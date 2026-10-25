@@ -5714,6 +5714,59 @@ To plan (tier M: Train + coach files): the rate map omits weekdays with nothing 
 
 **CLOSED 2026-10-25 (branch `promo-limit-7`, the commit carrying `closes-oi: OI-406`).** The last open condition, the founder's signed-in promo check (OI-348 item B5), passed on 2026-10-25: signed in as a free account on app.icanbefitter.com, a known active code showed its discount and an unknown code showed "Invalid promo code", so `validate-promo`'s service-role read works after migration 163 revoked the client grants. Migration 163 is merged to `main` (PR #163, the `promo_codes_server_only_access` entry of `backups/applied_migrations.json`) with CI green, and the post-apply live verify read `ok=16 fail=0`.
 
+## OI-167 — the debugging skill's bug-class numbers collide 9×, every one is cited by number from elsewhere, and nothing gates them (P3)
+
+- **Status**: CLOSED · 2026-10-25 · diagnose-doc `2026-10-25-bug-class-number-collisions-d5b8e3` · branch `bug-class-uniqueness` · the commit carrying `closes-oi: OI-167`
+- **Blocked on**: — (resolved)
+- **Verified**: 2026-09-07 — `grep -oE '^### 2\.[0-9]+' .claude/skills/debugging/SKILL.md | grep -oE '[0-9]+$' | sort -n | uniq -d` → **2.36, 2.37, 2.38, 2.39, 2.40, 2.41, 2.53, 2.54, 2.55** (NINE numbers, each naming TWO unrelated classes). True max is **2.63**. The pairs are genuinely distinct content — `2.36` is both *"a DROP + CREATE on a SECURITY DEFINER function RESETS its ACL"* and *"PostgREST builder is a thenable with NO .catch()"*
+- **Identified**: 2026-09-07 · found by nearly minting a tenth — this session added a `2.61` that already existed, caught it in review, and renumbered to 2.63. **2.61 is therefore NOT in the duplicate list**; it is only how the mechanism was discovered
+- **Symptom**: two unrelated bug classes answer to the same number, so a citation like "debugging skill bug-class 2.38" does not resolve to one entry. A reader following it lands on whichever occurrence they find first, which may be the wrong class entirely.
+
+- **Root cause, worth stating precisely because it will recur**: the numbers are **not monotonic in file order** — 2.61 and 2.62 sit ABOVE 2.53–2.60 in the file. So the natural survey, `grep -nE '^### 2\.[0-9]+' | tail -1`, answers *"the last-positioned entry"* when the question was *"the highest number"*, and returns a number that is already taken. Correct form, now in the section-2 header as a guard:
+
+      grep -oE '^### 2\.[0-9]+' .claude/skills/debugging/SKILL.md | grep -oE '[0-9]+$' | sort -n | tail -1
+
+- **Same class as the OI-number collisions** `scripts/check_oi_numbering_unique.dart` exists to catch (six had shipped by 2026-08-16; `build_oi_index.dart:110-111` records *"OI numbers are minted by eyeballing the board's tail"*). Identical mechanism, identical cause, **no equivalent gate covers `.claude/skills/`**.
+
+- ⚠ **RENUMBERING IS NOT SAFE FOR ANY OF THE NINE.** A first pass at this entry claimed six of them were uncited and "mechanically safe"; a context-blind review disproved it, and the census below is the corrected result. Every one of the nine is cited by number from outside the skill:
+
+      for n in 36 37 38 39 40 41 53 54 55; do echo -n "2.$n -> "; grep -rn "2[.]$n" --include=*.md . | grep -v skills/debugging/SKILL.md | grep -vE 'docs/(audit|reviews|plan-reviews)/' | wc -l; done
+      # every one NON-ZERO. Citing docs span docs/diagnoses/, docs/plans/,
+      # docs/superpowers/, docs/handbook/, docs/adr/ and memory/.
+
+  Deliberately ONE line with no backslash continuations and `2[.]N` rather than `2\.N`: three
+  separate attempts to publish the multi-line form had their escapes eaten in transit, shipping a
+  command with a literal newline inside `printf` and no continuations at all. A guard that
+  prescribes a broken command is worse than no guard, so the form that survives copying wins over
+  the form that reads more nicely.
+
+  ⚠ **The claim is "all nine are non-zero", NOT any particular count** — and the distinction is
+  not pedantry, it is the second defect this entry had to fix. The exact totals are UNSTABLE:
+  2.53 reads 8, 10 or 5 depending purely on which directories the command excludes, and a bare
+  `2.39` also matches version strings and decimals. Worse, the exclusions have to grow as this
+  issue accumulates meta-documentation — the review and plan-review files written FOR this entry
+  quote the same numbers, so the first published command started counting them within minutes
+  (2.36 went 1 → 6). **A count over a corpus that includes the discussion of the count is not a
+  measurement.** Non-zero-ness is the property that survives every exclusion choice, so it is the
+  only thing asserted here.
+
+- ⚠ **Two ways the first pass got this wrong, both worth keeping**:
+  1. Its census filtered to lines also containing `bug.?class|debugging skill`. The real citations mostly do not say that — `docs/diagnoses/2026-06-13-referral-rls-context-d2b9e6.md:80` reads `2.36 (FunctionException not unpacked → masked errors)` and matches no keyword. **A filter narrower than the thing you are counting reports zero and looks like proof.**
+  2. It attributed the citations to "CLAUDE.md, ADRs and diagnose-docs". **No CLAUDE.md cites any of these numbers** — `find . -iname CLAUDE.md -exec grep -Hn "2\.3[789]\|2\.40" {} \;` returns nothing. CLAUDE.md rule 9 cites only 2.35 / 2.31, neither of which is duplicated, so that citation is unaffected.
+
+- ⚠ **The prescribed census must EXCLUDE this board.** This entry names the very numbers it counts, so a naive `grep -rn` scores its own text as citations — the self-matching shape `check_no_deferral_euphemism.dart` handles with a visible `deu-quote` marker. The `grep -v` exclusions above are load-bearing, not decoration.
+
+- **Options**:
+  1. ~~Renumber the uncited duplicates~~ — **there are none**; every one is cited. Any renumber requires reading all citations first, so this is not the cheap option it appears to be.
+  2. Stop numbering new entries and key on the TITLE, the way `GATE_INDEX.md` keys gates on filename with the number as an optional alias — the move CLAUDE.md rule 24 already made, for this exact reason. Existing numbers stay as aliases; the collisions become harmless.
+  3. Gate only, renumber nothing — blocks new collisions, leaves the nine ambiguous.
+
+- **Recommendation**: **option 2 plus a gate.** Rule 24's precedent already exists in this repo — *"the filename is the identity; a number is an optional alias"* — and it is why `GATE_INDEX.md` stopped having this problem. Titles are what readers search for, existing numbers keep resolving as aliases, and no archaeology is needed to stop the bleeding.
+
+- **Not urgent**: this misdirects a reader; it breaks no build and no runtime path. Filed at P3 so it is not lost — the guard now in the section-2 header stops a tenth collision, but a comment is an intention, and this repo's own §4.13 point 6 says intentions decay.
+
+**CLOSED 2026-10-25 (branch `bug-class-uniqueness`, landing B of `docs/plans/merge-conflict-treadmill.md`; plan `docs/plans/bug-class-uniqueness.md`, two review rounds).** Option 3 was taken and then completed with the renumber the options list called expensive, because the per-citation reading it needed was done: all citations of the nine ids were read one by one (the two skill files themselves hold 18 citation lines, 10 of which follow a moved class; 8 more lines in 7 other files), the class with more citation lines kept each number (a tie went to the class introduced earlier in git), and the other class of each pair moved to 2.125-2.133 with a `(was 2.N; renumbered 2026-10-25)` marker; 18 citation lines were repointed and the legacy map for older records sits in the `bug-classes.md` header. The gate is `scripts/check_bug_class_numbers_unique.dart` (pure parser `scripts/bug_class_ids_lib.dart`), run by the pre-commit loop and the CI Audit Gates job: it fails on an id used twice in either file, an id in one file and not the other, a major other than 2, a numeric `### 2.N` heading in SKILL.md, a line that looks like a heading (even one indented up to three spaces) but does not parse, an unclosed code fence, an id whose title differs between the files (first 16 letters and digits), a missing file or index section, and a parse that finds nothing; `--next` prints the next free id numerically. On the base files (`b0735bb1`) it reported exactly the nine duplicate ids (18 lines) plus the one title mismatch (2.93), which the same commit aligned. Option 2 (key on the title) was not taken: more than 100 documents cite classes by number. Residual, by design: two PRs that mint the same next id and are both green before either merges turn the `main` push CI red; the session that merged second renumbers (landing D narrows the window).
+
 ## OI-395 — beat-my-coach: challenge query filters on capitalised categories, so every challenge comes from the fallback list
 
 - **Status**: CLOSED · 2026-10-25 · superseded by the founder's drop decision (no diagnose-doc: a removal, nothing was fixed) · branch `drop-beat-my-coach` · the commit carrying `closes-oi: OI-395`
@@ -5728,3 +5781,4 @@ To plan (tier M: Train + coach files): the rate map omits weekdays with nothing 
 **Outcome (2026-10-25).** The founder chose neither (a) nor (b): drop the whole feature. Removed on branch `drop-beat-my-coach` (PR #170; plan `docs/plans/2026-10-25-drop-beat-my-coach.md`, ledger `docs/audit/drop-beat-my-coach.closure.yaml`): the Edge Function source, the never-mounted `ChallengeCard`, `AppConstants.beatMyCoachFunction` and `beatMyCoachIntervalDays`, and the never-unlockable `challengeWon` ("Coach Slayer") badge, with the registry, test and doc entries that named them. The LIVE function (id `5c436e59-eec6-4e5b-99f5-c226dfc47152`, v15) was deleted on 2026-10-25 at 12:00:00Z after an explicit founder go; `list_edge_functions` then listed 44 functions and not this one. Its last live bundle `index.ts` is byte-identical to git `425bc63f` (sha256 `877823cd797ad4f73a16b4874c8e77f8ded8b22adef2d030037d0d9a914d851e`); rollback: `node .claude/deploy_via_api.js --rollback beat-my-coach 425bc63f --yes`. Guard against the feature coming back unnoticed: `test/contracts/beat_my_coach_removed_test.dart`.
 
 **Done when.** Met: the founder picked a third path (drop), and the source, the badge, the registries and the live function are gone.
+

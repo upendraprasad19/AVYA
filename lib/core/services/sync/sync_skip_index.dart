@@ -19,6 +19,7 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:hive/hive.dart';
 import 'package:icanbefitter/core/services/error_telemetry.dart';
+import 'package:icanbefitter/core/services/sync_flags.dart';
 import 'package:uuid/uuid.dart';
 
 /// Where a domain's index lives: always the user-scoped box that holds the
@@ -117,6 +118,12 @@ class SyncFingerprint {
 typedef SyncSkipFailureReporter = void Function(
     String opType, Object error, StackTrace stack);
 
+/// sync-storm-first-sweep W2 — how many confirmed pushes a pass accumulates
+/// before it writes them to Hive. Before this, confirmations were persisted only
+/// by [SyncSkipIndex.commit] at the END of a pass, so a retry, a reload, a killed
+/// app or an owner abort redid the whole pass.
+const int kSkipIndexFlushEvery = 25;
+
 class SyncSkipIndex {
   SyncSkipIndex({
     required Box<dynamic> box,
@@ -125,10 +132,22 @@ class SyncSkipIndex {
     required bool Function() ownerChangedNow,
     required SyncSkipFailureReporter reportFailure,
     this.forcePushKeys = const <String>{},
+    int flushEvery = kSkipIndexFlushEvery,
   })  : _box = box,
         _ownerChangedNow = ownerChangedNow,
         _reportFailure = reportFailure,
+        _flushEvery = flushEvery,
+        _flushOn = flushEnabledResolver() && !disabled,
         _stored = readIndex(box, domain.indexKey);
+
+  /// Kill-switch seam for the incremental flush (`disable_skip_index_incremental_
+  /// flush`, [SyncFlags.skipIndexIncrementalFlushEnabled]). Hive-free unit tests
+  /// fall back to enabled; a test may assign a closure and must restore this
+  /// default afterwards.
+  @visibleForTesting
+  static bool Function() flushEnabledResolver = _flushEnabledDefault;
+  static bool _flushEnabledDefault() =>
+      SyncFlags.skipIndexIncrementalFlushEnabled;
 
   final SyncSkipDomain domain;
 
@@ -147,6 +166,19 @@ class SyncSkipIndex {
   final bool Function() _ownerChangedNow;
   final SyncSkipFailureReporter _reportFailure;
   final Map<String, String> _stored;
+  final int _flushEvery;
+
+  /// Decided once at construction: switch not engaged AND the index is not
+  /// [disabled]. When false nothing below is ever recorded as pending and the
+  /// pass is byte-identical to the pre-W2 one.
+  final bool _flushOn;
+
+  /// W2 — confirmations / removals not yet written to the box. Kept in step with
+  /// [_confirmed] / [_forgotten] (a key is in at most one of the two).
+  final Map<String, String> _pendingConfirm = <String, String>{};
+  final Set<String> _pendingForget = <String>{};
+  int _sinceFlush = 0;
+  bool _flushErrorReported = false;
 
   /// L1a-3 (D5a): THIS pass's own deltas against the stored index. [commit]
   /// applies only these to a fresh re-read of the box, so two overlapping
@@ -228,7 +260,7 @@ class SyncSkipIndex {
       confirmed = await push();
     } catch (e, st) {
       failed++;
-      _forget(rowKey);
+      final dropped = _forget(rowKey);
       // Report once per DISTINCT opType per pass, not just the first
       // failure overall (mirror gap fix, F1 round 2) -- a shared index
       // (customItem) can see two different opType overrides fail in one
@@ -236,6 +268,7 @@ class SyncSkipIndex {
       // exactly once, since `add` returns false on the second occurrence.
       final op = opType ?? domain.opType;
       if (_reportedOpTypes.add(op)) _reportFailure(op, e, st);
+      if (dropped && _flushOn) await _countFlushEvent();
       return false;
     }
     if (_ownerChangedNow()) {
@@ -244,7 +277,7 @@ class SyncSkipIndex {
     }
     if (!confirmed) {
       unconfirmed++;
-      _forget(rowKey);
+      if (_forget(rowKey) && _flushOn) await _countFlushEvent();
       return false;
     }
     pushed++;
@@ -252,14 +285,68 @@ class SyncSkipIndex {
       _stored[rowKey] = fp;
       _confirmed[rowKey] = fp;
       _forgotten.remove(rowKey);
+      if (_flushOn) {
+        _pendingConfirm[rowKey] = fp;
+        _pendingForget.remove(rowKey);
+        await _countFlushEvent();
+      }
     }
     return true;
   }
 
-  void _forget(String rowKey) {
-    _stored.remove(rowKey);
+  /// Drops [rowKey]'s stored fingerprint. Returns true when one WAS stored, i.e.
+  /// when the drop changes what a later pass would skip (only then does it count
+  /// toward the incremental flush: a failed push of a never-stored row changes
+  /// nothing durable).
+  bool _forget(String rowKey) {
+    final hadStored = _stored.remove(rowKey) != null;
     _confirmed.remove(rowKey);
     _forgotten.add(rowKey);
+    if (_flushOn) {
+      _pendingConfirm.remove(rowKey);
+      _pendingForget.add(rowKey);
+    }
+    return hadStored;
+  }
+
+  /// W2 — one durable state change (a confirmed push, or the drop of a stored
+  /// fingerprint). Every [_flushEvery] of them writes the pending sets, so a
+  /// killed pass keeps both what it confirmed AND what it found stale (a
+  /// dropped fingerprint matters when the row's content later reverts).
+  Future<void> _countFlushEvent() async {
+    if (++_sinceFlush < _flushEvery) return;
+    _sinceFlush = 0;
+    await _flush();
+  }
+
+  /// W2 — writes the confirmations and removals accumulated since the last
+  /// flush into a fresh re-read of the box, never the construction-time
+  /// snapshot: an overlapping pass may have confirmed other rows since. Same
+  /// rule as [commit]: no await between the read and the put. It never prunes
+  /// (that stays in [commit], which knows the live keys). A failed put keeps the
+  /// pending sets (the next flush or [commit] carries them), costs one extra
+  /// push at worst — never a false skip — and is reported once per instance.
+  Future<void> _flush() async {
+    if (_ownerChangedNow()) return;
+    if (_pendingConfirm.isEmpty && _pendingForget.isEmpty) return;
+    try {
+      final read = readIndex(_box, domain.indexKey);
+      final next = Map<String, String>.from(read)
+        ..removeWhere((k, _) => _pendingForget.contains(k))
+        ..addAll(_pendingConfirm);
+      final unchanged = next.length == read.length &&
+          next.entries.every((e) => read[e.key] == e.value);
+      if (!unchanged) await _box.put(domain.indexKey, next);
+      _pendingConfirm.clear();
+      _pendingForget.clear();
+    } catch (e, st) {
+      debugPrint('[SyncSkipIndex] ${domain.name} flush: $e');
+      if (!_flushErrorReported) {
+        _flushErrorReported = true;
+        unawaited(ErrorTelemetry.recordNonFatal(e, st,
+            reason: 'sync_skip_flush_${domain.name}'));
+      }
+    }
   }
 
   /// Persists the index once per pass: prunes rows not in [liveKeys] and

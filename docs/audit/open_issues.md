@@ -2880,57 +2880,6 @@ Do NOT re-propose v1. Verified clean by round 2: sending `''` to `user_profile.c
 - **PARTIALLY RESOLVED 2026-09-11 — a FOURTH candidate behaviour was chosen and shipped, none of the three above**: OI-166 Unit 2 (`docs/audit/oi166-unit2-plan-v10.md`, diagnose `d7f3b2`) implements CYCLING — `contentFlavorIndex((w-1)%4)` repeats the baseline→overreach→peak→deload wave past week 4 rather than freezing on week 4's character (candidate 1), refusing (candidate 2), or handing off to phase advance (candidate 3). This closes the "no well-defined behaviour" complaint for the CONTENT/LABELING half: `rawWeek > 4` now stamps its real week number and picks well-defined content, verbatim, for any `rawWeek`. It does NOT close the WINDOW-ALIGNMENT half this entry also raises — whether `redoWeek4`'s own extension window is week-grid-aligned is untouched (`redoWeek4`/`holdWeek` themselves were explicit out-of-scope for Unit 2). Leaving this OPEN rather than closing it: the founder-blocked question above was "what should a regen DO", and cycling answers it for content but the sequencing-after-OI-174 note and the `redoWeek4` non-alignment concern (candidate 1's own rejection reason) still stand.
 - ⚠ **A THIRD residual surfaced the same day by the Unit 2 B-pass (Finding 2, P1), distinct from window-alignment: the phase-arc strip's "NOW" highlight does not cycle even though content now does.** `getCurrentWeekNumber()` (`workout_schedule_read_service.dart:1334`, unchanged by Unit 2) clamps to `[1,4]`, so past real week 4 the strip permanently highlights index 3 — "deload" per Unit 2's own splice — regardless of which of baseline/overreach/peak/deload the real current week actually cycles to. Reachable TODAY via the live `redoWeek4`, no flag required. Not strictly a NEW regression (pre-fix, `current_plan` was also unconditionally rewritten to the same canonical order every regen, so the clamp already existed against different, frozen content) — but Unit 2 makes the mismatch visible and variable for the first time. A real fix means routing the highlight through a cycle-aware index or otherwise making `hold_week_identity`'s clamp itself past-week-4-aware, which is a redesign of a DIFFERENT SoT concept (`hold_week_identity`, own tests, own explicit "do NOT branch inputs where the clamped 4 is HONEST" warning for its other consumers) — correctly out of scope for the already-9-round-converged Unit 2, tracked here instead of left implied-fixed.
 
-## OI-167 — the debugging skill's bug-class numbers collide 9×, every one is cited by number from elsewhere, and nothing gates them (P3)
-
-- **Status**: OPEN
-- **Blocked on**: nothing technical — needs a per-citation reading, or a decision to stop numbering
-- **Verified**: 2026-09-07 — `grep -oE '^### 2\.[0-9]+' .claude/skills/debugging/SKILL.md | grep -oE '[0-9]+$' | sort -n | uniq -d` → **2.36, 2.37, 2.38, 2.39, 2.40, 2.41, 2.53, 2.54, 2.55** (NINE numbers, each naming TWO unrelated classes). True max is **2.63**. The pairs are genuinely distinct content — `2.36` is both *"a DROP + CREATE on a SECURITY DEFINER function RESETS its ACL"* and *"PostgREST builder is a thenable with NO .catch()"*
-- **Identified**: 2026-09-07 · found by nearly minting a tenth — this session added a `2.61` that already existed, caught it in review, and renumbered to 2.63. **2.61 is therefore NOT in the duplicate list**; it is only how the mechanism was discovered
-- **Symptom**: two unrelated bug classes answer to the same number, so a citation like "debugging skill bug-class 2.38" does not resolve to one entry. A reader following it lands on whichever occurrence they find first, which may be the wrong class entirely.
-
-- **Root cause, worth stating precisely because it will recur**: the numbers are **not monotonic in file order** — 2.61 and 2.62 sit ABOVE 2.53–2.60 in the file. So the natural survey, `grep -nE '^### 2\.[0-9]+' | tail -1`, answers *"the last-positioned entry"* when the question was *"the highest number"*, and returns a number that is already taken. Correct form, now in the section-2 header as a guard:
-
-      grep -oE '^### 2\.[0-9]+' .claude/skills/debugging/SKILL.md | grep -oE '[0-9]+$' | sort -n | tail -1
-
-- **Same class as the OI-number collisions** `scripts/check_oi_numbering_unique.dart` exists to catch (six had shipped by 2026-08-16; `build_oi_index.dart:110-111` records *"OI numbers are minted by eyeballing the board's tail"*). Identical mechanism, identical cause, **no equivalent gate covers `.claude/skills/`**.
-
-- ⚠ **RENUMBERING IS NOT SAFE FOR ANY OF THE NINE.** A first pass at this entry claimed six of them were uncited and "mechanically safe"; a context-blind review disproved it, and the census below is the corrected result. Every one of the nine is cited by number from outside the skill:
-
-      for n in 36 37 38 39 40 41 53 54 55; do echo -n "2.$n -> "; grep -rn "2[.]$n" --include=*.md . | grep -v skills/debugging/SKILL.md | grep -vE 'docs/(audit|reviews|plan-reviews)/' | wc -l; done
-      # every one NON-ZERO. Citing docs span docs/diagnoses/, docs/plans/,
-      # docs/superpowers/, docs/handbook/, docs/adr/ and memory/.
-
-  Deliberately ONE line with no backslash continuations and `2[.]N` rather than `2\.N`: three
-  separate attempts to publish the multi-line form had their escapes eaten in transit, shipping a
-  command with a literal newline inside `printf` and no continuations at all. A guard that
-  prescribes a broken command is worse than no guard, so the form that survives copying wins over
-  the form that reads more nicely.
-
-  ⚠ **The claim is "all nine are non-zero", NOT any particular count** — and the distinction is
-  not pedantry, it is the second defect this entry had to fix. The exact totals are UNSTABLE:
-  2.53 reads 8, 10 or 5 depending purely on which directories the command excludes, and a bare
-  `2.39` also matches version strings and decimals. Worse, the exclusions have to grow as this
-  issue accumulates meta-documentation — the review and plan-review files written FOR this entry
-  quote the same numbers, so the first published command started counting them within minutes
-  (2.36 went 1 → 6). **A count over a corpus that includes the discussion of the count is not a
-  measurement.** Non-zero-ness is the property that survives every exclusion choice, so it is the
-  only thing asserted here.
-
-- ⚠ **Two ways the first pass got this wrong, both worth keeping**:
-  1. Its census filtered to lines also containing `bug.?class|debugging skill`. The real citations mostly do not say that — `docs/diagnoses/2026-06-13-referral-rls-context-d2b9e6.md:80` reads `2.36 (FunctionException not unpacked → masked errors)` and matches no keyword. **A filter narrower than the thing you are counting reports zero and looks like proof.**
-  2. It attributed the citations to "CLAUDE.md, ADRs and diagnose-docs". **No CLAUDE.md cites any of these numbers** — `find . -iname CLAUDE.md -exec grep -Hn "2\.3[789]\|2\.40" {} \;` returns nothing. CLAUDE.md rule 9 cites only 2.35 / 2.31, neither of which is duplicated, so that citation is unaffected.
-
-- ⚠ **The prescribed census must EXCLUDE this board.** This entry names the very numbers it counts, so a naive `grep -rn` scores its own text as citations — the self-matching shape `check_no_deferral_euphemism.dart` handles with a visible `deu-quote` marker. The `grep -v` exclusions above are load-bearing, not decoration.
-
-- **Options**:
-  1. ~~Renumber the uncited duplicates~~ — **there are none**; every one is cited. Any renumber requires reading all citations first, so this is not the cheap option it appears to be.
-  2. Stop numbering new entries and key on the TITLE, the way `GATE_INDEX.md` keys gates on filename with the number as an optional alias — the move CLAUDE.md rule 24 already made, for this exact reason. Existing numbers stay as aliases; the collisions become harmless.
-  3. Gate only, renumber nothing — blocks new collisions, leaves the nine ambiguous.
-
-- **Recommendation**: **option 2 plus a gate.** Rule 24's precedent already exists in this repo — *"the filename is the identity; a number is an optional alias"* — and it is why `GATE_INDEX.md` stopped having this problem. Titles are what readers search for, existing numbers keep resolving as aliases, and no archaeology is needed to stop the bleeding.
-
-- **Not urgent**: this misdirects a reader; it breaks no build and no runtime path. Filed at P3 so it is not lost — the guard now in the section-2 header stops a tenth collision, but a comment is an intention, and this repo's own §4.13 point 6 says intentions decay.
-
 ## OI-169 — a local run of `test/edge_functions/` reports "All tests passed" having executed nothing (P2)
 
 - **Status**: OPEN
@@ -5666,7 +5615,7 @@ The repo root has no allowlist, so a command that writes a file there (a stray s
 ## OI-309 — Merge-conflict treadmill: every >=account PR conflicts with main again and again (shared append-only + generated docs, max+1 numbering) while the 25-minute pre-push full suite re-runs on each docs-only merge; PR #73 needed 4 merge rounds in ~1 day, and its merge then turned main red on a stale plan-review tier
 
 - **Status**: OPEN
-- **Blocked on**: a plan (it changes hooks and the generated-file policy, so CLAUDE.md 4.12 plan review x2 applies) and a founder call on the options below. Interim, in force now: for a push whose new commits are only a merge of `origin/main` with docs-only conflict edits, the founder approved `FOUNDER_APPROVED_NO_VERIFY=1` (chat 2026-10-05, "Approved no verify if that helps"); CI still runs the full suite on the PR. Whether that approval is standing or per-push is the founder's to state.
+- **Blocked on**: a plan (it changes hooks and the generated-file policy, so CLAUDE.md 4.12 plan review x2 applies) and a founder call on the options below. Interim, in force now: for a push whose new commits are only a merge of `origin/main` with docs-only conflict edits, the founder approved `FOUNDER_APPROVED_NO_VERIFY=1` (chat 2026-10-05, "Approved no verify if that helps"); CI still runs the full suite on the PR. Whether that approval is standing or per-push is the founder's to state. Progress 2026-10-25 (plan `docs/plans/merge-conflict-treadmill.md`): landings A0 (#159), A1 (#160) and A2 (#167) are merged, B (the bug-class uniqueness gate and renumber, closes OI-167) is in the PR of branch `bug-class-uniqueness`; C (sync-merge review and resolver) and D (merge train) remain, and this issue stays OPEN until D.
 - **Verified**: 2026-10-05 - measured on PR #73 (OI-284): 4 merge-of-main rounds in about a day (plus a red main: the plan-review record's tier was measured before main's PR #70 promoted two files it touches to platform, so the merge-to-main gate wanted `bpass: accepted`; fixed by the record-correction PR); each round = hand-resolve + gate loop + a ~25-minute pre-push full suite, during which main moved again. Commits touching each file on `origin/main` in 3 days: `OPEN_INDEX.md` 8, `bug-classes.md` 8, `open_issues.md` 8, `sot_registry.yaml` 9, `diagnoses/INDEX.md` 6, `debugging/SKILL.md` 4, `naming_conventions.md` 3. Conflicts seen: bug-class number taken twice by max+1 (2.85 then 2.87), glossary rows appended at the same spot, two generated indexes, the OI board tail, plus one non-textual interaction (PR #70's new engine-completeness test flagged the new file).
 - **Root causes**: (1) every batch is REQUIRED to edit the same shared files, mostly by appending at one spot (bug classes, naming glossary, OI board, SoT registry, diagnose docs); (2) generated files (`OPEN_INDEX.md`, `diagnoses/INDEX.md`, `GATE_INDEX.md`) are committed and regenerated per commit, so they conflict on any overlap although they rebuild in seconds; (3) bug-class numbers are claimed by "max + 1" (OI numbers are not: `mint_oi.sh` reserves atomically; OI-167 already recommends keying classes on the title); (4) the pre-push full suite takes ~25 minutes and re-runs on a docs-only merge, a window in which another PR merges.
 - **Options to plan** (each independent): (a) stop tracking generated indexes (build in CI / on demand) or give them a regenerate merge driver installed by `setup-hooks.sh`; (b) one file per entry for bug classes, glossary terms and diagnose entries with a generated index, so two branches never edit the same lines; (c) an allocator or title-keyed ids for bug classes; (d) pre-push policy: when the new commits are a pure merge of `origin/main` (CI-green) the delta since the last green push is docs-only, verify the delta (gates + analyze) instead of the whole suite, CI stays the full-suite source of truth; (e) a GitHub merge queue (or auto-merge) so each PR is tested on top of current main serially; (f) `git rerere` and `merge=union` for pure-append files.
@@ -6876,6 +6825,195 @@ Past `user_daily_snapshots` stay (nothing reads a past day's `coach_notices`). D
 
 **Done when.** `flutter test test/scripts/` is green on the Windows machine, and a mutation shows each assertion still bites (revert the decode fix, and the fixture fix, and the matching test goes red).
 
+## OI-416 — Overlapping live sync passes still duplicate work: no one-pass-at-a-time guard (a retry sweep started while an abandoned 45 s-ceiling loop still walks rows, and any two entry points)
+
+- **Status**: OPEN
+- **Blocked on**: blocked_on_user (separate piece named in the scope call)
+- **Verified**: 2026-10-25, live: the 09:02 IST gateway log of the founder's private-window session (633 `workout_log_exercises` upserts for 207 bundles); the overlap mechanism is by reading `sync_service.dart` and the plan reviews, not reproduced on a device.
+- **Identified**: 2026-10-25 · filed via mint_oi.sh from branch `sync-storm-first-sweep`
+
+Filed by the sync-storm-first-sweep batch (A1 = W1 migrator fix, W2 save progress every 25 events, W3 postponed first sweep; diagnose `b9e4d7`, plan `docs/plans/2026-10-25-sync-storm-first-sweep.md`, ledger `docs/audit/sync-storm-first-sweep.closure.yaml`).
+
+**Scope.** Founder scope call, 2026-10-25 (AskUserQuestion answer "Smallest piece first (Recommended)"): A1 = the migrator fix + save progress every ~25 rows + skip the first full sweep on a fresh device; this item is outside it.
+
+**Evidence.** 2026-10-25 09:02 IST gateway log: `workout_log_exercises` took 633 upserts for 207 bundles (3 passes of the same rows). A1 removes the largest cause (the migrator) and saves progress every 25 rows, but two passes of the same domain can still be live at once: a retry sweep started while an abandoned loop (the 45 s restore-op ceiling) is still walking rows, and any two entry points (`checkAndSync`, the coalesced fan-out, the retry controller).
+
+**Design notes from the plan reviews.** A fingerprint-carrying in-flight ledger (a row already in flight with the same fingerprint is skipped by the second pass), the `forcePushKeys` bypass, an owner token, a monotonic TTL, a reset seam on account change, and the `kNotSweptOpTypes` domains. Cheapest candidate mitigation: refresh `_stored` from the flushed map at flush time (A1's `_flush` already re-reads the box).
+
+**Done when.** Two overlapping passes of one domain over the same unchanged rows send each row once; a behavioral test with two live `SyncSkipIndex` instances over a stubbed server counts the upserts.
+
+
+## OI-417 — The restore records push fingerprints only for exercise logs: the other 15 SyncSkipIndex domains re-upload what a fresh device just downloaded (the postponed day+1 sweep pays it)
+
+- **Status**: OPEN
+- **Blocked on**: blocked_on_user (separate piece named in the scope call)
+- **Verified**: 2026-10-25, by reading: `_restoreExerciseLogs` is the only restore path that records push fingerprints (diagnose `f3d2a7`); the other domains record none. Not measured on a device.
+- **Identified**: 2026-10-25 · filed via mint_oi.sh from branch `sync-storm-first-sweep`
+
+Filed by the sync-storm-first-sweep batch (A1 = W1 migrator fix, W2 save progress every 25 events, W3 postponed first sweep; diagnose `b9e4d7`, plan `docs/plans/2026-10-25-sync-storm-first-sweep.md`, ledger `docs/audit/sync-storm-first-sweep.closure.yaml`).
+
+**Scope.** Founder scope call, 2026-10-25 (AskUserQuestion answer "Smallest piece first (Recommended)"): A1 = the migrator fix + save progress every ~25 rows + skip the first full sweep on a fresh device; this item is outside it.
+
+**Evidence.** Same root cause as A1 for every other domain. `_restoreExerciseLogs` records `SyncSkipIndex.recordConfirmedAll` fingerprints (L1a-3, diagnose `f3d2a7`) via `restoredBundleEqualsCloud`; the other domains (`wlog`, `sched`, `completion`, `template`, `plan`, `streak`, `water`, `steps`, `urine`, `sleep`, `weight`, `measurement`, `readiness`, `savedMeal`, `customItem`, `nlog`) record nothing on restore, so their first push after a restore re-uploads every restored row. W3 postpones the daily sweep by 24 h; the day+1 sweep then pays this cost.
+
+**Fix shape.** A per-domain equality check like `restoredBundleEqualsCloud` (fingerprint built by the SAME function the push uses; recorded only for a row the restore wrote and the cloud row equals what the push would send).
+
+**Done when.** After a restore on a fresh device, the day+1 sweep sends 0 rows per covered domain (measured with the section 9 gateway queries of the plan).
+
+
+## OI-418 — Sync pushes one request per row and two per exercise: batch the upserts (about 50 rows per request)
+
+- **Status**: OPEN
+- **Blocked on**: blocked_on_user (separate piece named in the scope call)
+- **Verified**: 2026-10-25, live: the same gateway log (2,228 requests in the session).
+- **Identified**: 2026-10-25 · filed via mint_oi.sh from branch `sync-storm-first-sweep`
+
+Filed by the sync-storm-first-sweep batch (A1 = W1 migrator fix, W2 save progress every 25 events, W3 postponed first sweep; diagnose `b9e4d7`, plan `docs/plans/2026-10-25-sync-storm-first-sweep.md`, ledger `docs/audit/sync-storm-first-sweep.closure.yaml`).
+
+**Scope.** Founder scope call, 2026-10-25 (AskUserQuestion answer "Smallest piece first (Recommended)"): A1 = the migrator fix + save progress every ~25 rows + skip the first full sweep on a fresh device; this item is outside it.
+
+**Evidence.** The 2026-10-25 session sent 2,228 requests; each exercise summary and each set row is its own PostgREST call. A1 reduces how many rows push, not how many requests a push of N rows costs.
+
+**Fix shape.** One upsert request per up-to-50 rows per table, with the per-row confirmation the skip index needs (`pushIfChanged` confirms per row today); the failure of one row in a batch must not forget the others. Touches the G1 gate (`check_sync_hash_skip_atomicity.dart`), which forbids an `.upsert(` outside a `pushIfChanged` closure.
+
+**Done when.** The request count for N changed rows is about N/50 per table, rows are confirmed individually, and G1 still holds.
+
+
+## OI-419 — Every telemetry event costs one Edge Function call plus one GoTrue /user round trip (82 events, average 3.7 s in the 2026-10-25 session): batch them
+
+- **Status**: OPEN
+- **Blocked on**: blocked_on_user (separate piece named in the scope call)
+- **Verified**: 2026-10-25, live: the same gateway log (82 `log-client-error` events, average 3.7 s each).
+- **Identified**: 2026-10-25 · filed via mint_oi.sh from branch `sync-storm-first-sweep`
+
+Filed by the sync-storm-first-sweep batch (A1 = W1 migrator fix, W2 save progress every 25 events, W3 postponed first sweep; diagnose `b9e4d7`, plan `docs/plans/2026-10-25-sync-storm-first-sweep.md`, ledger `docs/audit/sync-storm-first-sweep.closure.yaml`).
+
+**Scope.** Founder scope call, 2026-10-25 (AskUserQuestion answer "Smallest piece first (Recommended)"): A1 = the migrator fix + save progress every ~25 rows + skip the first full sweep on a fresh device; this item is outside it.
+
+**Evidence.** 82 telemetry events in the 2026-10-25 session each cost one `log-client-error` Edge Function call plus one GoTrue `/user` round trip, averaging 3.7 s while the backend was slow, and they compete with the sync for the same connection budget.
+
+**Fix shape.** Queue events on the device and post them in one request per interval or per N events (the `drainTelemetryQueue` path already exists for failed posts), with one token validation per batch.
+
+**Done when.** A session that raises N events sends about N/20 requests and the per-event auth round trip is gone.
+
+
+## OI-420 — Android phone cold start after sign-in is slow and shows Sync paused: add startup timeline events and measure (3 s splash floor, awaited health sync); two causes are NOT established
+
+- **Status**: OPEN
+- **Blocked on**: blocked_on_user (found during the A1 investigation; outside the quoted scope call; founder to schedule)
+- **Verified**: 2026-10-25: the founder's phone report. The cold start is UNMEASURED and both causes named below are NOT established.
+- **Identified**: 2026-10-25 · filed via mint_oi.sh from branch `sync-storm-first-sweep`
+
+Filed by the sync-storm-first-sweep batch (A1 = W1 migrator fix, W2 save progress every 25 events, W3 postponed first sweep; diagnose `b9e4d7`, plan `docs/plans/2026-10-25-sync-storm-first-sweep.md`, ledger `docs/audit/sync-storm-first-sweep.closure.yaml`).
+
+**Scope.** Founder scope call, 2026-10-25 (AskUserQuestion answer "Smallest piece first (Recommended)"): A1 = the migrator fix + save progress every ~25 rows + skip the first full sweep on a fresh device; this item is outside it.
+
+**Evidence.** The founder's phone report on 2026-10-25 (Sync paused on cold start) is NOT explained by A1, which was measured on web. The phone cold start is UNMEASURED.
+
+**NOT established (kept here so the symptom has a terminal home).** (1) The 8-33 s single-row reads from the phone upstream of the app. (2) The cause of the 28-of-29 HTTP 503 burst at 09:15-09:25 IST: compute tier, or dashboard CPU and IO for that window. Neither was proven to be this app's doing.
+
+**Candidates to measure first.** Startup timeline events (add them before changing anything), the 3 s splash floor, the awaited Android health sync in `checkAndSync` (`HealthSyncService.instance.syncToHive()` runs before the restore).
+
+**Done when.** A cold-start timeline from a real phone names the long pole with numbers.
+
+
+## OI-421 — Google sign-in sends no prompt=select_account (auth_provider.dart:561): the browser silently reuses the last Google account
+
+- **Status**: OPEN
+- **Blocked on**: blocked_on_user (found during the A1 investigation; outside the quoted scope call; founder to schedule)
+- **Verified**: 2026-10-25, by reading `lib/features/auth/providers/auth_provider.dart:561`: the `signInWithOAuth` call passes `redirectTo` only, no `queryParams`.
+- **Identified**: 2026-10-25 · filed via mint_oi.sh from branch `sync-storm-first-sweep`
+
+Filed by the sync-storm-first-sweep batch (A1 = W1 migrator fix, W2 save progress every 25 events, W3 postponed first sweep; diagnose `b9e4d7`, plan `docs/plans/2026-10-25-sync-storm-first-sweep.md`, ledger `docs/audit/sync-storm-first-sweep.closure.yaml`).
+
+**Scope.** Founder scope call, 2026-10-25 (AskUserQuestion answer "Smallest piece first (Recommended)"): A1 = the migrator fix + save progress every ~25 rows + skip the first full sweep on a fresh device; this item is outside it.
+
+**Evidence.** `lib/features/auth/providers/auth_provider.dart:561` starts the Google OAuth flow without `prompt=select_account`, so a browser that is signed into one Google account reuses it with no chooser; a tester switching accounts on one profile lands in the previous account.
+
+**Fix shape.** Pass `queryParams: {'prompt': 'select_account'}` to the OAuth call and test the URL it builds.
+
+**Done when.** The OAuth URL carries `prompt=select_account` (unit test) and the chooser shows on the web app.
+
+
+## OI-422 — Two full restores run concurrently on a fresh device by design (checkAndSync -> legacy restoreFromCloud, and restoring_screen.dart:116): confirm they explain the doubled table reads, then choose one
+
+- **Status**: OPEN
+- **Blocked on**: blocked_on_user (found during the A1 investigation / removed by plan review; outside the quoted scope call; founder to schedule)
+- **Verified**: 2026-10-25, by reading: `restoring_screen.dart:116` and `sync_service.dart` `checkAndSync` (:1063 -> `_restoreIfNeeded` -> `restoreFromCloud` :1660) are two restore entries. That they cause the doubled reads is NOT yet shown.
+- **Identified**: 2026-10-25 · filed via mint_oi.sh from branch `sync-storm-first-sweep`
+
+Filed by the sync-storm-first-sweep batch (A1 = W1 migrator fix, W2 save progress every 25 events, W3 postponed first sweep; diagnose `b9e4d7`, plan `docs/plans/2026-10-25-sync-storm-first-sweep.md`, ledger `docs/audit/sync-storm-first-sweep.closure.yaml`).
+
+**Scope.** Founder scope call, 2026-10-25 (AskUserQuestion answer "Smallest piece first (Recommended)"): A1 = the migrator fix + save progress every ~25 rows + skip the first full sweep on a fresh device; this item is outside it.
+
+**Evidence.** On a fresh device `checkAndSync` calls `_restoreIfNeeded` -> legacy `restoreFromCloud`, while the restoring screen starts its own restore (`restoring_screen.dart:116`). The gateway log showed table reads roughly doubled during the restore.
+
+**Not yet shown.** That these two restores ARE the doubled reads: add a call counter around `restoreFromCloudForUser`/`restoreFromCloud` and record it in a fresh-device run before deciding which restore to drop.
+
+**Done when.** A counter shows one restore per fresh-device launch, or the doubled reads are explained by something else and this item is closed with that evidence.
+
+
+## OI-423 — Delete the three sync-storm-first-sweep kill switches and their old paths once the runtime check is recorded (disable_exlog_migrator_skip_unchanged, disable_skip_index_incremental_flush, disable_first_sweep_postpone)
+
+- **Status**: OPEN
+- **Blocked on**: upstream_blocked: the plan's section 9 device check (reopen when it is recorded)
+- **Verified**: 2026-10-25, by reading: the three getters live in `lib/core/services/sync_flags.dart` (added by this batch).
+- **Identified**: 2026-10-25 · filed via mint_oi.sh from branch `sync-storm-first-sweep`
+
+Filed by the sync-storm-first-sweep batch (A1 = W1 migrator fix, W2 save progress every 25 events, W3 postponed first sweep; diagnose `b9e4d7`, plan `docs/plans/2026-10-25-sync-storm-first-sweep.md`, ledger `docs/audit/sync-storm-first-sweep.closure.yaml`).
+
+**Why this exists.** The three switches ship LIVE by default (opt-out), which departs from CLAUDE.md 4.6.1/3 and is stated once in the PR. 4.6.4 requires the old path to be deleted in the batch that rolls the gate; the roll waits for the founder-run check in `docs/plans/2026-10-25-sync-storm-first-sweep.md` section 9. Precedent: OI-303.
+
+**Done when.** The section 9 numbers are recorded, the three `SyncFlags` getters, the `flushEnabledResolver` seam, the old unconditional migrator rewrite and the unconditional sweep path are deleted, and the tests that exercise the switches are removed or repointed.
+
+
+## OI-424 — Residual restored-row re-send shapes after A1: the migrator still rewrites and re-pushes summary-only, NULL-aggregate and mismatched-aggregate rows, and the push sends set_number = 1 for a summary-only row
+
+- **Status**: OPEN
+- **Blocked on**: upstream_blocked: needs the section 9 count of rewritten rows (reopen when it is recorded)
+- **Verified**: 2026-10-25, by reading and by the A1 tests: the 'residual shapes' section of diagnose `b9e4d7`; shape (1) was measured (it pushes once with or without the migrator).
+- **Identified**: 2026-10-25 · filed via mint_oi.sh from branch `sync-storm-first-sweep`
+
+Filed by the sync-storm-first-sweep batch (A1 = W1 migrator fix, W2 save progress every 25 events, W3 postponed first sweep; diagnose `b9e4d7`, plan `docs/plans/2026-10-25-sync-storm-first-sweep.md`, ledger `docs/audit/sync-storm-first-sweep.closure.yaml`).
+
+**Evidence.** The A1 diagnose-doc lists three shapes the skip does not cover: (1) a timed/cardio row whose cloud `weight_kg`/`reps` are NULL (no restore fingerprint is recorded for it at all, measured: it pushes once with or without the migrator), (2) a canonical-keyed summary-only row with no `sets` (the migrator synthesizes a set and the row differs from what the restore fingerprinted), (3) a row whose stored aggregates disagree with its sets. For (2) the push also sends `set_number = 1` regardless of the cloud value.
+
+**Done when.** The section 9 count says how many rows fall in these shapes on a real account and either they are made byte-stable in the migrator or the cost is accepted in writing.
+
+
+## OI-425 — W3 consequence: on a fresh device sweep-only pushes wait until the first launch at least 24 h after the first one (unbounded for an inactive user): Health Connect imports, plan_json, profile / progress / preferences / coach pushes
+
+- **Status**: OPEN
+- **Blocked on**: blocked_on_user (consequence of W3, accepted under the quoted scope call; the mitigation decision needs the section 9 numbers)
+- **Verified**: 2026-10-25, by reading `first_sweep_decision.dart`, `_postponeFirstSweep` and `shouldRunFullSweep`; the B-pass corrected the wording to 'until the first launch at least 24 h after the first one'.
+- **Identified**: 2026-10-25 · filed via mint_oi.sh from branch `sync-storm-first-sweep`
+
+Filed by the sync-storm-first-sweep batch (A1 = W1 migrator fix, W2 save progress every 25 events, W3 postponed first sweep; diagnose `b9e4d7`, plan `docs/plans/2026-10-25-sync-storm-first-sweep.md`, ledger `docs/audit/sync-storm-first-sweep.closure.yaml`).
+
+**What waits.** Anything ONLY the daily sweep pushes reaches the cloud at the first launch at least 24 h after the first one instead of at it: Health Connect imports (steps, weight, sleep), rows whose normal fan-out was rejected, `plan_json`, and the profile / progress / preferences / coach-interaction pushes. A private window closed within that day loses the on-device-only ones, and another device sees first-launch local changes later.
+
+**Decide after section 9.** Whether any of them needs an immediate push (for example a one-row push of `plan_json` at the end of the restore), using the measured request counts.
+
+**Done when.** Each listed push has a decision recorded: immediate, or accepted with the 24 h delay.
+
+
+## OI-426 — The restore records its exercise fingerprints once after its loop: a process killed or reloaded mid-restore leaves restored rows without a fingerprint (they push once)
+
+- **Status**: OPEN
+- **Blocked on**: blocked_on_user (removed from A1 by plan review; outside the quoted scope call; founder to schedule)
+- **Verified**: 2026-10-25, by reading `_restoreExerciseLogs` (one `recordConfirmedAll` after the write loop).
+- **Identified**: 2026-10-25 · filed via mint_oi.sh from branch `sync-storm-first-sweep`
+
+Filed by the sync-storm-first-sweep batch (A1 = W1 migrator fix, W2 save progress every 25 events, W3 postponed first sweep; diagnose `b9e4d7`, plan `docs/plans/2026-10-25-sync-storm-first-sweep.md`, ledger `docs/audit/sync-storm-first-sweep.closure.yaml`).
+
+**Scope.** Founder scope call, 2026-10-25 (AskUserQuestion answer "Smallest piece first (Recommended)"): A1 = the migrator fix + save progress every ~25 rows + skip the first full sweep on a fresh device; this item is outside it.
+
+**Evidence.** `_restoreExerciseLogs` calls `SyncSkipIndex.recordConfirmedAll` once after its write loop (L1a-3). A tab reloaded or a process killed mid-restore leaves the already-written rows with no fingerprint, so each pushes once. v3 of the A1 plan had chunked recording (W2b) and plan review removed it: weak benefit, no clean test seam.
+
+**Input.** The section 9 reload-mid-restore count (how many exercise rows push after one reload mid-restore).
+
+**Done when.** The count is recorded and either chunked recording lands with a deterministic seam or the cost is accepted in writing.
+
 ## OI-427 — The Clean Eater badge (BadgeId.nutritionWeek) has a profile tile but no unlock rule, so it can never be earned
 
 - **Status**: OPEN
@@ -6890,3 +7028,4 @@ Past `user_daily_snapshots` stay (nothing reads a past day's `coach_notices`). D
 **Fix shape.** Either give the tile its rule (the description already defines it: a meal logged on each of 7 consecutive IST days; read it through the nutrition repository with the IST date helper, not from a widget, and decide whether a food log or a saved meal counts), or remove the tile and the enum value the way `challengeWon` was removed. Whichever is chosen, add the invariant that was missing: a contract test that every `BadgeId` value has exactly one `tryUnlock(BadgeId.<id>, ...)` rule in `badge_service.dart`, so the next never-earnable badge fails a test instead of shipping.
 
 **Done when.** The invariant test exists and is green, and (if the rule is built) a behavioural test earns the badge after 7 consecutive IST days of logs and does not earn it after 6 or after a gap.
+

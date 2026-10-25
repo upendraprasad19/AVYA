@@ -1,11 +1,45 @@
 # Debugging skill - bug-class bodies (moved verbatim from SKILL.md section 2)
 
-Full `### 2.N` entries, in their original file order, UNRENUMBERED (nine numbers are duplicated on
-purpose - see the warning in `SKILL.md` section 2 and OI-167; every number is cited from outside).
-Open this file on demand and grep the id (`grep -n "^### 2.53" bug-classes.md`); the index table in
-`SKILL.md` lists every id with its one-line trigger. **Append new bug classes HERE** (true next
-number: `grep -oE "^### 2\.[0-9]+" bug-classes.md | grep -oE "[0-9]+$" | sort -n | tail -1`) and add one
+Full `### 2.N` entries, in their original file order (NOT numeric order: grep the id, never read the last entry for the maximum).
+Open this file on demand and grep the id (`grep -n "^### 2.53 " bug-classes.md`, with the trailing space so a prefix such as 2.13 does not also match 2.130-2.133); the index table in
+`SKILL.md` lists every id with its one-line trigger. **Append new bug classes HERE** and add one
 row to the SKILL.md index in the same commit.
+
+## Numbering (read before citing or adding a class)
+
+Ids are UNIQUE and gated by `scripts/check_bug_class_numbers_unique.dart` (pre-commit and CI; OI-167). Next free id:
+`dart run scripts/check_bug_class_numbers_unique.dart --next` (on some toolchains `dart run` prints a build banner first: the id is the LAST line of stdout; no Dart: the highest number from
+`grep -oE "^### 2\.[0-9]+" bug-classes.md | grep -oE "[0-9]+$" | sort -n | tail -1`, plus one).
+
+Parsing notes for the gate: a class heading must start at column 0 (`### 2.N Title`); a line that starts with up to three spaces, one to six `#` and a number like `2.5` is read as a heading that did not parse, so do not start a prose line that way; a code fence must be closed; a heading or row inside an HTML comment still counts.
+
+**Legacy map.** Until 2026-10-25 nine ids named two classes each. The class in the "kept" column still has the id; the class in the
+"moved" column got a new id (its heading and index row end with `(was 2.N; renumbered 2026-10-25)`).
+
+| old id | kept (same id) | moved (new id) |
+|---|---|---|
+| 2.36 | a `DROP` + `CREATE` on a SECURITY DEFINER function resets its ACL | PostgREST builder is a thenable with no `.catch()` -> 2.125 |
+| 2.37 | platform-only native init unguarded by `kIsWeb` | a positive grep cannot see a defect in an ARGUMENT -> 2.126 |
+| 2.38 | cross-user read need vs own-only RLS | verify one layer FURTHER than the layer you are looking at -> 2.127 |
+| 2.39 | a mutation set built only from "delete the protection" is half a proof | native-only plugin reachable on web -> 2.128 |
+| 2.40 | fabricated default persisted into a field a different path consumes | mutation-proving runs in the SHARED worktree -> 2.129 |
+| 2.41 | the mutation was ABSORBED | cross-migration NOT-NULL writer drift -> 2.130 |
+| 2.53 | a MIRROR harness stops modelling production | the Nth fix to one file, each a WIDER GUESS -> 2.131 |
+| 2.54 | a mutation test that passes in BOTH arms proved nothing | an invariant GREEN while the thing it protects is broken -> 2.132 |
+| 2.55 | your own "quick checks" are load | a deliberately SCOPED capability wired to an UNSCOPED surface -> 2.133 |
+
+A citation of one of these nine ids in a record this change did not rewrite (a review, a plan review, a closure ledger, the frozen
+tuning archive, or any document written before 2026-10-25) may mean either class: read the sentence, then use the dates.
+- **2.36-2.41:** the six June 2026 classes (2.36 PostgREST thenable, 2.37 web boot, 2.38 cross-user RLS, 2.39 native plugin on web,
+  2.40 fabricated default, 2.41 cross-migration NOT NULL) existed alone until 2026-08-21, so a record dated before 2026-08-21 means
+  the June class. Today those are 2.125, 2.37, 2.38, 2.128, 2.40 and 2.130.
+- **2.53-2.55:** the 2026-08-27 classes (2.53 Nth fix, 2.54 both arms, 2.55 quick checks) existed alone until 2026-08-28. Today those
+  are 2.131, 2.54 and 2.55.
+- `docs/diagnoses/2026-06-13-referral-rls-context-d2b9e6.md:80` cites "2.36 (FunctionException not unpacked -> masked errors)", a title
+  that matches neither class; dated June 2026 it means the June class, now 2.125.
+- `docs/plan-reviews/oi126-training-day-predicate.md:26` cites "debugging skill §2.37 class" in a sentence about wiring no test observed: that is the positive-grep class, now 2.126.
+- The OI-89 records of 2026-08-28 (`docs/plan-reviews/oi89-bodyweight-floor.md`, `docs/audit/oi89-bodyweight-floor.closure.yaml`) cite
+  "§2.53 and §2.54" and mean the 2026-08-28 pair: 2.53 (kept) and 2.54 (now 2.132).
 
 ### 2.1 Writer/reader field drift
 - **Telltale:** "Saved but doesn't appear" / "Receipt shows 0 sets" / "AI snapshot misses meals." Hive write path uses field name A; consumer reads field name B (or same name with different semantic — e.g. cumulative-vs-first-set).
@@ -173,7 +207,7 @@ row to the SKILL.md index in the same commit.
   assumption tells you what Postgres will actually do.
 - **Regression test:** `test/contracts/admin_metrics_functions_role_revoke_test.dart`
 
-### 2.37 A positive grep cannot see a defect in an ARGUMENT
+### 2.126 A positive grep cannot see a defect in an ARGUMENT (was 2.37; renumbered 2026-10-25)
 
 - **Trigger:** any "surface wiring" test that asserts a file CONTAINS `someProvider`,
   `someFormatter(`, or a call name.
@@ -190,7 +224,7 @@ row to the SKILL.md index in the same commit.
   match and silently neuters the check.
 - **Regression test:** `test/contracts/hold_week_identity_behavioral_test.dart`
 
-### 2.38 Verify one layer FURTHER than the layer you are looking at
+### 2.127 Verify one layer FURTHER than the layer you are looking at (was 2.38; renumbered 2026-10-25)
 
 - **Trigger:** "the RPC returns it", "the endpoint responds 200", "the EF spreads the row", "the
   ACL is correct in the catalog".
@@ -240,7 +274,7 @@ row to the SKILL.md index in the same commit.
 - **Corollary for §4.4 rule 24 evidence:** "N tests redden" is only meaningful if you RAN it.
   A mutation you reasoned about rather than executed cannot tell you it was absorbed.
 
-### 2.40 Mutation-proving runs in the SHARED worktree, where §4.13's guarantee does not reach
+### 2.129 Mutation-proving runs in the SHARED worktree, where §4.13's guarantee does not reach (was 2.40; renumbered 2026-10-25)
 
 - **Trigger:** dispatching mutation agents and read-only reviewers at the same time.
 - **The hole:** mutation proving edits tracked files in place and restores them seconds later, so
@@ -252,7 +286,7 @@ row to the SKILL.md index in the same commit.
   finding against `git show HEAD:` is improvising a guarantee the worktree should have given it.
 - **Tracked as:** OI-134.
 
-### 2.53 The Nth fix to one file, each a WIDER GUESS at the same heuristic (NEW 2026-08-27)
+### 2.131 The Nth fix to one file, each a WIDER GUESS at the same heuristic (NEW 2026-08-27) (was 2.53; renumbered 2026-10-25)
 
 - **Trigger:** a test file fails intermittently, you find the previous fix, and your instinct is to
   make that fix's tolerance bigger — more retry rounds, a longer interval, one more key in the tuple.
@@ -271,7 +305,7 @@ row to the SKILL.md index in the same commit.
   synchronisation primitive that existed the whole time. Chain the hook (never replace it, or you
   break whoever else installed one) and restore it in a `finally`.
 - **Ask, on the second fix and every one after:** *what does this code already emit that means what
-  I am trying to infer?* Same shape as "reach for the behavioural test FIRST" (§2.40 family).
+  I am trying to infer?* Same shape as "reach for the behavioural test FIRST".
 - **Tracked as:** diagnose `a3e9b7`; supersedes `f3c7d2` (flipped `fixed` → `partial`).
 
 ### 2.54 A mutation test that passes in BOTH arms proved nothing (NEW 2026-08-27)
@@ -430,7 +464,7 @@ row to the SKILL.md index in the same commit.
 - **CRITICAL detection lesson:** the anon-Bearer BOOT-verify (deploy-rollback §6.5) CANNOT catch this — a broken-auth module returns its own 401 to the anon AND to every valid user token, indistinguishable from a correct anon rejection. Verify a `verify_jwt=true` EF with a REAL user token (deploy-rollback §6.7).
 - **Prior incidents:** 2026-06-13 diagnose `e8a1c3` — delete-account v1→v4 shipped this; the DPDP §17 erasure was unreachable for ALL users; caught only by the live real-token E2E. Tests `delete_account_auth_pattern_test.dart` + the gate. See `feedback_edge_function_auth_jwt_as_apikey.md`.
 
-### 2.36 PostgREST builder is a thenable with NO .catch() method (NEW 2026-06-13)
+### 2.125 PostgREST builder is a thenable with NO .catch() method (NEW 2026-06-13) (was 2.36; renumbered 2026-10-25)
 - **Telltale:** a Deno EF `.insert()/.update()/.select()` chained with `.catch(fn)` throws a `TypeError` (`.catch is not a function`) → the catch never runs AND the query may never execute. Often masked behind an earlier bug (delete-account's auth always 401'd, so the audit-insert `.catch` never ran until the auth fix revealed it → 500 AFTER a successful irreversible delete).
 - **Root-cause shape:** supabase-js PostgREST filter builders are *thenables* (await-able) but do NOT implement `Promise.catch`. `builder.catch` is `undefined`; `undefined(fn)` throws synchronously.
 - **Fix pattern:** `const {error} = await admin.from(...).insert(...); if (error) throw error;` wrapped in a real try/catch. Never `.catch()` on a builder; `.catch()` is valid ONLY on a real Promise (a native `fetch()`).
@@ -448,7 +482,7 @@ row to the SKILL.md index in the same commit.
 - **Fix pattern:** route the cross-user read through a SCOPED service-role Edge Function — pure `createClient(URL, SERVICE_ROLE)` (BYPASSRLS, no global headers) + `getUser(token)` to authenticate the caller — that returns ONLY the needful rows (e.g. `submitted && !approved`), narrow projection, and STRIPS other users' identifiers it doesn't need (anonymize). NEVER relax the table RLS to world-read — that exposes every user's full catalog incl. private rows. If you also tighten a related world-read policy, verify EVERY reader first; server tallies that are SECURITY DEFINER or service-role are BYPASSRLS and unaffected (verify `prosecdef`/the client builder live before asserting "breaks no reader").
 - **Prior incidents:** 2026-06-13 `d2b9e6` (referral — EF read the referrer's code under the referee's RLS context via JWT-in-`global.headers`; the alternative client-direct read was equally blocked); 2026-06-13 `c7d4f1` (community-review queue — client read `user_custom_*` cross-user directly; fixed with the new `get-community-review-items` EF + `community_reviews` SELECT world→own tighten, both BYPASSRLS tally readers verified). Tests: `referral_redeem_success_contract_test.dart`, `community_review_rls_context_c7d4f1_test.dart`. See `feedback_edge_function_auth_jwt_as_apikey.md` (sibling class).
 
-### 2.39 Native-only plugin reachable on web → user-triggered dead-end (NEW 2026-06-14)
+### 2.128 Native-only plugin reachable on web → user-triggered dead-end (NEW 2026-06-14) (was 2.39; renumbered 2026-10-25)
 - **Telltale:** a web user taps a control (e.g. Health Sync "CONNECT") and it hangs / dead-ends — the action calls a plugin with no web binding (`MissingPluginException`). Distinct from §2.37 (a BOOT-time native-init crash): here it's a USER-triggered action AND the UI entry is still live on web, so the user walks into the dead-end.
 - **Root-cause shape:** a native-only plugin (`health`/`Health()`, HealthKit, etc.) instantiated inside a method reachable from a web tap. Boot paths may already be `kIsWeb`-guarded (splash / sync_service) while the user-triggered entry (a profile toggle) is not.
 - **Fix pattern — TWO layers:** (1) `if (kIsWeb) return …` at the top of EVERY public method on the native service that touches the plugin (ENUMERATE them — gating 3 of 4 leaves a hole); (2) gate the UI ENTRY too — disable the control on web (`onTap: kIsWeb ? null : …`) with a clear "mobile-only" affordance, so the user can't tap into a now-inert path. The native no-op alone leaves a confusing dead button; the UI gate alone leaves the native call reachable from other entries.
@@ -460,7 +494,7 @@ row to the SKILL.md index in the same commit.
 - **Fix pattern:** (1) STOP fabricating at the write site — forward the raw nullable value; a NULLABLE parse (`_parseDoubleOrNull`), not a 0-flooring one, for optional numerics so a skip SAVES `null`. (2) Make the value's effect EXPLICIT + SHARED — both the preview and the commit feed it through ONE selector (`BmrCalculator.bodyFatForCalc(bf, disabled:)`) so the "do we use it" decision can't drift and is behaviorally testable. (3) HEAL existing rows: a boot migrator nulls the fabricated default, discriminating it from a genuine value (`==18.0 AND body_fat_assessed_at==null`). Cloud-clear FIRST then local when the normal sync omits nulls (§ omit-null/re-hydrate trap). (4) ENUMERATE every consumer of the field before declaring done — the writer's silence about a field ≠ no one reads it.
 - **Prior incidents:** 2026-06-14 diagnose `c3f2d8` — onboarding body-fat `?? 18.0` fed `recalculateTargets` Katch. Tests `onboarding_bodyfat_calc_test.dart` + `body_fat_default_heal_test.dart`. Caught only because the plan was reviewed twice (§4.12) — review #1 found the second fabrication site + the synced-null heal hole; the 0.0-display regression was caught at implementation-verify. Related: §2.1 (writer/reader drift), §2.33 (refactor drops a consumed field).
 
-### 2.41 Cross-migration NOT-NULL writer drift (a later migration tightens a column an older writer omits) (NEW 2026-06-16)
+### 2.130 Cross-migration NOT-NULL writer drift (a later migration tightens a column an older writer omits) (NEW 2026-06-16) (was 2.41; renumbered 2026-10-25)
 - **Telltale:** an INSERT/RPC that worked (or never ran) starts throwing `23502 null value in column "X" violates not-null constraint` — for X the inserter never supplied. Often surfaces only when a DIFFERENT fix removes a masking layer above it (e.g. an auth fix lets the call finally REACH the failing INSERT). The writer's SQL looks unchanged; what changed is a *later* migration that added `SET NOT NULL` (no default) to a column the writer omits.
 - **Root-cause shape:** `redeem_referral_atomic` (migration 038) INSERTed a `referral_trial` row into `subscriptions` providing only `(user_id, plan, status, start_date, end_date)`. Migration 052 (`*_rls_lockdown`) later `SET NOT NULL` on the 3 `razorpay_*` columns and audited only the *then-existing* (all-Razorpay) rows — never reconciling the older 038 writer. Every referral grant 23502'd → the EF 500'd → referral had NEVER succeeded (0 `referral_trial` rows ever). The Unit-1 auth fix (d2b9e6) removed the masking layer (the EF now reached the RPC), exposing it.
 - **Fix pattern:** (1) decide whether the column is legitimately optional for THIS writer's row-type — if yes, `DROP NOT NULL` (a referral/promo/trial row has no Razorpay IDs) rather than fabricating a sentinel (a CHECK that requires it only for paid plans is the narrower alternative; prefer DROP when the real writers set it structurally + a payment path already passes `?? null`). (2) When a migration ADDS `SET NOT NULL`, grep EVERY INSERT/upsert/RPC writer of that table for the column FIRST — the audit-existing-rows step does NOT catch a writer that simply never ran. (3) Verify the exact SQLSTATE with a non-persisting live DO-block (`23502` on the named column) before + after. (4) If the gate that's meant to catch this (Gate 52, `check_schema_payload_parity.dart`) only tracks `SET NOT NULL`, teach it to honor `DROP NOT NULL` (ordered SET/DROP resolver) so it doesn't go stale.
@@ -649,7 +683,7 @@ added, false of the flip being performed.
   infrastructure, it was correct when written, and its staleness is invisible in any
   diff that does not touch it. Ref: OI-89, diagnose `f7b2c4`.
 
-### 2.54 An invariant is GREEN while the thing it protects is broken, because it describes the ingredients and not the output (NEW 2026-08-28)
+### 2.132 An invariant is GREEN while the thing it protects is broken, because it describes the ingredients and not the output (NEW 2026-08-28) (was 2.54; renumbered 2026-10-25)
 
 - **Telltale:** a freshly-written invariant test passes, and the user-visible failure it
   was written to prevent happens anyway. On OI-89, "every movement pattern holds ≥3
@@ -670,7 +704,7 @@ added, false of the flip being performed.
   what the second one would assert and whether anything asserts it. Ref: OI-89,
   diagnose `f7b2c4`, `feedback_green_check_input_set_width.md` #26/#27.
 
-### 2.55 A deliberately SCOPED capability, wired to an UNSCOPED surface (NEW 2026-08-28)
+### 2.133 A deliberately SCOPED capability, wired to an UNSCOPED surface (NEW 2026-08-28) (was 2.55; renumbered 2026-10-25)
 
 - **Telltale:** a user changes a setting, the app confirms it ("Reschedule Workouts?"),
   and nothing observable changes. No error, no warning — the write succeeded, the sync
@@ -1178,7 +1212,7 @@ added, false of the flip being performed.
   correct >77% of the time, invisible to a quick manual check, and untested
   by any fixture that stubs the date query away entirely (as this repo's
   own Supabase-client stubs commonly do). This is the SAME general shape as
-  §2.53/§2.54/§2.63/§2.65 (bad-news-vs-no-news family) but a distinct
+  §2.53, §2.131, §2.54, §2.132, §2.63 and §2.65 (bad-news-vs-no-news family; the old numbers 2.53 and 2.54 each named two classes, so both are listed) but a distinct
   mechanism: not an overloaded sentinel or a swallowed exception, but two
   independently-"correct" TIMEZONE CONVENTIONS applied to what the code
   believed was one shared concept.
@@ -1633,7 +1667,7 @@ added, false of the flip being performed.
 - **Why it survives review:** the pins are mutated by DELETING the protection, never by respelling the attack; the author's mutants share the author's blind spot.
 - **Fix pattern:** write the pattern against the grammar (`(?:GRANT|REVOKE)\b[^;]*?\bON\b[^;]*?(?:name|ALL TABLES IN SCHEMA ...)`), make schema qualification optional, add the session-level switches (`session_replication_role`), and anchor predicate-parity pins so a widened copy (`OR`, `+`, `-`, `:`) cannot satisfy a substring match.
 - **Class rule:** for every guard over SQL text, list the spellings of the operation (list, schema-wide, unqualified, role-level setting) and add one synthetic respelled case each that must fire.
-- **Prior incidents:** `d8f2a6` (B-pass round 5, findings B1-B5). Related: 2.39 (a mutation set built only from "delete the protection"), 2.37 (a positive grep cannot see a defect in an argument).
+- **Prior incidents:** `d8f2a6` (B-pass round 5, findings B1-B5). Related: 2.39 (a mutation set built only from "delete the protection"), 2.126 (a positive grep cannot see a defect in an argument).
 - **Regression tests:** `test/contracts/progress_photos_pro_insert_rule_test.dart` (211 tests; the synthetic L37-L40 and isolated C3d/C3a/C2b/C3k/C4b cases).
 
 ### 2.96 One screen state with several async writers: each path "obviously" sets it, and the order they finish in decides what the user sees (NEW 2026-10-08)
@@ -1746,7 +1780,7 @@ added, false of the flip being performed.
 - **Root-cause shape:** the test asserts what the callback reported, or that the source contains a helper's name, so it protects the pure function next to the change, not the wiring or the visible state.
 - **Fix pattern:** read the state from the object the user sees (`FixedExtentScrollController.selectedItem`, `DatePickerDialog.initialDate`), pin the exact expression passed (not the helper's name), and pin both call-site lines of a stamp (comment-stripped; strip whole-line comments only when the source holds a URL).
 - **Test shape:** one mutant per deleted line before the test is believed; list the reviewer's mutants and run them all.
-- **Prior incidents:** 2.37 (a positive grep cannot see a defect in an argument), 2.54.
+- **Prior incidents:** 2.126 (a positive grep cannot see a defect in an argument), 2.54 and 2.132.
 - **Regression test:** `test/widgets/scroll_date_picker_clamp_test.dart`, `test/contracts/age_floor_pickers_test.dart`, `test/auth/terms_version_for_account_test.dart`, `test/auth/sign_up_consent_notice_test.dart`, `test/onboarding/identity_dob_floor_test.dart` (B-pass `docs/reviews/age-floor-signup-consent-bpass.md`, mutants R1-R8).
 
 
@@ -1886,3 +1920,21 @@ added, false of the flip being performed.
 - **Test shape:** the same stored day through each surface (Train day card, Train week list, Home card, the coach) asserts one number; a mutant that adds 1 s to one item type must redden the gate.
 - **Prior incidents:** B2 batch R3 P2-2 (coach `shortenDay`), R3 P2-1 (cardio and timed rows priced as one 40 s set by every producer at once), R3 P2-4 (the display function was never run over a real plan).
 - **Regression test:** `test/contracts/session_estimate_display_test.dart` ("flag OFF: the old exercises-only estimate, 21 min" / "flag ON: the same 26 min Train and Home show for that day"), `test/plan_generator/session_set_budget_gate_test.dart` (display equals the oracle on every day).
+
+### 2.123 A boot migrator rewrites rows that are already correct and stamps them "now", so the push fingerprint the restore just recorded goes stale (NEW 2026-10-25)
+
+- **Telltale:** a fresh device restores its history and then re-uploads rows the server already holds. Mechanism, measured on the stub chain (restore two exercises, run the real migrator, push): 0 upserts expected, 2 on `origin/main`. The restore had recorded a push fingerprint per row; the one-time `ExlogKeyMigrator` then put every canonical row back with `updated_at_ms = now`, the push sends `completed_at = max(resolved, updated_at_ms)`, and `completed_at` is part of the fingerprint, so every recorded fingerprint no longer matched. The incident volume (633 upserts for 207 bundles) is what this plus the concurrent sweep and the retry explain together, not the migrator alone.
+- **Root-cause shape:** an unconditional "migrate everything" loop whose output differs from its input only by a write stamp that a downstream fingerprint reads. Any writer that touches rows en masse and bumps a stamp owes the question "does this row actually change?" before it writes.
+- **Fix pattern:** build the would-be row WITHOUT the new stamp, compare it with the stored row by `SyncFingerprint.canonicalJson` (a comparison that can throw falls back to the old rewrite and reports once), and skip the `put` when equal. Keep every side effect the rewrite had (here `PendingExlogDeletes.cancelFor`) on the skip path. Kill switch `disable_exlog_migrator_skip_unchanged`.
+- **Test shape:** seed the cloud, run the real restore, run the migrator, run the real push, assert ZERO upserts; then the negative shapes the skip must NOT swallow (a row with no `sets`, a row whose aggregates differ, a rogue key, an `Infinity` weight). A fixture that differs from the candidate for TWO reasons hides a comparison that ignores one of them (mutant M4 survived until test 5c isolated `sets`).
+- **Prior incidents:** `f3d2a7`, `a8c4e5` (overlapping passes lose each other's confirmations), `f1c6b4` (per-launch restore writers rewrite unchanged rows). Related to 2.100 only through the residual shape: a summary-only restored row is still rewritten and its push sends `set_number = 1` whatever the cloud holds (an OI, not fixed here).
+- **Regression test:** `test/contracts/exlog_migrator_keeps_restored_fingerprints_test.dart`.
+
+### 2.124 Progress is persisted only at the END of a long pass, and a fresh device starts two pushers at once (NEW 2026-10-25)
+
+- **Telltale:** "Sync paused" on a first launch in a private window; the request log shows the same rows uploaded on several launches or by two passes at once. The skip index recorded confirmations in memory and wrote them to Hive once, in `commit`, at the end of the pass; a retry, a page reload, a killed tab or an owner abort therefore redid the whole pass, and a fresh device ran the daily sweep (`last_full_sync` null) at the same time as the migrator-triggered workout push.
+- **Root-cause shape:** durability tied to the success of the whole unit of work (commit at end) instead of to each confirmed step; plus a "never ran" sentinel (`last_full_sync == null`) that means "due now" on exactly the launch where a restore has just made everything look dirty.
+- **Fix pattern:** flush every `kSkipIndexFlushEvery` (25) durable events (a confirmed push, or the drop of a fingerprint that WAS stored, so a pass killed after a failed push of an edited row has already removed the old fingerprint) into a FRESH re-read of the box (never the construction-time snapshot, so an overlapping pass keeps its confirmations), never prune in the flush, keep the pending sets on failure and report once; and postpone (not drop) the first sweep behind a durable per-user marker with a 1 h window, stamping `last_full_sync` with the MARKER time. Kill switches `disable_skip_index_incremental_flush`, `disable_first_sweep_postpone`.
+- **Test shape:** a killed pass (30 confirmed, no `commit`) leaves a new instance skipping exactly the first 25; an aborted real `_syncExerciseLogs` pass keeps at least 25; overlapping instances keep the union; a failing `put` neither throws nor loses pending rows; the marker is written once under two concurrent callers, never for another account's session, and consumed on every decision.
+- **Prior incidents:** `e5b2a9` (outage resilience: the sweep is owed, never silently dropped), `f3d2a7`/`a8c4e5` (commit merges the pass's own deltas into a re-read).
+- **Regression tests:** `test/sync/sync_skip_index_incremental_flush_test.dart`, `test/sync/first_sweep_decision_test.dart`.

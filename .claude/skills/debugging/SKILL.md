@@ -84,30 +84,15 @@ Per CLAUDE.md rules 21 + 22:
 
 ## 2. Bug class catalog (seeded — append on each new class)
 
-> **Split 2026-09-29 (context-lean):** the full `### 2.N` bodies now live in [`bug-classes.md`](bug-classes.md) (same directory), verbatim and unrenumbered. This file keeps only the index table below. To use a class: find its id/trigger in the table, then `grep -n "^### 2.N " .claude/skills/debugging/bug-classes.md` and read that entry. Do not load `bug-classes.md` whole. **New classes: append the body to `bug-classes.md` and add one index row here, same commit.** The test column shows the first test path the body cites (`-` = none cited; open the body).
+> **Split 2026-09-29 (context-lean):** the full `### 2.N` bodies now live in [`bug-classes.md`](bug-classes.md) (same directory), verbatim. This file keeps only the index table below. To use a class: find its id/trigger in the table, then `grep -n "^### 2.N " .claude/skills/debugging/bug-classes.md` and read that entry. Do not load `bug-classes.md` whole. **New classes: append the body to `bug-classes.md` and add one index row here, same commit.** The test column shows the first test path the body cites (`-` = none cited; open the body).
 
-> ⚠ **NUMBERS IN THIS SECTION ARE NOT MONOTONIC IN FILE ORDER, and NINE are
-> DUPLICATED** — 2.36, 2.37, 2.38, 2.39, 2.40, 2.41, 2.53, 2.54, 2.55 — each
-> naming two unrelated classes. Before adding an entry, get the true maximum:
->
-> ```sh
-> grep -oE '^### 2\.[0-9]+' .claude/skills/debugging/bug-classes.md | grep -oE '[0-9]+$' | sort -n | tail -1
-> ```
->
-> **`tail -1` on the file itself gives the LAST-POSITIONED entry, not the
-> highest-numbered one.** On 2026-09-07 that mistake minted a second 2.61; it
-> was caught in review and renumbered, so 2.61 is NOT in the duplicate list
-> above — but it is exactly how the other nine got there. Same shape as the
-> OI-number collisions `scripts/check_oi_numbering_unique.dart` exists to catch;
-> **no equivalent gate covers `.claude/skills/`.**
->
-> ⚠ **Do NOT renumber the nine to tidy them.** Every one is cited by number from
-> outside this file — `docs/diagnoses/`, `docs/plans/`, `docs/superpowers/`,
-> `docs/plan-reviews/` and `memory/` — and because each number names two
-> unrelated classes, a citation cannot be resolved to one of them without
-> reading it. Tracked as **OI-167**, whose recommendation is to key on the TITLE
-> and treat the number as an optional alias, the way CLAUDE.md rule 24 already
-> did for gates.
+> **Ids are unique and gated** (`scripts/check_bug_class_numbers_unique.dart`, run by pre-commit and CI; OI-167). Get the next free id with
+> `dart run scripts/check_bug_class_numbers_unique.dart --next` (some toolchains print a build banner first: the id is the LAST line of stdout). The id is the highest NUMBER over both files, never the last entry in
+> `bug-classes.md`: entries are not in numeric order (`tail -1` on that file minted a second 2.61 on 2026-09-07). Without Dart:
+> `grep -oE '^### 2\.[0-9]+' .claude/skills/debugging/bug-classes.md | grep -oE '[0-9]+$' | sort -n | tail -1`, plus one. Nine ids used to name two
+> classes each (2.36-2.41, 2.53-2.55); on 2026-10-25 the other class of each pair got a new id (2.125-2.133, marked `(was 2.N; renumbered 2026-10-25)`
+> on its heading and row). A citation of one of those nine ids in an older record may mean either class: the legacy map is in the header of
+> `bug-classes.md`.
 
 ### Bug-class index (bodies live in `bug-classes.md` - open it and grep the id)
 
@@ -132,12 +117,12 @@ Per CLAUDE.md rules 21 + 22:
 | 2.10 | Provider-invalidation-after-mutation gaps | Write succeeds; UI shows stale value until cold restart; insight card / receipt / calen... | - |
 | 2.18 | Source-grep contract test stale after refactor — caught only at `fl... | flutter test red after a refactor that preserves behaviour via a shim/forwarder file. F... | gate: scripts/check_sot_behavioral_test_paths.dart |
 | 2.36 | A `DROP` + `CREATE` on a SECURITY DEFINER function RESETS its ACL —... | any migration that changes a function's RETURN TYPE. Postgres raises 42P13 on CREATE OR... | test/contracts/admin_metrics_functions_role_revoke_test.dart |
-| 2.37 | A positive grep cannot see a defect in an ARGUMENT | any "surface wiring" test that asserts a file CONTAINS someProvider, someFormatter(, or... | test/contracts/hold_week_identity_behavioral_test.dart |
-| 2.38 | Verify one layer FURTHER than the layer you are looking at | "the RPC returns it", "the endpoint responds 200", "the EF spreads the row", "the ACL i... | - |
+| 2.126 | A positive grep cannot see a defect in an ARGUMENT (was 2.37; renumbered 2026-10-25) | any "surface wiring" test that asserts a file CONTAINS someProvider, someFormatter(, or... | test/contracts/hold_week_identity_behavioral_test.dart |
+| 2.127 | Verify one layer FURTHER than the layer you are looking at (was 2.38; renumbered 2026-10-25) | "the RPC returns it", "the endpoint responds 200", "the EF spreads the row", "the ACL i... | - |
 | 2.39 | A mutation set built only from "delete the protection" is half a proof | a mutation_proven: true ledger entry whose evidence is "deleting the check reddens N te... | - |
 | 2.41 | The mutation was ABSORBED — the test is green because something els... | you delete a protection, the tests stay green, and the protection looks obviously load-... | - |
-| 2.40 | Mutation-proving runs in the SHARED worktree, where §4.13's guarant... | dispatching mutation agents and read-only reviewers at the same time. | - |
-| 2.53 | The Nth fix to one file, each a WIDER GUESS at the same heuristic | a test file fails intermittently, you find the previous fix, and your instinct is to ma... | - |
+| 2.129 | Mutation-proving runs in the SHARED worktree, where §4.13's guarant... (was 2.40; renumbered 2026-10-25) | dispatching mutation agents and read-only reviewers at the same time. | - |
+| 2.131 | The Nth fix to one file, each a WIDER GUESS at the same heuristic (was 2.53; renumbered 2026-10-25) | a test file fails intermittently, you find the previous fix, and your instinct is to ma... | - |
 | 2.54 | A mutation test that passes in BOTH arms proved nothing | proving a fix for a RACE by running it N times under synthetic load, then N times with... | - |
 | 2.55 | Your own "quick checks" are load, and can cause the failure you the... | a full suite is running (pre-push, CI-locally, a long background job) and you run dart... | - |
 | 2.19 | Monotonic-field demoted by recompute | User "loses" an achievement that should be permanent after their current state regresse... | - |
@@ -157,12 +142,12 @@ Per CLAUDE.md rules 21 + 22:
 | 2.33 | A "replaces X" refactor silently drops a field the readers depend on | A count/history/aggregate surface UNDERCOUNTS live data, but the data exists and a rein... | - |
 | 2.34 | Commit-gate hash instability — non-deterministic regen + non-byte-f... | The catastrophic-tier review gate can't be satisfied — the docs/reviews/<hash>-review.m... | - |
 | 2.35 | Edge Function auth: user JWT passed as the supabaseKey + bare getUs... | an authed verify_jwt=true Edge Function returns its OWN sanitized 401 ("Invalid or expi... | gate: scripts/check_edge_function_auth_pattern.dart |
-| 2.36 | PostgREST builder is a thenable with NO .catch() method | a Deno EF .insert()/.update()/.select() chained with .catch(fn) throws a TypeError (.ca... | - |
+| 2.125 | PostgREST builder is a thenable with NO .catch() method (was 2.36; renumbered 2026-10-25) | a Deno EF .insert()/.update()/.select() chained with .catch(fn) throws a TypeError (.ca... | - |
 | 2.37 | Platform-only native init unguarded by kIsWeb → web boot crash | web boot console: "[main] Firebase/Crashlytics init failed: Null check operator used on... | - |
 | 2.38 | Cross-user read need vs own-only RLS → must use a scoped service-ro... | a feature that needs to read OTHER users' rows (a community review queue, a referral-co... | - |
-| 2.39 | Native-only plugin reachable on web → user-triggered dead-end | a web user taps a control (e.g. Health Sync "CONNECT") and it hangs / dead-ends — the a... | - |
+| 2.128 | Native-only plugin reachable on web → user-triggered dead-end (was 2.39; renumbered 2026-10-25) | a web user taps a control (e.g. Health Sync "CONNECT") and it hangs / dead-ends — the a... | - |
 | 2.40 | Fabricated default persisted into a field a DIFFERENT path consumes... | a value the WRITE site fabricates (x ?? 18.0, ?? 0, ?? 'unknown') looks harmless becaus... | - |
-| 2.41 | Cross-migration NOT-NULL writer drift (a later migration tightens a... | an INSERT/RPC that worked (or never ran) starts throwing 23502 null value in column "X"... | - |
+| 2.130 | Cross-migration NOT-NULL writer drift (a later migration tightens a... (was 2.41; renumbered 2026-10-25) | an INSERT/RPC that worked (or never ran) starts throwing 23502 null value in column "X"... | - |
 | 2.42 | A periodic CLEAR of a ledger destroys a PERMANENT-protection invari... | a value that should be remembered for a long horizon is silently forgotten at a periodi... | - |
 | 2.43 | Un-debounced fire-and-forget sync fan-out → free-tier backend collapse | a burst of writes (signup onboarding, heavy logging) produces a flood of cloud calls in... | - |
 | 2.45 | Supabase dashboard Site URL overrides client `redirectTo` for email... | Forgot-password / magic-link email points to http://127.0.0.1:<port> or a wrong domain.... | - |
@@ -177,8 +162,8 @@ Per CLAUDE.md rules 21 + 22:
 | 2.51 | Moving data out of a wholesale-replaced container into another whol... | a setting the user changed on device A is missing after device B syncs — and nothing er... | test/contracts/notification_prefs_round_trip_behavioral_test.dart |
 | 2.52 | A call site is deleted for ONE of its consumers while a second cons... | a compile/type error naming an identifier you are certain you removed on purpose — Cann... | - |
 | 2.53 | A MIRROR harness stops modelling production, so it is green in ever... | you toggle the input the batch exists to ship, re-run the measurement harness, and the... | - |
-| 2.54 | An invariant is GREEN while the thing it protects is broken, becaus... | a freshly-written invariant test passes, and the user-visible failure it was written to... | - |
-| 2.55 | A deliberately SCOPED capability, wired to an UNSCOPED surface | a user changes a setting, the app confirms it ("Reschedule Workouts?"), and nothing obs... | - |
+| 2.132 | An invariant is GREEN while the thing it protects is broken, becaus... (was 2.54; renumbered 2026-10-25) | a freshly-written invariant test passes, and the user-visible failure it was written to... | - |
+| 2.133 | A deliberately SCOPED capability, wired to an UNSCOPED surface (was 2.55; renumbered 2026-10-25) | a user changes a setting, the app confirms it ("Reschedule Workouts?"), and nothing obs... | - |
 | 2.56 | An inherited environment variable INVERTS a test's assertion instea... | a test asserting that a guard REFUSES something starts failing, and the guard is workin... | test/contracts/git_safety_hook_integration_test.dart |
 | 2.57 | A citation is checked in ONE direction only — the claim is never ve... | a commit message (or a diagnose-doc, or an agent's own summary) says "closes OI-NN" / "... | test/scripts/oi_closure_lib_test.dart |
 | 2.58 | N providers read ONE store independently; the invalidation list for... | two surfaces render the SAME underlying field differently in the same session — Home sh... | test/contracts/profile_provider_single_source_test.dart |
@@ -213,7 +198,7 @@ Per CLAUDE.md rules 21 + 22:
 | 2.89 | A PRO-only screen whose gate sits on its DOOR only (a row or button holds `gateAndVerify`; the screen reads and writes the protected data with no check, so a typed web address, a deep link or a second button skips it) | a free user uses a "PRO" feature; docs say "each destination keeps its own gate"; source pins pin the door and stay green while a second door exists | test/contracts/progress_photos_screen_gate_test.dart |
 | 2.90 | A spawned-process test asserts only the exit code, so the one stream that holds the cause is never printed (`dart run` exits 254 on a compile or load error with the reason on stderr, 255 on an uncaught exception) | one CI test fails with `Expected: <0> Actual: <254>` and nothing else, and the re-run is green | test/contracts/sot_registry_citations_test.dart |
 | 2.92 | A process-wide "restore finished" counter used as a per-ACCOUNT gate (`restoreCompletedTick > 0`): it opens after the one rollover that needed it and is never reset on an account swap | Home streak holds only through SIMULATED freezes while the chip shows the unspent count (the debit never persisted on a cold start); or a freeze is debited against the NEW account's pre-restore rows right after a swap | test/contracts/streak_reckon_restore_settled_behavioral_test.dart |
-| 2.93 | PostgREST answers every read with at most `db-max-rows` (1000) rows, status 200, error null, so a bare select or a large `.range` silently truncates; and an offset pager ordered by a NON-UNIQUE column skips and duplicates rows across a page seam | a restore lands fewer rows than the cloud holds with no error (completions: missed days in the streak walk); a table count of exactly 1000; or rows missing AND doubled only where many rows share a timestamp | test/sync/restore_legacy_paging_behavioral_test.dart |
+| 2.93 | PostgREST truncates every read to `db-max-rows` (1000) rows, status 200, error null, so a bare select or a large `.range` silently truncates; and an offset pager ordered by a NON-UNIQUE column skips and duplicates rows across a page seam | a restore lands fewer rows than the cloud holds with no error (completions: missed days in the streak walk); a table count of exactly 1000; or rows missing AND doubled only where many rows share a timestamp | test/sync/restore_legacy_paging_behavioral_test.dart |
 | 2.94 | A shared in-flight flag is its own mirror: a `static bool` guarding a paid call cannot wake a second screen instance, its dedupe stamp is written only after the slow call returns, and the call has no timeout | a fix adds a guard and the NEXT review finds a path it misses (a re-open mid-call, the extra trigger the fix itself added, a Generate button greyed out forever) | test/contracts/weekly_report_video_and_refresh_issue78_test.dart |
 | 2.95 | A guard regex written for the shape you just wrote misses the list, schema-wide, unqualified and search_path forms of the same operation | a tripwire over later migrations is green and a respelled GRANT/objects/session_replication_role defeats it | test/contracts/progress_photos_pro_insert_rule_test.dart |
 | 2.96 | One screen state with several async writers: each path sets it, and the order they finish in decides what the user sees | a stale empty read locks a payer out; a downgrade hides a lapsed user's photos; a failed read shown as 'no photos' | test/contracts/progress_photos_lapsed_flow_test.dart |
@@ -244,6 +229,8 @@ Per CLAUDE.md rules 21 + 22:
 | 2.120 | A filter that drops a slot leaves a short day: safe omission with no refill | an injured user's generated day holds one or two exercises, or none, while the uninjured plan is full | test/contracts/thin_day_topup_behavioral_test.dart |
 | 2.121 | A service-role path performs its side effect BEFORE the authorization check that should gate it | a refusal (403 / 400 "not yours") is answered correctly, yet a capture, a status echo or an external write already happened for the caller before it; after a fix in one writer, its TWIN writer (c7e3b1: the webhook) | test/contracts/verify_payment_owner_before_capture_writer_to_reader_test.dart, test/contracts/webhook_already_captured_recovery_writer_to_reader_test.dart |
 | 2.122 | A user-visible quantity has more producers than the model that was changed | two screens show one number and a third surface (the coach's estimate, a card) still computes it the old way; the same stored day reads 21 on one and 26 on another | test/contracts/session_estimate_display_test.dart, test/plan_generator/session_set_budget_gate_test.dart |
+| 2.123 | A boot migrator rewrites rows that are already correct and stamps them "now", so the push fingerprint the restore just recorded goes stale | a fresh device restores its history and then re-uploads all of it (633 `workout_log_exercises` upserts for 207 bundles) | test/contracts/exlog_migrator_keeps_restored_fingerprints_test.dart |
+| 2.124 | Progress is persisted only at the END of a long pass, and a fresh device starts two pushers at once | "Sync paused" on a first launch; the same rows uploaded on several launches or by two passes at once | test/sync/sync_skip_index_incremental_flush_test.dart, test/sync/first_sweep_decision_test.dart |
 
 ---
 
@@ -267,13 +254,13 @@ Borrowing from `superpowers:using-superpowers`, `superpowers:systematic-debuggin
 - **"The redirect/guard just reads `InductionService.x` / a service getter — it's cheap."** If that getter reads a user-scoped Hive box (`coachBox`, `userBox`, …) and the call is reachable from a GoRouter `redirect` or any pre-`/restoring` path, it can throw "HiveUserSession not opened" at cold start → router error page. `HiveService.isInitialized` is NOT enough; guard `HiveUserSession.currentOwnerFullId != null`. See §2.21.
 - **"The subagent's fix introduced a regression but Gate XX caught it — I'll skip the fix-up commit since the gate already passed somehow."** Gate scripts may report FAIL but exit 0 during baselining. Re-run the gate standalone and check `$?`. If `[Gate XX] FAIL` appears in output, ALWAYS fix-up and commit, even if exit code says 0. APK Test #16 caught this nuance via Gate 16.
 - **"This sheet/card takes the data as a param and renders it — fine."** If a PROVIDER is the source of truth and the surface renders a value captured at open-time, `invalidateSelf()` won't rebuild it → stale until a remount ("works after navigate-away-and-back" is the tell). Wrap in `Consumer` + `ref.watch`; `await` the mutating callback. See §2.28.
-- **"The test greps for the provider name, so the wiring is covered."** No. That token survives a call site that passes `null`. See §2.37 — a 4757-test suite stayed green through it.
-- **"The RPC returns the column / the endpoint 200s, so the feature works."** That is true at ONE layer. Name the next consumer and check it. See §2.38.
+- **"The test greps for the provider name, so the wiring is covered."** No. That token survives a call site that passes `null`. See §2.126 — a 4757-test suite stayed green through it.
+- **"The RPC returns the column / the endpoint 200s, so the feature works."** That is true at ONE layer. Name the next consumer and check it. See §2.127.
 - **"Mutation-proven — I deleted the check and tests went red."** Half a proof. Reorder it, respell it, and add a NEW unguarded instance beside the guarded one. See §2.39.
 - **"I deleted the check and tests stayed green, so the mutation must be wrong."** Usually the TEST is: something else absorbed the damage before it reached the assertion. See §2.41.
 - **"`CREATE OR REPLACE` keeps the grants, so I can add a return column."** You cannot — 42P13 forces a DROP, and the DROP resets the ACL. See §2.36.
-- **"I'll run the mutations here while the reviewers read."** They will see a tree that matches no commit. See §2.40.
-- **"The last fix to this file was nearly right — I'll just widen it."** If this is the second or later fix to one file for one class, the heuristic IS the bug. Ask what signal the code already emits. See §2.53.
+- **"I'll run the mutations here while the reviewers read."** They will see a tree that matches no commit. See §2.129.
+- **"The last fix to this file was nearly right — I'll just widen it."** If this is the second or later fix to one file for one class, the heuristic IS the bug. Ask what signal the code already emits. See §2.131.
 - **"It passed 5/5 under load, the fix works."** Did you run the NEUTERED arm? If that also passes, your experiment is blind and the 5/5 means nothing. See §2.54.
 - **"The suite is running, I'll just check one thing with `dart run`."** That is load — the dart wrapper serializes on the SDK lock. See §2.55.
 - **"The trigger only renames the key on INSERT — the upsert will still find its row."** It will not: BEFORE INSERT row triggers run before the ON CONFLICT arbiter, so a rewritten key column never conflicts. Test the writer's real upsert against an EXISTING row, not only against an empty key. See §2.4 mode C (`bd79b1`).
@@ -311,7 +298,7 @@ Skill deltas:      <new bug class appended to §2? new red flag in §3?>
 
 When you encounter ANY of the following during a debugging session, append to this file BEFORE marking the session complete:
 
-1. **A new bug class** not in §2 — add a new sub-section to `bug-classes.md` (plus one row in the §2 index table here) with the same shape (telltale, root-cause shape, fix pattern, prior incidents).
+1. **A new bug class** not in §2 — add a new sub-section to `bug-classes.md` (plus one row in the §2 index table here) with the same shape (telltale, root-cause shape, fix pattern, prior incidents). Take the id from `dart run scripts/check_bug_class_numbers_unique.dart --next` and run that gate before the commit.
 2. **A new methodology refinement** — extend §1 step list or add a sub-step. Cite the incident that surfaced the refinement.
 3. **A new red flag** — add to §3 with the trigger phrase and the correct response.
 4. **A bug class graduates** (3+ recurrences) — link a dedicated `feedback_mistake_*.md` from MEMORY.md and tighten the §2 fix pattern.
@@ -350,7 +337,7 @@ Append-only by default. If you must REWRITE an existing entry (e.g. the fix patt
 
 - **2026-09-27 (day-swapper-sync-load)** — Self-evolution. §2.73 NEW — a widget test hanging straight through `--timeout` is unwrapped real I/O in the `testWidgets` body, not a synchronous product loop (3 hangs in one batch; one misdirected product-loop hunt before bisection found the bare `await box.put`).
 
-- **2026-08-28 (OI-144, same branch)** — Self-evolution. §2.55 NEW — a deliberately SCOPED
+- **2026-08-28 (OI-144, same branch)** — Self-evolution. §2.133 NEW (was 2.55) — a deliberately SCOPED
   capability wired to an UNSCOPED surface (collect-but-ignore). The Profile picker offered
   13 chips at a tier the capability model never reached; ticking one raised the reschedule
   prompt and returned a byte-identical plan. Carries three sub-lessons: check the COMPLEMENT
@@ -360,7 +347,7 @@ Append-only by default. If you must REWRITE an existing entry (e.g. the fix patt
   effectiveItems' fail-open branch reachable). Closes-diagnose: `a9e3c7`. Regression test:
   `test/contracts/equipment_owned_widens_test.dart`, mutation-proven on both legs.
 
-- **2026-08-28 (OI-89 equipment capability batch)** — Self-evolution. §2.53 NEW — a MIRROR harness stops modelling production and is green in every world (the 606-persona scorecard reported byte-identical numbers with the capability flag ON and OFF; `CascadeTracer`/`QueryV4Mirror` never modelled capability, and only the pool DATA was pinned, never the BEHAVIOUR). §2.54 NEW — an invariant green while the thing it protects is broken, because it describes ingredients not output ("≥3 baseline rows per pattern" passed while the generator left 331 empty slots; `pickedNames` dedup exhausts a 3-row pool inside one week). Both were found by MEASUREMENT after the ×2 plan review had converged, which is the transferable point: a converged review does not substitute for running the thing. Closes-diagnose: `f7b2c4`. Regression tests: `test/contracts/equipment_tier_consistency_test.dart` (per-pattern floor), `test/plan_generator/scorecard_gate_test.dart` (equipment violations promoted from ≤201 to a hard ==0).
+- **2026-08-28 (OI-89 equipment capability batch)** — Self-evolution. §2.53 NEW — a MIRROR harness stops modelling production and is green in every world (the 606-persona scorecard reported byte-identical numbers with the capability flag ON and OFF; `CascadeTracer`/`QueryV4Mirror` never modelled capability, and only the pool DATA was pinned, never the BEHAVIOUR). §2.132 NEW (was 2.54) — an invariant green while the thing it protects is broken, because it describes ingredients not output ("≥3 baseline rows per pattern" passed while the generator left 331 empty slots; `pickedNames` dedup exhausts a 3-row pool inside one week). Both were found by MEASUREMENT after the ×2 plan review had converged, which is the transferable point: a converged review does not substitute for running the thing. Closes-diagnose: `f7b2c4`. Regression tests: `test/contracts/equipment_tier_consistency_test.dart` (per-pattern floor), `test/plan_generator/scorecard_gate_test.dart` (equipment violations promoted from ≤201 to a hard ==0).
 
 - **2026-05-15** — Skill created. Seeded with 10 bug classes from Tests #6 through #15.4 + audit 2026-05-12. Diagnose-doc `2026-05-15-debugging-skill-creation-4e9515.md`.
 - **2026-05-15 (evening, post-APK-Test-#16)** — Self-evolution. (a) §2.4 expanded with mode-B 42P10 trap (5th writer/reader drift instance), live-arbiter scaffold reference, NOT-NULL-arbiter class rule. (b) §2.5 retry budget bumped to `[2000, 6000, 12000]` + 504 trigger + direct-HTTP wrapping. (c) §2.11 added — Repository `box.get(key) → Map` id-injection class (Gate 16). (d) Two new red flags in §3: onConflict-change verification + "Gate FAIL output but exit 0" trap. Closes-diagnose: `76c8f4`, `9f4ab2`, `25e91d`, `c01d57`, `a5d29c`.
@@ -381,3 +368,4 @@ Append-only by default. If you must REWRITE an existing entry (e.g. the fix patt
 - **2026-10-05 (sot-gate-test-stderr)** — Self-evolution. §2.90 NEW — a spawned-process test asserts only the exit code, so the stream that holds the cause is never printed. Founding case: CI run 37203140849 (2026-10-04) failed one test with `Expected: <0> Actual: <254>` and nothing else; its assertion printed stdout only (of the file's eight gate-run assertions four printed both streams, three stdout only, one neither), the re-run was green and the cause is still unexplained (ledger row C3). The fix reports from the choke point (`runGateOn` ends with `report(gateDiag(...))`, default `printOnFailure`) instead of per assertion: the per-site `reason:` plus a counting pin was dropped after plan-review round 1, because the pin's own literal satisfied its third check. Commit type `test(contracts):`, so no diagnose-doc; plan `docs/plans/sot-gate-test-stderr.md`, ledger `docs/audit/sot-gate-test-stderr.closure.yaml`. Regression test: `test/contracts/sot_registry_citations_test.dart` (33 tests, 5 new).
 - **2026-10-06 (spawn-tests-env-and-stderr, e6c4a9)** — Self-evolution. §2.56 gains its FIFTH instance and the structural fix: the leaked variable was the repo's own recursion guard (`CONTRACT_SWEEP_NESTED`, set by the pre-push sweep on the `flutter test` that selected `contract_sweep_e2e_test.dart`), so 5 of 7 of that test's cases failed on every registry-touching push. The fix is ONE spawn helper (`test/helpers/spawn.dart`: a control-variable-clean environment AND the one failure report) plus a DERIVED two-way manifest of every environment variable the scripts read (`test/contracts/spawn_env_manifest_test.dart`), with the lessons: run the prototype scan on the real tree and read what it did NOT find (an `echo` line fooled the first assignment regex; `git grep` printed a Node helper only as `Binary file ... matches` with no lines, so `USDA_API_KEY` was read past by hand and found by the scan), a poisoned-parent regression passes vacuously if its seam is dropped (add preconditions and a seam pin), and a `reason:` string that names a guard variable is not a declaration of it. §2.90's choke point moved into that helper (`gateDiag` is gone; `defaultSpawnReport` also handles a spawn made at load time, outside any test zone).
 - **2026-10-07 (coach-history-correctness-tools)** — Self-evolution. §2.97 NEW — day windows selected by the write time instead of the day (`workout_log_id` v5), plus dedupe-after-filter and a window shorter than its cron period. Founding case: L1b (diagnoses a1c7e3, c3e9a5, d4fab6, e5abc7, c9ef01); mutation lessons: a test fake that ignores the filter the reader relies on makes the 'edited old log' case vacuous (the missing-date-bucket row is what protects the in-memory window), and two reviewer findings (cross-tick double announce, `to` unbounded) were real gaps the 45-mutant set missed because the mutants only deleted protections.
+- **2026-10-25 (bug-class-uniqueness, OI-167)** — Self-evolution. Bug-class numbers are now unique and gated: `scripts/check_bug_class_numbers_unique.dart` (pre-commit and CI) fails on an id used twice, an id in one file and not the other, a heading that does not parse, a major other than 2, or an id whose title differs between `bug-classes.md` and this index; `--next` prints the next free id. The nine duplicated ids (2.36-2.41, 2.53-2.55) were split: the class with fewer citation lines moved to 2.125-2.133 (a tie kept the class introduced earlier in git) (marker `(was 2.N; renumbered 2026-10-25)`), 18 citation lines were repointed, and the legacy map for older records is in the `bug-classes.md` header. Red flags in section 3 that cite a moved class now name its new id.

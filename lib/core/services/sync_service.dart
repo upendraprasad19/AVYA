@@ -34,6 +34,7 @@ import 'package:icanbefitter/core/services/sync/schedule_completion_time.dart';
 import 'package:icanbefitter/core/services/sync/sync_skip_index.dart';
 import 'package:icanbefitter/core/services/sync/exlog_push_rules.dart';
 import 'package:icanbefitter/core/services/sync/exlog_restore_rules.dart';
+import 'package:icanbefitter/core/services/sync/first_sweep_decision.dart';
 import 'package:icanbefitter/core/services/sync/measurement_push_rules.dart';
 import 'package:icanbefitter/core/services/sync_error.dart';
 import 'package:icanbefitter/core/services/sync_flags.dart';
@@ -1011,6 +1012,11 @@ class SyncService {
       final userId = await _ensureSessionOpen();
       if (userId == null) return;
 
+      // sync-storm-first-sweep W3 — remember, durably and before any restore
+      // write, that this device was empty at its first launch, so the first
+      // sweep below can be postponed. First-wins; never throws.
+      await _markFreshDeviceIfEmpty(userId);
+
       // ── Health sync FIRST — steps/weight are fast local reads from
       // Health Connect and the user expects to see them immediately on
       // the home screen. All other sync tasks (restore, full sync,
@@ -1077,7 +1083,12 @@ class SyncService {
         interval: _fullSyncInterval,
         owed: _sweepOwed,
       )) {
-        await weeklyFullSync();
+        // sync-storm-first-sweep W3 — a device that was empty at its first
+        // launch has just downloaded its history; the sweep is postponed (the
+        // stamp is the marker time), not dropped. Never throws.
+        if (!await _postponeFirstSweep(userId)) {
+          await weeklyFullSync();
+        }
       }
 
       // Push any pending custom items immediately.
@@ -1545,19 +1556,105 @@ class SyncService {
   Future<void> replayPendingOnboardingSyncForTest(String userId) =>
       _replayPendingOnboardingSync(userId);
 
+  /// True when the workout box holds any `wlog_` / `exlog_` row, i.e. the
+  /// device is not a fresh install. A PURE read (no catch: `_restoreIfNeeded`
+  /// keeps its pre-extraction throw semantics).
+  bool _hasLocalWorkoutHistory() {
+    for (final key in _hive.workoutBox.keys) {
+      if (key is String &&
+          (key.startsWith('wlog_') || key.startsWith('exlog_'))) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  /// sync-storm-first-sweep W3 — writes the durable per-user marker
+  /// (`syncBox['fresh_device_<userId>']` = UTC ISO time) when this launch finds
+  /// the device EMPTY: no workout history, no sweep ever stamped, no marker yet
+  /// (first-wins). Called from the top of `checkAndSync` (web reload, existing
+  /// session) and from the restore core right after the Hive session opens (the
+  /// in-app sign-in path never runs `checkAndSync` until the next cold start),
+  /// in both cases BEFORE any restore op writes history. No await between the
+  /// marker read and the put, so two interleaved callers cannot both write. A
+  /// failure only means "not marked": today's behaviour.
+  Future<void> _markFreshDeviceIfEmpty(String userId) async {
+    try {
+      if (!SyncFlags.firstSweepPostponeEnabled) return;
+      // Layer A: when the live uid differs from the Hive owner the user-scoped
+      // boxes are served EMPTY, which would read as a fresh device.
+      if (HiveUserSession.currentOwnerFullId != userId ||
+          ownerChangedSince(userId)) {
+        return;
+      }
+      final key = freshDeviceMarkerKey(userId);
+      if (!shouldMarkFreshDevice(
+        hasLocalHistory: _hasLocalWorkoutHistory(),
+        lastFullSync: _getTimestamp(_lastFullSyncKey),
+        markerExists: _hive.syncBox.get(key) != null,
+        enabled: true,
+      )) {
+        return;
+      }
+      await _hive.syncBox.put(key, DateTime.now().toUtc().toIso8601String());
+    } catch (e, st) {
+      debugPrint('[SyncService.markFreshDevice] $e');
+      unawaited(
+          ErrorTelemetry.recordNonFatal(e, st, reason: 'sync_fresh_device_mark'));
+    }
+  }
+
+  /// sync-storm-first-sweep W3 — called only inside the `due` branch of the
+  /// launch sweep decision. Returns true when the sweep is POSTPONED: the
+  /// marker is younger than [kFreshDeviceWindow], no failure is owed, and the
+  /// session still belongs to [userId]; `last_full_sync` is then stamped with
+  /// the MARKER time, so the next sweep is due 24 h after the first launch. The
+  /// marker is consumed whatever the outcome. Never throws (a throw would skip
+  /// the rest of `checkAndSync`); any error returns false = today's sweep.
+  Future<bool> _postponeFirstSweep(String userId) async {
+    try {
+      if (!SyncFlags.firstSweepPostponeEnabled) return false;
+      final key = freshDeviceMarkerKey(userId);
+      final raw = _hive.syncBox.get(key);
+      final marker = raw == null ? null : DateTime.tryParse(raw.toString());
+      if (raw != null) await _hive.syncBox.delete(key);
+      final action = decideSweep(
+        due: true,
+        owed: _sweepOwed,
+        freshWithinWindow:
+            isFreshWithinWindow(marker: marker, now: DateTime.now()),
+        enabled: true,
+      );
+      if (action != SweepAction.postponeAndStamp) return false;
+      if (ownerChangedSince(userId)) return false;
+      await _setTimestamp(_lastFullSyncKey, at: marker);
+      unawaited(ErrorTelemetry.logEvent('first_sweep_postponed'));
+      return true;
+    } catch (e, st) {
+      debugPrint('[SyncService.postponeFirstSweep] $e');
+      unawaited(ErrorTelemetry.recordNonFatal(e, st,
+          reason: 'sync_first_sweep_postpone'));
+      return false;
+    }
+  }
+
+  /// Test seams for the two W3 methods above (precedent:
+  /// [replayPendingOnboardingSyncForTest]); `checkAndSync` itself cannot run
+  /// under the unit harness (`_supabase.isAuthenticated` returns first).
+  @visibleForTesting
+  Future<void> markFreshDeviceForTest(String userId) =>
+      _markFreshDeviceIfEmpty(userId);
+
+  @visibleForTesting
+  Future<bool> postponeFirstSweepForTest(String userId) =>
+      _postponeFirstSweep(userId);
+
   /// Checks if local Hive is empty and restores from Supabase if so.
   /// Called automatically by checkAndSync() on app launch.
   Future<void> _restoreIfNeeded(String userId) async {
     // Check if there's any workout data locally. If workoutBox has
     // exercise logs or workout logs, the user hasn't reinstalled.
-    bool hasLocalData = false;
-    for (final key in _hive.workoutBox.keys) {
-      if (key is String &&
-          (key.startsWith('wlog_') || key.startsWith('exlog_'))) {
-        hasLocalData = true;
-        break;
-      }
-    }
+    final hasLocalData = _hasLocalWorkoutHistory();
 
     if (!hasLocalData) {
       await restoreFromCloud(userId);
@@ -2019,6 +2116,11 @@ class SyncService {
           reason: 'sync_service_if_5'));
       return RestoreResult.failed(e);
     }
+
+    // sync-storm-first-sweep W3 — in-app sign-in reaches the restore without
+    // ever running the launch sync; mark an empty device here, before the first
+    // restore op writes history. First-wins; never throws.
+    await _markFreshDeviceIfEmpty(userId);
 
     // APK Test #12.8 — restore lifecycle event so we can correlate
     // post-restore symptoms (PRO pill stuck, profile blank) with
@@ -3144,7 +3246,13 @@ class SyncService {
     return DateTime.tryParse(raw.toString());
   }
 
-  Future<void> _setTimestamp(String key) async {
-    await _hive.syncBox.put(key, DateTime.now().toIso8601String());
+  /// Stamps [key] with now, or with [at] when given (the W3 postponement stamps
+  /// the first-launch marker time). Spelled without a null-coalescing now
+  /// fallback on purpose: Gate G2 (`check_sync_no_now_fallback`) bans it.
+  Future<void> _setTimestamp(String key, {DateTime? at}) async {
+    var stamp = DateTime.now();
+    final given = at;
+    if (given != null) stamp = given;
+    await _hive.syncBox.put(key, stamp.toIso8601String());
   }
 }

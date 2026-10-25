@@ -20,7 +20,7 @@
    step (Task 3 Step 1), not just a one-time finding to trust.
 2. **v1's regression test never exercised the wiring — only the two pure predicate functions in
    isolation.** A bug in any one of the 11 call sites' ternary expressions would have been
-   undetectable by v1's test suite (the debugging skill's own §2.37, "a positive grep cannot see a
+   undetectable by v1's test suite (the debugging skill's own §2.126, "a positive grep cannot see a
    defect in an argument," is exactly this class). Fixed structurally: instead of duplicating a
    3-line ternary at 11 sites, this version extracts ONE flag-aware wrapper
    (`PlanEngineFlags.isRestDayConsideringLogged`) that every site calls — collapsing "does the

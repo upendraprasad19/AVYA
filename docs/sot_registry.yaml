@@ -516,9 +516,9 @@ concepts:
         method: logExercise
         notes: cancelFor (time-less entries only) after the index append
       - file: lib/core/services/exlog_key_migrator.dart
-        line_range: 35-150
+        line_range: 35-224
         method: runIfNeeded
-        notes: cancelFor for the re-created row
+        notes: cancelFor for the re-created row; since sync-storm-first-sweep W1 it runs on the UNCHANGED path too (a lone canonical row whose rewrite would be byte-equal is not put, but the queued delete is still cancelled exactly as before)
     reader_manifest_complete: true
     readers:
       - file: lib/core/services/sync/sync_workout.dart
@@ -2537,6 +2537,9 @@ concepts:
       - file: lib/core/services/sync/sync_workout.dart
         line_range: 1-9999
         method: _restoreExerciseLogs (L1a-3 / M2) -- after its local-wins put RAN it collects exlogPayloadFingerprint(_buildExlogPushBundle(...)) per written key and records them in ONE SyncSkipIndex.recordConfirmedAll (owner check before the write; skipped under the exlog hash-skip kill switch); a local row that won the put is never fingerprinted
+      - file: lib/core/services/exlog_key_migrator.dart
+        line_range: 35-224
+        method: "runIfNeeded (sync-storm-first-sweep W1, confirmed :48; NOT a writer of the index but a writer of the ROW the fingerprint covers: the push sends completed_at = max(resolved, updated_at_ms) and completed_at is part of the fingerprint, so the old unconditional rewrite with updated_at_ms = now made every fingerprint the restore had recorded stale. A lone canonical-keyed row whose recomputed aggregates equal the stored row (SyncFingerprint.canonicalJson) is now left untouched; kill switch disable_exlog_migrator_skip_unchanged)"
       - file: lib/core/services/sync_service.dart
         line_range: 1-9999
         method: exlogPayloadFingerprint (confirmed :340, pure static, byte-identical -- plan D4) + _hashSkipKillSwitchOn(SyncSkipDomain) (confirmed :329, generic kill-switch reader shared with nlog/every future domain, replaces the deleted _exlogHashSkipDisabled getter)
@@ -2552,6 +2555,7 @@ concepts:
         fields_read: [sync_exlog_payload_hash_index.<exlog_key>]
     regression_test: test/contracts/sync_exercise_log_payload_hash_index_writer_to_reader_test.dart
     behavioral_test_path: test/contracts/sync_exercise_log_payload_hash_index_writer_to_reader_test.dart
+    behavioral_test_path_migrator: test/contracts/exlog_migrator_keeps_restored_fingerprints_test.dart  # sync-storm-first-sweep W1: real restore -> real migrator -> real push = 0 upserts; the shapes the skip must NOT swallow (no sets, differing aggregates, rogue key, Infinity weight); 12 of 12 non-equivalent mutants red (M1 and W1f equivalent, measured 0 red; M4 needed test 5c)
     hive:
       box: workoutBox
       key_prefix: "sync_exlog_payload_hash_index"
@@ -2975,7 +2979,7 @@ concepts:
       assumption (it cannot detect a lowered production cap).
     writers:
       - file: lib/core/services/sync_service.dart
-        line_range: 3044-3115
+        line_range: 3146-3217
         method: _fetchAllRows
         notes: |
           The ONE paging loop: owner-scoped (.eq user_id) first, optional since filter,
@@ -3142,7 +3146,10 @@ concepts:
       of an op type the sweep re-sends arms a reachability-probed re-run of
       weeklyFullSync on 30 s / 2 m / 10 m, capped at 6 failed runs; recovery clears
       the paused flag; weeklyFullSync stamps last_full_sync only if no retryable
-      failure occurred, and the durable syncBox flag sync_sweep_owed (set by the
+      failure occurred (or `_postponeFirstSweep` stamps it with the first-launch
+      marker time on a device that was empty at its first launch, see
+      first_launch_sweep_decision; an owed sweep is never postponed), and the
+      durable syncBox flag sync_sweep_owed (set by the
       funnel, cleared by a clean sweep, honoured by checkAndSync) survives a
       reload or the retry cap (diagnose e5b2a9).
     writers:
@@ -3201,6 +3208,53 @@ concepts:
       Never widen the retry predicate to SyncError.isTransient (UnknownError and
       AuthError are transient - an infinite loop). A deterministic failure (4xx,
       PG 23xxx/42703) must never arm a retry. The cycle is capped.
+
+  - concept: first_launch_sweep_decision
+    domain: sync_infra
+    description: |
+      sync-storm-first-sweep W3 (2026-10-25, diagnose restored-device-resends-
+      history): whether the launch's full sweep runs or is POSTPONED once. On a
+      device whose first launch found it EMPTY (no wlog_/exlog_ row, no
+      last_full_sync) `_markFreshDeviceIfEmpty` writes the durable per-user
+      marker syncBox['fresh_device_<userId>'] (UTC ISO instant, first-wins) at
+      the top of checkAndSync and in the restore core, always before a restore
+      op writes history. `_postponeFirstSweep`, called only inside the due
+      branch of checkAndSync, consumes the marker: younger than
+      kFreshDeviceWindow (1 h), no owed failure, same session -> last_full_sync
+      is stamped with the MARKER time and the sweep is skipped this launch (the
+      next one is due 24 h after the first launch). Otherwise the sweep runs
+      exactly as before. Kill switch disable_first_sweep_postpone.
+    writers:
+      - file: lib/core/services/sync_service.dart
+        line_range: 1-9999
+        method: "_markFreshDeviceIfEmpty (confirmed :1581; called from checkAndSync :1018 and the restore core :2123) + _postponeFirstSweep (confirmed :1614; called at :1089) + _setTimestamp(at:) (the stamp)"
+      - file: lib/core/services/sync/first_sweep_decision.dart
+        line_range: 1-65
+        method: "decideSweep + shouldMarkFreshDevice + isFreshWithinWindow + freshDeviceMarkerKey (pure rules, no Hive, no clock read)"
+    reader_manifest_complete: true
+    readers:
+      - file: lib/core/services/sync_service.dart
+        line_range: 1-9999
+        method: _postponeFirstSweep (the only CONSUMER of the marker: reads and deletes it, except under the kill switch, which returns first and keeps it) and checkAndSync (reads last_full_sync through shouldRunFullSweep); _markFreshDeviceIfEmpty also reads the key (first-wins) and last_full_sync (null means never swept, and a postponement makes it non-null without a sweep)
+        semantic: flag-check
+        fields_read: [syncBox.fresh_device_<userId>, syncBox.last_full_sync, syncBox.sync_sweep_owed]
+    regression_test: test/contracts/first_launch_sweep_decision_writer_to_reader_test.dart
+    behavioral_test_path: test/sync/first_sweep_decision_test.dart
+    behavioral_test_path_contract: test/contracts/first_launch_sweep_decision_writer_to_reader_test.dart  # Gate 9 round trip: the marker the writer stored is the one the reader consumes, key spelled as a literal; 7 of 7 mutants red (M55-M60, MG2)
+    sync_methods: [_markFreshDeviceIfEmpty, _postponeFirstSweep]
+    hive:
+      box: syncBox
+      key_prefix: "fresh_device_"
+      key_formula: "fresh_device_<userId> -> UTC ISO-8601 instant of the first launch that found the device empty (single writer, first-wins; deleted by its sole consumer)"
+    class_constraints: |
+      A POSTPONEMENT, never a drop: an owed sweep (sync_sweep_owed) always runs,
+      and the stamp is the MARKER time so the next sweep is due 24 h after the
+      first launch. The marker is never written for a session the Hive owner
+      does not match (Layer A serves EMPTY boxes to a foreign uid, which would
+      read as a fresh device), and never throws out of checkAndSync (a throw
+      would skip the rest of it). Consequence, listed on the OI board: pushes only
+      the daily sweep carries wait until the first launch at least 24 h after
+      the first one (unbounded for an inactive user), not merely 24 h.
 
   - concept: restore_completeness
     domain: cross_domain
@@ -4999,14 +5053,14 @@ concepts:
       before the legacy fan-out re-runs the ops.
     writers:
       - file: lib/core/services/sync_service.dart
-        line_range: 1913-1930
+        line_range: 2010-2027
         method: _settleRestoreMarker
         notes: |
           The ONE marker writer; the decision is the pure
           `shouldSettleRestoreMarker` (result.succeeded, no streak-critical
           failure, uid non-null, live uid == uid, Hive owner == uid).
       - file: lib/core/services/sync_service.dart
-        line_range: 1955-1965
+        line_range: 2052-2062
         method: restoreFromCloudForUser
         notes: |
           Wrapper shape pinned by completed_title_follows_log_test.dart: runs the
@@ -5030,7 +5084,7 @@ concepts:
           a stale failure from the aborted attempt cannot hold the marker closed
           (B-pass reviewer B F4).
       - file: lib/core/services/sync_service.dart
-        line_range: 2873-2946
+        line_range: 2975-3048
         method: _reportSyncFailure
         notes: first statement calls `RestoreFailureCollector.note(opType)`; the single failure funnel.
       - file: lib/core/services/day_rollover_service.dart
@@ -12361,7 +12415,7 @@ concepts:
           (→913) despite the gate not flagging it, found by grepping the
           symbol directly rather than trusting the gate's silence on it.
       - file: lib/core/services/sync_service.dart
-        line_range: 2731-2731
+        line_range: 2833-2833
         method: restoreOpTimeout
         semantic: per-op-ceiling
         notes: day-swapper + sync-load Task 20 fix1 (diagnose a9d3f6) shifted
@@ -12372,7 +12426,7 @@ concepts:
           an N-M line_range — but left stale it would misdirect a future
           reader by the same +14).
       - file: lib/core/services/sync_service.dart
-        line_range: 2754-2758
+        line_range: 2856-2860
         method: applyRestoreCeiling
         semantic: apply-ceiling
         notes: day-swapper + sync-load Task 20 shifted this range (+148 lines,
@@ -12382,7 +12436,7 @@ concepts:
           blocks on a citation you shifted). Shifted again by task-20-fix1
           (diagnose a9d3f6, +14 lines, same method) for the same reason.
       - file: lib/core/services/sync_service.dart
-        line_range: 2768-2770
+        line_range: 2870-2872
         method: restoreFailureReason
         semantic: telemetry-reason-split
         notes: same shift as applyRestoreCeiling directly above, both times; all three re-derived +3 by the Hermes sync_epoch_seen doc comment (2026-09-28), then +1 (with _safeRestoreOp) by the plan_engine_flags import the merge-review F4 fix added (a3e7d9).
@@ -12397,7 +12451,7 @@ concepts:
         method: _authRedirect
         semantic: delegates-to-pure-fn
       - file: lib/core/services/sync_service.dart
-        line_range: 2753-2795
+        line_range: 2855-2897
         method: _safeRestoreOp
         semantic: bounded-await
     hive:
@@ -14442,7 +14496,7 @@ concepts:
     writers:
       - file: lib/core/services/sync/sync_skip_index.dart
         line_range: 1-9999
-        method: SyncSkipIndex (pushIfChanged, commit, recordConfirmed, clearAll — whole class; confirmed at :180, :248, :295, :317 respectively)
+        method: "SyncSkipIndex (whole class; re-measured 2026-10-25, sync-storm-first-sweep: pushIfChanged :227, _countFlushEvent :316 and _flush :329 (W2), commit :355, readIndex :388, recordConfirmed :408, recordConfirmedAll :420, clearAll :453; these drift with the next edit, the method names do not)"
       - file: lib/features/dev/simulation_service.dart
         line_range: 1-9999
         method: resetJourney (calls SyncSkipIndex.clearAll once for every SyncSkipBox)
@@ -14457,27 +14511,40 @@ concepts:
           Reader and writer are the SAME class operating on the SAME reserved
           key inside one call — structurally impossible to drift, same
           argument the pre-existing sched/exlog/nlog concepts already make.
-          Confirmed at sync_skip_index.dart:275 (static method), called from
-          the constructor at :130 and from recordConfirmed at :297.
+          readIndex is a static method (sync_skip_index.dart :388), called from
+          the constructor, from _flush and commit (each a FRESH read) and from
+          recordConfirmed / recordConfirmedAll.
     hive:
       box: workoutBox | nutritionBox | healthBox | customBox | userBox  # per-domain, see SyncSkipBox enum
       key_prefix: ""
       key_formula: "one reserved key per SyncSkipDomain value: domain.indexKey (e.g. 'sync_wlog_payload_hash_index'); see the 14 sibling concepts for the concrete keys"
     behavioral_test_path: test/sync/sync_skip_index_test.dart
+    behavioral_test_path_flush: test/sync/sync_skip_index_incremental_flush_test.dart  # sync-storm-first-sweep W2: every kSkipIndexFlushEvery (25) durable events (a confirmed push, or the drop of a stored fingerprint) are written into a fresh re-read of the box; a killed/aborted pass keeps them; failures keep pending and report once
     class_constraints: |
-      Fingerprint is a THUNK evaluated inside the helper's try (a throwing
-      fingerprint fails open: push, don't record — confirmed sync_skip_index.dart:189-196).
-      push() returning false records nothing (unconfirmed, not a failure —
-      :217-220). A thrown or unconfirmed push DROPS any previously-stored
-      fingerprint for that row via _forget (closes OI-204's edit-then-revert
-      residue). Failures are reported once per DISTINCT opType per pass (D13,
-      mirror-gap fix round 2, :199-208) — a shared index like `customItem` can
-      surface two different opType overrides failing in the same pass. The
-      owner check runs before every push AND before recording (:181-184,
-      :211-213); once the account changes mid-pass the pass is `aborted` and
-      commit() writes nothing (:249). `disabled` (kill switch) pushes
-      everything, records nothing, and commit() DELETES the stored index
-      (:253-255).
+      sync-storm-first-sweep W2: `_flush` writes the pass's pending confirmations
+      and removals into a FRESH `readIndex` (never the construction-time
+      snapshot), with no await between the read and the put, never prunes (that
+      stays in commit, which knows liveKeys), and a failed put keeps the pending
+      sets and reports once per instance (`sync_skip_flush_<domain>`). The
+      counter (`_countFlushEvent`) advances on a CONFIRMED push with a
+      fingerprint and on the drop of a fingerprint that WAS stored (a thrown or
+      unconfirmed push of a stored row); a failed push of a never-stored row
+      changes nothing durable and does not count. Kill switch
+      `disable_skip_index_incremental_flush` (decided once at construction,
+      together with `disabled`). A process killed mid-pass loses at most
+      `kSkipIndexFlushEvery - 1` events: a fingerprint dropped inside that
+      window survives until the next flush or commit.
+      Fingerprint is a THUNK evaluated inside pushIfChanged's try (a throwing
+      fingerprint fails open: push, don't record). push() returning false
+      records nothing (unconfirmed, not a failure). A thrown or unconfirmed push
+      DROPS any previously-stored fingerprint for that row via _forget (closes
+      OI-204's edit-then-revert residue, durably at the next flush or commit).
+      Failures are reported once per DISTINCT opType per pass (D13, mirror-gap
+      fix round 2) — a shared index like `customItem` can surface two different
+      opType overrides failing in the same pass. The owner check runs before
+      every push AND before recording; once the account changes mid-pass the
+      pass is `aborted` and commit() writes nothing. `disabled` (kill switch)
+      pushes everything, records nothing, and commit() DELETES the stored index.
 
   - concept: sync_schedule_completion_payload_hash_index
     domain: workout
