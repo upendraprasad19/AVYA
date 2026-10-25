@@ -126,14 +126,14 @@ Accepted. The server pattern shipped live in `delete-account` v5+ (e8a1c3, 2026-
 loop. Recorded as an ADR 2026-06-26 (E2E fix-wave Unit F) so the contract is durable
 beyond the diagnose-docs.
 
-Update 2026-10-25: beat-my-coach removed (OI-395); the reference EFs are daily-snapshot, ai-media-proxy, assess-body-composition.
+Update 2026-10-25 (OI-395): the beat-my-coach reference EF is dropped; the reference EFs are daily-snapshot, ai-media-proxy, assess-body-composition.
 
 ## See also
 
 - `docs/diagnoses/2026-06-12-delete-account-auth-rejects-valid-token-e8a1c3.md` (founding incident)
 - diagnoses d2b9e6 (referral JWT-in-headers) + c7d4f1 (cross-user own-only RLS)
 - `docs/handbook/bug-classes/edge-function-user-token-auth.md` (the durable rule)
-- `supabase/functions/_shared/` + the four reference EFs (daily-snapshot / ai-media-proxy / assess-body-composition / beat-my-coach)
+- `supabase/functions/_shared/` + the three reference EFs (daily-snapshot / ai-media-proxy / assess-body-composition; a fourth, beat-my-coach, was dropped under OI-395)
 - `lib/core/services/supabase_service.dart:176,231` (`ensureFreshToken` / `callFunction`)
 - `scripts/check_edge_function_auth_pattern.dart`, `scripts/check_authed_invoke_fresh_token.dart` (the gates)
 - CLAUDE.md §4.4 rule 9; debugging skill §2.35 / §2.31 / §2.38; `feedback_edge_function_auth_jwt_as_apikey.md`, `feedback_cross_user_read_rls_context.md`

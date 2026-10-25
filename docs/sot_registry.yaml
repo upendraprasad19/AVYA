@@ -1597,7 +1597,7 @@ concepts:
           made TODAY without waiting for tomorrow's rollover) is still
           NOT wired — filed as OI-267, not silently dropped.
       - file: lib/core/services/badge_service.dart
-        line_range: 110-115
+        line_range: 119-122
         method: BadgeService weight-log counter
         semantic: aggregated
         fields_read: [healthBox.keys with prefix weight_]
@@ -4636,7 +4636,7 @@ concepts:
           Forward-filled across 7-day window (last-known value carries
           on un-weighed days). Skipping is a bug — gap should not show 0.
       - file: lib/core/services/badge_service.dart
-        line_range: 110-115
+        line_range: 119-122
         method: BadgeService weight-log count
         semantic: aggregated
         fields_read: [healthBox.keys with prefix weight_]

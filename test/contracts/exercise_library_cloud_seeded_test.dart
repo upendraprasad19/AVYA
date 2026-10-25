@@ -4,10 +4,10 @@
 //
 // Cloud `exercise_library` must be seeded — the coach's `getFormCues`
 // tool (supabase/functions/_shared/tools/exercise/getFormCues.ts) reads
-// it, and so did the `beat-my-coach` Edge Function until its removal
-// (OI-395, 2026-10-25). Until 2026-05-27 it was empty (bundled seed
-// shipped to Hive but never to cloud), silently degrading the PRO
-// coach feature.
+// it, and so did the `beat-my-coach` Edge Function until its source was
+// removed (OI-395). Until 2026-05-27 it was empty (bundled seed
+// shipped to Hive but never to cloud), silently degrading the coach's
+// form-cue answers.
 //
 // This is a source-grep contract — it asserts that the seed
 // migration file exists with the expected INSERT row count, and
@@ -204,34 +204,49 @@ void main() {
           reason: 'Entry must carry sha256 hash for integrity audit.');
     });
 
-    test('getFormCues coach tool is a live, reachable cloud reader of exercise_library', () {
+    test('getFormCues is a cloud reader of exercise_library and is listed in the tool registry', () {
       // Pin the cloud-reader contract — the coach's form-cue tool is the
       // remaining Edge Function code that SELECTs exercise_library (the
-      // beat-my-coach reader was removed in OI-395; promote-community-item
+      // beat-my-coach reader's source was removed in OI-395; promote-community-item
       // only INSERTs). If someone refactors it away from exercise_library,
       // this test reminds them to update the SoT model in
       // docs/architecture/database.md.
+      String stripComments(String src) => src
+          .replaceAll(RegExp(r'/\*[\s\S]*?\*/'), '')
+          .replaceAll(RegExp(r'(?<!:)//[^\n]*'), '');
+
       final tool =
           File('supabase/functions/_shared/tools/exercise/getFormCues.ts');
       expect(tool.existsSync(), isTrue);
-      expect(tool.readAsStringSync(), contains('.from("exercise_library")'),
+      // Comment-stripped, and BOTH reads (stage 1 exact match, stage 2 partial
+      // match): either one alone, or a commented-out one, must not pass.
+      final reads = RegExp(r'\.from\("exercise_library"\)')
+          .allMatches(stripComments(tool.readAsStringSync()))
+          .length;
+      expect(reads, greaterThanOrEqualTo(2),
           reason:
-              'getFormCues is the canonical cloud reader for exercise_library. '
-              'If you removed this read, also update docs/architecture/database.md '
+              'getFormCues is the canonical cloud reader for exercise_library '
+              '(stage 1 exact + stage 2 partial; found $reads live reads). '
+              'If you removed a read, also update docs/architecture/database.md '
               'and consider deleting migration 074.');
 
-      // A reader nobody can reach is not a reader: the tool must still be
-      // listed in the registry the tool loop offers (comments stripped, so a
-      // commented-out entry does not count).
+      // A reader nobody can reach is not a reader: the tool must still be an
+      // ENTRY of the ALL_TOOLS array the tool loop offers. Scoped to the array
+      // body (the import line also ends in `getFormCuesTool`, and once a
+      // second exercise tool joins it the formatter makes the import
+      // multi-line with trailing commas), comments stripped so a
+      // commented-out entry does not count.
       final registry = File('supabase/functions/_shared/tools/registry.ts');
       expect(registry.existsSync(), isTrue);
-      final code = registry
-          .readAsStringSync()
-          .replaceAll(RegExp(r'/\*[\s\S]*?\*/'), '')
-          .replaceAll(RegExp(r'//[^\n]*'), '');
-      expect(code, contains('getFormCuesTool,'),
+      final raw = registry.readAsStringSync();
+      final start = raw.indexOf('const ALL_TOOLS');
+      final end = raw.indexOf('];', start);
+      expect(start, greaterThan(0));
+      expect(end, greaterThan(start));
+      final arrayBody = stripComments(raw.substring(start, end));
+      expect(arrayBody, contains('getFormCuesTool,'),
           reason:
-              'getFormCuesTool must stay in the registry tool list, or the '
+              'getFormCuesTool must stay an ALL_TOOLS entry, or the '
               'cloud reader of exercise_library becomes an orphan file.');
     });
   });

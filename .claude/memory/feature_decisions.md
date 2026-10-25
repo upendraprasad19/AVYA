@@ -91,7 +91,7 @@ WhatsApp AI Coach → **DEFERRED** (Telegram focus for now).
 
 ## Shareable Cards Spec
 
-All 3 shareable cards include:
+Both shareable cards include:
 - **ICANBEFITTER** wordmark (DM Sans w900)
 - App logo / branding strip
 - QR code → `www.icanbefitter.com` (update to Play Store link before release)

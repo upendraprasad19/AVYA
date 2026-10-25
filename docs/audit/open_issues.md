@@ -3742,7 +3742,7 @@ Unit 2's blocked question — what a regeneration does when the plan window is E
 - **Verified**: 2026-09-16, B-pass on the cron-ai-removal batch
   (`docs/reviews/247d945d1ba0-review.md` Finding 1), independently
   re-verified before acting: `grep -rn "futurePredictionFunction" lib/`
-  → only the declaration at `app_constants.dart:26`, never called again
+  → only the declaration at `app_constants.dart:26` (now `:25`, after `beatMyCoachFunction` above it was dropped, OI-395), never called again
   anywhere in `lib/`; `grep -n "future-prediction"
   docs/operations/CRON_REGISTRY.md` → no match; `grep -rln
   "future-prediction" supabase/migrations/*.sql` → no match (not
@@ -6102,7 +6102,7 @@ Fix options (to be planned, not decided): (a) a `free_access_codes` table (code,
 - **Verified**: 2026-10-17 - by reading every `terminal_state: blocked_on_user` row of `docs/audit/*.closure.yaml` (118 rows) and the OI board, and keeping only the rows that are CHECKS (something to run or observe). Rows that are decisions or go-aheads are not here; they stay on their own OIs. Re-checked 2026-10-20 against `main` 7266ea93: added the shipped Unit C steps (A10, PR #129), the OI-349 look (A11), the OI-341 Piece A payment read (C7, PR #124, deployed v25/v29 with the switch unset), and a note for the dark LOG-per-exercise flag (PR #128), whose device check belongs to its flip.
 - **Identified**: 2026-10-17 · filed via mint_oi.sh from branch `pending-checks-oi` (founder request: "create an OI compiling all the checks pending ever ... after a new aab/apk build at the end")
 
-**Before the build (added 2026-10-21, OI-341 B2a):** the VPS `.env` `RAZORPAY_KEY_ID` must hold the LIVE key ID (`rzp_live_...`, the public half of the pair, from the Razorpay dashboard). Today it holds a `rzp_test_` ID while the server's secrets are the live pair, and the client opens checkout with its own build-time key (`app_constants.dart:193`), so an AAB built as-is would fail at checkout. After the build, also run one real purchase from the phone (90% code, refunded) as part of the B2b checks.
+**Before the build (added 2026-10-21, OI-341 B2a):** the VPS `.env` `RAZORPAY_KEY_ID` must hold the LIVE key ID (`rzp_live_...`, the public half of the pair, from the Razorpay dashboard). Today it holds a `rzp_test_` ID while the server's secrets are the live pair, and the client opens checkout with its own build-time key (`AppConstants.razorpayKeyId`, `app_constants.dart:189`), so an AAB built as-is would fail at checkout. After the build, also run one real purchase from the phone (90% code, refunded) as part of the B2b checks.
 
 How to use: build once from the last merged `main`, install on the phone, sign in with one FREE and one PRO account (plus one throwaway or lapsed account where a row says so), then walk the sections in order. Section A needs the phone, B needs a signed-in session or JWT (a dev build or test account), C needs no build and can be run any time with the founder's go for live reads. W runs on the founder's Windows clone, no build.
 
