@@ -6792,21 +6792,6 @@ Past `user_daily_snapshots` stay (nothing reads a past day's `coach_notices`). D
 
 **Done when.** A conflicted merge of a branch with a main that carries catastrophic paths commits through pre-commit without a review file, and the negative control reddens when the stand-down is made unconditional.
 
-## OI-414 — validate-promo spends one check unit per gateway retry: at 7 per UTC-hour bucket two 502/504 taps lock a user out of promo checks until the bucket ends
-
-- **Status**: OPEN
-- **Blocked on**: none (a small client or function change; no founder input needed). Must land before the store launch: at 7 per bucket the retry amplification matters for real users, not for testers.
-- **Verified**: 2026-10-25 - by reading: `lib/core/services/supabase_service.dart` `callFunction` / `retryColdStart` retry a 502, 503 or 504 after 2 s, 6 s and 12 s (up to 4 invocations per tap; a 500 is not retried), `validate-promo/index.ts:88` spends the unit before the body is read, `paywall_sheet.dart:201-247` is the only caller (one call per APPLY tap), and `supabase/migrations/128_usage_counters.sql:95-100` counts every call that reaches the counter below the limit. NOT observed live: a gateway 502/504 after the handler ran (only the gateway emits those statuses). Seen first by the plan-review seats of `docs/plans/2026-10-25-promo-check-limit-7.md`.
-- **Identified**: 2026-10-25 · filed via mint_oi.sh from branch `promo-limit-7`
-
-**The defect.** One APPLY tap can spend up to four check units when the gateway answers 502 or 504 AFTER the handler ran (the unit is already spent), because the shared client wrapper retries those statuses. At the old limit of 20 this was harmless; at 7 per UTC-hour bucket two such taps lock a user out of promo checks until the bucket ends (at most 60 minutes). The order endpoint had the same class and was fixed by answering 500 instead of 502 (hermes H1); `validate-promo` only emits 200, 401, 405 and 500, so the extra statuses can only come from the gateway.
-
-**Impact.** Testing phase: testers only; rare (needs a gateway 502 or 504 on this function). Not fixed in the limit-7 batch, which changes one constant.
-
-**Fix shape.** Either the paywall's promo call opts out of the 502/504 retry (the wrapper has a per-call option for the 500 case; add the symmetric one), or the spend is made idempotent per tap (a client-generated request id the function de-duplicates). Prefer the opt-out: a failed promo check costs the user one more tap, never a unit.
-
-**Done when.** A behavioural test shows a 502 or 504 from `validate-promo` is NOT retried by the promo call (and the 503 boot-failure retry is unchanged), and `supabase/functions/CLAUDE.md` row `promo_validate_rate_limit` names the rule.
-
 ## OI-415 — Two test files are red on a Windows dev machine and green in CI: gate_index_e2e_test (cp1252 decode of an em dash) and discipline_hook_local_indexes_e2e_test (installed shared hooks)
 
 - **Status**: OPEN
@@ -7028,4 +7013,107 @@ Filed by the sync-storm-first-sweep batch (A1 = W1 migrator fix, W2 save progres
 **Fix shape.** Either give the tile its rule (the description already defines it: a meal logged on each of 7 consecutive IST days; read it through the nutrition repository with the IST date helper, not from a widget, and decide whether a food log or a saved meal counts), or remove the tile and the enum value the way `challengeWon` was removed. Whichever is chosen, add the invariant that was missing: a contract test that every `BadgeId` value has exactly one `tryUnlock(BadgeId.<id>, ...)` rule in `badge_service.dart`, so the next never-earnable badge fails a test instead of shipping.
 
 **Done when.** The invariant test exists and is green, and (if the rule is built) a behavioural test earns the badge after 7 consecutive IST days of logs and does not earn it after 6 or after a gap.
+
+
+## OI-428 — ai-proxy scan_meal, cart_auditor and food_text_analysis are re-sent after a gateway 502/503/504 and spend a free-tier unit per send (OI-414 census)
+
+- **Status**: OPEN
+- **Blocked on**: the founder's decision on the question below (OI-414 closure ledger: `blocked_on_user`). The code change is small and agent work once decided.
+- **Verified**: 2026-10-25 - by reading (OI-414 census, self-attested): `lib/features/nutrition/providers/nutrition_provider.dart` calls `ai-proxy` for `food_text_analysis` (`:734`, with `retryOn500: true`), `scan_meal` (`:1400`) and `cart_auditor` (`:1511`) through `SupabaseService.callFunction`, which sends a 502/503/504 again after 2 s, 6 s and 12 s; `supabase/functions/ai-proxy/index.ts:385-393` de-duplicates a food-text send only against a `model_used='pending'` row created in the last 60 s, so a re-send after the first one finished is a second insert and a second trigger-counted unit; `supabase/functions/_shared/ai_limits.ts` has scan_meal and cart_auditor on ONE shared budget (free 4 per IST day, PRO 20). NOT observed live: a gateway 502/503/504 after the handler ran (the 30-day `client_errors` read shows `ai-proxy` 502 x9, one user, 2026-10-02, all recovered by the re-send).
+- **Identified**: 2026-10-25 · filed via mint_oi.sh from branch `oi414-promo-no-gateway-retry`
+
+**The defect.** The OI-414 fix gives a call an opt-out of the gateway re-send (`spendsQuotaPerCall: true` on `callFunction`). Three `ai-proxy` request types spend a free-tier unit per send through the insert-first trigger and do not use it: `food_text_analysis` (free 10 per day, PRO 200), `scan_meal` and `cart_auditor` (one shared budget, free 4 per day, PRO 20). If the gateway answers 502/503/504 after the handler ran, each re-send spends another unit: one tap can spend up to four, i.e. a free user's whole daily scan budget.
+
+**Why this was not folded into OI-414 (the exact question).** These calls ARE the reason the re-send exists: `ai-proxy` cold starts (c01d57). Opting them out removes the automatic recovery from a cold-start 502/503/504 and trades it for "tap again". That is a product trade-off, not a defect with one answer, so the founder chose (2026-10-25, "Promo + day-swap (Recommended)") to fix promo and day swap now and file this one.
+
+**Options.** (A) pass `spendsQuotaPerCall: true` at all three call sites: a gateway error shows the existing error state and the next tap is the retry; `retryOn500: true` on the food-text call is independent and stays. (B) flag only `scan_meal` and `cart_auditor` (the 4-per-day free budget is the one a single tap can empty) and leave food text, whose placeholder dedupe already absorbs the fast re-send. (C) leave as is. (D) a server-side idempotency key (a request id the function de-duplicates): no recovery lost, but an `ai-proxy` change and deploy.
+
+**Done when.** The founder picks A, B, C or D. For A/B: a behavioural test per flagged call site that a 502 is sent once (the loop and the forwarding are already pinned by `edge_function_cold_start_retry_behavioral_test.dart` and `call_function_spends_quota_per_call_behavioral_test.dart`; each call site owes the source pin pattern of `spends_quota_per_call_source_pins_test.dart`), and the `supabase/functions/CLAUDE.md` rows 143-144 name the rule.
+
+## OI-429 — ai-media-proxy photo and media calls, and the web fallback loop _retryHttpColdStart, are re-sent after a gateway error and spend a unit per send (OI-414 census)
+
+- **Status**: OPEN
+- **Blocked on**: the founder's decision on the question below (OI-414 closure ledger: `blocked_on_user`).
+- **Verified**: 2026-10-25 - by reading (OI-414 census, self-attested): `lib/core/services/ai_service.dart:676` sends `ai-media-proxy` through `callFunction`; the web direct-HTTP fallback `_retryHttpColdStart` (`:588`, used at `:511` and `:750`) has its OWN 502/503/504 loop that `callFunction`'s flag cannot reach; `supabase/functions/ai-media-proxy/index.ts:816-835` states the cost in a comment (a Gemini timeout/5xx after a successful consume spends a unit; the client retries a 502 up to 3 times, so one photo during an outage can spend up to 4; no decrement RPC; "a daily unit is cheap, the outage rare"). Caps: PRO 10 images / 5 videos per IST day, free 5 lifetime image analyses (`_shared/ai_limits.ts`).
+- **Identified**: 2026-10-25 · filed via mint_oi.sh from branch `oi414-promo-no-gateway-retry`
+
+**The defect.** `ai-media-proxy` spends a unit per send (PRO daily caps consume-first, after the media fetch; the free lifetime meter consume-after). A gateway 502/503/504 that arrives after the handler ran is re-sent by the wrapper and spends another unit. The function's own comment accepts this for its OWN 502.
+
+**What makes it a decision, not a one-line fix.** (1) The call also carries a storage-race 400 retry (CDN propagation after an upload) that must stay: `spendsQuotaPerCall` leaves it alone, but a test must keep proving that. (2) On the web the call can take a second path, `_retryHttpColdStart`, which would keep re-sending after the flagged `callFunction` path was fixed; it needs the same rule or the fix is half-true. (3) Opting out removes cold-start recovery for a photo upload, which is a user-visible regression for a PRO feature. A free user's 5 lifetime analyses are the scarcest unit.
+
+**Options.** (A) flag the `callFunction` site and give `_retryHttpColdStart` the same switch; (B) flag only for free users (the lifetime meter is the scarce one); (C) leave as is, as the function's comment decided; (D) a server idempotency key.
+
+**Done when.** The founder picks an option. For A/B: a behavioural test that the web loop honours the switch, a test that the storage-race 400 is still re-sent, and the source pin for the call site.
+
+## OI-430 — ai-proxy prediction card: 3 per day, never refunded, re-sent after a gateway error; decide cold-start recovery versus units lost (OI-414 census)
+
+- **Status**: OPEN
+- **Blocked on**: the founder's call: cold-start recovery versus units lost (OI-414 closure ledger: `blocked_on_user`). The client change is one argument and needs no Edge Function change.
+- **Verified**: 2026-10-25 - by reading (OI-414 census, self-attested): `lib/core/services/ai_service.dart:423` `AiService.predict` sends `ai-proxy` with `type: 'prediction'` through `callFunction` (no `retryOn500`); `supabase/functions/_shared/prediction_handler.ts` consumes one unit of `prediction_daily` (3 per user per day) BEFORE Gemini and never refunds it; its header comment argues the handler's own failures answer 500, which the wrapper does not re-send, and that gateway cold starts fail BEFORE the handler so never consume. That does not cover a gateway error AFTER the handler ran.
+- **Identified**: 2026-10-25 · filed via mint_oi.sh from branch `oi414-promo-no-gateway-retry`
+
+**The defect.** With a cap of 3 per day and no refund, four sends from one tap (initial plus re-sends at 2 s, 6 s and 12 s) can spend the whole day's budget when the gateway answers 502/503/504 after the handler ran. The handler's comment is right about its own 500s and about cold starts; the gap is the gateway error that comes after a completed handler.
+
+**Mitigations already there.** Automatic refreshes get ONE attempt per IST day (`PredictionAttemptGate`), so the cost is paid mostly on a manual refresh; a 429 with `code: RATE_LIMITED` reads as the daily limit.
+
+**The question for the founder.** Pass `spendsQuotaPerCall: true` in `AiService.predict`: a cold-start gateway error then shows the prediction card's error state with no automatic retry (the card already allows one attempt per day automatically, so the recovery being lost is small) and the day's 3 units can no longer be spent by one tap. Or leave it: rare, and a cold start is then absorbed. Recommendation: flag it.
+
+**Done when.** The founder decides; if yes, the one-argument change plus a source pin and a mutation, and the `supabase/functions/CLAUDE.md` prediction paragraph names the rule.
+
+## OI-431 — delete-account: a re-send after a gateway error meets a 401 because the account is already gone, which hides the first success (OI-414 census)
+
+- **Status**: OPEN
+- **Blocked on**: the Edge Function deploy go (CLAUDE.md 4.3) and the choice below; the code and tests are agent work (OI-414 closure ledger: `blocked_on_user`).
+- **Verified**: 2026-10-25 - by reading (OI-414 census, self-attested): `lib/features/profile/screens/delete_account_screen.dart:81` sends `delete-account` through `callFunction`; `supabase/functions/delete-account/index.ts:134-140` answers 401 `unauthenticated` when `getUser(token)` fails, and `:373` deletes the auth user, so a re-send after the first send already deleted the account meets that 401; `:151-187` meters the call (`delete_account`, hourly bucket) and fails OPEN. NOT observed live; the first-send-succeeded-then-gateway-error ordering cannot be forced from a device.
+- **Identified**: 2026-10-25 · filed via mint_oi.sh from branch `oi414-promo-no-gateway-retry`
+
+**The defect.** If the gateway answers 502/503/504 after `delete-account` finished (account and data gone), the wrapper sends the call again. The token no longer belongs to a user, so the second send gets a 401, and the screen reports "Couldn't delete account" for an erasure that has in fact completed (DPDP section 17 flow). The user may retry or contact support about a deletion that happened.
+
+**Fix shape.** On the client: pass `spendsQuotaPerCall: true` (or a dedicated switch) so the call is sent once, and on a gateway error confirm the outcome by asking the auth server whether the session is still valid (a user-not-found or 401 from `getUser` means the account is gone: treat as success and sign out). On the server alternatively: answer a 401 caused by a deleted user with the success body (needs care: it must not turn into an unauthenticated oracle).
+
+**Done when.** A behavioural test that a gateway error followed by a "no such user" answer ends in the signed-out success state, and one that a gateway error with a still-valid session shows the error state; the Edge Function change (if chosen) is deployed with the founder's go and boot-verified.
+
+## OI-432 — weekly-report: a re-send after a gateway error meets 403 NOT_PRO or spends after generation, so a free user's only report becomes a paywall (OI-414 census)
+
+- **Status**: OPEN
+- **Blocked on**: the Edge Function deploy go (CLAUDE.md 4.3) and the choice below; the code and tests are agent work (OI-414 closure ledger: `blocked_on_user`).
+- **Verified**: 2026-10-25 - by reading (OI-414 census, self-attested): `lib/features/profile/screens/reports_screen.dart:165` sends `weekly-report` through `callFunction` under `WeeklyReportCallGate.callTimeout`; `supabase/functions/weekly-report/index.ts:155-168` answers 403 `NOT_PRO` when a free user already has `used >= 1` on `weekly_report_free`; the free unit is consumed AFTER the report is generated and inserted (`:722-735`, a deliberate under-count). NOT observed live; NOT established: whether the screen can show the already-stored report after the 403.
+- **Identified**: 2026-10-25 · filed via mint_oi.sh from branch `oi414-promo-no-gateway-retry`
+
+**The defect.** A free user has ONE lifetime report. If the gateway answers 502/503/504 after the handler generated and stored it and consumed the unit, the wrapper re-sends; the second send finds `used = 1`, answers 403 `NOT_PRO`, and the screen shows the paywall instead of the report the user just paid a unit for. A PRO user's re-send regenerates the thinking-on Gemini report (cost, a second stored row).
+
+**Fix shape.** Send the call once (`spendsQuotaPerCall: true`) and, on a gateway error, reload the stored report (the row exists because the insert is first) before showing an error; or make the function return the existing report for a repeated call within a short window. Decide whether a 403 from a re-send should ever be shown as the paywall.
+
+**Done when.** A behavioural test of the screen's gateway-error path (the stored report is shown, or the error state with a retry that does not paywall), and the chosen server change deployed with the founder's go.
+
+## OI-433 — assess-body-composition: its own 502s are re-run by callFunction (Gemini up to 4 times per tap) and a lost success makes every replay a 429 for 30 days (OI-414 census)
+
+- **Status**: OPEN
+- **Blocked on**: the Edge Function deploy go (CLAUDE.md 4.3) and the choice of what to store (OI-414 closure ledger: `blocked_on_user`).
+- **Verified**: 2026-10-25 - by reading (OI-414 census, self-attested; the line numbers re-read): `supabase/functions/assess-body-composition/index.ts:105-115` answers 429 `rate_limited` for 30 days after `coachingNotes.last_bf_assessed_at`; its own failures answer 502 (`:185` AI assessment failed, `:196` unparseable, `:219` unrealistic values); the timestamp is written only AFTER validation (`:223-228`) and the response body is never stored; the caller is `lib/shared/repositories/user_repository.dart:1426` through `callFunction`.
+- **Identified**: 2026-10-25 · filed via mint_oi.sh from branch `oi414-promo-no-gateway-retry`
+
+**Two facets.**
+
+1. **Its own 502s are re-run.** A failed or unparseable Gemini answer, or unrealistic values, is returned as 502 BEFORE the timestamp is written, so `callFunction` sends the photo again after 2 s, 6 s and 12 s: up to four Gemini vision calls per tap (cost, no quota unit). This is the class c7e3b1 H1 fixed for the order endpoint by answering 500, which the wrapper does not re-send.
+2. **A lost success locks the user out for 30 days.** If the gateway answers 502/503/504 after the handler stamped `last_bf_assessed_at` and returned the result, the re-send gets the 429, and because only the timestamp (never the result) is stored the user has neither the assessment nor a way to repeat it for 30 days.
+
+**Fix shape.** (1) Answer 500 for the function's own failures. (2) Either store the result with the stamp and return it for a repeat within the window, or stamp only after the client confirmed, or send the call once and say so on a gateway error. A 30-day lock needs the stored-result option.
+
+**Done when.** A Deno test that the three failure shapes answer 500 and that a repeat inside the window returns the stored result; the deploy with the founder's go and a boot check.
+
+## OI-434 — paywall _validatePromoCode has no mounted check after its awaits (found by the OI-414 B-pass, pre-existing)
+
+- **Status**: OPEN
+- **Blocked on**: none
+- **Verified**: 2026-10-25 - by reading, found by the OI-414 B-pass (pre-existing, not caused by that change): `lib/shared/widgets/paywall_sheet.dart` `_validatePromoCode` (`:200-250`) calls `setState` after `await SupabaseService.instance.callFunction(...)` in the success path and in the `catch`, with no `if (!mounted) return;`.
+- **Identified**: 2026-10-25 · filed via mint_oi.sh from branch `oi414-promo-no-gateway-retry`
+
+**The defect.** If the user dismisses the paywall sheet while the promo check is in flight, the call returns to a disposed `State` and `setState` runs on it (a Flutter assertion in debug builds, a state change on a defunct element in release).
+
+**Impact.** Low. After OI-414 the wait is one attempt (it used to be up to four with 2 s, 6 s and 12 s waits), which shortens the window; it does not close it.
+
+**Fix shape.** `if (!mounted) return;` after the await and at the top of the `catch`; look at the other awaits in the same file in the same pass.
+
+**Done when.** A widget test that dismisses the sheet while a delayed `validate-promo` answer is pending and sees no exception; mutate the guard and watch it go red.
 
