@@ -348,6 +348,55 @@ class SyncFlags {
     }
   }
 
+  /// Kill switch for the exercise-log migrator's skip of an UNCHANGED canonical
+  /// row (plan sync-storm-first-sweep W1, diagnose restored-device-resends-
+  /// history). On: a single canonical row whose recomputed aggregates equal the
+  /// stored row is left alone, so the fingerprint the restore recorded survives.
+  /// `configBox['disable_exlog_migrator_skip_unchanged'] = true` rewrites every
+  /// group with `updated_at_ms = now`, verbatim. With the box not open the skip
+  /// stays ON. Only matters before a device's first migrator run: the migrator
+  /// is one-shot (`exlog_key_migration_v8`), so afterwards reverting means
+  /// clearing that flag.
+  static bool get exlogMigratorSkipUnchangedEnabled {
+    try {
+      return HiveService.instance.configBox
+              .get('disable_exlog_migrator_skip_unchanged') !=
+          true;
+    } catch (_) {
+      return true;
+    }
+  }
+
+  /// Kill switch for the incremental `SyncSkipIndex` flush (plan
+  /// sync-storm-first-sweep W2). On: every `kSkipIndexFlushEvery` confirmed
+  /// rows are persisted while the pass runs. `configBox[
+  /// 'disable_skip_index_incremental_flush'] = true` persists only at `commit`,
+  /// verbatim. With the box not open the flush stays ON.
+  static bool get skipIndexIncrementalFlushEnabled {
+    try {
+      return HiveService.instance.configBox
+              .get('disable_skip_index_incremental_flush') !=
+          true;
+    } catch (_) {
+      return true;
+    }
+  }
+
+  /// Kill switch for postponing the first full sweep on a device that was empty
+  /// at its first launch (plan sync-storm-first-sweep W3). On: the durable
+  /// `fresh_device_<userId>` marker is written and honoured. `configBox[
+  /// 'disable_first_sweep_postpone'] = true` writes no marker and runs the
+  /// sweep exactly as before. With the box not open the postponement stays ON.
+  static bool get firstSweepPostponeEnabled {
+    try {
+      return HiveService.instance.configBox
+              .get('disable_first_sweep_postpone') !=
+          true;
+    } catch (_) {
+      return true;
+    }
+  }
+
   /// Test-only setter. Production callers MUST NOT toggle flags in
   /// code — they flip via `configBox.put` from a one-shot migration
   /// or remote-config write only.

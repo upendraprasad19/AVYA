@@ -384,6 +384,47 @@ Full detail: `docs/sot_registry.yaml` (search `payload_hash_index`),
 `docs/diagnoses/2026-09-19-full-rescan-sync-timeout-d3f8a6.md`,
 `docs/adr/0020-sync-sends-only-what-changed.md`.
 
+### First-launch push storm (sync-storm-first-sweep, 2026-10-25, diagnose `restored-device-resends-history`)
+
+A device that restores its history must not push that history back. Three pieces, each with its own
+opt-out kill switch (live by default; the OI that deletes them follows the runtime check):
+
+1. **The exercise-log migrator leaves unchanged rows alone** (`exlog_key_migrator.dart`,
+   `disable_exlog_migrator_skip_unchanged`). The restore records a push fingerprint per row; the
+   push sends `completed_at = max(resolved, updated_at_ms)` and `completed_at` is part of the
+   fingerprint, so the old unconditional rewrite (`updated_at_ms = now`) made every restored row
+   look edited. A single canonical-keyed row whose recomputed aggregates already equal the stored
+   row (`SyncFingerprint.canonicalJson`) is skipped; `PendingExlogDeletes.cancelFor` still runs. Rows
+   with no `sets`, with differing aggregates or under a rogue key are rewritten as before; a
+   comparison that throws (NaN / Infinity) falls back to the rewrite and reports once as
+   `sync_exlog_migrator_compare`. The kill switch only matters before a device's first migrator run:
+   afterwards the one-time flag `exlog_key_migration_v8` is set and the migrator never runs again, so
+   reverting after rollout means clearing that flag (which re-runs the whole migrator).
+2. **`SyncSkipIndex` saves progress while the pass runs** (`sync_skip_index.dart`,
+   `disable_skip_index_incremental_flush`). Every `kSkipIndexFlushEvery` (25) durable events (a confirmed push, or the drop of a fingerprint that was stored) are
+   written to a fresh re-read of the index (pending confirmations added, pending forgets removed; no
+   await between the read and the put; never a prune, which stays in `commit`). A killed tab, a
+   reload, a retry or an owner abort keeps every flushed batch of 25 (at most 24 unflushed events are
+   lost). A failed `put` keeps the pending sets and is reported once per instance
+   (`sync_skip_flush_<domain>`); a skipped or fingerprint-less row, and a failure that never had a
+   stored fingerprint, do not advance the counter.
+3. **The first sweep of a fresh device is postponed, not dropped** (`first_sweep_decision.dart`,
+   `SyncService._markFreshDeviceIfEmpty` / `_postponeFirstSweep`, `disable_first_sweep_postpone`).
+   `last_full_sync` is null on a device that never ran the sweep, so the first `checkAndSync` ran it
+   at once, concurrently with the migrator-triggered workout push. The durable marker
+   `syncBox['fresh_device_<userId>']` is written first-wins before any restore op writes history (top
+   of `checkAndSync`, and the restore core after `openForUser`, because in-app sign-in never runs the
+   launch sync until the next cold start). At the sweep decision a marker younger than
+   `kFreshDeviceWindow` (1 h), with no owed failure, stamps `last_full_sync` with the MARKER time, so
+   the next sweep is due 24 h after the first launch. Consequence: pushes that only the sweep carries
+   (Health Connect rows, `plan_json`, profile / progress / prefs / coach) wait until the first launch
+   at least 24 h after the first one (unbounded for an inactive user); every per-write fan-out is
+   unaffected.
+
+Not in this batch (tracked on the OI board): two overlapping live passes of the same domain, the
+restore recording fingerprints for the other 15 domains, request batching, telemetry batching, the
+phone cold start, Google `prompt=select_account`.
+
 ### Restore conflict policy — local-wins / additive (ADR-0014, diagnose c5a1f2)
 Since the slow-boot guard, returning users reach /home WHILE the cloud restore runs in
 the **background** — so the restore is concurrent with the user logging. Loss-sensitive

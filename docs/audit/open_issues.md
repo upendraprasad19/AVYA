@@ -6819,3 +6819,193 @@ Past `user_daily_snapshots` stay (nothing reads a past day's `coach_notices`). D
 **Fix shape.** Either the paywall's promo call opts out of the 502/504 retry (the wrapper has a per-call option for the 500 case; add the symmetric one), or the spend is made idempotent per tap (a client-generated request id the function de-duplicates). Prefer the opt-out: a failed promo check costs the user one more tap, never a unit.
 
 **Done when.** A behavioural test shows a 502 or 504 from `validate-promo` is NOT retried by the promo call (and the 503 boot-failure retry is unchanged), and `supabase/functions/CLAUDE.md` row `promo_validate_rate_limit` names the rule.
+
+## OI-416 — Overlapping live sync passes still duplicate work: no one-pass-at-a-time guard (a retry sweep started while an abandoned 45 s-ceiling loop still walks rows, and any two entry points)
+
+- **Status**: OPEN
+- **Blocked on**: blocked_on_user (separate piece named in the scope call)
+- **Verified**: 2026-10-25, live: the 09:02 IST gateway log of the founder's private-window session (633 `workout_log_exercises` upserts for 207 bundles); the overlap mechanism is by reading `sync_service.dart` and the plan reviews, not reproduced on a device.
+- **Identified**: 2026-10-25 · filed via mint_oi.sh from branch `sync-storm-first-sweep`
+
+Filed by the sync-storm-first-sweep batch (A1 = W1 migrator fix, W2 save progress every 25 events, W3 postponed first sweep; diagnose `b9e4d7`, plan `docs/plans/2026-10-25-sync-storm-first-sweep.md`, ledger `docs/audit/sync-storm-first-sweep.closure.yaml`).
+
+**Scope.** Founder scope call, 2026-10-25 (AskUserQuestion answer "Smallest piece first (Recommended)"): A1 = the migrator fix + save progress every ~25 rows + skip the first full sweep on a fresh device; this item is outside it.
+
+**Evidence.** 2026-10-25 09:02 IST gateway log: `workout_log_exercises` took 633 upserts for 207 bundles (3 passes of the same rows). A1 removes the largest cause (the migrator) and saves progress every 25 rows, but two passes of the same domain can still be live at once: a retry sweep started while an abandoned loop (the 45 s restore-op ceiling) is still walking rows, and any two entry points (`checkAndSync`, the coalesced fan-out, the retry controller).
+
+**Design notes from the plan reviews.** A fingerprint-carrying in-flight ledger (a row already in flight with the same fingerprint is skipped by the second pass), the `forcePushKeys` bypass, an owner token, a monotonic TTL, a reset seam on account change, and the `kNotSweptOpTypes` domains. Cheapest candidate mitigation: refresh `_stored` from the flushed map at flush time (A1's `_flush` already re-reads the box).
+
+**Done when.** Two overlapping passes of one domain over the same unchanged rows send each row once; a behavioral test with two live `SyncSkipIndex` instances over a stubbed server counts the upserts.
+
+
+## OI-417 — The restore records push fingerprints only for exercise logs: the other 15 SyncSkipIndex domains re-upload what a fresh device just downloaded (the postponed day+1 sweep pays it)
+
+- **Status**: OPEN
+- **Blocked on**: blocked_on_user (separate piece named in the scope call)
+- **Verified**: 2026-10-25, by reading: `_restoreExerciseLogs` is the only restore path that records push fingerprints (diagnose `f3d2a7`); the other domains record none. Not measured on a device.
+- **Identified**: 2026-10-25 · filed via mint_oi.sh from branch `sync-storm-first-sweep`
+
+Filed by the sync-storm-first-sweep batch (A1 = W1 migrator fix, W2 save progress every 25 events, W3 postponed first sweep; diagnose `b9e4d7`, plan `docs/plans/2026-10-25-sync-storm-first-sweep.md`, ledger `docs/audit/sync-storm-first-sweep.closure.yaml`).
+
+**Scope.** Founder scope call, 2026-10-25 (AskUserQuestion answer "Smallest piece first (Recommended)"): A1 = the migrator fix + save progress every ~25 rows + skip the first full sweep on a fresh device; this item is outside it.
+
+**Evidence.** Same root cause as A1 for every other domain. `_restoreExerciseLogs` records `SyncSkipIndex.recordConfirmedAll` fingerprints (L1a-3, diagnose `f3d2a7`) via `restoredBundleEqualsCloud`; the other domains (`wlog`, `sched`, `completion`, `template`, `plan`, `streak`, `water`, `steps`, `urine`, `sleep`, `weight`, `measurement`, `readiness`, `savedMeal`, `customItem`, `nlog`) record nothing on restore, so their first push after a restore re-uploads every restored row. W3 postpones the daily sweep by 24 h; the day+1 sweep then pays this cost.
+
+**Fix shape.** A per-domain equality check like `restoredBundleEqualsCloud` (fingerprint built by the SAME function the push uses; recorded only for a row the restore wrote and the cloud row equals what the push would send).
+
+**Done when.** After a restore on a fresh device, the day+1 sweep sends 0 rows per covered domain (measured with the section 9 gateway queries of the plan).
+
+
+## OI-418 — Sync pushes one request per row and two per exercise: batch the upserts (about 50 rows per request)
+
+- **Status**: OPEN
+- **Blocked on**: blocked_on_user (separate piece named in the scope call)
+- **Verified**: 2026-10-25, live: the same gateway log (2,228 requests in the session).
+- **Identified**: 2026-10-25 · filed via mint_oi.sh from branch `sync-storm-first-sweep`
+
+Filed by the sync-storm-first-sweep batch (A1 = W1 migrator fix, W2 save progress every 25 events, W3 postponed first sweep; diagnose `b9e4d7`, plan `docs/plans/2026-10-25-sync-storm-first-sweep.md`, ledger `docs/audit/sync-storm-first-sweep.closure.yaml`).
+
+**Scope.** Founder scope call, 2026-10-25 (AskUserQuestion answer "Smallest piece first (Recommended)"): A1 = the migrator fix + save progress every ~25 rows + skip the first full sweep on a fresh device; this item is outside it.
+
+**Evidence.** The 2026-10-25 session sent 2,228 requests; each exercise summary and each set row is its own PostgREST call. A1 reduces how many rows push, not how many requests a push of N rows costs.
+
+**Fix shape.** One upsert request per up-to-50 rows per table, with the per-row confirmation the skip index needs (`pushIfChanged` confirms per row today); the failure of one row in a batch must not forget the others. Touches the G1 gate (`check_sync_hash_skip_atomicity.dart`), which forbids an `.upsert(` outside a `pushIfChanged` closure.
+
+**Done when.** The request count for N changed rows is about N/50 per table, rows are confirmed individually, and G1 still holds.
+
+
+## OI-419 — Every telemetry event costs one Edge Function call plus one GoTrue /user round trip (82 events, average 3.7 s in the 2026-10-25 session): batch them
+
+- **Status**: OPEN
+- **Blocked on**: blocked_on_user (separate piece named in the scope call)
+- **Verified**: 2026-10-25, live: the same gateway log (82 `log-client-error` events, average 3.7 s each).
+- **Identified**: 2026-10-25 · filed via mint_oi.sh from branch `sync-storm-first-sweep`
+
+Filed by the sync-storm-first-sweep batch (A1 = W1 migrator fix, W2 save progress every 25 events, W3 postponed first sweep; diagnose `b9e4d7`, plan `docs/plans/2026-10-25-sync-storm-first-sweep.md`, ledger `docs/audit/sync-storm-first-sweep.closure.yaml`).
+
+**Scope.** Founder scope call, 2026-10-25 (AskUserQuestion answer "Smallest piece first (Recommended)"): A1 = the migrator fix + save progress every ~25 rows + skip the first full sweep on a fresh device; this item is outside it.
+
+**Evidence.** 82 telemetry events in the 2026-10-25 session each cost one `log-client-error` Edge Function call plus one GoTrue `/user` round trip, averaging 3.7 s while the backend was slow, and they compete with the sync for the same connection budget.
+
+**Fix shape.** Queue events on the device and post them in one request per interval or per N events (the `drainTelemetryQueue` path already exists for failed posts), with one token validation per batch.
+
+**Done when.** A session that raises N events sends about N/20 requests and the per-event auth round trip is gone.
+
+
+## OI-420 — Android phone cold start after sign-in is slow and shows Sync paused: add startup timeline events and measure (3 s splash floor, awaited health sync); two causes are NOT established
+
+- **Status**: OPEN
+- **Blocked on**: blocked_on_user (found during the A1 investigation; outside the quoted scope call; founder to schedule)
+- **Verified**: 2026-10-25: the founder's phone report. The cold start is UNMEASURED and both causes named below are NOT established.
+- **Identified**: 2026-10-25 · filed via mint_oi.sh from branch `sync-storm-first-sweep`
+
+Filed by the sync-storm-first-sweep batch (A1 = W1 migrator fix, W2 save progress every 25 events, W3 postponed first sweep; diagnose `b9e4d7`, plan `docs/plans/2026-10-25-sync-storm-first-sweep.md`, ledger `docs/audit/sync-storm-first-sweep.closure.yaml`).
+
+**Scope.** Founder scope call, 2026-10-25 (AskUserQuestion answer "Smallest piece first (Recommended)"): A1 = the migrator fix + save progress every ~25 rows + skip the first full sweep on a fresh device; this item is outside it.
+
+**Evidence.** The founder's phone report on 2026-10-25 (Sync paused on cold start) is NOT explained by A1, which was measured on web. The phone cold start is UNMEASURED.
+
+**NOT established (kept here so the symptom has a terminal home).** (1) The 8-33 s single-row reads from the phone upstream of the app. (2) The cause of the 28-of-29 HTTP 503 burst at 09:15-09:25 IST: compute tier, or dashboard CPU and IO for that window. Neither was proven to be this app's doing.
+
+**Candidates to measure first.** Startup timeline events (add them before changing anything), the 3 s splash floor, the awaited Android health sync in `checkAndSync` (`HealthSyncService.instance.syncToHive()` runs before the restore).
+
+**Done when.** A cold-start timeline from a real phone names the long pole with numbers.
+
+
+## OI-421 — Google sign-in sends no prompt=select_account (auth_provider.dart:561): the browser silently reuses the last Google account
+
+- **Status**: OPEN
+- **Blocked on**: blocked_on_user (found during the A1 investigation; outside the quoted scope call; founder to schedule)
+- **Verified**: 2026-10-25, by reading `lib/features/auth/providers/auth_provider.dart:561`: the `signInWithOAuth` call passes `redirectTo` only, no `queryParams`.
+- **Identified**: 2026-10-25 · filed via mint_oi.sh from branch `sync-storm-first-sweep`
+
+Filed by the sync-storm-first-sweep batch (A1 = W1 migrator fix, W2 save progress every 25 events, W3 postponed first sweep; diagnose `b9e4d7`, plan `docs/plans/2026-10-25-sync-storm-first-sweep.md`, ledger `docs/audit/sync-storm-first-sweep.closure.yaml`).
+
+**Scope.** Founder scope call, 2026-10-25 (AskUserQuestion answer "Smallest piece first (Recommended)"): A1 = the migrator fix + save progress every ~25 rows + skip the first full sweep on a fresh device; this item is outside it.
+
+**Evidence.** `lib/features/auth/providers/auth_provider.dart:561` starts the Google OAuth flow without `prompt=select_account`, so a browser that is signed into one Google account reuses it with no chooser; a tester switching accounts on one profile lands in the previous account.
+
+**Fix shape.** Pass `queryParams: {'prompt': 'select_account'}` to the OAuth call and test the URL it builds.
+
+**Done when.** The OAuth URL carries `prompt=select_account` (unit test) and the chooser shows on the web app.
+
+
+## OI-422 — Two full restores run concurrently on a fresh device by design (checkAndSync -> legacy restoreFromCloud, and restoring_screen.dart:116): confirm they explain the doubled table reads, then choose one
+
+- **Status**: OPEN
+- **Blocked on**: blocked_on_user (found during the A1 investigation / removed by plan review; outside the quoted scope call; founder to schedule)
+- **Verified**: 2026-10-25, by reading: `restoring_screen.dart:116` and `sync_service.dart` `checkAndSync` (:1063 -> `_restoreIfNeeded` -> `restoreFromCloud` :1660) are two restore entries. That they cause the doubled reads is NOT yet shown.
+- **Identified**: 2026-10-25 · filed via mint_oi.sh from branch `sync-storm-first-sweep`
+
+Filed by the sync-storm-first-sweep batch (A1 = W1 migrator fix, W2 save progress every 25 events, W3 postponed first sweep; diagnose `b9e4d7`, plan `docs/plans/2026-10-25-sync-storm-first-sweep.md`, ledger `docs/audit/sync-storm-first-sweep.closure.yaml`).
+
+**Scope.** Founder scope call, 2026-10-25 (AskUserQuestion answer "Smallest piece first (Recommended)"): A1 = the migrator fix + save progress every ~25 rows + skip the first full sweep on a fresh device; this item is outside it.
+
+**Evidence.** On a fresh device `checkAndSync` calls `_restoreIfNeeded` -> legacy `restoreFromCloud`, while the restoring screen starts its own restore (`restoring_screen.dart:116`). The gateway log showed table reads roughly doubled during the restore.
+
+**Not yet shown.** That these two restores ARE the doubled reads: add a call counter around `restoreFromCloudForUser`/`restoreFromCloud` and record it in a fresh-device run before deciding which restore to drop.
+
+**Done when.** A counter shows one restore per fresh-device launch, or the doubled reads are explained by something else and this item is closed with that evidence.
+
+
+## OI-423 — Delete the three sync-storm-first-sweep kill switches and their old paths once the runtime check is recorded (disable_exlog_migrator_skip_unchanged, disable_skip_index_incremental_flush, disable_first_sweep_postpone)
+
+- **Status**: OPEN
+- **Blocked on**: upstream_blocked: the plan's section 9 device check (reopen when it is recorded)
+- **Verified**: 2026-10-25, by reading: the three getters live in `lib/core/services/sync_flags.dart` (added by this batch).
+- **Identified**: 2026-10-25 · filed via mint_oi.sh from branch `sync-storm-first-sweep`
+
+Filed by the sync-storm-first-sweep batch (A1 = W1 migrator fix, W2 save progress every 25 events, W3 postponed first sweep; diagnose `b9e4d7`, plan `docs/plans/2026-10-25-sync-storm-first-sweep.md`, ledger `docs/audit/sync-storm-first-sweep.closure.yaml`).
+
+**Why this exists.** The three switches ship LIVE by default (opt-out), which departs from CLAUDE.md 4.6.1/3 and is stated once in the PR. 4.6.4 requires the old path to be deleted in the batch that rolls the gate; the roll waits for the founder-run check in `docs/plans/2026-10-25-sync-storm-first-sweep.md` section 9. Precedent: OI-303.
+
+**Done when.** The section 9 numbers are recorded, the three `SyncFlags` getters, the `flushEnabledResolver` seam, the old unconditional migrator rewrite and the unconditional sweep path are deleted, and the tests that exercise the switches are removed or repointed.
+
+
+## OI-424 — Residual restored-row re-send shapes after A1: the migrator still rewrites and re-pushes summary-only, NULL-aggregate and mismatched-aggregate rows, and the push sends set_number = 1 for a summary-only row
+
+- **Status**: OPEN
+- **Blocked on**: upstream_blocked: needs the section 9 count of rewritten rows (reopen when it is recorded)
+- **Verified**: 2026-10-25, by reading and by the A1 tests: the 'residual shapes' section of diagnose `b9e4d7`; shape (1) was measured (it pushes once with or without the migrator).
+- **Identified**: 2026-10-25 · filed via mint_oi.sh from branch `sync-storm-first-sweep`
+
+Filed by the sync-storm-first-sweep batch (A1 = W1 migrator fix, W2 save progress every 25 events, W3 postponed first sweep; diagnose `b9e4d7`, plan `docs/plans/2026-10-25-sync-storm-first-sweep.md`, ledger `docs/audit/sync-storm-first-sweep.closure.yaml`).
+
+**Evidence.** The A1 diagnose-doc lists three shapes the skip does not cover: (1) a timed/cardio row whose cloud `weight_kg`/`reps` are NULL (no restore fingerprint is recorded for it at all, measured: it pushes once with or without the migrator), (2) a canonical-keyed summary-only row with no `sets` (the migrator synthesizes a set and the row differs from what the restore fingerprinted), (3) a row whose stored aggregates disagree with its sets. For (2) the push also sends `set_number = 1` regardless of the cloud value.
+
+**Done when.** The section 9 count says how many rows fall in these shapes on a real account and either they are made byte-stable in the migrator or the cost is accepted in writing.
+
+
+## OI-425 — W3 consequence: on a fresh device sweep-only pushes wait until the first launch at least 24 h after the first one (unbounded for an inactive user): Health Connect imports, plan_json, profile / progress / preferences / coach pushes
+
+- **Status**: OPEN
+- **Blocked on**: blocked_on_user (consequence of W3, accepted under the quoted scope call; the mitigation decision needs the section 9 numbers)
+- **Verified**: 2026-10-25, by reading `first_sweep_decision.dart`, `_postponeFirstSweep` and `shouldRunFullSweep`; the B-pass corrected the wording to 'until the first launch at least 24 h after the first one'.
+- **Identified**: 2026-10-25 · filed via mint_oi.sh from branch `sync-storm-first-sweep`
+
+Filed by the sync-storm-first-sweep batch (A1 = W1 migrator fix, W2 save progress every 25 events, W3 postponed first sweep; diagnose `b9e4d7`, plan `docs/plans/2026-10-25-sync-storm-first-sweep.md`, ledger `docs/audit/sync-storm-first-sweep.closure.yaml`).
+
+**What waits.** Anything ONLY the daily sweep pushes reaches the cloud at the first launch at least 24 h after the first one instead of at it: Health Connect imports (steps, weight, sleep), rows whose normal fan-out was rejected, `plan_json`, and the profile / progress / preferences / coach-interaction pushes. A private window closed within that day loses the on-device-only ones, and another device sees first-launch local changes later.
+
+**Decide after section 9.** Whether any of them needs an immediate push (for example a one-row push of `plan_json` at the end of the restore), using the measured request counts.
+
+**Done when.** Each listed push has a decision recorded: immediate, or accepted with the 24 h delay.
+
+
+## OI-426 — The restore records its exercise fingerprints once after its loop: a process killed or reloaded mid-restore leaves restored rows without a fingerprint (they push once)
+
+- **Status**: OPEN
+- **Blocked on**: blocked_on_user (removed from A1 by plan review; outside the quoted scope call; founder to schedule)
+- **Verified**: 2026-10-25, by reading `_restoreExerciseLogs` (one `recordConfirmedAll` after the write loop).
+- **Identified**: 2026-10-25 · filed via mint_oi.sh from branch `sync-storm-first-sweep`
+
+Filed by the sync-storm-first-sweep batch (A1 = W1 migrator fix, W2 save progress every 25 events, W3 postponed first sweep; diagnose `b9e4d7`, plan `docs/plans/2026-10-25-sync-storm-first-sweep.md`, ledger `docs/audit/sync-storm-first-sweep.closure.yaml`).
+
+**Scope.** Founder scope call, 2026-10-25 (AskUserQuestion answer "Smallest piece first (Recommended)"): A1 = the migrator fix + save progress every ~25 rows + skip the first full sweep on a fresh device; this item is outside it.
+
+**Evidence.** `_restoreExerciseLogs` calls `SyncSkipIndex.recordConfirmedAll` once after its write loop (L1a-3). A tab reloaded or a process killed mid-restore leaves the already-written rows with no fingerprint, so each pushes once. v3 of the A1 plan had chunked recording (W2b) and plan review removed it: weak benefit, no clean test seam.
+
+**Input.** The section 9 reload-mid-restore count (how many exercise rows push after one reload mid-restore).
+
+**Done when.** The count is recorded and either chunked recording lands with a deterministic seam or the cost is accepted in writing.
+

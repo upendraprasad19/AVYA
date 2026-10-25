@@ -1,7 +1,12 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 
+import 'error_telemetry.dart';
 import 'hive_service.dart';
 import 'pending_exlog_deletes.dart';
+import 'sync/sync_skip_index.dart';
+import 'sync_flags.dart';
 import 'sync_service.dart';
 import 'workout_write_service.dart';
 
@@ -28,6 +33,14 @@ import 'workout_write_service.dart';
 /// re-runs the merge against the v7 boundary, picking up the
 /// rogue rows; the writers themselves were rewritten to delegate
 /// to [WorkoutWriteService.exlogKey] so the issue does not recur.
+///
+/// sync-storm-first-sweep W1 — a single canonical row whose recomputed
+/// aggregates already equal the stored row is NOT rewritten (no `put`, no
+/// `updated_at_ms = now`). The restore records the push fingerprint of every
+/// row it writes; the push sends `completed_at = max(resolved, updated_at_ms)`
+/// and `completed_at` is part of that fingerprint, so a blind rewrite made the
+/// next push re-upload every restored exercise. Kill switch
+/// `disable_exlog_migrator_skip_unchanged` restores the unconditional rewrite.
 class ExlogKeyMigrator {
   ExlogKeyMigrator._();
   static const _migrationKey = 'exlog_key_migration_v8';
@@ -44,6 +57,10 @@ class ExlogKeyMigrator {
 
     int rekeyed = 0;
     int merged = 0;
+    int unchanged = 0;
+    int rewritten = 0;
+    final skipUnchanged = SyncFlags.exlogMigratorSkipUnchangedEnabled;
+    var compareErrorReported = false;
 
     // Group existing entries by their NEW key.
     final byNewKey = <String, List<MapEntry<String, Map<String, dynamic>>>>{};
@@ -115,26 +132,55 @@ class ExlogKeyMigrator {
               (((s['weight_kg'] as num?)?.toDouble() ?? 0.0) *
                   ((s['reps'] as num?)?.toInt() ?? 0)));
 
-      final mergedEntry = <String, dynamic>{
+      // Everything the migrator would write, minus the new write stamp.
+      final candidate = <String, dynamic>{
         ...base,
         'sets': mergedSets,
         'set_number': mergedSets.length,
         'weight_kg': maxWeight,
         'reps_completed': totalReps,
         'volume_kg': volume,
-        'updated_at_ms': DateTime.now().millisecondsSinceEpoch,
       };
+
+      // sync-storm-first-sweep W1 — a lone canonical row that the rewrite would
+      // leave byte-equal is left alone. `.first` (not `.single`) so a
+      // multi-entry group simply fails the length test; such a group can never
+      // be equal anyway (every extra entry adds a set). The comparison may
+      // throw (NaN/Infinity makes jsonEncode throw): fall back to the rewrite.
+      var rowUnchanged = false;
+      if (skipUnchanged && group.length == 1 && group.first.key == newKey) {
+        try {
+          rowUnchanged = SyncFingerprint.canonicalJson(candidate) ==
+              SyncFingerprint.canonicalJson(base);
+        } catch (e, st) {
+          if (!compareErrorReported) {
+            compareErrorReported = true;
+            unawaited(ErrorTelemetry.recordNonFatal(e, st,
+                reason: 'sync_exlog_migrator_compare'));
+          }
+        }
+      }
 
       // Write under the new key FIRST, then delete the old keys (b8d5c2 B-pass
       // F1) — a throwing/interrupted put never leaves the group with the old
       // keys deleted but nothing written. Idempotent: an interrupted
       // put-then-delete re-enters the group next boot (old keys still present)
       // and reproduces the result.
-      await box.put(newKey, mergedEntry);
+      if (rowUnchanged) {
+        unchanged++;
+      } else {
+        await box.put(newKey, <String, dynamic>{
+          ...candidate,
+          'updated_at_ms': DateTime.now().millisecondsSinceEpoch,
+        });
+        rewritten++;
+      }
       // L1a-2 U4: the migrator re-creates the row, so a delete still queued
-      // for this exercise on this day is cancelled (same as a re-log).
-      final migratedName = mergedEntry['exercise_name'] as String?;
-      final migratedDate = mergedEntry['date'] as String?;
+      // for this exercise on this day is cancelled (same as a re-log). Kept on
+      // the unchanged path too: the arguments come from `base`, so the call is
+      // identical to today's.
+      final migratedName = candidate['exercise_name'] as String?;
+      final migratedDate = candidate['date'] as String?;
       if (migratedName != null && migratedDate != null) {
         await PendingExlogDeletes.cancelFor(
           workoutLogId: SyncService.workoutLogIdForDate(migratedDate),
@@ -172,7 +218,7 @@ class ExlogKeyMigrator {
     }
 
     debugPrint(
-        '[ExlogKeyMigrator] rekeyed=$rekeyed merged=$merged total_after=${box.keys.where((k) => k.toString().startsWith('exlog_')).length}');
+        '[ExlogKeyMigrator] rekeyed=$rekeyed merged=$merged unchanged=$unchanged rewritten=$rewritten total_after=${box.keys.where((k) => k.toString().startsWith('exlog_')).length}');
     await config.put(_migrationKey, true);
   }
 }

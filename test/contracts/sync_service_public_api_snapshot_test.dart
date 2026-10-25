@@ -164,6 +164,11 @@ void main() {
         // onboarding-replay now()-fallback fix (no existing SyncDomain entry
         // point for this one-shot migration replay).
         'replayPendingOnboardingSyncForTest',
+        // sync-storm-first-sweep W3 - @visibleForTesting seams for the durable
+        // fresh-device marker and the postponed first sweep (`checkAndSync`
+        // cannot run under the unit harness).
+        'markFreshDeviceForTest',
+        'postponeFirstSweepForTest',
       };
 
       final files = <File>[
