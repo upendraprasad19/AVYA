@@ -140,7 +140,7 @@ _Moved verbatim from `supabase/functions/CLAUDE.md` (original lines 193-193, con
 | `type` | Model | Cap | Client call site |
 |---|---|---|---|
 
-| `food_text_analysis` | `gemini-3.1-flash-lite`, JSON mode | 10/day free · 200/day PRO — enforced atomically by the `trg_food_text_rate_limit` Postgres trigger (live definition migration 129 — counts usage_counters, not ai_coach_interactions rows; free cap set by 127, created by 026, IST boundary fixed by 113, free arm lowered 50→10 by 127 per b8f4c2), which raises `food_text_daily_limit_reached` (SQLSTATE P0001) → 429 | `lib/features/nutrition/providers/nutrition_provider.dart:733` |
+| `food_text_analysis` | `gemini-3.1-flash-lite`, JSON mode | 10/day free · 200/day PRO — enforced atomically by the `trg_food_text_rate_limit` Postgres trigger (live definition migration 129 — counts usage_counters, not ai_coach_interactions rows; free cap set by 127, created by 026, IST boundary fixed by 113, free arm lowered 50→10 by 127 per b8f4c2), which raises `food_text_daily_limit_reached` (SQLSTATE P0001) → 429 | `lib/features/nutrition/providers/nutrition_provider.dart` (`AiBreakdownNotifier.analyse`) |
 
 ## type row: scan_meal (full)
 
@@ -149,7 +149,7 @@ _Moved verbatim from `supabase/functions/CLAUDE.md` (original lines 194-194, con
 | `type` | Model | Cap | Client call site |
 |---|---|---|---|
 
-| `scan_meal` | `gemini-3.1-flash-lite` (vision), JSON mode | **COMBINED with `cart_auditor`: free 4/day, PRO 20/day** — one shared budget, not two independent caps (OI-46; Part B / migration 153 made it tier-aware: free 3+1, PRO 10+10 fit exactly under 4 / 20 — see `docs/architecture/business-rules.md`). Enforced atomically by `trg_vision_analysis_rate_limit` (live definition migration 129, which moved it onto `usage_counters` quota_key `vision_analysis`; created by 111; live definition now migration 153: free 4 / PRO 20), which raises `vision_analysis_daily_limit_reached (cap=%, pro=%)` (SQLSTATE P0001) → 429 with `tier` + `limit`. | `nutrition_provider.dart:1356` |
+| `scan_meal` | `gemini-3.1-flash-lite` (vision), JSON mode | **COMBINED with `cart_auditor`: free 4/day, PRO 20/day** — one shared budget, not two independent caps (OI-46; Part B / migration 153 made it tier-aware: free 3+1, PRO 10+10 fit exactly under 4 / 20 — see `docs/architecture/business-rules.md`). Enforced atomically by `trg_vision_analysis_rate_limit` (live definition migration 129, which moved it onto `usage_counters` quota_key `vision_analysis`; created by 111; live definition now migration 153: free 4 / PRO 20), which raises `vision_analysis_daily_limit_reached (cap=%, pro=%)` (SQLSTATE P0001) → 429 with `tier` + `limit`. | `nutrition_provider.dart` (`ScanMealNotifier.scanImage`) |
 
 ## prediction type paragraph (full)
 

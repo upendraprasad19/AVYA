@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:icanbefitter/core/services/error_telemetry.dart';
 import 'package:icanbefitter/core/services/supabase_service.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -334,6 +335,272 @@ void main() {
             isA<FunctionException>().having((e) => e.status, 'status', 500)),
       );
       expect(attempts, 2);
+    });
+  });
+  // OI-414 — a call flagged `spendsQuotaPerCall` is never sent again on a
+  // gateway 502/503/504, because the handler may already have run and spent
+  // its quota unit. Events are captured through the telemetry seam; the hook is
+  // set in setUp and nulled in tearDown so a failing expect cannot leak it.
+  //
+  // A compile error before the fix is NOT proof that these tests catch it: the
+  // proof is the mutant run recorded in
+  // docs/diagnoses/2026-10-25-promo-check-gateway-retry-a6d2f9.md. Rows marked
+  // (control) pass with and without the fix.
+  group('OI-414 spendsQuotaPerCall', () {
+    final events = <String>[];
+
+    setUp(() {
+      events.clear();
+      ErrorTelemetry.debugOnLogEventForTests = (opType, {message}) {
+        events.add('$opType:$message');
+      };
+    });
+
+    tearDown(() {
+      ErrorTelemetry.debugOnLogEventForTests = null;
+    });
+
+    // A long first wait on purpose: a gate placed AFTER the backoff would not
+    // finish inside the timeout, and an EMPTY backoff list would rethrow at the
+    // first attempt even without the gate (a pass for the wrong reason).
+    Future<void> expectStopsAtFirstAnswer(int status) async {
+      var attempts = 0;
+      Future<FunctionResponse> invoker() async {
+        attempts++;
+        throw FunctionException(status: status, details: 'gateway');
+      }
+
+      await expectLater(
+        () => SupabaseService.retryColdStart(
+          invoker,
+          functionName: 'test-fn',
+          backoffsMs: const [60000, 60000, 60000],
+          spendsQuotaPerCall: true,
+        ).timeout(const Duration(seconds: 2)),
+        throwsA(isA<FunctionException>()
+            .having((e) => e.status, 'status', status)),
+        reason: 'a TimeoutException here means the gateway status was still '
+            'waiting for a re-send',
+      );
+      expect(attempts, 1, reason: 'one invocation, no re-send');
+      expect(events,
+          ['edge_function_no_retry_quota_call:fn=test-fn status=$status'],
+          reason: 'exactly the stop event, and no cold-start re-send event');
+    }
+
+    test('T1: 502 on a flagged call is thrown on the first answer', () async {
+      await expectStopsAtFirstAnswer(502);
+    });
+
+    test('T2: 504 on a flagged call is thrown on the first answer', () async {
+      await expectStopsAtFirstAnswer(504);
+    });
+
+    test('T3: 503 on a flagged call is thrown on the first answer', () async {
+      await expectStopsAtFirstAnswer(503);
+    });
+
+    test('T5a (control): 504 then 200 WITHOUT the flag is still re-sent',
+        () async {
+      var attempts = 0;
+      Future<FunctionResponse> invoker() async {
+        attempts++;
+        if (attempts == 1) {
+          throw const FunctionException(status: 504, details: 'gateway');
+        }
+        return FunctionResponse(status: 200, data: {'ok': true});
+      }
+
+      final resp = await SupabaseService.retryColdStart(
+        invoker,
+        functionName: 'test-fn',
+        backoffsMs: const [10, 10, 10],
+      );
+      expect(attempts, 2);
+      expect(resp.status, 200);
+      expect(events, [
+        'edge_function_cold_start_retry:fn=test-fn attempt=1 status=504 '
+            'backoff_ms=10'
+      ], reason: 'the old path, event for event');
+    });
+
+    test('T5b (control): 503 with string details WITHOUT the flag is re-sent',
+        () async {
+      var attempts = 0;
+      Future<FunctionResponse> invoker() async {
+        attempts++;
+        if (attempts == 1) {
+          throw const FunctionException(status: 503, details: 'boot error');
+        }
+        return FunctionResponse(status: 200, data: {'ok': true});
+      }
+
+      await SupabaseService.retryColdStart(
+        invoker,
+        functionName: 'test-fn',
+        backoffsMs: const [10, 10, 10],
+      );
+      expect(attempts, 2);
+      expect(events.where((e) => e.startsWith('edge_function_no_retry')),
+          isEmpty);
+    });
+
+    test('T6: the explicit retryOn500 opt-in is respected on a flagged call',
+        () async {
+      var attempts = 0;
+      Future<FunctionResponse> invoker() async {
+        attempts++;
+        if (attempts == 1) {
+          throw const FunctionException(status: 500, details: 'upstream');
+        }
+        return FunctionResponse(status: 200, data: {'ok': true});
+      }
+
+      final resp = await SupabaseService.retryColdStart(
+        invoker,
+        functionName: 'test-fn',
+        backoffsMs: const [10, 10, 10],
+        retryOn500: true,
+        spendsQuotaPerCall: true,
+      );
+      expect(attempts, 2, reason: 'the flag only covers the gateway statuses');
+      expect(resp.status, 200);
+      expect(events.where((e) => e.startsWith('edge_function_no_retry')),
+          isEmpty);
+    });
+
+    test('T7 (control): 400, 401 and a plain 500 on a flagged call rethrow at '
+        'once with no stop event', () async {
+      for (final status in [400, 401, 500]) {
+        events.clear();
+        var attempts = 0;
+        Future<FunctionResponse> invoker() async {
+          attempts++;
+          throw FunctionException(status: status, details: 'caller error');
+        }
+
+        await expectLater(
+          () => SupabaseService.retryColdStart(
+            invoker,
+            functionName: 'test-fn',
+            backoffsMs: const [10, 10, 10],
+            spendsQuotaPerCall: true,
+          ),
+          throwsA(isA<FunctionException>()
+              .having((e) => e.status, 'status', status)),
+        );
+        expect(attempts, 1, reason: 'status $status');
+        expect(events, isEmpty, reason: 'status $status is not a gateway status');
+      }
+    });
+
+    test('T7b: the storage-race 400 on a flagged call is still re-sent',
+        () async {
+      var attempts = 0;
+      Future<FunctionResponse> invoker() async {
+        attempts++;
+        if (attempts == 1) {
+          throw const FunctionException(
+              status: 400, details: {'error_type': 'storage'});
+        }
+        return FunctionResponse(status: 200, data: {'ok': true});
+      }
+
+      await SupabaseService.retryColdStart(
+        invoker,
+        functionName: 'test-fn',
+        storageRaceBackoffsMs: const [10, 10, 10],
+        spendsQuotaPerCall: true,
+      );
+      expect(attempts, 2);
+      expect(events.where((e) => e.startsWith('edge_function_no_retry')),
+          isEmpty);
+    });
+
+    test('T7c: a transport failure (status 0) on a flagged call rethrows once '
+        'with no stop event', () async {
+      var attempts = 0;
+      Future<FunctionResponse> invoker() async {
+        attempts++;
+        throw const FunctionsFetchException(details: 'offline');
+      }
+
+      await expectLater(
+        () => SupabaseService.retryColdStart(
+          invoker,
+          functionName: 'test-fn',
+          backoffsMs: const [10, 10, 10],
+          spendsQuotaPerCall: true,
+        ),
+        throwsA(isA<FunctionException>()
+            .having((e) => e.status, 'status', 0)),
+      );
+      expect(attempts, 1);
+      expect(events, isEmpty);
+    });
+
+    test('T8: a flagged call stops at the first answer of EVERY status 100-599 '
+        'except the storage-race 400: one attempt, a stop event only for '
+        '502/503/504', () async {
+      // The sweep, not a list, so a status added to the cold-start predicate
+      // (520, 522, ...) cannot be re-sent on a flagged call unnoticed.
+      for (var status = 100; status <= 599; status++) {
+        events.clear();
+        var attempts = 0;
+        Future<FunctionResponse> invoker() async {
+          attempts++;
+          throw FunctionException(status: status, details: 'gateway');
+        }
+
+        await expectLater(
+          () => SupabaseService.retryColdStart(
+            invoker,
+            functionName: 'test-fn',
+            backoffsMs: const [10, 10, 10],
+            storageRaceBackoffsMs: const [10, 10, 10],
+            spendsQuotaPerCall: true,
+          ),
+          throwsA(isA<FunctionException>()
+              .having((e) => e.status, 'status', status)),
+          reason: 'status $status',
+        );
+        expect(attempts, 1, reason: 'status $status was sent again');
+        final isGateway = status == 502 || status == 503 || status == 504;
+        expect(
+          events,
+          isGateway
+              ? ['edge_function_no_retry_quota_call:fn=test-fn status=$status']
+              : isEmpty,
+          reason: 'status $status',
+        );
+      }
+    });
+
+    test('T9: retryOn500 does not switch the stop off for a gateway status',
+        () async {
+      // The two switches are independent: retryOn500 adds the 500 retry, the
+      // flag stops the gateway re-send. A gate written as `&& !retryOn500`
+      // would send a metered call again here.
+      var attempts = 0;
+      Future<FunctionResponse> invoker() async {
+        attempts++;
+        throw const FunctionException(status: 502, details: 'gateway');
+      }
+
+      await expectLater(
+        () => SupabaseService.retryColdStart(
+          invoker,
+          functionName: 'test-fn',
+          backoffsMs: const [10, 10, 10],
+          retryOn500: true,
+          spendsQuotaPerCall: true,
+        ),
+        throwsA(isA<FunctionException>()
+            .having((e) => e.status, 'status', 502)),
+      );
+      expect(attempts, 1);
+      expect(events,
+          ['edge_function_no_retry_quota_call:fn=test-fn status=502']);
     });
   });
 }

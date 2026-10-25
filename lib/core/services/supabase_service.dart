@@ -397,6 +397,11 @@ class SupabaseService {
     Map<String, String>? headers,
     Map<String, dynamic>? body,
     bool retryOn500 = false,
+    // OI-414: set for a function that spends one quota unit per call, up to
+    // its window's limit. A gateway 502, 503 or 504 is then thrown on the
+    // first answer instead of being sent again: the handler may already have
+    // run, and a second send would spend a second unit.
+    bool spendsQuotaPerCall = false,
   }) async {
     // Proactive token refresh — avoids sending an expired JWT
     final token = await ensureFreshToken();
@@ -427,6 +432,9 @@ class SupabaseService {
     // rethrow immediately so the caller (e.g. AiCoachProvider) handles
     // them. The 2026-04-07 401-recursion guard is preserved.
     //
+    // A call flagged [spendsQuotaPerCall] is the exception to all of the
+    // above: a gateway 502/503/504 is thrown on the first answer (OI-414).
+    //
     // Retry control flow is factored into [retryColdStart] so it can
     // be exercised by behavioral tests with a mock invoker (source-grep
     // alone can't catch a future refactor that breaks the break/rethrow
@@ -437,6 +445,7 @@ class SupabaseService {
       () => _invokeRaw(name, headers: headers, body: body),
       functionName: name,
       retryOn500: retryOn500,
+      spendsQuotaPerCall: spendsQuotaPerCall,
     );
   }
 
@@ -500,6 +509,10 @@ class SupabaseService {
   /// exceptions rethrow immediately (auth-class 401/403, other 4xx, and
   /// non-cold-start 5xx like 500 do NOT retry).
   ///
+  /// A call flagged [spendsQuotaPerCall] is the exception: the first 502, 503
+  /// or 504 is thrown (and logged as `edge_function_no_retry_quota_call`),
+  /// because the handler may already have spent its quota unit (OI-414).
+  ///
   /// Exposed `@visibleForTesting` so behavioral tests can inject a mock
   /// invoker and assert runtime semantics — see
   /// `test/contracts/edge_function_cold_start_retry_behavioral_test.dart`.
@@ -510,6 +523,7 @@ class SupabaseService {
     List<int> backoffsMs = _coldStartBackoffsMs,
     List<int> storageRaceBackoffsMs = _storageRaceBackoffsMs,
     bool retryOn500 = false,
+    bool spendsQuotaPerCall = false,
   }) async {
     int coldStartAttempt = 0;
     int storageRaceAttempt = 0;
@@ -535,6 +549,19 @@ class SupabaseService {
         // caller bug and must NOT retry.
         final isStorageRace =
             e.status == 400 && _functionDetailsIsStorageRace(e.details);
+
+        // OI-414 — a call that spends a quota unit per call is never sent
+        // again on a gateway status: the handler may already have run. This
+        // sits BEFORE the isColdStart branch so that predicate stays as it
+        // was. The stop is logged as a LOW-priority event (it can be dropped
+        // under a client cooldown, so its absence is not proof of none).
+        if (spendsQuotaPerCall && _gatewayStatuses.contains(e.status)) {
+          unawaited(ErrorTelemetry.logEvent(
+            'edge_function_no_retry_quota_call',
+            message: 'fn=$functionName status=${e.status}',
+          ));
+          rethrow;
+        }
 
         if (isColdStart) {
           if (coldStartAttempt >= backoffsMs.length) rethrow;
@@ -570,6 +597,10 @@ class SupabaseService {
   /// Storage-race retry schedule. Sub-second-friendly because CDN
   /// propagation typically resolves in <1s; total budget ~5s.
   static const List<int> _storageRaceBackoffsMs = [500, 1500, 3000];
+
+  /// The statuses only the gateway answers with (OI-414): never sent again
+  /// for a call flagged `spendsQuotaPerCall`.
+  static const Set<int> _gatewayStatuses = {502, 503, 504};
 
   /// True if the FunctionException body carries `error_type=="storage"`.
   /// Tolerant of varied shapes — `details` may be a Map, a JSON string,

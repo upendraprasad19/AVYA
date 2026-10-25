@@ -15239,7 +15239,13 @@ concepts:
       server call in the background per spec §5.3 "After a successful
       write" -- confirmed day_swap_allowance.dart :64-76); any non-200/no
       server response keeps the phone copy (fail open, confirmed :94-95,
-      :98).
+      :98). OI-414 (diagnose a6d2f9): the server call passes
+      spendsQuotaPerCall, so a gateway 502/503/504 is thrown on the first
+      answer and the phone copy stands; the server count then runs behind the
+      phone by one per failed call that did not reach the handler, and only the
+      next swap's reply corrects it (the under-count direction, accepted: a PRO
+      user can reach limit+N swaps in the week, and a second device can swap past
+      a free limit).
     writers:
       - file: lib/core/services/day_swap/day_swap_allowance.dart
         line_range: 1-9999
@@ -17252,12 +17258,17 @@ concepts:
   - concept: promo_validate_rate_limit
     domain: subscription
     behavioral_test_path: supabase/functions/validate-promo/index_test.ts
+    behavioral_test_path_client_retry: test/contracts/edge_function_cold_start_retry_behavioral_test.dart  # OI-414: pins the CLIENT half (a gateway 502/503/504 is thrown on the first answer, never sent again); the Deno test above cannot see the client. Forwarding: call_function_spends_quota_per_call_behavioral_test.dart; call-site argument (presence only): spends_quota_per_call_source_pins_test.dart
     description: |
       consume_quota('promo_validate', <1-hour UTC bucket>, 7) right after the JWT check in validate-promo,
       before the body and the lookup. -1 -> HTTP 200 {valid:false, reason:"Too many attempts. Try again in N
       minutes."} (N = the rest of the UTC hour, rateLimitedReason; hermes H3); an RPC error -> HTTP 200 {valid:false, reason:"Couldn't check the code right now. Try again
       shortly."} (200 because the paywall shows any non-2xx as "Network error"). Same kill switch as the order
       limit; switch "true" = the pre-OI-366 path verbatim (golden against the frozen origin/main fixture).
+      Client half (OI-414, diagnose a6d2f9): the paywall passes spendsQuotaPerCall: true, so
+      SupabaseService.callFunction throws a gateway 502/503/504 on the first answer instead of sending the
+      call again (the handler may already have spent the unit). One APPLY tap spends at most one unit; the
+      user cannot tell whether a gateway error spent it.
     writers:
       - file: supabase/functions/validate-promo/index.ts
         line_range: 82-108
@@ -17265,8 +17276,8 @@ concepts:
         semantic: cloud-write
     readers:
       - file: lib/shared/widgets/paywall_sheet.dart
-        line_range: 200-248
-        method: _validatePromoCode — valid == true, else shows data['reason']
+        line_range: 200-251
+        method: _validatePromoCode — valid == true, else shows data['reason']; the call passes spendsQuotaPerCall (OI-414), so a thrown gateway error reaches the catch after one attempt
         semantic: cloud-read
       - file: supabase/functions/_shared/founder_digest_content.ts
         line_range: 88-137

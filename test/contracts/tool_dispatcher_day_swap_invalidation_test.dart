@@ -18,7 +18,7 @@
 //   - `daySwapAllowanceProvider` (lib/features/train/providers/day_swap_provider.dart:114)
 //     listens to `DaySwapAllowance.instance.revision`, which
 //     `SwapService.swapDays` bumps via `DaySwapAllowance.instance.recordSwap`
-//     -> `lib/core/services/day_swap/day_swap_allowance.dart:159`, on every
+//     -> `DaySwapAllowance._write` (lib/core/services/day_swap/day_swap_allowance.dart), on every
 //     successful swap — independent of the dispatcher entirely.
 // Deleting the dedicated block reddens NOTHING in this file (Mutation 3). It
 // is kept anyway as a cheap, harmless defensive guard — the same
@@ -192,7 +192,7 @@ void main() {
       expect(afterSat, 'Pull + Core');
       // The allowance family refreshes via DaySwapAllowance.instance.revision
       // (day_swap_provider.dart:114), which SwapService.swapDays bumps
-      // through DaySwapAllowance.recordSwap -> day_swap_allowance.dart:159 —
+      // through DaySwapAllowance.recordSwap -> DaySwapAllowance._write —
       // independent of the dedicated dispatcher block (see file header).
       expect(c.read(daySwapAllowanceProvider(weekStart)).used, 1,
           reason: 'daySwapAllowanceProvider must be invalidated after a '

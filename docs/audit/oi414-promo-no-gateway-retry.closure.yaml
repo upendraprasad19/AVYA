@@ -1,0 +1,132 @@
+# Closure ledger — oi414-promo-no-gateway-retry (OI-414 and its census of every callFunction caller)
+# Gate 40 (validate_audit_closure.dart). One terminal_state per item; no `deferred:` key.
+# Plan docs/plans/2026-10-25-oi414-promo-no-gateway-retry.md (v3, two context-blind review rounds),
+# executed inline on branch oi414-promo-no-gateway-retry; `oi414-promo-no-gateway-retry@branch` is the
+# in-branch commit form for the commits that carry this file.
+#
+# Founder scope call (2026-10-25), copied verbatim.
+#   Question asked: "How far should the OI-414 batch go? It always fixes the promo check. The question is
+#   which other calls get the same 'don't resend after a gateway error' protection now."
+#   Answer chosen: "Promo + day-swap (Recommended)", whose option text read: "Promo check (the OI) and the
+#   PRO day-swap call, a background correction with no visible cost. The AI scan/cart/photo calls and the
+#   prediction card each get an OI with the exact question, because they lose automatic cold-start recovery.
+#   delete-account, weekly-report and body-fat get OIs for the separate lost-response problem."
+#
+# Reading guide. `verified_clean` rows are a CENSUS READING by the agent, self-attested, not a proof: the
+# B-pass re-read them. `create-razorpay-order` is classed clean by the agent's judgement (30 per fixed hour,
+# a duplicate order is unpaid and harmless, the re-send recovers a cold start at the moment of payment); the
+# founder did not choose it. B1-B6 map to OI-428..OI-433 (B1 carries three calls: scan_meal, cart_auditor, food_text_analysis); B8 is the founder's post-build phone check. For OI-431..OI-433 the
+# fix itself is agent work and only the Edge Function deploy go (CLAUDE.md 4.3) and, for OI-433, the choice of
+# what to store are user-only: that is a borderline use of this state and is stated here rather than hidden.
+# OI-434 (the paywall `mounted` check, found by the B-pass) is an OI, not a census row.
+
+batch: oi414-promo-no-gateway-retry
+plan_review_record: docs/plan-reviews/oi414-promo-no-gateway-retry.md
+
+findings:
+  - id: C1
+    title: "validate-promo: the paywall APPLY call is sent once on a gateway 502/503/504 (OI-414)"
+    terminal_state: closed_in_commit
+    commit: 6febc329
+    verification: "supabase_service.dart spendsQuotaPerCall + early gate; paywall_sheet.dart passes it. Loop: group 'OI-414 spendsQuotaPerCall' (11 tests, incl. a sweep over statuses 100-599); forwarding over real HTTP: call_function_spends_quota_per_call_behavioral_test.dart; call-site argument: source pin in spends_quota_per_call_source_pins_test.dart (presence only). 21 mutants plus M11, all red (diagnose a6d2f9)."
+
+  - id: C2
+    title: "consume-day-swap: the PRO day-swap background call is sent once on a gateway error"
+    terminal_state: closed_in_commit
+    commit: 6febc329
+    verification: "day_swap_allowance.dart _callServer passes spendsQuotaPerCall: true (source pin, comments stripped; mutant M10 red). Accepted property A7 (server runs behind the phone by one per failed call that did not reach the handler) is written in the plan, the registry and the diagnose-doc."
+
+  - id: V1
+    title: "create-razorpay-order: left unflagged on purpose"
+    terminal_state: verified_clean
+    evidence: "Census reading, self-attested. 30 per fixed UTC hour (consume_quota right after the JWT check); with the abuse guards on its own refusals answer 500, not 502 (c7e3b1 H1); a re-send after a lost response yields at worst a second UNPAID Razorpay order, no charge; the re-send recovers a cold start at the moment of payment, which is worth more than the harmless duplicate."
+
+  - id: V2
+    title: "verify-payment: must keep the re-send"
+    terminal_state: verified_clean
+    evidence: "Census reading, self-attested. 20 per 10-minute bucket; replay is idempotent (the payment-id pre-SELECT); the re-send is REQUIRED to recover a paid user whose first confirmation was lost; worst case 4 sends x 4 attempts = 16 units, below 20."
+
+  - id: V3
+    title: "daily-snapshot: re-send wanted"
+    terminal_state: verified_clean
+    evidence: "Census reading, self-attested. coach_extraction 1 per 6 h; the snapshot upsert is idempotent; a re-send after a cold start is the desired behaviour (H3)."
+
+  - id: V4
+    title: "ai-proxy chat: delivered reply is replayed"
+    terminal_state: verified_clean
+    evidence: "Census reading, self-attested. The 30 s dedupe replays a delivered reply and refunds; that holds for fast-failing shapes, a very slow attempt can land outside the window (recorded in the plan, not a new defect)."
+
+  - id: V5
+    title: "redeem-referral: no quota unit, idempotent"
+    terminal_state: verified_clean
+    evidence: "Census reading, self-attested. redeem_referral_atomic is idempotent per referee (migration 159); a re-send cannot credit twice."
+
+  - id: V6
+    title: "restore-user-snapshot: read-only"
+    terminal_state: verified_clean
+    evidence: "Census reading, self-attested. A read; a re-send is free."
+
+  - id: V7
+    title: "verify-subscription: read-only"
+    terminal_state: verified_clean
+    evidence: "Census reading, self-attested. A read of the subscription rows; a re-send is free."
+
+  - id: V8
+    title: "get-community-review-items: read-only"
+    terminal_state: verified_clean
+    evidence: "Census reading, self-attested. A read; a re-send is free."
+
+  - id: V9
+    title: "admin-dashboard-data: read-only"
+    terminal_state: verified_clean
+    evidence: "Census reading, self-attested. A read behind the admin check; a re-send is free."
+
+  - id: V10
+    title: "log-client-error: no quota unit"
+    terminal_state: verified_clean
+    evidence: "Census reading, self-attested. It meters a per-user row budget (2000 per 24 h), not a usage_counters unit; the wrapper is bypassed for the telemetry lane (callFunctionAnonymous, pinned not to carry the flag)."
+
+  - id: B1
+    title: "ai-proxy scan_meal, cart_auditor, food_text_analysis: re-send spends a free-tier unit per send (OI-428)"
+    terminal_state: blocked_on_user
+    reason: "The founder's decision on the trade-off recorded in OI-428 (opting out loses automatic recovery from an ai-proxy cold-start 502/503/504): flag all three, flag scan and cart only, leave as is, or a server idempotency key. The scope call above already put these in an OI with the exact question."
+    notes: "food_text_analysis is NOT clean: its dedupe covers only a model_used='pending' row from the last 60 s (ai-proxy/index.ts:385-393), so a re-send after the first finished is a second unit (found by plan-review round 2)."
+
+  - id: B2
+    title: "ai-media-proxy and the web fallback loop _retryHttpColdStart (OI-429)"
+    terminal_state: blocked_on_user
+    reason: "The founder's decision recorded in OI-429 (flag the callFunction site and give the web loop the same switch, flag only for free users, leave as the function's own comment decided, or a server idempotency key)."
+
+  - id: B3
+    title: "ai-proxy prediction: 3 per day, never refunded (OI-430)"
+    terminal_state: blocked_on_user
+    reason: "The founder's call recorded in OI-430: pass spendsQuotaPerCall in AiService.predict (the recovery lost is small, one attempt per IST day automatically) or leave it. A one-argument client change, ready to apply on a yes; no Edge Function change."
+
+  - id: B4
+    title: "delete-account: a re-send meets a 401 that hides the first success (OI-431)"
+    terminal_state: blocked_on_user
+    reason: "The Edge Function deploy go (CLAUDE.md 4.3) if the server option is chosen, and the choice between the client-only and the server fix recorded in OI-431. The code and tests are agent work."
+
+  - id: B5
+    title: "weekly-report: a re-send meets 403 NOT_PRO and paywalls the free user's only report (OI-432)"
+    terminal_state: blocked_on_user
+    reason: "The Edge Function deploy go (CLAUDE.md 4.3) if the server option is chosen, and the choice between reloading the stored report on the client and returning it from the function (OI-432). The code and tests are agent work."
+
+  - id: B6
+    title: "assess-body-composition: its own 502s are re-run, and a lost success locks the user out for 30 days (OI-433)"
+    terminal_state: blocked_on_user
+    reason: "The Edge Function deploy go (CLAUDE.md 4.3) and the choice of what to store with the 30-day stamp (OI-433). Two facets: cost only (answer 500 for the function's own failures, the c7e3b1 H1 fix class) and the lockout (store the result with the stamp). The code and tests are agent work."
+
+  - id: B7
+    title: "B-pass (three context-blind Sonnet seats on the staged diff): 15 distinct findings, all dispositioned"
+    terminal_state: closed_in_commit
+    commit: 6febc329
+    verification: "docs/reviews/eb8fea69c002-review.md (verdict accepted, 15 distinct findings: 0 P0, 0 P1, 2 P2, 13 P3) carries each finding with its disposition; B4 became OI-434; the accepted fixes are in commit 6febc329 with the code (status sweep test T8, retryOn500 independence test T9, polled control test, comment and doc wording, bug-classes 2.5 sentence)."
+
+  - id: B8
+    title: "OI-348 post-build line: promo APPLY (valid and invalid code) and one day swap on the build carrying this change"
+    terminal_state: blocked_on_user
+    reason: "The founder's phone check on the build that carries this change (needs the founder's next /build-apk). A gateway error after the handler ran cannot be forced from a device, so the check is only that APPLY and one day swap still behave on normal answers."
+
+total_findings: 20
+closed_count: 20

@@ -213,8 +213,11 @@ class _PaywallSheetState extends ConsumerState<PaywallSheet> {
       // Route through callFunction (refreshes the JWT first) — a raw invoke on an
       // aged/backgrounded web token 401s silently (§2.31); validate-promo is authed.
       // Surfaced by the multi-line-aware gate fix (Unit 1, 2026-06-13).
+      // OI-414: validate-promo spends one check unit per call (until the hourly
+      // limit), so a gateway 502/503/504 must not be sent again by the wrapper (the
+      // user sees "Network error. Try again." and taps once more instead).
       final response = await SupabaseService.instance.callFunction(
-          'validate-promo', body: {'code': code});
+          'validate-promo', body: {'code': code}, spendsQuotaPerCall: true);
 
       final data = response.data as Map<String, dynamic>?;
       if (data == null) {
