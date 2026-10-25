@@ -10,7 +10,7 @@ wiring surface uses. A gate **number is an optional alias**: most gates have non
 the next free number: **55**. Declare it canonically as `// Gate: N` on its
 own line in the first 10 lines — that exact form is the only one this generator reads.
 
-Total gates: **111** (48 numbered, 63 by filename only).
+Total gates: **111** (47 numbered, 64 by filename only).
 
 | Gate | Script | Purpose | Test ledger |
 |---|---|---|---|
@@ -40,7 +40,6 @@ Total gates: **111** (48 numbered, 63 by filename only).
 | 30 | `check_crashlytics_alert_routing.dart` | assert that Firebase Crashlytics alert routing is documented at | grandfathered |
 | 31 | `check_cron_registry.dart` | assert that every `cron.schedule(...)` call in `supabase/migrations/*.sql` is also recorded | mutation_proven |
 | 54 | `check_device_tests_exist.dart` | assert that the 4 named Patrol device-CI flow files exist in `integration_test/device/` and | grandfathered |
-| 25 | `check_diagnose_index_fresh.dart` | assert that `docs/diagnoses/INDEX.md` enumerates every diagnose-doc on disk. | grandfathered |
 | 18 | `check_doc_internal_consistency.dart` | known-drift pairs across CLAUDE.md + AGENTS.md must agree. | grandfathered |
 | — | `check_edge_function_auth_pattern.dart` | Edge Function auth-pattern validation (e8a1c3 class, 2026-06-12). | grandfathered |
 | 12 | `check_edge_function_payloads.dart` | Flutter caller body keys ⊆ Edge Function validator shape. | grandfathered |
@@ -68,6 +67,7 @@ Total gates: **111** (48 numbered, 63 by filename only).
 | — | `check_incident_index_fresh.dart` | confirms docs/incidents/INDEX.md is up-to-date. | grandfathered |
 | 28 | `check_jose_version.dart` | assert `jose` is at or above the configured minimum version across every Edge Function. | grandfathered |
 | — | `check_local_date_key_drift.dart` | Ban device-local `YYYY-MM-DD` date-key construction in lib/, i.e. | grandfathered |
+| — | `check_local_indexes_untracked.dart` | Assert that neither generated index, docs/audit/OPEN_INDEX.md or docs/diagnoses/INDEX.md, is | mutation_proven |
 | — | `check_merge_tree_write_tree_form.dart` | flag the legacy `git merge-tree <base> <a> <b>` (3-arg) form in | mutation_proven |
 | — | `check_migration_contains_assertion_uniqueness.dart` | WARN-ONLY. Never exits 1. See migration_contains_uniqueness_lib.dart for | mutation_proven |
 | — | `check_migration_ledger_paired.dart` | assert that whenever a new | mutation_proven |

@@ -216,7 +216,7 @@ with a gate holds; everything on intention decays. Same disease §4.12 records f
 > with no mechanism behind it, decaying unread.
 >
 > The mechanism is real as of **2026-07-29**: `scripts/build_oi_index.dart` regenerates
-> [`OPEN_INDEX.md`](OPEN_INDEX.md) from this file, wired into `scripts/pre-commit.sh` beside
+> `OPEN_INDEX.md` (a gitignored local build since 2026-10-24) from this file, wired into `scripts/pre-commit.sh` beside
 > the other index regens, and it **fails closed** if any open entry is missing its
 > `Blocked on` / `Verified` fields. `scripts/check_closes_oi_cited.dart` (commit-msg) enforces
 > the `closes-oi:` citation. Both are exercised by `test/contracts/`.

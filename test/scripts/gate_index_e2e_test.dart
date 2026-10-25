@@ -230,6 +230,32 @@ void main() {
     expect(r.exitCode, 1, reason: 'two declarations on 49 must still collide');
   });
 
+  test('the Total line counts numbered gates among the scripts that EXIST, not the ledger claims', () {
+    // A closure ledger still mints a number for a gate whose script has since been DELETED
+    // (Gate 25, check_diagnose_index_fresh.dart, in the local-indexes landing). That claim is real
+    // history and stays in the registry, but it is not a row of the table: counting claims made the
+    // sentence say one numbered gate more than the table under it shows.
+    final dir = _fixture({
+      'check_alpha.dart': _gate('7', 'Alpha.'),
+      'check_beta.dart': _gate(null, 'Unnumbered.'),
+    });
+    addTearDown(() => dir.deleteSync(recursive: true));
+    File('${dir.path}/docs/audit/old_batch.closure.yaml').writeAsStringSync(
+      'verification: scripts/check_gone.dart (Gate 9, hard-fail)\n',
+    );
+
+    final r = _runBuilder(dir.path);
+    expect(r.exitCode, 0, reason: '${r.stdout}${r.stderr}');
+
+    final index = File('${dir.path}/docs/audit/GATE_INDEX.md').readAsStringSync();
+    expect(index, contains('Total gates: **2** (1 numbered, 1 by filename only).'));
+    final numberedRows = RegExp(r'^\| \d+ \|', multiLine: true).allMatches(index).length;
+    final filenameRows = RegExp(r'^\| — \|', multiLine: true).allMatches(index).length;
+    expect([numberedRows, filenameRows], [1, 1], reason: 'the sentence must equal the table under it');
+    // The console line is the same claim, made a second time, and is what pre-commit prints.
+    expect('${r.stdout}', contains('PASS — 2 gates, 1 numbered, no collisions.'));
+  });
+
   test('a closure ledger mint collides with a header declaration', () {
     // Source 4. The ONLY claim Gate 45 and Gate 7 have in the real repo lives
     // in a ledger — a scan blind to these produced two P0s in review.

@@ -43,8 +43,11 @@ runs the same gates). See §4 process invariants for the no-deferred-failures po
   `§N` heading citations, not numeric claims), so they go stale on any commit that adds a gate —
   as this row did (it said 90 / 76 / 78 from 2026-08-25 until 2026-09-19). Re-run the `ls`
   above rather than trusting the number.
-  Bounded-parallel, `PRE_COMMIT_GATE_JOBS` default 4. Plus Gate 40 + conditional index regens +
-  merge-commit regression-catalog walk. Blocks the commit on any failure. Prints a non-blocking
+  Bounded-parallel, `PRE_COMMIT_GATE_JOBS` default 4. Plus Gate 40 + conditional index regens (the OPEN and
+  diagnose indexes are UNTRACKED local builds since A2: a staged board or diagnose doc is validated by the
+  same strict builder and nothing is staged; exit 3 = validation passed, write failed = a warning) +
+  merge-commit regression-catalog walk (preceded, in a tree with `scripts/build_local_indexes.dart` whose diagnose
+  index is untracked, by `build_bug_index.dart --lenient`). Blocks the commit on any failure. Prints a non-blocking
   `/code-review` (B-pass) reminder when the staged blast-radius is ≥`account` — the review itself
   is MANDATORY before the merge per §4.3; the echo is only the reminder, not the gate.
   It does **NOT** run `flutter analyze` or `flutter test` (cost split 2026-08-11 — see ADR-0018).
@@ -84,7 +87,8 @@ runs the same gates). See §4 process invariants for the no-deferred-failures po
   are recorded failures, never silent. A plain `cp` over an installed hook FILE fails with `Permission denied` on
   purpose (an old tree's installer must not downgrade the shared hooks); the same message on the hooks DIRECTORY means
   its owner or mode is wrong (for example an install made with sudo). Rollback is `chmod u+w <hooks>/*`, then the
-  installer. Windows: the `u+w` retry is unverified on Git Bash.
+  installer. Windows: the FIRST install on Git Bash worked (founder, 2026-10-24); replacing already read-only copies (the
+  `u+w` retry) is still unverified there until the first reinstall.
   Tests: `test/scripts/setup_hooks_atomic_install_e2e_test.dart`, `test/scripts/pre_commit_index_add_e2e_test.dart`.
   `flutter analyze --no-fatal-infos` runs **unconditionally**, above every early exit — placement
   is load-bearing, because on a `feature`-tier branch push it is the only compile check that runs
@@ -132,7 +136,10 @@ runs the same gates). See §4 process invariants for the no-deferred-failures po
   and both were false for want of this hook. It runs the two board gates only
   (`build_oi_index.dart` for within-file duplicates, `check_oi_numbering_unique.dart` for
   cross-branch/cross-board), NOT the full 75-gate loop: a merge needs board integrity, not a
-  re-scan of a tree already gated at every commit on both sides.
+  re-scan of a tree already gated at every commit on both sides. **A2:** when `docs/audit/OPEN_INDEX.md` is
+  IGNORED (`git check-ignore -q`, not `ls-files`: a tracked or neither-tracked-nor-ignored file keeps the old
+  backup/restore path byte for byte) the hook only validates: no backup, no restore (it would `rm -f` the fresh
+  build), no "stale, `git add` it" NOTE; a duplicate `## OI-N` still exits 1, a failed write (exit 3) warns.
 - **CI (`.github/workflows/test.yml`) is the full-suite source-of-truth for `main`** — analyze +
   full `flutter test` + all gates + a debug-APK compile + **the `deno-edge-functions` job**
   (in `test.yml`), which runs `deno test` AND a `deno check` type-check over the WHOLE
@@ -187,6 +194,32 @@ runs the same gates). See §4 process invariants for the no-deferred-failures po
 | Topic | Path / detail |
 |---|---|
 | **Open-issues backlog — READ THE INDEX FIRST** | `docs/audit/OPEN_INDEX.md` — auto-generated, one line per open OI (`Blocked on` / `Verified` / line anchor), **~3,800 tokens (13,619 B, measured 2026-08-30)**. ⚠ This row said **"~950 tokens" for a month while the real figure reached 5,266** — TRUE when written (`e4bc9040`, 2026-07-29: 3,759 B ≈ 1,044 tok) and never re-derived, on the very row that tells every session to read this file first. **Do not trust this number either — measure it**: `wc -c docs/audit/OPEN_INDEX.md`, ÷3.6 for tokens. It is now gated (`check_context_artifact_budget.dart`, soft 15% warn / hard 50% block) precisely because prose cannot hold a number. The 2026-08-30 batch also capped `Blocked on`/`Verified` at 40 chars in the RENDER (`build_oi_index.dart`, reusing `_shorten`) — they were emitted RAW at up to 212 and 312 chars against a title capped at 74, which is where the bloat came from. Full detail: `docs/audit/open_issues.md` at the cited line (`Read(offset:, limit: 60)`); closed history archived in `docs/audit/closed_issues.md` — **which is where 27 CLOSED entries went on 2026-08-30, 46% of a board named "open"** (357,664 → 194,850 B — the FINAL figure across both archive commits; 200,300 B was the intermediate state after the first 26, and pairing the final count with the intermediate size is exactly the error round 1 caught here). Generator `scripts/build_oi_index.dart` regenerates on any commit touching the board (`pre-commit.sh`) and **fails closed** on a missing `Blocked on`/`Verified`. `closes-oi: OI-NN` is enforced at commit-msg by `scripts/check_closes_oi_cited.dart` when a status moves OPEN→CLOSED. Tests: `test/contracts/oi_index_test.dart`, `test/contracts/closes_oi_cited_test.dart`. **Why generated:** the board went 70 days unread because nothing referenced it, and its own "fixed by `check_open_issues_reconciled.dart`" note described a script that was never written. |
+
+### Local indexes — the OPEN and diagnose indexes are untracked build products (A2, merge-conflict-treadmill, 2026-10)
+
+`docs/audit/OPEN_INDEX.md` and `docs/diagnoses/INDEX.md` are **gitignored and untracked**: two branches that each add an
+issue or a diagnose doc used to conflict in a file neither wrote by hand (47 of 52 replayed main-sync merges conflicted;
+20 in `OPEN_INDEX.md`, 13 in `diagnoses/INDEX.md`). Plan `docs/plans/merge-conflict-treadmill.md` §6.
+
+| Piece | What it does |
+|---|---|
+| `scripts/local_indexes_lib.dart` | the ONE home of: each index's input list, the diagnose-doc predicate (`.md`, not `INDEX.md`/`README.md`/`TEMPLATE.md`, so `x.md~` never counts), the **stamp**, `isStale`, the atomic write |
+| stamp | line 1 of each output: `<!-- local-build: <sha256 of the sorted "name size mtime" lines of every input> -->` (stat only, never contents; the stats are taken BEFORE the inputs are read). A `touch` or a checkout that rewrites an unchanged input makes it stale: one rebuild answers it |
+| `scripts/build_oi_index.dart`, `scripts/build_bug_index.dart` | `runOiIndex(root, {strict})` / `runBugIndex(root, {strict})` return an exit code instead of calling `exit`. **Strict** (the default; CI and pre-commit): any problem fails and writes nothing. **`--lenient`**: skip or FLAG the offender, say so, write the rest; a duplicate `## OI-N` fails in both modes, and so do a missing or unreadable board / docs directory (a board that is not valid UTF-8 is exit 1, not an exception). A `## OI-N` header the section regexp cannot read (a hyphen or en dash for the em dash, a U+2028 in the title, no title) fails strict and is listed under "Needs attention" in lenient: it would otherwise vanish from the index with exit 0 (the OI-68 scar). Exit **3** = validation passed, write failed (the old output stays) |
+| `scripts/build_local_indexes.dart [--lenient]` | builds both, ALWAYS runs both (a builder that throws anyway counts as 1, is named on stderr, and does not stop the other), exits with the worst code (1 over 3 over 0), then a **self-check**: `isStale(root)` must be false. Root = the git toplevel when it holds this script, else the script's parent (a `git archive` tree). `ensureLocalIndexes` (builds a MISSING OI index; one test reads it) and `ensureBugIndexFresh` (builds a missing or STALE diagnose index, lenient) are the two consumer-side helpers |
+| write | atomic: a temp file under `.dart_tool/local_indexes/`, then rename (one retry after 200 ms); a directory at the output path is replaced only when empty; stale `*.tmp` older than 1 h are swept |
+| `validateDiagnoseDocs` (in `scripts/bug_index_lib.dart`) | strict rules: parseable frontmatter, a **bare** `date: YYYY-MM-DD` (the table sorts on the raw string and the merge-commit regression walk keeps only rows whose first cell has that shape, so a quoted or free-text date would silently drop that bug's test from the walk), a usable `symptom:`, `bug_id:` equal to the file name's 6-character suffix or the whole stem (one pair of quotes tolerated). This replaces Gate 25, deleted in A2 |
+| `scripts/check_regression_catalog.dart` (the merge-commit walk) | **builds its own input**: `ensureBugIndexFresh` runs first, so a MISSING or STALE `docs/diagnoses/INDEX.md` is rebuilt (lenient) before the walk. Hooks are copies: a machine whose installed `pre-commit` predates A2 never builds the index, and the walk used to die on "not found" with a message about a failing TEST. The current hook also builds it first (its own exit-code policy and tracked-index guard); this is the net under every older copy |
+| CI (`test.yml`) | a plain strict `dart run scripts/build_local_indexes.dart` step before the unit-test shards and before the Audit Gates loop (no `${{ }}`, no `if:`) |
+| `scripts/check_local_indexes_untracked.dart` | fails when either path is TRACKED again (`git ls-files`); fails open when git cannot answer |
+| SessionStart / bug-prompt nudge (`discipline_hook.dart`) | stat only, no spawn: `Local indexes stale/missing — run: dart run scripts/build_local_indexes.dart --lenient`. Fires only where `scripts/build_local_indexes.dart` exists. **No Claude Code hook builds anything (D7)**: builds are automatic in git hooks and CI only |
+| hooks-not-reinstalled warning | SessionStart only, one `git rev-parse --git-path hooks` spawn: warns when the installed `pre-commit` or `pre-merge-commit` lacks the literal `build_local_indexes.dart` |
+
+**Old hook, A2 tree (a mixed fleet; `test/scripts/fixtures/pre_a2_hooks/` holds the A0 hooks frozen).** The tree moves with `git merge --ff-only`, the hook copy only with `sh scripts/setup-hooks.sh`, so for a while a machine runs an OLD hook on a NEW tree. With the A0 hooks (what both machines had): a staged board or diagnose doc builds with the strict A2 builder and is NOT staged (A0's tracked-only guard); a merge commit works (the walk builds its own index, above); `pre-commit` BLOCKS on an index write failure (it knows only 0 and non-0, where A2 warns on 3); `pre-merge-commit` still validates the board and blocks a duplicate OI, and prints the `git add` NOTE for an index that is now ignored. With hooks that predate A0, a plain `git add` of an ignored index fails every commit that touches a board or a diagnose doc. The SessionStart warning names this once per session.
+**Budget gate:** `check_context_artifact_budget.dart` still tracks `docs/audit/OPEN_INDEX.md`, now **as built locally**: absent = SKIPPED (fails open), present = measured against the recorded baseline; the stamp line adds about 87 B.
+**Subagents:** an isolation worktree (`agent-*`) gets neither the nudge nor the files (ignored files are not copied, SessionStart does not fire for subagents), so the read recipe in CLAUDE.md §7 carries the no-Dart fallbacks (`grep -n '^## OI-' docs/audit/open_issues.md`, `grep -ril <term> docs/diagnoses/`).
+**Roll-out (once per machine after A2 merges):** in the primary, `git checkout -- docs/diagnoses/INDEX.md docs/audit/OPEN_INDEX.md` if either is dirty; `git fetch origin main && git merge --ff-only origin/main`; `dart run scripts/build_local_indexes.dart --lenient`; then `sh scripts/setup-hooks.sh` (pre-commit and pre-merge-commit changed). **Merge note:** a branch cut before A2 that edited either index hits one modify/delete conflict on merging main: `git rm --cached` both paths, then run the builder. A pre-A2 worktree with a DIRTY tracked index refuses the sync merge ("local changes would be overwritten"): `git checkout -- docs/diagnoses/INDEX.md docs/audit/OPEN_INDEX.md` first.
+Tests: `test/scripts/local_indexes_e2e_test.dart`, `test/scripts/bug_index_strict_test.dart`, `test/scripts/check_local_indexes_untracked_test.dart`, `test/scripts/ci_local_indexes_steps_test.dart`, `test/scripts/discipline_hook_local_indexes_e2e_test.dart`, `test/scripts/pre_merge_commit_e2e_test.dart`, `test/scripts/pre_commit_index_add_e2e_test.dart`, `test/scripts/context_artifact_tracked_list_test.dart`, `test/scripts/gitignore_classification_test.dart`, `test/scripts/script_closure_fixture_test.dart`, `test/scripts/gate_index_e2e_test.dart`.
 
 ### Discipline harness hooks (prompt-time §4 reminders + euphemism gate + MEMORY.md size nudge + worktree warni...
 
@@ -501,7 +534,7 @@ The user has **two Supabase accounts** with different logins. These are NOT the 
 ##### 4.1.5 Bug-history lookup (BEFORE proposing root cause)
 
 After observations captured + before brainstorming:
-1. Grep `docs/diagnoses/INDEX.md` for matching symptom / concept / file paths.
+1. Grep `docs/diagnoses/INDEX.md` (a LOCAL build product: absent or stale → `dart run scripts/build_local_indexes.dart --lenient`; no Dart → `grep -ril <term> docs/diagnoses/`) for matching symptom / concept / file paths.
 2. Read every matching diagnose-doc — what was the root cause, what fixed it.
 3. Check `feedback_*.md` files for the recurrence class.
 4. If recurrence: cite prior instances in the new diagnose-doc's `related_bugs:` + `recurrence:` fields; apply the known-good fix pattern.
@@ -716,7 +749,7 @@ Subagent investigation dispatches prepend the 12-tier checklist via `docs/agent_
 | Exercise library reference | `docs/reference/exercise-library.md` |
 | Food database reference | `docs/reference/food-database.md` |
 | Common pitfalls (cross-domain) | `docs/playbook/common-pitfalls.md` |
-| Bug history index | `docs/diagnoses/INDEX.md` (auto-generated; regenerated on commit) |
+| Bug history index | `docs/diagnoses/INDEX.md` (gitignored LOCAL BUILD, A2; `dart run scripts/build_local_indexes.dart --lenient`) |
 | SoT registry (machine-readable) | `docs/sot_registry.yaml` |
 | Naming conventions | `docs/naming_conventions.md` |
 | Audit lens registry (54 lenses; L54 = context-artifact cost, added 2026-08-30) | `docs/audit/LENS_REGISTRY.md` |

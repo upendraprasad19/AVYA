@@ -204,6 +204,11 @@ void main(List<String> args) {
   final collidedNumbers = collisions.map((c) => c.number).toSet();
 
   final names = gateFiles.keys.toList()..sort();
+  // Count the numbered gates among the scripts that EXIST. `numberByScript` also holds the
+  // claims that closure ledgers still mint for a gate whose script has been deleted (Gate 25,
+  // check_diagnose_index_fresh.dart, in the A2 landing), so its length overstated the numbered
+  // rows by one and the sentence below disagreed with the table under it (B-pass seat 1, F9).
+  final numberedCount = names.where(numberByScript.containsKey).length;
   final buf = StringBuffer()
     ..writeln('# Gate index')
     ..writeln()
@@ -225,8 +230,8 @@ void main(List<String> args) {
         'form is the only one this generator reads.')
     ..writeln()
     ..writeln('Total gates: **${names.length}** '
-        '(${numberByScript.length} numbered, '
-        '${names.length - numberByScript.length} by filename only).')
+        '($numberedCount numbered, '
+        '${names.length - numberedCount} by filename only).')
     ..writeln()
     ..writeln('| Gate | Script | Purpose | Test ledger |')
     ..writeln('|---|---|---|---|');
@@ -315,7 +320,7 @@ void main(List<String> args) {
 
   if (problems.isEmpty) {
     stdout.writeln('[gate-index] PASS — ${names.length} gates, '
-        '${numberByScript.length} numbered, no collisions. '
+        '$numberedCount numbered, no collisions. '
         'Next free number: ${nextFreeNumber(claims, reserved)}.');
     exit(0);
   }

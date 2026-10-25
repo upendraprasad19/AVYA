@@ -136,6 +136,16 @@ jobs:
       - name: Install dependencies
         run: flutter pub get
 
+      - name: Build the local indexes (strict)
+        # A2 (merge-conflict-treadmill, docs/plans/merge-conflict-treadmill.md section 6):
+        # docs/audit/OPEN_INDEX.md and docs/diagnoses/INDEX.md are gitignored LOCAL BUILD
+        # PRODUCTS, so a CI checkout has neither. This builds both, STRICT (no --lenient): a PR
+        # whose board has a duplicate or unknown-status entry, or whose diagnose doc has no date,
+        # symptom or matching bug_id, fails HERE with a message that names the cause, instead of
+        # surfacing as a missing file inside a shard or a gate. The step carries no ${{ }} and no
+        # `if:` on purpose: a conditional build is a build that silently did not run.
+        run: dart run scripts/build_local_indexes.dart
+
       - name: Run this shard's whole test files (pure Dart — no device needed)
         # Golden-image tests are platform-specific (Windows-generated PNGs vs
         # CI's Linux render differ in font hinting/anti-aliasing); excluded
@@ -303,6 +313,16 @@ jobs:
       - name: Install dependencies
         run: flutter pub get
 
+      - name: Build the local indexes (strict)
+        # A2 (merge-conflict-treadmill, docs/plans/merge-conflict-treadmill.md section 6):
+        # docs/audit/OPEN_INDEX.md and docs/diagnoses/INDEX.md are gitignored LOCAL BUILD
+        # PRODUCTS, so a CI checkout has neither. This builds both, STRICT (no --lenient): a PR
+        # whose board has a duplicate or unknown-status entry, or whose diagnose doc has no date,
+        # symptom or matching bug_id, fails HERE with a message that names the cause, instead of
+        # surfacing as a missing file inside a shard or a gate. The step carries no ${{ }} and no
+        # `if:` on purpose: a conditional build is a build that silently did not run.
+        run: dart run scripts/build_local_indexes.dart
+
       - name: Run all check_*.dart gates
         run: |
           set -e
@@ -367,9 +387,10 @@ jobs:
         # mint OI-2 in widely separated regions of the OPEN board, git merges
         # them cleanly, and the merged file carries two `## OI-2` headings.
         #
-        # This is the generator, so it also rewrites OPEN_INDEX.md; CI's tree is
-        # disposable, and check_oi_index_fresh (in the loop above) is what
-        # enforces the committed copy is current.
+        # This is the generator, so it also rewrites the (gitignored) OPEN_INDEX.md; CI's
+        # tree is disposable. There is no committed copy to keep current any more (A2), so
+        # nothing else is needed to enforce one. This comment used to cite
+        # `check_oi_index_fresh`, a gate that never existed.
         run: dart run scripts/build_oi_index.dart
 
       - name: Gate 40 — validate audit closure ledgers (closed==N)

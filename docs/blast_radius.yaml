@@ -377,6 +377,15 @@ paths:
   - { glob: "docs/blast_radius.yaml", tier: platform }
   - { glob: ".github/workflows/test.yml", tier: platform }
   - { glob: ".claude/settings.json", tier: platform }
+  # A2 (merge-conflict-treadmill): the two generated indexes are local build products. These six decide
+  # what the strict CI build, the pre-commit validation and the SessionStart nudge accept, so an edit
+  # that loosened a rule would let a bad diagnose doc or board entry land under a green check.
+  - { glob: "scripts/build_oi_index.dart", tier: platform }
+  - { glob: "scripts/build_bug_index.dart", tier: platform }
+  - { glob: "scripts/bug_index_lib.dart", tier: platform }
+  - { glob: "scripts/local_indexes_lib.dart", tier: platform }
+  - { glob: "scripts/build_local_indexes.dart", tier: platform }
+  - { glob: "scripts/check_local_indexes_untracked.dart", tier: platform }
 
   # ----- account -----
   # vercel.json's `redirects` array is what makes any bare-path web route

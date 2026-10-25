@@ -21,7 +21,7 @@ filename is worth preserving, but the "7 citations" figure overstated the case.
 |---|---|---|
 | **What is still owed / pending** | **`docs/audit/open_issues.md`** | **Yes — repo-tracked.** The cross-session source of truth. Surfaced automatically at every session start by `scripts/discipline_hook.dart`, and gated at merge-to-main by `scripts/check_open_issues_reconciled.dart`. |
 | Why a decision was made; past scars | `~/.claude/projects/<mangled-project-path>/memory/` | **No.** Harness-local, outside git, untracked. Rich and current, but it does not exist on another machine. |
-| Bug forensics | `docs/diagnoses/INDEX.md` | Yes |
+| Bug forensics | `docs/diagnoses/` (the docs themselves; `INDEX.md` is a LOCAL build: `dart run scripts/build_local_indexes.dart --lenient`, or `grep -ril <term> docs/diagnoses/`) | Yes — the docs are repo-tracked; the generated index is not, so a cloud session greps or builds it. |
 | Architectural decisions | `docs/adr/` | Yes |
 
 ## The sibling files in this directory

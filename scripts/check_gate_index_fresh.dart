@@ -1,7 +1,7 @@
 // scripts/check_gate_index_fresh.dart
 //
 // Gate: confirms docs/audit/GATE_INDEX.md is up-to-date relative to its baked
-// inputs. Mirrors check_adr_index_fresh.dart / check_diagnose_index_fresh.dart.
+// inputs. Mirrors check_adr_index_fresh.dart (and the deleted Gate 25).
 //
 // SEPARATION OF CONCERNS — this gate checks FRESHNESS ONLY, never collisions.
 // It always invokes the builder with `--warn-only`. Collision enforcement is

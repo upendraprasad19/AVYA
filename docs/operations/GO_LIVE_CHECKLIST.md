@@ -212,5 +212,5 @@ Also verify on-device, since neither is provable from CI:
 Stated so it is a decision rather than an oversight: the ~45 OI-board items covering gate scripts,
 worktree hygiene, CI timings, test-runtime budgets and doc-citation drift. They are real work and
 they block no user. Burning them down before launch would cost weeks and move nothing a customer
-can see. They stay on `docs/audit/OPEN_INDEX.md`, which remains the source of truth for "what's
+can see. They stay on `docs/audit/open_issues.md`, which remains the source of truth for "what's
 owed" — this file is only ever about "what stops us shipping".

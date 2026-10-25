@@ -216,7 +216,7 @@ A successful audit produces:
     re-running the same query; and reporting a dramatic live finding without reading the config
     that would refute it.
   - **Dispatch note that held up well:** the 6 category agents were told to grep
-    `docs/audit/OPEN_INDEX.md` FIRST and skip anything already tracked, and to mark FALSE_ALARM +
+    `docs/audit/OPEN_INDEX.md` FIRST (a local build: run `dart run scripts/build_local_indexes.dart --lenient` before dispatching, or grep `docs/audit/open_issues.md` for `^## OI-`) and skip anything already tracked, and to mark FALSE_ALARM +
     name the gate when one of the ~95 existing gates already covers the finding. Both instructions
     materially cut noise — several agents returned explicit "already OI-NN, skipped" lines, and the
     FALSE_ALARM blocks (cleared with evidence) are now the record that stops the next audit

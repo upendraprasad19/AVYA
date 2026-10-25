@@ -23,15 +23,27 @@
 // SIZE DISCIPLINE: one line per OI, never a block. An index as large as the
 // thing it indexes has stopped being an index.
 //
-// Usage: dart run scripts/build_oi_index.dart
-// Exit codes: 0 = written, 1 = a field is missing/placeholder (fails closed).
+// A2 (merge-conflict-treadmill): the output is a LOCAL BUILD PRODUCT. It is gitignored and
+// untracked, line 1 is the stamp from local_indexes_lib.dart, and the write is atomic.
+//
+// Usage: dart run scripts/build_oi_index.dart [--lenient]
+// Exit codes: 0 = written, 1 = the board is missing or unreadable, a field or status is
+// missing/unknown, a header cannot be read, an id is duplicated, or no open issue parsed (fails
+// closed, nothing written), 3 = validation passed but the write failed.
+// `--lenient` renders an unknown-status or missing-field row FLAGGED and lists the offenders
+// (the OI-68 scar below: nothing may vanish silently), and lists a header it cannot read under
+// "Needs attention"; a duplicate id still fails closed, because a duplicate corrupts every
+// pointer below it.
 
 import 'dart:io';
 
-const _boardPath = 'docs/audit/open_issues.md';
-const _indexPath = 'docs/audit/OPEN_INDEX.md';
+import 'local_indexes_lib.dart';
+
+const _boardPath = kOiBoardPath;
+const _indexPath = kOiIndexPath;
 
 final _sectionRe = RegExp(r'^## (OI-\d+)\s*—\s*(.*)$');
+final _headingPrefixRe = RegExp(r'^## OI-\d+');
 // `\**` strips a doubly-bolded value (`- **Status**: **OPEN**`). The sibling
 // parser in check_closes_oi_cited.dart already did this; the two disagreeing on
 // the same board text is how one gate stays silent while the other fires.
@@ -50,12 +62,16 @@ String statusWord(String raw) {
 }
 
 class OpenIssue {
-  OpenIssue(this.id, this.title, this.line, this.blockedOn, this.verified);
+  OpenIssue(this.id, this.title, this.line, this.blockedOn, this.verified,
+      {this.flag = ''});
   final String id;
   final String title;
   final int line; // 1-based, for a surgical Read(offset:) into the board
   final String blockedOn;
   final String verified;
+
+  /// Non-empty only in a LENIENT build: why this row is flagged (an unknown or absent status).
+  final String flag;
 }
 
 /// Every `## OI-NN` header whose status this parser does NOT recognise.
@@ -100,6 +116,28 @@ List<String> unrecognisedStatuses(String content) {
   return bad;
 }
 
+/// Every line that STARTS like an issue header (`## OI-<digits>`) but does not match
+/// [_sectionRe], as `"line N: <the line, shortened>"`.
+///
+/// THE SAME SCAR, ONE STEP EARLIER. [unrecognisedStatuses], [duplicateIds] and
+/// [parseOpenIssues] all begin with `_sectionRe`, so a header typed with a hyphen or an en dash
+/// instead of the em dash (`## OI-409 - title`: no em dash on most keyboards), or carrying a
+/// Unicode line separator in its title (`.` does not match U+2028 / U+2029), is invisible to all
+/// three: the issue is absent from the index, every check passes and the generator exits 0
+/// (B-pass seat 1, F8; `check_oi_numbering_unique` only notices when NO header parses). The raw
+/// prefix is the discriminator, as in `countHeadingPrefixes` (oi_numbering_lib.dart).
+List<String> unparseableHeadings(String content) {
+  final lines = content.replaceAll('\r\n', '\n').split('\n');
+  final bad = <String>[];
+  for (var i = 0; i < lines.length; i++) {
+    if (!_headingPrefixRe.hasMatch(lines[i])) continue;
+    if (_sectionRe.hasMatch(lines[i])) continue;
+    bad.add('line ${i + 1}: ${_shorten(lines[i], max: 60)} '
+        '(expected `## OI-N — title` with an em dash and no line separators)');
+  }
+  return bad;
+}
+
 /// Every `## OI-NN` id that appears more than once, as `"OI-NN appears N times"`.
 ///
 /// Scans ALL headers deliberately, NOT [parseOpenIssues]' OPEN-only result: the
@@ -135,7 +173,11 @@ List<String> duplicateIds(String content) {
 /// Parses the board into its OPEN entries. Closed entries live in
 /// `closed_issues.md`; unknown vocabulary is rejected by [unrecognisedStatuses]
 /// before this result is ever rendered.
-List<OpenIssue> parseOpenIssues(String content) {
+///
+/// [includeUnknown] is for the LENIENT build only: an entry whose status is neither open nor
+/// closed (including one with no `- **Status**:` line) is returned too, carrying a non-empty
+/// [OpenIssue.flag], so it appears in the index as a flagged row instead of vanishing (OI-68).
+List<OpenIssue> parseOpenIssues(String content, {bool includeUnknown = false}) {
   final lines = content.replaceAll('\r\n', '\n').split('\n');
   final out = <OpenIssue>[];
   for (var i = 0; i < lines.length; i++) {
@@ -156,9 +198,15 @@ List<OpenIssue> parseOpenIssues(String content) {
           if (verified.isEmpty) verified = v;
       }
     }
-    if (!_openWords.contains(statusWord(status))) continue;
-    out.add(OpenIssue(
-        head.group(1)!, _shorten(head.group(2)!.trim()), i + 1, blocked, verified));
+    final word = statusWord(status);
+    var flag = '';
+    if (!_openWords.contains(word)) {
+      if (!includeUnknown || _closedWords.contains(word)) continue;
+      flag = status.isEmpty ? 'no Status line' : 'unknown status "$word"';
+    }
+    out.add(OpenIssue(head.group(1)!, _shorten(head.group(2)!.trim()), i + 1,
+        blocked, verified,
+        flag: flag));
   }
   out.sort((a, b) => _num(a.id).compareTo(_num(b.id)));
   return out;
@@ -189,15 +237,18 @@ String _shorten(String s, {int max = 74}) {
   return '${flat.substring(0, cut > 0 ? cut : max).trimRight()}…';
 }
 
-String renderIndex(List<OpenIssue> issues) {
+/// [attention] is the LENIENT build's list of offenders (an unknown status, a missing field);
+/// when non-empty it is rendered as a trailing section so nothing vanishes silently.
+String renderIndex(List<OpenIssue> issues, {List<String> attention = const []}) {
   final b = StringBuffer()
     ..writeln('# Open Issues — index (auto-generated)')
     ..writeln('')
     ..writeln('**${issues.length} open.** One line each; full detail in '
         '[`open_issues.md`](open_issues.md) at the cited line, so a single entry '
         'can be read with `Read(open_issues.md, offset: <line>, limit: 60)` '
-        'instead of loading the file. Closed history: '
-        '[`closed_issues.md`](closed_issues.md).')
+        'instead of loading the file. The first line that read returns must be '
+        '`## OI-N —`; if it is not, this index is stale, so rebuild it. Closed '
+        'history: [`closed_issues.md`](closed_issues.md).')
     ..writeln('')
     ..writeln('`Blocked on` answers "what can I pick up right now". `Verified` is '
         'when the entry was last checked against reality — `never` means the text '
@@ -205,7 +256,7 @@ String renderIndex(List<OpenIssue> issues) {
         'claim, not a fact. OI-47 read as authoritative for a day while being '
         'wrong; that is what this column exists to make visible.')
     ..writeln('')
-    ..writeln('Re-run: `dart run scripts/build_oi_index.dart`')
+    ..writeln('Re-run: `dart run scripts/build_local_indexes.dart --lenient`')
     ..writeln('')
     ..writeln('| OI | Title | Blocked on | Verified | ↦ |')
     ..writeln('|---|---|---|---|---|');
@@ -214,38 +265,101 @@ String renderIndex(List<OpenIssue> issues) {
     // contract is pinned by oi_index_test.dart (`captures Blocked on and
     // Verified`, plus the no-bleed cases), and a consumer other than this
     // renderer must still see the whole field.
-    b.writeln('| ${i.id} | ${i.title} '
-        '| ${_shorten(i.blockedOn, max: _fieldMax)} '
-        '| ${_shorten(i.verified, max: _fieldMax)} '
+    // A flagged row (lenient build only) says so in the title cell; an empty field renders as
+    // `⚠ missing` there as well, since a strict build never reaches this point with one.
+    final title = i.flag.isEmpty ? i.title : '⚠ ${i.flag}: ${i.title}';
+    String cell(String v) => v.isEmpty ? '⚠ missing' : _shorten(v, max: _fieldMax);
+    b.writeln('| ${i.id} | $title '
+        '| ${cell(i.blockedOn)} '
+        '| ${cell(i.verified)} '
         '| [:${i.line}](open_issues.md#L${i.line}) |');
+  }
+  if (attention.isNotEmpty) {
+    b
+      ..writeln('')
+      ..writeln('## Needs attention (lenient build)')
+      ..writeln('')
+      ..writeln('These rows are flagged above; a strict build (CI, pre-commit) refuses '
+          'to run until each is fixed on the board.');
+    for (final a in attention) {
+      b.writeln('- $a');
+    }
   }
   return b.toString();
 }
 
-void main() {
-  final board = File(_boardPath);
+void main(List<String> args) {
+  exit(runOiIndex(Directory.current.path, strict: !args.contains('--lenient')));
+}
+
+/// Builds the open-issues index under [root]. Returns the exit code (see the header).
+///
+/// Every `exit(1)` of the old script is a `return 1` here, so the orchestrator
+/// (build_local_indexes.dart) can run both builders and report the worst code.
+int runOiIndex(String root, {bool strict = true}) {
+  final board = File('$root/$_boardPath');
   if (!board.existsSync()) {
     stderr.writeln('$_boardPath not found');
-    exit(1);
+    return 1;
   }
-  final content = board.readAsStringSync();
+  // The stats are captured BEFORE the board is read (local_indexes_lib.dart, R5D-8). A board
+  // that cannot be read (not valid UTF-8 after a Windows editor re-saved an em dash as 0x97, a
+  // permission bit) is a reported failure in both modes, not an exception: the orchestrator
+  // promises to run both builders and every caller maps a code, not a stack trace.
+  final digest = statDigest(root, indexInputPaths(root, kOiIndexSpec));
+  final String content;
+  try {
+    content = board.readAsStringSync();
+  } catch (e) {
+    stderr.writeln('[OI-INDEX] FAIL: $_boardPath is unreadable ($e)');
+    return 1;
+  }
 
-  // Vocabulary check FIRST — an unrecognised status must not be able to vanish
+  // Header shape FIRST — a header the section regexp cannot read is invisible to every check
+  // below, so the issue would vanish from the index with exit 0. See unparseableHeadings().
+  final unparsed = unparseableHeadings(content);
+  if (unparsed.isNotEmpty) {
+    if (strict) {
+      stderr.writeln('[OI-INDEX] FAIL: ${unparsed.length} header(s) in $_boardPath start '
+          'like an issue but cannot be read, so they would be SILENTLY absent from the '
+          'index (the OI-68 failure again):');
+      for (final u in unparsed) {
+        stderr.writeln('  - $u');
+      }
+      return 1;
+    }
+    stderr.writeln('[OI-INDEX] WARNING (lenient): ${unparsed.length} header(s) in '
+        '$_boardPath cannot be read; they have no row, and are listed under "Needs '
+        'attention" so they do not vanish:');
+    for (final u in unparsed) {
+      stderr.writeln('  - $u');
+    }
+  }
+
+  // Vocabulary check — an unrecognised status must not be able to vanish
   // an issue from the index. See unrecognisedStatuses() for the OI-68 scar.
   final unknown = unrecognisedStatuses(content);
   if (unknown.isNotEmpty) {
-    stderr.writeln('[OI-INDEX] FAIL: ${unknown.length} issue(s) in $_boardPath '
-        'carry a status this index does not recognise. They would be SILENTLY '
-        'absent from the index, which is exactly the failure OI-68 records:');
+    if (strict) {
+      stderr.writeln('[OI-INDEX] FAIL: ${unknown.length} issue(s) in $_boardPath '
+          'carry a status this index does not recognise. They would be SILENTLY '
+          'absent from the index, which is exactly the failure OI-68 records:');
+      for (final u in unknown) {
+        stderr.writeln('  - $u');
+      }
+      return 1;
+    }
+    stderr.writeln('[OI-INDEX] WARNING (lenient): ${unknown.length} issue(s) carry a '
+        'status this index does not recognise; they are rendered FLAGGED, not dropped:');
     for (final u in unknown) {
       stderr.writeln('  - $u');
     }
-    exit(1);
   }
 
   // Duplicate-id check — BEFORE the OPEN-only parse, deliberately. An OPEN
   // entry colliding with a CLOSED one is the same corruption, and
-  // parseOpenIssues cannot see it.
+  // parseOpenIssues cannot see it. It fails closed in a LENIENT build too: a
+  // duplicate corrupts every pointer below it, and nothing can flag that.
   final dupes = duplicateIds(content);
   if (dupes.isNotEmpty) {
     stderr.writeln('[OI-INDEX] FAIL: ${dupes.length} OI id(s) appear more than '
@@ -260,10 +374,10 @@ void main() {
         'MERGED CLEANLY because the additions sat in different regions.\n'
         '  Fix: renumber the NEWER side to the next free id — and sweep EVERY '
         'branch for the ceiling, not just this one. It moves.');
-    exit(1);
+    return 1;
   }
 
-  final issues = parseOpenIssues(content);
+  final issues = parseOpenIssues(content, includeUnknown: !strict);
 
   // SELF-CHECK — fail closed. docs/diagnoses/INDEX.md sat 70% empty for months
   // because its generator exited 0 while writing placeholders. An index nobody
@@ -282,21 +396,35 @@ void main() {
     }
   }
   if (bad.isNotEmpty) {
-    stderr.writeln('[OI-INDEX] FAIL: ${bad.length} open issue(s) missing index '
-        'fields in $_boardPath:');
+    if (strict) {
+      stderr.writeln('[OI-INDEX] FAIL: ${bad.length} open issue(s) missing index '
+          'fields in $_boardPath:');
+      for (final b in bad) {
+        stderr.writeln('  - $b');
+      }
+      return 1;
+    }
+    stderr.writeln('[OI-INDEX] WARNING (lenient): ${bad.length} open issue(s) '
+        'missing index fields in $_boardPath; rendered FLAGGED:');
     for (final b in bad) {
       stderr.writeln('  - $b');
     }
-    exit(1);
   }
   if (issues.isEmpty) {
     stderr.writeln('[OI-INDEX] FAIL: parsed ZERO open issues from $_boardPath. '
         'Refusing to write an empty index — that is indistinguishable from a '
         'clean backlog and would hide every open item.');
-    exit(1);
+    return 1;
   }
 
-  File(_indexPath).writeAsStringSync(renderIndex(issues));
-  stdout.writeln('[OI-INDEX] OK: ${issues.length} open issues indexed → '
-      '$_indexPath');
+  final rc = writeLocalIndex(
+      root,
+      _indexPath,
+      stampedOutput(
+          digest, renderIndex(issues, attention: [...unparsed, ...unknown, ...bad])));
+  if (rc == 0) {
+    stdout.writeln('[OI-INDEX] OK: ${issues.length} open issues indexed → '
+        '$_indexPath');
+  }
+  return rc;
 }

@@ -283,9 +283,6 @@ check_cron_registry.dart:
 check_device_tests_exist.dart:
   grandfathered: 2026-08-10
 
-check_diagnose_index_fresh.dart:
-  grandfathered: 2026-08-10
-
 check_doc_internal_consistency.dart:
   grandfathered: 2026-08-10
 
@@ -497,6 +494,29 @@ check_jose_version.dart:
 
 check_local_date_key_drift.dart:
   grandfathered: 2026-08-10
+
+check_local_indexes_untracked.dart:
+  mutation_proven: true
+  test_path:
+    - test/scripts/check_local_indexes_untracked_test.dart
+  evidence: >
+    Added 2026-10-24 (landing A2 of the merge-conflict-treadmill plan, with the untracking of
+    docs/audit/OPEN_INDEX.md and docs/diagnoses/INDEX.md). The gate fails when either generated
+    index is TRACKED again (git ls-files over the index, so a staged add and the unmerged stages
+    of a conflicted merge are seen). The test runs the REAL script in throwaway git repos.
+    Mutations RUN against the final source, each confirmed applied (the harness re-reads the file
+    after the write and compares; every restore was verified by sha256), counts read: pathspec
+    without the diagnose index 2 red, without the OI index 6, HEAD read instead of the index
+    (git ls-tree) 6, prefix-glob pathspec 1, gate always exits 0 6, --warn-only ignored 1, WARN
+    tag dropped 1, fails CLOSED when git cannot answer 1, fix line without the exact paths 2,
+    wrong count line 2, PASS line dropped 1, FAIL header and path lines on stdout 3, de-duplication
+    of unmerged stages removed 1. 13 of 13 killed; none was a compile error (each analyzed clean
+    before its run). A first draft carried a trailing sort() that no test could see: git emits
+    index order, so the line was deleted instead of being called protected. B-pass round: the
+    "git is not installed" arm (exit 0 with a NOTE; the header promises the gate never blocks a
+    machine that cannot ask) had no test, because the "cannot answer" mutant above only reaches the
+    non-zero-exit branch; a case with an empty PATH now pins it (mutant: that catch exits 1, 1 red,
+    restored by sha256). 14 of 14 killed.
 
 check_migration_ledger_paired.dart:
   mutation_proven: true

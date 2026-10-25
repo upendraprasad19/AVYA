@@ -23,7 +23,9 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 
+import '../../scripts/build_local_indexes.dart' show ensureLocalIndexes;
 import '../../scripts/check_context_artifact_budget.dart' show kTrackedArtifacts;
+import '../helpers/dart_source_slice.dart';
 
 const _pinned = <String>{
   'CLAUDE.md',
@@ -44,6 +46,38 @@ const _pinned = <String>{
 void main() {
   final tracked = kTrackedArtifacts.toSet();
 
+  // A2 (merge-conflict-treadmill): docs/audit/OPEN_INDEX.md is a gitignored LOCAL BUILD PRODUCT,
+  // so a fresh clone or worktree has none, and `every tracked artifact exists on disk` below
+  // would fail on a bare `flutter test`, on `PRE_COMMIT_FULL=1` and on /build-apk's suite gate.
+  // The test builds the one index it reads for itself (the OI index only: nothing in test/
+  // reads docs/diagnoses/INDEX.md). CI also builds both before the shards; this keeps a local
+  // run self-sufficient.
+  setUpAll(() {
+    final rc = ensureLocalIndexes(Directory.current.path);
+    if (rc != 0) {
+      fail('could not build docs/audit/OPEN_INDEX.md (exit $rc); run '
+          '`dart run scripts/build_local_indexes.dart` and read what it says');
+    }
+  });
+
+  // The existence test below is red ONLY on a tree that has no OPEN_INDEX.md, which is exactly the
+  // tree `setUpAll` exists for (a fresh worktree, a bare `flutter test`, /build-apk's suite gate)
+  // and exactly NOT the tree anyone runs this on after a build: removing the `setUpAll` stays
+  // green everywhere it is run. So the wiring itself is pinned, in comment-stripped source
+  // (presence only, like every source grep): the call, inside a `setUpAll`, before any test.
+  test('PRESENCE: this file builds the one index it reads, in setUpAll, before its first test', () {
+    final src = stripDartComments(
+        File('test/scripts/context_artifact_tracked_list_test.dart').readAsStringSync());
+    // The needles are split in two so that the text searched for does not occur in THIS test's own
+    // source: a needle that quotes itself would be found here even with the real setUpAll deleted.
+    final setUp = src.indexOf('setUpAll(() ' '{');
+    final build = src.indexOf('ensureLocalIndexes(Directory' '.current.path)');
+    final firstTest = src.indexOf("  test('the tracked list contains every" " pinned");
+    expect(setUp, isNonNegative, reason: 'the setUpAll block is gone');
+    expect(build, greaterThan(setUp), reason: 'ensureLocalIndexes must be called INSIDE the setUpAll');
+    expect(build, lessThan(firstTest), reason: 'and before the first test, or it builds too late');
+  });
+
   test('the tracked list contains every pinned context artifact', () {
     expect(_pinned.difference(tracked), isEmpty,
         reason: 'a context artifact was dropped from kTrackedArtifacts; it '
@@ -61,6 +95,9 @@ void main() {
             '`dart run scripts/check_context_artifact_budget.dart --record`');
   });
 
+  // NOTE for the budget baseline: OPEN_INDEX.md is measured AS BUILT LOCALLY (a stamp line adds
+  // about 87 B); an absent file is SKIPPED by the gate (fails open), a present one is compared
+  // with `backups/context_artifact_sizes.json`.
   test('every tracked artifact exists on disk', () {
     for (final p in tracked) {
       expect(File(p).existsSync(), isTrue, reason: '$p is tracked but missing');

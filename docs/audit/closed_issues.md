@@ -6,8 +6,7 @@ untouched** — an OI number is a permanent identifier cited from diagnose-docs
 and commit messages, so nothing here was renumbered and nothing was rewritten.
 
 Open issues live in [`open_issues.md`](open_issues.md); the one-line triage view
-is [`OPEN_INDEX.md`](OPEN_INDEX.md), regenerated on every commit that touches the
-board.
+is `OPEN_INDEX.md`, a gitignored local build (`dart run scripts/build_local_indexes.dart --lenient`).
 
 ---
 

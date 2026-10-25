@@ -103,7 +103,17 @@ echo "[pre-merge-commit] board integrity (2 gates; the full suite runs at push +
 _OPEN_INDEX="docs/audit/OPEN_INDEX.md"
 _INDEX_BACKUP=""
 _INDEX_EXISTED=0
-if [ -f "$_OPEN_INDEX" ]; then
+# A2 (merge-conflict-treadmill): the index is an IGNORED local build product. Keyed on
+# `git check-ignore`, NOT on `ls-files`: a tracked file is never reported as ignored, and a
+# fixture where the file is neither tracked nor ignored (the three pre-A2 tests) keeps the
+# existing path below byte for byte. An ignored index takes NO backup (nothing to leak when
+# mktemp fails), never sets the skip flag, and is never restored: `_restore_index` with
+# _INDEX_EXISTED=0 would `rm -f` the build that was just made.
+_INDEX_IGNORED=0
+if git check-ignore -q -- "$_OPEN_INDEX"; then
+  _INDEX_IGNORED=1
+fi
+if [ "$_INDEX_IGNORED" -eq 0 ] && [ -f "$_OPEN_INDEX" ]; then
   _INDEX_EXISTED=1
   _INDEX_BACKUP="$(mktemp 2>/dev/null)" || _INDEX_BACKUP=""
   if [ -n "$_INDEX_BACKUP" ]; then
@@ -163,28 +173,48 @@ _restore_index() {
   fi
 }
 
-if [ "$_SKIP_RENDER_CHECK" -eq 0 ] && ! "$DART_BIN" run scripts/build_oi_index.dart; then
-  _restore_index
-  echo "[pre-merge-commit] FAIL: the merged OI board did not validate." >&2
-  echo "  Most likely: both sides minted the same OI number and git combined" >&2
-  echo "  them cleanly because they sat in different regions of the file." >&2
-  echo "  Fix the board on the FEATURE branch (origin/main's numbers are" >&2
-  echo "  published and fixed), then re-run the merge. Precedent: 0cb4120a." >&2
-  exit 1
-fi
+if [ "$_INDEX_IGNORED" -eq 1 ]; then
+  # A2: validate only. The builder still fails closed on a duplicate `## OI-N` (exit 1); exit 3
+  # means validation passed and only the write of the ignored output failed, which is not worth
+  # blocking a merge for. No backup, no NOTE (it told the user to `git add` an ignored file),
+  # no restore.
+  _OI_RC=0
+  "$DART_BIN" run scripts/build_oi_index.dart || _OI_RC=$?
+  if [ "$_OI_RC" -eq 3 ]; then
+    echo "[pre-merge-commit] WARNING: could not write $_OPEN_INDEX (a local build product; the board validated)." >&2
+    echo "  Rebuild it with: dart run scripts/build_local_indexes.dart --lenient" >&2
+  elif [ "$_OI_RC" -ne 0 ]; then
+    echo "[pre-merge-commit] FAIL: the merged OI board did not validate." >&2
+    echo "  Most likely: both sides minted the same OI number and git combined" >&2
+    echo "  them cleanly because they sat in different regions of the file." >&2
+    echo "  Fix the board on the FEATURE branch (origin/main's numbers are" >&2
+    echo "  published and fixed), then re-run the merge. Precedent: 0cb4120a." >&2
+    exit 1
+  fi
+else
+  if [ "$_SKIP_RENDER_CHECK" -eq 0 ] && ! "$DART_BIN" run scripts/build_oi_index.dart; then
+    _restore_index
+    echo "[pre-merge-commit] FAIL: the merged OI board did not validate." >&2
+    echo "  Most likely: both sides minted the same OI number and git combined" >&2
+    echo "  them cleanly because they sat in different regions of the file." >&2
+    echo "  Fix the board on the FEATURE branch (origin/main's numbers are" >&2
+    echo "  published and fixed), then re-run the merge. Precedent: 0cb4120a." >&2
+    exit 1
+  fi
 
-# If the regenerated index differs from what the merge produced, the branch
-# committed a stale index. Report it — do not silently repair it, because a
-# repair here cannot reach the merge commit anyway (see above), so "fixed" would
-# be a lie and the staleness would resurface on the next commit.
-if [ -n "$_INDEX_BACKUP" ] && ! cmp -s "$_OPEN_INDEX" "$_INDEX_BACKUP"; then
-  echo "[pre-merge-commit] NOTE: $_OPEN_INDEX is stale relative to the merged" >&2
-  echo "  board. It is generated, so regenerate and commit it on the branch:" >&2
-  echo "    dart run scripts/build_oi_index.dart && git add $_OPEN_INDEX" >&2
-  echo "  Not blocking: the board itself validated, and this hook cannot write" >&2
-  echo "  to a merge commit whose tree git already computed." >&2
+  # If the regenerated index differs from what the merge produced, the branch
+  # committed a stale index. Report it — do not silently repair it, because a
+  # repair here cannot reach the merge commit anyway (see above), so "fixed" would
+  # be a lie and the staleness would resurface on the next commit.
+  if [ -n "$_INDEX_BACKUP" ] && ! cmp -s "$_OPEN_INDEX" "$_INDEX_BACKUP"; then
+    echo "[pre-merge-commit] NOTE: $_OPEN_INDEX is stale relative to the merged" >&2
+    echo "  board. It is generated, so regenerate and commit it on the branch:" >&2
+    echo "    dart run scripts/build_oi_index.dart && git add $_OPEN_INDEX" >&2
+    echo "  Not blocking: the board itself validated, and this hook cannot write" >&2
+    echo "  to a merge commit whose tree git already computed." >&2
+  fi
+  _restore_index
 fi
-_restore_index
 
 # ---------------------------------------------------------------------------
 # 2. CROSS-BRANCH / CROSS-BOARD collisions.

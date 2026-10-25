@@ -94,7 +94,7 @@ extension _RecordingBody on _AiCoachScreenState {
         _recordingElapsed = _recordingElapsed + const Duration(seconds: 1);
       });
     });
-    // Reuse existing speech_to_text wiring (see docs/diagnoses/INDEX.md).
+    // Reuse existing speech_to_text wiring (see docs/diagnoses/; CLAUDE.md §4.1.5 builds the index).
     // _startListening() flips _isRecording = true via setState.
     _startListening();
   }

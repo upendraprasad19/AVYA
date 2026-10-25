@@ -1,6 +1,7 @@
 // Gate: confirms docs/adr/INDEX.md is up-to-date relative to docs/adr/NNNN-*.md.
 //
-// Mirrors the pattern of `scripts/check_diagnose_index_fresh.dart`.
+// Mirrors the pattern of the diagnose-index freshness gate (Gate 25, deleted in A2 when that
+// index became an untracked local build product; the ADR index is still tracked).
 //
 // Exit 0 if INDEX.md matches what `build_adr_index.dart` would produce.
 // Exit 1 if a regeneration is needed (with a hint to run the builder).
