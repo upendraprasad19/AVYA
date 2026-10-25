@@ -61,8 +61,9 @@ findings:
 
   - id: PH-DEPLOYS
     title: "deploy the six changed functions (verify-payment, razorpay-webhook, create-razorpay-order, validate-promo, founder-digest, telegram-admin-bot)"
-    terminal_state: blocked_on_user
-    reason: "each live Edge Function deploy needs its own founder go after the merge (CLAUDE.md 4.3)"
+    terminal_state: closed_in_commit
+    commit: "f58db308 (the PR #165 merge: the tree all six were built from)"
+    notes: "deployed 2026-10-25 on the founder's go for all six: founder-digest v15, telegram-admin-bot v12, verify-payment v31, validate-promo v22, create-razorpay-order v19, razorpay-webhook v35; boot-verified with an anon-key probe only (no payment or signed-in call by the agent); the signed-in checks are PH-DEVICE-CHECKS. validate-promo is redeployed later for the limit-7 change (OI-366 Update 2026-10-25)."
 
   - id: PH-DEVICE-CHECKS
     title: "the founder's device checks of the new paths (signed-in promo check, a refused or expired promo at order time, the order limit message)"

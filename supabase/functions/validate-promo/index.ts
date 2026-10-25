@@ -31,7 +31,7 @@ const corsHeaders = {
 };
 
 const PROMO_QUOTA_KEY = "promo_validate";
-const PROMO_QUOTA_LIMIT = 20;
+const PROMO_QUOTA_LIMIT = 7;
 const PROMO_RATE_WINDOW_MS = 60 * 60 * 1000;
 /** The same switch create-razorpay-order reads: one constant, in _shared/order_abuse_guards.ts. */
 export const PROMO_GUARDS_DISABLE_ENV = ORDER_ABUSE_GUARDS_DISABLE_ENV;

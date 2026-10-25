@@ -17187,7 +17187,7 @@ concepts:
     domain: subscription
     behavioral_test_path: supabase/functions/validate-promo/index_test.ts
     description: |
-      consume_quota('promo_validate', <1-hour UTC bucket>, 20) right after the JWT check in validate-promo,
+      consume_quota('promo_validate', <1-hour UTC bucket>, 7) right after the JWT check in validate-promo,
       before the body and the lookup. -1 -> HTTP 200 {valid:false, reason:"Too many attempts. Try again in N
       minutes."} (N = the rest of the UTC hour, rateLimitedReason; hermes H3); an RPC error -> HTTP 200 {valid:false, reason:"Couldn't check the code right now. Try again
       shortly."} (200 because the paywall shows any non-2xx as "Network error"). Same kill switch as the order
