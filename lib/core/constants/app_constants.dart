@@ -22,7 +22,6 @@ class AppConstants {
   static const String weeklyRecalcFunction = 'weekly-recalc';
   static const String rollingContextFunction = 'rolling-context';
   static const String morningAlertFunction = 'morning-alert';
-  static const String beatMyCoachFunction = 'beat-my-coach';
   static const String futurePredictionFunction = 'future-prediction';
   static const String weeklyReportFunction = 'weekly-report';
   static const String aiMediaProxyFunction = 'ai-media-proxy';
@@ -96,9 +95,6 @@ class AppConstants {
 
   /// PRO cart auditor uses per day (soft cap warning at 7).
   static const int proCartAuditorPerDay = 10;
-
-  /// Beat My Coach challenge interval in days (disabled — Phase 2).
-  static const int beatMyCoachIntervalDays = 14;
 
   // ── Activity Goals ────────────────────────────────────────
   /// Default daily step goal shown on the Home steps card + Today's Workout

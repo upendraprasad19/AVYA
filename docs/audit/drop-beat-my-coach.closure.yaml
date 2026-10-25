@@ -1,0 +1,150 @@
+# Closure ledger — drop-beat-my-coach (OI-395, exercise library programme, T3 of the founder order)
+# Gate 40 (validate_audit_closure.dart). One terminal_state per item; no
+# `deferred:` key. Plan docs/plans/2026-10-25-drop-beat-my-coach.md (r4, three
+# context-blind review rounds), executed inline on branch drop-beat-my-coach;
+# `drop-beat-my-coach@branch` is the in-branch commit form for the commits that
+# carry this file. Group A (this file as first committed) holds three rows
+# `blocked_on_user` on purpose: the live Edge Function delete is a per-action
+# founder go (CLAUDE.md section 4.3), OI-395 may not be closed before that
+# delete exists, and the badge total needs a phone check. Group B, one
+# docs-only commit after the delete, flips the first two to closed_in_commit.
+
+batch: drop-beat-my-coach
+plan_review_record: docs/plan-reviews/drop-beat-my-coach.md
+
+findings:
+  # ── Units ────────────────────────────────────────────────────────
+  - id: U1
+    title: "Edge Function source supabase/functions/beat-my-coach deleted"
+    terminal_state: closed_in_commit
+    commit: drop-beat-my-coach@branch
+    verification: "git rm of the directory (its only file was index.ts, 376 lines); test/contracts/beat_my_coach_removed_test.dart (a) pins Directory(...).existsSync() == false; mutations M2a (dir with code: (a) and (b) red), M2b (comment-only stub: (a) red), M2c (empty dir: (a) red). No config.toml entry, workflow deploy or live-parity gate existed for it."
+
+  - id: U2
+    title: "Dead widget lib/features/train/widgets/challenge_card.dart deleted, plus its codemod allow-list line"
+    terminal_state: closed_in_commit
+    commit: drop-beat-my-coach@branch
+    verification: "git rm; no importer existed (git grep challenge_card -- lib test scripts was empty); docs/sot_registry.yaml post-codemod list line removed; check_sot_registry_parity and Gate 7 PASS. Its imports (card_share_service, shareable_card, colors, typography) all have other importers, so nothing is orphaned."
+
+  - id: U3
+    title: "AppConstants.beatMyCoachFunction and beatMyCoachIntervalDays deleted"
+    terminal_state: closed_in_commit
+    commit: drop-beat-my-coach@branch
+    verification: "app_constants.dart: the function constant, and the interval constant with its doc comment and one blank line (git diff: 4 deletions, one blank line left); neither had a use besides its definition. unit 9 (b) scans lib/ for the removed tokens."
+
+  - id: U4
+    title: "Badge challengeWon (Coach Slayer) removed: enum value, list entry, unlock rule, hasBeatCoach parameter and call-site argument; SoT range re-derived"
+    terminal_state: closed_in_commit
+    commit: drop-beat-my-coach@branch
+    verification: "achievement_badge.dart -2, badge_service.dart -3 (139 to 136 lines). docs/sot_registry.yaml line_range for checkAll 94-139 to 92-136 (grep -n checkAll gives 92); without it check_sot_registry_parity and Gate 7 fail (range overflow), with it both PASS. Stored-data safety: getAllWithStatus iterates AchievementBadge.all, so an unknown stored key is ignored, pinned by beat_my_coach_removed_test (e). The Profile badge total goes 15 to 14 (dynamic allBadges.length)."
+
+  - id: U5
+    title: "snapshot_contract.yaml beat_my_coach key block removed"
+    terminal_state: closed_in_commit
+    commit: drop-beat-my-coach@branch
+    verification: "docs/snapshot_contract.yaml -7 lines; check_snapshot_contract.dart: 57 keys checked, 3 reader citations checked, OK (was 58 and 4). 0 of 345-346 live snapshot rows hold the key."
+
+  - id: U6
+    title: "Registries that named the slug: deploy smoke map entry and runbook expectedVerifyJwt entry removed"
+    terminal_state: closed_in_commit
+    commit: drop-beat-my-coach@branch
+    verification: ".claude/deploy_via_api.js and test/contracts/runbook_deploy_verify_jwt_test.dart, one line each. runbook_deploy_verify_jwt_test 7/7 green with no committed .md or .yaml quoting the 4-positional deploy form for the slug (regex run over the plan: 0 matches). Mutations M1 and M8a: the key re-added reddens only beat_my_coach_removed_test (c); the runbook test itself stays green, so (c) is the sole guard."
+
+  - id: U7
+    title: "Cloud-reader pin repointed, not loosened: exercise_library_cloud_seeded_test now pins getFormCues.ts and its registry entry"
+    terminal_state: closed_in_commit
+    commit: drop-beat-my-coach@branch
+    verification: "test/contracts/exercise_library_cloud_seeded_test.dart header, comment and last test; the live reader is _shared/tools/exercise/getFormCues.ts (.from exercise_library at :65 and :92), registered at _shared/tools/registry.ts:30 and :67. Mutations M9a (entry removed), M9b (commented out), M9c (read renamed), M9d (file deleted): each reddens that test. 10/10 green."
+
+  - id: U8
+    title: "Docs and comments: architecture docs, handbook, ADR-0016 dated update, OI-233 prose, feature_decisions rows, three comment-only mentions, blast_radius rule"
+    terminal_state: closed_in_commit
+    commit: drop-beat-my-coach@branch
+    verification: "ai.md (18 names to 17, 'all N live' reworded), business-rules.md, subscription.md, functionality-flow.md PROF-17, database.md, sot_registry.yaml two prose lists, handbook 'four to three reference EFs', ADR-0016 Status update line, open_issues.md OI-233 (writer list and 'all 4 writers'), .claude/memory/feature_decisions.md two rows, docs/blast_radius.yaml dead rule. The comment edits in _shared/snapshot_merge.ts:7, _shared/notification_prefs.ts:22 (history kept: 'since removed') and daily-snapshot/index.ts:636 are line-count-neutral (git diff: one line in, one line out each) and self-attested by git grep, since unit 9 (b) strips comments. Registries and gates run on a simulated tree and again here: snapshot contract, SoT parity and Gate 7, blast_radius_coverage."
+
+  - id: U9
+    title: "New contract test beat_my_coach_removed_test.dart, mutation-checked"
+    terminal_state: closed_in_commit
+    commit: drop-beat-my-coach@branch
+    verification: "9 tests green. 18 mutations, each confirmed applied by count and restored from the index with an empty unstaged diff: M1 runbook key (c); M2a dir with code (a)+(b); M2b stub (a); M2c empty dir (a); M3 enum value only (b)+(d); M4 enum+entry (b)+(d)+(e); M5 duplicate entry (d); M6 enum value without entry (d); M7a code token in lib (b); M7b tokens only in comments STAYS GREEN (by design); M7c token in a _shared .ts (b); M8a deploy map (c); M8b blast_radius rule (c); M8c snapshot_contract block (c); M9a-d unit 7 test. None reddened nothing; 'list entry only' cannot compile and was not used."
+
+  - id: U10A
+    title: "OI-395 Blocked-on line brought up to date (decision made; waiting on the live delete go)"
+    terminal_state: closed_in_commit
+    commit: drop-beat-my-coach@branch
+    verification: "docs/audit/open_issues.md OI-395 Blocked on: 'founder go for the live Edge Function delete (blocked_on_user; branch drop-beat-my-coach, plan ...)'. Status stays OPEN, so no closes-oi citation is engaged."
+
+  - id: U10B
+    title: "Close OI-395 (move to closed_issues.md, regenerate OPEN_INDEX) and file the nutritionWeek never-earnable-badge OI"
+    terminal_state: blocked_on_user
+    reason: "Closes only after the founder-gated live Edge Function delete (U12). Group B, one docs-only commit after the delete, carries the closes-oi trailer, moves the section, runs build_oi_index.dart and mints the nutritionWeek OI with mint_oi.sh."
+
+  - id: U11
+    title: "Deploy skill: EF-delete recipe (3.4) and bug class 6.14; retrospective memory"
+    terminal_state: closed_in_commit
+    commit: drop-beat-my-coach@branch
+    verification: ".claude/skills/edge-function-deploy-rollback/SKILL.md section 3.4 (zero dependents, which commit is live, rollback dry-run from a scratch clone, token precondition, identity-guarded DELETE, verify, rollback) and 6.14 (the runbook coverage test scans committed docs for the 4-positional deploy form). In-flight memory project_drop_beat_my_coach_inflight.md; the shipped-batch retrospective is written at close-out."
+
+  - id: U12
+    title: "Live Edge Function beat-my-coach deleted from project dedsavbjuwgarrhphgnl"
+    terminal_state: blocked_on_user
+    reason: "Founder go for the live delete (CLAUDE.md section 4.3, per action) and a working Supabase token: on this machine the primary .supabase token file is absent and only the legacy file exists, so the read-only identity GET must answer 200 with id 5c436e59-eec6-4e5b-99f5-c226dfc47152 and version 15 before the DELETE runs. Rollback prepared and dry-run: the live bundle index.ts is byte-identical to git 425bc63f (sha256 877823cd797ad4f73a16b4874c8e77f8ded8b22adef2d030037d0d9a914d851e)."
+
+  - id: RUNTIME
+    title: "Section 5 runtime verification: Profile badge total shows 14 and no Coach Slayer tile"
+    terminal_state: blocked_on_user
+    reason: "Founder phone check. The flow touched is read-only (badge grid reads AchievementBadge.all); no data written."
+
+  # ── Rulings ──────────────────────────────────────────────────────
+  - id: R1
+    title: "The badge goes with the feature"
+    terminal_state: closed_in_commit
+    commit: drop-beat-my-coach@branch
+    verification: "U4. challengeWon could never unlock (the only caller passed the literal hasBeatCoach: false; git log -S 'hasBeatCoach: true' -- lib is empty)."
+
+  - id: R2
+    title: "No snapshot_json cleanup migration"
+    terminal_state: verified_clean
+    evidence: "0 of 345-346 user_daily_snapshots rows hold beat_my_coach (key test and a snapshot_json::text ilike scan; positive control: about 69 other keys enumerate). A migration would be a live apply with nothing to clean."
+
+  - id: R3
+    title: "The three comment-only mentions are edited now (reversed after review round 2)"
+    terminal_state: closed_in_commit
+    commit: drop-beat-my-coach@branch
+    verification: "U8. Comment-only, no redeploy needed (no gate compares live to git). deno check of daily-snapshot/index.ts and the Deno tests for snapshot_merge, daily-snapshot and the importers of notification_prefs run before the commit."
+
+  - id: R4
+    title: "docs/blast_radius.yaml dead rule removed (reversed after review round 2)"
+    terminal_state: closed_in_commit
+    commit: drop-beat-my-coach@branch
+    verification: "U8. The coverage gate cannot fail for a recreated directory (the supabase/functions/** catch-all is platform, measured: PASS); the protection is beat_my_coach_removed_test (a) and (b). Mutation M8b re-adds the rule and reddens (c)."
+
+  - id: R5
+    title: "Historical records are not rewritten"
+    terminal_state: verified_clean
+    evidence: "docs/diagnoses, docs/plan-reviews, earlier docs/plans, docs/audit/closed_issues.md, docs/audit/2026-* audit reports, docs/audit/library-core-list-pool.closure.yaml (its R8 blocked_on_user row about the OI-395 option is answered by this batch; Gate 40 has no OI cross-check), docs/audit/oi98-notification-prefs.closure.yaml, docs/reviews, docs/superpowers, .claude/tasks, backups and scripts/seed_exercise_library.js describe what was true when written. The whole-tree git grep survivors outside these paths are the OI-395 section itself (closed in Group B), the ADR history sentences, database.md history, the three comment-only mentions and the new test."
+
+  - id: R6
+    title: "Live delete before merge, with the Group A / Group B commit split"
+    terminal_state: closed_in_commit
+    commit: drop-beat-my-coach@branch
+    verification: "Plan commit-flow section. Group A carries no OI trailer (so check_closes_oi_performed is not engaged) and opens the PR as a draft (safe_pr_merge_lib refuses a draft); the PR is marked ready only after the delete and Group B."
+
+  - id: R7
+    title: "Delete outright, no 410 stub"
+    terminal_state: verified_clean
+    evidence: "ai-proxy-pro was kept as a 410 stub because clients existed. For beat-my-coach: no in-repo caller, 0 beat hits in log sweeps over a contiguous 14-day window 2026-10-11 to 10-24 plus sampled days back to 2026-08-10, 0 snapshot rows."
+
+  - id: GATES
+    title: "Section 4.12.8 gate loop run in full on the Group A tree"
+    terminal_state: closed_in_commit
+    commit: drop-beat-my-coach@branch
+    verification: "flutter analyze lib/ --no-fatal-infos: exit 0, 0 errors, 0 warnings, 60 infos (the one in badge_service.dart is the untouched hive import at line 1). Full flutter test with TZ=Asia/Kolkata: 10,970 passed, 28 skipped, 0 failed, exit 0 (the previous baseline was 10,961; the +9 are the new test). deno check --node-modules-dir=none on daily-snapshot/index.ts clean. deno test --no-check --allow-all --node-modules-dir=none supabase/functions/: 1475 passed, 0 failed, tracked files untouched. Gate-DEU PASS, Gate 40 PASS, check_snapshot_contract 57 keys / 3 citations, check_sot_registry_parity and Gate 7 PASS. The pre-commit loop runs on the commit itself."
+
+  - id: REVIEW-ROUNDS
+    title: "Three context-blind plan review rounds (six Sonnet reviewers); B-pass pending"
+    terminal_state: verified_clean
+    evidence: "docs/plans/2026-10-25-drop-beat-my-coach.md round dispositions: round 1 found one P0 (SoT line range) and rollback/sequencing P1s; round 2 found two P1s (the live-bundle capture method, close-out ordering) and reversed R3/R4; round 3 found no P0 or P1. The B-pass review file is added in the next commit."
+
+total_findings: 23
+closed_count: 23

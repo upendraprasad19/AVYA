@@ -409,7 +409,6 @@ paths:
   - { glob: "supabase/functions/validate-promo/**", tier: account }
   - { glob: "supabase/functions/redeem-referral/**", tier: account }
   - { glob: "supabase/functions/verify-subscription/**", tier: account }
-  - { glob: "supabase/functions/beat-my-coach/**", tier: account }
   # B-pass finding, progress-map-consolidation batch (2026-07-30): the catch-all
   # comment at the bottom of this file has said "lib/shared/repositories ... is
   # account" since this registry was written, but no rule ever implemented it —

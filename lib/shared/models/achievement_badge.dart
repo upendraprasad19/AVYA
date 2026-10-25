@@ -11,7 +11,6 @@ enum BadgeId {
   nutritionWeek,
   weightLogged30,
   aiCoachChat,
-  challengeWon,
   customExercise,
   earlyAdopter,
 }
@@ -46,7 +45,6 @@ class AchievementBadge {
     AchievementBadge(id: BadgeId.nutritionWeek,  name: 'Clean Eater',       description: 'Log meals every day for a week',       emoji: '🥗'),
     AchievementBadge(id: BadgeId.weightLogged30, name: 'Scale Watcher',     description: 'Log weight 30 times',                  emoji: '⚖️'),
     AchievementBadge(id: BadgeId.aiCoachChat,    name: "Coach's Pet",       description: 'Send your first message to AI Coach',  emoji: '🤖'),
-    AchievementBadge(id: BadgeId.challengeWon,   name: 'Coach Slayer',      description: 'Beat the coach in a HIIT challenge',   emoji: '🥊'),
     AchievementBadge(id: BadgeId.customExercise, name: 'Innovator',         description: 'Create a custom exercise',             emoji: '🔬'),
     AchievementBadge(id: BadgeId.earlyAdopter,   name: 'OG Fitter',         description: 'Joined ICANBEFITTER early',            emoji: '⭐'),
   ];

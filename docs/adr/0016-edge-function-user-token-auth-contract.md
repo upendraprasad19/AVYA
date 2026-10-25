@@ -126,6 +126,8 @@ Accepted. The server pattern shipped live in `delete-account` v5+ (e8a1c3, 2026-
 loop. Recorded as an ADR 2026-06-26 (E2E fix-wave Unit F) so the contract is durable
 beyond the diagnose-docs.
 
+Update 2026-10-25: beat-my-coach removed (OI-395); the reference EFs are daily-snapshot, ai-media-proxy, assess-body-composition.
+
 ## See also
 
 - `docs/diagnoses/2026-06-12-delete-account-auth-rejects-valid-token-e8a1c3.md` (founding incident)

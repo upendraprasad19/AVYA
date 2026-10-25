@@ -19,7 +19,7 @@
  *      from "everything enabled" — pushed an all-enabled default that REPLACED
  *      the server's stored copy. The choice was destroyed, not merely unread.
  *   2. FOUR Edge Functions write that row (`daily-snapshot`, `rolling-context`,
- *      `future-prediction`, `beat-my-coach`) and the last three create a
+ *      `future-prediction`, `beat-my-coach`, since removed) and the last three create a
  *      preference-less row when the day has none. Since every reader takes the
  *      newest row with no fall-through, 3 of the 5 users who had ever stored a
  *      preference were being ignored outright.

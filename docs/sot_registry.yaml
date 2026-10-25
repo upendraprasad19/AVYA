@@ -1081,7 +1081,7 @@ concepts:
       callers: the client (daily-snapshot, a wholesale rebuild from Hive
       on every app sync) and several server-side crons that each
       read-modify-write ONE key into the same row (morning-alert's
-      morning_alert, rolling-context, future-prediction, beat-my-coach).
+      morning_alert, rolling-context, future-prediction).
       The client writer MUST preserve any key it does not itself know
       about, via mergeSnapshotJson, or a same-day client sync destroys
       whatever a cron wrote earlier that day. Diagnose d8a2f6, recurrence
@@ -1113,7 +1113,7 @@ concepts:
       cron-owned server-side does not mean the client never carries it;
       check every writer's payload for round-tripped keys, not just the
       server-side merge mechanism. reader_manifest_complete is
-      deliberately false: rolling-context/future-prediction/beat-my-coach
+      deliberately false: rolling-context/future-prediction
       also read their own keys back from this same blob and are not
       individually catalogued here — scoped to the reader whose bug this
       diagnose-doc fixes, not an exhaustive audit of the table.
@@ -5364,7 +5364,7 @@ concepts:
     reader_manifest_complete: false
     readers:
       - file: lib/core/services/badge_service.dart
-        line_range: 94-139
+        line_range: 92-136
         method: checkAll
         semantic: pass-through
         fields_read: [current_streak_weeks]
@@ -8733,7 +8733,6 @@ concepts:
       - { file: lib/features/profile/widgets/profile_banner.dart, reason: "post-codemod reader" }
       - { file: lib/features/profile/widgets/stat_card.dart, reason: "post-codemod reader" }
       - { file: lib/features/profile/widgets/subscription_card.dart, reason: "post-codemod reader" }
-      - { file: lib/features/train/widgets/challenge_card.dart, reason: "post-codemod reader" }
       - { file: lib/features/train/widgets/exercise_sparkline.dart, reason: "post-codemod reader" }
       - { file: lib/features/train/widgets/muscle_recovery_map.dart, reason: "post-codemod reader" }
       - { file: lib/features/train/widgets/pr_stats_grid.dart, reason: "post-codemod reader" }

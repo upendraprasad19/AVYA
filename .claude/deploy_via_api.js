@@ -752,7 +752,6 @@ const SMOKE_TOLERATED_CODES = {
   // separate change with its own review; noting it here so the next person
   // hitting a fourth instance has the diagnosis rather than the symptom.
   'weekly-recap-ready': [401],
-  'beat-my-coach': [400, 401],
   'future-prediction': [400, 401],
   'assess-body-composition': [400, 401],
   'weekly-report': [400, 401],

@@ -4505,7 +4505,7 @@ the merged result. This makes the CLIENT writer safe against a cron having
 written earlier.
 
 **What it does NOT do:** make the 4 writers (`daily-snapshot`,
-`morning-alert`, `rolling-context`, `future-prediction`, `beat-my-coach`)
+`morning-alert`, `rolling-context`, `future-prediction`)
 atomic against EACH OTHER. Each still does its own application-level
 read-modify-write (SELECT, merge in application code, then UPSERT) — so two
 of them racing the exact same row at the exact same instant could still
@@ -4528,7 +4528,7 @@ reported symptom, which the read-modify-write fix already closes completely.
 follow `e4a1b7`/OI-98's precedent: a SECURITY DEFINER (or INVOKER, per that
 migration's own later correction) Postgres RPC that does the merge
 atomically inside a single statement (`snapshot_json = snapshot_json ||
-$delta`), called by all 5 writers instead of each doing its own
+$delta`), called by all 4 writers instead of each doing its own
 SELECT-then-UPSERT. Needs its own migration + live verification pass per
 this repo's migration protocol, not a quick follow-on to d8a2f6.
 
@@ -6604,7 +6604,7 @@ To plan (full diagnose template, recurrence class): keep `durationSec` for `card
 ## OI-395 — beat-my-coach: challenge query filters on capitalised categories, so every challenge comes from the fallback list
 
 - **Status**: OPEN
-- **Blocked on**: founder decision between (a) and (b) below (blocked_on_user; Batch B1 plan Ruling 8).
+- **Blocked on**: founder go for the live Edge Function delete (blocked_on_user; branch `drop-beat-my-coach`, plan `docs/plans/2026-10-25-drop-beat-my-coach.md`). The (a)/(b) decision below is superseded by the founder's drop decision.
 - **Verified**: 2026-10-23 — `supabase/functions/beat-my-coach/index.ts:195` filters `.or("category.eq.Calisthenics,category.eq.Cardio")`; the shipped library's categories are lowercase (`cardio` 12 rows, no `calisthenics` category at all), and the live table was read-only queried lowercase during the B1 review.
 - **Identified**: 2026-10-23 · filed via mint_oi.sh from branch `library-batch-b`
 

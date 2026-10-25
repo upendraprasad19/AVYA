@@ -38,7 +38,7 @@ Two pairs of tables follow a **base seed + user-contributed growth** model. The 
 | `food_database` (1,431 rows as of 2026-05-27) | `user_custom_foods` | migration 030 (93 base) + 041 (v2 expand) | `promote-community-item` Edge Function |
 | `exercise_library` (seeded migration 074, 2026-05-27) | `user_custom_exercises` | `assets/data/exercise_library.json` (~17K-line JSON) | `promote-community-item` Edge Function |
 
-Cloud `exercise_library` was empty until migration 074 — `beat-my-coach` Edge Function had been silently returning zero bodyweight-exercise candidates. Closed 2026-05-27 (diagnose `2026-05-27-exercise-library-cloud-empty-*`).
+Cloud `exercise_library` was empty until migration 074 — `beat-my-coach` Edge Function (removed 2026-10-25, OI-395) had been silently returning zero bodyweight-exercise candidates. Closed 2026-05-27 (diagnose `2026-05-27-exercise-library-cloud-empty-*`).
 
 **FK direction quirk — `referral_codes` is the ONLY table with an FK to `auth.users(id)`.** Every other user-scoped table FKs to `public.users(id)` because those tables are populated only after the onboarding sync path has inserted the user into `public.users`. Referral-code generation fires on-demand from Profile → Invite Friends, which can happen BEFORE `public.users` has the user's row (fresh sign-up, onboarding not yet completed). Migration 035 (2026-04-24) repointed the FK to `auth.users` + added `UNIQUE(user_id)` after silent FK violations on new-account testers produced the "Failed to generate referral code" toast. Do not "normalize" this FK back to `public.users` without understanding that timing dependency.
 

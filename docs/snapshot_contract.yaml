@@ -683,13 +683,6 @@ extra_server_written_keys:
       line 251, re-derive the citation: `grep -n "future_prediction"
       supabase/functions/future-prediction/index.ts`.
 
-  - key: beat_my_coach
-    written_by: beat-my-coach Edge Function
-    readers:
-      - { fn: beat-my-coach, file: supabase/functions/beat-my-coach/index.ts, line: 176 }
-    notes: |
-      Self-read (function caches its own output).
-
   - key: morning_alert
     written_by: morning-alert Edge Function (self)
     readers:

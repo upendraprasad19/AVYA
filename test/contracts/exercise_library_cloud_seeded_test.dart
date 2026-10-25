@@ -2,9 +2,10 @@
 //
 // Contract for closes-diagnose ada3fb (2026-05-27):
 //
-// Cloud `exercise_library` must be seeded — `beat-my-coach` Edge
-// Function depends on a populated library for bodyweight/cardio
-// fallback queries. Until 2026-05-27 it was empty (bundled seed
+// Cloud `exercise_library` must be seeded — the coach's `getFormCues`
+// tool (supabase/functions/_shared/tools/exercise/getFormCues.ts) reads
+// it, and so did the `beat-my-coach` Edge Function until its removal
+// (OI-395, 2026-10-25). Until 2026-05-27 it was empty (bundled seed
 // shipped to Hive but never to cloud), silently degrading the PRO
 // coach feature.
 //
@@ -20,7 +21,7 @@
 // See:
 //   - docs/diagnoses/2026-05-27-exercise-library-cloud-empty-ada3fb.md
 //   - scripts/seed_exercise_library.js (regenerator)
-//   - supabase/functions/beat-my-coach/index.ts:193 (the broken reader)
+//   - supabase/functions/_shared/tools/exercise/getFormCues.ts:65,92 (the cloud reader)
 
 import 'dart:convert';
 import 'dart:io';
@@ -99,7 +100,7 @@ void main() {
               'Seed SQL must contain one VALUES tuple per bundled exercise '
               '(json=$expectedRows, sql=$tupleStarts). Re-run '
               'scripts/seed_exercise_library.js if drift detected.');
-      // Sanity floor — beat-my-coach needs a healthy library.
+      // Sanity floor — the coach's form-cue tool needs a healthy library.
       expect(expectedRows, greaterThanOrEqualTo(250),
           reason:
               'Bundled exercise_library shrank below 250 entries; '
@@ -203,18 +204,35 @@ void main() {
           reason: 'Entry must carry sha256 hash for integrity audit.');
     });
 
-    test('beat-my-coach Edge Function reader is unchanged + still targets exercise_library', () {
-      // Pin the cloud-reader contract — if someone refactors beat-my-coach
-      // away from exercise_library, this test reminds them to update the
-      // SoT model in docs/architecture/database.md.
-      final beatMyCoach = File('supabase/functions/beat-my-coach/index.ts');
-      expect(beatMyCoach.existsSync(), isTrue);
-      final src = beatMyCoach.readAsStringSync();
-      expect(src, contains(".from(\"exercise_library\")"),
+    test('getFormCues coach tool is a live, reachable cloud reader of exercise_library', () {
+      // Pin the cloud-reader contract — the coach's form-cue tool is the
+      // remaining Edge Function code that SELECTs exercise_library (the
+      // beat-my-coach reader was removed in OI-395; promote-community-item
+      // only INSERTs). If someone refactors it away from exercise_library,
+      // this test reminds them to update the SoT model in
+      // docs/architecture/database.md.
+      final tool =
+          File('supabase/functions/_shared/tools/exercise/getFormCues.ts');
+      expect(tool.existsSync(), isTrue);
+      expect(tool.readAsStringSync(), contains('.from("exercise_library")'),
           reason:
-              'beat-my-coach is the canonical cloud reader for exercise_library. '
+              'getFormCues is the canonical cloud reader for exercise_library. '
               'If you removed this read, also update docs/architecture/database.md '
               'and consider deleting migration 074.');
+
+      // A reader nobody can reach is not a reader: the tool must still be
+      // listed in the registry the tool loop offers (comments stripped, so a
+      // commented-out entry does not count).
+      final registry = File('supabase/functions/_shared/tools/registry.ts');
+      expect(registry.existsSync(), isTrue);
+      final code = registry
+          .readAsStringSync()
+          .replaceAll(RegExp(r'/\*[\s\S]*?\*/'), '')
+          .replaceAll(RegExp(r'//[^\n]*'), '');
+      expect(code, contains('getFormCuesTool,'),
+          reason:
+              'getFormCuesTool must stay in the registry tool list, or the '
+              'cloud reader of exercise_library becomes an orphan file.');
     });
   });
 }
