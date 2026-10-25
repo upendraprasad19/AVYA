@@ -35,7 +35,7 @@ flutter analyze
 
 ### Git hooks (FIVE) + CI — summary (full text: `docs/architecture/hooks.md`)
 Install once per clone, **from the PRIMARY worktree after `git fetch origin main && git merge --ff-only origin/main`**: `sh scripts/setup-hooks.sh` (the installed hooks are atomic, READ-ONLY copies in a dir shared by every worktree; the installer refuses a tree that is behind/diverged from `origin/main` or off `main` with changed hook sources, overrides `--allow-stale` / `--allow-unmerged`; a `Permission denied` on a hook FILE means that tree's installer is old: update the tree, never chmod/rm by hand). All hooks resolve Dart via `scripts/_dart_bin.sh`, never a bare `dart`. `--no-verify` needs explicit founder approval in chat (§4.3).
-- **pre-commit**: every `scripts/check_*.dart` gate + index regens. Does NOT run analyze/test (ADR-0018); `PRE_COMMIT_FULL=1` adds analyze + full suite (`PRE_COMMIT_LEGACY=1` = analyze + `test/contracts/`; FULL wins).
+- **pre-commit**: every `scripts/check_*.dart` gate + tracked-index regens (the OPEN and diagnose indexes are untracked local builds: a staged board or diagnose doc is validated by the same strict builder, nothing is staged). Does NOT run analyze/test (ADR-0018); `PRE_COMMIT_FULL=1` adds analyze + full suite (`PRE_COMMIT_LEGACY=1` = analyze + `test/contracts/`; FULL wins).
 - **pre-push**: `flutter analyze --no-fatal-infos` ALWAYS (a `warning -` line aborts the push and git prints only `failed to push some refs` — on a clean fast-forward that means the LOCAL hook failed); then `scripts/contract_sweep.dart` (warn-only); the full `flutter test` only at blast-radius ≥`account` AND NOT on a BRANCH push (every ref a non-`main`/`develop` `refs/heads/*` — CI on the open PR is that gate, merge only via `sh scripts/safe_pr_merge.sh <pr>`; OI-275); `PRE_PUSH_FULL=1` forces.
 - **commit-msg** / **prepare-commit-msg**: enforce `closes-diagnose:` / `closes-oi:` trailers and prepend the `Blast-radius:` line.
 - **pre-merge-commit**: OI board integrity at an auto-created merge. **CI** (`.github/workflows/test.yml`) is the full-suite source of truth for `main`, but only on `main`/`develop` pushes and PRs — not every push.
@@ -112,7 +112,7 @@ Secrets set in the dashboard, never committed: `ONESIGNAL_REST_API_KEY`, `GEMINI
 
 ### 4.1.5 Bug-history lookup (BEFORE proposing root cause)
 
-1. Grep `docs/diagnoses/INDEX.md` for the symptom / concept / file paths; read every matching diagnose-doc; check `feedback_*.md` for the recurrence class.
+1. Grep `docs/diagnoses/INDEX.md` (a local build: absent or stale → `dart run scripts/build_local_indexes.dart --lenient`; no Dart → `grep -ril <term> docs/diagnoses/`) for the symptom / concept / file paths; read every matching diagnose-doc; check `feedback_*.md` for the recurrence class.
 2. Recurrence: cite prior instances in the new diagnose-doc's `related_bugs:` + `recurrence:` and apply the known-good fix. Not recurrence: say so explicitly.
 3. **Value-semantics grep:** a batch that changes a stored value's MEANING sweeps `test/` AND `supabase/functions/` for it BEFORE coding, not just `lib/`.
 
@@ -213,7 +213,7 @@ Full text, measured batches and rationale: `docs/architecture/process-invariants
 5. **Run the local gate loop BEFORE dispatching any review round that has a draft diff** — reviewer attention is for mechanism, not stale line ranges or counts. (Not for a prose plan with no code yet.)
 6. **S/M/L fix tiering.** **S** = diff touches ONLY `lib/features/{home,train,nutrition,profile}/**` (literal hard filter; auth/ai_coach UI ⇒ M), ≤2 PRODUCT-code files (tests + diagnose doc excluded), whole diff <100 lines, not a recurrence-class bug ⇒ no ×2 plan review, B-pass skipped; analyze `lib/` + targeted tests + slim diagnose doc (`tier: s_fix`). **M** = else ⇒ full pipeline + `flutter analyze lib/` before every reviewer dispatch. **L** = payment/auth/sync/schema/EF/plan-engine/CLAUDE.md ⇒ unchanged. SELF-ATTESTED; the merge seam still demands the record at ≥account, and any gate failure, seam symbol or diff growth escalates to M (M briefs declare compile-class findings out of scope; a P0/P2 escaping an S-fix triggers ONE evidence-based tightening). Escapes: `docs/audit/s_tier_escapes.yaml`; an all-mechanical review round closes with `mechanical_only: true`. The founder initiates APK builds.
 7. **Execution mode is decided at batch START and written into the plan:** subagent-driven (one worktree per unit; the coordinator integrates by cherry-pick and is the single writer of shared files) or inline — never switched mid-batch. The coordinator re-verifies one mutation per unit (§4.4 rule 21).
-8. **Full gate loop before review dispatch (NON-NEGOTIABLE, 2026-09-23):** run the COMPLETE suite — `flutter analyze lib/`, `flutter test` (VPS: `TZ=Asia/Kolkata`), the pre-commit gate loop (`sh scripts/pre-commit.sh` or attempt the commit) — never a hand-picked subset; the loop removes the judgment about which gates are relevant.
+8. **Full gate loop before review dispatch (NON-NEGOTIABLE, 2026-09-23):** run the COMPLETE suite — `flutter analyze --no-fatal-infos` (the WHOLE project, exactly what pre-push runs: a `warning -` in `test/` or `scripts/` aborts the push and `flutter analyze lib/` cannot see it; 2026-10-24, local-indexes B-pass), `flutter test` (VPS: `TZ=Asia/Kolkata`), the pre-commit gate loop (`sh scripts/pre-commit.sh` or attempt the commit) — never a hand-picked subset; the loop removes the judgment about which gates are relevant.
 
 These bind the planning / `/code-review` / `/hermes-pass` / brainstorming flows.
 
@@ -342,11 +342,11 @@ Every diagnose-doc lists tiers with status `verified` / `fixed_in_this_batch` / 
 | Functionality flow (test charter) | `docs/architecture/functionality-flow.md` |
 | Full text of §4.3/4.4/4.10/4.12/4.13; hooks/gates/harness internals; nested-CLAUDE.md overflow | `docs/architecture/{process-invariants-detail,hooks,functions-detail,train-detail,auth-detail,services-detail,ai-coach-detail,plan-engine-detail}.md` |
 | Directory tree; exercise library; food database | `docs/reference/{directory-structure,exercise-library,food-database}.md` |
-| Common pitfalls (+ full §4.9 rows); bug history (generated); SoT registry | `docs/playbook/common-pitfalls.md`; `docs/diagnoses/INDEX.md`; `docs/sot_registry.yaml` |
+| Common pitfalls (+ full §4.9 rows); bug history (local build, same recipe as the OI index); SoT registry | `docs/playbook/common-pitfalls.md`; `docs/diagnoses/INDEX.md`; `docs/sot_registry.yaml` |
 | Live schema column snapshot | `backups/live_schema_columns.json` — regenerate in the SAME commit as any column-changing migration (`check_schema_column_refs.dart`) |
 | Naming conventions | `docs/naming_conventions.md` |
 | Audit lens registry / closure ledgers | `docs/audit/LENS_REGISTRY.md`, `docs/audit/<YYYY_MM_DD>_audit_closures.yaml` |
-| **Open-issues backlog — READ THE INDEX FIRST** | `docs/audit/OPEN_INDEX.md` (generated; `wc -c` it) → `docs/audit/open_issues.md` at the cited line; closed history `docs/audit/closed_issues.md`; numbers minted ONLY by `scripts/mint_oi.sh` |
+| **Open-issues backlog — READ THE INDEX FIRST** | `docs/audit/OPEN_INDEX.md` (gitignored local build: `Read` it or plain `grep` the explicit path, never `git grep`; absent or stale → `dart run scripts/build_local_indexes.dart --lenient`, no Dart → `grep -n '^## OI-' docs/audit/open_issues.md`; `wc -c` it) → `docs/audit/open_issues.md` at the cited line (the first line `Read(offset: <line>)` returns must be `## OI-N —`, else rebuild); closed history `docs/audit/closed_issues.md`; numbers minted ONLY by `scripts/mint_oi.sh` |
 | Blast-radius registry; ADRs; handbook; incidents | `docs/blast_radius.yaml`, `docs/adr/`, `docs/handbook/`, `docs/incidents/` |
 | Review / debug / e2e skills (long history on demand) | `.claude/skills/{code-review,hermes-pass,debugging,e2e-sim-testing}/SKILL.md`; `code-review/tuning-history.md` (frozen legacy archive), `debugging/bug-classes.md`; `docs/reviews/` |
 | Device-CI, cron registry, secrets, fresh clone | `docs/operations/{DEVICE_TESTING,CRON_REGISTRY,SECRET_INVENTORY}.md`, `docs/onboarding/FRESH_CLONE.md` |

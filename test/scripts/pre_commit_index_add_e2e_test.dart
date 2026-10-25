@@ -44,7 +44,51 @@
 //   6a/6b  a failing add stays FATAL (held    [`git add -u -- <index> || true`]
 //          .git/index.lock)
 //   7a/7b  tracked index whose rebuilt        [`git add -u` on an unmodified tracked path failing]
-//          content is unchanged: exit 0
+//          content is unchanged: exit 0       (runs the FROZEN pre-A2 builders: a mixed fleet, because
+//                                              the A2 builders stamp line 1 with a stat digest and so
+//                                              can never rebuild a tracked file byte-identically)
+//   A2 (merge-conflict-treadmill, plan section 6) added:
+//   8a/8b  untracked index, WRITE failure     [exit 3 treated as a failure at the board / diagnose
+//          (exit 3): a warning, exit 0         site, each applied separately]
+//   8c/8d  untracked index, VALIDATION        [exit 1 swallowed; the strict builder made lenient]
+//          failure (duplicate OI; dateless
+//          doc): the commit is BLOCKED
+//   9a     a merge commit, index untracked,   [the lenient build dropped; moved AFTER the catalog walk;
+//          orchestrator present: the diagnose  `--lenient` dropped (a bad doc then blocks, see 9e)]
+//          index is built lenient BEFORE the
+//          regression-catalog walk
+//   9b     mixed fleet: a merge commit, the   [the tracked-index guard dropped: the old builder ignores
+//          index TRACKED, old scripts: nothing --lenient and rewrites the tracked file]
+//          is rebuilt, no tracked file changes
+//   9c     index untracked but NO orchestrator [the `[ -f scripts/build_local_indexes.dart ]` guard dropped]
+//          script: no build
+//   9g     the merge-time build CRASHES:       [a real failure swallowed (`elif false`): only exit 3 may pass]
+//          the merge commit is BLOCKED
+//   9f     NEW scripts, but the index is       [the tracked-index guard dropped, told apart from 9b: its old
+//          TRACKED (re-tracked by accident):    scripts already fail the orchestrator guard]
+//          no build, no tracked file touched
+//   9d     the merge-time build cannot WRITE:  [exit 3 treated as a failure at the merge-time build]
+//          a warning, the walk still runs
+//   9e     a merge commit with a WIP doc on    [`--lenient` dropped: the strict build blocks the merge]
+//          disk (untracked, not part of the
+//          merge) that strict would refuse: it
+//          passes (lenient). A refused doc that
+//          IS in the merge arrives staged, and the
+//          strict regeneration above blocks it
+//   3c     the board builder CRASHES (254):    [`= "1"` instead of `!= "0"` at the board site]
+//          the commit is BLOCKED
+//   9l/9m  MIXED indexes at the merge site:   [the tracked-index guard testing the OTHER index's path,
+//          bug untracked + OI tracked builds;  both directions]
+//          bug tracked + OI untracked does not
+//   9h-9k  the FROZEN A0 hook (what the        [the walk no longer builds its own input]
+//          machines had installed) running an
+//          A2 tree: a merge commit with the
+//          index absent (9h) or stale (9i) walks
+//          a fresh index; a staged diagnose doc
+//          (9j) builds and does not stage; a
+//          failed WRITE (9k) still blocks in the
+//          old hook, which is why the SessionStart
+//          warning says "stop on a failed index write"
 //
 // The fixture deliberately does NOT copy scripts/_dart_bin.sh, so the guard at
 // the top of pre-commit.sh falls through to the PATH `dart` (the stub).
@@ -57,6 +101,7 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 
+import '../helpers/script_closure_fixture.dart';
 import '../helpers/spawn.dart';
 
 const _oiIndex = 'docs/audit/OPEN_INDEX.md';
@@ -178,8 +223,16 @@ void main() {
   /// (unless [ignoreUntracked] is false) and absent from the commit. [tracked] sets
   /// both; [trackedOi] / [trackedBug] override one (the mixed fixtures of cases
   /// 4a-4d). [seedBuilt] commits the REAL builder output instead of stale text, so
-  /// a rebuild can come out identical. [breakBugBuilder] makes the diagnose builder
-  /// fail to compile.
+  /// a rebuild can come out identical (only the frozen [preA2Builders] can: the A2
+  /// builders stamp line 1). [breakBugBuilder] makes the diagnose builder fail to
+  /// compile ([breakOiBuilder] does the same to the board builder, so it exits 254, not 1).
+  /// [withOrchestrator] adds scripts/build_local_indexes.dart (the A2 marker the
+  /// hook's merge-time build keys on). [preA2Builders] swaps in the FROZEN pre-A2
+  /// builders (test/scripts/fixtures/pre_a2_index_builders): a worktree cut before A2
+  /// running the shared A2 hook. [a0Hook] is the opposite mixed fleet: the FROZEN A0 hook
+  /// (test/scripts/fixtures/pre_a2_hooks, what the machines had installed before the A2
+  /// roll-out) running an A2 tree. [realCatalog] makes the stub dart run the REAL
+  /// scripts/check_regression_catalog.dart (copied with its closure) instead of exiting 0.
   String fixture({
     bool tracked = true,
     bool? trackedOi,
@@ -187,6 +240,11 @@ void main() {
     bool ignoreUntracked = true,
     bool seedBuilt = false,
     bool breakBugBuilder = false,
+    bool breakOiBuilder = false,
+    bool withOrchestrator = false,
+    bool preA2Builders = false,
+    bool a0Hook = false,
+    bool realCatalog = false,
   }) {
     final oiTracked = trackedOi ?? tracked;
     final bugTracked = trackedBug ?? tracked;
@@ -201,23 +259,43 @@ void main() {
     Directory('$work/docs/audit').createSync(recursive: true);
     Directory('$work/docs/diagnoses').createSync(recursive: true);
     Directory('$work/bin').createSync(recursive: true);
-    for (final f in const [
+    // The hook plus both builders and EVERYTHING they import, through the closure helper (A2 gave
+    // the builders a shared lib; a hand-written list broke 18 cases here).
+    copyScriptClosure(repoRoot, work, const [
       'scripts/pre-commit.sh',
       'scripts/build_oi_index.dart',
       'scripts/build_bug_index.dart',
-      'scripts/bug_index_lib.dart',
-    ]) {
-      File('$repoRoot/$f').copySync('$work/$f');
+    ]);
+    if (withOrchestrator) {
+      copyScriptClosure(repoRoot, work, const ['scripts/build_local_indexes.dart']);
+    }
+    if (realCatalog) {
+      copyScriptClosure(repoRoot, work, const ['scripts/check_regression_catalog.dart']);
+    }
+    if (a0Hook) {
+      File('$repoRoot/test/scripts/fixtures/pre_a2_hooks/pre-commit.sh.txt')
+          .copySync('$work/scripts/pre-commit.sh');
+    }
+    if (preA2Builders) {
+      const frozen = 'test/scripts/fixtures/pre_a2_index_builders';
+      for (final f in const ['build_oi_index.dart', 'build_bug_index.dart', 'bug_index_lib.dart']) {
+        File('$repoRoot/$frozen/$f.txt').copySync('$work/scripts/$f');
+      }
     }
     if (breakBugBuilder) {
       File('$work/scripts/bug_index_lib.dart').writeAsStringSync('this is not dart\n');
+    }
+    if (breakOiBuilder) {
+      File('$work/scripts/build_oi_index.dart').writeAsStringSync('this is not dart\n');
     }
 
     // Real dart only for the two builders; every other gate "passes".
     final stub = File('$work/bin/dart');
     stub.writeAsStringSync('#!/bin/sh\n'
+        'printf \'%s\\n\' "\$*" >> "$work/.git/stub-dart.log"\n'
         'case "\$*" in\n'
         '  *scripts/build_oi_index.dart*|*scripts/build_bug_index.dart*) exec "$realDart" "\$@" ;;\n'
+        '${realCatalog ? '  *scripts/check_regression_catalog.dart*) exec "$realDart" "\$@" ;;\n' : ''}'
         'esac\n'
         'exit 0\n');
     _run('chmod', ['+x', stub.path], work);
@@ -287,6 +365,19 @@ void main() {
   List<String> stubCalls(String work) {
     final f = File('$work/.git/stub-git.log');
     return f.existsSync() ? f.readAsLinesSync() : const [];
+  }
+
+  /// Every `dart` call the hook made through the stub, one argv per line.
+  List<String> dartCalls(String work) {
+    final f = File('$work/.git/stub-dart.log');
+    return f.existsSync() ? f.readAsLinesSync() : const [];
+  }
+
+  /// Puts the repo in the "merge in progress" state the hook keys on (`git rev-parse --verify
+  /// MERGE_HEAD`): the hook only checks that the ref resolves.
+  void startMerge(String work) {
+    final head = (_run('git', ['rev-parse', 'HEAD'], work).stdout as String).trim();
+    File('$work/.git/MERGE_HEAD').writeAsStringSync('$head\n');
   }
 
   String diag(ProcessResult r) => 'exit=${r.exitCode}\nstdout:\n${r.stdout}\nstderr:\n${r.stderr}';
@@ -524,12 +615,23 @@ void main() {
       expect(r.exitCode, 1, reason: diag(r));
       expect('${r.stdout}${r.stderr}', contains('build_bug_index.dart errored'), reason: diag(r));
     });
+
+    // 3c: the BOARD builder crashes (a compile error: exit 254), not a clean validation failure
+    // (exit 1, case 3). The hook's rule is "exit 3 warns, ANYTHING else non-zero blocks"; a rule
+    // written as `= "1"` would wave a crashed validator through with no message at all.
+    test('3c: a board builder that CRASHES (exit 254) blocks the commit (index ${tracked ? 'tracked' : 'ignored'})', () {
+      final w = fixture(tracked: tracked, breakOiBuilder: true);
+      stageBoard(w, [1, 2]);
+      final r = hook(w);
+      expect(r.exitCode, 1, reason: 'only exit 3 (write failed) may be waved through\n${diag(r)}');
+      expect('${r.stdout}${r.stderr}', contains('build_oi_index.dart errored'), reason: diag(r));
+    });
   }
 
   // 7a/7b: the commonest real case: the index is tracked and the rebuild comes out IDENTICAL to the
   // committed one, so `git add -u` has nothing to stage. It must still exit 0.
   test('7a: board staged (comment only), tracked index rebuilds IDENTICAL -> exit 0, nothing staged for it', () {
-    final w = fixture(tracked: true, seedBuilt: true);
+    final w = fixture(tracked: true, seedBuilt: true, preA2Builders: true);
     final seeded = File('$w/$_oiIndex').readAsStringSync();
     File('$w/docs/audit/open_issues.md').writeAsStringSync('${_board([1])}\n<!-- a comment, not an issue -->\n');
     _git(w, ['add', 'docs/audit/open_issues.md']);
@@ -542,7 +644,7 @@ void main() {
   });
 
   test('7b: diagnose doc body edited (frontmatter unchanged), tracked index rebuilds IDENTICAL -> exit 0', () {
-    final w = fixture(tracked: true, seedBuilt: true);
+    final w = fixture(tracked: true, seedBuilt: true, preA2Builders: true);
     final seeded = File('$w/$_bugIndex').readAsStringSync();
     final doc = File('$w/docs/diagnoses/2026-10-01-seed-aaaaaa.md');
     doc.writeAsStringSync('${doc.readAsStringSync()}a body line that the index does not carry\n');
@@ -553,5 +655,245 @@ void main() {
     expect(staged(w), isNot(contains(_bugIndex)), reason: diag(r));
     expectGuardCalls(w, r, _bugIndex, tracked: true);
     expectWipStaysUnstaged(w, r);
+  });
+
+  // ---------------------------------------------------------------------------------------------
+  // A2: the indexes are untracked LOCAL BUILD PRODUCTS. The builders exit 1 on a validation
+  // failure (the hook BLOCKS) and 3 when validation passed but the write failed (the hook WARNS:
+  // the output is ignored and regenerable). A non-empty DIRECTORY at the index path is the
+  // portable way to make the write fail while validation passes.
+  // ---------------------------------------------------------------------------------------------
+
+  void blockIndexPath(String work, String index) {
+    Directory('$work/$index').createSync(recursive: true);
+    File('$work/$index/keep.txt').writeAsStringSync('x');
+  }
+
+  test('8a: board staged, untracked OPEN_INDEX.md cannot be WRITTEN (exit 3) -> a warning, exit 0', () {
+    final w = fixture(tracked: false);
+    blockIndexPath(w, _oiIndex);
+    stageBoard(w, [1, 2]);
+    final r = hook(w);
+    expect(r.exitCode, 0, reason: 'a failed write of a regenerable output must not block a commit\n${diag(r)}');
+    expect('${r.stdout}${r.stderr}', contains('WARNING: could not write docs/audit/OPEN_INDEX.md'),
+        reason: diag(r));
+    expect(File('$w/$_oiIndex/keep.txt').existsSync(), isTrue, reason: 'content is never deleted'); // file-only: fixture file
+    expectGuardCalls(w, r, _oiIndex, tracked: false);
+  });
+
+  test('8b: diagnose doc staged, untracked INDEX.md cannot be WRITTEN (exit 3) -> a warning, exit 0', () {
+    final w = fixture(tracked: false);
+    blockIndexPath(w, _bugIndex);
+    stageDiagnose(w);
+    final r = hook(w);
+    expect(r.exitCode, 0, reason: diag(r));
+    expect('${r.stdout}${r.stderr}', contains('WARNING: could not write docs/diagnoses/INDEX.md'),
+        reason: diag(r));
+    expectGuardCalls(w, r, _bugIndex, tracked: false);
+  });
+
+  test('8c: a duplicate OI-N staged, index untracked -> BLOCKED (validation stays fatal), nothing written', () {
+    final w = fixture(tracked: false);
+    File('$w/docs/audit/open_issues.md').writeAsStringSync('${_board([1])}${_board([1]).split('\n\n').skip(1).join('\n\n')}');
+    _git(w, ['add', 'docs/audit/open_issues.md']);
+    final r = hook(w);
+    expect(r.exitCode, isNot(0), reason: diag(r));
+    expect('${r.stdout}${r.stderr}', contains('FAIL: build_oi_index.dart errored'), reason: diag(r));
+    expect('${r.stdout}${r.stderr}', contains('OI-1 appears 2 times'), reason: diag(r));
+    expect(File('$w/$_oiIndex').existsSync(), isFalse, reason: 'a failed build writes nothing'); // file-only: a generated FILE
+  });
+
+  test('8d: a staged diagnose doc with no date: -> BLOCKED by the strict builder', () {
+    final w = fixture(tracked: false);
+    File('$w/docs/diagnoses/2026-10-02-dateless-dddddd.md')
+        .writeAsStringSync('---\nbug_id: dddddd\nsymptom: no date here\n---\n# dddddd\n');
+    _git(w, ['add', 'docs/diagnoses/2026-10-02-dateless-dddddd.md']);
+    final r = hook(w);
+    expect(r.exitCode, isNot(0), reason: diag(r));
+    expect('${r.stdout}${r.stderr}', contains('FAIL: build_bug_index.dart errored'), reason: diag(r));
+    expect('${r.stdout}${r.stderr}', contains('missing `date:`'), reason: diag(r));
+    expect(File('$w/$_bugIndex').existsSync(), isFalse, reason: 'a failed build writes nothing'); // file-only: a generated FILE
+  });
+
+  // 9a-9e: a MERGE commit (MERGE_HEAD resolves). The regression-catalog walk reads the diagnose
+  // index, which is a local build product now and may be missing or stale; the hook builds it
+  // LENIENT first, but only from a tree that has the new orchestrator AND where the index is
+  // untracked. Every other worktree shares this hook, and an old tree's builder ignores
+  // --lenient and would rewrite its TRACKED index.
+  int firstCall(List<String> calls, String needle) => calls.indexWhere((c) => c.contains(needle));
+
+  test('9a: merge commit, index untracked, orchestrator present -> built lenient BEFORE the catalog walk', () {
+    final w = fixture(tracked: false, withOrchestrator: true);
+    startMerge(w);
+    final r = hook(w);
+    expect(r.exitCode, 0, reason: diag(r));
+    final calls = dartCalls(w);
+    final build = firstCall(calls, 'scripts/build_bug_index.dart --lenient');
+    final walk = firstCall(calls, 'scripts/check_regression_catalog.dart');
+    expect(build, isNonNegative, reason: 'the lenient diagnose build must run\ncalls: $calls\n${diag(r)}');
+    expect(walk, isNonNegative, reason: 'the catalog walk must still run\ncalls: $calls\n${diag(r)}');
+    expect(build, lessThan(walk), reason: 'the walk reads the index, so it must be built FIRST\ncalls: $calls');
+    expect(File('$w/$_bugIndex').readAsStringSync(), startsWith('<!-- local-build: '), reason: diag(r));
+    expect(staged(w), isNot(contains(_bugIndex)));
+    // The tracked-index guard asks git a question whose answer ("no") must not print: a pathspec
+    // error on every merge commit would read as a failure.
+    expectNoGitNoise(r);
+  });
+
+  test('9b: MIXED FLEET, merge commit, index TRACKED, old scripts -> no lenient build, no tracked file touched', () {
+    final w = fixture(tracked: true, seedBuilt: true, preA2Builders: true);
+    final seeded = File('$w/$_bugIndex').readAsStringSync();
+    // A newly merged diagnose doc: if the old builder ran, it would REWRITE the tracked index.
+    File('$w/docs/diagnoses/2026-10-03-merged-eeeeee.md')
+        .writeAsStringSync(_diagnoseDoc('eeeeee', 'brought in by the merge'));
+    startMerge(w);
+    final r = hook(w);
+    expect(r.exitCode, 0, reason: diag(r));
+    expect(dartCalls(w).where((c) => c.contains('build_bug_index.dart')), isEmpty,
+        reason: 'a tree whose index is tracked (or without the orchestrator) must take the old path\n${diag(r)}');
+    expect(File('$w/$_bugIndex').readAsStringSync(), seeded,
+        reason: 'the old builder ignores --lenient and rewrites a TRACKED index: a dirty tracked file after every merge');
+    expect(_run('git', ['status', '--porcelain', '--', _bugIndex], w).stdout.toString().trim(), isEmpty);
+  });
+
+  test('9g: merge commit, the lenient build CRASHES (not exit 3) -> the merge commit is BLOCKED', () {
+    final w = fixture(tracked: false, withOrchestrator: true, breakBugBuilder: true);
+    startMerge(w);
+    final r = hook(w);
+    expect(r.exitCode, isNot(0), reason: 'only exit 3 (write failed) may be waved through\n${diag(r)}');
+    expect('${r.stdout}${r.stderr}', contains('FAIL: build_bug_index.dart --lenient errored'), reason: diag(r));
+    expect(firstCall(dartCalls(w), 'scripts/check_regression_catalog.dart'), isNegative,
+        reason: 'the walk must not run on a missing or stale index after a failed build');
+  });
+
+  test('9f: merge commit, NEW scripts but the index is TRACKED (a re-tracked index) -> no build, no tracked file touched', () {
+    // The orchestrator is present, so ONLY the tracked-index guard separates this from 9a: the
+    // new builder would rewrite a tracked file after every merge commit (9b cannot tell, its old
+    // scripts already fail the orchestrator guard).
+    final w = fixture(tracked: true, seedBuilt: true, withOrchestrator: true);
+    final seeded = File('$w/$_bugIndex').readAsStringSync();
+    File('$w/docs/diagnoses/2026-10-03-merged-eeeeee.md')
+        .writeAsStringSync(_diagnoseDoc('eeeeee', 'brought in by the merge'));
+    startMerge(w);
+    final r = hook(w);
+    expect(r.exitCode, 0, reason: diag(r));
+    expect(dartCalls(w).where((c) => c.contains('build_bug_index.dart')), isEmpty,
+        reason: 'an index that is tracked must never be rebuilt by the merge-time build\n${diag(r)}');
+    expect(File('$w/$_bugIndex').readAsStringSync(), seeded);
+    expect(_run('git', ['status', '--porcelain', '--', _bugIndex], w).stdout.toString().trim(), isEmpty);
+  });
+
+  test('9c: merge commit, index untracked but NO orchestrator script -> no build', () {
+    final w = fixture(tracked: false);
+    startMerge(w);
+    final r = hook(w);
+    expect(r.exitCode, 0, reason: diag(r));
+    expect(dartCalls(w).where((c) => c.contains('build_bug_index.dart')), isEmpty, reason: diag(r));
+    expect(firstCall(dartCalls(w), 'scripts/check_regression_catalog.dart'), isNonNegative,
+        reason: 'the walk itself is unchanged');
+    expectNoGitNoise(r);
+  });
+
+  test('9d: merge commit, the lenient build cannot WRITE (exit 3) -> a warning, the walk still runs, exit 0', () {
+    final w = fixture(tracked: false, withOrchestrator: true);
+    blockIndexPath(w, _bugIndex);
+    startMerge(w);
+    final r = hook(w);
+    expect(r.exitCode, 0, reason: diag(r));
+    expect('${r.stdout}${r.stderr}', contains('could not write docs/diagnoses/INDEX.md'), reason: diag(r));
+    expect(firstCall(dartCalls(w), 'scripts/check_regression_catalog.dart'), isNonNegative, reason: diag(r));
+  });
+
+  test('9e: merge commit, a WIP diagnose doc on disk (untracked, not part of the merge) that strict would refuse -> LENIENT lets the merge through', () {
+    final w = fixture(tracked: false, withOrchestrator: true);
+    File('$w/docs/diagnoses/2026-10-04-dateless-ffffff.md')
+        .writeAsStringSync('---\nbug_id: ffffff\nsymptom: a work in progress\n---\n# ffffff\n');
+    startMerge(w);
+    final r = hook(w);
+    expect(r.exitCode, 0,
+        reason: 'a merge must not be blocked by a doc the strict builder refuses; the lenient build '
+            'skips it and says so\n${diag(r)}');
+    expect(File('$w/$_bugIndex').readAsStringSync(), contains('seed symptom'), reason: diag(r));
+    expect(File('$w/$_bugIndex').readAsStringSync(), isNot(contains('a work in progress')),
+        reason: 'the bad doc is skipped, not indexed');
+  });
+
+  // 9l/9m: ONE index tracked and the other not, at the MERGE site. The staged sites have mixed
+  // fixtures (4a-4d); every merge fixture above has both indexes tracked or both untracked, so a
+  // guard that tests the OTHER index's path (OPEN_INDEX.md for the diagnose build) behaved the same.
+  test('9l: merge commit, diagnose index UNTRACKED but OPEN_INDEX.md tracked -> the diagnose index IS built', () {
+    final w = fixture(trackedOi: true, trackedBug: false, withOrchestrator: true);
+    startMerge(w);
+    final r = hook(w);
+    expect(r.exitCode, 0, reason: diag(r));
+    expect(firstCall(dartCalls(w), 'scripts/build_bug_index.dart --lenient'), isNonNegative,
+        reason: 'the guard is about the DIAGNOSE index, which is untracked here\n${diag(r)}');
+    expect(File('$w/$_bugIndex').readAsStringSync(), startsWith('<!-- local-build: '), reason: diag(r));
+    expectNoGitNoise(r);
+  });
+
+  test('9m: merge commit, diagnose index TRACKED but OPEN_INDEX.md untracked -> no build, tracked file untouched', () {
+    final w = fixture(trackedOi: false, trackedBug: true, withOrchestrator: true);
+    startMerge(w);
+    final r = hook(w);
+    expect(r.exitCode, 0, reason: diag(r));
+    expect(dartCalls(w).where((c) => c.contains('build_bug_index.dart')), isEmpty,
+        reason: 'the diagnose index is tracked: the new builder would rewrite it\n${diag(r)}');
+    expect(File('$w/$_bugIndex').readAsStringSync(), 'stale bug index\n');
+    expect(_run('git', ['status', '--porcelain', '--', _bugIndex], w).stdout.toString().trim(), isEmpty);
+  });
+
+  // 9h-9k: the FROZEN A0 hook (test/scripts/fixtures/pre_a2_hooks) running an A2 tree. Hooks are
+  // copies, installed once per machine; the tree moves with `git merge --ff-only`, the hook only
+  // with `sh scripts/setup-hooks.sh`, so for a while every machine runs an OLD hook on a NEW tree.
+  // None of these cases could exist while the fixture always ran the CURRENT hook.
+  test('9h: OLD hook, A2 tree, merge commit, the diagnose index ABSENT -> the walk builds its own input', () {
+    final w = fixture(tracked: false, withOrchestrator: true, a0Hook: true, realCatalog: true);
+    expect(File('$w/$_bugIndex').existsSync(), isFalse, reason: 'precondition: a fresh worktree has no index'); // file-only: a generated FILE
+    startMerge(w);
+    final r = hook(w);
+    expect(r.exitCode, 0,
+        reason: 'the old hook never builds the index; without the walk building it the merge commit '
+            'died on "not found" with a message about a failing TEST\n${diag(r)}');
+    expect(dartCalls(w).where((c) => c.contains('build_bug_index.dart')), isEmpty,
+        reason: 'precondition: the OLD hook did not build it (the walk did)');
+    expect(File('$w/$_bugIndex').readAsStringSync(), startsWith('<!-- local-build: '), reason: diag(r));
+    expect('${r.stdout}${r.stderr}', contains('Regression catalog: no recent Dart tests in window'),
+        reason: diag(r));
+  });
+
+  test('9i: OLD hook, A2 tree, merge commit, the diagnose index STALE -> the walk rebuilds it first', () {
+    final w = fixture(tracked: false, withOrchestrator: true, a0Hook: true, realCatalog: true);
+    expect(_run(_realDart(), ['run', 'scripts/build_bug_index.dart'], w).exitCode, 0);
+    // The merge brings in a doc after the index was built.
+    File('$w/docs/diagnoses/2026-10-03-merged-eeeeee.md')
+        .writeAsStringSync(_diagnoseDoc('eeeeee', 'brought in by the merge'));
+    expect(File('$w/$_bugIndex').readAsStringSync(), isNot(contains('brought in by the merge')));
+    startMerge(w);
+    final r = hook(w);
+    expect(r.exitCode, 0, reason: diag(r));
+    expect(File('$w/$_bugIndex').readAsStringSync(), contains('brought in by the merge'),
+        reason: 'a stale list would walk the regression tests of the old docs only\n${diag(r)}');
+  });
+
+  test('9j: OLD hook, A2 tree, a staged diagnose doc and an untracked index -> built, not staged, exit 0', () {
+    final w = fixture(tracked: false, withOrchestrator: true, a0Hook: true);
+    stageDiagnose(w);
+    final r = hook(w);
+    expect(r.exitCode, 0, reason: diag(r));
+    expect(File('$w/$_bugIndex').readAsStringSync(), contains('second symptom'), reason: diag(r));
+    expect(staged(w), isNot(contains(_bugIndex)));
+    expectNoGitNoise(r);
+  });
+
+  test('9k: OLD hook, A2 tree, the index cannot be WRITTEN (exit 3) -> the old hook BLOCKS (it knows only 0 and non-0)', () {
+    final w = fixture(tracked: false, withOrchestrator: true, a0Hook: true);
+    blockIndexPath(w, _oiIndex);
+    stageBoard(w, [1, 2]);
+    final r = hook(w);
+    expect(r.exitCode, isNot(0),
+        reason: 'the A0 hook has no exit-3 branch; this is the "stop on a failed index write" the '
+            'SessionStart warning promises, and the reason to reinstall\n${diag(r)}');
+    expect('${r.stdout}${r.stderr}', contains('build_oi_index.dart errored'), reason: diag(r));
   });
 }

@@ -139,8 +139,8 @@ void main(List<String> args) {
     sink.writeln('  - $oi is "${statuses[oi]}" in $_openBoard');
   }
   sink.writeln('             Either finish the close — move the entry to '
-      '$_closedBoard with `- **Status**: CLOSED` and regenerate the index with '
-      '`dart run scripts/build_oi_index.dart` — or drop the `closes-oi:` line '
+      '$_closedBoard with `- **Status**: CLOSED` and rebuild the local index with '
+      '`dart run scripts/build_local_indexes.dart --lenient` — or drop the `closes-oi:` line '
       'from the commit that does not actually close it.');
   sink.writeln('             Both halves of this have shipped: OI-150 was '
       'cited and never performed (the board sat stale while an agent reported '

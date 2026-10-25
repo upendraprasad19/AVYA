@@ -9,13 +9,26 @@
 
 import 'dart:io';
 
+import 'build_local_indexes.dart' show ensureBugIndexFresh;
 import 'regression_catalog_lib.dart';
 
 void main() async {
+  // Step 0 (A2, merge-conflict-treadmill): docs/diagnoses/INDEX.md is a gitignored LOCAL BUILD
+  // PRODUCT, so a fresh worktree has none and a long-lived one may hold a stale one. The current
+  // pre-commit hook builds it before this walk, but hooks are COPIES: a machine whose installed
+  // hook predates A2 never does, and the walk then died on "not found" with a message about a
+  // failing test (B-pass seat 2, F2). The walk makes sure of its own input.
+  final built = ensureBugIndexFresh(Directory.current.path);
+  if (built != 0) {
+    stderr.writeln('Regression catalog: could not (re)build docs/diagnoses/INDEX.md '
+        '(exit $built); walking whatever is on disk.');
+  }
+
   // Step 1: Parse INDEX.md for test paths from last 30 days.
   final indexFile = File('docs/diagnoses/INDEX.md');
   if (!indexFile.existsSync()) {
-    stderr.writeln('docs/diagnoses/INDEX.md not found. Run build_bug_index.dart first.');
+    stderr.writeln('docs/diagnoses/INDEX.md not found and it could not be built. '
+        'Run: dart run scripts/build_local_indexes.dart --lenient');
     exit(2);
   }
   final content = indexFile.readAsStringSync();

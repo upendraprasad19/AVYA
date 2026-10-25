@@ -42,8 +42,8 @@ const HOT_SET = `
 ⚠️ DISCIPLINE HOT-SET (harness-injected — this reads like a bug/fix/observation).
 Apply these BEFORE touching code; instantiate them as TodoWrite items now:
 1. WAIT → BRAINSTORM → PROPOSE. If APK observations, gather ALL first; never reflex-fix (§4.1).
-2. BUG-HISTORY FIRST. Grep docs/diagnoses/INDEX.md + feedback_*.md for this symptom/file BEFORE
-   hypothesizing a root cause; cite or rule out recurrence (§4.1.5).
+2. BUG-HISTORY FIRST. Grep docs/diagnoses/INDEX.md (build it first if absent) + feedback_*.md for
+   this symptom/file BEFORE hypothesizing a root cause; cite or rule out recurrence (§4.1.5).
 3. NAME WRITER + READER by file:line before proposing any fix — writer/reader drift is the
    default suspect class (§4.1, recurring ≥15×).
 4. NO DEFERRALS, incl. euphemisms. Banned re-wraps: "dedicated/follow-up/test-maintenance/cleanup

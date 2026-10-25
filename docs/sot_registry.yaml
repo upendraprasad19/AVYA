@@ -17247,3 +17247,89 @@ concepts:
       table: promo_codes
       columns: [is_active, valid_until, max_uses, used_count, discount_pct]
     sync_methods: []
+
+  - concept: local_generated_indexes
+    domain: cross_domain
+    behavioral_test_path: test/scripts/local_indexes_e2e_test.dart
+    behavioral_test_path_strict: test/scripts/bug_index_strict_test.dart  # eeca32 — pure strict validation of the diagnose docs, incl. every doc of the real corpus
+    behavioral_test_path_pre_commit: test/scripts/pre_commit_index_add_e2e_test.dart  # eeca32 — staged board / diagnose doc, MERGE_HEAD build, mixed fleets: old scripts + tracked index (9b), the FROZEN A0 hook + an A2 tree (9h-9k)
+    behavioral_test_path_pre_merge: test/scripts/pre_merge_commit_e2e_test.dart  # eeca32 — ignored vs tracked vs neither fixture; a failing mktemp still runs the duplicate check
+    behavioral_test_path_nudge: test/scripts/discipline_hook_local_indexes_e2e_test.dart  # eeca32 — fresh / stale / missing, one JSON document, stat-only, hooks-not-reinstalled warning
+    behavioral_test_path_ci: test/scripts/ci_local_indexes_steps_test.dart  # eeca32 — the strict CI build steps, EXECUTED against a bad board
+    behavioral_test_path_gate: test/scripts/check_local_indexes_untracked_test.dart  # eeca32 — the gate that fails when either index is tracked again
+    description: |
+      Landing A2 of the merge-conflict-treadmill plan (diagnose eeca32).
+      docs/audit/OPEN_INDEX.md and docs/diagnoses/INDEX.md are gitignored LOCAL
+      BUILD PRODUCTS, not committed files: every parallel branch that added an OI
+      or a diagnose doc used to rewrite the same generated file and conflict at the
+      next sync (of 52 replayed main-sync merges, OPEN_INDEX.md conflicted in 20
+      and diagnoses/INDEX.md in 13).
+      scripts/build_local_indexes.dart builds both (strict by default, --lenient on
+      a developer machine); each builder returns an exit code (0 ok, 1 invalid
+      input, 3 validation passed but the write failed) and writes through
+      writeLocalIndex (a temp file under .dart_tool/local_indexes/, then a rename).
+      Line 1 of each output is a stamp, a sha256 over the sorted "name size mtime"
+      text of its inputs, so one predicate (indexState / isStale) answers "is this
+      output current" for the build self-check and the SessionStart nudge, without
+      reading any document body; ensureLocalIndexes only asks whether the OI index
+      EXISTS, and ensureBugIndexFresh uses the same predicate to rebuild a missing
+      or stale diagnose index. Strict validation of the diagnose docs (parseable
+      frontmatter, a bare YYYY-MM-DD date, a symptom, a bug_id that is the
+      6-character file-name suffix or the whole stem) replaces the retired
+      Gate 25. A duplicate OI number, an unreadable board and a header the section
+      regexp cannot read fail closed in strict mode (the duplicate and the unreadable
+      board in BOTH modes). Who builds: the pre-commit hook (staged board or
+      diagnose doc, and before the catalog walk on a merge commit), the
+      pre-merge-commit hook (validate only), the catalog walk itself (it builds its
+      own input, so an older hook copy cannot block a merge), CI (a strict step
+      before the shard run and before the Audit Gates loop), and a developer by
+      hand. Nothing builds them from a Claude Code hook. The tracked-again case is
+      pinned by scripts/check_local_indexes_untracked.dart.
+    writers:
+      - file: scripts/build_oi_index.dart
+        line_range: 1-9999
+        method: runOiIndex
+        semantic: derived
+        notes: reads docs/audit/open_issues.md; duplicate OI fails closed in both modes; --lenient flags an unknown status or a missing field instead of dropping the row.
+      - file: scripts/build_bug_index.dart
+        line_range: 1-9999
+        method: runBugIndex
+        semantic: derived
+        notes: reads docs/diagnoses/*.md through validateDiagnoseDocs (bug_index_lib.dart); strict refuses a doc the index would lose.
+      - file: scripts/local_indexes_lib.dart
+        line_range: 1-9999
+        method: writeLocalIndex
+        semantic: atomic-write
+        notes: temp file + rename (one 200 ms retry); a directory at the path is replaced when empty, an exit 3 when not.
+      - file: scripts/build_local_indexes.dart
+        line_range: 1-9999
+        method: runLocalIndexes
+        semantic: orchestrator
+        notes: runs BOTH builders (one that throws counts as 1 and does not stop the other), returns the worst code, then self-checks that the result is not stale.
+      - file: scripts/build_local_indexes.dart
+        line_range: 1-9999
+        method: ensureBugIndexFresh
+        semantic: derived
+        notes: builds the diagnose index (lenient) when it is missing or stale; the merge-commit catalog walk calls it before reading the index.
+    readers:
+      - file: scripts/local_indexes_lib.dart
+        line_range: 1-9999
+        method: indexState
+        semantic: flag-check
+        notes: the ONE staleness predicate (stat digest of the inputs vs the stamp in the first 256 bytes of the output).
+      - file: scripts/discipline_hook.dart
+        line_range: 1-9999
+        method: localIndexesNudge
+        semantic: flag-check
+        notes: SessionStart and the bug-trigger branch; stat-only, never reads a document body.
+      - file: scripts/check_regression_catalog.dart
+        line_range: 1-9999
+        method: main
+        semantic: derived
+        notes: walks docs/diagnoses/INDEX.md on a merge commit; it makes sure of its own input first (ensureBugIndexFresh), so a pre-commit hook copy that predates A2 cannot block a merge on a missing index.
+      - file: scripts/check_context_artifact_budget.dart
+        line_range: 1-9999
+        method: main
+        semantic: size-only
+        notes: budgets docs/audit/OPEN_INDEX.md by size; measured as built locally, CI builds it first.
+    regression_test: test/scripts/local_indexes_e2e_test.dart

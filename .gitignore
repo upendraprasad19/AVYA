@@ -204,3 +204,10 @@ test/goldens/**/failures/
 
 # FVM Version Cache
 .fvm/
+
+# The two GENERATED indexes are local build products (A2, merge-conflict-treadmill): rebuilt by
+# `dart run scripts/build_local_indexes.dart` (CI builds them strict; pre-commit and pre-merge-commit
+# validate through the same builders). Git hooks installed before A2 would fail on an ignored
+# index, so reinstall them first: `sh scripts/setup-hooks.sh` from the primary (see scripts/setup-hooks.sh).
+docs/audit/OPEN_INDEX.md
+docs/diagnoses/INDEX.md

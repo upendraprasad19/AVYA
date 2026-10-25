@@ -300,10 +300,11 @@ Two standing invariants, codified after a 4-round pre-implementation review of t
 8. **Full gate loop before review dispatch (NON-NEGOTIABLE — adopted from ICANBEFITTER, 2026-09-23).**
    Before dispatching ANY review round that has a diff to look at, run the COMPLETE gate suite:
    ```bash
-   flutter analyze lib/
+   flutter analyze --no-fatal-infos   # the WHOLE project, exactly as pre-push runs it
    flutter test
    dart run scripts/pre-commit.sh   # or attempt git commit to trigger the loop
    ```
+   The analyze line was `flutter analyze lib/` until 2026-10-24: the `local-indexes` batch (platform tier) passed that loop, two reviewer rounds and its own full suite, and a B-pass seat then found a `warning -` (`unnecessary_non_null_assertion`) in a NEW file under `test/scripts/`. `pre-push` runs `flutter analyze --no-fatal-infos` on EVERY push and aborts on a warning, so the branch could not have been pushed; `lib/` alone cannot see `test/` or `scripts/`, which is where a platform-tier batch writes most of its code.
    NOT a hand-picked subset. Hand-picked subsets miss gates. A review that only runs "the relevant ones" is choosing which gates the next reviewer does NOT see. The measure: a `profile-phase-fixes` batch ran 8 gates by hand, skipped 2, and the commit failed on one of the skipped ones. That gap did not exist in the review because nothing in the review ran that gate. Run the full loop — the loop exists to remove the judgment about which gates are relevant.
 
 These bind the planning / `/code-review` / `/hermes-pass` / brainstorming flows.

@@ -55,7 +55,6 @@ const _grandfathered = <String>{
   'check_crashlytics_alert_routing.dart',
   'check_cron_registry.dart',
   'check_device_tests_exist.dart',
-  'check_diagnose_index_fresh.dart',
   'check_doc_internal_consistency.dart',
   'check_edge_function_auth_pattern.dart',
   'check_edge_function_payloads.dart',

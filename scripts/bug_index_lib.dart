@@ -125,3 +125,119 @@ Map<String, dynamic>? parseFrontmatter(String content) {
   }
   return out;
 }
+
+// ---------------------------------------------------------------------------
+// A2 (merge-conflict-treadmill, plan section 6): STRICT validation of the diagnose docs.
+//
+// docs/diagnoses/INDEX.md is a local build product now, so nothing commits it and nothing
+// compares a committed copy with the docs any more (that was Gate 25,
+// scripts/check_diagnose_index_fresh.dart, deleted in the same landing). What Gate 25 really
+// protected was "every doc is findable in the index"; the builder now refuses to write an
+// index that would lose a doc, and that refusal is the same pure function a unit test can
+// drive without spawning anything.
+// ---------------------------------------------------------------------------
+
+/// One diagnose doc as the builder reads it: its file name (no directory) and its text.
+class DiagnoseDocInput {
+  const DiagnoseDocInput(this.name, this.content);
+  final String name;
+  final String content;
+}
+
+/// The outcome of [validateDiagnoseDocs].
+class DiagnoseValidation {
+  const DiagnoseValidation(this.entries, this.problems);
+
+  /// The docs that passed: parsed frontmatter maps with `_path` set to `<dir>/<name>`.
+  final List<Map<String, dynamic>> entries;
+
+  /// One line per doc that did not pass, `"<dir>/<name>: <what is wrong>"`.
+  final List<String> problems;
+}
+
+/// The ids a doc's `bug_id:` may carry: the 6-character suffix of its file name
+/// (`...-239999.md` -> `239999`) or the whole stem. The stem form exists for 12 legacy docs
+/// (ten `2026-05-16-*` files with no suffix and two whose suffix is a word), measured
+/// 2026-10-22: 648 docs carry the suffix and those 12 the stem.
+Set<String> allowedBugIds(String fileName) {
+  final stem = fileName.endsWith('.md')
+      ? fileName.substring(0, fileName.length - 3)
+      : fileName;
+  final suffix = RegExp(r'-([a-zA-Z0-9]{6})$').firstMatch(stem)?.group(1);
+  return {stem, ?suffix};
+}
+
+/// [v] without ONE pair of matching surrounding quotes: `bug_id: "132315"` is valid YAML for
+/// the string `132315` and one doc (2026-10-23-dow-skip-rate-132315.md) is written that way,
+/// while [parseFrontmatter] keeps scalars raw. Only the comparison is unquoted; the index still
+/// renders the raw value, exactly as the pre-A2 builder did. Used for `bug_id:` only: a `date:`
+/// must be bare ([_bareIsoDateRe]).
+String _unquoted(String v) {
+  final t = v.trim();
+  if (t.length >= 2 &&
+      ((t.startsWith('"') && t.endsWith('"')) ||
+          (t.startsWith("'") && t.endsWith("'")))) {
+    return t.substring(1, t.length - 1);
+  }
+  return t;
+}
+
+/// A `date:` every reader of the index can use: bare `YYYY-MM-DD`, no quotes. The chronological
+/// table is sorted on the raw string, `check_regression_catalog.dart` keeps only the rows whose
+/// first cell has exactly this shape (`regression_catalog_lib.dart`, `extractRecentTestPaths`),
+/// and `validate_diagnose_doc_lib.dart` enforces the newer required fields only for a date that
+/// starts with it. A quoted or free-text date therefore sorted out of order and silently dropped
+/// that doc's regression test from the merge-commit walk (B-pass seat 1, F2). Gate 25 is gone,
+/// so this rule is the only guard. Every doc of the repo carries a bare date
+/// (`bug_index_strict_test.dart` walks the real corpus).
+final RegExp _bareIsoDateRe = RegExp(r'^\d{4}-\d{2}-\d{2}$');
+
+/// Validates every doc and returns the ones that pass plus a problem line for each that does
+/// not. PURE: no file access, no exit.
+///
+/// A doc is a problem when it has no parseable frontmatter (the old builder only printed a
+/// warning and skipped it, so the index silently lost the doc); no `date:` or one that is not
+/// a bare `YYYY-MM-DD` (the sort below the builder used to crash with a TypeError on
+/// `null as String`); no usable `symptom:` (c4e8a2: the index sat 237 of 344 entries empty);
+/// or a `bug_id:` that is neither the file name's 6-character suffix nor its whole stem (the
+/// id Gate 25 used to look for). A STRICT build fails on any problem and writes nothing; a
+/// LENIENT build skips the docs named here, says so, and writes the rest.
+DiagnoseValidation validateDiagnoseDocs(List<DiagnoseDocInput> docs,
+    {String dir = 'docs/diagnoses'}) {
+  final entries = <Map<String, dynamic>>[];
+  final problems = <String>[];
+  for (final doc in docs) {
+    final path = '$dir/${doc.name}';
+    final fm = parseFrontmatter(doc.content);
+    if (fm == null) {
+      problems.add('$path: no parseable frontmatter (missing or unclosed `---`)');
+      continue;
+    }
+    final why = <String>[];
+    final date = fm['date'];
+    if (date is! String || date.trim().isEmpty) {
+      why.add('missing `date:`');
+    } else if (!_bareIsoDateRe.hasMatch(date.trim())) {
+      why.add('`date:` "$date" is not a bare YYYY-MM-DD date (no quotes, no free text)');
+    }
+    final symptom = summarize(fm['symptom']);
+    if (symptom.isEmpty) {
+      why.add('missing `symptom:`');
+    } else if (blockScalarRe.hasMatch(symptom)) {
+      why.add('`symptom:` is a bare block-scalar indicator "$symptom"');
+    }
+    final id = fm['bug_id'];
+    if (id is! String || !allowedBugIds(doc.name).contains(_unquoted(id))) {
+      why.add('`bug_id:` ${id == null ? 'is missing' : '"$id"'} is neither the '
+          '6-character file-name suffix nor the whole stem '
+          '(${allowedBugIds(doc.name).join(' or ')})');
+    }
+    if (why.isNotEmpty) {
+      problems.add('$path: ${why.join('; ')}');
+      continue;
+    }
+    fm['_path'] = path;
+    entries.add(fm);
+  }
+  return DiagnoseValidation(entries, problems);
+}

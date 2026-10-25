@@ -56,6 +56,16 @@ After the stanza, you may include free-form analysis. The stanza must come
 FIRST in your output, demarcated by the literal `diagnose_stanza:` key at
 column 0.
 
+THE TWO INDEXES MAY BE ABSENT OR STALE. `docs/audit/OPEN_INDEX.md` and
+`docs/diagnoses/INDEX.md` are gitignored local builds (not copied into an
+isolation worktree). The source docs are authoritative. If an index is missing,
+grep the source instead of concluding "nothing found":
+`grep -n '^## OI-' docs/audit/open_issues.md` and `grep -ril <term> docs/diagnoses/`.
+Read an index by its explicit path (Read or plain `grep`), never `git grep` or an
+ignore-respecting directory walk. A coordinator builds them
+(`dart run scripts/build_local_indexes.dart --lenient`) before dispatching only for
+subagents that share its working directory.
+
 See `docs/discipline.md` for the canonical 12-question explanation and
 3 worked examples (Test #8 receipt fields, Test #12.7 completed_at race,
 Test #12.9 telemetry blackout).

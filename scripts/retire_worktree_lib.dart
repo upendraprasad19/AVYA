@@ -262,6 +262,11 @@ const regenerableIgnoredPaths = <String>[
   // that has ever run a Deno test is unretirable (ai-coach-ux-tool-integrity
   // batch, 2026-09-18 — the retirement dry-run KEEP'd on exactly this file).
   'deno.lock',
+  // The two generated indexes (A2, merge-conflict-treadmill): gitignored local BUILD PRODUCTS,
+  // rebuilt in a second by `dart run scripts/build_local_indexes.dart`. Without these entries
+  // every worktree that has ever built them would be unretirable (leg 3).
+  'docs/audit/OPEN_INDEX.md',
+  'docs/diagnoses/INDEX.md',
   '.flutter-plugins',
   '.flutter-plugins-dependencies',
   '.packages',

@@ -245,7 +245,7 @@ void main() {
     });
   });
 
-  group('token paths are ignored by the REPO .gitignore itself (c6f2a8)', () {
+  group('paths that must be ignored by the REPO .gitignore itself (tokens: c6f2a8; generated indexes: A2)', () {
     // Hermetic: no inherited GIT_* (pre-push runs the suite inside a hook, with
     // GIT_DIR/GIT_INDEX_FILE set) and no global/system config, so a developer's
     // own core.excludesFile cannot supply the match. The match SOURCE is then
@@ -264,27 +264,46 @@ void main() {
       };
     }
 
+    /// git itself says [path] is ignored, and by the repo's own .gitignore (not a machine-local rule).
+    void expectIgnoredByRepo(String path, String consequence) {
+      final r = runSpawn(
+        'git',
+        ['check-ignore', '-v', '--no-index', path],
+        why: 'git check-ignore on $path (hermetic config)',
+        extraEnv: configPins(),
+        allowControl: {'GIT_CONFIG_GLOBAL', 'GIT_CONFIG_NOSYSTEM'},
+        stdoutEncoding: utf8,
+        stderrEncoding: utf8,
+      );
+      expect(r.exitCode, 0, reason: '$path is NOT ignored — $consequence. stderr: ${r.stderr}');
+      expect((r.stdout as String).startsWith('.gitignore:'), isTrue,
+          reason: 'ignored, but not by the repo .gitignore (matched by: '
+              '${r.stdout}) — the protection is machine-local and would '
+              'not exist on another clone');
+    }
+
     for (final tokenPath in const [
       '.supabase/supabase access token.txt', // root copy — unignored until c6f2a8
       'supabase/.supabase/supabase access token.txt', // the path the tools read
     ]) {
       test('`$tokenPath` is ignored, and by .gitignore', () {
-        final r = runSpawn(
-          'git',
-          ['check-ignore', '-v', '--no-index', tokenPath],
-          why: 'git check-ignore on a token path (hermetic config)',
-          extraEnv: configPins(),
-          allowControl: {'GIT_CONFIG_GLOBAL', 'GIT_CONFIG_NOSYSTEM'},
-          stdoutEncoding: utf8,
-          stderrEncoding: utf8,
-        );
-        expect(r.exitCode, 0,
-            reason: '$tokenPath is NOT ignored — a `git add -A` would stage a '
-                'live Supabase Management API token. stderr: ${r.stderr}');
-        expect((r.stdout as String).startsWith('.gitignore:'), isTrue,
-            reason: 'ignored, but not by the repo .gitignore (matched by: '
-                '${r.stdout}) — the protection is machine-local and would '
-                'not exist on another clone');
+        expectIgnoredByRepo(
+            tokenPath, 'a `git add -A` would stage a live Supabase Management API token');
+      });
+    }
+
+    // A2 (merge-conflict-treadmill): the two generated indexes are LOCAL BUILD PRODUCTS. Without
+    // these lines they show up as untracked files in every worktree, `git add -A` stages them
+    // (and check_local_indexes_untracked then fails the commit), and pre-merge-commit.sh takes
+    // its tracked path (keyed on `git check-ignore`). The retire list alone cannot prove this:
+    // delete the .gitignore line and the list entry survives (the mutation pass found exactly that).
+    for (final indexPath in const [
+      'docs/audit/OPEN_INDEX.md',
+      'docs/diagnoses/INDEX.md',
+    ]) {
+      test('`$indexPath` (a generated local build product) is ignored, and by .gitignore', () {
+        expectIgnoredByRepo(indexPath,
+            'a `git add -A` would stage a generated file and bring back the merge conflicts it was untracked to remove');
       });
     }
   });

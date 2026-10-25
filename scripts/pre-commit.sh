@@ -185,7 +185,14 @@ fi
 # Regen bug index if any diagnose-doc was modified (per CLAUDE.md decluttering spec §8)
 if git diff --cached --name-only | grep -q '^docs/diagnoses/'; then
   echo "[pre-commit] Diagnose-docs touched — regenerating INDEX.md..."
-  if ! "$DART_BIN" run scripts/build_bug_index.dart; then
+  # A2: the index is a local build product. The builder exits 1 when a doc fails validation
+  # (blocks) and 3 when validation passed but the write failed (the output is ignored and
+  # regenerable, so warn and go on). An older builder only ever exits 0 or 1.
+  BUG_INDEX_RC=0
+  "$DART_BIN" run scripts/build_bug_index.dart || BUG_INDEX_RC=$?
+  if [ "$BUG_INDEX_RC" = "3" ]; then
+    echo "[pre-commit] WARNING: could not write docs/diagnoses/INDEX.md (a local build product; validation passed). Rebuild: dart run scripts/build_local_indexes.dart --lenient"
+  elif [ "$BUG_INDEX_RC" != "0" ]; then
     echo "[pre-commit] FAIL: build_bug_index.dart errored."
     exit 1
   fi
@@ -208,7 +215,12 @@ fi
 # written. This regen is the real one.
 if git diff --cached --name-only | grep -q '^docs/audit/open_issues\.md$'; then
   echo "[pre-commit] Open-issues board touched — regenerating OPEN_INDEX.md..."
-  if ! "$DART_BIN" run scripts/build_oi_index.dart; then
+  # Exit 3 = validation passed, write failed: warn and go on (see the diagnose index above).
+  OI_INDEX_RC=0
+  "$DART_BIN" run scripts/build_oi_index.dart || OI_INDEX_RC=$?
+  if [ "$OI_INDEX_RC" = "3" ]; then
+    echo "[pre-commit] WARNING: could not write docs/audit/OPEN_INDEX.md (a local build product; validation passed). Rebuild: dart run scripts/build_local_indexes.dart --lenient"
+  elif [ "$OI_INDEX_RC" != "0" ]; then
     echo "[pre-commit] FAIL: build_oi_index.dart errored."
     exit 1
   fi
@@ -408,6 +420,23 @@ fi
 
 # Regression catalog walk — only on merge commits (per spec §9.2)
 if git rev-parse --verify MERGE_HEAD >/dev/null 2>&1; then
+  # A2: the catalog walk reads docs/diagnoses/INDEX.md, which is a local build product now and
+  # may be missing or stale (the merge just brought in other branches' diagnose docs). Build it
+  # LENIENT first, but ONLY from a tree that has the new builder AND where the index is
+  # untracked: this hook is shared by every worktree, and an older tree's builder ignores
+  # --lenient and would rewrite its TRACKED INDEX.md, leaving a dirty tracked file after every
+  # merge commit. Anywhere else the old path below runs unchanged. Exit 3 (write failed) warns.
+  if [ -f scripts/build_local_indexes.dart ] && ! git ls-files --error-unmatch -- docs/diagnoses/INDEX.md >/dev/null 2>&1; then
+    echo "[pre-commit] Merge commit detected — building the local diagnose index (lenient)..."
+    MERGE_INDEX_RC=0
+    "$DART_BIN" run scripts/build_bug_index.dart --lenient || MERGE_INDEX_RC=$?
+    if [ "$MERGE_INDEX_RC" = "3" ]; then
+      echo "[pre-commit] WARNING: could not write docs/diagnoses/INDEX.md (a local build product); the catalog walk below reads whatever is there."
+    elif [ "$MERGE_INDEX_RC" != "0" ]; then
+      echo "[pre-commit] FAIL: build_bug_index.dart --lenient errored."
+      exit 1
+    fi
+  fi
   echo "[pre-commit] Merge commit detected — walking regression catalog..."
   if ! "$DART_BIN" run scripts/check_regression_catalog.dart; then
     echo "[pre-commit] FAIL: regression catalog detected a missing or failing test."

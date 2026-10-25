@@ -46,10 +46,14 @@ the hooks repeats this. A `Permission denied` from a plain `cp` over a hook FILE
 is old; update the tree instead of using chmod. (The same message on the hooks DIRECTORY means its owner or mode is
 wrong, for example after an install made with sudo.)
 
-- **`pre-commit`** blocks the commit on any failing discipline gate, regenerates
-  `docs/diagnoses/INDEX.md` and the other indexes when their sources change, and walks the
-  regression catalog on merge commits. It does **not** run `flutter analyze` or `flutter test`
+- **`pre-commit`** blocks the commit on any failing discipline gate, regenerates the TRACKED indexes
+  (ADR, incident, gate, handbook) when their sources change, validates a staged OI board or diagnose doc
+  through the strict index builders, and walks the regression catalog on merge commits. It does **not** run `flutter analyze` or `flutter test`
   (cost split 2026-08-11 — see CLAUDE.md §0).
+- **Local indexes (A2).** `docs/audit/OPEN_INDEX.md` and `docs/diagnoses/INDEX.md` are gitignored build
+  products, so a fresh clone has neither. Build them once after the install:
+  `dart run scripts/build_local_indexes.dart --lenient` (a SessionStart line reminds you when they are
+  missing or stale; CI builds them strict).
 - **`pre-push`** runs `flutter analyze` on every push, then the full `flutter test` when the
   pushed range is ≥`account` blast-radius — except on a branch push, where CI on the open PR is that gate
   (since 2026-10-10, OI-275; merge via `sh scripts/safe_pr_merge.sh <pr>`).

@@ -12,15 +12,18 @@
 //   • SessionStart      → fires on EVERY source (startup/resume/compact; the
 //                         "compact" matcher was REMOVED in settings.json so the
 //                         worktree warning can surface at session start). Emits
-//                         up to five self-guarded pieces: the hot-set
+//                         up to seven self-guarded pieces: the hot-set
 //                         re-injection (compact source ONLY, so discipline
 //                         survives summarization); a worktree-per-session warning
 //                         when in the shared main worktree (§4.13); a
 //                         main-vs-origin/main sync warning (multi-machine drift —
 //                         2026-09-24 VPS 300-commit-behind incident); a MEMORY.md
 //                         size nudge (→ /consolidate-memory) when the per-session
-//                         memory index has grown past its soft cap; and the OI
-//                         board line.
+//                         memory index has grown past its soft cap; the OI
+//                         board line; a stale/missing LOCAL INDEXES line (A2:
+//                         docs/audit/OPEN_INDEX.md and docs/diagnoses/INDEX.md are
+//                         gitignored build products, so a fresh worktree has neither);
+//                         and a warning when the installed git hooks predate A2.
 //
 // Injection is ALWAYS via structured JSON hookSpecificOutput.additionalContext —
 // for PreToolUse, plain stdout goes to the debug log only, so the JSON field is
@@ -35,6 +38,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'batch_close_lib.dart' show primaryRootFrom, mangleProjectPath;
+import 'local_indexes_lib.dart';
 import 'oi_numbering_lib.dart';
 
 // Bug / fix / observation triggers for UserPromptSubmit. Word-bounded where a
@@ -54,8 +58,8 @@ const String _hotSet = '''
 ⚠️ DISCIPLINE HOT-SET (harness-injected — this reads like a bug/fix/observation).
 Apply these BEFORE touching code; instantiate them as TodoWrite items now:
 1. WAIT → BRAINSTORM → PROPOSE. If APK observations, gather ALL first; never reflex-fix (§4.1).
-2. BUG-HISTORY FIRST. Grep docs/diagnoses/INDEX.md + feedback_*.md for this symptom/file BEFORE
-   hypothesizing a root cause; cite or rule out recurrence (§4.1.5).
+2. BUG-HISTORY FIRST. Grep docs/diagnoses/INDEX.md (build it first if absent) + feedback_*.md for
+   this symptom/file BEFORE hypothesizing a root cause; cite or rule out recurrence (§4.1.5).
 3. NAME WRITER + READER by file:line before proposing any fix — writer/reader drift is the
    default suspect class (§4.1, recurring ≥15×).
 4. NO DEFERRALS, incl. euphemisms. Banned re-wraps: "dedicated/follow-up/test-maintenance/cleanup
@@ -126,13 +130,24 @@ void main() async {
         if (memNudge.isNotEmpty) parts.add(memNudge);
         final oiLine = _oiBoardLine();
         if (oiLine.isNotEmpty) parts.add(oiLine);
+        final indexNudge = localIndexesNudge();
+        if (indexNudge.isNotEmpty) parts.add(indexNudge);
+        final hooksWarn = _hooksNotReinstalledWarning();
+        if (hooksWarn.isNotEmpty) parts.add(hooksWarn);
         if (parts.isNotEmpty) _emit('SessionStart', parts.join('\n\n'));
         break;
 
       case 'UserPromptSubmit':
       default:
         final prompt = (input['prompt'] as String?) ?? '';
-        if (_trigger.hasMatch(prompt)) _emit('UserPromptSubmit', _hotSet);
+        if (_trigger.hasMatch(prompt)) {
+          // ONE document per event: a bug-shaped prompt in a tree whose local indexes are stale
+          // gets the hot-set and the nudge together, never two JSON lines.
+          final parts = <String>[_hotSet];
+          final indexNudge = localIndexesNudge();
+          if (indexNudge.isNotEmpty) parts.add(indexNudge);
+          _emit('UserPromptSubmit', parts.join('\n\n'));
+        }
         break;
     }
   } catch (_) {
@@ -411,6 +426,87 @@ Future<String> _mainSyncWarning() async {
       wasFetched: wasFetched,
       fetchAge: wasFetched ? null : fetchAge,
     );
+  } catch (_) {
+    return '';
+  }
+}
+
+// ---------------------------------------------------------------------------------------------
+// A2 (merge-conflict-treadmill): the two indexes are local build products.
+//
+// STAT ONLY, NO SPAWN, NO CONTENT READ. This runs at SessionStart and on every bug-shaped
+// prompt, so it costs one FileStat per input and the first 256 bytes of each output (the
+// stamp); it never reads a document body and never starts a process (D7: no automatic rebuild
+// in Claude Code hooks; builds are automatic only in git hooks and CI). `Directory.current` is
+// the checkout root because the settings commands `cd` to it (fce6065c). It acts only when
+// scripts/build_local_indexes.dart exists there, so a tree from before A2 and a test fixture
+// stay silent. (A subagent's isolation worktree of an A2 tree holds the tracked builder and
+// would nudge; it stays silent only because SessionStart does not fire for subagents.) Its own
+// try/catch, silent like its siblings.
+// The staleness predicate is the SAME function the orchestrator's self-check calls.
+// ---------------------------------------------------------------------------------------------
+
+/// The one context line for stale or missing indexes, or '' when both are fresh. Pure.
+String formatLocalIndexesNudge(List<IndexReport> reports) {
+  if (reports.every((r) => r.state == IndexState.fresh)) return '';
+  return 'Local indexes stale/missing — run: dart run scripts/build_local_indexes.dart '
+      '--lenient (then read docs/audit/OPEN_INDEX.md / docs/diagnoses/INDEX.md)';
+}
+
+/// I/O wrapper for [formatLocalIndexesNudge]. [root], [stat] and [readHead] are test seams.
+String localIndexesNudge(
+    {String? root,
+    StatFn stat = FileStat.statSync,
+    HeadReader readHead = readHeadBytes}) {
+  try {
+    final dir = root ?? Directory.current.path;
+    if (!File('$dir/scripts/build_local_indexes.dart').existsSync()) return ''; // file-only: a script
+    return formatLocalIndexesNudge(
+        localIndexReports(dir, stat: stat, readHead: readHead));
+  } catch (_) {
+    return '';
+  }
+}
+
+/// Pure: the warning when an installed hook predates A2, else ''. `null` = that hook file is
+/// absent. The marker is the A2-ONLY literal `build_local_indexes.dart`: A0's tracked-only
+/// guard is always present by A2 time, so it cannot tell an A0 hook from an A2 hook, and A2
+/// changes both hooks that carry the literal (pre-commit, pre-merge-commit).
+String formatHooksNotReinstalledWarning(
+    {required String? preCommit, required String? preMergeCommit}) {
+  const marker = 'build_local_indexes.dart';
+  final stale = <String>[
+    if (preCommit == null || !preCommit.contains(marker)) 'pre-commit',
+    if (preMergeCommit == null || !preMergeCommit.contains(marker)) 'pre-merge-commit',
+  ];
+  if (stale.isEmpty) return '';
+  return '⚠️ GIT HOOKS: the installed ${stale.join(' and ')} hook(s) predate the local-indexes '
+      'change (they lack `$marker`), so a merge or a commit that touches a diagnose doc or the '
+      'OI board can print advice that no longer applies (to `git add` an index that is now '
+      'ignored) or stop on a failed index write. Reinstall from the PRIMARY worktree, once per '
+      'machine:\n'
+      '    git fetch origin main && git merge --ff-only origin/main && sh scripts/setup-hooks.sh';
+}
+
+/// I/O wrapper: one `git rev-parse --git-path hooks` spawn, once per SessionStart, and only in
+/// a tree that has the A2 builder. Fail-silent.
+String _hooksNotReinstalledWarning() {
+  try {
+    final dir = Directory.current.path;
+    if (!File('$dir/scripts/build_local_indexes.dart').existsSync()) return ''; // file-only: a script
+    final r = Process.runSync(
+        'git', ['rev-parse', '--path-format=absolute', '--git-path', 'hooks'],
+        workingDirectory: dir, stdoutEncoding: utf8);
+    if (r.exitCode != 0) return '';
+    final hooks = (r.stdout as String).trim();
+    if (hooks.isEmpty) return '';
+    String? read(String name) {
+      final f = File('$hooks/$name');
+      if (!f.existsSync()) return null; // file-only: an installed hook is a file
+      return utf8.decode(f.readAsBytesSync(), allowMalformed: true);
+    }
+    return formatHooksNotReinstalledWarning(
+        preCommit: read('pre-commit'), preMergeCommit: read('pre-merge-commit'));
   } catch (_) {
     return '';
   }
