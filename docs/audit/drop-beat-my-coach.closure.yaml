@@ -8,8 +8,9 @@
 # founder go (CLAUDE.md section 4.3), OI-395 may not be closed before that
 # delete exists, and the badge total needs a phone check. Group B, one
 # docs-only commit after the delete (done 2026-10-25), flipped the first two to
-# closed_in_commit, and the library-core-list-pool ledger's R8 row; only RUNTIME
-# (the founder phone check) remains blocked_on_user.
+# closed_in_commit, and the library-core-list-pool ledger's R8 row. RUNTIME (the
+# founder phone check) was the last blocked_on_user row; the founder confirmed
+# the badge total of 14 on 2026-10-25 and it is now verified_clean.
 
 batch: drop-beat-my-coach
 # Added in the commit after the B-pass fixes (it cites the B-pass file by name,
@@ -98,8 +99,8 @@ findings:
 
   - id: RUNTIME
     title: "Section 5 runtime verification: Profile badge total shows 14 and no Coach Slayer tile"
-    terminal_state: blocked_on_user
-    reason: "Founder phone check. The flow touched is read-only (badge grid reads AchievementBadge.all); no data written."
+    terminal_state: verified_clean
+    evidence: "Founder phone check, 2026-10-25: the iPhone web app shows a badge total of 14. It first still showed Coach Slayer because Vercel never built the merge commit 14864498 (no production deployment existed for it; cause not established); a production deployment was created by hand on the founder's go (dpl_HJxZ3Bp7VyLVRRoFEpFuuEAqst5u, READY 13:22:43Z), after which the served main.dart.js held 0 hits for 'Coach Slayer' and 'challengeWon' (it held 1 of each before). The flow touched is read-only (badge grid reads AchievementBadge.all); no data written."
 
   # ── Rulings ──────────────────────────────────────────────────────
   - id: R1
