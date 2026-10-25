@@ -10,7 +10,7 @@ wiring surface uses. A gate **number is an optional alias**: most gates have non
 the next free number: **55**. Declare it canonically as `// Gate: N` on its
 own line in the first 10 lines — that exact form is the only one this generator reads.
 
-Total gates: **111** (47 numbered, 64 by filename only).
+Total gates: **112** (47 numbered, 65 by filename only).
 
 | Gate | Script | Purpose | Test ledger |
 |---|---|---|---|
@@ -25,6 +25,7 @@ Total gates: **111** (47 numbered, 64 by filename only).
 | — | `check_authed_invoke_fresh_token.dart` | every authed Edge Function call from the client sends a FRESH token | grandfathered |
 | — | `check_blast_radius_coverage.dart` | Asserts that every top-level directory under `lib/features/`, | grandfathered |
 | — | `check_blast_radius_stdin_usage.dart` | Blocks a STAGED ADDED line that pipes into | mutation_proven |
+| — | `check_bug_class_numbers_unique.dart` | Assert that the debugging skill's bug-class numbers are unique and agree between the two files | mutation_proven |
 | 10 | `check_bugfix_commits_have_diagnose.dart` | Bug-fix commits since last APK build reference a valid diagnose-doc. | grandfathered |
 | — | `check_ci_flutter_version.dart` | CI / dev / Vercel Flutter-version parity. | grandfathered |
 | 26 | `check_claude_md_citations.dart` | assert that every `§N` and `§N.M` citation across CLAUDE.md + nested CLAUDE.md files | grandfathered |

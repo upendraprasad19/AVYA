@@ -305,7 +305,7 @@ across 7 files**, and the two outside the three known files (`phase_unlock_end_t
 | **B12** | local `current_phase` non-numeric, cloud numeric (r2/B4 branch 5) | cloud taken ⇒ companions take cloud |
 | **B13** | **`merged['current_phase']` byte-identical to today** across all 7 branches (r2/B5) | incl. branch 1: cloud-null ⇒ key **not inserted** |
 | A1 | pure `resolvePlanRegenStart` (r2/N4) | stale-refused Hive date → resolves to the **local** date |
-| A2 | `restore_progress_uses_shared_merge_test.dart` (r1/F2) | positive: bootstrapper calls `getPhaseStartedAtIso()`; negative (comments stripped, §2.37): no `progressRows.first['phase_started_at']` |
+| A2 | `restore_progress_uses_shared_merge_test.dart` (r1/F2) | positive: bootstrapper calls `getPhaseStartedAtIso()`; negative (comments stripped, §2.126): no `progressRows.first['phase_started_at']` |
 | **A3** | cloud row ABSENT but Hive holds a date (r2/N3) | resolves to the Hive date, not `now()` — pins the intended behaviour change |
 
 ### 3.3 Mutation proofs
@@ -327,7 +327,7 @@ Rule 24 / §2.39 (delete · reorder · respell) and §2.54 (**run the neutered a
    shipped the symptom)
 7. **map branch 3 with absent local to `keptLocal` instead of `noWrite` → B13 reddens** (r2/B4)
 
-Mutations run in a **dedicated worktree** (OI-134 / §2.40).
+Mutations run in a **dedicated worktree** (OI-134 / §2.129).
 
 ---
 

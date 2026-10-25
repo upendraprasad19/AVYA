@@ -293,6 +293,11 @@ paths:
   - { glob: "scripts/_dart_bin.sh", tier: platform }
   - { glob: "scripts/check_oi_numbering_unique.dart", tier: platform }
   - { glob: "scripts/oi_numbering_lib.dart", tier: platform }
+  # The bug-class twin of the OI-number gate above (2026-10-25, landing B of the merge-conflict-
+  # treadmill plan, OI-167): the gate and its pure parser fell through `scripts/**` to feature, so
+  # an edit that loosened the uniqueness check would clear no review gate.
+  - { glob: "scripts/check_bug_class_numbers_unique.dart", tier: platform }
+  - { glob: "scripts/bug_class_ids_lib.dart", tier: platform }
   # OI allocator (2026-09-12): the mint script and the SessionStart hook both fell
   # through `scripts/**` to feature, so an edit to either alone would get no B-pass
   # and no full suite (plan-review round 1, finding 10).

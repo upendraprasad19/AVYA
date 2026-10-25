@@ -79,7 +79,7 @@ landings: [A0, A1, A2, B, C, D]   # each: own branch, plan-review record (≥2 r
   - 45 of 179 archive headers are unbolded (`blast-radius platform (…)`).
   - On 170 reviews with both fields, the date matches 170/170 and the first-word tier matches all but one genuine divergence.
   - The largest review is 84 KB, the archive 417 KB.
-- **Bug classes:** 122 entries, max 2.113, 9 duplicates; next free 2.114.
+- **Bug classes:** 122 entries, max 2.113, 9 duplicates; next free 2.114 at that time (the max was 2.122 by 2026-10-25; see docs/plans/bug-class-uniqueness.md).
 - **Platform:** no merge queue for User-owned repos. CI ~5 min per run. 8 unmerged remote branches (excluding `oi/`, `mig/`, dependabot); 1 touches an index.
 
 ## 1. Bug history (§4.1.5)
@@ -386,7 +386,7 @@ landings: [A0, A1, A2, B, C, D]   # each: own branch, plan-review record (≥2 r
 
 ## 7. Landings B–D
 Each gets its own revision and two review rounds, the last converged, before code.
-- **B (OI-167):** a uniqueness gate + lib; the legacy 9 renumbered from 2.114 after reading every citation (excluding reviews, plan-reviews and closure ledgers). Before C.
+- **B (OI-167):** a uniqueness gate + lib; the legacy 9 renumbered from 2.114 (superseded: the ids and the decision rule are in docs/plans/bug-class-uniqueness.md, whose targets are 2.125-2.133) after reading every citation (excluding reviews, plan-reviews and closure ledgers). Before C.
 - **C:**
   - U3: remerge ∪ both-sides overlap; full ref name; fallbacks.
   - U5: the record-aware resolver; builders last; fixtures projected through A1/A2; the archive off the allow-list; YAML structural checks.
