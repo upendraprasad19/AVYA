@@ -50,8 +50,8 @@ const userId = userRes.user?.id;                                   // null → 4
 ```
 
 GoTrue validates the user JWT (genuine auth), the `apikey` is a real key (service-role),
-so the request is accepted. The four reference EFs do exactly this: `daily-snapshot`,
-`ai-media-proxy`, `assess-body-composition`, `beat-my-coach`.
+so the request is accepted. The three reference EFs do exactly this: `daily-snapshot`,
+`ai-media-proxy`, `assess-body-composition`.
 
 ## Client seam — send a fresh token
 

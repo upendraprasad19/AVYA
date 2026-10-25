@@ -4,7 +4,7 @@
 // the client (`daily-snapshot`, a wholesale rebuild from Hive on every app
 // sync) and several server-side crons that each own ONE key inside the same
 // blob (morning-alert's `morning_alert`, rolling-context's semantic-retrieval
-// fields, future-prediction's `future_prediction`, beat-my-coach's fields).
+// fields, future-prediction's `future_prediction`).
 // The cron writers already read-modify-write correctly. The client writer
 // did not — it replaced the whole row, so any cron-owned key written earlier
 // that day was silently destroyed the next time the client pushed (diagnose

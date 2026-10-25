@@ -3691,7 +3691,7 @@ Unit 2's blocked question — what a regeneration does when the plan window is E
 - **Verified**: 2026-09-16, B-pass on the cron-ai-removal batch
   (`docs/reviews/247d945d1ba0-review.md` Finding 1), independently
   re-verified before acting: `grep -rn "futurePredictionFunction" lib/`
-  → only the declaration at `app_constants.dart:26`, never called again
+  → only the declaration at `app_constants.dart:26` (now `:25`, after `beatMyCoachFunction` above it was dropped, OI-395), never called again
   anywhere in `lib/`; `grep -n "future-prediction"
   docs/operations/CRON_REGISTRY.md` → no match; `grep -rln
   "future-prediction" supabase/migrations/*.sql` → no match (not
@@ -4454,7 +4454,7 @@ the merged result. This makes the CLIENT writer safe against a cron having
 written earlier.
 
 **What it does NOT do:** make the 4 writers (`daily-snapshot`,
-`morning-alert`, `rolling-context`, `future-prediction`, `beat-my-coach`)
+`morning-alert`, `rolling-context`, `future-prediction`)
 atomic against EACH OTHER. Each still does its own application-level
 read-modify-write (SELECT, merge in application code, then UPSERT) — so two
 of them racing the exact same row at the exact same instant could still
@@ -4477,7 +4477,7 @@ reported symptom, which the read-modify-write fix already closes completely.
 follow `e4a1b7`/OI-98's precedent: a SECURITY DEFINER (or INVOKER, per that
 migration's own later correction) Postgres RPC that does the merge
 atomically inside a single statement (`snapshot_json = snapshot_json ||
-$delta`), called by all 5 writers instead of each doing its own
+$delta`), called by all 4 writers instead of each doing its own
 SELECT-then-UPSERT. Needs its own migration + live verification pass per
 this repo's migration protocol, not a quick follow-on to d8a2f6.
 
@@ -6051,7 +6051,7 @@ Fix options (to be planned, not decided): (a) a `free_access_codes` table (code,
 - **Verified**: 2026-10-17 - by reading every `terminal_state: blocked_on_user` row of `docs/audit/*.closure.yaml` (118 rows) and the OI board, and keeping only the rows that are CHECKS (something to run or observe). Rows that are decisions or go-aheads are not here; they stay on their own OIs. Re-checked 2026-10-20 against `main` 7266ea93: added the shipped Unit C steps (A10, PR #129), the OI-349 look (A11), the OI-341 Piece A payment read (C7, PR #124, deployed v25/v29 with the switch unset), and a note for the dark LOG-per-exercise flag (PR #128), whose device check belongs to its flip.
 - **Identified**: 2026-10-17 · filed via mint_oi.sh from branch `pending-checks-oi` (founder request: "create an OI compiling all the checks pending ever ... after a new aab/apk build at the end")
 
-**Before the build (added 2026-10-21, OI-341 B2a):** the VPS `.env` `RAZORPAY_KEY_ID` must hold the LIVE key ID (`rzp_live_...`, the public half of the pair, from the Razorpay dashboard). Today it holds a `rzp_test_` ID while the server's secrets are the live pair, and the client opens checkout with its own build-time key (`app_constants.dart:193`), so an AAB built as-is would fail at checkout. After the build, also run one real purchase from the phone (90% code, refunded) as part of the B2b checks.
+**Before the build (added 2026-10-21, OI-341 B2a):** the VPS `.env` `RAZORPAY_KEY_ID` must hold the LIVE key ID (`rzp_live_...`, the public half of the pair, from the Razorpay dashboard). Today it holds a `rzp_test_` ID while the server's secrets are the live pair, and the client opens checkout with its own build-time key (`AppConstants.razorpayKeyId`, `app_constants.dart:189`), so an AAB built as-is would fail at checkout. After the build, also run one real purchase from the phone (90% code, refunded) as part of the B2b checks.
 
 How to use: build once from the last merged `main`, install on the phone, sign in with one FREE and one PRO account (plus one throwaway or lapsed account where a row says so), then walk the sections in order. Section A needs the phone, B needs a signed-in session or JWT (a dev build or test account), C needs no build and can be run any time with the founder's go for live reads. W runs on the founder's Windows clone, no build.
 
@@ -6550,19 +6550,6 @@ Impact: every cardio exercise saved from the active workout or the coach keeps i
 
 To plan (full diagnose template, recurrence class): keep `durationSec` for `cardio` in the normaliser and decide `distance`; give a set or the row a distance path and write `distance_km` from `logExercise`; a behavioural test that logs a library cardio exercise through `logExercise` and reads minutes and km back from Hive and from the expanded row; a tier-4 audit query on `exercise_logs` for cardio rows with zero duration to size the damage and decide whether stored rows can be repaired (the minutes are not recoverable from the row itself); correct the `train/CLAUDE.md` field list.
 
-## OI-395 — beat-my-coach: challenge query filters on capitalised categories, so every challenge comes from the fallback list
-
-- **Status**: OPEN
-- **Blocked on**: founder decision between (a) and (b) below (blocked_on_user; Batch B1 plan Ruling 8).
-- **Verified**: 2026-10-23 — `supabase/functions/beat-my-coach/index.ts:195` filters `.or("category.eq.Calisthenics,category.eq.Cardio")`; the shipped library's categories are lowercase (`cardio` 12 rows, no `calisthenics` category at all), and the live table was read-only queried lowercase during the B1 review.
-- **Identified**: 2026-10-23 · filed via mint_oi.sh from branch `library-batch-b`
-
-**The defect.** The query never matches, so every challenge is drawn from the hardcoded fallback list (`index.ts:244-258`: Push-ups, Squats, Burpees, …). Nothing errors, so nothing reports it.
-
-**Options.** (a) Make the query work (lowercase `cardio`, and decide what stands in for "Calisthenics", e.g. `discipline` once the cloud carries it) — this CHANGES the challenges users get. (b) Delete the dead query and keep the fallback list as the intended content.
-
-**Done when.** The founder picks (a) or (b), and an Edge Function test pins the chosen source.
-
 ## OI-396 — Cardio finisher is generated but no screen shows it
 
 - **Status**: OPEN
@@ -6820,6 +6807,24 @@ Past `user_daily_snapshots` stay (nothing reads a past day's `coach_notices`). D
 
 **Done when.** A behavioural test shows a 502 or 504 from `validate-promo` is NOT retried by the promo call (and the 503 boot-failure retry is unchanged), and `supabase/functions/CLAUDE.md` row `promo_validate_rate_limit` names the rule.
 
+## OI-415 — Two test files are red on a Windows dev machine and green in CI: gate_index_e2e_test (cp1252 decode of an em dash) and discipline_hook_local_indexes_e2e_test (installed shared hooks)
+
+- **Status**: OPEN
+- **Blocked on**: none
+- **Verified**: 2026-10-25 - by running `flutter test test/scripts/gate_index_e2e_test.dart test/scripts/discipline_hook_local_indexes_e2e_test.dart` on a clean checkout of `origin/main` `38f8a064` (a scratch worktree) on the founder's Windows machine: `+28 ~2 -2`, the same two failures the full suite showed on branch `drop-beat-my-coach` (11,157 passed, 35 skipped, 2 failed). CI is green at that SHA (`Test & Analyze`, all four unit-test shards) and on the landing-A2 PR #167, so both are local to this machine. The installed `.git/hooks/pre-commit` is byte-identical to `scripts/pre-commit.sh` (`cmp`).
+- **Identified**: 2026-10-25 · filed via mint_oi.sh from branch `drop-beat-my-coach`
+
+**The defect, two independent ones.**
+
+1. `test/scripts/gate_index_e2e_test.dart:256` expects `PASS — 2 gates, 1 numbered, no collisions.` and the child's stdout arrives as `PASS â€” 2 gates ...`: the em dash (UTF-8 bytes E2 80 94) is decoded as cp1252. `_runBuilder` (`:44`) goes through `runSpawn(..., runInShell: true)` with the default `systemEncoding`. This is the same class as the em-dash `systemEncoding` entries already on this board.
+2. `test/scripts/discipline_hook_local_indexes_e2e_test.dart:289` (`from a LINKED worktree the shared hooks are found: the REAL A2 hooks do not warn`): the fixture's seed commit (`linkedWorktreeOf`, `:278`) goes through a copy of the real `scripts/pre-commit.sh`. Its `Gate-index input touched` stage runs `dart run scripts/build_gate_index.dart`, which the fixture does not have (it copies only the closures of `discipline_hook.dart` and `build_local_indexes.dart`), so the stage prints `Could not find file scripts/build_gate_index.dart` / `FAIL: build_gate_index.dart errored` and the commit exits 1 (`Expected: <0> Actual: <1>`). NOT established: why the same fixture does not also fail on Linux CI.
+
+**Impact.** Every full `flutter test` on a Windows machine ends red with these two, which hides a third failure the day one appears; CI is unaffected. A permanently red local suite is the state the "no pre-existing failures" rule exists to prevent.
+
+**Fix shape.** (1) Decode the child's output as UTF-8 in the shared spawn helper (`stdoutEncoding` / `stderrEncoding`), and check the other `test/scripts` e2e tests that compare non-ASCII output. (2) Find which staged path triggers the stage on this machine (re-run the test with the fixture kept), then either give the fixture the gate-index builder closure or make the seed commit stage no gate-index input. Do not weaken either assertion.
+
+**Done when.** `flutter test test/scripts/` is green on the Windows machine, and a mutation shows each assertion still bites (revert the decode fix, and the fixture fix, and the matching test goes red).
+
 ## OI-416 — Overlapping live sync passes still duplicate work: no one-pass-at-a-time guard (a retry sweep started while an abandoned 45 s-ceiling loop still walks rows, and any two entry points)
 
 - **Status**: OPEN
@@ -7008,4 +7013,19 @@ Filed by the sync-storm-first-sweep batch (A1 = W1 migrator fix, W2 save progres
 **Input.** The section 9 reload-mid-restore count (how many exercise rows push after one reload mid-restore).
 
 **Done when.** The count is recorded and either chunked recording lands with a deterministic seam or the cost is accepted in writing.
+
+## OI-427 — The Clean Eater badge (BadgeId.nutritionWeek) has a profile tile but no unlock rule, so it can never be earned
+
+- **Status**: OPEN
+- **Blocked on**: none
+- **Verified**: 2026-10-25 - by reading and a diff of two lists: `lib/core/services/badge_service.dart` has 13 `tryUnlock(BadgeId.<id>, ...)` rules and `BadgeId` has 14 values; the only value with no rule is `nutritionWeek` (`git grep -n nutritionWeek -- lib test supabase` finds only `lib/shared/models/achievement_badge.dart:11` (the enum value) and `:45` (the profile tile, "Clean Eater", description "Log meals every day for a week")). No test, provider or Edge Function mentions it.
+- **Identified**: 2026-10-25 · filed via mint_oi.sh from branch `drop-beat-my-coach`
+
+**The defect.** The Profile badge grid shows a "Clean Eater" tile that promises a reward for logging meals every day for a week, and nothing can ever unlock it: `checkAll()` computes seven inputs for `checkAndUnlock` and none of them is about food logging. It is the same defect class as `challengeWon` ("Coach Slayer"), which OI-395's removal took out in the same batch; that one was found because its only caller passed the literal `hasBeatCoach: false`, this one has no caller at all, so the unlock-rule count (13) is the only thing that shows it. `beat_my_coach_removed_test.dart` (d) pins the enum against the list, not against the unlock rules, so it cannot see this class.
+
+**Impact.** Testing phase: a locked tile that stays locked, and a Profile total (14) that includes a badge nobody can earn. Before the store launch it is a promise the app cannot keep.
+
+**Fix shape.** Either give the tile its rule (the description already defines it: a meal logged on each of 7 consecutive IST days; read it through the nutrition repository with the IST date helper, not from a widget, and decide whether a food log or a saved meal counts), or remove the tile and the enum value the way `challengeWon` was removed. Whichever is chosen, add the invariant that was missing: a contract test that every `BadgeId` value has exactly one `tryUnlock(BadgeId.<id>, ...)` rule in `badge_service.dart`, so the next never-earnable badge fails a test instead of shipping.
+
+**Done when.** The invariant test exists and is green, and (if the rule is built) a behavioural test earns the badge after 7 consecutive IST days of logs and does not earn it after 6 or after a gap.
 

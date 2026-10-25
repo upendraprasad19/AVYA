@@ -185,7 +185,7 @@ Input $0.075/M · output $0.30/M for Flash; $1.25/M · $10/M for Pro; Flash-Lite
   ```
 - Short request IDs (8 hex chars) are logged server-side AND returned to the client so support can grep logs for the exact failure. The client sees a generic message; the logs retain full detail.
 - **Validation errors** (400 responses like "Message too long", "Image too large", "PRO subscription required") ARE safe to return verbatim — they're user-actionable and don't leak internals.
-- Applies to all 18 live Edge Functions: `ai-proxy`, `ai-media-proxy`, `razorpay-webhook`, `verify-payment`, `verify-subscription`, `validate-promo`, `assess-body-composition`, `beat-my-coach`, `daily-snapshot`, `expiry-reminder`, `future-prediction`, `morning-alert`, `redeem-referral`, `rolling-context`, `streak-guardian`, `weekly-recalc`, `weekly-recap-ready`, `weekly-report`. (`ai-proxy-pro` is a 410-Gone stub — retired 2026-04-18 — excluded.)
+- Applies to these 17 functions: `ai-proxy`, `ai-media-proxy`, `razorpay-webhook`, `verify-payment`, `verify-subscription`, `validate-promo`, `assess-body-composition`, `daily-snapshot`, `expiry-reminder`, `future-prediction`, `morning-alert`, `redeem-referral`, `rolling-context`, `streak-guardian`, `weekly-recalc`, `weekly-recap-ready`, `weekly-report`. (`ai-proxy-pro` is a 410-Gone stub — retired 2026-04-18 — excluded.)
 
 ## Server-Side Workout Analytics
 - `weekly-recalc`: Reads exercise-level data from `workout_log_exercises` (NOT `workout_logs`). Derives date from `completed_at`. Groups exercises by `exercise_id` (= exercise_name) for weight progression tracking. `total_workouts_done` counts distinct dates, not exercise rows.

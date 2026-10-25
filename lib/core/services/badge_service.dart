@@ -32,7 +32,6 @@ class BadgeService {
     required int weightLogCount,
     required bool phase1Complete,
     required bool hasChattedWithAI,
-    required bool hasBeatCoach,
     required bool hasCustomExercise,
   }) {
     final unlocked = _getUnlocked();
@@ -56,7 +55,6 @@ class BadgeService {
     tryUnlock(BadgeId.streak12Weeks,  currentStreakWeeks >= 12);
     tryUnlock(BadgeId.weightLogged30, weightLogCount >= 30);
     tryUnlock(BadgeId.aiCoachChat,    hasChattedWithAI);
-    tryUnlock(BadgeId.challengeWon,   hasBeatCoach);
     tryUnlock(BadgeId.customExercise, hasCustomExercise);
     // Every current user is an early adopter
     tryUnlock(BadgeId.earlyAdopter, true);
@@ -132,7 +130,6 @@ class BadgeService {
       weightLogCount: weightLogCount,
       phase1Complete: phase1Complete,
       hasChattedWithAI: hasChattedWithAI,
-      hasBeatCoach: false, // Beat My Coach not yet implemented
       hasCustomExercise: hasCustomExercise,
     );
   }

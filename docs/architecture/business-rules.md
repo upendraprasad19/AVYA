@@ -27,7 +27,6 @@ status: scaffold
 - Morning alert — generic push notification
 - Weekly nutrition report — first report free (after Week 1)
 - Future Prediction card — one card post-onboarding
-- Beat My Coach HIIT challenge — 1 per 2 weeks
 - Diet plan — preview + swap + save to device + share as PDF (generated from food DB, no AI). Saved plans loadable on re-entry.
 - Exercise coaching cues, common mistakes, pro tips — all visible
 - Workout Receipt PNG (shareable) — after every completed workout

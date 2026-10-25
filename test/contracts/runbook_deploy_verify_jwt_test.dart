@@ -47,7 +47,6 @@ const expectedVerifyJwt = <String, bool>{
   'ai-proxy': false,
   'ai-proxy-pro': false,
   'assess-body-composition': true,
-  'beat-my-coach': true,
   'clean-orphan-media': false,
   'compute-admin-metrics-daily': false,
   'compute-coach-signals': false,

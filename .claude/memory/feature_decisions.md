@@ -36,7 +36,6 @@ WhatsApp AI Coach → **DEFERRED** (Telegram focus for now).
 | Diet Plan PDF | Preview + swap items + download. Generated from food DB locally. Zero AI cost |
 | PRO Tips on Exercises | Coaching cues, common mistakes, breathing cue, pro tip — all visible to everyone |
 | Workout Receipt PNG | Shareable card after every completed workout. ICANBEFITTER branding + QR code |
-| Beat My Coach HIIT | 1 challenge per 2 weeks. AI generates brutal HIIT finisher as shareable card |
 | Future Prediction Card | One AI forecast card post-onboarding. Bold 90-day prediction |
 | Steps + Sleep Sync | Google Fit / Health Connect basic sync. Display only |
 | Basic Morning Alert | Generic push notification at 7AM. "Time to train — Push Day scheduled." |
@@ -92,7 +91,7 @@ WhatsApp AI Coach → **DEFERRED** (Telegram focus for now).
 
 ## Shareable Cards Spec
 
-All 3 shareable cards include:
+Both shareable cards include:
 - **ICANBEFITTER** wordmark (DM Sans w900)
 - App logo / branding strip
 - QR code → `www.icanbefitter.com` (update to Play Store link before release)
@@ -102,7 +101,6 @@ All 3 shareable cards include:
 |------|---------|------|
 | Workout Receipt | After completing workout | FREE |
 | Future Prediction | Post-onboarding + monthly | FREE once, PRO monthly |
-| Beat My Coach | Every 2 weeks | FREE |
 
 ---
 

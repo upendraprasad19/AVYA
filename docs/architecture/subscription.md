@@ -38,7 +38,6 @@ static const Set<String> _highValueFeatures = {
 ```
 workout_receipt        → PNG after every completed workout + viewable later via "View Card"
 future_prediction      → AI forecast card (once free, monthly PRO)
-beat_my_coach          → HIIT challenge card (1 per 2 weeks, all users)
 video_share            → Remotion/Lambda video render (DEFERRED — hidden until post-launch)
 ```
 All shareable cards include: ICANBEFITTER wordmark + QR code → www.icanbefitter.com

@@ -633,7 +633,7 @@ async function handler(req: Request): Promise<Response> {
     // Diagnose d8a2f6 (recurrence of e4a1b7/OI-98 on `morning_alert`):
     // this payload is a WHOLESALE rebuild from the client's Hive state, but
     // several server crons (morning-alert generate mode, rolling-context,
-    // future-prediction, beat-my-coach) each read-modify-write ONE key into
+    // future-prediction) each read-modify-write ONE key into
     // the SAME row earlier in the day. A blind upsert here replaced their
     // work the next time the client synced. Read the existing row first so
     // any key this payload doesn't mention survives — `.maybeSingle()`,

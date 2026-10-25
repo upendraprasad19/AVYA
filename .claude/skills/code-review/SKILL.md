@@ -181,6 +181,16 @@ When invoked, this skill should:
    a sub-defect and its widened test were verified working-tree-only and never `git add`-ed;
    the reviewer caught it by resetting to `git show :<path>` content. Lens 10 is the
    reviewer-side half; this is the check that makes the author's "done" mean the index.
+0b. **Refuse to dispatch on a stale base.** After `git fetch origin main`, run
+   `git rev-list --left-right --count HEAD...origin/main`; if the right-hand number is non-zero, run
+   `git diff --name-status $(git merge-base HEAD origin/main) origin/main` and intersect it with the
+   branch's own file list. A file the branch edits that main deleted, renamed or untracked is a certain
+   merge conflict, and the reviewers' three-dot diff (`origin/main...HEAD`) is a merge-base diff, so it
+   CANNOT show it. Bring the branch up to date FIRST (unpushed branch: rebase; pushed: merge), re-run the
+   gate loop, THEN dispatch, and name the reviewed SHA in every brief. Added 2026-10-25
+   (`drop-beat-my-coach` B-pass, a P1 found independently by two reviewers): main had made
+   `docs/audit/OPEN_INDEX.md` a gitignored local build product while the branch edited it, and the session
+   banner "local main is 7 commit(s) behind origin/main" was in the author's context and read as background.
 1. Run `git diff --cached --name-only` and `git diff --cached` to assemble the diff.
 2. Compute blast-radius via `dart run scripts/blast_radius_from_diff.dart`.
 3. Generate the staging hash **exactly the way the gate does**, or the file you write
