@@ -1,0 +1,100 @@
+# Closure ledger - OI-410 (verify-payment answered verified:true for a payment whose subscriptions row was not active; plan
+# docs/plans/2026-10-26-oi410-verify-payment-non-active-row.md, diagnose docs/diagnoses/2026-10-26-verify-payment-non-active-row-060837.md).
+# Gate 40. One terminal_state per finding; no `deferred:` key. Every row below is a CENSUS entry of the plan: the three doors that
+# were the defect, every other arm that can answer `verified:true`, the sibling writers and readers, the review rounds, and the live
+# deploy. The row `OI410-LIVE-PROOF` records a FOUNDER WAIVER (Q2, 2026-10-26, "Waive the live proof (Recommended)"), NOT a live run:
+# its evidence states only the waiver and what exists at the time of this commit. OI-410 itself stays OPEN until the post-deploy
+# docs PR records the deployed SHA, version, payload sha256 and the boot and smoke results.
+
+batch: oi410-verify-nonactive-row
+plan_review_record: docs/plan-reviews/oi410-verify-nonactive-row.md
+total_findings: 15
+closed_count: 15
+
+findings:
+  # ── the defect: the three replay doors ────────────────────────────────────
+  - id: OI410-DOOR1
+    title: "idempotency pre-select's else arm (index.ts ~:689) answered verified:true for a stored row of any status"
+    terminal_state: closed_in_commit
+    commit: "51327572"
+    verification: "replayVerdict/replayGate (index.ts:849-882) gate the arm; verify-payment/index_test.ts T0-T4 (cancelled own row: 200 verified:false, no insert, no promo redemption); M0 = the pre-fix handler turns 36 Deno tests red"
+
+  - id: OI410-DOOR2
+    title: "OFF-branch 23505 re-read (index.ts ~:766) answered verified:true for the race winner's row whatever its status"
+    terminal_state: closed_in_commit
+    commit: "51327572"
+    verification: "same gate; T1b' reaches the door on the faithful no-pre-select-error route, T3b reproduces the defect through the frozen pre-fix handler fixture; 31 mutants killed, each confirmed applied and restored by sha256"
+
+  - id: OI410-DOOR3
+    title: "stacking-ON record_paid_subscription answer with inserted=false (index.ts ~:779; migration 161 returns the stored row whatever its status) answered verified:true"
+    terminal_state: closed_in_commit
+    commit: "51327572"
+    verification: "an extra status read keyed on payment id and user id when !rec.inserted, gated by the same replayVerdict; T1c' and T2d' pin the ON door for a cancelled row and an unreadable one"
+
+  - id: OI410-B2
+    title: "a row that is absent, foreign-owned or unreadable at a replay door: founder-accepted design B2 (HTTP 200 verified:false 'Could not confirm this payment yet; please retry' instead of the old seeded verified:true)"
+    terminal_state: closed_in_commit
+    commit: "51327572"
+    verification: "Q3 'Accept B2 (Recommended)' (plan, verbatim); T2f plants a foreign-owned row with no interception; docs/architecture/payment.md rule 12 states the soft failure and the up-to-about-20-minute delay of an honest demotion"
+
+  # ── census: every other arm and every sibling ─────────────────────────────
+  - id: OI410-EARLY-READ
+    title: "the early read (index.ts ~:369-395) is the only other route to verified:true"
+    terminal_state: verified_clean
+    evidence: "it filters status = 'active' in SQL; a hermes seat and a B-pass seat each enumerated every verified:true literal (exactly two) and every route into the final answer: each is an insert by this request or passes the gate"
+
+  - id: OI410-WEBHOOK
+    title: "razorpay-webhook's id-only idempotent arms have the same query shape"
+    terminal_state: verified_clean
+    evidence: "hermes A-H1 (FALSE_ALARM): only Razorpay calls the webhook, it acks alreadyProcessed:true, and nothing re-activates a row from that answer (docs/audit/2026-10-26-hermes-oi410.md)"
+
+  - id: OI410-OTHER-READERS
+    title: "other readers of subscription state: verify-subscription (.eq status active, index.ts:68-70, end-date term :91-100), redeem-referral:132 (an 'ever paid' check, not an entitlement answer), admin-verify-payment (a 410 stub)"
+    terminal_state: verified_clean
+    evidence: "plan census, re-read by hermes seat B (consumer sweep clean: only razorpay_service.dart Phase 2 and payment_retry_attempt.dart call verify-payment, and neither reads `error`)"
+
+  - id: OI410-CLIENT
+    title: "client readers trust only verified == true: Phase 1 poll, Phase 2 (razorpay_service.dart), the retries (payment_retry_attempt.dart) and refreshFromSupabase (filters active)"
+    terminal_state: verified_clean
+    evidence: "writer-to-reader contract test verify_payment_verified_means_active_row_writer_to_reader_test.dart; a refusal leaves the optimistic local PRO and the in-flight marker open for the grace window, so the fix delays an honest demotion, never advances one"
+
+  - id: OI410-END-DATE
+    title: "the compare is status-only; the shared PRO predicate adds end_date > now()"
+    terminal_state: verified_clean
+    evidence: "the early read always answered this way; in the client flow Phase 2 and the retries run within about 22 minutes of a payment, so that flow never presents a paid row already past its end; a direct caller with the owner's old active row still gets verified:true (stated in payment.md rule 12 after hermes C-H2)"
+
+  # ── reviews ───────────────────────────────────────────────────────────────
+  - id: OI410-PLAN-REVIEW
+    title: "plan review: five rounds (rounds 2-4 not_converged, round 5 mechanical-only converged), verified against the code at every round"
+    terminal_state: closed_in_commit
+    commit: "51327572"
+    verification: "docs/plans/2026-10-26-oi410-verify-payment-non-active-row.md v5; record docs/plan-reviews/oi410-verify-nonactive-row.md"
+
+  - id: OI410-BPASS
+    title: "B-pass on commit 1: 3 Sonnet seats, 16 findings (2 P2 false citations, 14 P3), all dispositioned"
+    terminal_state: closed_in_commit
+    commit: "51327572"
+    verification: "docs/reviews/3b55547d33d9-review.md, verdict accepted, Tuning entry written; the P2s (line numbers cited as class ids; a wrong token_path.js range) fixed in the diagnose-doc, plan, class 2.135 and SKILL 6.15"
+
+  - id: OI410-HERMES
+    title: "hermes pass: 4 seats, 11 findings (0 P0/P1/P2, 9 P3, 2 false alarms); the REAL ones fixed in commit 2 (12efca99, three comments, reviewed in docs/reviews/90b3647d99f2-review.md) and commit 3 (docs: payment.md rule 12, registry, plan rollout text, deploy skill sections 2.2/3.2/6.15/9)"
+    terminal_state: closed_in_commit
+    commit: "12efca99"
+    verification: "docs/audit/2026-10-26-hermes-oi410.md, verdict accepted; the commit-3 doc fixes are in the same branch (oi410-verify-nonactive-row, hermes-docs commit)"
+
+  # ── the live half ─────────────────────────────────────────────────────────
+  - id: OI410-LIVE-PROOF
+    title: "live behavioural proof of the refusal on a real captured payment (cancel its row, replay verify-payment)"
+    terminal_state: verified_clean
+    evidence: "WAIVED by the founder 2026-10-26 (Q2, answer 'Waive the live proof (Recommended)'): closure rests on the handler-level tests against the real client library, the M0 revert proof (36 reds) and 31 killed mutants; the deploy-time boot probe and signed-in smoke are recorded by the post-deploy PR, not pre-written here. This row names the waiver as the founder's call; it is not evidence of a live run (SKILL 6.10(2) wants one)."
+
+  - id: OI410-INTENT-ROLLBACK
+    title: "no runtime kill switch for this change; rollback is a forward-deploy of the saved previous bundle"
+    terminal_state: closed_in_commit
+    commit: "51327572"
+    verification: "Q1 'No switch; rollback = redeploy (Recommended)' (plan, verbatim); plan 'Verification, review, rollout' steps 2 and 6 and SKILL 6.15 give the recipe; the rollback dry-run was corrected by hermes D-H3"
+
+  - id: OI410-LIVE-DEPLOY
+    title: "deploy verify-payment to the live project (fresh GET and bundle compare, deploy, anon-key boot probe, signed-in smoke, 24 h log and alerts reads)"
+    terminal_state: blocked_on_user
+    reason: "a live Edge Function deploy needs the founder's explicit per-action go, asked for AFTER the merge with every live action listed (plan 'Live deploy'); Q4 covered the code through merge only. The post-deploy docs PR records the deployed SHA, version, payload sha256 and the check results, and closes OI-410 only if the checks Q2 names were run."

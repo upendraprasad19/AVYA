@@ -89,12 +89,12 @@ Per CLAUDE.md §0. Pre-deploy: run `grep -rn 'from "./\\_shared' supabase/functi
 ### 2.2 Verify deploy succeeded
 
 ```bash
-# 1) Check version bumped
-# 2) Smoke test
-node .claude/deploy_via_api.js dedsavbjuwgarrhphgnl <fn> --smoke
+# 1) Check version bumped (MCP `list_edge_functions` / `get_edge_function`)
+# 2) Smoke test: the deploy script ALREADY ran it; read its output. There is NO `--smoke` flag
+#    (an unknown flag on a deploy call is not a smoke run). `--no-smoke` skips it; `--dry-run` skips it too.
 ```
 
-The `--smoke` flag (NEW in B5) invokes the function with `{ smoke: true }` payload and asserts a 200 response. Fails fast if Vault secret missing or import path broken.
+Every successful forward deploy posts `{ smoke: true }` to the deployed function (`deploy_via_api.js`, section "I3: post-deploy smoke step") and tolerates any 2xx, plus the codes in its `SMOKE_TOLERATED_CODES` map (for example 401 and 400 for `verify-payment`, whose gateway or module rejects the synthetic body). A non-tolerated answer logs a WARN with the rollback command pre-baked; there is no auto-rollback. A tolerated 401 proves only that the function booted: boot-verify and auth-verify as in 6.7.
 
 If smoke fails:
 1. Read deploy logs via MCP `get_logs` (service: `edge-function`).
@@ -120,13 +120,13 @@ Pick the SHA you want to roll back to. Production version on disk is whatever sh
 node .claude/deploy_via_api.js --rollback <fn> <sha>
 ```
 
-The script (B3 deliverable from audit 2026-05-20):
-1. Checks out `supabase/functions/<fn>/` from `<sha>` into a temp dir
-2. Emits payload from that snapshot
-3. Deploys + runs smoke
-4. Restores your working tree on completion (does NOT touch HEAD)
+The script (B3 deliverable from audit 2026-05-20), read from `deploy_via_api.js` (`gitShowAtSha`, `emitPayloadAtSha`):
+1. Resolves `<sha>` with `git rev-parse` and reads `supabase/functions/<fn>/index.ts` and its relative imports at that sha with `git show` (no checkout, no temp dir: HEAD and your working tree are never touched). The repo you run it in therefore needs the full history; a `--depth 1` clone cannot resolve an older sha
+2. Re-emits the payload from those blobs, byte-identical to `emit_payload.js` at that sha
+3. Diffs it against HEAD and asks for confirmation (`--yes` skips the prompt; `--dry-run` stops after the diff and needs no token)
+4. Deploys, then runs the smoke step (unless `--no-smoke`)
 
-The deployed payload is also archived under `backups/edge_function_payloads/<fn>/<sha>.json` (last 3 retained per function).
+The deployed payload is also archived under `backups/edge_function_payloads/<fn>/v<N>_<short-sha>.json` (last 3 retained per function).
 
 ### 3.3 Communicate rollback
 
@@ -332,7 +332,7 @@ If deploy is part of a multi-fn batch (e.g. test #15.4 fixed pr-detection + morn
 - ❌ Using `supabase functions deploy` CLI (wrong account)
 - ❌ Using `./` for shared imports (path mangle)
 - ❌ Deploying without git status clean (uncommitted state ships)
-- ❌ Skipping `--smoke` flag after deploy
+- ❌ Passing `--no-smoke`, or not reading the smoke result, after a deploy
 - ❌ Cron function without `_shared/cron_telemetry.ts` wrapper
 - ❌ Rollback without diagnose-doc
 - ❌ Adding a Vault secret in dashboard but not documenting in CLAUDE.md §2a credential table
@@ -373,4 +373,4 @@ Last evolved: B5 D1 of tech-debt audit 2026-05-20 (initial creation; codifies ho
 ### 6.15 A deploy from a THROWAWAY CLONE finds no token: `.claude/token_path.js` takes the clone itself as "primary" (NEW 2026-10-26, OI-410 plan; read from the code, not yet exercised)
 **Telltale:** in a fresh `git clone` of the repo (the recommended place to deploy from, because the deploy tool rewrites tracked backup files and leaves untracked payloads, OI-405) `node .claude/deploy_via_api.js ...` reports that no token file was found: both token files are gitignored, so a clone has neither.
 **Root cause:** `.claude/token_path.js` `primaryRoot` (`:41-55`) takes the FIRST entry of `git worktree list` as the primary checkout and `candidateEntries` (`:63-74`) adds the primary's paths only when that differs from the clone itself; in a standalone clone the first entry IS the clone, so the candidate list is the clone's own two paths (both absent) and `resolveTokenFile` finds nothing.
-**Fix:** pass the working token explicitly on EVERY `deploy_via_api.js` call, `--token-file "<primary repo>/.supabase/supabase access token.txt"`; `emit_payload.js` does NOT take that flag (it rejects unknown arguments, `:86`). The forward deploy also needs `--yes` when there is no TTY (`confirmOrAbort` aborts with exit 2), added only after the founder's go.
+**Fix:** pass the working token explicitly on EVERY `deploy_via_api.js` call that talks to the API (a `--dry-run`, with or without `--rollback`, needs no token, `deploy_via_api.js:318-346`), `--token-file "<primary repo>/.supabase/supabase access token.txt"`; `emit_payload.js` does NOT take that flag (it rejects unknown arguments, `:86`). The forward deploy also needs `--yes` when there is no TTY (`confirmOrAbort` aborts with exit 2), added only after the founder's go.
