@@ -158,6 +158,10 @@ void main() {
       return;
     }
     expect(picks, isNotEmpty, reason: 'no golden persona picked any new row: the 629 rows never reach the generator');
+    // B-pass (reviewer B, 2026-10-26): non-empty alone passes when ONE persona picks ONE new id, and then (i) and (ii)
+    // above would check almost nothing. Recorded at C1: 939 of 998 personas pick at least one new id; half is the floor.
+    expect(personasWithNew, greaterThanOrEqualTo(personas.length ~/ 2),
+        reason: 'only $personasWithNew of ${personas.length} personas picked a new row; R6 (i) and (ii) cover too little');
   });
 
   test('golden: persona count matches the fixture', () {

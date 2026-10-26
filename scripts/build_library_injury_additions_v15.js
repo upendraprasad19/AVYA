@@ -47,7 +47,9 @@ function familyTokens(row) {
 }
 
 function buildRow(row, lib) {
-  const sibs = lib.filter((l) => l.variant_family && l.variant_family === row.variant_family);
+  // ORIGINAL rows only (E-ids): the library file also holds the shipped G/N rows, and the row being built is one of them
+  // (test/helpers/library_injury_floor.dart familyOriginals() filters the same way).
+  const sibs = lib.filter((l) => /^E\d/.test(l.id) && l.variant_family && l.variant_family === row.variant_family);
   const cnt = {};
   for (const l of sibs) for (const t of sortedUnique(l.injury_contraindications)) cnt[t] = (cnt[t] || 0) + 1;
   const floor = sibs.length ? Object.keys(cnt).filter((t) => cnt[t] === sibs.length) : [];

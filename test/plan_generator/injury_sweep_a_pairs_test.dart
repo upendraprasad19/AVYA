@@ -2,7 +2,7 @@
 library;
 
 // Injury re-check sweep, block 3 of 5: PAIRS, all 15 pairs of knee/shoulder/lower_back/wrist/elbow/hip (the six injuries
-// with the most v14 tags), 3 and 5 days, phase 1. See injury_floor_sweep_test.dart for the five blocks and
+// with the most v14 tags), 3 and 5 days, phase 1. See injury_sweep_b_singles_test.dart for the five blocks and
 // test/helpers/injury_floor_sweep_lib.dart for the harness and gates. No day is thin (under 3 exercises) in any tier: this
 // block used to be ratcheted at 2 scan days (shoulder + lower_back, bodyweight, beginner, OI-408) until Batch C1's rows.
 

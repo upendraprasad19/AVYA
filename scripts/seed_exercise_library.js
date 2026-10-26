@@ -5,7 +5,8 @@
 //
 //   <migration file name>  REQUIRED, e.g. 163_reseed_exercise_library.sql. There is no default: a no-name run exits
 //                          non-zero, because the old default was the LAST applied migration and a bare run would have
-//                          rewritten it. A name whose number the applied ledger already records is refused unless --out
+//                          rewritten it. A name whose number the applied ledger already records is refused (also for an explicit
+//                          --out that resolves to supabase/migrations) unless --out
 //                          redirects the file (a rehearsal / test).
 //   --split                two INSERT statements (each with its own ON CONFLICT clause) instead of one, for a POST the
 //                          apply tool refuses for size. Never hand-edit the generated file to split it.
@@ -69,7 +70,14 @@ const FILE_NAME = positional[0];
 if (path.basename(FILE_NAME) !== FILE_NAME || !/^\d+_\w*seed_exercise_library\.sql$/.test(FILE_NAME)) {
   fail(`"${FILE_NAME}" is not a seed migration name like 163_reseed_exercise_library.sql`);
 }
-if (outDir === null) {
+const DEFAULT_OUT_DIR = path.join(ROOT, 'supabase', 'migrations');
+// The refusal applies to the default directory in EVERY spelling: an explicit `--out supabase/migrations` is the same
+// directory and would rewrite an applied, immutable migration just the same (B-pass 2026-10-26).
+const normalizedDir = (p) => {
+  const r = path.resolve(p);
+  return process.platform === 'win32' || process.platform === 'darwin' ? r.toLowerCase() : r;
+};
+if (outDir === null || normalizedDir(outDir) === normalizedDir(DEFAULT_OUT_DIR)) {
   const number = String(parseInt(FILE_NAME.match(/^(\d+)_/)[1], 10));
   let applied = [];
   try {
@@ -83,7 +91,7 @@ if (outDir === null) {
   });
   if (clash) fail(`migration ${number} is already in the applied ledger and is immutable; mint the next number`);
 }
-const OUTPUT_SQL = path.join(outDir || path.join(ROOT, 'supabase', 'migrations'), FILE_NAME);
+const OUTPUT_SQL = path.join(outDir || DEFAULT_OUT_DIR, FILE_NAME);
 
 // UUID v5 namespace shared with custom_exercises + food_database seeds
 const NAMESPACE = '5a1f0b0c-9dad-11d1-80b4-00c04fd430c8';

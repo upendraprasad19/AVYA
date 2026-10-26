@@ -22945,7 +22945,7 @@
       "pull-up bar"
     ],
     "logging_type": "timed",
-    "difficulty_level": "elite",
+    "difficulty_level": "advanced",
     "suitable_for": [
       "Calisthenics"
     ],
@@ -34994,7 +34994,7 @@
       "bodyweight"
     ],
     "logging_type": "timed",
-    "difficulty_level": "elite",
+    "difficulty_level": "advanced",
     "suitable_for": [
       "Advanced",
       "Calisthenics"
@@ -37214,7 +37214,7 @@
       "bodyweight"
     ],
     "logging_type": "timed",
-    "difficulty_level": "elite",
+    "difficulty_level": "advanced",
     "suitable_for": [
       "Advanced",
       "Calisthenics"
@@ -37295,7 +37295,7 @@
       "bodyweight"
     ],
     "logging_type": "timed",
-    "difficulty_level": "elite",
+    "difficulty_level": "advanced",
     "suitable_for": [
       "Advanced",
       "Calisthenics"
@@ -50632,7 +50632,7 @@
       "vertical_pull"
     ],
     "exercise_type": [
-      "calisthenics"
+      "compound"
     ],
     "primary_muscles": [
       "Lats"
@@ -50643,8 +50643,7 @@
       "Core"
     ],
     "equipment_needed": [
-      "pull-up bar",
-      "elevated surface"
+      "machines"
     ],
     "logging_type": "bodyweight_reps",
     "difficulty_level": "beginner",
@@ -50661,16 +50660,16 @@
     "cal_per_set_est": 7.0,
     "breathing_cue": "Exhale pulling up, inhale lowering",
     "coaching_cues": [
-      "Start from a full hang, shoulders pulled down",
-      "Drive the elbows down toward the hips",
-      "Chin over the bar, lower fully controlled"
+      "Stand on the assist platform and grip the handles, palms facing away",
+      "Drive the elbows down toward the hips, chest up",
+      "Lower slowly, fully extending the arms"
     ],
     "common_mistakes": [
-      "Kipping or swinging for momentum",
-      "Stopping short of a full hang"
+      "Letting the assist do the whole rep",
+      "Stopping short of full arm extension"
     ],
     "warmup_protocol": "",
-    "pro_tip": "Use the legs only as much as needed.",
+    "pro_tip": "Use less assistance each week until you can do unassisted reps.",
     "is_indian_context": false,
     "indian_alternative": "",
     "source": "exercise-gif-set",
@@ -50687,7 +50686,6 @@
       "Lats (Width)"
     ],
     "equipment_tier": [
-      "basic_gym",
       "full_gym"
     ],
     "standard_swap": "",
@@ -52256,7 +52254,7 @@
       "bodyweight"
     ],
     "logging_type": "bodyweight_reps",
-    "difficulty_level": "elite",
+    "difficulty_level": "advanced",
     "suitable_for": [
       "Calisthenics"
     ],
@@ -52288,7 +52286,7 @@
       "shoulder",
       "wrist"
     ],
-    "is_bilateral": true,
+    "is_bilateral": false,
     "cns_demand": 4,
     "target_focus": [
       "Mid Chest",
@@ -60717,6 +60715,8 @@
     "is_active": true,
     "is_foundational": false,
     "injury_contraindications": [
+      "hip",
+      "knee",
       "lower_back",
       "shoulder",
       "wrist"
@@ -61001,7 +61001,7 @@
       "bodyweight"
     ],
     "logging_type": "bodyweight_reps",
-    "difficulty_level": "elite",
+    "difficulty_level": "advanced",
     "suitable_for": [
       "Calisthenics"
     ],
@@ -61696,7 +61696,7 @@
       "bodyweight"
     ],
     "logging_type": "timed",
-    "difficulty_level": "elite",
+    "difficulty_level": "advanced",
     "suitable_for": [
       "Calisthenics"
     ],

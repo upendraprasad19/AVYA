@@ -261,6 +261,38 @@ class _Temp {
 ProcessResult _importer(List<String> args, String why, {String script = _importerRel}) =>
     runSpawn('node', [script, ...args], why: why, report: (_) {});
 
+// B-pass (reviewer A, 2026-10-26): three field-agreement checks the review found broken on shipped rows.
+//   difficulty_level: the library vocabulary is beginner / intermediate / advanced (getFormCues.ts documents exactly those
+//     three); seven new rows shipped "elite".
+//   is_bilateral: a single-arm / single-leg / one-arm / one-leg row is false on every other new row; G0725 shipped true.
+//   same machine: two rows whose pictures show the SAME machine must agree on the equipment; G1432 shipped a pull-up bar and
+//     a box while G1431 (read at triage) correctly shipped the weight-stack assist machine.
+const _difficultyVocab = {'beginner', 'intermediate', 'advanced'};
+final _singleLimbName = RegExp(r'single[- ](arm|leg)|one[- ](arm|leg)', caseSensitive: false);
+const _sameMachinePairs = <(String, String)>[('G1431', 'G1432')];
+
+List<String> _difficultyViolations(List<Map<String, dynamic>> lib) => [
+      for (final r in lib)
+        if (!_difficultyVocab.contains(r['difficulty_level'])) '${r['id']} ${r['name']} has difficulty_level ${r['difficulty_level']}',
+    ];
+
+List<String> _singleLimbViolations(List<Map<String, dynamic>> rows) => [
+      for (final r in rows)
+        if (_singleLimbName.hasMatch('${r['name']}') && r['is_bilateral'] != false) '${r['id']} ${r['name']} is_bilateral ${r['is_bilateral']}',
+    ];
+
+List<String> _sameMachineViolations(List<Map<String, dynamic>> lib) {
+  final out = <String>[];
+  for (final (a, b) in _sameMachinePairs) {
+    final x = _byId(lib, a);
+    final y = _byId(lib, b);
+    for (final k in ['equipment_needed', 'equipment_tier']) {
+      if (jsonEncode(x[k]) != jsonEncode(y[k])) out.add('$a $k ${jsonEncode(x[k])} vs $b ${jsonEncode(y[k])}');
+    }
+  }
+  return out;
+}
+
 void main() {
   late List<Map<String, dynamic>> lib;
   late List<Map<String, dynamic>> rows;
@@ -462,6 +494,39 @@ void main() {
       final a = _deepRows(lib);
       _byId(a, 'E274')['target_focus'] = ['Upper Back'];
       expect(_e274Violations(a), isNotEmpty);
+    });
+
+    test('difficulty_level is beginner, intermediate or advanced on every library row', () {
+      expect(_difficultyViolations(lib), isEmpty);
+    });
+
+    test('MUTATION: "elite" on one new row is a violation', () {
+      final a = _deepRows(lib);
+      _newRows(a).first['difficulty_level'] = 'elite';
+      expect(_difficultyViolations(a), isNotEmpty);
+    });
+
+    test('a single-arm, single-leg, one-arm or one-leg new row is not bilateral', () {
+      expect(_singleLimbViolations(rows), isEmpty);
+      expect(rows.where((r) => _singleLimbName.hasMatch('${r['name']}')).length, greaterThan(60), reason: 'the check must cover the single-limb rows');
+    });
+
+    test('MUTATION: G0725 Single Arm Push Up back to bilateral is a violation', () {
+      final a = _deepRows(lib);
+      _byId(a, 'G0725')['is_bilateral'] = true;
+      expect(_singleLimbViolations(_newRows(a)), isNotEmpty);
+    });
+
+    test('rows that show the same machine agree on equipment and tier (G1431 and G1432, the weight-stack assist machine)', () {
+      expect(_sameMachineViolations(lib), isEmpty);
+      expect(_byId(lib, 'G1432')['equipment_needed'], ['machines']);
+      expect(_byId(lib, 'G1432')['equipment_tier'], ['full_gym']);
+    });
+
+    test('MUTATION: G1432 back to a pull-up bar and a box is a violation', () {
+      final a = _deepRows(lib);
+      _byId(a, 'G1432')['equipment_needed'] = ['pull-up bar', 'elevated surface'];
+      expect(_sameMachineViolations(a), isNotEmpty);
     });
   });
 

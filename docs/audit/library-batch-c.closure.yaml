@@ -23,13 +23,13 @@ findings:
     title: "Source file (708 rows), picture triage, identity reads, scope contract C1 to C6"
     terminal_state: closed_in_commit
     commit: 8a432f38
-    verification: "scripts/data/library_batch_c_source.json, scripts/library_batch_c_scope.js (--write, --check), test/contracts/library_batch_c_source_test.dart. 100 picture entries and 22 identity entries first-hand at this commit (the ninth picture hold, G3672, came with the injury table commit); holds at the end of the batch 79 (13 token, 4 name_collision, 53 low_confidence, 9 picture); 629 shipped; core 56 / 47 / 31 = 83 rows. A read that returned 'media removed' was discarded and redone."
+    verification: "scripts/data/library_batch_c_source.json, scripts/library_batch_c_scope.js (--write, --check), test/contracts/library_batch_c_source_test.dart. 100 picture entries and 22 identity entries first-hand at this commit (the ninth picture hold, G3672, came with the injury table commit); holds at the end of the batch 79 (13 token, 4 name_collision, 53 low_confidence, 9 picture); 629 shipped; core levels 56 / 47 / 31 (134 level slots on 83 rows). A read that returned 'media removed' was discarded and redone."
 
   - id: T2
     title: "Injury table for 629 rows (hard gate), builder, coverage test"
     terminal_state: closed_in_commit
     commit: bfcbd0bd
-    verification: "scripts/data/library_injury_additions_v15.json founder-approved 2026-10-26 ('approve all'; nine rear-delt rows tag shoulder; G0602, G0993, G0359 safe pool); safe_pool_additions 29 = 4.6 percent untagged against 11.6 percent of the library. Builder mutations: rewrite-existing reddens 3, drop safe_pool_additions reddens 2; coverage 21 and source 47 green."
+    verification: "scripts/data/library_injury_additions_v15.json founder-approved 2026-10-26 ('approve all'; nine rear-delt rows gain shoulder, four more already carried it; G0602, G0993, G0359 safe pool); safe_pool_additions 29 = 4.6 percent untagged against 11.6 percent of the original 285-row library (6.8 percent of the 914-row library). Builder mutations: rewrite-existing reddens 3, drop safe_pool_additions reddens 2; coverage 21 and source 47 green."
 
   - id: T3
     title: "Core coaching text for 14 core rows"
@@ -41,7 +41,7 @@ findings:
     title: "Importer, the 914-row library, seed v15, E274, equipment audit, pins"
     terminal_state: closed_in_commit
     commit: 0677987f
-    verification: "scripts/add_library_batch_c_v15.js --check is byte equality; library_batch_c_rows_contract_test 37 green with importer mutations; library_seed_v15_upgrade_behavioral_test; 37 row-specific equipment-audit waivers; E274 target_focus Upper Back to Mid Back (frozen reference re-recorded by id, the only kept row that changed); kV14SafePool 33 to 62; Renegade Row, Hip Adduction Machine and five thin-day personas re-pointed after a reach search, never loosened."
+    verification: "scripts/add_library_batch_c_v15.js --check is byte equality; library_batch_c_rows_contract_test 37 green with importer mutations; library_seed_v15_upgrade_behavioral_test; 36 row-specific equipment-audit waivers (37 after the B-pass added G1432's); E274 target_focus Upper Back to Mid Back (frozen reference re-recorded by id, the only kept row that changed); kV14SafePool 33 to 62; Renegade Row, Hip Adduction Machine and five thin-day personas re-pointed after a reach search, never loosened."
 
   - id: T5
     title: "Generator evidence on the 914-row library: golden, split injury sweep, baselines, reports"
@@ -84,7 +84,7 @@ findings:
     reason: "The founder looks at each picture and decides the row, then the release protocol in OI-437."
 
   - id: SHIPPED-UNCHECKED
-    title: "530 shipped rows that no picture or identity read covers (131 with a doubting word in their source note)"
+    title: "529 shipped rows that no picture or identity read covers (130 with a doubting word in their source note)"
     terminal_state: blocked_on_user
     reason: "The founder's GIF review of the shipped rows, or a first-hand image read in a session that can see images (OI-437)."
 
@@ -92,7 +92,7 @@ findings:
     title: "Retiring 7 duplicate rows lowered the uninjured scorecard and was never re-baselined"
     terminal_state: closed_in_commit
     commit: 52783c3b
-    verification: "Re-measured after C1 and re-baselined: aggregate volume 70.4 against 69.1 and the original 69.6; 90 of the 176 moved personas now above the original, 86 below (mean +0.42). Moved to closed_issues.md with the closes-oi trailer."
+    verification: "Re-measured after C1 and re-baselined: aggregate volume 70.4 against 69.1 and the original 69.6; 90 of the 176 moved personas now above the original, 86 below (mean +0.42 over the 176; mean -2.72 over the 86, worst -12.0, 74 of them uninjured). Closed on the aggregate re-measure the OI allowed, not on its Done-when steps, which are superseded because the pool changed (the closed_issues.md paragraph says so, with the per-persona figures). Moved to closed_issues.md with the closes-oi trailer."
 
   - id: OI-408
     title: "Bodyweight beginner with shoulder + lower_back injuries had 2-exercise upper days"

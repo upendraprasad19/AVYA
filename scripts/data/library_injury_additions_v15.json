@@ -2572,9 +2572,12 @@
       "variant_family": "push_up"
     },
     "G0786": {
-      "tokens": [],
+      "tokens": [
+        "hip",
+        "knee"
+      ],
       "class": "judgement",
-      "reason": "no same-family original or name rule; the source tags (lower_back+shoulder+wrist) stand",
+      "reason": "judgement: a squat-catch jerk loads the hip and knee like the loaded squats E036, E037, E088, E112 and E149 (B-pass finding, 2026-10-26); the source tags (lower_back+shoulder+wrist) stand",
       "variant_family": "olympic_jerk"
     },
     "G0794": {

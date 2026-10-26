@@ -331,6 +331,20 @@ void main() {
       expect('${r.stderr}', contains('already in the applied ledger'));
     });
 
+    // B-pass finding (reviewer A, 2026-10-26): the ledger refusal ran only when --out was ABSENT, so the explicit spelling of
+    // the default directory skipped it and rewrote the applied, immutable migration. The mirror of "default directory" is
+    // "an --out that resolves to the default directory", in every spelling.
+    test('an explicit --out that IS supabase/migrations is refused for an applied number, in every spelling, and writes nothing', () async {
+      final applied = File('supabase/migrations/162_reseed_exercise_library.sql');
+      final before = applied.readAsBytesSync();
+      for (final out in ['supabase/migrations', './supabase/migrations', 'supabase/../supabase/migrations/', Directory('supabase/migrations').absolute.path]) {
+        final r = await _generateAsync(['162_reseed_exercise_library.sql', '--out', out], 'generator, applied number, --out $out');
+        expect(r.exitCode, isNot(0), reason: '--out $out rewrote the immutable applied migration 162');
+        expect('${r.stderr}', contains('already in the applied ledger'), reason: '--out $out');
+      }
+      expect(applied.readAsBytesSync(), before);
+    });
+
     test('--out and the name work in either order; the default output directory is not touched', () async {
       final r = await _generateAsync(['--out', '${tmp.path}/order', '997_reseed_exercise_library.sql'], 'generator with --out first');
       expect(r.exitCode, 0, reason: '${r.stdout}${r.stderr}');

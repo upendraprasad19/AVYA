@@ -554,6 +554,41 @@ void main() {
       expect(_tableRows(read()).containsKey(id), isTrue);
     });
 
+    // B-pass finding (reviewer A, 2026-10-26): the builder read the sibling pool from the WHOLE library file. That was
+    // right at commit 3 (only E rows) and wrong from commit 5 on (the file also holds the shipped G/N rows, and the row
+    // being built is one of them), so a from-scratch build or a `--drop` and re-run disagreed with the independent
+    // original-rows-only recomputation in test/helpers/library_injury_floor.dart.
+    test('a from-scratch build reproduces every non-judgement row of the committed table (siblings are ORIGINAL rows only)', () {
+      final fresh = '${tmp.path}/fresh.json'; // absent: the builder builds EVERY shipped row
+      final r = _builder(['--table', fresh], 'builder from-scratch build against the committed library');
+      expect(r.exitCode, 0, reason: '${r.stdout}${r.stderr}');
+      final built = _tableRows(_readMap(fresh));
+      final committed = _tableRows(_readMap(_tableRel));
+      final decided = committed.entries.where((e) => (e.value as Map)['class'] != 'judgement').toList();
+      expect(decided.length, greaterThan(500), reason: 'the comparison must cover the floor, majority, family and twin rows');
+      final diffs = <String>[];
+      var droppedRows = 0;
+      for (final e in decided) {
+        final b = built[e.key] as Map<String, dynamic>?;
+        final c = e.value as Map<String, dynamic>;
+        if (b == null) {
+          diffs.add('${e.key}: not built');
+        } else if ('${c['reason']}'.contains(' dropped (')) {
+          // A founder-dropped majority token: the committed reason is the built reason plus the recorded drop, and the
+          // committed tokens are the built tokens minus the dropped one.
+          droppedRows++;
+          final tokensOk = _strs(c['tokens']).every(_strs(b['tokens']).contains) && _strs(c['tokens']).length < _strs(b['tokens']).length;
+          if (!'${c['reason']}'.startsWith('${b['reason']}; ') || !tokensOk || c['class'] != b['class']) {
+            diffs.add('${e.key}: built ${jsonEncode(b)} vs committed ${jsonEncode(c)}');
+          }
+        } else if (jsonEncode(b) != jsonEncode(c)) {
+          diffs.add('${e.key}: built ${jsonEncode(b)} vs committed ${jsonEncode(c)}');
+        }
+      }
+      expect(droppedRows, greaterThan(0), reason: 'the founder-drop branch must be exercised');
+      expect(diffs, isEmpty, reason: '${diffs.length} rows differ, first: ${diffs.take(3).join(' | ')}');
+    });
+
     test('--out writes elsewhere and leaves the --table input untouched', () {
       final before = File(copyPath).readAsStringSync();
       final out = '${tmp.path}/out.json';

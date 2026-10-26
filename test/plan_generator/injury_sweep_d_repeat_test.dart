@@ -3,7 +3,7 @@ library;
 
 // Injury re-check sweep, block 5 of 5: REPEAT. Phase 1 is generated uninjured, then phase 2 with the injury and that plan's
 // names pinned, at 3, 4, 5 and 6 days (the repeat-phase path, where a now-unsafe pin is dropped with no refill,
-// exercise_selector.dart buildPinnedDays). See injury_floor_sweep_test.dart for the five blocks and
+// exercise_selector.dart buildPinnedDays). See injury_sweep_b_singles_test.dart for the five blocks and
 // test/helpers/injury_floor_sweep_lib.dart for the harness and gates.
 
 import 'package:flutter_test/flutter_test.dart';

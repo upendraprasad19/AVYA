@@ -216,6 +216,7 @@ const acceptedMentions = <String, String>{
   'G1685|doorway': 'pro_tip: "hold a pole or door frame if balance is shaky" - an optional balance aid',
   'G1587|towel': 'pro_tip: "sit on a folded towel to tilt the pelvis" - an optional aid (first frame: seated wide-angle pose on the floor)',
   'G0017|pull-up bar': 'the name is the assisted pull-up MACHINE (first frame: kneeling pad, overhead handles, weight stack); no free bar is needed',
+  'G1432|pull-up bar': 'the name is the assisted pull-up MACHINE (picture 1432_Standing_Pullup.gif: standing on the platform of a weight-stack assist machine, the same machine as G1431); no free bar is needed',
   'G0613|towel': 'pro_tip: "use a towel or strap if you cannot reach the foot" - an optional aid',
   'G3544|bench': 'the row declares `elevated surface` (first frame: forearm on the edge of a bench); a chair or step serves, as for E125',
   'G2329|towel': 'pro_tip: "sit on a folded towel if the hips are tight" - an optional aid',

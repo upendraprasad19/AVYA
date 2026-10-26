@@ -1,8 +1,8 @@
 @Timeout(Duration(minutes: 10))
 library;
 
-// Injury re-check sweep, block 4 of 5: PAIRS, the same 15 pairs as injury_floor_sweep_pairs_test.dart, 4 and 6 days, phase 1.
-// See injury_floor_sweep_test.dart for the five blocks and test/helpers/injury_floor_sweep_lib.dart for the harness and gates.
+// Injury re-check sweep, block 4 of 5: PAIRS, the same 15 pairs as injury_sweep_a_pairs_test.dart, 4 and 6 days, phase 1.
+// See injury_sweep_b_singles_test.dart for the five blocks and test/helpers/injury_floor_sweep_lib.dart for the harness and gates.
 // No day is thin (under 3 exercises) in any tier: this block used to be ratcheted at 6 scan days (the 6-day plans of
 // shoulder + lower_back, bodyweight, beginner, OI-408) until Batch C1's rows.
 

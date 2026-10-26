@@ -5,8 +5,8 @@ batch: library-batch-c
 status: fixed
 blast_radius: platform
 symptom: >-
-  The exercise library held 285 rows, and 83 core-list slots (56 beginner, 47
-  intermediate, 31 advanced) that the B1 core-list pool needs were missing from
+  The exercise library held 285 rows, and 83 core-list rows (134 level slots: 56
+  beginner, 47 intermediate, 31 advanced) that the B1 core-list pool needs were missing from
   it; its flip criteria (docs/ship_dark_pending_review.yaml) wait on them.
   Batch C1 adds 629 of the 708 converted sheet rows (79 held). Three problems
   had to be handled while adding them. (1) E274 Prone T Raise carried
@@ -81,8 +81,9 @@ regression_test_planned:
   - test/contracts/library_batch_c_source_test.dart
   - test/contracts/library_seed_v15_upgrade_behavioral_test.dart
   - test/plan_generator/generator_golden_test.dart
-  - test/plan_generator/injury_floor_sweep_test.dart
-  - test/plan_generator/injury_floor_sweep_pairs_test.dart
+  - test/plan_generator/injury_sweep_b_singles_test.dart
+  - test/plan_generator/injury_sweep_a_pairs_test.dart
+  - test/contracts/library_new_row_pick_violations_test.dart
   - test/plan_generator/core_list_pool_gate_test.dart
   - test/contracts/exercise_library_cloud_seeded_test.dart
 related_bugs:
@@ -98,10 +99,10 @@ recurrence: |
   that adds rows starts from nothing. Known-good fix applied and moved to the
   point of ingestion: the tag table is decided per injury by movement pattern
   with no "kept safe" list (feedback_injury_tag_per_injury_no_kept_safe, founder
-  2026-10-23 and again 2026-10-26: nine rear-delt rows tag shoulder, three are
+  2026-10-23 and again 2026-10-26: nine rear-delt rows gain shoulder from the table (four more already carry it), three are
   safe-pool), the safe pool grows only by named, founder-approved additions
   (29, kV14SafePool 33 to 62, 4.6 percent of the new rows against 11.6 percent of
-  the library), and a library-side test recomputes the floor, family and twin
+  the original 285-row library and 6.8 percent of the 914-row library after this batch), and a library-side test recomputes the floor, family and twin
   tokens independently of the table. New this time: the same check runs on what
   the real generator PICKS (golden R6 (ii)), so a tag lost after import is seen
   where users see it. The identity class (G0007, G0980, G0578) is new: the sheet
@@ -118,7 +119,7 @@ touched_layers_checked:
   - { tier: 9, name: storage_buckets, status: not_applicable, evidence: "No storage object is added; 758 library rows have no artwork in the bundle (pinned by the plate and library data tests)." }
   - { tier: 10, name: secrets_api_keys, status: not_applicable, evidence: "No secret involved." }
   - { tier: 11, name: external_services, status: not_applicable, evidence: "No external service involved." }
-  - { tier: 12, name: client_server_contract, status: verified, evidence: "Real PlanGenerator.generateV4, flag OFF, on the 914-row library: the five injury sweep files (7,200 runs, 21 tests) have 0 unsafe, unresolved, unperformable, duplicate, empty, one-exercise and thin days; generator golden re-recorded (998 personas, 943 changed, 50 distinct new ids picked by 939 personas, top pick G0380 Dumbbell Rear Lateral Raise x589 = 59.0 percent); scorecard gate, core-list gate and B2 gate green on the final library. Cloud side: exercise_library_cloud_seeded_test has the generator and rollback assertions; three of its checks stay red until the migration file exists." }
+  - { tier: 12, name: client_server_contract, status: verified, evidence: "Real PlanGenerator.generateV4, flag OFF, on the 914-row library: the five injury sweep files (7,200 runs, 22 tests) have 0 unsafe, unresolved, unperformable, duplicate, empty, one-exercise and thin days; generator golden re-recorded (998 personas, 943 changed, 50 distinct new ids picked by 939 personas, top pick G0380 Dumbbell Rear Lateral Raise x589 = 59.0 percent); scorecard gate, core-list gate and B2 gate green on the final library. Cloud side: exercise_library_cloud_seeded_test has the generator and rollback assertions; three of its checks stay red until the migration file exists." }
 impact_analysis: >-
   Every OFF plan can change because 629 rows join the cascade's pool: 943 of the
   998 golden personas differ (grid bodyweight 240, home_dumbbells 240,
@@ -147,11 +148,12 @@ Three separate things, one batch.
 ## Decisions that are not obvious from the diff
 
 - **Held, not dropped.** 79 of 708 stay in `scripts/data/library_batch_c_source.json` with a `hold` entry and an owner: 13 token (Batch D), 4 name_collision (G1368 G1489 G2567 G0474, Batch C2), 53 low_confidence and 9 picture (the founder's GIF review). The importer drops every source id and re-adds only the non-held ones, so a hold placed after a first import removes the row on the next run. Release steps: OI-437.
-- **The shipped residual is not zero.** 530 of the 629 shipped rows have neither a picture record nor an identity record (131 of them with a doubting word in their source note). The triage criterion selected 125 reads. This is stated here and in OI-437 instead of being left implicit.
-- **Tag table.** 629 rows, founder-approved (`approve all`, then nine rear-delt rows tagged `shoulder`, three safe pool). Two majority-token calls were shown to the founder and approved: eight lying or seated leg raises lost a majority `shoulder` (the originals are hanging or dragon-flag moves), and G0873 reverse crunch lost a majority `neck`. 29 safe-pool additions (4.6 percent untagged against 11.6 percent of the library); `kV14SafePool` 33 to 62 and asserted equal to `safe_pool_additions`.
+- **The shipped residual is not zero.** 529 of the 629 shipped rows have neither a picture record nor an identity record (130 of them with a doubting word in their source note). The triage criterion selected 122 reads (100 picture, 22 identity); 126 records exist (104 picture, 22 identity): three extra picture records come from the equipment audit and one, G1432, from the B-pass (it showed the same weight-stack machine as G1431). This is stated here and in OI-437 instead of being left implicit.
+- **Tag table.** 629 rows, founder-approved (`approve all`, then nine rear-delt rows that gained `shoulder` from the table, three safe pool; four more already carried it). Two majority-token calls were shown to the founder and approved: eight lying or seated leg raises lost a majority `shoulder` (the originals are hanging or dragon-flag moves), and G0873 reverse crunch lost a majority `neck`. 29 safe-pool additions (4.6 percent untagged against 11.6 percent of the original 285-row library and 6.8 percent of the 914-row library); `kV14SafePool` 33 to 62 and asserted equal to `safe_pool_additions`.
 - **Smith machine rows are `full_gym` only.** 39 new rows use the `smith machine` token and the tier table puts it in `full_gym` alone (`equipment_vocab.dart`); the comment there that said 0 rows use it is corrected.
+- **Traded proofs (named so no one thinks they were kept).** Re-pointing the thin-day personas and the removal of the E121 Renegade Row and Hip Adduction Machine generator-level cases are not extra coverage: with the 914-row library no persona reaches E121 or the hip adduction machine any more (a reach search over 3 goals x 4 tiers x 3 levels x 4 day counts found no plan holding E121, and one over 36 tier, level and day combinations found none for the hip adduction machine), so the real-generator proof that an E121 wrist or shoulder tag removes it from a plan, and the equivalent for the hip adduction machine, are replaced by their `queryV4` level proofs. The generator-side cover that remains is golden R6 (ii) on the new rows and the sweep. Five thin-day personas were re-pointed (for example `shoulder` to `shoulder+wrist`, `knee+hip` to `shoulder+elbow`), each after a reach search and with its precondition asserted first.
 - **Core text.** 14 core rows had their coaching cues rewritten from a reviewed file, not taken from the sheet.
-- **Equipment audit.** 37 row-specific waivers in `scripts/equipment_audit_lib.dart` (each with its reason), 9 cue fixes made in the source file, 3 picture records; the audit id regex is `^[EGN]\d{2,4}$`.
+- **Equipment audit.** 37 row-specific waivers in `scripts/equipment_audit_lib.dart` (each with its reason; 36 at the reviewed SHA, and the B-pass added G1432's when its name still said pull up on a machine row), 9 cue fixes made in the source file, 3 picture records; the audit id regex is `^[EGN]\d{2,4}$`.
 - **Recorded exceptions.** Ten rows that break the family rule (`_meta.family_exception`) and three groups of identical cues that are correct (`_meta.identical_cues_ok`) each carry a reason in the source file; none is silent.
 
 ## Measured
@@ -171,7 +173,7 @@ Real `PlanGenerator.generateV4`, B1 flag OFF unless stated.
 | Core pool gate: emergencyAnyLevel, golden personas / multi-injury runs / refilled runs | 2 / 74 / 34 | 2 / 58 / 34 (OI-436) |
 | B2 gate (hard zeros, 7 tests) | green | green; days over the user's minutes 3,965 to 4,292 of 33,204 |
 
-**Solo timings, same machine, back to back:** golden 160 s to 242 s; core pool gate 18 s to 39 s (wall); scorecard gate 14 s to 25 s; B2 gate 135 s to 327 s; injury sweep 754 s as one file to 1,922 s as one file, which is why it is five files of four tests each now (worst test 3:06 solo, pairs 4/6 days, bodyweight). On the CI partition (`ci_test_partition.dart`: sorted files, index modulo 4) the pairs 4/6 block, the singles block and the B2 gate land on one shard (shard 4). CI speed relative to solo is not measured, so the draft PR's shard times decide whether a rename for balance is needed (plan stop rule: a shard over 18 minutes).
+**Solo timings, same machine, back to back:** golden 160 s to 242 s; core pool gate 18 s to 39 s (wall); scorecard gate 14 s to 25 s; B2 gate 135 s to 327 s; injury sweep 754 s as one file to 1,922 s as one file, which is why it is five files now: four tier tests each, plus two more in the singles file that pin the sweep's lists and read all five files for the tier loop (22 tests; worst test 3:06 solo, pairs 4/6 days, bodyweight). **CI partition (`ci_test_partition.dart`: sorted files, index modulo 4).** Under the first names (`injury_floor_sweep_*`) the pairs 4/6 block, the singles block and the B2 gate all landed on one shard (shard 4 before the origin/main merge, shard 1 after it, because main's new test files moved the indexes): 405 + 514 + 327 = 1,246 s solo, 20:46, against the 20-minute shard cap and the 18-minute stop rule. The B-pass renamed the five files `injury_sweep_a..e_*_test.dart`; the letter is a sort key, and the layout is now shard 1 repeat + B2 gate 679 s, shard 2 core gate + pairs + singles46 678 s, shard 3 thin-day + singles 547 s, shard 4 golden + pairs46 + scorecard 672 s (solo seconds of the heavy files only). Any file added before them in the sorted list re-deals them, and CI speed relative to solo is not measured, so the draft PR's four shard times still decide (stop rule: a shard over 18 minutes).
 
 **Scorecard progression, 100.0 to 62.9.** The dimension sums `default_sets` of every picked row per phase and fails a family if the total ever falls: 75 of 213 families fail it, every one at phase 1 to 2, every one by exactly one set (for example `build_muscle|basic_gym|5|intermediate` 109 to 108), because the new rows carry `default_sets` 3 (mean 3.00 over 2,183 picks) against 3.57 for the older rows (17,363 picks). It is a binary test on a selection proxy, not the periodized set count. The baselines were regenerated, the scoring was not changed, and OI-435 holds the fix.
 
@@ -182,6 +184,20 @@ Real `PlanGenerator.generateV4`, B1 flag OFF unless stated.
 | G3288 Korean Dips made pickable (bodyweight, tier 1, foundational, Beginner), G0380 loses its `shoulder` floor token, both at once | the five golden group tests redden; the (i) list names G3288 (calisthenics_skill), the (ii) list names G0380 |
 | the 629 rows deleted from the library | golden R6 (iii) reddens ("no golden persona picked any new row"); core gate R9 reddens back to the three-id set; pairs[bodyweight] and pairs 4/6[bodyweight] redden with exactly the old 2 and 6 thin scan days |
 | importer: ships a held row; ignores the table; edited cue or tag by hand; alias changed; missing table row | each reddens its own test in library_batch_c_rows_contract_test or the coverage test (control runs on clean inputs are green) |
+
+## B-pass (two fresh reviewers, 14 findings, `docs/reviews/library-batch-c-bpass.md`)
+
+One P1 and thirteen P2, all verified by the author from the files before acting. Fixed in this batch: **G1432** shipped a pull-up bar and a box for the same weight-stack assist machine G1431 shows (now `machines`, `full_gym`; a same-machine check pins the pair); the **tag builder** counted shipped new rows as "original" siblings (E-ids only now; a from-scratch build must reproduce every non-judgement row of the committed table); **G0786 Squat Jerk** gained `hip` and `knee` (founder's per-movement rule; the table was founder-approved, so the PR text says so); the **seed generator**'s applied-number refusal ignored an explicit `--out supabase/migrations`; seven rows shipped `difficulty_level "elite"` (now `advanced`, vocabulary check over all 914 rows); G0725 `is_bilateral`; the sweep now counts plan weeks with a missing day and the first sweep file pins its lists and reads all five files for the tier loop; golden R6 (iii) needs at least half the personas on a new id and `newRowPickViolations` has its own negative tests; the five sweep files were renamed `injury_sweep_a..e` to spread the heavy shard (see the timings paragraph); eight document numbers were corrected and the OI-404 closure now states it is on the aggregate.
+
+**Mutations of the B-pass tests (each applied, run, restored):**
+
+| Mutation | Result |
+|---|---|
+| builder sibling filter reverted to the whole library | the from-scratch test reddens with 506 differing rows (before the fix) |
+| generator ledger guard reverted (only when `--out` is absent) | the four-spelling test reddens, and the run overwrote the applied migration 162 in the worktree, restored with `git checkout` |
+| the repeat sweep file loops one tier instead of `kSweepTiers` | the loop-presence test reddens (expected 1 loop, found 0) |
+| `newRowPickViolations` (i) condition and floor-token check neutered | 5 of the 10 tests in `library_new_row_pick_violations_test.dart` redden |
+| G1432 back to a pull-up bar and a box; G0725 back to bilateral; one row at `elite` | each reddens its own check in `library_batch_c_rows_contract_test.dart` |
 
 ## Left open, each with an owner
 

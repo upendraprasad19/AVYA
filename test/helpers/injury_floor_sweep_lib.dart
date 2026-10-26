@@ -4,9 +4,10 @@
 // WHY SPLIT. On the 914-row library the whole sweep took 32 minutes solo (754 s on the 285-row base): singles 6:45,
 // singles 4/6 days 3:33, pairs 7:06, pairs 4/6 days 8:34, repeat 5:52. One file per block, and inside it one TEST PER
 // EQUIPMENT TIER, keeps every test near two minutes (the per-test @Timeout applies per test, and CI shards hand out WHOLE
-// files). Nothing was removed from the sweep: every injury x tier x goal x level x day-count x phase run still happens, in
-// the same order, with the same gates. The tier loop moved out of the run functions into the tests, so a tier dropped from
-// [kSweepTiers] would silently lose a quarter of the runs: injury_floor_sweep_test.dart pins the list.
+// files). Nothing was removed from the sweep: every injury x tier x goal x level x day-count x phase run still happens, with
+// the same gates (the tier loop moved out of the run functions into the tests, so the ORDER of the runs differs, the set does
+// not). A tier dropped from [kSweepTiers], or a block file that dropped its own tier loop, would silently lose a quarter of the
+// runs: injury_sweep_b_singles_test.dart pins the lists and reads all five files for the loop and the call.
 //
 // The REAL PlanGenerator.instance.generateV4, flag OFF (the path users get). The tag lookup reads
 // assets/data/exercise_library.json, the same file the generator is seeded from.
@@ -14,7 +15,8 @@
 // GATED in every block: no unsafe main pick, no unsafe warm-up / cool-down pick, no pick whose name is not a library row
 // (such a pick would be skipped silently by the tag lookup, so `unsafe == 0` could hide it), no main pick the run's
 // equipment tier cannot perform (`unperformable`, EquipmentCapability, read from the library row) and no exercise twice in
-// one day (`duplicates`); no empty day and no one-exercise day; and the scan saw days and picks at all. GATED in singles
+// one day (`duplicates`); no empty day and no one-exercise day; every scanned plan week has the day count the run asked
+// for (a day that never appears is neither empty nor thin); and the scan saw days and picks at all. GATED in singles
 // (both), pairs (both) and repeat: no day under 3 exercises ("thin"; the thin-day top-up, OI-401, takes it to 0, and the 629
 // rows of Batch C1 took the last two pairs personas, OI-408, to 0 as well). Out of scope: the cardio finisher (WorkoutDay.finisher). It takes no injuries and no screen shows it (OI-396).
 
@@ -46,7 +48,7 @@ const kSweepLevels = ['beginner', 'intermediate', 'advanced'];
 
 class SweepTally {
   int runs = 0, days = 0, picks = 0, empty = 0, thin = 0, unsafeMain = 0, unsafeWarm = 0;
-  int unresolvedMain = 0, unresolvedWarm = 0, unperformable = 0, duplicates = 0;
+  int unresolvedMain = 0, unresolvedWarm = 0, unperformable = 0, duplicates = 0, wrongDayCount = 0;
   final sizes = <int, int>{};
   final thinBy = <String, int>{};
   final oneExercise = <String>[];
@@ -55,6 +57,7 @@ class SweepTally {
   final unresolved = <String>{};
   final cannotPerform = <String>{};
   final duplicated = <String>{};
+  final wrongDays = <String>{};
 }
 
 /// Seeds the library into Hive once per test file and runs the sweep blocks. Call [install] from `main()`.
@@ -132,13 +135,19 @@ class SweepHarness {
         pinnedExercisesByDay: pins,
       );
 
-  void scan(SweepTally t, Phase p, List<String> injuries, String label) {
+  /// [dayCount] is the training days a week the run asked for: a plan week that has more or fewer days than that is
+  /// counted, so a day that never appears (neither empty nor thin, because it is not there) cannot hide.
+  void scan(SweepTally t, Phase p, List<String> injuries, String label, int dayCount) {
     t.runs++;
     // The label is `<injuries>|<tier>|...`; the capability set is what the
     // generator itself resolves for that tier with no owned items and no exclusions.
     final capability =
         EquipmentVocab.effectiveItems(label.split('|')[1], null, null);
     for (final wk in p.weekPlans.take(2)) {
+      if (wk.workoutDays.length != dayCount) {
+        t.wrongDayCount++;
+        t.wrongDays.add('$label: ${wk.workoutDays.length} days, asked for $dayCount');
+      }
       for (final day in wk.workoutDays) {
         t.days++;
         final dayNames = [for (final e in day.exercises) e.exerciseName];
@@ -218,6 +227,7 @@ class SweepHarness {
     expect(t.days, greaterThanOrEqualTo(t.runs * 6),
         reason: 'the scan saw too few days; every zero below would pass on an empty scan');
     expect(t.picks, greaterThan(0), reason: 'the scan saw no exercise at all');
+    expect(t.wrongDayCount, 0, reason: 'plan weeks whose day count is not the one asked for: ${t.wrongDays.take(10).toList()}');
     expect(t.unsafeMain, 0, reason: 'unsafe main picks: ${t.unsafe}');
     expect(t.unsafeWarm, 0, reason: 'unsafe warm-up / cool-down picks: ${t.unsafe}');
     expect(t.unresolvedMain, 0, reason: 'main picks that are not library rows: ${t.unresolved}');
@@ -250,6 +260,7 @@ class SweepHarness {
                 gen(tier: tier, goal: goal, level: level, days: d, phase: phase, injuries: [injury]),
                 [injury],
                 '$injury|$tier|$goal|$level|${d}d|p$phase',
+                d,
               );
             }
           }
@@ -272,6 +283,7 @@ class SweepHarness {
                 gen(tier: tier, goal: goal, level: level, days: d, phase: 1, injuries: pair),
                 pair,
                 '${pair.join('+')}|$tier|$goal|$level|${d}d|p1',
+                d,
               );
             }
           }
@@ -294,6 +306,7 @@ class SweepHarness {
               gen(tier: tier, goal: goal, level: level, days: d, phase: 2, injuries: [injury], pins: pins),
               [injury],
               '$injury|$tier|$goal|$level|${d}d|p2-pinned',
+              d,
             );
           }
         }

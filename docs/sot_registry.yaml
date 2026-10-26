@@ -11526,7 +11526,7 @@ concepts:
       tokens, its family rule and its twin's tokens (test/helpers/library_injury_floor.dart
       recomputes all three independently of the table); the founder approved 9 rear-delt rows
       tagged shoulder and 29 names left untagged as safe-pool additions (kV14SafePool 33 to 62,
-      4.6 percent of the new rows against 11.6 percent of the library). The tag table is
+      4.6 percent of the new rows against 11.6 percent of the original 285-row library and 6.8 percent of the 914-row library). The tag table is
       add-only and merge-preserving (scripts/build_library_injury_additions_v15.js).
     writers:
       - file: assets/data/exercise_library.json
@@ -11543,7 +11543,7 @@ concepts:
         notes: B1 Task 1b (c2d5e8, founder 2026-10-22) — E061 +knee, E070 +shoulder +elbow, E121 +wrist +shoulder, E127 +lower_back, E173 +lower_back; re-seeded by SeedService v13; behavioural proof test/contracts/injury_safety_tags_v13_behavioral_test.dart
       - file: scripts/add_library_injury_tags_v14.js
         method: UNIONs scripts/data/library_injury_additions_v14.json into injury_contraindications (sorted, canonical tokens only, refuses to remove a tag)
-        notes: v14 injury re-check (d30de7, founder 2026-10-23) — 104 rows, 148 tokens; re-seeded by SeedService v14; behavioural proof test/contracts/injury_recheck_v14_contract_test.dart + library_seed_v14_upgrade_behavioral_test.dart + the injury sweep test/plan_generator/injury_floor_sweep_test.dart
+        notes: v14 injury re-check (d30de7, founder 2026-10-23) — 104 rows, 148 tokens; re-seeded by SeedService v14; behavioural proof test/contracts/injury_recheck_v14_contract_test.dart + library_seed_v14_upgrade_behavioral_test.dart + the injury sweep test/plan_generator/injury_sweep_b_singles_test.dart
       - file: scripts/add_library_batch_c_v15.js
         method: tags of a new row = sorted(raw source tags UNION scripts/data/library_injury_additions_v15.json row); builder scripts/build_library_injury_additions_v15.js is add-only (--drop to remove)
         notes: Batch C1 (c1d7a4) — 629 rows, re-seeded by SeedService v15; behavioural proof test/contracts/library_batch_c_injury_coverage_test.dart (library group, importer-skips-table mutation) + library_seed_v15_upgrade_behavioral_test.dart + the golden R6 (ii) in test/plan_generator/generator_golden_test.dart + the five injury sweep files
@@ -16962,7 +16962,7 @@ concepts:
       default ON), a length mismatch and a list with no thin day all return the same list
       instance. plan_generator.dart is not edited (rule 14). The scorecard mirrors never call the
       selector and cannot see this; the proof is the five-block sweep (block 1
-      test/plan_generator/injury_floor_sweep_test.dart, harness test/helpers/injury_floor_sweep_lib.dart)
+      test/plan_generator/injury_sweep_b_singles_test.dart, harness test/helpers/injury_floor_sweep_lib.dart)
       plus the behavioural file. The residual (a 5/6-day beginner trimmed by VolumeFilter before the
       selector) is OI-408.
     writers:

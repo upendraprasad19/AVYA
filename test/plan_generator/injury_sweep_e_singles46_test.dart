@@ -1,7 +1,7 @@
 @Timeout(Duration(minutes: 10))
 library;
 
-// Injury re-check sweep, block 2 of 5: SINGLES, 4 and 6 days, phase 1. See injury_floor_sweep_test.dart for the five blocks
+// Injury re-check sweep, block 2 of 5: SINGLES, 4 and 6 days, phase 1. See injury_sweep_b_singles_test.dart for the five blocks
 // and test/helpers/injury_floor_sweep_lib.dart for the harness and gates.
 
 import 'package:flutter_test/flutter_test.dart';
