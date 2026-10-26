@@ -16946,7 +16946,8 @@ concepts:
       Injured users only: an uninjured user, the kill-switch (configBox disable_thin_day_topup,
       default ON), a length mismatch and a list with no thin day all return the same list
       instance. plan_generator.dart is not edited (rule 14). The scorecard mirrors never call the
-      selector and cannot see this; the proof is the sweep test/plan_generator/injury_floor_sweep_test.dart
+      selector and cannot see this; the proof is the five-block sweep (block 1
+      test/plan_generator/injury_floor_sweep_test.dart, harness test/helpers/injury_floor_sweep_lib.dart)
       plus the behavioural file. The residual (a 5/6-day beginner trimmed by VolumeFilter before the
       selector) is OI-408.
     writers:

@@ -6676,21 +6676,6 @@ Past `user_daily_snapshots` stay (nothing reads a past day's `coach_notices`). D
 
 **Done when.** `_findSubstitute` skips any candidate whose `injury_contraindications` contains a canonical token for the injury (`InjuryVocab.normalize` of the body part, with the muscle test kept as a second filter). A behavioural test builds a library where the first muscle-safe candidate is tagged for the injury and asserts the planner returns the next untagged row, plus a positive control with no tag. The Edge Function tool's own description of what it swaps is checked for the same claim. Mutation: remove the tag check and the test reddens.
 
-## OI-404 — Retiring 7 duplicate library rows (ad896b42) lowered the uninjured scorecard: 164 personas, volume 69.6 to 69.2, never re-baselined
-
-- **Status**: OPEN
-- **Blocked on**: none
-- **Verified**: 2026-10-24 - regenerated `test/plan_generator/generate_baseline.dart` with the CURRENT engine and only the library file swapped: library at `8ef89153` (the baseline's own commit) reproduces the committed baseline exactly (0 of 606 personas moved); library at `4514cf0c` also 0; library at `ad896b42` moves 165 (164 uninjured; all 165 lower on `volume`, 155 lower on `overall`, none higher). Nothing between those two library commits touches the score.
-- **Identified**: 2026-10-24 · filed via mint_oi.sh from branch `library-injury-recheck`
-
-**The defect.** Commit `ad896b42` (2026-10-22, Batch A: "retire 7 duplicate rows into their twins; aliases, seed prune, v12") lowered the scorecard of uninjured personas and nobody re-baselined. The retired rows (kept twin in brackets): E241 [E016 Close Grip Bench Press], E240 [E097 Overhead Tricep Cable Extension], E225 [E107 Hip Abduction Machine], E249 [E176 V-Up], E165 [E216 Standing Quad Stretch], E167 [E219 Cross-body Shoulder Stretch], E168 [E220 Chest Doorway Stretch].
-
-**Measured (the 165 moved personas, committed baseline vs the library at `ad896b42`).** `volume` mean -1.53 (all 165 lower, none higher); `coverage`, `balance` and `realism` unchanged; `overall` mean -0.26 (worst -0.6, e.g. `build_muscle | home_dumbbells | 3d | beginner | p6`; the moved personas are phases p1, p2 and p6). The aggregate `volume` read 69.6 in the committed baseline and 69.2 fresh.
-
-**Why it was invisible.** `scorecard_gate_test.dart` only enforces no-regression ceilings against the baseline's AGGREGATE (`overall >= baseline - 0.05`, total fallback picks `<=`), and a fall of 0.0 to 0.1 in the aggregate sits under that tolerance. The d30de7 injury re-check refreshed `baseline_scorecard.json` and `baseline_plans.md` (its own effect is 12 injured personas), which also absorbed this older drift. Without this entry the decline would be unrecorded.
-
-**Done when.** (1) Say which of the seven retired rows the generator was picking for the moved personas (re-run the 165 with the pre-retirement library and diff the day lists). (2) Decide, with the founder, whether the volume loss is intended (a twin that fills the same slot with fewer sets or a different `rep_range`) or a defect (restore a twin's `default_sets`/`rep_range`, or carry the retired row's role in the kept twin). (3) If it is a defect, fix it with a test that fails on the library at `ad896b42` and passes after; if it is intended, record that here and in the baseline's header so the next refresh is not a surprise. Batch C's extra core rows may remove it anyway; re-measure after Batch C either way.
-
 ## OI-405 — deploy_via_api.js leaves a dirty tree after EVERY deploy: the payload-archive prune deletes tracked files and adds untracked ones, and the archive policy contradicts itself (disposable per the tool header, deploy record per OI-142)
 
 - **Status**: OPEN
@@ -6720,19 +6705,6 @@ Past `user_daily_snapshots` stay (nothing reads a past day's `coach_notices`). D
 **What.** CLAUDE.md 4.6 step 4: the old path is deleted in the batch that rolls the gate; here the gates default ON (founder decision 2026-10-24), so the "roll" is the live check, and the deletion is tracked here instead of as an intention (the OI-374 precedent). Delete: the switch reads, the `else` / switch-on branches (the 502-without-reread in the webhook; the tolerant promo path in `create-razorpay-order`; the `.single()` path in `validate-promo`), the switch-ON goldens and the frozen `validate_promo_origin_main.ts.txt` fixture if nothing else reads it, the two `SECRET_INVENTORY.md` rows, and the payment.md mentions.
 
 **Done when.** Both live checks above are recorded; the deletion lands with its tests; neither secret is set in the Dashboard. Blast radius: `catastrophic` (payment functions).
-
-## OI-408 — Bodyweight beginner with shoulder + lower_back injuries has 2-exercise upper days (Plank, Dead Bug) after the thin-day top-up
-
-- **Status**: OPEN
-- **Blocked on**: upstream, a founder call. `VolumeFilter.targetCount('beginner', 5|6)` is 4 (`lib/shared/repositories/plan_engine/volume_filter.dart:19-24`), so `plan_generator.dart` hands the selector a day already trimmed to its first 4 slots, and the arm slots are gone before the top-up runs; the founder's stop rule (OI-401, option b) then ends the stages at the trimmed day's muscles, their neighbour patterns and core. `reopen_when`: the founder asks for anchors from the UNTRIMMED split (an input from `plan_generator.dart`, root CLAUDE.md rule 14) or for a last stage "any safe move".
-- **Verified**: 2026-10-24 - the OI-401 top-up's FINAL code on the real library (`injury_floor_sweep_test.dart`, 7,200 runs, flag OFF; the sweep gates it: `kPairsThinBaseline` 2, `kPairs46ThinBaseline` 6, every thin key must be `shoulder+lower_back|shoulder+lower_back`): after the top-up the only thin days left are 8 scan days = 4 runs with one short day each (5-day build_muscle, and 6-day lose_fat, strength and general_fitness; shoulder + lower_back, bodyweight, beginner), each holding `Plank, Dead Bug`. Under the generator's own bodyweight capability set the library holds about 22 Beginner rows free of shoulder and lower_back tags (a reviewer's count by first movement pattern: 7 knee_dominant, 5 hip_isolation, 2 core, 5 elbow_flexion, 2 elbow_extension, 1 shoulder_isolation; 16 under the narrower `{none, bodyweight}` set), including 5 biceps and 2 triceps rows (the row counts are the plan review's, not re-run on the final code).
-- **Identified**: 2026-10-24 · filed via mint_oi.sh from branch `thin-day-topup`
-
-**The defect.** After the OI-401 top-up (`ExerciseSelector.topUpDays`), a bodyweight beginner with shoulder + lower_back injuries on a 5- or 6-day upper-body day still ends with two exercises, Plank and Dead Bug. The library is not empty for that user; the stages never reach its arm rows.
-
-**Three ways to change it, none decided.** (1) Pass the untrimmed split's anchors to the selector (needs a `plan_generator.dart` change, rule 14, the founder's OK). (2) Add a last stage "any safe move" (an upper-body day would then hold leg work). (3) Batch C rows for the day's own muscles.
-
-**Done when.** The founder picks one, it is built with a regression test, and `kPairsThinBaseline` and `kPairs46ThinBaseline` in `test/plan_generator/injury_floor_sweep_test.dart` go to 0.
 
 ## OI-409 — Both payment writers capture an authorized payment before checking that its amount matches a plan, and the webhook cannot tell an app payment from a website payment on the shared Razorpay account
 
@@ -7118,3 +7090,29 @@ Filed by the sync-storm-first-sweep batch (A1 = W1 migrator fix, W2 save progres
 
 **Done when.** A widget test that dismisses the sheet while a delayed `validate-promo` answer is pending and sees no exception; mutate the guard and watch it go red.
 
+
+## OI-435 — Scorecard progression dimension is a binary one-set proxy: 75 of 213 families fail it on the 914-row library (each by 1 set at phase 1 to 2), so progression fell 100.0 to 62.9 and overall 86.1 to 81.1 with no user-visible change
+
+- **Status**: OPEN
+- **Blocked on**: none
+- **Verified**: 2026-10-26 - by running the scorecard matrix on the Batch C1 tree and a throwaway probe over the same plans (output kept with the batch's evidence, not committed). `plan_scorecard.dart:287-321` (`computeProgression`) groups the personas into families `goal|equipment|days|experience|injury`, sums the library `default_sets` of every picked exercise per phase (1, 2, 6) and scores the family 100 only if the totals never fall (tolerance 0.001), else 0. On the 285-row library every family scored 100 (0 of 606 personas at 0). On the 914-row library 225 of 606 personas score 0, which is 75 of 213 families, and every failure is the phase 1 to phase 2 step. The sizes: `build_muscle|home_dumbbells|3|intermediate` 82 to 81 sets, `build_muscle|basic_gym|3|intermediate` 87 to 86, `build_muscle|basic_gym|5|beginner` 75 to 74, `build_muscle|basic_gym|5|intermediate` 109 to 108: one set in a hundred, and phase 6 then rises by 22 to 66 sets over phase 2 in those four families.
+- **Identified**: 2026-10-26 · filed via mint_oi.sh from branch `library-batch-c`
+
+**The defect.** The scorecard's `progression` dimension is a binary test on a proxy. The proxy is the sum of each picked row's `default_sets`, which is what the selector picks, not the set count the periodization prescribes (`volume_titration.dart:43-46` says the same of the volume bands: the scorecard scores "a `default_sets` selection proxy"). It moved when the library grew for a reason that has nothing to do with progression: the 629 new rows carry `default_sets` 3 (mean 3.00 over the 2,183 picks the matrix makes of them) while the older rows the matrix picks average 3.57 over 17,363 picks, and in phase 2 (when `foundationalOnly` ends) one 3-set row displaces one 4-set row. The result is `progression` 100.0 to 62.9 and `overall` 86.1 to 81.1, from this dimension alone: over the other five dimensions 400 personas rose and 118 fell, `coverage` +0.2, `balance` 0.0, `volume` +1.3, `realism` +5.8, fallback picks 2,864 to 1,679. Batch C1 regenerated `baseline_scorecard.json` and `baseline_plans.md` with these numbers so the gate (`scorecard_gate_test.dart`, `overall >= baseline - 0.05`) passes against an honest baseline; it did not change the scoring.
+
+**Why it matters.** A baseline whose `progression` is 62.9 hides the next real progression regression under a number already low, and `overall` is the figure the gate watches. No user-visible change was found: the matrix cannot see the real periodization, and the real engine's weekly sets come from the wave, not from `default_sets` sums.
+
+**Fix shape.** Score the family on the prescribed sets (the `PlannedExercise.sets` after periodization, which the matrix does not run) or give the test a tolerance that a one-set swap cannot cross (for example, a fall of more than 2 percent of the week's sets), then re-baseline and show `progression` back near 100 on the 914-row library.
+
+**Done when.** The scorer is changed; a test builds a family whose phase 2 total is 10 percent below phase 1 and shows it scores 0, and the 75 one-set families score 100; `baseline_scorecard.json` is regenerated and the diagnose doc of that batch names the before and after. Blast radius: `feature` (test tooling only).
+
+## OI-436 — B1 core-list flip criteria still unmet after Batch C1: emergencyAnyLevel in 2 golden personas and 58 of 576 multi-injury runs, refilled in 34 of 576
+
+- **Status**: OPEN
+- **Blocked on**: upstream, the `enable_core_list_pool` flip review (`docs/ship_dark_pending_review.yaml`). Batch C1 adds rows and tags only; B1 stays OFF and no flag changed. `reopen_when`: that flip review, or a library batch that adds bodyweight shoulder-safe rows for the 4-day intermediate build.
+- **Verified**: 2026-10-26 - by running `WRITE_CORE_LIST_REPORT=1 TZ=Asia/Kolkata flutter test test/plan_generator/core_list_pool_gate_test.dart` on the Batch C1 tree (914 rows), compared with the report committed at `HEAD` (285 rows): the golden-persona `emergencyAnyLevel` personas are the same 2 (`injury|shoulder|bodyweight|build_muscle|4d|intermediate|p1` and `p2`); the multi-injury sweep (576 runs, every pair of knee / shoulder / lower_back / wrist) went from `emergencyAnyLevel` in 74 runs to 58 and stayed at `refilled` in 34; the retired rows in the built lists of that sweep went from E261, E234 to E144, E261, E254, E294, E271, E234; skill and olympic rows: none in either. The hard zeros of the gate (998 personas, the file's 11 tests) pass.
+- **Identified**: 2026-10-26 · filed via mint_oi.sh from branch `library-batch-c`
+
+**What.** The `enable_core_list_pool` entry in `docs/ship_dark_pending_review.yaml` lists the flip criteria: `emergencyAnyLevel` 0 after Batch C, and `refilled` 0 with no retired or skill / olympic id in the BUILT lists over the multi-injury sweep too. The plan of Batch C1 (R6 and Task 5.5) says that if `emergencyAnyLevel` stays above 0, C1 ships anyway and the gap is filed with a `reopen_when`. It stays above 0, so this is that entry. The 629 new rows moved the sweep's `emergencyAnyLevel` down by 16 runs and did not touch the shoulder-injured bodyweight 4-day intermediate persona or the 34 refilled runs.
+
+**Done when.** The flip review either adds the missing bodyweight shoulder-safe pool rows (a library batch, with the sweep re-run) or records, per remaining persona, why the emergency path is acceptable; the numbers above are re-measured on that tree and written into the flip entry. Blast radius: `feature` (ship-dark path, default OFF).

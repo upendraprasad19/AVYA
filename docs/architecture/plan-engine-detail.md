@@ -345,7 +345,7 @@ Plan `docs/plans/2026-10-24-thin-day-topup.md` (r3, two converged review rounds)
 
 **B1 ON.** The top-up is path-independent and uses the OFF-path candidate rules, also when the core-list pool is ON. Whether a top-up under B1 should be core-list-only belongs to B1's flip review (`docs/ship_dark_pending_review.yaml`, `enable_core_list_pool`).
 
-**Evidence.** `test/contracts/thin_day_topup_behavioral_test.dart` (real `generateV4` personas whose thin day is asserted first with the kill-switch set, plus direct `topUpDays` calls on a seeded library), `test/plan_engine_v4/thin_day_topup_test.dart` (pure rules), `thin_day_topup_flag_test.dart`, the five-block sweep `test/plan_generator/injury_floor_sweep_test.dart`, and the generator golden (2 keys moved).
+**Evidence.** `test/contracts/thin_day_topup_behavioral_test.dart` (real `generateV4` personas whose thin day is asserted first with the kill-switch set, plus direct `topUpDays` calls on a seeded library), `test/plan_engine_v4/thin_day_topup_test.dart` (pure rules), `thin_day_topup_flag_test.dart`, the five-block sweep (since Batch C1 five files, one test per equipment tier: `test/plan_generator/injury_floor_sweep_test.dart` is block 1, `injury_floor_sweep_singles46_test.dart`, `injury_floor_sweep_pairs_test.dart`, `injury_floor_sweep_pairs46_test.dart` and `injury_floor_sweep_repeat_test.dart` the rest, harness `test/helpers/injury_floor_sweep_lib.dart`), and the generator golden (2 keys moved).
 
 ## Session set budget (Batch B2, ship-dark `enable_session_set_budget`, DEFAULT OFF)
 

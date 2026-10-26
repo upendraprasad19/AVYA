@@ -30,6 +30,7 @@ import 'package:icanbefitter/shared/repositories/plan_engine/models.dart';
 import 'package:icanbefitter/shared/repositories/plan_engine/plan_generator.dart';
 
 import '../helpers/generator_golden_personas.dart';
+import '../helpers/library_injury_floor.dart' show builtIds;
 
 const _reportPath = 'test/plan_generator/core_list_pool_report.md';
 const _rank = {'beginner': 0, 'intermediate': 1, 'advanced': 2};
@@ -48,20 +49,18 @@ bool _retired(Map<String, dynamic> r) =>
 bool _skill(Map<String, dynamic> r) =>
     r['discipline'] == 'calisthenics_skill' || r['discipline'] == 'olympic';
 
-/// Every main-lift id the phase actually serves, both variants, every week.
-Iterable<String> builtIds(Phase p) => [
-      for (final w in p.weekPlans)
-        for (final d in w.workoutDays)
-          for (final e in d.exercises) e.exerciseId
-    ];
-
 /// Rows B1 calls retired that the thin-day top-up (OI-401) adds for an injured
-/// user, measured on the 998 golden personas (2026-10-24): the top-up reads the
-/// OFF-path candidates, not the core list (plan R9). Whether a top-up under B1
-/// should be core-list-only is the `enable_core_list_pool` flip review's
-/// question (`docs/ship_dark_pending_review.yaml`). The set is a ratchet: a NEW
-/// retired id appearing here fails the gate and wants a decision.
-const _r9TopUpRetired = {'E234', 'E261', 'E271'};
+/// user, measured on the 998 golden personas: the top-up reads the OFF-path
+/// candidates, not the core list (plan R9). Whether a top-up under B1 should be
+/// core-list-only is the `enable_core_list_pool` flip review's question
+/// (`docs/ship_dark_pending_review.yaml`). The set is a ratchet: a NEW retired
+/// id appearing here fails the gate and wants a decision.
+/// 2026-10-24 (285 rows): E234, E261, E271. 2026-10-26 (Batch C1, 914 rows):
+/// E254 Doorframe Curl joined, for shoulder-injured bodyweight 4-day
+/// intermediate builds at phases 1 and 2 (the top-up's biceps neighbour move,
+/// an elbow-only tag): the 629 new rows change which OFF-path candidates the
+/// top-up ranks first, they do not make B1 pick a retired row itself.
+const _r9TopUpRetired = {'E234', 'E254', 'E261', 'E271'};
 
 /// Splits the built ids that are retired or skill rows into the hard failures
 /// and the R9 evidence. [without] is the same persona's built ids with the
@@ -361,7 +360,9 @@ void main() {
     expect(topUpRetiredIds, _r9TopUpRetired,
         reason: 'a NEW retired id reached an injured user through the thin-day '
             'top-up under B1 ON (or a recorded one stopped): decide it at the '
-            'enable_core_list_pool flip review, then edit _r9TopUpRetired');
+            'enable_core_list_pool flip review, then edit _r9TopUpRetired. '
+            'Personas that got an id outside the recorded set: '
+            '${topUpRetired.where((e) => !_r9TopUpRetired.contains(e.split(' ').last)).toList()}');
     expect(topUpRetired, isNotEmpty);
     expect(attributionReruns, greaterThan(0),
         reason: 'the evidence above must come from attributed re-runs, not from '
@@ -530,10 +531,17 @@ void main() {
         .map((e) => e.key)
         .toList()
       ..sort();
+    final r9ById = <String, int>{};
+    for (final e in topUpRetired) {
+      r9ById.update(e.split(' ').last, (v) => v + 1, ifAbsent: () => 1);
+    }
     out
       ..writeln()
       ..writeln('## Reported, not gated (flip criteria)')
       ..writeln()
+      ..writeln('- thin-day top-up (R9) retired additions for injured users, attributed by a kill-switch re-run: '
+          '${r9ById.isEmpty ? 'none' : r9ById.entries.map((e) => '${e.key} ${byId[e.key]?['name']} ×${e.value}').join('; ')} '
+          '(${{for (final e in topUpRetired) e.split(' ').first}.length} personas)')
       ..writeln('- `emergencyAnyLevel` personas: ${emergencyKeys.length} '
           '${emergencyKeys.isEmpty ? '' : '(${emergencyKeys.join(', ')})'}')
       ..writeln('- `copied` variants: $copied')

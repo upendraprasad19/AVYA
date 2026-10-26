@@ -5,6 +5,10 @@
 // behind a copy of the builder's own logic. Used by library_batch_c_injury_coverage_test.dart and, in Task 5, by the
 // generator assertions that restrict themselves to the new ids.
 
+import 'package:icanbefitter/shared/repositories/plan_engine/models.dart';
+
+import 'injury_safe_pool.dart';
+
 /// Two new rows share a picture with a library row (the library rows' picture ids exist only in the scratch merged.json,
 /// so these pairs are a constant, not a recomputation): the new row carries at least the library row's tags.
 const Map<String, String> kTwinLibraryRow = {
@@ -76,3 +80,52 @@ List<String> twinTokens(Map<String, dynamic> row, List<Map<String, dynamic>> lib
 /// The tokens a new row MUST end with: floor, family rules and twin (the majority is a founder call, not a floor).
 List<String> requiredTokens(Map<String, dynamic> row, List<Map<String, dynamic>> lib) =>
     sortedUnique([...floorOf(row['variant_family'] as String?, lib), ...familyRuleTokens(row), ...twinTokens(row, lib)]);
+
+final RegExp _newRowId = RegExp(r'^[GN]\d');
+
+/// True for an id of a Batch C1 row (G####, N##); the original library rows are E-ids.
+bool isNewRowId(String id) => _newRowId.hasMatch(id);
+
+/// Every main-lift id the phase actually serves, both variants, every week.
+Iterable<String> builtIds(Phase p) => [
+      for (final w in p.weekPlans)
+        for (final d in w.workoutDays)
+          for (final e in d.exercises) e.exerciseId
+    ];
+
+/// Disciplines a flag-OFF plan must never serve from the new rows (R6 (i)): the OFF cascade has no structural discipline
+/// exclusion, so the new rows are kept out by data (priority_tier 3) and this loop proves it on the golden personas.
+const Set<String> kNeverPickedDisciplines = {'calisthenics_skill', 'olympic', 'plyometric'};
+
+/// R6 (i) and (ii) for ONE persona's built ids, scoped to the NEW ids: a picked new row is not a skill, olympic,
+/// plyometric, high_impact or requires_coaching row (i); it carries its original-sibling floor, family-rule and twin
+/// tokens, and one with no tags at all is a `kV14SafePool` name (ii). Returns one line per violation.
+List<String> newRowPickViolations({
+  required String personaKey,
+  required Iterable<String> builtIds,
+  required Map<String, Map<String, dynamic>> byId,
+  required List<Map<String, dynamic>> library,
+}) {
+  final safe = {for (final n in kV14SafePool) n.toLowerCase()};
+  final out = <String>[];
+  for (final id in builtIds) {
+    if (!isNewRowId(id)) continue;
+    final row = byId[id];
+    if (row == null) {
+      out.add('$personaKey picked $id, which is not in the library');
+      continue;
+    }
+    if (kNeverPickedDisciplines.contains(row['discipline']) || row['high_impact'] == true || row['requires_coaching'] == true) {
+      out.add('$personaKey (i) picked $id ${row['name']}: ${row['discipline']}, high_impact ${row['high_impact']}, '
+          'requires_coaching ${row['requires_coaching']}');
+    }
+    final have = injuryTagsOf(row);
+    for (final t in requiredTokens(row, library)) {
+      if (!have.contains(t)) out.add('$personaKey (ii) picked $id ${row['name']} without floor token $t (has $have)');
+    }
+    if (have.isEmpty && !safe.contains('${row['name']}'.toLowerCase())) {
+      out.add('$personaKey (ii) picked $id ${row['name']}: untagged and not a safe-pool name');
+    }
+  }
+  return out;
+}
