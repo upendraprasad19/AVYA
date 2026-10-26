@@ -12,8 +12,8 @@ bpass_review: docs/reviews/sync-storm-first-sweep-bpass.md
 diagnose_docs:
   - docs/diagnoses/2026-10-25-restored-device-resends-history-b9e4d7.md
 
-total_findings: 16
-closed_count: 16
+total_findings: 17
+closed_count: 17
 
 findings:
   # ── units ──────────────────────────────────────────────────────────────────
@@ -44,7 +44,7 @@ findings:
   - id: U5
     title: "runtime verification on a real device: normal window, site data cleared, server quiet; web OAuth reload vs in-app sign-in; day +1 sweep; reload mid-restore; offline first launch; request count against the 2,228 baseline (plan section 9)"
     terminal_state: blocked_on_user
-    reason: "Pending founder action: run plan section 9 in a normal browser window with site data cleared and the server quiet, plus the Android cold start, and record the request counts. The 'about 300' figure was an estimate, not a measurement."
+    reason: "Day 0 on the web PASSED on 2026-10-25 (laptop, Chrome guest window: 381 requests against the 2,228 baseline, 0 workout_log_exercises upserts, first_sweep_postponed present, no 4xx or 5xx; numbers on OI-423). Still to run by the founder: OI-348 rows S1 to S5 (live web app, no build) and A15 (phone, first AAB with PR #172)."
 
   # ── separate pieces (the plan's letters (a)-(k)); none is claimed fixed ─────
   - id: OI-416
@@ -103,3 +103,8 @@ findings:
     title: "(k) the restore records its exercise fingerprints once after its loop; a process killed or reloaded mid-restore leaves restored rows without a fingerprint (they push once)"
     terminal_state: blocked_on_user
     reason: "Removed from A1 by plan review, outside the quoted scope call; founder to schedule, with the U5 reload-mid-restore count as input. OI-426."
+
+  - id: OI-439
+    title: "a browser tab frozen during the restore (iPhone Safari app switch) fires the 45 s restore ceilings on wake: Sync paused appears and an owed retry sweep re-sends the non-workout domains"
+    terminal_state: blocked_on_user
+    reason: "Found while running the A1 device check on 2026-10-25, outside the quoted scope call; founder to schedule. OI-439."
