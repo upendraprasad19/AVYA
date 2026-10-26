@@ -60,6 +60,8 @@ verdict: pending  # → accepted | rejected (after founder triage)
 - **YYYY-MM-DD** - blast-radius <tier> - N findings; M false_alarm; tuning: <what changed, or none>.
 ```
 
+**Keep the `verdict:` line BARE once it is `accepted` (2026-10-26, Batch C1).** The merge-to-main CI job `check_plan_review_record_exists.dart` reads the review file a plan-review record cites as `bpass_review` and requires a line matching `^verdict:\s*accepted\s*$`. A trailing `# comment` on that line (as the template above shows for `pending`) fails it, and NO commit-time gate reads that field, so the first reader is CI on `main` after the merge. Put the comment in a `verdict_note:` line. Before merging a branch that carries a plan-review record, run the regex yourself against the cited file.
+
 The `## Tuning entry` section is REQUIRED (gate `scripts/check_skill_tuning_history.dart`): the heading at column 0 outside any code fence or HTML comment, and its FIRST non-blank line the dated bullet. The date equals this file's `reviewed_at`, and the blast-radius word equals the frontmatter `blast_radius` (when both are one of feature, account, platform, catastrophic). The tuning entry lives INSIDE the review file so two parallel PRs never edit the same line of a shared archive (that archive conflicted on 35 of 52 main-sync merges). `tuning-history.md` is frozen: a non-merge commit that adds a dated entry to it is blocked.
 
 ## 2. Lens set (8 lenses, fast)
