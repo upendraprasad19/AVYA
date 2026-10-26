@@ -19,9 +19,10 @@ library;
 // THE LETTER IN EACH NAME IS A CI SORT KEY, NOT A BLOCK NUMBER. .github/workflows/test.yml deals WHOLE test files to four
 // shards by their index in the sorted list (scripts/ci_test_partition.dart), so these five heavy files (solo seconds:
 // singles 514, pairs 426, pairs46 405, repeat 352, singles46 213) are spread by their NAMES. With a..e the heaviest shard
-// carries about 680 s solo (repeat + the set-budget gate on shard 1; core gate + pairs + singles46 on 2; thin-day + singles
-// on 3; golden + pairs46 + scorecard on 4); under the old names it carried about 1,250 s. Any file added to the sorted list
-// before these re-deals them, so read the four shard times on the PR rather than trusting this arithmetic.
+// carries about 680 s solo; under the old names it carried about 1,250 s. As dealt on PR #178 (the layout after the
+// new-row pick test joined the sorted list): golden + pairs46 + scorecard on shard 1; repeat + the set-budget gate on 2;
+// core gate + pairs + singles46 on 3; thin-day + singles on 4. CI wall times there: 8m48s, 7m50s, 11m01s, 8m13s. Any file
+// added to the sorted list before these re-deals them, so read the four shard times on the PR rather than trusting this.
 
 import 'dart:io';
 
