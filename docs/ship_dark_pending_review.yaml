@@ -307,14 +307,30 @@ pending:
       and does not apply the core-level rules or the community-row exclusion), so
       an injured user's topped-up day under B1 can hold a non-core-list row.
       Decide whether a top-up under B1 should be core-list-only. Measured
-      2026-10-24 (core_list_pool_gate_test.dart, 998 personas, B1 ON): the top-up
-      adds three non-core-list strength rows E234 Floor Press, E261 Bodyweight Rear
-      Delt Raise and E271 Wall Triceps Extension to shoulder-injured bodyweight and
-      home-dumbbells 4-day builds (16 build occurrences) and no skill/olympic row.
-      The gate keeps B1's own picks hard, attributes top-up additions by a re-run
-      with the top-up kill-switch set, and pins that three-id set as a ratchet
-      (_r9TopUpRetired): a fourth id fails the gate. Terminal state
+      2026-10-24 (core_list_pool_gate_test.dart, 998 personas, B1 ON, 285-row
+      library): the top-up added three non-core-list strength rows E234 Floor
+      Press, E261 Bodyweight Rear Delt Raise and E271 Wall Triceps Extension to
+      shoulder-injured bodyweight and home-dumbbells 4-day builds (16 build
+      occurrences) and no skill/olympic row.
+      Re-measured 2026-10-26 after Batch C1 (914-row library, same 998 personas,
+      B1 still OFF): four ids, E271 Wall Triceps Extension x8, E261 Bodyweight
+      Rear Delt Raise x4, E254 Doorframe Curl x4 (new) and E234 Floor Press x4,
+      in 4 personas (E254 is in the shoulder-injured bodyweight 4-day
+      intermediate build, phases 1 and 2); no skill/olympic row. The gate keeps
+      B1's own picks hard, attributes top-up additions by a re-run with the
+      top-up kill-switch set, and pins that four-id set as a ratchet
+      (_r9TopUpRetired): a fifth id fails the gate. Terminal state
       upstream_blocked, reopen_when this flag's flip review.
+      Batch C1 flip-criteria numbers (core_list_pool_report.md, committed;
+      OI-436): emergencyAnyLevel in 2 golden personas (the shoulder-injured
+      bodyweight 4-day intermediate build, phases 1 and 2; unchanged from the
+      285-row library) and in 58 of the 576 multi-injury runs (was 74); refilled
+      in 34 of 576 (unchanged); retired rows in those built lists E144, E261,
+      E254, E294, E271, E234 (was E261, E234); skill/olympic none. New for the
+      review: the 629 rows put one high-impact row into B1's ON-world picks,
+      G3582 Lunge with Jump x288 (E193 Jump Squat x676 and E066 Box Jump x1 as
+      before); requires-coaching picks none. The OFF generator picks 50 distinct
+      new ids (golden), top pick G0380 Dumbbell Rear Lateral Raise.
 
   - flag: enable_session_set_budget
     branch: session-set-budget
@@ -334,14 +350,14 @@ pending:
       in docs/audit/session-set-budget.closure.yaml (upstream_blocked, reopen_when this
       flag's flip review): (1) the co_group_limited and time_limited floors, e.g. the
       6-day 90-minute build_muscle case leaves Quads at 8 weekly sets while Glutes sits
-      at its top; (2) a 90-minute user leaves a median 27.2 minutes a day unused (founder
+      at its top; (2) a 90-minute user leaves a median 26.2 minutes a day unused (27.2 on the 285-row library) (founder
       F3: leftover time stays unused; the report does not say which of the exercise
       count, the 5-set max, the session caps or the weekly tops binds); (3) a library
       timed / distance row keeps its sets (Ruling 8), so on a 30-minute 3-day
       home_dumbbells day those rows alone can spend the whole budget and the one forced
-      lead lift runs up to 5.5 minutes over the user's minutes (7 days of 33,204);
-      (4) 12% of days run longer than the minutes by some amount (median 0.7 minutes
-      over): the model reserves warmCoolMinutes while the stored warm-up and cool-down
+      lead lift runs up to 5.5 minutes over the user's minutes (1 day of 33,204 on the 914-row library after Batch C1, 7 before);
+      (4) 12.9% of days (4,292 of 33,204; 11.9% before Batch C1) run longer than the
+      minutes by some amount (median 0.68 minutes over): the model reserves warmCoolMinutes while the stored warm-up and cool-down
       items vary (Ruling 3); (5) the lead-lift policy: protected from the week and from
       an empty day, not from the clock, so a lead lift the time cannot afford is dropped
       (0 of 9,966 allocated days in the grid); (6) a repeat phase keeps the previous

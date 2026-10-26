@@ -18,21 +18,36 @@
 // is re-runnable; any future schema-wipe is caught by the
 // supabase/migrations apply ledger pair-update rule.
 //
+// Batch C1 (library v15, 914 rows) adds: the generator CLI (`<name> [--split] [--out <dir>]`, no default name), the
+// per-row cloud-uuid check, the rollback pin (`source = 'exercise-gif-set'`), and mutations of each on the GENERATED text.
+// The tests that read the newest seed file on disk are red until that file exists (Task 7); the generator tests run now.
+//
 // See:
 //   - docs/diagnoses/2026-05-27-exercise-library-cloud-empty-ada3fb.md
 //   - scripts/seed_exercise_library.js (regenerator)
 //   - supabase/functions/_shared/tools/exercise/getFormCues.ts:65,92 (the cloud reader)
+@Timeout(Duration(minutes: 3))
+library;
 
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:uuid/uuid.dart';
 
+import '../helpers/spawn.dart';
+
 /// scripts/seed_exercise_library.js NAMESPACE: cloud ids are UUID v5 of
-/// "exercise_library|<E###>".
+/// `exercise_library|` followed by the library id (E001, G0380, N10).
 const _namespace = '5a1f0b0c-9dad-11d1-80b4-00c04fd430c8';
 String _cloudId(String libraryId) =>
     const Uuid().v5(_namespace, 'exercise_library|$libraryId');
+
+/// Rows the Batch C1 importer writes carry this `source`; it is also the rollback selector.
+const _newRowSource = 'exercise-gif-set';
+const _rollbackLine = "UPDATE exercise_library SET is_active = false WHERE source = '$_newRowSource';";
+const _generator = 'scripts/seed_exercise_library.js';
+final _tupleStart = RegExp(r"^\('[0-9a-f]{8}-", multiLine: true);
 
 /// The highest-numbered `*_*seed_exercise_library.sql` on disk.
 ///
@@ -52,6 +67,37 @@ File _newestSeedMigration() {
   seeds.sort((a, b) => num(a).compareTo(num(b)));
   return seeds.last;
 }
+
+/// Every library row has exactly one VALUES tuple carrying its cloud uuid, and no tuple is extra.
+List<String> _tupleViolations(String sql, List<Map<String, dynamic>> rows) {
+  final tupleIds = RegExp(r"^\('([0-9a-f-]{36})'", multiLine: true).allMatches(sql).map((m) => m.group(1)!).toList();
+  final want = {for (final r in rows) _cloudId(r['id'] as String): r['id'] as String};
+  final out = <String>[];
+  final seen = <String>{};
+  for (final id in tupleIds) {
+    if (!want.containsKey(id)) out.add('tuple $id is no library row');
+    if (!seen.add(id)) out.add('tuple $id appears twice');
+  }
+  for (final e in want.entries) {
+    if (!seen.contains(e.key)) out.add('${e.value} (${e.key}) has no tuple');
+  }
+  return out;
+}
+
+/// The inline rollback deactivates exactly the new rows, and the header counts them.
+List<String> _rollbackViolations(String sql, List<Map<String, dynamic>> rows) {
+  final out = <String>[];
+  final newRows = rows.where((r) => r['source'] == _newRowSource).length;
+  if (!sql.contains('-- Rollback strategy: inline')) out.add('no inline rollback strategy header');
+  if (!sql.contains('--   $_rollbackLine')) out.add('the commented rollback block does not hold the deactivation line');
+  if (!sql.contains("-- Rollback strategy: inline   -- $_rollbackLine")) out.add('the Rollback strategy header does not name the deactivation');
+  if (!sql.contains('(selects exactly the $newRows new rows;')) out.add('the header does not count the $newRows new rows');
+  return out;
+}
+
+Future<ProcessResult> _generateAsync(List<String> args, String why) =>
+    runSpawnAsync('node', [_generator, ...args], why: why, report: (_) {})
+        .timeout(const Duration(seconds: 60), onTimeout: () => throw TimeoutException('generator run timed out: $why'));
 
 void main() {
   group('exercise_library cloud seed (diagnose ada3fb)', () {
@@ -93,8 +139,7 @@ void main() {
       // Count VALUES tuples by counting opening `(` at start of a line — each
       // single-line VALUES tuple from the generator begins with `(`.
       final sql = seedFile.readAsStringSync();
-      final tupleStarts =
-          RegExp(r"^\('[0-9a-f]{8}-", multiLine: true).allMatches(sql).length;
+      final tupleStarts = _tupleStart.allMatches(sql).length;
       expect(tupleStarts, equals(expectedRows),
           reason:
               'Seed SQL must contain one VALUES tuple per bundled exercise '
@@ -105,6 +150,19 @@ void main() {
           reason:
               'Bundled exercise_library shrank below 250 entries; '
               'verify intentional curation OR investigate accidental deletion.');
+    });
+
+    // Batch C1: every shipped row, new ones included, reaches the cloud seed under the uuid the
+    // namespace gives it (a tuple count alone passes if one row is dropped and another doubled).
+    test('every library row has exactly one tuple under its cloud uuid, new rows included', () {
+      final rows = (jsonDecode(bundledSeed.readAsStringSync()) as List).cast<Map<String, dynamic>>();
+      expect(rows.where((r) => r['source'] == _newRowSource), isNotEmpty);
+      expect(_tupleViolations(seedFile.readAsStringSync(), rows), isEmpty);
+    });
+
+    test('the inline rollback deactivates exactly the new rows, and the header counts them', () {
+      final rows = (jsonDecode(bundledSeed.readAsStringSync()) as List).cast<Map<String, dynamic>>();
+      expect(_rollbackViolations(seedFile.readAsStringSync(), rows), isEmpty);
     });
 
     // Batch A (library v12): 7 rows were retired into a kept twin (merged_ids).
@@ -153,7 +211,8 @@ void main() {
           () {
         // Each UPDATE copies the kept twin's cues. Before the upsert those are
         // still the shifted text, so the order is what makes the copy right.
-        final upsertEnd = sql.indexOf('name_aliases = EXCLUDED.name_aliases;');
+        // lastIndexOf: a --split file ends the first statement earlier than the second.
+        final upsertEnd = sql.lastIndexOf('name_aliases = EXCLUDED.name_aliases;');
         final firstUpdate = sql.indexOf('UPDATE exercise_library r ');
         expect(upsertEnd, greaterThan(0));
         expect(firstUpdate, greaterThan(upsertEnd));
@@ -167,22 +226,10 @@ void main() {
         expect(bad, isEmpty);
       });
 
-      test('the header declares the row rewrite and a complete inline rollback',
-          () {
+      test('the header declares the row rewrite and an inline rollback', () {
         // supabase/migrations/CLAUDE.md: "yes" when a migration rewrites rows.
         expect(sql, contains('-- Destructive?: yes'));
         expect(sql, contains('-- Rollback strategy: inline'));
-        // Re-applying 125 alone is not an inverse: it predates name_aliases
-        // and the 126 fix to E260's equipment.
-        expect(sql, contains('re-apply supabase/migrations/125_reseed_exercise_library.sql'));
-        expect(sql, contains('re-apply supabase/migrations/126_fix_incline_dumbbell_press_equipment.sql'));
-        final holders = rows
-            .where((r) => (r['name_aliases'] as List?)?.isNotEmpty ?? false)
-            .map((r) => "'${_cloudId(r['id'] as String)}'")
-            .join(', ');
-        expect(holders.split(', ').length, 7);
-        expect(sql,
-            contains('--   3. UPDATE exercise_library SET name_aliases = NULL WHERE id IN ($holders);'));
       });
     });
 
@@ -248,6 +295,111 @@ void main() {
           reason:
               'getFormCuesTool must stay an ALL_TOOLS entry, or the '
               'cloud reader of exercise_library becomes an orphan file.');
+    });
+  });
+
+  // The generator itself, run into a temp directory (never into supabase/migrations): these are green before the
+  // migration file exists, and the mutations act on the GENERATED text.
+  group('the seed generator CLI (Batch C1): <name> [--split] [--out <dir>]', () {
+    late Directory tmp;
+    late List<Map<String, dynamic>> rows;
+    late String plain;
+    late String split;
+    setUpAll(() async {
+      tmp = Directory.systemTemp.createTempSync('seedgen_');
+      rows = (jsonDecode(File('assets/data/exercise_library.json').readAsStringSync()) as List).cast<Map<String, dynamic>>();
+      final a = await _generateAsync(['999_reseed_exercise_library.sql', '--out', '${tmp.path}/plain'], 'generator, one statement');
+      expect(a.exitCode, 0, reason: '${a.stdout}${a.stderr}');
+      final b = await _generateAsync(['--split', '998_reseed_exercise_library.sql', '--out', '${tmp.path}/split'], 'generator --split with the flag first');
+      expect(b.exitCode, 0, reason: '${b.stdout}${b.stderr}');
+      plain = File('${tmp.path}/plain/999_reseed_exercise_library.sql').readAsStringSync();
+      split = File('${tmp.path}/split/998_reseed_exercise_library.sql').readAsStringSync();
+    });
+    tearDownAll(() => tmp.deleteSync(recursive: true));
+
+    test('a run without a file name exits non-zero and writes nothing (it never falls back to an applied migration)', () async {
+      final r = await _generateAsync(const [], 'generator without a name');
+      expect(r.exitCode, isNot(0));
+      final r2 = await _generateAsync(['--out', '${tmp.path}/none'], 'generator with only --out');
+      expect(r2.exitCode, isNot(0));
+      expect(Directory('${tmp.path}/none').existsSync(), isFalse);
+    });
+
+    test('a name whose number the applied ledger records is refused unless --out redirects it', () async {
+      final r = await _generateAsync(['162_reseed_exercise_library.sql'], 'generator against an applied number');
+      expect(r.exitCode, isNot(0), reason: 'would have rewritten the immutable applied migration 162');
+      expect('${r.stderr}', contains('already in the applied ledger'));
+    });
+
+    // B-pass finding (reviewer A, 2026-10-26): the ledger refusal ran only when --out was ABSENT, so the explicit spelling of
+    // the default directory skipped it and rewrote the applied, immutable migration. The mirror of "default directory" is
+    // "an --out that resolves to the default directory", in every spelling.
+    test('an explicit --out that IS supabase/migrations is refused for an applied number, in every spelling, and writes nothing', () async {
+      final applied = File('supabase/migrations/162_reseed_exercise_library.sql');
+      final before = applied.readAsBytesSync();
+      for (final out in ['supabase/migrations', './supabase/migrations', 'supabase/../supabase/migrations/', Directory('supabase/migrations').absolute.path]) {
+        final r = await _generateAsync(['162_reseed_exercise_library.sql', '--out', out], 'generator, applied number, --out $out');
+        expect(r.exitCode, isNot(0), reason: '--out $out rewrote the immutable applied migration 162');
+        expect('${r.stderr}', contains('already in the applied ledger'), reason: '--out $out');
+      }
+      expect(applied.readAsBytesSync(), before);
+    });
+
+    test('--out and the name work in either order; the default output directory is not touched', () async {
+      final r = await _generateAsync(['--out', '${tmp.path}/order', '997_reseed_exercise_library.sql'], 'generator with --out first');
+      expect(r.exitCode, 0, reason: '${r.stdout}${r.stderr}');
+      expect(File('${tmp.path}/order/997_reseed_exercise_library.sql').existsSync(), isTrue);
+      expect(File('supabase/migrations/997_reseed_exercise_library.sql').existsSync(), isFalse);
+    });
+
+    test('one INSERT by default; --split gives two, each ending in the ON CONFLICT clause, tuples equal the JSON length', () {
+      expect('INSERT INTO exercise_library'.allMatches(plain).length, 1);
+      expect('INSERT INTO exercise_library'.allMatches(split).length, 2);
+      expect('name_aliases = EXCLUDED.name_aliases;'.allMatches(split).length, 2);
+      expect(_tupleStart.allMatches(plain).length, rows.length);
+      expect(_tupleStart.allMatches(split).length, rows.length);
+      // Each statement closes with its own conflict clause before the next one starts.
+      final firstStart = split.indexOf('INSERT INTO exercise_library');
+      final firstEnd = split.indexOf('name_aliases = EXCLUDED.name_aliases;');
+      final secondStart = split.indexOf('INSERT INTO exercise_library', firstStart + 1);
+      expect(firstStart, greaterThanOrEqualTo(0));
+      expect(firstStart, lessThan(firstEnd));
+      expect(firstEnd, lessThan(secondStart));
+      expect(_tupleViolations(split, rows), isEmpty);
+    });
+
+    test('the generated file carries the C1 header, every row uuid and the pinned rollback', () {
+      expect(plain, contains('-- Destructive?: yes'));
+      expect(plain, contains('-- Linked diagnose-doc: 2026-10-26-library-batch-c1-c1d7a4'));
+      expect(_tupleViolations(plain, rows), isEmpty);
+      expect(_rollbackViolations(plain, rows), isEmpty);
+      expect(_rollbackViolations(split, rows), isEmpty);
+    });
+
+    test('MUTATION: a dropped tuple, a doubled tuple and a foreign tuple are each a violation', () {
+      final lines = plain.split('\n');
+      final i = lines.indexWhere((l) => l.startsWith("('"));
+      final dropped = [...lines]..removeAt(i);
+      expect(_tupleViolations(dropped.join('\n'), rows), isNotEmpty, reason: 'dropped');
+      final doubled = [...lines]..insert(i, lines[i]);
+      expect(_tupleViolations(doubled.join('\n'), rows), isNotEmpty, reason: 'doubled');
+      final foreign = [...lines]..insert(i, lines[i].replaceFirst(RegExp(r"^\('[0-9a-f-]{36}'"), "('00000000-0000-5000-8000-000000000000'"));
+      expect(_tupleViolations(foreign.join('\n'), rows), isNotEmpty, reason: 'foreign uuid');
+    });
+
+    test('MUTATION: deleting the deactivation line, or pointing it at another source, is a violation', () {
+      final gone = plain.replaceAll(_rollbackLine, '');
+      expect(gone, isNot(plain), reason: 'the mutation must apply');
+      expect(_rollbackViolations(gone, rows), isNotEmpty, reason: 'line deleted');
+      final other = plain.replaceAll("source = '$_newRowSource'", "source = 'icanbefitter_seed'");
+      expect(other, isNot(plain), reason: 'the mutation must apply');
+      expect(_rollbackViolations(other, rows), isNotEmpty, reason: 'wrong selector');
+    });
+
+    test('MUTATION: a --split file that loses one conflict clause is caught by the clause count', () {
+      final broken = split.replaceFirst('name_aliases = EXCLUDED.name_aliases;', 'name_aliases = EXCLUDED.name_aliases');
+      expect(broken, isNot(split), reason: 'the mutation must apply');
+      expect('name_aliases = EXCLUDED.name_aliases;'.allMatches(broken).length, isNot(2));
     });
   });
 }

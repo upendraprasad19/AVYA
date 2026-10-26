@@ -113,7 +113,13 @@ class SeedService {
   //   wrist + shoulder, Chin Up elbow only). injury_contraindications is NOT a
   //   cloud column -> no migration. Without this bump the tags are inert for every
   //   existing install (library_seed_v14_upgrade_behavioral_test.dart).
-  static const int _exerciseLibraryVersion = 14;
+  // v15 (Batch C1, docs/plans/2026-10-25-library-batch-c-new-rows.md): the library
+  //   gains 629 rows (ids G####, N##) built from scripts/data/library_batch_c_source.json
+  //   by scripts/add_library_batch_c_v15.js, each with injury tags from
+  //   library_injury_additions_v15.json; E274 target_focus Upper Back -> Mid Back.
+  //   Nothing is removed (Batch C2). Without this bump the new rows never reach an
+  //   existing install (library_seed_v15_upgrade_behavioral_test.dart).
+  static const int _exerciseLibraryVersion = 15;
   static const String _exerciseVersionKey = 'exercise_library_version';
 
   /// Bump this integer whenever the bundled food_database.json changes

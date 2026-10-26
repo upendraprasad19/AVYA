@@ -9,103 +9,102 @@ The "precondition" hard zero checks the allocator's bookkeeping (2 x lead-lift d
 | minutes | days | level | exercises | sets | minutes with warm-up and cool-down |
 |---|---|---|---|---|---|
 | 30 | 3 | beginner | 3.0 | 9.5 | 29.4 |
-| 30 | 3 | intermediate | 4.0 | 10.0 | 30.1 |
+| 30 | 3 | intermediate | 3.0 | 10.0 | 30.1 |
 | 30 | 3 | advanced | 3.0 | 10.0 | 30.2 |
 | 30 | 4 | beginner | 4.5 | 11.5 | 29.6 |
-| 30 | 4 | intermediate | 2.0 | 8.0 | 29.6 |
+| 30 | 4 | intermediate | 2.0 | 8.0 | 29.7 |
 | 30 | 4 | advanced | 2.0 | 8.0 | 29.8 |
-| 30 | 5 | beginner | 3.0 | 10.0 | 28.7 |
+| 30 | 5 | beginner | 3.0 | 10.0 | 28.8 |
 | 30 | 5 | intermediate | 3.0 | 10.0 | 29.7 |
 | 30 | 5 | advanced | 3.0 | 10.0 | 29.6 |
-| 30 | 6 | beginner | 3.0 | 10.0 | 28.5 |
-| 30 | 6 | intermediate | 2.5 | 9.0 | 29.1 |
+| 30 | 6 | beginner | 3.0 | 9.0 | 28.5 |
+| 30 | 6 | intermediate | 3.0 | 9.0 | 29.0 |
 | 30 | 6 | advanced | 3.0 | 9.0 | 29.1 |
 | 60 | 3 | beginner | 5.5 | 19.0 | 57.3 |
-| 60 | 3 | intermediate | 7.0 | 21.0 | 59.3 |
-| 60 | 3 | advanced | 7.0 | 22.0 | 60.1 |
+| 60 | 3 | intermediate | 8.0 | 22.0 | 58.9 |
+| 60 | 3 | advanced | 7.0 | 22.0 | 60.0 |
 | 60 | 4 | beginner | 5.0 | 14.0 | 42.5 |
 | 60 | 4 | intermediate | 4.0 | 15.0 | 57.1 |
-| 60 | 4 | advanced | 4.0 | 16.0 | 58.7 |
-| 60 | 5 | beginner | 5.0 | 15.0 | 56.2 |
-| 60 | 5 | intermediate | 5.0 | 15.0 | 54.4 |
-| 60 | 5 | advanced | 5.0 | 16.0 | 55.7 |
-| 60 | 6 | beginner | 5.0 | 15.0 | 51.8 |
-| 60 | 6 | intermediate | 4.0 | 15.0 | 55.4 |
-| 60 | 6 | advanced | 5.0 | 15.5 | 56.6 |
+| 60 | 4 | advanced | 4.5 | 16.0 | 59.2 |
+| 60 | 5 | beginner | 5.0 | 16.0 | 56.2 |
+| 60 | 5 | intermediate | 5.0 | 15.0 | 55.6 |
+| 60 | 5 | advanced | 5.0 | 16.0 | 56.6 |
+| 60 | 6 | beginner | 5.0 | 15.0 | 53.3 |
+| 60 | 6 | intermediate | 4.0 | 15.0 | 55.7 |
+| 60 | 6 | advanced | 5.0 | 16.0 | 56.9 |
 | 90 | 3 | beginner | 6.0 | 21.0 | 62.7 |
-| 90 | 3 | intermediate | 7.0 | 22.0 | 69.4 |
-| 90 | 3 | advanced | 7.5 | 25.5 | 83.5 |
+| 90 | 3 | intermediate | 8.0 | 25.0 | 72.5 |
+| 90 | 3 | advanced | 8.5 | 28.0 | 84.1 |
 | 90 | 4 | beginner | 5.0 | 14.5 | 43.8 |
-| 90 | 4 | intermediate | 6.0 | 21.5 | 74.3 |
-| 90 | 4 | advanced | 6.0 | 22.0 | 74.8 |
-| 90 | 5 | beginner | 6.0 | 16.5 | 60.2 |
-| 90 | 5 | intermediate | 5.0 | 18.0 | 58.4 |
-| 90 | 5 | advanced | 6.0 | 20.0 | 63.2 |
-| 90 | 6 | beginner | 5.0 | 15.5 | 55.8 |
-| 90 | 6 | intermediate | 5.0 | 16.0 | 62.8 |
-| 90 | 6 | advanced | 6.0 | 18.0 | 65.4 |
+| 90 | 4 | intermediate | 6.0 | 22.0 | 74.8 |
+| 90 | 4 | advanced | 7.0 | 22.0 | 78.9 |
+| 90 | 5 | beginner | 6.0 | 17.0 | 60.2 |
+| 90 | 5 | intermediate | 5.0 | 18.0 | 61.2 |
+| 90 | 5 | advanced | 6.0 | 20.0 | 63.7 |
+| 90 | 6 | beginner | 5.0 | 16.0 | 56.0 |
+| 90 | 6 | intermediate | 5.0 | 17.0 | 65.2 |
+| 90 | 6 | advanced | 6.0 | 19.0 | 67.2 |
 
 ## Minutes unused per day (median, p10 not shown)
 
 | minutes | median unused |
 |---|---|
 | 30 | 0.5 |
-| 60 | 3.3 |
-| 90 | 27.2 |
+| 60 | 3.1 |
+| 90 | 26.2 |
 
 ## Groups below their weekly floor, by label (count of group-runs)
 
 | label | count |
 |---|---|
-| cap_limited | 3702 |
-| co_group_limited | 3538 |
-| not_trained_by_split | 85 |
-| time_limited | 13022 |
+| cap_limited | 3724 |
+| co_group_limited | 2763 |
+| not_trained_by_split | 66 |
+| time_limited | 13943 |
 
 By group:
 
 | group:label | count |
 |---|---|
-| Back:cap_limited | 242 |
-| Back:co_group_limited | 69 |
-| Back:time_limited | 925 |
-| Biceps:cap_limited | 556 |
-| Biceps:co_group_limited | 66 |
-| Biceps:time_limited | 1691 |
-| Calves:cap_limited | 883 |
-| Calves:co_group_limited | 150 |
-| Calves:time_limited | 1906 |
-| Chest:cap_limited | 223 |
-| Chest:co_group_limited | 305 |
-| Chest:time_limited | 790 |
-| Core:cap_limited | 13 |
-| Core:co_group_limited | 53 |
-| Core:not_trained_by_split | 15 |
-| Core:time_limited | 1582 |
-| Glutes:cap_limited | 630 |
-| Glutes:co_group_limited | 66 |
-| Glutes:time_limited | 506 |
-| Hamstrings:cap_limited | 336 |
-| Hamstrings:co_group_limited | 1050 |
-| Hamstrings:not_trained_by_split | 49 |
-| Hamstrings:time_limited | 1340 |
-| Quads:cap_limited | 643 |
-| Quads:co_group_limited | 1410 |
+| Back:cap_limited | 270 |
+| Back:co_group_limited | 10 |
+| Back:time_limited | 847 |
+| Biceps:cap_limited | 564 |
+| Biceps:co_group_limited | 27 |
+| Biceps:time_limited | 1727 |
+| Calves:cap_limited | 743 |
+| Calves:co_group_limited | 111 |
+| Calves:time_limited | 2105 |
+| Chest:cap_limited | 283 |
+| Chest:co_group_limited | 275 |
+| Chest:time_limited | 951 |
+| Core:cap_limited | 14 |
+| Core:co_group_limited | 21 |
+| Core:not_trained_by_split | 45 |
+| Core:time_limited | 1674 |
+| Glutes:cap_limited | 672 |
+| Glutes:co_group_limited | 3 |
+| Glutes:time_limited | 697 |
+| Hamstrings:cap_limited | 348 |
+| Hamstrings:co_group_limited | 1053 |
+| Hamstrings:time_limited | 1352 |
+| Quads:cap_limited | 669 |
+| Quads:co_group_limited | 1078 |
 | Quads:not_trained_by_split | 21 |
-| Quads:time_limited | 985 |
-| Shoulders:cap_limited | 35 |
-| Shoulders:co_group_limited | 214 |
-| Shoulders:time_limited | 1156 |
-| Triceps:cap_limited | 141 |
-| Triceps:co_group_limited | 155 |
-| Triceps:time_limited | 2141 |
+| Quads:time_limited | 1227 |
+| Shoulders:cap_limited | 36 |
+| Shoulders:co_group_limited | 118 |
+| Shoulders:time_limited | 1174 |
+| Triceps:cap_limited | 125 |
+| Triceps:co_group_limited | 67 |
+| Triceps:time_limited | 2189 |
 
 ## Time and lead lifts (counts are DAYS of weeks 1-4 of every run, not personas)
 
-- Days longer than the user's own minutes, by any amount: 3965 of 33204, worst 5.50 min over. The gate's limit is minutes + 2.
-- Of those, median 0.70 min over, 911 days over by more than 1 min, 7 by more than 2 (the exempt forced lead lifts). The stored warm-up and cool-down items vary by day type while the model reserves `warmCoolMinutes`; this is that calibration residual (Ruling 3).
-- `timeForcedFirst` (days the empty-day guard filled although the time was already spent: the lead lift, or the first exercise that had weekly room): 14
-- Days over minutes + 2 that the forced lead lift explains (the gate's one exemption): 7, worst 5.5 min over the user's minutes, e.g. build_muscle|home_dumbbells|3d|beginner|p5|30min.
+- Days longer than the user's own minutes, by any amount: 4292 of 33204, worst 5.50 min over. The gate's limit is minutes + 2.
+- Of those, median 0.68 min over, 947 days over by more than 1 min, 1 by more than 2 (the exempt forced lead lifts). The stored warm-up and cool-down items vary by day type while the model reserves `warmCoolMinutes`; this is that calibration residual (Ruling 3).
+- `timeForcedFirst` (days the empty-day guard filled although the time was already spent: the lead lift, or the first exercise that had weekly room): 12
+- Days over minutes + 2 that the forced lead lift explains (the gate's one exemption): 1, worst 5.5 min over the user's minutes, e.g. build_muscle|full_gym|3d|intermediate|p1|30min|injured lower_back.
 - Lead lift not kept (the time left fitted a cheaper lift but not 2 sets of it): 0 of 9966 allocated days (every run, both variants).
 - Display agreement: 33204 stored days priced by `SessionBudget.estimateDaySecondsFromPlanDay` equal the oracle to 1e-6 s.
 
@@ -114,7 +113,7 @@ By group:
 | split | Chest sets |
 |---|---|
 | 3d | 12 |
-| 4d | 17 |
+| 4d | 15 |
 | 5d | 22 |
 | 6d | 24 |
 
@@ -131,9 +130,9 @@ By group:
 | Legs A | 6 | 22 | 88.1 |
 | Push B | 6 | 17 | 53.4 |
 | Pull B | 6 | 16 | 49.2 |
-| Legs B | 7 | 21 | 62.1 |
+| Legs B | 8 | 24 | 68.8 |
 
-Weekly sets: Back 16, Biceps 16, Calves 11, Chest 16, Core 14, Glutes 16, Hamstrings 12, Quads 8, Shoulders 16, Triceps 14
+Weekly sets: Back 16, Biceps 16, Calves 9, Chest 16, Core 14, Glutes 16, Hamstrings 12, Quads 8, Shoulders 16, Triceps 14
 
 **Week 2**
 
@@ -144,9 +143,9 @@ Weekly sets: Back 16, Biceps 16, Calves 11, Chest 16, Core 14, Glutes 16, Hamstr
 | Legs A | 6 | 22 | 88.1 |
 | Push B | 6 | 19 | 58.3 |
 | Pull B | 6 | 16 | 49.2 |
-| Legs B | 7 | 22 | 64.5 |
+| Legs B | 8 | 26 | 73.7 |
 
-Weekly sets: Back 16, Biceps 16, Calves 11, Chest 16, Core 16, Glutes 16, Hamstrings 12, Quads 8, Shoulders 16, Triceps 16
+Weekly sets: Back 16, Biceps 16, Calves 9, Chest 16, Core 16, Glutes 16, Hamstrings 12, Quads 8, Shoulders 16, Triceps 16
 
 **Week 3**
 
@@ -157,9 +156,9 @@ Weekly sets: Back 16, Biceps 16, Calves 11, Chest 16, Core 16, Glutes 16, Hamstr
 | Legs A | 6 | 22 | 88.1 |
 | Push B | 6 | 17 | 53.4 |
 | Pull B | 6 | 16 | 49.2 |
-| Legs B | 7 | 21 | 62.1 |
+| Legs B | 8 | 24 | 68.8 |
 
-Weekly sets: Back 16, Biceps 16, Calves 11, Chest 16, Core 14, Glutes 16, Hamstrings 12, Quads 8, Shoulders 16, Triceps 14
+Weekly sets: Back 16, Biceps 16, Calves 9, Chest 16, Core 14, Glutes 16, Hamstrings 12, Quads 8, Shoulders 16, Triceps 14
 
 **Week 4**
 
@@ -170,9 +169,9 @@ Weekly sets: Back 16, Biceps 16, Calves 11, Chest 16, Core 14, Glutes 16, Hamstr
 | Legs A | 6 | 11 | 46.7 |
 | Push B | 6 | 6 | 28.0 |
 | Pull B | 6 | 6 | 26.2 |
-| Legs B | 7 | 9 | 34.7 |
+| Legs B | 8 | 10 | 36.5 |
 
-Weekly sets: Back 7, Biceps 7, Calves 6, Chest 7, Core 6, Glutes 7, Hamstrings 5, Quads 4, Shoulders 7, Triceps 6
+Weekly sets: Back 7, Biceps 7, Calves 5, Chest 7, Core 6, Glutes 7, Hamstrings 5, Quads 4, Shoulders 7, Triceps 6
 
 
 ### Focus Chest
@@ -186,9 +185,9 @@ Weekly sets: Back 7, Biceps 7, Calves 6, Chest 7, Core 6, Glutes 7, Hamstrings 5
 | Legs A | 6 | 22 | 88.1 |
 | Push B | 7 | 21 | 62.8 |
 | Pull B | 6 | 16 | 49.2 |
-| Legs B | 7 | 21 | 62.1 |
+| Legs B | 8 | 24 | 68.8 |
 
-Weekly sets: Back 16, Biceps 16, Calves 11, Chest 24, Core 14, Glutes 16, Hamstrings 12, Quads 8, Shoulders 16, Triceps 12
+Weekly sets: Back 16, Biceps 16, Calves 9, Chest 24, Core 14, Glutes 16, Hamstrings 12, Quads 8, Shoulders 16, Triceps 12
 
 **Week 2**
 
@@ -199,9 +198,9 @@ Weekly sets: Back 16, Biceps 16, Calves 11, Chest 24, Core 14, Glutes 16, Hamstr
 | Legs A | 6 | 22 | 88.1 |
 | Push B | 7 | 23 | 67.6 |
 | Pull B | 6 | 16 | 49.2 |
-| Legs B | 7 | 22 | 64.5 |
+| Legs B | 8 | 26 | 73.7 |
 
-Weekly sets: Back 16, Biceps 16, Calves 11, Chest 24, Core 16, Glutes 16, Hamstrings 12, Quads 8, Shoulders 16, Triceps 14
+Weekly sets: Back 16, Biceps 16, Calves 9, Chest 24, Core 16, Glutes 16, Hamstrings 12, Quads 8, Shoulders 16, Triceps 14
 
 **Week 3**
 
@@ -212,9 +211,9 @@ Weekly sets: Back 16, Biceps 16, Calves 11, Chest 24, Core 16, Glutes 16, Hamstr
 | Legs A | 6 | 22 | 88.1 |
 | Push B | 7 | 21 | 62.8 |
 | Pull B | 6 | 16 | 49.2 |
-| Legs B | 7 | 21 | 62.1 |
+| Legs B | 8 | 24 | 68.8 |
 
-Weekly sets: Back 16, Biceps 16, Calves 11, Chest 24, Core 14, Glutes 16, Hamstrings 12, Quads 8, Shoulders 16, Triceps 12
+Weekly sets: Back 16, Biceps 16, Calves 9, Chest 24, Core 14, Glutes 16, Hamstrings 12, Quads 8, Shoulders 16, Triceps 12
 
 **Week 4**
 
@@ -225,9 +224,9 @@ Weekly sets: Back 16, Biceps 16, Calves 11, Chest 24, Core 14, Glutes 16, Hamstr
 | Legs A | 6 | 11 | 46.7 |
 | Push B | 7 | 7 | 30.5 |
 | Pull B | 6 | 6 | 26.2 |
-| Legs B | 7 | 9 | 34.7 |
+| Legs B | 8 | 10 | 36.5 |
 
-Weekly sets: Back 7, Biceps 7, Calves 6, Chest 10, Core 6, Glutes 7, Hamstrings 5, Quads 4, Shoulders 7, Triceps 5
+Weekly sets: Back 7, Biceps 7, Calves 5, Chest 10, Core 6, Glutes 7, Hamstrings 5, Quads 4, Shoulders 7, Triceps 5
 
 
 ## For scale: the flag-OFF world (build_muscle, full_gym, phase 1, week 1)

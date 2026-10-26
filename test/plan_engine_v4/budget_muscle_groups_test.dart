@@ -135,9 +135,18 @@ void main() {
       // Namaskar, E137 Tire Flip, E184 Sandbag Clean, E194 Depth Jump, E200 Hindu
       // Warrior Flow (full body); E099 Wrist Curl, E100 Reverse Wrist Curl
       // (forearms); E108 Hip Adduction Machine (adductors); E157 Psoas March.
+      // Batch C1 added 34 more, all with no budget group by the same rule (the expected set below is a literal, not a
+      // recomputation): Forearms (Finger Curls, Pronation / Supination, the wrist-curl family), Adductors (Cable and Side
+      // Lying Hip Adduction), Serratus (the Incline Shoulder Raises, Scapula Push Up), Rotator Cuff (the four shoulder-rotation
+      // rows), Full Body (Dumbbell Burpee) and Tibialis Raise (N03).
       expect(noGroup, {
         'E029', 'E065', 'E078', 'E099', 'E100', 'E108',
         'E137', 'E157', 'E184', 'E194', 'E200',
+        'G1201', 'G1437', 'G0455', 'G0168', 'G3667', 'G2705', 'G2706', 'G3021',
+        'G0050', 'G0328', 'G0759', 'G0235', 'G0216', 'G0863', 'G0864', 'N03',
+        'G0994', 'G1016', 'G0082', 'G0104', 'G0126', 'G0210', 'G0224', 'G0247',
+        'G0365', 'G0368', 'G0366', 'G1441', 'G0367', 'G0369', 'G0397', 'G0358',
+        'G1415', 'G0364',
       });
     });
 

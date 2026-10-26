@@ -20,12 +20,12 @@ class EquipmentVocab {
   EquipmentVocab._();
 
   /// The 12 canonical tokens. The contract test pins the live library as a
-  /// SUBSET of this set (NOT equality — `smith machine` is canonical but 0
-  /// library rows use it, so an equality assert would fail). As of ⑥ C2,
+  /// SUBSET of this set (not equality; `smith machine` had 0 library rows until
+  /// Batch C1 added 39, all `full_gym`). As of ⑥ C2,
   /// `full_gym`'s item tokens (minus the `none` sentinel) are ALL 12 canonical
   /// tokens — `cardio machine` was ADDED to the gym tiers so the WU-2 gym-cardio
   /// gate can detect it (it previously held only the 11 non-`cardio machine`
-  /// tokens; `smith machine` remains a 0-library-row canonical token).
+  /// tokens).
   static const canonicalTokens = <String>{
     'bodyweight',
     'dumbbells',
