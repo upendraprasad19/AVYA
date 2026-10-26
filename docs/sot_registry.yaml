@@ -17138,7 +17138,7 @@ concepts:
       Now each door reads the row's status and the ONE decision `replayVerdict` (strict `=== "active"`) gates it: a
       non-active row answers HTTP 200 `verified: false` ("Subscription for this payment is not active"), a row that
       is absent or cannot be read answers HTTP 200 `verified: false` ("Could not confirm this payment yet; please
-      retry"); neither writes, redeems or alarms. The early read filters `status = active` in SQL; the compare is status only (no end_date term: Phase 2 and the retries run within about 22 minutes of a payment). The client readers
+      retry"); neither writes, redeems or alarms. The early read filters `status = active` in SQL; the compare is status only (no end_date term: in the client flow Phase 2 and the retries run within about 22 minutes of a payment; a direct caller with the owner's old active row still gets `verified: true`). The client readers
       write PRO only on `verified == true`, so a refusal leaves the in-flight marker open for the grace window
       (the honest demotion is delayed, not earlier). Behaviour: T0-T4 in supabase/functions/verify-payment/index_test.ts
       (the real supabase-js client on a fetch-level fake; M0 = the pre-fix handler turns T1/T1b/T1c/T2d red).
