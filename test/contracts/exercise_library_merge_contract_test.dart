@@ -37,8 +37,8 @@ void main() {
       v is List ? v.map((e) => e.toString()).toList() : const <String>[];
 
   group('exercise_library duplicate merges (Batch A Task 2)', () {
-    test('285 rows, and none of the 7 retired ids is a row', () {
-      expect(rows.length, 285);
+    test('914 rows (285 + 629 Batch C1), and none of the 7 retired ids is a row', () {
+      expect(rows.length, 914);
       expect(_merges.keys.where(byId.containsKey), isEmpty);
     });
 

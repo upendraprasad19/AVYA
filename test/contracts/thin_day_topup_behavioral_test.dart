@@ -10,6 +10,11 @@
 //    happens to be (own pattern before neighbour, neighbour before core, the
 //    soft-avoid sets, aliasing, identity, the pinned exit, customs).
 //
+// Batch C1 (629 new rows) re-pointed the REAL-library personas: the 285-row library's thin days (shoulder advanced 4-day,
+// knee+hip intermediate 3-day, elbow lose_fat 6-day pins) are no longer thin, so each case now runs on a persona found by
+// a reach search over the 914-row library (tier bodyweight; 12 injury sets x 3 levels x 3-6 days; pins: 2 goals x 2 levels
+// x 2 day counts x 6 injuries). Every precondition is still asserted FIRST, so a persona that stops being thin fails loudly.
+//
 // The oracle reads tags and equipment from assets/data/exercise_library.json
 // (as the sweep does) and from the built PlannedExercise, never from production
 // _isContraindicated.
@@ -266,42 +271,42 @@ void main() {
         p.weekPlans.take(2).expand((w) => w.workoutDays).expand((d) => d.exercises);
 
     test(
-        'shoulder bodyweight advanced 4-day: no empty or thin day, no tagged pick, '
+        'shoulder+wrist bodyweight advanced 4-day: no empty or thin day, no tagged pick, '
         'no unperformable pick', () async {
       await killSwitch(on: true);
-      final before = gen(level: 'advanced', days: 4, injuries: ['shoulder']);
+      final before = gen(level: 'advanced', days: 4, injuries: ['shoulder', 'wrist']);
       expect(dayOf(before, 1, 'Chest, shoulders, triceps').exercises, isEmpty,
           reason: 'precondition: empty on main with the kill-switch set');
       await killSwitch(on: false);
-      final after = gen(level: 'advanced', days: 4, injuries: ['shoulder']);
+      final after = gen(level: 'advanced', days: 4, injuries: ['shoulder', 'wrist']);
       for (final wk in after.weekPlans.take(2)) {
         for (final d in wk.workoutDays) {
           expect(d.exercises.length, greaterThanOrEqualTo(3),
               reason: '${d.focus} is under the floor');
         }
       }
-      expect(unsafe(mainOf(after), ['shoulder']), isEmpty);
+      expect(unsafe(mainOf(after), ['shoulder', 'wrist']), isEmpty);
       expect(unperformable(mainOf(after), bwCapability), isEmpty);
     });
 
-    test('knee+hip bodyweight intermediate 3-day: week-2 day is lifted and safe',
+    test('shoulder+elbow bodyweight advanced 4-day: week-2 back day is lifted and safe',
         () async {
       await killSwitch(on: true);
       final before = gen(
-          level: 'intermediate', days: 3, injuries: ['knee', 'hip']);
-      expect(dayOf(before, 1, 'Quads, hamstrings, glutes').exercises, isEmpty,
-          reason: 'precondition: the B variant is empty on main');
+          level: 'advanced', days: 4, injuries: ['shoulder', 'elbow']);
+      expect(dayOf(before, 1, 'Back, biceps').exercises, isEmpty,
+          reason: 'precondition: the week-2 back day is empty on main');
       await killSwitch(on: false);
       final after = gen(
-          level: 'intermediate', days: 3, injuries: ['knee', 'hip']);
-      final lifted = dayOf(after, 1, 'Quads, hamstrings, glutes').exercises;
+          level: 'advanced', days: 4, injuries: ['shoulder', 'elbow']);
+      final lifted = dayOf(after, 1, 'Back, biceps').exercises;
       expect(lifted.length, greaterThanOrEqualTo(3));
-      expect(unsafe(lifted, ['knee', 'hip']), isEmpty);
+      expect(unsafe(lifted, ['shoulder', 'elbow']), isEmpty);
       expect(unperformable(lifted, bwCapability), isEmpty);
-      expect(_names(lifted), kKneeHipWeek2Added);
+      expect(_names(lifted), kShoulderElbowWeek2BackDay);
     });
 
-    test('repeat: one surviving pin is lifted to 3, safe, with no duplicate name',
+    test('repeat: one surviving pin is lifted to 3, safe, with no duplicate name (wrist)',
         () async {
       final first = gen(
           goal: 'lose_fat', level: 'beginner', days: 6, injuries: const []);
@@ -309,13 +314,13 @@ void main() {
       await killSwitch(on: true);
       final before = gen(
           goal: 'lose_fat', level: 'beginner', days: 6, phase: 2,
-          injuries: ['elbow'], pins: pins);
-      expect(dayOf(before, 0, 'Upper pull + conditioning').exercises, hasLength(1),
+          injuries: ['wrist'], pins: pins);
+      expect(dayOf(before, 0, 'Chest, shoulders, triceps').exercises, hasLength(1),
           reason: 'precondition: one surviving pin on main');
       await killSwitch(on: false);
       final after = gen(
           goal: 'lose_fat', level: 'beginner', days: 6, phase: 2,
-          injuries: ['elbow'], pins: pins);
+          injuries: ['wrist'], pins: pins);
       for (final wk in after.weekPlans.take(2)) {
         for (final d in wk.workoutDays) {
           final n = _names(d.exercises);
@@ -323,17 +328,17 @@ void main() {
           expect(n.toSet().length, n.length, reason: 'duplicate in ${d.focus}: $n');
         }
       }
-      expect(unsafe(mainOf(after), ['elbow']), isEmpty);
+      expect(unsafe(mainOf(after), ['wrist']), isEmpty);
       expect(unperformable(mainOf(after), bwCapability), isEmpty);
     });
 
     test('kill-switch: set gives the thin length recorded from main, unset gives >= 3',
         () async {
       await killSwitch(on: true);
-      final off = gen(level: 'advanced', days: 4, injuries: ['shoulder']);
+      final off = gen(level: 'advanced', days: 4, injuries: ['shoulder', 'wrist']);
       expect(dayOf(off, 1, 'Chest, shoulders, triceps').exercises, hasLength(0));
       await killSwitch(on: false);
-      final on = gen(level: 'advanced', days: 4, injuries: ['shoulder']);
+      final on = gen(level: 'advanced', days: 4, injuries: ['shoulder', 'wrist']);
       expect(dayOf(on, 1, 'Chest, shoulders, triceps').exercises.length,
           greaterThanOrEqualTo(3));
     });
@@ -376,10 +381,10 @@ void main() {
       Future<List<PlannedExercise>> added(List<String> excl) async {
         await killSwitch(on: true);
         final off = gen(
-            level: 'intermediate', days: 5, injuries: ['wrist'], exclusions: excl);
+            level: 'intermediate', days: 4, injuries: ['wrist'], exclusions: excl);
         await killSwitch(on: false);
         final on = gen(
-            level: 'intermediate', days: 5, injuries: ['wrist'], exclusions: excl);
+            level: 'intermediate', days: 4, injuries: ['wrist'], exclusions: excl);
         final out = <PlannedExercise>[];
         for (var w = 0; w < 2; w++) {
           for (var i = 0; i < on.weekPlans[w].workoutDays.length; i++) {
@@ -957,12 +962,11 @@ void main() {
   });
 }
 
-/// The knee+hip week-2 day the final code produces (the B variant was empty on
-/// main), in order. Recorded from the first run of the final code, 2026-10-24.
-/// B's names are a subset of A's here (the safe pool is four rows), so "B differs
-/// from A" is NOT asserted for this persona; the direct tests carry that.
-const kKneeHipWeek2Added = <String>[
-  'Bodyweight Good Morning',
-  'Standing Single Leg Hinge',
-  'Glute Bridge',
+/// The shoulder+elbow advanced 4-day week-2 back day the final code produces (empty on
+/// main), in order. Recorded from the first run on the 914-row library (Batch C1,
+/// 2026-10-26); it replaced the knee+hip persona, whose day the 629 new rows filled.
+const kShoulderElbowWeek2BackDay = <String>[
+  'Backpack Bent-Over Row',
+  'Plank',
+  'Bodyweight Rear Delt Raise',
 ];

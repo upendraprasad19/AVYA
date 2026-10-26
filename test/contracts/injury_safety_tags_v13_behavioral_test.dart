@@ -2,13 +2,13 @@
 // 2026-10-22), diagnose docs/diagnoses/2026-10-22-library-injury-undertag-v13-c2d5e8.md.
 //
 // Each (row, added token) pair is proven on a real reader:
-//  - E121 Renegade Row is the only one of the five that any golden persona's
-//    OFF plan picks (19 of 998 personas), so it runs through the REAL
-//    PlanGenerator.generateV4 with a positive control: the persona's plan holds
-//    the row without the injury, and loses it with the injury.
-//  - E061 / E070 / E127 / E173 are picked by no golden persona, so their pairs
-//    are asserted on queryV4 itself, again with a positive control (the row is
-//    in the unfiltered result), so a pattern typo cannot pass vacuously.
+//  - E121 Renegade Row was, on the 285-row library, the only one of the five that any
+//    golden persona's OFF plan picked (19 of 998 personas), so it ran through the REAL
+//    PlanGenerator.generateV4. Batch C1 (629 new rows) displaced it: a reach search over
+//    3 goals x 4 tiers x 3 levels x 4 day counts found NO plan that holds it, so its pairs
+//    moved to queryV4 with the other four.
+//  - E061 / E070 / E121 / E127 / E173 are asserted on queryV4 itself, with a positive
+//    control (the row is in the unfiltered result), so a pattern typo cannot pass vacuously.
 import 'dart:convert';
 import 'dart:io';
 
@@ -20,8 +20,6 @@ import 'package:icanbefitter/core/services/guarded_box.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
 import 'package:icanbefitter/core/services/hive_user_session.dart';
 import 'package:icanbefitter/shared/repositories/exercise_repository.dart';
-import 'package:icanbefitter/shared/repositories/plan_engine/models.dart';
-import 'package:icanbefitter/shared/repositories/plan_engine/plan_generator.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -77,39 +75,13 @@ void main() {
     expect(tags('E173'), {'lower_back'});
   });
 
-  group('E121 Renegade Row through the real generator', () {
-    Set<String> planNames(List<String> injuries) {
-      final Phase p = PlanGenerator.instance.generateV4(
-        goal: 'build_muscle',
-        equipment: 'home_dumbbells',
-        daysPerWeek: 4,
-        phase: 1,
-        experienceLevel: 'intermediate',
-        injuries: injuries,
-        previousWeights: const {},
-      );
-      return {
-        for (final w in p.weekPlans)
-          for (final d in w.workoutDays)
-            for (final e in d.exercises) e.exerciseName
-      };
-    }
-
-    test('positive control: the uninjured plan holds it', () {
-      expect(planNames(const []), contains('Renegade Row'));
-    });
-    for (final token in ['wrist', 'shoulder']) {
-      test('+$token: an injured plan does not', () {
-        expect(planNames([token]), isNot(contains('Renegade Row')));
-      });
-    }
-  });
-
-  group('rows no golden persona picks, on queryV4', () {
+  group('rows no persona picks, on queryV4', () {
     const pairs = [
       ('E061', 'Running (Treadmill)', 'cardio', 'knee'),
       ('E070', 'Front Lever Hold', 'core', 'shoulder'),
       ('E070', 'Front Lever Hold', 'core', 'elbow'),
+      ('E121', 'Renegade Row', 'horizontal_pull', 'wrist'),
+      ('E121', 'Renegade Row', 'horizontal_pull', 'shoulder'),
       ('E127', 'Reverse Hyper', 'hip_isolation', 'lower_back'),
       ('E173', 'Decline Sit Up', 'core', 'lower_back'),
     ];

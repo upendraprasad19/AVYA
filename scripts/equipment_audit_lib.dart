@@ -196,6 +196,45 @@ const acceptedMentions = <String, String>{
       'sofa or step serves, which is exactly why the requirement is `elevated surface` and not '
       '`bench`. Renaming it would break standard_swap references and every logged set keyed '
       'on the name, so the name stays and the mention is accepted here.',
+  // -- Batch C1 (library v15): the 38 findings of the 629 new rows, each read against the row's own prose and, where
+  // marked, its first frame. The real ones were fixed in the DATA (G2285 cue now says pad; the four reverse wrist curls
+  // now offer the thighs like their siblings; the seated rows offer a chair) and are deliberately not listed here.
+  'N06|doorway': 'pro_tip: "hold a doorframe for balance until the range improves" - an optional balance aid',
+  'N04|towel': 'pro_tip: "pad the back knee with a folded towel" - optional padding',
+  'G3769|doorway': 'pro_tip: "hold a wall or doorframe lightly while learning" - an optional balance aid',
+  'G1756|dumbbells': 'pro_tip: "practise with dumbbells or bodyweight before the barbell" - a regression aid',
+  'G3287|bench': 'pro_tip: "do bench dips first if you cannot do 8 clean reps" - names the regression, not the kit',
+  'G3007|bench': 'cue offers "a bench or chair" (first frame: a flat bench, loop band around both lower legs) - the row needs a band and a seat',
+  'G0387|bench': 'cue offers "a bench or chair" - the row needs dumbbells and a seat',
+  'G0392|bench': 'cue offers "a bench or chair" - the row needs dumbbells and a seat',
+  'G1678|bench': 'cue offers "a bench or chair" - the row needs dumbbells and a seat',
+  'G1409|bench': 'cue: "upper back against the floor or bench" - the floor is offered',
+  'G1409|towel': 'pro_tip: "pad the bar with a towel or foam wrap for comfort" - optional padding',
+  'G3193|pull-up bar': '"pull up" is the verb in a cue and a mistake ("pull up with the hamstrings"); the machine holds the feet and has no bar',
+  'G1576|towel': 'pro_tip: "loop a towel around the foot if you cannot reach" - an optional aid',
+  'G0189|bench': 'cue: "free hand braced on the thigh or bench" - the thigh is offered',
+  'G1685|doorway': 'pro_tip: "hold a pole or door frame if balance is shaky" - an optional balance aid',
+  'G1587|towel': 'pro_tip: "sit on a folded towel to tilt the pelvis" - an optional aid (first frame: seated wide-angle pose on the floor)',
+  'G0017|pull-up bar': 'the name is the assisted pull-up MACHINE (first frame: kneeling pad, overhead handles, weight stack); no free bar is needed',
+  'G0613|towel': 'pro_tip: "use a towel or strap if you cannot reach the foot" - an optional aid',
+  'G3544|bench': 'the row declares `elevated surface` (first frame: forearm on the edge of a bench); a chair or step serves, as for E125',
+  'G2329|towel': 'pro_tip: "sit on a folded towel if the hips are tight" - an optional aid',
+  'G1476|bench': 'pro_tip: "hold a post or sit to a bench to regress it" - a regression aid',
+  'G3298|parallel bars': 'pro_tip: "use parallettes if wrists are tight" - an optional aid; the row is a floor hold',
+  'G1582|towel': 'pro_tip: "a strap or towel works the same as a band" - an alternative to the band the row already declares',
+  'G1428|pull-up bar': 'pro_tip names OTHER exercises ("before pull-ups, rows and deadlifts"), as for E210',
+  'G0994|bench': 'cue: "a bench or thighs" - the thighs are offered',
+  'G1016|bench': 'cue: "a bench or thighs" - the thighs are offered',
+  'G0082|bench': 'cue: "a bench or thighs" - the thighs are offered',
+  'G0126|bench': 'cue: "a bench or thighs" - the thighs are offered',
+  'G0210|bench': 'cue: "a bench or thighs" - the thighs are offered',
+  'G0247|bench': 'cue: "a bench or thighs" - the thighs are offered',
+  'G0397|bench': 'cue: "a bench or thighs" - the thighs are offered',
+  'G0358|bench': 'cue: "a bench or thighs" - the thighs are offered',
+  'G1415|bench': 'cue: "a bench or thighs" - the thighs are offered',
+  'G0364|bench': 'cue: "a bench or thighs" - the thighs are offered',
+  'G1545|towel': 'pro_tip: "use a bar pad or towel to protect the elbows" - optional padding',
+  'N13|bench': 'the row declares `elevated surface`; the cue offers "a sturdy chair or bench", as for E125',
 };
 
 /// The result of splitting findings against [acceptedMentions].

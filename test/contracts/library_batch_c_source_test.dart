@@ -31,8 +31,12 @@ const _holdClasses = {'token', 'name_collision', 'low_confidence', 'picture'};
 const _holdOwners = {'Batch D', 'C2', 'founder GIF review', 'founder'};
 
 Map<String, dynamic> _readMap(String p) => jsonDecode(File(p).readAsStringSync()) as Map<String, dynamic>;
-List<Map<String, dynamic>> _readLib() =>
-    (jsonDecode(File(_libRel).readAsStringSync()) as List).cast<Map<String, dynamic>>();
+/// The ORIGINAL library rows (E-ids): once the importer has run, the file also holds the new rows, and every check here
+/// compares the SOURCE against what existed before it, so the new rows must not be counted as a collision with themselves.
+List<Map<String, dynamic>> _readLib() => (jsonDecode(File(_libRel).readAsStringSync()) as List)
+    .cast<Map<String, dynamic>>()
+    .where((r) => RegExp(r'^E\d').hasMatch(r['id'] as String))
+    .toList();
 List<Map<String, dynamic>> _rows(Map<String, dynamic> src) => (src['rows'] as List).cast<Map<String, dynamic>>();
 Map<String, dynamic> _row(Map<String, dynamic> src, String id) => _rows(src).firstWhere((r) => r['id'] == id);
 Map<String, dynamic> _meta(Map<String, dynamic> src) => src['_meta'] as Map<String, dynamic>;

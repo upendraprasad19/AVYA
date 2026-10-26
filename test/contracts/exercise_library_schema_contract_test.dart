@@ -139,8 +139,8 @@ void main() {
       // taken to 3. Calibrated against the two patterns that already worked:
       // horizontal_push had 6 baseline rows and zero missing, hip_isolation 5 and
       // zero. Six to seven is the working number; three is not.
-      expect(rows.length, 285);
-      expect(rows.map((r) => r['id']).toSet().length, 285);
+      expect(rows.length, 914, reason: '285 original rows + 629 Batch C1 rows');
+      expect(rows.map((r) => r['id']).toSet().length, 914);
       expect(rows.any((r) => r['id'] == 'E261'), isTrue);
       expect(rows.any((r) => r['id'] == 'E294'), isTrue);
     });

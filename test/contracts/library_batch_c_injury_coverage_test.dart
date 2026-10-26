@@ -5,7 +5,7 @@
 // independent Dart recomputation in test/helpers/library_injury_floor.dart. A new row's final tags are
 // sorted(raw source tags UNION its table row).
 //
-// The LIBRARY GROUP (final library vs the table) arrives with the importer at commit 5.
+// The LIBRARY GROUP (final library vs the table, and kV14SafePool vs safe_pool_additions) landed with the importer at commit 5.
 //
 // Every check is a pure function over in-memory maps, so each one is mutated below and must go red.
 @Timeout(Duration(minutes: 5))
@@ -17,6 +17,7 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:icanbefitter/core/utils/injury_vocab.dart';
 
+import '../helpers/injury_safe_pool.dart';
 import '../helpers/library_injury_floor.dart';
 import '../helpers/spawn.dart';
 
@@ -143,6 +144,86 @@ List<String> _safePoolViolations(Map<String, dynamic> src, Map<String, dynamic> 
 }
 
 ProcessResult _builder(List<String> args, String why) => runSpawn('node', [_builderRel, ...args], why: why, report: (_) {});
+
+/// The 33 names `kV14SafePool` held before Batch C1, pinned as a literal: `injury_safe_pool.dart` is one flat list, so the
+/// additions are the remainder after these.
+const _original33 = <String>[
+  'Machine Chest Press', 'Floor Press', 'Chest Squeeze Press', 'Svend Press', 'Face Pull', 'Band Pull Apart',
+  'Reverse Fly', 'Bodyweight Rear Delt Raise', 'Dumbbell Row', 'Seated Cable Row', 'Chest Supported Row', 'Seal Row',
+  'Inverted Row', 'TRX Row', 'Machine High Row', 'Machine Low Row', 'Glute Bridge', 'Lateral Band Walk', 'Plank',
+  'Dead Bug', 'Pallof Press', 'Cycling (Stationary)', 'Assault Bike', 'Sled Push', 'Prowler Push', 'Slow Walking',
+  'Arm Circles', 'Deep Breathing', 'Cat-Cow Stretch', 'Thoracic Extension (Foam Roller)', 'Thoracic Rotation',
+  'Foam Roll IT Band', 'Foam Roll Upper Back',
+];
+
+List<Map<String, dynamic>> _libNew(List<Map<String, dynamic>> lib) =>
+    lib.where((r) => RegExp(r'^[GN]\d').hasMatch('${r['id']}')).toList();
+
+/// LIBRARY GROUP. For every table id the shipped row's tags equal sorted(raw source tags UNION table row) and its
+/// variant_family is the frozen one.
+List<String> _libTagViolations(Map<String, dynamic> src, Map<String, dynamic> table, List<Map<String, dynamic>> lib) {
+  final byId = {for (final r in lib) r['id'] as String: r};
+  final out = <String>[];
+  for (final r in _shipped(src)) {
+    final id = r['id'] as String;
+    if (_tableRows(table)[id] == null) continue; // reported by the id-set check
+    final row = byId[id];
+    if (row == null) {
+      out.add('$id has a table row but is not in the library');
+      continue;
+    }
+    final want = _finalTags(r, table);
+    final have = _strs(row['injury_contraindications']);
+    if (have.join(',') != want.join(',')) out.add('$id ships tags $have, source UNION table is $want');
+    if (row['variant_family'] != _trow(table, id)['variant_family']) {
+      out.add('$id ships variant_family ${row['variant_family']}, the table froze ${_trow(table, id)['variant_family']}');
+    }
+  }
+  return out;
+}
+
+/// The set of shipped new-row ids equals the set of table ids (a release that only deletes `hold` skips the gate otherwise).
+List<String> _libIdSetViolations(Map<String, dynamic> table, List<Map<String, dynamic>> lib) {
+  final shipped = _libNew(lib).map((r) => r['id'] as String).toSet();
+  final ids = _tableRows(table).keys.toSet();
+  return [
+    ...shipped.difference(ids).map((i) => '$i ships but has no table row'),
+    ...ids.difference(shipped).map((i) => '$i has a table row but is not shipped'),
+  ];
+}
+
+/// Every shipped new row ends with its floor, family-rule and twin tokens, computed from the ORIGINAL library rows.
+List<String> _libFloorViolations(List<Map<String, dynamic>> lib) {
+  final out = <String>[];
+  for (final r in _libNew(lib)) {
+    final have = injuryTagsOf(r);
+    for (final t in requiredTokens(r, lib)) {
+      if (!have.contains(t)) out.add('${r['id']} ${r['name']} ships without $t (has $have)');
+    }
+  }
+  return out;
+}
+
+/// kV14SafePool starts with the original 33 names and its remainder equals safe_pool_additions; each name is one library row.
+List<String> _poolViolations(Map<String, dynamic> table, List<String> pool, List<Map<String, dynamic>> lib) {
+  final out = <String>[];
+  if (pool.length < _original33.length || pool.sublist(0, _original33.length).join('|') != _original33.join('|')) {
+    out.add('the first 33 names of kV14SafePool are not the original 33');
+  }
+  final extra = pool.length > _original33.length ? pool.sublist(_original33.length) : <String>[];
+  final additions = _strs(table['safe_pool_additions']);
+  if (extra.toSet().length != extra.length) out.add('kV14SafePool repeats a name');
+  out.addAll(extra.toSet().difference(additions.toSet()).map((n) => '"$n" is in kV14SafePool but not in safe_pool_additions'));
+  out.addAll(additions.toSet().difference(extra.toSet()).map((n) => '"$n" is in safe_pool_additions but not in kV14SafePool'));
+  final count = <String, int>{};
+  for (final r in lib) {
+    count.update('${r['name']}'.toLowerCase(), (v) => v + 1, ifAbsent: () => 1);
+  }
+  for (final n in pool) {
+    if (count[n.toLowerCase()] != 1) out.add('kV14SafePool name "$n" matches ${count[n.toLowerCase()] ?? 0} library rows');
+  }
+  return out;
+}
 
 void main() {
   group('table group: the founder table against the source and the original library rows', () {
@@ -301,6 +382,112 @@ void main() {
       printOnFailure('untagged $untagged/${shipped.length} = ${(rate * 100).toStringAsFixed(1)}% vs the library 11.6%');
       expect(rate, lessThan(33 / 285));
       expect(untagged, _strs(table['safe_pool_additions']).length);
+    });
+  });
+
+  group('library group: the shipped library against the table (added with the importer, commit 5)', () {
+    late Map<String, dynamic> src;
+    late Map<String, dynamic> table;
+    late List<Map<String, dynamic>> lib;
+    setUpAll(() {
+      src = _readMap(_srcRel);
+      table = _readMap(_tableRel);
+      lib = (jsonDecode(File(_libRel).readAsStringSync()) as List).cast<Map<String, dynamic>>();
+    });
+    List<Map<String, dynamic>> l() => (jsonDecode(jsonEncode(lib)) as List).cast<Map<String, dynamic>>();
+    Map<String, dynamic> t() => _deep(table);
+    Map<String, dynamic> row(List<Map<String, dynamic>> rows, String id) => rows.firstWhere((r) => r['id'] == id);
+
+    test('every table id ships with sorted(raw source tags UNION table row) and the frozen variant_family', () {
+      expect(_libTagViolations(src, table, lib), isEmpty);
+    });
+
+    test('MUTATION: a floor token deleted from one shipped row, and a changed shipped family, are each red', () {
+      final a = l();
+      final victim = _libNew(a).firstWhere((r) => _strs(r['injury_contraindications']).isNotEmpty);
+      (victim['injury_contraindications'] as List).removeAt(0);
+      expect(_libTagViolations(src, table, a), isNotEmpty, reason: 'tag removed');
+      final b = l();
+      _libNew(b).first['variant_family'] = 'not_the_frozen_family';
+      expect(_libTagViolations(src, table, b), isNotEmpty, reason: 'family changed');
+    });
+
+    test('the set of shipped new-row ids equals the set of table ids', () {
+      expect(_libIdSetViolations(table, lib), isEmpty);
+    });
+
+    test('MUTATION: a deleted table row, and a shipped row the builder did not see, are each red', () {
+      final a = t();
+      _tableRows(a).remove(_tableRows(a).keys.first);
+      expect(_libIdSetViolations(a, lib), isNotEmpty, reason: 'table row deleted');
+      final b = l();
+      b.add({..._libNew(b).first, 'id': 'G9999', 'name': 'Zz Unseen Row'});
+      expect(_libIdSetViolations(table, b), isNotEmpty, reason: 'a shipped row with no table row');
+    });
+
+    test('every shipped new row carries its floor, family-rule and twin tokens (read from the shipped library)', () {
+      expect(_libFloorViolations(lib), isEmpty);
+    });
+
+    test('G0845 carries lower_back; G0814 carries E075 tags; G1428 carries E210 tags (read from the shipped rows)', () {
+      expect(injuryTagsOf(row(lib, 'G0845')), contains('lower_back'));
+      expect(injuryTagsOf(row(lib, 'G0814')), containsAll(injuryTagsOf(row(lib, 'E075'))));
+      expect(injuryTagsOf(row(lib, 'G1428')), containsAll(injuryTagsOf(row(lib, 'E210'))));
+    });
+
+    test('MUTATION: a floor token removed, G0845 untagged, a twin token dropped and shoulder removed from a push-up row are each red', () {
+      final withFloor = _libNew(l()).firstWhere((r) => floorOf(r['variant_family'] as String?, lib).isNotEmpty);
+      final a = l();
+      final fr = row(a, withFloor['id'] as String);
+      final floor = floorOf(fr['variant_family'] as String?, lib).first;
+      (fr['injury_contraindications'] as List).remove(floor);
+      expect(_libFloorViolations(a), isNotEmpty, reason: 'floor token removed');
+      final b = l();
+      (row(b, 'G0845')['injury_contraindications'] as List).remove('lower_back');
+      expect(_libFloorViolations(b), isNotEmpty, reason: 'G0845 lower_back removed');
+      final c = l();
+      (row(c, 'G0814')['injury_contraindications'] as List).removeLast();
+      expect(_libFloorViolations(c), isNotEmpty, reason: 'twin token dropped');
+      final d = l();
+      final push = _libNew(d).firstWhere((r) => RegExp(r'push[- ]?up', caseSensitive: false).hasMatch('${r['name']}'));
+      (push['injury_contraindications'] as List).remove('shoulder');
+      expect(_libFloorViolations(d), isNotEmpty, reason: 'shoulder removed from a push-up-named row');
+    });
+
+    test('kV14SafePool is the original 33 plus safe_pool_additions, each name one library row', () {
+      expect(_poolViolations(table, kV14SafePool, lib), isEmpty);
+    });
+
+    test('MUTATION: a name added to kV14SafePool only, to safe_pool_additions only, and a HELD row name in both are each red', () {
+      expect(_poolViolations(table, [...kV14SafePool, 'Zz Pool Only'], lib), isNotEmpty, reason: 'pool only');
+      final a = t();
+      (a['safe_pool_additions'] as List).add('Zz Additions Only');
+      expect(_poolViolations(a, kV14SafePool, lib), isNotEmpty, reason: 'additions only');
+      final libNames = lib.map((r) => '${r['name']}'.toLowerCase()).toSet();
+      final held = _rowsOf(src).firstWhere((r) => r['hold'] != null && !libNames.contains('${r['name']}'.toLowerCase()))['name'] as String;
+      final b = t();
+      (b['safe_pool_additions'] as List).add(held);
+      expect(_poolViolations(b, [...kV14SafePool, held], lib), isNotEmpty, reason: 'a held row name is no library row');
+    });
+
+    test('MUTATION: an importer that skips the tag table ships rows the library group rejects', () {
+      final tmp = Directory.systemTemp.createTempSync('lbc_inj_imp_');
+      addTearDown(() => tmp.deleteSync(recursive: true));
+      final text = File('scripts/add_library_batch_c_v15.js').readAsStringSync();
+      const needle = '[...rawTags, ...tableRow.tokens]';
+      expect(text.contains(needle), isTrue, reason: 'the importer must merge the table tokens on this expression');
+      final script = File('${tmp.path}/importer.js')..writeAsStringSync(text.replaceFirst(needle, '[...rawTags]'));
+      final out = '${tmp.path}/lib.json';
+      File(_libRel).copySync(out);
+      final r = runSpawn(
+        'node',
+        [script.path, '--library', out, '--source', _srcRel, '--table', _tableRel],
+        why: 'mutated importer that skips the tag table',
+        report: (_) {},
+      );
+      expect(r.exitCode, 0, reason: '${r.stdout}${r.stderr}');
+      final built = (jsonDecode(File(out).readAsStringSync()) as List).cast<Map<String, dynamic>>();
+      expect(_libTagViolations(src, table, built), isNotEmpty);
     });
   });
 

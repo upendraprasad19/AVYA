@@ -6612,6 +6612,18 @@
       "G0423": {
         "seen": "Standing with one hand on the hip and one arm overhead lowering a single dumbbell behind the head, back of the upper arm lit; a single-arm standing extension, so the row is renamed and made unilateral.",
         "action": "edited"
+      },
+      "G0017": {
+        "seen": "Assisted pull-up machine: kneeling pad, overhead handles, weight stack; equipment machines is right, no free bar (4.3 audit read)",
+        "action": "unchanged"
+      },
+      "G2285": {
+        "seen": "Reclined pullover machine, back on the pad, arms overhead, feet planted; the first cue said bench, now says pad (4.3 audit read)",
+        "action": "edited"
+      },
+      "G3007": {
+        "seen": "Seated on a flat bench with a loop band around both lower legs and no anchor; the first cue said anchored band, now says looped around both lower legs (4.3 audit read)",
+        "action": "edited"
       }
     },
     "identity_checked": {
@@ -19606,7 +19618,7 @@
       "priority_tier": 3,
       "breathing_cue": "Exhale as you extend the knee",
       "coaching_cues": [
-        "Sit on a bench, band looped around ankle and anchored",
+        "Sit on a bench or chair, band looped around both lower legs",
         "Straighten the knee fully and squeeze the quad",
         "Return slowly to the start"
       ],
@@ -21910,7 +21922,7 @@
       "priority_tier": 3,
       "breathing_cue": "Exhale as each arm rises",
       "coaching_cues": [
-        "Sit tall on a bench, dumbbells at thighs",
+        "Sit tall on a bench or chair, dumbbells at thighs",
         "Raise one arm to shoulder height, then lower",
         "Alternate arms without leaning back"
       ],
@@ -21979,7 +21991,7 @@
       "priority_tier": 3,
       "breathing_cue": "Exhale as the arms rise",
       "coaching_cues": [
-        "Sit tall on a bench, dumbbells at thighs",
+        "Sit tall on a bench or chair, dumbbells at thighs",
         "Raise both arms to shoulder height together",
         "Lower with control"
       ],
@@ -23902,7 +23914,7 @@
       "priority_tier": 3,
       "breathing_cue": "Exhale as you curl up",
       "coaching_cues": [
-        "Sit tall on a bench, palms facing in",
+        "Sit tall on a bench or chair, palms facing in",
         "Curl both dumbbells up, elbows pinned",
         "Lower under control to full extension"
       ],
@@ -37605,7 +37617,7 @@
       "priority_tier": 3,
       "breathing_cue": "Inhale as the weight goes back, exhale as you pull over",
       "coaching_cues": [
-        "Upper back across the bench, hips low, feet planted",
+        "Lie back against the pad, hips low, feet planted",
         "Keep a slight elbow bend",
         "Arc the weight back over the head",
         "Pull over until the arms are above the chest"
@@ -55001,7 +55013,7 @@
       "priority_tier": 3,
       "breathing_cue": "Exhale as you extend, inhale as you lower",
       "coaching_cues": [
-        "Rest the forearms on a bench with palms facing down",
+        "Rest the forearms on a bench or thighs, palms facing down",
         "Raise the back of the hand using the wrist only",
         "Lower slowly through the full range"
       ],
@@ -55133,7 +55145,7 @@
       "priority_tier": 3,
       "breathing_cue": "Exhale as you extend, inhale as you lower",
       "coaching_cues": [
-        "Rest the forearms on a bench with palms facing down",
+        "Rest the forearms on a bench or thighs, palms facing down",
         "Raise the back of the hand using the wrist only",
         "Lower slowly through the full range"
       ],
@@ -55331,7 +55343,7 @@
       "priority_tier": 3,
       "breathing_cue": "Exhale as you extend, inhale as you lower",
       "coaching_cues": [
-        "Rest the forearms on a bench with palms facing down",
+        "Rest the forearms on a bench or thighs, palms facing down",
         "Raise the back of the hand using the wrist only",
         "Lower slowly through the full range"
       ],
@@ -55997,7 +56009,7 @@
       "priority_tier": 3,
       "breathing_cue": "Exhale as you extend, inhale as you lower",
       "coaching_cues": [
-        "Rest the forearms on a bench with palms facing down",
+        "Rest the forearms on a bench or thighs, palms facing down",
         "Raise the back of the hand using the wrist only",
         "Lower slowly through the full range"
       ],

@@ -77,7 +77,7 @@ void main() {
       expect(p.assetPaths, isEmpty);
       expect(p.monogram, isNotEmpty);
     }
-    expect(checked, 129, reason: 'the artwork-less set is 129 rows');
+    expect(checked, 758, reason: 'the artwork-less set is 758 rows (914 minus the 156 with artwork)');
   });
 
   test('an unknown name never throws and never claims artwork', () {
