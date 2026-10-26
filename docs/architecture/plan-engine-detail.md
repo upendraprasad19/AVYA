@@ -339,7 +339,7 @@ Plan `docs/plans/2026-10-24-thin-day-topup.md` (r3, two converged review rounds)
 
 **Aliasing.** `alias = identical(input A, input B)`, computed before anything is rebuilt; an alias day is topped up once and B is that list, so `PeriodizationEngine` (which reads `exercisesB` on weeks 2 and 4) sees the same names. A pinned B that merely equals A in content is not an alias and is topped up on its own.
 
-**Residual (OI-408).** A bodyweight beginner with shoulder + lower_back injuries on a 5- or 6-day upper-body day keeps `Plank, Dead Bug`: `VolumeFilter.targetCount('beginner', 5|6)` is 4, so the day is trimmed before the selector runs, and the founder's "then stop" ends the stages. Three ways to change it, none decided: anchors from the untrimmed split (needs a `plan_generator.dart` input, rule 14), a last stage "any safe move", or Batch C rows.
+**Residual (OI-408), closed 2026-10-26 by Batch C1.** A bodyweight beginner with shoulder + lower_back injuries on a 5- or 6-day upper-body day kept `Plank, Dead Bug`: `VolumeFilter.targetCount('beginner', 5|6)` is 4, so the day is trimmed before the selector runs, and the founder's "then stop" ends the stages. The third option, Batch C rows, is what happened: on the 914-row library the five-file injury sweep (7,200 runs) has 0 thin days, and deleting the 629 rows brings back exactly 2 and 6 thin scan days. The trim itself is unchanged; the sweep's hard zero is the guard (the `kPairsThinBaseline` ratchets are gone).
 
 **Scorecard.** `CascadeTracer`, `QueryV4Mirror` and `generator_matrix.dart` mirror per-slot cascade attempts and never call the selector, and a top-up has no slot, so the scorecard cannot see this feature; the injury sweep and the behavioural file are the proof.
 
