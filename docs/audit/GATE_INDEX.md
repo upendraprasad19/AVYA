@@ -32,7 +32,7 @@ Total gates: **112** (47 numbered, 65 by filename only).
 | 29 | `check_client_errors_alert.dart` | assert an alert config exists at `supabase/alerts/client_errors.yaml` declaring a threshold rule | grandfathered |
 | — | `check_closes_oi_cited.dart` | Commit-msg gate: a commit that flips an OI from OPEN to CLOSED in | grandfathered |
 | — | `check_closes_oi_performed.dart` | Merge-commit gate: every `closes-oi: OI-NN` in the commits a merge brings in | mutation_proven |
-| — | `check_code_review_pass_exists.dart` | For staged commits whose max blast-radius is `catastrophic`, require a | grandfathered |
+| — | `check_code_review_pass_exists.dart` | For staged commits whose max blast-radius is `catastrophic`, require a | mutation_proven |
 | — | `check_commit_from_worktree.dart` | Worktree-per-session enforcement (codified 2026-07-07 after 2 cross-session | grandfathered |
 | — | `check_container_color_decoration.dart` | a Flutter `Container` must not pass BOTH `color:` and `decoration:`. | grandfathered |
 | — | `check_context_artifact_budget.dart` | Guards the size of the artifacts an AGENT loads, the way | mutation_proven |

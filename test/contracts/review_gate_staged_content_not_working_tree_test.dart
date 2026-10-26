@@ -104,6 +104,7 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 
+import '../helpers/script_closure_fixture.dart';
 import '../helpers/spawn.dart';
 
 // HISTORY of the environment handling (the hand-copied `_gitEnvKeysToStrip`
@@ -251,13 +252,9 @@ void main() {
       await _git(tmp.path, ['config', 'user.email', 'test@example.com']);
       await _git(tmp.path, ['config', 'user.name', 'Test']);
 
-      await Directory('${tmp.path}/scripts').create(recursive: true);
-      for (final f in const [
-        'check_code_review_pass_exists.dart',
-        'blast_radius_content_rules_lib.dart',
-      ]) {
-        File('$srcRoot/scripts/$f').copySync('${tmp.path}/scripts/$f');
-      }
+      // The gate's whole import closure (it gained merge_scope_lib.dart in landing C1): a hand-written
+      // copy list rots the moment the gate gains an import.
+      copyScriptClosure(srcRoot, tmp.path, const ['scripts/check_code_review_pass_exists.dart']);
       await Directory('${tmp.path}/docs/reviews').create(recursive: true);
       File('$srcRoot/docs/blast_radius.yaml')
           .copySync('${tmp.path}/docs/blast_radius.yaml');
@@ -415,13 +412,9 @@ void main() {
       await _git(tmp.path, ['init', '-q']);
       await _git(tmp.path, ['config', 'user.email', 'test@example.com']);
       await _git(tmp.path, ['config', 'user.name', 'Test']);
-      await Directory('${tmp.path}/scripts').create(recursive: true);
-      for (final f in const [
-        'check_code_review_pass_exists.dart',
-        'blast_radius_content_rules_lib.dart',
-      ]) {
-        File('$srcRoot/scripts/$f').copySync('${tmp.path}/scripts/$f');
-      }
+      // The gate's whole import closure (it gained merge_scope_lib.dart in landing C1): a hand-written
+      // copy list rots the moment the gate gains an import.
+      copyScriptClosure(srcRoot, tmp.path, const ['scripts/check_code_review_pass_exists.dart']);
       await Directory('${tmp.path}/docs/reviews').create(recursive: true);
       File('$srcRoot/docs/blast_radius.yaml')
           .copySync('${tmp.path}/docs/blast_radius.yaml');
