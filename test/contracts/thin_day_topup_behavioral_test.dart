@@ -18,6 +18,12 @@
 // The oracle reads tags and equipment from assets/data/exercise_library.json
 // (as the sweep does) and from the built PlannedExercise, never from production
 // _isContraindicated.
+//
+// Batch C1: on the 914-row library the equipment oracle (8 real generateV4 runs) takes about 17 s solo, and under load it
+// crossed the 30 s default (a merge commit's regression catalog, 2026-10-26), so the file carries a 3-minute timeout.
+@Timeout(Duration(minutes: 3))
+library;
+
 import 'dart:convert';
 import 'dart:io';
 
