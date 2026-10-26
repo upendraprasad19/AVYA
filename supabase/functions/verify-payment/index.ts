@@ -17,9 +17,12 @@
  *
  * Output shape:
  *   200 { verified: true, plan, end_date: ISO, source }
- *   200 { verified: false, status: "pending" }   // webhook hasn't fired yet
- *   400 { error: "invalid_signature" | "amount_mismatch" | ... , request_id }
- *   409 { error: "already_pro", request_id }     // user already PRO (idempotent)
+ *   200 { verified: false, error }               // not captured; OR a replay whose stored row is not
+ *                                                //   `active` ("Subscription for this payment is not active");
+ *                                                //   OR a replay whose row cannot be read ("Could not
+ *                                                //   confirm this payment yet; please retry") (OI-410)
+ *   400/401/403/405/429/502 { error, ... }       // validation, auth, ownership, method, rate limit, Razorpay
+ *   500 { error[, verified: false], request_id } // the row could not be recorded (client retries) / catch-all
  *
  * Env secrets used:
  *   - RAZORPAY_KEY_ID / RAZORPAY_KEY_SECRET (signature verify + order fetch)
@@ -27,9 +30,13 @@
  *
  * verify_jwt: true at deploy — the calling user MUST be authenticated.
  *
- * Idempotency: re-calling with the same payment_id after a successful verify
- * returns the same 200 payload. The 409 `already_pro` path exists for the case
- * where the webhook beat the client to the DB write.
+ * Idempotency: re-calling with the same payment_id replays the stored row. A replay
+ * answers `verified: true` ONLY after this request has read that row as `active`
+ * (the early read filters on it; the three replay arms below go through
+ * `replayGate` / `replayVerdict`, OI-410). A row that exists but is not `active`
+ * answers the soft failure above, and a replay whose row cannot be read is
+ * "unconfirmed", never `verified: true`. The webhook may beat the client to the DB
+ * write; that active row is the normal replay.
  *
  * Canonical plan prices in paise are duplicated below; they MUST stay in sync
  * with `razorpay-webhook/index.ts` and `lib/core/constants/app_constants.dart`.
@@ -586,9 +593,9 @@ export async function handler(req: Request): Promise<Response> {
     // again when it merely finds the webhook's row (F31 — the double-redeem
     // over-counted used_count and duplicated the promo_code_uses audit row).
     //
-    // The idempotency pre-SELECT mirrors razorpay-webhook's H-19 guard: a row
-    // already present means the creator already redeemed any promo, so we skip
-    // both the insert and the redemption (idempotent success).
+    // The idempotency pre-SELECT mirrors razorpay-webhook's H-19 skip but gates the answer
+    // on ACTIVE: an ACTIVE row already present means the creator already redeemed any promo,
+    // so we skip the insert and the redemption (non-active: OI-410, see replayGate).
     // Review d6b736 F1/F2: report the canonical subscriptions row's end_date
     // (never re-anchor it to verify-time on a replay / race), and surface a
     // pre-SELECT DB error instead of silently treating it as "no row".
@@ -605,7 +612,7 @@ export async function handler(req: Request): Promise<Response> {
     // above or reached this line by a path that skipped them.
     const { data: paymentSubRow, error: preSelectError } = await supabase
       .from("subscriptions")
-      .select("id, end_date")
+      .select("id, end_date, status")
       .eq("razorpay_payment_id", paymentId)
       .eq("user_id", userId)
       .maybeSingle();
@@ -670,13 +677,26 @@ export async function handler(req: Request): Promise<Response> {
       console.log(
         `[verify-payment] stacking=on payment_id=${paymentId} inserted=${rec.inserted}`,
       );
+      if (!rec.inserted) {
+        // The rpc returned a STORED row whatever its status (migration 161, idempotency fast
+        // path); this request did not insert it, so it must read it as `active` (OI-410).
+        const { data: storedRow, error: storedError } = await supabase
+          .from("subscriptions")
+          .select("status")
+          .eq("razorpay_payment_id", paymentId)
+          .eq("user_id", userId)
+          .maybeSingle();
+        const refused = replayGate(storedRow, storedError, paymentId);
+        if (refused) return refused;
+      }
     } else if (paymentSubRow === null) {
       // OFF branch (the default): exactly `now + days`; the insert and its 23505
       // handling are today's code. Its one added request is the mismatch alarm
       // after the promo (Piece B2a plan 2.5), which never changes the response.
       const storedEnd = plainEndDate(now, plan === "yearly" ? 365 : 30);
-      // Seeded BEFORE the insert: if this insert loses a 23505 race and the winner's row cannot be re-read,
-      // the response still reports the value this call stored.
+      // Seeded BEFORE the insert: the response reports the value this call stored when the insert succeeds.
+      // (d6b736 F2 also used it when a 23505 winner's row could not be re-read; since OI-410 that case is
+      // `unconfirmed` and answers a soft failure instead.)
       canonicalEndDateIso = storedEnd.toISOString();
       const { error: insertError } = await supabase
         .from("subscriptions")
@@ -698,7 +718,7 @@ export async function handler(req: Request): Promise<Response> {
       } else {
         // 23505 unique-violation = we lost the race to the webhook between the
         // pre-SELECT and the insert. The webhook owns the row AND the promo
-        // redemption, so treat this as idempotent success WITHOUT redeeming.
+        // redemption, so an ACTIVE winner is idempotent success WITHOUT redeeming.
         const code =
           (insertError as { code?: string }).code ??
           (insertError as { details?: string }).details ??
@@ -735,12 +755,16 @@ export async function handler(req: Request): Promise<Response> {
         }
         // The webhook owns the row; report ITS end_date so the response
         // matches the canonical row.
-        const { data: raceRow } = await supabase
+        const { data: raceRow, error: raceError } = await supabase
           .from("subscriptions")
-          .select("end_date")
+          .select("end_date, status")
           .eq("razorpay_payment_id", paymentId)
           .eq("user_id", userId)
           .maybeSingle();
+        // OI-410: the winner's row must read back as `active`; a non-active row, or one that
+        // cannot be read, is a soft failure, not the seeded `verified: true` of d6b736 F2.
+        const refused = replayGate(raceRow, raceError, paymentId);
+        if (refused) return refused;
         const raceEnd = (raceRow as { end_date?: string } | null)?.end_date;
         if (raceEnd) canonicalEndDateIso = raceEnd;
         console.log(
@@ -748,8 +772,13 @@ export async function handler(req: Request): Promise<Response> {
         );
       }
     } else {
-      // Row already exists (webhook or a prior verify-payment). Use its canonical
-      // end_date — do NOT re-anchor the expiry to this call's time.
+      // Row already exists (webhook or a prior verify-payment). It answers
+      // `verified: true` only if it is `active` (OI-410: a cancelled/expired row for this
+      // payment is not a verification). A failed pre-select leaves `paymentSubRow` null and
+      // goes to the insert branch above, whose two replay doors check the same thing.
+      const refused = replayGate(paymentSubRow, null, paymentId);
+      if (refused) return refused;
+      // Use its canonical end_date — do NOT re-anchor the expiry to this call's time.
       const existingEnd = (paymentSubRow as { end_date?: string }).end_date;
       if (existingEnd) canonicalEndDateIso = existingEnd;
     }
@@ -815,6 +844,41 @@ export async function handler(req: Request): Promise<Response> {
       },
     );
   }
+}
+
+// ── OI-410: what a REPLAY arm may answer about a stored row it did not insert ──
+// `verified: true` for a row this request did not insert needs a read, in THIS request, that
+// saw `status === "active"`. Strict equality like the early read's `.eq("status", "active")`:
+// `null`, "", "ACTIVE", cancelled, expired, refunded and any future value are `not_active`.
+// An absent row or a failed read is `unconfirmed` (fail safe: the client retries; no 500 path).
+export type ReplayVerdict = "ok" | "not_active" | "unconfirmed";
+export function replayVerdict(row: unknown, readFailed: boolean): ReplayVerdict {
+  if (readFailed || row == null || typeof row !== "object") return "unconfirmed";
+  return (row as { status?: unknown }).status === "active" ? "ok" : "not_active";
+}
+
+/** `null` when the replay may proceed (the row read back as active); else the soft-failure response. */
+function replayGate(row: unknown, readError: unknown, paymentId: string): Response | null {
+  const verdict = replayVerdict(row, readError != null);
+  if (verdict === "ok") return null;
+  const headers = { ...corsHeaders, "Content-Type": "application/json" };
+  if (verdict === "not_active") {
+    const rowStatus = (row as { status?: unknown }).status;
+    console.log(
+      `[verify-payment] replay refused, row not active payment_id=${paymentId} status=${codeToken(rowStatus)}`,
+    );
+    return new Response(
+      JSON.stringify({ verified: false, error: "Subscription for this payment is not active" }),
+      { status: 200, headers },
+    );
+  }
+  console.warn(
+    `[verify-payment] replay unconfirmed payment_id=${paymentId} code=${pgErrorCode(readError)}`,
+  );
+  return new Response(
+    JSON.stringify({ verified: false, error: "Could not confirm this payment yet; please retry" }),
+    { status: 200, headers },
+  );
 }
 
 // `serve()` only when run as the entrypoint, so tests can import `handler`

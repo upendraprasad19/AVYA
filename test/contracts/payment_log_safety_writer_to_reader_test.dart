@@ -76,6 +76,7 @@ const Map<String, Set<String>> _allowed = {
     r'boundedText(promoCode)', // helper
     r'boundedText(razorpayResponse.statusText)', // helper
     r'codeToken(rec.code)', // helper
+    r'codeToken(rowStatus)', // helper
     r'errorName(e)', // helper
     r'errorName(err)', // helper
     r'pgErrorCode(e)', // helper
@@ -83,6 +84,7 @@ const Map<String, Set<String>> _allowed = {
     r'pgErrorCode(insertError)', // helper
     r'pgErrorCode(preSelectError)', // helper
     r'pgErrorCode(rateErr)', // helper
+    r'pgErrorCode(readError)', // helper
     r'pgErrorCode(useErr)', // helper
     r'razorpayErrorSummary(captureResp.status, body)', // helper
     r'stackFrames(err)', // helper
