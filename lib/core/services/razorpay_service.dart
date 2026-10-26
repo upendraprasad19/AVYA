@@ -1009,11 +1009,11 @@ class RazorpayService {
           },
         );
         if (response.status != 200) return null;
-        // verify-payment returns 200 with verified:false for
-        // uncaptured payments. Only verified:true is trusted (the
-        // helper checks it); a verified:true reply always means an
-        // active subscriptions row exists (F33: a failed insert
-        // returns verified:false + 500).
+        // verify-payment returns 200 with verified:false for an uncaptured,
+        // not-active or not-yet-confirmable payment (OI-410). Only verified:true
+        // is trusted (the helper checks it); a verified:true reply always means
+        // an active subscriptions row exists (F33: a failed insert returns
+        // verified:false + 500).
         return response.data is Map
             ? Map<String, dynamic>.from(response.data as Map)
             : <String, dynamic>{};

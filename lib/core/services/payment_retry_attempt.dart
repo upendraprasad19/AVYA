@@ -78,7 +78,7 @@ Future<bool> runVerificationRetryAttempt({
   );
   if (data == null) return false;
   // Only `verified: true` is a verdict. verify-payment answers 200 with
-  // `verified: false` for a payment Razorpay has not captured yet.
+  // `verified: false` for an uncaptured, not-active or unconfirmed payment (OI-410).
   if (data['verified'] != true) return false;
 
   // The retry can land long after the account switched; never write PRO state

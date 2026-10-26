@@ -593,9 +593,9 @@ export async function handler(req: Request): Promise<Response> {
     // again when it merely finds the webhook's row (F31 — the double-redeem
     // over-counted used_count and duplicated the promo_code_uses audit row).
     //
-    // The idempotency pre-SELECT mirrors razorpay-webhook's H-19 guard: an ACTIVE row
-    // already present means the creator already redeemed any promo, so we skip
-    // both the insert and the redemption (idempotent success; non-active: OI-410).
+    // The idempotency pre-SELECT mirrors razorpay-webhook's H-19 skip but gates the answer
+    // on ACTIVE: an ACTIVE row already present means the creator already redeemed any promo,
+    // so we skip the insert and the redemption (non-active: OI-410, see replayGate).
     // Review d6b736 F1/F2: report the canonical subscriptions row's end_date
     // (never re-anchor it to verify-time on a replay / race), and surface a
     // pre-SELECT DB error instead of silently treating it as "no row".
