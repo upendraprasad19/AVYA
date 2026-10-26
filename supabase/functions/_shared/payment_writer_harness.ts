@@ -367,6 +367,21 @@ export function withoutMismatchRead(reqs: RecordedRequest[]): RecordedRequest[] 
   return reqs.filter((r) => !isMismatchRead(r));
 }
 
+/**
+ * OI-410: verify-payment's idempotency pre-select now ALSO selects `status` (`id,end_date,status`), while the OFF golden
+ * compares the NEW handler's requests with the frozen pre-Piece-A handler's, which selects `id,end_date`. Rewrites ONLY a
+ * subscriptions GET whose `select` is exactly `id,end_date,status` back to that form. Apply it to the NEW side only: applied to
+ * both it would make a normaliser that strips every select pass the golden.
+ */
+export function withoutStatusSelect(reqs: RecordedRequest[]): RecordedRequest[] {
+  return reqs.map((r) =>
+    r.method === "GET" && r.path === "/rest/v1/subscriptions" &&
+      r.query.some(([k, v]) => k === "select" && v === "id,end_date,status")
+      ? { ...r, query: r.query.map(([k, v]): [string, string] => (k === "select" && v === "id,end_date,status" ? [k, "id,end_date"] : [k, v])) }
+      : r
+  );
+}
+
 /** An active `referral_trial` grant row (NULL payment id), ending `endInDays` from now. */
 export function referralTrialRow(endInDays: number, over: Row = {}): Row {
   return trialRow(endInDays, { id: "rtrial-1", plan: "referral_trial", ...over });

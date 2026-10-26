@@ -8353,7 +8353,7 @@ concepts:
         method: subscriptions insert (the ONLY entitlement write)
         notes: The users.update mirror write this handler used to make was removed; the insert is the whole write.
       - file: supabase/functions/verify-payment/index.ts
-        line_range: 678-755
+        line_range: 697-784
         method: subscriptions insert / canonical end_date
         notes: Same — no users mirror write; the response reports the canonical row's end_date.
       - file: supabase/migrations/038_redeem_referral_atomic.sql
@@ -13667,7 +13667,7 @@ concepts:
          .maybeSingle() then synthesises PGRST116 and strips PRO.
     writers:
       - file: supabase/functions/verify-payment/index.ts
-        line_range: 681-693
+        line_range: 701-713
         method: payment confirmation handler — subscription insert
         semantic: cloud-write
         notes: |
@@ -16514,7 +16514,7 @@ concepts:
         method: isEnvExactlyTrue / isStackingEnabled / isTrialPurchaseEnabled / plainEndDate
         notes: The ONE strict "true" switch rule for both secrets (read once per request) and the OFF-branch arithmetic (setDate, byte-identical to origin/main).
       - file: supabase/functions/verify-payment/index.ts
-        line_range: 619-755
+        line_range: 626-784
         method: the insert branch (stackingOn)
         notes: ON assigns canonicalEndDateIso and weInsertedTheRow from the RPC answer; OFF is today's insert and 23505 arms, and sets offInserted only on its own successful insert (the alarm's precondition, consumed after the promo).
       - file: supabase/functions/razorpay-webhook/index.ts
@@ -16596,7 +16596,7 @@ concepts:
         semantic: detect-door-on-order-recorded-off
         notes: Does NOT read stacks_after (payment notes come from the client's checkout options); it reads the database for an active referral_trial row after its own OFF insert.
       - file: supabase/functions/verify-payment/index.ts
-        line_range: 619-791
+        line_range: 626-820
         method: the insert branch (OFF-branch mismatch alarm)
         semantic: detect-door-on-order-recorded-off
         notes: Same alarm as the webhook. The client reader of stacks_after is trial_stacking_client_estimate (Piece B2b).
@@ -17117,12 +17117,12 @@ concepts:
       test/contracts/verify_payment_owner_before_capture_writer_to_reader_test.dart.
     writers:
       - file: supabase/functions/verify-payment/index.ts
-        line_range: 428-462
+        line_range: 435-469
         method: handler — the 400 / 403 ownership guards directly after the Razorpay GET
         semantic: guard
     readers:
       - file: supabase/functions/verify-payment/index.ts
-        line_range: 464-516
+        line_range: 471-523
         method: handler — the capture POST and the status echo, reachable only past the guards
         semantic: cloud-write
       - file: lib/core/services/razorpay_service.dart
@@ -17137,6 +17137,49 @@ concepts:
       columns: [user_id, razorpay_payment_id]
     sync_methods: []
     regression_test: test/contracts/verify_payment_owner_before_capture_writer_to_reader_test.dart
+
+  # OI-410 (diagnose 060837, 2026-10-26) — `verified: true` for a row this request did not insert needs a read, in the same request, that saw it ACTIVE.
+  - concept: verify_payment_verified_means_active_row
+    domain: subscription
+    behavioral_test_path: supabase/functions/verify-payment/index_test.ts
+    description: |
+      verify-payment answered `verified: true` for a payment whose subscriptions row was not `active` (cancelled,
+      expired, ...) through three replay doors: the idempotency pre-select's `else` arm, the OFF-branch 23505 re-read
+      and the stacking-ON rpc's `inserted = false` answer (migration 161 returns the stored row whatever its status).
+      Now each door reads the row's status and the ONE decision `replayVerdict` (strict `=== "active"`) gates it: a
+      non-active row answers HTTP 200 `verified: false` ("Subscription for this payment is not active"), a row that
+      is absent or cannot be read answers HTTP 200 `verified: false` ("Could not confirm this payment yet; please
+      retry"); neither writes, redeems or alarms. The early read filters `status = active` in SQL; the compare is status only (no end_date term: in the client flow Phase 2 and the retries run within about 22 minutes of a payment; a direct caller with the owner's old active row still gets `verified: true`). The client readers
+      write PRO only on `verified == true`, so a refusal leaves the in-flight marker open for the grace window
+      (the honest demotion is delayed, not earlier). Behaviour: T0-T4 in supabase/functions/verify-payment/index_test.ts
+      (the real supabase-js client on a fetch-level fake; M0 = the pre-fix handler turns T1/T1b/T1c/T2d red).
+      Source pin: test/contracts/verify_payment_verified_means_active_row_writer_to_reader_test.dart.
+    writers:
+      - file: supabase/functions/verify-payment/index.ts
+        line_range: 626-784
+        method: handler — the insert branch with its three replay doors, each gated by the replay gate
+        semantic: guard
+      - file: supabase/functions/verify-payment/index.ts
+        line_range: 849-882
+        method: the replay decision and its two soft-failure responses (module level, after the handler)
+        semantic: guard
+    readers:
+      - file: lib/core/services/razorpay_service.dart
+        line_range: 900-1030
+        method: verify fallback — status==200 && verified==true writes PRO; anything else is a soft failure
+        semantic: cloud-read
+      - file: lib/core/services/payment_retry_attempt.dart
+        line_range: 60-110
+        method: retry attempt — only verified==true writes PRO and clears the grace window
+        semantic: cloud-read
+    hive:
+      box: "n/a — server-side guard, no Hive surface"
+      key_prefix: "n/a"
+    cloud:
+      table: subscriptions
+      columns: [status, razorpay_payment_id, user_id, end_date]
+    sync_methods: []
+    regression_test: test/contracts/verify_payment_verified_means_active_row_writer_to_reader_test.dart
 
   # payment-hardening U0 (OI-360, diagnose d1a4f6, 2026-10-24) — what a payment-path log line may carry.
   - concept: payment_log_safety
@@ -17163,8 +17206,8 @@ concepts:
         semantic: pure
     readers:
       - file: supabase/functions/verify-payment/index.ts
-        line_range: 1-822
-        method: every log site on the payment path (insert failure, capture refusal, plan mismatch, pre-SELECT, promo)
+        line_range: 1-886
+        method: every log site on the payment path (insert failure, capture refusal, plan mismatch, pre-SELECT, promo, replay refused / unconfirmed)
         semantic: log
       - file: supabase/functions/razorpay-webhook/index.ts
         line_range: 1-883

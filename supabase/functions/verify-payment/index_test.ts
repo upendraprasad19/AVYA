@@ -4,6 +4,7 @@
 // (../_shared/fixtures/verify_payment_origin_main.ts.txt) through the same scenario.
 // Sanitizers are off for these tests: createClient() starts an auth refresh timer.
 import { assert, assertEquals, assertMatch } from "https://deno.land/std@0.224.0/assert/mod.ts";
+import { jsonResponse, type RecordedRequest, type Row } from "../_shared/postgrest_fake_fetch.ts";
 import {
   captureConsole,
   type Handler,
@@ -14,6 +15,7 @@ import {
   mismatchReads,
   referralTrialRow,
   withoutMismatchRead,
+  withoutStatusSelect,
   importWithEnv,
   iso,
   loadOriginMainHandler,
@@ -32,7 +34,11 @@ import {
   YEARLY_PAISE,
 } from "../_shared/payment_writer_harness.ts";
 
-const newHandler = (await importWithEnv(() => import("./index.ts"))).handler as Handler;
+// OI-410 T0: index.ts reads its env at module load, so the pure helper comes from THIS dynamic import (a static import would load
+// the module with no env and cache that broken instance for importWithEnv).
+const mod = await importWithEnv(() => import("./index.ts"));
+const newHandler = mod.handler as Handler;
+const replayVerdict = mod.replayVerdict as (row: unknown, readFailed: boolean) => string;
 const originHandler = await loadOriginMainHandler("verify_payment_origin_main.ts.txt");
 
 function t(name: string, fn: () => Promise<void>) {
@@ -81,6 +87,66 @@ const rpcRow = (over: Record<string, unknown> = {}) => ({
 });
 const withRpc = (sc: Scenario, over: Record<string, unknown> = {}): Scenario => ({ ...sc, recordPaid: { rows: [rpcRow(over)] } });
 
+// ── OI-410: a replay arm answers verified:true only for a row it READ as active ──
+const REFUSED = { verified: false, error: "Subscription for this payment is not active" };
+const UNCONFIRMED = { verified: false, error: "Could not confirm this payment yet; please retry" };
+const REFUSED_LOG = "[verify-payment] replay refused, row not active";
+const UNCONFIRMED_LOG = "[verify-payment] replay unconfirmed";
+const subsGet = (req: RecordedRequest) => req.method === "GET" && req.path === "/rest/v1/subscriptions";
+const qhas = (req: RecordedRequest, k: string, v?: string) => req.query.some(([qk, qv]) => qk === k && (v === undefined || qv === v));
+/** The early active-only read: keyed on the payment id AND `status=eq.active` (the mismatch alarm and the stacking helper read carry no payment id). */
+const isEarlyRead = (req: RecordedRequest) => subsGet(req) && qhas(req, "status", "eq.active") && qhas(req, "razorpay_payment_id");
+const isPreSelect = (req: RecordedRequest) => subsGet(req) && qhas(req, "select", "id,end_date,status");
+const isRaceReread = (req: RecordedRequest) => subsGet(req) && qhas(req, "select", "end_date,status");
+const isStatusRead = (req: RecordedRequest) => subsGet(req) && qhas(req, "select", "status");
+const activePayRow = (over: Row = {}): Row => trialRow(33, { id: "done", razorpay_payment_id: PAY, ...over });
+/** A row for the payment with the given status; `undefined` removes the key. */
+const nonActivePayRow = (status: unknown, over: Row = {}): Row => {
+  const r = activePayRow(over);
+  if (status === undefined) delete r.status;
+  else r.status = status;
+  return r;
+};
+const logToken = (v: unknown) => (typeof v === "string" && /^[A-Za-z0-9_]{1,24}$/.test(v) ? v : "no_code");
+const boom = () => jsonResponse(500, { code: "XX000", message: "boom" });
+
+/** Door 1: a row for the payment that the early active-only read misses (the webhook won) but the pre-select finds. */
+function webhookWon(row: Row, base: Scenario = {}): Scenario {
+  return { ...base, rows: [row, ...(base.rows ?? [])], intercept: (req) => (isEarlyRead(req) ? jsonResponse(200, []) : base.intercept?.(req)) };
+}
+/**
+ * Doors 2 and 3: the planted row is hidden from the early read and the pre-select (empty answer, or a 500), so the handler
+ * reaches the insert branch; the door's own read (`end_date,status` / `status`) stays live unless `doorRead` replaces it.
+ * Door 2 then reaches its 23505 through the fake's unique index; door 3 reads the row the canned rpc planted nothing for.
+ */
+function replayBehindPreselect(row: Row, how: "empty" | "error", base: Scenario = {}, doorRead: "live" | "empty" | "error" | "throw" = "live"): Scenario {
+  return {
+    ...base,
+    rows: [row, ...(base.rows ?? [])],
+    intercept: (req) => {
+      if (isEarlyRead(req)) return jsonResponse(200, []);
+      if (isPreSelect(req)) return how === "error" ? boom() : jsonResponse(200, []);
+      if (doorRead !== "live" && (isRaceReread(req) || isStatusRead(req))) return doorRead === "throw" ? "throw" : doorRead === "error" ? boom() : jsonResponse(200, []);
+      return base.intercept?.(req);
+    },
+  };
+}
+type Run = Awaited<ReturnType<typeof run>>;
+function assertSoftFailure(r: Run, expected: unknown) {
+  assertEquals(r.res.status, 200);
+  assertEquals(r.errors, [], "a soft failure logs no console.error line (log and warn only)");
+  assertEquals(r.body, expected);
+  assertEquals(r.res.headers.get("access-control-allow-origin"), "*");
+  assertMatch(r.res.headers.get("content-type") ?? "", /application\/json/);
+}
+function assertNothingWritten(r: Run, rowsBefore: number) {
+  assertEquals(r.server.tables.subscriptions.length, rowsBefore, "no subscriptions row is written");
+  assertEquals(r.promoIncrements.length, 0, "a refused replay never redeems the promo");
+  assertEquals(r.server.to("/rest/v1/promo_code_uses", "POST").length, 0);
+  assertEquals(mismatchReads(r.server).length, 0);
+  assertEquals(alertInserts(r.server).length, 0);
+}
+
 t("ON: calls rpc/record_paid_subscription exactly once with the exact args; NO insert POST and NO helper GET", async () => {
   const r = await run(newHandler, withRpc({ rows: [] }), "true");
   assertEquals(r.res.status, 200);
@@ -106,7 +172,9 @@ t("ON, YEARLY payment: p_plan is 'yearly' (the plan is derived, never hard-coded
 
 for (const inserted of [true, false]) {
   t(`ON, out_inserted=${inserted}: the response end_date is the rpc's out_end_date as an ISO string (not the local now+days)`, async () => {
-    const r = await run(newHandler, withRpc({ rows: [] }, { out_inserted: inserted }), "true");
+    // inserted=false: the webhook won, so an ACTIVE row exists that the early read and the pre-select miss and door 3 reads back (OI-410)
+    const sc: Scenario = inserted ? { rows: [] } : replayBehindPreselect(activePayRow(), "empty");
+    const r = await run(newHandler, withRpc(sc, { out_inserted: inserted }), "true");
     assertEquals(r.res.status, 200);
     assertEquals(r.body.verified, true);
     assertEquals(r.body.end_date, RPC_END_ISO);
@@ -121,8 +189,9 @@ t("ON: an out_end_date with a +05:30 offset maps to the right instant", async ()
 });
 
 t("ON, out_inserted=false: the promo is NOT redeemed; out_inserted=true: redeemed exactly once", async () => {
-  const no = await run(newHandler, withRpc(promoScenario([]), { out_inserted: false }), "true");
+  const no = await run(newHandler, withRpc(replayBehindPreselect(activePayRow(), "empty", promoScenario([])), { out_inserted: false }), "true");
   assertEquals(no.res.status, 200);
+  assertEquals(no.body.verified, true, "an ACTIVE winner row still verifies (OI-410 must not refuse it)");
   assertEquals(no.promoIncrements.length, 0);
   assertEquals(no.server.to("/rest/v1/promo_code_uses", "POST").length, 0);
   const yes = await run(newHandler, withRpc(promoScenario([]), { out_inserted: true }), "true");
@@ -230,7 +299,7 @@ for (const sw of [undefined, "false", "", "TRUE", " true", "1"]) {
     assertEquals(now.res.status, golden.res.status);
     // Piece B2a plan 2.5: the ONE deliberate addition is the mismatch alarm's read after the OFF insert.
     assertEquals(mismatchReads(now.server).length, 1, "exactly one added request: the alarm read");
-    assertEquals(normalizeRequests(withoutMismatchRead(now.server.requests)), normalizeRequests(golden.server.requests));
+    assertEquals(normalizeRequests(withoutStatusSelect(withoutMismatchRead(now.server.requests))), normalizeRequests(golden.server.requests));
     assertEquals(stripInstants(now.body), stripInstants(golden.body));
     assertEquals(helperReads(now.server).length, 0);
     const row = subscriptionInserts(now.server)[0].body as Record<string, string>;
@@ -250,7 +319,7 @@ t("OFF golden: yearly, and with a promo, are identical to origin/main too", asyn
     assertEquals(now.res.status, golden.res.status);
     // Piece B2a plan 2.5: the ONE deliberate addition is the mismatch alarm's read after the OFF insert.
     assertEquals(mismatchReads(now.server).length, 1, "exactly one added request: the alarm read");
-    assertEquals(normalizeRequests(withoutMismatchRead(now.server.requests)), normalizeRequests(golden.server.requests));
+    assertEquals(normalizeRequests(withoutStatusSelect(withoutMismatchRead(now.server.requests))), normalizeRequests(golden.server.requests));
     assertEquals(stripInstants(now.body), stripInstants(golden.body));
     assertEquals(now.promoIncrements, golden.promoIncrements);
   }
@@ -267,14 +336,218 @@ t("replay (an ACTIVE row for this payment): early return, NO rpc call, no insert
   assertEquals(subscriptionInserts(r.server).length, 0);
 });
 
-t("replay (the row for this payment exists but is not 'active'): pre-SELECT arm, NO rpc call, no insert, canonical end, no promo", async () => {
+t("replay (the row for this payment exists but is not 'active'): pre-SELECT arm refuses (OI-410), NO rpc call, no insert, no promo", async () => {
   const done = trialRow(33, { id: "done", razorpay_payment_id: PAY, status: "cancelled" });
   const r = await run(newHandler, withRpc(promoScenario([done, trialRow(3)])), "true");
-  assertEquals(r.res.status, 200);
-  assertEquals(r.body.end_date, done.end_date);
+  assertSoftFailure(r, REFUSED);
   assertEquals(recordPaidCalls(r.server).length, 0);
   assertEquals(subscriptionInserts(r.server).length, 0);
-  assertEquals(r.promoIncrements.length, 0, "a replay never redeems the promo");
+  assertNothingWritten(r, 2);
+});
+
+// ── OI-410 (T0-T4): the three replay doors answer verified:true only for a row read as active ──
+
+t("T0 replayVerdict: only a row read as exactly 'active' is ok; any other status is not_active; no row or a failed read is unconfirmed", async () => {
+  for (const status of ["cancelled", "expired", "refunded", "pending", "", "ACTIVE", "active ", 1, {}, null, undefined]) {
+    assertEquals(replayVerdict({ status }, false), "not_active", String(status));
+  }
+  assertEquals(replayVerdict({}, false), "not_active", "an absent status key");
+  assertEquals(replayVerdict({ status: "active" }, false), "ok");
+  for (const row of [null, undefined, "active", 5]) assertEquals(replayVerdict(row, false), "unconfirmed", String(row));
+  assertEquals(replayVerdict({ status: "active" }, true), "unconfirmed", "a failed read is never ok, even with a row");
+  assertEquals(replayVerdict(null, true), "unconfirmed");
+});
+
+const NON_ACTIVE_STATUSES: Array<[string, unknown]> = [
+  ["cancelled", "cancelled"], ["expired", "expired"], ["refunded", "refunded"], ["pending", "pending"], ["empty string", ""],
+  ["null", null], ["absent key", undefined], ["ACTIVE-cased", "ACTIVE"],
+  ["hostile newline", "cancelled\n[verify-payment] FORGED-LINE status=active"], ["40 chars", "x".repeat(40)],
+];
+
+for (const sw of [undefined, "true"]) {
+  for (const [label, status] of NON_ACTIVE_STATUSES) {
+    t(`T1 door 1 (pre-SELECT arm), switch ${sw ?? "OFF"}, status ${label}: HTTP 200 soft failure, nothing written, one code-only log line`, async () => {
+      const row = nonActivePayRow(status);
+      const base = promoScenario([row]);
+      const r = await run(newHandler, sw ? withRpc(base) : base, sw);
+      assertSoftFailure(r, REFUSED);
+      assertEquals(subscriptionInserts(r.server).length, 0);
+      assertEquals(recordPaidCalls(r.server).length, 0);
+      assertNothingWritten(r, 1);
+      const lines = r.all.filter((l) => l.startsWith(REFUSED_LOG));
+      assertEquals(lines, [`${REFUSED_LOG} payment_id=${PAY} status=${logToken(status)}`]);
+      assert(!anyLine(r.all, "FORGED-LINE"), "the hostile status never reaches the log");
+      assert(!anyLine(r.all, "x".repeat(40)), "a long status never reaches the log");
+    });
+  }
+  t(`T1 door 1, switch ${sw ?? "OFF"}: a cancelled row with end_date null is refused too`, async () => {
+    const base = promoScenario([nonActivePayRow("cancelled", { end_date: null })]);
+    const r = await run(newHandler, sw ? withRpc(base) : base, sw);
+    assertSoftFailure(r, REFUSED);
+    assertNothingWritten(r, 1);
+  });
+}
+
+for (const [label, status] of [["cancelled", "cancelled"], ["null", null], ["ACTIVE-cased", "ACTIVE"]] as Array<[string, unknown]>) {
+  t(`T1b door 2 (23505 re-read), switch OFF, status ${label}: the pre-select ERRORS, the insert hits 23505, the re-read finds a non-active row: refused`, async () => {
+    const r = await run(newHandler, replayBehindPreselect(nonActivePayRow(status), "error", promoScenario([])), undefined);
+    assertSoftFailure(r, REFUSED);
+    assertEquals(subscriptionInserts(r.server).length, 1, "the one insert attempt that produced the 23505");
+    assertEquals(r.server.requests.filter(isRaceReread).length, 1);
+    assertNothingWritten(r, 1);
+    assertEquals(r.all.filter((l) => l.startsWith(REFUSED_LOG)), [`${REFUSED_LOG} payment_id=${PAY} status=${logToken(status)}`]);
+  });
+}
+
+t("T1c door 3 (ON, out_inserted=false): the pre-select ERRORS, the rpc returns the stored row, the status read finds a non-active row: refused", async () => {
+  // the second ACTIVE row of the same user kills a status read keyed on user_id alone (maybeSingle would answer PGRST116, i.e. unconfirmed)
+  const base = promoScenario([trialRow(3)]);
+  const r = await run(newHandler, withRpc(replayBehindPreselect(nonActivePayRow("cancelled"), "error", base), { out_inserted: false }), "true");
+  assertSoftFailure(r, REFUSED);
+  assertEquals(recordPaidCalls(r.server).length, 1);
+  assertEquals(subscriptionInserts(r.server).length, 0);
+  const reads = r.server.requests.filter(isStatusRead);
+  assertEquals(reads.length, 1);
+  assertEquals(reads[0].query.slice().sort(), [["razorpay_payment_id", `eq.${PAY}`], ["select", "status"], ["user_id", `eq.${USER}`]]);
+  assertNothingWritten(r, 2);
+  assertEquals(r.all.filter((l) => l.startsWith(REFUSED_LOG)), [`${REFUSED_LOG} payment_id=${PAY} status=cancelled`]);
+});
+
+for (const sw of [undefined, "true"]) {
+  t(`T2 positive control (why the else arm exists), switch ${sw ?? "OFF"}: an ACTIVE row the early read misses still answers verified:true from the pre-SELECT arm`, async () => {
+    const row = activePayRow();
+    const base = webhookWon(row, promoScenario([]));
+    const r = await run(newHandler, sw ? withRpc(base) : base, sw);
+    assertEquals(r.res.status, 200);
+    assertEquals(r.body.verified, true);
+    assertEquals(r.body.source, "razorpay_api", "the pre-SELECT arm, not the early return");
+    assertEquals(r.body.end_date, row.end_date);
+    assertEquals(subscriptionInserts(r.server).length, 0);
+    assertEquals(recordPaidCalls(r.server).length, 0);
+    assertNothingWritten(r, 1);
+  });
+}
+
+t("T2b door 2 with an ACTIVE winner row (pre-select error, 23505, re-read active): still verified:true with that row's end date, no promo", async () => {
+  const row = activePayRow();
+  const r = await run(newHandler, replayBehindPreselect(row, "error", promoScenario([])), undefined);
+  assertEquals(r.res.status, 200);
+  assertEquals(r.body.verified, true);
+  assertEquals(r.body.end_date, row.end_date);
+  assertEquals(subscriptionInserts(r.server).length, 1, "the one insert attempt that produced the 23505");
+  assertNothingWritten(r, 1);
+});
+
+t("T2c door 3 with an ACTIVE stored row (ON, out_inserted=false): still verified:true with the rpc's end date, no promo, one status read", async () => {
+  const r = await run(newHandler, withRpc(replayBehindPreselect(activePayRow(), "error", promoScenario([])), { out_inserted: false }), "true");
+  assertEquals(r.res.status, 200);
+  assertEquals(r.body.verified, true);
+  assertEquals(r.body.end_date, RPC_END_ISO);
+  assertEquals(r.server.requests.filter(isStatusRead).length, 1);
+  assertNothingWritten(r, 1);
+});
+
+for (const [doorRead, code] of [["empty", "no_code"], ["error", "XX000"]] as Array<["empty" | "error", string]>) {
+  t(`T2d door 2: the winner row is ${doorRead === "empty" ? "ABSENT" : "UNREADABLE"} at the re-read: HTTP 200 unconfirmed (not the seeded verified:true), code=${code}`, async () => {
+    const r = await run(newHandler, replayBehindPreselect(nonActivePayRow("cancelled"), "error", promoScenario([]), doorRead), undefined);
+    assertSoftFailure(r, UNCONFIRMED);
+    assertNothingWritten(r, 1);
+    assertEquals(r.all.filter((l) => l.startsWith(UNCONFIRMED_LOG)), [`${UNCONFIRMED_LOG} payment_id=${PAY} code=${code}`]);
+    assert(!anyLine(r.all, REFUSED_LOG));
+  });
+  t(`T2d door 3: the stored row is ${doorRead === "empty" ? "ABSENT" : "UNREADABLE"} at the status read: HTTP 200 unconfirmed, code=${code}`, async () => {
+    const r = await run(newHandler, withRpc(replayBehindPreselect(nonActivePayRow("cancelled"), "error", promoScenario([]), doorRead), { out_inserted: false }), "true");
+    assertSoftFailure(r, UNCONFIRMED);
+    assertEquals(recordPaidCalls(r.server).length, 1);
+    assertNothingWritten(r, 1);
+    assertEquals(r.all.filter((l) => l.startsWith(UNCONFIRMED_LOG)), [`${UNCONFIRMED_LOG} payment_id=${PAY} code=${code}`]);
+  });
+}
+
+t("T2e (negative): ON with out_inserted=true reads nothing from subscriptions after the rpc", async () => {
+  const r = await run(newHandler, withRpc({ rows: [] }, { out_inserted: true }), "true");
+  assertEquals(r.res.status, 200);
+  assertEquals(r.body.verified, true);
+  const i = r.server.requests.findIndex((q) => q.path === "/rest/v1/rpc/record_paid_subscription");
+  assert(i >= 0);
+  assertEquals(r.server.requests.slice(i + 1).filter((q) => q.path === "/rest/v1/subscriptions").length, 0);
+});
+
+t("T3 control: the frozen pre-Piece-A handler answers verified:true with the cancelled row's end date (the defect, reproduced by OLD code)", async () => {
+  const done = nonActivePayRow("cancelled");
+  const r = await run(originHandler, { rows: [done] }, undefined);
+  assertEquals(r.res.status, 200);
+  assertEquals(r.body.verified, true);
+  assertEquals(r.body.end_date, done.end_date);
+});
+
+// B-pass (seat 2): the no-error routes into doors 2 and 3, a foreign-owned row, a fetch that throws, and an origin control for door 2.
+
+t("T1b' door 2 on the faithful RACE route: NO pre-select error, the row appears after the pre-select and is NOT active: refused (a gate nested under a pre-select error would miss it)", async () => {
+  const winner = nonActivePayRow("cancelled");
+  const sc: Scenario = {
+    ...promoScenario([]),
+    beforeInsert: (table, _row, srv) => {
+      if (table === "subscriptions" && !srv.tables.subscriptions.some((x) => x.razorpay_payment_id === PAY)) srv.tables.subscriptions.push(winner);
+    },
+  };
+  const r = await run(newHandler, sc, undefined);
+  assertSoftFailure(r, REFUSED);
+  assertEquals(r.all.filter((l) => l.includes("idempotency pre-SELECT failed")).length, 0, "no pre-select error on this route");
+  assertEquals(subscriptionInserts(r.server).length, 1, "the one insert attempt that produced the 23505");
+  assertNothingWritten(r, 1);
+});
+
+t("T1c' door 3 on the no-error route: the pre-select answers EMPTY (no error), the rpc then returns the stored row, which is NOT active: refused", async () => {
+  const base = promoScenario([trialRow(3)]);
+  const r = await run(newHandler, withRpc(replayBehindPreselect(nonActivePayRow("cancelled"), "empty", base), { out_inserted: false }), "true");
+  assertSoftFailure(r, REFUSED);
+  assertEquals(r.all.filter((l) => l.includes("idempotency pre-SELECT failed")).length, 0, "no pre-select error on this route");
+  assertEquals(recordPaidCalls(r.server).length, 1);
+  assertEquals(r.server.requests.filter(isStatusRead).length, 1);
+  assertNothingWritten(r, 2);
+});
+
+t("T2f door 2, a FOREIGN-OWNED row for the payment id (no intercepts): the user-keyed reads see nothing, the insert hits the global unique index, the re-read finds nothing: unconfirmed, not the seeded verified:true", async () => {
+  const r = await run(newHandler, { ...promoScenario([]), rows: [activePayRow({ user_id: OTHER_USER })] }, undefined);
+  assertSoftFailure(r, UNCONFIRMED);
+  assertEquals(subscriptionInserts(r.server).length, 1, "the one insert attempt that produced the 23505");
+  assertNothingWritten(r, 1);
+  assertEquals(r.all.filter((l) => l.startsWith(UNCONFIRMED_LOG)), [`${UNCONFIRMED_LOG} payment_id=${PAY} code=no_code`]);
+});
+
+t("T2d' a read whose FETCH THROWS at door 2 or door 3 comes back as an error from supabase-js, so the answer is the same unconfirmed soft failure (not a 500)", async () => {
+  const two = await run(newHandler, replayBehindPreselect(nonActivePayRow("cancelled"), "error", promoScenario([]), "throw"), undefined);
+  assertSoftFailure(two, UNCONFIRMED);
+  assertNothingWritten(two, 1);
+  assertEquals(two.all.filter((l) => l.startsWith(UNCONFIRMED_LOG)).length, 1);
+  const three = await run(newHandler, withRpc(replayBehindPreselect(nonActivePayRow("cancelled"), "error", promoScenario([]), "throw"), { out_inserted: false }), "true");
+  assertSoftFailure(three, UNCONFIRMED);
+  assertNothingWritten(three, 1);
+  assertEquals(three.all.filter((l) => l.startsWith(UNCONFIRMED_LOG)).length, 1);
+});
+
+t("T3b control: the frozen pre-Piece-A handler reproduces the defect at DOOR 2 too (its pre-select errors, the insert hits 23505, its re-read returns the cancelled row's end date as verified:true)", async () => {
+  const done = nonActivePayRow("cancelled");
+  const intercept: Scenario["intercept"] = (req) => (subsGet(req) && qhas(req, "select", "id,end_date") ? boom() : undefined);
+  const r = await run(originHandler, { rows: [done], intercept }, undefined);
+  assertEquals(r.res.status, 200);
+  assertEquals(r.body.verified, true);
+  assertEquals(r.body.end_date, done.end_date);
+});
+
+
+t("T4 request shapes: the pre-select selects id,end_date,status and the 23505 re-read selects end_date,status, both keyed on payment id AND user id with no status filter", async () => {
+  const keys = (q: RecordedRequest) => q.query.map(([k]) => k).sort();
+  const one = await run(newHandler, { rows: [nonActivePayRow("cancelled")] }, undefined);
+  const pre = one.server.requests.filter(isPreSelect);
+  assertEquals(pre.length, 1);
+  assertEquals(pre[0].query.filter(([k]) => k !== "select").sort(), [["razorpay_payment_id", `eq.${PAY}`], ["user_id", `eq.${USER}`]]);
+  assert(!keys(pre[0]).includes("status"));
+  const two = await run(newHandler, replayBehindPreselect(nonActivePayRow("cancelled"), "error", promoScenario([])), undefined);
+  const re = two.server.requests.filter(isRaceReread);
+  assertEquals(re.length, 1);
+  assertEquals(re[0].query.filter(([k]) => k !== "select").sort(), [["razorpay_payment_id", `eq.${PAY}`], ["user_id", `eq.${USER}`]]);
 });
 
 t("plain 23505 race (switch OFF): reports the canonical row and does not redeem", async () => {
@@ -327,8 +600,9 @@ t("switch log line: OFF prints stacking_switch=off once, ON prints stacking_swit
   const on = await run(newHandler, withRpc({ rows: [] }), "true");
   assertEquals(count(on.all, "on"), 1);
   assertEquals(count(on.all, "off"), 0);
-  const cancelled = trialRow(33, { id: "done", razorpay_payment_id: PAY, status: "cancelled" });
-  const existing = await run(newHandler, { rows: [cancelled] }, undefined);
+  // an existing row reaches the pre-SELECT arm (the webhook won): an ACTIVE row that the early read misses (a non-active one is refused since OI-410)
+  const existing = await run(newHandler, webhookWon(activePayRow()), undefined);
+  assertEquals(existing.body.source, "razorpay_api");
   assertEquals(existing.all.filter((l) => l.includes("stacking_switch=")).length, 0);
 });
 
@@ -413,8 +687,9 @@ t("alarm: never on the ON path (no check request, even with a referral trial row
 t("alarm: never when the payment's row already exists (active early return, or the pre-SELECT arm)", async () => {
   const active = await run(newHandler, { rows: [trialRow(33, { id: "done", razorpay_payment_id: PAY }), referralTrialRow(5)] }, undefined);
   assertEquals(mismatchReads(active.server).length, 0);
-  const cancelled = await run(newHandler, { rows: [trialRow(33, { id: "done", razorpay_payment_id: PAY, status: "cancelled" }), referralTrialRow(5)] }, undefined);
-  assertEquals(mismatchReads(cancelled.server).length, 0);
+  const preSelect = await run(newHandler, webhookWon(activePayRow(), { rows: [referralTrialRow(5)] }), undefined);
+  assertEquals(preSelect.body.source, "razorpay_api", "the pre-SELECT arm, not the early return");
+  assertEquals(mismatchReads(preSelect.server).length, 0);
 });
 
 t("alarm: never on the 23505 race arm (weInsertedTheRow false: the webhook won the insert and owns the check)", async () => {
@@ -632,7 +907,8 @@ t("U0 log: a failed idempotency pre-SELECT logs its code, never its message (con
   const intercept: Scenario["intercept"] = (req) => {
     if (req.method !== "GET" || req.path !== "/rest/v1/subscriptions") return undefined;
     const q = new Map(req.query);
-    if (q.get("select") === "id,end_date" && !q.has("status")) {
+    // one intercept serves BOTH handlers: the frozen origin selects id,end_date, the new one id,end_date,status (OI-410)
+    if ((q.get("select") === "id,end_date" || q.get("select") === "id,end_date,status") && !q.has("status")) {
       return new Response(JSON.stringify({ code: "XX000", message: `read failed ${SECRET}` }), { status: 500 });
     }
     return undefined;
