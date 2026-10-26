@@ -199,7 +199,7 @@ void main() {
       for (final k in acceptedMentions.keys) {
         final parts = k.split('|');
         expect(parts, hasLength(2), reason: '"$k" is not id|token');
-        expect(parts[0], matches(RegExp(r'^E\d{3}$')), reason: 'bad id in "$k"');
+        expect(parts[0], matches(RegExp(r'^[EGN]\d{2,4}$')), reason: 'bad id in "$k"');
         expect(equipmentNouns.values, contains(parts[1]),
             reason: '"${parts[1]}" is not a token the scan can ever emit, so '
                 'this entry exempts nothing and is dead weight');

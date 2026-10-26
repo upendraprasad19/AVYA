@@ -131,14 +131,14 @@ void main() {
     }, _slotFocus);
   });
 
-  test('per-level core counts over kept rows are 73 / 91 / 67', () {
+  test('per-level core counts are 129 / 138 / 98 (73 / 91 / 67 original + 56 / 47 / 31 Batch C1)', () {
     final counts = {for (final l in _levels) l: 0};
     for (final r in rows) {
       for (final l in (r['core_levels'] as List).cast<String>()) {
         counts[l] = counts[l]! + 1;
       }
     }
-    expect(counts, {'beginner': 73, 'intermediate': 91, 'advanced': 67});
+    expect(counts, {'beginner': 129, 'intermediate': 138, 'advanced': 98});
   });
 
   test('the seed version is at least 13, so existing installs re-seed', () {
@@ -163,6 +163,6 @@ void main() {
       }
     }
     expect(bad, isEmpty);
-    expect(links, hasLength(9));
+    expect(links, hasLength(35), reason: '9 original links + 26 on the shipped Batch C1 rows');
   });
 }

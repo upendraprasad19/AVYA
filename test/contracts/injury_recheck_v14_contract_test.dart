@@ -5,7 +5,7 @@
 // rejected; 104 library rows gain 148 injury tags (additions only). This file
 // pins, in three layers:
 //  (A) DATA — every founder call as a literal on a name, the closed vocabulary,
-//      the table the applier reads, the 33-row safe pool (and nothing else
+//      the table the applier reads, the 62-row safe pool (33 + 29 from Batch C1; nothing else
 //      left untagged).
 //  (B) BEHAVIOUR — the REAL PlanGenerator.generateV4 (flag OFF, the path users
 //      get) and the REAL queryV4 filter. Every absence has a positive control:
@@ -161,7 +161,8 @@ void main() {
     test('every push-up variant carries shoulder (no variant is shoulder-free)', () {
       final rows = library.where((r) =>
           RegExp(r'push[- ]?up', caseSensitive: false).hasMatch(r['name'] as String));
-      expect(rows.length, 11, reason: 'denominator: push-up-named rows in the library');
+      expect(rows.length, 33,
+          reason: 'denominator: 11 original push-up-named rows + 22 Batch C1 rows (the 629 shipped; a push-up row held at the picture is not counted)');
       for (final r in rows) {
         expect((r['injury_contraindications'] as List), contains('shoulder'),
             reason: '${r['id']} ${r['name']} is a push-up but is shoulder-free');
@@ -171,15 +172,16 @@ void main() {
     test('every elbow_flexion / elbow_extension row carries elbow', () {
       final rows = library.where((r) => (r['movement_pattern'] as List)
           .any((p) => p == 'elbow_flexion' || p == 'elbow_extension'));
-      expect(rows.length, 30, reason: 'denominator: library rows in the two patterns');
+      expect(rows.length, 147,
+          reason: 'denominator: 30 original rows in the two patterns + 117 Batch C1 rows');
       for (final r in rows) {
         expect(toks(r['injury_contraindications']), contains('elbow'),
             reason: '${r['id']} ${r['name']}');
       }
     });
 
-    test('the safe pool: 33 named rows stay untagged, and nothing else does', () {
-      expect(kV14SafePool.length, 33);
+    test('the safe pool: 62 named rows (33 + 29 from Batch C1) stay untagged, and nothing else does', () {
+      expect(kV14SafePool.length, 62);
       for (final n in kV14SafePool) {
         expect(tagsOf(n), isEmpty, reason: '"$n" must stay untagged (low-load / rehab)');
       }
@@ -226,7 +228,6 @@ void main() {
       ('Crunches', 'lower_back', 'bodyweight', 'advanced', 3),
       ('Bicycle Crunch', 'lower_back', 'bodyweight', 'advanced', 3),
       ('Hip Abduction Machine', 'hip', 'full_gym', 'beginner', 5),
-      ('Hip Adduction Machine', 'hip', 'full_gym', 'intermediate', 3),
     ];
     for (final (move, injury, tier, level, days) in reached) {
       test('$move: in the uninjured $tier/$level/${days}d plan, gone for $injury', () {
@@ -273,6 +274,9 @@ void main() {
       ('Burpee', 'cardio', 'wrist'),
       ('Mountain Climber', 'cardio', 'shoulder'),
       ('Mountain Climber', 'cardio', 'wrist'),
+      // Moved here from the persona list by Batch C1: the 629 new rows displaced it from every build_muscle plan
+      // (36 tier/level/day combinations searched on the 914-row library), so the filter is pinned directly.
+      ('Hip Adduction Machine', 'hip_isolation', 'hip'),
     ];
     for (final (name, pattern, token) in pairs) {
       test('$name: queryV4($pattern) drops it for $token', () {
