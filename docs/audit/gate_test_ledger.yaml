@@ -236,7 +236,38 @@ check_closes_oi_performed.dart:
     before the real suite was re-run (20/20 green).
 
 check_code_review_pass_exists.dart:
-  grandfathered: 2026-08-10
+  mutation_proven: true
+  test_path:
+    - test/contracts/merge_scope_gate_e2e_test.dart
+    - test/scripts/merge_scope_lib_test.dart
+    - test/scripts/merge_scope_git_test.dart
+    - test/scripts/merge_scope_git_fuzz_test.dart
+    - test/contracts/review_gate_staged_content_not_working_tree_test.dart
+  evidence: >
+    Changed 2026-10-25 (landing C1 of the merge-conflict-treadmill plan, OI-413, diagnose d1264d): the gate
+    now grades only what a branch sync adds beyond main (scripts/merge_scope_lib.dart), reads its staged
+    paths with -z, --no-renames, --ignore-submodules=none and a strict UTF-8 decode, hashes the staged diff
+    with the same --ignore-submodules=none, and lists every graded path on a FAIL. Moved off
+    `grandfathered:` because this batch materially changes the gate's protection (rule 24; precedent
+    check_ai_tool_dispatcher_coverage.dart); the name stays in the script's grandfathered set. Tests: the
+    REAL gate spawned in temp repos (29 tests, exit codes and the exact NOTE) plus the pure lib against a
+    scripted fake (32), 23 scenarios against real git and a seeded fuzz of 80 syncs with three oracles, and
+    the staged-content fixture (10). 79 mutants, covering every row of the table in docs/plans/sync-merge-
+    scope.md section 5 except 6a (no code to mutate: graded paths are taken from the strictly decoded staged
+    list and nothing decodes a diff-index answer) plus the B-pass additions (a failing git read as no staged
+    changes, the hash flag, a stand-down, the FAIL listing, the NOTE and escape boundaries); each applied
+    with an exact-one-match assertion before the write, `dart analyze` required clean (a compile error is
+    not red), the five test files run, the sources restored and their sha256 re-checked (RESTORE-CHECK OK).
+    The whole table was run on the FINAL tree, after the last edit of the code and of the tests: 79 of 79
+    red. An earlier run had one survivor (12b6, a hex check that accepts a leading dash), closed by three
+    new cases. Failing tests per mutant: 01 28, 02a 28, 02b 17, 03 16, 04a 36, 04b 54, 05a 2, 05b 3, 06b 3,
+    06c1 3, 06c2 3, 07a 1, 07b 42, 08a 19, 08b1 21, 08b2 58, 09a 14, 09b 13, 10 21, 11 8, 12a 2, 12b1 2,
+    12b2 1, 12b3 59, 12b4 59, 12b5 1, 12b6 2, 12c1 1, 12c2 1, 13 2, 14a1 2, 14a2 1, 14a3 1, 14a4 1, 14b1 1,
+    14b2 1, 14b3 3, 14b4 1, 14b5 1, 15a1 2, 15a2 1, 15b 3, 15c 3, 16 1, 17a 3, 17b1 2, 17b2 1, 17b3 2, 17b4
+    2, 18 3, 19 1, 20 6, 21 9, 22 3, 23a 11, 23b 3, 23c 1, 23d 2, 24 1, 25 1, 26 13, 27 14, 28 12, 29 1, 30
+    1, 31 13, 31b 10, 32 4, 32b 1, 32c 1, 32d 3, 33 1, 34a 1, 34b 1, 34c 1, 34d 1, 34e 1, 35 2, 36 3. The
+    reads of the two diff-index calls are verdict-neutral in order and the display sort is verdict-neutral
+    (pre-declared in the plan).
 
 check_commit_from_worktree.dart:
   grandfathered: 2026-08-10

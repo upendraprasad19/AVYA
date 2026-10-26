@@ -164,6 +164,9 @@ paths:
   # review could itself be edited with no review at all, which is precisely the
   # exemption this block exists to close.
   - { glob: "scripts/check_code_review_pass_exists.dart", tier: platform }
+  # Landing C1 (2026-10-25, OI-413): the pure lib that same gate imports to decide which staged paths of a
+  # branch sync it grades. An edit to it changes what the catastrophic gate looks at, so it sits beside the gate.
+  - { glob: "scripts/merge_scope_lib.dart", tier: platform }
   - { glob: "scripts/check_gate_scripts_wired.dart", tier: platform }
   # gate-integrity batch (2026-09-19, spec D16): the same "a change to the
   # reviewer must not be exempt from review" rule, applied to the files that

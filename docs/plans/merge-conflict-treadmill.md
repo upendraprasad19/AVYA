@@ -7,7 +7,7 @@ blast_radius: platform
 tier: L
 execution_mode: inline   # one worktree per landing
 closes_oi: [OI-309, OI-167]
-landings: [A0, A1, A2, B, C, D]   # each: own branch, plan-review record (≥2 rounds, last converged), B-pass, PR
+landings: [A0, A1, A2, B, C1, C2, D]   # each: own branch, plan-review record (≥2 rounds, last converged), B-pass, PR
 ---
 
 # Stop the merge-conflict cascade between parallel PRs
@@ -387,10 +387,9 @@ landings: [A0, A1, A2, B, C, D]   # each: own branch, plan-review record (≥2 r
 ## 7. Landings B–D
 Each gets its own revision and two review rounds, the last converged, before code.
 - **B (OI-167):** a uniqueness gate + lib; the legacy 9 renumbered from 2.114 (superseded: the ids and the decision rule are in docs/plans/bug-class-uniqueness.md, whose targets are 2.125-2.133) after reading every citation (excluding reviews, plan-reviews and closure ledgers). Before C.
-- **C:**
-  - U3: remerge ∪ both-sides overlap; full ref name; fallbacks.
-  - U5: the record-aware resolver; builders last; fixtures projected through A1/A2; the archive off the allow-list; YAML structural checks.
-  - Diagnose doc for forced merge-only reviews.
+- **C** is split in two landings, each with its own plan, review rounds and B-pass:
+  - **C1 (OI-413; branch `sync-merge-scope`; plan `docs/plans/sync-merge-scope.md`, revision 4; 2026-10-25):** U3 as built. The original U3 idea (grade the paths of a re-merge union the paths both sides changed) did not survive review (a rule keyed on names or on how git got there is bypassed by a rename). The rule: while a merge of an ancestor of `refs/remotes/origin/main` is pending, grade only the staged paths whose index entry (mode + object id, or absent) differs from BOTH HEAD's and the tip's; the full ref name; every failed precondition falls back to the full staged list and says why. The diagnose doc for the forced merge-only reviews is `d1264d`.
+  - **C2:** U5, the record-aware resolver; builders last; fixtures projected through A1/A2; the archive off the allow-list; YAML structural checks.
 - **D:** a written comparison first; if bespoke: its own temp worktree, pinned shas, a `GITHUB_REF` seam replay with an output check, a lock, a background run. OI-309 closed per option.
 
 ## 8. Expected effect and residuals

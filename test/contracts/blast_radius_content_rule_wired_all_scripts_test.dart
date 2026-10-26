@@ -106,6 +106,8 @@ void main() {
     'scripts/check_bugfix_commits_have_diagnose.dart',
     // Third member of the blast-radius trio named in CLAUDE.md §7.
     'scripts/check_blast_radius_coverage.dart',
+    // Landing C1: the review gate imports it to decide which staged paths of a branch sync it grades.
+    'scripts/merge_scope_lib.dart',
   ];
 
   /// Hook sources that setup-hooks.sh installs but which are deliberately NOT

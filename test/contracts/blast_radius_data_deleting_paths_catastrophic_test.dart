@@ -31,11 +31,13 @@
 // check_blast_radius_coverage.dart's copy is public but irrelevant (it only checks that every path has SOME tier). The
 // merge-time keystone (check_plan_review_record_exists.dart, which demands `hermes: accepted`) keeps a PRIVATE copy and
 // is covered end to end by the four `catastrophic path (rolling-context/ | purge_user_storage | mixed diff)` cases in
-// test/scripts/plan_review_record_gate_e2e_test.dart. The keystone's copy compiles with `dotAll: true` and the other
-// three do not (a line terminator inside a file name falls through `**` to the default tier in those three); git
-// C-quotes such names before the commit-time gates see them, so the difference is theoretical today. Only the purge
-// glob is insensitive to it (`[^/]*` and an escaped dot); the rolling glob ends in `**`, which compiles to `.*`, so in
-// the three non-dotAll copies a name with a line terminator under rolling-context/ would fall through to the default.
+// test/scripts/plan_review_record_gate_e2e_test.dart. The keystone's copy and the commit-time review gate's copy compile
+// with `dotAll: true` (the gate's since landing C1, which also made it read its staged paths with `-z`, so git no longer
+// C-quotes a name out of its globs: test/contracts/merge_scope_gate_e2e_test.dart G7c); the classifier's copy and the
+// coverage checker's do not (a line terminator inside a file name falls through `**` to the default tier in those two;
+// OI-337 stays open for the classifier). Only the purge glob is insensitive to it (`[^/]*` and an escaped dot); the
+// rolling glob ends in `**`, which compiles to `.*`, so in the two non-dotAll copies a name with a line terminator under
+// rolling-context/ would fall through to the default.
 //
 // Run: flutter test test/contracts/blast_radius_data_deleting_paths_catastrophic_test.dart
 

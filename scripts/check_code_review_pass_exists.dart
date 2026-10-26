@@ -11,10 +11,21 @@
 // Exit 0 = pass (blast-radius < catastrophic, OR catastrophic + accepted review).
 // Exit 1 = fail (catastrophic with no accepted review).
 // --warn-only flag for the 24h soft-rollout window.
+//
+// BRANCH SYNC (landing C1 of the merge-conflict-treadmill plan, closes OI-413; plan
+// docs/plans/sync-merge-scope.md, rule and trust argument in scripts/merge_scope_lib.dart).
+// While a merge of an ancestor of refs/remotes/origin/main is pending, only the staged paths
+// whose index entry equals NEITHER HEAD's NOR origin/main's entry are graded: the rest is
+// either already in the branch or already on main. Every failed precondition falls back to the
+// full staged list (the old rule) and says why in a NOTE; the pre-commit loop discards this
+// gate's output, so read the NOTE by re-running `dart run scripts/check_code_review_pass_exists.dart`
+// while the merge is pending. The hash and the review file name still derive from the FULL staged
+// diff; the reviewer scopes the review to the graded paths the NOTE lists.
 
 import 'dart:io';
 
 import 'blast_radius_content_rules_lib.dart';
+import 'merge_scope_lib.dart';
 
 const _registryPath = 'docs/blast_radius.yaml';
 const _reviewsDir = 'docs/reviews';
@@ -68,7 +79,9 @@ RegExp globToRegExp(String glob) {
     }
   }
   buf.write(r'$');
-  return RegExp(buf.toString());
+  // dotAll: `.` must also match a line terminator, or a path with one in its name matches no glob and
+  // falls to the default tier (check_plan_review_record_exists.dart has the same flag).
+  return RegExp(buf.toString(), dotAll: true);
 }
 
 const _tierOrder = ['feature', 'account', 'platform', 'catastrophic'];
@@ -101,13 +114,45 @@ String _stagedFileContent(String path) {
 /// at the earliest call site. Flagged as pre-existing rather than introduced
 /// here; fixed anyway, because it sits three lines from its own cure.
 Future<List<String>?> stagedPaths() async {
-  final result = await Process.run('git', ['diff', '--cached', '--name-only']);
+  // OI-337 for this gate: `-z` (no C-quoting), `--no-renames` (a rename out of a catastrophic path
+  // lists its source), `--ignore-submodules=none` (a `.gitmodules` `ignore = all` must not hide a
+  // gitlink) and a strict UTF-8 decode, all through merge_scope_lib.dart's one parser. A malformed
+  // path returns null, which the caller turns into a FAIL.
+  final result = await Process.run('git', stagedPathsArgv, stdoutEncoding: null);
   if (result.exitCode != 0) return null;
-  return (result.stdout as String)
-      .split('\n')
-      .map((s) => s.trim())
-      .where((s) => s.isNotEmpty)
-      .toList();
+  return parseNulPaths(result.stdout as List<int>);
+}
+
+/// The production [GitRun]: the gate's own environment (a hook's `GIT_INDEX_FILE`, and `GIT_DIR` in
+/// a linked worktree, are wanted so the diff reads the index `git diff --cached` reads) and raw bytes.
+({int exitCode, List<int> stdout})? _runGit(List<String> args) {
+  try {
+    final r = Process.runSync('git', args, stdoutEncoding: null, stderrEncoding: null);
+    return (exitCode: r.exitCode, stdout: r.stdout as List<int>);
+  } on ProcessException {
+    return null;
+  }
+}
+
+/// The production [ReadMergeHead]: null when the file is absent, a thrown error when it is not
+/// readable (a directory, a permission error): the lib turns that into a `Fallback`.
+String? _readMergeHead(String path) {
+  try {
+    return File(path).readAsStringSync();
+  } on PathNotFoundException {
+    return null;
+  }
+}
+
+/// At a FAIL in a branch sync the NOTE's 20-name cut is not enough: print every graded path, one per
+/// line and escaped, so the reviewer scopes the review to exactly what was graded.
+void _printGradedPaths(MergeScope scope) {
+  if (scope is! Scoped) return;
+  stderr.writeln('  Branch sync: ${scope.paths.length} graded path(s) (the review file is still named for the hash '
+      'of the FULL staged diff):');
+  for (final p in scope.paths) {
+    stderr.writeln('    ${escapeForNote(p)}');
+  }
 }
 
 Future<String> stagedDiffHash() async {
@@ -161,6 +206,11 @@ Future<String> stagedDiffHash() async {
       [
         'diff',
         '--cached',
+        // The graded set is read with --ignore-submodules=none (stagedPathsArgv); the hash must see the same
+        // gitlinks, or a staged gitlink hidden by `.gitmodules ignore = all` is graded catastrophic while the
+        // hash is that of an EMPTY diff, the same review name for every gitlink value. Identical output to the
+        // flagless call whenever no ignore configuration exists.
+        '--ignore-submodules=none',
         '--',
         ':(top)',
         ':(top,exclude)$_reviewsDir',
@@ -193,9 +243,9 @@ Future<void> main(List<String> args) async {
 
   final paths = await stagedPaths();
   if (paths == null) {
-    stderr.writeln('$tag FAIL: `git diff --cached --name-only` failed. Refusing '
-        'to read a git error as "no staged changes" — that exits 0 and waves a '
-        'catastrophic-tier commit through.');
+    stderr.writeln('$tag FAIL: could not read the staged paths (`git diff --cached --name-only -z` '
+        'failed, or a path is not valid UTF-8). Refusing to read that as "no staged changes" — that '
+        'exits 0 and waves a catastrophic-tier commit through.');
     exit(warnOnly ? 0 : 1);
   }
   if (paths.isEmpty) {
@@ -203,8 +253,17 @@ Future<void> main(List<String> args) async {
     exit(0);
   }
 
+  // Branch sync: while a merge of origin/main is pending, grade only the paths that match neither
+  // HEAD nor origin/main. Decided AFTER the "no staged changes" skip (a `-s ours` merge stages
+  // nothing and has always skipped) and used ONLY for the tier loop below: the hash and the review
+  // path still come from the full staged diff.
+  final scope = computeMergeScope(_runGit, readMergeHead: _readMergeHead, staged: paths);
+  final scopeNote = formatScopeNote(scope, paths.length);
+  if (scopeNote != null) stdout.writeln('$tag NOTE: $scopeNote');
+  final classified = scope is Scoped ? scope.paths : paths;
+
   var maxTier = 'feature';
-  for (final p in paths) {
+  for (final p in classified) {
     String tier = 'feature';
     for (final rule in rules) {
       if (globToRegExp(rule.glob).hasMatch(p)) {
@@ -223,7 +282,8 @@ Future<void> main(List<String> args) async {
   }
 
   if (maxTier != 'catastrophic') {
-    stdout.writeln('$tag PASS: max blast-radius = $maxTier (review-acceptance gate only applies to catastrophic).');
+    final what = scope is Scoped ? 'max blast-radius of the graded set' : 'max blast-radius';
+    stdout.writeln('$tag PASS: $what = $maxTier (review-acceptance gate only applies to catastrophic).');
     exit(0);
   }
 
@@ -258,6 +318,7 @@ Future<void> main(List<String> args) async {
       stderr.writeln('  Run `/review` to generate it, then triage findings, then mark `verdict: accepted` in the frontmatter.');
     }
     stderr.writeln('  (The hash excludes $_reviewsDir/, so staging the review does not rename it.)');
+    _printGradedPaths(scope);
     exit(warnOnly ? 0 : 1);
   }
 
@@ -266,6 +327,7 @@ Future<void> main(List<String> args) async {
   if (verdictMatch == null || verdictMatch.group(1) != 'accepted') {
     stderr.writeln('$tag FAIL: staged review file $reviewPath exists but verdict is not "accepted".');
     stderr.writeln('  Triage all findings then change frontmatter to `verdict: accepted` AND re-stage it.');
+    _printGradedPaths(scope);
     exit(warnOnly ? 0 : 1);
   }
 
