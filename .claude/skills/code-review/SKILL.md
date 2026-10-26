@@ -14,6 +14,7 @@ self-evolving: true
 
 - **Reminder-triggered** by `scripts/pre-commit.sh` — it PRINTS a `NOTE: blast-radius=<tier> (>=account) — run /code-review (B-pass)` nudge when the staged blast-radius is ≥ `account` (per `docs/blast_radius.yaml`). Git hooks **cannot invoke Claude skills**, so this is a printed reminder; run `/code-review` **manually** when you see it. (Corrected lean-workflow batch 2026-06-01 — the prior "auto-triggered" wording described behaviour the hook never had.)
 - **Required** for commits with blast-radius `catastrophic` (gate `check_code_review_pass_exists.dart` blocks without an `accepted` verdict)
+  - **Branch sync (landing C1, OI-413).** While a merge of an ancestor of `origin/main` is pending, the gate grades only the staged paths whose index entry matches NEITHER HEAD's NOR `origin/main`'s: what main already holds, or the branch already holds, is not reviewed again. A review file is demanded only when a graded path reaches `catastrophic` (by its path or by `SECURITY DEFINER` content): a sync that adds nothing of its own needs none, and hand edits to feature-tier paths need none; when one is demanded it covers the graded paths only, and the file is still named for the hash of the FULL staged diff. Re-run `dart run scripts/check_code_review_pass_exists.dart` while the merge is pending to read the NOTE (it names the first 20 graded paths; a FAIL lists every one, and the pre-commit loop discards the gate's output). If the NOTE says "scoping not applied", the full staged list is graded, as before.
 - **Manual**: `/review` any time, including pre-push and pre-batch-finalization
 - **Skip**: commits with blast-radius `feature` (cost > value)
 - **Skip**: a bare version bump (OI-275 B2: ONLY `pubspec.yaml` + `app_constants.dart`, decided by content, all-or-nothing). Both files are `platform` tier, so the pre-commit NOTE above still prints for it; ignore it. CI's keystone gate exempts the merge from the record and the B-pass (`/build-apk` Gate 2 is the flow).
@@ -191,14 +192,14 @@ When invoked, this skill should:
    (`drop-beat-my-coach` B-pass, a P1 found independently by two reviewers): main had made
    `docs/audit/OPEN_INDEX.md` a gitignored local build product while the branch edited it, and the session
    banner "local main is 7 commit(s) behind origin/main" was in the author's context and read as background.
-1. Run `git diff --cached --name-only` and `git diff --cached` to assemble the diff.
+1. Run `git diff --cached --name-only` and `git diff --cached` to assemble the diff. In a branch sync (section 0) review `git diff --cached -- <the graded paths>` only: the rest of the staged diff is main's, already reviewed.
 2. Compute blast-radius via `dart run scripts/blast_radius_from_diff.dart`.
 3. Generate the staging hash **exactly the way the gate does**, or the file you write
    will not be the one it looks for:
    ```bash
-   git diff --cached -- ':(top)' ':(top,exclude)docs/reviews' ':(top,exclude).claude/skills/code-review/SKILL.md' ':(top,exclude).claude/skills/code-review/tuning-history.md' | git hash-object --stdin
+   git diff --cached --ignore-submodules=none -- ':(top)' ':(top,exclude)docs/reviews' ':(top,exclude).claude/skills/code-review/SKILL.md' ':(top,exclude).claude/skills/code-review/tuning-history.md' | git hash-object --stdin
    ```
-   then truncate to 12 chars. Three details are load-bearing and this step used to document
+   then truncate to 12 chars (`--ignore-submodules=none` changes the output only where a `.gitmodules` `ignore` setting would hide a staged gitlink; the gate passes it, since landing C1, so that the hash binds the gitlink). Three details are load-bearing and this step used to document
    only two — corrected 2026-09-14, telegram-admin-bot batch, after a session chased a
    FALSE hash-fixed-point across 3 renames believing SKILL.md's own content moved the
    hash (it does not — `check_code_review_pass_exists.dart`'s real exclusion set already
