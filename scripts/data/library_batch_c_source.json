@@ -6242,8 +6242,8 @@
         "action": "unchanged"
       },
       "G3672": {
-        "seen": "Standing and taking a wide side step into a half squat, one hand reaching down to touch the floor, then stepping back up and across; it is a lateral step with a floor touch, so cue 1 is made specific.",
-        "action": "edited"
+        "seen": "Standing and taking a wide side step into a half squat, one hand reaching down to touch the floor, then stepping back up and across: a lateral step with a floor touch, not the back-and-forth step the name and cues describe.",
+        "action": "hold"
       },
       "G1466": {
         "seen": "On the back with the knees bent and the feet flat, one arm folded across the chest while the hips lift and the other arm reaches out to the side, abs lit: a bridge-style hip lift with a twist; the legs are not lifted over the hips, so cue 1 is corrected.",
@@ -6727,9 +6727,9 @@
         "token": 13,
         "name_collision": 4,
         "low_confidence": 53,
-        "picture": 8
+        "picture": 9
       },
-      "shipped": 630,
+      "shipped": 629,
       "core": {
         "beginner": 56,
         "intermediate": 47,
@@ -14474,14 +14474,14 @@
       "breathing_cue": "Exhale as you pull up, inhale as you lower",
       "coaching_cues": [
         "Stand on the assist platform and grip the handles, palms toward you",
-        "Grip underhand shoulder-width, chest up to the bar",
+        "Chest up, pull the chin over the handles",
         "Lower slowly, fully extending the arms"
       ],
       "common_mistakes": [
         "Pushing off the assist so hard it does the whole rep",
         "Half reps"
       ],
-      "pro_tip": "Use a lighter band each week until you can do unassisted reps",
+      "pro_tip": "Use less assistance each week until you can do unassisted reps.",
       "indian_alternative": "",
       "variant_family": "chin_up",
       "discipline": "strength",
@@ -21056,7 +21056,7 @@
       "priority_tier": 3,
       "breathing_cue": "Breathe rhythmically with your steps",
       "coaching_cues": [
-        "Step wide to one side, reach a hand down toward the floor, then step back up",
+        "Stand tall, light on the balls of the feet",
         "Step one foot back and forward in a steady rhythm",
         "Swing the arms naturally"
       ],
@@ -21078,7 +21078,12 @@
       "gym_availability": "home",
       "confidence": "low",
       "note": "Name is vague; assumed a low-impact stepping warm-up drill. Check the picture.",
-      "changes": {}
+      "changes": {},
+      "hold": {
+        "class": "picture",
+        "reason": "Picture shows a wide side step with a hand reaching to the floor, but the row is a back-and-forth step with cues to match; founder decides rename, rewrite or drop at the GIF review.",
+        "owner": "founder"
+      }
     },
     {
       "id": "G1472",
@@ -33704,7 +33709,7 @@
         "Pushing hard into pain",
         "Rolling the ankle quickly"
       ],
-      "pro_tip": "Do it seated with the foot across the opposite knee.",
+      "pro_tip": "Keep the band loose on the foot and pull it gently toward you.",
       "indian_alternative": "",
       "variant_family": "stretch_calf",
       "discipline": "mobility",
@@ -45084,7 +45089,7 @@
       "priority_tier": 2,
       "breathing_cue": "Exhale as you come up, inhale as you lower",
       "coaching_cues": [
-        "Hook your feet under the decline bench pad, plate held in both hands over the chest",
+        "Hook your feet under the decline bench pad, plate held at arm length over the chest",
         "Sit up with control, keep the plate close",
         "Lower slowly"
       ],
@@ -45092,7 +45097,7 @@
         "Using a plate that is too heavy",
         "Swinging off the bottom"
       ],
-      "pro_tip": "Hold the plate across the chest, not behind the head.",
+      "pro_tip": "Keep the plate over the chest and the arms long, not behind the head.",
       "indian_alternative": "",
       "variant_family": "sit_up",
       "discipline": "strength",
@@ -46897,7 +46902,7 @@
         "Heels lifting off the platform",
         "Knees caving inward"
       ],
-      "pro_tip": "Set the pad height so you start tall.",
+      "pro_tip": "Set the start position so you begin standing tall.",
       "indian_alternative": "",
       "variant_family": "squat",
       "discipline": "strength",
@@ -46961,13 +46966,13 @@
       "coaching_cues": [
         "Lie back on the pad with both feet flat on the plate",
         "Press the legs out and back in with control",
-        "Keep the lower back on the floor"
+        "Keep the lower back flat on the pad"
       ],
       "common_mistakes": [
-        "Letting the lower back arch",
+        "Letting the lower back lift off the pad",
         "Moving too fast"
       ],
-      "pro_tip": "Slow tempo; no weight needed.",
+      "pro_tip": "Start light and slow until the range feels smooth.",
       "indian_alternative": "",
       "variant_family": "squat",
       "discipline": "strength",
@@ -49605,14 +49610,14 @@
       "breathing_cue": "Inhale down, exhale as you press",
       "coaching_cues": [
         "Hold a kettlebell in each hand racked at the chest, squat deep",
-        "Drive up and press the bell overhead",
-        "Lower back to the chest and repeat"
+        "Drive up and press both bells overhead",
+        "Lower the bells back to the chest and repeat"
       ],
       "common_mistakes": [
         "Pressing before the legs finish",
         "Letting the bell crash on the wrist"
       ],
-      "pro_tip": "Use one or two kettlebells; start light.",
+      "pro_tip": "Start light; the press is easier when the legs do the work.",
       "indian_alternative": "",
       "variant_family": "thruster",
       "discipline": "strength",
