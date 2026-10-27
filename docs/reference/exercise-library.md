@@ -13,6 +13,15 @@ status: scaffold
 
 Every exercise has: coaching_cues, common_mistakes, breathing_cue, warmup_protocol, pro_tip, MET_value, logging_type, difficulty, suitable_for, regression/progression links, image URLs.
 
+## Media fields (library v16, optional)
+Three optional keys on the 617 rows that have a Wardroom animation (see `docs/operations/EXERCISE_MEDIA.md`). A row carries **all three or none**; absent, never `null`; always the last three keys, in this order. Nothing in the app reads them until Batch M2 (OI-440).
+| Field | Type | Purpose |
+|-------|------|---------|
+| `media_slug` | string | `<4-digit gif number>-<kebab(name)>`, for example `0103-barbell-standing-ab-rollout`. Two rows with one gif number share one slug. |
+| `media_version` | int | Positive; 1 for every file in M1. A changed file is a new version (Batch M1c, OI-441). |
+| `media_source` | string | The constant `wardroom`. |
+The Storage object is `<media_slug>_v<media_version>.webp` in the **private** bucket `exercise-media`. The keys are written by the importer's media stage from `scripts/data/library_media_v16.json`; never edit them in the JSON by hand.
+
 ## V4 Fields (on every exercise)
 | Field | Type | Purpose |
 |-------|------|---------|

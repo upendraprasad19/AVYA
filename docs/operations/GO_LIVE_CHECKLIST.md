@@ -179,6 +179,10 @@ once roughly doubles the surface while §0–§3 are still open.
 | 5.2 | Working tree clean (Gate 1 hard-fails otherwise) | AGENT | `git status --porcelain` empty |
 | 5.3 | `pubspec.yaml` versionCode bumped vs last shipped | AGENT | `backups/apk_sizes.json` last entry vs `pubspec.yaml` — versionCode has NO other source (`build.gradle.kts:41` = `flutter.versionCode`) |
 | 5.4 | Record the shipped artifact's size + commit it | AGENT | `+38`'s ledger entry sat UNCOMMITTED in the working tree; do not repeat that |
+| 5.5 | Supabase plan: Free to Pro before launch (design spec D10). The Free allowance of 1 GB storage and 5 GB uncached egress a month is shared by every bucket, and `exercise-media` alone is 253.55 MB | FOUNDER | Dashboard → Organization → Billing shows Pro; OI-444 |
+| 5.6 | Spend Cap: OFF, with a usage alert on egress and storage. With the cap ON, going over the quota restricts the project (pausing, read-only or HTTP 402 on API requests) for every user; with it OFF the overage is billed, about $0.09 per GB uncached | FOUNDER | Dashboard → Billing → Spend Cap off; an alert rule exists; OI-444 |
+| 5.7 | Auth CAPTCHA at sign-up. It is app work, not only a dashboard switch: once on, the Auth server rejects a sign-up without a token, so the sign-up and sign-in screens must obtain and send it | AGENT + FOUNDER | OI-445; a test that covers the absent-token path |
+| 5.8 | Egress arithmetic for the exercise animations: one full-library download is 253.55 MB of uncached egress, so Free covers about 19 a month and Pro's 250 GB about 985; Batch M2's Wi-Fi prefetch budget is the control | AGENT | OI-440; `docs/operations/EXERCISE_MEDIA.md` section 3 |
 
 ---
 

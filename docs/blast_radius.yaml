@@ -511,6 +511,12 @@ paths:
   # platform: platform also requires a feature_flag, which plain data edits do not carry.
   - { glob: "assets/data/exercise_library.json", tier: account }
   - { glob: "scripts/data/library_injury_additions_*.json", tier: account }
+  # Batch M1 (2026-10-27): the media upload tool holds the service-role key and can delete a Storage
+  # bucket, as the host-shell prod tools (.claude/apply_migration_via_api.js) do at account; the Storage-
+  # deleting Edge Function paths are catastrophic because they run server-side for every user. The
+  # provenance table decides which storage objects the library rows point at. Both sit above scripts/**.
+  - { glob: "scripts/upload_exercise_media.js", tier: account }
+  - { glob: "scripts/data/library_media_v16.json", tier: account }
   - { glob: "docs/**", tier: feature }
   - { glob: "scripts/**", tier: feature }
   - { glob: "test/**", tier: feature }
