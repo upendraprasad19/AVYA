@@ -196,6 +196,9 @@ function isInside(root, p) {
   return rel === '' || (rel !== '..' && !rel.startsWith(`..${path.sep}`) && !path.isAbsolute(rel));
 }
 
+// lstat of a path that is not there answers ENOENT; of a path THROUGH a file it answers ENOTDIR on POSIX (Windows says ENOENT). Both mean "not there".
+const isMissing = (e) => Boolean(e) && (e.code === 'ENOENT' || e.code === 'ENOTDIR');
+
 function checkReportPath(report) {
   if (!report) usage('--report <path> is required with --execute');
   const { primaryRoot } = require(path.join(REPO, '.claude', 'token_path.js'));
@@ -213,7 +216,7 @@ function checkReportPath(report) {
   try {
     existing = fs.lstatSync(resolved);
   } catch (e) {
-    if (e.code !== 'ENOENT') usage(`the report path cannot be inspected (${e.code || e.message}); nothing was sent`);
+    if (!isMissing(e)) usage(`the report path cannot be inspected (${e.code || e.message}); nothing was sent`);
   }
   if (existing && existing.isSymbolicLink()) usage('the report path is a symbolic link; give the path of a real file; nothing was sent');
   const leaf = path.dirname(resolved);
@@ -228,7 +231,7 @@ function checkReportPath(report) {
       fs.lstatSync(d);
       break;
     } catch (e) {
-      if (e.code !== 'ENOENT' && e.code !== 'ENOTDIR') usage(`the report path cannot be inspected (${e.code || e.message}); nothing was sent`);
+      if (!isMissing(e)) usage(`the report path cannot be inspected (${e.code || e.message}); nothing was sent`);
     }
     toCreate.push(d);
     const parent = path.dirname(d);
