@@ -1,0 +1,235 @@
+# Closure ledger — deps-board-equipment: supabase_flutter bump (OI-57 #16),
+# board truth corrections, and the equipment-exclusions flip-on (e2d6b8).
+#
+# Gate 40 (validate_audit_closure.dart). One terminal_state per finding; no
+# `deferred:` key. Branch: deps-board-equipment.
+#
+# Findings R1..R11 came from the two independent context-blind round-1 reviewers
+# and the round-2 reviewer on the hardened diff (§4.12.1). Every one was
+# re-verified by the author against the actual files before being acted on — TWO
+# (R9, R10) were REFUTED on that re-check and carry `verified_clean` rather than a
+# fix, because acting on a wrong finding is the same defect class as missing a
+# right one.
+#
+# R12..R15 are round-2 findings on the round-1 CORRECTIONS — which is exactly why
+# §4.12.1 requires the second round to run on the hardened diff rather than the
+# original. R12 in particular overturned a claim R5 made about its own fix.
+
+batch: deps-board-equipment
+diagnose: docs/diagnoses/2026-08-06-equipment-exclusions-collected-then-ignored-e2d6b8.md
+plan_review_record: docs/plan-reviews/deps-board-equipment.md
+total_findings: 15
+closed_count: 15
+
+findings:
+  - id: R1
+    title: "Commit message understated 4 of 5 transitive versions AND the risk audit was changelog-scoped to that narrower window — gotrue 2.26.0 is flagged BREAKING and was never read"
+    severity: P1
+    terminal_state: closed_in_commit
+    commit: "deps-board-equipment (message corrected before push)"
+    detail: >
+      Claimed gotrue 2.25.0 / postgrest 2.8.0 / realtime 2.10.0 / functions_client
+      2.6.4; pubspec.lock actually holds 2.27.1 / 2.9.1 / 2.13.0 / 2.7.1, plus
+      supabase 2.16.0 and two NEW transitive deps (supabase_common 0.1.2,
+      passkeys_platform_interface 2.9.0) that went unmentioned. Root cause: the
+      versions were taken from the PR's changelog rather than the authoritative
+      lock file — the recurring "asserted state without checking the authoritative
+      source" class (feedback_mistake_unverified_done_claims.md).
+    verification: >
+      Re-derived every version from pubspec.lock by awk. Re-read the missed
+      changelog ranges: gotrue 2.26.0 is the ONLY breaking release in the range
+      ("BREAKING FIX(gotrue): handle already-consented OAuth authorization
+      responses" #1536). Assessed against our surface: the app's ONLY OAuth call
+      is signInWithOAuth(OAuthProvider.google) at auth_provider.dart:326 — no
+      OAuth-server/admin API usage — and the tree compiles with 0 errors. Risk is
+      low but behavioural, so live Google sign-in is a required APK/web check
+      (already mandated by lib/features/auth/CLAUDE.md and diagnose f2b8a1).
+
+  - id: R2
+    title: "The commit invalidated its own citation: edit_profile_screen.dart:1679 shifted to :1686 by the doc comment added in the SAME commit"
+    severity: P1
+    terminal_state: closed_in_commit
+    commit: "deps-board-equipment"
+    detail: >
+      The doc-comment expansion at :1296-1310 pushed the `equipment_exclusions`
+      write down 7 lines. :1679 was then cited in the diagnose doc, the flag
+      comment, the ship-dark ledger, a test comment and both commit messages.
+    verification: "grep -n \"'equipment_exclusions':\" edit_profile_screen.dart → :1686; all 5 citations repointed; grep for 1679 returns nothing."
+
+  - id: R3
+    title: "New warmup assertions were CIRCULAR — derived from the same production map the filter reads, so a wrong tag was invisible"
+    severity: P2
+    terminal_state: closed_in_commit
+    commit: "deps-board-equipment"
+    detail: >
+      The first fix derived `wristTagged` from WarmupCooldownSelector.moveInjuries,
+      making both new assertions tautological, and claimed in a comment that a
+      future tag change "cannot silently re-break this". It could. This also
+      violated the file's own header rule (:6 "Asserts against SPECIFIC known moves
+      (not the production map) to stay non-circular").
+    verification: >
+      MUTATION-PROVEN both ways by the author, not just by the reviewer. Removing
+      'wrist' from warmup_cooldown.dart:43 left all 7 tests PASSING before the fix;
+      after replacing the derivation with a hardcoded {'Jump Rope'} plus an
+      independent pin on moveInjuries['Jump Rope'], the same mutation FAILS with
+      "Expected: ['knee','ankle','wrist'] / Actual: ['knee','ankle']". Tag restored.
+
+  - id: R4
+    title: "The batch's central claim was untested end-to-end: profile-read x default-config was covered by nothing"
+    severity: P2
+    terminal_state: closed_in_commit
+    commit: "deps-board-equipment"
+    detail: >
+      The flip test passes `exclusions:` as an explicit param, which short-circuits
+      before the profile read (training_history_analyzer.dart:174-176). The only
+      profile-reading test forced the flag via setFlag(true). So "default config x
+      explicit param" and "profile read x forced flag" were both covered, and the
+      only combination a real device runs — profile read at the DEFAULT config —
+      was not.
+    verification: >
+      Added "THE USER JOURNEY" case to equipment_exclusions_activation_behavioral_test.dart:
+      deletes both config keys, writes the profile field, generates with no param.
+      Self-discriminating: it also asserts the kill-switch makes the same profile
+      exclusion inert again, so both halves of the path are proven live.
+
+  - id: R5
+    title: "The kill-switch had NO writer anywhere — a gate nothing can close is not 'reachable' under §4.6"
+    severity: P2
+    terminal_state: closed_in_commit
+    commit: "deps-board-equipment"
+    detail: >
+      `disable_equipment_exclusions` was read at plan_engine_flags.dart:172 and
+      written nowhere; the dev panel wrote only `enable_hold_weeks`. Reverting a
+      platform-tier change affecting every gym-tier user would have required a code
+      change plus an APK respin.
+    verification: >
+      Added _toggleEquipmentExclusions() + a status row and button to
+      dev_panel_screen.dart's Ship-dark flags card. It deletes the key to restore
+      the default and writes true to kill, reverting BOTH gated behaviours.
+
+  - id: R6
+    title: "diagnose-doc claimed `telemetry_op_types: None added` — the flip makes a previously-unreachable telemetry path live"
+    severity: P3
+    terminal_state: closed_in_commit
+    commit: "deps-board-equipment"
+    detail: >
+      training_history_analyzer.dart:187-189 fires ErrorTelemetry.recordNonFatal
+      from the catch around the profile read. Pre-flip, flagEnabled:false returned
+      at :174 so that try block was unreachable. Post-flip every generation reads
+      userBox.
+    verification: >
+      Field rewritten with the reason string, the pre/post reachability change, the
+      observed test-harness emission, and why production rate is expected to be
+      zero (all generation callers run after HiveUserSession.openForUser). The
+      catch is deliberately NOT silenced — a StateError there would be a real
+      signal (feedback_observability_silent_drop.md).
+
+  - id: R7
+    title: "plan_engine/CLAUDE.md self-contradicted: the edited paragraph still ended 'Kill-switch enable_equipment_exclusions', and the stage-8 WU-2 entry it points at was untouched"
+    severity: P2
+    terminal_state: closed_in_commit
+    commit: "deps-board-equipment"
+    verification: "Both :279's trailing sentence and :63's two clauses updated; grep for enable_equipment_exclusions under lib/ now returns only correct historical references."
+
+  - id: R8
+    title: "OI-89's body stated the pre-flip world in present tense above the new update block, and cited a line range the flip had moved"
+    severity: P2
+    terminal_state: closed_in_commit
+    commit: "deps-board-equipment"
+    verification: "Stale clause struck inline with a pointer to the update; getter line range corrected :145-153 → :169."
+
+  - id: R10
+    title: "REFUTED — reviewer claimed pro_phase_advance.dart's repeatContent expression spans :168-170 and that :167 is a comment; it does not"
+    severity: P3
+    terminal_state: verified_clean
+    evidence: >
+      `sed -n '166,171p' lib/shared/services/pro_phase_advance.dart | cat -n` shows
+      :166 is the trailing comment line and the expression occupies :167-169
+      exactly as originally cited. The author's citation was right and the
+      reviewer's correction was wrong; no edit made. Recorded because an unrefuted
+      "correction" gets re-applied by the next reader and would introduce the error
+      it claims to fix — the same reason R9 is written down.
+
+  - id: R11
+    title: "OI-53 described the triggered-deload readiness gate as `&& readinessEnabled` when the code is an early-return"
+    severity: P3
+    terminal_state: closed_in_commit
+    commit: "deps-board-equipment"
+    verification: >
+      deload_evaluator.dart:56 is `if (!PlanEngineFlags.readinessEnabled) return;`.
+      Behaviourally identical, but the phrasing was inherited from the ledger
+      comment rather than read from the code. OI-53 now cites the file:line and
+      notes the distinction. The substantive claim (it does nothing until readiness
+      is ON) was correct.
+
+  - id: R9
+    title: "REFUTED — reviewer flagged `flip_commit: null` as a defect; the ledger's own schema requires null until flip_reviewed is true"
+    severity: P3
+    terminal_state: verified_clean
+    evidence: >
+      docs/ship_dark_pending_review.yaml:24-25 defines the field as "sha of the
+      flip-on commit (fill in when flip_reviewed flips to true; null until then)".
+      flip_reviewed is still false because no converged plan-review record exists
+      yet, so null is the CORRECT value and populating it would have been the
+      actual error. Recorded rather than silently dropped: a reviewer finding that
+      is wrong needs a written refutation, or the next reader re-raises it.
+
+  # ── Round-2 findings, on the round-1 CORRECTIONS ────────────────────────────
+
+  - id: R12
+    title: "R5's kill-switch writer is DEBUG-ONLY — in a release APK the gate still has no writer, so R5's own closure claim was false for the shipped artifact"
+    severity: P1
+    terminal_state: closed_in_commit
+    commit: "deps-board-equipment (claim scoped honestly; OI-95 filed for the capability gap)"
+    verification: >
+      app_router.dart:336 wraps the /dev route in `if (kDebugMode)`, so
+      DevPanelScreen is compiled out of `--flavor prod --release`. Confirmed by
+      direct grep, and `grep -rn "RemoteConfig" lib/` returns only
+      sync_service.dart:254's comment stating none exists. So R5 made the
+      kill-switch operable for DEVELOPMENT only; production revert of this
+      platform-tier flip still requires a code change plus an APK respin —
+      verbatim the cost R5 claimed to remove.
+      NOT papered over and NOT re-fixed by exposing a plan-engine kill-switch to
+      end users, which would be worse. The limitation is ARCHITECTURAL and applies
+      to every flag in this codebase, so it is stated plainly here, in the flip
+      commit, and in the plan-review record, and filed as OI-95 for the general
+      capability. Accepted risk for this flip specifically: the failure mode is
+      degraded plan CONTENT, not a crash or data loss, so respin latency is
+      tolerable — but that is a judgement, and it is recorded as one.
+
+  - id: R13
+    title: "The converse wrist-drop assertion was latently vacuous — `if (!base.contains(m)) continue;` silently skipped the whole second contract half"
+    severity: P3
+    terminal_state: closed_in_commit
+    commit: "deps-board-equipment"
+    verification: >
+      Round 2 probed it by replacing the continue with an expect and confirmed the
+      move IS in the baseline today, so the assertion is live — but it would go
+      silent the moment gym cardio stopped being reachable, which is the exact
+      condition that hid this bug for three weeks. Replaced with an explicit
+      `expect(base.intersection(wristTagged), isNotEmpty)` reachability guard
+      before the loop. Same class as R3: a guard that can quietly assert nothing.
+
+  - id: R14
+    title: "The USER JOURNEY test mutated shared configBox/userBox state with cleanup only on the success path"
+    severity: P3
+    terminal_state: closed_in_commit
+    commit: "deps-board-equipment"
+    verification: >
+      Cleanup sat after the assertions, so a failure at either expect() would have
+      leaked `disable_equipment_exclusions: true` into sibling tests in the same
+      file. Moved to `addTearDown` registered BEFORE the assertions. Bounded in
+      practice (the next test sets both itself) but ordering-fragile.
+
+  - id: R15
+    title: "OI-53 left stale by the very commit that rewrote it — still says 13 flags and states the broken promise in the present tense"
+    severity: P2
+    terminal_state: closed_in_commit
+    commit: "deps-board-equipment"
+    verification: >
+      After this commit it is TWELVE flags still dark, and the equipment-exclusions
+      promise is kept, not broken. The entry's own `Verified:` line claimed it was
+      "re-derived from source this session", which overstated it. Corrected. Noted
+      because R11 edited this same entry without catching it — the miss was
+      inconsistent attention, not a systemic gap, which is the more useful thing to
+      record.

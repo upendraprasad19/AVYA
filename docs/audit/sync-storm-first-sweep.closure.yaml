@@ -1,0 +1,110 @@
+# Closure ledger - sync-storm-first-sweep (diagnose b9e4d7; plan docs/plans/2026-10-25-sync-storm-first-sweep.md)
+# Gate 40 (validate_audit_closure.dart). One terminal_state per finding; no `deferred:` key.
+# `<branch>@branch` is the in-branch commit form (the SHA does not exist until the commit).
+# Scope: founder scope call 2026-10-25 (AskUserQuestion, answer "Smallest piece first (Recommended)"):
+# A1 = the migrator fix + saving progress every ~25 rows + postponing the first full sweep on a fresh device.
+# Every other piece named in the investigation is an OI below (letters (a)-(k) of the plan).
+
+batch: sync-storm-first-sweep
+plan: docs/plans/2026-10-25-sync-storm-first-sweep.md
+plan_review_record: docs/plan-reviews/sync-storm-first-sweep.md
+bpass_review: docs/reviews/sync-storm-first-sweep-bpass.md
+diagnose_docs:
+  - docs/diagnoses/2026-10-25-restored-device-resends-history-b9e4d7.md
+
+total_findings: 17
+closed_count: 17
+
+findings:
+  # ── units ──────────────────────────────────────────────────────────────────
+  - id: U1
+    title: "W1: the exercise-log migrator no longer rewrites and re-stamps a restored row that is already canonical, so the restore's push fingerprints survive (diagnose b9e4d7)"
+    terminal_state: closed_in_commit
+    commit: sync-storm-first-sweep@branch
+    verification: "test/contracts/exlog_migrator_keeps_restored_fingerprints_test.dart (restore -> migrate -> push chain, every clause with a negative control); 12 of 12 non-equivalent mutants red (M1 and W1f measured equivalent); kill switch disable_exlog_migrator_skip_unchanged; B-pass seat W1"
+
+  - id: U2
+    title: "W2: SyncSkipIndex saves its progress to Hive every 25 durable events (a confirmed push, or the drop of a stored fingerprint) so a retry, reload or killed tab does not redo finished rows"
+    terminal_state: closed_in_commit
+    commit: sync-storm-first-sweep@branch
+    verification: "test/sync/sync_skip_index_incremental_flush_test.dart (31 tests incl. S1-S4/S11 and N1-N3 for the drop-counting design change); 30 mutants applied (M9-M22, M48-M54, S*, N*): 27 red, 3 measured equivalent (M21, and M51+M54 as a pair); kill switch disable_skip_index_incremental_flush; B-pass seat W2"
+
+  - id: U3
+    title: "W3: a device that was empty at its first launch postpones the first full sweep (durable uid-keyed marker, 1 h window, stamps last_full_sync with the marker time); the sweep runs at the first launch at least 24 h after the first one"
+    terminal_state: closed_in_commit
+    commit: sync-storm-first-sweep@branch
+    verification: "test/sync/first_sweep_decision_test.dart (29 tests; 33 of 33 mutants red), test/contracts/first_launch_sweep_decision_writer_to_reader_test.dart (3 tests, writer -> reader; 7 of 7 mutants red); five indent-anchored wiring pins (presence only: checkAndSync cannot run under SyncHarness); kill switch disable_first_sweep_postpone; B-pass seat W3; the 24 h wording was corrected after B-pass P1"
+
+  - id: U4
+    title: "docs, SoT registry, skill bug-classes 2.123/2.124, naming glossary, nested CLAUDE.md, public-API snapshot, plan-review record and B-pass review"
+    terminal_state: closed_in_commit
+    commit: sync-storm-first-sweep@branch
+    verification: "docs/sot_registry.yaml entries first_launch_sweep_decision and the migrator comment; docs/architecture/sync.md; lib/core/services/CLAUDE.md row; docs/naming_conventions.md rows; B-pass seat docs/governance (36 findings in total over four seats, all handled, 0 false alarms); full gate loop (sh scripts/pre-commit.sh) green on the staged state"
+
+  - id: U5
+    title: "runtime verification on a real device: normal window, site data cleared, server quiet; web OAuth reload vs in-app sign-in; day +1 sweep; reload mid-restore; offline first launch; request count against the 2,228 baseline (plan section 9)"
+    terminal_state: blocked_on_user
+    reason: "Day 0 on the web PASSED on 2026-10-25 (laptop, Chrome guest window: 381 requests against the 2,228 baseline, 0 workout_log_exercises upserts, first_sweep_postponed present, no 4xx or 5xx; numbers on OI-423). Still to run by the founder: OI-348 rows S1 to S5 (live web app, no build) and A15 (phone, first AAB with PR #172)."
+
+  # ── separate pieces (the plan's letters (a)-(k)); none is claimed fixed ─────
+  - id: OI-416
+    title: "(a) overlapping live sync passes still duplicate work: no one-pass-at-a-time guard"
+    terminal_state: blocked_on_user
+    reason: "Separate piece named in the founder's 2026-10-25 scope call ('Smallest piece first'); founder to schedule. OI-416 holds the evidence and the design notes."
+
+  - id: OI-417
+    title: "(b) the restore records push fingerprints only for exercise logs; the other 15 SyncSkipIndex domains re-upload what a fresh device just downloaded (the postponed day+1 sweep pays it)"
+    terminal_state: blocked_on_user
+    reason: "Separate piece named in the founder's 2026-10-25 scope call; founder to schedule, with the day+1 request count from U5 as input. OI-417."
+
+  - id: OI-418
+    title: "(c) sync pushes one request per row and two per exercise: batch the upserts"
+    terminal_state: blocked_on_user
+    reason: "Separate piece named in the founder's 2026-10-25 scope call; founder to schedule. OI-418."
+
+  - id: OI-419
+    title: "(d) every telemetry event costs one Edge Function call plus one GoTrue round trip: batch them"
+    terminal_state: blocked_on_user
+    reason: "Separate piece named in the founder's 2026-10-25 scope call; founder to schedule. OI-419."
+
+  - id: OI-420
+    title: "(e) Android phone cold start after sign-in is slow and shows Sync paused: UNMEASURED, two causes not established"
+    terminal_state: blocked_on_user
+    reason: "Found during the A1 investigation, outside the quoted scope call; founder to schedule. Needs a real-phone cold-start timeline (U5 includes the first measurement). OI-420."
+
+  - id: OI-421
+    title: "(f) Google sign-in sends no prompt=select_account (auth_provider.dart:561)"
+    terminal_state: blocked_on_user
+    reason: "Found during the A1 investigation, outside the quoted scope call; founder to schedule. OI-421."
+
+  - id: OI-422
+    title: "(g) two full restores run concurrently on a fresh device by design; confirm they explain the doubled table reads, then choose one"
+    terminal_state: blocked_on_user
+    reason: "Found during the A1 investigation and removed from A1 by plan review, outside the quoted scope call; founder to schedule. OI-422."
+
+  - id: OI-423
+    title: "(h) delete the three sync-storm-first-sweep kill switches and their old paths once the runtime check is recorded"
+    terminal_state: upstream_blocked
+    blocker: "the plan's section 9 device check (U5) is founder-run and not yet recorded; CLAUDE.md 4.6 step 4 deletes the old paths in the batch that rolls the gate"
+    reopen_when: "the U5 numbers are recorded on OI-423"
+
+  - id: OI-424
+    title: "(i) residual restored-row re-send shapes after A1 (summary-only, NULL-aggregate and mismatched-aggregate rows; set_number = 1 for a summary-only row)"
+    terminal_state: upstream_blocked
+    blocker: "the number of rows in these shapes on a real account is only known from the U5 device check"
+    reopen_when: "the U5 count of rewritten rows is recorded on OI-424"
+
+  - id: OI-425
+    title: "(j) W3 consequence: sweep-only pushes (Health Connect imports, plan_json, profile / progress / preferences / coach pushes) wait until the first launch at least 24 h after the first one, unbounded for an inactive user"
+    terminal_state: blocked_on_user
+    reason: "Consequence of W3, accepted under the quoted scope call; whether any of these needs an immediate push is a decision that needs the U5 request counts. OI-425."
+
+  - id: OI-426
+    title: "(k) the restore records its exercise fingerprints once after its loop; a process killed or reloaded mid-restore leaves restored rows without a fingerprint (they push once)"
+    terminal_state: blocked_on_user
+    reason: "Removed from A1 by plan review, outside the quoted scope call; founder to schedule, with the U5 reload-mid-restore count as input. OI-426."
+
+  - id: OI-439
+    title: "a browser tab frozen during the restore (iPhone Safari app switch) fires the 45 s restore ceilings on wake: Sync paused appears and an owed retry sweep re-sends the non-workout domains"
+    terminal_state: blocked_on_user
+    reason: "Found while running the A1 device check on 2026-10-25, outside the quoted scope call; founder to schedule. OI-439."
