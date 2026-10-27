@@ -19,7 +19,7 @@
 -- THE WRITE LEGS RUN AS `authenticated` ONLY. A write grant to anon alone is not exercised by a leg: it is carried by
 -- the catalog check (c) below, which is a heuristic over the deparsed policy text (it flags no bucket predicate, a
 -- policy naming exercise-media, or a negation: <>, !=, !~, NOT, IS DISTINCT, ~~; a policy that reaches the bucket by
--- a range or LIKE on bucket_id escapes it). The probe legs are the proof for authenticated; for anon alone nothing
+-- a range, a positive regex (~, ~*, SIMILAR TO) or a function of bucket_id escapes it). The probe legs are the proof for authenticated; for anon alone nothing
 -- but that listing stands behind the claim, so read the listing again after any storage-policy change.
 -- What it does NOT prove: that Storage maps an anon-key JWT to the role anon and an anonymous sign-in to
 -- is_anonymous true (documented behaviour, UNVERIFIED here; Task 9.2 adds one real request with the anon key),

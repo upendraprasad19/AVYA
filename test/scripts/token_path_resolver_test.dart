@@ -213,9 +213,9 @@ void main() {
   test('node: an injected GIT_CONFIG_COUNT/KEY_0/VALUE_0 triple reaches git whole, so the primary lookup still works', () {
     final w = _repoWithLinkedWorktree(tmp);
     _write(w.primary, ['.supabase']);
-    final r = _viaNode(w.linked, env: _injectedGitConfig)!;
-    expect(r.primaryError, isNull, reason: 'git must not die on a COUNT whose KEY_0 was scrubbed');
-    expect(_real(r.path), _real(_join([w.primary, '.supabase', _name])));
+    final r = _viaNode(w.linked, env: _injectedGitConfig);
+    expect(r, isNotNull, reason: 'git must not die on a COUNT whose KEY_0 was scrubbed: the lookup would find nothing');
+    expect(_real(r!.path), _real(_join([w.primary, '.supabase', _name])));
   });
 
   // The `git` child that finds the primary checkout has no use for a Supabase secret; a hook or a wrapper that logs a child

@@ -55,6 +55,7 @@ class _Fake {
   final postBody = <String, String>{};
   final cutPost = <String>{}; // destroy the connection on the first POST of a name
   final cutDelete = <String>{}; // destroy the connection on the first DELETE of a name
+  final cutHead = <String>{}; // destroy the connection on the first keyed HEAD of a name
   bool cutBucketEmpty = false; // destroy the connection on the empty-bucket call
   bool cutBucketDelete = false; // destroy the connection on the delete-bucket call
   bool destroyPublic = false; // drop the connection on the first public-route probe of exercise-media
@@ -122,6 +123,10 @@ class _Fake {
             }
           } else if (!hasKey) {
             _json(res, 401, {'message': 'bad key'});
+          } else if (req.method == 'HEAD' && cutHead.remove(name)) {
+            final socket = await res.detachSocket(writeHeaders: false);
+            socket.destroy();
+            return;
           } else {
             final seq = headSeq[name];
             final forced = req.method == 'HEAD' && seq != null && seq.isNotEmpty ? seq.removeAt(0) : headStatus[name];
@@ -472,6 +477,8 @@ void main() {
       expect(Directory('${rig.dir.path}/fresh').existsSync(), isFalse);
     });
 
+    // Windows-protective: on POSIX the old stop-at-the-first-created-directory logic also worked, so this test and the
+    // dangling-link test below cannot redden on Linux CI; the open-failure test below reddens on both.
     test('the writability check leaves a directory that was already there alone, even when it is empty', () async {
       final keep = Directory('${rig.dir.path}/empty-existing')..createSync();
       final r = await rig.run(['--execute', '--report', '${keep.path}/new/report.json'], withKey: false);
@@ -486,6 +493,23 @@ void main() {
       expect(r.exitCode, 2, reason: _all(r));
       expect(_all(r), contains('cannot be written'));
       expect(Directory('${rig.dir.path}/made').existsSync(), isFalse);
+      expect(rig.fake.seen, isEmpty);
+    });
+
+    test('a dangling directory link as the report parent is refused and the link stays (it is not the probe\'s to remove)', () async {
+      final target = Directory('${rig.dir.path}/link-target')..createSync();
+      final link = Link('${rig.dir.path}/dangling-parent');
+      try {
+        link.createSync(target.path);
+      } on FileSystemException catch (e) {
+        markTestSkipped('a directory link cannot be created here (${e.osError?.message})');
+        return;
+      }
+      target.deleteSync();
+      final r = await rig.run(['--execute', '--report', '${link.path}/report.json']);
+      expect(r.exitCode, 2, reason: _all(r));
+      expect(_all(r), contains('cannot be written'));
+      expect(FileSystemEntity.isLinkSync(link.path), isTrue, reason: 'the link must still be there');
       expect(rig.fake.seen, isEmpty);
     });
 
@@ -1214,8 +1238,19 @@ void main() {
       final report = jsonDecode(File(rig.reportPath).readAsStringSync()) as Map<String, dynamic>;
       expect((report['results'] as List).map((e) => (e as Map)['name']).toList(), ['canary-1_v0.webp']);
       expect(report['stoppedBy'], isA<String>());
-      expect(report['inFlight'], 'canary-2_v0.webp', reason: 'the report names the object whose DELETE was cut off');
+      expect(report['inFlight'], {'name': 'canary-2_v0.webp', 'deleteStatus': null}, reason: 'the report names the object whose DELETE was cut off');
       expect(rig.fake.objects.containsKey('canary-1_v0.webp'), isFalse, reason: 'the first object really was deleted');
+    });
+
+    test('--delete-object keeps the DELETE answer in the report when only the HEAD after it is cut off', () async {
+      expect((await rig.run(['--canary', '--execute', '--report', rig.reportPath])).exitCode, 0);
+      rig.fake.seen.clear();
+      rig.fake.cutHead.add('canary-2_v0.webp');
+      final r = await rig.run(['--delete-object', 'canary-1_v0.webp,canary-2_v0.webp', '--execute', '--confirm-bucket', 'exercise-media', '--report', rig.reportPath]);
+      expect(r.exitCode, isNot(0), reason: _all(r));
+      final report = jsonDecode(File(rig.reportPath).readAsStringSync()) as Map<String, dynamic>;
+      expect(report['inFlight'], {'name': 'canary-2_v0.webp', 'deleteStatus': 200});
+      expect(rig.fake.objects.containsKey('canary-2_v0.webp'), isFalse, reason: 'the DELETE really was executed');
     });
 
     for (final (label, cutEmpty, cutDelete, emptyStatus) in [('the empty call', true, false, null), ('the delete call', false, true, 200)]) {

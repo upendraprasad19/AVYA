@@ -28,7 +28,9 @@ const TOKEN_NAME = 'supabase access token.txt';
 // Names are compared upper-cased (Windows keeps the case an operator typed, `$env:supabase_service_role_key` included), and
 // any variable that looks like a credential goes with them: the two git commands run here are local and need none.
 // The GIT_CONFIG_* family is the one exception: git reads GIT_CONFIG_COUNT together with GIT_CONFIG_KEY_<n> and
-// GIT_CONFIG_VALUE_<n>, and dies (exit 128) on a COUNT whose KEY_n is gone, so the three stay together.
+// GIT_CONFIG_VALUE_<n>, and dies (exit 128) on a COUNT whose KEY_n is gone, so the three stay together. Residual, accepted:
+// that family can carry a credential (an http extraheader in a VALUE, a token in an insteadOf KEY); both git commands run
+// here are local, and a container may need an injected safe.directory.
 const SECRET_NAME = /KEY|TOKEN|SECRET|PASSWORD|PASSWD|CREDENTIAL/;
 function scrubbedGitEnv(base = process.env) {
   const env = { ...base };

@@ -32,6 +32,8 @@ Map<String, String> scrubbedGitEnv([Map<String, String>? base]) {
   // Names are compared upper-cased (Windows keeps the case an operator typed), and any variable that looks like a credential
   // goes with them: the git commands run here are local and need none. The twin of `.claude/token_path.js`.
   // The GIT_CONFIG_* family stays whole: git dies (exit 128) on a GIT_CONFIG_COUNT whose GIT_CONFIG_KEY_<n> is gone.
+  // Residual, accepted: it can carry a credential (an http extraheader in a VALUE, a token in an insteadOf KEY); both git
+  // commands run here are local, and a container may need an injected safe.directory.
   const redirects = {'GIT_DIR', 'GIT_WORK_TREE', 'GIT_INDEX_FILE', 'GIT_COMMON_DIR'};
   final secretName = RegExp(r'KEY|TOKEN|SECRET|PASSWORD|PASSWD|CREDENTIAL');
   env.removeWhere((k, _) {

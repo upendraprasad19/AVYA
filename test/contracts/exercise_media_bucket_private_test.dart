@@ -738,10 +738,12 @@ void main() {
       _Pol w(String cmd, String? qual, [String? check, List<String> roles = const ['authenticated'], String table = 'objects']) =>
           _Pol(table, 'p', cmd, roles, qual, check);
       final flagged = <String, _Pol>{
-        'a policy on storage.buckets': w('UPDATE', 'true', null, const ['authenticated'], 'buckets'),
+        // bucket-scoped text, so only the table branch can list it
+        'a policy on storage.buckets': w('UPDATE', "(bucket_id = 'coach-media'::text)", null, const ['authenticated'], 'buckets'),
         'an INSERT with no bucket predicate': w('INSERT', null, 'true'),
         'a DELETE that names exercise-media': w('DELETE', "(bucket_id = 'exercise-media'::text)"),
         'a <> on the bucket': w('DELETE', "(bucket_id <> 'coach-media'::text)"),
+        'a != on the bucket (pg_get_expr prints <>, so this spelling is belt and braces)': w('DELETE', "(bucket_id != 'coach-media'::text)"),
         'a NOT LIKE on the bucket': w('DELETE', "(bucket_id !~~ 'x%'::text)"),
         'a LIKE on the bucket': w('DELETE', "(bucket_id ~~ 'exercise%'::text)"),
         'a negated regex on the bucket': w('DELETE', "(bucket_id !~ 'x'::text)"),
@@ -762,9 +764,12 @@ void main() {
       for (final e in spared.entries) {
         expect(_modelUnscopedWrite(e.value), isFalse, reason: 'must not be listed: ${e.key}');
       }
-      // The documented gap of the heuristic (live-verify header): a range on bucket_id that reaches the bucket is not
-      // named, not negated and has a bucket predicate. The write legs of the probe (as authenticated) are the proof.
+      // The documented gaps of the heuristic (live-verify header): a range, a positive regex or a function of bucket_id
+      // that reaches the bucket is not named, not negated and has a bucket predicate. The write legs of the probe (as
+      // authenticated) are the proof for those.
       expect(_modelUnscopedWrite(w('INSERT', null, "(bucket_id > 'a'::text)")), isFalse);
+      expect(_modelUnscopedWrite(w('INSERT', null, "(bucket_id ~ 'exercise'::text)")), isFalse);
+      expect(_modelUnscopedWrite(w('INSERT', null, "(starts_with(bucket_id, 'exercise'::text))")), isFalse);
     });
 
     test('the live verify has no DDL and neither file controls a transaction', () {
