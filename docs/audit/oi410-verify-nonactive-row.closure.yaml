@@ -3,8 +3,9 @@
 # Gate 40. One terminal_state per finding; no `deferred:` key. Every row below is a CENSUS entry of the plan: the three doors that
 # were the defect, every other arm that can answer `verified:true`, the sibling writers and readers, the review rounds, and the live
 # deploy. The row `OI410-LIVE-PROOF` records a FOUNDER WAIVER (Q2, 2026-10-26, "Waive the live proof (Recommended)"), NOT a live run:
-# its evidence states only the waiver and what exists at the time of this commit. OI-410 itself stays OPEN until the post-deploy
-# docs PR records the deployed SHA, version, payload sha256 and the boot and smoke results.
+# its evidence states only the waiver and what existed when the code merged; the 2026-10-27 amendment (the founder accepted the boot probe
+# alone in place of the signed-in smoke) is recorded in the same row. OI-410 closes in the post-deploy docs commit that moved it to
+# docs/audit/closed_issues.md, after the live deploy (verify-payment v32, 2026-10-27T14:57:54Z) and its boot probe.
 
 batch: oi410-verify-nonactive-row
 plan_review_record: docs/plan-reviews/oi410-verify-nonactive-row-v2.md
@@ -86,7 +87,7 @@ findings:
   - id: OI410-LIVE-PROOF
     title: "live behavioural proof of the refusal on a real captured payment (cancel its row, replay verify-payment)"
     terminal_state: verified_clean
-    evidence: "WAIVED by the founder 2026-10-26 (Q2, answer 'Waive the live proof (Recommended)'): closure rests on the handler-level tests against the real client library, the M0 revert proof (36 reds) and 31 killed mutants; the deploy-time boot probe and signed-in smoke are recorded by the post-deploy PR, not pre-written here. This row names the waiver as the founder's call; it is not evidence of a live run (SKILL 6.10(2) wants one)."
+    evidence: "WAIVED by the founder 2026-10-26 (Q2, answer 'Waive the live proof (Recommended)'): closure rests on the handler-level tests against the real client library, the M0 revert proof (36 reds) and 31 killed mutants; the deploy-time boot probe was run 2026-10-27 (HTTP 401, the module's own body, not a 503), and on 2026-10-27 the founder accepted the boot probe alone in place of the signed-in smoke (his words: 'accept boot probe alone'); no signed-in smoke and no real captured-payment replay were run. This row names the waiver as the founder's call; it is not evidence of a live run (SKILL 6.10(2) wants one)."
 
   - id: OI410-INTENT-ROLLBACK
     title: "no runtime kill switch for this change; rollback is a forward-deploy of the saved previous bundle"
@@ -95,6 +96,7 @@ findings:
     verification: "Q1 'No switch; rollback = redeploy (Recommended)' (plan, verbatim); plan 'Verification, review, rollout' steps 2 and 6 and SKILL 6.15 give the recipe; the rollback dry-run was corrected by hermes D-H3"
 
   - id: OI410-LIVE-DEPLOY
-    title: "deploy verify-payment to the live project (fresh GET and bundle compare, deploy, anon-key boot probe, signed-in smoke, 24 h log and alerts reads)"
-    terminal_state: blocked_on_user
-    reason: "a live Edge Function deploy needs the founder's explicit per-action go, asked for AFTER the merge with every live action listed (plan 'Live deploy'); Q4 covered the code through merge only. The post-deploy docs PR records the deployed SHA, version, payload sha256 and the check results, and closes OI-410 only if the checks Q2 names were run."
+    title: "deploy verify-payment to the live project (fresh GET and bundle compare, deploy, anon-key boot probe, 24 h log and alerts reads; the signed-in smoke replaced by the founder's boot-probe-only acceptance)"
+    terminal_state: closed_in_commit
+    commit: "oi410-post-deploy-docs (the closing docs commit; the deploy itself is a live action, 2026-10-27T14:57:54Z)"
+    verification: "founder's per-action go 2026-10-27 ('approval? granted' on items 1, 2, 3, 5, 6; 'accept boot probe alone'); fresh GET v31 verify_jwt true; live bundle == 5794439a on 4/4 files; deploy HTTP 201 -> v32 verify_jwt true; live bundle == main 43bd8797 on 4/4; anon-key boot probe HTTP 401 module body (not 503); T+0 reads 2 requests, 0 5xx, 0 boot errors, 0 replay lines, 0 alerts; forward payload sha256 92b50aab223e415c5a36467813a1f979d5a39a37331716989869040fc3d98e2d; rollback payload (from 5794439a) sha256 877c5a95a8ac4484a577dc29715dd73ac44ecc1045cd4d68bd3da33bbb729ae3; the 24 h watch window to about 2026-10-28 20:30 IST is monitoring, not a closing condition"
