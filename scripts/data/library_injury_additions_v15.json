@@ -1,0 +1,5113 @@
+{
+  "_meta": {
+    "version": 15,
+    "about": "Injury tokens ADDED to the raw tags of each new row (final tags = sorted(raw union row tokens)). Built by scripts/build_library_injury_additions_v15.js; decided by the founder.",
+    "classes": [
+      "floor",
+      "majority",
+      "family",
+      "twin",
+      "judgement"
+    ]
+  },
+  "safe_pool_additions": [
+    "Band Hip Lift",
+    "Band Reverse Fly",
+    "Band Standing Rear Delt Row",
+    "Barbell Incline Row",
+    "Bird Dog",
+    "Bodyweight Row",
+    "Cable Floor Seated Wide Grip Row",
+    "Cable Low Seated Row",
+    "Cable Palm Rotational Row",
+    "Cable Rear Delt Row",
+    "Cable Seated High Row",
+    "Cable Seated Single Arm Alternate Row",
+    "Cable Seated Wide Grip Row",
+    "Cable Straight Back Seated Row",
+    "Clamshell",
+    "Dumbbell Incline Row",
+    "Dumbbell Lying Rear Delt Row",
+    "Elliptical Trainer",
+    "Hug Knees to Chest",
+    "Inverted Row Bent Knees",
+    "Machine Alternating Narrow Grip Seated Row",
+    "Machine Narrow Grip Seated Row",
+    "Machine Seated Reverse Fly",
+    "Machine Seated Row",
+    "Pelvic Tilt",
+    "Pelvic Tilt Into Bridge",
+    "Resistance Band Seated Straight Back Row",
+    "Standing Pelvic Tilt",
+    "Supported Dumbbell Single Arm Reverse Fly"
+  ],
+  "rows": {
+    "G0001": {
+      "tokens": [
+        "lower_back"
+      ],
+      "class": "family",
+      "reason": "floor lower_back (all 3 same-family originals); family lower_back (twist / V-up / crunch / sit-up name)",
+      "variant_family": "sit_up"
+    },
+    "G0002": {
+      "tokens": [
+        "lower_back"
+      ],
+      "class": "floor",
+      "reason": "floor lower_back (all 1 same-family originals)",
+      "variant_family": "side_bend"
+    },
+    "G0006": {
+      "tokens": [
+        "lower_back",
+        "neck"
+      ],
+      "class": "floor",
+      "reason": "floor lower_back (all 4 same-family originals); majority neck (more than half of 4 same-family originals)",
+      "variant_family": "crunch"
+    },
+    "G0007": {
+      "tokens": [
+        "shoulder"
+      ],
+      "class": "majority",
+      "reason": "majority shoulder (more than half of 6 same-family originals)",
+      "variant_family": "lat_pulldown"
+    },
+    "G0009": {
+      "tokens": [
+        "elbow",
+        "shoulder"
+      ],
+      "class": "floor",
+      "reason": "floor elbow+shoulder (all 2 same-family originals)",
+      "variant_family": "dip"
+    },
+    "G0015": {
+      "tokens": [
+        "elbow",
+        "shoulder"
+      ],
+      "class": "floor",
+      "reason": "floor elbow+shoulder (all 1 same-family originals)",
+      "variant_family": "pull_up"
+    },
+    "G0017": {
+      "tokens": [
+        "elbow",
+        "shoulder"
+      ],
+      "class": "floor",
+      "reason": "floor elbow+shoulder (all 1 same-family originals)",
+      "variant_family": "pull_up"
+    },
+    "G0024": {
+      "tokens": [
+        "hip",
+        "knee",
+        "lower_back",
+        "wrist"
+      ],
+      "class": "floor",
+      "reason": "floor hip+knee+lower_back+wrist (all 1 same-family originals)",
+      "variant_family": "front_squat"
+    },
+    "G0026": {
+      "tokens": [
+        "hip",
+        "knee"
+      ],
+      "class": "floor",
+      "reason": "floor hip+knee (all 8 same-family originals)",
+      "variant_family": "squat"
+    },
+    "G0028": {
+      "tokens": [
+        "lower_back",
+        "wrist"
+      ],
+      "class": "floor",
+      "reason": "floor lower_back+wrist (all 1 same-family originals)",
+      "variant_family": "olympic_clean"
+    },
+    "G0029": {
+      "tokens": [
+        "hip",
+        "knee",
+        "lower_back",
+        "wrist"
+      ],
+      "class": "floor",
+      "reason": "floor hip+knee+lower_back+wrist (all 1 same-family originals)",
+      "variant_family": "front_squat"
+    },
+    "G0035": {
+      "tokens": [
+        "elbow"
+      ],
+      "class": "family",
+      "reason": "floor elbow (all 6 same-family originals); family elbow (elbow_flexion / elbow_extension pattern)",
+      "variant_family": "triceps_extension"
+    },
+    "G0036": {
+      "tokens": [
+        "shoulder"
+      ],
+      "class": "majority",
+      "reason": "majority shoulder (more than half of 7 same-family originals)",
+      "variant_family": "bench_press"
+    },
+    "G0038": {
+      "tokens": [
+        "elbow"
+      ],
+      "class": "family",
+      "reason": "floor elbow (all 10 same-family originals); family elbow (elbow_flexion / elbow_extension pattern)",
+      "variant_family": "biceps_curl"
+    },
+    "G0039": {
+      "tokens": [
+        "hip",
+        "knee",
+        "lower_back",
+        "wrist"
+      ],
+      "class": "floor",
+      "reason": "floor hip+knee+lower_back+wrist (all 1 same-family originals)",
+      "variant_family": "front_squat"
+    },
+    "G0041": {
+      "tokens": [
+        "shoulder"
+      ],
+      "class": "floor",
+      "reason": "floor shoulder (all 2 same-family originals)",
+      "variant_family": "front_raise"
+    },
+    "G0046": {
+      "tokens": [
+        "hip",
+        "knee"
+      ],
+      "class": "floor",
+      "reason": "floor hip+knee (all 1 same-family originals)",
+      "variant_family": "hack_squat"
+    },
+    "G0049": {
+      "tokens": [],
+      "class": "judgement",
+      "reason": "judgement safe pool (same exercise as Chest Supported Row, which is in the safe pool, on other equipment or grip)",
+      "variant_family": "row"
+    },
+    "G0050": {
+      "tokens": [],
+      "class": "judgement",
+      "reason": "no same-family original or name rule; the source tags (shoulder) stand",
+      "variant_family": "serratus_raise"
+    },
+    "G0053": {
+      "tokens": [
+        "ankle",
+        "knee"
+      ],
+      "class": "floor",
+      "reason": "floor ankle+knee (all 3 same-family originals)",
+      "variant_family": "jump"
+    },
+    "G0054": {
+      "tokens": [
+        "hip",
+        "knee"
+      ],
+      "class": "floor",
+      "reason": "floor hip+knee (all 3 same-family originals)",
+      "variant_family": "lunge"
+    },
+    "G0063": {
+      "tokens": [
+        "hip",
+        "knee"
+      ],
+      "class": "floor",
+      "reason": "floor hip+knee (all 8 same-family originals)",
+      "variant_family": "squat"
+    },
+    "G0067": {
+      "tokens": [],
+      "class": "judgement",
+      "reason": "no same-family original or name rule; the source tags (lower_back+shoulder+wrist) stand",
+      "variant_family": "olympic_snatch"
+    },
+    "G0068": {
+      "tokens": [
+        "hip",
+        "knee"
+      ],
+      "class": "floor",
+      "reason": "floor hip+knee (all 1 same-family originals)",
+      "variant_family": "single_leg_squat"
+    },
+    "G0069": {
+      "tokens": [
+        "hip",
+        "knee"
+      ],
+      "class": "floor",
+      "reason": "floor hip+knee (all 8 same-family originals)",
+      "variant_family": "squat"
+    },
+    "G0070": {
+      "tokens": [
+        "elbow"
+      ],
+      "class": "family",
+      "reason": "floor elbow (all 1 same-family originals); family elbow (elbow_flexion / elbow_extension pattern)",
+      "variant_family": "preacher_curl"
+    },
+    "G0071": {
+      "tokens": [
+        "lower_back"
+      ],
+      "class": "family",
+      "reason": "floor lower_back (all 3 same-family originals); family lower_back (twist / V-up / crunch / sit-up name)",
+      "variant_family": "sit_up"
+    },
+    "G0072": {
+      "tokens": [
+        "elbow"
+      ],
+      "class": "family",
+      "reason": "floor elbow (all 10 same-family originals); family elbow (elbow_flexion / elbow_extension pattern)",
+      "variant_family": "biceps_curl"
+    },
+    "G0073": {
+      "tokens": [
+        "shoulder"
+      ],
+      "class": "floor",
+      "reason": "floor shoulder (all 2 same-family originals)",
+      "variant_family": "pullover"
+    },
+    "G0075": {
+      "tokens": [
+        "shoulder"
+      ],
+      "class": "majority",
+      "reason": "majority shoulder (more than half of 5 same-family originals)",
+      "variant_family": "rear_delt_fly"
+    },
+    "G0076": {
+      "tokens": [],
+      "class": "judgement",
+      "reason": "no same-family original or name rule; the source tags (lower_back) stand",
+      "variant_family": "row"
+    },
+    "G0078": {
+      "tokens": [
+        "hip",
+        "knee"
+      ],
+      "class": "floor",
+      "reason": "floor hip+knee (all 3 same-family originals)",
+      "variant_family": "lunge"
+    },
+    "G0080": {
+      "tokens": [
+        "elbow"
+      ],
+      "class": "family",
+      "reason": "family elbow (elbow_flexion / elbow_extension pattern)",
+      "variant_family": "reverse_curl"
+    },
+    "G0081": {
+      "tokens": [
+        "elbow"
+      ],
+      "class": "family",
+      "reason": "floor elbow (all 1 same-family originals); family elbow (elbow_flexion / elbow_extension pattern)",
+      "variant_family": "preacher_curl"
+    },
+    "G0082": {
+      "tokens": [
+        "elbow",
+        "wrist"
+      ],
+      "class": "family",
+      "reason": "floor elbow+wrist (all 1 same-family originals); family elbow (elbow_flexion / elbow_extension pattern)",
+      "variant_family": "reverse_wrist_curl"
+    },
+    "G0083": {
+      "tokens": [
+        "lower_back",
+        "shoulder",
+        "wrist"
+      ],
+      "class": "floor",
+      "reason": "floor lower_back+shoulder+wrist (all 1 same-family originals)",
+      "variant_family": "rollout"
+    },
+    "G0084": {
+      "tokens": [
+        "lower_back",
+        "shoulder",
+        "wrist"
+      ],
+      "class": "floor",
+      "reason": "floor lower_back+shoulder+wrist (all 1 same-family originals)",
+      "variant_family": "rollout"
+    },
+    "G0088": {
+      "tokens": [
+        "ankle"
+      ],
+      "class": "floor",
+      "reason": "floor ankle (all 4 same-family originals)",
+      "variant_family": "calf_raise"
+    },
+    "G0089": {
+      "tokens": [
+        "elbow"
+      ],
+      "class": "family",
+      "reason": "floor elbow (all 10 same-family originals); family elbow (elbow_flexion / elbow_extension pattern)",
+      "variant_family": "biceps_curl"
+    },
+    "G0090": {
+      "tokens": [
+        "hamstring",
+        "lower_back"
+      ],
+      "class": "floor",
+      "reason": "floor hamstring+lower_back (all 2 same-family originals)",
+      "variant_family": "good_morning"
+    },
+    "G0091": {
+      "tokens": [
+        "shoulder"
+      ],
+      "class": "floor",
+      "reason": "floor shoulder (all 7 same-family originals)",
+      "variant_family": "shoulder_press"
+    },
+    "G0092": {
+      "tokens": [
+        "elbow"
+      ],
+      "class": "family",
+      "reason": "floor elbow (all 6 same-family originals); family elbow (elbow_flexion / elbow_extension pattern)",
+      "variant_family": "triceps_extension"
+    },
+    "G0094": {
+      "tokens": [
+        "lower_back"
+      ],
+      "class": "floor",
+      "reason": "floor lower_back (all 2 same-family originals)",
+      "variant_family": "rotation_core"
+    },
+    "G0095": {
+      "tokens": [
+        "neck"
+      ],
+      "class": "floor",
+      "reason": "floor neck (all 1 same-family originals)",
+      "variant_family": "shrug"
+    },
+    "G0099": {
+      "tokens": [
+        "hip",
+        "knee"
+      ],
+      "class": "floor",
+      "reason": "floor hip+knee (all 2 same-family originals)",
+      "variant_family": "split_squat"
+    },
+    "G0101": {
+      "tokens": [
+        "hip",
+        "knee"
+      ],
+      "class": "floor",
+      "reason": "floor hip+knee (all 8 same-family originals)",
+      "variant_family": "squat"
+    },
+    "G0103": {
+      "tokens": [
+        "lower_back",
+        "shoulder",
+        "wrist"
+      ],
+      "class": "floor",
+      "reason": "floor lower_back+shoulder+wrist (all 1 same-family originals)",
+      "variant_family": "rollout"
+    },
+    "G0104": {
+      "tokens": [
+        "elbow",
+        "wrist"
+      ],
+      "class": "family",
+      "reason": "floor elbow+wrist (all 1 same-family originals); family elbow (elbow_flexion / elbow_extension pattern)",
+      "variant_family": "wrist_curl"
+    },
+    "G0106": {
+      "tokens": [
+        "elbow"
+      ],
+      "class": "family",
+      "reason": "floor elbow (all 10 same-family originals); family elbow (elbow_flexion / elbow_extension pattern)",
+      "variant_family": "biceps_curl"
+    },
+    "G0107": {
+      "tokens": [
+        "shoulder"
+      ],
+      "class": "floor",
+      "reason": "floor shoulder (all 2 same-family originals)",
+      "variant_family": "front_raise"
+    },
+    "G0109": {
+      "tokens": [
+        "elbow"
+      ],
+      "class": "family",
+      "reason": "floor elbow (all 6 same-family originals); family elbow (elbow_flexion / elbow_extension pattern)",
+      "variant_family": "triceps_extension"
+    },
+    "G0110": {
+      "tokens": [
+        "elbow"
+      ],
+      "class": "family",
+      "reason": "family elbow (elbow_flexion / elbow_extension pattern)",
+      "variant_family": "reverse_curl"
+    },
+    "G0112": {
+      "tokens": [
+        "lower_back"
+      ],
+      "class": "floor",
+      "reason": "floor lower_back (all 2 same-family originals)",
+      "variant_family": "rotation_core"
+    },
+    "G0114": {
+      "tokens": [
+        "hip",
+        "knee"
+      ],
+      "class": "floor",
+      "reason": "floor hip+knee (all 1 same-family originals)",
+      "variant_family": "step_up"
+    },
+    "G0115": {
+      "tokens": [
+        "hamstring",
+        "lower_back"
+      ],
+      "class": "floor",
+      "reason": "floor hamstring+lower_back (all 2 same-family originals)",
+      "variant_family": "good_morning"
+    },
+    "G0116": {
+      "tokens": [
+        "hamstring",
+        "lower_back"
+      ],
+      "class": "floor",
+      "reason": "floor hamstring+lower_back (all 3 same-family originals)",
+      "variant_family": "romanian_deadlift"
+    },
+    "G0118": {
+      "tokens": [],
+      "class": "judgement",
+      "reason": "no same-family original or name rule; the source tags (lower_back+wrist) stand",
+      "variant_family": "row"
+    },
+    "G0120": {
+      "tokens": [
+        "shoulder"
+      ],
+      "class": "floor",
+      "reason": "floor shoulder (all 1 same-family originals)",
+      "variant_family": "upright_row"
+    },
+    "G0122": {
+      "tokens": [
+        "shoulder"
+      ],
+      "class": "majority",
+      "reason": "majority shoulder (more than half of 7 same-family originals)",
+      "variant_family": "bench_press"
+    },
+    "G0123": {
+      "tokens": [
+        "shoulder"
+      ],
+      "class": "floor",
+      "reason": "floor shoulder (all 1 same-family originals)",
+      "variant_family": "upright_row"
+    },
+    "G0124": {
+      "tokens": [
+        "hip",
+        "knee"
+      ],
+      "class": "floor",
+      "reason": "floor hip+knee (all 8 same-family originals)",
+      "variant_family": "squat"
+    },
+    "G0126": {
+      "tokens": [
+        "elbow",
+        "wrist"
+      ],
+      "class": "family",
+      "reason": "floor elbow+wrist (all 1 same-family originals); family elbow (elbow_flexion / elbow_extension pattern)",
+      "variant_family": "wrist_curl"
+    },
+    "G0139": {
+      "tokens": [],
+      "class": "judgement",
+      "reason": "judgement safe pool (same exercise as Inverted Row, which is in the safe pool, on other equipment or grip)",
+      "variant_family": "inverted_row"
+    },
+    "G0140": {
+      "tokens": [
+        "elbow",
+        "shoulder"
+      ],
+      "class": "floor",
+      "reason": "floor elbow+shoulder (all 1 same-family originals)",
+      "variant_family": "pull_up"
+    },
+    "G0148": {
+      "tokens": [
+        "shoulder"
+      ],
+      "class": "floor",
+      "reason": "floor shoulder (all 7 same-family originals)",
+      "variant_family": "shoulder_press"
+    },
+    "G0149": {
+      "tokens": [
+        "elbow"
+      ],
+      "class": "family",
+      "reason": "floor elbow (all 6 same-family originals); family elbow (elbow_flexion / elbow_extension pattern)",
+      "variant_family": "triceps_extension"
+    },
+    "G0153": {
+      "tokens": [
+        "shoulder"
+      ],
+      "class": "majority",
+      "reason": "majority shoulder (more than half of 6 same-family originals)",
+      "variant_family": "lat_pulldown"
+    },
+    "G0154": {
+      "tokens": [
+        "shoulder"
+      ],
+      "class": "majority",
+      "reason": "majority shoulder (more than half of 5 same-family originals)",
+      "variant_family": "rear_delt_fly"
+    },
+    "G0157": {
+      "tokens": [
+        "lower_back"
+      ],
+      "class": "floor",
+      "reason": "floor lower_back (all 4 same-family originals)",
+      "variant_family": "deadlift"
+    },
+    "G0160": {
+      "tokens": [],
+      "class": "judgement",
+      "reason": "judgement safe pool (same exercise as Seated Cable Row, which is in the safe pool, on other equipment or grip)",
+      "variant_family": "row"
+    },
+    "G0168": {
+      "tokens": [
+        "hip"
+      ],
+      "class": "family",
+      "reason": "floor hip (all 1 same-family originals); family hip (hip abduction / adduction name)",
+      "variant_family": "hip_adduction"
+    },
+    "G0172": {
+      "tokens": [
+        "elbow"
+      ],
+      "class": "family",
+      "reason": "floor elbow (all 6 same-family originals); family elbow (elbow_flexion / elbow_extension pattern)",
+      "variant_family": "triceps_extension"
+    },
+    "G0174": {
+      "tokens": [
+        "lower_back"
+      ],
+      "class": "floor",
+      "reason": "floor lower_back (all 2 same-family originals)",
+      "variant_family": "rotation_core"
+    },
+    "G0178": {
+      "tokens": [
+        "shoulder"
+      ],
+      "class": "floor",
+      "reason": "floor shoulder (all 4 same-family originals)",
+      "variant_family": "lateral_raise"
+    },
+    "G0179": {
+      "tokens": [
+        "shoulder"
+      ],
+      "class": "majority",
+      "reason": "majority shoulder (more than half of 6 same-family originals)",
+      "variant_family": "chest_fly"
+    },
+    "G0180": {
+      "tokens": [],
+      "class": "judgement",
+      "reason": "judgement safe pool (same exercise as Seated Cable Row, which is in the safe pool, on other equipment or grip)",
+      "variant_family": "row"
+    },
+    "G0189": {
+      "tokens": [
+        "lower_back"
+      ],
+      "class": "judgement",
+      "reason": "judgement lower_back (hinged, unsupported bent-over row, as Barbell Bent Over Row and Kettlebell Row)",
+      "variant_family": "row"
+    },
+    "G0190": {
+      "tokens": [
+        "elbow"
+      ],
+      "class": "family",
+      "reason": "floor elbow (all 10 same-family originals); family elbow (elbow_flexion / elbow_extension pattern)",
+      "variant_family": "biceps_curl"
+    },
+    "G0192": {
+      "tokens": [
+        "shoulder"
+      ],
+      "class": "floor",
+      "reason": "floor shoulder (all 4 same-family originals)",
+      "variant_family": "lateral_raise"
+    },
+    "G0193": {
+      "tokens": [
+        "lower_back"
+      ],
+      "class": "judgement",
+      "reason": "judgement lower_back (kneeling unsupported single-arm pull, as Kettlebell Row)",
+      "variant_family": "row"
+    },
+    "G0195": {
+      "tokens": [
+        "elbow"
+      ],
+      "class": "family",
+      "reason": "floor elbow (all 1 same-family originals); family elbow (elbow_flexion / elbow_extension pattern)",
+      "variant_family": "preacher_curl"
+    },
+    "G0200": {
+      "tokens": [
+        "elbow"
+      ],
+      "class": "family",
+      "reason": "floor elbow (all 1 same-family originals); family elbow (elbow_flexion / elbow_extension pattern)",
+      "variant_family": "triceps_pushdown"
+    },
+    "G0202": {
+      "tokens": [],
+      "class": "judgement",
+      "reason": "judgement safe pool (same exercise as Face Pull, which is in the safe pool, on other equipment or grip)",
+      "variant_family": "row"
+    },
+    "G0208": {
+      "tokens": [
+        "shoulder"
+      ],
+      "class": "majority",
+      "reason": "majority shoulder (more than half of 6 same-family originals)",
+      "variant_family": "lat_pulldown"
+    },
+    "G0209": {
+      "tokens": [
+        "elbow"
+      ],
+      "class": "family",
+      "reason": "floor elbow (all 1 same-family originals); family elbow (elbow_flexion / elbow_extension pattern)",
+      "variant_family": "preacher_curl"
+    },
+    "G0210": {
+      "tokens": [
+        "elbow",
+        "wrist"
+      ],
+      "class": "family",
+      "reason": "floor elbow+wrist (all 1 same-family originals); family elbow (elbow_flexion / elbow_extension pattern)",
+      "variant_family": "reverse_wrist_curl"
+    },
+    "G0212": {
+      "tokens": [
+        "lower_back",
+        "neck"
+      ],
+      "class": "family",
+      "reason": "floor lower_back (all 4 same-family originals); majority neck (more than half of 4 same-family originals); family lower_back (twist / V-up / crunch / sit-up name)",
+      "variant_family": "crunch"
+    },
+    "G0213": {
+      "tokens": [],
+      "class": "judgement",
+      "reason": "judgement safe pool (same exercise as Seated Cable Row, which is in the safe pool, on other equipment or grip)",
+      "variant_family": "row"
+    },
+    "G0214": {
+      "tokens": [],
+      "class": "judgement",
+      "reason": "judgement safe pool (same exercise as Seated Cable Row, which is in the safe pool, on other equipment or grip)",
+      "variant_family": "row"
+    },
+    "G0215": {
+      "tokens": [
+        "shoulder"
+      ],
+      "class": "majority",
+      "reason": "majority shoulder (more than half of 5 same-family originals)",
+      "variant_family": "rear_delt_fly"
+    },
+    "G0216": {
+      "tokens": [
+        "shoulder"
+      ],
+      "class": "floor",
+      "reason": "floor shoulder (all 1 same-family originals)",
+      "variant_family": "rotator_cuff"
+    },
+    "G0218": {
+      "tokens": [],
+      "class": "judgement",
+      "reason": "judgement safe pool (same exercise as Seated Cable Row, which is in the safe pool, on other equipment or grip)",
+      "variant_family": "row"
+    },
+    "G0219": {
+      "tokens": [
+        "shoulder"
+      ],
+      "class": "floor",
+      "reason": "floor shoulder (all 7 same-family originals)",
+      "variant_family": "shoulder_press"
+    },
+    "G0220": {
+      "tokens": [
+        "neck"
+      ],
+      "class": "floor",
+      "reason": "floor neck (all 1 same-family originals)",
+      "variant_family": "shrug"
+    },
+    "G0222": {
+      "tokens": [
+        "lower_back"
+      ],
+      "class": "floor",
+      "reason": "floor lower_back (all 1 same-family originals)",
+      "variant_family": "side_bend"
+    },
+    "G0223": {
+      "tokens": [
+        "lower_back"
+      ],
+      "class": "family",
+      "reason": "floor lower_back (all 1 same-family originals); family lower_back (twist / V-up / crunch / sit-up name)",
+      "variant_family": "side_bend"
+    },
+    "G0224": {
+      "tokens": [
+        "elbow",
+        "wrist"
+      ],
+      "class": "family",
+      "reason": "floor elbow+wrist (all 1 same-family originals); family elbow (elbow_flexion / elbow_extension pattern)",
+      "variant_family": "wrist_curl"
+    },
+    "G0231": {
+      "tokens": [
+        "elbow"
+      ],
+      "class": "family",
+      "reason": "floor elbow (all 6 same-family originals); family elbow (elbow_flexion / elbow_extension pattern)",
+      "variant_family": "triceps_extension"
+    },
+    "G0235": {
+      "tokens": [
+        "shoulder"
+      ],
+      "class": "floor",
+      "reason": "floor shoulder (all 1 same-family originals)",
+      "variant_family": "rotator_cuff"
+    },
+    "G0236": {
+      "tokens": [],
+      "class": "judgement",
+      "reason": "no same-family original or name rule; the source tags (lower_back) stand",
+      "variant_family": "row"
+    },
+    "G0239": {
+      "tokens": [],
+      "class": "judgement",
+      "reason": "judgement safe pool (same exercise as Seated Cable Row, which is in the safe pool, on other equipment or grip)",
+      "variant_family": "row"
+    },
+    "G0243": {
+      "tokens": [
+        "lower_back"
+      ],
+      "class": "floor",
+      "reason": "floor lower_back (all 2 same-family originals)",
+      "variant_family": "rotation_core"
+    },
+    "G0246": {
+      "tokens": [
+        "shoulder"
+      ],
+      "class": "floor",
+      "reason": "floor shoulder (all 1 same-family originals)",
+      "variant_family": "upright_row"
+    },
+    "G0247": {
+      "tokens": [
+        "elbow",
+        "wrist"
+      ],
+      "class": "family",
+      "reason": "floor elbow+wrist (all 1 same-family originals); family elbow (elbow_flexion / elbow_extension pattern)",
+      "variant_family": "wrist_curl"
+    },
+    "G0253": {
+      "tokens": [
+        "elbow"
+      ],
+      "class": "floor",
+      "reason": "floor elbow (all 1 same-family originals)",
+      "variant_family": "chin_up"
+    },
+    "G0257": {
+      "tokens": [
+        "knee"
+      ],
+      "class": "judgement",
+      "reason": "judgement knee (knee circles)",
+      "variant_family": "mobility_knee"
+    },
+    "G0259": {
+      "tokens": [
+        "shoulder",
+        "wrist"
+      ],
+      "class": "family",
+      "reason": "floor shoulder+wrist (all 8 same-family originals); family shoulder (push-up name)",
+      "variant_family": "push_up"
+    },
+    "G0260": {
+      "tokens": [
+        "lower_back",
+        "neck"
+      ],
+      "class": "floor",
+      "reason": "floor lower_back (all 4 same-family originals); majority neck (more than half of 4 same-family originals)",
+      "variant_family": "crunch"
+    },
+    "G0262": {
+      "tokens": [
+        "lower_back",
+        "neck"
+      ],
+      "class": "family",
+      "reason": "floor lower_back (all 4 same-family originals); majority neck (more than half of 4 same-family originals); family lower_back (twist / V-up / crunch / sit-up name)",
+      "variant_family": "crunch"
+    },
+    "G0277": {
+      "tokens": [
+        "lower_back",
+        "neck"
+      ],
+      "class": "family",
+      "reason": "floor lower_back (all 4 same-family originals); majority neck (more than half of 4 same-family originals); family lower_back (twist / V-up / crunch / sit-up name)",
+      "variant_family": "crunch"
+    },
+    "G0285": {
+      "tokens": [
+        "elbow"
+      ],
+      "class": "family",
+      "reason": "floor elbow (all 10 same-family originals); family elbow (elbow_flexion / elbow_extension pattern)",
+      "variant_family": "biceps_curl"
+    },
+    "G0286": {
+      "tokens": [
+        "shoulder"
+      ],
+      "class": "floor",
+      "reason": "floor shoulder (all 7 same-family originals)",
+      "variant_family": "shoulder_press"
+    },
+    "G0291": {
+      "tokens": [
+        "hip",
+        "knee"
+      ],
+      "class": "floor",
+      "reason": "floor hip+knee (all 8 same-family originals)",
+      "variant_family": "squat"
+    },
+    "G0293": {
+      "tokens": [],
+      "class": "judgement",
+      "reason": "no same-family original or name rule; the source tags (lower_back) stand",
+      "variant_family": "row"
+    },
+    "G0295": {
+      "tokens": [
+        "lower_back",
+        "wrist"
+      ],
+      "class": "floor",
+      "reason": "floor lower_back+wrist (all 1 same-family originals)",
+      "variant_family": "olympic_clean"
+    },
+    "G0296": {
+      "tokens": [
+        "shoulder"
+      ],
+      "class": "majority",
+      "reason": "majority shoulder (more than half of 7 same-family originals)",
+      "variant_family": "bench_press"
+    },
+    "G0298": {
+      "tokens": [
+        "elbow"
+      ],
+      "class": "family",
+      "reason": "floor elbow (all 2 same-family originals); family elbow (elbow_flexion / elbow_extension pattern)",
+      "variant_family": "hammer_curl"
+    },
+    "G0299": {
+      "tokens": [
+        "shoulder"
+      ],
+      "class": "floor",
+      "reason": "floor shoulder (all 1 same-family originals)",
+      "variant_family": "rotator_cuff"
+    },
+    "G0300": {
+      "tokens": [
+        "lower_back"
+      ],
+      "class": "floor",
+      "reason": "floor lower_back (all 4 same-family originals)",
+      "variant_family": "deadlift"
+    },
+    "G0302": {
+      "tokens": [
+        "shoulder"
+      ],
+      "class": "majority",
+      "reason": "majority shoulder (more than half of 6 same-family originals)",
+      "variant_family": "chest_fly"
+    },
+    "G0303": {
+      "tokens": [
+        "shoulder"
+      ],
+      "class": "majority",
+      "reason": "majority shoulder (more than half of 7 same-family originals)",
+      "variant_family": "bench_press"
+    },
+    "G0305": {
+      "tokens": [
+        "neck"
+      ],
+      "class": "floor",
+      "reason": "floor neck (all 1 same-family originals)",
+      "variant_family": "shrug"
+    },
+    "G0306": {
+      "tokens": [
+        "elbow"
+      ],
+      "class": "family",
+      "reason": "floor elbow (all 6 same-family originals); family elbow (elbow_flexion / elbow_extension pattern)",
+      "variant_family": "triceps_extension"
+    },
+    "G0307": {
+      "tokens": [
+        "shoulder"
+      ],
+      "class": "majority",
+      "reason": "majority shoulder (more than half of 6 same-family originals)",
+      "variant_family": "chest_fly"
+    },
+    "G0311": {
+      "tokens": [
+        "shoulder"
+      ],
+      "class": "floor",
+      "reason": "floor shoulder (all 4 same-family originals)",
+      "variant_family": "lateral_raise"
+    },
+    "G0320": {
+      "tokens": [
+        "elbow"
+      ],
+      "class": "family",
+      "reason": "floor elbow (all 2 same-family originals); family elbow (elbow_flexion / elbow_extension pattern)",
+      "variant_family": "hammer_curl"
+    },
+    "G0321": {
+      "tokens": [
+        "shoulder"
+      ],
+      "class": "floor",
+      "reason": "floor shoulder (all 2 same-family originals)",
+      "variant_family": "incline_press"
+    },
+    "G0322": {
+      "tokens": [
+        "elbow"
+      ],
+      "class": "family",
+      "reason": "floor elbow (all 10 same-family originals); family elbow (elbow_flexion / elbow_extension pattern)",
+      "variant_family": "biceps_curl"
+    },
+    "G0323": {
+      "tokens": [
+        "shoulder"
+      ],
+      "class": "floor",
+      "reason": "floor shoulder (all 4 same-family originals)",
+      "variant_family": "lateral_raise"
+    },
+    "G0324": {
+      "tokens": [
+        "shoulder"
+      ],
+      "class": "floor",
+      "reason": "floor shoulder (all 2 same-family originals)",
+      "variant_family": "incline_press"
+    },
+    "G0326": {
+      "tokens": [
+        "shoulder"
+      ],
+      "class": "majority",
+      "reason": "majority shoulder (more than half of 5 same-family originals)",
+      "variant_family": "rear_delt_fly"
+    },
+    "G0327": {
+      "tokens": [],
+      "class": "judgement",
+      "reason": "judgement safe pool (same exercise as Chest Supported Row, which is in the safe pool, on other equipment or grip)",
+      "variant_family": "row"
+    },
+    "G0328": {
+      "tokens": [],
+      "class": "judgement",
+      "reason": "no same-family original or name rule; the source tags (shoulder) stand",
+      "variant_family": "serratus_raise"
+    },
+    "G0329": {
+      "tokens": [
+        "neck"
+      ],
+      "class": "floor",
+      "reason": "floor neck (all 1 same-family originals)",
+      "variant_family": "shrug"
+    },
+    "G0331": {
+      "tokens": [
+        "shoulder"
+      ],
+      "class": "majority",
+      "reason": "majority shoulder (more than half of 6 same-family originals)",
+      "variant_family": "chest_fly"
+    },
+    "G0335": {
+      "tokens": [
+        "shoulder"
+      ],
+      "class": "floor",
+      "reason": "floor shoulder (all 4 same-family originals)",
+      "variant_family": "lateral_raise"
+    },
+    "G0336": {
+      "tokens": [
+        "hip",
+        "knee"
+      ],
+      "class": "floor",
+      "reason": "floor hip+knee (all 3 same-family originals)",
+      "variant_family": "lunge"
+    },
+    "G0337": {
+      "tokens": [
+        "elbow"
+      ],
+      "class": "family",
+      "reason": "floor elbow (all 6 same-family originals); family elbow (elbow_flexion / elbow_extension pattern)",
+      "variant_family": "triceps_extension"
+    },
+    "G0338": {
+      "tokens": [
+        "elbow"
+      ],
+      "class": "family",
+      "reason": "floor elbow (all 6 same-family originals); family elbow (elbow_flexion / elbow_extension pattern)",
+      "variant_family": "triceps_extension"
+    },
+    "G0339": {
+      "tokens": [
+        "hamstring"
+      ],
+      "class": "floor",
+      "reason": "floor hamstring (all 4 same-family originals)",
+      "variant_family": "leg_curl"
+    },
+    "G0340": {
+      "tokens": [
+        "shoulder"
+      ],
+      "class": "majority",
+      "reason": "majority shoulder (more than half of 7 same-family originals)",
+      "variant_family": "bench_press"
+    },
+    "G0345": {
+      "tokens": [
+        "shoulder"
+      ],
+      "class": "majority",
+      "reason": "majority shoulder (more than half of 5 same-family originals)",
+      "variant_family": "rear_delt_fly"
+    },
+    "G0348": {
+      "tokens": [
+        "shoulder"
+      ],
+      "class": "majority",
+      "reason": "majority shoulder (more than half of 5 same-family originals)",
+      "variant_family": "rear_delt_fly"
+    },
+    "G0351": {
+      "tokens": [
+        "elbow"
+      ],
+      "class": "family",
+      "reason": "floor elbow (all 6 same-family originals); family elbow (elbow_flexion / elbow_extension pattern)",
+      "variant_family": "triceps_extension"
+    },
+    "G0352": {
+      "tokens": [
+        "shoulder"
+      ],
+      "class": "majority",
+      "reason": "majority shoulder (more than half of 7 same-family originals)",
+      "variant_family": "bench_press"
+    },
+    "G0354": {
+      "tokens": [
+        "elbow"
+      ],
+      "class": "family",
+      "reason": "floor elbow (all 2 same-family originals); family elbow (elbow_flexion / elbow_extension pattern)",
+      "variant_family": "triceps_kickback"
+    },
+    "G0355": {
+      "tokens": [
+        "shoulder"
+      ],
+      "class": "floor",
+      "reason": "floor shoulder (all 4 same-family originals)",
+      "variant_family": "lateral_raise"
+    },
+    "G0356": {
+      "tokens": [
+        "shoulder"
+      ],
+      "class": "floor",
+      "reason": "floor shoulder (all 4 same-family originals)",
+      "variant_family": "lateral_raise"
+    },
+    "G0358": {
+      "tokens": [
+        "elbow",
+        "wrist"
+      ],
+      "class": "family",
+      "reason": "floor elbow+wrist (all 1 same-family originals); family elbow (elbow_flexion / elbow_extension pattern)",
+      "variant_family": "reverse_wrist_curl"
+    },
+    "G0359": {
+      "tokens": [],
+      "class": "judgement",
+      "reason": "judgement safe pool (founder 2026-10-26: same exercise as Reverse Fly, which is in the safe pool, on a machine, band or support); majority shoulder dropped",
+      "variant_family": "rear_delt_fly"
+    },
+    "G0361": {
+      "tokens": [
+        "shoulder"
+      ],
+      "class": "floor",
+      "reason": "floor shoulder (all 7 same-family originals)",
+      "variant_family": "shoulder_press"
+    },
+    "G0362": {
+      "tokens": [
+        "elbow"
+      ],
+      "class": "family",
+      "reason": "floor elbow (all 6 same-family originals); family elbow (elbow_flexion / elbow_extension pattern)",
+      "variant_family": "triceps_extension"
+    },
+    "G0363": {
+      "tokens": [
+        "shoulder"
+      ],
+      "class": "floor",
+      "reason": "floor shoulder (all 1 same-family originals)",
+      "variant_family": "upright_row"
+    },
+    "G0364": {
+      "tokens": [
+        "elbow",
+        "wrist"
+      ],
+      "class": "family",
+      "reason": "floor elbow+wrist (all 1 same-family originals); family elbow (elbow_flexion / elbow_extension pattern)",
+      "variant_family": "wrist_curl"
+    },
+    "G0365": {
+      "tokens": [
+        "elbow",
+        "wrist"
+      ],
+      "class": "family",
+      "reason": "floor elbow+wrist (all 1 same-family originals); family elbow (elbow_flexion / elbow_extension pattern)",
+      "variant_family": "wrist_curl"
+    },
+    "G0366": {
+      "tokens": [
+        "elbow",
+        "wrist"
+      ],
+      "class": "family",
+      "reason": "floor elbow+wrist (all 1 same-family originals); family elbow (elbow_flexion / elbow_extension pattern)",
+      "variant_family": "wrist_curl"
+    },
+    "G0367": {
+      "tokens": [
+        "elbow",
+        "wrist"
+      ],
+      "class": "family",
+      "reason": "floor elbow+wrist (all 1 same-family originals); family elbow (elbow_flexion / elbow_extension pattern)",
+      "variant_family": "wrist_curl"
+    },
+    "G0368": {
+      "tokens": [
+        "elbow",
+        "wrist"
+      ],
+      "class": "family",
+      "reason": "floor elbow+wrist (all 1 same-family originals); family elbow (elbow_flexion / elbow_extension pattern)",
+      "variant_family": "reverse_wrist_curl"
+    },
+    "G0369": {
+      "tokens": [
+        "elbow",
+        "wrist"
+      ],
+      "class": "family",
+      "reason": "floor elbow+wrist (all 1 same-family originals); family elbow (elbow_flexion / elbow_extension pattern)",
+      "variant_family": "wrist_curl"
+    },
+    "G0370": {
+      "tokens": [
+        "elbow"
+      ],
+      "class": "family",
+      "reason": "floor elbow (all 2 same-family originals); family elbow (elbow_flexion / elbow_extension pattern)",
+      "variant_family": "hammer_curl"
+    },
+    "G0371": {
+      "tokens": [
+        "ankle",
+        "knee"
+      ],
+      "class": "floor",
+      "reason": "floor ankle+knee (all 3 same-family originals)",
+      "variant_family": "jump"
+    },
+    "G0372": {
+      "tokens": [
+        "elbow"
+      ],
+      "class": "family",
+      "reason": "floor elbow (all 1 same-family originals); family elbow (elbow_flexion / elbow_extension pattern)",
+      "variant_family": "preacher_curl"
+    },
+    "G0374": {
+      "tokens": [
+        "elbow"
+      ],
+      "class": "family",
+      "reason": "floor elbow (all 10 same-family originals); family elbow (elbow_flexion / elbow_extension pattern)",
+      "variant_family": "biceps_curl"
+    },
+    "G0377": {
+      "tokens": [
+        "lower_back"
+      ],
+      "class": "judgement",
+      "reason": "judgement lower_back (hinged, unsupported bent-over row, as Barbell Bent Over Row and Kettlebell Row)",
+      "variant_family": "row"
+    },
+    "G0378": {
+      "tokens": [
+        "shoulder"
+      ],
+      "class": "majority",
+      "reason": "majority shoulder (more than half of 5 same-family originals)",
+      "variant_family": "rear_delt_fly"
+    },
+    "G0379": {
+      "tokens": [
+        "shoulder"
+      ],
+      "class": "majority",
+      "reason": "majority shoulder (more than half of 5 same-family originals)",
+      "variant_family": "rear_delt_fly"
+    },
+    "G0380": {
+      "tokens": [
+        "shoulder"
+      ],
+      "class": "majority",
+      "reason": "majority shoulder (more than half of 5 same-family originals)",
+      "variant_family": "rear_delt_fly"
+    },
+    "G0381": {
+      "tokens": [
+        "hip",
+        "knee"
+      ],
+      "class": "floor",
+      "reason": "floor hip+knee (all 3 same-family originals)",
+      "variant_family": "lunge"
+    },
+    "G0382": {
+      "tokens": [
+        "elbow"
+      ],
+      "class": "family",
+      "reason": "floor elbow (all 2 same-family originals); family elbow (elbow_flexion / elbow_extension pattern)",
+      "variant_family": "hammer_curl"
+    },
+    "G0384": {
+      "tokens": [
+        "elbow"
+      ],
+      "class": "family",
+      "reason": "floor elbow (all 1 same-family originals); family elbow (elbow_flexion / elbow_extension pattern)",
+      "variant_family": "preacher_curl"
+    },
+    "G0386": {
+      "tokens": [
+        "shoulder"
+      ],
+      "class": "majority",
+      "reason": "majority shoulder (more than half of 5 same-family originals)",
+      "variant_family": "rear_delt_fly"
+    },
+    "G0387": {
+      "tokens": [
+        "shoulder"
+      ],
+      "class": "floor",
+      "reason": "floor shoulder (all 2 same-family originals)",
+      "variant_family": "front_raise"
+    },
+    "G0388": {
+      "tokens": [
+        "shoulder"
+      ],
+      "class": "floor",
+      "reason": "floor shoulder (all 7 same-family originals)",
+      "variant_family": "shoulder_press"
+    },
+    "G0391": {
+      "tokens": [
+        "elbow"
+      ],
+      "class": "family",
+      "reason": "floor elbow (all 10 same-family originals); family elbow (elbow_flexion / elbow_extension pattern)",
+      "variant_family": "biceps_curl"
+    },
+    "G0392": {
+      "tokens": [
+        "shoulder"
+      ],
+      "class": "floor",
+      "reason": "floor shoulder (all 2 same-family originals)",
+      "variant_family": "front_raise"
+    },
+    "G0393": {
+      "tokens": [
+        "elbow"
+      ],
+      "class": "family",
+      "reason": "floor elbow (all 10 same-family originals); family elbow (elbow_flexion / elbow_extension pattern)",
+      "variant_family": "biceps_curl"
+    },
+    "G0394": {
+      "tokens": [
+        "elbow"
+      ],
+      "class": "family",
+      "reason": "floor elbow (all 2 same-family originals); family elbow (elbow_flexion / elbow_extension pattern)",
+      "variant_family": "triceps_kickback"
+    },
+    "G0396": {
+      "tokens": [
+        "shoulder"
+      ],
+      "class": "floor",
+      "reason": "floor shoulder (all 4 same-family originals)",
+      "variant_family": "lateral_raise"
+    },
+    "G0397": {
+      "tokens": [
+        "elbow",
+        "wrist"
+      ],
+      "class": "family",
+      "reason": "floor elbow+wrist (all 1 same-family originals); family elbow (elbow_flexion / elbow_extension pattern)",
+      "variant_family": "wrist_curl"
+    },
+    "G0398": {
+      "tokens": [
+        "elbow"
+      ],
+      "class": "family",
+      "reason": "floor elbow (all 2 same-family originals); family elbow (elbow_flexion / elbow_extension pattern)",
+      "variant_family": "triceps_kickback"
+    },
+    "G0400": {
+      "tokens": [
+        "ankle"
+      ],
+      "class": "floor",
+      "reason": "floor ankle (all 4 same-family originals)",
+      "variant_family": "calf_raise"
+    },
+    "G0402": {
+      "tokens": [
+        "elbow"
+      ],
+      "class": "family",
+      "reason": "floor elbow (all 1 same-family originals); family elbow (elbow_flexion / elbow_extension pattern)",
+      "variant_family": "preacher_curl"
+    },
+    "G0403": {
+      "tokens": [
+        "elbow"
+      ],
+      "class": "family",
+      "reason": "family elbow (elbow_flexion / elbow_extension pattern)",
+      "variant_family": "reverse_curl"
+    },
+    "G0404": {
+      "tokens": [
+        "shoulder"
+      ],
+      "class": "floor",
+      "reason": "floor shoulder (all 7 same-family originals)",
+      "variant_family": "shoulder_press"
+    },
+    "G0405": {
+      "tokens": [
+        "shoulder"
+      ],
+      "class": "floor",
+      "reason": "floor shoulder (all 7 same-family originals)",
+      "variant_family": "shoulder_press"
+    },
+    "G0409": {
+      "tokens": [
+        "ankle"
+      ],
+      "class": "floor",
+      "reason": "floor ankle (all 4 same-family originals)",
+      "variant_family": "calf_raise"
+    },
+    "G0411": {
+      "tokens": [
+        "hip",
+        "knee"
+      ],
+      "class": "floor",
+      "reason": "floor hip+knee (all 1 same-family originals)",
+      "variant_family": "single_leg_squat"
+    },
+    "G0413": {
+      "tokens": [
+        "hip",
+        "knee"
+      ],
+      "class": "floor",
+      "reason": "floor hip+knee (all 8 same-family originals)",
+      "variant_family": "squat"
+    },
+    "G0414": {
+      "tokens": [
+        "shoulder"
+      ],
+      "class": "floor",
+      "reason": "floor shoulder (all 7 same-family originals)",
+      "variant_family": "shoulder_press"
+    },
+    "G0415": {
+      "tokens": [
+        "shoulder"
+      ],
+      "class": "floor",
+      "reason": "floor shoulder (all 2 same-family originals)",
+      "variant_family": "front_raise"
+    },
+    "G0419": {
+      "tokens": [
+        "shoulder"
+      ],
+      "class": "floor",
+      "reason": "floor shoulder (all 2 same-family originals)",
+      "variant_family": "front_raise"
+    },
+    "G0421": {
+      "tokens": [
+        "elbow"
+      ],
+      "class": "family",
+      "reason": "floor elbow (all 10 same-family originals); family elbow (elbow_flexion / elbow_extension pattern)",
+      "variant_family": "biceps_curl"
+    },
+    "G0423": {
+      "tokens": [
+        "elbow"
+      ],
+      "class": "family",
+      "reason": "floor elbow (all 6 same-family originals); family elbow (elbow_flexion / elbow_extension pattern)",
+      "variant_family": "triceps_extension"
+    },
+    "G0424": {
+      "tokens": [
+        "shoulder"
+      ],
+      "class": "floor",
+      "reason": "floor shoulder (all 7 same-family originals)",
+      "variant_family": "shoulder_press"
+    },
+    "G0425": {
+      "tokens": [
+        "elbow"
+      ],
+      "class": "family",
+      "reason": "family elbow (elbow_flexion / elbow_extension pattern)",
+      "variant_family": "reverse_curl"
+    },
+    "G0427": {
+      "tokens": [
+        "shoulder"
+      ],
+      "class": "floor",
+      "reason": "floor shoulder (all 7 same-family originals)",
+      "variant_family": "shoulder_press"
+    },
+    "G0429": {
+      "tokens": [
+        "elbow"
+      ],
+      "class": "family",
+      "reason": "family elbow (elbow_flexion / elbow_extension pattern)",
+      "variant_family": "reverse_curl"
+    },
+    "G0432": {
+      "tokens": [
+        "hamstring",
+        "lower_back"
+      ],
+      "class": "floor",
+      "reason": "floor hamstring+lower_back (all 3 same-family originals)",
+      "variant_family": "romanian_deadlift"
+    },
+    "G0434": {
+      "tokens": [
+        "hamstring",
+        "lower_back"
+      ],
+      "class": "floor",
+      "reason": "floor hamstring+lower_back (all 3 same-family originals)",
+      "variant_family": "romanian_deadlift"
+    },
+    "G0436": {
+      "tokens": [
+        "elbow"
+      ],
+      "class": "family",
+      "reason": "floor elbow (all 6 same-family originals); family elbow (elbow_flexion / elbow_extension pattern)",
+      "variant_family": "triceps_extension"
+    },
+    "G0443": {
+      "tokens": [
+        "lower_back"
+      ],
+      "class": "floor",
+      "reason": "floor lower_back (all 2 same-family originals)",
+      "variant_family": "rotation_core"
+    },
+    "G0446": {
+      "tokens": [
+        "elbow"
+      ],
+      "class": "family",
+      "reason": "floor elbow (all 10 same-family originals); family elbow (elbow_flexion / elbow_extension pattern)",
+      "variant_family": "biceps_curl"
+    },
+    "G0447": {
+      "tokens": [
+        "elbow"
+      ],
+      "class": "family",
+      "reason": "floor elbow (all 10 same-family originals); family elbow (elbow_flexion / elbow_extension pattern)",
+      "variant_family": "biceps_curl"
+    },
+    "G0448": {
+      "tokens": [
+        "elbow"
+      ],
+      "class": "family",
+      "reason": "floor elbow (all 6 same-family originals); family elbow (elbow_flexion / elbow_extension pattern)",
+      "variant_family": "triceps_extension"
+    },
+    "G0451": {
+      "tokens": [
+        "elbow"
+      ],
+      "class": "family",
+      "reason": "family elbow (elbow_flexion / elbow_extension pattern)",
+      "variant_family": "reverse_curl"
+    },
+    "G0452": {
+      "tokens": [
+        "elbow"
+      ],
+      "class": "family",
+      "reason": "floor elbow (all 1 same-family originals); family elbow (elbow_flexion / elbow_extension pattern)",
+      "variant_family": "preacher_curl"
+    },
+    "G0455": {
+      "tokens": [
+        "elbow",
+        "wrist"
+      ],
+      "class": "family",
+      "reason": "floor elbow+wrist (all 1 same-family originals); family elbow (elbow_flexion / elbow_extension pattern)",
+      "variant_family": "wrist_curl"
+    },
+    "G0464": {
+      "tokens": [],
+      "class": "judgement",
+      "reason": "no same-family original or name rule; the source tags (shoulder+wrist) stand",
+      "variant_family": "plank"
+    },
+    "G0469": {
+      "tokens": [
+        "lower_back",
+        "neck"
+      ],
+      "class": "family",
+      "reason": "floor lower_back (all 4 same-family originals); majority neck (more than half of 4 same-family originals); family lower_back (twist / V-up / crunch / sit-up name)",
+      "variant_family": "crunch"
+    },
+    "G0471": {
+      "tokens": [
+        "shoulder",
+        "wrist"
+      ],
+      "class": "family",
+      "reason": "floor shoulder+wrist (all 1 same-family originals); family shoulder (push-up name)",
+      "variant_family": "handstand"
+    },
+    "G0472": {
+      "tokens": [
+        "lower_back",
+        "shoulder"
+      ],
+      "class": "floor",
+      "reason": "floor lower_back (all 5 same-family originals); majority shoulder (more than half of 5 same-family originals)",
+      "variant_family": "leg_raise"
+    },
+    "G0473": {
+      "tokens": [
+        "lower_back",
+        "shoulder"
+      ],
+      "class": "floor",
+      "reason": "floor lower_back (all 5 same-family originals); majority shoulder (more than half of 5 same-family originals)",
+      "variant_family": "leg_raise"
+    },
+    "G0484": {
+      "tokens": [
+        "lower_back"
+      ],
+      "class": "floor",
+      "reason": "floor lower_back (all 5 same-family originals); majority shoulder (more than half of 5 same-family originals); majority shoulder dropped (the majority comes from the hanging and dragon-flag originals; this raise is lying or seated and does not load the shoulder)",
+      "variant_family": "leg_raise"
+    },
+    "G0488": {
+      "tokens": [
+        "lower_back"
+      ],
+      "class": "floor",
+      "reason": "floor lower_back (all 2 same-family originals)",
+      "variant_family": "back_extension"
+    },
+    "G0490": {
+      "tokens": [
+        "shoulder",
+        "wrist"
+      ],
+      "class": "family",
+      "reason": "floor shoulder+wrist (all 8 same-family originals); family shoulder (push-up name)",
+      "variant_family": "push_up"
+    },
+    "G0491": {
+      "tokens": [
+        "lower_back"
+      ],
+      "class": "floor",
+      "reason": "floor lower_back (all 5 same-family originals); majority shoulder (more than half of 5 same-family originals); majority shoulder dropped (the majority comes from the hanging and dragon-flag originals; this raise is lying or seated and does not load the shoulder)",
+      "variant_family": "leg_raise"
+    },
+    "G0492": {
+      "tokens": [
+        "shoulder",
+        "wrist"
+      ],
+      "class": "family",
+      "reason": "floor shoulder+wrist (all 8 same-family originals); family shoulder (push-up name)",
+      "variant_family": "push_up"
+    },
+    "G0493": {
+      "tokens": [
+        "shoulder",
+        "wrist"
+      ],
+      "class": "family",
+      "reason": "floor shoulder+wrist (all 8 same-family originals); family shoulder (push-up name)",
+      "variant_family": "push_up"
+    },
+    "G0495": {
+      "tokens": [
+        "lower_back"
+      ],
+      "class": "family",
+      "reason": "floor lower_back (all 3 same-family originals); family lower_back (twist / V-up / crunch / sit-up name)",
+      "variant_family": "sit_up"
+    },
+    "G0498": {
+      "tokens": [],
+      "class": "judgement",
+      "reason": "no same-family original or name rule; the source tags (shoulder) stand",
+      "variant_family": "inverted_row"
+    },
+    "G0507": {
+      "tokens": [
+        "lower_back"
+      ],
+      "class": "family",
+      "reason": "floor lower_back (all 3 same-family originals); family lower_back (twist / V-up / crunch / sit-up name)",
+      "variant_family": "sit_up"
+    },
+    "G0517": {
+      "tokens": [
+        "lower_back"
+      ],
+      "class": "floor",
+      "reason": "floor lower_back (all 2 same-family originals)",
+      "variant_family": "rotation_core"
+    },
+    "G0518": {
+      "tokens": [],
+      "class": "judgement",
+      "reason": "no same-family original or name rule; the source tags (lower_back+wrist) stand",
+      "variant_family": "kettlebell_clean"
+    },
+    "G0519": {
+      "tokens": [
+        "shoulder"
+      ],
+      "class": "majority",
+      "reason": "majority shoulder (more than half of 7 same-family originals)",
+      "variant_family": "bench_press"
+    },
+    "G0520": {
+      "tokens": [
+        "shoulder"
+      ],
+      "class": "floor",
+      "reason": "floor shoulder (all 7 same-family originals)",
+      "variant_family": "shoulder_press"
+    },
+    "G0523": {
+      "tokens": [
+        "shoulder"
+      ],
+      "class": "floor",
+      "reason": "floor shoulder (all 7 same-family originals)",
+      "variant_family": "shoulder_press"
+    },
+    "G0524": {
+      "tokens": [
+        "shoulder"
+      ],
+      "class": "floor",
+      "reason": "floor shoulder (all 7 same-family originals)",
+      "variant_family": "shoulder_press"
+    },
+    "G0525": {
+      "tokens": [],
+      "class": "judgement",
+      "reason": "no same-family original or name rule; the source tags (lower_back+wrist) stand",
+      "variant_family": "kettlebell_clean"
+    },
+    "G0526": {
+      "tokens": [],
+      "class": "judgement",
+      "reason": "no same-family original or name rule; the source tags (lower_back+wrist) stand",
+      "variant_family": "kettlebell_clean"
+    },
+    "G0528": {
+      "tokens": [
+        "shoulder"
+      ],
+      "class": "floor",
+      "reason": "floor shoulder (all 7 same-family originals)",
+      "variant_family": "shoulder_press"
+    },
+    "G0529": {
+      "tokens": [],
+      "class": "judgement",
+      "reason": "no same-family original or name rule; the source tags (lower_back+shoulder+wrist) stand",
+      "variant_family": "olympic_snatch"
+    },
+    "G0530": {
+      "tokens": [
+        "lower_back"
+      ],
+      "class": "floor",
+      "reason": "floor lower_back (all 2 same-family originals)",
+      "variant_family": "rotation_core"
+    },
+    "G0532": {
+      "tokens": [
+        "lower_back"
+      ],
+      "class": "floor",
+      "reason": "floor lower_back (all 2 same-family originals)",
+      "variant_family": "rotation_core"
+    },
+    "G0533": {
+      "tokens": [
+        "hip",
+        "knee",
+        "lower_back",
+        "wrist"
+      ],
+      "class": "floor",
+      "reason": "floor hip+knee+lower_back+wrist (all 1 same-family originals)",
+      "variant_family": "front_squat"
+    },
+    "G0534": {
+      "tokens": [
+        "hip",
+        "knee"
+      ],
+      "class": "floor",
+      "reason": "floor hip+knee (all 8 same-family originals)",
+      "variant_family": "squat"
+    },
+    "G0535": {
+      "tokens": [],
+      "class": "judgement",
+      "reason": "no same-family original or name rule; the source tags (lower_back+wrist) stand",
+      "variant_family": "kettlebell_clean"
+    },
+    "G0536": {
+      "tokens": [
+        "hip",
+        "knee"
+      ],
+      "class": "floor",
+      "reason": "floor hip+knee (all 3 same-family originals)",
+      "variant_family": "lunge"
+    },
+    "G0537": {
+      "tokens": [
+        "lower_back",
+        "wrist"
+      ],
+      "class": "floor",
+      "reason": "floor lower_back+wrist (all 1 same-family originals)",
+      "variant_family": "olympic_clean"
+    },
+    "G0538": {
+      "tokens": [],
+      "class": "judgement",
+      "reason": "no same-family original or name rule; the source tags (lower_back+shoulder) stand",
+      "variant_family": "olympic_jerk"
+    },
+    "G0539": {
+      "tokens": [
+        "shoulder"
+      ],
+      "class": "floor",
+      "reason": "floor shoulder (all 7 same-family originals)",
+      "variant_family": "shoulder_press"
+    },
+    "G0541": {
+      "tokens": [],
+      "class": "judgement",
+      "reason": "no same-family original or name rule; the source tags (lower_back) stand",
+      "variant_family": "row"
+    },
+    "G0542": {
+      "tokens": [],
+      "class": "judgement",
+      "reason": "no same-family original or name rule; the source tags (lower_back+shoulder+wrist) stand",
+      "variant_family": "olympic_snatch"
+    },
+    "G0544": {
+      "tokens": [
+        "hip",
+        "knee"
+      ],
+      "class": "floor",
+      "reason": "floor hip+knee (all 1 same-family originals)",
+      "variant_family": "pistol_squat"
+    },
+    "G0546": {
+      "tokens": [
+        "shoulder"
+      ],
+      "class": "floor",
+      "reason": "floor shoulder (all 7 same-family originals)",
+      "variant_family": "shoulder_press"
+    },
+    "G0547": {
+      "tokens": [
+        "shoulder"
+      ],
+      "class": "floor",
+      "reason": "floor shoulder (all 7 same-family originals)",
+      "variant_family": "shoulder_press"
+    },
+    "G0548": {
+      "tokens": [],
+      "class": "judgement",
+      "reason": "no same-family original or name rule; the source tags (lower_back+shoulder) stand",
+      "variant_family": "high_pull"
+    },
+    "G0550": {
+      "tokens": [],
+      "class": "judgement",
+      "reason": "no same-family original or name rule; the source tags (knee+shoulder) stand",
+      "variant_family": "thruster"
+    },
+    "G0552": {
+      "tokens": [
+        "lower_back",
+        "wrist"
+      ],
+      "class": "floor",
+      "reason": "floor lower_back+wrist (all 1 same-family originals)",
+      "variant_family": "olympic_clean"
+    },
+    "G0553": {
+      "tokens": [
+        "shoulder"
+      ],
+      "class": "floor",
+      "reason": "floor shoulder (all 7 same-family originals)",
+      "variant_family": "shoulder_press"
+    },
+    "G0554": {
+      "tokens": [
+        "lower_back"
+      ],
+      "class": "floor",
+      "reason": "floor lower_back (all 2 same-family originals)",
+      "variant_family": "rotation_core"
+    },
+    "G0570": {
+      "tokens": [
+        "lower_back"
+      ],
+      "class": "floor",
+      "reason": "floor lower_back (all 5 same-family originals); majority shoulder (more than half of 5 same-family originals); majority shoulder dropped (the majority comes from the hanging and dragon-flag originals; this raise is lying or seated and does not load the shoulder)",
+      "variant_family": "leg_raise"
+    },
+    "G0571": {
+      "tokens": [],
+      "class": "judgement",
+      "reason": "judgement safe pool (same exercise as Machine Low Row, which is in the safe pool, on other equipment or grip)",
+      "variant_family": "row"
+    },
+    "G0572": {
+      "tokens": [
+        "elbow"
+      ],
+      "class": "floor",
+      "reason": "floor elbow (all 1 same-family originals)",
+      "variant_family": "chin_up"
+    },
+    "G0573": {
+      "tokens": [
+        "lower_back"
+      ],
+      "class": "floor",
+      "reason": "floor lower_back (all 2 same-family originals)",
+      "variant_family": "back_extension"
+    },
+    "G0574": {
+      "tokens": [],
+      "class": "judgement",
+      "reason": "no same-family original or name rule; the source tags (lower_back) stand",
+      "variant_family": "row"
+    },
+    "G0575": {
+      "tokens": [
+        "elbow"
+      ],
+      "class": "family",
+      "reason": "floor elbow (all 10 same-family originals); family elbow (elbow_flexion / elbow_extension pattern)",
+      "variant_family": "biceps_curl"
+    },
+    "G0578": {
+      "tokens": [
+        "hip",
+        "knee"
+      ],
+      "class": "floor",
+      "reason": "floor hip+knee (all 8 same-family originals)",
+      "variant_family": "squat"
+    },
+    "G0579": {
+      "tokens": [
+        "shoulder"
+      ],
+      "class": "majority",
+      "reason": "majority shoulder (more than half of 6 same-family originals)",
+      "variant_family": "lat_pulldown"
+    },
+    "G0583": {
+      "tokens": [
+        "lower_back"
+      ],
+      "class": "floor",
+      "reason": "floor lower_back (all 2 same-family originals)",
+      "variant_family": "rotation_core"
+    },
+    "G0587": {
+      "tokens": [
+        "shoulder"
+      ],
+      "class": "floor",
+      "reason": "floor shoulder (all 7 same-family originals)",
+      "variant_family": "shoulder_press"
+    },
+    "G0588": {
+      "tokens": [],
+      "class": "judgement",
+      "reason": "judgement safe pool (same exercise as Machine Low Row, which is in the safe pool, on other equipment or grip)",
+      "variant_family": "row"
+    },
+    "G0591": {
+      "tokens": [
+        "elbow",
+        "shoulder"
+      ],
+      "class": "family",
+      "reason": "floor elbow+shoulder (all 2 same-family originals); family elbow (elbow_flexion / elbow_extension pattern)",
+      "variant_family": "dip"
+    },
+    "G0595": {
+      "tokens": [
+        "lower_back",
+        "neck"
+      ],
+      "class": "family",
+      "reason": "floor lower_back (all 4 same-family originals); majority neck (more than half of 4 same-family originals); family lower_back (twist / V-up / crunch / sit-up name)",
+      "variant_family": "crunch"
+    },
+    "G0599": {
+      "tokens": [
+        "hamstring"
+      ],
+      "class": "floor",
+      "reason": "floor hamstring (all 4 same-family originals)",
+      "variant_family": "leg_curl"
+    },
+    "G0602": {
+      "tokens": [],
+      "class": "judgement",
+      "reason": "judgement safe pool (founder 2026-10-26: same exercise as Reverse Fly, which is in the safe pool, on a machine, band or support); majority shoulder dropped",
+      "variant_family": "rear_delt_fly"
+    },
+    "G0604": {
+      "tokens": [
+        "neck"
+      ],
+      "class": "floor",
+      "reason": "floor neck (all 1 same-family originals)",
+      "variant_family": "shrug"
+    },
+    "G0607": {
+      "tokens": [
+        "elbow"
+      ],
+      "class": "family",
+      "reason": "floor elbow (all 6 same-family originals); family elbow (elbow_flexion / elbow_extension pattern)",
+      "variant_family": "triceps_extension"
+    },
+    "G0613": {
+      "tokens": [
+        "ankle",
+        "knee"
+      ],
+      "class": "floor",
+      "reason": "floor ankle+knee (all 1 same-family originals)",
+      "variant_family": "stretch_quad"
+    },
+    "G0620": {
+      "tokens": [
+        "lower_back"
+      ],
+      "class": "floor",
+      "reason": "floor lower_back (all 5 same-family originals); majority shoulder (more than half of 5 same-family originals); majority shoulder dropped (the majority comes from the hanging and dragon-flag originals; this raise is lying or seated and does not load the shoulder)",
+      "variant_family": "leg_raise"
+    },
+    "G0635": {
+      "tokens": [
+        "lower_back",
+        "neck"
+      ],
+      "class": "family",
+      "reason": "floor lower_back (all 4 same-family originals); majority neck (more than half of 4 same-family originals); family lower_back (twist / V-up / crunch / sit-up name)",
+      "variant_family": "crunch"
+    },
+    "G0640": {
+      "tokens": [
+        "lower_back",
+        "shoulder"
+      ],
+      "class": "floor",
+      "reason": "floor lower_back+shoulder (all 1 same-family originals)",
+      "variant_family": "slam"
+    },
+    "G0642": {
+      "tokens": [
+        "shoulder",
+        "wrist"
+      ],
+      "class": "family",
+      "reason": "floor shoulder+wrist (all 8 same-family originals); family shoulder (push-up name)",
+      "variant_family": "push_up"
+    },
+    "G0661": {
+      "tokens": [
+        "shoulder",
+        "wrist"
+      ],
+      "class": "family",
+      "reason": "floor shoulder+wrist (all 8 same-family originals); family shoulder (push-up name)",
+      "variant_family": "push_up"
+    },
+    "G0664": {
+      "tokens": [
+        "shoulder",
+        "wrist"
+      ],
+      "class": "family",
+      "reason": "floor shoulder+wrist (all 8 same-family originals); family shoulder (push-up name)",
+      "variant_family": "push_up"
+    },
+    "G0669": {
+      "tokens": [
+        "shoulder"
+      ],
+      "class": "floor",
+      "reason": "floor shoulder (all 2 same-family originals)",
+      "variant_family": "stretch_shoulder"
+    },
+    "G0677": {
+      "tokens": [
+        "elbow",
+        "shoulder"
+      ],
+      "class": "floor",
+      "reason": "floor elbow+shoulder (all 2 same-family originals)",
+      "variant_family": "dip"
+    },
+    "G0688": {
+      "tokens": [
+        "elbow",
+        "shoulder"
+      ],
+      "class": "floor",
+      "reason": "floor elbow+shoulder (all 1 same-family originals)",
+      "variant_family": "pull_up"
+    },
+    "G0689": {
+      "tokens": [
+        "lower_back"
+      ],
+      "class": "floor",
+      "reason": "floor lower_back (all 5 same-family originals); majority shoulder (more than half of 5 same-family originals); majority shoulder dropped (the majority comes from the hanging and dragon-flag originals; this raise is lying or seated and does not load the shoulder)",
+      "variant_family": "leg_raise"
+    },
+    "G0690": {
+      "tokens": [
+        "lower_back"
+      ],
+      "class": "judgement",
+      "reason": "judgement lower_back (seated forward flexion of the lower back)",
+      "variant_family": "stretch_lower_back"
+    },
+    "G0691": {
+      "tokens": [
+        "lower_back"
+      ],
+      "class": "family",
+      "reason": "floor lower_back (all 1 same-family originals); family lower_back (twist / V-up / crunch / sit-up name)",
+      "variant_family": "side_bend"
+    },
+    "G0699": {
+      "tokens": [
+        "shoulder",
+        "wrist"
+      ],
+      "class": "family",
+      "reason": "floor shoulder+wrist (all 8 same-family originals); family shoulder (push-up name)",
+      "variant_family": "push_up"
+    },
+    "G0710": {
+      "tokens": [
+        "hip"
+      ],
+      "class": "family",
+      "reason": "family hip (hip abduction / adduction name)",
+      "variant_family": "hip_abduction"
+    },
+    "G0716": {
+      "tokens": [],
+      "class": "judgement",
+      "reason": "no same-family original or name rule; the source tags (neck) stand",
+      "variant_family": "stretch_neck"
+    },
+    "G0721": {
+      "tokens": [
+        "wrist"
+      ],
+      "class": "judgement",
+      "reason": "judgement wrist (wrist extension at end range)",
+      "variant_family": "stretch_forearm"
+    },
+    "G0725": {
+      "tokens": [
+        "shoulder",
+        "wrist"
+      ],
+      "class": "family",
+      "reason": "floor shoulder+wrist (all 8 same-family originals); family shoulder (push-up name)",
+      "variant_family": "push_up"
+    },
+    "G0738": {
+      "tokens": [
+        "ankle"
+      ],
+      "class": "floor",
+      "reason": "floor ankle (all 4 same-family originals)",
+      "variant_family": "calf_raise"
+    },
+    "G0742": {
+      "tokens": [
+        "ankle"
+      ],
+      "class": "floor",
+      "reason": "floor ankle (all 4 same-family originals)",
+      "variant_family": "calf_raise"
+    },
+    "G0744": {
+      "tokens": [
+        "hip",
+        "knee"
+      ],
+      "class": "floor",
+      "reason": "floor hip+knee (all 8 same-family originals)",
+      "variant_family": "squat"
+    },
+    "G0746": {
+      "tokens": [
+        "neck"
+      ],
+      "class": "floor",
+      "reason": "floor neck (all 1 same-family originals)",
+      "variant_family": "shrug"
+    },
+    "G0748": {
+      "tokens": [
+        "shoulder"
+      ],
+      "class": "majority",
+      "reason": "majority shoulder (more than half of 7 same-family originals)",
+      "variant_family": "bench_press"
+    },
+    "G0749": {
+      "tokens": [
+        "hamstring",
+        "lower_back"
+      ],
+      "class": "floor",
+      "reason": "floor hamstring+lower_back (all 2 same-family originals)",
+      "variant_family": "good_morning"
+    },
+    "G0750": {
+      "tokens": [
+        "hip",
+        "knee"
+      ],
+      "class": "floor",
+      "reason": "floor hip+knee (all 8 same-family originals)",
+      "variant_family": "squat"
+    },
+    "G0751": {
+      "tokens": [
+        "shoulder"
+      ],
+      "class": "majority",
+      "reason": "majority shoulder (more than half of 7 same-family originals)",
+      "variant_family": "bench_press"
+    },
+    "G0752": {
+      "tokens": [
+        "lower_back"
+      ],
+      "class": "floor",
+      "reason": "floor lower_back (all 4 same-family originals)",
+      "variant_family": "deadlift"
+    },
+    "G0753": {
+      "tokens": [
+        "shoulder"
+      ],
+      "class": "majority",
+      "reason": "majority shoulder (more than half of 7 same-family originals)",
+      "variant_family": "bench_press"
+    },
+    "G0754": {
+      "tokens": [
+        "shoulder"
+      ],
+      "class": "majority",
+      "reason": "majority shoulder (more than half of 7 same-family originals)",
+      "variant_family": "bench_press"
+    },
+    "G0755": {
+      "tokens": [
+        "hip",
+        "knee"
+      ],
+      "class": "floor",
+      "reason": "floor hip+knee (all 1 same-family originals)",
+      "variant_family": "hack_squat"
+    },
+    "G0757": {
+      "tokens": [
+        "shoulder"
+      ],
+      "class": "floor",
+      "reason": "floor shoulder (all 2 same-family originals)",
+      "variant_family": "incline_press"
+    },
+    "G0758": {
+      "tokens": [
+        "shoulder"
+      ],
+      "class": "floor",
+      "reason": "floor shoulder (all 2 same-family originals)",
+      "variant_family": "incline_press"
+    },
+    "G0759": {
+      "tokens": [],
+      "class": "judgement",
+      "reason": "no same-family original or name rule; the source tags (shoulder) stand",
+      "variant_family": "serratus_raise"
+    },
+    "G0762": {
+      "tokens": [],
+      "class": "judgement",
+      "reason": "no same-family original or name rule; the source tags (lower_back) stand",
+      "variant_family": "row"
+    },
+    "G0764": {
+      "tokens": [
+        "shoulder"
+      ],
+      "class": "majority",
+      "reason": "majority shoulder (more than half of 7 same-family originals)",
+      "variant_family": "bench_press"
+    },
+    "G0765": {
+      "tokens": [
+        "shoulder"
+      ],
+      "class": "floor",
+      "reason": "floor shoulder (all 7 same-family originals)",
+      "variant_family": "shoulder_press"
+    },
+    "G0766": {
+      "tokens": [
+        "shoulder"
+      ],
+      "class": "floor",
+      "reason": "floor shoulder (all 7 same-family originals)",
+      "variant_family": "shoulder_press"
+    },
+    "G0767": {
+      "tokens": [
+        "neck"
+      ],
+      "class": "floor",
+      "reason": "floor neck (all 1 same-family originals)",
+      "variant_family": "shrug"
+    },
+    "G0768": {
+      "tokens": [
+        "hip",
+        "knee"
+      ],
+      "class": "floor",
+      "reason": "floor hip+knee (all 2 same-family originals)",
+      "variant_family": "split_squat"
+    },
+    "G0769": {
+      "tokens": [
+        "hip",
+        "knee"
+      ],
+      "class": "floor",
+      "reason": "floor hip+knee (all 3 same-family originals)",
+      "variant_family": "lunge"
+    },
+    "G0770": {
+      "tokens": [
+        "hip",
+        "knee"
+      ],
+      "class": "floor",
+      "reason": "floor hip+knee (all 8 same-family originals)",
+      "variant_family": "squat"
+    },
+    "G0773": {
+      "tokens": [
+        "ankle"
+      ],
+      "class": "floor",
+      "reason": "floor ankle (all 4 same-family originals)",
+      "variant_family": "calf_raise"
+    },
+    "G0774": {
+      "tokens": [
+        "shoulder"
+      ],
+      "class": "floor",
+      "reason": "floor shoulder (all 7 same-family originals)",
+      "variant_family": "shoulder_press"
+    },
+    "G0775": {
+      "tokens": [
+        "shoulder"
+      ],
+      "class": "floor",
+      "reason": "floor shoulder (all 1 same-family originals)",
+      "variant_family": "upright_row"
+    },
+    "G0776": {
+      "tokens": [],
+      "class": "judgement",
+      "reason": "no same-family original or name rule; the source tags (lower_back+shoulder+wrist) stand",
+      "variant_family": "olympic_snatch"
+    },
+    "G0778": {
+      "tokens": [
+        "shoulder",
+        "wrist"
+      ],
+      "class": "family",
+      "reason": "floor shoulder+wrist (all 8 same-family originals); family shoulder (push-up name)",
+      "variant_family": "push_up"
+    },
+    "G0786": {
+      "tokens": [
+        "hip",
+        "knee"
+      ],
+      "class": "judgement",
+      "reason": "judgement: a squat-catch jerk loads the hip and knee like the loaded squats E036, E037, E088, E112 and E149 (B-pass finding, 2026-10-26); the source tags (lower_back+shoulder+wrist) stand",
+      "variant_family": "olympic_jerk"
+    },
+    "G0794": {
+      "tokens": [
+        "lower_back"
+      ],
+      "class": "judgement",
+      "reason": "judgement lower_back (standing side bend, as Side Bend Stretch)",
+      "variant_family": "stretch_torso"
+    },
+    "G0796": {
+      "tokens": [
+        "lower_back",
+        "shoulder",
+        "wrist"
+      ],
+      "class": "floor",
+      "reason": "floor lower_back+shoulder+wrist (all 1 same-family originals)",
+      "variant_family": "rollout"
+    },
+    "G0805": {
+      "tokens": [
+        "lower_back",
+        "shoulder",
+        "wrist"
+      ],
+      "class": "floor",
+      "reason": "floor lower_back+shoulder+wrist (all 1 same-family originals)",
+      "variant_family": "rollout"
+    },
+    "G0806": {
+      "tokens": [
+        "shoulder",
+        "wrist"
+      ],
+      "class": "family",
+      "reason": "floor shoulder+wrist (all 8 same-family originals); family shoulder (push-up name)",
+      "variant_family": "push_up"
+    },
+    "G0808": {
+      "tokens": [],
+      "class": "judgement",
+      "reason": "no same-family original or name rule; the source tags (elbow+shoulder) stand",
+      "variant_family": "inverted_row"
+    },
+    "G0813": {
+      "tokens": [
+        "elbow",
+        "shoulder"
+      ],
+      "class": "family",
+      "reason": "floor elbow+shoulder (all 2 same-family originals); family elbow (elbow_flexion / elbow_extension pattern)",
+      "variant_family": "dip"
+    },
+    "G0814": {
+      "tokens": [
+        "elbow",
+        "shoulder"
+      ],
+      "class": "twin",
+      "reason": "floor elbow+shoulder (all 2 same-family originals); family elbow (elbow_flexion / elbow_extension pattern); twin elbow+shoulder (twin of E075 Dip (Parallel Bars))",
+      "variant_family": "dip"
+    },
+    "G0815": {
+      "tokens": [
+        "elbow",
+        "shoulder"
+      ],
+      "class": "family",
+      "reason": "floor elbow+shoulder (all 2 same-family originals); family elbow (elbow_flexion / elbow_extension pattern)",
+      "variant_family": "dip"
+    },
+    "G0817": {
+      "tokens": [
+        "elbow",
+        "shoulder"
+      ],
+      "class": "judgement",
+      "reason": "judgement elbow+shoulder (overhead elbow flexion at end range)",
+      "variant_family": "stretch_triceps"
+    },
+    "G0826": {
+      "tokens": [
+        "lower_back",
+        "shoulder"
+      ],
+      "class": "floor",
+      "reason": "floor lower_back (all 5 same-family originals); majority shoulder (more than half of 5 same-family originals)",
+      "variant_family": "leg_raise"
+    },
+    "G0845": {
+      "tokens": [
+        "lower_back"
+      ],
+      "class": "family",
+      "reason": "floor lower_back (all 2 same-family originals); family lower_back (twist / V-up / crunch / sit-up name)",
+      "variant_family": "rotation_core"
+    },
+    "G0851": {
+      "tokens": [],
+      "class": "judgement",
+      "reason": "no same-family original or name rule; the source tags (knee) stand",
+      "variant_family": "sissy_squat"
+    },
+    "G0862": {
+      "tokens": [
+        "lower_back"
+      ],
+      "class": "floor",
+      "reason": "floor lower_back (all 2 same-family originals)",
+      "variant_family": "rotation_core"
+    },
+    "G0863": {
+      "tokens": [
+        "shoulder"
+      ],
+      "class": "floor",
+      "reason": "floor shoulder (all 1 same-family originals)",
+      "variant_family": "rotator_cuff"
+    },
+    "G0864": {
+      "tokens": [
+        "shoulder"
+      ],
+      "class": "floor",
+      "reason": "floor shoulder (all 1 same-family originals)",
+      "variant_family": "rotator_cuff"
+    },
+    "G0865": {
+      "tokens": [
+        "lower_back"
+      ],
+      "class": "floor",
+      "reason": "floor lower_back (all 5 same-family originals); majority shoulder (more than half of 5 same-family originals); majority shoulder dropped (the majority comes from the hanging and dragon-flag originals; this raise is lying or seated and does not load the shoulder)",
+      "variant_family": "leg_raise"
+    },
+    "G0866": {
+      "tokens": [
+        "lower_back",
+        "shoulder"
+      ],
+      "class": "floor",
+      "reason": "floor lower_back (all 5 same-family originals); majority shoulder (more than half of 5 same-family originals)",
+      "variant_family": "leg_raise"
+    },
+    "G0873": {
+      "tokens": [
+        "lower_back"
+      ],
+      "class": "family",
+      "reason": "floor lower_back (all 4 same-family originals); majority neck (more than half of 4 same-family originals); family lower_back (twist / V-up / crunch / sit-up name); majority neck dropped (a reverse crunch lifts the hips, not the head; the library Reverse Crunch carries no neck)",
+      "variant_family": "crunch"
+    },
+    "G0874": {
+      "tokens": [
+        "lower_back",
+        "neck"
+      ],
+      "class": "family",
+      "reason": "floor lower_back (all 4 same-family originals); majority neck (more than half of 4 same-family originals); family lower_back (twist / V-up / crunch / sit-up name)",
+      "variant_family": "crunch"
+    },
+    "G0968": {
+      "tokens": [
+        "elbow"
+      ],
+      "class": "family",
+      "reason": "floor elbow (all 10 same-family originals); family elbow (elbow_flexion / elbow_extension pattern)",
+      "variant_family": "biceps_curl"
+    },
+    "G0970": {
+      "tokens": [
+        "elbow",
+        "shoulder"
+      ],
+      "class": "floor",
+      "reason": "floor elbow+shoulder (all 1 same-family originals)",
+      "variant_family": "pull_up"
+    },
+    "G0974": {
+      "tokens": [
+        "shoulder"
+      ],
+      "class": "majority",
+      "reason": "majority shoulder (more than half of 6 same-family originals)",
+      "variant_family": "lat_pulldown"
+    },
+    "G0975": {
+      "tokens": [
+        "shoulder",
+        "wrist"
+      ],
+      "class": "family",
+      "reason": "floor shoulder+wrist (all 8 same-family originals); family shoulder (push-up name)",
+      "variant_family": "push_up"
+    },
+    "G0976": {
+      "tokens": [
+        "elbow"
+      ],
+      "class": "family",
+      "reason": "floor elbow (all 10 same-family originals); family elbow (elbow_flexion / elbow_extension pattern)",
+      "variant_family": "biceps_curl"
+    },
+    "G0977": {
+      "tokens": [
+        "shoulder"
+      ],
+      "class": "floor",
+      "reason": "floor shoulder (all 2 same-family originals)",
+      "variant_family": "front_raise"
+    },
+    "G0978": {
+      "tokens": [
+        "shoulder"
+      ],
+      "class": "floor",
+      "reason": "floor shoulder (all 2 same-family originals)",
+      "variant_family": "front_raise"
+    },
+    "G0980": {
+      "tokens": [
+        "hip"
+      ],
+      "class": "floor",
+      "reason": "floor hip (all 2 same-family originals)",
+      "variant_family": "glute_kickback"
+    },
+    "G0981": {
+      "tokens": [
+        "lower_back"
+      ],
+      "class": "family",
+      "reason": "floor lower_back (all 3 same-family originals); family lower_back (twist / V-up / crunch / sit-up name)",
+      "variant_family": "sit_up"
+    },
+    "G0983": {
+      "tokens": [
+        "shoulder"
+      ],
+      "class": "majority",
+      "reason": "majority shoulder (more than half of 6 same-family originals)",
+      "variant_family": "lat_pulldown"
+    },
+    "G0985": {
+      "tokens": [
+        "lower_back"
+      ],
+      "class": "family",
+      "reason": "floor lower_back (all 2 same-family originals); family lower_back (twist / V-up / crunch / sit-up name)",
+      "variant_family": "rotation_core"
+    },
+    "G0988": {
+      "tokens": [
+        "lower_back"
+      ],
+      "class": "judgement",
+      "reason": "judgement lower_back (standing unsupported single-arm pull, as Kettlebell Row)",
+      "variant_family": "row"
+    },
+    "G0989": {
+      "tokens": [
+        "shoulder"
+      ],
+      "class": "majority",
+      "reason": "majority shoulder (more than half of 7 same-family originals)",
+      "variant_family": "bench_press"
+    },
+    "G0990": {
+      "tokens": [
+        "lower_back"
+      ],
+      "class": "judgement",
+      "reason": "judgement lower_back (seated unsupported single-arm pull with trunk rotation)",
+      "variant_family": "row"
+    },
+    "G0991": {
+      "tokens": [
+        "lower_back"
+      ],
+      "class": "floor",
+      "reason": "floor lower_back (all 1 same-family originals)",
+      "variant_family": "pull_through"
+    },
+    "G0992": {
+      "tokens": [
+        "lower_back"
+      ],
+      "class": "family",
+      "reason": "floor lower_back (all 3 same-family originals); family lower_back (twist / V-up / crunch / sit-up name)",
+      "variant_family": "sit_up"
+    },
+    "G0993": {
+      "tokens": [],
+      "class": "judgement",
+      "reason": "judgement safe pool (founder 2026-10-26: same exercise as Reverse Fly, which is in the safe pool, on a machine, band or support); majority shoulder dropped",
+      "variant_family": "rear_delt_fly"
+    },
+    "G0994": {
+      "tokens": [
+        "elbow",
+        "wrist"
+      ],
+      "class": "family",
+      "reason": "floor elbow+wrist (all 1 same-family originals); family elbow (elbow_flexion / elbow_extension pattern)",
+      "variant_family": "reverse_wrist_curl"
+    },
+    "G0996": {
+      "tokens": [
+        "hip"
+      ],
+      "class": "floor",
+      "reason": "floor hip (all 3 same-family originals)",
+      "variant_family": "mobility_hip"
+    },
+    "G0997": {
+      "tokens": [
+        "shoulder"
+      ],
+      "class": "floor",
+      "reason": "floor shoulder (all 7 same-family originals)",
+      "variant_family": "shoulder_press"
+    },
+    "G0999": {
+      "tokens": [
+        "ankle"
+      ],
+      "class": "floor",
+      "reason": "floor ankle (all 4 same-family originals)",
+      "variant_family": "calf_raise"
+    },
+    "G1000": {
+      "tokens": [
+        "ankle"
+      ],
+      "class": "floor",
+      "reason": "floor ankle (all 4 same-family originals)",
+      "variant_family": "calf_raise"
+    },
+    "G1001": {
+      "tokens": [
+        "hip",
+        "knee"
+      ],
+      "class": "floor",
+      "reason": "floor hip+knee (all 2 same-family originals)",
+      "variant_family": "split_squat"
+    },
+    "G1002": {
+      "tokens": [
+        "lower_back"
+      ],
+      "class": "floor",
+      "reason": "floor lower_back (all 5 same-family originals); majority shoulder (more than half of 5 same-family originals); majority shoulder dropped (the majority comes from the hanging and dragon-flag originals; this raise is lying or seated and does not load the shoulder)",
+      "variant_family": "leg_raise"
+    },
+    "G1003": {
+      "tokens": [
+        "hip",
+        "knee"
+      ],
+      "class": "floor",
+      "reason": "floor hip+knee (all 8 same-family originals)",
+      "variant_family": "squat"
+    },
+    "G1005": {
+      "tokens": [
+        "lower_back",
+        "neck"
+      ],
+      "class": "family",
+      "reason": "floor lower_back (all 4 same-family originals); majority neck (more than half of 4 same-family originals); family lower_back (twist / V-up / crunch / sit-up name)",
+      "variant_family": "crunch"
+    },
+    "G1007": {
+      "tokens": [
+        "lower_back"
+      ],
+      "class": "family",
+      "reason": "floor lower_back (all 2 same-family originals); family lower_back (twist / V-up / crunch / sit-up name)",
+      "variant_family": "rotation_core"
+    },
+    "G1008": {
+      "tokens": [
+        "hip",
+        "knee"
+      ],
+      "class": "floor",
+      "reason": "floor hip+knee (all 1 same-family originals)",
+      "variant_family": "step_up"
+    },
+    "G1009": {
+      "tokens": [
+        "hamstring",
+        "lower_back"
+      ],
+      "class": "floor",
+      "reason": "floor hamstring+lower_back (all 3 same-family originals)",
+      "variant_family": "romanian_deadlift"
+    },
+    "G1010": {
+      "tokens": [
+        "hamstring",
+        "lower_back"
+      ],
+      "class": "floor",
+      "reason": "floor hamstring+lower_back (all 3 same-family originals)",
+      "variant_family": "romanian_deadlift"
+    },
+    "G1011": {
+      "tokens": [
+        "lower_back"
+      ],
+      "class": "floor",
+      "reason": "floor lower_back (all 2 same-family originals)",
+      "variant_family": "rotation_core"
+    },
+    "G1013": {
+      "tokens": [
+        "shoulder"
+      ],
+      "class": "majority",
+      "reason": "majority shoulder (more than half of 6 same-family originals)",
+      "variant_family": "lat_pulldown"
+    },
+    "G1015": {
+      "tokens": [
+        "shoulder"
+      ],
+      "class": "judgement",
+      "reason": "judgement shoulder (overhead (vertical) band press: the shoulder, where Pallof Press is a horizontal press)",
+      "variant_family": "anti_rotation"
+    },
+    "G1016": {
+      "tokens": [
+        "elbow",
+        "wrist"
+      ],
+      "class": "family",
+      "reason": "floor elbow+wrist (all 1 same-family originals); family elbow (elbow_flexion / elbow_extension pattern)",
+      "variant_family": "wrist_curl"
+    },
+    "G1017": {
+      "tokens": [
+        "neck",
+        "shoulder"
+      ],
+      "class": "floor",
+      "reason": "floor neck+shoulder (all 1 same-family originals)",
+      "variant_family": "y_raise"
+    },
+    "G1018": {
+      "tokens": [
+        "neck"
+      ],
+      "class": "floor",
+      "reason": "floor neck (all 1 same-family originals)",
+      "variant_family": "shrug"
+    },
+    "G1022": {
+      "tokens": [],
+      "class": "judgement",
+      "reason": "judgement safe pool (same exercise as Band Pull Apart, which is in the safe pool, on other equipment or grip)",
+      "variant_family": "row"
+    },
+    "G1023": {
+      "tokens": [
+        "hamstring",
+        "lower_back"
+      ],
+      "class": "floor",
+      "reason": "floor hamstring+lower_back (all 3 same-family originals)",
+      "variant_family": "romanian_deadlift"
+    },
+    "G1201": {
+      "tokens": [
+        "ankle",
+        "knee",
+        "shoulder",
+        "wrist"
+      ],
+      "class": "floor",
+      "reason": "floor ankle+knee+shoulder+wrist (all 1 same-family originals)",
+      "variant_family": "burpee"
+    },
+    "G1254": {
+      "tokens": [
+        "shoulder"
+      ],
+      "class": "majority",
+      "reason": "majority shoulder (more than half of 7 same-family originals)",
+      "variant_family": "bench_press"
+    },
+    "G1256": {
+      "tokens": [
+        "shoulder"
+      ],
+      "class": "majority",
+      "reason": "majority shoulder (more than half of 7 same-family originals)",
+      "variant_family": "bench_press"
+    },
+    "G1257": {
+      "tokens": [
+        "shoulder"
+      ],
+      "class": "floor",
+      "reason": "floor shoulder (all 2 same-family originals)",
+      "variant_family": "incline_press"
+    },
+    "G1258": {
+      "tokens": [
+        "shoulder"
+      ],
+      "class": "majority",
+      "reason": "majority shoulder (more than half of 7 same-family originals)",
+      "variant_family": "bench_press"
+    },
+    "G1271": {
+      "tokens": [
+        "shoulder"
+      ],
+      "class": "floor",
+      "reason": "floor shoulder (all 2 same-family originals)",
+      "variant_family": "stretch_chest"
+    },
+    "G1273": {
+      "tokens": [
+        "shoulder",
+        "wrist"
+      ],
+      "class": "family",
+      "reason": "floor shoulder+wrist (all 8 same-family originals); family shoulder (push-up name)",
+      "variant_family": "push_up"
+    },
+    "G1274": {
+      "tokens": [
+        "shoulder",
+        "wrist"
+      ],
+      "class": "family",
+      "reason": "floor shoulder+wrist (all 8 same-family originals); family shoulder (push-up name)",
+      "variant_family": "push_up"
+    },
+    "G1276": {
+      "tokens": [
+        "shoulder"
+      ],
+      "class": "majority",
+      "reason": "majority shoulder (more than half of 6 same-family originals)",
+      "variant_family": "chest_fly"
+    },
+    "G1279": {
+      "tokens": [
+        "shoulder"
+      ],
+      "class": "majority",
+      "reason": "majority shoulder (more than half of 6 same-family originals)",
+      "variant_family": "chest_fly"
+    },
+    "G1281": {
+      "tokens": [
+        "shoulder"
+      ],
+      "class": "floor",
+      "reason": "floor shoulder (all 2 same-family originals)",
+      "variant_family": "incline_press"
+    },
+    "G1285": {
+      "tokens": [
+        "shoulder"
+      ],
+      "class": "majority",
+      "reason": "majority shoulder (more than half of 6 same-family originals)",
+      "variant_family": "chest_fly"
+    },
+    "G1287": {
+      "tokens": [
+        "shoulder"
+      ],
+      "class": "majority",
+      "reason": "majority shoulder (more than half of 7 same-family originals)",
+      "variant_family": "bench_press"
+    },
+    "G1297": {
+      "tokens": [
+        "shoulder"
+      ],
+      "class": "majority",
+      "reason": "majority shoulder (more than half of 6 same-family originals)",
+      "variant_family": "chest_fly"
+    },
+    "G1298": {
+      "tokens": [
+        "shoulder"
+      ],
+      "class": "majority",
+      "reason": "majority shoulder (more than half of 7 same-family originals)",
+      "variant_family": "bench_press"
+    },
+    "G1299": {
+      "tokens": [
+        "shoulder"
+      ],
+      "class": "floor",
+      "reason": "floor shoulder (all 2 same-family originals)",
+      "variant_family": "incline_press"
+    },
+    "G1300": {
+      "tokens": [
+        "shoulder"
+      ],
+      "class": "majority",
+      "reason": "majority shoulder (more than half of 7 same-family originals)",
+      "variant_family": "bench_press"
+    },
+    "G1308": {
+      "tokens": [
+        "shoulder"
+      ],
+      "class": "majority",
+      "reason": "majority shoulder (more than half of 7 same-family originals)",
+      "variant_family": "bench_press"
+    },
+    "G1309": {
+      "tokens": [
+        "shoulder"
+      ],
+      "class": "majority",
+      "reason": "majority shoulder (more than half of 7 same-family originals)",
+      "variant_family": "bench_press"
+    },
+    "G1311": {
+      "tokens": [
+        "shoulder",
+        "wrist"
+      ],
+      "class": "family",
+      "reason": "floor shoulder+wrist (all 8 same-family originals); family shoulder (push-up name)",
+      "variant_family": "push_up"
+    },
+    "G1313": {
+      "tokens": [
+        "lower_back"
+      ],
+      "class": "judgement",
+      "reason": "judgement lower_back (standing unsupported single-arm pull, as Kettlebell Row)",
+      "variant_family": "row"
+    },
+    "G1317": {
+      "tokens": [
+        "elbow"
+      ],
+      "class": "judgement",
+      "reason": "judgement elbow (underhand (reverse) grip loads the elbow flexors, as Chin Up is elbow)",
+      "variant_family": "row"
+    },
+    "G1319": {
+      "tokens": [],
+      "class": "judgement",
+      "reason": "judgement safe pool (same exercise as Seated Cable Row, which is in the safe pool, on other equipment or grip)",
+      "variant_family": "row"
+    },
+    "G1327": {
+      "tokens": [
+        "elbow"
+      ],
+      "class": "floor",
+      "reason": "floor elbow (all 1 same-family originals)",
+      "variant_family": "chin_up"
+    },
+    "G1328": {
+      "tokens": [],
+      "class": "judgement",
+      "reason": "judgement safe pool (same exercise as Chest Supported Row, which is in the safe pool, on other equipment or grip)",
+      "variant_family": "row"
+    },
+    "G1331": {
+      "tokens": [
+        "elbow"
+      ],
+      "class": "judgement",
+      "reason": "judgement elbow (underhand (reverse) grip loads the elbow flexors, as Chin Up is elbow)",
+      "variant_family": "row"
+    },
+    "G1345": {
+      "tokens": [],
+      "class": "judgement",
+      "reason": "no same-family original or name rule; the source tags (lower_back) stand",
+      "variant_family": "row"
+    },
+    "G1346": {
+      "tokens": [
+        "knee",
+        "shoulder"
+      ],
+      "class": "judgement",
+      "reason": "judgement knee+shoulder (kneeling reach with the hips sunk back: knee as Child's Pose, shoulder as Lat Stretch)",
+      "variant_family": "stretch_lats"
+    },
+    "G1347": {
+      "tokens": [
+        "shoulder"
+      ],
+      "class": "majority",
+      "reason": "majority shoulder (more than half of 6 same-family originals)",
+      "variant_family": "lat_pulldown"
+    },
+    "G1350": {
+      "tokens": [],
+      "class": "judgement",
+      "reason": "judgement safe pool (same exercise as Machine Low Row, which is in the safe pool, on other equipment or grip)",
+      "variant_family": "row"
+    },
+    "G1353": {
+      "tokens": [],
+      "class": "judgement",
+      "reason": "no same-family original or name rule; the source tags (lower_back+shoulder) stand",
+      "variant_family": "medicine_ball_throw"
+    },
+    "G1355": {
+      "tokens": [
+        "shoulder"
+      ],
+      "class": "majority",
+      "reason": "majority shoulder (more than half of 6 same-family originals)",
+      "variant_family": "lat_pulldown"
+    },
+    "G1356": {
+      "tokens": [
+        "shoulder"
+      ],
+      "class": "majority",
+      "reason": "majority shoulder (more than half of 6 same-family originals)",
+      "variant_family": "lat_pulldown"
+    },
+    "G1358": {
+      "tokens": [
+        "lower_back"
+      ],
+      "class": "judgement",
+      "reason": "judgement lower_back (lateral side stretch, as Side Bend Stretch)",
+      "variant_family": "stretch_side"
+    },
+    "G1359": {
+      "tokens": [],
+      "class": "judgement",
+      "reason": "no same-family original or name rule; the source tags (lower_back) stand",
+      "variant_family": "row"
+    },
+    "G1361": {
+      "tokens": [],
+      "class": "judgement",
+      "reason": "no same-family original or name rule; the source tags (lower_back+wrist) stand",
+      "variant_family": "row"
+    },
+    "G1362": {
+      "tokens": [],
+      "class": "judgement",
+      "reason": "no same-family original or name rule; the source tags (lower_back) stand",
+      "variant_family": "mobility_spine"
+    },
+    "G1363": {
+      "tokens": [
+        "lower_back"
+      ],
+      "class": "judgement",
+      "reason": "judgement lower_back (seated spinal flexion)",
+      "variant_family": "mobility_spine"
+    },
+    "G1364": {
+      "tokens": [],
+      "class": "judgement",
+      "reason": "judgement safe pool (standard low-back rehab drill (pelvic tilt, low load))",
+      "variant_family": "mobility_pelvis"
+    },
+    "G1365": {
+      "tokens": [
+        "shoulder"
+      ],
+      "class": "judgement",
+      "reason": "judgement shoulder (clasped, rounded upper back: the shoulder at end range, as Chest Opener)",
+      "variant_family": "stretch_upper_back"
+    },
+    "G1366": {
+      "tokens": [],
+      "class": "judgement",
+      "reason": "no same-family original or name rule; the source tags (lower_back+wrist) stand",
+      "variant_family": "mobility_spine"
+    },
+    "G1370": {
+      "tokens": [
+        "ankle"
+      ],
+      "class": "floor",
+      "reason": "floor ankle (all 4 same-family originals)",
+      "variant_family": "calf_raise"
+    },
+    "G1372": {
+      "tokens": [
+        "ankle"
+      ],
+      "class": "floor",
+      "reason": "floor ankle (all 4 same-family originals)",
+      "variant_family": "calf_raise"
+    },
+    "G1373": {
+      "tokens": [
+        "ankle"
+      ],
+      "class": "floor",
+      "reason": "floor ankle (all 4 same-family originals)",
+      "variant_family": "calf_raise"
+    },
+    "G1375": {
+      "tokens": [
+        "ankle"
+      ],
+      "class": "floor",
+      "reason": "floor ankle (all 4 same-family originals)",
+      "variant_family": "calf_raise"
+    },
+    "G1379": {
+      "tokens": [
+        "ankle"
+      ],
+      "class": "floor",
+      "reason": "floor ankle (all 4 same-family originals)",
+      "variant_family": "calf_raise"
+    },
+    "G1383": {
+      "tokens": [
+        "ankle"
+      ],
+      "class": "floor",
+      "reason": "floor ankle (all 4 same-family originals)",
+      "variant_family": "calf_raise"
+    },
+    "G1384": {
+      "tokens": [
+        "ankle"
+      ],
+      "class": "floor",
+      "reason": "floor ankle (all 4 same-family originals)",
+      "variant_family": "calf_raise"
+    },
+    "G1385": {
+      "tokens": [
+        "ankle"
+      ],
+      "class": "floor",
+      "reason": "floor ankle (all 4 same-family originals)",
+      "variant_family": "calf_raise"
+    },
+    "G1387": {
+      "tokens": [
+        "ankle"
+      ],
+      "class": "floor",
+      "reason": "floor ankle (all 4 same-family originals)",
+      "variant_family": "calf_raise"
+    },
+    "G1388": {
+      "tokens": [
+        "ankle"
+      ],
+      "class": "floor",
+      "reason": "floor ankle (all 1 same-family originals)",
+      "variant_family": "stretch_calf"
+    },
+    "G1389": {
+      "tokens": [
+        "ankle"
+      ],
+      "class": "floor",
+      "reason": "floor ankle (all 1 same-family originals)",
+      "variant_family": "stretch_calf"
+    },
+    "G1390": {
+      "tokens": [
+        "ankle"
+      ],
+      "class": "floor",
+      "reason": "floor ankle (all 1 same-family originals)",
+      "variant_family": "stretch_calf"
+    },
+    "G1391": {
+      "tokens": [
+        "ankle"
+      ],
+      "class": "floor",
+      "reason": "floor ankle (all 4 same-family originals)",
+      "variant_family": "calf_raise"
+    },
+    "G1392": {
+      "tokens": [
+        "ankle"
+      ],
+      "class": "floor",
+      "reason": "floor ankle (all 4 same-family originals)",
+      "variant_family": "calf_raise"
+    },
+    "G1393": {
+      "tokens": [
+        "ankle"
+      ],
+      "class": "floor",
+      "reason": "floor ankle (all 4 same-family originals)",
+      "variant_family": "calf_raise"
+    },
+    "G1395": {
+      "tokens": [
+        "ankle"
+      ],
+      "class": "floor",
+      "reason": "floor ankle (all 4 same-family originals)",
+      "variant_family": "calf_raise"
+    },
+    "G1398": {
+      "tokens": [
+        "ankle"
+      ],
+      "class": "floor",
+      "reason": "floor ankle (all 1 same-family originals)",
+      "variant_family": "stretch_calf"
+    },
+    "G1399": {
+      "tokens": [
+        "elbow",
+        "shoulder"
+      ],
+      "class": "family",
+      "reason": "floor elbow+shoulder (all 2 same-family originals); family elbow (elbow_flexion / elbow_extension pattern)",
+      "variant_family": "dip"
+    },
+    "G1403": {
+      "tokens": [],
+      "class": "judgement",
+      "reason": "no same-family original or name rule; the source tags (neck) stand",
+      "variant_family": "stretch_neck"
+    },
+    "G1405": {
+      "tokens": [
+        "shoulder"
+      ],
+      "class": "floor",
+      "reason": "floor shoulder (all 2 same-family originals)",
+      "variant_family": "stretch_chest"
+    },
+    "G1408": {
+      "tokens": [],
+      "class": "judgement",
+      "reason": "judgement safe pool (same exercise as Glute Bridge, which is in the safe pool, on other equipment or grip)",
+      "variant_family": "glute_bridge"
+    },
+    "G1409": {
+      "tokens": [
+        "hip",
+        "lower_back"
+      ],
+      "class": "judgement",
+      "reason": "judgement hip+lower_back (barbell-loaded bridge: hip and spinal load, as Single Leg Glute Bridge)",
+      "variant_family": "glute_bridge"
+    },
+    "G1410": {
+      "tokens": [
+        "hip",
+        "knee"
+      ],
+      "class": "floor",
+      "reason": "floor hip+knee (all 3 same-family originals)",
+      "variant_family": "lunge"
+    },
+    "G1413": {
+      "tokens": [
+        "elbow"
+      ],
+      "class": "family",
+      "reason": "family elbow (elbow_flexion / elbow_extension pattern)",
+      "variant_family": "reverse_curl"
+    },
+    "G1414": {
+      "tokens": [
+        "elbow"
+      ],
+      "class": "family",
+      "reason": "floor elbow (all 1 same-family originals); family elbow (elbow_flexion / elbow_extension pattern)",
+      "variant_family": "preacher_curl"
+    },
+    "G1415": {
+      "tokens": [
+        "elbow",
+        "wrist"
+      ],
+      "class": "family",
+      "reason": "floor elbow+wrist (all 1 same-family originals); family elbow (elbow_flexion / elbow_extension pattern)",
+      "variant_family": "wrist_curl"
+    },
+    "G1418": {
+      "tokens": [],
+      "class": "judgement",
+      "reason": "judgement safe pool (standard low-back relief stretch (rehab move, low load))",
+      "variant_family": "stretch_lower_back"
+    },
+    "G1419": {
+      "tokens": [
+        "lower_back"
+      ],
+      "class": "judgement",
+      "reason": "judgement lower_back (supine leg swing across the body: spinal rotation, as Torso Twists)",
+      "variant_family": "mobility_spine"
+    },
+    "G1422": {
+      "tokens": [],
+      "class": "judgement",
+      "reason": "judgement safe pool (same exercise as Glute Bridge, which is in the safe pool, on other equipment or grip)",
+      "variant_family": "glute_bridge"
+    },
+    "G1424": {
+      "tokens": [
+        "hip"
+      ],
+      "class": "judgement",
+      "reason": "judgement hip (ankle-over-knee glute stretch, as Seated Piriformis Stretch)",
+      "variant_family": "stretch_glute"
+    },
+    "G1425": {
+      "tokens": [
+        "knee",
+        "lower_back"
+      ],
+      "class": "floor",
+      "reason": "floor knee+lower_back (all 1 same-family originals)",
+      "variant_family": "leg_press"
+    },
+    "G1428": {
+      "tokens": [
+        "wrist"
+      ],
+      "class": "twin",
+      "reason": "twin wrist (twin of E210 Wrist Rotations)",
+      "variant_family": "mobility_wrist"
+    },
+    "G1429": {
+      "tokens": [
+        "elbow",
+        "shoulder"
+      ],
+      "class": "floor",
+      "reason": "floor elbow+shoulder (all 1 same-family originals)",
+      "variant_family": "pull_up"
+    },
+    "G1431": {
+      "tokens": [
+        "elbow"
+      ],
+      "class": "floor",
+      "reason": "floor elbow (all 1 same-family originals)",
+      "variant_family": "chin_up"
+    },
+    "G1432": {
+      "tokens": [
+        "elbow",
+        "shoulder"
+      ],
+      "class": "floor",
+      "reason": "floor elbow+shoulder (all 1 same-family originals)",
+      "variant_family": "pull_up"
+    },
+    "G1433": {
+      "tokens": [
+        "hip",
+        "knee",
+        "lower_back",
+        "wrist"
+      ],
+      "class": "floor",
+      "reason": "floor hip+knee+lower_back+wrist (all 1 same-family originals)",
+      "variant_family": "front_squat"
+    },
+    "G1434": {
+      "tokens": [
+        "hip",
+        "knee"
+      ],
+      "class": "floor",
+      "reason": "floor hip+knee (all 8 same-family originals)",
+      "variant_family": "squat"
+    },
+    "G1435": {
+      "tokens": [
+        "hip",
+        "knee"
+      ],
+      "class": "floor",
+      "reason": "floor hip+knee (all 8 same-family originals)",
+      "variant_family": "squat"
+    },
+    "G1436": {
+      "tokens": [
+        "hip",
+        "knee"
+      ],
+      "class": "floor",
+      "reason": "floor hip+knee (all 8 same-family originals)",
+      "variant_family": "squat"
+    },
+    "G1437": {
+      "tokens": [
+        "elbow",
+        "wrist"
+      ],
+      "class": "family",
+      "reason": "floor elbow+wrist (all 1 same-family originals); family elbow (elbow_flexion / elbow_extension pattern)",
+      "variant_family": "wrist_curl"
+    },
+    "G1438": {
+      "tokens": [
+        "shoulder"
+      ],
+      "class": "floor",
+      "reason": "floor shoulder (all 7 same-family originals)",
+      "variant_family": "shoulder_press"
+    },
+    "G1441": {
+      "tokens": [
+        "elbow",
+        "wrist"
+      ],
+      "class": "family",
+      "reason": "floor elbow+wrist (all 1 same-family originals); family elbow (elbow_flexion / elbow_extension pattern)",
+      "variant_family": "reverse_wrist_curl"
+    },
+    "G1451": {
+      "tokens": [
+        "elbow",
+        "shoulder"
+      ],
+      "class": "family",
+      "reason": "floor elbow+shoulder (all 2 same-family originals); family elbow (elbow_flexion / elbow_extension pattern)",
+      "variant_family": "dip"
+    },
+    "G1456": {
+      "tokens": [
+        "shoulder"
+      ],
+      "class": "floor",
+      "reason": "floor shoulder (all 7 same-family originals)",
+      "variant_family": "shoulder_press"
+    },
+    "G1458": {
+      "tokens": [
+        "elbow"
+      ],
+      "class": "family",
+      "reason": "floor elbow (all 10 same-family originals); family elbow (elbow_flexion / elbow_extension pattern)",
+      "variant_family": "biceps_curl"
+    },
+    "G1466": {
+      "tokens": [
+        "lower_back"
+      ],
+      "class": "floor",
+      "reason": "floor lower_back (all 2 same-family originals)",
+      "variant_family": "rotation_core"
+    },
+    "G1468": {
+      "tokens": [
+        "lower_back"
+      ],
+      "class": "floor",
+      "reason": "floor lower_back (all 2 same-family originals)",
+      "variant_family": "rotation_core"
+    },
+    "G1472": {
+      "tokens": [
+        "ankle",
+        "knee"
+      ],
+      "class": "floor",
+      "reason": "floor ankle+knee (all 3 same-family originals)",
+      "variant_family": "jump"
+    },
+    "G1473": {
+      "tokens": [
+        "ankle",
+        "knee"
+      ],
+      "class": "floor",
+      "reason": "floor ankle+knee (all 3 same-family originals)",
+      "variant_family": "jump"
+    },
+    "G1476": {
+      "tokens": [
+        "hip",
+        "knee"
+      ],
+      "class": "floor",
+      "reason": "floor hip+knee (all 1 same-family originals)",
+      "variant_family": "single_leg_squat"
+    },
+    "G1490": {
+      "tokens": [
+        "ankle"
+      ],
+      "class": "floor",
+      "reason": "floor ankle (all 4 same-family originals)",
+      "variant_family": "calf_raise"
+    },
+    "G1494": {
+      "tokens": [
+        "hip"
+      ],
+      "class": "judgement",
+      "reason": "judgement hip (butterfly: hip external rotation at end range, as Pigeon Pose)",
+      "variant_family": "stretch_hip"
+    },
+    "G1512": {
+      "tokens": [
+        "ankle",
+        "knee"
+      ],
+      "class": "floor",
+      "reason": "floor ankle+knee (all 1 same-family originals)",
+      "variant_family": "stretch_quad"
+    },
+    "G1545": {
+      "tokens": [
+        "hip",
+        "knee"
+      ],
+      "class": "floor",
+      "reason": "floor hip+knee (all 8 same-family originals)",
+      "variant_family": "squat"
+    },
+    "G1548": {
+      "tokens": [
+        "hamstring",
+        "lower_back"
+      ],
+      "class": "floor",
+      "reason": "floor hamstring+lower_back (all 2 same-family originals)",
+      "variant_family": "stretch_hamstring"
+    },
+    "G1564": {
+      "tokens": [
+        "ankle",
+        "knee"
+      ],
+      "class": "floor",
+      "reason": "floor ankle+knee (all 1 same-family originals)",
+      "variant_family": "stretch_quad"
+    },
+    "G1576": {
+      "tokens": [
+        "hamstring",
+        "lower_back"
+      ],
+      "class": "floor",
+      "reason": "floor hamstring+lower_back (all 2 same-family originals)",
+      "variant_family": "stretch_hamstring"
+    },
+    "G1582": {
+      "tokens": [
+        "hamstring",
+        "lower_back"
+      ],
+      "class": "floor",
+      "reason": "floor hamstring+lower_back (all 2 same-family originals)",
+      "variant_family": "stretch_hamstring"
+    },
+    "G1585": {
+      "tokens": [
+        "knee"
+      ],
+      "class": "floor",
+      "reason": "floor knee (all 1 same-family originals)",
+      "variant_family": "stretch_hip_flexor"
+    },
+    "G1587": {
+      "tokens": [
+        "hamstring",
+        "hip"
+      ],
+      "class": "judgement",
+      "reason": "judgement hamstring+hip (wide-angle forward fold: hip and hamstring at end range)",
+      "variant_family": "stretch_adductor"
+    },
+    "G1617": {
+      "tokens": [
+        "shoulder"
+      ],
+      "class": "majority",
+      "reason": "majority shoulder (more than half of 7 same-family originals)",
+      "variant_family": "bench_press"
+    },
+    "G1619": {
+      "tokens": [
+        "shoulder"
+      ],
+      "class": "floor",
+      "reason": "floor shoulder (all 2 same-family originals)",
+      "variant_family": "incline_press"
+    },
+    "G1623": {
+      "tokens": [
+        "shoulder"
+      ],
+      "class": "floor",
+      "reason": "floor shoulder (all 2 same-family originals)",
+      "variant_family": "incline_press"
+    },
+    "G1624": {
+      "tokens": [
+        "shoulder"
+      ],
+      "class": "majority",
+      "reason": "majority shoulder (more than half of 7 same-family originals)",
+      "variant_family": "bench_press"
+    },
+    "G1625": {
+      "tokens": [
+        "shoulder"
+      ],
+      "class": "majority",
+      "reason": "majority shoulder (more than half of 7 same-family originals)",
+      "variant_family": "bench_press"
+    },
+    "G1627": {
+      "tokens": [
+        "elbow"
+      ],
+      "class": "family",
+      "reason": "floor elbow (all 1 same-family originals); family elbow (elbow_flexion / elbow_extension pattern)",
+      "variant_family": "preacher_curl"
+    },
+    "G1629": {
+      "tokens": [
+        "elbow"
+      ],
+      "class": "family",
+      "reason": "floor elbow (all 10 same-family originals); family elbow (elbow_flexion / elbow_extension pattern)",
+      "variant_family": "biceps_curl"
+    },
+    "G1630": {
+      "tokens": [
+        "elbow"
+      ],
+      "class": "family",
+      "reason": "floor elbow (all 10 same-family originals); family elbow (elbow_flexion / elbow_extension pattern)",
+      "variant_family": "biceps_curl"
+    },
+    "G1631": {
+      "tokens": [
+        "elbow"
+      ],
+      "class": "family",
+      "reason": "floor elbow (all 10 same-family originals); family elbow (elbow_flexion / elbow_extension pattern)",
+      "variant_family": "biceps_curl"
+    },
+    "G1632": {
+      "tokens": [
+        "elbow"
+      ],
+      "class": "family",
+      "reason": "floor elbow (all 10 same-family originals); family elbow (elbow_flexion / elbow_extension pattern)",
+      "variant_family": "biceps_curl"
+    },
+    "G1634": {
+      "tokens": [
+        "elbow"
+      ],
+      "class": "family",
+      "reason": "floor elbow (all 10 same-family originals); family elbow (elbow_flexion / elbow_extension pattern)",
+      "variant_family": "biceps_curl"
+    },
+    "G1641": {
+      "tokens": [
+        "elbow"
+      ],
+      "class": "family",
+      "reason": "floor elbow (all 10 same-family originals); family elbow (elbow_flexion / elbow_extension pattern)",
+      "variant_family": "biceps_curl"
+    },
+    "G1646": {
+      "tokens": [
+        "elbow"
+      ],
+      "class": "family",
+      "reason": "floor elbow (all 1 same-family originals); family elbow (elbow_flexion / elbow_extension pattern)",
+      "variant_family": "preacher_curl"
+    },
+    "G1647": {
+      "tokens": [
+        "elbow"
+      ],
+      "class": "family",
+      "reason": "floor elbow (all 1 same-family originals); family elbow (elbow_flexion / elbow_extension pattern)",
+      "variant_family": "preacher_curl"
+    },
+    "G1648": {
+      "tokens": [
+        "elbow"
+      ],
+      "class": "family",
+      "reason": "floor elbow (all 2 same-family originals); family elbow (elbow_flexion / elbow_extension pattern)",
+      "variant_family": "hammer_curl"
+    },
+    "G1661": {
+      "tokens": [
+        "elbow"
+      ],
+      "class": "family",
+      "reason": "floor elbow (all 10 same-family originals); family elbow (elbow_flexion / elbow_extension pattern)",
+      "variant_family": "biceps_curl"
+    },
+    "G1663": {
+      "tokens": [
+        "elbow"
+      ],
+      "class": "family",
+      "reason": "floor elbow (all 1 same-family originals); family elbow (elbow_flexion / elbow_extension pattern)",
+      "variant_family": "preacher_curl"
+    },
+    "G1669": {
+      "tokens": [
+        "elbow"
+      ],
+      "class": "family",
+      "reason": "floor elbow (all 2 same-family originals); family elbow (elbow_flexion / elbow_extension pattern)",
+      "variant_family": "hammer_curl"
+    },
+    "G1670": {
+      "tokens": [
+        "elbow"
+      ],
+      "class": "family",
+      "reason": "floor elbow (all 10 same-family originals); family elbow (elbow_flexion / elbow_extension pattern)",
+      "variant_family": "biceps_curl"
+    },
+    "G1671": {
+      "tokens": [
+        "elbow"
+      ],
+      "class": "family",
+      "reason": "floor elbow (all 2 same-family originals); family elbow (elbow_flexion / elbow_extension pattern)",
+      "variant_family": "hammer_curl"
+    },
+    "G1674": {
+      "tokens": [
+        "elbow"
+      ],
+      "class": "family",
+      "reason": "floor elbow (all 2 same-family originals); family elbow (elbow_flexion / elbow_extension pattern)",
+      "variant_family": "hammer_curl"
+    },
+    "G1678": {
+      "tokens": [
+        "elbow"
+      ],
+      "class": "family",
+      "reason": "floor elbow (all 2 same-family originals); family elbow (elbow_flexion / elbow_extension pattern)",
+      "variant_family": "hammer_curl"
+    },
+    "G1680": {
+      "tokens": [
+        "elbow"
+      ],
+      "class": "family",
+      "reason": "floor elbow (all 10 same-family originals); family elbow (elbow_flexion / elbow_extension pattern)",
+      "variant_family": "biceps_curl"
+    },
+    "G1682": {
+      "tokens": [
+        "elbow"
+      ],
+      "class": "family",
+      "reason": "floor elbow (all 10 same-family originals); family elbow (elbow_flexion / elbow_extension pattern)",
+      "variant_family": "biceps_curl"
+    },
+    "G1683": {
+      "tokens": [
+        "elbow"
+      ],
+      "class": "family",
+      "reason": "floor elbow (all 10 same-family originals); family elbow (elbow_flexion / elbow_extension pattern)",
+      "variant_family": "biceps_curl"
+    },
+    "G1685": {
+      "tokens": [
+        "hip",
+        "knee"
+      ],
+      "class": "judgement",
+      "reason": "judgement hip+knee (squat to overhead reach, as Squat to Stand (hip + knee + lower_back))",
+      "variant_family": "mobility_squat"
+    },
+    "G1686": {
+      "tokens": [
+        "lower_back",
+        "shoulder",
+        "wrist"
+      ],
+      "class": "floor",
+      "reason": "floor lower_back+shoulder+wrist (all 3 same-family originals)",
+      "variant_family": "mobility_full_body"
+    },
+    "G1700": {
+      "tokens": [
+        "shoulder"
+      ],
+      "class": "floor",
+      "reason": "floor shoulder (all 7 same-family originals)",
+      "variant_family": "shoulder_press"
+    },
+    "G1701": {
+      "tokens": [
+        "shoulder",
+        "wrist"
+      ],
+      "class": "family",
+      "reason": "floor shoulder+wrist (all 8 same-family originals); family shoulder (push-up name)",
+      "variant_family": "push_up"
+    },
+    "G1709": {
+      "tokens": [
+        "hip"
+      ],
+      "class": "judgement",
+      "reason": "judgement hip (ankle-over-knee glute stretch, as Piriformis Stretch)",
+      "variant_family": "stretch_glute"
+    },
+    "G1712": {
+      "tokens": [
+        "hip"
+      ],
+      "class": "judgement",
+      "reason": "judgement hip (adductor stretch: the hip at end range)",
+      "variant_family": "stretch_adductor"
+    },
+    "G1719": {
+      "tokens": [
+        "shoulder"
+      ],
+      "class": "floor",
+      "reason": "floor shoulder (all 2 same-family originals)",
+      "variant_family": "incline_press"
+    },
+    "G1721": {
+      "tokens": [
+        "elbow"
+      ],
+      "class": "family",
+      "reason": "floor elbow (all 6 same-family originals); family elbow (elbow_flexion / elbow_extension pattern)",
+      "variant_family": "triceps_extension"
+    },
+    "G1723": {
+      "tokens": [
+        "elbow"
+      ],
+      "class": "family",
+      "reason": "floor elbow (all 1 same-family originals); family elbow (elbow_flexion / elbow_extension pattern)",
+      "variant_family": "triceps_pushdown"
+    },
+    "G1727": {
+      "tokens": [
+        "elbow"
+      ],
+      "class": "family",
+      "reason": "floor elbow (all 1 same-family originals); family elbow (elbow_flexion / elbow_extension pattern)",
+      "variant_family": "triceps_pushdown"
+    },
+    "G1730": {
+      "tokens": [
+        "elbow"
+      ],
+      "class": "family",
+      "reason": "floor elbow (all 2 same-family originals); family elbow (elbow_flexion / elbow_extension pattern)",
+      "variant_family": "triceps_kickback"
+    },
+    "G1733": {
+      "tokens": [
+        "elbow"
+      ],
+      "class": "family",
+      "reason": "floor elbow (all 6 same-family originals); family elbow (elbow_flexion / elbow_extension pattern)",
+      "variant_family": "triceps_extension"
+    },
+    "G1743": {
+      "tokens": [
+        "shoulder"
+      ],
+      "class": "majority",
+      "reason": "majority shoulder (more than half of 7 same-family originals)",
+      "variant_family": "bench_press"
+    },
+    "G1748": {
+      "tokens": [
+        "elbow"
+      ],
+      "class": "family",
+      "reason": "floor elbow (all 6 same-family originals); family elbow (elbow_flexion / elbow_extension pattern)",
+      "variant_family": "triceps_extension"
+    },
+    "G1750": {
+      "tokens": [],
+      "class": "judgement",
+      "reason": "no same-family original or name rule; the source tags (shoulder) stand",
+      "variant_family": "medicine_ball_throw"
+    },
+    "G1752": {
+      "tokens": [
+        "elbow"
+      ],
+      "class": "family",
+      "reason": "floor elbow (all 6 same-family originals); family elbow (elbow_flexion / elbow_extension pattern)",
+      "variant_family": "triceps_extension"
+    },
+    "G1756": {
+      "tokens": [
+        "hamstring",
+        "lower_back"
+      ],
+      "class": "floor",
+      "reason": "floor hamstring+lower_back (all 3 same-family originals)",
+      "variant_family": "romanian_deadlift"
+    },
+    "G1758": {
+      "tokens": [
+        "lower_back"
+      ],
+      "class": "family",
+      "reason": "floor lower_back (all 3 same-family originals); family lower_back (twist / V-up / crunch / sit-up name)",
+      "variant_family": "sit_up"
+    },
+    "G1761": {
+      "tokens": [
+        "lower_back",
+        "shoulder"
+      ],
+      "class": "floor",
+      "reason": "floor lower_back (all 5 same-family originals); majority shoulder (more than half of 5 same-family originals)",
+      "variant_family": "leg_raise"
+    },
+    "G1771": {
+      "tokens": [
+        "elbow"
+      ],
+      "class": "family",
+      "reason": "floor elbow (all 6 same-family originals); family elbow (elbow_flexion / elbow_extension pattern)",
+      "variant_family": "triceps_extension"
+    },
+    "G1774": {
+      "tokens": [
+        "hip"
+      ],
+      "class": "family",
+      "reason": "family hip (hip abduction / adduction name)",
+      "variant_family": "side_plank"
+    },
+    "G1775": {
+      "tokens": [
+        "hip"
+      ],
+      "class": "family",
+      "reason": "family hip (hip abduction / adduction name)",
+      "variant_family": "side_plank"
+    },
+    "G2135": {
+      "tokens": [
+        "lower_back"
+      ],
+      "class": "judgement",
+      "reason": "judgement lower_back (plate loaded on the upper back adds spinal load to a plank)",
+      "variant_family": "plank"
+    },
+    "G2141": {
+      "tokens": [],
+      "class": "judgement",
+      "reason": "judgement safe pool (same exercise as Cycling (Stationary), which is in the safe pool, on other equipment or grip)",
+      "variant_family": "cardio_elliptical"
+    },
+    "G2142": {
+      "tokens": [
+        "lower_back",
+        "shoulder"
+      ],
+      "class": "judgement",
+      "reason": "judgement lower_back+shoulder (hinge and pull: spinal and shoulder load, as Rowing Machine)",
+      "variant_family": "cardio_ski_erg"
+    },
+    "G2285": {
+      "tokens": [
+        "shoulder"
+      ],
+      "class": "floor",
+      "reason": "floor shoulder (all 2 same-family originals)",
+      "variant_family": "pullover"
+    },
+    "G2287": {
+      "tokens": [
+        "knee",
+        "lower_back"
+      ],
+      "class": "floor",
+      "reason": "floor knee+lower_back (all 1 same-family originals)",
+      "variant_family": "leg_press"
+    },
+    "G2292": {
+      "tokens": [
+        "shoulder"
+      ],
+      "class": "majority",
+      "reason": "majority shoulder (more than half of 5 same-family originals)",
+      "variant_family": "rear_delt_fly"
+    },
+    "G2300": {
+      "tokens": [],
+      "class": "judgement",
+      "reason": "judgement safe pool (same exercise as Inverted Row, which is in the safe pool, on other equipment or grip)",
+      "variant_family": "inverted_row"
+    },
+    "G2311": {
+      "tokens": [
+        "hip",
+        "knee"
+      ],
+      "class": "judgement",
+      "reason": "judgement hip+knee (stair climbing loads the knee and hip, as Walking Lunge)",
+      "variant_family": "cardio_stairs"
+    },
+    "G2312": {
+      "tokens": [
+        "lower_back"
+      ],
+      "class": "floor",
+      "reason": "floor lower_back (all 2 same-family originals)",
+      "variant_family": "rotation_core"
+    },
+    "G2317": {
+      "tokens": [
+        "shoulder"
+      ],
+      "class": "floor",
+      "reason": "floor shoulder (all 4 same-family originals)",
+      "variant_family": "lateral_raise"
+    },
+    "G2329": {
+      "tokens": [
+        "lower_back"
+      ],
+      "class": "judgement",
+      "reason": "judgement lower_back (seated spinal rotation, as Torso Twists)",
+      "variant_family": "mobility_spine"
+    },
+    "G2397": {
+      "tokens": [
+        "shoulder"
+      ],
+      "class": "floor",
+      "reason": "floor shoulder (all 7 same-family originals)",
+      "variant_family": "shoulder_press"
+    },
+    "G2398": {
+      "tokens": [
+        "shoulder",
+        "wrist"
+      ],
+      "class": "family",
+      "reason": "floor shoulder+wrist (all 8 same-family originals); family shoulder (push-up name)",
+      "variant_family": "push_up"
+    },
+    "G2399": {
+      "tokens": [
+        "lower_back"
+      ],
+      "class": "floor",
+      "reason": "floor lower_back (all 2 same-family originals)",
+      "variant_family": "rotation_core"
+    },
+    "G2464": {
+      "tokens": [
+        "lower_back"
+      ],
+      "class": "judgement",
+      "reason": "judgement lower_back (standing unsupported pull with trunk rotation)",
+      "variant_family": "row"
+    },
+    "G2470": {
+      "tokens": [
+        "shoulder"
+      ],
+      "class": "majority",
+      "reason": "majority shoulder (more than half of 5 same-family originals)",
+      "variant_family": "rear_delt_fly"
+    },
+    "G2611": {
+      "tokens": [
+        "knee",
+        "lower_back"
+      ],
+      "class": "floor",
+      "reason": "floor knee+lower_back (all 1 same-family originals)",
+      "variant_family": "leg_press"
+    },
+    "G2616": {
+      "tokens": [
+        "shoulder"
+      ],
+      "class": "majority",
+      "reason": "majority shoulder (more than half of 6 same-family originals)",
+      "variant_family": "lat_pulldown"
+    },
+    "G2705": {
+      "tokens": [
+        "elbow"
+      ],
+      "class": "family",
+      "reason": "family elbow (elbow_flexion / elbow_extension pattern)",
+      "variant_family": "forearm_rotation"
+    },
+    "G2706": {
+      "tokens": [
+        "elbow"
+      ],
+      "class": "family",
+      "reason": "family elbow (elbow_flexion / elbow_extension pattern)",
+      "variant_family": "forearm_rotation"
+    },
+    "G2741": {
+      "tokens": [
+        "elbow"
+      ],
+      "class": "family",
+      "reason": "floor elbow (all 10 same-family originals); family elbow (elbow_flexion / elbow_extension pattern)",
+      "variant_family": "biceps_curl"
+    },
+    "G2796": {
+      "tokens": [
+        "hip",
+        "knee"
+      ],
+      "class": "floor",
+      "reason": "floor hip+knee (all 1 same-family originals)",
+      "variant_family": "step_up"
+    },
+    "G2802": {
+      "tokens": [
+        "lower_back"
+      ],
+      "class": "floor",
+      "reason": "floor lower_back (all 5 same-family originals); majority shoulder (more than half of 5 same-family originals); majority shoulder dropped (the majority comes from the hanging and dragon-flag originals; this raise is lying or seated and does not load the shoulder)",
+      "variant_family": "leg_raise"
+    },
+    "G2803": {
+      "tokens": [
+        "hip",
+        "knee"
+      ],
+      "class": "floor",
+      "reason": "floor hip+knee (all 8 same-family originals)",
+      "variant_family": "squat"
+    },
+    "G2805": {
+      "tokens": [
+        "hamstring",
+        "lower_back"
+      ],
+      "class": "floor",
+      "reason": "floor hamstring+lower_back (all 3 same-family originals)",
+      "variant_family": "romanian_deadlift"
+    },
+    "G3006": {
+      "tokens": [
+        "hip"
+      ],
+      "class": "family",
+      "reason": "family hip (hip abduction / adduction name)",
+      "variant_family": "hip_abduction"
+    },
+    "G3007": {
+      "tokens": [
+        "knee"
+      ],
+      "class": "floor",
+      "reason": "floor knee (all 1 same-family originals)",
+      "variant_family": "leg_extension"
+    },
+    "G3012": {
+      "tokens": [
+        "elbow",
+        "shoulder"
+      ],
+      "class": "floor",
+      "reason": "floor elbow+shoulder (all 2 same-family originals)",
+      "variant_family": "dip"
+    },
+    "G3021": {
+      "tokens": [
+        "shoulder"
+      ],
+      "class": "family",
+      "reason": "family shoulder (push-up name)",
+      "variant_family": "scapula_push_up"
+    },
+    "G3117": {
+      "tokens": [
+        "shoulder"
+      ],
+      "class": "majority",
+      "reason": "majority shoulder (more than half of 6 same-family originals)",
+      "variant_family": "lat_pulldown"
+    },
+    "G3122": {
+      "tokens": [
+        "shoulder"
+      ],
+      "class": "floor",
+      "reason": "floor shoulder (all 7 same-family originals)",
+      "variant_family": "shoulder_press"
+    },
+    "G3123": {
+      "tokens": [
+        "elbow"
+      ],
+      "class": "family",
+      "reason": "floor elbow (all 10 same-family originals); family elbow (elbow_flexion / elbow_extension pattern)",
+      "variant_family": "biceps_curl"
+    },
+    "G3124": {
+      "tokens": [
+        "shoulder"
+      ],
+      "class": "majority",
+      "reason": "majority shoulder (more than half of 7 same-family originals)",
+      "variant_family": "bench_press"
+    },
+    "G3142": {
+      "tokens": [
+        "hip",
+        "knee"
+      ],
+      "class": "floor",
+      "reason": "floor hip+knee (all 8 same-family originals)",
+      "variant_family": "squat"
+    },
+    "G3144": {
+      "tokens": [],
+      "class": "judgement",
+      "reason": "judgement safe pool (same exercise as Seated Cable Row, which is in the safe pool, on other equipment or grip)",
+      "variant_family": "row"
+    },
+    "G3147": {
+      "tokens": [],
+      "class": "judgement",
+      "reason": "judgement safe pool (standard low-back rehab drill (pelvic tilt, low load))",
+      "variant_family": "mobility_pelvis"
+    },
+    "G3162": {
+      "tokens": [
+        "shoulder"
+      ],
+      "class": "judgement",
+      "reason": "judgement shoulder (leaned-back bodyweight row on fixed bars, as Table Row (shoulder + elbow))",
+      "variant_family": "row"
+    },
+    "G3166": {
+      "tokens": [
+        "shoulder"
+      ],
+      "class": "judgement",
+      "reason": "judgement shoulder (leaned-back bodyweight row on fixed bars, as Table Row (shoulder + elbow))",
+      "variant_family": "row"
+    },
+    "G3193": {
+      "tokens": [],
+      "class": "judgement",
+      "reason": "no same-family original or name rule; the source tags (hamstring+lower_back) stand",
+      "variant_family": "glute_ham_raise"
+    },
+    "G3194": {
+      "tokens": [
+        "hip",
+        "knee"
+      ],
+      "class": "floor",
+      "reason": "floor hip+knee (all 8 same-family originals)",
+      "variant_family": "squat"
+    },
+    "G3201": {
+      "tokens": [
+        "lower_back"
+      ],
+      "class": "family",
+      "reason": "floor lower_back (all 3 same-family originals); family lower_back (twist / V-up / crunch / sit-up name)",
+      "variant_family": "sit_up"
+    },
+    "G3202": {
+      "tokens": [
+        "lower_back"
+      ],
+      "class": "family",
+      "reason": "floor lower_back (all 3 same-family originals); family lower_back (twist / V-up / crunch / sit-up name)",
+      "variant_family": "sit_up"
+    },
+    "G3203": {
+      "tokens": [
+        "lower_back"
+      ],
+      "class": "family",
+      "reason": "floor lower_back (all 3 same-family originals); family lower_back (twist / V-up / crunch / sit-up name)",
+      "variant_family": "sit_up"
+    },
+    "G3204": {
+      "tokens": [
+        "lower_back"
+      ],
+      "class": "family",
+      "reason": "floor lower_back (all 3 same-family originals); family lower_back (twist / V-up / crunch / sit-up name)",
+      "variant_family": "sit_up"
+    },
+    "G3211": {
+      "tokens": [
+        "shoulder",
+        "wrist"
+      ],
+      "class": "family",
+      "reason": "floor shoulder+wrist (all 8 same-family originals); family shoulder (push-up name)",
+      "variant_family": "push_up"
+    },
+    "G3214": {
+      "tokens": [
+        "hip"
+      ],
+      "class": "floor",
+      "reason": "floor hip (all 3 same-family originals)",
+      "variant_family": "mobility_hip"
+    },
+    "G3215": {
+      "tokens": [],
+      "class": "judgement",
+      "reason": "no same-family original or name rule; the source tags (hamstring+lower_back) stand",
+      "variant_family": "mobility_spine"
+    },
+    "G3218": {
+      "tokens": [],
+      "class": "judgement",
+      "reason": "no same-family original or name rule; the source tags (hamstring+lower_back) stand",
+      "variant_family": "mobility_spine"
+    },
+    "G3219": {
+      "tokens": [
+        "ankle",
+        "knee"
+      ],
+      "class": "floor",
+      "reason": "floor ankle+knee (all 3 same-family originals)",
+      "variant_family": "jump"
+    },
+    "G3222": {
+      "tokens": [
+        "ankle",
+        "knee"
+      ],
+      "class": "floor",
+      "reason": "floor ankle+knee (all 3 same-family originals)",
+      "variant_family": "jump"
+    },
+    "G3237": {
+      "tokens": [
+        "shoulder"
+      ],
+      "class": "floor",
+      "reason": "floor shoulder (all 4 same-family originals)",
+      "variant_family": "lateral_raise"
+    },
+    "G3281": {
+      "tokens": [
+        "hip",
+        "knee"
+      ],
+      "class": "floor",
+      "reason": "floor hip+knee (all 8 same-family originals)",
+      "variant_family": "squat"
+    },
+    "G3287": {
+      "tokens": [
+        "elbow",
+        "shoulder"
+      ],
+      "class": "family",
+      "reason": "floor elbow+shoulder (all 2 same-family originals); family elbow (elbow_flexion / elbow_extension pattern)",
+      "variant_family": "dip"
+    },
+    "G3288": {
+      "tokens": [
+        "elbow",
+        "shoulder"
+      ],
+      "class": "floor",
+      "reason": "floor elbow+shoulder (all 2 same-family originals)",
+      "variant_family": "dip"
+    },
+    "G3291": {
+      "tokens": [
+        "shoulder",
+        "wrist"
+      ],
+      "class": "floor",
+      "reason": "floor shoulder+wrist (all 1 same-family originals)",
+      "variant_family": "handstand"
+    },
+    "G3297": {
+      "tokens": [],
+      "class": "judgement",
+      "reason": "no same-family original or name rule; the source tags (elbow+shoulder+wrist) stand",
+      "variant_family": "back_lever"
+    },
+    "G3298": {
+      "tokens": [],
+      "class": "judgement",
+      "reason": "no same-family original or name rule; the source tags (elbow+shoulder+wrist) stand",
+      "variant_family": "planche"
+    },
+    "G3299": {
+      "tokens": [],
+      "class": "judgement",
+      "reason": "no same-family original or name rule; the source tags (elbow+shoulder+wrist) stand",
+      "variant_family": "planche"
+    },
+    "G3300": {
+      "tokens": [],
+      "class": "judgement",
+      "reason": "no same-family original or name rule; the source tags (elbow+shoulder+wrist) stand",
+      "variant_family": "planche"
+    },
+    "G3301": {
+      "tokens": [],
+      "class": "judgement",
+      "reason": "no same-family original or name rule; the source tags (elbow+shoulder+wrist) stand",
+      "variant_family": "planche"
+    },
+    "G3303": {
+      "tokens": [],
+      "class": "judgement",
+      "reason": "no same-family original or name rule; the source tags (elbow+shoulder+wrist) stand",
+      "variant_family": "human_flag"
+    },
+    "G3304": {
+      "tokens": [],
+      "class": "judgement",
+      "reason": "no same-family original or name rule; the source tags (elbow+shoulder) stand",
+      "variant_family": "back_lever"
+    },
+    "G3305": {
+      "tokens": [],
+      "class": "judgement",
+      "reason": "no same-family original or name rule; the source tags (knee+lower_back+shoulder) stand",
+      "variant_family": "thruster"
+    },
+    "G3315": {
+      "tokens": [],
+      "class": "judgement",
+      "reason": "no same-family original or name rule; the source tags (elbow+shoulder+wrist) stand",
+      "variant_family": "planche"
+    },
+    "G3361": {
+      "tokens": [
+        "ankle",
+        "knee"
+      ],
+      "class": "floor",
+      "reason": "floor ankle+knee (all 3 same-family originals)",
+      "variant_family": "jump"
+    },
+    "G3418": {
+      "tokens": [
+        "elbow",
+        "shoulder"
+      ],
+      "class": "floor",
+      "reason": "floor elbow+shoulder (all 1 same-family originals)",
+      "variant_family": "pull_up"
+    },
+    "G3420": {
+      "tokens": [
+        "shoulder",
+        "wrist"
+      ],
+      "class": "floor",
+      "reason": "floor shoulder+wrist (all 1 same-family originals)",
+      "variant_family": "l_sit"
+    },
+    "G3470": {
+      "tokens": [
+        "hip",
+        "knee"
+      ],
+      "class": "floor",
+      "reason": "floor hip+knee (all 3 same-family originals)",
+      "variant_family": "lunge"
+    },
+    "G3533": {
+      "tokens": [
+        "hip",
+        "knee"
+      ],
+      "class": "floor",
+      "reason": "floor hip+knee (all 8 same-family originals)",
+      "variant_family": "squat"
+    },
+    "G3541": {
+      "tokens": [
+        "neck",
+        "shoulder"
+      ],
+      "class": "floor",
+      "reason": "floor neck+shoulder (all 1 same-family originals)",
+      "variant_family": "y_raise"
+    },
+    "G3542": {
+      "tokens": [
+        "shoulder"
+      ],
+      "class": "majority",
+      "reason": "majority shoulder (more than half of 5 same-family originals)",
+      "variant_family": "rear_delt_fly"
+    },
+    "G3544": {
+      "tokens": [],
+      "class": "judgement",
+      "reason": "no same-family original or name rule; the source tags (shoulder) stand",
+      "variant_family": "side_plank"
+    },
+    "G3545": {
+      "tokens": [
+        "shoulder"
+      ],
+      "class": "floor",
+      "reason": "floor shoulder (all 2 same-family originals)",
+      "variant_family": "incline_press"
+    },
+    "G3546": {
+      "tokens": [
+        "shoulder"
+      ],
+      "class": "floor",
+      "reason": "floor shoulder (all 7 same-family originals)",
+      "variant_family": "shoulder_press"
+    },
+    "G3547": {
+      "tokens": [
+        "elbow",
+        "shoulder"
+      ],
+      "class": "family",
+      "reason": "floor shoulder (all 7 same-family originals); family elbow (elbow_flexion / elbow_extension pattern)",
+      "variant_family": "shoulder_press"
+    },
+    "G3548": {
+      "tokens": [],
+      "class": "judgement",
+      "reason": "no same-family original or name rule; the source tags (shoulder) stand",
+      "variant_family": "carry"
+    },
+    "G3561": {
+      "tokens": [
+        "hip"
+      ],
+      "class": "judgement",
+      "reason": "judgement hip (single-leg load through the hip, as Single Leg Glute Bridge)",
+      "variant_family": "glute_bridge"
+    },
+    "G3563": {
+      "tokens": [
+        "shoulder"
+      ],
+      "class": "majority",
+      "reason": "majority shoulder (more than half of 6 same-family originals)",
+      "variant_family": "lat_pulldown"
+    },
+    "G3582": {
+      "tokens": [
+        "ankle",
+        "knee"
+      ],
+      "class": "floor",
+      "reason": "floor ankle+knee (all 3 same-family originals)",
+      "variant_family": "jump"
+    },
+    "G3635": {
+      "tokens": [
+        "hip",
+        "knee"
+      ],
+      "class": "floor",
+      "reason": "floor hip+knee (all 3 same-family originals)",
+      "variant_family": "lunge"
+    },
+    "G3639": {
+      "tokens": [
+        "lower_back"
+      ],
+      "class": "judgement",
+      "reason": "judgement lower_back (lying spinal twist)",
+      "variant_family": "stretch_spine"
+    },
+    "G3640": {
+      "tokens": [
+        "lower_back",
+        "neck"
+      ],
+      "class": "family",
+      "reason": "floor lower_back (all 4 same-family originals); majority neck (more than half of 4 same-family originals); family lower_back (twist / V-up / crunch / sit-up name)",
+      "variant_family": "crunch"
+    },
+    "G3643": {
+      "tokens": [
+        "hip",
+        "knee"
+      ],
+      "class": "floor",
+      "reason": "floor hip+knee (all 3 same-family originals)",
+      "variant_family": "lunge"
+    },
+    "G3656": {
+      "tokens": [],
+      "class": "judgement",
+      "reason": "no same-family original or name rule; the source tags (ankle+knee) stand",
+      "variant_family": "cardio_run"
+    },
+    "G3662": {
+      "tokens": [
+        "shoulder",
+        "wrist"
+      ],
+      "class": "family",
+      "reason": "floor shoulder+wrist (all 8 same-family originals); family shoulder (push-up name)",
+      "variant_family": "push_up"
+    },
+    "G3663": {
+      "tokens": [],
+      "class": "judgement",
+      "reason": "no same-family original or name rule; the source tags (shoulder+wrist) stand",
+      "variant_family": "plank"
+    },
+    "G3664": {
+      "tokens": [],
+      "class": "judgement",
+      "reason": "no same-family original or name rule; the source tags (shoulder+wrist) stand",
+      "variant_family": "side_plank"
+    },
+    "G3665": {
+      "tokens": [
+        "shoulder",
+        "wrist"
+      ],
+      "class": "judgement",
+      "reason": "judgement shoulder+wrist (high plank with an alternating arm or leg reach: loaded hands, as Mountain Climber)",
+      "variant_family": "plank"
+    },
+    "G3667": {
+      "tokens": [
+        "hip"
+      ],
+      "class": "family",
+      "reason": "floor hip (all 1 same-family originals); family hip (hip abduction / adduction name)",
+      "variant_family": "hip_adduction"
+    },
+    "G3669": {
+      "tokens": [
+        "shoulder"
+      ],
+      "class": "judgement",
+      "reason": "judgement shoulder (standing archer: shoulder horizontal abduction and rotation)",
+      "variant_family": "mobility_thoracic"
+    },
+    "G3670": {
+      "tokens": [
+        "lower_back"
+      ],
+      "class": "family",
+      "reason": "floor lower_back (all 3 same-family originals); family lower_back (twist / V-up / crunch / sit-up name)",
+      "variant_family": "sit_up"
+    },
+    "G3679": {
+      "tokens": [
+        "lower_back"
+      ],
+      "class": "family",
+      "reason": "floor lower_back (all 3 same-family originals); family lower_back (twist / V-up / crunch / sit-up name)",
+      "variant_family": "sit_up"
+    },
+    "G3699": {
+      "tokens": [],
+      "class": "judgement",
+      "reason": "no same-family original or name rule; the source tags (shoulder+wrist) stand",
+      "variant_family": "anti_rotation"
+    },
+    "G3769": {
+      "tokens": [
+        "hip",
+        "knee"
+      ],
+      "class": "floor",
+      "reason": "floor hip+knee (all 3 same-family originals)",
+      "variant_family": "lunge"
+    },
+    "G3888": {
+      "tokens": [],
+      "class": "judgement",
+      "reason": "no same-family original or name rule; the source tags (lower_back+shoulder+wrist) stand",
+      "variant_family": "olympic_snatch"
+    },
+    "G6003": {
+      "tokens": [
+        "ankle",
+        "hip",
+        "knee"
+      ],
+      "class": "floor",
+      "reason": "floor ankle+hip+knee (all 1 same-family originals)",
+      "variant_family": "cardio_treadmill"
+    },
+    "G6005": {
+      "tokens": [
+        "wrist"
+      ],
+      "class": "judgement",
+      "reason": "judgement wrist (heavy carry: the grip, as Farmers Carry and Suitcase Carry)",
+      "variant_family": "carry"
+    },
+    "N01": {
+      "tokens": [],
+      "class": "judgement",
+      "reason": "judgement safe pool (standard spine-stability rehab drill (bird dog), as Dead Bug)",
+      "variant_family": "anti_rotation"
+    },
+    "N02": {
+      "tokens": [
+        "hip",
+        "knee"
+      ],
+      "class": "floor",
+      "reason": "floor hip+knee (all 8 same-family originals)",
+      "variant_family": "squat"
+    },
+    "N03": {
+      "tokens": [],
+      "class": "judgement",
+      "reason": "no same-family original or name rule; the source tags (ankle) stand",
+      "variant_family": "tibialis_raise"
+    },
+    "N04": {
+      "tokens": [
+        "knee"
+      ],
+      "class": "floor",
+      "reason": "floor knee (all 1 same-family originals)",
+      "variant_family": "stretch_hip_flexor"
+    },
+    "N05": {
+      "tokens": [
+        "hip"
+      ],
+      "class": "floor",
+      "reason": "floor hip (all 3 same-family originals)",
+      "variant_family": "mobility_hip"
+    },
+    "N06": {
+      "tokens": [
+        "hip",
+        "knee"
+      ],
+      "class": "floor",
+      "reason": "floor hip+knee (all 3 same-family originals)",
+      "variant_family": "lunge"
+    },
+    "N07": {
+      "tokens": [
+        "elbow"
+      ],
+      "class": "family",
+      "reason": "floor elbow (all 10 same-family originals); family elbow (elbow_flexion / elbow_extension pattern)",
+      "variant_family": "biceps_curl"
+    },
+    "N08": {
+      "tokens": [
+        "hamstring"
+      ],
+      "class": "floor",
+      "reason": "floor hamstring (all 4 same-family originals)",
+      "variant_family": "leg_curl"
+    },
+    "N09": {
+      "tokens": [],
+      "class": "judgement",
+      "reason": "judgement safe pool (standard hip rehab drill (clamshell, low load), as Lateral Band Walk)",
+      "variant_family": "hip_abduction"
+    },
+    "N10": {
+      "tokens": [
+        "hip",
+        "knee"
+      ],
+      "class": "floor",
+      "reason": "floor hip+knee (all 8 same-family originals)",
+      "variant_family": "squat"
+    },
+    "N11": {
+      "tokens": [
+        "hamstring",
+        "lower_back"
+      ],
+      "class": "floor",
+      "reason": "floor hamstring+lower_back (all 3 same-family originals)",
+      "variant_family": "romanian_deadlift"
+    },
+    "N12": {
+      "tokens": [],
+      "class": "judgement",
+      "reason": "no same-family original or name rule; the source tags (lower_back) stand",
+      "variant_family": "row"
+    },
+    "N13": {
+      "tokens": [
+        "shoulder"
+      ],
+      "class": "family",
+      "reason": "family shoulder (push-up name)",
+      "variant_family": "pike_push_up"
+    }
+  }
+}

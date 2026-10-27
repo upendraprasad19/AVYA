@@ -1,0 +1,6 @@
+# Files grandfathered for scripts/check_authed_invoke_fresh_token.dart (§2.31 class).
+# CLEARED 2026-06-13 by the Obs#9 sweep — all 4 sites now route through
+# SupabaseService.callFunction (refresh + retry) or add ensureFreshToken before
+# the invoke. The gate is now hard-green with an EMPTY baseline; any NEW raw
+# functions.invoke without a preceding ensureFreshToken hard-fails.
+# Refresh: dart run scripts/check_authed_invoke_fresh_token.dart --update-baseline
