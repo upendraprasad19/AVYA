@@ -15,7 +15,12 @@
 --   (d) the role probe: a fake object of this bucket is read by an authenticated non-anonymous session (1), not by
 --       the anon role (0), not by an anonymous-sign-in session (0), and a fake object of ANOTHER private bucket
 --       is not read by the same session (0); an INSERT by that session is refused, an UPDATE and a DELETE
---       affect 0 rows, and so does an UPDATE of the bucket's own storage.buckets row (public = true).
+--       affect 0 rows, and so does an UPDATE of every storage.buckets row (public = true, no WHERE clause).
+-- THE WRITE LEGS RUN AS `authenticated` ONLY. A write grant to anon alone is not exercised by a leg: it is carried by
+-- the catalog check (c) below, which is a heuristic over the deparsed policy text (it flags no bucket predicate, a
+-- policy naming exercise-media, or a negation: <>, !=, !~, NOT, IS DISTINCT, ~~; a policy that reaches the bucket by
+-- a range or LIKE on bucket_id escapes it). The probe legs are the proof for authenticated; for anon alone nothing
+-- but that listing stands behind the claim, so read the listing again after any storage-policy change.
 -- What it does NOT prove: that Storage maps an anon-key JWT to the role anon and an anonymous sign-in to
 -- is_anonymous true (documented behaviour, UNVERIFIED here; Task 9.2 adds one real request with the anon key),
 -- and that Auth emits the claim name is_anonymous.
@@ -60,7 +65,7 @@
 --                                              one that names exercise-media)
 --   unscoped_write_grants        expected none (INSERT/UPDATE/DELETE/ALL policies for anon/authenticated/public on
 --                                              storage.objects with no bucket predicate, or one that names exercise-media
---                                              or negates (<>, !=, NOT), or on storage.buckets at all, listed as
+--                                              or negates (<>, !=, !~, NOT, IS DISTINCT, ~~), or on storage.buckets at all, listed as
 --                                              table.policy; a write policy scoped to another bucket by equality is fine)
 --   select_policies              operator reading (truncated): every anon/public/authenticated SELECT or ALL policy
 -- A value starting `error:` is a leg that raised something other than its expected refusal: a STOP, read the text.
@@ -121,7 +126,7 @@ BEGIN
      AND (tablename = 'buckets'
           OR strpos(coalesce(qual, '') || coalesce(with_check, ''), 'bucket_id') = 0
           OR strpos(coalesce(qual, '') || coalesce(with_check, ''), 'exercise-media') > 0
-          OR (coalesce(qual, '') || coalesce(with_check, '')) ~ '(<>|!=|NOT )');
+          OR (coalesce(qual, '') || coalesce(with_check, '')) ~ '(<>|!=|!~|NOT |IS DISTINCT|~~)');
   -- CATALOG-END
 
   SELECT coalesce(left(string_agg(policyname || '|' || cmd || '|' || roles::text, '; ' ORDER BY policyname), 900), 'none')

@@ -11,6 +11,7 @@
 @Timeout(Duration(minutes: 3))
 library;
 
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
@@ -21,24 +22,37 @@ import '../helpers/spawn.dart';
 const _tool = 'scripts/exercise_media_rehearsal_sql.js';
 
 // A hung node must not hold the isolate until the file timeout: every spawn here is asynchronous and has its own limit (plan R12).
+// Future.timeout alone only stops WAITING and leaves the child running, so the child is started with startSpawn and KILLED at the limit.
 const _spawnTimeout = Duration(seconds: 90);
 
+Future<ProcessResult> _spawnNode(List<String> args, String why) async {
+  final p = await startSpawn('node', args);
+  final out = utf8.decodeStream(p.stdout);
+  final err = utf8.decodeStream(p.stderr);
+  final code = await p.exitCode.timeout(_spawnTimeout, onTimeout: () {
+    p.kill();
+    throw TimeoutException('$why did not finish in ${_spawnTimeout.inSeconds} s; the node child was killed');
+  });
+  final result = ProcessResult(p.pid, code, await out, await err);
+  reportSpawn(result.exitCode, result.stdout, result.stderr, why);
+  return result;
+}
+
 Future<ProcessResult> _run(List<String> args) =>
-    runSpawnAsync('node', [_tool, ...args], why: 'exercise_media_rehearsal_sql.js ${args.join(' ')}').timeout(_spawnTimeout);
+    _spawnNode([_tool, ...args], 'exercise_media_rehearsal_sql.js ${args.join(' ')}');
 
 /// Runs the module's [compose] (or [stripComments]) in a node child and returns {ok, text|error}.
 Future<Map<String, dynamic>> _node(String expr) async {
   final script = File(_tool).absolute.path;
-  final r = await runSpawnAsync(
-    'node',
+  final r = await _spawnNode(
     [
       '-e',
       'const t=require(${jsonEncode(script)});'
           'try{console.log(JSON.stringify({ok:true,text:$expr}));}'
           'catch(e){console.log(JSON.stringify({ok:false,problem:e instanceof t.Problem,error:String(e.message)}));}',
     ],
-    why: 'node $_tool $expr',
-  ).timeout(_spawnTimeout);
+    'node $_tool $expr',
+  );
   expect(r.exitCode, 0, reason: '${r.stderr}');
   return jsonDecode((r.stdout as String).trim()) as Map<String, dynamic>;
 }

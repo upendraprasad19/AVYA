@@ -31,11 +31,12 @@ Map<String, String> scrubbedGitEnv([Map<String, String>? base]) {
   final env = Map<String, String>.from(base ?? Platform.environment);
   // Names are compared upper-cased (Windows keeps the case an operator typed), and any variable that looks like a credential
   // goes with them: the git commands run here are local and need none. The twin of `.claude/token_path.js`.
+  // The GIT_CONFIG_* family stays whole: git dies (exit 128) on a GIT_CONFIG_COUNT whose GIT_CONFIG_KEY_<n> is gone.
   const redirects = {'GIT_DIR', 'GIT_WORK_TREE', 'GIT_INDEX_FILE', 'GIT_COMMON_DIR'};
   final secretName = RegExp(r'KEY|TOKEN|SECRET|PASSWORD|PASSWD|CREDENTIAL');
   env.removeWhere((k, _) {
     final u = k.toUpperCase();
-    return redirects.contains(u) || u.startsWith('SUPABASE_') || secretName.hasMatch(u);
+    return redirects.contains(u) || u.startsWith('SUPABASE_') || (!u.startsWith('GIT_CONFIG_') && secretName.hasMatch(u));
   });
   return env;
 }

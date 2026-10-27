@@ -217,22 +217,31 @@ function checkReportPath(report) {
   }
   if (existing && existing.isSymbolicLink()) usage('the report path is a symbolic link; give the path of a real file; nothing was sent');
   const leaf = path.dirname(resolved);
-  let firstCreated;
+  // The directories the probe has to create, deepest first, listed BEFORE the mkdir: the return value of a recursive
+  // mkdirSync cannot be used to find them again (on Windows it is the \\?\ spelling, which never equals a path walked up
+  // from the leaf, so a stop-at-the-first-created-directory test is dead code there and removes empty parents that were
+  // already there).
+  const toCreate = [];
+  for (let d = leaf; !fs.existsSync(d); ) {
+    toCreate.push(d);
+    const parent = path.dirname(d);
+    if (parent === d) break;
+    d = parent;
+  }
   try {
-    firstCreated = fs.mkdirSync(leaf, { recursive: true });
+    fs.mkdirSync(leaf, { recursive: true });
     fs.closeSync(fs.openSync(resolved, 'a'));
     if (!existing) fs.unlinkSync(resolved);
   } catch (e) {
     usage(`the report path cannot be written (${e.code || e.message}); nothing was sent`);
-  }
-  if (firstCreated) {
-    for (let d = leaf; ; d = path.dirname(d)) {
+  } finally {
+    // On both paths, and only the directories listed above; the first one that cannot be removed (not empty) ends it.
+    for (const d of toCreate) {
       try {
         fs.rmdirSync(d);
       } catch (_) {
         break;
       }
-      if (d === firstCreated) break;
     }
   }
   return resolved;
@@ -648,8 +657,10 @@ async function modeDeleteObject(o, table, ctx, reportPath, endpoints) {
   const results = [];
   let bad = false;
   let failure = null;
+  let inFlight = null; // the object whose DELETE was sent (or whose HEAD is running) when a request is cut off
   try {
     for (const n of names) {
+      inFlight = n;
       const del = await request('DELETE', objectUrl(ctx.base, n), { headers: authHeaders(ctx.key) });
       await del.arrayBuffer().catch(() => {});
       let head = await headObject(ctx.base, ctx.key, n);
@@ -663,13 +674,15 @@ async function modeDeleteObject(o, table, ctx, reportPath, endpoints) {
         if (head.status === 200) bad = true;
       }
       results.push({ name: n, deleteStatus: del.status, headAfter: head.status, secondCheck: note !== '' });
+      inFlight = null;
       say(`${n}: DELETE ${del.status}, HEAD with key ${head.status}${note}`);
     }
   } catch (e) {
     failure = e;
   }
   // The report is written even when a request threw halfway: an object already deleted must be on record.
-  writeReport(reportPath, { mode: 'delete-object', bucket: BUCKET, results, ...(failure ? { stoppedBy: stoppedBy(failure) } : {}) });
+  // A cut DELETE may or may not have been executed by the server: inFlight names the object, as emptyStatus: null does for the bucket.
+  writeReport(reportPath, { mode: 'delete-object', bucket: BUCKET, results, ...(failure ? { stoppedBy: stoppedBy(failure), inFlight } : {}) });
   if (failure) throw failure;
   if (bad) stop('an object still answers 200 after the delete and a second check');
 }

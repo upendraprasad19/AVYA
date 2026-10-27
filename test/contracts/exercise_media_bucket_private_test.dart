@@ -240,6 +240,102 @@ String migrationBody(String migration) {
   return m == null ? '' : m.group(1)!;
 }
 
+/// The alternatives of the negation test inside the unscoped-write predicate. pg_get_expr deparses NOT x as `NOT x`,
+/// a negated LIKE as `!~~`, a negated regex as `!~`, and IS NOT NULL / IS DISTINCT FROM keep their words. UNVERIFIED
+/// until the Task 8.4 rehearsal runs the variants; the heuristic is a net under the probe legs, not the proof.
+const String _negationRegex = r'(<>|!=|!~|NOT |IS DISTINCT|~~)';
+
+/// The WHOLE unscoped-write statement of the catalog block (a clause-presence pin passes when an OR becomes an AND).
+const String _expectedUnscoped = '''
+SELECT coalesce(string_agg(tablename || '.' || policyname, ',' ORDER BY tablename, policyname), 'none') INTO v_unscoped_write
+  FROM pg_policies
+ WHERE schemaname = 'storage' AND tablename IN ('objects', 'buckets')
+   AND cmd IN ('INSERT', 'UPDATE', 'DELETE', 'ALL')
+   AND roles && ARRAY['anon', 'authenticated', 'public']::name[]
+   AND (tablename = 'buckets'
+        OR strpos(coalesce(qual, '') || coalesce(with_check, ''), 'bucket_id') = 0
+        OR strpos(coalesce(qual, '') || coalesce(with_check, ''), 'exercise-media') > 0
+        OR (coalesce(qual, '') || coalesce(with_check, '')) ~ '$_negationRegex');''';
+
+/// One row of pg_policies as the catalog block reads it (the qual texts below are HAND-WRITTEN approximations of the
+/// deparse; the rehearsal's own catalog reading is the real test of them).
+class _Pol {
+  const _Pol(this.table, this.name, this.cmd, this.roles, this.qual, [this.withCheck]);
+  final String table;
+  final String name;
+  final String cmd;
+  final List<String> roles;
+  final String? qual;
+  final String? withCheck;
+}
+
+const String _qualBase =
+    "((bucket_id = 'exercise-media'::text) AND (COALESCE((((SELECT auth.jwt() AS jwt) ->> 'is_anonymous'::text))::boolean, false) = false))";
+const String _qualNoAnon = "(bucket_id = 'exercise-media'::text)";
+const String _qualNoBucket =
+    "(COALESCE((((SELECT auth.jwt() AS jwt) ->> 'is_anonymous'::text))::boolean, false) = false)";
+
+/// Whether the catalog block's unscoped-write predicate lists [p] (a Dart twin of the SQL; the SQL text is pinned to
+/// [_expectedUnscoped], so the two cannot drift apart without this file failing).
+bool _modelUnscopedWrite(_Pol p) {
+  if (!{'objects', 'buckets'}.contains(p.table)) return false;
+  if (!{'INSERT', 'UPDATE', 'DELETE', 'ALL'}.contains(p.cmd)) return false;
+  if (!p.roles.any({'anon', 'authenticated', 'public'}.contains)) return false;
+  final both = (p.qual ?? '') + (p.withCheck ?? '');
+  return p.table == 'buckets' ||
+      !both.contains('bucket_id') ||
+      both.contains('exercise-media') ||
+      RegExp(_negationRegex).hasMatch(both);
+}
+
+/// The six-field catalog string of the rehearsal (policy_cmd|roles|has_bucket|has_is_anonymous|anon_public|unscoped)
+/// over [pols], as the SQL composes it. The live project's own storage policies are assumed to flag none (read live,
+/// 2026-10-27: none flagged).
+String _modelCatalog(List<_Pol> pols) {
+  final own = pols.where((p) => p.table == 'objects' && p.name == _policyName).toList();
+  var cmd = 'absent', roles = 'absent', hasBucket = 'absent', hasAnon = 'absent';
+  if (own.isNotEmpty) {
+    final p = own.first;
+    cmd = p.cmd;
+    roles = '{${p.roles.join(',')}}';
+    if (p.qual != null) {
+      hasBucket = p.qual!.contains('exercise-media').toString();
+      hasAnon = p.qual!.contains('is_anonymous').toString();
+    }
+  }
+  final anonPublic = pols
+      .where((p) =>
+          p.table == 'objects' &&
+          {'SELECT', 'ALL'}.contains(p.cmd) &&
+          p.roles.any({'anon', 'public'}.contains) &&
+          (p.qual == null || !p.qual!.contains('bucket_id') || p.qual!.contains('exercise-media')))
+      .map((p) => p.name)
+      .toList()
+    ..sort();
+  final unscoped = pols.where(_modelUnscopedWrite).map((p) => '${p.table}.${p.name}').toList()..sort();
+  return '$cmd|$roles|$hasBucket|$hasAnon|${anonPublic.isEmpty ? 'none' : anonPublic.join(',')}|'
+      '${unscoped.isEmpty ? 'none' : unscoped.join(',')}';
+}
+
+/// The policies each rehearsal variant (loop index 1..6) leaves in place, per the rehearsal's own DDL.
+List<_Pol> _variantPolicies(int i) {
+  final own = switch (i) {
+    2 => _Pol('objects', _policyName, 'SELECT', ['public'], _qualBase),
+    3 => _Pol('objects', _policyName, 'SELECT', ['authenticated'], _qualNoAnon),
+    4 => _Pol('objects', _policyName, 'SELECT', ['authenticated'], _qualNoBucket),
+    5 => _Pol('objects', _policyName, 'ALL', ['authenticated'], _qualBase),
+    _ => _Pol('objects', _policyName, 'SELECT', ['authenticated'], _qualBase),
+  };
+  return [own, if (i == 6) _Pol('buckets', 'exercise_media_buckets_wrong', 'UPDATE', ['authenticated'], 'true')];
+}
+
+/// The six strings of the rehearsal's `v_expected_c` array, read from the FILE 2 text.
+List<String> _expectedCatalogStrings(String f2) {
+  final m = RegExp(r'v_expected_c\s+text\[\]\s*:=\s*ARRAY\[([\s\S]*?)\];').firstMatch(stripSqlAllComments(f2));
+  if (m == null) return const <String>[];
+  return RegExp(r"'([^']*)'").allMatches(m.group(1)!).map((x) => x.group(1)!).toList();
+}
+
 const String _expectedArrays = '''
 v_names text[] := ARRAY['baseline', 'v1_to_public', 'v2_no_is_anonymous', 'v3_unscoped_bucket', 'v4_for_all', 'v5_buckets_update_policy'];
 v_expected text[] := ARRAY['0/1/0/0', '1/1/0/0', '0/1/1/0', '0/1/0/1', '0/1/0/0', '0/1/0/0'];
@@ -249,7 +345,7 @@ v_expected_c text[] := ARRAY[
   'SELECT|{public}|true|true|exercise_media_authenticated_read|none',
   'SELECT|{authenticated}|true|false|none|none',
   'SELECT|{authenticated}|false|true|none|none',
-  'ALL|{authenticated}|true|true|none|none',
+  'ALL|{authenticated}|true|true|none|objects.exercise_media_authenticated_read',
   'SELECT|{authenticated}|true|true|none|buckets.exercise_media_buckets_wrong'];''';
 
 /// The grant-dependent expectation of variant 5 and the composition of the catalog reading.
@@ -282,7 +378,7 @@ const List<String> _expectedMessages = <String>[
   "CASE WHEN v_n = 0 THEN '0' ELSE 'open' END",
   // The unscoped-write check also flags a write policy that names exercise-media or negates the bucket test.
   "strpos(coalesce(qual, '') || coalesce(with_check, ''), 'exercise-media') > 0",
-  "~ '(<>|!=|NOT )'",
+  "~ '$_negationRegex'",
 ];
 
 const List<String> _expectedVariants = <String>[
@@ -370,6 +466,18 @@ List<String> sqlFilesViolations({required String f1, required String f2, require
   final catalog1 = normalizeSql(_between(f1, '-- CATALOG-BEGIN', '-- CATALOG-END'));
   final catalog2 = normalizeSql(_between(f2, '-- CATALOG-BEGIN', '-- CATALOG-END'));
   if (catalog1.isEmpty || catalog1 != catalog2) v.add('catalog_equal');
+  final unscoped = normalizeSql(_expectedUnscoped);
+  if (!catalog1.contains(unscoped) || !catalog2.contains(unscoped)) v.add('unscoped_predicate');
+  // The behavioural mirror of the expected catalog strings: the six variant policies, run through the Dart twin of the
+  // predicate, must give the six strings the rehearsal expects (the needle check above only sees the text).
+  final expectedCatalog = _expectedCatalogStrings(f2);
+  if (expectedCatalog.length != 6) {
+    v.add('catalog_model');
+  } else {
+    for (var i = 1; i <= 6; i++) {
+      if (_modelCatalog(_variantPolicies(i)) != expectedCatalog[i - 1]) v.add('catalog_model');
+    }
+  }
   for (final needle in _expectedMessages) {
     if (!probe1.contains(normalizeSql(needle)) && !catalog1.contains(normalizeSql(needle))) v.add('messages');
     if (!probe2.contains(normalizeSql(needle)) && !catalog2.contains(normalizeSql(needle))) v.add('messages');
@@ -614,6 +722,51 @@ void main() {
       expect(c1, contains(normalizeSql("tablename IN ('objects', 'buckets')")));
     });
 
+    test('the unscoped-write predicate is pinned as a WHOLE in both files, and the Dart twin gives the six expected strings', () {
+      final c1 = normalizeSql(_between(f1, '-- CATALOG-BEGIN', '-- CATALOG-END'));
+      final c2 = normalizeSql(_between(f2, '-- CATALOG-BEGIN', '-- CATALOG-END'));
+      expect(c1, contains(normalizeSql(_expectedUnscoped)));
+      expect(c2, contains(normalizeSql(_expectedUnscoped)));
+      final expected = _expectedCatalogStrings(f2);
+      expect(expected, hasLength(6));
+      for (var i = 1; i <= 6; i++) {
+        expect(_modelCatalog(_variantPolicies(i)), expected[i - 1], reason: 'rehearsal variant $i');
+      }
+    });
+
+    test('the Dart twin of the predicate lists each OR-branch, each negation spelling, and spares a bucket-scoped equality', () {
+      _Pol w(String cmd, String? qual, [String? check, List<String> roles = const ['authenticated'], String table = 'objects']) =>
+          _Pol(table, 'p', cmd, roles, qual, check);
+      final flagged = <String, _Pol>{
+        'a policy on storage.buckets': w('UPDATE', 'true', null, const ['authenticated'], 'buckets'),
+        'an INSERT with no bucket predicate': w('INSERT', null, 'true'),
+        'a DELETE that names exercise-media': w('DELETE', "(bucket_id = 'exercise-media'::text)"),
+        'a <> on the bucket': w('DELETE', "(bucket_id <> 'coach-media'::text)"),
+        'a NOT LIKE on the bucket': w('DELETE', "(bucket_id !~~ 'x%'::text)"),
+        'a LIKE on the bucket': w('DELETE', "(bucket_id ~~ 'exercise%'::text)"),
+        'a negated regex on the bucket': w('DELETE', "(bucket_id !~ 'x'::text)"),
+        'IS DISTINCT FROM on the bucket': w('DELETE', "(bucket_id IS DISTINCT FROM 'coach-media'::text)"),
+        'a NOT in a scoped policy (IS NOT NULL: a false positive by design)':
+            w('INSERT', null, "((bucket_id = 'coach-media'::text) AND (auth.uid() IS NOT NULL))"),
+        'an anon-only write with no bucket predicate': w('INSERT', null, 'true', const ['anon']),
+      };
+      for (final e in flagged.entries) {
+        expect(_modelUnscopedWrite(e.value), isTrue, reason: 'must be listed: ${e.key}');
+      }
+      final spared = <String, _Pol>{
+        'a write scoped to another bucket by equality': w('INSERT', null, "(bucket_id = 'coach-media'::text)"),
+        'a SELECT policy (outside the write commands)': w('SELECT', null),
+        'a role outside anon, authenticated, public': w('INSERT', null, 'true', const ['service_role']),
+        'a table other than objects and buckets': w('INSERT', null, 'true', const ['authenticated'], 'migrations'),
+      };
+      for (final e in spared.entries) {
+        expect(_modelUnscopedWrite(e.value), isFalse, reason: 'must not be listed: ${e.key}');
+      }
+      // The documented gap of the heuristic (live-verify header): a range on bucket_id that reaches the bucket is not
+      // named, not negated and has a bucket predicate. The write legs of the probe (as authenticated) are the proof.
+      expect(_modelUnscopedWrite(w('INSERT', null, "(bucket_id > 'a'::text)")), isFalse);
+    });
+
     test('the live verify has no DDL and neither file controls a transaction', () {
       expect(RegExp(r'\b(CREATE|ALTER|DROP|GRANT|REVOKE|TRUNCATE)\b').hasMatch(executableText(f1)), isFalse);
       for (final f in [f1, f2]) {
@@ -641,13 +794,19 @@ void main() {
       ('the FILE 1 verdict expects authenticated 0', () => (f1: _replaceOnce(f1, "AND v_auth = '1'", "AND v_auth = '0'"), f2: f2, migration: migration), ['f1_verdict']),
       ('a probe marker removed from FILE 1', () => (f1: _replaceOnce(f1, '  -- PROBE-END', '  -- PROBE-FIN'), f2: f2, migration: migration), ['markers']),
       ('the bucket leg dropped from the FILE 1 verdict', () => (f1: _replaceOnce(f1, " AND v_write_bucket = '0'", ''), f2: f2, migration: migration), ['f1_verdict']),
-      ('an expected catalog string changed in FILE 2', () => (f1: f1, f2: _replaceOnce(f2, "'ALL|{authenticated}|true|true|none|none'", "'SELECT|{authenticated}|true|true|none|none'"), migration: migration), ['f2_expected']),
+      ('an expected catalog string changed in FILE 2', () => (f1: f1, f2: _replaceOnce(f2, "'ALL|{authenticated}|true|true|none|objects.exercise_media_authenticated_read'", "'SELECT|{authenticated}|true|true|none|none'"), migration: migration), ['f2_expected']),
       ('the grant-dependent expectation of variant 5 removed', () => (f1: f1, f2: _replaceOnce(f2, "  IF v_bucket_upd_priv THEN v_expected_w[6] := 'refused/0/0/open'; END IF;\n", ''), migration: migration), ['f2_flow']),
       ('the grant-dependent expectation of variant 5 goes back to a row count', () => (f1: f1, f2: _replaceOnce(f2, "v_expected_w[6] := 'refused/0/0/open'", "v_expected_w[6] := 'refused/0/0/1'"), migration: migration), ['f2_flow']),
       ('the bucket leg takes a WHERE on id again in FILE 1 AND FILE 2 together', () => (f1: _replaceOnce(f1, 'UPDATE storage.buckets SET public = true;', "UPDATE storage.buckets SET public = true WHERE id = 'exercise-media';"), f2: _replaceOnce(f2, 'UPDATE storage.buckets SET public = true;', "UPDATE storage.buckets SET public = true WHERE id = 'exercise-media';"), migration: migration), ['bucket_leg_where', 'messages']),
       ('the bucket leg reads a row count again in FILE 1 AND FILE 2 together', () => (f1: _replaceOnce(f1, "v_write_bucket := CASE WHEN v_n = 0 THEN '0' ELSE 'open' END;", 'v_write_bucket := v_n::text;'), f2: _replaceOnce(f2, "v_write_bucket := CASE WHEN v_n = 0 THEN '0' ELSE 'open' END;", 'v_write_bucket := v_n::text;'), migration: migration), ['messages']),
       ('the unscoped-write check forgets a policy that names exercise-media, in both files', () => (f1: _replaceOnce(f1, "          OR strpos(coalesce(qual, '') || coalesce(with_check, ''), 'exercise-media') > 0\n", ''), f2: _replaceOnce(f2, "              OR strpos(coalesce(qual, '') || coalesce(with_check, ''), 'exercise-media') > 0\n", ''), migration: migration), ['messages']),
-      ('the unscoped-write check forgets a negated bucket test, in both files', () => (f1: _replaceOnce(f1, "\n          OR (coalesce(qual, '') || coalesce(with_check, '')) ~ '(<>|!=|NOT )')", ')'), f2: _replaceOnce(f2, "\n              OR (coalesce(qual, '') || coalesce(with_check, '')) ~ '(<>|!=|NOT )')", ')'), migration: migration), ['messages']),
+      ('the unscoped-write check forgets a negated bucket test, in both files', () => (f1: _replaceOnce(f1, "\n          OR (coalesce(qual, '') || coalesce(with_check, '')) ~ '(<>|!=|!~|NOT |IS DISTINCT|~~)')", ')'), f2: _replaceOnce(f2, "\n              OR (coalesce(qual, '') || coalesce(with_check, '')) ~ '(<>|!=|!~|NOT |IS DISTINCT|~~)')", ')'), migration: migration), ['messages']),
+      ('the expected catalog string of variant 4 goes back to the string before the exercise-media branch', () => (f1: f1, f2: _replaceOnce(f2, "'ALL|{authenticated}|true|true|none|objects.exercise_media_authenticated_read'", "'ALL|{authenticated}|true|true|none|none'"), migration: migration), ['f2_expected', 'catalog_model']),
+      ('the expected catalog string of variant 5 loses its policy name', () => (f1: f1, f2: _replaceOnce(f2, "|buckets.exercise_media_buckets_wrong'", "|none'"), migration: migration), ['f2_expected', 'catalog_model']),
+      ('the exercise-media branch of the unscoped-write check becomes an AND, in both files', () => (f1: _replaceOnce(f1, "OR strpos(coalesce(qual, '') || coalesce(with_check, ''), 'exercise-media') > 0", "AND strpos(coalesce(qual, '') || coalesce(with_check, ''), 'exercise-media') > 0"), f2: _replaceOnce(f2, "OR strpos(coalesce(qual, '') || coalesce(with_check, ''), 'exercise-media') > 0", "AND strpos(coalesce(qual, '') || coalesce(with_check, ''), 'exercise-media') > 0"), migration: migration), ['unscoped_predicate']),
+      ('the no-bucket-predicate branch of the unscoped-write check becomes an AND, in both files', () => (f1: _replaceOnce(f1, "OR strpos(coalesce(qual, '') || coalesce(with_check, ''), 'bucket_id') = 0", "AND strpos(coalesce(qual, '') || coalesce(with_check, ''), 'bucket_id') = 0"), f2: _replaceOnce(f2, "OR strpos(coalesce(qual, '') || coalesce(with_check, ''), 'bucket_id') = 0", "AND strpos(coalesce(qual, '') || coalesce(with_check, ''), 'bucket_id') = 0"), migration: migration), ['unscoped_predicate']),
+      ('the negation test loses IS DISTINCT, in both files', () => (f1: _replaceOnce(f1, '|IS DISTINCT', ''), f2: _replaceOnce(f2, '|IS DISTINCT', ''), migration: migration), ['unscoped_predicate', 'messages']),
+      ('the unscoped-write check differs between the two files', () => (f1: f1, f2: _replaceOnce(f2, "OR strpos(coalesce(qual, '') || coalesce(with_check, ''), 'bucket_id') = 0", "OR strpos(coalesce(qual, '') || coalesce(with_check, ''), 'bucket_id') = 1"), migration: migration), ['catalog_equal', 'unscoped_predicate']),
       ('the FILE 2 flags ignore the catalog reading', () => (f1: f1, f2: _replaceOnce(f2, " AND v_cat = v_expected_c[v_i]\n                       THEN 'RED'", "\n                       THEN 'RED'"), migration: migration), ['f2_flow']),
       ('the catalog reading is composed without the unscoped writes', () => (f1: f1, f2: _replaceOnce(f2, "        || v_anon_public || '|' || v_unscoped_write;", "        || v_anon_public;"), migration: migration), ['f2_flow']),
       ('variant 6 (the buckets policy) changed', () => (f1: f1, f2: _replaceOnce(f2, 'FOR UPDATE TO authenticated', 'FOR SELECT TO authenticated'), migration: migration), ['f2_variants']),

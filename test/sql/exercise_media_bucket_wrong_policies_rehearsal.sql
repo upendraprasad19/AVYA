@@ -24,7 +24,7 @@
 --   v1        TO public instead of TO authenticated         1/1/0/0  refused/0/0/0  SELECT|{public}|true|true|<policy>|none   flips anon
 --   v2        no is_anonymous clause                        0/1/1/0  refused/0/0/0  SELECT|{authenticated}|true|false|none|none flips anon_session
 --   v3        no bucket scope (is_anonymous clause only)    0/1/0/1  refused/0/0/0  SELECT|{authenticated}|false|true|none|none flips other_bucket
---   v4        FOR ALL with the right USING                  0/1/0/0  inserted/1/1/0 ALL|{authenticated}|true|true|none|none     flips the objects write legs
+--   v4        FOR ALL with the right USING                  0/1/0/0  inserted/1/1/0 ALL|{authenticated}|true|true|none|objects.exercise_media_authenticated_read  flips the objects write legs
 --   v5        the right policy PLUS a FOR UPDATE USING (true) policy on storage.buckets: quadruple 0/1/0/0,
 --             writes refused/0/0/open (refused/0/0/0 when authenticated has no UPDATE privilege on storage.buckets: then
 --             the leg cannot redden and the catalog string alone carries v5), catalog
@@ -80,7 +80,7 @@ DECLARE
     'SELECT|{public}|true|true|exercise_media_authenticated_read|none',
     'SELECT|{authenticated}|true|false|none|none',
     'SELECT|{authenticated}|false|true|none|none',
-    'ALL|{authenticated}|true|true|none|none',
+    'ALL|{authenticated}|true|true|none|objects.exercise_media_authenticated_read',
     'SELECT|{authenticated}|true|true|none|buckets.exercise_media_buckets_wrong'];
   v_actual         text;
   v_actual_w       text;
@@ -358,7 +358,7 @@ BEGIN
          AND (tablename = 'buckets'
               OR strpos(coalesce(qual, '') || coalesce(with_check, ''), 'bucket_id') = 0
               OR strpos(coalesce(qual, '') || coalesce(with_check, ''), 'exercise-media') > 0
-              OR (coalesce(qual, '') || coalesce(with_check, '')) ~ '(<>|!=|NOT )');
+              OR (coalesce(qual, '') || coalesce(with_check, '')) ~ '(<>|!=|!~|NOT |IS DISTINCT|~~)');
       -- CATALOG-END
 
       v_actual := coalesce(v_anon, 'unset') || '/' || coalesce(v_auth, 'unset') || '/'

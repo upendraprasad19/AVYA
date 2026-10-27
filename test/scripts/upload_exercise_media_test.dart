@@ -472,6 +472,23 @@ void main() {
       expect(Directory('${rig.dir.path}/fresh').existsSync(), isFalse);
     });
 
+    test('the writability check leaves a directory that was already there alone, even when it is empty', () async {
+      final keep = Directory('${rig.dir.path}/empty-existing')..createSync();
+      final r = await rig.run(['--execute', '--report', '${keep.path}/new/report.json'], withKey: false);
+      expect(r.exitCode, isNot(0), reason: _all(r));
+      expect(_all(r), contains('no service-role key'), reason: 'the run must have got PAST the report-path check');
+      expect(Directory('${keep.path}/new').existsSync(), isFalse, reason: 'the directory the probe created is removed');
+      expect(keep.existsSync(), isTrue, reason: 'the empty directory that was already there is not the probe\'s to remove');
+    });
+
+    test('the writability check removes the directories it created when the report file itself cannot be opened', () async {
+      final r = await rig.run(['--execute', '--report', '${rig.dir.path}/made/here/${'x' * 300}.json']);
+      expect(r.exitCode, 2, reason: _all(r));
+      expect(_all(r), contains('cannot be written'));
+      expect(Directory('${rig.dir.path}/made').existsSync(), isFalse);
+      expect(rig.fake.seen, isEmpty);
+    });
+
     test('a report path that is a symbolic link is refused: nothing is created through it and the link stays', () async {
       final target = '${rig.dir.path}/dangling-target.json';
       final link = Link('${rig.dir.path}/report-link.json');
@@ -1197,6 +1214,7 @@ void main() {
       final report = jsonDecode(File(rig.reportPath).readAsStringSync()) as Map<String, dynamic>;
       expect((report['results'] as List).map((e) => (e as Map)['name']).toList(), ['canary-1_v0.webp']);
       expect(report['stoppedBy'], isA<String>());
+      expect(report['inFlight'], 'canary-2_v0.webp', reason: 'the report names the object whose DELETE was cut off');
       expect(rig.fake.objects.containsKey('canary-1_v0.webp'), isFalse, reason: 'the first object really was deleted');
     });
 
