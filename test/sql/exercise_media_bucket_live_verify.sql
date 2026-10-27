@@ -43,8 +43,8 @@
 --   write_insert                 expected refused  (42501 "new row violates row-level security policy")
 --   write_update                 expected 0   (rows affected)
 --   write_delete                 expected 0   (rows affected)
---   write_bucket                 expected 0   (rows affected by UPDATE storage.buckets SET public = true; a privilege
---                                              denial on the table is also 0)
+--   write_bucket                 expected 0   (rows affected by an UPDATE of storage.buckets with no WHERE clause; any
+--                                              row reads `open`; a privilege denial on the table is also 0)
 --   anon_select_priv             expected true (has_table_privilege anon SELECT on storage.objects; false is a STOP,
 --                                              because then the TO public variant could not redden)
 --   authenticated_update_priv_on_buckets  information only (has_table_privilege authenticated UPDATE on
@@ -59,8 +59,9 @@
 --   anon_public_select_policies  expected none (SELECT or ALL policies for anon/public with no bucket predicate or
 --                                              one that names exercise-media)
 --   unscoped_write_grants        expected none (INSERT/UPDATE/DELETE/ALL policies for anon/authenticated/public on
---                                              storage.objects with no bucket predicate, or on storage.buckets at all,
---                                              listed as table.policy)
+--                                              storage.objects with no bucket predicate, or one that names exercise-media
+--                                              or negates (<>, !=, NOT), or on storage.buckets at all, listed as
+--                                              table.policy; a write policy scoped to another bucket by equality is fine)
 --   select_policies              operator reading (truncated): every anon/public/authenticated SELECT or ALL policy
 -- A value starting `error:` is a leg that raised something other than its expected refusal: a STOP, read the text.
 
@@ -117,7 +118,10 @@ BEGIN
    WHERE schemaname = 'storage' AND tablename IN ('objects', 'buckets')
      AND cmd IN ('INSERT', 'UPDATE', 'DELETE', 'ALL')
      AND roles && ARRAY['anon', 'authenticated', 'public']::name[]
-     AND (tablename = 'buckets' OR strpos(coalesce(qual, '') || coalesce(with_check, ''), 'bucket_id') = 0);
+     AND (tablename = 'buckets'
+          OR strpos(coalesce(qual, '') || coalesce(with_check, ''), 'bucket_id') = 0
+          OR strpos(coalesce(qual, '') || coalesce(with_check, ''), 'exercise-media') > 0
+          OR (coalesce(qual, '') || coalesce(with_check, '')) ~ '(<>|!=|NOT )');
   -- CATALOG-END
 
   SELECT coalesce(left(string_agg(policyname || '|' || cmd || '|' || roles::text, '; ' ORDER BY policyname), 900), 'none')
@@ -250,15 +254,17 @@ BEGIN
     IF v_msg <> 'PROBE_ROLLBACK' THEN v_write_delete := 'error: ' || v_msg; END IF;
   END;
 
-  -- leg 5d: the normal session may not flip the bucket public: an UPDATE of its storage.buckets row affects 0 rows (a
-  -- privilege denial on that table is the same answer, 0)
+  -- leg 5d: the normal session may not rewrite a bucket row (flip it public). The statement has NO WHERE clause and sets a
+  -- constant, on purpose: a WHERE on id (or a column on the right of SET) also needs the row to pass a SELECT policy, so an
+  -- UPDATE-only policy would hide from it; with neither, only the UPDATE policy decides. 0 rows (a privilege denial on that
+  -- table is the same answer, 0) is right; any row means some policy lets a logged-in user rewrite a bucket row: 'open'.
   BEGIN
     SET LOCAL ROLE authenticated;
     PERFORM set_config('request.jwt.claims',
       json_build_object('sub', v_uid, 'role', 'authenticated', 'is_anonymous', false)::text, true);
-    UPDATE storage.buckets SET public = true WHERE id = 'exercise-media';
+    UPDATE storage.buckets SET public = true;
     GET DIAGNOSTICS v_n = ROW_COUNT;
-    v_write_bucket := v_n::text;
+    v_write_bucket := CASE WHEN v_n = 0 THEN '0' ELSE 'open' END;
     RAISE EXCEPTION 'PROBE_ROLLBACK';
   EXCEPTION
     WHEN insufficient_privilege THEN

@@ -29,10 +29,14 @@ class TokenFile {
 /// and a hook or a wrapper that logs a child environment must not be able to print them). [base] is for tests.
 Map<String, String> scrubbedGitEnv([Map<String, String>? base]) {
   final env = Map<String, String>.from(base ?? Platform.environment);
-  for (final k in const ['GIT_DIR', 'GIT_WORK_TREE', 'GIT_INDEX_FILE', 'GIT_COMMON_DIR', 'SUPABASE_SERVICE_ROLE_KEY']) {
-    env.remove(k);
-  }
-  env.removeWhere((k, _) => k.startsWith('SUPABASE_ACCESS_TOKEN'));
+  // Names are compared upper-cased (Windows keeps the case an operator typed), and any variable that looks like a credential
+  // goes with them: the git commands run here are local and need none. The twin of `.claude/token_path.js`.
+  const redirects = {'GIT_DIR', 'GIT_WORK_TREE', 'GIT_INDEX_FILE', 'GIT_COMMON_DIR'};
+  final secretName = RegExp(r'KEY|TOKEN|SECRET|PASSWORD|PASSWD|CREDENTIAL');
+  env.removeWhere((k, _) {
+    final u = k.toUpperCase();
+    return redirects.contains(u) || u.startsWith('SUPABASE_') || secretName.hasMatch(u);
+  });
   return env;
 }
 

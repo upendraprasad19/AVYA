@@ -46,7 +46,7 @@ function migrationBody(text) {
 
 /**
  * Removes `--` line comments and block comments outside single-quoted literals (an E'' literal also escapes a quote with a
- * backslash) and drops the blank lines that leave. Dollar-quoted bodies are treated as plain text:
+ * backslash) and outside double-quoted identifiers, and drops the blank lines that leave. Dollar-quoted bodies are treated as plain text:
  * the DO bodies of these files are PL/pgSQL, where `--` is a comment, which is what this strips.
  */
 function stripComments(sql) {
@@ -66,6 +66,16 @@ function stripComments(sql) {
         }
         // a doubled quote ends this literal and opens the next one at once, which reads the same as an escaped quote here
         if (sql[j] === "'") break;
+        j += 1;
+      }
+      out += sql.slice(i, j + 1);
+      i = j + 1;
+    } else if (c === '"') {
+      // a double-quoted identifier: a `--` or a `/*` inside it is part of the name (a doubled quote reads the same as above)
+      let j = i + 1;
+      for (;;) {
+        if (j >= n) throw new Problem('an unterminated quoted identifier');
+        if (sql[j] === '"') break;
         j += 1;
       }
       out += sql.slice(i, j + 1);

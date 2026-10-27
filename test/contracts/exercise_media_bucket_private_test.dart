@@ -254,7 +254,7 @@ v_expected_c text[] := ARRAY[
 
 /// The grant-dependent expectation of variant 5 and the composition of the catalog reading.
 const List<String> _expectedFlow = <String>[
-  "IF v_bucket_upd_priv THEN v_expected_w[6] := 'refused/0/0/1'; END IF;",
+  "IF v_bucket_upd_priv THEN v_expected_w[6] := 'refused/0/0/open'; END IF;",
   '''
 v_cat := coalesce(v_policy_cmd, 'absent') || '|' || coalesce(v_policy_roles, 'absent') || '|'
   || coalesce(v_qual_bucket, 'absent') || '|' || coalesce(v_qual_anon, 'absent') || '|'
@@ -276,6 +276,13 @@ const List<String> _expectedMessages = <String>[
   "strpos(qual, 'is_anonymous') > 0",
   "strpos(qual, 'bucket_id') = 0",
   "tablename IN ('objects', 'buckets')",
+  // The bucket leg has NO WHERE and sets a constant (a WHERE on id would also need a SELECT-visible row, so an UPDATE-only
+  // policy on storage.buckets would hide from it), and it reads any row as 'open'.
+  'UPDATE storage.buckets SET public = true;',
+  "CASE WHEN v_n = 0 THEN '0' ELSE 'open' END",
+  // The unscoped-write check also flags a write policy that names exercise-media or negates the bucket test.
+  "strpos(coalesce(qual, '') || coalesce(with_check, ''), 'exercise-media') > 0",
+  "~ '(<>|!=|NOT )'",
 ];
 
 const List<String> _expectedVariants = <String>[
@@ -358,6 +365,8 @@ List<String> sqlFilesViolations({required String f1, required String f2, require
   final probe1 = normalizeSql(_between(f1, '-- PROBE-BEGIN', '-- PROBE-END'));
   final probe2 = normalizeSql(_between(f2, '-- PROBE-BEGIN', '-- PROBE-END'));
   if (probe1.isEmpty || probe1 != probe2) v.add('probe_equal');
+  final whereLeg = normalizeSql('UPDATE storage.buckets SET public = true WHERE');
+  if (probe1.contains(whereLeg) || probe2.contains(whereLeg)) v.add('bucket_leg_where');
   final catalog1 = normalizeSql(_between(f1, '-- CATALOG-BEGIN', '-- CATALOG-END'));
   final catalog2 = normalizeSql(_between(f2, '-- CATALOG-BEGIN', '-- CATALOG-END'));
   if (catalog1.isEmpty || catalog1 != catalog2) v.add('catalog_equal');
@@ -590,9 +599,10 @@ void main() {
 
     test('the probe covers the four reads and the four write legs (insert, update, delete, the bucket row)', () {
       final p = normalizeSql(_between(f1, '-- PROBE-BEGIN', '-- PROBE-END'));
-      for (final needle in ['SET LOCAL ROLE anon', "'is_anonymous',false", "'is_anonymous',true", "bucket_id = 'coach-media'", 'INSERT INTO storage.objects', 'UPDATE storage.objects', 'DELETE FROM storage.objects', "UPDATE storage.buckets SET public = true WHERE id = 'exercise-media'"]) {
+      for (final needle in ['SET LOCAL ROLE anon', "'is_anonymous',false", "'is_anonymous',true", "bucket_id = 'coach-media'", 'INSERT INTO storage.objects', 'UPDATE storage.objects', 'DELETE FROM storage.objects', 'UPDATE storage.buckets SET public = true;']) {
         expect(p, contains(needle));
       }
+      expect(p, isNot(contains('UPDATE storage.buckets SET public = true WHERE')));
       expect(_count(p, 'SET LOCAL ROLE authenticated'), 7);
     });
 
@@ -632,7 +642,12 @@ void main() {
       ('a probe marker removed from FILE 1', () => (f1: _replaceOnce(f1, '  -- PROBE-END', '  -- PROBE-FIN'), f2: f2, migration: migration), ['markers']),
       ('the bucket leg dropped from the FILE 1 verdict', () => (f1: _replaceOnce(f1, " AND v_write_bucket = '0'", ''), f2: f2, migration: migration), ['f1_verdict']),
       ('an expected catalog string changed in FILE 2', () => (f1: f1, f2: _replaceOnce(f2, "'ALL|{authenticated}|true|true|none|none'", "'SELECT|{authenticated}|true|true|none|none'"), migration: migration), ['f2_expected']),
-      ('the grant-dependent expectation of variant 5 removed', () => (f1: f1, f2: _replaceOnce(f2, "  IF v_bucket_upd_priv THEN v_expected_w[6] := 'refused/0/0/1'; END IF;\n", ''), migration: migration), ['f2_flow']),
+      ('the grant-dependent expectation of variant 5 removed', () => (f1: f1, f2: _replaceOnce(f2, "  IF v_bucket_upd_priv THEN v_expected_w[6] := 'refused/0/0/open'; END IF;\n", ''), migration: migration), ['f2_flow']),
+      ('the grant-dependent expectation of variant 5 goes back to a row count', () => (f1: f1, f2: _replaceOnce(f2, "v_expected_w[6] := 'refused/0/0/open'", "v_expected_w[6] := 'refused/0/0/1'"), migration: migration), ['f2_flow']),
+      ('the bucket leg takes a WHERE on id again in FILE 1 AND FILE 2 together', () => (f1: _replaceOnce(f1, 'UPDATE storage.buckets SET public = true;', "UPDATE storage.buckets SET public = true WHERE id = 'exercise-media';"), f2: _replaceOnce(f2, 'UPDATE storage.buckets SET public = true;', "UPDATE storage.buckets SET public = true WHERE id = 'exercise-media';"), migration: migration), ['bucket_leg_where', 'messages']),
+      ('the bucket leg reads a row count again in FILE 1 AND FILE 2 together', () => (f1: _replaceOnce(f1, "v_write_bucket := CASE WHEN v_n = 0 THEN '0' ELSE 'open' END;", 'v_write_bucket := v_n::text;'), f2: _replaceOnce(f2, "v_write_bucket := CASE WHEN v_n = 0 THEN '0' ELSE 'open' END;", 'v_write_bucket := v_n::text;'), migration: migration), ['messages']),
+      ('the unscoped-write check forgets a policy that names exercise-media, in both files', () => (f1: _replaceOnce(f1, "          OR strpos(coalesce(qual, '') || coalesce(with_check, ''), 'exercise-media') > 0\n", ''), f2: _replaceOnce(f2, "              OR strpos(coalesce(qual, '') || coalesce(with_check, ''), 'exercise-media') > 0\n", ''), migration: migration), ['messages']),
+      ('the unscoped-write check forgets a negated bucket test, in both files', () => (f1: _replaceOnce(f1, "\n          OR (coalesce(qual, '') || coalesce(with_check, '')) ~ '(<>|!=|NOT )')", ')'), f2: _replaceOnce(f2, "\n              OR (coalesce(qual, '') || coalesce(with_check, '')) ~ '(<>|!=|NOT )')", ')'), migration: migration), ['messages']),
       ('the FILE 2 flags ignore the catalog reading', () => (f1: f1, f2: _replaceOnce(f2, " AND v_cat = v_expected_c[v_i]\n                       THEN 'RED'", "\n                       THEN 'RED'"), migration: migration), ['f2_flow']),
       ('the catalog reading is composed without the unscoped writes', () => (f1: f1, f2: _replaceOnce(f2, "        || v_anon_public || '|' || v_unscoped_write;", "        || v_anon_public;"), migration: migration), ['f2_flow']),
       ('variant 6 (the buckets policy) changed', () => (f1: f1, f2: _replaceOnce(f2, 'FOR UPDATE TO authenticated', 'FOR SELECT TO authenticated'), migration: migration), ['f2_variants']),
@@ -643,7 +658,7 @@ void main() {
       ('the catalog reads is_anonymous with a LIKE underscore in both files', () => (f1: _replaceOnce(f1, "(strpos(qual, 'is_anonymous') > 0)::text", "(qual LIKE '%is_anonymous%')::text"), f2: _replaceOnce(f2, "(strpos(qual, 'is_anonymous') > 0)::text", "(qual LIKE '%is_anonymous%')::text"), migration: migration), ['messages', 'no_underscore_like']),
       ('the bucket scope of the unscoped-write check is a LIKE in both files', () => (f1: _replaceOnce(f1, "strpos(coalesce(qual, '') || coalesce(with_check, ''), 'bucket_id') = 0", "(coalesce(qual, '') || coalesce(with_check, '')) NOT LIKE '%bucket_id%'"), f2: _replaceOnce(f2, "strpos(coalesce(qual, '') || coalesce(with_check, ''), 'bucket_id') = 0", "(coalesce(qual, '') || coalesce(with_check, '')) NOT LIKE '%bucket_id%'"), migration: migration), ['no_underscore_like']),
       ('a catalog marker removed from FILE 1', () => (f1: _replaceOnce(f1, '  -- CATALOG-END', '  -- CATALOG-FIN'), f2: f2, migration: migration), ['markers']),
-      ('the bucket leg changed in the FILE 2 probe copy', () => (f1: f1, f2: _replaceOnce(f2, "UPDATE storage.buckets SET public = true WHERE id = 'exercise-media';", "UPDATE storage.buckets SET public = true WHERE id = 'exercise-media-x';"), migration: migration), ['probe_equal']),
+      ('the bucket leg changed in the FILE 2 probe copy', () => (f1: f1, f2: _replaceOnce(f2, 'UPDATE storage.buckets SET public = true;', "UPDATE storage.buckets SET public = true WHERE id = 'exercise-media-x';"), migration: migration), ['probe_equal']),
       ('the self-check reads is_anonymous with a LIKE underscore again', () => (f1: f1, f2: f2, migration: _replaceOnce(migration, "strpos(qual, 'is_anonymous') > 0", "qual LIKE '%is_anonymous%'")), ['prelude_equal']),
       ('the final RAISE removed from FILE 2', () => (f1: f1, f2: _replaceOnce(f2, "RAISE EXCEPTION 'VERIFY_RESULTS%'", "RAISE NOTICE 'VERIFY_RESULTS%'"), migration: migration), ['verify_results_once']),
     ];

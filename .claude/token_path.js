@@ -25,12 +25,16 @@ const TOKEN_NAME = 'supabase access token.txt';
 // inherited, they make `git worktree list` answer about THAT repo, or fail from another cwd.
 // The Supabase secrets are dropped too: a `git` child has no use for the service-role key or an access token, and a hook
 // or a wrapper that logs a child environment must not be able to print them.
+// Names are compared upper-cased (Windows keeps the case an operator typed, `$env:supabase_service_role_key` included), and
+// any variable that looks like a credential goes with them: the two git commands run here are local and need none.
+const SECRET_NAME = /KEY|TOKEN|SECRET|PASSWORD|PASSWD|CREDENTIAL/;
 function scrubbedGitEnv(base = process.env) {
   const env = { ...base };
   for (const k of Object.keys(env)) {
+    const u = k.toUpperCase();
     if (
-      k === 'GIT_DIR' || k === 'GIT_WORK_TREE' || k === 'GIT_INDEX_FILE' || k === 'GIT_COMMON_DIR' ||
-      k === 'SUPABASE_SERVICE_ROLE_KEY' || k.startsWith('SUPABASE_ACCESS_TOKEN')
+      u === 'GIT_DIR' || u === 'GIT_WORK_TREE' || u === 'GIT_INDEX_FILE' || u === 'GIT_COMMON_DIR' ||
+      u.startsWith('SUPABASE_') || SECRET_NAME.test(u)
     ) {
       delete env[k];
     }

@@ -4,6 +4,10 @@
 -- b4e7a2, plan docs/plans/2026-10-27-library-batch-m1-media-data.md R15. Run it in Task 8.4, BEFORE the apply, and
 -- NEVER after it: its first statement raises if the exercise-media bucket already exists.
 --
+-- LOCKS. The policy DDL of the baseline and of every variant takes the same table locks as the apply (see the LOCKS
+-- note of the migration draft) and holds them until the block ends, so the whole rehearsal holds them for seconds, not
+-- milliseconds. Run it off-peak, with no sign-in or test session active.
+--
 -- WHAT IT PROVES. That the role probe and the catalog check of FILE 1 can tell the right setup from wrong ones. A
 -- probe that passes the right policy proves nothing until it is also shown to fail a wrong one. The block runs the
 -- migration body (the prelude below: the text of the migration's DO block without its wrapper, pinned equal to the
@@ -22,7 +26,7 @@
 --   v3        no bucket scope (is_anonymous clause only)    0/1/0/1  refused/0/0/0  SELECT|{authenticated}|false|true|none|none flips other_bucket
 --   v4        FOR ALL with the right USING                  0/1/0/0  inserted/1/1/0 ALL|{authenticated}|true|true|none|none     flips the objects write legs
 --   v5        the right policy PLUS a FOR UPDATE USING (true) policy on storage.buckets: quadruple 0/1/0/0,
---             writes refused/0/0/1 (refused/0/0/0 when authenticated has no UPDATE privilege on storage.buckets: then
+--             writes refused/0/0/open (refused/0/0/0 when authenticated has no UPDATE privilege on storage.buckets: then
 --             the leg cannot redden and the catalog string alone carries v5), catalog
 --             SELECT|{authenticated}|true|true|none|buckets.exercise_media_buckets_wrong   flips the bucket leg
 -- A variant is RED only when its quadruple, its writes AND its catalog string equal its row exactly; anything else is
@@ -147,7 +151,7 @@ BEGIN
 
   v_anon_priv := has_table_privilege('anon', 'storage.objects', 'SELECT');
   v_bucket_upd_priv := has_table_privilege('authenticated', 'storage.buckets', 'UPDATE');
-  IF v_bucket_upd_priv THEN v_expected_w[6] := 'refused/0/0/1'; END IF;
+  IF v_bucket_upd_priv THEN v_expected_w[6] := 'refused/0/0/open'; END IF;
 
   FOR v_i IN 1..6 LOOP
     v_anon := NULL; v_auth := NULL; v_anon_session := NULL; v_other := NULL;
@@ -307,15 +311,17 @@ BEGIN
         IF v_msg <> 'PROBE_ROLLBACK' THEN v_write_delete := 'error: ' || v_msg; END IF;
       END;
 
-      -- leg 5d: the normal session may not flip the bucket public: an UPDATE of its storage.buckets row affects 0 rows (a
-      -- privilege denial on that table is the same answer, 0)
+      -- leg 5d: the normal session may not rewrite a bucket row (flip it public). The statement has NO WHERE clause and sets a
+      -- constant, on purpose: a WHERE on id (or a column on the right of SET) also needs the row to pass a SELECT policy, so an
+      -- UPDATE-only policy would hide from it; with neither, only the UPDATE policy decides. 0 rows (a privilege denial on that
+      -- table is the same answer, 0) is right; any row means some policy lets a logged-in user rewrite a bucket row: 'open'.
       BEGIN
         SET LOCAL ROLE authenticated;
         PERFORM set_config('request.jwt.claims',
           json_build_object('sub', v_uid, 'role', 'authenticated', 'is_anonymous', false)::text, true);
-        UPDATE storage.buckets SET public = true WHERE id = 'exercise-media';
+        UPDATE storage.buckets SET public = true;
         GET DIAGNOSTICS v_n = ROW_COUNT;
-        v_write_bucket := v_n::text;
+        v_write_bucket := CASE WHEN v_n = 0 THEN '0' ELSE 'open' END;
         RAISE EXCEPTION 'PROBE_ROLLBACK';
       EXCEPTION
         WHEN insufficient_privilege THEN
@@ -349,7 +355,10 @@ BEGIN
        WHERE schemaname = 'storage' AND tablename IN ('objects', 'buckets')
          AND cmd IN ('INSERT', 'UPDATE', 'DELETE', 'ALL')
          AND roles && ARRAY['anon', 'authenticated', 'public']::name[]
-         AND (tablename = 'buckets' OR strpos(coalesce(qual, '') || coalesce(with_check, ''), 'bucket_id') = 0);
+         AND (tablename = 'buckets'
+              OR strpos(coalesce(qual, '') || coalesce(with_check, ''), 'bucket_id') = 0
+              OR strpos(coalesce(qual, '') || coalesce(with_check, ''), 'exercise-media') > 0
+              OR (coalesce(qual, '') || coalesce(with_check, '')) ~ '(<>|!=|NOT )');
       -- CATALOG-END
 
       v_actual := coalesce(v_anon, 'unset') || '/' || coalesce(v_auth, 'unset') || '/'

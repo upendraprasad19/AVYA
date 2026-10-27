@@ -35,7 +35,7 @@ const OBJECT_RE = /^\d{4}-[a-z0-9]+(-[a-z0-9]+)*_v\d+\.webp$/;
 const CANARY_RE = /^canary-[1-3]_v0\.webp$/;
 // The default is the `private` form: an object's cache-control is fixed at upload (x-upsert false), a signed URL is a bearer link, and a
 // shared cache that stores a signed response for a year would outlive the link's expiry. A form containing `public` is refused.
-// The canary uploads all three so the observed headers say which survive; supabase-js itself sends the last (bare max-age).
+// The canary uploads all three so the observed headers say which survive. (The bare form is the shared-cacheable one; it is the last.)
 const CACHE_FORMS = ['private, max-age=31536000, immutable', 'max-age=31536000, immutable', 'max-age=31536000'];
 const DEFAULT_CACHE = CACHE_FORMS[0];
 const REQUEST_TIMEOUT_MS = 60000;
@@ -173,7 +173,11 @@ function checkLocal(wardroom, obj) {
 const FOLD = process.platform === 'win32' || process.platform === 'darwin';
 const fold = (p) => (FOLD ? p.toLowerCase() : p);
 
-/** realpath of the nearest existing ancestor, plus the not-yet-existing remainder. */
+/**
+ * realpath of the nearest existing ancestor, plus the not-yet-existing remainder. The native form is used on purpose: on
+ * Windows it expands 8.3 short names (C:\PROGRA~1) and turns a \\?\C:\ device spelling into C:\, so those spellings of a path
+ * inside the repository compare as inside; the JS form leaves the first alone and throws EISDIR on the second.
+ */
 function realpathLoose(p) {
   let cur = path.resolve(p);
   const rest = [];
@@ -183,7 +187,7 @@ function realpathLoose(p) {
     rest.unshift(path.basename(cur));
     cur = parent;
   }
-  const real = fs.existsSync(cur) ? fs.realpathSync(cur) : cur;
+  const real = fs.existsSync(cur) ? fs.realpathSync.native(cur) : cur;
   return path.join(real, ...rest);
 }
 
@@ -202,17 +206,40 @@ function checkReportPath(report) {
   }
   const resolved = path.resolve(report);
   // Prove the report can be written BEFORE anything destructive runs (a delete mode records its result last). A file created
-  // only for the probe is removed again, so a run that stops early leaves nothing behind.
-  const existed = fs.existsSync(resolved);
+  // only for the probe is removed again, and so is every directory the probe had to create, so a run that stops early leaves
+  // nothing behind. A symbolic link is refused: opening a dangling one would create its target, and removing "our" file would
+  // remove the link instead.
+  let existing = null;
   try {
-    fs.mkdirSync(path.dirname(resolved), { recursive: true });
+    existing = fs.lstatSync(resolved);
+  } catch (e) {
+    if (e.code !== 'ENOENT') usage(`the report path cannot be inspected (${e.code || e.message}); nothing was sent`);
+  }
+  if (existing && existing.isSymbolicLink()) usage('the report path is a symbolic link; give the path of a real file; nothing was sent');
+  const leaf = path.dirname(resolved);
+  let firstCreated;
+  try {
+    firstCreated = fs.mkdirSync(leaf, { recursive: true });
     fs.closeSync(fs.openSync(resolved, 'a'));
-    if (!existed) fs.unlinkSync(resolved);
+    if (!existing) fs.unlinkSync(resolved);
   } catch (e) {
     usage(`the report path cannot be written (${e.code || e.message}); nothing was sent`);
   }
+  if (firstCreated) {
+    for (let d = leaf; ; d = path.dirname(d)) {
+      try {
+        fs.rmdirSync(d);
+      } catch (_) {
+        break;
+      }
+      if (d === firstCreated) break;
+    }
+  }
   return resolved;
 }
+
+/** The reason a run stopped, for a partial report: the error text, redacted when it is written. */
+const stoppedBy = (e) => String((e && e.message) || e).slice(0, 200);
 
 // ---- HTTP ---------------------------------------------------------------------------------------------------------------
 const state = { deleteAllowed: false };
@@ -620,36 +647,56 @@ async function modeDeleteObject(o, table, ctx, reportPath, endpoints) {
   state.deleteAllowed = true;
   const results = [];
   let bad = false;
-  for (const n of names) {
-    const del = await request('DELETE', objectUrl(ctx.base, n), { headers: authHeaders(ctx.key) });
-    await del.arrayBuffer().catch(() => {});
-    let head = await headObject(ctx.base, ctx.key, n);
-    let note = '';
-    if (head.status === 200) {
-      const wait = endpoints.seam && process.env.EXERCISE_MEDIA_RETRY_WAIT_MS ? Number(process.env.EXERCISE_MEDIA_RETRY_WAIT_MS) : 90000;
-      say(`${n}: HEAD still 200 after the delete (CDN lag?); waiting ${wait} ms and checking again`);
-      await sleep(wait);
-      head = await headObject(ctx.base, ctx.key, n);
-      note = ' (second check)';
-      if (head.status === 200) bad = true;
+  let failure = null;
+  try {
+    for (const n of names) {
+      const del = await request('DELETE', objectUrl(ctx.base, n), { headers: authHeaders(ctx.key) });
+      await del.arrayBuffer().catch(() => {});
+      let head = await headObject(ctx.base, ctx.key, n);
+      let note = '';
+      if (head.status === 200) {
+        const wait = endpoints.seam && process.env.EXERCISE_MEDIA_RETRY_WAIT_MS ? Number(process.env.EXERCISE_MEDIA_RETRY_WAIT_MS) : 90000;
+        say(`${n}: HEAD still 200 after the delete (CDN lag?); waiting ${wait} ms and checking again`);
+        await sleep(wait);
+        head = await headObject(ctx.base, ctx.key, n);
+        note = ' (second check)';
+        if (head.status === 200) bad = true;
+      }
+      results.push({ name: n, deleteStatus: del.status, headAfter: head.status, secondCheck: note !== '' });
+      say(`${n}: DELETE ${del.status}, HEAD with key ${head.status}${note}`);
     }
-    results.push({ name: n, deleteStatus: del.status, headAfter: head.status, secondCheck: note !== '' });
-    say(`${n}: DELETE ${del.status}, HEAD with key ${head.status}${note}`);
+  } catch (e) {
+    failure = e;
   }
-  writeReport(reportPath, { mode: 'delete-object', bucket: BUCKET, results });
+  // The report is written even when a request threw halfway: an object already deleted must be on record.
+  writeReport(reportPath, { mode: 'delete-object', bucket: BUCKET, results, ...(failure ? { stoppedBy: stoppedBy(failure) } : {}) });
+  if (failure) throw failure;
   if (bad) stop('an object still answers 200 after the delete and a second check');
 }
 
 async function modeDeleteBucket(o, ctx, reportPath) {
   state.deleteAllowed = true;
-  const empty = await request('POST', `${ctx.base}/storage/v1/bucket/${BUCKET}/empty`, { headers: authHeaders(ctx.key) });
+  let empty;
+  try {
+    empty = await request('POST', `${ctx.base}/storage/v1/bucket/${BUCKET}/empty`, { headers: authHeaders(ctx.key) });
+  } catch (e) {
+    // The empty call may or may not have reached the server: the report says so instead of saying nothing.
+    writeReport(reportPath, { mode: 'delete-bucket', emptyStatus: null, deleteStatus: null, stoppedBy: stoppedBy(e) });
+    throw e;
+  }
   await empty.arrayBuffer().catch(() => {});
   say(`empty ${BUCKET}: ${empty.status}`);
   if (empty.status !== 200) {
     writeReport(reportPath, { mode: 'delete-bucket', emptyStatus: empty.status, deleteStatus: null });
     return stop(`emptying the bucket answered ${empty.status}; the bucket was not deleted`);
   }
-  const del = await request('DELETE', `${ctx.base}/storage/v1/bucket/${BUCKET}`, { headers: authHeaders(ctx.key) });
+  let del;
+  try {
+    del = await request('DELETE', `${ctx.base}/storage/v1/bucket/${BUCKET}`, { headers: authHeaders(ctx.key) });
+  } catch (e) {
+    writeReport(reportPath, { mode: 'delete-bucket', emptyStatus: empty.status, deleteStatus: null, stoppedBy: stoppedBy(e) });
+    throw e;
+  }
   await del.arrayBuffer().catch(() => {});
   say(`delete ${BUCKET}: ${del.status}`);
   writeReport(reportPath, { mode: 'delete-bucket', emptyStatus: empty.status, deleteStatus: del.status });

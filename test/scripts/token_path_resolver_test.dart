@@ -210,6 +210,17 @@ void main() {
     'SUPABASE_ACCESS_TOKEN_FITNESS': 'sentinel-access-token-fitness',
   };
   const redirects = <String, String>{'GIT_DIR': '/x', 'GIT_WORK_TREE': '/x', 'GIT_INDEX_FILE': '/x', 'GIT_COMMON_DIR': '/x'};
+  // Windows keeps the case an operator typed (`$env:supabase_service_role_key`), and other credentials look like credentials: both
+  // go, whatever the spelling. A name that merely looks harmless stays.
+  const spelled = <String, String>{
+    'supabase_service_role_key': 'sentinel-lower',
+    'Supabase_Access_Token_Other': 'sentinel-mixed',
+    'git_dir': '/x',
+    'GEMINI_API_KEY': 'sentinel-gemini',
+    'Razorpay_Key_Secret': 'sentinel-razorpay',
+    'MY_DB_PASSWORD': 'sentinel-password',
+    'GH_TOKEN': 'sentinel-gh',
+  };
 
   test('node: the git child environment carries no Supabase secret and no git redirection, and keeps the rest', () {
     final script = File('.claude/token_path.js').absolute.path;
@@ -217,24 +228,25 @@ void main() {
       'node',
       ['-e', 'const t=require(${jsonEncode(script)});console.log(JSON.stringify(t.scrubbedGitEnv()));'],
       why: 'node .claude/token_path.js scrubbedGitEnv()',
-      extraEnv: {...secrets, ...redirects, 'TOKEN_PATH_TEST_KEEP': 'kept'},
-      allowControl: {...secrets.keys, ...redirects.keys},
+      extraEnv: {...secrets, ...redirects, ...spelled, 'RESOLVER_TEST_KEEP': 'kept'},
+      allowControl: {...secrets.keys, ...redirects.keys, ...spelled.keys},
     );
     expect(r.exitCode, 0, reason: '${r.stderr}');
     final env = (jsonDecode((r.stdout as String).trim()) as Map<String, dynamic>).cast<String, String>();
-    for (final k in [...secrets.keys, ...redirects.keys]) {
-      expect(env.containsKey(k), isFalse, reason: '$k must not reach the git child');
+    for (final k in [...secrets.keys, ...redirects.keys, ...spelled.keys]) {
+      expect(env.keys.any((e) => e.toUpperCase() == k.toUpperCase()), isFalse, reason: '$k must not reach the git child');
     }
-    expect(env['TOKEN_PATH_TEST_KEEP'], 'kept');
+    expect(env['RESOLVER_TEST_KEEP'], 'kept');
     expect(env.keys.any((k) => k.toUpperCase() == 'PATH'), isTrue, reason: 'git itself needs PATH');
   });
 
   test('dart: the git child environment carries no Supabase secret and no git redirection, and keeps the rest', () {
-    final env = dart_resolver.scrubbedGitEnv({...secrets, ...redirects, 'TOKEN_PATH_TEST_KEEP': 'kept', 'PATH': '/bin'});
-    for (final k in [...secrets.keys, ...redirects.keys]) {
+    final env = dart_resolver.scrubbedGitEnv({...secrets, ...redirects, ...spelled, 'RESOLVER_TEST_KEEP': 'kept', 'PATH': '/bin', 'SystemRoot': r'C:Windows'});
+    for (final k in [...secrets.keys, ...redirects.keys, ...spelled.keys]) {
       expect(env.containsKey(k), isFalse, reason: '$k must not reach the git child');
     }
-    expect(env['TOKEN_PATH_TEST_KEEP'], 'kept');
+    expect(env['SystemRoot'], r'C:Windows', reason: 'git needs the system variables');
+    expect(env['RESOLVER_TEST_KEEP'], 'kept');
     expect(env['PATH'], '/bin');
   });
 }

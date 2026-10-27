@@ -54,6 +54,9 @@ class _Fake {
   final postStatus = <String, int>{}; // forced POST status (the object is not stored)
   final postBody = <String, String>{};
   final cutPost = <String>{}; // destroy the connection on the first POST of a name
+  final cutDelete = <String>{}; // destroy the connection on the first DELETE of a name
+  bool cutBucketEmpty = false; // destroy the connection on the empty-bucket call
+  bool cutBucketDelete = false; // destroy the connection on the delete-bucket call
   bool destroyPublic = false; // drop the connection on the first public-route probe of exercise-media
   int publicStatus = 400; // exercise-media on the public route
   int noAuthStatus = 400; // the authenticated route with no Authorization header
@@ -159,6 +162,10 @@ class _Fake {
         final name = path.substring(objPrefix.length);
         if (!hasKey) {
           _json(res, 401, {'message': 'bad key'});
+        } else if (cutDelete.remove(name)) {
+          final socket = await res.detachSocket(writeHeaders: false);
+          socket.destroy();
+          return;
         } else {
           objects.remove(name);
           _json(res, 200, {'message': 'Successfully deleted'});
@@ -199,9 +206,19 @@ class _Fake {
           res.statusCode = controlStatus;
         }
       } else if (path == '/storage/v1/bucket/exercise-media/empty' && req.method == 'POST') {
+        if (cutBucketEmpty) {
+          final socket = await res.detachSocket(writeHeaders: false);
+          socket.destroy();
+          return;
+        }
         objects.clear();
         _json(res, 200, {'message': 'Successfully emptied'});
       } else if (path == '/storage/v1/bucket/exercise-media' && req.method == 'DELETE') {
+        if (cutBucketDelete) {
+          final socket = await res.detachSocket(writeHeaders: false);
+          socket.destroy();
+          return;
+        }
         _json(res, 200, {'message': 'Successfully deleted'});
       } else {
         res.statusCode = 404;
@@ -447,6 +464,38 @@ void main() {
       }
       expect(rig.fake.seen, isEmpty);
     });
+
+    test('the writability check removes the directories it had to create', () async {
+      final r = await rig.run(['--execute', '--report', '${rig.dir.path}/fresh/dir/report.json'], withKey: false);
+      expect(r.exitCode, isNot(0), reason: _all(r));
+      expect(_all(r), contains('no service-role key'), reason: 'the run must have got PAST the report-path check');
+      expect(Directory('${rig.dir.path}/fresh').existsSync(), isFalse);
+    });
+
+    test('a report path that is a symbolic link is refused: nothing is created through it and the link stays', () async {
+      final target = '${rig.dir.path}/dangling-target.json';
+      final link = Link('${rig.dir.path}/report-link.json');
+      try {
+        link.createSync(target);
+      } on FileSystemException catch (e) {
+        markTestSkipped('a symbolic link cannot be created here (${e.osError?.message})');
+        return;
+      }
+      final r = await rig.run(['--execute', '--report', link.path]);
+      expect(r.exitCode, 2, reason: _all(r));
+      expect(_all(r), contains('is a symbolic link'));
+      expect(FileSystemEntity.isLinkSync(link.path), isTrue, reason: 'the link must still be there');
+      expect(File(target).existsSync(), isFalse, reason: 'nothing may be created through the link');
+      expect(rig.fake.seen, isEmpty);
+    });
+
+    test("a report path in the device-namespace spelling inside the repository is refused with the guard's own message (win32)", () async {
+      final dev = r'\\?\' + Directory.current.path.replaceAll('/', r'\') + r'\pubspec.yaml\report.json';
+      final r = await rig.run(['--execute', '--report', dev]);
+      expect(r.exitCode, isNot(0), reason: _all(r));
+      expect(_all(r), contains('must be outside the repository and the primary checkout'));
+      expect(rig.fake.seen, isEmpty);
+    }, skip: Platform.isWindows ? false : 'device paths are a Windows spelling');
 
     test('the writability check leaves no file behind when the run then stops (no key), and keeps a report that already existed', () async {
       final r = await rig.run(['--execute', '--report', rig.reportPath], withKey: false);
@@ -843,7 +892,7 @@ void main() {
       expect(_all(r), contains('readable without a login'));
     });
 
-    for (final s in [400, 404]) {
+    for (final s in [400, 401, 403, 404]) {
       test('probes answering $s pass', () async {
         rig.fake.publicStatus = s;
         rig.fake.noAuthStatus = s;
@@ -968,12 +1017,14 @@ void main() {
       expect(_all(b), contains('readable without a login'));
     });
 
-    test('probes answering 400 and 404 pass', () async {
-      await uploadAll();
-      rig.fake.publicStatus = 404;
-      rig.fake.noAuthStatus = 400;
-      expect((await rig.run(['--verify'])).exitCode, 0);
-    });
+    for (final s in [400, 401, 403, 404]) {
+      test('probes answering $s pass', () async {
+        await uploadAll();
+        rig.fake.publicStatus = s;
+        rig.fake.noAuthStatus = s;
+        expect((await rig.run(['--verify'])).exitCode, 0);
+      });
+    }
 
     for (final s in [206, 429, 500]) {
       test('a privacy probe answering $s is not a refusal: verify exits non-zero and says privacy is not shown', () async {
@@ -1136,6 +1187,32 @@ void main() {
       expect(heads.single.headers['authorization'], 'Bearer ${rig.key}');
       expect(heads.single.headers['apikey'], rig.key);
     });
+
+    test('--delete-object writes the report of what it already deleted when a later request is cut off', () async {
+      expect((await rig.run(['--canary', '--execute', '--report', rig.reportPath])).exitCode, 0);
+      rig.fake.seen.clear();
+      rig.fake.cutDelete.add('canary-2_v0.webp');
+      final r = await rig.run(['--delete-object', 'canary-1_v0.webp,canary-2_v0.webp', '--execute', '--confirm-bucket', 'exercise-media', '--report', rig.reportPath]);
+      expect(r.exitCode, isNot(0), reason: _all(r));
+      final report = jsonDecode(File(rig.reportPath).readAsStringSync()) as Map<String, dynamic>;
+      expect((report['results'] as List).map((e) => (e as Map)['name']).toList(), ['canary-1_v0.webp']);
+      expect(report['stoppedBy'], isA<String>());
+      expect(rig.fake.objects.containsKey('canary-1_v0.webp'), isFalse, reason: 'the first object really was deleted');
+    });
+
+    for (final (label, cutEmpty, cutDelete, emptyStatus) in [('the empty call', true, false, null), ('the delete call', false, true, 200)]) {
+      test('--delete-bucket records where it stopped when $label is cut off', () async {
+        rig.fake.cutBucketEmpty = cutEmpty;
+        rig.fake.cutBucketDelete = cutDelete;
+        final r = await rig.run(['--delete-bucket', '--execute', '--confirm-bucket', 'exercise-media', '--report', rig.reportPath]);
+        expect(r.exitCode, isNot(0), reason: _all(r));
+        final report = jsonDecode(File(rig.reportPath).readAsStringSync()) as Map<String, dynamic>;
+        expect(report['mode'], 'delete-bucket');
+        expect(report['emptyStatus'], emptyStatus);
+        expect(report['deleteStatus'], isNull);
+        expect(report['stoppedBy'], isA<String>());
+      });
+    }
 
     test('a HEAD that answers 200 once and then 404 passes after the second HEAD', () async {
       expect((await rig.run(['--canary', '--execute', '--report', rig.reportPath])).exitCode, 0);
