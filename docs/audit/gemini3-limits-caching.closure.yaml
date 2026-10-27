@@ -1,0 +1,147 @@
+# Closure ledger — gemini3-limits-caching (Part A Gemini 3.x migration + Part B limits/refund).
+# Gate 40 (validate_audit_closure.dart). One terminal_state per item; no `deferred:` key.
+# `closed_in_commit` = the fix is in a commit that exists (Part A: beecc799; Part B: the branch commit that carries this file).
+# `blocked_on_user` items each name the founder action that closes them.
+
+batch: gemini3-limits-caching
+plan_review_record: docs/plan-reviews/gemini3-limits-caching.md
+diagnose_docs:
+  - docs/diagnoses/2026-10-01-failed-turns-burn-daily-quota-c4e9b2.md
+  - docs/diagnoses/2026-10-01-chat-cap-counts-non-reservation-rows-d7a1f5.md
+total_findings: 24
+closed_count: 24
+
+findings:
+  - id: A1
+    title: "_shared/gemini.ts constants per tier + MODEL_FALLBACK, thinkingLevel handling, retry/fallback attempt list"
+    terminal_state: closed_in_commit
+    commit: "beecc799"
+    verification: "Part A review docs/reviews/a5a985e852f1-review.md; diagnose-docs f3a8d1, d9a4f7, b6e2c4, a5c8e2; Deno suite green at commit time."
+
+  - id: A2
+    title: "thought signatures preserved raw through geminiChatWithTools; signature-400 dummy retry"
+    terminal_state: closed_in_commit
+    commit: "beecc799"
+    verification: "Part A review docs/reviews/a5a985e852f1-review.md; diagnose-docs f3a8d1, d9a4f7, b6e2c4, a5c8e2; Deno suite green at commit time."
+
+  - id: A3
+    title: "404 model-unavailable classification + attemptStatuses on the failure shape + alert class"
+    terminal_state: closed_in_commit
+    commit: "beecc799"
+    verification: "Part A review docs/reviews/a5a985e852f1-review.md; diagnose-docs f3a8d1, d9a4f7, b6e2c4, a5c8e2; Deno suite green at commit time."
+
+  - id: A4
+    title: "call sites, row labels, hard-failure row sentinel, docs"
+    terminal_state: closed_in_commit
+    commit: "beecc799"
+    verification: "Part A review docs/reviews/a5a985e852f1-review.md; diagnose-docs f3a8d1, d9a4f7, b6e2c4, a5c8e2; Deno suite green at commit time."
+
+  - id: A6
+    title: "Part A Deno tests + mutations"
+    terminal_state: closed_in_commit
+    commit: "beecc799"
+    verification: "Part A review docs/reviews/a5a985e852f1-review.md; diagnose-docs f3a8d1, d9a4f7, b6e2c4, a5c8e2; Deno suite green at commit time."
+
+  - id: C1
+    title: "cachedContentTokenCount / thoughtsTokenCount telemetry (console only)"
+    terminal_state: closed_in_commit
+    commit: "beecc799"
+    verification: "Part A review docs/reviews/a5a985e852f1-review.md; diagnose-docs f3a8d1, d9a4f7, b6e2c4, a5c8e2; Deno suite green at commit time."
+
+  - id: B1
+    title: "migration 153 (chat 7/20 on reservation rows only, vision 4/20, refund_quota) applied 2026-10-02 + ledger entry"
+    terminal_state: closed_in_commit
+    commit: "gemini3-limits-caching@branch"
+    verification: "Whole flutter suite 7330 pass and Deno whole tree 868 pass (2 known AddrInUse :8000 VPS failures) after the last edit; pre-commit gate loop green; deno check clean on 9 functions; B-pass 28 findings all fixed or recorded as residue."
+
+  - id: B2
+    title: "_shared/ai_limits.ts single TS home of the caps; client AppConstants 7/20; tier-aware 429 body + copy; refunded flag end to end"
+    terminal_state: closed_in_commit
+    commit: "gemini3-limits-caching@branch"
+    verification: "Whole flutter suite 7330 pass and Deno whole tree 868 pass (2 known AddrInUse :8000 VPS failures) after the last edit; pre-commit gate loop green; deno check clean on 9 functions; B-pass 28 findings all fixed or recorded as residue."
+
+  - id: B3
+    title: "PRO media caps 10 images / 5 videos per IST day + COACH_REPLIES args"
+    terminal_state: closed_in_commit
+    commit: "gemini3-limits-caching@branch"
+    verification: "Whole flutter suite 7330 pass and Deno whole tree 868 pass (2 known AddrInUse :8000 VPS failures) after the last edit; pre-commit gate loop green; deno check clean on 9 functions; B-pass 28 findings all fixed or recorded as residue."
+
+  - id: B4
+    title: "founder digest: tier-mixed keys, refund_budget line (excluded from Top users), read-only heavy-chat line"
+    terminal_state: closed_in_commit
+    commit: "gemini3-limits-caching@branch"
+    verification: "Whole flutter suite 7330 pass and Deno whole tree 868 pass (2 known AddrInUse :8000 VPS failures) after the last edit; pre-commit gate loop green; deno check clean on 9 functions; B-pass 28 findings all fixed or recorded as residue."
+
+  - id: B5
+    title: "tests that encoded the old caps rewritten (never loosened); live SQL scripts rewritten for 7/20/4"
+    terminal_state: closed_in_commit
+    commit: "gemini3-limits-caching@branch"
+    verification: "Whole flutter suite 7330 pass and Deno whole tree 868 pass (2 known AddrInUse :8000 VPS failures) after the last edit; pre-commit gate loop green; deno check clean on 9 functions; B-pass 28 findings all fixed or recorded as residue."
+
+  - id: B6
+    title: "Part B diagnose-docs c4e9b2 + d7a1f5, 51 mutations (23 + 28) confirmed applied and restored, B-pass docs/reviews review file"
+    terminal_state: closed_in_commit
+    commit: "gemini3-limits-caching@branch"
+    verification: "Whole flutter suite 7330 pass and Deno whole tree 868 pass (2 known AddrInUse :8000 VPS failures) after the last edit; pre-commit gate loop green; deno check clean on 9 functions; B-pass 28 findings all fixed or recorded as residue."
+
+  - id: OI-276
+    title: "Chat video analysis: nothing in the client uploads video; PRO video cap/docs alignment"
+    terminal_state: blocked_on_user
+    reason: "Founder prioritisation of the video feature (decision 2026-10-01: video later). Work item lives on the OI board as OI-276."
+
+  - id: OI-277
+    title: "Free-tier chat cost exposure after the Gemini 3.1 Flash-Lite move; revisit the free cap and prompt size"
+    terminal_state: upstream_blocked
+    blocker: "no PRO or volume data until the migration is applied (applied 2026-10-02)"
+    reopen_when: "14 days after migration apply (2026-10-16) OR sustained > 46 chat messages/day"
+
+  - id: OI-278
+    title: "Telegram bot chat cap parity (bot disabled; its cap must follow free 7 / PRO 20 when re-enabled)"
+    terminal_state: upstream_blocked
+    blocker: "bot disabled (separate OpenClaw project)"
+    reopen_when: "founder re-enables the bot"
+
+  - id: PRO-CAP-25
+    title: "PRO chat cap 20 -> 25"
+    terminal_state: blocked_on_user
+    reason: "Founder decision once data exists; source = usage_counters chat_app rows for PRO users, which exist only from the 2026-10-02 apply onward."
+
+  - id: A5-SMOKE
+    title: "Real free and PRO user-token smoke on the DEPLOYED ai-proxy (Part A 2-round tool turn; Part B 429 copy at 7/7 and 20/20, a forced transport failure refunding once)"
+    terminal_state: blocked_on_user
+    reason: "Needs real user JWTs (ai-proxy authenticates via auth.getUser(token)); the agent has none and will not mint prod users unasked. Founder runs a free and a PRO account in the app, or hands over a test account."
+
+  - id: DEPLOY-A
+    title: "Part A Edge Function deploys (ai-proxy, ai-media-proxy, weekly-report, assess-body-composition, daily-snapshot, rolling-context)"
+    terminal_state: verified_clean
+    evidence: "Deployed 2026-10-02 on the founder's go from merged main 9fb68189: ai-proxy v92, ai-media-proxy v31, weekly-report v34, assess-body-composition v21, daily-snapshot v32, rolling-context v25; confirmed read-only via MCP list_edge_functions, verify_jwt unchanged; ai-proxy anon-Bearer boot check answered its own 401, not 503."
+
+  - id: DEPLOY-B
+    title: "Part B Edge Function deploys (founder-digest, telegram-admin-bot, alert-critical-notify + the shared importers)"
+    terminal_state: verified_clean
+    evidence: "Deployed 2026-10-02 with Part A (same go): founder-digest v12, telegram-admin-bot v9, alert-critical-notify v6 (its unauthenticated smoke 401 is the cron-secret auth working); confirmed via MCP list_edge_functions."
+
+  - id: LIVE-SQL
+    title: "Run test/sql/gemini3_limits_refund_live_verify.sql and oi46_daily_cap_triggers_live_verify.sql against prod"
+    terminal_state: verified_clean
+    evidence: "Run 2026-10-02 on the founder's go via scripts/check_onconflict_live_arbiter.dart inside BEGIN..ROLLBACK: gemini3_limits_refund_live_verify 15/15 ok (R1-R9 incl. R3b), oi46_daily_cap_triggers_live_verify 23/23 ok; follow-up MCP reads found zero residue test rows."
+
+  - id: RESIDUE-ROW
+    title: "A client can store a non-pending channel='app' row (a pending insert is still refused: INVOKER trigger, authenticated cannot execute consume_quota)"
+    terminal_state: blocked_on_user
+    reason: "Founder decision 2026-10-02: ship as-is. Closing it needs a guard on client-supplied channel/model_used plus proof that no client sync path writes channel='app'; founder to schedule if wanted."
+
+  - id: RESIDUE-THROW
+    title: "A runToolLoop throw refunds regardless of cause"
+    terminal_state: verified_clean
+    notes: "Deliberate: a throw yields no reply, so refunding is the fair default; bounded by the 3/IST-day refund_budget; recorded in c4e9b2."
+
+  - id: RESIDUE-MIDNIGHT
+    title: "A refund after IST midnight goes to the row's own day"
+    terminal_state: verified_clean
+    notes: "Correct accounting (crediting today would be an over-refund); seconds-wide window; recorded in c4e9b2 / the migration header."
+
+  - id: EMBEDDINGS
+    title: "embeddings unchanged (gemini-embedding-001, 768d)"
+    terminal_state: verified_clean
+    evidence: "Probe 2026-10-01: gemini-embedding-001 200, 768d (docs/audit/2026-10-01-gemini3-probe-summary.md)."
