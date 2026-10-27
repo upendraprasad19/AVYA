@@ -1,0 +1,345 @@
+# Closure ledger — streak-freeze-restore-ownership batch
+# Gate 40 (validate_audit_closure.dart). One terminal_state per item; no `deferred:` key.
+# Source of the item list: docs/plans/streak-freeze-restore-ownership.md section 3 "Terminal states"
+# (founder report 2026-10-06: Home shows streak 16 with 2 freezes on account upendra), plus every
+# finding of the ≥platform B-pass (three context-blind reviewers: Unit 1 code, Unit 2 code, docs/claims),
+# each verified against the code before it was entered here.
+#
+# `commit:` values are a SHA-free recipe (`git log --grep`) because a commit cannot name its own SHA; both
+# units landed in ONE commit (Slice A: they share six files, the B-pass reviewed them together, and the
+# mutation proofs ran against the combined tree). OI-318 and OI-319 were minted at that commit. No push,
+# build or live production write has been made; every item that needs one is blocked_on_user or says so.
+# The four founder-owed items (RESIDUAL-EF-CAPS, F8, LAST-WORKOUT-DATE, WEEKS-PUSH-RPC) were DECIDED by the
+# founder on 2026-10-06; their code lands in LATER commits of this same batch (slices B1, U6, C1, C2 of
+# docs/plans/streak-freeze-restore-ownership-addendum-a.md) and each is closed_in_commit when its slice lands.
+# Until then they stay blocked_on_user because each still waits on a per-action founder go (a live apply or
+# deploy, CLAUDE.md 4.3) or on the founder approving exact copy.
+#
+# bpass_review points at the staged B-pass review. plan_review_record is NOT cited here: the record lands in its own
+# later commit (docs/plan-reviews/ is not hash-excluded), and pointing at a file before it exists is the anti-pattern
+# docs/audit/unitb-deload-reason.closure.yaml finding B3 warns against.
+
+batch: streak-freeze-restore-ownership
+plan: docs/plans/streak-freeze-restore-ownership.md
+bpass_review: docs/reviews/streak-freeze-restore-ownership-bpass.md
+diagnose_docs:
+  - docs/diagnoses/2026-10-06-streak-decay-persist-restore-settled-b4e7a1.md
+  - docs/diagnoses/2026-10-06-progress-restore-clobbers-freeze-state-c9d2f6.md
+  - docs/diagnoses/2026-10-06-restore-user-snapshot-returns-every-row-e4c1d7.md
+  - docs/diagnoses/2026-10-06-legacy-restore-reads-page-and-order-deterministically-c7e2a9.md
+  - docs/diagnoses/2026-10-07-streak-freeze-notice-says-weekly-allowance-and-a-stale-count-a5e3c7.md
+
+findings:
+  # ── Unit 1 (diagnose b4e7a1): the decay persist is gated on THIS account's restore having settled ──
+  - id: F1
+    title: "A cold start never persists the idle-day freeze debit (the reckon gate opens after the only rollover that matters)"
+    terminal_state: closed_in_commit
+    commit: "git log --grep='closes-diagnose: b4e7a1' (Slice A commit)"
+    verification: "diagnose b4e7a1; test/contracts/streak_reckon_restore_settled_behavioral_test.dart T2, T3c and T7e (end to end, a settled restore persists the debit); mutations N1 (marker never set) 4 red, N5 (gate back to the tick) 4 red. The CONTINUE-escape cohort (the marker could settle with no heal attached) is closed by B1-CONTINUE-COHORT below, not left as an unchanged remainder."
+
+  - id: F2
+    title: "The decay gate is a process-wide counter never reset on an account swap (the 2026-09-17 spurious debit)"
+    terminal_state: closed_in_commit
+    commit: "git log --grep='closes-diagnose: b4e7a1' (Slice A commit)"
+    verification: "diagnose b4e7a1; T3 (marker = A, live uid = B, tick above 0, no persist) and T3b (_onUserChanged clears the marker); mutation N4 (no clear on swap) 1 red, N6a/N6b/N6c/N6d/N6e (each of the FIVE settle conjuncts dropped) 1/1/4/2/1 red."
+
+  - id: F5
+    title: "A debit landed by the background restore shows no notice on an already-mounted Home"
+    terminal_state: closed_in_commit
+    commit: "git log --grep='closes-diagnose: b4e7a1' (Slice A commit)"
+    verification: "diagnose b4e7a1; home_screen.dart overrides invalidateOnBackgroundRestore and calls _checkStreakFreezeUsed; reckonAndNotifyAfterRestore reckons first and bumps last (T4, mutation N3 bump-first 4 red). HONEST LIMIT: the Home override itself is protected by a source-grep PIN only (T9, presence); the mounted-Home snackbar is a device check owed by the founder (CLAUDE.md section 5, runtime verification), not a behavioral test."
+
+  - id: CURRENT-STREAK-DAYS
+    title: "current_streak_days is overwritten by the whole-row restore (SELECT star)"
+    terminal_state: closed_in_commit
+    commit: "git log --grep='closes-diagnose: b4e7a1' (Slice A commit)"
+    notes: "Repaired by Unit 1's post-restore reckon, which re-stamps the count through _persistCurrentStreakDays in the same call. CONDITIONAL ON THE MARKER SETTLING: that persist sits inside the same gate as the debit (workout_repository.dart reckonStreakDecayAndPersist), so on a withheld restore the clobbered count stays until the next settled restore. Same batch and never shipped without Unit 1, so there is no window where the clobbered value stays visible once the restore settles."
+
+  - id: LIVENESS
+    title: "Any streak-critical op that REPORTED a failure withholds the persist for the whole process (the founder's original symptom recurs on a bad-backend morning)"
+    terminal_state: verified_clean
+    notes: "A DESIGNED, DISCLOSED trade-off, not a closed defect, so it is not filed as closed_in_commit: persisting a debit against possibly incomplete schedule rows is the bug this batch removes, and the plan disclosed the liveness cost up front (plan header, 'Liveness, stated up front'). Pinned (T7b a 500 on scheduled_workouts withholds, T4b withheld still bumps the tick) and made diagnosable (the failing op is named in client_errors by _reportSyncFailure; one best-effort LOW streak_reckon_withheld event carries the reason). The state verified_clean is used here as a recorded decision with evidence, not as 'no defect'."
+
+  - id: B1-GHOST-LOOKUP
+    title: "B-pass reviewer B F1 (P2): PlanIntegrityReconciler.reconcile writes schedule_* rows AFTER the marker settled and outside any collector, through a ghost-day lookup that failed EMPTY, so a failed lookup resurrected a deleted template's day as a past planned row that the next reckon debited for good (boot, foreground and background-heal callers alike)"
+    terminal_state: closed_in_commit
+    commit: "git log --grep='closes-diagnose: b4e7a1' (Slice A commit)"
+    verification: "diagnose b4e7a1 proposed_fix 6; the lookup is tri-state (_deletedTemplateCloudIdsOrNull, null = could not answer) and reconcile routes its bundle through filterGhostScheduleEntries, which skips every tmpl_<uuid> day on null; test/contracts/streak_reckon_restore_settled_behavioral_test.dart T5 (null on a 500, {} / the id on an answered read, the restore-side wrapper still fails empty) and T11 (null skips template days and keeps the plain one, {} keeps all, an answered set drops exactly the ghost, one lookup and none for a legacy key, reconcile routes through it); mutations MB1 (null treated as empty) 1 red, MB2 (forwarder back to fail-empty) 1 red."
+
+  - id: B1-CONTINUE-COHORT
+    title: "B-pass reviewer C F1 (P2): the CONTINUE escape leaves the restoring screen while the restore runs and _goHome returns early once the screen is gone, so that cohort could settle the marker and never reckon the idle-day debit until a later trigger"
+    terminal_state: closed_in_commit
+    commit: "git log --grep='closes-diagnose: b4e7a1' (Slice A commit)"
+    verification: "diagnose b4e7a1 proposed_fix 7; healAfterRestoreWhenSucceeded (heal_after_restore.dart) is attached by _onContinueAnyway after navigating, only with the Hive session open; T12 (success heals once, failed / cancelled / null / throwing never heal, a pending future waits, attach-after-go presence pin); mutations MB6 (attach removed) 1 red, MB7 (heal ignores the result) 1 red."
+
+  - id: B1-WRAPPER-COVERAGE
+    title: "B-pass reviewer B F2 (P3): only scheduled_workouts and weight_logs were driven through the real restoreFromCloudForUser wrapper; the completion ledger, the log summaries and user_progress each feed the walk"
+    terminal_state: closed_in_commit
+    commit: "git log --grep='closes-diagnose: b4e7a1' (Slice A commit)"
+    verification: "T7 (b-workout_logs, b-workout_schedule_completions, b-user_progress): each table answering 500 withholds the marker and the reason names its op; mutations MB3a/MB3b/MB3c (each op dropped from the allowlist) 2/1/3 red."
+
+  - id: B1-CLEAR-FIRST
+    title: "B-pass reviewer B F3 (P3): the marker clear sat at the END of _onUserChanged, so a throw in any earlier step left account A's marker open for an A -> B -> A return"
+    terminal_state: closed_in_commit
+    commit: "git log --grep='closes-diagnose: b4e7a1' (Slice A commit)"
+    verification: "_onUserChanged clears _restoreSettledUserId and the withheld reason as its FIRST statement; T3b (behavioral: the swap clears the marker) and a T9 ordering pin (presence); mutation MB4 (a throwable step placed before the clear) 1 red."
+
+  - id: B1-SINK-CLEAR
+    title: "B-pass reviewer B F4 (P3): a single-call attempt that faulted left its recorded failures in the sink while the legacy fan-out re-ran and restored the same ops, holding the marker closed needlessly"
+    terminal_state: closed_in_commit
+    commit: "git log --grep='closes-diagnose: b4e7a1' (Slice A commit)"
+    verification: "RestoreFailureCollector.clear() empties the active zone sink only; the restore calls it on the single-call fault branch before the legacy Step A; T1 (clear() empties only its own zone and is a no-op outside one) and a T9 presence pin; mutations MB5a (call removed) 1 red, MB5b (clear neutered) 1 red. A behavioral drive of a faulting single-call apply is not reachable under SyncHarness (no session), so the call-site ordering is a presence pin and the effect is a unit test."
+
+  # ── Unit 2 (diagnose c9d2f6): a stale cloud row stops overwriting freeze state ──
+  - id: F3
+    title: "A whole-row restore overwrites local freeze state (available, last_refill, first-PRO flag) with a stale cloud row"
+    terminal_state: closed_in_commit
+    commit: "git log --grep='closes-diagnose: c9d2f6' (Slice A commit)"
+    verification: "diagnose c9d2f6; test/contracts/progress_restore_freeze_merge_behavioral_test.dart Group A (stale-cloud row fails pre-fix) and Group C (production order progress-then-freezes through the real writers, exactly one RPC); mutations M1 (post-pass off) 12 red, M2 (carry removed) 4 red, M3 1, M4 2, M5 1, M6 1, M7 2."
+
+  - id: F7
+    title: "The sign-in hydrate hands the RAW cloud row (user_id, plan_json, sync_epoch) to the progress merge"
+    terminal_state: closed_in_commit
+    commit: "git log --grep='closes-diagnose: c9d2f6' (Slice A commit)"
+    verification: "diagnose c9d2f6; mergeCloudProgress ignores the control-plane keys under the freeze-merge switch; test F7 in Group A (control-plane columns are never copied into the progress map) reddened by mutation M1."
+
+  - id: B2-EATEN-GRANT
+    title: "B-pass reviewer A F1 (P2): a local first-PRO grant {3,W,flag T} meeting a stale cloud {1,W,flag F} was clamped to 1 by the plain same-week rule while the flag was written TRUE, blocking grantFirstProFreezes for good and pushing the lost count over a cloud that might already hold the landed grant"
+    terminal_state: closed_in_commit
+    commit: "git log --grep='closes-diagnose: c9d2f6' (Slice A commit)"
+    verification: "diagnose c9d2f6 proposed_fix 2; an EATEN grant (local flag true, cloud not, merged count below the local one) leaves the flag at the cloud's false and schedules no push for it (the pre-fix outcome, self-healing at the next PRO boot); a surviving grant is claimed and pushed. Group A 'a LOCAL grant the cloud has not seen' (eaten with the pre-fix control, eaten with a local-only used date, surviving, local-newer, phantom) ; mutations MC1 (flag claimed) 2 red, MC2 (push scheduled) 1 red."
+
+  - id: B2-CARRY-REFINEMENTS
+    title: "B-pass reviewer A F2 (P3): the asymmetric grant carry kept the local NEWER refill stamp (dropping that week's +1) and could refund a local consume the cloud ledger had not seen"
+    terminal_state: closed_in_commit
+    commit: "git log --grep='closes-diagnose: c9d2f6' (Slice A commit)"
+    verification: "diagnose c9d2f6 proposed_fix 2; the carried count is the cloud's minus every local used date the cloud ledger has not seen, and the cloud's OLDER stamp is adopted so refillIfNewWeek still tops the week up; Group A carry rows ({1,W,F}x{3,P,T} -> {3,P} no push, {1,W,F}x{2,P,T} -> {2,P}, the unseen-consume rows, the already-seen mirror, the no-evidence row equal to pre-fix); mutations MC3 (no subtraction) 2 red, MC4 (stamp not adopted) 3 red."
+
+  - id: B2-SOLE-WRITER-REGEX
+    title: "B-pass reviewer A F3 (P3): the sole-writer contract for streak_freezes_available matched only a map-literal key, so index-assignment writers (including this unit's post-pass) were invisible to it"
+    terminal_state: closed_in_commit
+    commit: "git log --grep='closes-diagnose: c9d2f6' (Slice A commit)"
+    verification: "streak_progress_service_concurrency_test.dart now also flags INDEX assignment; user_repository.dart (restore projection) and streak_freeze_clamp_migrator.dart (one-shot repair) are allowlisted by name with reasons; mutation MC6 (a second index writer added to an unrelated lib file) 1 red."
+
+  - id: B2-HYDRATE-TEST
+    title: "B-pass reviewer A F6 (P3): the sign-in hydrate push (the one freeze-merge writer no restore test reaches) had presence-only coverage"
+    terminal_state: closed_in_commit
+    commit: "git log --grep='closes-diagnose: c9d2f6' (Slice A commit)"
+    verification: "Group C 'SIGN-IN HYDRATE' drives AuthSessionBootstrapper.hydrateFromCloud through SyncHarness: a stale cloud row leaves local {2,P} and sends exactly the merged update_streak_progress RPC; an equal row sends nothing; mutation MC5 (push removed) 2 red (the behavioral test and the Group D pin)."
+
+  - id: CURRENT-STREAK-WEEKS
+    title: "current_streak_weeks is overwritten by the whole-row restore (a stale cloud row lowers the weeks counter)"
+    terminal_state: closed_in_commit
+    commit: "git log --grep='closes-diagnose: c9d2f6' (Slice A commit)"
+    verification: "diagnose c9d2f6 item 8; founder decision A on 2026-10-06 (lifetime counter, a restore never lowers it); test/contracts/progress_restore_monotonic_behavioral_test.dart new group (7 tests, the pre-fix control reproduces the demotion) and the every-field test now carries weeks; mutation K1 (field removed from monotonicProgressFields) 4 red of 50. Not part of this item: a reset of the weeks when the daily streak breaks is a new feature, filed on the open-issues board as OI-319, and would have to remove the field from the monotonic list again."
+
+  # ── Verified clean / recorded decision ──
+  - id: F4
+    title: "2026-09-26 first-PRO grant 0 to 3 then before=1 at the 18:42 consume (earlier 'lost grant' hypothesis)"
+    terminal_state: verified_clean
+    evidence: "Retracted as a defect hypothesis. 6 subscriptions rows since 2026-05-05; migration 095 (applied 2026-06-18 15:35 IST, backups/applied_migrations.json) backfills the flag for every user with any subscription row; the 09-14 23:08:32 subscription_state_written isPro=true produced no grant event; the 09-26 grant fired mid account swap with an empty local progress box. WHICH merge undid the 3 is UNVERIFIED (the plan says so too); the 3 to 1 outcome is consistent with the by-design same-week LOWER rule, pinned by a mirror row in Group A (phantom local {3, flag true} against cloud {1, flag true} gives 1)."
+
+  - id: FOUNDER-LEDGER-ONE-SHORT
+    title: "The founder's own freeze ledger is one freeze short (the 2026-09-17 spurious debit)"
+    terminal_state: verified_clean
+    notes: "A RECORDED FOUNDER DECISION, not 'no defect': the ledger IS one freeze short (re-derived against the schedule: without the 09-16 spurious debit the account would hold 3 at the 10-06 refill and 1 after the two debits, not 0). Founder decision 2026-10-06 in chat after the repair (a production UPDATE needing a cloud-row AND phone-local write) was explained: no issues, leave it like that. No production write was made or is owed; the weekly +1 refill (the 10-06 log shows before=1 after=2) is the only thing that closes the gap. Recorded here so the shortfall is a decision, not an omission."
+
+  # ── Blocked on an external cause ──
+  - id: F6
+    title: "A 127 s restore on the morning of 2026-10-06 (restore_completed total_ms=127281; per-op restore_op_done 9-41 s, two 45 s ceilings)"
+    terminal_state: upstream_blocked
+    blocker: "Network-or-backend latency in that window, EXTERNAL to this repo and not separable from it: the evidence is device-measured per-op durations from client_errors, the phone's network and Supabase cannot be told apart afterwards, and get_advisors reports current state, not 06:45 IST. The same restore's single-call data ops took 0-355 ms. Tracked as OI-318 (OI-279 is pull-on-resume, not latency)."
+    reopen_when: "A restore longer than 60 s recurs AND query_logs / get_advisors evidence is taken inside that window (OI-318)."
+
+  - id: RESIDUAL-EMPTY-ANSWER
+    title: "The marker means 'no streak-critical op REPORTED a failure', not 'every row was fetched': an empty read that returns nothing is silent"
+    terminal_state: upstream_blocked
+    blocker: "Empty reads that return nothing are silent (user_progress rows.isEmpty, user_profile, workout_plan, freezes rawRes == null); on the legacy fan-out path an RLS-filtered stale-token empty answer is indistinguishable from an empty table (the default single-call path is service-role and fail-closed). Telling 'empty' from 'unanswered' needs a restore-outcome record, which is OI-293 (restore outcomes observable); that is its own design with its own plan review, not a patch to this marker."
+    reopen_when: "OI-293 (restore outcomes observable) lands."
+
+  - id: RESIDUAL-ABA-SWAP
+    title: "An A to B to A account swap inside ONE restore step can write A's rows into B's box with nothing reported"
+    terminal_state: upstream_blocked
+    blocker: "The pre-existing e5c2d1 class: restoreAbortedFor runs only between restore steps (sync_service.dart), unchanged by this batch. The marker adds no exposure beyond the restore's own."
+    reopen_when: "The restore step checkpoint design changes (a per-write ownership check inside a step)."
+
+  - id: RESIDUAL-FRESHNESS
+    title: "The marker is process-lifetime and not freshness-bounded: a resume days later can reckon against rows another device completed in between"
+    terminal_state: upstream_blocked
+    blocker: "Exactly as the replaced tick was. Bounding it by IST date would disable the midnight-resume reckon and regress today's behaviour; the real fix is pull-on-resume (OI-279)."
+    reopen_when: "OI-279 (pull on resume) lands."
+
+  # ── Needs the founder ──
+  - id: RESIDUAL-EF-CAPS
+    title: "restore-user-snapshot silently caps scheduled_workouts at .range(0, 999) (ascending) and has no limit on workout_schedule_completions, so a long-history account's single-call restore can be incomplete with nothing reported"
+    terminal_state: closed_in_commit
+    commit: "git log --grep='closes-diagnose: e4c1d7' (Slice B1 commit)"
+    verification: "diagnose e4c1d7 (the scope grew once the function was read in full: eleven reads were clamped to 1000 rows by PostgREST, plus two bare selects and a coach read that kept the OLDEST 1000). supabase/functions/restore-user-snapshot/paged_reads_test.ts (104 Deno tests; 2,500 rows with 700 tied across the page seam come back exactly once for every table; exactly 50,000 rows pass and 50,001 throw; a failed page rejects) and 32 mutations all red; the real fetchAllPages through supabase-js 2.39.3 returned all 1431 food_database rows exactly once against live PostgREST (a single .range(0,49999) returned 1000, error null). THE REPO CODE closes here; the live function runs it since 2026-10-07 (B1-EF-DEPLOY)."
+
+  - id: F8
+    title: "A freeze is consumed even when the streak breaks anyway, and the multi-freeze notice reads 'Streak Freeze used! 0 remaining this week.'"
+    terminal_state: closed_in_commit
+    commit: "git log --grep='closes-diagnose: a5e3c7' (Slice U6 commit)"
+    verification: "Founder decision 2026-10-06: KEEP the rule (a freeze is still consumed when the streak breaks anyway) and fix the wording only; founder approved the exact strings on 2026-10-07 ('copy ok'). Diagnose a5e3c7. New lib/core/copy/streak_freeze_copy.dart: the snackbar reads 'Streak Freeze used on a missed day. {n} left.' (or 'None left. A new one arrives next Monday.', or the plural 'k Streak Freezes used on missed days.') where n is the LIVE streak_freezes_available at show time (the debit-time snapshot is only a fallback), and the explainer sheet's rules 3, 4 and the PRO note take their words from the same file. StreakProgressService.commitConsume now writes the local-only streak_freeze_just_used_count and accumulates it while the notice is unshown; StreakProgressService.takeFreezeNotice hands the text out once (Home's only entry; it clears in the same call); UserRepository.clearStreakFreezeNotice is the one clearer. Tests: test/contracts/streak_freeze_notice_behavioral_test.dart (real Hive; writer to reader; the stale-snapshot case end to end; the clearer is a delta) and test/contracts/streak_freeze_notice_copy_test.dart (every approved row; real progress maps; the explainer sheet RENDERED, free and PRO; plus a presence-only wiring group). 45 mutants (run on the post-review tree), all red, none a compile error, every file restored byte-identical (diagnose mutation_proof). The SnackBar widget itself is not pumped, so its wiring is presence-only; a device check is owed (CLAUDE.md section 5)."
+
+  - id: LAST-WORKOUT-DATE
+    title: "last_workout_date is overwritten by the whole-row restore (cloud-non-null-wins); a phone with a newer unpushed date is regressed by a stale cloud row and the regressed value is pushed back"
+    terminal_state: closed_in_commit
+    commit: "git log --grep='closes-diagnose: 47de4f' (Slice C1 commit)"
+    verification: "Diagnose 47de4f. Client: UserRepository.laterIsoDate (later wins, real calendar date, ceiling IST-today + 1, malformed reported) used by mergeCloudProgress, both callers pass istToday; test/contracts/last_workout_date_latest_wins_behavioral_test.dart (27 tests), 20/20 client mutants red. Server: migration 156 applied live 2026-10-08 on the founder's go (GREATEST for last_workout_date with the clamp and an explicit NULL branch); A1 dry-run 10/10 new cases ok and the old body failed exactly the 4 discriminating cases; post-apply live read: body carries both rules, ACL unchanged, anon-key probe rejected 42501. B-pass (2 seats) and Hermes pass (docs/audit/2026-10-08-hermes-streak-freeze-c1.md, accepted) clean at P3."
+
+  - id: WEEKS-PUSH-RPC
+    title: "B-pass reviewer A F5 (P3): the client treats current_streak_weeks as monotonic on RESTORE, but the push RPC (migration 115) was a bare COALESCE for it and the weekly marker was local-only, so a reinstall re-counts the current week once"
+    terminal_state: closed_in_commit
+    commit: "git log --grep='closes-diagnose: 47de4f' (counter half, Slice C1, migration 156) and git log --grep='closes-diagnose: a3c8f1' (marker half, Slice C2, migration 157)"
+    verification: "Counter half: live since 2026-10-08 (migration 156, GREATEST). Marker half: migration 157 applied live 2026-10-08 (cloud_version 20261008164155) on the founder's per-action go after two always-aborting A1 dry-runs (15/15 cases ok on the exact file bytes; 4 body variants each red on the intended cases) and verified post-apply (column integer, one function, exact grantees, anon EXECUTE false, anon-key POST rejected 42501); client push + max-wins restore + 13 push tests, 12 migration-text tests, 26 mutants RED. Accepted residuals recorded in the diagnose doc a3c8f1: a device ahead of IST on an IST Sunday evening can re-count one week; stored values are not an integrity boundary (RLS lets a user PATCH their own row)."
+
+  # ── Slice D (diagnose b7d3e5): the weekly-streak marker moves only when a week counts ──
+  - id: WEEKLY-COUNT-STAMP
+    title: "The weekly-streak counter under-counts: last_streak_week was stamped on every completeWorkout, so the first session of a week blocked the qualifying later one (Unit 7, founder decision D5 = yes)"
+    terminal_state: closed_in_commit
+    commit: "git log --grep='closes-diagnose: b7d3e5' (Slice D commit)"
+    verification: "Diagnose b7d3e5. New pure weeklyStreakAfterCompletion in train_provider.dart; the marker (now the calendar week last counted, local key last_counted_week_key) is stamped only when the counter increments; B-pass P1 (plan week ids repeat across phases) fixed in the batch; test/contracts/weekly_streak_counter_writer_to_reader_test.dart (10 behavioural rows + a presence pin), 6/6 mutants red, file byte-identical after. Forward-only, no retroactive credit (the founder's 2026-09-14 week stays uncounted unless the founder asks for a one-off production write, its own go). Device check owed (CLAUDE.md section 5)."
+
+  # ── Slice B1 (diagnose e4c1d7): restore-user-snapshot returns every row, scoped on every read ──
+  - id: B1-EF-DEPLOY
+    title: "The paged-read fix to restore-user-snapshot is live only once the Edge Function is deployed (deployed 2026-10-07, v10)"
+    terminal_state: verified_clean
+    evidence: "Founder's per-action go in chat 2026-10-07 (Deploy approved), from the committed tree (HEAD 11673870, supabase/functions identical to 449aca21). Checked first: git fetch origin main (ca4c8270) and git diff HEAD...origin/main -- supabase/functions empty; deno check --node-modules-dir=none clean; 104 Deno tests green; the live function was v9 (verify_jwt true) and its multipart-fetched source/index.ts (16,262 bytes, sha256 ad0cf24f...b1b) equals git show 449aca21^:supabase/functions/restore-user-snapshot/index.ts. Deployed with emit_payload.js + deploy_via_api.js --yes: HTTP 201, version 10, unauthenticated smoke 401 (now tolerated by a new SMOKE_TOLERATED_CODES entry), the live bundle fetched as multipart again holds three files whose sha256 equal the HEAD blobs, an anon-key POST answers the module's own 401 unauthenticated with a request_id (booted). Rollback, dry-run verified: node .claude/deploy_via_api.js --rollback restore-user-snapshot f5087888. Diagnose e4c1d7 tier 6 holds the full record. What this does NOT show is a real restore against v10: that is RESTORE-TRANSPORT-NO-TIMEOUT."
+
+  - id: HERMES-C13-TEMPLATE-EMBED
+    title: "scheduled_workouts.template embed is scoped only by a caller-writable foreign key; workout_templates is not filtered by user, so a schedule row pointing at ANOTHER user's template returns that template's name and exercises under service_role (Hermes C13, open since 2026-07-30 and on no board)"
+    terminal_state: closed_in_commit
+    commit: "git log --grep='closes-diagnose: e4c1d7' (Slice B1 commit)"
+    verification: "paged_reads.ts scopeEmbed (the embed selects the template user_id; a foreign, array, primitive or owner-less embed becomes null; an owned one loses user_id; owner compare case-insensitive); paged_reads_test.ts 'a foreign template embed comes back null', the hostile-shapes test and the case-insensitivity test; mutations M7, M8, M23, M24 red. Live exposure was 0 of 22 scheduled rows before the fix. Closed in the repo and live since 2026-10-07 (B1-EF-DEPLOY)."
+
+  - id: B1-BPASS-A
+    title: "B-pass round 1, seat A (correctness / fidelity / test adequacy): 1 P2 + 4 P3 (tests did not assert the select and window filter actually SENT; date-primary tables could not tell [date, id] from [id]; custom-item order; uppercase uuid vs strict embed compare; comment and registry drift)"
+    terminal_state: closed_in_commit
+    commit: "git log --grep='closes-diagnose: e4c1d7' (Slice B1 commit)"
+    verification: "docs/reviews/restore-user-snapshot-paged-reads-bpass.md findings A1-A5 each FIXED with a test that goes red under a mutation (M16 33 red, M17 7, M18, M19 77, M20, M27, M28, M24, W14, W16); every claim was re-read against the file before being accepted."
+
+  - id: B1-BPASS-B
+    title: "B-pass round 1, seat B (cross-user security under service_role): 1 P2 + 3 P3 (one request could fan out to 663 sequential queries; scopeEmbed passed a primitive embed through; case mismatch nulled owned embeds; header and test coverage of the non-paged reads)"
+    terminal_state: closed_in_commit
+    commit: "git log --grep='closes-diagnose: e4c1d7' (Slice B1 commit)"
+    verification: "docs/reviews/restore-user-snapshot-paged-reads-bpass.md findings B1-B4: a per-request page budget (TOTAL_PAGE_BUDGET = 120, required argument, charged in a finally; M6, M6b, M22, M26, M29, M31 red), scopeEmbed hardening (M23 red), case-insensitive compare (M24 red after the first vacuous test was fixed), and a wiring test that EVERY tables[...] assignment in index.ts mentions vUid (W12 red). Seat B found no P0 or P1 and confirmed the user scope on all ~30 reads."
+
+  - id: B1-BPASS-C
+    title: "B-pass round 2, seat C (delta re-review): 1 P2 + 4 P3 (the wiring test let the page budget be hoisted above serve(), one budget for the whole isolate; budget comment arithmetic; a budget trip worded as a sort-key problem; no all-thirteen-under-one-budget test; docblock overstatement)"
+    terminal_state: closed_in_commit
+    commit: "git log --grep='closes-diagnose: e4c1d7' (Slice B1 commit)"
+    verification: "docs/reviews/restore-user-snapshot-paged-reads-bpass.md findings C1-C5: the wiring test requires createPageBudget() inside the handler (W17 red); the trip is rethrown as 'page budget exhausted at <name>' (M30 red); a 0/400/1200/3000-rows-per-table test pins 13/26/39/52 requests (M31 red). No P0 or P1 in either round."
+
+  - id: B1-TIE-ORDER-NOT-PRESERVED
+    title: "The new tie order among rows sharing a sort key does not keep today's (undefined, physical) winner for first-wins readers"
+    terminal_state: verified_clean
+    evidence: "A RECORDED DECISION, not 'no defect': for the founder's 44 multi-row workout_log_exercises groups the new order [completed_at, created_at, id] picks the same first row as the physical order (completed_at, ctid) in 28 of 44 and the same as [completed_at, id] in 24 of 44 (read-only, 2026-10-06). The reader that keeps the FIRST row per natural key is _restoreExerciseLogs (sync_workout.dart). The previous order was not defined either, so no guarantee is lost; created_at is a fair insertion-order proxy and id only guarantees page-seam stability. Stated in the diagnose doc so it is not read as a preservation claim."
+
+  - id: RESTORE-PATH-ORDER-DIRECTION-DIFFERS
+    title: "The two restore paths already pick OPPOSITE rows in first-wins readers (the legacy client reads descending by default, the Edge Function ascending)"
+    terminal_state: upstream_blocked
+    blocker: "Pre-existing and not made worse by B1: deciding which tied summary row is canonical belongs to OI-307 (a second live workout_log_exercises summary row when a log's set count changes after sync: 44 groups / 99 rows live for one user), reserved on branch coach-progress-review and not on this tree's board."
+    reopen_when: "OI-307 is filed on this tree's board, or the canonical-row decision is made."
+
+  - id: B1-VERIFIED-CLEAN-CAPS
+    title: "The reads that stay on q() in restore-user-snapshot cannot be silently clamped"
+    terminal_state: verified_clean
+    evidence: "Each remaining read has a natural bound at or below 1000: limit 1 (user_profile, user_progress, user_preferences, workout_plan), maybeSingle (users, coach_memory, freezes, saved_diet_plan), limit 500 (workout_templates live max 5; user_saved_meals), limit 200 (notifications_inbox), limit 52 (streaks), limit 50 (referral_redemptions; max 3 rows per user live, 2026-10-06; it has no user_id column and keeps its dual-FK .or scope), limit 20 (rank_promotions), limit 1 maybeSingle (referral_codes). These are product caps the legacy client mirrors."
+
+  - id: B1-EF-MEMORY-LIMIT
+    title: "The page budget bounds REQUESTS, not bytes: 120 pages of wide rows plus JSON.stringify could exceed the Edge runtime memory limit"
+    terminal_state: upstream_blocked
+    blocker: "The Edge Function memory and CPU limits are platform facts not readable from the repository or from a read-only database session. A worker killed for memory answers non-200, which the client already treats as the legacy-restore fallback, so the failure is safe, not bounded."
+    reopen_when: "The limit is read from the Supabase dashboard, or query_logs / the function logs show a restore-user-snapshot worker killed for memory."
+
+  # ── Slice B2 (diagnose c7e2a9): the client's legacy restore reads page and order deterministically ──
+  - id: B2-LEGACY-RESTORE-PAGING
+    title: "The legacy per-table restore silently dropped rows past 1000 on three bare reads (workout_schedule_completions, user_custom_exercises, user_custom_foods), paged on a non-unique sort everywhere else, and only debugPrint-ed at its 50,000-row ceiling"
+    terminal_state: closed_in_commit
+    commit: "git log --grep='closes-diagnose: c7e2a9' (Slice B2 commit)"
+    verification: "diagnose c7e2a9. test/sync/restore_legacy_paging_behavioral_test.dart (40 tests through the real SyncService against a stub that really pages: 2,500 completions land through three owner-scoped pages; tie groups straddling BOTH page seams are neither skipped nor served twice, with a NEGATIVE CONTROL showing the same stub does lose and double rows without the tie-break; 1,500 custom exercises and foods land; readiness_daily orders by date and never id; 2,500 nutrition logs page with id last; ten tables send their exact unique-last order string and the old string under the kill switch; every filter and order column SENT is a live column; the coach read is still one newest-1000 request; the 50,000-row ceiling emits one event naming the table, from _fetchAllRows and the nutrition loop). 46 production and helper mutants, all red in the end (41 as reviewed in round 1, 5 more for the round-2 additions, one of which first survived and produced the below-cap mirror test; the per-mutant results are in the diagnose mutation_proof). Kill switch disable_restore_paging_fix reverts every read verbatim and is itself tested (owner scope and since filter included). The coach read (already newest 1000) is untouched and pinned."
+
+  - id: B2-SHORT-PAGE-STOP
+    title: "_fetchAllRows (and the nutrition loop) stop on a SHORT page, which is right only while PostgREST's db-max-rows equals the page size (1000); a lowered cap would silently lose every row past the first page, and nothing in the client can detect that"
+    terminal_state: upstream_blocked
+    blocker: "db-max-rows is a platform setting (measured 1000 on 2026-10-06) that the client never reads, so no test can DETECT a lowered cap; the test only DOCUMENTS the assumption by modelling a lower cap in the stub. Stopping on an EMPTY page (as the Edge Function's paged_fetch.ts does) was weighed and not adopted: it costs one extra request on every read of the fallback path (about eleven) and would loop to the 50,000-row ceiling on any stub that answers a table with the same non-empty rows whatever the offset (no existing test does that to a _fetchAllRows table today). The pre-existing assumption is not introduced by this slice."
+    reopen_when: "The project's max-rows setting is lowered below 1000, or a restore_op_done / client_errors row shows a legacy-restore table whose row count equals a cap below 1000. The cap-independent alternative (Prefer: count=exact answers 206 with the total in Content-Range, documented in supabase/functions/_shared/paged_fetch.ts) needs no extra request."
+
+  - id: B2-TIE-ORDER-UNREACHABLE-ON-THREE-TABLES
+    title: "For the three newly paged tables a tie on the sort column cannot happen in production, so their id tie-break is belt and braces and the protection that matters is the paging (B-pass round 1 seat A, F4)"
+    terminal_state: verified_clean
+    evidence: "Read-only, 2026-10-06: pg_indexes / pg_constraint show a unique (user_id, scheduled_date) index and constraint on workout_schedule_completions (migration 009) and one unique (user_id, lower(name)) index on each of user_custom_exercises and user_custom_foods (migration 057); live row counts 46 completions, 14 custom exercises, 0 custom foods. The earlier claim that a duplicate lower-cased name would restore the NEWER row locally was wrong (unreachable) and is corrected in the diagnose impact analysis and the SoT registry. Where the sort column really is non-unique (created_at, date) the tie-break is load-bearing and is tested table by table."
+
+  - id: B2-COMMUNITY-PULL-PAGING
+    title: "syncCommunityItems (the community-catalogue pull) offset-pages 500 rows at a time ordered by created_at alone, and stamps last_community_sync, so a tied row skipped at a page seam is never refetched; its 10-page cap was silent (B-pass round 1 seat A F1, round 2 seat C F7)"
+    terminal_state: closed_in_commit
+    commit: "git log --grep='closes-diagnose: c7e2a9' (Slice B2 commit)"
+    verification: "Both queries add .order('id', ascending: true) behind disable_restore_paging_fix (verbatim revert tested); 1,200 approved foods and exercises tied on created_at page 500 at a time with id last, each served once (reshuffleTies on); a pull that fills its 10 x 500-row cap emits restore_row_ceiling_hit with message community_pull:<table> (tested for both tables). Mutants N06, N07, N08 (id term removed from foods / exercises, kill switch ignored) and R01-R04 (cap event removed, wrong message, wrong page) all red. LIMIT, stated plainly: the 5,000-row cap itself is unchanged (raising it needs keyset paging, a separate design); 0 approved community items exist live (2026-10-06), so it is unreachable today and now observable if it is ever reached."
+
+  - id: B2-BPASS-A
+    title: "B-pass round 1, seat A (correctness, fidelity, kill-switch revert, source-grep ripples): 0 P0, 0 P1, 1 P2, 5 P3"
+    terminal_state: closed_in_commit
+    commit: "git log --grep='closes-diagnose: c7e2a9' (Slice B2 commit)"
+    verification: "docs/reviews/restore-legacy-paging-bpass.md, findings A1-A6. Each verified against the code before it was accepted (the unique indexes live, the sibling loop, the order directions by grep); all FIXED: the community pull's tie-break and cap event, the nutrition loop's ceiling event, the 'every order term states ascending' overstatement scoped to NEW terms, the wrong duplicate-name consequence corrected, the placeholder filled, the stub's FormatException hang."
+
+  - id: B2-BPASS-B
+    title: "B-pass round 1, seat B (test adequacy): 0 P0, 0 P1, 4 P2, 3 P3"
+    terminal_state: closed_in_commit
+    commit: "git log --grep='closes-diagnose: c7e2a9' (Slice B2 commit)"
+    verification: "docs/reviews/restore-legacy-paging-bpass.md, findings B1-B7: the kill-switch tests now pin the owner scope and since filter of the reverted reads (N01-N03 red); the short-page pin is worded as documents-not-detects (ledger B2-SHORT-PAGE-STOP); every filter and order column SENT is checked against the live schema in every test's tearDown (the first version, a hand-typed expected list, would have survived a consistent typo: R05 red only with the sent-column check); the nutrition loop has paging, tie and ceiling tests (N04, N05, N10 red); the seam geometry is derived and the dataset changed to 2,499 so BOTH seams straddle; the stub answers any model failure with a recorded 400; the box-closed fallback and the exactly-2,000-row boundary are tested (N09 red)."
+
+  - id: B2-BPASS-C
+    title: "B-pass round 2, seat C (the changes made for round 1): 0 P0, 0 P1, 0 P2, 7 P3"
+    terminal_state: closed_in_commit
+    commit: "git log --grep='closes-diagnose: c7e2a9' (Slice B2 commit)"
+    verification: "docs/reviews/restore-legacy-paging-bpass.md, findings C1-C7: a wrong citation in the empty-page-stop rationale (the cited nutrition test is a PUSH test) removed and the reason restated; 834 vs 833 dates; line citations re-derived by grep; the review file and this ledger entry now exist; the naming row and docs/architecture/sync.md kill-switch list name the nutrition emitter and the new switch; the live-schema check widened to everything the code sent; the community pull's silent cap announced."
+
+  - id: U6-BPASS-A
+    title: "B-pass round 1, seat A (correctness, copy fidelity, writer/reader map): 0 P0, 0 P1, 1 P2, 4 P3"
+    terminal_state: closed_in_commit
+    commit: "git log --grep='closes-diagnose: a5e3c7' (Slice U6 commit)"
+    verification: "docs/reviews/streak-freeze-notice-bpass.md, findings A1-A5. Each verified against the code before it was accepted (the throwing cast read at streak_progress_service.dart, mergeCloudProgress starting from {...local}, the shifted registry range by grep); all FIXED: the writer helper reads the stored count with raw is num && raw.isFinite (mutant S09 red, a string and a NaN count still let the debit land), two false sentences in the diagnose corrected, the stale integration test and its seed helper updated, the PRO note built from the sheet's caps, the shifted registry range repointed."
+
+  - id: U6-BPASS-B
+    title: "B-pass round 1, seat B (test adequacy): 0 P0, 0 P1, 2 P2, 6 P3"
+    terminal_state: closed_in_commit
+    commit: "git log --grep='closes-diagnose: a5e3c7' (Slice U6 commit)"
+    verification: "docs/reviews/streak-freeze-notice-bpass.md, findings B1-B8. Each recomputed by hand before it was accepted; all FIXED except the one wording call ledgered as U6-PROFILE-TILE-COPY: the read-and-clear moved into StreakProgressService.takeFreezeNotice, driven by a real-Hive test (mutants S10-S12 red), the clearer returns early on an absent map and a test asserts progress stays null (R05 red), a repo-wide lib/ scan pins the one flag-false writer (H04 red), the wiring group reads the restoring screen with its part files, the caps are pinned. Home's call to takeFreezeNotice and Text(notice, stay presence-only (the SnackBar is not pumped); stated in the diagnose Limits."
+
+  - id: U6-PROFILE-TILE-COPY
+    title: "The Profile service-record tile read 'FREEZES LEFT n / max THIS WEEK' (rank_service_record_sheet.dart), the weekly-allowance wording the snackbar and the explainer no longer use"
+    terminal_state: closed_in_commit
+    commit: "git log --grep='closes-diagnose: a5e3c7' (Slice U6 tile commit)"
+    verification: "The wording was not in the copy approved on 2026-10-07 ('copy ok'), so it went to the founder as a product call; he chose the unit line 'IN RESERVE' the same day. rank_service_record_sheet.dart _statusTilesRow now reads 'FREEZES LEFT  n / max  IN RESERVE' (one literal plus its stale comment, one product file). test/contracts/streak_freeze_tile_rendered_test.dart builds the REAL sheet against real Hive and reads the tile off the screen (free 1 / 1, PRO 2 / 3, none left 0 / 1, no THIS WEEK or PER WEEK anywhere on the sheet); the mutants are in the diagnose mutation_proof. The tile (Profile) and the new sentences (Home, the explainer) are on different screens, so no screen shows both wordings."
+
+  - id: U6-BPASS-C
+    title: "B-pass round 2, seat C (the changes made for round 1): 0 P0, 0 P1, 1 P2, 5 P3"
+    terminal_state: closed_in_commit
+    commit: "git log --grep='closes-diagnose: a5e3c7' (Slice U6 commit)"
+    verification: "docs/reviews/streak-freeze-notice-bpass.md, findings C1-C6, each verified by grep before it was accepted: the ledger ids the docs cited are now in this ledger (C1); the diagnose's prose line cites re-derived and Home's entry named (C2); F8 says 45 mutants (C3); the caps pin counts isPro ? 3 : 1 in the service, home_provider (twice) and the Profile tile, mutants N01-N04 red, and the diagnose names all five statements of the caps (C4); the repo-wide flag-write scan covers the literal and the indexed form and counts exactly one write inside user_repository.dart, mutants N05-N07 red (C5); registry constraint order, the clearer range 846-862, the idempotency range 258-265 and the restoring screen's comment (C6). Seat C agreed the Profile tile is outside this slice."
+
+  - id: RESTORE-TRANSPORT-NO-TIMEOUT
+    title: "The single-call restore has no client-side timeout and (with the paged Edge Function) makes about 13 more sequential requests; the legacy fallback has the same shape"
+    terminal_state: blocked_on_user
+    reason: "The paged function went live 2026-10-07 (v10, B1-EF-DEPLOY). Its per-request cost and row counts are measured only once the founder's phone restores against it (a fresh install or sign-in; I cannot trigger that): then read the per-request rows line from the function logs and compare each count with a live count(*) for the founder's user, and read restore_step_done / restore_completed from client_errors against the baseline. Baseline read-only on 2026-10-06 (before any deploy): the last 8 single-call restores had total_ms 15,034 to 127,281 (restore_completed, 2026-10-04 to 2026-10-06) and the sampled step=B values 153 to 2,366 ms; the call is bounded today by the restoring screen's 15 s / 30 s hint and its CONTINUE escape. Closes as verified_clean with the measured cost once a restore has run against v10."
+
+  # ── Slice C2 (diagnose a3c8f1): the week marker goes to the cloud ──
+  - id: OLD-APK-MARKER-COPY
+    title: "Hermes C2 L35 P1-1: an older client's restore copies every unknown cloud key into its Hive progress map, and the new column has the same name as the Hive key last_counted_week_key"
+    terminal_state: verified_clean
+    evidence: "Measured 2026-10-08 with git grep on origin/main: NO client on origin/main reads or writes last_counted_week_key (the shipped clients use last_streak_week, train_provider.dart:1979/1994 on main), so a shipped client that copies the new column into its progress map never reads it. The only code that reads the key is Slice D, which is unpushed and ships in the SAME pull request as C2 (merge waits for the C2 apply), so a D-without-C2 build cannot be produced from main. Rule recorded here: never build an APK from the intermediate D commit (/build-apk builds from main only, CLAUDE.md 4.3)."
+
+  - id: C2-STALE-PUSHED-MEMORY
+    title: "B-pass A P3 + Hermes C2 L15-16 P2-1 (stale half): the pushed-marker memory could suppress the push forever if the cloud row is reset or nulled out of band while the device keeps its marker"
+    terminal_state: closed_in_commit
+    commit: "git log --grep='closes-diagnose: a3c8f1' (Slice C2 commit)"
+    verification: "The memory is '<userId>:<marker>:<IST day>', so the marker is re-pushed at most once per IST day and the cloud heals within a day. test/contracts/streak_week_marker_push_behavioral_test.dart 'a memory from an earlier IST day re-pushes' (plus mutant M15 'memory without the IST day', RED)."
+
+  - id: C2-DIRECT-WRITE-NOT-AN-INTEGRITY-BOUNDARY
+    title: "Hermes C2 L15-16 P2-1 (direct-write half): RLS user_progress_update_own lets an authenticated user PATCH their own last_counted_week_key to any value, bypassing the clamp and GREATEST"
+    terminal_state: verified_clean
+    evidence: "Same posture as current_streak_weeks and every other client-authoritative user_progress column (C1 accepted it): own-row only, the worst outcome is the user mis-counting their own weekly streak, no cross-account path (the function's auth.uid() guard and the RLS owner policy both bind to the caller). A BEFORE UPDATE trigger would be a separate design for all columns. Stated in the diagnose doc (impact), the SoT registry class_constraints item 3 and lib/core/services/CLAUDE.md row 102."
+
+total_findings: 52
+closed_count: 52
