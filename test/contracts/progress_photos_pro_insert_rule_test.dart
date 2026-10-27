@@ -612,7 +612,20 @@ const Map<String, String> _laterMigrationsIsolated = <String, String>{
 /// intact after it AND the file's content hash (`ruleSqlHash`, printed by the failing test). EMPTY at B1
 /// (nothing newer exists). Adding an entry is the human re-verification the tripwire exists to force;
 /// the reason must say what was re-checked, and editing the file afterwards makes the entry stale.
-const Map<String, TripwireAllow> _tripwireAllow = <String, TripwireAllow>{};
+const Map<String, TripwireAllow> _tripwireAllow = <String, TripwireAllow>{
+  // Batch M1 (diagnose b4e7a2), applied live 2026-10-27. The only statements are the DROP POLICY IF EXISTS and the CREATE
+  // POLICY of its own SELECT policy for authenticated, scoped to the bucket exercise-media; no INSERT, UPDATE, DELETE, ALL,
+  // GRANT, REVOKE or trigger, and nothing names progress-photos, public.progress_photos or public.subscriptions.
+  '165_exercise_media_bucket.sql': TripwireAllow(
+    reason: 'Re-verified 2026-10-27 on the live project after the apply: pg_policies still holds the three storage.objects '
+        'policies that name progress-photos (progress_photos_delete_own, progress_photos_insert_own, progress_photos_select_own, '
+        'authenticated, same names, commands and roles as the recorded evidence), the four public.progress_photos policies and '
+        'the single subscriptions_select_own policy; progress_photos_insert_own still reads public.subscriptions (active and '
+        'end_date in its check). The new policy is SELECT only, TO authenticated, bucket_id = exercise-media, so a permissive '
+        'policy of this kind grants no write on the progress-photos bucket and does not reopen the second door.',
+    contentHash: 'f9719947ff20e05f',
+  ),
+};
 
 Map<String, String> _filesWith(Map<String, String> base, Map<String, String> extra) => <String, String>{...base, ...extra};
 
@@ -856,7 +869,7 @@ CREATE POLICY "other" ON storage.objects FOR INSERT WITH CHECK (zzz);
     for (final e in _laterMigrations.entries) {
       test('tripwire: ${e.key}', () {
         final sets = _filesWith(files, <String, String>{'supabase/migrations/155_later.sql': e.value});
-        final v = tripwireViolations(sets, b1Path: b1Path);
+        final v = tripwireViolations(sets, b1Path: b1Path, allow: _tripwireAllow);
         expect(v, isNotEmpty, reason: 'a later migration "${e.key}" did not trip the tripwire');
       });
     }
@@ -864,7 +877,7 @@ CREATE POLICY "other" ON storage.objects FOR INSERT WITH CHECK (zzz);
     for (final e in _laterMigrationsIsolated.entries) {
       test('tripwire (isolated alternative): ${e.key}', () {
         final sets = _filesWith(files, <String, String>{'supabase/migrations/155_later.sql': e.value});
-        expect(tripwireViolations(sets, b1Path: b1Path), isNotEmpty, reason: '"${e.key}" did not trip the tripwire');
+        expect(tripwireViolations(sets, b1Path: b1Path, allow: _tripwireAllow), isNotEmpty, reason: '"${e.key}" did not trip the tripwire');
       });
     }
 
@@ -873,19 +886,19 @@ CREATE POLICY "other" ON storage.objects FOR INSERT WITH CHECK (zzz);
       final sets = _filesWith(files, <String, String>{
         'supabase/migrations/${number}b_shares_the_number.sql': 'DROP TRIGGER trg_progress_photo_pro ON public.progress_photos;',
       });
-      expect(tripwireViolations(sets, b1Path: b1Path), isNotEmpty);
+      expect(tripwireViolations(sets, b1Path: b1Path, allow: _tripwireAllow), isNotEmpty);
     });
 
     test('tripwire: a later migration that only MENTIONS the rule inside comments is clean', () {
       final sets = _filesWith(files, <String, String>{
         'supabase/migrations/155_later.sql': '-- DROP TRIGGER trg_progress_photo_pro ON public.progress_photos;\n/* DROP POLICY x ON storage.objects; */\nSELECT 1;',
       });
-      expect(tripwireViolations(sets, b1Path: b1Path), isEmpty);
+      expect(tripwireViolations(sets, b1Path: b1Path, allow: _tripwireAllow), isEmpty);
     });
 
     test('tripwire: an EARLIER migration is not flagged (only files newer than the rule are)', () {
       final sets = _filesWith(files, <String, String>{'supabase/migrations/100z_earlier.sql': "CREATE POLICY p ON storage.objects FOR SELECT USING (bucket_id = 'x');"});
-      expect(tripwireViolations(sets, b1Path: b1Path), isEmpty);
+      expect(tripwireViolations(sets, b1Path: b1Path, allow: _tripwireAllow), isEmpty);
     });
 
     test('tripwire: an allow-list entry acknowledges one file and nothing else', () {
@@ -935,7 +948,14 @@ CREATE POLICY "other" ON storage.objects FOR INSERT WITH CHECK (zzz);
 
     test('tripwire L16: a NEW unnumbered .sql file that is not in the baseline is refused', () {
       final sets = _filesWith(files, <String, String>{'supabase/migrations/zz_new.sql': 'SELECT 1;'});
-      expect(tripwireViolations(sets, b1Path: b1Path), isNotEmpty);
+      expect(tripwireViolations(sets, b1Path: b1Path, allow: _tripwireAllow), isNotEmpty);
+    });
+
+    test('tripwire: the real tree needs its allow-list entry (without it migration 165 trips, with it the tree is clean)', () {
+      // The mutant tests above pass the real allow list so that only their synthetic file can trip; this is their mirror: if the
+      // tripwire stopped reading the real tree, both sides would be empty and those tests could pass on nothing.
+      expect(tripwireViolations(files, b1Path: b1Path).join('\n'), contains('165_exercise_media_bucket.sql'));
+      expect(tripwireViolations(files, b1Path: b1Path, allow: _tripwireAllow), isEmpty);
     });
 
     test('E5 no second door: on the real tree every INSERT/ALL policy on storage.objects names a bucket and only the rule names progress-photos', () {
