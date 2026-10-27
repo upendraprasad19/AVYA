@@ -1,0 +1,379 @@
+# Closure ledger — session-set-budget (Batch B2, exercise library programme, T2 of the founder order)
+# Gate 40 (validate_audit_closure.dart). One terminal_state per item; no
+# `deferred:` key. Plan docs/plans/2026-10-22-session-set-budget.md (r6, rulings 1 to 14),
+# executed inline on branch session-set-budget; `session-set-budget@branch` is the in-branch
+# commit form for the records commit that carries this file.
+
+batch: session-set-budget
+plan_review_record: docs/plan-reviews/session-set-budget.md
+
+findings:
+  # ── Tasks ────────────────────────────────────────────────────────
+  - id: PLAN-R6
+    title: "Plan r6: a rebase onto the thin-day top-up (no design change), after four context-blind review rounds"
+    terminal_state: closed_in_commit
+    commit: 359b7a1e
+    verification: "docs/plans/2026-10-22-session-set-budget.md: round 4 converged (0 P0, 0 P1); r6 is Ruling 14 only. Founder decisions F1 to F5 locked 2026-10-22."
+
+  - id: T0
+    title: "Flag enable_session_set_budget (default OFF) and session minutes resolution (empty = 60, F2); Edit Profile default 60"
+    terminal_state: closed_in_commit
+    commit: 1bd25c20
+    verification: "PlanEngineFlags.sessionSetBudgetEnabled; SessionBudget.resolveMinutes / initialSessionDuration; test/plan_engine_v4/session_minutes_resolution_test.dart."
+
+  - id: T1
+    title: "Budget model and ledger: time formula, archetypes, bands, caps, BudgetLedger, SessionBudgetContext"
+    terminal_state: closed_in_commit
+    commit: 0eac3ba8
+    verification: "lib/shared/repositories/plan_engine/session_budget.dart; test/plan_engine_v4/session_budget_test.dart."
+
+  - id: T2
+    title: "Budget muscle groups: ten groups over the free-text primary_muscles, erectors map to none (Ruling 12)"
+    terminal_state: closed_in_commit
+    commit: 74a074ce
+    verification: "lib/shared/repositories/plan_engine/budget_muscle_groups.dart; test/plan_engine_v4/budget_muscle_groups_test.dart (every distinct shipped token checked, none maps to two groups)."
+
+  - id: T3
+    title: "Session set allocator: priority-rank admission with reservation, empty-day guard, floors, focus pass"
+    terminal_state: closed_in_commit
+    commit: aa8acea4
+    verification: "session_set_allocator.dart; test/contracts/session_set_allocator_behavioral_test.dart; survivors pinned in 2c973735 and 64f6978f. Round 1 33 mutants, 10 survivors, 2 equivalent (code simplified), 8 killed by new reference fixtures, 0 left (docs/reviews/session-set-budget-bpass.md, mutation proofs)."
+
+  - id: T4
+    title: "Consumers take the context: PeriodizationEngine.apply, VolumeTitration.applyToWeeks, WarmupCooldownSelector.attach, VolumeFilter.keepAllSlots"
+    terminal_state: closed_in_commit
+    commit: 949c2460
+    verification: "test/contracts/session_set_budget_consumers_test.dart (pinned in 5f04acae, d4da84b3); 38 mutants, all killed on the final suite."
+
+  - id: T5
+    title: "Production-path check of the extra slots (keepAllSlots), OFF mirror and ON core-list"
+    terminal_state: closed_in_commit
+    commit: 6a1e1475
+    verification: "test/contracts/keep_all_slots_selection_test.dart over 192 combinations; no gym-tier attempt-5 slot, so no finding."
+
+  - id: T6
+    title: "Wiring in generateV4 behind the flag (F1: rule 14 waived for this wiring only); OFF is byte-identical"
+    terminal_state: closed_in_commit
+    commit: fd9338bf
+    verification: "test/plan_generator/generator_golden_test.dart (998 personas, OFF) and test/contracts/session_set_budget_wiring_test.dart green on every B-pass commit; 12 wiring mutants all killed."
+
+  - id: T6B
+    title: "Display estimate: Train, Home and the coach's shortenDay price a day with the budget model under the flag"
+    terminal_state: closed_in_commit
+    commit: 590baed3
+    verification: "session_estimate.dart; test/contracts/session_estimate_display_test.dart (call sites pinned in e6fe6505); 19 mutants all killed."
+
+  - id: T7
+    title: "ON-world gate and report over real generateV4 runs (1,847 runs), hard zeros for time, caps, tops, lighter phase, empty days, lost lead lifts, display"
+    terminal_state: closed_in_commit
+    commit: 9cac7c88
+    verification: "test/plan_generator/session_set_budget_gate_test.dart (+ fd418453 lost-lifts zero, 1f2d2ce8 time and lead-lift measurements) and session_set_budget_report.md; green at 3:08."
+
+  - id: T8
+    title: "Records: SoT concepts session_set_budget and session_duration_minutes, naming rows, ship-dark entry, detail section, nested CLAUDE.md"
+    terminal_state: closed_in_commit
+    commit: 8a9d3ef7
+    verification: "docs/sot_registry.yaml, docs/naming_conventions.md, docs/ship_dark_pending_review.yaml, docs/architecture/plan-engine-detail.md, lib/shared/repositories/plan_engine/CLAUDE.md; rewritten with measured numbers in 1f2d2ce8; check_context_artifact_budget green."
+
+  - id: FS-1
+    title: "The spawned-env manifest did not know WRITE_SESSION_BUDGET_REPORT"
+    terminal_state: closed_in_commit
+    commit: 011b5c49
+    verification: "Found by the full suite; test/contracts/spawn_env_manifest_test.dart; the literal list in test/scripts/regression_catalog_lib_test.dart gained the name in 1f2d2ce8."
+
+  # ── B-pass round 1, reviewer 1 (core rules and allocator) ────────
+  - id: BP1-P2-1
+    title: "boundBy asked about granted + 1 after the ledger already held granted (named a group when only time bound the lead lift)"
+    terminal_state: closed_in_commit
+    commit: 13349c27
+    verification: "_firstBlockingGroup(ledger, d, s, 1, later); test 'boundBy is null when only TIME held the lead lift below its desired sets (B-pass R1 P2-1)' RED then GREEN; mutation A1 killed."
+
+  - id: BP1-P2-2
+    title: "A lead lift can be dropped while accessories stay (the guard fires only on an empty day)"
+    terminal_state: closed_in_commit
+    commit: 1f2d2ce8
+    verification: "Policy stated in the allocator class doc (13349c27), plan-engine-detail and the nested CLAUDE.md: protected from the week and an empty day, not from the clock; a dropped lead lift reads sets 0. Measured: 0 of 9,966 allocated days (gate 'lost lifts' zero + lead-lift counter); test 'R1 P2-2: a lead lift that does not fit is dropped while a cheaper lift stays; the stat says so'."
+
+  - id: BP1-P3-1
+    title: "SessionBudgetContext.dayIntensities had a writer and no reader"
+    terminal_state: closed_in_commit
+    commit: 13349c27
+    verification: "Field and argument removed; git grep dayIntensities -- lib test returns nothing."
+
+  - id: BP1-P3-2
+    title: "The budgeted predicate was implemented twice (allocator rows vs archetypeByName)"
+    terminal_state: closed_in_commit
+    commit: 13349c27
+    verification: "The allocator calls SessionBudget.isBudgeted (a row not in archetypeByName keeps its sets, the 'ghost' fixture in session_set_allocator_behavioral_test.dart); mutation A4 killed 13 tests."
+
+  - id: BP1-P3-3
+    title: "timeForcedFirst doc and the copied-B-day label (a frozen day read cap_limited)"
+    terminal_state: closed_in_commit
+    commit: 13349c27
+    verification: "Fifth floor label copy_day_limited (variant B only); stat doc rewritten; mutation A6 killed; naming_conventions row updated."
+
+  - id: BP1-P3-4
+    title: "BudgetMuscleGroups spelling gaps (Low Back, Latissimus Dorsi, Abdominals, Quadratus Lumborum) and non-List / null-element muscle values throwing or mis-typing"
+    terminal_state: closed_in_commit
+    commit: 13349c27
+    verification: "Regexes widened; allocator _groupsOf and SessionBudget._typesOf skip non-List and null elements; tests: spelling variants in budget_muscle_groups_test.dart, a non-list primary_muscles value (R2 P3-8) in session_set_allocator_behavioral_test.dart, a null type element in session_budget_test.dart; mutations G1 to G4, S1, A3b killed; the redundant-token survivor G5 pinned by 'Quadratus' in 08b1c4ea."
+
+  - id: BP1-P3-5
+    title: "VolumeFilter comments misdescribed the allocator"
+    terminal_state: closed_in_commit
+    commit: 13349c27
+    verification: "volume_filter.dart header and keepAllSlots docs rewritten."
+
+  - id: BP1-P3-6
+    title: "Docs said all consumers share one BudgetLedger and that WarmupCooldownSelector takes it"
+    terminal_state: closed_in_commit
+    commit: 1f2d2ce8
+    verification: "plan-engine-detail and the nested CLAUDE.md: each consumer builds its own ledger over the same context; the selector reads minutes only."
+
+  - id: BP1-P3-7
+    title: "sameNames compared List.toString() (ambiguous) and a partial copy would be silent"
+    terminal_state: closed_in_commit
+    commit: 13349c27
+    verification: "_sameNames compares element names; test 'R1 P3-7: two A/B lists whose names only JOIN alike are not the same day'; mutation A5 killed."
+
+  - id: BP1-P3-8
+    title: "The scorecard mirrors never pass keepAllSlots"
+    terminal_state: verified_clean
+    evidence: "generator_matrix.dart, sample_plans_report.dart and the v4_diagnostic writer measure the OFF world by design; the nested CLAUDE.md says the scorecard cannot measure ON. The ON instrument is session_set_budget_gate_test.dart over real generateV4 runs."
+
+  - id: BP1-P3-9
+    title: "Literature citations in the session_budget.dart header (Pelland 2026, Remmert 2025) cannot be source-checked from this session"
+    terminal_state: upstream_blocked
+    blocker: "No source access from the implementing session. The citations are header comments; no behaviour or test depends on them. The numbers the reviewer could not check (1,802 runs, 6 of 1,776, 27 minutes) were regenerated from the gate in 1f2d2ce8."
+    reopen_when: "A source check of the two citations is done (any time; comment-only)."
+
+  # ── B-pass round 1, reviewer 2 (consumers and wiring) ────────────
+  - id: BP2-P2-1
+    title: "A repeat phase keeps the previous phase's exercise list when the user's minutes go up (the allocator never adds exercises)"
+    terminal_state: upstream_blocked
+    blocker: "By design pins are faithful; the repeat gate (pro_phase_advance.dart) tests adherence only. Raising minutes between phases needs a product call (fresh pick vs faithful repeat). Recorded as item (6) of the enable_session_set_budget entry and in plan-engine-detail (f)."
+    reopen_when: "The enable_session_set_budget flip review."
+
+  - id: BP2-P3-1
+    title: "_titrateWeekBudgeted treated delta 0 as a trim"
+    terminal_state: closed_in_commit
+    commit: 95cd1b75
+    verification: "if (delta == 0) continue; and next = cur + delta.sign. The zero-delta test could not see the guard, so 08b1c4ea added a fixture with a row shared by two groups; mutations C1b and C2b killed."
+
+  - id: BP2-P3-2
+    title: "The 'null budget is today's path' test compared a call with itself"
+    terminal_state: closed_in_commit
+    commit: 95cd1b75
+    verification: "OFF grids pinned as recorded literals ('4x10@75,4x13@75 | ...'); mutation C8 (OFF 4-set minimum 3) killed 3."
+
+  - id: BP2-P3-3
+    title: "The titration tests did not isolate the weekly-top clause; no deload-week trim or time-refused test"
+    terminal_state: closed_in_commit
+    commit: 95cd1b75
+    verification: "Four isolating fixtures (Chest 6/6/4, deload trim, time refusal, band bottom). Mutations: weekly clause C3 killed 3, session cap C4 killed 6, time C5 killed 3, ledger time spend C6 killed 2, deload workingSets C7 killed 2, trim bottom C13 killed 3, trim to one set C14 killed 1, max sets C15 killed 1."
+
+  - id: BP2-P3-4
+    title: "The nested CLAUDE.md said the allocator runs after sequencing"
+    terminal_state: closed_in_commit
+    commit: 1f2d2ce8
+    verification: "Reads 'before apply, ahead of sequencing, so its rank is the split's slot order'; SequencingEngine.sequence is the last stage (plan_generator.dart)."
+
+  - id: BP2-P3-4B
+    title: "plan_generator.dart's pre-existing pipeline header ('Stage 3 Sequencing -> Stage 4 Periodization') is stale"
+    terminal_state: upstream_blocked
+    blocker: "Root CLAUDE.md section 4.4 rule 14: never modify plan_generator.dart without explicit instruction. The founder's F1 waiver covered this batch's generateV4 wiring only. The nested CLAUDE.md and plan-engine-detail carry the true order."
+    reopen_when: "The founder gives an explicit instruction to edit plan_generator.dart (the comment-only fix is two lines)."
+
+  - id: BP2-P3-5
+    title: "Capability docs in training_history_analyzer.dart still listed the retired 'tier is not bodyweight' null case"
+    terminal_state: closed_in_commit
+    commit: 95cd1b75
+    verification: "resolveCapability and effectiveEquipmentForSnapshot docs rewritten to the OI-144 behaviour."
+
+  - id: BP2-P3-6
+    title: "Three docs cited a closure file that did not exist"
+    terminal_state: closed_in_commit
+    commit: session-set-budget@branch
+    verification: "This file."
+
+  - id: BP2-P3-7
+    title: "dayIntensities written, never read"
+    terminal_state: closed_in_commit
+    commit: 13349c27
+    verification: "Same change as BP1-P3-1."
+
+  - id: BP2-P3-8
+    title: "Allocator and consumers got a row's muscles from different sources (last-wins rowsByName; hard cast)"
+    terminal_state: closed_in_commit
+    commit: 13349c27
+    verification: "The exercise's own carried primaryMuscles win over the row's; is List instead of a cast; plan_generator.dart builds rowsByName first-wins (putIfAbsent), as getByExactName does; tests 'R2 P3-8: a primary_muscles value that is not a list reads as no muscle, it does not throw' and the carried-muscles fixture beside it; mutation A2 killed."
+
+  - id: BP2-P3-9
+    title: "Duplicated rep-based and not-budgeted rules"
+    terminal_state: closed_in_commit
+    commit: 13349c27
+    verification: "SessionBudget.isRepBased and SessionBudget.isBudgeted are the only copies; apply, titration, the allocator and the display call them; mutations S2 and A4 killed."
+
+  - id: BP2-P3-10
+    title: "A failure in the ON block of generateV4 fails the whole generation"
+    terminal_state: verified_clean
+    evidence: "The reviewer calls it an observation. Every other stage of generateV4 behaves the same way, the flag is ship-dark, and no input the reviewer read can throw (all 285 library rows are non-empty arrays; custom rows are text[]). A catch with an OFF fallback would hide a real defect from the gate."
+
+  # ── B-pass round 1, reviewer 3 (display, gate, scripts, records) ─
+  - id: BP3-P2-1
+    title: "Display priced a cardio or long timed row at one 40 s set, ignoring its prescribed minutes"
+    terminal_state: closed_in_commit
+    commit: f2d656a1
+    verification: "SessionBudget.longEffortWorkSeconds (a row whose reps names minutes works that long per set, capped 7200 s) used by the allocator's not-budgeted rows, apply week 2, titration and the display; tests labelled 'P2-1' in session_estimate_display_test.dart and 'R3 P2-1' in session_set_allocator_behavioral_test.dart; mutations E1, E2, E3 killed."
+
+  - id: BP3-P2-2
+    title: "swap_service.shortenDay used a third estimator that disagreed with the budget model under the flag"
+    terminal_state: closed_in_commit
+    commit: f2d656a1
+    verification: "_estimateSeconds prices through budgetedDaySeconds when ON (OFF keeps the old sum): the same stored day reads 21 min OFF and 26 min ON; mutation E9 killed."
+
+  - id: BP3-P2-3
+    title: "The gate's allocator-derived zeros could pass vacuously or on stale debugLastStats"
+    terminal_state: closed_in_commit
+    commit: 1f2d2ce8
+    verification: "check() resets debugLastStats and asserts the allocator ran; an oracle-side lost-lifts zero reads the final plan; mutation GA1 (allocator never sets stats) killed 6."
+
+  - id: BP3-P2-4
+    title: "Nothing tied the display function to a real generated and stored plan"
+    terminal_state: closed_in_commit
+    commit: 1f2d2ce8
+    verification: "The gate prices every stored day with estimateDaySecondsFromPlanDay and compares it to the oracle: equal to 1e-6 s on 33,204 days; mutation GA2 (timed item +1 s) killed 6."
+
+  - id: BP3-P3-1
+    title: "'Never throws' was not true: int.parse on a long digit run; an empty catch with no telemetry"
+    terminal_state: closed_in_commit
+    commit: f2d656a1
+    verification: "_numbersIn / _restSecondsOf / _setsOf use tryParse and clamps; budgetedDaySeconds reports session_estimate_day_minutes and returns null. 08b1c4ea pinned the rest clamp and the telemetry; mutations E3, E4, E5, E6b, E11b killed."
+
+  - id: BP3-P3-2
+    title: "_itemSeconds parsed a timed item's duration differently from the Train screen"
+    terminal_state: closed_in_commit
+    commit: f2d656a1
+    verification: "SessionBudget.timedItemSeconds follows parseTimedDurationSecs; the test compares the two over the same cases; mutation E8 killed."
+
+  - id: BP3-P3-3
+    title: "Template-built days carry no exercise_id or rep_range; 52 multi-type rows; the archetype-agreement test compared a function with itself"
+    terminal_state: closed_in_commit
+    commit: f2d656a1
+    verification: "Exact-name lookup (alias matches rejected); the agreement test compares to an independent oracle and covers multi-type rows. 08b1c4ea pinned the alias rejection; mutations E7, E10b, E12 killed."
+
+  - id: BP3-P3-4
+    title: "The drift-gate exemption for session_duration_minutes was name-global"
+    terminal_state: closed_in_commit
+    commit: 1f2d2ce8
+    verification: "Removed from _alwaysOk; the two real hits in training_history_analyzer.dart are baselined by file in backups/gate19_drift_baseline.txt; dart run scripts/check_hive_map_field_drift.dart prints PASS (554 candidates, all in baseline)."
+
+  - id: BP3-P3-5
+    title: "The independent literal list of scrubbed control variables lacked WRITE_SESSION_BUDGET_REPORT"
+    terminal_state: closed_in_commit
+    commit: 1f2d2ce8
+    verification: "test/scripts/regression_catalog_lib_test.dart:253; test/contracts/spawn_env_manifest_test.dart green."
+
+  - id: BP3-P3-6
+    title: "Docs cited a closure file that did not exist at HEAD"
+    terminal_state: closed_in_commit
+    commit: session-set-budget@branch
+    verification: "This file (same item as BP2-P3-6)."
+
+  - id: BP3-P3-7
+    title: "Report and doc statements that overstated or could not be checked ('6 of 1,776 personas', 'the one allowed overage', 'about 122 minutes', 'weekly tops bind first')"
+    terminal_state: closed_in_commit
+    commit: 1f2d2ce8
+    verification: "Counts are DAYS (7 past minutes + 2 of 33,204; 3,965 over by any amount, median 0.70 min); the +2 slack is named as the warm-up calibration residual (Ruling 3); the OFF table is in the report; the 90-minute leftover is stated without a cause the report cannot attribute."
+
+  - id: BP3-P3-8
+    title: "SoT session_duration_minutes: restore leg and two readers missing"
+    terminal_state: closed_in_commit
+    commit: 1f2d2ce8
+    verification: "docs/sot_registry.yaml: hydrateFromCloud writer, kTier2Fields and edit_profile_screen initState readers."
+
+  - id: BP3-P3-8B
+    title: "Migration 017's column comment says the plan generator no longer reads session_duration_minutes"
+    terminal_state: upstream_blocked
+    blocker: "A COMMENT ON COLUMN is a live-schema apply, which needs its own explicit go (root CLAUDE.md 4.3), and the comment is TRUE while the flag is OFF. It becomes false only at the flip."
+    reopen_when: "The enable_session_set_budget flip commit (item is on the flip checklist in docs/ship_dark_pending_review.yaml)."
+
+  - id: BP3-P3-9
+    title: "Home card covered by a source-grep that a constant in its place would satisfy; recompose goal and injured users absent from the gate"
+    terminal_state: closed_in_commit
+    commit: 08b1c4ea
+    verification: "The test pins the assignment from homeCardMinutes, exactly one 'durationMin: estDuration,' and three durationMin sites; it stays PRESENCE-ONLY by declaration (the card is built inside a screen). The gate gained 'the recompose goal (plans as build_muscle) and injured users' (45 runs, 1f2d2ce8). Phases {1,4,5} cover every reachable (effective level x lighter) pair, and a phase changes only reps in the time model (rest comes from the day's intensity)."
+
+  - id: BP3-P3-10
+    title: "check_context_artifact_budget --record re-baselined nine unrelated artifacts; scripts/** gate edits sit at feature tier"
+    terminal_state: verified_clean
+    evidence: "Informational. The tool records all entries at once; the recorded values equal the HEAD sizes (git cat-file -s). This batch is platform tier through plan_engine/** and carries this review, so the script edits are covered; the drift-gate edit is narrower than the first version (BP3-P3-4)."
+
+  # ── Mutation cycle of the round ──────────────────────────────────
+  - id: MUT-R1
+    title: "Mutation proof of the round's protections (rule 21): 44 mutants, 8 survivors and 1 compile error, all resolved"
+    terminal_state: closed_in_commit
+    commit: 08b1c4ea
+    verification: "docs/reviews/session-set-budget-bpass.md, mutation table. Survivors C1, C2, C12, E6, E10, E11, G5 pinned by new tests and re-run (all killed); C11 was an equivalence (a not-budgeted row has no groups) and the ternaries were removed; A3 did not compile and was re-run as A3b (killed)."
+
+  # ── Rulings and measured questions carried to the flip review ────
+  - id: RULING-6
+    title: "No time is reserved for the cardio finisher (finisherSeconds is always 0) while no screen shows it"
+    terminal_state: upstream_blocked
+    blocker: "The finisher is generated but not displayed; reserving time for an invisible block would shorten visible days."
+    reopen_when: "A screen shows the finisher."
+
+  - id: RULING-7
+    title: "Edit Profile default is 60; the nine live rows already stamped 90 keep 90"
+    terminal_state: upstream_blocked
+    blocker: "Existing accounts are all testing accounts until the store launch (root CLAUDE.md section 1); no migration of stored values is warranted."
+    reopen_when: "The Play / App Store launch."
+
+  - id: FLOOR-CO-GROUP-TIME
+    title: "co_group_limited (3,538 group-runs) and time_limited (13,022) floors, e.g. the 6-day 90-minute build_muscle case leaves Quads at 8 weekly sets while Glutes sits at its top"
+    terminal_state: upstream_blocked
+    blocker: "A product question, not a defect: which co-trained group should yield. The report (session_set_budget_report.md) is the evidence."
+    reopen_when: "The enable_session_set_budget flip review."
+
+  - id: FLOOR-CAP-NOT-TRAINED
+    title: "cap_limited (3,702) and not_trained_by_split (85) floors"
+    terminal_state: verified_clean
+    evidence: "Both are the intended behaviour: a session cap (6/8/10, 12 for a focus group) or a split that never trains the group; the gate's cap and top zeros hold over 1,847 runs."
+
+  - id: FORCED-LEAD-LIFT
+    title: "On a 30-minute 3-day home_dumbbells day, library timed / distance rows alone spend the whole budget (Ruling 8) and the forced lead lift runs up to 5.5 minutes over (7 days of 33,204)"
+    terminal_state: upstream_blocked
+    blocker: "Ruling 8 keeps not-budgeted rows untouched; trimming library timed rows is a product question."
+    reopen_when: "The enable_session_set_budget flip review."
+
+  - id: UNUSED-90
+    title: "A 90-minute user leaves a median 27.2 minutes a day unused"
+    terminal_state: upstream_blocked
+    blocker: "Founder F3: leftover time stays unused rather than inflating sets. The report does not attribute it to one of the fixed exercise count, the 5-set max, the session caps or the weekly tops."
+    reopen_when: "The enable_session_set_budget flip review."
+
+  - id: CORE-LIST-PICKS
+    title: "With enable_core_list_pool ON, hip_isolation and lateral-delts slots can be dropped from the extra slots (gym tiers)"
+    terminal_state: upstream_blocked
+    blocker: "Pool depth belongs to the core-list flip review: ON core-list drops among 370 extra slots were bodyweight 123, home 69, basic_gym 36, full_gym 34 (T5 measurement)."
+    reopen_when: "The enable_core_list_pool flip review."
+
+  - id: OI-412
+    title: "scripts/.dart_tool/ is not in the worktree retirement allowlist (surfaced while retiring the previous batch)"
+    terminal_state: upstream_blocked
+    blocker: "Filed as OI-412 on the board (d234f31c); a tooling change in scripts/retire_worktree_lib.dart outside this batch's plan."
+    reopen_when: "scripts/retire_worktree_lib.dart is next changed, or the founder picks the OI."
+
+  - id: OI-413
+    title: "check_code_review_pass_exists.dart has no MERGE_HEAD stand-down (class 6 of gates unsatisfiable at a merge); surfaced by the origin/main merge into this branch"
+    terminal_state: upstream_blocked
+    blocker: "Filed as OI-413 on the board (a gate change with its own diagnose-doc and negative-control test, outside this batch's plan). The merge was completed without a hook bypass: the hand-resolved tree was saved, the merge made with -X theirs and the tree restored in the next commit (85fc430a, 32ae232c)."
+    reopen_when: "scripts/check_code_review_pass_exists.dart is next changed, or the founder picks the OI."
+
+  - id: REVIEW-ROUNDS
+    title: "Four context-blind plan review rounds, three fresh B-pass reviewers, B-pass accepted"
+    terminal_state: verified_clean
+    evidence: "docs/plan-reviews/session-set-budget.md (review_rounds 4, ground_truth_verified true, verdict converged, bpass accepted); docs/reviews/session-set-budget-bpass.md (36 findings, 0 false alarms, all triaged)."
+
+total_findings: 61
+closed_count: 61

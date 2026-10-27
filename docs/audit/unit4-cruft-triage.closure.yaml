@@ -1,0 +1,63 @@
+# Closure ledger — Unit 4: primary-folder cruft triage. 62 untracked/deleted
+# entries had accumulated in the SHARED main folder (some for weeks). Gate 40
+# (validate_audit_closure.dart). One terminal_state per item; no `deferred:` key.
+# 7 items, over the §4.2 ≥4 threshold. Branch: unit4-cruft-triage.
+#
+# No diagnose-doc: this is repo hygiene, not a bug fix — the commit is
+# `chore(repo):`, which rule 22's `^(fix|bug|regression)` pattern does not match.
+
+batch: unit4-cruft-triage
+total_findings: 7
+closed_count: 7
+
+_commit: &wip "unit4-cruft-triage (uncommitted at authoring)"
+
+findings:
+  - id: U4-1
+    title: "2 qualification-exam plan docs existed ONLY as untracked files in the primary working tree — never committed anywhere in git history, so a `git clean` or a disk loss would have destroyed them outright"
+    terminal_state: closed_in_commit
+    commit: *wip
+    verification: "`git log --all --oneline -- <path>` returned EMPTY for both files, confirming they were in no branch, no stash, no reflog-reachable commit. They were also already staged (`A `) in the `qualification-exam-plans` worktree, and those staged copies were confirmed md5-identical to the primary copies (4505a51d… / 8510f51b…) before consolidating here — so nothing was lost by committing from this branch instead of that one."
+    notes: "Committed to their normal location docs/superpowers/plans/, NOT archived — they are plan documents for work that is still live (the `qualification-exam` branch is one of only 4 branches not merged into main)."
+
+  - id: U4-2
+    title: "68 files of Edge Function payload-backup churn sitting uncommitted — 57 untracked (new deploy versions + 12 entirely new function directories) plus 11 tracked files deleted from the working tree"
+    terminal_state: closed_in_commit
+    commit: *wip
+    verification: "Synced file-by-file from the `git status --untracked-files=all` list rather than by a wholesale directory copy (a wholesale copy cannot express the 11 deletions). Staged result reconciles exactly: 55 A + 9 D + 2 R = 66 entries, where the 2 renames each consume one addition AND one deletion — 55+2 = 57 additions, 9+2 = 11 deletions. git paired those 2 as renames at 66% similarity (an old payload version renamed to a new version name)."
+    notes: "These are deploy-history artifacts of the documented host-shell deploy flow (CLAUDE.md §0), not junk."
+
+  - id: U4-3
+    title: "docs/audit/2026-06-29-hermes-opt-h-restore-marker.md — a genuine decision record left untracked"
+    terminal_state: closed_in_commit
+    commit: *wip
+    verification: "Committed to its normal docs/audit/ location; present in the staged diff."
+    notes: "Deliberately NOT archived — unlike the 13 in U4-4, this records a decision that is still in force."
+
+  - id: U4-4
+    title: "13 superseded review/audit artifacts untracked in the primary folder: 7 quarterly-audit per-lens deltas, 1 plan-review record, 5 review outputs for already-merged work"
+    terminal_state: closed_in_commit
+    commit: *wip
+    verification: "Archived to docs/archive/2026-08-05-primary-cruft-triage/ preserving original relative paths, with a README stating what each group is. Count verified by `find … -type f -name '*.md' | wc -l` = 13, matching 7 + 1 + 5."
+    notes: "Archived rather than committed live because each is a point-in-time artifact of landed work; keeping them at their original paths would imply they are current guidance. SAFETY CHECK on moving `docs/plan-reviews/opt-a-rls-initplan.md` — that directory is read by the keystone gate, so this was verified rather than assumed: the `opt-a-rls-initplan` branch is ALREADY MERGED into main (so its landing is long since pushed and outside any future pushed range), and the gate reads records via `git show <merge>:<path>` from the merge commit's own tree — this file was never committed, so no merge tree ever contained it and nothing that already passed can retroactively fail. The other two candidate branch names (`community-review-fix`, `unit3-web-ux`) do not exist as branches at all."
+
+  - id: U4-5
+    title: "`.gitignore` rule for the deno-materialised zod artifact could NEVER match what deno actually produces — written as `node_modules/zod/` with a trailing slash, which in gitignore semantics matches a DIRECTORY only, while deno writes a 34-byte symlink STUB (an ordinary text file) on this Windows/Git-Bash stack"
+    terminal_state: closed_in_commit
+    commit: *wip
+    verification: "Before: `git check-ignore -v node_modules/zod` returned NO match. After dropping the trailing slash: matches at `.gitignore:163`. Confirmed by creating a file at that exact path, running check-ignore, and removing it. Separately confirmed the 142 deliberately-vendored node_modules files remain tracked and unaffected (`git status --porcelain node_modules/` empty)."
+    notes: "The original plan proposed DELETING node_modules/zod. That would have been cosmetic — the next local deno run recreates it, and the entry would reappear as untracked noise exactly as it has been. Widening the pattern is the durable fix, so the stub is left in place. The block's own repair line already read `rm -f node_modules/zod` (`-f`, i.e. a file), so the file-shape was known; only the pattern was wrong."
+
+  - id: U4-6
+    title: "Round-4 review of the unshipped Unit 3a lock found a 4th check-then-act defect (failed restore destroys the stolen lock ⇒ two processes hold the mutex) — needed a durable record, since the branch is not shipping"
+    terminal_state: closed_in_commit
+    commit: *wip
+    verification: "Filed as OI-92 with the full reproduction sequence, the empirically-verified `mv -T` failure mode, and a recommended fix. `dart run scripts/build_oi_index.dart` regenerated OPEN_INDEX.md — 31 open issues, OI-92 present with its Blocked-on and Verified fields populated (the generator fails closed on either being missing)."
+    notes: "The FINDING is closed by being filed; the underlying defect stays OPEN as OI-92 and is blocked on a founder design decision. Not live on main — the discipline-tooling-hardening branch is unmerged, which is exactly why round 4 mattered."
+
+  - id: U4-7
+    title: "ICANBEFITTER_persona_plans.xlsx + _commentary.md — untracked test output from a plan-generator persona sweep, mistakable for founder-authored source material"
+    terminal_state: closed_in_commit
+    commit: *wip
+    verification: "Confirmed regenerable test output before deleting: the commentary self-describes a `PlanGenerator.generateV4` sweep (18 personas × phases 1-3 = 54 plans, 2026-07-19) and the generator `test/plan_generator/persona_matrix_export.dart` exists in the `persona-sweep-e2e` worktree. Deleted from the primary working tree; they were untracked, so no commit records the removal — the durable artifact is OI-89."
+    notes: "Founder-decided (file the finding, delete the files). The one finding inside them that had never been filed — a `bodyweight`-equipment user still receiving 5 gym-equipment picks out of 28 — was preserved as OI-89 BEFORE deletion, so deleting the artifacts loses no information."
