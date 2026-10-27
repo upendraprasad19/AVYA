@@ -22,6 +22,7 @@ import '../helpers/spawn.dart';
 const _libRel = 'assets/data/exercise_library.json';
 const _srcRel = 'scripts/data/library_batch_c_source.json';
 const _tableRel = 'scripts/data/library_injury_additions_v15.json';
+const _mediaTableRel = 'scripts/data/library_media_v16.json';
 const _importerRel = 'scripts/add_library_batch_c_v15.js';
 
 /// E001's 43 keys minus demo_slug, demo_pair and variant_family: carried by every library row, in this order.
@@ -34,9 +35,13 @@ const _required40 = <String>[
   'priority_tier', 'rep_range', 'core_levels', 'discipline', 'gym_availability', 'requires_coaching', 'high_impact',
 ];
 const _optionalKeys = <String>{'variant_family', 'skill_track', 'skill_step', 'progression_to', 'regression_to'};
-const _mediaKeys = <String>{'demo_slug', 'demo_pair', 'media_slug', 'media_version', 'media_source'};
+// Plate keys stay forbidden on new rows. The media keys (Batch M1) are allowed ONLY on ids the committed media table maps,
+// as a group, last and in this order.
+const _plateKeys = <String>{'demo_slug', 'demo_pair'};
+const _mediaKeyList = <String>['media_slug', 'media_version', 'media_source'];
 const _newId = r'^[GN]\d';
 
+Set<String> _mappedIds() => ((_readMap(_mediaTableRel)['rows'] as Map<String, dynamic>).keys).toSet();
 Map<String, dynamic> _readMap(String p) => jsonDecode(File(p).readAsStringSync()) as Map<String, dynamic>;
 List<Map<String, dynamic>> _readLib(String p) => (jsonDecode(File(p).readAsStringSync()) as List).cast<Map<String, dynamic>>();
 List<Map<String, dynamic>> _srcRows(Map<String, dynamic> src) => (src['rows'] as List).cast<Map<String, dynamic>>();
@@ -48,7 +53,8 @@ List<Map<String, dynamic>> _deepRows(List<Map<String, dynamic>> v) =>
     (jsonDecode(jsonEncode(v)) as List).cast<Map<String, dynamic>>();
 Map<String, dynamic> _byId(List<Map<String, dynamic>> rows, String id) => rows.firstWhere((r) => r['id'] == id);
 
-List<String> _keyViolations(List<Map<String, dynamic>> rows) {
+List<String> _keyViolations(List<Map<String, dynamic>> rows, {Set<String>? mapped}) {
+  final mappedIds = mapped ?? _mappedIds();
   final out = <String>[];
   for (final r in rows) {
     final id = r['id'];
@@ -57,12 +63,21 @@ List<String> _keyViolations(List<Map<String, dynamic>> rows) {
     }
     if (!r.containsKey('variant_family')) out.add('$id has no variant_family');
     for (final k in r.keys) {
-      if (_mediaKeys.contains(k)) {
-        out.add('$id carries media key $k (Batch M owns media)');
+      if (_plateKeys.contains(k)) {
+        out.add('$id carries plate key $k (plates are not shipped on new rows)');
+      } else if (_mediaKeyList.contains(k)) {
+        // checked below, as a group
       } else if (!_required40.contains(k) && !_optionalKeys.contains(k)) {
         out.add('$id carries extra key $k');
       }
       if (_optionalKeys.contains(k) && r[k] == null) out.add('$id carries a null $k (omit the key)');
+    }
+    final keys = r.keys.toList();
+    final hasAny = _mediaKeyList.any(r.containsKey);
+    if (hasAny && !mappedIds.contains(id)) out.add('$id carries a media key but the media table does not map it');
+    if (hasAny) {
+      final tail = keys.length >= 3 ? keys.sublist(keys.length - 3) : keys;
+      if (tail.join(',') != _mediaKeyList.join(',')) out.add('$id: the media keys must be the last three keys, in order (found ${keys.join(',')})');
     }
   }
   return out;
@@ -309,7 +324,7 @@ void main() {
       expect(rows, isNotEmpty, reason: 'run: node scripts/add_library_batch_c_v15.js');
     });
 
-    test('40 required keys plus only the optional ones present, no media keys', () {
+    test('40 required keys plus only the optional ones present; media keys only on mapped rows, last and in order', () {
       expect(_keyViolations(rows), isEmpty);
     });
 
@@ -320,6 +335,20 @@ void main() {
       expect(_keyViolations(b), isNotEmpty, reason: 'an extra key (a _coreAdded on a row)');
       final c = _deepRows(rows)..first['demo_slug'] = 'x';
       expect(_keyViolations(c), isNotEmpty, reason: 'a demo_slug on a shipped row');
+      final mapped = _mappedIds();
+      final unmapped = rows.firstWhere((r) => !mapped.contains(r['id']));
+      final f = _deepRows(rows);
+      _byId(f, unmapped['id'] as String)..['media_slug'] = '0001-x'..['media_version'] = 1..['media_source'] = 'wardroom';
+      expect(_keyViolations(f), isNotEmpty, reason: 'media keys on an unmapped row');
+      final onMapped = rows.firstWhere((r) => mapped.contains(r['id']));
+      final g = _deepRows(rows);
+      final victim = _byId(g, onMapped['id'] as String);
+      final slug = victim.remove('media_slug');
+      victim['media_slug'] = slug; // moved to the end: order is now version, source, slug
+      expect(_keyViolations(g), isNotEmpty, reason: 'the media keys out of order');
+      final h = _deepRows(rows);
+      _byId(h, onMapped['id'] as String)['extra_after'] = 1;
+      expect(_keyViolations(h), isNotEmpty, reason: 'a key after the media keys (and an extra key)');
       final d = _deepRows(rows)..first['progression_to'] = null;
       expect(_keyViolations(d), isNotEmpty, reason: 'a null ladder key');
       final e = _deepRows(rows)..first.remove('variant_family');
@@ -579,7 +608,7 @@ void main() {
       victim['hold'] = {'class': 'picture', 'reason': 'test', 'owner': 'founder'};
       final sp = t.put('src.json', jsonEncode(s));
       final lp = t.put('lib.json', File(_libRel).readAsStringSync());
-      final r = _importer(['--library', lp, '--source', sp], 'importer run with a newly held row');
+      final r = _importer(['--library', lp, '--source', sp, '--media', 'none'], 'importer run with a newly held row');
       expect(r.exitCode, 0, reason: '${r.stdout}${r.stderr}');
       final out = _readLib(lp);
       expect(out.where((x) => x['id'] == victim['id']), isEmpty);
@@ -622,12 +651,12 @@ void main() {
       final tp = t.put('table.json', File(_tableRel).readAsStringSync());
 
       final control = t.put('lib_control.json', File(_libRel).readAsStringSync());
-      final c = _importer(['--library', control, '--source', sp, '--table', tp], 'unmutated importer, one newly held row');
+      final c = _importer(['--library', control, '--source', sp, '--table', tp, '--media', 'none'], 'unmutated importer, one newly held row');
       expect(c.exitCode, 0, reason: '${c.stdout}${c.stderr}');
       expect(_heldViolations(s, _readLib(control)), isEmpty, reason: 'the unmutated importer drops the held row');
 
       final lp = t.put('lib.json', File(_libRel).readAsStringSync());
-      final r = _importer(['--library', lp, '--source', sp, '--table', tp], 'mutated importer shipping held rows', script: script);
+      final r = _importer(['--library', lp, '--source', sp, '--table', tp, '--media', 'none'], 'mutated importer shipping held rows', script: script);
       expect(r.exitCode, 0, reason: '${r.stdout}${r.stderr}');
       expect(_heldViolations(s, _readLib(lp)), isNotEmpty, reason: 'the held-row check must redden when the importer ships a held row');
     });

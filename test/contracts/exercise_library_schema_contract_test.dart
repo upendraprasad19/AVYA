@@ -44,7 +44,24 @@ const _optionalKeys = <String>{
   'demo_slug', 'demo_pair', 'name_aliases', 'merged_ids',
   'variant_family', 'slot_focus', 'slot_pattern', 'skill_track', 'skill_step',
   'regression_to', 'progression_to',
+  // Batch M1 (library v16): written together or not at all, by the importer's media stage.
+  'media_slug', 'media_version', 'media_source',
 };
+
+const _mediaKeys = ['media_slug', 'media_version', 'media_source'];
+
+List<String> _mediaKeyViolations(List<Map<String, dynamic>> rows) => [
+      for (final r in rows)
+        if (_mediaKeys.any(r.containsKey))
+          if (!_mediaKeys.every(r.containsKey))
+            '${r['id']}: media keys present ${_mediaKeys.where(r.containsKey).toList()} of $_mediaKeys'
+          else if (r['media_slug'] is! String || !RegExp(r'^\d{4}-[a-z0-9]+(-[a-z0-9]+)*$').hasMatch(r['media_slug'] as String))
+            '${r['id']}: media_slug ${r['media_slug']} is not a slug'
+          else if (r['media_version'] is! int || (r['media_version'] as int) < 1)
+            '${r['id']}: media_version ${r['media_version']} is not a positive int'
+          else if (r['media_source'] != 'wardroom')
+            '${r['id']}: media_source ${r['media_source']} is not wardroom',
+    ];
 
 void main() {
   final rows = (jsonDecode(
@@ -52,10 +69,28 @@ void main() {
   ) as List).cast<Map<String, dynamic>>();
 
   group('exercise_library schema contract (Batch 13-A D-1)', () {
-    test('the canonical schema is 40 required keys plus 11 optional', () {
+    test('the canonical schema is 40 required keys plus 14 optional', () {
       expect(_canonicalKeys.length, 40);
-      expect(_optionalKeys.length, 11);
+      expect(_optionalKeys.length, 14);
       expect(_canonicalKeys.intersection(_optionalKeys), isEmpty);
+    });
+
+    test('the three media keys travel together: all or none on every row, with the right types', () {
+      expect(_mediaKeyViolations(rows), isEmpty);
+      expect(rows.where((r) => r.containsKey('media_slug')), isNotEmpty, reason: 'the library carries media keys at v16');
+    });
+
+    test('MUTATION: one media key dropped, a wrong source and a wrong type are each a violation', () {
+      List<Map<String, dynamic>> copy() => (jsonDecode(jsonEncode(rows)) as List).cast<Map<String, dynamic>>();
+      final a = copy();
+      a.firstWhere((r) => r.containsKey('media_slug')).remove('media_version');
+      expect(_mediaKeyViolations(a), isNotEmpty, reason: 'a partial triple');
+      final b = copy();
+      b.firstWhere((r) => r.containsKey('media_slug'))['media_source'] = 'elsewhere';
+      expect(_mediaKeyViolations(b), isNotEmpty, reason: 'a source other than wardroom');
+      final c = copy();
+      c.firstWhere((r) => r.containsKey('media_slug'))['media_version'] = '1';
+      expect(_mediaKeyViolations(c), isNotEmpty, reason: 'a string media_version');
     });
 
     test('name_aliases and merged_ids, when present, are non-empty string lists',

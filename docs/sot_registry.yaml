@@ -13029,7 +13029,7 @@ concepts:
         line_range: 1-2
         method: demo_slug + demo_pair fields
       - file: lib/core/services/seed_service.dart
-        line_range: 122-122
+        line_range: 128-128
         method: _exerciseLibraryVersion
     readers:
       - file: lib/shared/widgets/exercise_plate/plate_resolver.dart
@@ -13038,6 +13038,39 @@ concepts:
       - file: lib/shared/widgets/exercise_plate/exercise_plate_sheet.dart
         line_range: 93-100
         method: build
+
+  # Batch M1 (2026-10-27): the library rows that have a Wardroom animation point at it.
+  - concept: exercise_media_fields
+    domain: workout
+    behavioral_test_path: test/contracts/library_seed_v16_upgrade_behavioral_test.dart
+    contract_test_path: test/contracts/library_media_table_test.dart
+    description: |
+      Library rows that have a Wardroom animation carry three optional keys, written together or
+      not at all, always last and in this order: `media_slug` (the file's stem, `<gif number>-<name>`),
+      `media_version` (an integer, 1 for every file in M1) and `media_source` (`wardroom`). Library
+      v16. The file is the private Storage object `<media_slug>_v<media_version>.webp` in the
+      `exercise-media` bucket; the provenance (hashes, sizes, frames, the ledger id) lives in
+      `scripts/data/library_media_v16.json`, never in the library row.
+
+      WRITERS: the media stage of the library importer (the only code that sets the keys; it also
+      removes them from any row the table does not map) and, for existing installs, the v16 re-seed
+      in the seed service. The table itself is built by `scripts/build_library_media_v16.js` from
+      the Wardroom ledger and the files on disk.
+
+      READERS: none yet. The app side (a media resolver, signed URLs, the card) is Batch M2, which
+      adds its reader here when it lands. CI pins the links between the table, the media map and the
+      library (every leg of R10 in `library_media_table_test.dart`).
+
+      WARNING: a later `media_version` reaches an installed copy only if the library version
+      constant is bumped again. WARNING: the bucket is private; a row's keys are not a public URL.
+    writers:
+      - file: scripts/add_library_batch_c_v15.js
+        line_range: 154-175
+        method: applyMedia
+      - file: lib/core/services/seed_service.dart
+        line_range: 128-128
+        method: _exerciseLibraryVersion
+    readers: []
 
   # One LOG per exercise (branch active-workout-log-exercise, 2026-10-19). Ship
   # dark behind `enable_log_exercise_button` (default OFF).
