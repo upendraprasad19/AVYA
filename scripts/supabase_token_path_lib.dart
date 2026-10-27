@@ -24,11 +24,22 @@ class TokenFile {
   final String? primaryError;
 }
 
-Map<String, String> _scrubbedGitEnv() {
-  final env = Map<String, String>.from(Platform.environment);
-  for (final k in const ['GIT_DIR', 'GIT_WORK_TREE', 'GIT_INDEX_FILE', 'GIT_COMMON_DIR']) {
-    env.remove(k);
-  }
+/// The environment a `git` child gets: the git redirection variables are dropped (an inherited GIT_DIR answers about
+/// ANOTHER repo) and so are the Supabase secrets (a `git` child has no use for the service-role key or an access token,
+/// and a hook or a wrapper that logs a child environment must not be able to print them). [base] is for tests.
+Map<String, String> scrubbedGitEnv([Map<String, String>? base]) {
+  final env = Map<String, String>.from(base ?? Platform.environment);
+  // Names are compared upper-cased (Windows keeps the case an operator typed), and any variable that looks like a credential
+  // goes with them: the git commands run here are local and need none. The twin of `.claude/token_path.js`.
+  // The GIT_CONFIG_* family stays whole: git dies (exit 128) on a GIT_CONFIG_COUNT whose GIT_CONFIG_KEY_<n> is gone.
+  // Residual, accepted: it can carry a credential (an http extraheader in a VALUE, a token in an insteadOf KEY); both git
+  // commands run here are local, and a container may need an injected safe.directory.
+  const redirects = {'GIT_DIR', 'GIT_WORK_TREE', 'GIT_INDEX_FILE', 'GIT_COMMON_DIR'};
+  final secretName = RegExp(r'KEY|TOKEN|SECRET|PASSWORD|PASSWD|CREDENTIAL');
+  env.removeWhere((k, _) {
+    final u = k.toUpperCase();
+    return redirects.contains(u) || u.startsWith('SUPABASE_') || (!u.startsWith('GIT_CONFIG_') && secretName.hasMatch(u));
+  });
   return env;
 }
 
@@ -38,7 +49,7 @@ String _join(List<String> parts) => parts.join(Platform.pathSeparator);
 String repoRootFrom(String fromDir) {
   try {
     final r = Process.runSync('git', ['rev-parse', '--show-toplevel'],
-        workingDirectory: fromDir, environment: _scrubbedGitEnv(), includeParentEnvironment: false);
+        workingDirectory: fromDir, environment: scrubbedGitEnv(), includeParentEnvironment: false);
     final out = (r.stdout as String).trim();
     if (r.exitCode == 0 && out.isNotEmpty) return Directory(out).absolute.path;
   } catch (_) {}
@@ -49,7 +60,7 @@ String repoRootFrom(String fromDir) {
 ({String? root, String? error}) primaryRoot(String repoRoot, {String git = 'git'}) {
   try {
     final r = Process.runSync(git, ['worktree', 'list', '--porcelain'],
-        workingDirectory: repoRoot, environment: _scrubbedGitEnv(), includeParentEnvironment: false);
+        workingDirectory: repoRoot, environment: scrubbedGitEnv(), includeParentEnvironment: false);
     if (r.exitCode != 0) {
       final msg = (r.stderr as String).trim().split('\n').first;
       return (root: null, error: msg.length > 200 ? msg.substring(0, 200) : msg);

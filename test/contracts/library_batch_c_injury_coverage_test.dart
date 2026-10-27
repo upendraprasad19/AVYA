@@ -481,7 +481,7 @@ void main() {
       File(_libRel).copySync(out);
       final r = runSpawn(
         'node',
-        [script.path, '--library', out, '--source', _srcRel, '--table', _tableRel],
+        [script.path, '--library', out, '--source', _srcRel, '--table', _tableRel, '--media', 'none'],
         why: 'mutated importer that skips the tag table',
         report: (_) {},
       );

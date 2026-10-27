@@ -27,6 +27,9 @@ import '../../scripts/check_code_review_pass_exists.dart' as reviewGate;
 
 const _libraryGlob = 'assets/data/exercise_library.json';
 const _tablesGlob = 'scripts/data/library_injury_additions_*.json';
+// Batch M1: the media upload tool (service-role key, can delete a bucket) and the provenance table it reads.
+const _uploadToolGlob = 'scripts/upload_exercise_media.js';
+const _mediaTableGlob = 'scripts/data/library_media_v16.json';
 const _assetsGlob = 'assets/**';
 const _scriptsGlob = 'scripts/**';
 
@@ -83,6 +86,29 @@ void main() {
     });
   });
 
+  group('1b. the media upload tool and its provenance table (Batch M1)', () {
+    test('both are account, claimed by their own rules, and both files exist', () {
+      for (final p in [_uploadToolGlob, _mediaTableGlob]) {
+        expect(File(p).existsSync(), isTrue, reason: 'positive control: $p exists');
+        expect(tier(p), 'account', reason: p);
+        expect(ruleFor(p)?.glob, p, reason: '$p must be claimed by its own rule, not the scripts/** catch-all');
+      }
+    });
+
+    test("the commit-time review gate's own engine reads them as account too", () {
+      final rules = reviewGate.parseRules(yaml);
+      String gateTier(String p) {
+        for (final r in rules) {
+          if (reviewGate.globToRegExp(r.glob).hasMatch(p)) return r.tier;
+        }
+        return 'feature';
+      }
+
+      expect(gateTier(_uploadToolGlob), 'account');
+      expect(gateTier(_mediaTableGlob), 'account');
+    });
+  });
+
   group('2. order', () {
     test('both rules sit above the assets/** and scripts/** feature defaults', () {
       int index(String glob) => reg.rules.indexWhere((r) => r.glob == glob);
@@ -93,6 +119,14 @@ void main() {
       expect(index(_libraryGlob), lessThan(index(_assetsGlob)));
       expect(index(_tablesGlob), lessThan(index(_scriptsGlob)));
     });
+
+    test('the media tool and table rules sit above scripts/**', () {
+      int index(String glob) => reg.rules.indexWhere((r) => r.glob == glob);
+      expect(index(_uploadToolGlob), isNonNegative);
+      expect(index(_mediaTableGlob), isNonNegative);
+      expect(index(_uploadToolGlob), lessThan(index(_scriptsGlob)));
+      expect(index(_mediaTableGlob), lessThan(index(_scriptsGlob)));
+    });
   });
 
   group('3. mirrors', () {
@@ -100,6 +134,10 @@ void main() {
       expect(tier('assets/data/food_database.json'), 'feature');
       expect(tier('scripts/add_library_injury_tags_v14.js'), 'feature');
       expect(tier('scripts/data/some_other_table.json'), 'feature');
+      // The media rules are exact paths: the builder, the map and a sibling tool stay feature.
+      expect(tier('scripts/build_library_media_v16.js'), 'feature');
+      expect(tier('scripts/data/library_batch_c_media_map.json'), 'feature');
+      expect(tier('scripts/upload_exercise_media_other.js'), 'feature');
     });
   });
 }

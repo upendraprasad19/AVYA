@@ -23,10 +23,23 @@ const TOKEN_NAME = 'supabase access token.txt';
 
 // A hook (or a parent `git` process) can export GIT_DIR / GIT_WORK_TREE / GIT_INDEX_FILE;
 // inherited, they make `git worktree list` answer about THAT repo, or fail from another cwd.
-function scrubbedGitEnv() {
-  const env = { ...process.env };
+// The Supabase secrets are dropped too: a `git` child has no use for the service-role key or an access token, and a hook
+// or a wrapper that logs a child environment must not be able to print them.
+// Names are compared upper-cased (Windows keeps the case an operator typed, `$env:supabase_service_role_key` included), and
+// any variable that looks like a credential goes with them: the two git commands run here are local and need none.
+// The GIT_CONFIG_* family is the one exception: git reads GIT_CONFIG_COUNT together with GIT_CONFIG_KEY_<n> and
+// GIT_CONFIG_VALUE_<n>, and dies (exit 128) on a COUNT whose KEY_n is gone, so the three stay together. Residual, accepted:
+// that family can carry a credential (an http extraheader in a VALUE, a token in an insteadOf KEY); both git commands run
+// here are local, and a container may need an injected safe.directory.
+const SECRET_NAME = /KEY|TOKEN|SECRET|PASSWORD|PASSWD|CREDENTIAL/;
+function scrubbedGitEnv(base = process.env) {
+  const env = { ...base };
   for (const k of Object.keys(env)) {
-    if (k === 'GIT_DIR' || k === 'GIT_WORK_TREE' || k === 'GIT_INDEX_FILE' || k === 'GIT_COMMON_DIR') {
+    const u = k.toUpperCase();
+    if (
+      u === 'GIT_DIR' || u === 'GIT_WORK_TREE' || u === 'GIT_INDEX_FILE' || u === 'GIT_COMMON_DIR' ||
+      u.startsWith('SUPABASE_') || (!u.startsWith('GIT_CONFIG_') && SECRET_NAME.test(u))
+    ) {
       delete env[k];
     }
   }
@@ -106,4 +119,4 @@ function resolveTokenFile(repoRoot, opts = {}) {
   return null;
 }
 
-module.exports = { candidateTokenFiles, resolveTokenFile, primaryRoot, TOKEN_NAME };
+module.exports = { candidateTokenFiles, resolveTokenFile, primaryRoot, scrubbedGitEnv, TOKEN_NAME };

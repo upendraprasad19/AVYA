@@ -32,12 +32,20 @@ class _Answer {
   final String? primaryError;
 }
 
+/// The way a harness or CI step injects git config: git reads the COUNT together with every KEY_<n> and VALUE_<n>, and
+/// dies (exit 128) on a COUNT whose KEY_0 is missing.
+const _injectedGitConfig = <String, String>{
+  'GIT_CONFIG_COUNT': '1',
+  'GIT_CONFIG_KEY_0': 'core.tokenpathtest',
+  'GIT_CONFIG_VALUE_0': 'x',
+};
+
 /// A git executable that does not exist: proves the git-failed branch of both resolvers.
 const _noGit = '/nonexistent/git-for-token-path-test';
 
 /// [env] is the EXTRA environment the node child gets on top of the helper's scrubbed one
-/// (the only caller passes `GIT_DIR`, deliberately, so the file's one control variable is
-/// declared here as a closed literal set).
+/// (the callers pass `GIT_DIR`, or the injected `GIT_CONFIG_*` triple, deliberately, so the file's control
+/// variables are declared here as a closed literal set).
 _Answer? _viaNode(String repoRoot, {Map<String, String>? env, String? git}) {
   final script = File('.claude/token_path.js').absolute.path;
   final r = runSpawn(
@@ -50,7 +58,7 @@ _Answer? _viaNode(String repoRoot, {Map<String, String>? env, String? git}) {
     ],
     why: 'node .claude/token_path.js resolveTokenFile($repoRoot)',
     extraEnv: env ?? const <String, String>{},
-    allowControl: {'GIT_DIR'},
+    allowControl: {'GIT_DIR', ..._injectedGitConfig.keys},
   );
   expect(r.exitCode, 0, reason: '${r.stderr}');
   final out = (r.stdout as String).trim();
@@ -200,5 +208,85 @@ void main() {
     _git(['init', '-q'], other.path);
     final r = _viaNode(w.linked, env: {'GIT_DIR': _join([other.path, '.git'])})!;
     expect(_real(r.path), _real(_join([w.primary, '.supabase', _name])));
+  });
+
+  test('node: an injected GIT_CONFIG_COUNT/KEY_0/VALUE_0 triple reaches git whole, so the primary lookup still works', () {
+    final w = _repoWithLinkedWorktree(tmp);
+    _write(w.primary, ['.supabase']);
+    final r = _viaNode(w.linked, env: _injectedGitConfig);
+    expect(r, isNotNull, reason: 'git must not die on a COUNT whose KEY_0 was scrubbed: the lookup would find nothing');
+    expect(_real(r!.path), _real(_join([w.primary, '.supabase', _name])));
+  });
+
+  // The `git` child that finds the primary checkout has no use for a Supabase secret; a hook or a wrapper that logs a child
+  // environment must not be able to print one. Both resolvers drop the git redirection variables and the secrets.
+  const secrets = <String, String>{
+    'SUPABASE_SERVICE_ROLE_KEY': 'sentinel-service-role-key',
+    'SUPABASE_ACCESS_TOKEN': 'sentinel-access-token',
+    'SUPABASE_ACCESS_TOKEN_FITNESS': 'sentinel-access-token-fitness',
+  };
+  const redirects = <String, String>{'GIT_DIR': '/x', 'GIT_WORK_TREE': '/x', 'GIT_INDEX_FILE': '/x', 'GIT_COMMON_DIR': '/x'};
+  // Windows keeps the case an operator typed (`$env:supabase_service_role_key`), and other credentials look like credentials: both
+  // go, whatever the spelling. A name that merely looks harmless stays.
+  const spelled = <String, String>{
+    'supabase_service_role_key': 'sentinel-lower',
+    'Supabase_Access_Token_Other': 'sentinel-mixed',
+    'git_dir': '/x',
+    'GEMINI_API_KEY': 'sentinel-gemini',
+    'Razorpay_Key_Secret': 'sentinel-razorpay',
+    'MY_DB_PASSWORD': 'sentinel-password',
+    'GH_TOKEN': 'sentinel-gh',
+  };
+
+  test('node: the git child environment carries no Supabase secret and no git redirection, and keeps the rest', () {
+    final script = File('.claude/token_path.js').absolute.path;
+    final r = runSpawn(
+      'node',
+      ['-e', 'const t=require(${jsonEncode(script)});console.log(JSON.stringify(t.scrubbedGitEnv()));'],
+      why: 'node .claude/token_path.js scrubbedGitEnv()',
+      extraEnv: {...secrets, ...redirects, ...spelled, 'RESOLVER_TEST_KEEP': 'kept'},
+      allowControl: {...secrets.keys, ...redirects.keys, ...spelled.keys},
+    );
+    expect(r.exitCode, 0, reason: '${r.stderr}');
+    final env = (jsonDecode((r.stdout as String).trim()) as Map<String, dynamic>).cast<String, String>();
+    for (final k in [...secrets.keys, ...redirects.keys, ...spelled.keys]) {
+      expect(env.keys.any((e) => e.toUpperCase() == k.toUpperCase()), isFalse, reason: '$k must not reach the git child');
+    }
+    expect(env['RESOLVER_TEST_KEEP'], 'kept');
+    expect(env.keys.any((k) => k.toUpperCase() == 'PATH'), isTrue, reason: 'git itself needs PATH');
+  });
+
+  test('node: the git config family is kept whole (a COUNT never loses its KEY_<n> or VALUE_<n> to the credential-name scrub)', () {
+    final script = File('.claude/token_path.js').absolute.path;
+    final r = runSpawn(
+      'node',
+      ['-e', 'const t=require(${jsonEncode(script)});console.log(JSON.stringify(t.scrubbedGitEnv()));'],
+      why: 'node .claude/token_path.js scrubbedGitEnv() with an injected git config',
+      extraEnv: _injectedGitConfig,
+      allowControl: _injectedGitConfig.keys.toSet(),
+    );
+    expect(r.exitCode, 0, reason: '${r.stderr}');
+    final env = (jsonDecode((r.stdout as String).trim()) as Map<String, dynamic>).cast<String, String>();
+    for (final e in _injectedGitConfig.entries) {
+      expect(env[e.key], e.value, reason: '${e.key} must reach git with its siblings');
+    }
+  });
+
+  test('dart: the git child environment carries no Supabase secret and no git redirection, and keeps the rest', () {
+    final env = dart_resolver.scrubbedGitEnv({...secrets, ...redirects, ...spelled, 'RESOLVER_TEST_KEEP': 'kept', 'PATH': '/bin', 'SystemRoot': r'C:Windows'});
+    for (final k in [...secrets.keys, ...redirects.keys, ...spelled.keys]) {
+      expect(env.containsKey(k), isFalse, reason: '$k must not reach the git child');
+    }
+    expect(env['SystemRoot'], r'C:Windows', reason: 'git needs the system variables');
+    expect(env['RESOLVER_TEST_KEEP'], 'kept');
+    expect(env['PATH'], '/bin');
+  });
+
+  test('dart: the git config family is kept whole (a COUNT never loses its KEY_<n> or VALUE_<n> to the credential-name scrub)', () {
+    final env = dart_resolver.scrubbedGitEnv({..._injectedGitConfig, 'GEMINI_API_KEY': 'sentinel-gemini'});
+    for (final e in _injectedGitConfig.entries) {
+      expect(env[e.key], e.value, reason: '${e.key} must reach git with its siblings');
+    }
+    expect(env.containsKey('GEMINI_API_KEY'), isFalse, reason: 'the exemption is the git config family only');
   });
 }

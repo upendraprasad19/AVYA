@@ -71,6 +71,6 @@ void main() {
     expect(Map<String, dynamic>.from(hive.exerciseBox.get(_customId) as Map)['name'], 'My Own Curl');
     expect(Map<String, dynamic>.from(hive.exerciseBox.get(_communityId) as Map)['name'], 'Shared Row');
     expect(hive.exerciseBox.length, original.length + added.length + 2);
-    expect(hive.configBox.get('exercise_library_version') as int, 15);
+    expect(hive.configBox.get('exercise_library_version') as int, greaterThanOrEqualTo(15));
   });
 }

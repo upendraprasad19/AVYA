@@ -119,7 +119,13 @@ class SeedService {
   //   library_injury_additions_v15.json; E274 target_focus Upper Back -> Mid Back.
   //   Nothing is removed (Batch C2). Without this bump the new rows never reach an
   //   existing install (library_seed_v15_upgrade_behavioral_test.dart).
-  static const int _exerciseLibraryVersion = 15;
+  // v16 (Batch M1, docs/plans/2026-10-27-library-batch-m1-media-data.md): the 617
+  //   rows that have a Wardroom animation gain media_slug, media_version and
+  //   media_source (scripts/data/library_media_v16.json, written by the media stage
+  //   of scripts/add_library_batch_c_v15.js). Nothing reads them until Batch M2.
+  //   A later media_version change reaches an installed copy only if this constant
+  //   is bumped again (library_seed_v16_upgrade_behavioral_test.dart).
+  static const int _exerciseLibraryVersion = 16;
   static const String _exerciseVersionKey = 'exercise_library_version';
 
   /// Bump this integer whenever the bundled food_database.json changes
