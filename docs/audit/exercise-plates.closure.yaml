@@ -1,0 +1,141 @@
+# Closure ledger — exercise plates. Gate 40 (validate_audit_closure.dart).
+# One terminal_state per item; no `deferred:` key. 15 items, over the §4.2 >=4
+# threshold. Branch: exercise-plates.
+#
+# No diagnose-doc: this is a feature, not a bug fix. No commit subject matches
+# rule 22's ^(fix|bug|regression) pattern.
+#
+# The four parked items each cite an OI that EXISTS. An earlier draft parked the
+# breathing_cue repair as `upstream_blocked` against "an OI" with no number,
+# which is a deferral wearing a terminal state — the §4.2 case where the ban is
+# on the semantic, not the string.
+
+batch: exercise-plates
+total_findings: 15
+closed_count: 15
+
+findings:
+  # ---- the build, in the order it landed ----
+  - id: T1
+    title: demo_slug + demo_pair on 165 rows, seed version 10 -> 11
+    terminal_state: closed_in_commit
+    commit: "224b6d09"
+    verification: flutter test test/contracts/exercise_plate_library_data_test.dart
+
+  - id: T2
+    title: vendor the artwork, crop it, ship 292 SVGs
+    terminal_state: closed_in_commit
+    commit: "3537cae8"
+    verification: flutter test test/contracts/exercise_plate_assets_present_test.dart
+
+  - id: T3
+    title: the plate resolver — name to assets and shape
+    terminal_state: closed_in_commit
+    commit: "e35be284"
+    verification: flutter test test/contracts/exercise_plate_resolver_test.dart
+
+  - id: T4
+    title: the monogram and the 44 px thumbnail
+    terminal_state: closed_in_commit
+    commit: "05e0a588"
+    verification: flutter test test/contracts/exercise_plate_widgets_test.dart
+
+  - id: T5
+    title: the plate sheet — diptych for a cycle, one plate for a hold
+    terminal_state: closed_in_commit
+    commit: "2cc510fa"
+    verification: flutter test test/contracts/exercise_plate_sheet_test.dart
+
+  - id: T6
+    title: wire three badge sites, the second door, the breathing guard
+    terminal_state: closed_in_commit
+    commit: "exercise-plates (this commit)"
+    verification: flutter test test/contracts/exercise_plate_badge_sites_test.dart test/contracts/breathing_cue_numeric_suppressed_test.dart
+
+  - id: T7
+    title: ship the CC BY-SA attribution to the user
+    terminal_state: closed_in_commit
+    commit: "exercise-plates (this commit)"
+    verification: flutter test test/contracts/plate_attribution_surface_test.dart
+
+  - id: T8
+    title: spec corrections, SoT registry entry, this ledger
+    terminal_state: closed_in_commit
+    commit: "exercise-plates (this commit)"
+    verification: dart run scripts/check_sot_behavioral_test_paths.dart
+
+  - id: T9
+    title: full suite, B-pass, plan-review record, merge
+    terminal_state: closed_in_commit
+    commit: "exercise-plates (this commit)"
+    verification: flutter test && flutter analyze --no-fatal-infos
+
+  # ---- parked, each terminal, each citing an OI that exists ----
+  - id: P1
+    title: 127 photographs for the exercises with no drawing
+    terminal_state: blocked_on_user
+    reason: >
+      Requires the founder's camera. The monogram covers these rows from day
+      one, and the photographs arrive later as a data change plus an
+      _exerciseLibraryVersion bump, with no code. Shooting guidance is recorded
+      in docs/plans/exercise-plates-spec.md.
+
+  - id: P2
+    title: 23 equipment-variant exercises surfaced by the split rule
+    terminal_state: blocked_on_user
+    reason: >
+      OI-148. Blocked on a product decision, not on artwork - every drawing is
+      already identified. A dumbbell user would see BOTH rows of every split
+      pair, doubling that movement's slot probability, which is OI-146's defect
+      reproduced 23 times. The spec had misrouted these to OI-145, which scopes
+      34 different drawings.
+
+  - id: P3
+    title: breathing_cue holds a bare number on 136 of 292 rows
+    terminal_state: blocked_on_user
+    reason: >
+      OI-149. 136 replacement cues must be AUTHORED; the original text is
+      unrecoverable, and both recovery paths were checked - the field is absent
+      from all 20 columns of both seed migrations, and all 19 git revisions of
+      the library carry the numeric value. Both render surfaces in this batch
+      suppress it, pinned together by
+      test/contracts/breathing_cue_numeric_suppressed_test.dart.
+
+  - id: P4
+    title: remove Donkey Calf Raise
+    terminal_state: blocked_on_user
+    reason: >
+      OI-147. Split out of this batch after review round 2 dissolved three of
+      its five blockers. Needs the 606-persona generator matrix run first - it
+      is the library's only bodyweight-tier calf isolation row - then a
+      seed-migration re-mint, an applied_migrations pair, and a live prod apply
+      that needs its own founder authorization.
+
+  - id: P5
+    title: the three dead image URL fields in migrations 074/125 and two seed scripts
+    terminal_state: verified_clean
+    evidence: >
+      backups/live_schema_columns.json holds no exercise_library key at all, so
+      nothing server-side reads them. Removed from the bundled JSON and from
+      swap_service in T1, and from all 30 template blocks in
+      scripts/add_new_exercises.py after the B-pass found it still emitting
+      them.
+      SCOPE, stated precisely because the first version of this entry overstated
+      it: test/contracts/exercise_plate_library_data_test.dart pins them absent
+      across lib/ and test/ .dart FILES ONLY -- its own scan skips anything not
+      ending in .dart, so it never saw the .py generator and could not have.
+      What actually catches a row created with a dead field is the closed-schema
+      contract (35 required + 2 optional, extra computed by set difference),
+      downstream at test time rather than at authoring time.
+      The two seed migrations 074/125 still name the columns; they are
+      historical records that are never rewritten, and OI-147's re-mint is what
+      next regenerates from the bundled JSON.
+
+  - id: P6
+    title: stale swap_service entries in backups/gate19_drift_baseline.txt
+    terminal_state: verified_clean
+    notes: >
+      Gate 19 flags NEW drift only and has no stale-entry check, so the two
+      entries naming the deleted swap_service lines cannot fail anything. Its
+      header asks for a refresh after closing a true drift; this is a deletion,
+      not a drift closure.
