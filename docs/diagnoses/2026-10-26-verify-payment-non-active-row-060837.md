@@ -2,7 +2,7 @@
 bug_id: 060837
 date: 2026-10-26
 batch: oi410-verify-nonactive-row (OI-410)
-status: fixed_in_code_deploy_pending
+status: fixed
 tier: l_fix
 blast_radius: catastrophic
 symptom: >-
@@ -147,3 +147,15 @@ included ..." answered **"Implement through merge (Recommended)"**.
 
 Rollback: forward-deploy the saved previous bundle (plan, Verification, rollout); no client build is needed. The live
 deploy is a separate go and is NOT part of this commit.
+
+## Deployment (2026-10-27, recorded by the closing docs commit)
+
+The founder gave the per-action go on 2026-10-27 (every live action listed; the signed-in smoke replaced by "accept boot probe alone").
+`verify-payment` was deployed from a full clone at main `43bd8797` (the fix merged as `87aa7fdc`; nothing under `supabase/functions/` changed between
+them): v31 -> **v32**, `verify_jwt` true, 2026-10-27T14:57:54Z, HTTP 201. Before: the decoded live bundle equalled pre-merge `5794439a` on all 4 files and
+the diff to main was exactly the fix (only `index.ts`). After: the decoded live bundle equals main on all 4 files. Boot probe with the anon-key Bearer:
+HTTP 401 `{"error":"Invalid or expired token"}`, the module's own answer (not a 503). T+0 reads: 2 requests (both 401, v32), 0 5xx, 0 boot errors,
+0 `replay` lines, 0 `alerts` rows since the deploy (24 h baseline before: 0 requests). Forward payload sha256
+`92b50aab223e415c5a36467813a1f979d5a39a37331716989869040fc3d98e2d`; rollback payload (rebuilt from `5794439a`) sha256
+`877c5a95a8ac4484a577dc29715dd73ac44ecc1045cd4d68bd3da33bbb729ae3`. Not run, by the founder's decision: a real captured-payment replay (Q2) and the
+signed-in smoke. Tier 6 of `touched_layers_checked` above states the pre-deploy reading (v31); it is the 2026-10-26 evidence and stays as written.
