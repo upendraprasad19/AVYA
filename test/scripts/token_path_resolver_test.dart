@@ -201,4 +201,40 @@ void main() {
     final r = _viaNode(w.linked, env: {'GIT_DIR': _join([other.path, '.git'])})!;
     expect(_real(r.path), _real(_join([w.primary, '.supabase', _name])));
   });
+
+  // The `git` child that finds the primary checkout has no use for a Supabase secret; a hook or a wrapper that logs a child
+  // environment must not be able to print one. Both resolvers drop the git redirection variables and the secrets.
+  const secrets = <String, String>{
+    'SUPABASE_SERVICE_ROLE_KEY': 'sentinel-service-role-key',
+    'SUPABASE_ACCESS_TOKEN': 'sentinel-access-token',
+    'SUPABASE_ACCESS_TOKEN_FITNESS': 'sentinel-access-token-fitness',
+  };
+  const redirects = <String, String>{'GIT_DIR': '/x', 'GIT_WORK_TREE': '/x', 'GIT_INDEX_FILE': '/x', 'GIT_COMMON_DIR': '/x'};
+
+  test('node: the git child environment carries no Supabase secret and no git redirection, and keeps the rest', () {
+    final script = File('.claude/token_path.js').absolute.path;
+    final r = runSpawn(
+      'node',
+      ['-e', 'const t=require(${jsonEncode(script)});console.log(JSON.stringify(t.scrubbedGitEnv()));'],
+      why: 'node .claude/token_path.js scrubbedGitEnv()',
+      extraEnv: {...secrets, ...redirects, 'TOKEN_PATH_TEST_KEEP': 'kept'},
+      allowControl: {...secrets.keys, ...redirects.keys},
+    );
+    expect(r.exitCode, 0, reason: '${r.stderr}');
+    final env = (jsonDecode((r.stdout as String).trim()) as Map<String, dynamic>).cast<String, String>();
+    for (final k in [...secrets.keys, ...redirects.keys]) {
+      expect(env.containsKey(k), isFalse, reason: '$k must not reach the git child');
+    }
+    expect(env['TOKEN_PATH_TEST_KEEP'], 'kept');
+    expect(env.keys.any((k) => k.toUpperCase() == 'PATH'), isTrue, reason: 'git itself needs PATH');
+  });
+
+  test('dart: the git child environment carries no Supabase secret and no git redirection, and keeps the rest', () {
+    final env = dart_resolver.scrubbedGitEnv({...secrets, ...redirects, 'TOKEN_PATH_TEST_KEEP': 'kept', 'PATH': '/bin'});
+    for (final k in [...secrets.keys, ...redirects.keys]) {
+      expect(env.containsKey(k), isFalse, reason: '$k must not reach the git child');
+    }
+    expect(env['TOKEN_PATH_TEST_KEEP'], 'kept');
+    expect(env['PATH'], '/bin');
+  });
 }

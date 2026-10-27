@@ -95,7 +95,7 @@ BEGIN
       AND cmd = 'SELECT'
       AND roles = ARRAY['authenticated']::name[]
       AND qual LIKE '%exercise-media%'
-      AND qual LIKE '%is_anonymous%'
+      AND strpos(qual, 'is_anonymous') > 0
   ) THEN
     RAISE EXCEPTION 'exercise_media_bucket self-check: the read policy is missing or is not SELECT TO authenticated with the bucket and is_anonymous predicates';
   END IF;
@@ -241,9 +241,42 @@ String migrationBody(String migration) {
 }
 
 const String _expectedArrays = '''
-v_names text[] := ARRAY['baseline', 'v1_to_public', 'v2_no_is_anonymous', 'v3_unscoped_bucket', 'v4_for_all'];
-v_expected text[] := ARRAY['0/1/0/0', '1/1/0/0', '0/1/1/0', '0/1/0/1', '0/1/0/0'];
-v_expected_w text[] := ARRAY['refused/0/0', 'refused/0/0', 'refused/0/0', 'refused/0/0', 'inserted/1/1'];''';
+v_names text[] := ARRAY['baseline', 'v1_to_public', 'v2_no_is_anonymous', 'v3_unscoped_bucket', 'v4_for_all', 'v5_buckets_update_policy'];
+v_expected text[] := ARRAY['0/1/0/0', '1/1/0/0', '0/1/1/0', '0/1/0/1', '0/1/0/0', '0/1/0/0'];
+v_expected_w text[] := ARRAY['refused/0/0/0', 'refused/0/0/0', 'refused/0/0/0', 'refused/0/0/0', 'inserted/1/1/0', 'refused/0/0/0'];
+v_expected_c text[] := ARRAY[
+  'SELECT|{authenticated}|true|true|none|none',
+  'SELECT|{public}|true|true|exercise_media_authenticated_read|none',
+  'SELECT|{authenticated}|true|false|none|none',
+  'SELECT|{authenticated}|false|true|none|none',
+  'ALL|{authenticated}|true|true|none|none',
+  'SELECT|{authenticated}|true|true|none|buckets.exercise_media_buckets_wrong'];''';
+
+/// The grant-dependent expectation of variant 5 and the composition of the catalog reading.
+const List<String> _expectedFlow = <String>[
+  "IF v_bucket_upd_priv THEN v_expected_w[6] := 'refused/0/0/1'; END IF;",
+  '''
+v_cat := coalesce(v_policy_cmd, 'absent') || '|' || coalesce(v_policy_roles, 'absent') || '|'
+  || coalesce(v_qual_bucket, 'absent') || '|' || coalesce(v_qual_anon, 'absent') || '|'
+  || v_anon_public || '|' || v_unscoped_write;''',
+  '''
+v_flag := CASE WHEN v_actual = v_expected[v_i] AND v_actual_w = v_expected_w[v_i] AND v_cat = v_expected_c[v_i] AND v_anon_priv
+               THEN 'OK' ELSE 'STOP' END;''',
+  '''
+v_flag := CASE WHEN v_actual = v_expected[v_i] AND v_actual_w = v_expected_w[v_i] AND v_cat = v_expected_c[v_i]
+               THEN 'RED' ELSE 'STOP' END;''',
+];
+
+/// The probe's refusal messages are matched against the specific table, and the underscored words are looked up with
+/// strpos (a LIKE underscore is a wildcard). Each needle must be in the probe or the catalog block of BOTH files.
+const List<String> _expectedMessages = <String>[
+  "LIKE 'permission denied for table objects%'",
+  "LIKE 'new row violates row-level security policy for table \"objects\"%'",
+  "LIKE 'permission denied for table buckets%'",
+  "strpos(qual, 'is_anonymous') > 0",
+  "strpos(qual, 'bucket_id') = 0",
+  "tablename IN ('objects', 'buckets')",
+];
 
 const List<String> _expectedVariants = <String>[
   '''
@@ -275,13 +308,18 @@ ELSIF v_i = 5 THEN
     USING (
       bucket_id = 'exercise-media'
       AND coalesce(((select auth.jwt()) ->> 'is_anonymous')::boolean, false) = false
-    );
+    );''',
+  '''
+ELSIF v_i = 6 THEN
+  CREATE POLICY exercise_media_buckets_wrong ON storage.buckets
+    FOR UPDATE TO authenticated
+    USING (true);
 END IF;''',
 ];
 
 const String _expectedVerdict1 = '''
 WHEN v_anon = '0' AND v_auth = '1' AND v_anon_session = '0' AND v_other = '0'
- AND v_write_insert = 'refused' AND v_write_update = '0' AND v_write_delete = '0'
+ AND v_write_insert = 'refused' AND v_write_update = '0' AND v_write_delete = '0' AND v_write_bucket = '0'
  AND v_anon_priv
  AND v_bucket_public = 'false' AND v_bucket_limit = '1500000' AND v_bucket_mime = '{image/webp}'
  AND v_policy_cmd = 'SELECT' AND v_policy_roles = '{authenticated}'
@@ -295,7 +333,7 @@ IF EXISTS (SELECT 1 FROM storage.buckets WHERE id = 'exercise-media') THEN
   RAISE EXCEPTION 'REHEARSAL_ONLY: the exercise-media bucket already exists; this file must not run after the apply';
 END IF;''';
 
-const String _expectedVerdict2 = "v_stop = 0 AND v_red = 4 AND v_anon_priv THEN 'PASS' ELSE 'FAIL' END";
+const String _expectedVerdict2 = "v_stop = 0 AND v_red = 5 AND v_anon_priv THEN 'PASS' ELSE 'FAIL' END";
 
 /// The ids of the pins the two SQL files [f1] (live verify) and [f2] (wrong-policies rehearsal) violate against
 /// the [migration] text.
@@ -307,6 +345,10 @@ List<String> sqlFilesViolations({required String f1, required String f2, require
   if (_count(f1, '-- PROBE-BEGIN') != 1 ||
       _count(f1, '-- PROBE-END') != 1 ||
       _count(f1, '-- PRELUDE-INSERT-POINT') != 1 ||
+      _count(f1, '-- CATALOG-BEGIN') != 1 ||
+      _count(f1, '-- CATALOG-END') != 1 ||
+      _count(f2, '-- CATALOG-BEGIN') != 1 ||
+      _count(f2, '-- CATALOG-END') != 1 ||
       _count(f2, '-- PROBE-BEGIN') != 1 ||
       _count(f2, '-- PROBE-END') != 1 ||
       _count(f2, '-- PRELUDE-BEGIN') != 1 ||
@@ -316,6 +358,17 @@ List<String> sqlFilesViolations({required String f1, required String f2, require
   final probe1 = normalizeSql(_between(f1, '-- PROBE-BEGIN', '-- PROBE-END'));
   final probe2 = normalizeSql(_between(f2, '-- PROBE-BEGIN', '-- PROBE-END'));
   if (probe1.isEmpty || probe1 != probe2) v.add('probe_equal');
+  final catalog1 = normalizeSql(_between(f1, '-- CATALOG-BEGIN', '-- CATALOG-END'));
+  final catalog2 = normalizeSql(_between(f2, '-- CATALOG-BEGIN', '-- CATALOG-END'));
+  if (catalog1.isEmpty || catalog1 != catalog2) v.add('catalog_equal');
+  for (final needle in _expectedMessages) {
+    if (!probe1.contains(normalizeSql(needle)) && !catalog1.contains(normalizeSql(needle))) v.add('messages');
+    if (!probe2.contains(normalizeSql(needle)) && !catalog2.contains(normalizeSql(needle))) v.add('messages');
+  }
+  final underscoreLike = RegExp(r"LIKE\s*'%(is_anonymous|bucket_id)%'", caseSensitive: false);
+  if (underscoreLike.hasMatch(executableText(f1)) || underscoreLike.hasMatch(executableText(f2))) {
+    v.add('no_underscore_like');
+  }
   final prelude = normalizeSql(_between(f2, '-- PRELUDE-BEGIN', '-- PRELUDE-END'));
   final body = normalizeSql(migrationBody(migration));
   if (body.isEmpty || prelude != body) v.add('prelude_equal');
@@ -331,7 +384,10 @@ List<String> sqlFilesViolations({required String f1, required String f2, require
   if (!n1.contains(normalizeSql(_expectedVerdict1))) v.add('f1_verdict');
   if (!n2.contains(normalizeSql(_expectedGuard2))) v.add('f2_guard');
   if (!n2.contains(normalizeSql(_expectedArrays))) v.add('f2_expected');
-  if (!n2.contains(normalizeSql(_expectedVerdict2)) || !n2.contains('FOR v_i IN 1..5 LOOP')) v.add('f2_verdict');
+  if (!n2.contains(normalizeSql(_expectedVerdict2)) || !n2.contains('FOR v_i IN 1..6 LOOP')) v.add('f2_verdict');
+  for (final stmt in _expectedFlow) {
+    if (!n2.contains(normalizeSql(stmt))) v.add('f2_flow');
+  }
   for (final stmt in _expectedVariants) {
     if (!n2.contains(normalizeSql(stmt))) v.add('f2_variants');
   }
@@ -532,12 +588,20 @@ void main() {
       expect(normalizeSql(_between(f2, '-- PRELUDE-BEGIN', '-- PRELUDE-END')), normalizeSql(migrationBody(migration)));
     });
 
-    test('the probe covers the four reads and the three write legs', () {
+    test('the probe covers the four reads and the four write legs (insert, update, delete, the bucket row)', () {
       final p = normalizeSql(_between(f1, '-- PROBE-BEGIN', '-- PROBE-END'));
-      for (final needle in ['SET LOCAL ROLE anon', "'is_anonymous',false", "'is_anonymous',true", "bucket_id = 'coach-media'", 'INSERT INTO storage.objects', 'UPDATE storage.objects', 'DELETE FROM storage.objects']) {
+      for (final needle in ['SET LOCAL ROLE anon', "'is_anonymous',false", "'is_anonymous',true", "bucket_id = 'coach-media'", 'INSERT INTO storage.objects', 'UPDATE storage.objects', 'DELETE FROM storage.objects', "UPDATE storage.buckets SET public = true WHERE id = 'exercise-media'"]) {
         expect(p, contains(needle));
       }
-      expect(_count(p, 'SET LOCAL ROLE authenticated'), 6);
+      expect(_count(p, 'SET LOCAL ROLE authenticated'), 7);
+    });
+
+    test('the catalog block is byte-equal in both files and reads storage.buckets policies as well as storage.objects', () {
+      final c1 = normalizeSql(_between(f1, '-- CATALOG-BEGIN', '-- CATALOG-END'));
+      final c2 = normalizeSql(_between(f2, '-- CATALOG-BEGIN', '-- CATALOG-END'));
+      expect(c1, isNotEmpty);
+      expect(c1, c2);
+      expect(c1, contains(normalizeSql("tablename IN ('objects', 'buckets')")));
     });
 
     test('the live verify has no DDL and neither file controls a transaction', () {
@@ -557,15 +621,30 @@ void main() {
       ('an extra statement in the FILE 2 prelude', () => (f1: f1, f2: _replaceOnce(f2, "  PERFORM set_config('lock_timeout', '5s', true);", "  PERFORM set_config('lock_timeout', '5s', true);\n  PERFORM 1;"), migration: migration), ['prelude_equal']),
       ('the migration changes and the prelude does not', () => (f1: f1, f2: f2, migration: _replaceOnce(migration, 'file_size_limit = 1500000\n      AND allowed', 'file_size_limit = 1400000\n      AND allowed')), ['prelude_equal']),
       ('an expected quadruple changed in FILE 2', () => (f1: f1, f2: _replaceOnce(f2, "'1/1/0/0'", "'0/1/0/0'"), migration: migration), ['f2_expected']),
-      ('an expected write row changed in FILE 2', () => (f1: f1, f2: _replaceOnce(f2, "'inserted/1/1'", "'refused/0/0'"), migration: migration), ['f2_expected']),
+      ('an expected write row changed in FILE 2', () => (f1: f1, f2: _replaceOnce(f2, "'inserted/1/1/0'", "'refused/0/0/0'"), migration: migration), ['f2_expected']),
       ('variant 1 no longer TO public', () => (f1: f1, f2: _replaceOnce(f2, 'FOR SELECT TO public', 'FOR SELECT TO authenticated'), migration: migration), ['f2_variants']),
-      ('a variant dropped from the loop', () => (f1: f1, f2: _replaceOnce(f2, 'FOR v_i IN 1..5 LOOP', 'FOR v_i IN 1..4 LOOP'), migration: migration), ['f2_verdict']),
-      ('the FILE 2 verdict accepts three of four', () => (f1: f1, f2: _replaceOnce(f2, 'v_red = 4', 'v_red = 3'), migration: migration), ['f2_verdict']),
+      ('a variant dropped from the loop', () => (f1: f1, f2: _replaceOnce(f2, 'FOR v_i IN 1..6 LOOP', 'FOR v_i IN 1..5 LOOP'), migration: migration), ['f2_verdict']),
+      ('the FILE 2 verdict accepts four of five', () => (f1: f1, f2: _replaceOnce(f2, 'v_red = 5', 'v_red = 4'), migration: migration), ['f2_verdict']),
       ('the FILE 2 guard removed', () => (f1: f1, f2: _replaceOnce(f2, "IF EXISTS (SELECT 1 FROM storage.buckets WHERE id = 'exercise-media') THEN", "IF NOT EXISTS (SELECT 1 FROM storage.buckets WHERE id = 'exercise-media') THEN"), migration: migration), ['f2_guard']),
       ('a DDL statement in FILE 1', () => (f1: _replaceOnce(f1, '  v_anon_priv := has_table_privilege', "  DROP POLICY IF EXISTS x ON storage.objects;\n  v_anon_priv := has_table_privilege"), f2: f2, migration: migration), ['f1_no_ddl']),
       ('a COMMIT in FILE 1', () => (f1: _replaceOnce(f1, '  v_anon_priv := has_table_privilege', '  COMMIT;\n  v_anon_priv := has_table_privilege'), f2: f2, migration: migration), ['no_txn_control']),
       ('the FILE 1 verdict expects authenticated 0', () => (f1: _replaceOnce(f1, "AND v_auth = '1'", "AND v_auth = '0'"), f2: f2, migration: migration), ['f1_verdict']),
       ('a probe marker removed from FILE 1', () => (f1: _replaceOnce(f1, '  -- PROBE-END', '  -- PROBE-FIN'), f2: f2, migration: migration), ['markers']),
+      ('the bucket leg dropped from the FILE 1 verdict', () => (f1: _replaceOnce(f1, " AND v_write_bucket = '0'", ''), f2: f2, migration: migration), ['f1_verdict']),
+      ('an expected catalog string changed in FILE 2', () => (f1: f1, f2: _replaceOnce(f2, "'ALL|{authenticated}|true|true|none|none'", "'SELECT|{authenticated}|true|true|none|none'"), migration: migration), ['f2_expected']),
+      ('the grant-dependent expectation of variant 5 removed', () => (f1: f1, f2: _replaceOnce(f2, "  IF v_bucket_upd_priv THEN v_expected_w[6] := 'refused/0/0/1'; END IF;\n", ''), migration: migration), ['f2_flow']),
+      ('the FILE 2 flags ignore the catalog reading', () => (f1: f1, f2: _replaceOnce(f2, " AND v_cat = v_expected_c[v_i]\n                       THEN 'RED'", "\n                       THEN 'RED'"), migration: migration), ['f2_flow']),
+      ('the catalog reading is composed without the unscoped writes', () => (f1: f1, f2: _replaceOnce(f2, "        || v_anon_public || '|' || v_unscoped_write;", "        || v_anon_public;"), migration: migration), ['f2_flow']),
+      ('variant 6 (the buckets policy) changed', () => (f1: f1, f2: _replaceOnce(f2, 'FOR UPDATE TO authenticated', 'FOR SELECT TO authenticated'), migration: migration), ['f2_variants']),
+      ('the catalog block differs in FILE 2', () => (f1: f1, f2: _replaceOnce(f2, "tablename IN ('objects', 'buckets')", "tablename IN ('objects')"), migration: migration), ['catalog_equal']),
+      ('the catalog block loses the buckets table in FILE 1 AND FILE 2 together', () => (f1: _replaceOnce(f1, "tablename IN ('objects', 'buckets')", "tablename IN ('objects')"), f2: _replaceOnce(f2, "tablename IN ('objects', 'buckets')", "tablename IN ('objects')"), migration: migration), ['messages']),
+      ('the probe messages are widened in FILE 1 AND FILE 2 together', () => (f1: _replaceOnce(f1, "LIKE 'permission denied for table objects%'", "LIKE 'permission denied for table%'"), f2: _replaceOnce(f2, "LIKE 'permission denied for table objects%'", "LIKE 'permission denied for table%'"), migration: migration), ['messages']),
+      ('the insert refusal is matched loosely in both files', () => (f1: _replaceOnce(f1, 'row-level security policy for table "objects"%', 'row-level security policy%'), f2: _replaceOnce(f2, 'row-level security policy for table "objects"%', 'row-level security policy%'), migration: migration), ['messages']),
+      ('the catalog reads is_anonymous with a LIKE underscore in both files', () => (f1: _replaceOnce(f1, "(strpos(qual, 'is_anonymous') > 0)::text", "(qual LIKE '%is_anonymous%')::text"), f2: _replaceOnce(f2, "(strpos(qual, 'is_anonymous') > 0)::text", "(qual LIKE '%is_anonymous%')::text"), migration: migration), ['messages', 'no_underscore_like']),
+      ('the bucket scope of the unscoped-write check is a LIKE in both files', () => (f1: _replaceOnce(f1, "strpos(coalesce(qual, '') || coalesce(with_check, ''), 'bucket_id') = 0", "(coalesce(qual, '') || coalesce(with_check, '')) NOT LIKE '%bucket_id%'"), f2: _replaceOnce(f2, "strpos(coalesce(qual, '') || coalesce(with_check, ''), 'bucket_id') = 0", "(coalesce(qual, '') || coalesce(with_check, '')) NOT LIKE '%bucket_id%'"), migration: migration), ['no_underscore_like']),
+      ('a catalog marker removed from FILE 1', () => (f1: _replaceOnce(f1, '  -- CATALOG-END', '  -- CATALOG-FIN'), f2: f2, migration: migration), ['markers']),
+      ('the bucket leg changed in the FILE 2 probe copy', () => (f1: f1, f2: _replaceOnce(f2, "UPDATE storage.buckets SET public = true WHERE id = 'exercise-media';", "UPDATE storage.buckets SET public = true WHERE id = 'exercise-media-x';"), migration: migration), ['probe_equal']),
+      ('the self-check reads is_anonymous with a LIKE underscore again', () => (f1: f1, f2: f2, migration: _replaceOnce(migration, "strpos(qual, 'is_anonymous') > 0", "qual LIKE '%is_anonymous%'")), ['prelude_equal']),
       ('the final RAISE removed from FILE 2', () => (f1: f1, f2: _replaceOnce(f2, "RAISE EXCEPTION 'VERIFY_RESULTS%'", "RAISE NOTICE 'VERIFY_RESULTS%'"), migration: migration), ['verify_results_once']),
     ];
     for (final (name, build, ids) in mutants) {

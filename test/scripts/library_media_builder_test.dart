@@ -257,6 +257,49 @@ void main() {
       expect(r.stderr, contains('recorded'));
     });
 
+    test('a THUMBNAIL that differs from the table\'s recorded sha for the same slug stops the run (the other half of immutability)', () async {
+      expect((await env.build()).exitCode, 0);
+      final id = '3643_Farmer_s_Walk';
+      final nb = webpBytes(700, 78);
+      env.ward.thumbFile(id).writeAsBytesSync(nb);
+      (env.ward.entry(id)['thumbnailValidation'] as Map)['SHA256'] = sha256Hex(nb);
+      (env.ward.entry(id)['thumbnailValidation'] as Map)['bytes'] = nb.length;
+      env.ward.saveLedger();
+      final r = await env.build();
+      expect(r.exitCode, isNot(0), reason: _out(r));
+      expect(r.stderr, contains('3643-farmer-s-walk'));
+      expect(r.stderr, contains('recorded'));
+    });
+
+    test('an animation whose byte count differs from the ledger\'s stops the run, naming the slug and both numbers', () async {
+      final id = '3643_Farmer_s_Walk';
+      final real = env.ward.animFile(id).lengthSync();
+      (env.ward.entry(id)['animationValidation'] as Map)['bytes'] = real + 1;
+      env.ward.saveLedger();
+      final r = await env.build();
+      expect(r.exitCode, isNot(0), reason: _out(r));
+      expect(r.stderr, contains('3643-farmer-s-walk'));
+      expect(r.stderr, contains('$real bytes'));
+      expect(r.stderr, contains('${real + 1}'));
+    });
+
+    for (final bad in <String, Object?>{'a string': '12', 'a fraction': 12.5, 'absent': null}.entries) {
+      test('a ledger frame count that is ${bad.key} (not an integer) stops the run, naming the slug', () async {
+        final id = '3643_Farmer_s_Walk';
+        final validation = env.ward.entry(id)['animationValidation'] as Map;
+        if (bad.value == null) {
+          validation.remove('frames');
+        } else {
+          validation['frames'] = bad.value;
+        }
+        env.ward.saveLedger();
+        final r = await env.build();
+        expect(r.exitCode, isNot(0), reason: _out(r));
+        expect(r.stderr, contains('3643-farmer-s-walk'));
+        expect(r.stderr, contains('frame count'));
+      });
+    }
+
     test('a file over webp_bytes_max stops the run', () async {
       final e = _Env(entries: [..._defaultEntries(), FixtureEntry(number: '0555', name: 'Huge One', animSize: 1500001, seed: 5)]);
       addTearDown(e.dispose);

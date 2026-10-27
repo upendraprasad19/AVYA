@@ -46,7 +46,7 @@
 -- Verification after apply (founder-visible, read-only): test/sql/exercise_media_bucket_live_verify.sql writes its
 -- fixtures INSIDE one always-aborting DO block (nothing persists). The rehearsal that precedes the apply is the same
 -- file with this block's body inserted at its marker, plus test/sql/exercise_media_bucket_wrong_policies_rehearsal.sql
--- (rehearsal only: three wrong policies must each go RED).
+-- (rehearsal only: five wrong variants must each go RED).
 
 DO $mig$
 BEGIN
@@ -88,7 +88,7 @@ BEGIN
       AND cmd = 'SELECT'
       AND roles = ARRAY['authenticated']::name[]
       AND qual LIKE '%exercise-media%'
-      AND qual LIKE '%is_anonymous%'
+      AND strpos(qual, 'is_anonymous') > 0
   ) THEN
     RAISE EXCEPTION 'exercise_media_bucket self-check: the read policy is missing or is not SELECT TO authenticated with the bucket and is_anonymous predicates';
   END IF;

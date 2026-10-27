@@ -15,7 +15,7 @@
 | The seed | `lib/core/services/seed_service.dart` `_exerciseLibraryVersion = 16` | Installs re-seed the library once on the next launch. |
 | The bucket | Storage bucket `exercise-media` on project `dedsavbjuwgarrhphgnl`, created by the migration `NNN_exercise_media_bucket.sql` | PRIVATE, `image/webp` only, 1,500,000 bytes per object, one read policy. |
 | The upload tool | `scripts/upload_exercise_media.js` | Dry run, canary, upload, verify, sign, delete, probes. Pinned to this project and bucket. |
-| The proofs | `test/sql/exercise_media_bucket_live_verify.sql`, `test/sql/exercise_media_bucket_wrong_policies_rehearsal.sql`, `test/contracts/exercise_media_bucket_private_test.dart` | The role probe on the live catalog; the rehearsal that shows the probe goes red on wrong policies; the text pins. |
+| The proofs | `test/sql/exercise_media_bucket_live_verify.sql`, `test/sql/exercise_media_bucket_wrong_policies_rehearsal.sql`, `test/contracts/exercise_media_bucket_private_test.dart`, `scripts/exercise_media_rehearsal_sql.js` | The role probe and catalog check on the live database; the rehearsal that shows they go red on five wrong setups (including a policy on `storage.buckets` that could flip the bucket public); the text pins; the composer that builds the exact SQL the rehearsal sends (`node scripts/exercise_media_rehearsal_sql.js --file1` or `--file2`, to stdout, nothing written). |
 
 The three library fields are **absent, never `null`, and travel together**: a row carries all three or none, appended last in the order
 `media_slug`, `media_version`, `media_source`. `media_source` is the constant `wardroom`. The object name is
@@ -73,10 +73,13 @@ node scripts/upload_exercise_media.js --probe-control avatars/<name>
 ```
 
 - `--report <path>` must lie **outside the repository and outside the primary checkout** (compared after `realpath`, case-folded on Windows and macOS). A missing report changes nothing: every run re-checks the bucket.
-- `--execute` is required for any request that changes the bucket. Without it a mode prints what it would do.
+- `--execute` is required for any request that changes the bucket. Without it the upload and canary modes print the plan and send nothing; the two delete modes refuse (exit 2) unless `--execute` and `--confirm-bucket exercise-media` are both given.
+- The report path is proved writable **before** the first request (a delete mode writes its report last, so an unwritable path would otherwise surface after the DELETE). The check creates and removes an empty file when the report does not exist yet, and leaves an existing report untouched.
+- A report is passed through the secret redactor before it is written.
 - Upload is `x-upsert: false`. An object that exists with the same sha256 is counted `alreadyEqual` and not re-sent; one with a different sha256 stops the run naming the slug; a quota-style answer (413, or a body naming a quota or limit) stops the run. A cut run is re-run unchanged.
 - The upload and verify scope is the `active` files only. `unmapped` and `taken_down` files are never uploaded, verified or signed.
-- `--verify` and the canary also send two requests **with no credential** (the public route, and the authenticated route with no Authorization header). Either answering 200 stops the run naming `readable without a login`. The second is not a policy test (a missing header is refused before row level security is consulted); the policy is proved by the role probe.
+- `--verify` and the canary also send two requests **with no credential** (the public route, and the authenticated route with no Authorization header). Either answering 200 stops the run naming `readable without a login`. Anything other than a plain refusal (400, 401, 403, 404) also stops the run, saying `privacy is NOT shown`: a network error, a 429, a 5xx, a redirect or a 206 proves nothing about privacy and is never counted as private. The second probe is not a policy test (a missing header is refused before row level security is consulted); the policy is proved by the role probe.
+- `--verify` against a table with no `active` file is a stop, not a clean "0 of 0".
 - `--probe-control <bucket/name>` (bucket `avatars` or `banners`) sends one GET to the public route of a bucket that really is public and prints only the status. It is the positive control that makes the non-200 of the exercise-media probe mean something.
 - `--delete-object` refuses the object of an `active` file and, after the DELETE, HEADs the name **with the key** (a keyless HEAD of a private object answers 4xx and would read as gone); a 200 may be CDN lag, so it waits 90 seconds and HEADs again. `--delete-bucket` empties the bucket through the Storage API, then deletes it; it has only ever run against the fake server and is never run live except as the rollback.
 
@@ -87,7 +90,7 @@ The tool resolves the key in this order and never prints, logs or writes it:
 1. the environment variable `SUPABASE_SERVICE_ROLE_KEY`, if set (set it in your shell for the run only);
 2. otherwise the Management API (`GET /v1/projects/dedsavbjuwgarrhphgnl/api-keys?reveal=true`) with the access token read from the token **file** (`--token-file`, or the file `.claude/token_path.js` `resolveTokenFile` picks). The `SUPABASE_ACCESS_TOKEN*` variables are **not** read.
 
-A key that is a JWT must carry `ref == dedsavbjuwgarrhphgnl`, or the tool refuses it. `--probe-key` runs step 2 and prints key names, lengths, the HTTP status and `ref ok`. The endpoint's behaviour is UNVERIFIED until Task 9.1 records it (section 8); if it answers otherwise, set the environment variable. Inventory row: `docs/operations/SECRET_INVENTORY.md`.
+A key that is a JWT must carry `ref == dedsavbjuwgarrhphgnl`, or the tool refuses it. `--probe-key` runs step 2 and prints key names, lengths, the HTTP status and `ref ok`. If `SUPABASE_SERVICE_ROLE_KEY` is set in the shell it prints `the Management API was NOT contacted` and probes nothing, so unset the variable to probe the endpoint. The endpoint's behaviour is UNVERIFIED until Task 9.1 records it (section 8); if it answers otherwise, set the environment variable. The git child that finds the primary checkout never receives the service-role key or an access token (`.claude/token_path.js` and `scripts/supabase_token_path_lib.dart` drop them from its environment). Inventory row: `docs/operations/SECRET_INVENTORY.md`.
 
 ## 6. Maintenance recipes (the table, the library and the bucket move together)
 
@@ -147,7 +150,7 @@ These are what the tool and the plan assume and nobody has seen on the live proj
 | An anon-key request to the authenticated route answers non-200 | one request, Task 9.2 |
 | Anonymous sign-ins are off on the live project (otherwise the policy's second clause is the only gate against a no-email sign-up) | Task 8.3 |
 | The Management API key endpoint answers with a revealable `service_role` key | `--probe-key`, Task 9.1 |
-| The winning `cache-control` form on the signed-URL response (the default is `max-age=31536000`) | canary, Task 9.2 |
+| Which `cache-control` forms survive on the signed-URL response. The default is `private, max-age=31536000, immutable`; the canary uploads one object per form (`private, ...immutable`, `max-age=..., immutable`, bare `max-age=...`) and the observed header decides. Keep `private` unless the signed response lacks `max-age` | canary, Task 9.2 |
 | An animated WebP decodes and animates in a browser and on a device | playback check, Task 9.4 (no one has decoded one yet) |
 
 ## 9. The trap for Batch M2

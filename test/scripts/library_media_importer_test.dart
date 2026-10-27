@@ -192,6 +192,33 @@ void main() {
       expect(t.readLibText(), before, reason: 'a refused run must not write');
     });
 
+    test('the refusal for a newly held mapped row names a document that exists, and its section', () async {
+      final s = t.readSrc();
+      final victim = (s['rows'] as List).cast<Json>().firstWhere((r) => r['hold'] == null && tableRows.containsKey(r['id']));
+      victim['hold'] = {'class': 'picture', 'reason': 'test', 'owner': 'founder'};
+      t.writeSrc(s);
+      final r = await t.importer();
+      expect(r.exitCode, isNot(0), reason: _out(r));
+      final m = RegExp(r'(docs/[A-Za-z0-9_/.-]+\.md), "([^"]+)"').firstMatch(_err(r));
+      expect(m, isNotNull, reason: 'the error must cite a document and a section: ${_err(r)}');
+      final doc = File(m!.group(1)!);
+      expect(doc.existsSync(), isTrue, reason: '${m.group(1)} named by the error does not exist');
+      expect(doc.readAsStringSync(), contains(m.group(2)!), reason: 'the section the error names is not in the document');
+    });
+
+    for (final c in <String, Object?>{'an empty rows map': <String, Object>{}, 'a null rows': null}.entries) {
+      test('a table with ${c.key} is refused and writes nothing (it would strip the media keys from every row)', () async {
+        final m = t.readMedia();
+        m['rows'] = c.value;
+        t.writeMedia(m);
+        final before = t.readLibText();
+        final r = await t.importer();
+        expect(r.exitCode, isNot(0), reason: _out(r));
+        expect(_err(r), contains('maps no rows'));
+        expect(t.readLibText(), before, reason: 'a refused run must not write');
+      });
+    }
+
     test('a rows slug with no files entry stops the run, naming the slug', () async {
       final m = t.readMedia();
       final id = tableRows.keys.first;

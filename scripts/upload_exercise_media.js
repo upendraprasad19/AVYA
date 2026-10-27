@@ -33,8 +33,10 @@ const DEFAULT_TABLE = path.join(__dirname, 'data', 'library_media_v16.json');
 const MANAGEMENT_DEFAULT = 'https://api.supabase.com';
 const OBJECT_RE = /^\d{4}-[a-z0-9]+(-[a-z0-9]+)*_v\d+\.webp$/;
 const CANARY_RE = /^canary-[1-3]_v0\.webp$/;
-// supabase-js sends max-age=31536000. A form containing `public` is refused: a shared cache could then store an authorised response.
-const CACHE_FORMS = ['max-age=31536000', 'max-age=31536000, immutable', 'private, max-age=31536000, immutable'];
+// The default is the `private` form: an object's cache-control is fixed at upload (x-upsert false), a signed URL is a bearer link, and a
+// shared cache that stores a signed response for a year would outlive the link's expiry. A form containing `public` is refused.
+// The canary uploads all three so the observed headers say which survive; supabase-js itself sends the last (bare max-age).
+const CACHE_FORMS = ['private, max-age=31536000, immutable', 'max-age=31536000, immutable', 'max-age=31536000'];
 const DEFAULT_CACHE = CACHE_FORMS[0];
 const REQUEST_TIMEOUT_MS = 60000;
 const MAX_CONSECUTIVE_FAILURES = 5;
@@ -187,7 +189,7 @@ function realpathLoose(p) {
 
 function isInside(root, p) {
   const rel = path.relative(fold(realpathLoose(root)), fold(realpathLoose(p)));
-  return rel === '' || (!rel.startsWith('..') && !path.isAbsolute(rel));
+  return rel === '' || (rel !== '..' && !rel.startsWith(`..${path.sep}`) && !path.isAbsolute(rel));
 }
 
 function checkReportPath(report) {
@@ -198,7 +200,18 @@ function checkReportPath(report) {
   for (const root of [REPO, primary]) {
     if (isInside(root, report)) stop(`the report path must be outside the repository and the primary checkout (it is inside ${root})`);
   }
-  return path.resolve(report);
+  const resolved = path.resolve(report);
+  // Prove the report can be written BEFORE anything destructive runs (a delete mode records its result last). A file created
+  // only for the probe is removed again, so a run that stops early leaves nothing behind.
+  const existed = fs.existsSync(resolved);
+  try {
+    fs.mkdirSync(path.dirname(resolved), { recursive: true });
+    fs.closeSync(fs.openSync(resolved, 'a'));
+    if (!existed) fs.unlinkSync(resolved);
+  } catch (e) {
+    usage(`the report path cannot be written (${e.code || e.message}); nothing was sent`);
+  }
+  return resolved;
 }
 
 // ---- HTTP ---------------------------------------------------------------------------------------------------------------
@@ -286,7 +299,7 @@ async function resolveKey(o, endpoints) {
     return stop(`the Management API returned no revealed service_role key (names: ${names.map((n) => `${n.name}:${n.length}`).join(', ')}); set SUPABASE_SERVICE_ROLE_KEY in the shell instead`);
   }
   SECRETS.push(entry.api_key);
-  return { key: entry.api_key, source: 'management api', refNote: checkKeyRef(entry.api_key), names };
+  return { key: entry.api_key, source: 'management api', refNote: checkKeyRef(entry.api_key), names, status: res.status };
 }
 
 // ---- object operations --------------------------------------------------------------------------------------------------
@@ -368,9 +381,15 @@ async function noCredentialProbes(base, name) {
   return out;
 }
 
+// A probe that did not run (a network error), or that answered anything but a plain refusal (429, 5xx, 3xx, 206), proves nothing: it must
+// stop the run, not count as "private".
+const REFUSAL_STATUSES = new Set([400, 401, 403, 404]);
+
 function assertPrivate(probes, name) {
   const open = Object.entries(probes).filter(([, s]) => s === 200).map(([l]) => l);
   if (open.length) stop(`${name} is readable without a login (${open.join(', ')} answered 200): the bucket is not private; stopping`);
+  const unclear = Object.entries(probes).filter(([, s]) => !REFUSAL_STATUSES.has(s)).map(([l, st]) => `${l}: ${st}`);
+  if (unclear.length) stop(`${name}: the privacy probe did not get a clear refusal (${unclear.join('; ')}); privacy is NOT shown; stopping`);
 }
 
 // ---- signing ------------------------------------------------------------------------------------------------------------
@@ -400,7 +419,7 @@ async function signObject(ctx, name, expires) {
 // ---- modes --------------------------------------------------------------------------------------------------------------
 function writeReport(p, data) {
   fs.mkdirSync(path.dirname(p), { recursive: true });
-  fs.writeFileSync(p, `${JSON.stringify(data, null, 2)}\n`);
+  fs.writeFileSync(p, `${redact(JSON.stringify(data, null, 2))}\n`);
 }
 
 function sleep(ms) {
@@ -532,6 +551,7 @@ async function modeRepost(o, wardroom, ctx, reportPath) {
 
 async function modeVerify(o, table, ctx) {
   const objs = activeObjects(table, o.only);
+  if (objs.length === 0) stop('verify: the table has no active object to check (an empty check proves nothing)');
   const problems = [];
   let okCount = 0;
   for (const obj of objs) {
@@ -639,6 +659,11 @@ async function modeDeleteBucket(o, ctx, reportPath) {
 async function modeProbeKey(o, endpoints) {
   const k = await resolveKey(o, endpoints);
   say(`key source: ${k.source}`);
+  if (k.source === 'environment') {
+    say('the Management API was NOT contacted: SUPABASE_SERVICE_ROLE_KEY is set in this shell; unset it to probe the endpoint');
+  } else {
+    say(`management api http status: ${k.status}`);
+  }
   if (k.names) say(`key names returned: ${k.names.map((n) => `${n.name} (length ${n.length})`).join(', ')}`);
   say(`service-role key length: ${k.key.length}`);
   say(k.refNote);

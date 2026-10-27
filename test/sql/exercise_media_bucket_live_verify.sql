@@ -9,12 +9,13 @@
 --   (a) the bucket row is private, 1,500,000 bytes, image/webp only;
 --   (b) the one read policy is FOR SELECT TO authenticated and its deparsed predicate names the bucket and
 --       is_anonymous (catalog FIELDS, not source text: pg_policies.qual is the deparsed expression);
---   (c) no other policy lets anon or PUBLIC read this bucket and no policy of storage.objects grants a write to
---       anon, authenticated or PUBLIC without a bucket predicate;
+--   (c) no other policy lets anon or PUBLIC read this bucket, no policy of storage.objects grants a write to
+--       anon, authenticated or PUBLIC without a bucket predicate, and no policy at all of storage.buckets grants a
+--       write to them (a bucket policy could flip this bucket public);
 --   (d) the role probe: a fake object of this bucket is read by an authenticated non-anonymous session (1), not by
 --       the anon role (0), not by an anonymous-sign-in session (0), and a fake object of ANOTHER private bucket
 --       is not read by the same session (0); an INSERT by that session is refused, an UPDATE and a DELETE
---       affect 0 rows.
+--       affect 0 rows, and so does an UPDATE of the bucket's own storage.buckets row (public = true).
 -- What it does NOT prove: that Storage maps an anon-key JWT to the role anon and an anonymous sign-in to
 -- is_anonymous true (documented behaviour, UNVERIFIED here; Task 9.2 adds one real request with the anon key),
 -- and that Auth emits the claim name is_anonymous.
@@ -42,8 +43,12 @@
 --   write_insert                 expected refused  (42501 "new row violates row-level security policy")
 --   write_update                 expected 0   (rows affected)
 --   write_delete                 expected 0   (rows affected)
+--   write_bucket                 expected 0   (rows affected by UPDATE storage.buckets SET public = true; a privilege
+--                                              denial on the table is also 0)
 --   anon_select_priv             expected true (has_table_privilege anon SELECT on storage.objects; false is a STOP,
 --                                              because then the TO public variant could not redden)
+--   authenticated_update_priv_on_buckets  information only (has_table_privilege authenticated UPDATE on
+--                                              storage.buckets; false means write_bucket cannot redden by a policy)
 --   bucket_public                expected false
 --   bucket_limit                 expected 1500000
 --   bucket_mime                  expected {image/webp}
@@ -53,8 +58,9 @@
 --   policy_qual_has_is_anonymous expected true
 --   anon_public_select_policies  expected none (SELECT or ALL policies for anon/public with no bucket predicate or
 --                                              one that names exercise-media)
---   unscoped_write_grants        expected none (INSERT/UPDATE/DELETE/ALL policies for anon/authenticated/public with
---                                              no bucket predicate)
+--   unscoped_write_grants        expected none (INSERT/UPDATE/DELETE/ALL policies for anon/authenticated/public on
+--                                              storage.objects with no bucket predicate, or on storage.buckets at all,
+--                                              listed as table.policy)
 --   select_policies              operator reading (truncated): every anon/public/authenticated SELECT or ALL policy
 -- A value starting `error:` is a leg that raised something other than its expected refusal: a STOP, read the text.
 
@@ -72,7 +78,9 @@ DECLARE
   v_write_insert   text;
   v_write_update   text;
   v_write_delete   text;
+  v_write_bucket   text;
   v_anon_priv      boolean;
+  v_bucket_upd_priv boolean;
   v_bucket_public  text;
   v_bucket_limit   text;
   v_bucket_mime    text;
@@ -87,12 +95,12 @@ DECLARE
 BEGIN
   -- PRELUDE-INSERT-POINT (rehearsal only: the migration body goes here, twice; a normal run leaves this comment)
 
-  -- the catalog half: bucket row, the one policy, and the policies that would open the bucket
+  -- CATALOG-BEGIN
   SELECT public::text, file_size_limit::text, allowed_mime_types::text
     INTO v_bucket_public, v_bucket_limit, v_bucket_mime
     FROM storage.buckets WHERE id = 'exercise-media';
 
-  SELECT cmd, roles::text, (qual LIKE '%exercise-media%')::text, (qual LIKE '%is_anonymous%')::text
+  SELECT cmd, roles::text, (strpos(qual, 'exercise-media') > 0)::text, (strpos(qual, 'is_anonymous') > 0)::text
     INTO v_policy_cmd, v_policy_roles, v_qual_bucket, v_qual_anon
     FROM pg_policies
    WHERE schemaname = 'storage' AND tablename = 'objects' AND policyname = 'exercise_media_authenticated_read';
@@ -102,14 +110,15 @@ BEGIN
    WHERE schemaname = 'storage' AND tablename = 'objects'
      AND cmd IN ('SELECT', 'ALL')
      AND roles && ARRAY['anon', 'public']::name[]
-     AND (qual IS NULL OR qual NOT LIKE '%bucket_id%' OR qual LIKE '%exercise-media%');
+     AND (qual IS NULL OR strpos(qual, 'bucket_id') = 0 OR strpos(qual, 'exercise-media') > 0);
 
-  SELECT coalesce(string_agg(policyname, ',' ORDER BY policyname), 'none') INTO v_unscoped_write
+  SELECT coalesce(string_agg(tablename || '.' || policyname, ',' ORDER BY tablename, policyname), 'none') INTO v_unscoped_write
     FROM pg_policies
-   WHERE schemaname = 'storage' AND tablename = 'objects'
+   WHERE schemaname = 'storage' AND tablename IN ('objects', 'buckets')
      AND cmd IN ('INSERT', 'UPDATE', 'DELETE', 'ALL')
      AND roles && ARRAY['anon', 'authenticated', 'public']::name[]
-     AND (coalesce(qual, '') || coalesce(with_check, '')) NOT LIKE '%bucket_id%';
+     AND (tablename = 'buckets' OR strpos(coalesce(qual, '') || coalesce(with_check, ''), 'bucket_id') = 0);
+  -- CATALOG-END
 
   SELECT coalesce(left(string_agg(policyname || '|' || cmd || '|' || roles::text, '; ' ORDER BY policyname), 900), 'none')
     INTO v_listing
@@ -119,6 +128,7 @@ BEGIN
      AND roles && ARRAY['anon', 'public', 'authenticated']::name[];
 
   v_anon_priv := has_table_privilege('anon', 'storage.objects', 'SELECT');
+  v_bucket_upd_priv := has_table_privilege('authenticated', 'storage.buckets', 'UPDATE');
 
   -- PROBE-BEGIN
   v_name := 'probe-' || gen_random_uuid()::text || '.webp';
@@ -147,7 +157,7 @@ BEGIN
   EXCEPTION
     WHEN insufficient_privilege THEN
       GET STACKED DIAGNOSTICS v_msg = MESSAGE_TEXT;
-      v_anon := CASE WHEN v_msg LIKE 'permission denied for table%' THEN '0' ELSE 'error: ' || v_msg END;
+      v_anon := CASE WHEN v_msg LIKE 'permission denied for table objects%' THEN '0' ELSE 'error: ' || v_msg END;
     WHEN OTHERS THEN
       GET STACKED DIAGNOSTICS v_msg = MESSAGE_TEXT;
       IF v_msg <> 'PROBE_ROLLBACK' THEN v_anon := 'error: ' || v_msg; END IF;
@@ -204,7 +214,7 @@ BEGIN
   EXCEPTION
     WHEN insufficient_privilege THEN
       GET STACKED DIAGNOSTICS v_msg = MESSAGE_TEXT;
-      v_write_insert := CASE WHEN v_msg LIKE 'new row violates row-level security policy%' THEN 'refused' ELSE 'error: ' || v_msg END;
+      v_write_insert := CASE WHEN v_msg LIKE 'new row violates row-level security policy for table "objects"%' THEN 'refused' ELSE 'error: ' || v_msg END;
     WHEN OTHERS THEN
       GET STACKED DIAGNOSTICS v_msg = MESSAGE_TEXT;
       IF v_msg <> 'PROBE_ROLLBACK' THEN v_write_insert := 'error: ' || v_msg; END IF;
@@ -239,11 +249,30 @@ BEGIN
     GET STACKED DIAGNOSTICS v_msg = MESSAGE_TEXT;
     IF v_msg <> 'PROBE_ROLLBACK' THEN v_write_delete := 'error: ' || v_msg; END IF;
   END;
+
+  -- leg 5d: the normal session may not flip the bucket public: an UPDATE of its storage.buckets row affects 0 rows (a
+  -- privilege denial on that table is the same answer, 0)
+  BEGIN
+    SET LOCAL ROLE authenticated;
+    PERFORM set_config('request.jwt.claims',
+      json_build_object('sub', v_uid, 'role', 'authenticated', 'is_anonymous', false)::text, true);
+    UPDATE storage.buckets SET public = true WHERE id = 'exercise-media';
+    GET DIAGNOSTICS v_n = ROW_COUNT;
+    v_write_bucket := v_n::text;
+    RAISE EXCEPTION 'PROBE_ROLLBACK';
+  EXCEPTION
+    WHEN insufficient_privilege THEN
+      GET STACKED DIAGNOSTICS v_msg = MESSAGE_TEXT;
+      v_write_bucket := CASE WHEN v_msg LIKE 'permission denied for table buckets%' THEN '0' ELSE 'error: ' || v_msg END;
+    WHEN OTHERS THEN
+      GET STACKED DIAGNOSTICS v_msg = MESSAGE_TEXT;
+      IF v_msg <> 'PROBE_ROLLBACK' THEN v_write_bucket := 'error: ' || v_msg; END IF;
+  END;
   -- PROBE-END
 
   v_verdict := CASE
     WHEN v_anon = '0' AND v_auth = '1' AND v_anon_session = '0' AND v_other = '0'
-     AND v_write_insert = 'refused' AND v_write_update = '0' AND v_write_delete = '0'
+     AND v_write_insert = 'refused' AND v_write_update = '0' AND v_write_delete = '0' AND v_write_bucket = '0'
      AND v_anon_priv
      AND v_bucket_public = 'false' AND v_bucket_limit = '1500000' AND v_bucket_mime = '{image/webp}'
      AND v_policy_cmd = 'SELECT' AND v_policy_roles = '{authenticated}'
@@ -260,7 +289,9 @@ BEGIN
     || 'write_insert=' || coalesce(v_write_insert, 'unset') || E'\n'
     || 'write_update=' || coalesce(v_write_update, 'unset') || E'\n'
     || 'write_delete=' || coalesce(v_write_delete, 'unset') || E'\n'
+    || 'write_bucket=' || coalesce(v_write_bucket, 'unset') || E'\n'
     || 'anon_select_priv=' || coalesce(v_anon_priv::text, 'unset') || E'\n'
+    || 'authenticated_update_priv_on_buckets=' || coalesce(v_bucket_upd_priv::text, 'unset') || E'\n'
     || 'bucket_public=' || coalesce(v_bucket_public, 'absent') || E'\n'
     || 'bucket_limit=' || coalesce(v_bucket_limit, 'absent') || E'\n'
     || 'bucket_mime=' || coalesce(v_bucket_mime, 'absent') || E'\n'

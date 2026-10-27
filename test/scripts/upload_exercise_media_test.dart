@@ -54,6 +54,7 @@ class _Fake {
   final postStatus = <String, int>{}; // forced POST status (the object is not stored)
   final postBody = <String, String>{};
   final cutPost = <String>{}; // destroy the connection on the first POST of a name
+  bool destroyPublic = false; // drop the connection on the first public-route probe of exercise-media
   int publicStatus = 400; // exercise-media on the public route
   int noAuthStatus = 400; // the authenticated route with no Authorization header
   int controlStatus = 200; // avatars / banners on the public route
@@ -184,6 +185,11 @@ class _Fake {
         final bucket = rest.split('/').first;
         if (bucket == 'exercise-media') {
           final name = rest.substring('exercise-media/'.length);
+          if (destroyPublic) {
+            final socket = await res.detachSocket(writeHeaders: false);
+            socket.destroy();
+            return;
+          }
           if (publicStatus == 200 && objects.containsKey(name)) {
             _serve(res, 'GET', name);
           } else {
@@ -325,6 +331,13 @@ class _Rig {
 
 String _all(ProcessResult r) => '${r.stdout}\n${r.stderr}';
 
+/// The primary checkout (first entry of `git worktree list`), the second root the tool's report-path guard protects.
+Future<String> _primaryCheckout() async {
+  final wt = await runSpawnAsync('git', ['worktree', 'list', '--porcelain'], why: 'primary checkout for a report-path test', report: (_) {})
+      .timeout(const Duration(seconds: 30));
+  return RegExp(r'^worktree (.+)$', multiLine: true).firstMatch(wt.stdout as String)!.group(1)!.trim();
+}
+
 /// Nothing the tool printed or wrote may contain a secret.
 void _expectNoSecrets(_Rig rig, ProcessResult r, {List<String> extra = const []}) {
   final blob = StringBuffer(_all(r));
@@ -381,35 +394,121 @@ void main() {
       expect(rig.fake.seen, isEmpty);
     });
 
-    test('a report path inside the repository is refused', () async {
-      final r = await rig.run(['--execute', '--report', '${Directory.current.path}/report_must_not_exist.json']);
+    // The report paths below sit UNDER pubspec.yaml (a file), so a regression of the guard cannot leave a stray report in the
+    // repository or the primary checkout: it fails later at "cannot be written", and the message assertion tells the two apart.
+    test('a report path inside the repository is refused, with the guard\'s own message', () async {
+      final r = await rig.run(['--execute', '--report', '${Directory.current.path}/pubspec.yaml/report.json']);
       expect(r.exitCode, isNot(0), reason: _all(r));
-      expect(File('${Directory.current.path}/report_must_not_exist.json').existsSync(), isFalse);
+      expect(_all(r), contains('must be outside the repository and the primary checkout'));
       expect(rig.fake.seen, isEmpty);
     });
 
-    test('a report path inside the primary checkout is refused', () async {
-      final wt = await runSpawnAsync('git', ['worktree', 'list', '--porcelain'],
-              why: 'primary checkout for the report-path test', report: (_) {})
-          .timeout(const Duration(seconds: 30));
-      final primary = RegExp(r'^worktree (.+)$', multiLine: true).firstMatch(wt.stdout as String)!.group(1)!.trim();
-      final r = await rig.run(['--execute', '--report', '$primary/report_must_not_exist.json']);
+    test('a report path inside the primary checkout is refused, with the guard\'s own message', () async {
+      final primary = await _primaryCheckout();
+      final r = await rig.run(['--execute', '--report', '$primary/pubspec.yaml/report.json']);
       expect(r.exitCode, isNot(0), reason: _all(r));
-      expect(File('$primary/report_must_not_exist.json').existsSync(), isFalse);
+      expect(_all(r), contains('must be outside the repository and the primary checkout'));
       expect(rig.fake.seen, isEmpty);
     });
+
+    test('a directory whose name merely starts with two dots is inside the checkout, not outside it', () async {
+      // Measured against the PRIMARY checkout: this worktree lives inside it, so a path under THIS worktree is refused by the
+      // primary's check even when the worktree's own check is wrong; only a path directly under the primary isolates the
+      // "rel starts with two dots" bug (a directory named "..reportdir" has a relative path "..reportdir/...").
+      final primary = await _primaryCheckout();
+      final dotted = Directory('$primary/..reportdir');
+      expect(dotted.existsSync(), isFalse, reason: 'the probe directory must not pre-exist');
+      addTearDown(() {
+        if (dotted.existsSync()) dotted.deleteSync(recursive: true);
+      });
+      final r = await rig.run(['--execute', '--report', '${dotted.path}/report.json']);
+      expect(r.exitCode, isNot(0), reason: _all(r));
+      expect(_all(r), contains('must be outside the repository and the primary checkout'));
+      expect(rig.fake.seen, isEmpty);
+    });
+
+    test('a report path that cannot be written is refused before anything is sent', () async {
+      final blocker = File('${rig.dir.path}/a-file')..writeAsStringSync('x');
+      final r = await rig.run(['--execute', '--report', '${blocker.path}/report.json']);
+      expect(r.exitCode, 2, reason: _all(r));
+      expect(_all(r), contains('cannot be written'));
+      expect(rig.fake.seen, isEmpty);
+    });
+
+    test('a delete mode with an unwritable report sends no DELETE', () async {
+      final blocker = File('${rig.dir.path}/a-file')..writeAsStringSync('x');
+      for (final args in [
+        ['--delete-object', 'canary-1_v0.webp'],
+        ['--delete-bucket'],
+      ]) {
+        final r = await rig.run([...args, '--execute', '--confirm-bucket', 'exercise-media', '--report', '${blocker.path}/report.json']);
+        expect(r.exitCode, 2, reason: '${args.first}: ${_all(r)}');
+        expect(_all(r), contains('cannot be written'));
+      }
+      expect(rig.fake.seen, isEmpty);
+    });
+
+    test('the writability check leaves no file behind when the run then stops (no key), and keeps a report that already existed', () async {
+      final r = await rig.run(['--execute', '--report', rig.reportPath], withKey: false);
+      expect(r.exitCode, isNot(0), reason: _all(r));
+      expect(_all(r), contains('no service-role key'), reason: 'the run must have got PAST the report-path check');
+      expect(File(rig.reportPath).existsSync(), isFalse);
+      File(rig.reportPath)
+        ..createSync(recursive: true)
+        ..writeAsStringSync('previous report');
+      final again = await rig.run(['--execute', '--report', rig.reportPath], withKey: false);
+      expect(again.exitCode, isNot(0), reason: _all(again));
+      expect(File(rig.reportPath).readAsStringSync(), 'previous report');
+    });
+
+    test('the mode flags are exclusive, --repost needs --canary and --expires needs --sign, each with nothing sent', () async {
+      final sign = rig.objOf('0103');
+      for (final args in [
+        ['--verify', '--canary'],
+        ['--sign', sign, '--verify'],
+        ['--probe-key', '--verify'],
+        ['--probe-control', 'avatars/x.png', '--verify'],
+        ['--delete-bucket', '--canary', '--execute', '--confirm-bucket', 'exercise-media', '--report', rig.reportPath],
+        ['--delete-object', 'canary-1_v0.webp', '--delete-bucket', '--execute', '--confirm-bucket', 'exercise-media', '--report', rig.reportPath],
+      ]) {
+        final r = await rig.run(args);
+        expect(r.exitCode, 2, reason: '${args.join(' ')}: ${_all(r)}');
+        expect(_all(r), contains('choose one mode'), reason: args.join(' '));
+      }
+      final repost = await rig.run(['--repost', '--execute', '--report', rig.reportPath]);
+      expect(repost.exitCode, 2, reason: _all(repost));
+      expect(_all(repost), contains('--repost goes with --canary'));
+      final expires = await rig.run(['--expires', '300']);
+      expect(expires.exitCode, 2, reason: _all(expires));
+      expect(_all(expires), contains('--expires needs --sign'));
+      final bucket = await rig.run(['--confirm-bucket', 'avatars']);
+      expect(bucket.exitCode, 2, reason: _all(bucket));
+      expect(_all(bucket), contains('--confirm-bucket must be exercise-media'));
+      expect(rig.fake.seen, isEmpty);
+    });
+
+    for (final bad in ['0', '-5', '1.5', 'abc', '']) {
+      test('--sign with --expires "$bad" is refused with nothing sent', () async {
+        final r = await rig.run(['--sign', rig.objOf('0103'), '--expires', bad.isEmpty ? '   ' : bad]);
+        expect(r.exitCode, isNot(0), reason: _all(r));
+        expect(rig.fake.seen, isEmpty);
+      });
+    }
 
     test('a report path written with backslashes inside the repository is refused (win32)', () async {
-      final r = await rig.run(['--execute', '--report', '${Directory.current.path.replaceAll('/', r'\')}\\report_must_not_exist.json']);
+      // Under pubspec.yaml (a file) like the tests above, so a regressed guard cannot leave a stray report behind.
+      final r = await rig.run(['--execute', '--report', '${Directory.current.path.replaceAll('/', r'\')}\\pubspec.yaml\\report.json']);
       expect(r.exitCode, isNot(0), reason: _all(r));
+      expect(_all(r), contains('must be outside the repository and the primary checkout'));
       expect(rig.fake.seen, isEmpty);
     }, skip: Platform.isWindows ? false : 'backslash paths are a Windows spelling');
 
     test('a report path with a different drive-letter case inside the repository is refused (win32)', () async {
       final p = Directory.current.path;
       final flipped = '${p[0] == p[0].toUpperCase() ? p[0].toLowerCase() : p[0].toUpperCase()}${p.substring(1)}';
-      final r = await rig.run(['--execute', '--report', '$flipped/report_must_not_exist.json']);
+      final r = await rig.run(['--execute', '--report', '$flipped/pubspec.yaml/report.json']);
       expect(r.exitCode, isNot(0), reason: _all(r));
+      expect(_all(r), contains('must be outside the repository and the primary checkout'));
       expect(rig.fake.seen, isEmpty);
     }, skip: Platform.isWindows ? false : 'drive letters are a Windows spelling');
 
@@ -500,27 +599,48 @@ void main() {
       expect(r.stdout, contains('anon (length ${_anonValue.length})'));
       expect(r.stdout, contains('service_role (length ${rig.key.length})'));
       expect(r.stdout, contains('ref ok'));
+      expect(r.stdout, contains('management api http status: 200'));
+      expect(r.stdout, isNot(contains('NOT contacted')));
       _expectNoSecrets(rig, r);
     });
 
-    test('--probe-key with the key in the environment prints the source and ref ok', () async {
+    test('--probe-key with the key in the environment says the Management API was NOT contacted', () async {
       final r = await rig.run(['--probe-key']);
       expect(r.exitCode, 0, reason: _all(r));
       expect(r.stdout, contains('environment'));
       expect(r.stdout, contains('ref ok'));
+      expect(r.stdout, contains('the Management API was NOT contacted'));
+      expect(r.stdout, isNot(contains('management api http status')));
       _expectNoSecrets(rig, r);
       expect(rig.fake.seen, isEmpty, reason: 'a key from the environment needs no request');
     });
   });
 
   group('--execute: the upload', () {
+    // The local path in the table is read from disk and then sent; a path that leaves webp-720/ must never be opened.
+    for (final bad in ['../x.webp', 'webp-720/../x.webp', r'webp-720\x.webp', r'webp-720/sub\x.webp', 'thumbnails-192/x.webp', '/etc/x.webp', 'webp-720']) {
+      test('a table file path of "$bad" is refused in the dry run and in --execute, with nothing sent', () async {
+        final slug = rig.slugOf('0103');
+        final versions = ((rig.table['files'] as Map<String, dynamic>)[slug] as Map<String, dynamic>)['versions'] as List;
+        (versions.first as Map<String, dynamic>)['file'] = bad;
+        rig.writeTable();
+        final dry = await rig.run([]);
+        expect(dry.exitCode, isNot(0), reason: _all(dry));
+        expect(_all(dry), contains('is not under webp-720/'));
+        final r = await rig.run(['--execute', '--report', rig.reportPath]);
+        expect(r.exitCode, isNot(0), reason: _all(r));
+        expect(_all(r), contains('is not under webp-720/'));
+        expect(rig.fake.posts, isEmpty);
+      });
+    }
+
     test('POSTs <slug>_v1.webp with image/webp, the default cache-control and x-upsert false; the report lists the outcome', () async {
       final r = await rig.run(['--execute', '--report', rig.reportPath]);
       expect(r.exitCode, 0, reason: _all(r));
       expect(rig.fake.posts, hasLength(3));
       for (final p in rig.fake.posts) {
         expect(p.headers['content-type'], 'image/webp');
-        expect(p.headers['cache-control'], 'max-age=31536000');
+        expect(p.headers['cache-control'], 'private, max-age=31536000, immutable');
         expect(p.headers['x-upsert'], 'false');
         expect(p.headers['authorization'], 'Bearer ${rig.key}');
       }
@@ -651,12 +771,24 @@ void main() {
     });
 
     test('no mode except the two delete modes issues a DELETE', () async {
-      await rig.run(['--execute', '--report', rig.reportPath]);
-      await rig.run(['--verify']);
-      await rig.run(['--sign', rig.objOf('0103')]);
-      await rig.run(['--canary', '--execute', '--report', rig.reportPath]);
-      await rig.run([]);
+      // Every run must SUCCEED and reach the fake: a run that died before its first request would leave "no DELETE" true for nothing.
+      final runs = <String, List<String>>{
+        'execute': ['--execute', '--report', rig.reportPath],
+        'verify': ['--verify'],
+        'sign': ['--sign', rig.objOf('0103')],
+        'canary': ['--canary', '--execute', '--report', rig.reportPath],
+        'canary-repost': ['--canary', '--repost', '--execute', '--report', rig.reportPath],
+        'probe-key': ['--probe-key'],
+        'probe-control': ['--probe-control', 'avatars/some-image.png'],
+        'dry-run': [],
+      };
+      for (final e in runs.entries) {
+        final r = await rig.run(e.value);
+        expect(r.exitCode, 0, reason: '${e.key}: ${_all(r)}');
+      }
       expect(rig.fake.deletes, isEmpty);
+      expect(rig.fake.seen.where((s) => s.method == 'POST'), isNotEmpty, reason: 'the upload modes must have reached the fake');
+      expect(rig.fake.seen.where((s) => s.method == 'HEAD'), isNotEmpty);
     });
   });
 
@@ -672,7 +804,7 @@ void main() {
       expect(r.exitCode, 0, reason: _all(r));
       expect(rig.fake.posts.map((p) => p.path.split('/').last), ['canary-1_v0.webp', 'canary-2_v0.webp', 'canary-3_v0.webp']);
       expect(rig.fake.posts.map((p) => p.headers['cache-control']).toList(),
-          ['max-age=31536000', 'max-age=31536000, immutable', 'private, max-age=31536000, immutable']);
+          ['private, max-age=31536000, immutable', 'max-age=31536000, immutable', 'max-age=31536000']);
       final report = rig.readReport();
       final canaries = (report['canaries'] as List).cast<Map<String, dynamic>>();
       expect(canaries, hasLength(3));
@@ -719,6 +851,63 @@ void main() {
         expect(r.exitCode, 0, reason: _all(r));
       });
     }
+
+    // A probe that is not a plain refusal proves nothing about privacy: it must stop the run, not count as "private".
+    for (final s in [206, 304, 429, 500, 503]) {
+      for (final probe in ['public-route', 'no-Authorization']) {
+        test('the $probe probe answering $s is not a refusal: the run stops and says privacy is not shown', () async {
+          if (probe == 'public-route') {
+            rig.fake.publicStatus = s;
+          } else {
+            rig.fake.noAuthStatus = s;
+          }
+          final r = await rig.run(['--canary', '--execute', '--report', rig.reportPath]);
+          expect(r.exitCode, isNot(0), reason: _all(r));
+          expect(_all(r), contains('did not get a clear refusal'));
+          expect(_all(r), contains('privacy is NOT shown'));
+          expect(rig.readReport()['stopped'], contains('privacy is NOT shown'));
+        });
+      }
+    }
+
+    test('a privacy probe whose connection fails is not a refusal either', () async {
+      rig.fake.destroyPublic = true;
+      final r = await rig.run(['--canary', '--execute', '--report', rig.reportPath]);
+      expect(r.exitCode, isNot(0), reason: _all(r));
+      expect(_all(r), contains('did not get a clear refusal'));
+      expect(_all(r), contains('network error'));
+    });
+
+    test('a second canary run finds all three equal, re-POSTs nothing and exits 0', () async {
+      expect((await rig.run(['--canary', '--execute', '--report', rig.reportPath])).exitCode, 0);
+      final before = rig.fake.posts.length;
+      final r = await rig.run(['--canary', '--execute', '--report', rig.reportPath]);
+      expect(r.exitCode, 0, reason: _all(r));
+      expect(rig.fake.posts.length, before);
+      final canaries = (rig.readReport()['canaries'] as List).cast<Map<String, dynamic>>();
+      expect(canaries.map((c) => c['postStatus']).toSet(), {'skipped (already equal)'});
+      expect(canaries.map((c) => c['headBeforePost']).toSet(), {200});
+    });
+
+    test('a canary object that exists with different bytes stops the run and names the delete mode', () async {
+      expect((await rig.run(['--canary', '--execute', '--report', rig.reportPath])).exitCode, 0);
+      rig.fake.objects['canary-2_v0.webp'] = Uint8List.fromList(webpBytes(900, 77));
+      final before = rig.fake.posts.length;
+      final r = await rig.run(['--canary', '--execute', '--report', rig.reportPath]);
+      expect(r.exitCode, isNot(0), reason: _all(r));
+      expect(_all(r), contains('canary-2_v0.webp exists with different bytes'));
+      expect(_all(r), contains('--delete-object'));
+      expect(rig.fake.posts.length, before);
+    });
+
+    test('a repost answer that echoes a secret is redacted in the printed line AND in the report', () async {
+      rig.fake.postStatus['canary-1_v0.webp'] = 409;
+      rig.fake.postBody['canary-1_v0.webp'] = '{"statusCode":"409","error":"Duplicate","echo":"${rig.key}"}';
+      final r = await rig.run(['--canary', '--repost', '--execute', '--report', rig.reportPath]);
+      expect(r.exitCode, 0, reason: _all(r));
+      expect(File(rig.reportPath).readAsStringSync(), contains('[redacted]'));
+      _expectNoSecrets(rig, r);
+    });
 
     test('--canary --repost --execute POSTs canary-1 again and prints the status and body of the answer', () async {
       expect((await rig.run(['--canary', '--execute', '--report', rig.reportPath])).exitCode, 0);
@@ -786,6 +975,32 @@ void main() {
       expect((await rig.run(['--verify'])).exitCode, 0);
     });
 
+    for (final s in [206, 429, 500]) {
+      test('a privacy probe answering $s is not a refusal: verify exits non-zero and says privacy is not shown', () async {
+        await uploadAll();
+        rig.fake.publicStatus = s;
+        final a = await rig.run(['--verify']);
+        expect(a.exitCode, isNot(0), reason: _all(a));
+        expect(_all(a), contains('privacy is NOT shown'));
+        rig.fake.publicStatus = 400;
+        rig.fake.noAuthStatus = s;
+        final b = await rig.run(['--verify']);
+        expect(b.exitCode, isNot(0), reason: _all(b));
+        expect(_all(b), contains('privacy is NOT shown'));
+      });
+    }
+
+    test('a table with no active file is a stop, not a clean "0 of 0"', () async {
+      for (final f in (rig.table['files'] as Map<String, dynamic>).values) {
+        (f as Map<String, dynamic>)['status'] = 'unmapped';
+      }
+      rig.writeTable();
+      final r = await rig.run(['--verify']);
+      expect(r.exitCode, isNot(0), reason: _all(r));
+      expect(_all(r), contains('no active object'));
+      expect(r.stdout, isNot(contains('verify: 0 of 0')));
+    });
+
     test('the no-Authorization probe sends no Authorization and no apikey header', () async {
       await uploadAll();
       rig.fake.seen.clear();
@@ -831,6 +1046,14 @@ void main() {
       final b = await rig.run(['--sign', rig.objOf('0555')]);
       expect(b.exitCode, isNot(0), reason: _all(b));
       expect(rig.fake.seen, isEmpty);
+    });
+
+    test('a refused sign request exits non-zero and prints no URL', () async {
+      rig.fake.signStatus = 500;
+      final r = await rig.run(['--sign', rig.objOf('0103')]);
+      expect(r.exitCode, isNot(0), reason: _all(r));
+      expect(r.stdout, isNot(contains('token=')));
+      expect(_all(r), contains('500'));
     });
 
     test('refuses a signed path whose host differs from the base URL', () async {
@@ -953,10 +1176,18 @@ void main() {
 
   group('the file itself', () {
     test('exactly one spawn of the tool exists in this file, and it is the helper that adds the seams', () {
+      // Every needle is assembled from fragments, so this test's own text never matches what it counts.
       final src = File('test/scripts/upload_exercise_media_test.dart').readAsStringSync();
       final spawnCall = 'runSpawn${'Async'}(';
-      final withTool = RegExp('${RegExp.escape(spawnCall)}\\s*\'node\',\\s*\\[\\s*_tool,').allMatches(src).length;
-      expect(withTool, 1, reason: 'a second spawn of the tool could reach the real API');
+      final toolId = '_to${'ol'}';
+      expect(RegExp('${RegExp.escape(spawnCall)}\\s*\'node\',\\s*\\[\\s*$toolId,').allMatches(src).length, 1,
+          reason: 'a second spawn of the tool could reach the real API');
+      expect(RegExp('\\b$toolId\\b').allMatches(src).length, 2, reason: 'the tool path is used only by its definition and by the one helper');
+      expect(src.split(spawnCall).length - 1, 2, reason: 'only the tool helper and the git lookup of the primary checkout may spawn anything');
+      expect(src.split('runSpawn${''}(').length - 1, 0, reason: 'the synchronous twin must not be used');
+      for (final other in ['Process${'.'}run', 'Process${'.'}start', 'Process${'.'}runSync', 'Pro${'cess'}.start', "'power${'shell'}", "'c${'md'}'", "'ba${'s'}${'h'}'", "'s${'h'}'"]) {
+        expect(src.contains(other), isFalse, reason: 'no other way to start a process: $other');
+      }
       expect(src.contains("'--base-url', fake.url, '--management-url', fake.url"), isTrue);
     });
   });

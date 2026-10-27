@@ -6,13 +6,14 @@ status: in_progress
 blast_radius: platform
 symptom: >-
   616 Wardroom animations (253,550,820 bytes) exist only on the founder's disk,
-  and no library row says which animation it shows. 522 of the 617 mapped rows
-  are already shipped in the library; none of them carries the data an app or a
-  server would need to find its picture. Nothing stores the files either, and
-  the founder's rule is that only a person who has installed the app and logged
-  in may reach them, no one else. Batch M1 builds the data and the storage; the
-  app side (M2) and the picture check of the 522 shipped rows (M1b, OI-437)
-  come after it.
+  and no library row says which animation it shows. All 617 rows that have an
+  animation are in the shipped library, and none of them carries the data an
+  app or a server would need to find its picture; 522 of them were shipped with
+  no picture or identity record at all (OI-437). Nothing stores the files
+  either, and the founder's rule is that only a person who has installed the
+  app and logged in may reach them, no one else. Batch M1 builds the data and
+  the storage; the app side (M2) and the picture check of the 522 rows (M1b,
+  OI-437) come after it.
 concept: exercise_media_fields
 sot_registry_entry: exercise_media_fields
 writers:
@@ -34,7 +35,7 @@ writers:
 readers:
   - file: lib/core/services/seed_service.dart
     method_or_widget: seedIfNeeded re-seeds exerciseBox by id when the stored version is below 16
-    line: 128
+    line: 153
   - file: test/contracts/library_media_table_test.dart
     method_or_widget: CI links between the table, the media map and the library
     line: 1

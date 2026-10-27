@@ -23,10 +23,15 @@ const TOKEN_NAME = 'supabase access token.txt';
 
 // A hook (or a parent `git` process) can export GIT_DIR / GIT_WORK_TREE / GIT_INDEX_FILE;
 // inherited, they make `git worktree list` answer about THAT repo, or fail from another cwd.
-function scrubbedGitEnv() {
-  const env = { ...process.env };
+// The Supabase secrets are dropped too: a `git` child has no use for the service-role key or an access token, and a hook
+// or a wrapper that logs a child environment must not be able to print them.
+function scrubbedGitEnv(base = process.env) {
+  const env = { ...base };
   for (const k of Object.keys(env)) {
-    if (k === 'GIT_DIR' || k === 'GIT_WORK_TREE' || k === 'GIT_INDEX_FILE' || k === 'GIT_COMMON_DIR') {
+    if (
+      k === 'GIT_DIR' || k === 'GIT_WORK_TREE' || k === 'GIT_INDEX_FILE' || k === 'GIT_COMMON_DIR' ||
+      k === 'SUPABASE_SERVICE_ROLE_KEY' || k.startsWith('SUPABASE_ACCESS_TOKEN')
+    ) {
       delete env[k];
     }
   }
@@ -106,4 +111,4 @@ function resolveTokenFile(repoRoot, opts = {}) {
   return null;
 }
 
-module.exports = { candidateTokenFiles, resolveTokenFile, primaryRoot, TOKEN_NAME };
+module.exports = { candidateTokenFiles, resolveTokenFile, primaryRoot, scrubbedGitEnv, TOKEN_NAME };

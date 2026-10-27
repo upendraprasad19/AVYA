@@ -65,10 +65,18 @@ void main() {
 
   Json libRow(String id) => lib.cast<Json>().firstWhere((r) => r['id'] == id);
 
-  void expectLeg(String leg) {
+  /// [has], when given, must appear in the text of a violation of that leg, so a twin proves ITS sub-clause and not any other.
+  void expectLeg(String leg, {String? has}) {
     final v = tableViolations(table, map, lib);
-    expect(v.where((s) => s.startsWith('($leg)')), isNotEmpty, reason: 'leg ($leg) stayed green on a broken copy; all: $v');
+    final ofLeg = v.where((s) => s.startsWith('($leg)')).toList();
+    expect(ofLeg, isNotEmpty, reason: 'leg ($leg) stayed green on a broken copy; all: $v');
+    if (has != null) {
+      expect(ofLeg.any((s) => s.contains(has)), isTrue, reason: 'no ($leg) violation names "$has"; got $ofLeg');
+    }
   }
+
+  Json fileOf(String id) => files()[slugOf(id)] as Json;
+  Json versionOf(String id) => (fileOf(id)['versions'] as List).first as Json;
 
   group('the committed table against the committed map and library', () {
     test('every leg of R10 (a)-(h) and R1 holds on the real data', () {
@@ -266,5 +274,110 @@ void main() {
       (files()[slugOf('G0103')] as Json)['thumb_sha256'] = 'xyz';
       expectLeg('h');
     });
+  });
+
+  // Each sub-clause of (d), (f) and (h) has its own broken copy, and the violation must name the clause it is about: a clause
+  // nobody exercises could be dropped and every other test would stay green (B-pass of Batch M1).
+  group('each sub-clause of (d), (f) and (h) turns red on its own broken copy', () {
+    test('(h) versions[0].file that does not start with webp-720/', () {
+      versionOf('G0103')['file'] = 'thumbnails-192/${slugOf('G0103')}.webp';
+      expectLeg('h', has: 'must start webp-720/');
+    });
+
+    test('(h) versions[0].file that does not end with .webp', () {
+      versionOf('G0103')['file'] = 'webp-720/${slugOf('G0103')}.png';
+      expectLeg('h', has: 'must start webp-720/');
+    });
+
+    test('(h) versions[0].file that holds .. inside webp-720/', () {
+      versionOf('G0103')['file'] = 'webp-720/a..b.webp';
+      expectLeg('h', has: 'must start webp-720/');
+    });
+
+    test('(h) two versions in M1', () {
+      (fileOf('G0103')['versions'] as List).add(_copy(versionOf('G0103')));
+      expectLeg('h', has: 'exactly one entry');
+    });
+
+    test('(h) no versions list', () {
+      fileOf('G0103').remove('versions');
+      expectLeg('h', has: 'exactly one entry');
+    });
+
+    test('(h) versions[0] sha that differs from the top-level sha', () {
+      versionOf('G0103')['webp_sha256'] = 'b' * 64;
+      expectLeg('h', has: 'differ from the top-level');
+    });
+
+    test('(h) versions[0] bytes that differ from the top-level bytes', () {
+      versionOf('G0103')['webp_bytes'] = (fileOf('G0103')['webp_bytes'] as int) - 1;
+      expectLeg('h', has: 'differ from the top-level');
+    });
+
+    test('(h) an unknown status', () {
+      fileOf('G0103')['status'] = 'archived';
+      expectLeg('h', has: 'unknown status');
+    });
+
+    for (final k in ['webp_sha256', 'thumb_sha256', 'source_gif_sha256']) {
+      test('(h) a malformed $k', () {
+        fileOf('G0103')[k] = 'XYZ' * 21 + 'a';
+        expectLeg('h', has: '$k is not a sha256');
+      });
+      test('(h) a $k that is absent', () {
+        fileOf('G0103').remove(k);
+        expectLeg('h', has: '$k is not a sha256');
+      });
+    }
+
+    for (final bad in <Object>[0, -3, '12', 1.5]) {
+      test('(h) frames of $bad', () {
+        fileOf('G0103')['frames'] = bad;
+        expectLeg('h', has: 'frames is not a positive integer');
+      });
+      test('(h) thumb_bytes of $bad', () {
+        fileOf('G0103')['thumb_bytes'] = bad;
+        expectLeg('h', has: 'thumb_bytes is not a positive integer');
+      });
+    }
+
+    for (final bad in <Object>[0, -1, '900', 12.5]) {
+      test('(d) webp_bytes of $bad', () {
+        fileOf('G0103')['webp_bytes'] = bad;
+        expectLeg('d', has: 'webp_bytes is not a positive integer');
+      });
+    }
+
+    for (final bad in <Object?>[0, -1, '1500000', null]) {
+      test('(d) _meta.webp_bytes_max of $bad', () {
+        meta()['webp_bytes_max'] = bad;
+        expectLeg('d', has: '_meta.webp_bytes_max is not a positive integer');
+      });
+    }
+
+    test('(f) old_rows set while no E row exists', () {
+      meta()['old_rows'] = {'entries': 0, 'omitted': 0, 'sha256': 'a' * 64};
+      expectLeg('f', has: 'no E row exists');
+    });
+
+    test('(f) old_rows.sha256 malformed', () {
+      rows()['E050'] = slugOf('G0103');
+      meta()['old_rows'] = {'entries': 1, 'omitted': 0, 'sha256': 'not-a-hash'};
+      expectLeg('f', has: 'old_rows.sha256 is not a sha256');
+    });
+
+    test('(f) old_rows.sha256 absent', () {
+      rows()['E050'] = slugOf('G0103');
+      meta()['old_rows'] = {'entries': 1, 'omitted': 0};
+      expectLeg('f', has: 'old_rows.sha256 is not a sha256');
+    });
+
+    for (final bad in <Object?>['0', 1.5, null]) {
+      test('(f) old_rows.omitted of $bad', () {
+        rows()['E050'] = slugOf('G0103');
+        meta()['old_rows'] = {'entries': 1, 'omitted': bad, 'sha256': 'a' * 64};
+        expectLeg('f', has: 'old_rows.omitted is not an integer');
+      });
+    }
   });
 }

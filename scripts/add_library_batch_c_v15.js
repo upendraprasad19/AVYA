@@ -148,6 +148,11 @@ function readMediaTable() {
   }
   const t = JSON.parse(fs.readFileSync(MEDIA, 'utf8'));
   if (!t || typeof t.rows !== 'object' || typeof t.files !== 'object') throw new Error(`media table ${MEDIA} has no rows / files`);
+  // An empty `rows` map is not "nothing to attach": applyMedia deletes the three keys from every old row first, so an
+  // empty or truncated table would silently strip the media from the whole library. Skipping the stage must be explicit.
+  if (t.rows === null || Object.keys(t.rows).length === 0) {
+    throw new Error(`media table ${MEDIA} maps no rows (an empty table would strip the media keys from every row; pass --media none with --library to skip the media stage on purpose)`);
+  }
   return t;
 }
 
@@ -156,7 +161,7 @@ function applyMedia(allRows, media) {
   const resolved = {};
   for (const [id, slug] of Object.entries(media.rows)) {
     if (!ids.has(id)) {
-      throw new Error(`media table maps ${id}, which is not a row of the new library (a newly held row? remove it from the table first: docs/architecture/EXERCISE_MEDIA.md, "Hold a mapped row")`);
+      throw new Error(`media table maps ${id}, which is not a row of the new library (a newly held row? remove it from the table first: docs/operations/EXERCISE_MEDIA.md, "Hold a mapped row")`);
     }
     const file = media.files[slug];
     if (!file) throw new Error(`media table: ${id} maps to ${slug}, which has no files entry`);
