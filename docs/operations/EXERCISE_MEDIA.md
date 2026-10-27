@@ -135,23 +135,27 @@ Every entry needs `equipment_checked: true` and a `gif` that has a ledger entry.
 4. **Rollback is the Storage API, not SQL:** drop the policy (one statement, in the migration's rollback comment), then `node scripts/upload_exercise_media.js --delete-bucket --execute --confirm-bucket exercise-media --report <path>`.
 5. **The dashboard is the inventory.** There is no inventory tool for the bucket's contents; Supabase Dashboard → Storage → `exercise-media` is the list. `--verify` checks the 616 objects the table names, not extras.
 
-## 8. Not yet observed (recorded by Task 9 of the plan, then moved up)
+## 8. What the live project answered (observed 2026-10-27, Task 9 of the plan)
 
-These are what the tool and the plan assume and nobody has seen on the live project. Each is a stop condition in the plan if it turns out otherwise.
+These were assumptions of the tool and the plan until the canary and the bulk upload ran on project `dedsavbjuwgarrhphgnl`. Each has an observed answer now; the tool still stops if one of them changes.
 
-| Assumption | Where it is tested |
+| Assumption | Observed |
 |---|---|
-| `GET /storage/v1/object/authenticated/exercise-media/<name>` with the key reads a private object (and HEAD answers its length) | canary, Task 9.2 |
-| `POST /storage/v1/object/sign/exercise-media/<name>` returns a `signedURL` relative to `/storage/v1`, and its GET carries `cache-control` | canary, Task 9.2 |
-| A duplicate POST answers 409, or 400 with `statusCode "409"` | `--canary --repost`, Task 9.2 |
-| An absent object answers a non-200 HEAD on the authenticated route | canary, Task 9.2 |
-| The public route and the authenticated route with no Authorization answer non-200 | canary and `--verify` |
-| The public-route URL shape answers 200 for a public bucket | `--probe-control`, Task 9.2 |
-| An anon-key request to the authenticated route answers non-200 | one request, Task 9.2 |
-| Anonymous sign-ins are off on the live project (otherwise the policy's second clause is the only gate against a no-email sign-up) | Task 8.3 |
-| The Management API key endpoint answers with a revealable `service_role` key | `--probe-key`, Task 9.1 |
-| Which `cache-control` forms survive on the signed-URL response. The default is `private, max-age=31536000, immutable`; the canary uploads one object per form (`private, ...immutable`, `max-age=..., immutable`, bare `max-age=...`) and the observed header decides. Keep `private` unless the signed response lacks `max-age` | canary, Task 9.2 |
-| An animated WebP decodes and animates in a browser and on a device | playback check, Task 9.4 (no one has decoded one yet) |
+| The Management API key endpoint answers with a revealable `service_role` key | HTTP 200; key names `anon` (208 characters), `service_role` (219), `default` (46), `default` (41); `ref ok` (`--probe-key`) |
+| `GET /storage/v1/object/authenticated/exercise-media/<name>` with the key reads a private object, and HEAD answers its length | GET 200 with an equal sha256 for the canaries and for all 616 files; HEAD length equals the table (`--verify`: 616 of 616 match) |
+| `POST /storage/v1/object/sign/exercise-media/<name>` returns a `signedURL` and its GET reads the object | sign 200; signed GET 200 with an equal sha256 |
+| The signed response carries `cache-control` | **No.** It carries `ETag`, `Expires` (the link's own expiry), `Last-Modified`, `Accept-Ranges: bytes` and `Access-Control-Allow-Origin: *`, and no `Cache-Control`, whichever form the object was uploaded with (all three forms tried). The stored object metadata keeps `private, max-age=31536000, immutable` (one distinct value across the 616). The founder agreed to keep the default; the header is not load-bearing because the app keeps files on the device under their object name (M2) |
+| A duplicate POST answers 409, or 400 with `statusCode "409"` | HTTP 400 with body `{"statusCode":"409","error":"Duplicate","message":"The resource already exists","code":"KeyAlreadyExists"}` |
+| An absent object answers a non-200 HEAD on the authenticated route | HEAD with the key answers **400** (not 404), before the upload and after a DELETE that answered 200 |
+| The public route and the authenticated route with no Authorization answer non-200 | Both 400, on the three canaries, on the first of the 616 (`--verify`) and, from the built-in browser pane with no credentials, on three more names |
+| The public-route URL shape answers 200 for a public bucket | 200 (`--probe-control` on a banner of the `banners` bucket) |
+| An anon-key request to the authenticated route answers non-200 | 400 with body `statusCode "404"`, `Object not found` (the policy hides the object from the `anon` role); the public route answers `Bucket not found`. One request each, with the project's public anon key |
+| Anonymous sign-ins are off on the live project | Off (`external_anonymous_users_enabled` false, read at Task 8.3), so the policy's second clause is defence in depth today |
+| An animated WebP decodes and animates in a browser | Three files opened from signed links in the built-in browser pane and decoded with `ImageDecoder`: 123,878 bytes / 12 frames, 493,984 bytes (the shared-slug file) / 12 frames, 987,558 bytes (the largest) / 24 frames; all 720 x 720, animated, first and last frame differ. **Not yet seen on a device** (M2) |
+
+Two consequences for M2 (also on OI-440): a forbidden read and an absent object both answer HTTP 400 on the authenticated route, so status alone does not separate "no such file" from "not allowed" and the client treats a refused read of a mapped row as retry-later, not as "no animation"; and nothing on a signed response tells the client how long to keep the bytes, so it caches by object name (the name carries the version, `_v<n>`, so a name never changes content).
+
+Traffic of the first full run: the upload was about 0.25 GB into Storage, the `--verify` about 0.25 GB of egress, the playback check a few MB; against the Free allowance of 5 GB a month that is about a twentieth. Storage now holds 258,172,324 bytes in 639 objects (the bucket 618: 616 animations and the two canary objects `canary-1_v0.webp` and `canary-2_v0.webp`, never referenced; `--verify` checks only the 616).
 
 ## 9. The trap for Batch M2
 
