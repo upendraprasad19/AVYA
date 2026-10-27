@@ -5,7 +5,8 @@ blast_radius: platform
 reviewer: claude-sonnet-via-skill (two fresh reviewers: A data / importer / tags / seed / cloud generator, B tests / gates / baselines / documents)
 lens_set: [writer_reader_drift, blast_radius_mismatch, guard_without_its_mirror, missing_input, asserted_fixture_value]
 findings_count: 14
-verdict: accepted  # 0 P0, 1 P1 + 13 P2; every finding verified by the author against the files before acting; 13 fixed in the batch, 1 (B6) is expected and lands in its own later commit; 0 false alarms; 2 reviewer numbers were wrong and corrected from the source
+verdict: accepted
+verdict_note: 0 P0, 1 P1 + 13 P2; every finding verified by the author against the files before acting; 13 fixed in the batch, 1 (B6) is expected and lands in its own later commit; 0 false alarms; 2 reviewer numbers were wrong and corrected from the source
 ---
 
 # Code Review (B-pass) — branch `library-batch-c` (Batch C1), `git diff origin/main...HEAD` at `1eeb7705`
