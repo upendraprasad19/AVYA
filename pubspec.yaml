@@ -130,6 +130,7 @@ flutter:
   assets:
     - assets/data/
     - assets/exercise_plates/
+    - assets/exercise_stills/
     - assets/founder/
     - assets/coach/
     - assets/avya_logo.png
