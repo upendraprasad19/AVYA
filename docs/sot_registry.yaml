@@ -13057,9 +13057,12 @@ concepts:
       in the seed service. The table itself is built by `scripts/build_library_media_v16.js` from
       the Wardroom ledger and the files on disk.
 
-      READERS: none yet. The app side (a media resolver, signed URLs, the card) is Batch M2, which
-      adds its reader here when it lands. CI pins the links between the table, the media map and the
-      library (every leg of R10 in `library_media_table_test.dart`).
+      READERS: `resolveMedia` (Batch M2a, `lib/shared/widgets/exercise_plate/exercise_media_resolver.dart`)
+      is the only reader: it takes the two keys with type and shape guards (`is String`, trimmed, matched
+      against `^[a-z0-9][a-z0-9-]*$`; `is int` and >= 1) and yields the object name and the bundled still.
+      The repository, client and store never read the row. CI pins the links between the table, the media
+      map and the library (every leg of R10 in `library_media_table_test.dart`) and the reader's guards
+      (`exercise_media_resolver_test.dart`).
 
       WARNING: a later `media_version` reaches an installed copy only if the library version
       constant is bumped again. WARNING: the bucket is private; a row's keys are not a public URL.
@@ -13070,7 +13073,13 @@ concepts:
       - file: lib/core/services/seed_service.dart
         line_range: 128-128
         method: _exerciseLibraryVersion
-    readers: []
+    readers:
+      - file: lib/shared/widgets/exercise_plate/exercise_media_resolver.dart
+        line_range: 19-30
+        method: resolveMedia
+        semantic: pass-through
+        fields_read: [media_slug, media_version]
+        notes: Batch M2a Task 4 - type and shape guards on both keys; null for anything else. Behavioral test/contracts/exercise_media_resolver_test.dart.
 
   # One LOG per exercise (branch active-workout-log-exercise, 2026-10-19). Ship
   # dark behind `enable_log_exercise_button` (default OFF).
