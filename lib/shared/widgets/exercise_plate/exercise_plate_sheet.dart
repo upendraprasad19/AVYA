@@ -3,16 +3,23 @@
 // The plate. Two images for a movement that cycles, one for a hold. Free to
 // every tier, matching the FORM & CUES panel it sits beside.
 //
+// Since Batch M2a a row with an animation (`resolveMedia`) shows ONE animated picture in place of START and END while
+// `PlateFlags.animationsEnabled` holds; with the animations switched off the sheet is exactly what it was (the drawings, or
+// the monogram and NO DRAWING YET). The animation is fetched when the sheet opens, one file, never before.
+//
 // NOTE on the "never resolve library data in build()" constraint: this widget
 // DOES, deliberately. That rule exists for the Active Workout card, which
 // rebuilds ~1x/second off the workout timer. A modal sheet builds once when it
 // opens; paying two linear scans of exerciseBox there is the simpler trade.
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
+import 'package:icanbefitter/core/services/exercise_media/exercise_media.dart';
 import 'package:icanbefitter/core/theme/colors.dart';
 import 'package:icanbefitter/core/theme/spacing.dart';
 import 'package:icanbefitter/core/theme/typography.dart';
 import 'package:icanbefitter/shared/repositories/exercise_repository.dart';
+import 'package:icanbefitter/shared/widgets/exercise_plate/exercise_animation_view.dart';
+import 'package:icanbefitter/shared/widgets/exercise_plate/exercise_media_resolver.dart';
 import 'package:icanbefitter/shared/widgets/exercise_plate/exercise_monogram.dart';
 import 'package:icanbefitter/shared/widgets/exercise_plate/plate_flags.dart';
 import 'package:icanbefitter/shared/widgets/exercise_plate/plate_resolver.dart';
@@ -94,9 +101,44 @@ class ExercisePlateSheet extends StatelessWidget {
       style: AppTypography.monoXs
           .copyWith(color: AppColors.textMute, letterSpacing: 2));
 
+  /// The one animated picture, in a square frame as wide as the sheet allows. `size` is the frame's measured width: it drives
+  /// the decode width, and the sheet's width differs from one device to the next.
+  Widget _animationBox(ExerciseMedia media) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final side = constraints.maxWidth;
+        final radius = BorderRadius.circular(AppRadius.card);
+        return AspectRatio(
+          aspectRatio: 1,
+          child: DecoratedBox(
+            position: DecorationPosition.foreground,
+            decoration: BoxDecoration(
+              borderRadius: radius,
+              border: Border.all(color: AppColors.border),
+            ),
+            child: ClipRRect(
+              borderRadius: radius,
+              child: ColoredBox(
+                color: AppColors.cardHi,
+                child: ExerciseAnimationView(
+                  media: media,
+                  exerciseName: exerciseName,
+                  size: side,
+                ),
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final plate = resolvePlate(exerciseName);
+    // Both conditions, always: the kill switch must also close the sheet's door to the animation.
+    final media =
+        PlateFlags.animationsEnabled ? resolveMedia(exerciseName) : null;
     final row = ExerciseRepository.instance.getByExactName(exerciseName);
     final cues = _cues(row);
     final breathing = _clean(row?['breathing_cue']);
@@ -128,7 +170,9 @@ class ExercisePlateSheet extends StatelessWidget {
                 style: AppTypography.mono.copyWith(
                     color: AppColors.textPrimary, letterSpacing: 2.2)),
             const SizedBox(height: 14),
-            if (plate.hasArtwork)
+            if (media != null)
+              _animationBox(media)
+            else if (plate.hasArtwork)
               Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: plate.isPair

@@ -2,7 +2,8 @@
 
 > Batch M1 (diagnose `b4e7a2`, plan `docs/plans/2026-10-27-library-batch-m1-media-data.md`). This file is the operator's
 > reference: what exists, who can read it, the commands, the maintenance recipes and the things nobody has observed yet.
-> The app side is Batch M2 (OI-440); nothing in `lib/` reads the media fields yet.
+> The app side is Batch M2 (OI-440). M2a (2026-10-31) reads the media fields: the calendar day sheet and the active-workout picture sheet
+> fetch ONE animation when an exercise is opened, only for a logged-in account. The Wi-Fi bulk prefetch (M2c) is not shipped. See section 9.
 
 ## 1. What exists
 
@@ -24,13 +25,16 @@ In M1 `media_version` is 1 for every file, and a changed file under an existing 
 
 ## 2. Who can read the files (the access model)
 
-The founder's rule: **only a person who has installed the app and logged in reaches the animations, no one else.**
+The founder's rule: **only a person who has installed the app and logged in can download the animations from the bucket.** Two decisions refine it, both made on purpose (design calls G12 and C8):
+
+- **G12: the stills are readable without a login.** The 616 first frames (192 x 192) are bundled in the app (`assets/exercise_stills/`), so anyone who has the app sees them, signed in or not.
+- **C8: a cached animation survives sign-out.** A file already fetched stays on the device (native: files under the app's support folder, `exercise_media/`; web: the Hive lazy box `exerciseMediaBlobs`), and the sign-out wipe (`clearAllData()`) deliberately does not touch it, so a later person on that device can see it. No login is needed to play a file that is already cached; every download still needs one. (The kill-switch flags live in `configBox`, which that wipe DOES clear: section 9.)
 
 - The bucket is **private** (`public = false`). The public route `/storage/v1/object/public/exercise-media/<name>` serves nothing.
 - ONE policy exists on `storage.objects` for this bucket, `exercise_media_authenticated_read`: `FOR SELECT TO authenticated`, this bucket only, and only when the JWT is not an anonymous sign-in (`coalesce(((select auth.jwt()) ->> 'is_anonymous')::boolean, false) = false`). There is no policy for `anon` and none for writes.
 - The upload tool uses the service-role key, which bypasses row level security. The app never writes here.
 - A logged-in user reads with their JWT on `/storage/v1/object/authenticated/exercise-media/<name>` or through a signed URL.
-- **Not stopped:** a scraper who signs up (sign-up is open). The controls for that are a per-account cap (M2, OI-440), CAPTCHA at sign-up (OI-445) and a usage alert with the Spend Cap decision (OI-444).
+- **Not stopped:** a scraper who signs up (sign-up is open). The app has NO per-account cap: access design A, chosen for M2a, lets any logged-in, non-anonymous account read directly. The controls for that are CAPTCHA at sign-up (OI-445), a usage alert with the Spend Cap decision (OI-444) and, until M2c, on-demand-only delivery plus the session-counter event (section 3). OI-444 and OI-445 stay launch gates.
 - **A signed URL is a bearer token:** whoever holds it can fetch until it expires. `--sign` therefore refuses an expiry above 900 seconds and prints the URL to standard output only (never to the report).
 - **At the database-role level.** The role probe proves the policy for the roles `anon` and `authenticated` and for a hand-built anonymous-session claim. That Storage maps an anon-key JWT to the role `anon`, and an anonymous sign-in to `is_anonymous: true`, is documented behaviour and UNVERIFIED here; Task 9.2 of the plan sends one real request with the project's anon key and records the status below (section 8).
 
@@ -48,7 +52,9 @@ The founder's rule: **only a person who has installed the app and logged in reac
 | Pro plan | 250 GB + 250 GB: about 985 full downloads; overage about $0.09 per GB uncached, $0.03 cached |
 | Spend Cap (Pro) | ON: over the quota the organization is restricted for **every** user; OFF: the overage is billed. The founder chose OFF with a usage alert (OI-444). |
 
-M2's Wi-Fi prefetch budget is the control on the egress side. Before the upload, Task 9.1 of the plan reads the storage total and stops if the total plus 260 MB exceeds 900 MB.
+Until M2c ships there is no prefetch budget and no per-account cap. The control on the egress side is **on-demand-only delivery** (one file, only when a person opens that exercise's sheet) plus the **session counter**: the app sends one `exercise_media_session_over_budget` event the first time a session has downloaded 100 MiB (about 250 files at the average animation size of 412 KB; the query is `select * from client_errors where op_type = 'exercise_media_session_over_budget'`; the row is LOW priority, so a rate-limit cooldown can drop it) and OI-444's usage alert. Before the upload, Task 9.1 of the plan reads the storage total and stops if the total plus 260 MB exceeds 900 MB.
+
+Accepted limits of the app side (each is a decision, none is a defect to fix in M2a): an unwritable store re-downloads the file on every open (after one failed write the app skips the write for 5 minutes); a token that expired while the phone was offline costs one failing refresh per open; recency bumps are persisted only together with a later change to the store; a failing file delete leaves an orphan on disk that the next launch re-adopts as the newest entry, so disk use can exceed the cap, bounded only by the person's taps; after a failed store load the next change persists an index holding only the new entries (earlier blobs become orphans, re-adopted at the next launch); the session alert and the two first-outcome events (`exercise_media_first_refused`, `exercise_media_first_unreachable`) are LOW-priority rows that a rate-limit cooldown can drop; a second `ensure` can download a file once more in a window of milliseconds; and on web `followRedirects: false` is not honoured by the browser adapter (the browser drops `Authorization` on a cross-origin redirect).
 
 ## 4. Commands
 
@@ -157,9 +163,20 @@ Two consequences for M2 (also on OI-440): a forbidden read and an absent object 
 
 Traffic of the first full run: the upload was about 0.25 GB into Storage, the `--verify` about 0.25 GB of egress, the playback check a few MB; against the Free allowance of 5 GB a month that is about a twentieth. Storage now holds 258,172,324 bytes in 639 objects (the bucket 618: 616 animations and the two canary objects `canary-1_v0.webp` and `canary-2_v0.webp`, never referenced; `--verify` checks only the 616).
 
-## 9. The trap for Batch M2
+## 9. What Batch M2a shipped (the app side), and the trap it avoided
 
-A `lib/` file that names the bucket through `storage.from` trips `test/contracts/delete_account_purges_all_user_buckets_test.dart` until `supabase/functions/_shared/user_owned_buckets.ts` gets the documented "holds no user-owned objects" treatment (that test's failure message says how), or the app reads the bucket without `storage.from`. M2 also chooses between short-lived signed links issued by an Edge Function that counts them per account (after which it drops `exercise_media_authenticated_read`) and an uncapped logged-in reader; the first read of a real object with a real user JWT happens only in M2. See OI-440.
+**Shipped (2026-10-31, plan `docs/plans/2026-10-28-library-batch-m2-app-delivery.md`).** The calendar day sheet and the active-workout picture sheet show the WebP animation of an exercise that has one; a tile (the 44 px thumb) shows the bundled still. Opening one exercise fetches that ONE file, on any connection, for a logged-in, non-anonymous account only; there is no subscription gate (C7). The Train tab plan list shows no pictures. **Bulk prefetch on Wi-Fi is NOT shipped (M2c, OI-440's second half).**
+
+- **Access design A.** The app reads the authenticated route directly (`GET /storage/v1/object/authenticated/exercise-media/<name>` with the user's access token) through ONE Dio client (`lib/core/services/exercise_media/exercise_media_client.dart`). It never calls `storage.from`, so the trap this section used to describe does not arise: `test/contracts/exercise_media_reads_without_storage_from_test.dart` pins that none of the animation files uses `storage.from`, `.storage.`, `bucket:` or `package:http`, and that none of them gates on the subscription. The signed-link design (an Edge Function issuing short-lived links, counted per account) was not chosen; `exercise_media_authenticated_read` stays.
+- **The cache.** Native: files under the application support folder (`exercise_media/`), 150 MB; web: the Hive lazy box `exerciseMediaBlobs`, 60 MB. The store keeps its own index inside its byte store, so clearing the Hive boxes cannot desync it; eviction is by recency (the recency of a cache hit is written together with the next change to the store, so a process killed before that change falls back to the last written order: an accepted limit, section 3). A cached file survives sign-out (C8) and the stills are readable without a login (G12): both are decisions, section 2.
+- **Kill switches (both default ON, the flag turns them OFF).** `configBox['disable_exercise_animations'] = true` stops every download and every animated view, and takes the bundled still tile with them (the still is an animation surface, design call C22), so the faces are what they were before M2a: the plate where the row has a drawing, else the monogram. The 617 rows with an animation have no drawing, so with only this switch set their tiles show the monogram and their sheet says NO DRAWING YET; `configBox['disable_exercise_plates'] = true` turns the plates off too, and animations follow it. Both are read at the sink on every call. **`clearAllData()` clears `configBox`, so a sign-out wipe also clears these flags** (G4); a build that must stay off ships the compile-time platform switches instead (`kWebAnimationsFetchEnabled`, `kNativeAnimationsFetchEnabled` in `exercise_media_repository.dart`, both `true` today).
+- **Anonymous sessions** read nothing: the client answers `unauthenticated` with zero requests, and that answer never arms a per-name back-off the next account would inherit.
+- **A refused read is retry-later.** A forbidden read and an absent object both answer HTTP 400, so a refusal never means "this exercise has no animation": the name is retried after 10 seconds, and only a file the image codec cannot decode is banned for the session.
+- **Hardened in the B-pass (2026-10-31).** A response that reports more than the 1.5 MB WebP cap, as received so far or as declared, is cancelled while it streams and counts as refused (the whole body is no longer buffered first). A clock stepped backwards never freezes a cooldown: a stamp in the future is expired, for the 10 s back-off, the 5 min unwritable back-off and the 60 s token-refresh cooldown. An `evict` that runs while a download or a store read is under way is not undone by it (the ban is checked again after both). An index file damaged into invalid UTF-8 reads as an unreadable index, so every blob is re-adopted. The view decodes again, wider, when the sheet grows by more than 1.25x while it is open (never narrower), starts the frozen-frame decode when `autoplay` turns off, evicts a provider that a second answer replaces, treats an unbounded size as the widest decode, and keeps the still on screen until the animation's first frame is decoded.
+- **What was observed.** Task 1 findings: `docs/audit/library-m2-spike-findings.md`. S7 is observed (all 924 files in the folder: RIFF size consistent, loop count 0 = infinite). S1 (animation plays on a phone and in Chrome), S2 and S4 (a real user token's read and refusal statuses), S3 and S3b (web CORS), S6 (memory of the 48-frame file) and **S8 (does the web store persist across a reload)** are NOT observed: they need a QA login and a phone, and are owed in the post-merge device and web check. Until S8 is observed, "the second open works offline" on web is unverified. Web ships the direct GET; a CORS refusal there ends as `unreachable` and the still stays.
+- **Not shipped.** The Wi-Fi bulk prefetch and its budget (M2c); the hero tile, the full-screen viewer and the keyboard fold (M2b, OI-354); the per-account cap (access design A has none). Until M2c, section 3 names the egress controls.
+
+See OI-440.
 
 ## 10. Related board entries
 

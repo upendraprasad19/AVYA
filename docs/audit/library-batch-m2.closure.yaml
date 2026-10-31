@@ -1,0 +1,302 @@
+# Closure ledger — library-batch-m2 (Batch M2a, the app delivers the exercise animations on demand)
+# Gate 40 (validate_audit_closure.dart). One terminal_state per item; no `deferred:` key.
+# Plan docs/plans/2026-10-28-library-batch-m2-app-delivery.md (r11), executed inline (executing-plans) on branch library-batch-m2.
+# `library-batch-m2@branch` is the in-branch commit form for the commits that cannot cite their own SHA (this file's commit and the
+# plan-review record that follows it). Merge and worktree retirement are pipeline steps recorded in the retrospective memory file.
+# Mutation evidence (rule 21) is written as `mutants_reddened`: letter=number of cases that went red when that one mutation was applied.
+# Each mutation was applied by a harness that refuses to run unless its anchor text occurs exactly once in the file, and that restores
+# the file byte for byte afterwards (git status clean after every run).
+
+batch: library-batch-m2
+plan_review_record: docs/plan-reviews/library-batch-m2.md
+
+findings:
+  - id: T1-FINDINGS
+    title: "Task 1: spike findings file (S7 observed on all 924 files; the rest recorded as unobserved with their consequences)"
+    terminal_state: closed_in_commit
+    commit: 43b7f4b5
+    verification: "docs/audit/library-m2-spike-findings.md: 924 files scanned, 0 RIFF-size violations, ANIM loop count 0 (infinite) on all 924; the other seven questions are recorded UNOBSERVED with the ladder consequence for each."
+
+  - id: T1-PHONE-WEB
+    title: "Task 1 steps that need a QA login or a phone: S1, S2, S3, S3b, S4, S6, S8"
+    terminal_state: blocked_on_user
+    reason: "The founder supplies a QA login and a phone (or waives the observation in chat, which is then written into the plan-review record). Until then both platform switches ship true, web ships the direct GET, the signed-link fallback is not built and the 'second open works offline on web' claim is documented as unverified."
+
+  - id: T2-STILLS
+    title: "Task 2: the 616 stills bundled"
+    terminal_state: closed_in_commit
+    commit: 78ba563d
+    verification: "assets/exercise_stills (616 files, 3,102,690 bytes) written by scripts/bundle_exercise_stills.js, which checks every sha256 against the table before copying; exercise_stills_bundle_test and bundle_exercise_stills_test. mutation: one flipped byte in one still reddened exactly the hash test; restored with cp and cmp."
+
+  - id: T3-KILL-SWITCH
+    title: "Task 3: PlateFlags.animationsEnabled"
+    terminal_state: closed_in_commit
+    commit: fd9eadd2
+    verification: "exercise_animation_flags_test (no-Hive case first) and exercise_plate_widgets_test, 14 of 14 pass. mutations a, b and c each reddened exactly the case named for it (the per-mutation case counts were not recorded at the time); restored with cp and cmp."
+
+  - id: T4-RESOLVER
+    title: "Task 4: resolveMedia and ExerciseMedia"
+    terminal_state: closed_in_commit
+    commit: c99c3e82
+    verification: "exercise_media_resolver_test 9 of 9 and the SoT registry gates pass (concept exercise_media_fields lists resolveMedia as its reader); first commit f93ee973. mutations a, b and c each reddened exactly the case named for it (the per-mutation case counts were not recorded at the time); restored with cp and cmp."
+
+  - id: T5-STORE
+    title: "Task 5: the device store (files on native, a Hive lazy box on web), its own index, the cap"
+    terminal_state: closed_in_commit
+    commit: 0ae69f02
+    verification: "exercise_media_store_behavioral_test 51 and exercise_media_webp_test 6 pass; clear_all_data_box_coverage_test pass; check_cqrs_query_naming OK. mutants_reddened (48 of 48 killed, every one by its named case): a=2 b=1 c=2 d=1 e=1 f=1 g=1 h=1 i=1 j=2 k=1 l=2 m=1 n=1 o=1 p=1 q=1 r=1 s=2 t=2 u=1 v=1 w=1 x=1 y=1 z=1 aa=1 ab=1 ac1=1 ac2=1 ac3=1 ad=2 ae=5 af=1 ag=1 ah=3 ai=1 aj=2 ak=2 al=1 am=1 an=3 ao=2 ap=1 aq=1 ar=1 as=1 at=1; files restored and compared; the tests were written after the code (Ruling in the task ledger), so this mutation run is the proof that each protection bites."
+
+  - id: T6-CLIENT
+    title: "Task 6: the one Dio class that reads the private bucket with the user's token"
+    terminal_state: closed_in_commit
+    commit: 9a0e3853
+    verification: "exercise_media_client_behavioral_test and exercise_media_reads_without_storage_from_test pass (49 tests with the repository test). mutants_reddened (23 of 23 killed): a=4 b=2 c=1 d=2 e=1 f=3 g=2 h=1 i=1 j=1 k=1 l=1 m=1 n=2 o=1 p=1 q=1 r=5 s=1 t=2 u=7 v=1 w=1; b and d are caught by the WebP predicate tests and by case m, which is the intended owner of the body check; files restored and compared."
+
+  - id: T7-REPOSITORY
+    title: "Task 7: ExerciseMediaRepository and the providers"
+    terminal_state: closed_in_commit
+    commit: 7d15fdd0
+    verification: "exercise_media_repository_behavioral_test 20 of 20; analyze clean apart from the fake_async not-a-dependency info the other fake-clock tests already carry. mutants_reddened (32 of 32 killed, each by its named case): a=2 b=2 c=1 d=1 e=2 f=2 g=2 h=1 i=8 j=2 k=1 l=2 m=4 n=1 o=1 p=1 q=1 r=2 s=1 t=1 u=1 v=1 w=1 x=1 y=1 z=1 aa=1 ab=1 ac=1 ad=1 ae=1 af=1; files restored and compared."
+
+  - id: T8-WIFI-PREFETCH
+    title: "Task 8: Wi-Fi bulk prefetch (split out under 4.12.1 as batch M2c; a stub with no commit)"
+    terminal_state: upstream_blocked
+    blocker: "Split out of M2a after four plan-review rounds; drafted in docs/plans/2026-10-31-library-batch-m2c-wifi-prefetch-DRAFT.md and tracked on OI-440."
+    reopen_when: "M2a is merged; then the draft becomes a plan and gets its own two reviews."
+
+  - id: T9-VIEW-TILE-SHEET
+    title: "Task 9: the animation view, the still tile, the animated sheet, the fallback chain and both kill switches"
+    terminal_state: closed_in_commit
+    commit: 45147845
+    verification: "exercise_animation_view_test 24, exercise_media_fallback_chain_test 15, the tightened exercise_media_reads_without_storage_from_test 5, and the existing exercise_plate_widgets, exercise_plate_sheet, exercise_plate_badge_sites, breathing_cue_numeric_suppressed, coaching_panel_numeric_breathing_behavioral and swap_move_icons_widget tests all pass; check_sot_registry_parity PASS. mutants_reddened (23 of 23 killed, plus the inert control x which correctly survived): a=1 b=3 c=2 d=4 e=1 f=1 g=1 h=1 i=2 j=1 k=1 l=2 m=1 n=1 o=1 p=1 q=1 r=1 s=2 t=2 u=1 v=1 w=1 x=0; files restored and compared. Review-only limit: that every Codec and ui.Image is disposed on every path is read in the B-pass, no unit test can count handles."
+
+  - id: T6-STEP6-SIGNED-LINK
+    title: "Task 6 Step 6: signed-link fallback for web, only if S3 is later seen blocked"
+    terminal_state: upstream_blocked
+    blocker: "S3 (the web CORS answer to an Authorization header on the authenticated GET) is unobserved, so the direct GET ships and the fallback is not built."
+    reopen_when: "The post-merge web observation shows a CORS refusal; it is then filed as a new OI that reopens Task 6 Step 6."
+
+  - id: M2B-HERO-TILE-VIEWER
+    title: "M2b: the hero tile, the full-screen viewer and the keyboard fold (OI-354)"
+    terminal_state: upstream_blocked
+    blocker: "M2a is not merged and the founder has not approved the mockup (the draft plan's Task 1 is that mockup)."
+    reopen_when: "M2a merged and mockup approved."
+
+  - id: DEVICE-CHECK
+    title: "Device check: memory and first-frame time of the 48-frame file on a low-end phone, playback, offline reopen"
+    terminal_state: blocked_on_user
+    reason: "Needs the founder's phone (spike S1 and S6, and the 360 px decode-width rule if S6 asks for it)."
+
+  - id: OI443-DATA-STEP
+    title: "OI-443 data step: 148 old-row pairs, the live upload and the seed bump"
+    terminal_state: blocked_on_user
+    reason: "The live upload to the production bucket needs the founder's explicit go."
+
+  - id: OI443-HELD-PAIRS
+    title: "OI-443: the 11 held pairs"
+    terminal_state: blocked_on_user
+    reason: "The founder's picture decision."
+
+  - id: OI443-PICTURE-CHECK
+    title: "OI-443: the picture check of the 529 shipped animations"
+    terminal_state: blocked_on_user
+    reason: "The founder's eyes on the pictures."
+
+  - id: OI444-SUPABASE-PLAN
+    title: "OI-444: Pro plan, Spend Cap and usage alert"
+    terminal_state: blocked_on_user
+    reason: "Dashboard actions in the founder's accounts; a launch gate. The board entry now names on-demand-only delivery and the session-counter event as the egress control until M2c."
+
+  - id: OI445-CAPTCHA
+    title: "OI-445: CAPTCHA at sign-up"
+    terminal_state: blocked_on_user
+    reason: "A dashboard action in the founder's account plus sign-up screen work; a launch gate."
+
+  - id: T10-REGISTRY-DOCS-GATES-REVIEW
+    title: "Task 10: registry concept, docs, board entries, closure ledger, gate loop, B-pass, plan-review record"
+    terminal_state: closed_in_commit
+    commit: library-batch-m2@branch
+    verification: "Docs commit 8956d92a (registry concept exercise_media_delivery, EXERCISE_MEDIA.md sections 2, 3 and 9, naming terms, OI-440/444/445, lib/core/services/CLAUDE.md row); OI-354 already read 'M2a is merged AND the founder has approved the mockup' and was left unchanged. Gate loop on the Task 10 tree: whole-project flutter analyze --no-fatal-infos with 0 warnings (391 infos, all of the pre-existing kinds); full local flutter test on 8956d92a: 12,168 passed, 35 skipped, 3 failed (OI-415 twice and OI-446, the three known Windows-only reds, none touch this batch); sh scripts/pre-commit.sh RC=0. B-pass: docs/reviews/library-batch-m2-bpass.md (two fresh Sonnet reviewers, 28 findings, every one verified by the author), fixed in 6b9f5571 and the follow-up commit; mutation proof 36 of 38 killed, 2 review-only (BP-30). The full-suite re-run on the final code HEAD is recorded in the plan-review record."
+
+  # ---- The B-pass (docs/reviews/library-batch-m2-bpass.md): two fresh reviewers on HEAD 8956d92a, 28 distinct findings + 1 found by the mutation proof.
+  # Fixes are in commit 6b9f5571 unless the entry says library-batch-m2@branch (the follow-up commit that also carries the review file and this ledger).
+  # mutants: the ids of the mutations (scratchpad harness, anchor must occur exactly once, file restored byte for byte) whose case went red.
+
+  - id: BP-01-KILL-SWITCH-PER-CALL
+    title: "B-pass 1 (P1, B1): the kill switch read on EVERY call was not pinned"
+    terminal_state: closed_in_commit
+    commit: 6b9f5571
+    verification: "test/contracts/exercise_media_repository_behavioral_test.dart [bp1] flips the switch between calls both ways; mutant bp1 (a snapshot in the initializer) reddens it."
+
+  - id: BP-02-WEB-ADOPTION
+    title: "B-pass 2 (P1, B2): web adoption of a valid unindexed blob had no positive case"
+    terminal_state: closed_in_commit
+    commit: 6b9f5571
+    verification: "test/contracts/exercise_media_store_behavioral_test.dart [bp11]; mutant bp11 (never read a web blob to measure it) reddens it."
+
+  - id: BP-03-RETRY-ONCE-BOUND
+    title: "B-pass 3 (P1, B3): the retry-once-after-one-victim bound could not be seen"
+    terminal_state: closed_in_commit
+    commit: 6b9f5571
+    verification: "test/contracts/exercise_media_store_behavioral_test.dart [bp12] (three entries, permanent write failure: 2 attempts, one victim); mutant bp12 (unbounded evict-and-retry loop) reddens it."
+
+  - id: BP-04-KILL-SWITCH-WORDING
+    title: "B-pass 4 (P2, A1+B4): three texts said the still survives the animation switch; the code follows design call C22"
+    terminal_state: closed_in_commit
+    commit: 6b9f5571
+    verification: "plate_flags.dart header, docs/operations/EXERCISE_MEDIA.md section 9 and docs/naming_conventions.md reworded to the C22 behaviour (plate or monogram; the 617 media rows show the monogram); the behaviour itself was already pinned by test/contracts/exercise_media_fallback_chain_test.dart."
+
+  - id: BP-05-REGISTRY-CLEARALLDATA
+    title: "B-pass 5 (P2, B5): the registry said clearAllData() clears the media files and index"
+    terminal_state: closed_in_commit
+    commit: 6b9f5571
+    verification: "docs/sot_registry.yaml sentence rewritten (neither clearAllData nor any box wipe touches them, C8); the behaviour is pinned by [c] of the store test, which now opens the real web box name."
+
+  - id: BP-06-OI440-LEDGER-CITED
+    title: "B-pass 6 (P2, B6): OI-440 cited a closure ledger that was not in the tree"
+    terminal_state: closed_in_commit
+    commit: library-batch-m2@branch
+    verification: "this file, validated by Gate 40 in the commit that adds it; the OI-440 text is unchanged and now true."
+
+  - id: BP-07-BLAST-RADIUS-TIER
+    title: "B-pass 7 (P3, B18): the board said blast radius account, the diff computes platform"
+    terminal_state: closed_in_commit
+    commit: 6b9f5571
+    verification: "docs/audit/open_issues.md OI-440 says platform and names pubspec.yaml and hive_service.dart (docs/blast_radius.yaml)."
+
+  - id: BP-08-CLOCK-STEP
+    title: "B-pass 8 (P3, A2): a backwards clock step froze the 10 s back-off, the 5 min unwritable back-off and the static 60 s refresh cooldown"
+    terminal_state: closed_in_commit
+    commit: 6b9f5571
+    verification: "[bp2], [bp2b] (repository test) and [bp7] (client test) failed on the reviewed code and pass now. mutants_reddened: bp2=1 bp2b=1 bp7=1, each at its own site. Bug class 2.140 added to the debugging skill."
+
+  - id: BP-09-RECENCY-NOT-PERSISTED
+    title: "B-pass 9 (P3, A3): a cache hit's recency is written only with the next change to the store"
+    terminal_state: verified_clean
+    evidence: "docs/operations/EXERCISE_MEDIA.md section 3 already listed it as an accepted limit (recency bumps are persisted only together with a later change to the store); section 9 now repeats it next to the eviction-by-recency sentence. Ruling: writing the index on every read costs a write per open on both backends for a cache that reaches its cap only after about 365 distinct exercises. Cost if wrong: after a crash-heavy period the eviction order falls back to the last written one."
+
+  - id: BP-10-NON-FINITE-SIZE
+    title: "B-pass 10 (P3, A4): an unbounded size made a layout value look like a bad file"
+    terminal_state: closed_in_commit
+    commit: 6b9f5571
+    verification: "exercise_animation_view_test.dart [bp15], [bp15b] failed before and pass now. mutants_reddened: bp15=2."
+
+  - id: BP-11-LAYOUT-AND-AUTOPLAY
+    title: "B-pass 11 (P3, A5): the decode width and autoplay were frozen at the first answer"
+    terminal_state: closed_in_commit
+    commit: 6b9f5571
+    verification: "[bp16] (grow past 1.25x, no change inside it, never narrower, replaced provider evicted) and [bp17] (autoplay off while playing). mutants_reddened: bp16=1 bp16b=1 bp16c=1 bp16d=1 bp17=1."
+
+  - id: BP-12-REPLACED-PROVIDER
+    title: "B-pass 12 (P3, A6): a second answer for the same media replaced the provider without evicting the first"
+    terminal_state: closed_in_commit
+    commit: 6b9f5571
+    verification: "[bp18] (A, B, A in one fetch window) and [bp21] (A answers late while B is pending). mutants_reddened: bp18=1 bp21=2."
+
+  - id: BP-13-WRITE-ERROR-EVICTS
+    title: "B-pass 13 (P3, A7): any first-write error evicts one healthy cached file before the cause is known"
+    terminal_state: verified_clean
+    evidence: "Ruling, cost stated: the loss is bounded to one file per put (now pinned by [bp12]) and the repository stops attempting put for 5 minutes after a failure; telling disk-full from folder-unwritable is not reliable across Android, Windows and IndexedDB, and failing to free space on a genuinely full disk is the worse error. Cost if wrong: a persistently unwritable folder costs one cached animation per 5 minutes of use."
+
+  - id: BP-14-EVICT-VS-INFLIGHT
+    title: "B-pass 14 (P3, A8): an evict that overtook an in-flight ensure was undone by that ensure's put, and a ban set during the store read was ignored"
+    terminal_state: closed_in_commit
+    commit: 6b9f5571
+    verification: "[bp3] (fakeAsync, evict at 5 ms of a 10 ms download: not stored, not returned) and [bp3b] (evict while the read is gated). mutants_reddened: bp3=1 bp3b=1."
+
+  - id: BP-15-BODY-CAP
+    title: "B-pass 15 (P3, A9): no cap on the body while it is buffered"
+    terminal_state: closed_in_commit
+    commit: 6b9f5571
+    verification: "exercise_media_client_behavioral_test.dart [bp9] (received over the cap), [bp9b] (declared over the cap), [bp9c] (exactly the cap passes); Dio 5.9.2 fires onReceiveProgress for in-memory bodies, which first made case [m] lose its status, so the status line is captured in validateStatus. mutants_reddened: bp9=2 bp9b=1 bp9c=1 bp9d=3 bp9e=1."
+
+  - id: BP-16-BLANK-FRAME
+    title: "B-pass 16 (P3, A10): the animation replaced the still before its first frame was decoded"
+    terminal_state: closed_in_commit
+    commit: 6b9f5571
+    verification: "[bp19] (placeholder still inside the playing image before decode, gone after). mutants_reddened: bp19=1. Bug class 2.141 added."
+
+  - id: BP-17-BUNDLE-SCRIPT
+    title: "B-pass 17 (P3, B7): the bundle script's copy mode had no test and an empty table passed"
+    terminal_state: closed_in_commit
+    commit: 6b9f5571
+    verification: "test/scripts/bundle_exercise_stills_test.dart: staged-source cases (copy, flipped byte, missing thumbnail, unknown ledger id, climbing path, each leaving the output folder untouched), empty table, path slug. mutants_reddened: bp26=1 bp27=1 bp28=1."
+
+  - id: BP-18-GREP-FAMILY
+    title: "B-pass 18 (P3, B8): the source-grep family forbade neither gateAndVerify nor proStateSnapshot and scanned only one folder"
+    terminal_state: closed_in_commit
+    commit: library-batch-m2@branch
+    verification: "[w] forbids both names (final form in the follow-up commit, see BP-29); a lib-wide completeness test fails for any file that mentions the animation symbols and is neither listed nor on a one-entry reviewed allow-list. mutants_reddened: bp24=1 bp24b=1 bp25=1."
+
+  - id: BP-19-FILES-NUMBER
+    title: "B-pass 19 (P3, B9): about 100 files at 100 MiB"
+    terminal_state: closed_in_commit
+    commit: 6b9f5571
+    verification: "recomputed 253,550,820 bytes over 616 files = 411,608 bytes average; EXERCISE_MEDIA.md says about 250 files."
+
+  - id: BP-20-THUMBNAIL-COUNT
+    title: "B-pass 20 (P3, B10): OI-443 said 923 thumbnails"
+    terminal_state: closed_in_commit
+    commit: 6b9f5571
+    verification: "author recounted the founder's two folders (924 and 924 files, 379,451,864 and 4,606,034 bytes); OI-443 says 924 and that it was recounted."
+
+  - id: BP-21-REGISTRY-RANGES
+    title: "B-pass 21 (P3, B11): five registry line ranges were loose"
+    terminal_state: closed_in_commit
+    commit: 6b9f5571
+    verification: "ranges set to the exact symbol bounds (resolveMedia 19-32, ensure 95-127, put 479-482, _request 137-145, sheet build 137-141); check_sot_registry_parity passes at the commit."
+
+  - id: BP-22-LATCHES
+    title: "B-pass 22 (P3, B12): the two first-outcome latches were tested one kind at a time"
+    terminal_state: closed_in_commit
+    commit: 6b9f5571
+    verification: "[bp4], [bp4b] (both orders). mutants_reddened: bp4=2."
+
+  - id: BP-23-CLIENT-TESTS
+    title: "B-pass 23 (P3, B13): client tests did not pin the process-wide cooldown, the web path or the logging control"
+    terminal_state: closed_in_commit
+    commit: 6b9f5571
+    verification: "[bp6] (two instances share the cooldown), [bp8] (web has no 60 s cap), [e] gained a positive control for its three capture hooks. mutants_reddened: bp6=1 bp8=1 bp10=1."
+
+  - id: BP-24-VIEW-TESTS
+    title: "B-pass 24 (P3, B14): a weak 44 px finder, one stale-completion order, fixed real-time sleeps"
+    terminal_state: closed_in_commit
+    commit: 6b9f5571
+    verification: "the 44 px test measures the keyed target, [bp21] is the other order, _settle polls for a condition. mutants_reddened: bp20=1 bp21=2."
+
+  - id: BP-25-LOGEVENT-LEG
+    title: "B-pass 25 (P3, B15): the logEvent leg of the totality guard was unpinned"
+    terminal_state: closed_in_commit
+    commit: 6b9f5571
+    verification: "[bp5] (a throwing logEvent hook on an over-budget fetch). mutants_reddened: bp5=1."
+
+  - id: BP-26-REAL-WEB-BOX-NAME
+    title: "B-pass 26 (P3, B16): the sign-out test used a different box name from the real one"
+    terminal_state: closed_in_commit
+    commit: 6b9f5571
+    verification: "[c] opens HiveService.mediaBlobStoreName; [bp14] pins three uses in hive_service.dart and none in user_repository.dart. mutants_reddened: bp14=1."
+
+  - id: BP-27-DAMAGED-INDEX
+    title: "B-pass 27 (P3, B17): an index file damaged into invalid UTF-8 threw and emptied the index for the session"
+    terminal_state: closed_in_commit
+    commit: 6b9f5571
+    verification: "readMeta decodes with allowMalformed; [bp13] (damaged index, both blobs re-adopted). mutants_reddened: bp13=1. The second half (a fake read is a snapshot, a real file can vanish between exists and read) ruled to stand: the real outcome is a null read, a miss."
+
+  - id: BP-28-PRESENCE-ONLY-PIN
+    title: "B-pass 28 (P3, B19): the compile-gated presence pin in the fallback test is weaker than its comment"
+    terminal_state: verified_clean
+    evidence: "Declared PRESENCE ONLY with its reason in the test's own header (an absent asset hangs the harness, so the face order cannot be run there); the behavioural cases of the same file cover the face order. Cost if wrong: a swap of the two branches inside errorBuilder is caught only in review."
+
+  - id: BP-29-REGEX-BACKSPACE
+    title: "Found by the mutation proof (P1): the two new forbidden-word patterns held backspace characters and could never match"
+    terminal_state: closed_in_commit
+    commit: library-batch-m2@branch
+    verification: "mutants bp24 and bp24b SURVIVED, od -c on the line showed 0x08; fixed with real backslashes, both now killed by [w]; a byte scan of every changed file found no other control character. Recorded in the escape-trap memory class."
+
+  - id: BP-30-GENERATION-REVIEW-ONLY
+    title: "Mutation proof residue: the two _generation++ lines that discard a stale frozen-frame decode"
+    terminal_state: verified_clean
+    evidence: "mutants bp22 and bp23 reddened nothing, by design: a real codec's completion order cannot be scripted, and the lines only matter when two decodes of one view finish out of order. Stated as a review-only limit in the header of exercise_animation_view.dart."
+
+total_findings: 49
+closed_count: 49

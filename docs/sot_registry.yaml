@@ -13036,7 +13036,7 @@ concepts:
         line_range: 57-84
         method: resolvePlate
       - file: lib/shared/widgets/exercise_plate/exercise_plate_sheet.dart
-        line_range: 93-100
+        line_range: 137-141
         method: build
 
   # Batch M1 (2026-10-27): the library rows that have a Wardroom animation point at it.
@@ -13057,9 +13057,12 @@ concepts:
       in the seed service. The table itself is built by `scripts/build_library_media_v16.js` from
       the Wardroom ledger and the files on disk.
 
-      READERS: none yet. The app side (a media resolver, signed URLs, the card) is Batch M2, which
-      adds its reader here when it lands. CI pins the links between the table, the media map and the
-      library (every leg of R10 in `library_media_table_test.dart`).
+      READERS: `resolveMedia` (Batch M2a, `lib/shared/widgets/exercise_plate/exercise_media_resolver.dart`)
+      is the only reader: it takes the two keys with type and shape guards (`is String`, trimmed, matched
+      against `^[a-z0-9][a-z0-9-]*$`; `is int` and >= 1) and yields the object name and the bundled still.
+      The repository, client and store never read the row. CI pins the links between the table, the media
+      map and the library (every leg of R10 in `library_media_table_test.dart`) and the reader's guards
+      (`exercise_media_resolver_test.dart`).
 
       WARNING: a later `media_version` reaches an installed copy only if the library version
       constant is bumped again. WARNING: the bucket is private; a row's keys are not a public URL.
@@ -13070,7 +13073,53 @@ concepts:
       - file: lib/core/services/seed_service.dart
         line_range: 128-128
         method: _exerciseLibraryVersion
-    readers: []
+    readers:
+      - file: lib/shared/widgets/exercise_plate/exercise_media_resolver.dart
+        line_range: 19-32
+        method: resolveMedia
+        semantic: pass-through
+        fields_read: [media_slug, media_version]
+        notes: Batch M2a Task 4 - type and shape guards on both keys; null for anything else. Behavioral test/contracts/exercise_media_resolver_test.dart.
+
+  # Batch M2a (2026-10-31): how one animation file gets from the private bucket to the screen.
+  - concept: exercise_media_delivery
+    domain: workout
+    behavioral_test_path: test/contracts/exercise_media_repository_behavioral_test.dart
+    contract_test_path: test/contracts/exercise_media_client_behavioral_test.dart
+    description: |
+      One exercise animation (`<media_slug>_v<media_version>.webp` in the private `exercise-media` bucket) reaches the
+      screen only when a sheet asks for it, never in bulk (the Wi-Fi bulk prefetch is Batch M2c, not shipped).
+
+      WRITER: `ExerciseMediaRepository.ensure` (`lib/core/services/exercise_media/exercise_media_repository.dart`)
+      is the only code that downloads a file and the only caller of `ExerciseMediaStore.put`: it reads the device store
+      first, joins an in-flight download of the same name, honours the 10 s on-demand back-off, calls the one HTTP class
+      (`ExerciseMediaClient`, Dio, `GET /storage/v1/object/authenticated/exercise-media/<name>`, never `storage.from`), and
+      writes the bytes into the store. It is total: nothing escapes as an exception, a kill switch
+      (`configBox['disable_exercise_animations']`, read at this sink on every call) returns null, and a decode failure
+      bans the name for the session through `evict`.
+
+      READER: `ExerciseAnimationView` (`lib/shared/widgets/exercise_plate/exercise_animation_view.dart`) asks `ensure` once per
+      object name and cross-fades from the bundled still to the animation; every other outcome keeps the still. The thumb
+      shows only the bundled still, and the sheet is the only door to the animation.
+
+      WARNING: stills are bundled and readable without a login (decision G12); fetched animation files are cached on the
+      device and survive sign-out (decision C8). Only a logged-in, non-anonymous session may fetch (the client answers
+      `unauthenticated` with zero requests otherwise), and no subscription gate applies (C7: free to every tier).
+      WARNING: the device store keeps its own index in its byte store, so neither `clearAllData()` nor any Hive box wipe
+      touches the files or the index: they survive a sign-out together (C8); 150 MB native, 60 MB web.
+    writers:
+      - file: lib/core/services/exercise_media/exercise_media_repository.dart
+        line_range: 95-127
+        method: ensure
+      - file: lib/core/services/exercise_media/exercise_media_store.dart
+        line_range: 479-482
+        method: put
+    readers:
+      - file: lib/shared/widgets/exercise_plate/exercise_animation_view.dart
+        line_range: 137-145
+        method: _request
+        semantic: pass-through
+        notes: Batch M2a Task 9 - asks ensure once per objectName, ignores a stale completion, never raises. Behavioral test/contracts/exercise_animation_view_test.dart.
 
   # One LOG per exercise (branch active-workout-log-exercise, 2026-10-19). Ship
   # dark behind `enable_log_exercise_button` (default OFF).
