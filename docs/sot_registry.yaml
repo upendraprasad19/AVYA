@@ -13036,7 +13036,7 @@ concepts:
         line_range: 57-84
         method: resolvePlate
       - file: lib/shared/widgets/exercise_plate/exercise_plate_sheet.dart
-        line_range: 93-100
+        line_range: 136-141
         method: build
 
   # Batch M1 (2026-10-27): the library rows that have a Wardroom animation point at it.
