@@ -25,6 +25,17 @@
 // TO DISABLE IN AN INCIDENT: set `configBox['disable_exercise_plates'] = true`.
 // Thumbs fall back to the monogram they already show for the 127 artwork-less
 // exercises — no asset loads, no SVG parsing — and the sheet stops opening.
+//
+// THE ANIMATION KILL SWITCH (Batch M2a, same kind: default ON, the flag turns it
+// OFF): `configBox['disable_exercise_animations'] = true` stops every download of
+// an exercise animation and every animated view; the bundled still (or, where
+// there is none, the plate) shows instead. `animationsEnabled` also follows the
+// plates switch, because an animation replaces a plate and has nothing to
+// replace when plates are off. It is read at the SINK (the repository checks it
+// before any client call or store read, so a flag flipped mid-session takes
+// effect on the next open, not the next launch). `clearAllData()` clears
+// `configBox`, so the switch does not survive a sign-out wipe (G4); a build that
+// must stay off ships the compile-time platform switches instead.
 import 'package:icanbefitter/core/services/hive_service.dart';
 
 class PlateFlags {
@@ -38,6 +49,19 @@ class PlateFlags {
     try {
       return HiveService.instance.configBox.get('disable_exercise_plates') !=
           true;
+    } catch (_) {
+      return true; // no Hive (pure unit test) → safe default: ON
+    }
+  }
+
+  /// False when the animation switch is set OR plates are off. Same guard as
+  /// [platesEnabled]: a missing or unopened box reads as ENABLED.
+  static bool get animationsEnabled {
+    try {
+      return HiveService.instance.configBox
+                  .get('disable_exercise_animations') !=
+              true &&
+          platesEnabled;
     } catch (_) {
       return true; // no Hive (pure unit test) → safe default: ON
     }
