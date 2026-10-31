@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/widgets.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 
@@ -48,6 +49,11 @@ class HiveService with WidgetsBindingObserver {
   /// and any future device-lifetime gates. NEVER cleared.
   static const String migrationBoxName = 'migrationBox';
 
+  /// Batch M2a (G13): the WEB cache of exercise animations, a Hive LazyBox of blobs (up to 60 MB). Deliberately NOT named
+  /// `...BoxName` and NOT in [_sharedBoxNames], [_compactableBoxNames] or any wipe list: the box is a droppable device cache that
+  /// survives sign-out by design (design call C8), and the box-coverage contract only treats `...BoxName` constants as boxes.
+  static const String mediaBlobStoreName = 'exerciseMediaBlobs';
+
   /// Shared boxes — opened by `init()` before runApp. Available to all
   /// users / no users.
   static const List<String> _sharedBoxNames = <String>[
@@ -82,6 +88,44 @@ class HiveService with WidgetsBindingObserver {
     await Future.wait(_sharedBoxNames.map(_safeOpenBox));
     WidgetsBinding.instance.addObserver(this);
     _initialized = true;
+  }
+
+  /// Batch M2a: opens the web animation cache. Returns null when not web (the native cache is files), when the open times out,
+  /// or when it fails for good. It NEVER throws and never delays [init]: it is NOT called from [init]; the web byte store
+  /// calls it lazily on first use, so a blocked IndexedDB cannot cause a white screen. This is a recorded deviation from root
+  /// rule 3 ("open all boxes before runApp"), justified because the box is a droppable cache.
+  ///
+  /// On an open ERROR (not on a timeout) it deletes the box once, under the same timeout (another tab holding the IndexedDB
+  /// connection can block a delete for ever), and reopens once: values of up to 1 MB make a kill mid-write much likelier than
+  /// for the small boxes, and without the repair one corrupt open would leave the web build session-only for good (the
+  /// [_safeOpenBox] precedent). An open error on a healthy box, such as a blocked IndexedDB, also costs the cached files:
+  /// accepted, it is a droppable cache. [isWeb], [opener], [deleter] and [timeout] are test seams.
+  static Future<LazyBox?> openMediaBlobBox({
+    bool? isWeb,
+    Future<LazyBox> Function(String name)? opener,
+    Future<void> Function(String name)? deleter,
+    Duration timeout = const Duration(seconds: 3),
+  }) async {
+    if (!(isWeb ?? kIsWeb)) return null;
+    final open = opener ?? ((String name) => Hive.openLazyBox(name));
+    final remove = deleter ?? ((String name) => Hive.deleteBoxFromDisk(name));
+    // A bare `Future<LazyBox>.timeout(..., onTimeout: () => null)` does not type-check, hence the `then<LazyBox?>`.
+    Future<LazyBox?> attempt() =>
+        open(mediaBlobStoreName).then<LazyBox?>((b) => b).timeout(timeout, onTimeout: () => null);
+    try {
+      return await attempt();
+    } catch (e, st) {
+      unawaited(ErrorTelemetry.recordNonFatal(e, st, reason: 'hive_service_open_media_blob_box')
+          .catchError((Object _) {}));
+      try {
+        await remove(mediaBlobStoreName).timeout(timeout);
+        return await attempt();
+      } catch (e2, st2) {
+        unawaited(ErrorTelemetry.recordNonFatal(e2, st2, reason: 'hive_service_open_media_blob_box_retry')
+            .catchError((Object _) {}));
+        return null;
+      }
+    }
   }
 
   // ── Lifecycle-driven compaction ──────────────────────────────
