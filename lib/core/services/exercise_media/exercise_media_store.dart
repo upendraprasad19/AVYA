@@ -161,7 +161,9 @@ class FileExerciseMediaBytesStore implements ExerciseMediaBytesStore {
     final d = await _folder();
     final f = File('${d.path}/$_metaName');
     if (!await f.exists()) return null;
-    return f.readAsString();
+    // Decoded leniently: an index file damaged into invalid UTF-8 must read as an unparsable index (every blob is re-adopted),
+    // not as a FormatException that leaves the index empty for the whole session.
+    return utf8.decode(await f.readAsBytes(), allowMalformed: true);
   }
 
   @override

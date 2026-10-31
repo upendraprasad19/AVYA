@@ -13036,7 +13036,7 @@ concepts:
         line_range: 57-84
         method: resolvePlate
       - file: lib/shared/widgets/exercise_plate/exercise_plate_sheet.dart
-        line_range: 136-141
+        line_range: 137-141
         method: build
 
   # Batch M1 (2026-10-27): the library rows that have a Wardroom animation point at it.
@@ -13075,7 +13075,7 @@ concepts:
         method: _exerciseLibraryVersion
     readers:
       - file: lib/shared/widgets/exercise_plate/exercise_media_resolver.dart
-        line_range: 19-30
+        line_range: 19-32
         method: resolveMedia
         semantic: pass-through
         fields_read: [media_slug, media_version]
@@ -13105,18 +13105,18 @@ concepts:
       WARNING: stills are bundled and readable without a login (decision G12); fetched animation files are cached on the
       device and survive sign-out (decision C8). Only a logged-in, non-anonymous session may fetch (the client answers
       `unauthenticated` with zero requests otherwise), and no subscription gate applies (C7: free to every tier).
-      WARNING: the device store keeps its own index in its byte store, so `clearAllData()` clears files and index together;
-      150 MB native, 60 MB web.
+      WARNING: the device store keeps its own index in its byte store, so neither `clearAllData()` nor any Hive box wipe
+      touches the files or the index: they survive a sign-out together (C8); 150 MB native, 60 MB web.
     writers:
       - file: lib/core/services/exercise_media/exercise_media_repository.dart
-        line_range: 90-121
+        line_range: 95-127
         method: ensure
       - file: lib/core/services/exercise_media/exercise_media_store.dart
-        line_range: 476-480
+        line_range: 479-482
         method: put
     readers:
       - file: lib/shared/widgets/exercise_plate/exercise_animation_view.dart
-        line_range: 124-134
+        line_range: 137-145
         method: _request
         semantic: pass-through
         notes: Batch M2a Task 9 - asks ensure once per objectName, ignores a stale completion, never raises. Behavioral test/contracts/exercise_animation_view_test.dart.

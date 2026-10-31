@@ -14,6 +14,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:icanbefitter/core/constants/app_constants.dart';
 import 'package:icanbefitter/core/services/error_telemetry.dart';
 import 'package:icanbefitter/core/services/exercise_media/exercise_media_client.dart';
+import 'package:icanbefitter/core/services/exercise_media/exercise_media_webp.dart';
 import 'package:icanbefitter/core/services/supabase_service.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -39,6 +40,15 @@ class _Fail extends _Step {
 
 class _Hang extends _Step {}
 
+/// A response that reports its receive progress the way a real adapter does while it streams the body. If the request was
+/// cancelled by then, the adapter throws the cancel error (real Dio closes the stream and fails the request the same way).
+class _Chunked extends _Step {
+  _Chunked({required this.received, required this.total, required this.body});
+  final int received;
+  final int total;
+  final Uint8List body;
+}
+
 class _FakeAdapter implements HttpClientAdapter {
   _FakeAdapter(this.script);
   final List<_Step> script;
@@ -51,6 +61,13 @@ class _FakeAdapter implements HttpClientAdapter {
     final step = requests.length <= script.length ? script[requests.length - 1] : _Reply(599);
     if (step is _Hang) return Completer<ResponseBody>().future;
     if (step is _Fail) throw step.make(options);
+    if (step is _Chunked) {
+      options.onReceiveProgress?.call(step.received, step.total);
+      if (options.cancelToken?.isCancelled ?? false) {
+        throw DioException.requestCancelled(requestOptions: options, reason: 'cancelled while receiving');
+      }
+      return ResponseBody.fromBytes(step.body, 200);
+    }
     final r = step as _Reply;
     return ResponseBody.fromBytes(r.body ?? Uint8List(0), r.status);
   }
@@ -220,6 +237,35 @@ void main() {
       expect(r.outcome, MediaFetchOutcome.refused);
       expect(a.requests, hasLength(3), reason: 'exactly ONE more request');
       expect(t.forcedCalls, 1, reason: 'no second refresh inside the cooldown');
+    });
+
+    test('[bp6] the cooldown is process-wide: a second client INSTANCE inside 60 s makes ONE request and no refresh', () async {
+      final t1 = _Tokens();
+      final c1 = _client(_FakeAdapter([_Reply(400), _Reply(400)]), t1, now: _Clock(const Duration(seconds: 1)).call);
+      await c1.fetch(_name); // 400 -> forced refresh -> 400
+      expect(t1.forcedCalls, 1);
+
+      final t2 = _Tokens();
+      final a2 = _FakeAdapter([_Reply(400), _Reply(400)]);
+      final c2 = _client(a2, t2, now: _Clock(const Duration(seconds: 1)).call);
+      final r = await c2.fetch('0104-other_v1.webp');
+      expect(r.outcome, MediaFetchOutcome.refused);
+      expect(a2.requests, hasLength(1), reason: 'no retry: another instance refreshed 1 s ago');
+      expect(t2.forcedCalls, 0);
+    });
+
+    test('[bp7] a clock stepped BACK after a forced refresh does not freeze the retry: the next 400 refreshes again', () async {
+      final times = <DateTime>[DateTime.utc(2026, 1, 1, 12), DateTime.utc(2026, 1, 1, 11)]; // the second read is an hour EARLIER
+      var n = 0;
+      DateTime clock() => times[n < times.length ? n++ : times.length - 1];
+      final t = _Tokens();
+      final a = _FakeAdapter([_Reply(400), _Reply(400), _Reply(400), _Reply(200, _good())]);
+      final c = _client(a, t, now: clock);
+      await c.fetch(_name); // 400 -> forced refresh (stamped 12:00) -> 400
+      expect(t.forcedCalls, 1);
+      final r = await c.fetch('0104-other_v1.webp'); // the clock now reads 11:00: the stamp is in the future, so it is expired
+      expect(t.forcedCalls, 2, reason: 'a negative difference is not "inside the cooldown"');
+      expect(r.outcome, MediaFetchOutcome.fetched);
     });
 
     test('[q] a null forced token is refused after exactly ONE request', () async {
@@ -403,6 +449,45 @@ void main() {
       });
     });
 
+    test('[bp8] on WEB there is no 60 s whole-fetch cap (the xhr carries its own, 130 s): a request still pending after 61 s is not cancelled', () {
+      fakeAsync((async) {
+        final a = _FakeAdapter([_Hang()]);
+        final c = _client(a, _Tokens(), isWeb: true);
+        MediaFetchResult? result;
+        c.fetch(_name).then((r) => result = r);
+        async.flushMicrotasks();
+        async.elapse(const Duration(milliseconds: 1));
+        expect(a.requests, hasLength(1));
+        async.elapse(const Duration(seconds: 61));
+        expect(result, isNull, reason: 'web waits for the xhr cap, not for the native 60 s bound');
+        expect(a.requests.single.cancelToken?.isCancelled, isFalse);
+      });
+    });
+
+    test('[bp9] a body that reports more than the WebP size cap is cancelled while it streams and refused, with NO retry', () async {
+      final t = _Tokens();
+      final a = _FakeAdapter([_Chunked(received: kMaxWebpBytes + 1, total: -1, body: _good())]);
+      final r = await _client(a, t).fetch(_name);
+      expect(r.outcome, MediaFetchOutcome.refused);
+      expect(a.requests, hasLength(1));
+      expect(a.requests.single.cancelToken?.isCancelled, isTrue);
+      expect(t.forcedCalls, 0);
+    });
+
+    test('[bp9b] a declared length over the cap cancels it as well, before a single byte counts', () async {
+      final a = _FakeAdapter([_Chunked(received: 10, total: kMaxWebpBytes + 1, body: _good())]);
+      final r = await _client(a, _Tokens()).fetch(_name);
+      expect(r.outcome, MediaFetchOutcome.refused);
+      expect(a.requests.single.cancelToken?.isCancelled, isTrue);
+    });
+
+    test('[bp9c] the mirror: a body that reports exactly the cap is NOT cancelled and is fetched', () async {
+      final a = _FakeAdapter([_Chunked(received: kMaxWebpBytes, total: kMaxWebpBytes, body: _good())]);
+      final r = await _client(a, _Tokens()).fetch(_name);
+      expect(r.outcome, MediaFetchOutcome.fetched);
+      expect(a.requests.single.cancelToken?.isCancelled, isFalse);
+    });
+
     test('[e] the token is never logged: no occurrence of the sentinel, "Authorization" or the full URL in debugPrint or telemetry', () async {
       const sentinel = 'SENTINEL-TOKEN-123';
       final captured = <String>[];
@@ -411,6 +496,13 @@ void main() {
       ErrorTelemetry.debugOnRecordNonFatalForTests = (error, stack, {required reason, extra}) => captured.add('$error $reason $extra');
       ErrorTelemetry.debugOnLogEventForTests = (opType, {message}) => captured.add('$opType $message');
       addTearDown(() => debugPrint = oldPrint);
+
+      // POSITIVE CONTROL (B-pass): the three capture hooks really capture. Without it this case would also pass if a hook were
+      // never installed.
+      debugPrint('control-print');
+      await ErrorTelemetry.recordNonFatal(StateError('control-error'), StackTrace.current, reason: 'control-reason');
+      await ErrorTelemetry.logEvent('control_op', message: 'control-message');
+      expect(captured.join('\n'), allOf(contains('control-print'), contains('control-error'), contains('control_op control-message')));
 
       // A throwing adapter (a connection error whose own text carries the URL) and a 500, both with the sentinel token.
       for (final step in <_Step>[_Fail((o) => DioException.connectionError(requestOptions: o, reason: 'boom')), _Reply(500), _Reply(400), _Reply(400)]) {

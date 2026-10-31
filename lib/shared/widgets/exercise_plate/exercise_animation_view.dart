@@ -20,6 +20,12 @@
 //   - MEDIA CHANGE: the previous bytes, the frozen frame and the play state are cleared in the SAME setState that requests the new
 //     file, so the view shows B's still and never A's frames, and A's provider is evicted from the `ImageCache`.
 //   - A platform whose switch is false never calls `ensure` and shows the still (the stills-only platform, Task 1's ladder).
+//   - LAYOUT CHANGES while open (a rotation, a web window resize): when the picture needs more than 1.25x the width it was decoded at,
+//     the provider is rebuilt at the new width and the old one evicted (never up-scaled from a small decode). Narrower never rebuilds.
+//     An `autoplay` that turns false while bytes are held starts the frozen-frame decode.
+//   - NO BLANK TILE: while the animation's first frame is not decoded yet, the playing image shows the still (an `Image` paints nothing
+//     until its first frame), so the cross-fade never passes through an empty tile.
+//   - A size that is not finite (an unbounded layout) decodes at `kMaxAnimatedDecodeWidth`; it is never a decode failure.
 //
 // Review-only limit (stated, not tested): that every `ui.Image` is disposed in every path is read in review; the VM has no handle
 // count to assert.
@@ -72,6 +78,9 @@ class _ExerciseAnimationViewState extends ConsumerState<ExerciseAnimationView> {
   ui.Image? _frame;
   bool _frameRequested = false;
 
+  /// The width [_provider] was built at; the layout is followed from here.
+  int? _decodedWidth;
+
   /// Bumped on every media change and on dispose; a decode that finishes under an older value is thrown away.
   int _generation = 0;
 
@@ -93,12 +102,16 @@ class _ExerciseAnimationViewState extends ConsumerState<ExerciseAnimationView> {
   @override
   void didUpdateWidget(covariant ExerciseAnimationView old) {
     super.didUpdateWidget(old);
-    if (old.media.objectName == widget.media.objectName) return;
+    if (old.media.objectName == widget.media.objectName) {
+      _followLayout();
+      return;
+    }
     _generation++;
     final oldProvider = _provider;
     setState(() {
       _bytes = null;
       _provider = null;
+      _decodedWidth = null;
       _playTapped = false;
       _evictScheduled = false;
       _frameRequested = false;
@@ -131,20 +144,55 @@ class _ExerciseAnimationViewState extends ConsumerState<ExerciseAnimationView> {
     }).catchError((Object _) {}));
   }
 
-  int _decodeWidth() =>
-      (widget.size * MediaQuery.devicePixelRatioOf(context)).round().clamp(1, kMaxAnimatedDecodeWidth).toInt();
+  int _decodeWidth() {
+    final wanted = widget.size * MediaQuery.devicePixelRatioOf(context);
+    if (!wanted.isFinite) return kMaxAnimatedDecodeWidth; // an unbounded layout: the widest decode (`.round()` would throw)
+    return wanted.round().clamp(1, kMaxAnimatedDecodeWidth).toInt();
+  }
 
   bool get _frozen => !widget.autoplay || MediaQuery.disableAnimationsOf(context);
 
   void _onBytes(Uint8List bytes) {
-    final provider = ResizeImage(MemoryImage(bytes), width: _decodeWidth());
+    final width = _decodeWidth();
+    final provider = ResizeImage(MemoryImage(bytes), width: width);
+    final replaced = _provider; // a second answer for the same media (A, B, A inside one fetch window) replaces the first
+    _generation++; // a frozen decode of the replaced bytes is thrown away
     setState(() {
       _bytes = bytes;
       _provider = provider;
+      _decodedWidth = width;
       _evictScheduled = false;
       _frameRequested = false;
+      _frame?.dispose();
+      _frame = null;
     });
+    if (replaced != null) unawaited(replaced.evict().catchError((Object _) => false));
     _maybeDecodeFrozenFrame();
+  }
+
+  /// Same media, new layout or new `autoplay`. Wider by more than 1.25x: decode again at that width (the sheet grew; a small decode
+  /// would be up-scaled). Never narrower: a bigger decode than needed costs nothing visible, and every step of a window drag would
+  /// otherwise re-decode.
+  void _followLayout() {
+    final bytes = _bytes;
+    final decoded = _decodedWidth;
+    if (bytes != null && decoded != null) {
+      final wanted = _decodeWidth();
+      if (wanted > decoded * 1.25) {
+        final replaced = _provider;
+        final provider = ResizeImage(MemoryImage(bytes), width: wanted);
+        _generation++; // a frozen decode started at the old width is thrown away
+        setState(() {
+          _provider = provider;
+          _decodedWidth = wanted;
+          _frameRequested = false;
+          _frame?.dispose();
+          _frame = null;
+        });
+        if (replaced != null) unawaited(replaced.evict().catchError((Object _) => false));
+      }
+    }
+    _maybeDecodeFrozenFrame(); // `autoplay` may have just turned false
   }
 
   // ---- the frozen branch ---------------------------------------------------------------------------------------------------------
@@ -195,16 +243,19 @@ class _ExerciseAnimationViewState extends ConsumerState<ExerciseAnimationView> {
   // ---- build ----------------------------------------------------------------------------------------------------------------------------
 
   Widget _still() {
-    return KeyedSubtree(
-      key: const ValueKey<String>('exercise-animation-still'),
-      child: Image.asset(
-        widget.media.stillAsset,
-        width: widget.size,
-        height: widget.size,
-        fit: widget.fit,
-        gaplessPlayback: true,
-        errorBuilder: (_, _, _) => ExerciseMonogram(name: widget.exerciseName, size: widget.size),
-      ),
+    return KeyedSubtree(key: const ValueKey<String>('exercise-animation-still'), child: _stillImage());
+  }
+
+  /// The bundled still without the key: the placeholder under an animation whose first frame is not decoded yet must not repeat the
+  /// key of the still that is fading out beside it.
+  Widget _stillImage() {
+    return Image.asset(
+      widget.media.stillAsset,
+      width: widget.size,
+      height: widget.size,
+      fit: widget.fit,
+      gaplessPlayback: true,
+      errorBuilder: (_, _, _) => ExerciseMonogram(name: widget.exerciseName, size: widget.size),
     );
   }
 
@@ -216,6 +267,7 @@ class _ExerciseAnimationViewState extends ConsumerState<ExerciseAnimationView> {
         behavior: HitTestBehavior.opaque,
         onTap: () => setState(() => _playTapped = true),
         child: ConstrainedBox(
+          key: const Key('exercise-animation-play-target'),
           constraints: const BoxConstraints(minWidth: 44, minHeight: 44),
           child: DecoratedBox(
             decoration: BoxDecoration(
@@ -264,6 +316,9 @@ class _ExerciseAnimationViewState extends ConsumerState<ExerciseAnimationView> {
           height: widget.size,
           fit: widget.fit,
           gaplessPlayback: true,
+          // An `Image` paints nothing until its first frame is decoded; until then the still stays on screen.
+          frameBuilder: (context, child, frame, wasSynchronouslyLoaded) =>
+              frame == null && !wasSynchronouslyLoaded ? _stillImage() : child,
           errorBuilder: (_, _, _) {
             _scheduleEvictOnce();
             return _still();

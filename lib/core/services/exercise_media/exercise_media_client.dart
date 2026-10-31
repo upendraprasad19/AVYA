@@ -10,8 +10,9 @@
 //
 // OUTCOMES (`MediaFetchOutcome`)
 //   fetched         a 200 whose body passed `isWellFormedWebp`.
-//   refused         the server or the body said no: another 4xx, an unexpected 1xx/2xx/3xx, a body that is not a WebP, or a name
-//                   that does not match the object-name pattern. Retry later, never "this exercise has no animation".
+//   refused         the server or the body said no: another 4xx, an unexpected 1xx/2xx/3xx, a body that is not a WebP (including one
+//                   that reports more than `kMaxWebpBytes`, which is cancelled while it streams), or a name that does not match
+//                   the object-name pattern. Retry later, never "this exercise has no animation".
 //   unreachable     5xx, a timeout, a connection error or any other `DioException`.
 //   unauthenticated there is no usable session (no token, a null token, an anonymous session, or a seam that threw). ZERO
 //                   requests, and unlike `refused` it must never arm a per-name back-off that the next account would inherit.
@@ -132,7 +133,10 @@ class ExerciseMediaClient {
       // At most ONE retry, and only if no forced refresh happened in the last 60 s process-wide.
       final t = _now();
       final last = _lastForcedRefresh;
-      if (last != null && t.difference(last) < _refreshCooldown) return first;
+      // A stamp in the FUTURE (the clock was stepped back after it was taken) is expired, not "still inside": a negative
+      // difference must not suppress the retry until the clock catches up.
+      final since = last == null ? null : t.difference(last);
+      if (since != null && !since.isNegative && since < _refreshCooldown) return first;
       _lastForcedRefresh = t;
       String? forced;
       try {
@@ -149,13 +153,26 @@ class ExerciseMediaClient {
 
   Future<MediaFetchResult> _get(String name, String token, CancelToken cancel) async {
     final Response<List<int>> r;
+    var tooLarge = false;
+    int? seenStatus; // the status line, known before the body streams; kept so a cancelled oversized body still reports it
     try {
       r = await _dio.get<List<int>>(
         '$_baseUrl/storage/v1/object/authenticated/exercise-media/$name',
         cancelToken: cancel,
+        // `ResponseType.bytes` buffers the whole body, and `isWellFormedWebp` can only reject an oversized one after it has been
+        // read. So a body that reports more than the cap (received so far, or declared length) is cancelled WHILE it streams.
+        onReceiveProgress: (received, total) {
+          if (received > kMaxWebpBytes || total > kMaxWebpBytes) {
+            tooLarge = true;
+            cancel.cancel('exercise media body over the size cap');
+          }
+        },
         options: Options(
           responseType: ResponseType.bytes,
-          validateStatus: (_) => true,
+          validateStatus: (s) {
+            seenStatus = s;
+            return true;
+          },
           followRedirects: false,
           headers: <String, Object>{
             'Authorization': 'Bearer $token',
@@ -170,6 +187,9 @@ class ExerciseMediaClient {
     } catch (_) {
       // A DioException of any type (connection, timeout, cancel, bad certificate, unknown) or anything else thrown by the
       // adapter. Never forwarded: its text carries the URL and its request options carry the token.
+      // The one cancel WE issued for size is a refusal (the answer is wrong, not the network), like an oversized body that had
+      // been read in full.
+      if (tooLarge) return MediaFetchResult(MediaFetchOutcome.refused, status: seenStatus);
       return const MediaFetchResult(MediaFetchOutcome.unreachable);
     }
     final status = r.statusCode;

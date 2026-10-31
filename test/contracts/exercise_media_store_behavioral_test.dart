@@ -367,6 +367,17 @@ void main() {
         expect(box.deleteCount, 1, reason: 'throwing=$throwing: the orphan must be deleted');
       }
     });
+
+    test('[bp11] the mirror of [z]: a VALID web blob with no meta entry (a lost meta) is adopted with its real length and NOT deleted', () async {
+      final box = FakeLazyBox({'a': _blob(40, 1), 'b': _blob(25, 2)});
+      final s = ExerciseMediaStore(bytes: HiveExerciseMediaBytesStore(() async => box), capBytes: 1000);
+      await s.ready;
+      expect(s.has('a'), isTrue);
+      expect(s.has('b'), isTrue);
+      expect(s.totalBytes, 65, reason: 'the web listing carries no lengths, so adoption must read each blob to measure it');
+      expect(box.deleteCount, 0, reason: 'an adopted blob is kept');
+      expect(await s.read('a'), isNotNull);
+    });
   });
 
   group('write and meta failures, total deletes', () {
@@ -396,6 +407,21 @@ void main() {
       final before = fake.writeAttempts;
       await expectLater(s.put('x', _blob(40, 2)), throwsA(isA<StateError>()));
       expect(fake.writeAttempts - before, 2);
+    });
+
+    test('[bp12] a write that keeps failing, with THREE other entries: ONE victim is evicted and the put gives up after 2 attempts', () async {
+      final fake = FakeBytesStore();
+      final s = _store(fake);
+      await s.put('v1', _blob(20, 1));
+      await s.put('v2', _blob(20, 2));
+      await s.put('v3', _blob(20, 3));
+      fake.armThrowOnWrite(-1);
+      final before = fake.writeAttempts;
+      await expectLater(s.put('x', _blob(20, 4)), throwsA(isA<StateError>()));
+      expect(fake.writeAttempts - before, 2, reason: 'retry ONCE, not once per remaining victim');
+      expect(fake.blobNames, {'v2', 'v3'}, reason: 'only the least recently shown (v1) was sacrificed; the cache is not emptied');
+      expect(s.has('v1'), isFalse);
+      expect(s.has('v2') && s.has('v3'), isTrue);
     });
 
     test('[ah] with no victim (the only entry is the name being written) the error is rethrown after exactly 1 attempt', () async {
@@ -461,7 +487,8 @@ void main() {
       addTearDown(() {
         if (folder.existsSync()) folder.deleteSync(recursive: true);
       });
-      final lazy = await Hive.openLazyBox('media_signout_test');
+      // The REAL web box name, so a future wipe that lists it by name (rather than a differently named test box) would show here.
+      final lazy = await Hive.openLazyBox(HiveService.mediaBlobStoreName);
       final backends = <String, ExerciseMediaBytesStore>{
         'file': FileExerciseMediaBytesStore(() async => folder),
         'web': HiveExerciseMediaBytesStore(() async => lazy),
@@ -519,6 +546,20 @@ void main() {
       final d2 = Directory('${base.path}/fresh2/nested');
       await FileExerciseMediaBytesStore(() async => d2).write('a', _blob(40));
       expect(File('${d2.path}/a').existsSync(), isTrue);
+    });
+
+    test('[bp13] an index file that is not valid UTF-8 is treated as an unreadable index: the blobs are re-adopted, none is lost', () async {
+      final fs = FileExerciseMediaBytesStore(() async => dir);
+      await fs.write('a', _blob(40, 1));
+      await fs.write('b', _blob(25, 2));
+      File('${dir.path}/_meta.json').writeAsBytesSync(<int>[0xff, 0xfe, 0x7b, 0x80, 0x00]); // not UTF-8
+      expect(await fs.readMeta(), isA<String>(), reason: 'reading a corrupt index must not throw');
+
+      final s = ExerciseMediaStore(bytes: fs, capBytes: 1000, now: _fixed(5000));
+      await s.ready;
+      expect(s.has('a'), isTrue);
+      expect(s.has('b'), isTrue);
+      expect(s.totalBytes, 65);
     });
 
     test('round trip, delete of a missing name, and [ai] read of a missing name returns null', () async {
@@ -740,6 +781,18 @@ void main() {
       expect(initBody, contains('Hive.initFlutter'), reason: 'the slice must be init(), not another function');
       expect(initBody.contains('openMediaBlobBox('), isFalse);
       expect(src.contains('static Future<LazyBox?> openMediaBlobBox('), isTrue, reason: 'the definition exists (non-vacuous)');
+    });
+
+    test('[bp14] the web media box is in NO wipe list: its name is used exactly three times in hive_service.dart (the definition, the open, the remove) and never in user_repository.dart', () {
+      final hive = stripDartComments(File('lib/core/services/hive_service.dart').readAsStringSync());
+      final users = stripDartComments(File('lib/shared/repositories/user_repository.dart').readAsStringSync());
+      expect(RegExp(r'\bmediaBlobStoreName\b').allMatches(hive).length, 3,
+          reason: 'a fourth use would be a list the name was added to: read it before accepting the number');
+      expect("exerciseMediaBlobs".allMatches(hive).length, 1, reason: 'the literal is spelled once, in the definition');
+      for (final needle in ['mediaBlobStoreName', 'exerciseMediaBlobs', 'openMediaBlobBox', 'exercise_media']) {
+        expect(users.contains(needle), isFalse, reason: 'clearAllData must not know the media store: $needle');
+      }
+      expect(users.contains('clearAllData'), isTrue, reason: 'non-vacuous: the file scanned is the one that holds the wipe');
     });
   });
 }

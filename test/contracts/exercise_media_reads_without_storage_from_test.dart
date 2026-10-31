@@ -4,11 +4,13 @@
 //   [v] none of them reads the bucket through the Supabase storage client or the `http` package: the ONE route is the Dio client
 //       (`exercise_media_client.dart`, G2). Forbidden: `storage.from`, `.storage.`, `bucket:`, `destinationBucket:`, `package:http`.
 //       (A lib file that names the bucket through `storage.from` also trips delete_account_purges_all_user_buckets_test.dart.)
-//   [w] none of them gates on the subscription (C7, free to every tier): no `.gate(`, no whole word `isPro` (not `isProgress`),
-//       no `SubscriptionService`, no `subscriptionServiceProvider`.
+//   [w] none of them gates on the subscription (C7, free to every tier): no `.gate(`, no `gateAndVerify`, no `proStateSnapshot`, no
+//       whole word `isPro` (not `isProgress`), no `SubscriptionService`, no `subscriptionServiceProvider`.
 // THE SCANNED SET IS PINNED. `_expected` is the full list; a file that is missing, renamed or mistyped FAILS the existence test (a
 // skip for an absent file would turn the whole pin into a pass over nothing), and a NEW file in the `exercise_media` directory that
-// is not on the list FAILS the completeness test, so adding one is a conscious edit of this list.
+// is not on the list FAILS the completeness test, so adding one is a conscious edit of this list. A SECOND completeness test covers
+// the rest of `lib/`: any file that mentions the animation symbols and is neither on the list nor on the short reviewed allow-list
+// FAILS, so a new reader in another folder (a widget, a provider) cannot dodge the scan by living outside `exercise_media/`.
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
@@ -17,6 +19,10 @@ import '../helpers/dart_source_slice.dart';
 
 const _client = 'lib/core/services/exercise_media/exercise_media_client.dart';
 const _dir = 'lib/core/services/exercise_media';
+
+/// Files outside the scanned set that mention the symbols and were READ: `hive_service.dart` holds the web box name and its opener
+/// (no read path, no network).
+const _mentionOnly = <String>{'lib/core/services/hive_service.dart'};
 
 const _expected = <String>[
   'lib/core/services/exercise_media/exercise_media.dart',
@@ -60,6 +66,26 @@ void main() {
     expect(_expected.where((p) => p.startsWith('$_dir/')).toSet().difference(onDisk), isEmpty);
   });
 
+  test('completeness: no other file in lib/ mentions the animation symbols without being on the list or the reviewed allow-list', () {
+    final symbols = RegExp(r'exercise_media|ExerciseMedia|exerciseMedia|ExerciseAnimationView|exercise_animation_view|resolveMedia|exercise_stills');
+    final hits = <String>{
+      for (final f in Directory('lib').listSync(recursive: true).whereType<File>())
+        if (f.path.endsWith('.dart') && symbols.hasMatch(stripDartComments(f.readAsStringSync()))) f.path.replaceAll(r'\', '/'),
+    };
+    expect(hits.difference({..._expected, ..._mentionOnly}), isEmpty,
+        reason: 'read the new file for storage.from, package:http and subscription gates, then add it to _expected');
+    expect(
+        hits,
+        containsAll(<String>[
+          'lib/shared/providers/exercise_media_provider.dart',
+          'lib/shared/widgets/exercise_plate/exercise_animation_view.dart',
+          'lib/shared/widgets/exercise_plate/exercise_plate_sheet.dart',
+          'lib/shared/widgets/exercise_plate/exercise_plate_thumb.dart',
+          ..._mentionOnly,
+        ]),
+        reason: 'non-vacuous: the scan really finds the files outside the exercise_media folder');
+  });
+
   test('positive control: the client file was scanned and really builds the one route', () {
     expect(stripped.keys, contains(_client));
     expect(stripped[_client], contains('/storage/v1/object/authenticated/exercise-media/'));
@@ -79,6 +105,8 @@ void main() {
     final patterns = <String, RegExp>{
       '.gate(': RegExp(r'\.gate\('),
       'isPro': RegExp(r'\bisPro\b'),
+      'gateAndVerify': RegExp(r'gateAndVerify'),
+      'proStateSnapshot': RegExp(r'proStateSnapshot'),
       'SubscriptionService': RegExp(r'SubscriptionService'),
       'subscriptionServiceProvider': RegExp(r'subscriptionServiceProvider'),
     };

@@ -30,6 +30,7 @@ const _mediaB = ExerciseMedia(slug: '0002-45-degree-side-bend', version: 1);
 const _still = Key('exercise-animation-still');
 const _playing = Key('exercise-animation-playing');
 const _frozen = Key('exercise-animation-frozen');
+const _playTarget = Key('exercise-animation-play-target');
 
 Uint8List _png() => Uint8List.fromList(kTinyPng);
 
@@ -66,6 +67,8 @@ class _FakeRepo implements ExerciseMediaRepository {
 }
 
 final ValueNotifier<int> _noTick = ValueNotifier<int>(0);
+final ValueNotifier<double> _noSize = ValueNotifier<double>(0);
+final ValueNotifier<bool> _noAutoplay = ValueNotifier<bool>(true);
 
 /// Every pump of [tick] builds a FRESH, non-const view instance: a const or identical widget would make Flutter skip
 /// `didUpdateWidget`, and the 60-rebuild case would never reach the code it is about.
@@ -73,6 +76,8 @@ Widget _app({
   required _FakeRepo repo,
   required ValueNotifier<ExerciseMedia> media,
   ValueNotifier<int>? tick,
+  ValueNotifier<double>? sizeN,
+  ValueNotifier<bool>? autoplayN,
   double size = 200,
   bool autoplay = true,
   bool platformOn = true,
@@ -94,11 +99,17 @@ Widget _app({
                 valueListenable: media,
                 builder: (_, m, _) => ValueListenableBuilder<int>(
                   valueListenable: tick ?? _noTick,
-                  builder: (_, _, _) => ExerciseAnimationView(
-                    media: m,
-                    exerciseName: 'Fixture Exercise',
-                    size: size,
-                    autoplay: autoplay,
+                  builder: (_, _, _) => ValueListenableBuilder<double>(
+                    valueListenable: sizeN ?? _noSize,
+                    builder: (_, liveSize, _) => ValueListenableBuilder<bool>(
+                      valueListenable: autoplayN ?? _noAutoplay,
+                      builder: (_, liveAutoplay, _) => ExerciseAnimationView(
+                        media: m,
+                        exerciseName: 'Fixture Exercise',
+                        size: sizeN == null ? size : liveSize,
+                        autoplay: autoplayN == null ? autoplay : liveAutoplay,
+                      ),
+                    ),
                   ),
                 ),
               ),
@@ -111,11 +122,23 @@ Widget _app({
 }
 
 /// Lets the real engine finish a decode (or fail one), then runs the frames that follow.
-Future<void> _settle(WidgetTester t) async {
+Future<void> _settle(WidgetTester t, {bool Function()? until}) async {
   await t.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 150)));
   await t.pump();
   await t.pump(const Duration(seconds: 1));
+  // A loaded machine can need longer than the fixed sleep: poll (real time, at most 5 s) until the condition holds.
+  for (var i = 0; until != null && !until() && i < 100; i++) {
+    await t.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 50)));
+    await t.pump();
+  }
 }
+
+/// True once the frozen branch shows a DECODED frame: the stack exists and no asset `Image` (the still) is left in it. (A plain
+/// `Image` builds a `RawImage` internally, so "a RawImage exists" proves nothing.)
+bool _frozenDecoded() =>
+    find.byKey(_frozen).evaluate().isNotEmpty &&
+    find.descendant(of: find.byKey(_frozen), matching: find.byType(Image)).evaluate().isEmpty &&
+    find.descendant(of: find.byKey(_frozen), matching: find.byType(RawImage)).evaluate().isNotEmpty;
 
 Image _playingImage(WidgetTester t) => t.widget<Image>(find.byKey(_playing));
 
@@ -187,7 +210,7 @@ void main() {
 
   group('reduced motion and autoplay', () {
     Future<void> expectFrozenThenPlay(WidgetTester t, _FakeRepo repo, ValueNotifier<ExerciseMedia> media) async {
-      await _settle(t);
+      await _settle(t, until: _frozenDecoded);
       expect(find.byKey(_frozen), findsOneWidget);
       expect(find.byKey(_playing), findsNothing);
       expect(find.text('PLAY'), findsOneWidget);
@@ -227,7 +250,7 @@ void main() {
       await t.pumpWidget(_app(repo: repo, media: media, reduceMotion: true));
       await t.pump();
       await _settle(t);
-      final box = t.getRect(find.ancestor(of: find.text('PLAY'), matching: find.byType(ConstrainedBox)).first);
+      final box = t.getRect(find.byKey(_playTarget)); // the keyed target itself, not "the first ConstrainedBox above the text"
       expect(box.width, greaterThanOrEqualTo(44));
       expect(box.height, greaterThanOrEqualTo(44));
     });
@@ -433,6 +456,156 @@ void main() {
 
       expect(repo.evicted, [_mediaA.objectName], reason: 'evict was reached, and it threw');
       expect(find.byKey(_still), findsOneWidget);
+      expect(t.takeException(), isNull);
+    });
+  });
+
+  // ---- The B-pass (reviewers A and B, HEAD 8956d92a) ----------------------------------------------------------------------
+
+  group('B-pass: an unbounded size', () {
+    testWidgets('[bp15] size infinity still shows the animation, decoded at the widest width', (t) async {
+      final repo = _FakeRepo((_) async => _png());
+      await t.pumpWidget(_app(repo: repo, media: ValueNotifier<ExerciseMedia>(_mediaA), size: double.infinity));
+      await t.pump();
+      await t.pump(const Duration(seconds: 1));
+      expect(find.byKey(_playing), findsOneWidget, reason: 'a non-finite width must not abort the answer');
+      expect(_resize(t).width, kMaxAnimatedDecodeWidth);
+      expect(t.takeException(), isNull);
+    });
+
+    testWidgets('[bp15b] the same under reduce-motion: the first frame is decoded and the good file is NOT evicted as a bad one', (t) async {
+      final repo = _FakeRepo((_) async => _png());
+      await t.pumpWidget(_app(repo: repo, media: ValueNotifier<ExerciseMedia>(_mediaA), size: double.infinity, reduceMotion: true));
+      await t.pump();
+      await _settle(t, until: _frozenDecoded);
+      expect(repo.evicted, isEmpty, reason: 'a layout value is not a decode failure');
+      expect(_frozenDecoded(), isTrue, reason: 'the first frame was decoded');
+    });
+  });
+
+  group('B-pass: the layout changes while the view is open', () {
+    testWidgets('[bp16] the picture widens past 1.25x the decoded width, never narrows, and the replaced provider leaves the ImageCache', (t) async {
+      final repo = _FakeRepo((_) async => _png());
+      final sizeN = ValueNotifier<double>(200);
+      await t.pumpWidget(_app(repo: repo, media: ValueNotifier<ExerciseMedia>(_mediaA), sizeN: sizeN));
+      await t.pump();
+      await t.pump(const Duration(seconds: 1));
+      await t.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 150)));
+      await t.pump();
+      final first = _playingImage(t).image;
+      expect(_resize(t).width, 200);
+      final key200 = await t.runAsync(() => first.obtainKey(ImageConfiguration.empty));
+      expect(imageCache.containsKey(key200!), isTrue, reason: 'precondition: the 200 px decode is cached');
+
+      sizeN.value = 220; // inside 1.25x: no new decode
+      await t.pump();
+      expect(identical(_playingImage(t).image, first), isTrue);
+      expect(_resize(t).width, 200);
+
+      sizeN.value = 400;
+      await t.pump();
+      await t.pump(const Duration(seconds: 1));
+      expect(_resize(t).width, 400, reason: 'the sheet grew: a 200 px decode would be up-scaled');
+      await t.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 50)));
+      await t.pump();
+      expect(imageCache.containsKey(key200), isFalse, reason: 'the replaced provider was evicted');
+
+      sizeN.value = 100; // narrower never re-decodes
+      await t.pump();
+      expect(_resize(t).width, 400);
+      expect(t.takeException(), isNull);
+    });
+
+    testWidgets('[bp17] autoplay turned OFF while the animation is playing: the first frame is decoded and the play button appears', (t) async {
+      final repo = _FakeRepo((_) async => _png());
+      final autoplayN = ValueNotifier<bool>(true);
+      await t.pumpWidget(_app(repo: repo, media: ValueNotifier<ExerciseMedia>(_mediaA), autoplayN: autoplayN));
+      await t.pump();
+      await t.pump(const Duration(seconds: 1));
+      expect(find.byKey(_playing), findsOneWidget);
+
+      autoplayN.value = false;
+      await t.pump();
+      await _settle(t, until: _frozenDecoded);
+      expect(find.byKey(_frozen), findsOneWidget);
+      expect(_frozenDecoded(), isTrue, reason: 'the first frame was decoded');
+      expect(find.text('PLAY'), findsOneWidget);
+    });
+  });
+
+  group('B-pass: a replaced answer', () {
+    testWidgets('[bp18] media A, B, A inside the fetch window: the first A answer leaves the ImageCache when the second replaces it', (t) async {
+      final a1 = Completer<Uint8List?>();
+      final a2 = Completer<Uint8List?>();
+      final b1 = Completer<Uint8List?>();
+      final queues = <String, List<Completer<Uint8List?>>>{
+        _mediaA.objectName: [a1, a2],
+        _mediaB.objectName: [b1],
+      };
+      final repo = _FakeRepo((m) => queues[m.objectName]!.removeAt(0).future);
+      final media = ValueNotifier<ExerciseMedia>(_mediaA);
+      await t.pumpWidget(_app(repo: repo, media: media));
+      await t.pump();
+      media.value = _mediaB;
+      await t.pump();
+      media.value = _mediaA;
+      await t.pump();
+      expect(repo.ensured, [_mediaA.objectName, _mediaB.objectName, _mediaA.objectName]);
+
+      final bytes1 = _png();
+      a1.complete(bytes1);
+      await t.pump();
+      await t.pump(const Duration(seconds: 1));
+      await t.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 150)));
+      await t.pump();
+      final key1 = await t.runAsync(() => _playingImage(t).image.obtainKey(ImageConfiguration.empty));
+      expect(imageCache.containsKey(key1!), isTrue, reason: 'precondition: the first answer is on screen and cached');
+
+      final bytes2 = _png();
+      a2.complete(bytes2);
+      await t.pump();
+      await t.pump(const Duration(seconds: 1));
+      await t.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 50)));
+      await t.pump();
+      expect(identical(_bytesOf(_resize(t)), bytes2), isTrue);
+      expect(imageCache.containsKey(key1), isFalse, reason: 'the provider the second answer replaced must not stay in the ImageCache');
+    });
+
+    testWidgets('[bp21] A answers LATE while B is still pending: nothing paints on B', (t) async {
+      final doneA = Completer<Uint8List?>();
+      final doneB = Completer<Uint8List?>();
+      final repo = _FakeRepo((m) => (m.objectName == _mediaA.objectName ? doneA : doneB).future);
+      final media = ValueNotifier<ExerciseMedia>(_mediaA);
+      await t.pumpWidget(_app(repo: repo, media: media));
+      await t.pump();
+      media.value = _mediaB;
+      await t.pump();
+
+      doneA.complete(_png());
+      await t.pump();
+      await t.pump(const Duration(seconds: 1));
+      expect(find.byKey(_playing), findsNothing, reason: 'B has no bytes: an answer for A, however late, is not B\'s');
+      expect(find.byKey(_still), findsOneWidget);
+      final still = t.widget<Image>(find.descendant(of: find.byKey(_still), matching: find.byType(Image)));
+      expect((still.image as AssetImage).assetName, _mediaB.stillAsset);
+    });
+  });
+
+  group('B-pass: no blank tile while the first frame decodes', () {
+    testWidgets('[bp19] after the bytes arrive and before the first frame is decoded the playing image shows the still; once decoded it does not', (t) async {
+      final repo = _FakeRepo((_) async => _png());
+      await t.pumpWidget(_app(repo: repo, media: ValueNotifier<ExerciseMedia>(_mediaA)));
+      await t.pump();
+      await t.pump(const Duration(seconds: 1)); // bytes are in; the engine has not been given real time to decode
+      expect(find.byKey(_playing), findsOneWidget);
+      Finder assetStillInside() => find.descendant(
+            of: find.byKey(_playing),
+            matching: find.byWidgetPredicate((w) => w is Image && w.image is AssetImage),
+          );
+      expect(assetStillInside(), findsOneWidget, reason: 'an undecoded first frame paints nothing: the still must stay under it');
+
+      await _settle(t, until: () => assetStillInside().evaluate().isEmpty);
+      expect(assetStillInside(), findsNothing, reason: 'decoded: the animation replaces the placeholder');
       expect(t.takeException(), isNull);
     });
   });

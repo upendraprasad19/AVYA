@@ -68,6 +68,8 @@ function readTable(file) {
   const t = readJson(file, 'table');
   if (!t || typeof t.files !== 'object' || t.files === null) throw new Stop(`table ${file} has no files object`);
   const slugs = Object.keys(t.files);
+  // A table that names nothing would "verify" an empty bundle and report ok: a zero-file result is a hard stop.
+  if (slugs.length === 0) throw new Stop(`table ${file} names no stills`);
   for (const s of slugs) {
     const rec = t.files[s];
     if (!SLUG_RE.test(s)) throw new Stop(`${s}: not a valid media slug`);

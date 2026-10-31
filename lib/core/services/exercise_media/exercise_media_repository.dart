@@ -25,6 +25,10 @@
 //     carrying the HTTP status (or `none`), so a systematic refusal does not look like "offline". A best-effort breadcrumb, not a
 //     guarantee (the latch is consumed on the attempt).
 //   - `evict(media)` deletes the blob AND bans the name for the session (a file the decoder rejected must not be fetched again).
+//     A download or a store read already under way when it runs is neither written back nor served (the ban is checked again
+//     after both).
+//   - Every cooldown (the on-demand back-off, the unwritable-store back-off) treats a stamp in the FUTURE, which a backwards
+//     clock step produces, as expired.
 import 'dart:async';
 import 'dart:typed_data';
 
@@ -101,13 +105,14 @@ class ExerciseMediaRepository {
         _report(e, st, 'exercise_media_repository_read');
         hit = null;
       }
-      if (hit != null) return hit;
+      // A ban set while the read was under way (an `evict` from another view) wins over the hit that read returns.
+      if (hit != null) return _banned.contains(name) ? null : hit;
 
       final running = _inFlight[name];
       if (running != null) return await running;
 
       final blockedAt = _blockedAt[name];
-      if (blockedAt != null && _now().difference(blockedAt) < kOnDemandMinInterval) return null;
+      if (blockedAt != null && _within(blockedAt, kOnDemandMinInterval)) return null;
 
       late final Future<Uint8List?> future;
       future = _download(name).whenComplete(() {
@@ -135,14 +140,23 @@ class ExerciseMediaRepository {
         final bytes = result.bytes;
         if (bytes == null) return null;
         _countSession(bytes.length); // BEFORE the put, and whether or not the put is skipped
+        // An `evict` that ran while this download was in flight banned the name: the file is neither written back nor served.
+        if (_banned.contains(name)) return null;
         await _putGuarded(name, bytes);
         return bytes;
     }
   }
 
+  /// True while [stamp] is inside [window]. A stamp in the FUTURE (the clock was stepped back after it was taken) is expired,
+  /// never "still inside": a negative difference must not freeze a cooldown until the clock catches up.
+  bool _within(DateTime stamp, Duration window) {
+    final elapsed = _now().difference(stamp);
+    return !elapsed.isNegative && elapsed < window;
+  }
+
   Future<void> _putGuarded(String name, Uint8List bytes) async {
     final since = _unwritableSince;
-    if (since != null && _now().difference(since) < kStoreUnwritableBackoff) return; // armed: no put
+    if (since != null && _within(since, kStoreUnwritableBackoff)) return; // armed: no put
     try {
       await _store.put(name, bytes);
       _unwritableSince = null;

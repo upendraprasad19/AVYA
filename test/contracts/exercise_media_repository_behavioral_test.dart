@@ -106,6 +106,31 @@ class _ThrowingDeleteStore extends _ThrowingReadStore {
   Future<void> delete(String name) async => throw StateError('store delete failed');
 }
 
+/// Reads the inner store FIRST and then waits for [gate], so a test can change the repository's state between "the store answered"
+/// and "the repository looked at the answer".
+class _GatedReadStore implements ExerciseMediaStore {
+  _GatedReadStore(this.inner);
+  final ExerciseMediaStore inner;
+  final Completer<void> gate = Completer<void>();
+  @override
+  Future<void> get ready => inner.ready;
+  @override
+  bool has(String name) => inner.has(name);
+  @override
+  int get totalBytes => inner.totalBytes;
+  @override
+  Future<Uint8List?> read(String name) async {
+    final value = await inner.read(name);
+    await gate.future;
+    return value;
+  }
+
+  @override
+  Future<void> put(String name, Uint8List bytes) => inner.put(name, bytes);
+  @override
+  Future<void> delete(String name) => inner.delete(name);
+}
+
 class _Rig {
   _Rig({bool Function()? enabled, int alert = 100 * 1024 * 1024, ExerciseMediaStore? store, FakeBytesStore? fake})
       : fake = fake ?? FakeBytesStore() {
@@ -446,6 +471,134 @@ void main() {
     test('both ship switches are true until a spike verdict says otherwise', () {
       expect(kWebAnimationsFetchEnabled, isTrue);
       expect(kNativeAnimationsFetchEnabled, isTrue);
+    });
+  });
+
+  // The B-pass (reviewers A and B, HEAD 8956d92a). Letters continue the lettering above; the mutation each one answers is in the
+  // closure ledger (docs/audit/library-batch-m2.closure.yaml).
+  group('B-pass: the kill switch is read on EVERY call', () {
+    test('[bp1] the switch flipped between two ensure calls takes effect at once, both ways, with zero client calls and zero store reads while off', () async {
+      var on = true;
+      final rig = _Rig(enabled: () => on);
+      final counting = _CountingReadStore(rig.realStore);
+      final repo = ExerciseMediaRepository(client: rig.client, store: counting, now: rig.clock.call, enabled: () => on);
+      final x = _bytes(400, 30);
+      final y = _bytes(400, 31);
+      rig.client.script.addAll([_Plan(_ok(x)), _Plan(_ok(y))]);
+      expect(await repo.ensure(_media('x')), x);
+      expect(rig.client.calls, hasLength(1));
+      final readsBefore = counting.reads;
+
+      on = false; // the incident lever, flipped mid-session
+      expect(await repo.ensure(_media('y')), isNull);
+      expect(await repo.ensure(_media('x')), isNull, reason: 'a stored blob is not served while the switch is off');
+      expect(rig.client.calls, hasLength(1), reason: 'zero client calls while off');
+      expect(counting.reads, readsBefore, reason: 'zero store reads while off');
+
+      on = true; // and back on, again with no restart
+      expect(await repo.ensure(_media('y')), y);
+      expect(rig.client.calls, hasLength(2));
+    });
+  });
+
+  group('B-pass: a clock stepped BACK never freezes a cooldown', () {
+    test('[bp2] a refused name is asked again after the clock goes back one hour (the difference is negative)', () async {
+      final rig = _Rig();
+      final b = _bytes(400, 32);
+      rig.client.script.addAll([_Plan(_refused()), _Plan(_ok(b))]);
+      expect(await rig.repo.ensure(_media('x')), isNull);
+      rig.clock.advance(-const Duration(hours: 1));
+      expect(await rig.repo.ensure(_media('x')), b);
+      expect(rig.client.calls, hasLength(2));
+    });
+
+    test('[bp2b] a store whose write failed is tried again after the clock goes back one hour', () async {
+      final rig = _Rig();
+      await rig.realStore.ready;
+      rig.fake.armThrowOnWrite(-1);
+      final b = _bytes(400, 33);
+      rig.client.script.addAll([_Plan(_ok(b)), _Plan(_ok(b))]);
+      expect(await rig.repo.ensure(_media('x')), b);
+      final w = rig.fake.writeAttempts;
+      expect(w, greaterThan(0));
+      rig.clock.advance(-const Duration(hours: 1));
+      expect(await rig.repo.ensure(_media('x')), b);
+      expect(rig.fake.writeAttempts, greaterThan(w), reason: 'a negative difference is an expired back-off, not an armed one');
+    });
+  });
+
+  group('B-pass: an evict is not undone by a download or a read already under way', () {
+    test('[bp3] evict while the download is in flight: the finished download is neither stored nor returned', () {
+      fakeAsync((async) {
+        final rig = _Rig();
+        final b = _bytes(400, 34);
+        rig.client.script.add(_Plan(_ok(b), realDelay: const Duration(milliseconds: 10)));
+        settle(async, rig.realStore.ready);
+        final pending = rig.repo.ensure(_media('x'));
+        async.elapse(const Duration(milliseconds: 5));
+        final evicted = rig.repo.evict(_media('x')); // bans the name now; the download is still 5 ms from done
+        expect(settle(async, pending), isNull);
+        settle(async, evicted);
+        expect(rig.realStore.has(_media('x').objectName), isFalse);
+        expect(rig.fake.writeAttempts, 0, reason: 'a banned name is never written back');
+        expect(rig.client.calls, hasLength(1));
+      });
+    });
+
+    test('[bp3b] evict while the store read is under way: the hit that read returns is not served', () async {
+      final rig = _Rig();
+      final name = _media('x').objectName;
+      await rig.realStore.put(name, _bytes(400, 35));
+      final gated = _GatedReadStore(rig.realStore);
+      final repo = ExerciseMediaRepository(client: rig.client, store: gated, now: rig.clock.call);
+      final pending = repo.ensure(_media('x'));
+      await Future<void>.delayed(Duration.zero); // the read has answered and waits at the gate
+      await repo.evict(_media('x'));
+      gated.gate.complete();
+      expect(await pending, isNull);
+      expect(rig.client.calls, isEmpty);
+    });
+  });
+
+  group('B-pass: the two first-outcome latches are independent', () {
+    test('[bp4] a refused and then an unreachable result of two names send BOTH first events, once each', () async {
+      final rig = _Rig();
+      rig.client.script.addAll([_Plan(_refused(400)), _Plan(_unreachable())]);
+      await rig.repo.ensure(_media('a'));
+      await rig.repo.ensure(_media('b'));
+      expect(events.where((e) => e.startsWith('exercise_media_first_')).toList(), [
+        'exercise_media_first_refused|status=400',
+        'exercise_media_first_unreachable|status=none',
+      ]);
+    });
+
+    test('[bp4b] the other order sends both as well', () async {
+      final rig = _Rig();
+      rig.client.script.addAll([_Plan(_unreachable()), _Plan(_refused(404))]);
+      await rig.repo.ensure(_media('a'));
+      await rig.repo.ensure(_media('b'));
+      expect(events.where((e) => e.startsWith('exercise_media_first_')).toSet(), {
+        'exercise_media_first_unreachable|status=none',
+        'exercise_media_first_refused|status=404',
+      });
+    });
+  });
+
+  group('B-pass: the event leg of the totality guard', () {
+    test('[bp5] a logEvent hook that THROWS (an over-budget fetch) leaves ensure returning its bytes and no uncaught async error', () async {
+      ErrorTelemetry.debugOnLogEventForTests = (opType, {message}) => throw StateError('log failed');
+      final rig = _Rig(alert: 100);
+      final b = _bytes(400, 36);
+      rig.client.script.add(_Plan(_ok(b)));
+      final uncaught = <Object>[];
+      Uint8List? got;
+      await (runZonedGuarded(() async {
+            got = await rig.repo.ensure(_media('x'));
+            await Future<void>.delayed(Duration.zero); // let a late async error surface
+          }, (e, s) => uncaught.add(e)) ??
+          Future<void>.value());
+      expect(got, b);
+      expect(uncaught, isEmpty);
     });
   });
 }

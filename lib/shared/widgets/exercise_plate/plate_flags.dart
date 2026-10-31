@@ -28,9 +28,13 @@
 //
 // THE ANIMATION KILL SWITCH (Batch M2a, same kind: default ON, the flag turns it
 // OFF): `configBox['disable_exercise_animations'] = true` stops every download of
-// an exercise animation and every animated view; the bundled still (or, where
-// there is none, the plate) shows instead. `animationsEnabled` also follows the
-// plates switch, because an animation replaces a plate and has nothing to
+// an exercise animation and every animated view, and it takes the bundled still
+// tile with them (the still is an animation surface, design call C22). The plates
+// keep working, so the faces are exactly what they were before this batch: the
+// plate where the row has a drawing, else the monogram. The 617 rows that have an
+// animation have no drawing, so with only this switch set their tiles show the
+// monogram and their sheet says NO DRAWING YET. `animationsEnabled` also follows
+// the plates switch, because an animation replaces a plate and has nothing to
 // replace when plates are off. It is read at the SINK (the repository checks it
 // before any client call or store read, so a flag flipped mid-session takes
 // effect on the next open, not the next launch). `clearAllData()` clears
