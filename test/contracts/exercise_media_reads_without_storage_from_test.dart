@@ -105,8 +105,8 @@ void main() {
     final patterns = <String, RegExp>{
       '.gate(': RegExp(r'\.gate\('),
       'isPro': RegExp(r'\bisPro\b'),
-      'gateAndVerify': RegExp(r'gateAndVerify'),
-      'proStateSnapshot': RegExp(r'proStateSnapshot'),
+      'gateAndVerify': RegExp(r'\bgateAndVerify\b'),
+      'proStateSnapshot': RegExp(r'\bproStateSnapshot\b'),
       'SubscriptionService': RegExp(r'SubscriptionService'),
       'subscriptionServiceProvider': RegExp(r'subscriptionServiceProvider'),
     };

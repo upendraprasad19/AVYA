@@ -27,8 +27,10 @@
 //     until its first frame), so the cross-fade never passes through an empty tile.
 //   - A size that is not finite (an unbounded layout) decodes at `kMaxAnimatedDecodeWidth`; it is never a decode failure.
 //
-// Review-only limit (stated, not tested): that every `ui.Image` is disposed in every path is read in review; the VM has no handle
-// count to assert.
+// Review-only limits (stated, not tested): that every `ui.Image` is disposed in every path is read in review; the VM has no handle
+// count to assert. Likewise the two `_generation++` lines (in `_onBytes` and `_followLayout`) that throw a stale frozen-frame decode
+// away: the real codec's completion order cannot be scripted, so a mutation that removes them reddens nothing; they only matter when
+// two decodes of one view finish out of order (the older, narrower frame would then win).
 import 'dart:async';
 import 'dart:typed_data';
 import 'dart:ui' as ui;
