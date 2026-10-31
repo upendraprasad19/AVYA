@@ -9,7 +9,6 @@ import 'dart:io';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hive_flutter/hive_flutter.dart';
-import 'package:icanbefitter/core/services/exercise_media/exercise_media.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
 import 'package:icanbefitter/shared/widgets/exercise_plate/exercise_media_resolver.dart';
 
@@ -46,7 +45,7 @@ void main() {
   Future<String> seed(Map<String, Object?> fields, {List<String>? aliases}) async {
     final n = ++seq;
     final name = 'Zmedia Test Row $n';
-    final row = <String, dynamic>{'id': 'ZMEDIA$n', 'name': name, if (aliases != null) 'name_aliases': aliases};
+    final row = <String, dynamic>{'id': 'ZMEDIA$n', 'name': name, 'name_aliases': ?aliases};
     fields.forEach((k, v) {
       if (!identical(v, _absent)) row[k] = v;
     });
