@@ -125,7 +125,12 @@ class SeedService {
   //   of scripts/add_library_batch_c_v15.js). Nothing reads them until Batch M2.
   //   A later media_version change reaches an installed copy only if this constant
   //   is bumped again (library_seed_v16_upgrade_behavioral_test.dart).
-  static const int _exerciseLibraryVersion = 16;
+  // v17 (OI-443 data step, docs/plans/2026-11-01-library-old-rows-media.md): 137 of
+  //   the 285 original rows gain the same three keys from the founder's picks
+  //   (docs/audit/library-old-rows-media-input.json; held pairs, removal-slated rows
+  //   and E230 are not applied). Without this bump the keys never reach an installed
+  //   copy (library_seed_v16_upgrade_behavioral_test.dart).
+  static const int _exerciseLibraryVersion = 17;
   static const String _exerciseVersionKey = 'exercise_library_version';
 
   /// Bump this integer whenever the bundled food_database.json changes

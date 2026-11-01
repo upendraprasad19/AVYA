@@ -23,7 +23,7 @@
 // So it defaults ON and the flag turns it OFF.
 //
 // TO DISABLE IN AN INCIDENT: set `configBox['disable_exercise_plates'] = true`.
-// Thumbs fall back to the monogram they already show for the 127 artwork-less
+// Thumbs fall back to the monogram they already show for the artwork-less
 // exercises — no asset loads, no SVG parsing — and the sheet stops opening.
 //
 // THE ANIMATION KILL SWITCH (Batch M2a, same kind: default ON, the flag turns it
@@ -31,9 +31,10 @@
 // an exercise animation and every animated view, and it takes the bundled still
 // tile with them (the still is an animation surface, design call C22). The plates
 // keep working, so the faces are exactly what they were before this batch: the
-// plate where the row has a drawing, else the monogram. The 617 rows that have an
-// animation have no drawing, so with only this switch set their tiles show the
-// monogram and their sheet says NO DRAWING YET. `animationsEnabled` also follows
+// plate where the row has a drawing, else the monogram. A row with an animation and
+// no drawing (the 617 new rows that have one and 31 old rows) shows the monogram and its sheet says NO DRAWING YET
+// with only this switch set; a row with both (106 old rows since the OI-443
+// release) goes back to its plate. `animationsEnabled` also follows
 // the plates switch, because an animation replaces a plate and has nothing to
 // replace when plates are off. It is read at the SINK (the repository checks it
 // before any client call or store read, so a flag flipped mid-session takes

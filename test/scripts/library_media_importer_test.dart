@@ -249,23 +249,33 @@ void main() {
       });
     }
 
+    /// Old rows (E ids) the committed table does NOT map, read from the real library. Since the OI-443 data step the table maps
+    /// 137 of the 285, so a fixed id such as E003 would be a MAPPED row; the premise "the table does not map it" is asserted.
+    List<String> unmappedOldIds() => [
+          for (final r in t.readLib())
+            if (RegExp(r'^E\d+$').hasMatch(r['id'] as String) && !tableRows.containsKey(r['id'])) r['id'] as String,
+        ];
+
     test('an old row that still carries media keys and that the table does not map loses them', () async {
-      t.writeLibText(_withStrayKeys(t.readLibText(), 'E003'));
-      expect(_hasMediaKey(_byId(t.readLib())['E003']!), isTrue);
+      final id = unmappedOldIds().first;
+      expect(tableRows.containsKey(id), isFalse, reason: 'the premise: the table does not map $id');
+      t.writeLibText(_withStrayKeys(t.readLibText(), id));
+      expect(_hasMediaKey(_byId(t.readLib())[id]!), isTrue);
       final r = await t.importer();
       expect(r.exitCode, 0, reason: _out(r));
-      expect(_hasMediaKey(_byId(t.readLib())['E003']!), isFalse);
+      expect(_hasMediaKey(_byId(t.readLib())[id]!), isFalse);
     });
 
     test('an old row the table maps gets the keys last and in order (delete-then-set, not assignment)', () async {
-      t.writeLibText(_withStrayKeys(t.readLibText(), 'E004'));
+      final id = unmappedOldIds()[1];
+      t.writeLibText(_withStrayKeys(t.readLibText(), id));
       final m = t.readMedia();
       final slug = tableRows['G0103']!;
-      (m['rows'] as Json)['E004'] = slug;
+      (m['rows'] as Json)[id] = slug;
       t.writeMedia(m);
       final r = await t.importer();
       expect(r.exitCode, 0, reason: _out(r));
-      final row = _byId(t.readLib())['E004']!;
+      final row = _byId(t.readLib())[id]!;
       final keys = row.keys.toList();
       expect(keys.sublist(keys.length - 3), _mediaKeys);
       expect(row['media_slug'], slug);
@@ -275,6 +285,13 @@ void main() {
 
     test('an old-row entry mapping E001 does not trip the 40-key sentinel, on the first run or the second', () async {
       final m = t.readMedia();
+      // The real table maps E001 since the OI-443 data step, so its library row already carries the keys. Unmap it and run
+      // once, so the first run below starts from a row WITHOUT keys, the state this test was written for.
+      (m['rows'] as Json).remove('E001');
+      t.writeMedia(m);
+      final strip = await t.importer();
+      expect(strip.exitCode, 0, reason: _out(strip));
+      expect(_hasMediaKey(_byId(t.readLib())['E001']!), isFalse, reason: 'the premise: E001 carries no media key');
       (m['rows'] as Json)['E001'] = tableRows['G0103']!;
       t.writeMedia(m);
       final first = await t.importer();

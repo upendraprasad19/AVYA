@@ -22,7 +22,9 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 
+import '../../scripts/migration_ledger_hash_lib.dart' show sha256Hex;
 import '../helpers/library_media_table_checks.dart';
+import '../helpers/library_old_rows_input_checks.dart';
 
 Json _readObject(String path) => jsonDecode(File(path).readAsStringSync()) as Json;
 
@@ -65,6 +67,26 @@ void main() {
 
   Json libRow(String id) => lib.cast<Json>().firstWhere((r) => r['id'] == id);
 
+  final oldId = RegExp(r'^E\d+$');
+
+  /// The table and library as they were BEFORE the old-rows release (Batch M1's state): no E row, no E-only file (leg (h) would
+  /// call it active and unused), no old_rows meta, no media key on an E row. The (f) tests below build their scenarios on it, so
+  /// they keep proving what they name now that the real table carries E rows.
+  void stripOldRows() {
+    final r = rows();
+    final eIds = r.keys.where(oldId.hasMatch).toList();
+    final eSlugs = {for (final id in eIds) r[id] as String};
+    for (final id in eIds) {
+      r.remove(id);
+    }
+    final stillUsed = r.values.toSet();
+    for (final s in eSlugs) {
+      if (!stillUsed.contains(s)) files().remove(s);
+    }
+    meta()['old_rows'] = null;
+    syncLibraryToTable();
+  }
+
   /// [has], when given, must appear in the text of a violation of that leg, so a twin proves ITS sub-clause and not any other.
   void expectLeg(String leg, {String? has}) {
     final v = tableViolations(table, map, lib);
@@ -83,11 +105,15 @@ void main() {
       expect(tableViolations(table0, map0, lib0), isEmpty);
     });
 
-    test('the table has the shape M1 shipped: 617 rows, 616 files, all active, nothing held back', () {
-      expect(rows().length, 617);
-      expect(files().length, 616);
+    test('the table has the shape M1 shipped (617 G/N rows on 616 files) plus the old rows: every file is referenced, all active, nothing held back', () {
+      final newRows = rows().keys.where((k) => !oldId.hasMatch(k)).toList();
+      final newSlugs = {for (final k in newRows) slugOf(k)};
+      expect(newRows.length, 617, reason: 'the G/N rows are the M1 base; C2 edits this pin when it removes or adds rows');
+      expect(newSlugs.length, 616);
+      expect(files().keys.toSet(), rows().values.toSet(), reason: 'every file is referenced by a row and every row names a file');
       expect(files().values.every((f) => (f as Json)['status'] == 'active'), isTrue);
-      expect(meta()['old_rows'], isNull);
+      final eCount = rows().keys.where(oldId.hasMatch).length;
+      expect((meta()['old_rows'] as Json)['entries'], eCount);
       expect(meta()['taken_down'], isEmpty);
       expect(meta()['bucket'], 'exercise-media');
       expect(meta()['webp_bytes_max'], 1500000);
@@ -236,17 +262,20 @@ void main() {
     });
 
     test('(f) an E id in rows while _meta.old_rows is null', () {
+      stripOldRows();
       rows()['E050'] = slugOf('G0103');
       expectLeg('f');
     });
 
     test('(f) _meta.old_rows.entries off by one', () {
+      stripOldRows();
       rows()['E050'] = slugOf('G0103');
       meta()['old_rows'] = {'entries': 2, 'omitted': 0, 'sha256': 'a' * 64};
       expectLeg('f');
     });
 
     test('(f) the E row, its count and its hash all agree - green', () {
+      stripOldRows();
       rows()['E050'] = slugOf('G0103');
       meta()['old_rows'] = {'entries': 1, 'omitted': 0, 'sha256': 'a' * 64};
       syncLibraryToTable();
@@ -356,17 +385,20 @@ void main() {
     }
 
     test('(f) old_rows set while no E row exists', () {
+      stripOldRows();
       meta()['old_rows'] = {'entries': 0, 'omitted': 0, 'sha256': 'a' * 64};
       expectLeg('f', has: 'no E row exists');
     });
 
     test('(f) old_rows.sha256 malformed', () {
+      stripOldRows();
       rows()['E050'] = slugOf('G0103');
       meta()['old_rows'] = {'entries': 1, 'omitted': 0, 'sha256': 'not-a-hash'};
       expectLeg('f', has: 'old_rows.sha256 is not a sha256');
     });
 
     test('(f) old_rows.sha256 absent', () {
+      stripOldRows();
       rows()['E050'] = slugOf('G0103');
       meta()['old_rows'] = {'entries': 1, 'omitted': 0};
       expectLeg('f', has: 'old_rows.sha256 is not a sha256');
@@ -374,10 +406,173 @@ void main() {
 
     for (final bad in <Object?>['0', 1.5, null]) {
       test('(f) old_rows.omitted of $bad', () {
+        stripOldRows();
         rows()['E050'] = slugOf('G0103');
         meta()['old_rows'] = {'entries': 1, 'omitted': bad, 'sha256': 'a' * 64};
         expectLeg('f', has: 'old_rows.omitted is not an integer');
       });
     }
+  });
+
+  // OI-443 data step: the old-row pairs are a RULE over the founder's picks (docs/plans/2026-11-01-library-old-rows-media.md,
+  // Task 1), checked here from committed data only, and each rule is proved on its own broken copy.
+  group('the old-rows input: the pairs are a rule over the founder picks and the table carries exactly them', () {
+    final input0 = _readObject('docs/audit/library-old-rows-media-input.json');
+    final picks0 = _readObject('docs/audit/library-old-rows-picks-2026-10-17.json');
+    final check0 = _readObject('docs/audit/library-old-rows-equipment-check.json');
+    late Json input;
+    late Json picks;
+    late Json check;
+    setUp(() {
+      input = _copy(input0);
+      picks = _copy(picks0);
+      check = _copy(check0);
+    });
+
+    List<Json> bucket(String name) => (input[name] as List).cast<Json>();
+
+    /// Removes the pair of [id] from a bucket and returns it.
+    Json take(String name, String id) {
+      final list = bucket(name);
+      return list.removeAt(list.indexWhere((e) => e['id'] == id));
+    }
+
+    List<String> violations() =>
+        oldRowsInputViolations(input: input, picks: picks, check: check, library: lib, table: table);
+
+    void expectRule(String rule, {String? has}) {
+      final v = violations().where((s) => s.startsWith('($rule)')).toList();
+      expect(v, isNotEmpty, reason: 'rule ($rule) stayed green on a broken copy');
+      if (has != null) expect(v.any((s) => s.contains(has)), isTrue, reason: 'no ($rule) violation names "$has"; got $v');
+    }
+
+    test('the real data: every pick is in one bucket, every parked bucket is in its record, the table carries the entries', () {
+      expect(oldRowsInputViolations(input: input0, picks: picks0, check: check0, library: lib0, table: table0), isEmpty);
+    });
+
+    test('the input hash is the table old_rows hash, and the file holds no CR byte', () {
+      final bytes = File('docs/audit/library-old-rows-media-input.json').readAsBytesSync();
+      expect(bytes.contains(13), isFalse, reason: 'the hash must not depend on the line endings of a checkout');
+      expect(sha256Hex(bytes), (meta()['old_rows'] as Json)['sha256'],
+          reason: 'any edit of the input file, even only a parked bucket or the _note, changes this hash: run '
+              'node scripts/build_library_media_v16.js --old-rows docs/audit/library-old-rows-media-input.json --write');
+    });
+
+    test('the pairs the founder named are in: Face Pull (E014) and Barbell Curl (E031)', () {
+      final ids = bucket('entries').map((e) => e['id']).toSet();
+      expect(ids, containsAll(['E014', 'E031']));
+    });
+
+    test('(P1) a pick dropped from the input', () {
+      take('entries', 'E050');
+      expectRule('P1', has: 'E050');
+    });
+
+    test('(P1) a pick in two buckets', () {
+      bucket('held').add(_copy(bucket('entries').firstWhere((e) => e['id'] == 'E050')));
+      expectRule('P1', has: 'E050');
+    });
+
+    test('(P2) a gif changed on an entry', () {
+      bucket('entries').firstWhere((e) => e['id'] == 'E050')['gif'] = '9999';
+      expectRule('P2', has: 'E050');
+    });
+
+    test('(P2) an entry with no pick', () {
+      (picks['picks'] as List).removeWhere((p) => (p as Json)['exercise_id'] == 'E050');
+      expectRule('P2', has: 'E050');
+    });
+
+    test('(P3) a pick moved into held without the record naming it', () {
+      bucket('held').add(take('entries', 'E050'));
+      expectRule('P3', has: 'held E050');
+    });
+
+    test('(P3) a pick moved into left_out without the record naming it', () {
+      bucket('left_out').add(take('entries', 'E050'));
+      expectRule('P3', has: 'left_out E050');
+    });
+
+    test('(P3) a pick moved into retag_waits without the export naming it', () {
+      bucket('retag_waits').add(take('entries', 'E050'));
+      expectRule('P3', has: 'retag_waits E050');
+    });
+
+    test('(P3) a held pair whose record entry is gone', () {
+      ((check['held'] as Json)['rows'] as List).remove('E027');
+      expectRule('P3', has: 'held E027');
+    });
+
+    test('(P4) a removal-slated pair moved into entries', () {
+      final pair = take('removal_slated', 'E075');
+      pair['equipment_checked'] = true;
+      bucket('entries').add(pair);
+      expectRule('P4', has: 'entry E075');
+    });
+
+    test('(P4) a removal-slated row that C2 keeps (it gains a core level) forces a decision', () {
+      libRow('E084')['core_levels'] = ['beginner'];
+      expectRule('P4', has: 'E084');
+    });
+
+    test('(P5) an entry that was not equipment-checked', () {
+      bucket('entries').firstWhere((e) => e['id'] == 'E050')['equipment_checked'] = false;
+      expectRule('P5', has: 'E050');
+    });
+
+    test('(P6) an entry the table does not map', () {
+      rows().remove('E050');
+      expectRule('P6', has: 'E050');
+    });
+
+    test('(P6) a table E row the input has no entry for', () {
+      take('entries', 'E050');
+      expectRule('P6', has: 'E050');
+    });
+
+    test('(P6) a slug that does not start with the entry gif', () {
+      rows()['E050'] = slugOf('G0103');
+      expectRule('P6', has: 'E050');
+    });
+
+    // (P7) releasing a held or retag-decided pair needs a recorded decision. E027 is held for a different kit (the picture is
+    // a plate-loaded T-bar station); E230 is the founder's decided retag, which waits for Batch C2's seed migration.
+    List<String> p7() => violations().where((s) => s.startsWith('(P7)')).toList();
+
+    test('(P7) a held pair released into entries with no decision', () {
+      bucket('entries').add(take('held', 'E027')..['equipment_checked'] = true);
+      expectRule('P7', has: 'entry E027');
+    });
+
+    test('(P7) the decided retag released into entries with no decision', () {
+      bucket('entries').add(take('retag_waits', 'E230')..['equipment_checked'] = true);
+      expectRule('P7', has: 'entry E230');
+    });
+
+    test('(P7) mirror: the same release WITH a released_by decision is not a P7 violation', () {
+      bucket('entries').add(take('held', 'E027')
+        ..['equipment_checked'] = true
+        ..['released_by'] = 'founder 2026-11-02: accept the picture and retag');
+      expect(p7(), isEmpty);
+    });
+
+    test('(P7) mirror: a blank released_by is no decision', () {
+      bucket('entries').add(take('held', 'E027')
+        ..['equipment_checked'] = true
+        ..['released_by'] = '  ');
+      expectRule('P7', has: 'entry E027');
+    });
+
+    test('(P7) mirror: an ordinary entry needs no released_by', () {
+      expect(bucket('entries').any((e) => e['id'] == 'E050' && !e.containsKey('released_by')), isTrue);
+      expect(p7(), isEmpty);
+    });
+
+    test('(P7) fails closed: a record that lists no mismatch rows', () {
+      check
+        ..remove('equipment_mismatch')
+        ..remove('movement_mismatch');
+      expectRule('P7', has: 'lists no equipment_mismatch');
+    });
   });
 }

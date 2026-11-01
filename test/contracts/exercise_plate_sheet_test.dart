@@ -52,7 +52,21 @@ Future<void> _ensureHive() async {
     'name': 'Synthetic Numeric Breathing',
     'breathing_cue': '12',
   });
+  // Since the OI-443 data step (seed v17) the real Barbell Bench Press (E001) carries an animation, and the sheet then shows the
+  // animation box instead of the START / END drawings (and needs a ProviderScope this harness does not give). The plate-only
+  // assertions below use a synthetic COPY of that row with its media keys removed, so a later batch that maps another real row
+  // cannot silently change what they prove. The mirror (the real E001 shows ONE animation view and no plates) is pinned in
+  // exercise_media_fallback_chain_test.dart.
+  final bench = lib.firstWhere((e) => e['name'] == 'Barbell Bench Press');
+  await HiveService.instance.exerciseBox.put('TEST_PLATE_ONLY_PAIR', {
+    for (final e in bench.entries)
+      if (!e.key.startsWith('media_')) e.key: e.value,
+    'id': 'TEST_PLATE_ONLY_PAIR',
+    'name': _plateOnlyPair,
+  });
 }
+
+const _plateOnlyPair = 'Synthetic Plate Only Pair';
 
 List<Map<String, dynamic>> _library() =>
     (jsonDecode(File('assets/data/exercise_library.json').readAsStringSync())
@@ -126,7 +140,7 @@ void main() {
   });
 
   testWidgets('a pair shows TWO plates labelled START and END', (t) async {
-    await open(t, 'Barbell Bench Press');
+    await open(t, _plateOnlyPair);
     expect(find.byType(SvgPicture), findsNWidgets(2));
     expect(find.text('START'), findsOneWidget);
     expect(find.text('END'), findsOneWidget);
@@ -147,9 +161,10 @@ void main() {
 
   testWidgets('a REAL breathing cue renders', (t) async {
     // Barbell Bench Press carries "Inhale down, exhale on press" (verified
-    // against the library). Without this positive half, the suppression test
-    // below would pass on a sheet that never renders BREATHING at all.
-    await open(t, 'Barbell Bench Press');
+    // against the library; the synthetic plate-only copy carries the same
+    // field). Without this positive half, the suppression test below would pass
+    // on a sheet that never renders BREATHING at all.
+    await open(t, _plateOnlyPair);
     expect(find.text('BREATHING'), findsOneWidget);
   });
 
@@ -176,9 +191,15 @@ void main() {
     // AND the most cue lines. Picked from the data rather than by hand — the
     // first attempt named an exercise with no artwork at all, so it rendered
     // one monogram instead of two square plates and tested nothing.
-    final worst = _library()
-        .where((e) => e['demo_pair'] == true && e['coaching_cues'] is List)
-        .reduce((a, b) => _cueLines(a) >= _cueLines(b) ? a : b);
+    //
+    // Only rows WITHOUT an animation: a row that has one renders the animation box (one square, not two plates) and the test
+    // would test nothing again. The candidate set is asserted non-empty, so that a batch that maps every pair row fails here
+    // instead of passing vacuously.
+    final candidates = _library()
+        .where((e) => e['demo_pair'] == true && e['coaching_cues'] is List && !e.containsKey('media_slug'))
+        .toList();
+    expect(candidates, isNotEmpty, reason: 'no plate-only pair row is left to be the worst case');
+    final worst = candidates.reduce((a, b) => _cueLines(a) >= _cueLines(b) ? a : b);
     await open(t, worst['name'] as String, surface: const Size(320, 480));
     expect(t.takeException(), isNull, reason: 'RenderFlex overflow');
     expect(find.byType(SingleChildScrollView), findsWidgets);

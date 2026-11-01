@@ -76,7 +76,10 @@
     "gym_availability": "standard_gym",
     "requires_coaching": false,
     "high_impact": false,
-    "variant_family": "bench_press"
+    "variant_family": "bench_press",
+    "media_slug": "0025-barbell-bench-press",
+    "media_version": 1,
+    "media_source": "wardroom"
   },
   {
     "id": "E002",
@@ -156,7 +159,10 @@
     "gym_availability": "standard_gym",
     "requires_coaching": false,
     "high_impact": false,
-    "variant_family": "bench_press"
+    "variant_family": "bench_press",
+    "media_slug": "0289-dumbbell-bench-press",
+    "media_version": 1,
+    "media_source": "wardroom"
   },
   {
     "id": "E003",
@@ -235,7 +241,10 @@
     "gym_availability": "standard_gym",
     "requires_coaching": false,
     "high_impact": false,
-    "variant_family": "incline_press"
+    "variant_family": "incline_press",
+    "media_slug": "0047-barbell-incline-bench-press",
+    "media_version": 1,
+    "media_source": "wardroom"
   },
   {
     "id": "E004",
@@ -313,7 +322,10 @@
     "gym_availability": "standard_gym",
     "requires_coaching": false,
     "high_impact": false,
-    "variant_family": "bench_press"
+    "variant_family": "bench_press",
+    "media_slug": "0033-barbell-decline-bench-press",
+    "media_version": 1,
+    "media_source": "wardroom"
   },
   {
     "id": "E005",
@@ -400,7 +412,10 @@
     "variant_family": "push_up",
     "skill_track": "push_up",
     "skill_step": 4,
-    "progression_to": "Decline Push Up"
+    "progression_to": "Decline Push Up",
+    "media_slug": "0662-pushup",
+    "media_version": 1,
+    "media_source": "wardroom"
   },
   {
     "id": "E006",
@@ -479,7 +494,10 @@
     "gym_availability": "standard_gym",
     "requires_coaching": false,
     "high_impact": false,
-    "variant_family": "chest_fly"
+    "variant_family": "chest_fly",
+    "media_slug": "0308-dumbbell-fly",
+    "media_version": 1,
+    "media_source": "wardroom"
   },
   {
     "id": "E007",
@@ -553,7 +571,10 @@
     "gym_availability": "standard_gym",
     "requires_coaching": false,
     "high_impact": false,
-    "variant_family": "chest_fly"
+    "variant_family": "chest_fly",
+    "media_slug": "0188-cable-middle-fly",
+    "media_version": 1,
+    "media_source": "wardroom"
   },
   {
     "id": "E008",
@@ -633,7 +654,10 @@
     "high_impact": false,
     "variant_family": "dip",
     "skill_track": "dip",
-    "skill_step": 3
+    "skill_step": 3,
+    "media_slug": "0251-chest-dip",
+    "media_version": 1,
+    "media_source": "wardroom"
   },
   {
     "id": "E009",
@@ -707,7 +731,10 @@
     "gym_availability": "standard_gym",
     "requires_coaching": false,
     "high_impact": false,
-    "variant_family": "bench_press"
+    "variant_family": "bench_press",
+    "media_slug": "1301-machine-inner-chest-press",
+    "media_version": 1,
+    "media_source": "wardroom"
   },
   {
     "id": "E010",
@@ -876,7 +903,10 @@
     "gym_availability": "standard_gym",
     "requires_coaching": false,
     "high_impact": false,
-    "variant_family": "shoulder_press"
+    "variant_family": "shoulder_press",
+    "media_slug": "1457-barbell-standing-wide-military-press",
+    "media_version": 1,
+    "media_source": "wardroom"
   },
   {
     "id": "E012",
@@ -956,7 +986,10 @@
     "gym_availability": "home",
     "requires_coaching": false,
     "high_impact": false,
-    "variant_family": "shoulder_press"
+    "variant_family": "shoulder_press",
+    "media_slug": "0426-dumbbell-standing-overhead-press",
+    "media_version": 1,
+    "media_source": "wardroom"
   },
   {
     "id": "E013",
@@ -1036,7 +1069,10 @@
     "gym_availability": "home",
     "requires_coaching": false,
     "high_impact": false,
-    "variant_family": "lateral_raise"
+    "variant_family": "lateral_raise",
+    "media_slug": "0334-dumbbell-lateral-raise",
+    "media_version": 1,
+    "media_source": "wardroom"
   },
   {
     "id": "E014",
@@ -1115,7 +1151,10 @@
     "gym_availability": "standard_gym",
     "requires_coaching": false,
     "high_impact": false,
-    "variant_family": "face_pull"
+    "variant_family": "face_pull",
+    "media_slug": "0233-face-pull",
+    "media_version": 1,
+    "media_source": "wardroom"
   },
   {
     "id": "E015",
@@ -1197,7 +1236,10 @@
     "variant_family": "front_raise",
     "slot_pattern": [
       "shoulder_isolation"
-    ]
+    ],
+    "media_slug": "0310-dumbbell-front-raise",
+    "media_version": 1,
+    "media_source": "wardroom"
   },
   {
     "id": "E016",
@@ -1283,7 +1325,10 @@
     "gym_availability": "standard_gym",
     "requires_coaching": false,
     "high_impact": false,
-    "variant_family": "bench_press"
+    "variant_family": "bench_press",
+    "media_slug": "0030-barbell-close-grip-bench-press",
+    "media_version": 1,
+    "media_source": "wardroom"
   },
   {
     "id": "E017",
@@ -1359,7 +1404,10 @@
     "gym_availability": "standard_gym",
     "requires_coaching": false,
     "high_impact": false,
-    "variant_family": "triceps_pushdown"
+    "variant_family": "triceps_pushdown",
+    "media_slug": "0201-cable-tricep-pushdown",
+    "media_version": 1,
+    "media_source": "wardroom"
   },
   {
     "id": "E018",
@@ -1433,7 +1481,10 @@
     "gym_availability": "standard_gym",
     "requires_coaching": false,
     "high_impact": false,
-    "variant_family": "triceps_extension"
+    "variant_family": "triceps_extension",
+    "media_slug": "0060-barbell-skull-crusher",
+    "media_version": 1,
+    "media_source": "wardroom"
   },
   {
     "id": "E019",
@@ -1509,7 +1560,10 @@
     "gym_availability": "home",
     "requires_coaching": false,
     "high_impact": false,
-    "variant_family": "triceps_extension"
+    "variant_family": "triceps_extension",
+    "media_slug": "2188-dumbbell-seated-tricep-extension",
+    "media_version": 1,
+    "media_source": "wardroom"
   },
   {
     "id": "E020",
@@ -1594,7 +1648,10 @@
     "variant_family": "push_up",
     "skill_track": "push_up",
     "skill_step": 6,
-    "regression_to": "Decline Push Up"
+    "regression_to": "Decline Push Up",
+    "media_slug": "0283-diamond-pushup",
+    "media_version": 1,
+    "media_source": "wardroom"
   },
   {
     "id": "E021",
@@ -1680,7 +1737,10 @@
     "gym_availability": "standard_gym",
     "requires_coaching": false,
     "high_impact": false,
-    "variant_family": "deadlift"
+    "variant_family": "deadlift",
+    "media_slug": "0032-barbell-deadlift",
+    "media_version": 1,
+    "media_source": "wardroom"
   },
   {
     "id": "E022",
@@ -1765,7 +1825,10 @@
     "high_impact": false,
     "variant_family": "pull_up",
     "skill_track": "pull_up",
-    "skill_step": 3
+    "skill_step": 3,
+    "media_slug": "0652-pullup",
+    "media_version": 1,
+    "media_source": "wardroom"
   },
   {
     "id": "E023",
@@ -1845,7 +1908,10 @@
     "gym_availability": "standard_gym",
     "requires_coaching": false,
     "high_impact": false,
-    "variant_family": "row"
+    "variant_family": "row",
+    "media_slug": "0027-barbell-bent-over-row",
+    "media_version": 1,
+    "media_source": "wardroom"
   },
   {
     "id": "E024",
@@ -1927,7 +1993,10 @@
     "gym_availability": "standard_gym",
     "requires_coaching": false,
     "high_impact": false,
-    "variant_family": "row"
+    "variant_family": "row",
+    "media_slug": "0292-dumbbell-single-arm-bent-over-row",
+    "media_version": 1,
+    "media_source": "wardroom"
   },
   {
     "id": "E025",
@@ -2008,7 +2077,10 @@
     "gym_availability": "standard_gym",
     "requires_coaching": false,
     "high_impact": false,
-    "variant_family": "lat_pulldown"
+    "variant_family": "lat_pulldown",
+    "media_slug": "0198-cable-lat-pulldown",
+    "media_version": 1,
+    "media_source": "wardroom"
   },
   {
     "id": "E026",
@@ -2088,7 +2160,10 @@
     "gym_availability": "standard_gym",
     "requires_coaching": false,
     "high_impact": false,
-    "variant_family": "row"
+    "variant_family": "row",
+    "media_slug": "0861-cable-seated-row",
+    "media_version": 1,
+    "media_source": "wardroom"
   },
   {
     "id": "E027",
@@ -2248,7 +2323,10 @@
     "gym_availability": "well_equipped_gym",
     "requires_coaching": false,
     "high_impact": false,
-    "variant_family": "back_extension"
+    "variant_family": "back_extension",
+    "media_slug": "0489-hyperextension",
+    "media_version": 1,
+    "media_source": "wardroom"
   },
   {
     "id": "E030",
@@ -2405,7 +2483,10 @@
     "gym_availability": "standard_gym",
     "requires_coaching": false,
     "high_impact": false,
-    "variant_family": "biceps_curl"
+    "variant_family": "biceps_curl",
+    "media_slug": "0031-barbell-curl",
+    "media_version": 1,
+    "media_source": "wardroom"
   },
   {
     "id": "E032",
@@ -2484,7 +2565,10 @@
     "gym_availability": "standard_gym",
     "requires_coaching": false,
     "high_impact": false,
-    "variant_family": "biceps_curl"
+    "variant_family": "biceps_curl",
+    "media_slug": "0294-dumbbell-bicep-curl",
+    "media_version": 1,
+    "media_source": "wardroom"
   },
   {
     "id": "E033",
@@ -2563,7 +2647,10 @@
     "gym_availability": "home",
     "requires_coaching": false,
     "high_impact": false,
-    "variant_family": "hammer_curl"
+    "variant_family": "hammer_curl",
+    "media_slug": "0313-dumbbell-hammer-curl",
+    "media_version": 1,
+    "media_source": "wardroom"
   },
   {
     "id": "E034",
@@ -2636,7 +2723,10 @@
     "gym_availability": "standard_gym",
     "requires_coaching": false,
     "high_impact": false,
-    "variant_family": "biceps_curl"
+    "variant_family": "biceps_curl",
+    "media_slug": "0297-dumbbell-concentration-curl",
+    "media_version": 1,
+    "media_source": "wardroom"
   },
   {
     "id": "E035",
@@ -2713,7 +2803,10 @@
     "gym_availability": "standard_gym",
     "requires_coaching": false,
     "high_impact": false,
-    "variant_family": "biceps_curl"
+    "variant_family": "biceps_curl",
+    "media_slug": "0868-cable-curl",
+    "media_version": 1,
+    "media_source": "wardroom"
   },
   {
     "id": "E036",
@@ -2797,7 +2890,10 @@
     "gym_availability": "standard_gym",
     "requires_coaching": false,
     "high_impact": false,
-    "variant_family": "squat"
+    "variant_family": "squat",
+    "media_slug": "0043-barbell-full-squat",
+    "media_version": 1,
+    "media_source": "wardroom"
   },
   {
     "id": "E037",
@@ -2878,7 +2974,10 @@
     "gym_availability": "standard_gym",
     "requires_coaching": false,
     "high_impact": false,
-    "variant_family": "front_squat"
+    "variant_family": "front_squat",
+    "media_slug": "0042-barbell-front-squat",
+    "media_version": 1,
+    "media_source": "wardroom"
   },
   {
     "id": "E038",
@@ -2960,7 +3059,10 @@
     "gym_availability": "home",
     "requires_coaching": false,
     "high_impact": false,
-    "variant_family": "squat"
+    "variant_family": "squat",
+    "media_slug": "1760-dumbbell-goblet-squat",
+    "media_version": 1,
+    "media_source": "wardroom"
   },
   {
     "id": "E039",
@@ -3042,7 +3144,10 @@
     "gym_availability": "standard_gym",
     "requires_coaching": false,
     "high_impact": false,
-    "variant_family": "leg_press"
+    "variant_family": "leg_press",
+    "media_slug": "0739-leg-press",
+    "media_version": 1,
+    "media_source": "wardroom"
   },
   {
     "id": "E040",
@@ -3120,7 +3225,10 @@
     "gym_availability": "well_equipped_gym",
     "requires_coaching": false,
     "high_impact": false,
-    "variant_family": "hack_squat"
+    "variant_family": "hack_squat",
+    "media_slug": "0743-hack-squat",
+    "media_version": 1,
+    "media_source": "wardroom"
   },
   {
     "id": "E041",
@@ -3201,7 +3309,10 @@
     "gym_availability": "standard_gym",
     "requires_coaching": false,
     "high_impact": false,
-    "variant_family": "split_squat"
+    "variant_family": "split_squat",
+    "media_slug": "0410-dumbbell-single-leg-split-squat",
+    "media_version": 1,
+    "media_source": "wardroom"
   },
   {
     "id": "E042",
@@ -3284,7 +3395,10 @@
     "gym_availability": "home",
     "requires_coaching": false,
     "high_impact": false,
-    "variant_family": "lunge"
+    "variant_family": "lunge",
+    "media_slug": "1460-walking-lunge",
+    "media_version": 1,
+    "media_source": "wardroom"
   },
   {
     "id": "E043",
@@ -3360,7 +3474,10 @@
     "gym_availability": "standard_gym",
     "requires_coaching": false,
     "high_impact": false,
-    "variant_family": "leg_extension"
+    "variant_family": "leg_extension",
+    "media_slug": "0585-leg-extension",
+    "media_version": 1,
+    "media_source": "wardroom"
   },
   {
     "id": "E044",
@@ -3442,7 +3559,10 @@
     "gym_availability": "home",
     "requires_coaching": false,
     "high_impact": false,
-    "variant_family": "step_up"
+    "variant_family": "step_up",
+    "media_slug": "0431-dumbbell-stepup",
+    "media_version": 1,
+    "media_source": "wardroom"
   },
   {
     "id": "E045",
@@ -3524,7 +3644,10 @@
     "gym_availability": "home",
     "requires_coaching": false,
     "high_impact": false,
-    "variant_family": "romanian_deadlift"
+    "variant_family": "romanian_deadlift",
+    "media_slug": "1459-dumbbell-romanian-deadlift",
+    "media_version": 1,
+    "media_source": "wardroom"
   },
   {
     "id": "E046",
@@ -3602,7 +3725,10 @@
       "knee_dominant"
     ],
     "skill_track": "nordic_curl",
-    "skill_step": 2
+    "skill_step": 2,
+    "media_slug": "1766-nordic-hamstring-curl",
+    "media_version": 1,
+    "media_source": "wardroom"
   },
   {
     "id": "E047",
@@ -3681,7 +3807,10 @@
     "gym_availability": "standard_gym",
     "requires_coaching": false,
     "high_impact": false,
-    "variant_family": "hip_thrust"
+    "variant_family": "hip_thrust",
+    "media_slug": "0058-barbell-hip-thrust",
+    "media_version": 1,
+    "media_source": "wardroom"
   },
   {
     "id": "E048",
@@ -3761,7 +3890,10 @@
     "variant_family": "glute_bridge",
     "slot_pattern": [
       "hip_dominant"
-    ]
+    ],
+    "media_slug": "3013-low-glute-bridge-on-floor",
+    "media_version": 1,
+    "media_source": "wardroom"
   },
   {
     "id": "E049",
@@ -3836,7 +3968,10 @@
     "gym_availability": "standard_gym",
     "requires_coaching": false,
     "high_impact": false,
-    "variant_family": "leg_curl"
+    "variant_family": "leg_curl",
+    "media_slug": "0586-lying-leg-curl",
+    "media_version": 1,
+    "media_source": "wardroom"
   },
   {
     "id": "E050",
@@ -3923,7 +4058,10 @@
     "variant_family": "deadlift",
     "slot_pattern": [
       "hip_dominant"
-    ]
+    ],
+    "media_slug": "0117-barbell-sumo-deadlift",
+    "media_version": 1,
+    "media_source": "wardroom"
   },
   {
     "id": "E051",
@@ -4074,7 +4212,10 @@
     "gym_availability": "standard_gym",
     "requires_coaching": false,
     "high_impact": false,
-    "variant_family": "calf_raise"
+    "variant_family": "calf_raise",
+    "media_slug": "0594-seated-calf-raise",
+    "media_version": 1,
+    "media_source": "wardroom"
   },
   {
     "id": "E053",
@@ -4146,7 +4287,10 @@
     "gym_availability": "home",
     "requires_coaching": false,
     "high_impact": false,
-    "variant_family": "calf_raise"
+    "variant_family": "calf_raise",
+    "media_slug": "0284-donkey-calf-raise",
+    "media_version": 1,
+    "media_source": "wardroom"
   },
   {
     "id": "E054",
@@ -4306,7 +4450,10 @@
     "gym_availability": "home",
     "requires_coaching": false,
     "high_impact": false,
-    "variant_family": "dead_bug"
+    "variant_family": "dead_bug",
+    "media_slug": "0276-dead-bug",
+    "media_version": 1,
+    "media_source": "wardroom"
   },
   {
     "id": "E056",
@@ -4383,7 +4530,10 @@
     "gym_availability": "standard_gym",
     "requires_coaching": false,
     "high_impact": false,
-    "variant_family": "crunch"
+    "variant_family": "crunch",
+    "media_slug": "0175-cable-kneeling-crunch",
+    "media_version": 1,
+    "media_source": "wardroom"
   },
   {
     "id": "E057",
@@ -4465,7 +4615,10 @@
     "gym_availability": "standard_gym",
     "requires_coaching": false,
     "high_impact": false,
-    "variant_family": "leg_raise"
+    "variant_family": "leg_raise",
+    "media_slug": "0475-hanging-straight-leg-raise",
+    "media_version": 1,
+    "media_source": "wardroom"
   },
   {
     "id": "E058",
@@ -4548,7 +4701,10 @@
     "gym_availability": "well_equipped_gym",
     "requires_coaching": false,
     "high_impact": false,
-    "variant_family": "rollout"
+    "variant_family": "rollout",
+    "media_slug": "0857-wheel-rollout",
+    "media_version": 1,
+    "media_source": "wardroom"
   },
   {
     "id": "E059",
@@ -4628,7 +4784,10 @@
     "gym_availability": "home",
     "requires_coaching": false,
     "high_impact": false,
-    "variant_family": "rotation_core"
+    "variant_family": "rotation_core",
+    "media_slug": "0687-russian-twist",
+    "media_version": 1,
+    "media_source": "wardroom"
   },
   {
     "id": "E060",
@@ -4705,7 +4864,10 @@
     "gym_availability": "home",
     "requires_coaching": false,
     "high_impact": false,
-    "variant_family": "crunch"
+    "variant_family": "crunch",
+    "media_slug": "0872-reverse-crunch",
+    "media_version": 1,
+    "media_source": "wardroom"
   },
   {
     "id": "E061",
@@ -4788,7 +4950,10 @@
     "gym_availability": "standard_gym",
     "requires_coaching": false,
     "high_impact": false,
-    "variant_family": "cardio_treadmill"
+    "variant_family": "cardio_treadmill",
+    "media_slug": "0684-treadmill-run-time",
+    "media_version": 1,
+    "media_source": "wardroom"
   },
   {
     "id": "E062",
@@ -4863,7 +5028,10 @@
     "gym_availability": "standard_gym",
     "requires_coaching": false,
     "high_impact": false,
-    "variant_family": "cardio_bike"
+    "variant_family": "cardio_bike",
+    "media_slug": "0798-stationary-bike-walk",
+    "media_version": 1,
+    "media_source": "wardroom"
   },
   {
     "id": "E063",
@@ -4945,7 +5113,10 @@
     "gym_availability": "home",
     "requires_coaching": false,
     "high_impact": true,
-    "variant_family": "cardio_jump_rope"
+    "variant_family": "cardio_jump_rope",
+    "media_slug": "2612-jump-rope",
+    "media_version": 1,
+    "media_source": "wardroom"
   },
   {
     "id": "E064",
@@ -5113,7 +5284,10 @@
     "gym_availability": "home",
     "requires_coaching": false,
     "high_impact": true,
-    "variant_family": "burpee"
+    "variant_family": "burpee",
+    "media_slug": "1160-burpee",
+    "media_version": 1,
+    "media_source": "wardroom"
   },
   {
     "id": "E066",
@@ -5278,7 +5452,10 @@
     "gym_availability": "home",
     "requires_coaching": false,
     "high_impact": false,
-    "variant_family": "mountain_climber"
+    "variant_family": "mountain_climber",
+    "media_slug": "0630-mountain-climber",
+    "media_version": 1,
+    "media_source": "wardroom"
   },
   {
     "id": "E068",
@@ -5350,7 +5527,10 @@
     "gym_availability": "specialty",
     "requires_coaching": false,
     "high_impact": false,
-    "variant_family": "cardio_assault_bike"
+    "variant_family": "cardio_assault_bike",
+    "media_slug": "2331-assault-bike",
+    "media_version": 1,
+    "media_source": "wardroom"
   },
   {
     "id": "E069",
@@ -5430,7 +5610,10 @@
     "high_impact": false,
     "variant_family": "muscle_up",
     "skill_track": "muscle_up",
-    "skill_step": 5
+    "skill_step": 5,
+    "media_slug": "1401-muscle-up",
+    "media_version": 1,
+    "media_source": "wardroom"
   },
   {
     "id": "E070",
@@ -5511,7 +5694,10 @@
     "high_impact": false,
     "variant_family": "front_lever",
     "skill_track": "front_lever",
-    "skill_step": 5
+    "skill_step": 5,
+    "media_slug": "3296-front-lever",
+    "media_version": 1,
+    "media_source": "wardroom"
   },
   {
     "id": "E071",
@@ -5593,7 +5779,10 @@
     "high_impact": false,
     "variant_family": "l_sit",
     "skill_track": "l_sit",
-    "skill_step": 3
+    "skill_step": 3,
+    "media_slug": "3419-l-sit-on-floor",
+    "media_version": 1,
+    "media_source": "wardroom"
   },
   {
     "id": "E072",
@@ -5671,7 +5860,10 @@
     "high_impact": false,
     "variant_family": "handstand",
     "skill_track": "handstand",
-    "skill_step": 3
+    "skill_step": 3,
+    "media_slug": "3302-handstand",
+    "media_version": 1,
+    "media_source": "wardroom"
   },
   {
     "id": "E073",
@@ -5751,7 +5943,10 @@
     "high_impact": false,
     "variant_family": "pistol_squat",
     "skill_track": "pistol_squat",
-    "skill_step": 3
+    "skill_step": 3,
+    "media_slug": "1759-pistol-squat",
+    "media_version": 1,
+    "media_source": "wardroom"
   },
   {
     "id": "E074",
@@ -6001,7 +6196,10 @@
     "gym_availability": "home",
     "requires_coaching": false,
     "high_impact": false,
-    "variant_family": "push_up"
+    "variant_family": "push_up",
+    "media_slug": "3217-modified-hindu-pushup",
+    "media_version": 1,
+    "media_source": "wardroom"
   },
   {
     "id": "E077",
@@ -6458,7 +6656,10 @@
     "gym_availability": "home",
     "requires_coaching": false,
     "high_impact": false,
-    "variant_family": "mobility_hip"
+    "variant_family": "mobility_hip",
+    "media_slug": "1604-world-s-greatest-stretch",
+    "media_version": 1,
+    "media_source": "wardroom"
   },
   {
     "id": "E084",
@@ -6679,7 +6880,10 @@
     "gym_availability": "well_equipped_gym",
     "requires_coaching": true,
     "high_impact": false,
-    "variant_family": "olympic_clean"
+    "variant_family": "olympic_clean",
+    "media_slug": "0648-power-clean",
+    "media_version": 1,
+    "media_source": "wardroom"
   },
   {
     "id": "E087",
@@ -6763,7 +6967,10 @@
     "gym_availability": "well_equipped_gym",
     "requires_coaching": false,
     "high_impact": false,
-    "variant_family": "deadlift"
+    "variant_family": "deadlift",
+    "media_slug": "0811-trap-bar-deadlift",
+    "media_version": 1,
+    "media_source": "wardroom"
   },
   {
     "id": "E088",
@@ -6843,7 +7050,10 @@
     "gym_availability": "standard_gym",
     "requires_coaching": false,
     "high_impact": false,
-    "variant_family": "squat"
+    "variant_family": "squat",
+    "media_slug": "0127-barbell-zercher-squat",
+    "media_version": 1,
+    "media_source": "wardroom"
   },
   {
     "id": "E089",
@@ -6926,7 +7136,10 @@
     "gym_availability": "home",
     "requires_coaching": false,
     "high_impact": false,
-    "variant_family": "carry"
+    "variant_family": "carry",
+    "media_slug": "2133-farmers-walk-time",
+    "media_version": 1,
+    "media_source": "wardroom"
   },
   {
     "id": "E090",
@@ -7092,7 +7305,10 @@
     "gym_availability": "home",
     "requires_coaching": false,
     "high_impact": false,
-    "variant_family": "romanian_deadlift"
+    "variant_family": "romanian_deadlift",
+    "media_slug": "1757-dumbbell-single-leg-deadlift",
+    "media_version": 1,
+    "media_source": "wardroom"
   },
   {
     "id": "E092",
@@ -7171,7 +7387,10 @@
     "gym_availability": "standard_gym",
     "requires_coaching": false,
     "high_impact": false,
-    "variant_family": "good_morning"
+    "variant_family": "good_morning",
+    "media_slug": "0044-barbell-good-morning",
+    "media_version": 1,
+    "media_source": "wardroom"
   },
   {
     "id": "E093",
@@ -7325,7 +7544,10 @@
     "gym_availability": "standard_gym",
     "requires_coaching": false,
     "high_impact": false,
-    "variant_family": "biceps_curl"
+    "variant_family": "biceps_curl",
+    "media_slug": "0315-dumbbell-incline-bicep-curl",
+    "media_version": 1,
+    "media_source": "wardroom"
   },
   {
     "id": "E095",
@@ -7469,7 +7691,10 @@
     "gym_availability": "standard_gym",
     "requires_coaching": false,
     "high_impact": false,
-    "variant_family": "triceps_kickback"
+    "variant_family": "triceps_kickback",
+    "media_slug": "0860-cable-kickback",
+    "media_version": 1,
+    "media_source": "wardroom"
   },
   {
     "id": "E097",
@@ -7551,7 +7776,10 @@
     "gym_availability": "standard_gym",
     "requires_coaching": false,
     "high_impact": false,
-    "variant_family": "triceps_extension"
+    "variant_family": "triceps_extension",
+    "media_slug": "1722-cable-overhead-tricep-extension",
+    "media_version": 1,
+    "media_source": "wardroom"
   },
   {
     "id": "E098",
@@ -7630,7 +7858,10 @@
     "gym_availability": "home",
     "requires_coaching": false,
     "high_impact": false,
-    "variant_family": "rear_delt_fly"
+    "variant_family": "rear_delt_fly",
+    "media_slug": "0383-dumbbell-reverse-fly",
+    "media_version": 1,
+    "media_source": "wardroom"
   },
   {
     "id": "E099",
@@ -7702,7 +7933,10 @@
     "gym_availability": "home",
     "requires_coaching": false,
     "high_impact": false,
-    "variant_family": "wrist_curl"
+    "variant_family": "wrist_curl",
+    "media_slug": "0401-dumbbell-seated-palms-up-wrist-curl",
+    "media_version": 1,
+    "media_source": "wardroom"
   },
   {
     "id": "E100",
@@ -7776,7 +8010,10 @@
     "gym_availability": "home",
     "requires_coaching": false,
     "high_impact": false,
-    "variant_family": "reverse_wrist_curl"
+    "variant_family": "reverse_wrist_curl",
+    "media_slug": "0385-dumbbell-reverse-wrist-curl",
+    "media_version": 1,
+    "media_source": "wardroom"
   },
   {
     "id": "E101",
@@ -7936,7 +8173,10 @@
     "variant_family": "push_up",
     "skill_track": "push_up",
     "skill_step": 2,
-    "regression_to": "Wall Push Up"
+    "regression_to": "Wall Push Up",
+    "media_slug": "3785-box-decline-pushup",
+    "media_version": 1,
+    "media_source": "wardroom"
   },
   {
     "id": "E103",
@@ -8022,7 +8262,10 @@
     "skill_track": "push_up",
     "skill_step": 5,
     "regression_to": "Push Up",
-    "progression_to": "Diamond Push Up"
+    "progression_to": "Diamond Push Up",
+    "media_slug": "0279-incline-pushup",
+    "media_version": 1,
+    "media_source": "wardroom"
   },
   {
     "id": "E104",
@@ -8102,7 +8345,10 @@
     "gym_availability": "standard_gym",
     "requires_coaching": false,
     "high_impact": false,
-    "variant_family": "shoulder_press"
+    "variant_family": "shoulder_press",
+    "media_slug": "2137-dumbbell-arnold-press",
+    "media_version": 1,
+    "media_source": "wardroom"
   },
   {
     "id": "E105",
@@ -8180,7 +8426,10 @@
     "gym_availability": "home",
     "requires_coaching": false,
     "high_impact": false,
-    "variant_family": "upright_row"
+    "variant_family": "upright_row",
+    "media_slug": "0437-dumbbell-upright-row",
+    "media_version": 1,
+    "media_source": "wardroom"
   },
   {
     "id": "E106",
@@ -8259,7 +8508,10 @@
     "gym_availability": "home",
     "requires_coaching": false,
     "high_impact": false,
-    "variant_family": "shrug"
+    "variant_family": "shrug",
+    "media_slug": "0406-dumbbell-shrug",
+    "media_version": 1,
+    "media_source": "wardroom"
   },
   {
     "id": "E107",
@@ -8339,7 +8591,10 @@
     "gym_availability": "well_equipped_gym",
     "requires_coaching": false,
     "high_impact": false,
-    "variant_family": "hip_abduction"
+    "variant_family": "hip_abduction",
+    "media_slug": "0597-seated-hip-abduction",
+    "media_version": 1,
+    "media_source": "wardroom"
   },
   {
     "id": "E108",
@@ -8409,7 +8664,10 @@
     "gym_availability": "well_equipped_gym",
     "requires_coaching": false,
     "high_impact": false,
-    "variant_family": "hip_adduction"
+    "variant_family": "hip_adduction",
+    "media_slug": "0598-seated-hip-adduction",
+    "media_version": 1,
+    "media_source": "wardroom"
   },
   {
     "id": "E109",
@@ -8793,7 +9051,10 @@
     "gym_availability": "standard_gym",
     "requires_coaching": false,
     "high_impact": false,
-    "variant_family": "bench_press"
+    "variant_family": "bench_press",
+    "media_slug": "0343-dumbbell-lying-single-arm-press",
+    "media_version": 1,
+    "media_source": "wardroom"
   },
   {
     "id": "E114",
@@ -9101,7 +9362,10 @@
     "gym_availability": "standard_gym",
     "requires_coaching": false,
     "high_impact": false,
-    "variant_family": "chest_fly"
+    "variant_family": "chest_fly",
+    "media_slug": "1269-cable-standing-crossovers",
+    "media_version": 1,
+    "media_source": "wardroom"
   },
   {
     "id": "E118",
@@ -9178,7 +9442,10 @@
     "variant_family": "chest_fly",
     "slot_focus": [
       "Mid Chest"
-    ]
+    ],
+    "media_slug": "0596-seated-fly",
+    "media_version": 1,
+    "media_source": "wardroom"
   },
   {
     "id": "E119",
@@ -9558,7 +9825,10 @@
     "high_impact": false,
     "variant_family": "chin_up",
     "skill_track": "pull_up",
-    "skill_step": 3
+    "skill_step": 3,
+    "media_slug": "1326-chinup",
+    "media_version": 1,
+    "media_source": "wardroom"
   },
   {
     "id": "E124",
@@ -9858,7 +10128,10 @@
     "variant_family": "back_extension",
     "slot_pattern": [
       "hip_dominant"
-    ]
+    ],
+    "media_slug": "1423-reverse-hyper-on-flat-bench",
+    "media_version": 1,
+    "media_source": "wardroom"
   },
   {
     "id": "E128",
@@ -10011,7 +10284,10 @@
     "gym_availability": "standard_gym",
     "requires_coaching": false,
     "high_impact": false,
-    "variant_family": "deadlift"
+    "variant_family": "deadlift",
+    "media_slug": "0074-barbell-rack-pull",
+    "media_version": 1,
+    "media_source": "wardroom"
   },
   {
     "id": "E130",
@@ -10153,7 +10429,10 @@
     "gym_availability": "home",
     "requires_coaching": false,
     "high_impact": false,
-    "variant_family": "sit_up"
+    "variant_family": "sit_up",
+    "media_slug": "0508-janda-situp",
+    "media_version": 1,
+    "media_source": "wardroom"
   },
   {
     "id": "E132",
@@ -10306,7 +10585,10 @@
     "slot_focus": [
       "Core",
       "Core/Obliques"
-    ]
+    ],
+    "media_slug": "0562-landmine-180",
+    "media_version": 1,
+    "media_source": "wardroom"
   },
   {
     "id": "E134",
@@ -10472,7 +10754,10 @@
     "gym_availability": "home",
     "requires_coaching": false,
     "high_impact": false,
-    "variant_family": "crawl"
+    "variant_family": "crawl",
+    "media_slug": "3360-bear-crawl-time",
+    "media_version": 1,
+    "media_source": "wardroom"
   },
   {
     "id": "E136",
@@ -10861,7 +11146,10 @@
     "gym_availability": "well_equipped_gym",
     "requires_coaching": false,
     "high_impact": false,
-    "variant_family": "kettlebell_swing"
+    "variant_family": "kettlebell_swing",
+    "media_slug": "0549-kettlebell-swing",
+    "media_version": 1,
+    "media_source": "wardroom"
   },
   {
     "id": "E141",
@@ -10932,7 +11220,10 @@
     "gym_availability": "well_equipped_gym",
     "requires_coaching": false,
     "high_impact": false,
-    "variant_family": "turkish_get_up"
+    "variant_family": "turkish_get_up",
+    "media_slug": "0551-kettlebell-squat-style-turkish-get-up",
+    "media_version": 1,
+    "media_source": "wardroom"
   },
   {
     "id": "E142",
@@ -11007,7 +11298,10 @@
     "gym_availability": "well_equipped_gym",
     "requires_coaching": false,
     "high_impact": false,
-    "variant_family": "slam"
+    "variant_family": "slam",
+    "media_slug": "1354-medicine-ball-overhead-slam",
+    "media_version": 1,
+    "media_source": "wardroom"
   },
   {
     "id": "E143",
@@ -11710,7 +12004,10 @@
     "gym_availability": "home",
     "requires_coaching": false,
     "high_impact": false,
-    "variant_family": "mobility_full_body"
+    "variant_family": "mobility_full_body",
+    "media_slug": "1471-inchworm",
+    "media_version": 1,
+    "media_source": "wardroom"
   },
   {
     "id": "E152",
@@ -12012,7 +12309,10 @@
     "gym_availability": "home",
     "requires_coaching": false,
     "high_impact": false,
-    "variant_family": "stretch_chest"
+    "variant_family": "stretch_chest",
+    "media_slug": "1167-dynamic-chest-stretch",
+    "media_version": 1,
+    "media_source": "wardroom"
   },
   {
     "id": "E156",
@@ -12466,7 +12766,10 @@
     "gym_availability": "home",
     "requires_coaching": false,
     "high_impact": false,
-    "variant_family": "stretch_calf"
+    "variant_family": "stretch_calf",
+    "media_slug": "1377-calf-stretch-with-hands-against-wall",
+    "media_version": 1,
+    "media_source": "wardroom"
   },
   {
     "id": "E162",
@@ -12980,7 +13283,10 @@
     "gym_availability": "standard_gym",
     "requires_coaching": false,
     "high_impact": false,
-    "variant_family": "pullover"
+    "variant_family": "pullover",
+    "media_slug": "0433-dumbbell-pullover",
+    "media_version": 1,
+    "media_source": "wardroom"
   },
   {
     "id": "E172",
@@ -13057,7 +13363,10 @@
     "variant_family": "side_bend",
     "slot_focus": [
       "Core/Obliques"
-    ]
+    ],
+    "media_slug": "0407-dumbbell-side-bend",
+    "media_version": 1,
+    "media_source": "wardroom"
   },
   {
     "id": "E173",
@@ -13135,7 +13444,10 @@
     "gym_availability": "standard_gym",
     "requires_coaching": false,
     "high_impact": false,
-    "variant_family": "sit_up"
+    "variant_family": "sit_up",
+    "media_slug": "0282-decline-situp",
+    "media_version": 1,
+    "media_source": "wardroom"
   },
   {
     "id": "E174",
@@ -13214,7 +13526,10 @@
     "gym_availability": "home",
     "requires_coaching": false,
     "high_impact": false,
-    "variant_family": "crunch"
+    "variant_family": "crunch",
+    "media_slug": "0274-crunch-floor",
+    "media_version": 1,
+    "media_source": "wardroom"
   },
   {
     "id": "E175",
@@ -13297,7 +13612,10 @@
     "variant_family": "crunch",
     "slot_focus": [
       "Core/Obliques"
-    ]
+    ],
+    "media_slug": "0003-bicycle-crunch",
+    "media_version": 1,
+    "media_source": "wardroom"
   },
   {
     "id": "E176",
@@ -13686,7 +14004,10 @@
     "gym_availability": "standard_gym",
     "requires_coaching": false,
     "high_impact": false,
-    "variant_family": "leg_raise"
+    "variant_family": "leg_raise",
+    "media_slug": "0476-windshield-wiper",
+    "media_version": 1,
+    "media_source": "wardroom"
   },
   {
     "id": "E181",
@@ -14047,7 +14368,10 @@
     "gym_availability": "well_equipped_gym",
     "requires_coaching": false,
     "high_impact": false,
-    "variant_family": "shoulder_press"
+    "variant_family": "shoulder_press",
+    "media_slug": "0540-kettlebell-single-arm-push-press",
+    "media_version": 1,
+    "media_source": "wardroom"
   },
   {
     "id": "E186",
@@ -14200,7 +14524,10 @@
     "gym_availability": "well_equipped_gym",
     "requires_coaching": false,
     "high_impact": false,
-    "variant_family": "row"
+    "variant_family": "row",
+    "media_slug": "0522-kettlebell-alternating-row",
+    "media_version": 1,
+    "media_source": "wardroom"
   },
   {
     "id": "E188",
@@ -14278,7 +14605,10 @@
     "gym_availability": "home",
     "requires_coaching": false,
     "high_impact": false,
-    "variant_family": "squat"
+    "variant_family": "squat",
+    "media_slug": "1004-band-squat",
+    "media_version": 1,
+    "media_source": "wardroom"
   },
   {
     "id": "E189",
@@ -14662,7 +14992,10 @@
     "gym_availability": "home",
     "requires_coaching": false,
     "high_impact": true,
-    "variant_family": "jump"
+    "variant_family": "jump",
+    "media_slug": "0514-jump-squat",
+    "media_version": 1,
+    "media_source": "wardroom"
   },
   {
     "id": "E194",
@@ -15052,7 +15385,10 @@
     ],
     "slot_pattern": [
       "knee_dominant"
-    ]
+    ],
+    "media_slug": "1688-lunge-with-twist",
+    "media_version": 1,
+    "media_source": "wardroom"
   },
   {
     "id": "E199",
@@ -15271,7 +15607,10 @@
     "gym_availability": "home",
     "requires_coaching": false,
     "high_impact": false,
-    "variant_family": "cardio_jog"
+    "variant_family": "cardio_jog",
+    "media_slug": "0685-run-time",
+    "media_version": 1,
+    "media_source": "wardroom"
   },
   {
     "id": "E202",
@@ -15429,7 +15768,10 @@
     "gym_availability": "home",
     "requires_coaching": false,
     "high_impact": true,
-    "variant_family": "warmup_cardio"
+    "variant_family": "warmup_cardio",
+    "media_slug": "3655-walking-high-knees-lunge",
+    "media_version": 1,
+    "media_source": "wardroom"
   },
   {
     "id": "E204",
@@ -16105,7 +16447,10 @@
     "variant_family": "push_up",
     "skill_track": "push_up",
     "skill_step": 1,
-    "progression_to": "Incline Push Up"
+    "progression_to": "Incline Push Up",
+    "media_slug": "0659-wall-pushup",
+    "media_version": 1,
+    "media_source": "wardroom"
   },
   {
     "id": "E213",
@@ -16338,7 +16683,10 @@
     "gym_availability": "home",
     "requires_coaching": false,
     "high_impact": false,
-    "variant_family": "stretch_hamstring"
+    "variant_family": "stretch_hamstring",
+    "media_slug": "3212-basic-toe-touch",
+    "media_version": 1,
+    "media_source": "wardroom"
   },
   {
     "id": "E216",
@@ -16501,7 +16849,10 @@
     "gym_availability": "home",
     "requires_coaching": false,
     "high_impact": false,
-    "variant_family": "stretch_shoulder"
+    "variant_family": "stretch_shoulder",
+    "media_slug": "0643-overhead-tricep-stretch",
+    "media_version": 1,
+    "media_source": "wardroom"
   },
   {
     "id": "E218",
@@ -16897,7 +17248,10 @@
     "variant_family": "glute_bridge",
     "slot_pattern": [
       "hip_dominant"
-    ]
+    ],
+    "media_slug": "0668-rear-decline-bridge",
+    "media_version": 1,
+    "media_source": "wardroom"
   },
   {
     "name": "B-Stance RDL",
@@ -17050,7 +17404,10 @@
     "gym_availability": "standard_gym",
     "requires_coaching": false,
     "high_impact": false,
-    "variant_family": "pull_through"
+    "variant_family": "pull_through",
+    "media_slug": "0196-cable-pull-through",
+    "media_version": 1,
+    "media_source": "wardroom"
   },
   {
     "name": "Frog Pumps",
@@ -17355,7 +17712,10 @@
     "gym_availability": "standard_gym",
     "requires_coaching": false,
     "high_impact": false,
-    "variant_family": "romanian_deadlift"
+    "variant_family": "romanian_deadlift",
+    "media_slug": "0085-barbell-romanian-deadlift",
+    "media_version": 1,
+    "media_source": "wardroom"
   },
   {
     "name": "Standing Single Leg Curl",
@@ -17503,7 +17863,10 @@
     "gym_availability": "standard_gym",
     "requires_coaching": false,
     "high_impact": false,
-    "variant_family": "bench_press"
+    "variant_family": "bench_press",
+    "media_slug": "0301-dumbbell-decline-bench-press",
+    "media_version": 1,
+    "media_source": "wardroom"
   },
   {
     "name": "Incline Dumbbell Fly",
@@ -17579,7 +17942,10 @@
     "gym_availability": "standard_gym",
     "requires_coaching": false,
     "high_impact": false,
-    "variant_family": "chest_fly"
+    "variant_family": "chest_fly",
+    "media_slug": "0319-dumbbell-incline-fly",
+    "media_version": 1,
+    "media_source": "wardroom"
   },
   {
     "name": "Deficit Push-Up",
@@ -17800,7 +18166,10 @@
     "gym_availability": "standard_gym",
     "requires_coaching": false,
     "high_impact": false,
-    "variant_family": "lateral_raise"
+    "variant_family": "lateral_raise",
+    "media_slug": "0584-lateral-raise",
+    "media_version": 1,
+    "media_source": "wardroom"
   },
   {
     "name": "Cable Front Raise",
@@ -17876,7 +18245,10 @@
     "gym_availability": "standard_gym",
     "requires_coaching": false,
     "high_impact": false,
-    "variant_family": "front_raise"
+    "variant_family": "front_raise",
+    "media_slug": "0161-cable-front-raise",
+    "media_version": 1,
+    "media_source": "wardroom"
   },
   {
     "name": "Egyptian Lateral Raise",
@@ -18032,7 +18404,10 @@
     "high_impact": false,
     "variant_family": "dip",
     "skill_track": "dip",
-    "skill_step": 1
+    "skill_step": 1,
+    "media_slug": "0812-bench-tricep-dip",
+    "media_version": 1,
+    "media_source": "wardroom"
   },
   {
     "name": "Dumbbell Kickback",
@@ -18108,7 +18483,10 @@
     "gym_availability": "home",
     "requires_coaching": false,
     "high_impact": false,
-    "variant_family": "triceps_kickback"
+    "variant_family": "triceps_kickback",
+    "media_slug": "0333-dumbbell-kickback",
+    "media_version": 1,
+    "media_source": "wardroom"
   },
   {
     "name": "Rope Hammer Curl",
@@ -18186,7 +18564,10 @@
     "gym_availability": "standard_gym",
     "requires_coaching": false,
     "high_impact": false,
-    "variant_family": "hammer_curl"
+    "variant_family": "hammer_curl",
+    "media_slug": "0165-cable-hammer-curl",
+    "media_version": 1,
+    "media_source": "wardroom"
   },
   {
     "name": "High Cable Curl",
@@ -18333,7 +18714,10 @@
     "gym_availability": "standard_gym",
     "requires_coaching": false,
     "high_impact": false,
-    "variant_family": "row"
+    "variant_family": "row",
+    "media_slug": "3017-barbell-pendlay-row",
+    "media_version": 1,
+    "media_source": "wardroom"
   },
   {
     "name": "Machine High Row",
@@ -18405,7 +18789,10 @@
     "gym_availability": "standard_gym",
     "requires_coaching": false,
     "high_impact": false,
-    "variant_family": "lat_pulldown"
+    "variant_family": "lat_pulldown",
+    "media_slug": "0581-high-row",
+    "media_version": 1,
+    "media_source": "wardroom"
   },
   {
     "name": "Machine Low Row",
@@ -18557,7 +18944,10 @@
     "gym_availability": "standard_gym",
     "requires_coaching": false,
     "high_impact": false,
-    "variant_family": "pullover"
+    "variant_family": "pullover",
+    "media_slug": "0238-cable-straight-arm-pulldown",
+    "media_version": 1,
+    "media_source": "wardroom"
   },
   {
     "name": "Captain's Chair Leg Raise",
@@ -18635,7 +19025,10 @@
     "gym_availability": "standard_gym",
     "requires_coaching": false,
     "high_impact": false,
-    "variant_family": "leg_raise"
+    "variant_family": "leg_raise",
+    "media_slug": "2963-captains-chair-straight-leg-raise",
+    "media_version": 1,
+    "media_source": "wardroom"
   },
   {
     "name": "Flutter Kicks",
@@ -18716,7 +19109,10 @@
     "gym_availability": "home",
     "requires_coaching": false,
     "high_impact": false,
-    "variant_family": "leg_raise"
+    "variant_family": "leg_raise",
+    "media_slug": "0459-flutter-kicks",
+    "media_version": 1,
+    "media_source": "wardroom"
   },
   {
     "name": "Side Plank",
@@ -19119,7 +19515,10 @@
     "gym_availability": "home",
     "requires_coaching": false,
     "high_impact": false,
-    "variant_family": "inverted_row"
+    "variant_family": "inverted_row",
+    "media_slug": "3165-bodyweight-towel-standing-row",
+    "media_version": 1,
+    "media_source": "wardroom"
   },
   {
     "id": "E256",
@@ -19359,7 +19758,10 @@
     "gym_availability": "home",
     "requires_coaching": false,
     "high_impact": false,
-    "variant_family": "calf_raise"
+    "variant_family": "calf_raise",
+    "media_slug": "0417-dumbbell-standing-calf-raise",
+    "media_version": 1,
+    "media_source": "wardroom"
   },
   {
     "id": "E259",
@@ -19440,7 +19842,10 @@
     "gym_availability": "home",
     "requires_coaching": false,
     "high_impact": false,
-    "variant_family": "split_squat"
+    "variant_family": "split_squat",
+    "media_slug": "2368-split-squats",
+    "media_version": 1,
+    "media_source": "wardroom"
   },
   {
     "id": "E260",
@@ -19522,7 +19927,10 @@
     "gym_availability": "standard_gym",
     "requires_coaching": false,
     "high_impact": false,
-    "variant_family": "incline_press"
+    "variant_family": "incline_press",
+    "media_slug": "0314-dumbbell-incline-bench-press",
+    "media_version": 1,
+    "media_source": "wardroom"
   },
   {
     "id": "E261",
@@ -22005,7 +22413,10 @@
     "gym_availability": "home",
     "requires_coaching": false,
     "high_impact": false,
-    "variant_family": "glute_bridge"
+    "variant_family": "glute_bridge",
+    "media_slug": "3645-single-leg-bridge-with-outstretched-leg",
+    "media_version": 1,
+    "media_source": "wardroom"
   },
   {
     "id": "E292",
