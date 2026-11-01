@@ -13,8 +13,8 @@ status: scaffold
 
 Every exercise has: coaching_cues, common_mistakes, breathing_cue, warmup_protocol, pro_tip, MET_value, logging_type, difficulty, suitable_for, regression/progression links, image URLs.
 
-## Media fields (library v16, optional)
-Three optional keys on the 617 rows that have a Wardroom animation (see `docs/operations/EXERCISE_MEDIA.md`). A row carries **all three or none**; absent, never `null`; always the last three keys, in this order. Nothing in the app reads them until Batch M2 (OI-440).
+## Media fields (introduced in library v16, 137 old rows added in v17; optional)
+Three optional keys on the 754 rows that have a Wardroom animation: the 617 new rows that have one (the other 12 new rows have none) and, since the OI-443 release, 137 old `E` rows (see `docs/operations/EXERCISE_MEDIA.md`). A row carries **all three or none**; absent, never `null`; always the last three keys, in this order. Since Batch M2a (OI-440) the app reads them through `resolveMedia`.
 | Field | Type | Purpose |
 |-------|------|---------|
 | `media_slug` | string | `<4-digit gif number>-<kebab(name)>`, for example `0103-barbell-standing-ab-rollout`. Two rows with one gif number share one slug. |

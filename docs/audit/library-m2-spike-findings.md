@@ -12,7 +12,7 @@ The founder has not supplied a QA login or a phone in chat, so everything that n
 | S3b | CORS answer on `POST /object/sign` (web) | UNOBSERVED | Only matters if S3 is later seen blocked |
 | S4 | Status for a bad token versus an absent object | UNOBSERVED | Task 6 keeps one retry rule for all non-200 answers (no narrowing) |
 | S5 | Response headers (`cache-control`, `etag`, `content-length`) | Partly known from M1: the signed response carries `ETag`, `Expires`, `Last-Modified`, `Accept-Ranges`, `Access-Control-Allow-Origin: *`, no `Cache-Control` (EXERCISE_MEDIA.md section 8). The authenticated-route headers for a user token are UNOBSERVED | The app caches by object name on the device, so the header is not load-bearing |
-| S6 | Memory and first-frame time for the worst-case file `3214-arms-apart-circular-toe-touch` (48 frames) | UNOBSERVED (`blocked_on_user`: needs a phone) | Task 9 builds with the defaults (`kMaxAnimatedDecodeWidth` 720, both switches true); the 360 re-measurement under the S6 rule becomes part of Task 10 Step 8 |
+| S6 | Memory and first-frame time for the worst-case files `3214-arms-apart-circular-toe-touch` (48 frames) and, since the OI-443 release (2026-11-01), `0551-kettlebell-squat-style-turkish-get-up` (54 frames, 999,800 bytes, the largest file in the bucket; row E141) | UNOBSERVED (`blocked_on_user`: needs a phone) | Task 9 builds with the defaults (`kMaxAnimatedDecodeWidth` 720, both switches true); the 360 re-measurement under the S6 rule becomes part of Task 10 Step 8 |
 | S7 | RIFF size rule and ANIM loop count | **OBSERVED, see below** | Store predicate keeps the full RIFF size check; loop count is infinite (C10 holds) |
 | S8 | Web store byte type and persistence across a reload (`Hive.openLazyBox`, 988,000-byte `Uint8List`) | UNOBSERVED here (needs a Flutter web run) | The web store coerces any `List<int>` (Task 5); persistence is checked against the real web store at Task 10 Step 8; until then the "second open works offline" claim on web is written as unverified |
 
@@ -23,7 +23,7 @@ Script: a one-off Node reader over every `*.webp` in `.../wardroom customized gi
 - Files scanned: 924. RIFF-size violations: **0**. Non-RIFF files: **0**.
 - Loop count: **0 (infinite) on all 924**. Non-zero loop counts: **0**.
 - Files with more than 24 frames: 10 of the 924.
-- Largest file in the whole folder: 999,800 bytes (`0551_Kettlebell_Squat_Style_Turkish_Get_Up_wardroom_720.webp`), under the 1,500,000 byte ceiling the store uses. The largest of the 616 mapped files is 987,558 (EXERCISE_MEDIA.md).
+- Largest file in the whole folder: 999,800 bytes (`0551_Kettlebell_Squat_Style_Turkish_Get_Up_wardroom_720.webp`), under the 1,500,000 byte ceiling the store uses. The largest of the 616 mapped files was 987,558 at this 2026-10-31 reading, before the OI-443 release; of the 753 mapped now it is `0551`, 999,800 (EXERCISE_MEDIA.md section 3).
 
 Verdict: S7 violations are 0, so Task 5 and Task 6 keep the full predicate (length, magic, size field).
 
