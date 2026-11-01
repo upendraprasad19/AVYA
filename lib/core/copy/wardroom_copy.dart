@@ -82,9 +82,6 @@ class WardroomCopy {
   /// TalkBack label of the trophy on a logged exercise row (OI-371).
   static const personalRecordSemantics = 'Personal record';
 
-  /// Today's Workout section eyebrow.
-  static const trainTodayWorkoutEyebrow = "TODAY'S WORKOUT";
-
   /// Today's Workout CTA.
   static const trainStartWorkoutCta = '▸ START WORKOUT →';
 
@@ -455,11 +452,6 @@ class WardroomCopy {
       'One answer shapes everything: your plan, targets, and coaching tone.';
 
   /// Goal options (key + title + subtitle).
-  static const onboardingGoalRecomp = [
-    'A',
-    'Recompose',
-    'Lose fat, build lean mass at the same time.',
-  ];
   static const onboardingGoalBuild = [
     'B',
     'Build muscle',
@@ -474,11 +466,6 @@ class WardroomCopy {
     'D',
     'Maintain',
     'Hold present composition — consistency & habit.',
-  ];
-  static const onboardingGoalPerform = [
-    'E',
-    'Perform',
-    'Sport-first: strength, speed, endurance ceilings.',
   ];
 
   static const onboardingBackCta = 'BACK';

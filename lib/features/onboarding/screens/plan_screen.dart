@@ -44,7 +44,7 @@ class _PlanScreenState extends ConsumerState<PlanScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final goal = widget.data['goal'] as String? ?? 'recomp';
+    final goal = widget.data['goal'] as String? ?? 'build_muscle';
     final goalLabel = _goalLabel(goal);
     final targets = _computeTargets();
 
@@ -414,7 +414,7 @@ class _PlanScreenState extends ConsumerState<PlanScreen> {
       // because the mapping is 1:1 and no extra user question would
       // improve fidelity.
       //   start_date → 'this_monday' (most-picked option in legacy flow).
-      final goal = widget.data['goal'] as String? ?? 'recomp';
+      final goal = widget.data['goal'] as String? ?? 'build_muscle';
       final weight = (widget.data['weight_kg'] as num?)?.toDouble() ?? 75.0;
       final activityLevel =
           (widget.data['activity_level'] as String?) ?? 'moderate';
@@ -589,7 +589,7 @@ class _PlanScreenState extends ConsumerState<PlanScreen> {
     final gender = (widget.data['sex'] as String?) ?? 'male';
     final pace =
         (widget.data['pace_preference'] as String?) ?? 'balanced';
-    final goal = widget.data['goal'] as String? ?? 'recomp';
+    final goal = widget.data['goal'] as String? ?? 'build_muscle';
     final mappedGoal = _mapGoal(goal);
     // Obs#6 (f1b6d4): derive activityLevel EXACTLY as
     // OnboardingNotifier.completeOnboarding does — resolveActivityLevel from the

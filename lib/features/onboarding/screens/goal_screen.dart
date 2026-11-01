@@ -15,8 +15,9 @@ import 'package:icanbefitter/shared/widgets/wardroom/wardroom.dart';
 ///   33% gold fill + right-aligned "GOAL" caption.
 /// * Question header — mono "QUESTION I" eyebrow + Fraunces 30 w500
 ///   headline with italic-gold "do?" + DM Sans 13 dim helper copy.
-/// * 5 goal cards (WardRadioRow) — Build / Recompose / Cut / Maintain
-///   / Perform. Selected: `cardTop` bg + gold border + 3-px gold
+/// * 3 goal cards (WardRadioRow) — Build / Cut / Maintain (founder call
+///   2026-11-01: Recompose + Perform left the picker; their `FitnessGoals`
+///   tokens stay for restore, legacy chat onboarding and the AI coach). Selected: `cardTop` bg + gold border + 3-px gold
 ///   left border + solid gold dot inside the radio circle.
 /// * CTA row — "BACK" outline + "CONTINUE →" gold primary.
 ///
@@ -44,20 +45,14 @@ class GoalScreen extends StatefulWidget {
 class _GoalScreenState extends State<GoalScreen> {
   // Build is the pre-selected default (`_goals.first`) \u2014 matches the muscle-gain
   // wedge thesis. Recompose was the old default but silently produced
-  // maintenance calories + the lowest protein (F19); it stays as a deliberate
-  // choice, now a real first-class profile (see FitnessGoals).
+  // maintenance calories + the lowest protein (F19); it is no longer offered
+  // (2026-11-01) but remains a real first-class profile (see FitnessGoals).
   static const _goals = [
     _GoalOption(
       key: 'build_muscle',
       code: 'BUILD',
       title: 'Build',
       subtitle: 'Put on clean muscle',
-    ),
-    _GoalOption(
-      key: 'recomp',
-      code: 'RECOMP',
-      title: 'Recompose',
-      subtitle: 'Drop body fat \u00B7 hold strength',
     ),
     _GoalOption(
       key: 'lose_fat',
@@ -71,12 +66,6 @@ class _GoalScreenState extends State<GoalScreen> {
       title: 'Maintain',
       subtitle: 'Hold the line \u00B7 feel your best',
     ),
-    _GoalOption(
-      key: 'strength',
-      code: 'PERFORM',
-      title: 'Perform',
-      subtitle: 'Sport \u00B7 power \u00B7 output',
-    ),
   ];
 
   late String _selected;
@@ -84,7 +73,14 @@ class _GoalScreenState extends State<GoalScreen> {
   @override
   void initState() {
     super.initState();
-    _selected = widget.initialGoal ?? _goals.first.key;
+    // A legacy `recomp` / `strength` arriving in the route extras (in-progress
+    // tester, chat flow) has no card any more: fall back to the pre-selected
+    // default so a card is always selected and CONTINUE never forwards a hidden
+    // goal.
+    final initial = widget.initialGoal;
+    _selected = (initial != null && _goals.any((g) => g.key == initial))
+        ? initial
+        : _goals.first.key;
   }
 
   @override

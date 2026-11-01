@@ -55,36 +55,22 @@ void main() {
     final hero = File('lib/features/train/screens/train/hero_cards.dart')
         .readAsStringSync();
 
-    test('Train deployment banner is phase-relative (no hardcoded FOUNDATION '
-        'or "OF 12")', () {
-      // UPDATED 2026-08-30 (diagnose b7f1c8): the banner's inline ternary was
-      // extracted into the pure formatter `deploymentEyebrowLabel`
-      // (lib/core/utils/hold_week_labels.dart), so the phase name and the
-      // "WK n OF 4" literal now live there. The banner's job is to pass the
-      // real per-account values IN — which is the half this test exists to
-      // pin, and which the extraction made checkable rather than weaker:
-      // the deployment NUMBER was a hardcoded '01' for every account at every
-      // phase until this batch, and no test here could see it because the
-      // grep only ever looked at the phase name and week.
+    test('Train screen has no deployment eyebrow (removed 2026-11-01) and no '
+        'hardcoded FOUNDATION / "OF 12" banner', () {
+      // REWRITTEN 2026-11-01: the "DEPLOYMENT NN · PHASE · WK n OF 4" eyebrow was
+      // removed from the Train screen (founder call — it cost a row), and its pure
+      // formatter `deploymentEyebrowLabel` was deleted with it. What this test
+      // always protected — no hardcoded "DEPLOYMENT 01 — FOUNDATION" / "OF 12"
+      // banner — now holds because no such banner exists at all.
       final labels = _strip(
           File('lib/core/utils/hold_week_labels.dart').readAsStringSync());
 
-      expect(banner.contains('deploymentEyebrowLabel('), isTrue,
-          reason: 'the eyebrow must route through the extracted formatter');
-      expect(banner.contains('phase: plan.phase'), isTrue,
-          reason: 'the DEPLOYMENT number must come from the real phase — it '
-              'was a hardcoded "01" for every account until diagnose b7f1c8');
-      expect(banner.contains('phaseName: plan.phaseName'), isTrue);
-      expect(banner.contains('currentWeek: plan.currentWeek'), isTrue);
-
-      expect(labels.contains(r'WK $currentWeek OF 4'), isTrue,
-          reason: 'the week-within-phase counter must still be 1-4, not a '
-              '12-week program week');
-      expect(labels.contains('DEPLOYMENT 01 — FOUNDATION'), isFalse,
-          reason: 'the hardcoded FOUNDATION / OF 12 banner must be gone');
+      expect(banner.contains('deploymentEyebrowLabel'), isFalse);
       expect(banner.contains('DEPLOYMENT 01'), isFalse,
           reason: 'no hardcoded deployment number may survive in the screen');
       expect(banner.contains('OF 12)'), isFalse);
+      expect(labels.contains('DEPLOYMENT 01 — FOUNDATION'), isFalse,
+          reason: 'the hardcoded FOUNDATION / OF 12 banner must be gone');
     });
 
     test('Roadmap header uses the program week (not the 1-4 phase week)', () {

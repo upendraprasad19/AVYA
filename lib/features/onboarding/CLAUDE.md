@@ -52,9 +52,13 @@ Welcome       (/onboarding)            → sets no state, just CTA           (un
                                           + restoreFromCloud() in parallel
    ↓ (no row in user_profile → new user)
 Mission Brief (/onboarding/mission-brief) → founder photo + founder-locked
-                                            note (injury/comeback story +
-                                            "No one is coming to save you"
-                                            closer; Unit 5 2026-06-14). The
+                                            note ("Welcome aboard, Recruit." →
+                                            "AVYA is the structure of military
+                                            training…" → "No one is coming to
+                                            save you" closer; shortened
+                                            2026-11-01 — the injury story and
+                                            "Fourteen years" paragraphs are
+                                            gone). The
                                             Instagram CTA was REMOVED (founder
                                             call — acquisition friction on the
                                             trust-building first screen).
@@ -62,7 +66,8 @@ Mission Brief (/onboarding/mission-brief) → founder photo + founder-locked
    ↓
 Identity      (/onboarding/identity)   → full_name, date_of_birth, sex     (01 · 05)
    ↓
-Goal          (/onboarding/goal)       → primary_goal                      (02 · 05)
+Goal          (/onboarding/goal)       → primary_goal: Build / Cut / Maintain
+                                         only (3 cards, 2026-11-01)         (02 · 05)
    ↓
 Stats         (/onboarding/stats)      → current_weight_kg, target_weight_kg,
                                          height_cm, body_fat_pct,
@@ -104,6 +109,8 @@ Plan          (/onboarding/plan)       → "REPORT FOR DUTY" — commits via
   **no premature provider commits.** The notifier only runs once, on the final tap. Each
   screen spreads the incoming extras (`...widget.initial`) into its outgoing extras so
   every field captured upstream survives to Plan.
+- **Goal screen = 3 cards (2026-11-01, founder call).** Build (`build_muscle`), Cut (`lose_fat`), Maintain (`general_fitness`). `recompose` / `strength` stay in `FitnessGoals` (restore, legacy chat onboarding, AI coach switch-goal) and in `plan_screen._mapGoal`; the goal-token gate (`scripts/check_goal_token_exhaustiveness.dart`, logic in `goal_token_exhaustiveness_lib.dart`) takes them via the narrow `kLegacyReachableOnlyGoalTokens` allowlist (a stale entry that IS card-reachable fails). A legacy `recomp`/`strength` route extra falls back to Build (`GoalScreen.initState`); the `?? 'recomp'` fallbacks in `plan_screen` / `app_router` are now `'build_muscle'`.
+- **Target weight is validated against the goal** (`target_weight_check.dart`, pure): Cut strictly below current, Build strictly above, Maintain ±3.0 kg inclusive, in integer tenths (float trap 78.3−75.3). Blank/NaN → `missing`; `recomp`/`strength`/unknown goals have no rule. `StatsScreen._onCalibrate` validates the RAW parsed value after the weight/height guard and before the body-fat snackbar, and shows a dismissable popup (focus returns to TARGET). The target seed (`seedTargetWeight`) reseeds when the stored target was seeded for a different goal: both Stats exits write `seeded_for_goal`; BACK writes an explicit `target_weight_kg: null` when the field is blank (an absent key would let the `...widget.initial` spread resurrect a stale value).
 - **Sex moved from Stats to Identity.** Stats no longer shows the 3-pill sex selector.
 - **Age dropped entirely.** `date_of_birth` (captured on Identity via date picker, min age
   13) is the canonical field. `plan_screen` computes `age` on the fly for `BmrCalculator`;
@@ -167,10 +174,14 @@ Plan          (/onboarding/plan)       → "REPORT FOR DUTY" — commits via
 - **Details screen is now ALL chip rows** (APK-test-2-batch / Q8, supersedes APK-test-1-batch
   fade-row layout; Ship 3 / U5 added the 5th row). Sections render as horizontal chip rows:
   Experience (3 chips: Beginner / Intermediate / Advanced), Pace (3 chips: Steady / Balanced /
-  Aggressive), Days/Week (4 chips: 3 / 4 / 5 / 6), Equipment (2×2 grid: Bodyweight / Dumbbells /
-  Basic Gym / Full Gym — labels too long for single row at 360 dp), and **Injuries** (multi-select
-  `Wrap`: No injuries + the 9 canonical tokens from `InjuryVocab.chipTokens`, pre-selected "No
-  injuries"). Selected chip = gold-fill + black
+  Aggressive), Days/Week (4 chips: 3 / 4 / 5 / 6), Equipment (**dropdown** since 2026-11-01: Bodyweight / Dumbbells /
+  Basic Gym / Full Gym, **Basic Gym preselected in onboarding only** via `kOnboardingDefaultEquipment`
+  — the shared `kDefaultEquipmentAccess` stays `bodyweight`, diagnose d3a8f5, and the seed is written
+  as a typed local + ternary because `equipment_access_default_test.dart` bans the
+  `['equipment_access'] ?? '<literal>'` shape across `lib/`), and **Injuries** (a collapsed "No
+  injuries" row that expands in place to the multi-select `Wrap`: No injuries + the 9 canonical tokens
+  from `InjuryVocab.chipTokens`; a pre-existing real selection opens expanded). The collapsed screen is
+  436 dp of content (measured with real DM Sans) so it fits 360×640 without scrolling. Selected chip = gold-fill + black
   w700 + opacity 1.0. Unselected = transparent + textGhost border + textDim text + opacity
   0.55. Cross-fades 150 ms on tap. Description line below each row updates on selection.
   Defaults pre-selected (Intermediate / Balanced / 4 / Basic Gym) so CONTINUE always works.
