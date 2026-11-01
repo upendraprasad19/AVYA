@@ -475,19 +475,15 @@ void main() {
     });
   });
 
-  group('D1 — the deployment banner drops the week counter while holding', () {
-    // UPDATED 2026-08-30 (diagnose b7f1c8). The banner's inline ternary was
-    // extracted into the pure formatter `deploymentEyebrowLabel`
-    // (lib/core/utils/hold_week_labels.dart) — the same extraction this repo
-    // already applied to the five sibling formatters in that file, after a
-    // B-pass inverted an inlined ternary and all 16 tests still passed.
-    //
-    // These two tests keep their ORIGINAL job (both arms exist, and holding
-    // drops the week counter) but now assert it where the logic lives. The
-    // exact rendered strings are additionally pinned behaviourally, per arm,
-    // in test/contracts/hold_week_labels_test.dart's `deploymentEyebrowLabel`
-    // group — which a source-grep cannot do, and which is why the extraction
-    // is a strengthening rather than a relocation.
+  group('D1 — the Train screen carries NO deployment eyebrow; the hold state '
+      'reaches the hero card', () {
+    // REWRITTEN 2026-11-01 (founder call: the "DEPLOYMENT NN · PHASE · WK n OF 4"
+    // eyebrow cost a row of the Train screen and was removed, so the pure
+    // formatter `deploymentEyebrowLabel` it routed through was deleted with it
+    // rather than left as dead code). What this group protected — no week counter
+    // may print under the HOLDING pill — now holds trivially because no counter
+    // prints at all; the hold state still has to reach the hero card, which keeps
+    // its accent "HOLD WEEK" identity.
     final banner = File('lib/features/train/screens/train/screen.dart')
         .readAsStringSync()
         .replaceAll(RegExp(r'/\*.*?\*/', dotAll: true), '')
@@ -497,31 +493,27 @@ void main() {
         .replaceAll(RegExp(r'/\*.*?\*/', dotAll: true), '')
         .replaceAll(RegExp(r'//[^\n]*'), '');
 
-    test('the banner delegates to the pure formatter, hold-state included', () {
-      expect(banner.contains('deploymentEyebrowLabel('), isTrue,
-          reason: 'the eyebrow must route through the extracted formatter, '
-              'not re-inline a ternary a source-grep cannot verify');
-      expect(banner.contains('isHolding: holdStatus.isHolding'), isTrue,
-          reason: 'the formatter can only drop the week counter while '
-              'holding if the screen actually passes the hold state in');
+    test('no DEPLOYMENT eyebrow and no WK n OF 4 counter on the Train screen', () {
+      expect(banner.contains('deploymentEyebrowLabel'), isFalse);
+      expect(banner.contains('DEPLOYMENT'), isFalse,
+          reason: 'the deployment eyebrow was removed from the Train screen');
+      expect(labels.contains('deploymentEyebrowLabel'), isFalse,
+          reason: 'the formatter had one caller; it was deleted, not orphaned');
+      expect(labels.contains(r'WK $currentWeek OF 4'), isFalse);
     });
 
-    test('holding arm renders the phase WITHOUT a week counter', () {
-      expect(labels.contains('deploymentEyebrowLabel('), isTrue,
-          reason: 'the formatter must exist in hold_week_labels.dart');
-      // The holding arm returns the deployment+phase segment ALONE; only the
-      // non-holding arm appends the week counter.
-      final holdingArm =
-          RegExp(r'isHolding\s*\?\s*deployment\s*:', multiLine: true);
-      expect(holdingArm.hasMatch(labels), isTrue,
-          reason: 'a hold week sits OUTSIDE the phase 4 weeks — no honest '
-              '"WK n OF 4" exists for it; the HOLDING pill owns the identity');
-    });
-
-    test('non-holding arm still carries the pinned WK n OF 4 literal', () {
-      // phase_relative_week_label_test.dart greps for this same string, now
-      // at its post-extraction home.
-      expect(labels.contains(r'WK $currentWeek OF 4'), isTrue);
+    test('the hold state still reaches the hero card (HOLD WEEK identity)', () {
+      // Pinned on the hero-card CALL specifically — a bare
+      // `isHolding: holdStatus.isHolding` elsewhere on the screen must not be
+      // able to satisfy this.
+      expect(
+        RegExp(r'_buildTodayHeroCard\([^;]*?isHolding:\s*holdStatus\.isHolding',
+                dotAll: true)
+            .hasMatch(banner),
+        isTrue,
+        reason: 'without the hold state the hero card cannot show its HOLD WEEK '
+            'tag nor read the date-keyed hold row',
+      );
     });
   });
 

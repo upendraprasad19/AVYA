@@ -23,7 +23,8 @@ import '../providers/diet_plan_provider.dart';
 import '../services/meal_slot_inference.dart';
 import '../widgets/todays_meals_card.dart';
 import '../widgets/weekly_chart_card.dart';
-import '../widgets/hydration_card.dart';
+import '../widgets/hydration_sheet.dart';
+import '../widgets/log_action_row.dart';
 import '../widgets/your_foods_section.dart';
 import '../widgets/log_food_sheet.dart';
 
@@ -241,11 +242,12 @@ class _NutritionScreenState extends ConsumerState<NutritionScreen>
     // APK Test #3 / Plan D layout. Top → bottom:
     //   1. TODAY'S SUMMARY (existing — calorie ring + macro bars +
     //      inline projection italic)
-    //   2. + LOG FOOD CTA (new gold button → showLogFoodSheet)
-    //   3. HYDRATION & STATUS combined card (new HydrationCard)
-    //   4. TODAY'S MEALS (existing TodaysMealsCard, hoisted up)
-    //   5. INSIGHTS & TRENDS (existing WeeklyChartCard pair)
-    //   6. YOUR FOODS (new YourFoodsSection)
+    //   2. LOG FOOD | LOG HYDRATION buttons (gold → showLogFoodSheet, outlined →
+    //      showHydrationSheet; the hydration card + urine status live in that
+    //      sheet since 2026-11-01 so the logged meals stay in view)
+    //   3. TODAY'S MEALS (existing TodaysMealsCard, hoisted up)
+    //   4. INSIGHTS & TRENDS (existing WeeklyChartCard pair)
+    //   5. YOUR FOODS (new YourFoodsSection)
     return ListView(
       padding: EdgeInsets.zero,
       children: [
@@ -262,23 +264,18 @@ class _NutritionScreenState extends ConsumerState<NutritionScreen>
         ),
         const SizedBox(height: 14),
 
-        // 2. + LOG FOOD CTA ──────────────────────────────────────
+        // 2. LOG FOOD | LOG HYDRATION ──────────────────────────────────────
         Padding(
           padding: const EdgeInsets.symmetric(
               horizontal: AppSpacing.screenPadding),
-          child: _buildLogFoodCta(),
+          child: LogActionRow(
+            onLogFood: () => showLogFoodSheet(context),
+            onLogHydration: () => showHydrationSheet(context),
+          ),
         ),
         const SizedBox(height: 14),
 
-        // 3. HYDRATION & STATUS ───────────────────────────────────
-        Padding(
-          padding: const EdgeInsets.symmetric(
-              horizontal: AppSpacing.screenPadding),
-          child: const HydrationCard(),
-        ),
-        const SizedBox(height: 14),
-
-        // 4. TODAY'S MEALS ────────────────────────────────────────
+        // 3. TODAY'S MEALS ────────────────────────────────────────
         _sectionLabel("TODAY'S MEALS"),
         Padding(
           padding: const EdgeInsets.symmetric(
@@ -298,7 +295,7 @@ class _NutritionScreenState extends ConsumerState<NutritionScreen>
         ),
         const SizedBox(height: 14),
 
-        // 5. INSIGHTS & TRENDS ────────────────────────────────────
+        // 4. INSIGHTS & TRENDS ────────────────────────────────────
         Padding(
           padding: const EdgeInsets.symmetric(
               horizontal: AppSpacing.screenPadding),
@@ -306,52 +303,10 @@ class _NutritionScreenState extends ConsumerState<NutritionScreen>
         ),
         const SizedBox(height: 14),
 
-        // 6. YOUR FOODS ──────────────────────────────────────────
+        // 5. YOUR FOODS ──────────────────────────────────────────
         const YourFoodsSection(),
         const SizedBox(height: 24),
       ],
-    );
-  }
-
-  /// Full-width gold-accent CTA opening the LogFoodSheet (5 modes).
-  ///
-  /// Replaces the previous flat split of AI input + SCAN peer + Search
-  /// + Cart + Barcode rows. One button, one tap, one decision.
-  Widget _buildLogFoodCta() {
-    return GestureDetector(
-      onTap: () => showLogFoodSheet(context),
-      child: Container(
-        width: double.infinity,
-        padding: const EdgeInsets.symmetric(vertical: 14),
-        decoration: BoxDecoration(
-          color: AppColors.accent,
-          borderRadius: BorderRadius.circular(AppRadius.sharp),
-          boxShadow: [
-            BoxShadow(
-              color: AppColors.accent.withValues(alpha: 0.20),
-              blurRadius: 18,
-              offset: const Offset(0, 4),
-            ),
-          ],
-        ),
-        alignment: Alignment.center,
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(Icons.add, color: AppColors.bgDeep, size: 18),
-            const SizedBox(width: 8),
-            Text(
-              '+ LOG FOOD',
-              style: AppTypography.mono.copyWith(
-                color: AppColors.bgDeep,
-                fontSize: 13,
-                letterSpacing: 2,
-                fontWeight: FontWeight.w800,
-              ),
-            ),
-          ],
-        ),
-      ),
     );
   }
 

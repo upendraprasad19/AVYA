@@ -281,7 +281,7 @@ class AppRouter {
         name: 'onboardingStats',
         pageBuilder: (context, state) {
           final extra = state.extra as Map<String, dynamic>? ?? const {};
-          final goal = extra['goal'] as String? ?? 'recomp';
+          final goal = extra['goal'] as String? ?? 'build_muscle';
           return CustomTransitionPage(
             key: state.pageKey,
             child: StatsScreen(

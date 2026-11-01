@@ -41,42 +41,41 @@ extension _HeroCards on _TrainScreenState {
     return Padding(
       padding:
           const EdgeInsets.symmetric(horizontal: AppSpacing.screenPadding),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            isHolding ? 'TODAY · HOLD WEEK' : "TODAY'S WORKOUT",
-            style: AppTypography.mono.copyWith(
-              color: isHolding ? AppColors.accent : AppColors.textMute,
-              letterSpacing: 2,
-            ),
-          ),
-          const SizedBox(height: 8),
-          if (isDoneToday && todayDay != null)
-            _buildDoneHeroCard(todayDay)
-          else if (isRestDay)
-            _buildRestHeroCard()
-          else if (todayWorkout != null && todayWorkout.exercises.isNotEmpty)
-            _buildWorkoutHeroCard(context, todayWorkout)
-          else
-            // Content-less today (plan gap / unhealed restore) — NEVER offer a
-            // dead START button (review P1 2026-06-06; the founder's "i cant
-            // start the workout" was this surface). Show a refresh hint instead.
-            _buildEmptyWorkoutHeroCard(),
-        ],
-      ),
+      // No "TODAY'S WORKOUT" eyebrow any more (founder call 2026-11-01 — it cost a
+      // row, and the highlighted day below already says "today"). A hold week keeps
+      // its accent identity as a small HOLD WEEK tag INSIDE each compact card.
+      child: isDoneToday && todayDay != null
+          ? _buildDoneHeroCard(todayDay, isHolding: isHolding)
+          : isRestDay
+              ? _buildRestHeroCard(isHolding: isHolding)
+              : (todayWorkout != null && todayWorkout.exercises.isNotEmpty)
+                  ? _buildWorkoutHeroCard(context, todayWorkout,
+                      isHolding: isHolding)
+                  // Content-less today (plan gap / unhealed restore) — NEVER offer
+                  // a dead START button (review P1 2026-06-06; the founder's "i
+                  // cant start the workout" was this surface). Show a refresh
+                  // hint instead.
+                  : _buildEmptyWorkoutHeroCard(isHolding: isHolding),
     );
   }
 
-  Widget _buildWorkoutHeroCard(
-      BuildContext context, WorkoutDayData workout) {
-    // Extract focus/muscles from subtitle
-    final subtitleParts = workout.subtitle.split('\u00b7');
-    final focusText =
-        subtitleParts.isNotEmpty ? subtitleParts[0].trim() : '';
+  /// Accent "HOLD WEEK · " lead-in span for the free-tier hold week (null when
+  /// not holding). Shared by all four compact hero states.
+  TextSpan? _holdLead(bool isHolding) => isHolding
+      ? TextSpan(
+          text: 'HOLD WEEK \u00B7 ',
+          style: AppTypography.monoXs.copyWith(
+            color: AppColors.accent,
+            letterSpacing: 1,
+            fontWeight: FontWeight.w700,
+          ),
+        )
+      : null;
 
+  Widget _buildWorkoutHeroCard(BuildContext context, WorkoutDayData workout,
+      {bool isHolding = false}) {
     // Split workout.name so the mode label (e.g. "Relaxed", "Focused")
-    // renders as an italic-gold second run under the title. Phase-driven
+    // renders as an italic-gold second run after the title. Phase-driven
     // same as Home — matches handoff "Leg Day / _Relaxed_" pattern.
     final plan = ref.read(currentPlanProvider);
     final phaseMode = {
@@ -91,54 +90,70 @@ extension _HeroCards on _TrainScreenState {
     // it via beginWorkoutWithReadiness's guard.
     final isResuming = ref.watch(activeWorkoutProvider).hasInProgressSession;
 
+    // ONE compact row (founder call 2026-11-01): title + mode on top, a single
+    // meta line under it, a small START / RESUME button on the right. The old
+    // card was five rows (title, focus line, meta, gap, full-width button).
     return WardCard(
       variant: WardCardVariant.hero,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      child: Row(
         children: [
-          RichText(
-            text: TextSpan(
-              style: AppTypography.h2.copyWith(
-                fontSize: 20,
-                fontWeight: FontWeight.w700,
-                color: AppColors.textPrimary,
-                letterSpacing: -0.3,
-                height: 1.1,
-              ),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
               children: [
-                TextSpan(text: workout.name),
-                const TextSpan(text: ' '),
-                TextSpan(
-                  text: modeLabel,
-                  style: const TextStyle(
-                    fontStyle: FontStyle.italic,
-                    fontWeight: FontWeight.w500,
-                    color: AppColors.accent,
+                RichText(
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  text: TextSpan(
+                    style: AppTypography.h2.copyWith(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w700,
+                      color: AppColors.textPrimary,
+                      letterSpacing: -0.3,
+                      height: 1.1,
+                    ),
+                    children: [
+                      TextSpan(text: workout.name),
+                      const TextSpan(text: ' '),
+                      TextSpan(
+                        text: modeLabel,
+                        style: const TextStyle(
+                          fontStyle: FontStyle.italic,
+                          fontWeight: FontWeight.w500,
+                          color: AppColors.accent,
+                        ),
+                      ),
+                    ],
                   ),
+                ),
+                const SizedBox(height: 3),
+                Text.rich(
+                  TextSpan(
+                    style: AppTypography.monoXs.copyWith(
+                      color: AppColors.textDim,
+                      letterSpacing: 1,
+                    ),
+                    children: [
+                      if (_holdLead(isHolding) != null) _holdLead(isHolding)!,
+                      TextSpan(
+                        text:
+                            '${workout.exerciseCount} EX \u00B7 ~${workout.estimatedDuration.toString().toUpperCase()}',
+                      ),
+                    ],
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                 ),
               ],
             ),
           ),
-          if (focusText.isNotEmpty) ...[
-            const SizedBox(height: 4),
-            Text(
-              focusText,
-              style: AppTypography.bodySm.copyWith(
-                color: AppColors.textDim,
-              ),
-            ),
-          ],
-          const SizedBox(height: 4),
-          Text(
-            '${workout.exerciseCount} EXERCISES \u00B7 ~${workout.estimatedDuration.toString().toUpperCase()}',
-            style: AppTypography.monoXs.copyWith(
-              color: AppColors.textDim,
-              letterSpacing: 1,
-            ),
-          ),
-          const SizedBox(height: 14),
+          const SizedBox(width: 10),
           WardButton(
-            label: isResuming ? 'RESUME WORKOUT' : 'START WORKOUT',
+            label: isResuming ? 'RESUME' : 'START',
+            size: WardButtonSize.small,
+            fullWidth: false,
             trailing: const Icon(Icons.arrow_forward,
                 size: 14, color: AppColors.bgDeep),
             onPressed: () async {
@@ -152,27 +167,40 @@ extension _HeroCards on _TrainScreenState {
     );
   }
 
-  Widget _buildRestHeroCard() {
+  /// One line: `REST DAY · Recovery & mobility` + chevron (founder call
+  /// 2026-11-01 — was a two-row card). Whole card taps to the recovery sheet.
+  Widget _buildRestHeroCard({bool isHolding = false}) {
     return WardCard(
       onTap: () => _showRestDaySheet(context),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      child: Row(
         children: [
-          Text(
-            'REST DAY',
-            style: AppTypography.mono.copyWith(
-              fontSize: 12,
-              color: AppColors.textDim,
-              letterSpacing: 2.5,
+          Expanded(
+            child: Text.rich(
+              TextSpan(
+                children: [
+                  if (_holdLead(isHolding) != null) _holdLead(isHolding)!,
+                  TextSpan(
+                    text: 'REST DAY',
+                    style: AppTypography.mono.copyWith(
+                      fontSize: 12,
+                      color: AppColors.textDim,
+                      letterSpacing: 2.5,
+                    ),
+                  ),
+                  TextSpan(
+                    text: '  \u00B7  Recovery & mobility',
+                    style: AppTypography.bodySm.copyWith(
+                      color: AppColors.textDim,
+                    ),
+                  ),
+                ],
+              ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
             ),
           ),
-          const SizedBox(height: 4),
-          Text(
-            'Recovery & mobility \u2014 tap for recovery tips',
-            style: AppTypography.bodySm.copyWith(
-              color: AppColors.textDim,
-            ),
-          ),
+          const Icon(Icons.chevron_right, size: 18, color: AppColors.textDim),
         ],
       ),
     );
@@ -181,37 +209,47 @@ extension _HeroCards on _TrainScreenState {
   /// Today is a workout day but has NO exercises (a plan gap / unhealed
   /// restore). Renders an informative card with a refresh tap instead of a
   /// START button that can't start anything (review P1 2026-06-06).
-  Widget _buildEmptyWorkoutHeroCard() {
+  Widget _buildEmptyWorkoutHeroCard({bool isHolding = false}) {
     return WardCard(
       onTap: () {
         ref.invalidate(currentPlanProvider);
         ref.invalidate(selectedWeekProvider);
       },
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      child: Row(
         children: [
-          Text(
-            'NO WORKOUT SCHEDULED',
-            style: AppTypography.mono.copyWith(
-              fontSize: 12,
-              color: AppColors.textDim,
-              letterSpacing: 2.5,
+          Expanded(
+            child: Text.rich(
+              TextSpan(
+                children: [
+                  if (_holdLead(isHolding) != null) _holdLead(isHolding)!,
+                  TextSpan(
+                    text: 'NO WORKOUT SCHEDULED',
+                    style: AppTypography.mono.copyWith(
+                      fontSize: 12,
+                      color: AppColors.textDim,
+                      letterSpacing: 2.5,
+                    ),
+                  ),
+                  TextSpan(
+                    text: "\nToday's plan is still syncing \u2014 tap to refresh.",
+                    style: AppTypography.bodySm.copyWith(
+                      color: AppColors.textDim,
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
-          const SizedBox(height: 4),
-          Text(
-            "Today's plan is still syncing \u2014 tap to refresh.",
-            style: AppTypography.bodySm.copyWith(
-              color: AppColors.textDim,
-            ),
-          ),
+          const Icon(Icons.refresh, size: 18, color: AppColors.textDim),
         ],
       ),
     );
   }
 
-  Widget _buildDoneHeroCard(WorkoutDayData workout) {
+  Widget _buildDoneHeroCard(WorkoutDayData workout, {bool isHolding = false}) {
     return WardCard(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
       child: Row(
         children: [
           const Icon(Icons.check_circle, color: AppColors.ok, size: 20),
@@ -225,10 +263,17 @@ extension _HeroCards on _TrainScreenState {
                   style: AppTypography.h3,
                 ),
                 const SizedBox(height: 2),
-                Text(
-                  'Completed today \u2014 great work!',
-                  style: AppTypography.bodySm.copyWith(
-                    color: AppColors.ok,
+                Text.rich(
+                  TextSpan(
+                    children: [
+                      if (_holdLead(isHolding) != null) _holdLead(isHolding)!,
+                      TextSpan(
+                        text: 'Completed today \u2014 great work!',
+                        style: AppTypography.bodySm.copyWith(
+                          color: AppColors.ok,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               ],

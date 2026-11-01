@@ -46,6 +46,36 @@ void main() {
       expect(find.byType(RichText), findsWidgets);
     });
 
+    testWidgets(
+        'note opens with Welcome aboard then AVYA; injury + 14-years '
+        'paragraphs are gone (founder 2026-11-01)', (tester) async {
+      await tester.pumpWidget(buildScreen());
+      final plain = tester
+          .widgetList<RichText>(find.byType(RichText))
+          .map((rt) => rt.text.toPlainText())
+          .join('\n');
+      expect(
+        plain.contains('Welcome aboard, Recruit.\n\nAVYA is the structure of '
+            'military training, the science of certified coaching'),
+        isTrue,
+        reason: 'the note must go straight from the welcome to AVYA',
+      );
+      for (final removed in const [
+        'shattered my right leg',
+        'cross-country run',
+        'Fourteen years in uniform',
+        "isn't motivation",
+        "That's what AVYA is",
+      ]) {
+        expect(plain.contains(removed), isFalse,
+            reason: 'removed paragraph text "$removed" is back');
+      }
+      // Kept: the closers + sign-off.
+      expect(plain.contains('AVYA holds the line'), isTrue);
+      expect(plain.contains('No one is coming to save you, Recruit.'), isTrue);
+      expect(plain.contains('Jai Hind'), isTrue);
+    });
+
     testWidgets('does NOT render an Instagram CTA (removed Unit 5 2026-06-14)',
         (tester) async {
       await tester.pumpWidget(buildScreen());

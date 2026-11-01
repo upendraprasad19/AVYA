@@ -52,7 +52,8 @@ void main() {
       // flow actually READS (StatsScreen.initState / _onCalibrate / plan_screen).
       // The old 'current_weight_kg' key was silently dropped on return (reset to 75).
       expect(
-        src.contains("'weight_kg': double.tryParse(_weight.text)"),
+        RegExp(r"'weight_kg':\s*_weight\.text\.isNotEmpty\s*\?\s*double\.tryParse\(_weight\.text\)\s*:\s*null")
+            .hasMatch(src),
         isTrue,
         reason:
             'Stats BACK must forward weight_kg (the flow-read key) from the controller',

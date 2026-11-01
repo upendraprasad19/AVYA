@@ -6,6 +6,7 @@ import 'package:icanbefitter/core/theme/colors.dart';
 import 'package:icanbefitter/core/theme/spacing.dart';
 import 'package:icanbefitter/core/theme/typography.dart';
 import 'package:icanbefitter/shared/widgets/wardroom/wardroom.dart';
+import 'package:icanbefitter/features/onboarding/target_weight_check.dart';
 
 /// Step 2/3 of the handoff onboarding flow — baseline stats capture
 /// (`design_handoff_wardroom/src/screens/onboarding.jsx` StatsScreen,
@@ -30,6 +31,8 @@ class _StatsScreenState extends State<StatsScreen> {
   late final TextEditingController _targetWeight;
   late final TextEditingController _height;
   late final TextEditingController _bodyFat;
+  // Target field focus: the invalid-target popup returns focus here on close.
+  final FocusNode _targetFocus = FocusNode();
   late String _activity;
 
   @override
@@ -39,21 +42,17 @@ class _StatsScreenState extends State<StatsScreen> {
     _weight = TextEditingController(
       text: (init['weight_kg'] as num?)?.toStringAsFixed(1) ?? '75.0',
     );
-    // AI.1 — target weight seed mirrors the goal-derived delta that
-    // plan_screen.dart previously computed silently (lose_fat -5,
-    // recomp -2, build_muscle +3, otherwise current weight). User can
-    // overwrite freely; the BMR calculator uses this for protein
-    // targeting when goal == 'lose_fat' and for projection elsewhere.
+    // AI.1 — target weight seed. Goal-derived (Cut -5, Build +3, Maintain =
+    // current) via the pure `seedTargetWeight`, which also RESEEDS when the stored
+    // target was seeded for a different goal (Stats -> BACK -> other goal -> Stats).
     final seedWeight =
         (init['weight_kg'] as num?)?.toDouble() ?? 75.0;
-    final goalDelta = switch (widget.goal) {
-      'lose_fat' => -5.0,
-      'recomp' => -2.0,
-      'build_muscle' => 3.0,
-      _ => 0.0,
-    };
-    final seedTarget = (init['target_weight_kg'] as num?)?.toDouble() ??
-        (seedWeight + goalDelta).clamp(40.0, 250.0);
+    final seedTarget = seedTargetWeight(
+      goal: widget.goal,
+      currentKg: seedWeight,
+      storedTarget: init['target_weight_kg'],
+      seededForGoal: init['seeded_for_goal'],
+    );
     _targetWeight = TextEditingController(
       text: seedTarget.toStringAsFixed(1),
     );
@@ -74,6 +73,7 @@ class _StatsScreenState extends State<StatsScreen> {
   void dispose() {
     _weight.dispose();
     _targetWeight.dispose();
+    _targetFocus.dispose();
     _height.dispose();
     _bodyFat.dispose();
     super.dispose();
@@ -223,6 +223,7 @@ class _StatsScreenState extends State<StatsScreen> {
                 label: 'TARGET',
                 unit: 'KG',
                 controller: _targetWeight,
+                focusNode: _targetFocus,
                 highlight: true,
                 decimal: true,
               ),
@@ -325,14 +326,24 @@ class _StatsScreenState extends State<StatsScreen> {
             extra: {
               ...widget.initial ?? const <String, dynamic>{},
               'goal': widget.goal,
-              if (_weight.text.isNotEmpty)
-                'weight_kg': double.tryParse(_weight.text),
-              if (_targetWeight.text.isNotEmpty)
-                'target_weight_kg': double.tryParse(_targetWeight.text),
-              if (_height.text.isNotEmpty)
-                'height_cm': double.tryParse(_height.text),
-              if (_bodyFat.text.isNotEmpty)
-                'body_fat_pct': double.tryParse(_bodyFat.text),
+              'seeded_for_goal': widget.goal,
+              // Explicit null when blank/unparseable (weight, height, body fat,
+              // target): an absent key would let the `...widget.initial` spread
+              // resurrect a stale earlier value.
+              'weight_kg': _weight.text.isNotEmpty
+                  ? double.tryParse(_weight.text)
+                  : null,
+              // Explicit null when blank/unparseable: an absent key would let the
+              // `...widget.initial` spread resurrect a stale earlier target.
+              'target_weight_kg': _targetWeight.text.isNotEmpty
+                  ? double.tryParse(_targetWeight.text)
+                  : null,
+              'height_cm': _height.text.isNotEmpty
+                  ? double.tryParse(_height.text)
+                  : null,
+              'body_fat_pct': _bodyFat.text.isNotEmpty
+                  ? double.tryParse(_bodyFat.text)
+                  : null,
               'activity_level': _activity,
             },
           ),
@@ -384,6 +395,71 @@ class _StatsScreenState extends State<StatsScreen> {
     );
   }
 
+  /// Dismissable popup explaining why the target was rejected. Closing it (the
+  /// ADJUST button or a tap outside) returns focus to the TARGET field.
+  Future<void> _showTargetWeightDialog(String message) async {
+    await showDialog<void>(
+      context: context,
+      barrierDismissible: true,
+      builder: (ctx) => Dialog(
+        key: const ValueKey('target_weight_dialog'),
+        backgroundColor: AppColors.card,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(AppRadius.card),
+          side: BorderSide(color: AppColors.accent.withValues(alpha: 0.53)),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text(
+                'CHECK YOUR TARGET',
+                style: AppTypography.mono.copyWith(
+                  color: AppColors.accent,
+                  letterSpacing: 2,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              const SizedBox(height: 12),
+              Text(
+                message,
+                style: AppTypography.bodyL.copyWith(
+                  color: AppColors.textPrimary,
+                  height: 1.4,
+                ),
+              ),
+              const SizedBox(height: 18),
+              GestureDetector(
+                key: const ValueKey('target_weight_dialog_close'),
+                onTap: () => Navigator.of(ctx).pop(),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  decoration: BoxDecoration(
+                    color: AppColors.accent,
+                    borderRadius: BorderRadius.circular(AppRadius.sharp),
+                  ),
+                  alignment: Alignment.center,
+                  child: Text(
+                    'ADJUST TARGET',
+                    style: AppTypography.mono.copyWith(
+                      fontSize: 12,
+                      color: AppColors.bgDeep,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: 2,
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+    if (mounted) _targetFocus.requestFocus();
+  }
+
   void _onCalibrate() {
     final weight = double.tryParse(_weight.text);
     final height = double.tryParse(_height.text);
@@ -402,6 +478,19 @@ class _StatsScreenState extends State<StatsScreen> {
           behavior: SnackBarBehavior.floating,
         ),
       );
+      return;
+    }
+    // Target weight must agree with the goal (Cut below, Build above, Maintain
+    // within 3 kg). Uses the RAW parsed value, never the clamped one. Runs after
+    // the weight/height guard and BEFORE the body-fat skip snackbar, so that
+    // snackbar only shows on the path that actually continues.
+    final check = validateTargetWeight(
+      goal: widget.goal,
+      current: weight,
+      target: targetWeight,
+    );
+    if (check != TargetWeightCheck.ok) {
+      _showTargetWeightDialog(targetWeightMessage(check, weight));
       return;
     }
     // Body fat is optional. When blank, BmrCalculator falls back to
@@ -429,6 +518,7 @@ class _StatsScreenState extends State<StatsScreen> {
       extra: {
         ...widget.initial ?? const <String, dynamic>{},
         'goal': widget.goal,
+        'seeded_for_goal': widget.goal,
         'weight_kg': weight,
         'target_weight_kg': resolvedTarget,
         'height_cm': height,
@@ -450,11 +540,13 @@ class _StatField extends StatelessWidget {
     this.highlight = false,
     this.decimal = false,
     this.hint,
+    this.focusNode,
   });
 
   final String label;
   final String unit;
   final TextEditingController controller;
+  final FocusNode? focusNode;
   final bool highlight;
   final bool decimal;
   /// Placeholder shown when the controller is empty — used on optional
@@ -495,6 +587,7 @@ class _StatField extends StatelessWidget {
               Flexible(
                 child: TextField(
                   controller: controller,
+                  focusNode: focusNode,
                   keyboardType: decimal
                       ? const TextInputType.numberWithOptions(decimal: true)
                       : TextInputType.number,
