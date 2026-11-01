@@ -7245,3 +7245,16 @@ Found by the sync-storm-first-sweep batch while measuring its Day-0 web check (l
 **Fix shape.** Accept a drive letter in the precondition (`RegExp(r'^([A-Za-z]:)?[\\/]')`), run the test on Windows, and fix whatever sits behind it. Do it together with OI-415, which has the same effect on the same machine.
 
 **Done when.** `flutter test test/scripts/merge_scope_git_test.dart` is green on the Windows machine and on CI, with the precondition still asserting that the path is absolute. Blast radius: `feature` (a test-only change; `test/**` is `feature` in `docs/blast_radius.yaml`).
+
+## OI-447 — Train roadmap screen is stuck in Deployment 01 and clamps to 12 weeks: a PRO user past week 12 sees the wrong deployment number, WK n/12 and % complete, and no you-are-here marker on the rank ladder
+
+- **Status**: OPEN
+- **Blocked on**: none
+- **Verified**: 2026-11-01 - by reading the code (not on a device): `lib/features/train/screens/phase_roadmap_screen.dart:220` hardcodes `DEPLOYMENT 01`; `WorkoutScheduleReadService.programWeekFor` (`workout_schedule_read_service.dart:1610`) is `((phase-1) % 3) * 4 + weekInPhase`, so every deployment maps back onto weeks 1 to 12; the rank markers (CPO wk 26, MCPO wk 52 ...) are a static list with no current-position marker. The same eyebrow on the Train screen was already fixed by diagnose `b7f1c8` and then removed from that screen on 2026-11-01.
+- **Identified**: 2026-11-01 · filed via mint_oi.sh from branch `onboarding-train-nutrition-compact` (founder: "mark this as OI for later session, do both")
+
+**What.** For a PRO user past week 12 (for example month 5, phase 5, program week about 17 to 21) the roadmap shows `DEPLOYMENT 01 · <phase name>`, `WK 5/12` and about 42% complete with the Phase II block highlighted, as if they were in week 5 of their first deployment. Nothing says Deployment 01 is complete, and the long-term rank ladder (YEAR 1, YEAR 2, YEARS 3 to 5) has no "you are here" marker at the user's absolute program week.
+
+**Fix shape (founder chose both).** (a) Derive the real deployment number from the phase (`(phase - 1) ~/ 3 + 1`), show earlier deployments as complete, keep the 12-week layout for the current one; (b) put a "you are here" marker on the rank ladder at the user's absolute program week. Keep the hold-week behaviour of `_DeploymentHeader` (counter suppressed while holding; percent and bar keep the program week).
+
+**Done when.** A user in phase 5 sees `DEPLOYMENT 02` with Deployment 01 marked complete and a marker on the ladder; behavioural tests cover phases 1, 4, 5 and 12 and the hold arm. Blast radius: `feature` (`lib/features/train/**` only).

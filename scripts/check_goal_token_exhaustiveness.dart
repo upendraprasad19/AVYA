@@ -19,6 +19,8 @@
 
 import 'dart:io';
 
+import 'goal_token_exhaustiveness_lib.dart';
+
 String? _read(String path) {
   final f = File(path);
   return f.existsSync() ? f.readAsStringSync() : null;
@@ -73,26 +75,17 @@ void main(List<String> args) {
     }
   }
 
-  // Check 1: every card key resolves (via arm or default) to a known token.
-  final reachable = <String>{};
-  for (final k in cardKeys) {
-    final t = mapArms[k] ?? mapDefault;
-    if (t == null) {
-      problems.add('Onboarding key "$k" has no _mapGoal arm and there is no default.');
-      continue;
-    }
-    reachable.add(t);
-    if (!tokens.contains(t)) {
-      problems.add('Onboarding key "$k" maps to "$t", which is not a FitnessGoals token '
-          '(${tokens.join(", ")}).');
-    }
-  }
-  // Every token should be reachable from a card (no orphan goal).
-  for (final t in tokens) {
-    if (cardKeys.isNotEmpty && !reachable.contains(t)) {
-      problems.add('FitnessGoals token "$t" is not reachable from any onboarding goal card.');
-    }
-  }
+  // Check 1: every card key resolves (via arm or default) to a known token, and
+  // every token is reachable from a card — except the narrow, reasoned
+  // legacy-reachable-only allowlist (recompose/strength: no onboarding card since
+  // 2026-11-01, still emitted by legacy chat onboarding, restore and the AI coach).
+  problems.addAll(goalCardReachabilityProblems(
+    tokens: tokens,
+    cardKeys: cardKeys,
+    mapArms: mapArms,
+    mapDefault: mapDefault,
+    legacyReachableOnly: kLegacyReachableOnlyGoalTokens,
+  ));
 
   // Check 2: BmrCalculator uses the SoT, no raw goal switch.
   if (bmr != null) {

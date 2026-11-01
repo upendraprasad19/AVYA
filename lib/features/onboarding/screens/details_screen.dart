@@ -6,7 +6,6 @@ import 'package:icanbefitter/core/theme/spacing.dart';
 import 'package:icanbefitter/core/theme/typography.dart';
 import 'package:icanbefitter/core/utils/injury_vocab.dart';
 import 'package:icanbefitter/shared/widgets/wardroom/wardroom.dart';
-import 'package:icanbefitter/core/constants/equipment_defaults.dart';
 
 /// Step 04 · 05 of the stepped onboarding flow — training details capture.
 ///
@@ -23,7 +22,8 @@ import 'package:icanbefitter/core/constants/equipment_defaults.dart';
 /// Experience: 3 inline chips (Beginner / Intermediate / Advanced).
 /// Pace:       3 inline chips (Steady / Balanced / Aggressive).
 /// Days/Week:  4 inline chips (3 / 4 / 5 / 6).
-/// Equipment:  2 × 2 grid (labels too long for a single row at 360 dp).
+/// Equipment:  dropdown (Basic Gym preselected; 2026-11-01 compaction).
+/// Injuries:   collapsed "No injuries" row that expands to the multi-select chips.
 ///
 /// Description line below each section updates on selection — user sees
 /// context for the chosen option without per-chip clutter.
@@ -36,6 +36,12 @@ import 'package:icanbefitter/core/constants/equipment_defaults.dart';
 /// Data out: original map + `{fitness_experience, pace_preference,
 /// days_per_week, equipment_access}` passed to `/onboarding/plan` via
 /// route extras.
+/// Equipment tier PRESELECTED on the onboarding Details screen (founder call
+/// 2026-11-01). This is deliberately NOT `kDefaultEquipmentAccess`: that shared
+/// fallback stays `bodyweight` (diagnose d3a8f5 — the fail-safe direction for a
+/// profile that lost its value), so existing profiles are unaffected.
+const String kOnboardingDefaultEquipment = 'basic_gym';
+
 class DetailsScreen extends StatefulWidget {
   const DetailsScreen({super.key, required this.data});
 
@@ -115,7 +121,16 @@ class _DetailsScreenState extends State<DetailsScreen> {
     _experience  = (widget.data['fitness_experience'] as String?) ?? 'intermediate';
     _pace        = (widget.data['pace_preference']    as String?) ?? 'balanced';
     _daysPerWeek = (widget.data['days_per_week']      as int?)    ?? 4;
-    _equipment   = equipmentAccessOf(widget.data);
+    // Seed from the incoming extras (ADJUST PLAN round-trip), else Basic Gym.
+    // Written as a typed local + ternary on purpose: equipment_access_default_test
+    // bans the `['equipment_access'] ?? '<literal>'` shape across lib/.
+    final rawEquipment = widget.data['equipment_access'];
+    // Only a token the dropdown offers is accepted: DropdownButton asserts when
+    // `value` is not among its items (a legacy / deep-link token would throw).
+    _equipment = (rawEquipment is String &&
+            _equipments.any((o) => o.value == rawEquipment.trim()))
+        ? rawEquipment.trim()
+        : kOnboardingDefaultEquipment;
     // Seed injuries from the incoming extras (GROWABLE — the toggle mutates it in
     // place). MUST seed here or the plan→details "ADJUST PLAN" round-trip resets
     // a real selection to ['none'] before generation (×2 review P1-A). Type-check
@@ -159,18 +174,19 @@ class _DetailsScreenState extends State<DetailsScreen> {
         padBottom: 0,
         child: SafeArea(
           child: Padding(
-            padding: const EdgeInsets.fromLTRB(22, 24, 22, 20),
+            padding: const EdgeInsets.fromLTRB(22, 14, 22, 14),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 _progress(),
-                const SizedBox(height: 18),
+                const SizedBox(height: 10),
                 _header(),
-                const SizedBox(height: 18),
+                const SizedBox(height: 12),
                 Expanded(
                   child: SingleChildScrollView(
-                    // Safety net for small-viewport devices; content is tuned
-                    // to fit 360×640 dp without scrolling.
+                    // Safety net for small viewports and for the EXPANDED injuries
+                    // chips; the collapsed default is tuned to fit 360×640 dp
+                    // without scrolling.
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
@@ -181,7 +197,7 @@ class _DetailsScreenState extends State<DetailsScreen> {
                           description: _experienceDescriptions[_experience] ?? '',
                           onSelect: (v) => setState(() => _experience = v),
                         ),
-                        const SizedBox(height: 18),
+                        const SizedBox(height: 10),
                         _ChipSection<String>(
                           label: 'PACE',
                           options: _paces,
@@ -189,7 +205,7 @@ class _DetailsScreenState extends State<DetailsScreen> {
                           description: _paceDescriptions[_pace] ?? '',
                           onSelect: (v) => setState(() => _pace = v),
                         ),
-                        const SizedBox(height: 18),
+                        const SizedBox(height: 10),
                         _ChipSection<int>(
                           label: 'DAYS / WEEK',
                           options: _days,
@@ -197,14 +213,14 @@ class _DetailsScreenState extends State<DetailsScreen> {
                           description: _daysDescription(),
                           onSelect: (v) => setState(() => _daysPerWeek = v),
                         ),
-                        const SizedBox(height: 18),
+                        const SizedBox(height: 10),
                         _EquipmentSection(
                           options: _equipments,
                           selected: _equipment,
                           description: _equipmentDescriptions[_equipment] ?? '',
                           onSelect: (v) => setState(() => _equipment = v),
                         ),
-                        const SizedBox(height: 18),
+                        const SizedBox(height: 10),
                         _InjuriesSection(
                           selected: _injuries,
                           onToggle: _toggleInjury,
@@ -213,7 +229,7 @@ class _DetailsScreenState extends State<DetailsScreen> {
                     ),
                   ),
                 ),
-                const SizedBox(height: 12),
+                const SizedBox(height: 8),
                 _cta(context),
               ],
             ),
@@ -376,7 +392,7 @@ class _ChipSection<T> extends StatelessWidget {
       mainAxisSize: MainAxisSize.min,
       children: [
         Padding(
-          padding: const EdgeInsets.only(bottom: 8, left: 2),
+          padding: const EdgeInsets.only(bottom: 6, left: 2),
           child: Text(
             label,
             style: AppTypography.monoXs.copyWith(
@@ -400,7 +416,7 @@ class _ChipSection<T> extends StatelessWidget {
             ],
           ],
         ),
-        const SizedBox(height: 6),
+        const SizedBox(height: 4),
         Text(
           description,
           style: AppTypography.bodyS.copyWith(color: AppColors.textDim),
@@ -410,10 +426,10 @@ class _ChipSection<T> extends StatelessWidget {
   }
 }
 
-// ── Equipment section (2 × 2 grid + description) ──────────────────────────
+// ── Equipment section (dropdown + description) ────────────────────────────
 
-/// 2 × 2 chip grid for Equipment. Labels are too long to fit 4 in a
-/// single row at 360 dp so we break into two rows of two.
+/// Equipment dropdown (2026-11-01 compaction — replaces the 2 × 2 chip grid, which
+/// cost ~120 dp). One row; the description of the selected tier sits below it.
 class _EquipmentSection extends StatelessWidget {
   const _EquipmentSection({
     required this.options,
@@ -434,7 +450,7 @@ class _EquipmentSection extends StatelessWidget {
       mainAxisSize: MainAxisSize.min,
       children: [
         Padding(
-          padding: const EdgeInsets.only(bottom: 8, left: 2),
+          padding: const EdgeInsets.only(bottom: 6, left: 2),
           child: Text(
             'EQUIPMENT',
             style: AppTypography.monoXs.copyWith(
@@ -444,24 +460,39 @@ class _EquipmentSection extends StatelessWidget {
             ),
           ),
         ),
-        for (var row = 0; row < 2; row++) ...[
-          Row(
-            children: [
-              for (var col = 0; col < 2; col++) ...[
-                Expanded(
-                  child: _Chip<String>(
-                    option: options[row * 2 + col],
-                    selected: options[row * 2 + col].value == selected,
-                    onTap: () => onSelect(options[row * 2 + col].value),
-                  ),
-                ),
-                if (col == 0) const SizedBox(width: 6),
-              ],
-            ],
+        Container(
+          key: const ValueKey('equipment_dropdown'),
+          padding: const EdgeInsets.symmetric(horizontal: 14),
+          decoration: BoxDecoration(
+            color: AppColors.card,
+            border: Border.all(color: AppColors.accent.withValues(alpha: 0.53)),
+            borderRadius: BorderRadius.circular(AppRadius.sharp),
           ),
-          if (row == 0) const SizedBox(height: 6),
-        ],
-        const SizedBox(height: 6),
+          child: DropdownButtonHideUnderline(
+            child: DropdownButton<String>(
+              value: selected,
+              isExpanded: true,
+              dropdownColor: AppColors.card,
+              iconEnabledColor: AppColors.accent,
+              style: AppTypography.body.copyWith(
+                fontSize: 13,
+                color: AppColors.textPrimary,
+                fontWeight: FontWeight.w700,
+              ),
+              items: [
+                for (final o in options)
+                  DropdownMenuItem<String>(
+                    value: o.value,
+                    child: Text(o.label),
+                  ),
+              ],
+              onChanged: (v) {
+                if (v != null) onSelect(v);
+              },
+            ),
+          ),
+        ),
+        const SizedBox(height: 4),
         Text(
           description,
           style: AppTypography.bodyS.copyWith(color: AppColors.textDim),
@@ -478,11 +509,28 @@ class _EquipmentSection extends StatelessWidget {
 /// from the SHARED `InjuryVocab.chipTokens` + `chipLabel` (one vocab with Edit
 /// Profile, pinned to the library — no drift). Pre-selected "No injuries" keeps
 /// CONTINUE frictionless (founder Option B). Same visual as [_Chip].
-class _InjuriesSection extends StatelessWidget {
+class _InjuriesSection extends StatefulWidget {
   const _InjuriesSection({required this.selected, required this.onToggle});
 
   final List<String> selected;
   final ValueChanged<String> onToggle;
+
+  @override
+  State<_InjuriesSection> createState() => _InjuriesSectionState();
+}
+
+class _InjuriesSectionState extends State<_InjuriesSection> {
+  // Collapsed by default (2026-11-01): the pre-selected "No injuries" is the
+  // common case and the chip Wrap costs ~3 rows of height. A pre-existing real
+  // selection (ADJUST PLAN round-trip) opens expanded so it is never hidden.
+  late bool _expanded =
+      !(widget.selected.length == 1 && widget.selected.first == 'none');
+
+  String _summary() {
+    final real = widget.selected.where((t) => t != 'none').toList();
+    if (real.isEmpty) return InjuryVocab.chipLabel('none');
+    return real.map(InjuryVocab.chipLabel).join(', ');
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -491,7 +539,7 @@ class _InjuriesSection extends StatelessWidget {
       mainAxisSize: MainAxisSize.min,
       children: [
         Padding(
-          padding: const EdgeInsets.only(bottom: 8, left: 2),
+          padding: const EdgeInsets.only(bottom: 6, left: 2),
           child: Text(
             'INJURIES / AREAS TO AVOID',
             style: AppTypography.monoXs.copyWith(
@@ -501,23 +549,60 @@ class _InjuriesSection extends StatelessWidget {
             ),
           ),
         ),
-        Wrap(
-          spacing: 6,
-          runSpacing: 6,
-          children: [
-            for (final token in InjuryVocab.chipTokens)
-              _InjuryChip(
-                label: InjuryVocab.chipLabel(token),
-                selected: selected.contains(token),
-                onTap: () => onToggle(token),
-              ),
-          ],
+        GestureDetector(
+          key: const ValueKey('injuries_toggle_row'),
+          behavior: HitTestBehavior.opaque,
+          onTap: () => setState(() => _expanded = !_expanded),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
+            decoration: BoxDecoration(
+              color: AppColors.card,
+              border: Border.all(color: AppColors.line2),
+              borderRadius: BorderRadius.circular(AppRadius.sharp),
+            ),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    _summary(),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: AppTypography.body.copyWith(
+                      fontSize: 13,
+                      color: AppColors.textPrimary,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+                Icon(
+                  _expanded ? Icons.expand_less : Icons.expand_more,
+                  size: 20,
+                  color: AppColors.accent,
+                ),
+              ],
+            ),
+          ),
         ),
-        const SizedBox(height: 6),
-        Text(
-          'Tap any that apply — your plan avoids loading them.',
-          style: AppTypography.bodyS.copyWith(color: AppColors.textDim),
-        ),
+        if (_expanded) ...[
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 6,
+            runSpacing: 6,
+            children: [
+              for (final token in InjuryVocab.chipTokens)
+                _InjuryChip(
+                  label: InjuryVocab.chipLabel(token),
+                  selected: widget.selected.contains(token),
+                  onTap: () => widget.onToggle(token),
+                ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          Text(
+            'Tap any that apply — your plan avoids loading them.',
+            style: AppTypography.bodyS.copyWith(color: AppColors.textDim),
+          ),
+        ],
       ],
     );
   }
@@ -596,7 +681,7 @@ class _Chip<T> extends StatelessWidget {
         opacity: selected ? 1.0 : 0.55,
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 150),
-          padding: const EdgeInsets.symmetric(vertical: 13),
+          padding: const EdgeInsets.symmetric(vertical: 10),
           decoration: BoxDecoration(
             color: selected ? AppColors.accent : Colors.transparent,
             border: Border.all(

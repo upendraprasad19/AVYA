@@ -729,12 +729,12 @@ concepts:
         semantic: display-only
         fields_read: [total_calories]
       - file: lib/features/nutrition/screens/nutrition_screen.dart
-        line_range: 655-665
+        line_range: 610-620
         method: _confirmAndDeleteLog (delete confirmation chip)
         semantic: display-only
         fields_read: [total_calories, total_protein]
       - file: lib/features/nutrition/screens/nutrition_screen.dart
-        line_range: 938-948
+        line_range: 893-903
         method: _showEditMacrosSheet (edit macros bottom sheet)
         semantic: display-only
         fields_read: [total_calories, total_protein, total_carbs, total_fat, total_fiber]
@@ -885,14 +885,14 @@ concepts:
       directly from a widget.
     writers:
       - file: lib/features/nutrition/screens/nutrition_screen.dart
-        line_range: 850-918
+        line_range: 805-873
         method: _confirmAndDeleteFoodLog
         notes: |
           Legacy 5s-undo path. Reads the Hive row before delete, stashes
           it locally, then calls FoodLogNotifier.deleteFoodLog and shows
           a 5-second SnackBar with UNDO → FoodLogNotifier.restoreFoodLog.
       - file: lib/features/nutrition/screens/nutrition_screen.dart
-        line_range: 654-751
+        line_range: 609-706
         method: _confirmAndDeleteLog
         notes: |
           Plan C-14 path. Confirm sheet → NutritionWriteService.deleteLog
@@ -1378,7 +1378,7 @@ concepts:
         semantic: display-only
         fields_read: [waterTargetProvider]
       - file: lib/features/nutrition/screens/nutrition_screen.dart
-        line_range: 365-380
+        line_range: 320-335
         method: self-contained
         semantic: display-only
         fields_read: [waterTargetProvider]
@@ -1461,7 +1461,7 @@ concepts:
           protein; picks first item name as firstFoodName for the
           pre-filled food search.
       - file: lib/features/nutrition/screens/nutrition_screen.dart
-        line_range: 268-285
+        line_range: 270-290
         method: nutrition tab (TODAY'S MEALS section)
         semantic: pass-through
         fields_read: [via ref.watch(dietPlanProvider)]
@@ -4437,7 +4437,7 @@ concepts:
         semantic: pass-through
         fields_read: [via waterIntakeProvider]
       - file: lib/features/nutrition/screens/nutrition_screen.dart
-        line_range: 372-374
+        line_range: 327-329
         method: self-contained
         semantic: pass-through
         fields_read: [via waterIntakeProvider]
@@ -9080,33 +9080,6 @@ concepts:
         method: the five pure formatters every surface renders through (homeWeekSegment / profileWeekSegment / journeyWeekLabel / journeyPhaseOneMilestone / roadmapWeekLabel) — extracted after a B-pass inverted an inlined ternary and all 16 tests still passed; behavioral coverage in test/contracts/hold_week_labels_test.dart
         semantic: latest
         fields_read: [WeekIdentity.holdOrdinal, WeekIdentity.weekInPhase]
-      - file: lib/core/utils/hold_week_labels.dart
-        line_range: 149-173
-        method: deploymentEyebrowLabel — the Train screen's deployment eyebrow ("DEPLOYMENT NN · PHASE · WK n OF 4"); hold-aware, drops the week counter while holding
-        semantic: latest
-        fields_read: [CurrentPlanData.phase, CurrentPlanData.phaseName, CurrentPlanData.currentWeek, HoldStatus.isHolding]
-        notes: |
-          Added by diagnose b7f1c8 (2026-08-30). Registered here rather than
-          left unlisted (plan-review round 2 finding 4) because this file's
-          formatters are an established SoT writer surface — the sibling
-          five-formatter entry above and holdIdentityLabel are both
-          registered, and lib/CLAUDE.md requires the registry entry to move
-          in the same commit as the writer.
-
-          Replaces a hardcoded 'DEPLOYMENT 01' literal that rendered for
-          EVERY account at every phase. Reads `phase` directly (NOT
-          `deployments_complete`): the two are related by the existing
-          `deployments_complete = current_phase - 1` invariant
-          (user_repository.dart:186-201, verified live across all 17
-          accounts — 15x(1,0), 2x(2,1), no counterexample), so the
-          deployment IN PROGRESS is `phase` itself. Uses the same
-          `plan.phase` read WeekSelector/HoldRoadmapStrip already use on
-          this screen rather than introducing a fourth independent
-          "what phase am I on" path.
-
-          Behavioral: test/contracts/hold_week_labels_test.dart
-          (deploymentEyebrowLabel group — exact-string assertions for
-          phase 1 / phase 2 / phase 12 zero-pad boundary / holding).
     class_constraints: |
       WeekIdentity MUST NOT gain a projected week getter. The hold arm asserts
       weekInPhase is NULL precisely so a projection cannot be reintroduced.
@@ -9772,7 +9745,7 @@ concepts:
         method: _buildInjuriesChips + profile reader
         notes: chips emit canonical tokens (via InjuryVocab.chipTokens/toggleChip Ship 3); reader normalizes legacy stored values
       - file: lib/features/onboarding/screens/details_screen.dart
-        line_range: 52-500
+        line_range: 52-652
         method: _InjuriesSection chip + _toggleInjury + initState seed + _onContinue extras
         notes: Ship 3 (U5) - onboarding Details collects injuries via the shared InjuryVocab.chipTokens/toggleChip chip (pre-selected 'No injuries' default); initState seeds _injuries from widget.data so the plan→details ADJUST-PLAN round-trip preserves the selection; writes 'injuries' into the plan route extras
       - file: lib/features/onboarding/screens/plan_screen.dart

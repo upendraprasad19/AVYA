@@ -153,7 +153,6 @@ _Moved verbatim from `lib/features/train/CLAUDE.md` (original lines 89-89, conte
 | Pitfall | How to avoid | Source |
 |---|---|---|
 
-| Deployment eyebrow hardcoded to "DEPLOYMENT 01" regardless of phase | Was a literal string in `screen.dart`, presumably a placeholder that happened to be correct for phase 1 (the common case for every new account) and so survived undetected until an account old enough to reach phase 2 rendered it. Fixed via `deploymentEyebrowLabel` (`lib/core/utils/hold_week_labels.dart`) — `phase` drives the deployment number directly (`deployments_complete = current_phase - 1`, so the deployment IN PROGRESS is `phase` itself), reusing the SAME `plan.phase` read `WeekSelector`/`HoldRoadmapStrip` already use on this screen rather than a fourth independent "what phase am I on" read. Diagnose `b7f1c8`. ⚠ Separately investigated but NOT fixed in that batch: the missing "PHASE I (DONE)" group (diagnose `c9e4b7`'s known display anomaly) still reproduces on the same founder account — a full-table sweep found it is one of exactly 2 accounts, ever, with `current_phase > 1`, both already-known test/QA accounts; see `b7f1c8`'s `impact_analysis` for the full writer-elimination trace before landing on a live telemetry tripwire (`past_phase_blocks_strict_empty`) instead of a re-attempted root-cause fix. | `test/contracts/hold_week_labels_test.dart`, `test/contracts/past_phase_display_recovery_behavioral_test.dart` (group E) |
 
 ## Pitfall: controller seeded from an unrelated field (full)
 

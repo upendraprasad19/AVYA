@@ -90,9 +90,12 @@ through the WriteService — APK Test #16.2 / E).
 | Graduation unlock logic living in the screen | The generate + `commitPhaseAdvance` + repeat-nudge block is **`runGraduationPhaseAdvance` in `lib/shared/services/pro_phase_advance.dart`**; the screen is UI only (pre-lock abort and `ref.invalidate(phaseRepeatNudgeProvider)` stay there). Returns a 4-case outcome enum. | `test/contracts/pro_phase_advance_behavioral_test.dart` |
 | A PRO user paging ahead into a not-yet-generated future PHASE sees a generic empty state | `isFutureUngeneratedPhase` + `futurePhaseUnlockCopy` (`lib/core/utils/hold_week_labels.dart`) in `empty_states.dart`'s `_buildEmptyWeek`. Diagnose `c4f9a1`. | `hold_week_labels_test.dart`, `train_phase_lock_empty_state_test.dart` |
 | A PRO user whose phase EXPIRED sees "Complete Phase III to unlock Phase IV" on the W5 chip (`plan.currentWeek` is clamped to 4) | `showsTrainHeroSlot` shows `PhaseGeneratingCard` on any chip when PRO + `isPhaseExpired()`; `emptyWeekUnlockCopy` returns null for them. The build itself is `ensureProPhaseAfterRestore` (`lib/core/services/CLAUDE.md`). Diagnose `d9b3e7`. | `hold_week_labels_test.dart`, `pro_phase_ensure_current_behavioral_test.dart` |
-| Deployment eyebrow hardcoded to "DEPLOYMENT 01" | Use `deploymentEyebrowLabel` (`hold_week_labels.dart`), driven by the same `plan.phase` read as `WeekSelector`. Diagnose `b7f1c8`. | `hold_week_labels_test.dart`, `past_phase_display_recovery_behavioral_test.dart` |
 
 | An input controller seeded with a copy-pasted value from an unrelated field | If a `TextEditingController` has no prefill source (check `LastPerformanceData`), leave it EMPTY — never seed it from a sibling controller. Code that parses every controller unconditionally lets a phantom value reach type-resolution logic. | `docs/diagnoses/2026-09-28-duration-controller-seeding-leak-e8f95e.md` |
+
+## Compact top of screen (2026-11-01, founder call)
+
+The top of the Train screen is the week's schedule: no "TODAY'S WORKOUT" eyebrow, no "DEPLOYMENT NN" eyebrow (`deploymentEyebrowLabel` was deleted with its only call site), no "THIS WEEK" label. `hero_cards.dart` renders ONE compact row in all four states (workout with a small START/RESUME button, rest day `REST DAY · Recovery & mobility`, empty, done); a hold week keeps its accent identity as a `HOLD WEEK ·` lead-in inside the card. The `VIEW THE 12-WEEK ROADMAP` pill (and `HoldRoadmapStrip`, which travels with it) sits right after the PRs block (`StatsGrid`). Pinned by `test/contracts/train_screen_compact_layout_test.dart`. ⚠ The roadmap screen itself still hardcodes `DEPLOYMENT 01` and clamps to 12 weeks for a user past week 12 (separate OI).
 
 ## Tests pinning the rules here
 

@@ -270,106 +270,6 @@ class _TrainScreenState extends ConsumerState<TrainScreen>
 
                     const SizedBox(height: 14),
 
-                    // APK Test #3 / Obs 1: deployment header above
-                    // Roadmap pill. Communicates that THIS WEEK is one
-                    // chapter of a 12-week deployment, not the whole story.
-                    Padding(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: AppSpacing.screenPadding),
-                      child: Text(
-                        // Phase-relative (founder decision 2026-06-06): real
-                        // phase name from current_phase + week WITHIN the phase
-                        // (1-4), not the clamped 1-4 value framed as "OF 12".
-                        //
-                        // While HOLDING, drop the week counter entirely. A hold
-                        // week sits OUTSIDE the phase's 4 weeks, so there is no
-                        // honest "WK n OF 4" for it — `getCurrentWeekNumber()`
-                        // clamps to 4 and would print "WK 4 OF 4" directly under
-                        // the `HOLDING · Hn` pill this screen also renders (live
-                        // walkthrough 2026-07-25: the two sat ~40px apart in the
-                        // same scroll view). Same rule the letterhead eyebrow
-                        // already applies — see plan_header.dart. The pill owns
-                        // the week identity during a hold.
-                        // DEPLOYMENT NN — see deploymentEyebrowLabel's doc
-                        // comment (hold_week_labels.dart) for why `phase` is
-                        // the deployment number and why this is a pure
-                        // formatter rather than an inline ternary (same
-                        // untestable-inline-ternary lesson every other label
-                        // in that file was extracted for).
-                        deploymentEyebrowLabel(
-                          phase: plan.phase,
-                          phaseName: plan.phaseName,
-                          currentWeek: plan.currentWeek,
-                          isHolding: holdStatus.isHolding,
-                        ),
-                        style: AppTypography.mono.copyWith(
-                          color: AppColors.textMute,
-                          letterSpacing: 2,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-
-                    // VIEW ROADMAP pill — Q7 surface A entry point
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(
-                          AppSpacing.screenPadding, 0, AppSpacing.screenPadding, 10),
-                      child: GestureDetector(
-                        onTap: () => context.push('/train/roadmap'),
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 14, vertical: 10),
-                          decoration: BoxDecoration(
-                            color: AppColors.input,
-                            borderRadius: BorderRadius.circular(8),
-                            border: Border.all(color: AppColors.accent),
-                          ),
-                          child: Row(
-                            children: [
-                              Icon(Icons.map_outlined,
-                                  size: 16, color: AppColors.accent),
-                              const SizedBox(width: 8),
-                              Text(
-                                'VIEW THE 12-WEEK ROADMAP',
-                                style: AppTypography.mono.copyWith(
-                                  fontSize: 11,
-                                  letterSpacing: 1.2,
-                                  color: AppColors.accent,
-                                  fontWeight: FontWeight.w800,
-                                ),
-                              ),
-                              const Spacer(),
-                              Icon(Icons.arrow_forward,
-                                  size: 14, color: AppColors.accent),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ),
-
-                    // Hold-week roadmap card — reassures a holder that Phase I
-                    // is still theirs and shows what PRO unlocks, without
-                    // touching the roadmap's week math (see HoldRoadmapStrip).
-                    if (holdStatus.isHolding) ...[
-                      HoldRoadmapStrip(currentPhase: plan.phase),
-                      const SizedBox(height: 14),
-                    ],
-
-                    // 3. This Week section label — moved BELOW Roadmap
-                    // pill per APK Test #3 / Obs 1 ordering decision.
-                    Padding(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: AppSpacing.screenPadding),
-                      child: Text(
-                        'THIS WEEK',
-                        style: AppTypography.mono.copyWith(
-                          color: AppColors.textMute,
-                          letterSpacing: 2,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-
                     // Week selector tabs
                     WeekSelector(
                       totalWeeks: plan.weeks.length.clamp(1, 12),
@@ -437,6 +337,56 @@ class _TrainScreenState extends ConsumerState<TrainScreen>
 
                     // YOUR PRs section
                     const StatsGrid(),
+
+                    const SizedBox(height: 14),
+
+                    // VIEW ROADMAP pill — Q7 surface A entry point. Moved to sit right after the
+                    // PRs block (founder call 2026-11-01) so the top of the screen is the
+                    // week's schedule; the deployment eyebrow + THIS WEEK label above it
+                    // are gone for the same reason.
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(
+                          AppSpacing.screenPadding, 0, AppSpacing.screenPadding, 10),
+                      child: GestureDetector(
+                        onTap: () => context.push('/train/roadmap'),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 14, vertical: 10),
+                          decoration: BoxDecoration(
+                            color: AppColors.input,
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(color: AppColors.accent),
+                          ),
+                          child: Row(
+                            children: [
+                              Icon(Icons.map_outlined,
+                                  size: 16, color: AppColors.accent),
+                              const SizedBox(width: 8),
+                              Text(
+                                'VIEW THE 12-WEEK ROADMAP',
+                                style: AppTypography.mono.copyWith(
+                                  fontSize: 11,
+                                  letterSpacing: 1.2,
+                                  color: AppColors.accent,
+                                  fontWeight: FontWeight.w800,
+                                ),
+                              ),
+                              const Spacer(),
+                              Icon(Icons.arrow_forward,
+                                  size: 14, color: AppColors.accent),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+
+                    // Hold-week roadmap card — reassures a holder that Phase I
+                    // is still theirs and shows what PRO unlocks, without
+                    // touching the roadmap's week math (see HoldRoadmapStrip).
+                    if (holdStatus.isHolding) ...[
+                      HoldRoadmapStrip(currentPhase: plan.phase),
+                      const SizedBox(height: 14),
+                    ],
 
                     const SizedBox(height: 20),
 

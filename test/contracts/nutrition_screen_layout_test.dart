@@ -8,12 +8,35 @@ void main() {
 
   test('NutritionScreen renders the redesigned layout', () {
     // New widgets
-    expect(source.contains('HydrationCard()'), isTrue,
-        reason: 'NutritionScreen must render the new HydrationCard.');
+    // Hydration moved behind the LOG HYDRATION button (founder call 2026-11-01):
+    // the card is NOT inline on the page any more; the page opens it in a sheet.
+    expect(source.contains('HydrationCard()'), isFalse,
+        reason: 'HydrationCard must not be inline on the page — it lives in '
+            'showHydrationSheet so the logged meals stay in view.');
+    // Comment-stripped and wired to the RIGHT callback: a mention in a comment, or
+    // LOG HYDRATION opening the food sheet, must not satisfy this pin.
+    final code = source
+        .replaceAll(RegExp(r'/\*.*?\*/', dotAll: true), '')
+        .split('\n')
+        .map((l) {
+      final at = l.indexOf('//');
+      return at < 0 ? l : l.substring(0, at);
+    }).join('\n');
+    expect(
+        RegExp(r'onLogHydration:\s*\(\)\s*=>\s*showHydrationSheet\(context\)')
+            .hasMatch(code),
+        isTrue,
+        reason: 'LOG HYDRATION must call showHydrationSheet on tap.');
+    expect(
+        RegExp(r'onLogFood:\s*\(\)\s*=>\s*showLogFoodSheet\(context\)')
+            .hasMatch(code),
+        isTrue,
+        reason: 'LOG FOOD must call showLogFoodSheet on tap.');
+    expect(source.contains('LogActionRow('), isTrue,
+        reason: 'NutritionScreen must render the LOG FOOD | LOG HYDRATION row.');
     expect(source.contains('YourFoodsSection()'), isTrue,
         reason: 'NutritionScreen must render the new YourFoodsSection.');
-    expect(source.contains('+ LOG FOOD'), isTrue,
-        reason: 'NutritionScreen must show the + LOG FOOD CTA button.');
+
     expect(source.contains('showLogFoodSheet'), isTrue,
         reason: 'CTA must call showLogFoodSheet on tap.');
 

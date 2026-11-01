@@ -5,11 +5,15 @@ import 'package:icanbefitter/core/theme/typography.dart';
 
 /// The founder's personal note — the first screen every new user reads.
 ///
-/// Copy is the founder-locked Mission Brief (Unit 5, 2026-06-14). The
-/// injury/comeback story + the "No one is coming to save you" closer are
-/// verbatim as approved. The Instagram CTA was removed from this screen
-/// (acquisition friction on the trust-building first screen — founder call
-/// 2026-06-14).
+/// Copy is the founder-locked Mission Brief (Unit 5, 2026-06-14), shortened
+/// 2026-11-01 (founder call): the injury/comeback paragraph and the "Fourteen
+/// years in uniform" paragraph were removed so the note opens with "Welcome
+/// aboard, Recruit." and goes straight to what AVYA is. The "No one is coming
+/// to save you" closer is verbatim as approved. The Instagram CTA was removed
+/// from this screen (acquisition friction on the trust-building first screen
+/// — founder call 2026-06-14). The signature block (photo, name, credentials)
+/// is unchanged, and the Profile read-only view (`readOnly: true`) shows the
+/// same copy.
 class MissionBriefScreen extends StatelessWidget {
   const MissionBriefScreen({super.key, this.readOnly = false});
 
@@ -138,28 +142,9 @@ class MissionBriefScreen extends StatelessWidget {
                     const TextSpan(text: 'Welcome aboard, Recruit.\n\n'),
                     const TextSpan(
                       text:
-                          'Early in my Navy training, I shattered my right leg '
-                          'on a cross-country run — broken in several places. '
-                          'While it healed with a rod inside, I started lifting. '
-                          'Skinny. Humbled. No coach, no gym. I just never gave '
-                          'up.\n\n',
-                    ),
-                    const TextSpan(
-                      text:
-                          'Fourteen years in uniform taught me the truth nobody '
-                          'sells you — discipline ',
-                    ),
-                    accent("isn't motivation"),
-                    const TextSpan(
-                      text:
-                          ". It's structure. A plan you follow on the days you "
-                          "don't feel like it.\n\n",
-                    ),
-                    const TextSpan(
-                      text:
-                          "That's what AVYA is. The structure of military "
-                          'training, the science of certified coaching — built '
-                          'to carry you when willpower runs out.\n\n',
+                          'AVYA is the structure of military training, the '
+                          'science of certified coaching — built to carry you '
+                          'when willpower runs out.\n\n',
                     ),
                     const TextSpan(text: 'You do the work. '),
                     accent('AVYA holds the line'),
