@@ -34,6 +34,7 @@ import 'package:icanbefitter/shared/widgets/exercise_plate/exercise_plate_thumb.
 
 const _mediaOnly = 'M2 Fixture Media Only';
 const _both = 'M2 Fixture Media And Plate';
+const _plateOnlyPair = 'M2 Fixture Plate Only Pair';
 const _mediaOnlyMedia = ExerciseMedia(slug: '0001-three-quarter-situp', version: 1);
 const _bothMedia = ExerciseMedia(slug: '0002-45-degree-side-bend', version: 1);
 
@@ -51,8 +52,9 @@ Future<void> _ensureHive() async {
   await HiveService.instance.init();
   final lib = (jsonDecode(File('assets/data/exercise_library.json').readAsStringSync()) as List).cast<Map<String, dynamic>>();
   await HiveService.instance.exerciseBox.putAll({for (final e in lib) e['id'] as String: e});
-  // The real library has NO row carrying both a plate and an animation, so the C3 case seeds one. `bench-press` is a PAIR
-  // (START and END), which is what the sheet shows when the animation is switched off.
+  // Since the OI-443 data step the real library DOES carry rows with both a plate and an animation (E001 is one; see the
+  // mirror case below), but the C3 cases keep a seeded row so they do not depend on which real rows are mapped. `bench-press`
+  // is a PAIR (START and END), which is what the sheet shows when the animation is switched off.
   await HiveService.instance.exerciseBox.put('M2_MEDIA_ONLY', {
     'id': 'M2_MEDIA_ONLY',
     'name': _mediaOnly,
@@ -66,6 +68,14 @@ Future<void> _ensureHive() async {
     'demo_pair': true,
     'media_slug': _bothMedia.slug,
     'media_version': _bothMedia.version,
+  });
+  // The plate-only case: a COPY of the real Barbell Bench Press row without its media keys (the real row has an animation now).
+  final bench = lib.firstWhere((e) => e['name'] == 'Barbell Bench Press');
+  await HiveService.instance.exerciseBox.put('M2_PLATE_ONLY_PAIR', {
+    for (final e in bench.entries)
+      if (!e.key.startsWith('media_')) e.key: e.value,
+    'id': 'M2_PLATE_ONLY_PAIR',
+    'name': _plateOnlyPair,
   });
 }
 
@@ -281,12 +291,23 @@ void main() {
     });
 
     testWidgets('a plate-only pair still shows START and END and never builds the animation view', (t) async {
-      final repo = await _openSheet(t, 'Barbell Bench Press');
+      final repo = await _openSheet(t, _plateOnlyPair);
       expect(find.byType(ExerciseAnimationView), findsNothing);
       expect(find.byType(SvgPicture), findsNWidgets(2));
       expect(find.text('START'), findsOneWidget);
       expect(find.text('END'), findsOneWidget);
       expect(repo.ensured, isEmpty);
+    });
+
+    // The mirror of the case above, on a REAL row (OI-443 data step): Barbell Bench Press (E001) has a plate pair AND an
+    // animation in the shipped library, so its sheet shows the animation and neither START nor END (C3).
+    testWidgets('the REAL Barbell Bench Press, which has both, shows ONE animation view and no plates', (t) async {
+      final repo = await _openSheet(t, 'Barbell Bench Press');
+      expect(find.byType(ExerciseAnimationView), findsOneWidget);
+      expect(find.byType(SvgPicture), findsNothing);
+      expect(find.text('START'), findsNothing);
+      expect(find.text('END'), findsNothing);
+      expect(repo.ensured, hasLength(1), reason: 'the animation is asked for once, when the sheet opens');
     });
 
     testWidgets('disable_exercise_plates: show() returns without opening the sheet', (t) async {

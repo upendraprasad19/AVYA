@@ -3,8 +3,8 @@
 // Batch M2a (plan Task 2). The app bundles one still (192 x 192 WebP) per animation so a tile can show something at once and
 // offline; the animation itself is fetched on demand. These are pure file checks of `assets/exercise_stills/` against the media
 // table (`scripts/data/library_media_v16.json`): every slug has its still, the bytes are the ones the table hashed, and nothing
-// else sits in the folder. No count is hard-coded (OI-443 adds about 160 stills); today the table holds 616 slugs and
-// 3,102,690 bytes.
+// else sits in the folder. No count is hard-coded (the OI-443 release added 137 stills); today the table holds 753 slugs and
+// 3,785,288 bytes.
 import 'dart:convert';
 import 'dart:io';
 

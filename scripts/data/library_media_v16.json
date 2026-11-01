@@ -2,7 +2,11 @@
   "_meta": {
     "bucket": "exercise-media",
     "ledger_completed_at": "2026-10-18T03:13:14.150Z",
-    "old_rows": null,
+    "old_rows": {
+      "entries": 137,
+      "omitted": 0,
+      "sha256": "943a0b1b0c5bafdfb0af7c1efa9b852e50d94980038661f519999d9ea22b6231"
+    },
     "origin": "AI recreation of the GIF set in `assets/exercise animations/forgetrainer_animations/gifs`; licensing risk accepted by the founder (D9, 2026-10-21)",
     "taken_down": [],
     "webp_bytes_max": 1500000
@@ -45,6 +49,25 @@
       ],
       "webp_bytes": 444874,
       "webp_sha256": "e7906ee5bbbd1fcd0deb01c2188ecfa4abecb781f7ad2070fcafdef85ccf748f"
+    },
+    "0003-bicycle-crunch": {
+      "frames": 24,
+      "gif": "0003",
+      "ledger_id": "0003_Bicycle_Crunch",
+      "source_gif_sha256": "51a1cd261d59a8ef5051f09c5a30750fe28fb54a34126ac2431e02c447c55844",
+      "status": "active",
+      "thumb_bytes": 4954,
+      "thumb_sha256": "b2e4dd844a49fb44d495d70eed7c212cd0df463f6204a1cb79869a4449a096cb",
+      "versions": [
+        {
+          "file": "webp-720/0003_Bicycle_Crunch_wardroom_720.webp",
+          "media_version": 1,
+          "webp_bytes": 812602,
+          "webp_sha256": "0000d33b3d493b6e49954b1cfc6a8fa4799773be3e803f08e1d1b3001cd72708"
+        }
+      ],
+      "webp_bytes": 812602,
+      "webp_sha256": "0000d33b3d493b6e49954b1cfc6a8fa4799773be3e803f08e1d1b3001cd72708"
     },
     "0006-alternate-heel-touchers": {
       "frames": 12,
@@ -160,6 +183,25 @@
       "webp_bytes": 482288,
       "webp_sha256": "d9f43c279908af8feecaf2133aea566551a80983299721d9eea5a0d0c8fa3526"
     },
+    "0025-barbell-bench-press": {
+      "frames": 12,
+      "gif": "0025",
+      "ledger_id": "0025_Barbell_Bench_Press",
+      "source_gif_sha256": "a47bcf8e12099ed470a9d760beb495292d92be3632754c0bacf90240a82d8f50",
+      "status": "active",
+      "thumb_bytes": 6780,
+      "thumb_sha256": "da0a13886d46bc4c5f6107eedf91c7cf56ccf2a64505b8f53f56aeadf1656708",
+      "versions": [
+        {
+          "file": "webp-720/0025_Barbell_Bench_Press_wardroom_720.webp",
+          "media_version": 1,
+          "webp_bytes": 588284,
+          "webp_sha256": "0f0f002f392240e413e0731a004700c453db487193cf16b6c64e1b66b77daf4a"
+        }
+      ],
+      "webp_bytes": 588284,
+      "webp_sha256": "0f0f002f392240e413e0731a004700c453db487193cf16b6c64e1b66b77daf4a"
+    },
     "0026-barbell-bench-squat": {
       "frames": 12,
       "gif": "0026",
@@ -178,6 +220,25 @@
       ],
       "webp_bytes": 509834,
       "webp_sha256": "8433c9cb5869f442514e2075b130b1a8f24183336829f9dde066030e986197cd"
+    },
+    "0027-barbell-bent-over-row": {
+      "frames": 12,
+      "gif": "0027",
+      "ledger_id": "0027_Barbell_Bent_Over_Row",
+      "source_gif_sha256": "9d9b12e427bcde4e6ab9c7e7a8ed6eafae7cad51b5518aca7993175c6bfa05ad",
+      "status": "active",
+      "thumb_bytes": 5492,
+      "thumb_sha256": "5e9a4f7fa9a217a15201c24e4c5bd5a63f879e8789e47db2450714a89d00d330",
+      "versions": [
+        {
+          "file": "webp-720/0027_Barbell_Bent_Over_Row_wardroom_720.webp",
+          "media_version": 1,
+          "webp_bytes": 465208,
+          "webp_sha256": "a1f2cc5c69a2e2f189b02348efafe54638c37bd66e37f2531841a7ba7045231b"
+        }
+      ],
+      "webp_bytes": 465208,
+      "webp_sha256": "a1f2cc5c69a2e2f189b02348efafe54638c37bd66e37f2531841a7ba7045231b"
     },
     "0028-barbell-clean-and-press": {
       "frames": 24,
@@ -216,6 +277,82 @@
       ],
       "webp_bytes": 280940,
       "webp_sha256": "12ab78139c0fa262a81f2b1e067f054a90ceed6374f6476bd6e892fffb5f5a87"
+    },
+    "0030-barbell-close-grip-bench-press": {
+      "frames": 12,
+      "gif": "0030",
+      "ledger_id": "0030_Barbell_Close_Grip_Bench_Press",
+      "source_gif_sha256": "c58c2d93f43971bbc9aac15d675e23645eb8db643f55f89b4e0ea11354f4563c",
+      "status": "active",
+      "thumb_bytes": 7284,
+      "thumb_sha256": "05a80aef463ee157da6ae7dec1fd7d31e2e3068e9d284521649a1c8c08047dde",
+      "versions": [
+        {
+          "file": "webp-720/0030_Barbell_Close_Grip_Bench_Press_wardroom_720.webp",
+          "media_version": 1,
+          "webp_bytes": 594782,
+          "webp_sha256": "04fb74f5b0f3400de2994f2c0cd98ce1d087fe6c20c13700f0d64ebd9d66eac8"
+        }
+      ],
+      "webp_bytes": 594782,
+      "webp_sha256": "04fb74f5b0f3400de2994f2c0cd98ce1d087fe6c20c13700f0d64ebd9d66eac8"
+    },
+    "0031-barbell-curl": {
+      "frames": 12,
+      "gif": "0031",
+      "ledger_id": "0031_Barbell_Curl",
+      "source_gif_sha256": "f85c1be8f899fb2743a30a6c95f0217a1ef155ea845d731ef871916f4b6526f6",
+      "status": "active",
+      "thumb_bytes": 4648,
+      "thumb_sha256": "7168ded8d95a3c6bca3552a4404d70b31d7f18c4b22697e9ee7dc3463b9d6919",
+      "versions": [
+        {
+          "file": "webp-720/0031_Barbell_Curl_wardroom_720.webp",
+          "media_version": 1,
+          "webp_bytes": 465586,
+          "webp_sha256": "3f2b5755b028764b686a0280fd99c10db4aaffefda4bf43e959a728bb584b6b0"
+        }
+      ],
+      "webp_bytes": 465586,
+      "webp_sha256": "3f2b5755b028764b686a0280fd99c10db4aaffefda4bf43e959a728bb584b6b0"
+    },
+    "0032-barbell-deadlift": {
+      "frames": 12,
+      "gif": "0032",
+      "ledger_id": "0032_Barbell_Deadlift",
+      "source_gif_sha256": "838a95a71c987d0fdc7dfefbba02de09953c2e5c7a43dbc61373d16fa3378879",
+      "status": "active",
+      "thumb_bytes": 7280,
+      "thumb_sha256": "a105b9eb8e7752fc982b8ed904c39d6de4a18847d3cc58f4007dd7cb1dabdb30",
+      "versions": [
+        {
+          "file": "webp-720/0032_Barbell_Deadlift_wardroom_720.webp",
+          "media_version": 1,
+          "webp_bytes": 422794,
+          "webp_sha256": "e8e96308e541d408da0567e4843c821d519d4973d23f9e46a8472b53e7d2e958"
+        }
+      ],
+      "webp_bytes": 422794,
+      "webp_sha256": "e8e96308e541d408da0567e4843c821d519d4973d23f9e46a8472b53e7d2e958"
+    },
+    "0033-barbell-decline-bench-press": {
+      "frames": 12,
+      "gif": "0033",
+      "ledger_id": "0033_Barbell_Decline_Bench_Press",
+      "source_gif_sha256": "71858f095266dfeaaee26c1652a89ab30fb670eff1d9ff7e0b16343f1b49d3bb",
+      "status": "active",
+      "thumb_bytes": 6330,
+      "thumb_sha256": "4a645655befdca1a5de03cdfd45eb0b5bd2f79361f37bec9a784791e4405fca6",
+      "versions": [
+        {
+          "file": "webp-720/0033_Barbell_Decline_Bench_Press_wardroom_720.webp",
+          "media_version": 1,
+          "webp_bytes": 580604,
+          "webp_sha256": "c7c1275a5f754af5b3a7ac765854a7262638ab7ee68310ad126955a06574238f"
+        }
+      ],
+      "webp_bytes": 580604,
+      "webp_sha256": "c7c1275a5f754af5b3a7ac765854a7262638ab7ee68310ad126955a06574238f"
     },
     "0035-barbell-decline-close-grip-to-skull-press": {
       "frames": 12,
@@ -312,6 +449,63 @@
       "webp_bytes": 489428,
       "webp_sha256": "2d99809f65117f0e3de68d41910ce83d47de5a858741c1c8cdef289457fe50d2"
     },
+    "0042-barbell-front-squat": {
+      "frames": 12,
+      "gif": "0042",
+      "ledger_id": "0042_Barbell_Front_Squat",
+      "source_gif_sha256": "be633a7ed5e14da09df2bbe12421300773c9796f42e0ca45bd4acf44f0c84b11",
+      "status": "active",
+      "thumb_bytes": 5838,
+      "thumb_sha256": "c8e1dc168b1f4f79e0cee6589adde43965089bc0de6db3f7442c8727e1b28df6",
+      "versions": [
+        {
+          "file": "webp-720/0042_Barbell_Front_Squat_wardroom_720.webp",
+          "media_version": 1,
+          "webp_bytes": 436690,
+          "webp_sha256": "37c77a2acda046044cba10d45aa5dc63456e9451768708bd90817e4ab4a1e5ef"
+        }
+      ],
+      "webp_bytes": 436690,
+      "webp_sha256": "37c77a2acda046044cba10d45aa5dc63456e9451768708bd90817e4ab4a1e5ef"
+    },
+    "0043-barbell-full-squat": {
+      "frames": 12,
+      "gif": "0043",
+      "ledger_id": "0043_Barbell_Full_Squat",
+      "source_gif_sha256": "ccd635e4e34651cc7b675706b3ce471a974b69c4fdee74a571ebefe9287d2158",
+      "status": "active",
+      "thumb_bytes": 5522,
+      "thumb_sha256": "5ccb686da3b308b7cec8c37ab4f34f1dda97020d013af4fb801e24a8f12ddfc1",
+      "versions": [
+        {
+          "file": "webp-720/0043_Barbell_Full_Squat_wardroom_720.webp",
+          "media_version": 1,
+          "webp_bytes": 494196,
+          "webp_sha256": "c937d5c8846d64371a91d797e4d798b45ff904cd76775b872a73a742ec7ead07"
+        }
+      ],
+      "webp_bytes": 494196,
+      "webp_sha256": "c937d5c8846d64371a91d797e4d798b45ff904cd76775b872a73a742ec7ead07"
+    },
+    "0044-barbell-good-morning": {
+      "frames": 12,
+      "gif": "0044",
+      "ledger_id": "0044_Barbell_Good_Morning",
+      "source_gif_sha256": "86e79fcfd1ec894fab89bfa9e966279e513958ae7d466de34765434589d0e8de",
+      "status": "active",
+      "thumb_bytes": 4778,
+      "thumb_sha256": "9aff00085e282a0ae0704409c0258b2c355e42415f19f2f984e303c3f660716e",
+      "versions": [
+        {
+          "file": "webp-720/0044_Barbell_Good_Morning_wardroom_720.webp",
+          "media_version": 1,
+          "webp_bytes": 411774,
+          "webp_sha256": "403a01f77222ab43c0bcc4541be31c8696b5ea86da360e3cf478de44293d3110"
+        }
+      ],
+      "webp_bytes": 411774,
+      "webp_sha256": "403a01f77222ab43c0bcc4541be31c8696b5ea86da360e3cf478de44293d3110"
+    },
     "0046-barbell-hack-squat": {
       "frames": 12,
       "gif": "0046",
@@ -330,6 +524,25 @@
       ],
       "webp_bytes": 373794,
       "webp_sha256": "fe0c3e1bced911597296e0e654f9c8175e4f4d8baf0050e06d79a03fc86d7e6d"
+    },
+    "0047-barbell-incline-bench-press": {
+      "frames": 12,
+      "gif": "0047",
+      "ledger_id": "0047_Barbell_Incline_Bench_Press",
+      "source_gif_sha256": "3ee846768a044a6120316de5639069ed3fdf1f95ed2113f29767cce08da0a7fd",
+      "status": "active",
+      "thumb_bytes": 6136,
+      "thumb_sha256": "df5cf3b1d89a7b20806a901190072783824f9d1afd23872d892123878e0fd45a",
+      "versions": [
+        {
+          "file": "webp-720/0047_Barbell_Incline_Bench_Press_wardroom_720.webp",
+          "media_version": 1,
+          "webp_bytes": 504044,
+          "webp_sha256": "1adea141ad4c86149fdb66286c89e8aa9449ce57cea69b4b78e71538ac4d623d"
+        }
+      ],
+      "webp_bytes": 504044,
+      "webp_sha256": "1adea141ad4c86149fdb66286c89e8aa9449ce57cea69b4b78e71538ac4d623d"
     },
     "0049-barbell-incline-row": {
       "frames": 12,
@@ -406,6 +619,44 @@
       ],
       "webp_bytes": 279686,
       "webp_sha256": "25e62d478e0a884339d551a082a56b0acc95ab3ad89facfd2599ab777540766d"
+    },
+    "0058-barbell-hip-thrust": {
+      "frames": 12,
+      "gif": "0058",
+      "ledger_id": "0058_Barbell_Hip_Thrust",
+      "source_gif_sha256": "e06c822019df81b2f80d8f68847779319ba441b63b3f94c1d8f89a85d8febd67",
+      "status": "active",
+      "thumb_bytes": 5250,
+      "thumb_sha256": "d793a465076359bee95dd98464dfeb7218f6d09a45f420b977361a1fb0c1136c",
+      "versions": [
+        {
+          "file": "webp-720/0058_Barbell_Hip_Thrust_wardroom_720.webp",
+          "media_version": 1,
+          "webp_bytes": 482072,
+          "webp_sha256": "cee93097c221e8ac92fd80044b1dd1797baf63c776a451a167c0cc8588ff9c3c"
+        }
+      ],
+      "webp_bytes": 482072,
+      "webp_sha256": "cee93097c221e8ac92fd80044b1dd1797baf63c776a451a167c0cc8588ff9c3c"
+    },
+    "0060-barbell-skull-crusher": {
+      "frames": 12,
+      "gif": "0060",
+      "ledger_id": "0060_Barbell_Skull_Crusher",
+      "source_gif_sha256": "6458b2b5c47a65493e5541e462eaf477267dd65ddc4a70f10b6a70b6b7c80ec8",
+      "status": "active",
+      "thumb_bytes": 5836,
+      "thumb_sha256": "adf6ae405fa296ee5db1a8b680d39bf3883f6dff9034995c687c4054472c491b",
+      "versions": [
+        {
+          "file": "webp-720/0060_Barbell_Skull_Crusher_wardroom_720.webp",
+          "media_version": 1,
+          "webp_bytes": 461278,
+          "webp_sha256": "b364a50b3a7c225f8b9f81da9c426357259d1b4bb98b86f9f7ad7bdf32715485"
+        }
+      ],
+      "webp_bytes": 461278,
+      "webp_sha256": "b364a50b3a7c225f8b9f81da9c426357259d1b4bb98b86f9f7ad7bdf32715485"
     },
     "0063-barbell-narrow-stance-squat": {
       "frames": 12,
@@ -559,6 +810,25 @@
       "webp_bytes": 385968,
       "webp_sha256": "a79a74a2b09ba9c4dd49bc4f4e0a0a8b28191b34df5295267e82f8bc8392501e"
     },
+    "0074-barbell-rack-pull": {
+      "frames": 12,
+      "gif": "0074",
+      "ledger_id": "0074_Barbell_Rack_Pull",
+      "source_gif_sha256": "88ae01d5242010ad1dd4c32261d7ea5d792c864540375f2783600301ac67b60e",
+      "status": "active",
+      "thumb_bytes": 4272,
+      "thumb_sha256": "8b0e15fe561225e03d58eaf6cb120617957d8a4974f5a73e22d2a596abb60624",
+      "versions": [
+        {
+          "file": "webp-720/0074_Barbell_Rack_Pull_wardroom_720.webp",
+          "media_version": 1,
+          "webp_bytes": 378952,
+          "webp_sha256": "561479f3b77d078d364989240f0958d290ffc0d5f41e1870b8c9ccfd208da3be"
+        }
+      ],
+      "webp_bytes": 378952,
+      "webp_sha256": "561479f3b77d078d364989240f0958d290ffc0d5f41e1870b8c9ccfd208da3be"
+    },
     "0075-barbell-rear-delt-raise": {
       "frames": 12,
       "gif": "0075",
@@ -710,6 +980,25 @@
       ],
       "webp_bytes": 283128,
       "webp_sha256": "dbaf90c8230d183eb706787baba63ef91095741015ffb213378e9e3bd9537cb0"
+    },
+    "0085-barbell-romanian-deadlift": {
+      "frames": 12,
+      "gif": "0085",
+      "ledger_id": "0085_Barbell_Romanian_Deadlift",
+      "source_gif_sha256": "25cd6a8e05851078105b4862e31b57e8ff252379d37facf1c66ee8d6c8023f32",
+      "status": "active",
+      "thumb_bytes": 4288,
+      "thumb_sha256": "f17e7bc798d0bf3deaff776616cecc2fb7c066bf966d42238414a2e6eee12571",
+      "versions": [
+        {
+          "file": "webp-720/0085_Barbell_Romanian_Deadlift_wardroom_720.webp",
+          "media_version": 1,
+          "webp_bytes": 395014,
+          "webp_sha256": "f02c34ed9cf863047eda0bee840f0104149aeebbb6d7da6383c563f36e0df9cb"
+        }
+      ],
+      "webp_bytes": 395014,
+      "webp_sha256": "f02c34ed9cf863047eda0bee840f0104149aeebbb6d7da6383c563f36e0df9cb"
     },
     "0088-barbell-seated-calf-raise": {
       "frames": 12,
@@ -1072,6 +1361,25 @@
       "webp_bytes": 424286,
       "webp_sha256": "024b2bc7ca80e53b214a49682f38cdc2358272e93d30fe3795f4e248995e1d63"
     },
+    "0117-barbell-sumo-deadlift": {
+      "frames": 12,
+      "gif": "0117",
+      "ledger_id": "0117_Barbell_Sumo_Deadlift",
+      "source_gif_sha256": "5c397a3834fe74c0e6ef2db91b0ff74b1627d93fab462ded5738275bab7f9e29",
+      "status": "active",
+      "thumb_bytes": 4654,
+      "thumb_sha256": "1c613f346cadf302ffc08eba0bffdca78aab35638f61f8ec1edcc57056cf3a06",
+      "versions": [
+        {
+          "file": "webp-720/0117_Barbell_Sumo_Deadlift_wardroom_720.webp",
+          "media_version": 1,
+          "webp_bytes": 411772,
+          "webp_sha256": "d48f6ce5aabd6e905dc0bdb92da6c96b5ba1b37f0e3fc71b0261179546109ccb"
+        }
+      ],
+      "webp_bytes": 411772,
+      "webp_sha256": "d48f6ce5aabd6e905dc0bdb92da6c96b5ba1b37f0e3fc71b0261179546109ccb"
+    },
     "0118-barbell-reverse-grip-bent-over-row": {
       "frames": 12,
       "gif": "0118",
@@ -1185,6 +1493,25 @@
       ],
       "webp_bytes": 402802,
       "webp_sha256": "0fbdd6934fde3400ca5b4b5f5e3408d76960327ef563f5a043e0cbc2aeca2c57"
+    },
+    "0127-barbell-zercher-squat": {
+      "frames": 12,
+      "gif": "0127",
+      "ledger_id": "0127_Barbell_Zercher_Squat",
+      "source_gif_sha256": "8e0b1ec42226f44cde70471acac98fdc2e5c58ddb8113cb9cf11141c20484af8",
+      "status": "active",
+      "thumb_bytes": 5702,
+      "thumb_sha256": "e15b1ae182f659dfcee59fd74130c0b84288fb5c46bfa57bef29a4596ab8aa82",
+      "versions": [
+        {
+          "file": "webp-720/0127_Barbell_Zercher_Squat_wardroom_720.webp",
+          "media_version": 1,
+          "webp_bytes": 423332,
+          "webp_sha256": "d802ec5eafa5e7a597bc32796aacc263febb66eb502503558937151c590ec383"
+        }
+      ],
+      "webp_bytes": 423332,
+      "webp_sha256": "d802ec5eafa5e7a597bc32796aacc263febb66eb502503558937151c590ec383"
     },
     "0139-bicep-narrow-pullup": {
       "frames": 12,
@@ -1338,6 +1665,44 @@
       "webp_bytes": 410288,
       "webp_sha256": "86c727a41276117058a16481a2f30ae77a7f7ec8e377db4c74a48d53f049a043"
     },
+    "0161-cable-front-raise": {
+      "frames": 12,
+      "gif": "0161",
+      "ledger_id": "0161_Cable_Front_Raise",
+      "source_gif_sha256": "e8d2b38c66d7534debdcde3077aa61057da6b871001d4fd606146b467ed3fe1d",
+      "status": "active",
+      "thumb_bytes": 3768,
+      "thumb_sha256": "ea57a6933382076a44f8b6988e83db3c058d092aec158c5d48a5efbdc98869ce",
+      "versions": [
+        {
+          "file": "webp-720/0161_Cable_Front_Raise_wardroom_720.webp",
+          "media_version": 1,
+          "webp_bytes": 286032,
+          "webp_sha256": "dbc0ac68613afe0d3e3424ed6cad8810cedd460d721004eeb357cd1281e5346b"
+        }
+      ],
+      "webp_bytes": 286032,
+      "webp_sha256": "dbc0ac68613afe0d3e3424ed6cad8810cedd460d721004eeb357cd1281e5346b"
+    },
+    "0165-cable-hammer-curl": {
+      "frames": 12,
+      "gif": "0165",
+      "ledger_id": "0165_Cable_Hammer_Curl",
+      "source_gif_sha256": "67dc157b630348c2b309aa2185d43a35fca354bd9904397204641e568123939b",
+      "status": "active",
+      "thumb_bytes": 3806,
+      "thumb_sha256": "a05ca04822ee28ae2b6c60c4eea229c0fb8fd1d4cd65bbc699714ee4d2cee68c",
+      "versions": [
+        {
+          "file": "webp-720/0165_Cable_Hammer_Curl_wardroom_720.webp",
+          "media_version": 1,
+          "webp_bytes": 293866,
+          "webp_sha256": "bb35ea0de6c427449ec84eb04e7f9410fe97417087273b47631c3a58c58cadb1"
+        }
+      ],
+      "webp_bytes": 293866,
+      "webp_sha256": "bb35ea0de6c427449ec84eb04e7f9410fe97417087273b47631c3a58c58cadb1"
+    },
     "0168-cable-hip-adduction": {
       "frames": 12,
       "gif": "0168",
@@ -1395,6 +1760,25 @@
       "webp_bytes": 296624,
       "webp_sha256": "48a8862e6abd98ff4cb1b0a54ddc5704a70bc205675c79adf2e0d4814befec0e"
     },
+    "0175-cable-kneeling-crunch": {
+      "frames": 12,
+      "gif": "0175",
+      "ledger_id": "0175_Cable_Kneeling_Crunch",
+      "source_gif_sha256": "5e9d1b1356b55f7b7611940bbbf24a29901b11548a6641bfa34765d7f0ff442d",
+      "status": "active",
+      "thumb_bytes": 4268,
+      "thumb_sha256": "49b0333cc57a5264fac794cdbbdc617907f12e4b11eefbfa2494b9c5b5734113",
+      "versions": [
+        {
+          "file": "webp-720/0175_Cable_Kneeling_Crunch_wardroom_720.webp",
+          "media_version": 1,
+          "webp_bytes": 415940,
+          "webp_sha256": "fb3cf9a3597144d0f8baf2399d6f8abf6ca339820459927791c460a3613a4387"
+        }
+      ],
+      "webp_bytes": 415940,
+      "webp_sha256": "fb3cf9a3597144d0f8baf2399d6f8abf6ca339820459927791c460a3613a4387"
+    },
     "0178-cable-lateral-raise": {
       "frames": 12,
       "gif": "0178",
@@ -1451,6 +1835,25 @@
       ],
       "webp_bytes": 501580,
       "webp_sha256": "97ce65e967c52debbca081bb0ea01dfb46eb3738bb6935c072aabe355cbc30a4"
+    },
+    "0188-cable-middle-fly": {
+      "frames": 12,
+      "gif": "0188",
+      "ledger_id": "0188_Cable_Middle_Fly",
+      "source_gif_sha256": "aec67e31ed7761b5435c6d91bf90159b35291c85ed4ee664d16e2aade1bccfbb",
+      "status": "active",
+      "thumb_bytes": 4308,
+      "thumb_sha256": "35ae6803335e130dcdfc3e0d5537b70333940c6aeaf3e429fa99d447fdaaf302",
+      "versions": [
+        {
+          "file": "webp-720/0188_Cable_Middle_Fly_wardroom_720.webp",
+          "media_version": 1,
+          "webp_bytes": 322894,
+          "webp_sha256": "9dd7538a80c54e49b57b4011cacaa2f5d57785e21785987238a2bfb38b02bd5c"
+        }
+      ],
+      "webp_bytes": 322894,
+      "webp_sha256": "9dd7538a80c54e49b57b4011cacaa2f5d57785e21785987238a2bfb38b02bd5c"
     },
     "0189-cable-single-arm-bent-over-row": {
       "frames": 12,
@@ -1547,6 +1950,44 @@
       "webp_bytes": 465306,
       "webp_sha256": "3193955bb172c1ae78f07f5d26af8dc02826b71fa7cc82acb3b34226b201c080"
     },
+    "0196-cable-pull-through": {
+      "frames": 12,
+      "gif": "0196",
+      "ledger_id": "0196_Cable_Pull_Through",
+      "source_gif_sha256": "8c328f682c571955b29f723293ed53af15c670f461d33a1eace4ffdac52c5aa7",
+      "status": "active",
+      "thumb_bytes": 3820,
+      "thumb_sha256": "f9bced99ee727e10de26ec774448e7a1c4ece44ce8e9598d75e76291648fe3bf",
+      "versions": [
+        {
+          "file": "webp-720/0196_Cable_Pull_Through_wardroom_720.webp",
+          "media_version": 1,
+          "webp_bytes": 323216,
+          "webp_sha256": "670e4d24b85c86165d454a9c4e96b6050abd8d20d51287de684f8b917726152e"
+        }
+      ],
+      "webp_bytes": 323216,
+      "webp_sha256": "670e4d24b85c86165d454a9c4e96b6050abd8d20d51287de684f8b917726152e"
+    },
+    "0198-cable-lat-pulldown": {
+      "frames": 12,
+      "gif": "0198",
+      "ledger_id": "0198_Cable_Lat_Pulldown",
+      "source_gif_sha256": "76b128f34e9b207a7360e1eced2bc9b2cc6a4f9acbca62fc4f98627a37594ed2",
+      "status": "active",
+      "thumb_bytes": 4938,
+      "thumb_sha256": "6d1c286ff45d984182dbfb8b042e5aff08ca8d22c10e64ad615e6264cbf47e12",
+      "versions": [
+        {
+          "file": "webp-720/0198_Cable_Lat_Pulldown_wardroom_720.webp",
+          "media_version": 1,
+          "webp_bytes": 429470,
+          "webp_sha256": "4e00925a22662592de3972624aff27c333bbe512b64e9fa21ef09ff552703716"
+        }
+      ],
+      "webp_bytes": 429470,
+      "webp_sha256": "4e00925a22662592de3972624aff27c333bbe512b64e9fa21ef09ff552703716"
+    },
     "0200-cable-rope-pushdown": {
       "frames": 12,
       "gif": "0200",
@@ -1565,6 +2006,25 @@
       ],
       "webp_bytes": 314364,
       "webp_sha256": "803d1ddc6e8c9de53492854909c3b1a98dde6d331b80e97fe36b5c529b4e2d0b"
+    },
+    "0201-cable-tricep-pushdown": {
+      "frames": 12,
+      "gif": "0201",
+      "ledger_id": "0201_Cable_Tricep_Pushdown",
+      "source_gif_sha256": "193c0f4957df2e18525882ad17d7ca2e0aeeb73eb8981a822be89d731518a791",
+      "status": "active",
+      "thumb_bytes": 4528,
+      "thumb_sha256": "07e0f0470669c7db534d4eafc83e618cd59532319602ef5d749b93f99c752997",
+      "versions": [
+        {
+          "file": "webp-720/0201_Cable_Tricep_Pushdown_wardroom_720.webp",
+          "media_version": 1,
+          "webp_bytes": 329454,
+          "webp_sha256": "cbf127b79781597913f10fe8a45aea0b541a1102562b043fb215cc92162abac0"
+        }
+      ],
+      "webp_bytes": 329454,
+      "webp_sha256": "cbf127b79781597913f10fe8a45aea0b541a1102562b043fb215cc92162abac0"
     },
     "0202-cable-rear-delt-row": {
       "frames": 12,
@@ -1870,6 +2330,25 @@
       "webp_bytes": 252210,
       "webp_sha256": "19b029179d9e20d4d888edec7ad75557fed4646b41f5792eeb9f871d1e1edb0e"
     },
+    "0233-face-pull": {
+      "frames": 12,
+      "gif": "0233",
+      "ledger_id": "0233_Face_Pull",
+      "source_gif_sha256": "e797142741c4d7934c71284a06fbd6fc31972751cd1993228576eb6ce3ff61aa",
+      "status": "active",
+      "thumb_bytes": 5660,
+      "thumb_sha256": "7afc0f3ffa215f4f93b4c5c39edee3218f5005f26e0516e80a2cb8ea45ba9f6f",
+      "versions": [
+        {
+          "file": "webp-720/0233_Face_Pull_wardroom_720.webp",
+          "media_version": 1,
+          "webp_bytes": 444496,
+          "webp_sha256": "42948bd48cb19f6bbdde53b643d44c289b6dcdfabe419377934fece210066a20"
+        }
+      ],
+      "webp_bytes": 444496,
+      "webp_sha256": "42948bd48cb19f6bbdde53b643d44c289b6dcdfabe419377934fece210066a20"
+    },
     "0235-cable-external-shoulder-rotation": {
       "frames": 12,
       "gif": "0235",
@@ -1907,6 +2386,25 @@
       ],
       "webp_bytes": 191620,
       "webp_sha256": "a33dfd2f45c0a1200673510c783a3529f284c445674d92c4b2364af5942eed8c"
+    },
+    "0238-cable-straight-arm-pulldown": {
+      "frames": 12,
+      "gif": "0238",
+      "ledger_id": "0238_Cable_Straight_Arm_Pulldown",
+      "source_gif_sha256": "4bc17eed3afb5625ba74a3ad3916f9b03c8f5e6a68d8fb24ecf99107777e3d23",
+      "status": "active",
+      "thumb_bytes": 3350,
+      "thumb_sha256": "772866dc4e447171663a100add3cc896b8fae969ad2f8b51cd76a59638e10230",
+      "versions": [
+        {
+          "file": "webp-720/0238_Cable_Straight_Arm_Pulldown_wardroom_720.webp",
+          "media_version": 1,
+          "webp_bytes": 282042,
+          "webp_sha256": "c1b8dce4da920583672ce5c0cbaf43b5d7aff1b73d14f26ab9175ec3998299de"
+        }
+      ],
+      "webp_bytes": 282042,
+      "webp_sha256": "c1b8dce4da920583672ce5c0cbaf43b5d7aff1b73d14f26ab9175ec3998299de"
     },
     "0239-cable-straight-back-seated-row": {
       "frames": 12,
@@ -1983,6 +2481,25 @@
       ],
       "webp_bytes": 458950,
       "webp_sha256": "723ac71334a342a8aeda79b0a453b2d66bd69f6d4922f3da283fedbaf3f50f28"
+    },
+    "0251-chest-dip": {
+      "frames": 12,
+      "gif": "0251",
+      "ledger_id": "0251_Chest_Dip",
+      "source_gif_sha256": "4f2272b086c1035b782afce25e63548d20f57b925a02b7aa3f1459efd0814d10",
+      "status": "active",
+      "thumb_bytes": 6986,
+      "thumb_sha256": "1d5a338660247c86fff353f26c18beec28d84a68e0f2e2d46e37d4be483d6761",
+      "versions": [
+        {
+          "file": "webp-720/0251_Chest_Dip_wardroom_720.webp",
+          "media_version": 1,
+          "webp_bytes": 404518,
+          "webp_sha256": "91f156595ea0ef0eff382e7df8a81cd25fec107d463779a96929c2031c88f458"
+        }
+      ],
+      "webp_bytes": 404518,
+      "webp_sha256": "91f156595ea0ef0eff382e7df8a81cd25fec107d463779a96929c2031c88f458"
     },
     "0253-narrow-neutral-grip-chinup": {
       "frames": 12,
@@ -2079,6 +2596,44 @@
       "webp_bytes": 426672,
       "webp_sha256": "e25d2c60c83693191b0853bd40c0e1972dd0da6f3aa573840fac570ef482b79e"
     },
+    "0274-crunch-floor": {
+      "frames": 12,
+      "gif": "0274",
+      "ledger_id": "0274_Crunch_Floor",
+      "source_gif_sha256": "e3b493c1584ec46a36c31ccff034b808ce416c4142596069a3a1f781abb0a1f1",
+      "status": "active",
+      "thumb_bytes": 5954,
+      "thumb_sha256": "4abb416bd99a6584ba225f875a3262a2cadea63aa8ae766a443e5273abf15cbe",
+      "versions": [
+        {
+          "file": "webp-720/0274_Crunch_Floor_wardroom_720.webp",
+          "media_version": 1,
+          "webp_bytes": 404398,
+          "webp_sha256": "2e7d5d58433d15ea68e06abd5510dc674df8355cc766cdc94e864e3e7a917776"
+        }
+      ],
+      "webp_bytes": 404398,
+      "webp_sha256": "2e7d5d58433d15ea68e06abd5510dc674df8355cc766cdc94e864e3e7a917776"
+    },
+    "0276-dead-bug": {
+      "frames": 12,
+      "gif": "0276",
+      "ledger_id": "0276_Dead_Bug",
+      "source_gif_sha256": "2c13960310a73f0c169869c23cb793a21d02927c5fc68aeec0679125d742c438",
+      "status": "active",
+      "thumb_bytes": 4240,
+      "thumb_sha256": "2e36794a6512ab54bc47008cd462ef745142a1bb63f308c38d2d54cdd9d3cb18",
+      "versions": [
+        {
+          "file": "webp-720/0276_Dead_Bug_wardroom_720.webp",
+          "media_version": 1,
+          "webp_bytes": 355482,
+          "webp_sha256": "a11d2425dbd1e4290333a194b1650dc74fd384e3641df8633c3cde27d6625767"
+        }
+      ],
+      "webp_bytes": 355482,
+      "webp_sha256": "a11d2425dbd1e4290333a194b1650dc74fd384e3641df8633c3cde27d6625767"
+    },
     "0277-decline-crunch": {
       "frames": 12,
       "gif": "0277",
@@ -2097,6 +2652,82 @@
       ],
       "webp_bytes": 361298,
       "webp_sha256": "026332eb57b9fcb90d48679030c00834f063d5bff6271ebdd942ed4244ceb699"
+    },
+    "0279-incline-pushup": {
+      "frames": 12,
+      "gif": "0279",
+      "ledger_id": "0279_Incline_Pushup",
+      "source_gif_sha256": "a656bd2f0d1c4e122c633763d82244e7f5b3f52b527ac5f2b0c2eac65c6ff4db",
+      "status": "active",
+      "thumb_bytes": 3104,
+      "thumb_sha256": "1de8e61e3a0b338acfc38c676ec926ad792d8ee48e3049350c930adcbdd10d81",
+      "versions": [
+        {
+          "file": "webp-720/0279_Incline_Pushup_wardroom_720.webp",
+          "media_version": 1,
+          "webp_bytes": 299906,
+          "webp_sha256": "907eb3cd4070c506e8c1df584cffbe66c35c49c93c734f686ba58e980a4dcf44"
+        }
+      ],
+      "webp_bytes": 299906,
+      "webp_sha256": "907eb3cd4070c506e8c1df584cffbe66c35c49c93c734f686ba58e980a4dcf44"
+    },
+    "0282-decline-situp": {
+      "frames": 12,
+      "gif": "0282",
+      "ledger_id": "0282_Decline_Situp",
+      "source_gif_sha256": "edccd6f1e0b1d72d14152b8ad6d0ccdf7ee1e027870f27536bebe8c435113262",
+      "status": "active",
+      "thumb_bytes": 5260,
+      "thumb_sha256": "e36fc9bf98450357dc551738af4dde676341b082d24ab7f1b25588cb51b9ad18",
+      "versions": [
+        {
+          "file": "webp-720/0282_Decline_Situp_wardroom_720.webp",
+          "media_version": 1,
+          "webp_bytes": 421936,
+          "webp_sha256": "f4ae2108642882a5d17b5ba230247287f6b1228b23c26e003237ef195e83f6e5"
+        }
+      ],
+      "webp_bytes": 421936,
+      "webp_sha256": "f4ae2108642882a5d17b5ba230247287f6b1228b23c26e003237ef195e83f6e5"
+    },
+    "0283-diamond-pushup": {
+      "frames": 12,
+      "gif": "0283",
+      "ledger_id": "0283_Diamond_Pushup",
+      "source_gif_sha256": "1c762fb032fe5eec499fbb0c249b95f10d6b461c21e39927ee1692c4d417d595",
+      "status": "active",
+      "thumb_bytes": 3798,
+      "thumb_sha256": "166af9c05c29b6002ef7d3063aa7ba30ae5063b7c1b1e29ae4a1cce20f496d11",
+      "versions": [
+        {
+          "file": "webp-720/0283_Diamond_Pushup_wardroom_720.webp",
+          "media_version": 1,
+          "webp_bytes": 441356,
+          "webp_sha256": "f5bf280e81aa95eeb0af12f43ecce19a2b5224fdc3491d64b2b034a27315ae21"
+        }
+      ],
+      "webp_bytes": 441356,
+      "webp_sha256": "f5bf280e81aa95eeb0af12f43ecce19a2b5224fdc3491d64b2b034a27315ae21"
+    },
+    "0284-donkey-calf-raise": {
+      "frames": 12,
+      "gif": "0284",
+      "ledger_id": "0284_Donkey_Calf_Raise",
+      "source_gif_sha256": "57a9a7421e1f5a90260dcf8146f2fefced990e6420ca085230ded04340eff21d",
+      "status": "active",
+      "thumb_bytes": 6426,
+      "thumb_sha256": "3cd17fcac4a762dd9a4143d1d684662e3d6e70f9e1cbe94fabee9e920ef0d168",
+      "versions": [
+        {
+          "file": "webp-720/0284_Donkey_Calf_Raise_wardroom_720.webp",
+          "media_version": 1,
+          "webp_bytes": 454440,
+          "webp_sha256": "f37d8be4ec6882b963ded156ea662b97fa4272fa9c091b40668f09df6bf6cd60"
+        }
+      ],
+      "webp_bytes": 454440,
+      "webp_sha256": "f37d8be4ec6882b963ded156ea662b97fa4272fa9c091b40668f09df6bf6cd60"
     },
     "0285-dumbbell-alternate-bicep-curl": {
       "frames": 12,
@@ -2136,6 +2767,25 @@
       "webp_bytes": 213534,
       "webp_sha256": "58ace4b186951e05da33d44ca5e92e123df3189baaf2444fd10fe080ea6537f3"
     },
+    "0289-dumbbell-bench-press": {
+      "frames": 12,
+      "gif": "0289",
+      "ledger_id": "0289_Dumbbell_Bench_Press",
+      "source_gif_sha256": "d4c01bebb4fe66bf574f290421f3dd0442682055a2df0ec55160abcab0a0b835",
+      "status": "active",
+      "thumb_bytes": 6362,
+      "thumb_sha256": "e1c64526e3a1a2c1da0bd17aa0a8bbc112e7d918fe234b67e315bab49ab60c74",
+      "versions": [
+        {
+          "file": "webp-720/0289_Dumbbell_Bench_Press_wardroom_720.webp",
+          "media_version": 1,
+          "webp_bytes": 482776,
+          "webp_sha256": "ba2a2da8fa26ee4fde724922c869ca1f24a80ae763589b7ac6b331f17cd8b603"
+        }
+      ],
+      "webp_bytes": 482776,
+      "webp_sha256": "ba2a2da8fa26ee4fde724922c869ca1f24a80ae763589b7ac6b331f17cd8b603"
+    },
     "0291-dumbbell-bench-squat": {
       "frames": 12,
       "gif": "0291",
@@ -2155,6 +2805,25 @@
       "webp_bytes": 390778,
       "webp_sha256": "69fe3152b0986a6fd009f530841ae93d224a3cab8fe645ab9e8a93b0e09118a5"
     },
+    "0292-dumbbell-single-arm-bent-over-row": {
+      "frames": 12,
+      "gif": "0292",
+      "ledger_id": "0292_Dumbbell_Single_Arm_Bent_Over_Row",
+      "source_gif_sha256": "51082ea62e7fa606593401680a2838ea35daab6abd9c10bba7083ce8b2151984",
+      "status": "active",
+      "thumb_bytes": 7104,
+      "thumb_sha256": "35c91fd097218c5eeee28813ab998fc2c2d88ca3761a5da9ae9dae3e3418bf5a",
+      "versions": [
+        {
+          "file": "webp-720/0292_Dumbbell_Single_Arm_Bent_Over_Row_wardroom_720.webp",
+          "media_version": 1,
+          "webp_bytes": 516814,
+          "webp_sha256": "5609d81134ffec16968dc01b33eae99c0933285b85132117c5e308b5d2e6b83b"
+        }
+      ],
+      "webp_bytes": 516814,
+      "webp_sha256": "5609d81134ffec16968dc01b33eae99c0933285b85132117c5e308b5d2e6b83b"
+    },
     "0293-dumbbell-bent-over-row": {
       "frames": 12,
       "gif": "0293",
@@ -2173,6 +2842,25 @@
       ],
       "webp_bytes": 517968,
       "webp_sha256": "13a78a2c459513203eb354fb3676ff907316d286b663c304d8634cb8ab4696a2"
+    },
+    "0294-dumbbell-bicep-curl": {
+      "frames": 12,
+      "gif": "0294",
+      "ledger_id": "0294_Dumbbell_Bicep_Curl",
+      "source_gif_sha256": "ff38ac48f00a05abd096f4443467a7dc30392a428c08ed19ab2f5d44f7a4321e",
+      "status": "active",
+      "thumb_bytes": 3734,
+      "thumb_sha256": "349fb40d380f8e6fe5c6b78f7d5c53b372449bef21f7f2c11b7fe2f233e8f1be",
+      "versions": [
+        {
+          "file": "webp-720/0294_Dumbbell_Bicep_Curl_wardroom_720.webp",
+          "media_version": 1,
+          "webp_bytes": 299508,
+          "webp_sha256": "eed32beb92ba0520838302a9b07692f069f25c52a25bc16f96bde7ac8e077c85"
+        }
+      ],
+      "webp_bytes": 299508,
+      "webp_sha256": "eed32beb92ba0520838302a9b07692f069f25c52a25bc16f96bde7ac8e077c85"
     },
     "0295-dumbbell-clean": {
       "frames": 18,
@@ -2211,6 +2899,25 @@
       ],
       "webp_bytes": 569550,
       "webp_sha256": "3a84e99839d1f7eb1d93d8b65bffaf3ebbccb82bad3775869ddfc21385c89972"
+    },
+    "0297-dumbbell-concentration-curl": {
+      "frames": 12,
+      "gif": "0297",
+      "ledger_id": "0297_Dumbbell_Concentration_Curl",
+      "source_gif_sha256": "3945fec329b7ebc1dbb29b5642989b37f0fb922b87169e12b0653ab48c4dfe32",
+      "status": "active",
+      "thumb_bytes": 6368,
+      "thumb_sha256": "da85aa102b411679d287d0a0f2da01171dcf0c68feb5c60b57c7f268832133fc",
+      "versions": [
+        {
+          "file": "webp-720/0297_Dumbbell_Concentration_Curl_wardroom_720.webp",
+          "media_version": 1,
+          "webp_bytes": 529666,
+          "webp_sha256": "21b11565986a76015452cd7ee507762d53aecf120a69154c347d79ed4d1330ed"
+        }
+      ],
+      "webp_bytes": 529666,
+      "webp_sha256": "21b11565986a76015452cd7ee507762d53aecf120a69154c347d79ed4d1330ed"
     },
     "0298-dumbbell-cross-body-hammer-curl": {
       "frames": 12,
@@ -2268,6 +2975,25 @@
       ],
       "webp_bytes": 287392,
       "webp_sha256": "ca8b4eedd331121309b4b79a98402346b7c6074c7338e55fbebd145d0daa04e9"
+    },
+    "0301-dumbbell-decline-bench-press": {
+      "frames": 12,
+      "gif": "0301",
+      "ledger_id": "0301_Dumbbell_Decline_Bench_Press",
+      "source_gif_sha256": "2895ee256b2625cc46cb62f8d2acf5b107eae822a6711f7bf4d1c1eceac092c0",
+      "status": "active",
+      "thumb_bytes": 6068,
+      "thumb_sha256": "ed2ed5e0886120ea80c648ccb38bff50cafd6fee854a70cfd42313da7fbdc049",
+      "versions": [
+        {
+          "file": "webp-720/0301_Dumbbell_Decline_Bench_Press_wardroom_720.webp",
+          "media_version": 1,
+          "webp_bytes": 414252,
+          "webp_sha256": "6f6b32d6c99c3b67b654c96f6bccafc0bd5e9b8a7aea747ab2ed0d54d31df201"
+        }
+      ],
+      "webp_bytes": 414252,
+      "webp_sha256": "6f6b32d6c99c3b67b654c96f6bccafc0bd5e9b8a7aea747ab2ed0d54d31df201"
     },
     "0302-dumbbell-decline-fly": {
       "frames": 12,
@@ -2364,6 +3090,44 @@
       "webp_bytes": 388612,
       "webp_sha256": "7997586f0977801668d05518447982d5b4f6b9472fe71f1d8b2bda022e471cff"
     },
+    "0308-dumbbell-fly": {
+      "frames": 12,
+      "gif": "0308",
+      "ledger_id": "0308_Dumbbell_Fly",
+      "source_gif_sha256": "5d17d4efa48b6bc148f58a21cb6257eddd28f897ee8f348660d0e606d5526979",
+      "status": "active",
+      "thumb_bytes": 6772,
+      "thumb_sha256": "9795cc2c41d2de53353f707b79cb7531b32a44cd5ea75b038789ba3b184d1815",
+      "versions": [
+        {
+          "file": "webp-720/0308_Dumbbell_Fly_wardroom_720.webp",
+          "media_version": 1,
+          "webp_bytes": 547018,
+          "webp_sha256": "e851becac71a012650f3a9ba9b4abb7af90894829fa3dfb851c19adf12d4509a"
+        }
+      ],
+      "webp_bytes": 547018,
+      "webp_sha256": "e851becac71a012650f3a9ba9b4abb7af90894829fa3dfb851c19adf12d4509a"
+    },
+    "0310-dumbbell-front-raise": {
+      "frames": 12,
+      "gif": "0310",
+      "ledger_id": "0310_Dumbbell_Front_Raise",
+      "source_gif_sha256": "9f3aa3c228d47073659c9e182abcdf91b3a564960e79432da314c0912584d8b3",
+      "status": "active",
+      "thumb_bytes": 3916,
+      "thumb_sha256": "93981b9fdb2dc8f7d1b68cf9fab586996e88a20425546e99516b9edda04bd54e",
+      "versions": [
+        {
+          "file": "webp-720/0310_Dumbbell_Front_Raise_wardroom_720.webp",
+          "media_version": 1,
+          "webp_bytes": 325654,
+          "webp_sha256": "90fef0162638e3992f2247aa6ab24b2be7b8db9611335391ad89b44c13a43838"
+        }
+      ],
+      "webp_bytes": 325654,
+      "webp_sha256": "90fef0162638e3992f2247aa6ab24b2be7b8db9611335391ad89b44c13a43838"
+    },
     "0311-dumbbell-full-can-lateral-raise": {
       "frames": 12,
       "gif": "0311",
@@ -2382,6 +3146,82 @@
       ],
       "webp_bytes": 363606,
       "webp_sha256": "27f4871424782bff92405d8529221336f948c89459c82bf701c0584b8f291c09"
+    },
+    "0313-dumbbell-hammer-curl": {
+      "frames": 12,
+      "gif": "0313",
+      "ledger_id": "0313_Dumbbell_Hammer_Curl",
+      "source_gif_sha256": "1e2ca50aca2a300778d6ce375892c441a710754fd579eb3206aa554fb8807368",
+      "status": "active",
+      "thumb_bytes": 3964,
+      "thumb_sha256": "928412906e07b66d0967e3ea77d25a327b66d5a6005a60db63f4836e7f3e1a7b",
+      "versions": [
+        {
+          "file": "webp-720/0313_Dumbbell_Hammer_Curl_wardroom_720.webp",
+          "media_version": 1,
+          "webp_bytes": 329940,
+          "webp_sha256": "668512ff5e83a585a35edde30ad6c3a5e371b782a37ace1eb55a2b816f94b589"
+        }
+      ],
+      "webp_bytes": 329940,
+      "webp_sha256": "668512ff5e83a585a35edde30ad6c3a5e371b782a37ace1eb55a2b816f94b589"
+    },
+    "0314-dumbbell-incline-bench-press": {
+      "frames": 12,
+      "gif": "0314",
+      "ledger_id": "0314_Dumbbell_Incline_Bench_Press",
+      "source_gif_sha256": "0f42744eccd765364bc9cc750edda05faed5d2acd6a57418cb2fe6d8c2430a7d",
+      "status": "active",
+      "thumb_bytes": 5342,
+      "thumb_sha256": "69a75719503a047d1e363869323f0f1bfabbed40c63bef4ed5729c290e4244d8",
+      "versions": [
+        {
+          "file": "webp-720/0314_Dumbbell_Incline_Bench_Press_wardroom_720.webp",
+          "media_version": 1,
+          "webp_bytes": 349074,
+          "webp_sha256": "44c6853ffa72068feb4a7d2c2e4a39eb2bb02bfa2fc1b499afc59323345c894e"
+        }
+      ],
+      "webp_bytes": 349074,
+      "webp_sha256": "44c6853ffa72068feb4a7d2c2e4a39eb2bb02bfa2fc1b499afc59323345c894e"
+    },
+    "0315-dumbbell-incline-bicep-curl": {
+      "frames": 12,
+      "gif": "0315",
+      "ledger_id": "0315_Dumbbell_Incline_Bicep_Curl",
+      "source_gif_sha256": "81d87735f45e10b9e7df11da2d80709a7c01312645c8b31b0e4a9f6531bf1014",
+      "status": "active",
+      "thumb_bytes": 7184,
+      "thumb_sha256": "f8847e00de5563b60f538ba98d8722e14395ac9a7447384c7422b3f221d1809d",
+      "versions": [
+        {
+          "file": "webp-720/0315_Dumbbell_Incline_Bicep_Curl_wardroom_720.webp",
+          "media_version": 1,
+          "webp_bytes": 672480,
+          "webp_sha256": "b451c4f0b3209c6f04efbcd298973441edc5adf41fbaf58125962a267382bc98"
+        }
+      ],
+      "webp_bytes": 672480,
+      "webp_sha256": "b451c4f0b3209c6f04efbcd298973441edc5adf41fbaf58125962a267382bc98"
+    },
+    "0319-dumbbell-incline-fly": {
+      "frames": 12,
+      "gif": "0319",
+      "ledger_id": "0319_Dumbbell_Incline_Fly",
+      "source_gif_sha256": "06b1f08b3aeae20093293df3954ad5b52ac805c6724a5e5e73ae82b9b8eac9a6",
+      "status": "active",
+      "thumb_bytes": 5416,
+      "thumb_sha256": "b17ce8aa11013e86873656f3cec4c50eb68857c1f4d97897f86f7bb54bda2629",
+      "versions": [
+        {
+          "file": "webp-720/0319_Dumbbell_Incline_Fly_wardroom_720.webp",
+          "media_version": 1,
+          "webp_bytes": 457824,
+          "webp_sha256": "442c157efef68a8226fddfbff66f0b70e3ce318b904c86fb2fe89b2af60f1c7c"
+        }
+      ],
+      "webp_bytes": 457824,
+      "webp_sha256": "442c157efef68a8226fddfbff66f0b70e3ce318b904c86fb2fe89b2af60f1c7c"
     },
     "0320-dumbbell-incline-hammer-curl": {
       "frames": 12,
@@ -2573,6 +3413,44 @@
       "webp_bytes": 380090,
       "webp_sha256": "6245049d4a1f716420c0e09829f2fc459cc105cdaf32e55292a407c265518f69"
     },
+    "0333-dumbbell-kickback": {
+      "frames": 12,
+      "gif": "0333",
+      "ledger_id": "0333_Dumbbell_Kickback",
+      "source_gif_sha256": "69cb41d7f9310fdbf513d84d9b60c40b1cc29fb9e3d328175b4da6596777382c",
+      "status": "active",
+      "thumb_bytes": 5850,
+      "thumb_sha256": "7ebaca7d11c72af6d80b0574347c10c4970566135926d65e35a5ae9362840ebd",
+      "versions": [
+        {
+          "file": "webp-720/0333_Dumbbell_Kickback_wardroom_720.webp",
+          "media_version": 1,
+          "webp_bytes": 463720,
+          "webp_sha256": "48a6830f370d1e26e430e5b9aaef344f1eedf47e09e106dc3f9a195cc93abab7"
+        }
+      ],
+      "webp_bytes": 463720,
+      "webp_sha256": "48a6830f370d1e26e430e5b9aaef344f1eedf47e09e106dc3f9a195cc93abab7"
+    },
+    "0334-dumbbell-lateral-raise": {
+      "frames": 12,
+      "gif": "0334",
+      "ledger_id": "0334_Dumbbell_Lateral_Raise",
+      "source_gif_sha256": "38eb2c194994601739676cfdff8c765d93abd66443da427971a91ccfdfe2c4c3",
+      "status": "active",
+      "thumb_bytes": 4048,
+      "thumb_sha256": "f313ce6ac5c88313076649929a5ec35505dfc19338074671eb2c52036f03615d",
+      "versions": [
+        {
+          "file": "webp-720/0334_Dumbbell_Lateral_Raise_wardroom_720.webp",
+          "media_version": 1,
+          "webp_bytes": 330112,
+          "webp_sha256": "0c10cd23a7881ed29e60da293de88ee28ad2c0c694b3e41342398c9129909cd0"
+        }
+      ],
+      "webp_bytes": 330112,
+      "webp_sha256": "0c10cd23a7881ed29e60da293de88ee28ad2c0c694b3e41342398c9129909cd0"
+    },
     "0335-dumbbell-lateral-to-front-raise": {
       "frames": 24,
       "gif": "0335",
@@ -2686,6 +3564,25 @@
       ],
       "webp_bytes": 578406,
       "webp_sha256": "e47d6cf53894a87b284c348be6b70a01b34dc665117abd53c26fd9250f34fc01"
+    },
+    "0343-dumbbell-lying-single-arm-press": {
+      "frames": 12,
+      "gif": "0343",
+      "ledger_id": "0343_Dumbbell_Lying_Single_Arm_Press",
+      "source_gif_sha256": "35f8c71cd424a712fa8e176a076236d84d34321f1ddb8a0acccbed2ec1a3c81d",
+      "status": "active",
+      "thumb_bytes": 6048,
+      "thumb_sha256": "1df5af8058364d172e35eec9f4f99da314c51f4a9e4d69ebd5369a1946d124e7",
+      "versions": [
+        {
+          "file": "webp-720/0343_Dumbbell_Lying_Single_Arm_Press_wardroom_720.webp",
+          "media_version": 1,
+          "webp_bytes": 432748,
+          "webp_sha256": "e11cc21db992c59c85c1cf03ae9d728c13e613fcb938dbc066cc53593689ccb6"
+        }
+      ],
+      "webp_bytes": 432748,
+      "webp_sha256": "e11cc21db992c59c85c1cf03ae9d728c13e613fcb938dbc066cc53593689ccb6"
     },
     "0345-dumbbell-lying-single-arm-rear-lateral-raise": {
       "frames": 12,
@@ -3219,6 +4116,25 @@
       "webp_bytes": 306310,
       "webp_sha256": "e8874442bb1d74402b0daaa239ee5bfc95ad400425a454aee3e69b53b6c55a51"
     },
+    "0383-dumbbell-reverse-fly": {
+      "frames": 12,
+      "gif": "0383",
+      "ledger_id": "0383_Dumbbell_Reverse_Fly",
+      "source_gif_sha256": "cef36ded120eb2ac7bafc1c955bac3961ec006da2ed7527bcb4f568eb4b0f84c",
+      "status": "active",
+      "thumb_bytes": 6136,
+      "thumb_sha256": "f3c2028b3bbf99eb905a4e25963ac0276f9d4c8b04c0c7c4603f9569e2133762",
+      "versions": [
+        {
+          "file": "webp-720/0383_Dumbbell_Reverse_Fly_wardroom_720.webp",
+          "media_version": 1,
+          "webp_bytes": 465474,
+          "webp_sha256": "41651d6b9083e2290a3ef739b943bd2f7a100c994e204949e26bbb40c513025f"
+        }
+      ],
+      "webp_bytes": 465474,
+      "webp_sha256": "41651d6b9083e2290a3ef739b943bd2f7a100c994e204949e26bbb40c513025f"
+    },
     "0384-dumbbell-reverse-preacher-curl": {
       "frames": 12,
       "gif": "0384",
@@ -3237,6 +4153,25 @@
       ],
       "webp_bytes": 384382,
       "webp_sha256": "857c9cdab4d1f3dffc8bcd9e79f8774456396ee4bc986e45da7768148ea9449d"
+    },
+    "0385-dumbbell-reverse-wrist-curl": {
+      "frames": 12,
+      "gif": "0385",
+      "ledger_id": "0385_Dumbbell_Reverse_Wrist_Curl",
+      "source_gif_sha256": "9762ee94cce4b2c4f307f312fed89ca7dfe86381c4fa8c5a6fab6b09b2c07304",
+      "status": "active",
+      "thumb_bytes": 6048,
+      "thumb_sha256": "98b7df370720831270395baafaa012ffff95aab8e7f7f92c9afa7bf5d212a01d",
+      "versions": [
+        {
+          "file": "webp-720/0385_Dumbbell_Reverse_Wrist_Curl_wardroom_720.webp",
+          "media_version": 1,
+          "webp_bytes": 529614,
+          "webp_sha256": "463ac51d6b4d7c9e95a5b8666d64a6d2257ce5a7f8c0ac911e6adc4b83cd00ca"
+        }
+      ],
+      "webp_bytes": 529614,
+      "webp_sha256": "463ac51d6b4d7c9e95a5b8666d64a6d2257ce5a7f8c0ac911e6adc4b83cd00ca"
     },
     "0386-dumbbell-rotation-reverse-fly": {
       "frames": 12,
@@ -3447,6 +4382,25 @@
       "webp_bytes": 412148,
       "webp_sha256": "b95d5fa833b3fdab2c38123f2d86b35003fcb2dba0859bd72c7238389150647a"
     },
+    "0401-dumbbell-seated-palms-up-wrist-curl": {
+      "frames": 12,
+      "gif": "0401",
+      "ledger_id": "0401_Dumbbell_Seated_Palms_Up_Wrist_Curl",
+      "source_gif_sha256": "bb5464ad3f114c51e51b4bbacc4b4ecc81abe3bb4cbb26ec56b6ca2c0b960309",
+      "status": "active",
+      "thumb_bytes": 5292,
+      "thumb_sha256": "4aeaa830fcffc2bdf7ce29be7573737b0382633d41e1bf5568a4aea2a71c828c",
+      "versions": [
+        {
+          "file": "webp-720/0401_Dumbbell_Seated_Palms_Up_Wrist_Curl_wardroom_720.webp",
+          "media_version": 1,
+          "webp_bytes": 394174,
+          "webp_sha256": "678a41536f6e8364aedf6e782f3ea16630144121ccc8438a89232a3d498a6d9f"
+        }
+      ],
+      "webp_bytes": 394174,
+      "webp_sha256": "678a41536f6e8364aedf6e782f3ea16630144121ccc8438a89232a3d498a6d9f"
+    },
     "0402-dumbbell-seated-preacher-curl": {
       "frames": 12,
       "gif": "0402",
@@ -3523,6 +4477,44 @@
       "webp_bytes": 352218,
       "webp_sha256": "2da5f1826a94e7fa23401e0689b11248719872f5b75af7e13012b9a03cea9eb9"
     },
+    "0406-dumbbell-shrug": {
+      "frames": 12,
+      "gif": "0406",
+      "ledger_id": "0406_Dumbbell_Shrug",
+      "source_gif_sha256": "c4b63ea9a11ac58ca1efeb45be70ba9e7943d8c708841d041b98918e8d41f944",
+      "status": "active",
+      "thumb_bytes": 3632,
+      "thumb_sha256": "3c0f8685d5b46c219552ec01727e3fe386be19266aeb484b2f08064d823667c9",
+      "versions": [
+        {
+          "file": "webp-720/0406_Dumbbell_Shrug_wardroom_720.webp",
+          "media_version": 1,
+          "webp_bytes": 295744,
+          "webp_sha256": "cd66a43c8feaea84b3ce7e8a5417901e5018b7406954a6af817b2c295b7a6c97"
+        }
+      ],
+      "webp_bytes": 295744,
+      "webp_sha256": "cd66a43c8feaea84b3ce7e8a5417901e5018b7406954a6af817b2c295b7a6c97"
+    },
+    "0407-dumbbell-side-bend": {
+      "frames": 12,
+      "gif": "0407",
+      "ledger_id": "0407_Dumbbell_Side_Bend",
+      "source_gif_sha256": "bf224d649f2a4e150a5dbbee7b288e60e2521aaa76c5c20bbb530a864bf9d562",
+      "status": "active",
+      "thumb_bytes": 4762,
+      "thumb_sha256": "e0bfadd5b8d81b4149338a1718471b382ad689b013d376bb46c0bd3f9cf6dbb0",
+      "versions": [
+        {
+          "file": "webp-720/0407_Dumbbell_Side_Bend_wardroom_720.webp",
+          "media_version": 1,
+          "webp_bytes": 311334,
+          "webp_sha256": "74083d6d29af700dcecdeaeeb62a6dbeb1837289433b0374331b8b1c244f6801"
+        }
+      ],
+      "webp_bytes": 311334,
+      "webp_sha256": "74083d6d29af700dcecdeaeeb62a6dbeb1837289433b0374331b8b1c244f6801"
+    },
     "0409-dumbbell-single-leg-calf-raise": {
       "frames": 12,
       "gif": "0409",
@@ -3541,6 +4533,25 @@
       ],
       "webp_bytes": 307014,
       "webp_sha256": "101d6410d18cc69cbfcffcb02f4f0086cb4387f408c23c9151aad7b1fbd7aff4"
+    },
+    "0410-dumbbell-single-leg-split-squat": {
+      "frames": 12,
+      "gif": "0410",
+      "ledger_id": "0410_Dumbbell_Single_Leg_Split_Squat",
+      "source_gif_sha256": "da151a28ad7840bf72fd4cc231efb0f8db7fca5c9814028fa4d24427058b2a2b",
+      "status": "active",
+      "thumb_bytes": 6062,
+      "thumb_sha256": "a58364232a5ac983e2bab57ac2f0f0963e7e9af077705b1b911fdc9b38e2c0a2",
+      "versions": [
+        {
+          "file": "webp-720/0410_Dumbbell_Single_Leg_Split_Squat_wardroom_720.webp",
+          "media_version": 1,
+          "webp_bytes": 400146,
+          "webp_sha256": "1a9c3e2b402f723260a7edb36160ccd37676b0e3ffaf6599bcbcd77f6aa10823"
+        }
+      ],
+      "webp_bytes": 400146,
+      "webp_sha256": "1a9c3e2b402f723260a7edb36160ccd37676b0e3ffaf6599bcbcd77f6aa10823"
     },
     "0411-dumbbell-single-leg-squat": {
       "frames": 12,
@@ -3617,6 +4628,25 @@
       ],
       "webp_bytes": 313258,
       "webp_sha256": "96bd0bce9853dce001bfa0fd8cc2f4d922797bf5d0b2f188d431b69bf396d271"
+    },
+    "0417-dumbbell-standing-calf-raise": {
+      "frames": 12,
+      "gif": "0417",
+      "ledger_id": "0417_Dumbbell_Standing_Calf_Raise",
+      "source_gif_sha256": "d7de0e8bbfb32628df284742c31caf8db8460491ec665f7e675f56426a4b2ce4",
+      "status": "active",
+      "thumb_bytes": 3320,
+      "thumb_sha256": "4cd0f355b6d376804de2f5a751cb8e862f7ffa98a95152fc7c59bdc807831cbf",
+      "versions": [
+        {
+          "file": "webp-720/0417_Dumbbell_Standing_Calf_Raise_wardroom_720.webp",
+          "media_version": 1,
+          "webp_bytes": 290394,
+          "webp_sha256": "9cbdbdc5e47e58bb86706996de09fd235c4d0868b85d6811d5476396591e72d9"
+        }
+      ],
+      "webp_bytes": 290394,
+      "webp_sha256": "9cbdbdc5e47e58bb86706996de09fd235c4d0868b85d6811d5476396591e72d9"
     },
     "0419-dumbbell-standing-front-raise-above-head": {
       "frames": 12,
@@ -3713,6 +4743,25 @@
       "webp_bytes": 263768,
       "webp_sha256": "dd16e1197ae466cd9a90f4bf882e89ed49f083344addd29e201e4195822b53a9"
     },
+    "0426-dumbbell-standing-overhead-press": {
+      "frames": 12,
+      "gif": "0426",
+      "ledger_id": "0426_Dumbbell_Standing_Overhead_Press",
+      "source_gif_sha256": "86ddb62873a9440824abc628b5fff5844fee4a6a38090408583cdcb12f730e2e",
+      "status": "active",
+      "thumb_bytes": 2992,
+      "thumb_sha256": "9d69f142ab892624e37e14a7ecd827199dc2922480d0edf46ea45b3c608a88e7",
+      "versions": [
+        {
+          "file": "webp-720/0426_Dumbbell_Standing_Overhead_Press_wardroom_720.webp",
+          "media_version": 1,
+          "webp_bytes": 249472,
+          "webp_sha256": "825776f939fc9cc4377c08e3e9f0b6e6cea7530f382230e374a6be3d772a5817"
+        }
+      ],
+      "webp_bytes": 249472,
+      "webp_sha256": "825776f939fc9cc4377c08e3e9f0b6e6cea7530f382230e374a6be3d772a5817"
+    },
     "0427-dumbbell-standing-palms-in-press": {
       "frames": 12,
       "gif": "0427",
@@ -3751,6 +4800,25 @@
       "webp_bytes": 268888,
       "webp_sha256": "4caa143fae35ddc1d756cdd6eb1dd774ad2079313d251d2b0732cf86afbcb773"
     },
+    "0431-dumbbell-stepup": {
+      "frames": 12,
+      "gif": "0431",
+      "ledger_id": "0431_Dumbbell_Stepup",
+      "source_gif_sha256": "bc97b87d0d8fceb6cad8430d9f50485d56b38d9111592978bfc900538b9c412e",
+      "status": "active",
+      "thumb_bytes": 2286,
+      "thumb_sha256": "90b0dce89f1dc684f4868eb1b3d09f6d3bc1a5293cdc925cdb9ca7a6d1bace55",
+      "versions": [
+        {
+          "file": "webp-720/0431_Dumbbell_Stepup_wardroom_720.webp",
+          "media_version": 1,
+          "webp_bytes": 185864,
+          "webp_sha256": "c33cc7b543b78fd11f94417aef3f6fc98b06e6b7b99b896713b0598370313f85"
+        }
+      ],
+      "webp_bytes": 185864,
+      "webp_sha256": "c33cc7b543b78fd11f94417aef3f6fc98b06e6b7b99b896713b0598370313f85"
+    },
     "0432-dumbbell-stiff-leg-deadlift": {
       "frames": 12,
       "gif": "0432",
@@ -3769,6 +4837,25 @@
       ],
       "webp_bytes": 289992,
       "webp_sha256": "fe8fb83d3901cd44ddf7e47d7c4abcacef23a855882773a5fbc107f135f97374"
+    },
+    "0433-dumbbell-pullover": {
+      "frames": 12,
+      "gif": "0433",
+      "ledger_id": "0433_Dumbbell_Pullover",
+      "source_gif_sha256": "2b1fc5c8b31de12fd887449784c80312a2a27129a0ee45083f42c391c6079a77",
+      "status": "active",
+      "thumb_bytes": 6280,
+      "thumb_sha256": "a90863affbfff8467ba703209e8fc124b06f3e18ac846be52960e638406fe712",
+      "versions": [
+        {
+          "file": "webp-720/0433_Dumbbell_Pullover_wardroom_720.webp",
+          "media_version": 1,
+          "webp_bytes": 377074,
+          "webp_sha256": "e3520e8deb53b2bcb5e38de241d3be58ead4c45f1ce3c208542246b6c8c43a8d"
+        }
+      ],
+      "webp_bytes": 377074,
+      "webp_sha256": "e3520e8deb53b2bcb5e38de241d3be58ead4c45f1ce3c208542246b6c8c43a8d"
     },
     "0434-dumbbell-straight-leg-deadlift": {
       "frames": 12,
@@ -3807,6 +4894,25 @@
       ],
       "webp_bytes": 395648,
       "webp_sha256": "0d6fa53778226dadb7fe05e953d57a26e62aed201bc6280e32df1dea31d0e895"
+    },
+    "0437-dumbbell-upright-row": {
+      "frames": 12,
+      "gif": "0437",
+      "ledger_id": "0437_Dumbbell_Upright_Row",
+      "source_gif_sha256": "388cac3a10cf09a33d86d35526f2ee0fd8f7f1e4a439487ae8011185baa7046e",
+      "status": "active",
+      "thumb_bytes": 3450,
+      "thumb_sha256": "086293c589d12320f4bff87f617bd61682e7a93fcf6b28d32375b77754b9654f",
+      "versions": [
+        {
+          "file": "webp-720/0437_Dumbbell_Upright_Row_wardroom_720.webp",
+          "media_version": 1,
+          "webp_bytes": 307748,
+          "webp_sha256": "e4823df36a4e47915cf492990947176cdce74c97286491c9351e8ec12f9b0854"
+        }
+      ],
+      "webp_bytes": 307748,
+      "webp_sha256": "e4823df36a4e47915cf492990947176cdce74c97286491c9351e8ec12f9b0854"
     },
     "0443-elbow-to-knee": {
       "frames": 12,
@@ -3941,6 +5047,25 @@
       "webp_bytes": 466444,
       "webp_sha256": "b6cf3f09bda0c94e9db90f8a335af1426f6e9d4d6bcd295711d7accde77300e6"
     },
+    "0459-flutter-kicks": {
+      "frames": 12,
+      "gif": "0459",
+      "ledger_id": "0459_Flutter_Kicks",
+      "source_gif_sha256": "3732a0a5a8453596776a60ba1faed02d900d2f1d685f8dbfed15d7e3a9381158",
+      "status": "active",
+      "thumb_bytes": 4864,
+      "thumb_sha256": "be7b7dace6217bf8013b1132d62697f45af4600e7e71ec6a4f893f9683fa8ccd",
+      "versions": [
+        {
+          "file": "webp-720/0459_Flutter_Kicks_wardroom_720.webp",
+          "media_version": 1,
+          "webp_bytes": 404152,
+          "webp_sha256": "0f654db27b6b3761a47c13e7795ae625aff36b8dd272f2282fb579644038dd4e"
+        }
+      ],
+      "webp_bytes": 404152,
+      "webp_sha256": "0f654db27b6b3761a47c13e7795ae625aff36b8dd272f2282fb579644038dd4e"
+    },
     "0464-front-plank-with-twist": {
       "frames": 12,
       "gif": "0464",
@@ -4036,6 +5161,44 @@
       "webp_bytes": 234620,
       "webp_sha256": "b40b0c239abfb388d2926f1218a6c9e81621b2958b733227f358b20aa6c02121"
     },
+    "0475-hanging-straight-leg-raise": {
+      "frames": 12,
+      "gif": "0475",
+      "ledger_id": "0475_Hanging_Straight_Leg_Raise",
+      "source_gif_sha256": "e9efc35b8d8d126ef0ca579913cb66d0f68284949540adf9c045a75d4bff650f",
+      "status": "active",
+      "thumb_bytes": 3174,
+      "thumb_sha256": "33d4ce824fa06806b649c7cb2a27faa35ce072c074c95a2e44352766360f40c1",
+      "versions": [
+        {
+          "file": "webp-720/0475_Hanging_Straight_Leg_Raise_wardroom_720.webp",
+          "media_version": 1,
+          "webp_bytes": 223220,
+          "webp_sha256": "add03524d54f0e944855671fe584cc473e109df59006c89ccf51eb4771fd0c1a"
+        }
+      ],
+      "webp_bytes": 223220,
+      "webp_sha256": "add03524d54f0e944855671fe584cc473e109df59006c89ccf51eb4771fd0c1a"
+    },
+    "0476-windshield-wiper": {
+      "frames": 12,
+      "gif": "0476",
+      "ledger_id": "0476_Windshield_Wiper",
+      "source_gif_sha256": "6972708e7dd40c9c4110f75589241ca4cda083a6c3cefb93d315426a69b22d72",
+      "status": "active",
+      "thumb_bytes": 6250,
+      "thumb_sha256": "e6f676ed4ca0f7ad0cd1c8a27d7c95e6c2ba7a424fc68f95582c42f95bc16fb3",
+      "versions": [
+        {
+          "file": "webp-720/0476_Windshield_Wiper_wardroom_720.webp",
+          "media_version": 1,
+          "webp_bytes": 515428,
+          "webp_sha256": "07394ecb304fd4e9bd024d88e0eed75b3f9bbaf1c124e428b149dc18e037dc61"
+        }
+      ],
+      "webp_bytes": 515428,
+      "webp_sha256": "07394ecb304fd4e9bd024d88e0eed75b3f9bbaf1c124e428b149dc18e037dc61"
+    },
     "0484-bent-knee-hip-raise": {
       "frames": 12,
       "gif": "0484",
@@ -4073,6 +5236,25 @@
       ],
       "webp_bytes": 320894,
       "webp_sha256": "dc50701113fe031c3396807560ce8b907d4d4468dab272acd1861d332e54b275"
+    },
+    "0489-hyperextension": {
+      "frames": 12,
+      "gif": "0489",
+      "ledger_id": "0489_Hyperextension",
+      "source_gif_sha256": "447f47dd5bb548c93ad113a64cd46fa7052f4726eb85c93fc4a66246700aed02",
+      "status": "active",
+      "thumb_bytes": 4864,
+      "thumb_sha256": "c1bcecdd80d425dde92a7f15a82678fdc6670d82d029cac4ac17055f4f22a662",
+      "versions": [
+        {
+          "file": "webp-720/0489_Hyperextension_wardroom_720.webp",
+          "media_version": 1,
+          "webp_bytes": 354646,
+          "webp_sha256": "9541cca5788b1e41c01e76099333954fed3a2de775867423614114576d8cc5e6"
+        }
+      ],
+      "webp_bytes": 354646,
+      "webp_sha256": "9541cca5788b1e41c01e76099333954fed3a2de775867423614114576d8cc5e6"
     },
     "0490-decline-close-grip-pushup": {
       "frames": 12,
@@ -4207,6 +5389,44 @@
       "webp_bytes": 306722,
       "webp_sha256": "f28aa28d14bc8fbf19bea9dc078011257c5316f8b88bbcb5a02a52ec939bce34"
     },
+    "0508-janda-situp": {
+      "frames": 12,
+      "gif": "0508",
+      "ledger_id": "0508_Janda_Situp",
+      "source_gif_sha256": "f5ab9f160c42b3a4bf192fbf9c8a001bec15aa1c0bd565092f29618482cc3798",
+      "status": "active",
+      "thumb_bytes": 5556,
+      "thumb_sha256": "3d8adf12bc523b94602904926b0553f1a53b9c74adad8bf0ad16cdbecdd4efce",
+      "versions": [
+        {
+          "file": "webp-720/0508_Janda_Situp_wardroom_720.webp",
+          "media_version": 1,
+          "webp_bytes": 499104,
+          "webp_sha256": "9fb0e4f10b13c181099d8163c1613e9cc837d8bde6264621b4807ddef0fe9d3d"
+        }
+      ],
+      "webp_bytes": 499104,
+      "webp_sha256": "9fb0e4f10b13c181099d8163c1613e9cc837d8bde6264621b4807ddef0fe9d3d"
+    },
+    "0514-jump-squat": {
+      "frames": 12,
+      "gif": "0514",
+      "ledger_id": "0514_Jump_Squat",
+      "source_gif_sha256": "9f9cd6c66cdb35cf9ed2573cdb2be936560b21d8d216d73c04801c5190c47b67",
+      "status": "active",
+      "thumb_bytes": 3900,
+      "thumb_sha256": "8dcb957fec20bc1f946f3b9c68854bae82bebe4b3656c3e329526486d5434df0",
+      "versions": [
+        {
+          "file": "webp-720/0514_Jump_Squat_wardroom_720.webp",
+          "media_version": 1,
+          "webp_bytes": 293694,
+          "webp_sha256": "9b308d89013f7965ab5d2c9473b62978cdaa72f100992980bab18ccacc1fd984"
+        }
+      ],
+      "webp_bytes": 293694,
+      "webp_sha256": "9b308d89013f7965ab5d2c9473b62978cdaa72f100992980bab18ccacc1fd984"
+    },
     "0517-kettlebell-advanced-windmill": {
       "frames": 12,
       "gif": "0517",
@@ -4282,6 +5502,25 @@
       ],
       "webp_bytes": 232632,
       "webp_sha256": "93827de6a882ebe61ba3d6cda147a32798baa52dc1df4c272432c593b1d95c1f"
+    },
+    "0522-kettlebell-alternating-row": {
+      "frames": 12,
+      "gif": "0522",
+      "ledger_id": "0522_Kettlebell_Alternating_Row",
+      "source_gif_sha256": "ec5c9321ad14019c2ba4cb5d9dce8a410dbf625b17d7791129c3bb9249528e2e",
+      "status": "active",
+      "thumb_bytes": 6200,
+      "thumb_sha256": "0e97ad8427eb286e7805e3644aab3dc26ebda3f9ee2faeea947e6381b2aa77d1",
+      "versions": [
+        {
+          "file": "webp-720/0522_Kettlebell_Alternating_Row_wardroom_720.webp",
+          "media_version": 1,
+          "webp_bytes": 496876,
+          "webp_sha256": "3ebb266e216b108d82cc9b735c048d7dbf537e9f5f97618bdf6c9e23a8b97e83"
+        }
+      ],
+      "webp_bytes": 496876,
+      "webp_sha256": "3ebb266e216b108d82cc9b735c048d7dbf537e9f5f97618bdf6c9e23a8b97e83"
     },
     "0523-kettlebell-arnold-press": {
       "frames": 12,
@@ -4568,6 +5807,25 @@
       "webp_bytes": 205614,
       "webp_sha256": "0e6a845217171afbf17e0c0a267456bc2aa74a79e94aea52f1f46909fabbddd7"
     },
+    "0540-kettlebell-single-arm-push-press": {
+      "frames": 18,
+      "gif": "0540",
+      "ledger_id": "0540_Kettlebell_Single_Arm_Push_Press",
+      "source_gif_sha256": "3666f0dfb5d1b0201d9e8a89e7a6f262875e23d73e898cc9b414d2a98895aacf",
+      "status": "active",
+      "thumb_bytes": 3996,
+      "thumb_sha256": "bb65131b7c491aa49b31ac232e37ad6969c0c0248f41779d405db5e59b34f4f2",
+      "versions": [
+        {
+          "file": "webp-720/0540_Kettlebell_Single_Arm_Push_Press_wardroom_720.webp",
+          "media_version": 1,
+          "webp_bytes": 323602,
+          "webp_sha256": "6a3e56870188998fa23f4bef454ece49ce9c16c6e6ecba22ac0394b404a844ba"
+        }
+      ],
+      "webp_bytes": 323602,
+      "webp_sha256": "6a3e56870188998fa23f4bef454ece49ce9c16c6e6ecba22ac0394b404a844ba"
+    },
     "0541-kettlebell-single-arm-row": {
       "frames": 12,
       "gif": "0541",
@@ -4682,6 +5940,25 @@
       "webp_bytes": 351810,
       "webp_sha256": "9e14314a313e6d12d98ca2fdd22ad8a985780cf191bfbc4256f20659ed9f1e8a"
     },
+    "0549-kettlebell-swing": {
+      "frames": 12,
+      "gif": "0549",
+      "ledger_id": "0549_Kettlebell_Swing",
+      "source_gif_sha256": "5d129f63d5bf33f77744e7efe23fbf7fc8eab86e87849a704fe52cd470e5882d",
+      "status": "active",
+      "thumb_bytes": 3404,
+      "thumb_sha256": "5c8cea59f323e3fa7f25fb62dc158feb129b26027cf361bfbe62ab0cbab5cc46",
+      "versions": [
+        {
+          "file": "webp-720/0549_Kettlebell_Swing_wardroom_720.webp",
+          "media_version": 1,
+          "webp_bytes": 264272,
+          "webp_sha256": "eb72dbdb96b185e6263e5fba70f0c6f510afe5dcecef2026b5d446056c4b701e"
+        }
+      ],
+      "webp_bytes": 264272,
+      "webp_sha256": "eb72dbdb96b185e6263e5fba70f0c6f510afe5dcecef2026b5d446056c4b701e"
+    },
     "0550-kettlebell-thruster": {
       "frames": 18,
       "gif": "0550",
@@ -4700,6 +5977,25 @@
       ],
       "webp_bytes": 356322,
       "webp_sha256": "0f8f2ce450cdf2b459083c89e4dbcf7f230c98c9425e3a6bd8784e3ffd325f81"
+    },
+    "0551-kettlebell-squat-style-turkish-get-up": {
+      "frames": 54,
+      "gif": "0551",
+      "ledger_id": "0551_Kettlebell_Squat_Style_Turkish_Get_Up",
+      "source_gif_sha256": "de21878aaec78c295c8d4a51adfd5bad019aa4e2e29d7092bf86be228cf10ee3",
+      "status": "active",
+      "thumb_bytes": 5028,
+      "thumb_sha256": "898d8d52ec7e7a8310181dbf4f0aec908e948028ad33c1a9c654afe325447b1e",
+      "versions": [
+        {
+          "file": "webp-720/0551_Kettlebell_Squat_Style_Turkish_Get_Up_wardroom_720.webp",
+          "media_version": 1,
+          "webp_bytes": 999800,
+          "webp_sha256": "37042eb9c82b618fc01342fe1de420373f0d23e5f6d14807b21745aed37b4588"
+        }
+      ],
+      "webp_bytes": 999800,
+      "webp_sha256": "37042eb9c82b618fc01342fe1de420373f0d23e5f6d14807b21745aed37b4588"
     },
     "0552-kettlebell-two-arm-clean": {
       "frames": 12,
@@ -4757,6 +6053,25 @@
       ],
       "webp_bytes": 302984,
       "webp_sha256": "5a7543c7977d6c2d9ec3c2ebcb5953f4e94773e11a8a4ed7f0105a4b9ee6fcb3"
+    },
+    "0562-landmine-180": {
+      "frames": 12,
+      "gif": "0562",
+      "ledger_id": "0562_Landmine_180",
+      "source_gif_sha256": "c97492426e9bfb82375d26d43885dbda37a42681889d42b295cc4fbc737b285e",
+      "status": "active",
+      "thumb_bytes": 3828,
+      "thumb_sha256": "0d9e9e7ae0f168611734a0068e46367e40b2355f7175f2f6619233437499f75b",
+      "versions": [
+        {
+          "file": "webp-720/0562_Landmine_180_wardroom_720.webp",
+          "media_version": 1,
+          "webp_bytes": 338308,
+          "webp_sha256": "cc68329b0ce70c49c5ff1b0dc63eaff70f1425fdba6a0fa15c935e104583ab2f"
+        }
+      ],
+      "webp_bytes": 338308,
+      "webp_sha256": "cc68329b0ce70c49c5ff1b0dc63eaff70f1425fdba6a0fa15c935e104583ab2f"
     },
     "0570-leg-pull-in-flat-bench": {
       "frames": 12,
@@ -4910,6 +6225,25 @@
       "webp_bytes": 596698,
       "webp_sha256": "86db08d4b6541d1513174419db1b7373a98171bec864325a1ebc1ad65e11dd96"
     },
+    "0581-high-row": {
+      "frames": 12,
+      "gif": "0581",
+      "ledger_id": "0581_High_Row",
+      "source_gif_sha256": "7bf3b206817aa63a975c69993ae72c49c7788db054f23c2d49a1b46bad17b382",
+      "status": "active",
+      "thumb_bytes": 6714,
+      "thumb_sha256": "9bb6d06588963a0b371fe30508656c46ca57ec8583639de3cc9e00ee21cc1999",
+      "versions": [
+        {
+          "file": "webp-720/0581_High_Row_wardroom_720.webp",
+          "media_version": 1,
+          "webp_bytes": 648486,
+          "webp_sha256": "4874ac17905f216f36d1a0080d0d3d402cacd299d0fe1f61465c58721804d8bf"
+        }
+      ],
+      "webp_bytes": 648486,
+      "webp_sha256": "4874ac17905f216f36d1a0080d0d3d402cacd299d0fe1f61465c58721804d8bf"
+    },
     "0583-kneeling-twist": {
       "frames": 12,
       "gif": "0583",
@@ -4928,6 +6262,63 @@
       ],
       "webp_bytes": 333008,
       "webp_sha256": "8006afa5da9ca676a8defd14e0ed9ff4d418b73b47d96f69539661be796728b0"
+    },
+    "0584-lateral-raise": {
+      "frames": 12,
+      "gif": "0584",
+      "ledger_id": "0584_Lateral_Raise",
+      "source_gif_sha256": "23ccd0c24df58fe5b5445f99458e499d646bd41f56300546ba04cbf14d47edf2",
+      "status": "active",
+      "thumb_bytes": 6396,
+      "thumb_sha256": "706b0fff0bb9bc5afc5d1dc4f4baa8b20344ea560dc5f15ec9ad79c83b81c7f2",
+      "versions": [
+        {
+          "file": "webp-720/0584_Lateral_Raise_wardroom_720.webp",
+          "media_version": 1,
+          "webp_bytes": 548432,
+          "webp_sha256": "26e521b9772ef842964b4a3cc4b4d0e7cd1f1a48298e9100127ec6a8b486ea67"
+        }
+      ],
+      "webp_bytes": 548432,
+      "webp_sha256": "26e521b9772ef842964b4a3cc4b4d0e7cd1f1a48298e9100127ec6a8b486ea67"
+    },
+    "0585-leg-extension": {
+      "frames": 12,
+      "gif": "0585",
+      "ledger_id": "0585_Leg_Extension",
+      "source_gif_sha256": "b679abb3c1ac022bd947d68851957282a0a6e242f49c2c443e043f766d54b047",
+      "status": "active",
+      "thumb_bytes": 7278,
+      "thumb_sha256": "8c397cc79af20c3f8759984b969c429ba4de6ab8e11b2a7158eed26481d2cecc",
+      "versions": [
+        {
+          "file": "webp-720/0585_Leg_Extension_wardroom_720.webp",
+          "media_version": 1,
+          "webp_bytes": 532682,
+          "webp_sha256": "bc14d3ad6f7e7e03624f98f58e436ce8df0ce574d1abede49b2ab029c4e7b890"
+        }
+      ],
+      "webp_bytes": 532682,
+      "webp_sha256": "bc14d3ad6f7e7e03624f98f58e436ce8df0ce574d1abede49b2ab029c4e7b890"
+    },
+    "0586-lying-leg-curl": {
+      "frames": 12,
+      "gif": "0586",
+      "ledger_id": "0586_Lying_Leg_Curl",
+      "source_gif_sha256": "53788af54c3c9a9ad622d631d30404f9181686ac1fc4f751d20119ee941023c9",
+      "status": "active",
+      "thumb_bytes": 5606,
+      "thumb_sha256": "a1e33a51852d8884d6ca05ae980e619ac4424b437c279cc20778449ca5b10f31",
+      "versions": [
+        {
+          "file": "webp-720/0586_Lying_Leg_Curl_wardroom_720.webp",
+          "media_version": 1,
+          "webp_bytes": 355268,
+          "webp_sha256": "732fd5190c41c742f9c0fa54f4c5b20abd77f94eb9b9ba42bd86ecfeea1574ed"
+        }
+      ],
+      "webp_bytes": 355268,
+      "webp_sha256": "732fd5190c41c742f9c0fa54f4c5b20abd77f94eb9b9ba42bd86ecfeea1574ed"
     },
     "0587-military-press": {
       "frames": 12,
@@ -4986,6 +6377,25 @@
       "webp_bytes": 602828,
       "webp_sha256": "166823b93cbc0264ecdeabe8bfea176237da927b55eb0d01556cf4d4655b4018"
     },
+    "0594-seated-calf-raise": {
+      "frames": 12,
+      "gif": "0594",
+      "ledger_id": "0594_Seated_Calf_Raise",
+      "source_gif_sha256": "f34b757c5316e0d985e93371a148981f3284c8b4fe7ceffc0954b99771caf39a",
+      "status": "active",
+      "thumb_bytes": 5142,
+      "thumb_sha256": "7ca0438f10317689b8239c1423ec81cdfacecc3a4883305506548078e1d4df81",
+      "versions": [
+        {
+          "file": "webp-720/0594_Seated_Calf_Raise_wardroom_720.webp",
+          "media_version": 1,
+          "webp_bytes": 347932,
+          "webp_sha256": "94e6fae73d0be60c48b5c0d638b121747c24fd6aca33eaa373a9639cb463a92d"
+        }
+      ],
+      "webp_bytes": 347932,
+      "webp_sha256": "94e6fae73d0be60c48b5c0d638b121747c24fd6aca33eaa373a9639cb463a92d"
+    },
     "0595-seated-crunch": {
       "frames": 12,
       "gif": "0595",
@@ -5004,6 +6414,63 @@
       ],
       "webp_bytes": 596814,
       "webp_sha256": "109ec0ebb14dc4de6c95e9e75e2a8a41eae320c3ec1492c1d3f73ac8e9146b5d"
+    },
+    "0596-seated-fly": {
+      "frames": 12,
+      "gif": "0596",
+      "ledger_id": "0596_Seated_Fly",
+      "source_gif_sha256": "f3616f634199731472b94d515bac0a7de6f158f8d2c9506a03607173b0b2c41d",
+      "status": "active",
+      "thumb_bytes": 5590,
+      "thumb_sha256": "4aca60947103b57304d155b50c0bd7f0cbf94b9364af8d940242e2bd36200d8e",
+      "versions": [
+        {
+          "file": "webp-720/0596_Seated_Fly_wardroom_720.webp",
+          "media_version": 1,
+          "webp_bytes": 489116,
+          "webp_sha256": "b67e8fc06cf0bac1b8b18f2d93d4f28d8b5fed57e99724c013bf6e534408c6df"
+        }
+      ],
+      "webp_bytes": 489116,
+      "webp_sha256": "b67e8fc06cf0bac1b8b18f2d93d4f28d8b5fed57e99724c013bf6e534408c6df"
+    },
+    "0597-seated-hip-abduction": {
+      "frames": 12,
+      "gif": "0597",
+      "ledger_id": "0597_Seated_Hip_Abduction",
+      "source_gif_sha256": "4be3a7be51ed2a1a9c338ed4ec5675bb9715c15871be9b05dd9ebfb7b50b8c35",
+      "status": "active",
+      "thumb_bytes": 8070,
+      "thumb_sha256": "54cff60315c680c6f2800510706424a21474daf82a20ed14b46a72df99cef3fb",
+      "versions": [
+        {
+          "file": "webp-720/0597_Seated_Hip_Abduction_wardroom_720.webp",
+          "media_version": 1,
+          "webp_bytes": 656110,
+          "webp_sha256": "514b2798b5ed9b4e75db386fcb3f6188fba734cb1c6e5d3a59afd0fd83801810"
+        }
+      ],
+      "webp_bytes": 656110,
+      "webp_sha256": "514b2798b5ed9b4e75db386fcb3f6188fba734cb1c6e5d3a59afd0fd83801810"
+    },
+    "0598-seated-hip-adduction": {
+      "frames": 12,
+      "gif": "0598",
+      "ledger_id": "0598_Seated_Hip_Adduction",
+      "source_gif_sha256": "a81448929bf77d90417940cc915ce1a6f16d02e759fedf7b80d72ec75e751cf1",
+      "status": "active",
+      "thumb_bytes": 5964,
+      "thumb_sha256": "2927cbfb0a3cbf570c6c62af442de9fff9ee79482eaeef31296cb33016cf70df",
+      "versions": [
+        {
+          "file": "webp-720/0598_Seated_Hip_Adduction_wardroom_720.webp",
+          "media_version": 1,
+          "webp_bytes": 457488,
+          "webp_sha256": "e2c4509a315bbb47bc54adac915083aade3ed43129bd8494ba8be88f632c2f5c"
+        }
+      ],
+      "webp_bytes": 457488,
+      "webp_sha256": "e2c4509a315bbb47bc54adac915083aade3ed43129bd8494ba8be88f632c2f5c"
     },
     "0599-seated-leg-curl": {
       "frames": 12,
@@ -5119,6 +6586,25 @@
       "webp_bytes": 256710,
       "webp_sha256": "a09b5657e67ff95ed3ce366ff973dd580a10d52fd893cf6a8f2c4bb78a8bf780"
     },
+    "0630-mountain-climber": {
+      "frames": 24,
+      "gif": "0630",
+      "ledger_id": "0630_Mountain_Climber",
+      "source_gif_sha256": "d5e8c635d90d99c7c9e882f6f44577e07df98182779e1f056ee37126ce1a1fc4",
+      "status": "active",
+      "thumb_bytes": 4308,
+      "thumb_sha256": "463d5ad6a3b45962ed2198918ff65f6824b54f3db72227c0b61a57cd88f8a390",
+      "versions": [
+        {
+          "file": "webp-720/0630_Mountain_Climber_wardroom_720.webp",
+          "media_version": 1,
+          "webp_bytes": 613236,
+          "webp_sha256": "08145df627e6c5c78e6524c9fa5ab3fe419690e41ec27069b64d84b72357eb0c"
+        }
+      ],
+      "webp_bytes": 613236,
+      "webp_sha256": "08145df627e6c5c78e6524c9fa5ab3fe419690e41ec27069b64d84b72357eb0c"
+    },
     "0635-oblique-crunches-floor": {
       "frames": 12,
       "gif": "0635",
@@ -5176,6 +6662,82 @@
       "webp_bytes": 354224,
       "webp_sha256": "475cceb703b8b419956d236a1ce4c370708d1dbd0583d05e47f0dcabc8fc3988"
     },
+    "0643-overhead-tricep-stretch": {
+      "frames": 12,
+      "gif": "0643",
+      "ledger_id": "0643_Overhead_Tricep_Stretch",
+      "source_gif_sha256": "313245d9697f13caec6b21f98d7a4df18153b4824664ea2053468e5427609d0d",
+      "status": "active",
+      "thumb_bytes": 3588,
+      "thumb_sha256": "14cb57647e1560cf190cb3350a2fa8b7824f2ff1238b2fd10417bb89d387d51d",
+      "versions": [
+        {
+          "file": "webp-720/0643_Overhead_Tricep_Stretch_wardroom_720.webp",
+          "media_version": 1,
+          "webp_bytes": 286452,
+          "webp_sha256": "a2e1a589c005d0196c955a4bd864c8beb5eb20521986de8d162f6e338db77da7"
+        }
+      ],
+      "webp_bytes": 286452,
+      "webp_sha256": "a2e1a589c005d0196c955a4bd864c8beb5eb20521986de8d162f6e338db77da7"
+    },
+    "0648-power-clean": {
+      "frames": 24,
+      "gif": "0648",
+      "ledger_id": "0648_Power_Clean",
+      "source_gif_sha256": "345dfe47bb22f8bc35ff8aeff93c4b935ee233faa9e2a365232bab3ef2cd077b",
+      "status": "active",
+      "thumb_bytes": 4762,
+      "thumb_sha256": "a978bb01ef65a825462935b71793a134154551f048f082b173ebfd798e72edcb",
+      "versions": [
+        {
+          "file": "webp-720/0648_Power_Clean_wardroom_720.webp",
+          "media_version": 1,
+          "webp_bytes": 681612,
+          "webp_sha256": "961b9702467121882b0007d0b39044eb39306a22b7d2620a217894b1463cfc89"
+        }
+      ],
+      "webp_bytes": 681612,
+      "webp_sha256": "961b9702467121882b0007d0b39044eb39306a22b7d2620a217894b1463cfc89"
+    },
+    "0652-pullup": {
+      "frames": 12,
+      "gif": "0652",
+      "ledger_id": "0652_Pullup",
+      "source_gif_sha256": "d75b26416b19dd699fe52643f891378bce8d30b8cf15c39db42469468c616405",
+      "status": "active",
+      "thumb_bytes": 3650,
+      "thumb_sha256": "46d79584d7726bd4eb87fd3b819b675ed4e340ecc9abd31c5313cd6d4d680ea9",
+      "versions": [
+        {
+          "file": "webp-720/0652_Pullup_wardroom_720.webp",
+          "media_version": 1,
+          "webp_bytes": 241698,
+          "webp_sha256": "37dfb28810d1c137fa2bf9e5649a1b59e2cbe6e2be2a45917657e3979305ae14"
+        }
+      ],
+      "webp_bytes": 241698,
+      "webp_sha256": "37dfb28810d1c137fa2bf9e5649a1b59e2cbe6e2be2a45917657e3979305ae14"
+    },
+    "0659-wall-pushup": {
+      "frames": 12,
+      "gif": "0659",
+      "ledger_id": "0659_Wall_Pushup",
+      "source_gif_sha256": "9f8694dd1e0241264c797285c8073c1c8f2bf730e0a01443a4a561d6ac63b5f3",
+      "status": "active",
+      "thumb_bytes": 3790,
+      "thumb_sha256": "98fd281a056bae449ec759c1f3e42339090f130b8d92249fd36f9370dd935487",
+      "versions": [
+        {
+          "file": "webp-720/0659_Wall_Pushup_wardroom_720.webp",
+          "media_version": 1,
+          "webp_bytes": 371962,
+          "webp_sha256": "1a78001ba14d8e527291efceab3f946a6a4532309e87145b651ebbae541cdc2a"
+        }
+      ],
+      "webp_bytes": 371962,
+      "webp_sha256": "1a78001ba14d8e527291efceab3f946a6a4532309e87145b651ebbae541cdc2a"
+    },
     "0661-pushup-inside-leg-kick": {
       "frames": 12,
       "gif": "0661",
@@ -5195,6 +6757,25 @@
       "webp_bytes": 359260,
       "webp_sha256": "9208a870335cbef13ea4dc33bd65a5007d732160f66e6b1b1362d811f4632d3f"
     },
+    "0662-pushup": {
+      "frames": 12,
+      "gif": "0662",
+      "ledger_id": "0662_Pushup",
+      "source_gif_sha256": "609a7bb667e4ca9a94cd85f0a2ea40029937ce062f53728ea186e902499d1e62",
+      "status": "active",
+      "thumb_bytes": 3936,
+      "thumb_sha256": "8a1fb6906381ff5b95ac708c4abc8032023463d00493283ca98aed8f2dd4b942",
+      "versions": [
+        {
+          "file": "webp-720/0662_Pushup_wardroom_720.webp",
+          "media_version": 1,
+          "webp_bytes": 390076,
+          "webp_sha256": "b038c9f32ae518391261544686919f6783c01e7f50d50de799854b6b1ac68e9a"
+        }
+      ],
+      "webp_bytes": 390076,
+      "webp_sha256": "b038c9f32ae518391261544686919f6783c01e7f50d50de799854b6b1ac68e9a"
+    },
     "0664-pushup-to-side-plank": {
       "frames": 18,
       "gif": "0664",
@@ -5213,6 +6794,25 @@
       ],
       "webp_bytes": 446830,
       "webp_sha256": "3a05ca0a527fc1284e15581746e2979dc5c8245f6a573ab2ca11e8b9242e6d78"
+    },
+    "0668-rear-decline-bridge": {
+      "frames": 12,
+      "gif": "0668",
+      "ledger_id": "0668_Rear_Decline_Bridge",
+      "source_gif_sha256": "ecf4cc7b2fb81c6a55e069305a7e1bad4c19bfc57a917b2bebe1390015092129",
+      "status": "active",
+      "thumb_bytes": 3878,
+      "thumb_sha256": "b8927e16dad398a44d679e78292e822b7bac1a48f6d609d9f98c74a60f2375b9",
+      "versions": [
+        {
+          "file": "webp-720/0668_Rear_Decline_Bridge_wardroom_720.webp",
+          "media_version": 1,
+          "webp_bytes": 318568,
+          "webp_sha256": "1ca706050be4275bd72e120a10583c56ef46b70a1fcd8d2939ed9bf80373346e"
+        }
+      ],
+      "webp_bytes": 318568,
+      "webp_sha256": "1ca706050be4275bd72e120a10583c56ef46b70a1fcd8d2939ed9bf80373346e"
     },
     "0669-rear-deltoid-stretch": {
       "frames": 12,
@@ -5251,6 +6851,63 @@
       ],
       "webp_bytes": 229594,
       "webp_sha256": "4dc2d9a6356b7e97aec0274c1d6baf7f311f5fe77827568a5492cf294544347e"
+    },
+    "0684-treadmill-run-time": {
+      "frames": 12,
+      "gif": "0684",
+      "ledger_id": "0684_Treadmill_Run_Time",
+      "source_gif_sha256": "2b32f3638111ca4617c80a4eb165637198028c1cf0db46fde5918488564705b0",
+      "status": "active",
+      "thumb_bytes": 5340,
+      "thumb_sha256": "5c8cff48dd3aa26006f5dd745f6ec533cee679257dae6c136edb00126f696a09",
+      "versions": [
+        {
+          "file": "webp-720/0684_Treadmill_Run_Time_wardroom_720.webp",
+          "media_version": 1,
+          "webp_bytes": 391190,
+          "webp_sha256": "7781fb953a852379f3ae2e7df331851ad27cef3bb130d9d0503465bcf4a4e38d"
+        }
+      ],
+      "webp_bytes": 391190,
+      "webp_sha256": "7781fb953a852379f3ae2e7df331851ad27cef3bb130d9d0503465bcf4a4e38d"
+    },
+    "0685-run-time": {
+      "frames": 12,
+      "gif": "0685",
+      "ledger_id": "0685_Run_Time",
+      "source_gif_sha256": "1afa95982105ff4b683c910ec780b13a7665c7caf44da794ceccf9b43e0413a1",
+      "status": "active",
+      "thumb_bytes": 3936,
+      "thumb_sha256": "7614fe28c89ec338fb6fa52dcb463677e65bf1d4809b0ee87316f979b42f54c7",
+      "versions": [
+        {
+          "file": "webp-720/0685_Run_Time_wardroom_720.webp",
+          "media_version": 1,
+          "webp_bytes": 309906,
+          "webp_sha256": "c232efa49cb46c66ae6b4f899aa5aff0e88b6f59252b382823646c672462fb50"
+        }
+      ],
+      "webp_bytes": 309906,
+      "webp_sha256": "c232efa49cb46c66ae6b4f899aa5aff0e88b6f59252b382823646c672462fb50"
+    },
+    "0687-russian-twist": {
+      "frames": 24,
+      "gif": "0687",
+      "ledger_id": "0687_Russian_Twist",
+      "source_gif_sha256": "0995b805d7182597499eb74010dc24db9793d43c474a59e322c307d27055615a",
+      "status": "active",
+      "thumb_bytes": 5226,
+      "thumb_sha256": "d3d39957e9f919dbe811f2454a0a730dd6c5379b2e423b73bf8cf68fc2bdd7b4",
+      "versions": [
+        {
+          "file": "webp-720/0687_Russian_Twist_wardroom_720.webp",
+          "media_version": 1,
+          "webp_bytes": 721266,
+          "webp_sha256": "fc8027a5e22c043b25e8451848e0f66de2f32912683eb98f164dcfc8f18f87af"
+        }
+      ],
+      "webp_bytes": 721266,
+      "webp_sha256": "fc8027a5e22c043b25e8451848e0f66de2f32912683eb98f164dcfc8f18f87af"
     },
     "0688-scapular-pullup": {
       "frames": 12,
@@ -5442,6 +7099,25 @@
       "webp_bytes": 575350,
       "webp_sha256": "ccd20b48974c5a3296425d8db70dda5d6bf84d0bd577cb2f02b85ca02de1f9b4"
     },
+    "0739-leg-press": {
+      "frames": 12,
+      "gif": "0739",
+      "ledger_id": "0739_Leg_Press",
+      "source_gif_sha256": "867bbb51c51a165103649960b4065838a6c898aa7744c781cc97f37400e77541",
+      "status": "active",
+      "thumb_bytes": 6444,
+      "thumb_sha256": "5c5ab9e13f345b7d38a5f63c04c46af9648b5a04f21f33be1797a052cd9e9cbf",
+      "versions": [
+        {
+          "file": "webp-720/0739_Leg_Press_wardroom_720.webp",
+          "media_version": 1,
+          "webp_bytes": 577694,
+          "webp_sha256": "8e103e5b18c86524da6220ea10d4ea1a050b2660af447fb89cc9a315ca3070e9"
+        }
+      ],
+      "webp_bytes": 577694,
+      "webp_sha256": "8e103e5b18c86524da6220ea10d4ea1a050b2660af447fb89cc9a315ca3070e9"
+    },
     "0742-forward-angled-calf-raise": {
       "frames": 12,
       "gif": "0742",
@@ -5460,6 +7136,25 @@
       ],
       "webp_bytes": 528122,
       "webp_sha256": "7848ef49c72e855ea10c6125fa51386f311bda3f261ca65b1ccd4b568baef785"
+    },
+    "0743-hack-squat": {
+      "frames": 12,
+      "gif": "0743",
+      "ledger_id": "0743_Hack_Squat",
+      "source_gif_sha256": "539705a506f5d8fb333eb21408952d86065a5e5f8fa222d838ea4c5327e70fad",
+      "status": "active",
+      "thumb_bytes": 7276,
+      "thumb_sha256": "9eb574b6592327fd3de5c54964940984a733f3659591754b0f4be12edd87c95e",
+      "versions": [
+        {
+          "file": "webp-720/0743_Hack_Squat_wardroom_720.webp",
+          "media_version": 1,
+          "webp_bytes": 549474,
+          "webp_sha256": "2eb1b7ee236866fea52a2e92695fd3789cdb7b4c1cff65b2f610c03683e0e7b8"
+        }
+      ],
+      "webp_bytes": 549474,
+      "webp_sha256": "2eb1b7ee236866fea52a2e92695fd3789cdb7b4c1cff65b2f610c03683e0e7b8"
     },
     "0744-lying-squat": {
       "frames": 12,
@@ -6012,6 +7707,25 @@
       "webp_bytes": 263676,
       "webp_sha256": "01896eee174c16b439c673db95f1c18667676b4ba7e90b56a5b87a96d58f97e6"
     },
+    "0798-stationary-bike-walk": {
+      "frames": 12,
+      "gif": "0798",
+      "ledger_id": "0798_Stationary_Bike_Walk",
+      "source_gif_sha256": "031771e180e7b8f8c6ad23a0aff61b6b943d4335b4886cc97a4d8a8669b31ba0",
+      "status": "active",
+      "thumb_bytes": 4472,
+      "thumb_sha256": "cdec153760524c7e95c3c0b0efa64a87bc5a322e7f7007f21b87f9789d680f1c",
+      "versions": [
+        {
+          "file": "webp-720/0798_Stationary_Bike_Walk_wardroom_720.webp",
+          "media_version": 1,
+          "webp_bytes": 369796,
+          "webp_sha256": "556845830fa6c448486499fe27cbaffc1e2bac07b680c5b62a1c0bfc5fedaf84"
+        }
+      ],
+      "webp_bytes": 369796,
+      "webp_sha256": "556845830fa6c448486499fe27cbaffc1e2bac07b680c5b62a1c0bfc5fedaf84"
+    },
     "0805-suspended-abdominal-fallout": {
       "frames": 12,
       "gif": "0805",
@@ -6068,6 +7782,44 @@
       ],
       "webp_bytes": 447012,
       "webp_sha256": "f69738a8453d13226d323413e0ae2011723e53edbdc9cadc200003c4ea23f1dc"
+    },
+    "0811-trap-bar-deadlift": {
+      "frames": 12,
+      "gif": "0811",
+      "ledger_id": "0811_Trap_Bar_Deadlift",
+      "source_gif_sha256": "cbaec6e8b8af66eddec090b87724010a1b6fc54afe4cb7125ecba015cdeeba1f",
+      "status": "active",
+      "thumb_bytes": 4958,
+      "thumb_sha256": "deca78f3a7aaec88fc201bba3e615fa5a81b26b857c602968291a770eae22773",
+      "versions": [
+        {
+          "file": "webp-720/0811_Trap_Bar_Deadlift_wardroom_720.webp",
+          "media_version": 1,
+          "webp_bytes": 401680,
+          "webp_sha256": "92920dc2ec5a009d61511784ed4bae7cecf89974bfc59f1e22ce211cf9d08a11"
+        }
+      ],
+      "webp_bytes": 401680,
+      "webp_sha256": "92920dc2ec5a009d61511784ed4bae7cecf89974bfc59f1e22ce211cf9d08a11"
+    },
+    "0812-bench-tricep-dip": {
+      "frames": 12,
+      "gif": "0812",
+      "ledger_id": "0812_Bench_Tricep_Dip",
+      "source_gif_sha256": "2ba9d7b124c813d54fe860a96efc7c974a32fce62dc1fa8bec57ff7a67e8e40c",
+      "status": "active",
+      "thumb_bytes": 4844,
+      "thumb_sha256": "322b45c312ebf4ec19fd9de04f59d667a5ddd30e3ab58b0f4aec190cef20b3da",
+      "versions": [
+        {
+          "file": "webp-720/0812_Bench_Tricep_Dip_wardroom_720.webp",
+          "media_version": 1,
+          "webp_bytes": 444604,
+          "webp_sha256": "6f5174e9afd77761e5744dc5dcbfc4285de3634cc374bbe8ed7ae6dc1afd3b22"
+        }
+      ],
+      "webp_bytes": 444604,
+      "webp_sha256": "6f5174e9afd77761e5744dc5dcbfc4285de3634cc374bbe8ed7ae6dc1afd3b22"
     },
     "0813-between-benches-tricep-dip": {
       "frames": 12,
@@ -6202,6 +7954,63 @@
       "webp_bytes": 424086,
       "webp_sha256": "a3489fcf0ec8ec8d8b6586ce11f8886526710cbcffde15249d715ce238e4db51"
     },
+    "0857-wheel-rollout": {
+      "frames": 12,
+      "gif": "0857",
+      "ledger_id": "0857_Wheel_Rollout",
+      "source_gif_sha256": "426b228dcdb08bb993b42aaa39108af40ea9b237909f58f595614f58093f0c89",
+      "status": "active",
+      "thumb_bytes": 2274,
+      "thumb_sha256": "53a9db560f96fdcca9abaf6bea50a4d9f0c43476897db0667920f059b9c35353",
+      "versions": [
+        {
+          "file": "webp-720/0857_Wheel_Rollout_wardroom_720.webp",
+          "media_version": 1,
+          "webp_bytes": 185090,
+          "webp_sha256": "5a9b4e510cc02065b5707cca4dc1b715faf120cec534b8c5363e9b2bc9285b19"
+        }
+      ],
+      "webp_bytes": 185090,
+      "webp_sha256": "5a9b4e510cc02065b5707cca4dc1b715faf120cec534b8c5363e9b2bc9285b19"
+    },
+    "0860-cable-kickback": {
+      "frames": 12,
+      "gif": "0860",
+      "ledger_id": "0860_Cable_Kickback",
+      "source_gif_sha256": "bfd97287e85ae2ccbbea6b1b4a1a9ea40796485ad9f781919f70d0a400b3248a",
+      "status": "active",
+      "thumb_bytes": 5010,
+      "thumb_sha256": "6911efa4bfe531346e43de121b5ac6b4fee633bc62724dc6ae6a3acd49fc276d",
+      "versions": [
+        {
+          "file": "webp-720/0860_Cable_Kickback_wardroom_720.webp",
+          "media_version": 1,
+          "webp_bytes": 400280,
+          "webp_sha256": "d37eae787cc6c62d79da71b9408454feff1545bbd5e7320b86b6c552abb55c4d"
+        }
+      ],
+      "webp_bytes": 400280,
+      "webp_sha256": "d37eae787cc6c62d79da71b9408454feff1545bbd5e7320b86b6c552abb55c4d"
+    },
+    "0861-cable-seated-row": {
+      "frames": 12,
+      "gif": "0861",
+      "ledger_id": "0861_Cable_Seated_Row",
+      "source_gif_sha256": "f883a30c40509bec6003cd2a50b8ec8aa62ff1fed7a59ff94fadb7a7c1324c6a",
+      "status": "active",
+      "thumb_bytes": 6036,
+      "thumb_sha256": "32bc1b551274e3539b6ce325b3dacbbb104882cda611ea164fe6c863fc2a8c0e",
+      "versions": [
+        {
+          "file": "webp-720/0861_Cable_Seated_Row_wardroom_720.webp",
+          "media_version": 1,
+          "webp_bytes": 492262,
+          "webp_sha256": "5405eca48cc771a086f29a0f8e0e3dc115e426440abf037f18cf71814ac83a4b"
+        }
+      ],
+      "webp_bytes": 492262,
+      "webp_sha256": "5405eca48cc771a086f29a0f8e0e3dc115e426440abf037f18cf71814ac83a4b"
+    },
     "0862-cable-up-down-twist": {
       "frames": 12,
       "gif": "0862",
@@ -6296,6 +8105,44 @@
       ],
       "webp_bytes": 271162,
       "webp_sha256": "b88230fbd382e9f29d3b97887f8a083ffb6428e27abc9a7f269d10068397ff07"
+    },
+    "0868-cable-curl": {
+      "frames": 12,
+      "gif": "0868",
+      "ledger_id": "0868_Cable_Curl",
+      "source_gif_sha256": "2e8f4823192882e003b4e9ca00c141168584a7ef7bec9d4cfc248fd9d7795857",
+      "status": "active",
+      "thumb_bytes": 3840,
+      "thumb_sha256": "4d887f40429e961bc3ebaae2e623c1e03baa8578cb3c5db805805d65d91aa34f",
+      "versions": [
+        {
+          "file": "webp-720/0868_Cable_Curl_wardroom_720.webp",
+          "media_version": 1,
+          "webp_bytes": 316270,
+          "webp_sha256": "c32953a462220021d37be995bc5a15b0ad879d8a80a92a88caae3079979565e1"
+        }
+      ],
+      "webp_bytes": 316270,
+      "webp_sha256": "c32953a462220021d37be995bc5a15b0ad879d8a80a92a88caae3079979565e1"
+    },
+    "0872-reverse-crunch": {
+      "frames": 12,
+      "gif": "0872",
+      "ledger_id": "0872_Reverse_Crunch",
+      "source_gif_sha256": "f3b2fbaf2606ccee399fc86771270752e0f6c1c3960a4b5e9a8f6e3005959402",
+      "status": "active",
+      "thumb_bytes": 5450,
+      "thumb_sha256": "42a810bb9eef9c60cd6a1c15e6860048628074689f05989a8c0ead3982e71a9f",
+      "versions": [
+        {
+          "file": "webp-720/0872_Reverse_Crunch_wardroom_720.webp",
+          "media_version": 1,
+          "webp_bytes": 323010,
+          "webp_sha256": "761cb90e92c7c82f9616fd1566ce9fdf3e1f7e83a1c4d377858a7917dfe500b1"
+        }
+      ],
+      "webp_bytes": 323010,
+      "webp_sha256": "761cb90e92c7c82f9616fd1566ce9fdf3e1f7e83a1c4d377858a7917dfe500b1"
     },
     "0873-cable-reverse-crunch": {
       "frames": 12,
@@ -6810,6 +8657,25 @@
       "webp_bytes": 315772,
       "webp_sha256": "6a573adad49c44a8ab5eec6d8ab25e21aa4f0e9486894a01fe04c72fb82ce7cb"
     },
+    "1004-band-squat": {
+      "frames": 12,
+      "gif": "1004",
+      "ledger_id": "1004_Band_Squat",
+      "source_gif_sha256": "63dc70059eafacbb15617fb42ec2141295af8cd32cc68db53208e26984cfeb0c",
+      "status": "active",
+      "thumb_bytes": 3822,
+      "thumb_sha256": "3f489795dc7539974de5f4f901e05a5eef1f1239b9fd2328ab700256f8ca44bd",
+      "versions": [
+        {
+          "file": "webp-720/1004_Band_Squat_wardroom_720.webp",
+          "media_version": 1,
+          "webp_bytes": 365618,
+          "webp_sha256": "0c2f1c129f64eb7b41215c4c40343321c2332c9d6727a5fd7ef5991513739f2a"
+        }
+      ],
+      "webp_bytes": 365618,
+      "webp_sha256": "0c2f1c129f64eb7b41215c4c40343321c2332c9d6727a5fd7ef5991513739f2a"
+    },
     "1005-band-standing-crunch": {
       "frames": 12,
       "gif": "1005",
@@ -7057,6 +8923,44 @@
       "webp_bytes": 303242,
       "webp_sha256": "c72b47fb94f789a47e462a18da1916b4fe252c5cc3de87ebb9beeaa18ae0812c"
     },
+    "1160-burpee": {
+      "frames": 30,
+      "gif": "1160",
+      "ledger_id": "1160_Burpee",
+      "source_gif_sha256": "76200473cb71a0218c2a85000aee55dafff80b0a4c7f27802140432622db69b4",
+      "status": "active",
+      "thumb_bytes": 9330,
+      "thumb_sha256": "fe2c49db39015992a0e9dd11a6d6ec98a60fe5a286d1a16d47cb1a01bf35438e",
+      "versions": [
+        {
+          "file": "webp-720/1160_Burpee_wardroom_720.webp",
+          "media_version": 1,
+          "webp_bytes": 436882,
+          "webp_sha256": "1d1303fe6276dea44f83d3fb70024cef136bbc6294dfbc25923707ab1f46bbbd"
+        }
+      ],
+      "webp_bytes": 436882,
+      "webp_sha256": "1d1303fe6276dea44f83d3fb70024cef136bbc6294dfbc25923707ab1f46bbbd"
+    },
+    "1167-dynamic-chest-stretch": {
+      "frames": 12,
+      "gif": "1167",
+      "ledger_id": "1167_Dynamic_Chest_Stretch",
+      "source_gif_sha256": "34672207253c674dd9399e1201b1a42c7a26f2c86460abc3a4efdefd116384a4",
+      "status": "active",
+      "thumb_bytes": 3706,
+      "thumb_sha256": "5860cb718be1c8328f181795388b82bd60275b2fae35d1c78aea3cf19d7ce9c2",
+      "versions": [
+        {
+          "file": "webp-720/1167_Dynamic_Chest_Stretch_wardroom_720.webp",
+          "media_version": 1,
+          "webp_bytes": 295730,
+          "webp_sha256": "831f26b86ea30285c8e57ed1d88df49e95ee514e81b2f0f7844ec0f07b5ab6f9"
+        }
+      ],
+      "webp_bytes": 295730,
+      "webp_sha256": "831f26b86ea30285c8e57ed1d88df49e95ee514e81b2f0f7844ec0f07b5ab6f9"
+    },
     "1201-dumbbell-burpee": {
       "frames": 30,
       "gif": "1201",
@@ -7151,6 +9055,25 @@
       ],
       "webp_bytes": 512100,
       "webp_sha256": "1c06277ecdc47cf68f594579eef522c084a1e2b94ca18c6d645e51367228b1cb"
+    },
+    "1269-cable-standing-crossovers": {
+      "frames": 12,
+      "gif": "1269",
+      "ledger_id": "1269_Cable_Standing_Crossovers",
+      "source_gif_sha256": "7ee6819ada3b34dbdc8855cb586df61f070e5837556d1d286ee0cee30770ca09",
+      "status": "active",
+      "thumb_bytes": 3934,
+      "thumb_sha256": "823dc12f0db03ccd4f727659c20e6b65934a9f2d76637ca86a20995a13badd60",
+      "versions": [
+        {
+          "file": "webp-720/1269_Cable_Standing_Crossovers_wardroom_720.webp",
+          "media_version": 1,
+          "webp_bytes": 335140,
+          "webp_sha256": "67654eef8d7e60b61d7bc2c3e3fdfdfd71a780990696374bb902fcb181585c57"
+        }
+      ],
+      "webp_bytes": 335140,
+      "webp_sha256": "67654eef8d7e60b61d7bc2c3e3fdfdfd71a780990696374bb902fcb181585c57"
     },
     "1271-chest-and-front-of-shoulder-stretch": {
       "frames": 12,
@@ -7380,6 +9303,25 @@
       "webp_bytes": 695528,
       "webp_sha256": "f4445929fe3fcf93b60e0efcba2b5c1730a8f859b30c23f5041e1d77bc115535"
     },
+    "1301-machine-inner-chest-press": {
+      "frames": 12,
+      "gif": "1301",
+      "ledger_id": "1301_Machine_Inner_Chest_Press",
+      "source_gif_sha256": "d0ae88fa82c0ef64de7f1c71fcc547b3c4ab05f4f22dc78642b86a7c86375595",
+      "status": "active",
+      "thumb_bytes": 6762,
+      "thumb_sha256": "76397ae5fb3097e7fd41aca798bc0dc1e5b319601a7f65b17a228bad438f316b",
+      "versions": [
+        {
+          "file": "webp-720/1301_Machine_Inner_Chest_Press_wardroom_720.webp",
+          "media_version": 1,
+          "webp_bytes": 551334,
+          "webp_sha256": "4bb9d773394d2550a7f9af95d3451ab0f1ea92a3e180eb13ad129592400621ce"
+        }
+      ],
+      "webp_bytes": 551334,
+      "webp_sha256": "4bb9d773394d2550a7f9af95d3451ab0f1ea92a3e180eb13ad129592400621ce"
+    },
     "1308-smith-wide-grip-bench-press": {
       "frames": 12,
       "gif": "1308",
@@ -7493,6 +9435,25 @@
       ],
       "webp_bytes": 246976,
       "webp_sha256": "25db1fbaaa314a278d94207eb8ac5681c4f2564d10c5a6cf8ca799e66ca5dc65"
+    },
+    "1326-chinup": {
+      "frames": 12,
+      "gif": "1326",
+      "ledger_id": "1326_Chinup",
+      "source_gif_sha256": "7967c40d03e789cbaed6b2c76e12b90f56e55b9263ce35ce7717107ed38f213f",
+      "status": "active",
+      "thumb_bytes": 3336,
+      "thumb_sha256": "3028cb6767176f6de1ffb8d0ca4093a0114a5706e8793501ecad5e8c221cbda6",
+      "versions": [
+        {
+          "file": "webp-720/1326_Chinup_wardroom_720.webp",
+          "media_version": 1,
+          "webp_bytes": 244514,
+          "webp_sha256": "9ff58c28adcaf4481d0efc8d4c2ff9dde871d2e0ca718fefe10e98c586add26a"
+        }
+      ],
+      "webp_bytes": 244514,
+      "webp_sha256": "9ff58c28adcaf4481d0efc8d4c2ff9dde871d2e0ca718fefe10e98c586add26a"
     },
     "1327-close-grip-chinup": {
       "frames": 12,
@@ -7645,6 +9606,25 @@
       ],
       "webp_bytes": 422954,
       "webp_sha256": "f9aa3be324e23c347202c32e13d10e5c2a3484122ddcc0117b460cb0b0f8b6aa"
+    },
+    "1354-medicine-ball-overhead-slam": {
+      "frames": 12,
+      "gif": "1354",
+      "ledger_id": "1354_Medicine_Ball_Overhead_Slam",
+      "source_gif_sha256": "c0be316711e3cd0ad940f1dc400615de199058e615bd67a1c620d5db59203d85",
+      "status": "active",
+      "thumb_bytes": 7520,
+      "thumb_sha256": "f1240de22ea6c1698212d7db34240b5ee6154d74fc1c884d36e2249d89f090f7",
+      "versions": [
+        {
+          "file": "webp-720/1354_Medicine_Ball_Overhead_Slam_wardroom_720.webp",
+          "media_version": 1,
+          "webp_bytes": 259004,
+          "webp_sha256": "06a29b14bf761dc7061875af19d5739ada2e0a4b6eeb4de3e141bc246c81c3de"
+        }
+      ],
+      "webp_bytes": 259004,
+      "webp_sha256": "06a29b14bf761dc7061875af19d5739ada2e0a4b6eeb4de3e141bc246c81c3de"
     },
     "1355-single-arm-isometric-lat-pull": {
       "frames": 12,
@@ -7912,6 +9892,25 @@
       "webp_bytes": 400466,
       "webp_sha256": "c9265c7ca98ac0ff6c4664f507ae1e8e935d6411faf426411be7730ee15104f8"
     },
+    "1377-calf-stretch-with-hands-against-wall": {
+      "frames": 12,
+      "gif": "1377",
+      "ledger_id": "1377_Calf_Stretch_with_Hands_Against_Wall",
+      "source_gif_sha256": "a1589059c2f50694fd4fc115a9972b44e8e097499b36b59757561d26777a820c",
+      "status": "active",
+      "thumb_bytes": 3356,
+      "thumb_sha256": "73f60fa17146e4ebb1ff9671726ec00e3d3af2e85d6eb9abec255896f4071056",
+      "versions": [
+        {
+          "file": "webp-720/1377_Calf_Stretch_with_Hands_Against_Wall_wardroom_720.webp",
+          "media_version": 1,
+          "webp_bytes": 231986,
+          "webp_sha256": "1f0c6164b780097383a4a50e370cc98d5e75bd13bb7369d6a234b3ed2a173940"
+        }
+      ],
+      "webp_bytes": 231986,
+      "webp_sha256": "1f0c6164b780097383a4a50e370cc98d5e75bd13bb7369d6a234b3ed2a173940"
+    },
     "1379-dumbbell-seated-calf-raise": {
       "frames": 12,
       "gif": "1379",
@@ -8178,6 +10177,25 @@
       "webp_bytes": 410902,
       "webp_sha256": "0dcb44bd7fe6e78f4e3dbc586e5a53b44391d7c86ac8bbf4ba72777dafc33b13"
     },
+    "1401-muscle-up": {
+      "frames": 18,
+      "gif": "1401",
+      "ledger_id": "1401_Muscle_Up",
+      "source_gif_sha256": "fb6eca0b40a22b7e9d3e84771b031c5aae3513b22fbe80bc7c6a926fb4e8d538",
+      "status": "active",
+      "thumb_bytes": 4708,
+      "thumb_sha256": "00a6dd2e509232f152f2720bc8e62563ebbd6f9515cf3f25eafae62b26614615",
+      "versions": [
+        {
+          "file": "webp-720/1401_Muscle_Up_wardroom_720.webp",
+          "media_version": 1,
+          "webp_bytes": 256032,
+          "webp_sha256": "67dee026b0df8fa9846f3373a54a135431e3ca81b4bec76fce723407c1d5c302"
+        }
+      ],
+      "webp_bytes": 256032,
+      "webp_sha256": "67dee026b0df8fa9846f3373a54a135431e3ca81b4bec76fce723407c1d5c302"
+    },
     "1403-neck-side-stretch": {
       "frames": 12,
       "gif": "1403",
@@ -8386,6 +10404,25 @@
       ],
       "webp_bytes": 309474,
       "webp_sha256": "fcaa99851c61121063be754e49df8ba3bf9f69b991939efa9023b396f21ee71c"
+    },
+    "1423-reverse-hyper-on-flat-bench": {
+      "frames": 12,
+      "gif": "1423",
+      "ledger_id": "1423_Reverse_Hyper_on_Flat_Bench",
+      "source_gif_sha256": "991212ec8b6ff7215455b22b403e66a4269f3a0f5956a0162a3bee9cb49f3473",
+      "status": "active",
+      "thumb_bytes": 3368,
+      "thumb_sha256": "5edacfa5164d5a3df5e465f82e331aedecbcef165bfeea8bd1e892957f623965",
+      "versions": [
+        {
+          "file": "webp-720/1423_Reverse_Hyper_on_Flat_Bench_wardroom_720.webp",
+          "media_version": 1,
+          "webp_bytes": 274516,
+          "webp_sha256": "b7b1cbbb77ee843d9aa46e6e8b859608f56cbe81b170aa211f417a435ef674b9"
+        }
+      ],
+      "webp_bytes": 274516,
+      "webp_sha256": "b7b1cbbb77ee843d9aa46e6e8b859608f56cbe81b170aa211f417a435ef674b9"
     },
     "1424-seated-glute-stretch": {
       "frames": 12,
@@ -8672,6 +10709,25 @@
       "webp_bytes": 312678,
       "webp_sha256": "e5bcbdd9f242ac3651f0b78e5b33603ea3c3d4a4b9cbd4c711bbca5061a7ae7b"
     },
+    "1457-barbell-standing-wide-military-press": {
+      "frames": 12,
+      "gif": "1457",
+      "ledger_id": "1457_Barbell_Standing_Wide_Military_Press",
+      "source_gif_sha256": "a0ec987652999a9e62a8c65faff6f3795ca106c704ac81c3233b74ed5e399150",
+      "status": "active",
+      "thumb_bytes": 4186,
+      "thumb_sha256": "3082c8e6d72abf4ea4ed025f7ff59d76b02c4ce81814a11ff11d937f66f007e6",
+      "versions": [
+        {
+          "file": "webp-720/1457_Barbell_Standing_Wide_Military_Press_wardroom_720.webp",
+          "media_version": 1,
+          "webp_bytes": 345714,
+          "webp_sha256": "adca9700fa567edbff1bef1df363037a60be9d6609a442400641ea17c228b6e4"
+        }
+      ],
+      "webp_bytes": 345714,
+      "webp_sha256": "adca9700fa567edbff1bef1df363037a60be9d6609a442400641ea17c228b6e4"
+    },
     "1458-ez-bar-seated-curls": {
       "frames": 12,
       "gif": "1458",
@@ -8690,6 +10746,44 @@
       ],
       "webp_bytes": 520856,
       "webp_sha256": "e6e22422da659853428acb3e75fb53f92513853195f8dc549d76bc867ab51b52"
+    },
+    "1459-dumbbell-romanian-deadlift": {
+      "frames": 12,
+      "gif": "1459",
+      "ledger_id": "1459_Dumbbell_Romanian_Deadlift",
+      "source_gif_sha256": "bd987422b691f6a884f2fd0f5d9234f10fac30ea0927a75b0040718cd8ac814f",
+      "status": "active",
+      "thumb_bytes": 3436,
+      "thumb_sha256": "6ccf5c61dcba82d84e01495eca4d29cbcdc60cf9aa08198e3a27906a3fbbd97d",
+      "versions": [
+        {
+          "file": "webp-720/1459_Dumbbell_Romanian_Deadlift_wardroom_720.webp",
+          "media_version": 1,
+          "webp_bytes": 309852,
+          "webp_sha256": "fc89c451cb23235c39fb109a4fa249dddaa6c79345c1afbbc845b63ebe3c2a8f"
+        }
+      ],
+      "webp_bytes": 309852,
+      "webp_sha256": "fc89c451cb23235c39fb109a4fa249dddaa6c79345c1afbbc845b63ebe3c2a8f"
+    },
+    "1460-walking-lunge": {
+      "frames": 24,
+      "gif": "1460",
+      "ledger_id": "1460_Walking_Lunge",
+      "source_gif_sha256": "48831c0a0493ff5703aab8395e1e67d1f06ca8a1b2673a148167e272c2d5768f",
+      "status": "active",
+      "thumb_bytes": 5160,
+      "thumb_sha256": "67a5343effdbc68036ca6ab4c7e780ae4c5c142128d11f714c8c86f7a6541367",
+      "versions": [
+        {
+          "file": "webp-720/1460_Walking_Lunge_wardroom_720.webp",
+          "media_version": 1,
+          "webp_bytes": 473724,
+          "webp_sha256": "188dcc650ba09bebe4b92d92b8f74255001026041a264b88169d493b9893db51"
+        }
+      ],
+      "webp_bytes": 473724,
+      "webp_sha256": "188dcc650ba09bebe4b92d92b8f74255001026041a264b88169d493b9893db51"
     },
     "1466-twist-hip-lift": {
       "frames": 12,
@@ -8728,6 +10822,25 @@
       ],
       "webp_bytes": 460432,
       "webp_sha256": "615436c8b9aff227d6c5d56542896f5ba311456a5a00a0dadc02a0405a8843ac"
+    },
+    "1471-inchworm": {
+      "frames": 24,
+      "gif": "1471",
+      "ledger_id": "1471_Inchworm",
+      "source_gif_sha256": "92b0bd70c517ee73c3f1c27f50e96bffd163952132d7d199fa39d03c65bdba8f",
+      "status": "active",
+      "thumb_bytes": 3914,
+      "thumb_sha256": "f29fa8ad41094ae7d895a844914261f49dc51765359845fcc4cc8dad00ca7e56",
+      "versions": [
+        {
+          "file": "webp-720/1471_Inchworm_wardroom_720.webp",
+          "media_version": 1,
+          "webp_bytes": 550098,
+          "webp_sha256": "a468ae2670119a902b6fe5bb8f342a9e203821f7cddebd803108b09f8781f001"
+        }
+      ],
+      "webp_bytes": 550098,
+      "webp_sha256": "a468ae2670119a902b6fe5bb8f342a9e203821f7cddebd803108b09f8781f001"
     },
     "1472-forward-jump": {
       "frames": 18,
@@ -8975,6 +11088,25 @@
       ],
       "webp_bytes": 373092,
       "webp_sha256": "9350490ce7a27c74636dd2a67032919efbd894f7e7721377fb4d73903edabb2d"
+    },
+    "1604-world-s-greatest-stretch": {
+      "frames": 18,
+      "gif": "1604",
+      "ledger_id": "1604_World_s_Greatest_Stretch",
+      "source_gif_sha256": "61407a34f3035559ca94979740c98867f71ac0bc6266fa28dcbad4092a29b84f",
+      "status": "active",
+      "thumb_bytes": 4720,
+      "thumb_sha256": "c7b46c9a0082f0edfe41e6edfe829ab6f14645ca6dfb8b1c9cd22808b81feaaa",
+      "versions": [
+        {
+          "file": "webp-720/1604_World_s_Greatest_Stretch_wardroom_720.webp",
+          "media_version": 1,
+          "webp_bytes": 565608,
+          "webp_sha256": "d43ccaa383ea64cbda9ad5d8560e91950ba589a3f91f82b73d74732d71877e2b"
+        }
+      ],
+      "webp_bytes": 565608,
+      "webp_sha256": "d43ccaa383ea64cbda9ad5d8560e91950ba589a3f91f82b73d74732d71877e2b"
     },
     "1617-dumbbell-decline-single-arm-hammer-press": {
       "frames": 12,
@@ -9489,6 +11621,25 @@
       "webp_bytes": 225622,
       "webp_sha256": "30b76bb0fb4264eb81c550dd3e9264a7335be512a22c4042b83206e341da35f4"
     },
+    "1688-lunge-with-twist": {
+      "frames": 12,
+      "gif": "1688",
+      "ledger_id": "1688_Lunge_with_Twist",
+      "source_gif_sha256": "6a508e686f813f6462b61c056ae198a20095d1fc0c69d621e0a62db800a6cc98",
+      "status": "active",
+      "thumb_bytes": 5358,
+      "thumb_sha256": "7839c778821eb27606402d3d567551d798db6e0cac917624649917b4c4f988ec",
+      "versions": [
+        {
+          "file": "webp-720/1688_Lunge_with_Twist_wardroom_720.webp",
+          "media_version": 1,
+          "webp_bytes": 367374,
+          "webp_sha256": "89a67c3cf570d51ddc4efa344cb60aafc4b9ff722ddd2a637db9070d82ee25e6"
+        }
+      ],
+      "webp_bytes": 367374,
+      "webp_sha256": "89a67c3cf570d51ddc4efa344cb60aafc4b9ff722ddd2a637db9070d82ee25e6"
+    },
     "1700-dumbbell-push-press": {
       "frames": 18,
       "gif": "1700",
@@ -9602,6 +11753,25 @@
       ],
       "webp_bytes": 486904,
       "webp_sha256": "404ecfc78e5dc0f5083bb7d2ce62fb71a53d97ac3cf54339b664941ecba26d62"
+    },
+    "1722-cable-overhead-tricep-extension": {
+      "frames": 12,
+      "gif": "1722",
+      "ledger_id": "1722_Cable_Overhead_Tricep_Extension",
+      "source_gif_sha256": "93197aeaaf9d39c785c6071cc2b2d0b477233120d28c735beed89d6f25fca77f",
+      "status": "active",
+      "thumb_bytes": 4510,
+      "thumb_sha256": "6d11abdda59bb3fa746f370289619c3e4912c594c7f85c3f7549622715e3a081",
+      "versions": [
+        {
+          "file": "webp-720/1722_Cable_Overhead_Tricep_Extension_wardroom_720.webp",
+          "media_version": 1,
+          "webp_bytes": 358416,
+          "webp_sha256": "c80365b3a4d8864b3a635251aa67083b2143fe16282d9d179745ffcd9d7f15a9"
+        }
+      ],
+      "webp_bytes": 358416,
+      "webp_sha256": "c80365b3a4d8864b3a635251aa67083b2143fe16282d9d179745ffcd9d7f15a9"
     },
     "1723-cable-single-arm-tricep-pushdown": {
       "frames": 12,
@@ -9774,6 +11944,25 @@
       "webp_bytes": 462758,
       "webp_sha256": "7f4ca42ce9f42f090a905993c00c8ab6b1012cfb32a1ba58f028c10962a779d4"
     },
+    "1757-dumbbell-single-leg-deadlift": {
+      "frames": 12,
+      "gif": "1757",
+      "ledger_id": "1757_Dumbbell_Single_Leg_Deadlift",
+      "source_gif_sha256": "fafd20c413af430145b6e0c2e0a2bf2d5ba52c283b5093474627935bb73366bb",
+      "status": "active",
+      "thumb_bytes": 4524,
+      "thumb_sha256": "058831e1c4925f189d348581c5f9f8bfe468921abf25ccb0e2c56ad294c0fb83",
+      "versions": [
+        {
+          "file": "webp-720/1757_Dumbbell_Single_Leg_Deadlift_wardroom_720.webp",
+          "media_version": 1,
+          "webp_bytes": 342642,
+          "webp_sha256": "96871c5ff88b1792a87f4df16a9fe827eb7f43770f543c9c79e93028cdf712d8"
+        }
+      ],
+      "webp_bytes": 342642,
+      "webp_sha256": "96871c5ff88b1792a87f4df16a9fe827eb7f43770f543c9c79e93028cdf712d8"
+    },
     "1758-situp": {
       "frames": 12,
       "gif": "1758",
@@ -9793,6 +11982,44 @@
       "webp_bytes": 341102,
       "webp_sha256": "ac7368d3b4596903dd60fea820466856b006bc00f4071904b4590987cc966934"
     },
+    "1759-pistol-squat": {
+      "frames": 12,
+      "gif": "1759",
+      "ledger_id": "1759_Pistol_Squat",
+      "source_gif_sha256": "9e00ca7cbef5d35283344c968e158396ab33ea8a2495bc1b0e52216ce892019a",
+      "status": "active",
+      "thumb_bytes": 6098,
+      "thumb_sha256": "41591d474bfb7af76ea9133f9442bf40b9da5ad1971ba054ed813d8243e28e9a",
+      "versions": [
+        {
+          "file": "webp-720/1759_Pistol_Squat_wardroom_720.webp",
+          "media_version": 1,
+          "webp_bytes": 320410,
+          "webp_sha256": "f17b953a08c28fdc94db47d872c6282ea6fd017b44dee4bd4a72ec5cca39059a"
+        }
+      ],
+      "webp_bytes": 320410,
+      "webp_sha256": "f17b953a08c28fdc94db47d872c6282ea6fd017b44dee4bd4a72ec5cca39059a"
+    },
+    "1760-dumbbell-goblet-squat": {
+      "frames": 12,
+      "gif": "1760",
+      "ledger_id": "1760_Dumbbell_Goblet_Squat",
+      "source_gif_sha256": "a50106fd551cae6d6b6c59803ea4238ffe483b39a7e72481e3fa6be4733eee25",
+      "status": "active",
+      "thumb_bytes": 5488,
+      "thumb_sha256": "6648512b1e35819ca401228cd4cb27049683dd0f7df03f90b081a87752ce716c",
+      "versions": [
+        {
+          "file": "webp-720/1760_Dumbbell_Goblet_Squat_wardroom_720.webp",
+          "media_version": 1,
+          "webp_bytes": 257242,
+          "webp_sha256": "3f04722bec87669c7465219b40a60790aa6719a513e6f02437497ff27110bc6f"
+        }
+      ],
+      "webp_bytes": 257242,
+      "webp_sha256": "3f04722bec87669c7465219b40a60790aa6719a513e6f02437497ff27110bc6f"
+    },
     "1761-hanging-oblique-knee-raise": {
       "frames": 24,
       "gif": "1761",
@@ -9811,6 +12038,25 @@
       ],
       "webp_bytes": 423770,
       "webp_sha256": "86354d3186dc034d5f0deb2af1402420ffb0638082ee07e08f2afc5a968bdb2b"
+    },
+    "1766-nordic-hamstring-curl": {
+      "frames": 12,
+      "gif": "1766",
+      "ledger_id": "1766_Nordic_Hamstring_Curl",
+      "source_gif_sha256": "764592bf3e6e3f5357f2402447bf229d76d94c44095b990ed748747673f98f24",
+      "status": "active",
+      "thumb_bytes": 4528,
+      "thumb_sha256": "1861316f35f9052d7f289b461d9fba6c86256ea97f5b632bc034c4ffd6fc6f2d",
+      "versions": [
+        {
+          "file": "webp-720/1766_Nordic_Hamstring_Curl_wardroom_720.webp",
+          "media_version": 1,
+          "webp_bytes": 445390,
+          "webp_sha256": "2d63ed6369a32d48849025ec56aa8db7c68fd14587498fc58b05fc9b7e2e61f0"
+        }
+      ],
+      "webp_bytes": 445390,
+      "webp_sha256": "2d63ed6369a32d48849025ec56aa8db7c68fd14587498fc58b05fc9b7e2e61f0"
     },
     "1771-bodyweight-kneeling-tricep-extension": {
       "frames": 12,
@@ -9869,6 +12115,25 @@
       "webp_bytes": 247892,
       "webp_sha256": "20314f8238caed4bc374ed9eda0a9c1420aac890515ad0a68e63f89f778a8abc"
     },
+    "2133-farmers-walk-time": {
+      "frames": 24,
+      "gif": "2133",
+      "ledger_id": "2133_Farmers_Walk_Time",
+      "source_gif_sha256": "3fd4146f9342ea3b84cd9e462ace73612d19731a9a56293061f249cf0552ffc3",
+      "status": "active",
+      "thumb_bytes": 3862,
+      "thumb_sha256": "299f867e4b4825033f4c721980a22412c1a8a41cc9234f46fc4e5ef6270b713f",
+      "versions": [
+        {
+          "file": "webp-720/2133_Farmers_Walk_Time_wardroom_720.webp",
+          "media_version": 1,
+          "webp_bytes": 606296,
+          "webp_sha256": "657865749afb5513e314dc9ae89b0c8f00b8280a7870b9366514bd1fc20c761b"
+        }
+      ],
+      "webp_bytes": 606296,
+      "webp_sha256": "657865749afb5513e314dc9ae89b0c8f00b8280a7870b9366514bd1fc20c761b"
+    },
     "2135-weighted-front-plank": {
       "frames": 12,
       "gif": "2135",
@@ -9887,6 +12152,25 @@
       ],
       "webp_bytes": 269814,
       "webp_sha256": "d98a16f676229711285b6a69e97f0360215acfe2dc304ca7bda3f1abee31ec62"
+    },
+    "2137-dumbbell-arnold-press": {
+      "frames": 12,
+      "gif": "2137",
+      "ledger_id": "2137_Dumbbell_Arnold_Press",
+      "source_gif_sha256": "deee67c2e012dd40a0b1bae875cc00b9790f7c8dcae2e494cd39fc617f7dfc08",
+      "status": "active",
+      "thumb_bytes": 4466,
+      "thumb_sha256": "05876932a11dcc6ebc2ac1773af35579878635cfaa93d355a7a09b15ec7e40db",
+      "versions": [
+        {
+          "file": "webp-720/2137_Dumbbell_Arnold_Press_wardroom_720.webp",
+          "media_version": 1,
+          "webp_bytes": 364650,
+          "webp_sha256": "71525e33da76af7b20acaed9151f5d2731447586df50d5d1d46d55bd9d57a271"
+        }
+      ],
+      "webp_bytes": 364650,
+      "webp_sha256": "71525e33da76af7b20acaed9151f5d2731447586df50d5d1d46d55bd9d57a271"
     },
     "2141-elliptical-time": {
       "frames": 12,
@@ -9925,6 +12209,25 @@
       ],
       "webp_bytes": 630024,
       "webp_sha256": "8e074db214674ec9032cec9fda77024c9f5d0c1e5786a3b42b274f7aea3f4ccd"
+    },
+    "2188-dumbbell-seated-tricep-extension": {
+      "frames": 12,
+      "gif": "2188",
+      "ledger_id": "2188_Dumbbell_Seated_Tricep_Extension",
+      "source_gif_sha256": "b75b47cedc0523b7f55a2d3b199a1d9ea13e664531de8055b6dc455f68623886",
+      "status": "active",
+      "thumb_bytes": 3846,
+      "thumb_sha256": "9e2abfb2dd23489d008fe0b868127b3380d743825929c2f48bcc012336a57beb",
+      "versions": [
+        {
+          "file": "webp-720/2188_Dumbbell_Seated_Tricep_Extension_wardroom_720.webp",
+          "media_version": 1,
+          "webp_bytes": 310206,
+          "webp_sha256": "caaab01807941418c42582fabbd52cb0a736036801955f6706525a1982ba14fc"
+        }
+      ],
+      "webp_bytes": 310206,
+      "webp_sha256": "caaab01807941418c42582fabbd52cb0a736036801955f6706525a1982ba14fc"
     },
     "2285-pullover": {
       "frames": 12,
@@ -10078,6 +12381,44 @@
       "webp_bytes": 414726,
       "webp_sha256": "c592fd8c3c17cf18934b383e3c98be83ad3baf70ad9a0a40a0a3113e751cabde"
     },
+    "2331-assault-bike": {
+      "frames": 12,
+      "gif": "2331",
+      "ledger_id": "2331_Assault_Bike",
+      "source_gif_sha256": "c69d2dcc933826acf7be1142eb9283fbca536e240423250c49bdedea38e7c0c9",
+      "status": "active",
+      "thumb_bytes": 6128,
+      "thumb_sha256": "b1954642e952fa2d02b110af81c04e36974e8cfdfe83648063a70fec3012cab5",
+      "versions": [
+        {
+          "file": "webp-720/2331_Assault_Bike_wardroom_720.webp",
+          "media_version": 1,
+          "webp_bytes": 617446,
+          "webp_sha256": "7298e3a9807f815d097bab84c580cf94b8c4f29f92c8d5e8b3f8097236e34393"
+        }
+      ],
+      "webp_bytes": 617446,
+      "webp_sha256": "7298e3a9807f815d097bab84c580cf94b8c4f29f92c8d5e8b3f8097236e34393"
+    },
+    "2368-split-squats": {
+      "frames": 12,
+      "gif": "2368",
+      "ledger_id": "2368_Split_Squats",
+      "source_gif_sha256": "87f58f8eb9abe0f3d986b405a98d175b1b4f8bfe4c1d6b7baf5792fef85360da",
+      "status": "active",
+      "thumb_bytes": 4504,
+      "thumb_sha256": "af9d3f555060812d6828081118ff32adfe9dfea60f17ef54f8d02dd3fc2385ae",
+      "versions": [
+        {
+          "file": "webp-720/2368_Split_Squats_wardroom_720.webp",
+          "media_version": 1,
+          "webp_bytes": 283904,
+          "webp_sha256": "be065538117b582988e7e20bbf925cc42fdec5c92e8237bd07c2bff30ff50d8d"
+        }
+      ],
+      "webp_bytes": 283904,
+      "webp_sha256": "be065538117b582988e7e20bbf925cc42fdec5c92e8237bd07c2bff30ff50d8d"
+    },
     "2397-dumbbell-scott-press": {
       "frames": 12,
       "gif": "2397",
@@ -10191,6 +12532,25 @@
       ],
       "webp_bytes": 551572,
       "webp_sha256": "dec554a18b41ee73ced3c89ca8ff743c6ba565782a13b6962b89cba7fbf8b313"
+    },
+    "2612-jump-rope": {
+      "frames": 12,
+      "gif": "2612",
+      "ledger_id": "2612_Jump_Rope",
+      "source_gif_sha256": "d8d714e47befd0105cde49b1ba0829f9d81cbf634ddaa644370c17635e8109c2",
+      "status": "active",
+      "thumb_bytes": 3856,
+      "thumb_sha256": "8cd6d902de705fc965b6b68abf5d962a3f70b01282b5820fd2855ebc4fb5efbc",
+      "versions": [
+        {
+          "file": "webp-720/2612_Jump_Rope_wardroom_720.webp",
+          "media_version": 1,
+          "webp_bytes": 284324,
+          "webp_sha256": "07173c546ac6b162085211c4984ed068b3b8dc9e35778c263619117b1ddea204"
+        }
+      ],
+      "webp_bytes": 284324,
+      "webp_sha256": "07173c546ac6b162085211c4984ed068b3b8dc9e35778c263619117b1ddea204"
     },
     "2616-cable-lateral-pulldown-with-v-bar": {
       "frames": 12,
@@ -10344,6 +12704,25 @@
       "webp_bytes": 347210,
       "webp_sha256": "6c558492b27467ad16294d4d06fc5c6b22c94e08eaffdd291a706881c0d13f57"
     },
+    "2963-captains-chair-straight-leg-raise": {
+      "frames": 12,
+      "gif": "2963",
+      "ledger_id": "2963_Captains_Chair_Straight_Leg_Raise",
+      "source_gif_sha256": "9aed35439ab3758e56804e06ba2a3d72474bcdd178ef724120bbb9ba35e629bc",
+      "status": "active",
+      "thumb_bytes": 5008,
+      "thumb_sha256": "13b646aa4feb90721058ec4ac3c16b0ca16efdb89a01617896e6749969c4a770",
+      "versions": [
+        {
+          "file": "webp-720/2963_Captains_Chair_Straight_Leg_Raise_wardroom_720.webp",
+          "media_version": 1,
+          "webp_bytes": 424870,
+          "webp_sha256": "9ff7dae1d0a9692e226f8cd91e847e9bcc329b0b8b2f0c02a3d8ef0c6d4a4fda"
+        }
+      ],
+      "webp_bytes": 424870,
+      "webp_sha256": "9ff7dae1d0a9692e226f8cd91e847e9bcc329b0b8b2f0c02a3d8ef0c6d4a4fda"
+    },
     "3006-resistance-band-seated-hip-abduction": {
       "frames": 12,
       "gif": "3006",
@@ -10400,6 +12779,44 @@
       ],
       "webp_bytes": 392848,
       "webp_sha256": "5daab85bb770235755ad928f5949daeacee3597f55747a6c8509ec4e6add8acb"
+    },
+    "3013-low-glute-bridge-on-floor": {
+      "frames": 12,
+      "gif": "3013",
+      "ledger_id": "3013_Low_Glute_Bridge_on_Floor",
+      "source_gif_sha256": "4469e2839e562e87e5aca98251429d5f415f0ccd919308434965c9ae1c020bd7",
+      "status": "active",
+      "thumb_bytes": 3934,
+      "thumb_sha256": "8a8da8975cbe63699c9c8e170890d8545eeda001a02e89fab74ced3915c36245",
+      "versions": [
+        {
+          "file": "webp-720/3013_Low_Glute_Bridge_on_Floor_wardroom_720.webp",
+          "media_version": 1,
+          "webp_bytes": 357642,
+          "webp_sha256": "09c44bf81db142623411b3a3c3538ee9b7f5dd1ec438b7e97b7663bf77c68b71"
+        }
+      ],
+      "webp_bytes": 357642,
+      "webp_sha256": "09c44bf81db142623411b3a3c3538ee9b7f5dd1ec438b7e97b7663bf77c68b71"
+    },
+    "3017-barbell-pendlay-row": {
+      "frames": 12,
+      "gif": "3017",
+      "ledger_id": "3017_Barbell_Pendlay_Row",
+      "source_gif_sha256": "cb99667319adc8822ac0435576a8e7cc104be71248711b9c6d66cba86fead1bd",
+      "status": "active",
+      "thumb_bytes": 7072,
+      "thumb_sha256": "c8ba26d827e2352a2053b18be9d241dda850b5f80b17e383df31a66bf3428973",
+      "versions": [
+        {
+          "file": "webp-720/3017_Barbell_Pendlay_Row_wardroom_720.webp",
+          "media_version": 1,
+          "webp_bytes": 657654,
+          "webp_sha256": "a9d1114557aa2f7cf3a6e216df818df2e8b2a4d8b5251e899ae4b972b0775385"
+        }
+      ],
+      "webp_bytes": 657654,
+      "webp_sha256": "a9d1114557aa2f7cf3a6e216df818df2e8b2a4d8b5251e899ae4b972b0775385"
     },
     "3021-scapula-pushup": {
       "frames": 12,
@@ -10572,6 +12989,25 @@
       "webp_bytes": 392002,
       "webp_sha256": "f5a36afd2bf51a70ca582dab7f0989146459aaa6e47d56624590a9d52cb20ef9"
     },
+    "3165-bodyweight-towel-standing-row": {
+      "frames": 12,
+      "gif": "3165",
+      "ledger_id": "3165_Bodyweight_Towel_Standing_Row",
+      "source_gif_sha256": "b196645ab0245513a1db85b0f77d7a3bf992cce9e5f7e0d76c218626965fd08f",
+      "status": "active",
+      "thumb_bytes": 4946,
+      "thumb_sha256": "898fae9c3e54eba9ad283638b69a900938742411f8d7b572aac3849c8ad3bdf8",
+      "versions": [
+        {
+          "file": "webp-720/3165_Bodyweight_Towel_Standing_Row_wardroom_720.webp",
+          "media_version": 1,
+          "webp_bytes": 425280,
+          "webp_sha256": "7bfacb1d9a06a63d7125ad050644c3d6786a80d401bae39fd4453416c537925b"
+        }
+      ],
+      "webp_bytes": 425280,
+      "webp_sha256": "7bfacb1d9a06a63d7125ad050644c3d6786a80d401bae39fd4453416c537925b"
+    },
     "3166-bodyweight-standing-row": {
       "frames": 12,
       "gif": "3166",
@@ -10724,6 +13160,25 @@
       "webp_bytes": 264254,
       "webp_sha256": "a4c2d13e6f91ae42d7f95fecd5a9e65747390370d1a0378b912ba485a040f8ae"
     },
+    "3212-basic-toe-touch": {
+      "frames": 12,
+      "gif": "3212",
+      "ledger_id": "3212_Basic_Toe_Touch",
+      "source_gif_sha256": "eff726886f3e3b74df6e4d63ea377ba35284a6f145fa493421395387b3682780",
+      "status": "active",
+      "thumb_bytes": 2920,
+      "thumb_sha256": "8959c894a475644e9831968305bd20bc6d138835d0974162e3396d780bcbca15",
+      "versions": [
+        {
+          "file": "webp-720/3212_Basic_Toe_Touch_wardroom_720.webp",
+          "media_version": 1,
+          "webp_bytes": 233472,
+          "webp_sha256": "a8c06ec9790d22a8335a6aee2fa660c387a497e8d150f1efae1c769b1222d9c5"
+        }
+      ],
+      "webp_bytes": 233472,
+      "webp_sha256": "a8c06ec9790d22a8335a6aee2fa660c387a497e8d150f1efae1c769b1222d9c5"
+    },
     "3214-arms-apart-circular-toe-touch": {
       "frames": 48,
       "gif": "3214",
@@ -10761,6 +13216,25 @@
       ],
       "webp_bytes": 770986,
       "webp_sha256": "53565931cb48e8d51b217a1583752a814b468714eceff9f4217ad98494ed00f0"
+    },
+    "3217-modified-hindu-pushup": {
+      "frames": 18,
+      "gif": "3217",
+      "ledger_id": "3217_Modified_Hindu_Pushup",
+      "source_gif_sha256": "6013c53bbaa3ccb02701e6dafe3a933e618d1cfc38996981b37734d0446aa7e6",
+      "status": "active",
+      "thumb_bytes": 4448,
+      "thumb_sha256": "adeef1540d52e3f6c85fd64196d90ee9f6852aaf771f250c8fccd787c1d33766",
+      "versions": [
+        {
+          "file": "webp-720/3217_Modified_Hindu_Pushup_wardroom_720.webp",
+          "media_version": 1,
+          "webp_bytes": 417932,
+          "webp_sha256": "42c6e013c4420ff2baf8925f4f9597a1fec8f17605c8dd1479550e22c0a8a523"
+        }
+      ],
+      "webp_bytes": 417932,
+      "webp_sha256": "42c6e013c4420ff2baf8925f4f9597a1fec8f17605c8dd1479550e22c0a8a523"
     },
     "3218-hands-clasped-circular-toe-touch": {
       "frames": 47,
@@ -10914,6 +13388,25 @@
       "webp_bytes": 194360,
       "webp_sha256": "b9bc90bb00ee66d36b2e9d6d9a1a282632fc45db0331e41bb4bda3a4f5077d2e"
     },
+    "3296-front-lever": {
+      "frames": 12,
+      "gif": "3296",
+      "ledger_id": "3296_Front_Lever",
+      "source_gif_sha256": "7127a4f557931a8fd42daccaacca0550802d174a9592ede758753e9aa0552da8",
+      "status": "active",
+      "thumb_bytes": 4618,
+      "thumb_sha256": "50a960a20ad9e0f1d1d7f3490602ce167035cc9eb766db2bf336a23550479c45",
+      "versions": [
+        {
+          "file": "webp-720/3296_Front_Lever_wardroom_720.webp",
+          "media_version": 1,
+          "webp_bytes": 341266,
+          "webp_sha256": "8b5306a54ffba1c352ec656a5fd7035b2b87f781c1d413bc129849e20874d1d1"
+        }
+      ],
+      "webp_bytes": 341266,
+      "webp_sha256": "8b5306a54ffba1c352ec656a5fd7035b2b87f781c1d413bc129849e20874d1d1"
+    },
     "3297-back-lever": {
       "frames": 12,
       "gif": "3297",
@@ -11009,6 +13502,25 @@
       "webp_bytes": 386548,
       "webp_sha256": "324496d4af7e9a3607f4a0d8620e3f2d6c9c9238c10e6fa4578d845d1f383b98"
     },
+    "3302-handstand": {
+      "frames": 18,
+      "gif": "3302",
+      "ledger_id": "3302_Handstand",
+      "source_gif_sha256": "1143f1608b9170c7acef32d7a8483bbd0417353e4ec37b989425aa14ef3cbdab",
+      "status": "active",
+      "thumb_bytes": 5666,
+      "thumb_sha256": "263d882356b41d6989d59064a167e17b0f5e8726d812eec338261125d7797340",
+      "versions": [
+        {
+          "file": "webp-720/3302_Handstand_wardroom_720.webp",
+          "media_version": 1,
+          "webp_bytes": 336900,
+          "webp_sha256": "be458e6f174b064ff41029d169aad15eedfc3cb2975029717eff7ab52995bde9"
+        }
+      ],
+      "webp_bytes": 336900,
+      "webp_sha256": "be458e6f174b064ff41029d169aad15eedfc3cb2975029717eff7ab52995bde9"
+    },
     "3303-flag": {
       "frames": 12,
       "gif": "3303",
@@ -11085,6 +13597,25 @@
       "webp_bytes": 203670,
       "webp_sha256": "d26db4c7df270551339a24df183226787ec626f5ddafaf0ecb3afcf17e876dd2"
     },
+    "3360-bear-crawl-time": {
+      "frames": 18,
+      "gif": "3360",
+      "ledger_id": "3360_Bear_Crawl_Time",
+      "source_gif_sha256": "2a49c4a704fbb54b011cece68c6d332928aba58e96e2283e74193a08baddabca",
+      "status": "active",
+      "thumb_bytes": 4394,
+      "thumb_sha256": "0555cac619026797ba8352d0602be9b5871361266cc076f5ef50b00788bd5f1e",
+      "versions": [
+        {
+          "file": "webp-720/3360_Bear_Crawl_Time_wardroom_720.webp",
+          "media_version": 1,
+          "webp_bytes": 350996,
+          "webp_sha256": "208759d645fdb20034eb4b5983bd4a75af6b74dde2fcb4c0fab2cf4684872eec"
+        }
+      ],
+      "webp_bytes": 350996,
+      "webp_sha256": "208759d645fdb20034eb4b5983bd4a75af6b74dde2fcb4c0fab2cf4684872eec"
+    },
     "3361-skater-hops": {
       "frames": 24,
       "gif": "3361",
@@ -11122,6 +13653,25 @@
       ],
       "webp_bytes": 337880,
       "webp_sha256": "a3825e83c447d3976f32d9a79ef2ab007d2b81069275a5239a92fcec23474c5a"
+    },
+    "3419-l-sit-on-floor": {
+      "frames": 12,
+      "gif": "3419",
+      "ledger_id": "3419_L-sit_on_Floor",
+      "source_gif_sha256": "440fd0c2c17ee35ddd7b103beda7379ec86b060ec5962f8fdb0320e73adf71b6",
+      "status": "active",
+      "thumb_bytes": 4996,
+      "thumb_sha256": "083c29af9947921981ba98e0eb4f317176c66f63eb6b096bebb6974516c5e419",
+      "versions": [
+        {
+          "file": "webp-720/3419_L-sit_on_Floor_wardroom_720.webp",
+          "media_version": 1,
+          "webp_bytes": 445030,
+          "webp_sha256": "ea9bb8acc94ff79ad8d6db588bfd3b9237a40018013b3c72b1a15b6f29012284"
+        }
+      ],
+      "webp_bytes": 445030,
+      "webp_sha256": "ea9bb8acc94ff79ad8d6db588bfd3b9237a40018013b3c72b1a15b6f29012284"
     },
     "3420-v-sit-on-floor": {
       "frames": 12,
@@ -11446,6 +13996,44 @@
       "webp_bytes": 493984,
       "webp_sha256": "0e3f3ff24f22a24129782669b568607c9f6a407c8d0a2ec9a3cdab5c56bd1ada"
     },
+    "3645-single-leg-bridge-with-outstretched-leg": {
+      "frames": 12,
+      "gif": "3645",
+      "ledger_id": "3645_Single_Leg_Bridge_with_Outstretched_Leg",
+      "source_gif_sha256": "5efef0d3a1337e9312f0ea1758ae277524a34e08d462109baa11555bb520f668",
+      "status": "active",
+      "thumb_bytes": 3262,
+      "thumb_sha256": "d18127fc8b91f66495e486905d80bc55f90bd236d04d09631f7f659d63076bdd",
+      "versions": [
+        {
+          "file": "webp-720/3645_Single_Leg_Bridge_with_Outstretched_Leg_wardroom_720.webp",
+          "media_version": 1,
+          "webp_bytes": 254546,
+          "webp_sha256": "86ff654bad493461cd11927f9ecdb2cd3c0d4148be6e7f81f3b5949052d8cfce"
+        }
+      ],
+      "webp_bytes": 254546,
+      "webp_sha256": "86ff654bad493461cd11927f9ecdb2cd3c0d4148be6e7f81f3b5949052d8cfce"
+    },
+    "3655-walking-high-knees-lunge": {
+      "frames": 24,
+      "gif": "3655",
+      "ledger_id": "3655_Walking_High_Knees_Lunge",
+      "source_gif_sha256": "cd2d1a3d0972dfc1462270033cf4434abc593c0696dba3b10a58cd171b416371",
+      "status": "active",
+      "thumb_bytes": 6348,
+      "thumb_sha256": "fc37d59b8c84bae0a36534d6501b4f987a19b161c47f4908c6ccfe947debf79a",
+      "versions": [
+        {
+          "file": "webp-720/3655_Walking_High_Knees_Lunge_wardroom_720.webp",
+          "media_version": 1,
+          "webp_bytes": 447446,
+          "webp_sha256": "3eb2251898b73b7441564289099ac32a097b00dd185783d6724889dffe74a741"
+        }
+      ],
+      "webp_bytes": 447446,
+      "webp_sha256": "3eb2251898b73b7441564289099ac32a097b00dd185783d6724889dffe74a741"
+    },
     "3656-short-stride-run-time": {
       "frames": 24,
       "gif": "3656",
@@ -11655,6 +14243,25 @@
       "webp_bytes": 563928,
       "webp_sha256": "876d86485334e3f17ca1485e803b80b34356e3bb1f3bfebf8a16ae91bbca3f8d"
     },
+    "3785-box-decline-pushup": {
+      "frames": 12,
+      "gif": "3785",
+      "ledger_id": "3785_Box_Decline_Pushup",
+      "source_gif_sha256": "0ddf2c30dc7d4f5fac8cd09369e7c11d4b99ca77aef71b48f8d403d6f6e2d168",
+      "status": "active",
+      "thumb_bytes": 4024,
+      "thumb_sha256": "0a883cf52e05ce6fefb2798120c8c56b0ed28967da08f3d93fb3550d7042009d",
+      "versions": [
+        {
+          "file": "webp-720/3785_Box_Decline_Pushup_wardroom_720.webp",
+          "media_version": 1,
+          "webp_bytes": 398244,
+          "webp_sha256": "4ab5f9ffd8eea92fa8d4e77ba88d86d16765dd54a86d93519b1fbbe799964f7e"
+        }
+      ],
+      "webp_bytes": 398244,
+      "webp_sha256": "4ab5f9ffd8eea92fa8d4e77ba88d86d16765dd54a86d93519b1fbbe799964f7e"
+    },
     "3888-dumbbell-single-arm-snatch": {
       "frames": 24,
       "gif": "3888",
@@ -11714,6 +14321,143 @@
     }
   },
   "rows": {
+    "E001": "0025-barbell-bench-press",
+    "E002": "0289-dumbbell-bench-press",
+    "E003": "0047-barbell-incline-bench-press",
+    "E004": "0033-barbell-decline-bench-press",
+    "E005": "0662-pushup",
+    "E006": "0308-dumbbell-fly",
+    "E007": "0188-cable-middle-fly",
+    "E008": "0251-chest-dip",
+    "E009": "1301-machine-inner-chest-press",
+    "E011": "1457-barbell-standing-wide-military-press",
+    "E012": "0426-dumbbell-standing-overhead-press",
+    "E013": "0334-dumbbell-lateral-raise",
+    "E014": "0233-face-pull",
+    "E015": "0310-dumbbell-front-raise",
+    "E016": "0030-barbell-close-grip-bench-press",
+    "E017": "0201-cable-tricep-pushdown",
+    "E018": "0060-barbell-skull-crusher",
+    "E019": "2188-dumbbell-seated-tricep-extension",
+    "E020": "0283-diamond-pushup",
+    "E021": "0032-barbell-deadlift",
+    "E022": "0652-pullup",
+    "E023": "0027-barbell-bent-over-row",
+    "E024": "0292-dumbbell-single-arm-bent-over-row",
+    "E025": "0198-cable-lat-pulldown",
+    "E026": "0861-cable-seated-row",
+    "E029": "0489-hyperextension",
+    "E031": "0031-barbell-curl",
+    "E032": "0294-dumbbell-bicep-curl",
+    "E033": "0313-dumbbell-hammer-curl",
+    "E034": "0297-dumbbell-concentration-curl",
+    "E035": "0868-cable-curl",
+    "E036": "0043-barbell-full-squat",
+    "E037": "0042-barbell-front-squat",
+    "E038": "1760-dumbbell-goblet-squat",
+    "E039": "0739-leg-press",
+    "E040": "0743-hack-squat",
+    "E041": "0410-dumbbell-single-leg-split-squat",
+    "E042": "1460-walking-lunge",
+    "E043": "0585-leg-extension",
+    "E044": "0431-dumbbell-stepup",
+    "E045": "1459-dumbbell-romanian-deadlift",
+    "E046": "1766-nordic-hamstring-curl",
+    "E047": "0058-barbell-hip-thrust",
+    "E048": "3013-low-glute-bridge-on-floor",
+    "E049": "0586-lying-leg-curl",
+    "E050": "0117-barbell-sumo-deadlift",
+    "E052": "0594-seated-calf-raise",
+    "E053": "0284-donkey-calf-raise",
+    "E055": "0276-dead-bug",
+    "E056": "0175-cable-kneeling-crunch",
+    "E057": "0475-hanging-straight-leg-raise",
+    "E058": "0857-wheel-rollout",
+    "E059": "0687-russian-twist",
+    "E060": "0872-reverse-crunch",
+    "E061": "0684-treadmill-run-time",
+    "E062": "0798-stationary-bike-walk",
+    "E063": "2612-jump-rope",
+    "E065": "1160-burpee",
+    "E067": "0630-mountain-climber",
+    "E068": "2331-assault-bike",
+    "E069": "1401-muscle-up",
+    "E070": "3296-front-lever",
+    "E071": "3419-l-sit-on-floor",
+    "E072": "3302-handstand",
+    "E073": "1759-pistol-squat",
+    "E076": "3217-modified-hindu-pushup",
+    "E083": "1604-world-s-greatest-stretch",
+    "E086": "0648-power-clean",
+    "E087": "0811-trap-bar-deadlift",
+    "E088": "0127-barbell-zercher-squat",
+    "E089": "2133-farmers-walk-time",
+    "E091": "1757-dumbbell-single-leg-deadlift",
+    "E092": "0044-barbell-good-morning",
+    "E094": "0315-dumbbell-incline-bicep-curl",
+    "E096": "0860-cable-kickback",
+    "E097": "1722-cable-overhead-tricep-extension",
+    "E098": "0383-dumbbell-reverse-fly",
+    "E099": "0401-dumbbell-seated-palms-up-wrist-curl",
+    "E100": "0385-dumbbell-reverse-wrist-curl",
+    "E102": "3785-box-decline-pushup",
+    "E103": "0279-incline-pushup",
+    "E104": "2137-dumbbell-arnold-press",
+    "E105": "0437-dumbbell-upright-row",
+    "E106": "0406-dumbbell-shrug",
+    "E107": "0597-seated-hip-abduction",
+    "E108": "0598-seated-hip-adduction",
+    "E113": "0343-dumbbell-lying-single-arm-press",
+    "E117": "1269-cable-standing-crossovers",
+    "E118": "0596-seated-fly",
+    "E123": "1326-chinup",
+    "E127": "1423-reverse-hyper-on-flat-bench",
+    "E129": "0074-barbell-rack-pull",
+    "E131": "0508-janda-situp",
+    "E133": "0562-landmine-180",
+    "E135": "3360-bear-crawl-time",
+    "E140": "0549-kettlebell-swing",
+    "E141": "0551-kettlebell-squat-style-turkish-get-up",
+    "E142": "1354-medicine-ball-overhead-slam",
+    "E151": "1471-inchworm",
+    "E155": "1167-dynamic-chest-stretch",
+    "E161": "1377-calf-stretch-with-hands-against-wall",
+    "E171": "0433-dumbbell-pullover",
+    "E172": "0407-dumbbell-side-bend",
+    "E173": "0282-decline-situp",
+    "E174": "0274-crunch-floor",
+    "E175": "0003-bicycle-crunch",
+    "E180": "0476-windshield-wiper",
+    "E185": "0540-kettlebell-single-arm-push-press",
+    "E187": "0522-kettlebell-alternating-row",
+    "E188": "1004-band-squat",
+    "E193": "0514-jump-squat",
+    "E198": "1688-lunge-with-twist",
+    "E201": "0685-run-time",
+    "E203": "3655-walking-high-knees-lunge",
+    "E212": "0659-wall-pushup",
+    "E215": "3212-basic-toe-touch",
+    "E217": "0643-overhead-tricep-stretch",
+    "E222": "0668-rear-decline-bridge",
+    "E224": "0196-cable-pull-through",
+    "E229": "0085-barbell-romanian-deadlift",
+    "E231": "0301-dumbbell-decline-bench-press",
+    "E232": "0319-dumbbell-incline-fly",
+    "E235": "0584-lateral-raise",
+    "E236": "0161-cable-front-raise",
+    "E238": "0812-bench-tricep-dip",
+    "E239": "0333-dumbbell-kickback",
+    "E242": "0165-cable-hammer-curl",
+    "E244": "3017-barbell-pendlay-row",
+    "E245": "0581-high-row",
+    "E247": "0238-cable-straight-arm-pulldown",
+    "E248": "2963-captains-chair-straight-leg-raise",
+    "E250": "0459-flutter-kicks",
+    "E255": "3165-bodyweight-towel-standing-row",
+    "E258": "0417-dumbbell-standing-calf-raise",
+    "E259": "2368-split-squats",
+    "E260": "0314-dumbbell-incline-bench-press",
+    "E291": "3645-single-leg-bridge-with-outstretched-leg",
     "G0001": "0001-three-quarter-situp",
     "G0002": "0002-45-degree-side-bend",
     "G0006": "0006-alternate-heel-touchers",

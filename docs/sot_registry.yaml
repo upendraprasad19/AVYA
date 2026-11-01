@@ -11449,7 +11449,7 @@ concepts:
         method: scripts/repair_exercise_library_v12.js (repairText, mergeDuplicates, relabel, dropPlates)
         notes: v12 (Batch A) — 136 un-shifted text rows, cues one per item, 7 duplicates retired (name_aliases + merged_ids on the kept row), E172/E163 labels, E207/E179 plate keys dropped
       - file: lib/core/services/seed_service.dart
-        line_range: 222-267
+        line_range: 227-272
         method: _exerciseLibraryVersion (11→12) + retiredLibraryIds + pruneRetired after putAll in _seedExercises
         notes: putAll never deletes, so the prune is what removes a retired row from an existing install
       - file: supabase/migrations/162_reseed_exercise_library.sql
@@ -13002,7 +13002,7 @@ concepts:
         line_range: 1-2
         method: demo_slug + demo_pair fields
       - file: lib/core/services/seed_service.dart
-        line_range: 128-128
+        line_range: 133-133
         method: _exerciseLibraryVersion
     readers:
       - file: lib/shared/widgets/exercise_plate/plate_resolver.dart
@@ -13020,14 +13020,16 @@ concepts:
     description: |
       Library rows that have a Wardroom animation carry three optional keys, written together or
       not at all, always last and in this order: `media_slug` (the file's stem, `<gif number>-<name>`),
-      `media_version` (an integer, 1 for every file in M1) and `media_source` (`wardroom`). Library
-      v16. The file is the private Storage object `<media_slug>_v<media_version>.webp` in the
+      `media_version` (an integer, 1 for every file in M1) and `media_source` (`wardroom`). Introduced
+      in library v16 on 617 new rows; since v17 (OI-443) 137 old `E` rows carry them too, and the
+      table's `E` rows are rebuilt only from the entries of the cumulative input
+      `docs/audit/library-old-rows-media-input.json`. The file is the private Storage object `<media_slug>_v<media_version>.webp` in the
       `exercise-media` bucket; the provenance (hashes, sizes, frames, the ledger id) lives in
       `scripts/data/library_media_v16.json`, never in the library row.
 
       WRITERS: the media stage of the library importer (the only code that sets the keys; it also
-      removes them from any row the table does not map) and, for existing installs, the v16 re-seed
-      in the seed service. The table itself is built by `scripts/build_library_media_v16.js` from
+      removes them from any row the table does not map) and, for existing installs, the v16 and v17
+      re-seeds in the seed service. The table itself is built by `scripts/build_library_media_v16.js` from
       the Wardroom ledger and the files on disk.
 
       READERS: `resolveMedia` (Batch M2a, `lib/shared/widgets/exercise_plate/exercise_media_resolver.dart`)
@@ -13044,7 +13046,7 @@ concepts:
         line_range: 154-175
         method: applyMedia
       - file: lib/core/services/seed_service.dart
-        line_range: 128-128
+        line_range: 133-133
         method: _exerciseLibraryVersion
     readers:
       - file: lib/shared/widgets/exercise_plate/exercise_media_resolver.dart

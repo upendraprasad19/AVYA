@@ -1,0 +1,668 @@
+{
+  "_note": "The founder tab 1 export of 2026-10-17 (use_gif_for_our_exercises), reduced to exercise_id and gif_id. The export itself lives outside the repo; its sha256 is recorded here.",
+  "export_file": "gif-review tab 1 on 10-17.json",
+  "export_sha256": "49fb2ce636302b72178e7e0636bb306f8ab740982c5ac4b6f44ab5680a76aad3",
+  "exported": "2026-10-17T11:37:22.673Z",
+  "equipment_retag_decided": {
+    "E230": {
+      "to": [
+        "bodyweight"
+      ],
+      "why": "GIF 0795 Standing Single Leg Curl is bodyweight; founder chose to treat the exercise as bodyweight"
+    }
+  },
+  "picks": [
+    {
+      "exercise_id": "E001",
+      "gif_id": "0025"
+    },
+    {
+      "exercise_id": "E002",
+      "gif_id": "0289"
+    },
+    {
+      "exercise_id": "E003",
+      "gif_id": "0047"
+    },
+    {
+      "exercise_id": "E004",
+      "gif_id": "0033"
+    },
+    {
+      "exercise_id": "E005",
+      "gif_id": "0662"
+    },
+    {
+      "exercise_id": "E006",
+      "gif_id": "0308"
+    },
+    {
+      "exercise_id": "E007",
+      "gif_id": "0188"
+    },
+    {
+      "exercise_id": "E008",
+      "gif_id": "0251"
+    },
+    {
+      "exercise_id": "E009",
+      "gif_id": "1301"
+    },
+    {
+      "exercise_id": "E011",
+      "gif_id": "1457"
+    },
+    {
+      "exercise_id": "E012",
+      "gif_id": "0426"
+    },
+    {
+      "exercise_id": "E013",
+      "gif_id": "0334"
+    },
+    {
+      "exercise_id": "E014",
+      "gif_id": "0233"
+    },
+    {
+      "exercise_id": "E015",
+      "gif_id": "0310"
+    },
+    {
+      "exercise_id": "E016",
+      "gif_id": "0030"
+    },
+    {
+      "exercise_id": "E017",
+      "gif_id": "0201"
+    },
+    {
+      "exercise_id": "E018",
+      "gif_id": "0060"
+    },
+    {
+      "exercise_id": "E019",
+      "gif_id": "2188"
+    },
+    {
+      "exercise_id": "E020",
+      "gif_id": "0283"
+    },
+    {
+      "exercise_id": "E021",
+      "gif_id": "0032"
+    },
+    {
+      "exercise_id": "E022",
+      "gif_id": "0652"
+    },
+    {
+      "exercise_id": "E023",
+      "gif_id": "0027"
+    },
+    {
+      "exercise_id": "E024",
+      "gif_id": "0292"
+    },
+    {
+      "exercise_id": "E025",
+      "gif_id": "0198"
+    },
+    {
+      "exercise_id": "E026",
+      "gif_id": "0861"
+    },
+    {
+      "exercise_id": "E027",
+      "gif_id": "0606"
+    },
+    {
+      "exercise_id": "E029",
+      "gif_id": "0489"
+    },
+    {
+      "exercise_id": "E031",
+      "gif_id": "0031"
+    },
+    {
+      "exercise_id": "E032",
+      "gif_id": "0294"
+    },
+    {
+      "exercise_id": "E033",
+      "gif_id": "0313"
+    },
+    {
+      "exercise_id": "E034",
+      "gif_id": "0297"
+    },
+    {
+      "exercise_id": "E035",
+      "gif_id": "0868"
+    },
+    {
+      "exercise_id": "E036",
+      "gif_id": "0043"
+    },
+    {
+      "exercise_id": "E037",
+      "gif_id": "0042"
+    },
+    {
+      "exercise_id": "E038",
+      "gif_id": "1760"
+    },
+    {
+      "exercise_id": "E039",
+      "gif_id": "0739"
+    },
+    {
+      "exercise_id": "E040",
+      "gif_id": "0743"
+    },
+    {
+      "exercise_id": "E041",
+      "gif_id": "0410"
+    },
+    {
+      "exercise_id": "E042",
+      "gif_id": "1460"
+    },
+    {
+      "exercise_id": "E043",
+      "gif_id": "0585"
+    },
+    {
+      "exercise_id": "E044",
+      "gif_id": "0431"
+    },
+    {
+      "exercise_id": "E045",
+      "gif_id": "1459"
+    },
+    {
+      "exercise_id": "E046",
+      "gif_id": "1766"
+    },
+    {
+      "exercise_id": "E047",
+      "gif_id": "0058"
+    },
+    {
+      "exercise_id": "E048",
+      "gif_id": "3013"
+    },
+    {
+      "exercise_id": "E049",
+      "gif_id": "0586"
+    },
+    {
+      "exercise_id": "E050",
+      "gif_id": "0117"
+    },
+    {
+      "exercise_id": "E051",
+      "gif_id": "0605"
+    },
+    {
+      "exercise_id": "E052",
+      "gif_id": "0594"
+    },
+    {
+      "exercise_id": "E053",
+      "gif_id": "0284"
+    },
+    {
+      "exercise_id": "E055",
+      "gif_id": "0276"
+    },
+    {
+      "exercise_id": "E056",
+      "gif_id": "0175"
+    },
+    {
+      "exercise_id": "E057",
+      "gif_id": "0475"
+    },
+    {
+      "exercise_id": "E058",
+      "gif_id": "0857"
+    },
+    {
+      "exercise_id": "E059",
+      "gif_id": "0687"
+    },
+    {
+      "exercise_id": "E060",
+      "gif_id": "0872"
+    },
+    {
+      "exercise_id": "E061",
+      "gif_id": "0684"
+    },
+    {
+      "exercise_id": "E062",
+      "gif_id": "0798"
+    },
+    {
+      "exercise_id": "E063",
+      "gif_id": "2612"
+    },
+    {
+      "exercise_id": "E065",
+      "gif_id": "1160"
+    },
+    {
+      "exercise_id": "E067",
+      "gif_id": "0630"
+    },
+    {
+      "exercise_id": "E068",
+      "gif_id": "2331"
+    },
+    {
+      "exercise_id": "E069",
+      "gif_id": "1401"
+    },
+    {
+      "exercise_id": "E070",
+      "gif_id": "3296"
+    },
+    {
+      "exercise_id": "E071",
+      "gif_id": "3419"
+    },
+    {
+      "exercise_id": "E072",
+      "gif_id": "3302"
+    },
+    {
+      "exercise_id": "E073",
+      "gif_id": "1759"
+    },
+    {
+      "exercise_id": "E075",
+      "gif_id": "0814"
+    },
+    {
+      "exercise_id": "E076",
+      "gif_id": "3217"
+    },
+    {
+      "exercise_id": "E083",
+      "gif_id": "1604"
+    },
+    {
+      "exercise_id": "E084",
+      "gif_id": "1368"
+    },
+    {
+      "exercise_id": "E086",
+      "gif_id": "0648"
+    },
+    {
+      "exercise_id": "E087",
+      "gif_id": "0811"
+    },
+    {
+      "exercise_id": "E088",
+      "gif_id": "0127"
+    },
+    {
+      "exercise_id": "E089",
+      "gif_id": "2133"
+    },
+    {
+      "exercise_id": "E091",
+      "gif_id": "1757"
+    },
+    {
+      "exercise_id": "E092",
+      "gif_id": "0044"
+    },
+    {
+      "exercise_id": "E094",
+      "gif_id": "0315"
+    },
+    {
+      "exercise_id": "E095",
+      "gif_id": "0592"
+    },
+    {
+      "exercise_id": "E096",
+      "gif_id": "0860"
+    },
+    {
+      "exercise_id": "E097",
+      "gif_id": "1722"
+    },
+    {
+      "exercise_id": "E098",
+      "gif_id": "0383"
+    },
+    {
+      "exercise_id": "E099",
+      "gif_id": "0401"
+    },
+    {
+      "exercise_id": "E100",
+      "gif_id": "0385"
+    },
+    {
+      "exercise_id": "E101",
+      "gif_id": "0652"
+    },
+    {
+      "exercise_id": "E102",
+      "gif_id": "3785"
+    },
+    {
+      "exercise_id": "E103",
+      "gif_id": "0279"
+    },
+    {
+      "exercise_id": "E104",
+      "gif_id": "2137"
+    },
+    {
+      "exercise_id": "E105",
+      "gif_id": "0437"
+    },
+    {
+      "exercise_id": "E106",
+      "gif_id": "0406"
+    },
+    {
+      "exercise_id": "E107",
+      "gif_id": "0597"
+    },
+    {
+      "exercise_id": "E108",
+      "gif_id": "0598"
+    },
+    {
+      "exercise_id": "E111",
+      "gif_id": "1489"
+    },
+    {
+      "exercise_id": "E113",
+      "gif_id": "0343"
+    },
+    {
+      "exercise_id": "E117",
+      "gif_id": "1269"
+    },
+    {
+      "exercise_id": "E118",
+      "gif_id": "0596"
+    },
+    {
+      "exercise_id": "E120",
+      "gif_id": "0856"
+    },
+    {
+      "exercise_id": "E121",
+      "gif_id": "0521"
+    },
+    {
+      "exercise_id": "E123",
+      "gif_id": "1326"
+    },
+    {
+      "exercise_id": "E124",
+      "gif_id": "0499"
+    },
+    {
+      "exercise_id": "E127",
+      "gif_id": "1423"
+    },
+    {
+      "exercise_id": "E129",
+      "gif_id": "0074"
+    },
+    {
+      "exercise_id": "E131",
+      "gif_id": "0508"
+    },
+    {
+      "exercise_id": "E132",
+      "gif_id": "0979"
+    },
+    {
+      "exercise_id": "E133",
+      "gif_id": "0562"
+    },
+    {
+      "exercise_id": "E135",
+      "gif_id": "3360"
+    },
+    {
+      "exercise_id": "E140",
+      "gif_id": "0549"
+    },
+    {
+      "exercise_id": "E141",
+      "gif_id": "0551"
+    },
+    {
+      "exercise_id": "E142",
+      "gif_id": "1354"
+    },
+    {
+      "exercise_id": "E146",
+      "gif_id": "1688"
+    },
+    {
+      "exercise_id": "E151",
+      "gif_id": "1471"
+    },
+    {
+      "exercise_id": "E152",
+      "gif_id": "0514"
+    },
+    {
+      "exercise_id": "E155",
+      "gif_id": "1167"
+    },
+    {
+      "exercise_id": "E161",
+      "gif_id": "1377"
+    },
+    {
+      "exercise_id": "E162",
+      "gif_id": "2567"
+    },
+    {
+      "exercise_id": "E166",
+      "gif_id": "1511"
+    },
+    {
+      "exercise_id": "E169",
+      "gif_id": "2567"
+    },
+    {
+      "exercise_id": "E171",
+      "gif_id": "0433"
+    },
+    {
+      "exercise_id": "E172",
+      "gif_id": "0407"
+    },
+    {
+      "exercise_id": "E173",
+      "gif_id": "0282"
+    },
+    {
+      "exercise_id": "E174",
+      "gif_id": "0274"
+    },
+    {
+      "exercise_id": "E175",
+      "gif_id": "0003"
+    },
+    {
+      "exercise_id": "E180",
+      "gif_id": "0476"
+    },
+    {
+      "exercise_id": "E185",
+      "gif_id": "0540"
+    },
+    {
+      "exercise_id": "E187",
+      "gif_id": "0522"
+    },
+    {
+      "exercise_id": "E188",
+      "gif_id": "1004"
+    },
+    {
+      "exercise_id": "E193",
+      "gif_id": "0514"
+    },
+    {
+      "exercise_id": "E198",
+      "gif_id": "1688"
+    },
+    {
+      "exercise_id": "E201",
+      "gif_id": "0685"
+    },
+    {
+      "exercise_id": "E203",
+      "gif_id": "3655"
+    },
+    {
+      "exercise_id": "E210",
+      "gif_id": "1428"
+    },
+    {
+      "exercise_id": "E211",
+      "gif_id": "1368"
+    },
+    {
+      "exercise_id": "E212",
+      "gif_id": "0659"
+    },
+    {
+      "exercise_id": "E214",
+      "gif_id": "3666"
+    },
+    {
+      "exercise_id": "E215",
+      "gif_id": "3212"
+    },
+    {
+      "exercise_id": "E217",
+      "gif_id": "0643"
+    },
+    {
+      "exercise_id": "E222",
+      "gif_id": "0668"
+    },
+    {
+      "exercise_id": "E224",
+      "gif_id": "0196"
+    },
+    {
+      "exercise_id": "E225",
+      "gif_id": "0597"
+    },
+    {
+      "exercise_id": "E229",
+      "gif_id": "0085"
+    },
+    {
+      "exercise_id": "E230",
+      "gif_id": "0795"
+    },
+    {
+      "exercise_id": "E231",
+      "gif_id": "0301"
+    },
+    {
+      "exercise_id": "E232",
+      "gif_id": "0319"
+    },
+    {
+      "exercise_id": "E235",
+      "gif_id": "0584"
+    },
+    {
+      "exercise_id": "E236",
+      "gif_id": "0161"
+    },
+    {
+      "exercise_id": "E238",
+      "gif_id": "0812"
+    },
+    {
+      "exercise_id": "E239",
+      "gif_id": "0333"
+    },
+    {
+      "exercise_id": "E240",
+      "gif_id": "1722"
+    },
+    {
+      "exercise_id": "E241",
+      "gif_id": "0030"
+    },
+    {
+      "exercise_id": "E242",
+      "gif_id": "0165"
+    },
+    {
+      "exercise_id": "E243",
+      "gif_id": "0868"
+    },
+    {
+      "exercise_id": "E244",
+      "gif_id": "3017"
+    },
+    {
+      "exercise_id": "E245",
+      "gif_id": "0581"
+    },
+    {
+      "exercise_id": "E247",
+      "gif_id": "0238"
+    },
+    {
+      "exercise_id": "E248",
+      "gif_id": "2963"
+    },
+    {
+      "exercise_id": "E250",
+      "gif_id": "0459"
+    },
+    {
+      "exercise_id": "E255",
+      "gif_id": "3165"
+    },
+    {
+      "exercise_id": "E256",
+      "gif_id": "0652"
+    },
+    {
+      "exercise_id": "E258",
+      "gif_id": "0417"
+    },
+    {
+      "exercise_id": "E259",
+      "gif_id": "2368"
+    },
+    {
+      "exercise_id": "E260",
+      "gif_id": "0314"
+    },
+    {
+      "exercise_id": "E264",
+      "gif_id": "N001"
+    },
+    {
+      "exercise_id": "E291",
+      "gif_id": "3645"
+    }
+  ]
+}

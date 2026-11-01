@@ -1,6 +1,8 @@
 // Batch M1 (seed v16, docs/plans/2026-10-27-library-batch-m1-media-data.md, Task 2.4) - an install that already holds the
 // v15 library must receive the media fields (`media_slug`, `media_version`, `media_source`) on exactly the rows the media
-// table maps on its next launch, and must keep every other field and every row it already has.
+// table maps on its next launch, and must keep every other field and every row it already has. The OI-443 data step
+// (seed v17, docs/plans/2026-11-01-library-old-rows-media.md) repeats that for an install at v16: the old rows of the
+// founder's picks gain the keys. The file keeps its v16 name: the SoT registry cites it as the behavioural test path.
 //
 // Presence of the number 16 in seed_service.dart proves nothing about a box: this drives the REAL
 // SeedService.seedIfNeeded against a box holding the 914 v15 library rows without the media keys, a custom exercise and a
@@ -23,6 +25,16 @@ import '../helpers/hive_test_setup.dart';
 const _customId = '7b1f6c1e-6f43-4d52-9d0c-0c0a3f1f0a01';
 const _communityId = '0d0e0f10-1112-4314-9516-171819202122';
 const _mediaKeys = ['media_slug', 'media_version', 'media_source'];
+
+/// `SeedService._exerciseLibraryVersion` (private): 17 since the OI-443 data step. The mutation "put the constant back to 16"
+/// reddens every test below that expects an upgrade or this number.
+const _currentVersion = 17;
+
+/// The rows the committed media table maps (G/N rows and, since v17, the old rows of the founder's picks).
+int _tableRowCount() {
+  final t = jsonDecode(File('scripts/data/library_media_v16.json').readAsStringSync()) as Map<String, dynamic>;
+  return (t['rows'] as Map).length;
+}
 
 List<Map<String, dynamic>> _bundled() =>
     (jsonDecode(File('assets/data/exercise_library.json').readAsStringSync()) as List).cast<Map<String, dynamic>>();
@@ -56,7 +68,7 @@ void main() {
   void expectSeededLikeBundled(List<Map<String, dynamic>> bundled) {
     final hive = HiveService.instance;
     final mapped = bundled.where((r) => r.containsKey('media_slug')).toList();
-    expect(mapped, hasLength(617), reason: 'the bundled library carries the media fields on the 617 mapped rows');
+    expect(mapped, hasLength(_tableRowCount()), reason: 'the bundled library carries the media fields on exactly the rows the media table maps');
     for (final r in bundled) {
       final stored = Map<String, dynamic>.from(hive.exerciseBox.get(r['id']) as Map);
       expect(stored.containsKey('media_slug'), r.containsKey('media_slug'), reason: '${r['id']} media keys');
@@ -65,10 +77,10 @@ void main() {
     expect(Map<String, dynamic>.from(hive.exerciseBox.get(_customId) as Map)['name'], 'My Own Curl');
     expect(Map<String, dynamic>.from(hive.exerciseBox.get(_communityId) as Map)['name'], 'Shared Row');
     expect(hive.exerciseBox.length, bundled.length + 2);
-    expect(hive.configBox.get('exercise_library_version') as int, 16);
+    expect(hive.configBox.get('exercise_library_version') as int, _currentVersion);
   }
 
-  test('a v15 box gets the media fields on exactly the mapped ids and version 16; every other field and row stays', () async {
+  test('a v15 box gets the media fields on exactly the mapped ids and the current version; every other field and row stays', () async {
     final bundled = _bundled();
     final hive = HiveService.instance;
     for (final r in bundled) {
@@ -84,7 +96,7 @@ void main() {
     expect(Map<String, dynamic>.from(hive.exerciseBox.get('E274') as Map)['target_focus'], ['Mid Back']);
   });
 
-  test('an install that skipped v15 (stored 13) also reaches 16 with the new rows and the media fields', () async {
+  test('an install that skipped v15 (stored 13) also reaches the current version with the new rows and the media fields', () async {
     final bundled = _bundled();
     final hive = HiveService.instance;
     for (final r in bundled.where((r) => RegExp(r'^E\d').hasMatch(r['id'] as String))) {
@@ -97,19 +109,44 @@ void main() {
     expectSeededLikeBundled(bundled);
   });
 
-  test('a v16 box is left alone (the fast path): a row edited in the box is not overwritten', () async {
+  test('a v16 box (617 G/N media rows, no old-row media) gains the keys on exactly the old rows the table maps; custom and community rows stay', () async {
+    // OI-443 data step: what a device holds after Batch M1 is the bundled library with every E row WITHOUT media keys.
+    final bundled = _bundled();
+    final hive = HiveService.instance;
+    final oldMapped = bundled.where((r) => RegExp(r'^E\d+$').hasMatch(r['id'] as String) && r.containsKey('media_slug')).toList();
+    expect(oldMapped, isNotEmpty, reason: 'the bundled library carries media keys on old rows (the precondition of this release)');
+    for (final r in bundled) {
+      final isOld = RegExp(r'^E\d+$').hasMatch(r['id'] as String);
+      await hive.exerciseBox.put(r['id'], isOld ? _withoutMedia(r) : r); // the v16 install
+    }
+    await markSeeded(16);
+    expect(
+      hive.exerciseBox.values.where((v) => (v as Map).containsKey('media_slug')).length,
+      _tableRowCount() - oldMapped.length,
+      reason: 'the precondition: only the G/N rows carry media keys on the v16 install',
+    );
+
+    await SeedService.instance.seedIfNeeded();
+
+    expectSeededLikeBundled(bundled);
+    for (final r in oldMapped) {
+      expect((hive.exerciseBox.get(r['id']) as Map)['media_slug'], r['media_slug'], reason: '${r['id']} gains its animation');
+    }
+  });
+
+  test('the current version is left alone (the fast path): a row edited in the box is not overwritten', () async {
     final bundled = _bundled();
     final hive = HiveService.instance;
     for (final r in bundled) {
       await hive.exerciseBox.put(r['id'], r);
     }
-    await markSeeded(16);
+    await markSeeded(_currentVersion);
     final edited = Map<String, dynamic>.from(hive.exerciseBox.get('E001') as Map)..['name'] = 'Edited On Device';
     await hive.exerciseBox.put('E001', edited);
 
     await SeedService.instance.seedIfNeeded();
 
     expect((hive.exerciseBox.get('E001') as Map)['name'], 'Edited On Device');
-    expect(hive.configBox.get('exercise_library_version') as int, 16);
+    expect(hive.configBox.get('exercise_library_version') as int, _currentVersion);
   });
 }
