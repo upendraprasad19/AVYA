@@ -11,12 +11,12 @@ findings:
   - id: FRS-T1-CHIP
     title: "The Train/Nutrition streak chip stayed at the pre-refill value after a background restore when Home was not mounted (9c8958 class)"
     terminal_state: closed_in_commit
-    commit: PENDING_STAMP
+    commit: 37818e49
     verification: "restoreCompletedTickProvider bridge watched by StreakFreezeNotifier and StreakNotifier; test/contracts/streak_chip_restore_tick_behavioral_test.dart (4 tests); mutants N1-N4 all red."
   - id: FRS-T2-PUSH
     title: "The version-locked freeze push retried once and lost to two consecutive bumps (expected 198 then 199)"
     terminal_state: closed_in_commit
-    commit: PENDING_STAMP
+    commit: 37818e49
     verification: "bounded 3-round retry with fresh re-fetch/re-read/ownership re-check, kill switch disable_freeze_push_attempts; test/contracts/freeze_push_retry_attempts_behavioral_test.dart (6 tests); mutants M1-M8 all red. 3 is a bounded improvement, not proven sufficient (stated in the diagnose-doc)."
   - id: FRS-H-C-GRANT
     title: "First-PRO freeze grant fires on every web cold start (local flag unset, cloud flag true); not causal for the observed cloud row"
