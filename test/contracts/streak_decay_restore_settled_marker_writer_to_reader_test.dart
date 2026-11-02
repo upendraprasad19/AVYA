@@ -97,6 +97,10 @@ void main() {
         // only once the restore for THIS account settled (a fourth deciding
         // reader, on purpose; re-checked before every write).
         'lib/core/services/l2_custom_append_repair_migrator.dart',
+        // Weekly freeze credit (freeze-order-d1, 2026-11-02): `refillIfNewWeek`
+        // defers until the restore for THIS account settled (a fifth deciding
+        // reader, on purpose), so the credit never lands before the settle.
+        'lib/core/services/streak_progress_service.dart',
       },
           reason: 'a new file deciding on the marker must be added here on '
               'purpose (the dev simulator only MENTIONS it, in a comment)');

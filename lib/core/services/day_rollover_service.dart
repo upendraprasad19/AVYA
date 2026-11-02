@@ -234,10 +234,14 @@ class DayRolloverObserver with WidgetsBindingObserver {
           reason: 'day_rollover_streak_freeze_refill'));
     }
 
-    // D2 (f9d2e7) — streak-decay reckon. Refill runs FIRST (tops up the weekly
-    // budget) THEN reckon, so an idle user's missed days are consumed + PERSISTED
-    // on app-open — not only on completeWorkout (pre-D2 the read-only streak
-    // display and the persisted freeze count diverged). Gated inside reckon
+    // D2 (f9d2e7) — streak-decay reckon: an idle user's missed days are consumed
+    // + PERSISTED on app-open — not only on completeWorkout (pre-D2 the read-only
+    // streak display and the persisted freeze count diverged). Order (freeze-order-d1,
+    // founder rule "settle Saturday first, then credit Monday"): `refillIfNewWeek`
+    // above now settles the days before this Monday with the OLD stock and only then
+    // credits (and defers until the restore settled); the walk's own cutoff keeps
+    // Monday-onward misses for the new credit, so this reckon is correct whichever
+    // order the two calls run in. Gated inside reckon
     // (the restore for THIS account settled + non-empty schedule — b4e7a1) so a
     // pre-restore cold start can't spuriously decay. A returning user's cold
     // start reaches here BEFORE the background restore finishes, so it is gated

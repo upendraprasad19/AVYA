@@ -381,6 +381,13 @@ class UserRepository {
   String? getPhaseStartedAtIso() =>
       getProgress()?['phase_started_at'] as String?;
 
+  /// The Monday (`YYYY-MM-DD`) of the last weekly streak-freeze credit, or null
+  /// when none was ever stamped. A typed accessor for the same Gate-19 reason
+  /// as [getPhaseStartedAtIso]: the streak walk in `workout_repository.dart`
+  /// walks `schedule_*` maps and must not read a progress key by literal.
+  String? getFreezeLastRefill() =>
+      getProgress()?['streak_freezes_last_refill'] as String?;
+
   /// The progress-map fields that are MONOTONIC — a lifetime/earned counter or
   /// the phase index — where a cloud→Hive restore must never lower the local
   /// value. Founder decision 2026-08-03: **local-max-wins**, with telemetry.

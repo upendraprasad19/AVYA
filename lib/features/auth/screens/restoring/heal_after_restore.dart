@@ -49,6 +49,8 @@ Future<void> _healAfterRestoreInBackground() async {
   }
   await _runL2CustomRepair();
   try {
+    // Settle-then-credit (freeze-order-d1): the restore marker is already set
+    // here, so the refill runs its own settle pass before the +1.
     StreakProgressService.instance.refillIfNewWeek();
   } catch (e, st) {
     unawaited(ErrorTelemetry.recordNonFatal(e, st, reason: 'bg_heal_refill'));

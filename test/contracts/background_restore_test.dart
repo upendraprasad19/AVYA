@@ -173,7 +173,7 @@ void main() {
       expect(body.contains('PhaseProgressReconciler.reconcile('), isTrue);
       // The bare `bumpRestoreCompleted()` became `reckonAndNotifyAfterRestore()`
       // (reckon the streak decay, THEN bump). The heal must call it AFTER the
-      // weekly refill (the reckon reads the refilled budget) and must no longer
+      // weekly refill (the refill settles the old days and credits the week itself, freeze-order-d1; the reckon then repaints from the result) and must no longer
       // bump directly — a direct bump would repaint BEFORE the debit lands.
       final refill = body.indexOf('refillIfNewWeek()');
       final reckon = body.indexOf(
@@ -181,7 +181,7 @@ void main() {
       expect(reckon, greaterThan(-1));
       expect(refill, greaterThan(-1));
       expect(reckon, greaterThan(refill),
-          reason: 'the reckon reads the refilled weekly budget');
+          reason: 'the refill (settle, then credit) lands before the reckon + tick');
       expect(body.contains('SyncService.instance.bumpRestoreCompleted()'),
           isFalse,
           reason: 'bumping directly would repaint before the debit lands');

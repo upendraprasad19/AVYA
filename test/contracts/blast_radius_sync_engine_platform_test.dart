@@ -266,6 +266,16 @@ const _declined = <String, String>{
       'blast_radius_progress_map_writer_paths_test). If the engine ever calls '
       'anything else from it, or it starts writing cloud rows, it stops being '
       'declined-eligible (d9b3e7)',
+  'lib/features/train/repositories/workout_repository.dart':
+      'the workout repository: streak_progress_service.dart (engine file) '
+      'imports it so refillIfNewWeek can run WorkoutRepository.reckonStreakDecayAndPersist '
+      'once before and once after commitRefill (freeze-order-d1). The engine '
+      'only CALLS the reckon; the merge that chose which copy wins, and what is '
+      'pushed, are decided in the engine. Declined on cost: the file is the '
+      'Train feature\'s main repository and nearly every Train commit touches it, '
+      'so platform would turn them all into full pipeline runs; it keeps its '
+      'feature-tier rule. If the engine ever calls anything else from it, or it '
+      'starts writing cloud rows, it stops being declined-eligible',
   'lib/features/profile/services/profile_target_recompute.dart':
       'a computation applied to the merge winners: sync_profile.dart gates the '
       'restore recompute with derivedTargetInputsChanged and calls '

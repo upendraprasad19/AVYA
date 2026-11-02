@@ -541,7 +541,8 @@ class _RestoringScreenState extends ConsumerState<RestoringScreen> {
       }
     }
 
-    // (3) Post-restore weekly refill — defence-in-depth for the obs 1+2
+    // (3) Post-restore weekly refill (settle-then-credit, freeze-order-d1: it
+    // settles the days before this Monday first) — defence-in-depth for the obs 1+2
     // race fix. `_restoreFreezes` does a max-merge on (available,
     // last_refill); this re-call is the belt-and-braces in case local
     // last_refill got reset between splash + restore. Idempotent — no-op

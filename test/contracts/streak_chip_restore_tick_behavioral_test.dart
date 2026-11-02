@@ -48,6 +48,9 @@ void main() {
       'id': kTestUserId,
       'onboarding_completed_at': '2026-09-01T00:00:00+05:30',
     });
+    // The heal that calls the refill runs AFTER the restore settled its marker
+    // (freeze-order-d1: the refill is deferred until then).
+    SyncService.instance.debugSetRestoreSettledUserIdForTest(kTestUserId);
     // The state a restore leaves just before the Monday refill: 0 freezes,
     // last refill the previous Monday.
     await HiveService.instance.userBox.put('progress', {
@@ -58,6 +61,7 @@ void main() {
   });
 
   tearDown(() async {
+    SyncService.instance.debugSetRestoreSettledUserIdForTest(null);
     resetTestClock();
     await h.tearDown();
   });
