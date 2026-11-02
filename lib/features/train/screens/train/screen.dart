@@ -32,7 +32,6 @@ import 'package:icanbefitter/features/home/widgets/weight_log_sheet.dart';
 import '../../widgets/create_custom_exercise_sheet.dart';
 import '../../widgets/edit_workout_log_sheet.dart';
 import '../../widgets/week_selector.dart';
-import '../../widgets/phase_arc_strip.dart';
 import '../../widgets/hold_roadmap_strip.dart';
 import '../../widgets/plan_expired_card.dart';
 import '../../widgets/phase_generating_card.dart';
@@ -164,7 +163,7 @@ class _TrainScreenState extends ConsumerState<TrainScreen>
                     // Fraunces title + status strip + progress bar).
                     // No WardTabHeader / RankChipFullWidth — rank info lives
                     // on the dedicated /train/roadmap screen per Q10.
-                    _buildPlanHeader(plan, selectedWeek, weekDays),
+                    _buildPlanHeader(plan, selectedWeek),
 
                     const SizedBox(height: 14),
 
@@ -307,12 +306,6 @@ class _TrainScreenState extends ConsumerState<TrainScreen>
                         },
                     ),
                     const SizedBox(height: 10),
-
-                    // ⑥ Batch 7-A (W3.2): phase wave arc — ship-dark; renders
-                    // nothing when disable_phase_arc is set or there's no plan.
-                    // LIVE since 2026-09-05; the week-4 reason line inside it
-                    // is LIVE (kill-switch disable_deload_reason_line).
-                    const PhaseArcStrip(),
 
                     // Compact week rows
                     // A3: never the "Complete Phase … to unlock" copy for a PRO

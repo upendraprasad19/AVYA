@@ -47,35 +47,13 @@ state (`last_actual_deload_phase` backstop + `deload_evaluated_for_phase_N`), NO
 
 _Moved verbatim from `lib/shared/repositories/plan_engine/CLAUDE.md` (original lines 78-108, context-lean batch 2026-09-29)._
 
-**Deload "why" (W3.1 — Batch 10 explainability).** The eval ALSO stamps a per-phase workoutBox
-key `deload_reason_phase_<P>` (via `WorkoutScheduleReadService.deloadReasonKeyPrefix` +
-`deloadPhaseFromWeek4` — the SAME phase source as the flag/marker) with a pure non-shaming
-one-liner (`lib/core/utils/deload_reason.dart` `deloadDecisionReason`: structural-before-evidence
-precedence, each evidence branch had-data-gated, keyed on the ACTUAL outcome `liftedAny` —
-`_liftWeekFour` now returns `bool`, so a `shouldLift`-but-nothing-lifted case shows a matching,
-not contradictory, subtext). `WorkoutScheduleReadService.currentDeloadReason` reads the SAME key
-via the SAME derivation (writer==reader by construction) gated on `triggeredDeloadEnabled`; the
-Train `PhaseArcStrip` renders it only on the deload week (`currentWeek==4`) → null / not-week-4 →
-byte-identical to 7-A. Additive, LOCAL-only, no migration.
+**Deload "why" (W3.1) — REMOVED 2026-11-02 (train-header-b2).** The reason line rendered only in the
+removed phase-arc strip, so the evaluator no longer stamps `deload_reason_phase_<P>`; the reader
+(`currentDeloadReason`, `validatedDeloadReason`), the text builder (`deload_reason.dart`), the kill switch
+`disable_deload_reason_line` and the SoT concept `deload_decision_reason` went with it. An old stamp left on a
+tester device is inert (never read, never synced). The decision, the `week_character` rewrite and the idempotency
+flag are unchanged. History (Unit B stale-reason defect, diagnose `c5a8f3`; backstop copy, `d9e1b4`) is in git.
 
-**LIVE since 2026-09-06** (OI-53 flag 4; kill-switch `disable_deload_reason_line`), and the
-stored VALUE changed with the flip. Unit B (diagnose `c5a8f3`) found the stamped reason can
-outlive the week it describes: two BLOB-rewriting paths re-stamp week 4 back to `deload` after a
-lift (`workout_schedule_read_service.dart:388` and `:227`) while `deload_evaluator.dart:79`'s
-idempotency flag blocks any correction and NOTHING in `lib/` deletes the key. The key now holds a
-MAP `{week_character, text}` — `week_character` is `liftedAny ? 'working' : 'deload'`, the same
-predicate the copy already branches on — and the pure
-`WorkoutScheduleReadService.validatedDeloadReason` returns the text ONLY while that character
-still equals week 4's in `currentWaveCharacters()` (the BLOB the strip renders, deliberately not
-the scheduled rows), compared lowercase+trimmed on both sides. Mismatch in EITHER direction, a
-legacy bare String, a malformed map or a blob under 4 weeks all → no line. That validator is a
-SEPARATE pure function on purpose: inline, its nulls were indistinguishable from the enclosing
-`catch`, and three guard-deletion mutations reddened zero tests.
-⚠ It cannot see the AI-coach regen, which writes rows and no blob (OI-166).
-
-SoT `deload_decision_reason`; behavioral `deload_reason_test.dart` (pure) +
-`deload_eval_behavioral_test.dart` (round-trip through the real evaluator) +
-`deload_reason_staleness_behavioral_test.dart` (the staleness contract, 20 assertions).
 The adherence-gate "why" (W3.1's other half) is a copy-only non-shaming lead-in in
 `advance_choice_sheet.dart` (no completion %, per the codified non-shaming brand soul).
 

@@ -29,7 +29,7 @@ symptom: >
   has been OFF since it was built. The WRITE, however, has been live since 2026-09-01, so the
   stale values already exist in real users' Hive.
 concept: deload_decision_reason
-sot_registry_entry: deload_decision_reason
+sot_registry_entry: Not applicable — concept removed 2026-11-02 (feature deleted)
 sot_registry_note: >
   Updated in this commit: the stored VALUE is now a map (`{week_character, text}`) rather than a
   bare String; the reader is documented as self-validating against `currentWaveCharacters()[3]`;

@@ -99,7 +99,7 @@ class SyncFlags {
   /// safe-looking default is the bug is not a safety mechanism. §4.6's actual
   /// requirement — *"old path preserved verbatim, reachable when the gate is
   /// closed"* — is satisfied exactly as written, and the repo already uses this
-  /// `disable_*` polarity for `disable_phase_arc` and `disable_triggered_deload`.
+  /// `disable_*` polarity for `disable_triggered_deload` and its siblings.
   ///
   /// FAIL DIRECTION IS TOWARD THE FIX, deliberately. On any read failure
   /// (`configBox` not open — very early boot, or a pure unit test with no Hive

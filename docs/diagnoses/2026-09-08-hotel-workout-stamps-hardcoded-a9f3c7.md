@@ -29,7 +29,7 @@ concept: >
   contradicting each other, and the clock-derived one would have reproduced the same defect class
   on a plan spanning two weeks. Caught by plan-review round 5, fixed by deriving BOTH from the
   row's own date.
-sot_registry_entry: phase_arc_display
+sot_registry_entry: week_character_display
 sot_registry_note: >
   No registry change. This batch adds no new concept: `week_character` and the `'week'` stamp are
   already registered under `phase_arc_display`, and the hotel planner becomes a conforming writer

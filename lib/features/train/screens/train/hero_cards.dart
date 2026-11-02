@@ -74,17 +74,11 @@ extension _HeroCards on _TrainScreenState {
 
   Widget _buildWorkoutHeroCard(BuildContext context, WorkoutDayData workout,
       {bool isHolding = false}) {
-    // Split workout.name so the mode label (e.g. "Relaxed", "Focused")
-    // renders as an italic-gold second run after the title. Phase-driven
-    // same as Home — matches handoff "Leg Day / _Relaxed_" pattern.
-    final plan = ref.read(currentPlanProvider);
-    final phaseMode = {
-      1: 'Relaxed',
-      2: 'Focused',
-      3: 'Capacity',
-      4: 'Peak',
-    };
-    final modeLabel = phaseMode[plan.phase] ?? 'Focused';
+    // The italic-gold second run is the WEEK's character word (Baseline /
+    // Overreach / Peak / Deload, `Working` after a lifted deload), resolved ONCE
+    // by `WorkoutScheduleService.weekModeForRow` and carried on the day
+    // (`workout.weekMode`); Home's card calls the same resolver. null => no run.
+    final modeLabel = workout.weekMode;
     // Obs 5 follow-up (diagnose 6c2f91) — surface that a live session already
     // exists so the user isn't tempted to re-tap START and silently discard
     // it via beginWorkoutWithReadiness's guard.
@@ -116,15 +110,17 @@ extension _HeroCards on _TrainScreenState {
                     ),
                     children: [
                       TextSpan(text: workout.name),
-                      const TextSpan(text: ' '),
-                      TextSpan(
-                        text: modeLabel,
-                        style: const TextStyle(
-                          fontStyle: FontStyle.italic,
-                          fontWeight: FontWeight.w500,
-                          color: AppColors.accent,
+                      if (modeLabel != null) ...[
+                        const TextSpan(text: ' '),
+                        TextSpan(
+                          text: modeLabel,
+                          style: const TextStyle(
+                            fontStyle: FontStyle.italic,
+                            fontWeight: FontWeight.w500,
+                            color: AppColors.accent,
+                          ),
                         ),
-                      ),
+                      ],
                     ],
                   ),
                 ),

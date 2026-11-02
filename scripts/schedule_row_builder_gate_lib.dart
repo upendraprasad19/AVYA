@@ -22,7 +22,7 @@
 // ⚠ INPUT SET IS `lib/` ONLY, AND THAT IS LOAD-BEARING (review round 5, P2-11).
 // Run repo-wide the same heuristic returns FIVE files — the three in lib/ plus
 // test/contracts/deload_eval_behavioral_test.dart and
-// test/contracts/deload_reason_staleness_behavioral_test.dart, which
+// a second deload test (deleted 2026-11-02), which
 // legitimately seed schedule rows as fixtures. Every behavioural test the
 // Unit 2 de-duplication adds will match too. Scoped repo-wide, the hard-fail
 // flip would break the build on the batch's own tests. The caller passes only

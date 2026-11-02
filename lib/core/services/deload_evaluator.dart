@@ -30,7 +30,6 @@ import 'package:icanbefitter/core/services/workout_schedule_read_service.dart';
 import 'package:icanbefitter/core/services/workout_schedule_service.dart';
 import 'package:icanbefitter/core/services/workout_write_service.dart';
 import 'package:icanbefitter/core/services/write_result.dart';
-import 'package:icanbefitter/core/utils/deload_reason.dart';
 import 'package:icanbefitter/core/utils/ist_date.dart';
 import 'package:icanbefitter/core/utils/readiness.dart';
 import 'package:icanbefitter/shared/repositories/plan_engine/periodization_engine.dart';
@@ -66,9 +65,9 @@ class DeloadEvaluator {
     if (wk4.isEmpty) return;
 
     // Derive the phase from the wk4 rows' own stamp (the phase this deload
-    // belongs to) — read ONCE, threaded to the flag key + archetype + backstop +
-    // (Batch 10) the reason key. The SAME derivation the reason READER uses
-    // (`WorkoutScheduleReadService.currentDeloadReason`) → writer==reader.
+    // belongs to) — read ONCE, threaded to the flag key + archetype + backstop
+    // + the marker below (one derivation, so the key can never drift).
+    //
     final phase = WorkoutScheduleReadService.deloadPhaseFromWeek4(wk4);
     if (phase == null) return;
 
@@ -120,9 +119,8 @@ class DeloadEvaluator {
     final shouldLift =
         notBackstop && notDeloadPhase && readiness.good && e1rm.noFatigue;
 
-    var liftedAny = false;
     if (shouldLift) {
-      liftedAny = await _liftWeekFour(wk4);
+      await _liftWeekFour(wk4);
       await box.put(flagKey, true); // lifted → lock (no deload taken this phase).
     } else {
       // KEEP. A FIRM keep (lock + seed the marker) is any keep NOT caused solely
@@ -139,39 +137,6 @@ class DeloadEvaluator {
         await box.put(flagKey, true);
       }
     }
-
-    // W3.1 (Batch 10 explainability): stamp the one-line "why", keyed on THIS
-    // deload's phase (the SAME derivation the reader uses → writer==reader), from
-    // the ACTUAL outcome (`liftedAny` — a shouldLift with nothing eligible to lift
-    // leaves the week a `deload`, so the copy must match the wave the strip shows).
-    // Additive + LOCAL-only; only reached under the two flags (Guard 1) → inert off.
-    //
-    // Unit B: stored as a MAP carrying the outcome `week_character` beside the
-    // prose, because the prose alone cannot be validated later. A regen re-stamps
-    // week 4 back to `deload` (`workout_schedule_read_service.dart:388`,
-    // `:227`) while the idempotency flag at :79 blocks
-    // any re-eval from correcting the string — so the READER
-    // ([WorkoutScheduleReadService.currentDeloadReason]) compares this character
-    // against the blob the strip renders and drops a reason that no longer
-    // describes the week. `liftedAny` is the same predicate the copy branches on
-    // (`deload_reason.dart:41-43`), so this records what the text already assumes.
-    await box.put(
-      '${WorkoutScheduleReadService.deloadReasonKeyPrefix}$phase',
-      <String, dynamic>{
-        'week_character': liftedAny ? 'working' : 'deload',
-        'text': deloadDecisionReason(
-          shouldLift: shouldLift,
-          liftedAny: liftedAny,
-          notDeloadPhase: notDeloadPhase,
-          notBackstop: notBackstop,
-          hasDeloadOnRecord: markerPhase != null,
-          readinessGood: readiness.good,
-          readinessHadData: readiness.hadData,
-          e1rmNoFatigue: e1rm.noFatigue,
-          e1rmHasEvidence: e1rm.hasCompoundEvidence,
-        ),
-      },
-    );
   }
 
   /// readinessGood requires POSITIVE evidence: ≥3 check-ins in the trailing 14

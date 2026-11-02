@@ -26,11 +26,15 @@ void main() {
         reason: 'eyebrow must include PHASE number per F9');
   });
 
-  test('subtitle collapsed into progress-bar row', () {
-    expect(src.contains('of \$totalWorkoutDays sessions complete'), isFalse,
-        reason: 'F9 dropped the verbose subtitle in favor of inline X / Y');
-    expect(src.contains('\$completedDays / \$totalWorkoutDays'), isTrue,
-        reason: 'F9 inlines the subtitle as compact X / Y with progress bar');
+  test('no progress bar in the plan header; only a hold week shows its session count', () {
+    // Founder call 2026-11-02 (train-header-b2): the `0 / 6` bar went. The hold
+    // week keeps its OWN session count as plain text (no bar, no percent).
+    expect(src.contains('of \$totalWorkoutDays sessions complete'), isFalse);
+    expect(src.contains('WardBar('), isFalse,
+        reason: 'the plan-header progress bar was removed');
+    expect(src.contains('\$completedDays / \$totalWorkoutDays SESSIONS'), isTrue,
+        reason: 'the hold-week sessions readout stays');
+    expect(src.contains('progressPercent'), isFalse);
   });
 
   test('WardStatusStrip placed inside title Row trailing (not standalone)', () {

@@ -193,14 +193,13 @@ class WorkoutScheduleService {
   double currentPhaseCompletionRate() =>
       read.WorkoutScheduleReadService.instance.currentPhaseCompletionRate();
 
-  /// ⑥ Batch 7-A (W3.2): read-only phase-arc wave characters (see read service).
+  /// Read-only wave characters of the current plan blob (see the read service).
   List<String> currentWaveCharacters() =>
       read.WorkoutScheduleReadService.instance.currentWaveCharacters();
 
-  /// Batch 10 (W3.1): the one-line deload "why" for the current phase's week 4,
-  /// or null (flag OFF / no reason stamped).
-  String? currentDeloadReason() =>
-      read.WorkoutScheduleReadService.instance.currentDeloadReason();
+  /// train-header-b2: hero label word for a schedule row (see the read service).
+  String? weekModeForRow(Map<dynamic, dynamic>? row, DateTime? date) =>
+      read.WorkoutScheduleReadService.instance.weekModeForRow(row, date);
 
   DateTime? getPlanStartDate() =>
       read.WorkoutScheduleReadService.instance.getPlanStartDate();

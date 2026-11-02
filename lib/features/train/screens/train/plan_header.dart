@@ -3,30 +3,14 @@ part of 'screen.dart';
 extension _PlanHeader on _TrainScreenState {
   // ── 1. Plan Header with Progress Bar ──────────────────────────
 
-  Widget _buildPlanHeader(
-      CurrentPlanData plan, int selectedWeek, List<WorkoutDayData> weekDays) {
+  Widget _buildPlanHeader(CurrentPlanData plan, int selectedWeek) {
     final holdStatus = ref.watch(holdStatusProvider);
 
-    // Calculate week completion
-    int totalWorkoutDays = 0;
-    int completedDays = 0;
-    for (final day in weekDays) {
-      if (!day.isRest) {
-        totalWorkoutDays++;
-        if (day.isDone) completedDays++;
-      }
-    }
-    // During a hold, `weekDays` is the phase's ORIGINAL week 4 (the selected
-    // week is clamped to 1-4 and hold rows live at week 5+), so its tallies
-    // describe a month-old week. The hold week's own session count is the only
-    // honest progress readout. Flag OFF ⇒ never holding ⇒ untouched.
-    if (holdStatus.isHolding) {
-      completedDays = holdStatus.sessionsCompleted;
-      totalWorkoutDays = holdStatus.sessionsTotal;
-    }
-    final progress =
-        totalWorkoutDays > 0 ? completedDays / totalWorkoutDays : 0.0;
-    final progressPercent = (progress * 100).round();
+    // The normal week shows no progress readout here (founder call 2026-11-02:
+    // the `0 / 6` bar went). A hold week keeps its OWN session count: `weekDays`
+    // would describe the phase's original week 4, a month-old week.
+    final completedDays = holdStatus.sessionsCompleted;
+    final totalWorkoutDays = holdStatus.sessionsTotal;
 
     // F9 · Test #9 — Train header compacted to 3 rows + 1 hairline.
     // Eyebrow gains PHASE meta. Title bumped 28sp -> 32sp. Subtitle inlined.
@@ -128,32 +112,18 @@ extension _PlanHeader on _TrainScreenState {
             const SizedBox(height: 10),
             _buildHoldingPill(holdStatus),
           ],
-          const SizedBox(height: 10),
-          // ROW 3 — compact subtitle + progress bar inline
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              Text(
-                holdStatus.isHolding
-                    ? '$completedDays / $totalWorkoutDays SESSIONS'
-                    : '$completedDays / $totalWorkoutDays',
-                style: AppTypography.monoXs.copyWith(
-                  color: AppColors.textDim,
-                  letterSpacing: 1.5,
-                  fontWeight: FontWeight.w700,
-                ),
+          // ROW 3 — hold week only: the hold week's own session count (text, no bar).
+          if (holdStatus.isHolding) ...[
+            const SizedBox(height: 10),
+            Text(
+              '$completedDays / $totalWorkoutDays SESSIONS',
+              style: AppTypography.monoXs.copyWith(
+                color: AppColors.textDim,
+                letterSpacing: 1.5,
+                fontWeight: FontWeight.w700,
               ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: WardBar(
-                  pct: progress,
-                  height: 4,
-                  trailingLabel: '$progressPercent%',
-                  trailingColor: AppColors.accent,
-                ),
-              ),
-            ],
-          ),
+            ),
+          ],
         ],
       ),
     );

@@ -25,7 +25,6 @@ import 'package:icanbefitter/core/services/deload_evaluator.dart';
 import 'package:icanbefitter/core/services/guarded_box.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
 import 'package:icanbefitter/core/services/hive_user_session.dart';
-import 'package:icanbefitter/core/services/workout_schedule_service.dart';
 import 'package:icanbefitter/core/utils/ist_date.dart';
 
 void main() {
@@ -609,9 +608,12 @@ void main() {
     });
   });
 
-  group('W3.1 deload reason (Batch 10) — round-trip through the real reader', () {
-    test('LIFT → "Working week" reason, read back via currentDeloadReason',
-        () async {
+  group('train-header-b2: no deload "why" is stamped any more', () {
+    // The week-4 reason line rendered only inside the removed phase-arc strip, so
+    // its Hive stamp `deload_reason_phase_<P>` had no reader and the writer went
+    // too. Both outcomes are pinned: neither a LIFT nor a KEEP writes the key,
+    // and the decision itself (the week_character rewrite) is unchanged.
+    test('LIFT: week 4 becomes `working`, no reason key is written', () async {
       await seedWk4(phase: 2);
       await wb.put('last_actual_deload_phase', 1);
       await seedGoodReadiness();
@@ -620,64 +622,12 @@ void main() {
 
       await DeloadEvaluator.instance.maybeEvaluate();
 
-      // Unit B: the value is a MAP carrying the OUTCOME beside the prose.
-      final reason = wb.get('deload_reason_phase_2');
-      expect(reason, isA<Map>(),
-          reason: 'a bare String cannot be validated against the blob later');
-      final m = Map<String, dynamic>.from(reason as Map);
-      expect(m['text'], contains('Working week'));
-      expect(m['week_character'], 'working',
-          reason: 'the lift rewrote week 4, so the stamp must say so');
-      // The blob the STRIP renders agrees — writer==reader.
-      expect(WorkoutScheduleService.instance.currentWaveCharacters()[3],
-          'working');
-      // The REAL reader derives the phase the SAME way + reads the SAME key.
-      expect(WorkoutScheduleService.instance.currentDeloadReason(), m['text']);
+      expect(liftedWorkoutRow()!['week_character'], 'working');
+      expect(
+          wb.keys.where((k) => '$k'.startsWith('deload_reason_phase_')), isEmpty);
     });
 
-    test(
-        'REGEN after a lift → the stamped reason is SUPPRESSED, not deleted '
-        '(the Unit B defect, end-to-end through the real evaluator)', () async {
-      await seedWk4(phase: 2);
-      await wb.put('last_actual_deload_phase', 1);
-      await seedGoodReadiness();
-      await seedNonDecliningCompound();
-      await enableFlags();
-
-      await DeloadEvaluator.instance.maybeEvaluate();
-      expect(WorkoutScheduleService.instance.currentDeloadReason(),
-          contains('Working week'),
-          reason: 'precondition: the lift reason is live');
-
-      // The regen: `generateAndScheduleFromDate` (:388) / the AI-coach regen
-      // `generateAndSchedule` (`:227`) RE-STAMP an existing blob's week 4 back
-      // to `deload` — the state this fixture builds. (`current_plan` has FOUR
-      // writers in all; the other two are the lift itself and the restore, and
-      // neither re-stamps a lifted week back to `deload`. Narrowed after round 3
-      // caught this sentence contradicting OI-166's writer inventory, filed in
-      // the same commit.) The AI-coach regen writes rows only and cannot
-      // produce this state at all.
-      // Nothing deletes the reason key, and `deload_evaluator.dart:79`'s
-      // idempotency flag blocks any re-eval from correcting it.
-      final blob = Map<String, dynamic>.from(wb.get('current_plan') as Map);
-      final weeks = List<dynamic>.from(blob['week_plans'] as List);
-      weeks[3] = {
-        ...Map<String, dynamic>.from(weeks[3] as Map),
-        'week_character': 'deload',
-      };
-      blob['week_plans'] = weeks;
-      await wb.put('current_plan', blob);
-
-      expect(wb.get('deload_reason_phase_2'), isNotNull,
-          reason: 'no deleter exists anywhere in lib/ — the key SURVIVES');
-      expect(wb.get('deload_evaluated_for_phase_2'), isTrue,
-          reason: 'the idempotency flag still blocks a corrective re-eval');
-      expect(WorkoutScheduleService.instance.currentDeloadReason(), isNull,
-          reason: 'the READER suppresses it, so the strip can never show '
-              '"Working week" above a DELOAD node');
-    });
-
-    test('KEEP (declining e1RM) → "dipped" reason (matches the deload node)',
+    test('KEEP (declining e1RM): week 4 stays `deload`, no reason key is written',
         () async {
       await seedWk4(phase: 2);
       await wb.put('last_actual_deload_phase', 1);
@@ -704,32 +654,9 @@ void main() {
 
       await DeloadEvaluator.instance.maybeEvaluate();
 
-      expect(liftedWorkoutRow()!['week_character'], 'deload'); // kept
-      final m =
-          Map<String, dynamic>.from(wb.get('deload_reason_phase_2') as Map);
-      expect(m['text'], contains('dipped'));
-      expect(m['week_character'], 'deload',
-          reason: 'a KEEP leaves week 4 a deload — the stamp must match');
-      expect(WorkoutScheduleService.instance.currentWaveCharacters()[3],
-          'deload');
-      expect(WorkoutScheduleService.instance.currentDeloadReason(), m['text']);
-    });
-
-    test('reader gate: flag OFF → null even with a VALID stamped value',
-        () async {
-      await seedWk4(phase: 2);
-      // Unit B: this must be a value the reader would otherwise RETURN, or the
-      // test passes for the wrong reason (a bare String is now dropped by the
-      // validation, which would make the flag look load-bearing when it is not).
-      await wb.put('deload_reason_phase_2',
-          {'week_character': 'deload', 'text': 'Scheduled recovery week.'});
-      expect(WorkoutScheduleService.instance.currentDeloadReason(),
-          'Scheduled recovery week.',
-          reason: 'precondition: valid + matching, so only the flag can gate it');
-      // The reader gate is triggeredDeloadEnabled — write it EXPLICITLY.
-      // Before the 2026-09-01 flip this relied on that flag defaulting OFF.
-      await cb.put('disable_triggered_deload', true);
-      expect(WorkoutScheduleService.instance.currentDeloadReason(), isNull);
+      expect(liftedWorkoutRow()!['week_character'], 'deload');
+      expect(
+          wb.keys.where((k) => '$k'.startsWith('deload_reason_phase_')), isEmpty);
     });
   });
 
