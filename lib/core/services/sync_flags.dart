@@ -257,6 +257,21 @@ class SyncFlags {
     }
   }
 
+  /// Kill switch for settle-then-credit (diagnose freeze-order-d1). Opt-OUT
+  /// polarity: `configBox['disable_settle_before_refill'] = true` removes the
+  /// walk's cutoff and horizon rules and `refillIfNewWeek`'s deferral and
+  /// settle passes, restoring the pre-batch credit-first behavior. With the box
+  /// not open the rules stay ON.
+  static bool get settleBeforeRefillEnabled {
+    try {
+      return HiveService.instance.configBox
+              .get('disable_settle_before_refill') !=
+          true;
+    } catch (_) {
+      return true;
+    }
+  }
+
   /// Retries after the first version mismatch of a freeze push. Three is a
   /// bounded improvement over one, NOT proven sufficient: `syncFreezes` is not
   /// coalesced, so N racing pushes can each lose to N-1 winners; the next write

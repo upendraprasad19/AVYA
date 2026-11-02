@@ -1638,7 +1638,7 @@ concepts:
     reader_manifest_complete: true
     readers:
       - file: lib/core/services/day_rollover_service.dart
-        line_range: 193-343
+        line_range: 193-347
         method: _doRolloverWithRef (self-contained)
         semantic: pass-through
         fields_read: [<provider invalidation only — no Hive read>]
@@ -3016,7 +3016,7 @@ concepts:
           never be refetched, because the pull stamps last_community_sync. A pull that
           fills its 10 x 500-row cap emits restore_row_ceiling_hit (community_pull:<table>).
       - file: lib/core/services/sync_flags.dart
-        line_range: 297-317
+        line_range: 312-332
         method: restorePagingFixEnabled
         notes: Opt-out polarity; with the box not open the fix stays ON.
     reader_manifest_complete: false
@@ -3638,7 +3638,7 @@ concepts:
         semantic: pass-through
         fields_read: [is_pro, expires_at, plan, paymentInFlightOrder]
       - file: lib/shared/repositories/user_repository.dart
-        line_range: 1054-1056
+        line_range: 1061-1063
         method: isOnboarded
         semantic: flag-check
         fields_read: [onboarding_completed]
@@ -4839,6 +4839,7 @@ concepts:
       - test/contracts/progress_restore_freeze_merge_behavioral_test.dart  # c9d2f6: a whole-row restore merges the freeze family by the one rule instead of overwriting it
       - test/contracts/streak_chip_restore_tick_behavioral_test.dart  # e5c9b1: the chip providers rebuild on a completed restore, whichever tab is mounted (Train-first, web /#/train)
       - test/contracts/freeze_push_retry_attempts_behavioral_test.dart  # e5c9b1: the version-locked freeze push survives 2 consecutive bumps (bounded 3 retries, fresh re-read each round, ownership re-checked, kill switch disable_freeze_push_attempts)
+      - test/contracts/freeze_settle_then_credit_behavioral_test.dart  # a7d2e6: settle-then-credit (walk CUTOFF + HORIZON, refill deferred until the restore settled, kill switch disable_settle_before_refill); 18 mutants killed
       - test/contracts/hold_week_streak_identity_behavioral_test.dart  # a3f8d1: the weekly streak advances once per HOLD week (unclamped date-week identity, correct across a late-return gap) and each hold gets its OWN streaks row instead of overwriting week 4's; PLUS one shared training-day predicate on both sides of the adherence ratio, so an all-custom_template week no longer scores planned==0 and blanks both the streak and the cloud row. FIRST coverage this block has ever had; 5 mutations run, each reddening only its intended cases.
     reader_allow_files:
       # Debug-only year-simulation harness (kDebugMode-gated; release-inert).
@@ -4957,14 +4958,14 @@ concepts:
       re-purchase after lapse does not re-grant.
     writers:
       - file: lib/core/services/streak_progress_service.dart
-        line_range: 258-279
+        line_range: 308-329
         method: grantFirstProFreezes
         notes: |
           Reads flag from progress map; no-op if already true. Sets
           streak_freezes_available = max(current, 3) then flag = true.
           Fire-and-forget syncFreezes() + telemetry.
       - file: lib/core/services/streak_progress_service.dart
-        line_range: 290-313
+        line_range: 340-363
         method: resetToFreeCapOnLapse
         notes: |
           Clamps streak_freezes_available to 1 on lapse. Does NOT touch
@@ -4986,7 +4987,7 @@ concepts:
     reader_manifest_complete: false
     readers:
       - file: lib/core/services/streak_progress_service.dart
-        line_range: 258-265
+        line_range: 308-315
         method: grantFirstProFreezes (idempotency check)
         semantic: pass-through
         fields_read: [streak_freezes_first_pro_grant_done]
@@ -5122,7 +5123,7 @@ concepts:
     reader_manifest_complete: false
     readers:
       - file: lib/features/train/repositories/workout_repository.dart
-        line_range: 334-355
+        line_range: 335-356
         method: reckonStreakDecayAndPersist
         semantic: flag-check
         fields_read: [restoreSettledForCurrentUser]
@@ -5194,19 +5195,19 @@ concepts:
         method: _runAdvanceWith
         notes: calls resetFreezesAfterGap ONLY when commitPhaseAdvance returned true and the written window left >= 7 blank days (freezeResetGapDays); runGraduationPhaseAdvance does the same at ~895-902.
       - file: lib/core/services/streak_progress_service.dart
-        line_range: 325-338
+        line_range: 375-388
         method: resetFreezesAfterGap
         notes: writes ONLY streak_freezes_available (0) via updateProgress, then syncFreezes; flag and ledger untouched.
     reader_manifest_complete: false
     readers:
       - file: lib/features/train/repositories/workout_repository.dart
-        line_range: 338-478
+        line_range: 420-597
         method: _calculateStreak
         semantic: flag-check
         fields_read: [schedule_<date> presence]
         notes: a rowless day before today ends the chain (no freeze spent); today is tolerated.
       - file: lib/features/train/repositories/workout_repository.dart
-        line_range: 574-622
+        line_range: 635-683
         method: completionRateOverWindow
         semantic: flag-check
         fields_read: [schedule_<date> presence]
@@ -5275,11 +5276,11 @@ concepts:
       `streak_progress_service_concurrency_test.dart` greps raw source).
     writers:
       - file: lib/shared/repositories/user_repository.dart
-        line_range: 613-808
+        line_range: 620-815
         method: mergeCloudProgress
         notes: skips the freeze family and the control-plane keys in the cloud-copy loop when the freeze merge is on.
       - file: lib/shared/repositories/user_repository.dart
-        line_range: 824-937
+        line_range: 831-944
         method: _mergeFreezeFamily
         notes: the post-pass; delegates to StreakProgressService.mergeFreezeProgress.
       - file: lib/core/services/sync/sync_profile.dart
@@ -5348,7 +5349,7 @@ concepts:
       date NULL (explicit branch: LEAST(NULL, x) is x).
     writers:
       - file: lib/shared/repositories/user_repository.dart
-        line_range: 613-808
+        line_range: 620-815
         method: mergeCloudProgress
         notes: the date branch inside the cloud-copy loop; laterIsoDate at 125.
       - file: lib/core/services/sync/sync_profile.dart
@@ -5895,7 +5896,7 @@ concepts:
           stayed NULL -> forced re-onboard on a new device. Now carries the
           column (guarded SyncService._hasValue, never clobbers with null).
       - file: lib/shared/repositories/user_repository.dart
-        line_range: 1059-1061
+        line_range: 1066-1068
         method: setOnboarded
       - file: lib/core/services/auth_session_bootstrapper.dart
         line_range: 758-1088
@@ -15688,7 +15689,7 @@ concepts:
           without this, the very next extraction pass would silently
           overwrite every pre-existing user's genuine profile values.
       - file: lib/shared/repositories/user_repository.dart
-        line_range: 1368-1388
+        line_range: 1375-1395
         method: lockCoachExtractionFields
         notes: |
           Client call site: `.rpc('lock_coach_extraction_fields', params: {'p_fields': fields})`.
@@ -15703,7 +15704,7 @@ concepts:
           Locks only fields that ACTUALLY changed this save (diet_preference /
           lifestyle_activity / injuries), never a field re-saved unchanged.
       - file: lib/shared/repositories/user_repository.dart
-        line_range: 880-919
+        line_range: 887-926
         method: "syncOnboardingToSupabase (onboarding injuries trigger) + shouldLockOnboardingInjuries (pure decision, line 941)"
         notes: |
           Locks 'injuries' when onboarding collected a REAL selection (not
@@ -15819,7 +15820,7 @@ concepts:
       while the previous notice is still unshown.
     writers:
       - file: lib/core/services/streak_progress_service.dart
-        line_range: 114-205
+        line_range: 116-207
         method: freezeNoticeCountAfterConsume / takeFreezeNotice / commitConsume
         notes: |
           takeFreezeNotice hands the notice out ONCE (reads it through
@@ -15830,7 +15831,7 @@ concepts:
           streak_freezes_available. The three notice keys are local-only: every progress
           payload builder names its keys (sync_profile.dart _buildUserProgressRpcParams).
       - file: lib/shared/repositories/user_repository.dart
-        line_range: 1006-1022
+        line_range: 1013-1029
         method: clearStreakFreezeNotice
         notes: |
           The ONE clearer: the flag, the count and the snapshot in ONE updateProgress delta

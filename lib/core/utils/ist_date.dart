@@ -117,6 +117,19 @@ DateTime mondayOfIst(DateTime t) {
   return ist.subtract(Duration(days: daysFromMonday));
 }
 
+/// Monday of the IST week containing [t] as a `YYYY-MM-DD` key. Formats the
+/// COMPONENTS of [mondayOfIst]'s naive result directly: passing that value
+/// through `formatDateKey` / `istDateStr` would convert the instant a second
+/// time and be one day early east of IST (freeze-order-d1, plan-review round 5).
+/// The ONE Monday key for the weekly streak-freeze credit and the streak walk.
+String istMondayKey(DateTime t) {
+  final m = mondayOfIst(t);
+  final y = m.year.toString().padLeft(4, '0');
+  final mo = m.month.toString().padLeft(2, '0');
+  final d = m.day.toString().padLeft(2, '0');
+  return '$y-$mo-$d';
+}
+
 /// Monday (`YYYY-MM-DD`) of the IST Mon–Sun week holding the IST date string
 /// [istDate] (OI-390). UTC calendar arithmetic on the date parts, so it is the
 /// same in every device zone — never `mondayOfIst(DateTime.parse(istDate))`,

@@ -442,6 +442,33 @@ class WorkoutRepository {
     final List<String> newlyConsumedDates = <String>[];
     final String walkStartDateStr = formatDateKey(today);
 
+    // freeze-order-d1 (settle-then-credit): two rules, read ONCE here so the
+    // 365-iteration loop does no configBox read. Off under the kill switch
+    // `disable_settle_before_refill`, the legacy tick gate
+    // `disable_streak_reckon_user_gate` and the dev simulation: the walk is then
+    // the pre-batch walk.
+    //  - CUTOFF: while the weekly credit is DUE (a stamp older than this IST
+    //    Monday), a fresh missed day on or after this Monday is neither spent
+    //    nor chain-breaking; it waits for the credit ("next Monday's +1 covers
+    //    a missed Monday"). A NULL stamp = never credited = no cutoff.
+    //  - HORIZON: a fresh missed day strictly before the stamped Monday was
+    //    settled before that credit and could not be paid then: unfundable, so
+    //    a later credit can never resurrect a broken chain.
+    final bool rulesOn = StreakProgressService.settleThenCreditActive;
+    String? freezeStamp;
+    String? creditMonday;
+    bool creditDue = false;
+    bool horizonOn = false;
+    if (rulesOn) {
+      freezeStamp = UserRepository.instance.getFreezeLastRefill();
+      creditMonday = istMondayKey(today);
+      if (freezeStamp != null) {
+        creditDue = freezeStamp.compareTo(creditMonday) < 0;
+        // A future-dated stamp (wrong clock, year-sim) must not unfund every miss.
+        horizonOn = freezeStamp.compareTo(creditMonday) <= 0;
+      }
+    }
+
     // Perf: single pass over box.keys to build an in-memory schedule map.
     // Replaces up to 365 sequential box.get('schedule_<date>') calls (~250ms
     // cold on a year-old account) with a single iteration + O(1) map lookups.
@@ -522,6 +549,16 @@ class WorkoutRepository {
         // adherence) and starved the sailor-track rank gates (SD1 streak>=7 /
         // LS streak>=14 never qualified → rank stuck at SD2 after Phase 1).
         continue;
+      } else if (rulesOn &&
+          creditDue &&
+          dateStr.compareTo(creditMonday!) >= 0) {
+        // freeze-order-d1 CUTOFF: waits for this Monday's credit.
+        continue;
+      } else if (rulesOn &&
+          horizonOn &&
+          dateStr.compareTo(freezeStamp!) < 0) {
+        // freeze-order-d1 HORIZON: unfundable, the chain is broken for good.
+        break;
       } else if (freezesAvailable > 0) {
         // Fresh missed day — consume a streak freeze if one is available.
         freezesAvailable -= 1;

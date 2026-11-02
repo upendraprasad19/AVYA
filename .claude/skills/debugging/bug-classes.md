@@ -2020,3 +2020,12 @@ added, false of the flip being performed.
 - **Test shape:** a real `ProviderContainer` with no screen mounted; a counting subclass to prove a rebuild; `hasListeners` asserted false FROM THE START of the dispose test (a baseline read inside the test hides the mutant's own leak from earlier tests); a stub that applies the RPC's lock verbatim and asserts the `p_expected_version` of every request in order.
 - **Prior incidents:** `9c8958`, `9c4a17`, `e6b9c4`. 
 - **Regression test:** `test/contracts/streak_chip_restore_tick_behavioral_test.dart`, `test/contracts/freeze_push_retry_attempts_behavioral_test.dart`. Diagnose `e5c9b1`.
+
+### 2.143 Two writers of one Hive value with no ORDER contract; a stateless walk that re-funds what it could not pay (NEW 2026-11-02)
+
+- **Telltale:** the founder states an order ("settle Saturday, THEN credit Monday") and the code runs the writers in the other order on one path (`refillIfNewWeek` before `reckonStreakDecayAndPersist` at `day_rollover_service.dart:230/247`); or a chain the rules say is broken comes back after the next credit, because the walk recomputes from scratch each time and funds any unpaid day while stock > 0.
+- **Root-cause shape:** correctness lived in the CALL ORDER of several callers (rollover, post-restore heal, restoring screen) instead of in the data; a reorder of one caller leaves every other reckon (completeWorkout, the PRO ensure) unbounded. A walk with no memory of a break cannot make a break durable.
+- **Fix pattern:** put the order into the walk and the choke point: a CUTOFF (while the credit is due, days on/after this Monday wait for it) and a HORIZON (a miss before the credited Monday is unfundable), both read once per walk behind one predicate and a kill switch; defer the credit until the restore settled. Round 3 of the plan review killed the first design (a separate pre-pass plus a caller reorder).
+- **Test shape:** real Hive on pinned Monday/Tuesday/Wednesday clocks asserting stock, ledger, stamp and streak after EVERY step, including a second reckon after the credit and the next Monday's credit; a bare reckon with no refill call; the mirror cases (NULL stamp, future-dated stamp, legacy switch with tick > 0, simulation). Weekday-dependent old tests must seed no stamp or a stamp equal to this Monday.
+- **Prior incidents:** `f9d2e7` (made refill-first deliberate), `5e8a1c`, `b4e7a1`, `e5c9b1`.
+- **Regression test:** `test/contracts/freeze_settle_then_credit_behavioral_test.dart`. Diagnose `a7d2e6`.

@@ -33,9 +33,11 @@ import 'package:flutter/foundation.dart';
 
 import '../copy/streak_freeze_copy.dart';
 import 'error_telemetry.dart';
+import 'sync_flags.dart';
 import 'sync_service.dart';
 import 'subscription_service.dart';
 import '../utils/ist_date.dart';
+import '../../features/train/repositories/workout_repository.dart';
 import '../../shared/repositories/user_repository.dart';
 
 /// Sole writer for `user_progress.streak_freezes_available`,
@@ -210,15 +212,13 @@ class StreakProgressService {
   /// `DayRolloverObserver._doRolloverWithRef` (every rollover) +
   /// splash post-restore (first launch). Idempotent — same Monday twice
   /// is a no-op. Returns the new available count, or null if no refill
-  /// happened (already done this week).
+  /// happened (already done this week, or deferred: freeze-order-d1 settles
+  /// the days before this Monday with the OLD stock FIRST and only then credits,
+  /// and defers until the restore for this account settled).
   int? refillIfNewWeek() {
-    final thisMonday = mondayOfIst(nowWall()); // seam-aware (dev / year-sim)
+    final thisMondayStr = istMondayKey(nowWall()); // seam-aware (dev / year-sim)
     final progress = UserRepository.instance.getProgress() ?? {};
     final lastRefill = progress['streak_freezes_last_refill'] as String?;
-    final y = thisMonday.year.toString().padLeft(4, '0');
-    final m = thisMonday.month.toString().padLeft(2, '0');
-    final d = thisMonday.day.toString().padLeft(2, '0');
-    final thisMondayStr = '$y-$m-$d';
 
     final bool willRefill =
         lastRefill == null || lastRefill.compareTo(thisMondayStr) < 0;
@@ -235,10 +235,60 @@ class StreakProgressService {
       return null;
     }
 
+    // freeze-order-d1 — settle, THEN credit. Off under the kill switch
+    // `disable_settle_before_refill`, the legacy tick gate and the dev
+    // simulation (the reckon is then gate-closed or the old order is wanted):
+    // the credit lands at once, as before this batch.
+    final bool settleFirst = settleThenCreditActive;
+    if (settleFirst) {
+      // Defer until the restore for THIS account has settled: a credit that
+      // lands first on a reinstall / pre-restore cold start is spent on last
+      // week's Saturday once the restore brings the history (the credit is +1
+      // per call, stamped per Monday, so an unsettled week is not made up).
+      if (!SyncService.instance.restoreSettledForCurrentUser) {
+        unawaited(ErrorTelemetry.logEvent(
+          'streak_freeze_refill_deferred',
+          message: 'monday=$thisMondayStr reason=restore_unsettled',
+        ));
+        return null;
+      }
+      // Credit due: the walk settles ONLY days before this Monday, with the
+      // old stock. A throwing walk must not cost the week's credit.
+      try {
+        WorkoutRepository.instance.reckonStreakDecayAndPersist();
+      } catch (e, st) {
+        unawaited(ErrorTelemetry.recordNonFatal(e, st,
+            reason: 'streak_freeze_refill_settle_failed'));
+      }
+    }
+
     final isPro = SubscriptionService.instance.isPro();
     final maxFreezes = isPro ? 3 : 1;
-    return commitRefill(maxFreezes: maxFreezes, thisMondayStr: thisMondayStr);
+    final newAvailable =
+        commitRefill(maxFreezes: maxFreezes, thisMondayStr: thisMondayStr);
+
+    if (settleFirst) {
+      // The stamp is now this Monday: this reckon spends Monday-onward misses
+      // against the new stock and persists the streak count.
+      try {
+        WorkoutRepository.instance.reckonStreakDecayAndPersist();
+      } catch (e, st) {
+        unawaited(ErrorTelemetry.recordNonFatal(e, st,
+            reason: 'streak_freeze_refill_settle_failed'));
+      }
+    }
+    return newAvailable;
   }
+
+  /// Single predicate for the settle-then-credit rules (freeze-order-d1), read
+  /// by `refillIfNewWeek` (deferral + settle passes) AND by
+  /// `WorkoutRepository._calculateStreak` (cutoff + horizon arms) so the two
+  /// halves can never disagree: kill switch `disable_settle_before_refill` not
+  /// set, legacy tick gate on, not a dev simulation.
+  static bool get settleThenCreditActive =>
+      SyncFlags.settleBeforeRefillEnabled &&
+      SyncFlags.streakReckonUserGateEnabled &&
+      !SyncService.pausedForSimulation;
 
   // ── First-PRO grant / lapse-reset (Phase 2 Unit C) ─────────
 
