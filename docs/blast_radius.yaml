@@ -167,6 +167,13 @@ paths:
   # Landing C1 (2026-10-25, OI-413): the pure lib that same gate imports to decide which staged paths of a
   # branch sync it grades. An edit to it changes what the catastrophic gate looks at, so it sits beside the gate.
   - { glob: "scripts/merge_scope_lib.dart", tier: platform }
+  # Landing C2 (2026-10-26, OI-309): the record-aware branch sync. It rewrites conflicted ledger files in a developer's
+  # worktree and stages them, so a wrong merge here lands in the index of a commit that every gate then reads as
+  # human-resolved. The lib decides the merge and its three checks, the CLI owns every git and file effect, the wrapper
+  # owns the exit code and the last stdout line. All three sit at the tier of the gate whose input they produce.
+  - { glob: "scripts/sync_resolver_lib.dart", tier: platform }
+  - { glob: "scripts/sync_with_main.dart", tier: platform }
+  - { glob: "scripts/sync_with_main.sh", tier: platform }
   - { glob: "scripts/check_gate_scripts_wired.dart", tier: platform }
   # gate-integrity batch (2026-09-19, spec D16): the same "a change to the
   # reviewer must not be exempt from review" rule, applied to the files that
