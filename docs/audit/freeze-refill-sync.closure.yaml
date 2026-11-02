@@ -28,8 +28,9 @@ findings:
     reason: "T0 replay of the logged sequence yields cloud {0, 10-26} + local {1, 11-02}, which a reload heals. A second debit after the refill (second consume or resetFreezesAfterGap) would produce {0, 11-02}, but prod shows no new used date after 2026-10-31, no phase/gap event, one device only. Needs the device's local Hive export or the log of the next occurrence; the T2 fix removes the lost-push path that makes it likelier."
   - id: FRS-D1-ORDER
     title: "Settle-then-credit order: the rollover path runs refill before reckon (day_rollover_service.dart:230 vs :247), the reverse of the founder's rule"
-    terminal_state: blocked_on_user
-    reason: "Founder decision D1 (follow the stated rule on every path, or keep refill-first). Differs only at stock 0 with a missed Saturday. Not changed in this batch."
+    terminal_state: closed_in_commit
+    commit: 29d20340
+    verification: "Founder decided D1 (settle Saturday first, then credit Monday, on every path); landed by freeze-order-d1 (diagnose a7d2e6, test/contracts/freeze_settle_then_credit_behavioral_test.dart)."
   - id: FRS-ACCOUNT-HEAL
     title: "The upendra account's cloud row is {0, 2026-11-02}; the same-week LOWER rule keeps it at 0 on every reload"
     terminal_state: blocked_on_user

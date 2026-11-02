@@ -11,12 +11,12 @@ findings:
   - id: FOD-D1-ORDER
     title: "The weekly freeze credit ran before the settle of last week's missed days (rollover, post-restore heal, restoring screen) - the reverse of the founder's rule"
     terminal_state: closed_in_commit
-    commit: PENDING_STAMP
+    commit: 29d20340
     verification: "walk CUTOFF + refillIfNewWeek settle-then-credit + deferral until the restore settled; test/contracts/freeze_settle_then_credit_behavioral_test.dart (26 tests); 18 mutants all red plus the PRO-cap mutant (3 tests red)"
   - id: FOD-DURABLE-BREAK
     title: "The stateless streak walk re-funded an unpaid missed day whenever stock was positive, so a later credit resurrected a broken chain"
     terminal_state: closed_in_commit
-    commit: PENDING_STAMP
+    commit: 29d20340
     verification: "walk HORIZON (a miss before the stamped Monday is unfundable); durability + PRO six-misses + next-Monday cases in the same test file; mutants drop-horizon, <=, future-stamp guard all red"
   - id: FOD-DEVICE-CHECK
     title: "Founder device check of settle-then-credit on a real Monday (stock 0 + missed Saturday; Tuesday/Wednesday first open) and of the accepted consequences"
