@@ -2011,3 +2011,12 @@ added, false of the flip being performed.
 - **Test shape:** pump after the bytes arrive WITHOUT real time and assert the placeholder is inside the playing image; then wait (poll) until decoded and assert it is gone. Mutate by dropping the `frameBuilder`.
 - **Prior incidents:** Library M2a B-pass (2026-10-31), `exercise_animation_view.dart`. Same session, same family: Dio fires `onReceiveProgress` for an in-memory body from any adapter, not only for `download()`, so a size cap placed there also governs the unit tests' fake bodies.
 - **Regression tests:** `test/contracts/exercise_animation_view_test.dart` ([bp19]).
+
+### 2.142 A cached Notifier read by several tabs is refreshed only by the one tab that was mounted; a version-locked push retried once loses to a burst (NEW 2026-11-02)
+
+- **Telltale:** a value the device wrote to Hive on time (a Monday refill) shows the OLD number on one screen until a restart, only when the session opened on a different tab (web deep link `/#/train`); or a version-locked RPC logs two consecutive `*_retry_dropped` events (expected N then N+1) in one launch.
+- **Root-cause shape:** a `Notifier` reads Hive once per `build()` and nothing tells it Hive changed, so every refresh is an explicit `ref.invalidate` in a screen hook; fixing the hook of the screen that happened to be mounted (9c8958: Home) leaves the other readers (Train, Nutrition) stale. Separately, several unawaited pushers share ONE optimistic-lock version, so a single re-fetch + retry is lost whenever two writers land inside it.
+- **Fix pattern:** bridge the process-wide event (`SyncService.restoreCompletedTick`) into a Riverpod provider that every reader watches (fix at the source, not per screen); make the bridge remove its listener on dispose. For the push: bounded rounds, each re-fetching and re-reading local state fresh and re-checking account ownership, stamping the version only on success; say plainly the bound is not proven sufficient.
+- **Test shape:** a real `ProviderContainer` with no screen mounted; a counting subclass to prove a rebuild; `hasListeners` asserted false FROM THE START of the dispose test (a baseline read inside the test hides the mutant's own leak from earlier tests); a stub that applies the RPC's lock verbatim and asserts the `p_expected_version` of every request in order.
+- **Prior incidents:** `9c8958`, `9c4a17`, `e6b9c4`. 
+- **Regression test:** `test/contracts/streak_chip_restore_tick_behavioral_test.dart`, `test/contracts/freeze_push_retry_attempts_behavioral_test.dart`. Diagnose `e5c9b1`.

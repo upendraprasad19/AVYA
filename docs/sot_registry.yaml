@@ -620,17 +620,17 @@ concepts:
           against stale `completed_at` mismatching the requested date
           (Test #13 Bug 5.3 — do NOT call .toLocal() before _dateKey).
       - file: lib/features/home/providers/home_provider.dart
-        line_range: 75-100
+        line_range: 77-135
         method: calendarWeekProvider per-day fetch
         semantic: pass-through
         fields_read: [via WorkoutScheduleService.getScheduleForDate(date)]
       - file: lib/features/home/providers/home_provider.dart
-        line_range: 518-531
+        line_range: 550-565
         method: todayWorkoutProvider
         semantic: pass-through
         fields_read: [via WorkoutScheduleService.getScheduleForDate(DateTime.now())]
       - file: lib/features/home/providers/home_provider.dart
-        line_range: 649-690
+        line_range: 680-755
         method: aiInsightProvider (next-workout consistency hint)
         semantic: pass-through
         fields_read: [via ref.watch(todayWorkoutProvider) — derives from the Today card's row (c7e3a9, test/contracts/ai_insight_follows_today_row_test.dart)]
@@ -776,7 +776,7 @@ concepts:
           Reads pre-delete log entry to stash audit row in
           'recent_deletes' bucket; falls back to legacy 'calories' key.
       - file: lib/features/home/providers/home_provider.dart
-        line_range: 743-785
+        line_range: 775-821
         method: RecentFoodLogsNotifier.build
         semantic: display-only
         fields_read: [total_calories, total_protein, total_carbs, total_fat, food_name, meal_name, name, date]
@@ -1212,7 +1212,7 @@ concepts:
           razorpay_service.dart:733 (_invalidateSubscriptionProviders). Its build() MUST use proStateSnapshot(),
           never isPro() — pinned by subscription_cqrs_behavioral_test group E.
       - file: lib/features/home/providers/home_provider.dart
-        line_range: 512-517
+        line_range: 544-547
         method: subscriptionExpiryBannerProvider
         semantic: derived
         fields_read: [isPro, daysUntilExpiry, proLapsedAt]
@@ -1441,7 +1441,7 @@ concepts:
           Builds planData map → calls saveDietPlan → fires
           syncSavedDietPlan to cloud → invalidates dietPlanProvider.
       - file: lib/core/services/sync/sync_restore_completeness.dart
-        line_range: 523-553
+        line_range: 557-590
         method: _restoreSavedDietPlan
         notes: |
           Pulls plan_json from cloud saved_diet_plans table on restore
@@ -2043,7 +2043,7 @@ concepts:
         semantic: historical-series
         fields_read: [total_calories, total_protein, date, is_saved_meal]
       - file: lib/features/home/providers/home_provider.dart
-        line_range: 743-785
+        line_range: 775-821
         method: RecentFoodLogsNotifier.build
         semantic: display-only
         fields_read: [total_calories, total_protein, total_carbs, total_fat, food_name, meal_name, name, date]
@@ -3016,7 +3016,7 @@ concepts:
           never be refetched, because the pull stamps last_community_sync. A pull that
           fills its 10 x 500-row cap emits restore_row_ceiling_hit (community_pull:<table>).
       - file: lib/core/services/sync_flags.dart
-        line_range: 276-296
+        line_range: 297-317
         method: restorePagingFixEnabled
         notes: Opt-out polarity; with the box not open the fix stays ON.
     reader_manifest_complete: false
@@ -3967,12 +3967,12 @@ concepts:
     reader_manifest_complete: true
     readers:
       - file: lib/features/home/providers/home_provider.dart
-        line_range: 75-100
+        line_range: 77-135
         method: calendarWeekProvider per-day status check
         semantic: flag-check
         fields_read: [status, completed_at]
       - file: lib/features/home/providers/home_provider.dart
-        line_range: 518-531
+        line_range: 550-565
         method: todayWorkoutProvider
         semantic: flag-check
         fields_read: [status, completed_at, exercises]
@@ -4324,7 +4324,7 @@ concepts:
           per-set MAX. Pre-fix returned cumulative SUM for bodyweight_reps
           + timed. Closes-diagnose: 2026-05-16-pr-cumulative-bug
       - file: lib/features/home/providers/home_provider.dart
-        line_range: 790-800
+        line_range: 969-980
         method: AllExercisePRsNotifier.build (wraps loadAllExercisePRs)
         semantic: pass-through
         fields_read: [via loadAllExercisePRs]
@@ -4638,7 +4638,7 @@ concepts:
         method: HealthWriteService.logWeight
         canonical: true
       - file: lib/features/home/providers/home_provider.dart
-        line_range: 874-905
+        line_range: 905-939
         method: WeightLogNotifier.logWeight
         delegate: true
         notes: |
@@ -4664,7 +4664,7 @@ concepts:
     reader_manifest_complete: true
     readers:
       - file: lib/features/home/providers/home_provider.dart
-        line_range: 520-553
+        line_range: 643-675
         method: WeightHistoryNotifier.build (weightHistoryProvider)
         semantic: historical-series
         fields_read: [type, weight_kg, date]
@@ -4771,8 +4771,8 @@ concepts:
         line_range: 1-9999
         method: reckonStreakDecayAndPersist (D2 f9d2e7 — single gated consume site; rollover + completeWorkout + the post-restore reckon; gated on SyncService.restoreSettledForCurrentUser (per-account marker, b4e7a1) + non-empty-schedule)
       - file: lib/features/home/providers/home_provider.dart
-        line_range: 273-309
-        method: StreakFreezeNotifier._refillIfNewWeek
+        line_range: 242-269
+        method: restoreCompletedTickProvider (restore-tick bridge; both chip notifiers watch it)
     reader_manifest_complete: true
     readers:
       - file: lib/core/services/sync/sync_workout.dart
@@ -4797,14 +4797,14 @@ concepts:
           INTEND to consume a freeze should use it. Never trust a cached
           streak number for rank gates.
       - file: lib/features/home/providers/home_provider.dart
-        line_range: 222-250
+        line_range: 271-300
         method: StreakNotifier.build (streakProvider)
         semantic: pass-through
         fields_read: []
         notes: |
           Pure delegating provider. Returns WorkoutRepository.instance.currentStreak().
       - file: lib/features/home/providers/home_provider.dart
-        line_range: 254-310
+        line_range: 304-341
         method: StreakFreezeNotifier.build (streakFreezeProvider)
         semantic: pass-through
         fields_read: [streak_freezes_available, streak_freezes_last_refill]
@@ -4837,6 +4837,8 @@ concepts:
       - test/contracts/streak_decay_reckon_permanent_ledger_test.dart  # f9d2e7: D1 permanent ledger (commitRefill prune-not-clear; a frozen day survives a refill) + D2 gated reckon (rollover persists; marker unset / empty-schedule do NOT decay; b4e7a1 repointed the gate from the tick to the per-account marker)
       - test/contracts/streak_reckon_restore_settled_behavioral_test.dart  # b4e7a1: per-account restore-settled marker, failure collector, post-restore reckon + notice
       - test/contracts/progress_restore_freeze_merge_behavioral_test.dart  # c9d2f6: a whole-row restore merges the freeze family by the one rule instead of overwriting it
+      - test/contracts/streak_chip_restore_tick_behavioral_test.dart  # e5c9b1: the chip providers rebuild on a completed restore, whichever tab is mounted (Train-first, web /#/train)
+      - test/contracts/freeze_push_retry_attempts_behavioral_test.dart  # e5c9b1: the version-locked freeze push survives 2 consecutive bumps (bounded 3 retries, fresh re-read each round, ownership re-checked, kill switch disable_freeze_push_attempts)
       - test/contracts/hold_week_streak_identity_behavioral_test.dart  # a3f8d1: the weekly streak advances once per HOLD week (unclamped date-week identity, correct across a late-return gap) and each hold gets its OWN streaks row instead of overwriting week 4's; PLUS one shared training-day predicate on both sides of the adherence ratio, so an all-custom_template week no longer scores planned==0 and blanks both the streak and the cloud row. FIRST coverage this block has ever had; 5 mutations run, each reddening only its intended cases.
     reader_allow_files:
       # Debug-only year-simulation harness (kDebugMode-gated; release-inert).
@@ -4968,7 +4970,7 @@ concepts:
           Clamps streak_freezes_available to 1 on lapse. Does NOT touch
           the flag — preserving grant history across lapse+re-buy cycles.
       - file: lib/core/services/sync/sync_restore_completeness.dart
-        line_range: 324-433
+        line_range: 380-483
         method: _restoreFreezes
         notes: |
           On restore: reads flag from cloud, writes true to Hive if cloud
@@ -5700,7 +5702,7 @@ concepts:
           independent getProfile() read in no invalidateOnRetry list, so it
           cached the pre-restore map for the whole session.
       - file: lib/features/home/providers/home_provider.dart
-        line_range: 138-165
+        line_range: 141-168
         method: UserGreetingNotifier.build (userGreetingProvider)
         semantic: display-only
         fields_read: [full_name]
@@ -5709,7 +5711,7 @@ concepts:
           first space; fallback "there". b3c9d4 — DERIVED from
           userProfileProvider; does not read Hive itself.
       - file: lib/features/home/providers/home_provider.dart
-        line_range: 189-215
+        line_range: 192-224
         method: UserFirstNameNotifier.build (userFirstNameProvider)
         semantic: display-only
         fields_read: [full_name]
@@ -5721,7 +5723,7 @@ concepts:
           hasProfile field reports profile.isNotEmpty (the source maps an
           absent map to {}, where getProfile() returned null).
       - file: lib/features/home/providers/home_provider.dart
-        line_range: 219-231
+        line_range: 228-240
         method: UserInitialNotifier.build (userInitialProvider)
         semantic: display-only
         fields_read: [full_name]
@@ -6418,7 +6420,7 @@ concepts:
           Nightly walks of coachBox.values to extract facts +
           patterns into coaching_notes singleton + memory_embeddings.
       - file: lib/features/home/providers/home_provider.dart
-        line_range: 648-721
+        line_range: 680-753
         method: AiInsightNotifier._getLatestCoachTip
         semantic: latest
         fields_read: [ai_response, created_at]
@@ -6558,7 +6560,7 @@ concepts:
           plan-less day (total_planned == 0) — consistent with the dispatcher no
           longer vacuously auto-completing a plan-less day.
       - file: lib/features/home/providers/home_provider.dart
-        line_range: 132-518
+        line_range: 135-563
         method: calendarWeekProvider (~132) + todayWorkoutProvider (~518)
         semantic: flag-check
         fields_read: [status, completed_at_ms]
@@ -7564,7 +7566,7 @@ concepts:
     reader_manifest_complete: true
     readers:
       - file: lib/features/home/providers/home_provider.dart
-        line_range: 520-790
+        line_range: 643-966
         method: WeightHistoryNotifier + WeightLogNotifier + todayWeightLoggedProvider
         semantic: historical-series
         fields_read: [type, weight_kg, date]
@@ -14525,7 +14527,7 @@ concepts:
         fields_read: [type]
         notes: "Task 29 (wave-3 carry item 2) re-derived this as a METHOD-SPANNING range (signature to closing brace, confirmed by direct read) rather than the previous 5-line window -- needsHeal was repointed 3 times this batch (T21, T22, T21-fix1: T22 added an import + the L2 write-only-if-differs block inside mergeScheduleBundleIntoHive; T21-fix1 shortened _mondayOfIsoWeek to delegate to DaySwapRules.mondayOf; all three land ABOVE needsHeal in the same file, so the method body itself is unchanged but every narrow line_range citing it goes stale on each shift). A method-spanning range absorbs future shifts of code ABOVE it without going stale again for this reason; only a change to needsHeal's OWN body would require re-deriving this citation."
       - file: lib/features/home/providers/home_provider.dart
-        line_range: 99-679
+        line_range: 99-755
         method: "calendar week status classifier feeding streak-banner remaining-count / StreakWarningEligibility / AI-insight quick-text (3 sites)"
         semantic: flag-check
         fields_read: [type]
@@ -16160,7 +16162,7 @@ concepts:
         fields_read: [subscriptions.user_id, subscriptions.plan, subscriptions.razorpay_payment_id]
         notes: Any status counts; a `referral_trial` row or a hand grant with a NULL payment id does not.
       - file: lib/core/services/sync/sync_restore_completeness.dart
-        line_range: 674-691
+        line_range: 686-724
         method: _restoreReferralRedemptions
         semantic: restore-raw
         fields_read: [referral_redemptions.code, referral_redemptions.referrer_id, referral_redemptions.referee_id, referral_redemptions.days_granted_each, referral_redemptions.created_at]

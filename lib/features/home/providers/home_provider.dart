@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart' show ValueNotifier;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:icanbefitter/core/services/error_telemetry.dart';
 import 'package:icanbefitter/core/services/health_write_service.dart';
@@ -7,6 +8,7 @@ import 'package:icanbefitter/core/services/hive_service.dart';
 import 'package:icanbefitter/core/services/nutrition_read_service.dart';
 import 'package:icanbefitter/core/services/migrated_key.dart';
 import 'package:icanbefitter/core/services/subscription_service.dart';
+import 'package:icanbefitter/core/services/sync_service.dart';
 import 'package:icanbefitter/core/services/write_result.dart';
 // OI-38 (2026-05-17) — streak_progress_service + ist_date imports
 // dropped. _refillIfNewWeek() moved to StreakProgressService.refillIfNewWeek()
@@ -239,10 +241,38 @@ final userInitialProvider =
 
 // ── Streak ───────────────────────────────────────────────────────
 
+/// Bridges `SyncService.restoreCompletedTick` (a [ValueNotifier] bumped LAST
+/// after a background restore and its heals, `day_rollover_service.dart:180`)
+/// into Riverpod, so a provider that WATCHES this one is rebuilt by every
+/// completed restore whichever tab is mounted.
+///
+/// Why (diagnose freeze-refill-sync, class 9c8958): the post-restore weekly
+/// refill (`heal_after_restore.dart:52`) writes Hive but invalidated no
+/// provider. Only HOME's `invalidateOnRetry` invalidated the streak chip
+/// providers, so a session that opened on Train (the web app's `/#/train`
+/// deep link, Home never built) kept the pre-refill `0/3` until a restart.
+/// The chip is read by Home, Train and Nutrition; fixing it at the source
+/// covers all three and any future reader.
+final restoreCompletedTickProvider = Provider<int>((ref) {
+  // Widget/unit tests read the chip providers without SyncService
+  // (hive_tab_scaffold.dart:158 guards the same way): degrade to "no ticks".
+  final ValueNotifier<int> tick;
+  try {
+    tick = SyncService.instance.restoreCompletedTick;
+  } catch (_) {
+    return 0;
+  }
+  void onTick() => ref.invalidateSelf();
+  tick.addListener(onTick);
+  ref.onDispose(() => tick.removeListener(onTick));
+  return tick.value;
+});
+
 class StreakNotifier extends Notifier<int> {
   @override
   int build() {
     ref.watch(authUserIdTokenProvider); // c4055a — rebuild on auth change
+    ref.watch(restoreCompletedTickProvider); // freeze-refill-sync: restore tick
     // APK Test #12.7 — single source of truth for streak count.
     // Previously read cached `current_streak_days` from `user_progress`,
     // which was only refreshed inside `completeWorkout`. The rank-chip
@@ -281,6 +311,7 @@ class StreakFreezeNotifier extends Notifier<int> {
     // `DayRolloverObserver._doRolloverWithRef` (every rollover; idempotent
     // for non-Monday calls) + splash post-restore (first launch).
     ref.watch(authUserIdTokenProvider); // c4055a — rebuild on auth change
+    ref.watch(restoreCompletedTickProvider); // freeze-refill-sync: restore tick
     final progress = UserRepository.instance.getProgress();
     final stored = (progress?['streak_freezes_available'] as int?) ?? 1;
     // Bug f8c1a5 (APK Test #16.2) — clamp on read defends against

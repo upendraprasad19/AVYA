@@ -7258,3 +7258,16 @@ Found by the sync-storm-first-sweep batch while measuring its Day-0 web check (l
 **Fix shape (founder chose both).** (a) Derive the real deployment number from the phase (`(phase - 1) ~/ 3 + 1`), show earlier deployments as complete, keep the 12-week layout for the current one; (b) put a "you are here" marker on the rank ladder at the user's absolute program week. Keep the hold-week behaviour of `_DeploymentHeader` (counter suppressed while holding; percent and bar keep the program week).
 
 **Done when.** A user in phase 5 sees `DEPLOYMENT 02` with Deployment 01 marked complete and a marker on the ladder; behavioural tests cover phases 1, 4, 5 and 12 and the hold arm. Blast radius: `feature` (`lib/features/train/**` only).
+
+## OI-448 — First-PRO freeze grant fires on every web cold start (local flag unset, cloud flag true); needs a grant-pending marker plus a settle trigger
+
+- **Status**: OPEN
+- **Blocked on**: none
+- **Verified**: never
+- **Identified**: 2026-11-02 · filed via mint_oi.sh from branch `freeze-refill-sync`
+
+**What happens (verified in code and prod logs 2026-11-02).** On a fresh web boot the local Hive is empty, so `oldIsPro` (`SubscriptionService.writeSubscriptionState`, `subscription_service.dart:345-349`) is false and `StreakProgressService.grantFirstProFreezes` (`streak_progress_service.dart:258`) fires (prod: `streak_freeze_first_pro_grant before=0 after=3`, on 10-25 five times and on 11-02) even though the cloud flag `streak_freezes_first_pro_grant_done` is already TRUE. The grant leaves local `last_refill` null, so the restore merge takes the `cloudWins` branch and discards the phantom 3 (harmless when the restore succeeds; a free refund when it does not). It is NOT causal for the 2026-11-02 cloud `{0, 11-02}` row (batch freeze-refill-sync, diagnose `e5c9b1`, plan `docs/plans/2026-11-02-freeze-refill-sync.md`): split out under CLAUDE.md 4.12.1 after plan-review rounds 1 and 2 found the fix design incomplete.
+
+**Why the obvious fix is not enough (plan-review R2).** "Wait for `restoreSettledForCurrentUser`, then grant" is not implementable inside `writeSubscriptionState`: the grant is one-shot at the free->PRO transition, so after one boot `oldIsPro` is true and nothing calls it again; a restore that never settles would lose the grant forever. Needs a durable "grant pending" marker set instead of granting while the restore is unsettled, a trigger at settle (`_settleRestoreMarker`, `sync_service.dart`), and a decision for a restore that never settles. Also read why web local Hive is empty/unset at each cold start (not established).
+
+**Done when.** A fresh web boot with the cloud flag true never changes `streak_freezes_available` locally or in the cloud; a genuine first upgrade still gets its 3 (also when the restore is slow); a behavioral test covers both and each guard is mutated. Blast radius: `platform` (sync/restore + subscription). Founder scope call pending: fold into a later batch or its own plan (the OI is the tracked item).

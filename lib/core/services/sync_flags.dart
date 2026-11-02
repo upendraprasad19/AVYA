@@ -242,6 +242,27 @@ class SyncFlags {
     }
   }
 
+  /// Kill switch for the bounded freeze-push retry (diagnose freeze-refill-sync).
+  /// Opt-OUT polarity: `configBox['disable_freeze_push_attempts'] = true` makes
+  /// `_retrySyncFreezesOnceAfterConflict` run its pre-fix ONE re-fetch + ONE
+  /// retry. Default: up to [freezePushRetryAttempts] attempts, each re-fetching
+  /// the cloud row and re-reading Hive. With the box not open the fix stays ON.
+  static bool get freezePushAttemptsEnabled {
+    try {
+      return HiveService.instance.configBox
+              .get('disable_freeze_push_attempts') !=
+          true;
+    } catch (_) {
+      return true;
+    }
+  }
+
+  /// Retries after the first version mismatch of a freeze push. Three is a
+  /// bounded improvement over one, NOT proven sufficient: `syncFreezes` is not
+  /// coalesced, so N racing pushes can each lose to N-1 winners; the next write
+  /// or restore self-heals exactly as before.
+  static const int freezePushRetryAttempts = 3;
+
   /// Kill switch for the PRO post-restore phase ensure (plan
   /// `docs/plans/2026-10-16-pro-phase-advance-ensure-current.md`, Piece A).
   /// Opt-OUT polarity: `configBox['disable_pro_phase_ensure'] = true` makes
