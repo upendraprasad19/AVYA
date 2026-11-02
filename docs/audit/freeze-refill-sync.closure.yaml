@@ -1,0 +1,40 @@
+# Closure ledger - freeze-refill-sync (docs/plans/2026-11-02-freeze-refill-sync.md, diagnose e5c9b1).
+# Rows carry the SHA of the landing commit, written by the stamp commit that follows it (a commit cannot name its own SHA).
+batch: freeze-refill-sync
+plan_review_record: docs/plan-reviews/freeze-refill-sync.md
+diagnose_docs:
+  - docs/diagnoses/2026-11-02-streak-freeze-monday-credit-chip-and-push-retry-e5c9b1.md
+total_findings: 7
+closed_count: 7
+
+findings:
+  - id: FRS-T1-CHIP
+    title: "The Train/Nutrition streak chip stayed at the pre-refill value after a background restore when Home was not mounted (9c8958 class)"
+    terminal_state: closed_in_commit
+    commit: PENDING_STAMP
+    verification: "restoreCompletedTickProvider bridge watched by StreakFreezeNotifier and StreakNotifier; test/contracts/streak_chip_restore_tick_behavioral_test.dart (4 tests); mutants N1-N4 all red."
+  - id: FRS-T2-PUSH
+    title: "The version-locked freeze push retried once and lost to two consecutive bumps (expected 198 then 199)"
+    terminal_state: closed_in_commit
+    commit: PENDING_STAMP
+    verification: "bounded 3-round retry with fresh re-fetch/re-read/ownership re-check, kill switch disable_freeze_push_attempts; test/contracts/freeze_push_retry_attempts_behavioral_test.dart (6 tests); mutants M1-M8 all red. 3 is a bounded improvement, not proven sufficient (stated in the diagnose-doc)."
+  - id: FRS-H-C-GRANT
+    title: "First-PRO freeze grant fires on every web cold start (local flag unset, cloud flag true); not causal for the observed cloud row"
+    terminal_state: blocked_on_user
+    reason: "Founder scope call: the fix needs a grant-pending marker plus a settle trigger (plan-review R2 found the simple deferral unimplementable), split out per CLAUDE.md 4.12.1. Tracked as OI-448."
+  - id: FRS-H-D-CLOUD-ZERO
+    title: "The writer that left the cloud row at {0, 2026-11-02} was not reproduced"
+    terminal_state: blocked_on_user
+    reason: "T0 replay of the logged sequence yields cloud {0, 10-26} + local {1, 11-02}, which a reload heals. A second debit after the refill (second consume or resetFreezesAfterGap) would produce {0, 11-02}, but prod shows no new used date after 2026-10-31, no phase/gap event, one device only. Needs the device's local Hive export or the log of the next occurrence; the T2 fix removes the lost-push path that makes it likelier."
+  - id: FRS-D1-ORDER
+    title: "Settle-then-credit order: the rollover path runs refill before reckon (day_rollover_service.dart:230 vs :247), the reverse of the founder's rule"
+    terminal_state: blocked_on_user
+    reason: "Founder decision D1 (follow the stated rule on every path, or keep refill-first). Differs only at stock 0 with a missed Saturday. Not changed in this batch."
+  - id: FRS-ACCOUNT-HEAL
+    title: "The upendra account's cloud row is {0, 2026-11-02}; the same-week LOWER rule keeps it at 0 on every reload"
+    terminal_state: blocked_on_user
+    reason: "Correcting it is a live prod write on a founder-owned testing account and needs its own per-action go (CLAUDE.md 4.3)."
+  - id: FRS-DEVICE-CHECK
+    title: "Founder device check of the chip after a Monday refill on a Train-first web session"
+    terminal_state: blocked_on_user
+    reason: "Needs the next Monday refill or a manual new-week simulation on the founder's device."
