@@ -157,8 +157,8 @@ Per CLAUDE.md rules 21 + 22:
 | 2.48 | A "single convergence point" comment is trusted instead of verified... | a fix adds a fallback/heal into a method whose OWN doc comment claims it's "the single... | - |
 | 2.49 | An error fallback picks the DESTRUCTIVE default — "we could not det... | a catch block, or a query whose empty result is ambiguous, returns a domain value rathe... | test/contracts/local_onboarding_evidence_behavioral_test.dart |
 | 2.50 | A test asserts on a RESPONSE whose author is not the code you are r... | an assertion on an HTTP/RPC response body fails with the field simply absent (Actual: <... | test/edge_functions/redeem_referral_test.dart |
-| 2.61 | Prose that DESCRIBES a state, persisted without the state itself, i... | Bug ID: c5a8f3 · Test: test/contracts/deload_reason_staleness_behavioral_test.dart | test/contracts/deload_reason_staleness_behavioral_test.dart |
-| 2.62 | A DECISION boolean reused as an EXPLANATION | Bug ID: d9e1b4 · Test: test/contracts/deload_reason_test.dart | test/contracts/deload_reason_test.dart |
+| 2.61 | Prose that DESCRIBES a state, persisted without the state itself, i... | Bug ID: c5a8f3 · Test removed with the feature 2026-11-02 (train-header-b2) | - |
+| 2.62 | A DECISION boolean reused as an EXPLANATION | Bug ID: d9e1b4 · Test removed with the feature 2026-11-02 (train-header-b2) | - |
 | 2.51 | Moving data out of a wholesale-replaced container into another whol... | a setting the user changed on device A is missing after device B syncs — and nothing er... | test/contracts/notification_prefs_round_trip_behavioral_test.dart |
 | 2.52 | A call site is deleted for ONE of its consumers while a second cons... | a compile/type error naming an identifier you are certain you removed on purpose — Cann... | - |
 | 2.53 | A MIRROR harness stops modelling production, so it is green in ever... | you toggle the input the batch exists to ship, re-run the measurement harness, and the... | - |

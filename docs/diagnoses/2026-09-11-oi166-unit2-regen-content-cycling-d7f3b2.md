@@ -146,7 +146,7 @@ concept: >
      "entry not a Map" test (`Expected: true / Actual: <false>` on `res.success` — the thrown TypeError
      was swallowed by the outer catch-all) and left "not a List" green; removing the `is List` guard
      reddened EXACTLY the inverse pair. Orthogonal, zero collateral in either direction.
-sot_registry_entry: phase_arc_display
+sot_registry_entry: week_character_display
 sot_registry_note: >
   `phase_arc_display` (already the home for schedule-row week/week_character derivation per
   a9f3c7's precedent, not only the strip widget) gains its FIRST TWO current_plan WRITERS — it was

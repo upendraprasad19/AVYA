@@ -832,15 +832,11 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
     final progress = UserRepository.instance.getProgress() ?? {};
     final currentPhase = (progress['current_phase'] as int?) ?? 1;
 
-    // Phase-driven mode label — renders as the italic-gold second line
-    // under the Fraunces workout title (handoff: "LEG DAY / _Relaxed_").
-    const phaseMode = {
-      1: 'Relaxed',
-      2: 'Focused',
-      3: 'Capacity',
-      4: 'Peak',
-    };
-    final modeLabel = phaseMode[currentPhase] ?? 'Focused';
+    // The week's character word (Baseline / Overreach / Peak / Deload, `Working`
+    // after a lifted deload) — renders as the italic-gold second line under the
+    // workout title. Same resolver as Train's hero card; null => no label.
+    final modeLabel = WorkoutScheduleService.instance.weekModeForRow(
+        schedule, DateTime.tryParse('${schedule?['date'] ?? ''}'));
 
     if (isRestDay) {
       return TodayWorkoutCard(

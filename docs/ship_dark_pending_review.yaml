@@ -598,6 +598,8 @@ resolved:
       OI-166 -- the AI-coach regen writes rows and never `current_plan`, so the phase-arc strip
       renders a stale wave. Pre-existing since flag 3 shipped 2026-09-05; invisible to this
       batch's guard by construction.
+      REMOVED 2026-11-02 (train-header-b2): the feature, its kill switch `disable_deload_reason_line` and the
+      `deload_reason_phase_<P>` stamp were deleted with the phase-arc strip; this record is kept as history.
 
   - flag: enable_phase_arc
     branch: phase-arc-flip
@@ -622,6 +624,8 @@ resolved:
       ⚠ There is NO release-build kill-switch (OI-95, accepted risk across all OI-53 flags):
       every toggle lives in the kDebugMode dev panel and there is no RemoteConfig, so a real
       rollback is a code revert plus a store round-trip.
+      REMOVED 2026-11-02 (train-header-b2): the strip, `phaseArcProvider` and the kill switch `disable_phase_arc` were
+      deleted (founder call); the hero label now follows `week_character` through `weekModeForRow`. Record kept as history.
 
   - flag: enable_equipment_capability_floor
     branch: oi89-bodyweight-floor

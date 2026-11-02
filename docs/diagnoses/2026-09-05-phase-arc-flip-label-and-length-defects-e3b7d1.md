@@ -33,7 +33,7 @@ concept: >
   closes. (3) A length guard chosen against the wrong invariant: `< 2` guards "is there a
   degenerate plan", but the invariant that matters is "can the clamped highlight address a node",
   which needs 4.
-sot_registry_entry: phase_arc_display
+sot_registry_entry: week_character_display
 sot_registry_note: >
   Updated in this commit: the ship-dark claim became the `disable_phase_arc` kill-switch, the
   five-token vocabulary and the `>= 4` render rule are recorded, and the writer citation

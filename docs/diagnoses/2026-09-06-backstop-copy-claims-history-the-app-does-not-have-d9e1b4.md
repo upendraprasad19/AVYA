@@ -25,7 +25,7 @@ symptom: >
   been ON. This batch is the commit that turns it ON, which is exactly why it had to be found
   here — §4.12.4 calls the flip "the moment real user risk starts".
 concept: deload_decision_reason
-sot_registry_entry: deload_decision_reason
+sot_registry_entry: Not applicable — concept removed 2026-11-02 (feature deleted)
 sot_registry_note: >
   Updated in this commit: `deloadDecisionReason` gains a required `hasDeloadOnRecord` argument
   and the backstop branch becomes two strings. The registry's description of the copy contract

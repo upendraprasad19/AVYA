@@ -582,7 +582,7 @@ tuning archive, or any document written before 2026-10-25) may mean either class
 
 ### 2.61 Prose that DESCRIBES a state, persisted without the state itself, is undetectably stale (NEW 2026-09-06)
 
-**Bug ID:** `c5a8f3` · **Test:** `test/contracts/deload_reason_staleness_behavioral_test.dart`
+**Bug ID:** `c5a8f3` · **Test:** `test/contracts/deload_reason_staleness_behavioral_test.dart` (deleted 2026-11-02 with the deload "why" feature, train-header-b2; the class stays valid)
 
 A writer persists a human-facing sentence ABOUT some state — an explanation, a
 summary, a status line — and stores only the sentence. Nothing can later tell
@@ -612,7 +612,7 @@ not also record.
 
 ### 2.62 A DECISION boolean reused as an EXPLANATION (NEW 2026-09-06)
 
-**Bug ID:** `d9e1b4` · **Test:** `test/contracts/deload_reason_test.dart`
+**Bug ID:** `d9e1b4` · **Test:** `test/contracts/deload_reason_test.dart` (deleted 2026-11-02 with the deload "why" feature, train-header-b2; the class stays valid)
 
 A flag is computed to make a safe choice, then reused to choose user-facing copy.
 The choice is correct for every reason the flag is false; the sentence is correct

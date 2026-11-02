@@ -20,7 +20,7 @@
 // Pure arithmetic lives in `WorkoutScheduleReadService.rawWeekNumberFor`;
 // `planWeekAndCharacterFor` pairs it with the blob's character. Neither has a
 // `catch` above its guards, deliberately — see the file-level note on
-// `currentDeloadReason`, where guards under a swallowing `catch` made three
+// the (since removed) deload-reason reader, where guards under a swallowing `catch` made three
 // separate mutations redden ZERO of twelve assertions.
 
 import 'dart:io';

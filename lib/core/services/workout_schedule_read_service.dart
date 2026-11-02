@@ -34,6 +34,7 @@ import '../utils/gap_policy.dart';
 import '../utils/hold_week_labels.dart';
 import '../utils/ist_date.dart';
 import '../utils/phase_completion.dart';
+import '../utils/week_mode_label.dart';
 import '../../features/profile/services/profile_write_service.dart';
 import '../../shared/repositories/plan_generator.dart';
 import '../../shared/repositories/plan_engine/plan_engine_flags.dart';
@@ -1327,87 +1328,14 @@ class WorkoutScheduleReadService {
     return days;
   }
 
-  /// Batch 10 (W3.1 explainability): the Hive key prefix for the per-phase deload
-  /// "why" string (writer: `DeloadEvaluator`; reader: [currentDeloadReason]).
-  static const String deloadReasonKeyPrefix = 'deload_reason_phase_';
-
   /// The phase a week-4 deload belongs to — the first `phase`-stamped row in the
-  /// week-4 rows. The SINGLE derivation shared by the eval (reason WRITER + its
-  /// flag/marker) and [currentDeloadReason] (reason READER), so the reason key can
-  /// never drift between writer and reader.
+  /// week-4 rows, used by the evaluator for its idempotency flag key and marker.
   static int? deloadPhaseFromWeek4(List<Map<String, dynamic>> rows) {
     for (final r in rows) {
       final p = r['phase'];
       if (p is int) return p;
     }
     return null;
-  }
-
-  /// Batch 10 (W3.1): the one-line deload "why" for the CURRENT phase's week-4
-  /// decision, or null. Gated on `triggeredDeloadEnabled` for clean kill-switch
-  /// reversibility (a stale reason hides the moment the flag is turned OFF). Reads
-  /// the same `deload_reason_phase_<P>` key the eval wrote, deriving P via
-  /// [deloadPhaseFromWeek4] → writer==reader by construction. Crash-safe.
-  ///
-  /// Unit B: the stored value is a MAP (`{week_character, text}`) and this reader
-  /// returns `text` ONLY while the stamped character still equals week 4's
-  /// character in the blob [currentWaveCharacters] → the strip can never show a
-  /// reason that contradicts the wave node above it. Legacy bare Strings and any
-  /// mismatch resolve to `null` (no line), which is byte-identical to the
-  /// pre-flip state.
-  String? currentDeloadReason() {
-    try {
-      if (!PlanEngineFlags.triggeredDeloadEnabled) return null;
-      final phase = deloadPhaseFromWeek4(getWeek(4));
-      if (phase == null) return null;
-      final v =
-          HiveService.instance.workoutBox.get('$deloadReasonKeyPrefix$phase');
-      return validatedDeloadReason(v, currentWaveCharacters());
-    } catch (_) {
-      return null;
-    }
-  }
-
-  /// PURE (visible for testing) — Unit B's validation, lifted OUT of
-  /// [currentDeloadReason] so it can be tested without that method's crash-safety
-  /// `catch`. That extraction is not cosmetic: with the guards inline, plan-review
-  /// round 1 measured that deleting the `waves.length` guard, the `is! Map` guard
-  /// or the `stamped` shape guard reddened **ZERO** of twelve assertions — the
-  /// resulting RangeError / NoSuchMethodError was swallowed by the `catch` and
-  /// produced the SAME null the tests asserted. Four tests were checking the
-  /// exception handler, not the guard. Here every null comes from an explicit
-  /// guard, so deleting one throws and the test goes red for the right reason.
-  ///
-  /// Returns the stored reason text only while the stamped outcome still matches
-  /// week 4 of [waves] — the blob the STRIP renders, deliberately not the
-  /// scheduled rows [currentDeloadReason] derives its phase from, because a line
-  /// contradicting the node directly above it is worse than no line.
-  ///
-  /// Comparison is NORMALISED on both sides. `PhaseArcStrip.labelFor` lowercases
-  /// and trims before rendering, and its own history records `'  '` shipping as a
-  /// dot with no label — so padded/mixed-case `week_character` is a state this
-  /// codebase already treats as reachable, and a raw compare would disagree with
-  /// the display about what "the same character" is.
-  ///
-  /// EQUALITY, not `== 'working'`: the mirror — stored `deload` while the blob
-  /// says `working`, reachable when a sync lands a lifted blob over a local keep
-  /// — is exactly as stale and must drop too.
-  ///
-  /// A bare String is a LEGACY value (the writer stamped prose alone from
-  /// 2026-09-01 until Unit B) carrying no outcome to check, so it is
-  /// indistinguishable from a stale one and resolves to null.
-  @visibleForTesting
-  static String? validatedDeloadReason(Object? stored, List<String> waves) {
-    if (stored is! Map) return null;
-    final text = stored['text'];
-    if (text is! String || text.isEmpty) return null;
-    final rawStamp = stored['week_character'];
-    if (rawStamp is! String) return null;
-    final stamped = rawStamp.toLowerCase().trim();
-    if (stamped.isEmpty) return null;
-    if (waves.length < 4) return null; // the strip renders nothing below 4 anyway
-    if (waves[3].toLowerCase().trim() != stamped) return null;
-    return text;
   }
 
   /// ⑧ Batch 8 (W2.5 adherence gate) — the current phase's completion rate:
@@ -1553,7 +1481,7 @@ class WorkoutScheduleReadService {
   ///
   /// `character` is null when there is no plan, no blob, a short/malformed
   /// blob, or an empty entry. **Every null has exactly one explicit source and
-  /// there is no `catch` above them** — the lesson [currentDeloadReason]
+  /// there is no `catch` above them** — the lesson of the (since removed) deload-reason reader
   /// records in this same file, where guards buried under a swallowing `catch`
   /// made three separate mutations redden zero of twelve assertions.
   ({int week, String? character}) planWeekAndCharacterFor(DateTime date) {
@@ -1571,13 +1499,45 @@ class WorkoutScheduleReadService {
     return (week: week, character: character.isEmpty ? null : character);
   }
 
-  /// ⑥ Batch 7-A (W3.2 phase arc): the periodization wave character per week of
+  /// train-header-b2: the hero label word for a schedule [row] shown on [date].
+  ///
+  /// The ROW's own `week_character` stamp wins (every generated / regenerated /
+  /// hotel row carries one; a hold row is a copy of the Peak or deload row and
+  /// carries that). A row WITHOUT a stamp (template rows, restored rows whose
+  /// bundle lacks it) falls back to the plan blob's character for [date]'s plan
+  /// week, read directly (NOT through the clamped [planWeekAndCharacterFor],
+  /// whose clamp would label a hold week or an extended plan with week 4's word).
+  ///
+  /// The fallback returns null when it cannot be honest: no [date], no/invalid
+  /// `plan_start`, [date] before `plan_start` (raw week truncates toward zero, so
+  /// this is an explicit date comparison), a raw week outside 1..4, a row `week`
+  /// above 4, or a hold row (`is_hold`, which a cloud-restored hold row may lack:
+  /// the week check covers it). Null = the card omits the word.
+  String? weekModeForRow(Map<dynamic, dynamic>? row, DateTime? date) {
+    final stamped = weekModeLabel(row?['week_character']);
+    if (stamped != null) return stamped;
+    if (row == null || date == null) return null;
+    if (row['is_hold'] == true) return null;
+    final rowWeek = row['week'];
+    if (rowWeek is int && rowWeek > 4) return null;
+    final startStr = MigratedKey.read<String>(_planStartKey);
+    if (startStr == null) return null;
+    final planStart = DateTime.tryParse(startStr);
+    if (planStart == null || date.isBefore(planStart)) return null;
+    final week = rawWeekNumberFor(date, planStart);
+    if (week < 1 || week > 4) return null;
+    final waves = currentWaveCharacters();
+    if (week - 1 >= waves.length) return null;
+    return weekModeLabel(waves[week - 1]);
+  }
+
+  /// The periodization wave character per week of
   /// the CURRENT phase — baseline / overreach / peak / deload, plus `working`
   /// once a deload is lifted (deload_evaluator.dart:245) — read from the
   /// materialized `current_plan` blob (`week_plans[i]['week_character']`,
-  /// snake_case per `WeekPlan.toMap`). Read-only DISPLAY source for the
-  /// Train-screen wave strip; no engine coupling. Crash-safe: a missing /
-  /// malformed / short blob returns `const []` (widget then renders nothing).
+  /// snake_case per `WeekPlan.toMap`). Feeds `weekModeForRow`'s fallback and
+  /// `planWeekAndCharacterFor` (hotel stamp); no engine coupling. Crash-safe: a missing /
+  /// malformed / short blob returns `const []` (callers then omit the word).
   List<String> currentWaveCharacters() {
     final raw = _hive.workoutBox.get(_planKey);
     if (raw is! Map) return const [];
