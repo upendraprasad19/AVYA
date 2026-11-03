@@ -71,8 +71,9 @@ findings:
 
   - id: SBF-MIGRATION-COMMENT
     title: "COMMENT ON COLUMN public.user_profile.session_duration_minutes: migration 017's comment says the generator no longer reads the column, which is false since the flip"
-    terminal_state: blocked_on_user
-    reason: "A comment-only live schema apply needs the founder's explicit per-action go (root CLAUDE.md 4.3). Gate 14 and the paired-commit gate force the file, its applied-ledger entry and the apply together, so it lands as its own commit and PR after that go (number reserved with scripts/mint_migration.sh then); no column changes, so backups/live_schema_columns.json is untouched."
+    terminal_state: closed_in_commit
+    commit: PENDING_STAMP
+    verification: "Migration 166 (supabase/migrations/166_session_duration_minutes_comment.sql) applied to project dedsavbjuwgarrhphgnl on 2026-11-03 after the founder's per-action go; read-back of col_description equals the new text exactly; ledger entry 166 with a verified hash (Gate 39); migration 017 is untouched (immutable)."
 
   - id: SBF-SCORECARD-BASELINE
     title: "The Batch 0 scorecard baseline is re-frozen: every slot now survives to the allocator, so the plans carry more fallback picks (1679 to 2009 over 606 personas; plans with one 288 to 303) while coverage, progression and the overall mean rise"

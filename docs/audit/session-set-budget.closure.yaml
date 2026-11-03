@@ -293,8 +293,9 @@ findings:
 
   - id: BP3-P3-8B
     title: "Migration 017's column comment says the plan generator no longer reads session_duration_minutes"
-    terminal_state: blocked_on_user
-    reason: "The comment is now FALSE (the generator reads the column on every generation since the 2026-11-02 flip). The COMMENT ON COLUMN migration needs the founder's explicit live-apply go (root CLAUDE.md 4.3); it lands as its own commit after that go (docs/audit/set-budget-flip.closure.yaml SBF-MIGRATION-COMMENT)."
+    terminal_state: closed_in_commit
+    commit: PENDING_STAMP
+    verification: "Migration 166 (supabase/migrations/166_session_duration_minutes_comment.sql) applied to project dedsavbjuwgarrhphgnl on 2026-11-03 after the founder's per-action go; read-back of col_description equals the new text exactly; ledger entry 166 with a verified hash (Gate 39); migration 017 is untouched (immutable)."
 
   - id: BP3-P3-9
     title: "Home card covered by a source-grep that a constant in its place would satisfy; recompose goal and injured users absent from the gate"
