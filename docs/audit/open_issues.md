@@ -7317,3 +7317,14 @@ Found by the sync-storm-first-sweep batch while measuring its Day-0 web check (l
 **Decision needed.** (a) Delete the catch in `_out`/`_err` and rely on the `stdout.done` / `stderr.done` handlers, or (b) add a test seam that makes the write throw, plus a test, so the catch is proven. Prefer (a) unless a synchronous throw can be provoked on a real detached stdout; check that first.
 
 **Done when.** The decision is recorded; the chosen change ships with a mutant run on `_out` and `_err` (no survivor left unnamed). Blast radius: `platform` (`scripts/land_pr.dart`).
+
+## OI-455 — Collapsed active-workout card header overflows by 13 px at 360 dp (RenderFlex, exercise_card.dart ~line 1388), seen in Chrome during M2b Part B, present on main
+
+- **Status**: OPEN
+- **Blocked on**: none
+- **Verified**: never
+- **Identified**: 2026-11-04 · filed via mint_oi.sh from branch `library-batch-m2b-viewer`
+
+Found by the M2b Part B Chrome check (360 dp, real fonts, the real card and exercise library with seeded data). The header `Row` of a COLLAPSED active-workout card in `lib/features/train/screens/active_workout/exercise_card.dart` (the `Exercise header row` block of `build`, about line 1388 when it was seen) reports a 13 px `RenderFlex` overflow. It is on `main` and not in the Part B diff: the widget tests run under the Ahem font, whose glyph widths are not the real ones, so no test sees it. The cause is NOT established (the long name, the meta line or the trailing controls are all candidates). Founder go to file it: 2026-11-04.
+
+**Done when.** The overflow is reproduced (Chrome at 360 dp with real fonts, or a widget test at a text scale that reddens it), the row is fixed so no child overflows at 360 dp and at the largest text scale the app supports, and the fix carries a regression test that fails without it (mutated and run, rule 21). UI only: a Train widget.
