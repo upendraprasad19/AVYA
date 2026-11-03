@@ -7290,6 +7290,32 @@ Found by the sync-storm-first-sweep batch while measuring its Day-0 web check (l
 
 **Done when.** Cause established by a measured experiment; fixed with a test that fails without the fix; the test passes 20 loaded runs in a row. Blast radius: `feature` (`test/ai_coach/**`; `lib/` only if the cause is a real race).
 
+## OI-452 — A day can end with 1 or 2 exercises when its muscle groups' weekly band is spent (6-day beginner weeks, injured pools): add a 3-exercise day floor
+
+- **Status**: OPEN
+- **Blocked on**: none
+- **Verified**: never
+- **Identified**: 2026-11-03 · filed via mint_oi.sh from branch `oi-thin-days-repeat-phase`
+
+**What happens.** After the session set budget flip (PR #195, 2026-11-03) the allocator can leave a day with 1 or 2 exercises when the weekly band of that day's muscle groups is already spent by earlier days (6-day beginner general_fitness weeks, top 10 sets per group; injured pools). Measured by the 20 injury-sweep blocks (`test/helpers/injury_floor_sweep_lib.dart`, `kThinCeilings`, exact counts): 14 to 197 days under 3 exercises and 0 to 24 one-exercise days per block of 2,160 to 3,888 days; no empty day. Closure row `SBF-THIN-DAYS` (`docs/audit/set-budget-flip.closure.yaml`). A user should not go to the gym for a 10-minute, two-exercise session.
+
+**Founder direction (2026-11-03).** File and pick up later. Recommended design: a hard floor of 3 exercises per day; a day below the floor may exceed the weekly band by a few sets, only for those days (a guard with its own stats). A first attempt (restore removed slots over the weekly top) fixed the sweeps but broke `session_set_allocator_behavioral_test` (weekly top 16 to 26) and the budget gate, so it was reverted: this needs a plan, not a tweak.
+
+**Done when.** Plan reviewed twice; the allocator keeps every day at 3 or more exercises (or says why a day cannot); the weekly-top invariant is restated for the exception; `kThinCeilings` for days under 3 drops to 0 (or to a named residue); mutants prove it. Blast radius: `platform` (plan_engine), tier L.
+
+## OI-453 — A repeat phase keeps its exercise list when the user's minutes go up: keep pinned compounds, spend the spare time on extra sets then appended accessories
+
+- **Status**: OPEN
+- **Blocked on**: none
+- **Verified**: never
+- **Identified**: 2026-11-03 · filed via mint_oi.sh from branch `oi-thin-days-repeat-phase`
+
+**What happens.** A repeat phase pins the previous phase's exercise list (faithful repeat). When the user's session minutes go up between phases, the extra time stays unused because the allocator adds sets but never exercises. Closure row `SBF-REPEAT-PHASE-MINUTES` (`docs/audit/set-budget-flip.closure.yaml`).
+
+**Founder direction (2026-11-03).** File and pick up later. Chosen design (hybrid): keep the pinned compounds; when minutes rise, spend the spare time first on extra sets (up to the per-session cap), then on appended accessories chosen by the normal selector; do not reshuffle the whole list. Rationale: exercise-specific progression and load tracking favour keeping the main lifts across a block, while recoverable extra volume is added as accessories or sets.
+
+**Done when.** Plan reviewed twice; a repeat phase with more minutes fills the extra time as above and a repeat with the same minutes stays byte-identical to today; pins of compounds survive; the repeat gate still tests adherence; mutants prove both branches. Blast radius: `platform` (plan_engine), tier L.
+
 ## OI-451 — land_pr.dart _out try/catch is unreachable by any test (mutant N09 survivor)
 
 - **Status**: OPEN
