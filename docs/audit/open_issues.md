@@ -7261,3 +7261,31 @@ Found by the sync-storm-first-sweep batch while measuring its Day-0 web check (l
 **Why the obvious fix is not enough (plan-review R2).** "Wait for `restoreSettledForCurrentUser`, then grant" is not implementable inside `writeSubscriptionState`: the grant is one-shot at the free->PRO transition, so after one boot `oldIsPro` is true and nothing calls it again; a restore that never settles would lose the grant forever. Needs a durable "grant pending" marker set instead of granting while the restore is unsettled, a trigger at settle (`_settleRestoreMarker`, `sync_service.dart`), and a decision for a restore that never settles. Also read why web local Hive is empty/unset at each cold start (not established).
 
 **Done when.** A fresh web boot with the cloud flag true never changes `streak_freezes_available` locally or in the cloud; a genuine first upgrade still gets its 3 (also when the restore is slow); a behavioral test covers both and each guard is mutated. Blast radius: `platform` (sync/restore + subscription). Founder scope call pending: fold into a later batch or its own plan (the OI is the tracked item).
+
+## OI-449 — land_pr.sh has no mutual exclusion: two runs for one PR, or two in one worktree, can interleave (wasted push and CI wait; the merge stays safe)
+
+- **Status**: OPEN
+- **Blocked on**: none
+- **Verified**: never
+- **Identified**: 2026-11-03 · filed via mint_oi.sh from branch `oi-land-pr-followups`
+
+**What happens.** `sh scripts/land_pr.sh <pr>` takes no lock (landing D, PR #193, plan `docs/plans/merge-train.md` section 3 and residual R1). Two runs for the same PR, or two runs in one worktree, can interleave: both push and both wait for CI. The merge itself stays safe, because `scripts/safe_pr_merge.sh` refuses a stale head and a PR that is not green; the cost is a wasted push and CI wait, and in the same-worktree case two sync steps racing on one index.
+
+**Why it was not built in D.** `scripts/_git_lock.sh` (OI-92, closed 2026-08-05) deliberately has NO automatic reclaim: a dead holder's lock is refused and the person must `rm -rf` it by hand, because every automatic-reclaim design of that shape was broken in review. A lock in `land_pr.sh` built on it would leave a stuck lock after a crash or kill, which is a worse failure for a one-command landing tool than the interleaving it prevents.
+
+**Decision needed.** (a) Reuse `_git_lock.sh` as is and accept the manual `rm -rf` after a crash (the wrapper prints the command), or (b) accept the residual and document it (today). Not a new reclaim design.
+
+**Done when.** The decision is recorded; if (a), the lock is taken after the argument checks and released on every exit path including TERM/INT/HUP, with an e2e test for two concurrent runs (second refused) and one for a killed run (lock left, message names the path), each guard mutated. Blast radius: `platform` (`scripts/land_pr.*`).
+
+## OI-450 — workout_log_confirm_card_saved_signal_test 'a timed set with a bad duration saves, the day mark fails' failed once in a loaded full-suite run and passes alone (52/52)
+
+- **Status**: OPEN
+- **Blocked on**: none
+- **Verified**: never
+- **Identified**: 2026-11-03 · filed via mint_oi.sh from branch `oi-land-pr-followups`
+
+**What happens.** In the full-suite run of landing D (branch `merge-train`, `TZ=Asia/Kolkata flutter test --exclude-tags golden`, 2026-11-02, machine under load) `test/ai_coach/workout_log_confirm_card_saved_signal_test.dart` failed in "a timed set with a bad duration saves, the day mark fails ...". The same file passed 52/52 alone, no `lib/` file had changed, and the final full run on the same tree did not show it. Cause NOT established.
+
+**Not yet known.** Whether it is a timing assumption (a fixed delay or `pump` count), shared state with another file in the same isolate, or a real race in the confirm-card save path. Reproduce first (loop the file under CPU load, then the full suite order), then name writer and reader by file:line before any fix (CLAUDE.md 4.1).
+
+**Done when.** Cause established by a measured experiment; fixed with a test that fails without the fix; the test passes 20 loaded runs in a row. Blast radius: `feature` (`test/ai_coach/**`; `lib/` only if the cause is a real race).
