@@ -7251,21 +7251,6 @@ Found by the sync-storm-first-sweep batch while measuring its Day-0 web check (l
 
 **Done when.** A fresh web boot with the cloud flag true never changes `streak_freezes_available` locally or in the cloud; a genuine first upgrade still gets its 3 (also when the restore is slow); a behavioral test covers both and each guard is mutated. Blast radius: `platform` (sync/restore + subscription). Founder scope call pending: fold into a later batch or its own plan (the OI is the tracked item).
 
-## OI-449 — land_pr.sh has no mutual exclusion: two runs for one PR, or two in one worktree, can interleave (wasted push and CI wait; the merge stays safe)
-
-- **Status**: OPEN
-- **Blocked on**: none
-- **Verified**: never
-- **Identified**: 2026-11-03 · filed via mint_oi.sh from branch `oi-land-pr-followups`
-
-**What happens.** `sh scripts/land_pr.sh <pr>` takes no lock (landing D, PR #193, plan `docs/plans/merge-train.md` section 3 and residual R1). Two runs for the same PR, or two runs in one worktree, can interleave: both push and both wait for CI. The merge itself stays safe, because `scripts/safe_pr_merge.sh` refuses a stale head and a PR that is not green; the cost is a wasted push and CI wait, and in the same-worktree case two sync steps racing on one index.
-
-**Why it was not built in D.** `scripts/_git_lock.sh` (OI-92, closed 2026-08-05) deliberately has NO automatic reclaim: a dead holder's lock is refused and the person must `rm -rf` it by hand, because every automatic-reclaim design of that shape was broken in review. A lock in `land_pr.sh` built on it would leave a stuck lock after a crash or kill, which is a worse failure for a one-command landing tool than the interleaving it prevents.
-
-**Decision needed.** (a) Reuse `_git_lock.sh` as is and accept the manual `rm -rf` after a crash (the wrapper prints the command), or (b) accept the residual and document it (today). Not a new reclaim design.
-
-**Done when.** The decision is recorded; if (a), the lock is taken after the argument checks and released on every exit path including TERM/INT/HUP, with an e2e test for two concurrent runs (second refused) and one for a killed run (lock left, message names the path), each guard mutated. Blast radius: `platform` (`scripts/land_pr.*`).
-
 ## OI-450 — workout_log_confirm_card_saved_signal_test 'a timed set with a bad duration saves, the day mark fails' failed once in a loaded full-suite run and passes alone (52/52)
 
 - **Status**: OPEN
@@ -7305,18 +7290,20 @@ Found by the sync-storm-first-sweep batch while measuring its Day-0 web check (l
 
 **Done when.** Plan reviewed twice; a repeat phase with more minutes fills the extra time as above and a repeat with the same minutes stays byte-identical to today; pins of compounds survive; the repeat gate still tests adherence; mutants prove both branches. Blast radius: `platform` (plan_engine), tier L.
 
-## OI-451 — land_pr.dart _out try/catch is unreachable by any test (mutant N09 survivor)
+## OI-454 — Quads sit below their weekly floor in 6-day build_muscle plans: add a Legs B quad slot AND an allocator co-group policy so a quad exercise is not removed for crediting Glutes
 
 - **Status**: OPEN
 - **Blocked on**: none
 - **Verified**: never
-- **Identified**: 2026-11-03 · filed via mint_oi.sh from branch `oi-n09-dead-catch`
+- **Identified**: 2026-11-03 · filed via mint_oi.sh from branch `oi-quads-floor`
 
-**What happens.** In `scripts/land_pr.dart` the `try/catch` inside `_out` (line 78) is defence for a stdout that throws synchronously. A closed stdout reports its error through `stdout.done`, not as a synchronous throw, so no test reaches the catch. In landing D's mutation run (87 mutants, B-pass `docs/reviews/b073e94ab265-review.md` Finding 4) the mutant that turns the catch into `rethrow` (N09) was the one survivor. It was kept as defence for a detached stdout and stated as not behaviourally proven. `_err` (line 70) has the same shape.
+**What happens.** Intermediate build_muscle, full_gym, 6 days, 90 minutes: Quads get 8 weekly sets against a band of 12 to 16 (floors 10/12/14 by level). Legs A (`Quad dominant`) holds the only quad work; Legs B (`Hamstring + glute focus`, `_get6DayV4('build_muscle')` in `lib/shared/repositories/plan_engine/split_resolver.dart`) has none. Glutes already sit at their weekly top (12/16/20), so the allocator removes any added squat or lunge because it also credits Glutes. Closure row `SBF-QUADS-FLOOR` (`docs/audit/set-budget-flip.closure.yaml`); measured at the flip in `docs/architecture/plan-engine-detail.md` (d).
 
-**Decision needed.** (a) Delete the catch in `_out`/`_err` and rely on the `stdout.done` / `stderr.done` handlers, or (b) add a test seam that makes the write throw, plus a test, so the catch is proven. Prefer (a) unless a synchronous throw can be provoked on a real detached stdout; check that first.
+**Spike (2026-11-03, reverted).** A Legs B quad slot alone changes nothing (the allocator drops it). Replacing Legs B's glute-isolation slot lifts Quads only to 9 to 12 sets against floors 10/12/14.
 
-**Done when.** The decision is recorded; the chosen change ships with a mutant run on `_out` and `_err` (no survivor left unnamed). Blast radius: `platform` (`scripts/land_pr.dart`).
+**Founder direction (2026-11-03).** Quads option (a), recommended path: swap the Legs B glute-isolation slot for a Quads knee_dominant compound slot AND add an allocator co-group policy (a quad-primary exercise is not refused for crediting Glutes: partial glute credit, or the cap applied to the primary muscle), in one batch. Rule-14 waiver for `plan_generator.dart` given ("ok"); the allocator file may need its own waiver. The old draft `docs/plans/2026-11-03-quads-legs-b-slot.md` (worktree `quads-legs-b`, untracked) predates the spike and must be rewritten around it.
+
+**Done when.** Plan reviewed twice; Quads reach the band floor in the founder case and the other 6-day build_muscle personas with no group above its band top and every day inside its minutes; the generator golden changes only for 6-day build_muscle personas (changed keys listed); `kThinCeilings` and the scorecard baseline re-frozen if they move; mutants on the slot and on the policy. Blast radius: `platform` (plan_engine), tier L.
 
 ## OI-455 — Collapsed active-workout card header overflows by 13 px at 360 dp (RenderFlex, exercise_card.dart ~line 1388), seen in Chrome during M2b Part B, present on main
 

@@ -5879,6 +5879,38 @@ To plan (tier M: Train + coach files): the rate map omits weekdays with nothing 
 
 **CLOSED 2026-11-02 (landing D, branch `merge-train`).** Each option of this entry and the landing that answered it: (a) stop tracking generated indexes: A2 (#167); (b) one file per entry: not built as proposed, B (#171, the bug-class uniqueness gate) removed the max+1 collision and C2 (#190, `scripts/sync_with_main.sh`) merges the shared files by record; (c) title-keyed or allocated class ids: B; (d) pre-push policy for a pure sync: OI-275 (a BRANCH push no longer runs the local full suite) and C1 (#176, the review gate grades a branch sync by what the merge adds); (e) a merge queue or auto-merge: compared in `docs/plans/merge-train.md` section 1 and not available (GitHub's merge queue is for organization-owned repositories, this one belongs to a personal account; auto-merge would merge before CI because `main` has no required checks), replaced by `sh scripts/land_pr.sh <pr>` (sync, push, CI wait, plan-review-record replay, then `safe_pr_merge.sh`); (f) `git rerere` and `merge=union`: not built, `union` cannot refuse a number collision and `rerere` only replays a human's earlier resolution, C2's resolver covers the append-only files with a collision check. The open question on `FOUNDER_APPROVED_NO_VERIFY` for a sync push is moot: a branch push runs no local suite and a sync through the tool needs no bypass. Measured effect (parent plan section 8): of the 166 conflicted syncs among the last 600 merges, A1 + A2 clear 73 and C2 resolves 53 more completely; 40 still need a human (11 live number collisions). Residuals are stated in both plans (no mutual exclusion between two landings, the final main-moved window, Windows untested).
 
+## OI-449 — land_pr.sh has no mutual exclusion: two runs for one PR, or two in one worktree, can interleave (wasted push and CI wait; the merge stays safe)
+
+- **Status**: CLOSED · 2026-11-03 · decision (b) by the founder: accept the residual and document it · the commit carrying `closes-oi: OI-449`
+- **Blocked on**: — (resolved)
+- **Verified**: never
+- **Identified**: 2026-11-03 · filed via mint_oi.sh from branch `oi-land-pr-followups`
+
+**What happens.** `sh scripts/land_pr.sh <pr>` takes no lock (landing D, PR #193, plan `docs/plans/merge-train.md` section 3 and residual R1). Two runs for the same PR, or two runs in one worktree, can interleave: both push and both wait for CI. The merge itself stays safe, because `scripts/safe_pr_merge.sh` refuses a stale head and a PR that is not green; the cost is a wasted push and CI wait, and in the same-worktree case two sync steps racing on one index.
+
+**Why it was not built in D.** `scripts/_git_lock.sh` (OI-92, closed 2026-08-05) deliberately has NO automatic reclaim: a dead holder's lock is refused and the person must `rm -rf` it by hand, because every automatic-reclaim design of that shape was broken in review. A lock in `land_pr.sh` built on it would leave a stuck lock after a crash or kill, which is a worse failure for a one-command landing tool than the interleaving it prevents.
+
+**Decision needed.** (a) Reuse `_git_lock.sh` as is and accept the manual `rm -rf` after a crash (the wrapper prints the command), or (b) accept the residual and document it (today). Not a new reclaim design.
+
+**Done when.** The decision is recorded; if (a), the lock is taken after the argument checks and released on every exit path including TERM/INT/HUP, with an e2e test for two concurrent runs (second refused) and one for a killed run (lock left, message names the path), each guard mutated. Blast radius: `platform` (`scripts/land_pr.*`).
+
+**Closed by.** Founder decision 2026-11-03: option (b). `land_pr.sh` stays lock-free. A stuck lock after a crash is a worse failure for a one-command landing tool than an occasional wasted push and CI wait, the merge stays safe (`safe_pr_merge.sh` refuses a stale head or a non-green PR), and one person lands PRs here. The residual is stated in `docs/plans/merge-train.md` section 7 R1 (now citing this decision) and in the landing D residuals of `docs/architecture/hooks.md`. Reopen only if concurrent landings start costing real CI time; the design then is (a), reuse `_git_lock.sh` as is, with the manual `rm -rf` after a crash.
+
+## OI-451 — land_pr.dart _out try/catch is unreachable by any test (mutant N09 survivor)
+
+- **Status**: CLOSED · 2026-11-03 · option (a) · the commit carrying `closes-oi: OI-451`
+- **Blocked on**: — (resolved)
+- **Verified**: never
+- **Identified**: 2026-11-03 · filed via mint_oi.sh from branch `oi-n09-dead-catch`
+
+**What happens.** In `scripts/land_pr.dart` the `try/catch` inside `_out` (line 78) is defence for a stdout that throws synchronously. A closed stdout reports its error through `stdout.done`, not as a synchronous throw, so no test reaches the catch. In landing D's mutation run (87 mutants, B-pass `docs/reviews/b073e94ab265-review.md` Finding 4) the mutant that turns the catch into `rethrow` (N09) was the one survivor. It was kept as defence for a detached stdout and stated as not behaviourally proven. `_err` (line 70) has the same shape.
+
+**Decision needed.** (a) Delete the catch in `_out`/`_err` and rely on the `stdout.done` / `stderr.done` handlers, or (b) add a test seam that makes the write throw, plus a test, so the catch is proven. Prefer (a) unless a synchronous throw can be provoked on a real detached stdout; check that first.
+
+**Done when.** The decision is recorded; the chosen change ships with a mutant run on `_out` and `_err` (no survivor left unnamed). Blast radius: `platform` (`scripts/land_pr.dart`).
+
+**Closed by.** Option (a). Probe (closed stdout `>&-`, broken pipe, `/dev/full`): `stdout.writeln` never throws synchronously; the failure is an async unhandled `FileSystemException`, so the catch was unreachable. `_out` and `_err` in `scripts/land_pr.dart` are now bare writes; the protection is `stdout.done`/`stderr.done` `.catchError` and the `runZonedGuarded` handler in `main`. Pin: `test/scripts/land_pr_source_pins_test.dart` (OI-451); mutant that restores the catch in `_out` reddens it (1 failure). Residual, not fixed: the zone handler calls `_out`, and on any early-exit path before the `done` handlers are installed (`_parse` refusals, construction errors, `scripts/land_pr.dart` main), a broken stdout could re-enter it; the run still ends because `_finish` keeps its own try/catch (it also guards `flush()`, which can throw). One more narrow window: while `_finish` runs `stdout.flush()` the sink is bound (SDK `io_sink.dart` `_isBound`), so a write then throws StateError; only a late uncaught async error reaching the zone handler could write there, and the old catch would have absorbed it.
+
 ## OI-354 — Active Workout hero tile + full-screen viewer (animated WEBP) blocked on asset pipeline and delivery architecture
 
 - **Status**: CLOSED · 2026-11-03 · plan `docs/plans/2026-11-03-library-batch-m2b-viewer.md` (Part A: `docs/plans/2026-11-02-library-batch-m2b-tile-and-rows.md`, PR #199) · branch `library-batch-m2b-viewer` · the commit carrying `closes-oi: OI-354`
