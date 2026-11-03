@@ -294,7 +294,7 @@ findings:
   - id: BP3-P3-8B
     title: "Migration 017's column comment says the plan generator no longer reads session_duration_minutes"
     terminal_state: closed_in_commit
-    commit: PENDING_STAMP
+    commit: 3bfead7d2470843f9c2bbcdc44ecbde7da66e87f
     verification: "Migration 166 (supabase/migrations/166_session_duration_minutes_comment.sql) applied to project dedsavbjuwgarrhphgnl on 2026-11-03 after the founder's per-action go; read-back of col_description equals the new text exactly; ledger entry 166 with a verified hash (Gate 39); migration 017 is untouched (immutable)."
 
   - id: BP3-P3-9
