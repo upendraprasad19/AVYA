@@ -5911,6 +5911,21 @@ To plan (tier M: Train + coach files): the rate map omits weekdays with nothing 
 
 **Closed by.** Option (a). Probe (closed stdout `>&-`, broken pipe, `/dev/full`): `stdout.writeln` never throws synchronously; the failure is an async unhandled `FileSystemException`, so the catch was unreachable. `_out` and `_err` in `scripts/land_pr.dart` are now bare writes; the protection is `stdout.done`/`stderr.done` `.catchError` and the `runZonedGuarded` handler in `main`. Pin: `test/scripts/land_pr_source_pins_test.dart` (OI-451); mutant that restores the catch in `_out` reddens it (1 failure). Residual, not fixed: the zone handler calls `_out`, and on any early-exit path before the `done` handlers are installed (`_parse` refusals, construction errors, `scripts/land_pr.dart` main), a broken stdout could re-enter it; the run still ends because `_finish` keeps its own try/catch (it also guards `flush()`, which can throw). One more narrow window: while `_finish` runs `stdout.flush()` the sink is bound (SDK `io_sink.dart` `_isBound`), so a write then throws StateError; only a late uncaught async error reaching the zone handler could write there, and the old catch would have absorbed it.
 
+## OI-450 — workout_log_confirm_card_saved_signal_test 'a timed set with a bad duration saves, the day mark fails' failed once in a loaded full-suite run and passes alone (52/52)
+
+- **Status**: CLOSED · 2026-11-03 · the commit carrying `closes-oi: OI-450`
+- **Blocked on**: — (resolved)
+- **Verified**: never
+- **Identified**: 2026-11-03 · filed via mint_oi.sh from branch `oi-land-pr-followups`
+
+**What happens.** In the full-suite run of landing D (branch `merge-train`, `TZ=Asia/Kolkata flutter test --exclude-tags golden`, 2026-11-02, machine under load) `test/ai_coach/workout_log_confirm_card_saved_signal_test.dart` failed in "a timed set with a bad duration saves, the day mark fails ...". The same file passed 52/52 alone, no `lib/` file had changed, and the final full run on the same tree did not show it. Cause NOT established at filing; see Closed by.
+
+**Not yet known.** Whether it is a timing assumption (a fixed delay or `pump` count), shared state with another file in the same isolate, or a real race in the confirm-card save path. Reproduce first (loop the file under CPU load, then the full suite order), then name writer and reader by file:line before any fix (CLAUDE.md 4.1).
+
+**Done when.** Cause established by a measured experiment; fixed with a test that fails without the fix; the test passes 20 loaded runs in a row. Blast radius: `feature` (`test/ai_coach/**`; `lib/` only if the cause is a real race).
+
+**Closed by.** Cause established by looping the whole file under CPU load (it must be the whole file: `--plain-name` skips the fonts-first test and always fails). Not a race in the save path: the file's assertions raced real clocks (the saved-card hold `Timer`, the 500 ms CONFIRM tap guard, and a fixed 20 ms wait after an auth flip), six distinct sites in all, and the OI's own test failed at its long-hold midpoint check. Fix is test-only (`test/ai_coach/workout_log_confirm_card_saved_signal_test.dart`): the hold never fires unless a test opts in, midpoint timing checks became a recorded-argument assertion, test (f) asserts only while its own stopwatch proves the guard window is open. 54/54 unloaded; 20 consecutive runs under 4 CPU burners on 4 cores green; two lib mutants reddened exactly the intended tests. Diagnose doc `docs/diagnoses/2026-11-03-confirm-card-test-real-clock-races-c4a5f0.md`. Residual (documented there): a run that stalls past 480 ms skips test (f)'s one guard assertion; `openGate`'s 400 ms settle is still a wall-clock wait.
+
 ## OI-354 — Active Workout hero tile + full-screen viewer (animated WEBP) blocked on asset pipeline and delivery architecture
 
 - **Status**: CLOSED · 2026-11-03 · plan `docs/plans/2026-11-03-library-batch-m2b-viewer.md` (Part A: `docs/plans/2026-11-02-library-batch-m2b-tile-and-rows.md`, PR #199) · branch `library-batch-m2b-viewer` · the commit carrying `closes-oi: OI-354`
