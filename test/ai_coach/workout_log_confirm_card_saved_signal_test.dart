@@ -40,8 +40,27 @@ import '../helpers/hive_test_setup.dart';
 import '../helpers/workout_draft_seed.dart';
 
 const kConfirm = 'CONFIRM · LOG WORKOUT';
+// OI-450: the saved-card hold is a REAL timer (WorkoutDraftNotifier._holdTimer).
+// An assertion "the card is still there at time T" against it is a race that a
+// loaded machine loses (five sites flaked in 30 loaded runs; widening the
+// margins only made it rarer). So by default the hold NEVER fires in a test;
+// the few tests that watch the card clear call [useFiringHold] and assert only
+// the END state (a stall can delay the clear, never undo it).
 const kShortHold = Duration(milliseconds: 150);
 const kLongHold = Duration(milliseconds: 500);
+const kNeverFires = Duration(hours: 1);
+
+bool holdFires = false;
+final holdAsked = <bool>[];
+
+/// Call first in a test that waits for the saved card to clear.
+void useFiringHold() => holdFires = true;
+
+/// A test whose subject IS the hold ending (not only the card clearing) picks
+/// one explicit, wide duration for every card it saves.
+Duration? holdOverride;
+void useHold(Duration d) => holdOverride = d;
+
 
 Directory? dir;
 
@@ -233,6 +252,14 @@ Future<void> openGate(WidgetTester tester, Completer<void> gate, Slot s) async {
     gate.complete();
     await Future<void>.delayed(const Duration(milliseconds: 20));
     await untilIdle(s);
+    // OI-450: after an auth flip the draft is null, so [untilIdle] sees
+    // nothing to wait for while the released submit is still running its
+    // tail (`endSubmit` in submitWorkoutDraft's finally). Disposing the
+    // container under it throws UnmountedRefException after the test
+    // completed. Give that tail a margin far wider than a loaded stall.
+    if (s.draft == null) {
+      await Future<void>.delayed(const Duration(milliseconds: 400));
+    }
   });
   await tester.pump();
   await tester.pump(const Duration(milliseconds: 250));
@@ -270,8 +297,14 @@ void main() {
   testWidgets('fonts degrade before any Hive mock', renderFontsFirst);
 
   setUp(() {
-    WorkoutDraftNotifier.savedHoldFor =
-        (hasNote) => hasNote ? kLongHold : kShortHold;
+    holdFires = false;
+    holdOverride = null;
+    holdAsked.clear();
+    WorkoutDraftNotifier.savedHoldFor = (hasNote) {
+      holdAsked.add(hasNote);
+      if (holdOverride != null) return holdOverride!;
+      return holdFires ? (hasNote ? kLongHold : kShortHold) : kNeverFires;
+    };
     DraftSubmitDebug.debugSubmitGate = null;
     DraftSubmitDebug.debugBeforeMarkGate = null;
     DraftSubmitDebug.clock = DateTime.now;
@@ -289,9 +322,17 @@ void main() {
     if (dir != null) await tearDownHiveForTests(dir!);
   });
 
+  test('OI-450: the shipped hold is longer when the card has a line to read',
+      () {
+    expect(WorkoutDraftNotifier.defaultSavedHoldFor(false),
+        const Duration(milliseconds: 1500));
+    expect(WorkoutDraftNotifier.defaultSavedHoldFor(true),
+        const Duration(milliseconds: 4000));
+  });
+
   group('saved', () {
     testWidgets('header, WORKOUT LOGGED + tick, live region, pencils hidden; '
-        'the slot is empty after the hold', (tester) async {
+        'a saved card takes no edit', (tester) async {
       await ensureHive(tester);
       final sem = tester.ensureSemantics();
       final s = await pumpSlot(tester,
@@ -314,11 +355,21 @@ void main() {
       final before = s.draft;
       s.n.updateSet(before!.id, 0, 0, DraftSet(weightKg: 99, reps: 1));
       expect(identical(s.draft, before), isTrue);
+      sem.dispose();
+      await done(tester);
+    });
 
+    testWidgets('the slot is empty after the hold', (tester) async {
+      // OI-450: split from the test above, whose assertions on the saved card
+      // raced this timer.
+      useFiringHold();
+      await ensureHive(tester);
+      final s = await pumpSlot(tester,
+          seed: draftOf([lift('Bench Press', 60, 8)]));
+      await confirm(tester, s);
       await waitReal(tester, kShortHold + const Duration(milliseconds: 100));
       expect(s.draft, isNull);
       expect(find.byType(WorkoutLogConfirmCard), findsNothing);
-      sem.dispose();
       await done(tester);
     });
   });
@@ -548,6 +599,7 @@ void main() {
   group('day not marked, skipped, cardio', () {
     testWidgets('a timed set with a bad duration saves, the day mark fails: '
         'the day line, no wlog_, the long hold', (tester) async {
+      useFiringHold();
       await ensureHive(tester);
       final s = await pumpSlot(tester, seed: draftOf([badPlank()]));
       await confirm(tester, s);
@@ -556,10 +608,10 @@ void main() {
       expect(find.text(WardroomCopy.coachWorkoutDayNotMarked), findsOneWidget);
       expect(rows('exlog_'), hasLength(1));
       expect(rows('wlog_'), isEmpty);
-      // OI-382: the long hold, so the line can be read.
-      await waitReal(tester, kShortHold + const Duration(milliseconds: 100));
-      expect(s.draft, isNotNull);
-      await waitReal(tester, kLongHold);
+      // OI-382: a day line asks for the LONG hold, so it can be read. The
+      // argument is the contract (OI-450: no wall-clock midpoint check).
+      expect(holdAsked, [true]);
+      await waitReal(tester, kLongHold + const Duration(milliseconds: 100));
       expect(s.draft, isNull);
       await done(tester);
     });
@@ -664,6 +716,7 @@ void main() {
 
     testWidgets('skipped leftover: saved with the Skipped line in the live '
         'region, the long hold, no note, one wlog_', (tester) async {
+      useFiringHold();
       await ensureHive(tester);
       final sem = tester.ensureSemantics();
       final s = await pumpSlot(tester,
@@ -677,9 +730,9 @@ void main() {
       expect(find.text(kConfirm), findsNothing);
       expect(find.textContaining('Partly logged'), findsNothing);
       expect(rows('wlog_'), hasLength(1));
-      await waitReal(tester, kShortHold + const Duration(milliseconds: 100));
-      expect(s.draft, isNotNull, reason: 'the long hold');
-      await waitReal(tester, kLongHold);
+      expect(holdAsked, [true], reason: 'the long hold');
+      await waitReal(tester, kLongHold + const Duration(milliseconds: 100));
+      expect(s.draft, isNull);
       sem.dispose();
       await done(tester);
     });
@@ -763,6 +816,10 @@ void main() {
   group('held draft', () {
     testWidgets('(a) a card arriving mid-submit waits for the saved hold, '
         'then appears and is announced once', (tester) async {
+      // The hold ending IS the subject, and "Squat is not shown yet" is
+      // asserted after the save: a wide hold (OI-450) keeps that check safe.
+      const hold = Duration(milliseconds: 1500);
+      useHold(hold);
       await ensureHive(tester);
       final announced = <String>[];
       tester.binding.defaultBinaryMessenger.setMockDecodedMessageHandler<dynamic>(
@@ -786,7 +843,7 @@ void main() {
       await openGate(tester, gate, s);
       expect(s.draft!.status, DraftCardStatus.saved);
       expect(find.text('Squat'), findsNothing);
-      await waitReal(tester, kShortHold + const Duration(milliseconds: 100));
+      await waitReal(tester, hold + const Duration(milliseconds: 100));
       expect(find.text('Squat'), findsOneWidget);
       expect(announced, ['Workout ready to log']);
       expect(s.draft!.appliedFromHold, isFalse);
@@ -854,12 +911,23 @@ void main() {
       await tester.pump();
       await tester.tap(find.text('DISCARD'));
       await tester.pump();
+      // OI-450: the guard is a real Stopwatch started when the new card mounts
+      // (inside the next pump), so this one starts no later than that mount
+      // and is read after the tap returns: it never under-counts the guard's
+      // elapsed time at the tap.
+      final sinceApply = Stopwatch()..start();
       await tester.tap(find.text('DISCARD'));
       await tester.pump();
       expect(find.text('Squat'), findsOneWidget);
       // tapWrite runs the tap in real time, so without the guard the write
       // completes (and this fails) instead of hanging in fake time.
       await tapWrite(tester, s, find.text(kConfirm));
+      if (sinceApply.elapsed >= kHeldCardTapGuard - const Duration(milliseconds: 20)) {
+        // A loaded machine stalled past the 500 ms window before the tap, so
+        // the guard had legitimately expired: nothing left to assert here.
+        await done(tester);
+        return;
+      }
       expect(s.draft!.isSubmitting, isFalse);
       expect(exlogFor('Squat'), isNull, reason: 'the immediate tap is ignored');
       await waitReal(tester, kHeldCardTapGuard + const Duration(milliseconds: 100));
