@@ -29,8 +29,9 @@ findings:
     verification: "row removed whole; a hold week keeps its own sessions text; test/train/header_layout_test.dart and the presence pin in train_hero_week_mode_behavioral_test.dart."
   - id: THB-WORKING-WORD
     title: "A lifted deload week is labelled 'Working', which is not one of the founder's four words"
-    terminal_state: blocked_on_user
-    reason: "Product call: keep 'Working' (truthful: the deload was lifted) or fold it into Deload / Baseline. One line in weekModeLabel."
+    terminal_state: closed_in_commit
+    commit: 2505d52d17b51824d563a703c633ab96bb0e7648
+    verification: "Founder call 2026-11-03: a lifted deload shows 'Baseline'. weekModeLabel maps the stored token 'working' to 'Baseline' (the token is unchanged); test/contracts/train_hero_week_mode_behavioral_test.dart pins the mapper, the padded token, the stamped row and the stamp-less lifted blob week; plan docs/plans/2026-11-03-working-label-baseline.md."
   - id: THB-DEVICE-CHECK
     title: "Founder device check of the Train header and Home card"
     terminal_state: blocked_on_user
