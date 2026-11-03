@@ -3,9 +3,10 @@
 // The user's self-selected `physique_focus` is CENTRALLY translated to muscle-
 // substring tokens (TrainingHistoryAnalyzer.physiqueFocusToBodyFocus), read from
 // the profile via a try/catch helper (physiqueFocusMuscles → [] on null/corrupt),
-// and fed to effectiveBodyFocus, which PeriodizationEngine turns into +1 set per
-// matching exercise. The dedicated isolation SLOT is a founder-deferred future
-// batch — this pins the +1-set mechanism only.
+// and fed to effectiveBodyFocus, which `generateV4` turns into the allocator's
+// focus groups (raised weekly top / session cap; the per-exercise +1 in
+// PeriodizationEngine was deleted with the unbudgeted body, flip 2026-11-02). The
+// dedicated isolation SLOT is a founder-deferred future batch.
 
 import 'dart:io';
 
@@ -16,10 +17,11 @@ import 'package:hive_flutter/hive_flutter.dart';
 import 'package:icanbefitter/core/services/guarded_box.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
 import 'package:icanbefitter/core/services/hive_user_session.dart';
-import 'package:icanbefitter/shared/repositories/plan_engine/periodization_engine.dart';
+import 'package:icanbefitter/shared/repositories/plan_engine/budget_muscle_groups.dart';
+import 'package:icanbefitter/shared/repositories/plan_engine/models.dart';
 import 'package:icanbefitter/shared/repositories/plan_engine/training_history_analyzer.dart';
 
-import '../plan_engine_v4/_helpers.dart';
+import '../helpers/session_budget_fixtures.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -42,33 +44,58 @@ void main() {
     });
   });
 
-  group('translated physique_focus → +1 set via PeriodizationEngine (effect)', () {
-    // Mirrors hypertrophy_archetype_test "Body focus +1 set", but drives the
-    // REAL reader with the TRANSLATED glutes_legs tokens — proving the
-    // token→muscle-substring translation actually produces the +1-set on the
-    // right muscles. (No generateV4 Hive-boot harness exists; apply-direct is the
-    // established pattern for this stage.)
-    test('glutes_legs → a Glutes exercise gets +1 set; a non-matching does not',
-        () {
-      final populated = [
-        populatedDay(exercisesA: [
-          exercise(name: 'Hip Thrust', primaryMuscles: ['Glutes', 'Hamstrings']),
-          exercise(name: 'Bench Press', primaryMuscles: ['Chest', 'Triceps']),
-        ]),
-      ];
-      final focus =
-          TrainingHistoryAnalyzer.physiqueFocusToBodyFocus('glutes_legs');
-      final withFocus = PeriodizationEngine.apply(
-          populated: populated, phase: 1, is6Day: false, bodyFocus: focus);
-      final without = PeriodizationEngine.apply(
-          populated: populated, phase: 1, is6Day: false, bodyFocus: const []);
+  group('translated physique_focus → focus groups in the set-budget allocator (effect)',
+      () {
+    // The flip (2026-11-02) deleted `PeriodizationEngine`'s per-exercise +1 (it
+    // lived in the unbudgeted body). The same translated tokens now reach
+    // `generateV4` as `BudgetMuscleGroups.of(effectiveBodyFocus)`, which raise those
+    // groups' weekly top to 25 and their session cap to 12 in the allocator's focus
+    // pass. This drives the REAL translation table, the REAL group mapper and the
+    // REAL allocator: the tokens must produce the focus groups, and a focus group
+    // must end the week with more sets than the same plan without focus.
+    test('glutes_legs tokens map to exactly the four budget groups', () {
+      final focus = BudgetMuscleGroups.of(
+          TrainingHistoryAnalyzer.physiqueFocusToBodyFocus('glutes_legs'));
+      expect(focus, {'Glutes', 'Quads', 'Hamstrings', 'Calves'});
+    });
 
-      // Hip Thrust matches 'glutes'/'hamstrings' → +1 set.
-      expect(withFocus[0].workoutDays[0].exercises[0].sets,
-          without[0].workoutDays[0].exercises[0].sets + 1);
-      // Bench Press matches none of the glutes_legs tokens → unchanged.
-      expect(withFocus[0].workoutDays[0].exercises[1].sets,
-          without[0].workoutDays[0].exercises[1].sets);
+    test('a focus group ends the week with more sets than without; others do not',
+        () {
+      final fx = Fx()
+        ..row('Hip Thrust', ['Glutes'], type: 'compound')
+        ..row('Glute Bridge', ['Glutes'], type: 'isolation')
+        ..row('Cable Kickback', ['Glutes'], type: 'isolation')
+        ..row('Bench Press', ['Chest'], type: 'compound')
+        ..row('Cable Fly', ['Chest'], type: 'isolation')
+        ..row('Pec Deck', ['Chest'], type: 'isolation');
+      List<PopulatedDay> days() => [
+            for (var d = 0; d < 3; d++)
+              fx.day('hypertrophy', [
+                fx.ex('Hip Thrust'),
+                fx.ex('Glute Bridge'),
+                fx.ex('Cable Kickback'),
+                fx.ex('Bench Press'),
+                fx.ex('Cable Fly'),
+                fx.ex('Pec Deck'),
+              ]),
+          ];
+      int weekly(List<PopulatedDay> out, Set<String> names) => [
+            for (final d in out)
+              for (final e in d.exercisesA)
+                if (names.contains(e.exerciseName)) e.sets
+          ].fold(0, (a, b) => a + b);
+      const glutes = {'Hip Thrust', 'Glute Bridge', 'Cable Kickback'};
+      const chest = {'Bench Press', 'Cable Fly', 'Pec Deck'};
+
+      final focusGroups = BudgetMuscleGroups.of(
+          TrainingHistoryAnalyzer.physiqueFocusToBodyFocus('glutes_legs'));
+      final withFocus = fx.run(days(), minutes: 90, focus: focusGroups, is6Day: false);
+      final without = fx.run(days(), minutes: 90, is6Day: false);
+
+      expect(weekly(withFocus, glutes), greaterThan(weekly(without, glutes)),
+          reason: 'the focus pass grows a focus group past the ordinary top');
+      expect(weekly(withFocus, chest), weekly(without, chest),
+          reason: 'a non-focus group is untouched by the focus');
     });
   });
 

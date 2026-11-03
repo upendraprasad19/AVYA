@@ -315,17 +315,17 @@ void main() {
     test('repeat: one surviving pin is lifted to 3, safe, with no duplicate name (wrist)',
         () async {
       final first = gen(
-          goal: 'lose_fat', level: 'beginner', days: 6, injuries: const []);
+          goal: 'lose_fat', level: 'beginner', days: 5, injuries: const []);
       final pins = namesByDay(first);
       await killSwitch(on: true);
       final before = gen(
-          goal: 'lose_fat', level: 'beginner', days: 6, phase: 2,
+          goal: 'lose_fat', level: 'beginner', days: 5, phase: 2,
           injuries: ['wrist'], pins: pins);
       expect(dayOf(before, 0, 'Chest, shoulders, triceps').exercises, hasLength(1),
-          reason: 'precondition: one surviving pin on main');
+          reason: 'precondition: one surviving pin with the kill-switch set');
       await killSwitch(on: false);
       final after = gen(
-          goal: 'lose_fat', level: 'beginner', days: 6, phase: 2,
+          goal: 'lose_fat', level: 'beginner', days: 5, phase: 2,
           injuries: ['wrist'], pins: pins);
       for (final wk in after.weekPlans.take(2)) {
         for (final d in wk.workoutDays) {
@@ -387,10 +387,10 @@ void main() {
       Future<List<PlannedExercise>> added(List<String> excl) async {
         await killSwitch(on: true);
         final off = gen(
-            level: 'intermediate', days: 4, injuries: ['wrist'], exclusions: excl);
+            level: 'advanced', days: 4, injuries: ['shoulder', 'wrist'], exclusions: excl);
         await killSwitch(on: false);
         final on = gen(
-            level: 'intermediate', days: 4, injuries: ['wrist'], exclusions: excl);
+            level: 'advanced', days: 4, injuries: ['shoulder', 'wrist'], exclusions: excl);
         final out = <PlannedExercise>[];
         for (var w = 0; w < 2; w++) {
           for (var i = 0; i < on.weekPlans[w].workoutDays.length; i++) {
@@ -420,14 +420,16 @@ void main() {
         'Farmers Carry', () async {
       await killSwitch(on: true);
       final off = gen(
-          tier: 'home_dumbbells', level: 'beginner', days: 5, injuries: ['shoulder']);
-      expect(dayOf(off, 0, 'Chest focus').exercises.length, lessThan(3),
+          tier: 'home_dumbbells', goal: 'general_fitness', level: 'beginner', days: 6,
+          injuries: ['shoulder', 'elbow']);
+      expect(dayOf(off, 0, 'Chest, shoulders, triceps').exercises.length, lessThan(3),
           reason: 'precondition: thin with the kill-switch set');
       await killSwitch(on: false);
       final on = gen(
-          tier: 'home_dumbbells', level: 'beginner', days: 5, injuries: ['shoulder']);
-      final offNames = _names(dayOf(off, 0, 'Chest focus').exercises).toSet();
-      final addedNames = _names(dayOf(on, 0, 'Chest focus').exercises)
+          tier: 'home_dumbbells', goal: 'general_fitness', level: 'beginner', days: 6,
+          injuries: ['shoulder', 'elbow']);
+      final offNames = _names(dayOf(off, 0, 'Chest, shoulders, triceps').exercises).toSet();
+      final addedNames = _names(dayOf(on, 0, 'Chest, shoulders, triceps').exercises)
           .where((n) => !offNames.contains(n))
           .toList();
       expect(addedNames, ['Plank']);
@@ -436,11 +438,11 @@ void main() {
     test('a topped-up day reaches PeriodizationEngine: the week-1 day holds the '
         'added moves with sets and reps', () async {
       await killSwitch(on: true);
-      final before = gen(level: 'beginner', days: 5, injuries: ['shoulder']);
+      final before = gen(level: 'beginner', days: 5, injuries: ['shoulder', 'wrist']);
       final thin = dayOf(before, 0, 'Chest focus');
       expect(thin.exercises.length, lessThan(3), reason: 'precondition');
       await killSwitch(on: false);
-      final after = gen(level: 'beginner', days: 5, injuries: ['shoulder']);
+      final after = gen(level: 'beginner', days: 5, injuries: ['shoulder', 'wrist']);
       final lifted = dayOf(after, 0, 'Chest focus').exercises;
       expect(lifted.length, greaterThanOrEqualTo(3));
       final kept = _names(thin.exercises).toSet();

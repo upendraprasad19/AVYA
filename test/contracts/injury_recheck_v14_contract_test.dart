@@ -7,7 +7,7 @@
 //  (A) DATA — every founder call as a literal on a name, the closed vocabulary,
 //      the table the applier reads, the 62-row safe pool (33 + 29 from Batch C1; nothing else
 //      left untagged).
-//  (B) BEHAVIOUR — the REAL PlanGenerator.generateV4 (flag OFF, the path users
+//  (B) BEHAVIOUR — the REAL PlanGenerator.generateV4 (the path users
 //      get) and the REAL queryV4 filter. Every absence has a positive control:
 //      the same persona / the unfiltered query holds the move.
 //  (C) The curated injury substitutes only name moves that are safe for the
@@ -198,7 +198,7 @@ void main() {
   });
 
   // ------------------------------------------------- (B) BEHAVIOUR, generator
-  group('(B) the real generator, flag OFF', () {
+  group('(B) the real generator', () {
     Set<String> planNames(String tier, String goal, String level, int days,
         List<String> injuries) {
       final Phase p = PlanGenerator.instance.generateV4(
@@ -218,16 +218,18 @@ void main() {
     }
 
     // (move, injury, tier, level, days): personas found by a reach search on
-    // 144 uninjured plans (4 tiers x 4 goals x 3 levels x 3/4/5 days), all
-    // build_muscle. Each move IS in the uninjured plan (positive control).
+    // the uninjured plans (4 tiers x 3 levels x 3/4/5 days, build_muscle),
+    // re-searched on 2026-11-02 when the session set budget went ON for every
+    // generation (it sizes each day by the minutes and the weekly band, so the
+    // moves a persona reaches changed; Bicycle Crunch reaches no persona any
+    // more). Each move IS in the uninjured plan (positive control).
     const reached = <(String, String, String, String, int)>[
       ('Push Up', 'shoulder', 'bodyweight', 'beginner', 3),
       ('Lat Pulldown', 'shoulder', 'basic_gym', 'beginner', 3),
-      ('Chin Up', 'elbow', 'basic_gym', 'beginner', 5),
+      ('Chin Up', 'elbow', 'basic_gym', 'intermediate', 4),
       ('Russian Twist', 'lower_back', 'bodyweight', 'beginner', 3),
       ('Crunches', 'lower_back', 'bodyweight', 'advanced', 3),
-      ('Bicycle Crunch', 'lower_back', 'bodyweight', 'advanced', 3),
-      ('Hip Abduction Machine', 'hip', 'full_gym', 'beginner', 5),
+      ('Hip Abduction Machine', 'hip', 'full_gym', 'advanced', 3),
     ];
     for (final (move, injury, tier, level, days) in reached) {
       test('$move: in the uninjured $tier/$level/${days}d plan, gone for $injury', () {

@@ -1,9 +1,10 @@
 // B2 Task 6 (docs/plans/2026-10-22-session-set-budget.md): `generateV4` wiring.
 //
-// The REAL PlanGenerator over the shipped library. Flag OFF is the generator
-// golden, byte for byte, and reads no profile minutes. Flag ON sizes each session
-// by the user's minutes: the volume filter keeps every split slot, the allocator
-// sizes the days, and `apply`, titration and the warm-up take the same context.
+// The REAL PlanGenerator over the shipped library. Every session is sized by the
+// user's minutes (the flag and the OFF path were deleted with the flip,
+// 2026-11-02): the volume filter keeps every split slot, the allocator sizes the
+// days, and `apply`, titration and the warm-up take the same context. The generator
+// golden (`generator_golden_test.dart`) pins the whole output.
 //
 // The time oracle below is test-local and independent of the allocator: it prices
 // each exercise the plan finally carries with the Q4 constants, at the rest the
@@ -25,13 +26,10 @@ import 'package:icanbefitter/shared/repositories/plan_engine/budget_muscle_group
 import 'package:icanbefitter/shared/repositories/plan_engine/models.dart';
 import 'package:icanbefitter/shared/repositories/plan_engine/plan_generator.dart';
 import 'package:icanbefitter/shared/repositories/plan_engine/session_budget.dart';
-import 'package:icanbefitter/shared/repositories/plan_engine/training_history_analyzer.dart';
 
-import '../../scripts/migration_ledger_hash_lib.dart' show sha256Hex;
-import '../helpers/generator_golden_personas.dart';
+import '../helpers/generator_golden_personas.dart' show customPinName, namesByDay;
 
-const _fixturePath = 'test/fixtures/generator_golden_hashes.json';
-const _flag = 'enable_session_set_budget';
+
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -73,12 +71,9 @@ void main() {
   });
 
   tearDown(() async {
-    await HiveService.instance.configBox.delete(_flag);
     await HiveService.instance.configBox.delete('disable_thin_day_topup');
     await HiveService.instance.userBox.delete('profile');
   });
-
-  Future<void> flagOn() => HiveService.instance.configBox.put(_flag, true);
 
   Phase gen({
     String tier = 'full_gym',
@@ -161,31 +156,8 @@ void main() {
     return best;
   }
 
-  group('flag OFF', () {
-    test('four golden personas are byte-identical and no profile minutes are read', () {
-      final fixture = jsonDecode(File(_fixturePath).readAsStringSync()) as Map<String, dynamic>;
-      final keys = [
-        'grid|full_gym|build_muscle|6d|beginner|p1',
-        'grid|bodyweight|lose_fat|3d|intermediate|p2',
-        'grid|basic_gym|strength|4d|advanced|p3',
-        'grid|home_dumbbells|general_fitness|5d|intermediate|p5',
-      ];
-      final personas = generatorGoldenPersonas();
-      final reads = TrainingHistoryAnalyzer.debugReadCount;
-      for (final k in keys) {
-        final p = personas.firstWhere((x) => x.key == k);
-        final hash = sha256Hex(utf8.encode(jsonEncode(p.run().toMap())));
-        expect(hash, fixture[k], reason: k);
-      }
-      expect(TrainingHistoryAnalyzer.debugReadCount, reads);
-    });
-  });
-
-  group('flag ON', () {
-    test('every split slot is kept: a beginner 6-day plan holds more than the 4 exercises OFF gives', () async {
-      final off = gen(days: 6, level: 'beginner');
-      expect(off.weekPlans.first.workoutDays.map((d) => d.exercises.length), everyElement(4));
-      await flagOn();
+  group('the budget is always on (flag deleted 2026-11-02)', () {
+    test('every split slot is kept: a beginner 6-day plan holds more than the old fixed 4 exercises', () async {
       final on = gen(days: 6, level: 'beginner', sessionDuration: 90);
       expect(on.weekPlans.first.workoutDays.map((d) => d.exercises.length).reduce((a, b) => a > b ? a : b),
           greaterThan(4));
@@ -193,11 +165,6 @@ void main() {
 
     test('the profile minutes size the sessions when the caller passes none', () async {
       await HiveService.instance.userBox.put('profile', {'session_duration_minutes': 30});
-      final off = gen();
-      expect(allDays(off).map(mainSeconds).reduce((a, b) => a > b ? a : b),
-          greaterThan(budgetSeconds(30)),
-          reason: 'fixture: OFF overspends a 30-minute session');
-      await flagOn();
       final on = gen();
       for (final d in allDays(on)) {
         expect(mainSeconds(d), lessThanOrEqualTo(budgetSeconds(30) + 1e-6));
@@ -206,7 +173,6 @@ void main() {
 
     test('a caller-supplied duration beats the profile', () async {
       await HiveService.instance.userBox.put('profile', {'session_duration_minutes': 30});
-      await flagOn();
       final on = gen(sessionDuration: 90);
       final longest = allDays(on).map(mainSeconds).reduce((a, b) => a > b ? a : b);
       expect(longest, greaterThan(budgetSeconds(30)));
@@ -214,7 +180,6 @@ void main() {
     });
 
     test('with no minutes anywhere the session is budgeted at 60', () async {
-      await flagOn();
       final on = gen();
       final longest = allDays(on).map(mainSeconds).reduce((a, b) => a > b ? a : b);
       expect(longest, lessThanOrEqualTo(budgetSeconds(60) + 1e-6));
@@ -222,7 +187,6 @@ void main() {
     });
 
     test('phase 4 is a lighter phase: no group is above the band bottom, where phase 3 is', () async {
-      await flagOn();
       // An advanced build_muscle user: band 14-20. Phase 3 may go to the top; phase 4
       // (a deload-archetype phase) holds every group to the bottom, 14.
       final heavy = gen(days: 6, level: 'advanced', phase: 3, sessionDuration: 90);
@@ -233,7 +197,6 @@ void main() {
     });
 
     test('a body focus is the focus group: Chest goes past the ordinary top of 16', () async {
-      await flagOn();
       final plain = gen(days: 5, sessionDuration: 90);
       final focused = gen(days: 5, sessionDuration: 90, bodyFocus: const ['chest']);
       expect(weeklyTotals(plain, 0)['Chest'] ?? 0, lessThanOrEqualTo(16));
@@ -242,9 +205,6 @@ void main() {
     });
 
     test('the warm-up lead-in and the cool-down walk scale with the minutes', () async {
-      final off = gen();
-      expect(off.weekPlans.first.workoutDays.first.warmup.first.reps, '300s');
-      await flagOn();
       final on30 = gen(sessionDuration: 30);
       final day = on30.weekPlans.first.workoutDays.first;
       expect(day.warmup.first.reps, '60s');
@@ -264,7 +224,6 @@ void main() {
     });
 
     test('the level is the EFFECTIVE level: a beginner at phase 5 is budgeted as advanced', () async {
-      await flagOn();
       // Session caps by level (build_muscle): beginner 6, advanced 10.
       final first = gen(days: 3, level: 'beginner', phase: 1, sessionDuration: 90);
       final later = gen(days: 3, level: 'beginner', phase: 5, sessionDuration: 90);
@@ -289,12 +248,6 @@ void main() {
         prior[0] = (a: [...day0.a, customPinName], b: day0.b);
         final pinnedLibrary = day0.a.length;
 
-        final off = gen(phase: 2, pins: prior);
-        final offCustom = off.weekPlans[0].workoutDays[0].exercises
-            .firstWhere((e) => e.exerciseName == customPinName);
-        expect(offCustom.sets, 4, reason: 'fixture: OFF re-sizes the custom to the base 4');
-
-        await flagOn();
         final on = gen(phase: 2, pins: prior, sessionDuration: 30);
         final onDay = on.weekPlans[0].workoutDays[0].exercises;
         final onCustom = onDay.firstWhere((e) => e.exerciseName == customPinName);
@@ -309,7 +262,6 @@ void main() {
     });
 
     test('a thin day of an injured user: the top-up fills it before the allocator, which budgets the add', () async {
-      await flagOn();
       final config = HiveService.instance.configBox;
       // Built with the top-up's kill-switch set, then without it. 30 minutes, a
       // beginner on a bodyweight tier with a wrist and a shoulder injury.

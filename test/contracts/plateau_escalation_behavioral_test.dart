@@ -33,6 +33,8 @@ import 'package:icanbefitter/shared/repositories/plan_engine/plan_generator.dart
 import 'package:icanbefitter/shared/repositories/plan_engine/plateau_scan.dart';
 import 'package:icanbefitter/shared/repositories/plan_engine/volume_titration.dart';
 
+import '../helpers/session_budget_fixtures.dart';
+
 PlannedExercise _ex(String name, int sets, List<String> muscles) =>
     PlannedExercise(
       exerciseId: name,
@@ -300,7 +302,8 @@ void main() {
           [_ex(compName, 3, [compToken])]
         ])
       ];
-      final out = VolumeTitration.applyToWeeks(weeks, deltas);
+      final out = VolumeTitration.applyToWeeks(weeks, deltas,
+          budget: testBudget(names: [compName]));
       expect(_groupWeeklySets(out.first, compGroup), 4); // 3 → 4
     });
 
@@ -318,23 +321,35 @@ void main() {
       expect(merged[compGroup], -1, reason: 'plateau must NOT override the −1');
       final weeks = [
         _week([
-          [_ex(compName, 5, [compToken]), _ex('${compName}_b', 5, [compToken])]
+          [_ex(compName, 5, [compToken]), _ex('${compName}_b', 5, [compToken])],
+          [_ex('${compName}_c', 4, [compToken])],
         ])
       ];
-      final out = VolumeTitration.applyToWeeks(weeks, merged);
-      expect(_groupWeeklySets(out.first, compGroup), 9); // 10 → 9 (trim, not +1)
+      // 14 sets, above the budget's band bottom (12): the trim applies.
+      final out = VolumeTitration.applyToWeeks(weeks, merged,
+          budget: testBudget(
+              names: [compName, '${compName}_b', '${compName}_c']));
+      expect(_groupWeeklySets(out.first, compGroup), 13); // 14 → 13 (trim, not +1)
     });
 
-    test('+1 clamped at MRV (group already ≥20 → no bump)', () async {
+    test('+1 refused at the budget weekly top (group already at 16 → no bump)',
+        () async {
       await seedFlatPlateau();
       final deltas = PlateauScan.mergePlateauSetDeltas(const {}, phase: 2);
       final weeks = [
         _week([
-          [_ex(compName, 10, [compToken]), _ex('${compName}_b', 10, [compToken])]
+          [_ex(compName, 4, [compToken]), _ex('${compName}_b', 4, [compToken])],
+          [_ex('${compName}_c', 4, [compToken]), _ex('${compName}_d', 4, [compToken])],
         ])
       ];
-      final out = VolumeTitration.applyToWeeks(weeks, deltas);
-      expect(_groupWeeklySets(out.first, compGroup), 20); // unchanged
+      final out = VolumeTitration.applyToWeeks(weeks, deltas,
+          budget: testBudget(names: [
+            compName,
+            '${compName}_b',
+            '${compName}_c',
+            '${compName}_d'
+          ]));
+      expect(_groupWeeklySets(out.first, compGroup), 16); // unchanged
     });
   });
 

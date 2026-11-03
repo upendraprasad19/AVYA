@@ -1,7 +1,8 @@
 // Batch 9 (W2.7) — phase-boundary volume titration.
 //
 // At a genuine FRESH phase advance, nudge each MAJOR MUSCLE GROUP's weekly
-// direct-set volume by ±1, clamped to [MEV=8, MRV=20] sets/group/week, from
+// direct-set volume by ±1, clamped by the session set budget's band and ledger
+// (the weekly band, the per-session cap and the floor of 1), from
 // phase-N evidence:
 //   • per-GROUP e1RM trend (reuses the W2.4 e1RM scan construction + the shared
 //     `sessionMaxE1rm`) — the per-muscle performance signal;
@@ -39,13 +40,6 @@ import 'session_budget.dart';
 
 class VolumeTitration {
   VolumeTitration._();
-
-  /// Effective per-GROUP weekly direct-set band (R5 landmark; same source of
-  /// numbers as `plan_scorecard.dart` `_mev`/`_mrv`, but a DISTINCT measurement
-  /// context — the scorecard scores a `default_sets` selection proxy; here the
-  /// clamp is on the real periodized weekly set count).
-  static const int _mevPerWeek = 8;
-  static const int _mrvPerWeek = 20;
 
   /// Trailing IST-day window of `exlog_*` / `readiness_*` counted as CURRENT
   /// evidence (a phase is 28 days; the advance fires at the boundary). Mirrors
@@ -155,7 +149,7 @@ class VolumeTitration {
   /// Weeks 0/1/2 (baseline/overreach/peak) adjust the visible `sets`; the deload
   /// week (idx 3) leaves visible sets untouched but adjusts a stashed
   /// `workingSets` symmetrically (so a triggered un-deload restores the TITRATED
-  /// peak — F1). Clamp: the group's weekly total stays in [MEV,MRV]; one exercise
+  /// peak — F1). Clamp: the group's weekly total stays inside the budget band; one exercise
   /// is adjusted at most once/week (dedup); groups processed in sorted order.
   ///
   /// B2 (session set budget, Ruling 10): with a [budget] the clamp is the budget's
@@ -168,15 +162,12 @@ class VolumeTitration {
   /// refused too.
   static List<WeekPlan> applyToWeeks(
       List<WeekPlan> weeks, Map<String, int> deltas,
-      {SessionBudgetContext? budget}) {
+      {required SessionBudgetContext budget}) {
     if (deltas.isEmpty) return weeks;
     final sortedGroups = deltas.keys.toList()..sort();
-    if (budget != null) {
-      return [
-        for (final week in weeks) _titrateWeekBudgeted(week, deltas, sortedGroups, budget),
-      ];
-    }
-    return [for (final week in weeks) _titrateWeek(week, deltas, sortedGroups)];
+    return [
+      for (final week in weeks) _titrateWeekBudgeted(week, deltas, sortedGroups, budget),
+    ];
   }
 
   static WeekPlan _titrateWeekBudgeted(
@@ -192,7 +183,7 @@ class VolumeTitration {
 
     // The sets this titration reads and writes: the visible sets, or on the deload
     // week the stashed peak-equivalent `workingSets` (a missing stash counts as 0,
-    // which skips the group exactly as the unbudgeted path does).
+    // which skips the group).
     int current(PlannedExercise e) => isDeload ? (e.workingSets ?? 0) : e.sets;
     Set<String> groupsOf(PlannedExercise e) => SessionBudget.isBudgeted(e, budget)
         ? BudgetMuscleGroups.of(e.primaryMuscles ?? const [])
@@ -211,7 +202,7 @@ class VolumeTitration {
     final bumped = <String>{}; // "di:xi" already adjusted this week
     for (final g in groups) {
       final delta = deltas[g]!;
-      // A delta of 0 asks for nothing, as in the unbudgeted path (`d > 0` / `d < 0`).
+      // A delta of 0 asks for nothing (only `d > 0` / `d < 0` act).
       if (delta == 0) continue;
       final matches = <(int, int)>[];
       for (var di = 0; di < dayExercises.length; di++) {
@@ -254,102 +245,6 @@ class VolumeTitration {
           _rebuildDay(week.workoutDays[di], dayExercises[di]),
       ],
     );
-  }
-
-  static WeekPlan _titrateWeek(
-      WeekPlan week, Map<String, int> deltas, List<String> sortedGroups) {
-    final isDeload = week.weekCharacter == 'deload';
-    // Mutable per-day copies we can rewrite in place.
-    final dayExercises = [for (final d in week.workoutDays) [...d.exercises]];
-    final bumped = <String>{}; // "di:xi" already adjusted this week
-
-    for (final g in sortedGroups) {
-      final d = deltas[g]!;
-      // The group's matching exercises this week + its current weekly base sets.
-      final matches = <(int, int)>[];
-      var weeklyBase = 0;
-      for (var di = 0; di < dayExercises.length; di++) {
-        final exs = dayExercises[di];
-        for (var xi = 0; xi < exs.length; xi++) {
-          if (_matchesGroup(exs[xi], g)) {
-            matches.add((di, xi));
-            weeklyBase += exs[xi].sets;
-          }
-        }
-      }
-      if (matches.isEmpty) continue;
-
-      if (!isDeload) {
-        if (d > 0 && weeklyBase < _mrvPerWeek) {
-          _applyBump(dayExercises, matches, bumped, 1, working: false);
-        } else if (d < 0 && weeklyBase > _mevPerWeek) {
-          _applyBump(dayExercises, matches, bumped, -1, working: false);
-        }
-      } else {
-        // Deload week: the stashed workingSets ≈ the peak-week (idx 2) sets, so
-        // clamping on the workingSets aggregate mirrors the peak-week decision.
-        var workingBase = 0;
-        for (final (di, xi) in matches) {
-          workingBase += dayExercises[di][xi].workingSets ?? 0;
-        }
-        if (workingBase == 0) continue; // no stash (deload flag OFF at gen)
-        if (d > 0 && workingBase < _mrvPerWeek) {
-          _applyBump(dayExercises, matches, bumped, 1, working: true);
-        } else if (d < 0 && workingBase > _mevPerWeek) {
-          _applyBump(dayExercises, matches, bumped, -1, working: true);
-        }
-      }
-    }
-
-    return WeekPlan(
-      weekNumber: week.weekNumber,
-      weekInPhase: week.weekInPhase,
-      overloadNotes: week.overloadNotes,
-      weekCharacter: week.weekCharacter,
-      workoutDays: [
-        for (var di = 0; di < week.workoutDays.length; di++)
-          _rebuildDay(week.workoutDays[di], dayExercises[di]),
-      ],
-    );
-  }
-
-  /// Adjust the FIRST not-yet-bumped matching exercise's `sets` (or `workingSets`)
-  /// by [delta], never below 1. Skips an exercise already floored (so a −1 rolls
-  /// to the next candidate).
-  static void _applyBump(
-    List<List<PlannedExercise>> dayExercises,
-    List<(int, int)> matches,
-    Set<String> bumped,
-    int delta, {
-    required bool working,
-  }) {
-    for (final (di, xi) in matches) {
-      final id = '$di:$xi';
-      if (bumped.contains(id)) continue;
-      final ex = dayExercises[di][xi];
-      if (working) {
-        final cur = ex.workingSets;
-        if (cur == null) continue;
-        final next = cur + delta;
-        if (next < 1) continue;
-        dayExercises[di][xi] = ex.copyWith(workingSets: next);
-      } else {
-        final next = ex.sets + delta;
-        if (next < 1) continue;
-        dayExercises[di][xi] = ex.copyWith(sets: next);
-      }
-      bumped.add(id);
-      return;
-    }
-  }
-
-  static bool _matchesGroup(PlannedExercise ex, String group) {
-    final pm = ex.primaryMuscles;
-    if (pm == null) return false;
-    for (final t in pm) {
-      if (muscleGroupOf(t) == group) return true;
-    }
-    return false;
   }
 
   static WorkoutDay _rebuildDay(WorkoutDay day, List<PlannedExercise> exercises) {

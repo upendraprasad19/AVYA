@@ -85,9 +85,8 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
   //   exercise-selector exclusion masks. physique_focus drives +1 set on
   //   matching exercises via PeriodizationEngine (⑤ Batch 4, LIVE since
   //   2026-09-16 — OI-53 batch 2, kill-switch disable_physique_focus_bringup).
-  //   session_duration_minutes is consumed by the engine only under
-  //   enable_session_set_budget (B2, ship-dark, default OFF); until that flips it
-  //   is collected, not applied. ALL must trigger reschedule on change.
+  //   session_duration_minutes is the session length the plan is sized to (B2,
+  //   flipped ON 2026-11-02). ALL must trigger reschedule on change.
   late int _originalDaysPerWeek;
   late String _originalGoal;
   late String _originalEquipment;
@@ -1144,7 +1143,7 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
                   ),
                 ),
                 child: Text(
-                  '$min min',
+                  'Up to $min min',
                   style: AppTypography.body.copyWith(fontSize: 13, fontWeight: selected ? FontWeight.w700 : FontWeight.w500, color: selected
                         ? AppColors.accent
                         : AppColors.textDim),
@@ -1929,18 +1928,17 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
       ref.invalidate(userGreetingProvider);
 
       // Detect plan-affecting field changes and offer rescheduling.
-      // Experience drives VolumeFilter.targetCount → exercise count per day.
-      // Beginner/Inter/Advanced × 3-6 days = 4 to 10 exercises. Without this,
-      // bumping intermediate→advanced wouldn't trigger reschedule and today's
-      // plan would keep showing the old 4-7 exercises forever.
+      // Experience sets the weekly set band and the per-session cap the session
+      // set budget uses. Without this, bumping intermediate→advanced wouldn't
+      // trigger reschedule and today's plan would keep the old set counts forever.
       //
-      // physique_focus drives +1 set on matching exercises via PeriodizationEngine
-      // (⑤ Batch 4, LIVE since 2026-09-16 — OI-53 batch 2, kill-switch
-      // disable_physique_focus_bringup); injuries drive exclusion masks in the
-      // exercise selector. session_duration_minutes is consumed by the engine
-      // only under enable_session_set_budget (B2, ship-dark, default OFF); until
-      // that flips it is collected, not applied. ALL must trigger reschedule on
-      // change to keep today's schedule consistent with the saved profile.
+      // physique_focus raises the focus muscles' weekly top in the session set
+      // budget allocator (⑤ Batch 4, kill-switch disable_physique_focus_bringup);
+      // injuries drive exclusion masks in the exercise selector.
+      // session_duration_minutes is the session length the plan is sized to (B2,
+      // flipped ON 2026-11-02): a day fits inside it and can run shorter. ALL must
+      // trigger reschedule on change to keep today's schedule consistent with the
+      // saved profile.
       final planChanged = computePlanChanged(
         daysPerWeek: _daysPerWeek,
         originalDaysPerWeek: _originalDaysPerWeek,

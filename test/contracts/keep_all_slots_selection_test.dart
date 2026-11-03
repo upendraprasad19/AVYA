@@ -1,7 +1,7 @@
 // B2 Task 5 (docs/plans/2026-10-22-session-set-budget.md): the production-path
-// check of the EXTRA slots. Under the session set budget the volume filter keeps
-// EVERY split slot (`keepAllSlots`), so the selector now has to fill slots beyond
-// today's `targetCount`. They sit at the END of each day's priority order. This
+// check of the EXTRA slots. The volume filter keeps EVERY split slot (flipped
+// ON 2026-11-02), so the selector has to fill slots beyond the old fixed
+// `targetCount` (a table deleted with the flip, copied below as `_oldTargetCount`). They sit at the END of each day's priority order. This
 // test fills them on both selection paths and counts the ones that do not resolve
 // to a real exercise.
 //
@@ -36,6 +36,26 @@ import 'package:icanbefitter/shared/repositories/plan_engine/training_history_an
 import 'package:icanbefitter/shared/repositories/plan_engine/volume_filter.dart';
 
 import '../plan_generator/v4_diagnostic/cascade_tracer.dart';
+
+/// The deleted `VolumeFilter.targetCount` table (flip 2026-11-02), kept HERE only
+/// to name which slots are "extra": the ones the old fixed-count day never filled.
+/// The selector must still resolve them to real exercises now that every slot is
+/// kept, so this test still counts failures over exactly those slots.
+int _oldTargetCount(String experience, int daysPerWeek) {
+  if (experience == 'beginner') {
+    if (daysPerWeek <= 3) return 6;
+    if (daysPerWeek == 4) return 5;
+    return 4;
+  }
+  if (experience == 'intermediate') {
+    if (daysPerWeek <= 3) return 8;
+    if (daysPerWeek == 4) return 7;
+    return 6;
+  }
+  if (daysPerWeek <= 3) return 10;
+  if (daysPerWeek == 4) return 9;
+  return 8;
+}
 
 const _goals = ['build_muscle', 'lose_fat', 'strength', 'general_fitness'];
 const _tiers = ['bodyweight', 'home_dumbbells', 'basic_gym', 'full_gym'];
@@ -97,9 +117,9 @@ void main() {
         for (final days in _days) {
           for (final level in _levels) {
             final split = SplitResolver.selectV4(goal, days, experienceLevel: level);
-            final all = VolumeFilter.filterDays(split,
-                experience: level, weekCharacter: 'baseline', keepAllSlots: true);
-            final target = VolumeFilter.targetCount(level, days);
+            final all =
+                VolumeFilter.filterDays(split, weekCharacter: 'baseline');
+            final target = _oldTargetCount(level, days);
 
             // ── OFF: the cascade mirror, variant A, slots in priority order ──
             final picked = <String>{};

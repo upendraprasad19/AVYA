@@ -1,7 +1,9 @@
 // B2 Task 6b (docs/plans/2026-10-22-session-set-budget.md, Ruling 13): the
 // session-length estimate that Train and Home DISPLAY follows the budget model
-// when `enable_session_set_budget` is ON, and is the old `totalSets x 2.5` when
-// it is OFF.
+// (the flag was deleted with the flip, 2026-11-02). A day the model cannot read (no
+// exercise map, a corrupt stored day) uses the ONE shared fallback: the old
+// `totalSets x 2.5` minutes, 45 for an empty day on Home, and the coach's
+// `sets x (60 + rest)` seconds.
 //
 // One shared function prices a stored plan day for both screens, so the two can
 // never disagree. Its literals below are computed by hand from the shipped
@@ -34,7 +36,6 @@ import 'package:icanbefitter/shared/repositories/plan_engine/session_estimate.da
 
 import '../helpers/hive_test_setup.dart';
 
-const _flag = 'enable_session_set_budget';
 
 Map<String, dynamic> _ex(
   String id,
@@ -101,7 +102,6 @@ void main() {
     await tearDownHiveForTests(tempDir);
   });
 
-  Future<void> flagOn() => HiveService.instance.configBox.put(_flag, true);
 
   Map<String, dynamic> bench({int rest = 150}) =>
       _ex('E001', 'Barbell Bench Press', 'weight_reps', 4, rest);
@@ -274,8 +274,7 @@ void main() {
       expect(only(entry), closeTo(816.0, 1e-9));
     });
 
-    test('P3-3: budgetedDayMinutes resolves a name-only entry through the library (flag ON)', () async {
-      await flagOn();
+    test('P3-3: budgetedDayMinutes resolves a name-only entry through the library', () async {
       final entry = {
         'exercise_name': 'Barbell Bench Press',
         'logging_type': 'weight_reps',
@@ -290,8 +289,7 @@ void main() {
           13);
     });
 
-    test("P3-3: a name that is only another exercise's alias is not that exercise's row (flag ON)", () async {
-      await flagOn();
+    test("P3-3: a name that is only another exercise's alias is not that exercise's row", () async {
       final row = Map<String, dynamic>.from(rowsById['E001']!)..['name_aliases'] = ['Template Bench'];
       await HiveService.instance.exerciseBox.put('E001', row);
       final entry = {
@@ -338,7 +336,6 @@ void main() {
     });
 
     test('P3-1: a day whose exercise name is not text is still priced, not thrown on', () async {
-      await flagOn();
       expect(
           budgetedDayMinutes({
             'exercises': [
@@ -348,8 +345,7 @@ void main() {
           isA<int>());
     });
 
-    test('P3-1: a pricing failure is reported once and degrades to null (flag ON)', () async {
-      await flagOn();
+    test('P3-1: a pricing failure is reported once and degrades to null', () async {
       final reasons = <String>[];
       ErrorTelemetry.debugOnRecordNonFatalForTests =
           (error, stack, {required reason, extra}) => reasons.add(reason);
@@ -451,12 +447,7 @@ void main() {
       return SwapService.instance.shortenDay(date: date, targetMinutes: 90);
     }
 
-    test('flag OFF: the old exercises-only estimate, 21 min', () async {
-      expect((await shorten()).estimatedOriginalMinutes, 21);
-    });
-
-    test('flag ON: the same 26 min Train and Home show for that day', () async {
-      await flagOn();
+    test('the same 26 min Train and Home show for that day', () async {
       expect((await shorten()).estimatedOriginalMinutes, 26);
       expect(budgetedDayMinutes(day()), 26);
     });
@@ -468,18 +459,7 @@ void main() {
       await HiveService.instance.workoutBox.put('schedule_${formatDateKey(today)}', d);
     }
 
-    test('flag OFF: Train 7 sets x 2.5 = 18 min, Home 18, and no budget minutes are computed', () async {
-      final d = day();
-      await putToday(d);
-      expect(budgetedDayMinutes(d), isNull);
-      expect(workoutDayForDate(DateTime.now())!.estimatedDuration, '18 min');
-      expect(homeCardMinutes(d), 18);
-      expect(homeCardMinutes({'exercises': <dynamic>[]}), 45,
-          reason: 'OFF Home keeps its 45 min placeholder for a day with no sets');
-    });
-
-    test('flag ON: Train and Home both read 26 min for the same stored day', () async {
-      await flagOn();
+    test('Train and Home both read 26 min for the same stored day', () async {
       final d = day();
       await putToday(d);
       expect(budgetedDayMinutes(d), 26);
@@ -519,19 +499,12 @@ void main() {
       return plan.weeks.first.firstWhere((x) => x.name == 'PUSH A');
     }
 
-    test('flag OFF: the Train week list keeps 7 sets x 2.5 = 18 min', () async {
-      await seedWeekWith(day());
-      expect(weekListDay().estimatedDuration, '18 min');
-    });
-
-    test('flag ON: the Train week list reads the same 26 min as the day card and Home', () async {
-      await flagOn();
+    test('the Train week list reads the same 26 min as the day card and Home', () async {
       await seedWeekWith(day());
       expect(weekListDay().estimatedDuration, '26 min');
     });
 
-    test('flag ON: a day with no exercises falls back to the old numbers (Home 45)', () async {
-      await flagOn();
+    test('a day with no exercises falls back to the old numbers (Home 45)', () async {
       expect(budgetedDayMinutes({'exercises': <dynamic>[]}), isNull);
       expect(homeCardMinutes({'exercises': <dynamic>[]}), 45);
     });
@@ -553,6 +526,41 @@ void main() {
       expect(RegExp(r'durationMin:').allMatches(src), hasLength(3));
       final train = code('lib/features/train/providers/train_provider.dart');
       expect(RegExp(r'budgetMinutes: budgetedDayMinutes\(row\)').hasMatch(train), isTrue);
+    });
+
+    // The flip (2026-11-02) turned the three old estimators into ONE unreadable-day
+    // fallback in session_estimate.dart. Each caller keeps its old numbers.
+    test('the shared fallback keeps the old numbers for each caller', () {
+      expect(fallbackDayMinutes(7), 18); // 7 sets x 2.5 = 17.5 -> 18
+      expect(fallbackDayMinutes(0), 45); // Home: a day with no sets
+      expect(fallbackDayMinutes(0, emptyDay: 0), 0); // Train: '0 min'
+      // The coach's shortenDay: sets x 60 + sets x rest (3 sets, 60 s when absent).
+      expect(
+          fallbackExerciseListSeconds([
+            {'sets': 3, 'rest_seconds': 90},
+            {'exercise_name': 'x'},
+          ]),
+          3 * 60 + 3 * 90 + 3 * 60 + 3 * 60);
+      expect(fallbackExerciseListSeconds(const []), 0);
+    });
+
+    test('a day the model cannot read (no exercise maps, or null) still gets a Home number', () {
+      expect(budgetedDayMinutes({'exercises': <dynamic>['not a map']}), isNull);
+      expect(homeCardMinutes({'exercises': <dynamic>['not a map']}), 45);
+      expect(homeCardMinutes(null), 45);
+    });
+
+    test('PRESENCE ONLY: Train and the coach call the shared fallback (no private copy)', () {
+      String code(String path) => File(path)
+          .readAsLinesSync()
+          .map((l) => l.replaceFirst(RegExp(r'//.*'), ''))
+          .join(' ');
+      final train = code('lib/features/train/providers/train_provider.dart');
+      expect(train.contains('fallbackDayMinutes(totalSets, emptyDay: 0)'), isTrue);
+      expect(train.contains('totalSets * 2.5'), isFalse);
+      final swap = code('lib/core/services/swap_service.dart');
+      expect(swap.contains('fallbackExerciseListSeconds(exercises)'), isTrue);
+      expect(swap.contains('_estimateExerciseListSeconds'), isFalse);
     });
 
     test('a rest day shows no estimate', () {

@@ -165,19 +165,12 @@ class PlanGenerator {
     final splitDays = SplitResolver.selectV4(planGoal, daysPerWeek,
         experienceLevel: effectiveExp);
 
-    // B2 (session set budget, ship-dark `enable_session_set_budget`): read ONCE,
-    // here, so every stage below sees the same answer. OFF → every B2 seam below is
-    // inert and this method runs verbatim.
-    final budgetOn = PlanEngineFlags.sessionSetBudgetEnabled;
-
-    // Stage 1.5: Volume Filter — trim slots by experience + frequency. Under the
-    // budget it keeps EVERY split slot: the allocator, not a fixed count, decides
-    // how many of them a session has time for.
+    // Stage 1.5: Volume Filter — the deload rule only. Every split slot is kept: the
+    // session set budget (Stage 3.5 below, B2 flipped ON 2026-11-02), not a fixed
+    // count, decides how many of them a session has time for.
     final filteredDays = VolumeFilter.filterDays(
       splitDays,
-      experience: effectiveExp,
       weekCharacter: 'baseline', // first-pass uses baseline
-      keepAllSlots: budgetOn,
     );
 
     // Stage 2: Exercise selection with filtered slots. ⑧ 8-A/2-cap: when a pinned
@@ -275,43 +268,38 @@ class PlanGenerator {
     // same effective body focus the physique bring-up reads, and a deload-archetype
     // phase is lighter. Not-budgeted rows (customs, timed / cardio / distance, rows
     // with no library match) keep their sets and only spend time.
-    SessionBudgetContext? budget;
-    if (budgetOn) {
-      // The FIRST row of a name wins, as `getByExactName` does: a community row and
-      // a bundled row can share a name, and the two must price one exercise alike.
-      final rowsByName = <String, Map<String, dynamic>>{};
-      for (final r in ExerciseRepository.instance.getAll()) {
-        final name = r['name'];
-        if (name is String) rowsByName.putIfAbsent(name.toLowerCase(), () => r);
-      }
-      budget = SessionBudgetContext(
-        minutes: SessionBudget.resolveMinutes(
-          param: sessionDuration,
-          profileValue: TrainingHistoryAnalyzer.sessionMinutesFromProfile(),
-        ),
-        planGoal: planGoal,
-        level: effectiveExp,
-        lighterPhase: PeriodizationEngine.archetypeForPhase(phase) == 'deload',
-        focusGroups: BudgetMuscleGroups.of(effectiveBodyFocus),
-        archetypeByName: {
-          for (final e in rowsByName.entries) e.key: SessionBudget.archetypeOfRow(e.value),
-        },
-      );
-      populated = SessionSetAllocator.allocate(
-        days: populated,
-        ctx: budget,
-        rowsByName: rowsByName,
-        is6Day: daysPerWeek == 6,
-      );
+    // The FIRST row of a name wins, as `getByExactName` does: a community row and
+    // a bundled row can share a name, and the two must price one exercise alike.
+    final rowsByName = <String, Map<String, dynamic>>{};
+    for (final r in ExerciseRepository.instance.getAll()) {
+      final name = r['name'];
+      if (name is String) rowsByName.putIfAbsent(name.toLowerCase(), () => r);
     }
+    final budget = SessionBudgetContext(
+      minutes: SessionBudget.resolveMinutes(
+        param: sessionDuration,
+        profileValue: TrainingHistoryAnalyzer.sessionMinutesFromProfile(),
+      ),
+      planGoal: planGoal,
+      level: effectiveExp,
+      lighterPhase: PeriodizationEngine.archetypeForPhase(phase) == 'deload',
+      focusGroups: BudgetMuscleGroups.of(effectiveBodyFocus),
+      archetypeByName: {
+        for (final e in rowsByName.entries) e.key: SessionBudget.archetypeOfRow(e.value),
+      },
+    );
+    populated = SessionSetAllocator.allocate(
+      days: populated,
+      ctx: budget,
+      rowsByName: rowsByName,
+      is6Day: daysPerWeek == 6,
+    );
 
     // Stage 4: Periodization → WeekPlan[]
     var weekPlans = PeriodizationEngine.apply(
       populated: populated,
       phase: phase,
       is6Day: daysPerWeek == 6,
-      effectiveExp: effectiveExp,
-      bodyFocus: effectiveBodyFocus,
       previousWeights: weights,
       budget: budget,
       // ⑥ 7-B-1 (W2.4): stash peak-equivalent working sets/reps on the deload week
@@ -326,7 +314,7 @@ class PlanGenerator {
     // resolveDeltas additionally returns {} unless `enable_volume_titration` is ON
     // AND phase>=2. Any of those false → applyToWeeks is identity → byte-identical.
     // Placed BEFORE sequencing/superset (neither reads `sets`) so it sees the
-    // bodyFocus-adjusted counts and its result flows through unchanged.
+    // allocator's set counts and its result flows through unchanged.
     if (applyVolumeTitration || applyPlateauEscalation) {
       // W2.7 titration AND W3.5 plateau +sets BOTH resolve to a per-major-group ±1
       // map applied via ONE applyToWeeks pass (two passes would double-bump a group
@@ -463,8 +451,8 @@ class PlanGenerator {
     // and recycle the advanced phase-9-12 focuses on rotation
     // (templateIndex = 9 + ((phase-9) % 4) → 9,10,11,12,9,...). Exercise
     // selection is phase-invariant; continued overload comes from periodization
-    // load progression (see PeriodizationEngine.cycleMultiplier cap + the
-    // autoregulated weight progression).
+    // load progression (see the session set budget's per-exercise
+    // set cap + the autoregulated weight progression).
     final int recycledIndex = 9 + ((phase - 9) % 4);
     return PhaseMeta(
       name: phase < names.length ? names[phase] : 'Deployment ${phase - 12}',

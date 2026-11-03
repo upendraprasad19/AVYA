@@ -1,9 +1,9 @@
 import 'models.dart' show PlannedExercise, parseRepRange;
 
 /// Batch B2 (docs/plans/2026-10-22-session-set-budget.md): the session set
-/// budget. Behind `PlanEngineFlags.sessionSetBudgetEnabled` (ship-dark, default
-/// OFF) a generated session's size follows the user's minutes and evidence-based
-/// caps instead of a fixed exercise count.
+/// budget. A generated session's size follows the user's minutes and
+/// evidence-based caps instead of a fixed exercise count (flipped ON for every
+/// generation 2026-11-02; the flag and the old fixed-count path are deleted).
 ///
 /// Pure Dart: no Hive, no repository, no flag read. Callers pass everything in,
 /// so the engine stays deterministic and every rule is testable on its own.

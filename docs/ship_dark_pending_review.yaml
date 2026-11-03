@@ -321,6 +321,12 @@ pending:
       top-up kill-switch set, and pins that four-id set as a ratchet
       (_r9TopUpRetired): a fifth id fails the gate. Terminal state
       upstream_blocked, reopen_when this flag's flip review.
+      Re-measured 2026-11-02 after the session set budget flipped ON for every
+      generation (docs/plans/2026-11-02-session-set-budget-flip.md): the top-up's
+      retired ids shrink to E261 and E271 (the budgeted allocator reshapes the
+      topped-up days); the ratchet _r9TopUpRetired follows. The flip criteria below
+      are unchanged and still unmet (this review did not re-run the 576-run
+      multi-injury sweep), so B1 stays OFF.
       Batch C1 flip-criteria numbers (core_list_pool_report.md, committed;
       OI-436): emergencyAnyLevel in 2 golden personas (the shoulder-injured
       bodyweight 4-day intermediate build, phases 1 and 2; unchanged from the
@@ -332,49 +338,28 @@ pending:
       before); requires-coaching picks none. The OFF generator picks 50 distinct
       new ids (golden), top pick G0380 Dumbbell Rear Lateral Raise.
 
+resolved:
   - flag: enable_session_set_budget
     branch: session-set-budget
-    build_commit: 1bd25c20  # the commit that adds PlanEngineFlags.sessionSetBudgetEnabled
+    build_commit: 1bd25c20  # the commit that added PlanEngineFlags.sessionSetBudgetEnabled
     build_date: 2026-10-24
-    flip_reviewed: false
-    flip_commit: null
+    flip_reviewed: true
+    flip_commit: PENDING_STAMP
+    flip_review_record: docs/plan-reviews/set-budget-flip.md
     note: >
-      Batch B2 session set budget (docs/plans/2026-10-22-session-set-budget.md, r6).
-      DEFAULT OFF; OFF is byte-identical (test/plan_generator/generator_golden_test.dart,
-      998 personas, plus test/contracts/session_set_budget_wiring_test.dart which also
-      asserts no profile minutes are read). Platform tier. Rule 14 (plan_generator.dart)
-      was waived by the founder for this batch's wiring only (F1). Evidence for the
-      flip review: test/plan_generator/session_set_budget_report.md (1,847 real
-      generateV4 runs, flag ON, and the flag-OFF table for scale) and the hard zeros of
-      session_set_budget_gate_test.dart. Open questions the report raises, each terminal
-      in docs/audit/session-set-budget.closure.yaml (upstream_blocked, reopen_when this
-      flag's flip review): (1) the co_group_limited and time_limited floors, e.g. the
-      6-day 90-minute build_muscle case leaves Quads at 8 weekly sets while Glutes sits
-      at its top; (2) a 90-minute user leaves a median 26.2 minutes a day unused (27.2 on the 285-row library) (founder
-      F3: leftover time stays unused; the report does not say which of the exercise
-      count, the 5-set max, the session caps or the weekly tops binds); (3) a library
-      timed / distance row keeps its sets (Ruling 8), so on a 30-minute 3-day
-      home_dumbbells day those rows alone can spend the whole budget and the one forced
-      lead lift runs up to 5.5 minutes over the user's minutes (1 day of 33,204 on the 914-row library after Batch C1, 7 before);
-      (4) 12.9% of days (4,292 of 33,204; 11.9% before Batch C1) run longer than the
-      minutes by some amount (median 0.68 minutes over): the model reserves warmCoolMinutes while the stored warm-up and cool-down
-      items vary (Ruling 3); (5) the lead-lift policy: protected from the week and from
-      an empty day, not from the clock, so a lead lift the time cannot afford is dropped
-      (0 of 9,966 allocated days in the grid); (6) a repeat phase keeps the previous
-      phase's exercise list, so a user who raises their minutes between phases and repeats
-      keeps the short list; (7) Ruling 6, no time is reserved for the cardio finisher
-      while no screen shows it; (8) Ruling 7, the Edit Profile default is 60 and the 9
-      live rows at 90 stay 90. Flip checklist: a new migration with a COMMENT ON COLUMN
-      for public.user_profile.session_duration_minutes (migration 017's comment says
-      the plan generator no longer reads it, and lists 30/45/60), and confirm the
-      Home card, the coach shortenDay pricing and the Train day card all read the same
-      budgeted minutes once ON. The
-      flip commit deletes the OFF paths (CLAUDE.md 4.6 step 4: PeriodizationEngine.apply
-      OFF body, VolumeTitration OFF clamp, VolumeFilter.targetCount trim, the sets x 2.5
-      display, the OFF branch of swap_service.shortenDay) and needs the full x2 review +
-      bpass.
+      Batch B2 session set budget (docs/plans/2026-10-22-session-set-budget.md, r6), flipped ON
+      for every generation on 2026-11-02 by docs/plans/2026-11-02-session-set-budget-flip.md
+      (r3: round 1 not converged, 6 P1, round 2 converged; B-pass accepted). The flag, its getter
+      and every OFF path are deleted in the flip commit (CLAUDE.md 4.6 step 4):
+      PeriodizationEngine.apply unbudgeted body (cycle multiplier, 4-set minimum, post-hoc
+      physique +1), the VolumeTitration [8,20] clamp, VolumeFilter.targetCount and keepAllSlots,
+      the sets x 2.5 as an OFF display (it survives only as the shared unreadable-day fallback),
+      and the OFF branch of swap_service.shortenDay (same fallback). WarmupCooldownSelector.attach
+      keeps a nullable budget for template_service only. The generator golden was re-recorded
+      wholesale (all 998 personas changed). Open build-time questions are re-stated in
+      docs/audit/set-budget-flip.closure.yaml (Quads below floor: blocked_on_user; the
+      COMMENT ON COLUMN migration: blocked_on_user, own commit after the apply go).
 
-resolved:
   - flag: ENABLE_SUBSCRIPTION_STACKING
     branch: oi341-purchase-in-trial
     build_commit: 8be9371d
