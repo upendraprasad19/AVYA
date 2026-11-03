@@ -210,7 +210,7 @@ class PlanEngineFlags {
   /// stash presence). The eval also early-returns without readiness.
   ///
   /// ⚠ Killing this switch does NOT revert a lift already applied — the week
-  /// stays `week_character: 'working'` and the hero label keeps saying `Working`.
+  /// stays `week_character: 'working'` and the hero label says `Baseline`.
   /// (The phase-arc strip and the week-4 "why" line, which used to sit on this
   /// switch's surface, were removed 2026-11-02, train-header-b2.)
   static bool get triggeredDeloadEnabled {

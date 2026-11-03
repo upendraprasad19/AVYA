@@ -75,7 +75,7 @@ extension _HeroCards on _TrainScreenState {
   Widget _buildWorkoutHeroCard(BuildContext context, WorkoutDayData workout,
       {bool isHolding = false}) {
     // The italic-gold second run is the WEEK's character word (Baseline /
-    // Overreach / Peak / Deload, `Working` after a lifted deload), resolved ONCE
+    // Overreach / Peak / Deload; a lifted deload shows Baseline), resolved ONCE
     // by `WorkoutScheduleService.weekModeForRow` and carried on the day
     // (`workout.weekMode`); Home's card calls the same resolver. null => no run.
     final modeLabel = workout.weekMode;

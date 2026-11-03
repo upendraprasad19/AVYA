@@ -2,10 +2,11 @@
 //
 // Pure token -> word mapper (train-header-b2). The raw token is the
 // periodization `week_character` stamped on every schedule row
-// (baseline | overreach | peak | deload, plus `working` once a deload is lifted
-// by `deload_evaluator.dart`). The service-aware resolver that picks WHICH token
-// to map lives in `WorkoutScheduleReadService.weekModeForRow`; both cards call
-// that, so Train and Home cannot disagree.
+// (baseline | overreach | peak | deload, plus `working` once a deload is
+// lifted by `deload_evaluator.dart`; a lifted week is shown as 'Baseline',
+// founder call 2026-11-03). The service-aware resolver that picks WHICH
+// token to map lives in `WorkoutScheduleReadService.weekModeForRow`; both
+// cards call that, so Train and Home cannot disagree.
 
 /// Display word for one raw `week_character`, normalised ONCE
 /// (`toString().toLowerCase().trim()`). Empty / null -> null (no word is
@@ -19,7 +20,7 @@ String? weekModeLabel(Object? rawWeekCharacter) {
     'overreach': 'Overreach',
     'peak': 'Peak',
     'deload': 'Deload',
-    'working': 'Working',
+    'working': 'Baseline',
   };
   return known[t] ?? '${t[0].toUpperCase()}${t.substring(1)}';
 }
