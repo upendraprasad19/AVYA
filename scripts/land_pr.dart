@@ -66,19 +66,18 @@ String? _interruptSignal;
 int _childrenRunning = 0;
 _Land? _land;
 
-/// A write to our own stderr, same rule.
+/// A write to our own stderr, same rule as [_out].
 void _err(String line) {
-  try {
-    stderr.writeln(line);
-  } catch (_) {}
+  stderr.writeln(line);
 }
 
-/// A write to our own stdout that cannot fail the run: a closed terminal or pipe must not turn a landing into an
-/// uncaught error while a child (the merge) is still running. The exit code still carries the answer.
+/// A write to our own stdout. It needs no try/catch (OI-451): a closed, broken-pipe or full stdout does NOT throw
+/// from `writeln`; the failure arrives asynchronously, so a catch here is unreachable (one exception: while `_finish` is
+/// flushing, the sink is bound and a write throws StateError; nothing writes then except a late zone error). What keeps a landing alive
+/// while a child (the merge) runs is `stdout.done` / `stderr.done` (`main`) and the zone handler. The exit code
+/// still carries the answer.
 void _out(String line) {
-  try {
-    stdout.writeln(line);
-  } catch (_) {}
+  stdout.writeln(line);
 }
 
 /// A message on ONE line (git and gh errors carry newlines; a later line must not start with `result:`).

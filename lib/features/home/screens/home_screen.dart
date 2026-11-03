@@ -832,8 +832,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
     final progress = UserRepository.instance.getProgress() ?? {};
     final currentPhase = (progress['current_phase'] as int?) ?? 1;
 
-    // The week's character word (Baseline / Overreach / Peak / Deload, `Working`
-    // after a lifted deload) — renders as the italic-gold second line under the
+    // The week's character word (Baseline / Overreach / Peak / Deload; a lifted
+    // deload shows Baseline) — renders as the italic-gold second line under the
     // workout title. Same resolver as Train's hero card; null => no label.
     final modeLabel = WorkoutScheduleService.instance.weekModeForRow(
         schedule, DateTime.tryParse('${schedule?['date'] ?? ''}'));

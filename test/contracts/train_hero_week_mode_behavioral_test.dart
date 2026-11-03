@@ -1,5 +1,5 @@
 // train-header-b2 (plan docs/plans/2026-11-02-train-header-week-mode.md): the hero label follows the WEEK
-// (Baseline / Overreach / Peak / Deload, `Working` after a lifted deload), not
+// (Baseline / Overreach / Peak / Deload; a lifted deload shows Baseline), not
 // the phase number. ONE resolver, `WorkoutScheduleReadService.weekModeForRow`,
 // feeds Train's hero (both `WorkoutDayData` constructors) and Home's card.
 //
@@ -65,11 +65,12 @@ void main() {
       expect(weekModeLabel('overreach'), 'Overreach');
       expect(weekModeLabel('peak'), 'Peak');
       expect(weekModeLabel('deload'), 'Deload');
-      expect(weekModeLabel('working'), 'Working');
+      expect(weekModeLabel('working'), 'Baseline');
     });
     test('normalised once: padded and mixed case', () {
       expect(weekModeLabel('  DeLoAd  '), 'Deload');
       expect(weekModeLabel('PEAK'), 'Peak');
+      expect(weekModeLabel('  WORKING '), 'Baseline');
     });
     test('empty / blank / null -> null (no word is invented)', () {
       expect(weekModeLabel(null), isNull);
@@ -124,7 +125,7 @@ void main() {
       await seedBlob(waves);
       final d = planStart.add(const Duration(days: 22));
       expect(svc.weekModeForRow({'week_character': 'deload'}, d), 'Deload');
-      expect(svc.weekModeForRow({'week_character': 'working'}, d), 'Working');
+      expect(svc.weekModeForRow({'week_character': 'working'}, d), 'Baseline');
     });
 
     test('a row with NO stamp falls back to the blob word of its plan week', () async {
@@ -136,6 +137,13 @@ void main() {
             weekModeLabel(waves[w]),
             reason: 'week ${w + 1}');
       }
+    });
+
+    test('a row with NO stamp in a LIFTED blob week (working) reads Baseline', () async {
+      await seedStart();
+      await seedBlob(['baseline', 'overreach', 'peak', 'working']);
+      final d = planStart.add(const Duration(days: 22));
+      expect(svc.weekModeForRow({'week': 4}, d), 'Baseline');
     });
 
     test('no stamp, a date past week 4 (plan_start + 28), NO is_hold -> null, never the clamped week 4', () async {
