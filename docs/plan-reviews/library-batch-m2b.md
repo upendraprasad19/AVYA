@@ -12,7 +12,7 @@ verdict: converged
 Plan: `docs/plans/2026-11-02-library-batch-m2b-tile-and-rows.md` (r8). Tier `account`: the new strings go into
 `WardroomCopy` (`lib/core/**`, `docs/blast_radius.yaml:615`); the rest of the diff is `lib/features/train/**` (feature).
 Part B (the logging viewer, D4/D6/D9) is a separate unit with its own two review rounds on a new branch
-(`docs/plans/2026-11-03-library-batch-m2b-viewer-DRAFT.md`); OI-354 stays OPEN naming it.
+(`docs/plans/2026-11-03-library-batch-m2b-viewer.md`); OI-354 stays OPEN naming it.
 
 ## Rounds (context-blind Sonnet reviewers, each verifying claims against the code)
 

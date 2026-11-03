@@ -70,6 +70,12 @@ class _ExerciseCard extends ConsumerStatefulWidget {
   /// Just placed by a move: a short gold border.
   final bool justMoved;
 
+  /// Test seam: receives the entry handle (null outside LOG mode) after the
+  /// first frame. The card is a private `part of` widget, so a test reaches the
+  /// handle only through here.
+  @visibleForTesting
+  final ValueChanged<ExerciseEntryHandle?>? onHandleForTest;
+
   const _ExerciseCard({
     required this.exerciseIndex,
     required this.exercise,
@@ -98,6 +104,7 @@ class _ExerciseCard extends ConsumerStatefulWidget {
     this.canMove = false,
     this.showHintRing = false,
     this.justMoved = false,
+    this.onHandleForTest,
   });
 
   @override
@@ -108,7 +115,9 @@ class _ExerciseCard extends ConsumerStatefulWidget {
 bool _motionReduced(BuildContext c) => MediaQuery.disableAnimationsOf(c);
 
 class _ExerciseCardState extends ConsumerState<_ExerciseCard>
-    with SingleTickerProviderStateMixin {
+    with
+        SingleTickerProviderStateMixin,
+        AutomaticKeepAliveClientMixin<_ExerciseCard> {
   // Move-mode target glow and first-use hint ring (1.7 s). Created on first
   // need, runs only while one of them shows and motion is allowed.
   AnimationController? _pulse;
@@ -158,14 +167,115 @@ class _ExerciseCardState extends ConsumerState<_ExerciseCard>
       !widget.moveModeActive &&
       _mediaNow != null;
 
-  void _openPicture() =>
+  /// The logging viewer is open for this card. While it is, the card must keep
+  /// its State and controllers: the covered `ListView(children: [...])` drops a
+  /// card that falls outside viewport + cache extent, and the viewer's
+  /// TextFields still write into this card's controllers.
+  bool _viewerOpen = false;
+
+  @override
+  bool get wantKeepAlive => _viewerOpen;
+
+  /// The 44 px still and the ENLARGE chip: a row with an animation opens the
+  /// logging viewer (with LOG, from any card, D9); a row without one opens
+  /// today's plate sheet.
+  Future<void> _openPicture() async {
+    if (_viewerOpen) return;
+    final media = _mediaNow;
+    if (media == null) {
       unawaited(ExercisePlateSheet.show(context, widget.exercise.name));
+      return;
+    }
+    setState(() => _viewerOpen = true);
+    updateKeepAlive();
+    // Everything after the lock sits inside the `try`: a throw from the focus
+    // callback or the push must not leave `_viewerOpen` set (it would block the
+    // door and keep the card alive for good).
+    try {
+      // Opening from a collapsed card or a superset partner focuses it first
+      // (call C-c): back then leaves THAT exercise open.
+      widget.onFocus();
+      // Otherwise popping the viewer restores focus to a card field and
+      // re-opens the keyboard.
+      FocusManager.instance.primaryFocus?.unfocus();
+      final route = ExerciseMediaViewer.show(
+        context,
+        exerciseName: widget.exercise.name,
+        exerciseIndex: widget.exerciseIndex,
+        media: media,
+        entry: _makeEntryHandle(),
+      );
+      await route.popped;
+    } finally {
+      if (mounted) {
+        setState(() => _viewerOpen = false);
+        updateKeepAlive();
+      }
+    }
+  }
 
   @override
   void initState() {
     super.initState();
     _media = resolveMedia(widget.exercise.name);
     _initControllers();
+    final seam = widget.onHandleForTest;
+    if (seam != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) seam(_makeEntryHandle());
+      });
+    }
+  }
+
+  /// What this card lends to the logging viewer (Batch M2b Part B): its rows
+  /// and LOG row over its OWN controllers. Null outside LOG mode. A closure
+  /// that runs once the card has left the tree builds nothing: it must never
+  /// mount a field on a controller that is already disposed, nor read `ref`
+  /// on a deactivated element.
+  ///
+  /// A method, not a getter: the CQRS naming gate treats every getter as a
+  /// query and follows the closures it builds into the mutating callbacks.
+  ExerciseEntryHandle? _makeEntryHandle() => !_logMode
+      ? null
+      : ExerciseEntryHandle(
+          buildRows: (context, data, nodeFor) =>
+              _inTree ? _entryRows(data, nodeFor) : const SizedBox.shrink(),
+          buildLogRow: (context, data, nodeFor, afterLogged) => _inTree
+              ? _buildLogRow(data, nodeFor,
+                  afterLogged: afterLogged, focusContext: context)
+              : const SizedBox.shrink(),
+        );
+
+  /// `State.mounted` stays TRUE while the element is only deactivated, and a
+  /// re-route inside the branch deactivates this card (its page leaves the
+  /// tree) one step BEFORE the navigator drops the viewer route that rebuilds
+  /// through the closures above: `ref.read` on a deactivated element asserts.
+  /// False from `deactivate` to `activate` (a GlobalKey move re-activates).
+  bool _inTree = true;
+
+  @override
+  void activate() {
+    super.activate();
+    _inTree = true;
+  }
+
+  @override
+  void deactivate() {
+    _inTree = false;
+    super.deactivate();
+  }
+
+  /// The number of set rows a builder may draw for [data]: never more than the
+  /// controllers this card owns. The viewer watches the provider itself and is
+  /// built BEFORE the card in the same frame, so after a `+` / `-` it sees
+  /// the new count with the old controller lists; the card's own
+  /// `didUpdateWidget` resizes them in the same frame.
+  int _setCountFor(ActiveWorkoutData data) {
+    final i = widget.exerciseIndex;
+    final fromData = i >= 0 && i < data.exercises.length
+        ? int.tryParse(data.exercises[i].sets) ?? 3
+        : _numSets;
+    return math.min(fromData, _weightControllers.length);
   }
 
   void _initControllers() {
@@ -555,7 +665,7 @@ class _ExerciseCardState extends ConsumerState<_ExerciseCard>
   /// card re-init restores what the user typed (completeWorkout reads only
   /// checked sets).
   void _onFieldChanged(int setIdx, SetField field) {
-    if (!_logMode || setIdx >= _weightControllers.length) return;
+    if (!mounted || !_logMode || setIdx >= _weightControllers.length) return;
     final data = ref.read(activeWorkoutProvider);
     // Review mode: completeWorkout will not save again, so a capture here would
     // only make the header volume disagree with the saved log.
@@ -662,27 +772,45 @@ class _ExerciseCardState extends ConsumerState<_ExerciseCard>
   }
 
   /// Blocked LOG: focus the failing field and open the keypad.
-  void _focusFailingField(int setIdx, SetField field) {
-    final node = _focusNodeFor(setIdx, field);
+  ///
+  /// The viewer passes its own [nodeFor] and its own context: the failing box
+  /// to focus is the one the user is looking at, and a node must be requested
+  /// from the focus scope it lives in.
+  void _focusFailingField(
+    int setIdx,
+    SetField field, {
+    EntryFocusNodeFor? nodeFor,
+    BuildContext? focusContext,
+  }) {
+    final node = (nodeFor ?? _focusNodeFor)(setIdx, field);
     if (node == null) return;
-    FocusScope.of(context).requestFocus(node);
+    FocusScope.of(focusContext ?? context).requestFocus(node);
   }
 
-  void _onLogPressed() {
+  /// A LOG tap, from this card or from the viewer. Returns the outcome (null
+  /// when nothing was logged or attempted); the card's own tap ignores it.
+  /// The LOG flag is re-read on every rebuild, so a viewer that outlives a
+  /// flag flip must not reach `widget.onLogExercise!`.
+  LogOutcomeKind? _onLogPressed({
+    EntryFocusNodeFor? nodeFor,
+    BuildContext? focusContext,
+  }) {
+    if (!mounted || !_logMode) return null;
     final data = ref.read(activeWorkoutProvider);
-    if (data.isSaved) return;
+    if (data.isSaved) return null;
     final numSets = _numSets;
     final toLog = setsToLog(
       exerciseIndex: widget.exerciseIndex,
       numSets: numSets,
       checkedSets: data.checkedSets,
     );
-    if (toLog.isEmpty) return;
+    if (toLog.isEmpty) return null;
     for (final i in toLog) {
       final v = _validationOf(i);
       if (!v.isOk) {
-        _focusFailingField(i, v.field!);
-        return;
+        _focusFailingField(i, v.field!,
+            nodeFor: nodeFor, focusContext: focusContext);
+        return null;
       }
     }
     // Record every set before logging: the unchecked ones being logged, and any
@@ -693,6 +821,7 @@ class _ExerciseCardState extends ConsumerState<_ExerciseCard>
     }
     final outcome = widget.onLogExercise!(toLog);
     if (outcome == LogOutcomeKind.logged) _persistLoggedState(toLog.last);
+    return outcome;
   }
 
   /// LOG-mode twin of [_persistActiveState]: the completed count comes from
@@ -920,13 +1049,158 @@ class _ExerciseCardState extends ConsumerState<_ExerciseCard>
     return [...cells, const SizedBox(width: 6), checkCell];
   }
 
+  /// The table header and one row per set, over this card's own controllers.
+  /// Built by the card itself and, through [ExerciseEntryHandle], by the
+  /// logging viewer: [data] is the state to draw (the card passes its widget's,
+  /// the viewer its own fresh read) and [nodeFor] looks up the focus node of a
+  /// box (each host has its own: one node cannot sit under two fields).
+  Widget _entryRows(ActiveWorkoutData data, EntryFocusNodeFor nodeFor) {
+    final numSets = _setCountFor(data);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // Table header row
+        Row(children: _tableHeaderLabels(logMode: _logMode)),
+
+        const SizedBox(height: 4),
+
+        // Compact set rows
+        ...List.generate(numSets, (setIdx) {
+          final isChecked =
+              data.isSetChecked(widget.exerciseIndex, setIdx);
+          final isWarmUp =
+              data.isSetWarmUp(widget.exerciseIndex, setIdx);
+          // The up / same / down arrow of a logged set. LOG mode
+          // draws it inside the KG box (no check column to hold
+          // it); the per-set path keeps it after the check tile.
+          final overload = isChecked
+              ? _OverloadIndicator(
+                  exerciseName: widget.exercise.name,
+                  currentWeight: double.tryParse(_weightControllers[setIdx].text) ?? 0,
+                  loadFactor: data.effectiveLoadFactor(widget.exercise),
+                )
+              : null;
+          return Padding(
+            padding: const EdgeInsets.only(bottom: 4),
+            child: Row(
+              children: [
+                Expanded(
+                  child: SetInputRow(
+                    loggingType: widget.exercise.loggingType,
+                    weightController: _weightControllers[setIdx],
+                    repsController: _repsControllers[setIdx],
+                    durationController: _durationControllers[setIdx],
+                    distanceController: _distanceControllers[setIdx],
+                    setNumber: setIdx + 1,
+                    isWarmUp: isWarmUp,
+                    isCompleted: isChecked,
+                    isChecked: isChecked,
+                    onToggleWarmUp: () => widget.onToggleWarmUp(setIdx),
+                    interactiveCheck: !_logMode,
+                    weightFocusNode: _logMode ? nodeFor(setIdx, SetField.weight) : null,
+                    repsFocusNode: _logMode ? nodeFor(setIdx, SetField.reps) : null,
+                    durationFocusNode: _logMode ? nodeFor(setIdx, SetField.duration) : null,
+                    distanceFocusNode: _logMode ? nodeFor(setIdx, SetField.distance) : null,
+                    onChanged: _logMode ? (f) => _onFieldChanged(setIdx, f) : null,
+                    weightSuffix: _logMode ? overload : null,
+                    fadedFields: {
+                      for (final f in mirrorFieldsFor(widget.exercise.loggingType))
+                        if (isFaded(
+                          logMode: _logMode,
+                          data: data,
+                          exerciseIndex: widget.exerciseIndex,
+                          setIndex: setIdx,
+                          field: f,
+                        ))
+                          f,
+                    },
+                    onCheck: _logMode ? null : () {
+                      // If unchecking, allow without validation
+                      final alreadyChecked = data.isSetChecked(
+                          widget.exerciseIndex, setIdx);
+                      if (alreadyChecked) {
+                        _captureSetValues(setIdx);
+                        widget.onToggleSet(setIdx);
+                        // A7: update snapshot on uncheck too —
+                        // reflects the revised completed-set count.
+                        _persistActiveState(setIdx);
+                        return;
+                      }
+
+                      // Validate required fields before marking complete
+                      final validationError = _validateSetInputs(setIdx);
+                      if (validationError != null) {
+                        ScaffoldMessenger.of(context).clearSnackBars();
+                        ScaffoldMessenger.of(context)
+                            .showSnackBar(
+                          SnackBar(
+                            backgroundColor: AppColors.card,
+                            behavior:
+                                SnackBarBehavior.floating,
+                            duration: const Duration(
+                                milliseconds: 1500),
+                            shape: RoundedRectangleBorder(
+                              borderRadius:
+                                  BorderRadius.circular(
+                                      AppRadius.sharp),
+                              side: BorderSide(
+                                  color: AppColors.bad
+                                      .withValues(alpha: 0.3)),
+                            ),
+                            content: Text(
+                              validationError,
+                              style: AppTypography.bodySm
+                                  .copyWith(
+                                color: AppColors.bad,
+                              ),
+                            ),
+                          ),
+                        );
+                        return;
+                      }
+
+                      _captureSetValues(setIdx);
+                      widget.onToggleSet(setIdx);
+                      // A7: persist snapshot after every set check-off
+                      // so the Captain knows current mid-workout state.
+                      _persistActiveState(setIdx);
+                    },
+                  ),
+                ),
+                // Inline overload indicator after checkbox (per-set path
+                // only; LOG mode has no trailing column at all).
+                if (!_logMode && overload != null)
+                  Padding(
+                    padding: const EdgeInsets.only(left: 4),
+                    child: overload,
+                  ),
+                if (!_logMode && overload == null)
+                  const SizedBox(width: 18), // placeholder for alignment
+              ],
+            ),
+          );
+        }),
+      ],
+    );
+  }
+
   /// LOG mode: the sets stepper and the LOG button on ONE row (founder
   /// 2026-10-17). Rebuilt on every keystroke through the merged controller
   /// listenable (built here, from the live lists, so it never goes stale), not
   /// only on the 1 Hz timer rebuild. The tap handler re-validates from the
   /// controllers and the provider, never from this label.
-  Widget _buildLogRow(int numSets) {
-    final reviewMode = widget.data.isSaved;
+  ///
+  /// [data] / [nodeFor] as in [_entryRows]; [focusContext] is the host's context
+  /// (the focus scope a blocked tap requests its box from), [afterLogged] runs
+  /// only when the LOG really logged.
+  Widget _buildLogRow(
+    ActiveWorkoutData data,
+    EntryFocusNodeFor nodeFor, {
+    VoidCallback? afterLogged,
+    BuildContext? focusContext,
+  }) {
+    final reviewMode = data.isSaved;
+    final numSets = _setCountFor(data);
     return ListenableBuilder(
       listenable: Listenable.merge([
         ..._weightControllers,
@@ -935,7 +1209,6 @@ class _ExerciseCardState extends ConsumerState<_ExerciseCard>
         ..._distanceControllers,
       ]),
       builder: (context, _) {
-        final data = widget.data;
         final toLog = setsToLog(
           exerciseIndex: widget.exerciseIndex,
           numSets: numSets,
@@ -970,7 +1243,10 @@ class _ExerciseCardState extends ConsumerState<_ExerciseCard>
           button = _LogExerciseButton(
             label: blockedLogLabel(v),
             style: _LogButtonStyle.blocked,
-            onTap: reviewMode ? null : () => _focusFailingField(i, v.field!),
+            onTap: reviewMode
+                ? null
+                : () => _focusFailingField(i, v.field!,
+                    nodeFor: nodeFor, focusContext: focusContext),
           );
         } else if (toLog.isEmpty) {
           button = _LogExerciseButton(
@@ -1007,7 +1283,13 @@ class _ExerciseCardState extends ConsumerState<_ExerciseCard>
                 ? prefilledSubline(volume)
                 : liftedSubline(volume),
             style: _LogButtonStyle.ready,
-            onTap: reviewMode ? null : _onLogPressed,
+            onTap: reviewMode
+                ? null
+                : () {
+                    final outcome = _onLogPressed(
+                        nodeFor: nodeFor, focusContext: focusContext);
+                    if (outcome == LogOutcomeKind.logged) afterLogged?.call();
+                  },
           );
         }
 
@@ -1050,6 +1332,7 @@ class _ExerciseCardState extends ConsumerState<_ExerciseCard>
 
   @override
   Widget build(BuildContext context) {
+    super.build(context); // AutomaticKeepAliveClientMixin
     final numSets = _numSets;
     final isInSuperset = widget.supersetGroup != null;
     final supersetColor = isInSuperset
@@ -1229,132 +1512,14 @@ class _ExerciseCardState extends ConsumerState<_ExerciseCard>
 
                         const SizedBox(height: 8),
 
-                        // Table header row
-                        Row(children: _tableHeaderLabels(logMode: _logMode)),
-
-                        const SizedBox(height: 4),
-
-                        // Compact set rows
-                        ...List.generate(numSets, (setIdx) {
-                          final isChecked =
-                              widget.data.isSetChecked(widget.exerciseIndex, setIdx);
-                          final isWarmUp =
-                              widget.data.isSetWarmUp(widget.exerciseIndex, setIdx);
-                          // The up / same / down arrow of a logged set. LOG mode
-                          // draws it inside the KG box (no check column to hold
-                          // it); the per-set path keeps it after the check tile.
-                          final overload = isChecked
-                              ? _OverloadIndicator(
-                                  exerciseName: widget.exercise.name,
-                                  currentWeight: double.tryParse(_weightControllers[setIdx].text) ?? 0,
-                                  loadFactor: widget.data.effectiveLoadFactor(widget.exercise),
-                                )
-                              : null;
-                          return Padding(
-                            padding: const EdgeInsets.only(bottom: 4),
-                            child: Row(
-                              children: [
-                                Expanded(
-                                  child: SetInputRow(
-                                    loggingType: widget.exercise.loggingType,
-                                    weightController: _weightControllers[setIdx],
-                                    repsController: _repsControllers[setIdx],
-                                    durationController: _durationControllers[setIdx],
-                                    distanceController: _distanceControllers[setIdx],
-                                    setNumber: setIdx + 1,
-                                    isWarmUp: isWarmUp,
-                                    isCompleted: isChecked,
-                                    isChecked: isChecked,
-                                    onToggleWarmUp: () => widget.onToggleWarmUp(setIdx),
-                                    interactiveCheck: !_logMode,
-                                    weightFocusNode: _logMode ? _focusNodeFor(setIdx, SetField.weight) : null,
-                                    repsFocusNode: _logMode ? _focusNodeFor(setIdx, SetField.reps) : null,
-                                    durationFocusNode: _logMode ? _focusNodeFor(setIdx, SetField.duration) : null,
-                                    distanceFocusNode: _logMode ? _focusNodeFor(setIdx, SetField.distance) : null,
-                                    onChanged: _logMode ? (f) => _onFieldChanged(setIdx, f) : null,
-                                    weightSuffix: _logMode ? overload : null,
-                                    fadedFields: {
-                                      for (final f in mirrorFieldsFor(widget.exercise.loggingType))
-                                        if (isFaded(
-                                          logMode: _logMode,
-                                          data: widget.data,
-                                          exerciseIndex: widget.exerciseIndex,
-                                          setIndex: setIdx,
-                                          field: f,
-                                        ))
-                                          f,
-                                    },
-                                    onCheck: _logMode ? null : () {
-                                      // If unchecking, allow without validation
-                                      final alreadyChecked = widget.data.isSetChecked(
-                                          widget.exerciseIndex, setIdx);
-                                      if (alreadyChecked) {
-                                        _captureSetValues(setIdx);
-                                        widget.onToggleSet(setIdx);
-                                        // A7: update snapshot on uncheck too —
-                                        // reflects the revised completed-set count.
-                                        _persistActiveState(setIdx);
-                                        return;
-                                      }
-
-                                      // Validate required fields before marking complete
-                                      final validationError = _validateSetInputs(setIdx);
-                                      if (validationError != null) {
-                                        ScaffoldMessenger.of(context).clearSnackBars();
-                                        ScaffoldMessenger.of(context)
-                                            .showSnackBar(
-                                          SnackBar(
-                                            backgroundColor: AppColors.card,
-                                            behavior:
-                                                SnackBarBehavior.floating,
-                                            duration: const Duration(
-                                                milliseconds: 1500),
-                                            shape: RoundedRectangleBorder(
-                                              borderRadius:
-                                                  BorderRadius.circular(
-                                                      AppRadius.sharp),
-                                              side: BorderSide(
-                                                  color: AppColors.bad
-                                                      .withValues(alpha: 0.3)),
-                                            ),
-                                            content: Text(
-                                              validationError,
-                                              style: AppTypography.bodySm
-                                                  .copyWith(
-                                                color: AppColors.bad,
-                                              ),
-                                            ),
-                                          ),
-                                        );
-                                        return;
-                                      }
-
-                                      _captureSetValues(setIdx);
-                                      widget.onToggleSet(setIdx);
-                                      // A7: persist snapshot after every set check-off
-                                      // so the Captain knows current mid-workout state.
-                                      _persistActiveState(setIdx);
-                                    },
-                                  ),
-                                ),
-                                // Inline overload indicator after checkbox (per-set path
-                                // only; LOG mode has no trailing column at all).
-                                if (!_logMode && overload != null)
-                                  Padding(
-                                    padding: const EdgeInsets.only(left: 4),
-                                    child: overload,
-                                  ),
-                                if (!_logMode && overload == null)
-                                  const SizedBox(width: 18), // placeholder for alignment
-                              ],
-                            ),
-                          );
-                        }),
+                        // Table header row + compact set rows: the same builder the
+                        // logging viewer borrows (Batch M2b Part B).
+                        _entryRows(widget.data, _focusNodeFor),
 
                         // ── Add / Remove set buttons ─────────────────
                         const SizedBox(height: 6),
                         if (_logMode)
-                          _buildLogRow(numSets)
+                          _buildLogRow(widget.data, _focusNodeFor)
                         else
                         Row(
                           mainAxisAlignment: MainAxisAlignment.end,
@@ -1419,12 +1584,15 @@ class _ExerciseCardState extends ConsumerState<_ExerciseCard>
 
                         // ── Per-exercise coaching content (W3.6) ─────
                         // Collapsed by default; renders nothing when the
-                        // exercise has no library match (swap/custom).
-                        CoachingContentPanel(
-                          key: ValueKey(
-                              'coaching_${widget.exercise.name}'),
-                          exerciseName: widget.exercise.name,
-                        ),
+                        // exercise has no library match (swap/custom). A row
+                        // WITH an animation shows its four sections in the
+                        // logging viewer instead (M2b Part B, D4).
+                        if (_mediaNow == null)
+                          CoachingContentPanel(
+                            key: ValueKey(
+                                'coaching_${widget.exercise.name}'),
+                            exerciseName: widget.exercise.name,
+                          ),
                         ], // close `if (widget.isExpanded) ...[` (Bug #15b)
                       ],
                     ),
@@ -1468,7 +1636,7 @@ class _ExerciseCardState extends ConsumerState<_ExerciseCard>
   /// vertical Column, so its height is unbounded.
   Widget _buildTileHeader() {
     // The tile loops by itself, except when a route on this navigator covers the
-    // screen (the plate sheet from ANY door, the swap and picker sheets) and once
+    // screen (the logging viewer, the plate sheet, the swap and picker sheets) and once
     // every exercise is done. `isCurrentOf` subscribes to the `isCurrent` aspect
     // ONLY, so only the focused card rebuilds at a sheet's push and pop. A root
     // navigator dialog never changes this route's `isCurrent`; a null route (a
@@ -1899,6 +2067,7 @@ Widget debugExerciseCardHostForTest({
   bool canMove = false,
   bool showHintRing = false,
   bool justMoved = false,
+  ValueChanged<ExerciseEntryHandle?>? onHandleForTest,
 }) {
   return Consumer(builder: (context, ref, _) {
     final data = ref.watch(activeWorkoutProvider);
@@ -1930,6 +2099,7 @@ Widget debugExerciseCardHostForTest({
       onLongPressHeader: onLongPressHeader ?? () {},
       onLogExercise: onLogExercise,
       onReopenExercise: onReopenExercise,
+      onHandleForTest: onHandleForTest,
     );
   });
 }

@@ -12,6 +12,7 @@ import 'package:icanbefitter/core/services/hive_service.dart';
 import 'package:icanbefitter/core/theme/typography.dart';
 import 'package:icanbefitter/features/auth/providers/auth_invalidation_provider.dart';
 import 'package:icanbefitter/features/train/providers/train_provider.dart';
+import 'package:icanbefitter/features/train/screens/active_workout/exercise_entry_handle.dart';
 import 'package:icanbefitter/features/train/screens/active_workout/screen.dart';
 import 'package:icanbefitter/features/train/services/log_exercise_flags.dart';
 import 'package:icanbefitter/features/train/services/log_exercise_logic.dart';
@@ -148,6 +149,12 @@ List<Override> mediaOverrides(FakeExerciseMediaRepository repo) => [
 /// has ONE Navigator, so a root-navigator dialog covers the card's route there;
 /// the real Train branch is a nested navigator, and the dialog case needs that
 /// shape.
+///
+/// Part B B1: [onLogExercise] REPLACES the default LOG handler (which runs
+/// `logSets` on the real notifier and returns `logged`): no `logSets` runs, the
+/// call is still recorded in `CardHarness.logCalls`, and the returned outcome is
+/// the test's. [onHandleForTest] receives the card's entry handle after the
+/// first frame.
 Future<CardHarness> pumpCard(
   WidgetTester tester, {
   required ActiveWorkoutData seed,
@@ -165,6 +172,8 @@ Future<CardHarness> pumpCard(
   bool animationsOff = false,
   Uint8List? mediaBytes,
   bool nestedNavigator = false,
+  LogExerciseCallback? onLogExercise,
+  ValueChanged<ExerciseEntryHandle?>? onHandleForTest,
 }) async {
   await ensureHive(tester);
   await seedLibrary(tester, rows: libraryRows, animationsOff: animationsOff);
@@ -181,6 +190,8 @@ Future<CardHarness> pumpCard(
   addTearDown(container.dispose);
   LogOutcomeKind onLog(Set<int> idxs) {
     calls.add(idxs);
+    final override = onLogExercise;
+    if (override != null) return override(idxs);
     container.read(activeWorkoutProvider.notifier).logSets(0, idxs);
     return LogOutcomeKind.logged;
   }
@@ -211,6 +222,7 @@ Future<CardHarness> pumpCard(
           onLongPressHeader: onLongPressHeader,
           onLogExercise: logMode ? onLog : null,
           onReopenExercise: logMode ? onReopen : null,
+          onHandleForTest: onHandleForTest,
         ),
       ),
     ),
@@ -274,6 +286,7 @@ Future<ScreenHarness> pumpScreen(
   List<Map<String, dynamic>> libraryRows = const [],
   bool animationsOff = false,
   Uint8List? mediaBytes,
+  ActiveWorkoutNotifier Function(ActiveWorkoutData data)? notifierFor,
 }) async {
   await ensureHive(tester);
   await seedLibrary(tester, rows: libraryRows, animationsOff: animationsOff);
@@ -298,8 +311,10 @@ Future<ScreenHarness> pumpScreen(
   );
   final container = ProviderContainer(overrides: [
     authUserIdTokenProvider.overrideWithValue(kTestUserId),
-    activeWorkoutProvider
-        .overrideWith(() => SeededNotifier(seed?.call(base) ?? base)),
+    activeWorkoutProvider.overrideWith(() {
+      final data = seed?.call(base) ?? base;
+      return notifierFor?.call(data) ?? SeededNotifier(data);
+    }),
     lastPerformanceProvider.overrideWith((ref, name) => lastPerf),
     ...mediaOverrides(mediaRepo),
     ...overrides,

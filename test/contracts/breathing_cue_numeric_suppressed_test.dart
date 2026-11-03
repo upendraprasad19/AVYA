@@ -2,11 +2,13 @@
 //
 // Until 2026-10-22, 136 of 292 rows carried a bare number in breathing_cue: a
 // spreadsheet column shift had moved every field from met_value to source one
-// place right (OI-149). BOTH surfaces that render the field suppress a numeric
-// value; guarding only one would leave two surfaces disagreeing about one
-// field, the writer/reader drift class this repo has hit 15+ times. The guards
-// stay after the data repair, because a future library edit can re-introduce
-// the shape.
+// place right (OI-149). EVERY surface that renders the field suppresses a
+// numeric value, and since Batch M2b Part B they do it through ONE parser
+// (`exerciseCuesOf`, SoT concept `exercise_coaching_content`): the plate sheet,
+// the FORM & CUES panel and the logging viewer. Three copies of the guard kept
+// in step by a source-grep test was the writer/reader drift class this repo has
+// hit 15+ times. The guard stays after the data repair, because a future
+// library edit can re-introduce the shape.
 //
 // OI-149 was CLOSED by the Batch A repair (docs/plans/2026-10-22-library-data-
 // repair.md): the text was never lost, only shifted. The field order and the
@@ -20,16 +22,29 @@ String _strip(String s) => s
     .replaceAll(RegExp(r'//.*'), '');
 
 void main() {
+  const parser = 'lib/shared/widgets/exercise_plate/exercise_cues.dart';
   const surfaces = [
     'lib/shared/widgets/exercise_plate/exercise_plate_sheet.dart',
     'lib/features/train/screens/active_workout/coaching_content_panel.dart',
+    'lib/features/train/screens/active_workout/exercise_media_viewer.dart',
   ];
+  const guard = r'^\d+(\.\d+)?$';
 
-  test('both breathing_cue surfaces guard against a numeric value', () {
+  test('the numeric guard is written once, in the shared parser', () {
+    expect(_strip(File(parser).readAsStringSync()).contains(guard), isTrue,
+        reason: '$parser lost the numeric breathing_cue guard');
+  });
+
+  test('every breathing_cue surface reads through exerciseCuesOf and carries '
+      'no guard or raw read of its own', () {
     for (final p in surfaces) {
       final src = _strip(File(p).readAsStringSync());
-      expect(src.contains(r'^\d+(\.\d+)?$'), isTrue,
-          reason: '$p renders breathing_cue without the numeric guard');
+      expect(src.contains('exerciseCuesOf('), isTrue,
+          reason: '$p must take its cues from the shared parser');
+      expect(src.contains(guard), isFalse,
+          reason: '$p carries its own copy of the numeric guard');
+      expect(src.contains("'breathing_cue'"), isFalse,
+          reason: '$p reads the raw breathing_cue key, bypassing the parser');
     }
   });
 

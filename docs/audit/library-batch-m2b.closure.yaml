@@ -1,6 +1,6 @@
 # Closure ledger - library-batch-m2b, Part A (docs/plans/2026-11-02-library-batch-m2b-tile-and-rows.md).
 # Rows carry the SHA of the landing commit, written by the stamp commit that follows it (a commit cannot name its own SHA).
-# Part B (the logging viewer) is NOT in this batch: OI-354 stays OPEN naming it.
+# Part B (the logging viewer) is NOT in this batch: it shipped on its own branch (row M2B-B-VIEWER, ledger library-batch-m2b-viewer.closure.yaml), which closed OI-354.
 batch: library-batch-m2b
 plan_review_record: docs/plan-reviews/library-batch-m2b.md
 diagnose_docs: []
@@ -46,9 +46,9 @@ findings:
     reason: "Needs the founder's phone and a build: 0551 and 3214 loop without a memory kill, INCLUDING with the plate sheet open over the frozen tile (a second decode), and the focused-card fetch cost on mobile data is acceptable. If not, kHeaderTileAutoplay = false in exercise_header_tile.dart stops the loop, not the fetch. This is OI-440's phone check."
   - id: M2B-B-VIEWER
     title: "Part B: the logging viewer (D4, D6, D9: the FORM & CUES panel moves into it, the 44 px still of any card opens it)"
-    terminal_state: upstream_blocked
-    blocker: "Part A is not merged; Part B's draft (docs/plans/2026-11-03-library-batch-m2b-viewer-DRAFT.md) needs its own two plan-review rounds on a new branch from the merged tree, because the viewer is a second input surface over the same set controllers. Until then the focused card is about 48 to 80 dp taller than on main (the tile row replaces the thumb row and the panel stays)."
-    reopen_when: "Part A merged to main."
+    terminal_state: closed_in_commit
+    commit: "library-batch-m2b-viewer (Part B landing commit; its SHA is stamped in docs/audit/library-batch-m2b-viewer.closure.yaml)"
+    verification: "Part A merged (PR #199, 9dc64abb); Part B was built on its own branch from the merged tree after its own three plan-review rounds (plan docs/plans/2026-11-03-library-batch-m2b-viewer.md, record docs/plan-reviews/library-batch-m2b-viewer.md). The viewer is a second host of the card's rows and LOG row over the SAME controllers (test/features/train/log_exercise/exercise_media_viewer_test.dart, exercise_entry_handle_test.dart, exercise_media_viewer_router_test.dart). Rows of Part B are in docs/audit/library-batch-m2b-viewer.closure.yaml."
   - id: M2B-STALE-M2-ROW
     title: "The row M2B-HERO-TILE-VIEWER in docs/audit/library-batch-m2.closure.yaml (lines 79-83) says M2a is not merged and the mockup is not approved"
     terminal_state: verified_clean
