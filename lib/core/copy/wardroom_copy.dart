@@ -196,6 +196,16 @@ class WardroomCopy {
   /// TalkBack hint on a faded (app-filled, untouched) field.
   static const activePrefilledHint = 'Prefilled value';
 
+  /// TalkBack label of a logged set's tick (LOG mode), `{n}` = set number. A
+  /// logged warm-up says so, because its tick replaces the visible `W`.
+  static const activeSetLoggedLabelTemplate = 'Set {n}, logged';
+  static const activeWarmUpSetLoggedLabelTemplate = 'Warm-up set {n}, logged';
+
+  /// The header tile of the focused card (M2b): the chip over the animation and
+  /// the TalkBack label of the whole tile, `{name}` = the exercise.
+  static const activeEnlargeChip = 'ENLARGE';
+  static const activeEnlargeLabelTemplate = 'Enlarge {name}';
+
   /// Blocked LOG button: a required field is empty.
   static const activeBlockedAddWeight = 'Add weight';
   static const activeBlockedAddReps = 'Add reps';

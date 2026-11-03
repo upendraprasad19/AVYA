@@ -38,6 +38,10 @@ class _ExerciseCard extends ConsumerStatefulWidget {
   /// Bug #15b — Whether this card's set inputs (and add/remove buttons) are
   /// rendered. Headers are always visible regardless.
   final bool isExpanded;
+  /// M2b — This is THE focused card (`_effectiveFocusedIndex`), not merely an
+  /// expanded one: a superset partner is expanded too (`_isExerciseExpanded`)
+  /// but only the focused card shows the header tile.
+  final bool isFocused;
   /// Bug #15b — Tap-on-header callback to make this card the focused one.
   final VoidCallback onFocus;
   /// One LOG per exercise (flag `enable_log_exercise_button`). Non-null puts
@@ -82,6 +86,7 @@ class _ExerciseCard extends ConsumerStatefulWidget {
     required this.onSwap,
     required this.onLongPressHeader,
     required this.isExpanded,
+    this.isFocused = false,
     required this.onFocus,
     this.onLogExercise,
     this.onReopenExercise,
@@ -137,9 +142,29 @@ class _ExerciseCardState extends ConsumerState<_ExerciseCard>
 
   bool get _logMode => widget.onLogExercise != null;
 
+  // The exercise's animation (M2b): resolved from the library row in initState
+  // and again on a name change, never in build (the card rebuilds about once a
+  // second). Null = no animation for this row. The kill switch is read at the
+  // sink (`_mediaNow`), so a flag flipped mid-session shows on the next rebuild.
+  ExerciseMedia? _media;
+  ExerciseMedia? get _mediaNow => PlateFlags.animationsEnabled ? _media : null;
+
+  /// The tile-led header: only the FOCUSED, expanded card of a row with an
+  /// animation. A superset partner is expanded but not focused (thumb header);
+  /// move mode shows headers only.
+  bool get _showHeaderTile =>
+      widget.isExpanded &&
+      widget.isFocused &&
+      !widget.moveModeActive &&
+      _mediaNow != null;
+
+  void _openPicture() =>
+      unawaited(ExercisePlateSheet.show(context, widget.exercise.name));
+
   @override
   void initState() {
     super.initState();
+    _media = resolveMedia(widget.exercise.name);
     _initControllers();
   }
 
@@ -340,6 +365,7 @@ class _ExerciseCardState extends ConsumerState<_ExerciseCard>
 
     // Exercise swap: full rebuild needed (different pre-fills, weight, reps).
     if (oldWidget.exercise.name != widget.exercise.name) {
+      _media = resolveMedia(widget.exercise.name);
       _disposeControllers();
       _initControllers();
       return;
@@ -844,56 +870,54 @@ class _ExerciseCardState extends ConsumerState<_ExerciseCard>
     }
   }
 
-  /// Build the table header labels based on logging type.
-  List<Widget> _tableHeaderLabels() {
+  /// Build the table header labels based on logging type. [logMode] has no
+  /// check column (the set rows run to the card's edge), so it drops the trailing
+  /// 6 dp gap and the check cell of EVERY logging type; the per-set path keeps
+  /// them (the `✓` text only for weight_reps and weighted_bodyweight).
+  List<Widget> _tableHeaderLabels({required bool logMode}) {
+    final List<Widget> cells;
+    Widget checkCell = const SizedBox(width: 28);
     switch (widget.exercise.loggingType) {
       case 'bodyweight_reps':
-        return [
+        cells = [
           const SizedBox(width: 28), // set badge
           const SizedBox(width: 8),
           Expanded(child: Center(child: Text('REPS', style: AppTypography.monoXs.copyWith(color: AppColors.textDim, letterSpacing: 1.5)))),
-          const SizedBox(width: 6),
-          const SizedBox(width: 28), // checkbox
         ];
       case 'timed':
-        return [
+        cells = [
           const SizedBox(width: 28),
           const SizedBox(width: 8),
           Expanded(child: Center(child: Text('SEC', style: AppTypography.monoXs.copyWith(color: AppColors.textDim, letterSpacing: 1.5)))),
-          const SizedBox(width: 6),
-          const SizedBox(width: 28),
         ];
       case 'cardio':
-        return [
+        cells = [
           const SizedBox(width: 28),
           const SizedBox(width: 8),
           Expanded(child: Center(child: Text('MIN', style: AppTypography.monoXs.copyWith(color: AppColors.textDim, letterSpacing: 1.5)))),
           const SizedBox(width: 6),
           Expanded(child: Center(child: Text('KM', style: AppTypography.monoXs.copyWith(color: AppColors.textDim, letterSpacing: 1.5)))),
-          const SizedBox(width: 6),
-          const SizedBox(width: 28),
         ];
       case 'distance':
-        return [
+        cells = [
           const SizedBox(width: 28),
           const SizedBox(width: 8),
           Expanded(child: Center(child: Text('KM', style: AppTypography.monoXs.copyWith(color: AppColors.textDim, letterSpacing: 1.5)))),
           const SizedBox(width: 6),
           Expanded(child: Center(child: Text('KG', style: AppTypography.monoXs.copyWith(color: AppColors.textDim, letterSpacing: 1.5)))),
-          const SizedBox(width: 6),
-          const SizedBox(width: 28),
         ];
       default: // weight_reps, weighted_bodyweight
-        return [
+        cells = [
           const SizedBox(width: 28),
           const SizedBox(width: 8),
           Expanded(child: Center(child: Text('KG', style: AppTypography.monoXs.copyWith(color: AppColors.textDim, letterSpacing: 1.5)))),
           const SizedBox(width: 6),
           Expanded(child: Center(child: Text('REPS', style: AppTypography.monoXs.copyWith(color: AppColors.textDim, letterSpacing: 1.5)))),
-          const SizedBox(width: 6),
-          SizedBox(width: 28, child: Center(child: Text('✓', style: AppTypography.monoXs.copyWith(color: AppColors.textDim)))),
         ];
+        checkCell = SizedBox(width: 28, child: Center(child: Text('✓', style: AppTypography.monoXs.copyWith(color: AppColors.textDim))));
     }
+    if (logMode) return cells;
+    return [...cells, const SizedBox(width: 6), checkCell];
   }
 
   /// LOG mode: the sets stepper and the LOG button on ONE row (founder
@@ -1087,6 +1111,9 @@ class _ExerciseCardState extends ConsumerState<_ExerciseCard>
                         // Exercise header row — Bug #15b: tap to focus this
                         // card (collapses any other expanded card). Long-press
                         // still triggers superset grouping.
+                        if (_showHeaderTile)
+                          _buildTileHeader()
+                        else
                         GestureDetector(
                           behavior: HitTestBehavior.opaque,
                           onTap: _headerTap,
@@ -1107,10 +1134,15 @@ class _ExerciseCardState extends ConsumerState<_ExerciseCard>
                                 size: 44,
                                 // Move mode: the plate is part of the header
                                 // tap (null lets it reach the header).
-                                onTap: widget.moveModeActive
+                                // Superset-grouping mode: null too, so the tap
+                                // reaches the header's own tap (focus) instead of
+                                // opening the sheet; the tile has no header tap
+                                // around it, so its tap falls through to the
+                                // card's group-select.
+                                onTap: widget.moveModeActive ||
+                                        widget.isInSupersetGroupMode
                                     ? null
-                                    : () => ExercisePlateSheet.show(
-                                        context, widget.exercise.name),
+                                    : _openPicture,
                               ),
                               const SizedBox(width: 10),
 
@@ -1182,81 +1214,23 @@ class _ExerciseCardState extends ConsumerState<_ExerciseCard>
                         // hint, table, set rows, +/- buttons) is gated on
                         // isExpanded so collapsed cards stay header-only.
                         if (widget.isExpanded) ...[
-                        // Last performance + suggested weight
-                        Builder(builder: (_) {
-                          final lastPerf = ref.watch(lastPerformanceProvider(widget.exercise.name));
-                          if (!lastPerf.hasData) return const SizedBox.shrink();
-
-                          final children = <Widget>[];
-
-                          // "Last: 50.0kg × 10 reps" line
-                          if (lastPerf.lastWeight != null && lastPerf.lastWeight! > 0) {
-                            children.add(Padding(
-                              padding: const EdgeInsets.only(top: 4),
-                              child: Row(
-                                children: [
-                                  const Icon(Icons.history,
-                                      size: 10,
-                                      color: AppColors.textDim),
-                                  const SizedBox(width: 3),
-                                  // Flexible + ellipsis: at 320 dp and a large
-                                  // font this line overflowed (flip R4A-03).
-                                  Flexible(
-                                    child: Text(
-                                      'LAST: ${lastPerf.lastWeight!.toStringAsFixed(1)}KG × ${lastPerf.lastReps ?? '?'} REPS',
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                      style: AppTypography.monoXs.copyWith(
-                                        color: AppColors.textDim,
-                                        letterSpacing: 1.2,
-                                      ),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ));
-                          }
-
-                          // "Try: 52.5kg × 10" suggestion line — ⑦(b) + ⑥ 6-B:
-                          // SUPPRESS when ANY session cut is active — the ⑦b
-                          // detraining gap-cut OR the ⑥ readiness deload (the
-                          // EFFECTIVE factor < 1.0). A "TRY: +2.5kg" directive
-                          // would contradict the reduced prefill (the banner
-                          // explains the lighter load) = "never shame". The
-                          // factual "LAST:" line above is kept.
-                          if (lastPerf.suggestedWeight != null &&
-                              lastPerf.suggestedWeight! > 0 &&
-                              widget.data.effectiveLoadFactor(widget.exercise) >=
-                                  1.0) {
-                            children.add(Padding(
-                              padding: const EdgeInsets.only(top: 2),
-                              child: Row(
-                                children: [
-                                  const Icon(Icons.arrow_upward,
-                                      size: 10, color: AppColors.accent),
-                                  const SizedBox(width: 3),
-                                  Text(
-                                    'TRY: ${lastPerf.suggestedWeight!.toStringAsFixed(1)}KG × ${lastPerf.lastReps ?? widget.exercise.reps}',
-                                    style: AppTypography.monoXs.copyWith(
-                                      color: AppColors.accent,
-                                      letterSpacing: 1.2,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ));
-                          }
-
-                          return Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: children,
-                          );
-                        }),
+                        // Last performance + suggested weight. The tile layout puts
+                        // these lines in its own column, so it builds nothing here
+                        // (the set rows below keep their elements: the Column
+                        // matches its unchanged tail from the bottom).
+                        if (!_showHeaderTile)
+                          ExerciseLastTryLines(
+                            exerciseName: widget.exercise.name,
+                            showTry: widget.data
+                                    .effectiveLoadFactor(widget.exercise) >=
+                                1.0,
+                            fallbackReps: widget.exercise.reps,
+                          ),
 
                         const SizedBox(height: 8),
 
                         // Table header row
-                        Row(children: _tableHeaderLabels()),
+                        Row(children: _tableHeaderLabels(logMode: _logMode)),
 
                         const SizedBox(height: 4),
 
@@ -1266,6 +1240,16 @@ class _ExerciseCardState extends ConsumerState<_ExerciseCard>
                               widget.data.isSetChecked(widget.exerciseIndex, setIdx);
                           final isWarmUp =
                               widget.data.isSetWarmUp(widget.exerciseIndex, setIdx);
+                          // The up / same / down arrow of a logged set. LOG mode
+                          // draws it inside the KG box (no check column to hold
+                          // it); the per-set path keeps it after the check tile.
+                          final overload = isChecked
+                              ? _OverloadIndicator(
+                                  exerciseName: widget.exercise.name,
+                                  currentWeight: double.tryParse(_weightControllers[setIdx].text) ?? 0,
+                                  loadFactor: widget.data.effectiveLoadFactor(widget.exercise),
+                                )
+                              : null;
                           return Padding(
                             padding: const EdgeInsets.only(bottom: 4),
                             child: Row(
@@ -1288,6 +1272,7 @@ class _ExerciseCardState extends ConsumerState<_ExerciseCard>
                                     durationFocusNode: _logMode ? _focusNodeFor(setIdx, SetField.duration) : null,
                                     distanceFocusNode: _logMode ? _focusNodeFor(setIdx, SetField.distance) : null,
                                     onChanged: _logMode ? (f) => _onFieldChanged(setIdx, f) : null,
+                                    weightSuffix: _logMode ? overload : null,
                                     fadedFields: {
                                       for (final f in mirrorFieldsFor(widget.exercise.loggingType))
                                         if (isFaded(
@@ -1352,17 +1337,14 @@ class _ExerciseCardState extends ConsumerState<_ExerciseCard>
                                     },
                                   ),
                                 ),
-                                // Inline overload indicator after checkbox
-                                if (isChecked)
+                                // Inline overload indicator after checkbox (per-set path
+                                // only; LOG mode has no trailing column at all).
+                                if (!_logMode && overload != null)
                                   Padding(
                                     padding: const EdgeInsets.only(left: 4),
-                                    child: _OverloadIndicator(
-                                      exerciseName: widget.exercise.name,
-                                      currentWeight: double.tryParse(_weightControllers[setIdx].text) ?? 0,
-                                      loadFactor: widget.data.effectiveLoadFactor(widget.exercise),
-                                    ),
+                                    child: overload,
                                   ),
-                                if (!isChecked)
+                                if (!_logMode && overload == null)
                                   const SizedBox(width: 18), // placeholder for alignment
                               ],
                             ),
@@ -1474,6 +1456,124 @@ class _ExerciseCardState extends ConsumerState<_ExerciseCard>
     return Padding(
       padding: EdgeInsets.fromLTRB(16, 0, 16, bottomPadding),
       child: card,
+    );
+  }
+
+  /// The tile-led header (M2b): a 124 dp tile flush top-left and, beside it, the
+  /// name, the meta line, LAST / TRY and the icons. The tile sits in
+  /// `Align(topLeft)` because `stretch` hands every non-flex child a TIGHT height
+  /// (`IntrinsicHeight` makes it the column's height) and would stretch the 124 dp
+  /// frame into a 124 x H box whenever the column is taller than 124 dp, which is
+  /// the normal case at 360 dp. No `Spacer`: the header sits in the card's
+  /// vertical Column, so its height is unbounded.
+  Widget _buildTileHeader() {
+    // The tile loops by itself, except when a route on this navigator covers the
+    // screen (the plate sheet from ANY door, the swap and picker sheets) and once
+    // every exercise is done. `isCurrentOf` subscribes to the `isCurrent` aspect
+    // ONLY, so only the focused card rebuilds at a sheet's push and pop. A root
+    // navigator dialog never changes this route's `isCurrent`; a null route (a
+    // bare test widget) reads as not covered.
+    final covered = ModalRoute.isCurrentOf(context) == false;
+    final allDone = List.generate(widget.data.exercises.length, widget.data.isExerciseDone)
+        .every((done) => done);
+    final noTap = widget.moveModeActive || widget.isInSupersetGroupMode;
+    return IntrinsicHeight(
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Align(
+            alignment: Alignment.topLeft,
+            child: ExerciseHeaderTile(
+              media: _mediaNow!,
+              exerciseName: widget.exercise.name,
+              autoplay: kHeaderTileAutoplay && !allDone && !covered,
+              onEnlarge: noTap ? null : _openPicture,
+              onLongPress:
+                  widget.moveModeActive ? null : widget.onLongPressHeader,
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: _headerTap,
+              onLongPress:
+                  widget.moveModeActive ? null : widget.onLongPressHeader,
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Expanded(
+                            child: Text(
+                              widget.exercise.name,
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                              style: AppTypography.h3.copyWith(
+                                fontSize: 14,
+                                height: 1.2,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 6),
+                          Padding(
+                            padding: const EdgeInsets.only(top: 1),
+                            child: AnimatedRotation(
+                              turns: widget.isExpanded ? 0.5 : 0,
+                              duration: const Duration(milliseconds: 180),
+                              child: Icon(
+                                Icons.keyboard_arrow_down,
+                                size: 18,
+                                color: AppColors.textDim.withValues(alpha: 0.7),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 1),
+                      Text(
+                        _logMode ? _metaTextForLogMode() : _metaText(),
+                        style: AppTypography.monoXs.copyWith(
+                          color: AppColors.textDim,
+                          letterSpacing: 1.2,
+                        ),
+                      ),
+                      // Bug #6 hint (per-set path only), moved into the column.
+                      if (widget.isDone && widget.isExpanded && !_logMode)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 2),
+                          child: Text(
+                            'Tap to edit values',
+                            style: AppTypography.bodySm.copyWith(
+                              color: AppColors.textDim,
+                            ),
+                          ),
+                        ),
+                      ExerciseLastTryLines(
+                        exerciseName: widget.exercise.name,
+                        showTry:
+                            widget.data.effectiveLoadFactor(widget.exercise) >=
+                                1.0,
+                        fallbackReps: widget.exercise.reps,
+                        lastMaxLines: 2,
+                      ),
+                    ],
+                  ),
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: _headerActions(),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -1783,6 +1883,8 @@ class _StepperButton extends StatelessWidget {
 Widget debugExerciseCardHostForTest({
   required int exerciseIndex,
   bool isExpanded = true,
+  bool isFocused = false,
+  bool isInSupersetGroupMode = false,
   LogExerciseCallback? onLogExercise,
   VoidCallback? onReopenExercise,
   // ⇄ / ⇅ (docs/plans/active-workout-swap-move.md Task 5).
@@ -1807,6 +1909,8 @@ Widget debugExerciseCardHostForTest({
       isActive: true,
       data: data,
       isExpanded: isExpanded,
+      isFocused: isFocused,
+      isInSupersetGroupMode: isInSupersetGroupMode,
       moveModeActive: moveModeActive,
       moveRole: moveRole,
       moveTargetAbove: moveTargetAbove,
