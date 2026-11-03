@@ -20,6 +20,7 @@ import 'package:icanbefitter/shared/repositories/plan_engine/superset_pairer.dar
 import 'package:icanbefitter/shared/repositories/plan_engine/warmup_cooldown.dart';
 
 import '_helpers.dart';
+import '../helpers/session_budget_fixtures.dart';
 
 void main() {
   // ════════════════════════════════════════════════════════════════
@@ -1138,7 +1139,8 @@ void main() {
         populated: populated,
         phase: 1,
         is6Day: false,
-      );
+          budget: testBudget(),
+        );
 
       expect(weeks.length, 4);
       for (int i = 0; i < 4; i++) {
@@ -1193,8 +1195,8 @@ void main() {
         populated: populated,
         phase: 1,
         is6Day: false,
-        effectiveExp: 'intermediate',
-      );
+          budget: testBudget(),
+        );
       expect(weeks.length, 4);
 
       // Stage 3: Sequencing
@@ -1246,36 +1248,28 @@ void main() {
       }
     });
 
-    test('cycle multiplier affects sets in later phases', () {
+    test('the phase does not scale the allocated sets (no cycle multiplier)', () {
       final populated = [populatedDay(intensity: 'hypertrophy')];
 
-      // APK Test #12.6 — removed unused phase1Weeks / phase5Weeks
-      // assignments (intermediate path; the assertions below use the
-      // beginner-effectiveExp variants).
-      //
-      // Phase 5 has 1.1x multiplier, phase 1 has 1.0x.
-      // Hypertrophy base sets = 3, so phase 1 baseline = 3, phase 5
-      // baseline = round(3*1.1) = 3. With 4-set minimum for intermediate,
-      // both become 4 — that's why we use beginner here where the floor
-      // doesn't apply.
-      final phase1BeginnerWeeks = PeriodizationEngine.apply(
+      // The 1.1x per-phase cycle multiplier and the 4-set minimum are deleted
+      // (set-budget flip, 2026-11-02): the allocator owns the sets, so the same
+      // day gets the same week-1 sets in phase 1 and phase 5.
+      final phase1Weeks = PeriodizationEngine.apply(
         populated: populated,
         phase: 1,
         is6Day: false,
-        effectiveExp: 'beginner',
+        budget: testBudget(level: 'beginner'),
       );
-      final phase5BeginnerWeeks = PeriodizationEngine.apply(
+      final phase5Weeks = PeriodizationEngine.apply(
         populated: populated,
         phase: 5,
         is6Day: false,
-        effectiveExp: 'beginner',
+        budget: testBudget(level: 'beginner'),
       );
 
-      final p1Sets = phase1BeginnerWeeks[0].workoutDays[0].exercises[0].sets;
-      final p5Sets = phase5BeginnerWeeks[0].workoutDays[0].exercises[0].sets;
-      // phase 5 cycle multiplier = 1.1, so 3*1.1 = 3.3 → 3 (rounded)
-      // The volume bump might be negligible for 3 sets but should be >= p1 sets
-      expect(p5Sets, greaterThanOrEqualTo(p1Sets));
+      final p1Sets = phase1Weeks[0].workoutDays[0].exercises[0].sets;
+      final p5Sets = phase5Weeks[0].workoutDays[0].exercises[0].sets;
+      expect(p5Sets, p1Sets);
     });
 
     test('overload notes differ across weeks', () {
@@ -1284,7 +1278,8 @@ void main() {
         populated: populated,
         phase: 1,
         is6Day: false,
-      );
+          budget: testBudget(),
+        );
 
       final notes = weeks.map((w) => w.overloadNotes).toSet();
       expect(notes.length, 4,
@@ -1306,7 +1301,8 @@ void main() {
         populated: populated,
         phase: 1,
         is6Day: true,
-      );
+          budget: testBudget(),
+        );
 
       // All 4 weeks should use variant A for 6-day (A/B baked into the split)
       for (final week in weeks) {

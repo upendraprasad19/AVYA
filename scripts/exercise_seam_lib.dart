@@ -110,8 +110,8 @@ const seamAllowlist = <String, SeamEntry>{
           'canOfferInPicker) then merge — no per-row is_custom check, '
           'restored rows carry no such field.'),
   'lib/shared/repositories/plan_engine/plan_generator.dart': SeamEntry(1,
-      'B2 (session set budget, 2026-10-25). generateV4 reads '
-      'ExerciseRepository.instance.getAll() ONCE, flag-ON only, to build the '
+      'B2 (session set budget, 2026-10-25; always on since the 2026-11-02 flip). generateV4 reads '
+      'ExerciseRepository.instance.getAll() ONCE per generation to build the '
       'name -> row map the allocator and the archetype lookup use. It emits NO '
       'exercise into a plan: every exercise still comes from the selectors '
       'above, which carry capability as a required parameter. The allocator '

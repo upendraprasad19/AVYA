@@ -60,7 +60,11 @@ bool _skill(Map<String, dynamic> r) =>
 /// intermediate builds at phases 1 and 2 (the top-up's biceps neighbour move,
 /// an elbow-only tag): the 629 new rows change which OFF-path candidates the
 /// top-up ranks first, they do not make B1 pick a retired row itself.
-const _r9TopUpRetired = {'E234', 'E254', 'E261', 'E271'};
+/// 2026-11-02 (the session set budget flipped ON for every generation): the
+/// budgeted allocator trims or reshapes the topped-up days, so only E261 and E271
+/// still reach an injured user; E234 and E254 no longer do. The ratchet follows
+/// the measured set DOWN (a recorded id that stops is also a failure here).
+const _r9TopUpRetired = {'E261', 'E271'};
 
 /// Splits the built ids that are retired or skill rows into the hard failures
 /// and the R9 evidence. [without] is the same persona's built ids with the

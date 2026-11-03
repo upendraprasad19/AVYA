@@ -203,7 +203,8 @@ class WarmupCooldownSelector {
     Set<String>? capability,
     // B2 (session set budget, Ruling 3): scales the cardio lead-in and the cool-down
     // walk with the session's minutes (60 s at 30 min ... 300 s at 90 min). null →
-    // today's fixed 300 s, byte-identical.
+    // the fixed 300 s: `generateV4` always passes a budget, but a template or custom
+    // day (`template_service`) has no session minutes and keeps 300 s.
     SessionBudgetContext? budget,
   }) {
     final isAdvanced = effectiveExp != 'beginner';

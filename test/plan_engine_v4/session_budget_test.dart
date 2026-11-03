@@ -10,6 +10,7 @@ import 'package:icanbefitter/shared/repositories/plan_engine/periodization_engin
 import 'package:icanbefitter/shared/repositories/plan_engine/session_budget.dart';
 
 import '_helpers.dart';
+import '../helpers/session_budget_fixtures.dart';
 
 SessionBudgetContext ctx({
   int minutes = 60,
@@ -204,12 +205,14 @@ void main() {
     });
   });
 
-  group('restFor / desiredFor agree with PeriodizationEngine (the mirror)', () {
-    // The model keeps its own table (Ruling 2: all constants in one place), so
+  group('restFor agrees with PeriodizationEngine (the mirror)', () {
+    // The model keeps its own rest table (Ruling 2: all constants in one place), so
     // the engine's `_profileParams` and this table could drift apart silently.
-    // Drive the real engine and compare.
+    // Drive the real engine and compare. The engine no longer stamps base SETS
+    // (flip 2026-11-02: the allocator owns them), so the sets are pinned the other
+    // way: `apply` must leave the allocated sets alone.
     for (final intensity in ['strength', 'hypertrophy', 'endurance', 'something_unknown']) {
-      test('$intensity: the engine stamps the rest and base sets the model assumes', () {
+      test('$intensity: the engine stamps the rest the model assumes and keeps the sets it is given', () {
         final day = populatedDay(
           intensity: intensity,
           exercisesA: [exercise(name: 'Bench Press', exerciseType: 'compound', sets: 9)],
@@ -218,11 +221,11 @@ void main() {
           populated: [day],
           phase: 1,
           is6Day: true,
-          effectiveExp: 'beginner', // no 4-set minimum, no cycle multiplier at phase 1
+          budget: testBudget(level: 'beginner'),
         );
         final ex = weeks[0].workoutDays[0].exercises[0];
         expect(SessionBudget.restFor(intensity), ex.restSeconds);
-        expect(SessionBudget.desiredFor(intensity), ex.sets);
+        expect(ex.sets, 9, reason: 'the allocated sets pass through week 1 untouched');
       });
     }
 

@@ -1,7 +1,8 @@
 // Batch 9 (W2.7) — volume titration behavioral test (platform behavioral_test_path,
 // §4.4 rule 21). Two halves:
-//   • PURE `applyToWeeks` — inertness (identical ref on empty), per-group ±1 clamp
-//     to [MEV=8,MRV=20], multi-group dedup, deload-week `workingSets` symmetry.
+//   • PURE `applyToWeeks` (budgeted, flip 2026-11-02) — inertness (identical ref on
+//     empty), per-group ±1 within the budget's band, multi-group dedup,
+//     deload-week `workingSets` symmetry.
 //   • Hive-seeded `resolveDeltas` — SAFE polarity (−1 on e1RM decline alone; +1
 //     ONLY with positive readiness recovery evidence) + the flag/phase gates.
 //
@@ -23,7 +24,10 @@ import 'package:icanbefitter/core/services/hive_user_session.dart';
 import 'package:icanbefitter/core/utils/ist_date.dart';
 import 'package:icanbefitter/shared/repositories/plan_engine/models.dart';
 import 'package:icanbefitter/shared/repositories/plan_engine/muscle_groups.dart';
+import 'package:icanbefitter/shared/repositories/plan_engine/session_budget.dart';
 import 'package:icanbefitter/shared/repositories/plan_engine/volume_titration.dart';
+
+import '../helpers/session_budget_fixtures.dart';
 
 // ── pure builders ──
 PlannedExercise _ex(String name, int sets, List<String> muscles,
@@ -66,83 +70,113 @@ int _groupWeeklySets(WeekPlan w, String group) {
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
-  group('applyToWeeks (pure)', () {
+  // The flip (2026-11-02) deleted the unbudgeted clamp [MEV=8, MRV=20]; titration
+  // is the budget's own: bottom 12 / top 16 for intermediate build_muscle, a +1
+  // must fit the ledger (session cap 8, every co-group's top, the day's time), a
+  // -1 may not take a credited group below the bottom, only budgeted rows move.
+  group('applyToWeeks (pure, budgeted)', () {
+    SessionBudgetContext b(Iterable<String> names) => testBudget(names: names);
+
     test('empty deltas → IDENTICAL reference (byte-identical inertness)', () {
       final weeks = [
         _week('baseline', [
-          [_ex('Bench', 3, ['chest'])]
+          [_ex('Bench', 3, ['Chest'])]
         ])
       ];
-      expect(identical(weeks, VolumeTitration.applyToWeeks(weeks, const {})),
+      expect(
+          identical(weeks,
+              VolumeTitration.applyToWeeks(weeks, const {}, budget: b(['Bench']))),
           isTrue);
     });
 
-    test('+1 bumps exactly one matching exercise; below MRV', () {
+    test('+1 bumps exactly one matching exercise; below the top', () {
       final weeks = [
         _week('baseline', [
-          [_ex('Bench', 3, ['chest']), _ex('Fly', 3, ['chest'])]
+          [_ex('Bench', 3, ['Chest']), _ex('Fly', 3, ['Chest'])]
         ])
       ];
-      final out = VolumeTitration.applyToWeeks(weeks, const {'Chest': 1});
-      // weekly base 6 → +1 → 7 (one exercise bumped, not both).
-      expect(_groupWeeklySets(out.first, 'Chest'), 7);
+      final out = VolumeTitration.applyToWeeks(weeks, const {'Chest': 1},
+          budget: b(['Bench', 'Fly']));
+      expect(_groupWeeklySets(out.first, 'Chest'), 7); // 6 → 7, one exercise
       final exs = out.first.workoutDays.first.exercises;
       expect(exs.where((e) => e.sets == 4).length, 1);
       expect(exs.where((e) => e.sets == 3).length, 1);
     });
 
-    test('+1 clamped at MRV (no bump when the group is already ≥20)', () {
+    test('+1 refused at the weekly top (16 for intermediate build_muscle)', () {
       final weeks = [
         _week('baseline', [
-          [_ex('a', 10, ['chest']), _ex('b', 10, ['chest'])]
+          [_ex('a', 4, ['Chest']), _ex('b', 4, ['Chest'])],
+          [_ex('c', 4, ['Chest']), _ex('d', 4, ['Chest'])],
         ])
       ];
-      final out = VolumeTitration.applyToWeeks(weeks, const {'Chest': 1});
-      expect(_groupWeeklySets(out.first, 'Chest'), 20); // unchanged
+      final out = VolumeTitration.applyToWeeks(weeks, const {'Chest': 1},
+          budget: b(['a', 'b', 'c', 'd']));
+      expect(_groupWeeklySets(out.first, 'Chest'), 16); // unchanged
     });
 
-    test('−1 trims one exercise (above MEV)', () {
+    test('+1 refused at the per-session cap (8 for intermediate)', () {
       final weeks = [
         _week('baseline', [
-          [_ex('a', 5, ['chest']), _ex('b', 5, ['chest'])]
+          [_ex('a', 4, ['Chest']), _ex('b', 4, ['Chest'])],
         ])
       ];
-      final out = VolumeTitration.applyToWeeks(weeks, const {'Chest': -1});
-      expect(_groupWeeklySets(out.first, 'Chest'), 9); // 10 → 9
+      final out = VolumeTitration.applyToWeeks(weeks, const {'Chest': 1},
+          budget: b(['a', 'b']));
+      expect(_groupWeeklySets(out.first, 'Chest'), 8); // unchanged, 8 in one day
     });
 
-    test('−1 no-op at/below MEV (never trims below the floor)', () {
+    test('−1 trims one exercise (above the bottom, 12)', () {
       final weeks = [
         _week('baseline', [
-          [_ex('a', 4, ['chest']), _ex('b', 4, ['chest'])]
+          [_ex('a', 4, ['Chest']), _ex('b', 4, ['Chest'])],
+          [_ex('c', 5, ['Chest'])],
         ])
       ];
-      final out = VolumeTitration.applyToWeeks(weeks, const {'Chest': -1});
-      expect(_groupWeeklySets(out.first, 'Chest'), 8); // == MEV → unchanged
+      final out = VolumeTitration.applyToWeeks(weeks, const {'Chest': -1},
+          budget: b(['a', 'b', 'c']));
+      expect(_groupWeeklySets(out.first, 'Chest'), 12); // 13 → 12, one exercise
+    });
+
+    test('−1 no-op at the bottom (never trims a group below 12)', () {
+      final weeks = [
+        _week('baseline', [
+          [_ex('a', 3, ['Chest']), _ex('b', 3, ['Chest'])],
+          [_ex('c', 3, ['Chest']), _ex('d', 3, ['Chest'])],
+        ])
+      ];
+      final out = VolumeTitration.applyToWeeks(weeks, const {'Chest': -1},
+          budget: b(['a', 'b', 'c', 'd']));
+      expect(_groupWeeklySets(out.first, 'Chest'), 12); // == bottom → unchanged
     });
 
     test('−1 respects the per-exercise sets≥1 floor', () {
-      // 9 chest exercises × 1 set → weeklyBase 9 (> MEV) but every match is
-      // already at 1 → the −1 rolls through all and applies nowhere.
+      // 13 chest exercises x 1 set → weekly 13 (> bottom) but every match is
+      // already at 1 → the −1 applies nowhere.
       final weeks = [
         _week('baseline', [
-          [for (var i = 0; i < 9; i++) _ex('c$i', 1, ['chest'])]
+          [for (var i = 0; i < 7; i++) _ex('c$i', 1, ['Chest'])],
+          [for (var i = 7; i < 13; i++) _ex('c$i', 1, ['Chest'])],
         ])
       ];
-      final out = VolumeTitration.applyToWeeks(weeks, const {'Chest': -1});
-      expect(_groupWeeklySets(out.first, 'Chest'), 9); // unchanged (floored)
-      expect(out.first.workoutDays.first.exercises.every((e) => e.sets == 1),
+      final out = VolumeTitration.applyToWeeks(weeks, const {'Chest': -1},
+          budget: b([for (var i = 0; i < 13; i++) 'c$i']));
+      expect(_groupWeeklySets(out.first, 'Chest'), 13); // unchanged (floored)
+      expect(
+          out.first.workoutDays
+              .every((d) => d.exercises.every((e) => e.sets == 1)),
           isTrue);
     });
 
     test('multi-group exercise bumped AT MOST once per week (dedup)', () {
       final weeks = [
         _week('baseline', [
-          [_ex('Bench', 3, ['chest', 'triceps'])]
+          [_ex('Bench', 3, ['Chest', 'Triceps'])]
         ])
       ];
-      final out =
-          VolumeTitration.applyToWeeks(weeks, const {'Chest': 1, 'Triceps': 1});
+      final out = VolumeTitration.applyToWeeks(
+          weeks, const {'Chest': 1, 'Triceps': 1},
+          budget: b(['Bench']));
       // Bench matches BOTH deltas but is adjusted once → 4, not 5.
       expect(out.first.workoutDays.first.exercises.first.sets, 4);
     });
@@ -151,22 +185,24 @@ void main() {
         () {
       final weeks = [
         _week('deload', [
-          [_ex('Bench', 2, ['chest'], workingSets: 5)]
+          [_ex('Bench', 2, ['Chest'], workingSets: 4)]
         ])
       ];
-      final out = VolumeTitration.applyToWeeks(weeks, const {'Chest': 1});
+      final out = VolumeTitration.applyToWeeks(weeks, const {'Chest': 1},
+          budget: b(['Bench']));
       final e = out.first.workoutDays.first.exercises.first;
       expect(e.sets, 2); // recovery week visible sets preserved
-      expect(e.workingSets, 6); // stashed peak titrated (workingBase 5 < MRV)
+      expect(e.workingSets, 5); // stashed peak titrated 4 → 5 (under the 5-set limit)
     });
 
     test('deload week with NO stash (workingSets null) → nothing changes', () {
       final weeks = [
         _week('deload', [
-          [_ex('Bench', 2, ['chest'])]
+          [_ex('Bench', 2, ['Chest'])]
         ])
       ];
-      final out = VolumeTitration.applyToWeeks(weeks, const {'Chest': 1});
+      final out = VolumeTitration.applyToWeeks(weeks, const {'Chest': 1},
+          budget: b(['Bench']));
       final e = out.first.workoutDays.first.exercises.first;
       expect(e.sets, 2);
       expect(e.workingSets, isNull);
@@ -175,10 +211,22 @@ void main() {
     test('a group with no matching exercise this week is a safe no-op', () {
       final weeks = [
         _week('baseline', [
-          [_ex('Squat', 3, ['quads'])]
+          [_ex('Squat', 3, ['Quads'])]
         ])
       ];
-      final out = VolumeTitration.applyToWeeks(weeks, const {'Chest': 1});
+      final out = VolumeTitration.applyToWeeks(weeks, const {'Chest': 1},
+          budget: b(['Squat']));
+      expect(out.first.workoutDays.first.exercises.first.sets, 3);
+    });
+
+    test('a NOT-budgeted row (no library row) is never titrated', () {
+      final weeks = [
+        _week('baseline', [
+          [_ex('Bench', 3, ['Chest'])]
+        ])
+      ];
+      final out = VolumeTitration.applyToWeeks(weeks, const {'Chest': 1},
+          budget: b(const [])); // Bench absent from archetypeByName
       expect(out.first.workoutDays.first.exercises.first.sets, 3);
     });
   });

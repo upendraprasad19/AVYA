@@ -5,40 +5,19 @@
 //
 // Scope: tests that exercise the "hypertrophy" intensity profile (the
 // default for `populatedDay()` and the V4 archetype for phase 1 / 5 / 9).
-// Covers volume wave defaults, body focus +1 set, suggested starting
-// weights, cycle multiplier, and apply() structural invariants.
+// Covers volume wave defaults, suggested starting weights and apply()
+// structural invariants. The cycle multiplier and the body-focus +1 were deleted
+// with the unbudgeted body (flip 2026-11-02); the focus now lives in the allocator.
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:icanbefitter/shared/repositories/plan_engine/models.dart';
 import 'package:icanbefitter/shared/repositories/plan_engine/periodization_engine.dart';
 
 import '_helpers.dart';
+import '../helpers/session_budget_fixtures.dart';
 
 void main() {
   group('PeriodizationEngine', () {
-    group('cycleMultiplier', () {
-      test('phases 1-4 = 1.0', () {
-        for (int p = 1; p <= 4; p++) {
-          expect(PeriodizationEngine.cycleMultiplier(p), 1.0,
-              reason: 'Phase $p should be multiplier 1.0');
-        }
-      });
-
-      test('phases 5-8 = 1.1', () {
-        for (int p = 5; p <= 8; p++) {
-          expect(PeriodizationEngine.cycleMultiplier(p), closeTo(1.1, 0.001),
-              reason: 'Phase $p should be multiplier 1.1');
-        }
-      });
-
-      test('phases 9-12 = 1.2', () {
-        for (int p = 9; p <= 12; p++) {
-          expect(PeriodizationEngine.cycleMultiplier(p), closeTo(1.2, 0.001),
-              reason: 'Phase $p should be multiplier 1.2');
-        }
-      });
-    });
-
     group('Volume wave (4-week) — hypertrophy intensity', () {
       test('deload week has fewer sets than baseline', () {
         final populated = [populatedDay()];
@@ -46,6 +25,7 @@ void main() {
           populated: populated,
           phase: 1,
           is6Day: false,
+          budget: testBudget(),
         );
 
         final baselineSets = weeks[0].workoutDays[0].exercises[0].sets;
@@ -60,52 +40,12 @@ void main() {
           populated: populated,
           phase: 1,
           is6Day: false,
+          budget: testBudget(),
         );
         expect(weeks[0].weekCharacter, 'baseline');
         expect(weeks[1].weekCharacter, 'overreach');
         expect(weeks[2].weekCharacter, 'peak');
         expect(weeks[3].weekCharacter, 'deload');
-      });
-    });
-
-    group('Body focus +1 set', () {
-      test('matching muscle gets +1 set', () {
-        final populated = [
-          populatedDay(exercisesA: [
-            exercise(
-              name: 'Bench Press',
-              primaryMuscles: ['Chest', 'Triceps'],
-            ),
-            exercise(
-              name: 'Lat Pulldown',
-              primaryMuscles: ['Lats', 'Biceps'],
-            ),
-          ]),
-        ];
-
-        final weeksWithFocus = PeriodizationEngine.apply(
-          populated: populated,
-          phase: 1,
-          is6Day: false,
-          bodyFocus: ['chest'],
-        );
-
-        final weeksWithoutFocus = PeriodizationEngine.apply(
-          populated: populated,
-          phase: 1,
-          is6Day: false,
-          bodyFocus: [],
-        );
-
-        // Bench Press should get +1 set (matches chest)
-        final benchWithFocus = weeksWithFocus[0].workoutDays[0].exercises[0].sets;
-        final benchWithout = weeksWithoutFocus[0].workoutDays[0].exercises[0].sets;
-        expect(benchWithFocus, benchWithout + 1);
-
-        // Lat Pulldown should NOT get +1 set (does not match chest)
-        final latWithFocus = weeksWithFocus[0].workoutDays[0].exercises[1].sets;
-        final latWithout = weeksWithoutFocus[0].workoutDays[0].exercises[1].sets;
-        expect(latWithFocus, latWithout);
       });
     });
 
@@ -122,6 +62,7 @@ void main() {
           phase: 2,
           is6Day: false,
           previousWeights: {'Bench Press': 62.5},
+          budget: testBudget(),
         );
 
         final ex = weeks[0].workoutDays[0].exercises[0];
@@ -141,7 +82,8 @@ void main() {
           populated: populated,
           phase: 2,
           is6Day: false,
-          previousWeights: {'Bench Press': 62.5}, // no Cable Fly
+          previousWeights: {'Bench Press': 62.5}, // no Cable Fly,
+          budget: testBudget(),
         );
 
         final ex = weeks[0].workoutDays[0].exercises[0];
@@ -156,6 +98,7 @@ void main() {
           populated: populated,
           phase: 1,
           is6Day: false,
+          budget: testBudget(),
         );
         expect(weeks.length, 4);
       });
@@ -166,6 +109,7 @@ void main() {
           populated: populated,
           phase: 1,
           is6Day: false,
+          budget: testBudget(),
         );
         for (int i = 0; i < 4; i++) {
           expect(weeks[i].weekInPhase, i + 1);
@@ -179,6 +123,7 @@ void main() {
           populated: populated,
           phase: 1,
           is6Day: false,
+          budget: testBudget(),
         );
         expect(phase1Weeks[0].weekNumber, 1);
         expect(phase1Weeks[3].weekNumber, 4);
@@ -187,6 +132,7 @@ void main() {
           populated: populated,
           phase: 3,
           is6Day: false,
+          budget: testBudget(),
         );
         expect(phase3Weeks[0].weekNumber, 9);
         expect(phase3Weeks[3].weekNumber, 12);
@@ -202,6 +148,7 @@ void main() {
           populated: populated,
           phase: 1,
           is6Day: false,
+          budget: testBudget(),
         );
         for (final week in weeks) {
           expect(week.workoutDays.length, 3);
@@ -223,6 +170,7 @@ void main() {
           populated: populated,
           phase: 1,
           is6Day: false,
+          budget: testBudget(),
         );
 
         // Week 1 (idx 0) → A, Week 2 (idx 1) → B, Week 3 (idx 2) → A, Week 4 (idx 3) → B

@@ -1917,10 +1917,10 @@ added, false of the flip being performed.
 
 - **Telltale:** after a quantity's model changes (a day's minutes under the session set budget), two screens agree and a third surface still prices it the old way: the coach's "shorten to 45 minutes" estimated `sets x (60 + rest)` while Train and Home showed the budget model, so the same stored day read 21 minutes on one and 26 on the other. A display function that only hand-built test days ever called belongs here too.
 - **Root-cause shape:** the producers were found by looking at the function that was edited, not at every place that computes the VALUE. Grep the unit and the arithmetic (`* 2.5`, `/ 60`, `rest_seconds`, `minutes`) across `lib/`, not the function name.
-- **Fix pattern:** one shared pure function for every producer (here `budgetedDaySeconds`); the old formula stays only behind the flag's OFF branch. Price every generated and stored day through it in the gate and compare with an independent oracle to 1e-6 s.
+- **Fix pattern:** one shared pure function for every producer (here `budgetedDaySeconds`); the old formula now survives only as the shared unreadable-day fallback (`fallbackDayMinutes` / `fallbackExerciseListSeconds`; the flag was deleted 2026-11-02). Price every generated and stored day through it in the gate and compare with an independent oracle to 1e-6 s.
 - **Test shape:** the same stored day through each surface (Train day card, Train week list, Home card, the coach) asserts one number; a mutant that adds 1 s to one item type must redden the gate.
 - **Prior incidents:** B2 batch R3 P2-2 (coach `shortenDay`), R3 P2-1 (cardio and timed rows priced as one 40 s set by every producer at once), R3 P2-4 (the display function was never run over a real plan).
-- **Regression test:** `test/contracts/session_estimate_display_test.dart` ("flag OFF: the old exercises-only estimate, 21 min" / "flag ON: the same 26 min Train and Home show for that day"), `test/plan_generator/session_set_budget_gate_test.dart` (display equals the oracle on every day).
+- **Regression test:** `test/contracts/session_estimate_display_test.dart` ("the same 26 min Train and Home show for that day"; the OFF tests were deleted with the flag), `test/plan_generator/session_set_budget_gate_test.dart` (display equals the oracle on every day).
 
 ### 2.123 A boot migrator rewrites rows that are already correct and stamps them "now", so the push fingerprint the restore just recorded goes stale (NEW 2026-10-25)
 

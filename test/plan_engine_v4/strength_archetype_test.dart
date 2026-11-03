@@ -13,6 +13,7 @@ import 'package:icanbefitter/shared/repositories/plan_engine/split_resolver.dart
 import 'package:icanbefitter/shared/repositories/plan_engine/periodization_engine.dart';
 
 import '_helpers.dart';
+import '../helpers/session_budget_fixtures.dart';
 
 void main() {
   group('SplitResolver', () {
@@ -41,7 +42,7 @@ void main() {
           populated: populated,
           phase: 1,
           is6Day: false,
-          effectiveExp: 'intermediate',
+          budget: testBudget(),
         );
         expect(weeks.length, 4);
 
@@ -59,6 +60,7 @@ void main() {
           populated: populated,
           phase: 1,
           is6Day: false,
+          budget: testBudget(),
         );
 
         final baselineReps = weeks[0].workoutDays[0].exercises[0].reps;

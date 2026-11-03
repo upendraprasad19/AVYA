@@ -1,0 +1,97 @@
+# Closure ledger - set-budget-flip (Batch 3: the session set budget flipped ON, OFF paths deleted).
+# Plan docs/plans/2026-11-02-session-set-budget-flip.md (r3). Gate 40 (validate_audit_closure.dart).
+# Rows carry the SHA of the landing commit, written by the stamp commit that follows it (a commit cannot name its own SHA).
+batch: set-budget-flip
+plan_review_record: docs/plan-reviews/set-budget-flip.md
+total_findings: 16
+closed_count: 16
+
+findings:
+  - id: SBF-FLAG-FLIP
+    title: "The session set budget runs on every generation; the flag enable_session_set_budget and PlanEngineFlags.sessionSetBudgetEnabled are deleted (CLAUDE.md 4.6 step 4)"
+    terminal_state: closed_in_commit
+    commit: 0d847b9be6ae4846fa9f2443cb65778c0d22501a
+    verification: "generateV4 builds the SessionBudgetContext unconditionally (plan_generator.dart); test/contracts/session_set_budget_wiring_test.dart (minutes sizing, caller beats profile, default 60, lighter phase, focus, effective level, repeat pins, top-up); no reader of the flag remains (git grep over lib/ test/ scripts/ is empty)."
+
+  - id: SBF-DELETE-OFF-PATHS
+    title: "Every OFF path is deleted: PeriodizationEngine.apply unbudgeted body, cycleMultiplier, the 4-set minimum and the post-hoc physique +1; VolumeTitration _titrateWeek and the [8,20] clamp; VolumeFilter targetCount, keepAllSlots and the first-N trim"
+    terminal_state: closed_in_commit
+    commit: 0d847b9be6ae4846fa9f2443cb65778c0d22501a
+    verification: "apply and applyToWeeks take a required budget; VolumeFilter keeps only the deload rule; tests of the deleted behaviour were deleted or rebuilt on test/helpers/session_budget_fixtures.dart (testBudget) in 16 files; whole-project flutter analyze is clean."
+
+  - id: SBF-COVERAGE-LOSS
+    title: "Coverage-loss sweep: every live feature whose only proof exercised the deleted unbudgeted body has a budgeted equivalent (physique focus, triggered-deload stash, plateau +1, deload-week cut, wave reps and rest)"
+    terminal_state: closed_in_commit
+    commit: 0d847b9be6ae4846fa9f2443cb65778c0d22501a
+    verification: "physique_focus_bringup_test.dart now proves the translated tokens reach BudgetMuscleGroups and the allocator's focus pass (a focus group ends the week with more sets, a non-focus group does not); plateau_escalation_behavioral_test.dart and volume_titration_behavioral_test.dart run the budgeted titration (top 16, session cap 8, bottom 12, floor of 1, dedup, deload stash, not-budgeted rows); session_set_budget_consumers_test.dart pins the stash and week 4 = floor(0.6 x own sets); session_budget_test.dart pins that apply stamps the rest the model assumes and keeps the allocated sets."
+
+  - id: SBF-DISPLAY-FALLBACK
+    title: "The three unreadable-day fallbacks (Home, Train estimatedDuration, coach shortenDay) are ONE shared function and keep their old numbers; they were never OFF-only paths"
+    terminal_state: closed_in_commit
+    commit: 0d847b9be6ae4846fa9f2443cb65778c0d22501a
+    verification: "session_estimate.dart fallbackDayMinutes / fallbackExerciseListSeconds; test/contracts/session_estimate_display_test.dart (shared fallback numbers, an unreadable day still gets a Home number, Train and swap_service call the shared functions and carry no private copy); regression_logic_test.dart '30 min' stays."
+
+  - id: SBF-WORDING
+    title: "The Edit Profile minutes chips read Up to N min (the plan fits inside the minutes and can run shorter)"
+    terminal_state: closed_in_commit
+    commit: 0d847b9be6ae4846fa9f2443cb65778c0d22501a
+    verification: "test/contracts/session_duration_chip_wording_test.dart (presence only; the picker is a private method of a large screen). Onboarding has no minutes picker (it only passes the profile value through), so there is no second surface."
+
+  - id: SBF-GOLDEN
+    title: "The generator golden is re-recorded wholesale: all 998 personas changed because every generation is now budgeted"
+    terminal_state: closed_in_commit
+    commit: 0d847b9be6ae4846fa9f2443cb65778c0d22501a
+    verification: "RECORD_GENERATOR_GOLDEN=1 over generator_golden_test.dart (changed personas by group: bodyweight 240, home_dumbbells 240, basic_gym 240, full_gym 240, extra 38; total 998); the test passes against the new fixture."
+
+  - id: SBF-DOCS-REGISTRY
+    title: "Docs, registry and seam notes describe the flipped state: four nested CLAUDE.md files, plan-engine-detail, directory-structure, naming glossary, debugging bug-classes 2.122, sot_registry concepts session_set_budget and session_duration_minutes (flag readers removed, ranges recomputed), exercise_seam_lib note, ship_dark_pending_review (entry moved to resolved)"
+    terminal_state: closed_in_commit
+    commit: 0d847b9be6ae4846fa9f2443cb65778c0d22501a
+    verification: "check_sot_registry_parity, check_sot_registry_citations, check_sot_registry_completeness, Gate 42 and check_exercise_seams pass; the post-edit git grep for cycleMultiplier, keepAllSlots, sessionSetBudgetEnabled and targetCount leaves only historical records (plans, diagnoses, reviews, closed issues)."
+
+  - id: SBF-TEMPLATE-WARMUP
+    title: "Template and custom days keep the fixed 300 s warm-up lead-in and cool-down walk (WarmupCooldownSelector.attach keeps a nullable budget for template_service)"
+    terminal_state: verified_clean
+    evidence: "template_service.dart:190 calls attach with no budget; the 300 s default is unchanged and covered by session_set_budget_consumers_test.dart (the attach tests stay). Round 1 of the plan review found this path; the plan keeps the nullable parameter and names the reason."
+
+  - id: SBF-STORED-DAYS
+    title: "Stored days built by the old generator are now priced by the budget model; no stored value changes meaning"
+    terminal_state: verified_clean
+    evidence: "Round 2 of the plan review confirmed nothing compares a stored estimate with a recomputed one (estimated_duration is only a template column); the display reads stored sets and recomputes minutes. Testers only (launch status, root CLAUDE.md section 1), so no migration."
+
+  - id: SBF-QUADS-FLOOR
+    title: "Quads sit at 8 weekly sets in the 6-day 90-minute build_muscle case (band 12 to 16), below the floor"
+    terminal_state: blocked_on_user
+    reason: "Measured at the flip (plan-engine-detail (d)): Legs A (88.1 of 90 minutes) holds squat 4, deadlift 4, hanging leg raise 4, leg extension 4, calves 6; Legs B has no quad exercise; Glutes reach the band top (16), so the squat cannot grow. Two levers exist and neither is shipped: (a) a quad slot on Legs B in the 6-day split, (b) an allocator policy that serves below-floor groups first. Both change every generated plan, so it is the founder's choice among (a), (b) or neither."
+
+  - id: SBF-REPEAT-PHASE-MINUTES
+    title: "A repeat phase keeps the previous phase's exercise list when the user's minutes go up (the allocator never adds exercises)"
+    terminal_state: blocked_on_user
+    reason: "Product call: faithful repeat (today) versus a fresh pick when the minutes rose. Pins are faithful by design and the repeat gate tests adherence only."
+
+  - id: SBF-MIGRATION-COMMENT
+    title: "COMMENT ON COLUMN public.user_profile.session_duration_minutes: migration 017's comment says the generator no longer reads the column, which is false since the flip"
+    terminal_state: blocked_on_user
+    reason: "A comment-only live schema apply needs the founder's explicit per-action go (root CLAUDE.md 4.3). Gate 14 and the paired-commit gate force the file, its applied-ledger entry and the apply together, so it lands as its own commit and PR after that go (number reserved with scripts/mint_migration.sh then); no column changes, so backups/live_schema_columns.json is untouched."
+
+  - id: SBF-SCORECARD-BASELINE
+    title: "The Batch 0 scorecard baseline is re-frozen: every slot now survives to the allocator, so the plans carry more fallback picks (1679 to 2009 over 606 personas; plans with one 288 to 303) while coverage, progression and the overall mean rise"
+    terminal_state: closed_in_commit
+    commit: 0d847b9be6ae4846fa9f2443cb65778c0d22501a
+    verification: "dart run test/plan_generator/generate_baseline.dart (mean overall 81.1 to 82.3, coverage 94.7 to 97.5, progression 62.9 to 73.3, balance 67.1 to 64.5, volume 70.4 to 66.9, realism 91.8 to 91.5; unsafe 0 and equipment violations 0 unchanged); test/plan_generator/scorecard_gate_test.dart passes against it. The first full-suite run of this batch found it red (2009 over 1679)."
+
+  - id: SBF-THIN-DAYS
+    title: "A day can end with 1 or 2 exercises when the weekly band of its muscle groups is spent (6-day beginner weeks, injured pools); before the flip the injury sweeps held a hard zero for days under 3 exercises"
+    terminal_state: blocked_on_user
+    reason: "Measured by the 20 injury-sweep blocks (test/helpers/injury_floor_sweep_lib.dart kThinCeilings: 14 to 197 days under 3 exercises and 0 to 24 one-exercise days per block of 2,160 to 3,888 days, no empty day) and by an allocator trace: every removal there is a weekly-top removal (for example a 6-day beginner general_fitness week, top 10 sets per group). A guard that takes removed slots back over the weekly top fixed the sweeps but broke the allocator's weekly-top invariant and the budget gate, so it was reverted; the sweeps now ratchet at the measured counts (a ceiling only moves down). The founder decides: keep the weekly band hard (today), or let a day under 2 exercises exceed it by a few sets (a guard with its own stats), or lift the beginner 6-day band."
+
+  - id: SBF-B1-STAYS-OFF
+    title: "enable_core_list_pool (B1) stays OFF: its own recorded flip criteria are not met"
+    terminal_state: upstream_blocked
+    blocker: "docs/ship_dark_pending_review.yaml (enable_core_list_pool): emergencyAnyLevel is non-zero in 2 golden personas and in 58 of 576 multi-injury runs, refilled in 34 of 576, retired rows (E144 E261 E254 E294 E271 E234) appear in built lists, and the OI-401 / R9 top-up question is unanswered."
+    reopen_when: "emergencyAnyLevel == 0 after the library work, refilled == 0 with no retired or skill/olympic id over the multi-injury sweep, and the founder answers the promoted / injured thin-session and top-up questions."
+
+  - id: SBF-DEVICE-CHECK
+    title: "Device check of the flipped budget on a built app"
+    terminal_state: blocked_on_user
+    reason: "Needs a deployed build (the founder initiates builds). Check: a 30 / 45 / 60 / 90 minute profile gives sessions that fit inside the minutes; Home and Train show the same minutes for the same day; the coach's shorten-to-N lands near N; Edit Profile chips read Up to N min; a template day keeps its warm-up."

@@ -1,10 +1,8 @@
-// B2 Task 0 (docs/plans/2026-10-22-session-set-budget.md): the
-// `enable_session_set_budget` flag, the session-minutes resolution and the Edit
-// Profile default.
-//
-// The FIRST test runs before any Hive.init so the getter's catch branch (no Hive
-// -> OFF) is what answers; the Hive group opens boxes afterwards. Same ordering
-// rule as test/plan_engine_v4/thin_day_topup_flag_test.dart.
+// B2 Task 0 (docs/plans/2026-10-22-session-set-budget.md): the session-minutes
+// resolution and the Edit Profile default. The `enable_session_set_budget` flag
+// assertions were deleted with the flag (flip 2026-11-02,
+// docs/plans/2026-11-02-session-set-budget-flip.md); `resolveMinutes` and
+// `sessionMinutesFromProfile` keep their tests here.
 import 'dart:io';
 
 import 'package:flutter/services.dart';
@@ -14,16 +12,11 @@ import 'package:hive_flutter/hive_flutter.dart';
 import 'package:icanbefitter/core/services/guarded_box.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
 import 'package:icanbefitter/core/services/hive_user_session.dart';
-import 'package:icanbefitter/shared/repositories/plan_engine/plan_engine_flags.dart';
 import 'package:icanbefitter/shared/repositories/plan_engine/session_budget.dart';
 import 'package:icanbefitter/shared/repositories/plan_engine/training_history_analyzer.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
-
-  test('the flag defaults FALSE when Hive is unavailable (catch branch)', () {
-    expect(PlanEngineFlags.sessionSetBudgetEnabled, isFalse);
-  });
 
   group('SessionBudget.resolveMinutes', () {
     // (param, profileValue) -> expected, the plan's Task 0 table.
@@ -156,25 +149,6 @@ void main() {
 
     tearDown(() async {
       await HiveUserSession.closeAll();
-    });
-
-    test('unset -> OFF', () {
-      expect(PlanEngineFlags.sessionSetBudgetEnabled, isFalse);
-    });
-
-    test('enable_session_set_budget: true -> ON', () async {
-      await HiveService.instance.configBox.put('enable_session_set_budget', true);
-      expect(PlanEngineFlags.sessionSetBudgetEnabled, isTrue);
-    });
-
-    test('false, and a non-bool "true", stay OFF (the check is == true)',
-        () async {
-      await HiveService.instance.configBox
-          .put('enable_session_set_budget', false);
-      expect(PlanEngineFlags.sessionSetBudgetEnabled, isFalse);
-      await HiveService.instance.configBox
-          .put('enable_session_set_budget', 'true');
-      expect(PlanEngineFlags.sessionSetBudgetEnabled, isFalse);
     });
 
     test('sessionMinutesFromProfile: no profile -> null', () {

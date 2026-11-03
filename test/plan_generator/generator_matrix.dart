@@ -163,7 +163,6 @@ GeneratedPlan generatePlan(
   );
   final filteredDays = VolumeFilter.filterDays(
     splitDays,
-    experience: effExp,
     weekCharacter: 'baseline',
   );
 

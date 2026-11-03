@@ -1,29 +1,15 @@
 // test/plan_generator/edit_profile_regen_test.dart
 //
-// Regression test for F6 — when user has fitness_experience=advanced
-// + days_per_week=5 in their profile, the regen path through
-// edit_profile_screen must produce 8 exercises/day (advanced × 5),
-// not 4 (beginner × 5 fallback).
+// Regression test for F6 — when the user has fitness_experience=advanced in their
+// profile, the regen path through edit_profile_screen must read that key (not a
+// never-written `detected_experience_level`, which fell back to beginner). The
+// `VolumeFilter.targetCount` sanity group was deleted with the function (flip
+// 2026-11-02): the experience now sets the budget's weekly band and session cap.
 
 import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:icanbefitter/shared/repositories/plan_engine/volume_filter.dart';
 
 void main() {
-  group('VolumeFilter.targetCount sanity', () {
-    test('advanced + 5 days = 8 exercises', () {
-      expect(VolumeFilter.targetCount('advanced', 5), 8);
-    });
-
-    test('beginner + 5 days = 4 exercises', () {
-      expect(VolumeFilter.targetCount('beginner', 5), 4);
-    });
-
-    test('intermediate + 5 days = 6 exercises', () {
-      expect(VolumeFilter.targetCount('intermediate', 5), 6);
-    });
-  });
-
   group('edit_profile_screen experience key (F6)', () {
     test('reads fitness_experience, not detected_experience_level', () {
       final source =

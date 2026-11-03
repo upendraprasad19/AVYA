@@ -92,7 +92,7 @@ lib/
       plan_engine/                      # V4 modular pipeline
         models.dart                     # MuscleSlot, MuscleSlotDay
         split_resolver.dart             # Stage 1: muscle-level day splits (8-10 P1-P5 slots/day)
-        volume_filter.dart              # Stage 1.5: slots.take(targetCount(exp, daysPerWeek))
+        volume_filter.dart              # Stage 1.5: keeps every slot; deload = priority-1 only
         exercise_selector.dart          # Stage 2: 5-attempt cascade within movement patterns
         sequencing_engine.dart          # Stage 3: CNS ordering
         periodization_engine.dart       # Stage 4: DUP + exercise-specific rep_range
@@ -210,7 +210,7 @@ lib/
       plan_engine/             # V4 modular pipeline
         models.dart            # MuscleSlot, MuscleSlotDay, CSpec (legacy)
         split_resolver.dart    # Trainer-wisdom splits → MuscleSlotDay[]
-        volume_filter.dart     # Stage 1.5: slots.take(targetCount(exp, daysPerWeek))
+        volume_filter.dart     # Stage 1.5: keeps every slot; deload = priority-1 only
         exercise_selector.dart # 5-attempt cascading fallback
         plan_generator.dart    # Pipeline orchestrator (generateV4)
         periodization_engine.dart # DUP + exercise-specific rep_range
@@ -233,7 +233,7 @@ supabase/{migrations, functions}/                     # SQL + Edge Functions (TS
 - `lib/core/services/subscription_service.dart` — `isPro()` + `gate()` (never read `configBox.get('isPro')` directly)
 - `lib/core/services/ai_service.dart` — `_compactContext()` (the only snapshot trimmer)
 - `lib/shared/repositories/plan_generator.dart` — workout plan generation (CLAUDE rule #14: untouchable without explicit approval)
-- `lib/shared/repositories/plan_engine/volume_filter.dart` — Stage 1.5 target-count trimming (`targetCount(experience, daysPerWeek)`)
+- `lib/shared/repositories/plan_engine/volume_filter.dart` — Stage 1.5 deload-week slot filter (the fixed-count `targetCount` trim was deleted by the B2 flip, 2026-11-02)
 - `lib/core/utils/exercise_display.dart` — Experience-level exercise label formatting
 - `test/plan_generator/v4_diagnostic_test.dart` — pure-Dart V4 pipeline tracer. Run this when plan generator output looks wrong; emits `test/plan_generator/v4_diagnostic_output.md`. Mirrors `exercise_repository.queryV4` + `exercise_selector._cascadeFill`; any change to either production file requires an equivalent update to the mirror.
 - `lib/features/nutrition/providers/diet_plan_provider.dart` — ONE reader of `configBox['saved_diet_plan']`. Returns `Map<String, PlannedSlot>` keyed by slot (breakfast/lunch/dinner/snack). Consumed by `TodaysMealsCard` to render "FROM YOUR DIET PLAN" hints on empty slots. `diet_plan_screen._savePlan` invalidates this provider after writing the plan (PR AH.5).

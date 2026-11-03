@@ -5612,16 +5612,6 @@ The repo root has no allowlist, so a command that writes a file there (a stray s
 - **Verified**: 2026-10-06 - code read: no code path resets the field except the debug-only `simulation_service.dart` reset; badge readers (`badge_service.dart` 4/8/12-week badges) and the AI snapshot (`ai_snapshot_builder.dart`) read it as a lifetime count. Founder decision A, 2026-10-06 ("lifetime counter, restore never lowers it").
 - **Identified**: 2026-10-06 · filed via mint_oi.sh from branch `claude/avya-streak-data-check-b506de`
 
-## OI-309 — Merge-conflict treadmill: every >=account PR conflicts with main again and again (shared append-only + generated docs, max+1 numbering) while the 25-minute pre-push full suite re-runs on each docs-only merge; PR #73 needed 4 merge rounds in ~1 day, and its merge then turned main red on a stale plan-review tier
-
-- **Status**: OPEN
-- **Blocked on**: a plan (it changes hooks and the generated-file policy, so CLAUDE.md 4.12 plan review x2 applies) and a founder call on the options below. Interim, in force now: for a push whose new commits are only a merge of `origin/main` with docs-only conflict edits, the founder approved `FOUNDER_APPROVED_NO_VERIFY=1` (chat 2026-10-05, "Approved no verify if that helps"); CI still runs the full suite on the PR. Whether that approval is standing or per-push is the founder's to state. Progress 2026-10-26 (plan `docs/plans/merge-conflict-treadmill.md`): landings A0 (#159), A1 (#160), A2 (#167), B (#171, the bug-class uniqueness gate and renumber, closes OI-167) and C1 (#176, the review gate grades a branch sync by what the merge adds beyond main, closes OI-413) are merged; C2 (the record-aware branch sync `sh scripts/sync_with_main.sh`, plan `docs/plans/sync-resolver.md`) is in the PR of branch `sync-resolver`; D (merge train) remains, and this issue stays OPEN until D.
-- **Verified**: 2026-10-05 - measured on PR #73 (OI-284): 4 merge-of-main rounds in about a day (plus a red main: the plan-review record's tier was measured before main's PR #70 promoted two files it touches to platform, so the merge-to-main gate wanted `bpass: accepted`; fixed by the record-correction PR); each round = hand-resolve + gate loop + a ~25-minute pre-push full suite, during which main moved again. Commits touching each file on `origin/main` in 3 days: `OPEN_INDEX.md` 8, `bug-classes.md` 8, `open_issues.md` 8, `sot_registry.yaml` 9, `diagnoses/INDEX.md` 6, `debugging/SKILL.md` 4, `naming_conventions.md` 3. Conflicts seen: bug-class number taken twice by max+1 (2.85 then 2.87), glossary rows appended at the same spot, two generated indexes, the OI board tail, plus one non-textual interaction (PR #70's new engine-completeness test flagged the new file).
-- **Root causes**: (1) every batch is REQUIRED to edit the same shared files, mostly by appending at one spot (bug classes, naming glossary, OI board, SoT registry, diagnose docs); (2) generated files (`OPEN_INDEX.md`, `diagnoses/INDEX.md`, `GATE_INDEX.md`) are committed and regenerated per commit, so they conflict on any overlap although they rebuild in seconds; (3) bug-class numbers are claimed by "max + 1" (OI numbers are not: `mint_oi.sh` reserves atomically; OI-167 already recommends keying classes on the title); (4) the pre-push full suite takes ~25 minutes and re-runs on a docs-only merge, a window in which another PR merges.
-- **Options to plan** (each independent): (a) stop tracking generated indexes (build in CI / on demand) or give them a regenerate merge driver installed by `setup-hooks.sh`; (b) one file per entry for bug classes, glossary terms and diagnose entries with a generated index, so two branches never edit the same lines; (c) an allocator or title-keyed ids for bug classes; (d) pre-push policy: when the new commits are a pure merge of `origin/main` (CI-green) the delta since the last green push is docs-only, verify the delta (gates + analyze) instead of the whole suite, CI stays the full-suite source of truth; (e) a GitHub merge queue (or auto-merge) so each PR is tested on top of current main serially; (f) `git rerere` and `merge=union` for pure-append files.
-- **Industry norm** (to cite in the plan): merge queues that test the merge RESULT (GitHub merge queue, Mergify, Graphite, bors in Rust, Kubernetes Tide, Zuul speculative merging, Chromium CQ); per-change fragment files with the aggregate generated at release (Changesets, Towncrier); generated artifacts not committed or rebuilt in CI; trunk-based, short-lived branches.
-- **Identified**: 2026-10-05 · filed via mint_oi.sh from branch `swap-title-and-launch-refresh`
-
 ## OI-311 — A spawned `dart run` exited 254 in CI with no stderr in the log (run 37203140849, 2026-10-04; second sighting after a7f3d1): cause not established, not reproducible locally
 
 - **Status**: OPEN
@@ -7271,3 +7261,57 @@ Found by the sync-storm-first-sweep batch while measuring its Day-0 web check (l
 **Why the obvious fix is not enough (plan-review R2).** "Wait for `restoreSettledForCurrentUser`, then grant" is not implementable inside `writeSubscriptionState`: the grant is one-shot at the free->PRO transition, so after one boot `oldIsPro` is true and nothing calls it again; a restore that never settles would lose the grant forever. Needs a durable "grant pending" marker set instead of granting while the restore is unsettled, a trigger at settle (`_settleRestoreMarker`, `sync_service.dart`), and a decision for a restore that never settles. Also read why web local Hive is empty/unset at each cold start (not established).
 
 **Done when.** A fresh web boot with the cloud flag true never changes `streak_freezes_available` locally or in the cloud; a genuine first upgrade still gets its 3 (also when the restore is slow); a behavioral test covers both and each guard is mutated. Blast radius: `platform` (sync/restore + subscription). Founder scope call pending: fold into a later batch or its own plan (the OI is the tracked item).
+
+## OI-449 — land_pr.sh has no mutual exclusion: two runs for one PR, or two in one worktree, can interleave (wasted push and CI wait; the merge stays safe)
+
+- **Status**: OPEN
+- **Blocked on**: none
+- **Verified**: never
+- **Identified**: 2026-11-03 · filed via mint_oi.sh from branch `oi-land-pr-followups`
+
+**What happens.** `sh scripts/land_pr.sh <pr>` takes no lock (landing D, PR #193, plan `docs/plans/merge-train.md` section 3 and residual R1). Two runs for the same PR, or two runs in one worktree, can interleave: both push and both wait for CI. The merge itself stays safe, because `scripts/safe_pr_merge.sh` refuses a stale head and a PR that is not green; the cost is a wasted push and CI wait, and in the same-worktree case two sync steps racing on one index.
+
+**Why it was not built in D.** `scripts/_git_lock.sh` (OI-92, closed 2026-08-05) deliberately has NO automatic reclaim: a dead holder's lock is refused and the person must `rm -rf` it by hand, because every automatic-reclaim design of that shape was broken in review. A lock in `land_pr.sh` built on it would leave a stuck lock after a crash or kill, which is a worse failure for a one-command landing tool than the interleaving it prevents.
+
+**Decision needed.** (a) Reuse `_git_lock.sh` as is and accept the manual `rm -rf` after a crash (the wrapper prints the command), or (b) accept the residual and document it (today). Not a new reclaim design.
+
+**Done when.** The decision is recorded; if (a), the lock is taken after the argument checks and released on every exit path including TERM/INT/HUP, with an e2e test for two concurrent runs (second refused) and one for a killed run (lock left, message names the path), each guard mutated. Blast radius: `platform` (`scripts/land_pr.*`).
+
+## OI-450 — workout_log_confirm_card_saved_signal_test 'a timed set with a bad duration saves, the day mark fails' failed once in a loaded full-suite run and passes alone (52/52)
+
+- **Status**: OPEN
+- **Blocked on**: none
+- **Verified**: never
+- **Identified**: 2026-11-03 · filed via mint_oi.sh from branch `oi-land-pr-followups`
+
+**What happens.** In the full-suite run of landing D (branch `merge-train`, `TZ=Asia/Kolkata flutter test --exclude-tags golden`, 2026-11-02, machine under load) `test/ai_coach/workout_log_confirm_card_saved_signal_test.dart` failed in "a timed set with a bad duration saves, the day mark fails ...". The same file passed 52/52 alone, no `lib/` file had changed, and the final full run on the same tree did not show it. Cause NOT established.
+
+**Not yet known.** Whether it is a timing assumption (a fixed delay or `pump` count), shared state with another file in the same isolate, or a real race in the confirm-card save path. Reproduce first (loop the file under CPU load, then the full suite order), then name writer and reader by file:line before any fix (CLAUDE.md 4.1).
+
+**Done when.** Cause established by a measured experiment; fixed with a test that fails without the fix; the test passes 20 loaded runs in a row. Blast radius: `feature` (`test/ai_coach/**`; `lib/` only if the cause is a real race).
+
+## OI-452 — A day can end with 1 or 2 exercises when its muscle groups' weekly band is spent (6-day beginner weeks, injured pools): add a 3-exercise day floor
+
+- **Status**: OPEN
+- **Blocked on**: none
+- **Verified**: never
+- **Identified**: 2026-11-03 · filed via mint_oi.sh from branch `oi-thin-days-repeat-phase`
+
+**What happens.** After the session set budget flip (PR #195, 2026-11-03) the allocator can leave a day with 1 or 2 exercises when the weekly band of that day's muscle groups is already spent by earlier days (6-day beginner general_fitness weeks, top 10 sets per group; injured pools). Measured by the 20 injury-sweep blocks (`test/helpers/injury_floor_sweep_lib.dart`, `kThinCeilings`, exact counts): 14 to 197 days under 3 exercises and 0 to 24 one-exercise days per block of 2,160 to 3,888 days; no empty day. Closure row `SBF-THIN-DAYS` (`docs/audit/set-budget-flip.closure.yaml`). A user should not go to the gym for a 10-minute, two-exercise session.
+
+**Founder direction (2026-11-03).** File and pick up later. Recommended design: a hard floor of 3 exercises per day; a day below the floor may exceed the weekly band by a few sets, only for those days (a guard with its own stats). A first attempt (restore removed slots over the weekly top) fixed the sweeps but broke `session_set_allocator_behavioral_test` (weekly top 16 to 26) and the budget gate, so it was reverted: this needs a plan, not a tweak.
+
+**Done when.** Plan reviewed twice; the allocator keeps every day at 3 or more exercises (or says why a day cannot); the weekly-top invariant is restated for the exception; `kThinCeilings` for days under 3 drops to 0 (or to a named residue); mutants prove it. Blast radius: `platform` (plan_engine), tier L.
+
+## OI-453 — A repeat phase keeps its exercise list when the user's minutes go up: keep pinned compounds, spend the spare time on extra sets then appended accessories
+
+- **Status**: OPEN
+- **Blocked on**: none
+- **Verified**: never
+- **Identified**: 2026-11-03 · filed via mint_oi.sh from branch `oi-thin-days-repeat-phase`
+
+**What happens.** A repeat phase pins the previous phase's exercise list (faithful repeat). When the user's session minutes go up between phases, the extra time stays unused because the allocator adds sets but never exercises. Closure row `SBF-REPEAT-PHASE-MINUTES` (`docs/audit/set-budget-flip.closure.yaml`).
+
+**Founder direction (2026-11-03).** File and pick up later. Chosen design (hybrid): keep the pinned compounds; when minutes rise, spend the spare time first on extra sets (up to the per-session cap), then on appended accessories chosen by the normal selector; do not reshuffle the whole list. Rationale: exercise-specific progression and load tracking favour keeping the main lifts across a block, while recoverable extra volume is added as accessories or sets.
+
+**Done when.** Plan reviewed twice; a repeat phase with more minutes fills the extra time as above and a repeat with the same minutes stays byte-identical to today; pins of compounds survive; the repeat gate still tests adherence; mutants prove both branches. Blast radius: `platform` (plan_engine), tier L.

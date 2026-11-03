@@ -191,8 +191,8 @@ class TrainingHistoryAnalyzer {
   }
 
   /// Counts every [sessionMinutesFromProfile] call, hit or miss, so a test can
-  /// prove the flag-OFF path never reads the profile (B2: the read sits inside
-  /// `if (budgetOn)`). Production code only increments it.
+  /// count the profile reads per generation (the read is unconditional since the
+  /// 2026-11-02 flip). Production code only increments it.
   @visibleForTesting
   static int debugReadCount = 0;
 
@@ -200,7 +200,7 @@ class TrainingHistoryAnalyzer {
   /// UNTOUCHED (an int, a JSON double, a string, or null) for
   /// `SessionBudget.resolveMinutes` to judge. `generateV4`'s own callers rarely
   /// pass minutes (only `pro_phase_advance.dart` and `simulation_service.dart`
-  /// forward the profile value), so under the flag the generator resolves them
+  /// forward the profile value), so the generator resolves them
   /// centrally from here. try/catch → null like [physiqueFocusMuscles]: a null /
   /// corrupt / unopened `userBox['profile']` never throws into the generator, it
   /// lands on the 60-minute default.

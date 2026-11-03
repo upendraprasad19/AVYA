@@ -51,6 +51,7 @@ class SweepTally {
   int unresolvedMain = 0, unresolvedWarm = 0, unperformable = 0, duplicates = 0, wrongDayCount = 0;
   final sizes = <int, int>{};
   final thinBy = <String, int>{};
+  String block = '';
   final oneExercise = <String>[];
   final emptyDays = <String>[];
   final unsafe = <String>{};
@@ -205,6 +206,7 @@ class SweepHarness {
   }
 
   void report(String block, SweepTally t, Stopwatch sw) {
+    t.block = block;
     final sizes = (t.sizes.keys.toList()..sort()).map((k) => '$k:${t.sizes[k]}').join(' ');
     // ignore: avoid_print
     print('[$block] ${sw.elapsed} runs ${t.runs} days ${t.days} empty ${t.empty} '
@@ -237,15 +239,52 @@ class SweepHarness {
         reason: 'main picks the run\'s equipment tier cannot perform: ${t.cannotPerform}');
     expect(t.duplicates, 0, reason: 'a name twice in one day: ${t.duplicated}');
     expect(t.empty, 0, reason: 'a day with no exercise at all: ${t.emptyDays}');
-    expect(t.oneExercise, isEmpty,
-        reason: 'a one-exercise day: ${t.oneExercise.take(10).toList()}');
   }
 
-  /// Every block: the top-up leaves no day under 3 exercises. The pairs blocks used to be ratcheted instead (2 and 6 scan
-  /// days, all of them shoulder + lower_back, bodyweight, beginner, OI-408); Batch C1's arm rows took both to 0, so the
-  /// ratchet became this hard zero and its constants are gone.
+  /// Measured ceilings of the days the session set budget leaves thin, per block (the block name `report` is given): the
+  /// pair is (days under 3 exercises, days with exactly 1). Before the budget flipped (2026-11-02) both were hard zeros
+  /// because the thin-day top-up (OI-408) ran into a trim that only cut the tail of a full day. The budget sizes a day by
+  /// the user's minutes and by a WEEKLY band per muscle group, so a 6-day beginner week whose bands are spent drops the
+  /// last accessories of a day and an injured pool is thin to begin with. Measured on the 914-row library in
+  /// `docs/audit/set-budget-flip.closure.yaml` (SBF-THIN-DAYS), a founder call: keep the weekly band hard (today), or let
+  /// a day under 2 exercises exceed it by a few sets. No block has an EMPTY day (the allocator's guard, a hard zero in
+  /// [expectSafe]); a ceiling here moves only DOWN.
+  static const Map<String, (int thin, int one)> kThinCeilings = {
+    'pairs bodyweight': (30, 0),
+    'pairs home_dumbbells': (76, 14),
+    'pairs basic_gym': (152, 16),
+    'pairs full_gym': (116, 4),
+    'pairs46 bodyweight': (84, 2),
+    'pairs46 home_dumbbells': (176, 24),
+    'pairs46 basic_gym': (197, 16),
+    'pairs46 full_gym': (155, 10),
+    'repeat bodyweight': (82, 2),
+    'repeat home_dumbbells': (110, 6),
+    'repeat basic_gym': (120, 6),
+    'repeat full_gym': (118, 6),
+    'singles bodyweight': (14, 0),
+    'singles home_dumbbells': (14, 0),
+    'singles basic_gym': (28, 0),
+    'singles full_gym': (18, 0),
+    'singles46 bodyweight': (28, 0),
+    'singles46 home_dumbbells': (50, 4),
+    'singles46 basic_gym': (50, 2),
+    'singles46 full_gym': (38, 2),
+  };
+
+  /// Every block: thin days (under 3 exercises) and one-exercise days match the measured
+  /// count EXACTLY. Above the count is a regression; BELOW it means the ceiling is stale and
+  /// must be lowered here (a ratchet only works when a better number also fails).
   void expectNoThin(SweepTally t) {
-    expect(t.thin, 0, reason: 'days under 3 exercises: ${t.thinBy}');
+    final c = kThinCeilings[t.block];
+    expect(c, isNotNull, reason: 'no thin-day ceiling recorded for the block "${t.block}"');
+    expect(t.thin, lessThanOrEqualTo(c!.$1), reason: 'days under 3 exercises: ${t.thinBy}');
+    expect(t.oneExercise.length, lessThanOrEqualTo(c.$2),
+        reason: 'a one-exercise day: ${t.oneExercise.take(10).toList()}');
+    expect(t.thin, c.$1,
+        reason: 'block "${t.block}": thin days fell below the recorded ceiling; lower kThinCeilings to ${t.thin}');
+    expect(t.oneExercise.length, c.$2,
+        reason: 'block "${t.block}": one-exercise days fell below the recorded ceiling; lower kThinCeilings to ${t.oneExercise.length}');
   }
 
   SweepTally runSingles(String tier, List<int> days, List<int> phases) {

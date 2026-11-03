@@ -160,18 +160,53 @@ int _id(Map<String, dynamic> r) => r['id'] is int ? r['id'] as int : 0;
 /// Judges the GitHub-Actions check-runs of a PR head SHA. [runs] null means the
 /// lookup itself failed -- NOT evidence the checks passed.
 MergeDecision evaluateCheckRuns(List<Map<String, dynamic>>? runs) {
+  final j = _judgeCheckRuns(runs);
+  return MergeDecision(j.reasons.isEmpty, j.reasons);
+}
+
+/// The state of a PR head's CI for a caller that WAITS for it (scripts/land_pr.dart).
+enum CiState { green, red, pending }
+
+/// [state] plus the names of the jobs whose only runs are cancelled (a timed-out job is
+/// reported as cancelled): a caller that polls can tell "still running" from "stuck".
+typedef CiJudgement = ({CiState state, Set<String> cancelledOnly});
+
+/// Reads the SAME judgement as [evaluateCheckRuns]: `green` exactly when it is ok, `red`
+/// when any refusal is a COMPLETED run with a refused conclusion (fail early), else
+/// `pending` (not finished, missing, only cancelled, or the lookup failed).
+CiJudgement classifyCheckRuns(List<Map<String, dynamic>>? runs) {
+  final j = _judgeCheckRuns(runs);
+  final state = j.reasons.isEmpty
+      ? CiState.green
+      : (j.red.contains(true) ? CiState.red : CiState.pending);
+  return (state: state, cancelledOnly: j.cancelledOnly);
+}
+
+({List<String> reasons, List<bool> red, Set<String> cancelledOnly}) _judgeCheckRuns(
+    List<Map<String, dynamic>>? runs) {
+  final reasons = <String>[];
+  final red = <bool>[]; // parallel to reasons: true = a COMPLETED run with a refused conclusion
+  final cancelledOnlyNames = <String>{};
+  ({List<String> reasons, List<bool> red, Set<String> cancelledOnly}) done() =>
+      (reasons: reasons, red: red, cancelledOnly: cancelledOnlyNames);
+  void add(String msg, {required bool isRed}) {
+    reasons.add(msg);
+    red.add(isRed);
+  }
+
   if (runs == null) {
-    return const MergeDecision(
-        false, ['could not read the check-runs for the PR head (refusing: unknown is not green)']);
+    add('could not read the check-runs for the PR head (refusing: unknown is not green)', isRed: false);
+    return done();
   }
   final actions = runs
       .where((r) => (r['app'] is Map ? (r['app'] as Map)['slug'] : null) == githubActionsSlug)
       .toList();
   if (actions.isEmpty) {
-    return const MergeDecision(false, [
-      'no GitHub Actions check-runs exist for the PR head SHA (CI has not run on this '
-          'commit yet, or the PR is conflicted and never got a run)'
-    ]);
+    add(
+        'no GitHub Actions check-runs exist for the PR head SHA (CI has not run on this '
+        'commit yet, or the PR is conflicted and never got a run)',
+        isRed: false);
+    return done();
   }
 
   // Latest non-cancelled check-run per job name; a name that has ONLY cancelled
@@ -190,7 +225,7 @@ MergeDecision evaluateCheckRuns(List<Map<String, dynamic>>? runs) {
     if (cur == null || _id(r) > _id(cur)) latest[n] = r;
   }
 
-  final reasons = <String>[];
+  cancelledOnlyNames.addAll(onlyCancelled);
 
   String describe(Map<String, dynamic> r) =>
       _completed(r) ? 'concluded ${_conclusion(r)}' : 'is ${r['status']} (not finished)';
@@ -198,11 +233,10 @@ MergeDecision evaluateCheckRuns(List<Map<String, dynamic>>? runs) {
   for (final n in requiredSuccessJobs) {
     final r = latest[n];
     if (r == null) {
-      reasons.add(onlyCancelled.contains(n)
-          ? '"$n" has only cancelled runs'
-          : '"$n" has no check-run (required)');
+      add(onlyCancelled.contains(n) ? '"$n" has only cancelled runs' : '"$n" has no check-run (required)',
+          isRed: false);
     } else if (!_completed(r) || _conclusion(r) != 'success') {
-      reasons.add('"$n" ${describe(r)} (required: success)');
+      add('"$n" ${describe(r)} (required: success)', isRed: _completed(r));
     }
   }
 
@@ -210,7 +244,7 @@ MergeDecision evaluateCheckRuns(List<Map<String, dynamic>>? runs) {
     final r = latest[n];
     if (r == null) continue; // push-only job; absence is not a PR-time failure
     if (!_completed(r) || (_conclusion(r) != 'success' && _conclusion(r) != 'skipped')) {
-      reasons.add('"$n" ${describe(r)} (allowed: success or skipped)');
+      add('"$n" ${describe(r)} (allowed: success or skipped)', isRed: _completed(r));
     }
   }
 
@@ -223,7 +257,7 @@ MergeDecision evaluateCheckRuns(List<Map<String, dynamic>>? runs) {
     final r = entry.value;
     final c = _conclusion(r);
     final fine = _completed(r) && (c == 'success' || c == 'skipped' || c == 'neutral');
-    if (!fine) reasons.add('"$n" ${describe(r)}');
+    if (!fine) add('"$n" ${describe(r)}', isRed: _completed(r));
   }
   // The mirror of the required-job rule above: an unlisted job (a matrix shard, a
   // job added later) whose ONLY runs were cancelled -- a timed-out job is reported
@@ -231,10 +265,10 @@ MergeDecision evaluateCheckRuns(List<Map<String, dynamic>>? runs) {
   // the loop above never sees such a job; without this it would be ignored.
   for (final n in onlyCancelled) {
     if (requiredSuccessJobs.contains(n) || skippedOkJobs.contains(n)) continue;
-    reasons.add('"$n" has only cancelled runs');
+    add('"$n" has only cancelled runs', isRed: false);
   }
 
-  return MergeDecision(reasons.isEmpty, reasons);
+  return done();
 }
 
 /// CI configuration paths. A pull_request run executes the PR's OWN version of

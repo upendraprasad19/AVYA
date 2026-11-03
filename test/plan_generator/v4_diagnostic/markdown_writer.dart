@@ -45,7 +45,6 @@ class DiagnosticMarkdownWriter {
       // Apply VolumeFilter
       final filteredDays = VolumeFilter.filterDays(
         splitDays,
-        experience: effExp,
         weekCharacter: weekChar,
       );
 
