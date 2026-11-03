@@ -35,6 +35,10 @@ const _expected = <String>[
   'lib/shared/widgets/exercise_plate/exercise_media_resolver.dart',
   'lib/shared/widgets/exercise_plate/exercise_plate_sheet.dart',
   'lib/shared/widgets/exercise_plate/exercise_plate_thumb.dart',
+  // M2b: the focused card's header tile asks for its file; the card and the screen name the media type and resolver.
+  'lib/features/train/screens/active_workout/exercise_card.dart',
+  'lib/features/train/screens/active_workout/exercise_header_tile.dart',
+  'lib/features/train/screens/active_workout/screen.dart',
 ];
 
 Map<String, String> _stripped() => <String, String>{

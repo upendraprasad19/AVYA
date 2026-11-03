@@ -36,6 +36,12 @@ class SetInputRow extends StatelessWidget {
   /// Fires on every keystroke, with the field that changed.
   final ValueChanged<SetField>? onChanged;
 
+  /// LOG mode only: the up / same / down arrow of a logged set, drawn INSIDE the
+  /// KG box (9 dp from its right edge, vertically centred) because the check
+  /// column that used to hold it is gone. Ignored on the per-set path and for a
+  /// row with no weight box.
+  final Widget? weightSuffix;
+
   /// Fields whose text the app put there and the user has not typed in
   /// (docs/plans/log-exercise-flip.md §2): rendered at 62% parchment, a tap
   /// selects the whole value, TalkBack hears "Prefilled value". Empty on the
@@ -63,6 +69,7 @@ class SetInputRow extends StatelessWidget {
     this.distanceFocusNode,
     this.onChanged,
     this.fadedFields = const {},
+    this.weightSuffix,
   });
 
   @override
@@ -71,25 +78,68 @@ class SetInputRow extends StatelessWidget {
       padding: const EdgeInsets.symmetric(vertical: 2),
       child: Row(
         children: [
-          // Set tile (sharp 2-px) — "W" for warm-up, else set number
-          GestureDetector(
-            onLongPress: isCompleted ? null : onToggleWarmUp,
-            child: Container(
-              width: 28,
-              height: 28,
-              decoration: BoxDecoration(
-                color: isWarmUp
-                    ? AppColors.warn.withValues(alpha: 0.12)
-                    : AppColors.accentSoft,
-                borderRadius: BorderRadius.circular(2),
-                border: isWarmUp
-                    ? Border.all(
-                        color: AppColors.warn.withValues(alpha: 0.3),
-                      )
+          _setTile(),
+          const SizedBox(width: 8),
+
+          // Input fields based on logging type
+          ..._buildInputs(),
+
+          // Check tile (sharp 2-px): the per-set path only. LOG mode has no
+          // check column, so the fields run to the card's edge and a logged set
+          // is shown by its set tile (a tick) instead.
+          if (interactiveCheck) ...[
+            const SizedBox(width: 6),
+            GestureDetector(
+              onTap: onCheck,
+              child: Container(
+                width: 28,
+                height: 28,
+                decoration: BoxDecoration(
+                  color: isChecked ? AppColors.accent : Colors.transparent,
+                  borderRadius: BorderRadius.circular(2),
+                  border: isChecked
+                      ? null
+                      : Border.all(color: AppColors.line2, width: 1.5),
+                ),
+                child: isChecked
+                    ? Icon(Icons.check, size: 16, color: AppColors.bgDeep)
                     : null,
               ),
-              child: Center(
-                child: Text(
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  /// Set tile (sharp 2-px): "W" for warm-up, else the set number. In LOG mode a
+  /// logged set shows a tick instead (accent for a working set, warn for a
+  /// warm-up) with the "Set n, logged" label; the long-press that toggles
+  /// warm-up stays disabled once the set is completed.
+  Widget _setTile() {
+    final tick = !interactiveCheck && isChecked;
+    final tile = GestureDetector(
+      onLongPress: isCompleted ? null : onToggleWarmUp,
+      child: Container(
+        width: 28,
+        height: 28,
+        decoration: BoxDecoration(
+          color: tick
+              ? (isWarmUp ? AppColors.warn : AppColors.accent)
+              : isWarmUp
+                  ? AppColors.warn.withValues(alpha: 0.12)
+                  : AppColors.accentSoft,
+          borderRadius: BorderRadius.circular(2),
+          border: isWarmUp && !tick
+              ? Border.all(
+                  color: AppColors.warn.withValues(alpha: 0.3),
+                )
+              : null,
+        ),
+        child: Center(
+          child: tick
+              ? Icon(Icons.check, size: 16, color: AppColors.bgDeep)
+              : Text(
                   isWarmUp ? 'W' : '$setNumber',
                   style: AppTypography.mono.copyWith(
                     color: isWarmUp ? AppColors.warn : AppColors.accent,
@@ -97,53 +147,17 @@ class SetInputRow extends StatelessWidget {
                     letterSpacing: 1.2,
                   ),
                 ),
-              ),
-            ),
-          ),
-          const SizedBox(width: 8),
-
-          // Input fields based on logging type
-          ..._buildInputs(),
-
-          const SizedBox(width: 6),
-
-          // Check tile (sharp 2-px)
-          if (!interactiveCheck)
-            _staticCheckSlot()
-          else
-          GestureDetector(
-            onTap: onCheck,
-            child: Container(
-              width: 28,
-              height: 28,
-              decoration: BoxDecoration(
-                color: isChecked ? AppColors.accent : Colors.transparent,
-                borderRadius: BorderRadius.circular(2),
-                border: isChecked
-                    ? null
-                    : Border.all(color: AppColors.line2, width: 1.5),
-              ),
-              child: isChecked
-                  ? Icon(Icons.check, size: 16, color: AppColors.bgDeep)
-                  : null,
-            ),
-          ),
-        ],
+        ),
       ),
     );
-  }
-
-  /// The check column without a tap target (LOG-per-exercise mode).
-  Widget _staticCheckSlot() {
-    if (!isChecked) return const SizedBox(width: 28, height: 28);
-    return Container(
-      width: 28,
-      height: 28,
-      decoration: BoxDecoration(
-        color: AppColors.accent,
-        borderRadius: BorderRadius.circular(2),
-      ),
-      child: Icon(Icons.check, size: 16, color: AppColors.bgDeep),
+    if (!tick) return tile;
+    return Semantics(
+      container: true,
+      label: (isWarmUp
+              ? WardroomCopy.activeWarmUpSetLoggedLabelTemplate
+              : WardroomCopy.activeSetLoggedLabelTemplate)
+          .replaceAll('{n}', '$setNumber'),
+      child: tile,
     );
   }
 
@@ -218,10 +232,7 @@ class SetInputRow extends StatelessWidget {
     // keyboard connection) on the first keystroke into a faded field. Only its
     // properties change. The unit label is null on a blank field, where the
     // hintText already speaks it.
-    return Semantics(
-      label: controller.text.isEmpty ? null : hint,
-      hint: faded ? WardroomCopy.activePrefilledHint : null,
-      child: SizedBox(
+    final box = SizedBox(
       height: 38,
       child: TextField(
         controller: controller,
@@ -284,7 +295,35 @@ class SetInputRow extends StatelessWidget {
           ),
         ),
       ),
-      ),
+    );
+
+    // LOG mode's weight box carries the logged set's arrow as an overlay. The
+    // Stack is built for EVERY LOG-mode weight box, logged or not, with the box
+    // as its first child: only the overlay child comes and goes, so logging or
+    // re-opening a set never remounts the TextField (the same reason as the
+    // Semantics wrapper above). Positioned top and bottom with only a right
+    // inset gives the Center an unbounded width, so the arrow shrink-wraps at
+    // right: 9 and is centred on the 38 dp height; the Stack is sized by the box.
+    final withSuffix = !interactiveCheck && field == SetField.weight
+        ? Stack(
+            children: [
+              box,
+              if (weightSuffix != null)
+                Positioned(
+                  top: 0,
+                  bottom: 0,
+                  right: 9,
+                  child: IgnorePointer(
+                    child: Center(child: ExcludeSemantics(child: weightSuffix)),
+                  ),
+                ),
+            ],
+          )
+        : box;
+    return Semantics(
+      label: controller.text.isEmpty ? null : hint,
+      hint: faded ? WardroomCopy.activePrefilledHint : null,
+      child: withSuffix,
     );
   }
 }

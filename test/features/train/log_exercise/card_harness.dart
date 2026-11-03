@@ -2,9 +2,11 @@
 // harness_spike_test.dart for the two load-bearing harness facts (fonts before
 // any path_provider mock; Hive-writing taps inside runAsync).
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_riverpod/misc.dart' show Override;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
 import 'package:icanbefitter/core/theme/typography.dart';
@@ -14,7 +16,9 @@ import 'package:icanbefitter/features/train/screens/active_workout/screen.dart';
 import 'package:icanbefitter/features/train/services/log_exercise_flags.dart';
 import 'package:icanbefitter/features/train/services/log_exercise_logic.dart';
 import 'package:icanbefitter/features/train/services/swap_move_hint.dart';
+import 'package:icanbefitter/shared/providers/exercise_media_provider.dart';
 
+import '../../../helpers/fake_exercise_media_repository.dart';
 import '../../../helpers/hive_test_setup.dart';
 
 class SeededNotifier extends ActiveWorkoutNotifier {
@@ -76,9 +80,19 @@ Future<void> tapWithRealIo(WidgetTester tester, Finder f) async {
 }
 
 class CardHarness {
-  CardHarness(this.container, this.logCalls, this.app);
+  CardHarness(this.container, this.logCalls, this.app,
+      {ValueNotifier<bool>? focused, FakeExerciseMediaRepository? mediaRepo})
+      : focused = focused ?? ValueNotifier<bool>(false),
+        mediaRepo = mediaRepo ?? FakeExerciseMediaRepository();
   final ProviderContainer container;
   final List<Set<int>> logCalls;
+
+  /// The card's `isFocused`, read by the host: a test flips it to move the same
+  /// card State between the thumb header and the tile header.
+  final ValueNotifier<bool> focused;
+
+  /// The stand-in for the animation repository both helpers override.
+  final FakeExerciseMediaRepository mediaRepo;
 
   /// The pumped tree, so a test can dispose the card (pump something else)
   /// and re-pump it on the SAME container: a card re-init (flip §2 P5).
@@ -94,21 +108,75 @@ Future<void> repumpCard(WidgetTester tester, CardHarness h) async {
   await tester.pump();
 }
 
-/// Pumps the real card. [logMode] passes an `onLogExercise` that behaves like
-/// the screen: `logSets` on the real notifier.
+/// Seeds the library rows a test needs into exerciseBox (after clearing it: the
+/// harness keeps one Hive dir per file, so rows persist across tests) and resets
+/// the animation kill switch, which persists too. Real disk I/O, so it runs in
+/// the real zone.
+Future<void> seedLibrary(WidgetTester tester,
+    {List<Map<String, dynamic>> rows = const [], bool animationsOff = false}) {
+  return tester.runAsync(() async {
+    final box = HiveService.instance.exerciseBox;
+    await box.clear();
+    if (rows.isNotEmpty) {
+      await box.putAll({for (final r in rows) r['id'] as String: r});
+    }
+    final config = HiveService.instance.configBox;
+    if (animationsOff) {
+      await config.put('disable_exercise_animations', true);
+    } else {
+      await config.delete('disable_exercise_animations');
+    }
+  });
+}
+
+/// The overrides every helper adds: the fake animation repository (a seeded
+/// media row must never reach the real Dio client) and the platform switch ON,
+/// so a view really asks for its file.
+List<Override> mediaOverrides(FakeExerciseMediaRepository repo) => [
+      exerciseMediaRepositoryProvider.overrideWithValue(repo),
+      exerciseAnimationsPlatformEnabledProvider.overrideWithValue(true),
+    ];
+
+/// Pumps the real card. [logMode] passes an onLogExercise that behaves like the
+/// screen: logSets on the real notifier.
+///
+/// M2b: [isFocused] (the tile header, flipped later through
+/// CardHarness.focused), [moveModeActive], [isInSupersetGroupMode],
+/// [onLongPressHeader], [libraryRows] (seeded into exerciseBox), [animationsOff]
+/// (the kill switch), [mediaBytes] (what the fake repository answers; null = no
+/// file, the still stays) and [nestedNavigator]: the plain MaterialApp(home: ...)
+/// has ONE Navigator, so a root-navigator dialog covers the card's route there;
+/// the real Train branch is a nested navigator, and the dialog case needs that
+/// shape.
 Future<CardHarness> pumpCard(
   WidgetTester tester, {
   required ActiveWorkoutData seed,
   required bool logMode,
   LastPerformanceData lastPerf =
       const LastPerformanceData(lastWeight: 60, lastReps: 8),
+  List<Override> overrides = const [],
+  bool isExpanded = true,
+  bool isFocused = false,
+  bool moveModeActive = false,
+  bool isInSupersetGroupMode = false,
+  VoidCallback? onFocus,
+  VoidCallback? onLongPressHeader,
+  List<Map<String, dynamic>> libraryRows = const [],
+  bool animationsOff = false,
+  Uint8List? mediaBytes,
+  bool nestedNavigator = false,
 }) async {
   await ensureHive(tester);
+  await seedLibrary(tester, rows: libraryRows, animationsOff: animationsOff);
   final calls = <Set<int>>[];
+  final mediaRepo = FakeExerciseMediaRepository(bytes: mediaBytes);
+  final focused = ValueNotifier<bool>(isFocused);
   final container = ProviderContainer(overrides: [
     authUserIdTokenProvider.overrideWithValue(kTestUserId),
     activeWorkoutProvider.overrideWith(() => SeededNotifier(seed)),
     lastPerformanceProvider.overrideWith((ref, name) => lastPerf),
+    ...mediaOverrides(mediaRepo),
+    ...overrides,
   ]);
   addTearDown(container.dispose);
   LogOutcomeKind onLog(Set<int> idxs) {
@@ -129,21 +197,36 @@ Future<CardHarness> pumpCard(
         exerciseName: data.exercises[0].name, reopened: true);
   }
 
-  final app = UncontrolledProviderScope(
-    container: container,
-    child: MaterialApp(
-      home: Scaffold(
-        body: SingleChildScrollView(
-          child: debugExerciseCardHostForTest(
-            exerciseIndex: 0,
-            onLogExercise: logMode ? onLog : null,
-            onReopenExercise: logMode ? onReopen : null,
-          ),
+  final page = Scaffold(
+    body: SingleChildScrollView(
+      child: ValueListenableBuilder<bool>(
+        valueListenable: focused,
+        builder: (_, focusedNow, _) => debugExerciseCardHostForTest(
+          exerciseIndex: 0,
+          isExpanded: isExpanded,
+          isFocused: focusedNow,
+          moveModeActive: moveModeActive,
+          isInSupersetGroupMode: isInSupersetGroupMode,
+          onFocus: onFocus,
+          onLongPressHeader: onLongPressHeader,
+          onLogExercise: logMode ? onLog : null,
+          onReopenExercise: logMode ? onReopen : null,
         ),
       ),
     ),
   );
-  h = CardHarness(container, calls, app);
+  final app = UncontrolledProviderScope(
+    container: container,
+    child: nestedNavigator
+        ? MaterialApp(
+            home: Navigator(
+              onGenerateRoute: (_) =>
+                  MaterialPageRoute<void>(builder: (_) => page),
+            ),
+          )
+        : MaterialApp(home: page),
+  );
+  h = CardHarness(container, calls, app, focused: focused, mediaRepo: mediaRepo);
   await tester.pumpWidget(app);
   await tester.pump();
   return h;
@@ -187,8 +270,14 @@ Future<ScreenHarness> pumpScreen(
   bool? hintSeen = true, // null: leave the stored flag as it is
   LastPerformanceData lastPerf =
       const LastPerformanceData(lastWeight: 60, lastReps: 8),
+  List<Override> overrides = const [],
+  List<Map<String, dynamic>> libraryRows = const [],
+  bool animationsOff = false,
+  Uint8List? mediaBytes,
 }) async {
   await ensureHive(tester);
+  await seedLibrary(tester, rows: libraryRows, animationsOff: animationsOff);
+  final mediaRepo = FakeExerciseMediaRepository(bytes: mediaBytes);
   await tester.runAsync(() async {
     final box = HiveService.instance.configBox;
     if (logMode) {
@@ -212,6 +301,8 @@ Future<ScreenHarness> pumpScreen(
     activeWorkoutProvider
         .overrideWith(() => SeededNotifier(seed?.call(base) ?? base)),
     lastPerformanceProvider.overrideWith((ref, name) => lastPerf),
+    ...mediaOverrides(mediaRepo),
+    ...overrides,
   ]);
   addTearDown(container.dispose);
   await tester.pumpWidget(UncontrolledProviderScope(

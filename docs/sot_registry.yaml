@@ -11117,7 +11117,7 @@ concepts:
     reader_manifest_complete: true
     readers:
       - file: lib/features/train/screens/active_workout/exercise_card.dart
-        method: _ExerciseCardState._initControllers (prefill) + the LAST/TRY hint Builder
+        method: _ExerciseCardState._initControllers (prefill) + the showTry gate that feeds ExerciseLastTryLines (the card's old inline LAST/TRY Builder, moved out in M2b)
         semantic: scale-and-suppress
         notes: lastWeight prefill × widget.data.effectiveLoadFactor(ex) (lastWeight branch ONLY; ⑥ 6-B — min of ⑦b gap-cut ∧ readiness deload, == sessionDetrainingFactor when readiness null); "TRY:" line hidden when effectiveLoadFactor(ex) < 1.0 (⑥ 6 B-pass P2-1); "LAST:" kept
       - file: lib/features/train/screens/active_workout/overload_indicator.dart
@@ -12983,7 +12983,7 @@ concepts:
     contract_test_path: test/contracts/exercise_media_client_behavioral_test.dart
     description: |
       One exercise animation (`<media_slug>_v<media_version>.webp` in the private `exercise-media` bucket) reaches the
-      screen only when a sheet asks for it, never in bulk (the Wi-Fi bulk prefetch is Batch M2c, not shipped).
+      screen only when a sheet or the focused active-workout card's header tile asks for it, never in bulk (the Wi-Fi bulk prefetch is Batch M2c, not shipped).
 
       WRITER: `ExerciseMediaRepository.ensure` (`lib/core/services/exercise_media/exercise_media_repository.dart`)
       is the only code that downloads a file and the only caller of `ExerciseMediaStore.put`: it reads the device store
@@ -12995,7 +12995,7 @@ concepts:
 
       READER: `ExerciseAnimationView` (`lib/shared/widgets/exercise_plate/exercise_animation_view.dart`) asks `ensure` once per
       object name and cross-fades from the bundled still to the animation; every other outcome keeps the still. The thumb
-      shows only the bundled still, and the sheet is the only door to the animation.
+      shows only the bundled still; the sheet and the focused card's header tile (M2b Part A) are the only doors to the animation.
 
       WARNING: stills are bundled and readable without a login (decision G12); fetched animation files are cached on the
       device and survive sign-out (decision C8). Only a logged-in, non-anonymous session may fetch (the client answers
@@ -13109,13 +13109,13 @@ concepts:
         line_range: 470-551
         method: LogExerciseController.reopen
       - file: lib/features/train/screens/active_workout/exercise_card.dart
-        line_range: 529-557
+        line_range: 555-583
         method: _onFieldChanged
       - file: lib/features/train/screens/active_workout/exercise_card.dart
-        line_range: 590-624
+        line_range: 616-650
         method: _mirrorFrom
       - file: lib/features/train/screens/active_workout/exercise_card.dart
-        line_range: 643-668
+        line_range: 669-694
         method: _onLogPressed
     readers:
       - file: lib/features/train/providers/train_provider.dart
