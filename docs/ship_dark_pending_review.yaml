@@ -344,7 +344,7 @@ resolved:
     build_commit: 1bd25c20  # the commit that added PlanEngineFlags.sessionSetBudgetEnabled
     build_date: 2026-10-24
     flip_reviewed: true
-    flip_commit: PENDING_STAMP
+    flip_commit: 0d847b9be6ae4846fa9f2443cb65778c0d22501a
     flip_review_record: docs/plan-reviews/set-budget-flip.md
     note: >
       Batch B2 session set budget (docs/plans/2026-10-22-session-set-budget.md, r6), flipped ON
