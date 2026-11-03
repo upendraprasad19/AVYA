@@ -7313,3 +7313,18 @@ Found by the sync-storm-first-sweep batch while measuring its Day-0 web check (l
 **Decision needed.** (a) Delete the catch in `_out`/`_err` and rely on the `stdout.done` / `stderr.done` handlers, or (b) add a test seam that makes the write throw, plus a test, so the catch is proven. Prefer (a) unless a synchronous throw can be provoked on a real detached stdout; check that first.
 
 **Done when.** The decision is recorded; the chosen change ships with a mutant run on `_out` and `_err` (no survivor left unnamed). Blast radius: `platform` (`scripts/land_pr.dart`).
+
+## OI-454 — Quads sit below their weekly floor in 6-day build_muscle plans: add a Legs B quad slot AND an allocator co-group policy so a quad exercise is not removed for crediting Glutes
+
+- **Status**: OPEN
+- **Blocked on**: none
+- **Verified**: never
+- **Identified**: 2026-11-03 · filed via mint_oi.sh from branch `oi-quads-floor`
+
+**What happens.** Intermediate build_muscle, full_gym, 6 days, 90 minutes: Quads get 8 weekly sets against a band of 12 to 16 (floors 10/12/14 by level). Legs A (`Quad dominant`) holds the only quad work; Legs B (`Hamstring + glute focus`, `_get6DayV4('build_muscle')` in `lib/shared/repositories/plan_engine/split_resolver.dart`) has none. Glutes already sit at their weekly top (12/16/20), so the allocator removes any added squat or lunge because it also credits Glutes. Closure row `SBF-QUADS-FLOOR` (`docs/audit/set-budget-flip.closure.yaml`); measured at the flip in `docs/architecture/plan-engine-detail.md` (d).
+
+**Spike (2026-11-03, reverted).** A Legs B quad slot alone changes nothing (the allocator drops it). Replacing Legs B's glute-isolation slot lifts Quads only to 9 to 12 sets against floors 10/12/14.
+
+**Founder direction (2026-11-03).** Quads option (a), recommended path: swap the Legs B glute-isolation slot for a Quads knee_dominant compound slot AND add an allocator co-group policy (a quad-primary exercise is not refused for crediting Glutes: partial glute credit, or the cap applied to the primary muscle), in one batch. Rule-14 waiver for `plan_generator.dart` given ("ok"); the allocator file may need its own waiver. The old draft `docs/plans/2026-11-03-quads-legs-b-slot.md` (worktree `quads-legs-b`, untracked) predates the spike and must be rewritten around it.
+
+**Done when.** Plan reviewed twice; Quads reach the band floor in the founder case and the other 6-day build_muscle personas with no group above its band top and every day inside its minutes; the generator golden changes only for 6-day build_muscle personas (changed keys listed); `kThinCeilings` and the scorecard baseline re-frozen if they move; mutants on the slot and on the policy. Blast radius: `platform` (plan_engine), tier L.
