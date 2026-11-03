@@ -87,6 +87,7 @@ a permission classifier or sandbox has blocked before, so none of them is a surp
 5. **PR** — `gh pr create --base main --title "chore: bump versionCode 1.0.0+N → 1.0.0+(N+1)" --body "Version bump only."`
 6. **CI green, then merge** — `sh scripts/safe_pr_merge.sh <pr>`, never raw `gh pr merge`: `main` has no required
    status checks, so this wrapper is what checks the PR's Analyze / Unit Tests / Deno / Audit Gates / Build Check.
+   (If the bump branch is behind `main`, `sh scripts/land_pr.sh <pr>` syncs, pushes, waits for CI and then merges through this same wrapper.)
    CI's keystone gate (`check_plan_review_record_exists.dart`) exempts a merge whose net change is ONLY those
    two version lines, **by content** (OI-275 batch B2, `rangeIsVersionBump`): no plan-review record and no
    B-pass is written for a bump.
