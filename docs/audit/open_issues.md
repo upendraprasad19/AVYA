@@ -7262,19 +7262,6 @@ Found by the sync-storm-first-sweep batch while measuring its Day-0 web check (l
 
 **Done when.** A fresh web boot with the cloud flag true never changes `streak_freezes_available` locally or in the cloud; a genuine first upgrade still gets its 3 (also when the restore is slow); a behavioral test covers both and each guard is mutated. Blast radius: `platform` (sync/restore + subscription). Founder scope call pending: fold into a later batch or its own plan (the OI is the tracked item).
 
-## OI-450 — workout_log_confirm_card_saved_signal_test 'a timed set with a bad duration saves, the day mark fails' failed once in a loaded full-suite run and passes alone (52/52)
-
-- **Status**: OPEN
-- **Blocked on**: none
-- **Verified**: never
-- **Identified**: 2026-11-03 · filed via mint_oi.sh from branch `oi-land-pr-followups`
-
-**What happens.** In the full-suite run of landing D (branch `merge-train`, `TZ=Asia/Kolkata flutter test --exclude-tags golden`, 2026-11-02, machine under load) `test/ai_coach/workout_log_confirm_card_saved_signal_test.dart` failed in "a timed set with a bad duration saves, the day mark fails ...". The same file passed 52/52 alone, no `lib/` file had changed, and the final full run on the same tree did not show it. Cause NOT established.
-
-**Not yet known.** Whether it is a timing assumption (a fixed delay or `pump` count), shared state with another file in the same isolate, or a real race in the confirm-card save path. Reproduce first (loop the file under CPU load, then the full suite order), then name writer and reader by file:line before any fix (CLAUDE.md 4.1).
-
-**Done when.** Cause established by a measured experiment; fixed with a test that fails without the fix; the test passes 20 loaded runs in a row. Blast radius: `feature` (`test/ai_coach/**`; `lib/` only if the cause is a real race).
-
 ## OI-452 — A day can end with 1 or 2 exercises when its muscle groups' weekly band is spent (6-day beginner weeks, injured pools): add a 3-exercise day floor
 
 - **Status**: OPEN
