@@ -7302,3 +7302,51 @@ Found by the sync-storm-first-sweep batch while measuring its Day-0 web check (l
 **Founder direction (2026-11-03).** Quads option (a), recommended path: swap the Legs B glute-isolation slot for a Quads knee_dominant compound slot AND add an allocator co-group policy (a quad-primary exercise is not refused for crediting Glutes: partial glute credit, or the cap applied to the primary muscle), in one batch. Rule-14 waiver for `plan_generator.dart` given ("ok"); the allocator file may need its own waiver. The old draft `docs/plans/2026-11-03-quads-legs-b-slot.md` (worktree `quads-legs-b`, untracked) predates the spike and must be rewritten around it.
 
 **Done when.** Plan reviewed twice; Quads reach the band floor in the founder case and the other 6-day build_muscle personas with no group above its band top and every day inside its minutes; the generator golden changes only for 6-day build_muscle personas (changed keys listed); `kThinCeilings` and the scorecard baseline re-frozen if they move; mutants on the slot and on the policy. Blast radius: `platform` (plan_engine), tier L.
+
+## OI-456 — Exercise count per day is skewed (4 / 6 / 4 / 9) because rest time follows the day's intensity: set a 5-8 exercise band by level and rest by exercise type
+
+- **Status**: OPEN
+- **Blocked on**: none
+- **Verified**: never
+- **Identified**: 2026-11-03 · filed via mint_oi.sh from branch `exercise-count-band-oi`
+
+**What happens.** A tester (build_muscle, basic_gym, 4 days, intermediate, no minutes, so the 60-minute default) got Push 4, Pull 6, Legs 4, Upper 9 exercises in week 1 (cloud `user_progress.plan_json`, reproduced exactly with the real `PlanGenerator.generate` and his onboarding inputs). Day length is 57.6 / 48.2 / 60.4 / 56.7 minutes. Cause: the 4-day split gives each day an intensity (`split_resolver.dart:10`, strength / hypertrophy / strength / endurance) and `SessionBudget.restFor` (`session_budget.dart:381`) turns that into ONE rest for every exercise of the day (150 / 75 / 38 s); the 60-minute clock then fits 4 exercises on a 150 s day and 9 on a 38 s day. Isolation work (Lateral Raise, Bench Dips, Calf Raise) is rested 150 s on a strength day and a heavy Barbell Bench Press 5x7 only 38 s on the endurance day. The week-4 deload keeps the count but cuts a Pull day to 6 sets for 6 exercises (22 minutes).
+
+**Founder direction (2026-11-03), all recommended defaults accepted.**
+1. Exercise count by level at 60 minutes: beginner 5, intermediate 6, advanced 7 to 8; hard range 5 to 8 for everyone. Evidence and app practice: Fitbod sizes the count from the chosen duration (about 7 an hour); sessions of 5 to 7 exercises are the common hypertrophy convention (research note in the 2026-11-03 session; sources not primary).
+2. Rest by exercise type, not by day: heavy compound 150 s, other compound 120 s, isolation 75 s, timed or calisthenics 60 s. Day intensity changes reps and load only.
+3. The 5 to 8 band holds at 30, 45 and 90 minutes; sets flex first (30 min: 5 exercises at 2 sets; 90 min: up to 8 with more sets); the count never drops below 5.
+4. Only the main exercises count toward the band (warm-up, cool-down, cardio finisher do not).
+5. When the weekly set band cannot be met, the count band wins and the weekly band is a soft target.
+6. Week-4 deload keeps the count and cuts sets, with a floor of 2 sets per exercise.
+7. OI-454 (Quads floor) is filed but its work has NOT started (PR #201 only filed the OI). Both touch the allocator, so the order is a founder call still open; recommendation: OI-456 first, because it changes the exercise counts and rest that OI-454's measurements depend on, then re-measure OI-454 on top.
+8. Rule-14 waiver for the `generateV4` wiring in `plan_generator.dart` only.
+9. The level self-report safeguard is OI-457 (parked); the Upper-repeats issue is OI-458.
+
+**Done when.** Plan reviewed twice; every generated day holds 5 to 8 main exercises at every level and at 30 / 45 / 60 / 90 minutes (a sweep proves it, with named residue if any); rest follows the exercise type in the generator, the stored plan and the Home and Train "Up to N min" display (one table, display equals oracle); the generator golden and scorecard baselines change only where listed; the OI-452 3-exercise floor is subsumed or restated; mutants prove the band, the rest table and the deload floor. Blast radius: `platform` (plan_engine), tier L; full plan review x2 and B-pass.
+
+## OI-457 — Level is self-reported at onboarding: a 55 kg lifter who picks Intermediate gets heavy barbell squat, deadlift and bench 4x7 (parked: onboarding change)
+
+- **Status**: OPEN
+- **Blocked on**: none
+- **Verified**: never
+- **Identified**: 2026-11-03 · filed via mint_oi.sh from branch `exercise-count-band-oi`
+
+**What happens.** `fitness_experience` is a one-tap self-rating on the Details screen (Intermediate is preselected). A tester at 55 kg and 174 cm (BMI 18.2) kept Intermediate and got Barbell Back Squat 4x7, Deadlift 4x7 and Barbell Bench Press 4x7 in week 1. Nothing checks the rating against anything.
+
+**Founder direction (2026-11-03).** Parked: it is an onboarding change and the founder wants to change onboarding later, in a different way. Do NOT change onboarding as part of OI-456. Options noted for then: ask how many months the user has trained; or treat the first phase of a new account as beginner-leaning whatever the rating; or both.
+
+**Done when.** The founder's onboarding redesign decides the safeguard; then a plan reviewed twice. Blast radius: `account` at least (onboarding, plan input).
+
+## OI-458 — The 4-day Upper day repeats Push and Pull accessories (Bench Dips, Dumbbell Row, curls, Lateral Raise) instead of reading as a new day
+
+- **Status**: OPEN
+- **Blocked on**: none
+- **Verified**: never
+- **Identified**: 2026-11-03 · filed via mint_oi.sh from branch `exercise-count-band-oi`
+
+**What happens.** In the same tester plan as OI-456, week 1 Upper (day 4) reuses Bench Dips, Dumbbell Row, Self-Resisted Bicep Curl, Dumbbell Alternate Bicep Curl and Lateral Raise, which Push or Pull already carry that week; week 2 Upper reuses Barbell Curl, Cable Rope Pushdown and Egyptian Lateral Raise. The day reads as leftovers rather than a new session. Likely cause (not yet established): the Upper slots are small-muscle accessory slots whose pools are shallow, so the cascade picks the same names (`pickedNames` dedups across a plan only inside one variant).
+
+**Founder direction (2026-11-03).** Filed as its own item so it does not block OI-456. Pick up after OI-456, because the new exercise count changes which slots each day holds.
+
+**Done when.** The cause is named by writer and reader (file:line) first; a persona sweep measures repeated names across days of one week before and after; the fix keeps the equipment and injury filters; mutants prove it. Blast radius: `platform` (plan_engine), tier L.
