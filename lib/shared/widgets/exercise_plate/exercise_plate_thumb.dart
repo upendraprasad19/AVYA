@@ -23,7 +23,8 @@
 //                                       has artwork, else the monogram;
 //   3. the row has a plate            -> the plate tile (today's face, unchanged);
 //   4. otherwise                      -> the monogram.
-// The thumb itself never fetches an animation: a tile shows the still, the animation lives in the sheet. The plate face is
+// The thumb itself never fetches an animation: a tile shows the still, the animation lives in the sheet and, on the FOCUSED
+// active-workout card, in its header tile (ExerciseHeaderTile, M2b). The plate face is
 // declared FIRST in this file on purpose: exercise_plate_widgets_test.dart reads the first `errorBuilder:` and requires the
 // monogram within 160 characters of it.
 import 'package:flutter/material.dart';

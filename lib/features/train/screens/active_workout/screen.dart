@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/semantics.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:icanbefitter/core/services/exercise_media/exercise_media.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
 import 'package:icanbefitter/core/services/workout_schedule_read_service.dart';
 import 'package:icanbefitter/core/copy/wardroom_copy.dart';
@@ -12,8 +13,10 @@ import 'package:icanbefitter/core/utils/ist_date.dart';
 import 'package:icanbefitter/core/theme/spacing.dart';
 import 'package:icanbefitter/core/theme/typography.dart';
 import 'package:icanbefitter/shared/repositories/exercise_repository.dart';
+import 'package:icanbefitter/shared/widgets/exercise_plate/exercise_media_resolver.dart';
 import 'package:icanbefitter/shared/widgets/exercise_plate/exercise_plate_sheet.dart';
 import 'package:icanbefitter/shared/widgets/exercise_plate/exercise_plate_thumb.dart';
+import 'package:icanbefitter/shared/widgets/exercise_plate/plate_flags.dart';
 import 'package:icanbefitter/shared/widgets/wardroom/wardroom.dart';
 import '../../providers/train_provider.dart';
 import '../../services/active_workout_persistence.dart';
@@ -29,6 +32,8 @@ import '../../widgets/exercise_swap_sheet.dart';
 import '../../widgets/set_input_row.dart';
 import '../../widgets/workout_receipt_card.dart';
 import '../../widgets/workout_receipt_sheet.dart';
+import 'exercise_header_tile.dart';
+import 'exercise_last_try_lines.dart';
 
 // ⑦ OI-89 seams 6 + 8: the swap sheet and the exercise picker are `part of`
 // this library, so their capability imports must live here.
@@ -668,6 +673,7 @@ class _ActiveWorkoutScreenState extends ConsumerState<ActiveWorkoutScreen> {
                             isInSupersetGroupMode: data.isSupersetGroupMode,
                             isGroupModeSource: data.supersetGroupingSourceIndex == exIdx,
                             isExpanded: isExpanded,
+                            isFocused: exIdx == _effectiveFocusedIndex(data),
                             onFocus: () => _focusExercise(exIdx),
                             onLogExercise: logMode
                                 ? (setIdxs) => _onLogExercise(exIdx, setIdxs)
