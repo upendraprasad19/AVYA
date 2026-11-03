@@ -62,10 +62,10 @@ final previewPlanProvider =
   final daysPerWeek = (profile['days_per_week'] as int?) ?? 4;
   // APK Test #3 / Phase exercise count fix: fallback must match
   // onboarding's pre-selected default. APK Test #2 / F6 lesson: a
-  // 'beginner' fallback drives VolumeFilter.targetCount(beginner, 5) = 4
-  // exercises, but the user's actual plan was built with their
-  // 'intermediate' default → 6 exercises. The mismatch is the 6/7/8 vs
-  // 8 confusion in roadmap previews. NEVER reset to 'beginner' here.
+  // 'beginner' fallback sizes the sets for a beginner (the session set budget
+  // reads the level), but the user's actual plan was built with their
+  // 'intermediate' default. The mismatch is the confusion in roadmap previews.
+  // NEVER reset to 'beginner' here.
   final experienceLevel =
       (profile['fitness_experience'] as String?) ?? 'intermediate';
 

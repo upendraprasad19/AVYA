@@ -27,9 +27,10 @@ void main() {
       // rest day entry.
     }, skip: 'Phase 7 scaffold — needs onboarding fixture user.');
 
-    test('T2 — workout days have exercise count matching VolumeFilter.targetCount(intermediate, 4) = 7',
+    test('T2 — workout days carry the exercise count the session set budget allows for the minutes',
         () {
-      // Per lib/shared/repositories/plan_engine/CLAUDE.md table: intermediate × 4-day = 7 exercises/day.
+      // The fixed targetCount table (intermediate x 4-day = 7) was deleted by the B2 flip, 2026-11-02;
+      // the count now follows the user's minutes (SessionSetAllocator).
     }, skip: 'Phase 7 scaffold — needs onboarding fixture user.');
 
     test('T3 — cascade attempts stay within attempt1 / 2 for build_muscle / full_gym',

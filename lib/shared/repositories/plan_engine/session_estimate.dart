@@ -3,16 +3,15 @@ import 'dart:async';
 import 'package:icanbefitter/core/services/error_telemetry.dart';
 import 'package:icanbefitter/shared/repositories/exercise_repository.dart';
 
-import 'plan_engine_flags.dart';
 import 'session_budget.dart';
 
-/// B2 Task 6b (docs/plans/2026-10-22-session-set-budget.md, Ruling 13): the
-/// session length the app DISPLAYS for a stored plan day.
+/// B2 Task 6b (docs/plans/2026-10-22-session-set-budget.md, Ruling 13; flag deleted
+/// 2026-11-02, docs/plans/2026-11-02-session-set-budget-flip.md): the session
+/// length the app DISPLAYS for a stored plan day.
 ///
-/// The budget minutes of [planDay] (a `schedule_*` row) when
-/// `enable_session_set_budget` is ON, else null, and callers keep the old
-/// `totalSets x 2.5`. Also null for a day with no exercise maps, so an empty day
-/// keeps its old placeholder. One function serves Train (`WorkoutDayData`) and
+/// The budget minutes of [planDay] (a `schedule_*` row), or null when the day has
+/// no exercise map or could not be read; callers then use the ONE shared
+/// unreadable-day fallback below ([fallbackDayMinutes] / [fallbackExerciseListSeconds]). One function serves Train (`WorkoutDayData`) and
 /// Home ([homeCardMinutes]): the same day shows the same minutes on both.
 ///
 /// Library rows are looked up by `exercise_id` (`getById`, one box read each), and,
@@ -26,12 +25,11 @@ int? budgetedDayMinutes(Map<dynamic, dynamic>? planDay) {
 }
 
 /// [budgetedDayMinutes] before rounding: the modelled seconds of [planDay], or null
-/// (flag OFF, no exercise maps, or a stored day that could not be read). Also the
-/// coach's `shortenDay` estimate under the flag, so a day it shortens to N minutes
+/// (no exercise maps, or a stored day that could not be read). Also the
+/// coach's `shortenDay` estimate, so a day it shortens to N minutes
 /// shows about N minutes on Train and Home (B-pass R3 P2-2).
 double? budgetedDaySeconds(Map<dynamic, dynamic>? planDay) {
   if (planDay == null) return null;
-  if (!PlanEngineFlags.sessionSetBudgetEnabled) return null;
   final raw = planDay['exercises'];
   if (raw is! List || !raw.any((e) => e is Map)) return null;
   try {
@@ -76,10 +74,29 @@ Map<String, dynamic>? _libraryRow(Map<String, dynamic>? Function() lookup) {
   }
 }
 
-/// The minutes on Home's Today card for [schedule] (today's stored plan day).
-///
-/// Flag ON: [budgetedDayMinutes]. Flag OFF (or a day with no exercises): the old
-/// estimate verbatim, about 2.5 minutes per set and 45 for a day with no sets.
+/// The unreadable-day fallback, shared by Home, Train and the coach's `shortenDay`
+/// (the old `sets x 2.5` estimate, kept for a day [budgetedDaySeconds] cannot read:
+/// no exercise map, or a corrupt stored day). About 2.5 minutes a set. [emptyDay]
+/// is what a day with no sets shows (Home 45, Train 0).
+int fallbackDayMinutes(int totalSets, {int emptyDay = 45}) =>
+    totalSets > 0 ? (totalSets * 2.5).round() : emptyDay;
+
+/// The fallback for the coach's `shortenDay` when [budgetedDaySeconds] is null:
+/// `sets x 60 + sets x rest` seconds per exercise (3 sets and 60 s rest when absent).
+int fallbackExerciseListSeconds(List<Map<String, dynamic>> exercises) {
+  int total = 0;
+  for (final ex in exercises) {
+    final setsRaw = ex['sets'];
+    final sets = setsRaw is num ? setsRaw.toInt() : 3;
+    final restRaw = ex['rest_seconds'];
+    final rest = restRaw is num ? restRaw.toInt() : 60;
+    total += sets * 60 + sets * rest;
+  }
+  return total;
+}
+
+/// The minutes on Home's Today card for [schedule] (today's stored plan day):
+/// [budgetedDayMinutes], else [fallbackDayMinutes] over the stored sets.
 int homeCardMinutes(Map<dynamic, dynamic>? schedule) {
   final budgeted = budgetedDayMinutes(schedule);
   if (budgeted != null) return budgeted;
@@ -94,5 +111,5 @@ int homeCardMinutes(Map<dynamic, dynamic>? schedule) {
       totalSets += sets;
     }
   }
-  return totalSets > 0 ? (totalSets * 2.5).round() : 45;
+  return fallbackDayMinutes(totalSets);
 }

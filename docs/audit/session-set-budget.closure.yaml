@@ -150,9 +150,8 @@ findings:
   # ── B-pass round 1, reviewer 2 (consumers and wiring) ────────────
   - id: BP2-P2-1
     title: "A repeat phase keeps the previous phase's exercise list when the user's minutes go up (the allocator never adds exercises)"
-    terminal_state: upstream_blocked
-    blocker: "By design pins are faithful; the repeat gate (pro_phase_advance.dart) tests adherence only. Raising minutes between phases needs a product call (fresh pick vs faithful repeat). Recorded as item (6) of the enable_session_set_budget entry and in plan-engine-detail (f)."
-    reopen_when: "The enable_session_set_budget flip review."
+    terminal_state: blocked_on_user
+    reason: "Product call (fresh pick vs faithful repeat when the user raises minutes between phases): pins are faithful by design and the repeat gate tests adherence only. Re-stated at the 2026-11-02 flip in docs/audit/set-budget-flip.closure.yaml (SBF-REPEAT-PHASE-MINUTES)."
 
   - id: BP2-P3-1
     title: "_titrateWeekBudgeted treated delta 0 as a trim"
@@ -294,9 +293,8 @@ findings:
 
   - id: BP3-P3-8B
     title: "Migration 017's column comment says the plan generator no longer reads session_duration_minutes"
-    terminal_state: upstream_blocked
-    blocker: "A COMMENT ON COLUMN is a live-schema apply, which needs its own explicit go (root CLAUDE.md 4.3), and the comment is TRUE while the flag is OFF. It becomes false only at the flip."
-    reopen_when: "The enable_session_set_budget flip commit (item is on the flip checklist in docs/ship_dark_pending_review.yaml)."
+    terminal_state: blocked_on_user
+    reason: "The comment is now FALSE (the generator reads the column on every generation since the 2026-11-02 flip). The COMMENT ON COLUMN migration needs the founder's explicit live-apply go (root CLAUDE.md 4.3); it lands as its own commit after that go (docs/audit/set-budget-flip.closure.yaml SBF-MIGRATION-COMMENT)."
 
   - id: BP3-P3-9
     title: "Home card covered by a source-grep that a constant in its place would satisfy; recompose goal and injured users absent from the gate"
@@ -331,9 +329,8 @@ findings:
 
   - id: FLOOR-CO-GROUP-TIME
     title: "co_group_limited (3,538 group-runs) and time_limited (13,022) floors, e.g. the 6-day 90-minute build_muscle case leaves Quads at 8 weekly sets while Glutes sits at its top"
-    terminal_state: upstream_blocked
-    blocker: "A product question, not a defect: which co-trained group should yield. The report (session_set_budget_report.md) is the evidence."
-    reopen_when: "The enable_session_set_budget flip review."
+    terminal_state: blocked_on_user
+    reason: "Founder call: which group yields (a quad slot on Legs B in the 6-day split, an allocator policy serving below-floor groups first, or neither). Measured at the flip in plan-engine-detail (d); re-stated as SBF-QUADS-FLOOR in docs/audit/set-budget-flip.closure.yaml."
 
   - id: FLOOR-CAP-NOT-TRAINED
     title: "cap_limited (3,702) and not_trained_by_split (85) floors"
@@ -342,15 +339,13 @@ findings:
 
   - id: FORCED-LEAD-LIFT
     title: "On a 30-minute 3-day home_dumbbells day, library timed / distance rows alone spend the whole budget (Ruling 8) and the forced lead lift runs up to 5.5 minutes over (7 days of 33,204)"
-    terminal_state: upstream_blocked
-    blocker: "Ruling 8 keeps not-budgeted rows untouched; trimming library timed rows is a product question."
-    reopen_when: "The enable_session_set_budget flip review."
+    terminal_state: verified_clean
+    evidence: "Reviewed at the 2026-11-02 flip: Ruling 8 (not-budgeted rows keep their sets) is a founder-reviewed rule; the effect is bounded (a 30-minute 3-day home_dumbbells day, 1 day of 33,204 on the 914-row library, at most 5.5 minutes over) and the gate's time zero already excludes forced lead lifts and prints them. No product change."
 
   - id: UNUSED-90
     title: "A 90-minute user leaves a median 27.2 minutes a day unused"
-    terminal_state: upstream_blocked
-    blocker: "Founder F3: leftover time stays unused rather than inflating sets. The report does not attribute it to one of the fixed exercise count, the 5-set max, the session caps or the weekly tops."
-    reopen_when: "The enable_session_set_budget flip review."
+    terminal_state: verified_clean
+    evidence: "Founder F3 (locked 2026-10-22): leftover time stays unused rather than inflating sets. The flip makes the promise honest in the UI: the Edit Profile chips read Up to N min (docs/plans/2026-11-02-session-set-budget-flip.md D4)."
 
   - id: CORE-LIST-PICKS
     title: "With enable_core_list_pool ON, hip_isolation and lateral-delts slots can be dropped from the extra slots (gym tiers)"

@@ -57,60 +57,30 @@ void main() {
       const MuscleSlot(targetMuscle: 'Core', movementPattern: 'core', exerciseType: 'isolation', priority: 5),
     ];
 
-    group('targetCount', () {
-      test('beginner: 6/5/4/4 for 3/4/5/6 days', () {
-        expect(VolumeFilter.targetCount('beginner', 3), 6);
-        expect(VolumeFilter.targetCount('beginner', 4), 5);
-        expect(VolumeFilter.targetCount('beginner', 5), 4);
-        expect(VolumeFilter.targetCount('beginner', 6), 4);
-      });
-
-      test('intermediate: 8/7/6/6 for 3/4/5/6 days', () {
-        expect(VolumeFilter.targetCount('intermediate', 3), 8);
-        expect(VolumeFilter.targetCount('intermediate', 4), 7);
-        expect(VolumeFilter.targetCount('intermediate', 5), 6);
-        expect(VolumeFilter.targetCount('intermediate', 6), 6);
-      });
-
-      test('advanced: 10/9/8/8 for 3/4/5/6 days', () {
-        expect(VolumeFilter.targetCount('advanced', 3), 10);
-        expect(VolumeFilter.targetCount('advanced', 4), 9);
-        expect(VolumeFilter.targetCount('advanced', 5), 8);
-        expect(VolumeFilter.targetCount('advanced', 6), 8);
-      });
+    // The flip (2026-11-02) deleted `VolumeFilter.targetCount` and the first-N trim:
+    // the session set budget sizes the day by time, so every split slot is kept.
+    test('every slot is kept for any week that is not a deload', () {
+      final result = VolumeFilter.filter(allSlots, weekCharacter: 'baseline');
+      expect(result.length, allSlots.length);
+      expect(result.last.targetMuscle, 'Core');
     });
 
-    test('advanced 5-day keeps first 8 slots', () {
-      final result = VolumeFilter.filter(allSlots, experience: 'advanced', weekCharacter: 'baseline', daysPerWeek: 5);
-      expect(result.length, 8);
-      expect(result.last.targetMuscle, 'Triceps'); // P4 slot
-    });
-
-    test('intermediate 5-day keeps first 6 slots', () {
-      final result = VolumeFilter.filter(allSlots, experience: 'intermediate', weekCharacter: 'baseline', daysPerWeek: 5);
-      expect(result.length, 6);
-    });
-
-    test('beginner 5-day keeps first 4 slots', () {
-      final result = VolumeFilter.filter(allSlots, experience: 'beginner', weekCharacter: 'baseline', daysPerWeek: 5);
-      expect(result.length, 4);
-    });
-
-    test('advanced 3-day keeps all 10 slots', () {
-      final result = VolumeFilter.filter(allSlots, experience: 'advanced', weekCharacter: 'baseline', daysPerWeek: 3);
-      expect(result.length, 10);
+    test('the slot ORDER (priority order from the split) is preserved', () {
+      final result = VolumeFilter.filter(allSlots, weekCharacter: 'overreach');
+      expect([for (final s in result) s.targetMuscle],
+          [for (final s in allSlots) s.targetMuscle]);
     });
 
     test('deload week keeps P1 only regardless of experience', () {
-      final result = VolumeFilter.filter(allSlots, experience: 'advanced', weekCharacter: 'deload', daysPerWeek: 5);
+      final result = VolumeFilter.filter(allSlots, weekCharacter: 'deload');
       expect(result.every((s) => s.priority == 1), isTrue);
       expect(result.length, 2);
     });
 
-    test('fewer slots than target returns all', () {
+    test('a list shorter than any old target is returned whole', () {
       final fewSlots = allSlots.take(3).toList();
-      final result = VolumeFilter.filter(fewSlots, experience: 'advanced', weekCharacter: 'baseline', daysPerWeek: 5);
-      expect(result.length, 3); // only 3 available, target is 8
+      final result = VolumeFilter.filter(fewSlots, weekCharacter: 'baseline');
+      expect(result.length, 3);
     });
   });
 }

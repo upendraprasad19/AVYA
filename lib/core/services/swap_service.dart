@@ -35,7 +35,7 @@ import 'write_result.dart';
 import '../utils/date_utils.dart';
 import '../utils/ist_date.dart';
 import '../../shared/repositories/plan_engine/equipment_capability.dart';
-import '../../shared/repositories/plan_engine/session_estimate.dart' show budgetedDaySeconds;
+import '../../shared/repositories/plan_engine/session_estimate.dart' show budgetedDaySeconds, fallbackExerciseListSeconds;
 import '../../shared/repositories/plan_engine/training_history_analyzer.dart';
 
 /// Result returned by [SwapService.swapExerciseInDay].
@@ -716,27 +716,15 @@ class SwapService {
 
   // ── Helpers ─────────────────────────────────────────────────────
 
-  /// Seconds [exercises] take on the day stored in [scheduleMap]. With the session
-  /// set budget ON it is the SAME model Train and Home show (every exercise at its
-  /// archetype plus the day's warm-up and cool-down items), so "shorten to 45
-  /// minutes" lands on about 45 minutes where the user reads it; OFF it is the old
-  /// sets x (60 + rest) sum, verbatim (B-pass R3 P2-2).
+  /// Seconds [exercises] take on the day stored in [scheduleMap]: the SAME model
+  /// Train and Home show (every exercise at its archetype plus the day's warm-up and
+  /// cool-down items), so "shorten to 45 minutes" lands on about 45 minutes where
+  /// the user reads it (B-pass R3 P2-2). An unreadable or empty list uses the shared
+  /// `fallbackExerciseListSeconds` (the old sets x (60 + rest) sum).
   int _estimateSeconds(
       Map<String, dynamic> scheduleMap, List<Map<String, dynamic>> exercises) {
     final budgeted = budgetedDaySeconds({...scheduleMap, 'exercises': exercises});
-    return budgeted?.round() ?? _estimateExerciseListSeconds(exercises);
-  }
-
-  int _estimateExerciseListSeconds(List<Map<String, dynamic>> exercises) {
-    int total = 0;
-    for (final ex in exercises) {
-      final setsRaw = ex['sets'];
-      final sets = setsRaw is num ? setsRaw.toInt() : 3;
-      final restRaw = ex['rest_seconds'];
-      final rest = restRaw is num ? restRaw.toInt() : 60;
-      total += sets * 60 + sets * rest;
-    }
-    return total;
+    return budgeted?.round() ?? fallbackExerciseListSeconds(exercises);
   }
 
   int _exercisePriorityRank(Map<String, dynamic> ex) {

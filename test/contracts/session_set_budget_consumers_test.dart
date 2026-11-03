@@ -1,6 +1,7 @@
 // B2 Task 4 (docs/plans/2026-10-22-session-set-budget.md): the stages after the
-// allocator take an optional SessionBudgetContext. `null` is today's path
-// verbatim; a context makes each stage honour the same ledger the allocator used.
+// allocator take a SessionBudgetContext and honour the same ledger the allocator
+// used. (The `null` / unbudgeted paths were deleted with the flip, 2026-11-02;
+// `WarmupCooldownSelector.attach` alone keeps a nullable budget, for templates.)
 //
 // Crafted fixtures with literals worked out by hand (small enough to check), plus
 // a seeded property check that the allocator's output fed through `apply` never
@@ -53,7 +54,7 @@ void main() {
       return (f, [f.day('hypertrophy', [f.ex('bench'), f.ex('fly')])]);
     }
 
-    test('base sets are used as allocated: no cycle multiplier at phase 9, no 4-set minimum', () {
+    test('base sets are used as allocated: no cycle multiplier at phase 9, no 4-set minimum (both deleted with the unbudgeted body)', () {
       final (f, days) = chestDay();
       final ctx = f.ctx(days, minutes: 90);
       for (final phase in [1, 9]) {
@@ -61,18 +62,10 @@ void main() {
           populated: days,
           phase: phase,
           is6Day: true,
-          effectiveExp: 'intermediate',
           budget: ctx,
         );
         expect(setsIn(on, 0, 0), [3, 3], reason: 'phase $phase');
       }
-      // The same plan without a budget: round(3 x 1.2) = 4, and 4 is the minimum.
-      final off = PeriodizationEngine.apply(
-          populated: days, phase: 9, is6Day: true, effectiveExp: 'intermediate');
-      expect(setsIn(off, 0, 0), [4, 4]);
-      final off1 = PeriodizationEngine.apply(
-          populated: days, phase: 1, is6Day: true, effectiveExp: 'intermediate');
-      expect(setsIn(off1, 0, 0), [4, 4]);
     });
 
     test('the four weeks of a 6-day plan: allocated, +1 where it fits, allocated, floor(0.6 x)', () {
@@ -88,7 +81,6 @@ void main() {
         populated: days,
         phase: 1,
         is6Day: true,
-        effectiveExp: 'intermediate',
         budget: f.ctx(days, minutes: 90),
       );
       expect(setsIn(weeks, 0, 0), [4, 4, 3]);
@@ -107,7 +99,6 @@ void main() {
         populated: mixed,
         phase: 1,
         is6Day: true,
-        effectiveExp: 'intermediate',
         budget: f.ctx(mixed, minutes: 90),
       );
       final wk1 = w[0].workoutDays[0].exercises;
@@ -122,7 +113,6 @@ void main() {
         populated: none,
         phase: 1,
         is6Day: true,
-        effectiveExp: 'intermediate',
         budget: f.ctx(none, minutes: 90),
       );
       expect(setsIn(n, 1, 0), [4, 4]);
@@ -143,7 +133,6 @@ void main() {
         populated: days,
         phase: 1,
         is6Day: false,
-        effectiveExp: 'intermediate',
         stashWorkingBase: true,
         budget: ctx,
       );
@@ -158,7 +147,6 @@ void main() {
         populated: days,
         phase: 1,
         is6Day: true,
-        effectiveExp: 'intermediate',
         stashWorkingBase: true,
         budget: ctx,
       );
@@ -173,31 +161,9 @@ void main() {
         populated: days,
         phase: 1,
         is6Day: true,
-        effectiveExp: 'intermediate',
         budget: f.ctx(days, minutes: 90),
       );
       expect(setsIn(weeks, 3, 0), [1, 1]); // 1 stays 1; floor(0.6 x 2) = 1
-    });
-
-    test('the physique bring-up +1 is absent with a budget', () {
-      final (f, days) = chestDay();
-      final on = PeriodizationEngine.apply(
-        populated: days,
-        phase: 1,
-        is6Day: true,
-        effectiveExp: 'intermediate',
-        bodyFocus: const ['chest'],
-        budget: f.ctx(days, minutes: 90),
-      );
-      expect(setsIn(on, 0, 0), [3, 3]);
-      final off = PeriodizationEngine.apply(
-        populated: days,
-        phase: 1,
-        is6Day: true,
-        effectiveExp: 'intermediate',
-        bodyFocus: const ['chest'],
-      );
-      expect(setsIn(off, 0, 0), [5, 5]); // max(4, 3) + 1
     });
 
     test('Ruling 8: a timed row gets its week-2 +1 only while the day\'s time allows', () {
@@ -223,7 +189,6 @@ void main() {
         populated: days,
         phase: 1,
         is6Day: true,
-        effectiveExp: 'intermediate',
         budget: f.ctx(days, minutes: 30),
       );
       expect(setsIn(weeks, 0, 0), [3]);
@@ -242,7 +207,6 @@ void main() {
         populated: days,
         phase: 1,
         is6Day: true,
-        effectiveExp: 'intermediate',
         budget: f.ctx(days, minutes: 90),
       );
       expect(setsIn(weeks, 1, 0), [5, 4]);
@@ -264,42 +228,10 @@ void main() {
         populated: days,
         phase: 1,
         is6Day: true,
-        effectiveExp: 'intermediate',
         budget: f.ctx(days, minutes: 90, goal: 'general_fitness'),
       );
       expect(setsIn(weeks, 1, 0), [4, 3]);
       expect(setsIn(weeks, 1, 1), [5]);
-    });
-
-    test('a null budget is today\'s V4 wave: the 4-week grids are pinned to recorded literals (B-pass R2 P3-2)', () {
-      // The old version of this test compared apply(...) with apply(..., budget: null),
-      // the same call twice. These are the OFF engine's own sets x reps @ rest for the
-      // chest day, recorded from the engine with the budget stage absent; the
-      // generator golden pins generateV4 as a whole and this pins apply's own branch.
-      final (_, days) = chestDay();
-      String grids(int phase, String exp, bool is6) {
-        final weeks = PeriodizationEngine.apply(
-            populated: days, phase: phase, is6Day: is6, effectiveExp: exp);
-        return [
-          for (final w in weeks)
-            [for (final e in w.workoutDays[0].exercises) '${e.sets}x${e.reps}@${e.restSeconds}']
-                .join(','),
-        ].join(' | ');
-      }
-
-      expect(grids(5, 'advanced', false),
-          '4x10@75,4x13@75 | 4x10@75,4x13@75 | 4x8@75,4x11@75 | 1x8@75,1x10@75');
-      expect(grids(1, 'intermediate', true),
-          '4x10@75,4x13@75 | 4x10@75,4x13@75 | 4x8@75,4x11@75 | 1x8@75,1x10@75');
-      expect(grids(9, 'intermediate', true),
-          '4x10@75,4x13@75 | 5x10@75,5x13@75 | 4x8@75,4x11@75 | 2x8@75,2x10@75');
-      // An explicit null is the omitted argument.
-      final a = PeriodizationEngine.apply(
-          populated: days, phase: 5, is6Day: false, effectiveExp: 'advanced');
-      final b = PeriodizationEngine.apply(
-          populated: days, phase: 5, is6Day: false, effectiveExp: 'advanced', budget: null);
-      expect(jsonEncode([for (final w in a) [for (final d in w.workoutDays) d.toMap()]]),
-          jsonEncode([for (final w in b) [for (final d in w.workoutDays) d.toMap()]]));
     });
 
     group('seeded property: the allocator\'s output through apply stays inside the budget', () {
@@ -387,7 +319,6 @@ void main() {
             populated: out,
             phase: lighter ? 4 : 1,
             is6Day: is6,
-            effectiveExp: level,
             budget: ctx,
           );
           checked++;
@@ -448,8 +379,6 @@ void main() {
       ]);
       final on = VolumeTitration.applyToWeeks([week], {'Chest': 1}, budget: ctx);
       expect(grid(on.single), [[4, 4], [4, 4]]);
-      final off = VolumeTitration.applyToWeeks([week], {'Chest': 1});
-      expect(grid(off.single), [[5, 4], [4, 4]]);
     });
 
     test('never pushes a group past a session cap: the bump rolls to the day with room', () {
@@ -460,8 +389,6 @@ void main() {
       ]);
       final on = VolumeTitration.applyToWeeks([week], {'Chest': 1}, budget: ctx);
       expect(grid(on.single), [[4, 4], [4, 3]]);
-      final off = VolumeTitration.applyToWeeks([week], {'Chest': 1});
-      expect(grid(off.single), [[5, 4], [3, 3]]);
     });
 
     test('a plateau +1 with every candidate at its cap changes nothing', () {
@@ -482,8 +409,6 @@ void main() {
       final (atBottom, ctx) = setup(f, lists(4)); // 12
       expect(grid(VolumeTitration.applyToWeeks([atBottom], {'Chest': -1}, budget: ctx).single),
           [[4, 4], [4]]);
-      expect(grid(VolumeTitration.applyToWeeks([atBottom], {'Chest': -1}).single),
-          [[3, 4], [4]]);
       final (above, ctx2) = setup(f, lists(5)); // 13
       expect(grid(VolumeTitration.applyToWeeks([above], {'Chest': -1}, budget: ctx2).single),
           [[3, 4], [5]]);
@@ -507,8 +432,6 @@ void main() {
       ]);
       final on = VolumeTitration.applyToWeeks([week], {'Quads': -1}, budget: ctx);
       expect(grid(on.single), [[4], [4, 4], [4, 4]]);
-      final off = VolumeTitration.applyToWeeks([week], {'Quads': -1});
-      expect(grid(off.single), [[3], [5, 4], [4, 4]]);
     });
 
     test('a deload week with no stash is left alone', () {
@@ -532,7 +455,6 @@ void main() {
       ]);
       expect(grid(VolumeTitration.applyToWeeks([week], {'Chest': 1}, budget: ctx).single),
           [[5, 3]]);
-      expect(grid(VolumeTitration.applyToWeeks([week], {'Chest': 1}).single), [[6, 2]]);
     });
 
     test('a trim skips an exercise already at 1 set and rolls to the next', () {
@@ -575,10 +497,9 @@ void main() {
       ]);
       expect(grid(VolumeTitration.applyToWeeks([week], {'Chest': 1}, budget: ctx).single),
           [[3, 4]]);
-      expect(grid(VolumeTitration.applyToWeeks([week], {'Chest': 1}).single), [[4, 3]]);
     });
 
-    test('Lateral Delts count as Shoulders under a budget, and not without one', () {
+    test('Lateral Delts count as Shoulders', () {
       final f = Fx();
       f.row('lr', ['Lateral Delts'], type: 'isolation', reps: '12-15');
       final (week, ctx) = setup(f, [
@@ -586,7 +507,6 @@ void main() {
       ]);
       expect(grid(VolumeTitration.applyToWeeks([week], {'Shoulders': 1}, budget: ctx).single),
           [[4]]);
-      expect(grid(VolumeTitration.applyToWeeks([week], {'Shoulders': 1}).single), [[3]]);
     });
 
     test('a Forearms delta is skipped under a budget', () {
@@ -597,7 +517,6 @@ void main() {
       ]);
       expect(grid(VolumeTitration.applyToWeeks([week], {'Forearms': 1}, budget: ctx).single),
           [[3]]);
-      expect(grid(VolumeTitration.applyToWeeks([week], {'Forearms': 1}).single), [[4]]);
     });
 
     test('only budgeted rows are candidates: a repeat-pinned custom is left alone', () {
@@ -607,7 +526,6 @@ void main() {
       ]);
       expect(grid(VolumeTitration.applyToWeeks([week], {'Chest': 1}, budget: ctx).single),
           [[3, 4]]);
-      expect(grid(VolumeTitration.applyToWeeks([week], {'Chest': 1}).single), [[4, 3]]);
     });
 
     test('the deload week is checked against its stashed workingSets', () {
@@ -660,8 +578,6 @@ void main() {
       ]);
       expect(grid(VolumeTitration.applyToWeeks([week], {'Chest': 1}, budget: ctx).single),
           [[3, 3], [3, 3], [2, 2]]);
-      expect(grid(VolumeTitration.applyToWeeks([week], {'Chest': 1}).single),
-          [[4, 3], [3, 3], [2, 2]]);
       // One set under the top, the same fixture bumps: the top really is the clause.
       final (room, ctx2) = setup(f, [
         [f.ex('c1', sets: 3), f.ex('c2', sets: 3)],
@@ -687,7 +603,6 @@ void main() {
       final tight = f.ctx(days, minutes: 30);
       expect(grid(VolumeTitration.applyToWeeks([week], {'Chest': 1}, budget: tight).single),
           [[3, 5]]);
-      expect(grid(VolumeTitration.applyToWeeks([week], {'Chest': 1}).single), [[4, 5]]);
       // The same week on a 90-minute day has the time: the clock was the clause.
       final roomy = f.ctx(days, minutes: 90);
       expect(grid(VolumeTitration.applyToWeeks([week], {'Chest': 1}, budget: roomy).single),
@@ -729,7 +644,6 @@ void main() {
       ]);
       expect(grid(VolumeTitration.applyToWeeks([week], {'Chest': 0}, budget: ctx).single),
           [[4, 4], [5]]);
-      expect(grid(VolumeTitration.applyToWeeks([week], {'Chest': 0}).single), [[4, 4], [5]]);
     });
 
     test('a zero delta does not use up an exercise another group wants (B-pass R2 P3-1)', () {
@@ -812,7 +726,7 @@ void main() {
     });
   });
 
-  group('VolumeFilter.filterDays keepAllSlots', () {
+  group('VolumeFilter.filterDays keeps every slot', () {
     test('returns every split slot, where the default keeps targetCount', () {
       final slots = [
         for (var i = 0; i < 10; i++)
@@ -834,18 +748,13 @@ void main() {
             slotsB: slots.take(9).toList(),
           ),
       ];
-      // intermediate, 5 days: targetCount = 6.
-      final trimmed = VolumeFilter.filterDays(days, experience: 'intermediate', weekCharacter: 'baseline');
-      expect(trimmed.first.slotsA.length, 6);
-      expect(trimmed.first.slotsB!.length, 6);
-      final all = VolumeFilter.filterDays(days,
-          experience: 'intermediate', weekCharacter: 'baseline', keepAllSlots: true);
+      // Every split slot is kept (the old intermediate 5-day trim to 6 is deleted).
+      final all = VolumeFilter.filterDays(days, weekCharacter: 'baseline');
       expect(all.first.slotsA.length, 10);
       expect(all.first.slotsB!.length, 9);
       expect(all.length, 5);
       // The deload rule is not a count: it still keeps priority-1 slots only.
-      final deload = VolumeFilter.filterDays(days,
-          experience: 'intermediate', weekCharacter: 'deload', keepAllSlots: true);
+      final deload = VolumeFilter.filterDays(days, weekCharacter: 'deload');
       expect(deload.first.slotsA.length, slots.where((s) => s.priority == 1).length);
       expect(deload.first.slotsA.every((s) => s.priority == 1), isTrue);
     });

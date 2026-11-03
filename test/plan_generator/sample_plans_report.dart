@@ -34,7 +34,6 @@ void main() {
       // Volume filter
       final filteredDays = VolumeFilter.filterDays(
         splitDays,
-        experience: exp,
         weekCharacter: 'baseline',
       );
 

@@ -88,3 +88,28 @@ class Fx {
 List<(String, int)> setsOf(PopulatedDay d, {bool b = false}) => [
       for (final e in (b ? d.exercisesB : d.exercisesA)) (e.exerciseName, e.sets),
     ];
+
+/// A budget context for a test that drives `PeriodizationEngine.apply` /
+/// `VolumeTitration.applyToWeeks` over a hand-built day. No library rows, so every
+/// exercise is priced at the default archetype and, unless named in [names], is
+/// NOT budgeted (so the titration leaves it alone); [minutes] defaults to the F2
+/// resolution of an empty profile (60). Added with the flip (2026-11-02), when the
+/// unbudgeted bodies those tests used to call were deleted.
+SessionBudgetContext testBudget({
+  int minutes = 60,
+  String goal = 'build_muscle',
+  String level = 'intermediate',
+  bool lighter = false,
+  Set<String> focus = const {},
+  Iterable<String> names = const [],
+}) =>
+    SessionBudgetContext(
+      minutes: minutes,
+      planGoal: goal,
+      level: level,
+      lighterPhase: lighter,
+      focusGroups: focus,
+      // [names] are priced at archetype 'B' and therefore count as BUDGETED rows
+      // (`SessionBudget.isBudgeted` needs the name in this map).
+      archetypeByName: {for (final n in names) n.toLowerCase(): 'B'},
+    );

@@ -11,21 +11,16 @@ String _src(String relPath) => File(relPath).readAsStringSync();
 
 void main() {
   group('T-10 plan generator targetCount + cascade depth', () {
-    test('VolumeFilter.targetCount exists', () {
+    test('VolumeFilter keeps every slot but the deload rule (targetCount deleted)',
+        () {
       final src =
           _src('lib/shared/repositories/plan_engine/volume_filter.dart');
-      expect(src.contains('targetCount'), isTrue);
-      // The table per lib/shared/repositories/plan_engine/CLAUDE.md: beginner / intermediate / advanced
-      // × 3/4/5/6 days. Source must reference the experience tiers.
-      expect(
-        src.contains('beginner') &&
-            src.contains('intermediate') &&
-            src.contains('advanced'),
-        isTrue,
-        reason: 'VolumeFilter.targetCount must branch on '
-            'experience level (beginner / intermediate / advanced) per '
-            'lib/shared/repositories/plan_engine/CLAUDE.md.',
-      );
+      // Comments are stripped: the doc comment names the deleted table.
+      final code = src.split('\n').where((l) => !l.trimLeft().startsWith('//')).join('\n');
+      expect(code.contains('targetCount'), isFalse,
+          reason: 'the fixed-count table was deleted with the B2 flip');
+      expect(src.contains("weekCharacter == 'deload'"), isTrue,
+          reason: 'the deload (priority-1 only) rule must stay');
     });
 
     test('exercise_selector cascade has the 5-attempt pattern', () {

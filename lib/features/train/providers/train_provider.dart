@@ -241,9 +241,9 @@ class WorkoutDayData {
   final List<ExerciseData> warmup;
   final List<ExerciseData> cooldown;
 
-  /// B2 Task 6b: the budget model's minutes for this day, set only while
-  /// `enable_session_set_budget` is ON (`budgetedDayMinutes`, the function Home
-  /// uses too). null keeps the old `totalSets x 2.5` estimate.
+  /// B2 Task 6b: the budget model's minutes for this day (`budgetedDayMinutes`, the
+  /// function Home uses too). null (an unreadable day) uses the shared
+  /// `fallbackDayMinutes` estimate, about 2.5 minutes a set.
   final int? budgetMinutes;
 
   /// train-header-b2: the week's character word for the hero label
@@ -271,7 +271,7 @@ class WorkoutDayData {
     if (budgetMinutes != null) return '$budgetMinutes min';
     final totalSets =
         exercises.fold<int>(0, (sum, e) => sum + (int.tryParse(e.sets) ?? 3));
-    return '${(totalSets * 2.5).round()} min';
+    return '${fallbackDayMinutes(totalSets, emptyDay: 0)} min';
   }
 }
 

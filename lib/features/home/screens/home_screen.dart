@@ -902,8 +902,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
       );
     }
 
-    // Estimate duration: ~2.5 min per set, or the budget model's minutes when
-    // `enable_session_set_budget` is ON (B2 Task 6b; same function as Train's).
+    // Estimate duration: the budget model's minutes (B2 Task 6b; same function as
+    // Train's), or the shared unreadable-day fallback (~2.5 min per set).
     final estDuration = homeCardMinutes(schedule);
 
     return TodayWorkoutCard(
