@@ -306,7 +306,7 @@ assertion, compile error not counted as red, sources restored and re-hashed, the
 
 ## 7. Residuals
 
-- **R1** No mutual exclusion (two landings at once, or two runs in one worktree): they may waste a CI wait; a hand or web-UI merge can move main during it (the loop re-checks and re-syncs, at most 3 rounds).
+- **R1** No mutual exclusion (two landings at once, or two runs in one worktree): they may waste a CI wait; a hand or web-UI merge can move main during it (the loop re-checks and re-syncs, at most 3 rounds). Founder decision 2026-11-03 (OI-449, option b): accepted, no lock will be added; a crash-stuck lock is the worse failure.
 - **R2** Between the last ancestor check and the merge, main can still move (GitHub merges the PR head into main as it stands): the result is then untested on the very
   latest main, as today. Only a real merge queue closes this; none is available (section 1).
 - **R3** The sync with `--commit` and the push are unbounded phases; only the CI wait and each fetch have deadlines. A supervisor signals the process group.
