@@ -58,6 +58,14 @@ void main() {
       expect(cli, contains('unawaited(stdout.done.catchError((_) {}));'));
       expect(cli, contains('while (_childrenRunning > 0'));
     });
+    test('OI-451: _out and _err are bare writes; a closed stdout fails asynchronously, so no try/catch there is reachable', () {
+      for (final fn in ['_out', '_err']) {
+        final m = RegExp('void $fn\\(String line\\) \\{([^}]*)\\}').firstMatch(cli);
+        expect(m, isNotNull, reason: '$fn must keep its one-statement body');
+        expect(m!.group(1), isNot(contains('try')));
+        expect(m.group(1), isNot(contains('catch')));
+      }
+    });
     test("the replay hands the gate the MAIN sha as PUSH_BEFORE (CI's range base; the head would give the same first-parent walk, so only this pin holds it)", () {
       expect(cli, contains("'PUSH_BEFORE': mainSha,"));
       expect(cli, isNot(contains("'PUSH_BEFORE': head")));

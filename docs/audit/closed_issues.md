@@ -5896,3 +5896,17 @@ To plan (tier M: Train + coach files): the rate map omits weekdays with nothing 
 
 **Closed by.** Founder decision 2026-11-03: option (b). `land_pr.sh` stays lock-free. A stuck lock after a crash is a worse failure for a one-command landing tool than an occasional wasted push and CI wait, the merge stays safe (`safe_pr_merge.sh` refuses a stale head or a non-green PR), and one person lands PRs here. The residual is stated in `docs/plans/merge-train.md` section 7 R1 (now citing this decision) and in the landing D residuals of `docs/architecture/hooks.md`. Reopen only if concurrent landings start costing real CI time; the design then is (a), reuse `_git_lock.sh` as is, with the manual `rm -rf` after a crash.
 
+## OI-451 — land_pr.dart _out try/catch is unreachable by any test (mutant N09 survivor)
+
+- **Status**: CLOSED · 2026-11-03 · option (a) · the commit carrying `closes-oi: OI-451`
+- **Blocked on**: — (resolved)
+- **Verified**: never
+- **Identified**: 2026-11-03 · filed via mint_oi.sh from branch `oi-n09-dead-catch`
+
+**What happens.** In `scripts/land_pr.dart` the `try/catch` inside `_out` (line 78) is defence for a stdout that throws synchronously. A closed stdout reports its error through `stdout.done`, not as a synchronous throw, so no test reaches the catch. In landing D's mutation run (87 mutants, B-pass `docs/reviews/b073e94ab265-review.md` Finding 4) the mutant that turns the catch into `rethrow` (N09) was the one survivor. It was kept as defence for a detached stdout and stated as not behaviourally proven. `_err` (line 70) has the same shape.
+
+**Decision needed.** (a) Delete the catch in `_out`/`_err` and rely on the `stdout.done` / `stderr.done` handlers, or (b) add a test seam that makes the write throw, plus a test, so the catch is proven. Prefer (a) unless a synchronous throw can be provoked on a real detached stdout; check that first.
+
+**Done when.** The decision is recorded; the chosen change ships with a mutant run on `_out` and `_err` (no survivor left unnamed). Blast radius: `platform` (`scripts/land_pr.dart`).
+
+**Closed by.** Option (a). Probe (closed stdout `>&-`, broken pipe, `/dev/full`): `stdout.writeln` never throws synchronously; the failure is an async unhandled `FileSystemException`, so the catch was unreachable. `_out` and `_err` in `scripts/land_pr.dart` are now bare writes; the protection is `stdout.done`/`stderr.done` `.catchError` and the `runZonedGuarded` handler in `main`. Pin: `test/scripts/land_pr_source_pins_test.dart` (OI-451); mutant that restores the catch in `_out` reddens it (1 failure). Residual, not fixed: the zone handler calls `_out`, and on any early-exit path before the `done` handlers are installed (`_parse` refusals, construction errors, `scripts/land_pr.dart` main), a broken stdout could re-enter it; the run still ends because `_finish` keeps its own try/catch (it also guards `flush()`, which can throw). One more narrow window: while `_finish` runs `stdout.flush()` the sink is bound (SDK `io_sink.dart` `_isBound`), so a write then throws StateError; only a late uncaught async error reaching the zone handler could write there, and the old catch would have absorbed it.
