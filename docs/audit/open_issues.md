@@ -7315,3 +7315,16 @@ Found by the sync-storm-first-sweep batch while measuring its Day-0 web check (l
 **Founder direction (2026-11-03).** File and pick up later. Chosen design (hybrid): keep the pinned compounds; when minutes rise, spend the spare time first on extra sets (up to the per-session cap), then on appended accessories chosen by the normal selector; do not reshuffle the whole list. Rationale: exercise-specific progression and load tracking favour keeping the main lifts across a block, while recoverable extra volume is added as accessories or sets.
 
 **Done when.** Plan reviewed twice; a repeat phase with more minutes fills the extra time as above and a repeat with the same minutes stays byte-identical to today; pins of compounds survive; the repeat gate still tests adherence; mutants prove both branches. Blast radius: `platform` (plan_engine), tier L.
+
+## OI-451 — land_pr.dart _out try/catch is unreachable by any test (mutant N09 survivor)
+
+- **Status**: OPEN
+- **Blocked on**: none
+- **Verified**: never
+- **Identified**: 2026-11-03 · filed via mint_oi.sh from branch `oi-n09-dead-catch`
+
+**What happens.** In `scripts/land_pr.dart` the `try/catch` inside `_out` (line 78) is defence for a stdout that throws synchronously. A closed stdout reports its error through `stdout.done`, not as a synchronous throw, so no test reaches the catch. In landing D's mutation run (87 mutants, B-pass `docs/reviews/b073e94ab265-review.md` Finding 4) the mutant that turns the catch into `rethrow` (N09) was the one survivor. It was kept as defence for a detached stdout and stated as not behaviourally proven. `_err` (line 70) has the same shape.
+
+**Decision needed.** (a) Delete the catch in `_out`/`_err` and rely on the `stdout.done` / `stderr.done` handlers, or (b) add a test seam that makes the write throw, plus a test, so the catch is proven. Prefer (a) unless a synchronous throw can be provoked on a real detached stdout; check that first.
+
+**Done when.** The decision is recorded; the chosen change ships with a mutant run on `_out` and `_err` (no survivor left unnamed). Blast radius: `platform` (`scripts/land_pr.dart`).
