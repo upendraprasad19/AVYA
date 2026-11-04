@@ -24,6 +24,7 @@ class ExerciseLastTryLines extends ConsumerWidget {
     required this.showTry,
     required this.fallbackReps,
     this.lastMaxLines = 1,
+    this.inline = false,
   });
 
   final String exerciseName;
@@ -36,6 +37,11 @@ class ExerciseLastTryLines extends ConsumerWidget {
   /// 166 dp column and would lose "REPS" from about 1.1x text scale.
   final int lastMaxLines;
 
+  /// The logging viewer lays the two lines side by side when they fit (a
+  /// `Wrap`) and each row takes only its own width; the card keeps them
+  /// stacked, each row filling the column.
+  final bool inline;
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final lastPerf = ref.watch(lastPerformanceProvider(exerciseName));
@@ -46,8 +52,10 @@ class ExerciseLastTryLines extends ConsumerWidget {
     // "Last: 50.0kg × 10 reps" line
     if (lastPerf.lastWeight != null && lastPerf.lastWeight! > 0) {
       children.add(Padding(
+        key: const Key('exercise-last-line'),
         padding: const EdgeInsets.only(top: 4),
         child: Row(
+          mainAxisSize: inline ? MainAxisSize.min : MainAxisSize.max,
           children: [
             const Icon(Icons.history, size: 10, color: AppColors.textDim),
             const SizedBox(width: 3),
@@ -74,8 +82,10 @@ class ExerciseLastTryLines extends ConsumerWidget {
         lastPerf.suggestedWeight! > 0 &&
         showTry) {
       children.add(Padding(
+        key: const Key('exercise-try-line'),
         padding: const EdgeInsets.only(top: 2),
         child: Row(
+          mainAxisSize: inline ? MainAxisSize.min : MainAxisSize.max,
           children: [
             const Icon(Icons.arrow_upward, size: 10, color: AppColors.accent),
             const SizedBox(width: 3),
@@ -95,6 +105,9 @@ class ExerciseLastTryLines extends ConsumerWidget {
       ));
     }
 
+    if (inline) {
+      return Wrap(spacing: 16, children: children);
+    }
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: children,

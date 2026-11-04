@@ -12929,7 +12929,7 @@ concepts:
         line_range: 57-84
         method: resolvePlate
       - file: lib/shared/widgets/exercise_plate/exercise_plate_sheet.dart
-        line_range: 137-141
+        line_range: 118-129
         method: build
 
   # Batch M1 (2026-10-27): the library rows that have a Wardroom animation point at it.
@@ -12983,7 +12983,7 @@ concepts:
     contract_test_path: test/contracts/exercise_media_client_behavioral_test.dart
     description: |
       One exercise animation (`<media_slug>_v<media_version>.webp` in the private `exercise-media` bucket) reaches the
-      screen only when a sheet or the focused active-workout card's header tile asks for it, never in bulk (the Wi-Fi bulk prefetch is Batch M2c, not shipped).
+      screen only when a sheet, the focused active-workout card's header tile or the logging viewer asks for it, never in bulk (the Wi-Fi bulk prefetch is Batch M2c, not shipped).
 
       WRITER: `ExerciseMediaRepository.ensure` (`lib/core/services/exercise_media/exercise_media_repository.dart`)
       is the only code that downloads a file and the only caller of `ExerciseMediaStore.put`: it reads the device store
@@ -12995,7 +12995,8 @@ concepts:
 
       READER: `ExerciseAnimationView` (`lib/shared/widgets/exercise_plate/exercise_animation_view.dart`) asks `ensure` once per
       object name and cross-fades from the bundled still to the animation; every other outcome keeps the still. The thumb
-      shows only the bundled still; the sheet and the focused card's header tile (M2b Part A) are the only doors to the animation.
+      shows only the bundled still; the sheet, the focused card's header tile (M2b Part A) and the logging viewer (M2b Part B, opened by a tap on a card's
+      44 px still or its ENLARGE chip) are the only doors to the animation.
 
       WARNING: stills are bundled and readable without a login (decision G12); fetched animation files are cached on the
       device and survive sign-out (decision C8). Only a logged-in, non-anonymous session may fetch (the client answers
@@ -13015,6 +13016,66 @@ concepts:
         method: _request
         semantic: pass-through
         notes: Batch M2a Task 9 - asks ensure once per objectName, ignores a stale completion, never raises. Behavioral test/contracts/exercise_animation_view_test.dart.
+
+  # Batch M2b Part B (2026-11-03): the four coaching fields of a library row, parsed once.
+  - concept: exercise_coaching_content
+    domain: workout
+    behavioral_test_path: test/contracts/exercise_cues_behavioral_test.dart
+    contract_test_path: test/contracts/breathing_cue_numeric_suppressed_test.dart
+    description: |
+      The curated coaching text of a library row: `coaching_cues` and `common_mistakes`
+      (arrays), `breathing_cue` and `warmup_protocol` (strings). Display only, free to
+      every tier.
+
+      WRITER: the seeded library `assets/data/exercise_library.json`, delivered to
+      existing installs only by `_exerciseLibraryVersion`. Community rows carry
+      arbitrary JSON types.
+
+      READER: `exerciseCuesOf(row)` (`exercise_cues.dart`) is the ONLY parser. Its three
+      callers hand it `ExerciseRepository.getByExactName(name)`: the FORM & CUES panel
+      (`CoachingContentPanel._resolve`, a row WITHOUT an animation), the plate sheet
+      (`ExercisePlateSheet.build`) and the logging viewer (`initState`, a row WITH an
+      animation: D4 moved the panel's content into it). Rules, once: each `coaching_cues`
+      item is split on ';' (84 rows packed several cues in one string before library
+      v12), `common_mistakes` items are not split (no bundled item has a ';'),
+      `breathing_cue` and `warmup_protocol` are never split (37 and 3 rows contain a ';'),
+      a bare number as `breathing_cue` is suppressed (OI-149 column shift), blank strings
+      are dropped, and list items go through `toString()` (never a hard cast).
+
+      WARNING: before this batch the panel and the sheet each parsed the row, and the
+      panel did not split on ';'. A fourth reader must call `exerciseCuesOf`, not copy
+      the rules. WARNING: the panel and the viewer resolve once (`initState`), never in a
+      `build` that runs every second; the sheet resolves in its own `build` (not under the
+      workout timer).
+    writers:
+      - file: assets/data/exercise_library.json
+        line_range: 1-2
+        method: coaching_cues + common_mistakes + breathing_cue + warmup_protocol fields
+      - file: lib/core/services/seed_service.dart
+        line_range: 133-133
+        method: _exerciseLibraryVersion
+    readers:
+      - file: lib/shared/widgets/exercise_plate/exercise_cues.dart
+        line_range: 46-56
+        method: exerciseCuesOf
+        semantic: pass-through
+        fields_read: [coaching_cues, common_mistakes, breathing_cue, warmup_protocol]
+        notes: The one parser. Behavioral test/contracts/exercise_cues_behavioral_test.dart (panel, sheet and parser against one row).
+      - file: lib/features/train/screens/active_workout/coaching_content_panel.dart
+        line_range: 43-52
+        method: _resolve
+        semantic: pass-through
+        notes: Calls exerciseCuesOf; renders nothing when every section is empty.
+      - file: lib/shared/widgets/exercise_plate/exercise_plate_sheet.dart
+        line_range: 118-129
+        method: build
+        semantic: pass-through
+        notes: Calls exerciseCuesOf for FORM and BREATHING.
+      - file: lib/features/train/screens/active_workout/exercise_media_viewer.dart
+        line_range: 126-130
+        method: initState
+        semantic: pass-through
+        notes: Calls exerciseCuesOf once; the four sections sit under the set rows.
 
   # One LOG per exercise (branch active-workout-log-exercise, 2026-10-19). Ship
   # dark behind `enable_log_exercise_button` (default OFF).
@@ -13085,6 +13146,21 @@ concepts:
       The mirror source re-baselines on the rebuild after a warm-up toggle
       (`_rebaselineIfSourceMoved`), so a one-digit entry in the new source
       mirrors.
+
+      M2b PART B (the logging viewer, 2026-11-03): the full-screen viewer is a SECOND
+      HOST of the same input surface, not a second writer. The card lends its rows
+      and its LOG row through an `ExerciseEntryHandle` (`exercise_entry_handle.dart`);
+      the viewer's TextFields edit the card's OWN controllers, so `_onFieldChanged`,
+      `_mirrorFrom` and `_onLogPressed` (the one LOG path, `LogExerciseController.log`)
+      run unchanged and a typed value can never diverge between the two hosts.
+      WARNING: the viewer is built BEFORE the card in the frame that follows a `+`
+      or `-`, so a builder it calls draws `min(data sets, controller count)` rows
+      (`_setCountFor`); the card's own `didUpdateWidget` resizes the controller
+      lists in the same frame. WARNING: the viewer brings its own FocusNodes (one node
+      cannot sit under two fields). WARNING: `afterLogged` (the viewer's pop) runs
+      only for `LogOutcomeKind.logged`, never for a blocked or re-opened LOG, and a
+      closure that runs once the card left the tree builds nothing (`_inTree`:
+      `State.mounted` is true while an element is only deactivated).
     writers:
       - file: lib/features/train/services/log_exercise_logic.dart
         line_range: 1-9999
@@ -13109,13 +13185,13 @@ concepts:
         line_range: 470-551
         method: LogExerciseController.reopen
       - file: lib/features/train/screens/active_workout/exercise_card.dart
-        line_range: 555-583
+        line_range: 667-695
         method: _onFieldChanged
       - file: lib/features/train/screens/active_workout/exercise_card.dart
-        line_range: 616-650
+        line_range: 728-762
         method: _mirrorFrom
       - file: lib/features/train/screens/active_workout/exercise_card.dart
-        line_range: 669-694
+        line_range: 794-825
         method: _onLogPressed
     readers:
       - file: lib/features/train/providers/train_provider.dart

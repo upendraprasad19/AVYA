@@ -2029,3 +2029,20 @@ added, false of the flip being performed.
 - **Test shape:** real Hive on pinned Monday/Tuesday/Wednesday clocks asserting stock, ledger, stamp and streak after EVERY step, including a second reckon after the credit and the next Monday's credit; a bare reckon with no refill call; the mirror cases (NULL stamp, future-dated stamp, legacy switch with tick > 0, simulation). Weekday-dependent old tests must seed no stamp or a stamp equal to this Monday.
 - **Prior incidents:** `f9d2e7` (made refill-first deliberate), `5e8a1c`, `b4e7a1`, `e5c9b1`.
 - **Regression test:** `test/contracts/freeze_settle_then_credit_behavioral_test.dart`. Diagnose `a7d2e6`.
+
+### 2.144 An OPAQUE pushed route pauses the covered screen's Riverpod watches, so a pushed screen that acts on state the covered screen mirrors changes the state and nothing follows (NEW 2026-11-03)
+
+- **Telltale:** a screen pushed over another one changes a provider (a `+` on the set count) and the covered screen's controllers, lists or counters never follow; the same action on the covered screen itself works. It reproduces only through the REAL pushed route, never in a test that pumps the second screen as a sibling.
+- **Root-cause shape:** an opaque route makes the overlay build the entries it covers with `TickerMode(false)`, and `ConsumerStatefulElement` pauses `ref.watch` listeners while its ticker mode is off (`flutter_riverpod consumer.dart:390-413`; `overlay.dart:868-889`). The covered widget is alive, in the tree and painted, but deaf. Same family as OI-378.
+- **Fix pattern:** make the pushed route NON-opaque (`PageRouteBuilder(opaque: false, maintainState: true)`) and let ITS Scaffold paint; or keep the shared state out of the covered widget's watch. Host it on the navigator whose lifecycle you want (the BRANCH navigator, so a re-route removes it with its page); the root navigator orphans it.
+- **Test shape:** drive the action THROUGH the real pushed route (`tester.tap` on the pushed screen's own `+`), settle the push (`pump(300 ms)`, then one more `pump()`: the route's `opaque` flag takes effect when the push animation ends and the Overlay rebuilds a frame later), then assert on the COVERED screen. Mutation: `opaque: true`.
+- **Prior incidents:** OI-378, `reference_riverpod_pauses_covered_route_watches`.
+- **Regression test:** `test/features/train/log_exercise/exercise_media_viewer_test.dart` ("+ and - through the REAL pushed route"). Batch M2b Part B, OI-354.
+
+### 2.145 A closure handed to another route's subtree guards on `State.mounted`, which is TRUE while the element is only deactivated (NEW 2026-11-03)
+
+- **Telltale:** `Looking up a deactivated widget's ancestor is unsafe` (or an `ErrorWidget`, 100000 px tall in tests, in a Column) thrown while building a `ListenableBuilder` or builder that belongs to a DIFFERENT route than the object it calls into, in the frame where the first one's page leaves the tree (`go()` inside a branch, a swap, a sign-out).
+- **Root-cause shape:** `State.mounted` is `_element != null`; it stays true from `deactivate` until `dispose`. A pageless route (a viewer) is dropped by the navigator one step AFTER its owner's page is deactivated, and in that step it still rebuilds, calling closures that use the owner's `ref` / `context`.
+- **Fix pattern:** guard such closures with a flag the owner's `deactivate()` clears and `activate()` restores (`_inTree`), not with `mounted`.
+- **Test shape:** the host under a REAL `StatefulShellRoute`, open the second route, `router.go()` to another location of the same branch, pump ~3 s and assert `takeException() == null`. Mutation: replace the flag with nothing.
+- **Regression test:** `test/features/train/log_exercise/exercise_media_viewer_router_test.dart` ("a re-route inside the branch"). Batch M2b Part B, OI-354.

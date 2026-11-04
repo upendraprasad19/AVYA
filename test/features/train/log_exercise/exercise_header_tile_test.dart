@@ -2,15 +2,17 @@
 // tile-led header of the FOCUSED, expanded card on a row with an animation. One
 // 124 dp tile flush top-left, name / meta / LAST / TRY / icons beside it, an
 // ENLARGE chip at the tile's bottom-right, the tile freezing whenever a route on
-// its own navigator covers the screen, and the FORM & CUES panel UNCHANGED (D4
-// is Part B).
+// its own navigator covers the screen. Since Part B the tile, the chip and every
+// other card's 44 px still open the logging VIEWER (not the plate sheet), and the
+// FORM & CUES panel is gone from a row with an animation (D4): the viewer carries
+// it.
 //
 // Harness facts this file leans on (card_harness.dart, plan Step 0): the card
 // host has no name-keyed ancestor (a swap reaches `didUpdateWidget`); every
-// helper runs a FakeExerciseMediaRepository; the layout cases use a CUE-LESS
-// media row because the unchanged panel header overflows under Ahem at 360 dp
-// and below whenever a cue field is seeded; flutter_test renders every glyph in
-// Ahem, so real-font widths are read in the Chrome check, not here.
+// helper runs a FakeExerciseMediaRepository; the layout cases keep a CUE-LESS
+// media row from Part A, when the panel still sat on media rows and its header
+// overflowed under Ahem at 360 dp; flutter_test renders every glyph in Ahem, so
+// real-font widths are read in the Chrome check, not here.
 @Timeout(Duration(minutes: 6))
 library;
 
@@ -27,6 +29,7 @@ import 'package:icanbefitter/core/services/exercise_media/exercise_media.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
 import 'package:icanbefitter/features/train/providers/train_provider.dart';
 import 'package:icanbefitter/features/train/screens/active_workout/exercise_header_tile.dart';
+import 'package:icanbefitter/features/train/screens/active_workout/exercise_media_viewer.dart';
 import 'package:icanbefitter/shared/widgets/exercise_plate/exercise_animation_view.dart';
 import 'package:icanbefitter/shared/widgets/exercise_plate/exercise_plate_sheet.dart';
 import 'package:icanbefitter/shared/widgets/exercise_plate/exercise_plate_thumb.dart';
@@ -41,9 +44,9 @@ const _calf = 'Standing Calf Raise';
 const _cueless = 'Cue-less Bench';
 const _longName = 'Cue-less Incline Dumbbell Bench Press Long';
 
-/// Library rows. Every row that the panel must render carries a coaching field
-/// (otherwise `CoachingContentPanel` is a `SizedBox.shrink` and "the panel is
-/// still there" would pass vacuously). The cue-less rows are the layout rows.
+/// Library rows. Every media row carries a coaching field, so "no FORM & CUES on
+/// a media row" (D4) is not vacuous: the panel WOULD render if it were built.
+/// The cue-less rows are the layout rows.
 final _rows = <Map<String, dynamic>>[
   {
     'id': 'T_BENCH',
@@ -99,9 +102,23 @@ Finder get _tileView =>
 bool _tileAutoplay(WidgetTester tester) =>
     tester.widget<ExerciseAnimationView>(_tileView).autoplay;
 
-Future<void> _closeSheet(WidgetTester tester) async {
-  Navigator.of(tester.element(find.byType(ExercisePlateSheet))).pop();
-  await tester.pumpAndSettle();
+Finder get _viewer => find.byType(ExerciseMediaViewer);
+
+/// Taps [door] and lets the viewer's 150 ms fade and one settling frame pass. NOT
+/// `pumpAndSettle`: the viewer's own animation loops forever.
+Future<void> _openViewer(WidgetTester tester, Finder door) async {
+  await tester.tap(door);
+  await tester.pump();
+  await tester.pump(const Duration(milliseconds: 300));
+  await tester.pump();
+}
+
+/// The back arrow, then enough frames for the reverse animation to start and end.
+Future<void> _closeViewer(WidgetTester tester) async {
+  await tester.tap(find.byKey(const Key('exercise-viewer-back')));
+  await tester.pump();
+  await tester.pump(const Duration(milliseconds: 400));
+  await tester.pump(const Duration(milliseconds: 400));
 }
 
 /// The table-header Row (first child is a 28 dp SizedBox); its right edge is the
@@ -138,7 +155,7 @@ void main() {
   testWidgets('fonts degrade before any Hive mock', renderFontsFirst);
 
   group('which card shows the tile', () {
-    testWidgets('focused + expanded + media: one tile, no thumb, panel stays',
+    testWidgets('focused + expanded + media: one tile, no thumb, no panel (D4)',
         (tester) async {
       await pumpCard(tester,
           seed: _seed(_bench),
@@ -149,8 +166,8 @@ void main() {
       expect(find.byType(ExercisePlateThumb), findsNothing);
       expect(find.text('ENLARGE'), findsOneWidget,
           reason: "the chip is the tile's one visible door to the sheet");
-      expect(find.text('FORM & CUES'), findsOneWidget,
-          reason: 'D4 is Part B: the panel is built exactly as today');
+      expect(find.text('FORM & CUES'), findsNothing,
+          reason: 'D4: the panel moved into the viewer, this row has cues');
     });
 
     testWidgets('expanded but NOT focused (a superset partner): thumb, no tile',
@@ -190,6 +207,7 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.byType(ExercisePlateSheet), findsNothing,
           reason: 'C-f: the tap belongs to the group-select');
+      expect(_viewer, findsNothing);
       expect(groupSelects, 1,
           reason: "the tile's tap falls through to the card's group-select "
               '(its outer detector calls the long-press-header handler)');
@@ -206,6 +224,7 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.byType(ExercisePlateSheet), findsNothing,
           reason: 'the thumb takes no tap in grouping mode either');
+      expect(_viewer, findsNothing);
     });
 
     testWidgets('focused + no media row: the thumb as today', (tester) async {
@@ -268,7 +287,8 @@ void main() {
   });
 
   group('the freeze: every door to the plate sheet', () {
-    testWidgets('door 1: the tile', (tester) async {
+    testWidgets('door 1: the tile opens the viewer and freezes under it',
+        (tester) async {
       await pumpCard(tester,
           seed: _seed(_bench),
           logMode: true,
@@ -276,31 +296,50 @@ void main() {
           nestedNavigator: true,
           libraryRows: _rows);
       expect(_tileAutoplay(tester), isTrue);
-      await tester.tap(_tile);
-      await tester.pumpAndSettle();
-      expect(find.byType(ExercisePlateSheet), findsOneWidget);
-      expect(_tileAutoplay(tester), isFalse, reason: 'frozen under the sheet');
-      await _closeSheet(tester);
-      expect(find.byType(ExercisePlateSheet), findsNothing);
+      await _openViewer(tester, _tile);
+      expect(_viewer, findsOneWidget);
+      expect(find.byType(ExercisePlateSheet), findsNothing,
+          reason: 'Part B: the tile opens the viewer, not the sheet');
+      expect(_tileAutoplay(tester), isFalse, reason: 'frozen under the viewer');
+      await _closeViewer(tester);
+      expect(_viewer, findsNothing);
       expect(_tileAutoplay(tester), isTrue, reason: 'plays again after it');
     });
 
-    testWidgets('door 3: the panel\'s VIEW PLATE', (tester) async {
+    testWidgets('a throw while the viewer opens does not lock the door: the '
+        'next tap still reaches the focus callback and opens it',
+        (tester) async {
+      var focusCalls = 0;
       await pumpCard(tester,
           seed: _seed(_bench),
           logMode: true,
           isFocused: true,
           nestedNavigator: true,
-          libraryRows: _rows);
-      await tester.tap(find.text('VIEW PLATE'));
-      await tester.pumpAndSettle();
-      expect(find.byType(ExercisePlateSheet), findsOneWidget);
-      expect(_tileAutoplay(tester), isFalse);
-      await _closeSheet(tester);
-      expect(_tileAutoplay(tester), isTrue);
+          libraryRows: _rows,
+          onFocus: () {
+            focusCalls++;
+            if (focusCalls == 1) throw StateError('focus callback failed');
+          });
+      // `_openPicture` is a discarded Future, so its throw is an UNCAUGHT async
+      // error: catch it in a guarded zone around the tap.
+      final uncaught = <Object>[];
+      await runZonedGuarded(() async {
+        await tester.tap(_tile);
+        await tester.pump();
+      }, (error, _) => uncaught.add(error));
+      expect(focusCalls, 1);
+      expect(uncaught, hasLength(1));
+      expect(_viewer, findsNothing);
+      await _openViewer(tester, _tile);
+      expect(focusCalls, 2,
+          reason: 'a stuck _viewerOpen would return before onFocus');
+      expect(_viewer, findsOneWidget);
+      await _closeViewer(tester);
+      expect(_viewer, findsNothing);
     });
 
-    testWidgets('door 2: the thumb of ANOTHER card on the real screen',
+    testWidgets('door 2: the thumb of ANOTHER card on the real screen opens '
+        'THAT card viewer, and the focused tile freezes under it',
         (tester) async {
       await pumpScreen(tester,
           exercises: [exercise(name: _bench), exercise(name: _situp)],
@@ -309,11 +348,14 @@ void main() {
       final thumb = find.byType(ExercisePlateThumb).first;
       await tester.ensureVisible(thumb);
       await tester.pump();
-      await tester.tap(thumb);
-      await tester.pumpAndSettle();
-      expect(find.byType(ExercisePlateSheet), findsOneWidget);
-      expect(_tileAutoplay(tester), isFalse);
-      await _closeSheet(tester);
+      await _openViewer(tester, thumb);
+      expect(_viewer, findsOneWidget);
+      expect(find.byType(ExercisePlateSheet), findsNothing);
+      expect(tester.widget<ExerciseMediaViewer>(_viewer).exerciseName, _situp,
+          reason: 'D9: the viewer is the tapped card one');
+      expect(_tileAutoplay(tester), isFalse,
+          reason: 'the focus moved to the opened card; its tile is covered');
+      await _closeViewer(tester);
       expect(_tileAutoplay(tester), isTrue);
     });
 
@@ -559,6 +601,7 @@ void main() {
       await tester.pump();
       expect(held, 2);
       expect(find.byType(ExercisePlateSheet), findsNothing);
+      expect(_viewer, findsNothing);
     });
   });
 
@@ -623,8 +666,8 @@ void main() {
   });
 
   group('semantic actions reach the right handlers', () {
-    testWidgets('activate opens the sheet; long press starts grouping, never the '
-        'other way round', (tester) async {
+    testWidgets('activate opens the viewer; long press starts grouping, never '
+        'the other way round', (tester) async {
       final handle = tester.ensureSemantics();
       var held = 0;
       await pumpCard(tester,
@@ -640,11 +683,15 @@ void main() {
       await tester.pump();
       expect(held, 1, reason: "the screen reader's long press is the header's");
       expect(find.byType(ExercisePlateSheet), findsNothing);
+      expect(_viewer, findsNothing);
 
       tester.semantics.tap(node);
-      await tester.pumpAndSettle();
-      expect(find.byType(ExercisePlateSheet), findsOneWidget,
-          reason: "the screen reader's activate opens today's plate sheet");
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+      await tester.pump();
+      expect(_viewer, findsOneWidget,
+          reason: "the screen reader's activate opens the logging viewer");
+      expect(find.byType(ExercisePlateSheet), findsNothing);
       expect(held, 1);
       handle.dispose();
     });

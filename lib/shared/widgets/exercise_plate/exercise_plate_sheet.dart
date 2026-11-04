@@ -19,6 +19,7 @@ import 'package:icanbefitter/core/theme/spacing.dart';
 import 'package:icanbefitter/core/theme/typography.dart';
 import 'package:icanbefitter/shared/repositories/exercise_repository.dart';
 import 'package:icanbefitter/shared/widgets/exercise_plate/exercise_animation_view.dart';
+import 'package:icanbefitter/shared/widgets/exercise_plate/exercise_cues.dart';
 import 'package:icanbefitter/shared/widgets/exercise_plate/exercise_media_resolver.dart';
 import 'package:icanbefitter/shared/widgets/exercise_plate/exercise_monogram.dart';
 import 'package:icanbefitter/shared/widgets/exercise_plate/plate_flags.dart';
@@ -42,26 +43,6 @@ class ExercisePlateSheet extends StatelessWidget {
       ),
       builder: (_) => ExercisePlateSheet(exerciseName: exerciseName),
     );
-  }
-
-  /// Since library v12 (Batch A, 2026-10-22) every row stores one cue per list
-  /// item. Before it, 84 rows packed several cues into one string joined by
-  /// semicolons; the split on ';' stays so a community row or an install still
-  /// on an older seed renders as lines too.
-  List<String> _cues(Map<String, dynamic>? row) {
-    final raw = row?['coaching_cues'];
-    if (raw is! List) return const [];
-    return raw
-        .expand((c) => c.toString().split(';'))
-        .map((c) => c.trim())
-        .where((c) => c.isNotEmpty)
-        .toList(growable: false);
-  }
-
-  /// `is String`, never a cast — community rows carry arbitrary JSON types.
-  String? _clean(Object? v) {
-    final s = v is String ? v.trim() : '';
-    return s.isEmpty ? null : s;
   }
 
   Widget _plateBox(String assetPath, String caption, String name) {
@@ -140,13 +121,12 @@ class ExercisePlateSheet extends StatelessWidget {
     final media =
         PlateFlags.animationsEnabled ? resolveMedia(exerciseName) : null;
     final row = ExerciseRepository.instance.getByExactName(exerciseName);
-    final cues = _cues(row);
-    final breathing = _clean(row?['breathing_cue']);
-    // A bare number here is the fingerprint of a spreadsheet column shift (136
-    // rows had it until the OI-149 repair, 2026-10-22). Suppress rather than
-    // print "BREATHING / 5". coaching_content_panel applies the identical guard.
-    final showBreathing =
-        breathing != null && !RegExp(r'^\d+(\.\d+)?$').hasMatch(breathing);
+    // ONE parser for the sheet, the FORM & CUES panel and the logging viewer:
+    // the split on ';' of a packed cue, the numeric-breathing guard and the
+    // never-hard-cast rule live in exerciseCuesOf, not here.
+    final parsed = exerciseCuesOf(row);
+    final cues = parsed.cues;
+    final breathing = parsed.breathing;
 
     return SafeArea(
       child: SingleChildScrollView(
@@ -228,7 +208,7 @@ class ExercisePlateSheet extends StatelessWidget {
                     ),
                   )),
             ],
-            if (showBreathing) ...[
+            if (breathing != null) ...[
               const SizedBox(height: 14),
               _label('BREATHING'),
               const SizedBox(height: 4),

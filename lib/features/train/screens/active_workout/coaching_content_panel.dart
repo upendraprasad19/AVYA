@@ -23,16 +23,7 @@ class _CoachingContentPanelState extends State<CoachingContentPanel> {
   // Resolved ONCE in initState (re-resolved in didUpdateWidget only when the
   // exercise name changes) — the active-workout card list rebuilds ~1×/sec
   // from the workout timer, so a build()-time library scan is out.
-  List<String> _cues = const [];
-  List<String> _mistakes = const [];
-  String? _breathing;
-  String? _warmup;
-
-  bool get _hasContent =>
-      _cues.isNotEmpty ||
-      _mistakes.isNotEmpty ||
-      _breathing != null ||
-      _warmup != null;
+  ExerciseCues _cues = const ExerciseCues();
 
   @override
   void initState() {
@@ -52,46 +43,19 @@ class _CoachingContentPanelState extends State<CoachingContentPanel> {
   void _resolve() {
     // Exact-name lookup (NOT substring search — "Push Up" must not resolve to
     // "Pike Push Up"). Null for swapped/custom exercises → panel renders nothing.
-    final map = ExerciseRepository.instance.getByExactName(widget.exerciseName);
-    _cues = _stringList(map?['coaching_cues']);
-    _mistakes = _stringList(map?['common_mistakes']);
-    final rawBreathing = _cleanString(map?['breathing_cue']);
-    // A bare NUMBER here is the fingerprint of a spreadsheet column shift
-    // (136 rows had it until the OI-149 repair, 2026-10-22). Suppress rather
-    // than render "BREATHING / 5". The plate sheet applies the identical guard
-    // and test/contracts/breathing_cue_numeric_suppressed_test pins them
-    // together.
-    _breathing = (rawBreathing != null &&
-            RegExp(r'^\d+(\.\d+)?$').hasMatch(rawBreathing))
-        ? null
-        : rawBreathing;
-    _warmup = _cleanString(map?['warmup_protocol']);
-  }
-
-  /// Array fields (coaching_cues / common_mistakes) arrive from Hive as a
-  /// dynamic-typed list — coerce each element via toString(), drop blanks.
-  /// Never hard-cast to a typed string list (that cast throws + red-screens).
-  List<String> _stringList(Object? v) {
-    if (v is! List) return const [];
-    return v
-        .map((e) => e.toString().trim())
-        .where((s) => s.isNotEmpty)
-        .toList(growable: false);
-  }
-
-  /// String fields (breathing_cue / warmup_protocol) — null OR empty-string
-  /// (113 of 285 warmup_protocol values are "" in library v12) both suppress
-  /// the section.
-  String? _cleanString(Object? v) {
-    final s = (v is String) ? v.trim() : '';
-    return s.isEmpty ? null : s;
+    //
+    // ONE parser for this panel, the plate sheet and the logging viewer
+    // (`exerciseCuesOf`): the numeric-breathing guard, the never-hard-cast
+    // rule and the array handling live there, not here.
+    _cues = exerciseCuesOf(
+        ExerciseRepository.instance.getByExactName(widget.exerciseName));
   }
 
   @override
   Widget build(BuildContext context) {
     // No library match / all sections empty → render nothing (never a bare
     // heading).
-    if (!_hasContent) return const SizedBox.shrink();
+    if (_cues.isEmpty) return const SizedBox.shrink();
 
     const accent = AppColors.accent;
 
@@ -165,13 +129,14 @@ class _CoachingContentPanelState extends State<CoachingContentPanel> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    if (_cues.isNotEmpty)
-                      _bulletSection('COACHING CUES', _cues),
-                    if (_mistakes.isNotEmpty)
-                      _bulletSection('COMMON MISTAKES', _mistakes),
-                    if (_breathing != null)
-                      _lineSection('BREATHING', _breathing!),
-                    if (_warmup != null) _lineSection('WARM-UP', _warmup!),
+                    if (_cues.cues.isNotEmpty)
+                      _bulletSection('COACHING CUES', _cues.cues),
+                    if (_cues.mistakes.isNotEmpty)
+                      _bulletSection('COMMON MISTAKES', _cues.mistakes),
+                    if (_cues.breathing != null)
+                      _lineSection('BREATHING', _cues.breathing!),
+                    if (_cues.warmup != null)
+                      _lineSection('WARM-UP', _cues.warmup!),
                   ],
                 ),
               ),
