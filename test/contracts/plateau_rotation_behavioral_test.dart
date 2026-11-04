@@ -60,16 +60,6 @@ void main() {
     return out;
   }
 
-  int totalExerciseCount(Phase p) {
-    var n = 0;
-    for (final w in p.weekPlans) {
-      for (final d in w.workoutDays) {
-        n += d.exercises.length;
-      }
-    }
-    return n;
-  }
-
   // The lowercased names in [p] that resolve to a library COMPOUND (rotation targets).
   Set<String> compoundNames(Phase p) {
     final repo = ExerciseRepository.instance;
