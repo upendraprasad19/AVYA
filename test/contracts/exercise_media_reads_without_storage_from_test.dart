@@ -38,6 +38,8 @@ const _expected = <String>[
   // M2b: the focused card's header tile asks for its file; the card and the screen name the media type and resolver.
   'lib/features/train/screens/active_workout/exercise_card.dart',
   'lib/features/train/screens/active_workout/exercise_header_tile.dart',
+  // M2b Part B: the logging viewer shows the animation (the same view, the same Dio route; no storage client, no gate).
+  'lib/features/train/screens/active_workout/exercise_media_viewer.dart',
   'lib/features/train/screens/active_workout/screen.dart',
 ];
 

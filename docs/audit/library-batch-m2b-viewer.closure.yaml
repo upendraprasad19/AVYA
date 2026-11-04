@@ -1,0 +1,61 @@
+# Closure ledger - library-batch-m2b-viewer, Part B of Batch M2b (plan docs/plans/2026-11-03-library-batch-m2b-viewer.md, r4).
+# Rows carry the SHA of the landing commit (48c5388f), written by the stamp commit that follows it (a commit cannot name its own SHA).
+# The review file is docs/reviews/b21501324e9c-review.md (its name is the staging hash of the landing diff).
+batch: library-batch-m2b-viewer
+plan_review_record: docs/plan-reviews/library-batch-m2b-viewer.md
+diagnose_docs: []
+total_findings: 11
+closed_count: 11
+
+findings:
+  - id: M2B-B-ONE-INPUT-SURFACE
+    title: "Logging in the viewer is a SECOND INPUT SURFACE: it must edit the card's own controllers and use the card's own LOG path, or the typed values diverge (writer/reader drift class)"
+    terminal_state: closed_in_commit
+    commit: 48c5388f
+    verification: "ExerciseEntryHandle (exercise_entry_handle.dart) hands the viewer the card's rows (_entryRows), its LOG row (_buildLogRow) and _onLogPressed (which now returns the outcome), over the SAME controllers; _setCountFor keeps the viewer off a disposed controller on a shrink; _inTree (activate/deactivate) guards the handle closures because State.mounted stays true while an element is only deactivated. test/features/train/log_exercise/exercise_entry_handle_test.dart and exercise_media_viewer_test.dart (a value typed in the viewer is the card box value; + and - through the real pushed route; LOG logs once and pops once; UNDO puts the exercise back; a blocked LOG focuses the VIEWER box per logging type; late callbacks after the card is gone are no-ops). SoT concept active_workout_set_logging ranges re-pinned (check_sot_registry_parity PASS)."
+  - id: M2B-B-VIEWER-ROUTE
+    title: "The viewer is a non-opaque pageless route on the BRANCH navigator, 150 ms (zero under reduced motion), closing itself when its exercise goes away"
+    terminal_state: closed_in_commit
+    commit: 48c5388f
+    verification: "exercise_media_viewer.dart: ExerciseMediaViewer.show (PageRouteBuilder, opaque false, maintainState true), the cached route and navigator, _close() (isCurrent pops, else isActive removeRoute), _gone(data) for a swap, a removal, the last exercise removed and a completed workout, sizing clamp(maxHeight - 210, 0, min(maxWidth, 480)) hidden under 100. Evidence it is non-opaque on the BRANCH navigator: an executed spike against a real StatefulShellRoute (a covered screen stays live, Part A's ModalRoute.isCurrentOf freeze works, system back pops it first), test/features/train/log_exercise/exercise_media_viewer_router_test.dart and test/contracts/exercise_media_viewer_routing_test.dart. Targeted run of the 8 files of this batch: 126 passed."
+  - id: M2B-B-CUES-PARSER
+    title: "ONE parser for the four coaching fields, shared by the FORM & CUES panel, the plate sheet and the viewer (D4: the panel moves into the viewer on a row with an animation)"
+    terminal_state: closed_in_commit
+    commit: 48c5388f
+    verification: "exerciseCuesOf / ExerciseCues (lib/shared/widgets/exercise_plate/exercise_cues.dart); the panel resolves once in initState and renders nothing for an empty ExerciseCues (ExerciseCues.isEmpty, one predicate); the sheet resolves in its own build; the viewer shows FORM, COMMON MISTAKES, BREATHING, WARM-UP and hides each empty one. test/contracts/exercise_cues_behavioral_test.dart (pure parser, the panel and the sheet render the same lines, a row with no cues renders no panel at all) + coaching_panel_numeric_breathing_behavioral_test.dart and breathing_cue_numeric_suppressed_test.dart repointed; SoT concept exercise_coaching_content."
+  - id: M2B-B-DOORS-D9
+    title: "D9: the 44 px still of ANY card (collapsed, or a superset partner) opens its viewer with logging; ENLARGE and the header tile open it too"
+    terminal_state: closed_in_commit
+    commit: 48c5388f
+    verification: "exercise_media_viewer_test.dart: the tile opens the viewer; D9 for a COLLAPSED card focuses it and back leaves THAT card open; D9 for a superset PARTNER opens the partner's viewer; a row without media still opens the plate sheet; the thumb's semantics action opens the viewer. exercise_header_tile_test.dart door tests (the tile freezes under the viewer; another card's thumb opens THAT card's viewer; a throw while opening does not lock the door)."
+  - id: M2B-B-PART-A-REPOINTS
+    title: "Part A's tests, docs and ledger row that named the plate sheet as the tile's door or the panel as the cues' home now say the viewer"
+    terminal_state: closed_in_commit
+    commit: 48c5388f
+    verification: "exercise_header_tile_test.dart (door 1 and 2 test the viewer; the former door 3 test was deleted), lib/features/train/CLAUDE.md, docs/architecture/train-detail.md, docs/operations/EXERCISE_MEDIA.md, the app-delivery spec, docs/naming_conventions.md, the bug-class entries 2.144 and 2.145 in .claude/skills/debugging, the OI-354 entry archived to closed_issues.md, and the Part A ledger row M2B-B-VIEWER set from upstream_blocked to closed_in_commit."
+  - id: M2B-B-MUTATIONS
+    title: "Each new protection mutated and run (rule 21), with the outcomes kept honest"
+    terminal_state: closed_in_commit
+    commit: 48c5388f
+    verification: "Three rounds, each with the file restored and compared byte for byte, the mutation confirmed applied before it was run. B1 (handle and card): 8 mutations a-h over 9 runs, all red. B2 (viewer, cues, card, screen, copy): 28 mutations, all red in the end; two of them reddened NOTHING in their first form, (o) removal of the last-index guard and (z) a 340 dp text scale, and each got a new test that then reddened. B-pass round: 18 mutations (n1 n2b n3 n4 n5a-d n6a n6b n7 n8 n9 n10 n11a n11b n12 n13), 17 red (n5b, n5c, n5d 2 tests each, n2b 6, the rest 1); n12 (_closeScheduled removed) leaves every viewer test green and is an EQUIVALENT mutant (_close() is idempotent, the flag only saves queued no-op callbacks), kept as a cheap guard and unproven by design; n13 (the panel's empty guard forced off) reddened NOTHING in its first form and got the test 'a row with no cues renders no panel at all, not a bare heading'. A red LOG-tap test hangs tearDownAll(closeHive) for about 9 to 12 minutes, so the runs used bounded-teardown copies (zz_mutrun_*, deleted by the runner) and ONE sequential runner."
+  - id: M2B-B-CHROME-CHECK
+    title: "Real-font look at the viewer in Chrome at 360 dp, because the widget tests run under the Ahem font"
+    terminal_state: verified_clean
+    evidence: "Throwaway untracked preview entrypoint (deleted) mounting the real card and viewer with seeded data, the real exercise library and real animations. The only finding is the PRE-EXISTING 13 px overflow of the collapsed card header at exercise_card.dart (about line 1388), present on main and not in this diff (see M2B-B-OVERFLOW-13PX)."
+  - id: M2B-B-BPASS
+    title: "B-pass (/code-review, one fresh Sonnet reviewer) on the staged diff: no P0, no P1, 8 findings (3 P2, 5 P3), all tests that stayed green under a real regression or documents that contradicted the staged state"
+    terminal_state: closed_in_commit
+    commit: 48c5388f
+    verification: "docs/reviews/b21501324e9c-review.md with its dated Tuning entry. All 8 accepted and fixed (finding 8 in part: n12 is an equivalent mutant), none false_alarm; two sub-claims of the reviewer were wrong (the Ahem line-height arithmetic of finding 1; which box weighted_bodyweight blocks on in finding 2) and were caught by running the probe, not by reading. After the fixes: whole-project flutter analyze --no-fatal-infos 0 errors 0 warnings, sh scripts/pre-commit.sh rc=0 on the final staged state, targeted tests green. The review file's verdict line stays pending until the founder accepts the triage (advisory at account tier)."
+  - id: M2B-B-PHONE-CHECK
+    title: "Founder phone check of the viewer on a real Android phone (what the widget tests and Chrome cannot show)"
+    terminal_state: blocked_on_user
+    reason: "Needs the founder's phone and a build: the keyboard band (the square follows the space above the keyboard, LOG stays reachable), the notch and gesture-bar safe areas, TalkBack reading of the viewer and its back control, the Android hardware back (pops the viewer first, never the screen), and a low-end phone loop with the viewer open (OI-440: 0551 and 3214 without a memory kill)."
+  - id: M2B-B-OVERFLOW-13PX
+    title: "A 13 px RenderFlex overflow in the collapsed card header (exercise_card.dart, about line 1388), seen in Chrome at 360 dp, present on main"
+    terminal_state: blocked_on_user
+    reason: "Pre-existing and outside this diff's behaviour (on main, not in the Part B diff), so it is not fixed here. The founder said yes to filing it (2026-11-04) and it is OI-455 on the board (minted with sh scripts/mint_oi.sh, entry in docs/audit/open_issues.md). The work item lives on the OI board as OI-455; the fix is the founder's scheduling call."
+  - id: M2B-B-SUITE-WINDOWS
+    title: "Full suite on the founder's Windows machine: 12833 passed, 35 skipped, 127 failed, and the same 127 fail the same way on the unmodified base 0d95a747"
+    terminal_state: verified_clean
+    evidence: "Founder decision 2026-11-04: the suite stays Linux-only, Linux CI is the gate, and the scripts tests are NOT made to skip on Windows. 125 of the 127 are test/scripts/{land_pr_e2e 78, land_pr_replay 12, land_pr_wrapper_e2e 7, sync_with_main_e2e 10, sync_with_main_state_e2e 11, sync_with_main_wrapper_e2e 5, merge_scope_git 1, gate_index_e2e 1}, all with 'land_pr: internal error: SignalException: Failed to listen for SIGTERM, osError: The request is not supported, errno = 50' (scripts/land_pr.dart:603 watches SIGTERM, landed in b75c85b8 and d236857e after b23e8661); the other 2 are the known pair (exercise_media_store_behavioral_test flake, discipline_hook_local_indexes_e2e_test). Proven on a clean checkout of 0d95a747: the five-file run gives +73 -26 on both trees and the other three files 78, 11 and 10 reds. This diff touches nothing under scripts/, test/scripts/ or test/helpers/. Linux CI is the gate; a local Windows run is read against the per-file counts in the memory note reference_windows_full_suite_two_known_failures, and a failure in any other file is the author's."

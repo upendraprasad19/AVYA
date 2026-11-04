@@ -206,6 +206,16 @@ class WardroomCopy {
   static const activeEnlargeChip = 'ENLARGE';
   static const activeEnlargeLabelTemplate = 'Enlarge {name}';
 
+  /// The logging viewer (M2b Part B): the back control (shown text, and the
+  /// TalkBack label, which reads as a sentence) and the four coaching sections
+  /// that moved in from the FORM & CUES panel.
+  static const activeViewerBackLabel = 'BACK TO WORKOUT';
+  static const activeViewerBackSemantics = 'Back to workout';
+  static const activeViewerFormTitle = 'FORM';
+  static const activeViewerMistakesTitle = 'COMMON MISTAKES';
+  static const activeViewerBreathingTitle = 'BREATHING';
+  static const activeViewerWarmupTitle = 'WARM-UP';
+
   /// Blocked LOG button: a required field is empty.
   static const activeBlockedAddWeight = 'Add weight';
   static const activeBlockedAddReps = 'Add reps';

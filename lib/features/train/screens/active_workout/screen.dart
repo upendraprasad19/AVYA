@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/semantics.dart';
@@ -13,6 +14,7 @@ import 'package:icanbefitter/core/utils/ist_date.dart';
 import 'package:icanbefitter/core/theme/spacing.dart';
 import 'package:icanbefitter/core/theme/typography.dart';
 import 'package:icanbefitter/shared/repositories/exercise_repository.dart';
+import 'package:icanbefitter/shared/widgets/exercise_plate/exercise_cues.dart';
 import 'package:icanbefitter/shared/widgets/exercise_plate/exercise_media_resolver.dart';
 import 'package:icanbefitter/shared/widgets/exercise_plate/exercise_plate_sheet.dart';
 import 'package:icanbefitter/shared/widgets/exercise_plate/exercise_plate_thumb.dart';
@@ -32,7 +34,9 @@ import '../../widgets/exercise_swap_sheet.dart';
 import '../../widgets/set_input_row.dart';
 import '../../widgets/workout_receipt_card.dart';
 import '../../widgets/workout_receipt_sheet.dart';
+import 'exercise_entry_handle.dart';
 import 'exercise_header_tile.dart';
+import 'exercise_media_viewer.dart';
 import 'exercise_last_try_lines.dart';
 
 // ⑦ OI-89 seams 6 + 8: the swap sheet and the exercise picker are `part of`
@@ -716,7 +720,11 @@ class _ActiveWorkoutScreenState extends ConsumerState<ActiveWorkoutScreen> {
                             },
                             onToggleWarmUp: (setIdx) {
                               ref.read(activeWorkoutProvider.notifier).toggleWarmUp(exIdx, setIdx);
-                              if (!_hasShownWarmUpHint) {
+                              // While a route covers the screen (the logging
+                              // viewer) the hint would paint over it, unseen:
+                              // neither show it nor consume it.
+                              if (!_hasShownWarmUpHint &&
+                                  ModalRoute.of(context)?.isCurrent != false) {
                                 _hasShownWarmUpHint = true;
                                 ScaffoldMessenger.of(context).showSnackBar(
                                   SnackBar(

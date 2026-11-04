@@ -6160,17 +6160,6 @@ Impact: the graded, Epley-capped progression prescription reaches only the AI co
 
 Fix options (to be planned, not decided): (a) document that last-session values are authoritative and retire the unused plan field from the Train contract; (b) feed `suggested_weight` into the prefill / TRY hint for phase 2+. Do not touch `plan_generator.dart` (rule 14). Needs a diagnose-doc and a behavioural test if (b).
 
-## OI-354 — Active Workout hero tile + full-screen viewer (animated WEBP) blocked on asset pipeline and delivery architecture
-
-- **Status**: OPEN
-- **Blocked on**: the animated-WEBP asset pipeline and its delivery architecture (founder will brainstorm lazy download + local cache separately: 900+ files x ~400 KB = ~360 MB, so bundling is out). Reopen when: the delivery architecture is decided and at least the first WEBP files exist. **2026-10-28:** the founder put this tile and viewer into the Batch M2 design (OI-440; `docs/superpowers/specs/2026-10-28-exercise-animations-app-delivery-design.md`, calls C16 to C18); it ships with or right after M2's delivery class. The two mockups named above are not in the repository, so the plan starts with a new mockup for the founder to approve. **2026-10-31 split:** after two plan-review rounds the M2 plan was split under section 4.12.1: M2a (delivery, still tiles, the animated sheet; `docs/plans/2026-10-28-library-batch-m2-app-delivery.md`) goes first; this OI is now batch M2b. **2026-11-02/03 (redesign and second split):** the founder approved a new design on mockup v2 (D1 to D9: a 124 dp tile-led header, set rows to the card edge, a looping tile, no keyboard fold, a logging viewer). After two review rounds the unit split again under section 4.12.1: **Part A** (D1, D2, D3, D5, D7, D8: the tile-led header, LOG-mode rows to the edge, ENLARGE opens today's plate sheet; plan `docs/plans/2026-11-02-library-batch-m2b-tile-and-rows.md`, branch `library-batch-m2b`, built 2026-11-03) and **Part B** (D4, D6, D9: the FORM & CUES panel moves into a LOGGING viewer, the 44 px still of any card opens it; draft `docs/plans/2026-11-03-library-batch-m2b-viewer-DRAFT.md`, which needs its own two plan-review rounds on top of Part A's merge). Reopen when: Part A is merged; then Part B becomes a plan. This OI closes with Part B.
-- **Verified**: 2026-10-18 - design locked in `docs/mockups/2026-10-18-active-workout-hero-tile-v5.html` and `...-tile-states-v6.html`; repo holds no GIF/WEBP today (292 static SVG plates in `assets/exercise_plates/`, `exercise_plate_thumb.dart`, `exercise_plate_sheet.dart`).
-- **Identified**: 2026-10-18 · filed via mint_oi.sh from branch `active-workout-log-exercise`
-
-Source: founder, 2026-10-18. Unit U3 of `docs/plans/active-workout-log-exercise.md`: square hero tile (about half the card width) playing the exercise animation, centred "ENLARGE" overlay, full-screen viewer (animation edge to edge, form & cues below, sticky BACK TO WORKOUT, no bottom sheet), typing-mode fold to the 44 px thumb, reduce-motion first-frame + play button. Exercises without a WEBP keep the compact header + thumb (permanent fallback during rollout).
-
-Impact: the tile and viewer cannot ship without the assets and a delivery path; until then every exercise keeps today's 44 px thumb.
-
 ## OI-355 — Active Workout _persistActiveState reads the build-time widget.data, so the coach snapshot completed-set count lags one toggle
 
 - **Status**: OPEN
@@ -7350,3 +7339,14 @@ Found by the sync-storm-first-sweep batch while measuring its Day-0 web check (l
 **Founder direction (2026-11-03).** Filed as its own item so it does not block OI-456. Pick up after OI-456, because the new exercise count changes which slots each day holds.
 
 **Done when.** The cause is named by writer and reader (file:line) first; a persona sweep measures repeated names across days of one week before and after; the fix keeps the equipment and injury filters; mutants prove it. Blast radius: `platform` (plan_engine), tier L.
+
+## OI-455 — Collapsed active-workout card header overflows by 13 px at 360 dp (RenderFlex, exercise_card.dart ~line 1388), seen in Chrome during M2b Part B, present on main
+
+- **Status**: OPEN
+- **Blocked on**: none
+- **Verified**: never
+- **Identified**: 2026-11-04 · filed via mint_oi.sh from branch `library-batch-m2b-viewer`
+
+Found by the M2b Part B Chrome check (360 dp, real fonts, the real card and exercise library with seeded data). The header `Row` of a COLLAPSED active-workout card in `lib/features/train/screens/active_workout/exercise_card.dart` (the `Exercise header row` block of `build`, about line 1388 when it was seen) reports a 13 px `RenderFlex` overflow. It is on `main` and not in the Part B diff: the widget tests run under the Ahem font, whose glyph widths are not the real ones, so no test sees it. The cause is NOT established (the long name, the meta line or the trailing controls are all candidates). Founder go to file it: 2026-11-04.
+
+**Done when.** The overflow is reproduced (Chrome at 360 dp with real fonts, or a widget test at a text scale that reddens it), the row is fixed so no child overflows at 360 dp and at the largest text scale the app supports, and the fix carries a regression test that fails without it (mutated and run, rule 21). UI only: a Train widget.
