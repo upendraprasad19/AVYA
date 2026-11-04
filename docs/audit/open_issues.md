@@ -7364,14 +7364,3 @@ Found by the M2b Part B Chrome check (360 dp, real fonts, the real card and exer
 
 **Also recorded here (not a separate item).** `test/ai_coach/workout_log_confirm_card_saved_signal_test.dart` test (f) skips its one tap-guard assertion in a run that stalls past 480 ms, because the 500 ms `kHeldCardTapGuard` runs on a real `Stopwatch` in `lib/features/ai_coach/widgets/workout_log_confirm_card.dart`. Checking it on every run needs an injectable guard clock in `lib/`, which the founder declined for OI-450 (option A). Reopen when a `lib/` seam for that card is wanted for another reason.
 
-## OI-461 — CI unit-test shards run 8 to 19 minutes against a 20-minute job limit, so a slow runner cancels a shard on a docs-only PR
-
-- **Status**: OPEN
-- **Blocked on**: none
-- **Verified**: 2026-11-04 - read `.github/workflows/test.yml` (4 whole-file shards, `timeout-minutes: 20` per shard at line 121) and the durations of the last 6 `Test & Analyze` runs on `main` (24 shard jobs, all green): 8 to 19 minutes, median about 13. The slowest was shard 1 at 19 minutes on `main`.
-- **Identified**: 2026-11-04 · filed via mint_oi.sh from branch `ci-shard-time-oi`
-
-**What.** The unit suite is split into 4 shards that run in parallel, and each shard job is cancelled at 20 minutes. The same shard varies a lot between runs (shard 1: 12, 12, 13, 13, 16 and 19 minutes on `main`), so a slow runner can push a shard over the limit with no test failing. It happened on PR #207 (a one-file docs change): `Unit Tests shard 1/4` was cancelled at 20m15s, the `Unit Tests` gate went red, and `land_pr.sh` refused with `ci-failed`. Rerunning only that job passed. Each such cancel costs a rerun of up to 20 minutes plus a second CI wait.
-
-**Done when.** One of: shard cost rebalanced so the slowest shard has clear headroom (the workflow comment at `test.yml` lines 80 to 113 holds the history and the pre-committed abort conditions, read them first), or the limit raised with a recorded reason, or a documented rule that a time-limit cancel is rerun once. Not a test fix: no test is red in this case.
-

@@ -114,11 +114,18 @@ jobs:
   unit-test:
     name: Unit Tests shard ${{ matrix.shard }}/${{ strategy.job-total }}
     runs-on: ubuntu-latest
-    # Restored to 20 min per shard, as for the single job: this headroom exists
-    # because of test.yml's 2026-07-01 note (run 28517992078, cancelled at a 10-min
-    # limit while "All tests passed!" printed). A shard is expected to take a
-    # quarter of that; the limit is deliberately not tightened on a guess.
-    timeout-minutes: 20
+    # 30 min per shard (OI-461, 2026-11-04). It was 20, restored from the single job's
+    # limit because of test.yml's 2026-07-01 note (run 28517992078, cancelled at a 10-min
+    # limit while "All tests passed!" printed). MEASURED on the last 13 `main` runs
+    # (52 shard jobs): the four shards have medians of 13.4 to 14.1 min (13.8 overall), so
+    # the partition is balanced and the 8 to 19 min spread is runner speed, not skew; a
+    # re-balance would not help. The 20 min cap was hit twice with no red test (PR #207
+    # shard 1/4 at 20m15s, main run 41601261744 shard 4/4 at 20m10s), each costing a rerun
+    # plus a second CI wait. The slowest COMPLETED shard took 19.3 min and the two capped
+    # ones ran longer by an unknown amount, so 30 gives at least 10 min of headroom over
+    # the slowest completed shard, not a measured margin over the true tail. A genuinely
+    # hung shard is still cut off (10 extra minutes, not an unbounded wait).
+    timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:

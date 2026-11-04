@@ -198,9 +198,9 @@ void main() {
           reason: 'an empty list would make flutter test run the ENTIRE test/ directory');
     });
 
-    test('keeps the Flutter pin, the 20-minute headroom and the workflow-level TZ', () {
+    test('keeps the Flutter pin, the 30-minute headroom (OI-461) and the workflow-level TZ', () {
       expect(matrixJob, contains("flutter-version: '3.41.4'"));
-      expect(matrixJob, matches(RegExp(r'timeout-minutes:\s*20')));
+      expect(matrixJob, matches(RegExp(r'timeout-minutes:\s*30\b')));
       expect(src, matches(RegExp(r'^env:\s*\n\s+TZ: Asia/Kolkata', multiLine: true)),
           reason: 'IST is pinned at workflow level (several date-boundary contracts read it)');
     });
