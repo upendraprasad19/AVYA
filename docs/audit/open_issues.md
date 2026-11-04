@@ -7339,3 +7339,14 @@ Found by the M2b Part B Chrome check (360 dp, real fonts, the real card and exer
 **What.** Test (f) checks that a CONFIRM tap inside the first 500 ms of a held saved card is ignored. The guard runs on a real `Stopwatch`, which a test cannot fake, so the test starts its own stopwatch before the mount and asserts only while that proves the window was still open. In a run that stalls past 480 ms before the tap, the assertion is skipped. It can never fail wrongly, but a run that stalls silently checks less. Split out of OI-459, where it was recorded as a residual of OI-450.
 
 **Done when.** The guard reads an injectable clock (a `lib/` change in the card widget) so test (f) asserts the tap guard on every run, with a mutation (guard removed) that reddens it.
+
+## OI-468 — Three unit-test CI failures returned an impossible subprocess exit status (254, 1668163832, 1752491432) that passed on re-run: find the cause or add stderr capture
+
+- **Status**: OPEN
+- **Blocked on**: none
+- **Verified**: never
+- **Identified**: 2026-11-04 · filed via mint_oi.sh from branch `ci-flake-exit-garbage-oi`
+
+**What.** Three unit-test failures on GitHub CI, each a spawned child process whose exit status is not a valid one, each green on `gh run rerun --failed`, none reproducible locally, none ever with its stderr printed: (1) 2026-10-04, `sot` gate test, exit 254 (memory `reference_ci_flake_sot_gate_subprocess_exit254_2026_10_04.md`); (2) 2026-10-25, main run `40178030547` (docs-only PR), `oi_numbering_gate_e2e_test` fixture `git push` returned 1668163832 (0x636e28f8) with empty output; (3) 2026-11-04, PR #212 run `41889308206`, shard 4/4, `test/scripts/token_path_resolver_test.dart` ("VPS shape: linked worktree has nothing, primary has BOTH") failed at `_repoWithLinkedWorktree` (line 98) with exit {1752491432} (0x6874e5a8) while the shard was also running the heavy injury sweeps, stdout and stderr empty. The PR changed only plan-engine code and docs, so no code path of it reaches that test. Three instances of "impossible exit status in a loaded shard" is the threshold the memory note set for filing this.
+
+**Done when.** The cause is MEASURED (not guessed): either the runner's process handling under load is shown to return a corrupt status, or the harness reads a status it should not; or every spawn helper in the fixtures prints stdout, stderr and the status on a non-zero result (the token-path fixture already does, and still showed nothing) and retries a status outside 0..255 once with a recorded note. Blast radius: `feature` (test infrastructure).
