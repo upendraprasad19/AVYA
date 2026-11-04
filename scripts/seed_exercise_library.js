@@ -17,7 +17,8 @@
 // An APPLIED seed migration is IMMUTABLE, so a library change does NOT rewrite the
 // last one -- it mints the next number. 074 seeded the original 259 rows; 125 re-seeds
 // the 271 that OI-89 produced; 162 re-seeds the 285 of library v12 (Batch A) and
-// deactivates the 7 retired duplicates; the Batch C1 seed re-seeds the 914 of library v15.
+// deactivates the 7 retired duplicates; the Batch C1 seed re-seeds the 914 of library v15; the Batch C2a seed re-seeds the
+// 864 of library v18 and deactivates the 50 rows it removed (scripts/data/library_batch_c2_removals.json).
 // Rewriting 074 in place would have made the applied ledger describe a file that no
 // longer matches what ran.
 // Idempotent: uses ON CONFLICT (id) DO UPDATE so re-runs are safe.
@@ -36,10 +37,12 @@ const LEDGER_PATH = path.join(ROOT, 'backups', 'applied_migrations.json');
 
 // What the generated file says about itself. Edit this block for the next batch; nothing else in the script names a batch.
 const BATCH = {
-  label: 'library v15, Batch C1',
-  diagnose: '2026-10-26-library-batch-c1-c1d7a4',
-  // Rows this batch adds all carry this `source` literal (the importer writes it), so it is also the rollback selector.
+  label: 'library v18, Batch C2a',
+  diagnose: '2026-11-04-library-batch-c2a-removals-c2a7f1',
+  // Rows the Batch C1 importer wrote carry this `source` literal; C2a adds none, so it only counts the existing C1 rows.
   newRowSource: 'exercise-gif-set',
+  // Batch C2a removes rows instead of adding them: the rollback reactivates exactly the removed ids.
+  removalsFile: path.join(ROOT, 'scripts', 'data', 'library_batch_c2_removals.json'),
 };
 
 function fail(msg) {
@@ -198,14 +201,30 @@ const retireStatements = data
     `UPDATE exercise_library r SET is_active = false, coaching_cues = k.coaching_cues, common_mistakes = k.common_mistakes FROM exercise_library k WHERE r.id = '${idOf(retired)}' AND k.id = '${idOf(kept.id)}';`))
   .join('\n');
 
+// Batch C2a: the `decision: remove` ids. Cloud never deletes (promotions and logs may point at a row), so each is
+// deactivated. A removed row that shares its name with a KEPT row also takes that row's cues (getFormCues matches by name
+// with no is_active filter); a removed row whose name differs keeps its own cues, which are right for its own name.
+const removedEntries = fs.existsSync(BATCH.removalsFile)
+  ? JSON.parse(fs.readFileSync(BATCH.removalsFile, 'utf8')).entries.filter((e) => e.decision === 'remove').sort((a, b) => a.id.localeCompare(b.id))
+  : [];
+const keptByName = new Map(data.map((item) => [item.name.toLowerCase(), item]));
+const removalStatements = removedEntries
+  .map((e) => {
+    const twin = keptByName.get(e.name.toLowerCase());
+    return twin
+      ? `UPDATE exercise_library r SET is_active = false, coaching_cues = k.coaching_cues, common_mistakes = k.common_mistakes FROM exercise_library k WHERE r.id = '${idOf(e.id)}' AND k.id = '${idOf(twin.id)}';`
+      : `UPDATE exercise_library SET is_active = false WHERE id = '${idOf(e.id)}';`;
+  })
+  .join('\n');
+const reactivateLine = `UPDATE exercise_library SET is_active = true WHERE id IN (${removedEntries.map((e) => `'${idOf(e.id)}'`).join(', ')});`;
 const newRows = data.filter((item) => item.source === BATCH.newRowSource).length;
 const retiredPairs = data
   .filter((item) => Array.isArray(item.merged_ids))
   .reduce((n, kept) => n + kept.merged_ids.length, 0);
 
-const sql = `-- Intent: RE-SEED cloud exercise_library from bundled assets/data/exercise_library.json (${data.length} exercises, ${BATCH.label}): UPSERTS the ${newRows} new rows (source '${BATCH.newRowSource}') beside the ${data.length - newRows} existing ones, whose values are re-written unchanged, and repeats the ${retiredPairs} idempotent Batch A retire UPDATEs (those rows are already inactive). No row is deactivated by this file that is not already inactive.
--- Destructive?: yes   -- UPSERT REWRITES ROWS (supabase/migrations/CLAUDE.md): ON CONFLICT (id) DO UPDATE re-writes every column of the ${data.length - newRows} existing rows (with their current values) and inserts ${newRows} new ones. No DELETE, DROP, TRUNCATE or constraint change.
--- Rollback strategy: inline   -- UPDATE exercise_library SET is_active = false WHERE source = '${BATCH.newRowSource}';  (selects exactly the ${newRows} new rows; commented block at the end of this file). NOT a DELETE: promotions and logs may point at a row once users see it.
+const sql = `-- Intent: RE-SEED cloud exercise_library from bundled assets/data/exercise_library.json (${data.length} exercises, ${BATCH.label}): UPSERTS all ${data.length} rows with their bundled values (the ${newRows} Batch C1 rows, source '${BATCH.newRowSource}', are already in cloud, so they are re-written unchanged; the only new values are the name_aliases Batch C2a adds), repeats the ${retiredPairs} idempotent Batch A retire UPDATEs (those rows are already inactive) and DEACTIVATES the ${removedEntries.length} rows Batch C2a removed from the library.
+-- Destructive?: yes   -- UPSERT REWRITES ROWS (supabase/migrations/CLAUDE.md): ON CONFLICT (id) DO UPDATE re-writes every column of all ${data.length} rows (no new row: Batch C2a adds none). Also sets is_active = false on the ${removedEntries.length} removed rows. No DELETE, DROP, TRUNCATE or constraint change.
+-- Rollback strategy: inline   -- ${reactivateLine}  (reactivates exactly the ${removedEntries.length} removed rows; commented block at the end of this file). NOT a DELETE: promotions and logs may point at a row once users see it.
 -- Linked diagnose-doc: ${BATCH.diagnose}
 
 -- Source: ${data.length} exercises from assets/data/exercise_library.json.
@@ -230,10 +249,13 @@ ${insertStatements}
 -- Retired duplicates (library v12): deactivate, and copy the kept twin's cues.
 ${retireStatements}
 
+-- Removed rows (library v18, Batch C2a): deactivate. They left the bundled library; cloud keeps them.
+${removalStatements}
+
 -- Rollback (inline):
---   UPDATE exercise_library SET is_active = false WHERE source = '${BATCH.newRowSource}';
---   (the ${data.length - newRows} existing rows were re-written with their own values, so they need no inverse; re-applying
---    supabase/migrations/162_reseed_exercise_library.sql restores them verbatim if that is ever wanted)
+--   ${reactivateLine}
+--   (the ${data.length} upserted rows were re-written with their bundled values, so they need no inverse; the name_aliases
+--    Batch C2a added are harmless on a reactivated library. Re-applying the previous seed migration restores the old values verbatim.)
 `;
 
 fs.mkdirSync(path.dirname(OUTPUT_SQL), { recursive: true });
