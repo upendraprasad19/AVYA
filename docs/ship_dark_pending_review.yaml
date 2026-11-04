@@ -337,6 +337,14 @@ pending:
       G3582 Lunge with Jump x288 (E193 Jump Squat x676 and E066 Box Jump x1 as
       before); requires-coaching picks none. The OFF generator picks 50 distinct
       new ids (golden), top pick G0380 Dumbbell Rear Lateral Raise.
+      Batch C2a numbers (OI-460, 864-row library after the 50 removals; the
+      report was last regenerated 2026-10-26, so the session set budget flip of
+      2026-11-02 is also in these figures): emergencyAnyLevel in 2 golden
+      personas (unchanged) and in 40 of the 576 multi-injury runs (was 58),
+      refilled in 16 (was 34); retired rows in those built lists E271, E261,
+      E254, E234; the thin-day top-up ratchet _r9TopUpRetired stays E261 and E271
+      (the kept sheet-drop rows E254 and E294 are not top-up additions);
+      skill/olympic none. flip_reviewed stays false.
 
 resolved:
   - flag: enable_session_set_budget

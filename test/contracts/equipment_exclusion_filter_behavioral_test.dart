@@ -312,6 +312,16 @@ void main() {
     ExerciseSelector.universalPoolV4.forEach((pattern, pool) {
       if (!pool.any(survives)) patternsWithoutSurvivor.add(pattern);
     });
+    // Batch C2a (OI-460): survives() above returns true for a name the library does not carry, so a pool name whose row was
+    // REMOVED would still count as a survivor. Each pattern must keep one entry that resolves to a real row by exact name.
+    final patternsWithoutResolvedSurvivor = <String>[];
+    ExerciseSelector.universalPoolV4.forEach((pattern, pool) {
+      final ok = pool.any((n) => eqByName.containsKey(n.toLowerCase()) && survives(n));
+      if (!ok) patternsWithoutResolvedSurvivor.add(pattern);
+    });
+    expect(patternsWithoutResolvedSurvivor, isEmpty,
+        reason: 'every universalPoolV4 pattern must keep a bodyweight-only entry that resolves to a shipped row by exact name '
+            '(a removed name passes survives() vacuously). Offenders: $patternsWithoutResolvedSurvivor');
     expect(patternsWithoutSurvivor, isEmpty,
         reason: 'every universalPoolV4 pattern must retain ≥1 bodyweight-surviving '
             'pool move so the att5 exclusion skip never empties a slot. '
