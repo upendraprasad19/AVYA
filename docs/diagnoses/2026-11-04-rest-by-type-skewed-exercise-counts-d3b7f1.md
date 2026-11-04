@@ -66,23 +66,26 @@ proposed_fix: |
   (docs/plans/2026-11-04-oi456-b-count-band.md). OI-456 stays OPEN for it.
 contract_test_path: test/contracts/rest_by_type_behavioral_test.dart
 regression_test_planned: |
-  - test/contracts/rest_by_type_behavioral_test.dart (8 tests): (a) every budgeted rep-based exercise carries its
+  - test/contracts/rest_by_type_behavioral_test.dart (9 tests, incl. (h) the 75 s price at 30 minutes): (a) every budgeted rep-based exercise carries its
     archetype rest in all four weeks; (b) the same list on a strength / hypertrophy / strength / endurance day is
     identical in the allocator output and in weeks 1 and 3 (week 2 excluded on purpose: _weekTwoGains is day-order
     dependent); (c) deload 1..5 sets -> 1,2,2,2,3; (d) week-2 gains priced at the archetype rest; (e) a rep-based custom
     priced and stamped at its archetype rest; (e2) the same custom's week-2 extra set; a real-generator sweep of 1,000+
     stored rests against the literal table; (f) the tester persona measured.
-  - test/contracts/swap_exercise_rest_follows_incoming_archetype_test.dart (4 tests).
+  - test/contracts/swap_exercise_rest_follows_incoming_archetype_test.dart (6 tests: heavy<->iso, compound<->compound, custom targets, timed replacing rep-based, timed replacing timed, a bare library row follows the stored type).
   - session_budget_test.dart pins the literal table H 150 / M 120 / I 75 / B 60 / unknown 60 and baseSets 3.
-  MUTATION PROOF (rule 21): 17 mutants applied one at a time, each confirmed applied (anchor count 1, file changed) and
-  not a compile error, the five relevant files run against each, the tree restored after each (diff unchanged):
-  M01 allocator fixed 75 s (8 red), M02 intensity-keyed desired (11), M03 _applyWave fixed 75 s (8), M04 H/M swapped
-  (12), M05 unknown default 75 (2), M06 deload floor 1 (4), M07 deload floor 3 (3), M08 no min(ex.sets) (2), M09
-  _weekTwoGains reads ex.restSeconds (2), M10 allocator custom at fixed 75 s (1), M11 _weekTwoGains custom at
-  ex.restSeconds (FIRST RUN SURVIVED: 0 red; the fixture put a timed filler before the custom so the filler took the
-  spare time first; fixed by test (e2) with the custom first, then 1 red), M12 stamp only for budgeted rows (5), M13
-  swap keeps the outgoing rest (3), M14 swap applies archetype rest to timed rows (1), M15 swap does not store rep_range
-  (2), M16 baseSets 4 (20), M17 isolation rest 60 (6). All 17 killed.
+  MUTATION PROOF (rule 21), RE-RUN ON THE FINAL TREE (after the B-pass fixes): 23 mutants applied one at a time, each
+  confirmed applied (anchor count 1, file changed) and not a compile error, six files run against each (rest-by-type,
+  session_budget, consumers, allocator, swap, plateau rotation), the tree restored after each (git status clean).
+  Red counts: M01 allocator fixed 75 s (9), M02 intensity-keyed desired (13), M03 _applyWave fixed 75 s (8), M04 H/M
+  swapped (15), M05 unknown default 75 (3), M06 deload floor 1 (4), M07 deload floor 3 (3), M08 no min(ex.sets) (2), M09
+  _weekTwoGains reads ex.restSeconds (3), M10 allocator custom at fixed 75 s (1), M11 _weekTwoGains custom at
+  ex.restSeconds (1; its FIRST run survived with 0 red because the fixture put a timed filler before the custom, fixed
+  by test (e2)), M12 stamp only for budgeted rows (5), M13 swap keeps the outgoing rest (4), M14 swap applies the
+  archetype rest to timed rows (3), M15 swap does not store rep_range (2), M16 baseSets 4 (22), M17 isolation rest 60
+  (8), M18 allocator fixed 38 s (14), N1 timed-for-rep swap keeps the slot rest (1), N2 ignores the library default
+  (1), N3 timed-for-timed ignores the slot rest (2), N4 slot-type test inverted (3), S1 slotsSeen never recorded (1).
+  All 23 killed. Not covered by a mutant: the report-writer guard (a test-tooling convenience, no product effect).
   EXISTING GATES VERIFIED (not new proof): session_set_budget_gate_test.dart (1,728 real runs: weekly top, lighter
   phase, session caps, time within minutes + 2, display equals the oracle) is unchanged and green.
 impact_analysis: |
@@ -142,7 +145,7 @@ and ONE base set count for every exercise of the day, so the clock fitted a diff
 
 ## What was proven and what was not
 - Proven: the old model reproduces 4 / 6 / 4 / 9 (4 / 7 / 4 / 9 in an independent reviewer's rebuild); the new scheme
-  measures 6 / 6 / 7 / 6 for the same persona; 17 of 17 mutants killed after one fixture fix.
+  measures 6 / 6 / 7 / 6 for the same persona; 23 of 23 mutants killed on the final tree (M11 survived once on an earlier fixture).
 - Measured: bodyweight injury pairs gained 2 thin days (30 -> 32) because of the 3 base sets, not the rest (two probes).
 - NOT done here (piece B): a 5-8 band at every length and level, the 30-minute floor decision (D-A), the per-level
   count targets. The measured numbers that piece B starts from are in `test/plan_generator/rest_by_type_report.md`.

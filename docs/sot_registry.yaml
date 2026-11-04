@@ -17112,7 +17112,7 @@ concepts:
     regression_test: test/plan_generator/session_set_budget_gate_test.dart
     additional_tests:
       - test/contracts/rest_by_type_behavioral_test.dart  # OI-456 piece A: stamp, invariance across intensities, deload table, week-2 pricing, custom pricing, real-generator sweep
-      - test/contracts/swap_exercise_rest_follows_incoming_archetype_test.dart  # OI-456 piece A: the swap re-derives rest from the incoming archetype
+      - test/contracts/swap_exercise_rest_follows_incoming_archetype_test.dart  # OI-456 piece A: the swap re-derives a rep-based row's rest from the incoming archetype; a timed row replacing a rep-based slot takes its library default else 60
 
   - concept: session_duration_minutes
     domain: auth_profile
