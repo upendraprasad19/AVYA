@@ -1,0 +1,512 @@
+{
+ "_meta": {
+  "plan": "docs/plans/2026-11-04-library-batch-c2a-removals.md",
+  "oi": "OI-460",
+  "generator": "scripts/library_batch_c2_removals_gen.js",
+  "base_commit": "80a9bc2d",
+  "fixture": "test/fixtures/library_c2_base_depth.json",
+  "sheet_sha256": "7ded3e3e1c11338fe3e0b87157c78f6a1401ca2ef4babbb94a2e6e41d393074f",
+  "iteration_order": "ascending id",
+  "depth_rule": "after >= min(before, 3) per cell (injury single or pair x slot pattern x equipment tier), pool strength/prehab/mobility, movement_pattern AND slot_pattern ?? movement_pattern, union of keeps",
+  "counts": {
+   "total": 66,
+   "remove": 52,
+   "keep": 14
+  }
+ },
+ "entries": [
+  {
+   "id": "E075",
+   "name": "Dip (Parallel Bars)",
+   "decision": "remove",
+   "replacement": "E008",
+   "alias_to": "E008",
+   "reason": "Dip (Parallel Bars) duplicates Chest Dip.",
+   "depth_before": {}
+  },
+  {
+   "id": "E081",
+   "name": "Pigeon Pose",
+   "decision": "remove",
+   "reason": "Sheet drop; the depth rule holds without it in every cell.",
+   "depth_before": {}
+  },
+  {
+   "id": "E082",
+   "name": "Thoracic Extension (Foam Roller)",
+   "decision": "remove",
+   "reason": "Sheet drop; the depth rule holds without it in every cell.",
+   "depth_before": {}
+  },
+  {
+   "id": "E084",
+   "name": "Ankle Circles",
+   "decision": "keep",
+   "keep_reason": "twin_pending",
+   "twin": "G1368",
+   "reason": "Replacement G1368 is added by Batch C2b (OI-462); the row leaves then.",
+   "depth_before": {}
+  },
+  {
+   "id": "E101",
+   "name": "Chest to Bar Pull Up",
+   "decision": "remove",
+   "reason": "Sheet drop; discipline calisthenics_skill is outside every pool.",
+   "depth_before": {}
+  },
+  {
+   "id": "E111",
+   "name": "Sissy Squat",
+   "decision": "keep",
+   "keep_reason": "depth",
+   "reason": "Depth rule: mp|ankle+hip/knee_dominant/bodyweight:3->2",
+   "twin": "G1489",
+   "depth_before": {}
+  },
+  {
+   "id": "E115",
+   "name": "Z Press",
+   "decision": "remove",
+   "reason": "Sheet drop; the depth rule holds without it in every cell.",
+   "depth_before": {}
+  },
+  {
+   "id": "E116",
+   "name": "Meadows Row",
+   "decision": "remove",
+   "reason": "Sheet drop; the depth rule holds without it in every cell.",
+   "depth_before": {}
+  },
+  {
+   "id": "E119",
+   "name": "Chest Squeeze Press",
+   "decision": "keep",
+   "keep_reason": "depth",
+   "reason": "Depth rule: mp|ankle+shoulder/horizontal_push/basic_gym:3->1; mp|ankle+shoulder/horizontal_push/full_gym:4->2; mp|elbow+shoulder/horizontal_push/basic_gym:3->1",
+   "depth_before": {}
+  },
+  {
+   "id": "E125",
+   "name": "Seal Row",
+   "decision": "remove",
+   "reason": "Sheet drop; the depth rule holds without it in every cell.",
+   "depth_before": {}
+  },
+  {
+   "id": "E126",
+   "name": "JM Press",
+   "decision": "remove",
+   "reason": "Sheet drop; the depth rule holds without it in every cell.",
+   "depth_before": {}
+  },
+  {
+   "id": "E128",
+   "name": "Snatch Grip Deadlift",
+   "decision": "remove",
+   "reason": "Sheet drop; the depth rule holds without it in every cell.",
+   "depth_before": {}
+  },
+  {
+   "id": "E130",
+   "name": "Jefferson Curl",
+   "decision": "remove",
+   "reason": "Sheet drop; the depth rule holds without it in every cell.",
+   "depth_before": {}
+  },
+  {
+   "id": "E137",
+   "name": "Tire Flip",
+   "decision": "remove",
+   "reason": "Sheet drop; discipline conditioning is outside every pool.",
+   "depth_before": {}
+  },
+  {
+   "id": "E138",
+   "name": "Sled Push",
+   "decision": "remove",
+   "reason": "Sheet drop; discipline conditioning is outside every pool.",
+   "depth_before": {}
+  },
+  {
+   "id": "E144",
+   "name": "Reverse Lunge",
+   "decision": "remove",
+   "replacement": "G3470",
+   "alias_to": "G3470",
+   "reason": "Reverse Lunge: the hip/knee lunge twin (Forward Lunge); the name stays reachable as an alias.",
+   "depth_before": {}
+  },
+  {
+   "id": "E146",
+   "name": "Curtsy Lunge",
+   "decision": "remove",
+   "reason": "Sheet drop; the depth rule holds without it in every cell.",
+   "depth_before": {}
+  },
+  {
+   "id": "E148",
+   "name": "Reverse Nordic Curl",
+   "decision": "keep",
+   "keep_reason": "depth",
+   "reason": "Depth rule: mp|hamstring+hip/hip_dominant/bodyweight:2->1; mp|hamstring+lower_back/hip_dominant/bodyweight:3->2; mp|hip+lower_back/hip_dominant/bodyweight:3->2",
+   "depth_before": {}
+  },
+  {
+   "id": "E150",
+   "name": "Thoracic Rotation",
+   "decision": "remove",
+   "reason": "Sheet drop; the depth rule holds without it in every cell.",
+   "depth_before": {}
+  },
+  {
+   "id": "E153",
+   "name": "Ankle Dorsiflexion Stretch",
+   "decision": "remove",
+   "reason": "Sheet drop; the depth rule holds without it in every cell.",
+   "depth_before": {}
+  },
+  {
+   "id": "E154",
+   "name": "Lat Stretch",
+   "decision": "remove",
+   "reason": "Sheet drop; the depth rule holds without it in every cell.",
+   "depth_before": {}
+  },
+  {
+   "id": "E156",
+   "name": "Shoulder Dislocate",
+   "decision": "remove",
+   "reason": "Sheet drop; the depth rule holds without it in every cell.",
+   "depth_before": {}
+  },
+  {
+   "id": "E157",
+   "name": "Psoas March",
+   "decision": "remove",
+   "reason": "Sheet drop; the depth rule holds without it in every cell.",
+   "depth_before": {}
+  },
+  {
+   "id": "E158",
+   "name": "Thoracic Bridge",
+   "decision": "remove",
+   "reason": "Sheet drop; the depth rule holds without it in every cell.",
+   "depth_before": {}
+  },
+  {
+   "id": "E160",
+   "name": "Downward Dog",
+   "decision": "remove",
+   "reason": "Sheet drop; discipline yoga is outside every pool.",
+   "depth_before": {}
+  },
+  {
+   "id": "E162",
+   "name": "Piriformis Stretch",
+   "decision": "keep",
+   "keep_reason": "twin_pending",
+   "twin": "G2567",
+   "reason": "Replacement G2567 is added by Batch C2b (OI-462); the row leaves then.",
+   "depth_before": {}
+  },
+  {
+   "id": "E163",
+   "name": "Foam Roll IT Band",
+   "decision": "remove",
+   "reason": "Sheet drop; the depth rule holds without it in every cell.",
+   "depth_before": {}
+  },
+  {
+   "id": "E164",
+   "name": "Foam Roll Upper Back",
+   "decision": "remove",
+   "reason": "Sheet drop; the depth rule holds without it in every cell.",
+   "depth_before": {}
+  },
+  {
+   "id": "E169",
+   "name": "Seated Piriformis Stretch",
+   "decision": "keep",
+   "keep_reason": "twin_pending",
+   "twin": "G2567",
+   "reason": "Replacement G2567 is added by Batch C2b (OI-462); the row leaves then.",
+   "depth_before": {}
+  },
+  {
+   "id": "E170",
+   "name": "Wall Angels",
+   "decision": "remove",
+   "reason": "Sheet drop; the depth rule holds without it in every cell.",
+   "depth_before": {}
+  },
+  {
+   "id": "E178",
+   "name": "GHD Sit Up",
+   "decision": "remove",
+   "reason": "Sheet drop; the depth rule holds without it in every cell.",
+   "depth_before": {}
+  },
+  {
+   "id": "E179",
+   "name": "Toes to Bar",
+   "decision": "keep",
+   "keep_reason": "twin_pending",
+   "twin": "G0474",
+   "reason": "Replacement G0474 is added by Batch C2b (OI-462); the row leaves then.",
+   "depth_before": {}
+  },
+  {
+   "id": "E183",
+   "name": "Prowler Push",
+   "decision": "remove",
+   "reason": "Sheet drop; discipline conditioning is outside every pool.",
+   "depth_before": {}
+  },
+  {
+   "id": "E184",
+   "name": "Sandbag Clean",
+   "decision": "remove",
+   "reason": "Sheet drop; discipline conditioning is outside every pool.",
+   "depth_before": {}
+  },
+  {
+   "id": "E192",
+   "name": "Battle Rope Wave",
+   "decision": "remove",
+   "reason": "Sheet drop; discipline conditioning is outside every pool.",
+   "depth_before": {}
+  },
+  {
+   "id": "E194",
+   "name": "Depth Jump",
+   "decision": "remove",
+   "reason": "Sheet drop; discipline plyometric is outside every pool.",
+   "depth_before": {}
+  },
+  {
+   "id": "E195",
+   "name": "Split Jump",
+   "decision": "remove",
+   "reason": "Sheet drop; discipline plyometric is outside every pool.",
+   "depth_before": {}
+  },
+  {
+   "id": "E196",
+   "name": "Broad Jump",
+   "decision": "remove",
+   "reason": "Sheet drop; discipline plyometric is outside every pool.",
+   "depth_before": {}
+  },
+  {
+   "id": "E197",
+   "name": "Single Leg Box Jump",
+   "decision": "remove",
+   "reason": "Sheet drop; discipline plyometric is outside every pool.",
+   "depth_before": {}
+  },
+  {
+   "id": "E199",
+   "name": "Turkish Get Up (Half)",
+   "decision": "remove",
+   "reason": "Sheet drop; the depth rule holds without it in every cell.",
+   "depth_before": {}
+  },
+  {
+   "id": "E204",
+   "name": "Butt Kicks",
+   "decision": "remove",
+   "reason": "Sheet drop; the depth rule holds without it in every cell.",
+   "depth_before": {}
+  },
+  {
+   "id": "E208",
+   "name": "Hip Circles",
+   "decision": "keep",
+   "keep_reason": "forced",
+   "reason": "Hip Circles is an emitted warm-up name (warmup_cooldown.dart) and has no like-for-like row.",
+   "depth_before": {}
+  },
+  {
+   "id": "E210",
+   "name": "Wrist Rotations",
+   "decision": "remove",
+   "replacement": "G1428",
+   "alias_to": "G1428",
+   "reason": "Wrist Rotations shares animation 1428 with G1428 Wrist Circles.",
+   "depth_before": {}
+  },
+  {
+   "id": "E211",
+   "name": "Ankle Rotations",
+   "decision": "keep",
+   "keep_reason": "twin_pending",
+   "twin": "G1368",
+   "reason": "Replacement G1368 is added by Batch C2b (OI-462); the row leaves then.",
+   "depth_before": {}
+  },
+  {
+   "id": "E218",
+   "name": "Side Bend Stretch",
+   "decision": "remove",
+   "replacement": "G0794",
+   "alias_to": "G0794",
+   "reason": "Side Bend Stretch; G0794 is the lower-back side stretch.",
+   "depth_before": {}
+  },
+  {
+   "id": "E221",
+   "name": "Deep Breathing",
+   "decision": "keep",
+   "keep_reason": "forced",
+   "reason": "Deep Breathing is an emitted cool-down name and the cool-down floor anchor; no like-for-like row.",
+   "depth_before": {}
+  },
+  {
+   "id": "E223",
+   "name": "B-Stance RDL",
+   "decision": "remove",
+   "reason": "Sheet drop; the depth rule holds without it in every cell.",
+   "depth_before": {}
+  },
+  {
+   "id": "E227",
+   "name": "High Box Step-Up",
+   "decision": "remove",
+   "reason": "Sheet drop; the depth rule holds without it in every cell.",
+   "depth_before": {}
+  },
+  {
+   "id": "E228",
+   "name": "Deficit Reverse Lunge",
+   "decision": "remove",
+   "reason": "Sheet drop; the depth rule holds without it in every cell.",
+   "depth_before": {}
+  },
+  {
+   "id": "E233",
+   "name": "Deficit Push-Up",
+   "decision": "remove",
+   "reason": "Sheet drop; the depth rule holds without it in every cell.",
+   "depth_before": {}
+  },
+  {
+   "id": "E234",
+   "name": "Floor Press",
+   "decision": "keep",
+   "keep_reason": "depth",
+   "reason": "Depth rule: mp|ankle+shoulder/horizontal_push/home_dumbbells:1->0; mp|ankle+shoulder/horizontal_push/basic_gym:3->1; mp|ankle+shoulder/horizontal_push/full_gym:4->2",
+   "depth_before": {}
+  },
+  {
+   "id": "E237",
+   "name": "Egyptian Lateral Raise",
+   "decision": "remove",
+   "reason": "Sheet drop; the depth rule holds without it in every cell.",
+   "depth_before": {}
+  },
+  {
+   "id": "E243",
+   "name": "High Cable Curl",
+   "decision": "remove",
+   "reason": "Sheet drop; the depth rule holds without it in every cell.",
+   "depth_before": {}
+  },
+  {
+   "id": "E254",
+   "name": "Doorframe Curl",
+   "decision": "remove",
+   "replacement": "E282",
+   "reason": "Doorframe Curl; E282 is the home biceps curl.",
+   "depth_before": {}
+  },
+  {
+   "id": "E256",
+   "name": "Negative Pull Up",
+   "decision": "remove",
+   "reason": "Sheet drop; the depth rule holds without it in every cell.",
+   "depth_before": {}
+  },
+  {
+   "id": "E261",
+   "name": "Bodyweight Rear Delt Raise",
+   "decision": "keep",
+   "keep_reason": "depth",
+   "reason": "Depth rule: mp|ankle+shoulder/shoulder_isolation/bodyweight:1->0; mp|elbow+shoulder/shoulder_isolation/bodyweight:1->0; mp|hamstring+shoulder/shoulder_isolation/bodyweight:1->0",
+   "depth_before": {}
+  },
+  {
+   "id": "E263",
+   "name": "Prone Reverse Snow Angel",
+   "decision": "keep",
+   "keep_reason": "depth",
+   "reason": "Depth rule: slot|elbow+lower_back/horizontal_pull/bodyweight:3->2",
+   "depth_before": {}
+  },
+  {
+   "id": "E265",
+   "name": "Prone Lat Pull",
+   "decision": "remove",
+   "replacement": "E280",
+   "reason": "Prone Lat Pull; E280 is the home Beginner vertical pull.",
+   "depth_before": {}
+  },
+  {
+   "id": "E271",
+   "name": "Wall Triceps Extension",
+   "decision": "keep",
+   "keep_reason": "depth",
+   "reason": "Depth rule: mp|ankle+shoulder/elbow_extension/bodyweight:3->2; mp|hamstring+shoulder/elbow_extension/bodyweight:3->2; mp|hip+shoulder/elbow_extension/bodyweight:3->2",
+   "depth_before": {}
+  },
+  {
+   "id": "E279",
+   "name": "Wall Lat Press",
+   "decision": "remove",
+   "reason": "Sheet drop; the depth rule holds without it in every cell.",
+   "depth_before": {}
+  },
+  {
+   "id": "E281",
+   "name": "Towel Hammer Curl",
+   "decision": "remove",
+   "reason": "Sheet drop; the depth rule holds without it in every cell.",
+   "depth_before": {}
+  },
+  {
+   "id": "E285",
+   "name": "Elevated Diamond Push Up",
+   "decision": "remove",
+   "reason": "Sheet drop; the depth rule holds without it in every cell.",
+   "depth_before": {}
+  },
+  {
+   "id": "E287",
+   "name": "Towel Front Raise",
+   "decision": "remove",
+   "reason": "Sheet drop; the depth rule holds without it in every cell.",
+   "depth_before": {}
+  },
+  {
+   "id": "E288",
+   "name": "Wall Shoulder Slide",
+   "decision": "remove",
+   "reason": "Sheet drop; the depth rule holds without it in every cell.",
+   "depth_before": {}
+  },
+  {
+   "id": "E293",
+   "name": "Elevated Single Leg Hip Thrust",
+   "decision": "remove",
+   "replacement": "E291",
+   "reason": "Elevated Single Leg Hip Thrust; founder removed it 2026-11-04, E291 is the home hip thrust.",
+   "depth_before": {}
+  },
+  {
+   "id": "E294",
+   "name": "Standing Single Leg Hinge",
+   "decision": "remove",
+   "reason": "Sheet drop; the depth rule holds without it in every cell.",
+   "depth_before": {}
+  }
+ ]
+}
