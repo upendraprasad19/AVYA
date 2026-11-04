@@ -26,6 +26,7 @@ import 'package:icanbefitter/shared/repositories/exercise_repository.dart';
 import 'package:icanbefitter/shared/repositories/plan_engine/models.dart';
 import 'package:icanbefitter/shared/repositories/plan_engine/plan_generator.dart';
 import 'package:icanbefitter/shared/repositories/plan_engine/plateau_scan.dart';
+import 'package:icanbefitter/shared/repositories/plan_engine/session_set_allocator.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -217,9 +218,19 @@ void main() {
     test('slot-count-invariance: rotation is a SWAP, not an add (a day never loses a row, '
         'and the time budget seats at most one more)', () async {
       final off = gen(false);
+      final offSeen = {
+        for (final e in SessionSetAllocator.debugLastStats!.entries) e.key: List<int>.of(e.value.slotsSeen),
+      };
       await seedPlateausFor(compoundNames(off));
       await seedReadiness(3, flagged: false);
       final on = gen(true);
+      final onSeen = {
+        for (final e in SessionSetAllocator.debugLastStats!.entries) e.key: List<int>.of(e.value.slotsSeen),
+      };
+      // EXACT, at the selector stage and independent of rest and time: rotation hands the
+      // allocator the same number of slots per day (the swap-not-add claim itself).
+      expect(onSeen, offSeen, reason: 'rotation must not add or drop a selector slot');
+      expect(offSeen['A'], isNotEmpty);
       // OI-456 piece A: the rest follows the exercise's archetype, so a rotated-in compound
       // can cost less than the heavy one it replaces (Bench Press 150 s -> Push Up 120 s)
       // and credit different muscles; the SESSION BUDGET then seats one more accessory on

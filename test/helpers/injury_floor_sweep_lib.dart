@@ -248,11 +248,13 @@ class SweepHarness {
   /// last accessories of a day and an injured pool is thin to begin with. Measured on the 914-row library in
   /// `docs/audit/set-budget-flip.closure.yaml` (SBF-THIN-DAYS), a founder call: keep the weekly band hard (today), or let
   /// a day under 2 exercises exceed it by a few sets. No block has an EMPTY day (the allocator's guard, a hard zero in
-  /// [expectSafe]); a ceiling here moves only DOWN.
-  /// OI-456 piece A (rest by exercise type, 3 base sets every day) re-measured every block: 19 fell (one-exercise days
-  /// never rose); ONE rose, `pairs bodyweight` thin days 30 -> 32 (knee+elbow 10, lower_back+elbow 4, wrist+elbow 8,
-  /// elbow+hip 10), a recorded decision in the OI-456 diagnose-doc. Likely cause, NOT measured: a former endurance day
-  /// (2 sets) now starts at 3, so a small injured pool spends its weekly band sooner.
+  /// [expectSafe]); a ceiling moves DOWN freely; a rise needs a recorded decision (see below).
+  /// OI-456 piece A (rest by exercise type, 3 base sets every day) re-measured all 20 blocks: 18 fell, 1 equal, 1 rose
+  /// (one-exercise days never rose); the one that rose is `pairs bodyweight` thin days 30 -> 32 (knee+elbow 10,
+  /// lower_back+elbow 4, wrist+elbow 8, elbow+hip 10), a recorded decision in the OI-456 diagnose-doc. MEASURED cause
+  /// (probe, 2026-11-04): the 3 base sets, not the rest. Old 4/3/2 base sets with the new rests gives 30; the new 3 base
+  /// sets with the old intensity-keyed rests gives 32. So a former 2-set endurance day now starts at 3 and a small
+  /// injured pool spends its weekly band sooner.
   static const Map<String, (int thin, int one)> kThinCeilings = {
     'pairs bodyweight': (32, 0),
     'pairs home_dumbbells': (76, 8),

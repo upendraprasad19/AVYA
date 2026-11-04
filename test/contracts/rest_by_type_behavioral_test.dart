@@ -10,7 +10,7 @@
 //
 // `WRITE_REST_BY_TYPE_REPORT=1` also writes `rest_by_type_report.md` next to this
 // file's report sibling (`test/plan_generator/`), the numbers the diagnose-doc cites.
-@Timeout(Duration(minutes: 8))
+@Timeout(Duration(minutes: 12))
 library;
 
 import 'dart:convert';
@@ -222,6 +222,30 @@ void main() {
       expect(stamped['cust'], 150, reason: 'a custom H row is stamped at the H rest');
       expect(stamped['c1'], 120);
     });
+    test('(h) the allocator prices isolations at 75 s: at 30 minutes six distinct-group isolations seat 3', () {
+      // Day budget 1440 s. A 3-set isolation at 75 s costs 1.2 x (45 + 3 x 47 + 2 x 75) = 403.2 s, so 3 fit
+      // (1209.6 s) and a 4th does not even at 2 sets (+256.8 s). Priced at the old 38 s rest it costs 314.4 s,
+      // and a 4th would be admitted (a mutant that prices at the day's rest turns this red).
+      final f = Fx();
+      const groups = ['Chest', 'Lats', 'Quads', 'Biceps', 'Triceps', 'Hamstrings'];
+      for (var i = 0; i < groups.length; i++) {
+        f.row('iso$i', [groups[i]], type: 'isolation', reps: '10-15');
+      }
+      final days = [f.day('hypertrophy', [for (var i = 0; i < groups.length; i++) f.ex('iso$i')])];
+      final out = SessionSetAllocator.allocate(
+        days: days,
+        ctx: f.ctx(days, minutes: 30),
+        rowsByName: f.rows,
+        is6Day: true,
+      );
+      final kept = out[0].exercisesA;
+      expect(kept.length, 3);
+      // (the weekly-band growth passes may add a set to the lead lift; the count and the true cost are the pin)
+      final spent = kept.fold<double>(
+          0, (t, e) => t + SessionBudget.exerciseSeconds(archetype: 'I', sets: e.sets, restSeconds: SessionBudget.restForArchetype('I')));
+      expect(spent, lessThanOrEqualTo(1440));
+    });
+
     test('(e2) week 2: a rep-based custom\'s extra set is priced at its archetype rest, not the selector default', () {
       // `_weekTwoGains` runs before the stamp, so a custom\'s `restSeconds` is still the
       // selector default (30 s here). A custom H lift (5-8 reps), 3 sets, beside a timed
@@ -269,6 +293,8 @@ void main() {
     late Directory tempDir;
     late Map<String, Map<String, dynamic>> byName;
     final report = StringBuffer();
+    // The cells (f) measured, keyed 'tier|days|level|minutes'; the report is written only when all of them ran.
+    final measured = <String, List<int>>{};
 
     setUpAll(() async {
       tempDir = await Directory.systemTemp.createTemp('rest_by_type');
@@ -295,7 +321,7 @@ void main() {
     });
 
     tearDownAll(() async {
-      if (Platform.environment['WRITE_REST_BY_TYPE_REPORT'] == '1') {
+      if (Platform.environment['WRITE_REST_BY_TYPE_REPORT'] == '1' && measured.length == 9) {
         File('test/plan_generator/rest_by_type_report.md').writeAsStringSync(report.toString());
       }
       await HiveUserSession.closeAll();
@@ -383,11 +409,22 @@ void main() {
         final c = counts(gen(
             goal: 'build_muscle', tier: tier, days: days, level: level, minutes: minutes));
         final spread = c.reduce((a, b) => a > b ? a : b) - c.reduce((a, b) => a < b ? a : b);
+        measured['$tier|$days|$level|${minutes ?? 60}'] = c;
         report.writeln('| build_muscle | $tier | $days | $level | ${minutes ?? '60 (default)'} | $c | $spread |');
       }
       final tester = counts(gen(
           goal: 'build_muscle', tier: 'basic_gym', days: 4, level: 'intermediate'));
       final spread = tester.reduce((a, b) => a > b ? a : b) - tester.reduce((a, b) => a < b ? a : b);
+      // The cells the diagnose-doc and the nested CLAUDE.md quote: a change that moves one must move the prose.
+      expect(measured['basic_gym|4|intermediate|60'], [6, 6, 7, 6]);
+      expect(measured['basic_gym|4|intermediate|30'], [3, 3, 3, 3]);
+      expect(measured['basic_gym|4|intermediate|45'], [4, 5, 5, 5]);
+      expect(measured['basic_gym|4|intermediate|90'], [7, 6, 8, 9]);
+      expect(measured['basic_gym|4|beginner|60'], [5, 5, 5, 4]);
+      expect(measured['basic_gym|4|advanced|60'], [6, 6, 7, 6]);
+      expect(measured['full_gym|3|intermediate|60'], [6, 7, 7]);
+      expect(measured['full_gym|5|intermediate|60'], [6, 5, 7, 7, 6]);
+      expect(measured['full_gym|6|intermediate|60'], [6, 6, 7, 6, 6, 7]);
       // Before OI-456 the same persona measured 4 / 6 / 4 / 9 (a spread of 5).
       expect(spread, lessThanOrEqualTo(2), reason: 'tester counts: $tester');
     });

@@ -172,7 +172,7 @@ void main() {
       PlannedExercise plank() => f.ex('plank', sets: 3, logging: 'timed', rest: 30);
       // 30 minutes: 1440 s. One plank is 252 s; six are 1512 s, already over.
       // Day 2 holds five planks: 1260 s at their OWN rest of 30 s (room for two more
-      // sets, 84 s each), but 1800 s if they were timed at the day's rest of 75 s.
+      // sets, 84 s each); priced at a generic 75 s rest they would be 1800 s and gain nothing.
       final days = [
         f.day('hypertrophy', [plank()]),
         f.day('hypertrophy', [for (var i = 0; i < 6; i++) plank()]),

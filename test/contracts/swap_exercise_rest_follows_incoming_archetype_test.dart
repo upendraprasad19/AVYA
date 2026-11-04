@@ -118,9 +118,44 @@ void main() {
     expect(b['rest_seconds'], 75);
   });
 
-  test('a timed incoming row keeps the inherited rest (only rep-based rows follow the type table)', () async {
-    final out = await swap('heavy', 'plank', [planned('heavy', 150)]);
+  test('a timed incoming row replacing a REP-BASED slot takes its own default, else the B rest (not the slot\'s)', () async {
+    final noDefault = await swap('heavy', 'plank', [planned('heavy', 150)]);
+    expect(noDefault['logging_type'], 'timed');
+    expect(noDefault['rest_seconds'], 60, reason: 'B rest, not the heavy slot\'s 150');
+
+    await HiveService.instance.exerciseBox.put('hold', {
+      ...lib('hold', 'isolation', '30-60', logging: 'timed'),
+      'default_rest_secs': 45,
+    });
+    final withDefault = await swap('mid', 'hold', [planned('mid', 120)]);
+    expect(withDefault['rest_seconds'], 45, reason: 'the library row\'s own default wins');
+  });
+
+  test('a timed incoming row replacing a TIMED slot keeps that slot\'s rest', () async {
+    final out = await swap('plank', 'plank', [
+      {...planned('plank', 30), 'logging_type': 'timed'},
+    ]);
     expect(out['logging_type'], 'timed');
-    expect(out['rest_seconds'], 150);
+    expect(out['rest_seconds'], 30);
+  });
+
+  test('a library row with NO logging_type falls back to the slot\'s type, and the rest agrees with the STORED type', () async {
+    await HiveService.instance.exerciseBox.put('bare', {
+      'id': 'bare',
+      'name': 'bare',
+      'exercise_type': ['compound'],
+      'rep_range': '8-12',
+      'primary_muscles': ['Chest'],
+    });
+    // Over a timed slot: the type stays timed (the resolver finds none), so the slot's rest is kept.
+    final overTimed = await swap('plank', 'bare', [
+      {...planned('plank', 30), 'logging_type': 'timed'},
+    ]);
+    expect(overTimed['logging_type'], 'timed');
+    expect(overTimed['rest_seconds'], 30);
+    // Over a rep-based slot: the type stays rep-based, so the rest is the row's own archetype (M).
+    final overReps = await swap('heavy', 'bare', [planned('heavy', 150)]);
+    expect(SessionBudget.isRepBased('${overReps['logging_type']}'), isTrue);
+    expect(overReps['rest_seconds'], 120);
   });
 }

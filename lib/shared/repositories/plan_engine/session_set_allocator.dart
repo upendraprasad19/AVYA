@@ -17,6 +17,11 @@ class AllocationStats {
   /// room was gone. The gate requires 0.
   int capForcedFirst = 0;
 
+  /// Test-only: per day, how many BUDGETED exercises the selector handed the allocator
+  /// (before any admission or removal). Lets a test compare two worlds at the selector
+  /// stage, independent of rest and time.
+  final List<int> slotsSeen = [];
+
   /// Day indexes the guard filled (either counter).
   final List<int> forcedDays = [];
 
@@ -215,6 +220,10 @@ class SessionSetAllocator {
           all.add(slot);
         }
       }
+    }
+
+    for (var d = 0; d < n; d++) {
+      stats.slotsSeen.add(byDay[d].length);
     }
 
     // 2. Days copied from variant A enter the ledger as they are.

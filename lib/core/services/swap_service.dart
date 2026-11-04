@@ -531,7 +531,12 @@ class SwapService {
             ...newLib,
             'logging_type': resolvedLoggingType,
           }))
-        : (original['rest_seconds'] ?? newLib['default_rest_secs'] ?? 60);
+        : (SessionBudget.isRepBased('${original['logging_type'] ?? 'weight_reps'}')
+            // A timed / cardio / distance row replacing a REP-BASED slot must not inherit that
+            // slot's 150 / 120 / 75 s (B-pass OI-456, P2): its own default, else the B rest.
+            ? (newLib['default_rest_secs'] ?? SessionBudget.restForArchetype('B'))
+            // Timed replacing timed: the slot's own rest still describes this kind of row.
+            : (original['rest_seconds'] ?? newLib['default_rest_secs'] ?? 60));
     final replacement = <String, dynamic>{
       'exercise_id': (newLib['id'] as String?) ?? toExerciseId,
       'exercise_name': (newLib['name'] as String?) ?? toExerciseId,

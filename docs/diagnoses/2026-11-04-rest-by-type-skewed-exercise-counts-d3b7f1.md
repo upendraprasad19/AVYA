@@ -92,10 +92,11 @@ impact_analysis: |
   6 / 6 / 7 / 6; full_gym intermediate 3-day 6 / 7 / 7, 5-day 6 / 5 / 7 / 7 / 6, 6-day 6 / 6 / 7 / 6 / 6 / 7. So the
   intensity-driven spread is gone, and days at 30 and 45 minutes (and some beginner days) still sit under 5: that is
   piece B, not a regression.
-  THIN-DAY RATCHET (kThinCeilings, injury_floor_sweep_lib.dart): re-measured on all 20 blocks. 19 fell (for example
+  THIN-DAY RATCHET (kThinCeilings, injury_floor_sweep_lib.dart): re-measured on all 20 blocks. 18 fell, 1 equal (for example
   pairs46 bodyweight 84 -> 54, pairs basic_gym 152 -> 126, repeat bodyweight 82 -> 34; one-exercise days never rose).
-  ONE ROSE, a recorded decision: pairs bodyweight, days under 3 exercises 30 -> 32 (knee+elbow 10, lower_back+elbow 4,
-  wrist+elbow 8, elbow+hip 10). Likely cause, NOT measured: a former endurance day (2 sets) now starts at 3, so a small
+  ONE ROSE (the 20th), a recorded decision: pairs bodyweight, days under 3 exercises 30 -> 32 (knee+elbow 10, lower_back+elbow 4,
+  wrist+elbow 8, elbow+hip 10). MEASURED cause (probe): the 3 base sets, not the rest. Old 4/3/2 base sets with the new rests = 30;
+  new 3 base sets with old intensity-keyed rests = 32. A former 2-set endurance day now starts at 3, so a small
   injured bodyweight pool spends its weekly band sooner. Accepted as part of the change: no empty day appears in any
   block (the hard zero holds).
   PRODUCT CONSEQUENCES the founder should know: (1) strength-goal users go from 4 to 3 base sets on strength days (the
@@ -142,7 +143,7 @@ and ONE base set count for every exercise of the day, so the clock fitted a diff
 ## What was proven and what was not
 - Proven: the old model reproduces 4 / 6 / 4 / 9 (4 / 7 / 4 / 9 in an independent reviewer's rebuild); the new scheme
   measures 6 / 6 / 7 / 6 for the same persona; 17 of 17 mutants killed after one fixture fix.
-- NOT proven: why bodyweight injury pairs gained 2 thin days (30 -> 32); the cause above is a hypothesis.
+- Measured: bodyweight injury pairs gained 2 thin days (30 -> 32) because of the 3 base sets, not the rest (two probes).
 - NOT done here (piece B): a 5-8 band at every length and level, the 30-minute floor decision (D-A), the per-level
   count targets. The measured numbers that piece B starts from are in `test/plan_generator/rest_by_type_report.md`.
 
