@@ -17,6 +17,7 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 
 import '../../scripts/regression_catalog_lib.dart';
+import '../helpers/spawn.dart';
 
 void main() {
   final recent = DateTime.now().subtract(const Duration(days: 1));
@@ -319,11 +320,13 @@ void main() {
         () async {
       for (final parentTz in <String?>[null, 'UTC', 'Etc/GMT+12']) {
         final parent = <String, String>{'PATH': Platform.environment['PATH'] ?? '/usr/bin:/bin', 'TZ': ?parentTz};
-        final result = await Process.run(
+        // Through the sanctioned spawn helper (spawn_sites_guard G1a). It scrubs again, which
+        // keeps TZ, so the zone the child sees is the one catalogChildEnvironment pinned.
+        final result = await runSpawnAsync(
           '/bin/sh',
           ['-c', 'date +%z'],
-          environment: catalogChildEnvironment(parent),
-          includeParentEnvironment: false,
+          why: 'date +%z under the catalog child env (OI-459)',
+          parentEnvironment: catalogChildEnvironment(parent),
         );
         expect(result.exitCode, 0, reason: '${result.stderr}');
         expect((result.stdout as String).trim(), '+0530', reason: 'parent TZ: $parentTz');

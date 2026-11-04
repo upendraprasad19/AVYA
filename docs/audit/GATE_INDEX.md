@@ -150,4 +150,5 @@ A closure ledger minted these numbers before the script declared its own. The le
 record and is never rewritten, so the script's own `// Gate: N` wins and the old mint is listed here.
 
 - `check_device_tests_exist.dart` — ledger says Gate 44; now Gate 54.
+- `check_schema_payload_parity.dart` — ledger says Gate 19; now Gate 52.
 - `check_writeservice_only.dart` — ledger says Gate 7; now Gate 49.
