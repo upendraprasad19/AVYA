@@ -304,6 +304,7 @@ void main() {
       // Weeks 2 and 4 show the B list of a day (the 6-day plan has one list).
       final variant = (w == 1 || w == 3) && p.days != 6 ? 'B' : 'A';
       final forcedDays = stats?[variant]?.forcedDays ?? const <int>[];
+      final countForced = stats?[variant]?.countForced ?? const <int, List<({String name, int sets})>>{};
       final days = plan.weekPlans[w].workoutDays;
       for (var di = 0; di < days.length; di++) {
         final d = days[di];
@@ -333,9 +334,29 @@ void main() {
           // when the allocator says it forced this very day AND the day, without
           // that lift, is back inside the limit. Anything else over the limit fails.
           final lead = d.exercises.where(budgeted).firstOrNull;
-          final explained = lead != null &&
+          final guardExplained = lead != null &&
               forcedDays.contains(di) &&
               mins - exSeconds(lead) / 60 <= limitMin;
+          // OI-456 piece B: a day the count floor force-seated slots on (named by
+          // the allocator) is over by at most those slots' own seconds, and never by
+          // more than the forcing bound plus the display slack over the user's minutes.
+          // When the guard also filled the day, its lead lift is subtracted too.
+          var forcedSeconds = 0.0;
+          for (final f in countForced[di] ?? const <({String name, int sets})>[]) {
+            for (final e in d.exercises) {
+              if (e.exerciseName == f.name) forcedSeconds += exSeconds(e);
+            }
+          }
+          final guardSeconds = (lead != null && forcedDays.contains(di)) ? exSeconds(lead) : 0.0;
+          // The overrun over the user's minutes is bounded by the FORCING itself (at most
+          // maxForcedOverSeconds of it, B-pass P2-1 / P2-2), so a forced slot cannot mask an
+          // unrelated overrun; the display slack is the 2 minutes of `limitMin`.
+          final forcedPart =
+              forcedSeconds > SessionBudget.maxForcedOverSeconds ? SessionBudget.maxForcedOverSeconds.toDouble() : forcedSeconds;
+          final countExplained = forcedSeconds > 0 &&
+              mins - (forcedSeconds + guardSeconds) / 60 <= limitMin &&
+              mins - p.effMinutes <= (forcedPart + guardSeconds) / 60 + 2;
+          final explained = guardExplained || countExplained;
           if (explained) {
             _agg.timeForcedOver.add(mins - p.effMinutes); // minutes over the user's own minutes
             _agg.timeForcedOverWhere.add(p.label);

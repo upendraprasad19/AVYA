@@ -392,6 +392,28 @@ class SessionBudget {
   /// The sets the allocator tries first for every budgeted exercise, on every day.
   static const int baseSets = 3;
 
+  // ── Exercise count band (OI-456 piece B) ─────────────────────────────────
+
+  /// No day holds more than this many main exercises.
+  static const int hardMax = 8;
+
+  /// The most main exercises a day of a [level] user holds: beginner 5,
+  /// intermediate 6, advanced 8. An unknown level reads intermediate.
+  static int countMax(String level) => switch (_levelKey(level)) {
+        'beginner' => 5,
+        'advanced' => 8,
+        _ => 6,
+      };
+
+  /// The fewest main exercises a day of [minutes] should hold: 5 from 45 minutes,
+  /// 4 from 25 (founder decision D-A: a 30-minute session shows 4, not 5, so it
+  /// stays inside its minutes), 3 below. Defined over the whole 15..180 range so
+  /// the floor never lands on a clock cliff.
+  static int countFloor(int minutes) => minutes >= 45 ? 5 : (minutes >= 25 ? 4 : 3);
+
+  /// The most seconds the count floor may push one day past its budget.
+  static const int maxForcedOverSeconds = 300;
+
   // ── Bands and caps (Ruling 4) ────────────────────────────────────────────
 
   /// A focus muscle may go to this many hard sets a week (founder F3).
