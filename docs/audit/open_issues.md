@@ -7350,3 +7350,25 @@ Found by the sync-storm-first-sweep batch while measuring its Day-0 web check (l
 Found by the M2b Part B Chrome check (360 dp, real fonts, the real card and exercise library with seeded data). The header `Row` of a COLLAPSED active-workout card in `lib/features/train/screens/active_workout/exercise_card.dart` (the `Exercise header row` block of `build`, about line 1388 when it was seen) reports a 13 px `RenderFlex` overflow. It is on `main` and not in the Part B diff: the widget tests run under the Ahem font, whose glyph widths are not the real ones, so no test sees it. The cause is NOT established (the long name, the meta line or the trailing controls are all candidates). Founder go to file it: 2026-11-04.
 
 **Done when.** The overflow is reproduced (Chrome at 360 dp with real fonts, or a widget test at a text scale that reddens it), the row is fixed so no child overflows at 360 dp and at the largest text scale the app supports, and the fix carries a regression test that fails without it (mutated and run, rule 21). UI only: a Train widget.
+
+## OI-460 — Library Batch C2a: sheet-drop removals the depth rule allows, production-name repoints, orphan plates, cloud deactivation
+
+- **Status**: OPEN
+- **Blocked on**: none
+- **Verified**: never
+- **Identified**: 2026-11-04 · filed via mint_oi.sh from branch `library-batch-c2`
+
+Narrowed 2026-11-04 after two combined-plan review rounds came back not converged and the unit was split (section 4.12.1). C2a removes the sheet-drop library rows whose replacement already exists in the shipped 914-row library, repoints every exercise name production code hard-codes, deletes four orphaned plate SVGs and deactivates the removed rows in the cloud. Plan: `docs/plans/2026-11-04-library-batch-c2a-removals.md`. The twins, the E230 retag and the media are OI-462.
+
+**Done when.** The 52 removal ids are gone from `assets/data/exercise_library.json` and from every install (seed v18 prune); every hard-coded exercise name resolves to exactly one shipped row; the depth rule holds in every cell under both `movement_pattern` and `slot_pattern`; the cloud migration is applied and the rows are `is_active = false`; the five injury sweeps keep their hard zeros; the tests are repointed, mutated and green.
+
+## OI-462 — Library Batch C2b: twins G1368 G1489 G2567 G0474, E230 retag and media, removal of the six twin_pending rows (E084 E211 E111 E162 E169 E179)
+
+- **Status**: OPEN
+- **Blocked on**: none
+- **Verified**: never
+- **Identified**: 2026-11-04 · filed via mint_oi.sh from branch `library-batch-c2`
+
+Second half of the split of Batch C2 (the first half is OI-460). Adds the four twin rows G1368, G1489, G2567 and G0474, retags E230 and releases its media, then removes the six `twin_pending` rows that C2a keeps (E084 E211 E111 E162 E169 E179). Open: the G0474 picture decision. Needs its own plan, two review rounds, and a fresh founder go for the media upload.
+
+**Done when.** The four twins ship; each `twin_pending` row is removed or kept with a stated reason; E230 is retagged and its animation is in the bucket; the depth rule still holds; the cloud migration is applied.
