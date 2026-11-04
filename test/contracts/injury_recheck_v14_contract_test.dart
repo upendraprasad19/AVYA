@@ -5,8 +5,9 @@
 // rejected; 104 library rows gain 148 injury tags (additions only). This file
 // pins, in three layers:
 //  (A) DATA — every founder call as a literal on a name, the closed vocabulary,
-//      the table the applier reads, the 62-row safe pool (33 + 29 from Batch C1; nothing else
-//      left untagged).
+//      the table the applier reads, the 55-row safe pool (26 of the original 33 that are still rows + 29 from Batch C1;
+//      nothing else left untagged). Batch C2a (OI-460) removed 50 sheet-drop rows: the FROZEN table keeps their ids, so
+//      every reader here filters to ids that are still library rows and computes its denominator.
 //  (B) BEHAVIOUR — the REAL PlanGenerator.generateV4 (the path users
 //      get) and the REAL queryV4 filter. Every absence has a positive control:
 //      the same persona / the unfiltered query holds the move.
@@ -29,6 +30,16 @@ import 'package:icanbefitter/shared/repositories/plan_engine/models.dart';
 import 'package:icanbefitter/shared/repositories/plan_engine/plan_generator.dart';
 
 import '../helpers/injury_safe_pool.dart';
+
+/// Batch C2a removals: the ids of the `remove` entries and their BASE movement patterns / names (fixture, not git).
+final Set<String> _c2Removed = {
+  for (final e in ((jsonDecode(File('scripts/data/library_batch_c2_removals.json').readAsStringSync()) as Map<String, dynamic>)['entries'] as List))
+    if ((e as Map)['decision'] == 'remove') e['id'] as String,
+};
+final Map<String, Map<String, dynamic>> _c2BaseRows = {
+  for (final r in ((jsonDecode(File('test/fixtures/library_c2_base_depth.json').readAsStringSync()) as Map<String, dynamic>)['rows'] as List))
+    (r as Map)['id'] as String: Map<String, dynamic>.from(r),
+};
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -97,7 +108,8 @@ void main() {
       expect(additions.length, 104);
       var tokens = 0;
       for (final e in additions.entries) {
-        expect(tagsById.containsKey(e.key), isTrue, reason: '${e.key} unknown id');
+        // The table is FROZEN; a removed row's entry stays in it, and its id must be a C2a removal, never an unknown id.
+        expect(tagsById.containsKey(e.key) || _c2Removed.contains(e.key), isTrue, reason: '${e.key} unknown id');
         final t = toks(e.value);
         expect(t, isNotEmpty, reason: '${e.key} adds nothing');
         expect(InjuryVocab.canonicalTokens.containsAll(t), isTrue,
@@ -111,7 +123,7 @@ void main() {
 
     test('every table token is in the library row; touched lists are sorted; every token is canonical', () {
       final additions = Map<String, dynamic>.from(table['additions'] as Map);
-      for (final e in additions.entries) {
+      for (final e in additions.entries.where((e) => tagsById.containsKey(e.key))) {
         expect(tagsById[e.key]!.containsAll(toks(e.value)), isTrue,
             reason: '${e.key} lost a v14 token');
         // The applier sorts the rows it touches. 16 untouched rows (E229, E248, ...)
@@ -161,8 +173,9 @@ void main() {
     test('every push-up variant carries shoulder (no variant is shoulder-free)', () {
       final rows = library.where((r) =>
           RegExp(r'push[- ]?up', caseSensitive: false).hasMatch(r['name'] as String));
-      expect(rows.length, 33,
-          reason: 'denominator: 11 original push-up-named rows + 22 Batch C1 rows (the 629 shipped; a push-up row held at the picture is not counted)');
+      final removedPushUp = _c2Removed.where((i) => RegExp(r'push[- ]?up', caseSensitive: false).hasMatch(_c2BaseRows[i]!['name'] as String)).length;
+      expect(rows.length, 33 - removedPushUp,
+          reason: 'denominator: 11 original push-up-named rows + 22 Batch C1 rows (the 629 shipped; a push-up row held at the picture is not counted), minus the $removedPushUp push-up-named rows Batch C2a removed');
       for (final r in rows) {
         expect((r['injury_contraindications'] as List), contains('shoulder'),
             reason: '${r['id']} ${r['name']} is a push-up but is shoulder-free');
@@ -172,16 +185,17 @@ void main() {
     test('every elbow_flexion / elbow_extension row carries elbow', () {
       final rows = library.where((r) => (r['movement_pattern'] as List)
           .any((p) => p == 'elbow_flexion' || p == 'elbow_extension'));
-      expect(rows.length, 147,
-          reason: 'denominator: 30 original rows in the two patterns + 117 Batch C1 rows');
+      final removedElbow = _c2Removed.where((i) => (_c2BaseRows[i]!['movement_pattern'] as List).any((p) => p == 'elbow_flexion' || p == 'elbow_extension')).length;
+      expect(rows.length, 147 - removedElbow,
+          reason: 'denominator: 30 original rows in the two patterns + 117 Batch C1 rows, minus the $removedElbow Batch C2a removed');
       for (final r in rows) {
         expect(toks(r['injury_contraindications']), contains('elbow'),
             reason: '${r['id']} ${r['name']}');
       }
     });
 
-    test('the safe pool: 62 named rows (33 + 29 from Batch C1) stay untagged, and nothing else does', () {
-      expect(kV14SafePool.length, 62);
+    test('the safe pool: 55 named rows (26 original + 29 from Batch C1) stay untagged, and nothing else does', () {
+      expect(kV14SafePool.length, 55);
       for (final n in kV14SafePool) {
         expect(tagsOf(n), isEmpty, reason: '"$n" must stay untagged (low-load / rehab)');
       }
@@ -228,7 +242,6 @@ void main() {
       ('Lat Pulldown', 'shoulder', 'basic_gym', 'beginner', 3),
       ('Chin Up', 'elbow', 'basic_gym', 'intermediate', 4),
       ('Russian Twist', 'lower_back', 'bodyweight', 'beginner', 3),
-      ('Crunches', 'lower_back', 'bodyweight', 'advanced', 3),
       ('Hip Abduction Machine', 'hip', 'full_gym', 'advanced', 3),
     ];
     for (final (move, injury, tier, level, days) in reached) {
@@ -271,6 +284,8 @@ void main() {
       ('Diamond Push Up', 'horizontal_push', 'shoulder'),
       ('Incline Push Up', 'horizontal_push', 'shoulder'),
       ('V-Up', 'core', 'lower_back'),
+      // Moved here from the persona list by Batch C2a: the library edit displaced it from every searched uninjured plan, so the filter is pinned directly.
+      ('Crunches', 'core', 'lower_back'),
       ('Hollow Body Hold', 'core', 'lower_back'),
       ('Burpee', 'cardio', 'shoulder'),
       ('Burpee', 'cardio', 'wrist'),

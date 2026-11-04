@@ -249,24 +249,28 @@ class SweepHarness {
   /// `docs/audit/set-budget-flip.closure.yaml` (SBF-THIN-DAYS), a founder call: keep the weekly band hard (today), or let
   /// a day under 2 exercises exceed it by a few sets. No block has an EMPTY day (the allocator's guard, a hard zero in
   /// [expectSafe]); a ceiling here moves only DOWN.
+  // Batch C2a (OI-460, library v18, 864 rows) re-measured four blocks: pairs46 / repeat / singles46 bodyweight fell (84 to 44,
+  // 82 to 74, 28 to 14) and `repeat home_dumbbells` ROSE 110 to 112 (ankle 6 to 8: the uninjured phase-1 plan now pins
+  // different rows, two of which an ankle injury drops; no depth cell is thin, see the diagnose doc). Net thin days over
+  // the four blocks fell by 54.
   static const Map<String, (int thin, int one)> kThinCeilings = {
     'pairs bodyweight': (30, 0),
     'pairs home_dumbbells': (76, 14),
     'pairs basic_gym': (152, 16),
     'pairs full_gym': (116, 4),
-    'pairs46 bodyweight': (84, 2),
+    'pairs46 bodyweight': (44, 2),
     'pairs46 home_dumbbells': (176, 24),
     'pairs46 basic_gym': (197, 16),
     'pairs46 full_gym': (155, 10),
-    'repeat bodyweight': (82, 2),
-    'repeat home_dumbbells': (110, 6),
+    'repeat bodyweight': (74, 2),
+    'repeat home_dumbbells': (112, 6),
     'repeat basic_gym': (120, 6),
     'repeat full_gym': (118, 6),
     'singles bodyweight': (14, 0),
     'singles home_dumbbells': (14, 0),
     'singles basic_gym': (28, 0),
     'singles full_gym': (18, 0),
-    'singles46 bodyweight': (28, 0),
+    'singles46 bodyweight': (14, 0),
     'singles46 home_dumbbells': (50, 4),
     'singles46 basic_gym': (50, 2),
     'singles46 full_gym': (38, 2),

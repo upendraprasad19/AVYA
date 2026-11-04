@@ -39,6 +39,12 @@ const _optionalKeys = <String>{'variant_family', 'skill_track', 'skill_step', 'p
 // as a group, last and in this order.
 const _plateKeys = <String>{'demo_slug', 'demo_pair'};
 const _mediaKeyList = <String>['media_slug', 'media_version', 'media_source'];
+/// Batch C2a (OI-460): a new row that receives a removed row's name carries `name_aliases` (non-empty), and ONLY those rows do.
+Set<String> _aliasTargets() => {
+      for (final e in (jsonDecode(File('scripts/data/library_batch_c2_removals.json').readAsStringSync()) as Map<String, dynamic>)['entries'] as List)
+        if ((e as Map)['decision'] == 'remove' && e['alias_to'] != null) e['alias_to'] as String,
+    };
+
 const _newId = r'^[GN]\d';
 
 Set<String> _mappedIds() => ((_readMap(_mediaTableRel)['rows'] as Map<String, dynamic>).keys).toSet();
@@ -67,6 +73,9 @@ List<String> _keyViolations(List<Map<String, dynamic>> rows, {Set<String>? mappe
         out.add('$id carries plate key $k (plates are not shipped on new rows)');
       } else if (_mediaKeyList.contains(k)) {
         // checked below, as a group
+      } else if (k == 'name_aliases') {
+        if (!_aliasTargets().contains(id)) out.add('$id carries name_aliases but no removed row aliases to it');
+        if (r[k] is! List || (r[k] as List).isEmpty) out.add('$id carries an empty name_aliases');
       } else if (!_required40.contains(k) && !_optionalKeys.contains(k)) {
         out.add('$id carries extra key $k');
       }
@@ -349,6 +358,9 @@ void main() {
       final h = _deepRows(rows);
       _byId(h, onMapped['id'] as String)['extra_after'] = 1;
       expect(_keyViolations(h), isNotEmpty, reason: 'a key after the media keys (and an extra key)');
+      final aliasless = _deepRows(rows).firstWhere((r) => !_aliasTargets().contains(r['id']));
+      aliasless['name_aliases'] = ['Anything'];
+      expect(_keyViolations([aliasless]), isNotEmpty, reason: 'name_aliases on a row no removal aliases to');
       final d = _deepRows(rows)..first['progression_to'] = null;
       expect(_keyViolations(d), isNotEmpty, reason: 'a null ladder key');
       final e = _deepRows(rows)..first.remove('variant_family');

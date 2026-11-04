@@ -32,6 +32,8 @@ const SKIP_PATTERNS = new Set(['warmup', 'cooldown', 'flexibility', 'cardio']);
 const FORCED = {
   E208: 'Hip Circles is an emitted warm-up name (warmup_cooldown.dart) and has no like-for-like row.',
   E221: 'Deep Breathing is an emitted cool-down name and the cool-down floor anchor; no like-for-like row.',
+  E254: 'Plan matrix (606 personas, scorecard_gate_test): 25 bodyweight build_muscle 4-6 day plans fill 5-6 distinct elbow_flexion Biceps rows; with E254 and E281 both gone the bodyweight pool is 4 and each gets a (none) pick (hard zero). E254 and E281 together are the floor: E254 alone leaves 25 target-fidelity fallbacks (2034 > baseline 2009). The injury-cell depth rule does not see the uninjured cell.',
+  E281: 'Plan matrix (606 personas, scorecard_gate_test): see E254. With E254 kept and E281 removed the same 25 plans fall back to the universal pool (2034 fallback picks against a baseline of 2009).',
 };
 // twin_pending: the depth rule would let the row go, but its replacement twin is added by Batch C2b (OI-462).
 const TWIN_PENDING = {
@@ -42,7 +44,6 @@ const TWIN_PENDING = {
 const REPLACEMENT = {
   E144: { to: 'G3470', alias: true, why: 'Reverse Lunge: the hip/knee lunge twin (Forward Lunge); the name stays reachable as an alias.' },
   E075: { to: 'E008', alias: true, why: 'Dip (Parallel Bars) duplicates Chest Dip.' },
-  E254: { to: 'E282', alias: false, why: 'Doorframe Curl; E282 is the home biceps curl.' },
   E265: { to: 'E280', alias: false, why: 'Prone Lat Pull; E280 is the home Beginner vertical pull.' },
   E210: { to: 'G1428', alias: true, why: 'Wrist Rotations shares animation 1428 with G1428 Wrist Circles.' },
   E218: { to: 'G0794', alias: true, why: 'Side Bend Stretch; G0794 is the lower-back side stretch.' },

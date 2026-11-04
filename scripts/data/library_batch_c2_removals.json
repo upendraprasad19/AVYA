@@ -10,8 +10,8 @@
   "depth_rule": "after >= min(before, 3) per cell (injury single or pair x slot pattern x equipment tier), pool strength/prehab/mobility, movement_pattern AND slot_pattern ?? movement_pattern, union of keeps",
   "counts": {
    "total": 66,
-   "remove": 52,
-   "keep": 14
+   "remove": 50,
+   "keep": 16
   }
  },
  "entries": [
@@ -414,9 +414,9 @@
   {
    "id": "E254",
    "name": "Doorframe Curl",
-   "decision": "remove",
-   "replacement": "E282",
-   "reason": "Doorframe Curl; E282 is the home biceps curl.",
+   "decision": "keep",
+   "keep_reason": "forced",
+   "reason": "Plan matrix (606 personas, scorecard_gate_test): 25 bodyweight build_muscle 4-6 day plans fill 5-6 distinct elbow_flexion Biceps rows; with E254 and E281 both gone the bodyweight pool is 4 and each gets a (none) pick (hard zero). E254 and E281 together are the floor: E254 alone leaves 25 target-fidelity fallbacks (2034 > baseline 2009). The injury-cell depth rule does not see the uninjured cell.",
    "depth_before": {}
   },
   {
@@ -468,8 +468,9 @@
   {
    "id": "E281",
    "name": "Towel Hammer Curl",
-   "decision": "remove",
-   "reason": "Sheet drop; the depth rule holds without it in every cell.",
+   "decision": "keep",
+   "keep_reason": "forced",
+   "reason": "Plan matrix (606 personas, scorecard_gate_test): see E254. With E254 kept and E281 removed the same 25 plans fall back to the universal pool (2034 fallback picks against a baseline of 2009).",
    "depth_before": {}
   },
   {

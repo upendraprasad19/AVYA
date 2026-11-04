@@ -64,7 +64,7 @@ SWAP_FRAMES = {
     "arm-circles", "band-pull-apart", "banded-lateral-walk", "cable-curl",
     "cable-kickback", "donkey-kick", "feet-elevated-pike-push-up", "frog-pump",
     "hanging-leg-raise", "jumping-jack", "landmine-press", "machine-row",
-    "meadows-row", "pike-push-up", "prone-y-raise", "pull-up", "rowing",
+    "pike-push-up", "prone-y-raise", "pull-up", "rowing",
     "spider-curl", "v-up",
 }
 

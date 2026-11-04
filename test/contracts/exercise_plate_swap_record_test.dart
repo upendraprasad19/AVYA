@@ -1,6 +1,6 @@
 // Batch A Task 4 — plate frame order and two wrong drawings.
 //
-// On 19 pairs the upstream catalogue's frame 1 is the END of the movement and
+// On 18 pairs the upstream catalogue's frame 1 is the END of the movement and
 // frame 3 the START, so the plate sheet showed them backwards (founder review,
 // 2026-10-21). The build script now writes those slugs' frames swapped
 // (SWAP_FRAMES); the fixture records, from the files BEFORE the swap, which
@@ -19,7 +19,7 @@ import '../../scripts/migration_ledger_hash_lib.dart' show sha256Hex;
 const _swapped = <String>{
   'pike-push-up', 'cable-curl', 'hanging-leg-raise', 'rowing', 'band-pull-apart',
   'pull-up', 'cable-kickback', 'banded-lateral-walk', 'landmine-press',
-  'meadows-row', 'spider-curl', 'v-up', 'jumping-jack', 'arm-circles',
+  'spider-curl', 'v-up', 'jumping-jack', 'arm-circles',
   'frog-pump', 'machine-row', 'donkey-kick', 'feet-elevated-pike-push-up',
   'prone-y-raise',
 };
@@ -29,7 +29,7 @@ void main() {
     File('test/fixtures/plate_swap_hashes.json').readAsStringSync(),
   ) as Map<String, dynamic>);
 
-  test('build_exercise_plates.py declares SWAP_FRAMES as exactly the 19 slugs', () {
+  test('build_exercise_plates.py declares SWAP_FRAMES as exactly the 18 slugs', () {
     final src = File('scripts/build_exercise_plates.py').readAsStringSync();
     final decl = RegExp(r'^SWAP_FRAMES = \{([^}]*)\}', multiLine: true).firstMatch(src);
     expect(decl, isNotNull, reason: 'SWAP_FRAMES = {...} not declared');
@@ -40,7 +40,7 @@ void main() {
     expect(slugs, _swapped);
   });
 
-  test('the fixture covers the same 19 slugs', () {
+  test('the fixture covers the same 18 slugs', () {
     expect(fixture.keys.toSet(), _swapped);
   });
 

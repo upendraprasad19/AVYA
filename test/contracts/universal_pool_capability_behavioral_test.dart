@@ -30,7 +30,7 @@ const _pool = [
   'Inverted Row',
   'Sliding Lat Pull',
   'Doorway Isometric Lat Pull',
-  'Prone Lat Pull',
+  'Prone Lat Pull Hold',
 ];
 
 void main() {

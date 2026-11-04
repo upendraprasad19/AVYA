@@ -67,7 +67,11 @@ void main() {
         bad.add(e.key);
       }
     }
-    expect(ref.length, 285);
+    // 285 original rows; Batch C2a (OI-460) deleted the entries of the 50 rows it removed (a deliberate fixture edit).
+    final c2Removed = ((jsonDecode(File('scripts/data/library_batch_c2_removals.json').readAsStringSync()) as Map<String, dynamic>)['entries'] as List)
+        .where((e) => (e as Map)['decision'] == 'remove')
+        .length;
+    expect(ref.length, 285 - c2Removed);
     expect(bad, isEmpty, reason: 'rows whose pre-existing keys changed: $bad');
   });
 }

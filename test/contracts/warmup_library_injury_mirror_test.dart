@@ -64,7 +64,7 @@ void main() {
           : <String>{};
     }
     final map = WarmupCooldownSelector.moveInjuries;
-    expect(map.length, 27, reason: 'denominator: the keys of _moveInjuries');
+    expect(map.length, 26, reason: 'denominator: the keys of _moveInjuries (27 before Batch C2a removed Butt Kicks)');
     for (final entry in map.entries) {
       final lc = entry.key.toLowerCase();
       expect(libByName.containsKey(lc), isTrue,

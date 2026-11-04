@@ -7360,7 +7360,7 @@ Found by the M2b Part B Chrome check (360 dp, real fonts, the real card and exer
 
 Narrowed 2026-11-04 after two combined-plan review rounds came back not converged and the unit was split (section 4.12.1). C2a removes the sheet-drop library rows whose replacement already exists in the shipped 914-row library, repoints every exercise name production code hard-codes, deletes four orphaned plate SVGs and deactivates the removed rows in the cloud. Plan: `docs/plans/2026-11-04-library-batch-c2a-removals.md`. The twins, the E230 retag and the media are OI-462.
 
-**Done when.** The 52 removal ids are gone from `assets/data/exercise_library.json` and from every install (seed v18 prune); every hard-coded exercise name resolves to exactly one shipped row; the depth rule holds in every cell under both `movement_pattern` and `slot_pattern`; the cloud migration is applied and the rows are `is_active = false`; the five injury sweeps keep their hard zeros; the tests are repointed, mutated and green.
+**Done when.** The 50 removal ids are gone from `assets/data/exercise_library.json` and from every install (seed v18 prune); every hard-coded exercise name resolves to exactly one shipped row; the depth rule holds in every cell under both `movement_pattern` and `slot_pattern`; the cloud migration is applied and the rows are `is_active = false`; the five injury sweeps keep their hard zeros; the tests are repointed, mutated and green.
 
 ## OI-462 — Library Batch C2b: twins G1368 G1489 G2567 G0474, E230 retag and media, removal of the six twin_pending rows (E084 E211 E111 E162 E169 E179)
 

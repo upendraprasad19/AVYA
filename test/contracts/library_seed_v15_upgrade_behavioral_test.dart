@@ -37,7 +37,11 @@ void main() {
     final bundled = (jsonDecode(File('assets/data/exercise_library.json').readAsStringSync()) as List).cast<Map<String, dynamic>>();
     final original = bundled.where((r) => RegExp(r'^E\d').hasMatch(r['id'] as String)).toList();
     final added = bundled.where((r) => RegExp(r'^[GN]\d').hasMatch(r['id'] as String)).toList();
-    expect(original, hasLength(285), reason: 'the v14 library is the 285 E-id rows');
+    // 285 E-id rows at v14; Batch C2a removed 50 of them.
+    final c2Removed = ((jsonDecode(File('scripts/data/library_batch_c2_removals.json').readAsStringSync()) as Map<String, dynamic>)['entries'] as List)
+        .where((e) => (e as Map)['decision'] == 'remove')
+        .length;
+    expect(original, hasLength(285 - c2Removed), reason: 'the v14 library is the 285 E-id rows minus the C2a removals');
     expect(added, isNotEmpty, reason: 'run: node scripts/add_library_batch_c_v15.js');
     expect(bundled.firstWhere((r) => r['id'] == 'E274')['target_focus'], ['Mid Back']);
 

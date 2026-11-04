@@ -54,8 +54,8 @@ class InjurySubstitutes {
       // hip_dominant — RDL variants are now [lower_back,hamstring]-tagged (13-B) so
       // the filter removes them anyway; Hip Thrust is the safe hinge sub
       'Hip Thrust',
-      // horizontal_pull (3 / 12 — supported bench = spine unloaded)
-      'Chest Supported Row', 'Seal Row',
+      // horizontal_pull (supported bench = spine unloaded; Seal Row left the library in Batch C2a)
+      'Chest Supported Row',
     ],
     'wrist': [
       'Machine Chest Press', // horizontal_push (6 / 20)

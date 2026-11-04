@@ -42,11 +42,11 @@ void main() {
       'vertical_push': ['Pike Push Up', 'Handstand Hold', 'Dand (Hindu Pushup)'],
       'horizontal_pull': ['Inverted Row', 'TRX Row'],
       'vertical_pull': ['Pull Up', 'Chin Up', 'Inverted Row'],
-      'knee_dominant': ['Baithak (Hindu Squat)', 'Reverse Lunge', 'Bulgarian Split Squat', 'Jump Squat'],
+      'knee_dominant': ['Baithak (Hindu Squat)', 'Forward Lunge', 'Bulgarian Split Squat', 'Jump Squat'],
       'hip_dominant': ['Glute Bridge', 'Single Leg Romanian Deadlift', 'Good Morning'],
       'core': ['Plank', 'Dead Bug', 'Hollow Body Hold', 'Bicycle Crunch', 'Mountain Climber'],
       'elbow_flexion': ['Chin Up', 'Inverted Row'],
-      'elbow_extension': ['Diamond Push Up', 'Bench Dips', 'Dip (Parallel Bars)'],
+      'elbow_extension': ['Diamond Push Up', 'Bench Dips', 'Chest Dip'],
       'shoulder_isolation': ['Bodyweight Rear Delt Raise', 'Band Pull Apart', 'Arm Circles'],
       'hip_isolation': ['Glute Bridge', 'Glute Kickback'],
     };
