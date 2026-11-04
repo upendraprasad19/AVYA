@@ -35,6 +35,7 @@ import 'write_result.dart';
 import '../utils/date_utils.dart';
 import '../utils/ist_date.dart';
 import '../../shared/repositories/plan_engine/equipment_capability.dart';
+import '../../shared/repositories/plan_engine/session_budget.dart' show SessionBudget;
 import '../../shared/repositories/plan_engine/session_estimate.dart' show budgetedDaySeconds, fallbackExerciseListSeconds;
 import '../../shared/repositories/plan_engine/training_history_analyzer.dart';
 
@@ -513,26 +514,40 @@ class SwapService {
     }
 
     final original = exercises[matchIndex];
+    // The logging type that is STORED on the replacement (and read later by the
+    // time estimate); the rest below branches on it, not on the raw library field.
+    final resolvedLoggingType = LoggingTypeResolver.resolve(
+          exercise: Map<String, dynamic>.from(newLib),
+          exerciseLibrary: HiveService.instance.exerciseBox.toMap(),
+          customLibrary: HiveService.instance.customBox.toMap(),
+        ) ??
+        (original['logging_type'] as String?) ??
+        'weight_reps';
+    // OI-456: a rep-based exercise's rest follows ITS archetype, not the outgoing
+    // slot's (every slot of a day used to share one rest; they no longer do). A
+    // timed / cardio / distance row keeps the inherited value.
+    final restSeconds = SessionBudget.isRepBased(resolvedLoggingType)
+        ? SessionBudget.restForArchetype(SessionBudget.archetypeOfRow({
+            ...newLib,
+            'logging_type': resolvedLoggingType,
+          }))
+        : (original['rest_seconds'] ?? newLib['default_rest_secs'] ?? 60);
     final replacement = <String, dynamic>{
       'exercise_id': (newLib['id'] as String?) ?? toExerciseId,
       'exercise_name': (newLib['name'] as String?) ?? toExerciseId,
-      'logging_type': LoggingTypeResolver.resolve(
-            exercise: Map<String, dynamic>.from(newLib),
-            exerciseLibrary: HiveService.instance.exerciseBox.toMap(),
-            customLibrary: HiveService.instance.customBox.toMap(),
-          ) ??
-          (original['logging_type'] as String?) ??
-          'weight_reps',
+      'logging_type': resolvedLoggingType,
       'sets': original['sets'] ?? newLib['default_sets'] ?? 3,
       'reps': (original['reps'] ?? newLib['default_reps'] ?? '8-12')
           .toString(),
-      'rest_seconds':
-          original['rest_seconds'] ?? newLib['default_rest_secs'] ?? 60,
+      'rest_seconds': restSeconds,
       if (original['superset_group'] != null)
         'superset_group': original['superset_group'],
       if (newLib['category'] != null) 'category': newLib['category'],
       if (newLib['exercise_type'] != null)
         'exercise_type': newLib['exercise_type'],
+      // OI-456: carried so the estimate derives the same archetype (a custom row has
+      // no library match, so `archetypeOfPlanDayExercise` reads these stored fields).
+      if (newLib['rep_range'] != null) 'rep_range': newLib['rep_range'],
       if (newLib['equipment_needed'] != null)
         'equipment_needed': newLib['equipment_needed'],
       if (newLib['target_focus'] != null)

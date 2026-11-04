@@ -132,6 +132,10 @@ const _expectedEmitFields = <String, Set<String>>{
     // live query. Emitted by WorkoutWriteService.upsertScheduled and by the
     // restore paths' merged-map write (sync_workout.dart).
     'template_id',
+    // OI-456 piece A: PlannedExercise.toMap emits `rep_range` (models.dart:241) and
+    // SwapService.swapExerciseInDay now carries the incoming row's `rep_range` onto the
+    // replacement, so the time estimate derives the same archetype as the stamped rest.
+    'rep_range',
   },
   // wlog_* writer: WorkoutWriteService.markCompleted (workout summary row).
   // f1c8e4: markCompleted stamps type:'workout_log' + completed_at (ISO) +

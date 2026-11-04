@@ -86,7 +86,7 @@ void main() {
       expect(setsIn(weeks, 0, 0), [4, 4, 3]);
       expect(setsIn(weeks, 1, 0), [4, 4, 4]); // the cap refuses both chest lifts
       expect(setsIn(weeks, 2, 0), [4, 4, 3]);
-      expect(setsIn(weeks, 3, 0), [2, 2, 1]); // floor(0.6 x 4) = 2, floor(0.6 x 3) = 1
+      expect(setsIn(weeks, 3, 0), [2, 2, 2]); // min(s, max(2, floor(0.6 x s))): 4 -> 2, 3 -> 2 (OI-456 floor of 2)
     });
 
     test('week-2 cue: an exercise that gained no set keeps week 1\'s cue and note', () {
@@ -139,7 +139,7 @@ void main() {
       expect(setsIn(four, 0, 0), [4, 2]);
       expect(setsIn(four, 1, 0), [4, 5]); // B: b1 gains, b2 is already at 5
       expect(setsIn(four, 2, 0), [4, 2]);
-      expect(setsIn(four, 3, 0), [1, 3]); // floor(0.6 x 3) = 1, floor(0.6 x 5) = 3
+      expect(setsIn(four, 3, 0), [2, 3]); // 3 -> max(2, floor(1.8)) = 2, 5 -> floor(3.0) = 3
       // The stash is each exercise's OWN allocated baseline, not a neighbour's.
       expect([for (final e in four[3].workoutDays[0].exercises) e.workingSets], [3, 5]);
 
@@ -150,11 +150,11 @@ void main() {
         stashWorkingBase: true,
         budget: ctx,
       );
-      expect(setsIn(six, 3, 0), [2, 1]); // A: floor(2.4) = 2, floor(1.2) = 1
+      expect(setsIn(six, 3, 0), [2, 2]); // A: 4 -> 2, 2 stays 2 (floor of 2, never raised above its own sets)
       expect([for (final e in six[3].workoutDays[0].exercises) e.workingSets], [4, 2]);
     });
 
-    test('week 4 keeps a one-set exercise at one (floor(0.6 x 1) would be 0)', () {
+    test('week 4 never raises a row: a one-set exercise stays at one, a two-set one at two', () {
       final (f, _) = chestDay();
       final days = [f.day('hypertrophy', [f.ex('bench', sets: 1), f.ex('fly', sets: 2)])];
       final weeks = PeriodizationEngine.apply(
@@ -163,7 +163,7 @@ void main() {
         is6Day: true,
         budget: f.ctx(days, minutes: 90),
       );
-      expect(setsIn(weeks, 3, 0), [1, 1]); // 1 stays 1; floor(0.6 x 2) = 1
+      expect(setsIn(weeks, 3, 0), [1, 2]); // min(1, max(2, 0)) = 1; min(2, max(2, 1)) = 2
     });
 
     test('Ruling 8: a timed row gets its week-2 +1 only while the day\'s time allows', () {
