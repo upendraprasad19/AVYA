@@ -249,6 +249,11 @@ class SweepHarness {
   /// `docs/audit/set-budget-flip.closure.yaml` (SBF-THIN-DAYS), a founder call: keep the weekly band hard (today), or let
   /// a day under 2 exercises exceed it by a few sets. No block has an EMPTY day (the allocator's guard, a hard zero in
   /// [expectSafe]); a ceiling moves DOWN freely; a rise needs a recorded decision (see below).
+  /// OI-456 piece B (count band: every day SEATS its exercises at 2 sets first, floor 4/5 by minutes) re-measured all 20
+  /// blocks: 14 of 20 fell to 0 thin days and 0 one-exercise days (seating at 2 sets leaves room for the 3rd and 4th
+  /// exercise that the 3-set seat used to starve); the six `pairs` / `pairs46` blocks of home_dumbbells, basic_gym and
+  /// full_gym keep a small residue, every day of it a shoulder+elbow pair (small injured pool; measured 2026-11-04):
+  /// pairs 10 / 22 / 14 and pairs46 12 / 8 / 4, down from 76 / 126 / 106 and 120 / 143 / 125. No empty day anywhere.
   /// OI-456 piece A (rest by exercise type, 3 base sets every day) re-measured all 20 blocks: 18 fell, 1 equal, 1 rose
   /// (one-exercise days never rose); the one that rose is `pairs bodyweight` thin days 30 -> 32 (knee+elbow 10,
   /// lower_back+elbow 4, wrist+elbow 8, elbow+hip 10), a recorded decision in the OI-456 diagnose-doc. MEASURED cause
@@ -256,26 +261,26 @@ class SweepHarness {
   /// sets with the old intensity-keyed rests gives 32. So a former 2-set endurance day now starts at 3 and a small
   /// injured pool spends its weekly band sooner.
   static const Map<String, (int thin, int one)> kThinCeilings = {
-    'pairs bodyweight': (32, 0),
-    'pairs home_dumbbells': (76, 8),
-    'pairs basic_gym': (126, 12),
-    'pairs full_gym': (106, 4),
-    'pairs46 bodyweight': (54, 2),
-    'pairs46 home_dumbbells': (120, 14),
-    'pairs46 basic_gym': (143, 12),
-    'pairs46 full_gym': (125, 10),
-    'repeat bodyweight': (34, 0),
-    'repeat home_dumbbells': (58, 2),
-    'repeat basic_gym': (68, 2),
-    'repeat full_gym': (66, 2),
-    'singles bodyweight': (10, 0),
-    'singles home_dumbbells': (12, 0),
-    'singles basic_gym': (22, 0),
-    'singles full_gym': (14, 0),
-    'singles46 bodyweight': (20, 0),
-    'singles46 home_dumbbells': (36, 2),
-    'singles46 basic_gym': (42, 2),
-    'singles46 full_gym': (34, 2),
+    'pairs bodyweight': (0, 0),
+    'pairs home_dumbbells': (10, 0),
+    'pairs basic_gym': (22, 0),
+    'pairs full_gym': (14, 0),
+    'pairs46 bodyweight': (0, 0),
+    'pairs46 home_dumbbells': (12, 0),
+    'pairs46 basic_gym': (8, 0),
+    'pairs46 full_gym': (4, 0),
+    'repeat bodyweight': (0, 0),
+    'repeat home_dumbbells': (0, 0),
+    'repeat basic_gym': (0, 0),
+    'repeat full_gym': (0, 0),
+    'singles bodyweight': (0, 0),
+    'singles home_dumbbells': (0, 0),
+    'singles basic_gym': (0, 0),
+    'singles full_gym': (0, 0),
+    'singles46 bodyweight': (0, 0),
+    'singles46 home_dumbbells': (0, 0),
+    'singles46 basic_gym': (0, 0),
+    'singles46 full_gym': (0, 0),
   };
 
   /// Every block: thin days (under 3 exercises) and one-exercise days match the measured

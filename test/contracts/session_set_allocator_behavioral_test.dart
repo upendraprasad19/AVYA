@@ -23,20 +23,22 @@ AllocationStats statsB() => SessionSetAllocator.debugLastStats!['B']!;
 
 void main() {
   group('priority-rank admission', () {
-    test('priority: a day of 4 chest exercises is [3, 3, 2, removed], never [2, 2, 2, 2]', () {
+    test('priority: a day of 4 chest exercises seats all four at 2 sets (the count wins), never [3, 3, 2, removed]', () {
       final f = Fx();
       for (final n in ['c1', 'c2', 'c3', 'c4']) {
         f.row(n, ['Chest']);
       }
       final days = [f.day('strength', [for (final n in ['c1', 'c2', 'c3', 'c4']) f.ex(n)])];
       final out = f.run(days, minutes: 90);
-      // Every exercise starts at the base 3 (OI-456: the day's intensity no longer sets it);
-      // the Chest session cap is 8, so the third lift gets the remaining 2 and the fourth none.
-      expect(setsOf(out[0]), [('c1', 3), ('c2', 3), ('c3', 2)]);
+      // OI-456 piece B: every exercise is SEATED at 2 sets first (the count band beats
+      // set concentration), then grown towards the base 3. The Chest session cap is 8
+      // = 4 x 2, so nothing is left to grow: [2, 2, 2, 2], none removed. Before piece B
+      // this day was [3, 3, 2, removed].
+      expect(setsOf(out[0]), [('c1', 2), ('c2', 2), ('c3', 2), ('c4', 2)]);
       expect(statsA().weekly['Chest'], 8);
     });
 
-    test('round-robin by rank: 4 days of Back lead lifts all keep 3 sets before any accessory takes a share', () {
+    test('round-robin by rank: 4 days of Back lead lifts are seated before any accessory, then everyone sits at 2', () {
       final f = Fx();
       f.row('row', ['Lats']);
       f.row('pulldown', ['Lats']);
@@ -44,15 +46,15 @@ void main() {
         for (var i = 0; i < 4; i++) f.day('strength', [f.ex('row'), f.ex('pulldown')]),
       ];
       final out = f.run(days, minutes: 90);
-      // All four lead lifts (4 x 3 = 12 of the 16) are seated before rank 1: only day 0's
-      // pulldown still finds room (3 more, 15), the other three are refused at the top.
-      expect(setsOf(out[0]), [('row', 3), ('pulldown', 3)]);
-      for (final d in out.skip(1)) {
-        expect(setsOf(d), [('row', 3)]);
+      // OI-456 piece B: all four lead lifts are seated (2 sets each, 8 of the 16) before
+      // rank 1, then every pulldown seats at 2 (16 of 16): the week's Back top is spent
+      // before pass B can grow a lead lift to 3 (a stated consequence: the count wins).
+      for (final d in out) {
+        expect(setsOf(d), [('row', 2), ('pulldown', 2)]);
       }
       expect(statsA().capForcedFirst, 0);
       expect(statsA().timeForcedFirst, 0);
-      expect(statsA().weekly['Back'], 15);
+      expect(statsA().weekly['Back'], 16);
     });
 
     test('rank-0 reservation: every lead lift keeps >= 2 sets when the group top binds', () {
@@ -189,7 +191,9 @@ void main() {
       final (str, fs) = dayOf('strength');
       final outH = fh.run(hyp, minutes: 30);
       final outS = fs.run(str, minutes: 30);
-      expect(setsOf(outH[0]), [('chest', 3), ('back', 3), ('delts', 2)]);
+      // OI-456 piece B: the day seats its first four exercises at 2 sets (the time left
+      // after them cannot take a 5th at 2 or grow any to 3).
+      expect(setsOf(outH[0]), [('chest', 2), ('back', 2), ('delts', 2), ('bi', 2)]);
       expect(secondsOf(outH[0], fh, 'hypertrophy'), lessThanOrEqualTo(budget));
       expect(secondsOf(outS[0], fs, 'strength'), lessThanOrEqualTo(budget));
       // OI-456: the day's intensity no longer sets rest or sets, so the same exercise list
@@ -207,10 +211,10 @@ void main() {
       }
       List<PopulatedDay> mk() => [f.day('strength', [for (var i = 0; i < 6; i++) f.ex('c$i')])];
       final plain = f.run(mk(), minutes: 90);
-      // Base 3 per lift: 3 + 3 + 2 = 8 (the third lift takes what the cap leaves).
-      expect(setsOf(plain[0]), [('c0', 3), ('c1', 3), ('c2', 2)]);
+      // OI-456 piece B: lifts are seated at 2 sets: 4 x 2 = 8 and the cap leaves none for c4, c5.
+      expect(setsOf(plain[0]), [('c0', 2), ('c1', 2), ('c2', 2), ('c3', 2)]);
       final focus = f.run(mk(), minutes: 90, focus: {'Chest'});
-      expect(setsOf(focus[0]), [('c0', 3), ('c1', 3), ('c2', 3), ('c3', 3)]);
+      expect(setsOf(focus[0]), [('c0', 2), ('c1', 2), ('c2', 2), ('c3', 2), ('c4', 2), ('c5', 2)]);
     });
 
     test('weekly top: a non-focus group stays at 16 (intermediate build_muscle)', () {
@@ -222,10 +226,11 @@ void main() {
         days.add(f.day('strength', [f.ex('c${d}0'), f.ex('c${d}1')]));
       }
       final out = f.run(days, minutes: 90);
-      // Five lead lifts at the base 3 are 15 of the 16; the last set cannot take a 2-set lift.
-      expect([for (final d in out) d.exercisesA.first.sets], [3, 3, 3, 3, 3]);
-      expect(statsA().weekly['Chest'], 15);
-      expect([for (final d in out) d.exercisesA.length], [1, 1, 1, 1, 1]);
+      // OI-456 piece B: ten 2-set seats would be 20 > 16: lead lifts seat first (5 x 2 = 10),
+      // then the accessories until the top (3 more x 2 = 16), the last two days keep one.
+      expect([for (final d in out) d.exercisesA.first.sets], [2, 2, 2, 2, 2]);
+      expect(statsA().weekly['Chest'], 16);
+      expect([for (final d in out) d.exercisesA.length], [2, 2, 2, 1, 1]);
     });
 
     test('lighter phase: every weekly total stays at the band bottom, focus included', () {
@@ -251,9 +256,9 @@ void main() {
       // Weekly top is the band bottom (12) here, so a third full 3-set lift would fit the
       // week and the 12-set focus cap; only the ordinary cap of 8 stops it at 2 sets.
       final lighter = f.run(mk(), minutes: 90, lighter: true, focus: {'Chest'});
-      expect(setsOf(lighter[0]), [('c0', 3), ('c1', 3), ('c2', 2)]);
+      expect(setsOf(lighter[0]), [('c0', 2), ('c1', 2), ('c2', 2), ('c3', 2)]);
       final ordinary = f.run(mk(), minutes: 90, focus: {'Chest'});
-      expect(setsOf(ordinary[0]), [('c0', 3), ('c1', 3), ('c2', 3), ('c3', 3)]);
+      expect(setsOf(ordinary[0]), [('c0', 2), ('c1', 2), ('c2', 2), ('c3', 2), ('c4', 2), ('c5', 2)]);
     });
 
     test('focus reaches past the ordinary top (16) and stops at 25', () {
@@ -365,8 +370,8 @@ void main() {
     test('guard with no weekly room anywhere: rank 0 is forced anyway and capForcedFirst counts it', () {
       final (days, f) = crowdedChestWeek(const []);
       final out = f.run(days, minutes: 45);
-      expect(setsOf(out[0]), [('c1', 3), ('c2', 3), ('c3', 2)]);
-      expect(setsOf(out[1]), [('c5', 3), ('c6', 3), ('c7', 2)]);
+      expect(setsOf(out[0]), [('c1', 2), ('c2', 2), ('c3', 2), ('c4', 2)]);
+      expect(setsOf(out[1]), [('c5', 2), ('c6', 2), ('c7', 2), ('c8', 2)]);
       expect(setsOf(out[2]).where((e) => e.$1 == 'c9'), [('c9', 2)]);
       expect(statsA().weekly['Chest'], 18); // past the top of 16: the one thing the guard may do
       expect(statsA().capForcedFirst, 1);
