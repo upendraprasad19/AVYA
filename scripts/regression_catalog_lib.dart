@@ -105,6 +105,7 @@ const List<String> childEnvStrippedNames = <String>[
   'RECORD_LIBRARY_REFERENCE_IDS',
   'WRITE_CORE_LIST_REPORT',
   'WRITE_SESSION_BUDGET_REPORT',
+  'WRITE_REST_BY_TYPE_REPORT',
 ];
 
 /// Variables read by an EXTERNAL tool (not by any repo script), stripped because a

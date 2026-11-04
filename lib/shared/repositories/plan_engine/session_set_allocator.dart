@@ -17,6 +17,11 @@ class AllocationStats {
   /// room was gone. The gate requires 0.
   int capForcedFirst = 0;
 
+  /// Test-only: per day, how many BUDGETED exercises the selector handed the allocator
+  /// (before any admission or removal). Lets a test compare two worlds at the selector
+  /// stage, independent of rest and time.
+  final List<int> slotsSeen = [];
+
   /// Day indexes the guard filled (either counter).
   final List<int> forcedDays = [];
 
@@ -188,13 +193,15 @@ class SessionSetAllocator {
 
     // 1. Classify, and spend the not-budgeted rows' time first.
     for (var d = 0; d < n; d++) {
-      final dayRest = SessionBudget.restFor(days[d].intensity);
       var rank = 0;
       for (final ex in lists[d]) {
         final arch = SessionBudget.archetypeOfPlanned(ex, ctx);
         if (!SessionBudget.isBudgeted(ex, ctx)) {
-          // Ruling 8: a timed row at its OWN rest, a rep-based custom at the day's.
-          final rest = SessionBudget.isRepBased(ex.loggingType) ? dayRest : ex.restSeconds;
+          // Ruling 8: a timed row at its OWN rest, a rep-based custom at its archetype's
+          // (OI-456: the rest follows the exercise, not the day).
+          final rest = SessionBudget.isRepBased(ex.loggingType)
+              ? SessionBudget.restForArchetype(arch)
+              : ex.restSeconds;
           ledger.add(d, const {}, 0,
               SessionBudget.plannedExerciseSeconds(ex, ctx, sets: ex.sets, restSeconds: rest));
           entries[d].add((ex, null));
@@ -205,14 +212,18 @@ class SessionSetAllocator {
             ex,
             _groupsOf(ex, rows[ex.exerciseName.toLowerCase()]),
             arch,
-            dayRest,
-            SessionBudget.desiredFor(days[d].intensity),
+            SessionBudget.restForArchetype(arch),
+            SessionBudget.baseSets,
           );
           byDay[d].add(slot);
           entries[d].add((ex, slot));
           all.add(slot);
         }
       }
+    }
+
+    for (var d = 0; d < n; d++) {
+      stats.slotsSeen.add(byDay[d].length);
     }
 
     // 2. Days copied from variant A enter the ledger as they are.
