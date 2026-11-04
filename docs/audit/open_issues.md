@@ -7353,16 +7353,13 @@ Found by the M2b Part B Chrome check (360 dp, real fonts, the real card and exer
 
 **Done when.** The overflow is reproduced (Chrome at 360 dp with real fonts, or a widget test at a text scale that reddens it), the row is fixed so no child overflows at 360 dp and at the largest text scale the app supports, and the fix carries a regression test that fails without it (mutated and run, rule 21). UI only: a Train widget.
 
-## OI-459 — safe_commit.sh and land_pr.sh do not pin TZ=Asia/Kolkata, so a merge commit on the UTC VPS fails the pre-commit regression catalog
+## OI-463 — workout_log_confirm_card test (f) skips its tap-guard assertion in a run that stalls past 480 ms; a deterministic check needs an injectable guard clock in lib
 
 - **Status**: OPEN
-- **Blocked on**: none
-- **Verified**: 2026-11-03 - observed while landing PR #204 (OI-450): `land_pr.sh` stopped at the pre-commit regression catalog on a merge commit (6 tests); the same files passed with `TZ=Asia/Kolkata` and failed without it. `grep -n 'TZ\|Kolkata' scripts/safe_commit.sh scripts/land_pr.sh` finds nothing on 2026-11-04.
-- **Identified**: 2026-11-04 · filed via mint_oi.sh from branch `tz-pin-safe-commit-oi`
+- **Blocked on**: the founder declined the `lib/` seam for OI-450 (option A, 2026-11-03). `reopen_when`: a `lib/` seam for the workout log confirm card is wanted for another reason.
+- **Verified**: 2026-11-04 - read `lib/features/ai_coach/widgets/workout_log_confirm_card.dart` (`kHeldCardTapGuard` = 500 ms at line 46, `_sinceMount` is a real `Stopwatch` at line 73, the guard check at line 94) and `test/ai_coach/workout_log_confirm_card_saved_signal_test.dart` test (f) (the skip comment near line 926).
+- **Identified**: 2026-11-04 · filed via mint_oi.sh from branch `tz-pin-catalog`
 
-**What.** The VPS runs UTC and CI pins IST (CLAUDE.md section 0). The pre-commit regression catalog runs date-sensitive tests on a merge commit, so `sh scripts/safe_commit.sh ...` or `sh scripts/land_pr.sh <pr>` run without `TZ=Asia/Kolkata` fails there, and the failure looks like a flaky test. During OI-450 it cost one failed landing and a wrong "load flake" guess; the workaround was `TZ=Asia/Kolkata sh scripts/safe_commit.sh ...`, with the hook left on. A rerun of `land_pr.sh` while MERGE_HEAD existed was also refused, so the staged merge had to be concluded through `safe_commit.sh` first.
+**What.** Test (f) checks that a CONFIRM tap inside the first 500 ms of a held saved card is ignored. The guard runs on a real `Stopwatch`, which a test cannot fake, so the test starts its own stopwatch before the mount and asserts only while that proves the window was still open. In a run that stalls past 480 ms before the tap, the assertion is skipped. It can never fail wrongly, but a run that stalls silently checks less. Split out of OI-459, where it was recorded as a residual of OI-450.
 
-**Done when.** The scripts that run the catalog (`scripts/safe_commit.sh`, `scripts/land_pr.sh`, or the shared pre-commit entry they call) export `TZ=Asia/Kolkata` for the catalog run, with a test that fails without it (mutate and run it), and a merge commit on the UTC VPS passes the catalog with no manual `TZ`.
-
-**Also recorded here (not a separate item).** `test/ai_coach/workout_log_confirm_card_saved_signal_test.dart` test (f) skips its one tap-guard assertion in a run that stalls past 480 ms, because the 500 ms `kHeldCardTapGuard` runs on a real `Stopwatch` in `lib/features/ai_coach/widgets/workout_log_confirm_card.dart`. Checking it on every run needs an injectable guard clock in `lib/`, which the founder declined for OI-450 (option A). Reopen when a `lib/` seam for that card is wanted for another reason.
-
+**Done when.** The guard reads an injectable clock (a `lib/` change in the card widget) so test (f) asserts the tap guard on every run, with a mutation (guard removed) that reddens it.

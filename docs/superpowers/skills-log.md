@@ -387,3 +387,4 @@
   and the two housekeeping items (this line, and the nested-`.dart_tool` OI).
   → Logged from the `library-injury-recheck` worktree, riding with that batch (one push).
 - 2026-10-23 IST — trigger: explicit (/strategic-compact) at OI-389 1a complete-but-uncommitted boundary; founder decision pending
+- 2026-11-04 IST — trigger: explicit (/strategic-compact) after the OI-450/459/461 batch ship; boundary CLEAN (main equal to origin, worktrees retired, nothing owed). Founder ran /compact themselves on the preserve list; agent cannot invoke it. Logged from the `tz-pin-catalog` worktree, riding with OI-459.
