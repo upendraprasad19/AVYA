@@ -6036,3 +6036,38 @@ Narrowed 2026-11-04 after two combined-plan review rounds came back not converge
 **Done when.** The 50 removal ids are gone from `assets/data/exercise_library.json` and from every install (seed v18 prune); every hard-coded exercise name resolves to exactly one shipped row; the depth rule holds in every cell under both `movement_pattern` and `slot_pattern`; the cloud migration is applied and the rows are `is_active = false`; the five injury sweeps keep their hard zeros; the tests are repointed, mutated and green.
 
 **Closed by.** Branch `library-batch-c2`: removals file and generator (84171dfc), the library edit, seed v18 prune and repoints (43fbb074), the cloud seed generator (75496c80), tests and docs (fe299f12), the B-pass fixes (14cd036b, review `docs/reviews/library-batch-c2a-bpass.md`) and migration 167 (a7be5078, applied to `dedsavbjuwgarrhphgnl` on 2026-11-05 after the founder's go on the exact file). The six twin rows stay for OI-462.
+
+## OI-179 — `alert_cron_function_dead` cannot fire across 100% of its range, and never has (P1)
+
+- **Status**: CLOSED
+- **Blocked on**: none
+- **Verified**: 2026-09-26 — the R2-11 PRECONDITION is now met: migration 144 (diagnose `d6b2f9`) excludes `alert-critical-notify` inside the alert's `cron_call_log` subquery (live jobid 32 verified), pinned by `test/contracts/cron_vacuum_single_statement_test.dart`, which also requires every function on `cron_auth_adoption_test.dart`'s `_triggerDispatchedFunctions` roster that calls `logCronStart` to be excluded. The `>= 8` vs 7-day-prune defect itself is UNCHANGED (batch B2). Latent, recorded: `weekly-recalc` calls `logCronStart` (`weekly-recalc/index.ts:208`) but has no cron job and is not on the roster — a manual run would put it in the same silence-is-healthy class once the threshold is fixed. Also: with retention broken (09-22 → 09-26) this alert became reachable BY ACCIDENT, and a weekly function with one lost success row (`weekly-recap-ready`, OI-194 class) could have false-fired from 2026-09-29; 144's restored prune closes that.
+  PRIOR (kept verbatim): 2026-09-10 — `min(started_at)` across `cron_call_log` is **2026-09-03**, so the maximum achievable `days_silent` is **7.46**. The alert's predicate is `days_silent >= 8`. Hermes measured **7.21** on 2026-08-16; three weeks later the ceiling is unchanged because it is set by the pruner, not by traffic.
+- **Identified**: 2026-08-16 · Hermes L1-F3. **Pre-existing — not introduced by the log-retention batch.**
+- **The mechanism**: `cleanup_cron_call_log` prunes `cron_call_log` at 7 days, sparing only the single *globally* newest success. The alert asks whether any function has been silent for **8** days. The table cannot hold evidence that old, so the predicate is unsatisfiable by construction. It has fired **0 times, ever**.
+- ⚠ **The prior diagnose-doc records this as "cannot fire past day 7", which reads like a partial blind spot.** It is not partial: the alert is inert across its entire range. A threshold above its own data-retention ceiling is not a tuning problem, it is a dead alert that reads as coverage — which is worse than having no alert, because it occupies the slot.
+- **Proposed repair**: set the threshold below the retention ceiling (or lengthen retention for the alert's own read), **and** add a test asserting `threshold < retention_window` for every alert that reads a pruned table — the class, not the instance. A one-line fix with no such test leaves the next alert free to repeat it.
+- **Blast radius**: `alerts/_thresholds.yaml` + the alert's SQL; classify the written file.
+- **Cited as a live backstop while inert (2026-09-13, Hermes L31 on OI-153)**: migration 131's header (immutable) and the first version of `founder-digest/index.ts`'s header both named `alert_cron_function_dead` as the fallback that "would otherwise take a week to notice" a dead digest. It would notice nothing. The digest header was corrected (v2); the registry row 131 says so; the migration comment cannot be.
+- **Class**: `feedback_green_check_input_set_width` — the alert's input set is bounded by a pruner it does not know about. Also `feedback_bad_news_vs_no_news`: zero firings had two explanations (all healthy / cannot fire) and nobody asked which.
+- ⚠ **Precondition on this alert's own repair (R2-11, review round 2, 2026-09-14):
+  before lowering this threshold (or lengthening retention for it), the fix
+  MUST exclude non-scheduled, trigger-dispatched functions — today just
+  `alert-critical-notify` — from `alert_cron_function_dead`'s scope,** via
+  an allowlist of real `cron.job` slugs or an explicit denylist of
+  trigger-dispatched function names. Reason: `alert-critical-notify` is
+  event-driven (not `cron.schedule`-dispatched), so it can legitimately go
+  long stretches without running; if this alert's own OPEN threshold-below-
+  retention fix (above) ever makes it fire for `alert-critical-notify`, that
+  CRITICAL alert triggers `alert-critical-notify` itself to run, which
+  writes a fresh success row, which resets its own death-clock — a
+  self-sustaining false-critical loop. Today this is INERT only because
+  this OI's own bug (the threshold sitting above the retention ceiling)
+  keeps the alert from ever firing at all — fixing THIS OI without the
+  exclusion would arm the loop for the first time. Cross-referenced from
+  OI-199, whose fix shape (widening retention to per-function) would
+  independently arm the same loop from the other side.
+
+**UPDATE 2026-09-26 (backlog triage + `ci-green-batch-a`):** OI-224 closed as a duplicate of this entry (same `alert_cron_function_dead` `days_silent >= 8` predicate vs the 7-day `cron_call_log` prune). ⚠ LIVE 2026-09-26: the prune is currently NOT running (`db_maintenance_nightly` has failed every night since 2026-09-22, filed separately), so retained rows reach back to 09-14 and the predicate has become reachable BY ACCIDENT — a false critical for `alert-critical-notify` is armed for ~2026-10-01 06:47Z if retention is not restored first.
+
+**Closed 2026-11-05.** Fixed by retention 7 -> 10 days (migration 169, option 1 chosen with the founder over a lower threshold, which would have paged the weekly job every week). The alert command, its 8-day threshold and 14-day lookback are unchanged. Migration 169 was applied to `dedsavbjuwgarrhphgnl` on 2026-11-05 after the founder's per-action go (Supabase version `20261105065857`) and read back live: the function body carries `interval '10 days'`, still SECURITY DEFINER with `search_path=public`, `anon`/`authenticated` cannot execute it. The behavioural pin `test/sql/cleanup_cron_call_log_retention_live_verify.sql` was proven on a disposable Postgres replica (old 7-day body red, new body green, keep-set mutants red); its run against production was stopped by the founder for time and left no residue (row count and oldest row unchanged, 0 test rows). Guard: `test/contracts/alert_threshold_below_retention_test.dart` (threshold < min(lookback, retention)). Diagnose `c9e2a7`, plan `docs/plans/oi179-cron-dead-alert.md`. Not yet observed: the first real firing (earliest about one day after apply). Residuals filed or already tracked: OI-199 (silence past 10 days), OI-194 (lost `logCronStart` rows), OI-471 (orphan 7-day delete function), OI-472 (`weekly-recalc` has no cron job).

@@ -2910,39 +2910,6 @@ Do NOT re-propose v1. Verified clean by round 2: sending `''` to `user_profile.c
 - **Blast radius**: `scripts/**` is individually pinned `platform`; a new gate needs its own test plus a `mutation_proven:` ledger entry per rule 24.
 - **Class**: `feedback_green_check_input_set_width` — a second input was added precisely because the first had the wrong corpus; the second now has a freshness problem the first did not.
 
-## OI-179 — `alert_cron_function_dead` cannot fire across 100% of its range, and never has (P1)
-
-- **Status**: OPEN
-- **Blocked on**: none — one-line predicate fix; the value is in the test that would have caught it
-- **Verified**: 2026-09-26 — the R2-11 PRECONDITION is now met: migration 144 (diagnose `d6b2f9`) excludes `alert-critical-notify` inside the alert's `cron_call_log` subquery (live jobid 32 verified), pinned by `test/contracts/cron_vacuum_single_statement_test.dart`, which also requires every function on `cron_auth_adoption_test.dart`'s `_triggerDispatchedFunctions` roster that calls `logCronStart` to be excluded. The `>= 8` vs 7-day-prune defect itself is UNCHANGED (batch B2). Latent, recorded: `weekly-recalc` calls `logCronStart` (`weekly-recalc/index.ts:208`) but has no cron job and is not on the roster — a manual run would put it in the same silence-is-healthy class once the threshold is fixed. Also: with retention broken (09-22 → 09-26) this alert became reachable BY ACCIDENT, and a weekly function with one lost success row (`weekly-recap-ready`, OI-194 class) could have false-fired from 2026-09-29; 144's restored prune closes that.
-  PRIOR (kept verbatim): 2026-09-10 — `min(started_at)` across `cron_call_log` is **2026-09-03**, so the maximum achievable `days_silent` is **7.46**. The alert's predicate is `days_silent >= 8`. Hermes measured **7.21** on 2026-08-16; three weeks later the ceiling is unchanged because it is set by the pruner, not by traffic.
-- **Identified**: 2026-08-16 · Hermes L1-F3. **Pre-existing — not introduced by the log-retention batch.**
-- **The mechanism**: `cleanup_cron_call_log` prunes `cron_call_log` at 7 days, sparing only the single *globally* newest success. The alert asks whether any function has been silent for **8** days. The table cannot hold evidence that old, so the predicate is unsatisfiable by construction. It has fired **0 times, ever**.
-- ⚠ **The prior diagnose-doc records this as "cannot fire past day 7", which reads like a partial blind spot.** It is not partial: the alert is inert across its entire range. A threshold above its own data-retention ceiling is not a tuning problem, it is a dead alert that reads as coverage — which is worse than having no alert, because it occupies the slot.
-- **Proposed repair**: set the threshold below the retention ceiling (or lengthen retention for the alert's own read), **and** add a test asserting `threshold < retention_window` for every alert that reads a pruned table — the class, not the instance. A one-line fix with no such test leaves the next alert free to repeat it.
-- **Blast radius**: `alerts/_thresholds.yaml` + the alert's SQL; classify the written file.
-- **Cited as a live backstop while inert (2026-09-13, Hermes L31 on OI-153)**: migration 131's header (immutable) and the first version of `founder-digest/index.ts`'s header both named `alert_cron_function_dead` as the fallback that "would otherwise take a week to notice" a dead digest. It would notice nothing. The digest header was corrected (v2); the registry row 131 says so; the migration comment cannot be.
-- **Class**: `feedback_green_check_input_set_width` — the alert's input set is bounded by a pruner it does not know about. Also `feedback_bad_news_vs_no_news`: zero firings had two explanations (all healthy / cannot fire) and nobody asked which.
-- ⚠ **Precondition on this alert's own repair (R2-11, review round 2, 2026-09-14):
-  before lowering this threshold (or lengthening retention for it), the fix
-  MUST exclude non-scheduled, trigger-dispatched functions — today just
-  `alert-critical-notify` — from `alert_cron_function_dead`'s scope,** via
-  an allowlist of real `cron.job` slugs or an explicit denylist of
-  trigger-dispatched function names. Reason: `alert-critical-notify` is
-  event-driven (not `cron.schedule`-dispatched), so it can legitimately go
-  long stretches without running; if this alert's own OPEN threshold-below-
-  retention fix (above) ever makes it fire for `alert-critical-notify`, that
-  CRITICAL alert triggers `alert-critical-notify` itself to run, which
-  writes a fresh success row, which resets its own death-clock — a
-  self-sustaining false-critical loop. Today this is INERT only because
-  this OI's own bug (the threshold sitting above the retention ceiling)
-  keeps the alert from ever firing at all — fixing THIS OI without the
-  exclusion would arm the loop for the first time. Cross-referenced from
-  OI-199, whose fix shape (widening retention to per-function) would
-  independently arm the same loop from the other side.
-
-**UPDATE 2026-09-26 (backlog triage + `ci-green-batch-a`):** OI-224 closed as a duplicate of this entry (same `alert_cron_function_dead` `days_silent >= 8` predicate vs the 7-day `cron_call_log` prune). ⚠ LIVE 2026-09-26: the prune is currently NOT running (`db_maintenance_nightly` has failed every night since 2026-09-22, filed separately), so retained rows reach back to 09-14 and the predicate has become reachable BY ACCIDENT — a false critical for `alert-critical-notify` is armed for ~2026-10-01 06:47Z if retention is not restored first.
-
 ## OI-180 — `check_sot_registry_parity` silently skips every single-number `line_range:`, so 30 citations are validated by nothing (P2)
 
 - **Status**: OPEN
@@ -3389,6 +3356,7 @@ Unit 2's blocked question — what a regeneration does when the plan window is E
 
 - **Status**: OPEN
 - **Blocked on**: none
+- **Update 2026-11-05 (OI-179, migration 169)**: retention is 10 days once 169 is applied, so every "7d" below reads 10 days for the purge (the `/cron` 7-day `.gte()` window is unchanged); the per-function keep-set remains this OI's fix.
 - **Verified**: 2026-09-14, live read of the function body — corrected same
   day (R2-06/R2-07, review round 2) to cite migration **110**
   (`110_cron_silence_per_function_and_cleanup_null_guard.sql:30-47`), the
@@ -7411,3 +7379,33 @@ Second half of the split of Batch C2 (the first half is OI-460). Adds the four t
 **What happens.** `supabase/functions/_shared/tools/exercise/getFormCues.ts` (lines 63-69, stage 1 exact `ilike`, and 90-96, stage 2 partial `ilike`) selects from `exercise_library` by name with no `is_active` filter and `limit(1)`. Since Batch C2a (migration 167) 57 cloud rows are `is_active = false`; a name that a deactivated row shares with, or contains, a live name can answer from the deactivated row. C2a handled the same-name case in the seed (a removed row that shares its name with a kept row takes that row's cues, `scripts/seed_exercise_library.js`), but not the partial stage, nor any later deactivation.
 
 **Done when.** Both stages filter `is_active = true` (a regression test that fails without the filter), deployed through the Edge Function protocol; or the filter is shown to be unnecessary by a query that finds no live name matched by a deactivated row.
+
+## OI-471 — Orphan cron_call_log_cleanup_7d(): an unconditional 7-day DELETE with no caller that would undo the OI-179 retention fix if ever scheduled
+
+- **Status**: OPEN
+- **Blocked on**: none
+- **Verified**: never
+- **Identified**: 2026-11-05 · filed via mint_oi.sh from branch `oi179-cron-dead-alert`
+
+Found by round 2 of the OI-179 plan review (migrations 090:43 and 091:22 name it) and confirmed LIVE 2026-11-05 with `pg_proc` / `cron.job` / `pg_trigger` reads: `public.cron_call_log_cleanup_7d()` exists with the body `DELETE FROM public.cron_call_log WHERE started_at < now() - interval '7 days'` (no keep-set, `SECURITY DEFINER`, search_path public/extensions/vault/private). No cron job calls it, no function body references it, no trigger. It is inert today. It is the pre-109 pruner that `cleanup_cron_call_log()` replaced.
+
+**Why it matters:** OI-179's fix (migration 169, retention 10 days) is undone the moment anyone schedules or calls this function: it prunes at 7 days again and keeps nothing.
+
+**Do:** a migration `DROP FUNCTION IF EXISTS public.cron_call_log_cleanup_7d();` (Destructive: yes, so the founder's go and a dry run). The file-based `test/contracts/security_definer_revoke_migration_test.dart` reads migrations 090/091 and is unaffected. Re-check `pg_proc`/`cron.job`/`prosrc` references immediately before the drop.
+
+**Acceptance:** the function is gone live (`to_regprocedure` is null) and no migration after the drop references it.
+
+## OI-472 — weekly-recalc calls logCronStart but has no cron job: a manual run pages a CRITICAL alert_cron_function_dead 8 days later
+
+- **Status**: OPEN
+- **Blocked on**: none
+- **Verified**: never
+- **Identified**: 2026-11-05 · filed via mint_oi.sh from branch `oi179-cron-dead-alert`
+
+Found by round 2 of the OI-179 plan review. `supabase/functions/weekly-recalc/index.ts:210` calls `logCronStart("weekly-recalc")`, but no `cron.job` command references it (live read 2026-11-05: none) and `docs/operations/CRON_REGISTRY.md` has no row for it; it has no `cron_call_log` history today. It is neither a cron-invoked nor a trigger-dispatched function in the `cron_auth_adoption_test.dart` rosters.
+
+**Why it matters:** once migration 169 makes `alert_cron_function_dead` satisfiable, a single manual run of `weekly-recalc` writes a success row that goes 8 days without a successor, and the alert raises a CRITICAL (and a Telegram message via `alert-critical-notify`) about a function that was never scheduled.
+
+**Do:** exclude `weekly-recalc` in the alert's `cron_call_log` sub-select with the same shape as migration 144's `function_name <> 'alert-critical-notify'` line (re-apply the 144 body plus one predicate through `cron.alter_job` by jobname), extend the roster test `cron_vacuum_single_statement_test.dart` to require it, or give the function a schedule and a CRON_REGISTRY row. Also record the accepted residual: one lost `logCronStart` insert on `weekly-recap-ready` (OI-194 class) makes the alert page at day 8.
+
+**Acceptance:** a manual `weekly-recalc` run raises no `alert_cron_function_dead` row (SQL rehearsal in `BEGIN ... ROLLBACK`), and the roster test fails if the exclusion is removed.

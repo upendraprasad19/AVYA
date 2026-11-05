@@ -1313,5 +1313,14 @@
     "diagnose": "c2a7f1",
     "slug": "reseed_exercise_library",
     "note": "Batch C2a (plan docs/plans/2026-11-04-library-batch-c2a-removals.md r4, plan-review docs/plan-reviews/library-batch-c2.md, B-pass docs/reviews/library-batch-c2a-bpass.md accepted). RE-SEEDS cloud exercise_library from the v18 bundled asset: UPSERTS 864 rows (no new row) and sets is_active=false on the 50 removed rows (scripts/data/library_batch_c2_removals.json), after the upsert; nothing deleted. Applied to project dedsavbjuwgarrhphgnl only, after the founder's per-action go ('Apply', 2026-11-05) on the exact file, by .claude/apply_migration_via_api.js (HTTP 201). Pre-apply read-only check: 921 rows, 914 active, all 50 removed rows present and active. Post-apply: 921 rows, 864 active, 57 inactive (the 7 Batch A retirements plus the 50), 0 removed names active. File sha256 = this hash (LF). Rollback is inline: UPDATE exercise_library SET is_active = true WHERE id IN (the 50 removed uuids), needing its own go."
+  },
+  {
+      "migration": "169",
+      "applied_at": "2026-11-05T12:28:57+05:30",
+      "hash": "sha256:12c841e02e863e66e3651bba899d479eddbd113ca569687407d869ceecd28665",
+      "applier": "claude-via-mcp",
+      "diagnose": "c9e2a7",
+      "slug": "cron_call_log_retention_10d",
+      "note": "OI-179: CREATE OR REPLACE public.cleanup_cron_call_log() with interval '10 days' (was '7 days', migration 110) so alert_cron_function_dead (days_silent >= 8) can fire. Applied to project dedsavbjuwgarrhphgnl only, through MCP apply_migration after the founder's per-action go (2026-11-05); Supabase recorded version 20261105065857 (06:58:57 UTC = 12:28:57 IST). Verified live: prosrc contains interval '10 days' and not '7 days', prosecdef true, search_path=public, anon and authenticated cannot execute, postgres can; cron_call_log 535 rows before and after, 537 after a later fleet run, oldest row unchanged, 0 leaked test rows. File sha256 = this hash (LF). Rollback: re-apply the 110 body (interval '7 days') as a NEW forward migration."
   }
 ]
