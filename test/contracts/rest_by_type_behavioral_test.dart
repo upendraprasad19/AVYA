@@ -190,8 +190,9 @@ void main() {
     test('(e) a rep-based custom is priced at its archetype rest by the allocator and stamped by apply', () {
       // A custom H lift (5-8 reps, selector default 75 s) beside two chest/back compounds
       // on a 30-minute day (1440 s). At its archetype's 150 s the custom (3 sets) costs
-      // 586.8 s and leaves 853.2 s: c1 takes 3 sets (522 s), 331.2 s are left and c2's 2 sets
-      // (336 s) do not fit. Priced at the stale 75 s (406.8 s) c2 would fit.
+      // 586.8 s and leaves 853.2 s: c1 and c2 seat at 2 sets (336 s each) and 181.2 s are left, so
+      // neither grows to 3 (+186 s). Priced at the stale 75 s (406.8 s) 361.2 s would be left and c1 would
+      // grow to 3 (OI-456 piece B: the sets, not the count, show the price).
       final f = Fx();
       f.row('cust', ['Core'], reps: '5-8');
       f.row('c1', ['Chest']);
@@ -209,7 +210,8 @@ void main() {
         rowsByName: f.rows,
         is6Day: true,
       );
-      expect([for (final e in out[0].exercisesA) e.exerciseName], ['cust', 'c1']);
+      expect([for (final e in out[0].exercisesA) e.exerciseName], ['cust', 'c1', 'c2']);
+      expect([for (final e in out[0].exercisesA) e.sets].skip(1), [2, 2]);
       final weeks = PeriodizationEngine.apply(
         populated: out,
         phase: 1,
@@ -222,10 +224,10 @@ void main() {
       expect(stamped['cust'], 150, reason: 'a custom H row is stamped at the H rest');
       expect(stamped['c1'], 120);
     });
-    test('(h) the allocator prices isolations at 75 s: at 30 minutes six distinct-group isolations seat 3', () {
-      // Day budget 1440 s. A 3-set isolation at 75 s costs 1.2 x (45 + 3 x 47 + 2 x 75) = 403.2 s, so 3 fit
-      // (1209.6 s) and a 4th does not even at 2 sets (+256.8 s). Priced at the old 38 s rest it costs 314.4 s,
-      // and a 4th would be admitted (a mutant that prices at the day's rest turns this red).
+    test('(h) the allocator prices isolations at 75 s: at 30 minutes six distinct-group isolations seat 5', () {
+      // Day budget 1440 s. A 2-set isolation at 75 s costs 1.2 x (45 + 2 x 47 + 75) = 256.8 s, so 5 fit
+      // (1284 s) and a 6th does not (1540.8 s). Priced at the old 38 s rest it costs 212.4 s, and all six
+      // would be admitted (1274 s): a mutant that prices at the day's rest turns this red.
       final f = Fx();
       const groups = ['Chest', 'Lats', 'Quads', 'Biceps', 'Triceps', 'Hamstrings'];
       for (var i = 0; i < groups.length; i++) {
@@ -239,7 +241,7 @@ void main() {
         is6Day: true,
       );
       final kept = out[0].exercisesA;
-      expect(kept.length, 3);
+      expect(kept.length, 5);
       // (the weekly-band growth passes may add a set to the lead lift; the count and the true cost are the pin)
       final spent = kept.fold<double>(
           0, (t, e) => t + SessionBudget.exerciseSeconds(archetype: 'I', sets: e.sets, restSeconds: SessionBudget.restForArchetype('I')));
@@ -416,17 +418,20 @@ void main() {
           goal: 'build_muscle', tier: 'basic_gym', days: 4, level: 'intermediate'));
       final spread = tester.reduce((a, b) => a > b ? a : b) - tester.reduce((a, b) => a < b ? a : b);
       // The cells the diagnose-doc and the nested CLAUDE.md quote: a change that moves one must move the prose.
-      expect(measured['basic_gym|4|intermediate|60'], [6, 6, 7, 6]);
-      expect(measured['basic_gym|4|intermediate|30'], [3, 3, 3, 3]);
-      expect(measured['basic_gym|4|intermediate|45'], [4, 5, 5, 5]);
-      expect(measured['basic_gym|4|intermediate|90'], [7, 6, 8, 9]);
-      expect(measured['basic_gym|4|beginner|60'], [5, 5, 5, 4]);
-      expect(measured['basic_gym|4|advanced|60'], [6, 6, 7, 6]);
-      expect(measured['full_gym|3|intermediate|60'], [6, 7, 7]);
-      expect(measured['full_gym|5|intermediate|60'], [6, 5, 7, 7, 6]);
-      expect(measured['full_gym|6|intermediate|60'], [6, 6, 7, 6, 6, 7]);
+      // OI-456 piece B (the count band): intermediate 6 at 45 / 60 / 90, 4 at 30 (founder D-A),
+      // beginner 5, advanced 8. After piece A alone these were [6,6,7,6] / [3,3,3,3] / [4,5,5,5] /
+      // [7,6,8,9] / [5,5,5,4] / [6,6,7,6].
+      expect(measured['basic_gym|4|intermediate|60'], [6, 6, 6, 6]);
+      expect(measured['basic_gym|4|intermediate|30'], [4, 4, 4, 4]);
+      expect(measured['basic_gym|4|intermediate|45'], [6, 6, 6, 6]);
+      expect(measured['basic_gym|4|intermediate|90'], [6, 6, 6, 6]);
+      expect(measured['basic_gym|4|beginner|60'], [5, 5, 5, 5]);
+      expect(measured['basic_gym|4|advanced|60'], [8, 8, 8, 8]);
+      expect(measured['full_gym|3|intermediate|60'], [6, 6, 6]);
+      expect(measured['full_gym|5|intermediate|60'], [6, 6, 6, 6, 6]);
+      expect(measured['full_gym|6|intermediate|60'], [6, 6, 6, 6, 6, 6]);
       // Before OI-456 the same persona measured 4 / 6 / 4 / 9 (a spread of 5).
-      expect(spread, lessThanOrEqualTo(2), reason: 'tester counts: $tester');
+      expect(spread, 0, reason: 'tester counts: $tester');
     });
   });
 }

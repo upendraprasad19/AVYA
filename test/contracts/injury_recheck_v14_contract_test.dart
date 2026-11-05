@@ -249,9 +249,12 @@ void main() {
               .any((p) => p == 'elbow_flexion' || p == 'elbow_extension'))
             r['name'] as String
       };
-      final healthy = planNames('bodyweight', 'build_muscle', 'beginner', 3, const []);
+      // OI-456 piece B (the beginner day holds 5 main exercises, and the accessories that carry an elbow
+      // row are the ones the count leaves out) moved this persona from beginner 3d to intermediate 3d,
+      // found by a reach search on 2026-11-04 (healthy plan 6 elbow rows, injured 0).
+      final healthy = planNames('bodyweight', 'build_muscle', 'intermediate', 3, const []);
       expect(healthy.intersection(elbowRows), isNotEmpty, reason: 'positive control');
-      expect(planNames('bodyweight', 'build_muscle', 'beginner', 3, ['elbow'])
+      expect(planNames('bodyweight', 'build_muscle', 'intermediate', 3, ['elbow'])
           .intersection(elbowRows), isEmpty);
     });
   });

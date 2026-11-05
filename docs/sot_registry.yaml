@@ -16970,10 +16970,18 @@ concepts:
       every day starts every exercise at SessionBudget.baseSets (3), whatever its intensity (strength /
       hypertrophy / endurance change reps and load only); week 4 is min(sets, max(2, floor(0.6 x sets)));
       SwapService.swapExerciseInDay re-derives a rep-based row's rest from the INCOMING exercise.
+      OI-456 piece B (docs/plans/2026-11-04-oi456-b-count-band.md, 2026-11-04): the exercise COUNT is a band.
+      The allocator SEATS every exercise at 2 sets in rank order up to SessionBudget.countMax(level)
+      (beginner 5, intermediate 6, advanced 8; not-budgeted rows count), meets SessionBudget.countFloor(minutes)
+      (5 from 45, 4 from 25, 3 below; founder D-A) with a force step that seats the cheapest remaining slot
+      although the clock says no (never past a session cap or weekly top, at most maxForcedOverSeconds over the
+      day's budget; named in AllocationStats.countForced, inherited by variant B's copied days), then grows each
+      exercise to baseSets (pass B) and on to the weekly bands (passes C, D). A day still short is named in
+      belowCount (cap_top / clock) or selectorThin; a group whose slots the count left out is count_limited.
     writers:
       - file: lib/shared/repositories/plan_engine/session_set_allocator.dart
         method: SessionSetAllocator.allocate
-        semantic: sets the sets of every budgeted PlannedExercise per variant; debugLastStats records the floor labels and the lead lifts; prices each slot at restForArchetype(its archetype) and starts it at baseSets
+        semantic: sets the sets of every budgeted PlannedExercise per variant; debugLastStats records the floor labels, the lead lifts, countForced, belowCount and selectorThin; prices each slot at restForArchetype(its archetype), SEATS it at 2 sets up to countMax(level), forces the count floor (clock only, bounded), then grows it to baseSets
       - file: lib/shared/repositories/plan_engine/session_budget.dart
         method: SessionBudget / SessionBudgetContext / BudgetLedger
         semantic: the pure constants, bands, caps, time model (restForArchetype, baseSets) and the one headroom predicate (fits / add)
@@ -17015,6 +17023,7 @@ concepts:
     regression_test: test/plan_generator/session_set_budget_gate_test.dart
     additional_tests:
       - test/contracts/rest_by_type_behavioral_test.dart  # OI-456 piece A: stamp, invariance across intensities, deload table, week-2 pricing, custom pricing, real-generator sweep
+      - test/contracts/exercise_count_band_behavioral_test.dart  # OI-456 piece B: the tables, the target, the force step (clock only, bounded, negative secondsLeft, copy days) and a real-generator sweep over level x minutes 15..180 x days x goal x tier x weeks
       - test/contracts/swap_exercise_rest_follows_incoming_archetype_test.dart  # OI-456 piece A: the swap re-derives a rep-based row's rest from the incoming archetype; a timed row replacing a rep-based slot takes its library default else 60
 
   - concept: session_duration_minutes
