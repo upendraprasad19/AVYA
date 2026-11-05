@@ -1,0 +1,53 @@
+# Closure ledger: Library Batch C2b (four twin rows, six twin_pending removals, seed v19, migration 171)
+# Gate 40 (validate_audit_closure.dart). One terminal_state per finding; no `deferred:` key.
+# Diagnose b2c7e4. Everything below landed in commit 222b73b2 (the live steps ran before it, with the founder's go on each).
+
+batch: library-batch-c2b
+diagnose: docs/diagnoses/2026-11-05-library-batch-c2b-twins-b2c7e4.md
+plan_review_record: docs/plan-reviews/library-batch-c2b.md
+bpass_review: docs/reviews/library-batch-c2b-bpass.md
+total_findings: 7
+closed_count: 7
+
+findings:
+  - id: C2B-1
+    title: "Four twin rows G1368 G1489 G2567 G0474 ship with injury tags, aliases and local media"
+    terminal_state: closed_in_commit
+    commit: 222b73b2
+    verification: test/contracts/library_batch_c_injury_coverage_test.dart
+    notes: "holds released after each animation was read; G0474 is a real toes-to-bar (founder call accepted); G1368 cue 1 rewritten."
+  - id: C2B-2
+    title: "Six twin_pending rows E084 E211 E111 E162 E169 E179 removed as ordinary removals (seed v19 prune, retired names resolve by name or alias)"
+    terminal_state: closed_in_commit
+    commit: 222b73b2
+    verification: test/contracts/library_seed_v19_upgrade_behavioral_test.dart
+    notes: "mutated by reverting the version constant, deleting a retired id and dropping an alias: each reddened a test."
+  - id: C2B-3
+    title: "Depth rule judged with the twin rows; E111 removable only because G1489 is present"
+    terminal_state: closed_in_commit
+    commit: 222b73b2
+    verification: test/contracts/library_depth_rule_test.dart
+    notes: "twin fixture is sha-pinned; mirror guard and a G1489 mutation are in the test."
+  - id: C2B-4
+    title: "E043 standard swap repointed from E111 to G1489; generator golden re-recorded (8 of 998 personas)"
+    terminal_state: closed_in_commit
+    commit: 222b73b2
+    verification: test/contracts/library_batch_c2_name_readers_test.dart
+    notes: "probes showed no other single removal or twin changes any plan."
+  - id: C2B-5
+    title: "Four animations uploaded to the private exercise-media bucket"
+    terminal_state: closed_in_commit
+    commit: 222b73b2
+    verification: test/contracts/library_media_table_test.dart
+    notes: "live: 4 uploaded, 0 failed, 1,586,780 bytes; --verify --only 4 of 4 match; privacy probe 400. Run before the commit, with the founder's go."
+  - id: C2B-6
+    title: "Cloud migration 171 applied: four twins active, six removed rows inactive"
+    terminal_state: closed_in_commit
+    commit: 222b73b2
+    verification: test/contracts/exercise_library_cloud_tuples_match_test.dart
+    notes: "live read-back 925 rows, 862 active, 63 inactive; ledger hash sha256:4d09a506dd5863cdeb015a28a2908d5fb4b676506caed4cbf5862af4003f7ab6 in backups/applied_migrations.json."
+  - id: C2B-7
+    title: "E230 Standing Single Leg Curl retag and animation moved out of this batch"
+    terminal_state: upstream_blocked
+    blocker: "OI-474 (Batch C2c) needs its own plan and the founder's picture decision"
+    reopen_when: "Batch C2c is planned"

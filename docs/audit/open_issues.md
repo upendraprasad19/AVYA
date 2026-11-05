@@ -7390,17 +7390,6 @@ Found by the M2b Part B Chrome check (360 dp, real fonts, the real card and exer
 
 **Acceptance:** log evidence for the new-build cold start plus the positive control is recorded; any init line found reopens the removal. reopen_when: the new build is on a device.
 
-## OI-462 — Library Batch C2b: twins G1368 G1489 G2567 G0474 and removal of the six twin_pending rows (E084 E211 E111 E162 E169 E179); E230 moved to OI-474
-
-- **Status**: OPEN
-- **Blocked on**: none
-- **Verified**: never
-- **Identified**: 2026-11-04 · filed via mint_oi.sh from branch `library-batch-c2`
-
-Second half of the split of Batch C2 (the first half is OI-460). Adds the four twin rows G1368, G1489, G2567 and G0474, then removes the six `twin_pending` rows that C2a keeps (E084 E211 E111 E162 E169 E179). E230's retag and media moved to OI-474 at plan review round 2 (2026-11-05). Open: the G0474 picture decision. Needs its own plan, two review rounds, and a fresh founder go for the media upload and the migration apply.
-
-**Done when.** The four twins ship; each `twin_pending` row is removed or kept with a stated reason; the depth rule still holds; the cloud migration is applied.
-
 ## OI-469 — getFormCues matches exercise_library by name with no is_active filter: a deactivated row can answer for a live name
 
 - **Status**: OPEN

@@ -6036,3 +6036,16 @@ Narrowed 2026-11-04 after two combined-plan review rounds came back not converge
 **Done when.** The 50 removal ids are gone from `assets/data/exercise_library.json` and from every install (seed v18 prune); every hard-coded exercise name resolves to exactly one shipped row; the depth rule holds in every cell under both `movement_pattern` and `slot_pattern`; the cloud migration is applied and the rows are `is_active = false`; the five injury sweeps keep their hard zeros; the tests are repointed, mutated and green.
 
 **Closed by.** Branch `library-batch-c2`: removals file and generator (84171dfc), the library edit, seed v18 prune and repoints (43fbb074), the cloud seed generator (75496c80), tests and docs (fe299f12), the B-pass fixes (14cd036b, review `docs/reviews/library-batch-c2a-bpass.md`) and migration 167 (a7be5078, applied to `dedsavbjuwgarrhphgnl` on 2026-11-05 after the founder's go on the exact file). The six twin rows stay for OI-462.
+
+## OI-462 — Library Batch C2b: twins G1368 G1489 G2567 G0474 and removal of the six twin_pending rows (E084 E211 E111 E162 E169 E179); E230 moved to OI-474
+
+- **Status**: CLOSED
+- **Blocked on**: none
+- **Verified**: 2026-11-05 (live counts after migration 171: 925 rows, 862 active, 63 inactive; the four twin names each have one active row)
+- **Identified**: 2026-11-04 · filed via mint_oi.sh from branch `library-batch-c2`
+
+Second half of the split of Batch C2 (the first half is OI-460). Adds the four twin rows G1368, G1489, G2567 and G0474, then removes the six `twin_pending` rows that C2a keeps (E084 E211 E111 E162 E169 E179). E230's retag and media moved to OI-474 at plan review round 2 (2026-11-05). Open: the G0474 picture decision. Needs its own plan, two review rounds, and a fresh founder go for the media upload and the migration apply.
+
+**Done when.** The four twins ship; each `twin_pending` row is removed or kept with a stated reason; the depth rule still holds; the cloud migration is applied.
+
+**Closed by.** Branch `library-batch-c2b`: the batch commit 222b73b2 (twins, six removals, seed v19, media table and stills, depth rule with twin rows, E043 swap repoint, migration 171 file and ledger entry); media upload of four animations (4 of 4 verified) and migration 171 applied to `dedsavbjuwgarrhphgnl` on 2026-11-05 after the founder's go on each exact artifact. B-pass `docs/reviews/library-batch-c2b-bpass.md`; closure `docs/audit/library-batch-c2b.closure.yaml`. E230 went to OI-474.
