@@ -445,6 +445,26 @@ void main() {
       expect(_removalViolations(upserted.join('\n')), isNotEmpty, reason: 'still upserted');
     });
 
+    test('MUTATION (C2a): a removed id that is back in the library makes the generator refuse (exit 2), not ship it dead', () async {
+      final lib = (jsonDecode(File('assets/data/exercise_library.json').readAsStringSync()) as List).cast<Map<String, dynamic>>();
+      final back = Map<String, dynamic>.from(lib.first)..['id'] = _removedIds().first;
+      final tmp = Directory.systemTemp.createTempSync('c2a_readded');
+      try {
+        final f = File('${tmp.path}/lib.json')..writeAsStringSync(jsonEncode([...lib, back]));
+        final r = await Process.run('node', [_generator, '999_readded_seed_exercise_library.sql', '--out', tmp.path],
+            environment: {'SEED_LIBRARY_JSON': f.path}).timeout(const Duration(seconds: 60));
+        expect(r.exitCode, 2, reason: 'stderr: ${r.stderr}');
+        expect(r.stderr.toString(), contains(_removedIds().first));
+        expect(File('${tmp.path}/999_readded_seed_exercise_library.sql').existsSync(), isFalse);
+        // MIRROR: the unmodified library still generates.
+        final ok = await Process.run('node', [_generator, '999_readded_seed_exercise_library.sql', '--out', tmp.path])
+            .timeout(const Duration(seconds: 60));
+        expect(ok.exitCode, 0, reason: 'stderr: ${ok.stderr}');
+      } finally {
+        tmp.deleteSync(recursive: true);
+      }
+    });
+
     test('the generator, the removals file and the Dart prune set name the same ids', () {
       final fromSql = RegExp(r"UPDATE exercise_library SET is_active = false WHERE id = '([0-9a-f-]{36})';")
           .allMatches(plain)

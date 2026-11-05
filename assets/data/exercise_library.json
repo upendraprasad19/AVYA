@@ -17148,7 +17148,7 @@
       "basic_gym",
       "full_gym"
     ],
-    "standard_swap": "Prone Lat Pull",
+    "standard_swap": "Prone Lat Pull Hold",
     "priority_tier": 2,
     "rep_range": "10-12",
     "core_levels": [],
@@ -17226,7 +17226,7 @@
       "basic_gym",
       "full_gym"
     ],
-    "standard_swap": "Prone Lat Pull",
+    "standard_swap": "Prone Lat Pull Hold",
     "priority_tier": 2,
     "rep_range": "20-30s",
     "core_levels": [
@@ -18130,7 +18130,7 @@
       "basic_gym",
       "full_gym"
     ],
-    "standard_swap": "Prone Lat Pull",
+    "standard_swap": "Prone Lat Pull Hold",
     "priority_tier": 2,
     "rep_range": "12-15",
     "core_levels": [
@@ -18208,7 +18208,7 @@
       "basic_gym",
       "full_gym"
     ],
-    "standard_swap": "Prone Lat Pull",
+    "standard_swap": "",
     "priority_tier": 2,
     "rep_range": "20-30s",
     "core_levels": [

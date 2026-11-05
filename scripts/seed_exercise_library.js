@@ -32,7 +32,9 @@ const path = require('path');
 const crypto = require('crypto');
 
 const ROOT = path.resolve(__dirname, '..');
-const JSON_PATH = path.join(ROOT, 'assets', 'data', 'exercise_library.json');
+// SEED_LIBRARY_JSON points a REHEARSAL at another library file (test/contracts/exercise_library_cloud_seeded_test.dart); the
+// real run never sets it.
+const JSON_PATH = process.env.SEED_LIBRARY_JSON ? path.resolve(process.env.SEED_LIBRARY_JSON) : path.join(ROOT, 'assets', 'data', 'exercise_library.json');
 const LEDGER_PATH = path.join(ROOT, 'backups', 'applied_migrations.json');
 
 // What the generated file says about itself. Edit this block for the next batch; nothing else in the script names a batch.
@@ -207,6 +209,11 @@ const retireStatements = data
 const removedEntries = fs.existsSync(BATCH.removalsFile)
   ? JSON.parse(fs.readFileSync(BATCH.removalsFile, 'utf8')).entries.filter((e) => e.decision === 'remove').sort((a, b) => a.id.localeCompare(b.id))
   : [];
+// A removed id that is back in the library would be upserted active and then deactivated by the statements below (a row that
+// ships dead). B-pass C2a finding 4: refuse, the Dart seed has the same mirror (`pruneRetired(...difference(shipped))`).
+const dataIds = new Set(data.map((item) => item.id));
+const reAdded = removedEntries.filter((e) => dataIds.has(e.id)).map((e) => e.id);
+if (reAdded.length) fail(`removed id(s) are back in the library: ${reAdded.join(' ')} (edit ${path.relative(ROOT, BATCH.removalsFile)} first)`);
 const keptByName = new Map(data.map((item) => [item.name.toLowerCase(), item]));
 const removalStatements = removedEntries
   .map((e) => {

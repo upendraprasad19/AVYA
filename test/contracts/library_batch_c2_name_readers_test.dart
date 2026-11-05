@@ -122,6 +122,24 @@ void main() {
     expect(violations.single, contains('Ghost Removed Row'));
   });
 
+  List<String> danglingRemovedRefs(List<Map<String, dynamic>> rows) => [
+        for (final r in rows)
+          for (final f in const ['standard_swap', 'progression_to', 'regression_to'])
+            if (r[f] is String && removedNames.contains(_norm(r[f])) && !rows.any((x) => _norm(x['name']) == _norm(r[f])))
+              '${r['id']}.$f -> ${r[f]}',
+      ];
+
+  test('no row\'s standard_swap / progression_to / regression_to names a removed row (B-pass finding 2)', () {
+    expect(danglingRemovedRefs(lib), isEmpty);
+  });
+
+  test('MUTATION: a swap pointing at a removed name is red', () {
+    final probe = lib.map((r) => {...r}).toList();
+    final removedName = _removedEntries().first['name'] as String;
+    probe.first['standard_swap'] = removedName;
+    expect(danglingRemovedRefs(probe), isNotEmpty);
+  });
+
   test('MUTATION: an alias carried by two rows is red', () {
     final dup = lib.map((r) => {...r}).toList();
     final target = dup.firstWhere((r) => (r['name_aliases'] as List?)?.isNotEmpty ?? false);

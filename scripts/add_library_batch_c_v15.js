@@ -213,6 +213,19 @@ function applyAliases(allRows, removals) {
   });
 }
 
+// A `standard_swap` that names a removed row would point at nothing (B-pass C2a finding 2): it takes the replacement row's
+// name, or "" when the removal has no replacement or the replacement is the row itself. Nothing in lib/ reads the field.
+function repointStandardSwap(allRows, removals) {
+  const byId = new Map(allRows.map((r) => [r.id, r]));
+  const gone = new Map(removals.map((e) => [e.name.toLowerCase(), e]));
+  return allRows.map((r) => {
+    const e = typeof r.standard_swap === 'string' ? gone.get(r.standard_swap.toLowerCase()) : undefined;
+    if (!e) return r;
+    const to = e.replacement ? byId.get(e.replacement) : undefined;
+    return { ...r, standard_swap: to && to.id !== r.id ? to.name : '' };
+  });
+}
+
 function main() {
   const media = MEDIA_NONE ? null : readMediaTable();
   const before = fs.readFileSync(LIBRARY, 'utf8');
@@ -259,7 +272,8 @@ function main() {
     }
   }
   const aliased = applyAliases(finalRows, removals);
-  const withMedia = media ? applyMedia(aliased, media) : aliased;
+  const swapped = repointStandardSwap(aliased, removals);
+  const withMedia = media ? applyMedia(swapped, media) : swapped;
   const next = format(withMedia);
 
   const heldCount = rows.length - shipped.length;
