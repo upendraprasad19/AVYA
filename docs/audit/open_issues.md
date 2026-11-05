@@ -7376,3 +7376,16 @@ Found by the M2b Part B Chrome check (360 dp, real fonts, the real card and exer
 **Scope note:** OI-279's pull replaces only the weight leg; nutrition waits on OI-281; measurements are covered by neither. Decide the end state of each leg, then rename/relabel in the same batch that changes it (the `source` value is read by the UI, so sweep `lib/`, `test/` and `supabase/functions/` for it first).
 
 **Acceptance:** each leg has a named owner; the Telegram label is gone. reopen_when: OI-279 ships.
+
+## OI-470 — Post-build check: no Realtime tenant init on a new-build cold start (with a positive control)
+
+- **Status**: OPEN
+- **Blocked on**: the founder's next `/build-apk` and a cold start of that build on a device (CLAUDE.md 4.3).
+- **Verified**: never
+- **Identified**: 2026-11-05 · filed via mint_oi.sh from branch `weight-logs-publication-drop`
+
+**What:** the Realtime removal (PR #214) and the publication drop (migration 168) are verified in code and in the database, but not yet against a device: the claim that a new-build cold start opens no Realtime channel has no log evidence. The incident that started this work (2026-11-04 ~05:03 UTC) showed `Tenant ... is initializing` in the Realtime log on a cold start.
+
+**Do:** after the founder installs the new build and cold-starts it, read the Realtime and PostgREST logs for that minute (24 h retention, so within a day): expect NO Realtime tenant-init line. Run a positive control in the same window (an older build, or a deliberate channel attach) so an empty result means something. Record the lines read and the time window here.
+
+**Acceptance:** log evidence for the new-build cold start plus the positive control is recorded; any init line found reopens the removal. reopen_when: the new build is on a device.

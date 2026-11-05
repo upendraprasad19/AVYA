@@ -1303,6 +1303,6 @@
     "applier": "claude-via-node-api",
     "diagnose": "e4a7c9",
     "slug": "weight_logs_realtime_publication_drop",
-    "note": "OI-464: DROP public.weight_logs from the supabase_realtime publication (idempotent DO block) after the client Realtime subscription was removed (PR #214, 58d0d817). Applied to project dedsavbjuwgarrhphgnl only, after the founder's per-action go (2026-11-05), through .claude/apply_migration_via_api.js. Verified live: pg_publication_tables lists 0 members for supabase_realtime, weight_logs rows intact (79). Rollback: ALTER PUBLICATION supabase_realtime ADD TABLE public.weight_logs."
+    "note": "OI-464: DROP public.weight_logs from the supabase_realtime publication (idempotent DO block) after the client Realtime subscription was removed (PR #214, 58d0d817). Applied to project dedsavbjuwgarrhphgnl only, after the founder's per-action go (2026-11-05), through .claude/apply_migration_via_api.js. Verified live: pg_publication_tables lists 0 members for supabase_realtime, weight_logs rows intact (79). Rollback: ALTER PUBLICATION supabase_realtime ADD TABLE public.weight_logs. applied_at is approximate to the minute (the apply tool does not print a timestamp)."
   }
 ]

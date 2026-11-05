@@ -6007,7 +6007,7 @@ Impact: the tile and viewer cannot ship without the assets and a delivery path; 
 
 **Acceptance:** `pg_publication_tables` no longer lists `weight_logs`; no new Realtime tenant-init lines in the logs after a new-build cold start. reopen_when: the removal build is on a device and the founder gives the apply go.
 
-**Resolution (2026-11-05).** Migration 168 applied live after the founder's go: `pg_publication_tables` lists no `supabase_realtime` members, `weight_logs` rows intact (79). The no-new-tenant-init check after a new-build cold start stays with the build verification.
+**Resolution (2026-11-05).** Migration 168 applied live after the founder's go: `pg_publication_tables` lists no `supabase_realtime` members, `weight_logs` rows intact (79). The no-new-tenant-init check after a new-build cold start is tracked as OI-470.
 
 ## OI-465 — Redeploy log-client-error Edge Function (HIGH_PRIORITY_OP_TYPES lost realtime_subscribe_skipped_free_tier)
 
