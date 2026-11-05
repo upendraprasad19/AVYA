@@ -5993,3 +5993,33 @@ Impact: the tile and viewer cannot ship without the assets and a delivery path; 
 **Progress (2026-11-04): split into two pieces.** Three plan-review rounds on the full design found 6, 6 and 4 P1 design holes, all inside the new 5-8 count-band allocator pass (CLAUDE.md 4.12.1: too large). Piece A (rest by exercise type, the same 3 base sets every day, deload floor 2, a swap re-derives rest from the incoming exercise; plan `docs/plans/2026-11-04-oi456-a-rest-by-type.md`) removes the intensity-driven cause: the tester's persona now measures 6 / 6 / 7 / 6 at 60 minutes (spread 1, was 4 / 6 / 4 / 9). Measured and still open for piece B (`docs/plans/2026-11-04-oi456-b-count-band.md`, parked, re-planned from `test/plan_generator/rest_by_type_report.md` and its review findings): at 30 minutes every 4-day day holds 3 exercises, at 45 minutes 4 to 5, at 90 minutes 6 to 9 (spread 3); beginner at 60 minutes 4 to 5. Founder decision D-A is open and only piece B needs it: at 30 minutes 5 exercises at 2 sets do not fit the clock for any normal mix (26 to 28 minutes of work in a 24 minute window), so the "never below 5" rule and the clock conflict: either a 30-minute day may show about 28 minutes of main work, or the floor at 30 minutes drops to 4. OI-456 stays OPEN until piece B lands.
 
 **Resolution (2026-11-04).** Piece A (PR #210) made the rest follow the exercise and removed the intensity-driven skew. Piece B (this branch) made the count a band: every day seats its exercises at 2 sets up to the level's maximum (beginner 5, intermediate 6, advanced 8), meets a floor of 5 from 45 minutes, 4 from 25 and 3 below (founder decision D-A, 2026-11-04: a 30-minute day shows 4 so the session stays inside its minutes), then grows each exercise to 3 sets and on to the weekly bands. Measured (`test/plan_generator/rest_by_type_report.md`): the tester's plan holds 6 / 6 / 6 / 6 at 60 minutes (was 4 / 6 / 4 / 9), 4 at 30, 6 at 45 and 90; beginner 5, advanced 8. Residue, named: the founder's "5 to 8 at every length" is 4 at 30 minutes by D-A (and 3 below 25); a lead lift can end at 2 sets because accessories take weekly top first; six injury-sweep `pairs` blocks keep a shoulder+elbow thin-day residue (pairs 10 / 22 / 14, pairs46 12 / 8 / 4, no empty day; `kThinCeilings` ratchet). OI-454 (Quads) is next; OI-457 and OI-458 stay separate.
+
+## OI-464 — Drop weight_logs from the supabase_realtime publication (live apply after the Realtime removal ships)
+
+- **Status**: CLOSED · 2026-11-05 · the commit carrying `closes-oi: OI-464`
+- **Blocked on**: — (resolved)
+- **Verified**: 2026-11-04, read on branch `realtime-weight-off` (the removal commit).
+- **Identified**: 2026-11-04 · filed via mint_oi.sh from branch `realtime-weight-off`
+
+**What:** after the client stopped subscribing (batch realtime-weight-off), `public.weight_logs` is still in the `supabase_realtime` publication, so the server still decodes its WAL for no subscriber.
+
+**Do:** `ALTER PUBLICATION supabase_realtime DROP TABLE public.weight_logs;` Rollback: `ALTER PUBLICATION supabase_realtime ADD TABLE public.weight_logs;`. Pair the migration with `backups/applied_migrations.json` and `backups/live_schema_columns.json` as the migrations CLAUDE.md requires; mint the number with `scripts/mint_migration.sh`.
+
+**Acceptance:** `pg_publication_tables` no longer lists `weight_logs`; no new Realtime tenant-init lines in the logs after a new-build cold start. reopen_when: the removal build is on a device and the founder gives the apply go.
+
+**Resolution (2026-11-05).** Migration 168 applied live after the founder's go: `pg_publication_tables` lists no `supabase_realtime` members, `weight_logs` rows intact (79). The no-new-tenant-init check after a new-build cold start stays with the build verification.
+
+## OI-465 — Redeploy log-client-error Edge Function (HIGH_PRIORITY_OP_TYPES lost realtime_subscribe_skipped_free_tier)
+
+- **Status**: CLOSED · 2026-11-05 · the commit carrying `closes-oi: OI-465`
+- **Blocked on**: — (resolved)
+- **Verified**: 2026-11-04, read on branch `realtime-weight-off` (the removal commit).
+- **Identified**: 2026-11-04 · filed via mint_oi.sh from branch `realtime-weight-off`
+
+**What:** the repo's `log-client-error` `HIGH_PRIORITY_OP_TYPES` dropped `realtime_subscribe_skipped_free_tier` (client twin removed, parity test `high_priority_op_types_parity_test.dart`). The deployed function still carries the old entry; behavior is unchanged until redeploy (the op type is simply never sent).
+
+**Do:** host-shell deploy per `supabase/functions/CLAUDE.md` (`emit_payload.js` then `deploy_via_api.js`, verify_jwt per current setting), boot-verify with an anon-key Bearer.
+
+**Acceptance:** deployed version recorded; boot-verified. reopen_when: the founder gives the deploy go.
+
+**Resolution (2026-11-05).** `log-client-error` redeployed from main 58d0d817 as v21 (verify_jwt true) after the founder's go; deploy smoke OK (HTTP 401, function reachable).

@@ -1295,5 +1295,14 @@
     "slug": "session_duration_minutes_comment",
     "cloud_version": "20261103055659",
     "note": "Comment-only change (plan docs/plans/2026-11-03-session-minutes-column-comment.md, 2 review rounds converged): COMMENT ON COLUMN public.user_profile.session_duration_minutes replaces migration 017's text, which said the plan generator no longer reads the column (false since the session set budget flip, PR #195). Applied to project dedsavbjuwgarrhphgnl only, after the founder's per-action go ('apply 166 now', 2026-11-03); the statement was sent verbatim, without the header and trailing comment blocks. Post-apply read-back of col_description equals the new 324-character literal exactly (length 324, md5 3462146c09c0622f41717072e106b3eb, equal to the md5 of the literal in the file). No column, constraint, row, policy or grant changed. File sha256 = this hash (LF). Rollback is the commented block at the end of the file (migration 017's text), needing its own go."
+  },
+  {
+    "migration": "168",
+    "applied_at": "2026-11-05T07:20:00+05:30",
+    "hash": "sha256:45ba2a5bc2506f5327f06a3c7901c73f7fc4f4e2679cce572420976a631a82ec",
+    "applier": "claude-via-node-api",
+    "diagnose": "e4a7c9",
+    "slug": "weight_logs_realtime_publication_drop",
+    "note": "OI-464: DROP public.weight_logs from the supabase_realtime publication (idempotent DO block) after the client Realtime subscription was removed (PR #214, 58d0d817). Applied to project dedsavbjuwgarrhphgnl only, after the founder's per-action go (2026-11-05), through .claude/apply_migration_via_api.js. Verified live: pg_publication_tables lists 0 members for supabase_realtime, weight_logs rows intact (79). Rollback: ALTER PUBLICATION supabase_realtime ADD TABLE public.weight_logs."
   }
 ]
