@@ -120,7 +120,6 @@ void main() {
         'sync_custom_items', // pushed by checkAndSync / writers — the sweep does not re-send it
         'restore_workout_logs',
         'restore_weight_logs',
-        'realtime_handler_weight_logs',
         'push_snapshot',
         'check_and_sync',
         'onboarding_sync',
@@ -559,7 +558,7 @@ void main() {
         'backfill_custom_entity_ids', 'check_and_sync', 'check_and_sync_snapshot',
         'mirror_coach_memory_from_snapshot', 'onboarding_sync',
         'onboarding_sync_replay', 'onboarding_sync_retry', 'pull_cross_channel_logs',
-        'push_snapshot', 'realtime_handler_weight_logs', 'realtime_stream_weight_logs',
+        'push_snapshot',
         'scheduled_workout_fk_recovered', 'scheduled_workout_template_orphaned',
         'subscription_refresh_on_restore',
       };

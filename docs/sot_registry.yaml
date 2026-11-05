@@ -1632,7 +1632,7 @@ concepts:
       truth for which providers must rebuild when the date flips.
     writers:
       - file: lib/core/services/day_rollover_service.dart
-        line_range: 129-138
+        line_range: 116-125
         method: runRolloverNow
         notes: "Class is DayRolloverObserver (not DayRolloverService — stale name in registry)"
     reader_manifest_complete: true
@@ -1709,7 +1709,7 @@ concepts:
       - usageWeeksProvider  # bug ff3131, 2026-09-28 — had write-time invalidation, missing rollover leg only
       - bodyMeasurementsProvider  # L2b Landing B, 2026-10-12 — "due" reads the clock; a no-op until built (flag OFF)
     ist_sites:
-      - { file: lib/core/services/day_rollover_service.dart, line: 133, fn: runRolloverNow }
+      - { file: lib/core/services/day_rollover_service.dart, line: 120, fn: runRolloverNow }
     class_constraints: |
       All "today"-derived providers (todayWorkoutProvider,
       dailyNutritionProvider, streakProvider, aiInsightProvider,
@@ -2979,7 +2979,7 @@ concepts:
       assumption (it cannot detect a lowered production cap).
     writers:
       - file: lib/core/services/sync_service.dart
-        line_range: 3146-3217
+        line_range: 3097-3168
         method: _fetchAllRows
         notes: |
           The ONE paging loop: owner-scoped (.eq user_id) first, optional since filter,
@@ -3940,7 +3940,7 @@ concepts:
           for the "local completed, cloud stale" direction, which is
           _restoreScheduledWorkouts's own job (row above).
       - file: lib/core/services/completed_title_healer.dart
-        line_range: 1-122
+        line_range: 1-121
         method: CompletedTitleHealer.run
         notes: |
           OI-284 (2026-10-04): the ONLY writer that changes the TITLE
@@ -4624,7 +4624,7 @@ concepts:
     behavioral_test_path: test/contracts/weight_logs_writer_to_reader_test.dart
     description: |
       Weight entries stored as weight_<IST-date> in healthBox, type='weight_log'.
-      Real-time cloud sync via Supabase Realtime channel on weight_logs table.
+      No Realtime channel since batch realtime-weight-off (2026-11-04); other-client weights arrive via cold-start pull / restore.
       syncWeightNow() fires fire-and-forget after every logWeight call.
     writers:
       # F12 (2026-06-07): canonical writer is HealthWriteService.logWeight.
@@ -4724,12 +4724,13 @@ concepts:
       # home_provider delegate.
       - { file: lib/core/services/health_write_service.dart, line: 173, fn: logWeight }
     telemetry:
-      failure_op_types: [upsert_weight_log, realtime_handler_weight_logs, realtime_stream_weight_logs]
+      failure_op_types: [upsert_weight_log]
     class_constraints: |
       Key is weight_<IST-date> with type='weight_log'. Weekly report
       series is forward-filled — a weigh-in gap should NOT show 0.
-      Real-time Supabase channel auto-updates Hive on remote writes
-      (cross-device sync without needing an explicit restore).
+      No Realtime channel (removed 2026-11-04, batch realtime-weight-off): a
+      weight another client wrote reaches an existing phone via the cold-start
+      pull (24 h window) or a full restore; OI-279 item 8 tracks the resume pull.
 
   - concept: streaks
     domain: workout
@@ -5056,14 +5057,14 @@ concepts:
       before the legacy fan-out re-runs the ops.
     writers:
       - file: lib/core/services/sync_service.dart
-        line_range: 2010-2027
+        line_range: 1977-1995
         method: _settleRestoreMarker
         notes: |
           The ONE marker writer; the decision is the pure
           `shouldSettleRestoreMarker` (result.succeeded, no streak-critical
           failure, uid non-null, live uid == uid, Hive owner == uid).
       - file: lib/core/services/sync_service.dart
-        line_range: 2052-2062
+        line_range: 2003-2013
         method: restoreFromCloudForUser
         notes: |
           Wrapper shape pinned by completed_title_follows_log_test.dart: runs the
@@ -5087,11 +5088,11 @@ concepts:
           a stale failure from the aborted attempt cannot hold the marker closed
           (B-pass reviewer B F4).
       - file: lib/core/services/sync_service.dart
-        line_range: 2975-3048
+        line_range: 2926-2999
         method: _reportSyncFailure
         notes: first statement calls `RestoreFailureCollector.note(opType)`; the single failure funnel.
       - file: lib/core/services/day_rollover_service.dart
-        line_range: 162-180
+        line_range: 149-167
         method: reckonAndNotifyAfterRestore
         notes: |
           Post-restore: reckon + persist (gated by the marker), ONE best-effort LOW
@@ -6807,7 +6808,7 @@ concepts:
           Fires hive_session_opened / hive_session_closed /
           hive_session_reopen_noop events for every owner transition.
       - file: lib/core/services/subscription_service.dart
-        line_range: 197-1237
+        line_range: 197-1228
         method: subscription refresh + verify events
         semantic: pass-through
         fields_read: []
@@ -8697,7 +8698,7 @@ concepts:
       2026-05-20 A7 audit; PredictionService added 2026-09-26, B-pass
       round 2, single-owner-a — see its writers: entry above.)
     writers:
-      - { file: lib/core/services/sync_service.dart, line: 82, method: "SyncService._() constructor → _registerLifecycle()", notes: "Resets _realtimeSubscription / _healthSyncCompleter / restoreProgressLabel / _restoreCancelled." }
+      - { file: lib/core/services/sync_service.dart, line: 82, method: "SyncService._() constructor → _registerLifecycle()", notes: "Resets _healthSyncCompleter / restoreProgressLabel / _restoreCancelled." }
       - { file: lib/core/services/subscription_service.dart, line: 17, method: "SubscriptionService._() constructor → _registerLifecycle()", notes: "Re-fires onStateChanged so Riverpod consumers re-read the new user's PRO state." }
       - { file: lib/core/services/workout_schedule_service.dart, line: 177, method: "WorkoutScheduleService._() constructor → _registerLifecycle()", notes: "All state in workoutBox / userBox; reset hook is a no-op placeholder." }
       - { file: lib/core/services/usage_counter_service.dart, line: 13, method: "UsageCounterService._() constructor → _registerLifecycle()", notes: "Counters live in per-user userBox; reset hook is a no-op placeholder." }
@@ -8728,7 +8729,6 @@ concepts:
     class_constraints: |
       A7 cross-account-leak class — prevents stale in-memory state from
       a previous user's session bleeding into the next sign-in:
-        - SyncService realtime sub firing into the new user's Riverpod tree
         - AiService http.Client holding a tail of inflight requests
         - RazorpayService _onSuccess callback re-entering the new user's
           paywall closure if the previous user abandoned checkout
@@ -12032,7 +12032,7 @@ concepts:
           Never throws: an escape here would kill the user's ENTIRE daily
           snapshot via compileDailySnapshot -> pushSnapshotNow, not just prefs.
       - file: lib/core/services/sync_service.dart
-        line_range: 1134-1191
+        line_range: 1111-1168
         method: compileDailySnapshot
         semantic: pass-through
         notes: >
@@ -12331,7 +12331,7 @@ concepts:
           (→913) despite the gate not flagging it, found by grepping the
           symbol directly rather than trusting the gate's silence on it.
       - file: lib/core/services/sync_service.dart
-        line_range: 2833-2833
+        line_range: 2784-2784
         method: restoreOpTimeout
         semantic: per-op-ceiling
         notes: day-swapper + sync-load Task 20 fix1 (diagnose a9d3f6) shifted
@@ -12342,7 +12342,7 @@ concepts:
           an N-M line_range — but left stale it would misdirect a future
           reader by the same +14).
       - file: lib/core/services/sync_service.dart
-        line_range: 2856-2860
+        line_range: 2807-2811
         method: applyRestoreCeiling
         semantic: apply-ceiling
         notes: day-swapper + sync-load Task 20 shifted this range (+148 lines,
@@ -12352,7 +12352,7 @@ concepts:
           blocks on a citation you shifted). Shifted again by task-20-fix1
           (diagnose a9d3f6, +14 lines, same method) for the same reason.
       - file: lib/core/services/sync_service.dart
-        line_range: 2870-2872
+        line_range: 2823-2825
         method: restoreFailureReason
         semantic: telemetry-reason-split
         notes: same shift as applyRestoreCeiling directly above, both times; all three re-derived +3 by the Hermes sync_epoch_seen doc comment (2026-09-28), then +1 (with _safeRestoreOp) by the plan_engine_flags import the merge-review F4 fix added (a3e7d9).
@@ -12367,7 +12367,7 @@ concepts:
         method: _authRedirect
         semantic: delegates-to-pure-fn
       - file: lib/core/services/sync_service.dart
-        line_range: 2855-2897
+        line_range: 2806-2848
         method: _safeRestoreOp
         semantic: bounded-await
     hive:
@@ -14233,103 +14233,6 @@ concepts:
       table: "n/a"
       columns: []
     sync_methods: []
-  - concept: sync_realtime_subscription
-    domain: cross_domain
-    behavioral_test_path: test/contracts/realtime_pro_gate_behavioral_test.dart
-    description: |
-      Diagnose e4a7c9. The weight_logs Supabase Realtime subscription is a
-      PRO-ONLY feature, and the entitlement check belongs on the SINK
-      (subscribeToRealtimeSync) — NOT on the callers.
-
-      Measured cost of getting this wrong: realtime.list_changes() was 6,463s
-      of 18,279s total DB CPU (35.4%) across 900,823 calls over the project's
-      first 143 days, serving a feature gated to a PRO population of ~zero.
-      Cost scales with CONNECTED CLIENTS, not with subscribers.
-
-      Root cause was guard-at-one-entry (bug-class 2.25). sync_service.dart
-      wrapped its call in `if (isPro())`; day_rollover_service.dart's resume
-      handler did NOT, under a comment that claimed it did. The callee guarded
-      only re-entrancy. Every AppLifecycleState.resumed therefore attached a
-      WAL poller for every user, free or PRO.
-
-      Use proStateSnapshot(), NOT isPro(). isPro() is the DECISION path and can
-      reach _downgradeLocally() — 5 Hive writes plus an onStateChanged →
-      ref.invalidate cascade. Deciding whether to open a socket must not mutate
-      entitlement state (OI-44 Unit 6, diagnose a9c4e1).
-
-      The gate is only half the contract. subscribeToRealtimeSync's first line
-      is an `_realtimeSubscription != null` early return, so an ALREADY-ATTACHED
-      channel never re-enters the guard. Without a teardown on downgrade a
-      lapsed PRO user keeps a live PRO channel for the rest of the foreground
-      session. _downgradeLocally is the single sink all 8 downgrade call sites
-      funnel through, so the teardown belongs there.
-    writers:
-      - file: lib/core/services/sync/sync_realtime.dart
-        line_range: 33-73
-        method: subscribeToRealtimeSync
-        semantic: entitlement-gate-at-sink
-        canonical: true
-        notes: >-
-          The gate goes AFTER the re-entrancy return and BEFORE the
-          refreshSession() — a free user must not pay a POST /token to learn
-          it is not entitled.
-      - file: lib/core/services/subscription_service.dart
-        line_range: 1175
-        method: _downgradeLocally
-        semantic: teardown-on-downgrade
-        notes: >-
-           8 call sites funnel here. Line numbers deliberately REMOVED from this
-          prose 2026-09-10: the list was wrong on all eight the day it was
-          authored (real positions then were 461/483/601/621/912/922/930/1088,
-          not 439/461/579/599/890/900/908/1066) and drifted again on rebase.
-          A hand-maintained line list inside a free-text `notes:` field is
-          invisible to check_sot_registry_parity.dart, which only validates the
-          `line_range:` key -- so nothing could ever have caught it. The COUNT
-          (8) is the durable claim; re-derive positions with
-          `grep -n "_downgradeLocally()" lib/core/services/subscription_service.dart`.
-          890/900/908 are refreshFromSupabase's no-row / null-response branches
-          — the most likely real-world lapse path.
-      - file: lib/core/services/sync_service.dart
-        line_range: 167-217
-        method: _onUserChanged
-        semantic: account-swap-teardown
-        notes: >-
-          Calls unsubscribeRealtime() rather than inlining the cancel at
-          159-166, so a single teardown site carries any future bookkeeping.
-    readers:
-      - file: lib/core/services/sync/sync_realtime.dart
-        line_range: 77-152
-        method: _attachRealtimeStream
-        semantic: opens-the-wal-stream
-      - file: lib/core/services/day_rollover_service.dart
-        line_range: 73
-        method: didChangeAppLifecycleState
-        semantic: resume-resubscribe
-        notes: >-
-          Ungated by design AFTER this fix — the sink owns the decision. This
-          is also the free-to-PRO recovery path: a newly-PRO user attaches on
-          the next resume.
-      - file: lib/core/services/sync_service.dart
-        line_range: 1022-1155
-        method: checkAndSync
-        semantic: flag-check
-    hive:
-      box: configBox
-      key: disable_realtime_pro_gate
-      shape: "bool kill-switch in the SHARED configBox (device-level, deliberately not user-scoped — matches disable_sync_debounce and its siblings). Absent/false = gate ACTIVE."
-    cloud:
-      table: weight_logs
-      columns: [id, user_id, date, weight_kg, created_at]
-    sync_methods: [subscribeToRealtimeSync, unsubscribeRealtime]
-    restore_methods: [_restoreWeightLogs]
-    forbidden_legacy_patterns:
-      - "calling isPro() instead of proStateSnapshot() from the gate — isPro() may WRITE via _downgradeLocally and fires ref.invalidate"
-      - "gating a CALLER of subscribeToRealtimeSync instead of the sink — this is the exact shape of the original bug (2.25)"
-      - "a comment asserting an entitlement check on a line that does not perform one"
-      - "adding weight_logs realtime without a teardown on downgrade — the re-entrancy early-return means an attached channel never re-enters the gate"
-      - "adding a table to the supabase_realtime publication with no PRO-gated consumer"
-    contract_test_path: test/contracts/realtime_pro_gate_behavioral_test.dart
-
   # observation-batch-and-digest-redesign 2026-09-21 / A2a — a JSON-shaped
   # Gemini reply rendered raw in chat instead of natural language, both live
   # and (a distinct gap) on every relaunch via the restore path.

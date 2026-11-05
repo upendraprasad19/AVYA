@@ -39,9 +39,8 @@
 // WorkoutWriteService.
 //
 // Not hooked (and why): `restoreLightweightAlways` restores no logs; the
-// `*ForSyncDomain` entry points are flag-gated OFF; `sync_realtime.dart`
-// touches no schedule or wlog rows. Whoever flips them — or OI-279's
-// resume-pull — must call `CompletedTitleHealer.run()` after restoring logs.
+// `*ForSyncDomain` entry points are flag-gated OFF. Whoever flips them — or
+// OI-279's resume-pull — must call `CompletedTitleHealer.run()` after restoring logs.
 
 import 'dart:async';
 

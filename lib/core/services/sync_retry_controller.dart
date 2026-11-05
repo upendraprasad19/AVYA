@@ -110,7 +110,7 @@ const Set<String> kNotSweptOpTypes = {
   'upsert_coach_memory_induction',
 };
 
-/// `_reportSyncFailure` also receives restore, realtime, onboarding and
+/// `_reportSyncFailure` also receives restore, onboarding and
 /// bookkeeping failures. Only a PUSH failure that the sweep re-sends can be fixed
 /// by re-running it. `restore_sync_*` is a push op wrapped by `_safeRestoreOp` in
 /// `weeklyFullSync` that hit its 45 s ceiling; [kNotSweptOpTypes] are excluded.
