@@ -7353,32 +7353,6 @@ Found by the M2b Part B Chrome check (360 dp, real fonts, the real card and exer
 
 **Done when.** The cause is MEASURED (not guessed): either the runner's process handling under load is shown to return a corrupt status, or the harness reads a status it should not; or every spawn helper in the fixtures prints stdout, stderr and the status on a non-zero result (the token-path fixture already does, and still showed nothing) and retries a status outside 0..255 once with a recorded note. Blast radius: `feature` (test infrastructure).
 
-## OI-464 — Drop weight_logs from the supabase_realtime publication (live apply after the Realtime removal ships)
-
-- **Status**: OPEN
-- **Blocked on**: founder go for a live apply (CLAUDE.md 4.3: its own explicit authorization; off-hours, because every DDL fires `pgrst_ddl_watch` and a PostgREST schema reload).
-- **Verified**: 2026-11-04, read on branch `realtime-weight-off` (the removal commit).
-- **Identified**: 2026-11-04 · filed via mint_oi.sh from branch `realtime-weight-off`
-
-**What:** after the client stopped subscribing (batch realtime-weight-off), `public.weight_logs` is still in the `supabase_realtime` publication, so the server still decodes its WAL for no subscriber.
-
-**Do:** `ALTER PUBLICATION supabase_realtime DROP TABLE public.weight_logs;` Rollback: `ALTER PUBLICATION supabase_realtime ADD TABLE public.weight_logs;`. Pair the migration with `backups/applied_migrations.json` and `backups/live_schema_columns.json` as the migrations CLAUDE.md requires; mint the number with `scripts/mint_migration.sh`.
-
-**Acceptance:** `pg_publication_tables` no longer lists `weight_logs`; no new Realtime tenant-init lines in the logs after a new-build cold start. reopen_when: the removal build is on a device and the founder gives the apply go.
-
-## OI-465 — Redeploy log-client-error Edge Function (HIGH_PRIORITY_OP_TYPES lost realtime_subscribe_skipped_free_tier)
-
-- **Status**: OPEN
-- **Blocked on**: founder go for a live Edge Function deploy (per-action authorization); merge does not redeploy it.
-- **Verified**: 2026-11-04, read on branch `realtime-weight-off` (the removal commit).
-- **Identified**: 2026-11-04 · filed via mint_oi.sh from branch `realtime-weight-off`
-
-**What:** the repo's `log-client-error` `HIGH_PRIORITY_OP_TYPES` dropped `realtime_subscribe_skipped_free_tier` (client twin removed, parity test `high_priority_op_types_parity_test.dart`). The deployed function still carries the old entry; behavior is unchanged until redeploy (the op type is simply never sent).
-
-**Do:** host-shell deploy per `supabase/functions/CLAUDE.md` (`emit_payload.js` then `deploy_via_api.js`, verify_jwt per current setting), boot-verify with an anon-key Bearer.
-
-**Acceptance:** deployed version recorded; boot-verified. reopen_when: the founder gives the deploy go.
-
 ## OI-466 — Telegram copy still shown in the paywall and Telegram card (Telegram permanently dropped)
 
 - **Status**: OPEN
@@ -7402,3 +7376,16 @@ Found by the M2b Part B Chrome check (360 dp, real fonts, the real card and exer
 **Scope note:** OI-279's pull replaces only the weight leg; nutrition waits on OI-281; measurements are covered by neither. Decide the end state of each leg, then rename/relabel in the same batch that changes it (the `source` value is read by the UI, so sweep `lib/`, `test/` and `supabase/functions/` for it first).
 
 **Acceptance:** each leg has a named owner; the Telegram label is gone. reopen_when: OI-279 ships.
+
+## OI-470 — Post-build check: no Realtime tenant init on a new-build cold start (with a positive control)
+
+- **Status**: OPEN
+- **Blocked on**: the founder's next `/build-apk` and a cold start of that build on a device (CLAUDE.md 4.3).
+- **Verified**: never
+- **Identified**: 2026-11-05 · filed via mint_oi.sh from branch `weight-logs-publication-drop`
+
+**What:** the Realtime removal (PR #214) and the publication drop (migration 168) are verified in code and in the database, but not yet against a device: the claim that a new-build cold start opens no Realtime channel has no log evidence. The incident that started this work (2026-11-04 ~05:03 UTC) showed `Tenant ... is initializing` in the Realtime log on a cold start.
+
+**Do:** after the founder installs the new build and cold-starts it, read the Realtime and PostgREST logs for that minute (24 h retention, so within a day): expect NO Realtime tenant-init line. Run a positive control in the same window (an older build, or a deliberate channel attach) so an empty result means something. Record the lines read and the time window here.
+
+**Acceptance:** log evidence for the new-build cold start plus the positive control is recorded; any init line found reopens the removal. reopen_when: the new build is on a device.
