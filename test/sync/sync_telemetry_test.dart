@@ -209,7 +209,7 @@ void main() {
         // an entirely separate, pre-existing pattern: callers across
         // sync_service.dart AND every `part of` domain file under
         // lib/core/services/sync/ (sync_workout/nutrition/health/coach/
-        // profile/community/realtime/restore_completeness.dart — all
+        // profile/community/restore_completeness.dart — all
         // literally the same class via Dart `part of`) follow the
         // "audit-2026-05-11 H-42 — telemetry pair" idiom, where the CALLER
         // ALSO calls ErrorTelemetry.recordNonFatal (generic reason)

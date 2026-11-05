@@ -41,7 +41,6 @@ void main() {
         'restoreFromCloud',
         'restoreFromCloudForUser',
         'restoreLightweightAlways',
-        'subscribeToRealtimeSync',
         'syncCoachMemoryNow',
         'syncCommunityItems',
         'syncCustomItemsNow',
@@ -63,7 +62,6 @@ void main() {
         'syncWorkoutData',
         // H1a (Unit H) — non-coalesced variant for awaited callers.
         'syncWorkoutDataNow',
-        'unsubscribeRealtime',
         'weeklyFullSync',
         // Getters that look like methods (counted as public API surface):
         'healthSyncDone',

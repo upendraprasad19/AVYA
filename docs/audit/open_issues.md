@@ -5462,6 +5462,8 @@ Requirements the Phase 1 plan reviews established (all carried in the draft file
 
 7. (added 2026-10-04 by swap-title-and-launch-refresh, OI-284) After the pull restores any workout log, call `CompletedTitleHealer.run()` (local-only, no network; makes a completed non-template row's title follow its own `wlog_<date>`) - the heal is hooked into the full-restore entry points, NOT the resume path, so the pull must call it itself. It must NOT bump `restoreCompletedTick` (item 4); the pull's own tick is what refreshes the UI. The restore wrapper in that plan also adds a separate `restoreRefreshTick` for failed/cancelled full restores; the mixin listens to both, so rebase the listener list together.
 
+8. (added 2026-11-04, batch realtime-weight-off) **`weight_logs` is in this OI's scope.** The PRO Realtime `weight_logs` subscription was deleted in that batch (it had no live producer: Telegram is deferred and permanently dropped, founder 2026-11-04). Fact now: a weight another client wrote more than 24 h ago reaches a phone that already holds data only by a full restore (empty or no workout history) — `pullRecentCrossChannelLogs` (`sync_service.dart`, Telegram-labelled, `source: 'telegram'`) covers only a 24 h `created_at` window at cold start, and nothing re-pulls on resume. The founder accepted that gap on 2026-11-04 until this pull ships; the pull adds the weight leg with no weight-specific code beyond the same windowed query. reopen_when: store launch, or the founder wants cross-device weight sooner. Status and Blocked-on are unchanged.
+
 Items 2 and 3 live in the SHARED writer `_restoreExerciseLogs`, so the cold-start restore has the same exposure: Phase 1b VERIFIES that and fixes it at the writer, not only in the pull. Water and a stale device's overwrite stay with OI-280.
 
 ## OI-280 — Phase 2 multi-device delta sync: updated_at+deleted_at on every synced table, per-table cursor, conditional push, water as per-drink entries, cold-start restore replaced by a cursor delta (the since=2020-01-01 full-history restore re-runs on every swipe-away); also the fixed 3 s splash floor
@@ -7363,3 +7365,53 @@ Found by the M2b Part B Chrome check (360 dp, real fonts, the real card and exer
 **What.** Test (f) checks that a CONFIRM tap inside the first 500 ms of a held saved card is ignored. The guard runs on a real `Stopwatch`, which a test cannot fake, so the test starts its own stopwatch before the mount and asserts only while that proves the window was still open. In a run that stalls past 480 ms before the tap, the assertion is skipped. It can never fail wrongly, but a run that stalls silently checks less. Split out of OI-459, where it was recorded as a residual of OI-450.
 
 **Done when.** The guard reads an injectable clock (a `lib/` change in the card widget) so test (f) asserts the tap guard on every run, with a mutation (guard removed) that reddens it.
+
+## OI-464 — Drop weight_logs from the supabase_realtime publication (live apply after the Realtime removal ships)
+
+- **Status**: OPEN
+- **Blocked on**: founder go for a live apply (CLAUDE.md 4.3: its own explicit authorization; off-hours, because every DDL fires `pgrst_ddl_watch` and a PostgREST schema reload).
+- **Verified**: 2026-11-04, read on branch `realtime-weight-off` (the removal commit).
+- **Identified**: 2026-11-04 · filed via mint_oi.sh from branch `realtime-weight-off`
+
+**What:** after the client stopped subscribing (batch realtime-weight-off), `public.weight_logs` is still in the `supabase_realtime` publication, so the server still decodes its WAL for no subscriber.
+
+**Do:** `ALTER PUBLICATION supabase_realtime DROP TABLE public.weight_logs;` Rollback: `ALTER PUBLICATION supabase_realtime ADD TABLE public.weight_logs;`. Pair the migration with `backups/applied_migrations.json` and `backups/live_schema_columns.json` as the migrations CLAUDE.md requires; mint the number with `scripts/mint_migration.sh`.
+
+**Acceptance:** `pg_publication_tables` no longer lists `weight_logs`; no new Realtime tenant-init lines in the logs after a new-build cold start. reopen_when: the removal build is on a device and the founder gives the apply go.
+
+## OI-465 — Redeploy log-client-error Edge Function (HIGH_PRIORITY_OP_TYPES lost realtime_subscribe_skipped_free_tier)
+
+- **Status**: OPEN
+- **Blocked on**: founder go for a live Edge Function deploy (per-action authorization); merge does not redeploy it.
+- **Verified**: 2026-11-04, read on branch `realtime-weight-off` (the removal commit).
+- **Identified**: 2026-11-04 · filed via mint_oi.sh from branch `realtime-weight-off`
+
+**What:** the repo's `log-client-error` `HIGH_PRIORITY_OP_TYPES` dropped `realtime_subscribe_skipped_free_tier` (client twin removed, parity test `high_priority_op_types_parity_test.dart`). The deployed function still carries the old entry; behavior is unchanged until redeploy (the op type is simply never sent).
+
+**Do:** host-shell deploy per `supabase/functions/CLAUDE.md` (`emit_payload.js` then `deploy_via_api.js`, verify_jwt per current setting), boot-verify with an anon-key Bearer.
+
+**Acceptance:** deployed version recorded; boot-verified. reopen_when: the founder gives the deploy go.
+
+## OI-466 — Telegram copy still shown in the paywall and Telegram card (Telegram permanently dropped)
+
+- **Status**: OPEN
+- **Blocked on**: none
+- **Verified**: 2026-11-04, `paywall_sheet.dart:122` and the Telegram card copy read on branch `realtime-weight-off`.
+- **Identified**: 2026-11-04 · filed via mint_oi.sh from branch `realtime-weight-off`
+
+**What:** user-facing copy still sells Telegram ("Weekly AI nutrition report + Telegram push" in the paywall, and the Telegram card). Founder 2026-11-04: Telegram is permanently dropped.
+
+**Acceptance:** copy removed or reworded (Wardroom brand soul loaded first; psychology pass if a paywall line changes); tests/pins that cite the old strings repointed.
+
+## OI-467 — pullRecentCrossChannelLogs is Telegram-labelled; OI-279 replaces only the weight leg
+
+- **Status**: OPEN
+- **Blocked on**: OI-279 (resume pull) and OI-281 (meals); measurements are outside both.
+- **Verified**: 2026-11-04, `sync_service.dart` `pullRecentCrossChannelLogs` read on branch `realtime-weight-off`.
+- **Identified**: 2026-11-04 · filed via mint_oi.sh from branch `realtime-weight-off`
+
+**What:** `pullRecentCrossChannelLogs` is Telegram-labelled (`source: 'telegram'`, 24 h `created_at` window at cold start) and is now the only cold-start path for other-client weight, nutrition and measurements on an already-populated phone. With Telegram dropped it should be renamed and relabelled.
+
+**Scope note:** OI-279's pull replaces only the weight leg; nutrition waits on OI-281; measurements are covered by neither. Decide the end state of each leg, then rename/relabel in the same batch that changes it (the `source` value is read by the UI, so sweep `lib/`, `test/` and `supabase/functions/` for it first).
+
+**Acceptance:** each leg has a named owner; the Telegram label is gone. reopen_when: OI-279 ships.

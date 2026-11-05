@@ -97,13 +97,12 @@ final RegExp _indexLiteral =
 // invisible to the statement-scoped scan above it. Ruling: forbid aliasing
 // outright rather than trying to trace it — lexical form is the contract.
 final RegExp _assignOp = RegExp(r'(?<![=!<>])=(?!=)(?!>)');
-// `.stream(` is terminal too: `_realtimeSubscription = client.from('t')
-// .stream(...).listen(...)` (sync_realtime.dart) opens a realtime channel and
-// is never later called with a write verb — it is a subscription handle, not
-// a query builder stashed for a future `.upsert(`/etc. Confirmed live: this
-// is the ONLY assignment of a `.from(` chain anywhere in the current sync
-// layer (2026-09-27), and excluding it is what keeps this gate at zero
-// false positives on the real tree.
+// `.stream(` is terminal too: `sub = client.from('t').stream(...).listen(...)`
+// opens a realtime channel and is never later called with a write verb — it is
+// a subscription handle, not a query builder stashed for a future
+// `.upsert(`/etc. (The only such assignment in the sync layer, the PRO
+// weight_logs stream in the former sync_realtime.dart, was 2026-09-27's sole
+// example and has since been removed; the rule stays generic.)
 final RegExp _terminalRead = RegExp(r'\.(select|rpc|stream)\s*\(');
 
 const String _skipIndexPath = 'lib/core/services/sync/sync_skip_index.dart';

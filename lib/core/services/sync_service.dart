@@ -68,7 +68,6 @@ part 'sync/sync_community.dart';
 part 'sync/sync_health.dart';
 part 'sync/sync_nutrition.dart';
 part 'sync/sync_profile.dart';
-part 'sync/sync_realtime.dart';
 part 'sync/sync_restore_completeness.dart';
 part 'sync/sync_restore_failure_collector.dart';
 part 'sync/sync_resilience.dart';
@@ -172,7 +171,7 @@ class SyncService {
 
   /// Tech-debt audit 2026-05-20 / A7 — register cross-account reset
   /// hook so the singleton's in-memory state (queue init flag,
-  /// realtime sub, restore-cancelled flag, health-sync completer,
+  /// restore-cancelled flag, health-sync completer,
   /// restore-progress label) is dropped when [HiveUserSession] flips
   /// to a new user. Public API unchanged — callers do not move.
   void _registerLifecycle() {
@@ -200,28 +199,6 @@ class SyncService {
     // the 2026-09-17 spurious debit.)
     _restoreSettledUserId = null;
     _lastRestoreWithheldReason = null;
-
-    // Drop realtime subscription so the next user does not receive
-    // the previous user's broadcast events.
-    //
-    // e4a7c9 — was an INLINE cancel duplicating unsubscribeRealtime(). The two
-    // were equivalent, which is exactly why the drift was invisible: any
-    // bookkeeping added to the public method silently skipped this path. One
-    // teardown site now, so that cannot happen. (unsubscribeRealtime() carries
-    // the try/catch this block had.)
-    unsubscribeRealtime();
-    // e4a7c9 — the ONLY place the free-tier skip latch resets, and it belongs
-    // here specifically. The latch means "I have already reported that THIS
-    // user is unentitled", so a user swap must clear it or free user A's latch
-    // silently suppresses free user B's first skip event.
-    //
-    // Deliberately NOT inside unsubscribeRealtime(): that is called on every
-    // app background (day_rollover_service.dart), so resetting there re-fires
-    // the event on every resume — an Edge Function call plus a client_errors
-    // row per foreground, across the whole free population. That is the exact
-    // bug-class 2.13 flood the latch exists to prevent, and the first version
-    // of this fix shipped it. Caught by the B-pass.
-    _realtimeSkipLogged = false;
 
     // Complete any in-flight health-sync waiter so callers awaiting
     // the previous user's pass do not hang on the new user's session.
@@ -948,27 +925,6 @@ class SyncService {
 
   // ── Public API ──────────────────────────────────────────────
 
-  /// Active realtime subscription (PRO only, for Telegram cross-channel).
-  StreamSubscription? _realtimeSubscription;
-
-  /// e4a7c9 — one-shot latch so the free-tier skip is logged per transition,
-  /// not per resume. `didChangeAppLifecycleState` fires on every foreground,
-  /// so a bare `logEvent` here would become its own telemetry flood — the
-  /// bug-class 2.13 shape, in the fix for a cost bug.
-  bool _realtimeSkipLogged = false;
-
-  /// e4a7c9 kill-switch (§4.6, mandatory at platform tier): restores the
-  /// verbatim pre-fix behaviour of subscribing regardless of entitlement.
-  /// Defensive read (see [_syncDebounceDisabled]) — absent configBox defaults
-  /// to fix-ACTIVE, which is also the safe direction (no socket).
-  bool get _realtimeProGateDisabled {
-    try {
-      return _hive.configBox.get('disable_realtime_pro_gate') == true;
-    } catch (_) {
-      return false;
-    }
-  }
-
   /// Completes when health sync finishes (or immediately if disabled).
   /// The home screen awaits this to invalidate [todayStepsProvider] at
   /// exactly the right moment instead of guessing with a fixed delay.
@@ -1121,11 +1077,6 @@ class SyncService {
 
       // Pull approved community foods/exercises.
       await syncCommunityItems();
-
-      // PRO users: subscribe to realtime for instant Telegram sync.
-      if (SubscriptionService.instance.isPro()) {
-        unawaited(subscribeToRealtimeSync());
-      }
 
       // F5 · Broadcast restore-complete so screens can invalidate cached
       // providers (PRs recomputed from refreshed logs, plan from latest

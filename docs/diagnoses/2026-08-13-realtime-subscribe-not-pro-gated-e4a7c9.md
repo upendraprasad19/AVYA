@@ -32,14 +32,14 @@ symptom: |
   impact_analysis). Not the proximate trigger of that outage, but the largest
   standing draw on the CPU budget whose exhaustion caused it.
 concept: sync_realtime_subscription
-sot_registry_entry: sync_realtime_subscription
+sot_registry_entry: not_applicable (concept removed with the Realtime subscription, batch realtime-weight-off, 2026-11-04)
 writers:
-  - { file: lib/core/services/sync/sync_realtime.dart, method_or_widget: "subscribeToRealtimeSync — attaches the weight_logs stream; guards re-entrancy only, no entitlement check (THE SINK, where the guard belongs)", line: 13 }
-  - { file: lib/core/services/sync/sync_realtime.dart, method_or_widget: "_attachRealtimeStream — opens .from('weight_logs').stream(primaryKey: ['id'])", line: 42 }
+  - { file: lib/core/services/sync/sync_realtime.dart, method_or_widget: "subscribeToRealtimeSync — attaches the weight_logs stream; guards re-entrancy only, no entitlement check (THE SINK, where the guard belongs)", line_at_diagnosis: 13 (file deleted, batch realtime-weight-off) }
+  - { file: lib/core/services/sync/sync_realtime.dart, method_or_widget: "_attachRealtimeStream — opens .from('weight_logs').stream(primaryKey: ['id'])", line_at_diagnosis: 42 (file deleted, batch realtime-weight-off) }
   - { file: lib/core/services/day_rollover_service.dart, method_or_widget: "didChangeAppLifecycleState resumed branch — UNGATED call; comment claims 'if PRO', code does not check", line: 65 }
   - { file: lib/core/services/sync_service.dart, method_or_widget: "checkAndSync — the ONE correctly-gated call site (isPro() wrapper)", line: 789 }
 readers:
-  - { file: lib/core/services/sync/sync_realtime.dart, method_or_widget: "the stream handler — merges inbound weight_logs rows into Hive", line: 62 }
+  - { file: lib/core/services/sync/sync_realtime.dart, method_or_widget: "the stream handler — merges inbound weight_logs rows into Hive", line_at_diagnosis: 62 (file deleted, batch realtime-weight-off) }
   - { file: lib/core/services/day_rollover_service.dart, method_or_widget: "didChangeAppLifecycleState paused branch — unsubscribeRealtime (correctly unconditional; tearing down a non-existent subscription is a no-op)", line: 68 }
   - { file: lib/app.dart, method_or_widget: "dispose — unsubscribeRealtime", line: 88 }
 hive_key_prefix: "n/a — realtime inbound rows land under the existing weight-log keys written by HealthWriteService"
