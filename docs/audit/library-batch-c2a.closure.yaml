@@ -1,7 +1,6 @@
 # Closure ledger: Library Batch C2a (removals, production-name repoints, one cloud deactivation)
 # Gate 40 (validate_audit_closure.dart). One terminal_state per finding; no `deferred:` key.
-# Diagnose c2a7f1. The cloud apply entry is blocked_on_user until the founder's go on the exact
-# migration file; the amendment commit after the apply moves it to closed_in_commit.
+# Diagnose c2a7f1. The cloud apply entry (C2A-8) closed with migration 167 (a7be5078).
 
 batch: library-batch-c2a
 diagnose: docs/diagnoses/2026-11-04-library-batch-c2a-removals-c2a7f1.md
@@ -55,8 +54,10 @@ findings:
     notes: "generator and pins only; the migration file lands with its live apply."
   - id: C2A-8
     title: "Cloud migration applied: the 50 removed rows are is_active=false in project dedsavbjuwgarrhphgnl"
-    terminal_state: blocked_on_user
-    reason: "Live production apply needs the founder's explicit go on the exact migration file (CLAUDE.md 4.3); the file does not exist until it is minted at the end of this batch."
+    terminal_state: closed_in_commit
+    commit: a7be5078
+    verification: test/contracts/exercise_library_cloud_tuples_match_test.dart
+    notes: "migration 167, applied 2026-11-05 after the founder go on the exact file; live read-back 921 rows, 864 active, 57 inactive, 0 removed names active; ledger hash recorded in backups/applied_migrations.json."
   - id: C2A-9
     title: "Twin rows E084 E111 E162 E169 E179 E211 kept until their C2b twins ship (E111 is held by the depth rule and also has twin G1489)"
     terminal_state: upstream_blocked

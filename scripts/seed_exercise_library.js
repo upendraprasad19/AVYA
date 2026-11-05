@@ -206,9 +206,9 @@ const retireStatements = data
 // Batch C2a: the `decision: remove` ids. Cloud never deletes (promotions and logs may point at a row), so each is
 // deactivated. A removed row that shares its name with a KEPT row also takes that row's cues (getFormCues matches by name
 // with no is_active filter); a removed row whose name differs keeps its own cues, which are right for its own name.
-const removedEntries = fs.existsSync(BATCH.removalsFile)
-  ? JSON.parse(fs.readFileSync(BATCH.removalsFile, 'utf8')).entries.filter((e) => e.decision === 'remove').sort((a, b) => a.id.localeCompare(b.id))
-  : [];
+// A missing removals file is a hard stop, never an empty list: a run that quietly emits no deactivations looks like success.
+if (!fs.existsSync(BATCH.removalsFile)) fail(`removals file not found: ${path.relative(ROOT, BATCH.removalsFile)}`);
+const removedEntries = JSON.parse(fs.readFileSync(BATCH.removalsFile, 'utf8')).entries.filter((e) => e.decision === 'remove').sort((a, b) => a.id.localeCompare(b.id));
 // A removed id that is back in the library would be upserted active and then deactivated by the statements below (a row that
 // ships dead). B-pass C2a finding 4: refuse, the Dart seed has the same mirror (`pruneRetired(...difference(shipped))`).
 const dataIds = new Set(data.map((item) => item.id));

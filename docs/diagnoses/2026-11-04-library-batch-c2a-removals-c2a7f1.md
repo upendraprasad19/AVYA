@@ -86,8 +86,8 @@ touched_layers_checked:
   - { tier: 1, name: client_code, status: fixed_in_this_batch, evidence: "importer removals pass, seed v18 prune, name repoints in exercise_selector, injury_substitutes and warmup_cooldown, with the tests listed in regression_test_planned" }
   - { tier: 2, name: hive_local_state, status: fixed_in_this_batch, evidence: "library_seed_v18_upgrade_behavioral_test.dart drives the real SeedService.seedIfNeeded on a v17 box: the 50 removed ids are gone, every other row and the UUID custom and community rows stay" }
   - { tier: 3, name: postgres_schema, status: not_applicable, evidence: "No schema change: the removed rows are deactivated through the existing is_active column." }
-  - { tier: 4, name: postgres_data, status: not_applicable, evidence: "Live data is touched only by the seed migration applied at the end of this batch; its live results are recorded in the amendment commit." }
-  - { tier: 5, name: migrations_applied, status: not_applicable, evidence: "The seed migration is minted and applied in the last step of this batch (own explicit go); this entry is amended with the number and hash." }
+  - { tier: 4, name: postgres_data, status: verified, evidence: "Live read-back after migration 167 (2026-11-05): 921 rows, 864 active, 57 inactive (the 7 Batch A retirements plus the 50 removed), 0 removed names active. Before: 921 rows, 914 active, all 50 removed rows present and active." }
+  - { tier: 5, name: migrations_applied, status: fixed_in_this_batch, evidence: "Migration 167 applied to dedsavbjuwgarrhphgnl on 2026-11-05 (HTTP 201) after the founder go on the exact file; backups/applied_migrations.json carries its sha256 in the same commit (a7be5078)." }
   - { tier: 6, name: edge_function_code_vs_deploy, status: not_applicable, evidence: "No Edge Function is touched." }
   - { tier: 7, name: cron_jobs, status: not_applicable, evidence: "No cron job is added or changed." }
   - { tier: 8, name: rls_policies, status: not_applicable, evidence: "No policy is touched." }

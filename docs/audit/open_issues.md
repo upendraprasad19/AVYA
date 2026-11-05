@@ -7351,17 +7351,6 @@ Found by the M2b Part B Chrome check (360 dp, real fonts, the real card and exer
 
 **Done when.** The cause is MEASURED (not guessed): either the runner's process handling under load is shown to return a corrupt status, or the harness reads a status it should not; or every spawn helper in the fixtures prints stdout, stderr and the status on a non-zero result (the token-path fixture already does, and still showed nothing) and retries a status outside 0..255 once with a recorded note. Blast radius: `feature` (test infrastructure).
 
-## OI-460 — Library Batch C2a: sheet-drop removals the depth rule allows, production-name repoints, orphan plates, cloud deactivation
-
-- **Status**: OPEN
-- **Blocked on**: none
-- **Verified**: never
-- **Identified**: 2026-11-04 · filed via mint_oi.sh from branch `library-batch-c2`
-
-Narrowed 2026-11-04 after two combined-plan review rounds came back not converged and the unit was split (section 4.12.1). C2a removes the sheet-drop library rows whose replacement already exists in the shipped 914-row library, repoints every exercise name production code hard-codes, deletes four orphaned plate SVGs and deactivates the removed rows in the cloud. Plan: `docs/plans/2026-11-04-library-batch-c2a-removals.md`. The twins, the E230 retag and the media are OI-462.
-
-**Done when.** The 50 removal ids are gone from `assets/data/exercise_library.json` and from every install (seed v18 prune); every hard-coded exercise name resolves to exactly one shipped row; the depth rule holds in every cell under both `movement_pattern` and `slot_pattern`; the cloud migration is applied and the rows are `is_active = false`; the five injury sweeps keep their hard zeros; the tests are repointed, mutated and green.
-
 ## OI-462 — Library Batch C2b: twins G1368 G1489 G2567 G0474, E230 retag and media, removal of the six twin_pending rows (E084 E211 E111 E162 E169 E179)
 
 - **Status**: OPEN
@@ -7372,3 +7361,14 @@ Narrowed 2026-11-04 after two combined-plan review rounds came back not converge
 Second half of the split of Batch C2 (the first half is OI-460). Adds the four twin rows G1368, G1489, G2567 and G0474, retags E230 and releases its media, then removes the six `twin_pending` rows that C2a keeps (E084 E211 E111 E162 E169 E179). Open: the G0474 picture decision. Needs its own plan, two review rounds, and a fresh founder go for the media upload.
 
 **Done when.** The four twins ship; each `twin_pending` row is removed or kept with a stated reason; E230 is retagged and its animation is in the bucket; the depth rule still holds; the cloud migration is applied.
+
+## OI-469 — getFormCues matches exercise_library by name with no is_active filter: a deactivated row can answer for a live name
+
+- **Status**: OPEN
+- **Blocked on**: none
+- **Verified**: never
+- **Identified**: 2026-11-05 · filed via mint_oi.sh from branch `library-batch-c2`
+
+**What happens.** `supabase/functions/_shared/tools/exercise/getFormCues.ts` (lines 63-69, stage 1 exact `ilike`, and 90-96, stage 2 partial `ilike`) selects from `exercise_library` by name with no `is_active` filter and `limit(1)`. Since Batch C2a (migration 167) 57 cloud rows are `is_active = false`; a name that a deactivated row shares with, or contains, a live name can answer from the deactivated row. C2a handled the same-name case in the seed (a removed row that shares its name with a kept row takes that row's cues, `scripts/seed_exercise_library.js`), but not the partial stage, nor any later deactivation.
+
+**Done when.** Both stages filter `is_active = true` (a regression test that fails without the filter), deployed through the Edge Function protocol; or the filter is shown to be unnecessary by a query that finds no live name matched by a deactivated row.
