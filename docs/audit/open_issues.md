@@ -7276,19 +7276,6 @@ Found by the sync-storm-first-sweep batch while measuring its Day-0 web check (l
 
 **Done when.** The founder's onboarding redesign decides the safeguard; then a plan reviewed twice. Blast radius: `account` at least (onboarding, plan input).
 
-## OI-458 — The 4-day Upper day repeats Push and Pull accessories (Bench Dips, Dumbbell Row, curls, Lateral Raise) instead of reading as a new day
-
-- **Status**: OPEN
-- **Blocked on**: none
-- **Verified**: never
-- **Identified**: 2026-11-03 · filed via mint_oi.sh from branch `exercise-count-band-oi`
-
-**What happens.** In the same tester plan as OI-456, week 1 Upper (day 4) reuses Bench Dips, Dumbbell Row, Self-Resisted Bicep Curl, Dumbbell Alternate Bicep Curl and Lateral Raise, which Push or Pull already carry that week; week 2 Upper reuses Barbell Curl, Cable Rope Pushdown and Egyptian Lateral Raise. The day reads as leftovers rather than a new session. Likely cause (not yet established): the Upper slots are small-muscle accessory slots whose pools are shallow, so the cascade picks the same names (`pickedNames` dedups across a plan only inside one variant).
-
-**Founder direction (2026-11-03).** Filed as its own item so it does not block OI-456. Pick up after OI-456, because the new exercise count changes which slots each day holds.
-
-**Done when.** The cause is named by writer and reader (file:line) first; a persona sweep measures repeated names across days of one week before and after; the fix keeps the equipment and injury filters; mutants prove it. Blast radius: `platform` (plan_engine), tier L.
-
 ## OI-455 — Collapsed active-workout card header overflows by 13 px at 360 dp (RenderFlex, exercise_card.dart ~line 1388), seen in Chrome during M2b Part B, present on main
 
 - **Status**: OPEN

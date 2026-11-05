@@ -10709,6 +10709,30 @@ concepts:
         semantic: _pickCoreList passes the previous phase names to _selectCandidate as avoidNames (soft, as OFF)
     contract_test_path: test/contracts/cross_phase_variety_behavioral_test.dart
 
+  - concept: upper_day_cross_day_variety
+    domain: workout
+    behavioral_test_path: test/contracts/cross_day_variety_behavioral_test.dart
+    description: >
+      OI-458 — an `upper` day SOFT-avoids the names the earlier push / pull / shoulders_arms days of the same plan hold,
+      per variant (A with A, B with B, lowercased). `ExerciseSelector.pickV4` (cascade) and `_pickCoreList` (ship-dark)
+      union them into avoidA / avoidB, which feed ONLY `_selectCandidate._preferNovel` (never queryV4, pickedNames or
+      excludeNames), so the avoid can never empty a slot or change a pattern, equipment, injury or exclusion filter;
+      a pool with nothing else repeats. Day types come from the split (`MuscleSlotDay.dayType`) via
+      `_feedsUpperAvoid`. Every other day type is unchanged (6-day Push A / Push B repeats stay deliberate). Not
+      mirrored in cascade_tracer (it counts attempts; the tiebreak sits inside one pool), as W3.4 / W3.5 are not.
+      topUpDays (injured users) does not widen its soft avoid.
+    writers:
+      - file: lib/shared/repositories/plan_engine/exercise_selector.dart
+        method: pickV4 day loop (earlierPushPullA/B, isUpper, _feedsUpperAvoid) and _pickCoreList day loop
+    readers:
+      - file: lib/shared/repositories/plan_engine/exercise_selector.dart
+        method_or_widget: _selectCandidate._preferNovel (the avoid set is read here only)
+        semantic: soft tiebreak
+      - file: test/contracts/cross_day_variety_behavioral_test.dart
+        method_or_widget: real generateV4 sweep over tier x goal x days x level, weeks 1 and 2
+        semantic: behavioral
+    contract_test_path: test/contracts/cross_day_variety_behavioral_test.dart
+
   - concept: volume_titration
     domain: workout
     behavioral_test_path: test/contracts/volume_titration_behavioral_test.dart

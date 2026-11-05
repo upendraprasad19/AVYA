@@ -270,7 +270,7 @@ class SweepHarness {
     'pairs46 home_dumbbells': (12, 0),
     'pairs46 basic_gym': (8, 0),
     'pairs46 full_gym': (4, 0),
-    'repeat bodyweight': (4, 0),
+    'repeat bodyweight': (2, 0),
     'repeat home_dumbbells': (0, 0),
     'repeat basic_gym': (0, 0),
     'repeat full_gym': (0, 0),
