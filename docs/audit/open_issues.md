@@ -3457,48 +3457,6 @@ Unit 2's blocked question — what a regeneration does when the plan window is E
   reinclusion pattern, applied to `client_errors_today`'s subquery, in a
   NEW migration (136+).
 
-## OI-201 — alert_cron_function_dead can burst-dispatch many critical alerts at once; Telegram send failures are silently dropped with no retry
-
-- **Status**: OPEN
-- **Blocked on**: none
-- **Verified**: 2026-09-14, Hermes lens L31 (`docs/audit/2026-09-14-hermes-telegram-admin-bot.md`).
-  Two compounding gaps, both pre-existing infrastructure (migration 110,
-  predates this branch), materially amplified by this branch's own
-  deliverable (`alert-critical-notify` is what turns a Postgres `alerts`
-  row into an actual Telegram push):
-  1. **Burst dispatch**: `alert_cron_function_dead`'s query
-     (`110_cron_silence_per_function_and_cleanup_null_guard.sql:82-119`) is
-     a SET-RETURNING `INSERT ... SELECT` — one `critical`-severity row PER
-     dead function, in one statement. `133`'s trigger is `FOR EACH ROW`, so
-     a single statement that flags N dead functions fires N separate
-     `net.http_post` dispatches to `alert-critical-notify`, each sending
-     its own Telegram message. This repo's own history has a precedent for
-     "many cron jobs dead simultaneously" (the Vault `service_role_key`
-     drift killed 12+ jobs at once) — that exact shape would now burst
-     ~12-20 Telegram sends in one statement, against Telegram's roughly
-     1 msg/sec per-chat rate limit. The other `alerts` writers
-     (`076_alert_detection_crons.sql`, `086`, `087`, `109`) each carry a
-     single-open-alert `NOT EXISTS` dedup guard scoped per-alert; this one
-     is scoped per-`function_name` (`110:112-119`), so it does not bound a
-     fleet-wide event.
-  2. **No retry on Telegram send failure**: `_shared/telegram.ts:63-66`
-     handles a non-2xx Telegram response gracefully (no throw, no token
-     leak — `telegramErrorSummary` returns `err.name` only) but a `429`
-     (rate-limited) is indistinguishable from any other failure, `Retry-
-     After` is ignored, and `pg_net.http_post` is fire-and-forget with no
-     retry at the Postgres layer either. A dropped send during exactly the
-     burst scenario above is lost from the Telegram channel permanently —
-     the founder never sees it, with no compensating signal beyond a
-     `cron_call_log` `failed` row and a `client_errors` `warn` row that
-     nothing surfaces proactively.
-- **Scope note**: out of scope for the telegram-admin-bot batch's own fix
-  diff — fixing requires either batching `alert_cron_function_dead`'s
-  dispatch (one summary alert instead of N) or adding retry/backoff to
-  `alert-critical-notify`'s Telegram send path (with `Retry-After`
-  honored), both separate infrastructure work with their own blast radius
-  and test surface. Filed here rather than fixed in-batch per the same
-  reasoning as OI-199/OI-179 above.
-
 ## OI-205 — Already-authenticated user opening a valid /reset link is silently switched to a different account with no consent prompt (/confirm partially guarded — no same-vs-different-account distinction yet)
 
 - **Status**: OPEN
@@ -7420,11 +7378,13 @@ Found by round 2 of the OI-179 plan review. `supabase/functions/weekly-recalc/in
 
 Found by the Hermes pass (L31, 2026-11-05) of the OI-179 batch. Until migration 169 the alert could never fire; now it is satisfiable, and its body (migration 144, daily 06:47 UTC) has three edges that could not matter before.
 
-**1. Fleet-wide page storm.** The body has no per-run cap and no "the whole fleet is down" guard. 17 scheduled functions call `logCronStart`; in an 8-10 day outage the 06:47 run would insert up to 17 CRITICAL rows at once, each dispatching `alert-critical-notify` (a Telegram send), on top of `alert_cron_silence`. On the first recovery morning, functions scheduled after 06:47 UTC (for example `expiry-reminder` 09:00, `streak-guardian` 14:30) would page before their own first post-recovery run.
+**1. Fleet-wide page storm.** The body has no per-run cap and no "the whole fleet is down" guard. 17 scheduled functions call `logCronStart`; in an 8-10 day outage the 06:47 run would insert up to 17 CRITICAL rows at once, each dispatching `alert-critical-notify` (a Telegram send; Telegram is deferred, so what matters today is the `alerts` rows and the founder digest, not the sends), on top of `alert_cron_silence`. On the first recovery morning, functions scheduled after 06:47 UTC (for example `expiry-reminder` 09:00, `streak-guardian` 14:30) would page before their own first post-recovery run.
 
 **2. Two or three alerts per dead function, not one.** The dedup is `acknowledged = false AND detected_at > now() - interval '24 hours'`, so an acknowledged alert re-fires the next day and sub-second jitter between daily runs decides whether the dedup holds; with retention 10 days the worst case is three alerts (2 for most). Noise bounded by retention, not a false fire.
 
 **3. The exclusion list is a hard-coded name** (`function_name <> 'alert-critical-notify'`) inside the cron body, and nothing ties retiring, renaming or unscheduling a cron function to updating it: a function retired within the last 10 days pages CRITICAL for 2-3 days. (`weekly-recalc`, a function that logs runs but has no cron job, is OI-472.)
+
+**Telegram is out of scope here:** OI-201 (a 429 with no retry on the Telegram send) is closed as moot while Telegram is deferred; it returns with Telegram.
 
 **Do:** (1) suppress the per-function alert while `alert_cron_silence` is open, or cap the insert to a handful per run with one summary row; (2) dedup on the function name with a 36-48 h window; (3) add a contract test that every `logCronStart` caller is either on the CRON_REGISTRY schedule list or on the alert's exclusion list (extend `cron_vacuum_single_statement_test.dart`'s roster check). Alert-body change = `cron.alter_job` by jobname in a new migration (platform tier, the 144 body plus the change, live apply needs its own go).
 
