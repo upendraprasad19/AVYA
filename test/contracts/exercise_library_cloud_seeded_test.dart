@@ -451,14 +451,14 @@ void main() {
       final tmp = Directory.systemTemp.createTempSync('c2a_readded');
       try {
         final f = File('${tmp.path}/lib.json')..writeAsStringSync(jsonEncode([...lib, back]));
-        final r = await Process.run('node', [_generator, '999_readded_seed_exercise_library.sql', '--out', tmp.path],
-            environment: {'SEED_LIBRARY_JSON': f.path}).timeout(const Duration(seconds: 60));
+        final r = await runSpawnAsync('node', [_generator, '999_readded_seed_exercise_library.sql', '--out', tmp.path],
+            why: 'seed generator on a library with a removed id re-added', extraEnv: {'SEED_LIBRARY_JSON': f.path}, report: (_) {})
+            .timeout(const Duration(seconds: 60));
         expect(r.exitCode, 2, reason: 'stderr: ${r.stderr}');
         expect(r.stderr.toString(), contains(_removedIds().first));
         expect(File('${tmp.path}/999_readded_seed_exercise_library.sql').existsSync(), isFalse);
         // MIRROR: the unmodified library still generates.
-        final ok = await Process.run('node', [_generator, '999_readded_seed_exercise_library.sql', '--out', tmp.path])
-            .timeout(const Duration(seconds: 60));
+        final ok = await _generateAsync(['999_readded_seed_exercise_library.sql', '--out', tmp.path], 'unmodified library still generates');
         expect(ok.exitCode, 0, reason: 'stderr: ${ok.stderr}');
       } finally {
         tmp.deleteSync(recursive: true);
