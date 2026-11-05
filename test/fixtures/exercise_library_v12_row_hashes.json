@@ -1759,7 +1759,7 @@
       "tempo",
       "warmup_protocol"
     ],
-    "sha256": "265c6c184f445822b477f66a9d63deb9f7b2f916eff6b3c89f53db34cca3b08a"
+    "sha256": "2d191d58ff17801388b0597b0a3d07e2cb53c66b5ff342c879f7f7e5bd78b1b7"
   },
   "E044": {
     "keys": [
@@ -3255,46 +3255,6 @@
     ],
     "sha256": "0f0f82fa92ecee5d8bd0c211096d1bcbb7f537840eb203d6e95280684ef0012c"
   },
-  "E084": {
-    "keys": [
-      "breathing_cue",
-      "cal_per_set_est",
-      "category",
-      "cns_demand",
-      "coaching_cues",
-      "common_mistakes",
-      "default_reps",
-      "default_rest_secs",
-      "default_sets",
-      "difficulty_level",
-      "equipment_needed",
-      "equipment_tier",
-      "exercise_type",
-      "id",
-      "indian_alternative",
-      "injury_contraindications",
-      "is_active",
-      "is_bilateral",
-      "is_foundational",
-      "is_indian_context",
-      "logging_type",
-      "met_value",
-      "movement_pattern",
-      "name",
-      "primary_muscles",
-      "priority_tier",
-      "pro_tip",
-      "rep_range",
-      "secondary_muscles",
-      "source",
-      "standard_swap",
-      "suitable_for",
-      "target_focus",
-      "tempo",
-      "warmup_protocol"
-    ],
-    "sha256": "6b386f20ceadfa7c8d1be2917f6941b7aecd47baabf600e35ca6fc50325e9222"
-  },
   "E085": {
     "keys": [
       "breathing_cue",
@@ -4336,48 +4296,6 @@
       "warmup_protocol"
     ],
     "sha256": "a3c12c1dc6db9c61b6d7c18b57004684c52bd94843c3982c4f2ab05b4975f62c"
-  },
-  "E111": {
-    "keys": [
-      "breathing_cue",
-      "cal_per_set_est",
-      "category",
-      "cns_demand",
-      "coaching_cues",
-      "common_mistakes",
-      "default_reps",
-      "default_rest_secs",
-      "default_sets",
-      "demo_pair",
-      "demo_slug",
-      "difficulty_level",
-      "equipment_needed",
-      "equipment_tier",
-      "exercise_type",
-      "id",
-      "indian_alternative",
-      "injury_contraindications",
-      "is_active",
-      "is_bilateral",
-      "is_foundational",
-      "is_indian_context",
-      "logging_type",
-      "met_value",
-      "movement_pattern",
-      "name",
-      "primary_muscles",
-      "priority_tier",
-      "pro_tip",
-      "rep_range",
-      "secondary_muscles",
-      "source",
-      "standard_swap",
-      "suitable_for",
-      "target_focus",
-      "tempo",
-      "warmup_protocol"
-    ],
-    "sha256": "3c8f3d4fb9911e9a19ed986715e2019851c07f9a347257538d0ae4ad61d4b552"
   },
   "E112": {
     "keys": [
@@ -5733,46 +5651,6 @@
     ],
     "sha256": "05de6def972a18708e9ee844a14e9bd8988b4370401b053a8b8c988e900c1b72"
   },
-  "E162": {
-    "keys": [
-      "breathing_cue",
-      "cal_per_set_est",
-      "category",
-      "cns_demand",
-      "coaching_cues",
-      "common_mistakes",
-      "default_reps",
-      "default_rest_secs",
-      "default_sets",
-      "difficulty_level",
-      "equipment_needed",
-      "equipment_tier",
-      "exercise_type",
-      "id",
-      "indian_alternative",
-      "injury_contraindications",
-      "is_active",
-      "is_bilateral",
-      "is_foundational",
-      "is_indian_context",
-      "logging_type",
-      "met_value",
-      "movement_pattern",
-      "name",
-      "primary_muscles",
-      "priority_tier",
-      "pro_tip",
-      "rep_range",
-      "secondary_muscles",
-      "source",
-      "standard_swap",
-      "suitable_for",
-      "target_focus",
-      "tempo",
-      "warmup_protocol"
-    ],
-    "sha256": "bf201f2ee47e5c48ebac0505f5a80f19ae7818e412774536e2f1d5ee39b4632c"
-  },
   "E166": {
     "keys": [
       "breathing_cue",
@@ -5814,46 +5692,6 @@
       "warmup_protocol"
     ],
     "sha256": "9200ae3167095bde3ddf3f7b0ad80c54177d5cb971e3c4e42756966bfb8a3031"
-  },
-  "E169": {
-    "keys": [
-      "breathing_cue",
-      "cal_per_set_est",
-      "category",
-      "cns_demand",
-      "coaching_cues",
-      "common_mistakes",
-      "default_reps",
-      "default_rest_secs",
-      "default_sets",
-      "difficulty_level",
-      "equipment_needed",
-      "equipment_tier",
-      "exercise_type",
-      "id",
-      "indian_alternative",
-      "injury_contraindications",
-      "is_active",
-      "is_bilateral",
-      "is_foundational",
-      "is_indian_context",
-      "logging_type",
-      "met_value",
-      "movement_pattern",
-      "name",
-      "primary_muscles",
-      "priority_tier",
-      "pro_tip",
-      "rep_range",
-      "secondary_muscles",
-      "source",
-      "standard_swap",
-      "suitable_for",
-      "target_focus",
-      "tempo",
-      "warmup_protocol"
-    ],
-    "sha256": "5743bd048a2bbc9ab8673ca517a2ed80337ab2b1577ec2401f312de6d27bcea8"
   },
   "E171": {
     "keys": [
@@ -6148,46 +5986,6 @@
       "warmup_protocol"
     ],
     "sha256": "3094906a40561506247f7aa4b73c55e04dd12597a15566dd7188decc32d0d624"
-  },
-  "E179": {
-    "keys": [
-      "breathing_cue",
-      "cal_per_set_est",
-      "category",
-      "cns_demand",
-      "coaching_cues",
-      "common_mistakes",
-      "default_reps",
-      "default_rest_secs",
-      "default_sets",
-      "difficulty_level",
-      "equipment_needed",
-      "equipment_tier",
-      "exercise_type",
-      "id",
-      "indian_alternative",
-      "injury_contraindications",
-      "is_active",
-      "is_bilateral",
-      "is_foundational",
-      "is_indian_context",
-      "logging_type",
-      "met_value",
-      "movement_pattern",
-      "name",
-      "primary_muscles",
-      "priority_tier",
-      "pro_tip",
-      "rep_range",
-      "secondary_muscles",
-      "source",
-      "standard_swap",
-      "suitable_for",
-      "target_focus",
-      "tempo",
-      "warmup_protocol"
-    ],
-    "sha256": "4024e37d9e5698cee34a72f03153057a1f503ac2b7cd8c607a4c4ba38462adc9"
   },
   "E180": {
     "keys": [
@@ -7042,46 +6840,6 @@
       "warmup_protocol"
     ],
     "sha256": "faf780818b7f9a6738c8f067feee978670a4108efbb548af03e6b00edbffbd5c"
-  },
-  "E211": {
-    "keys": [
-      "breathing_cue",
-      "cal_per_set_est",
-      "category",
-      "cns_demand",
-      "coaching_cues",
-      "common_mistakes",
-      "default_reps",
-      "default_rest_secs",
-      "default_sets",
-      "difficulty_level",
-      "equipment_needed",
-      "equipment_tier",
-      "exercise_type",
-      "id",
-      "indian_alternative",
-      "injury_contraindications",
-      "is_active",
-      "is_bilateral",
-      "is_foundational",
-      "is_indian_context",
-      "logging_type",
-      "met_value",
-      "movement_pattern",
-      "name",
-      "primary_muscles",
-      "priority_tier",
-      "pro_tip",
-      "rep_range",
-      "secondary_muscles",
-      "source",
-      "standard_swap",
-      "suitable_for",
-      "target_focus",
-      "tempo",
-      "warmup_protocol"
-    ],
-    "sha256": "c394331f59dbc56f5d05e975dacdae511bc64b4ee83f8cd67b46f5768023020b"
   },
   "E212": {
     "keys": [

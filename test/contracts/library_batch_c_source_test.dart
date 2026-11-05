@@ -421,13 +421,15 @@ void main() {
     test('names are unique case-insensitively across the library and the shipped source rows', () {
       expect(_nameViolations(src, lib), isEmpty);
     });
-    test('MUTATION: a duplicated name, and releasing the hold of G1368 (same name as E084), are each a violation', () {
+    test('MUTATION: a duplicated name, and G1368 renamed to a library row name, are each a violation', () {
       final a = copy();
       _row(a, _firstShipped(a))['name'] = '${lib.first['name']}'.toUpperCase();
       expect(_nameViolations(a, lib), isNotEmpty);
+      // Batch C2b released the four name_collision holds (E084 left the library with G1368 shipping), so the mirror case is a
+      // released row that takes the name of a library row.
       final b = copy();
-      expect(_row(b, 'G1368')['hold'], isNotNull);
-      _row(b, 'G1368').remove('hold');
+      expect(_row(b, 'G1368')['hold'], isNull, reason: 'G1368 ships in Batch C2b');
+      _row(b, 'G1368')['name'] = '${lib.first['name']}';
       expect(_nameViolations(b, lib), isNotEmpty);
     });
 

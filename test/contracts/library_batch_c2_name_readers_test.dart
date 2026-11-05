@@ -106,7 +106,9 @@ void main() {
     final all = {for (final names in q.values) ...names};
     final resolved = all.where((n) => resolve(lib, n).length == 1).length;
     expect(resolved, greaterThan(all.length ~/ 2), reason: 'most quoted names must resolve; the resolver may be reading nothing');
-    expect(removedNames, hasLength(50));
+    // 50 removals of Batch C2a plus the 6 of Batch C2b (OI-462): the count follows the removals file.
+    expect(removedNames.length, greaterThanOrEqualTo(_removedEntries().map((e) => _norm(e['name'])).toSet().length));
+    expect(_removedEntries(), hasLength(greaterThanOrEqualTo(56)));
   });
 
   test('MUTATION: a pool that re-adds a removed name with no alias target is red', () {
@@ -122,12 +124,19 @@ void main() {
     expect(violations.single, contains('Ghost Removed Row'));
   });
 
-  List<String> danglingRemovedRefs(List<Map<String, dynamic>> rows) => [
-        for (final r in rows)
-          for (final f in const ['standard_swap', 'progression_to', 'regression_to'])
-            if (r[f] is String && removedNames.contains(_norm(r[f])) && !rows.any((x) => _norm(x['name']) == _norm(r[f])))
-              '${r['id']}.$f -> ${r[f]}',
-      ];
+  // Batch C2b (OI-462): the field also holds IDS on 21 rows (E043 named "E111"), so an id of a removed row with no shipped row of
+  // that id dangles too.
+  List<String> danglingRemovedRefs(List<Map<String, dynamic>> rows) {
+    final removedIds = {for (final e in _removedEntries()) e['id'] as String};
+    return [
+      for (final r in rows)
+        for (final f in const ['standard_swap', 'progression_to', 'regression_to'])
+          if (r[f] is String && removedNames.contains(_norm(r[f])) && !rows.any((x) => _norm(x['name']) == _norm(r[f])))
+            '${r['id']}.$f -> ${r[f]}'
+          else if (r[f] is String && removedIds.contains(r[f]) && !rows.any((x) => x['id'] == r[f]))
+            '${r['id']}.$f -> ${r[f]} (id)',
+    ];
+  }
 
   test('no row\'s standard_swap / progression_to / regression_to names a removed row (B-pass finding 2)', () {
     expect(danglingRemovedRefs(lib), isEmpty);
@@ -137,6 +146,12 @@ void main() {
     final probe = lib.map((r) => {...r}).toList();
     final removedName = _removedEntries().first['name'] as String;
     probe.first['standard_swap'] = removedName;
+    expect(danglingRemovedRefs(probe), isNotEmpty);
+  });
+
+  test('MUTATION: a swap pointing at a removed ID is red (E043 named E111)', () {
+    final probe = lib.map((r) => {...r}).toList();
+    probe.first['standard_swap'] = 'E111';
     expect(danglingRemovedRefs(probe), isNotEmpty);
   });
 

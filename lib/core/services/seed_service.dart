@@ -136,7 +136,13 @@ class SeedService {
   //   from every install's exerciseBox; 4 removed names become aliases on their replacement.
   //   Without this bump the removed rows live on in every existing install
   //   (library_seed_v18_upgrade_behavioral_test.dart).
-  static const int _exerciseLibraryVersion = 18;
+  //   v19 (Batch C2b, OI-462, docs/plans/2026-11-05-library-batch-c2b-twins.md): the four twin rows
+  //   (G1368 G1489 G2567 G0474) join the bundle and the six rows C2a kept as twin_pending (E084 E111
+  //   E162 E169 E179 E211) leave it (kRetiredLibraryIdsNoTwin) and are pruned from every install;
+  //   E162 and E211 become aliases on their twin. History that names a retired id is not remapped.
+  //   Without this bump an existing install keeps the six rows and never gets the twins
+  //   (library_seed_v19_upgrade_behavioral_test.dart).
+  static const int _exerciseLibraryVersion = 19;
   static const String _exerciseVersionKey = 'exercise_library_version';
 
   /// Bump this integer whenever the bundled food_database.json changes

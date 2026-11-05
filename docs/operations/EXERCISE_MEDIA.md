@@ -9,10 +9,10 @@
 
 | Piece | Where | Role |
 |---|---|---|
-| The animations | the founder's folder `assets/exercise animations/forgetrainer_animations/gifs/wardroom customized gifs/` (untracked): `webp-720/` (animated, 720 x 720), `thumbnails-192/` (static, 192 x 192), `generation-ledger.json` | The source files. 924 exist; 753 are mapped to library rows (310,027,946 bytes, the largest 999,800). Never committed. |
+| The animations | the founder's folder `assets/exercise animations/forgetrainer_animations/gifs/wardroom customized gifs/` (untracked): `webp-720/` (animated, 720 x 720), `thumbnails-192/` (static, 192 x 192), `generation-ledger.json` | The source files. 924 exist; 757 are mapped to library rows (311,614,726 bytes, the largest 999,800). Never committed. |
 | The provenance table | `scripts/data/library_media_v16.json` | One slug per animation, which library row uses it, every hash and size, and where the file lives on the founder's disk. Built by a tool that reads the real files; a hash is never typed by hand. |
 | The builder | `scripts/build_library_media_v16.js` (`--write`, `--check`, `--prune-only`) | Writes and checks the table. Needs the folder, except `--prune-only`. |
-| The library fields | `assets/data/exercise_library.json`, written by `scripts/add_library_batch_c_v15.js` (its media stage) | `media_slug`, `media_version`, `media_source` on the 754 mapped rows: the 617 new rows that have an animation (the other 12 new rows have none) and, since the OI-443 release (seed 17), 137 old `E` rows. |
+| The library fields | `assets/data/exercise_library.json`, written by `scripts/add_library_batch_c_v15.js` (its media stage) | `media_slug`, `media_version`, `media_source` on the 758 mapped rows: the 621 new rows that have an animation (the other 12 new rows have none) and, since the OI-443 release (seed 17), 137 old `E` rows. |
 | The seed | `lib/core/services/seed_service.dart` `_exerciseLibraryVersion = 17` | Installs re-seed the library once on the next launch. |
 | The bucket | Storage bucket `exercise-media` on project `dedsavbjuwgarrhphgnl`, created by the migration `165_exercise_media_bucket.sql` (applied 2026-10-27 22:33 IST) | PRIVATE, `image/webp` only, 1,500,000 bytes per object, one read policy. |
 | The upload tool | `scripts/upload_exercise_media.js` | Dry run, canary, upload, verify, sign, delete, probes. Pinned to this project and bucket. |
@@ -27,7 +27,7 @@ In M1 `media_version` is 1 for every file, and a changed file under an existing 
 
 The founder's rule: **only a person who has installed the app and logged in can download the animations from the bucket.** Two decisions refine it, both made on purpose (design calls G12 and C8):
 
-- **G12: the stills are readable without a login.** The 753 first frames (192 x 192) are bundled in the app (`assets/exercise_stills/`), so anyone who has the app sees them, signed in or not.
+- **G12: the stills are readable without a login.** The 757 first frames (192 x 192) are bundled in the app (`assets/exercise_stills/`), so anyone who has the app sees them, signed in or not.
 - **C8: a cached animation survives sign-out.** A file already fetched stays on the device (native: files under the app's support folder, `exercise_media/`; web: the Hive lazy box `exerciseMediaBlobs`), and the sign-out wipe (`clearAllData()`) deliberately does not touch it, so a later person on that device can see it. No login is needed to play a file that is already cached; every download still needs one. (The kill-switch flags live in `configBox`, which that wipe DOES clear: section 9.)
 
 - The bucket is **private** (`public = false`). The public route `/storage/v1/object/public/exercise-media/<name>` serves nothing.
@@ -46,7 +46,7 @@ The founder's rule: **only a person who has installed the app and logged in can 
 
 | Quantity | Value |
 |---|---|
-| Files mapped / total bytes / largest | 753 / 310,027,946 (310.03 MB) / 999,800 |
+| Files mapped / total bytes / largest | 757 / 311,614,726 (311.61 MB) / 999,800 |
 | One full-library download | 310.03 MB of **uncached** egress (a private object caches worse: each signed URL is its own cache key) |
 | Free plan | 1 GB storage and 5 GB uncached + 5 GB cached egress a month, shared by every bucket: about 16 full downloads a month |
 | Pro plan | 250 GB + 250 GB: about 806 full downloads; overage about $0.09 per GB uncached, $0.03 cached |
@@ -69,7 +69,7 @@ node scripts/build_library_media_v16.js --prune-only --write   # no folder neede
 node scripts/add_library_batch_c_v15.js --check            # the importer's byte-equality check (includes the media stage)
 node scripts/add_library_batch_c_v15.js                    # write the library (media stage on by default)
 # the upload tool (see its header for every flag)
-node scripts/upload_exercise_media.js                      # DRY RUN: prints the plan, hashes all 753 local files, sends nothing
+node scripts/upload_exercise_media.js                      # DRY RUN: prints the plan, hashes all 757 local files, sends nothing
 node scripts/upload_exercise_media.js --probe-key          # which key names the Management API returned (never the key)
 node scripts/upload_exercise_media.js --canary --execute --report <path>
 node scripts/upload_exercise_media.js --execute --report <path>
@@ -138,7 +138,7 @@ A takedown stops **new** downloads (the CDN entry is invalidated within about 60
 2. **The rehearsal** (before the apply, aborting, nothing persists; run it off-peak with no sign-in or test session active, because the policy DDL holds table locks until each block ends): `node scripts/exercise_media_rehearsal_sql.js --file1` prints the live-verify file with the migration body inserted twice at its marker comment, comment-stripped, as ONE call; `--file2` prints the wrong-policies file. FILE 2 runs five wrong setups (`TO public`, no `is_anonymous` clause, no bucket scope, `FOR ALL`, and a `FOR UPDATE` policy on `storage.buckets`); each is RED only when its quadruple, its write slots AND its catalog string equal its row, and the pass criterion is `mutated: 5 of 5 reddened` with `verdict=PASS` (the baseline must also read its row). The result lines are `VERIFY_RESULTS` followed by `key=value` lines; compare lines, do not read them.
 3. **After the apply and again after the upload:** run the live-verify file alone; expect `verdict=PASS`. The wrong-policies file is **rehearsal only** and is never run after the apply (its first statement raises if the bucket exists).
 4. **Rollback is the Storage API, not SQL:** drop the policy (one statement, in the migration's rollback comment), then `node scripts/upload_exercise_media.js --delete-bucket --execute --confirm-bucket exercise-media --report <path>`.
-5. **The dashboard is the inventory.** There is no inventory tool for the bucket's contents; Supabase Dashboard → Storage → `exercise-media` is the list. `--verify` checks the 753 objects the table names, not extras.
+5. **The dashboard is the inventory.** There is no inventory tool for the bucket's contents; Supabase Dashboard → Storage → `exercise-media` is the list. `--verify` checks the 757 objects the table names, not extras.
 
 ## 8. What the live project answered (observed 2026-10-27, Task 9 of the plan)
 
@@ -163,6 +163,8 @@ Two consequences for M2 (also on OI-440): a forbidden read and an absent object 
 Traffic of the first full run: the upload was about 0.25 GB into Storage, the `--verify` about 0.25 GB of egress, the playback check a few MB; against the Free allowance of 5 GB a month that is about a twentieth. Storage then held 258,172,324 bytes in 639 objects (the bucket 618: 616 animations and the two canary objects `canary-1_v0.webp` and `canary-2_v0.webp`, never referenced; `--verify` checked only the 616).
 
 Traffic of the OI-443 upload (2026-11-01, `--only` on the 137 new slugs): 56,477,126 bytes into Storage (137 uploaded, 0 failed), then `--verify --only` on the same 137 (137 of 137 match) and the privacy probes (400 of 400 refused). The bucket then listed 755 objects, 753 animations and the two canaries (310,027,946 bytes of animations, 295.7 MiB); `--verify` without `--only` now checks 753.
+
+Traffic of the Batch C2b upload (2026-11-05, OI-462, `--only` on the four twin slugs 0474-hanging-straight-leg-hip-raise, 1368-ankle-circles, 1489-sissy-squat, 2567-seated-piriformis-stretch): 1,586,780 bytes into Storage (4 uploaded, 0 failed), then `--verify --only` on the same four (4 of 4 match) and the privacy probe (400 refused). The bucket then holds 757 animations and the two canaries (311,614,726 bytes of animations); `--verify` without `--only` now checks 757.
 
 ## 9. What Batch M2a shipped (the app side), and the trap it avoided
 

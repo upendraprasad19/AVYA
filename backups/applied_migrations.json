@@ -1313,5 +1313,14 @@
     "diagnose": "c2a7f1",
     "slug": "reseed_exercise_library",
     "note": "Batch C2a (plan docs/plans/2026-11-04-library-batch-c2a-removals.md r4, plan-review docs/plan-reviews/library-batch-c2.md, B-pass docs/reviews/library-batch-c2a-bpass.md accepted). RE-SEEDS cloud exercise_library from the v18 bundled asset: UPSERTS 864 rows (no new row) and sets is_active=false on the 50 removed rows (scripts/data/library_batch_c2_removals.json), after the upsert; nothing deleted. Applied to project dedsavbjuwgarrhphgnl only, after the founder's per-action go ('Apply', 2026-11-05) on the exact file, by .claude/apply_migration_via_api.js (HTTP 201). Pre-apply read-only check: 921 rows, 914 active, all 50 removed rows present and active. Post-apply: 921 rows, 864 active, 57 inactive (the 7 Batch A retirements plus the 50), 0 removed names active. File sha256 = this hash (LF). Rollback is inline: UPDATE exercise_library SET is_active = true WHERE id IN (the 50 removed uuids), needing its own go."
+  },
+  {
+    "migration": "171",
+    "applied_at": "2026-11-05T18:45:00+05:30",
+    "hash": "sha256:4d09a506dd5863cdeb015a28a2908d5fb4b676506caed4cbf5862af4003f7ab6",
+    "applier": "claude-via-node-api",
+    "diagnose": "b2c7e4",
+    "slug": "reseed_exercise_library",
+    "note": "Batch C2b (OI-462, plan docs/plans/2026-11-05-library-batch-c2b-twins.md, B-pass docs/reviews/library-batch-c2b-bpass.md): UPSERTS 862 rows, adds the four twins G1368 G1489 G2567 G0474 and sets is_active=false on the six twin_pending rows E084 E211 E111 E162 E169 E179 (copying cues to the twin where the generated SQL says so); nothing deleted. Applied to project dedsavbjuwgarrhphgnl only, after the founder go (2026-11-05) on the exact file, by .claude/apply_migration_via_api.js (HTTP 201). Post-apply read-back: 925 rows, 862 active, 63 inactive; each of Ankle Circles, Sissy Squat, Seated Piriformis Stretch, Toes to Bar has one active row and one inactive old row. File sha256 = this hash (LF). Rollback is inline in the file header, needing its own go."
   }
 ]
