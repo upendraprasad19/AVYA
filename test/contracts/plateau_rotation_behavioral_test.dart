@@ -209,13 +209,13 @@ void main() {
         'and the time budget seats at most one more)', () async {
       final off = gen(false);
       final offSeen = {
-        for (final e in SessionSetAllocator.debugLastStats!.entries) e.key: List<int>.of(e.value.slotsSeen),
+        for (final e in SessionSetAllocator.debugLastStats!.entries) e.key: List<int>.of(e.value.rowsSeen),
       };
       await seedPlateausFor(compoundNames(off));
       await seedReadiness(3, flagged: false);
       final on = gen(true);
       final onSeen = {
-        for (final e in SessionSetAllocator.debugLastStats!.entries) e.key: List<int>.of(e.value.slotsSeen),
+        for (final e in SessionSetAllocator.debugLastStats!.entries) e.key: List<int>.of(e.value.rowsSeen),
       };
       // EXACT, at the selector stage and independent of rest and time: rotation hands the
       // allocator the same number of slots per day (the swap-not-add claim itself).

@@ -139,9 +139,10 @@ void main() {
       // recomputation): Forearms (Finger Curls, Pronation / Supination, the wrist-curl family), Adductors (Cable and Side
       // Lying Hip Adduction), Serratus (the Incline Shoulder Raises, Scapula Push Up), Rotator Cuff (the four shoulder-rotation
       // rows), Full Body (Dumbbell Burpee) and Tibialis Raise (N03).
+      // Batch C2a (OI-460) removed E137 Tire Flip, E157 Psoas March, E184 Sandbag Clean and E194 Depth Jump with their rows.
       expect(noGroup, {
         'E029', 'E065', 'E078', 'E099', 'E100', 'E108',
-        'E137', 'E157', 'E184', 'E194', 'E200',
+        'E200',
         'G1201', 'G1437', 'G0455', 'G0168', 'G3667', 'G2705', 'G2706', 'G3021',
         'G0050', 'G0328', 'G0759', 'G0235', 'G0216', 'G0863', 'G0864', 'N03',
         'G0994', 'G1016', 'G0082', 'G0104', 'G0126', 'G0210', 'G0224', 'G0247',

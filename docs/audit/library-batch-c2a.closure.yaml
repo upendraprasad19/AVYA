@@ -1,0 +1,65 @@
+# Closure ledger: Library Batch C2a (removals, production-name repoints, one cloud deactivation)
+# Gate 40 (validate_audit_closure.dart). One terminal_state per finding; no `deferred:` key.
+# Diagnose c2a7f1. The cloud apply entry (C2A-8) closed with migration 167 (a7be5078).
+
+batch: library-batch-c2a
+diagnose: docs/diagnoses/2026-11-04-library-batch-c2a-removals-c2a7f1.md
+plan_review_record: docs/plan-reviews/library-batch-c2.md
+bpass_review: docs/reviews/library-batch-c2a-bpass.md
+total_findings: 9
+closed_count: 9
+
+findings:
+  - id: C2A-1
+    title: "Removals file and generator: 66 sheet-drop rows decided once (50 remove, 16 keep, each with a reason)"
+    terminal_state: closed_in_commit
+    commit: 43fbb074
+    verification: test/contracts/library_batch_c2_removals_file_test.dart
+    notes: "the generator applies the depth rule; the file is the frozen decision."
+  - id: C2A-2
+    title: "Depth rule: no injury, slot pattern or equipment cell falls below min(before, 3) after a removal"
+    terminal_state: closed_in_commit
+    commit: 8d2840b2
+    verification: test/contracts/library_depth_rule_test.dart
+    notes: "reads the committed base fixture, never git history; E254 and E281 became forced keeps."
+  - id: C2A-3
+    title: "Library edit: 914 to 864 rows, name aliases on replacement rows, G1429 progression_to G3418"
+    terminal_state: closed_in_commit
+    commit: 43fbb074
+    verification: test/contracts/library_batch_c_rows_contract_test.dart
+    notes: "alias only on rows a removal aliases to; E293 replaced by E291."
+  - id: C2A-4
+    title: "Hard-coded exercise names repointed (pool, substitutes, safe pool, warm-up and cool-down lists)"
+    terminal_state: closed_in_commit
+    commit: 43fbb074
+    verification: test/contracts/library_batch_c2_name_readers_test.dart
+    notes: "a removed name resolves to exactly one shipped row by name or alias; mutated with a removed name in the pool."
+  - id: C2A-5
+    title: "Seed v18 prune on every install (kRetiredLibraryIdsNoTwin), custom and community rows untouched"
+    terminal_state: closed_in_commit
+    commit: 43fbb074
+    verification: test/contracts/library_seed_v18_upgrade_behavioral_test.dart
+    notes: "the set never feeds retiredLibraryIds and never intersects shipped ids."
+  - id: C2A-6
+    title: "Repeat plan pinned to a removed name: dropped, refilled, never emitted"
+    terminal_state: closed_in_commit
+    commit: 43fbb074
+    verification: test/contracts/library_batch_c2_removed_pin_behavioral_test.dart
+    notes: "mutated by seeding the removed rows back into the Hive box: red."
+  - id: C2A-7
+    title: "Cloud seed generator: is_active=false for the removed ids after the upsert, reactivation rollback"
+    terminal_state: closed_in_commit
+    commit: 75496c80
+    verification: test/contracts/exercise_library_cloud_seeded_test.dart
+    notes: "generator and pins only; the migration file lands with its live apply."
+  - id: C2A-8
+    title: "Cloud migration applied: the 50 removed rows are is_active=false in project dedsavbjuwgarrhphgnl"
+    terminal_state: closed_in_commit
+    commit: a7be5078
+    verification: test/contracts/exercise_library_cloud_tuples_match_test.dart
+    notes: "migration 167, applied 2026-11-05 after the founder go on the exact file; live read-back 921 rows, 864 active, 57 inactive, 0 removed names active; ledger hash recorded in backups/applied_migrations.json."
+  - id: C2A-9
+    title: "Twin rows E084 E111 E162 E169 E179 E211 kept until their C2b twins ship (E111 is held by the depth rule and also has twin G1489)"
+    terminal_state: upstream_blocked
+    blocker: "OI-462 (Batch C2b): twins G1368 G1489 G2567 G0474 do not ship yet"
+    reopen_when: "Batch C2b lands the twins and removes the six twin_pending rows"

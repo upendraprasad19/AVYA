@@ -32,7 +32,12 @@ const DEFAULT_TABLE = path.join(ROOT, 'scripts', 'data', 'library_injury_additio
 const CLASSES = ['floor', 'majority', 'family', 'twin', 'judgement'];
 const PENDING = 'PENDING founder review';
 // Library row whose picture a new row shares: its tags are the new row's twin tags.
-const TWIN = { G0814: { from: 'E075' }, G1428: { from: 'E210' } };
+// Batch C2a (OI-460) removed E075 and E210 from the library, so their tags are FROZEN here (they were read from the library
+// rows before); test/contracts/library_batch_c_injury_coverage_test.dart mirrors them against the base fixture.
+const TWIN = {
+  G0814: { from: 'E075', name: 'Dip (Parallel Bars)', tags: ['elbow', 'shoulder'] },
+  G1428: { from: 'E210', name: 'Wrist Rotations', tags: ['wrist'] },
+};
 
 const sortedUnique = (a) => [...new Set(a || [])].sort();
 const readJson = (p) => JSON.parse(fs.readFileSync(p, 'utf8'));
@@ -58,9 +63,9 @@ function buildRow(row, lib) {
   let twin = [];
   let twinReason = '';
   if (TWIN[row.id]) {
-    const from = lib.find((l) => l.id === TWIN[row.id].from);
-    twin = sortedUnique(from.injury_contraindications);
-    twinReason = `twin of ${from.id} ${from.name}`;
+    const from = TWIN[row.id];
+    twin = sortedUnique(from.tags);
+    twinReason = `twin of ${from.from} ${from.name}`;
   }
   const tokens = sortedUnique([...floor, ...majority, ...fam.map((f) => f[0]), ...twin]);
   const raw = sortedUnique(row.injury_contraindications);

@@ -7389,3 +7389,25 @@ Found by the M2b Part B Chrome check (360 dp, real fonts, the real card and exer
 **Do:** after the founder installs the new build and cold-starts it, read the Realtime and PostgREST logs for that minute (24 h retention, so within a day): expect NO Realtime tenant-init line. Run a positive control in the same window (an older build, or a deliberate channel attach) so an empty result means something. Record the lines read and the time window here.
 
 **Acceptance:** log evidence for the new-build cold start plus the positive control is recorded; any init line found reopens the removal. reopen_when: the new build is on a device.
+
+## OI-462 — Library Batch C2b: twins G1368 G1489 G2567 G0474, E230 retag and media, removal of the six twin_pending rows (E084 E211 E111 E162 E169 E179)
+
+- **Status**: OPEN
+- **Blocked on**: none
+- **Verified**: never
+- **Identified**: 2026-11-04 · filed via mint_oi.sh from branch `library-batch-c2`
+
+Second half of the split of Batch C2 (the first half is OI-460). Adds the four twin rows G1368, G1489, G2567 and G0474, retags E230 and releases its media, then removes the six `twin_pending` rows that C2a keeps (E084 E211 E111 E162 E169 E179). Open: the G0474 picture decision. Needs its own plan, two review rounds, and a fresh founder go for the media upload.
+
+**Done when.** The four twins ship; each `twin_pending` row is removed or kept with a stated reason; E230 is retagged and its animation is in the bucket; the depth rule still holds; the cloud migration is applied.
+
+## OI-469 — getFormCues matches exercise_library by name with no is_active filter: a deactivated row can answer for a live name
+
+- **Status**: OPEN
+- **Blocked on**: none
+- **Verified**: never
+- **Identified**: 2026-11-05 · filed via mint_oi.sh from branch `library-batch-c2`
+
+**What happens.** `supabase/functions/_shared/tools/exercise/getFormCues.ts` (lines 63-69, stage 1 exact `ilike`, and 90-96, stage 2 partial `ilike`) selects from `exercise_library` by name with no `is_active` filter and `limit(1)`. Since Batch C2a (migration 167) 57 cloud rows are `is_active = false`; a name that a deactivated row shares with, or contains, a live name can answer from the deactivated row. C2a handled the same-name case in the seed (a removed row that shares its name with a kept row takes that row's cues, `scripts/seed_exercise_library.js`), but not the partial stage, nor any later deactivation.
+
+**Done when.** Both stages filter `is_active = true` (a regression test that fails without the filter), deployed through the Edge Function protocol; or the filter is shown to be unnecessary by a query that finds no live name matched by a deactivated row.

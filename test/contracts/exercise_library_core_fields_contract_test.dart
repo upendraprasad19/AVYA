@@ -11,6 +11,12 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 
+/// Batch C2a (OI-460): the `remove` ids of scripts/data/library_batch_c2_removals.json have left the library.
+final Set<String> _c2Removed = {
+  for (final e in ((jsonDecode(File('scripts/data/library_batch_c2_removals.json').readAsStringSync()) as Map<String, dynamic>)['entries'] as List))
+    if ((e as Map)['decision'] == 'remove') e['id'] as String,
+};
+
 const _levels = {'beginner', 'intermediate', 'advanced'};
 const _disciplines = {
   'strength', 'calisthenics_skill', 'olympic', 'plyometric', 'mobility',
@@ -98,9 +104,9 @@ void main() {
     expect(bad, isEmpty);
   });
 
-  test('variant_family is absent exactly on the 66 discarded rows', () {
+  test('variant_family is absent exactly on the discarded rows that are still in the library (66 minus the C2a removals)', () {
     final absent = {for (final r in rows) if (!r.containsKey('variant_family')) id(r)};
-    expect(absent, _discarded);
+    expect(absent, _discarded.difference(_c2Removed));
     final blank = [
       for (final r in rows)
         if (r.containsKey('variant_family') &&
@@ -163,6 +169,6 @@ void main() {
       }
     }
     expect(bad, isEmpty);
-    expect(links, hasLength(35), reason: '9 original links + 26 on the shipped Batch C1 rows');
+    expect(links, hasLength(34), reason: '9 original links (E256 left in Batch C2a) + 26 on the shipped Batch C1 rows');
   });
 }

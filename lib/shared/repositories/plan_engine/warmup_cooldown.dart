@@ -35,7 +35,7 @@ class WarmupCooldownSelector {
     'Arm Circles': <String>{}, // low-load end-range mobility / rehab, not loading
     'Torso Twists': {'lower_back'},
     'Wall Push Up': {'shoulder', 'wrist', 'elbow'},
-    'Wrist Rotations': {'wrist'},
+    'Wrist Circles': {'wrist'},
     'Neck Rotations': {'neck'},
     'Dead Hang': {'shoulder', 'wrist', 'elbow'},
     'High Knees': {'knee', 'hip', 'ankle'},
@@ -51,12 +51,11 @@ class WarmupCooldownSelector {
     'Cross-body Shoulder Stretch': {'shoulder'},
     'Overhead Stretch': {'shoulder'},
     'Standing Toe Touch': {'lower_back', 'hamstring'},
-    'Side Bend Stretch': {'lower_back'},
+    'Standing Lateral Stretch': {'lower_back'},
     'Standing Quad Stretch': {'knee', 'ankle'},
     'Deep Breathing': <String>{}, // universally-safe anchor
     // dead durationMap entries (never emitted today) — mapped for the drift guard
     'Ankle Rotations': {'ankle'},
-    'Butt Kicks': {'knee', 'hamstring'},
   };
 
   /// True when [name] loads any of the user's [injuries] (already lowercased).
@@ -119,7 +118,7 @@ class WarmupCooldownSelector {
       'advanced': ['Arm Circles', 'Push Up', 'Band Pull Apart'],
     },
     'pull': {
-      'beginner': ['Arm Circles', 'Wrist Rotations', 'Neck Rotations'],
+      'beginner': ['Arm Circles', 'Wrist Circles', 'Neck Rotations'],
       'advanced': ['Arm Circles', 'Dead Hang', 'Neck Rotations'],
     },
     'legs': {
@@ -127,7 +126,7 @@ class WarmupCooldownSelector {
       'advanced': ['High Knees', 'Baithak (Hindu Squat)', 'Leg Swings'],
     },
     'upper': {
-      'beginner': ['Arm Circles', 'Torso Twists', 'Wrist Rotations'],
+      'beginner': ['Arm Circles', 'Torso Twists', 'Wrist Circles'],
       'advanced': ['Arm Circles', 'Push Up', 'Dead Hang'],
     },
     'full_body': {
@@ -135,16 +134,16 @@ class WarmupCooldownSelector {
       'advanced': ['High Knees', 'Push Up', 'Baithak (Hindu Squat)'],
     },
     'shoulders_arms': {
-      'beginner': ['Arm Circles', 'Wrist Rotations', 'Neck Rotations'],
-      'advanced': ['Arm Circles', 'Wrist Rotations', 'Band Pull Apart'],
+      'beginner': ['Arm Circles', 'Wrist Circles', 'Neck Rotations'],
+      'advanced': ['Arm Circles', 'Wrist Circles', 'Band Pull Apart'],
     },
   };
 
   /// Static stretch cool-down exercises per dayType.
   static const _cooldownStretches = <String, List<String>>{
     'push': ['Chest Doorway Stretch', 'Cross-body Shoulder Stretch', 'Overhead Stretch'],
-    'pull': ['Standing Toe Touch', 'Cross-body Shoulder Stretch', 'Side Bend Stretch'],
-    'legs': ['Standing Quad Stretch', 'Standing Toe Touch', 'Side Bend Stretch'],
+    'pull': ['Standing Toe Touch', 'Cross-body Shoulder Stretch', 'Standing Lateral Stretch'],
+    'legs': ['Standing Quad Stretch', 'Standing Toe Touch', 'Standing Lateral Stretch'],
     'upper': ['Chest Doorway Stretch', 'Standing Toe Touch', 'Cross-body Shoulder Stretch'],
     'full_body': ['Standing Toe Touch', 'Standing Quad Stretch', 'Chest Doorway Stretch'],
     'shoulders_arms': ['Cross-body Shoulder Stretch', 'Overhead Stretch', 'Deep Breathing'],
@@ -350,11 +349,10 @@ class WarmupCooldownSelector {
       'Torso Twists': '60',
       'Hip Circles': '60',
       'Leg Swings': '60',
-      'Wrist Rotations': '30',
+      'Wrist Circles': '30',
       'Ankle Rotations': '30',
       'Jumping Jacks': '60',
       'High Knees': '60',
-      'Butt Kicks': '60',
       'Spot Jogging': '60',
     };
     final dur = durationMap[name] ?? '60';

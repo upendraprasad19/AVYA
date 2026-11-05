@@ -145,15 +145,16 @@ List<String> _safePoolViolations(Map<String, dynamic> src, Map<String, dynamic> 
 
 ProcessResult _builder(List<String> args, String why) => runSpawn('node', [_builderRel, ...args], why: why, report: (_) {});
 
-/// The 33 names `kV14SafePool` held before Batch C1, pinned as a literal: `injury_safe_pool.dart` is one flat list, so the
-/// additions are the remainder after these.
-const _original33 = <String>[
+/// The names of the ORIGINAL safe pool (33 before Batch C1) that are still library rows, pinned as a literal:
+/// `injury_safe_pool.dart` is one flat list, so the additions are the remainder after these. Batch C2a (OI-460) removed
+/// seven of the 33 (Seal Row, Sled Push, Prowler Push, Thoracic Extension (Foam Roller), Thoracic Rotation, Foam Roll IT
+/// Band, Foam Roll Upper Back) together with their rows.
+const _originalKept = <String>[
   'Machine Chest Press', 'Floor Press', 'Chest Squeeze Press', 'Svend Press', 'Face Pull', 'Band Pull Apart',
-  'Reverse Fly', 'Bodyweight Rear Delt Raise', 'Dumbbell Row', 'Seated Cable Row', 'Chest Supported Row', 'Seal Row',
+  'Reverse Fly', 'Bodyweight Rear Delt Raise', 'Dumbbell Row', 'Seated Cable Row', 'Chest Supported Row',
   'Inverted Row', 'TRX Row', 'Machine High Row', 'Machine Low Row', 'Glute Bridge', 'Lateral Band Walk', 'Plank',
-  'Dead Bug', 'Pallof Press', 'Cycling (Stationary)', 'Assault Bike', 'Sled Push', 'Prowler Push', 'Slow Walking',
-  'Arm Circles', 'Deep Breathing', 'Cat-Cow Stretch', 'Thoracic Extension (Foam Roller)', 'Thoracic Rotation',
-  'Foam Roll IT Band', 'Foam Roll Upper Back',
+  'Dead Bug', 'Pallof Press', 'Cycling (Stationary)', 'Assault Bike', 'Slow Walking',
+  'Arm Circles', 'Deep Breathing', 'Cat-Cow Stretch',
 ];
 
 List<Map<String, dynamic>> _libNew(List<Map<String, dynamic>> lib) =>
@@ -204,13 +205,13 @@ List<String> _libFloorViolations(List<Map<String, dynamic>> lib) {
   return out;
 }
 
-/// kV14SafePool starts with the original 33 names and its remainder equals safe_pool_additions; each name is one library row.
+/// kV14SafePool starts with the kept original names and its remainder equals safe_pool_additions; each name is one library row.
 List<String> _poolViolations(Map<String, dynamic> table, List<String> pool, List<Map<String, dynamic>> lib) {
   final out = <String>[];
-  if (pool.length < _original33.length || pool.sublist(0, _original33.length).join('|') != _original33.join('|')) {
-    out.add('the first 33 names of kV14SafePool are not the original 33');
+  if (pool.length < _originalKept.length || pool.sublist(0, _originalKept.length).join('|') != _originalKept.join('|')) {
+    out.add('the first names of kV14SafePool are not the kept original names');
   }
-  final extra = pool.length > _original33.length ? pool.sublist(_original33.length) : <String>[];
+  final extra = pool.length > _originalKept.length ? pool.sublist(_originalKept.length) : <String>[];
   final additions = _strs(table['safe_pool_additions']);
   if (extra.toSet().length != extra.length) out.add('kV14SafePool repeats a name');
   out.addAll(extra.toSet().difference(additions.toSet()).map((n) => '"$n" is in kV14SafePool but not in safe_pool_additions'));
@@ -310,12 +311,15 @@ void main() {
         }
       }
     });
-    test('the twin rows carry their library twin tags, read from the library on disk', () {
+    test('the twin rows carry their twin tags (frozen literals, mirrored against the base fixture)', () {
+      final base = ((jsonDecode(File('test/fixtures/library_c2_base_depth.json').readAsStringSync()) as Map<String, dynamic>)['rows'] as List).cast<Map<String, dynamic>>();
       for (final e in kTwinLibraryRow.entries) {
         final row = _srcRow(src, e.key);
-        final libRow = lib.firstWhere((l) => l['id'] == e.value);
-        expect(injuryTagsOf(libRow), isNotEmpty, reason: '${e.value} is the twin of ${e.key}');
-        expect(_finalTags(row, table), containsAll(injuryTagsOf(libRow)), reason: e.key);
+        final baseRow = base.firstWhere((l) => l['id'] == e.value);
+        // Mirror: the frozen literal equals the removed twin's tags in the base library.
+        expect(kTwinFrozenTags[e.key], injuryTagsOf(baseRow), reason: '${e.value} frozen tags drifted from the base fixture');
+        expect(injuryTagsOf(baseRow), isNotEmpty, reason: '${e.value} is the twin of ${e.key}');
+        expect(_finalTags(row, table), containsAll(kTwinFrozenTags[e.key]!), reason: e.key);
       }
     });
     test('MUTATION: remove one floor token; drop a twin token; remove shoulder from one push-up-named row -> red', () {
@@ -431,8 +435,13 @@ void main() {
 
     test('G0845 carries lower_back; G0814 carries E075 tags; G1428 carries E210 tags (read from the shipped rows)', () {
       expect(injuryTagsOf(row(lib, 'G0845')), contains('lower_back'));
-      expect(injuryTagsOf(row(lib, 'G0814')), containsAll(injuryTagsOf(row(lib, 'E075'))));
-      expect(injuryTagsOf(row(lib, 'G1428')), containsAll(injuryTagsOf(row(lib, 'E210'))));
+      // E075 and E210 left the library in Batch C2a; their tags are read from the frozen base fixture.
+      final base = ((jsonDecode(File('test/fixtures/library_c2_base_depth.json').readAsStringSync()) as Map<String, dynamic>)['rows'] as List).cast<Map<String, dynamic>>();
+      Map<String, dynamic> baseRow(String id) => base.firstWhere((r) => r['id'] == id);
+      expect(injuryTagsOf(baseRow('E075')), isNotEmpty);
+      expect(injuryTagsOf(row(lib, 'G0814')), containsAll(injuryTagsOf(baseRow('E075'))));
+      expect(injuryTagsOf(baseRow('E210')), isNotEmpty);
+      expect(injuryTagsOf(row(lib, 'G1428')), containsAll(injuryTagsOf(baseRow('E210'))));
     });
 
     test('MUTATION: a floor token removed, G0845 untagged, a twin token dropped and shoulder removed from a push-up row are each red', () {
@@ -454,7 +463,7 @@ void main() {
       expect(_libFloorViolations(d), isNotEmpty, reason: 'shoulder removed from a push-up-named row');
     });
 
-    test('kV14SafePool is the original 33 plus safe_pool_additions, each name one library row', () {
+    test('kV14SafePool is the kept original names plus safe_pool_additions, each name one library row', () {
       expect(_poolViolations(table, kV14SafePool, lib), isEmpty);
     });
 

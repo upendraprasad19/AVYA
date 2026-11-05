@@ -6023,3 +6023,16 @@ Impact: the tile and viewer cannot ship without the assets and a delivery path; 
 **Acceptance:** deployed version recorded; boot-verified. reopen_when: the founder gives the deploy go.
 
 **Resolution (2026-11-05).** `log-client-error` redeployed from main 58d0d817 as v21 (verify_jwt true) after the founder's go; deploy smoke OK (HTTP 401, function reachable).
+
+## OI-460 — Library Batch C2a: sheet-drop removals the depth rule allows, production-name repoints, orphan plates, cloud deactivation
+
+- **Status**: CLOSED
+- **Blocked on**: none
+- **Verified**: 2026-11-05 (live counts after migration 167: 921 rows, 864 active, 57 inactive, 0 removed names active)
+- **Identified**: 2026-11-04 · filed via mint_oi.sh from branch `library-batch-c2`
+
+Narrowed 2026-11-04 after two combined-plan review rounds came back not converged and the unit was split (section 4.12.1). C2a removes the sheet-drop library rows whose replacement already exists in the shipped 914-row library, repoints every exercise name production code hard-codes, deletes four orphaned plate SVGs and deactivates the removed rows in the cloud. Plan: `docs/plans/2026-11-04-library-batch-c2a-removals.md`. The twins, the E230 retag and the media are OI-462.
+
+**Done when.** The 50 removal ids are gone from `assets/data/exercise_library.json` and from every install (seed v18 prune); every hard-coded exercise name resolves to exactly one shipped row; the depth rule holds in every cell under both `movement_pattern` and `slot_pattern`; the cloud migration is applied and the rows are `is_active = false`; the five injury sweeps keep their hard zeros; the tests are repointed, mutated and green.
+
+**Closed by.** Branch `library-batch-c2`: removals file and generator (84171dfc), the library edit, seed v18 prune and repoints (43fbb074), the cloud seed generator (75496c80), tests and docs (fe299f12), the B-pass fixes (14cd036b, review `docs/reviews/library-batch-c2a-bpass.md`) and migration 167 (a7be5078, applied to `dedsavbjuwgarrhphgnl` on 2026-11-05 after the founder's go on the exact file). The six twin rows stay for OI-462.

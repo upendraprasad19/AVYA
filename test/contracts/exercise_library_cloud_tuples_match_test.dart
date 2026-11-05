@@ -57,7 +57,11 @@ class _Sandbox {
   _Sandbox() : dir = Directory.systemTemp.createTempSync('lib_cloud_') {
     Directory('${dir.path}/scripts').createSync(recursive: true);
     Directory('${dir.path}/assets/data').createSync(recursive: true);
+    Directory('${dir.path}/scripts/data').createSync(recursive: true);
     Directory('${dir.path}/out').createSync();
+    // The removals file the generator reads (Batch C2a); without it the sandbox would emit no deactivations.
+    File('${dir.path}/scripts/data/library_batch_c2_removals.json')
+        .writeAsStringSync(File('scripts/data/library_batch_c2_removals.json').readAsStringSync());
     File(script).writeAsStringSync(File(_generatorRel).readAsStringSync());
     File(libPath).writeAsStringSync(File(_libRel).readAsStringSync());
   }

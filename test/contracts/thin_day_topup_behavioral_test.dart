@@ -12,7 +12,7 @@
 //
 // Batch C1 (629 new rows) re-pointed the REAL-library personas: the 285-row library's thin days (shoulder advanced 4-day,
 // knee+hip intermediate 3-day, elbow lose_fat 6-day pins) are no longer thin, so each case now runs on a persona found by
-// a reach search over the 914-row library (tier bodyweight; 12 injury sets x 3 levels x 3-6 days; pins: 2 goals x 2 levels
+// a reach search over the 914-row library (Batch C2a re-found the repeat persona on the 864-row library) (tier bodyweight; 12 injury sets x 3 levels x 3-6 days; pins: 2 goals x 2 levels
 // x 2 day counts x 6 injuries). Every precondition is still asserted FIRST, so a persona that stops being thin fails loudly.
 //
 // The oracle reads tags and equipment from assets/data/exercise_library.json
@@ -314,18 +314,20 @@ void main() {
 
     test('repeat: one surviving pin is lifted to 3, safe, with no duplicate name (wrist)',
         () async {
+      // Batch C2a (OI-460): lose_fat beginner 5-day stopped being thin on the 864-row library; a reach search over
+      // 2 goals x 2 levels x 2 day counts x 7 injuries found this persona (exactly one surviving pin, week 1 chest day).
       final first = gen(
-          goal: 'lose_fat', level: 'beginner', days: 5, injuries: const []);
+          goal: 'lose_fat', level: 'intermediate', days: 4, injuries: const []);
       final pins = namesByDay(first);
       await killSwitch(on: true);
       final before = gen(
-          goal: 'lose_fat', level: 'beginner', days: 5, phase: 2,
+          goal: 'lose_fat', level: 'intermediate', days: 4, phase: 2,
           injuries: ['wrist'], pins: pins);
       expect(dayOf(before, 0, 'Chest, shoulders, triceps').exercises, hasLength(1),
           reason: 'precondition: one surviving pin with the kill-switch set');
       await killSwitch(on: false);
       final after = gen(
-          goal: 'lose_fat', level: 'beginner', days: 5, phase: 2,
+          goal: 'lose_fat', level: 'intermediate', days: 4, phase: 2,
           injuries: ['wrist'], pins: pins);
       for (final wk in after.weekPlans.take(2)) {
         for (final d in wk.workoutDays) {

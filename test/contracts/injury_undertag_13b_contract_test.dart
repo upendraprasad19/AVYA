@@ -100,7 +100,16 @@ void main() {
     });
 
     test('every 13-B row carries EXACTLY its expected injury tokens', () {
+      final c2Removed = {
+        for (final e in (jsonDecode(File('scripts/data/library_batch_c2_removals.json').readAsStringSync()) as Map<String, dynamic>)['entries'] as List)
+          if ((e as Map)['decision'] == 'remove') e['id'] as String,
+      };
       k13bExpected.forEach((id, expected) {
+        // A row Batch C2a removed has no tags to check; any other missing id is still a failure.
+        if (c2Removed.contains(id)) {
+          expect(byId.containsKey(id), isFalse, reason: '$id was removed in Batch C2a');
+          return;
+        }
         expect(byId[id], expected.toSet(),
             reason: '$id injury_contraindications drifted from the 13-B decision');
       });

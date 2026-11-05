@@ -37218,7 +37218,7 @@
       "skill_track": "pull_up",
       "skill_step": 4,
       "regression_to": "Pull Up",
-      "progression_to": "Chest to Bar Pull Up",
+      "progression_to": "L-pullup",
       "requires_coaching": false,
       "high_impact": false,
       "gym_availability": "standard_gym",

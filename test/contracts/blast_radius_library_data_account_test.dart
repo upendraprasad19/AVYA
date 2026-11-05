@@ -30,6 +30,8 @@ const _tablesGlob = 'scripts/data/library_injury_additions_*.json';
 // Batch M1: the media upload tool (service-role key, can delete a bucket) and the provenance table it reads.
 const _uploadToolGlob = 'scripts/upload_exercise_media.js';
 const _mediaTableGlob = 'scripts/data/library_media_v16.json';
+// Batch C2a (OI-460): the removals file decides which library rows leave every install and the cloud.
+const _removalsGlob = 'scripts/data/library_batch_c2_removals.json';
 const _assetsGlob = 'assets/**';
 const _scriptsGlob = 'scripts/**';
 
@@ -106,6 +108,21 @@ void main() {
 
       expect(gateTier(_uploadToolGlob), 'account');
       expect(gateTier(_mediaTableGlob), 'account');
+    });
+  });
+
+  group('1c. the C2a removals file', () {
+    test('it is account, claimed by its own rule above scripts/**, and the file exists', () {
+      expect(File(_removalsGlob).existsSync(), isTrue, reason: 'positive control');
+      expect(tier(_removalsGlob), 'account');
+      expect(ruleFor(_removalsGlob)?.glob, _removalsGlob);
+      int index(String glob) => reg.rules.indexWhere((r) => r.glob == glob);
+      expect(index(_removalsGlob), lessThan(index(_scriptsGlob)));
+    });
+
+    test('mirror: its generator and sibling data file keep the scripts/** tier', () {
+      expect(tier('scripts/library_batch_c2_removals_gen.js'), 'feature');
+      expect(tier('scripts/data/library_batch_c2_other.json'), 'feature');
     });
   });
 

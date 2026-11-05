@@ -16,6 +16,13 @@ const Map<String, String> kTwinLibraryRow = {
   'G1428': 'E210', // ~ Wrist Rotations: wrist
 };
 
+/// Batch C2a (OI-460): E075 and E210 left the library, so the twin tags are FROZEN literals (the base library's tags for
+/// those rows). `library_batch_c_injury_coverage_test.dart` mirrors them against test/fixtures/library_c2_base_depth.json.
+const Map<String, List<String>> kTwinFrozenTags = {
+  'G0814': ['elbow', 'shoulder'],
+  'G1428': ['wrist'],
+};
+
 List<String> _strs(Object? v) => (v as List? ?? const []).map((e) => e.toString()).toList();
 
 List<String> sortedUnique(Iterable<String> v) => v.toSet().toList()..sort();
@@ -72,9 +79,7 @@ List<String> familyRuleTokens(Map<String, dynamic> row) {
 
 /// The twin tokens of [row] (the library row's tags), or empty when the row has no twin.
 List<String> twinTokens(Map<String, dynamic> row, List<Map<String, dynamic>> lib) {
-  final from = kTwinLibraryRow[row['id']];
-  if (from == null) return const [];
-  return injuryTagsOf(lib.firstWhere((l) => l['id'] == from));
+  return kTwinFrozenTags[row['id']] ?? const [];
 }
 
 /// The tokens a new row MUST end with: floor, family rules and twin (the majority is a founder call, not a floor).

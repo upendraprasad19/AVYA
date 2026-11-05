@@ -504,10 +504,10 @@ void main() {
     });
 
     test('(P4) a removal-slated pair moved into entries', () {
-      final pair = take('removal_slated', 'E075');
+      final pair = take('removal_slated', 'E084');
       pair['equipment_checked'] = true;
       bucket('entries').add(pair);
-      expectRule('P4', has: 'entry E075');
+      expectRule('P4', has: 'entry E084');
     });
 
     test('(P4) a removal-slated row that C2 keeps (it gains a core level) forces a decision', () {

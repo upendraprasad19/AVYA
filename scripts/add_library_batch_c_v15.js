@@ -6,6 +6,7 @@
 //   node scripts/add_library_batch_c_v15.js --check          # byte equality of a fresh import with the shipped file
 //   ... [--library <path>] [--source <path>] [--table <path>]  # test seams; the defaults are the committed files
 //   ... [--media <path>|none]    # the media provenance table (Batch M1, R4); default scripts/data/library_media_v16.json
+//   ... [--removals <path>|none] # the Batch C2a removals file; default scripts/data/library_batch_c2_removals.json (absent = no-op)
 //
 // Inputs: scripts/data/library_batch_c_source.json (every converted row, a held row carries `hold`),
 // scripts/data/library_injury_additions_v15.json (the founder-approved tag table and the frozen variant_family).
@@ -59,6 +60,13 @@ if (MEDIA_NONE && !args.includes('--library')) {
   throw new Error('--media none needs an explicit --library <copy>: without it the run would rewrite the real library and strip the media keys from every mapped row');
 }
 const MEDIA = MEDIA_NONE ? null : MEDIA_ARG === undefined ? path.join(__dirname, 'data', 'library_media_v16.json') : path.resolve(MEDIA_ARG);
+// Batch C2a (OI-460): scripts/data/library_batch_c2_removals.json. Every `decision: remove` id leaves the library; a
+// removed name that differs from every kept row name (`alias_to`) is appended to that row's name_aliases. A missing
+// file is a printed no-op, an id already absent is an idempotent no-op, an id that is a SOURCE id stops the run, and a
+// replacement / alias target that is not a row of the new library stops the run.
+const REMOVALS_ARG = rawFlag('--removals');
+const REMOVALS_NONE = REMOVALS_ARG === 'none';
+const REMOVALS = REMOVALS_NONE ? null : path.resolve(REMOVALS_ARG === undefined ? path.join(__dirname, 'data', 'library_batch_c2_removals.json') : REMOVALS_ARG);
 const MEDIA_KEYS = ['media_slug', 'media_version', 'media_source'];
 const MEDIA_SOURCE = 'wardroom';
 
@@ -179,6 +187,45 @@ function applyMedia(allRows, media) {
   });
 }
 
+function readRemovals() {
+  if (REMOVALS === null || !fs.existsSync(REMOVALS)) {
+    console.log(`removals stage skipped: ${REMOVALS === null ? '--removals none' : `${REMOVALS} not found`}`);
+    return [];
+  }
+  const entries = JSON.parse(fs.readFileSync(REMOVALS, 'utf8')).entries;
+  if (!Array.isArray(entries)) throw new Error(`removals file ${REMOVALS} has no entries array`);
+  return entries.filter((e) => e.decision === 'remove');
+}
+
+// Appends each alias_to name to its target row's name_aliases (existing array kept in order, no duplicate).
+function applyAliases(allRows, removals) {
+  const byId = new Map(allRows.map((r) => [r.id, r]));
+  const names = new Set(allRows.map((r) => r.name.toLowerCase()));
+  return allRows.map((r) => {
+    const add = removals.filter((e) => e.alias_to === r.id).map((e) => e.name);
+    if (!add.length) return r;
+    for (const n of add) {
+      if (names.has(n.toLowerCase())) throw new Error(`alias "${n}" equals a row name of the new library`);
+    }
+    const cur = Array.isArray(r.name_aliases) ? r.name_aliases : [];
+    const merged = [...cur, ...add.filter((n) => !cur.includes(n))];
+    return { ...r, name_aliases: merged };
+  });
+}
+
+// A `standard_swap` that names a removed row would point at nothing (B-pass C2a finding 2): it takes the replacement row's
+// name, or "" when the removal has no replacement or the replacement is the row itself. Nothing in lib/ reads the field.
+function repointStandardSwap(allRows, removals) {
+  const byId = new Map(allRows.map((r) => [r.id, r]));
+  const gone = new Map(removals.map((e) => [e.name.toLowerCase(), e]));
+  return allRows.map((r) => {
+    const e = typeof r.standard_swap === 'string' ? gone.get(r.standard_swap.toLowerCase()) : undefined;
+    if (!e) return r;
+    const to = e.replacement ? byId.get(e.replacement) : undefined;
+    return { ...r, standard_swap: to && to.id !== r.id ? to.name : '' };
+  });
+}
+
 function main() {
   const media = MEDIA_NONE ? null : readMediaTable();
   const before = fs.readFileSync(LIBRARY, 'utf8');
@@ -201,7 +248,11 @@ function main() {
   if (sourceIds.size !== rows.length) throw new Error('the source file repeats an id');
   /*HELD-SKIP*/ const shipped = rows.filter((r) => !r.hold);
 
-  const kept = base.filter((r) => !sourceIds.has(r.id)).map((r) => {
+  const removals = readRemovals();
+  const removeIds = new Set(removals.map((e) => e.id));
+  const inSource = [...removeIds].filter((i) => sourceIds.has(i));
+  if (inSource.length) throw new Error(`removals name source ids: ${inSource.join(' ')}`);
+  const kept = base.filter((r) => !sourceIds.has(r.id) && !removeIds.has(r.id)).map((r) => {
     if (r.id !== 'E274') return r;
     // E274 Prone T Raise: target_focus Upper Back -> Mid Back (slot_focus already carries Mid Back).
     return { ...r, target_focus: r.target_focus.map((f) => (f === 'Upper Back' ? 'Mid Back' : f)) };
@@ -213,7 +264,16 @@ function main() {
     if (!tableRow) throw new Error(`${r.id}: no row in the injury tag table (the injury gate cannot be skipped)`);
     return buildRow(r, tableRow);
   });
-  const withMedia = media ? applyMedia([...kept, ...added], media) : [...kept, ...added];
+  const finalRows = [...kept, ...added];
+  const finalIds = new Set(finalRows.map((r) => r.id));
+  for (const e of removals) {
+    for (const t of [e.replacement, e.alias_to]) {
+      if (t && !finalIds.has(t)) throw new Error(`${e.id}: replacement / alias target ${t} is not a row of the new library`);
+    }
+  }
+  const aliased = applyAliases(finalRows, removals);
+  const swapped = repointStandardSwap(aliased, removals);
+  const withMedia = media ? applyMedia(swapped, media) : swapped;
   const next = format(withMedia);
 
   const heldCount = rows.length - shipped.length;

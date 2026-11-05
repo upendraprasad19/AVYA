@@ -35,6 +35,8 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:uuid/uuid.dart';
 
+import 'package:icanbefitter/core/services/library_retired_ids.dart';
+
 import '../helpers/spawn.dart';
 
 /// scripts/seed_exercise_library.js NAMESPACE: cloud ids are UUID v5 of
@@ -43,9 +45,18 @@ const _namespace = '5a1f0b0c-9dad-11d1-80b4-00c04fd430c8';
 String _cloudId(String libraryId) =>
     const Uuid().v5(_namespace, 'exercise_library|$libraryId');
 
-/// Rows the Batch C1 importer writes carry this `source`; it is also the rollback selector.
+/// Rows the Batch C1 importer writes carry this `source`. Batch C2a adds none; its rollback reactivates the removed ids.
 const _newRowSource = 'exercise-gif-set';
-const _rollbackLine = "UPDATE exercise_library SET is_active = false WHERE source = '$_newRowSource';";
+
+/// Batch C2a: the `decision: remove` library ids of scripts/data/library_batch_c2_removals.json, ascending.
+List<String> _removedIds() {
+  final entries = ((jsonDecode(File('scripts/data/library_batch_c2_removals.json').readAsStringSync()) as Map<String, dynamic>)['entries'] as List)
+      .cast<Map<String, dynamic>>();
+  return [for (final e in entries) if (e['decision'] == 'remove') e['id'] as String]..sort();
+}
+
+String _rollbackLine() =>
+    "UPDATE exercise_library SET is_active = true WHERE id IN (${_removedIds().map((i) => "'${_cloudId(i)}'").join(', ')});";
 const _generator = 'scripts/seed_exercise_library.js';
 final _tupleStart = RegExp(r"^\('[0-9a-f]{8}-", multiLine: true);
 
@@ -84,14 +95,31 @@ List<String> _tupleViolations(String sql, List<Map<String, dynamic>> rows) {
   return out;
 }
 
-/// The inline rollback deactivates exactly the new rows, and the header counts them.
+/// The inline rollback reactivates exactly the removed rows, and the header counts them.
 List<String> _rollbackViolations(String sql, List<Map<String, dynamic>> rows) {
   final out = <String>[];
-  final newRows = rows.where((r) => r['source'] == _newRowSource).length;
+  final removed = _removedIds().length;
   if (!sql.contains('-- Rollback strategy: inline')) out.add('no inline rollback strategy header');
-  if (!sql.contains('--   $_rollbackLine')) out.add('the commented rollback block does not hold the deactivation line');
-  if (!sql.contains("-- Rollback strategy: inline   -- $_rollbackLine")) out.add('the Rollback strategy header does not name the deactivation');
-  if (!sql.contains('(selects exactly the $newRows new rows;')) out.add('the header does not count the $newRows new rows');
+  if (!sql.contains('--   ${_rollbackLine()}')) out.add('the commented rollback block does not hold the reactivation line');
+  if (!sql.contains('-- Rollback strategy: inline   -- ${_rollbackLine()}')) out.add('the Rollback strategy header does not name the reactivation');
+  if (!sql.contains('(reactivates exactly the $removed removed rows;')) out.add('the header does not count the $removed removed rows');
+  return out;
+}
+
+/// Batch C2a: every removed id is deactivated by exactly one statement, after the upsert, and no removed id is upserted.
+List<String> _removalViolations(String sql) {
+  final out = <String>[];
+  final upsertEnd = sql.lastIndexOf('name_aliases = EXCLUDED.name_aliases;');
+  for (final id in _removedIds()) {
+    final u = _cloudId(id);
+    final plain = "UPDATE exercise_library SET is_active = false WHERE id = '$u';";
+    final cue = "UPDATE exercise_library r SET is_active = false, coaching_cues = k.coaching_cues, common_mistakes = k.common_mistakes FROM exercise_library k WHERE r.id = '$u' AND";
+    final n = plain.allMatches(sql).length + cue.allMatches(sql).length;
+    if (n != 1) out.add('$id ($u) is deactivated by $n statements');
+    final at = sql.indexOf("id = '$u'");
+    if (at >= 0 && at < upsertEnd) out.add('$id deactivation precedes the upsert');
+    if (RegExp("^\\('$u'", multiLine: true).hasMatch(sql)) out.add('$id is still upserted');
+  }
   return out;
 }
 
@@ -160,9 +188,13 @@ void main() {
       expect(_tupleViolations(seedFile.readAsStringSync(), rows), isEmpty);
     });
 
-    test('the inline rollback deactivates exactly the new rows, and the header counts them', () {
+    test('the inline rollback reactivates exactly the removed rows, and the header counts them', () {
       final rows = (jsonDecode(bundledSeed.readAsStringSync()) as List).cast<Map<String, dynamic>>();
       expect(_rollbackViolations(seedFile.readAsStringSync(), rows), isEmpty);
+    });
+
+    test('Batch C2a: every removed id is deactivated once, after the upsert, and not upserted', () {
+      expect(_removalViolations(seedFile.readAsStringSync()), isEmpty);
     });
 
     // Batch A (library v12): 7 rows were retired into a kept twin (merged_ids).
@@ -370,7 +402,9 @@ void main() {
 
     test('the generated file carries the C1 header, every row uuid and the pinned rollback', () {
       expect(plain, contains('-- Destructive?: yes'));
-      expect(plain, contains('-- Linked diagnose-doc: 2026-10-26-library-batch-c1-c1d7a4'));
+      expect(plain, contains('-- Linked diagnose-doc: 2026-11-04-library-batch-c2a-removals-c2a7f1'));
+      expect(_removalViolations(plain), isEmpty);
+      expect(_removalViolations(split), isEmpty);
       expect(_tupleViolations(plain, rows), isEmpty);
       expect(_rollbackViolations(plain, rows), isEmpty);
       expect(_rollbackViolations(split, rows), isEmpty);
@@ -387,13 +421,58 @@ void main() {
       expect(_tupleViolations(foreign.join('\n'), rows), isNotEmpty, reason: 'foreign uuid');
     });
 
-    test('MUTATION: deleting the deactivation line, or pointing it at another source, is a violation', () {
-      final gone = plain.replaceAll(_rollbackLine, '');
+    test('MUTATION: deleting the reactivation line, or turning it into a deactivation, is a violation', () {
+      final gone = plain.replaceAll(_rollbackLine(), '');
       expect(gone, isNot(plain), reason: 'the mutation must apply');
       expect(_rollbackViolations(gone, rows), isNotEmpty, reason: 'line deleted');
-      final other = plain.replaceAll("source = '$_newRowSource'", "source = 'icanbefitter_seed'");
+      final other = plain.replaceAll('SET is_active = true WHERE id IN', 'SET is_active = false WHERE id IN');
       expect(other, isNot(plain), reason: 'the mutation must apply');
-      expect(_rollbackViolations(other, rows), isNotEmpty, reason: 'wrong selector');
+      expect(_rollbackViolations(other, rows), isNotEmpty, reason: 'wrong direction');
+    });
+
+    test('MUTATION (C2a): a dropped deactivation, a deactivation before the upsert and a still-upserted removed row are each a violation', () {
+      final first = _removedIds().first;
+      final stmt = "UPDATE exercise_library SET is_active = false WHERE id = '${_cloudId(first)}';";
+      expect(plain, contains(stmt));
+      final dropped = plain.replaceFirst(stmt, '');
+      expect(dropped, isNot(plain), reason: 'the mutation must apply');
+      expect(_removalViolations(dropped), isNotEmpty, reason: 'dropped');
+      final early = '$stmt\n${plain.replaceFirst(stmt, '')}';
+      expect(_removalViolations(early), isNotEmpty, reason: 'before the upsert');
+      final lines = plain.split('\n');
+      final i = lines.indexWhere((l) => l.startsWith("('"));
+      final upserted = [...lines]..insert(i, lines[i].replaceFirst(RegExp(r"^\('[0-9a-f-]{36}'"), "('${_cloudId(first)}'"));
+      expect(_removalViolations(upserted.join('\n')), isNotEmpty, reason: 'still upserted');
+    });
+
+    test('MUTATION (C2a): a removed id that is back in the library makes the generator refuse (exit 2), not ship it dead', () async {
+      final lib = (jsonDecode(File('assets/data/exercise_library.json').readAsStringSync()) as List).cast<Map<String, dynamic>>();
+      final back = Map<String, dynamic>.from(lib.first)..['id'] = _removedIds().first;
+      final tmp = Directory.systemTemp.createTempSync('c2a_readded');
+      try {
+        final f = File('${tmp.path}/lib.json')..writeAsStringSync(jsonEncode([...lib, back]));
+        final r = await runSpawnAsync('node', [_generator, '999_readded_seed_exercise_library.sql', '--out', tmp.path],
+            why: 'seed generator on a library with a removed id re-added', extraEnv: {'SEED_LIBRARY_JSON': f.path}, report: (_) {})
+            .timeout(const Duration(seconds: 60));
+        expect(r.exitCode, 2, reason: 'stderr: ${r.stderr}');
+        expect(r.stderr.toString(), contains(_removedIds().first));
+        expect(File('${tmp.path}/999_readded_seed_exercise_library.sql').existsSync(), isFalse);
+        // MIRROR: the unmodified library still generates.
+        final ok = await _generateAsync(['999_readded_seed_exercise_library.sql', '--out', tmp.path], 'unmodified library still generates');
+        expect(ok.exitCode, 0, reason: 'stderr: ${ok.stderr}');
+      } finally {
+        tmp.deleteSync(recursive: true);
+      }
+    });
+
+    test('the generator, the removals file and the Dart prune set name the same ids', () {
+      final fromSql = RegExp(r"UPDATE exercise_library SET is_active = false WHERE id = '([0-9a-f-]{36})';")
+          .allMatches(plain)
+          .map((m) => m.group(1)!)
+          .toSet();
+      final fromFile = {for (final i in _removedIds()) _cloudId(i)};
+      expect(fromSql, fromFile);
+      expect(_removedIds().toSet(), kRetiredLibraryIdsNoTwin);
     });
 
     test('MUTATION: a --split file that loses one conflict clause is caught by the clause count', () {

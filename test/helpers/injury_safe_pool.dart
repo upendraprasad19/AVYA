@@ -7,6 +7,10 @@
 // imports another, so the list lives here.
 
 /// Exact library names whose `injury_contraindications` must be empty.
+///
+/// Batch C2a (OI-460) removed seven of the original 33 names from the library (Seal Row, Sled Push, Prowler Push,
+/// Thoracic Extension (Foam Roller), Thoracic Rotation, Foam Roll IT Band, Foam Roll Upper Back): a name with no row
+/// has nothing to keep untagged, so they left this list with their rows.
 const List<String> kV14SafePool = [
   'Machine Chest Press',
   'Floor Press',
@@ -19,7 +23,6 @@ const List<String> kV14SafePool = [
   'Dumbbell Row',
   'Seated Cable Row',
   'Chest Supported Row',
-  'Seal Row',
   'Inverted Row',
   'TRX Row',
   'Machine High Row',
@@ -31,16 +34,10 @@ const List<String> kV14SafePool = [
   'Pallof Press',
   'Cycling (Stationary)',
   'Assault Bike',
-  'Sled Push',
-  'Prowler Push',
   'Slow Walking',
   'Arm Circles',
   'Deep Breathing',
   'Cat-Cow Stretch',
-  'Thoracic Extension (Foam Roller)',
-  'Thoracic Rotation',
-  'Foam Roll IT Band',
-  'Foam Roll Upper Back',
   // Batch C1 (docs/plans/2026-10-25-library-batch-c-new-rows.md, R5): the founder-approved safe-pool additions, equal to
   // safe_pool_additions in scripts/data/library_injury_additions_v15.json (asserted by library_batch_c_injury_coverage_test.dart).
   // Low-load or rehab rows only: seated and supported rows, pelvic tilts, bridges, band rear-delt work, low-impact cardio.

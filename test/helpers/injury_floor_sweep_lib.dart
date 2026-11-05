@@ -254,6 +254,7 @@ class SweepHarness {
   /// exercise that the 3-set seat used to starve); the six `pairs` / `pairs46` blocks of home_dumbbells, basic_gym and
   /// full_gym keep a small residue, every day of it a shoulder+elbow pair (small injured pool; measured 2026-11-04):
   /// pairs 10 / 22 / 14 and pairs46 12 / 8 / 4, down from 76 / 126 / 106 and 120 / 143 / 125. No empty day anywhere.
+  /// Batch C2a (OI-460, library v18, 864 rows), merged onto the count band, re-measured all 20 blocks: one rose, `repeat bodyweight` 0 -> 4 thin days (2 elbow 5d, 2 lower_back 4d: the phase-1 plan now pins different rows and a repeat phase drops an unsafe pin with no refill; 0 one-exercise days, 0 empty days), a recorded decision in the C2a diagnose-doc (c2a7f1). The other 19 blocks held.
   /// OI-456 piece A (rest by exercise type, 3 base sets every day) re-measured all 20 blocks: 18 fell, 1 equal, 1 rose
   /// (one-exercise days never rose); the one that rose is `pairs bodyweight` thin days 30 -> 32 (knee+elbow 10,
   /// lower_back+elbow 4, wrist+elbow 8, elbow+hip 10), a recorded decision in the OI-456 diagnose-doc. MEASURED cause
@@ -269,7 +270,7 @@ class SweepHarness {
     'pairs46 home_dumbbells': (12, 0),
     'pairs46 basic_gym': (8, 0),
     'pairs46 full_gym': (4, 0),
-    'repeat bodyweight': (0, 0),
+    'repeat bodyweight': (4, 0),
     'repeat home_dumbbells': (0, 0),
     'repeat basic_gym': (0, 0),
     'repeat full_gym': (0, 0),

@@ -390,12 +390,6 @@
     "pair": true
   },
   {
-    "id": "E075",
-    "name": "Dip (Parallel Bars)",
-    "slug": "dip",
-    "pair": true
-  },
-  {
     "id": "E076",
     "name": "Dand (Hindu Pushup)",
     "slug": "hindu-push-up",
@@ -474,12 +468,6 @@
     "pair": true
   },
   {
-    "id": "E101",
-    "name": "Chest to Bar Pull Up",
-    "slug": "pull-up",
-    "pair": true
-  },
-  {
     "id": "E102",
     "name": "Incline Push Up",
     "slug": "incline-push-up",
@@ -537,12 +525,6 @@
     "id": "E114",
     "name": "Landmine Press",
     "slug": "landmine-press",
-    "pair": true
-  },
-  {
-    "id": "E116",
-    "name": "Meadows Row",
-    "slug": "meadows-row",
     "pair": true
   },
   {
@@ -624,12 +606,6 @@
     "pair": true
   },
   {
-    "id": "E146",
-    "name": "Curtsy Lunge",
-    "slug": "curtsy-lunge",
-    "pair": true
-  },
-  {
     "id": "E151",
     "name": "Inchworm",
     "slug": "inchworm",
@@ -699,12 +675,6 @@
     "id": "E189",
     "name": "Banded Hip Thrust",
     "slug": "banded-hip-thrust",
-    "pair": true
-  },
-  {
-    "id": "E192",
-    "name": "Battle Rope Wave",
-    "slug": "battle-ropes",
     "pair": true
   },
   {
@@ -867,12 +837,6 @@
     "id": "E255",
     "name": "Towel Row",
     "slug": "towel-row",
-    "pair": true
-  },
-  {
-    "id": "E256",
-    "name": "Negative Pull Up",
-    "slug": "negative-pull-up",
     "pair": true
   },
   {

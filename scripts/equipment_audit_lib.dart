@@ -160,11 +160,8 @@ List<AuditFinding> auditFindings({
 const acceptedMentions = <String, String>{
   'E042|dumbbells': 'pro_tip: "add dumbbells once 3x20 feels easy" - a progression',
   'E073|suspension trainer': 'pro_tip: "assisted pistol with trx or band FIRST" - a regression aid',
-  'E210|pull-up bar': 'pro_tip names OTHER exercises ("before deadlifts, pull-ups")',
   'E220|bench': 'pro_tip: "rounded posture from bench press and desk work" - a contrast',
   'E222|bench': 'pro_tip: "rest upper back on a bench AND add a barbell" - the loaded progression; cues are floor-based',
-  'E227|barbell': 'pro_tip: "without needing a barbell" - an explicit contrast',
-  'E233|parallel bars': 'cues offer "handles, BOOKS, or parallettes" - books are household, so the row needs only an elevated surface',
   'E257|resistance band': 'pro_tip: "add ankle weight or resistance band to increase difficulty"',
   'E259|bench': 'pro_tip: "elevate rear foot on a bench" describes a DIFFERENT exercise (Bulgarian split squat)',
   'E261|bench': 'cues: "lie face-down on the floor OR a bench" - the floor is offered',
@@ -181,17 +178,13 @@ const acceptedMentions = <String, String>{
   'E035|barbell': 'pro_tip: "constant tension barbell cannot" - a comparison',
   'E097|dumbbells': 'pro_tip: "constant tension that dumbbells cannot" - a comparison',
   'E098|bench': 'cues offer "hinged at hip OR on incline bench" - the hinge needs nothing',
-  'E125|bench': 'the row already declares `elevated surface`; the prose word is "elevated bench", and it is barbell-gated regardless',
   'E182|barbell': 'pro_tip: "barbell carry experience" - a reference to a different lift',
-  'E184|kettlebell': 'pro_tip: "kettlebell swing first" - a progression reference',
   'E185|dumbbells': 'pro_tip: "practice movement with dumbbell first" - a regression aid',
   'E187|dumbbells': 'prose compares to the dumbbell row twice; this row IS the kettlebell version',
-  'E223|barbell': 'pro_tip: "stimulus without a barbell" - an explicit contrast',
   'E224|kettlebell': 'cues: "think kettlebell swing, not squat" - a CUE METAPHOR, not kit',
   'E234|bench': 'cues say "lie on the FLOOR", pro_tip says "with no bench" - the contrast is the point',
   'E235|dumbbells': 'pro_tip: "superior to dumbbell for lateral delt" - a comparison',
   'E236|dumbbells': 'pro_tip: "dumbbell version does not" - a comparison',
-  'E237|dumbbells': 'pro_tip: "more hypertrophic than dumbbell laterals" - a comparison',
   'E238|bench': 'the row is NAMED "Bench Dips" and its cues say "bench edge" -- but a chair, '
       'sofa or step serves, which is exactly why the requirement is `elevated surface` and not '
       '`bench`. Renaming it would break standard_swap references and every logged set keyed '

@@ -14,7 +14,7 @@ void main() {
               as List)
           .cast<Map<String, dynamic>>();
 
-  // slug -> isPair, DEDUPED: 156 exercises share 152 slugs (library v12).
+  // slug -> isPair, DEDUPED: 150 exercises share 148 slugs (library v18).
   final slugs = <String, bool>{};
   final conflicts = <String>[];
   for (final e in lib) {
@@ -31,11 +31,12 @@ void main() {
     expect(conflicts, isEmpty);
   });
 
-  test('the shipping set is 152 slugs, 138 of them pairs', () {
+  test('the shipping set is 148 slugs, 134 of them pairs', () {
     // 153 -> 152 and 139 -> 138: Batch A dropped torso-twist-stretch, a pair
-    // drawing the wrong movement for its only user (E207).
-    expect(slugs.length, 152);
-    expect(slugs.values.where((p) => p).length, 138);
+    // drawing the wrong movement for its only user (E207). 152 -> 148 and 138 -> 134: Batch C2a removed dip,
+    // meadows-row, curtsy-lunge and negative-pull-up with their only users (E075 E116 E146 E256).
+    expect(slugs.length, 148);
+    expect(slugs.values.where((p) => p).length, 134);
     expect(slugs.values.where((p) => !p).length, 14);
   });
 
@@ -55,7 +56,7 @@ void main() {
     expect(wrong, isEmpty, reason: 'asset shape drift: $wrong');
   });
 
-  test('exactly 290 SVGs ship — no orphans left by a rename', () {
+  test('exactly 282 SVGs ship — no orphans left by a rename', () {
     final dir = Directory('assets/exercise_plates');
     expect(dir.existsSync(), isTrue,
         reason: 'run python scripts/build_exercise_plates.py first');
@@ -64,7 +65,7 @@ void main() {
         .whereType<File>()
         .where((f) => f.path.endsWith('.svg'))
         .toList();
-    expect(files.length, 290);
+    expect(files.length, 282);
   });
 
   test('paired frames share one viewBox', () {

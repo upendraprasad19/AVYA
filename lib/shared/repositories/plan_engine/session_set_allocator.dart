@@ -22,6 +22,11 @@ class AllocationStats {
   /// stage, independent of rest and time.
   final List<int> slotsSeen = [];
 
+  /// Test-only: per day, every exercise the selector handed the allocator, budgeted or not ([slotsSeen] plus the
+  /// not-budgeted rows, e.g. an isometric hold). A rotated-in pick can swap a budgeted row for a not-budgeted one, so
+  /// 'rotation adds or drops nothing' is a claim about this count, not [slotsSeen].
+  final List<int> rowsSeen = [];
+
   /// Day indexes the guard filled (either counter).
   final List<int> forcedDays = [];
 
@@ -246,6 +251,7 @@ class SessionSetAllocator {
 
     for (var d = 0; d < n; d++) {
       stats.slotsSeen.add(byDay[d].length);
+      stats.rowsSeen.add(byDay[d].length + nonBudgeted[d]);
     }
 
     // 2. Days copied from variant A enter the ledger as they are.

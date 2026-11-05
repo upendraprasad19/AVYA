@@ -373,6 +373,22 @@ void main() {
             'treating every retired id as a top-up addition');
   });
 
+  test('R9 (Batch C2a): every retired id the top-up adds is a KEPT sheet-drop row, never a removed one', () async {
+    for (final p in personas) {
+      await checkOnce(p);
+    }
+    final entries = ((jsonDecode(File('scripts/data/library_batch_c2_removals.json').readAsStringSync())
+            as Map<String, dynamic>)['entries'] as List)
+        .cast<Map<String, dynamic>>();
+    final keep = {for (final e in entries) if (e['decision'] == 'keep') e['id'] as String};
+    final removed = {for (final e in entries) if (e['decision'] == 'remove') e['id'] as String};
+    expect(keep, isNotEmpty, reason: 'non-vacuity: the removals file has kept rows');
+    expect(topUpRetiredIds, isNotEmpty, reason: 'non-vacuity: the top-up adds retired rows');
+    expect(topUpRetiredIds.intersection(removed), isEmpty, reason: 'a removed row reached a built plan');
+    expect(keep.containsAll(topUpRetiredIds), isTrue,
+        reason: 'a retired top-up id outside the kept sheet-drop rows: ${topUpRetiredIds.difference(keep)}');
+  });
+
   group('classifyBuilt (the R9 attribution)', () {
     bool retired(String id) => id.startsWith('R');
     bool skill(String id) => id.startsWith('S');

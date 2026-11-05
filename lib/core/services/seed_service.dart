@@ -8,6 +8,7 @@ import 'package:hive_flutter/hive_flutter.dart' show Box;
 
 import 'error_telemetry.dart';
 import 'hive_service.dart';
+import 'library_retired_ids.dart';
 import 'singleton_lifecycle_registry.dart';
 
 // Top-level function required by compute() — runs in a background isolate.
@@ -130,7 +131,12 @@ class SeedService {
   //   (docs/audit/library-old-rows-media-input.json; held pairs, removal-slated rows
   //   and E230 are not applied). Without this bump the keys never reach an installed
   //   copy (library_seed_v16_upgrade_behavioral_test.dart).
-  static const int _exerciseLibraryVersion = 17;
+  //   v18 (Batch C2a, OI-460, docs/plans/2026-11-04-library-batch-c2a-removals.md): 50 sheet-drop
+  //   rows leave the bundle (kRetiredLibraryIdsNoTwin, library_retired_ids.dart) and are pruned
+  //   from every install's exerciseBox; 4 removed names become aliases on their replacement.
+  //   Without this bump the removed rows live on in every existing install
+  //   (library_seed_v18_upgrade_behavioral_test.dart).
+  static const int _exerciseLibraryVersion = 18;
   static const String _exerciseVersionKey = 'exercise_library_version';
 
   /// Bump this integer whenever the bundled food_database.json changes
@@ -259,6 +265,11 @@ class SeedService {
       // putAll never deletes: a row retired into its twin would otherwise live
       // on in every existing install and keep being offered.
       await pruneRetired(_hive.exerciseBox, retiredLibraryIds(entries.values));
+      // v18: rows removed with no merged_ids twin. `.difference(shippedIds)` keeps a row the bundle still ships.
+      await pruneRetired(
+        _hive.exerciseBox,
+        kRetiredLibraryIdsNoTwin.difference(entries.keys.toSet()),
+      );
       await _hive.configBox.put(_exercisesSeededKey, true);
       await _hive.configBox.put(_exerciseVersionKey, _exerciseLibraryVersion);
       debugPrint('[SeedService] Exercises seeded: ${entries.length} items (v$_exerciseLibraryVersion)');

@@ -65,9 +65,12 @@ void main() {
     expect(ids, contains('E172'));
   });
 
-  test('E172 and E163 carry no Lats label', () {
+  test('E172 and E163 carry no Lats label (E163 left the library in Batch C2a: its check is skipped, E172 must exist)', () {
+    expect(bundled.any((r) => r['id'] == 'E172'), isTrue);
     for (final id in ['E172', 'E163']) {
-      final row = bundled.singleWhere((r) => r['id'] == id);
+      final rows = bundled.where((r) => r['id'] == id).toList();
+      if (rows.isEmpty) continue;
+      final row = rows.single;
       final focus = (row['target_focus'] as List).map((e) => e.toString());
       expect(focus, isNot(contains('Lats')), reason: '$id target_focus=$focus');
     }
