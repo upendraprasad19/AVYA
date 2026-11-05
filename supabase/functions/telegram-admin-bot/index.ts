@@ -563,6 +563,10 @@ export async function cmdCron(supabase: any): Promise<string> {
   // per-function exemption, which is the actual fix for true
   // beyond-7-day silence; that is separate production infrastructure
   // (migration 110 predates this branch) and out of this diff's scope.
+  // Update 2026-11-05 (OI-179, migration 169): retention is now 10 days, not 7.
+  // The 7-day `.gte()` below is unchanged on purpose (a window, not a purge):
+  // after 169 it, not the purge, is what hides a function silent for 7-10 days;
+  // beyond 10 days the purge still does (OI-199).
   const sevenDaysAgoIso = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
   const { data, error } = await supabase
     .from("cron_call_log")

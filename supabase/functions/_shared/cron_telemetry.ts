@@ -13,9 +13,9 @@
  *   1. Calls `logCronStart(name)` at the top of its `serve` handler → returns a row id.
  *   2. Calls `logCronEnd(id, status, httpStatus?, errorSummary?)` before returning.
  *
- * The row lands in `public.cron_call_log` (migration 068). Retention: 7 days via
- * `public.cleanup_cron_call_log()` (must be wired by founder via pg_cron registration
- * — currently not scheduled; see open_issues.md OI-15 follow-up).
+ * The row lands in `public.cron_call_log` (migration 068). Retention: 10 days (migration
+ * 169; it was 7 until 2026-11-05) via `public.cleanup_cron_call_log()`, which the nightly
+ * `db_maintenance_nightly` pg_cron job calls (migrations 069, 141, 144).
  *
  * Failures inside the telemetry call itself are SWALLOWED (try/catch + debug log).
  * Cron functions MUST NOT 500 because telemetry is broken.

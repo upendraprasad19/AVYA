@@ -1183,6 +1183,9 @@ Deno.test("cmdCron queries a 7-day time window (gte on started_at), not a row-co
   // latest, so true >7-day silence still goes invisible past the
   // retention cut (B-pass finding, same day; see the code comment above
   // cmdCron; deeper fix tracked as OI-199).
+  // Update 2026-11-05 (OI-179, migration 169): retention is 10 days now; the
+  // 7-day gte asserted below is a window, unchanged, and is what hides silence
+  // between days 7 and 10.
   const now = new Date();
   const threeDaysAgo = new Date(now.getTime() - 3 * 24 * 60 * 60 * 1000).toISOString();
   let gteCol: string | undefined;
