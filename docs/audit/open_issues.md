@@ -7292,28 +7292,6 @@ Found by the sync-storm-first-sweep batch while measuring its Day-0 web check (l
 
 **Done when.** Plan reviewed twice; Quads reach the band floor in the founder case and the other 6-day build_muscle personas with no group above its band top and every day inside its minutes; the generator golden changes only for 6-day build_muscle personas (changed keys listed); `kThinCeilings` and the scorecard baseline re-frozen if they move; mutants on the slot and on the policy. Blast radius: `platform` (plan_engine), tier L.
 
-## OI-456 — Exercise count per day is skewed (4 / 6 / 4 / 9) because rest time follows the day's intensity: set a 5-8 exercise band by level and rest by exercise type
-
-- **Status**: OPEN
-- **Blocked on**: none
-- **Verified**: never
-- **Identified**: 2026-11-03 · filed via mint_oi.sh from branch `exercise-count-band-oi`
-
-**What happens.** A tester (build_muscle, basic_gym, 4 days, intermediate, no minutes, so the 60-minute default) got Push 4, Pull 6, Legs 4, Upper 9 exercises in week 1 (cloud `user_progress.plan_json`, reproduced exactly with the real `PlanGenerator.generate` and his onboarding inputs). Day length is 57.6 / 48.2 / 60.4 / 56.7 minutes. Cause: the 4-day split gives each day an intensity (`split_resolver.dart:10`, strength / hypertrophy / strength / endurance) and `SessionBudget.restFor` (`session_budget.dart:381`) turns that into ONE rest for every exercise of the day (150 / 75 / 38 s); the 60-minute clock then fits 4 exercises on a 150 s day and 9 on a 38 s day. Isolation work (Lateral Raise, Bench Dips, Calf Raise) is rested 150 s on a strength day and a heavy Barbell Bench Press 5x7 only 38 s on the endurance day. The week-4 deload keeps the count but cuts a Pull day to 6 sets for 6 exercises (22 minutes).
-
-**Founder direction (2026-11-03), all recommended defaults accepted.**
-1. Exercise count by level at 60 minutes: beginner 5, intermediate 6, advanced 7 to 8; hard range 5 to 8 for everyone. Evidence and app practice: Fitbod sizes the count from the chosen duration (about 7 an hour); sessions of 5 to 7 exercises are the common hypertrophy convention (research note in the 2026-11-03 session; sources not primary).
-2. Rest by exercise type, not by day: heavy compound 150 s, other compound 120 s, isolation 75 s, timed or calisthenics 60 s. Day intensity changes reps and load only.
-3. The 5 to 8 band holds at 30, 45 and 90 minutes; sets flex first (30 min: 5 exercises at 2 sets; 90 min: up to 8 with more sets); the count never drops below 5.
-4. Only the main exercises count toward the band (warm-up, cool-down, cardio finisher do not).
-5. When the weekly set band cannot be met, the count band wins and the weekly band is a soft target.
-6. Week-4 deload keeps the count and cuts sets, with a floor of 2 sets per exercise.
-7. OI-454 (Quads floor) is filed but its work has NOT started (PR #201 only filed the OI). Both touch the allocator, so the order is a founder call still open; recommendation: OI-456 first, because it changes the exercise counts and rest that OI-454's measurements depend on, then re-measure OI-454 on top.
-8. Rule-14 waiver for the `generateV4` wiring in `plan_generator.dart` only.
-9. The level self-report safeguard is OI-457 (parked); the Upper-repeats issue is OI-458.
-
-**Done when.** Plan reviewed twice; every generated day holds 5 to 8 main exercises at every level and at 30 / 45 / 60 / 90 minutes (a sweep proves it, with named residue if any); rest follows the exercise type in the generator, the stored plan and the Home and Train "Up to N min" display (one table, display equals oracle); the generator golden and scorecard baselines change only where listed; the OI-452 3-exercise floor is subsumed or restated; mutants prove the band, the rest table and the deload floor. Blast radius: `platform` (plan_engine), tier L; full plan review x2 and B-pass.
-
 ## OI-457 — Level is self-reported at onboarding: a 55 kg lifter who picks Intermediate gets heavy barbell squat, deadlift and bench 4x7 (parked: onboarding change)
 
 - **Status**: OPEN
@@ -7350,6 +7328,28 @@ Found by the sync-storm-first-sweep batch while measuring its Day-0 web check (l
 Found by the M2b Part B Chrome check (360 dp, real fonts, the real card and exercise library with seeded data). The header `Row` of a COLLAPSED active-workout card in `lib/features/train/screens/active_workout/exercise_card.dart` (the `Exercise header row` block of `build`, about line 1388 when it was seen) reports a 13 px `RenderFlex` overflow. It is on `main` and not in the Part B diff: the widget tests run under the Ahem font, whose glyph widths are not the real ones, so no test sees it. The cause is NOT established (the long name, the meta line or the trailing controls are all candidates). Founder go to file it: 2026-11-04.
 
 **Done when.** The overflow is reproduced (Chrome at 360 dp with real fonts, or a widget test at a text scale that reddens it), the row is fixed so no child overflows at 360 dp and at the largest text scale the app supports, and the fix carries a regression test that fails without it (mutated and run, rule 21). UI only: a Train widget.
+
+## OI-463 — workout_log_confirm_card test (f) skips its tap-guard assertion in a run that stalls past 480 ms; a deterministic check needs an injectable guard clock in lib
+
+- **Status**: OPEN
+- **Blocked on**: the founder declined the `lib/` seam for OI-450 (option A, 2026-11-03). `reopen_when`: a `lib/` seam for the workout log confirm card is wanted for another reason.
+- **Verified**: 2026-11-04 - read `lib/features/ai_coach/widgets/workout_log_confirm_card.dart` (`kHeldCardTapGuard` = 500 ms at line 46, `_sinceMount` is a real `Stopwatch` at line 73, the guard check at line 94) and `test/ai_coach/workout_log_confirm_card_saved_signal_test.dart` test (f) (the skip comment near line 926).
+- **Identified**: 2026-11-04 · filed via mint_oi.sh from branch `tz-pin-catalog`
+
+**What.** Test (f) checks that a CONFIRM tap inside the first 500 ms of a held saved card is ignored. The guard runs on a real `Stopwatch`, which a test cannot fake, so the test starts its own stopwatch before the mount and asserts only while that proves the window was still open. In a run that stalls past 480 ms before the tap, the assertion is skipped. It can never fail wrongly, but a run that stalls silently checks less. Split out of OI-459, where it was recorded as a residual of OI-450.
+
+**Done when.** The guard reads an injectable clock (a `lib/` change in the card widget) so test (f) asserts the tap guard on every run, with a mutation (guard removed) that reddens it.
+
+## OI-468 — Three unit-test CI failures returned an impossible subprocess exit status (254, 1668163832, 1752491432) that passed on re-run: find the cause or add stderr capture
+
+- **Status**: OPEN
+- **Blocked on**: none
+- **Verified**: never
+- **Identified**: 2026-11-04 · filed via mint_oi.sh from branch `ci-flake-exit-garbage-oi`
+
+**What.** Three unit-test failures on GitHub CI, each a spawned child process whose exit status is not a valid one, each green on `gh run rerun --failed`, none reproducible locally, none ever with its stderr printed: (1) 2026-10-04, `sot` gate test, exit 254 (memory `reference_ci_flake_sot_gate_subprocess_exit254_2026_10_04.md`); (2) 2026-10-25, main run `40178030547` (docs-only PR), `oi_numbering_gate_e2e_test` fixture `git push` returned 1668163832 (0x636e28f8) with empty output; (3) 2026-11-04, PR #212 run `41889308206`, shard 4/4, `test/scripts/token_path_resolver_test.dart` ("VPS shape: linked worktree has nothing, primary has BOTH") failed at `_repoWithLinkedWorktree` (line 98) with exit {1752491432} (0x6874e5a8) while the shard was also running the heavy injury sweeps, stdout and stderr empty. The PR changed only plan-engine code and docs, so no code path of it reaches that test. Three instances of "impossible exit status in a loaded shard" is the threshold the memory note set for filing this.
+
+**Done when.** The cause is MEASURED (not guessed): either the runner's process handling under load is shown to return a corrupt status, or the harness reads a status it should not; or every spawn helper in the fixtures prints stdout, stderr and the status on a non-zero result (the token-path fixture already does, and still showed nothing) and retries a status outside 0..255 once with a recorded note. Blast radius: `feature` (test infrastructure).
 
 ## OI-460 — Library Batch C2a: sheet-drop removals the depth rule allows, production-name repoints, orphan plates, cloud deactivation
 

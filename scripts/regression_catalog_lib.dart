@@ -105,6 +105,7 @@ const List<String> childEnvStrippedNames = <String>[
   'RECORD_LIBRARY_REFERENCE_IDS',
   'WRITE_CORE_LIST_REPORT',
   'WRITE_SESSION_BUDGET_REPORT',
+  'WRITE_REST_BY_TYPE_REPORT',
 ];
 
 /// Variables read by an EXTERNAL tool (not by any repo script), stripped because a
@@ -176,6 +177,30 @@ const List<String> childEnvExternalReaders = <String>['EMAIL'];
 Map<String, String> scrubbedChildEnvironment(Map<String, String> parent) {
   final env = Map<String, String>.from(parent);
   env.removeWhere((k, _) => isChildControlVariable(k));
+  return env;
+}
+
+/// The zone the catalog's `flutter test` child runs in. CI pins `TZ: Asia/Kolkata` at
+/// workflow level and pre-push pins it for its own suite; this is the same zone.
+const String catalogTestTimeZone = 'Asia/Kolkata';
+
+/// The environment for the catalog walk's `flutter test` child: the canonical scrub
+/// ([scrubbedChildEnvironment]) PLUS `TZ` pinned to [catalogTestTimeZone] (OI-459).
+///
+/// Why the pin lives HERE and not in `safe_commit.sh` / `land_pr.sh`: the walk runs from
+/// the pre-commit hook on a merge commit, and the hook fires for EVERY way of making one
+/// (those two wrappers, `safe_merge.sh`, a plain `git merge`). A wrapper-level export
+/// covers only the wrappers; the spawn site covers all of them.
+///
+/// Why it matters: the VPS runs UTC and the suite's date-boundary tests assume IST. The
+/// two zones name different calendar dates between 18:30 and 24:00 UTC, so the walk
+/// passes in the VPS's morning and fails in its evening with no code change (PR #204's
+/// landing failed 6 tests that way; the same files passed under `TZ=Asia/Kolkata`).
+/// [scrubbedChildEnvironment] itself must keep passing `TZ` through unchanged: other
+/// callers (git_safety_hook_integration_test, test/helpers/spawn.dart) share it.
+Map<String, String> catalogChildEnvironment(Map<String, String> parent) {
+  final env = scrubbedChildEnvironment(parent);
+  env['TZ'] = catalogTestTimeZone;
   return env;
 }
 

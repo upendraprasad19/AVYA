@@ -52,7 +52,7 @@ const _stripped = <String>{
   '_SKIP_RENDER_CHECK', 'ANDROID_DEVICE_ID',
   // test fixture / report re-record switches (generator golden, frozen library reference, B1 and B2 gate reports)
   'RECORD_GENERATOR_GOLDEN', 'RECORD_LIBRARY_REFERENCE', 'RECORD_LIBRARY_REFERENCE_IDS', 'WRITE_CORE_LIST_REPORT',
-  'WRITE_SESSION_BUDGET_REPORT',
+  'WRITE_SESSION_BUDGET_REPORT', 'WRITE_REST_BY_TYPE_REPORT',
 };
 
 /// Read by an EXTERNAL tool only (git's author-identity fallback; d9e4b1): stripped,

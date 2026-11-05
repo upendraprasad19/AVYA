@@ -77,7 +77,9 @@ void main() async {
       // `workingDirectory:` and `-C <path>`, so any test building its own git repo
       // gets pointed at the REAL repo — mid-merge — and fails on unrelated state.
       // See scrubbedChildEnvironment's doc comment for the measured evidence.
-      environment: scrubbedChildEnvironment(Platform.environment),
+      // catalogChildEnvironment = that scrub + TZ pinned to Asia/Kolkata (OI-459): the VPS is
+      // UTC and the suite's date-boundary tests assume IST.
+      environment: catalogChildEnvironment(Platform.environment),
       includeParentEnvironment: false,
       // Windows: Dart's Process.run cannot resolve `flutter.bat` without a shell,
       // so the merge-commit regression walk threw ProcessException ("cannot find

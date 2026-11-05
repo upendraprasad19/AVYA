@@ -17,6 +17,7 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 
 import '../../scripts/regression_catalog_lib.dart';
+import '../helpers/spawn.dart';
 
 void main() {
   final recent = DateTime.now().subtract(const Duration(days: 1));
@@ -252,6 +253,7 @@ void main() {
       '_SKIP_RENDER_CHECK', 'ANDROID_DEVICE_ID',
       'RECORD_GENERATOR_GOLDEN', 'RECORD_LIBRARY_REFERENCE', 'RECORD_LIBRARY_REFERENCE_IDS', 'WRITE_CORE_LIST_REPORT',
       'WRITE_SESSION_BUDGET_REPORT',
+      'WRITE_REST_BY_TYPE_REPORT',
       'GIT_DIR', 'GIT_SSH_COMMAND', 'GITHUB_ACTIONS', 'GITHUB_EVENT_PATH', 'GITHUB_REF',
       'GITHUB_REPOSITORY_OWNER',
       'EMAIL', // git's author-identity fallback (d9e4b1): an external reader
@@ -287,6 +289,51 @@ void main() {
     });
   });
 
+  group('catalogChildEnvironment pins the zone (OI-459)', () {
+    test('TZ is Asia/Kolkata whether the parent had none, UTC, or a zone whose date differs', () {
+      for (final parent in <Map<String, String>>[
+        {'PATH': '/p'},
+        {'PATH': '/p', 'TZ': 'UTC'},
+        {'PATH': '/p', 'TZ': 'Etc/GMT+12'},
+        {'PATH': '/p', 'TZ': 'Asia/Kolkata'},
+      ]) {
+        expect(catalogChildEnvironment(parent)['TZ'], 'Asia/Kolkata', reason: 'parent: $parent');
+      }
+      expect(catalogTestTimeZone, 'Asia/Kolkata');
+    });
+
+    test('it still applies the whole scrub and keeps PATH (the pin adds, never replaces)', () {
+      final out = catalogChildEnvironment({
+        'PATH': '/usr/bin', 'GIT_DIR': '/r/.git', 'GIT_INDEX_FILE': '/r/idx',
+        'CONTRACT_SWEEP_NESTED': '1', 'TZ': 'UTC',
+      });
+      expect(out, {'PATH': '/usr/bin', 'TZ': 'Asia/Kolkata'});
+    });
+
+    test('scrubbedChildEnvironment itself still passes TZ through (other callers share it)', () {
+      expect(scrubbedChildEnvironment({'PATH': '/p', 'TZ': 'UTC'})['TZ'], 'UTC');
+    });
+
+    // BEHAVIOURAL: a real child process built from the env this gate hands `flutter test`
+    // reads its own UTC offset (`date +%z`). POSIX only: Dart and `date` honour TZ there.
+    test('a child spawned with the catalog env runs at +0530 even when the parent zone is not IST',
+        () async {
+      for (final parentTz in <String?>[null, 'UTC', 'Etc/GMT+12']) {
+        final parent = <String, String>{'PATH': Platform.environment['PATH'] ?? '/usr/bin:/bin', 'TZ': ?parentTz};
+        // Through the sanctioned spawn helper (spawn_sites_guard G1a). It scrubs again, which
+        // keeps TZ, so the zone the child sees is the one catalogChildEnvironment pinned.
+        final result = await runSpawnAsync(
+          '/bin/sh',
+          ['-c', 'date +%z'],
+          why: 'date +%z under the catalog child env (OI-459)',
+          parentEnvironment: catalogChildEnvironment(parent),
+        );
+        expect(result.exitCode, 0, reason: '${result.stderr}');
+        expect((result.stdout as String).trim(), '+0530', reason: 'parent TZ: $parentTz');
+      }
+    }, skip: Platform.isWindows ? 'no POSIX date/TZ on Windows' : false);
+  });
+
   group('the gate actually USES the scrub', () {
     // STRUCTURAL, and labelled as such. Driving check_regression_catalog.dart
     // end-to-end would mean standing up a throwaway Flutter project with its own
@@ -301,9 +348,13 @@ void main() {
     test('Process.run passes the scrubbed env and disables inheritance', () {
       final src = File('scripts/check_regression_catalog.dart').readAsStringSync();
       final code = src.replaceAll(RegExp(r'^\s*//.*$', multiLine: true), '');
-      expect(code, contains('scrubbedChildEnvironment(Platform.environment)'),
+      expect(code, contains('catalogChildEnvironment(Platform.environment)'),
           reason: 'without this the child inherits GIT_DIR and every test that '
-              'builds its own repo is redirected at the real one');
+              'builds its own repo is redirected at the real one, and runs in the '
+              'VPS zone (UTC) instead of IST (OI-459)');
+      expect(code, isNot(contains('environment: scrubbedChildEnvironment(')),
+          reason: 'the scrub alone leaves TZ to the caller; the spawn must use the '
+              'pinned variant');
       expect(code, contains('includeParentEnvironment: false'),
           reason: 'passing `environment:` alone MERGES with the parent, so the '
               'scrubbed keys would come straight back — this flag is what makes '

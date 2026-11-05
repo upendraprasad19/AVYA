@@ -17,8 +17,28 @@ class AllocationStats {
   /// room was gone. The gate requires 0.
   int capForcedFirst = 0;
 
+  /// Test-only: per day, how many BUDGETED exercises the selector handed the allocator
+  /// (before any admission or removal). Lets a test compare two worlds at the selector
+  /// stage, independent of rest and time.
+  final List<int> slotsSeen = [];
+
   /// Day indexes the guard filled (either counter).
   final List<int> forcedDays = [];
+
+  /// OI-456 piece B: per day, the slots the count floor force-seated at 2 sets
+  /// although they did not fit the clock (never past a cap or a weekly top, and
+  /// the day stays at most [SessionBudget.maxForcedOverSeconds] over its budget).
+  /// Variant B inherits A's entries for the days it copies.
+  final Map<int, List<({String name, int sets})>> countForced = {};
+
+  /// OI-456 piece B: days under their count floor although the selector supplied
+  /// enough slots, with the cause: `cap_top` (a session cap or weekly top blocked
+  /// every remaining slot) or `clock` (only the forcing bound did).
+  final Map<int, String> belowCount = {};
+
+  /// OI-456 piece B: days whose selector slots plus not-budgeted rows are fewer
+  /// than the count floor (nothing the allocator can seat).
+  final List<int> selectorThin = [];
 
   /// Hard sets per budget group across the week, after the allocation.
   final Map<String, int> weekly = {};
@@ -26,7 +46,8 @@ class AllocationStats {
   /// For each group still below its weekly floor: `cap_limited`,
   /// `co_group_limited`, `time_limited`, `copy_day_limited` (variant B only: the
   /// exercises that could take a set sit on a day copied from A, which B never
-  /// grows) or `not_trained_by_split`.
+  /// grows), `count_limited` (every slot crediting the group was left out by the
+  /// level's exercise-count maximum, OI-456 piece B) or `not_trained_by_split`.
   final Map<String, String> belowFloor = {};
 
   /// One entry per allocated day that has a budgeted exercise: its lead lift
@@ -49,7 +70,7 @@ typedef FirstLift = ({
 
 /// Why a grant was refused, per group. [frozen] is only ever a floor label: the
 /// slot could take a set but sits on a day variant B copied from A.
-enum _Why { time, coGroup, cap, frozen }
+enum _Why { time, coGroup, cap, frozen, target }
 
 /// One budgeted exercise in one variant of one day.
 class _Slot {
@@ -68,6 +89,9 @@ class _Slot {
   bool removed = false;
   Map<String, _Why> why = const {};
   String? boundBy;
+
+  /// Pass A refused it only because the lead-lift reservation would break (rank 0).
+  bool reserveBlocked = false;
 }
 
 /// Batch B2 (docs/plans/2026-10-22-session-set-budget.md), Task 3: sizes every
@@ -128,7 +152,7 @@ class SessionSetAllocator {
         if (_sameNames(days[d].exercisesA, days[d].exercisesB)) copy[d] = a.byDay[d];
       }
       final b = _variant([for (final d in days) d.exercisesB], days, ctx, rowsByName, copy,
-          stats['B'] = AllocationStats());
+          stats['B'] = AllocationStats(), copyFrom: stats['A']);
       bOut = b.out;
     }
     debugLastStats = stats;
@@ -177,27 +201,32 @@ class SessionSetAllocator {
     SessionBudgetContext ctx,
     Map<String, Map<String, dynamic>> rows,
     Map<int, List<_Slot>>? copy,
-    AllocationStats stats,
-  ) {
+    AllocationStats stats, {
+    AllocationStats? copyFrom,
+  }) {
     final n = days.length;
     final ledger = BudgetLedger(ctx, n);
     final byDay = List<List<_Slot>>.generate(n, (_) => <_Slot>[]);
     // Per day, per exercise: its slot, or null when the exercise is not budgeted.
     final entries = List<List<(PlannedExercise, _Slot?)>>.generate(n, (_) => []);
     final all = <_Slot>[];
+    final nonBudgeted = List<int>.filled(n, 0);
 
     // 1. Classify, and spend the not-budgeted rows' time first.
     for (var d = 0; d < n; d++) {
-      final dayRest = SessionBudget.restFor(days[d].intensity);
       var rank = 0;
       for (final ex in lists[d]) {
         final arch = SessionBudget.archetypeOfPlanned(ex, ctx);
         if (!SessionBudget.isBudgeted(ex, ctx)) {
-          // Ruling 8: a timed row at its OWN rest, a rep-based custom at the day's.
-          final rest = SessionBudget.isRepBased(ex.loggingType) ? dayRest : ex.restSeconds;
+          // Ruling 8: a timed row at its OWN rest, a rep-based custom at its archetype's
+          // (OI-456: the rest follows the exercise, not the day).
+          final rest = SessionBudget.isRepBased(ex.loggingType)
+              ? SessionBudget.restForArchetype(arch)
+              : ex.restSeconds;
           ledger.add(d, const {}, 0,
               SessionBudget.plannedExerciseSeconds(ex, ctx, sets: ex.sets, restSeconds: rest));
           entries[d].add((ex, null));
+          nonBudgeted[d]++;
         } else {
           final slot = _Slot(
             d,
@@ -205,14 +234,18 @@ class SessionSetAllocator {
             ex,
             _groupsOf(ex, rows[ex.exerciseName.toLowerCase()]),
             arch,
-            dayRest,
-            SessionBudget.desiredFor(days[d].intensity),
+            SessionBudget.restForArchetype(arch),
+            SessionBudget.baseSets,
           );
           byDay[d].add(slot);
           entries[d].add((ex, slot));
           all.add(slot);
         }
       }
+    }
+
+    for (var d = 0; d < n; d++) {
+      stats.slotsSeen.add(byDay[d].length);
     }
 
     // 2. Days copied from variant A enter the ledger as they are.
@@ -235,8 +268,32 @@ class SessionSetAllocator {
       }
     }
 
+    if (copy != null && copyFrom != null) {
+      for (final d in copy.keys) {
+        final f = copyFrom.countForced[d];
+        if (f != null) stats.countForced[d] = List.of(f);
+        // A copied day is as short as A's was, for the same reason: name it in B's stats too.
+        final below = copyFrom.belowCount[d];
+        if (below != null) stats.belowCount[d] = below;
+        if (copyFrom.selectorThin.contains(d)) stats.selectorThin.add(d);
+      }
+    }
+
     double seconds(_Slot s, int sets) =>
         SessionBudget.exerciseSeconds(archetype: s.archetype, sets: sets, restSeconds: s.rest);
+
+    // OI-456 piece B: how many main exercises each day may hold, and how many of
+    // them pass A has seated so far.
+    final levelMax = SessionBudget.countMax(ctx.level) < SessionBudget.hardMax
+        ? SessionBudget.countMax(ctx.level)
+        : SessionBudget.hardMax;
+    final target = <int>[
+      for (var d = 0; d < n; d++) levelMax - nonBudgeted[d] < 0 ? 0 : levelMax - nonBudgeted[d],
+    ];
+    final seated = List<int>.filled(n, 0);
+    for (final e in (copy ?? const <int, List<_Slot>>{}).entries) {
+      seated[e.key] = byDay[e.key].where((s) => s.admitted).length;
+    }
 
     // 3. Pass A: priority-rank admission.
     var maxRank = 0;
@@ -264,23 +321,25 @@ class SessionSetAllocator {
           return true;
         }
 
-        var granted = 0;
-        for (var k = s.desired; k >= 2; k--) {
-          if (!ledger.fits(d, s.groups, k, seconds(s, k))) continue;
-          if (!reserved(k)) continue;
-          granted = k;
-          break;
-        }
-        if (granted > 0) {
+        // OI-456 piece B: the day holds at most [target] main exercises, so a
+        // slot past it is left out by the count, not by time, cap or top.
+        if (seated[d] >= target[d]) {
           s
-            ..sets = granted
+            ..removed = true
+            ..why = {for (final g in s.groups) g: _Why.target};
+          continue;
+        }
+
+        // Every exercise is SEATED at 2 sets; pass B grows it to the base sets.
+        const k = 2;
+        final fitsNow = ledger.fits(d, s.groups, k, seconds(s, k));
+        if (fitsNow && !reserved(k)) s.reserveBlocked = true;
+        if (fitsNow && reserved(k)) {
+          s
+            ..sets = k
             ..admitted = true;
-          ledger.add(d, s.groups, granted, seconds(s, granted));
-          if (r == 0 && granted < s.desired) {
-            // The ledger already holds the `granted` sets, so what stopped the NEXT
-            // one is asked of ONE more set, not of granted + 1 (B-pass R1 P2-1).
-            s.boundBy = _firstBlockingGroup(ledger, d, s, 1, later);
-          }
+          seated[d]++;
+          ledger.add(d, s.groups, k, seconds(s, k));
         } else {
           s.removed = true;
           s.why = _whyFlags(ledger, d, s, 2, seconds(s, 2), r == 0 ? later : null);
@@ -314,6 +373,92 @@ class SessionSetAllocator {
         ..admitted = true
         ..removed = false;
       ledger.add(d, pick.groups, 2, seconds(pick, 2));
+    }
+
+    // 4b. Pass A2 (OI-456 piece B): the count floor. Pass A already skips a slot that
+    // does not fit and carries on, so the only thing left to do here is FORCE: a day
+    // under its floor takes its cheapest remaining slot at 2 sets even though the
+    // clock says no, never past a session cap or weekly top and only while the day
+    // stays within [SessionBudget.maxForcedOverSeconds] of its budget. One slot per
+    // day per round (so no day starves another's weekly room), until nothing changes.
+    final floorBase = SessionBudget.countFloor(ctx.minutes);
+    int rowsOf(int d) => nonBudgeted[d] + byDay[d].where((s) => s.admitted).length;
+    int floorOf(int d) {
+      final reach = nonBudgeted[d] + byDay[d].length;
+      return floorBase < reach ? floorBase : reach;
+    }
+
+    bool canForce(int d, _Slot s) {
+      for (final g in s.groups) {
+        if (ledger.week(g) + 2 > ledger.weeklyTop(g)) return false;
+        if (ledger.session(d, g) + 2 > ledger.cap(g)) return false;
+      }
+      return true;
+    }
+
+    bool forceable(int d, _Slot s) =>
+        !s.admitted &&
+        !s.reserveBlocked &&
+        canForce(d, s) &&
+        ledger.secondsLeft(d) - seconds(s, 2) >= -SessionBudget.maxForcedOverSeconds;
+
+    var forcedAny = true;
+    while (forcedAny) {
+      forcedAny = false;
+      for (final d in allocateDays) {
+        if (byDay[d].isEmpty || rowsOf(d) >= floorOf(d)) continue;
+        // The lead lift when the bound allows it (B-pass P3-2), else the cheapest remaining slot.
+        _Slot? best = forceable(d, byDay[d].first) ? byDay[d].first : null;
+        if (best == null) {
+          for (final s in byDay[d]) {
+            if (!forceable(d, s)) continue;
+            if (best == null || seconds(s, 2) < seconds(best, 2)) best = s;
+          }
+        }
+        if (best == null) continue;
+        final fitted = ledger.fits(d, best.groups, 2, seconds(best, 2));
+        best
+          ..sets = 2
+          ..admitted = true
+          ..removed = false
+          ..why = const {};
+        ledger.add(d, best.groups, 2, seconds(best, 2));
+        if (!fitted) {
+          (stats.countForced[d] ??= []).add((name: best.exercise.exerciseName, sets: 2));
+        }
+        forcedAny = true;
+      }
+    }
+
+    // The count verdict is final here (passes B, C and D add no row), and it is read BEFORE the grow
+    // passes spend weekly top, so a day short only because of the forcing bound still says `clock`
+    // (B-pass P3-1).
+    for (final d in allocateDays) {
+      if (nonBudgeted[d] + byDay[d].length < floorBase) {
+        stats.selectorThin.add(d);
+      } else if (rowsOf(d) < floorBase) {
+        final remaining = [
+          for (final s in byDay[d])
+            if (!s.admitted && !s.reserveBlocked && !s.why.values.contains(_Why.target)) s,
+        ];
+        stats.belowCount[d] = remaining.any((s) => canForce(d, s)) ? 'clock' : 'cap_top';
+      }
+    }
+
+    // 4c. Pass B: grow every seated exercise to the base sets, rank by rank.
+    {
+      final order = <_Slot>[
+        for (final s in all)
+          if (s.admitted && allocateDays.contains(s.day)) s,
+      ]..sort((x, y) => x.rank != y.rank ? x.rank.compareTo(y.rank) : x.day.compareTo(y.day));
+      for (final s in order) {
+        while (s.sets < SessionBudget.baseSets) {
+          final dt = seconds(s, s.sets + 1) - seconds(s, s.sets);
+          if (!ledger.fits(s.day, s.groups, 1, dt)) break;
+          s.sets++;
+          ledger.add(s.day, s.groups, 1, dt);
+        }
+      }
     }
 
     // 5. Passes C and D: +1 rounds until a round adds nothing.
@@ -357,6 +502,11 @@ class SessionSetAllocator {
     for (final d in allocateDays) {
       if (byDay[d].isEmpty) continue;
       final lead = byDay[d].first;
+      // OI-456 piece B: the lead lift reaches its base sets AFTER every later day's
+      // lead is seated, so what stopped the next set is asked without the reservation.
+      if (lead.admitted && lead.sets < lead.desired) {
+        lead.boundBy = _firstBlockingGroup(ledger, d, lead, 1, null);
+      }
       final sets = lead.admitted ? lead.sets : 0;
       stats.firstLifts.add((
         day: d,
@@ -470,6 +620,7 @@ class SessionSetAllocator {
     if (reasons.contains(_Why.time)) return 'time_limited';
     if (reasons.contains(_Why.coGroup)) return 'co_group_limited';
     if (reasons.contains(_Why.frozen)) return 'copy_day_limited';
+    if (reasons.isNotEmpty && reasons.every((r) => r == _Why.target)) return 'count_limited';
     return 'cap_limited';
   }
 }

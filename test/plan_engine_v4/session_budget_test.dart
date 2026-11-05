@@ -205,35 +205,38 @@ void main() {
     });
   });
 
-  group('restFor agrees with PeriodizationEngine (the mirror)', () {
-    // The model keeps its own rest table (Ruling 2: all constants in one place), so
-    // the engine's `_profileParams` and this table could drift apart silently.
-    // Drive the real engine and compare. The engine no longer stamps base SETS
-    // (flip 2026-11-02: the allocator owns them), so the sets are pinned the other
-    // way: `apply` must leave the allocated sets alone.
+  group('restForArchetype agrees with PeriodizationEngine (the mirror)', () {
+    // The model keeps its own rest table (Ruling 2: all constants in one place), and
+    // the engine stamps from it, so drive the real engine and compare. OI-456: the rest
+    // follows the EXERCISE, never the day's intensity. The engine does not stamp base
+    // SETS (the allocator owns them), so `apply` must leave the allocated sets alone.
     for (final intensity in ['strength', 'hypertrophy', 'endurance', 'something_unknown']) {
-      test('$intensity: the engine stamps the rest the model assumes and keeps the sets it is given', () {
+      test('$intensity: the engine stamps the exercise\'s archetype rest and keeps the sets it is given', () {
         final day = populatedDay(
           intensity: intensity,
           exercisesA: [exercise(name: 'Bench Press', exerciseType: 'compound', sets: 9)],
         );
+        final budget = testBudget(level: 'beginner');
         final weeks = PeriodizationEngine.apply(
           populated: [day],
           phase: 1,
           is6Day: true,
-          budget: testBudget(level: 'beginner'),
+          budget: budget,
         );
         final ex = weeks[0].workoutDays[0].exercises[0];
-        expect(SessionBudget.restFor(intensity), ex.restSeconds);
+        expect(
+          ex.restSeconds,
+          SessionBudget.restForArchetype(SessionBudget.archetypeOfPlanned(ex, budget)),
+        );
         expect(ex.sets, 9, reason: 'the allocated sets pass through week 1 untouched');
       });
     }
 
-    test('the literal table: strength 150 / 4, hypertrophy 75 / 3, endurance 38 / 2, unknown 75 / 3', () {
-      expect([for (final i in ['strength', 'hypertrophy', 'endurance', 'x']) SessionBudget.restFor(i)],
-          [150, 75, 38, 75]);
-      expect([for (final i in ['strength', 'hypertrophy', 'endurance', 'x']) SessionBudget.desiredFor(i)],
-          [4, 3, 2, 3]);
+    test('the literal table: H 150, M 120, I 75, B 60, unknown 60; every day starts at 3 sets', () {
+      // Literals, not the table itself: a swapped or edited table must redden here.
+      expect([for (final a in ['H', 'M', 'I', 'B', 'X', '']) SessionBudget.restForArchetype(a)],
+          [150, 120, 75, 60, 60, 60]);
+      expect(SessionBudget.baseSets, 3);
     });
   });
 

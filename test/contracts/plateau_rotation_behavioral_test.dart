@@ -26,6 +26,7 @@ import 'package:icanbefitter/shared/repositories/exercise_repository.dart';
 import 'package:icanbefitter/shared/repositories/plan_engine/models.dart';
 import 'package:icanbefitter/shared/repositories/plan_engine/plan_generator.dart';
 import 'package:icanbefitter/shared/repositories/plan_engine/plateau_scan.dart';
+import 'package:icanbefitter/shared/repositories/plan_engine/session_set_allocator.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -57,16 +58,6 @@ void main() {
       }
     }
     return out;
-  }
-
-  int totalExerciseCount(Phase p) {
-    var n = 0;
-    for (final w in p.weekPlans) {
-      for (final d in w.workoutDays) {
-        n += d.exercises.length;
-      }
-    }
-    return n;
   }
 
   // The lowercased names in [p] that resolve to a library COMPOUND (rotation targets).
@@ -214,14 +205,36 @@ void main() {
       expect(allNames(gen(true)), allNames(gen(false)));
     });
 
-    test('slot-count-invariance: rotation is a SWAP, not an add (count unchanged)',
-        () async {
+    test('slot-count-invariance: rotation is a SWAP, not an add (a day never loses a row, '
+        'and the time budget seats at most one more)', () async {
       final off = gen(false);
+      final offSeen = {
+        for (final e in SessionSetAllocator.debugLastStats!.entries) e.key: List<int>.of(e.value.slotsSeen),
+      };
       await seedPlateausFor(compoundNames(off));
       await seedReadiness(3, flagged: false);
-      // Total exercise COUNT identical ON vs OFF (only identities differ). Sets may
-      // differ ±1 via default_sets — that is NOT asserted here.
-      expect(totalExerciseCount(gen(true)), totalExerciseCount(off));
+      final on = gen(true);
+      final onSeen = {
+        for (final e in SessionSetAllocator.debugLastStats!.entries) e.key: List<int>.of(e.value.slotsSeen),
+      };
+      // EXACT, at the selector stage and independent of rest and time: rotation hands the
+      // allocator the same number of slots per day (the swap-not-add claim itself).
+      expect(onSeen, offSeen, reason: 'rotation must not add or drop a selector slot');
+      expect(offSeen['A'], isNotEmpty);
+      // OI-456 piece A: the rest follows the exercise's archetype, so a rotated-in compound
+      // can cost less than the heavy one it replaces (Bench Press 150 s -> Push Up 120 s)
+      // and credit different muscles; the SESSION BUDGET then seats one more accessory on
+      // that day (measured at this fixture: 104 vs 100 over the 16 days, +1 on 4 of them).
+      // Rotation itself only widens the selector's avoid set (`plateauAvoidNames`, a soft
+      // avoid), so it cannot add a slot; what is left to pin here is the bound. Sets may
+      // differ via default_sets: not asserted.
+      for (var w = 0; w < off.weekPlans.length; w++) {
+        for (var d = 0; d < off.weekPlans[w].workoutDays.length; d++) {
+          final delta = on.weekPlans[w].workoutDays[d].exercises.length -
+              off.weekPlans[w].workoutDays[d].exercises.length;
+          expect(delta, inInclusiveRange(0, 1), reason: 'week ${w + 1}, day ${d + 1}');
+        }
+      }
     });
 
     test('bounded: heavy rotation seeding never empties a slot / crashes', () async {

@@ -248,32 +248,40 @@ class SweepHarness {
   /// last accessories of a day and an injured pool is thin to begin with. Measured on the 914-row library in
   /// `docs/audit/set-budget-flip.closure.yaml` (SBF-THIN-DAYS), a founder call: keep the weekly band hard (today), or let
   /// a day under 2 exercises exceed it by a few sets. No block has an EMPTY day (the allocator's guard, a hard zero in
-  /// [expectSafe]); a ceiling here moves only DOWN.
-  // Batch C2a (OI-460, library v18, 864 rows) re-measured four blocks: pairs46 / repeat / singles46 bodyweight fell (84 to 44,
-  // 82 to 74, 28 to 14) and `repeat home_dumbbells` ROSE 110 to 112 (ankle 6 to 8: the uninjured phase-1 plan now pins
-  // different rows, two of which an ankle injury drops; no depth cell is thin, see the diagnose doc). Net thin days over
-  // the four blocks fell by 54.
+  /// [expectSafe]); a ceiling moves DOWN freely; a rise needs a recorded decision (see below).
+  /// OI-456 piece B (count band: every day SEATS its exercises at 2 sets first, floor 4/5 by minutes) re-measured all 20
+  /// blocks: 14 of 20 fell to 0 thin days and 0 one-exercise days (seating at 2 sets leaves room for the 3rd and 4th
+  /// exercise that the 3-set seat used to starve); the six `pairs` / `pairs46` blocks of home_dumbbells, basic_gym and
+  /// full_gym keep a small residue, every day of it a shoulder+elbow pair (small injured pool; measured 2026-11-04):
+  /// pairs 10 / 22 / 14 and pairs46 12 / 8 / 4, down from 76 / 126 / 106 and 120 / 143 / 125. No empty day anywhere.
+  /// Batch C2a (OI-460, library v18, 864 rows), merged onto the count band, re-measured all 20 blocks: one rose, `repeat bodyweight` 0 -> 4 thin days (2 elbow 5d, 2 lower_back 4d: the phase-1 plan now pins different rows and a repeat phase drops an unsafe pin with no refill; 0 one-exercise days, 0 empty days), a recorded decision in the C2a diagnose-doc (c2a7f1). The other 19 blocks held.
+  /// OI-456 piece A (rest by exercise type, 3 base sets every day) re-measured all 20 blocks: 18 fell, 1 equal, 1 rose
+  /// (one-exercise days never rose); the one that rose is `pairs bodyweight` thin days 30 -> 32 (knee+elbow 10,
+  /// lower_back+elbow 4, wrist+elbow 8, elbow+hip 10), a recorded decision in the OI-456 diagnose-doc. MEASURED cause
+  /// (probe, 2026-11-04): the 3 base sets, not the rest. Old 4/3/2 base sets with the new rests gives 30; the new 3 base
+  /// sets with the old intensity-keyed rests gives 32. So a former 2-set endurance day now starts at 3 and a small
+  /// injured pool spends its weekly band sooner.
   static const Map<String, (int thin, int one)> kThinCeilings = {
-    'pairs bodyweight': (30, 0),
-    'pairs home_dumbbells': (76, 14),
-    'pairs basic_gym': (152, 16),
-    'pairs full_gym': (116, 4),
-    'pairs46 bodyweight': (44, 2),
-    'pairs46 home_dumbbells': (176, 24),
-    'pairs46 basic_gym': (197, 16),
-    'pairs46 full_gym': (155, 10),
-    'repeat bodyweight': (74, 2),
-    'repeat home_dumbbells': (112, 6),
-    'repeat basic_gym': (120, 6),
-    'repeat full_gym': (118, 6),
-    'singles bodyweight': (14, 0),
-    'singles home_dumbbells': (14, 0),
-    'singles basic_gym': (28, 0),
-    'singles full_gym': (18, 0),
-    'singles46 bodyweight': (14, 0),
-    'singles46 home_dumbbells': (50, 4),
-    'singles46 basic_gym': (50, 2),
-    'singles46 full_gym': (38, 2),
+    'pairs bodyweight': (0, 0),
+    'pairs home_dumbbells': (10, 0),
+    'pairs basic_gym': (22, 0),
+    'pairs full_gym': (14, 0),
+    'pairs46 bodyweight': (0, 0),
+    'pairs46 home_dumbbells': (12, 0),
+    'pairs46 basic_gym': (8, 0),
+    'pairs46 full_gym': (4, 0),
+    'repeat bodyweight': (4, 0),
+    'repeat home_dumbbells': (0, 0),
+    'repeat basic_gym': (0, 0),
+    'repeat full_gym': (0, 0),
+    'singles bodyweight': (0, 0),
+    'singles home_dumbbells': (0, 0),
+    'singles basic_gym': (0, 0),
+    'singles full_gym': (0, 0),
+    'singles46 bodyweight': (0, 0),
+    'singles46 home_dumbbells': (0, 0),
+    'singles46 basic_gym': (0, 0),
+    'singles46 full_gym': (0, 0),
   };
 
   /// Every block: thin days (under 3 exercises) and one-exercise days match the measured

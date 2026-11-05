@@ -23,18 +23,22 @@ AllocationStats statsB() => SessionSetAllocator.debugLastStats!['B']!;
 
 void main() {
   group('priority-rank admission', () {
-    test('priority: a day of 4 chest exercises is [4, 4, removed, removed], never [2, 2, 2, 2]', () {
+    test('priority: a day of 4 chest exercises seats all four at 2 sets (the count wins), never [3, 3, 2, removed]', () {
       final f = Fx();
       for (final n in ['c1', 'c2', 'c3', 'c4']) {
         f.row(n, ['Chest']);
       }
       final days = [f.day('strength', [for (final n in ['c1', 'c2', 'c3', 'c4']) f.ex(n)])];
       final out = f.run(days, minutes: 90);
-      expect(setsOf(out[0]), [('c1', 4), ('c2', 4)]);
+      // OI-456 piece B: every exercise is SEATED at 2 sets first (the count band beats
+      // set concentration), then grown towards the base 3. The Chest session cap is 8
+      // = 4 x 2, so nothing is left to grow: [2, 2, 2, 2], none removed. Before piece B
+      // this day was [3, 3, 2, removed].
+      expect(setsOf(out[0]), [('c1', 2), ('c2', 2), ('c3', 2), ('c4', 2)]);
       expect(statsA().weekly['Chest'], 8);
     });
 
-    test('round-robin by rank: 4 days of Back lead lifts all keep 4 sets', () {
+    test('round-robin by rank: 4 days of Back lead lifts are seated before any accessory, then everyone sits at 2', () {
       final f = Fx();
       f.row('row', ['Lats']);
       f.row('pulldown', ['Lats']);
@@ -42,8 +46,11 @@ void main() {
         for (var i = 0; i < 4; i++) f.day('strength', [f.ex('row'), f.ex('pulldown')]),
       ];
       final out = f.run(days, minutes: 90);
+      // OI-456 piece B: all four lead lifts are seated (2 sets each, 8 of the 16) before
+      // rank 1, then every pulldown seats at 2 (16 of 16): the week's Back top is spent
+      // before pass B can grow a lead lift to 3 (a stated consequence: the count wins).
       for (final d in out) {
-        expect(setsOf(d), [('row', 4)]);
+        expect(setsOf(d), [('row', 2), ('pulldown', 2)]);
       }
       expect(statsA().capForcedFirst, 0);
       expect(statsA().timeForcedFirst, 0);
@@ -51,7 +58,7 @@ void main() {
     });
 
     test('rank-0 reservation: every lead lift keeps >= 2 sets when the group top binds', () {
-      // general_fitness beginner: Chest top 10, cap 6. Days desire 4 / 3 / 2 / 2.
+      // general_fitness beginner: Chest top 10, cap 6. Every day desires 3 (OI-456), whatever its intensity.
       final f = Fx();
       f.row('bench', ['Chest']);
       f.row('press', ['Triceps'], type: 'isolation', reps: '10-15');
@@ -60,16 +67,18 @@ void main() {
           f.day(i, [f.ex('bench'), f.ex('press')]),
       ];
       final out = f.run(days, minutes: 90, goal: 'general_fitness', level: 'beginner');
-      expect([for (final d in out) d.exercisesA.first.sets], [4, 2, 2, 2]);
+      expect([for (final d in out) d.exercisesA.first.sets], [3, 3, 2, 2]);
       expect(statsA().capForcedFirst, 0);
       expect(statsA().weekly['Chest'], 10);
-      // Day 2 wanted 3 and got 2 because the reservation protected days 3 and 4;
+      // Day 3 (index 2) wanted 3 and got 2 because the reservation protected the last day;
       // the stats name the group that bound it.
       final lead = statsA().firstLifts.where((l) => l.rank == 0).toList();
       expect(lead.length, 4);
-      expect(lead[1].sets, 2);
-      expect(lead[1].desired, 3);
-      expect(lead[1].boundBy, 'Chest');
+      expect(lead[1].sets, 3);
+      expect(lead[1].boundBy, isNull);
+      expect(lead[2].sets, 2);
+      expect(lead[2].desired, 3);
+      expect(lead[2].boundBy, 'Chest');
     });
 
     test('rank-0 reservation counts only the later days whose lead lift credits the SAME group', () {
@@ -126,25 +135,26 @@ void main() {
     });
 
     test('boundBy is null when only TIME held the lead lift below its desired sets (B-pass R1 P2-1)', () {
-      // general_fitness beginner (Chest cap 6, top 10), one strength day (150 s rests,
-      // desired 4) on 30 minutes = 1440 s. A 6-set timed row at 70 s rest costs 744 s,
-      // leaving 696 s: three sets of the Chest lift fit (594 s), four do not (816 s).
-      // The ledger already holds the 3 granted sets when the allocator asks what stopped
-      // the 4th, so the question is "would ONE more fit?" (3 + 1 <= 6): only time says no.
+      // general_fitness beginner (Chest cap 6, top 10), one day (every exercise desires 3,
+      // OI-456) on 30 minutes = 1440 s. A 6-set timed row at 110 s rest costs 984 s,
+      // leaving 456 s: two sets of the Chest lift (archetype M, 120 s rest) fit (336 s),
+      // three do not (522 s). The ledger already holds the 2 granted sets when the
+      // allocator asks what stopped the 3rd, so the question is "would ONE more fit?"
+      // (2 + 1 <= 6): only time says no.
       final f = Fx();
       f.row('cl', ['Chest']);
       f.row('plank', ['Core'], type: 'isolation', reps: '30-60', logging: 'timed');
-      expect(SessionBudget.exerciseSeconds(archetype: 'B', sets: 6, restSeconds: 70), closeTo(744.0, 1e-6));
-      expect(SessionBudget.exerciseSeconds(archetype: 'M', sets: 3, restSeconds: 150), closeTo(594.0, 1e-6));
-      expect(SessionBudget.exerciseSeconds(archetype: 'M', sets: 4, restSeconds: 150), closeTo(816.0, 1e-6));
+      expect(SessionBudget.exerciseSeconds(archetype: 'B', sets: 6, restSeconds: 110), closeTo(984.0, 1e-6));
+      expect(SessionBudget.exerciseSeconds(archetype: 'M', sets: 2, restSeconds: 120), closeTo(336.0, 1e-6));
+      expect(SessionBudget.exerciseSeconds(archetype: 'M', sets: 3, restSeconds: 120), closeTo(522.0, 1e-6));
       final days = [
-        f.day('strength', [f.ex('plank', sets: 6, logging: 'timed', rest: 70), f.ex('cl')]),
+        f.day('strength', [f.ex('plank', sets: 6, logging: 'timed', rest: 110), f.ex('cl')]),
       ];
       final out = f.run(days, minutes: 30, goal: 'general_fitness', level: 'beginner');
-      expect(setsOf(out[0]).where((e) => e.$1 == 'cl'), [('cl', 3)]);
+      expect(setsOf(out[0]).where((e) => e.$1 == 'cl'), [('cl', 2)]);
       final first = statsA().firstLifts.single;
-      expect(first.sets, 3);
-      expect(first.desired, 4);
+      expect(first.sets, 2);
+      expect(first.desired, 3);
       expect(first.boundBy, isNull);
     });
   });
@@ -165,11 +175,14 @@ void main() {
 
     double secondsOf(PopulatedDay d, Fx f, String intensity) => [
           for (final e in d.exercisesA)
-            SessionBudget.exerciseSeconds(
-              archetype: SessionBudget.archetypeOfRow(f.rows[e.exerciseName.toLowerCase()]!),
-              sets: e.sets,
-              restSeconds: SessionBudget.restFor(intensity),
-            ),
+            () {
+              final arch = SessionBudget.archetypeOfRow(f.rows[e.exerciseName.toLowerCase()]!);
+              return SessionBudget.exerciseSeconds(
+                archetype: arch,
+                sets: e.sets,
+                restSeconds: SessionBudget.restForArchetype(arch),
+              );
+            }(),
         ].fold(0.0, (a, b) => a + b);
 
     test('no cap binds (one exercise per group): only time does, and the day fits', () {
@@ -178,13 +191,15 @@ void main() {
       final (str, fs) = dayOf('strength');
       final outH = fh.run(hyp, minutes: 30);
       final outS = fs.run(str, minutes: 30);
-      expect(setsOf(outH[0]), [('chest', 4), ('back', 3), ('delts', 3)]);
-      expect(setsOf(outS[0]), [('chest', 4), ('back', 3)]);
+      // OI-456 piece B: the day seats its first four exercises at 2 sets (the time left
+      // after them cannot take a 5th at 2 or grow any to 3).
+      expect(setsOf(outH[0]), [('chest', 2), ('back', 2), ('delts', 2), ('bi', 2)]);
       expect(secondsOf(outH[0], fh, 'hypertrophy'), lessThanOrEqualTo(budget));
       expect(secondsOf(outS[0], fs, 'strength'), lessThanOrEqualTo(budget));
-      // The same exercise list holds fewer sets on a strength day (150 s rests).
-      int total(PopulatedDay d) => d.exercisesA.fold(0, (a, e) => a + e.sets);
-      expect(total(outS[0]), lessThan(total(outH[0])));
+      // OI-456: the day's intensity no longer sets rest or sets, so the same exercise list
+      // holds the SAME sets on a strength day and a hypertrophy day (it used to hold fewer
+      // on the strength day, whose 150 s rests were the cause of the 4 / 6 / 4 / 9 skew).
+      expect(setsOf(outS[0]), setsOf(outH[0]));
     });
   });
 
@@ -196,9 +211,10 @@ void main() {
       }
       List<PopulatedDay> mk() => [f.day('strength', [for (var i = 0; i < 6; i++) f.ex('c$i')])];
       final plain = f.run(mk(), minutes: 90);
-      expect(setsOf(plain[0]), [('c0', 4), ('c1', 4)]);
+      // OI-456 piece B: lifts are seated at 2 sets: 4 x 2 = 8 and the cap leaves none for c4, c5.
+      expect(setsOf(plain[0]), [('c0', 2), ('c1', 2), ('c2', 2), ('c3', 2)]);
       final focus = f.run(mk(), minutes: 90, focus: {'Chest'});
-      expect(setsOf(focus[0]), [('c0', 4), ('c1', 4), ('c2', 4)]);
+      expect(setsOf(focus[0]), [('c0', 2), ('c1', 2), ('c2', 2), ('c3', 2), ('c4', 2), ('c5', 2)]);
     });
 
     test('weekly top: a non-focus group stays at 16 (intermediate build_muscle)', () {
@@ -210,9 +226,11 @@ void main() {
         days.add(f.day('strength', [f.ex('c${d}0'), f.ex('c${d}1')]));
       }
       final out = f.run(days, minutes: 90);
-      expect([for (final d in out) d.exercisesA.first.sets], [4, 4, 4, 2, 2]);
+      // OI-456 piece B: ten 2-set seats would be 20 > 16: lead lifts seat first (5 x 2 = 10),
+      // then the accessories until the top (3 more x 2 = 16), the last two days keep one.
+      expect([for (final d in out) d.exercisesA.first.sets], [2, 2, 2, 2, 2]);
       expect(statsA().weekly['Chest'], 16);
-      expect([for (final d in out) d.exercisesA.length], [1, 1, 1, 1, 1]);
+      expect([for (final d in out) d.exercisesA.length], [2, 2, 2, 1, 1]);
     });
 
     test('lighter phase: every weekly total stays at the band bottom, focus included', () {
@@ -235,12 +253,12 @@ void main() {
         f.row('c$i', ['Chest']);
       }
       List<PopulatedDay> mk() => [f.day('strength', [for (var i = 0; i < 6; i++) f.ex('c$i')])];
-      // Weekly top is the band bottom (12) here, so a third 4-set lift would fit the
-      // week and the 12-set focus cap; only the ordinary cap of 8 refuses it.
+      // Weekly top is the band bottom (12) here, so a third full 3-set lift would fit the
+      // week and the 12-set focus cap; only the ordinary cap of 8 stops it at 2 sets.
       final lighter = f.run(mk(), minutes: 90, lighter: true, focus: {'Chest'});
-      expect(setsOf(lighter[0]), [('c0', 4), ('c1', 4)]);
+      expect(setsOf(lighter[0]), [('c0', 2), ('c1', 2), ('c2', 2), ('c3', 2)]);
       final ordinary = f.run(mk(), minutes: 90, focus: {'Chest'});
-      expect(setsOf(ordinary[0]), [('c0', 4), ('c1', 4), ('c2', 4)]);
+      expect(setsOf(ordinary[0]), [('c0', 2), ('c1', 2), ('c2', 2), ('c3', 2), ('c4', 2), ('c5', 2)]);
     });
 
     test('focus reaches past the ordinary top (16) and stops at 25', () {
@@ -325,7 +343,7 @@ void main() {
       expect(statsA().capForcedFirst, 0);
     });
 
-    // Days 0 and 1 fill Chest to its weekly top of 16 (4 + 4 each); day 2's six
+    // Days 0 and 1 fill Chest to its weekly top of 16 (3 + 3 + 2 each); day 2's six
     // planks (6 x 444 s) overspend its 2220 s budget, so pass A admits nothing there.
     (List<PopulatedDay>, Fx) crowdedChestWeek(List<String> afterChest) {
       final f = Fx();
@@ -352,8 +370,8 @@ void main() {
     test('guard with no weekly room anywhere: rank 0 is forced anyway and capForcedFirst counts it', () {
       final (days, f) = crowdedChestWeek(const []);
       final out = f.run(days, minutes: 45);
-      expect(setsOf(out[0]), [('c1', 4), ('c2', 4)]);
-      expect(setsOf(out[1]), [('c5', 4), ('c6', 4)]);
+      expect(setsOf(out[0]), [('c1', 2), ('c2', 2), ('c3', 2), ('c4', 2)]);
+      expect(setsOf(out[1]), [('c5', 2), ('c6', 2), ('c7', 2), ('c8', 2)]);
       expect(setsOf(out[2]).where((e) => e.$1 == 'c9'), [('c9', 2)]);
       expect(statsA().weekly['Chest'], 18); // past the top of 16: the one thing the guard may do
       expect(statsA().capForcedFirst, 1);
@@ -371,7 +389,7 @@ void main() {
       expect(statsA().capForcedFirst, 0);
     });
 
-    test('not-budgeted rest: a timed row is timed at its OWN rest, not the strength day 150 s', () {
+    test('not-budgeted rest: a timed row is timed at its OWN rest, not the lift\'s 120 s', () {
       final f = Fx();
       f.row('plank', ['Core'], type: 'isolation', reps: '30-60', logging: 'timed');
       f.row('sq', ['Quads']);
@@ -383,9 +401,9 @@ void main() {
         ]),
       ];
       final out = f.run(days, minutes: 30);
-      expect(out[0].exercisesA.last.sets, 4);
-      // 1440 s - 2 x 252 s (planks at 30 s rest) - 816 s (4 sets at 150 s) = 120 s.
-      expect(statsA().firstLifts.single.secondsLeft, closeTo(120.0, 1e-6));
+      expect(out[0].exercisesA.last.sets, 5);
+      // 1440 s - 2 x 252 s (planks at 30 s rest) - 894 s (5 sets at the archetype's 120 s) = 42 s.
+      expect(statsA().firstLifts.single.secondsLeft, closeTo(42.0, 1e-6));
     });
   });
 
@@ -502,11 +520,13 @@ void main() {
     test('co_group_limited: the group is below its floor only because a co-group is at its top', () {
       final f = Fx();
       f.row('squat', ['Quads', 'Glutes']);
-      for (final n in ['ht1', 'ht2', 'ht3']) {
+      for (final n in ['ht1', 'ht2', 'ht3', 'ht4']) {
         f.row(n, ['Glutes']);
       }
+      // Four hip lifts at the base 3 plus the squat's 3 credit Glutes with 15 of its 16, so
+      // the squat can grow ONE set toward the Quads floor and then the Glutes top refuses.
       final days = [
-        for (final n in ['squat', 'ht1', 'ht2', 'ht3']) f.day('strength', [f.ex(n)]),
+        for (final n in ['squat', 'ht1', 'ht2', 'ht3', 'ht4']) f.day('strength', [f.ex(n)]),
       ];
       f.run(days, minutes: 90);
       expect(statsA().weekly['Glutes'], 16);
@@ -557,7 +577,7 @@ void main() {
       final before = a.map((e) => e.sets).toList();
       final out = f.run(days, minutes: 90);
       expect(a.map((e) => e.sets).toList(), before);
-      expect(out[0].exercisesA.map((e) => e.exerciseName).toList(), ['a', 'b']);
+      expect(out[0].exercisesA.map((e) => e.exerciseName).toList(), ['a', 'b', 'c']);
     });
 
     test('an empty plan and an all-custom day do not crash', () {
@@ -688,7 +708,8 @@ void main() {
                 SessionBudget.exerciseSeconds(
                   archetype: ctx.archetypeByName[e.exerciseName.toLowerCase()]!,
                   sets: e.sets,
-                  restSeconds: SessionBudget.restFor(days[d].intensity),
+                  restSeconds: SessionBudget.restForArchetype(
+                      ctx.archetypeByName[e.exerciseName.toLowerCase()]!),
                 ),
               );
             }
@@ -800,7 +821,7 @@ void main() {
         ),
       ];
       final out = f.run(days, minutes: 30, is6Day: false);
-      expect(setsOf(out[0]), [('x, y', 4), ('z', 3)]);
+      expect(setsOf(out[0]), [('x, y', 4), ('z', 4)]);
       expect(setsOf(out[0], b: true), [('x', 6), ('y, z', 2)]);
       expect(statsB().timeForcedFirst, 1);
       expect(statsA().firstLifts.single.groups, {'Chest'});
@@ -808,9 +829,9 @@ void main() {
 
     test('R3 P2-1: a cardio row prescribed in minutes spends those minutes, so the lift shrinks', () {
       // 60 minutes = 3000 s. A 20-40 min treadmill row costs 1.2 x (30 + 1800) = 2196 s,
-      // leaving 804 s: the bench gets 3 sets (594 s) and cannot grow (the 4th costs 816 s).
-      // The same row prescribed "30s" costs 84 s and leaves the bench its 4, then the floor
-      // pass grows it to 5.
+      // leaving 804 s: the bench (archetype M, 120 s rest) gets 4 sets (708 s) and cannot
+      // reach a 5th (894 s). The same row prescribed "30s" costs 84 s and leaves the bench
+      // its 3, then the floor pass grows it to 5.
       Map<String, int> benchSets(String reps) {
         final f = Fx();
         f.row('bench', ['Chest']);
@@ -820,7 +841,7 @@ void main() {
         return {for (final (n, s) in setsOf(out[0])) n: s};
       }
 
-      expect(benchSets('20-40 min')['bench'], 3);
+      expect(benchSets('20-40 min')['bench'], 4);
       expect(benchSets('30s')['bench'], 5);
     });
 

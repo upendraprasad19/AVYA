@@ -236,13 +236,17 @@ void main() {
     // re-searched on 2026-11-02 when the session set budget went ON for every
     // generation (it sizes each day by the minutes and the weekly band, so the
     // moves a persona reaches changed; Bicycle Crunch reaches no persona any
-    // more). Each move IS in the uninjured plan (positive control).
+    // more; and since OI-456 piece A, rest by exercise type, Hip Abduction Machine reaches none either:
+    // re-searched 2026-11-04, Hip Thrust is in and gone for hip on the same persona). Each move IS in the
+    // uninjured plan (positive control).
     const reached = <(String, String, String, String, int)>[
       ('Push Up', 'shoulder', 'bodyweight', 'beginner', 3),
       ('Lat Pulldown', 'shoulder', 'basic_gym', 'beginner', 3),
       ('Chin Up', 'elbow', 'basic_gym', 'intermediate', 4),
       ('Russian Twist', 'lower_back', 'bodyweight', 'beginner', 3),
       ('Hip Abduction Machine', 'hip', 'full_gym', 'advanced', 3),
+      ('Crunches', 'lower_back', 'bodyweight', 'advanced', 3),
+      ('Hip Thrust', 'hip', 'full_gym', 'advanced', 3),
     ];
     for (final (move, injury, tier, level, days) in reached) {
       test('$move: in the uninjured $tier/$level/${days}d plan, gone for $injury', () {
@@ -260,9 +264,12 @@ void main() {
               .any((p) => p == 'elbow_flexion' || p == 'elbow_extension'))
             r['name'] as String
       };
-      final healthy = planNames('bodyweight', 'build_muscle', 'beginner', 3, const []);
+      // OI-456 piece B (the beginner day holds 5 main exercises, and the accessories that carry an elbow
+      // row are the ones the count leaves out) moved this persona from beginner 3d to intermediate 3d,
+      // found by a reach search on 2026-11-04 (healthy plan 6 elbow rows, injured 0).
+      final healthy = planNames('bodyweight', 'build_muscle', 'intermediate', 3, const []);
       expect(healthy.intersection(elbowRows), isNotEmpty, reason: 'positive control');
-      expect(planNames('bodyweight', 'build_muscle', 'beginner', 3, ['elbow'])
+      expect(planNames('bodyweight', 'build_muscle', 'intermediate', 3, ['elbow'])
           .intersection(elbowRows), isEmpty);
     });
   });

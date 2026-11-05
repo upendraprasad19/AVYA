@@ -234,7 +234,7 @@ class SessionBudget {
       ctx.archetypeByName.containsKey(ex.exerciseName.toLowerCase());
 
   /// Whether [loggingType] is one the engine progresses by reps (it takes the
-  /// day's rest and a rep prescription): `weight_reps`, `bodyweight_reps`,
+  /// exercise's archetype rest and a rep prescription): `weight_reps`, `bodyweight_reps`,
   /// `weighted_bodyweight`, `reps_only`. The ONE set: the allocator, the week-2
   /// gains and `PeriodizationEngine._applyWave` all read it.
   static bool isRepBased(String loggingType) =>
@@ -371,26 +371,48 @@ class SessionBudget {
     );
   }
 
-  // ── Day intensity ────────────────────────────────────────────────────────
-  // Mirrors `PeriodizationEngine._profileParams` (sets, rest). The two tables are
-  // pinned equal by session_budget_test.dart, which drives the real engine.
+  // ── Rest and base sets (OI-456 piece A) ──────────────────────────────────
+  // The rest between sets follows the EXERCISE (its archetype), never the day's
+  // intensity; the day's intensity (strength / hypertrophy / endurance) changes
+  // only reps and load. Every day starts every exercise at [baseSets]. Before
+  // OI-456 a strength day rested 150 s at 4 sets and an endurance day 38 s at 2,
+  // so the same 60 minutes fit 4 exercises on one day and 9 on another.
 
-  /// The rest, in seconds, the engine stamps on a rep-based exercise of a day of
-  /// [intensity]: strength 150, hypertrophy 75, endurance 38. An unknown
-  /// intensity uses hypertrophy, as the engine does (M4).
-  static int restFor(String intensity) => switch (intensity) {
-        'strength' => 150,
-        'endurance' => 38,
-        _ => 75,
+  /// The rest, in seconds, of a rep-based exercise of [archetype]: heavy compound
+  /// (H) 150, other compound (M) 120, isolation (I) 75, timed / calisthenics /
+  /// anything else (B) 60. An unknown archetype reads as B, as [exerciseSeconds]
+  /// does.
+  static int restForArchetype(String archetype) => switch (archetype) {
+        'H' => 150,
+        'M' => 120,
+        'I' => 75,
+        _ => 60,
       };
 
-  /// The base sets per exercise the engine gives a day of [intensity]: strength
-  /// 4, hypertrophy 3, endurance 2, unknown 3.
-  static int desiredFor(String intensity) => switch (intensity) {
-        'strength' => 4,
-        'endurance' => 2,
-        _ => 3,
+  /// The sets the allocator tries first for every budgeted exercise, on every day.
+  static const int baseSets = 3;
+
+  // ── Exercise count band (OI-456 piece B) ─────────────────────────────────
+
+  /// No day holds more than this many main exercises.
+  static const int hardMax = 8;
+
+  /// The most main exercises a day of a [level] user holds: beginner 5,
+  /// intermediate 6, advanced 8. An unknown level reads intermediate.
+  static int countMax(String level) => switch (_levelKey(level)) {
+        'beginner' => 5,
+        'advanced' => 8,
+        _ => 6,
       };
+
+  /// The fewest main exercises a day of [minutes] should hold: 5 from 45 minutes,
+  /// 4 from 25 (founder decision D-A: a 30-minute session shows 4, not 5, so it
+  /// stays inside its minutes), 3 below. Defined over the whole 15..180 range so
+  /// the floor never lands on a clock cliff.
+  static int countFloor(int minutes) => minutes >= 45 ? 5 : (minutes >= 25 ? 4 : 3);
+
+  /// The most seconds the count floor may push one day past its budget.
+  static const int maxForcedOverSeconds = 300;
 
   // ── Bands and caps (Ruling 4) ────────────────────────────────────────────
 

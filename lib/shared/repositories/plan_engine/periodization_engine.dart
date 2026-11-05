@@ -20,12 +20,13 @@ class PeriodizationEngine {
   // ── V2 DUP profiles (used within each archetype for daily variation) ──
 
   static const _profileParams = <String, List<int>>{
-    // The sets column is gone (flip 2026-11-02): the allocator sizes every
-    // exercise's sets, and `SessionBudget.desiredFor` keeps its own base sets.
-    //                reps, rest(s)
-    'strength':      [5,    150],
-    'hypertrophy':   [10,   75],
-    'endurance':     [18,   38],
+    // Reps only. The sets column went with the flip (2026-11-02: the allocator
+    // sizes every exercise's sets) and the rest column went with OI-456: the rest
+    // follows the EXERCISE (`SessionBudget.restForArchetype`), not the day.
+    //                reps
+    'strength':      [5],
+    'hypertrophy':   [10],
+    'endurance':     [18],
   };
 
   // Volume wave names and cues
@@ -47,13 +48,15 @@ class PeriodizationEngine {
   /// session set budget (B2, flipped ON 2026-11-02; the unbudgeted body, the cycle
   /// multiplier, the 4-set minimum and the post-hoc physique +1 are deleted).
   ///
-  /// The reps, rest, cue and note logic is `_applyWave`'s; only the SETS differ,
+  /// The reps, rest (by the exercise's archetype), cue and note logic is `_applyWave`'s; only the SETS differ,
   /// because the allocator has already sized every exercise by the user's minutes:
   /// - weeks 1 and 3: the allocated sets;
   /// - week 2: +1 where the ledger allows (see [_weekTwoGains]); an exercise that
   ///   gained nothing carries week 1's cue, and the week keeps week 1's note when
   ///   nothing gained (Ruling 11);
-  /// - week 4: `max(1, floor(0.6 x that exercise's own allocated sets))`;
+  /// - week 4: `min(sets, max(2, floor(0.6 x that exercise's own allocated sets)))`,
+  ///   so 1 stays 1, 2 stays 2, 3 and 4 become 2, 5 becomes 3 (OI-456: a floor of 2,
+  ///   never RAISING a row);
   /// - the stash (`workingSets`) is that same exercise's allocated sets.
   /// Body focus is already inside the allocator (the focus groups), so the
   /// physique +1 is not applied here.
@@ -82,19 +85,21 @@ class PeriodizationEngine {
         final baseExercises = useB ? day.exercisesB : day.exercisesA;
         final profile = _profileParams[day.intensity] ?? _profileParams['hypertrophy']!;
         final baseReps = profile[0];
-        final baseRest = profile[1];
 
         final adjusted = <PlannedExercise>[];
         for (int i = 0; i < baseExercises.length; i++) {
           final ex = baseExercises[i];
+          // OI-456: the rest follows the exercise, the same value the allocator priced.
+          final restSeconds =
+              SessionBudget.restForArchetype(SessionBudget.archetypeOfPlanned(ex, budget));
           var exercise = _applyWave(
-            ex, weekIdx, baseReps, baseRest, day.intensity,
+            ex, weekIdx, baseReps, restSeconds, day.intensity,
             archetype: archetype,
           );
           final gained = gains.contains((d, i));
           final sets = switch (weekIdx) {
             1 => ex.sets + (gained ? 1 : 0),
-            3 => max(1, (ex.sets * 0.6).floor()),
+            3 => min(ex.sets, max(2, (ex.sets * 0.6).floor())),
             _ => ex.sets,
           };
           exercise = exercise.copyWith(sets: sets);
@@ -109,7 +114,7 @@ class PeriodizationEngine {
 
           if (weekIdx == 3 && stashWorkingBase) {
             final peak = _applyWave(
-              ex, 2, baseReps, baseRest, day.intensity,
+              ex, 2, baseReps, restSeconds, day.intensity,
               archetype: archetype,
             );
             exercise = exercise.copyWith(workingSets: ex.sets, workingReps: peak.reps);
@@ -155,11 +160,15 @@ class PeriodizationEngine {
 
     for (var d = 0; d < n; d++) {
       final list = useB ? populated[d].exercisesB : populated[d].exercisesA;
-      final dayRest = SessionBudget.restFor(populated[d].intensity);
       for (var i = 0; i < list.length; i++) {
         final ex = list[i];
         final budgeted = SessionBudget.isBudgeted(ex, budget);
-        final rest = budgeted || SessionBudget.isRepBased(ex.loggingType) ? dayRest : ex.restSeconds;
+        // OI-456: a budgeted row and a rep-based custom are priced at their archetype's rest,
+        // exactly as the allocator priced them (`ex.restSeconds` is still the selector default
+        // here: rests are stamped by `apply` AFTER this runs); a timed row keeps its own.
+        final rest = budgeted || SessionBudget.isRepBased(ex.loggingType)
+            ? SessionBudget.restForArchetype(SessionBudget.archetypeOfPlanned(ex, budget))
+            : ex.restSeconds;
         restOf[(d, i)] = rest;
         final g = budgeted
             ? BudgetMuscleGroups.of(ex.primaryMuscles ?? const [])
