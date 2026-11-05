@@ -6071,3 +6071,45 @@ Narrowed 2026-11-04 after two combined-plan review rounds came back not converge
 **UPDATE 2026-09-26 (backlog triage + `ci-green-batch-a`):** OI-224 closed as a duplicate of this entry (same `alert_cron_function_dead` `days_silent >= 8` predicate vs the 7-day `cron_call_log` prune). ⚠ LIVE 2026-09-26: the prune is currently NOT running (`db_maintenance_nightly` has failed every night since 2026-09-22, filed separately), so retained rows reach back to 09-14 and the predicate has become reachable BY ACCIDENT — a false critical for `alert-critical-notify` is armed for ~2026-10-01 06:47Z if retention is not restored first.
 
 **Closed 2026-11-05.** Fixed by retention 7 -> 10 days (migration 169, option 1 chosen with the founder over a lower threshold, which would have paged the weekly job every week). The alert command, its 8-day threshold and 14-day lookback are unchanged. Migration 169 was applied to `dedsavbjuwgarrhphgnl` on 2026-11-05 after the founder's per-action go (Supabase version `20261105065857`) and read back live: the function body carries `interval '10 days'`, still SECURITY DEFINER with `search_path=public`, `anon`/`authenticated` cannot execute it. The behavioural pin `test/sql/cleanup_cron_call_log_retention_live_verify.sql` was proven on a disposable Postgres replica (old 7-day body red, new body green, keep-set mutants red); its run against production was stopped by the founder for time and left no residue (row count and oldest row unchanged, 0 test rows). Guard: `test/contracts/alert_threshold_below_retention_test.dart` (threshold < min(lookback, retention)). Diagnose `c9e2a7`, plan `docs/plans/oi179-cron-dead-alert.md`. Not yet observed: the first real firing (earliest about one day after apply). Residuals filed or already tracked: OI-199 (silence past 10 days), OI-194 (lost `logCronStart` rows), OI-471 (orphan 7-day delete function), OI-472 (`weekly-recalc` has no cron job).
+
+## OI-201 — alert_cron_function_dead can burst-dispatch many critical alerts at once; Telegram send failures are silently dropped with no retry
+
+- **Status**: CLOSED · 2026-11-05 · MOOT while Telegram is deferred (founder 2026-11-04). Its burst-dispatch half is the same defect as OI-473 edge 1 (the cap fixes it at the source); its 429/no-retry half only concerns the Telegram send path. `reopen_when: Telegram is revived as a live channel` (then retry/`Retry-After` in `_shared/telegram.ts` `sendTelegramMessage`). Branch `oi201-fold-into-oi473`
+- **Blocked on**: none
+- **Verified**: 2026-09-14, Hermes lens L31 (`docs/audit/2026-09-14-hermes-telegram-admin-bot.md`).
+  Two compounding gaps, both pre-existing infrastructure (migration 110,
+  predates this branch), materially amplified by this branch's own
+  deliverable (`alert-critical-notify` is what turns a Postgres `alerts`
+  row into an actual Telegram push):
+  1. **Burst dispatch**: `alert_cron_function_dead`'s query
+     (`110_cron_silence_per_function_and_cleanup_null_guard.sql:82-119`) is
+     a SET-RETURNING `INSERT ... SELECT` — one `critical`-severity row PER
+     dead function, in one statement. `133`'s trigger is `FOR EACH ROW`, so
+     a single statement that flags N dead functions fires N separate
+     `net.http_post` dispatches to `alert-critical-notify`, each sending
+     its own Telegram message. This repo's own history has a precedent for
+     "many cron jobs dead simultaneously" (the Vault `service_role_key`
+     drift killed 12+ jobs at once) — that exact shape would now burst
+     ~12-20 Telegram sends in one statement, against Telegram's roughly
+     1 msg/sec per-chat rate limit. The other `alerts` writers
+     (`076_alert_detection_crons.sql`, `086`, `087`, `109`) each carry a
+     single-open-alert `NOT EXISTS` dedup guard scoped per-alert; this one
+     is scoped per-`function_name` (`110:112-119`), so it does not bound a
+     fleet-wide event.
+  2. **No retry on Telegram send failure**: `_shared/telegram.ts:63-66`
+     handles a non-2xx Telegram response gracefully (no throw, no token
+     leak — `telegramErrorSummary` returns `err.name` only) but a `429`
+     (rate-limited) is indistinguishable from any other failure, `Retry-
+     After` is ignored, and `pg_net.http_post` is fire-and-forget with no
+     retry at the Postgres layer either. A dropped send during exactly the
+     burst scenario above is lost from the Telegram channel permanently —
+     the founder never sees it, with no compensating signal beyond a
+     `cron_call_log` `failed` row and a `client_errors` `warn` row that
+     nothing surfaces proactively.
+- **Scope note**: out of scope for the telegram-admin-bot batch's own fix
+  diff — fixing requires either batching `alert_cron_function_dead`'s
+  dispatch (one summary alert instead of N) or adding retry/backoff to
+  `alert-critical-notify`'s Telegram send path (with `Retry-After`
+  honored), both separate infrastructure work with their own blast radius
+  and test surface. Filed here rather than fixed in-batch per the same
+  reasoning as OI-199/OI-179 above.
