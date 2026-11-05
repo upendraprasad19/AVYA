@@ -10720,7 +10720,8 @@ concepts:
       a pool with nothing else repeats. Day types come from the split (`MuscleSlotDay.dayType`) via
       `_feedsUpperAvoid`. Every other day type is unchanged (6-day Push A / Push B repeats stay deliberate). Not
       mirrored in cascade_tracer (it counts attempts; the tiebreak sits inside one pool), as W3.4 / W3.5 are not.
-      topUpDays (injured users) does not widen its soft avoid.
+      The repeat phase's one-frame fresh fill (`buildPinnedDays` -> `fresh()`) passes the earlier feeder frames' names as
+      `earlierFeederNamesA/B`. topUpDays (injured users) does not widen its soft avoid.
     writers:
       - file: lib/shared/repositories/plan_engine/exercise_selector.dart
         method: pickV4 day loop (earlierPushPullA/B, isUpper, _feedsUpperAvoid) and _pickCoreList day loop

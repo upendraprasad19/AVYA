@@ -57,23 +57,39 @@ proposed_fix: |
   unioned into avoidA / avoidB (review #1 added shoulders_arms: the 5-day build_muscle split is Chest / Back /
   Shoulders + Arms / Legs / Upper + Core). The avoid reaches only `_preferNovel` (first pool row not in the set, else
   pool.first), so it never empties a slot, never changes a pattern and never loosens an equipment, injury or exclusion
-  filter. The same lines sit in `_pickCoreList` so the ship-dark flag cannot bring the repeat back.
+  filter. The same lines sit in `_pickCoreList` so the ship-dark flag cannot bring the repeat back. B-pass fix: the repeat
+  phase's fresh fill (`buildPinnedDays` -> `fresh()`, a ONE-frame `pickV4` call) could not see the earlier days, so
+  `pickV4` takes optional `earlierFeederNamesA/B` seeds and `buildPinnedDays` collects the push / pull / shoulders_arms
+  frames it has already built and passes them in (empty seeds: byte-identical).
   RESIDUE, stated: 70 pairs remain in 38 of 72 plans. The avoid acts inside the first cascade attempt whose pool is
   non-empty, so a residual repeat is a shallow attempt pool (often attempt 1 with a sub-focus), not necessarily a shallow
   library; going to a broader attempt would change which filters apply, so it is not chased. topUpDays (injured users)
-  does not widen its soft avoid and can re-add a name. Coverage: the sweep measures the 4-day build_muscle split and the
+  does not widen its soft avoid and can re-add a name. Strength-goal 5-day Upper (intensity 'strength'): its lead
+  compounds can move to a lower-ranked in-pattern sibling when Push or Pull took the top one; accepted (the filters run
+  before the tiebreak, so the swap stays in-pattern, equipment-capable and injury-safe). Coverage: the sweep measures the 4-day build_muscle split and the
   5-day splits (build_muscle 'Upper + Core', strength and the default 5-day 'Upper'); the 4-day lose_fat / general_fitness
   split has 'Upper Push' / 'Upper Pull' days (engine day types push / pull, no upper day) and the 4-day strength split
   has no upper day, so the avoid does nothing there by design.
 contract_test_path: test/contracts/cross_day_variety_behavioral_test.dart
 regression_test_planned: |
-  - test/contracts/cross_day_variety_behavioral_test.dart (2 tests): (1) the REAL generator over 3 tiers x 4 goals x
+  - test/contracts/cross_day_variety_behavioral_test.dart (5 tests): (3) the ship-dark core-list path, flag ON on the
+    real library (155 pairs without the avoid, 2 with it, asserted `<= 2`); (4) an injured user (shoulder; 52 pairs
+    without, 20 with, `<= 20`, and no contraindicated pick); (5) a repeat phase that fresh-fills the Upper day, on both
+    the cascade and the core-list path (32 pairs without the seed, 0 with it, `== 0`). The control is now an exact count
+    (10 shared lifts), so an avoid on MORE day types also reddens it. (1) the REAL generator over 3 tiers x 4 goals x
     {4, 5} days x 3 levels (72 plans, 60 minutes, weeks 1 and 2) counts Upper-day names an earlier push / pull / chest /
     back / shoulders + arms day of the week also holds: 409 pairs in 42 plans before, 70 in 38 after; ratchet pairs <= 70,
     plans <= 38, pairs < 409 / 4. Reproduce the BEFORE figure: check out the pre-fix
     exercise_selector.dart into a scratch tree and run the file. (2) control: 6-day beginner Push A vs Push B still share
     10 lifts (an avoid applied to every day removes them).
-  MUTATION PROOF (rule 21), run on the final code: 8 mutants applied one at a time, each confirmed applied (anchor
+  MUTATION PROOF, B-PASS ROUND (final tree, unmutated test asserted green first): 16 mutants over the cascade guard,
+  the core-list guard and collection, the fresh-fill seeds and the pinned-frame collection; 13 red. THREE survived and are
+  stated: C2 (core-list B-variant guard off), F2 (fresh-fill B seed not passed) and F6 (core-list B seed ignored): a
+  probe over the real library showed identical output with and without them (weeks 2 and 4 stay at 45 repeats on the
+  core-list path and 0 on the fresh fill), because the Upper day's B picks do not overlap the push / pull B picks there.
+  They mirror the A guards, which ARE killed; a library change that makes B overlap would need a fixture of its own.
+  The A-side core seed (F5) and the core pickV4 pass-through (C5) were killed after the flag-ON repeat test was added.
+  FIRST TABLE, kept for the record: 8 mutants applied one at a time, each confirmed applied (anchor
   count >= 1, file changed) and not a compile error, the tree compared with the saved patch after the run: guard off for
   variant A (red), guard off for B (red), every day avoids (red), B collects A's names (red), case not lowered (red),
   shoulders_arms not collected (red), pull not collected (red), push not collected (red). All 8 killed, with the UNMUTATED test asserted green first in the same run (an earlier table ran against a test whose pairs ratchet had not been updated, so every mutant looked red because the baseline was red; review #2 caught it, the table was re-run). An earlier plain

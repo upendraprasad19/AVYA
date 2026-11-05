@@ -255,6 +255,7 @@ class SweepHarness {
   /// full_gym keep a small residue, every day of it a shoulder+elbow pair (small injured pool; measured 2026-11-04):
   /// pairs 10 / 22 / 14 and pairs46 12 / 8 / 4, down from 76 / 126 / 106 and 120 / 143 / 125. No empty day anywhere.
   /// Batch C2a (OI-460, library v18, 864 rows), merged onto the count band, re-measured all 20 blocks: one rose, `repeat bodyweight` 0 -> 4 thin days (2 elbow 5d, 2 lower_back 4d: the phase-1 plan now pins different rows and a repeat phase drops an unsafe pin with no refill; 0 one-exercise days, 0 empty days), a recorded decision in the C2a diagnose-doc (c2a7f1). The other 19 blocks held.
+  /// OI-458 (an Upper day soft-avoids the names its week's push / pull / shoulders_arms days hold, 2026-11-05): `repeat bodyweight` thin days 4 -> 2 (it FELL; no other block moved, none rose, no empty day). Diagnose a8c3e5.
   /// OI-456 piece A (rest by exercise type, 3 base sets every day) re-measured all 20 blocks: 18 fell, 1 equal, 1 rose
   /// (one-exercise days never rose); the one that rose is `pairs bodyweight` thin days 30 -> 32 (knee+elbow 10,
   /// lower_back+elbow 4, wrist+elbow 8, elbow+hip 10), a recorded decision in the OI-456 diagnose-doc. MEASURED cause

@@ -1,4 +1,4 @@
-# OI-458: the Upper day reads as leftovers (plan v2, after review #1)
+# OI-458: the Upper day reads as leftovers (plan v3, after reviews #1-#3 and the B-pass)
 
 Tier L (plan engine, `exercise_selector.dart`). Execution mode: INLINE (one unit, one worktree `oi458-upper-repeats`).
 Rule 14: `plan_generator.dart` is NOT touched.
@@ -62,3 +62,13 @@ scorecard counts cascade attempts, which a tiebreak inside one pool cannot move.
 4. Re-recorded in the same commit: `test/fixtures/generator_golden_hashes.json` (326 of 999 keys changed, every one a
    4-day or 5-day plan, none 3-day or 6-day; the key list is in the commit body), and the thin-day ratchet
    `kThinCeilings['repeat bodyweight']` 4 -> 2 (it FELL: a second Upper day pins fewer repeated unsafe rows).
+
+## B-pass findings folded (2026-11-05, 0 P0 / 0 P1 / 3 P2)
+
+- The repeat phase's one-frame fresh fill had no view of the earlier days: `pickV4` takes optional `earlierFeederNamesA/B`
+  seeds, `buildPinnedDays` passes the push / pull / shoulders_arms frames it has built. Proof: a repeat-phase test on the
+  cascade and the core-list path (32 pairs -> 0).
+- The ship-dark core-list path now has its own flag-ON sweep (155 -> 2 pairs) and mutants.
+- An injured-user sweep (52 -> 20 pairs, no contraindicated pick) and an exact-count control.
+- Stated, not killable on the shipped library: the B-variant core-list guard and the B seeds (identical output with and
+  without them).
