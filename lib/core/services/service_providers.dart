@@ -83,9 +83,9 @@ final subscriptionServiceProvider = Provider<SubscriptionService>((ref) {
 });
 
 /// Provider for [SyncService] — orchestrator for Hive→Supabase fan-out +
-/// restoreFromCloud + realtime + queue.
+/// restoreFromCloud + queue.
 ///
-/// Reset behavior: drops `_realtimeSubscription`, the health-sync
+/// Reset behavior: drops the health-sync
 /// completer, the restore-cancelled flag, and the restore-progress label
 /// so the previous user's sync state cannot leak into the new session.
 final syncServiceProvider = Provider<SyncService>((ref) {

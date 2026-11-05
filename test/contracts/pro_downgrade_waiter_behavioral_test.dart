@@ -53,7 +53,7 @@ void main() {
     tempDir = await setUpHiveForTests();
     // MigratedKey — which every entitlement read funnels through — needs the
     // migration box, and the auth-uid seam so a PRO fixture is not silently
-    // read as free (same setup as realtime_pro_gate_behavioral_test.dart).
+    // read as free.
     if (!Hive.isBoxOpen(HiveService.migrationBoxName)) {
       await Hive.openBox(HiveService.migrationBoxName);
     }

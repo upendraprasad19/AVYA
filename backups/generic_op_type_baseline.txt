@@ -50,7 +50,6 @@ lib/core/services/sync/sync_nutrition.dart::sync_service_if_13
 lib/core/services/sync/sync_nutrition.dart::sync_service_if_15
 lib/core/services/sync/sync_profile.dart::sync_service_catch_9
 lib/core/services/sync/sync_profile.dart::sync_service_if_14
-lib/core/services/sync/sync_realtime.dart::sync_service_catch_4
 lib/core/services/sync/sync_restore_completeness.dart::sync_service_for_29
 lib/core/services/sync/sync_restore_completeness.dart::sync_service_if_23
 lib/core/services/sync/sync_workout.dart::sync_service_catch_10

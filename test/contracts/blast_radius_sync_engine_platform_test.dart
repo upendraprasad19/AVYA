@@ -178,9 +178,8 @@ const _declined = <String, String>{
       'SyncService and SyncQueue use it throughout): a generic type with no '
       'merge, gate, identity or push decision; callers in platform files decide',
   '${_services}subscription_service.dart':
-      'entitlement state: the engine asks isPro() before opening the realtime '
-      'subscription and calls refreshFromSupabase() during restore '
-      '(sync_service.dart), and reads proStateSnapshot() in sync_realtime.dart; '
+      'entitlement state: the engine calls refreshFromSupabase() during restore '
+      '(sync_service.dart); '
       'none of that selects which copy of the user\'s data wins or what is '
       'pushed',
   '${_services}supabase_service.dart':

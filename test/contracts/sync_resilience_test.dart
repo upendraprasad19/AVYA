@@ -1,14 +1,10 @@
-// Regression contract for diagnose a7f2e9 (BUG-G + BUG-H, APK +34 batch):
-//  - realtime weight_logs stream must recover from a transient channelError
-//    (RealtimeSubscribeException channelError / WS close 1002), not only from a
-//    "token expired" error. Pre-fix only token-expiry reconnected, so a
-//    channelError left the stream permanently dead (113x in client_errors; PRO
-//    Telegram->app instant-sync silently never delivered).
+// Regression contract for diagnose a7f2e9 (BUG-G, APK +34 batch):
 //  - restore must refresh the session before the long multi-step pull so a
 //    token expiring mid-restore doesn't 401 (heavy accounts span the TTL).
 //
-// Source-grep (presence). The reconnect mechanism + ensureFreshToken primitive
-// are exercised by realtime/supabase_service tests; this guards the callers.
+// Source-grep (presence). The ensureFreshToken primitive is exercised by
+// supabase_service tests; this guards the callers. (The realtime half of this
+// file was removed with the Realtime subscription, batch realtime-weight-off.)
 
 import 'dart:io';
 
@@ -27,15 +23,6 @@ String _strip(String src) {
 }
 
 void main() {
-  test('realtime recovers from a transient channelError (not only token-expiry)',
-      () {
-    final src = _strip(
-        File('lib/core/services/sync/sync_realtime.dart').readAsStringSync());
-    expect(src.contains('isChannelError'), isTrue);
-    expect(src.contains('channelerror'), isTrue,
-        reason: 'a channelError must trigger a bounded reconnect, not stay dead');
-  });
-
   test('restore refreshes the session before the long pull', () {
     final src =
         _strip(File('lib/core/services/sync_service.dart').readAsStringSync());
