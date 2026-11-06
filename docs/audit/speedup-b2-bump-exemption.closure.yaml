@@ -1,0 +1,266 @@
+# Closure ledger — speedup-b2-bump-exemption (release-cycle speedup, batch B2: merge-commit version-bump exemption; OI-275)
+# Gate 40 (validate_audit_closure.dart). One terminal_state per finding; no `deferred:` key.
+# `<branch>@branch` is the in-branch commit form (precedent: speedup-b1-prepush.closure.yaml).
+#
+# Sources: the batch's own units (U1b-*, U2/U3, LEDGER, DOC), what the author's own mutation runs and probing found in the
+# batch's code (REG-*, PW-*, MIR-1), and the independent B-pass (BP-*, docs/reviews/speedup-b2-bump-exemption-bpass.md).
+
+batch: speedup-b2-bump-exemption
+plan_review_record: docs/plan-reviews/speedup-b2-bump-exemption.md
+bpass_review: docs/reviews/speedup-b2-bump-exemption-bpass.md
+diagnose_docs:
+  - docs/diagnoses/2026-10-11-version-bump-path-whitespace-34e764.md
+  - docs/diagnoses/2026-10-10-release-cycle-wallclock-c7a3e9.md
+
+total_findings: 27
+
+findings:
+  # ── Batch units (master plan section 3) ──────────────────────────────
+  - id: U1b-1
+    title: "Keystone gate: a first-parent MERGE whose net change against its first parent (sha^1..sha) is a bare version bump needs no plan-review record and no B-pass"
+    terminal_state: closed_in_commit
+    commit: speedup-b2-bump-exemption@branch
+    verification: >
+      check_plan_review_record_exists.dart merge loop: after the `tier < account` skip and BEFORE the switch on the merge subject, so an unrecognised or
+      foreign-owner subject whose whole change is two version lines is judged by content (the subject is never consulted: OI-58b untouched). All-or-nothing:
+      a bump plus any other file, a docs record, or docs/blast_radius.yaml (OI-70) is not a bump. Tests: group `U1b` of gate_input_family_e2e_test.dart runs
+      the REAL gate over throwaway repos with real merge commits (bump-only PR merge, pubspec-only, three subjects, bump plus docs, bump plus registry,
+      content written by the merge itself, symlink in place of pubspec, duplicate version token in each file, non-version content in app_constants.dart,
+      a push carrying a bump merge and an unreviewed auth merge, a bump WITH a valid record). Mutants: exemption diffs sha^2, consults the subject,
+      removed, path-set preconditions dropped: all RED (gate ledger evidence).
+
+  - id: U1b-2
+    title: "Git readers moved into scripts/version_bump_git_lib.dart (rangeIsVersionBump, gitBlobAt, gitModeAt, diffPathsBetween), shared by the direct loop (OI-58a), the merge loop and the CLI"
+    terminal_state: closed_in_commit
+    commit: speedup-b2-bump-exemption@branch
+    verification: >
+      The direct-commit loop was refactored onto the shared helper without losing a per-site extra (diffed against `git show HEAD:` of the gate). Pinned
+      platform in docs/blast_radius.yaml before the scripts/** catch-all. test/scripts/version_bump_git_lib_test.dart drives the real CLI over throwaway
+      repos: what IS a bump (both files, pubspec alone, CRLF, net change across commits, merge-base while main moved), what is NOT (every case exits 1),
+      the head-side AND base-side symlink mode, lenient vs strict UTF-8. Mutants: always-yes 14 red, head-mode forced regular, base-mode forced regular,
+      lenient decoding, CLI always exits 0 (14): all RED.
+
+  - id: U1b-3
+    title: "scripts/version_bump_range.dart CLI and the scripts/safe_merge.sh advisory: NOTE for a bare bump, the original WARNING otherwise or on any failure"
+    terminal_state: closed_in_commit
+    commit: speedup-b2-bump-exemption@branch
+    verification: >
+      safe_merge.sh derives the merge base with `git merge-base refs/heads/main refs/heads/<branch>` and asks the CLI; every failure to ask falls through to
+      the warning (fail closed). test/scripts/safe_merge_test.dart (+4 cases: the NOTE for a bare bump; the WARNING for a bump plus one other file; the
+      WARNING (fail closed) when the CLI is not installed; the NOTE when main moved on since the branch was cut, i.e. merge-base not main). Shell mutants
+      SM1/SM2/SM3/SM5 RED.
+
+  - id: U1b-4
+    title: "Guard for the copy lists of the e2e harnesses: every harness that copies the gate into a throwaway repo copies its WHOLE import closure"
+    terminal_state: closed_in_commit
+    commit: speedup-b2-bump-exemption@branch
+    verification: >
+      A new lib moved the gate's imports; the e2e harnesses copy the gate from hand-written lists, so a forgotten file would only fail inside a throwaway
+      repo with an opaque error. test/contracts/plan_review_gate_harness_copies_imports_test.dart computes the import closure and checks every list.
+      Mutants HC1-HC4 RED (HC4, a fourth harness written with a plain list literal, survived the first detector and the detector was widened).
+
+  - id: U2U3-1
+    title: "/build-apk Gate 2: landing a versionCode bump is ONE commit through a PR (worktree, both files, one commit, one push of the branch, gh pr create, safe_pr_merge.sh, --from-green), with the steps a classifier can block listed up front"
+    terminal_state: closed_in_commit
+    commit: speedup-b2-bump-exemption@branch
+    verification: >
+      The old text said "commit on main", which since B1 is the only push that still runs the ~39-minute suite. test/contracts/build_apk_bump_flow_test.dart pins
+      the ORDER of the steps, ONE commit touching only the two files, never raw `gh pr merge` (the only allow-rule the section may name is the wrapper's), the
+      push to the bump BRANCH, the classifier-block list, and that every script and flag named exists. Nine text mutants RED.
+
+  - id: LEDGER-1
+    title: "check_plan_review_record_exists.dart moves from `grandfathered` to `mutation_proven` in docs/audit/gate_test_ledger.yaml (the batch materially changes its protection surface, rule 24)"
+    terminal_state: closed_in_commit
+    commit: speedup-b2-bump-exemption@branch
+    verification: "check_gate_test_ledger.dart PASS (110 gates, one ledger state each); the evidence lists every mutation with its red count, the fixtures that first failed to discriminate, and the look-alike bypass."
+
+  - id: DOC-1
+    title: "Doc ripple (round-2 P2-3): every passage that said a bump needs a record or is committed on main"
+    terminal_state: closed_in_commit
+    commit: speedup-b2-bump-exemption@branch
+    verification: >
+      CLAUDE.md section 4.3, .claude/skills/code-review/SKILL.md section 0, docs/architecture/process-invariants-detail.md (4.12 item 3), docs/architecture/hooks.md
+      (the safe_merge precheck row), docs/naming_conventions.md (rangeIsVersionBump, version_bump_range and the exact-path rule), docs/blast_radius.yaml (two platform
+      pins), docs/sot_registry.yaml (a line_range that drifted after a gate edit, caught by check_sot_registry_parity), docs/audit/GATE_INDEX.md regenerated.
+      check_context_artifact_budget PASS.
+
+  - id: U1A-1
+    title: "U1(a), a content-aware classifier flag for pre-push, was DROPPED (round-2 P2-2/P1-6); OI-275 acceptance A (a version-only diff classifies below account) not built as worded"
+    terminal_state: verified_clean
+    evidence: >
+      Master plan section 3: after B1 a bump PR's branch push is analyze-only and the merge happens on GitHub, so the flag would only help a direct push of a
+      bump to main, which keeps the full suite by design (fail-safe). It would also add an env var needing a spawn_env_manifest classification and a second
+      classifier path next to a gate with four prior failed attempts. B2 delivers the remaining value (no record or B-pass for a bump merge). Recorded on the
+      OI-275 board entry by the founder-owned close-out; this batch does not edit docs/audit/open_issues.md.
+
+  - id: OI275-D
+    title: "OI-275 stays OPEN after this batch: the standing permission for the merge wrapper"
+    terminal_state: verified_clean
+    evidence: >
+      Resolved 2026-10-12: the founder added the settings allow-rule `Bash(sh scripts/safe_pr_merge.sh:*)` (OI-275 item D, carried from B1), read back the same
+      day (see speedup-b1-prepush U4-2), and OI-275 was closed in the oi275-closeout batch (closes-oi: OI-275). The rule names the wrapper ONLY, never raw
+      `gh pr merge`. This batch itself used no closes-oi trailer, as recorded when it shipped.
+
+  # ── Found by the author's own mutation runs and probing (before the B-pass) ──
+  - id: REG-1
+    title: "Mutants G4 (drop the regular-file mode check) and G9 (allow more than one version token) SURVIVED the gate e2e: the fixtures did not discriminate"
+    terminal_state: closed_in_commit
+    commit: speedup-b2-bump-exemption@branch
+    verification: >
+      The symlink fixture's target was not the whole bumped pubspec (the content comparison refused it, so the mode check was never what saved us) and the
+      duplicate-token base carried ONE token (the blobs differed anyway). Rewritten so only the mode check / only the token count can refuse, and a second
+      duplicate-token test added for app_constants.dart. Rerun: both RED. Recorded in the ledger evidence.
+
+  - id: REG-2
+    title: "Harness-guard mutant HC4 (a fourth harness spelled with a plain list literal) SURVIVED the first detector"
+    terminal_state: closed_in_commit
+    commit: speedup-b2-bump-exemption@branch
+    verification: "The detector required `const [`; widened to any list literal naming the bare quoted gate file. HC1-HC4 RED."
+
+  - id: REG-3
+    title: "check_sot_registry_parity failed in pre-commit: a registry line_range drifted after the gate edit"
+    terminal_state: closed_in_commit
+    commit: speedup-b2-bump-exemption@branch
+    verification: "docs/sot_registry.yaml line_range updated; stale file:NNN citations in the comments replaced by symbol names. Pre-commit loop PASS."
+
+  - id: REG-4
+    title: "Full local suite: one failure, test/contracts/deferral_euphemism_gate_test.dart, from a Flutter tool write race"
+    terminal_state: verified_clean
+    evidence: >
+      The failure text is `Set-Content : Stream was not readable ... bin/cache/engine.realm` from update_engine_version.ps1: two flutter processes started
+      together (the author was running another flutter command). Re-run alone: 18 of 18 green. Not a defect of the code under test.
+
+  - id: PW-1
+    title: "Look-alike path bypass in isVersionBumpCommit: a file named \" pubspec.yaml\" (leading space) rode along on a genuine bump because the predicate trimmed paths (predates B2; live for direct pushes since OI-58a)"
+    terminal_state: closed_in_commit
+    commit: speedup-b2-bump-exemption@branch
+    verification: >
+      Found by the author's own probe (a CLI run over an index entry written with update-index --cacheinfo). Paths are compared exactly; only an empty entry is
+      ignored. Test-first RED on the unfixed code, then GREEN: version_bump_exemption_test (predicate), version_bump_git_lib_test (real CLI, six spellings), the
+      gate e2e (direct commit AND merge). Mutants: trim back in the predicate 1 + 1 + 2 red. Diagnose 34e764.
+
+  - id: PW-2
+    title: "diffPathsBetween trimmed each path and the gate's helper trimmed the whole output; now `git diff --no-renames --name-only -z` read as raw bytes, strict UTF-8"
+    terminal_state: closed_in_commit
+    commit: speedup-b2-bump-exemption@branch
+    verification: >
+      NUL-separated output needs no C-quoting, so `-c core.quotePath=false` is gone; invalid UTF-8 returns null (fail closed). Mutants: trim each path again
+      1 + 2 red; `-z` dropped 5 + 25 red; --no-renames dropped after the rewrite 1 red.
+
+  - id: PW-3
+    title: "Sibling instance: dependabotDiffIsManifestOnly trimmed paths too, so a look-alike \" pubspec.lock\" rode along on a bot-shaped merge whose record was waived"
+    terminal_state: closed_in_commit
+    commit: speedup-b2-bump-exemption@branch
+    verification: >
+      Same one-line cause, same fix, found by sweeping the gate and its libs for every trim() on a path ("fix the class, not the instance"). Tests:
+      plan_review_record_lib_test.dart (six spellings and a bare space, after a control) and a gate e2e group with a CONTROL (a bot-authored merge touching
+      only the two manifests is exempt) and the look-alike (refused as a non-manifest path). Fixture checked against history: the bot author
+      address is the one all 15 real Dependabot commits in this repository carry; no real Dependabot MERGE commit exists in history, so the merge subject follows
+      the gate's documented shape (Merge pull request #N from owner/dependabot/...). Mutants: the predicate trims paths again 1 red (unit) + 1 red (gate e2e); pubspec.lock dropped from the allow-list 1 red (the CONTROL, as designed); the predicate accepts any non-empty diff 4 red (unit).
+
+  - id: PW-4
+    title: "Tier matcher: _globToRegExp compiled `**` and `?` to a bare `.`, which does not match a line terminator, so a path whose NAME holds LF, CR, U+2028 or U+2029 matched no tier rule and was graded the default tier (predates B2; found by sweeping the gate for the path-exactness class)"
+    terminal_state: closed_in_commit
+    commit: speedup-b2-bump-exemption@branch
+    verification: >
+      Measured first with the gate's own matcher against the real docs/blast_radius.yaml: supabase/functions/ai-proxy/in<LF>dex.ts graded feature instead of platform,
+      lib/core/services/sync<LF>_service.dart feature instead of account, supabase/migrations/200_x<LF>.sql feature instead of platform. The pre-B2 gate read the C-quoted
+      form of such a name (leading double quote), which an anchored glob also misses, so B2 neither introduced nor worsened it; B2's NUL-separated list is what hands the
+      matcher the verbatim name. Fix: the RegExp is built with dotAll (a path with no line terminator classifies exactly as before). Tests, gate_input_family_e2e_test.dart
+      group OI-58a: four through the real gate (LF, CR, U+2028, U+2029 under lib/features/auth, judged account, exit 1) and a MIRROR (a line-break name under the
+      feature-tier docs/** stays feature, exit 0). The fixture is built with git mktree + commit-tree (git for Windows refuses a control character in update-index and NTFS
+      cannot hold the file) and asserts the commit changes exactly the intended path. Mutant (the pre-fix line restored, dotAll removed): 4 red (LF, CR, U+2028, U+2029); the MIRROR stays green.
+
+  - id: PW-5
+    title: "The same limits in the commit-time and push-time path readers outside this diff: scripts/blast_radius_from_diff.dart and scripts/check_code_review_pass_exists.dart carry their own glob copy and read `git diff --cached --name-only` (C-quoted, newline-split, trimmed, rename detection on, submodules ignored per .gitmodules); scripts/pre-push.sh (RANGE_FILES) and scripts/contract_sweep.dart read `git diff --name-only` too"
+    terminal_state: verified_clean
+    notes: >
+      Founder decision 2026-10-12 (option B): leave these readers as they are. This is a decision, not a verification. The two classifiers run in the
+      pre-commit hot path (every commit of every session), so making them exact (a NUL-separated raw-byte reader with --no-renames and
+      --ignore-submodules=none, dotAll in the glob copy, and an end-to-end test plus a mutation each) is a change with its own review surface, and none of
+      these readers is the enforcement point: the keystone gate grades the exact name at merge-to-main (PW-4, BP-1), so what an odd name or a hidden gitlink can
+      still do here is move the demand for the same record and review from commit time to merge time. The practical exposure is close to zero: this repository has
+      no submodules, and Windows cannot create a file name that holds a line break. Checked and clean: scripts/check_blast_radius_coverage.dart applies its glob
+      copy to synthetic probe strings derived from the registry, never to a git path; scripts/safe_merge.sh's advisory diff passes --ignore-submodules=none (BP-1).
+      Reopen if a submodule is ever added, or if the repository starts being worked on a filesystem that allows control characters in file names: then both
+      classifiers are made exact in the same way as diffPathsBetween.
+
+  - id: MIR-1
+    title: ".opencode/command/build-apk.md had missed B1's one-line change and would have missed the Gate 2 rewrite"
+    terminal_state: closed_in_commit
+    commit: speedup-b2-bump-exemption@branch
+    verification: "Regenerated from the .claude command (own frontmatter + the same body); a MIRROR test in build_apk_bump_flow_test.dart pins the body byte for byte. Mutants: one word changed in the .opencode copy, and in the .claude command: 1 red each."
+
+  # ── The independent B-pass (docs/reviews/speedup-b2-bump-exemption-bpass.md) and the author's own scans after it ──
+  - id: BP-1
+    title: "[P1] The path list could be edited by the pusher: git diff honours a committed .gitmodules `ignore = all` and omits a gitlink move from --name-only, so a bump plus a hidden gitlink was judged a bare bump and the hidden path never reached the tier computation (predates B2 for direct commits; B2 would have extended it to merges and the CLI)"
+    terminal_state: closed_in_commit
+    commit: speedup-b2-bump-exemption@branch
+    verification: >
+      diffPathsBetween and the safe_merge.sh advisory diff pass --ignore-submodules=none (git documents it as overriding any `ignore` in git-config or .gitmodules). Reproduced before the fix; the new
+      tests' setup guards assert that plain `git diff` omits an ADDED gitlink and that the flag lists it (the reviewer's note that only an existing gitlink's pointer escapes is too narrow). Tests:
+      version_bump_git_lib_test.dart (the CLI attack, its control, and diffPathsBetween driven directly), gate_input_family_e2e_test.dart (a direct landing and a bump merge, each control + attack),
+      safe_merge_test.dart (the advisory warns for a hidden gitlink under supabase/migrations/**). Mutants: flag removed from the library 4 red (the CLI attack, the direct listing, the gate on a direct
+      landing, the gate on a bump merge); flag removed from the advisory 1 red.
+
+  - id: BP-2
+    title: "[P2] Both ways diffPathsBetween says \"git could not answer\" (non-zero exit, a path that is not valid UTF-8) were unpinned: mutants M3 and M4 survived 57 tests, and the gate turns an empty list into feature tier and a PASS"
+    terminal_state: closed_in_commit
+    commit: speedup-b2-bump-exemption@branch
+    verification: >
+      Tests only (the code was right). The producer is driven directly by a throwaway Dart program because the CLI folds NULL and empty into one exit 1: an unresolvable rev is NULL, an empty range is an empty
+      list (the mirror), an invalid-UTF-8 path is NULL, a valid non-ASCII path is verbatim, a leading-space name is untrimmed. Both call sites are driven through the real gate with a diff git cannot answer (the
+      parent's root tree object is renamed out of the store, after a control that the same landing passes) and an invalid-UTF-8 path name (with the mirror that a valid non-ASCII name under docs/ still passes).
+      Mutants: M3 revived 3 red; M4 revived 2 red; the direct-loop guard only prints 2 red; the merge-loop guard only prints 1 red; an empty diff becomes NULL 1 red (the mirror).
+
+  - id: BP-3
+    title: "[P2] The harness-closure test's import detector saw only `import 'x.dart';`: a prefixed import added to the gate (mutant H1) left it green while the e2e harnesses would fail to compile"
+    terminal_state: closed_in_commit
+    commit: speedup-b2-bump-exemption@branch
+    verification: >
+      The detector finds the statement first (up to its ';') and takes every quoted .dart URI inside it, so as/show/hide/deferred, double quotes, export, part, a wrapped directive and a conditional import naming
+      three files are all found; package:, dart:, non-.dart URIs and commented-out directives are not. It is a function (relativeImportsOf) with its own tests. Mutants: the reviewer's H1 2 red;
+      the control with the plain spelling 2 red; the detector put back to the old shape 1 red.
+
+  - id: BP-4
+    title: "[P3] \"Byte-identical once the version token is normalised\" was not literally true: a leading BOM was dropped by the decoder, an executable-bit flip passed the regular-file check, and the appVersion value was any quoted text (only commit-time Gate 51 pinned it)"
+    terminal_state: closed_in_commit
+    commit: speedup-b2-bump-exemption@branch
+    verification: >
+      Fixed rather than reworded: gitBlobAt re-prefixes U+FEFF when the bytes start EF BB BF; isVersionBumpCommit requires beforeMode == afterMode (executable on both sides is still accepted);
+      versionLineConstants requires major.minor.patch+build. Unit, CLI and mirror tests for each. Mutants: BOM dropped again 1 red; mode equality removed 2 red; appVersion accepts any quoted
+      text 2 red.
+
+  - id: BP-5
+    title: "[P3] docs/sot_registry.yaml line_range for _parseRules said 119-136; the function is at 127-144"
+    terminal_state: closed_in_commit
+    commit: speedup-b2-bump-exemption@branch
+    verification: "line_range set to 127-144 (re-checked against the file after the last edit to the gate); check_sot_registry_parity PASS in the pre-commit loop."
+
+  - id: BP-6
+    title: "[P3] safe_merge.sh NOTE said no record is needed, but it is decided on merge-base..tip while the gate decides on <merge>^1..<merge>"
+    terminal_state: closed_in_commit
+    commit: speedup-b2-bump-exemption@branch
+    verification: >
+      The NOTE now says a bare bump needs no record "unless the merge itself writes content (a conflict resolution): the gate judges the merge commit's net change against main", with a comment naming
+      the difference. The advisory tests match the substring "is a bare version bump" and are unchanged (20 green).
+
+  - id: BP-7
+    title: "[P2, author-assigned] Observation: the merge-parent REVERSE direction (main moved ahead with a bump, the branch carries real content) had no discriminating fixture; mutant M1 was killed only by pass-direction tests"
+    terminal_state: closed_in_commit
+    commit: speedup-b2-bump-exemption@branch
+    verification: >
+      REVERSE test (main gets a perfect bump after the branch was cut, the branch carries an auth change: not exempt, \"no plan-review record\") and its FORWARD MIRROR (main gets a docs commit after the cut, the
+      branch is a bare bump: exempt, by the exemption and not by the feature-tier skip). Mutants: exempt when EITHER parent's diff is a bump 2 red (the new REVERSE test, and one pre-existing test that catches it only incidentally); the exemption reads the second parent 7 red.
+
+  - id: REG-5
+    title: "Invisible characters in source: literal U+2028 and U+2029 (the line-terminator fixture table), a literal U+00A0 in each of two test files, and a literal U+FEFF that the edit tooling produced from an escape in version_bump_git_lib.dart"
+    terminal_state: closed_in_commit
+    commit: speedup-b2-bump-exemption@branch
+    verification: >
+      Found by the author's own scan of every changed file (U+FEFF, U+2028/9, U+0085, U+00A0, zero-width, bidi and control characters) after the B-pass fixes; CLAUDE.md section 4.9 says a file whose subject is
+      invisible characters must build them from escapes and be scanned afterwards. All replaced by escapes (the mutant that needs the BOM line, B1, could not even apply to the literal form until it was fixed). Scan
+      re-run clean over the changed files.
+
+
+closed_count: 27

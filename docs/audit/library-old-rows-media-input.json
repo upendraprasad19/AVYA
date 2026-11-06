@@ -1,0 +1,745 @@
+{
+  "_note": "Cumulative input of build_library_media_v16.js --old-rows. The builder reads only `entries`; the other lists record every in-library pick that is NOT applied and why, so a test can prove the partition and C2 and the founder have the gif ids.",
+  "entries": [
+    {
+      "id": "E001",
+      "gif": "0025",
+      "equipment_checked": true
+    },
+    {
+      "id": "E002",
+      "gif": "0289",
+      "equipment_checked": true
+    },
+    {
+      "id": "E003",
+      "gif": "0047",
+      "equipment_checked": true
+    },
+    {
+      "id": "E004",
+      "gif": "0033",
+      "equipment_checked": true
+    },
+    {
+      "id": "E005",
+      "gif": "0662",
+      "equipment_checked": true
+    },
+    {
+      "id": "E006",
+      "gif": "0308",
+      "equipment_checked": true
+    },
+    {
+      "id": "E007",
+      "gif": "0188",
+      "equipment_checked": true
+    },
+    {
+      "id": "E008",
+      "gif": "0251",
+      "equipment_checked": true
+    },
+    {
+      "id": "E009",
+      "gif": "1301",
+      "equipment_checked": true
+    },
+    {
+      "id": "E011",
+      "gif": "1457",
+      "equipment_checked": true
+    },
+    {
+      "id": "E012",
+      "gif": "0426",
+      "equipment_checked": true
+    },
+    {
+      "id": "E013",
+      "gif": "0334",
+      "equipment_checked": true
+    },
+    {
+      "id": "E014",
+      "gif": "0233",
+      "equipment_checked": true
+    },
+    {
+      "id": "E015",
+      "gif": "0310",
+      "equipment_checked": true
+    },
+    {
+      "id": "E016",
+      "gif": "0030",
+      "equipment_checked": true
+    },
+    {
+      "id": "E017",
+      "gif": "0201",
+      "equipment_checked": true
+    },
+    {
+      "id": "E018",
+      "gif": "0060",
+      "equipment_checked": true
+    },
+    {
+      "id": "E019",
+      "gif": "2188",
+      "equipment_checked": true
+    },
+    {
+      "id": "E020",
+      "gif": "0283",
+      "equipment_checked": true
+    },
+    {
+      "id": "E021",
+      "gif": "0032",
+      "equipment_checked": true
+    },
+    {
+      "id": "E022",
+      "gif": "0652",
+      "equipment_checked": true
+    },
+    {
+      "id": "E023",
+      "gif": "0027",
+      "equipment_checked": true
+    },
+    {
+      "id": "E024",
+      "gif": "0292",
+      "equipment_checked": true
+    },
+    {
+      "id": "E025",
+      "gif": "0198",
+      "equipment_checked": true
+    },
+    {
+      "id": "E026",
+      "gif": "0861",
+      "equipment_checked": true
+    },
+    {
+      "id": "E029",
+      "gif": "0489",
+      "equipment_checked": true
+    },
+    {
+      "id": "E031",
+      "gif": "0031",
+      "equipment_checked": true
+    },
+    {
+      "id": "E032",
+      "gif": "0294",
+      "equipment_checked": true
+    },
+    {
+      "id": "E033",
+      "gif": "0313",
+      "equipment_checked": true
+    },
+    {
+      "id": "E034",
+      "gif": "0297",
+      "equipment_checked": true
+    },
+    {
+      "id": "E035",
+      "gif": "0868",
+      "equipment_checked": true
+    },
+    {
+      "id": "E036",
+      "gif": "0043",
+      "equipment_checked": true
+    },
+    {
+      "id": "E037",
+      "gif": "0042",
+      "equipment_checked": true
+    },
+    {
+      "id": "E038",
+      "gif": "1760",
+      "equipment_checked": true
+    },
+    {
+      "id": "E039",
+      "gif": "0739",
+      "equipment_checked": true
+    },
+    {
+      "id": "E040",
+      "gif": "0743",
+      "equipment_checked": true
+    },
+    {
+      "id": "E041",
+      "gif": "0410",
+      "equipment_checked": true
+    },
+    {
+      "id": "E042",
+      "gif": "1460",
+      "equipment_checked": true
+    },
+    {
+      "id": "E043",
+      "gif": "0585",
+      "equipment_checked": true
+    },
+    {
+      "id": "E044",
+      "gif": "0431",
+      "equipment_checked": true
+    },
+    {
+      "id": "E045",
+      "gif": "1459",
+      "equipment_checked": true
+    },
+    {
+      "id": "E046",
+      "gif": "1766",
+      "equipment_checked": true
+    },
+    {
+      "id": "E047",
+      "gif": "0058",
+      "equipment_checked": true
+    },
+    {
+      "id": "E048",
+      "gif": "3013",
+      "equipment_checked": true
+    },
+    {
+      "id": "E049",
+      "gif": "0586",
+      "equipment_checked": true
+    },
+    {
+      "id": "E050",
+      "gif": "0117",
+      "equipment_checked": true
+    },
+    {
+      "id": "E052",
+      "gif": "0594",
+      "equipment_checked": true
+    },
+    {
+      "id": "E053",
+      "gif": "0284",
+      "equipment_checked": true
+    },
+    {
+      "id": "E055",
+      "gif": "0276",
+      "equipment_checked": true
+    },
+    {
+      "id": "E056",
+      "gif": "0175",
+      "equipment_checked": true
+    },
+    {
+      "id": "E057",
+      "gif": "0475",
+      "equipment_checked": true
+    },
+    {
+      "id": "E058",
+      "gif": "0857",
+      "equipment_checked": true
+    },
+    {
+      "id": "E059",
+      "gif": "0687",
+      "equipment_checked": true
+    },
+    {
+      "id": "E060",
+      "gif": "0872",
+      "equipment_checked": true
+    },
+    {
+      "id": "E061",
+      "gif": "0684",
+      "equipment_checked": true
+    },
+    {
+      "id": "E062",
+      "gif": "0798",
+      "equipment_checked": true
+    },
+    {
+      "id": "E063",
+      "gif": "2612",
+      "equipment_checked": true
+    },
+    {
+      "id": "E065",
+      "gif": "1160",
+      "equipment_checked": true
+    },
+    {
+      "id": "E067",
+      "gif": "0630",
+      "equipment_checked": true
+    },
+    {
+      "id": "E068",
+      "gif": "2331",
+      "equipment_checked": true
+    },
+    {
+      "id": "E069",
+      "gif": "1401",
+      "equipment_checked": true
+    },
+    {
+      "id": "E070",
+      "gif": "3296",
+      "equipment_checked": true
+    },
+    {
+      "id": "E071",
+      "gif": "3419",
+      "equipment_checked": true
+    },
+    {
+      "id": "E072",
+      "gif": "3302",
+      "equipment_checked": true
+    },
+    {
+      "id": "E073",
+      "gif": "1759",
+      "equipment_checked": true
+    },
+    {
+      "id": "E076",
+      "gif": "3217",
+      "equipment_checked": true
+    },
+    {
+      "id": "E083",
+      "gif": "1604",
+      "equipment_checked": true
+    },
+    {
+      "id": "E086",
+      "gif": "0648",
+      "equipment_checked": true
+    },
+    {
+      "id": "E087",
+      "gif": "0811",
+      "equipment_checked": true
+    },
+    {
+      "id": "E088",
+      "gif": "0127",
+      "equipment_checked": true
+    },
+    {
+      "id": "E089",
+      "gif": "2133",
+      "equipment_checked": true
+    },
+    {
+      "id": "E091",
+      "gif": "1757",
+      "equipment_checked": true
+    },
+    {
+      "id": "E092",
+      "gif": "0044",
+      "equipment_checked": true
+    },
+    {
+      "id": "E094",
+      "gif": "0315",
+      "equipment_checked": true
+    },
+    {
+      "id": "E096",
+      "gif": "0860",
+      "equipment_checked": true
+    },
+    {
+      "id": "E097",
+      "gif": "1722",
+      "equipment_checked": true
+    },
+    {
+      "id": "E098",
+      "gif": "0383",
+      "equipment_checked": true
+    },
+    {
+      "id": "E099",
+      "gif": "0401",
+      "equipment_checked": true
+    },
+    {
+      "id": "E100",
+      "gif": "0385",
+      "equipment_checked": true
+    },
+    {
+      "id": "E102",
+      "gif": "3785",
+      "equipment_checked": true
+    },
+    {
+      "id": "E103",
+      "gif": "0279",
+      "equipment_checked": true
+    },
+    {
+      "id": "E104",
+      "gif": "2137",
+      "equipment_checked": true
+    },
+    {
+      "id": "E105",
+      "gif": "0437",
+      "equipment_checked": true
+    },
+    {
+      "id": "E106",
+      "gif": "0406",
+      "equipment_checked": true
+    },
+    {
+      "id": "E107",
+      "gif": "0597",
+      "equipment_checked": true
+    },
+    {
+      "id": "E108",
+      "gif": "0598",
+      "equipment_checked": true
+    },
+    {
+      "id": "E113",
+      "gif": "0343",
+      "equipment_checked": true
+    },
+    {
+      "id": "E117",
+      "gif": "1269",
+      "equipment_checked": true
+    },
+    {
+      "id": "E118",
+      "gif": "0596",
+      "equipment_checked": true
+    },
+    {
+      "id": "E123",
+      "gif": "1326",
+      "equipment_checked": true
+    },
+    {
+      "id": "E127",
+      "gif": "1423",
+      "equipment_checked": true
+    },
+    {
+      "id": "E129",
+      "gif": "0074",
+      "equipment_checked": true
+    },
+    {
+      "id": "E131",
+      "gif": "0508",
+      "equipment_checked": true
+    },
+    {
+      "id": "E133",
+      "gif": "0562",
+      "equipment_checked": true
+    },
+    {
+      "id": "E135",
+      "gif": "3360",
+      "equipment_checked": true
+    },
+    {
+      "id": "E140",
+      "gif": "0549",
+      "equipment_checked": true
+    },
+    {
+      "id": "E141",
+      "gif": "0551",
+      "equipment_checked": true
+    },
+    {
+      "id": "E142",
+      "gif": "1354",
+      "equipment_checked": true
+    },
+    {
+      "id": "E151",
+      "gif": "1471",
+      "equipment_checked": true
+    },
+    {
+      "id": "E155",
+      "gif": "1167",
+      "equipment_checked": true
+    },
+    {
+      "id": "E161",
+      "gif": "1377",
+      "equipment_checked": true
+    },
+    {
+      "id": "E171",
+      "gif": "0433",
+      "equipment_checked": true
+    },
+    {
+      "id": "E172",
+      "gif": "0407",
+      "equipment_checked": true
+    },
+    {
+      "id": "E173",
+      "gif": "0282",
+      "equipment_checked": true
+    },
+    {
+      "id": "E174",
+      "gif": "0274",
+      "equipment_checked": true
+    },
+    {
+      "id": "E175",
+      "gif": "0003",
+      "equipment_checked": true
+    },
+    {
+      "id": "E180",
+      "gif": "0476",
+      "equipment_checked": true
+    },
+    {
+      "id": "E185",
+      "gif": "0540",
+      "equipment_checked": true
+    },
+    {
+      "id": "E187",
+      "gif": "0522",
+      "equipment_checked": true
+    },
+    {
+      "id": "E188",
+      "gif": "1004",
+      "equipment_checked": true
+    },
+    {
+      "id": "E193",
+      "gif": "0514",
+      "equipment_checked": true
+    },
+    {
+      "id": "E198",
+      "gif": "1688",
+      "equipment_checked": true
+    },
+    {
+      "id": "E201",
+      "gif": "0685",
+      "equipment_checked": true
+    },
+    {
+      "id": "E203",
+      "gif": "3655",
+      "equipment_checked": true
+    },
+    {
+      "id": "E212",
+      "gif": "0659",
+      "equipment_checked": true
+    },
+    {
+      "id": "E215",
+      "gif": "3212",
+      "equipment_checked": true
+    },
+    {
+      "id": "E217",
+      "gif": "0643",
+      "equipment_checked": true
+    },
+    {
+      "id": "E222",
+      "gif": "0668",
+      "equipment_checked": true
+    },
+    {
+      "id": "E224",
+      "gif": "0196",
+      "equipment_checked": true
+    },
+    {
+      "id": "E229",
+      "gif": "0085",
+      "equipment_checked": true
+    },
+    {
+      "id": "E231",
+      "gif": "0301",
+      "equipment_checked": true
+    },
+    {
+      "id": "E232",
+      "gif": "0319",
+      "equipment_checked": true
+    },
+    {
+      "id": "E235",
+      "gif": "0584",
+      "equipment_checked": true
+    },
+    {
+      "id": "E236",
+      "gif": "0161",
+      "equipment_checked": true
+    },
+    {
+      "id": "E238",
+      "gif": "0812",
+      "equipment_checked": true
+    },
+    {
+      "id": "E239",
+      "gif": "0333",
+      "equipment_checked": true
+    },
+    {
+      "id": "E242",
+      "gif": "0165",
+      "equipment_checked": true
+    },
+    {
+      "id": "E244",
+      "gif": "3017",
+      "equipment_checked": true
+    },
+    {
+      "id": "E245",
+      "gif": "0581",
+      "equipment_checked": true
+    },
+    {
+      "id": "E247",
+      "gif": "0238",
+      "equipment_checked": true
+    },
+    {
+      "id": "E248",
+      "gif": "2963",
+      "equipment_checked": true
+    },
+    {
+      "id": "E250",
+      "gif": "0459",
+      "equipment_checked": true
+    },
+    {
+      "id": "E255",
+      "gif": "3165",
+      "equipment_checked": true
+    },
+    {
+      "id": "E258",
+      "gif": "0417",
+      "equipment_checked": true
+    },
+    {
+      "id": "E259",
+      "gif": "2368",
+      "equipment_checked": true
+    },
+    {
+      "id": "E260",
+      "gif": "0314",
+      "equipment_checked": true
+    },
+    {
+      "id": "E291",
+      "gif": "3645",
+      "equipment_checked": true
+    }
+  ],
+  "held": [
+    {
+      "id": "E027",
+      "gif": "0606"
+    },
+    {
+      "id": "E051",
+      "gif": "0605"
+    },
+    {
+      "id": "E095",
+      "gif": "0592"
+    },
+    {
+      "id": "E120",
+      "gif": "0856"
+    },
+    {
+      "id": "E121",
+      "gif": "0521"
+    },
+    {
+      "id": "E124",
+      "gif": "0499"
+    },
+    {
+      "id": "E132",
+      "gif": "0979"
+    },
+    {
+      "id": "E152",
+      "gif": "0514"
+    },
+    {
+      "id": "E166",
+      "gif": "1511"
+    },
+    {
+      "id": "E214",
+      "gif": "3666"
+    }
+  ],
+  "removal_slated": [],
+  "left_out": [
+    {
+      "id": "E264",
+      "gif": "N001"
+    }
+  ],
+  "retag_waits": [
+    {
+      "id": "E230",
+      "gif": "0795"
+    }
+  ]
+}

@@ -1,0 +1,38 @@
+# Closure ledger - train-header-b2 (docs/plans/2026-11-02-train-header-week-mode.md).
+# Rows carry the SHA of the landing commit, written by the stamp commit that follows it (a commit cannot name its own SHA).
+batch: train-header-b2
+plan_review_record: docs/plan-reviews/train-header-b2.md
+diagnose_docs: []
+total_findings: 6
+closed_count: 6
+
+findings:
+  - id: THB-HERO-LABEL
+    title: "The hero label word came from the PHASE number (Relaxed / Focused / Capacity / Peak) and said nothing about the week"
+    terminal_state: closed_in_commit
+    commit: 7e476bc8
+    verification: "one resolver WorkoutScheduleReadService.weekModeForRow + pure weekModeLabel; both Train WorkoutDayData constructors and Home's today card call it; test/contracts/train_hero_week_mode_behavioral_test.dart (26 tests incl. both Train seams and presence pins)."
+  - id: THB-STRIP-REMOVED
+    title: "The 'THIS PHASE' strip with its kill switches disable_phase_arc and disable_deload_reason_line"
+    terminal_state: closed_in_commit
+    commit: 7e476bc8
+    verification: "PhaseArcStrip, phaseArcProvider, PhaseArcData, both flags, both dev-panel toggles deleted; source pins in train_hero_week_mode_behavioral_test.dart; registry concept renamed week_character_display."
+  - id: THB-REASON-CHAIN
+    title: "The deload 'why' stamp deload_reason_phase_<P> would have had no reader once the strip went"
+    terminal_state: closed_in_commit
+    commit: 7e476bc8
+    verification: "evaluator stamp, deload_reason.dart, currentDeloadReason, validatedDeloadReason deleted; deload_eval_behavioral_test.dart now pins that neither a LIFT nor a KEEP writes the key and the week_character decision is unchanged."
+  - id: THB-PLAN-HEADER-BAR
+    title: "The 0 / 6 progress bar in the Train plan header"
+    terminal_state: closed_in_commit
+    commit: 7e476bc8
+    verification: "row removed whole; a hold week keeps its own sessions text; test/train/header_layout_test.dart and the presence pin in train_hero_week_mode_behavioral_test.dart."
+  - id: THB-WORKING-WORD
+    title: "A lifted deload week is labelled 'Working', which is not one of the founder's four words"
+    terminal_state: closed_in_commit
+    commit: 2505d52d17b51824d563a703c633ab96bb0e7648
+    verification: "Founder call 2026-11-03: a lifted deload shows 'Baseline'. weekModeLabel maps the stored token 'working' to 'Baseline' (the token is unchanged); test/contracts/train_hero_week_mode_behavioral_test.dart pins the mapper, the padded token, the stamped row and the stamp-less lifted blob week; plan docs/plans/2026-11-03-working-label-baseline.md."
+  - id: THB-DEVICE-CHECK
+    title: "Founder device check of the Train header and Home card"
+    terminal_state: blocked_on_user
+    reason: "Needs the new build: hero label per week on Train and Home, no strip, no bar, hold-week sessions text, a template day with no stamp."

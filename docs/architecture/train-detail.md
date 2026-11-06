@@ -1,0 +1,200 @@
+# Train - moved-out detail
+
+On-demand detail for `lib/features/train/CLAUDE.md`. Everything here was moved VERBATIM out of the nested file (per-concept narratives, incident histories, `Corrected <date>` notes, long worked examples) to keep the auto-loaded file lean. The nested file keeps the current contract for each concept and points here. Read this for provenance, the full reader list of a drift class, or the history behind a rule.
+
+## SoT row: hive_field_name_exlog (full)
+
+_Moved verbatim from `lib/features/train/CLAUDE.md` (original lines 63-63, context-lean batch 2026-09-29)._
+
+| Concept | Writer | Reader |
+|---|---|---|
+
+| `hive_field_name_exlog` | **TWO writers, DIFFERENT field subsets — this asymmetry is the recurring bug source (d4e7c2).** `WorkoutWriteService.logExercise`: `exercise_name`, `set_number`, `reps_completed`, `weight_kg`, `volume_kg`, `is_pr`, `logging_type`, `workout_log_id`, `sets[]`, `distance_km`, optional `exercise_id` (W3.3 Batch 11-A — the library id, forward-only + STICKY; Hive-LOCAL, NEVER the cloud onConflict key) — and **no top-level `duration_seconds`** (that field is on the `wlog_*` row). The **restore** writer (`sync/sync_workout.dart:733-767`) instead emits `set_number` + **top-level `duration_seconds`** (`:766`), never `sets_completed`, and writes `sets[]` ONLY when the `workout_log_sets` join is non-empty (`:777`). | ⚠ **Never hand-roll the aggregate read — delegate to `WorkoutReadService.aggregateSetCount` / `aggregateDurationSeconds` / `hasAggregateSetCount`.** **SEVEN** readers each rolled their own and every one was wrong for cloud-restored rows: the receipt rendered 0 duration; the edit sheet rendered a blank sets box and then wiped the real total on save; `week_selector` dropped the duration from the line entirely; `exercise_preview_sheet` used a per-set MAX for a value its own comment calls "cumulative"; `expanded_exercises` did the same for the cardio total; `workout_repository.getExercisePRHistory` reported 0 sets for every restored row — which feeds the **AI coach** (`ai_snapshot_builder`, `pattern_detector`), so a restored user's coach reasoned over zeroed set history; and `train_provider.dart:1556` (the workout-finish PR banner) divided by a first-non-null of the two count keys, collapsing to 0 on the APK Test #12.1 shape and silently suppressing a genuine PR. (The count went 2 → 5 → 6 → 7 across three rounds — this sentence said SIX until the seventh was found by the B-pass *after* it was written, and corrected 2026-08-02. Treat seven as a FLOOR and grep before trusting it.) Diagnose `d4e7c2`, behavioral `test/contracts/exlog_aggregate_read_behavioral_test.dart`, gated by `test/contracts/no_top_level_duration_seconds_reads_test.dart` (which now scans `lib/core/services/` too, so the read can't just move one directory over). Pick by SEMANTIC: "best single set" → `bestPerSetDuration`; "total" → `aggregateDurationSeconds`. `EditLogExerciseRow.fromLog` still accepts dual per-set names (canonical `sets[]` OR legacy `sets_detail`; per-set `duration_sec` OR `duration_seconds`) for restore back-compat. `ProgressionResolver` reads `exercise_id` for id-keyed history (`exercise_id_history` SoT). |
+
+## SoT row: exercise_coaching_content (full)
+
+_Moved verbatim from `lib/features/train/CLAUDE.md` (original lines 64-64, context-lean batch 2026-09-29)._
+
+| Concept | Writer | Reader |
+|---|---|---|
+
+| `exercise_coaching_content` (W3.6) | **Read-only display** — the seeded library (`exerciseBox`) carries `coaching_cues`/`common_mistakes` (arrays, one cue per item since library v12, 285/285), `breathing_cue` (string, 285/285), `warmup_protocol` (string, 172/285 non-empty). `ExerciseRepository.getByExactName(name)` fetches the full row by EXACT name (NOT `search`, which is substring — "Push Up"→"Pike Push Up"), falling back to `name_aliases` only when no row carries the name (a retired duplicate's old name, Batch A). | `CoachingContentPanel` (`active_workout/coaching_content_panel.dart`, a `part of screen.dart`) — collapsible/collapsed-by-default "FORM & CUES" panel in the expanded exercise card, built only on a row WITHOUT an animation (M2b Part B, D4: a row with one shows the same four sections in the logging viewer). Since Part B the parsing is ONE function, `exerciseCuesOf` (`shared/widgets/exercise_plate/exercise_cues.dart`), shared by the panel, the plate sheet and the viewer: it splits each cue on `;` (the panel used not to), never splits `common_mistakes`, `breathing_cue` or `warmup_protocol` (37 and 3 rows contain a `;`), suppresses a bare-number `breathing_cue`, drops blank strings (null-or-empty-STRING for `warmup_protocol`) and casts arrays via `toString()` (never `as List<String>` — red-screens). Resolved in `initState`/`didUpdateWidget` (the card rebuilds ~1×/sec from the workout timer — never in `build()`). Null map (swap/custom) → renders nothing. FREE. |
+
+## SoT row: hold_display_read_path (full)
+
+_Moved verbatim from `lib/features/train/CLAUDE.md` (original lines 65-65, context-lean batch 2026-09-29)._
+
+| Concept | Writer | Reader |
+|---|---|---|
+
+| `hold_display_read_path` (Slices 2-6) | **Display half of the free-tier hold mechanic** (writer: `holdWeek()` stamps `is_hold` + `hold_ordinal`). `WorkoutScheduleReadService.holdWeeks()` / `holdOrdinalForDate()` / `holdWeekSessionProgress()` + the pure `isDeloadHold(n) = n % 4 == 0` (the writer NEVER persists that boolean — it only picks a source week, so display recomputes it). Additive: `getCurrentWeekNumber` / `getProgramWeek` / `currentPhaseCompletionRate` stay clamped and untouched. | `holdStatusProvider` (`train_provider.dart`) is the **single branch point** — returns `HoldStatusData.empty` whenever `enable_hold_weeks` is OFF, so no hold surface reads the flag or Hive directly. Consumers: `hold_chip_group.dart` (H-n chips + ✓ + dashed upcoming-deload preview + read-only week sheet), `plan_header.dart` (HOLDING · Hn pill, SESSIONS tally, drops the WK-n-OF-m it can't truthfully fill), `hero_cards.dart` (**date-sourced** today card), `hold_roadmap_strip.dart`, `plan_expired_card.dart`. ⚠ **Hold chips must NEVER drive `selectedWeekProvider`** — hold rows are stamped `week = 4 + ordinal` but `CurrentPlanData.weeks` stops at the phase's 4, so `getWeek(5)` is empty and selecting it renders "Week 5 hasn't started yet" over a week the user is training. Behavioral: `hold_display_read_path_test.dart`. |
+
+## SoT row: hold_week_identity (full)
+
+_Moved verbatim from `lib/features/train/CLAUDE.md` (original lines 66-66, context-lean batch 2026-09-29)._
+
+| Concept | Writer | Reader |
+|---|---|---|
+
+| `hold_week_identity` (FOB-1, OI-60) | **What week is it** — the one answer every surface printing a week counter must ask for. `getCurrentWeekNumber()` clamps to `[1,4]` and a hold starts at `plan_start+28`, so it returns **4 for every hold at every ordinal, forever**; six surfaces printed that while the Train tab said `HOLDING · Hn`. `WorkoutScheduleReadService.weekIdentity()` returns `WeekIdentity` = `weekInPhase` **XOR** `holdOrdinal` — no projected number, so `4 + ordinal` (which demotes a phase-2 holder from program week 8 to 5, `c9f4a2`) cannot be reintroduced through it. `activeHoldWeeks()` / `activeHoldOrdinalFor()` are the **ONE** read-side `enable_hold_weeks` gate; `holdStatusProvider` delegates to them rather than keeping a second copy. | `weekIdentityProvider` (`train_provider.dart`) for widgets, `weekIdentity()` directly for non-provider callers. All five labels render through the pure formatters in `lib/core/utils/hold_week_labels.dart` — **inline the ternary again and it becomes untestable**: a B-pass inverted one and all 16 tests passed, because a source grep cannot see a logic inversion. ⚠ A consumer must **`ref.watch`** the provider, never call the singleton from a `build()` — `userStatsProvider` did, had no edge to the hold write, and would have kept Profile stale while Home updated. ⚠ Do NOT branch inputs where the clamped 4 is HONEST (the journey `/4` bar, the roadmap percentage). Behavioral: `hold_week_identity_behavioral_test.dart` + `hold_week_labels_test.dart`. |
+
+## SoT row: readiness_checkin (full)
+
+_Moved verbatim from `lib/features/train/CLAUDE.md` (original lines 67-67, context-lean batch 2026-09-29)._
+
+| Concept | Writer | Reader |
+|---|---|---|
+
+| `readiness_checkin` (⑥ W2.3) | **LIVE since 2026-09-01** (OI-53 flag 1; kill-switch `disable_readiness`). The pre-workout 3x3 check-in, now **2 taps when sleep is known**: `readiness_sheet.dart` resolves today's measured sleep via `HealthReadService.sleepHoursForDate` and maps it with `sleepAxisFromHours` (>6.5h→0, 4.5-6.5→1, <4.5→2 — BOTH boundaries in the middle band). `resolveSleepAxis(null)` is the STATE decision: null → State B, ask for sleep with a TAPPABLE nudge that calls `HealthSyncService.requestSleepPermission()`. ⚠ That nudge must call `syncSleepOnly()`, **never `syncToHive()`** — the latter falls through to the steps/weight permission request and shows a STEPS+WEIGHT dialog to a user who tapped about sleep (B-pass `9e4c5681` F1). | `train_provider.startWorkout` applies the level: RED drops ONE isolation set (`_applyReadinessSetDrop`) and cuts compound PREFILL load (`_readinessLoadFactor`, red −10% / yellow −7%) via `effectiveLoadFactor` — ⚠ that helper is SHARED with ⑦b, never delete it wholesale. Accumulated `readiness_*` rows feed `deload_evaluator` (also LIVE) and, when their own flags flip, `plateau_scan` / `volume_titration`. Reports renders the trend FREE for all. Behavioral: `readiness_checkin_behavioral_test.dart`, `readiness_sleep_axis_test.dart`, `readiness_sheet_states_test.dart`. |
+
+## SoT row: week_character_display (was phase_arc_display)
+
+_The "THIS PHASE" strip, `phaseArcProvider` and both kill switches were removed 2026-11-02 (train-header-b2); the concept lives on as `week_character_display` (see `lib/features/train/CLAUDE.md`). The original full row is in git history before that date._
+
+## SoT row: session_detraining_cut (full)
+
+_Moved verbatim from `lib/features/train/CLAUDE.md` (original lines 69-69, context-lean batch 2026-09-29)._
+
+| Concept | Writer | Reader |
+|---|---|---|
+
+| `session_detraining_cut` (⑦b) | **Session-only. LIVE since 2026-09-16** (OI-53 batch 2; kill-switch `disable_session_detraining_cut`). `ActiveWorkoutNotifier.startWorkout` (`train_provider.dart:907`) sets `ActiveWorkoutData.sessionDetrainingFactor = detrainingFactorForGap(getDaysSinceLastWorkout())`, **threaded through `copyWith`** (round-2 F1 — else the 1×/sec elapsed-timer `copyWith(elapsedSeconds:)` reverts it to 1.0 within a frame). Band table shared with ⑦a via `lib/core/utils/detraining.dart` (one copy). | `exercise_card._initControllers` scales ONLY the last-logged-weight prefill (`:81-86`) — never the ⑦a-decayed prescribed `exercise.weight` (disjoint, no double-count); `_OverloadIndicator` + the "TRY:" hint both compare vs the cut target `last×effectiveLoadFactor(ex)` — ⑥ 6-B threads the min of the ⑦b gap-cut ∧ the ⑥ readiness deload (⑥ 6 B-pass P2-1), so a readiness-only deload also reads → not red↓ and suppresses "TRY:" ("LAST:" kept); `screen.dart` shows a non-shaming resume banner when `factor < 1.0`. Behavioral: `session_detraining_cut_test.dart`. |
+
+## SoT row: duration_controller_seeding_leak (full)
+
+_Moved verbatim from `lib/features/train/CLAUDE.md` (original lines 70-70, context-lean batch 2026-09-29)._
+
+| Concept | Writer | Reader |
+|---|---|---|
+
+| `duration_controller_seeding_leak` (bug e8f95e, 2026-09-28) | `exercise_card.dart` `_initControllers` — `_durationControllers` seeding. Third confirmed instance of the "reps renders as seconds" recurring class (after 9b1e7a swap-logging-type, a4c7d1 swap-sets-format) — this one requires NO swap at all: `_durationControllers` was copy-paste seeded with `repsValue`, and `_captureSetValues` parses it unconditionally into `SetInputValues.durationSeconds` regardless of the exercise's `loggingType`. A phantom non-zero duration then reaches `workout_write_service.dart`'s `_resolveLoggingType` data-shape fallback for any CUSTOM (non-library) exercise and mis-resolves it to `'timed'`. | `train_provider.dart` `completeWorkout` (builds `ExerciseSet` from the leaked value — a pre-existing `[durationCtl-leak]` debug diagnostic here, added in the APK Test #12.5 batch, was placed specifically to find this path) → `workout_write_service.dart` `logExercise`'s aggregate fields (`reps_completed`/`weight_kg`/`volume_kg`, also fixed in this batch to read from POST-normalization `cleanedSets` rather than PRE-normalization `mergedSets`, so the top-level fields can never disagree with `sets[]` regardless of the resolved type). See `docs/diagnoses/2026-09-28-duration-controller-seeding-leak-e8f95e.md`. |
+
+## SoT row: active_workout_resume_guard (full)
+
+_Moved verbatim from `lib/features/train/CLAUDE.md` (original lines 71-71, context-lean batch 2026-09-29)._
+
+| Concept | Writer | Reader |
+|---|---|---|
+
+| `active_workout_resume_guard` (Obs 5 follow-up, diagnose `e8f4a1`) | **Session-only — no Hive/cloud writer.** `ActiveWorkoutData.hasInProgressSession` (`train_provider.dart:1242`) is a pure derived getter (`workoutDay != null && !isComplete && !isSaved`) gating the ONE writer every START button shares: `ActiveWorkoutNotifier.startWorkout` (`:1320`, unconditional full reset). `beginWorkoutWithReadiness` (`readiness_sheet.dart:41`) checks it first and, if true, awaits `showResumeOrDiscardGuard` — RESUME (default, incl. barrier-dismiss) leaves the live session untouched; DISCARD & START FRESH falls through to `startWorkout()` AND fire-and-forgets `ActiveWorkoutPersistence.clearState()` (A7 parity with `_showCancelDialog`/`_showFinishDialog` in `finish_dialog.dart`). | `hero_cards.dart:92`, `planned_expansion.dart:9` (both flip their WardButton label to `RESUME WORKOUT`) and `today_workout_card.dart`'s `_HeroCta` via `home_screen.dart:899` (flips to `RESUME`) — all three `ref.watch` the flag so the warning shows before the tap, not just after. Fixes the actual data-loss mechanism `6c2f91`'s impact_analysis identified but didn't fix: ejection by any means → silent re-tap-START overwrite. Behavioral: `active_workout_resume_guard_behavioral_test.dart`. |
+
+## SoT row: day_swap_engine (full)
+
+_Moved verbatim from `lib/features/train/CLAUDE.md` (original lines 72-72, context-lean batch 2026-09-29)._
+
+| Concept | Writer | Reader |
+|---|---|---|
+
+| `day_swap_engine` (day-swapper + sync-load batch) | **`SwapService.swapDays` (`lib/core/services/swap_service.dart`) is the ONE entry point** for Train drag, the Train ⇅ picker (`DaySwapRowTrailing`), Home long-press and the coach `swapWorkoutDays` tool — every check (locks, allowance, rest-run warning) re-runs at CONFIRM time inside `WorkoutWriteService.swapScheduledDays`'s two-date write lock (itself inside `SwapService`'s per-IST-week lock, so two swaps of one week serialize), against rows re-read at that moment, not against whatever the picker screen showed when it opened. A swap is counted (`DaySwapAllowance.recordSwap`) only after the write succeeds. Kill switch `disable_day_swap_train_ui` hides the drag affordance and the ⇅ trailing icon for NEW swaps on Train (`daySwapTrainUiEnabled()`, `day_swap_row_trailing.dart`) — it does NOT touch the Home picker (still works with the switch on) and it never hides the `⇄ MOVED` tag of a swap already made (`DaySwapRules.isMoved` excludes completed rows unconditionally, so DONE always wins over MOVED regardless of the switch). SoT rows: `day_swap_engine`, `day_swap_allowance`, `schedule_arrangement_stamp` (all three documented in `lib/core/services/CLAUDE.md`). | `day_swap_provider.dart` (`daySwapWeekProvider`, `daySwapAllowanceProvider`), `week_rows.dart` via `DaySwapRowTrailing`, `SwapPickerSheet` / `SwapConfirmSheet`. |
+
+## Pitfall: Phase 2-12 invisible to free users (full)
+
+_Moved verbatim from `lib/features/train/CLAUDE.md` (original lines 80-80, context-lean batch 2026-09-29)._
+
+| Pitfall | How to avoid | Source |
+|---|---|---|
+
+| Phase 2-12 invisible to free users | Train screen previously capped the week selector at 4 weeks — free users couldn't see what they were paying for. APK Test #2 / Q7 extends the selector to 12 weeks (3 phases) with PHASE I / II (PRO) / III (PRO) headers + lock glyph on weeks 5–12 for free users. Tap any locked week → `/train/preview?phase=II&week=5&day=1` renders a real workout via `previewPlanProvider` (calls `PlanGenerator.instance.generateV4()` with the user's actual profile — goal/equipment/days/experience). State-aware banner: "Complete Phase I to unlock Phase II — your AI coach generates the next 4 weeks the moment you finish." Free users see UPGRADE TO PRO bottom CTA + cross-link to `/train/roadmap`. | (relocated 2026-05-18 — see docs/diagnoses/INDEX.md, a local build: CLAUDE.md §4.1.5) |
+
+## Pitfall: Phase Unlock card timing (full)
+
+_Moved verbatim from `lib/features/train/CLAUDE.md` (original lines 84-84, context-lean batch 2026-09-29)._
+
+| Pitfall | How to avoid | Source |
+|---|---|---|
+
+| Phase Unlock card surfaces from Monday of Week 4 | Theme E (APK Test #16.2 / 0e7714) — gate is `plan.currentWeek != 4 \|\| DateTime.now().weekday < DateTime.thursday`. Surfaces from Thursday of Phase Week 4 (LOCAL weekday, not IST — UI presence is perceptual, not calendar). Founder expectation 2026-05-21: "should open up on thursday of the last week". 4-day runway (Thu-Sun) for completing + tapping unlock. The COPY gate (locked "PHASE 2 AVAILABLE" vs unlocked "PHASE 1 COMPLETE!") stays driven by `completionRate >= AppConstants.phaseUnlockCompletionRate`. | `test/contracts/phase_unlock_card_thursday_gate_test.dart` |
+
+## Pitfall: Past completed phases invisible (full)
+
+_Moved verbatim from `lib/features/train/CLAUDE.md` (original lines 85-85, context-lean batch 2026-09-29)._
+
+| Pitfall | How to avoid | Source |
+|---|---|---|
+
+| Past completed phases invisible after unlock | Theme K (APK Test #16.2 / b9d2a8) — `week_selector.dart` renders one `_PastPhaseGroup` per past phase LEFT of the current phase. ⚠ **Corrected 2026-08-09 (c9e4b7):** this row used to say the widget "walks `workoutBox` for `schedule_*` keys with `date < planStart`, buckets by 28-day phases" — it has not since the 2026-06-02 refactor moved that into `WorkoutScheduleReadService`, and as of c9e4b7 the widget calls `pastPhaseBlocksForDisplay(currentPhase)`, NOT the strict `pastPhaseBlocks()`. **The two are not interchangeable:** the display wrapper recovers blocks the strict plan_start cutoff misses (right for rendering), while `PhaseProgressReconciler` must keep reading the STRICT set — it advances `current_phase` monotonically and an over-advance is unrecoverable. Both share `_scheduleRowsBefore(cutoff)` so a row parses identically either way; they differ ONLY in the cutoff. Pinned by an `isFalse` assertion that the reconciler never names the wrapper. Past chips use textDim border + `✓` check_circle glyph when ≥1 day in that week has `status=='completed'`. Tap → modal `_PastWeekSheet` showing the 7-day breakdown (read-only). Depends on Theme H (`b0baa5`) which protects past `schedule_*` entries from planGenerator overwrite — without that fix this scroll-back would show clobbered data. | `test/contracts/week_selector_past_phases_test.dart` |
+
+## Pitfall: Graduation Phase 2 preview hardcoded (full)
+
+_Moved verbatim from `lib/features/train/CLAUDE.md` (original lines 86-86, context-lean batch 2026-09-29)._
+
+| Pitfall | How to avoid | Source |
+|---|---|---|
+
+| Graduation Phase 2 preview hardcoded `5 DAYS/WEEK` + static day labels | Theme J (APK Test #16.2 / ea1059) — `Phase2PreviewCard` in `lib/features/train/widgets/phase2_preview_card.dart` dry-runs `PlanGenerator.instance.generateV4` with the user's actual `profile['days_per_week']` + `nextPhase` derived from progress. Renders `phase.weekPlans[0].workoutDays` for the day strip. Pure call — no Hive writes, no telemetry. Failure path emits `graduation_phase2_preview_failed` + falls back to a single descriptive line. ⚠ **Moved out of `graduation_screen.dart` by Unit B / `b4e9c7` (2026-08-03, closes OI-84)** — it was ~250 lines of a 909-line file held under Gate 43's ceiling only by an allow-list entry. The test was re-pointed at the new file AND gained an assertion that the screen still renders the card, because every other assertion in it would pass against a perfect-but-orphaned widget. | `test/contracts/graduation_phase2_preview_dynamic_test.dart` |
+
+## Pitfall: Graduation unlock logic in the screen (full)
+
+_Moved verbatim from `lib/features/train/CLAUDE.md` (original lines 87-87, context-lean batch 2026-09-29)._
+
+| Pitfall | How to avoid | Source |
+|---|---|---|
+
+| Graduation unlock logic living in the screen | The locked generate + `commitPhaseAdvance` + repeat-nudge block is **`runGraduationPhaseAdvance` in `lib/shared/services/pro_phase_advance.dart`**, not `graduation_screen._onPro` (Unit B / `b4e9c7`). The screen is UI only: choice sheet, pre-lock live-phase abort, `setState`, snackbars, navigation, provider invalidation. Two things deliberately did NOT move — the pre-lock abort check (moving it would flash the generating spinner on a path that only navigates) and `ref.invalidate(phaseRepeatNudgeProvider)` (that provider is in `lib/features/home/`; `GraduationAdvanceResult.repeatNudgeFlagged` is the seam, and the Hive write stays in the shared writer that owns the cross-account belt). ⚠ `lib/shared → lib/features` is a **convention, not a gated rule** — FOUR imports already breach it (`hive_tab_scaffold.dart:75`, `user_repository.dart:10`, `video_share_button.dart:5`, `wardroom/ward_status_strip.dart:3` — the last via a RELATIVE `../../../features/` import, which a `package:`-only grep misses) and no `check_*.dart` enforces it; the split here is justified by which layer owns the work, not by an invariant. Returns a 4-case outcome enum, not `bool?`: the old `false` covered two outcomes that already emitted different telemetry. ⚠ The preview extraction DID change one thing — `generateV4` went from eager-on-every-parent-build to lazy-on-mount (`const` widget in a lazily-materialized `ListView`), so `graduation_phase2_preview_failed` now fires ~once per mount (~per screen-open) instead of on every parent rebuild. | `test/contracts/pro_phase_advance_behavioral_test.dart` (group D2: one test per outcome arm + the repeat-nudge seam) |
+
+## Pitfall: PRO paging into a future PHASE (full)
+
+_Moved verbatim from `lib/features/train/CLAUDE.md` (original lines 88-88, context-lean batch 2026-09-29)._
+
+| Pitfall | How to avoid | Source |
+|---|---|---|
+
+| A PRO user paging ahead into a not-yet-generated future PHASE sees the generic "No workouts scheduled" empty state, which reads like a bug | `screen.dart`'s week-tap handler only special-cases the FREE-tier subscription gate (`!isProUser && week >= 5` → routes to `/train/preview`'s dry-run lock banner). A PRO user tapping any future week falls through to `selectedWeekProvider.select(week)` unconditionally, regardless of whether that PHASE has actually been reached — that's a separate, unhandled gate. Fixed via `isFutureUngeneratedPhase(selectedWeek)` + `futurePhaseUnlockCopy(currentPhase)` (`lib/core/utils/hold_week_labels.dart`), wired into `empty_states.dart`'s `_buildEmptyWeek` — NOT by reusing the `/train/preview` mechanism itself, which is a bigger change scoped to the subscription gate specifically. Diagnose `c4f9a1`. | `test/contracts/hold_week_labels_test.dart`, `test/contracts/train_phase_lock_empty_state_test.dart` |
+
+## Pitfall: Deployment eyebrow hardcoded (full)
+
+_Moved verbatim from `lib/features/train/CLAUDE.md` (original lines 89-89, context-lean batch 2026-09-29)._
+
+| Pitfall | How to avoid | Source |
+|---|---|---|
+
+
+## Pitfall: controller seeded from an unrelated field (full)
+
+_Moved verbatim from `lib/features/train/CLAUDE.md` (original lines 91-91, context-lean batch 2026-09-29)._
+
+| Pitfall | How to avoid | Source |
+|---|---|---|
+
+| An input controller seeded with a copy-pasted value from an unrelated field, when that field has no legitimate prefill source | If a `TextEditingController` has no data to prefill from (check `LastPerformanceData`/the equivalent model), leave it EMPTY — never seed it with a sibling controller's value "just in case", even one that reads similarly (e.g. a numeric string). `_captureSetValues`-style code that parses every controller unconditionally, regardless of which one the UI actually renders for the current mode, makes a phantom non-empty value silently reach downstream type-resolution logic that has no way to know the value was never user-visible. | `docs/diagnoses/2026-09-28-duration-controller-seeding-leak-e8f95e.md` |
+
+## Tests pinning the rules here: one-per-line inventory (full)
+
+_Moved verbatim from `lib/features/train/CLAUDE.md` (original lines 95-109, context-lean batch 2026-09-29)._
+
+- `test/contracts/exercise_logs_read_path_writer_to_reader_test.dart`
+- `test/contracts/exlog_key_canonical_test.dart`
+- `test/contracts/exlog_migrator_handles_rogue_shapes_test.dart`
+- `test/contracts/edit_log_field_normalization_test.dart`
+- `test/contracts/edit_log_id_injection_test.dart`
+- `test/contracts/edit_workout_log_sets_field_contract_test.dart`
+- `test/contracts/exercise_personal_records_writer_to_reader_test.dart`
+- `test/contracts/custom_exercise_writer_to_reader_test.dart`
+- `test/contracts/workout_completion_status_writer_to_reader_test.dart`
+- `test/contracts/workout_templates_writer_to_reader_test.dart`
+- `test/contracts/duration_seconds_aggregate_populated_test.dart`
+- `test/contracts/coaching_content_test.dart` (W3.6 — `getByExactName` exact-not-substring + library coaching-field population).
+- `test/contracts/hold_week_labels_test.dart` — also covers `phaseRoman`/`isFutureUngeneratedPhase`/`futurePhaseUnlockCopy` (the phase-lock empty-state fix, diagnose `c4f9a1`).
+- `test/contracts/train_phase_lock_empty_state_test.dart` — structural wiring for the phase-lock empty state (`screen.dart` → `empty_states.dart`).
+- `test/train/duration_controller_seeding_writer_to_reader_test.dart` (source-grep, presence only) + `test/workout_write_service/aggregate_reflects_cleaned_sets_test.dart` (BEHAVIORAL — canonical `behavioral_test_path` for `duration_controller_seeding_leak`).
+
+## Active-workout set rows and header tile (M2b Part A, 2026-11-03)
+
+Plan `docs/plans/2026-11-02-library-batch-m2b-tile-and-rows.md`, record `docs/plan-reviews/library-batch-m2b.md`. Part B (the logging viewer, OI-354) follows below.
+
+- **Rows to the edge (D3).** In LOG mode (`SetInputRow.interactiveCheck == false`) the row has no 6 dp spacer, no 28 dp check slot and the card no 18 dp placeholder column; `_tableHeaderLabels(logMode:)` drops the trailing gap and check cell of EVERY logging type. A logged set shows a tick in its 28 dp number tile (accent for a working set, warn for a warm-up, label `Set n, logged` / `Warm-up set n, logged`). The up / same / down arrow is `SetInputRow.weightSuffix`: a `Positioned(top: 0, bottom: 0, right: 9)` overlay in a `Stack` built for EVERY LOG-mode weight box (only the overlay child comes and goes, so logging or re-opening never remounts the TextField and drops focus). The per-set path keeps its check column byte for byte.
+- **Header tile (D1, D2, D5, D7).** `_ExerciseCard.isFocused` is true only for `_effectiveFocusedIndex` (a superset partner is expanded but not focused). `_showHeaderTile` = expanded, focused, not in move mode, and the row has media (`resolveMedia` once in `initState` and on a name change, BEFORE the early return of `didUpdateWidget`; the kill switch is read at the sink). The header is `IntrinsicHeight(Row(stretch, [Align(topLeft, ExerciseHeaderTile), column]))`: `Align` is what keeps the 124 dp tile from stretching to the column's height. LAST / TRY are `ExerciseLastTryLines` (the "never shame" TRY gate is the card's `showTry`). The tile loops (`kHeaderTileAutoplay`) except when `ModalRoute.isCurrentOf(context) == false` (any route on the Train branch navigator: the logging viewer, the plate sheet, the swap and picker sheets) or every exercise is done. A `showDialog` goes to the ROOT navigator and does not freeze it. Focusing a card fetches its file whether or not it autoplays.
+- **Tests.** `test/features/train/log_exercise/log_exercise_rows_edge_test.dart`, `exercise_header_tile_test.dart` (the harness's `pumpCard(nestedNavigator: true)` exists because the plain `MaterialApp(home:)` has one Navigator, where a dialog covers the route).
+
+## The logging viewer (M2b Part B, 2026-11-03)
+
+Plan `docs/plans/2026-11-03-library-batch-m2b-viewer.md` (r4), record `docs/plan-reviews/library-batch-m2b-viewer.md` (3 rounds), closes OI-354. Founder decisions: D4 (the FORM & CUES panel moves into the viewer on a row with an animation), D6 (the viewer is a LOGGING screen), D9 (the 44 px still of ANY card opens its viewer, with logging).
+
+- **Doors.** `_ExerciseCard._openPicture` reads the animation through the kill-switch sink (`_mediaNow`): a row WITH one opens the viewer, a row without one opens today's plate sheet. The tile, the ENLARGE chip and the 44 px thumb of a collapsed card or a superset partner all go through it. Opening from a card that is not focused calls `widget.onFocus()` first (call C-c), so back leaves THAT exercise open. Re-entry is blocked by `_viewerOpen`, which also feeds `AutomaticKeepAliveClientMixin` (`wantKeepAlive`): the covered `ListView(children: [...])` would drop a card outside viewport + cache extent, and the viewer's fields write into that card's controllers.
+- **Hosting (call C-a).** `PageRouteBuilder(opaque: false, maintainState: true, 150 ms fade)` pushed on `Navigator.of(context)`, the BRANCH navigator of `StatefulShellRoute.indexedStack`, never the root one. Not opaque because an opaque route makes the overlay build the covered entries with `TickerMode` off and flutter_riverpod pauses every `ref.watch` under them (`consumer.dart:390-413`): a `+` in the viewer would change the provider and no controller would be appended (bug class "an opaque pushed route pauses the covered screen's watches"). Not the root navigator because that covers the shell bar and orphans the viewer on a re-route or branch switch; on the branch navigator a re-route inside the branch removes the pageless route with its page, a branch switch hides it with its branch, Android back pops it first and the shell bar stays tappable. `router test`: `exercise_media_viewer_router_test.dart` (a real `StatefulShellRoute`; `pumpScreen`'s single Navigator cannot show any of this).
+- **One input surface, two hosts.** `ExerciseEntryHandle{buildRows, buildLogRow}` (`exercise_entry_handle.dart`) is what the card lends: `_entryRows` and `_buildLogRow`, extracted from `build()`, over the card's OWN controllers. The viewer brings its own `FocusNode`s (one node cannot sit under two fields) and edits the same text, so `_onFieldChanged`, `_mirrorFrom` and `_onLogPressed` (the one LOG path) run unchanged. `_makeEntryHandle()` is a METHOD (the CQRS naming gate follows a getter's closures into the mutating callbacks). `_setCountFor(data) = min(data count, controller count)`: the viewer watches the provider itself and is built BEFORE the card in the frame after a `+` or `-`, so it must not draw a row whose controller does not exist yet. The closures build nothing once the card left the tree (`_inTree`, false from `deactivate` to `activate`): `State.mounted` stays true while an element is only deactivated, and the viewer's last rebuild in a re-route frame reached `ref.read` on a deactivated element. `afterLogged` (the viewer's pop) runs only for `LogOutcomeKind.logged`.
+- **Closing.** Every way out is `_close()`: `route.isCurrent` pops, else `route.isActive` removes the route from underneath a sheet, else nothing (a bare `pop()` would take the screen's page). It holds no flag. The viewer closes itself, once, after the frame in which `_gone(data)` holds: the exercise at its index changed (swap or remove) or the workout is complete; that frame renders no rows. Route and navigator are cached in `didChangeDependencies` because both lookups throw once the State is unmounted. A post-frame pop starts its reverse animation on the NEXT frame: tests pump one frame more than the 150 ms.
+- **Layout.** The animation is a square of `clamp(c.maxHeight - 210, 0, min(c.maxWidth, 480))`, not drawn below 100 dp, over ONE scroll view (LAST / TRY inline, the set rows, FORM / COMMON MISTAKES / BREATHING / WARM-UP); LOG sits pinned at the bottom of the BODY (not a `bottomNavigationBar`, which is under the keyboard). The Scaffold is the root and the SafeArea goes inside it. `Semantics(scopesRoute, namesRoute, explicitChildNodes: true)`: without `explicitChildNodes` an assertion fires on every debug build.
+- **Cues (D4).** `exerciseCuesOf` is the ONE parser for the panel, the plate sheet and the viewer (SoT `exercise_coaching_content`); the card builds `CoachingContentPanel` only when `_mediaNow == null`.
+- **Accepted limits.** A `+` below the fold needs a manual scroll; the UNDO snack may overlay the pinned LOG for up to 5 s; TalkBack order follows the visual order; on a real phone the shell bar (about 80 dp) makes the square smaller than the Chrome numbers.
+- **Tests.** `exercise_media_viewer_test.dart`, `exercise_media_viewer_router_test.dart`, `exercise_entry_handle_test.dart`, `test/contracts/exercise_cues_behavioral_test.dart`, `exercise_media_viewer_routing_test.dart` (presence only), `breathing_cue_numeric_suppressed_test.dart`, `exercise_header_tile_test.dart` (doors repointed). Harness: `pumpCard(onLogExercise, onHandleForTest)`, `pumpScreen(notifierFor)`.

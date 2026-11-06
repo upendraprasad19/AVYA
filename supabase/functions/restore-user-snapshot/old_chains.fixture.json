@@ -1,0 +1,218 @@
+{
+  "_meta": {
+    "source": "git show <parent>:supabase/functions/restore-user-snapshot/index.ts",
+    "blob": "51c52c374810378ba1c7107dd532b187cd785dd0",
+    "generator": "extract_old_chains.js (regex extraction; the old source is never retyped)",
+    "note": "ascending is TRUE when .order() had no options (supabase-js default). range/limit are the old row caps."
+  },
+  "chains": {
+    "user_custom_exercises": {
+      "select": "*",
+      "gte": null,
+      "order": [],
+      "range": null,
+      "limit": null,
+      "eqUserId": true
+    },
+    "user_custom_foods": {
+      "select": "*",
+      "gte": null,
+      "order": [],
+      "range": null,
+      "limit": null,
+      "eqUserId": true
+    },
+    "workout_logs": {
+      "select": "*",
+      "gte": {
+        "column": "created_at",
+        "constant": "SINCE"
+      },
+      "order": [
+        {
+          "column": "created_at",
+          "ascending": true
+        }
+      ],
+      "range": "PAGINATED_CEILING - 1",
+      "limit": null,
+      "eqUserId": true
+    },
+    "workout_log_exercises": {
+      "select": "*",
+      "gte": {
+        "column": "completed_at",
+        "constant": "SINCE"
+      },
+      "order": [
+        {
+          "column": "completed_at",
+          "ascending": true
+        }
+      ],
+      "range": "PAGINATED_CEILING - 1",
+      "limit": null,
+      "eqUserId": true
+    },
+    "workout_log_sets": {
+      "select": "*",
+      "gte": {
+        "column": "completed_at",
+        "constant": "SINCE"
+      },
+      "order": [
+        {
+          "column": "completed_at",
+          "ascending": true
+        }
+      ],
+      "range": "PAGINATED_CEILING - 1",
+      "limit": null,
+      "eqUserId": true
+    },
+    "workout_schedule_completions": {
+      "select": "*",
+      "gte": {
+        "column": "completed_at",
+        "constant": "SINCE"
+      },
+      "order": [
+        {
+          "column": "scheduled_date",
+          "ascending": true
+        }
+      ],
+      "range": null,
+      "limit": null,
+      "eqUserId": true
+    },
+    "weight_logs": {
+      "select": "*",
+      "gte": {
+        "column": "created_at",
+        "constant": "SINCE"
+      },
+      "order": [
+        {
+          "column": "created_at",
+          "ascending": true
+        }
+      ],
+      "range": "PAGINATED_CEILING - 1",
+      "limit": null,
+      "eqUserId": true
+    },
+    "daily_steps": {
+      "select": "*",
+      "gte": {
+        "column": "date",
+        "constant": "SINCE_DATE"
+      },
+      "order": [
+        {
+          "column": "date",
+          "ascending": true
+        }
+      ],
+      "range": "PAGINATED_CEILING - 1",
+      "limit": null,
+      "eqUserId": true
+    },
+    "nutrition_logs": {
+      "select": "*, nutrition_log_items(*)",
+      "gte": {
+        "column": "created_at",
+        "constant": "SINCE"
+      },
+      "order": [
+        {
+          "column": "created_at",
+          "ascending": true
+        }
+      ],
+      "range": "PAGINATED_CEILING - 1",
+      "limit": null,
+      "eqUserId": true
+    },
+    "body_measurements": {
+      "select": "*",
+      "gte": {
+        "column": "created_at",
+        "constant": "SINCE"
+      },
+      "order": [
+        {
+          "column": "created_at",
+          "ascending": true
+        }
+      ],
+      "range": "PAGINATED_CEILING - 1",
+      "limit": null,
+      "eqUserId": true
+    },
+    "water_logs": {
+      "select": "*",
+      "gte": {
+        "column": "date",
+        "constant": "SINCE_DATE"
+      },
+      "order": [
+        {
+          "column": "date",
+          "ascending": true
+        }
+      ],
+      "range": "PAGINATED_CEILING - 1",
+      "limit": null,
+      "eqUserId": true
+    },
+    "sleep_logs": {
+      "select": "*",
+      "gte": {
+        "column": "created_at",
+        "constant": "SINCE"
+      },
+      "order": [
+        {
+          "column": "created_at",
+          "ascending": true
+        }
+      ],
+      "range": "PAGINATED_CEILING - 1",
+      "limit": null,
+      "eqUserId": true
+    },
+    "scheduled_workouts": {
+      "select": "*, template:template_id(id, name, workout_type, deleted_at, template_exercises(*))",
+      "gte": {
+        "column": "scheduled_date",
+        "constant": "SINCE_DATE"
+      },
+      "order": [
+        {
+          "column": "scheduled_date",
+          "ascending": true
+        }
+      ],
+      "range": "999",
+      "limit": null,
+      "eqUserId": true
+    },
+    "ai_coach_interactions": {
+      "select": "*",
+      "gte": {
+        "column": "created_at",
+        "constant": "SINCE"
+      },
+      "order": [
+        {
+          "column": "created_at",
+          "ascending": true
+        }
+      ],
+      "range": null,
+      "limit": 1000,
+      "eqUserId": true
+    }
+  }
+}

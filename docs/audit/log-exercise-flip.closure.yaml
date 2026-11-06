@@ -1,0 +1,206 @@
+# Closure ledger - log-exercise-flip (2026-10-20): one LOG per exercise goes live.
+# Units U-A RE-OPEN, U-B faded prefill + subline, U-D FINISH guard, U-E zero-set block (OI-361), U-C the flip.
+# `log-exercise-flip@branch` is the in-branch commit form (precedent: log-exercise-batch2.closure.yaml): a commit
+# cannot name its own SHA; `git log --grep='closes-oi: OI-361'` finds it.
+# Mutation evidence: every row names the mutation and how many tests reddened. Each mutation was applied by a
+# scratch driver (flipmut.py, a copy of this worktree) that refuses unless every old text occurs exactly once, ran
+# the named test files, and restored the files. A GREEN mutant is recorded as such, never as coverage.
+batch: log-exercise-flip
+plan_review_record: docs/plan-reviews/log-exercise-flip.md
+diagnose_docs:
+  - docs/diagnoses/2026-10-20-zero-set-completion-credit-e3a6c1.md
+total_findings: 39
+closed_count: 39
+
+findings:
+  - id: FLIP-CODE
+    title: "LogExerciseFlags.logExerciseButtonEnabled reads default ON (absent or non-bool ON, stored false = kill switch, unopened box OFF)"
+    terminal_state: closed_in_commit
+    commit: log-exercise-flip@branch
+    verification: "test/features/train/log_exercise/log_exercise_flags_test.dart F0-F3b. Mutations RED: `: true` -> `: false` 3 tests; catch false -> true 1; non-bool -> `stored == null` 1."
+  - id: DEV-PANEL
+    title: "dev panel toast and status row read ON / KILLED"
+    terminal_state: closed_in_commit
+    commit: log-exercise-flip@branch
+    verification: "D1 source pin in log_exercise_screen_flip_test.dart (presence only, stated). Mutation KILLED -> off: RED 1."
+  - id: REOPEN
+    title: "RE-OPEN: tap LOGGED unchecks the exercise with values kept (unlogSets(reopened: true) records the name); review mode shows no re-open text or action"
+    terminal_state: closed_in_commit
+    commit: log-exercise-flip@branch
+    verification: "log_exercise_flip_behavioral_test.dart (R3, review-mode noop, unlogSets(reopened:)); card tests A1/A3/A4. Mutations RED: R3 (done check dropped) 1; N4 (always adds the name) 1; A1 (LOGGED not tappable) 4; A3 (subline unconditional) 1; A4 (re-open also logs) 3."
+  - id: REVEAL-GUARD
+    title: "guard windows: kReopenGuard (1200 ms) on a re-open after an advancing LOG; kRevealGuard (700 ms) on a LOG after a re-open or a superset reveal"
+    terminal_state: closed_in_commit
+    commit: log-exercise-flip@branch
+    verification: "controller tests R1, R2, R4 on a fake monotonic clock. Mutations RED, 1 each: R1 window kRevealGuard; R2a re-open stamps the input guard; R2b no stamp on re-open; R4 advance window always kLogInputGuard."
+  - id: FADE
+    title: "faded prefill: app-filled weight/duration/distance at 62% parchment until typed (suggestedInputs, 3-part keys), reps always normal, a tap selects all"
+    terminal_state: closed_in_commit
+    commit: log-exercise-flip@branch
+    verification: "card tests P1-P4, P7 and pure isFaded. Mutations RED: P1 mark empty targets 1; P2a fade never cleared 3; P2b reps marked 2; P3 no select-all onTap 1; isFaded ignores checked 1 (pure; P7 asserts the fade HOLDS, which this mutation cannot redden)."
+  - id: FULL-CAPTURE
+    title: "LOG mode captures every keystroke through ONE card writer recordCardEdit (values + marks in one state change; no write when saved or unchanged)"
+    terminal_state: closed_in_commit
+    commit: log-exercise-flip@branch
+    verification: "recordCardEdit behavioural tests, card P5/P6. Mutations RED: N1 two writes 1; N2 no no-change check 1; N3 no isSaved guard 1; P5 checked-only capture 4; P6 OFF captures keystrokes 1."
+  - id: RESTORE-BLANK
+    title: "a re-init restores a cleared field blank in LOG mode, never the prefill"
+    terminal_state: closed_in_commit
+    commit: log-exercise-flip@branch
+    verification: "card P5b. Mutation (LOG-mode null restore reverted): RED 1."
+  - id: MIRROR-RESEED
+    title: "after a re-init, followers the mirror made follow again; history-prefill followers do not"
+    terminal_state: closed_in_commit
+    commit: log-exercise-flip@branch
+    verification: "card P9, P9 (returning), P9c. Mutations RED: re-seed dropped 1; source-not-suggested gate dropped 1. The text-equality clause is an EQUIVALENT mutant (dropping it stays GREEN): mirrorTargets only writes a follower whose text equals its last mirrored value, so a differing follower registered by the re-seed is inert. Kept as defence in depth, recorded as not covered (R6-02's premise did not hold)."
+  - id: SUBLINE
+    title: "LOG subline `{kg} KG · PREFILLED` while the mirror source's weight is app-filled, `KG LIFTED` once typed"
+    terminal_state: closed_in_commit
+    commit: log-exercise-flip@branch
+    verification: "card P4 and the repointed log_exercise_card_test.dart :47; pure prefilledSubline. Mutations RED: P4a subline ignores marks 1; P4b subline reads another set 1."
+  - id: LAYOUT
+    title: "LOG button grows (minHeight 44, label in FittedBox, subline 2 lines) instead of overflowing at 320 dp x 2.0"
+    terminal_state: closed_in_commit
+    commit: log-exercise-flip@branch
+    verification: "card L1. Mutation fixed height 44: RED 2."
+  - id: LAST-ROW-OVERFLOW
+    title: "LAST row Flexible + ellipsis at 320 dp x 1.5"
+    terminal_state: closed_in_commit
+    commit: log-exercise-flip@branch
+    verification: "card L2. Mutation (Flexible -> SizedBox): RED 1."
+  - id: SEMANTICS
+    title: "button Semantics carry onTap (TalkBack can press LOG/LOGGED), label includes the subline, LOGGED says Logged with a Re-open hint; fields announce their unit and, faded, Prefilled value; the Semantics wrapper is always present (no remount on the first keystroke)"
+    terminal_state: closed_in_commit
+    commit: log-exercise-flip@branch
+    verification: "card SM1 (3 tests) and P8. Mutations RED: button onTap dropped 2; label without subline 1; field label dropped 2; label hard-coded KG 2; hint unconditional 1; Semantics keyed on the fade (identity change) 1."
+  - id: UNDO-SEMANTICS
+    title: "UNDO Semantics carry onTap; the toast text is a live region"
+    terminal_state: closed_in_commit
+    commit: log-exercise-flip@branch
+    verification: "log_undo_toast_test.dart SM1 (semantics tap runs onUndo once). Mutations RED: UNDO onTap dropped 1; liveRegion false 1."
+  - id: TALKBACK-FEEDBACK
+    title: "RE-OPEN announces `<name> re-opened`"
+    terminal_state: closed_in_commit
+    commit: log-exercise-flip@branch
+    verification: "SM2 through the real ActiveWorkoutScreen (tester.takeAnnouncements). Mutation (announcement dropped): RED 1."
+  - id: SAVE-PREDICATE
+    title: "ONE save predicate wouldSaveSet / saveableSetIndexes (checked, not a warm-up, values captured; extended by checked keys beyond the template count), iterated by completeWorkout"
+    terminal_state: closed_in_commit
+    commit: log-exercise-flip@branch
+    verification: "U-D1 fixture + U-D1b the REAL awaited completeWorkout through setUpHiveForTests (A 3, D 3 of 4, E 4; B, C, F absent; equals saveableSetIndexes). Mutations RED: warm-up clause dropped 2; maxSetLog extension dropped 2."
+  - id: FINISH-GUARD
+    title: "FINISH dialog (LOG mode): working count, re-opened and typed lines (warn), skipped and partial lines (textDim), names capped at 5 + `+N more`, scrollable, no maxLines"
+    terminal_state: closed_in_commit
+    commit: log-exercise-flip@branch
+    verification: "pure finishGuard / capNames tests; dialog U-D2, U-D3 through the real screen. Mutations RED: typedUnsaved ignores the suggested key 1; scans reps 1; ignores the unchecked rule 1; capNames at 7 1; re-opened colour swapped 1; duration Row restored 2; maxLines 2 1."
+  - id: TYPED-UNSAVED-LINE
+    title: "typed-but-unlogged exercises are named (Typed, not logged), not called skipped"
+    terminal_state: closed_in_commit
+    commit: log-exercise-flip@branch
+    verification: "pure finishGuard case (typed vs returning prefill vs bodyweight reps vs logged all-warm-up) + U-D2. Mutations listed under FINISH-GUARD."
+  - id: HEADER-COUNTS
+    title: "header and progress bar read working counts in LOG mode; all-warm-up reads 0% (workingProgress zero guard, clamp)"
+    terminal_state: closed_in_commit
+    commit: log-exercise-flip@branch
+    verification: "S1 header test through the real screen; pure workingProgress. Mutations RED: zero guard dropped 1 (pure); the screen computes saved/total inline 1 (S1)."
+  - id: LOG-COMPLETING-GUARD
+    title: "logSets is a no-op while completeWorkout runs (_completing)"
+    terminal_state: closed_in_commit
+    commit: log-exercise-flip@branch
+    verification: "behavioural test: un-awaited completeWorkout in fakeAsync, then logSets leaves state identical. Mutation (guard dropped): RED 1."
+  - id: SESSION-STATE-CLEANUP
+    title: "suggestedInputs / reopenedExercises threaded through copyWith, cleared by startWorkout, re-indexed on swap / remove / removeLastSet with the field suffix kept"
+    terminal_state: closed_in_commit
+    commit: log-exercise-flip@branch
+    verification: "behavioural cleanup group. Mutations RED, 1 each: swap keeps keys; 2-part re-index; removeLastSet exact key; copyWith drops suggestedInputs."
+  - id: DIALOG-DURATION-WRAP
+    title: "the duration row is a Wrap (spacing 0) in both modes; OFF lays out like the old Row"
+    terminal_state: closed_in_commit
+    commit: log-exercise-flip@branch
+    verification: "U-D5 at 380 dp (the row uses 247 of 252 px under the test font). Mutations RED: scrollable true 2; spacing 6 1 (first GREEN at 400 dp, where 24 px still fit; the width was narrowed and the re-run reddened)."
+  - id: LOG-MODE-HINT
+    title: "`Tap to edit values` hidden in LOG mode (the LOGGED button says TAP TO RE-OPEN)"
+    terminal_state: closed_in_commit
+    commit: log-exercise-flip@branch
+    verification: "card H1. Mutation (LOG-mode hide dropped): RED 1."
+  - id: SCREEN-TEST
+    title: "the flip through the REAL ActiveWorkoutScreen: flag absent = LOG mode, a stored false brings the per-set path back on the next build; FINISH names the skipped exercise; RE-OPEN clears only its own toast and focuses the card"
+    terminal_state: closed_in_commit
+    commit: log-exercise-flip@branch
+    verification: "log_exercise_screen_flip_test.dart (S1 x3, SM2, D1, S2). Mutations RED: logMode false 4; S2 (re-open clears any toast) 1 (presence pin, stated)."
+  - id: ZERO-SET-COMPLETION
+    title: "OI-361: nothing saveable => completeWorkout refuses on its first line (before the timer cancel; review mode keeps its path) and COMPLETE is disabled with the reason on both flag paths; the dialog scrolls while blocked, keeps the re-opened / typed lines, and the COMPLETE closure re-checks the live state"
+    terminal_state: closed_in_commit
+    commit: log-exercise-flip@branch
+    verification: "diagnose e3a6c1. U-E1 (real awaited completeWorkout, Hive), U-E2/U-E2b/U-E2c/U-D4 (dialog, both modes), U-E3 (pure). Mutations RED: guard removed 4; below the timer cancel 1; without isSaved 1; hasSaveableSet false 5; exercise 0 only 1; block gated on logMode 2; scrollable logMode 1; closure re-check dropped 1; return after the block line 1; lists when blocked 2; COMPLETE enabled 3."
+  - id: CHAT-DRAFT-ZERO-SET
+    title: "OI-361 chat path (R7-02): submitWorkoutDraft returns before any write and keeps the draft when no exercise yields a set; WorkoutLogConfirmCard disables CONFIRM and says why"
+    terminal_state: closed_in_commit
+    commit: log-exercise-flip@branch
+    verification: "test/contracts/zero_set_completion_behavioral_test.dart U-E4 (pure) and U-E5 (the real submitWorkoutDraft with a real WidgetRef, Hive). Mutations RED: predicate => true 2; submit guard removed 1; card ignores canLog 1 (first GREEN, the submit's own guard hid it; the test now asserts the card's onTap is null)."
+  - id: BPASS
+    title: "/code-review B-pass (fresh read-only Sonnet reviewer, staged diff ea6bc3a330d3): 0 P0, 0 P1, 1 P2, 6 P3; 5 fixed and mutation-proven, 1 process note, 1 false alarm (rows BP1-BP5)"
+    terminal_state: closed_in_commit
+    commit: log-exercise-flip@branch
+    verification: "this batch's review file in docs/reviews/ (renamed to the post-fix staged hash). The reviewer ran analyze (clean) and the four target test sets (175 passed). Its finding 3 (the flag's catch returns OFF) is a false alarm: configBox is a shared box opened before runApp and never closed (HiveUserSession.closeAll closes user-scoped roots only). Finding 6 (the record not staged) is deliberate: the record cites the review file, so it lands in a follow-on commit (code-review SKILL §3 step 3)."
+  - id: BP1
+    title: "P2 - a chat draft with all-blank sets (or cardio without duration and distance) still produced a 0x0 set and completed the day"
+    terminal_state: closed_in_commit
+    commit: log-exercise-flip@branch
+    verification: "draftExerciseSets keeps only sets with weight, reps or duration above 0 (cardio: duration or distance); U-E4 blank-set test. Mutations RED: BF1a blank lift sets written 1; BF1b blank cardio written 1."
+  - id: BP2
+    title: "P3 - a throwing save left _completing set, so LOG / UNDO / RE-OPEN stayed dead for the session"
+    terminal_state: closed_in_commit
+    commit: log-exercise-flip@branch
+    verification: "completeWorkout wraps the extracted _persistCompletion() and resets _completing before rethrowing; test 'completeWorkout throws (no Hive): _completing resets, LOG works'. Mutation BF2 (no reset): RED 1."
+  - id: BP3
+    title: "P3 - reopenedExercises (keyed by name) was never pruned, so swap A->B->A mislabelled the new A as re-opened"
+    terminal_state: closed_in_commit
+    commit: log-exercise-flip@branch
+    verification: "swapExercise and removeExercise drop the outgoing name; two tests. Mutations RED: BF4a swap keeps the mark 1; BF4b remove keeps the mark 1."
+  - id: BP4
+    title: "P3 - the duration / distance branches of the typed-not-logged detector were untested"
+    terminal_state: closed_in_commit
+    commit: log-exercise-flip@branch
+    verification: "finishGuard timed/cardio case. Mutations RED: BF5a duration never typed 1; BF5b distance never typed 1."
+  - id: BP5
+    title: "P3 - the COMPLETE closure's live re-check returned silently, leaving a COMPLETE that does nothing"
+    terminal_state: closed_in_commit
+    commit: log-exercise-flip@branch
+    verification: "the re-check pops the dialog first; U-E2b asserts the dialog closes with nothing completed. Mutation BF7 (no pop): RED 2."
+  - id: REPS-BODYWEIGHT-SIGNAL
+    title: "reps and bodyweight carry no fade signal (typed and untouched cannot be told apart; a typed bodyweight exercise lands in the calm skipped line)"
+    terminal_state: verified_clean
+    evidence: "accepted founder decision 2026-10-18 (faded vs normal for weight/duration/distance only), stated in plan §5 and the train CLAUDE.md row; pure finishGuard case pins the bodyweight-skipped behaviour"
+  - id: TESTS
+    title: "full suite, flutter analyze, the pre-commit gate loop on the final tree"
+    terminal_state: closed_in_commit
+    commit: log-exercise-flip@branch
+    verification: "BOT=true TZ=Asia/Kolkata flutter test (whole suite, goldens included, final post-B-pass tree): 10062 passed, 10 skipped, 2 failed: test/goldens/wardroom/ward_rank_pill_golden_test.dart (Lt, SD1; 10 px diff). ENVIRONMENTAL: the same 2 fail on clean main a909cdb in this container (the goldens are rendered on Windows; pre-push and CI exclude the golden tag), and this diff does not touch the widget. flutter analyze: no error or warning. Gate loop: see the batch's closing report."
+  - id: DOCS
+    title: "train and ai_coach CLAUDE.md rows, naming conventions, functionality-flow TRAIN-06a, SoT registry (new writers/readers, the logSets `_completing` sentence, every stale range in the touched files re-baselined; parity gate PASS), debugging bug-classes 2.109/2.110, retrospective"
+    terminal_state: closed_in_commit
+    commit: log-exercise-flip@branch
+    notes: "context-artifact budget PASS (13 within band)."
+  - id: REVIEWS
+    title: "plan reviewed in 7 context-blind rounds (converged); B-pass on the staged diff"
+    terminal_state: closed_in_commit
+    commit: log-exercise-flip@branch
+    verification: "docs/plan-reviews/log-exercise-flip.md (review_rounds 7, verdict converged). The B-pass review file and its founder triage are recorded there (bpass)."
+  - id: PRECONDITION-3-AMENDED
+    title: "flip precondition 3 (device check on a debug build BEFORE the flip) amended by the founder to run after the merge on the release build"
+    terminal_state: closed_in_commit
+    commit: log-exercise-flip@branch
+    notes: "founder decision 2026-10-20 ('device check after merge'); recorded in docs/ship_dark_pending_review.yaml under the precondition block and as OI-348 row A12."
+  - id: FLIPPED-BUILD-CHECK
+    title: "the release-build device walk of the flipped flow (OI-348 row A12)"
+    terminal_state: blocked_on_user
+    reason: "needs the founder's phone and a release build from main after the merge; the agent cannot run a device from a cloud container"
+  - id: OFF-PATH-REMOVAL
+    title: "remove the per-set path and the kill switch (§4.6 step 4)"
+    terminal_state: blocked_on_user
+    reason: "founder decision 2026-10-20 to keep the OFF path as the kill switch until A12 passes; tracked as OI-362 (blocked on A12)"
+  - id: EXPOSURE
+    title: "the merge reaches every testing account on the next build and the web app (vercel builds main) before the device check; release builds have no switch"
+    terminal_state: blocked_on_user
+    reason: "pre-launch (testing accounts only, CLAUDE.md §1); before Play internal testing a remote kill switch is a founder decision, stated in plan §7"

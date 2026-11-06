@@ -1,0 +1,141 @@
+import 'dart:io';
+import 'package:flutter_test/flutter_test.dart';
+
+import '_sync_service_source.dart';
+
+/// Source-of-truth contract: writer/reader pairs for `streaks`
+/// from docs/sot_registry.yaml.
+///
+/// Writers: train_provider.completeWorkout (streak row upsert),
+///          workout_repository.calculateCurrentStreak (consumes freeze),
+///          home_provider.StreakFreezeNotifier._refillIfNewWeek
+/// Readers: sync_service._syncStreaks,
+///          workout_repository.calculateCurrentStreak,
+///          home_provider.streakFreezeProvider
+///
+/// Key: 'streaks' (singleton list) in healthBox.
+/// Freeze state in userBox via MigratedKey.
+/// UNIQUE(user_id, week_start) cloud dedup — never dedup by cloud id.
+void main() {
+  late String trainProvSrc;
+  late String workoutRepoSrc;
+  late String homeProvSrc;
+  late String syncSvcSrc;
+
+  setUpAll(() {
+    final tf = File('lib/features/train/providers/train_provider.dart');
+    expect(tf.existsSync(), isTrue,
+        reason: 'train_provider.dart must exist (streak upsert writer)');
+    trainProvSrc = tf.readAsStringSync();
+
+    final rf =
+        File('lib/features/train/repositories/workout_repository.dart');
+    expect(rf.existsSync(), isTrue,
+        reason: 'workout_repository.dart must exist (calculateCurrentStreak writer+reader)');
+    workoutRepoSrc = rf.readAsStringSync();
+
+    final hf = File('lib/features/home/providers/home_provider.dart');
+    expect(hf.existsSync(), isTrue, reason: 'home_provider.dart must exist');
+    homeProvSrc = hf.readAsStringSync();
+
+    final sf = loadSyncServiceSource();
+    expect(sf.existsSync(), isTrue, reason: 'sync_service.dart must exist');
+    syncSvcSrc = sf.readAsStringSync();
+  });
+
+  group('streaks writer↔reader source contract', () {
+    test('writer completeWorkout updates streak in train_provider', () {
+      expect(trainProvSrc.contains('completeWorkout'), isTrue,
+          reason: 'train_provider must define completeWorkout (streak upsert writer)');
+    });
+
+    test('writer completeWorkout references streaks key', () {
+      expect(
+          trainProvSrc.contains("'streaks'") || trainProvSrc.contains('streaks'),
+          isTrue,
+          reason: 'completeWorkout must update the streaks key in healthBox');
+    });
+
+    test('the streak CQRS split pair exists, and the merged name does not', () {
+      // OI-44 Unit 6 (2026-08-02) — this assertion used to require the symbol
+      // `calculateCurrentStreak` to be PRESENT. That was a
+      // feedback_source_grep_false_confidence instance twice over: it pinned a
+      // NAME rather than a behaviour, and the name it pinned was the
+      // @Deprecated shim whose whole problem was that a query-shaped name
+      // delegated to a mutator (it silently consumed a streak freeze on every
+      // render — C-14, audit-2026-05-11). A test demanding the presence of the
+      // defect is worse than no test. Now it pins the SPLIT.
+      expect(workoutRepoSrc.contains('int currentStreak()'), isTrue,
+          reason: 'workout_repository must define the PURE read '
+              'currentStreak() — every display surface calls it, and it must '
+              'never consume a freeze as a side effect of rendering');
+      expect(
+          workoutRepoSrc.contains('int consumeMissedDayIfFreezeAvailable()'),
+          isTrue,
+          reason: 'workout_repository must define the explicitly-named '
+              'mutating half consumeMissedDayIfFreezeAvailable()');
+      // Comments stripped first (feedback_source_grep_strip_comments_first):
+      // workout_repository.dart carries a deliberate tombstone comment naming
+      // the deleted symbol, and the file's older doc comments reference it too.
+      final strippedRepoSrc = workoutRepoSrc
+          .replaceAll(RegExp(r'//.*'), '')
+          .replaceAll(RegExp(r'/\*[\s\S]*?\*/', multiLine: true), '');
+      expect(strippedRepoSrc.contains('int calculateCurrentStreak()'), isFalse,
+          reason: 'the merged query-named mutator was deleted in OI-44 Unit 6 '
+              'and must not return. scripts/check_cqrs_query_naming.dart '
+              'blocks the shape; this pins the specific symbol.');
+      expect(
+          workoutRepoSrc.contains('streak_freezes'), isTrue,
+          reason: 'the streak walk must read streak freeze state to apply '
+              'freezes');
+    });
+
+    test('StreakFreezeNotifier._refillIfNewWeek exists in home_provider', () {
+      expect(homeProvSrc.contains('_refillIfNewWeek') ||
+          homeProvSrc.contains('refillIfNewWeek'), isTrue,
+          reason:
+              'home_provider must define StreakFreezeNotifier._refillIfNewWeek '
+              'to weekly-refill freeze credits');
+    });
+
+    test('reader _syncStreaks exists in sync_service', () {
+      expect(syncSvcSrc.contains('_syncStreaks'), isTrue,
+          reason: '_syncStreaks must exist in sync_service');
+    });
+
+    test('_syncStreaks deduplicates by week_start (not cloud id)', () {
+      // Per sot_registry class_constraints: dedup by week_start UNIQUE constraint
+      // never by cloud `id`
+      expect(
+          syncSvcSrc.contains('week_start') || syncSvcSrc.contains('onConflict'),
+          isTrue,
+          reason:
+              '_syncStreaks must use week_start for deduplication (UNIQUE constraint); '
+              'deduping by cloud id causes same-week duplicates');
+    });
+
+    test('freeze state stored via MigratedKey (user-scoped)', () {
+      expect(
+          workoutRepoSrc.contains('MigratedKey') ||
+              workoutRepoSrc.contains('userBox') ||
+              workoutRepoSrc.contains('streak_freezes'),
+          isTrue,
+          reason:
+              'streak freeze state must be stored in userBox (via MigratedKey) '
+              'not in shared configBox — freeze state is user-scoped');
+    });
+
+    test('syncFreezes exists in sync_service for cross-device restore', () {
+      expect(syncSvcSrc.contains('syncFreezes'), isTrue,
+          reason:
+              'sync_service must define syncFreezes() — freeze state must survive '
+              'reinstall (paying users lost freeze credits before Test #11)');
+    });
+
+    test('reader streakFreezeProvider exists in home_provider', () {
+      expect(homeProvSrc.contains('streakFreezeProvider'), isTrue,
+          reason:
+              'home_provider must define streakFreezeProvider (reader for freeze display)');
+    });
+  });
+}

@@ -1,0 +1,55 @@
+# Closure ledger - library-batch-m2b, Part A (docs/plans/2026-11-02-library-batch-m2b-tile-and-rows.md).
+# Rows carry the SHA of the landing commit, written by the stamp commit that follows it (a commit cannot name its own SHA).
+# Part B (the logging viewer) is NOT in this batch: it shipped on its own branch (row M2B-B-VIEWER, ledger library-batch-m2b-viewer.closure.yaml), which closed OI-354.
+batch: library-batch-m2b
+plan_review_record: docs/plan-reviews/library-batch-m2b.md
+diagnose_docs: []
+total_findings: 10
+closed_count: 10
+
+findings:
+  - id: M2B-A-ROWS-EDGE
+    title: "LOG-mode set rows stop short of the card edge: an empty 6 dp spacer plus a 28 dp check slot, and a placeholder column in the table header"
+    terminal_state: closed_in_commit
+    commit: 991b5027
+    verification: "SetInputRow has no spacer and no check slot in LOG mode, _tableHeaderLabels(logMode:) drops the trailing gap and check cell of every logging type, a logged set's number tile becomes a tick (accent; warn for a warm-up, with a Set n, logged label) and the overload arrow moves into the KG box (SetInputRow.weightSuffix, an unconditional Stack so the TextField never remounts). test/features/train/log_exercise/log_exercise_rows_edge_test.dart 13 tests (11 + 2 from the B-pass); the per-set path (logMode: false) keeps its check column and is pinned by its own case. mutants_reddened (9 of 9 killed, files restored and compared): a=6 b=2 c=1 d=6 e=1 f=1 g=6 h=1 i=1. B-pass additions (m2 tick leaks into the per-set path, m4a no IgnorePointer, m4b no ExcludeSemantics, each 1 test) were mutated the same way."
+  - id: M2B-A-HEADER-TILE
+    title: "The focused card's header is a 124 dp tile-led block: tile top-left, name / meta / LAST / TRY / swap-move icons beside it, ENLARGE chip bottom-right, the tile loops by itself and freezes under any sheet"
+    terminal_state: closed_in_commit
+    commit: 991b5027
+    verification: "ExerciseHeaderTile + ExerciseLastTryLines, _ExerciseCard.isFocused (only _effectiveFocusedIndex; a superset partner is expanded but not focused), _showHeaderTile (expanded, focused, not in move mode, row has media), ModalRoute.isCurrentOf(context) for the freeze, a tap on the tile or ENLARGE opens today's plate sheet, the FORM & CUES panel stays (Part B moves it). test/features/train/log_exercise/exercise_header_tile_test.dart 31 tests (27 + 4 from the B-pass) incl. source-grep presence pins (comments stripped). mutants_reddened (16 of 17 killed): a=4 b=2 c=1 d=3 e=1 f=1 g=1 h1=1 h2=1 i=2 j=2 k=5 m=1 n=2 o=1 p=1 q=5; l=0 SURVIVED (container: true on the tile Semantics): the plan rule applied, the line was removed from the tile and its comment says why, so nothing is left unproven that it claims. Review-only limit: that every Codec and ui.Image is disposed on every path is read in the B-pass, as in M2a."
+  - id: M2B-A-EGRESS-DOCS
+    title: "Focusing a card now FETCHES its animation file (up to about 1 MB on mobile data, every focus change), which the egress notes, the spec and the OI board did not say"
+    terminal_state: closed_in_commit
+    commit: 991b5027
+    verification: "docs/operations/EXERCISE_MEDIA.md, the app-delivery spec (C16 amended, C21 marked dropped, the interim ENLARGE note), docs/sot_registry.yaml prose, OI-354 / OI-440 / OI-444 on docs/audit/open_issues.md, the glossary row for header tile in docs/naming_conventions.md, lib/features/train/CLAUDE.md and docs/architecture/train-detail.md; check_sot_registry_parity PASS and check_nested_claude_md_content PASS after the edit."
+  - id: M2B-A-BPASS
+    title: "B-pass (/code-review, one fresh Sonnet reviewer, 92 tool uses) on the staged diff: no P0, 10 findings, 7 of them tests that stayed green under a real regression"
+    terminal_state: closed_in_commit
+    commit: 991b5027
+    verification: "docs/reviews/57a629d5c6ea-review.md, a dated Tuning entry inside it. Accepted and fixed (8): allDone .every vs .any (P1), the per-set path's tick, the semantics handlers, the arrow overlay's IgnorePointer and ExcludeSemantics, the 124 dp picture (the decode size), the dead ENLARGE chip, the tile root type changing per state (a real remount: test RED before the fix, GREEN after), and a wrong grouping-mode comment plus its unobserved group-select path. False alarms (2) with evidence: a media-lookup guard (a corrupt library row already takes the card down on main's thumb layout, probed, guard and test removed) and the contract test's file list (the card owns the tile's show condition, where a subscription gate would break C7). Each new protection mutated and run: m1 m2 m3 m4a m4b m5 m6 m7 m8 each reddened 1 test; the first version of the size test (m5) survived its mutation and was rewritten, found only by running it. After the fixes: analyze 0 errors 0 warnings on the whole project, test/features/train/log_exercise 171 passed, test/contracts + features + widgets + train + shared + core 7997 passed 5 skipped 0 failed, sh scripts/pre-commit.sh rc=0 on the staged state. The verdict line of the review file stays pending until the founder accepts the triage (advisory at account tier)."
+  - id: M2B-A-CHROME-CHECK
+    title: "Real-font look at the card in Chrome at 360 dp, before (main b23e8661) and after, because the widget tests run under the Ahem font"
+    terminal_state: verified_clean
+    evidence: "Throwaway untracked preview entrypoint (deleted) mounting the real card with seeded data, the real exercise library and a local file server for real animations. Measured card heights, dp: 4-set weight card with history 419 -> 467 (+48), without history 387 -> 467 (+80); 3-set weight or bodyweight or timed card 341 -> 421 without history (+80), 373 (derived: 46 dp per set row) -> 421 with history (+48). Collapsed card 74 both. Observed: the LAST line is one line at 360 dp in the real font, TRY one line; the tile loops on the focused card only (a card's file was fetched only when it became focused: one fetch per focus change); ENLARGE opens the plate sheet and closing it restores the tile; the logged state shows a gold tick in the number tile, the arrow inside the KG box and the REPS box at the same right edge as the header; the bodyweight and timed rows reach the card edge; the swap icon does not bleed past the content edge. Not observable: the tile frozen behind the sheet (the sheet covers it), proven by the widget tests (mutations k, p, q)."
+  - id: M2B-A-WEB-ABORT-LINE
+    title: "On web every focus change that unmounts a looping tile logs one 'AbortError: Aborted by failure' from the image resource service"
+    terminal_state: verified_clean
+    evidence: "Pre-existing in the shared view, not introduced by Part A: closing the M2a plate sheet over a playing animation prints the same line. Source: flutter/packages/flutter/lib/src/painting/image_stream.dart:1078-1086 reports the failed getNextFrame with silent: true, and foundation/assertions.dart:1025-1029 ignores the silent flag only in debug mode, so a release build prints nothing; the cause is ExerciseAnimationView.dispose evicting the provider (exercise_animation_view.dart:131) while the browser decoder has a frame pending. No user-visible effect, no Crashlytics path on web (main.dart sets the error hooks only when !kIsWeb)."
+  - id: M2B-A-SUITE-WINDOWS
+    title: "Full suite on the founder's Windows machine: 9752 passed, 25 skipped, 2 failed, and both fail the same way on the unmodified base commit"
+    terminal_state: blocked_on_user
+    reason: "Neither file nor anything it imports is in this diff, and a clean checkout of b23e8661 reproduces both. (1) test/contracts/exercise_media_store_behavioral_test.dart 'file store [i] two concurrent writes of the SAME name use two distinct temp names': PathAccessException (Access is denied, errno 5) from File.rename in FileExerciseMediaBytesStore._writeFile (exercise_media_store.dart:111) when two renames target one name at once, a Windows-only race (POSIX rename replaces atomically): 3 of 8 runs failed in this tree and 3 of 8 on the clean base, so a flake. (2) test/scripts/discipline_hook_local_indexes_e2e_test.dart 'from a LINKED worktree the shared hooks are found': fails every run here and on the clean base, the fixture's real pre-commit tries to regenerate GATE_INDEX.md and cannot find scripts/build_gate_index.dart. CI on Linux is green for b23e8661 and for main a75828af. Not a defect in the app or in this batch: it only shows when the whole suite is run on the founder's Windows PC, and CI (Linux) is the gate. Recommendation, not yet a decision: stay Linux-only; make the suite pass on Windows only if the founder wants to run it locally."
+  - id: M2B-A-PHONE-CHECK
+    title: "Founder phone check: kHeaderTileAutoplay on a low-end phone"
+    terminal_state: blocked_on_user
+    reason: "Needs the founder's phone and a build: 0551 and 3214 loop without a memory kill, INCLUDING with the plate sheet open over the frozen tile (a second decode), and the focused-card fetch cost on mobile data is acceptable. If not, kHeaderTileAutoplay = false in exercise_header_tile.dart stops the loop, not the fetch. This is OI-440's phone check."
+  - id: M2B-B-VIEWER
+    title: "Part B: the logging viewer (D4, D6, D9: the FORM & CUES panel moves into it, the 44 px still of any card opens it)"
+    terminal_state: closed_in_commit
+    commit: "library-batch-m2b-viewer (Part B landing commit; its SHA is stamped in docs/audit/library-batch-m2b-viewer.closure.yaml)"
+    verification: "Part A merged (PR #199, 9dc64abb); Part B was built on its own branch from the merged tree after its own three plan-review rounds (plan docs/plans/2026-11-03-library-batch-m2b-viewer.md, record docs/plan-reviews/library-batch-m2b-viewer.md). The viewer is a second host of the card's rows and LOG row over the SAME controllers (test/features/train/log_exercise/exercise_media_viewer_test.dart, exercise_entry_handle_test.dart, exercise_media_viewer_router_test.dart). Rows of Part B are in docs/audit/library-batch-m2b-viewer.closure.yaml."
+  - id: M2B-STALE-M2-ROW
+    title: "The row M2B-HERO-TILE-VIEWER in docs/audit/library-batch-m2.closure.yaml (lines 79-83) says M2a is not merged and the mockup is not approved"
+    terminal_state: verified_clean
+    notes: "Both are now true (M2a merged; the founder approved mockup v2 on 2026-11-02), and the batch it names split into Part A (this ledger) and Part B (M2B-B-VIEWER above). The old ledger belongs to a closed batch and is left as it is; this row supersedes it."

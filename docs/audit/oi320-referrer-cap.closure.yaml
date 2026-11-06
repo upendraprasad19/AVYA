@@ -1,0 +1,250 @@
+# Closure ledger - oi320-referrer-cap (OI-320)
+# Gate 40. One terminal_state per finding; no `deferred:` key.
+# `commit:` on a closed_in_commit row names the batch commit that ADDS this file; find it with
+#   git log --diff-filter=A --format=%h -- docs/audit/oi320-referrer-cap.closure.yaml
+
+batch: oi320-referrer-cap
+plan_review_record: docs/plan-reviews/oi320-referrer-cap.md
+total_findings: 41
+closed_count: 41
+
+findings:
+  - id: C1
+    title: "migration 158: redeem_referral_atomic credits the referrer only while the count of that referrer's credited redemptions in the last 90 days (strict >, on created_at) is below 7; both users' advisory locks, lowest key first, taken before the count and the audit insert; the referee is always credited; the audit row records both outcomes in referrer_rewarded / referee_rewarded; same signature, RETURNS void, SECURITY DEFINER, search_path restated, ACL re-asserted; a NULL referrer or referee raises 23502 before any lock"
+    terminal_state: closed_in_commit
+    commit: oi320-referrer-cap batch commit (see header)
+    verification: "Local replica of the live objects, live function body verbatim as the before state: test/sql/oi320_referrer_cap_live_verify.sql reads 18 fail / 9 ok on the old body and 27 ok on migration 158; test/sql/oi320_referrer_cap_concurrency_local.sh PART 1 (two sessions, one referrer, no referrer subscription row): B waited ~2.6 s, exactly 7 credited, B's referee still holds its trial; the SQL mutants are all red except the two documented non-behavioural ones (see C16). NOT yet applied to the live database: see A1."
+
+  - id: C2
+    title: "docs/architecture/database.md said referral_redemptions has a redeemed_at column and migration 037 builds idx_referral_redemptions_redeemed_at; the live table has only created_at (migration 037 only NAMES an index idx_referral_redemptions_redeemed_at, and it is on created_at). The first draft of the cap assumed the docs"
+    terminal_state: closed_in_commit
+    commit: oi320-referrer-cap batch commit (see header)
+    verification: "Corrected in database.md and recorded in the registry concept, the OI-320 entry and the migration header; test/contracts/referral_referrer_cap_migration_test.dart asserts, against backups/live_schema_columns.json, that created_at / referrer_rewarded / referee_rewarded exist, redeemed_at does not, and the executable SQL never names redeemed_at. Migration 037 is immutable and keeps its misleading index name. Round 2 corrected the wording that first attributed the missing column to 037 itself."
+
+  - id: C3
+    title: "referrer_rewarded / referee_rewarded were columns with no writer and no reader (the dead-column class); the cap makes the migration their first writer and the count their first reader"
+    terminal_state: closed_in_commit
+    commit: oi320-referrer-cap batch commit (see header)
+    verification: "git grep for both names finds them only in backups/live_schema_columns.json before this batch; SoT concept referral_referrer_cap lists the reader (the count statement, migration 158 lines 143-148) and states that nothing else reads them; every pre-158 live row is false and older than 90 days, so none enters a window (3 rows, one referrer, 2026-06-17 to 2026-06-26)."
+
+  - id: C4
+    title: "SoT registry concept referral_referrer_cap with a behavioral_test_path (Gate 42) and the supabase/functions/CLAUDE.md row; PROF-19 and database.md state the cap"
+    terminal_state: closed_in_commit
+    commit: oi320-referrer-cap batch commit (see header)
+    verification: "docs/sot_registry.yaml concept referral_referrer_cap (behavioral_test_path test/sql/oi320_referrer_cap_live_verify.sql, plus the _concurrency and _deletion paths; regression_test test/contracts/referral_referrer_cap_migration_test.dart, 25 tests); parity and Gate 42 pass in the pre-commit loop."
+
+  - id: C5
+    title: "plan-review round 1, P1: referral_redemptions.referee_id was ON DELETE CASCADE and delete-account ends in auth.admin.deleteUser (cascade through public.users), so a throwaway referee deleting its account took its credited audit row and reopened a slot (3 deletions turned 7 credits into 10)"
+    terminal_state: closed_in_commit
+    commit: oi320-referrer-cap batch commit (see header)
+    verification: "Reproduced first: test/sql/oi320_referrer_cap_deletion_replica.sql on the v1 design (cap + lock, CASCADE kept) reads K1 fail credited=4 and K2 fail (the 8th credited). Fixed in migration 158 (referee_id DROP NOT NULL; FK re-created ON DELETE SET NULL): K1-K5 ok. Live verify I5 (every FK to users is confdeltype n, exactly two) and I6 (both columns nullable) read fail on the old schema and ok after; case M1 (credited rows whose referee_id is NULL still count) reads fail on the old body. SQL mutants S21/S21b/S21c (referee FK kept CASCADE / NOT NULL kept), S31/S31b (FK dropped) red."
+
+  - id: C6
+    title: "plan-review round 1: the old function body took the referrer's then the referee's subscription row lock, so P redeeming Q while Q redeems P deadlocks; the v1 single advisory lock did not remove it"
+    terminal_state: closed_in_commit
+    commit: oi320-referrer-cap batch commit (see header)
+    verification: "MEASURED on the replica with the OLD body, pgbench, 2 clients x 3000 opposite-direction pairs: 51 deadlock detected (40P01) in one run, 2 in another; on migration 158: 0 errors, 6000 credited. v2 takes both users' advisory locks lowest-key-first. Pinned deterministically (the statistical run varies): test/sql/oi320_referrer_cap_concurrency_local.sh PART 2a holds the higher key from a helper session and reads pg_locks for the call under test, with the referrer on the high key and on the low key; PART 1b pins that the locks are transaction-level (a session lock makes B wait). Mutants S24 (single lock), S25/S26 (referrer-first / referee-first), S27 (descending), S28 (only the lower lock) and S30 (referee key prefix) are red ONLY under the race script; Dart pins on both sorted locks and the key derivation."
+
+  - id: C7
+    title: "three false statements in the v1 migration comments (a single lock 'cannot deadlock', the flag 'records the credit' when it records the decision, 'Destructive: no' with no mention of the DDL), and a rollback block that restored an equivalent body, not the live one"
+    terminal_state: closed_in_commit
+    commit: oi320-referrer-cap batch commit (see header)
+    verification: "Header rewritten with the measured facts (decision vs effect; lock order; the DDL; the timeout wording hedged: 'if one is configured'; ONE redemption per transaction). The inline rollback block holds the live definition VERBATIM. MEASURED: apply 158 to a copy of the old replica, insert a NULL-referee row, run the rollback block: md5(pg_get_functiondef) = 1066f4cb5b1c36058fd5c0b635e3209d (length 1825), both FKs back to ON DELETE CASCADE, both columns NOT NULL, ACL and search_path unchanged, the NULL row deleted. Pinned by the Dart group 3b against the replica schema's copy of the live body."
+
+  - id: C8
+    title: "every reader IN THIS REPO of referral_redemptions.referee_id and referrer_id tolerates NULL"
+    terminal_state: verified_clean
+    evidence: "git grep over lib/ and supabase/functions/ (non-test): sync_restore_completeness.dart:670-683 selects the five columns and stores the raw rows in Hive (no field parsed); referral_repository.dart:57 filters .eq('referee_id', userId); redeem-referral/index.ts:106 filters .eq('referee_id', referee.id); restore-user-snapshot/index.ts:261-266 selects the same five columns; the RLS policy (migration 100:92) reads both columns inside an OR. Group 4b of the Dart test fails if a Dart file reads ['referee_id'] or ['referrer_id'] out of a row. Not checkable from the repo: dashboard-created views and the out-of-repo Telegram bot."
+
+  - id: C9
+    title: "apply protocol gap: rows written by the OLD body carry referrer_rewarded=false, so the cap cannot count them; a referrer with redemptions in the 90 days before the apply could exceed 7"
+    terminal_state: closed_in_commit
+    commit: oi320-referrer-cap batch commit (see header)
+    verification: "Plan section 4 step 2 reads count(*) and count(distinct referrer_id) of referral_redemptions in the last 90 days before the apply (expected 0: the 3 live rows are 2026-06-17 to 2026-06-26) and makes a non-zero result a STOP and a question to the founder; backfilling flags is a data change with its own go."
+
+  - id: C10
+    title: "plan-review round 2, P2: the same cascade on referrer_id - deleting a referrer deleted the audit rows of their referees, so a referee whose referrer was deleted could redeem a SECOND code (14 days instead of 7); with the cap in place, burner referrers that delete themselves become the cheap farm"
+    terminal_state: closed_in_commit
+    commit: oi320-referrer-cap batch commit (see header)
+    verification: "Reproduced first on the v2 design (only referee_id SET NULL): test/sql/oi320_referrer_cap_deletion_replica.sql K4 and K5 read fail (the second redemption succeeded). Fixed in migration 158: referrer_id DROP NOT NULL and the FK re-created ON DELETE SET NULL, in the same ALTER TABLE as the referee key. K4/K5 ok on 158; live verify I5 (two FKs, both confdeltype n) and I6 read fail on the old schema. This is a design extension of mine, beyond the founder's number; it is reversible before the apply and is flagged to the founder."
+
+  - id: C11
+    title: "plan-review round 2, P2: DROP CONSTRAINT on a foreign key takes ACCESS EXCLUSIVE on public.users as well as the audit table, with no lock_timeout, so a long reader of users convoys every later query on users behind the migration (measured by the reviewer: a plain count(*) waited 2.7 s)"
+    terminal_state: closed_in_commit
+    commit: oi320-referrer-cap batch commit (see header)
+    verification: "Migration 158 opens with SET lock_timeout = '3s' and closes with RESET lock_timeout (the convention of migrations 152 and 157); the whole file is idempotent (applied twice with no error), so a timeout leaves a re-run to converge. The Dart pin 'lock_timeout before the first ALTER and RESET after the ACL' fails if either line moves or disappears. The SQL mutant S39 (lock_timeout removed) is not a behavioural change and stays green in SQL by design; the Dart pin owns it (see C16)."
+
+  - id: C12
+    title: "plan-review round 2, P2: two undetected regressions - (a) the referee's EXTEND branch gated by the cap decision, (b) credited rows of deleted referees dropped from the count (a count that filters referee_id IS NOT NULL, or count(DISTINCT referee_id))"
+    terminal_state: closed_in_commit
+    commit: oi320-referrer-cap batch commit (see header)
+    verification: "Live verify case R1 (a capped redemption of a referee who already holds a 30-day subscription must add 7 days and leave the referrer unmoved) and case M1 (three credited rows set to a NULL referee still count) both read fail on the old body, ok on 158, and are red under the matching SQL mutants. The Dart pins now compare the whole count statement and the whole referee block (free of v_credit_referrer) instead of per-clause fragments."
+
+  - id: C13
+    title: "plan-review round 2: the live verify could not see a second foreign key (a differently named key with ON DELETE CASCADE survives the DROP CONSTRAINT IF EXISTS of the two known names and keeps a cascade alive)"
+    terminal_state: closed_in_commit
+    commit: oi320-referrer-cap batch commit (see header)
+    verification: "Two layers. (1) The migration ends its DDL with a post-condition DO block that raises if any foreign key over either column is not ON DELETE SET NULL or either column is still NOT NULL: MEASURED, with a planted referral_redemptions_referrer_id_fkey1 CASCADE key the migration aborts and names the key. (2) Live verify case I5 reads every FK of the table to users from pg_constraint and requires exactly two, all confdeltype n. See run_fk positive control in the mutation record."
+
+  - id: C14
+    title: "plan-review round 2: the replica-only deletion file guarded on 'fewer than N users', which cannot tell the 20-user replica from the 43-user live project; the concurrency script refused only on a user-count threshold"
+    terminal_state: closed_in_commit
+    commit: oi320-referrer-cap batch commit (see header)
+    verification: "The replica schema file creates public.oi320_replica_marker; the deletion file refuses unless to_regclass('public.oi320_replica_marker') is not null (the live project has no such table), and the race script requires the marker table, the allowlisted container/database names and fewer than 100 users. Each refusal path was exercised by hand."
+
+  - id: C15
+    title: "plan-review round 2: documentation and process truth - the plan's apply protocol ordered the reviews after the live apply, implied the plan-review record could ride in the same commit as the review file it is hashed into, mis-stated which gates are red while migration 158 sits unapplied, and cited stale counts"
+    terminal_state: closed_in_commit
+    commit: oi320-referrer-cap batch commit (see header)
+    verification: "Plan v3 section 4 rewritten: B-pass and hermes pass on the draft BEFORE the apply go; the review file renamed to the final staged hash at commit time and re-run if the migration SQL changed; Gate 14 and applied_migrations_parity_test red by design while the file is unapplied; the commit that says closes-oi: OI-320 also moves the board entry to closed_issues.md and regenerates OPEN_INDEX.md; the plan-review record carries branch / bpass_review / hermes_report and lands as a later commit. Counts re-measured after the last edit."
+
+  - id: C16
+    title: "mutation proof (CLAUDE.md section 4.4 rule 21) of the v3 tests"
+    terminal_state: closed_in_commit
+    commit: oi320-referrer-cap batch commit (see header)
+    verification: "FINAL runs on the final tree. SQL mutants (scratchpad run_final.py, 58 definitions, each applied to a copy of 158 (or, for the R-series, to the replica schema) and run against the verify, deletion and race files in a fresh sandbox database; anchor-checked before any write, nothing written to the repo): 58 mutants, 54 red, 4 green by design (S32 post-condition block removed alone, S39 lock_timeout removed, n3 and n5 restated credit-block edits, each owned by a Dart pin); baseline green 28+6 ok and race ok; the race script's cleanup leaves 0 stray (NULL, NULL) audit rows. Earlier intermediate run: 44 migration definitions on the 26-case file, 42 red, 2 green by design - superseded by the final 58-mutant run above, whose S-series reproduces that result on the 28-case file; the lock mutants are red only under the race script. Dart-pin mutants: 80 mutants in three sets run against the final 29-test file, 80 red (1-2 tests each), originals restored and byte-compared by sha256: run_dart_v3.py 53 of the migration / Edge Function / a Dart reader, run_dart_v3b.py 18 of the credit blocks and the replica schema file, run_dart_v3c.py 9 of an Edge Function reader, the raw restore, the RLS shape and the guard's auth probe.. Duplicate-FK positive control: run_fk.py: a planted second CASCADE FK over each user column makes the unmodified migration fail to load (names the key); with the block removed verify I5 and the deletion file (K4/K5 for referrer_id, K1/K2 for referee_id) go red; the replica-only refusal paths were each exercised (deletion file without the marker table leaves the 20 users untouched; race script refuses a no-marker database, the database postgres and the container b1-pgtest).."
+
+  - id: C17
+    title: "the cap is per ACCOUNT, not per person: a referrer who deletes their account and signs up again, or holds a second account, starts with a fresh count"
+    terminal_state: verified_clean
+    evidence: "Measured on the replica (deletion file K1/K2: the count survives a referee's deletion; a deleted REFERRER takes the count with them because the audit rows lose their referrer_id). Nothing in the schema ties accounts together (no device or payment identity on public.users), so the residual is stated in the migration header, the plan section 2 and the OI-320 entry rather than claimed away. Bounded by UNIQUE(referee_id) on the receiving side and the 7-day signup window."
+
+  - id: BP1
+    title: "B-pass finding 1, P2 (reproduced): the replica schema file had no guard of its own - run in psql's default mode against a database that already held the replica, the failing CREATE TABLEs were skipped and the later statements ran, REPLACING the capped function with the old uncapped body, adding 20 users and leaving a valid replica marker, so the delete-capable replica-only files then ran against it"
+    terminal_state: closed_in_commit
+    commit: oi320-referrer-cap batch commit (see header)
+    verification: "Reproduced before the fix: md5(pg_get_functiondef) e69618b8... -> 1066f4cb... (the old body), users 20 -> 40, marker f -> t. Fixed in test/sql/oi320_referrer_cap_replica_schema.sql: the file is one BEGIN ... COMMIT transaction, opens with a guard that raises 'REFUSED' when public.users / referral_redemptions / subscriptions / redeem_referral_atomic / the marker already exist, and creates the marker LAST. After the fix: a fresh build is rc 0 with 20 users and the marker; a default-mode re-run on a built replica prints REFUSED and changes nothing; a re-run after dropping only the marker leaves md5 and users unchanged and creates no marker. Dart group 3d pins BEGIN first / COMMIT last, the guard and its five probes, and the marker after the fixture users; Dart mutants S1-S9 (BEGIN removed, COMMIT removed, guard removed or deleted, each of the users / function / marker probes removed, the REFUSED message dropped, the marker created first again, the fixture users inserted after the marker) are 9 of 9 red, with the file restored byte-identical."
+
+  - id: BP2
+    title: "B-pass finding 2, P2: the cap holds only if no authenticated user can DELETE or UPDATE their own referral_redemptions rows, and the repo shows only the SELECT policy while the table predates the migration tree (dashboard-created write policies could not be ruled out from the repo)"
+    terminal_state: verified_clean
+    evidence: "Live read-only query 2026-10-11 (project dedsavbjuwgarrhphgnl): RLS enabled (not forced); exactly one policy, 'Users can read own redemptions' (SELECT, role public); no INSERT / UPDATE / DELETE policy; no triggers; anon and authenticated hold full table GRANTS (platform default), so RLS is the only barrier. created_at is timestamptz default now(), nullable. 3 rows, 0 in the last 90 days. Plan section 1 records these facts and section 4 step 1 re-reads pg_policy, the grants and created_at at apply time with a STOP on any non-SELECT policy for anon/authenticated."
+
+  - id: BP3
+    title: "B-pass finding 3, P2: plan section 4 step 5 said to merge origin/main into the branch BEFORE the apply commit, but docs/sot_registry.yaml is staged and also changed on origin/main (a two-line line_range edit), so a merge with it staged refuses, and committing first is blocked by Gate 14 while the unapplied file is on disk"
+    terminal_state: closed_in_commit
+    commit: oi320-referrer-cap batch commit (see header)
+    verification: "Plan section 4 step 5 reordered: apply -> commit (Gate 14 is green only once the ledger entry is staged) -> merge origin/main into the clean branch -> re-run the gate loop on the merged tree (the merge-time plan-review gate was rewritten on main). Overlap measured: git diff --name-only HEAD origin/main intersected with the staged set is docs/sot_registry.yaml only."
+
+  - id: BP4
+    title: "B-pass finding 4, P2: documents enumerating exactly FIVE pseudonymised (ON DELETE SET NULL) surfaces and saying everything else cascades became false once referral_redemptions keeps its rows after an account deletion (docs/architecture/payment.md step 7, docs/naming_conventions.md deletion row, the migrations CLAUDE.md migration-049 row, the integration_test T5 scaffold comment, the delete-account Edge Function comments)"
+    terminal_state: closed_in_commit
+    commit: oi320-referrer-cap batch commit (see header)
+    verification: "payment.md step 7, the naming_conventions.md glossary row, the supabase/migrations/CLAUDE.md migration-049 row and the integration_test/flows/delete_account_e2e_test.dart T5 comment now name referral_redemptions as the sixth surface (both user columns, and why). The two comments in supabase/functions/delete-account/index.ts (:16, :369-372) say '5 community surfaces ... per migration 049', which is still true of migration 049; they are deliberately NOT edited, because an edit to a catastrophic-tier Edge Function would make git differ from the deployed bundle for no behavioural effect, and the sixth surface is documented where the cascade is explained (payment.md)."
+
+  - id: BP5
+    title: "B-pass finding 5, P2: the plan and ledger took no position on the registry's catastrophic requires: feature_flag (CLAUDE.md section 4.6)"
+    terminal_state: closed_in_commit
+    commit: oi320-referrer-cap batch commit (see header)
+    verification: "Plan section 2 now states the position: no runtime kill switch (it would live inside the SECURITY DEFINER function, a second code path, and its 'off' state is the abuse this batch closes); the old path is preserved verbatim as the inline rollback block, measured byte-exact (md5 1066f4cb5b1c36058fd5c0b635e3209d, length 1825); nothing enforces the registry entry mechanically (scripts/safe_push.sh:132-135, scripts/reconcile_ci.dart:41). The plan-review record repeats it."
+
+  - id: BP6
+    title: "B-pass finding 6, P3 (reproduced with 3 mutants that passed both SQL files): the verify cases were blind to the guard's mirror - L1 tested only the NULL referee arm; no case had a referrer who was also a referee; every case used one code, while codes expire and regenerate"
+    terminal_state: closed_in_commit
+    commit: oi320-referrer-cap batch commit (see header)
+    verification: "test/sql/oi320_referrer_cap_live_verify.sql is now 27 cases: L2 (a NULL referrer raises 23502 from the guard and writes nothing), E1 inserts an audit row in which the referrer under test is the REFEREE of a credited row before the window edge, M1 redeems through a SECOND code (v_code2). Old body 18 fail / 9 ok, migration 158 27 ok. Mutants n1 (referrer arm dropped) red by L2; n8 (referee arm dropped) red by L1; n2 (count also matches rows where the referrer was the referee) red by E1 and F1; n7 (count scoped per code) red by M1 and R1 (and the race script)."
+
+  - id: BP7
+    title: "B-pass finding 7, P3 (reproduced with 2 mutants): the referrer credit block is re-typed inside the new IF and was pinned by nothing - dropping AND status = 'active' from its MAX(end_date) read (n3) or hard-coding interval '7 days' for p_days (n5) passed every SQL file and every Dart pin"
+    terminal_state: closed_in_commit
+    commit: oi320-referrer-cap batch commit (see header)
+    verification: "Dart group 3c: the referrer credit statements must equal the previous body's (kept in the replica schema) plus exactly one closing END IF, and the referee credit statements must equal the previous body's exactly. The SQL mutants n3 and n5 stay green in SQL BY DESIGN (the behavioural files use p_days = 7 and one active row); Dart mutants E1-E8 (n3 status filter dropped, n5 and two more hard-coded 7-day amounts, the referee read without its status filter, either credit's plan name changed, the referrer extend losing its end_date guard) are 8 of 8 red, 1 test each."
+
+  - id: BP8
+    title: "B-pass finding 8, P3: the registry concept's readers: list had one entry and reader_manifest_complete: true is vacuous for it; the older referral_redemption concept lists a column referrer_user_id that is not in backups/live_schema_columns.json"
+    terminal_state: closed_in_commit
+    commit: oi320-referrer-cap batch commit (see header)
+    verification: "docs/sot_registry.yaml: the referral_referrer_cap readers now list the restore path (sync_restore_completeness.dart:674-691), restore-user-snapshot (index.ts:261-266), ReferralRepository.hasRedeemed (referral_repository.dart:40-71, filter at :57), the Edge Function idempotency read (redeem-referral/index.ts:104-106) and the RLS policy (migration 100:92); the older concept's cloud_columns now say referrer_id. check_sot_registry_parity, _completeness, _citations, check_reader_manifest_complete, Gate 42 and check_schema_column_refs pass."
+
+  - id: BP9
+    title: "B-pass finding 9, P3: documentation truth - OI-336 and the plan cited the invite-copy files at the wrong paths; the plan cited the hermes check at a line that moved; the ledger quoted two different mutant counts; two documents said a NULL party is tolerated by 'every reader'"
+    terminal_state: closed_in_commit
+    commit: oi320-referrer-cap batch commit (see header)
+    verification: "Paths corrected to lib/features/profile/screens/invite_friends_sheet.dart:246 and lib/features/profile/screens/profile/profile_content.dart:561 (both lines read back); the gate cite names the check, not a line, and says to read the origin/main version; the ledger counts are the measured 44 / 53 and the typos are gone; database.md, supabase/functions/CLAUDE.md and ledger row C8 now say 'every reader in this repo' and name the unchecked ones (dashboard objects, the out-of-repo Telegram bot)."
+
+  - id: BP10
+    title: "B-pass finding 10, P3: apply-protocol gaps (created_at type, 'show lock_timeout' after a fired timeout, the window-gap read taken only before the apply) and the header tag 'Destructive?: no' on a migration that drops and re-adds two foreign keys"
+    terminal_state: closed_in_commit
+    commit: oi320-referrer-cap batch commit (see header)
+    verification: "Plan section 4: step 1 reads pg_policy, the grants and created_at (timestamptz default now(), measured); step 3 reads show lock_timeout on a fresh session and re-reads the window-gap count right after the apply. The header tag stays 'no' on purpose: nothing is dropped, rewritten or lost (DROP NOT NULL widens; the foreign keys are dropped and re-added in ONE statement with a different ON DELETE action that PRESERVES rows on a later deletion); the header line spells out the exact DDL, and the founder signs off the apply separately."
+
+  - id: BP11
+    title: "B-pass reviewer's own deviations from the command list: a classifier-denied probe of pg_database, one python3 --version, one rm -f of its own scratch file, sed as an output filter, and /tmp/bp_*.sql pgbench scripts left inside the sandbox container"
+    terminal_state: verified_clean
+    evidence: "None touched anything outside the reviewer's scratchpad or the throwaway sandbox container oi320-pgtest. The reviewer's bp_* databases were dropped by it; the leftover /tmp/bp_*.sql files inside the container are removed by the coordinator at cleanup. The briefs for the hermes seats keep the same exhaustive command list."
+
+  - id: HM1
+    title: "hermes pass (seat H1 L2/L37, seat H4 L23), P2/P3: nothing pinned WHO can read or WRITE the audit rows - the replica ran with RLS off, no file used a role or auth.uid(), and the cap holds only while an authenticated user cannot rewrite or delete their own rows (anon and authenticated hold the platform-default full table grants, so RLS is the only barrier); a future permissive policy would reopen the cap silently"
+    terminal_state: closed_in_commit
+    commit: oi320-referrer-cap batch commit (see header)
+    verification: "test/sql/oi320_referrer_cap_replica_schema.sql now carries the LIVE shape (RLS on, the one SELECT policy over both user columns, the full grants, a minimal auth.uid(); the guard also refuses a database that already has an auth schema). Deletion file case K6 runs as authenticated and anon through request.jwt.claim.sub: a referee of a deleted referrer sees exactly its own row, a referrer sees its 3 NULL-referee rows, an unrelated user and anon see none, an own-row UPDATE and DELETE touch 0 rows and an INSERT is refused. Live verify case I7 (runnable live) reads RLS enabled and NO INSERT/UPDATE/DELETE policy for anon / authenticated / PUBLIC, so the apply-time check is part of the verify output. Dart group 3e pins the replica's RLS shape. Replica-schema mutants R1-R6 (RLS off, a write policy, an ALL policy, a policy hiding NULL-party rows, a policy without the referee arm, a policy showing everything): R1-R6 are 6 of 6 red (R1 RLS off, R2 a write policy, R5 an ALL policy by I7 and K6; R3 a policy hiding NULL-party rows, R4 a policy without the referee arm, R6 a policy showing everything by K6), and the Dart mutants T3-T3d (RLS enable removed, a second policy, the referee arm lost, the anon grant lost) are 4 of 4 red."
+
+  - id: HM2
+    title: "hermes pass (all four seats found it independently), P2: supabase/functions/CLAUDE.md row 181 still said 26 cases and 20 source pins after the counts moved - the B-pass sweep for stale counts (BP9) missed this row"
+    terminal_state: closed_in_commit
+    commit: oi320-referrer-cap batch commit (see header)
+    verification: "The row now says 28 cases, 6 deletion cases and 29 source pins (re-measured: the verify file prints 28 ok lines on 158, the deletion file 6, flutter test of the Dart file +29). Every document that carries these counts was re-grepped: the plan (sections 3 and 4), the ledger, the registry concept, the Dart and SQL headers, database.md, functionality-flow.md and the OI-320 entry."
+
+  - id: HM3
+    title: "hermes pass (seats H1, H4), P3: two older registry concepts (subscription_expiry_derived, referral_trial_subscription_grant) still named migration 038 (line_range 1-9999) as the writer of the grant; since 158 the live body is 158 and the referrer's half is conditional (the 'last CREATE OR REPLACE wins' trap, CLAUDE.md 4.9)"
+    terminal_state: closed_in_commit
+    commit: oi320-referrer-cap batch commit (see header)
+    verification: "Both concepts now list migration 158 (lines 111-204) as the LIVE writer beside 038 as the origin, the description says the referrer is credited only under the cap, and referral_trial_subscription_grant lists referral_referrer_cap in related_concepts. check_sot_registry_parity, _completeness, _citations, check_reader_manifest_complete and Gate 42 pass. No test greps the 038 citation (git grep over test/ scripts/ lib/ is empty)."
+
+  - id: HM4
+    title: "hermes pass (seat H1), P3: days_granted_each stays 7 on a capped row, and both restore selects (sync_restore_completeness.dart:677, restore-user-snapshot/index.ts:265) omit referrer_rewarded / referee_rewarded, so a restored history cannot tell a capped referral from a credited one; the meaning of days_granted_each (agreed, not credited) is documented nowhere"
+    terminal_state: closed_in_commit
+    commit: oi320-referrer-cap batch commit (see header)
+    verification: "database.md, the supabase/functions/CLAUDE.md row and the OI-336 entry now say days_granted_each is the AGREED amount and credited-or-not is read from the two flags, and OI-336 records the precondition (add both flags to both selects, the Edge Function part needing its own deploy go) for any surface that shows the history. Nothing reads userBox['referral_redemption_history'] today (git grep: one writer, no reader), so there is no live defect to fix in this batch."
+
+  - id: HM5
+    title: "hermes pass (seats H1, H2), P3: the Dart pin for 'readers tolerate a NULL party' scanned lib/*.dart bracket reads only - not TypeScript, and not the restore function's own shape"
+    terminal_state: closed_in_commit
+    commit: oi320-referrer-cap batch commit (see header)
+    verification: "Group 4b now also scans supabase/functions/**/*.ts (non-test) for a property read or subscript of either column (none exist: only .eq() filters and select strings name them) and pins that _restoreReferralRedemptions stores the fetched rows raw (userBox.put of rows, no map/where/cast/as String). Dart mutants T1 / T1b (an Edge Function dereferences or subscripts either column) and T2 / T2b (the restore path maps the rows or casts a party column) are 4 of 4 red."
+
+  - id: HM6
+    title: "hermes pass (seat H2), P3: the plan said a fired lock_timeout leaves 'nullable columns, the old CASCADE keys and the old body'; that holds only for a stop-at-first-error runner - under a continue-after-error runner (plain psql) the NEW capped body can sit beside CASCADE keys, so an account deletion would reopen the cap until the re-run"
+    terminal_state: closed_in_commit
+    commit: oi320-referrer-cap batch commit (see header)
+    verification: "Plan section 4 step 3 now treats ANY error as a half-applied database, says what each runner leaves, requires re-running the file until it completes clean and reading the catalog check plus I5/I6 first. MEASURED by the seat: the re-run converged to one catalog digest (function md5, ACL, search_path, constraints, columns, indexes) from apply-once, apply-twice, timeout-then-rerun and five hand-built half states. The migration file is unchanged by this finding."
+
+  - id: HM7
+    title: "hermes pass (seat H4), P3: the 'not checkable' notes for dashboard-created functions, views, triggers and cron jobs that mention referral_redemptions could be checked with a read-only live catalog query"
+    terminal_state: closed_in_commit
+    commit: oi320-referrer-cap batch commit (see header)
+    verification: "Run 2026-10-11 against project dedsavbjuwgarrhphgnl (read-only): pg_proc.prosrc, pg_views, pg_matviews, views depending on the table through pg_rewrite, pg_trigger definitions, pg_policies on other tables, cron.job commands and foreign keys INTO the table returned exactly one hit, public.redeem_referral_atomic (md5 1066f4cb5b1c36058fd5c0b635e3209d, the old body, still live). Plan section 4 step 1 repeats the query at apply time; only the out-of-repo Telegram bot stays unchecked and is named as such."
+
+  - id: HM8
+    title: "hermes pass (seat H3), P3: the live verify is one transaction that calls the function about 20 times on real user ids, so a production redemption touching two of the same borrowed users in the opposite order could be chosen as the deadlock victim (measured in the sandbox)"
+    terminal_state: closed_in_commit
+    commit: oi320-referrer-cap batch commit (see header)
+    verification: "Plan section 4 step 4 says to run it in a quiet moment and to check that no referral_redemptions row was created in the last hour; the production exposure is tiny (3 redemptions all-time, both users would have to be among the 19 borrowed ones inside well under a second) and the victim sees a generic 500 with nothing half-written."
+
+  - id: HM9
+    title: "hermes pass (seat H3), P3 (reproduced): the race script's cleanup deletes the users it added but, with both user columns ON DELETE SET NULL, that no longer deletes their audit rows - the replica kept one (NULL, NULL) row per redemption (6000 by default) and the comment said 'leave the replica as found'"
+    terminal_state: closed_in_commit
+    commit: oi320-referrer-cap batch commit (see header)
+    verification: "The cleanup now deletes the pairs' audit rows before their users and the comment says why; the final mutation matrix prints, for the baseline run, the number of (NULL, NULL) audit rows left behind: 0 (expected 0). The seat's reproduction with the old cleanup left 900 of 900 rows at 300 triples."
+
+  - id: HM10
+    title: "hermes pass (seat H4), P3 false alarm by design: the two delete-account comments still say 5 community surfaces (migration 049); and the seats' own deviations from the command list (one docker ps read, five stray psql error files in the primary repo root, shell &/wait/timeout/printf/tr)"
+    terminal_state: verified_clean
+    evidence: "The comments cite migration 049 specifically and are true of it (see BP4: not edited, to avoid git-vs-deployed drift of a catastrophic-tier Edge Function); the sixth surface is documented in payment.md, naming_conventions.md and the migrations CLAUDE.md row. The five stray files (hq2_h_S1/2/3/5/7.err, 111 bytes each, psql 'database does not exist') were inspected and deleted by the coordinator; git status of the primary repo shows none. The docker ps was a read-only listing; nothing outside the sandbox container or the seats' scratchpads was touched."
+
+  - id: A1
+    title: "the live apply of migration 158 to project dedsavbjuwgarrhphgnl, its backups/applied_migrations.json entry, and closes-oi: OI-320"
+    terminal_state: closed_in_commit
+    commit: oi320-referrer-cap batch commit (see header)
+    verification: "Applied through apply_migration on the founder's explicit go (2026-10-11), version 20261011182941, the file byte-for-byte: the stored statement's sha256 equals the file's (527999b4...ecafa). Pre-apply re-read clear (function md5 1066f4cb..., five constraints, both FKs CASCADE, 0 rows in the window, 0 in the last hour). Post-apply catalog: function md5 e69618b8bdabe6ef495a0a463efd51e0 equal to a local apply, search_path=public, ACL {postgres,service_role}, SECURITY DEFINER, void, both FKs confdeltype n, both columns nullable, lock_timeout 0. test/sql/oi320_referrer_cap_live_verify.sql through execute_sql: 28 of 28 lines ok, nothing persisted (3 rows, no NULL-party rows, no AVYA-VERIFY code). The ledger entry is hashed by scripts/migration_ledger_hash.dart (Gate 39 green); the OI-320 entry moved to docs/audit/closed_issues.md and OPEN_INDEX.md regenerated. Plan section 6 is the record."
+
+  - id: Q1
+    title: "a capped referrer's friend still gets their 7 days (my default; the founder decided only the number). Flip = the referee block's gate, one line, before the apply"
+    terminal_state: closed_in_commit
+    commit: oi320-referrer-cap batch commit (see header)
+    verification: "The founder accepted the default on 2026-10-11 ('OI-320 defaults yes acceptable'). The behaviour is in migration 158 (the referee block is outside the IF v_credit_referrer) and is pinned by live-verify B3 (the referee of a capped redemption holds a 7-day trial), R1 (a capped redemption extends a referee who already holds PRO) and J2, and by the Dart pins on the credit blocks; SQL mutants 'referee not credited when capped' and 'referee extend UPDATE gated' are red."
+
+  - id: Q2
+    title: "invite copy (lib/features/profile/screens/invite_friends_sheet.dart:246 'you both get 7 days of PRO free', lib/features/profile/screens/profile/profile_content.dart:561 'Both get 7 days PRO free') and a referrer-facing 'n of 7 left' surface"
+    terminal_state: blocked_on_user
+    reason: "The founder answered YES to both questions on 2026-10-11 (the invite copy states the cap; a referrer sees 'n of 7 left'). What remains is the founder's review of the drafted user-facing wording (Wardroom voice) once the OI-336 batch has written it, plus the founder's own go for the Edge Function half of the restore-flags precondition (a live deploy). Tracked as OI-336, independent of OI-320; both existing lines stay true for the referee always and for the referrer up to 7 per 90 days."

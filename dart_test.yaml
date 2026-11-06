@@ -1,0 +1,22 @@
+# dart_test.yaml — test runner configuration.
+#
+# The `golden` tag marks golden-image tests (test/goldens/**). They render
+# widgets pixel-for-pixel and are inherently PLATFORM-SPECIFIC: font hinting
+# and anti-aliasing differ between the dev platform (Windows, where the golden
+# PNGs are generated via `--update-goldens`) and CI's Linux runners. They pass
+# on the Windows dev platform but mismatch on Linux.
+#
+# CI's unit-test shards (one per matrix leg, each a disjoint set of whole files;
+# since 2026-10-11) therefore each run `flutter test <their files> --exclude-tags
+# golden` (see .github/workflows/test.yml), and the pre-push full suite runs
+# `flutter test test/ --exclude-tags golden`
+# (scripts/pre-push.sh run_full_suite -- pinned to CI's invocation by
+# test/scripts/pre_push_matches_ci_invocation_test.dart). Corrected 2026-10-10:
+# this comment used to say the pre-push suite runs the goldens; it does not.
+# They run ONLY on a matching platform, by hand (`flutter test test/goldens/`)
+# or under PRE_COMMIT_FULL=1, which runs a bare `flutter test`.
+# Background: feedback_local_ci_env_divergence.md (4th env-divergence flavor,
+# after Flutter-pin -> CRLF/LF -> timezone IST/UTC).
+tags:
+  golden:
+    # platform-specific render; excluded from CI, run locally on the dev platform.
