@@ -33,6 +33,7 @@ import 'workout_schedule_read_service.dart';
 import 'workout_write_service.dart';
 import 'write_result.dart';
 import '../utils/date_utils.dart';
+import '../utils/exercise_name_identity.dart';
 import '../utils/ist_date.dart';
 import '../../shared/repositories/plan_engine/equipment_capability.dart';
 import '../../shared/repositories/plan_engine/session_budget.dart' show SessionBudget;
@@ -489,6 +490,23 @@ class SwapService {
         'exercise_not_found',
         'Exercise "$toExerciseId" not found in library or custom exercises',
       );
+    }
+
+    // OI-358: one name per day. Two rows with one name reach the Active Workout
+    // screen as two cards sharing a GlobalKey. Compared on the name that would
+    // be written below, so a target given by id is caught too. The same slot
+    // stays allowed.
+    final incomingName = (newLib['name'] as String?) ?? toExerciseId;
+    final incomingKey = exerciseNameKey(incomingName);
+    for (var i = 0; i < exercises.length; i++) {
+      if (i == matchIndex) continue;
+      final other = exerciseRowName(exercises[i]);
+      if (other != null && exerciseNameKey(other) == incomingKey) {
+        throw SwapExerciseException(
+          'exercise_already_in_workout',
+          '"$incomingName" is already in that workout.',
+        );
+      }
     }
 
     // ⑦ OI-89 seam 9: this service had NO equipment check, and the AI coach's

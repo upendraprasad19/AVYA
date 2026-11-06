@@ -13,10 +13,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/copy/wardroom_copy.dart';
 import '../../../core/services/hive_service.dart';
 import '../../../core/theme/colors.dart';
 import '../../../core/theme/spacing.dart';
 import '../../../core/theme/typography.dart';
+import '../../../core/utils/exercise_name_identity.dart';
 import '../../../core/utils/ist_date.dart';
 import '../../../shared/repositories/plan_engine/equipment_capability.dart';
 import '../../../shared/repositories/plan_engine/training_history_analyzer.dart';
@@ -274,6 +276,8 @@ class _CoachSwapSheetState extends ConsumerState<CoachSwapSheet> {
                 )
               : Builder(builder: (ctx) {
                   final options = _substitutesFor(_selectedFrom!);
+                  // OI-358: the service refuses these; say so before the tap.
+                  final taken = exerciseNameKeysOf(_today.map((t) => t.name));
                   if (options.isEmpty) {
                     return Text(
                       'No substitutes available with your current equipment. '
@@ -286,13 +290,21 @@ class _CoachSwapSheetState extends ConsumerState<CoachSwapSheet> {
                     shrinkWrap: true,
                     itemCount: options.length,
                     separatorBuilder: (ctx2, i2) => const SizedBox(height: 6),
-                    itemBuilder: (ctx, i) => _tile(
-                      label: options[i].name +
-                          (options[i].isCustom ? '  ·CUSTOM' : ''),
-                      selected: _selectedTo?.id == options[i].id,
-                      onTap: () =>
-                          setState(() => _selectedTo = options[i]),
-                    ),
+                    itemBuilder: (ctx, i) {
+                      final isTaken =
+                          taken.contains(exerciseNameKey(options[i].name));
+                      return _tile(
+                        label: options[i].name +
+                            (options[i].isCustom ? '  ·CUSTOM' : '') +
+                            (isTaken
+                                ? '  ·${WardroomCopy.activeAlreadyInWorkoutTag}'
+                                : ''),
+                        selected: _selectedTo?.id == options[i].id,
+                        onTap: isTaken
+                            ? null
+                            : () => setState(() => _selectedTo = options[i]),
+                      );
+                    },
                   );
                 }),
         ),
@@ -325,7 +337,7 @@ class _CoachSwapSheetState extends ConsumerState<CoachSwapSheet> {
   Widget _tile({
     required String label,
     required bool selected,
-    required VoidCallback onTap,
+    required VoidCallback? onTap,
   }) {
     return InkWell(
       onTap: onTap,
@@ -343,7 +355,11 @@ class _CoachSwapSheetState extends ConsumerState<CoachSwapSheet> {
           selected ? '✓  $label' : label,
           style: AppTypography.body.copyWith(
             fontSize: 13,
-            color: selected ? AppColors.accent : AppColors.textDim,
+            color: onTap == null
+                ? AppColors.textGhost
+                : selected
+                    ? AppColors.accent
+                    : AppColors.textDim,
           ),
         ),
       ),

@@ -15,6 +15,7 @@ import 'package:icanbefitter/core/services/write_result.dart';
 import 'package:icanbefitter/core/utils/cardio_format.dart';
 import 'package:icanbefitter/core/utils/date_utils.dart';
 import 'package:icanbefitter/core/utils/equipment_vocab.dart';
+import 'package:icanbefitter/core/utils/exercise_name_identity.dart';
 import 'package:icanbefitter/core/utils/gap_policy.dart';
 import 'package:icanbefitter/core/utils/ist_date.dart';
 import 'package:icanbefitter/core/utils/schedule_day_eligibility.dart';
@@ -1771,6 +1772,32 @@ class WorkoutRepository {
           'duplicate_name',
           'A template named "$trimmed" already exists.',
         );
+      }
+    }
+
+    // OI-358: one name per day, checked BEFORE the first put so a refusal leaves
+    // no partial multi-day template. Same skip rule as the write loop below: a
+    // row it would drop cannot refuse.
+    for (int i = 0; i < days.length; i++) {
+      final seen = <String>{};
+      for (final raw in (days[i]['exercises'] as List?) ?? const []) {
+        if (raw is! Map) continue;
+        final exerciseId = raw['exerciseId']?.toString();
+        final exerciseName = raw['exerciseName']?.toString();
+        if (exerciseId == null ||
+            exerciseId.isEmpty ||
+            exerciseName == null ||
+            exerciseName.isEmpty) {
+          continue;
+        }
+        if (!seen.add(exerciseNameKey(exerciseName))) {
+          final dayName =
+              (days[i]['dayName'] as String?)?.trim() ?? 'Day ${i + 1}';
+          throw CreateTemplateException(
+            'duplicate_exercise',
+            '"$exerciseName" is listed twice in $dayName.',
+          );
+        }
       }
     }
 
