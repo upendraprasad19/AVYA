@@ -1,0 +1,172 @@
+# Closure ledger — notif-prefs Unit B (PRO predicate + contract/gate repair)
+#
+# §4.2 structural invariant: every entry carries a terminal_state; there is no
+# `deferred:` key in this schema. Gate 40 (validate_audit_closure.dart)
+# recomputes the tally and fails if any item is non-terminal.
+#
+# Unit B is the first unit of the notif-prefs arc. The split was a founder
+# decision after THREE independent review rounds, each of which surfaced new
+# material defects in units C/D/E/F while never finding one in B. Units A and
+# C-G are sequenced, each with its own closure entry when it lands — nothing in
+# the arc is dropped or downgraded.
+
+batch: notif-prefs-unit-b
+date: 2026-07-26
+blast_radius: platform
+diagnose_docs:
+  - docs/diagnoses/2026-07-26-morning-alert-pro-from-stale-column-a7d2e9.md
+total_count: 10
+closed_count: 10
+
+findings:
+  - id: B1
+    title: morning-alert decided PRO from users.subscription_status
+    severity: P1
+    terminal_state: closed_in_commit
+    commit: 55202d89
+    verification: >-
+      A denormalized column with no expiry term that nothing writes back to
+      'free'. Live: it claimed 6 PRO users; the correct predicate returned 0.
+      Six lapsed users were receiving Gemini-generated PRO copy. Replaced with
+      fetchProUserIds() from _shared/subscription.ts, fetched once per run
+      because the function paginates. Diagnose a7d2e9.
+
+  - id: B2
+    title: No shared definition of PRO existed anywhere
+    severity: P1
+    terminal_state: closed_in_commit
+    commit: 55202d89
+    verification: >-
+      Five distinct hand-rolled predicates across the Edge Functions; nothing in
+      _shared/ determined PRO. Added supabase/functions/_shared/subscription.ts
+      exposing fetchProUserIds (batch) and isProUser (single), both applying
+      status='active' AND end_date > now(), both fail-safe to "not PRO" on error.
+
+  - id: B3
+    title: morning-alert's header claimed a subscriptions gate it never had
+    severity: P2
+    terminal_state: closed_in_commit
+    commit: 55202d89
+    verification: >-
+      Header line read "subscriptions.status = 'active' (PRO gating)" while the
+      code read a users column. An auditor reading the header would have
+      concluded the function was correctly gated. Corrected with the history
+      inline so the next reader understands why the note exists.
+
+  - id: B4
+    title: No regression guard against the PRO-predicate class
+    severity: P1
+    terminal_state: closed_in_commit
+    commit: 55202d89
+    verification: >-
+      test/contracts/pro_predicate_adoption_test.dart — 4 test cases. Fails the
+      build if any Edge Function READS users.subscription_status for a tier
+      decision, while still permitting writes (it remains a legitimate cache).
+      Includes a positive control asserting the detector flags the exact pre-fix
+      line, so the absence assertions cannot pass vacuously.
+
+  - id: B5
+    title: snapshot_contract.yaml's notification_preferences entry was wrong in three ways
+    severity: P2
+    terminal_state: closed_in_commit
+    commit: 55202d89
+    verification: >-
+      written_by speculated a "legacy or future path" when no writer has ever
+      existed; notes said "5 readers" while listing 6; all six line citations
+      had drifted (509->574, 132->146, 196->216, 79->107, 52->53, 197->205).
+      All corrected against re-verified line numbers.
+
+  - id: B6
+    title: check_snapshot_contract.dart structurally could not validate extra_server_written_keys
+    severity: P1
+    terminal_state: closed_in_commit
+    commit: 55202d89
+    verification: >-
+      The parser set inKeys=false at the first column-0 key after `keys:`, and
+      only `keys:` re-entered — so the entire extra_server_written_keys block
+      was never parsed, which is why B5's drift went unseen for months. The
+      block is now parsed with the same entry shape and tagged, and its entries
+      are exempt from the writer-emit phase by definition (no writer emits them)
+      while the reader-citation phase applies in full. This lands the guard
+      BEFORE the refactor that will rely on it (§4.11).
+
+  - id: B7
+    title: The gate's reader probe produced false negatives on this codebase's own idioms
+    severity: P1
+    terminal_state: closed_in_commit
+    commit: 55202d89
+    verification: >-
+      Surfaced only once B6 made the block visible. The probe required
+      snapshot.<key>, but the code writes snapshot_json?.<key> (optional
+      chaining) and (snapshot as Record<...>)?.<key> (cast between root and
+      key). Six accurate citations were reported as violations; following the
+      gate would have meant "fixing" correct entries. Probe now accepts an
+      unrooted property access or string index, which still cannot be satisfied
+      by a bare mention in prose.
+
+  - id: B8
+    title: fetchProUserIds had no row cap — PostgREST would truncate it silently
+    severity: P2
+    terminal_state: closed_in_commit
+    commit: 55202d89
+    verification: >-
+      B-pass finding 1. An unbounded select is truncated at the project's
+      max-rows setting with no error and no log, so past that point PRO users
+      would be classified free — the exact silent-misclassification shape this
+      unit exists to remove, reintroduced one layer down. Inert today (live
+      active-PRO count is 0) but the same file paginates its sibling users
+      fetch for this reason, so the omission was inconsistent as well as
+      latent. Added an explicit .limit() so the ceiling is ours rather than the
+      platform's, plus a console.warn canary at the cap.
+
+  - id: B9
+    title: the "never throws" contract held for API errors but not transport errors
+    severity: P2
+    terminal_state: closed_in_commit
+    commit: 55202d89
+    verification: >-
+      B-pass finding 2. The { data, error } destructure converts PostgREST-level
+      failures into a soft error, but a transport-level fetch rejection (DNS,
+      reset, timeout before any HTTP response) may reject the promise instead.
+      That would propagate into morning-alert's single outer try and abort the
+      whole nightly run for every user, rather than degrade to the free
+      template. Both exported functions now wrap the query in try/catch and
+      return the fail-safe value on a throw, making the documented contract
+      literally true rather than probably true. The reviewer flagged this as
+      UNVERIFIED (settling it needs the pinned library's source); it is closed
+      by making the answer not matter.
+
+  - id: B10
+    title: the new guard's regex missed loose == despite its comment claiming otherwise
+    severity: P3
+    terminal_state: closed_in_commit
+    commit: 55202d89
+    verification: >-
+      B-pass finding 3, confirmed by the reviewer running the regex rather than
+      reading it. `[!=]==` requires three characters, so it matched === and !==
+      but not a bare ==, while the comment above it claimed all three. Changed
+      to `[!=]?==` and extended the positive control to assert all three forms
+      are flagged — the comment and the code now agree, and a future edit that
+      breaks either fails the build.
+
+notes: |
+  Two of the ten (B6, B7) were not on the original plan. They were found by
+  implementing it: B6 was known from review, but B7 only became visible once B6
+  was fixed — the gate could not report a false negative on a block it never
+  read. Both are closed here rather than recorded as findings, because a gate
+  that reports correct citations as violations would have trained the next
+  person to distrust and bypass it.
+
+  Also corrected in this commit: the snapshot_contract citation for the
+  `morning_alert` key moved 505 -> 568, because B1's fix added imports and
+  comments above it. The gate caught that on the same commit — the first commit
+  on which it was capable of doing so.
+
+  B8-B10 came from the B-pass (docs/reviews/notif-prefs-unit-b-review.md) and
+  are closed here rather than carried, per §4.2. None was blocking; all three
+  were cheap. Worth noting what the reviewer did that made them findable: it
+  EXECUTED both regexes against probe strings instead of reading them, which is
+  how B10 surfaced at all — the pattern looks correct until you run it. That
+  technique is the reason a P3 comment/code disagreement was caught rather than
+  inherited, and it generalises: an assertion about a regex is not verified by
+  reading the regex.

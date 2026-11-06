@@ -1,0 +1,422 @@
+# Closure ledger — auth-recovery-code-length (diagnose fa621a)
+# Gate 40 (validate_audit_closure.dart). One terminal_state per finding; no
+# `deferred:` key. closed_count == total_findings.
+#
+# WHAT PRODUCED THESE: a founder-reported incident (a real user could not finish
+# a password reset: the hosted project emailed 8-digit codes, the app's code field
+# allowed 6), two context-blind plan-review rounds (docs/plan-reviews/
+# auth-recovery-code-length.md), the implementation with 73 mutation runs, and a
+# self-initiated two-reviewer B-pass (docs/reviews/auth-recovery-code-length-bpass.md).
+#
+# `commit:` on a closed_in_commit row is the fix commit, 830852a3, merged to main by
+# PR #71 as 4fef03a7. While the work was uncommitted the rows carried the label
+# "auth-recovery-code-length (uncommitted)"; it was replaced by the SHA after the merge.
+
+batch: auth-recovery-code-length
+plan_review_record: docs/plan-reviews/auth-recovery-code-length.md
+bpass_review: docs/reviews/auth-recovery-code-length-bpass.md
+diagnose_docs:
+  - docs/diagnoses/2026-10-03-password-reset-otp-length-mismatch-fa621a.md
+total_findings: 45
+closed_count: 45
+
+findings:
+  # ── The planned units ─────────────────────────────────────────────
+  - id: U1
+    title: "helper + floor constant: lib/core/utils/recovery_code_format.dart (digits only, floor 6, no ceiling)"
+    terminal_state: closed_in_commit
+    commit: 830852a3
+    verification: >
+      Pure tables in the new test (5 accepted and 10 rejected shapes; 19 invisible
+      characters at the start, middle and end of a code; 8 visible-junk strings left
+      untouched) plus normalizeRecoveryCode, added by the B-pass. Mutants M4 (floor 7),
+      M68 (floor 5), M6 (int.tryParse), M11 (&& to ||), M12 (anchors dropped), M13 (>= to >),
+      M47 (a ceiling), M67 (multiLine) and M37-M38 / M48-M51 (the normalization) all red.
+
+  - id: U2
+    title: "sheet: guard via the helper, maxLength and the dead buildCounter deleted, number-free copy / hint / error strings, de-numbered comments and class doc"
+    terminal_state: closed_in_commit
+    commit: 830852a3
+    verification: >
+      Mutants M1 and M3 (maxLength 6 and 10), M66 (a LengthLimitingTextInputFormatter that
+      slips past the maxLength source pin), M2 (the old guard), M5a, M5b, M9, M36 / M36b (no
+      normalization), M15 (OtpType) and M16 (address in the copy) each red; M1 and M2 fail at
+      different assertions (field text vs the /verify request), which is the discriminator.
+
+  - id: U3
+    title: "reset-screen no-session copy states no digit count"
+    terminal_state: closed_in_commit
+    commit: 830852a3
+    verification: >
+      M5c red in the pre-existing flow test (assertion added) and in the source pin.
+
+  - id: U4
+    title: "phone-OTP hint copy: 'Code from your SMS' instead of '6-digit OTP'"
+    terminal_state: closed_in_commit
+    commit: 830852a3
+    verification: >
+      M10 red in the source pin only. Presence-only by design: sign_in_screen.dart is not
+      worth a Riverpod harness for one hint string. The phone OTP step enforces no length
+      (the submit handler checks only isEmpty).
+
+  - id: U5
+    title: "tests + mutation proof, closes OI-109"
+    terminal_state: closed_in_commit
+    commit: 830852a3
+    verification: >
+      test/contracts/password_recovery_code_length_behavioral_test.dart, 99 tests; one
+      assertion added to password_recovery_code_flow_behavioral_test.dart (now
+      order-independent); the first run against the OLD code was red for the intended
+      reasons (18 passed, 13 failed, 31 tests at that point); 73 mutation runs, 69 red and
+      4 equivalent mutants with their reasons recorded, each run confirmed applied and
+      restored (cmp). OI-109 moved to docs/audit/closed_issues.md, index regenerated.
+
+  - id: U6
+    title: "live-doc de-numbering: AUTH-03 rewritten, auth-detail, OI-205 body, auth CLAUDE.md pitfall title; functionality-flow coverage-gap list"
+    terminal_state: closed_in_commit
+    commit: 830852a3
+    verification: >
+      git grep for 6-digit / six-digit / magic-link across live docs returns only
+      historical records (diagnoses, plan-reviews, reviews) and the bug-class 2.45 text.
+
+  - id: U7
+    title: "docs/operations/AUTH_HOSTED_SETTINGS.md + auth CLAUDE.md row and Tests-pinning line + config.toml banner"
+    terminal_state: closed_in_commit
+    commit: 830852a3
+    verification: >
+      Live values re-read read-only 2026-10-03 (mailer_otp_length 6, recovery template
+      code-only, site_url and uri_allow_list as recorded, sms_otp_length 6). The
+      "no minimum-version mechanism" grep returns 0 hits. check_context_artifact_budget.dart
+      PASS.
+
+  - id: U8
+    title: "c9e2b7 dated CORRECTED notes (stale OI-100 cite; the unchecked 6-digit premise)"
+    terminal_state: closed_in_commit
+    commit: 830852a3
+    verification: >
+      Three inline notes in docs/diagnoses/2026-08-06-reset-link-device-bound-pkce-c9e2b7.md;
+      the doc still passes validate_diagnose_doc.dart.
+
+  - id: U9
+    title: "SoT sibling concept password_recovery_code_length + cross-link + glossary row"
+    terminal_state: closed_in_commit
+    commit: 830852a3
+    verification: >
+      docs/sot_registry.yaml entry with behavioral_test_path; the existing
+      password_recovery_session constraint cross-links it; docs/naming_conventions.md
+      section 8 row "recovery code". Registry gates pass in the pre-commit loop.
+
+  - id: U10
+    title: "debugging skill: bug classes 2.85 and 2.86, SKILL.md index rows, Changelog"
+    terminal_state: closed_in_commit
+    commit: 830852a3
+    verification: >
+      grep -oE "^### [0-9]+\.[0-9]+" bug-classes.md | sort | uniq -d lists only the nine
+      pre-existing duplicates (2.36-2.41, 2.53-2.55); 2.85 and 2.86 are not among them;
+      origin/main's highest class on 2026-10-03 was 2.84, so no collision at merge time.
+
+  - id: U11
+    title: "diagnose-doc fa621a + INDEX + OI board move + code-review tuning-history entry"
+    terminal_state: closed_in_commit
+    commit: 830852a3
+    verification: >
+      validate_diagnose_doc.dart OK; check_diagnose_index_fresh and the OPEN_INDEX
+      freshness gate pass; the tuning-history entry is appended in the same change as the
+      review file.
+
+  - id: U12
+    title: "hosted mailer_otp_length 8 -> 6 (live, 2026-10-03, outside git)"
+    terminal_state: closed_in_commit
+    commit: "outside git: live change 2026-10-03; recorded in the batch's fix commit"
+    verification: >
+      Independent config read-back (6, every other allow-listed key unchanged) by both
+      plan reviewers and again by this batch's inventory read. The pre-change value and
+      the per-key sha256 diff are session-sourced. NOT verified end to end: no recovery
+      email has been sent since.
+
+  - id: U13
+    title: "paste handling in the code field"
+    terminal_state: verified_clean
+    evidence: >
+      Separators cannot come from our bare {{ .Token }} template (read from the hosted
+      config). The behaviour change that a pasted whole sentence is now refused instead of
+      cut to its first 6 characters is accepted and recorded in the diagnose-doc. The B-pass
+      (B10) showed the OLD field accepted a trailing zero-width space by accident, so
+      normalizeRecoveryCode was added anyway as cheap insurance, not as a proven need.
+
+  - id: U14
+    title: "a Google-only account gets no hint to use Google on the email path"
+    terminal_state: blocked_on_user
+    reason: >
+      Founder 2026-10-03: leave this for now. That decision predates the finding that the
+      user was shown the email path with no hint she had signed up with Google, so it is
+      re-presented for confirmation. Needs a founder decision, then its own batch.
+
+  - id: U15
+    title: "separate observation: a client holding a valid session was shown the sign-in screen"
+    terminal_state: verified_clean
+    notes: >
+      Founder decision 2026-10-04: no action, no OI, no diagnosis. This is a decision, not a
+      verification: the auth logs cannot tell a log-off, a second window or a stale tab from a
+      routing defect, and one user once is not enough to chase. Not caused by this bug.
+
+  - id: U16
+    title: "founder device check and the web deploy that carries the fix"
+    terminal_state: blocked_on_user
+    reason: >
+      Request a code, expect 6 digits, enter it, set a password, sign in. The web build that
+      carries the fix shipped 2026-10-04 (PR #71, Vercel production deploy READY); the device
+      check is still the founder's. Every shipped APK stays 6-only until replaced, so the
+      hosted length must stay 6; the next APK is founder-initiated.
+
+  # ── Founder items that surfaced while writing the batch ───────────
+  - id: U17
+    title: "§4.6 feature-flag disposition for an auth change shipped without a flag"
+    terminal_state: blocked_on_user
+    reason: >
+      Recorded as EXEMPT in docs/plan-reviews/auth-recovery-code-length.md (the old path is
+      the defect, so a default-OFF flag would preserve the lockout; for every code GoTrue can
+      issue the new predicate accepts a superset of the old one). The founder may overrule and
+      ask for a flag; that is a scope decision, not something to assume.
+
+  - id: U18
+    title: "hosted password_min_length / password_required_characters were not read"
+    terminal_state: blocked_on_user
+    reason: >
+      The client's password validators say "At least 6 characters" (sign_in_screen.dart:879,
+      :997 and the reset screen); if the hosted minimum is higher the form's promise is wrong
+      (visibly, at submit, not silently). Reading both keys is a live Management API read; the
+      inventory row says "not read" and gives the recipe. Needs the founder's go for a live read.
+
+  - id: U19
+    title: "when the hosted mailer_otp_length became 8"
+    terminal_state: blocked_on_user
+    reason: >
+      No config history is readable, so the diagnosis cannot say how long users were affected
+      (it deliberately does not claim "since c9e2b7 shipped"). Only the founder can know whether
+      and when they changed it in the dashboard.
+
+  # ── Process incident of the B-pass ────────────────────────────────
+  - id: X1
+    title: "reviewer A's gate sweep ran check_onconflict_live_arbiter.dart against the LIVE project"
+    terminal_state: verified_clean
+    evidence: >
+      One read-only SELECT after the incident: the three synthetic fixture ids returned 0 rows
+      in each of auth.users, public.users, public.user_profile, public.subscriptions,
+      public.workout_logs, public.nutrition_logs, public.notifications_inbox and
+      public.coach_memory. The fixture SQL is BEGIN ... ROLLBACK and reported OK. The gate is
+      skipped by name in scripts/pre-commit.sh (manual(OI-283) in Gate 33's runner map), so
+      only a glob sweep runs it; this batch's own pre-commit passes did not.
+
+  - id: X2
+    title: "review briefs named a class of command ('gates that only read') instead of listing commands"
+    terminal_state: closed_in_commit
+    commit: 830852a3
+    verification: >
+      Reviewer B's brief carried an exhaustive command list and a ban on any database statement
+      (it complied: its report lists only git reads, file reads and flutter test / analyze).
+      .claude/skills/code-review/SKILL.md gained the anti-pattern bullet; the tuning-history entry
+      records the lesson and that the older feedback_subagent_live_db_no_writes memory rule was
+      not enough (that memory entry now records this second incident too).
+
+  # ── Reviewer A (lenses 1-5, 7, 8) ─────────────────────────────────
+  - id: A1
+    title: "the closure ledger the plan-review record cites did not exist"
+    terminal_state: closed_in_commit
+    commit: 830852a3
+    verification: "This file. Gate 40 (validate_audit_closure.dart) passes on it."
+
+  - id: A2
+    title: "AUTH_HOSTED_SETTINGS.md omitted the minimum password length and the signup confirmation template"
+    terminal_state: closed_in_commit
+    commit: 830852a3
+    verification: >
+      Rows added for mailer_templates_confirmation_content and for password_min_length /
+      password_required_characters (the latter marked "not read"; reading them is row U18).
+
+  - id: A3a
+    title: "SoT reader method name for the reset-screen no-session copy ('build' vs the helper it dispatches to)"
+    terminal_state: closed_in_commit
+    commit: 830852a3
+    verification: >
+      The earlier read denial cleared, so the method name was read from the file itself
+      (reset_password_screen.dart:174 dispatches to _buildNoSessionState, declared at :284).
+      docs/sot_registry.yaml password_recovery_code_length now says
+      method: _buildNoSessionState (the parity gate skips prose fields, so the registry entry
+      carries the real name and the diagnose-doc reader row repeats it).
+
+  - id: A3b
+    title: "class_constraints mentions the phone OTP with no registered reader"
+    terminal_state: closed_in_commit
+    commit: 830852a3
+    verification: >
+      docs/sot_registry.yaml password_recovery_code_length now says the phone-OTP hint is held
+      by a source pin only and is not a reader of this concept; check_sot_registry_parity passes.
+
+  - id: A4
+    title: "test strength: email finder matched the field, hint pinned to one literal, narrow pin regex, late client in tearDown, good-code case not the discriminator"
+    terminal_state: closed_in_commit
+    commit: 830852a3
+    verification: >
+      The send-step case asserts VERIFY CODE; a 4+-digit-run predicate replaces the literal hint
+      check (mutant M23 red); the pin regex is widened on three files (M22 red); the client field
+      is nullable; sub-point (e) is documented in the file header.
+
+  - id: A5
+    title: "mutation count (16 vs 18 rows) and the config.toml banner overstated a divergence"
+    terminal_state: closed_in_commit
+    commit: 830852a3
+    verification: >
+      The diagnose-doc table is generated from the driver's result files, so counts cannot drift;
+      the banner reads "can DIVERGE ... the OTP length did, fa621a".
+
+  - id: A6
+    title: "reset screen no-session copy still says 'or the link was opened on a different device'"
+    terminal_state: closed_in_commit
+    commit: 830852a3
+    verification: >
+      _buildNoSessionState now reads "This reset session has expired or is no longer valid."
+      (reset_password_screen.dart:299): no link, no device, no digit count. The flow test's
+      NO-session case asserts that exact sentence is on screen and that textContaining('link'),
+      ('different device') and ('digit') each find nothing; it replaces the old assertion that
+      PINNED the phrase 'different device'. Value-semantics grep (4.1.5): the old sentence has
+      no other reader in test/, lib/, supabase/ or web/. Mutants MA6a (the old sentence restored),
+      MA6b ('link' creeps back) and MA6c (a '6-digit' count creeps back) each applied (marker
+      count 1), each went red on that one case, and the file was restored (cmp); baseline 101
+      tests, 0 red.
+
+  - id: A7a
+    title: "dismissed sheet + in-flight verifyOTP: the hand-off never ran; error branches called setState unguarded"
+    terminal_state: closed_in_commit
+    commit: 830852a3
+    verification: >
+      router/navigator/route captured before the await, _fail() helper, hand-off outside the try
+      (see B1 for the predicate reviewer B corrected). Mutants M17-M21, M43, M45 and M58-M60 red.
+
+  - id: A7b
+    title: "/recover answers 200 for an unknown address, so a mistyped one waits for nothing"
+    terminal_state: verified_clean
+    evidence: >
+      GoTrue's anti-enumeration behavior; nothing the client can change. The way out (back, fix
+      the address, SEND CODE) is covered by the 'different address after back' case.
+
+  - id: A7c
+    title: "no resend control on the code step"
+    terminal_state: verified_clean
+    evidence: >
+      Back then SEND CODE is the resend path and is tested end to end (the copy and the /verify
+      body use the NEW address). A dedicated control is a product decision, not a defect.
+
+  - id: A7d
+    title: "non-ASCII digits, zero-width characters or a pasted sentence get one generic refusal"
+    terminal_state: closed_in_commit
+    commit: 830852a3
+    verification: >
+      Invisible characters are removed anywhere in the paste (normalizeRecoveryCode, see B10).
+      Visible junk and native-script digits are still refused with the plain message, by design
+      (stripping every non-digit would send a different, valid-looking code: mutant M38 red).
+
+  - id: A8
+    title: "a real user's id prefix in the plan; an untracked 'revisit with a minimum-version gate' sentence"
+    terminal_state: closed_in_commit
+    commit: 830852a3
+    verification: >
+      The plan carries no user id, session id or device detail; AUTH_HOSTED_SETTINGS.md states a
+      standing constraint ("do not raise the length until a minimum-version / force-update
+      mechanism exists") instead of future work.
+
+  # ── Reviewer B (lens 6, mutate-and-run) ───────────────────────────
+  - id: B1
+    title: "hand-off popped with `mounted` (true through the exit animation): popped the only page, blank screen, /reset never reached"
+    terminal_state: closed_in_commit
+    commit: 830852a3
+    verification: >
+      ModalRoute captured before the await, pop only while isActive, hand-off outside the try.
+      Cases: success and failure MID exit animation (last in the file). Mutants M43 (predicate
+      back to mounted), M19 (unguarded pop) and M45 (route captured after the await) red.
+      Release-mode behavior (asserts compiled out) is unverified; the fix does not depend on it.
+
+  - id: B2
+    title: "no test inspected the mounted sheet after a failure or a refusal"
+    terminal_state: closed_in_commit
+    commit: 830852a3
+    verification: >
+      Rejected code, rejected send, locally refused code and email each followed by a good one,
+      and both generic catches. Mutants M26, M27, M28, M29, M64, M65 red.
+
+  - id: B3
+    title: "the back / re-send path had no test (_sentTo, code, error, step)"
+    terminal_state: closed_in_commit
+    commit: 830852a3
+    verification: "Two cases; mutants M30, M31a, M31b, M31c red."
+
+  - id: B4
+    title: "the generic catches of _send and _verifyCode were untested, mounted or dismissed"
+    terminal_state: closed_in_commit
+    commit: 830852a3
+    verification: "Four cases (a [] body on /verify; the PKCE storage throwing on /recover). Mutants M58, M59 red."
+
+  - id: B5
+    title: "_sending was not a re-entrancy guard (two taps inside one frame sent twice)"
+    terminal_state: closed_in_commit
+    commit: 830852a3
+    verification: >
+      if (_sending) return; in both handlers; same-frame double-tap cases for both buttons, an
+      in-flight tap case for both, Cancel and the back arrow inert while in flight. Mutants M24a,
+      M24b, M25, M41, M42, M55a, M55b, M56 red; M25a (onTap null-ing alone) is an equivalent
+      mutant because the handler guards cover it.
+
+  - id: B6
+    title: "trimming was tested with ASCII spaces only; the email trim was untested"
+    terminal_state: closed_in_commit
+    commit: 830852a3
+    verification: "Paste table (NBSP, newline, tab, ideographic space, BOM) and a padded-email case. Mutants M36, M36b, M37, M37b, M39 red."
+
+  - id: B7
+    title: "the explicit pop() is deletable and go vs push was indistinguishable"
+    terminal_state: closed_in_commit
+    commit: 830852a3
+    verification: >
+      canPop() is false after the hand-off (mutant M35, push instead of go, red). The pop itself is
+      kept deliberately and recorded as an equivalent mutant (M63): the shipped behavior popped
+      first and only a device can say go() alone is enough.
+
+  - id: B8
+    title: "code-step keyboardType and autofocus, Cancel / back while sending, and the per-step ValueKey had no test"
+    terminal_state: closed_in_commit
+    commit: 830852a3
+    verification: "Keyboard (widget and platform channel), focus on both steps, a new field element per step. Mutants M32, M33, M34, M41, M42 red."
+
+  - id: B9
+    title: "the @ check in _send was untested"
+    terminal_state: closed_in_commit
+    commit: 830852a3
+    verification: "Refused-then-good email cases for an empty and a malformed address. Mutant M40 red."
+
+  - id: B10
+    title: "a pasted code with an invisible character was refused (the old maxLength field accepted a trailing one by accident); 10k paste; diagnose wording wrong"
+    terminal_state: closed_in_commit
+    commit: 830852a3
+    verification: >
+      normalizeRecoveryCode removes every separator, control and format character anywhere; table of
+      19 invisible characters at the start, middle and end; visible junk left alone. Mutants M36-M38,
+      M48-M51 red. The 10,000-digit paste reaching /verify is a recorded decision (no ceiling, M47
+      red); the diagnose-doc wording is corrected.
+
+  - id: B11
+    title: "the flow test's NO-session case failed when ordered after the WITH-session case (shuffle seeds 1, 31337)"
+    terminal_state: closed_in_commit
+    commit: 830852a3
+    verification: >
+      Fresh Supabase singleton per case (setUp / tearDown, persistSession: false). The unfixed file
+      fails under shuffle seeds 1, 31337, 4 and 5; the fixed file passes under seeds 1-6, 31337 and
+      777 and in declaration order. Two failed designs are recorded in the file header.
+
+  - id: B12
+    title: "swapping the order of the three hand-off statements is unobservable"
+    terminal_state: verified_clean
+    evidence: >
+      Mutants M61 (flag after go) and M62 (go before pop) were run and are green: the real /reset
+      screen reads the flag in a post-frame callback, and go is applied a frame later in either
+      order. No claim of protection is made for the order.
+

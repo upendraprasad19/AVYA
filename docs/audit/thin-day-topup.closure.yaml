@@ -1,0 +1,136 @@
+# Closure ledger — thin-day-topup (OI-401, exercise library programme, T1b of the founder order)
+# Gate 40 (validate_audit_closure.dart). One terminal_state per item; no
+# `deferred:` key. Plan docs/plans/2026-10-24-thin-day-topup.md (r3, rulings R1 to R13),
+# executed inline on branch thin-day-topup; `thin-day-topup@branch` is the in-branch
+# commit form for the records commit that carries this file.
+
+batch: thin-day-topup
+plan_review_record: docs/plan-reviews/thin-day-topup.md
+diagnose_docs:
+  - docs/diagnoses/2026-10-24-thin-day-topup-2d04d7.md
+
+findings:
+  # ── Tasks ────────────────────────────────────────────────────────
+  - id: T0
+    title: "Plan r3 after two context-blind review rounds; OI-408 filed for the residual"
+    terminal_state: closed_in_commit
+    commit: 72332c90
+    verification: "docs/plans/2026-10-24-thin-day-topup.md: round 1 not converged (P1s on the equipment leak and the sweep counters), round 2 on the hardened plan converged (0 P0, 0 P1). OI-408 minted with mint_oi.sh from this branch."
+
+  - id: T1
+    title: "Pure rules module: floor 3, neighbour table, applies, anchors; kill-switch getter"
+    terminal_state: closed_in_commit
+    commit: ab3dbc6a
+    verification: "lib/shared/repositories/plan_engine/thin_day_topup.dart (ThinDayTopUp), plan_engine_flags.dart thinDayTopupEnabled (configBox disable_thin_day_topup, default ON); test/plan_engine_v4/thin_day_topup_test.dart and thin_day_topup_flag_test.dart (the no-Hive default is asserted before any Hive init)."
+
+  - id: T2
+    title: "Post-pass ExerciseSelector.topUpDays at the three exits; seam allowlist 16 to 17; diagnose and SoT entry"
+    terminal_state: closed_in_commit
+    commit: ab3dbc6a
+    verification: "Exits: pickV4 cascade end, the B1 _pickCoreList return, buildPinnedDays end; plan_generator.dart untouched (rule 14); exactly one new repo.queryV4( site (scripts/exercise_seam_lib.dart 16 to 17). SoT concept thin_day_topup with behavioral_test_path. Real-library persona tests assert the thin day first with the kill-switch set."
+
+  - id: T3
+    title: "Sweep gated at 0 empty, 0 one-exercise, 0 thin (singles, repeat); pairs ratcheted to the one residual persona; golden re-recorded"
+    terminal_state: closed_in_commit
+    commit: 9a70e6ae
+    verification: "injury_floor_sweep_test.dart over 7,200 runs: BEFORE (kill-switch set = main) empty/thin/one-exercise singles 3/5 0/74/19, singles 4/6 1/75/13, pairs 3/5 4/531/197, pairs 4/6 6/647/241, repeat 0/768/310; AFTER 0/0/0, 0/0/0, 0/2/0, 0/6/0, 0/0/0; unsafe 0, unresolved 0, unperformable 0, duplicates 0. Golden: exactly the 2 expected keys (shoulder bodyweight 4d intermediate p1, p2). Sweep 12:02 against 10:51 (+11%)."
+
+  - id: T4
+    title: "Mutation proof, 35 mutations, each applied once and restored by sha1"
+    terminal_state: closed_in_commit
+    commit: f9f9b9fd
+    verification: "35 of 35 applied, none survived, none a compile error (table in the diagnose doc). Two runs: 29 on 8655a5b0, then the mutations touching the B-pass fix, the new rules and the gate re-run on the final code (18 of 18 red). The exhausted-key memo and the idempotence assertion have no mutation (stated in the diagnose doc)."
+
+  - id: T5
+    title: "Records and contract docs: nested CLAUDE.md, plan-engine-detail, naming rows, bug class 2.120, ship-dark note, #155 ledger entries, OI-401 closed"
+    terminal_state: closed_in_commit
+    commit: thin-day-topup@branch
+    verification: "lib/shared/repositories/plan_engine/CLAUDE.md within the L54 band; docs/naming_conventions.md 3 rows; .claude/skills/debugging bug class 2.120 (renumbered from 2.119 at the merge); the library-injury-recheck ledger entries PAIRS-EMPTY-DAYS, THIN-DAYS and BPASS-F3 closed; OI-401 closed and archived with the closes-oi trailer."
+
+  # ── Found by the full suite ──────────────────────────────────────
+  - id: FS-1
+    title: "The thin-day top-up re-added a swapped-out curated sub (L6 demoted name) beside the injury-substitute preference"
+    terminal_state: closed_in_commit
+    commit: 8655a5b0
+    verification: "Full local flutter test on bb366796: 10,707 passed, 27 skipped, 2 failed. core_list_pool_behavioral_test 'injured user keeps the soft avoid and L6' showed the substitute narrowing beats a soft avoid; demoted names now leave the candidate pool unless they are all that is left (plan R11). Regression: thin_day_topup_behavioral_test 'demoted + the injury-substitute preference (L6)', control first; mutations M5d and M18."
+
+  - id: FS-2
+    title: "core_list_pool_gate_test went red: the top-up adds three rows B1 calls retired (E234, E261, E271)"
+    terminal_state: closed_in_commit
+    commit: 8655a5b0
+    verification: "16 built rows in shoulder-injured bodyweight and home-dumbbells 4-day personas. The plan's fallback (record it, leave the gate red) cannot merge, so plan R12: the gate keeps B1's own picks and any skill/olympic row hard and attributes top-up additions by a re-run with the kill-switch set; the three ids are pinned exactly (_r9TopUpRetired)."
+
+  - id: MUT-1
+    title: "Mutation M17c survived: deleting the gate's attribution block left every test green"
+    terminal_state: closed_in_commit
+    commit: c1d8c82a
+    verification: "The block gained a fail-closed check (a re-run that built nothing is a violation) and the R9 test asserts at least one attribution re-run happened; M17c and M17e now redden 1 test each, M17d 2."
+
+  - id: LOAD-FLAKE
+    title: "The merge commit's regression catalog failed once on discipline_hook_main_sync_e2e_test (the hook's own git fetch reported offline)"
+    terminal_state: verified_clean
+    evidence: "Failure at minute 6 of an 11-minute run with other Dart and Flutter processes active; the file alone on a quiet machine passed (7 passed, 1 skipped), and the retried merge commit passed the whole catalog (HEAD 2b7a45f3). Not touched by this diff. No gate was bypassed."
+
+  - id: MERGE-RENUMBER
+    title: "Merge of origin/main: both branches minted bug class 2.119; six shared files conflicted"
+    terminal_state: closed_in_commit
+    commit: 2b7a45f3
+    verification: "main keeps 2.119 (promo_codes server-only), this branch's class is 2.120; no other file cited the number except bug-classes.md:1842, fixed by the B-pass fix; the duplicate-class set equals origin/main's; OI-406 and OI-408, and both SoT concepts, kept; the two generated indexes regenerated, not hand-merged."
+
+  # ── B-pass (docs/reviews/thin-day-topup-bpass.md) ────────────────
+  - id: BPASS-F1
+    title: "Core stage from phase 2 took the compound-first row: Dragon Flag (skill) for advanced users, Lunge with Twist on an upper day"
+    terminal_state: closed_in_commit
+    commit: f9f9b9fd
+    verification: "Reproduced on the real library with a throwaway probe (deleted). The core stage is foundational-first in every phase and a calisthenics_skill or olympic row is never a filler (plan R13); isolation-first rejected (it would replace Plank and Dead Bug in phase 1). Regression red on the unfixed code at 'shoulder intermediate phase 2'; M19, M19b, M20, M20b, M20c redden 2, 1, 1, 1, 1; sweep, golden and gate re-run on the fixed code, no number moved."
+
+  - id: BPASS-F2
+    title: "bug-classes.md:1842 still cited class 2.119 after the renumber"
+    terminal_state: closed_in_commit
+    commit: f9f9b9fd
+    verification: "git grep 'class 2.119' on the file returns nothing; the line reads class 2.120."
+
+  - id: BPASS-F3
+    title: "Stale citations: topUpDays line 1129 (is 1132); 'all seven' capability carriers (is eight)"
+    terminal_state: closed_in_commit
+    commit: f9f9b9fd
+    verification: "Eight signature lines carry Set<String>? capability; the nested CLAUDE.md and the SoT note list all eight; the diagnose line is 1132."
+
+  - id: BPASS-F4
+    title: "classifyBuilt had no injury scope"
+    terminal_state: closed_in_commit
+    commit: f9f9b9fd
+    verification: "injured: parameter; synthetic test for an uninjured persona; mutation M17f reddens 1."
+
+  - id: BPASS-F5
+    title: "The R9 test depended on the group tests having run first"
+    terminal_state: closed_in_commit
+    commit: f9f9b9fd
+    verification: "checkOnce memoizes per persona; flutter test --plain-name 'R9:' alone passes."
+
+  - id: BPASS-F6
+    title: "Closure ledger, OI-401 closure and plan-review record did not exist when reviewed"
+    terminal_state: closed_in_commit
+    commit: thin-day-topup@branch
+    verification: "This file; OI-401 moved to closed_issues.md in the commit carrying closes-oi: OI-401; docs/plan-reviews/thin-day-topup.md in its own later commit citing docs/reviews/thin-day-topup-bpass.md."
+
+  # ── Carried items ────────────────────────────────────────────────
+  - id: R9-B1-QUESTION
+    title: "Should a top-up under B1 be core-list-only? (E234, E261, E271 reach injured users through the top-up when enable_core_list_pool is ON)"
+    terminal_state: upstream_blocked
+    blocker: "B1 (enable_core_list_pool) is ship-dark; the question belongs to its flip review. The gate pins the three-id set so a fourth fails (core_list_pool_gate_test _r9TopUpRetired); the note is on the flag's entry in docs/ship_dark_pending_review.yaml."
+    reopen_when: "The enable_core_list_pool flip review."
+
+  - id: OI-408-RESIDUAL
+    title: "Bodyweight beginner with shoulder + lower_back on a 5/6-day plan: two exercises (Plank, Dead Bug) on one upper day"
+    terminal_state: upstream_blocked
+    blocker: "OI-408: VolumeFilter.targetCount('beginner', 5|6) trims the day to 4 slots before the selector (volume_filter.dart:19-24) and the founder's stop rule ends the stages; fixing it needs the untrimmed anchors from plan_generator.dart (root CLAUDE.md rule 14, the founder's OK) or a last stage 'any safe move'."
+    reopen_when: "The founder picks one of the three ways listed on OI-408."
+
+  - id: REVIEW-ROUNDS
+    title: "Two context-blind plan review rounds, B-pass accepted"
+    terminal_state: verified_clean
+    evidence: "docs/plan-reviews/thin-day-topup.md (review_rounds 2, ground_truth_verified true, verdict converged, bpass accepted); docs/reviews/thin-day-topup-bpass.md (6 findings, 0 false alarms, all triaged)."
+
+total_findings: 20
+closed_count: 20
