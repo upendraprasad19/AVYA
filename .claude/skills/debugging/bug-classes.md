@@ -2046,3 +2046,12 @@ added, false of the flip being performed.
 - **Fix pattern:** guard such closures with a flag the owner's `deactivate()` clears and `activate()` restores (`_inTree`), not with `mounted`.
 - **Test shape:** the host under a REAL `StatefulShellRoute`, open the second route, `router.go()` to another location of the same branch, pump ~3 s and assert `takeException() == null`. Mutation: replace the flag with nothing.
 - **Regression test:** `test/features/train/log_exercise/exercise_media_viewer_router_test.dart` ("a re-route inside the branch"). Batch M2b Part B, OI-354.
+
+### 2.146 A display name serves as a list's identity but no writer enforces it, so each door is one more way in (NEW 2026-11-06)
+
+- **Telltale:** `Multiple widgets used the same GlobalKey` from a list keyed by a name, or two rows saving to one record, reached through one door today and then found on six others.
+- **Root-cause shape:** a reader needs uniqueness (`_exerciseKeys` by name on purpose, `exlogKey` by normalised name) and the guarantee lives nowhere: pickers, coach tools, templates and restore each write the list. Filtering one picker fixes one door.
+- **Fix pattern:** state the rule once in one helper (`exerciseNameKey`), census EVERY writer before planning, refuse at the writers, and put a keep-first guard at the last line for rows that already exist (`startWorkout`, because restore is a carrier no picker controls). A returned enum, not a bool, so a bad index cannot read as "taken".
+- **Test shape:** the real screen with add, swap and a stored duplicate, plus a real-Hive test per writer. A finder over a sheet must not match its header: `find.text(name)` passed on the header while the row sat unbuilt below the fold of a lazy list.
+- **Prior incidents:** `b3c8d2` (duplicates reaching a real account through restore), OI-358.
+- **Regression test:** `test/contracts/exercise_name_unique_in_day_behavioral_test.dart`, `test/features/train/exercise_name_unique_screen_test.dart`. Diagnose `e6a4d9`.

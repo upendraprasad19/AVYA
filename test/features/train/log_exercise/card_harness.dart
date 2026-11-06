@@ -80,6 +80,26 @@ Future<void> tapWithRealIo(WidgetTester tester, Finder f) async {
   await tester.pump();
 }
 
+/// Waits in REAL time for disk I/O a tap started, pumping between checks, until
+/// [done] says the work happened. The 100 ms in [tapWithRealIo] is a floor, not a
+/// wait: on a loaded machine a write finishes later and the next assertion runs
+/// first (OI-358, a swap test red in the contract sweep and green alone). So wait
+/// on what the work DOES, and load cannot change the result. The limit is only
+/// there to fail with a name instead of hanging.
+Future<void> pumpUntilRealIoDone(
+  WidgetTester tester,
+  bool Function() done, {
+  required String what,
+}) async {
+  final deadline = DateTime.now().add(const Duration(seconds: 60));
+  while (!done()) {
+    if (DateTime.now().isAfter(deadline)) fail('$what never finished');
+    await tester.runAsync(
+        () => Future<void>.delayed(const Duration(milliseconds: 20)));
+    await tester.pump(const Duration(milliseconds: 50));
+  }
+}
+
 class CardHarness {
   CardHarness(this.container, this.logCalls, this.app,
       {ValueNotifier<bool>? focused, FakeExerciseMediaRepository? mediaRepo})

@@ -1,3 +1,4 @@
+import 'package:icanbefitter/core/utils/exercise_name_identity.dart';
 import 'package:icanbefitter/core/utils/ist_date.dart';
 import 'package:icanbefitter/features/train/repositories/workout_repository.dart';
 
@@ -64,6 +65,12 @@ class InjurySwapPlanner {
       final exercisesRaw = raw['exercises'];
       if (exercisesRaw is! List) continue;
 
+      // OI-358: one name per day. Without this, two affected exercises of one
+      // category both get the same first match. Per date: a substitute may
+      // repeat across days. A swapped-out name stays taken for its day.
+      final takenNames = exerciseNameKeysOf(
+          exercisesRaw.whereType<Map>().map(exerciseRowName));
+
       for (final ex in exercisesRaw) {
         if (ex is! Map) continue;
         final exId = (ex['exercise_id'] ?? ex['exercise_name'] ?? '')
@@ -85,8 +92,10 @@ class InjurySwapPlanner {
             fromId: exId,
             category: (ex['category'] ?? libEntry?['category'])?.toString(),
             avoidMuscles: affectedMuscles,
+            takenNames: takenNames,
           );
           if (sub != null) {
+            takenNames.add(exerciseNameKey(sub.name));
             swaps.add(InjurySwap(
               date: dateStr,
               fromId: exId,
@@ -104,8 +113,10 @@ class InjurySwapPlanner {
               fromId: exId,
               category: libEntry['category']?.toString(),
               avoidMuscles: affectedMuscles,
+              takenNames: takenNames,
             );
             if (sub != null) {
+              takenNames.add(exerciseNameKey(sub.name));
               swaps.add(InjurySwap(
                 date: dateStr,
                 fromId: exId,
@@ -212,6 +223,7 @@ class InjurySwapPlanner {
     required String fromId,
     required String? category,
     required Set<String> avoidMuscles,
+    required Set<String> takenNames,
   }) {
     final box = HiveService.instance.exerciseBox;
     final wantedCat = category?.toLowerCase();
@@ -227,6 +239,7 @@ class InjurySwapPlanner {
       if (_exerciseHitsMuscles(ex, avoidMuscles)) continue;
 
       final name = (ex['name'] ?? id).toString();
+      if (takenNames.contains(exerciseNameKey(name))) continue;
       return (id: id, name: name);
     }
     return null;

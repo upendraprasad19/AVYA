@@ -5,7 +5,11 @@ part of 'screen.dart';
 class _ExercisePickerSheet extends StatefulWidget {
   final void Function(Map<String, dynamic> exerciseData) onSelect;
 
-  const _ExercisePickerSheet({required this.onSelect});
+  /// `exerciseNameKey`s already in the session (OI-358): those rows stay
+  /// findable by search and cannot be tapped.
+  final Set<String> takenNames;
+
+  const _ExercisePickerSheet({required this.onSelect, required this.takenNames});
 
   @override
   State<_ExercisePickerSheet> createState() => _ExercisePickerSheetState();
@@ -260,9 +264,11 @@ class _ExercisePickerSheetState extends State<_ExercisePickerSheet> {
                           (ex['primary_muscles'] as List?)?.join(', ') ?? '';
                       final loggingType =
                           ex['logging_type'] as String? ?? 'weight_reps';
+                      final taken =
+                          widget.takenNames.contains(exerciseNameKey(name));
 
                       return InkWell(
-                        onTap: () => widget.onSelect(ex),
+                        onTap: taken ? null : () => widget.onSelect(ex),
                         child: Container(
                           padding: const EdgeInsets.symmetric(
                               horizontal: 16, vertical: 10),
@@ -281,9 +287,23 @@ class _ExercisePickerSheetState extends State<_ExercisePickerSheet> {
                                   children: [
                                     Text(
                                       name,
-                                      style: AppTypography.h3
-                                          .copyWith(fontSize: 13),
+                                      style: AppTypography.h3.copyWith(
+                                          fontSize: 13,
+                                          color:
+                                              taken ? AppColors.textGhost : null),
                                     ),
+                                    if (taken)
+                                      Padding(
+                                        padding:
+                                            const EdgeInsets.only(top: 2),
+                                        child: Text(
+                                          WardroomCopy.activeAlreadyInWorkoutTag,
+                                          style: AppTypography.monoXs.copyWith(
+                                            color: AppColors.textMute,
+                                            letterSpacing: 1.2,
+                                          ),
+                                        ),
+                                      ),
                                     if (muscles.isNotEmpty)
                                       Padding(
                                         padding:

@@ -181,6 +181,15 @@ class WardroomCopy {
   static const activeMovedTemplate = 'Moved “{exercise}” to position {n}';
   static const activeUndo = 'UNDO';
 
+  /// OI-358: a picker row whose exercise is already there, and the refusal on a
+  /// path no row controls — `{exercise}` = its name.
+  static const activeAlreadyInWorkoutTag = 'ALREADY IN WORKOUT';
+  static const activeAlreadyInWorkoutTemplate =
+      '“{exercise}” is already in this workout.';
+  static const templateAlreadyAddedTag = 'ALREADY IN TEMPLATE';
+  static const templateAlreadyAddedTemplate =
+      '“{exercise}” is already in this template.';
+
   /// First-use hint for the two icons (shown once per account).
   static const activeSwapMoveHintTitle = 'On every exercise';
   static const activeSwapMoveHintSwap = 'Swap — use a different exercise';
