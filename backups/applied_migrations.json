@@ -1331,5 +1331,14 @@
     "diagnose": "f7b3d1",
     "slug": "oi473_cron_dead_alert_edges",
     "note": "OI-473 + OI-472: cron.alter_job by jobname on alert_cron_function_dead (jobid 32): cap 3 singles else one summary row, 72 h name dedup independent of acknowledgement, NOT IN ('alert-critical-notify','weekly-recalc'). Applied to project dedsavbjuwgarrhphgnl only, through MCP execute_sql in BEGIN with lock_timeout 3s and statement_timeout 60s, after the founder's explicit go (2026-11-06); no apply_migration version recorded. Verified live: md5(cron.job.command) = f890669f0389e0febd5976ee0185c9f1 = md5 of the migration body between the dollar tags (before: bb2108a12cf313fa5cb4ee8c7f8d9398, the migration 144 body); schedule 47 6 * * * and active unchanged. First real observation: the 06:47 UTC run, expect 0 new rows. Rollback: re-apply the migration 144 body (lines 65-102) as a NEW forward migration."
+  },
+  {
+    "migration": "171",
+    "applied_at": "2026-11-05T18:45:00+05:30",
+    "hash": "sha256:4d09a506dd5863cdeb015a28a2908d5fb4b676506caed4cbf5862af4003f7ab6",
+    "applier": "claude-via-node-api",
+    "diagnose": "b2c7e4",
+    "slug": "reseed_exercise_library",
+    "note": "Batch C2b (OI-462, plan docs/plans/2026-11-05-library-batch-c2b-twins.md, B-pass docs/reviews/library-batch-c2b-bpass.md): UPSERTS 862 rows, adds the four twins G1368 G1489 G2567 G0474 and sets is_active=false on the six twin_pending rows E084 E211 E111 E162 E169 E179 (copying cues to the twin where the generated SQL says so); nothing deleted. Applied to project dedsavbjuwgarrhphgnl only, after the founder go (2026-11-05) on the exact file, by .claude/apply_migration_via_api.js (HTTP 201). Post-apply read-back: 925 rows, 862 active, 63 inactive; each of Ankle Circles, Sissy Squat, Seated Piriformis Stretch, Toes to Bar has one active row and one inactive old row. File sha256 = this hash (LF). Rollback is inline in the file header, needing its own go."
   }
 ]

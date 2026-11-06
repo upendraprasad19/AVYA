@@ -6628,6 +6628,22 @@
       "G1432": {
         "seen": "Standing on the platform of a weight-stack assist machine and gripping the high handles, pulling up with the assistance of the stack, lats lit; the same machine as G1431, so equipment is a machine, not a pull-up bar and a box, and cue 1 is corrected.",
         "action": "edited"
+      },
+      "G1368": {
+        "seen": "Whole animation read (gif 1368): a man standing tall with hands on hips, calves lit, one foot lifted a little and drawn in circles at the ankle, then the other foot. The first cue said \"Sit and lift one foot\", which the picture does not show; cue 1 is rewritten to the standing version.",
+        "action": "edited"
+      },
+      "G1489": {
+        "seen": "Whole animation read (gif 1489): a man standing beside an incline bench, one hand on the bench for balance, quads lit; he rises onto the toes and leans back with the knees travelling far forward, then returns. A sissy squat. The bench is a balance aid (the cue says a post), so equipment stays bodyweight.",
+        "action": "unchanged"
+      },
+      "G2567": {
+        "seen": "Whole animation read (gif 2567): a man seated on a stool, one ankle crossed over the opposite knee, folding forward and hugging the crossed shin, glute lit. A seated piriformis stretch; name, folder and the three cues agree.",
+        "action": "unchanged"
+      },
+      "G0474": {
+        "seen": "Whole animation read (gif 0474, 12 frames): a man hangs from a bar with straight legs, raises the straight legs until the feet reach the bar with the torso curled and abs lit, then lowers. The folder says Hip Raise, but the picture shows the feet at the bar: toes to bar. Name and cues agree; the row stays Toes to Bar.",
+        "action": "unchanged"
       }
     },
     "identity_checked": {
@@ -6718,6 +6734,22 @@
       "N13": {
         "seen": "Founder-added row (2026-10-21) with no animation: the beginner overhead press for no-equipment users; nothing to compare against, the name and cues stand on the founder note.",
         "action": "none"
+      },
+      "G1368": {
+        "seen": "Whole animation read (gif 1368): a man standing tall with hands on hips, calves lit, one foot lifted a little and drawn in circles at the ankle, then the other foot. The first cue said \"Sit and lift one foot\", which the picture does not show; cue 1 is rewritten to the standing version.",
+        "action": "edited"
+      },
+      "G1489": {
+        "seen": "Whole animation read (gif 1489): a man standing beside an incline bench, one hand on the bench for balance, quads lit; he rises onto the toes and leans back with the knees travelling far forward, then returns. A sissy squat. The bench is a balance aid (the cue says a post), so equipment stays bodyweight.",
+        "action": "unchanged"
+      },
+      "G2567": {
+        "seen": "Whole animation read (gif 2567): a man seated on a stool, one ankle crossed over the opposite knee, folding forward and hugging the crossed shin, glute lit. A seated piriformis stretch; name, folder and the three cues agree.",
+        "action": "unchanged"
+      },
+      "G0474": {
+        "seen": "Whole animation read (gif 0474, 12 frames): a man hangs from a bar with straight legs, raises the straight legs until the feet reach the bar with the torso curled and abs lit, then lowers. The folder says Hip Raise, but the picture shows the feet at the bar: toes to bar. Name and cues agree; the row stays Toes to Bar.",
+        "action": "unchanged"
       }
     },
     "identical_cues_ok": {
@@ -6741,11 +6773,11 @@
       "rows": 708,
       "held": {
         "token": 13,
-        "name_collision": 4,
+        "name_collision": 0,
         "low_confidence": 53,
         "picture": 9
       },
-      "shipped": 629,
+      "shipped": 633,
       "core": {
         "beginner": 56,
         "intermediate": 47,
@@ -7298,7 +7330,7 @@
       "priority_tier": 3,
       "breathing_cue": "Breathe naturally",
       "coaching_cues": [
-        "Sit and lift one foot off the floor",
+        "Stand tall with hands on hips and lift one foot slightly off the floor",
         "Draw large, slow circles with the toes",
         "Do both directions, then switch feet"
       ],
@@ -7320,12 +7352,7 @@
       "gym_availability": "home",
       "confidence": "high",
       "note": "Same animation as library E084 Ankle Circles and E211 Ankle Rotations: duplicates.",
-      "changes": {},
-      "hold": {
-        "class": "name_collision",
-        "reason": "same name as E084, which the sheet marks drop; added by C2 together with the removal",
-        "owner": "C2"
-      }
+      "changes": {}
     },
     {
       "id": "G3669",
@@ -33806,12 +33833,7 @@
       "gym_availability": "home",
       "confidence": "high",
       "note": "Duplicate of library E169 / E162 (same GIF 2567).",
-      "changes": {},
-      "hold": {
-        "class": "name_collision",
-        "reason": "same name as E169, which the sheet marks drop; added by C2 together with the removal",
-        "owner": "C2"
-      }
+      "changes": {}
     },
     {
       "id": "G0544",
@@ -44240,12 +44262,7 @@
       "gym_availability": "home",
       "confidence": "high",
       "note": "Duplicate of library E111.",
-      "changes": {},
-      "hold": {
-        "class": "name_collision",
-        "reason": "same name as E111, which the sheet marks drop; added by C2 together with the removal",
-        "owner": "C2"
-      }
+      "changes": {}
     },
     {
       "id": "G0851",
@@ -50406,12 +50423,7 @@
       "gym_availability": "standard_gym",
       "confidence": "medium",
       "note": "Folder name is Hanging Straight Leg Hip Raise: picture may stop at hip height, not the bar. Check picture and decide whether to rename.",
-      "changes": {},
-      "hold": {
-        "class": "name_collision",
-        "reason": "same name as E179, which the sheet marks drop; added by C2 together with the removal",
-        "owner": "C2"
-      }
+      "changes": {}
     },
     {
       "id": "G3640",

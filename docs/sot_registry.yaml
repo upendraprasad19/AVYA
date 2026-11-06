@@ -11358,7 +11358,12 @@ concepts:
     behavioral_test_path_panel: test/contracts/coaching_panel_numeric_breathing_behavioral_test.dart  # Batch A b7d3e1: rendered panel suppresses a numeric breathing_cue, Surya Namaskar mirror renders it
     behavioral_test_path_v18: test/contracts/library_seed_v18_upgrade_behavioral_test.dart  # Batch C2a 2026-11-04 (OI-460): real SeedService.seedIfNeeded on a v17 box; the 52 removed ids are pruned (kRetiredLibraryIdsNoTwin), custom and community rows survive
     behavioral_test_path_depth: test/contracts/library_depth_rule_test.dart  # Batch C2a: the depth rule on the base fixture and the shipped library, both pattern semantics, mutated
+    behavioral_test_path_v19: test/contracts/library_seed_v19_upgrade_behavioral_test.dart  # Batch C2b 2026-11-05 (OI-462): real SeedService.seedIfNeeded on a v18 box; the six twin_pending rows are pruned, the four twins arrive, retired names resolve by exact name or alias, a fresh install gets the four and none of the six
     description: |
+      Library v19 (Batch C2b, 2026-11-05, OI-462): 862 rows. The four twins G1368 G1489 G2567 G0474 ship and the six rows
+      C2a kept as twin_pending (E084 E111 E162 E169 E179 E211) left (removals file `removed_in: c2b`, kRetiredLibraryIdsNoTwin);
+      the depth rule is judged with the twin rows (test/fixtures/library_c2b_twin_rows.json). E043 standard_swap points at G1489.
+      Cloud: the C2b seed migration inserts the four twins, deactivates the six, rollback scoped to this batch.
       Library v18 (Batch C2a, 2026-11-04, OI-460): 864 rows. 50 sheet-drop rows left the library
       (scripts/data/library_batch_c2_removals.json, decided by the depth rule in
       test/helpers/library_depth.dart); their ids are kRetiredLibraryIdsNoTwin
@@ -12955,7 +12960,7 @@ concepts:
         line_range: 1-2
         method: demo_slug + demo_pair fields
       - file: lib/core/services/seed_service.dart
-        line_range: 139-139
+        line_range: 145-145
         method: _exerciseLibraryVersion
     readers:
       - file: lib/shared/widgets/exercise_plate/plate_resolver.dart
@@ -12999,7 +13004,7 @@ concepts:
         line_range: 154-175
         method: applyMedia
       - file: lib/core/services/seed_service.dart
-        line_range: 139-139
+        line_range: 145-145
         method: _exerciseLibraryVersion
     readers:
       - file: lib/shared/widgets/exercise_plate/exercise_media_resolver.dart
@@ -13085,7 +13090,7 @@ concepts:
         line_range: 1-2
         method: coaching_cues + common_mistakes + breathing_cue + warmup_protocol fields
       - file: lib/core/services/seed_service.dart
-        line_range: 139-139
+        line_range: 145-145
         method: _exerciseLibraryVersion
     readers:
       - file: lib/shared/widgets/exercise_plate/exercise_cues.dart

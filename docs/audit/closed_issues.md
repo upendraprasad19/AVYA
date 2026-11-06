@@ -6164,3 +6164,16 @@ Found by the Hermes pass (L31, 2026-11-05) of the OI-179 batch. Until migration 
 **Do:** (1) suppress the per-function alert while `alert_cron_silence` is open, or cap the insert to a handful per run with one summary row; (2) dedup on the function name with a 36-48 h window; (3) add a contract test that every `logCronStart` caller is either on the CRON_REGISTRY schedule list or on the alert's exclusion list (extend `cron_vacuum_single_statement_test.dart`'s roster check). Alert-body change = `cron.alter_job` by jobname in a new migration (platform tier, the 144 body plus the change, live apply needs its own go).
 
 **Acceptance:** a SQL rehearsal in `BEGIN ... ROLLBACK` with 5 seeded dead functions inserts at most the capped number, and the roster test fails when a new `logCronStart` caller is on neither list.
+
+## OI-462 — Library Batch C2b: twins G1368 G1489 G2567 G0474 and removal of the six twin_pending rows (E084 E211 E111 E162 E169 E179); E230 moved to OI-474
+
+- **Status**: CLOSED
+- **Blocked on**: none
+- **Verified**: 2026-11-05 (live counts after migration 171: 925 rows, 862 active, 63 inactive; the four twin names each have one active row)
+- **Identified**: 2026-11-04 · filed via mint_oi.sh from branch `library-batch-c2`
+
+Second half of the split of Batch C2 (the first half is OI-460). Adds the four twin rows G1368, G1489, G2567 and G0474, then removes the six `twin_pending` rows that C2a keeps (E084 E211 E111 E162 E169 E179). E230's retag and media moved to OI-474 at plan review round 2 (2026-11-05). Open: the G0474 picture decision. Needs its own plan, two review rounds, and a fresh founder go for the media upload and the migration apply.
+
+**Done when.** The four twins ship; each `twin_pending` row is removed or kept with a stated reason; the depth rule still holds; the cloud migration is applied.
+
+**Closed by.** Branch `library-batch-c2b`: the batch commit 222b73b2 (twins, six removals, seed v19, media table and stills, depth rule with twin rows, E043 swap repoint, migration 171 file and ledger entry); media upload of four animations (4 of 4 verified) and migration 171 applied to `dedsavbjuwgarrhphgnl` on 2026-11-05 after the founder's go on each exact artifact. B-pass `docs/reviews/library-batch-c2b-bpass.md`; closure `docs/audit/library-batch-c2b.closure.yaml`. E230 went to OI-474.

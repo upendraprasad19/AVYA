@@ -5,7 +5,7 @@
     "old_rows": {
       "entries": 137,
       "omitted": 0,
-      "sha256": "de37224d1d1c0c61b14e5215c9efa33da9b6fd302d552e8d421c5b956961c827"
+      "sha256": "2214b4a4f2209b2ed185f0105b09c3e0201cdaf0408355ce226cf0bf4cb26909"
     },
     "origin": "AI recreation of the GIF set in `assets/exercise animations/forgetrainer_animations/gifs`; licensing risk accepted by the founder (D9, 2026-10-21)",
     "taken_down": [],
@@ -5161,6 +5161,25 @@
       "webp_bytes": 234620,
       "webp_sha256": "b40b0c239abfb388d2926f1218a6c9e81621b2958b733227f358b20aa6c02121"
     },
+    "0474-hanging-straight-leg-hip-raise": {
+      "frames": 12,
+      "gif": "0474",
+      "ledger_id": "0474_Hanging_Straight_Leg_Hip_Raise",
+      "source_gif_sha256": "458c95bfbcf77ffa7d3f8d8ab1cf19c95e33f217a1ca4d76de7a0575088ef7e5",
+      "status": "active",
+      "thumb_bytes": 5522,
+      "thumb_sha256": "fd5b5ff18ed7d3ed09c03a8c1db804c9033b4c2122010794b9796dcefb0bddf5",
+      "versions": [
+        {
+          "file": "webp-720/0474_Hanging_Straight_Leg_Hip_Raise_wardroom_720.webp",
+          "media_version": 1,
+          "webp_bytes": 463626,
+          "webp_sha256": "5c44e1c3f29d2902b7823236b9e96c7da62b368c60267174f09e38e7486abf3a"
+        }
+      ],
+      "webp_bytes": 463626,
+      "webp_sha256": "5c44e1c3f29d2902b7823236b9e96c7da62b368c60267174f09e38e7486abf3a"
+    },
     "0475-hanging-straight-leg-raise": {
       "frames": 12,
       "gif": "0475",
@@ -9816,6 +9835,25 @@
       "webp_bytes": 270260,
       "webp_sha256": "46c6cf2c77764d4fe79514e6694a8b388a66f3d9549f12cdfa42deac7468ac3b"
     },
+    "1368-ankle-circles": {
+      "frames": 12,
+      "gif": "1368",
+      "ledger_id": "1368_Ankle_Circles",
+      "source_gif_sha256": "28cbe79af4d0817bdc0cab55d709a0b41a83b3d8c20c59cd055b7d0c2e22d760",
+      "status": "active",
+      "thumb_bytes": 3544,
+      "thumb_sha256": "97f29b1acf7c2d9969747112f56956a932b2f889ae996777f7b60eeb82ef636a",
+      "versions": [
+        {
+          "file": "webp-720/1368_Ankle_Circles_wardroom_720.webp",
+          "media_version": 1,
+          "webp_bytes": 280194,
+          "webp_sha256": "30c19c19a2765eaf269b9f50dfc4ab2f81a50b6027e1a2e642c8602d61e6e6ea"
+        }
+      ],
+      "webp_bytes": 280194,
+      "webp_sha256": "30c19c19a2765eaf269b9f50dfc4ab2f81a50b6027e1a2e642c8602d61e6e6ea"
+    },
     "1370-barbell-floor-calf-raise": {
       "frames": 12,
       "gif": "1370",
@@ -10898,6 +10936,25 @@
       ],
       "webp_bytes": 288154,
       "webp_sha256": "314afc99a68ec12de8c6070081e48aac754c31b3ac1be9a44fd9bbe0c6fb1ba3"
+    },
+    "1489-sissy-squat": {
+      "frames": 12,
+      "gif": "1489",
+      "ledger_id": "1489_Sissy_Squat",
+      "source_gif_sha256": "e59a9000268808d508a8aa4ab2040d2a13082cdd21d43c5e7867672be0fb6a10",
+      "status": "active",
+      "thumb_bytes": 4894,
+      "thumb_sha256": "aad596d6037ec48fb5a2c8992fa63c667cec1ed24ef002a5c481b779044e64a4",
+      "versions": [
+        {
+          "file": "webp-720/1489_Sissy_Squat_wardroom_720.webp",
+          "media_version": 1,
+          "webp_bytes": 438678,
+          "webp_sha256": "2acbf7cfe10680a3d92abb8c27f448373ba9314819b62f27bd80e7caa354a186"
+        }
+      ],
+      "webp_bytes": 438678,
+      "webp_sha256": "2acbf7cfe10680a3d92abb8c27f448373ba9314819b62f27bd80e7caa354a186"
     },
     "1490-staircase-calf-raise": {
       "frames": 12,
@@ -12513,6 +12570,25 @@
       ],
       "webp_bytes": 407962,
       "webp_sha256": "40a5d533cc2008e4d5ea3299ca62aff2c24393218bf56cb0ff941fd4bd61550c"
+    },
+    "2567-seated-piriformis-stretch": {
+      "frames": 12,
+      "gif": "2567",
+      "ledger_id": "2567_Seated_Piriformis_Stretch",
+      "source_gif_sha256": "642dacf1c7916060bc6414a434ec2d51cfc395f4ee8aa240f7ea399665979bf3",
+      "status": "active",
+      "thumb_bytes": 6086,
+      "thumb_sha256": "043201ae574d226e7718efef149032659fb4a7d9d0d1b44205fa6c7ff6a14acf",
+      "versions": [
+        {
+          "file": "webp-720/2567_Seated_Piriformis_Stretch_wardroom_720.webp",
+          "media_version": 1,
+          "webp_bytes": 404282,
+          "webp_sha256": "72b4356fdc7dda49550635c93ffc1785157134c8ccdba674d1b03b697461c059"
+        }
+      ],
+      "webp_bytes": 404282,
+      "webp_sha256": "72b4356fdc7dda49550635c93ffc1785157134c8ccdba674d1b03b697461c059"
     },
     "2611-horizontal-single-leg-press": {
       "frames": 12,
@@ -14670,6 +14746,7 @@
     "G0471": "0471-handstand-pushup",
     "G0472": "0472-hanging-leg-raise",
     "G0473": "0473-hanging-pike",
+    "G0474": "0474-hanging-straight-leg-hip-raise",
     "G0484": "0484-bent-knee-hip-raise",
     "G0488": "0488-bench-hyperextension",
     "G0490": "0490-decline-close-grip-pushup",
@@ -14870,6 +14947,7 @@
     "G1364": "1364-standing-pelvic-tilt",
     "G1365": "1365-upper-back-stretch",
     "G1366": "1366-upward-facing-dog",
+    "G1368": "1368-ankle-circles",
     "G1370": "1370-barbell-floor-calf-raise",
     "G1372": "1372-barbell-standing-calf-raise",
     "G1373": "1373-bodyweight-standing-calf-raise",
@@ -14920,6 +14998,7 @@
     "G1472": "1472-forward-jump",
     "G1473": "1473-backward-jump",
     "G1476": "1476-single-leg-squat",
+    "G1489": "1489-sissy-squat",
     "G1490": "1490-staircase-calf-raise",
     "G1494": "1494-butterfly-yoga-pose",
     "G1512": "1512-quadriceps-stretch",
@@ -14993,6 +15072,7 @@
     "G2399": "2399-cable-seated-twist",
     "G2464": "2464-cable-kayak-row",
     "G2470": "2470-dumbbell-lying-on-floor-rear-delt-raise",
+    "G2567": "2567-seated-piriformis-stretch",
     "G2611": "2611-horizontal-single-leg-press",
     "G2616": "2616-cable-lateral-pulldown-with-v-bar",
     "G2705": "2705-dumbbell-lying-pronation-on-floor",

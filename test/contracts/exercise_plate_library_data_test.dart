@@ -36,11 +36,11 @@ void main() {
         reason: 'v11 shipped the plates; the Batch A repair (merges, text, plate swaps) needs 12+');
   });
 
-  test('the library is 864 rows — 285 after Batch A retired 7 duplicates, plus 629 Batch C1 rows, minus 50 Batch C2a removals', () {
+  test('the library is 862 rows — 285 after Batch A retired 7 duplicates, plus 633 Batch C1/C2b rows, minus 56 removals (50 Batch C2a, 6 Batch C2b)', () {
     // Donkey Calf Raise stays. Its removal is OI-147, split out after review
     // round 2: it touches the cloud seed migration, a live prod apply and the
     // frozen generator baseline, none of which plates touches.
-    expect(lib.length, 864);
+    expect(lib.length, 862);
     expect(lib.any((e) => e['name'] == 'Donkey Calf Raise'), isTrue);
   });
 
@@ -54,13 +54,13 @@ void main() {
     }
   });
 
-  test('exactly 150 rows carry artwork and 714 do not (864 rows after Batch C2a; Batch C1 adds none, Batch M owns media)', () {
+  test('exactly 149 rows carry artwork and 713 do not (862 rows after Batch C2b, which removed E111 Sissy Squat and its plate; Batch C1 adds none, Batch M owns media)', () {
     final withArt = lib.where((e) {
       final s = e['demo_slug'];
       return s is String && s.isNotEmpty;
     }).toList();
-    expect(withArt.length, 150);
-    expect(lib.length - withArt.length, 714);
+    expect(withArt.length, 149);
+    expect(lib.length - withArt.length, 713);
     for (final e in withArt) {
       expect(e['demo_pair'], isA<bool>(),
           reason: '${e['name']}: demo_slug without demo_pair');
@@ -70,7 +70,7 @@ void main() {
   });
 
   test('an artwork-less row carries NEITHER key — never a null or empty one', () {
-    // Not vacuous: it fails if the writer emits demo_slug: null on 714 rows,
+    // Not vacuous: it fails if the writer emits demo_slug: null on 713 rows,
     // which is the obvious way to write the transform wrong.
     final bad = <String>[];
     for (final e in lib) {
@@ -85,7 +85,7 @@ void main() {
       }
     }
     expect(bad, isEmpty, reason: 'omit BOTH keys on an artwork-less row: $bad');
-    expect(lib.where((e) => e.containsKey('demo_slug')).length, 150);
+    expect(lib.where((e) => e.containsKey('demo_slug')).length, 149);
   });
 
   test('the dead image fields are gone from the library', () {

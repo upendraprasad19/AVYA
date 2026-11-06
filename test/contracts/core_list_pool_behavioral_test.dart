@@ -28,8 +28,10 @@ import '../../scripts/migration_ledger_hash_lib.dart' show sha256Hex;
 import '../helpers/generator_golden_personas.dart';
 
 const _rank = {'beginner': 0, 'intermediate': 1, 'advanced': 2};
+// E101 left in Batch C2a and E179 in Batch C2b; G0474 Toes to Bar is the E179 twin and a calisthenics_skill row, so it takes its place
+// (B-pass C2b finding 4: a stale id here silently stops covering the skill row that replaced it).
 const _skillIds = {
-  'E069', 'E070', 'E071', 'E072', 'E073', 'E074', 'E086', 'E101', 'E179', 'E180',
+  'E069', 'E070', 'E071', 'E072', 'E073', 'E074', 'E086', 'E180', 'G0474',
 };
 const _improvisedShoulder = {'E272', 'E273', 'E274', 'E276', 'E277', 'E289', 'E290'};
 
