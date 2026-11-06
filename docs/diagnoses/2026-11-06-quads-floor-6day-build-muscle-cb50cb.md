@@ -86,7 +86,7 @@ proposed_fix: |
   tools, not by the suite).
 contract_test_path: test/contracts/quads_floor_6day_behavioral_test.dart
 regression_test_planned: |
-  - test/contracts/quads_floor_6day_behavioral_test.dart (13 tests, real generateV4, production path with the core-list pool
+  - test/contracts/quads_floor_6day_behavioral_test.dart (17 tests, real generateV4, production path with the core-list pool
     OFF): (D1) the slot and the credit flag share one predicate (`selectV4` returns a `Legs B` day exactly when
     `SplitResolver.hasQuadLegsBSplit` is true, over 4 goals x 4 day counts x 3 levels), Legs B carries exactly one Quads
     knee_dominant compound slot at priority 2 and no Glutes hip_isolation slot and still 8 slots, Legs A and the default
@@ -101,7 +101,11 @@ regression_test_planned: |
     phase 4, a beginner budgeted as advanced at 5) for tops, caps, minutes and the slot; a glutes body focus (cap 12, top
     25); the `recompose` goal at 6 days; a knee-injured 6-day plan (no knee-tagged exercise, Legs B at least 3 exercises);
     a control over 8 plan shapes (every shape must hold a squat or lunge) that the allocator's Glutes ledger equals the
-    full count everywhere except 6-day build_muscle and 6-day recompose, where it equals the count under the rule.
+    full count everywhere except 6-day build_muscle and 6-day recompose, where it equals the count under the rule; a census
+    that every library row listing Quads and Glutes with another muscle first (7 rows) and every quad-first row listing
+    Hamstrings (Trap Bar Deadlift) is a KNOWN exception, so a library batch that reorders `primary_muscles` is decided on
+    purpose; the kill switch (3 tests, below); and the `cap_limited` cause for intermediate basic gym at 90 minutes (both
+    quad compounds at the 5-set maximum).
   - test/contracts/quads_credit_flag_consumers_test.dart (4 tests, crafted rows): the same input under both flag values for
     the allocator (Quads 4 vs 16), a quad-first row listing Hamstrings that keeps its Glutes credit, PeriodizationEngine.apply
     week 2 (no gain vs gain) and VolumeTitration (leg press vs squat).
@@ -109,24 +113,29 @@ regression_test_planned: |
     restatement its caps zero failed on 6 tests (Glutes counted in full), which is the evidence it reads the rule.
   - SCORECARD AND THIN DAYS: `scorecard_gate_test.dart` and the injury sweeps (`kThinCeilings`, exact in both directions)
     were run on the changed tree and PASS without a re-freeze, so no baseline or ceiling moved.
-  - NO RUNTIME FLAG (root CLAUDE.md 4.6, the platform tier lists `feature_flag`): like OI-458 this ships always on. The
-    revert is two lines (the `quadPrimaryCreditsGlutes` argument in `generateV4`, which is the negation of
-    `SplitResolver.hasQuadLegsBSplit`, and the Legs B slot), both pinned by the predicate test, and the B-pass is the
-    reviewer of that choice. A plan already on a tester device is not changed until it regenerates or advances a phase.
+  - KILL SWITCH (root CLAUDE.md 4.6; the platform tier lists `feature_flag`; B-pass finding 1): `configBox['disable_quad_legs_b'] = true`
+    (`PlanEngineFlags.quadLegsBEnabled`, default ON, read once in `generateV4`) restores the old Legs B Glutes isolation slot AND the
+    full Glutes credit together, for plans generated from then on (a stored plan is not rewritten; no migration, testers only).
+    Proven by three tests: the flag defaults ON, `selectV4(quadLegsB: false)` restores the pre-change slot list and touches no other
+    split, and with the key set generation returns Quads to the pre-change table in all 24 cells with the allocator crediting Glutes
+    in full. Roll-forward: the switch and its old path are removed in the batch that rolls it after the founder's device check
+    (root CLAUDE.md 4.6 step 4).
   MUTATION PROOF (final tree, the two new test files asserted GREEN first in the same run, every anchor confirmed present
   exactly once, a compile error counted as NOT a kill, the source tree compared byte for byte with a snapshot afterwards):
-  20 mutants, 20 red, 0 survived (tests red in brackets). P1 policy off (4); P2 predicate true for every build_muscle day
-  count (2); P3 predicate true for every goal at 6 days (2); P4 predicate always false (5); S1 the Legs B glute isolation slot
-  restored (6); S2 the quad slot at priority 3 (1); S3 the quad slot an isolation (2); B1 creditedOf flag inverted (10); B2
-  drops Glutes whenever Quads is listed anywhere (3); B3 drops Calves instead of Glutes (10); B4 first-muscle check and flag
-  dropped (5); B5 hip-hinge guard removed, Trap Bar Deadlift loses Glutes (3); H1 the Legs B hamstring curl slot removed,
-  caught by the Hamstrings sweep (3); G1 the Legs A glute isolation slot removed, caught by the Glutes floor (2); L1 the
-  `time_limited` label renamed, caught by the label pin (1); B6 creditedOf skips an unmapped leading token (3); C1 context
-  default false (1); A1 allocator ignores the flag (6); W1 PeriodizationEngine.apply ignores the flag (1); T1 VolumeTitration
-  ignores the flag (1). Not mutated, stated: the gate oracle's restatement (`_credited`): the evidence is that the gate's
-  caps zero failed on 6 tests before it was restated and passed after; and the generator golden, which covers the slot and
-  the flag at the byte level but was not part of the mutation loop. The review-1 edit to
-  session_set_budget_wiring_test.dart (a credit-aware helper) is NOT a catch: that test passes with and without it.
+  24 mutants, 24 red, 0 survived (tests red in brackets). P1 policy off (4); P2 predicate true for every build_muscle day
+  count (2); P3 predicate true for every goal at 6 days (2); P4 predicate always false (5); S1 the Legs B slot is the glute
+  isolation in both branches (6); S2 the quad slot at priority 3 (1); S3 the quad slot an isolation (2); K1 the kill switch
+  ignored for the slot (1); K2 the kill switch ignored for the credit rule (1); K3 the kill switch default inverted (8); K4
+  the switched-off `selectV4` keeps the quad slot (2); B1 creditedOf flag inverted (11); B2 drops Glutes whenever Quads is
+  listed anywhere (3); B3 drops Calves instead of Glutes (10); B4 first-muscle check and flag dropped (6); B5 hip-hinge guard
+  removed, Trap Bar Deadlift loses Glutes (3); H1 the Legs B hamstring curl slot removed, caught by the Hamstrings sweep (5);
+  G1 the Legs A glute isolation slot removed, caught by the Glutes floor (3); L1 the `time_limited` label renamed, caught by
+  the label pin (1); B6 creditedOf skips an unmapped leading token (3); C1 context default false (1); A1 allocator ignores
+  the flag (6); W1 PeriodizationEngine.apply ignores the flag (1); T1 VolumeTitration ignores the flag (1). Not mutated,
+  stated: the gate oracle's restatement (`_credited`): the evidence is that the gate's caps zero failed on 6 tests before it
+  was restated and passed after; and the generator golden, which covers the slot and the flag at the byte level but was
+  not part of the mutation loop. The review-1 edit to session_set_budget_wiring_test.dart (a credit-aware helper) is NOT a
+  catch: that test passes with and without it.
 impact_analysis: |
   MEASURED, same personas before / after: see proposed_fix. GOLDEN: test/fixtures/generator_golden_hashes.json re-recorded,
   60 of 999 keys changed, every one `grid|<tier>|build_muscle|6d|<level>|p<phase>` (4 tiers x 3 levels x 5 phases); no other
@@ -154,7 +163,7 @@ See `writers:` / `readers:` and `proposed_fix`. One sentence: Legs B had no quad
 too, so the allocator refused it while Glutes sat at its weekly top.
 
 ## What was proven and what was not
-- Proven: the table in `proposed_fix`, measured on the real generator before and after; 20 mutants of the new code (below).
+- Proven: the table in `proposed_fix`, measured on the real generator before and after; 24 mutants of the new code (below).
 - Measured, not fixed: the 6-day personas still short (OI-477), the 3 / 4 / 5-day splits (OI-475).
 - NOT done: a device check of a 6-day plan (the founder's next build).
 

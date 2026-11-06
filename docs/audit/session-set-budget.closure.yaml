@@ -331,7 +331,7 @@ findings:
   - id: FLOOR-CO-GROUP-TIME
     title: "co_group_limited (3,538 group-runs) and time_limited (13,022) floors, e.g. the 6-day 90-minute build_muscle case leaves Quads at 8 weekly sets while Glutes sits at its top"
     terminal_state: closed_in_commit
-    commit: "branch oi454-quads (OI-454; the landing SHA is the merge of that branch)"
+    commit: 0c203f77765c4780b279dfbc44af101aeb1f10e3
     verification: "The labels are the allocator's intended report (a floor missed for time or for a co-group's top is not a defect by itself). The one actionable instance this row named, 6-day build_muscle Quads at 8 against 12 while Glutes sat at its top, was decided by the founder (option a plus a co-group policy) and shipped by OI-454 (diagnose cb50cb, plan-engine-detail (d); SBF-QUADS-FLOOR in docs/audit/set-budget-flip.closure.yaml is closed_in_commit). The personas still short are tracked as OI-477 (6-day) and OI-475 (3, 4 and 5 days)."
 
   - id: FLOOR-CAP-NOT-TRAINED

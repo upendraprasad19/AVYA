@@ -10745,7 +10745,8 @@ concepts:
       function that applies it, called by `SessionSetAllocator._groupsOf`, `PeriodizationEngine.apply` and
       `VolumeTitration._titrateWeekBudgeted`, so the three ledgers agree. `BudgetMuscleGroups.of` (focus groups) is
       unchanged. Paired with the Legs B slot swap (`SplitResolver._get6DayV4`, Quads / knee_dominant / compound,
-      priority 2). The gate oracle (`session_set_budget_gate_test.dart`, `_credited`) restates the rule independently.
+      priority 2). Kill-switch `disable_quad_legs_b` (`PlanEngineFlags.quadLegsBEnabled`, default ON) restores both. The gate oracle
+      (`session_set_budget_gate_test.dart`, `_credited`) restates the rule independently.
       Not mirrored in cascade_tracer (it counts cascade attempts, not set credit).
     writers:
       - file: lib/shared/repositories/plan_engine/plan_generator.dart
@@ -14469,7 +14470,7 @@ concepts:
         fields_read: [type]
         notes: whitelist shape, widened to include 'logged' by this batch
       - file: lib/shared/repositories/plan_engine/plan_engine_flags.dart
-        line_range: 474-479
+        line_range: 487-492
         method: isRestDayConsideringLogged
         semantic: flag-check
         fields_read: [type]

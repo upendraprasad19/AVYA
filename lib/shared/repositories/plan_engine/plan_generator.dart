@@ -162,8 +162,11 @@ class PlanGenerator {
     final planGoal = goalSpec.planGoal;
 
     // Stage 1: Split resolution → MuscleSlotDay[]
+    // OI-454 kill-switch `disable_quad_legs_b`: read ONCE, so the Legs B slot and the Glutes credit
+    // rule below (one change) flip together.
+    final quadLegsB = PlanEngineFlags.quadLegsBEnabled;
     final splitDays = SplitResolver.selectV4(planGoal, daysPerWeek,
-        experienceLevel: effectiveExp);
+        experienceLevel: effectiveExp, quadLegsB: quadLegsB);
 
     // Stage 1.5: Volume Filter — the deload rule only. Every split slot is kept: the
     // session set budget (Stage 3.5 below, B2 flipped ON 2026-11-02), not a fixed
@@ -286,7 +289,7 @@ class PlanGenerator {
       focusGroups: BudgetMuscleGroups.of(effectiveBodyFocus),
       // OI-454: in the 6-day build_muscle split a squat or lunge does not spend the
       // Glutes top (its Legs B quad slot would otherwise be refused for it).
-      quadPrimaryCreditsGlutes: !SplitResolver.hasQuadLegsBSplit(planGoal, daysPerWeek),
+      quadPrimaryCreditsGlutes: !(quadLegsB && SplitResolver.hasQuadLegsBSplit(planGoal, daysPerWeek)),
       archetypeByName: {
         for (final e in rowsByName.entries) e.key: SessionBudget.archetypeOfRow(e.value),
       },

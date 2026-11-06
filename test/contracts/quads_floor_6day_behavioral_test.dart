@@ -32,6 +32,7 @@ import 'package:icanbefitter/core/services/hive_service.dart';
 import 'package:icanbefitter/core/services/hive_user_session.dart';
 import 'package:icanbefitter/shared/repositories/plan_engine/budget_muscle_groups.dart';
 import 'package:icanbefitter/shared/repositories/plan_engine/models.dart';
+import 'package:icanbefitter/shared/repositories/plan_engine/plan_engine_flags.dart';
 import 'package:icanbefitter/shared/repositories/plan_engine/plan_generator.dart';
 import 'package:icanbefitter/shared/repositories/plan_engine/session_budget.dart';
 import 'package:icanbefitter/shared/repositories/plan_engine/session_set_allocator.dart';
@@ -337,6 +338,31 @@ void main() {
       }
     });
 
+    test('the order of primary_muscles is a contract: every row listing Quads AND Glutes with another muscle first, '
+        'and every quad-first row listing Hamstrings, is a KNOWN exception', () {
+      const knownNotQuadFirst = {
+        'Box Squat', 'Lateral Lunge', 'Sumo Squat', 'Cossack Squat', 'Weighted Cossack Squats', 'Curtsey Squat',
+        'Skater Hops',
+      };
+      const knownHingeQuadFirst = {'Trap Bar Deadlift'};
+      final notQuadFirst = <String>{};
+      final hingeQuadFirst = <String>{};
+      for (final row in byName.values) {
+        final m = [for (final x in (row['primary_muscles'] as List? ?? const [])) '$x'];
+        if (m.isEmpty) continue;
+        final quadFirst = BudgetMuscleGroups.of([m.first]).contains('Quads');
+        final glutes = BudgetMuscleGroups.of(m).contains('Glutes');
+        final quads = BudgetMuscleGroups.of(m).contains('Quads');
+        if (quads && glutes && !quadFirst) notQuadFirst.add(row['name'] as String);
+        if (quadFirst && glutes && BudgetMuscleGroups.of(m).contains('Hamstrings')) hingeQuadFirst.add(row['name'] as String);
+      }
+      expect(notQuadFirst, knownNotQuadFirst,
+          reason: 'a new library row lists Quads and Glutes with another muscle first (it keeps its Glutes credit): '
+              'decide it on purpose and add it here, or reorder its primary_muscles');
+      expect(hingeQuadFirst, knownHingeQuadFirst,
+          reason: 'a new quad-first row also lists Hamstrings (a hip hinge that keeps its Glutes credit)');
+    });
+
     test('the context default keeps every other plan\'s credit', () {
       final c = SessionBudgetContext(
         minutes: 60,
@@ -388,6 +414,17 @@ void main() {
             // The allocator's own label for a Quads shortfall at 90 minutes is the documented one.
             if (minutes == 90) {
               expect(stats.belowFloor['Quads'], _quadsLabel90[key], reason: '$key Quads label');
+            }
+            // The documented CAUSE of `cap_limited` there: both leg days hold a budgeted quad compound at the
+            // per-exercise maximum (the label alone also covers a session cap or a weekly top).
+            if (key == 'intermediate|basic_gym|90') {
+              final quadCompoundSets = [
+                for (final d in plan.weekPlans[0].workoutDays.where((d) => d.name.startsWith('Legs')))
+                  for (final e in d.exercises.where(budgeted).where(kneeQuadFirst)) e.sets,
+              ];
+              expect(quadCompoundSets, isNotEmpty);
+              expect(quadCompoundSets.every((n) => n == SessionBudget.maxSetsPerExercise), isTrue,
+                  reason: 'quad compound sets $quadCompoundSets, maximum ${SessionBudget.maxSetsPerExercise}');
             }
             // Tops, caps and minutes in all four weeks (credited sense, the rule of this split).
             auditPlan(plan, level, 1, minutes, key, bad);
@@ -490,6 +527,63 @@ void main() {
           expect(full, greaterThan(ruled), reason: '$goal ${days}d: the rule WOULD have changed this plan');
         }
       }
+    });
+  });
+
+  group('kill switch disable_quad_legs_b (platform tier feature_flag, default ON)', () {
+    Future<void> withSwitch(Future<void> Function() body) async {
+      final box = HiveService.instance.configBox;
+      await box.put('disable_quad_legs_b', true);
+      try {
+        await body();
+      } finally {
+        await box.delete('disable_quad_legs_b');
+      }
+    }
+
+    test('unset: the new Legs B; the switch is read by PlanEngineFlags and defaults ON', () {
+      expect(PlanEngineFlags.quadLegsBEnabled, isTrue);
+    });
+
+    test('selectV4(quadLegsB: false) restores the pre-OI-454 Legs B slot list exactly', () {
+      final off = SplitResolver.selectV4('build_muscle', 6, quadLegsB: false).firstWhere((d) => d.name == 'Legs B');
+      expect(off.slotsA.length, 8);
+      expect(off.slotsA.where((s) => s.targetMuscle == 'Quads'), isEmpty);
+      expect(off.slotsA.where((s) => s.targetMuscle == 'Glutes' && s.movementPattern == 'hip_isolation' && s.priority == 2),
+          hasLength(1));
+      // Every other split is untouched by the argument.
+      for (final goal in ['lose_fat', 'strength', 'general_fitness', 'build_muscle']) {
+        for (final days in [3, 4, 5]) {
+          expect(SplitResolver.selectV4(goal, days, quadLegsB: false).map((d) => d.slotsA.length),
+              SplitResolver.selectV4(goal, days).map((d) => d.slotsA.length),
+              reason: '$goal ${days}d');
+        }
+      }
+    });
+
+    test('switched off, generation returns to the old behaviour: Quads equal the pre-change table in all 24 cells '
+        'and the allocator credits Glutes in full', () async {
+      await withSwitch(() async {
+        expect(PlanEngineFlags.quadLegsBEnabled, isFalse);
+        final bad = <String>[];
+        for (final level in _levels) {
+          for (final tier in _tiers) {
+            for (final minutes in const [60, 90]) {
+              final key = '$level|$tier|$minutes';
+              final plan = gen('build_muscle', tier, 6, level, minutes);
+              final q = fullCredit(plan, 0, 'quad');
+              if (q != _quadsBefore[key]) bad.add('$key: Quads $q != old ${_quadsBefore[key]}');
+            }
+          }
+        }
+        expect(bad, isEmpty);
+        SessionSetAllocator.debugLastStats = null;
+        final plan = gen('build_muscle', 'full_gym', 6, 'intermediate', 90);
+        expect(SessionSetAllocator.debugLastStats!['A']!.weekly['Glutes'], fullCredit(plan, 0, 'glute'),
+            reason: 'with the switch off a squat credits Glutes again');
+        final legsB = plan.weekPlans[0].workoutDays.firstWhere((d) => d.name == 'Legs B');
+        expect(legsB.exercises.where(kneeQuadFirst), isEmpty, reason: 'the old Legs B holds no quad exercise');
+      });
     });
   });
 }
