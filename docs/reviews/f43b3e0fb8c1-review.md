@@ -1,6 +1,6 @@
 ---
 reviewed_at: 2026-11-06T11:20:00+05:30
-staged_against: c1092edcca80
+staged_against: f43b3e0fb8c1
 blast_radius: platform
 reviewer: claude-sonnet-via-skill
 lens_set: [writer_reader_drift, function_exception_swallow, blast_radius_mismatch, secrets_in_tree, unawaited_no_error_sink, guard_without_its_mirror, missing_input, asserted_fixture_value]
@@ -9,7 +9,7 @@ verdict: accepted
 verdict_note: no P0 or P1; the six actionable findings are fixed in this commit, two are stated residue
 ---
 
-# Code Review (B-pass) — c1092edcca80
+# Code Review (B-pass) — f43b3e0fb8c1
 
 Branch `oi454-quads` (merged up to date with `origin/main` 1118d3b1), diff `origin/main...HEAD` of the fix commit `0c203f77`
 plus the sync merge `d7c019cf`; this file's commit carries the review fixes. One fresh context-blind Sonnet reviewer, all
