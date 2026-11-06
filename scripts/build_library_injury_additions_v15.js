@@ -34,9 +34,15 @@ const PENDING = 'PENDING founder review';
 // Library row whose picture a new row shares: its tags are the new row's twin tags.
 // Batch C2a (OI-460) removed E075 and E210 from the library, so their tags are FROZEN here (they were read from the library
 // rows before); test/contracts/library_batch_c_injury_coverage_test.dart mirrors them against the base fixture.
+// Batch C2b (OI-462) removes E084 E211 E111 E162 E169 E179 in the same batch that adds their twins, so the twins' tags are
+// FROZEN here too (read from the library rows before removal). `from` names every source row of a twin.
 const TWIN = {
   G0814: { from: 'E075', name: 'Dip (Parallel Bars)', tags: ['elbow', 'shoulder'] },
   G1428: { from: 'E210', name: 'Wrist Rotations', tags: ['wrist'] },
+  G1368: { from: 'E084 + E211', name: 'Ankle Circles / Ankle Rotations', tags: ['ankle'] },
+  G2567: { from: 'E162 + E169', name: 'Piriformis Stretch / Seated Piriformis Stretch', tags: ['hip'] },
+  G1489: { from: 'E111', name: 'Sissy Squat', tags: ['knee'] },
+  G0474: { from: 'E179', name: 'Toes to Bar', tags: ['lower_back', 'shoulder'] },
 };
 
 const sortedUnique = (a) => [...new Set(a || [])].sort();

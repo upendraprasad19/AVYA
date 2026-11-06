@@ -4,6 +4,8 @@
 // `movement_pattern` and `slot_pattern ?? movement_pattern`. The helper (test/helpers/library_depth.dart) computes it;
 // scripts/data/library_batch_c2_removals.json freezes the decision; this file proves the two agree on the BASE library
 // (test/fixtures/library_c2_base_depth.json) and that the SHIPPED library still honours the rule.
+// Batch C2b (OI-462): the four twin rows (test/fixtures/library_c2b_twin_rows.json) are added to the base, so a removal is
+// judged with its twin present; the mirror guard below pins that fixture to the shipped G rows.
 // Every literal is computed from the files.
 @Timeout(Duration(minutes: 5))
 library;
@@ -13,6 +15,7 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 
+import '../../scripts/migration_ledger_hash_lib.dart' show sha256Hex;
 import '../helpers/library_depth.dart';
 
 Map<String, dynamic> _json(String p) => jsonDecode(File(p).readAsStringSync()) as Map<String, dynamic>;
@@ -20,7 +23,10 @@ Map<String, dynamic> _json(String p) => jsonDecode(File(p).readAsStringSync()) a
 void main() {
   final file = _json('scripts/data/library_batch_c2_removals.json');
   final fx = _json('test/fixtures/library_c2_base_depth.json');
-  final base = (fx['rows'] as List).cast<Map<String, dynamic>>();
+  final twinFx = _json('test/fixtures/library_c2b_twin_rows.json');
+  final twinRows = (twinFx['rows'] as List).cast<Map<String, dynamic>>();
+  final baseOnly = (fx['rows'] as List).cast<Map<String, dynamic>>();
+  final base = [...baseOnly, ...twinRows];
   final shipped = (jsonDecode(File('assets/data/exercise_library.json').readAsStringSync()) as List)
       .cast<Map<String, dynamic>>();
   final entries = (file['entries'] as List).cast<Map<String, dynamic>>();
@@ -35,7 +41,6 @@ void main() {
   final removeIds = idsWhere((e) => e['decision'] == 'remove');
   final fileKeep = idsWhere((e) => e['decision'] == 'keep');
   final forced = idsWhere((e) => e['keep_reason'] == 'forced');
-  final twinPending = idsWhere((e) => e['keep_reason'] == 'twin_pending');
   final frozen = <String, Map<String, int>>{
     for (final e in entries)
       e['id'] as String: {
@@ -48,11 +53,10 @@ void main() {
       }.difference(forced);
 
   group('depth rule on the BASE library reproduces the frozen decision', () {
-    test('computed depth keeps, forced keeps and twin_pending keeps make exactly the file keep set', () {
+    test('computed depth keeps and forced keeps make exactly the file keep set', () {
       final c = computed();
       expect(c.difference(fileKeep), isEmpty, reason: 'a computed keep the file removes');
-      expect(fileKeep.difference(c), forced.union(twinPending.difference(c)),
-          reason: 'file_keep minus computed_keep must be forced plus the twin_pending rows the depth rule would remove');
+      expect(fileKeep.difference(c), forced, reason: 'file_keep minus computed_keep must be exactly the forced keeps');
     });
 
     test('the helper never keeps an ineligible row (E138 is conditioning)', () {
@@ -111,12 +115,53 @@ void main() {
       expect(v, isNotEmpty, reason: 'the empty table still reddens a row that thins a cell');
     });
 
-    test('one semantics only misses E263 (slot) and E111 or E148 (movement pattern)', () {
+    test('one semantics only misses E263 (slot) and E148 (movement pattern)', () {
       final mpOnly = computed(semantics: {DepthSemantics.movementPattern});
       final slotOnly = computed(semantics: {DepthSemantics.slotPattern});
       expect(mpOnly.union(slotOnly), computed());
       expect(mpOnly.length < computed().length || slotOnly.length < computed().length, isTrue,
           reason: 'at least one keep exists under one semantics only');
+    });
+  });
+
+  group('the twin rows (Batch C2b)', () {
+    test('with G1489 in the base E111 is removable; without it E111 is a computed depth keep', () {
+      expect(computed().contains('E111'), isFalse);
+      final withoutTwin = [for (final r in base) if (r['id'] != 'G1489') r];
+      final c = {
+        for (final s in DepthSemantics.values)
+          ...computeDepthKeeps(withoutTwin, sheet, forced: forced, sem: s, sets: depthInjurySets(withoutTwin)),
+      };
+      expect(c.contains('E111'), isTrue, reason: 'the twin row is what frees E111');
+    });
+
+    test('the six rows C2a kept as twin_pending are removals with a twin replacement now', () {
+      const pairs = {'E084': 'G1368', 'E211': 'G1368', 'E111': 'G1489', 'E162': 'G2567', 'E169': 'G2567', 'E179': 'G0474'};
+      for (final e in pairs.entries) {
+        final entry = entries.firstWhere((x) => x['id'] == e.key);
+        expect(entry['decision'], 'remove', reason: e.key);
+        expect(entry['replacement'], e.value, reason: e.key);
+        expect(entry['removed_in'], 'c2b', reason: e.key);
+      }
+    });
+
+    test('the twin fixture sha256 is the one the removals file recorded (an edit of the fixture without a regeneration is red)', () {
+      final bytes = File('test/fixtures/library_c2b_twin_rows.json').readAsBytesSync();
+      expect(sha256Hex(bytes), (file['_meta'] as Map)['twin_fixture_sha256']);
+      expect((file['_meta'] as Map)['twin_fixture'], 'test/fixtures/library_c2b_twin_rows.json');
+    });
+
+    test('mirror guard: the fixture rows equal the shipped G rows depth fields', () {
+      final shippedById = {for (final r in shipped) r['id'] as String: r};
+      expect(twinRows, hasLength(4));
+      for (final t in twinRows) {
+        final s = shippedById[t['id']];
+        expect(s, isNotNull, reason: '${t['id']} must ship');
+        for (final k in ['name', 'discipline', 'movement_pattern', 'injury_contraindications', 'equipment_tier']) {
+          expect(t[k], s![k], reason: '${t['id']} $k drifted from the shipped row');
+        }
+        expect(t['slot_pattern'], s!['slot_pattern'], reason: '${t['id']} slot_pattern drifted');
+      }
     });
   });
 }

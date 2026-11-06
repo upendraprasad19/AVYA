@@ -124,7 +124,7 @@ void main() {
           reason: 'Rows deviating from the 40-key canonical schema:\n${offenders.join('\n')}');
     });
 
-    test('demo_slug and demo_pair travel together, on exactly 150 rows', () {
+    test('demo_slug and demo_pair travel together, on exactly 149 rows', () {
       // The pair is what the asset pipeline and the resolver both key on; one
       // without the other is a half-written row, not a valid state.
       final lonely = rows
@@ -134,7 +134,7 @@ void main() {
       expect(lonely, isEmpty, reason: 'rows with one plate key but not the other: $lonely');
       // 165 -> 158: Batch A retired 7 plated duplicates into their twins;
       // 158 -> 156: E207 and E179 pointed at another movement's drawing.
-      expect(rows.where((r) => r.containsKey('demo_slug')).length, 150);
+      expect(rows.where((r) => r.containsKey('demo_slug')).length, 149);
     });
 
     test('no row is MISSING a List injury_contraindications (the E252 live hole)', () {
@@ -174,8 +174,8 @@ void main() {
       // taken to 3. Calibrated against the two patterns that already worked:
       // horizontal_push had 6 baseline rows and zero missing, hip_isolation 5 and
       // zero. Six to seven is the working number; three is not.
-      expect(rows.length, 864, reason: '285 original rows + 629 Batch C1 rows - 50 Batch C2a removals');
-      expect(rows.map((r) => r['id']).toSet().length, 864);
+      expect(rows.length, 862, reason: '285 original rows + 633 Batch C1/C2b rows - 56 removals (50 Batch C2a, 6 Batch C2b)');
+      expect(rows.map((r) => r['id']).toSet().length, 862);
       expect(rows.any((r) => r['id'] == 'E261'), isTrue);
       expect(rows.any((r) => r['id'] == 'E294'), isFalse, reason: 'E294 left in Batch C2a');
     });

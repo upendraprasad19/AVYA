@@ -481,6 +481,7 @@ class SessionBudgetContext {
     required this.lighterPhase,
     required Set<String> focusGroups,
     this.finisherSeconds = 0,
+    this.quadPrimaryCreditsGlutes = true,
     required Map<String, String> archetypeByName,
   })  : focusGroups = Set.unmodifiable(focusGroups),
         archetypeByName = Map.unmodifiable(archetypeByName);
@@ -501,6 +502,13 @@ class SessionBudgetContext {
 
   /// Always 0 while no screen shows the finisher (Ruling 6).
   final int finisherSeconds;
+
+  /// OI-454 co-group policy. True (the default) credits Glutes for every exercise
+  /// that lists them. False: an exercise whose first listed muscle is Quads credits
+  /// Quads (and its other groups) but not Glutes, so the Glutes top never refuses a
+  /// squat or a lunge. `generateV4` sets it false for the 6-day build_muscle split
+  /// only (see `BudgetMuscleGroups.creditedOf`).
+  final bool quadPrimaryCreditsGlutes;
 
   /// Lowercased exercise name -> archetype, computed once from the library rows.
   final Map<String, String> archetypeByName;

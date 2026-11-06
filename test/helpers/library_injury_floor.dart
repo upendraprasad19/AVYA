@@ -14,6 +14,17 @@ import 'injury_safe_pool.dart';
 const Map<String, String> kTwinLibraryRow = {
   'G0814': 'E075', // Tricep Dip ~ Dip (Parallel Bars): elbow + shoulder
   'G1428': 'E210', // ~ Wrist Rotations: wrist
+  // Batch C2b (OI-462): the first source of each twin (two twins have a second source, kTwinExtraSources).
+  'G1368': 'E084', // Ankle Circles: ankle
+  'G2567': 'E162', // Piriformis Stretch: hip
+  'G1489': 'E111', // Sissy Squat: knee
+  'G0474': 'E179', // Toes to Bar: lower_back + shoulder
+};
+
+/// Batch C2b: the second source row of a twin that replaces two rows. Its tags equal the twin's frozen tags too.
+const Map<String, String> kTwinExtraSources = {
+  'G1368': 'E211', // Ankle Rotations: ankle
+  'G2567': 'E169', // Seated Piriformis Stretch: hip
 };
 
 /// Batch C2a (OI-460): E075 and E210 left the library, so the twin tags are FROZEN literals (the base library's tags for
@@ -21,6 +32,11 @@ const Map<String, String> kTwinLibraryRow = {
 const Map<String, List<String>> kTwinFrozenTags = {
   'G0814': ['elbow', 'shoulder'],
   'G1428': ['wrist'],
+  // Batch C2b (OI-462): E084 E211 E111 E162 E169 E179 leave in the same batch, so these are frozen too.
+  'G1368': ['ankle'],
+  'G2567': ['hip'],
+  'G1489': ['knee'],
+  'G0474': ['lower_back', 'shoulder'],
 };
 
 List<String> _strs(Object? v) => (v as List? ?? const []).map((e) => e.toString()).toList();

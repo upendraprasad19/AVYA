@@ -6165,6 +6165,54 @@ Found by the Hermes pass (L31, 2026-11-05) of the OI-179 batch. Until migration 
 
 **Acceptance:** a SQL rehearsal in `BEGIN ... ROLLBACK` with 5 seeded dead functions inserts at most the capped number, and the roster test fails when a new `logCronStart` caller is on neither list.
 
+## OI-462 — Library Batch C2b: twins G1368 G1489 G2567 G0474 and removal of the six twin_pending rows (E084 E211 E111 E162 E169 E179); E230 moved to OI-474
+
+- **Status**: CLOSED
+- **Blocked on**: none
+- **Verified**: 2026-11-05 (live counts after migration 171: 925 rows, 862 active, 63 inactive; the four twin names each have one active row)
+- **Identified**: 2026-11-04 · filed via mint_oi.sh from branch `library-batch-c2`
+
+Second half of the split of Batch C2 (the first half is OI-460). Adds the four twin rows G1368, G1489, G2567 and G0474, then removes the six `twin_pending` rows that C2a keeps (E084 E211 E111 E162 E169 E179). E230's retag and media moved to OI-474 at plan review round 2 (2026-11-05). Open: the G0474 picture decision. Needs its own plan, two review rounds, and a fresh founder go for the media upload and the migration apply.
+
+**Done when.** The four twins ship; each `twin_pending` row is removed or kept with a stated reason; the depth rule still holds; the cloud migration is applied.
+
+**Closed by.** Branch `library-batch-c2b`: the batch commit 222b73b2 (twins, six removals, seed v19, media table and stills, depth rule with twin rows, E043 swap repoint, migration 171 file and ledger entry); media upload of four animations (4 of 4 verified) and migration 171 applied to `dedsavbjuwgarrhphgnl` on 2026-11-05 after the founder's go on each exact artifact. B-pass `docs/reviews/library-batch-c2b-bpass.md`; closure `docs/audit/library-batch-c2b.closure.yaml`. E230 went to OI-474.
+
+## OI-358 — An exercise name twice in one workout day: seven doors let it in, and Active Workout's name-keyed cards raised a duplicate GlobalKey
+
+- **Status**: CLOSED · 2026-11-06 · branch `oi358-unique-exercise-names`, closes-diagnose e6a4d9; behavioral test test/contracts/exercise_name_unique_in_day_behavioral_test.dart, screen test test/features/train/exercise_name_unique_screen_test.dart
+- **Blocked on**: none
+- **Verified**: 2026-11-06, in tests: the crash reproduced on the real screen in a test build, 52 new tests pass and 49 of 49 mutants are killed. Device walk: OI-348 row A16 (release-build behaviour was not measured).
+- **Identified**: 2026-10-20 · filed via mint_oi.sh from branch `log-exercise-batch2`
+
+Retitled on close: the original title named only the Add path. Every door is closed: Train Add, Train Swap, the template builder, the coach `swapExercise` tool, the coach Swap quick action, the coach injury swap and coach `createCustomTemplate`; a day that is already duplicated (restore, an old template) is made safe at `startWorkout`, `assignTemplateToDate` and the template builder's load. The card key stays name-based on purpose, and `exlogKey` needs unique names anyway. A taken name is shown grey, not hidden. Two separate defects found on the way are fixed in the same batch: the swap UNDO's stale index, and the template builder showing coach-made rows as Unknown, 3 x 10. Stored rows are not healed.
+
+Original entry: - **Status**: OPEN
+- **Blocked on**: none
+- **Verified**: never
+- **Identified**: 2026-10-20 · filed via mint_oi.sh from branch `log-exercise-batch2`
+
+Found by the batch-2 plan review (round 1, P2-12, 2026-10-20), verified by reading, not reproduced on device. `ActiveWorkoutNotifier.addExercise` (`lib/features/train/providers/train_provider.dart:1642-1646`) appends without a name check, and the exercise picker (`lib/features/train/screens/active_workout/exercise_picker_sheet.dart:47-61`) does not exclude exercises already in the session. The screen keys every card by name: `_exerciseKeys.putIfAbsent(exercise.name, () => GlobalKey())` (`screen.dart:438`) and `key: _exerciseKeys[exercise.name]` (`screen.dart:481`), so two cards with one name share a GlobalKey, which Flutter rejects ("Multiple widgets used the same GlobalKey"). Options to plan: exclude names already in the session from the picker, or key cards by a per-session id instead of the name. The batch-2 UNDO toast's identity check (`exerciseName` at an index) also assumes unique names; it stays correct today only because a duplicate already breaks the screen.
+
+## OI-454 — Quads sit below their weekly floor in 6-day build_muscle plans: add a Legs B quad slot AND an allocator co-group policy so a quad exercise is not removed for crediting Glutes
+
+- **Status**: CLOSED · 2026-11-06 · branch `oi454-quads` · diagnose `cb50cb` · the commit carrying `closes-oi: OI-454`
+- **Blocked on**: — (resolved)
+- **Verified**: never
+- **Identified**: 2026-11-03 · filed via mint_oi.sh from branch `oi-quads-floor`
+
+**What happens.** Intermediate build_muscle, full_gym, 6 days, 90 minutes: Quads get 8 weekly sets against a band of 12 to 16 (floors 10/12/14 by level). Legs A (`Quad dominant`) holds the only quad work; Legs B (`Hamstring + glute focus`, `_get6DayV4('build_muscle')` in `lib/shared/repositories/plan_engine/split_resolver.dart`) has none. Glutes already sit at their weekly top (12/16/20), so the allocator removes any added squat or lunge because it also credits Glutes. Closure row `SBF-QUADS-FLOOR` (`docs/audit/set-budget-flip.closure.yaml`); measured at the flip in `docs/architecture/plan-engine-detail.md` (d).
+
+**Spike (2026-11-03, reverted).** A Legs B quad slot alone changes nothing (the allocator drops it). Replacing Legs B's glute-isolation slot lifts Quads only to 9 to 12 sets against floors 10/12/14.
+
+**Founder direction (2026-11-03).** Quads option (a), recommended path: swap the Legs B glute-isolation slot for a Quads knee_dominant compound slot AND add an allocator co-group policy (a quad-primary exercise is not refused for crediting Glutes: partial glute credit, or the cap applied to the primary muscle), in one batch. Rule-14 waiver for `plan_generator.dart` given ("ok"); the allocator file may need its own waiver. The old draft `docs/plans/2026-11-03-quads-legs-b-slot.md` (worktree `quads-legs-b`, untracked) predates the spike and must be rewritten around it.
+
+**Done when.** Plan reviewed twice; Quads reach the band floor in the founder case and the other 6-day build_muscle personas with no group above its band top and every day inside its minutes; the generator golden changes only for 6-day build_muscle personas (changed keys listed); `kThinCeilings` and the scorecard baseline re-frozen if they move; mutants on the slot and on the policy. Blast radius: `platform` (plan_engine), tier L.
+
+**Narrowed 2026-11-06.** Done-when clause 2 ("Quads reach the band floor in the founder case and the other 6-day build_muscle personas") is met for the founder case and shown as a 24-cell ratchet for the others (every cell rose, 10 of 24 reach their floor: 7 at 90 minutes, 3 at 60); the personas still short are OI-477.
+
+**Closed 2026-11-06.** Cause: Legs B had no quad exercise, and a quad exercise lists Glutes too, so the allocator refused it while Glutes sat at its weekly top. Fix (option a, one batch): Legs B swaps its Glutes / hip_isolation slot for a Quads / knee_dominant / compound slot (priority 2), and `SessionBudgetContext.quadPrimaryCreditsGlutes` is false for 6-day build_muscle only, so `BudgetMuscleGroups.creditedOf` drops Glutes from an exercise whose first listed muscle is Quads (the allocator, week 2 and titration read the one flag). Founder case Quads 8 -> 12 of 12 to 16, Glutes 16 -> 13 (credited), Hamstrings 11 -> 12; at 90 minutes beginners reach their floor of 10 and intermediate bodyweight, dumbbells and full gym reach 12. Golden: 60 keys, all 6-day build_muscle (a global rule changed 745 and was rejected). The clause "the other 6-day personas reach the floor" is only PARTLY met: 5 of 12 personas are short at 90 minutes and 9 of 12 at the 60-minute default (intermediate basic gym `cap_limited`, advanced bodyweight `co_group_limited`, the rest `time_limited`), filed as OI-477. Stated cost: a squat's glute work no longer counts in this split (founder case 22 full-credit glute sets against a credited 13 and a top of 16; a beginner about 21 against 12). A hip hinge that lists Quads first (Trap Bar Deadlift) keeps its Glutes credit. Mutants: 24 of 24 red. Kill-switch `disable_quad_legs_b` restores the old Legs B and the full Glutes credit. The 3, 4 and 5-day splits are OI-475. Device check of a 6-day plan: the founder's next build.
+
 ## OI-227 — Telegram coach connect is broken (no linking token, bot says no user found) — remove UI entry points, revisit phase 2
 
 - **Status**: CLOSED · 2026-11-06 · closed by OI-466 (branch telegram-surface-off), closes-diagnose b9d3f1

@@ -58,7 +58,7 @@ impact_analysis: >
   User-visible: the paywall perk list loses one false claim, the AI Coach three-dot menu loses one item, and a tester
   with a saved Telegram channel lands in chat. Nothing else changes for a normal account. Accepted residue, stated and
   not solved: (1) the saved-channel guarantee is PRESENCE-ONLY. AiCoachScreen cannot be pumped in a unit test, so it
-  rests on the structural scan (no reader of coach_channel and no channel branch left in lib/) plus device check A16 of
+  rests on the structural scan (no reader of coach_channel and no channel branch left in lib/) plus device check A17 of
   OI-348. (2) Adjacent string literals ('Tele' 'gram') and Unicode lookalikes slip through any substring scan; the
   realistic threat is an old branch merged back, which the scan catches (mutant M10 survives and is recorded). (3) Three
   non-comment occurrences of 'telegram' stay in sync_service.dart and one in the migrator list; the scan pins those
@@ -130,7 +130,7 @@ recover from the toggle. The overflow menu is now a pure function so a test can 
 - Overflow menu: BEHAVIORAL, the real entries are pumped; the header wiring is pinned once and each value is tied to
   its case label by a source pin (the values and the dispatch live in two places).
 - A tester with a saved Telegram channel lands in chat: PRESENCE-ONLY (a structural scan: no reader of the key, no
-  channel branch, and the chat area pinned as the unconditional body of the screen build), plus device check A16 of
+  channel branch, and the chat area pinned as the unconditional body of the screen build), plus device check A17 of
   OI-348. The screen cannot be pumped in a unit test.
 - `Clear conversation` is pinned to EXIST and be wired; it is not claimed to work (OI-479, below).
 

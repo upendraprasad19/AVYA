@@ -105,11 +105,11 @@ void main() {
       expect(tableViolations(table0, map0, lib0), isEmpty);
     });
 
-    test('the table has the shape M1 shipped (617 G/N rows on 616 files) plus the old rows: every file is referenced, all active, nothing held back', () {
+    test('the table has the G/N shape (621 rows on 620 files: 617 on 616 from M1 plus the four Batch C2b twins) plus the old rows: every file is referenced, all active, nothing held back', () {
       final newRows = rows().keys.where((k) => !oldId.hasMatch(k)).toList();
       final newSlugs = {for (final k in newRows) slugOf(k)};
-      expect(newRows.length, 617, reason: 'the G/N rows are the M1 base; C2 edits this pin when it removes or adds rows');
-      expect(newSlugs.length, 616);
+      expect(newRows.length, 621, reason: 'the G/N rows: M1 base 617 plus the four Batch C2b twins (G1368 G1489 G2567 G0474)');
+      expect(newSlugs.length, 620);
       expect(files().keys.toSet(), rows().values.toSet(), reason: 'every file is referenced by a row and every row names a file');
       expect(files().values.every((f) => (f as Json)['status'] == 'active'), isTrue);
       final eCount = rows().keys.where(oldId.hasMatch).length;
@@ -503,16 +503,19 @@ void main() {
       expectRule('P3', has: 'held E027');
     });
 
-    test('(P4) a removal-slated pair moved into entries', () {
-      final pair = take('removal_slated', 'E084');
-      pair['equipment_checked'] = true;
-      bucket('entries').add(pair);
-      expectRule('P4', has: 'entry E084');
+    // Batch C2b (OI-462) removed the last five removal-slated rows (E084 E111 E162 E169 E211), so the bucket ends EMPTY and both
+    // P4 legs are proven on a synthetic copy: E050 is made to look like a row C2 drops, or placed in the bucket while it keeps
+    // its core levels.
+    test('(P4) an entry whose row has the removal-slated shape (no core level, no variant family)', () {
+      libRow('E050')['core_levels'] = <String>[];
+      libRow('E050').remove('variant_family');
+      expectRule('P4', has: 'entry E050');
     });
 
-    test('(P4) a removal-slated row that C2 keeps (it gains a core level) forces a decision', () {
-      libRow('E084')['core_levels'] = ['beginner'];
-      expectRule('P4', has: 'E084');
+    test('(P4) a removal-slated pair whose row still has core levels forces a decision', () {
+      final gif = bucket('entries').firstWhere((e) => e['id'] == 'E050')['gif'];
+      bucket('removal_slated').add({'id': 'E050', 'gif': gif});
+      expectRule('P4', has: 'removal_slated E050');
     });
 
     test('(P5) an entry that was not equipment-checked', () {

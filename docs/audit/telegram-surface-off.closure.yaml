@@ -24,7 +24,7 @@ findings:
     title: "A 'Telegram - Coming Soon' view replaced the whole chat (input bar, quick prompts, measurement chip) for a tester whose saved coach_channel was 'telegram'"
     terminal_state: closed_in_commit
     commit: d59f362e
-    verification: "telegram_view.dart, channelProvider, ChannelNotifier, telegramConnectionProvider, TelegramConnectionNotifier, the OI-232 channel listener and the four channel == 'in_app' branches in screen.dart are deleted; nothing in lib/ reads coach_channel except the migrator key list. PRESENCE ONLY, stated in the test header and the diagnose doc: AiCoachScreen cannot be pumped in a unit test (coach_chat_restore_invalidation_test.dart:15-36), so the saved-channel tester landing in chat is proven structurally by group S (584 lib files scanned, exact-count allow-list, symbol and file absence) and by device check A16 of OI-348. The chat area is also pinned as the unconditional body of the screen build by its neighbours, and coach_channel is pinned to exactly one use (the migrator list). Mutants M3, M4, M9, N1 (chat area gated behind isPro) and N5 (a second coach_channel use in the exempt migrator) redden group S."
+    verification: "telegram_view.dart, channelProvider, ChannelNotifier, telegramConnectionProvider, TelegramConnectionNotifier, the OI-232 channel listener and the four channel == 'in_app' branches in screen.dart are deleted; nothing in lib/ reads coach_channel except the migrator key list. PRESENCE ONLY, stated in the test header and the diagnose doc: AiCoachScreen cannot be pumped in a unit test (coach_chat_restore_invalidation_test.dart:15-36), so the saved-channel tester landing in chat is proven structurally by group S (584 lib files scanned, exact-count allow-list, symbol and file absence) and by device check A17 of OI-348. The chat area is also pinned as the unconditional body of the screen build by its neighbours, and coach_channel is pinned to exactly one use (the migrator list). Mutants M3, M4, M9, N1 (chat area gated behind isPro) and N5 (a second coach_channel use in the exempt migrator) redden group S."
 
   - id: TG-S4-DEADCARD
     title: "TelegramCard (75 lines, 'CONNECT @AVYACOACHBOT') and _openTelegramBot (t.me deep link) were dead code with no caller"
@@ -59,7 +59,7 @@ findings:
   - id: TG-DEVICE-CHECK
     title: "On-device check of the three user-visible results (menu, paywall perk, a tester with a saved Telegram channel lands in chat)"
     terminal_state: blocked_on_user
-    reason: "The founder runs row A16 of OI-348 on the first build that carries this batch: AI Coach three-dot menu has no Telegram entry; paywall perk reads 'Weekly AI nutrition report'; a tester account whose saved coach_channel is 'telegram' opens the AI Coach tab and sees the chat, not a Coming Soon screen. Not verifiable from the VPS (no device, and the screen cannot be pumped in a unit test)."
+    reason: "The founder runs row A17 of OI-348 on the first build that carries this batch: AI Coach three-dot menu has no Telegram entry; paywall perk reads 'Weekly AI nutrition report'; a tester account whose saved coach_channel is 'telegram' opens the AI Coach tab and sees the chat, not a Coming Soon screen. Not verifiable from the VPS (no device, and the screen cannot be pumped in a unit test)."
 
   - id: TG-BOT-FATE
     title: "Keep or delete the tracked telegram-bot/ directory, the morning-alert Telegram fallback and the dead Telegram tables/columns (OI-476)"

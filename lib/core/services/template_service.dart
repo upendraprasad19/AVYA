@@ -25,6 +25,7 @@ import 'workout_schedule_read_service.dart';
 import 'workout_write_service.dart';
 import 'write_result.dart';
 import '../utils/date_utils.dart';
+import '../utils/exercise_name_identity.dart';
 import '../utils/injury_vocab.dart';
 import '../../shared/repositories/plan_engine/plan_engine_flags.dart';
 import '../../shared/repositories/plan_engine/training_history_analyzer.dart';
@@ -139,8 +140,14 @@ class TemplateService {
     }
 
     final workoutName = tmplMap['name'] as String? ?? 'Custom Workout';
-    final normalizedExercises =
-        _normalizeExercises(tmplMap['exercises'] as List? ?? []);
+    // OI-358: a template saved with a name twice still schedules, with the first
+    // of each. On the raw rows: `_normalizeExercises` writes every nameless row as
+    // 'Unknown', and those must not collapse here. All three routes pass through
+    // this method (coach, Train SCHEDULE, builder save).
+    final normalizedExercises = _normalizeExercises(firstPerExerciseName<dynamic>(
+      tmplMap['exercises'] as List? ?? const [],
+      (row) => row is Map ? exerciseRowName(row) : null,
+    ));
 
     final templateEntry = <String, dynamic>{
       'date': dateKey,

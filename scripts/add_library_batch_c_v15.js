@@ -214,15 +214,21 @@ function applyAliases(allRows, removals) {
 }
 
 // A `standard_swap` that names a removed row would point at nothing (B-pass C2a finding 2): it takes the replacement row's
-// name, or "" when the removal has no replacement or the replacement is the row itself. Nothing in lib/ reads the field.
+// name, or "" when the removal has no replacement or the replacement is the row itself. Batch C2b (OI-462): the field also
+// holds ids on 21 rows (E043 names "E111"), so an id-form value is matched by id and takes the replacement's ID, a
+// name-form value keeps taking the NAME. Nothing in lib/ or the Edge Functions reads the field.
 function repointStandardSwap(allRows, removals) {
   const byId = new Map(allRows.map((r) => [r.id, r]));
-  const gone = new Map(removals.map((e) => [e.name.toLowerCase(), e]));
+  const goneByName = new Map(removals.map((e) => [e.name.toLowerCase(), e]));
+  const goneById = new Map(removals.map((e) => [e.id, e]));
   return allRows.map((r) => {
-    const e = typeof r.standard_swap === 'string' ? gone.get(r.standard_swap.toLowerCase()) : undefined;
+    if (typeof r.standard_swap !== 'string') return r;
+    const byName = goneByName.get(r.standard_swap.toLowerCase());
+    const e = byName || goneById.get(r.standard_swap);
     if (!e) return r;
     const to = e.replacement ? byId.get(e.replacement) : undefined;
-    return { ...r, standard_swap: to && to.id !== r.id ? to.name : '' };
+    const ok = to && to.id !== r.id;
+    return { ...r, standard_swap: ok ? (byName ? to.name : to.id) : '' };
   });
 }
 

@@ -60,4 +60,20 @@ class BudgetMuscleGroups {
     }
     return out;
   }
+
+  /// OI-454: the groups an EXERCISE credits to the budget. As [of], except that when
+  /// [quadPrimaryCreditsGlutes] is false an exercise whose FIRST listed muscle is
+  /// Quads does not credit Glutes (a squat or a lunge is a quad exercise for the
+  /// band; the glute work it does is not counted against the Glutes top, so it is
+  /// never refused for it). An exercise that also credits Hamstrings is a hip hinge
+  /// (Trap Bar Deadlift lists Quads first), the heaviest glute lift in the pool, and
+  /// keeps its Glutes credit. The default keeps every other plan's credit as it was.
+  static Set<String> creditedOf(List<String> tokens, {bool quadPrimaryCreditsGlutes = true}) {
+    final all = of(tokens);
+    if (quadPrimaryCreditsGlutes || tokens.isEmpty || !all.contains('Glutes')) return all;
+    if (all.contains('Hamstrings')) return all;
+    final first = of([tokens.first]);
+    if (first.length == 1 && first.contains('Quads')) return {...all}..remove('Glutes');
+    return all;
+  }
 }

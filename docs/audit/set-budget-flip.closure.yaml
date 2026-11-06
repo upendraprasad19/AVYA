@@ -61,8 +61,9 @@ findings:
 
   - id: SBF-QUADS-FLOOR
     title: "Quads sit at 8 weekly sets in the 6-day 90-minute build_muscle case (band 12 to 16), below the floor"
-    terminal_state: blocked_on_user
-    reason: "Measured at the flip (plan-engine-detail (d)): Legs A (88.1 of 90 minutes) holds squat 4, deadlift 4, hanging leg raise 4, leg extension 4, calves 6; Legs B has no quad exercise; Glutes reach the band top (16), so the squat cannot grow. Two levers exist and neither is shipped: (a) a quad slot on Legs B in the 6-day split, (b) an allocator policy that serves below-floor groups first. Both change every generated plan, so it is the founder's choice among (a), (b) or neither."
+    terminal_state: closed_in_commit
+    commit: 0c203f77765c4780b279dfbc44af101aeb1f10e3
+    verification: "Founder chose (a) plus a co-group policy on 2026-11-03 (OI-454). Legs B swaps its glute isolation slot for a Quads compound slot and SessionBudgetContext.quadPrimaryCreditsGlutes is false for 6-day build_muscle only; founder case Quads 8 -> 12 of 12 to 16. Proof test/contracts/quads_floor_6day_behavioral_test.dart and quads_credit_flag_consumers_test.dart (24 mutants), diagnose cb50cb, plan-engine-detail (d). Residue (intermediate basic gym, advanced and 60-minute personas) is OI-477; the 3, 4 and 5-day splits are OI-475."
 
   - id: SBF-REPEAT-PHASE-MINUTES
     title: "A repeat phase keeps the previous phase's exercise list when the user's minutes go up (the allocator never adds exercises)"

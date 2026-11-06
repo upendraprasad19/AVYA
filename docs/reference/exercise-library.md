@@ -30,3 +30,4 @@ The Storage object is `<media_slug>_v<media_version>.webp` in the **private** bu
 | `equipment_tier` | string[] | Subset of: bodyweight, home_dumbbells, basic_gym, full_gym |
 | `rep_range` | string | Exercise-specific rep prescription (e.g., "5-8", "8-12", "12-15") |
 | `priority_tier` | int | 1 (primary compound), 2 (secondary), 3 (accessory isolation) |
+| `primary_muscles` | string[] | The muscles the exercise trains, **ORDER MATTERS** (OI-454): in the 6-day build_muscle split the session set budget treats an exercise whose FIRST listed muscle is Quads (and which does not also list Hamstrings) as a quad exercise that does not credit Glutes, so put the main mover first. `quads_floor_6day_behavioral_test.dart` pins the known exceptions (rows listing Quads and Glutes with another muscle first, and the quad-first hip hinge Trap Bar Deadlift) and fails on a new one, so a library batch decides it on purpose. |

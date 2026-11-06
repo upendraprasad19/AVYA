@@ -60,6 +60,7 @@ findings:
     notes: "migration 167, applied 2026-11-05 after the founder go on the exact file; live read-back 921 rows, 864 active, 57 inactive, 0 removed names active; ledger hash recorded in backups/applied_migrations.json."
   - id: C2A-9
     title: "Twin rows E084 E111 E162 E169 E179 E211 kept until their C2b twins ship (E111 is held by the depth rule and also has twin G1489)"
-    terminal_state: upstream_blocked
-    blocker: "OI-462 (Batch C2b): twins G1368 G1489 G2567 G0474 do not ship yet"
-    reopen_when: "Batch C2b lands the twins and removes the six twin_pending rows"
+    terminal_state: closed_in_commit
+    commit: 222b73b2
+    verification: test/contracts/library_seed_v19_upgrade_behavioral_test.dart
+    notes: "Batch C2b (OI-462) shipped the four twins and removed the six rows; migration 171 applied live, 925 rows, 862 active."

@@ -5,9 +5,11 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:icanbefitter/core/copy/wardroom_copy.dart';
 import 'package:icanbefitter/core/theme/colors.dart';
 import 'package:icanbefitter/core/theme/spacing.dart';
 import 'package:icanbefitter/core/theme/typography.dart';
+import 'package:icanbefitter/core/utils/exercise_name_identity.dart';
 import 'package:icanbefitter/core/services/error_telemetry.dart';
 import 'package:icanbefitter/core/services/sync_service.dart';
 import 'package:icanbefitter/core/services/workout_schedule_service.dart';
@@ -48,9 +50,11 @@ class _TemplateBuilderScreenState
         _nameController.text = (tmpl['name'] as String?) ?? '';
         final exercises = tmpl['exercises'] as List?;
         if (exercises != null) {
-          for (final e in exercises) {
-            if (e is Map) _exercises.add(Map<String, dynamic>.from(e));
-          }
+          // OI-358: a name restored twice must not be saved back from here.
+          _exercises.addAll(firstPerExerciseName(
+            exercises.whereType<Map>().map(Map<String, dynamic>.from),
+            exerciseRowName,
+          ));
         }
         final days = tmpl['assigned_days'] as List?;
         if (days != null) {
@@ -284,16 +288,12 @@ class _TemplateBuilderScreenState
                     padding:
                         const EdgeInsets.only(bottom: AppSpacing.gridGap),
                     child: ExerciseCard(
-                      name: exercise['name'] as String? ?? 'Unknown',
+                      name: exerciseRowName(exercise) ?? 'Unknown',
                       category: exercise['category'] as String?,
                       loggingType: (exercise['logging_type'] as String?) ??
                           'weight_reps',
-                      sets: (exercise['prescribed_sets'] as int?) ??
-                          (exercise['default_sets'] as int?) ??
-                          3,
-                      reps: (exercise['prescribed_reps'] as String?) ??
-                          (exercise['default_reps'] as String?) ??
-                          '10',
+                      sets: _rowSets(exercise),
+                      reps: _rowReps(exercise),
                       restSeconds: (exercise['rest_seconds'] as int?) ??
                           (exercise['default_rest_secs'] as int?) ??
                           90,
@@ -326,13 +326,51 @@ class _TemplateBuilderScreenState
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (_) => _ExerciseSearchSheet(
+        takenNames: _takenNames,
         onSelect: (exercise) {
-          setState(() => _exercises.add(exercise));
+          // OI-358: the one writer of this list. A picked row is never taken
+          // (the sheet greys those), but a just-created custom can share a name.
+          final name = exerciseRowName(exercise);
+          if (name != null && _takenNames.contains(exerciseNameKey(name))) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text(
+                  WardroomCopy.templateAlreadyAddedTemplate
+                      .replaceAll('{exercise}', name),
+                  style: AppTypography.bodySm,
+                ),
+                backgroundColor: AppColors.card,
+              ),
+            );
+          } else {
+            setState(() => _exercises.add(exercise));
+          }
           Navigator.of(context).pop();
         },
       ),
     );
   }
+
+  Set<String> get _takenNames =>
+      exerciseNameKeysOf(_exercises.map(exerciseRowName));
+
+  /// A row's sets, whichever shape it came in: `prescribed_sets` / `default_sets`
+  /// on a picked library row, `sets` on a coach-made or restored template. Parsed,
+  /// never cast: a String `sets` has reached Hive before (diagnose a2f9e1).
+  static int _rowSets(Map<String, dynamic> row) {
+    for (final key in const ['prescribed_sets', 'default_sets', 'sets']) {
+      final value = row[key];
+      if (value is num) return value.toInt();
+      if (value is String) {
+        final parsed = int.tryParse(value);
+        if (parsed != null) return parsed;
+      }
+    }
+    return 3;
+  }
+
+  static String _rowReps(Map<String, dynamic> row) =>
+      '${row['prescribed_reps'] ?? row['default_reps'] ?? row['reps'] ?? '10'}';
 
   Future<void> _saveTemplate() async {
     final name = _nameController.text.trim();
@@ -491,7 +529,10 @@ class _TemplateBuilderScreenState
 class _ExerciseSearchSheet extends StatefulWidget {
   final void Function(Map<String, dynamic> exercise) onSelect;
 
-  const _ExerciseSearchSheet({required this.onSelect});
+  /// `exerciseNameKey`s already in the template (OI-358).
+  final Set<String> takenNames;
+
+  const _ExerciseSearchSheet({required this.onSelect, required this.takenNames});
 
   @override
   State<_ExerciseSearchSheet> createState() => _ExerciseSearchSheetState();
@@ -695,22 +736,29 @@ class _ExerciseSearchSheetState extends State<_ExerciseSearchSheet> {
                     itemCount: _results.length,
                     itemBuilder: (context, index) {
                       final ex = _results[index];
+                      final taken = widget.takenNames.contains(
+                          exerciseNameKey(ex['name'] as String? ?? ''));
                       return ListTile(
                         contentPadding: EdgeInsets.zero,
+                        enabled: !taken,
                         title: Text(
                           ex['name'] as String? ?? 'Unknown',
                           style: AppTypography.h3.copyWith(fontSize: 14),
                         ),
                         subtitle: Text(
-                          '${ex['category'] ?? ''} · ${_formatType(ex['logging_type'] as String? ?? '')}',
+                          taken
+                              ? WardroomCopy.templateAlreadyAddedTag
+                              : '${ex['category'] ?? ''} · ${_formatType(ex['logging_type'] as String? ?? '')}',
                           style: AppTypography.monoXs.copyWith(
                             color: AppColors.textDim,
                             letterSpacing: 1.2,
                           ),
                         ),
-                        trailing: const Icon(Icons.add_circle_outline,
-                            color: AppColors.accent, size: 20),
-                        onTap: () => widget.onSelect(ex),
+                        trailing: taken
+                            ? null
+                            : const Icon(Icons.add_circle_outline,
+                                color: AppColors.accent, size: 20),
+                        onTap: taken ? null : () => widget.onSelect(ex),
                       );
                     },
                   ),

@@ -108,7 +108,7 @@ Process notes from the coordinator: reviewer B deviated from its allow-list twic
 - Ledger vs `validate_audit_closure.dart`, diagnose doc vs the validator, plan-review record vs `check_plan_review_record_exists.dart`: consistent; the record's only open field is `bpass`, set after this file exists. Secrets regex over the 1908-line diff: 0 hits; no `/home/ubuntu`, `/tmp` or session ids in added lines. OI board: `closed_issues.md` append-only, `open_issues.md` loses exactly OI-227 and OI-466.
 
 ## Founder triage notes
-Coordinator triage, all findings non-pending. Two items need the founder and are on the board, not in the code: OI-476 (keep or delete `telegram-bot/` and the morning-alert fallback) and OI-479 (what `Clear conversation` should do), plus device check A16 of OI-348 for the one guarantee that is presence-only.
+Coordinator triage, all findings non-pending. Two items need the founder and are on the board, not in the code: OI-476 (keep or delete `telegram-bot/` and the morning-alert fallback) and OI-479 (what `Clear conversation` should do), plus device check A17 of OI-348 for the one guarantee that is presence-only.
 
 ## Tuning entry
 - **2026-11-06** - blast-radius platform - 15 findings; 0 false_alarm; tuning: none to the lens set. Observed for next time: a reviewer seat forbidden to edit can still propose mutants as text and the coordinator runs them (6 of 8 were real survivors of the author's own table); splitting the dispatch into a code-and-tests seat and a docs-and-board seat produced disjoint finding sets with no overlap, and only the docs seat caught the claim-accuracy P2s (an overstated exploit paragraph, a wrong review-finding number, six stale statements of a corrected claim).

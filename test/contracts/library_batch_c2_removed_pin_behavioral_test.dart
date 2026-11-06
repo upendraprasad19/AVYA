@@ -23,13 +23,22 @@ import 'package:icanbefitter/shared/repositories/plan_engine/plan_generator.dart
 
 import '../helpers/generator_golden_personas.dart' show namesByDay;
 
-/// Removed rows by name, from the removals file (the frozen decision, not a literal).
-Set<String> _removedNames() => {
-      for (final e in ((jsonDecode(File('scripts/data/library_batch_c2_removals.json').readAsStringSync())
-              as Map<String, dynamic>)['entries'] as List)
-          .cast<Map<String, dynamic>>())
-        if (e['decision'] == 'remove') (e['name'] as String).toLowerCase(),
-    };
+/// Removed rows by name, from the removals file (the frozen decision, not a literal), MINUS the names a shipped row carries.
+/// Batch C2b (OI-462): four removed rows share their name with the twin that replaces them (Ankle Circles, Sissy Squat, Seated
+/// Piriformis Stretch, Toes to Bar), so emitting that NAME is emitting the shipped twin, never the removed row. The same
+/// exemption library_batch_c2_name_readers_test.dart uses.
+Set<String> _removedNames() {
+  final shipped = {
+    for (final r in (jsonDecode(File('assets/data/exercise_library.json').readAsStringSync()) as List).cast<Map<String, dynamic>>())
+      (r['name'] as String).toLowerCase(),
+  };
+  return {
+    for (final e in ((jsonDecode(File('scripts/data/library_batch_c2_removals.json').readAsStringSync())
+            as Map<String, dynamic>)['entries'] as List)
+        .cast<Map<String, dynamic>>())
+      if (e['decision'] == 'remove') (e['name'] as String).toLowerCase(),
+  }.difference(shipped);
+}
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
