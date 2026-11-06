@@ -321,6 +321,11 @@ void main() {
         expect(injuryTagsOf(baseRow), isNotEmpty, reason: '${e.value} is the twin of ${e.key}');
         expect(_finalTags(row, table), containsAll(kTwinFrozenTags[e.key]!), reason: e.key);
       }
+      // Batch C2b: a twin that replaces two rows is mirrored against its second source too.
+      for (final e in kTwinExtraSources.entries) {
+        final baseRow = base.firstWhere((l) => l['id'] == e.value);
+        expect(kTwinFrozenTags[e.key], injuryTagsOf(baseRow), reason: '${e.value} frozen tags drifted from the base fixture');
+      }
     });
     test('MUTATION: remove one floor token; drop a twin token; remove shoulder from one push-up-named row -> red', () {
       // A floor token that lives only in the table row: take the first row whose floor is non-empty and whose raw tags lack it.

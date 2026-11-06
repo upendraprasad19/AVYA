@@ -57,12 +57,12 @@ void main() {
     expect(wrong, isEmpty, reason: 'not in START/END order: $wrong');
   });
 
-  test('E207 and E179 carry no plate keys, and torso-twist-stretch is gone', () {
+  test('E207 and G0474 (E179 Toes to Bar left in Batch C2b) carry no plate keys, and torso-twist-stretch is gone', () {
     final rows = (jsonDecode(
       File('assets/data/exercise_library.json').readAsStringSync(),
     ) as List)
         .cast<Map<String, dynamic>>();
-    for (final id in ['E207', 'E179']) {
+    for (final id in ['E207', 'G0474']) {
       final row = rows.singleWhere((r) => r['id'] == id);
       expect(row.containsKey('demo_slug'), isFalse, reason: '$id demo_slug');
       expect(row.containsKey('demo_pair'), isFalse, reason: '$id demo_pair');

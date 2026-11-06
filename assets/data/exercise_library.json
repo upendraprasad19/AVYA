@@ -3463,7 +3463,7 @@
     "equipment_tier": [
       "full_gym"
     ],
-    "standard_swap": "E111",
+    "standard_swap": "G1489",
     "priority_tier": 2,
     "rep_range": "12-15",
     "demo_slug": "leg-extension",
@@ -6442,79 +6442,6 @@
     "media_source": "wardroom"
   },
   {
-    "id": "E084",
-    "name": "Ankle Circles",
-    "category": "flexibility",
-    "movement_pattern": [
-      "flexibility",
-      "warmup"
-    ],
-    "exercise_type": [
-      "flexibility"
-    ],
-    "primary_muscles": [
-      "Ankles"
-    ],
-    "secondary_muscles": [],
-    "equipment_needed": [
-      "bodyweight"
-    ],
-    "logging_type": "timed",
-    "difficulty_level": "beginner",
-    "suitable_for": [
-      "Beginner",
-      "Intermediate",
-      "Advanced"
-    ],
-    "default_sets": 3,
-    "default_reps": "20 each direction each foot",
-    "default_rest_secs": 15,
-    "tempo": "",
-    "met_value": 1.5,
-    "cal_per_set_est": 1.0,
-    "breathing_cue": "Normal breathing",
-    "coaching_cues": [
-      "Seated",
-      "lift foot",
-      "large slow circles both directions",
-      "full range"
-    ],
-    "common_mistakes": [
-      "Small circles",
-      "rushing",
-      "not doing both directions"
-    ],
-    "warmup_protocol": "",
-    "pro_tip": "",
-    "is_indian_context": false,
-    "indian_alternative": "",
-    "source": "",
-    "is_active": true,
-    "injury_contraindications": [
-      "ankle"
-    ],
-    "is_bilateral": true,
-    "cns_demand": 1,
-    "target_focus": [
-      "ankles"
-    ],
-    "equipment_tier": [
-      "bodyweight",
-      "home_dumbbells",
-      "basic_gym",
-      "full_gym"
-    ],
-    "standard_swap": "",
-    "priority_tier": 3,
-    "rep_range": "30-60",
-    "is_foundational": false,
-    "core_levels": [],
-    "discipline": "mobility",
-    "gym_availability": "home",
-    "requires_coaching": false,
-    "high_impact": false
-  },
-  {
     "id": "E085",
     "name": "Cat-Cow Stretch",
     "category": "flexibility",
@@ -8526,77 +8453,6 @@
     "requires_coaching": false,
     "high_impact": false,
     "variant_family": "hip_abduction"
-  },
-  {
-    "id": "E111",
-    "name": "Sissy Squat",
-    "category": "legs",
-    "movement_pattern": [
-      "knee_dominant"
-    ],
-    "exercise_type": [
-      "isolation"
-    ],
-    "primary_muscles": [
-      "Quads"
-    ],
-    "secondary_muscles": [],
-    "equipment_needed": [
-      "bodyweight"
-    ],
-    "logging_type": "bodyweight_reps",
-    "difficulty_level": "advanced",
-    "suitable_for": [
-      "Advanced"
-    ],
-    "default_sets": 3,
-    "default_reps": "10-15",
-    "default_rest_secs": 90,
-    "tempo": "",
-    "met_value": 5.0,
-    "cal_per_set_est": 9.0,
-    "breathing_cue": "Inhale down, exhale up",
-    "coaching_cues": [
-      "Hold support",
-      "lean back as you descend",
-      "heels elevated",
-      "knees forward"
-    ],
-    "common_mistakes": [
-      "Without support initially",
-      "going too far back without strength"
-    ],
-    "warmup_protocol": "Bodyweight practice first",
-    "pro_tip": "",
-    "is_indian_context": false,
-    "indian_alternative": "",
-    "source": "",
-    "is_active": true,
-    "injury_contraindications": [
-      "knee"
-    ],
-    "is_bilateral": true,
-    "cns_demand": 2,
-    "target_focus": [
-      "Quads"
-    ],
-    "equipment_tier": [
-      "bodyweight",
-      "home_dumbbells",
-      "basic_gym",
-      "full_gym"
-    ],
-    "standard_swap": "",
-    "priority_tier": 3,
-    "rep_range": "12-15",
-    "is_foundational": false,
-    "demo_slug": "sissy-squat",
-    "demo_pair": true,
-    "core_levels": [],
-    "discipline": "strength",
-    "gym_availability": "home",
-    "requires_coaching": false,
-    "high_impact": false
   },
   {
     "id": "E112",
@@ -11219,78 +11075,6 @@
     "media_source": "wardroom"
   },
   {
-    "id": "E162",
-    "name": "Piriformis Stretch",
-    "category": "flexibility",
-    "movement_pattern": [
-      "flexibility"
-    ],
-    "exercise_type": [
-      "flexibility"
-    ],
-    "primary_muscles": [
-      "Piriformis",
-      "Deep Hip Rotators"
-    ],
-    "secondary_muscles": [],
-    "equipment_needed": [
-      "bodyweight"
-    ],
-    "logging_type": "timed",
-    "difficulty_level": "beginner",
-    "suitable_for": [
-      "Beginner",
-      "Intermediate",
-      "Advanced"
-    ],
-    "default_sets": 3,
-    "default_reps": "45-60 sec each",
-    "default_rest_secs": 15,
-    "tempo": "",
-    "met_value": 1.5,
-    "cal_per_set_est": 1.0,
-    "breathing_cue": "Deep slow breathing",
-    "coaching_cues": [
-      "Figure 4 position",
-      "pull bent knee toward chest",
-      "feel deep glute/hip stretch"
-    ],
-    "common_mistakes": [
-      "Forcing range",
-      "rushing",
-      "holding breath"
-    ],
-    "warmup_protocol": "",
-    "pro_tip": "",
-    "is_indian_context": false,
-    "indian_alternative": "",
-    "source": "",
-    "is_active": true,
-    "injury_contraindications": [
-      "hip"
-    ],
-    "is_bilateral": true,
-    "cns_demand": 1,
-    "target_focus": [
-      "piriformis"
-    ],
-    "equipment_tier": [
-      "bodyweight",
-      "home_dumbbells",
-      "basic_gym",
-      "full_gym"
-    ],
-    "standard_swap": "",
-    "priority_tier": 3,
-    "rep_range": "30-60",
-    "is_foundational": false,
-    "core_levels": [],
-    "discipline": "mobility",
-    "gym_availability": "home",
-    "requires_coaching": false,
-    "high_impact": false
-  },
-  {
     "id": "E166",
     "name": "Hamstring Stretch (Standing)",
     "category": "flexibility",
@@ -11366,80 +11150,6 @@
     "requires_coaching": false,
     "high_impact": false,
     "variant_family": "stretch_hamstring"
-  },
-  {
-    "id": "E169",
-    "name": "Seated Piriformis Stretch",
-    "category": "flexibility",
-    "movement_pattern": [
-      "flexibility"
-    ],
-    "exercise_type": [
-      "flexibility"
-    ],
-    "primary_muscles": [
-      "Piriformis",
-      "Glutes"
-    ],
-    "secondary_muscles": [],
-    "equipment_needed": [
-      "elevated surface"
-    ],
-    "logging_type": "timed",
-    "difficulty_level": "beginner",
-    "suitable_for": [
-      "Beginner",
-      "Intermediate",
-      "Advanced"
-    ],
-    "default_sets": 3,
-    "default_reps": "45-60 sec each",
-    "default_rest_secs": 15,
-    "tempo": "",
-    "met_value": 1.5,
-    "cal_per_set_est": 1.0,
-    "breathing_cue": "Deep slow breathing",
-    "coaching_cues": [
-      "Sit",
-      "cross ankle over knee",
-      "lean forward",
-      "feel deep glute stretch"
-    ],
-    "common_mistakes": [
-      "Forcing range",
-      "twisting spine",
-      "not leaning forward"
-    ],
-    "warmup_protocol": "",
-    "pro_tip": "",
-    "is_indian_context": false,
-    "indian_alternative": "",
-    "source": "",
-    "is_active": true,
-    "injury_contraindications": [
-      "hip"
-    ],
-    "is_bilateral": true,
-    "cns_demand": 1,
-    "target_focus": [
-      "Glutes",
-      "piriformis"
-    ],
-    "equipment_tier": [
-      "bodyweight",
-      "home_dumbbells",
-      "basic_gym",
-      "full_gym"
-    ],
-    "standard_swap": "",
-    "priority_tier": 3,
-    "rep_range": "30-60",
-    "is_foundational": false,
-    "core_levels": [],
-    "discipline": "mobility",
-    "gym_availability": "home",
-    "requires_coaching": false,
-    "high_impact": false
   },
   {
     "id": "E171",
@@ -12013,81 +11723,6 @@
     "requires_coaching": false,
     "high_impact": false,
     "variant_family": "plank"
-  },
-  {
-    "id": "E179",
-    "name": "Toes to Bar",
-    "category": "core",
-    "movement_pattern": [
-      "core",
-      "flexibility"
-    ],
-    "exercise_type": [
-      "calisthenics"
-    ],
-    "primary_muscles": [
-      "Core",
-      "Lower Back"
-    ],
-    "secondary_muscles": [
-      "core",
-      "lats"
-    ],
-    "equipment_needed": [
-      "pull-up bar"
-    ],
-    "logging_type": "bodyweight_reps",
-    "difficulty_level": "advanced",
-    "suitable_for": [
-      "Advanced"
-    ],
-    "default_sets": 4,
-    "default_reps": "10-12",
-    "default_rest_secs": 90,
-    "tempo": "",
-    "met_value": 5.5,
-    "cal_per_set_est": 10.0,
-    "breathing_cue": "Exhale on raise",
-    "coaching_cues": [
-      "Dead hang",
-      "minimal swing",
-      "raise straight legs to bar",
-      "controlled descent"
-    ],
-    "common_mistakes": [
-      "Swinging",
-      "bent legs",
-      "not touching bar",
-      "momentum"
-    ],
-    "warmup_protocol": "Hanging leg raise first",
-    "pro_tip": "",
-    "is_indian_context": false,
-    "indian_alternative": "",
-    "source": "",
-    "is_active": true,
-    "injury_contraindications": [
-      "lower_back",
-      "shoulder"
-    ],
-    "is_bilateral": true,
-    "cns_demand": 1,
-    "target_focus": [
-      "Core/Obliques"
-    ],
-    "equipment_tier": [
-      "basic_gym",
-      "full_gym"
-    ],
-    "standard_swap": "",
-    "priority_tier": 2,
-    "rep_range": "12-20",
-    "is_foundational": false,
-    "core_levels": [],
-    "discipline": "calisthenics_skill",
-    "gym_availability": "standard_gym",
-    "requires_coaching": false,
-    "high_impact": false
   },
   {
     "id": "E180",
@@ -13715,76 +13350,6 @@
     "requires_coaching": false,
     "high_impact": false,
     "variant_family": "mobility_hip"
-  },
-  {
-    "id": "E211",
-    "name": "Ankle Rotations",
-    "category": "warmup",
-    "movement_pattern": [
-      "warmup"
-    ],
-    "exercise_type": [
-      "dynamic_stretch"
-    ],
-    "primary_muscles": [
-      "Calves"
-    ],
-    "secondary_muscles": [],
-    "equipment_needed": [
-      "bodyweight"
-    ],
-    "logging_type": "timed",
-    "difficulty_level": "beginner",
-    "suitable_for": [
-      "Beginner",
-      "Intermediate",
-      "Advanced"
-    ],
-    "default_sets": 1,
-    "default_reps": "30s",
-    "default_rest_secs": 0,
-    "tempo": "",
-    "met_value": 1.5,
-    "cal_per_set_est": 1.0,
-    "breathing_cue": "Breathe naturally",
-    "coaching_cues": [
-      "Lift one foot",
-      "rotate ankle clockwise then counter-clockwise",
-      "switch feet"
-    ],
-    "common_mistakes": [
-      "Skipping this",
-      "not doing both directions"
-    ],
-    "warmup_protocol": "",
-    "pro_tip": "Prevents ankle sprains — important before any standing exercise",
-    "is_indian_context": false,
-    "indian_alternative": "",
-    "source": "Standard warm-up exercise",
-    "is_active": true,
-    "injury_contraindications": [
-      "ankle"
-    ],
-    "is_bilateral": true,
-    "cns_demand": 1,
-    "target_focus": [
-      "Calves"
-    ],
-    "equipment_tier": [
-      "bodyweight",
-      "home_dumbbells",
-      "basic_gym",
-      "full_gym"
-    ],
-    "standard_swap": "",
-    "priority_tier": 3,
-    "rep_range": "30-60",
-    "is_foundational": false,
-    "core_levels": [],
-    "discipline": "mobility",
-    "gym_availability": "home",
-    "requires_coaching": false,
-    "high_impact": false
   },
   {
     "id": "E212",
@@ -19487,6 +19052,84 @@
     "high_impact": false,
     "variant_family": "olympic_clean",
     "media_slug": "0028-barbell-clean-and-press",
+    "media_version": 1,
+    "media_source": "wardroom"
+  },
+  {
+    "id": "G1368",
+    "name": "Ankle Circles",
+    "category": "warmup",
+    "movement_pattern": [
+      "warmup"
+    ],
+    "exercise_type": [
+      "dynamic_stretch"
+    ],
+    "primary_muscles": [
+      "Calves",
+      "Tibialis"
+    ],
+    "secondary_muscles": [],
+    "equipment_needed": [
+      "bodyweight"
+    ],
+    "logging_type": "timed",
+    "difficulty_level": "beginner",
+    "suitable_for": [
+      "Beginner",
+      "Intermediate",
+      "Advanced"
+    ],
+    "default_sets": 1,
+    "default_reps": "10 each direction each foot",
+    "default_rest_secs": 0,
+    "tempo": "",
+    "met_value": 2.3,
+    "cal_per_set_est": 4.0,
+    "breathing_cue": "Breathe naturally",
+    "coaching_cues": [
+      "Stand tall with hands on hips and lift one foot slightly off the floor",
+      "Draw large, slow circles with the toes",
+      "Do both directions, then switch feet"
+    ],
+    "common_mistakes": [
+      "Making small, rushed circles",
+      "Skipping one direction"
+    ],
+    "warmup_protocol": "",
+    "pro_tip": "Move only from the ankle, keeping the shin still",
+    "is_indian_context": false,
+    "indian_alternative": "Seated ankle rotations at your desk",
+    "source": "exercise-gif-set",
+    "is_active": true,
+    "is_foundational": false,
+    "injury_contraindications": [
+      "ankle"
+    ],
+    "is_bilateral": true,
+    "cns_demand": 1,
+    "target_focus": [
+      "Calves"
+    ],
+    "equipment_tier": [
+      "bodyweight",
+      "home_dumbbells",
+      "basic_gym",
+      "full_gym"
+    ],
+    "standard_swap": "",
+    "priority_tier": 3,
+    "rep_range": "10-20",
+    "core_levels": [],
+    "discipline": "mobility",
+    "gym_availability": "home",
+    "requires_coaching": false,
+    "high_impact": false,
+    "variant_family": "mobility_ankle",
+    "name_aliases": [
+      "Ankle Rotations"
+    ],
+    "media_slug": "1368-ankle-circles",
     "media_version": 1,
     "media_source": "wardroom"
   },
@@ -45531,6 +45174,86 @@
     "media_source": "wardroom"
   },
   {
+    "id": "G2567",
+    "name": "Seated Piriformis Stretch",
+    "category": "flexibility",
+    "movement_pattern": [
+      "flexibility"
+    ],
+    "exercise_type": [
+      "static_stretch"
+    ],
+    "primary_muscles": [
+      "Glutes"
+    ],
+    "secondary_muscles": [
+      "Hip Flexors"
+    ],
+    "equipment_needed": [
+      "bodyweight"
+    ],
+    "logging_type": "timed",
+    "difficulty_level": "beginner",
+    "suitable_for": [
+      "Beginner",
+      "Intermediate",
+      "Advanced"
+    ],
+    "default_sets": 2,
+    "default_reps": "30-60 sec",
+    "default_rest_secs": 15,
+    "tempo": "",
+    "met_value": 2.3,
+    "cal_per_set_est": 4.0,
+    "breathing_cue": "Slow deep breaths; exhale to ease deeper",
+    "coaching_cues": [
+      "Sit tall, cross one ankle over the opposite knee",
+      "Hinge forward from the hips with a flat back",
+      "Hold the stretch deep in the glute"
+    ],
+    "common_mistakes": [
+      "Rounding the spine instead of hinging",
+      "Forcing the knee down"
+    ],
+    "warmup_protocol": "",
+    "pro_tip": "Sit on a chair edge if the floor is hard.",
+    "is_indian_context": false,
+    "indian_alternative": "",
+    "source": "exercise-gif-set",
+    "is_active": true,
+    "is_foundational": false,
+    "injury_contraindications": [
+      "hip"
+    ],
+    "is_bilateral": false,
+    "cns_demand": 1,
+    "target_focus": [
+      "Glutes",
+      "Hip"
+    ],
+    "equipment_tier": [
+      "bodyweight",
+      "home_dumbbells",
+      "basic_gym",
+      "full_gym"
+    ],
+    "standard_swap": "",
+    "priority_tier": 3,
+    "rep_range": "30-60",
+    "core_levels": [],
+    "discipline": "mobility",
+    "gym_availability": "home",
+    "requires_coaching": false,
+    "high_impact": false,
+    "variant_family": "stretch_hip",
+    "name_aliases": [
+      "Piriformis Stretch"
+    ],
+    "media_slug": "2567-seated-piriformis-stretch",
+    "media_version": 1,
+    "media_source": "wardroom"
+  },
+  {
     "id": "G0544",
     "name": "Kettlebell Pistol Squat",
     "category": "legs",
@@ -55853,6 +55576,80 @@
     "media_source": "wardroom"
   },
   {
+    "id": "G1489",
+    "name": "Sissy Squat",
+    "category": "legs",
+    "movement_pattern": [
+      "knee_dominant"
+    ],
+    "exercise_type": [
+      "isolation"
+    ],
+    "primary_muscles": [
+      "Quads"
+    ],
+    "secondary_muscles": [
+      "Core"
+    ],
+    "equipment_needed": [
+      "bodyweight"
+    ],
+    "logging_type": "bodyweight_reps",
+    "difficulty_level": "advanced",
+    "suitable_for": [
+      "Advanced"
+    ],
+    "default_sets": 3,
+    "default_reps": "10-15",
+    "default_rest_secs": 90,
+    "tempo": "2-0-2-0",
+    "met_value": 4.0,
+    "cal_per_set_est": 7.0,
+    "breathing_cue": "Inhale down, exhale up",
+    "coaching_cues": [
+      "Hold a post, rise onto the toes",
+      "Lean back as the knees travel far forward",
+      "Squeeze the quads to rise"
+    ],
+    "common_mistakes": [
+      "Bending at the hips instead of the knees",
+      "Going too deep before the tendons are ready"
+    ],
+    "warmup_protocol": "",
+    "pro_tip": "Hold a post for balance and build range over weeks.",
+    "is_indian_context": false,
+    "indian_alternative": "",
+    "source": "exercise-gif-set",
+    "is_active": true,
+    "is_foundational": false,
+    "injury_contraindications": [
+      "knee"
+    ],
+    "is_bilateral": true,
+    "cns_demand": 2,
+    "target_focus": [
+      "Quads"
+    ],
+    "equipment_tier": [
+      "bodyweight",
+      "home_dumbbells",
+      "basic_gym",
+      "full_gym"
+    ],
+    "standard_swap": "",
+    "priority_tier": 3,
+    "rep_range": "10-15",
+    "core_levels": [],
+    "discipline": "strength",
+    "gym_availability": "home",
+    "requires_coaching": false,
+    "high_impact": false,
+    "variant_family": "sissy_squat",
+    "media_slug": "1489-sissy-squat",
+    "media_version": 1,
+    "media_source": "wardroom"
+  },
+  {
     "id": "G0851",
     "name": "Weighted Sissy Squat",
     "category": "legs",
@@ -61895,6 +61692,83 @@
     "high_impact": false,
     "variant_family": "mobility_spine",
     "media_slug": "3215-hands-reversed-clasped-circular-toe-touch",
+    "media_version": 1,
+    "media_source": "wardroom"
+  },
+  {
+    "id": "G0474",
+    "name": "Toes to Bar",
+    "category": "core",
+    "movement_pattern": [
+      "core"
+    ],
+    "exercise_type": [
+      "calisthenics"
+    ],
+    "primary_muscles": [
+      "Abs",
+      "Hip Flexors"
+    ],
+    "secondary_muscles": [
+      "Core",
+      "Lats",
+      "Forearms"
+    ],
+    "equipment_needed": [
+      "pull-up bar"
+    ],
+    "logging_type": "bodyweight_reps",
+    "difficulty_level": "advanced",
+    "suitable_for": [
+      "Advanced",
+      "Calisthenics"
+    ],
+    "default_sets": 3,
+    "default_reps": "6-12",
+    "default_rest_secs": 60,
+    "tempo": "2-0-2-0",
+    "met_value": 3.8,
+    "cal_per_set_est": 7.0,
+    "breathing_cue": "Exhale as you raise the legs, inhale as you lower",
+    "coaching_cues": [
+      "Hang from the bar with the shoulders engaged",
+      "Raise straight legs up toward the bar with control",
+      "Lower slowly without swinging"
+    ],
+    "common_mistakes": [
+      "Swinging the body and kipping",
+      "Bending the knees to cheat the lift"
+    ],
+    "warmup_protocol": "",
+    "pro_tip": "Master hanging knee raises, then straight-leg raises.",
+    "is_indian_context": false,
+    "indian_alternative": "Hanging knee raises on a bar",
+    "source": "exercise-gif-set",
+    "is_active": true,
+    "is_foundational": false,
+    "injury_contraindications": [
+      "lower_back",
+      "shoulder"
+    ],
+    "is_bilateral": true,
+    "cns_demand": 2,
+    "target_focus": [
+      "Core"
+    ],
+    "equipment_tier": [
+      "basic_gym",
+      "full_gym"
+    ],
+    "standard_swap": "",
+    "priority_tier": 3,
+    "rep_range": "6-12",
+    "core_levels": [],
+    "discipline": "calisthenics_skill",
+    "gym_availability": "standard_gym",
+    "requires_coaching": false,
+    "high_impact": false,
+    "variant_family": "leg_raise",
+    "media_slug": "0474-hanging-straight-leg-hip-raise",
     "media_version": 1,
     "media_source": "wardroom"
   },

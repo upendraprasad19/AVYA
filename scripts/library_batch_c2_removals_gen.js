@@ -1,5 +1,7 @@
 #!/usr/bin/env node
-// Batch C2a removals generator (OI-460). Plan: docs/plans/2026-11-04-library-batch-c2a-removals.md (Task 1).
+// Removals generator: Batch C2a (OI-460, plan docs/plans/2026-11-04-library-batch-c2a-removals.md) and Batch C2b (OI-462,
+// plan docs/plans/2026-11-05-library-batch-c2b-twins.md). C2b adds the four twin rows to the depth rows (TWIN_FIXTURE) so a
+// removal is judged with its twin present, and moves the six former twin_pending rows into REPLACEMENT.
 //
 //   node scripts/library_batch_c2_removals_gen.js                 # write scripts/data/library_batch_c2_removals.json
 //   node scripts/library_batch_c2_removals_gen.js --check         # the committed file equals a fresh run (exit 1 if not)
@@ -18,9 +20,11 @@
 'use strict';
 const fs = require('fs');
 const path = require('path');
+const crypto = require('crypto');
 
 const ROOT = path.join(__dirname, '..');
 const FIXTURE = path.join(ROOT, 'test', 'fixtures', 'library_c2_base_depth.json');
+const TWIN_FIXTURE = path.join(ROOT, 'test', 'fixtures', 'library_c2b_twin_rows.json');
 const OUT = path.join(ROOT, 'scripts', 'data', 'library_batch_c2_removals.json');
 const SOURCE = path.join(ROOT, 'scripts', 'data', 'library_batch_c_source.json');
 
@@ -35,10 +39,11 @@ const FORCED = {
   E254: 'Plan matrix (606 personas, scorecard_gate_test): 25 bodyweight build_muscle 4-6 day plans fill 5-6 distinct elbow_flexion Biceps rows; with E254 and E281 both gone the bodyweight pool is 4 and each gets a (none) pick (hard zero). E254 and E281 together are the floor: E254 alone leaves 25 target-fidelity fallbacks (2034 > baseline 2009). The injury-cell depth rule does not see the uninjured cell.',
   E281: 'Plan matrix (606 personas, scorecard_gate_test): see E254. With E254 kept and E281 removed the same 25 plans fall back to the universal pool (2034 fallback picks against a baseline of 2009).',
 };
-// twin_pending: the depth rule would let the row go, but its replacement twin is added by Batch C2b (OI-462).
-const TWIN_PENDING = {
-  E084: 'G1368', E211: 'G1368', E111: 'G1489', E162: 'G2567', E169: 'G2567', E179: 'G0474',
-};
+// removed_in: the batch that removed the row. The 50 ids below are FROZEN (Batch C2a, migration 167); every other `remove` id is
+// Batch C2b. The seed generator scopes its rollback to `c2b` (plan Decision 3).
+const C2A_REMOVED = new Set([
+  'E075', 'E081', 'E082', 'E101', 'E115', 'E116', 'E125', 'E126', 'E128', 'E130', 'E137', 'E138', 'E144', 'E146', 'E150', 'E153', 'E154', 'E156', 'E157', 'E158', 'E160', 'E163', 'E164', 'E170', 'E178', 'E183', 'E184', 'E192', 'E194', 'E195', 'E196', 'E197', 'E199', 'E204', 'E210', 'E218', 'E223', 'E227', 'E228', 'E233', 'E237', 'E243', 'E256', 'E265', 'E279', 'E285', 'E287', 'E288', 'E293', 'E294',
+]);
 // replacement: the shipped row that serves the removed row's purpose TODAY. alias_to: the replacement that receives
 // the removed NAME as an alias (founder alias policy 2026-11-04; only when the name differs from every row name).
 const REPLACEMENT = {
@@ -48,10 +53,23 @@ const REPLACEMENT = {
   E210: { to: 'G1428', alias: true, why: 'Wrist Rotations shares animation 1428 with G1428 Wrist Circles.' },
   E218: { to: 'G0794', alias: true, why: 'Side Bend Stretch; G0794 is the lower-back side stretch.' },
   E293: { to: 'E291', alias: false, why: 'Elevated Single Leg Hip Thrust; founder removed it 2026-11-04, E291 is the home hip thrust.' },
+  // Batch C2b (OI-462): the four twins now ship, so the six rows that C2a kept as twin_pending leave. A name that equals the twin's
+  // name needs no alias (the seed generator copies the twin's cues onto a same-name removed row).
+  E084: { to: 'G1368', alias: false, isNew: true, why: 'Ankle Circles; G1368 is the same animation and the same name.' },
+  E211: { to: 'G1368', alias: true, isNew: true, why: 'Ankle Rotations; G1368 Ankle Circles is the same animation, the name stays reachable as an alias.' },
+  E111: { to: 'G1489', alias: false, isNew: true, why: 'Sissy Squat; G1489 is the same animation and name. The depth rule, judged with G1489 present, lets E111 go.' },
+  E162: { to: 'G2567', alias: true, isNew: true, why: 'Piriformis Stretch; G2567 Seated Piriformis Stretch is the same animation, the name stays reachable as an alias.' },
+  E169: { to: 'G2567', alias: false, isNew: true, why: 'Seated Piriformis Stretch; G2567 is the same animation and name.' },
+  E179: { to: 'G0474', alias: false, isNew: true, why: 'Toes to Bar; G0474 is the same animation and name.' },
 };
 
+// The base fixture plus the four C2b twin rows, in ONE rows array: depth() uses the same array for the before and the
+// after reading, so every removal is judged with its twin present.
 function loadFixture() {
-  return JSON.parse(fs.readFileSync(FIXTURE, 'utf8'));
+  const fx = JSON.parse(fs.readFileSync(FIXTURE, 'utf8'));
+  const tw = JSON.parse(fs.readFileSync(TWIN_FIXTURE, 'utf8'));
+  fx.rows = fx.rows.concat(tw.rows);
+  return fx;
 }
 
 function injurySets(rows) {
@@ -141,17 +159,15 @@ function build(fx) {
         e.decision = 'keep';
         e.keep_reason = 'depth';
         e.reason = `Depth rule: ${(mp.why[id] || slot.why[id] || []).join('; ')}`;
-        if (id in TWIN_PENDING) e.twin = TWIN_PENDING[id];
-      } else if (id in TWIN_PENDING) {
-        e.decision = 'keep';
-        e.keep_reason = 'twin_pending';
-        e.twin = TWIN_PENDING[id];
-        e.reason = `Replacement ${TWIN_PENDING[id]} is added by Batch C2b (OI-462); the row leaves then.`;
       } else {
         e.decision = 'remove';
+        e.removed_in = C2A_REMOVED.has(id) ? 'c2a' : 'c2b';
         const rep = REPLACEMENT[id];
         if (rep) {
           e.replacement = rep.to;
+          // replacement_new: the replacement row ships for the FIRST time in the batch that removes this row (a twin). The seed
+          // generator derives the rows its migration INSERTs, and its rollback deactivates, from this flag (B-pass C2b finding 3).
+          if (rep.isNew) e.replacement_new = true;
           if (rep.alias) e.alias_to = rep.to;
           e.reason = rep.why;
         } else {
@@ -175,11 +191,13 @@ function build(fx) {
     });
   return {
     _meta: {
-      plan: 'docs/plans/2026-11-04-library-batch-c2a-removals.md',
-      oi: 'OI-460',
+      plan: 'docs/plans/2026-11-04-library-batch-c2a-removals.md; docs/plans/2026-11-05-library-batch-c2b-twins.md',
+      oi: 'OI-460; OI-462',
       generator: 'scripts/library_batch_c2_removals_gen.js',
       base_commit: fx._meta.base_commit,
       fixture: 'test/fixtures/library_c2_base_depth.json',
+      twin_fixture: 'test/fixtures/library_c2b_twin_rows.json',
+      twin_fixture_sha256: crypto.createHash('sha256').update(fs.readFileSync(TWIN_FIXTURE)).digest('hex'),
       sheet_sha256: fx._meta.sheet_sha256,
       iteration_order: 'ascending id',
       depth_rule: 'after >= min(before, 3) per cell (injury single or pair x slot pattern x equipment tier), pool strength/prehab/mobility, movement_pattern AND slot_pattern ?? movement_pattern, union of keeps',

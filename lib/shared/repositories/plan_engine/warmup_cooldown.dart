@@ -55,7 +55,7 @@ class WarmupCooldownSelector {
     'Standing Quad Stretch': {'knee', 'ankle'},
     'Deep Breathing': <String>{}, // universally-safe anchor
     // dead durationMap entries (never emitted today) — mapped for the drift guard
-    'Ankle Rotations': {'ankle'},
+    'Ankle Circles': {'ankle'}, // Batch C2b: E211 Ankle Rotations left; G1368 Ankle Circles replaces it
   };
 
   /// True when [name] loads any of the user's [injuries] (already lowercased).
@@ -350,7 +350,7 @@ class WarmupCooldownSelector {
       'Hip Circles': '60',
       'Leg Swings': '60',
       'Wrist Circles': '30',
-      'Ankle Rotations': '30',
+      'Ankle Circles': '30',
       'Jumping Jacks': '60',
       'High Knees': '60',
       'Spot Jogging': '60',

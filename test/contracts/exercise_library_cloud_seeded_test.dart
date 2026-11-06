@@ -45,7 +45,7 @@ const _namespace = '5a1f0b0c-9dad-11d1-80b4-00c04fd430c8';
 String _cloudId(String libraryId) =>
     const Uuid().v5(_namespace, 'exercise_library|$libraryId');
 
-/// Rows the Batch C1 importer writes carry this `source`. Batch C2a adds none; its rollback reactivates the removed ids.
+/// Rows the Batch C1 importer writes carry this `source`: the C1 rows plus the four Batch C2b twins.
 const _newRowSource = 'exercise-gif-set';
 
 /// Batch C2a: the `decision: remove` library ids of scripts/data/library_batch_c2_removals.json, ascending.
@@ -55,8 +55,21 @@ List<String> _removedIds() {
   return [for (final e in entries) if (e['decision'] == 'remove') e['id'] as String]..sort();
 }
 
+/// Batch C2b: the removals this batch made itself (`removed_in: c2b`) and the twins that replace them. ALL removals are deactivated
+/// (idempotent); only this batch's own are reactivated by its rollback, and its twins are deactivated by it (cloud never deletes).
+List<Map<String, dynamic>> _removalEntries() =>
+    ((jsonDecode(File('scripts/data/library_batch_c2_removals.json').readAsStringSync()) as Map<String, dynamic>)['entries'] as List)
+        .cast<Map<String, dynamic>>()
+        .where((e) => e['decision'] == 'remove')
+        .toList();
+List<String> _ownRemovedIds() => [for (final e in _removalEntries()) if (e['removed_in'] == 'c2b') e['id'] as String]..sort();
+List<String> _twinIds() =>
+    {for (final e in _removalEntries()) if (e['removed_in'] == 'c2b' && e['replacement_new'] == true) e['replacement'] as String}.toList()..sort();
+
 String _rollbackLine() =>
-    "UPDATE exercise_library SET is_active = true WHERE id IN (${_removedIds().map((i) => "'${_cloudId(i)}'").join(', ')});";
+    "UPDATE exercise_library SET is_active = true WHERE id IN (${_ownRemovedIds().map((i) => "'${_cloudId(i)}'").join(', ')});";
+String _twinRollbackLine() =>
+    "UPDATE exercise_library SET is_active = false WHERE id IN (${_twinIds().map((i) => "'${_cloudId(i)}'").join(', ')});";
 const _generator = 'scripts/seed_exercise_library.js';
 final _tupleStart = RegExp(r"^\('[0-9a-f]{8}-", multiLine: true);
 
@@ -95,14 +108,20 @@ List<String> _tupleViolations(String sql, List<Map<String, dynamic>> rows) {
   return out;
 }
 
-/// The inline rollback reactivates exactly the removed rows, and the header counts them.
+/// The inline rollback reactivates exactly the rows THIS batch removed (not C2a's 50) and deactivates its twins; the header counts them.
 List<String> _rollbackViolations(String sql, List<Map<String, dynamic>> rows) {
   final out = <String>[];
-  final removed = _removedIds().length;
+  final own = _ownRemovedIds().length;
+  final earlier = _removedIds().length - own;
+  final twins = _twinIds().length;
   if (!sql.contains('-- Rollback strategy: inline')) out.add('no inline rollback strategy header');
   if (!sql.contains('--   ${_rollbackLine()}')) out.add('the commented rollback block does not hold the reactivation line');
   if (!sql.contains('-- Rollback strategy: inline   -- ${_rollbackLine()}')) out.add('the Rollback strategy header does not name the reactivation');
-  if (!sql.contains('(reactivates exactly the $removed removed rows;')) out.add('the header does not count the $removed removed rows');
+  if (!sql.contains('--   ${_twinRollbackLine()}')) out.add('the commented rollback block does not hold the twin deactivation line');
+  if (!sql.contains('(reactivates exactly the $own rows this batch removed, not the $earlier of Batch C2a; a second line deactivates the $twins inserted twins;')) {
+    out.add('the header does not count the $own own removals, the $earlier of C2a and the $twins twins');
+  }
+  if (own != 6 || twins != 4) out.add('Batch C2b removes 6 rows into 4 twins, the removals file says $own into $twins');
   return out;
 }
 
@@ -402,7 +421,7 @@ void main() {
 
     test('the generated file carries the C1 header, every row uuid and the pinned rollback', () {
       expect(plain, contains('-- Destructive?: yes'));
-      expect(plain, contains('-- Linked diagnose-doc: 2026-11-04-library-batch-c2a-removals-c2a7f1'));
+      expect(plain, contains('-- Linked diagnose-doc: 2026-11-05-library-batch-c2b-twins-b2c7e4'));
       expect(_removalViolations(plain), isEmpty);
       expect(_removalViolations(split), isEmpty);
       expect(_tupleViolations(plain, rows), isEmpty);
@@ -470,8 +489,19 @@ void main() {
           .allMatches(plain)
           .map((m) => m.group(1)!)
           .toSet();
+      // Batch C2b: four removed rows share a name with a twin, so they take the twin's cues (the cue-copy form); the seven Batch A
+      // retire statements use the same form and are not removals.
+      final cueForm = RegExp(r"UPDATE exercise_library r SET is_active = false, coaching_cues = k.coaching_cues, common_mistakes = k.common_mistakes FROM exercise_library k WHERE r.id = '([0-9a-f-]{36})' AND")
+          .allMatches(plain)
+          .map((m) => m.group(1)!)
+          .toSet();
+      final retiredBatchA = {
+        for (final r in (jsonDecode(File('assets/data/exercise_library.json').readAsStringSync()) as List).cast<Map<String, dynamic>>())
+          for (final i in (r['merged_ids'] as List? ?? const [])) _cloudId(i as String),
+      };
       final fromFile = {for (final i in _removedIds()) _cloudId(i)};
-      expect(fromSql, fromFile);
+      expect({...fromSql, ...cueForm.difference(retiredBatchA)}, fromFile);
+      expect(cueForm.difference(retiredBatchA).length, 4, reason: 'E084 E111 E169 E179 share a name with their twin');
       expect(_removedIds().toSet(), kRetiredLibraryIdsNoTwin);
     });
 

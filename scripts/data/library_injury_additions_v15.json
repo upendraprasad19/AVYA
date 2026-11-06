@@ -1769,6 +1769,15 @@
       "reason": "floor lower_back (all 5 same-family originals); majority shoulder (more than half of 5 same-family originals)",
       "variant_family": "leg_raise"
     },
+    "G0474": {
+      "tokens": [
+        "lower_back",
+        "shoulder"
+      ],
+      "class": "twin",
+      "reason": "floor lower_back (all 5 same-family originals); majority shoulder (more than half of 5 same-family originals); twin lower_back+shoulder (twin of E179 Toes to Bar)",
+      "variant_family": "leg_raise"
+    },
     "G0484": {
       "tokens": [
         "lower_back"
@@ -3367,6 +3376,14 @@
       "reason": "no same-family original or name rule; the source tags (lower_back+wrist) stand",
       "variant_family": "mobility_spine"
     },
+    "G1368": {
+      "tokens": [
+        "ankle"
+      ],
+      "class": "twin",
+      "reason": "twin ankle (twin of E084 + E211 Ankle Circles / Ankle Rotations)",
+      "variant_family": "mobility_ankle"
+    },
     "G1370": {
       "tokens": [
         "ankle"
@@ -3777,6 +3794,14 @@
       "class": "floor",
       "reason": "floor hip+knee (all 1 same-family originals)",
       "variant_family": "single_leg_squat"
+    },
+    "G1489": {
+      "tokens": [
+        "knee"
+      ],
+      "class": "twin",
+      "reason": "twin knee (twin of E111 Sissy Squat)",
+      "variant_family": "sissy_squat"
     },
     "G1490": {
       "tokens": [
@@ -4372,6 +4397,14 @@
       "class": "majority",
       "reason": "majority shoulder (more than half of 5 same-family originals)",
       "variant_family": "rear_delt_fly"
+    },
+    "G2567": {
+      "tokens": [
+        "hip"
+      ],
+      "class": "twin",
+      "reason": "twin hip (twin of E162 + E169 Piriformis Stretch / Seated Piriformis Stretch)",
+      "variant_family": "stretch_hip"
     },
     "G2611": {
       "tokens": [
