@@ -614,8 +614,8 @@ cloud sessions; **this file is the cross-session backlog.**
   `WorkoutScheduleReadService.weekIdentity()`. Two named residuals, neither deferred:
   `ai_snapshot_builder.dart` is **FOB-3's** by the board's own division (it rewrites the same lines
   to add the `hold` block and needs the ai-proxy redeploy — touching it twice would ship a
-  half-changed snapshot contract), and `telegram-bot/bot.py` is **upstream_blocked**, a separate
-  repo on the OpenClaw VPS (§2).
+  half-changed snapshot contract), and `telegram-bot/bot.py` is **upstream_blocked**, the OpenClaw VPS
+  deployment (§2; the tracked copy is `telegram-bot/`, dormant, OI-476).
 - **What's missing**: Own full ×2 per §4.12.4 (flip-on is where real user risk starts) — the four
   remaining FOB items closed first. The flip-on commit must clear **all four** `enable_hold_weeks`
   rows in the ledger (`hold-mechanic`, `hold-display`, `hold-display-fixes`, and
@@ -3912,81 +3912,6 @@ plan-review record for the merge. Out of scope for the fix that discovered this 
 feature-tier deliberately, to avoid the exact recursion this OI describes) — CLAUDE.md is
 pinned `platform` tier, so this edit needs its own appropriately-reviewed commit.
 
-## OI-227 — Telegram coach connect is broken (no linking token, bot says no user found) — remove UI entry points, revisit phase 2
-
-- **Status**: OPEN
-- **Blocked on**: none — UI removal is self-contained; the real fix needs the separate bot project
-- **Verified**: 2026-09-21 — founder tapped "Connect @AVYACoachBot" live, bot replied "no user found"
-- **Identified**: 2026-09-21 · filed via mint_oi.sh from branch `claude/food-logging-observations-126ab3`
-
-Founder tapped "Connect @AVYACoachBot" from the AI Coach tab and Telegram
-replied "no user found" — the account-linking handshake between the app and
-the bot doesn't work end to end.
-
-Root cause on the app side: `_openTelegramBot()`
-(`lib/features/ai_coach/screens/ai_coach/recording_body.dart:13`) opens a bare
-`https://t.me/AVYACoachBot` deep link with **no linking token** — no `?start=`
-param identifying the app user. Without one, the bot (a separate project on
-OpenClaw VPS, NOT in this repo — root `CLAUDE.md:269`) has no way to associate
-the incoming Telegram chat with an `icanbefitter` account. This repo cannot fix
-the bot-side half of that handshake; it needs access to the bot project.
-
-Confirmed while investigating: this is a **different bot** from the founder's
-admin console. `@AVYACoachBot` (user-facing, meant to carry coach
-conversations + proactive nudges via `telegram_connections`, referenced in
-`morning-alert/index.ts:456-464` as a push fallback) is separate from
-`@ICanbeFitterBot` / `@IcanbefitterBot` (root `CLAUDE.md:269`,
-`supabase/functions/CLAUDE.md:55` — the `telegram-admin-bot` Edge Function,
-read-only, founder-only, allowlisted to a single chat id, powers `/digest`
-etc.). No relation between the two; fixing one says nothing about the other.
-
-Live in-app entry points that let a user reach the broken flow:
-- `lib/features/ai_coach/screens/ai_coach/compact_header.dart` — popup menu
-  item `telegram` ("Connect @AVYACoachBot").
-- `lib/features/ai_coach/screens/ai_coach/telegram_view.dart` — the
-  "CONNECT @AVYACOACHBOT" CTA on the in-app Telegram card.
-
-Founder decision 2026-09-21: full fix (proper linking token + bot-side
-handling) is phase 2. **Done in this session, uncommitted:** removed the
-"Connect @AVYACoachBot" menu item (`compact_header.dart`) and the matching CTA
-in `telegram_view.dart` (its not-connected copy now reads "Telegram — Coming
-Soon" with no button). Deliberately **kept** the `switch_channel` toggle
-("Switch to Telegram" / "Switch to In-App Chat") — `channelProvider`
-(`ai_coach_provider.dart:1075-1086`) persists `coach_channel` to Hive, so any
-user already on `channel == 'telegram'` needs that toggle to get back to chat;
-removing it too would trade this bug for a worse one (a stranded user with no
-UI path back). Verified with `flutter analyze lib/` (both touched files are
-`part of 'screen.dart'`, so only a whole-tree analyze is valid per this
-board's own common-pitfalls note) — 0 errors/warnings, 45 pre-existing infos
-unrelated to these files. `telegram_view.dart` / `channelProvider` /
-`_openTelegramBot()` left in place (dead but harmless) for phase 2.
-
-**Phase 2 must not reuse the email flow (2026-09-29, Hermes L22/L35 on `oi-182-202-subscription-state`).**
-`telegram-bot/bot.py` `receive_email` (`:281-332`) links a Telegram chat to whichever `users` row
-matches a typed email, with no proof of ownership: no code, no link, no token. Anyone who knows or
-guesses a victim's email can link their own chat to that account, chat as that user (the coach
-context is built from the victim's data via `get_user_context`), and probably replace the real
-owner's `chat_id` in `telegram_connections`, which `morning-alert` uses as a push fallback. It is
-dormant only because the feature is hidden and the bot is not deployed (founder, 2026-09-29). The
-phase-2 linking-token handshake above (the app mints a one-time token, opened as
-`t.me/AVYACoachBot?start=<token>`) removes the flaw; the email prompt must be deleted, not kept as
-a fallback.
-
-Two related items surfaced, deliberately NOT resolved by this OI:
-- `lib/shared/widgets/paywall_sheet.dart:120` markets "Weekly AI nutrition
-  report + Telegram push" as a PRO perk bullet. With the connect entry points
-  gone, no new user can ever receive that. Founder to decide whether to reword
-  it now or leave it for the phase-2 fix.
-- `lib/features/ai_coach/widgets/telegram_card.dart` (`TelegramCard`) appears
-  unreferenced anywhere else in `lib/` — looks like dead code predating
-  `telegram_view.dart`. Not touched here; separate small cleanup if confirmed.
-
-**Recommendation**: Phase 2 — design a real linking handshake (token minted
-app-side, passed via the deep link's `start` param, exchanged by the bot for
-the user's id) with whoever owns the bot project, then re-add the UI entry
-points. Until then, this OI stays open as the pointer for "why is Telegram
-missing from the Coach menu."
-
 ## OI-228 — AI coach shortenWorkout tool calls get stuck at status:queued with no resolution; log_workout_sheet shows wrong copy for a completed day
 
 - **Status**: OPEN
@@ -5362,7 +5287,7 @@ recurring concern again before this lands.
 ## OI-278 — Telegram bot chat cap parity: bot is disabled; when re-enabled its cap (business-rules says 10/day) must follow the new free 7 / PRO 20 chat caps
 
 - **Status**: OPEN
-- **Blocked on**: the Telegram bot (separate OpenClaw VPS project, not in this repo) is DISABLED as of 2026-10-01 per the founder; this is `upstream_blocked` until it is re-enabled. **reopen_when**: the founder re-enables the bot.
+- **Blocked on**: the Telegram bot (the founder's OpenClaw VPS deployment; the tracked copy is `telegram-bot/`, OI-476) is DISABLED as of 2026-10-01 per the founder; this is `upstream_blocked` until it is re-enabled. **reopen_when**: the founder re-enables the bot.
 - **Verified**: 2026-10-01 — `docs/architecture/business-rules.md:26` says the bot has "the same 10/day forever cap"; `enforce_chat_app_daily_limit` (live) counts only `channel='app'`, so a Telegram cap, if any, lives outside this repo.
 - **Identified**: 2026-10-01 · filed via mint_oi.sh from branch `gemini3-limits-caching`
 
@@ -5693,8 +5618,8 @@ Obligation on whoever adds that writer, BEFORE it ships: move the push to the `m
 - **Verified**: 2026-10-03: `HealthWriteService.logMeasurement` has ONE call site (`conversational_log_handler.dart:163`, fed by the model's `<ICBF_LOG>` tag); `progress_comparison_screen.dart:16-17` says "no measurements UI yet"; the onboarding baseline snapshot stores `measurements: null` (`stat_snapshot_service.dart:213`); live `body_measurements` = 0 rows / 0 users; the site list is hard-coded at `conversational_log_handler.dart:158`, `ai_coach_provider.dart:1616`, `ai_snapshot_builder.dart:1622`, `sync_service.dart:2470`, `sync_health.dart:278-281`, `ai-proxy/index.ts:983`, `ai-media-proxy/index.ts:735` and the DDL.
 - **Identified**: 2026-10-03 · filed via mint_oi.sh from branch `coach-progress-review`
 - **Why**: the coach cannot judge body-composition change without girth data, and the only way in is a chat message (which, I infer, spends one of the 7/20 daily chat units — untested). A site added in one list but missed in `sync_health.dart:278` would stay device-only (writer/reader drift).
-- **Scope (founder, 2026-10-03)**: the existing four sites, **no cloud schema change**. Fix: one site registry (Dart + TS twin + parity test against the sync payload and `live_schema_columns.json`), a batch writer (one fan-out per save), `BodyMeasurementsSheet`, a Home "due" banner in the mounted banner stack (`home_screen.dart:468-470`; NOT `PatternDetector`/`InsightCard`, which render nowhere — OI-304), a link inside the Weight sheet, Progress Comparison "Add measurements" + then-vs-now deltas, an action chip in chat that opens the sheet without sending a message, a week-1 baseline prompt. Not PRO-gated. Round 1 also found the push sends null sites (`sync_health.dart:276-283`), so a second device can blank a first device's values — L2 omits null sites and null `notes` UNGATED (a writer bug fix). **Recorded residual:** old APKs and the out-of-repo Telegram writer still push nulls, and a same-day edit never reaches a device that already holds that date (restore skips present dates, `sync_health.dart:508`; pull fills only local nulls, `sync_service.dart:2452-2482`). A server-side guard is founder question OQ-L2a (0 measurement rows exist today). Constraints: nothing on the post-workout completion screen; no new push.
-- **Progress (2026-10-11)**: **L2a shipped** (PR #99, merge fdd89da6; plan `docs/plans/coach-measurement-entry-l2a.md`, diagnose c8a4d1, bug class 2.100, closure ledger `docs/audit/coach-measurement-entry.closure.yaml`). The push now sends only the sites a device holds (finite numbers; `notes` only when a String) through one builder, `lib/core/services/sync/measurement_push_rules.dart`; the skip fingerprint keeps the legacy-shape content, so an upgrade re-pushes nothing; the hard-coded site lists became one registry `kBodyMeasurementSites` (Dart constant, TS twin `supabase/functions/_shared/body_measurement_sites.ts`, parity and derivation tests); kill switch `disable_measurement_merge_safe_push` (local configBox, default ON, kept permanently on the oi83 precedent). No UI, no migration, no Edge Function change. **Residuals (ledger rows RESIDUAL-OLD-CLIENTS, RESIDUAL-STALE):** (1) old APKs and the out-of-repo Telegram writer still push nulls, and a blanking heals only on the next local edit of that date; (2) the push still sends every held site, so a stale held value can overwrite a value another device corrected (0 live rows today). **L2b obligations (plan §0):** decide OQ-L2a before the flag flips — a server-side BEFORE UPDATE keep-old-on-NULL guard (platform tier; the only fix for residual 1), a client-side per-site pending set (the push sends only sites edited since the last confirmed upload; fixes residual 2), or accept both; `HealthWriteService.logMeasurements` writes edited sites only (notes: null = leave, String = set); `HealthReadService.measurementHistory` + `latestBySite` with the AI snapshot reader re-routed through it; `kBodyMeasurementSpecs` (label, guide line, min/max, inch threshold) keyed by the registry tokens; bounds enforced at the chat parse, the handler and the writer with a NaN-safe check (superseded 2026-10-11 by plan v3.1: no handler tier, the writer is the backstop, plan A5; see the Landing A note below); the sheet offers no clear (clearing needs tombstones, OI-280); OI-304 rides with L2b (superseded 2026-10-11: the deletion is founder decision D2 and plan v3.1 no longer schedules it). The live PostgREST omit-key probe (ledger row PROBE) is founder-owned.
+- **Scope (founder, 2026-10-03)**: the existing four sites, **no cloud schema change**. Fix: one site registry (Dart + TS twin + parity test against the sync payload and `live_schema_columns.json`), a batch writer (one fan-out per save), `BodyMeasurementsSheet`, a Home "due" banner in the mounted banner stack (`home_screen.dart:468-470`; NOT `PatternDetector`/`InsightCard`, which render nowhere — OI-304), a link inside the Weight sheet, Progress Comparison "Add measurements" + then-vs-now deltas, an action chip in chat that opens the sheet without sending a message, a week-1 baseline prompt. Not PRO-gated. Round 1 also found the push sends null sites (`sync_health.dart:276-283`), so a second device can blank a first device's values — L2 omits null sites and null `notes` UNGATED (a writer bug fix). **Recorded residual:** old APKs and the Telegram bot writer (dormant `telegram-bot/` code, OI-476) still push nulls, and a same-day edit never reaches a device that already holds that date (restore skips present dates, `sync_health.dart:508`; pull fills only local nulls, `sync_service.dart:2452-2482`). A server-side guard is founder question OQ-L2a (0 measurement rows exist today). Constraints: nothing on the post-workout completion screen; no new push.
+- **Progress (2026-10-11)**: **L2a shipped** (PR #99, merge fdd89da6; plan `docs/plans/coach-measurement-entry-l2a.md`, diagnose c8a4d1, bug class 2.100, closure ledger `docs/audit/coach-measurement-entry.closure.yaml`). The push now sends only the sites a device holds (finite numbers; `notes` only when a String) through one builder, `lib/core/services/sync/measurement_push_rules.dart`; the skip fingerprint keeps the legacy-shape content, so an upgrade re-pushes nothing; the hard-coded site lists became one registry `kBodyMeasurementSites` (Dart constant, TS twin `supabase/functions/_shared/body_measurement_sites.ts`, parity and derivation tests); kill switch `disable_measurement_merge_safe_push` (local configBox, default ON, kept permanently on the oi83 precedent). No UI, no migration, no Edge Function change. **Residuals (ledger rows RESIDUAL-OLD-CLIENTS, RESIDUAL-STALE):** (1) old APKs and the Telegram bot writer (dormant `telegram-bot/` code, OI-476) still push nulls, and a blanking heals only on the next local edit of that date; (2) the push still sends every held site, so a stale held value can overwrite a value another device corrected (0 live rows today). **L2b obligations (plan §0):** decide OQ-L2a before the flag flips — a server-side BEFORE UPDATE keep-old-on-NULL guard (platform tier; the only fix for residual 1), a client-side per-site pending set (the push sends only sites edited since the last confirmed upload; fixes residual 2), or accept both; `HealthWriteService.logMeasurements` writes edited sites only (notes: null = leave, String = set); `HealthReadService.measurementHistory` + `latestBySite` with the AI snapshot reader re-routed through it; `kBodyMeasurementSpecs` (label, guide line, min/max, inch threshold) keyed by the registry tokens; bounds enforced at the chat parse, the handler and the writer with a NaN-safe check (superseded 2026-10-11 by plan v3.1: no handler tier, the writer is the backstop, plan A5; see the Landing A note below); the sheet offers no clear (clearing needs tombstones, OI-280); OI-304 rides with L2b (superseded 2026-10-11: the deletion is founder decision D2 and plan v3.1 no longer schedules it). The live PostgREST omit-key probe (ledger row PROBE) is founder-owned.
 - **Progress (2026-10-11, L2b Landing A)**: the measurement value bounds are built on branch `coach-measurement-sheet` (plan `docs/plans/coach-measurement-sheet-l2b.md` v3.1, three review rounds, record `docs/plan-reviews/coach-measurement-sheet.md`; diagnose `7c3e9a`; closure ledger `docs/audit/coach-measurement-bounds.closure.yaml`). `kBodyMeasurementSpecs` (chest 60-200, waist 50-200, hips 60-200, arms 20-70 cm) is enforced at the chat parse, the writer (on the value rounded to 0.1 cm) and the reader (`HealthReadService.measurementHistory` / `latestBySite`, which the AI snapshot now uses); a rejection emits `measurement_value_rejected`; no kill switch (founder decision D6). The defects with an evidenced producer: an absurd finite value reached the coach as fact, a wrong-typed model field (a String `value_cm` survives the proxy) threw out of the chat parse and replaced the shown reply with the error bubble, and a future-dated record from a wrong device clock shadowed real values. A stored NaN or Infinity (it makes `buildAiContext` throw, which would stop every chat context build and every snapshot push) is a latent hazard with no in-repo producer today: the proxy turns an Infinity into null and a bare NaN fails its JSON parse; Landing B's sheet parses user text with `double.tryParse` (which accepts `NaN`, `Infinity` and `1e999`), but its input formatter keeps only a leading digit prefix, so the field cannot produce a non-finite value (corrected in Landing B; the guard is defence in depth). B-pass 2026-10-11 (docs/reviews/coach-measurement-sheet-bpass.md): the reader judges and returns the value rounded to 0.1 cm, a wrong-typed value of a registered site emits `side=wrongtype`, `latestBySiteOf` asserts its newest-first input, and `PendingLogAction` ids are unique per action. Landing B (the dark sheet, flag `enable_body_measurements`, Home banner, Weight-sheet link) and Landing C (Progress Comparison card, chat chip) are separate landings of the same plan and each gets its own review round against the merged A. The sync push is NOT bounded here: a finite out-of-range value already held locally is still pushed (ledger row LEGACY-PUSH, decision D8: bounded in L2c with the per-site pending set; L2c exists only if OQ-L2a is decided for that set). The same L2c edit must replace the two casts in `_syncMeasurements` (`log['date'] as String?`, `log['created_at'] as String?`, `sync_health.dart:277,280`): a record whose date is not a String throws there and ends the whole body_measurements push pass at that key (no in-repo writer produces one; platform-tier file, so not touched at account tier). **Progress (2026-10-12, L2b Landing B)**: the dark measurements sheet is built on branch `coach-measurement-sheet-ui` (plan `docs/plans/coach-measurement-sheet-ui.md` v3.1, three review rounds, record `docs/plan-reviews/coach-measurement-sheet-ui.md`, closure ledger `docs/audit/coach-measurement-sheet.closure.yaml`): `HealthWriteService.logMeasurements`, `BodyMeasurementsSheet`, the Home banner (due and baseline variants), the Weight-sheet link, the chat path's history refresh and the debug-only dev toggle, all behind `enable_body_measurements` (default OFF, `docs/ship_dark_pending_review.yaml`). The flag waits for Landing C (E3 Progress Comparison card, E4 chat chip) because the cut leaves no always-visible door, and for OQ-L2a, OI-310 and OI-305. Not device-checked. **Progress (2026-10-12, L2b Landing C)**: the always-visible door is built on branch `coach-measurement-surfaces` (plan `docs/plans/coach-measurement-surfaces.md` v3, record `docs/plan-reviews/coach-measurement-surfaces.md`, closure ledger `docs/audit/coach-measurement-surfaces.closure.yaml`): the "Body measurements" card on Profile -> Progress comparison (E3, a permanent "Add measurements" button, the latest value and the change since the first entry per site) and the AI Coach chip (E4), both behind the same flag. With Landing C merged the flag waits only for OQ-L2a, OI-310 and OI-305 (and its own full x2 review and B-pass). Not device-checked.
 
 ## OI-298 — No effort capture (RIR/RPE): workout_logs.rpe is never written (0 rows live) and no table has a per-exercise effort column - founder decides in or out (progress-review spec §8)
@@ -5875,7 +5800,7 @@ Found by round 1 of the plan review of `blast-radius-data-deleting-paths` (quest
 The account-deletion purge walks `USER_OWNED_BUCKETS` (`_shared/purge_user_storage.ts` is called by `delete-account/index.ts` with that list, DPDP section 17). Three ways the contract test cannot see a weakening of it:
 1. **A commented-out entry still counts.** `// "avatars",` inside the array is read as present, because comments are not stripped before the token match. The purge would stop walking `avatars` (a PUBLIC bucket: a deleted user's photo stays reachable) and this test stays green.
 2. **A post-array transformation is invisible.** Only the literal array is read, so `export const USER_OWNED_BUCKETS = [...].filter(...)` or a `.slice(...)` that drops entries changes the runtime list and not what the test sees.
-3. **Discovery covers `lib/**/*.dart` only.** A writer to a bucket the client never names (a server-side function, the out-of-repo Telegram bot) is untied from the list. This one is a documented scope limit, not fixable inside the repo for the bot; the fix is to say so in the test header and to grep `supabase/functions` for `.storage.from(` writers as a second discovery source.
+3. **Discovery covers `lib/**/*.dart` only.** A writer to a bucket the client never names (a server-side function, the Telegram bot: dormant `telegram-bot/` code, OI-476) is untied from the list. This one is a documented scope limit, not fixable inside the repo for the bot; the fix is to say so in the test header and to grep `supabase/functions` for `.storage.from(` writers as a second discovery source.
 
 Fix shape: strip TypeScript comments before extracting (the file already carries `_stripDartComments` for Dart sources; a TS twin is a few lines), require that the array literal is the whole initialiser (nothing but `;` follows the closing bracket), and add the `supabase/functions` writer scan. Regression tests, mutation-proven (rule 21): comment out one entry; append `.filter(() => true)`; add an Edge Function that uploads to an unlisted bucket.
 
@@ -5992,6 +5917,7 @@ How to use: build once from the last merged `main`, install on the phone, sign i
 - A13 `oi341-piece-b2b-client` B2B-DEVICE-CHECK (after the live session's merge and the AAB with the live key ID): as a referral-trial tester with under 7 days left and the Home expiry banner not dismissed today, tap RENEW; the paywall shows "Your paid plan starts when your free days end." under the price cards and the Razorpay checkout description carries the same sentence; buy (90% code); afterwards the Profile PRO card shows the stacked end (trial end + 30) and today's EST date. With the door shut, the same tap shows "Your free PRO days are still running. You can subscribe once they end." and opens no checkout.
 - A14 `oi414-promo-no-gateway-retry` PROMO-AND-SWAP-ON-BUILD (on the first build that carries PR #174, `a69a54e0`): signed in on the phone, open the paywall and enter a known active promo code (it shows the discount) and an unknown one (it shows "Invalid promo code"); then, on a PRO account, make one day swap on the Train tab and see the allowance line count it. A gateway error after the handler ran cannot be forced from a device, so this only shows that the two flagged calls (`validate-promo`, `consume-day-swap`) still behave on normal answers. Afterwards the agent reads `client_errors` for `edge_function_no_retry_quota_call`: a row means a gateway 502/503/504 was met and the call was not sent again (LOW priority, so a missing row is not proof of none).
 - A15 `sync-storm-first-sweep` PHONE-FRESH-LAUNCH (on the first AAB that carries PR #172, `d1292a79`; ledger row U5, OI-420 and OI-423): force-stop the old app, install the AAB, sign in on the phone as `upendraprasad19@gmail.com` with the server quiet and no other client signed in, and keep the app in front for 10 minutes. Note the seconds from tapping the Google button to a usable Home screen and whether the 'Sync paused' banner appears. Afterwards the agent reads that window from the gateway and `client_errors`: the request count against the web Day-0 result (laptop, 2026-10-25: 381 requests, 0 `workout_log_exercises` upserts), `first_sweep_postponed`, and any `restore_sync_*` timeout. Then cold-start the app once more and note the seconds to Home again: OI-420 has no startup timeline events yet, so these stopwatch times are the only numbers. A day later relaunch once and the agent records the postponed sweep's request count (the phone side of S1).
+- A16 `telegram-surface-off` TG-DEVICE-CHECK (on the first build that carries the OI-466 PR; added 2026-11-06): (1) open the AI Coach tab and tap the three-dot menu: it lists `Clear conversation` (and `Upgrade to PRO` on a FREE account) and nothing about Telegram; (2) open the paywall (Profile, Go PRO): the perk list reads `Weekly AI nutrition report` with no Telegram wording; (3) on an account that had switched the coach to Telegram before (its saved `coach_channel` is `telegram`), open the AI Coach tab: the chat, quick prompts and input bar are shown, not a "Coming Soon" screen. Step 3 is the only proof of the saved-channel case, because the screen cannot be rendered in a unit test.
 
 ### B. Signed-in session or JWT (dev build, test account or the phone)
 
@@ -7267,17 +7193,6 @@ Found by the M2b Part B Chrome check (360 dp, real fonts, the real card and exer
 
 **Done when.** The cause is MEASURED (not guessed): either the runner's process handling under load is shown to return a corrupt status, or the harness reads a status it should not; or every spawn helper in the fixtures prints stdout, stderr and the status on a non-zero result (the token-path fixture already does, and still showed nothing) and retries a status outside 0..255 once with a recorded note. Blast radius: `feature` (test infrastructure).
 
-## OI-466 — Telegram copy still shown in the paywall and Telegram card (Telegram permanently dropped)
-
-- **Status**: OPEN
-- **Blocked on**: none
-- **Verified**: 2026-11-04, `paywall_sheet.dart:122` and the Telegram card copy read on branch `realtime-weight-off`.
-- **Identified**: 2026-11-04 · filed via mint_oi.sh from branch `realtime-weight-off`
-
-**What:** user-facing copy still sells Telegram ("Weekly AI nutrition report + Telegram push" in the paywall, and the Telegram card). Founder 2026-11-04: Telegram is permanently dropped.
-
-**Acceptance:** copy removed or reworded (Wardroom brand soul loaded first; psychology pass if a paywall line changes); tests/pins that cite the old strings repointed.
-
 ## OI-467 — pullRecentCrossChannelLogs is Telegram-labelled; OI-279 replaces only the weight leg
 
 - **Status**: OPEN
@@ -7287,7 +7202,7 @@ Found by the M2b Part B Chrome check (360 dp, real fonts, the real card and exer
 
 **What:** `pullRecentCrossChannelLogs` is Telegram-labelled (`source: 'telegram'`, 24 h `created_at` window at cold start) and is now the only cold-start path for other-client weight, nutrition and measurements on an already-populated phone. With Telegram dropped it should be renamed and relabelled.
 
-**Scope note:** OI-279's pull replaces only the weight leg; nutrition waits on OI-281; measurements are covered by neither. Decide the end state of each leg, then rename/relabel in the same batch that changes it (the `source` value is read by the UI, so sweep `lib/`, `test/` and `supabase/functions/` for it first).
+**Scope note:** OI-279's pull replaces only the weight leg; nutrition waits on OI-281; measurements are covered by neither. Decide the end state of each leg, then rename/relabel in the same batch that changes it (no UI reader of the `source` value was found in `lib/` on 2026-11-06, OI-466, but sweep `lib/`, `test/` and `supabase/functions/` for it first).
 
 **Acceptance:** each leg has a named owner; the Telegram label is gone. reopen_when: OI-279 ships.
 
@@ -7341,3 +7256,32 @@ Found by round 2 of the OI-179 plan review (migrations 090:43 and 091:22 name it
 
 **Acceptance:** the function is gone live (`to_regprocedure` is null) and no migration after the drop references it.
 
+## OI-476 — telegram-bot/ is tracked and dormant: bot.py receive_email links a Telegram chat to any account by typed email with no proof of ownership, and morning-alert still reads telegram_connections
+
+- **Status**: OPEN
+- **Blocked on**: the founder: keep or delete `telegram-bot/` and the `morning-alert` Telegram fallback (Telegram is dropped from the app, OI-466). Ledger row `TG-BOT-FATE` in `docs/audit/telegram-surface-off.closure.yaml`.
+- **Verified**: 2026-11-06, by reading (nothing run): `git ls-files telegram-bot` lists `bot.py`, `requirements.txt` and `.env.example`; `telegram-bot/bot.py:281-332` (incl. `:295-330`), `supabase/migrations/006_create_monetisation_tables.sql:58` and `supabase/functions/morning-alert/index.ts:456-465` as described below.
+- **Identified**: 2026-11-06 · filed via mint_oi.sh from branch `telegram-surface-off`
+
+**What.** Root `CLAUDE.md` and `README.md` said the Telegram bot is "Separate project (OpenClaw VPS, @ICanbeFitterBot) — NOT in this repo". It is in this repo: `telegram-bot/` is tracked. Its `receive_email` handler (`bot.py:281-332`) takes whatever email a Telegram user types and looks the account up with `get_user_by_email`. An unknown email is answered "No ICANBEFITTER account found with that email" (`:295-301`), so anyone can test whether an email has an account. For a known email it upserts `telegram_connections` (`:305-312`: `user_id`, `chat_id`, `is_active: true`, no `on_conflict`), sets `users.telegram_chat_id` and `users.telegram_connected` (`:315-320`) and replies with the account's `full_name`, the email and the PRO or FREE plan (`:322-330`), with no code, link or token that proves the person owns that email. So anyone who knows or guesses an email can (1) plant a link from their own chat to any account that has no `telegram_connections` row (every account today, since the app no longer offers a way to link) and read that account's name and plan, and (2) receive what `morning-alert` sends to `telegram_connections` rows (`morning-alert/index.ts:456-465`, `sendTelegramMessage` at `:168`): a message built from the user's snapshot (name, streak, today's workout, weight, a recent PR, yesterday's calories: `morning-alert/message.ts:17-26`). Whether it could instead REPLACE the chat of an account that already has a row is NOT established: the table has `UNIQUE (user_id)` (`supabase/migrations/006_create_monetisation_tables.sql:58`) and the upsert names no `on_conflict`, so by reading it would hit a unique violation before the `users` update; the live constraint was not checked and nothing was run (the earlier OI-227 text said "probably replace"). The bot also answers as the linked user: the coach context is built from that account's data (`get_user_by_chat_id`, `bot.py:84`). This is the warning OI-227 carried; OI-227 is closed by OI-466 and the text moved here.
+
+**Why it is not live today.** The bot is not deployed (founder, 2026-09-29) and, since OI-466 (2026-11-06), nothing in the app shows or links Telegram. This entry did not check whether `TELEGRAM_BOT_TOKEN` is set in the Edge Function secrets; if it is, `morning-alert` sends to any row that exists.
+
+**Options for the founder (pick one):** (a) delete `telegram-bot/`, the `morning-alert` Telegram branch, the `telegram_connections` table and the dead `users.telegram_connected` / `telegram_chat_id` columns (a migration, Destructive: yes, so a go and a dry run first); (b) delete the code only and leave the tables; (c) keep it dormant, add a `telegram-bot/README.md` saying "do not deploy: receive_email has no proof of ownership", and keep this OI open as the pointer. If the bot ever returns, the handshake must be a one-time token minted by the app and passed as `t.me/<bot>?start=<token>`; the email prompt must be deleted, not kept as a fallback.
+
+**Acceptance:** the decision is recorded here; for (a) or (b) the deletion lands with its own plan, review and closure ledger.
+
+## OI-479 — AI Coach 'Clear conversation' menu item does nothing: onSelected only invalidates chatHistoryProvider, whose build re-reads every row from coachBox
+
+- **Status**: OPEN
+- **Blocked on**: the founder: what "Clear conversation" should do (local rows only, or local and cloud, or drop the menu entry). Nothing is blocked technically.
+- **Verified**: 2026-11-06, by reading (nothing run): `lib/features/ai_coach/screens/ai_coach/compact_header.dart:130-132` (`case 'clear': ref.invalidate(chatHistoryProvider);`, byte-identical at `d27bf032`), `lib/features/ai_coach/providers/ai_coach_provider.dart:167-190` (`ChatHistoryNotifier.build` loops `coachBox.keys` and rebuilds the list from Hive), and `git grep -n -iE "coachBox\.(clear|delete|deleteAll)|clearChat|clearHistory|clearConversation" -- lib` returns only `lib/shared/repositories/user_repository.dart:1212` (the account wipe).
+- **Identified**: 2026-11-06 · filed via mint_oi.sh from branch `telegram-surface-off`; found by the OI-466 B-pass (a fresh Sonnet reviewer; pre-existing, not caused by that batch)
+
+**What.** The AI Coach three-dot menu offers `Clear conversation`. Choosing it only calls `ref.invalidate(chatHistoryProvider)`. Invalidating the provider makes it rebuild, and the rebuild re-reads every chat row from the local `coachBox`, so the conversation comes back exactly as it was and nothing is cleared. Nothing else in `lib/` clears or deletes chat rows except the whole-account wipe. After OI-466 removed the Telegram switch, this is the only menu entry a PRO account has (a free account also has `Upgrade to PRO`), so the menu now consists of one item that does nothing for them. The new `test/contracts/telegram_surface_removed_test.dart` pins that the entry EXISTS and is wired to its `case`; it does not claim it works.
+
+**Why it is not fixed in OI-466.** "Clear" has no single obvious meaning here: deleting local rows alone would be undone by a cloud restore if the chat rows are backed up (not investigated here), and deleting cloud rows is a Destructive call. That is a product decision plus a sync/restore design, not a Telegram removal.
+
+**Options for the founder (pick one):** (a) clear the local `coachBox` chat rows (keep the `coaching_notes` singleton) and make sure a restore does not resurrect them; (b) clear local and cloud; (c) remove the menu entry until (a) or (b) is wanted. The app is not live (testers only), so there is no user-facing urgency.
+
+**Acceptance:** the item either clears what the decision says (behavioral test: write chat rows to a real Hive box, trigger the action, read the box and the provider back, and, for (a) and (b), run a restore and assert the rows stay gone) or is removed and `coachHeaderMenuItems` and its pin in `test/contracts/telegram_surface_removed_test.dart` are updated in the same change.

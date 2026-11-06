@@ -311,7 +311,7 @@ void main() {
       f = submitWorkoutDraft(draft, ref);
       await Future<void>.delayed(Duration.zero);
     });
-    h.coachMounted.value = false; // the card is gone (OI-232 channel switch)
+    h.coachMounted.value = false; // the card is gone (the Coach tab was left)
     await tester.pump();
     final outcome = await tester.runAsync(() => f);
     expect(outcome!.savedIndices, [0], reason: 'no StateError on a dead ref');

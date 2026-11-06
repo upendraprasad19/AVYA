@@ -281,7 +281,12 @@ void main() {
     test('send() sanitizes BOTH the primary AND the auth-retry render — '
         'exactly 2 call sites in this method, not 1', () {
       final start = _indexOfOrFail('Future<void> send(');
-      final classEnd = _indexOfOrFail('\nclass ', start);
+      // OI-466: this slice used to end at the NEXT `\nclass ` (the Telegram
+      // notifier). Deleting that block made the next class `PredictionData`
+      // and the slice swallowed the top-level definition of the very function
+      // being counted (2 -> 3). End it at the provider declaration that closes
+      // SendMessageNotifier instead: the same content as before.
+      final classEnd = _indexOfOrFail('\nfinal sendMessageProvider', start);
       final body = source.substring(start, classEnd);
       final count =
           'detectAndStripJsonShapedReply('.allMatches(body).length;
@@ -322,7 +327,7 @@ void main() {
     test('send()\'s TWO call sites (primary + auth-retry) both pass '
         'allowYamlHeuristic: false', () {
       final start = _indexOfOrFail('Future<void> send(');
-      final classEnd = _indexOfOrFail('\nclass ', start);
+      final classEnd = _indexOfOrFail('\nfinal sendMessageProvider', start);
       final body = source.substring(start, classEnd);
       final count = 'allowYamlHeuristic: false'.allMatches(body).length;
       expect(count, 2,
@@ -361,7 +366,7 @@ void main() {
         'prediction_text — the Hive-corruption hazard review round 1 '
         'flagged must not recur', () {
       final classBlock = RegExp(
-        r'class SendMessageNotifier extends Notifier<bool> \{[\s\S]*?(?=\nclass )',
+        r'class SendMessageNotifier extends Notifier<bool> \{[\s\S]*?(?=\nfinal sendMessageProvider)',
       ).firstMatch(source);
       expect(classBlock, isNotNull,
           reason: 'Could not locate SendMessageNotifier in '

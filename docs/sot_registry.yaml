@@ -15932,7 +15932,7 @@ concepts:
         method: logMeasurement + logMeasurements
         notes: Writer tier. Both validate the ROUNDED value and emit tier=writer. logMeasurements (L2b Landing B) is the sheet's batch writer - all-or-nothing, one put, one fan-out, one event per call.
       - file: lib/features/ai_coach/providers/ai_coach_provider.dart
-        line_range: 1620-1651
+        line_range: 1589-1620
         method: PendingLogActionsNotifier._parse (case log_measurement)
         notes: Chat parse tier. Type tests, never casts; checks the RAW value; emits tier=chat (a wrong-typed value of a registered site emits side=wrongtype).
       - file: lib/core/services/sync/sync_health.dart
@@ -16409,7 +16409,7 @@ concepts:
       decision. L2b Landing C adds two more host lines, each with ONE home:
       the AI Coach chip line (comment-stripped, whitespace-insensitive, sliced
       to screen.dart's own build; between the quick prompts and the input bar,
-      in_app only, with its onShown scroll hook) and the pin that the composer
+      no condition of its own, with its onShown scroll hook) and the pin that the composer
       TextField is bound to the same _inputFocusNode the slot gets, both in
       measurement_flag_off_identity_test.dart; and the Progress comparison
       screen's single `body: MeasurementsCardFrame(child: _buildBody())` in
@@ -16441,9 +16441,9 @@ concepts:
         method: body (MeasurementsCardFrame(child: _buildBody()))
         notes: L2b Landing C, E3. One line; the frame owns the flag and the height cap, so a flag-OFF screen returns its own body instance.
       - file: lib/features/ai_coach/screens/ai_coach/screen.dart
-        line_range: 479-486
+        line_range: 458-464
         method: MeasurementChipSlot (the mount line in build)
-        notes: L2b Landing C, E4. Between the quick prompts and the input bar, in_app only; the slot owns its flag, prompt, focus and sending checks and is given no send callback; onShown scrolls a chat that was at its bottom back to its bottom (keepBottomAfterChip).
+        notes: L2b Landing C, E4. Between the quick prompts and the input bar, with no condition of its own; the slot owns its flag, prompt, focus and sending checks and is given no send callback; onShown scrolls a chat that was at its bottom back to its bottom (keepBottomAfterChip).
     readers:
       - file: lib/features/home/widgets/measurement_due_slot.dart
         line_range: 15-37
