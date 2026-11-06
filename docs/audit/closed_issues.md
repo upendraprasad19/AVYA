@@ -6177,3 +6177,19 @@ Second half of the split of Batch C2 (the first half is OI-460). Adds the four t
 **Done when.** The four twins ship; each `twin_pending` row is removed or kept with a stated reason; the depth rule still holds; the cloud migration is applied.
 
 **Closed by.** Branch `library-batch-c2b`: the batch commit 222b73b2 (twins, six removals, seed v19, media table and stills, depth rule with twin rows, E043 swap repoint, migration 171 file and ledger entry); media upload of four animations (4 of 4 verified) and migration 171 applied to `dedsavbjuwgarrhphgnl` on 2026-11-05 after the founder's go on each exact artifact. B-pass `docs/reviews/library-batch-c2b-bpass.md`; closure `docs/audit/library-batch-c2b.closure.yaml`. E230 went to OI-474.
+
+## OI-358 — An exercise name twice in one workout day: seven doors let it in, and Active Workout's name-keyed cards raised a duplicate GlobalKey
+
+- **Status**: CLOSED · 2026-11-06 · branch `oi358-unique-exercise-names`, closes-diagnose e6a4d9; behavioral test test/contracts/exercise_name_unique_in_day_behavioral_test.dart, screen test test/features/train/exercise_name_unique_screen_test.dart
+- **Blocked on**: none
+- **Verified**: 2026-11-06, in tests: the crash reproduced on the real screen in a test build, 52 new tests pass and 49 of 49 mutants are killed. Device walk: OI-348 row A16 (release-build behaviour was not measured).
+- **Identified**: 2026-10-20 · filed via mint_oi.sh from branch `log-exercise-batch2`
+
+Retitled on close: the original title named only the Add path. Every door is closed: Train Add, Train Swap, the template builder, the coach `swapExercise` tool, the coach Swap quick action, the coach injury swap and coach `createCustomTemplate`; a day that is already duplicated (restore, an old template) is made safe at `startWorkout`, `assignTemplateToDate` and the template builder's load. The card key stays name-based on purpose, and `exlogKey` needs unique names anyway. A taken name is shown grey, not hidden. Two separate defects found on the way are fixed in the same batch: the swap UNDO's stale index, and the template builder showing coach-made rows as Unknown, 3 x 10. Stored rows are not healed.
+
+Original entry: - **Status**: OPEN
+- **Blocked on**: none
+- **Verified**: never
+- **Identified**: 2026-10-20 · filed via mint_oi.sh from branch `log-exercise-batch2`
+
+Found by the batch-2 plan review (round 1, P2-12, 2026-10-20), verified by reading, not reproduced on device. `ActiveWorkoutNotifier.addExercise` (`lib/features/train/providers/train_provider.dart:1642-1646`) appends without a name check, and the exercise picker (`lib/features/train/screens/active_workout/exercise_picker_sheet.dart:47-61`) does not exclude exercises already in the session. The screen keys every card by name: `_exerciseKeys.putIfAbsent(exercise.name, () => GlobalKey())` (`screen.dart:438`) and `key: _exerciseKeys[exercise.name]` (`screen.dart:481`), so two cards with one name share a GlobalKey, which Flutter rejects ("Multiple widgets used the same GlobalKey"). Options to plan: exclude names already in the session from the picker, or key cards by a per-session id instead of the name. The batch-2 UNDO toast's identity check (`exerciseName` at an index) also assumes unique names; it stays correct today only because a duplicate already breaks the screen.
