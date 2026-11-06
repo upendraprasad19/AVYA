@@ -6114,6 +6114,21 @@ Narrowed 2026-11-04 after two combined-plan review rounds came back not converge
   and test surface. Filed here rather than fixed in-batch per the same
   reasoning as OI-199/OI-179 above.
 
+## OI-458 — The 4-day Upper day repeats Push and Pull accessories (Bench Dips, Dumbbell Row, curls, Lateral Raise) instead of reading as a new day
+
+- **Status**: CLOSED · 2026-11-05 · branch `oi458-upper-repeats` · diagnose `a8c3e5` · the commit carrying `closes-oi: OI-458`
+- **Blocked on**: — (resolved)
+- **Verified**: never
+- **Identified**: 2026-11-03 · filed via mint_oi.sh from branch `exercise-count-band-oi`
+
+**What happens.** In the same tester plan as OI-456, week 1 Upper (day 4) reuses Bench Dips, Dumbbell Row, Self-Resisted Bicep Curl, Dumbbell Alternate Bicep Curl and Lateral Raise, which Push or Pull already carry that week; week 2 Upper reuses Barbell Curl, Cable Rope Pushdown and Egyptian Lateral Raise. The day reads as leftovers rather than a new session. Likely cause (not yet established): the Upper slots are small-muscle accessory slots whose pools are shallow, so the cascade picks the same names (`pickedNames` dedups across a plan only inside one variant).
+
+**Founder direction (2026-11-03).** Filed as its own item so it does not block OI-456. Pick up after OI-456, because the new exercise count changes which slots each day holds.
+
+**Done when.** The cause is named by writer and reader (file:line) first; a persona sweep measures repeated names across days of one week before and after; the fix keeps the equipment and injury filters; mutants prove it. Blast radius: `platform` (plan_engine), tier L.
+
+**Closed 2026-11-05.** Cause: `ExerciseSelector.pickV4` fills every day with no view of the week, so the Upper day's shallow pools returned the same first rows as Push and Pull. Fix: an `upper` day soft-avoids the names the earlier push, pull and shoulders_arms days hold, per variant (`_preferNovel` tiebreak only, bounded; same lines in the ship-dark `_pickCoreList`). Measured over 72 real generations: 409 repeated names in 42 plans before, 70 in 38 after. The residue is shallow cascade-attempt pools; injured users' top-up can re-add a name; the 4-day lose_fat / general_fitness and strength splits have no `upper` day. The repeat phase's one-frame fresh fill is seeded with the earlier days' names too (32 -> 0 pairs); the ship-dark core-list path is proven (155 -> 2). Golden fixture re-recorded (326 keys, all 4-day or 5-day plans). Test `test/contracts/cross_day_variety_behavioral_test.dart`, 8 of 8 mutants red.
+
 ## OI-472 — weekly-recalc calls logCronStart but has no cron job: a manual run pages a CRITICAL alert_cron_function_dead 8 days later
 
 - **Status**: CLOSED · 2026-11-06 · migration 170 (live 2026-11-06, md5 verified), closes-diagnose f7b3d1; roster test test/contracts/cron_call_log_writers_roster_test.dart; rehearsal test/sql/alert_cron_function_dead_edges_live_verify.sql (local Postgres)
