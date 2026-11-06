@@ -19,9 +19,9 @@ String stripSqlLineComments(String sql) => sql
     })
     .join('\n');
 
-List<File> numberedMigrations() {
+List<File> numberedMigrations({String migrationsDir = 'supabase/migrations'}) {
   final re = RegExp(r'^(\d{3})[a-z]?_.*\.sql$');
-  return Directory('supabase/migrations')
+  return Directory(migrationsDir)
       .listSync()
       .whereType<File>()
       .where((f) => re.hasMatch(f.uri.pathSegments.last))
@@ -43,7 +43,8 @@ typedef CronJobBody = ({String cadence, String body, String file});
 /// e.g. `UPDATE cron.job … WHERE jobid = <n>` or a loop-variable
 /// `alter_job(r.jobid, command := …)` (107's shape, which predates every
 /// alert job).
-CronJobBody latestCronJobBody(String job) {
+CronJobBody latestCronJobBody(String job,
+    {String migrationsDir = 'supabase/migrations'}) {
   final schedule = RegExp(
       "cron\\.schedule\\(\\s*'$job'\\s*,\\s*'([^']*)'\\s*,\\s*"
       r'\$([A-Za-z_]*)\$(.*?)\$\2\$',
@@ -56,7 +57,7 @@ CronJobBody latestCronJobBody(String job) {
   // A numeric-id alter_job names no job, so the reader cannot tell whose body
   // it replaced — fail loudly for every reader rather than guess (0 today).
   final numericAlter = RegExp(r'alter_job\(\s*(job_id\s*(:=|=>)\s*)?[0-9]');
-  for (final f in numberedMigrations()) {
+  for (final f in numberedMigrations(migrationsDir: migrationsDir)) {
     final src = stripSqlLineComments(f.readAsStringSync());
     if (numericAlter.hasMatch(src)) {
       throw TestFailure('${f.path} alters a cron job by NUMERIC id — alter it '

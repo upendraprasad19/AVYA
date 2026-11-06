@@ -6037,6 +6037,98 @@ Narrowed 2026-11-04 after two combined-plan review rounds came back not converge
 
 **Closed by.** Branch `library-batch-c2`: removals file and generator (84171dfc), the library edit, seed v18 prune and repoints (43fbb074), the cloud seed generator (75496c80), tests and docs (fe299f12), the B-pass fixes (14cd036b, review `docs/reviews/library-batch-c2a-bpass.md`) and migration 167 (a7be5078, applied to `dedsavbjuwgarrhphgnl` on 2026-11-05 after the founder's go on the exact file). The six twin rows stay for OI-462.
 
+## OI-179 — `alert_cron_function_dead` cannot fire across 100% of its range, and never has (P1)
+
+- **Status**: CLOSED
+- **Blocked on**: none
+- **Verified**: 2026-09-26 — the R2-11 PRECONDITION is now met: migration 144 (diagnose `d6b2f9`) excludes `alert-critical-notify` inside the alert's `cron_call_log` subquery (live jobid 32 verified), pinned by `test/contracts/cron_vacuum_single_statement_test.dart`, which also requires every function on `cron_auth_adoption_test.dart`'s `_triggerDispatchedFunctions` roster that calls `logCronStart` to be excluded. The `>= 8` vs 7-day-prune defect itself is UNCHANGED (batch B2). Latent, recorded: `weekly-recalc` calls `logCronStart` (`weekly-recalc/index.ts:208`) but has no cron job and is not on the roster — a manual run would put it in the same silence-is-healthy class once the threshold is fixed. Also: with retention broken (09-22 → 09-26) this alert became reachable BY ACCIDENT, and a weekly function with one lost success row (`weekly-recap-ready`, OI-194 class) could have false-fired from 2026-09-29; 144's restored prune closes that.
+  PRIOR (kept verbatim): 2026-09-10 — `min(started_at)` across `cron_call_log` is **2026-09-03**, so the maximum achievable `days_silent` is **7.46**. The alert's predicate is `days_silent >= 8`. Hermes measured **7.21** on 2026-08-16; three weeks later the ceiling is unchanged because it is set by the pruner, not by traffic.
+- **Identified**: 2026-08-16 · Hermes L1-F3. **Pre-existing — not introduced by the log-retention batch.**
+- **The mechanism**: `cleanup_cron_call_log` prunes `cron_call_log` at 7 days, sparing only the single *globally* newest success. The alert asks whether any function has been silent for **8** days. The table cannot hold evidence that old, so the predicate is unsatisfiable by construction. It has fired **0 times, ever**.
+- ⚠ **The prior diagnose-doc records this as "cannot fire past day 7", which reads like a partial blind spot.** It is not partial: the alert is inert across its entire range. A threshold above its own data-retention ceiling is not a tuning problem, it is a dead alert that reads as coverage — which is worse than having no alert, because it occupies the slot.
+- **Proposed repair**: set the threshold below the retention ceiling (or lengthen retention for the alert's own read), **and** add a test asserting `threshold < retention_window` for every alert that reads a pruned table — the class, not the instance. A one-line fix with no such test leaves the next alert free to repeat it.
+- **Blast radius**: `alerts/_thresholds.yaml` + the alert's SQL; classify the written file.
+- **Cited as a live backstop while inert (2026-09-13, Hermes L31 on OI-153)**: migration 131's header (immutable) and the first version of `founder-digest/index.ts`'s header both named `alert_cron_function_dead` as the fallback that "would otherwise take a week to notice" a dead digest. It would notice nothing. The digest header was corrected (v2); the registry row 131 says so; the migration comment cannot be.
+- **Class**: `feedback_green_check_input_set_width` — the alert's input set is bounded by a pruner it does not know about. Also `feedback_bad_news_vs_no_news`: zero firings had two explanations (all healthy / cannot fire) and nobody asked which.
+- ⚠ **Precondition on this alert's own repair (R2-11, review round 2, 2026-09-14):
+  before lowering this threshold (or lengthening retention for it), the fix
+  MUST exclude non-scheduled, trigger-dispatched functions — today just
+  `alert-critical-notify` — from `alert_cron_function_dead`'s scope,** via
+  an allowlist of real `cron.job` slugs or an explicit denylist of
+  trigger-dispatched function names. Reason: `alert-critical-notify` is
+  event-driven (not `cron.schedule`-dispatched), so it can legitimately go
+  long stretches without running; if this alert's own OPEN threshold-below-
+  retention fix (above) ever makes it fire for `alert-critical-notify`, that
+  CRITICAL alert triggers `alert-critical-notify` itself to run, which
+  writes a fresh success row, which resets its own death-clock — a
+  self-sustaining false-critical loop. Today this is INERT only because
+  this OI's own bug (the threshold sitting above the retention ceiling)
+  keeps the alert from ever firing at all — fixing THIS OI without the
+  exclusion would arm the loop for the first time. Cross-referenced from
+  OI-199, whose fix shape (widening retention to per-function) would
+  independently arm the same loop from the other side.
+
+**UPDATE 2026-09-26 (backlog triage + `ci-green-batch-a`):** OI-224 closed as a duplicate of this entry (same `alert_cron_function_dead` `days_silent >= 8` predicate vs the 7-day `cron_call_log` prune). ⚠ LIVE 2026-09-26: the prune is currently NOT running (`db_maintenance_nightly` has failed every night since 2026-09-22, filed separately), so retained rows reach back to 09-14 and the predicate has become reachable BY ACCIDENT — a false critical for `alert-critical-notify` is armed for ~2026-10-01 06:47Z if retention is not restored first.
+
+**Closed 2026-11-05.** Fixed by retention 7 -> 10 days (migration 169, option 1 chosen with the founder over a lower threshold, which would have paged the weekly job every week). The alert command, its 8-day threshold and 14-day lookback are unchanged. Migration 169 was applied to `dedsavbjuwgarrhphgnl` on 2026-11-05 after the founder's per-action go (Supabase version `20261105065857`) and read back live: the function body carries `interval '10 days'`, still SECURITY DEFINER with `search_path=public`, `anon`/`authenticated` cannot execute it. The behavioural pin `test/sql/cleanup_cron_call_log_retention_live_verify.sql` was proven on a disposable Postgres replica (old 7-day body red, new body green, keep-set mutants red); its run against production was stopped by the founder for time and left no residue (row count and oldest row unchanged, 0 test rows). Guard: `test/contracts/alert_threshold_below_retention_test.dart` (threshold < min(lookback, retention)). Diagnose `c9e2a7`, plan `docs/plans/oi179-cron-dead-alert.md`. Not yet observed: the first real firing (earliest about one day after apply). Residuals filed or already tracked: OI-199 (silence past 10 days), OI-194 (lost `logCronStart` rows), OI-471 (orphan 7-day delete function), OI-472 (`weekly-recalc` has no cron job).
+
+## OI-201 — alert_cron_function_dead can burst-dispatch many critical alerts at once; Telegram send failures are silently dropped with no retry
+
+- **Status**: CLOSED · 2026-11-05 · MOOT while Telegram is deferred (founder 2026-11-04). Its burst-dispatch half is the same defect as OI-473 edge 1 (the cap fixes it at the source); its 429/no-retry half only concerns the Telegram send path. `reopen_when: Telegram is revived as a live channel` (then retry/`Retry-After` in `_shared/telegram.ts` `sendTelegramMessage`). Branch `oi201-fold-into-oi473`
+- **Blocked on**: none
+- **Verified**: 2026-09-14, Hermes lens L31 (`docs/audit/2026-09-14-hermes-telegram-admin-bot.md`).
+  Two compounding gaps, both pre-existing infrastructure (migration 110,
+  predates this branch), materially amplified by this branch's own
+  deliverable (`alert-critical-notify` is what turns a Postgres `alerts`
+  row into an actual Telegram push):
+  1. **Burst dispatch**: `alert_cron_function_dead`'s query
+     (`110_cron_silence_per_function_and_cleanup_null_guard.sql:82-119`) is
+     a SET-RETURNING `INSERT ... SELECT` — one `critical`-severity row PER
+     dead function, in one statement. `133`'s trigger is `FOR EACH ROW`, so
+     a single statement that flags N dead functions fires N separate
+     `net.http_post` dispatches to `alert-critical-notify`, each sending
+     its own Telegram message. This repo's own history has a precedent for
+     "many cron jobs dead simultaneously" (the Vault `service_role_key`
+     drift killed 12+ jobs at once) — that exact shape would now burst
+     ~12-20 Telegram sends in one statement, against Telegram's roughly
+     1 msg/sec per-chat rate limit. The other `alerts` writers
+     (`076_alert_detection_crons.sql`, `086`, `087`, `109`) each carry a
+     single-open-alert `NOT EXISTS` dedup guard scoped per-alert; this one
+     is scoped per-`function_name` (`110:112-119`), so it does not bound a
+     fleet-wide event.
+  2. **No retry on Telegram send failure**: `_shared/telegram.ts:63-66`
+     handles a non-2xx Telegram response gracefully (no throw, no token
+     leak — `telegramErrorSummary` returns `err.name` only) but a `429`
+     (rate-limited) is indistinguishable from any other failure, `Retry-
+     After` is ignored, and `pg_net.http_post` is fire-and-forget with no
+     retry at the Postgres layer either. A dropped send during exactly the
+     burst scenario above is lost from the Telegram channel permanently —
+     the founder never sees it, with no compensating signal beyond a
+     `cron_call_log` `failed` row and a `client_errors` `warn` row that
+     nothing surfaces proactively.
+- **Scope note**: out of scope for the telegram-admin-bot batch's own fix
+  diff — fixing requires either batching `alert_cron_function_dead`'s
+  dispatch (one summary alert instead of N) or adding retry/backoff to
+  `alert-critical-notify`'s Telegram send path (with `Retry-After`
+  honored), both separate infrastructure work with their own blast radius
+  and test surface. Filed here rather than fixed in-batch per the same
+  reasoning as OI-199/OI-179 above.
+
+## OI-458 — The 4-day Upper day repeats Push and Pull accessories (Bench Dips, Dumbbell Row, curls, Lateral Raise) instead of reading as a new day
+
+- **Status**: CLOSED · 2026-11-05 · branch `oi458-upper-repeats` · diagnose `a8c3e5` · the commit carrying `closes-oi: OI-458`
+- **Blocked on**: — (resolved)
+- **Verified**: never
+- **Identified**: 2026-11-03 · filed via mint_oi.sh from branch `exercise-count-band-oi`
+
+**What happens.** In the same tester plan as OI-456, week 1 Upper (day 4) reuses Bench Dips, Dumbbell Row, Self-Resisted Bicep Curl, Dumbbell Alternate Bicep Curl and Lateral Raise, which Push or Pull already carry that week; week 2 Upper reuses Barbell Curl, Cable Rope Pushdown and Egyptian Lateral Raise. The day reads as leftovers rather than a new session. Likely cause (not yet established): the Upper slots are small-muscle accessory slots whose pools are shallow, so the cascade picks the same names (`pickedNames` dedups across a plan only inside one variant).
+
+**Founder direction (2026-11-03).** Filed as its own item so it does not block OI-456. Pick up after OI-456, because the new exercise count changes which slots each day holds.
+
+**Done when.** The cause is named by writer and reader (file:line) first; a persona sweep measures repeated names across days of one week before and after; the fix keeps the equipment and injury filters; mutants prove it. Blast radius: `platform` (plan_engine), tier L.
+
+**Closed 2026-11-05.** Cause: `ExerciseSelector.pickV4` fills every day with no view of the week, so the Upper day's shallow pools returned the same first rows as Push and Pull. Fix: an `upper` day soft-avoids the names the earlier push, pull and shoulders_arms days hold, per variant (`_preferNovel` tiebreak only, bounded; same lines in the ship-dark `_pickCoreList`). Measured over 72 real generations: 409 repeated names in 42 plans before, 70 in 38 after. The residue is shallow cascade-attempt pools; injured users' top-up can re-add a name; the 4-day lose_fat / general_fitness and strength splits have no `upper` day. The repeat phase's one-frame fresh fill is seeded with the earlier days' names too (32 -> 0 pairs); the ship-dark core-list path is proven (155 -> 2). Golden fixture re-recorded (326 keys, all 4-day or 5-day plans). Test `test/contracts/cross_day_variety_behavioral_test.dart`, 8 of 8 mutants red.
+
 ## OI-462 — Library Batch C2b: twins G1368 G1489 G2567 G0474 and removal of the six twin_pending rows (E084 E211 E111 E162 E169 E179); E230 moved to OI-474
 
 - **Status**: CLOSED

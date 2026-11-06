@@ -579,6 +579,12 @@ class ExerciseSelector {
     // same-pattern sibling. Unioned into avoidA/avoidB → _preferNovel (soft, bounded).
     // Default `{}` → union no-op → byte-identical. Only generateV4 passes it.
     Set<String> plateauAvoidNames = const {},
+    // OI-458: lowercased names the push / pull / shoulders_arms days BEFORE these
+    // slotDays hold, per variant. Only the repeat-phase fresh fill passes them (it
+    // calls this with ONE frame, so the loop below cannot see the earlier days).
+    // Empty -> byte-identical.
+    Set<String> earlierFeederNamesA = const {},
+    Set<String> earlierFeederNamesB = const {},
   }) {
     // Batch B1: the core-list pool, ship-dark (`enable_core_list_pool`). OFF, or
     // a library with no `core_levels` (a v12 Hive box), runs the cascade below
@@ -601,6 +607,8 @@ class ExerciseSelector {
           capability: capability,
           previousPhaseByDay: previousPhaseByDay,
           plateauAvoidNames: plateauAvoidNames,
+          earlierFeederNamesA: earlierFeederNamesA,
+          earlierFeederNamesB: earlierFeederNamesB,
         );
         // OI-401: the ON path is path-independent for the top-up (Ruling R9).
         return topUpDays(
@@ -637,8 +645,14 @@ class ExerciseSelector {
         ? TrainingHistoryAnalyzer.demotedExercises()
         : const <String>{};
 
+    // OI-458: names the earlier push / pull days of this plan hold, per variant
+    // (lowercased). An `upper` day SOFT-avoids them, so it reads as a new
+    // session instead of the leftovers of the two days before it.
+    final earlierPushPullA = <String>{...earlierFeederNamesA};
+    final earlierPushPullB = <String>{...earlierFeederNamesB};
     for (var i = 0; i < slotDays.length; i++) {
       final day = slotDays[i];
+      final isUpper = day.dayType == 'upper';
       // W3.4 (Batch 11-B) variety + W3.5 (Batch 12-B) plateau rotation: the SOFT
       // avoid-names for THIS day — the previous phase's per-day A/B picks UNIONED
       // with the GLOBAL plateaued-compound names (both lowercased; feed
@@ -647,10 +661,12 @@ class ExerciseSelector {
       final avoidA = {
         ...(previousPhaseByDay?[i]?.a ?? const <String>[]),
         ...plateauAvoidNames,
+        if (isUpper) ...earlierPushPullA,
       };
       final avoidB = {
         ...(previousPhaseByDay?[i]?.b ?? const <String>[]),
         ...plateauAvoidNames,
+        if (isUpper) ...earlierPushPullB,
       };
       // Fill variant A
       var exercisesA = _fillSlots(
@@ -700,6 +716,11 @@ class ExerciseSelector {
         }
       }
 
+      if (_feedsUpperAvoid(day.dayType)) {
+        earlierPushPullA.addAll(exercisesA.map((e) => e.exerciseName.toLowerCase()));
+        earlierPushPullB.addAll(exercisesB.map((e) => e.exerciseName.toLowerCase()));
+      }
+
       result.add(PopulatedDay(
         name: day.name, focus: day.focus,
         dayType: day.dayType, intensity: day.intensity,
@@ -724,6 +745,11 @@ class ExerciseSelector {
     );
   }
 
+  /// OI-458: the day types whose picks an `upper` day soft-avoids. The 5-day
+  /// build_muscle split pairs 'Upper + Core' with a 'Shoulders + Arms' day.
+  static bool _feedsUpperAvoid(String dayType) =>
+      dayType == 'push' || dayType == 'pull' || dayType == 'shoulders_arms';
+
   /// Batch B1: the ON path of [pickV4] (plan Task 3). Each slot takes the top
   /// of [CoreListSelector.rankedPool] through [_selectCandidate]. Variant B
   /// SOFT-avoids A's names (they sort last instead of being excluded, unlike
@@ -747,6 +773,8 @@ class ExerciseSelector {
     required Set<String>? capability,
     required Map<int, ({List<String> a, List<String> b})>? previousPhaseByDay,
     required Set<String> plateauAvoidNames,
+    required Set<String> earlierFeederNamesA,
+    required Set<String> earlierFeederNamesB,
   }) {
     // ignore: invalid_use_of_visible_for_testing_member
     final trace = CoreListSelector.debugTrace;
@@ -757,17 +785,24 @@ class ExerciseSelector {
         : const <String>{};
     final demotedLower = {for (final n in demoted) n.toLowerCase()};
     final result = <PopulatedDay>[];
+    // OI-458, as in the cascade path of [pickV4]: an `upper` day soft-avoids the
+    // names the earlier push / pull days hold, per variant (lowercased).
+    final earlierPushPullA = <String>{...earlierFeederNamesA};
+    final earlierPushPullB = <String>{...earlierFeederNamesB};
 
     for (var i = 0; i < slotDays.length; i++) {
       final day = slotDays[i];
       final hasB = day.slotsB != null;
+      final isUpper = day.dayType == 'upper';
       final avoidA = {
         ...(previousPhaseByDay?[i]?.a ?? const <String>[]),
         ...plateauAvoidNames,
+        if (isUpper) ...earlierPushPullA,
       };
       final avoidB = {
         ...(previousPhaseByDay?[i]?.b ?? const <String>[]),
         ...plateauAvoidNames,
+        if (isUpper) ...earlierPushPullB,
       };
 
       List<PlannedExercise> fill(
@@ -891,6 +926,11 @@ class ExerciseSelector {
         } else {
           b = a;
         }
+      }
+
+      if (_feedsUpperAvoid(day.dayType)) {
+        earlierPushPullA.addAll(a.map((e) => e.exerciseName.toLowerCase()));
+        earlierPushPullB.addAll(b.map((e) => e.exerciseName.toLowerCase()));
       }
 
       result.add(PopulatedDay(
@@ -1033,6 +1073,8 @@ class ExerciseSelector {
       return picked;
     }
 
+    final feederNamesA = <String>{};
+    final feederNamesB = <String>{};
     for (var i = 0; i < frames.length; i++) {
       final frame = frames[i];
       final pins = pinnedByDay[i];
@@ -1042,6 +1084,10 @@ class ExerciseSelector {
       // onto weeks 1/3). pickV4 emits exactly one PopulatedDay per slotDay.
       PopulatedDay? freshCache;
       PopulatedDay fresh() => freshCache ??= pickV4(
+            // OI-458: this call sees ONE frame, so hand it what the earlier
+            // push / pull / shoulders_arms frames of this plan hold.
+            earlierFeederNamesA: feederNamesA,
+            earlierFeederNamesB: feederNamesB,
             slotDays: [frame],
             exerciseRepo: exerciseRepo,
             equipmentTier: equipmentTier,
@@ -1073,6 +1119,11 @@ class ExerciseSelector {
         exercisesB = exercisesA;
       } else {
         exercisesB = fresh().exercisesB;
+      }
+
+      if (_feedsUpperAvoid(frame.dayType)) {
+        feederNamesA.addAll(exercisesA.map((e) => e.exerciseName.toLowerCase()));
+        feederNamesB.addAll(exercisesB.map((e) => e.exerciseName.toLowerCase()));
       }
 
       result.add(PopulatedDay(
