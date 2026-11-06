@@ -6178,6 +6178,131 @@ Second half of the split of Batch C2 (the first half is OI-460). Adds the four t
 
 **Closed by.** Branch `library-batch-c2b`: the batch commit 222b73b2 (twins, six removals, seed v19, media table and stills, depth rule with twin rows, E043 swap repoint, migration 171 file and ledger entry); media upload of four animations (4 of 4 verified) and migration 171 applied to `dedsavbjuwgarrhphgnl` on 2026-11-05 after the founder's go on each exact artifact. B-pass `docs/reviews/library-batch-c2b-bpass.md`; closure `docs/audit/library-batch-c2b.closure.yaml`. E230 went to OI-474.
 
+## OI-358 — An exercise name twice in one workout day: seven doors let it in, and Active Workout's name-keyed cards raised a duplicate GlobalKey
+
+- **Status**: CLOSED · 2026-11-06 · branch `oi358-unique-exercise-names`, closes-diagnose e6a4d9; behavioral test test/contracts/exercise_name_unique_in_day_behavioral_test.dart, screen test test/features/train/exercise_name_unique_screen_test.dart
+- **Blocked on**: none
+- **Verified**: 2026-11-06, in tests: the crash reproduced on the real screen in a test build, 52 new tests pass and 49 of 49 mutants are killed. Device walk: OI-348 row A16 (release-build behaviour was not measured).
+- **Identified**: 2026-10-20 · filed via mint_oi.sh from branch `log-exercise-batch2`
+
+Retitled on close: the original title named only the Add path. Every door is closed: Train Add, Train Swap, the template builder, the coach `swapExercise` tool, the coach Swap quick action, the coach injury swap and coach `createCustomTemplate`; a day that is already duplicated (restore, an old template) is made safe at `startWorkout`, `assignTemplateToDate` and the template builder's load. The card key stays name-based on purpose, and `exlogKey` needs unique names anyway. A taken name is shown grey, not hidden. Two separate defects found on the way are fixed in the same batch: the swap UNDO's stale index, and the template builder showing coach-made rows as Unknown, 3 x 10. Stored rows are not healed.
+
+Original entry: - **Status**: OPEN
+- **Blocked on**: none
+- **Verified**: never
+- **Identified**: 2026-10-20 · filed via mint_oi.sh from branch `log-exercise-batch2`
+
+Found by the batch-2 plan review (round 1, P2-12, 2026-10-20), verified by reading, not reproduced on device. `ActiveWorkoutNotifier.addExercise` (`lib/features/train/providers/train_provider.dart:1642-1646`) appends without a name check, and the exercise picker (`lib/features/train/screens/active_workout/exercise_picker_sheet.dart:47-61`) does not exclude exercises already in the session. The screen keys every card by name: `_exerciseKeys.putIfAbsent(exercise.name, () => GlobalKey())` (`screen.dart:438`) and `key: _exerciseKeys[exercise.name]` (`screen.dart:481`), so two cards with one name share a GlobalKey, which Flutter rejects ("Multiple widgets used the same GlobalKey"). Options to plan: exclude names already in the session from the picker, or key cards by a per-session id instead of the name. The batch-2 UNDO toast's identity check (`exerciseName` at an index) also assumes unique names; it stays correct today only because a duplicate already breaks the screen.
+
+## OI-454 — Quads sit below their weekly floor in 6-day build_muscle plans: add a Legs B quad slot AND an allocator co-group policy so a quad exercise is not removed for crediting Glutes
+
+- **Status**: CLOSED · 2026-11-06 · branch `oi454-quads` · diagnose `cb50cb` · the commit carrying `closes-oi: OI-454`
+- **Blocked on**: — (resolved)
+- **Verified**: never
+- **Identified**: 2026-11-03 · filed via mint_oi.sh from branch `oi-quads-floor`
+
+**What happens.** Intermediate build_muscle, full_gym, 6 days, 90 minutes: Quads get 8 weekly sets against a band of 12 to 16 (floors 10/12/14 by level). Legs A (`Quad dominant`) holds the only quad work; Legs B (`Hamstring + glute focus`, `_get6DayV4('build_muscle')` in `lib/shared/repositories/plan_engine/split_resolver.dart`) has none. Glutes already sit at their weekly top (12/16/20), so the allocator removes any added squat or lunge because it also credits Glutes. Closure row `SBF-QUADS-FLOOR` (`docs/audit/set-budget-flip.closure.yaml`); measured at the flip in `docs/architecture/plan-engine-detail.md` (d).
+
+**Spike (2026-11-03, reverted).** A Legs B quad slot alone changes nothing (the allocator drops it). Replacing Legs B's glute-isolation slot lifts Quads only to 9 to 12 sets against floors 10/12/14.
+
+**Founder direction (2026-11-03).** Quads option (a), recommended path: swap the Legs B glute-isolation slot for a Quads knee_dominant compound slot AND add an allocator co-group policy (a quad-primary exercise is not refused for crediting Glutes: partial glute credit, or the cap applied to the primary muscle), in one batch. Rule-14 waiver for `plan_generator.dart` given ("ok"); the allocator file may need its own waiver. The old draft `docs/plans/2026-11-03-quads-legs-b-slot.md` (worktree `quads-legs-b`, untracked) predates the spike and must be rewritten around it.
+
+**Done when.** Plan reviewed twice; Quads reach the band floor in the founder case and the other 6-day build_muscle personas with no group above its band top and every day inside its minutes; the generator golden changes only for 6-day build_muscle personas (changed keys listed); `kThinCeilings` and the scorecard baseline re-frozen if they move; mutants on the slot and on the policy. Blast radius: `platform` (plan_engine), tier L.
+
+**Narrowed 2026-11-06.** Done-when clause 2 ("Quads reach the band floor in the founder case and the other 6-day build_muscle personas") is met for the founder case and shown as a 24-cell ratchet for the others (every cell rose, 10 of 24 reach their floor: 7 at 90 minutes, 3 at 60); the personas still short are OI-477.
+
+**Closed 2026-11-06.** Cause: Legs B had no quad exercise, and a quad exercise lists Glutes too, so the allocator refused it while Glutes sat at its weekly top. Fix (option a, one batch): Legs B swaps its Glutes / hip_isolation slot for a Quads / knee_dominant / compound slot (priority 2), and `SessionBudgetContext.quadPrimaryCreditsGlutes` is false for 6-day build_muscle only, so `BudgetMuscleGroups.creditedOf` drops Glutes from an exercise whose first listed muscle is Quads (the allocator, week 2 and titration read the one flag). Founder case Quads 8 -> 12 of 12 to 16, Glutes 16 -> 13 (credited), Hamstrings 11 -> 12; at 90 minutes beginners reach their floor of 10 and intermediate bodyweight, dumbbells and full gym reach 12. Golden: 60 keys, all 6-day build_muscle (a global rule changed 745 and was rejected). The clause "the other 6-day personas reach the floor" is only PARTLY met: 5 of 12 personas are short at 90 minutes and 9 of 12 at the 60-minute default (intermediate basic gym `cap_limited`, advanced bodyweight `co_group_limited`, the rest `time_limited`), filed as OI-477. Stated cost: a squat's glute work no longer counts in this split (founder case 22 full-credit glute sets against a credited 13 and a top of 16; a beginner about 21 against 12). A hip hinge that lists Quads first (Trap Bar Deadlift) keeps its Glutes credit. Mutants: 24 of 24 red. Kill-switch `disable_quad_legs_b` restores the old Legs B and the full Glutes credit. The 3, 4 and 5-day splits are OI-475. Device check of a 6-day plan: the founder's next build.
+
+## OI-227 — Telegram coach connect is broken (no linking token, bot says no user found) — remove UI entry points, revisit phase 2
+
+- **Status**: CLOSED · 2026-11-06 · closed by OI-466 (branch telegram-surface-off), closes-diagnose b9d3f1
+- **Blocked on**: none — UI removal is self-contained; the real fix needs the separate bot project
+- **Verified**: 2026-09-21 — founder tapped "Connect @AVYACoachBot" live, bot replied "no user found". Closure check 2026-11-06: every entry point named above is gone from lib/ (scan in test/contracts/telegram_surface_removed_test.dart).
+- **Identified**: 2026-09-21 · filed via mint_oi.sh from branch `claude/food-logging-observations-126ab3`
+
+Founder tapped "Connect @AVYACoachBot" from the AI Coach tab and Telegram
+replied "no user found" — the account-linking handshake between the app and
+the bot doesn't work end to end.
+
+Root cause on the app side: `_openTelegramBot()`
+(`lib/features/ai_coach/screens/ai_coach/recording_body.dart:13`) opens a bare
+`https://t.me/AVYACoachBot` deep link with **no linking token** — no `?start=`
+param identifying the app user. Without one, the bot (a separate project on
+OpenClaw VPS, NOT in this repo — root `CLAUDE.md:269`) has no way to associate
+the incoming Telegram chat with an `icanbefitter` account. This repo cannot fix
+the bot-side half of that handshake; it needs access to the bot project.
+
+Confirmed while investigating: this is a **different bot** from the founder's
+admin console. `@AVYACoachBot` (user-facing, meant to carry coach
+conversations + proactive nudges via `telegram_connections`, referenced in
+`morning-alert/index.ts:456-464` as a push fallback) is separate from
+`@ICanbeFitterBot` / `@IcanbefitterBot` (root `CLAUDE.md:269`,
+`supabase/functions/CLAUDE.md:55` — the `telegram-admin-bot` Edge Function,
+read-only, founder-only, allowlisted to a single chat id, powers `/digest`
+etc.). No relation between the two; fixing one says nothing about the other.
+
+Live in-app entry points that let a user reach the broken flow:
+- `lib/features/ai_coach/screens/ai_coach/compact_header.dart` — popup menu
+  item `telegram` ("Connect @AVYACoachBot").
+- `lib/features/ai_coach/screens/ai_coach/telegram_view.dart` — the
+  "CONNECT @AVYACOACHBOT" CTA on the in-app Telegram card.
+
+Founder decision 2026-09-21: full fix (proper linking token + bot-side
+handling) is phase 2. **Done in this session, uncommitted:** removed the
+"Connect @AVYACoachBot" menu item (`compact_header.dart`) and the matching CTA
+in `telegram_view.dart` (its not-connected copy now reads "Telegram — Coming
+Soon" with no button). Deliberately **kept** the `switch_channel` toggle
+("Switch to Telegram" / "Switch to In-App Chat") — `channelProvider`
+(`ai_coach_provider.dart:1075-1086`) persists `coach_channel` to Hive, so any
+user already on `channel == 'telegram'` needs that toggle to get back to chat;
+removing it too would trade this bug for a worse one (a stranded user with no
+UI path back). Verified with `flutter analyze lib/` (both touched files are
+`part of 'screen.dart'`, so only a whole-tree analyze is valid per this
+board's own common-pitfalls note) — 0 errors/warnings, 45 pre-existing infos
+unrelated to these files. `telegram_view.dart` / `channelProvider` /
+`_openTelegramBot()` left in place (dead but harmless) for phase 2.
+
+**Phase 2 must not reuse the email flow (2026-09-29, Hermes L22/L35 on `oi-182-202-subscription-state`).**
+`telegram-bot/bot.py` `receive_email` (`:281-332`) links a Telegram chat to whichever `users` row
+matches a typed email, with no proof of ownership: no code, no link, no token. Anyone who knows or
+guesses a victim's email can link their own chat to that account, chat as that user (the coach
+context is built from the victim's data via `get_user_context`), and probably replace the real
+owner's `chat_id` in `telegram_connections`, which `morning-alert` uses as a push fallback. It is
+dormant only because the feature is hidden and the bot is not deployed (founder, 2026-09-29). The
+phase-2 linking-token handshake above (the app mints a one-time token, opened as
+`t.me/AVYACoachBot?start=<token>`) removes the flaw; the email prompt must be deleted, not kept as
+a fallback.
+
+Two related items surfaced, deliberately NOT resolved by this OI:
+- `lib/shared/widgets/paywall_sheet.dart:120` markets "Weekly AI nutrition
+  report + Telegram push" as a PRO perk bullet. With the connect entry points
+  gone, no new user can ever receive that. Founder to decide whether to reword
+  it now or leave it for the phase-2 fix.
+- `lib/features/ai_coach/widgets/telegram_card.dart` (`TelegramCard`) appears
+  unreferenced anywhere else in `lib/` — looks like dead code predating
+  `telegram_view.dart`. Not touched here; separate small cleanup if confirmed.
+
+**Recommendation**: Phase 2 — design a real linking handshake (token minted
+app-side, passed via the deep link's `start` param, exchanged by the bot for
+the user's id) with whoever owns the bot project, then re-add the UI entry
+points. Until then, this OI stays open as the pointer for "why is Telegram
+missing from the Coach menu."
+
+**Resolution (2026-11-06).** Closed by OI-466 under the founder's 2026-11-04 decision that Telegram is dropped. The 2026-09-21 change removed only the "Connect @AVYACoachBot" entry points and deliberately kept the channel toggle, the "Coming Soon" view, `channelProvider` and the paywall perk; OI-466 removed all of those, so a user can no longer reach any Telegram surface and no Phase 2 is planned. The warning about `telegram-bot/bot.py` `receive_email` (it links a chat to whichever account matches a typed email, with no proof of ownership) is NOT closed with this entry: it moved to OI-476, together with the question of whether the tracked `telegram-bot/` directory and the `morning-alert` Telegram fallback are kept or deleted.
+
+## OI-466 — Telegram copy still shown in the paywall and Telegram card (Telegram permanently dropped)
+
+- **Status**: CLOSED · 2026-11-06 · branch telegram-surface-off (commit SHA stamped in docs/audit/telegram-surface-off.closure.yaml), closes-diagnose b9d3f1; pin test/contracts/telegram_surface_removed_test.dart
+- **Blocked on**: none
+- **Verified**: 2026-11-04, `paywall_sheet.dart:122` and the Telegram card copy read on branch `realtime-weight-off`. Closure check 2026-11-06: mutation table run on the final code after the B-pass, 23 of 24 mutants red and 1 known residue (adjacent string literals), see the diagnose doc.
+- **Identified**: 2026-11-04 · filed via mint_oi.sh from branch `realtime-weight-off`
+
+**What:** user-facing copy still sells Telegram ("Weekly AI nutrition report + Telegram push" in the paywall, and the Telegram card). Founder 2026-11-04: Telegram is permanently dropped.
+
+**Acceptance:** copy removed or reworded (Wardroom brand soul loaded first; psychology pass if a paywall line changes); tests/pins that cite the old strings repointed.
+
+**Resolution (2026-11-06).** The paywall perk is now `Weekly AI nutrition report` (`lib/shared/widgets/paywall_sheet.dart`, `_proBenefits`), and everything else that sold or linked Telegram to a user is gone from the app: the AI Coach "Switch to Telegram" menu item and the "Telegram - Coming Soon" view it opened, the dead `TelegramCard`, `channelProvider`, `telegramConnectionProvider` and `_openTelegramBot`. The overflow menu is now the pure function `coachHeaderMenuItems` (`Clear conversation`, plus `Upgrade to PRO` on a free account). Tests that cited the old strings were repointed, not loosened: `measurement_flag_off_identity_test.dart` now pins the chip slot by its neighbours, `coach_chat_reply_sanitization_test.dart` slices to a stable anchor, and `initial_scroll_to_bottom_test.dart` lost only the test of the retired OI-232 channel-switch listener. New pin: `test/contracts/telegram_surface_removed_test.dart` (a paywall pump for every feature label, a menu pump with each value tied to its `case`, and an exact-line source scan of `lib/`, `assets/` and `web/` with the chat area pinned as unconditional). The copy line went through the `psychology-pass-fitness` pass (verdict: keep the plain cut; the feature's NAME stays OI-325's open question). Diagnose doc `docs/diagnoses/2026-11-06-telegram-promise-removed-b9d3f1.md`; batch ledger `docs/audit/telegram-surface-off.closure.yaml`. Left on purpose: `pullRecentCrossChannelLogs` and its `source: 'telegram'` (OI-467), the `telegram_connected` / `coach_channel` names in the migrator key list, and the founder-ops `telegram-admin-bot`. The tracked `telegram-bot/` directory is OI-476. The B-pass found that the `Clear conversation` menu item does nothing (pre-existing, byte-identical before this batch): OI-479.
+
 ## OI-199 — cleanup_cron_call_log() spares only TWO global rows, not each function's latest — true >7d cron silence still goes invisible to /cron
 
 - **Status**: CLOSED

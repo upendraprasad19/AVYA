@@ -25,7 +25,7 @@ Personalised fitness and nutrition platform for young professionals (22-35) in I
 - Reasoning tab — deeper coaching via the thinking-on weekly report
 - Scan meal — 50 scans/day; Cart Auditor — 50 scans/day
 - Progress photos (full timeline)
-- Weekly AI nutrition report (ongoing) + Telegram push
+- Weekly AI nutrition report (ongoing)
 - AI-personalised morning alerts
 - Voice notes to AI coach
 - Fresh Future Prediction card monthly
@@ -48,7 +48,7 @@ Personalised fitness and nutrition platform for young professionals (22-35) in I
 | Plan Generator | Local Dart engine (queries Hive `exerciseBox`, zero API cost) |
 | Payments | Razorpay (WebView checkout → webhook → Supabase → poll → Hive) |
 | Push Notifications | OneSignal + Firebase (AVYA project) |
-| Telegram Bot | Separate project (OpenClaw VPS, @ICanbeFitterBot) — NOT in this repo |
+| Telegram Bot | Dropped (founder, 2026-11-04). Dormant code in `telegram-bot/` (OI-476); `telegram-admin-bot` is a different, founder-ops bot |
 
 > The previous OpenRouter (Gemma) + Cerebras (gpt-oss-120B / GLM-4.7) cascade was collapsed to a single Gemini provider on 2026-04-18 (see header comment in `supabase/functions/ai-proxy/index.ts`). Any doc still mentioning OpenRouter / Cerebras / GLM is stale — fix or flag it.
 

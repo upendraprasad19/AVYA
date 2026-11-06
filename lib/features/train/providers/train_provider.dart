@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:ui';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:icanbefitter/core/services/error_telemetry.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
 import 'package:icanbefitter/core/services/migrated_key.dart';
 import 'package:icanbefitter/core/utils/injury_vocab.dart';
@@ -22,6 +23,7 @@ import 'package:icanbefitter/core/services/workout_schedule_read_service.dart';
 import 'package:icanbefitter/core/services/service_providers.dart';
 import 'package:icanbefitter/core/utils/date_utils.dart';
 import 'package:icanbefitter/core/utils/exercise_display.dart';
+import 'package:icanbefitter/core/utils/exercise_name_identity.dart';
 import 'package:icanbefitter/core/utils/phase_completion.dart';
 import 'package:icanbefitter/core/utils/ist_date.dart';
 import 'package:icanbefitter/core/utils/detraining.dart';
@@ -1447,6 +1449,10 @@ class ActiveWorkoutData {
   }
 }
 
+/// What an attempt to add or swap an exercise did (OI-358). A plain bool could
+/// not tell a stale slot from a taken name, and only the second has a message.
+enum SessionExerciseChange { applied, nameTaken, invalidSlot }
+
 class ActiveWorkoutNotifier extends Notifier<ActiveWorkoutData> {
   Timer? _timer;
   DateTime? _workoutStartTime;
@@ -1491,7 +1497,16 @@ class ActiveWorkoutNotifier extends Notifier<ActiveWorkoutData> {
       level = readiness ??
           HealthReadService.instance.readinessForDate(nowWall())?.level;
     }
-    var exercises = List<ExerciseData>.from(day.exercises);
+    // OI-358: the last line for a day that already holds a name twice (a
+    // restore can write one without going through any picker, diagnose b3c8d2).
+    // Two cards with one name share a GlobalKey on the screen. The stored row is
+    // left as it is.
+    final distinct = firstPerExerciseName(day.exercises, (e) => e.name);
+    if (distinct.length != day.exercises.length) {
+      unawaited(ErrorTelemetry.logEvent('active_workout_duplicate_name_dropped',
+          message: 'dropped=${day.exercises.length - distinct.length}'));
+    }
+    var exercises = List<ExerciseData>.from(distinct);
     if (level == ReadinessLevel.red) {
       exercises = _applyReadinessSetDrop(exercises);
     }
@@ -1678,8 +1693,25 @@ class ActiveWorkoutNotifier extends Notifier<ActiveWorkoutData> {
   /// an exercise without a `logging_type` field; the resolver looks it up
   /// in `exerciseBox` / `customBox` by name before falling back to
   /// `weight_reps`.
-  void swapExercise(int exerciseIndex, ExerciseData newExercise) {
-    if (exerciseIndex < 0 || exerciseIndex >= state.exercises.length) return;
+  /// OI-358: true when [name] is in the session at any slot but [exceptIndex].
+  bool _nameInSession(String name, {int? exceptIndex}) {
+    final key = exerciseNameKey(name);
+    for (var i = 0; i < state.exercises.length; i++) {
+      if (i != exceptIndex && exerciseNameKey(state.exercises[i].name) == key) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  SessionExerciseChange swapExercise(int exerciseIndex, ExerciseData newExercise) {
+    if (exerciseIndex < 0 || exerciseIndex >= state.exercises.length) {
+      return SessionExerciseChange.invalidSlot;
+    }
+    // The same slot stays allowed: an UNDO, or re-picking what is already there.
+    if (_nameInSession(newExercise.name, exceptIndex: exerciseIndex)) {
+      return SessionExerciseChange.nameTaken;
+    }
 
     // Resolve correct logging_type for the incoming exercise.
     final hive = HiveService.instance;
@@ -1742,12 +1774,15 @@ class ActiveWorkoutNotifier extends Notifier<ActiveWorkoutData> {
       reopenedExercises: {...state.reopenedExercises}
         ..remove(state.exercises[exerciseIndex].name),
     );
+    return SessionExerciseChange.applied;
   }
 
-  void addExercise(ExerciseData exercise) {
+  SessionExerciseChange addExercise(ExerciseData exercise) {
+    if (_nameInSession(exercise.name)) return SessionExerciseChange.nameTaken;
     state = state.copyWith(
       exercises: [...state.exercises, exercise],
     );
+    return SessionExerciseChange.applied;
   }
 
   void removeExercise(int exerciseIndex) {

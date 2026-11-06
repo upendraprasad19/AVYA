@@ -119,7 +119,7 @@ class _PaywallSheetState extends ConsumerState<PaywallSheet> {
     'Dedicated AI coaching with higher daily limits',
     'AI food analysis & meal scanning (camera)',
     'Generate new plans after Week 4 (phases 2-12)',
-    'Weekly AI nutrition report + Telegram push',
+    'Weekly AI nutrition report',
     'Progress photos & body composition tracking',
     'Reasoning tab for advanced coaching',
     'PRO tips on every exercise',

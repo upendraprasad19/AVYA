@@ -1124,38 +1124,6 @@ class SendMessageNotifier extends Notifier<bool> {
 final sendMessageProvider =
     NotifierProvider<SendMessageNotifier, bool>(SendMessageNotifier.new);
 
-// ── Telegram Connection ──────────────────────────────────────────
-
-class TelegramConnectionNotifier extends Notifier<bool> {
-  @override
-  bool build() {
-    ref.watch(authUserIdTokenProvider); // c4055a — rebuild on auth change
-    return MigratedKey.readWithDefault<bool>('telegram_connected', false);
-  }
-}
-
-final telegramConnectionProvider =
-    NotifierProvider<TelegramConnectionNotifier, bool>(
-        TelegramConnectionNotifier.new);
-
-// ── Channel Selection ────────────────────────────────────────────
-
-class ChannelNotifier extends Notifier<String> {
-  @override
-  String build() {
-    ref.watch(authUserIdTokenProvider); // c4055a — rebuild on auth change
-    return MigratedKey.readWithDefault<String>('coach_channel', 'in_app');
-  }
-
-  void setChannel(String channel) {
-    MigratedKey.write('coach_channel', channel);
-    state = channel;
-  }
-}
-
-final channelProvider =
-    NotifierProvider<ChannelNotifier, String>(ChannelNotifier.new);
-
 // ── Reasoning Mode (retired 2026-04-18) ──────────────────────────
 //
 // The `reasoningModeProvider` used to back a Chat/Reasoning toggle in

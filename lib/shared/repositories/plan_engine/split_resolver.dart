@@ -391,8 +391,18 @@ class SplitResolver {
   // V4: MuscleSlotDay splits — granular muscle-slot architecture
   // ══════════════════════════════════════════════════════════════════
 
+  /// OI-454: whether [planGoal] at [daysPerWeek] is the split whose `Legs B` carries a
+  /// Quads compound slot (6-day build_muscle). `generateV4` sets
+  /// `SessionBudgetContext.quadPrimaryCreditsGlutes` to the NEGATION of this, so the
+  /// slot and the credit rule cannot be keyed on two different conditions;
+  /// `quads_floor_6day_behavioral_test.dart` pins that `selectV4` returns a `Legs B`
+  /// day exactly when this is true.
+  static bool hasQuadLegsBSplit(String planGoal, int daysPerWeek) =>
+      planGoal == 'build_muscle' && daysPerWeek == 6;
+
   /// V4: Returns MuscleSlotDay list with granular muscle slots.
-  static List<MuscleSlotDay> selectV4(String goal, int daysPerWeek, {String experienceLevel = 'intermediate'}) {
+  static List<MuscleSlotDay> selectV4(String goal, int daysPerWeek,
+      {String experienceLevel = 'intermediate', bool quadLegsB = true}) {
     final isBeginner = experienceLevel == 'beginner';
     if (isBeginner && daysPerWeek <= 4) {
       return _getBeginnerFullBodyV4(daysPerWeek, goal);
@@ -400,7 +410,7 @@ class SplitResolver {
     switch (daysPerWeek) {
       case 3: return _get3DayV4(goal);
       case 5: return _get5DayV4(goal);
-      case 6: return _get6DayV4(goal);
+      case 6: return _get6DayV4(goal, quadLegsB: quadLegsB);
       default: return _get4DayV4(goal);
     }
   }
@@ -932,7 +942,7 @@ class SplitResolver {
 
   // ── V4: 6-day splits ──────────────────────────────────────────────
 
-  static List<MuscleSlotDay> _get6DayV4(String goal) {
+  static List<MuscleSlotDay> _get6DayV4(String goal, {bool quadLegsB = true}) {
     if (goal == 'build_muscle') {
       return [
         // Push A: Heavy chest
@@ -990,11 +1000,15 @@ class SplitResolver {
           const MuscleSlot(targetMuscle: 'Biceps', subFocus: 'short_head', movementPattern: 'elbow_flexion', exerciseType: 'isolation', priority: 4),
           const MuscleSlot(targetMuscle: 'Mid Back', movementPattern: 'horizontal_pull', exerciseType: 'compound', priority: 4),
         ]),
-        // Legs B: Hamstring + glute
+        // Legs B: Hamstring + glute, plus one Quads compound (OI-454: the second weekly quad hit;
+        // the glute isolation lives on Legs A)
         MuscleSlotDay(name: 'Legs B', focus: 'Hamstring + glute focus', dayType: 'legs', intensity: 'hypertrophy', slotsA: [
           const MuscleSlot(targetMuscle: 'Hamstrings', movementPattern: 'hip_dominant', exerciseType: 'compound', priority: 1),
           const MuscleSlot(targetMuscle: 'Glutes', movementPattern: 'hip_dominant', exerciseType: 'compound', priority: 1),
-          const MuscleSlot(targetMuscle: 'Glutes', movementPattern: 'hip_isolation', exerciseType: 'isolation', priority: 2),
+          // OI-454: the second weekly quad hit; `disable_quad_legs_b` restores the Glutes isolation slot.
+          quadLegsB
+              ? const MuscleSlot(targetMuscle: 'Quads', movementPattern: 'knee_dominant', exerciseType: 'compound', priority: 2)
+              : const MuscleSlot(targetMuscle: 'Glutes', movementPattern: 'hip_isolation', exerciseType: 'isolation', priority: 2),
           const MuscleSlot(targetMuscle: 'Hamstrings', movementPattern: 'knee_dominant', exerciseType: 'isolation', priority: 2),
           const MuscleSlot(targetMuscle: 'Core', movementPattern: 'core', exerciseType: 'isolation', priority: 3),
           const MuscleSlot(targetMuscle: 'Calves', movementPattern: 'knee_dominant', exerciseType: 'isolation', priority: 3),

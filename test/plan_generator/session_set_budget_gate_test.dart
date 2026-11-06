@@ -118,6 +118,16 @@ Set<String> _groups(Iterable<Object?> muscles) {
   return out;
 }
 
+/// OI-454, restated here (not imported): in the 6-day build_muscle split an exercise whose FIRST
+/// listed muscle is Quads credits Quads but not Glutes, so the Glutes top and cap never count a
+/// squat's or a lunge's glute work. Every other plan credits every listed muscle.
+Set<String> _credited(List<Object?> muscles, {required bool quadOwnsGlutes}) {
+  final all = _groups(muscles);
+  if (!quadOwnsGlutes || muscles.isEmpty || all.contains('Hamstrings')) return all;
+  final first = _groups([muscles.first]);
+  return (first.length == 1 && first.contains('Quads')) ? (all..remove('Glutes')) : all;
+}
+
 // goal -> level -> (bottom, top, cap)
 const _table = {
   'build_muscle': {
@@ -255,10 +265,11 @@ void main() {
       d.warmup.fold(0.0, (a, e) => a + itemSeconds(e)) +
       d.cooldown.fold(0.0, (a, e) => a + itemSeconds(e));
 
-  Map<String, int> sessionGroups(WorkoutDay d) {
+  Map<String, int> sessionGroups(WorkoutDay d, {bool quadOwnsGlutes = false}) {
     final per = <String, int>{};
     for (final e in d.exercises.where(budgeted)) {
-      for (final g in _groups(byName[e.exerciseName.toLowerCase()]!['primary_muscles'] as List)) {
+      for (final g in _credited(byName[e.exerciseName.toLowerCase()]!['primary_muscles'] as List,
+          quadOwnsGlutes: quadOwnsGlutes)) {
         per[g] = (per[g] ?? 0) + e.sets;
       }
     }
@@ -364,7 +375,7 @@ void main() {
             fail('time', 'week ${w + 1} ${d.name} ${mins.toStringAsFixed(1)} min > $limitMin');
           }
         }
-        final per = sessionGroups(d);
+        final per = sessionGroups(d, quadOwnsGlutes: p.planGoal == 'build_muscle' && p.days == 6);
         per.forEach((g, n) {
           weekGroups[g] = (weekGroups[g] ?? 0) + n;
           if (n > p.cap(g)) fail('caps', 'week ${w + 1} ${d.name} $g $n > session cap ${p.cap(g)}');
@@ -512,7 +523,7 @@ void main() {
         for (final d in plan.weekPlans[w].workoutDays) {
           md.writeln('| ${d.name} | ${d.exercises.length} | '
               '${d.exercises.fold(0, (a, e) => a + e.sets)} | ${(daySeconds(d) / 60).toStringAsFixed(1)} |');
-          sessionGroups(d).forEach((g, n) => totals[g] = (totals[g] ?? 0) + n);
+          sessionGroups(d, quadOwnsGlutes: true).forEach((g, n) => totals[g] = (totals[g] ?? 0) + n);
         }
         final order = totals.keys.toList()..sort();
         md.writeln('\nWeekly sets: ${[for (final g in order) '$g ${totals[g]}'].join(', ')}');

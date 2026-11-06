@@ -535,19 +535,25 @@ void main() {
     // declarations of `_buildQuickPrompts` and `_buildInputBar` live in part
     // files that sort before screen.dart in the concatenation (and in this
     // file's body), and would fool a plain indexOf.
-    test('the AI Coach screen mounts the chip slot once, in_app only, between '
-        'the quick prompts and the input bar', () {
+    test('the AI Coach screen mounts the chip slot once, with no condition of '
+        'its own, between the quick prompts and the input bar', () {
       final build = functionBody(
         strip('lib/features/ai_coach/screens/ai_coach/screen.dart'),
         'Widget build(BuildContext context)',
       ).replaceAll(RegExp(r'\s+'), '').replaceAll(',)', ')');
       expect(countOf(build, 'MeasurementChipSlot('), 1);
+      // OI-466: the old pin was `if(channel=='in_app')MeasurementChipSlot(`.
+      // The channel is gone, and a bare "MeasurementChipSlot( appears once"
+      // check would pass under ANY re-gating (`if(!isPro)MeasurementChipSlot(`),
+      // so the pin names the chip's NEIGHBOURS: any `if(...)` inserted in front
+      // of the chip breaks the adjacency, which is what the old pin protected.
       expect(
         countOf(
           build,
-          "if(channel=='in_app')MeasurementChipSlot("
+          '_buildQuickPrompts(),MeasurementChipSlot('
           'inputFocusNode:_inputFocusNode,isSending:isSending,'
-          'onShown:(height)=>keepBottomAfterChip(_scrollController,height)),',
+          'onShown:(height)=>keepBottomAfterChip(_scrollController,height)),'
+          '_buildInputBar(',
         ),
         1,
       );
@@ -583,7 +589,7 @@ void main() {
       expect(
         countOf(
           all,
-          "if(channel=='in_app'&&!isSending&&messages.length<=1)"
+          'if(!isSending&&messages.length<=1)'
           '_buildQuickPrompts(),',
         ),
         1,

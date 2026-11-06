@@ -606,7 +606,7 @@ void main() {
       expect(shown, isEmpty);
     });
 
-    testWidgets('keepBottomAfterChip with no list attached (the Telegram '
+    testWidgets('keepBottomAfterChip with no list attached (the welcome '
         'view) does nothing and does not throw', (tester) async {
       final chat = ScrollController();
       addTearDown(chat.dispose);
