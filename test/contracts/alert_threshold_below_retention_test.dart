@@ -111,6 +111,7 @@ void main() {
         '143_restore_alert_cron_failures_stuck_job_bound.sql',
         '144_split_vacuum_out_of_db_maintenance_nightly.sql',
         '147_alert_client_errors_spike_breadth.sql',
+        '170_oi473_cron_dead_alert_edges.sql',
       ]);
     });
   });
