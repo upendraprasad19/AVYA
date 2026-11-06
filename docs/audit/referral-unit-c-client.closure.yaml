@@ -1,0 +1,162 @@
+# Closure ledger - referral-unit-c-client (unit C of the referral pay-on-conversion redesign: the referrer surface, OI-336)
+# Gate 40. One terminal_state per finding; no `deferred:` key.
+# `commit:` on a closed_in_commit row names the batch commit that ADDS this file; find it with
+#   git log --diff-filter=A --format=%h -- docs/audit/referral-unit-c-client.closure.yaml
+# Plan: docs/plans/referral-unit-c-client.md (v4). Server half: migrations 159/160 (applied live, merged).
+# The old ledger docs/audit/referral-pay-on-conversion.closure.yaml keeps U2 (re-pointed here) and X7 (client half closed here, privacy sentence and polling residual stay with the founder).
+
+batch: referral-unit-c-client
+plan_review_record: docs/plan-reviews/referral-unit-c-client.md
+total_findings: 26
+closed_count: 26
+
+findings:
+  - id: C1
+    title: "ReferralRepository.referrerSummary + ReferrerSummary.tryParse: one rpc('referrer_summary') call, null = unknown, expected absences silent, other failures telemetered"
+    terminal_state: closed_in_commit
+    commit: "referral-unit-c-client (the commit that adds this file; find it with: git log --diff-filter=A --format=%h -- docs/audit/referral-unit-c-client.closure.yaml)"
+    verification: "test/contracts/referral_unit_c_pure_test.dart (tryParse table, absence classifier, the seam: good body, NULL, malformed, six silent shapes, one telemetered shape)"
+
+  - id: C2
+    title: "ReferrerCountersBlock in the invite sheet: exact numbers, PENDING only above zero, hidden on unknown and on zero joined, skeleton while loading, one Semantics label"
+    terminal_state: closed_in_commit
+    commit: "referral-unit-c-client (the commit that adds this file; find it with: git log --diff-filter=A --format=%h -- docs/audit/referral-unit-c-client.closure.yaml)"
+    verification: "test/contracts/referral_unit_c_surfaces_test.dart group ReferrerCountersBlock (4 tests)"
+
+  - id: C3
+    title: "invite sheet: the real rule in the description (ReferralCopy.inviteDescription), counters below the Share action, scrollable body with keyboard inset, flexible header title"
+    terminal_state: closed_in_commit
+    commit: "referral-unit-c-client (the commit that adds this file; find it with: git log --diff-filter=A --format=%h -- docs/audit/referral-unit-c-client.closure.yaml)"
+    verification: "surfaces test: rule text and no 'you both get', counters below the action, fits 360x640 at 1x and 2x text with a 300-dp keyboard (Ahem, the widest face; the header Row overflowed 58 px at 1x before the title was made Expanded)"
+
+  - id: C4
+    title: "_applyCode repair (diagnose a7d3c1, recurrence of d2b9e6): the invite sheet masked every thrown error as 'Could not apply code', showed '+7 days' on any 200 and never verified the subscription; now ReferralRepository.redeem, the server's reason, alreadyRedeemed, verifyFromServer(force: true) and the eligibility invalidation"
+    terminal_state: closed_in_commit
+    commit: "referral-unit-c-client (the commit that adds this file; find it with: git log --diff-filter=A --format=%h -- docs/audit/referral-unit-c-client.closure.yaml)"
+    verification: "docs/diagnoses/2026-10-17-invite-sheet-apply-code-masks-server-reason-a7d3c1.md; surfaces test group InviteFriendsSheet (paid friend 400 text, alreadyRedeemed, fresh success verify + invalidation); repointed referral_redeem_success_contract_test and referral_repository_only_test"
+
+  - id: C5
+    title: "apply_referral_sheet: verifyFromServer(force: true) (the plain call is cached for 5 minutes) and the friend disclosure line"
+    terminal_state: closed_in_commit
+    commit: "referral-unit-c-client (the commit that adds this file; find it with: git log --diff-filter=A --format=%h -- docs/audit/referral-unit-c-client.closure.yaml)"
+    verification: "surfaces test group ApplyReferralSheet; lifecycle_and_pins test (force: true presence)"
+
+  - id: C6
+    title: "in-app credit notice: ReferralCreditNoticeNotifier (single-flight per account, 6-hour resume throttle, per-account state, token captured before every await, owner guard, forced verify once per total) + the pure creditNoticeFor + ReferralCreditSlot on Home; first run silent (founder decision 2026-10-16)"
+    terminal_state: closed_in_commit
+    commit: "referral-unit-c-client (the commit that adds this file; find it with: git log --diff-filter=A --format=%h -- docs/audit/referral-unit-c-client.closure.yaml)"
+    verification: "test/contracts/referral_credit_notice_behavioral_test.dart (19 tests: the decision against the real user box, single-flight, throttle, account swaps incl. a summary completing after the swap, guards) + pure table + surfaces group ReferralCreditSlot"
+
+  - id: C7
+    title: "referral_credit_seen_days registered in UserConfigMigrator.userScopedKeys; sign-out lifecycle test (the registry did not fail any existing test when forgotten)"
+    terminal_state: closed_in_commit
+    commit: "referral-unit-c-client (the commit that adds this file; find it with: git log --diff-filter=A --format=%h -- docs/audit/referral-unit-c-client.closure.yaml)"
+    verification: "test/contracts/referral_unit_c_lifecycle_and_pins_test.dart (lands in the user box, absent from configBox, gone after clearAllData)"
+
+  - id: C8
+    title: "X7 client half: the friend disclosure line on all four code-entry surfaces (invite sheet, apply sheet, sign-up form, onboarding welcome)"
+    terminal_state: closed_in_commit
+    commit: "referral-unit-c-client (the commit that adds this file; find it with: git log --diff-filter=A --format=%h -- docs/audit/referral-unit-c-client.closure.yaml)"
+    verification: "surfaces tests render the line on each of the four screens (the welcome screen at 1.5x text on 360x640); presence pin over the four files"
+
+  - id: C9
+    title: "Phone OTP wording: root CLAUDE.md Auth row and lib/features/auth/CLAUDE.md already say NOT live (plan commit); lib/core/services/supabase_service.dart comment and the stale writer name validate-referral in lib/features/profile/CLAUDE.md fixed"
+    terminal_state: closed_in_commit
+    commit: "referral-unit-c-client (the commit that adds this file; find it with: git log --diff-filter=A --format=%h -- docs/audit/referral-unit-c-client.closure.yaml)"
+    verification: "lifecycle_and_pins test: the Auth row says 'Phone OTP is NOT live'"
+
+  - id: C10
+    title: "docs and registry: SoT concept referral_credit_notice + the client reader on referrer_summary, naming conventions, functionality-flow PROF-22, profile and home CLAUDE.md, OI-336 narrowed, 159 ledger U2 re-pointed, context-artifact budget checked (13 within band, no re-baseline needed)"
+    terminal_state: closed_in_commit
+    commit: "referral-unit-c-client (the commit that adds this file; find it with: git log --diff-filter=A --format=%h -- docs/audit/referral-unit-c-client.closure.yaml)"
+    verification: "pre-commit gate loop run on the staged tree before the review (Gate 40, SoT parity, generic-error telemetry, nested CLAUDE.md gate, context-artifact budget); it is re-run at the commit"
+
+  - id: C11
+    title: "mutation proof (CLAUDE.md 4.4 rule 21): the unit's protections reddened by deliberate mutants"
+    terminal_state: closed_in_commit
+    commit: "referral-unit-c-client (the commit that adds this file; find it with: git log --diff-filter=A --format=%h -- docs/audit/referral-unit-c-client.closure.yaml)"
+    verification: "25 deliberate mutants of the unit's source each reddened at least one new test (swap joined/subscribed; announce the total not the difference; announce on first run; no re-baseline on a lower total; drop the account check after the fetch; drop the owner guard; verify without force; write the scalar at announce time; no single-flight; unknown as zeros; ignore the kill switch; sheet drops the forced verify; alreadyRedeemed claims +7; counters at zero joined; drop the sheet scroll; skeleton as a spinner; key not user-scoped; no resume throttle; resume stamp / verified memory not reset per account; PGRST202 not expected; dismiss stores the days not the total; Home slot not mounted; telemetry swallowed; absence check inverted). Each application was confirmed by a one-occurrence count before the run. A 26th mutant (naming redeem-referral inside a comment) survived and is equivalent: the pins strip comments on purpose; its real variant (a live callFunction('redeem-referral') in the sheet) reddened referral_repository_only_test. Script and log: session scratchpad mutate_unitc.py / mutants_unitc.log."
+
+  - id: U2
+    title: "unit C reaches users: merge, a /build-apk the founder starts, the device check of the counters block and the notice"
+    terminal_state: blocked_on_user
+    reason: "Founder-owned: the commit/merge go, the build, and the device check (OI-348 rows A10 and B1 (OI-348 is filed on branch `pending-checks-oi` and must land before or with this branch)). The old ledger row U2 points here."
+
+  - id: X7
+    title: "the aggregates' residual and the privacy-policy sentence (the friend half is C8)"
+    terminal_state: blocked_on_user
+    reason: "The privacy policy sits outside the repo; the founder pastes the sentence (draft given in chat 2026-10-17). The in-app line says 'how many of their friends joined and subscribed' (true of the aggregates); it does not say that with ONE friend the aggregate identifies that friend (B-pass F8, migration 160 residual): whether the line should say so is part of the founder's wording review. OI-336 stays open as the board owner."
+
+  - id: W2X
+    title: "onboarding welcome screen at 2x text on a 640-dp phone: it overflowed 28 px on the right BEFORE this unit (measured on the unmodified file, Ahem), and the extra disclosure line adds bottom overflow there; it fits through 1.5x"
+    terminal_state: blocked_on_user
+    reason: "A fix is a layout restructure of the first screen (the CTA column does not scroll), a different unit from the referral surface; the founder decides whether 2x system font on that screen is a supported case. Filed as OI-349."
+
+  - id: BP-A1
+    title: "B-pass seat A P2: a second concurrent check skipped the forced verify and the first could resurrect a dismissed card"
+    terminal_state: closed_in_commit
+    commit: "referral-unit-c-client (the commit that adds this file; find it with: git log --diff-filter=A --format=%h -- docs/audit/referral-unit-c-client.closure.yaml)"
+    verification: "every concurrent check awaits ONE shared verify future and re-decides after it; tests in referral_credit_notice_behavioral_test.dart (no card until the verify completes; a re-baseline during the wait is not overwritten); mutants N1, N2, N4 killed"
+
+  - id: BP-A2
+    title: "seat A P3: the 6-hour resume throttle was stamped before the read, so an offline resume blocked the next six hours"
+    terminal_state: closed_in_commit
+    commit: "referral-unit-c-client (the commit that adds this file; find it with: git log --diff-filter=A --format=%h -- docs/audit/referral-unit-c-client.closure.yaml)"
+    verification: "stamped only after a read that answered; test 'a resume whose read did not answer does not start the throttle'; mutant N3 killed"
+
+  - id: BP-A3
+    title: "seat A P3: a sign-out discards an unseen credit (the next sign-in baselines silently)"
+    terminal_state: verified_clean
+    evidence: "the plan's stated re-baseline (section 2.3): the per-user box is cleared on sign-out and the first evaluation is silent by the founder's decision; the invite sheet's PRO DAYS EARNED tile always shows the running total"
+
+  - id: BP-A4
+    title: "seat A P3: the invite sheet can make a second RPC after the code loads (single flight dedupes only overlapping calls)"
+    terminal_state: verified_clean
+    evidence: "no correctness impact, one extra RPC; the code comment and the plan build record now say so instead of 'never doubles the call'"
+
+  - id: BP-B1
+    title: "seat B P2: the invite copy overpromised ('when a friend subscribes' ignored the first-payment, 90-day and cancel conditions of migration 159)"
+    terminal_state: closed_in_commit
+    commit: "referral-unit-c-client (the commit that adds this file; find it with: git log --diff-filter=A --format=%h -- docs/audit/referral-unit-c-client.closure.yaml)"
+    verification: "ReferralCopy.inviteDescription now states: within 90 days, a week after the first payment, 30 for yearly, unless they cancel in that week; surfaces test asserts 'within 90 days' and 'unless they cancel'; conditions read from supabase/migrations/159 (c_window 90 days, first qualifying payment, void on cancel)"
+
+  - id: BP-B2
+    title: "seat B P2: the 'dismissal write after the account changed is dropped' test was vacuous (build() resets the state first; the token check in _writeSeen is unreachable between two synchronous calls)"
+    terminal_state: closed_in_commit
+    commit: "referral-unit-c-client (the commit that adds this file; find it with: git log --diff-filter=A --format=%h -- docs/audit/referral-unit-c-client.closure.yaml)"
+    verification: "the test is renamed to what it proves (previous account's card gone, a dismiss from the new account writes nothing); the unreachable check is documented as defence in depth in the plan build record; the real protections are killed by M05/M06/M22"
+
+  - id: BP-B3
+    title: "seat B P3: SoT registry line_range entries pointed at the wrong code"
+    terminal_state: closed_in_commit
+    commit: "referral-unit-c-client (the commit that adds this file; find it with: git log --diff-filter=A --format=%h -- docs/audit/referral-unit-c-client.closure.yaml)"
+    verification: "redeem/class entry 70-225, referrerSummary 103-140; check_sot_registry_parity PASS"
+
+  - id: BP-B4
+    title: "seat B P3: unverifiable doc claims (OI-348 lives only on branch pending-checks-oi; the budget was not re-baselined; the gate loop was claimed before it ran)"
+    terminal_state: closed_in_commit
+    commit: "referral-unit-c-client (the commit that adds this file; find it with: git log --diff-filter=A --format=%h -- docs/audit/referral-unit-c-client.closure.yaml)"
+    verification: "every OI-348 citation now says it is filed on branch pending-checks-oi and must land before or with this branch; the budget was checked (13 within band) and the ledger row says so; the gate loop wording is exact"
+
+  - id: BP-B5
+    title: "seat B P3: ReferralRepository.redeem failed OPEN on a 200 without success (the old sheet required success:true)"
+    terminal_state: closed_in_commit
+    commit: "referral-unit-c-client (the commit that adds this file; find it with: git log --diff-filter=A --format=%h -- docs/audit/referral-unit-c-client.closure.yaml)"
+    verification: "the 200 path now returns a failure unless body.success == true; pure tests (empty, wrong type, null, error body) and a sheet test; mutant killed. The stale comment at supabase/functions/redeem-referral/index.ts:158-159 is left: editing an Edge Function file for a comment would put the repo ahead of the deployed bundle"
+
+  - id: BP-B6
+    title: "seat B P3: layout - the skeleton can shift the apply field; every sheet test ran the REGENERATE state; the keyboard test asserted no overflow only"
+    terminal_state: closed_in_commit
+    commit: "referral-unit-c-client (the commit that adds this file; find it with: git log --diff-filter=A --format=%h -- docs/audit/referral-unit-c-client.closure.yaml)"
+    verification: "InviteFriendsSheet.loadCodeForTest renders the SHARE state; the new test asserts the counters sit below the Share button and that the apply field can be scrolled to and typed into with a 300-dp keyboard; the call is started post-frame while the code loads, so the block normally has its data on first paint"
+
+  - id: BP-B7
+    title: "seat B P3: accessibility - the Semantics label omitted PENDING, 9 px tile labels, the welcome disclosure used textMute (about 3.7:1)"
+    terminal_state: closed_in_commit
+    commit: "referral-unit-c-client (the commit that adds this file; find it with: git log --diff-filter=A --format=%h -- docs/audit/referral-unit-c-client.closure.yaml)"
+    verification: "label now includes the pending count (surfaces test), tile labels 10 px, the welcome disclosure uses textDim"
+
+  - id: BP-B8
+    title: "seat B P3: the in-app friend disclosure is true but does not say that with ONE friend the aggregate identifies that friend (migration 160 residual)"
+    terminal_state: blocked_on_user
+    reason: "the founder's wording review decides whether the line should say so; the privacy-policy sentence (row X7) states it plainly in the draft given in chat"

@@ -1,0 +1,95 @@
+# Closure ledger - log-exercise-batch2 (OI-356, batch 2 of the founder's 2 + 1 split, 2026-10-19):
+# UNDO toast after LOG, the MIRROR of set 1's typed weight/duration/distance, last-exercise emphasis.
+# Ship dark behind enable_log_exercise_button (default OFF), like U1a.
+# `log-exercise-batch2@branch` is the in-branch commit form (precedent: unitb-deload-reason.closure.yaml):
+# a commit cannot name its own SHA; `git log --grep='closes-oi: OI-356'` finds it.
+# Mutation evidence: every row below names the mutation and how many tests reddened; each mutation was a
+# single-match replacement confirmed applied (count == 1) and reverted after the run.
+batch: log-exercise-batch2
+plan_review_record: docs/plan-reviews/log-exercise-batch2.md
+diagnose_docs:
+  - docs/diagnoses/2026-10-20-log-undo-toast-staleness-c7d2a9.md
+total_findings: 16
+closed_count: 16
+
+findings:
+  - id: B2-UNLOG-WRITER
+    title: "ActiveWorkoutNotifier.unlogSets: unchecks exactly the given sets in ONE state change; refuses on a name mismatch at the index, out-of-range indexes, a saved/complete session, or while completeWorkout runs"
+    terminal_state: closed_in_commit
+    commit: log-exercise-batch2@branch
+    verification: "test/contracts/active_workout_set_logging_behavioral_test.dart group 'unlogSets (UNDO writer, batch 2)' (three-exercise identity fixture, round trip with logSets, bounds, saved). Mutations RED: N4 (name check dropped) 1 test, N5 (removes every set of the exercise) 3 tests."
+  - id: B2-COMPLETION-RACE
+    title: "UNDO cannot remove sets while the un-awaited completeWorkout() runs (_completing set after the isSaved return, reset at the top of startWorkout only)"
+    terminal_state: closed_in_commit
+    commit: log-exercise-batch2@branch
+    verification: "same file, group 'completion race': test 11 drives the REAL completeWorkout un-awaited inside fakeAsync and asserts unlogSets refuses; test 11b proves startWorkout resets the flag. Mutations RED: N1 (no `_completing = true`) 2 tests, N2 (check dropped from unlogSets) 1, N3 (no reset in startWorkout) 1."
+  - id: B2-UNDO-GATES
+    title: "pure UNDO gates in log_exercise_logic.dart: undoRecordFor (exactly the sets the LOG checked; null while a save runs), visibleUndoRecord (5 s window, saved, bounds, name identity, every set still checked), shouldIgnoreUndo (400 ms), logToastText, allExercisesLogged"
+    terminal_state: closed_in_commit
+    commit: log-exercise-batch2@branch
+    verification: "test/features/train/log_exercise/log_exercise_logic_test.dart UNDO group. Mutations RED, 1 test each: P1 (bounds check removed, RangeError after a removal), P2 (sets-still-checked loop removed), P3 (completing ignored), P4 (`<=` at the 400 ms boundary), P5 (allExercisesLogged ignores isSaved), P6 (warm-ups counted in the toast), P7 (window `>`), P8 (visibleUndoRecord ignores isSaved)."
+  - id: B2-TOAST-WIDGET
+    title: "LogUndoToast: in-tree (never a SnackBar, so the b4e7f1/s1n4c0 class cannot recur), body and background IgnorePointer, only UNDO hit-testable (44 x 64 minimum), one-line text that never overflows"
+    terminal_state: closed_in_commit
+    commit: log-exercise-batch2@branch
+    verification: "test/features/train/log_exercise/log_undo_toast_test.dart (3 tests). Mutations RED, 1 test each: W1 text IgnorePointer(ignoring: false), W2 background IgnorePointer(ignoring: false), W3 Expanded -> SizedBox (long-name overflow), W4 UNDO not wired. W1/W2 were first tried with a non-compiling edit; that run was discarded as proof. Dropping only maxLines/ellipsis stays GREEN (the test pins no-overflow through Expanded, not the ellipsis glyph); stated, not claimed as coverage."
+  - id: B2-SCREEN-WIRING
+    title: "screen: record created on a `logged` outcome only, toast at the top of the list (LOG mode only), generation-checked Timer, UNDO = shouldIgnoreUndo -> clear -> unlogSets -> focus; Timer cancelled in dispose and in the completion listener; FINISH's COMPLETE clears the toast via onComplete before the un-awaited save; UNDO never touches ActiveWorkoutPersistence"
+    terminal_state: closed_in_commit
+    commit: log-exercise-batch2@branch
+    verification: "source pins in active_workout_set_logging_behavioral_test.dart (presence only: the screen is a private `part of` State over many providers; behaviour is proven on the units above). Mutation S1 (`_showLogUndo` call removed): RED on its pin."
+  - id: B2-MIRROR
+    title: "MIRROR: set 1's typed weight (loaded types), duration (timed/cardio) or distance (cardio/distance) copies into blank, untouched, non-warm-up, unlogged fields of the same exercise; a hand-edited field stops following; clearing the source clears its followers; flag OFF unchanged"
+    terminal_state: closed_in_commit
+    commit: log-exercise-batch2@branch
+    verification: "test/features/train/log_exercise/log_exercise_card_test.dart group 'batch 2 mirror' (tests 12-19b, new-user fixture) + logic tests mirrorFieldsFor/mirrorSourceIndex/mirrorTargets. Mutations RED: C1 (mirror call removed) 9 tests, C2 (blank-only targets) 5, C3 (no text check) 2, C4 (per-field change detection removed) 1, C5 (empty source skipped) 1, C6 (timed mirrors weight) 1, C7 (logged-set exclusion dropped) 1, C10 (OFF leak) 2."
+  - id: B2-MIRROR-SEEDING
+    title: "`+` registers the new set as a follower only when it was seeded from the current source or from a set still showing its mirrored value (seedIndexForAddedSet); the source re-baselines when a warm-up flag moves it"
+    terminal_state: closed_in_commit
+    commit: log-exercise-batch2@branch
+    verification: "card tests 18 (returning user) and 18b (source moves). Mutations RED: C8 (every seed registered) 1 test, C9 (no re-baseline) 1 test. The `_mirrored` trim on shrink is NOT separately observable (a stale mark is re-registered or overwritten on `+`); kept as defensive bookkeeping, recorded as such, not as coverage."
+  - id: B2-LAST-EXERCISE
+    title: "last-exercise emphasis: 'All exercises logged.' above FINISH and FINISH outline until every exercise is logged (LOG mode only; review mode and flag OFF keep primary)"
+    terminal_state: closed_in_commit
+    commit: log-exercise-batch2@branch
+    verification: "allExercisesLogged pure tests (P5 RED) + FINISH variant source pin in the behavioral file."
+  - id: B2-U1A-REPOINT
+    title: "the U1a blocked-state card test (types set 1, expected sets 2-3 blank) repointed for the mirror: clear set 2 -> Add weight -> focus field 2"
+    terminal_state: closed_in_commit
+    commit: log-exercise-batch2@branch
+    verification: "U1a mutation M8 re-run on the repointed test: blocked tap focuses nothing -> RED 2 tests; focus always set 1 -> RED 2 tests. A first attempt mutated `_onLogPressed`'s focus call (wrong site, GREEN) and was discarded."
+  - id: B2-DUPLICATE-NAME
+    title: "adding an exercise already in the session crashes the screen (shared GlobalKey per name); the UNDO identity check assumes unique names"
+    terminal_state: upstream_blocked
+    blocker: "pre-existing defect outside this batch's scope (round-1 P2-12), filed as OI-358 with the two fix options"
+    reopen_when: "OI-358 is planned; its fix must keep visibleUndoRecord's name identity valid (or move the record to the per-session id)"
+  - id: TESTS
+    title: "full suite on the final tree, flutter analyze lib/, the pre-commit gate loop"
+    terminal_state: closed_in_commit
+    commit: log-exercise-batch2@branch
+    verification: "TZ=Asia/Kolkata flutter test --exclude-tags golden on the pre-B-pass tree: 9878 passed, 10 skipped, 1 failed: test/scripts/closes_oi_performed_e2e_test.dart, ENVIRONMENTAL (it asserts empty stderr; this cloud container runs flutter as root and prints a root banner; the same file passes 6/6 with BOT=true, and this diff does not touch it; same as U1a). After the B-pass fixes: test/features/train + test/train + test/contracts 5974 passed, 1 skipped, 0 failed. flutter analyze lib/: no error or warning, no issue in a touched file. sh scripts/pre-commit.sh: OK."
+  - id: BPASS
+    title: "/code-review B-pass (fresh read-only Sonnet reviewer, staged diff 8812992b4995): 1 P0, 0 P1, 3 P2, 0 false alarms, all fixed in this batch (rows BP1-BP4)"
+    terminal_state: closed_in_commit
+    commit: log-exercise-batch2@branch
+    verification: "this batch's review file in docs/reviews/ (staged_against 8812992b4995). The reviewer also proposed 7 mutants; the 4 behavioural ones were run and all reddened (R1 trim dropped 1, R2 `if (!removed)` deleted 1, R3 mirror moved below the checked return 11, R4 toast counts warm-ups 1); R5 duplicates P7; R6/R7 are presence pins (the screen State is not pumped)."
+  - id: BP1
+    title: "P0 - the list host swapped between a bare ListView and a Stack, so every toast show/clear rebuilt the list (scroll reset; off-screen cards disposed with typed, unlogged values)"
+    terminal_state: closed_in_commit
+    commit: log-exercise-batch2@branch
+    verification: "LogUndoToastHost (log_undo_toast.dart): one Stack(fit: expand) in LOG mode, the bare list with the flag OFF. log_undo_toast_test.dart host tests: scroll offset 1500 and the Scrollable's and a row's State identical across show and clear; no Stack when disabled. Mutations RED: F1 (host returns the bare list when no toast, the shipped shape) 1 test; F1b (Stack with the flag OFF) 1 test."
+  - id: BP2
+    title: "P2 - after a warm-up moved the mirror source, the first keystroke only re-baselined, so a one-digit entry never mirrored"
+    terminal_state: closed_in_commit
+    commit: log-exercise-batch2@branch
+    verification: "_rebaselineIfSourceMoved in didUpdateWidget (LOG mode only). Card test 18c. Mutation F2 (helper returns immediately): RED 1 test (18c)."
+  - id: BP3
+    title: "P2 - the `from == _lastSourceIndex` follower branch of `+` seeding was unreached by any test"
+    terminal_state: closed_in_commit
+    commit: log-exercise-batch2@branch
+    verification: "card test 18d (one-set exercise, + then edit set 1). Mutation F3 (`from == _lastSourceIndex ||` -> `false ||`): RED 1 test (18d)."
+  - id: BP4
+    title: "P2 - OI-358 and the plan cited pre-batch line numbers"
+    terminal_state: closed_in_commit
+    commit: log-exercise-batch2@branch
+    notes: "OI-358 now cites train_provider.dart:1642-1646 and screen.dart:438/481; the plan states both the pre-batch and the built lines."

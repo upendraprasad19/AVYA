@@ -1,0 +1,94 @@
+# Closure ledger — gate registry + red/green test rule. Gate 40
+# (validate_audit_closure.dart). One terminal_state per item; no `deferred:` key.
+# 10 items, over the §4.2 >=4 threshold. Branch: gate-registry.
+#
+# No diagnose-doc: this is new tooling + a process rule, not a bug fix. The
+# commits are `feat(gates):` / `refactor(gates):` / `docs(gates):` / `chore(gates):`,
+# none of which match rule 22's `^(fix|bug|regression)` pattern. GR-9/GR-10 are
+# review findings on UNMERGED code, caught by this batch's own B-pass before the
+# merge — their durable record is docs/reviews/gate-registry-bpass.md plus these
+# entries, which is the right artifact for a review finding. A `fix(` subject was
+# tried first and correctly BLOCKED by the commit-msg gate; the fix was to label
+# the commit honestly, not to manufacture a diagnose-doc for a defect that never
+# reached main.
+
+batch: gate-registry
+total_findings: 10
+closed_count: 10
+
+_a: &a "ed164459 (commit A — detection gate)"
+_b: &b "gate-registry commit B (refactor)"
+_c: &c "gate-registry commit C (rule 24)"
+_d: &d "gate-registry commit D (B-pass closure)"
+
+findings:
+  - id: GR-1
+    title: "A gate number was ambiguous: 'Gate 44' named two unrelated scripts, so a citation could not be resolved to a script at all — and the question was not even mechanically answerable"
+    terminal_state: closed_in_commit
+    commit: *a
+    verification: "`dart run scripts/build_gate_index.dart` now answers it mechanically and reproducibly. Before this existed, five surveys in one session returned five DIFFERENT collision counts (1 -> 3 -> 2 -> 3 -> 4 -> 5). The generator independently reproduced the final set — 7, 18(x3), 19, 23, 44 — which is the first time the question was answered the same way twice."
+    notes: "Root cause of all five wrong answers was the same: a too-narrow input set. sed/awk broken by backslash escaping; a scan matching `// Mirrors Gate 17` as a declaration; a check_*.dart glob blind to validate_audit_closure.dart (Gate 40); a regex blind to the `Gate 18.` / `Gate 18)` forms; and one blind to the closure ledgers. Six instances of feedback_green_check_input_set_width on ONE question."
+
+  - id: GR-2
+    title: "5 gate-number collisions (7, 18 x3, 19, 23, 44) across 84 gates"
+    terminal_state: closed_in_commit
+    commit: *b
+    verification: "Generator goes from `5 problem(s)` to `PASS — 86 gates, 49 numbered, no collisions`, with --warn-only removed from the pre-commit regen block so a duplicate now BLOCKS. 6 scripts renumbered to 49-54."
+    notes: "Ladder fixed BEFORE it was applied: rung 4 is a TIME, not a file offset. An earlier draft read YAML line order as chronology and INVERTED Gate 44; `git log -1` on the two minting commits (18f0296 21:00:22 vs 83bd4cb 21:43:40) settled it."
+
+  - id: GR-3
+    title: "A gate could ship with a non-discriminating test — one that passes whether or not the gate works. On 2026-08-10, 84 gates existed and only 6 test files in the whole repo asserted a red path"
+    terminal_state: closed_in_commit
+    commit: *c
+    verification: "CLAUDE.md rule 24 + docs/audit/gate_test_ledger.yaml + check_gate_test_ledger.dart, which requires a mutation_proven claim to name a test that EXISTS, REFERENCES the gate, and CONTAINS a red-path assertion. `[gate-test-ledger] PASS — 86 gates, all with exactly one ledger state (84 grandfathered 2026-08-10, closed)`."
+    notes: "Stated limit, in the gate header and in rule 24: a script cannot prove a mutation was RUN. It CAN prove the test exists, names the gate, and asserts a failing path — which makes the Gate-44 class mechanically impossible. The residue is self-attested and read by the x2 plan review, the same trust model as Gate 42's `presence_only:`."
+
+  - id: GR-4
+    title: "Source 4 (closure ledgers as a claim source) directly conflicts with the rule that historical records are never rewritten — the registry becomes UNBUILDABLE after any renumber"
+    terminal_state: closed_in_commit
+    commit: *b
+    verification: "Found during execution, by neither review round: 2026_05_20_audit_closures.yaml:237,315 mints Gate 7 for check_writeservice_only.dart, which commit B renumbers to 49, and that mint cannot be corrected at its source. Rule added: a ledger mint creates a claim only for a script that declares NOTHING itself; once a script carries `// Gate: N` its own declaration wins and the mint is listed under 'Superseded ledger mints'. Mutation: supersede ALL mints -> 1 test red."
+    notes: "Not a loophole, and two tests hold it there: two declarations on one number still hard-fail even when one also has a superseded mint, and a mint for an UNDECLARED script still creates a real claim — which is exactly what made Gate 45 and Gate 7 discoverable."
+
+  - id: GR-5
+    title: "The introducing commit would have been blocked by its own pre-commit hook — the builder hard-fails on the 5 live collisions, and every regen block is `if ! dart run ...; then exit 1`"
+    terminal_state: closed_in_commit
+    commit: *a
+    verification: "`build_gate_index.dart --warn-only` writes the index with collisions MARKED and exits 0; commit B removes the flag. Bounded by its own e2e test asserting --warn-only still REPORTS and the written index still contains the COLLISION markers, so it cannot silently become a permanent bypass. Mutation: make --warn-only unconditional -> 4 tests red."
+    notes: "Round-2 finding. It also broke the §4.11 substitution argument, since the baseline commit B is checked against could never have been produced."
+
+  - id: GR-6
+    title: "The canonical-format migration was undeclared work: ZERO of the 44 numbered gates used `// Gate: N`, so the generator would have found nothing"
+    terminal_state: closed_in_commit
+    commit: *a
+    verification: "`grep -lE '^// Gate: [0-9]+[a-z]?$' scripts/*.dart | wc -l` goes 0 -> 49, matching the plan's pre-stated prediction exactly. 49 = 44 existing header declarers + 4 numbered only by build-apk.md or a ledger + validate_audit_closure.dart."
+    notes: "The count was corrected from 48 to 49 in round 2 — validate_audit_closure.dart is inside the `scripts/*.dart` glob. The plan also had `grep -clE`, which prints filename:count and cannot produce a total."
+
+  - id: GR-7
+    title: "Hard-fail 4 (the unregistered-declaration scan) was VACUOUS as first written, then OVER-FIRED as first corrected"
+    terminal_state: closed_in_commit
+    commit: *a
+    verification: "v1 checked that a globbed check_*.dart appeared in output generated FROM that glob — cannot fail. Round 2's proposed narrowing (`^//\\s*Gate\\s*:?\\s*\\d`) still matches worktree_config_integrity_lib.dart:7 (`// Gate 33) treat only the gate itself as a gate...`), verified directly. Final rule keys on the CANONICAL form, which matches 0 of 84 files today — no false positives by construction — and is not circular, since the scan covers all of scripts/ while the index is built from check_* + _extraGateScripts."
+    notes: "An e2e test pins both directions: a rogue `validate_*` declaring a number fails, and a pure lib with a PROSE gate mention does not."
+
+  - id: GR-8
+    title: "Two `unnecessary_non_null_assertion` WARNINGS shipped into the new lib and were missed by the author's own verification"
+    terminal_state: closed_in_commit
+    commit: *a
+    verification: "`flutter analyze --no-fatal-infos scripts/gate_index_lib.dart` -> 0 warnings/errors. Caught only when the commit failed."
+    notes: "Cause worth recording: the author ran `flutter analyze ... | tail -8` and saw only infos. The warnings were ABOVE the tail. Checking severity requires grepping for it, not reading the end of the output — the same input-set-width error this whole batch is about, committed against the batch's own verification step. Subsequent checks use `grep -cE '^\\s*(error|warning)'`."
+
+  - id: GR-9
+    title: "B-pass P2-1 — extractPurpose accepted BARE PUNCTUATION as a gate's purpose, so 2 of 87 index rows rendered as a lone '.'"
+    terminal_state: closed_in_commit
+    commit: *d
+    verification: "`_purposeStrip` consumes a header like `// Gate (Track 2 of the ... batch).` entirely except the trailing `.`, and the loop rejected only an EMPTY piece — so '.' was accepted, and the blank comment line immediately after ended the loop, so the real description one paragraph down never surfaced. Confirmed live: `grep -nE '\| \. \|' docs/audit/GATE_INDEX.md` returned check_blast_radius_coverage.dart and check_code_review_pass_exists.dart, both of which have real summaries two lines lower. Fix: reject a piece with no word character. After: 0 rows. Regression test built from the verbatim check_blast_radius_coverage.dart header; MUTATION: revert the guard to `piece.isEmpty` -> 1 test red."
+    notes: "Found by the self-initiated B-pass (docs/reviews/gate-registry-bpass.md), independently re-verified against source before acceptance per feedback_audit_verifier_cannot_trust_own_subagent. Fixed in-batch, not carried (§4.2)."
+
+  - id: GR-10
+    title: "B-pass P2-2 — the ledger's own header cited '(Gate 55)' for a gate that deliberately carries NO number, contradicting the forward-minting rule the same batch introduces"
+    terminal_state: closed_in_commit
+    commit: *d
+    verification: "`grep -c 'Gate 55' docs/audit/gate_test_ledger.yaml` -> 0 after the fix. 55 was merely nextFreeNumber() at authoring time, never an assignment."
+    notes: "More than cosmetic: the string sits in the exact `scripts/xxx.dart (Gate N)` shape `_mintForward` matches (gate_index_lib.dart:232-233). It is inert only because build_gate_index.dart's isLedger predicate does not glob this filename — a landmine if that glob is ever widened. This is the SECOND self-consistency slip of the same kind in one batch: the gate itself first shipped as `// Gate: 55` before that was caught and removed in commit C."
+

@@ -1,0 +1,2797 @@
+{
+  "G0103": {
+    "_gif": "0103",
+    "_folder": "Barbell Standing Ab Rollout"
+  },
+  "G0805": {
+    "_gif": "0805",
+    "_folder": "Suspended Abdominal Fallout"
+  },
+  "G0419": {
+    "_gif": "0419",
+    "_folder": "Dumbbell Standing Front Raise Above Head"
+  },
+  "G1712": {
+    "_gif": "1712",
+    "_folder": "Side Lying Adductor Stretch"
+  },
+  "G0517": {
+    "_gif": "0517",
+    "_folder": "Kettlebell Advanced Windmill"
+  },
+  "G0537": {
+    "_gif": "0537",
+    "_folder": "Kettlebell Single Arm Clean and Jerk"
+  },
+  "G0028": {
+    "_gif": "0028",
+    "_folder": "Barbell Clean and Press"
+  },
+  "G1368": {
+    "_gif": "1368",
+    "_folder": "Ankle Circles"
+  },
+  "G3669": {
+    "_gif": "3669",
+    "_folder": "Standing Archer"
+  },
+  "G0523": {
+    "_gif": "0523",
+    "_folder": "Kettlebell Arnold Press"
+  },
+  "G2143": {
+    "_gif": "2143",
+    "_folder": "Dumbbell Standing Around World"
+  },
+  "G3297": {
+    "_gif": "3297",
+    "_folder": "Back Lever"
+  },
+  "G1352": {
+    "_gif": "1352",
+    "_folder": "Lower Back Curl"
+  },
+  "G0573": {
+    "_gif": "0573",
+    "_folder": "Back Extension"
+  },
+  "G3117": {
+    "_gif": "3117",
+    "_folder": "Band Fixed Back Close Grip Pulldown"
+  },
+  "G0239": {
+    "_gif": "0239",
+    "_folder": "Cable Straight Back Seated Row"
+  },
+  "G3144": {
+    "_gif": "3144",
+    "_folder": "Resistance Band Seated Straight Back Row"
+  },
+  "G0746": {
+    "_gif": "0746",
+    "_folder": "Smith Back Shrug"
+  },
+  "G0690": {
+    "_gif": "0690",
+    "_folder": "Seated Lower Back Stretch"
+  },
+  "G1365": {
+    "_gif": "1365",
+    "_folder": "Upper Back Stretch"
+  },
+  "N10": {},
+  "G1473": {
+    "_gif": "1473",
+    "_folder": "Backward Jump"
+  },
+  "G0020": {
+    "_gif": "0020",
+    "_folder": "Balance Board"
+  },
+  "G0640": {
+    "_gif": "0640",
+    "_folder": "Medicine Ball Single Arm Slam"
+  },
+  "G1680": {
+    "_gif": "1680",
+    "_folder": "Dumbbell Incline Bench Curl"
+  },
+  "G1285": {
+    "_gif": "1285",
+    "_folder": "Dumbbell Single Arm Bench Fly"
+  },
+  "G0488": {
+    "_gif": "0488",
+    "_folder": "Bench Hyperextension"
+  },
+  "G0130": {
+    "_gif": "0130",
+    "_folder": "Bench Kickback"
+  },
+  "G1254": {
+    "_gif": "1254",
+    "_folder": "Band Bench Press"
+  },
+  "G1719": {
+    "_gif": "1719",
+    "_folder": "Barbell Incline Close Grip Bench Press"
+  },
+  "G1256": {
+    "_gif": "1256",
+    "_folder": "Barbell Reverse Grip Decline Bench Press"
+  },
+  "G1257": {
+    "_gif": "1257",
+    "_folder": "Barbell Reverse Grip Incline Bench Press"
+  },
+  "G0122": {
+    "_gif": "0122",
+    "_folder": "Barbell Wide Bench Press"
+  },
+  "G1258": {
+    "_gif": "1258",
+    "_folder": "Barbell Wide Reverse Grip Bench Press"
+  },
+  "G0290": {
+    "_gif": "0290",
+    "_folder": "Dumbbell Bench Seated Press"
+  },
+  "G0352": {
+    "_gif": "0352",
+    "_folder": "Dumbbell Neutral Grip Bench Press"
+  },
+  "G1623": {
+    "_gif": "1623",
+    "_folder": "Dumbbell Palms in Incline Bench Press"
+  },
+  "G1624": {
+    "_gif": "1624",
+    "_folder": "Dumbbell Reverse Bench Press"
+  },
+  "G1743": {
+    "_gif": "1743",
+    "_folder": "Dumbbell Twisting Bench Press"
+  },
+  "G0748": {
+    "_gif": "0748",
+    "_folder": "Smith Bench Press"
+  },
+  "G0751": {
+    "_gif": "0751",
+    "_folder": "Smith Close Grip Bench Press"
+  },
+  "G0753": {
+    "_gif": "0753",
+    "_folder": "Smith Decline Bench Press"
+  },
+  "G0757": {
+    "_gif": "0757",
+    "_folder": "Smith Incline Bench Press"
+  },
+  "G1625": {
+    "_gif": "1625",
+    "_folder": "Smith Machine Decline Close Grip Bench Press"
+  },
+  "G1308": {
+    "_gif": "1308",
+    "_folder": "Smith Wide Grip Bench Press"
+  },
+  "G1309": {
+    "_gif": "1309",
+    "_folder": "Smith Wide Grip Decline Bench Press"
+  },
+  "G1317": {
+    "_gif": "1317",
+    "_folder": "Barbell Reverse Grip Incline Bench Row"
+  },
+  "G1331": {
+    "_gif": "1331",
+    "_folder": "Dumbbell Reverse Grip Incline Bench Arm Row"
+  },
+  "G0026": {
+    "_gif": "0026",
+    "_folder": "Barbell Bench Squat"
+  },
+  "G0291": {
+    "_gif": "0291",
+    "_folder": "Dumbbell Bench Squat"
+  },
+  "G2300": {
+    "_gif": "2300",
+    "_folder": "Inverted Row Bent Knees"
+  },
+  "G0524": {
+    "_gif": "0524",
+    "_folder": "Kettlebell Bent Press"
+  },
+  "N12": {},
+  "G0968": {
+    "_gif": "0968",
+    "_folder": "Band Alternating Bicep Curl"
+  },
+  "G0986": {
+    "_gif": "0986",
+    "_folder": "Band Single Arm Overhead Bicep Curl"
+  },
+  "G1634": {
+    "_gif": "1634",
+    "_folder": "Cable Lying Bicep Curl"
+  },
+  "G0285": {
+    "_gif": "0285",
+    "_folder": "Dumbbell Alternate Bicep Curl"
+  },
+  "G0322": {
+    "_gif": "0322",
+    "_folder": "Dumbbell Incline Inner Bicep Curl"
+  },
+  "G1661": {
+    "_gif": "1661",
+    "_folder": "Dumbbell Lying Supine Bicep Curl"
+  },
+  "G0382": {
+    "_gif": "0382",
+    "_folder": "Dumbbell Reverse Grip Bicep Curl"
+  },
+  "G0393": {
+    "_gif": "0393",
+    "_folder": "Dumbbell Seated Inner Bicep Curl"
+  },
+  "G2741": {
+    "_gif": "2741",
+    "_folder": "EZ Bar Standing Wide Grip Bicep Curl"
+  },
+  "G0575": {
+    "_gif": "0575",
+    "_folder": "Bicep Curl"
+  },
+  "G3123": {
+    "_gif": "3123",
+    "_folder": "Resistance Band Seated Bicep Curl"
+  },
+  "G1683": {
+    "_gif": "1683",
+    "_folder": "Smith Machine Bicep Curl"
+  },
+  "N01": {},
+  "G0262": {
+    "_gif": "0262",
+    "_folder": "Cross Body Crunch"
+  },
+  "G0493": {
+    "_gif": "0493",
+    "_folder": "Decline Pushup"
+  },
+  "G3561": {
+    "_gif": "3561",
+    "_folder": "Glute Bridge March"
+  },
+  "G1201": {
+    "_gif": "1201",
+    "_folder": "Dumbbell Burpee"
+  },
+  "G0844": {
+    "_gif": "0844",
+    "_folder": "Bus Driver"
+  },
+  "G0870": {
+    "_gif": "0870",
+    "_folder": "Butt Up"
+  },
+  "G0469": {
+    "_gif": "0469",
+    "_folder": "Groin Crunch"
+  },
+  "G2289": {
+    "_gif": "2289",
+    "_folder": "Calf Press"
+  },
+  "G2335": {
+    "_gif": "2335",
+    "_folder": "Seated Calf Press"
+  },
+  "G0999": {
+    "_gif": "0999",
+    "_folder": "Band Single Leg Calf Raise"
+  },
+  "G1000": {
+    "_gif": "1000",
+    "_folder": "Band Single Leg Reverse Calf Raise"
+  },
+  "G1370": {
+    "_gif": "1370",
+    "_folder": "Barbell Floor Calf Raise"
+  },
+  "G0088": {
+    "_gif": "0088",
+    "_folder": "Barbell Seated Calf Raise"
+  },
+  "G1372": {
+    "_gif": "1372",
+    "_folder": "Barbell Standing Calf Raise"
+  },
+  "G0108": {
+    "_gif": "0108",
+    "_folder": "Barbell Standing Leg Calf Raise"
+  },
+  "G0111": {
+    "_gif": "0111",
+    "_folder": "Barbell Standing Rocking Leg Calf Raise"
+  },
+  "G1373": {
+    "_gif": "1373",
+    "_folder": "Bodyweight Standing Calf Raise"
+  },
+  "G1375": {
+    "_gif": "1375",
+    "_folder": "Cable Standing Calf Raise"
+  },
+  "G1379": {
+    "_gif": "1379",
+    "_folder": "Dumbbell Seated Calf Raise"
+  },
+  "G0400": {
+    "_gif": "0400",
+    "_folder": "Dumbbell Seated Single Leg Calf Raise"
+  },
+  "G0409": {
+    "_gif": "0409",
+    "_folder": "Dumbbell Single Leg Calf Raise"
+  },
+  "G0742": {
+    "_gif": "0742",
+    "_folder": "Forward Angled Calf Raise"
+  },
+  "G1383": {
+    "_gif": "1383",
+    "_folder": "Hack Calf Raise"
+  },
+  "G1384": {
+    "_gif": "1384",
+    "_folder": "Hack Single Leg Calf Raise"
+  },
+  "G1387": {
+    "_gif": "1387",
+    "_folder": "Single Leg Floor Calf Raise"
+  },
+  "G1395": {
+    "_gif": "1395",
+    "_folder": "Smith Seated Single Leg Calf Raise"
+  },
+  "G1393": {
+    "_gif": "1393",
+    "_folder": "Smith Single Leg Floor Calf Raise"
+  },
+  "G0773": {
+    "_gif": "0773",
+    "_folder": "Smith Standing Leg Calf Raise"
+  },
+  "G1490": {
+    "_gif": "1490",
+    "_folder": "Staircase Calf Raise"
+  },
+  "G0763": {
+    "_gif": "0763",
+    "_folder": "Smith Reverse Calf Raises"
+  },
+  "G1390": {
+    "_gif": "1390",
+    "_folder": "Seated Calf Stretch"
+  },
+  "G1398": {
+    "_gif": "1398",
+    "_folder": "Standing Calf Stretch"
+  },
+  "G1708": {
+    "_gif": "1708",
+    "_folder": "Lying Calves Stretch"
+  },
+  "G0750": {
+    "_gif": "0750",
+    "_folder": "Smith Chair Squat"
+  },
+  "G0009": {
+    "_gif": "0009",
+    "_folder": "Kneeling Chest Dip"
+  },
+  "G0989": {
+    "_gif": "0989",
+    "_folder": "Band Single Arm Twisting Chest Press"
+  },
+  "G1287": {
+    "_gif": "1287",
+    "_folder": "Dumbbell Single Arm Decline Chest Press"
+  },
+  "G1300": {
+    "_gif": "1300",
+    "_folder": "Decline Chest Press"
+  },
+  "G1299": {
+    "_gif": "1299",
+    "_folder": "Incline Chest Press"
+  },
+  "G3124": {
+    "_gif": "3124",
+    "_folder": "Resistance Band Seated Chest Press"
+  },
+  "G0039": {
+    "_gif": "0039",
+    "_folder": "Barbell Front Chest Squat"
+  },
+  "G1297": {
+    "_gif": "1297",
+    "_folder": "Isometric Chest Squeeze"
+  },
+  "G1750": {
+    "_gif": "1750",
+    "_folder": "Medicine Ball Supine Chest Throw"
+  },
+  "G0572": {
+    "_gif": "0572",
+    "_folder": "Assisted Chinup"
+  },
+  "G1431": {
+    "_gif": "1431",
+    "_folder": "Standing Chinup"
+  },
+  "G1327": {
+    "_gif": "1327",
+    "_folder": "Close Grip Chinup"
+  },
+  "G0253": {
+    "_gif": "0253",
+    "_folder": "Narrow Neutral Grip Chinup"
+  },
+  "N09": {},
+  "G0295": {
+    "_gif": "0295",
+    "_folder": "Dumbbell Clean"
+  },
+  "G0552": {
+    "_gif": "0552",
+    "_folder": "Kettlebell Two Arm Clean"
+  },
+  "G0260": {
+    "_gif": "0260",
+    "_folder": "Cocoons"
+  },
+  "G0976": {
+    "_gif": "0976",
+    "_folder": "Band Concentration Curl"
+  },
+  "G0089": {
+    "_gif": "0089",
+    "_folder": "Barbell Seated Close Grip Concentration Curl"
+  },
+  "G1631": {
+    "_gif": "1631",
+    "_folder": "Cable Concentration Curl"
+  },
+  "G0403": {
+    "_gif": "0403",
+    "_folder": "Dumbbell Seated Reverse Grip Concentration Curl"
+  },
+  "G0421": {
+    "_gif": "0421",
+    "_folder": "Dumbbell Standing Single Arm Concentration Curl"
+  },
+  "G1682": {
+    "_gif": "1682",
+    "_folder": "EZ Bar Seated Close Grip Concentration Curl"
+  },
+  "N06": {
+    "_gif": "3643"
+  },
+  "G3643": {
+    "_gif": "3643",
+    "_folder": "Weighted Cossack Squats"
+  },
+  "N04": {},
+  "G1419": {
+    "_gif": "1419",
+    "_folder": "Iron Cross Stretch"
+  },
+  "G0154": {
+    "_gif": "0154",
+    "_folder": "Cable Crossover Reverse Fly"
+  },
+  "G1005": {
+    "_gif": "1005",
+    "_folder": "Band Standing Crunch"
+  },
+  "G0873": {
+    "_gif": "0873",
+    "_folder": "Cable Reverse Crunch"
+  },
+  "G0212": {
+    "_gif": "0212",
+    "_folder": "Cable Seated Crunch"
+  },
+  "G0874": {
+    "_gif": "0874",
+    "_folder": "Cable Standing Crunch"
+  },
+  "G0277": {
+    "_gif": "0277",
+    "_folder": "Decline Crunch"
+  },
+  "G0595": {
+    "_gif": "0595",
+    "_folder": "Seated Crunch"
+  },
+  "G0635": {
+    "_gif": "0635",
+    "_folder": "Oblique Crunches Floor"
+  },
+  "G0299": {
+    "_gif": "0299",
+    "_folder": "Dumbbell Cuban Press"
+  },
+  "G0080": {
+    "_gif": "0080",
+    "_folder": "Barbell Reverse Curl"
+  },
+  "G0106": {
+    "_gif": "0106",
+    "_folder": "Barbell Standing Close Grip Curl"
+  },
+  "G0110": {
+    "_gif": "0110",
+    "_folder": "Barbell Standing Reverse Grip Curl"
+  },
+  "G1629": {
+    "_gif": "1629",
+    "_folder": "Barbell Standing Wide Grip Curl"
+  },
+  "G1630": {
+    "_gif": "1630",
+    "_folder": "Cable Close Grip Curl"
+  },
+  "G1413": {
+    "_gif": "1413",
+    "_folder": "Cable Reverse Single Arm Curl"
+  },
+  "G1641": {
+    "_gif": "1641",
+    "_folder": "Cable Seated Curl"
+  },
+  "G0190": {
+    "_gif": "0190",
+    "_folder": "Cable Single Arm Curl"
+  },
+  "G1662": {
+    "_gif": "1662",
+    "_folder": "Dumbbell Lying Wide Curl"
+  },
+  "G0391": {
+    "_gif": "0391",
+    "_folder": "Dumbbell Seated Curl"
+  },
+  "G1670": {
+    "_gif": "1670",
+    "_folder": "Dumbbell Single Arm Standing Curl"
+  },
+  "G0429": {
+    "_gif": "0429",
+    "_folder": "Dumbbell Standing Reverse Curl"
+  },
+  "G0425": {
+    "_gif": "0425",
+    "_folder": "Dumbbell Standing Single Arm Reverse Curl"
+  },
+  "G0446": {
+    "_gif": "0446",
+    "_folder": "EZ Bar Close Grip Curl"
+  },
+  "G0447": {
+    "_gif": "0447",
+    "_folder": "EZ Bar Curl"
+  },
+  "G0451": {
+    "_gif": "0451",
+    "_folder": "EZ Bar Reverse Grip Curl"
+  },
+  "G0599": {
+    "_gif": "0599",
+    "_folder": "Seated Leg Curl"
+  },
+  "G0853": {
+    "_gif": "0853",
+    "_folder": "Weighted Standing Curl"
+  },
+  "G1458": {
+    "_gif": "1458",
+    "_folder": "EZ Bar Seated Curls"
+  },
+  "G3769": {
+    "_gif": "3769",
+    "_folder": "Curtsey Squat"
+  },
+  "G1756": {
+    "_gif": "1756",
+    "_folder": "Barbell Single Leg Deadlift"
+  },
+  "G0157": {
+    "_gif": "0157",
+    "_folder": "Cable Deadlift"
+  },
+  "G0300": {
+    "_gif": "0300",
+    "_folder": "Dumbbell Deadlift"
+  },
+  "G0752": {
+    "_gif": "0752",
+    "_folder": "Smith Deadlift"
+  },
+  "G0075": {
+    "_gif": "0075",
+    "_folder": "Barbell Rear Delt Raise"
+  },
+  "G2470": {
+    "_gif": "2470",
+    "_folder": "Dumbbell Lying on Floor Rear Delt Raise"
+  },
+  "G2292": {
+    "_gif": "2292",
+    "_folder": "Dumbbell Rear Delt Raise"
+  },
+  "G1022": {
+    "_gif": "1022",
+    "_folder": "Band Standing Rear Delt Row"
+  },
+  "G0076": {
+    "_gif": "0076",
+    "_folder": "Barbell Rear Delt Row"
+  },
+  "G0202": {
+    "_gif": "0202",
+    "_folder": "Cable Rear Delt Row"
+  },
+  "G1328": {
+    "_gif": "1328",
+    "_folder": "Dumbbell Lying Rear Delt Row"
+  },
+  "G0377": {
+    "_gif": "0377",
+    "_folder": "Dumbbell Rear Delt Row"
+  },
+  "G0762": {
+    "_gif": "0762",
+    "_folder": "Smith Rear Delt Row"
+  },
+  "G0669": {
+    "_gif": "0669",
+    "_folder": "Rear Deltoid Stretch"
+  },
+  "G0492": {
+    "_gif": "0492",
+    "_folder": "Incline Push Up Depth Jump"
+  },
+  "G1451": {
+    "_gif": "1451",
+    "_folder": "Seated Dip"
+  },
+  "G0639": {
+    "_gif": "0639",
+    "_folder": "Single Arm Dip"
+  },
+  "G2987": {
+    "_gif": "2987",
+    "_folder": "Weighted Close Grip Chinup on Dip Cage"
+  },
+  "G0815": {
+    "_gif": "0815",
+    "_folder": "Tricep Dips Floor"
+  },
+  "G0529": {
+    "_gif": "0529",
+    "_folder": "Kettlebell Double Snatch"
+  },
+  "G0530": {
+    "_gif": "0530",
+    "_folder": "Kettlebell Double Windmill"
+  },
+  "G0862": {
+    "_gif": "0862",
+    "_folder": "Cable Up Down Twist"
+  },
+  "G0038": {
+    "_gif": "0038",
+    "_folder": "Barbell Drag Curl"
+  },
+  "G1632": {
+    "_gif": "1632",
+    "_folder": "Cable Drag Curl"
+  },
+  "G3287": {
+    "_gif": "3287",
+    "_folder": "Elbow Dips"
+  },
+  "G0338": {
+    "_gif": "0338",
+    "_folder": "Dumbbell Lying Elbow Press"
+  },
+  "G2141": {
+    "_gif": "2141",
+    "_folder": "Elliptical (Time)"
+  },
+  "G1548": {
+    "_gif": "1548",
+    "_folder": "Chair Leg Extended Stretch"
+  },
+  "G3007": {
+    "_gif": "3007",
+    "_folder": "Resistance Band Leg Extension"
+  },
+  "G0337": {
+    "_gif": "0337",
+    "_folder": "Dumbbell Cross Face Lying Extension"
+  },
+  "G0448": {
+    "_gif": "0448",
+    "_folder": "EZ Bar Decline Close Grip Face Press"
+  },
+  "G1366": {
+    "_gif": "1366",
+    "_folder": "Upward Facing Dog"
+  },
+  "G6005": {
+    "_gif": "6005",
+    "_folder": "Farmers Walk (Distance)"
+  },
+  "G0532": {
+    "_gif": "0532",
+    "_folder": "Kettlebell Figure 8"
+  },
+  "G1437": {
+    "_gif": "1437",
+    "_folder": "Dumbbell Finger Curls"
+  },
+  "G0455": {
+    "_gif": "0455",
+    "_folder": "Finger Curls"
+  },
+  "G3303": {
+    "_gif": "3303",
+    "_folder": "Flag"
+  },
+  "G0570": {
+    "_gif": "0570",
+    "_folder": "Leg Pull in Flat Bench"
+  },
+  "G0620": {
+    "_gif": "0620",
+    "_folder": "Lying Leg Raise Flat Bench"
+  },
+  "G1298": {
+    "_gif": "1298",
+    "_folder": "Kettlebell Single Arm Floor Press"
+  },
+  "G0160": {
+    "_gif": "0160",
+    "_folder": "Cable Floor Seated Wide Grip Row"
+  },
+  "G1358": {
+    "_gif": "1358",
+    "_folder": "Side Lying Floor Stretch"
+  },
+  "G0993": {
+    "_gif": "0993",
+    "_folder": "Band Reverse Fly"
+  },
+  "G0179": {
+    "_gif": "0179",
+    "_folder": "Cable Incline Fly"
+  },
+  "G0302": {
+    "_gif": "0302",
+    "_folder": "Dumbbell Decline Fly"
+  },
+  "G1276": {
+    "_gif": "1276",
+    "_folder": "Dumbbell Decline Single Arm Fly"
+  },
+  "G1279": {
+    "_gif": "1279",
+    "_folder": "Dumbbell Incline Single Arm Fly"
+  },
+  "G0602": {
+    "_gif": "0602",
+    "_folder": "Seated Reverse Fly"
+  },
+  "G0359": {
+    "_gif": "0359",
+    "_folder": "Supported Dumbbell Single Arm Reverse Fly"
+  },
+  "G3672": {
+    "_gif": "3672",
+    "_folder": "Back and Forth Step"
+  },
+  "G1472": {
+    "_gif": "1472",
+    "_folder": "Forward Jump"
+  },
+  "G3635": {
+    "_gif": "3635",
+    "_folder": "Dumbbell Contralateral Forward Lunge"
+  },
+  "G3470": {
+    "_gif": "3470",
+    "_folder": "Forward Lunge"
+  },
+  "G3194": {
+    "_gif": "3194",
+    "_folder": "Frankenstein Squat"
+  },
+  "G3301": {
+    "_gif": "3301",
+    "_folder": "Frog Planche"
+  },
+  "G0083": {
+    "_gif": "0083",
+    "_folder": "Barbell Rollout From Bench"
+  },
+  "G2135": {
+    "_gif": "2135",
+    "_folder": "Weighted Front Plank"
+  },
+  "G0579": {
+    "_gif": "0579",
+    "_folder": "Front Pulldown"
+  },
+  "G0978": {
+    "_gif": "0978",
+    "_folder": "Band Front Raise"
+  },
+  "G0041": {
+    "_gif": "0041",
+    "_folder": "Barbell Front Raise"
+  },
+  "G0335": {
+    "_gif": "0335",
+    "_folder": "Dumbbell Lateral to Front Raise"
+  },
+  "G0387": {
+    "_gif": "0387",
+    "_folder": "Dumbbell Seated Alternate Front Raise"
+  },
+  "G0392": {
+    "_gif": "0392",
+    "_folder": "Dumbbell Seated Front Raise"
+  },
+  "G0834": {
+    "_gif": "0834",
+    "_folder": "Weighted Front Raise"
+  },
+  "G0024": {
+    "_gif": "0024",
+    "_folder": "Barbell Bench Front Squat"
+  },
+  "G0029": {
+    "_gif": "0029",
+    "_folder": "Barbell Clean Grip Front Squat"
+  },
+  "G0533": {
+    "_gif": "0533",
+    "_folder": "Kettlebell Front Squat"
+  },
+  "G1433": {
+    "_gif": "1433",
+    "_folder": "Smith Machine Clean Grip Front Squat"
+  },
+  "G3315": {
+    "_gif": "3315",
+    "_folder": "Full Maltese"
+  },
+  "G3299": {
+    "_gif": "3299",
+    "_folder": "Full Planche"
+  },
+  "G3281": {
+    "_gif": "3281",
+    "_folder": "Smith Full Squat"
+  },
+  "G1409": {
+    "_gif": "1409",
+    "_folder": "Barbell Glute Bridge"
+  },
+  "G1424": {
+    "_gif": "1424",
+    "_folder": "Seated Glute Stretch"
+  },
+  "G1709": {
+    "_gif": "1709",
+    "_folder": "Lying Glutes Stretch"
+  },
+  "G0534": {
+    "_gif": "0534",
+    "_folder": "Kettlebell Goblet Squat"
+  },
+  "G0090": {
+    "_gif": "0090",
+    "_folder": "Barbell Seated Good Morning"
+  },
+  "G0115": {
+    "_gif": "0115",
+    "_folder": "Barbell Stiff Leg Good Morning"
+  },
+  "G0749": {
+    "_gif": "0749",
+    "_folder": "Smith Bent Knee Good Morning"
+  },
+  "G0445": {
+    "_gif": "0445",
+    "_folder": "EZ Bar Anti Gravity Press"
+  },
+  "G2288": {
+    "_gif": "2288",
+    "_folder": "Gripper Hands"
+  },
+  "G0046": {
+    "_gif": "0046",
+    "_folder": "Barbell Hack Squat"
+  },
+  "G0755": {
+    "_gif": "0755",
+    "_folder": "Smith Hack Squat"
+  },
+  "G0140": {
+    "_gif": "0140",
+    "_folder": "Bicep Pullup"
+  },
+  "G3193": {
+    "_gif": "3193",
+    "_folder": "Glute Ham Raise"
+  },
+  "G1648": {
+    "_gif": "1648",
+    "_folder": "Dumbbell Alternate Seated Hammer Curl"
+  },
+  "G0298": {
+    "_gif": "0298",
+    "_folder": "Dumbbell Cross Body Hammer Curl"
+  },
+  "G0320": {
+    "_gif": "0320",
+    "_folder": "Dumbbell Incline Hammer Curl"
+  },
+  "G0370": {
+    "_gif": "0370",
+    "_folder": "Dumbbell Preacher Hammer Curl"
+  },
+  "G1674": {
+    "_gif": "1674",
+    "_folder": "Dumbbell Prone Incline Hammer Curl"
+  },
+  "G1678": {
+    "_gif": "1678",
+    "_folder": "Dumbbell Seated Hammer Curl"
+  },
+  "G1669": {
+    "_gif": "1669",
+    "_folder": "Dumbbell Single Arm Seated Hammer Curl"
+  },
+  "G1671": {
+    "_gif": "1671",
+    "_folder": "Dumbbell Single Arm Standing Hammer Curl"
+  },
+  "G0303": {
+    "_gif": "0303",
+    "_folder": "Dumbbell Decline Hammer Press"
+  },
+  "G1617": {
+    "_gif": "1617",
+    "_folder": "Dumbbell Decline Single Arm Hammer Press"
+  },
+  "G0321": {
+    "_gif": "0321",
+    "_folder": "Dumbbell Incline Hammer Press"
+  },
+  "G1619": {
+    "_gif": "1619",
+    "_folder": "Dumbbell Incline Single Arm Hammer Press"
+  },
+  "G0340": {
+    "_gif": "0340",
+    "_folder": "Dumbbell Lying Hammer Press"
+  },
+  "G0339": {
+    "_gif": "0339",
+    "_folder": "Dumbbell Lying Hamstring Curl"
+  },
+  "G1576": {
+    "_gif": "1576",
+    "_folder": "Leg Up Hamstring Stretch"
+  },
+  "N08": {},
+  "G0408": {
+    "_gif": "0408",
+    "_folder": "Dumbbell Side Lying One Hand Raise"
+  },
+  "G0854": {
+    "_gif": "0854",
+    "_folder": "Weighted Standing Hand Squeeze"
+  },
+  "G0518": {
+    "_gif": "0518",
+    "_folder": "Kettlebell Alternating Hang Clean"
+  },
+  "G0526": {
+    "_gif": "0526",
+    "_folder": "Kettlebell Double Alternating Hang Clean"
+  },
+  "G0535": {
+    "_gif": "0535",
+    "_folder": "Kettlebell Hang Clean"
+  },
+  "G0525": {
+    "_gif": "0525",
+    "_folder": "Kettlebell Bottoms Up Clean From the Hang Position"
+  },
+  "G0473": {
+    "_gif": "0473",
+    "_folder": "Hanging Pike"
+  },
+  "G0006": {
+    "_gif": "0006",
+    "_folder": "Alternate Heel Touchers"
+  },
+  "G0548": {
+    "_gif": "0548",
+    "_folder": "Kettlebell Sumo High Pull"
+  },
+  "G0213": {
+    "_gif": "0213",
+    "_folder": "Cable Seated High Row"
+  },
+  "G0193": {
+    "_gif": "0193",
+    "_folder": "Cable Single Arm Kneeling High Row"
+  },
+  "G1356": {
+    "_gif": "1356",
+    "_folder": "Single Arm Lateral High Row"
+  },
+  "G1436": {
+    "_gif": "1436",
+    "_folder": "Barbell High Bar Squat"
+  },
+  "G3662": {
+    "_gif": "3662",
+    "_folder": "Pike to Cobra Pushup"
+  },
+  "G3006": {
+    "_gif": "3006",
+    "_folder": "Resistance Band Seated Hip Abduction"
+  },
+  "G1774": {
+    "_gif": "1774",
+    "_folder": "Side Bridge Hip Abduction"
+  },
+  "G0710": {
+    "_gif": "0710",
+    "_folder": "Side Hip Abduction"
+  },
+  "G0168": {
+    "_gif": "0168",
+    "_folder": "Cable Hip Adduction"
+  },
+  "G3667": {
+    "_gif": "3667",
+    "_folder": "Side Lying Hip Adduction"
+  },
+  "G1775": {
+    "_gif": "1775",
+    "_folder": "Side Plank Hip Adduction"
+  },
+  "G1408": {
+    "_gif": "1408",
+    "_folder": "Band Hip Lift"
+  },
+  "G1466": {
+    "_gif": "1466",
+    "_folder": "Twist Hip Lift"
+  },
+  "G0484": {
+    "_gif": "0484",
+    "_folder": "Bent Knee Hip Raise"
+  },
+  "G0865": {
+    "_gif": "0865",
+    "_folder": "Lying Leg Hip Raise"
+  },
+  "G0491": {
+    "_gif": "0491",
+    "_folder": "Straight Leg Incline Hip Raise"
+  },
+  "G0866": {
+    "_gif": "0866",
+    "_folder": "Weighted Hanging Leg Hip Raise"
+  },
+  "G0996": {
+    "_gif": "0996",
+    "_folder": "Seated Internal Hip Rotation"
+  },
+  "N05": {},
+  "G2611": {
+    "_gif": "2611",
+    "_folder": "Horizontal Single Leg Press"
+  },
+  "G3234": {
+    "_gif": "3234",
+    "_folder": "Hyght Dumbbell Fly"
+  },
+  "G3289": {
+    "_gif": "3289",
+    "_folder": "Impossible Dips"
+  },
+  "G0324": {
+    "_gif": "0324",
+    "_folder": "Dumbbell Incline Palms in Press"
+  },
+  "G0427": {
+    "_gif": "0427",
+    "_folder": "Dumbbell Standing Palms in Press"
+  },
+  "G0424": {
+    "_gif": "0424",
+    "_folder": "Dumbbell Standing Single Arm Palm in Press"
+  },
+  "G0661": {
+    "_gif": "0661",
+    "_folder": "Pushup Inside Leg Kick"
+  },
+  "G1422": {
+    "_gif": "1422",
+    "_folder": "Pelvic Tilt Into Bridge"
+  },
+  "G0332": {
+    "_gif": "0332",
+    "_folder": "Dumbbell Iron Cross"
+  },
+  "G0538": {
+    "_gif": "0538",
+    "_folder": "Kettlebell Single Arm Jerk"
+  },
+  "G0174": {
+    "_gif": "0174",
+    "_folder": "Cable Judo Flip"
+  },
+  "G0053": {
+    "_gif": "0053",
+    "_folder": "Barbell Jump Squat"
+  },
+  "G2464": {
+    "_gif": "2464",
+    "_folder": "Cable Kayak Row"
+  },
+  "G0394": {
+    "_gif": "0394",
+    "_folder": "Dumbbell Seated Kickback"
+  },
+  "G0398": {
+    "_gif": "0398",
+    "_folder": "Dumbbell Seated Single Arm Kickback"
+  },
+  "G0354": {
+    "_gif": "0354",
+    "_folder": "Dumbbell Single Arm Kickback"
+  },
+  "G3221": {
+    "_gif": "3221",
+    "_folder": "Half Knee Bends"
+  },
+  "G0472": {
+    "_gif": "0472",
+    "_folder": "Hanging Leg Raise"
+  },
+  "G1761": {
+    "_gif": "1761",
+    "_folder": "Hanging Oblique Knee Raise"
+  },
+  "G0826": {
+    "_gif": "0826",
+    "_folder": "Parallel Bars Vertical Knee Raise"
+  },
+  "G0257": {
+    "_gif": "0257",
+    "_folder": "Circles Knee Stretch"
+  },
+  "G3639": {
+    "_gif": "3639",
+    "_folder": "Bent Knee Lying Twist"
+  },
+  "G3288": {
+    "_gif": "3288",
+    "_folder": "Korean Dips"
+  },
+  "G3418": {
+    "_gif": "3418",
+    "_folder": "L-pullup"
+  },
+  "G1355": {
+    "_gif": "1355",
+    "_folder": "Single Arm Isometric Lat Pull"
+  },
+  "G1346": {
+    "_gif": "1346",
+    "_folder": "Kneeling Lat Stretch"
+  },
+  "G1410": {
+    "_gif": "1410",
+    "_folder": "Barbell Lateral Lunge"
+  },
+  "G0007": {
+    "_gif": "0007",
+    "_folder": "Alternate Lateral Pulldown"
+  },
+  "G0153": {
+    "_gif": "0153",
+    "_folder": "Cable Crossover Lateral Pulldown"
+  },
+  "G1347": {
+    "_gif": "1347",
+    "_folder": "Single Arm Lateral Wide Pulldown"
+  },
+  "G0977": {
+    "_gif": "0977",
+    "_folder": "Band Front Lateral Raise"
+  },
+  "G3237": {
+    "_gif": "3237",
+    "_folder": "Landmine Lateral Raise"
+  },
+  "G0178": {
+    "_gif": "0178",
+    "_folder": "Cable Lateral Raise"
+  },
+  "G0215": {
+    "_gif": "0215",
+    "_folder": "Cable Seated Rear Lateral Raise"
+  },
+  "G0192": {
+    "_gif": "0192",
+    "_folder": "Cable Single Arm Lateral Raise"
+  },
+  "G0311": {
+    "_gif": "0311",
+    "_folder": "Dumbbell Full Can Lateral Raise"
+  },
+  "G0326": {
+    "_gif": "0326",
+    "_folder": "Dumbbell Incline Rear Lateral Raise"
+  },
+  "G0323": {
+    "_gif": "0323",
+    "_folder": "Dumbbell Incline Single Arm Lateral Raise"
+  },
+  "G0348": {
+    "_gif": "0348",
+    "_folder": "Dumbbell Lying Rear Lateral Raise"
+  },
+  "G0345": {
+    "_gif": "0345",
+    "_folder": "Dumbbell Lying Single Arm Rear Lateral Raise"
+  },
+  "G0380": {
+    "_gif": "0380",
+    "_folder": "Dumbbell Rear Lateral Raise"
+  },
+  "G2317": {
+    "_gif": "2317",
+    "_folder": "Dumbbell Seated Bent Arm Lateral Raise"
+  },
+  "G0396": {
+    "_gif": "0396",
+    "_folder": "Dumbbell Seated Lateral Raise"
+  },
+  "G0355": {
+    "_gif": "0355",
+    "_folder": "Dumbbell Single Arm Lateral Raise"
+  },
+  "G0379": {
+    "_gif": "0379",
+    "_folder": "Head Supported Dumbbell Rear Lateral Raise"
+  },
+  "G0794": {
+    "_gif": "0794",
+    "_folder": "Standing Lateral Stretch"
+  },
+  "G3300": {
+    "_gif": "3300",
+    "_folder": "Lean Planche"
+  },
+  "G0230": {
+    "_gif": "0230",
+    "_folder": "Cable Standing Lift"
+  },
+  "G0988": {
+    "_gif": "0988",
+    "_folder": "Band Single Arm Standing Low Row"
+  },
+  "G0180": {
+    "_gif": "0180",
+    "_folder": "Cable Low Seated Row"
+  },
+  "G1435": {
+    "_gif": "1435",
+    "_folder": "Barbell Low Bar Squat"
+  },
+  "G1434": {
+    "_gif": "1434",
+    "_folder": "Smith Low Bar Squat"
+  },
+  "G0054": {
+    "_gif": "0054",
+    "_folder": "Barbell Lunge"
+  },
+  "G0336": {
+    "_gif": "0336",
+    "_folder": "Dumbbell Lunge"
+  },
+  "G0769": {
+    "_gif": "0769",
+    "_folder": "Smith Lunge"
+  },
+  "G1456": {
+    "_gif": "1456",
+    "_folder": "Barbell Standing Close Grip Military Press"
+  },
+  "G1438": {
+    "_gif": "1438",
+    "_folder": "Kettlebell Seated Two Arm Military Press"
+  },
+  "G0553": {
+    "_gif": "0553",
+    "_folder": "Kettlebell Two Arm Military Press"
+  },
+  "G0774": {
+    "_gif": "0774",
+    "_folder": "Smith Standing Military Press"
+  },
+  "G0631": {
+    "_gif": "0631",
+    "_folder": "Ring Muscle Up"
+  },
+  "G3286": {
+    "_gif": "3286",
+    "_folder": "Weighted Ring Muscle Up"
+  },
+  "G0716": {
+    "_gif": "0716",
+    "_folder": "Side Push Neck Stretch"
+  },
+  "G0709": {
+    "_gif": "0709",
+    "_folder": "Parallel Bars Oblique Swing"
+  },
+  "G3562": {
+    "_gif": "3562",
+    "_folder": "Barbell Glute Bridge Two Legs on Bench"
+  },
+  "G0362": {
+    "_gif": "0362",
+    "_folder": "Dumbbell Single Arm Tricep Extension on Bench"
+  },
+  "G3679": {
+    "_gif": "3679",
+    "_folder": "Situp with Arms on Chest"
+  },
+  "G1399": {
+    "_gif": "1399",
+    "_folder": "Bench Dip on Floor"
+  },
+  "G2705": {
+    "_gif": "2705",
+    "_folder": "Dumbbell Lying Pronation on Floor"
+  },
+  "G2706": {
+    "_gif": "2706",
+    "_folder": "Dumbbell Lying Supination on Floor"
+  },
+  "G0519": {
+    "_gif": "0519",
+    "_folder": "Kettlebell Alternating Press on Floor"
+  },
+  "G3420": {
+    "_gif": "3420",
+    "_folder": "V-sit on Floor"
+  },
+  "G1391": {
+    "_gif": "1391",
+    "_folder": "Calf Press on Leg Press"
+  },
+  "G0738": {
+    "_gif": "0738",
+    "_folder": "Calf Raise on Leg Press"
+  },
+  "G1385": {
+    "_gif": "1385",
+    "_folder": "Seated Squat Calf Raise on Leg Press Machine"
+  },
+  "G1392": {
+    "_gif": "1392",
+    "_folder": "Single Leg Calf Press on Leg Press"
+  },
+  "G6003": {
+    "_gif": "6003",
+    "_folder": "Walking on Incline Treadmill (Distance)"
+  },
+  "G0555": {
+    "_gif": "0555",
+    "_folder": "Kick Out Sit"
+  },
+  "G0107": {
+    "_gif": "0107",
+    "_folder": "Barbell Standing Front Raise Over Head"
+  },
+  "G0980": {
+    "_gif": "0980",
+    "_folder": "Band Bent Over Kickback"
+  },
+  "G1730": {
+    "_gif": "1730",
+    "_folder": "Dumbbell Seated Bent Over Alternate Kickback"
+  },
+  "G0118": {
+    "_gif": "0118",
+    "_folder": "Barbell Reverse Grip Bent Over Row"
+  },
+  "G0064": {
+    "_gif": "0064",
+    "_folder": "Barbell Single Arm Bent Over Row"
+  },
+  "G0589": {
+    "_gif": "0589",
+    "_folder": "Single Arm Bent Over Row"
+  },
+  "G0189": {
+    "_gif": "0189",
+    "_folder": "Cable Single Arm Bent Over Row"
+  },
+  "G0293": {
+    "_gif": "0293",
+    "_folder": "Dumbbell Bent Over Row"
+  },
+  "G1329": {
+    "_gif": "1329",
+    "_folder": "Dumbbell Palm Rotational Bent Over Row"
+  },
+  "G1359": {
+    "_gif": "1359",
+    "_folder": "Smith Bent Over Row"
+  },
+  "G1361": {
+    "_gif": "1361",
+    "_folder": "Smith Reverse Grip Bent Over Row"
+  },
+  "G3548": {
+    "_gif": "3548",
+    "_folder": "Dumbbell Single Arm Overhead Carry"
+  },
+  "G1012": {
+    "_gif": "1012",
+    "_folder": "Band Twisting Overhead Press"
+  },
+  "G0091": {
+    "_gif": "0091",
+    "_folder": "Barbell Seated Overhead Press"
+  },
+  "G0414": {
+    "_gif": "0414",
+    "_folder": "Dumbbell Standing Alternate Overhead Press"
+  },
+  "G1685": {
+    "_gif": "1685",
+    "_folder": "Squat to Overhead Reach"
+  },
+  "G0069": {
+    "_gif": "0069",
+    "_folder": "Barbell Overhead Squat"
+  },
+  "G1353": {
+    "_gif": "1353",
+    "_folder": "Medicine Ball Catch and Overhead Throw"
+  },
+  "G1015": {
+    "_gif": "1015",
+    "_folder": "Band Vertical Pallof Press"
+  },
+  "G0536": {
+    "_gif": "0536",
+    "_folder": "Kettlebell Lunge Pass Through"
+  },
+  "G1405": {
+    "_gif": "1405",
+    "_folder": "Back Pec Stretch"
+  },
+  "G3147": {
+    "_gif": "3147",
+    "_folder": "Pelvic Tilt"
+  },
+  "G1364": {
+    "_gif": "1364",
+    "_folder": "Standing Pelvic Tilt"
+  },
+  "G1388": {
+    "_gif": "1388",
+    "_folder": "Peroneals Stretch"
+  },
+  "G2567": {
+    "_gif": "2567",
+    "_folder": "Seated Piriformis Stretch"
+  },
+  "G0544": {
+    "_gif": "0544",
+    "_folder": "Kettlebell Pistol Squat"
+  },
+  "G0730": {
+    "_gif": "0730",
+    "_folder": "Single Leg Platform Slide"
+  },
+  "G0371": {
+    "_gif": "0371",
+    "_folder": "Dumbbell Plyo Squat"
+  },
+  "G3665": {
+    "_gif": "3665",
+    "_folder": "Power Point Plank"
+  },
+  "G1587": {
+    "_gif": "1587",
+    "_folder": "Seated Wide Angle Pose Sequence"
+  },
+  "G0070": {
+    "_gif": "0070",
+    "_folder": "Barbell Preacher Curl"
+  },
+  "G0081": {
+    "_gif": "0081",
+    "_folder": "Barbell Reverse Preacher Curl"
+  },
+  "G0195": {
+    "_gif": "0195",
+    "_folder": "Cable Preacher Curl"
+  },
+  "G0209": {
+    "_gif": "0209",
+    "_folder": "Cable Reverse Preacher Curl"
+  },
+  "G1646": {
+    "_gif": "1646",
+    "_folder": "Dumbbell Alternate Hammer Preacher Curl"
+  },
+  "G1647": {
+    "_gif": "1647",
+    "_folder": "Dumbbell Alternate Preacher Curl"
+  },
+  "G0372": {
+    "_gif": "0372",
+    "_folder": "Dumbbell Preacher Curl"
+  },
+  "G0384": {
+    "_gif": "0384",
+    "_folder": "Dumbbell Reverse Preacher Curl"
+  },
+  "G0402": {
+    "_gif": "0402",
+    "_folder": "Dumbbell Seated Preacher Curl"
+  },
+  "G1663": {
+    "_gif": "1663",
+    "_folder": "Dumbbell Single Arm Hammer Preacher Curl"
+  },
+  "G1414": {
+    "_gif": "1414",
+    "_folder": "Dumbbell Single Arm Reverse Preacher Curl"
+  },
+  "G1627": {
+    "_gif": "1627",
+    "_folder": "EZ Bar Close Grip Preacher Curl"
+  },
+  "G0452": {
+    "_gif": "0452",
+    "_folder": "EZ Bar Reverse Grip Preacher Curl"
+  },
+  "G1615": {
+    "_gif": "1615",
+    "_folder": "Hammer Grip Preacher Curl"
+  },
+  "G2287": {
+    "_gif": "2287",
+    "_folder": "Alternate Leg Press"
+  },
+  "G0036": {
+    "_gif": "0036",
+    "_folder": "Barbell Decline Wide Grip Press"
+  },
+  "G0296": {
+    "_gif": "0296",
+    "_folder": "Dumbbell Close Grip Press"
+  },
+  "G3545": {
+    "_gif": "3545",
+    "_folder": "Dumbbell Incline Alternate Press"
+  },
+  "G1281": {
+    "_gif": "1281",
+    "_folder": "Dumbbell Incline Single Arm Press"
+  },
+  "G0388": {
+    "_gif": "0388",
+    "_folder": "Dumbbell Seated Alternate Press"
+  },
+  "G1622": {
+    "_gif": "1622",
+    "_folder": "Dumbbell Single Arm Reverse Grip Press"
+  },
+  "G0520": {
+    "_gif": "0520",
+    "_folder": "Kettlebell Alternating Press"
+  },
+  "G0546": {
+    "_gif": "0546",
+    "_folder": "Kettlebell Seated Press"
+  },
+  "G1425": {
+    "_gif": "1425",
+    "_folder": "Single Leg Press"
+  },
+  "G0754": {
+    "_gif": "0754",
+    "_folder": "Smith Decline Reverse Grip Press"
+  },
+  "G0758": {
+    "_gif": "0758",
+    "_folder": "Smith Incline Reverse Grip Press"
+  },
+  "G0764": {
+    "_gif": "0764",
+    "_folder": "Smith Reverse Grip Press"
+  },
+  "G0347": {
+    "_gif": "0347",
+    "_folder": "Dumbbell Lying Pronation"
+  },
+  "G0072": {
+    "_gif": "0072",
+    "_folder": "Barbell Prone Incline Curl"
+  },
+  "G0374": {
+    "_gif": "0374",
+    "_folder": "Dumbbell Prone Incline Curl"
+  },
+  "G0016": {
+    "_gif": "0016",
+    "_folder": "Prone Hamstring"
+  },
+  "G0305": {
+    "_gif": "0305",
+    "_folder": "Dumbbell Decline Shrug"
+  },
+  "G0721": {
+    "_gif": "0721",
+    "_folder": "Side Wrist Pull Stretch"
+  },
+  "G0991": {
+    "_gif": "0991",
+    "_folder": "Band Pull Through"
+  },
+  "G2808": {
+    "_gif": "2808",
+    "_folder": "Dumbbell Sumo Pull Through"
+  },
+  "G0017": {
+    "_gif": "0017",
+    "_folder": "Assisted Pullup"
+  },
+  "G0970": {
+    "_gif": "0970",
+    "_folder": "Band Assisted Pullup"
+  },
+  "G0015": {
+    "_gif": "0015",
+    "_folder": "Parallel Close Grip Pullup"
+  },
+  "G0688": {
+    "_gif": "0688",
+    "_folder": "Scapular Pullup"
+  },
+  "G1432": {
+    "_gif": "1432",
+    "_folder": "Standing Pullup"
+  },
+  "G3290": {
+    "_gif": "3290",
+    "_folder": "Weighted One Hand Pull Up"
+  },
+  "G0841": {
+    "_gif": "0841",
+    "_folder": "Weighted Pullup"
+  },
+  "G1429": {
+    "_gif": "1429",
+    "_folder": "Wide Grip Pullup"
+  },
+  "G0974": {
+    "_gif": "0974",
+    "_folder": "Band Close Grip Pulldown"
+  },
+  "G0983": {
+    "_gif": "0983",
+    "_folder": "Band Kneeling Single Arm Pulldown"
+  },
+  "G0208": {
+    "_gif": "0208",
+    "_folder": "Cable Reverse Grip Pulldown"
+  },
+  "G3563": {
+    "_gif": "3563",
+    "_folder": "Cable Single Arm Pulldown"
+  },
+  "G0073": {
+    "_gif": "0073",
+    "_folder": "Barbell Pullover"
+  },
+  "G2285": {
+    "_gif": "2285",
+    "_folder": "Pullover"
+  },
+  "G1700": {
+    "_gif": "1700",
+    "_folder": "Dumbbell Push Press"
+  },
+  "G0528": {
+    "_gif": "0528",
+    "_folder": "Kettlebell Double Push Press"
+  },
+  "G0975": {
+    "_gif": "0975",
+    "_folder": "Band Close Grip Pushup"
+  },
+  "G1273": {
+    "_gif": "1273",
+    "_folder": "Clap Push Up"
+  },
+  "G0259": {
+    "_gif": "0259",
+    "_folder": "Close Grip Pushup"
+  },
+  "G1274": {
+    "_gif": "1274",
+    "_folder": "Deep Push Up"
+  },
+  "G1772": {
+    "_gif": "1772",
+    "_folder": "Elbow Lift Reverse Pushup"
+  },
+  "G0471": {
+    "_gif": "0471",
+    "_folder": "Handstand Pushup"
+  },
+  "G2398": {
+    "_gif": "2398",
+    "_folder": "Kneeling Close Grip Pushup"
+  },
+  "G3211": {
+    "_gif": "3211",
+    "_folder": "Kneeling Pushup"
+  },
+  "G1701": {
+    "_gif": "1701",
+    "_folder": "Medicine Ball Close Grip Push Up"
+  },
+  "G0642": {
+    "_gif": "0642",
+    "_folder": "Outside Leg Kick Pushup"
+  },
+  "G3021": {
+    "_gif": "3021",
+    "_folder": "Scapula Pushup"
+  },
+  "G0699": {
+    "_gif": "0699",
+    "_folder": "Shoulder Tap Pushup"
+  },
+  "G0725": {
+    "_gif": "0725",
+    "_folder": "Single Arm Pushup"
+  },
+  "G0778": {
+    "_gif": "0778",
+    "_folder": "Spider Crawl Push Up"
+  },
+  "G0806": {
+    "_gif": "0806",
+    "_folder": "Suspended Pushup"
+  },
+  "G1311": {
+    "_gif": "1311",
+    "_folder": "Wide Hand Push Up"
+  },
+  "G0172": {
+    "_gif": "0172",
+    "_folder": "Cable Incline Pushdown"
+  },
+  "G0490": {
+    "_gif": "0490",
+    "_folder": "Decline Close Grip Pushup"
+  },
+  "G1564": {
+    "_gif": "1564",
+    "_folder": "Intermediate Hip Flexor and Quad Stretch"
+  },
+  "G1512": {
+    "_gif": "1512",
+    "_folder": "Quadriceps Stretch"
+  },
+  "G0613": {
+    "_gif": "0613",
+    "_folder": "Side Lying Quads Stretch"
+  },
+  "G0325": {
+    "_gif": "0325",
+    "_folder": "Dumbbell Incline Raise"
+  },
+  "G0415": {
+    "_gif": "0415",
+    "_folder": "Dumbbell Standing Alternate Raise"
+  },
+  "G0689": {
+    "_gif": "0689",
+    "_folder": "Seated Leg Raise"
+  },
+  "G0378": {
+    "_gif": "0378",
+    "_folder": "Dumbbell Rear Fly"
+  },
+  "G3664": {
+    "_gif": "3664",
+    "_folder": "Dumbbell Side Plank with Rear Fly"
+  },
+  "G0078": {
+    "_gif": "0078",
+    "_folder": "Barbell Rear Lunge"
+  },
+  "G0381": {
+    "_gif": "0381",
+    "_folder": "Dumbbell Rear Lunge"
+  },
+  "G0677": {
+    "_gif": "0677",
+    "_folder": "Ring Dips"
+  },
+  "G0084": {
+    "_gif": "0084",
+    "_folder": "Barbell Rollout"
+  },
+  "N11": {},
+  "G0200": {
+    "_gif": "0200",
+    "_folder": "Cable Rope Pushdown"
+  },
+  "G0399": {
+    "_gif": "0399",
+    "_folder": "Dumbbell Seated Single Arm Rotate"
+  },
+  "G0386": {
+    "_gif": "0386",
+    "_folder": "Dumbbell Rotation Reverse Fly"
+  },
+  "G1319": {
+    "_gif": "1319",
+    "_folder": "Cable Palm Rotational Row"
+  },
+  "G0049": {
+    "_gif": "0049",
+    "_folder": "Barbell Incline Row"
+  },
+  "G0139": {
+    "_gif": "0139",
+    "_folder": "Bicep Narrow Pullup"
+  },
+  "G3166": {
+    "_gif": "3166",
+    "_folder": "Bodyweight Standing Row"
+  },
+  "G3162": {
+    "_gif": "3162",
+    "_folder": "Bodyweight Standing Single Arm Row"
+  },
+  "G0214": {
+    "_gif": "0214",
+    "_folder": "Cable Seated Single Arm Alternate Row"
+  },
+  "G0218": {
+    "_gif": "0218",
+    "_folder": "Cable Seated Wide Grip Row"
+  },
+  "G0327": {
+    "_gif": "0327",
+    "_folder": "Dumbbell Incline Row"
+  },
+  "G0541": {
+    "_gif": "0541",
+    "_folder": "Kettlebell Single Arm Row"
+  },
+  "G1345": {
+    "_gif": "1345",
+    "_folder": "Kettlebell Two Arm Row"
+  },
+  "G0571": {
+    "_gif": "0571",
+    "_folder": "Alternating Narrow Grip Seated Row"
+  },
+  "G0588": {
+    "_gif": "0588",
+    "_folder": "Narrow Grip Seated Row"
+  },
+  "G1350": {
+    "_gif": "1350",
+    "_folder": "Seated Row"
+  },
+  "G0761": {
+    "_gif": "0761",
+    "_folder": "Smith Narrow Row"
+  },
+  "G1585": {
+    "_gif": "1585",
+    "_folder": "Runners Stretch"
+  },
+  "G0845": {
+    "_gif": "0845",
+    "_folder": "Legs Up Weighted Russian Twist"
+  },
+  "G3012": {
+    "_gif": "3012",
+    "_folder": "Scapula Dips"
+  },
+  "G3219": {
+    "_gif": "3219",
+    "_folder": "Scissor Jumps"
+  },
+  "G2397": {
+    "_gif": "2397",
+    "_folder": "Dumbbell Scott Press"
+  },
+  "G0547": {
+    "_gif": "0547",
+    "_folder": "Kettlebell Seesaw Press"
+  },
+  "G0997": {
+    "_gif": "0997",
+    "_folder": "Band Shoulder Press"
+  },
+  "G0148": {
+    "_gif": "0148",
+    "_folder": "Cable Alternate Shoulder Press"
+  },
+  "G0219": {
+    "_gif": "0219",
+    "_folder": "Cable Shoulder Press"
+  },
+  "G0404": {
+    "_gif": "0404",
+    "_folder": "Dumbbell Neutral Grip Seated Shoulder Press"
+  },
+  "G3546": {
+    "_gif": "3546",
+    "_folder": "Dumbbell Seated Alternate Shoulder Press"
+  },
+  "G3547": {
+    "_gif": "3547",
+    "_folder": "Dumbbell Seated Bicep Curl to Shoulder Press"
+  },
+  "G0405": {
+    "_gif": "0405",
+    "_folder": "Dumbbell Seated Shoulder Press"
+  },
+  "G0361": {
+    "_gif": "0361",
+    "_folder": "Dumbbell Single Arm Shoulder Press"
+  },
+  "G0587": {
+    "_gif": "0587",
+    "_folder": "Military Press"
+  },
+  "G3122": {
+    "_gif": "3122",
+    "_folder": "Resistance Band Seated Shoulder Press"
+  },
+  "G0765": {
+    "_gif": "0765",
+    "_folder": "Smith Seated Shoulder Press"
+  },
+  "G0766": {
+    "_gif": "0766",
+    "_folder": "Smith Shoulder Press"
+  },
+  "G0050": {
+    "_gif": "0050",
+    "_folder": "Barbell Incline Shoulder Raise"
+  },
+  "G0328": {
+    "_gif": "0328",
+    "_folder": "Dumbbell Incline Shoulder Raise"
+  },
+  "G0759": {
+    "_gif": "0759",
+    "_folder": "Smith Incline Shoulder Raises"
+  },
+  "G0235": {
+    "_gif": "0235",
+    "_folder": "Cable External Shoulder Rotation"
+  },
+  "G0216": {
+    "_gif": "0216",
+    "_folder": "Internal Shoulder Rotation"
+  },
+  "G0863": {
+    "_gif": "0863",
+    "_folder": "Dumbbell Lying External Shoulder Rotation"
+  },
+  "G0864": {
+    "_gif": "0864",
+    "_folder": "Dumbbell Standing External Shoulder Rotation"
+  },
+  "G1271": {
+    "_gif": "1271",
+    "_folder": "Chest and Front of Shoulder Stretch"
+  },
+  "G3699": {
+    "_gif": "3699",
+    "_folder": "Shoulder Tap"
+  },
+  "G1018": {
+    "_gif": "1018",
+    "_folder": "Band Shrug"
+  },
+  "G0095": {
+    "_gif": "0095",
+    "_folder": "Barbell Shrug"
+  },
+  "G0220": {
+    "_gif": "0220",
+    "_folder": "Cable Shrug"
+  },
+  "G0329": {
+    "_gif": "0329",
+    "_folder": "Dumbbell Incline Shrug"
+  },
+  "G0604": {
+    "_gif": "0604",
+    "_folder": "Shrug"
+  },
+  "G0767": {
+    "_gif": "0767",
+    "_folder": "Smith Shrug"
+  },
+  "G0002": {
+    "_gif": "0002",
+    "_folder": "45 Degree Side Bend"
+  },
+  "G0222": {
+    "_gif": "0222",
+    "_folder": "Cable Side Bend"
+  },
+  "G0223": {
+    "_gif": "0223",
+    "_folder": "Cable Side Crunch"
+  },
+  "G0691": {
+    "_gif": "0691",
+    "_folder": "Wall Seated Side Crunch"
+  },
+  "G0066": {
+    "_gif": "0066",
+    "_folder": "Barbell Single Arm Side Deadlift"
+  },
+  "G3544": {
+    "_gif": "3544",
+    "_folder": "Bodyweight Incline Side Plank"
+  },
+  "G0664": {
+    "_gif": "0664",
+    "_folder": "Pushup to Side Plank"
+  },
+  "G0286": {
+    "_gif": "0286",
+    "_folder": "Dumbbell Alternate Side Press"
+  },
+  "G1403": {
+    "_gif": "1403",
+    "_folder": "Neck Side Stretch"
+  },
+  "G1489": {
+    "_gif": "1489",
+    "_folder": "Sissy Squat"
+  },
+  "G0851": {
+    "_gif": "0851",
+    "_folder": "Weighted Sissy Squat"
+  },
+  "G3204": {
+    "_gif": "3204",
+    "_folder": "Arms Overhead Full Situp"
+  },
+  "G0981": {
+    "_gif": "0981",
+    "_folder": "Band Jack Knife Situp"
+  },
+  "G0992": {
+    "_gif": "0992",
+    "_folder": "Band Push Situp"
+  },
+  "G0071": {
+    "_gif": "0071",
+    "_folder": "Barbell Press Situp"
+  },
+  "G0495": {
+    "_gif": "0495",
+    "_folder": "Incline Twisting Situp"
+  },
+  "G3202": {
+    "_gif": "3202",
+    "_folder": "Half Situp"
+  },
+  "G0507": {
+    "_gif": "0507",
+    "_folder": "Jackknife Situp"
+  },
+  "G3203": {
+    "_gif": "3203",
+    "_folder": "Prisoner Half Situp"
+  },
+  "G3201": {
+    "_gif": "3201",
+    "_folder": "Quarter Situp"
+  },
+  "G1758": {
+    "_gif": "1758",
+    "_folder": "Situp"
+  },
+  "G0001": {
+    "_gif": "0001",
+    "_folder": "Three Quarter Situp"
+  },
+  "G3670": {
+    "_gif": "3670",
+    "_folder": "Weighted Decline Situp"
+  },
+  "G3361": {
+    "_gif": "3361",
+    "_folder": "Skater Hops"
+  },
+  "G2142": {
+    "_gif": "2142",
+    "_folder": "Ski Ergometer (Time)"
+  },
+  "G0035": {
+    "_gif": "0035",
+    "_folder": "Barbell Decline Close Grip to Skull Press"
+  },
+  "G1721": {
+    "_gif": "1721",
+    "_folder": "Barbell Reverse Grip Skullcrusher"
+  },
+  "G0067": {
+    "_gif": "0067",
+    "_folder": "Barbell Single Arm Snatch"
+  },
+  "G3888": {
+    "_gif": "3888",
+    "_folder": "Dumbbell Single Arm Snatch"
+  },
+  "G0542": {
+    "_gif": "0542",
+    "_folder": "Kettlebell Single Arm Snatch"
+  },
+  "G0776": {
+    "_gif": "0776",
+    "_folder": "Snatch Pull"
+  },
+  "N02": {},
+  "G0101": {
+    "_gif": "0101",
+    "_folder": "Barbell Speed Squat"
+  },
+  "G1362": {
+    "_gif": "1362",
+    "_folder": "Sphinx"
+  },
+  "G1363": {
+    "_gif": "1363",
+    "_folder": "Spine Stretch"
+  },
+  "G2329": {
+    "_gif": "2329",
+    "_folder": "Spine Twist"
+  },
+  "G0987": {
+    "_gif": "0987",
+    "_folder": "Band Single Arm Single Leg Split Squat"
+  },
+  "G1001": {
+    "_gif": "1001",
+    "_folder": "Band Single Leg Split Squat"
+  },
+  "G0098": {
+    "_gif": "0098",
+    "_folder": "Barbell Side Split Squat"
+  },
+  "G0099": {
+    "_gif": "0099",
+    "_folder": "Barbell Single Leg Split Squat"
+  },
+  "G0768": {
+    "_gif": "0768",
+    "_folder": "Smith Single Leg Split Squat"
+  },
+  "G0068": {
+    "_gif": "0068",
+    "_folder": "Barbell Single Leg Squat"
+  },
+  "G0124": {
+    "_gif": "0124",
+    "_folder": "Barbell Wide Squat"
+  },
+  "G3533": {
+    "_gif": "3533",
+    "_folder": "Bodyweight Squat"
+  },
+  "G0411": {
+    "_gif": "0411",
+    "_folder": "Dumbbell Single Leg Squat"
+  },
+  "G0413": {
+    "_gif": "0413",
+    "_folder": "Dumbbell Squat"
+  },
+  "G2803": {
+    "_gif": "2803",
+    "_folder": "Dumbbell Supported Squat"
+  },
+  "G0578": {
+    "_gif": "0578",
+    "_folder": "Deadlift"
+  },
+  "G0744": {
+    "_gif": "0744",
+    "_folder": "Lying Squat"
+  },
+  "G1476": {
+    "_gif": "1476",
+    "_folder": "Single Leg Squat"
+  },
+  "G0770": {
+    "_gif": "0770",
+    "_folder": "Smith Squat"
+  },
+  "G0852": {
+    "_gif": "0852",
+    "_folder": "Weighted Squat"
+  },
+  "G0786": {
+    "_gif": "0786",
+    "_folder": "Squat Jerk"
+  },
+  "G3222": {
+    "_gif": "3222",
+    "_folder": "Semi Squat Jump"
+  },
+  "G1003": {
+    "_gif": "1003",
+    "_folder": "Band Squat Row"
+  },
+  "G2311": {
+    "_gif": "2311",
+    "_folder": "Stairmaster (Time)"
+  },
+  "G3291": {
+    "_gif": "3291",
+    "_folder": "Stalder Press"
+  },
+  "G0063": {
+    "_gif": "0063",
+    "_folder": "Barbell Narrow Stance Squat"
+  },
+  "G2805": {
+    "_gif": "2805",
+    "_folder": "Dumbbell Single Leg Deadlift with Stepbox Support"
+  },
+  "G1008": {
+    "_gif": "1008",
+    "_folder": "Band Stepup"
+  },
+  "G0114": {
+    "_gif": "0114",
+    "_folder": "Barbell Stepup"
+  },
+  "G2796": {
+    "_gif": "2796",
+    "_folder": "Dumbbell Stepup Lunge"
+  },
+  "G1009": {
+    "_gif": "1009",
+    "_folder": "Band Stiff Leg Deadlift"
+  },
+  "G1023": {
+    "_gif": "1023",
+    "_folder": "Band Straight Back Stiff Leg Deadlift"
+  },
+  "G0432": {
+    "_gif": "0432",
+    "_folder": "Dumbbell Stiff Leg Deadlift"
+  },
+  "G3314": {
+    "_gif": "3314",
+    "_folder": "Straddle Maltese"
+  },
+  "G3298": {
+    "_gif": "3298",
+    "_folder": "Straddle Planche"
+  },
+  "G1010": {
+    "_gif": "1010",
+    "_folder": "Band Straight Leg Deadlift"
+  },
+  "G0116": {
+    "_gif": "0116",
+    "_folder": "Barbell Straight Leg Deadlift"
+  },
+  "G0434": {
+    "_gif": "0434",
+    "_folder": "Dumbbell Straight Leg Deadlift"
+  },
+  "G3313": {
+    "_gif": "3313",
+    "_folder": "Weighted Straight Bar Dip"
+  },
+  "G1002": {
+    "_gif": "1002",
+    "_folder": "Band Lying Straight Leg Raise"
+  },
+  "G3642": {
+    "_gif": "3642",
+    "_folder": "Weighted Stretch Lunge"
+  },
+  "G3656": {
+    "_gif": "3656",
+    "_folder": "Short Stride Run (Time)"
+  },
+  "G3142": {
+    "_gif": "3142",
+    "_folder": "Smith Sumo Squat"
+  },
+  "G0349": {
+    "_gif": "0349",
+    "_folder": "Dumbbell Lying Supination"
+  },
+  "G0808": {
+    "_gif": "0808",
+    "_folder": "Suspended Row"
+  },
+  "G0574": {
+    "_gif": "0574",
+    "_folder": "Bent Over Row"
+  },
+  "G1349": {
+    "_gif": "1349",
+    "_folder": "Reverse T-Bar Row"
+  },
+  "G3542": {
+    "_gif": "3542",
+    "_folder": "Dumbbell Incline T-raise"
+  },
+  "G0436": {
+    "_gif": "0436",
+    "_folder": "Dumbbell Tate Press"
+  },
+  "G3304": {
+    "_gif": "3304",
+    "_folder": "Skin the Cat"
+  },
+  "G0539": {
+    "_gif": "0539",
+    "_folder": "Kettlebell Single Arm Military Press to the Side"
+  },
+  "G3305": {
+    "_gif": "3305",
+    "_folder": "Barbell Thruster"
+  },
+  "G0550": {
+    "_gif": "0550",
+    "_folder": "Kettlebell Thruster"
+  },
+  "N03": {},
+  "G1389": {
+    "_gif": "1389",
+    "_folder": "Posterior Tibialis Stretch"
+  },
+  "G1418": {
+    "_gif": "1418",
+    "_folder": "Hug Knees to Chest"
+  },
+  "G0443": {
+    "_gif": "0443",
+    "_folder": "Elbow to Knee"
+  },
+  "G2312": {
+    "_gif": "2312",
+    "_folder": "Lying Elbow to Knee"
+  },
+  "G1582": {
+    "_gif": "1582",
+    "_folder": "Reclining Big Toe Pose with Rope"
+  },
+  "G3214": {
+    "_gif": "3214",
+    "_folder": "Arms Apart Circular Toe Touch"
+  },
+  "G1468": {
+    "_gif": "1468",
+    "_folder": "Crab Twist Toe Touch"
+  },
+  "G3218": {
+    "_gif": "3218",
+    "_folder": "Hands Clasped Circular Toe Touch"
+  },
+  "G3215": {
+    "_gif": "3215",
+    "_folder": "Hands Reversed Clasped Circular Toe Touch"
+  },
+  "G0474": {
+    "_gif": "0474",
+    "_folder": "Hanging Straight Leg Hip Raise"
+  },
+  "G3640": {
+    "_gif": "3640",
+    "_folder": "Knee Touch Crunch"
+  },
+  "G0813": {
+    "_gif": "0813",
+    "_folder": "Between Benches Tricep Dip"
+  },
+  "G0019": {
+    "_gif": "0019",
+    "_folder": "Kneeling Tricep Dip"
+  },
+  "G0591": {
+    "_gif": "0591",
+    "_folder": "Overhand Tricep Dip"
+  },
+  "G0814": {
+    "_gif": "0814",
+    "_folder": "Tricep Dip"
+  },
+  "G1755": {
+    "_gif": "1755",
+    "_folder": "Weighted Tricep Dips"
+  },
+  "G0998": {
+    "_gif": "0998",
+    "_folder": "Band Side Tricep Extension"
+  },
+  "G0092": {
+    "_gif": "0092",
+    "_folder": "Barbell Seated Overhead Tricep Extension"
+  },
+  "G0109": {
+    "_gif": "0109",
+    "_folder": "Barbell Standing Overhead Tricep Extension"
+  },
+  "G1771": {
+    "_gif": "1771",
+    "_folder": "Bodyweight Kneeling Tricep Extension"
+  },
+  "G0149": {
+    "_gif": "0149",
+    "_folder": "Cable Alternate Tricep Extension"
+  },
+  "G1727": {
+    "_gif": "1727",
+    "_folder": "Cable Single Arm Reverse Grip Tricep Extension"
+  },
+  "G0231": {
+    "_gif": "0231",
+    "_folder": "Cable Standing Single Arm Tricep Extension"
+  },
+  "G0306": {
+    "_gif": "0306",
+    "_folder": "Dumbbell Decline Tricep Extension"
+  },
+  "G1733": {
+    "_gif": "1733",
+    "_folder": "Dumbbell Incline Tricep Extension"
+  },
+  "G0351": {
+    "_gif": "0351",
+    "_folder": "Dumbbell Lying Tricep Extension"
+  },
+  "G0373": {
+    "_gif": "0373",
+    "_folder": "Dumbbell Pronated Grip Tricep Extension"
+  },
+  "G1737": {
+    "_gif": "1737",
+    "_folder": "Dumbbell Seated Bent Over Tricep Extension"
+  },
+  "G1740": {
+    "_gif": "1740",
+    "_folder": "Dumbbell Standing Bent Over Tricep Extension"
+  },
+  "G0423": {
+    "_gif": "0423",
+    "_folder": "Dumbbell Standing Tricep Extension"
+  },
+  "G1748": {
+    "_gif": "1748",
+    "_folder": "EZ Bar Lying Tricep Extension"
+  },
+  "G0607": {
+    "_gif": "0607",
+    "_folder": "Tricep Extension"
+  },
+  "G1752": {
+    "_gif": "1752",
+    "_folder": "Smith Machine Incline Tricep Extension"
+  },
+  "G1723": {
+    "_gif": "1723",
+    "_folder": "Cable Single Arm Tricep Pushdown"
+  },
+  "G0817": {
+    "_gif": "0817",
+    "_folder": "Tricep Stretch"
+  },
+  "G1011": {
+    "_gif": "1011",
+    "_folder": "Band Seated Twist"
+  },
+  "G0094": {
+    "_gif": "0094",
+    "_folder": "Barbell Seated Twist"
+  },
+  "G0112": {
+    "_gif": "0112",
+    "_folder": "Barbell Standing Twist"
+  },
+  "G2399": {
+    "_gif": "2399",
+    "_folder": "Cable Seated Twist"
+  },
+  "G0243": {
+    "_gif": "0243",
+    "_folder": "Cable Twist"
+  },
+  "G0583": {
+    "_gif": "0583",
+    "_folder": "Kneeling Twist"
+  },
+  "G0307": {
+    "_gif": "0307",
+    "_folder": "Dumbbell Decline Twist Fly"
+  },
+  "G0236": {
+    "_gif": "0236",
+    "_folder": "Cable Standing Twist Row"
+  },
+  "G0331": {
+    "_gif": "0331",
+    "_folder": "Dumbbell Incline Twisted Flyes"
+  },
+  "G2802": {
+    "_gif": "2802",
+    "_folder": "Twisted Leg Raise"
+  },
+  "G0985": {
+    "_gif": "0985",
+    "_folder": "Band Kneeling Twisting Crunch"
+  },
+  "G1007": {
+    "_gif": "1007",
+    "_folder": "Band Standing Twisting Crunch"
+  },
+  "G0244": {
+    "_gif": "0244",
+    "_folder": "Cable Twisting Pull"
+  },
+  "G0990": {
+    "_gif": "0990",
+    "_folder": "Band Single Arm Twisting Seated Row"
+  },
+  "G3116": {
+    "_gif": "3116",
+    "_folder": "Band Fixed Back Underhand Pulldown"
+  },
+  "G1013": {
+    "_gif": "1013",
+    "_folder": "Band Underhand Pulldown"
+  },
+  "G1313": {
+    "_gif": "1313",
+    "_folder": "Unilateral Row"
+  },
+  "G1324": {
+    "_gif": "1324",
+    "_folder": "Cable Upper Row"
+  },
+  "G0120": {
+    "_gif": "0120",
+    "_folder": "Barbell Upright Row"
+  },
+  "G0123": {
+    "_gif": "0123",
+    "_folder": "Barbell Wide Grip Upright Row"
+  },
+  "G0246": {
+    "_gif": "0246",
+    "_folder": "Cable Upright Row"
+  },
+  "G0363": {
+    "_gif": "0363",
+    "_folder": "Dumbbell Single Arm Upright Row"
+  },
+  "G0775": {
+    "_gif": "0775",
+    "_folder": "Smith Upright Row"
+  },
+  "G1014": {
+    "_gif": "1014",
+    "_folder": "Band V-up"
+  },
+  "G0438": {
+    "_gif": "0438",
+    "_folder": "Dumbbell W Press"
+  },
+  "G0796": {
+    "_gif": "0796",
+    "_folder": "Standing Wheel Rollout"
+  },
+  "G0554": {
+    "_gif": "0554",
+    "_folder": "Kettlebell Windmill"
+  },
+  "G3582": {
+    "_gif": "3582",
+    "_folder": "Lunge with Jump"
+  },
+  "G3663": {
+    "_gif": "3663",
+    "_folder": "Reverse Plank with Leg Lift"
+  },
+  "G1378": {
+    "_gif": "1378",
+    "_folder": "Calf Stretch with Rope"
+  },
+  "G0498": {
+    "_gif": "0498",
+    "_folder": "Inverted Row with Straps"
+  },
+  "G0356": {
+    "_gif": "0356",
+    "_folder": "Dumbbell Single Arm Lateral Raise with Support"
+  },
+  "G3641": {
+    "_gif": "3641",
+    "_folder": "Weighted Kneeling Step with Swing"
+  },
+  "G3644": {
+    "_gif": "3644",
+    "_folder": "Weighted Lunge with Swing"
+  },
+  "G0464": {
+    "_gif": "0464",
+    "_folder": "Front Plank with Twist"
+  },
+  "G1686": {
+    "_gif": "1686",
+    "_folder": "Squat to Overhead Reach with Twist"
+  },
+  "G3200": {
+    "_gif": "3200",
+    "_folder": "Bent Over Row with V Bar"
+  },
+  "G2616": {
+    "_gif": "2616",
+    "_folder": "Cable Lateral Pulldown with V Bar"
+  },
+  "G1428": {
+    "_gif": "1428",
+    "_folder": "Wrist Circles"
+  },
+  "G0994": {
+    "_gif": "0994",
+    "_folder": "Band Reverse Wrist Curl"
+  },
+  "G1016": {
+    "_gif": "1016",
+    "_folder": "Band Wrist Curl"
+  },
+  "G0082": {
+    "_gif": "0082",
+    "_folder": "Barbell Reverse Wrist Curl"
+  },
+  "G0104": {
+    "_gif": "0104",
+    "_folder": "Barbell Standing Back Wrist Curl"
+  },
+  "G0126": {
+    "_gif": "0126",
+    "_folder": "Barbell Wrist Curl"
+  },
+  "G0210": {
+    "_gif": "0210",
+    "_folder": "Cable Reverse Wrist Curl"
+  },
+  "G0224": {
+    "_gif": "0224",
+    "_folder": "Cable Standing Back Wrist Curl"
+  },
+  "G0247": {
+    "_gif": "0247",
+    "_folder": "Cable Wrist Curl"
+  },
+  "G0365": {
+    "_gif": "0365",
+    "_folder": "Dumbbell Over Bench Neutral Wrist Curl"
+  },
+  "G0368": {
+    "_gif": "0368",
+    "_folder": "Dumbbell Over Bench Reverse Wrist Curl"
+  },
+  "G0366": {
+    "_gif": "0366",
+    "_folder": "Dumbbell Over Bench Single Arm Neutral Wrist Curl"
+  },
+  "G1441": {
+    "_gif": "1441",
+    "_folder": "Dumbbell Over Bench Single Arm Reverse Wrist Curl"
+  },
+  "G0367": {
+    "_gif": "0367",
+    "_folder": "Dumbbell Over Bench Single Arm Wrist Curl"
+  },
+  "G0369": {
+    "_gif": "0369",
+    "_folder": "Dumbbell Over Bench Wrist Curl"
+  },
+  "G0397": {
+    "_gif": "0397",
+    "_folder": "Dumbbell Seated Neutral Wrist Curl"
+  },
+  "G0358": {
+    "_gif": "0358",
+    "_folder": "Dumbbell Single Arm Reverse Wrist Curl"
+  },
+  "G1415": {
+    "_gif": "1415",
+    "_folder": "Dumbbell Single Arm Seated Neutral Wrist Curl"
+  },
+  "G0364": {
+    "_gif": "0364",
+    "_folder": "Dumbbell Single Arm Wrist Curl"
+  },
+  "G0859": {
+    "_gif": "0859",
+    "_folder": "Wrist Roller"
+  },
+  "G1017": {
+    "_gif": "1017",
+    "_folder": "Band Y-raise"
+  },
+  "G3541": {
+    "_gif": "3541",
+    "_folder": "Dumbbell Incline Y-raise"
+  },
+  "G1494": {
+    "_gif": "1494",
+    "_folder": "Butterfly Yoga Pose"
+  },
+  "G1545": {
+    "_gif": "1545",
+    "_folder": "Barbell Full Zercher Squat"
+  },
+  "N07": {},
+  "N13": {}
+}

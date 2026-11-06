@@ -1,0 +1,65 @@
+# Closure ledger — Free-tier "Hold the Line" mechanic + durability (Slice 1).
+# Gate 40 (validate_audit_closure.dart). One terminal_state per finding; no
+# `deferred:` key. Branch: hold-mechanic (uncommitted at authoring — commit/
+# merge under explicit founder go). Diagnose d7f3a9. ×2 context-blind plan
+# review converged (no P0/P1); each finding shipped in one commit.
+
+batch: hold-mechanic
+diagnose: docs/diagnoses/2026-07-21-free-tier-hold-mechanic-d7f3a9.md
+plan_review_record: docs/plan-reviews/hold-mechanic.md
+bpass_review: docs/reviews/hold-mechanic-bpass.md
+total_findings: 8
+closed_count: 8
+
+_commit: &wip "hold-mechanic (uncommitted)"
+_mechanic_test: &mtest test/contracts/hold_week_mechanic_behavioral_test.dart
+
+findings:
+  - id: M1
+    title: "Mechanic: holdWeek sources Peak/deload BY DATE (not the trailing deload), Monday-backdated, FLAT loads, extends plan_end"
+    terminal_state: closed_in_commit
+    commit: *wip
+    verification: *mtest
+    notes: "replaces redoWeek4 behind enable_hold_weeks (default OFF); OFF → verbatim redoWeek4."
+  - id: M2
+    title: "Reinstall durability: holdWeek awaits pushWorkoutPlanForSyncDomain so plan_json carries the extension (syncWorkoutData does not)"
+    terminal_state: closed_in_commit
+    commit: *wip
+    verification: *mtest
+    notes: "review-#1 H1 (its proposed pushSnapshotNow was wrong — that pushes the AI snapshot; corrected to the plan_json push)."
+  - id: D1
+    title: "#1 Restore-collapse: monotonic phase-gated re-anchor (PlanWindowReanchor) in BOTH restore writers"
+    terminal_state: closed_in_commit
+    commit: *wip
+    verification: test/contracts/plan_window_reanchor_test.dart
+    notes: "same phase → keep later plan_end; fresh/advance → cloud verbatim (preserves a7d3f1 heal). Also fixes latent redoWeek4-extension collapse."
+  - id: D2
+    title: "#2 Reconciler fires-more: 1..4 symptom scan intentionally NOT widened (the #1 re-anchor is the fix)"
+    terminal_state: closed_in_commit
+    commit: *wip
+    verification: test/contracts/plan_window_reanchor_test.dart
+    notes: "widening the scan would make the culprit fire more; the monotonic guard at :148-149 is the correct fix."
+  - id: D3
+    title: "#3+#7 Concurrency + idempotent trigger: _holdInFlight mutex + fresh plan_end read + crash-idempotent ordinal + graduation dead-end guard (H5)"
+    terminal_state: closed_in_commit
+    commit: *wip
+    verification: *mtest
+    notes: "no sticky intent flag (phase_repeat_nudge_pending is non-atomic). Concurrent double-call → one hold (test)."
+  - id: D4
+    title: "#4 Restore pagination: pure paginateAll loop replaces .range(0,999) truncation"
+    terminal_state: closed_in_commit
+    commit: *wip
+    verification: test/contracts/paginate_all_test.dart
+    notes: ">1000-row (~2.7yr) holder's current phase no longer dropped from the status merge."
+  - id: D5
+    title: "#6 Phantom-phase: safe by construction (future-dated hold rows excluded by pastPhaseBlocks date filter; holdWeek never writes plan_start; phase carried by the copy, not stamped)"
+    terminal_state: closed_in_commit
+    commit: *wip
+    verification: *mtest
+    notes: "no bucketer change; pinned by the 'plan_start never written' test. Dropping the explicit phase stamp also avoids the legacy multi-phase mis-merge (review-#1 H3)."
+  - id: D6
+    title: "#5 plan_json growth: verified-acceptable, no code this batch"
+    terminal_state: verified_clean
+    commit: *wip
+    verification: "live measurement (prod): ~3.5 KB/day-card, ~25 KB/hold, 2.5 MB total across 11 users"
+    notes: "not a correctness bug (durability is D1+D4). REVISIT THRESHOLD: any user's plan_json > ~1 MB, or user count > a few hundred."

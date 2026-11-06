@@ -1,0 +1,149 @@
+# Closure ledger — oi321-orphan-media-pro-check (OI-321)
+# Gate 40. One terminal_state per finding; no `deferred:` key.
+# `commit:` on a closed_in_commit row names the batch commit that ADDS this file; find it with
+#   git log --diff-filter=A --format=%h -- docs/audit/oi321-orphan-media-recheck.closure.yaml
+
+batch: oi321-orphan-media-pro-check
+plan_review_record: docs/plan-reviews/oi321-orphan-media-pro-check.md
+diagnose_docs:
+  - docs/diagnoses/2026-10-11-clean-orphan-media-unreadable-pro-check-f0b6d8.md
+total_findings: 24
+closed_count: 24
+
+findings:
+  - id: C1
+    title: "readProState: the three-state PRO read (pro / free / unknown), an array read with .limit(1), unknown on error / throw / non-array / invalid now / empty or non-string userId (no query), appended at EOF of _shared/subscription.ts"
+    terminal_state: closed_in_commit
+    commit: oi321-orphan-media-pro-check batch commit (see header)
+    verification: "supabase/functions/_shared/subscription_test.ts (11 new, 23 in the file); mutants M0-M11b red; Gate parity (SoT ranges) green because nothing above line 276 changed."
+
+  - id: C2
+    title: "clean-orphan-media/logic.ts: sweepOrphans removes ONLY on exactly free (malformed candidate, out-of-union state, throwing dependency => keep), removeFromBucket is the one .remove( and converts a throw to { error }, runSweep binds the chat-media bucket, runErrorSummary"
+    terminal_state: closed_in_commit
+    commit: oi321-orphan-media-pro-check batch commit (see header)
+    verification: "supabase/functions/clean-orphan-media/logic_test.ts (35, incl. an end-to-end runSweep over one fake client: the two-row user and an unreadable read never reach remove, Storage-shaped failure codes, the systemic-failure boundaries); mutants M12-M33 and M36-M44 red."
+
+  - id: C3
+    title: "index.ts wiring: rechecksIsPro deleted, runSweep called, error_summary recorded on the cron row, additive counts in the response, both failed legs kept, and a RATIO rule (isSystematicFailure: at least 5 undecided AND a majority of the scanned) that ends the run failed/500 so a systematic outage pages"
+    terminal_state: closed_in_commit
+    commit: oi321-orphan-media-pro-check batch commit (see header)
+    verification: "test/contracts/clean_orphan_media_pro_recheck_test.dart (wiring pins, both failed legs by position, the status / httpStatus / Response lines); logic_test.ts (isSystematicFailure boundaries: 4 undecided is not systemic, half is not a majority, 5 of 5 is, 12 candidates with 3 flaky is not); mutants M23, M32, M34, M34b, M35, M36-M41, M45 red. deno check over the whole supabase/functions/ tree exits 0."
+
+  - id: C4
+    title: "a removal result is now read: a failed removal is counted failed, not deleted; removed 0 is alreadyGone"
+    terminal_state: closed_in_commit
+    commit: oi321-orphan-media-pro-check batch commit (see header)
+    verification: "logic_test.ts (error, throw, removed 0 / null); mutants M16, M17, M19, M22 red."
+
+  - id: C5
+    title: "pins: the chat-media bucket literal and the RPC name (the c1ea30 pin that was promised and never written), exactly one .remove(, each .gt(end_date) form once (the third copy of the PRO predicate cannot blind the older pins), and a DERIVED sweep over every user-keyed subscriptions chain ending in .maybeSingle()/.single()"
+    terminal_state: closed_in_commit
+    commit: oi321-orphan-media-pro-check batch commit (see header)
+    verification: "clean_orphan_media_pro_recheck_test.dart (14) + progress_photos_pro_insert_rule_test.dart (nowIso pin); mutants M10, M18, M27 (weekly-report loses .limit(1)), M32, M33, M46-M48 red; the extractor was measured on the real tree first (27 sites, 7 subject chains, floor asserted)."
+
+  - id: C6
+    title: "registry concept clean_orphan_media_pro_recheck (concept-level behavioral_test_path), naming_conventions PRO row (three PRO reads, ProState), supabase/functions/CLAUDE.md (one SoT row, one pitfall row), functions-detail.md, bug class 2.49 recurrence, the stale coach_media_repository.dart comment, OI-321 body corrected (Status stays OPEN)"
+    terminal_state: closed_in_commit
+    commit: oi321-orphan-media-pro-check batch commit (see header)
+    verification: "check_sot_registry_parity PASS, Gate 42 PASS, check_sot_registry_citations PASS, check_context_artifact_budget PASS, validate_diagnose_doc OK."
+
+  - id: B1
+    title: "B-pass F1 (P2): a SYSTEMATIC unreadable-subscription state (revoked grant, rotated key, PostgREST outage) made the run success with zero deletions every day and no alert; the justification also cited a wrong precedent (re-engagement)"
+    terminal_state: closed_in_commit
+    commit: oi321-orphan-media-pro-check batch commit (see header)
+    verification: "logic.ts isSystematicFailure (undecided = skippedUnknown + failed; at least 5 AND a strict majority of scanned) -> index.ts ends the run failed/500, which alert_cron_failures (migration 147) turns into the critical founder alert; one blip or one stuck object stays success. Precedent corrected to weekly-recalc/index.ts:415-420 in the plan, the diagnose-doc, functions-detail.md and bug class 2.49. logic_test.ts boundaries; mutants M36-M41 and M45 red."
+
+  - id: B2
+    title: "B-pass F2 (P3): subscription_test.ts '12 new' (it is 11 new, 23 total) in the diagnose-doc and this ledger; plan section 5 ledger numbering differed from the ledger"
+    terminal_state: closed_in_commit
+    commit: oi321-orphan-media-pro-check batch commit (see header)
+    verification: "counts re-measured: git diff --cached | grep -c '^+Deno.test' = 11, deno test = 23 / 35 / Dart 14; the plan numbering was aligned to this ledger."
+
+  - id: B3
+    title: "B-pass F3 (P3): SoT registry line ranges (sweepOrphans 96-165, index.ts 94-110) wider than the code, and a pitfall row that said the derived sweep pins .order(...)"
+    terminal_state: closed_in_commit
+    commit: oi321-orphan-media-pro-check batch commit (see header)
+    verification: "ranges re-derived from the final file (check_sot_registry_parity PASS: symbol inside the range, range not past the end of the file); the pitfall row now says .limit(1) is what the derived sweep pins."
+
+  - id: B4
+    title: "B-pass F4 (P3) parts (a) and (c): failureCode read only error.code, which a storage-js StorageApiError does not have (it has a numeric status), so in production every Storage failure collapsed to remove_error and the fixtures modelled a shape the client never produces; and a run where every removal was a no-op (removed 0) showed already_gone only in the log"
+    terminal_state: closed_in_commit
+    commit: oi321-orphan-media-pro-check batch commit (see header)
+    verification: "storage-js 2.5.5 / 2.7.x read in the Deno cache: StorageApiError { message, status: number }. failureCode now reads code, then statusCode, then status, through the same short-token filter; runErrorSummary adds already_gone=N when nothing was removed and everything scanned was already gone; logic_test.ts has Storage-shaped fixtures; mutants M42-M44 red."
+
+  - id: B4b
+    title: "B-pass F4 (P3) part (b), optional: a readProState failure's real cause (57014, a permission error, PGRST116) is logged only by the shared helper's console.error; the cron row says read_unknown"
+    terminal_state: verified_clean
+    evidence: "verified in _shared/subscription.ts readProState: a populated error and a thrown rejection are both logged with code and message (never the user id) by console.error, so the cause is in the Edge Function log; the cron row carries the counts and one removal code. Returning the code from the shared helper would change a three-state union used by two callers for a log line that already exists. The reviewer marked it optional; this is a decision, not an oversight."
+
+  - id: B5
+    title: "B-pass F5 (P3): the derived sweep had three blind spots (the payment-id exemption matched any mention of the column; a generic type argument ended the chain early; the floor equalled today's exact count)"
+    terminal_state: closed_in_commit
+    commit: oi321-orphan-media-pro-check batch commit (see header)
+    verification: "exempt narrowed to .eq(razorpay_payment_id); _chainAfter skips a balanced generic <...> (and the 'calls' regex sees maybeSingle<Row>( ); floor lowered to 5; new negative controls for the generic form and the select-only form (the generic control caught a second hole in my own fix); mutants M46-M48 red."
+
+  - id: B6
+    title: "B-pass F6 (P3): docs/blast_radius.yaml has no glob for supabase/functions/clean-orphan-media/**, so a function documented as 'DELETES Storage objects, highest-consequence endpoint behind the shared secret' is classified as the platform default; _shared/subscription.ts likewise"
+    terminal_state: closed_in_commit
+    commit: blast-radius-clean-orphan-media batch commit (founder decision 2026-10-11, catastrophic, recommended tier accepted); find it with git log --diff-filter=A --format=%h -- test/contracts/blast_radius_clean_orphan_media_catastrophic_test.dart
+    verification: "docs/blast_radius.yaml gains supabase/functions/clean-orphan-media/** as catastrophic, in the catastrophic block above the supabase/functions/** platform catch-all; pinned by test/contracts/blast_radius_clean_orphan_media_catastrophic_test.dart (12 tests: every file on disk under the directory is claimed by THAT rule per both the classifier and the commit-time review gate's own rules reader, a not-yet-existing file of any kind (README, CLAUDE.md, fixtures, a dotfile), rule order, look-alike siblings stay platform, all five other catastrophic function rules untouched, the directory still exists, the real CLI in either path order) plus two end-to-end cases against the merge-time keystone's private reader in test/scripts/plan_review_record_gate_e2e_test.dart (no hermes FAILS, hermes accepted PASSES); 11 mutants (delete, reorder below the catch-all, widen to clean-orphan-media*/**, tier platform, tier account, single-segment glob, wrong directory, promote _shared/subscription.ts, drop the admin-* neighbour, classifier last-path-wins, review-gate parser blind to catastrophic; and two keystone mutants, parser blind to catastrophic and hermes check disabled) - results in docs/plan-reviews/blast-radius-clean-orphan-media.md (the ledger header's plan_review_record names the OI-321 batch's own record). _shared/subscription.ts, the candidate RPC find_orphan_chat_media (migration 071) and the cron definition deliberately stay platform (an edit there is reviewed at platform, no hermes pass); a test asserts the subscription helper. The delete-path pins (clean_orphan_media_pro_recheck_test.dart, the clean_orphan_media_pro_recheck SoT entry, the backup payloads) stay feature, like the pins of every other catastrophic function (plan section 2, B-pass finding 4)."
+
+  - id: B7
+    title: "B-pass F7 (P3): the ledger, the diagnose-doc and the plan point at docs/plan-reviews/oi321-orphan-media-pro-check.md, and the B-pass produces docs/reviews/<hash>-review.md plus a tuning-history entry; none existed at staging time"
+    terminal_state: closed_in_commit
+    commit: oi321-orphan-media-pro-check batch commit (see header)
+    verification: "the review file and the code-review tuning-history entry land in the batch commit (check_skill_tuning_history gates that); the plan-review record lands in the NEXT commit on the branch, because it names the review file whose name is the staged-diff hash and putting it in the same commit would move that hash. check_plan_review_record_exists demands it at the merge to main."
+
+  - id: B8
+    title: "B-pass F8 (P3): the coach_media_repository.dart comment claimed the cron 'never' removes a PRO user's object (untrue until the deploy, and untrue across the read-then-remove window), and the readProState JSDoc sat above ProState so editor hover showed nothing"
+    terminal_state: closed_in_commit
+    commit: oi321-orphan-media-pro-check batch commit (see header)
+    verification: "comment reworded (unreadable subscription => no removal; a purchase between the recheck and the removal is not covered; live only after the redeploy); the JSDoc now sits directly above readProState with a one-line comment on ProState."
+
+  - id: G1
+    title: "sibling sweep of the 27 non-test from('subscriptions') sites in 16 files under supabase/functions: gates: .order(end_date desc).limit(1).maybeSingle() with an unreadable result refusing: weekly-report:100, ai-media-proxy:578 (error => tier_unavailable, fail closed), create-razorpay-order:99 (409 guard; an error lets a purchase proceed), ai-proxy:156 (the f2b9d4 fix, deliberate fail-closed), verify-subscription:67 (error => 500), assess-body-composition:72 (error ignored => reads free => 403, a refusal)"
+    terminal_state: verified_clean
+    evidence: "each read opened at its line; none can raise PGRST116 (limit(1) before maybeSingle) and none takes a destructive action on an unreadable result. Enumerated with git grep and re-derived by the chain extractor in the contract test (27 matches after this change: the clean-orphan-media site is gone, readProState is the new one). The only Storage .remove/.delete sites outside this function are rolling-context:522 (no PRO gate) and _shared/purge_user_storage.ts:119 (account deletion)."
+
+  - id: G2
+    title: "sibling sweep of the 27 non-test from('subscriptions') sites in 16 files under supabase/functions: future-prediction:223 .limit(1).single(): error or zero rows => NOT_PRO (a refusal)"
+    terminal_state: verified_clean
+    evidence: "opened at its line; a gate that refuses. Enumerated with git grep and re-derived by the chain extractor in the contract test (27 matches after this change: the clean-orphan-media site is gone, readProState is the new one). The only Storage .remove/.delete sites outside this function are rolling-context:522 (no PRO gate) and _shared/purge_user_storage.ts:119 (account deletion)."
+
+  - id: G3
+    title: "sibling sweep of the 27 non-test from('subscriptions') sites in 16 files under supabase/functions: batch PRO sets that THROW on error (alert content, not destructive): plateau-alert:139, protein-gap-alert:106 (fetchAllByIds / fetchAllPages), and the shared helpers subscription.ts fetchProUserIds / isProUser / fetchLatestActiveEndByUser"
+    terminal_state: verified_clean
+    evidence: "fetchAllPages throws on a page error; the callers' failure is a failed cron run, not a delete. Enumerated with git grep and re-derived by the chain extractor in the contract test (27 matches after this change: the clean-orphan-media site is gone, readProState is the new one). The only Storage .remove/.delete sites outside this function are rolling-context:522 (no PRO gate) and _shared/purge_user_storage.ts:119 (account deletion)."
+
+  - id: G4
+    title: "sibling sweep of the 27 non-test from('subscriptions') sites in 16 files under supabase/functions: aggregates and digests: admin-dashboard-data:243, founder_digest_content:937 and :1042, telegram-admin-bot:203 and :263, and telegram-admin-bot:412 (ordered, limit(1), throws on error)"
+    terminal_state: verified_clean
+    evidence: "no per-user entitlement decision, nothing destructive. Enumerated with git grep and re-derived by the chain extractor in the contract test (27 matches after this change: the clean-orphan-media site is gone, readProState is the new one). The only Storage .remove/.delete sites outside this function are rolling-context:522 (no PRO gate) and _shared/purge_user_storage.ts:119 (account deletion)."
+
+  - id: G5
+    title: "sibling sweep of the 27 non-test from('subscriptions') sites in 16 files under supabase/functions: payment-id idempotency / write-adjacent reads (razorpay_payment_id is UNIQUE, migration 010): razorpay-webhook:359, :560, :572; verify-payment:321, :540, :553, :606"
+    terminal_state: verified_clean
+    evidence: "keyed by a UNIQUE column, so at most one row; exempted by name in the derived sweep. Enumerated with git grep and re-derived by the chain extractor in the contract test (27 matches after this change: the clean-orphan-media site is gone, readProState is the new one). The only Storage .remove/.delete sites outside this function are rolling-context:522 (no PRO gate) and _shared/purge_user_storage.ts:119 (account deletion)."
+
+  - id: G6
+    title: "sibling sweep of the 27 non-test from('subscriptions') sites in 16 files under supabase/functions: delete-account:242: cancels a Razorpay subscription; on a read error it proceeds with erasure on purpose (DPDP section 17); not a PRO gate"
+    terminal_state: verified_clean
+    evidence: "code comment at delete-account/index.ts:230-237; erasure must not be blocked. Enumerated with git grep and re-derived by the chain extractor in the contract test (27 matches after this change: the clean-orphan-media site is gone, readProState is the new one). The only Storage .remove/.delete sites outside this function are rolling-context:522 (no PRO gate) and _shared/purge_user_storage.ts:119 (account deletion)."
+
+  - id: G7
+    title: "clean-orphan-media:122 (rechecksIsPro): the ONLY user-keyed PRO read without .limit(1) and the only one whose unknown branch is destructive"
+    terminal_state: closed_in_commit
+    commit: oi321-orphan-media-pro-check batch commit (see header)
+    verification: "this batch (C1-C5); the derived sweep now fails the build if another one appears."
+
+  - id: D1
+    title: "the live Edge Function deploy of clean-orphan-media (bundle gains _shared/subscription.ts and ./logic.ts; live v14 now)"
+    terminal_state: closed_in_commit
+    commit: df2b1282 (the merge of PR #101 whose tree was deployed; deploy run 2026-10-11 12:37 UTC on the founder's explicit go, "live deploy authorized. Go deploy")
+    verification: "Live project dedsavbjuwgarrhphgnl, function clean-orphan-media: version 14 -> 15, status ACTIVE, verify_jwt false, ezbr_sha256 9994c329... -> 998d66ef... (re-read through GET /v1/projects/<ref>/functions/clean-orphan-media after the deploy, not taken from the script's summary). Payload of 6 files (index.ts, logic.ts, _shared/subscription.ts, cron_auth.ts, cron_telemetry.ts, paged_fetch.ts), emitted from a worktree fast-forwarded to origin/main with supabase/functions identical to the PR head. Smoke UNAUTHENTICATED only: HTTP 401 from the function's own auth, re-run by hand with curl and no credentials (401 again). No authenticated call was made. Backup payload backups/edge_function_payloads/clean-orphan-media/v2_df2b128.json. NOT a proof of the sweep's behaviour: that is V1. Two corrections found while deploying are recorded in OI-334 (the pre-deploy snapshot wrote 0 files, so the rollback this ledger and the plan named did not exist; the working rollback is a forward deploy of the git-SHA payload with an explicit verify_jwt false) and in the deploy skill sections 6.12/6.13."
+
+  - id: V1
+    title: "live confirmation: the next scheduled run (03:00 UTC) shows cron_call_log status success and the counts in the function log"
+    terminal_state: closed_in_commit
+    commit: oi321-v1-close batch commit (the commit carrying closes-oi: OI-321)
+    verification: "Read 2026-10-12 04:12 UTC, project dedsavbjuwgarrhphgnl, read-only. cron_call_log id 9752: function_name clean-orphan-media, started_at 2026-10-12 03:00:02.878056+00, status success, http_status 200, request_id 76f39f0a, error_summary empty. The function log for the same request (execution on deployment version 15, boot 36 ms) carries the line [clean-orphan-media] request_id=76f39f0a scanned=0 deleted=0 skipped_pro=0 skipped_unknown=0 failed=0 already_gone=0, and the edge log shows POST 200 in 2422 ms, version 15. The two earlier daily runs (2026-10-10 and 2026-10-11 03:00 UTC, ids 9600 and 9674) were also success with an empty error_summary and ran on v14. SCOPE STATED: the candidate set was empty (scanned=0), so this run proves the v15 bundle boots, passes the cron auth, runs the sweep and writes the telemetry line and the cron_call_log row; it does NOT exercise the three-state PRO recheck against a live row (that remains proven only by the fakes in test/contracts/clean_orphan_media_*)."

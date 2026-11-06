@@ -1,0 +1,186 @@
+# Closure ledger — notif-prefs Units C..G (the rest of the arc after Unit B)
+#
+# §4.2 structural invariant: every entry carries a terminal_state; the schema
+# has no `deferred:` key. Gate 40 recomputes the tally and fails if any item is
+# non-terminal.
+#
+# Unit B shipped separately (a7d2e9, origin/main 3bca83a8) after three review
+# rounds each found new defects in C/D/E/F and none in B. This ledger closes
+# the remaining five units plus the round-3 findings folded into them.
+
+batch: notif-prefs-c-to-g
+date: 2026-07-27
+blast_radius: account
+diagnose_docs:
+  - docs/diagnoses/2026-07-27-notification-prefs-device-global-and-never-emitted-d4e8b2.md
+total_count: 11
+closed_count: 11
+
+findings:
+  - id: C
+    title: Preferences were device-global — stored in the SHARED configBox
+    severity: P1
+    terminal_state: closed_in_commit
+    commit: 8f7bb1c9
+    verification: >-
+      configBox carries no owner, so on a shared device the last saver set
+      preferences for whoever signed in next. NotificationPrefsRepository is now
+      the single session-gated reader/writer of the user-scoped key.
+      Behavioural proof (notification_prefs_rescope_behavioral_test.dart, 10):
+      user A writes OFF, user B signs in on the same device and reads {}, and
+      A's value is intact when A returns — isolation achieved without losing
+      data. Deliberately NOT MigratedKey: both its paths fall back to configBox.
+
+  - id: D
+    title: The key was never emitted — 0 of 91 snapshot rows carried it
+    severity: P1
+    terminal_state: closed_in_commit
+    commit: 8f7bb1c9
+    verification: >-
+      All 10 registry keys now emit from compileDailySnapshot AFTER the
+      buildAiContext spread. Verified rather than assumed that buildAiContext
+      returns trimSnapshotToBudget(...) (ai_snapshot_builder.dart:420) and that
+      this key is absent from the trimmer keep-set, so emitting inside would let
+      it be dropped for the users with the largest snapshots.
+      notification_preferences_writer_to_reader_test.dart (6).
+
+  - id: E
+    title: Four notification keys had no server-side guard at all
+    severity: P1
+    terminal_state: closed_in_commit
+    commit: 8f7bb1c9
+    verification: >-
+      New _shared/notification_prefs.ts — batched .in() + latest-desc order +
+      first-wins, `.enabled !== false`, empty map on any failure (absent means
+      SEND, N2). Guards added to plateau-alert, pr-detection, re-engagement
+      (before the dedup gate, so an opted-out user does not burn their
+      one-per-day proactive slot on a discarded push) and
+      proactive-coach-promotion (early return 200 — trigger-fired, no loop).
+      notification_prefs_server_guard_test.dart (6).
+
+  - id: F
+    title: Five of the ten toggles had no UI, and the PRO chip logic was inverted
+    severity: P2
+    terminal_state: closed_in_commit
+    commit: a2d399f2
+    verification: >-
+      _NotificationRow.isPro meant "the USER is PRO", so the gold chip rendered
+      only for users who already had PRO. Now isProFeature marks the ROW, with a
+      separate userIsPro deciding locked vs interactive. A locked row shows a
+      LOCK rather than a dead toggle. Five rows added. profile_content's
+      hardcoded 5-key list and literal /5 are now driven by
+      NotificationPrefsRepository.allKeys.
+
+  - id: A
+    title: Three Settings rows navigated to a route that does not exist
+    severity: P2
+    terminal_state: closed_in_commit
+    commit: a2d399f2
+    verification: >-
+      settings_screen.dart 105/109/113 used context.go('/notification-settings');
+      the registered path is nested under /profile and there is no errorBuilder,
+      so the tap landed on GoRouter's error screen. Repointed with push() to
+      match the working caller. notification_settings_route_test.dart (5)
+      asserts the LINK, not the save — a save test passes with the link broken.
+
+  - id: G
+    title: rank_promotion was not in the ProactiveType vocabulary
+    severity: P3
+    terminal_state: closed_in_commit
+    commit: "notif-prefs-cdefg (this commit)"
+    verification: >-
+      Added to the union so the notification key is canonical rather than an
+      ad-hoc string. See F8 below for what was deliberately NOT done.
+
+  - id: F1
+    title: "Round 3 P0 — Unit E must not copy protein-gap-alert's today-pinned read"
+    severity: P0
+    terminal_state: closed_in_commit
+    commit: 8f7bb1c9
+    verification: >-
+      The shared helper follows weekly-recap-ready's latest-desc batched shape.
+      A today-pinned read is inert against live data (91 rows / 17 users, 1 row
+      dated today, 3 users fresh within 3 days) and is structurally guaranteed
+      to fail for re-engagement, whose targets are by definition inactive.
+      Pinned by a test asserting the helper contains no .eq("snapshot_date").
+
+  - id: F7
+    title: "Round 3 P1 — the two toggles believed to ALREADY work were also inert"
+    severity: P1
+    terminal_state: closed_in_commit
+    commit: 8f7bb1c9
+    verification: >-
+      protein-gap-alert pinned snapshot_date to today and morning-alert to
+      yesterday for their PREFERENCE reads, so neither guard ran for ~16 of 17
+      users. Both now read latest-desc via the shared helper; their date pins
+      remain for CONTENT, which is correct there. INDEPENDENTLY VERIFIED that
+      the other four readers already used latest-desc rather than accepting that
+      claim — grep of all four confirmed .order("snapshot_date", desc).
+
+  - id: F5_F6_F10
+    title: "Round 3 — storage must be delete-only, named, and must not use MigratedKey"
+    severity: P1
+    terminal_state: closed_in_commit
+    commit: 8f7bb1c9
+    verification: >-
+      The legacy shared value is PURGED, never copied: the migration runs once
+      per DEVICE for whoever is signed in, and a shared-box value has no owner,
+      so a copy would hand user A's preferences to user B permanently. Own flag
+      (notif_prefs_purge_v1_done) rather than bumping _flagKey to v3, which
+      would re-run the completed 31-key sweep. MigratedKey avoided on BOTH read
+      and write paths — each falls back to configBox.
+
+  - id: F8
+    title: "Round 3 P2 — adding rank_promotion to dedup would weaken it for every other type"
+    severity: P2
+    terminal_state: closed_in_commit
+    commit: "notif-prefs-cdefg (this commit)"
+    verification: >-
+      shouldSendProactive compares a SINGLE last_proactive_type slot, so
+      stamping a promotion would overwrite whatever was last sent and let a
+      same-day pr_celebration fire again. Resolved by adding the type to the
+      union but NOT calling markProactiveSent for it, documented inline at the
+      union. Nothing is lost — a promotion is trigger-fired once per rank
+      change, so it is one-per-event by construction.
+
+  - id: F11_F12
+    title: "Round 3 — claimed the inverted flag orphans isPro / extra['isPro']"
+    severity: P3
+    terminal_state: verified_clean
+    commit: a2d399f2
+    evidence: >-
+      REFUTED on implementation, and recorded rather than silently diverged
+      from. The finding said inverting _NotificationRow.isPro orphans
+      NotificationSettingsScreen.isPro and extra['isPro'], to be deleted in the
+      same commit. It does not: with the inverted semantic the screen still
+      needs to know whether the USER has PRO in order to decide locked vs
+      interactive. The field is repurposed, not dead — deleting it would have
+      removed the input the lock state depends on.
+
+notes: |
+  Two of my own errors were caught before shipping and are recorded because both
+  would have survived review:
+
+  1. The trap-1 (trim) test first passed for the WRONG reason. Its fixture used
+     one large non-keep blob, so the trimmer shrank that blob and never reached
+     notification_preferences — the assertion held while proving nothing.
+     Rewritten so keep-set content alone exceeds the budget, which is the shape
+     that actually trims this key.
+
+  2. The Unit E adoption test first false-positived on three functions,
+     reporting workout_reminders / streak_alerts / subscription_reminders as
+     unguarded. They use dot access (prefs?.streak_alerts) rather than a quoted
+     key. Checked before "fixing" three non-bugs.
+
+  A third correction came from a gate rather than from me: the Unit-B
+  snapshot-contract parser repair immediately caught that removing the two
+  hand-rolled reads made the contract's reader citations stale. Entry updated —
+  written_by is no longer NOBODY, readers 6 -> 5, status connected. That gate had
+  never validated this block before Unit B fixed its parser, which is why six
+  stale citations had sat unnoticed.
+
+  NOT CLOSED BY THIS BATCH, and deliberately not claimed: the live proof.
+  `snapshot_json ? 'notification_preferences'` must go 0/91 -> non-zero, which
+  requires a client build in a real user session. Every test here can pass while
+  that number stays zero — which is precisely how this feature looked healthy for
+  months. Tracked as the arc's acceptance criterion, not as a closed item.
