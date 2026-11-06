@@ -7341,38 +7341,3 @@ Found by round 2 of the OI-179 plan review (migrations 090:43 and 091:22 name it
 
 **Acceptance:** the function is gone live (`to_regprocedure` is null) and no migration after the drop references it.
 
-## OI-472 — weekly-recalc calls logCronStart but has no cron job: a manual run pages a CRITICAL alert_cron_function_dead 8 days later
-
-- **Status**: OPEN
-- **Blocked on**: none
-- **Verified**: never
-- **Identified**: 2026-11-05 · filed via mint_oi.sh from branch `oi179-cron-dead-alert`
-
-Found by round 2 of the OI-179 plan review. `supabase/functions/weekly-recalc/index.ts:210` calls `logCronStart("weekly-recalc")`, but no `cron.job` command references it (live read 2026-11-05: none) and `docs/operations/CRON_REGISTRY.md` has no row for it; it has no `cron_call_log` history today. It is neither a cron-invoked nor a trigger-dispatched function in the `cron_auth_adoption_test.dart` rosters.
-
-**Why it matters:** once migration 169 makes `alert_cron_function_dead` satisfiable, a single manual run of `weekly-recalc` writes a success row that goes 8 days without a successor, and the alert raises a CRITICAL (and a Telegram message via `alert-critical-notify`) about a function that was never scheduled.
-
-**Do:** exclude `weekly-recalc` in the alert's `cron_call_log` sub-select with the same shape as migration 144's `function_name <> 'alert-critical-notify'` line (re-apply the 144 body plus one predicate through `cron.alter_job` by jobname), extend the roster test `cron_vacuum_single_statement_test.dart` to require it, or give the function a schedule and a CRON_REGISTRY row. Also record the accepted residual: one lost `logCronStart` insert on `weekly-recap-ready` (OI-194 class) makes the alert page at day 8.
-
-**Acceptance:** a manual `weekly-recalc` run raises no `alert_cron_function_dead` row (SQL rehearsal in `BEGIN ... ROLLBACK`), and the roster test fails if the exclusion is removed.
-
-## OI-473 — alert_cron_function_dead is now satisfiable and has three noise and blind-spot edges: fleet-wide page storm, 2-3 alerts per dead function, exclusion list not tied to function retirement
-
-- **Status**: OPEN
-- **Blocked on**: none
-- **Verified**: never
-- **Identified**: 2026-11-05 · filed via mint_oi.sh from branch `oi179-cron-dead-alert`
-
-Found by the Hermes pass (L31, 2026-11-05) of the OI-179 batch. Until migration 169 the alert could never fire; now it is satisfiable, and its body (migration 144, daily 06:47 UTC) has three edges that could not matter before.
-
-**1. Fleet-wide page storm.** The body has no per-run cap and no "the whole fleet is down" guard. 17 scheduled functions call `logCronStart`; in an 8-10 day outage the 06:47 run would insert up to 17 CRITICAL rows at once, each dispatching `alert-critical-notify` (a Telegram send; Telegram is deferred, so what matters today is the `alerts` rows and the founder digest, not the sends), on top of `alert_cron_silence`. On the first recovery morning, functions scheduled after 06:47 UTC (for example `expiry-reminder` 09:00, `streak-guardian` 14:30) would page before their own first post-recovery run.
-
-**2. Two or three alerts per dead function, not one.** The dedup is `acknowledged = false AND detected_at > now() - interval '24 hours'`, so an acknowledged alert re-fires the next day and sub-second jitter between daily runs decides whether the dedup holds; with retention 10 days the worst case is three alerts (2 for most). Noise bounded by retention, not a false fire.
-
-**3. The exclusion list is a hard-coded name** (`function_name <> 'alert-critical-notify'`) inside the cron body, and nothing ties retiring, renaming or unscheduling a cron function to updating it: a function retired within the last 10 days pages CRITICAL for 2-3 days. (`weekly-recalc`, a function that logs runs but has no cron job, is OI-472.)
-
-**Telegram is out of scope here:** OI-201 (a 429 with no retry on the Telegram send) is closed as moot while Telegram is deferred; it returns with Telegram.
-
-**Do:** (1) suppress the per-function alert while `alert_cron_silence` is open, or cap the insert to a handful per run with one summary row; (2) dedup on the function name with a 36-48 h window; (3) add a contract test that every `logCronStart` caller is either on the CRON_REGISTRY schedule list or on the alert's exclusion list (extend `cron_vacuum_single_statement_test.dart`'s roster check). Alert-body change = `cron.alter_job` by jobname in a new migration (platform tier, the 144 body plus the change, live apply needs its own go).
-
-**Acceptance:** a SQL rehearsal in `BEGIN ... ROLLBACK` with 5 seeded dead functions inserts at most the capped number, and the roster test fails when a new `logCronStart` caller is on neither list.
