@@ -1,6 +1,6 @@
 # Closure ledger - telegram-surface-off (OI-466, closes the residue of OI-227): the Telegram promises are out of the app.
 # Plan docs/plans/2026-11-06-telegram-surface-off.md (v3, two review rounds). Gate 40 (validate_audit_closure.dart).
-# closed_in_commit rows carry a labelled branch state until the stamp commit that follows the landing commit writes the SHA
+# closed_in_commit rows carry the SHA of the fix commit d59f362e, written by the stamp commit that follows it
 # (a commit cannot name its own SHA).
 batch: telegram-surface-off
 plan_review_record: docs/plan-reviews/telegram-surface-off.md
@@ -11,49 +11,49 @@ findings:
   - id: TG-S1-PAYWALL
     title: "The paywall PRO perk list sold 'Telegram push', a perk that cannot be delivered"
     terminal_state: closed_in_commit
-    commit: telegram-surface-off (uncommitted)
+    commit: d59f362e
     verification: "paywall_sheet.dart _proBenefits[3] is 'Weekly AI nutrition report'; test/contracts/telegram_surface_removed_test.dart group P pumps the real PaywallSheet, for the generic upgrade and for every one of the 15 feature labels of its subtitle switch plus the default branch, and finds no Telegram in any Text, RichText, Tooltip or Semantics label, with 'UPGRADE TO PRO' and the weekly report perk as positive controls. Mutants M1 (perk restored) and N6 (Tele and gram joined at run time in one subtitle, invisible to any source scan) redden it."
 
   - id: TG-S2-MENU
     title: "The AI Coach overflow menu offered 'Switch to Telegram' (and 'Switch to In-App Chat' to a tester already switched)"
     terminal_state: closed_in_commit
-    commit: telegram-surface-off (uncommitted)
+    commit: d59f362e
     verification: "The menu is the pure top-level function coachHeaderMenuItems (compact_header.dart): Clear conversation, plus Upgrade to PRO on a free account. Group M of the new test pumps a PopupMenuButton from that function (free: clear+upgrade; PRO: clear), group S pins the real header wiring (itemBuilder: (context) => coachHeaderMenuItems(isPro: isPro), count 1) and ties each menu value to exactly one case label in the header handler. Mutants M2 (item re-added), M16 (function unwired) and N2/N2b (a case label renamed) redden it. The entry is pinned to exist and be wired, not to work (TG-CLEAR-NOOP)."
 
   - id: TG-S3-VIEW
     title: "A 'Telegram - Coming Soon' view replaced the whole chat (input bar, quick prompts, measurement chip) for a tester whose saved coach_channel was 'telegram'"
     terminal_state: closed_in_commit
-    commit: telegram-surface-off (uncommitted)
+    commit: d59f362e
     verification: "telegram_view.dart, channelProvider, ChannelNotifier, telegramConnectionProvider, TelegramConnectionNotifier, the OI-232 channel listener and the four channel == 'in_app' branches in screen.dart are deleted; nothing in lib/ reads coach_channel except the migrator key list. PRESENCE ONLY, stated in the test header and the diagnose doc: AiCoachScreen cannot be pumped in a unit test (coach_chat_restore_invalidation_test.dart:15-36), so the saved-channel tester landing in chat is proven structurally by group S (584 lib files scanned, exact-count allow-list, symbol and file absence) and by device check A16 of OI-348. The chat area is also pinned as the unconditional body of the screen build by its neighbours, and coach_channel is pinned to exactly one use (the migrator list). Mutants M3, M4, M9, N1 (chat area gated behind isPro) and N5 (a second coach_channel use in the exempt migrator) redden group S."
 
   - id: TG-S4-DEADCARD
     title: "TelegramCard (75 lines, 'CONNECT @AVYACOACHBOT') and _openTelegramBot (t.me deep link) were dead code with no caller"
     terminal_state: closed_in_commit
-    commit: telegram-surface-off (uncommitted)
+    commit: d59f362e
     verification: "Both deleted (and the url_launcher import that only they used). Group S denies telegram, t.me as a word, tg://, the Devanagari spellings, AVYACoachBot and ICanbeFitterBot across lib/**/*.dart and the text files under assets/ and web/, and allows only the exact lines of sync_service.dart and the migrator list. Mutants M5, M6 (Telegram inside a string literal with a // in it, proving the string-aware stripper), M7 (@AVYACOACHBOT without the word Telegram), M8 (a fourth 'telegram' in sync_service.dart), N3 (a deep link built as host t.me), N3b (tg://), N3c (Devanagari) and N4 (user copy swapped into an allow-listed line, count unchanged) redden it. Mutant M10 ('Tele' 'gram' adjacent literals) SURVIVES and is recorded as a known residue of any substring scan."
 
   - id: TG-PIN-REPOINT
     title: "Tests that pinned the removed code were repointed, not loosened; the old contract test that pinned the opposite end state was replaced"
     terminal_state: closed_in_commit
-    commit: telegram-surface-off (uncommitted)
+    commit: d59f362e
     verification: "measurement_flag_off_identity_test.dart pins the chip slot by its neighbours (mutants M11, M14 and M15, each a re-gating, redden it); coach_chat_reply_sanitization_test.dart slices to 'final sendMessageProvider' because the old next-class terminator would have counted the top-level definition (mutant M12 restores it: red, count 3 vs 2); initial_scroll_to_bottom_test.dart lost only the test of the retired OI-232 listener; telegram_connect_ui_removed_test.dart (required the switch and Coming Soon to stay) is deleted and replaced by telegram_surface_removed_test.dart."
 
   - id: TG-REGISTRY-RANGES
     title: "docs/sot_registry.yaml line ranges into screen.dart (479-486), ai_coach_provider.dart (1620-1651) and the in_app-only notes moved or went false"
     terminal_state: closed_in_commit
-    commit: telegram-surface-off (uncommitted)
+    commit: d59f362e
     verification: "Re-anchored from the files: screen.dart chip mount 458-464, ai_coach_provider.dart log_measurement case 1589-1620, the whole block through its closing `);` (main holds the same block at 1621-1652, byte for byte; main's old range 1620-1651 was already one line short, corrected here after the B-pass). check_sot_registry_parity.dart and check_sot_registry_completeness.dart pass. Mutant M13 (old 479-486 put back) fails the parity gate with [range-overflow] ... vs 475 lines."
 
   - id: TG-DOCS
     title: "Docs told a reader the app has a Telegram toggle, a Telegram push perk or a bot that is 'NOT in this repo'"
     terminal_state: closed_in_commit
-    commit: telegram-surface-off (uncommitted)
+    commit: d59f362e
     verification: "Updated: CLAUDE.md (screens table and tech-stack row), README.md (perk and tech-stack row), lib/features/ai_coach/CLAUDE.md, docs/architecture/{ai-coach-detail,functionality-flow,business-rules}.md, QA_TEST_EXECUTION.md, .claude/memory/feature_decisions.md. Left on purpose with a reason in the plan: docs/architecture/hooks.md:482 and :547 (verbatim pre-shortening root text), docs/reference/database-schema.md:12 (the cloud column still exists), historical task logs. B-pass round (two fresh Sonnet reviewers) widened the sweep: docs/architecture/{database,subscription}.md and the board entries OI-60, OI-278, OI-338 no longer call the bot out-of-repo (it is tracked dormant code in telegram-bot/, OI-476), OI-467 no longer says the UI reads `source` (no reader found in lib/), the root CLAUDE.md and README rows lost their 'not deployed' claim (the board says the token was never checked), and the stale 'reasoning tab' and the 50/10 media caps were fixed on the lines this batch touched."
 
   - id: TG-BOARD
     title: "OI-466 and OI-227 closed; OI-227's warning about telegram-bot/bot.py receive_email carried into a live OI"
     terminal_state: closed_in_commit
-    commit: telegram-surface-off (uncommitted)
+    commit: d59f362e
     verification: "Both entries APPENDED to docs/audit/closed_issues.md (diff: 90 insertions, 0 deletions) and removed from open_issues.md; OI-476 and OI-479 minted with scripts/mint_oi.sh (each reserves a remote ref oi/N, both confirmed on origin) and filled in; commit trailers cite closes-oi once per OI."
 
   - id: TG-DEVICE-CHECK
