@@ -546,27 +546,16 @@ export async function cmdCron(supabase: any): Promise<string> {
   // (not a row count) closes that specific gap: every function that has
   // run in the last 7 days shows up regardless of how many OTHER rows
   // exist, which `.limit(200)` could never guarantee.
-  // ⚠ NOT a complete fix, corrected by the B-pass on this diff (2026-09-14),
-  // and re-corrected in review round 2 (R2-06/R2-07, 2026-09-14 — the first
-  // correction itself cited the SUPERSEDED migration 109 body instead of the
-  // live one): `cleanup_cron_call_log()`'s LIVE definition is migration
-  // 110 (`110_cron_silence_per_function_and_cleanup_null_guard.sql:30-47`,
-  // the last `CREATE OR REPLACE` — 109's one-row body was replaced by it).
-  // 110 spares TWO rows globally, not each function's latest: the newest
-  // `status='success'` row table-wide AND the newest row of any status
-  // table-wide — still not one per function. A function silent for longer
-  // than 7 days can still have ALL its rows purged by the next nightly
-  // cleanup and become invisible here too, past 7 days instead of past
-  // 200 rows — same class of blind spot, smaller window. `.limit(1000)`
-  // is a defence-in-depth cap only — PostgREST's own hard max — not the
-  // real bound. See OI-199 for widening the retention function to a
-  // per-function exemption, which is the actual fix for true
-  // beyond-7-day silence; that is separate production infrastructure
-  // (migration 110 predates this branch) and out of this diff's scope.
-  // Update 2026-11-05 (OI-179, migration 169): retention is now 10 days, not 7.
-  // The 7-day `.gte()` below is unchanged on purpose (a window, not a purge):
-  // after 169 it, not the purge, is what hides a function silent for 7-10 days;
-  // beyond 10 days the purge still does (OI-199).
+  // ⚠ NOT a complete fix. History: this comment used to say that
+  // `cleanup_cron_call_log()` (migrations 110, then 169) spared only TWO rows
+  // globally, so a function silent for longer than the retention lost ALL its
+  // rows and became invisible here. Since migration 172 (OI-199)
+  // the pruner keeps each function's newest success and newest row, so those
+  // rows now stay in the table. What still hides a function silent for 7 days
+  // or more is this 7-day `.gte()`: a window, unchanged on purpose. Aligning it
+  // with the alert's 14-day lookback is OI-478 (an Edge Function change with
+  // its own deploy go). `.limit(1000)` is a defence-in-depth cap only —
+  // PostgREST's own hard max — not the real bound.
   const sevenDaysAgoIso = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
   const { data, error } = await supabase
     .from("cron_call_log")
