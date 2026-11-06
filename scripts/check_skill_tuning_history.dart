@@ -29,9 +29,9 @@
 //      GitHub can still grow the archive. KNOWN LIMIT: the freeze compares COUNTS, so
 //      a commit that un-dates one old header and adds a new dated one is not seen; that
 //      takes deliberate effort and blocks nothing a mistake would produce.
-//   The pre-commit loop hides this gate's output (pre-commit.sh), so on a block
-//   re-run `dart run scripts/check_skill_tuning_history.dart` on the staged state
-//   to read the message.
+//   The pre-commit loop prints a FAILING gate's output (pre-commit.sh, OI-482), so a block
+//   shows its message; re-run `dart run scripts/check_skill_tuning_history.dart` on the
+//   staged state to read it again.
 //
 // SCOPE, stated so the pass is not read as wider than it is: this gates the
 // code-review (B-pass) skill only. `/hermes-pass` writes to the same directory
@@ -151,7 +151,8 @@ int _freeze({
   sink.writeln('  (A dated SUB-bullet counts as an entry too.)');
   _printSectionTemplate(sink, claims);
   sink.writeln('  Re-run `dart run scripts/check_skill_tuning_history.dart` on the staged state to');
-  sink.writeln('  read this message; the pre-commit loop hides it. Exempt: a merge in progress.');
+  sink.writeln('  read this message again (the pre-commit loop prints the output of the first 8 failing gates only).');
+  sink.writeln('  Exempt: a merge in progress.');
   return warnOnly ? 0 : 1;
 }
 

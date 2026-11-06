@@ -14,7 +14,7 @@ self-evolving: true
 
 - **Reminder-triggered** by `scripts/pre-commit.sh` — it PRINTS a `NOTE: blast-radius=<tier> (>=account) — run /code-review (B-pass)` nudge when the staged blast-radius is ≥ `account` (per `docs/blast_radius.yaml`). Git hooks **cannot invoke Claude skills**, so this is a printed reminder; run `/code-review` **manually** when you see it. (Corrected lean-workflow batch 2026-06-01 — the prior "auto-triggered" wording described behaviour the hook never had.)
 - **Required** for commits with blast-radius `catastrophic` (gate `check_code_review_pass_exists.dart` blocks without an `accepted` verdict)
-  - **Branch sync (landing C1, OI-413).** While a merge of an ancestor of `origin/main` is pending, the gate grades only the staged paths whose index entry matches NEITHER HEAD's NOR `origin/main`'s: what main already holds, or the branch already holds, is not reviewed again. A review file is demanded only when a graded path reaches `catastrophic` (by its path or by `SECURITY DEFINER` content): a sync that adds nothing of its own needs none, and hand edits to feature-tier paths need none; when one is demanded it covers the graded paths only, and the file is still named for the hash of the FULL staged diff. Re-run `dart run scripts/check_code_review_pass_exists.dart` while the merge is pending to read the NOTE (it names the first 20 graded paths; a FAIL lists every one, and the pre-commit loop discards the gate's output). If the NOTE says "scoping not applied", the full staged list is graded, as before.
+  - **Branch sync (landing C1, OI-413).** While a merge of an ancestor of `origin/main` is pending, the gate grades only the staged paths whose index entry matches NEITHER HEAD's NOR `origin/main`'s: what main already holds, or the branch already holds, is not reviewed again. A review file is demanded only when a graded path reaches `catastrophic` (by its path or by `SECURITY DEFINER` content): a sync that adds nothing of its own needs none, and hand edits to feature-tier paths need none; when one is demanded it covers the graded paths only, and the file is still named for the hash of the FULL staged diff. Re-run `dart run scripts/check_code_review_pass_exists.dart` while the merge is pending to read the NOTE (it names the first 20 graded paths; a FAIL lists every one, and the pre-commit loop shows a gate's output only when the gate FAILS, so a passing run's NOTE is not shown). If the NOTE says "scoping not applied", the full staged list is graded, as before.
 - **Manual**: `/review` any time, including pre-push and pre-batch-finalization
 - **Skip**: commits with blast-radius `feature` (cost > value)
 - **Skip**: a bare version bump (OI-275 B2: ONLY `pubspec.yaml` + `app_constants.dart`, decided by content, all-or-nothing). Both files are `platform` tier, so the pre-commit NOTE above still prints for it; ignore it. CI's keystone gate exempts the merge from the record and the B-pass (`/build-apk` Gate 2 is the flow).
@@ -156,6 +156,7 @@ Each lens has a focused prompt the dispatched agent runs against the staged diff
    test tree for anything exercising the now-enforced path and asserting success — those tests are
    untouched by the diff and invisible to a targeted run.
 
+   **Constant-coincidence sub-check (2026-11-07, OI-482 B-pass).** For every number a test pins about OUTPUT (a count, a line limit, a cap), name the fixtures that produce a number and ask whether a WRONG constant in the code would still make the assertion pass because another fixture prints the same figure (`contains('30 lines omitted')` over a whole output, while two fixtures print 30 and 20). Assert it inside the one block that owns it, give the fixtures distinct values, and pin the BOUNDARY the doc states (50, 60 and 61 lines for a "<= 60" rule), not only a value far from it. Mutate the constant (`- 50` to `- 40`, `60` to `20`/`69`) and see which test reddens.
    **Third question, added 2026-09-06 (OI-162 slice 3a) — the one that catches a fix's own
    fallout: *does this change alter the SHAPE of a read or write, and if so, what are the NEW
    outcome states?*** A `count: "exact"` query has two (a number, an error). A value-select has
@@ -291,5 +292,5 @@ the skill's per-invocation load small), now FROZEN: do not append to it. Read th
 demand with `grep -h -A3 '^## Tuning entry' docs/reviews/*.md | grep '^- \*\*'`, and the legacy ones
 by grepping that file for a branch or lens name; do not load either whole. Gate:
 `scripts/check_skill_tuning_history.dart`. When a commit is blocked, re-run
-`dart run scripts/check_skill_tuning_history.dart` on the staged state to read its message (the
-pre-commit loop hides it).
+`dart run scripts/check_skill_tuning_history.dart` on the staged state to read its message again (the
+pre-commit loop prints the output of the first 8 FAILING gates; a passing or SKIPPED gate's output is not shown).

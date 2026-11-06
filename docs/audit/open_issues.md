@@ -1651,30 +1651,6 @@ cloud sessions; **this file is the cross-session backlog.**
 - **Blast-radius estimate**: `feature` (`scripts/**`), though it is gate machinery, so it wants a
   real review despite the tier.
 
-## OI-117 — a SIGKILLed gate and a violated gate print the same `GATE FAIL` line (P2)
-
-- **Status**: OPEN
-- **Blocked on**: nothing.
-- **Verified**: 2026-08-13 — observed live. The backgrounded gate invocation is
-  `scripts/pre-commit.sh:315` (`if ! dart run "$GATE" >/dev/null 2>&1; then`, inside a subshell
-  closed by `) &` at `:318`); bash's async job-control notice printed
-  `3950 Killed  dart run "$GATE"` — note it appears despite the `>/dev/null 2>&1` redirect, because
-  the notice comes from the shell's job control, not the gate. Immediately followed by
-  `[pre-commit] GATE FAIL: check_adr_index_fresh.dart`, and the same for
-  `check_app_version_matches_pubspec.dart`. Both gates then **PASSED when run individually**
-  (exit 0; "OK: docs/adr/INDEX.md is up to date"; "OK — both at 1.0.0+38").
-- **Identified**: 2026-08-13.
-- **Risk class**: it spends the no-bypass discipline on evidence that does not exist. §4.4 rule 20
-  and `feedback_mistake_no_verify_reflex.md` both forbid bypassing a red gate — correctly. A gate
-  that reports failure when it was actually KILLED trains the reader to doubt the next real red.
-- **What's wrong**: the hook branches on the gate's non-zero exit code without distinguishing a
-  normal non-zero (violation found) from death by signal (128+N, e.g. 137 = SIGKILL). Under memory
-  pressure the OS kills a `dart run` and the pipeline reports it as a finding.
-- **Fix shape**: detect `exit >= 128` and print a distinct line. "Gate could not be RUN" is a
-  different sentence from "gate FAILED", and only the second should block. Third instance in three
-  days of the bad-news-vs-no-news class (`d4f9b2`, `a7e3c1`, `c3f9a7`).
-- **Blast-radius estimate**: `platform` (`scripts/pre-commit.sh` is pinned).
-
 ## OI-120 — the c3f9a7 timeout raise leaves the CI `unit-test` job with ~2 min of headroom (P2)
 
 - **Status**: OPEN
@@ -7238,13 +7214,15 @@ Residual of OI-199 and OI-471 after migration 172. Migration 172 makes `cleanup_
 
 **Done when.** `logCronEnd` removes the listed shapes before the cap, a test proves each one is removed and that a clean message passes through unchanged, and the plan names the redeploy of the cron functions.
 
-## OI-482 — The same dart run native-assets race hits every git-hook dart run site: the parallel pre-commit gate loop fails a different gate under load with its output discarded (six at once on 2026-11-06), and prepare-commit-msg can silently drop the Blast-radius line
+## OI-483 — The harness hooks in .claude/settings.json (9 dart run commands) and the dart launchers (land_pr.sh, sync_with_main.sh, safe_pr_merge.sh, safe_merge.sh) have no containment for the dart run native-assets race (split from OI-482)
 
 - **Status**: OPEN
-- **Blocked on**: none
-- **Verified**: 2026-11-06 - the mechanism and its reproduction are measured in the OI-468 diagnose doc (`b7e2d9`): 1 failure in 195 `dart run` of real gate scripts in this worktree under load, no adversary, identical stderr; the pre-commit loop's own failures are NOT reproduced here (item 5 of the quirks note is the only record, with output discarded).
-- **Identified**: 2026-11-06 · filed via mint_oi.sh from branch `oi468-spawn-status`
+- **Blocked on**: OI-482 merged to `main` (it reuses `_dart_run_retrying`, the function that unit adds to `scripts/_dart_bin.sh`)
+- **Verified**: 2026-11-06 - read from the OI-482 plan reviews (round 1, two fresh readers): the 9 harness hook commands are `.claude/settings.json` lines 12, 20, 28, 38, 49, 58, 67, 77 and 87 (each `dart run [--verbosity=error] scripts/<hook>.dart` after a root-resolving `cd` (line 12, `check_alerts.dart`, has no `--verbosity`), bare `dart`, i.e. the Flutter wrapper); the launchers are `scripts/land_pr.sh:65` and `scripts/sync_with_main.sh:56` (plain form, child BACKGROUNDED and signalled by PID, TERM/INT/HUP forwarded), `scripts/safe_pr_merge.sh:44,46` (`exec "$DART_BIN"`), `scripts/safe_merge.sh:286,308` (resolved as `_PRE_DART`, not `DART_BIN`); and the Dart scripts that spawn dart in the plain form, which are readers: `scripts/batch_close_hook.dart:159`, `scripts/land_pr.dart:521`, `scripts/sync_with_main.dart:665`. Not reproduced for these sites; the mechanism is measured in diagnose `b7e2d9`.
+- **Identified**: 2026-11-06 · filed via mint_oi.sh from branch `oi482-hook-dart-run-race`
 
-**What happens.** OI-468 / OI-311 explained the exit-254 test flake: `dart run` rewrites `<cwd package>/.dart_tool/native_assets.yaml` in place (truncate, then write, with the file empty for about 0.3 ms) and every dart child reads `<script's package>/.dart_tool/native_assets.yaml` while it starts; a reader that opens it inside another `dart run`'s window exits 254 with `File not formatted as yaml: .` before `main` runs (diagnose `docs/diagnoses/2026-11-06-spawn-status-native-assets-race-b7e2d9.md`, reproduced 1 of 195 real gate scripts under load with no adversary). That batch contained it in the TEST spawn helper only. The git hooks run the same command in the same package with nothing to contain it: `scripts/pre-commit.sh:392` runs `"$DART_BIN" run "$GATE" >/dev/null 2>&1` for every gate in parallel (`PRE_COMMIT_GATE_JOBS`, default 4, `:344`), cwd the repo root, so each gate is a writer AND a victim, and the loop throws the failure text away. The memory note `reference_vps_quirks.md` item 5 records the symptom: 2026-09-29 and 2026-11-05 a DIFFERENT gate failed each run (green alone, green with `PRE_COMMIT_GATE_JOBS=1`), and 2026-11-06 SIX gates failed at once at load about 10 (`check_ai_tool_dispatcher_coverage`, `check_analyze_narrower_than_lib_in_tooling`, `check_doc_internal_consistency`, `check_edge_function_auth_pattern`, `check_equipment_audit`, `check_gate_scripts_wired`), each green alone; the mechanism there is written as "INFERRED, not proven", and a writer descheduled inside its empty-file window fails every concurrent reader at once, which fits "six at once". The whole class is every hook `dart run`: `pre-commit.sh` 192, 220, 236, 246, 270, 280, 298, 315, 326, 392, 432, 441, 456; `commit-msg.sh` 74, 108, 110; `prepare-commit-msg.sh` 55 (stderr to `/dev/null` and an empty tier exits 0, so a lost race silently drops the `Blast-radius:` line); `pre-push.sh` 135, 226 (an empty tier fails safe into the full suite); `pre-merge-commit.sh` 182, 195, 227; plus the harness hooks in `.claude/settings.json` (`dart run` per prompt and tool call, which also write the file while a suite runs in the same checkout).
+**What is missing.** OI-482 contains the native-assets race (a `dart` child that starts while another `dart run` has `.dart_tool/native_assets.yaml` truncated exits 254 with `File not formatted as yaml: .` before `main`) at the five git hooks. It was split, by CLAUDE.md 4.12.1 (a unit whose plan reviews keep widening is too large), from the other dart consumers, which have a different failure shape and need their own plan:
+- **The harness hooks** (`.claude/settings.json`, 9 commands). A lost race exits 254. The harness treats any exit other than 2 as non-blocking, so on `git_safety_hook.dart` (settings line 58) a lost race lets a raw `git commit` / `git push` through, and on the other hooks the discipline reminder, the CI reconcile or the batch-close check silently does not run. They also WRITE the file on every prompt and tool call while a test suite runs in the same checkout (the writer side of the test flake, OI-468). A hook command that exits 2 BLOCKS the tool call, so a broken edit to these commands is more dangerous than the race: the plan must run each command string for real (stub dart, a throwaway repo), parse-check the helper it calls (`sh -n`) and fall back to today's `dart run` when the helper is absent.
+- **The launchers.** `land_pr.sh` and `sync_with_main.sh` run the child in the background and forward signals to its PID, `safe_pr_merge.sh` uses `exec`: a shell function or wrapper in that position changes what the PID names or fails outright (`exec` of a function). `safe_merge.sh` resolves its binary as `_PRE_DART` and uses the plain form `dart <script>` for `version_bump_range.dart`, so the retry must also recognise a first argument that is a `.dart` file.
 
-**Done when.** The hook sites no longer fail on this race and say so when something else fails: either (a) a shared `dart_run` function in `scripts/_dart_bin.sh` that runs `"$DART_BIN" run "$@"`, keeps stderr, and re-runs once when the status is 254 and stderr contains `File not formatted as yaml` (the child dies before `main`, so a re-run repeats no side effect), used at every site above; or (b) the plain form `"$DART_BIN" <script>` for the parallel gate loop (never a writer) plus the retry for the sequential sites; a behavioral test spawns the real hook (or gate loop) against a truncating process and proves it passes where the unfixed loop fails; the loop prints a failing gate's stderr instead of discarding it; the kill switch of platform tier is stated (an env switch restoring today's call); the installed hook COPIES are re-installed from the primary on a tree equal to `origin/main` (CLAUDE.md §0, §4.13.2). Blast radius: `platform` (four of the five installed hooks), tier L (own plan, two review rounds, plan-review record, B-pass). Not in scope: the test spawn helper (done in OI-468).
+**Done when.** Every site above runs through the retry (or has a stated reason it cannot, with a test of that reason), the harness commands are covered by a test that executes each command string, the kill switch `AVYA_DART_RUN_RETRY=0` restores today's call at each site, and the launchers keep their signal behaviour (a test sends TERM to the launcher and shows the child dies). Blast radius `platform`, tier L.

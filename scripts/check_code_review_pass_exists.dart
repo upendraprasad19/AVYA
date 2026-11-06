@@ -17,8 +17,8 @@
 // While a merge of an ancestor of refs/remotes/origin/main is pending, only the staged paths
 // whose index entry equals NEITHER HEAD's NOR origin/main's entry are graded: the rest is
 // either already in the branch or already on main. Every failed precondition falls back to the
-// full staged list (the old rule) and says why in a NOTE; the pre-commit loop discards this
-// gate's output, so read the NOTE by re-running `dart run scripts/check_code_review_pass_exists.dart`
+// full staged list (the old rule) and says why in a NOTE; the pre-commit loop shows this
+// gate's output only when it FAILS, so read the NOTE of a passing run by re-running `dart run scripts/check_code_review_pass_exists.dart`
 // while the merge is pending. The hash and the review file name still derive from the FULL staged
 // diff; the reviewer scopes the review to the graded paths the NOTE lists.
 
