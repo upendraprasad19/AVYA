@@ -284,6 +284,9 @@ class PlanGenerator {
       level: effectiveExp,
       lighterPhase: PeriodizationEngine.archetypeForPhase(phase) == 'deload',
       focusGroups: BudgetMuscleGroups.of(effectiveBodyFocus),
+      // OI-454: in the 6-day build_muscle split a squat or lunge does not spend the
+      // Glutes top (its Legs B quad slot would otherwise be refused for it).
+      quadPrimaryCreditsGlutes: !SplitResolver.hasQuadLegsBSplit(planGoal, daysPerWeek),
       archetypeByName: {
         for (final e in rowsByName.entries) e.key: SessionBudget.archetypeOfRow(e.value),
       },

@@ -189,13 +189,13 @@ class SessionSetAllocator {
   /// The budget-group tokens of [ex]: the muscles it carries (copied from the row
   /// that was actually picked), else those of [row]. A value that is not a list
   /// reads as none, never throws.
-  static Set<String> _groupsOf(PlannedExercise ex, Map<String, dynamic>? row) {
+  static Set<String> _groupsOf(PlannedExercise ex, Map<String, dynamic>? row, SessionBudgetContext ctx) {
     final raw = ex.primaryMuscles ?? row?['primary_muscles'];
-    return BudgetMuscleGroups.of([
+    return BudgetMuscleGroups.creditedOf([
       if (raw is List)
         for (final m in raw)
           if (m != null) '$m',
-    ]);
+    ], quadPrimaryCreditsGlutes: ctx.quadPrimaryCreditsGlutes);
   }
 
   // ── One variant ──────────────────────────────────────────────────────────
@@ -237,7 +237,7 @@ class SessionSetAllocator {
             d,
             rank++,
             ex,
-            _groupsOf(ex, rows[ex.exerciseName.toLowerCase()]),
+            _groupsOf(ex, rows[ex.exerciseName.toLowerCase()], ctx),
             arch,
             SessionBudget.restForArchetype(arch),
             SessionBudget.baseSets,

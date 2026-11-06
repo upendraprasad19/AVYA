@@ -391,6 +391,15 @@ class SplitResolver {
   // V4: MuscleSlotDay splits — granular muscle-slot architecture
   // ══════════════════════════════════════════════════════════════════
 
+  /// OI-454: whether [planGoal] at [daysPerWeek] is the split whose `Legs B` carries a
+  /// Quads compound slot (6-day build_muscle). `generateV4` sets
+  /// `SessionBudgetContext.quadPrimaryCreditsGlutes` to the NEGATION of this, so the
+  /// slot and the credit rule cannot be keyed on two different conditions;
+  /// `quads_floor_6day_behavioral_test.dart` pins that `selectV4` returns a `Legs B`
+  /// day exactly when this is true.
+  static bool hasQuadLegsBSplit(String planGoal, int daysPerWeek) =>
+      planGoal == 'build_muscle' && daysPerWeek == 6;
+
   /// V4: Returns MuscleSlotDay list with granular muscle slots.
   static List<MuscleSlotDay> selectV4(String goal, int daysPerWeek, {String experienceLevel = 'intermediate'}) {
     final isBeginner = experienceLevel == 'beginner';
@@ -990,11 +999,12 @@ class SplitResolver {
           const MuscleSlot(targetMuscle: 'Biceps', subFocus: 'short_head', movementPattern: 'elbow_flexion', exerciseType: 'isolation', priority: 4),
           const MuscleSlot(targetMuscle: 'Mid Back', movementPattern: 'horizontal_pull', exerciseType: 'compound', priority: 4),
         ]),
-        // Legs B: Hamstring + glute
+        // Legs B: Hamstring + glute, plus one Quads compound (OI-454: the second weekly quad hit;
+        // the glute isolation lives on Legs A)
         MuscleSlotDay(name: 'Legs B', focus: 'Hamstring + glute focus', dayType: 'legs', intensity: 'hypertrophy', slotsA: [
           const MuscleSlot(targetMuscle: 'Hamstrings', movementPattern: 'hip_dominant', exerciseType: 'compound', priority: 1),
           const MuscleSlot(targetMuscle: 'Glutes', movementPattern: 'hip_dominant', exerciseType: 'compound', priority: 1),
-          const MuscleSlot(targetMuscle: 'Glutes', movementPattern: 'hip_isolation', exerciseType: 'isolation', priority: 2),
+          const MuscleSlot(targetMuscle: 'Quads', movementPattern: 'knee_dominant', exerciseType: 'compound', priority: 2),
           const MuscleSlot(targetMuscle: 'Hamstrings', movementPattern: 'knee_dominant', exerciseType: 'isolation', priority: 2),
           const MuscleSlot(targetMuscle: 'Core', movementPattern: 'core', exerciseType: 'isolation', priority: 3),
           const MuscleSlot(targetMuscle: 'Calves', movementPattern: 'knee_dominant', exerciseType: 'isolation', priority: 3),

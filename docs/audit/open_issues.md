@@ -7206,21 +7206,6 @@ Found by the sync-storm-first-sweep batch while measuring its Day-0 web check (l
 
 **Done when.** Plan reviewed twice; a repeat phase with more minutes fills the extra time as above and a repeat with the same minutes stays byte-identical to today; pins of compounds survive; the repeat gate still tests adherence; mutants prove both branches. Blast radius: `platform` (plan_engine), tier L.
 
-## OI-454 — Quads sit below their weekly floor in 6-day build_muscle plans: add a Legs B quad slot AND an allocator co-group policy so a quad exercise is not removed for crediting Glutes
-
-- **Status**: OPEN
-- **Blocked on**: none
-- **Verified**: never
-- **Identified**: 2026-11-03 · filed via mint_oi.sh from branch `oi-quads-floor`
-
-**What happens.** Intermediate build_muscle, full_gym, 6 days, 90 minutes: Quads get 8 weekly sets against a band of 12 to 16 (floors 10/12/14 by level). Legs A (`Quad dominant`) holds the only quad work; Legs B (`Hamstring + glute focus`, `_get6DayV4('build_muscle')` in `lib/shared/repositories/plan_engine/split_resolver.dart`) has none. Glutes already sit at their weekly top (12/16/20), so the allocator removes any added squat or lunge because it also credits Glutes. Closure row `SBF-QUADS-FLOOR` (`docs/audit/set-budget-flip.closure.yaml`); measured at the flip in `docs/architecture/plan-engine-detail.md` (d).
-
-**Spike (2026-11-03, reverted).** A Legs B quad slot alone changes nothing (the allocator drops it). Replacing Legs B's glute-isolation slot lifts Quads only to 9 to 12 sets against floors 10/12/14.
-
-**Founder direction (2026-11-03).** Quads option (a), recommended path: swap the Legs B glute-isolation slot for a Quads knee_dominant compound slot AND add an allocator co-group policy (a quad-primary exercise is not refused for crediting Glutes: partial glute credit, or the cap applied to the primary muscle), in one batch. Rule-14 waiver for `plan_generator.dart` given ("ok"); the allocator file may need its own waiver. The old draft `docs/plans/2026-11-03-quads-legs-b-slot.md` (worktree `quads-legs-b`, untracked) predates the spike and must be rewritten around it.
-
-**Done when.** Plan reviewed twice; Quads reach the band floor in the founder case and the other 6-day build_muscle personas with no group above its band top and every day inside its minutes; the generator golden changes only for 6-day build_muscle personas (changed keys listed); `kThinCeilings` and the scorecard baseline re-frozen if they move; mutants on the slot and on the policy. Blast radius: `platform` (plan_engine), tier L.
-
 ## OI-457 — Level is self-reported at onboarding: a 55 kg lifter who picks Intermediate gets heavy barbell squat, deadlift and bench 4x7 (parked: onboarding change)
 
 - **Status**: OPEN
@@ -7376,3 +7361,25 @@ Found by the Hermes pass (L31, 2026-11-05) of the OI-179 batch. Until migration 
 **Do:** (1) suppress the per-function alert while `alert_cron_silence` is open, or cap the insert to a handful per run with one summary row; (2) dedup on the function name with a 36-48 h window; (3) add a contract test that every `logCronStart` caller is either on the CRON_REGISTRY schedule list or on the alert's exclusion list (extend `cron_vacuum_single_statement_test.dart`'s roster check). Alert-body change = `cron.alter_job` by jobname in a new migration (platform tier, the 144 body plus the change, live apply needs its own go).
 
 **Acceptance:** a SQL rehearsal in `BEGIN ... ROLLBACK` with 5 seeded dead functions inserts at most the capped number, and the roster test fails when a new `logCronStart` caller is on neither list.
+
+## OI-477 — 6-day build_muscle personas still under the Quads floor after OI-454: intermediate basic gym (cap), advanced bodyweight (co-group rows that keep crediting Glutes), advanced and 60-minute days (time)
+
+- **Status**: OPEN
+- **Blocked on**: none
+- **Verified**: never
+- **Identified**: 2026-11-06 · filed via mint_oi.sh from branch `oi454-quads`
+
+**What happens.** OI-454 lifted Quads in every 6-day build_muscle persona and brought the founder case to its floor (8 -> 12 of 12 to 16), but not every persona reaches its floor (10 / 12 / 14 by level). Week 1, phase 1, real `generateV4`, allocator credit, Quads weekly sets and the allocator's label (`AllocationStats.belowFloor['Quads']`, pinned at 90 minutes by `quads_floor_6day_behavioral_test.dart`). At 90 minutes, 5 of 12 personas are short: intermediate basic gym 10 of 12 (`cap_limited`: the squat holds the 5-set per-exercise maximum on both leg days), advanced bodyweight 12 of 14 (`co_group_limited`: Lateral Lunge, Sumo Squat and Curtsey Squat list another muscle before Quads, so `creditedOf` leaves them crediting Glutes, which sits at its top), advanced dumbbells 13, basic gym 9 and full gym 12 of 14 (`time_limited`: the day is full). At the 60-minute default, 9 of 12 are short (intermediate 9 / 10 / 7 / 10, advanced 8 / 8 / 5 / 8 for bodyweight / dumbbells / basic gym / full gym; beginner basic gym 9 of 10): the day has no time for a second quad hit and the 6-day split spends its minutes elsewhere. OI-454 added no minutes and widened no credit beyond "first listed muscle is Quads and no Hamstrings". Why a soft cross-day avoid (the OI-458 mechanism) does not close the intermediate basic gym gap: both leg days already hold a budgeted quad compound at the 5-set per-exercise maximum (5 + 5 = 10) and Legs A's quad isolation slot resolves to Wall Sit, a timed row the allocator does not budget, so a different squat on Legs B changes nothing; reaching 12 needs a third budgeted quad exercise, which is a slot, not an avoid.
+
+**Done when.** Each short persona's cause is confirmed from its allocator stats; a fix is chosen per cause (for example credit by movement pattern instead of first listed muscle for the lunge and sumo rows, or a leg-day slot order that keeps the second quad hit at 60 minutes); the generator golden changes only for the 6-day build_muscle keys; and Quads reach the floor wherever the day's minutes allow. Blast radius: `platform` (plan_engine), tier L.
+
+## OI-475 — Quads sit below their weekly floor in 3, 4 and 5-day build_muscle plans (basic_gym and full_gym, 60 and 90 minutes): different splits, different limits than the 6-day case fixed in OI-454
+
+- **Status**: OPEN
+- **Blocked on**: none
+- **Verified**: never
+- **Identified**: 2026-11-06 · filed via mint_oi.sh from branch `oi454-quads`
+
+**What happens.** Measured on the OI-454 tree (week 1, phase 1, real `generateV4`, allocator credit, Quads weekly sets against the band floor 10 / 12 / 14 by level): 3-day intermediate basic_gym 3 (60 and 90 minutes), full_gym 7 and 8; 3-day advanced basic_gym 2, full_gym 5 and 7; 4-day intermediate basic_gym 3, full_gym 7 and 8; 4-day advanced basic_gym 3, full_gym 6 and 8; 5-day beginner basic_gym 2, full_gym 6; 5-day intermediate basic_gym 3, full_gym 7 and 8; 5-day advanced basic_gym 3, full_gym 6 and 8. The floor labels are mixed (`cap_limited`, `co_group_limited`, `time_limited`) and Glutes sit at 6 to 10, far below their top, so the 6-day cause (Glutes at the top refusing a squat) is NOT the general one. These splits have one or two leg days and their own slot lists. OI-454 changed only the 6-day build_muscle split (a Legs B quad slot plus `SessionBudgetContext.quadPrimaryCreditsGlutes`, set false for that split only; a global credit rule changed 745 of 999 generator-golden keys and was rejected).
+
+**Done when.** Each affected split's cause is named from its own allocator stats (which slot or group stopped the next set), a fix is chosen per cause (a leg-day slot, a session cap, or the credit flag for that split), the golden changes only for the splits named, and Quads reach the floor where the day's time allows. Blast radius: `platform` (plan_engine), tier L.

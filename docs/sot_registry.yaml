@@ -10734,6 +10734,41 @@ concepts:
         semantic: behavioral
     contract_test_path: test/contracts/cross_day_variety_behavioral_test.dart
 
+  - concept: quad_primary_glute_credit
+    domain: workout
+    behavioral_test_path: test/contracts/quads_floor_6day_behavioral_test.dart
+    description: >
+      OI-454 — in the 6-day build_muscle split (and only there) an exercise whose FIRST listed muscle is Quads credits
+      Quads but not Glutes to the session set budget, so the Glutes weekly top and session cap never refuse a squat,
+      lunge or leg press. `SessionBudgetContext.quadPrimaryCreditsGlutes` (default true) is set false by
+      `PlanGenerator.generateV4` for planGoal build_muscle and 6 days; `BudgetMuscleGroups.creditedOf` is the one
+      function that applies it, called by `SessionSetAllocator._groupsOf`, `PeriodizationEngine.apply` and
+      `VolumeTitration._titrateWeekBudgeted`, so the three ledgers agree. `BudgetMuscleGroups.of` (focus groups) is
+      unchanged. Paired with the Legs B slot swap (`SplitResolver._get6DayV4`, Quads / knee_dominant / compound,
+      priority 2). The gate oracle (`session_set_budget_gate_test.dart`, `_credited`) restates the rule independently.
+      Not mirrored in cascade_tracer (it counts cascade attempts, not set credit).
+    writers:
+      - file: lib/shared/repositories/plan_engine/plan_generator.dart
+        method: generateV4 SessionBudgetContext(quadPrimaryCreditsGlutes:)
+      - file: lib/shared/repositories/plan_engine/budget_muscle_groups.dart
+        method: creditedOf
+      - file: lib/shared/repositories/plan_engine/split_resolver.dart
+        method: _get6DayV4 build_muscle Legs B slots
+    readers:
+      - file: lib/shared/repositories/plan_engine/session_set_allocator.dart
+        method_or_widget: _groupsOf (ledger credit for every budgeted slot)
+        semantic: credit set
+      - file: lib/shared/repositories/plan_engine/periodization_engine.dart
+        method_or_widget: apply week-2 ledger
+        semantic: credit set
+      - file: lib/shared/repositories/plan_engine/volume_titration.dart
+        method_or_widget: _titrateWeekBudgeted groupsOf
+        semantic: credit set
+      - file: test/contracts/quads_credit_flag_consumers_test.dart
+        method_or_widget: the same input under both flag values, one consumer per test
+        semantic: behavioral
+    contract_test_path: test/contracts/quads_floor_6day_behavioral_test.dart
+
   - concept: volume_titration
     domain: workout
     behavioral_test_path: test/contracts/volume_titration_behavioral_test.dart

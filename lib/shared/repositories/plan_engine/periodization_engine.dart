@@ -171,7 +171,8 @@ class PeriodizationEngine {
             : ex.restSeconds;
         restOf[(d, i)] = rest;
         final g = budgeted
-            ? BudgetMuscleGroups.of(ex.primaryMuscles ?? const [])
+            ? BudgetMuscleGroups.creditedOf(ex.primaryMuscles ?? const [],
+                quadPrimaryCreditsGlutes: budget.quadPrimaryCreditsGlutes)
             : const <String>{};
         groups[(d, i)] = g;
         // A row that is not budgeted has no groups: only its time is spent.
