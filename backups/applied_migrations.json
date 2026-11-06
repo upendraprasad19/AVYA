@@ -1324,6 +1324,15 @@
     "note": "OI-179: CREATE OR REPLACE public.cleanup_cron_call_log() with interval '10 days' (was '7 days', migration 110) so alert_cron_function_dead (days_silent >= 8) can fire. Applied to project dedsavbjuwgarrhphgnl only, through MCP apply_migration after the founder's per-action go (2026-11-05); Supabase recorded version 20261105065857 (06:58:57 UTC = 12:28:57 IST). Verified live: prosrc contains interval '10 days' and not '7 days', prosecdef true, search_path=public, anon and authenticated cannot execute, postgres can; cron_call_log 535 rows before and after, 537 after a later fleet run, oldest row unchanged, 0 leaked test rows. File sha256 = this hash (LF). Rollback: re-apply the 110 body (interval '7 days') as a NEW forward migration."
   },
   {
+    "migration": "170",
+    "applied_at": "2026-11-06T07:10:00+05:30",
+    "hash": "sha256:c664eda4fc4e4779857db4762488bb5bcc722c8d508a62f7fa5e49237b90e010",
+    "applier": "claude-via-mcp",
+    "diagnose": "f7b3d1",
+    "slug": "oi473_cron_dead_alert_edges",
+    "note": "OI-473 + OI-472: cron.alter_job by jobname on alert_cron_function_dead (jobid 32): cap 3 singles else one summary row, 72 h name dedup independent of acknowledgement, NOT IN ('alert-critical-notify','weekly-recalc'). Applied to project dedsavbjuwgarrhphgnl only, through MCP execute_sql in BEGIN with lock_timeout 3s and statement_timeout 60s, after the founder's explicit go (2026-11-06); no apply_migration version recorded. Verified live: md5(cron.job.command) = f890669f0389e0febd5976ee0185c9f1 = md5 of the migration body between the dollar tags (before: bb2108a12cf313fa5cb4ee8c7f8d9398, the migration 144 body); schedule 47 6 * * * and active unchanged. First real observation: the 06:47 UTC run, expect 0 new rows. Rollback: re-apply the migration 144 body (lines 65-102) as a NEW forward migration."
+  },
+  {
     "migration": "171",
     "applied_at": "2026-11-05T18:45:00+05:30",
     "hash": "sha256:4d09a506dd5863cdeb015a28a2908d5fb4b676506caed4cbf5862af4003f7ab6",
