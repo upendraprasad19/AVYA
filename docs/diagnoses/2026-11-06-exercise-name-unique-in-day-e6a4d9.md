@@ -116,6 +116,16 @@ regression_test_planned: |
   kill: the mutant dropped a null check. Rewritten to compile; red. M49 (builder load drops nameless rows) SURVIVED: the fixture
   held one nameless row, so dropping all but the first changed nothing. It now holds two; red.
 
+  A RACE IN THIS BATCH'S OWN TESTS, found by the warn-only contract sweep on the first push (377 files, one failure): "finds
+  its slot after a removal" went red at its first assertion, the swap not yet applied. `tapWithRealIo` waits a fixed 100 ms
+  for real disk I/O, and under the sweep's load the save took longer; the save then finished after the test ended (the
+  disposed-container StateError in that log is the same event). It passed alone every time, and in the full-suite run.
+  Not a product defect. Fixed by waiting on what the work does (`pumpUntilRealIoDone`: the sheet closed, or the row written
+  and SAVE live again), not by a longer delay. PROOF: with the 100 ms floor REMOVED the fixed files stay green (23 of 23)
+  and the old screen test goes red (5). Under load (8 CPU burners on 4 cores) 3 of 3 runs that were left to finish passed 23 of
+  23, the slowest in 351 s; two runs my own 280 s limit killed had failed nothing. All 49 mutants re-run after this edit:
+  49 killed. The other users of `tapWithRealIo` are unchanged; none failed in the sweep.
+
   KNOWN UNPINNED, stated: `_showSwapSheet`'s nameTaken message is unreachable through the UI today, because a taken row
   cannot be tapped; it remains the writer's answer if a row list goes stale. "No provider invalidation on a refusal" is not
   asserted; an extra invalidate only re-reads.

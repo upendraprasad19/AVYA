@@ -13,6 +13,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:icanbefitter/core/copy/wardroom_copy.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
 import 'package:icanbefitter/features/train/screens/template_builder_screen.dart';
+import 'package:icanbefitter/features/train/widgets/create_custom_exercise_sheet.dart';
 
 import 'log_exercise/card_harness.dart';
 
@@ -105,6 +106,10 @@ void main() {
       await tester.ensureVisible(_inSheet(find.text('SAVE')));
       await tester.pump();
       await tapWithRealIo(tester, _inSheet(find.text('SAVE')));
+      // The sheet closes, and onCreated runs, only after the real write.
+      final sheet = find.byType(CreateCustomExerciseSheet);
+      await pumpUntilRealIoDone(tester, () => sheet.evaluate().isEmpty,
+          what: 'saving the custom exercise');
       await _settle(tester);
 
       expect(_card(_bench), findsOneWidget, reason: 'still one row');
@@ -145,12 +150,19 @@ void main() {
       await tester.runAsync(() => HiveService.instance.workoutBox.put('tmpl_t1', {
             'id': 'tmpl_t1',
             'type': 'template',
-            'name': 'Saved',
+            'name': 'Before the save',
             'exercises': twice,
             'exercise_count': twice.length,
           }));
 
       await tapWithRealIo(tester, find.text('SAVE'));
+      final saveButton = find.widgetWithText(TextButton, 'SAVE');
+      await pumpUntilRealIoDone(tester, () {
+        final row = HiveService.instance.workoutBox.get('tmpl_t1') as Map;
+        return row['name'] == 'Saved' &&
+            (saveButton.evaluate().isEmpty ||
+                tester.widget<TextButton>(saveButton).onPressed != null);
+      }, what: 'saving the template');
       await _settle(tester);
 
       final stored = HiveService.instance.workoutBox.get('tmpl_t1') as Map;

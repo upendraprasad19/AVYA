@@ -12,6 +12,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:icanbefitter/core/copy/wardroom_copy.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
 import 'package:icanbefitter/features/train/providers/train_provider.dart';
+import 'package:icanbefitter/features/train/widgets/create_custom_exercise_sheet.dart';
 
 import 'log_exercise/card_harness.dart';
 
@@ -84,6 +85,10 @@ Future<void> _createCustom(WidgetTester tester, String name) async {
   await tester.ensureVisible(_inSheet(find.text('SAVE')));
   await tester.pump();
   await tapWithRealIo(tester, _inSheet(find.text('SAVE')));
+  // The sheet closes, and onCreated runs, only after the real write.
+  final sheet = find.byType(CreateCustomExerciseSheet);
+  await pumpUntilRealIoDone(tester, () => sheet.evaluate().isEmpty,
+      what: 'saving the custom exercise');
   await _settle(tester);
 }
 
