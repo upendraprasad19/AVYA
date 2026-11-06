@@ -8,7 +8,7 @@
  *   (migration 131). Every day, including all-quiet days: the message's
  *   ARRIVAL is the liveness signal — its absence means the cron or the bot
  *   is dead. Nothing else watches this function: `alert_cron_function_dead`
- *   cannot fire at all (OI-179, threshold above the log's retention), and
+ *   only sees it after 8 silent days (migrations 169 and 172 made that real), and
  *   `cron_call_log` is lossy at the 02:30Z burst — the FIRST natural fire
  *   (2026-09-13) delivered and left no row, because its `logCronStart`
  *   insert lost the race to a PostgREST 504 (OI-194). A manual re-run sends

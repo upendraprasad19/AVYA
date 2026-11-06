@@ -6302,3 +6302,89 @@ missing from the Coach menu."
 **Acceptance:** copy removed or reworded (Wardroom brand soul loaded first; psychology pass if a paywall line changes); tests/pins that cite the old strings repointed.
 
 **Resolution (2026-11-06).** The paywall perk is now `Weekly AI nutrition report` (`lib/shared/widgets/paywall_sheet.dart`, `_proBenefits`), and everything else that sold or linked Telegram to a user is gone from the app: the AI Coach "Switch to Telegram" menu item and the "Telegram - Coming Soon" view it opened, the dead `TelegramCard`, `channelProvider`, `telegramConnectionProvider` and `_openTelegramBot`. The overflow menu is now the pure function `coachHeaderMenuItems` (`Clear conversation`, plus `Upgrade to PRO` on a free account). Tests that cited the old strings were repointed, not loosened: `measurement_flag_off_identity_test.dart` now pins the chip slot by its neighbours, `coach_chat_reply_sanitization_test.dart` slices to a stable anchor, and `initial_scroll_to_bottom_test.dart` lost only the test of the retired OI-232 channel-switch listener. New pin: `test/contracts/telegram_surface_removed_test.dart` (a paywall pump for every feature label, a menu pump with each value tied to its `case`, and an exact-line source scan of `lib/`, `assets/` and `web/` with the chat area pinned as unconditional). The copy line went through the `psychology-pass-fitness` pass (verdict: keep the plain cut; the feature's NAME stays OI-325's open question). Diagnose doc `docs/diagnoses/2026-11-06-telegram-promise-removed-b9d3f1.md`; batch ledger `docs/audit/telegram-surface-off.closure.yaml`. Left on purpose: `pullRecentCrossChannelLogs` and its `source: 'telegram'` (OI-467), the `telegram_connected` / `coach_channel` names in the migrator key list, and the founder-ops `telegram-admin-bot`. The tracked `telegram-bot/` directory is OI-476. The B-pass found that the `Clear conversation` menu item does nothing (pre-existing, byte-identical before this batch): OI-479.
+
+## OI-199 — cleanup_cron_call_log() spares only TWO global rows, not each function's latest — true >7d cron silence still goes invisible to /cron
+
+- **Status**: CLOSED
+- **Blocked on**: none
+- **Update 2026-11-05 (OI-179, migration 169)**: retention is 10 days once 169 is applied, so every "7d" below reads 10 days for the purge (the `/cron` 7-day `.gte()` window is unchanged); the per-function keep-set remains this OI's fix.
+- **Also owned here (Hermes pass 2026-11-05, OI-179, two seats)**: `telegram-admin-bot` `/cron` (`index.ts` `sevenDaysAgoIso`, a 7-day `.gte()`) cannot show a function silent for 7-10 days, which is exactly when `alert_cron_function_dead` now pages, so the founder cannot corroborate the page there. Align the window with the retention (or with the per-function keep-set) when this OI is fixed: that is an Edge Function change (Deno assertion in `index_test.ts:1215-1219`, `deno check`, a redeploy with its own go).
+- **Verified**: 2026-09-14, live read of the function body — corrected same
+  day (R2-06/R2-07, review round 2) to cite migration **110**
+  (`110_cron_silence_per_function_and_cleanup_null_guard.sql:30-47`), the
+  LAST `CREATE OR REPLACE` and therefore the LIVE definition — the original
+  filing below quoted the SUPERSEDED migration 109 body (one spared row);
+  110 already widened that to two, and this OI's core finding (still not
+  PER-FUNCTION) survives the correction unchanged.
+- **Identified**: 2026-09-14 · filed via mint_oi.sh from branch `telegram-admin-bot`
+- **How found**: B-pass review of telegram-admin-bot's F4 fix (`/cron`'s
+  `.limit(200)` row-window → `.gte()` 7-day time-window). The fix's own
+  code comment claimed `cleanup_cron_call_log()` "always spares each
+  function's most recent row" — the B-pass read the live function body and
+  found this false. The LIVE (migration 110) definition:
+  ```sql
+  CREATE OR REPLACE FUNCTION public.cleanup_cron_call_log()
+  RETURNS void LANGUAGE sql SECURITY DEFINER SET search_path TO 'public'
+  AS $fn$
+    DELETE FROM public.cron_call_log
+    WHERE started_at < now() - interval '7 days'
+      AND id NOT IN (
+        SELECT id FROM (
+          (SELECT id FROM public.cron_call_log
+            WHERE status = 'success' ORDER BY started_at DESC LIMIT 1)
+          UNION
+          (SELECT id FROM public.cron_call_log
+            ORDER BY started_at DESC LIMIT 1)
+        ) AS keep_rows
+      );
+  $fn$;
+  ```
+  This spares exactly TWO rows globally (the single most-recent
+  `status='success'` row table-wide, AND the single most-recent row of any
+  status table-wide), not one per function. (109's ORIGINAL one-row body,
+  for the record, was `id IS DISTINCT FROM (SELECT id ... WHERE
+  status='success' ORDER BY started_at DESC LIMIT 1)`.)
+- **Consequence**: a cron-dispatched function silent for longer than 7 days
+  has ALL its `cron_call_log` rows purged by the next nightly
+  `cron_call_log_cleanup_daily` run and becomes invisible to
+  `/status`/`/cron`'s 7-day `.gte()` window — the same class of blind spot
+  F4 fixed (a genuinely-stale function silently missing), re-manifesting
+  past 7 days instead of past 200 rows. `alert_cron_silence` (also
+  migration 109) is a real absence-backstop for total-fleet silence, but
+  doesn't cover a single function going silent while others keep running.
+- **Fix shape (not decided)**: widen `cleanup_cron_call_log()`'s exemption
+  from two global rows to a per-`function_name` `DISTINCT ON` — e.g. spare
+  the latest row for EVERY `function_name` present, not just the two
+  fleet-wide ones. Needs a new migration (110 is applied and immutable) and
+  its own live-verify pass (confirm the DISTINCT ON exemption doesn't
+  defeat the 7-day retention's original storage-growth purpose for
+  functions that run frequently). **Precondition (R2-11, review round 2):
+  before this fix ships, it MUST exclude non-scheduled, trigger-dispatched
+  functions (`alert-critical-notify` today) from
+  `alert_cron_function_dead`'s scope** — see the cross-reference in that
+  alert's own OI (OI-179) for why: a per-function retention exemption would
+  arm the exact false-critical-alert loop that OI-179's own threshold
+  currently keeps inert by accident.
+- **Scope note**: pre-existing production infrastructure (migration 110
+  predates this branch), out of scope for the telegram-admin-bot batch's
+  own fix diff — the comment claiming this behavior was corrected in that
+  same commit (`diagnose 82b018`), and this OI tracks the deeper fix.
+
+**Closed by.** Branch `cron-log-retention-oi199-oi471`: migration 172 (`cleanup_cron_call_log()` keeps, per function_name, the newest success row and the newest row of any status, ties to the higher id; 10-day retention unchanged), applied to the live project 2026-11-06 20:47 IST after the founder's explicit go, ledger entry 172, diagnose `b3e7d2`. Verified live right after the apply: `md5(prosrc)` 6597e3e24f91126b6268b3d54aa7ea57, length 460, ACL identical, `anon` and `authenticated` cannot execute, job 41 unchanged. The keep-set itself is not observable live until a function is quiet for more than 10 days (the first deletions are about 2026-11-09 03:30 UTC). Behaviour change, measured and told to the founder: `alert_cron_function_dead` now pages a dead function twice (day 8 to 9, then day 11 to 13), never three times. The `/cron` 7-day window, the alert's own message text and a reader for silence beyond 14 days were split off with the founder's "Ok" (2026-11-06, Telegram deferred): OI-478, parked `upstream_blocked`.
+
+## OI-471 — Orphan cron_call_log_cleanup_7d(): an unconditional 7-day DELETE with no caller that would undo the OI-179 retention fix if ever scheduled
+
+- **Status**: CLOSED
+- **Blocked on**: none
+- **Verified**: 2026-11-06, live read after the apply (to_regprocedure of the orphan is null; the migration 172 request committed; harness case I and the Dart drop-form fixtures D1 to D3)
+- **Identified**: 2026-11-05 · filed via mint_oi.sh from branch `oi179-cron-dead-alert`
+
+Found by round 2 of the OI-179 plan review (migrations 090:43 and 091:22 name it) and confirmed LIVE 2026-11-05 with `pg_proc` / `cron.job` / `pg_trigger` reads: `public.cron_call_log_cleanup_7d()` exists with the body `DELETE FROM public.cron_call_log WHERE started_at < now() - interval '7 days'` (no keep-set, `SECURITY DEFINER`, search_path public/extensions/vault/private). No cron job calls it, no function body references it, no trigger. It is inert today. It is the pre-109 pruner that `cleanup_cron_call_log()` replaced.
+
+**Why it matters:** OI-179's fix (migration 169, retention 10 days) is undone the moment anyone schedules or calls this function: it prunes at 7 days again and keeps nothing.
+
+**Do:** a migration `DROP FUNCTION IF EXISTS public.cron_call_log_cleanup_7d();` (Destructive: yes, so the founder's go and a dry run). The file-based `test/contracts/security_definer_revoke_migration_test.dart` reads migrations 090/091 and is unaffected. Re-check `pg_proc`/`cron.job`/`prosrc` references immediately before the drop.
+
+**Acceptance:** the function is gone live (`to_regprocedure` is null) and no migration after the drop references it.
+
+**Closed by.** Branch `cron-log-retention-oi199-oi471`: migration 172 (`DROP FUNCTION IF EXISTS public.cron_call_log_cleanup_7d();`, no CASCADE), applied live 2026-11-06 20:47 IST in the same request as the OI-199 fix after the founder's explicit go. Pre-apply read: no dependent, no `cron.job` or function body naming it, one overload, 97 rows older than 7 days still in the table (so it had not run). The orphan's live body and ACL stay recoverable from rollback block 2 of the migration (not advised).
