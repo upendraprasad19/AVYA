@@ -2999,6 +2999,8 @@ Do NOT re-propose v1. Verified clean by round 2: sending `''` to `user_profile.c
 
 
 **Note 2026-10-25 (payment-hardening hermes pass, seat C, L2).** Also measure `promo_code_uses` and `subscriptions`: no migration revokes their table privileges, so the platform default (all eight privileges, TRUNCATE included, for `anon` and `authenticated`, as migration 163 measured on `promo_codes`) is inferred, not measured. RLS blocks row access on both; TRUNCATE ignores RLS but PostgREST does not expose it.
+**Note 2026-11-06 (migration 172 Hermes pass, seat C, L2).** `cron_call_log` is one of the four tables above, and from migration 172 the bound "at most two rows per `function_name` past 10 days" rests on this default-deny alone: where RLS is off (migration 068 says it stays disabled, so any fresh replay of the migrations) or a policy appears, a client with the anon key could insert arbitrary names and each would now be kept for good. The 172 apply therefore reads `relrowsecurity` and the policy count before and after (the plan's Live apply section). Revoking `anon` and `authenticated` on this table is still this OI's job, not 172's.
+
 ## OI-185 — `check_schema_column_refs.dart` validates only the FIRST line of a multi-line insert/update map (P2, gate gap, pre-existing)
 
 - **Status**: OPEN
@@ -3351,73 +3353,6 @@ Unit 2's blocked question — what a regeneration does when the plan window is E
   itself.
 
 **UPDATE 2026-09-26 (backlog triage + `ci-green-batch-a`):** OI-234 closed as a duplicate of item 2 here (401s write no `cron_call_log` row, so `alert_edge_function_health`'s `total >= 5` guard never sees them; 0 alerts ever). Live 2026-09-26: `alert_edge_function_health`, `alert_payment_flow_health`, `alert_cron_silence` and `alert_cron_function_dead` have fired 0 alerts between them.
-
-## OI-199 — cleanup_cron_call_log() spares only TWO global rows, not each function's latest — true >7d cron silence still goes invisible to /cron
-
-- **Status**: OPEN
-- **Blocked on**: none
-- **Update 2026-11-05 (OI-179, migration 169)**: retention is 10 days once 169 is applied, so every "7d" below reads 10 days for the purge (the `/cron` 7-day `.gte()` window is unchanged); the per-function keep-set remains this OI's fix.
-- **Also owned here (Hermes pass 2026-11-05, OI-179, two seats)**: `telegram-admin-bot` `/cron` (`index.ts` `sevenDaysAgoIso`, a 7-day `.gte()`) cannot show a function silent for 7-10 days, which is exactly when `alert_cron_function_dead` now pages, so the founder cannot corroborate the page there. Align the window with the retention (or with the per-function keep-set) when this OI is fixed: that is an Edge Function change (Deno assertion in `index_test.ts:1215-1219`, `deno check`, a redeploy with its own go).
-- **Verified**: 2026-09-14, live read of the function body — corrected same
-  day (R2-06/R2-07, review round 2) to cite migration **110**
-  (`110_cron_silence_per_function_and_cleanup_null_guard.sql:30-47`), the
-  LAST `CREATE OR REPLACE` and therefore the LIVE definition — the original
-  filing below quoted the SUPERSEDED migration 109 body (one spared row);
-  110 already widened that to two, and this OI's core finding (still not
-  PER-FUNCTION) survives the correction unchanged.
-- **Identified**: 2026-09-14 · filed via mint_oi.sh from branch `telegram-admin-bot`
-- **How found**: B-pass review of telegram-admin-bot's F4 fix (`/cron`'s
-  `.limit(200)` row-window → `.gte()` 7-day time-window). The fix's own
-  code comment claimed `cleanup_cron_call_log()` "always spares each
-  function's most recent row" — the B-pass read the live function body and
-  found this false. The LIVE (migration 110) definition:
-  ```sql
-  CREATE OR REPLACE FUNCTION public.cleanup_cron_call_log()
-  RETURNS void LANGUAGE sql SECURITY DEFINER SET search_path TO 'public'
-  AS $fn$
-    DELETE FROM public.cron_call_log
-    WHERE started_at < now() - interval '7 days'
-      AND id NOT IN (
-        SELECT id FROM (
-          (SELECT id FROM public.cron_call_log
-            WHERE status = 'success' ORDER BY started_at DESC LIMIT 1)
-          UNION
-          (SELECT id FROM public.cron_call_log
-            ORDER BY started_at DESC LIMIT 1)
-        ) AS keep_rows
-      );
-  $fn$;
-  ```
-  This spares exactly TWO rows globally (the single most-recent
-  `status='success'` row table-wide, AND the single most-recent row of any
-  status table-wide), not one per function. (109's ORIGINAL one-row body,
-  for the record, was `id IS DISTINCT FROM (SELECT id ... WHERE
-  status='success' ORDER BY started_at DESC LIMIT 1)`.)
-- **Consequence**: a cron-dispatched function silent for longer than 7 days
-  has ALL its `cron_call_log` rows purged by the next nightly
-  `cron_call_log_cleanup_daily` run and becomes invisible to
-  `/status`/`/cron`'s 7-day `.gte()` window — the same class of blind spot
-  F4 fixed (a genuinely-stale function silently missing), re-manifesting
-  past 7 days instead of past 200 rows. `alert_cron_silence` (also
-  migration 109) is a real absence-backstop for total-fleet silence, but
-  doesn't cover a single function going silent while others keep running.
-- **Fix shape (not decided)**: widen `cleanup_cron_call_log()`'s exemption
-  from two global rows to a per-`function_name` `DISTINCT ON` — e.g. spare
-  the latest row for EVERY `function_name` present, not just the two
-  fleet-wide ones. Needs a new migration (110 is applied and immutable) and
-  its own live-verify pass (confirm the DISTINCT ON exemption doesn't
-  defeat the 7-day retention's original storage-growth purpose for
-  functions that run frequently). **Precondition (R2-11, review round 2):
-  before this fix ships, it MUST exclude non-scheduled, trigger-dispatched
-  functions (`alert-critical-notify` today) from
-  `alert_cron_function_dead`'s scope** — see the cross-reference in that
-  alert's own OI (OI-179) for why: a per-function retention exemption would
-  arm the exact false-critical-alert loop that OI-179's own threshold
-  currently keeps inert by accident.
-- **Scope note**: pre-existing production infrastructure (migration 110
-  predates this branch), out of scope for the telegram-admin-bot batch's
-  own fix diff — the comment claiming this behavior was corrected in that
-  same commit (`diagnose 82b018`), and this OI tracks the deeper fix.
 
 ## OI-200 — founder_metrics_ops().client_errors_today counts benign event-coded breadcrumbs, no 087-style reinclusion filter
 
@@ -5483,6 +5418,8 @@ Five sightings so far: July 2026 (`a7f3d1`), 2026-10-04 (the run in the heading)
 
 **Fifth sighting, with the same output (2026-11-06).** PR #224 (`oi454-quads`, the OI-454 Quads floor), CI run `42201692989` on head `948f06a9` (a sync merge of `origin/main` into the branch), job `Unit Tests shard 1/4` (job `127838267652`), attempt 1: ONE failure in `+3627 -1`, `test/contracts/blast_radius_data_deleting_paths_catastrophic_test.dart` "the real CLI agrees, and prints the MAX tier of a mixed diff" (the data-deleting twin of the second and fourth sightings' test). The first two spawns exited 0 with the expected tiers (`user_owned_buckets.ts` platform, `rolling-context/index.ts` catastrophic); the third, on `supabase/functions/_shared/purge_user_storage.ts`, exited 254 with `stdout=Running build hooks...Running build hooks...` and `stderr=File not formatted as yaml: .`, so the test's own message was `no tier printed for [supabase/functions/_shared/purge_user_storage.ts]`. The same shard, same file and same three paths passed on the previous head of this branch (`775be7da`, run `42195588267`, all four shards green), and the only difference between the two heads is the merge of `origin/main` (PR #223, OI-358: train, ai_coach and core/utils files). Neither head's diff touches a blast-radius script, `docs/blast_radius.yaml`, `pubspec.yaml` or `scripts/`, so the failure is not caused by it. The job log shows `blast_radius_progress_map_writer_paths_test.dart` running at the same second (10:20:03Z), which keeps the untested concurrent-`dart run` hypothesis alive (that test reads the registry; it was not shown to spawn). Five sightings in 33 days, all on a spawn of `dart run scripts/blast_radius_from_diff.dart` or another `dart run` gate; the origin of the message string is still not located and the failure is still not reproduced locally (the author's full local suite on `775be7da` ran 13182 passed, 0 failed, including this file).
 
+**Sixth sighting, with the same output (2026-11-06).** PR #227 (`cron-log-retention-oi199-oi471`, migration 172), CI run `42246629429` on head `297832c6` (a sync merge of `origin/main` into the branch made by `land_pr.sh`), job `Unit Tests shard 1/4` (job `127990434057`), attempt 1: ONE failure in `+3185 ~5 -1`, `test/contracts/blast_radius_progress_map_writer_paths_test.dart` "blast_radius.yaml — progress-map writer paths are >= account the hoist did not move the progress write into a weaker tier (Unit B / OI-84)". The spawn on `lib/shared/services/pro_phase_advance.dart` exited 0 and printed `Blast-radius: account`; the spawn on `lib/features/train/widgets/phase2_preview_card.dart` exited 254 with `stdout=Running build hooks...Running build hooks...` and `stderr=File not formatted as yaml: .`, so the test's own message was `classifier printed no tier for lib/features/train/widgets/phase2_preview_card.dart`. The same test file passes locally (5 of 5) on the same tree, and this PR's diff touches no blast-radius script, no `docs/blast_radius.yaml`, no `pubspec.yaml` and nothing under `scripts/`, so the failure is not caused by it. This is the first sighting in which the failing test is the one the fifth sighting named as the possible concurrent reader of the registry; that keeps the untested concurrent-`dart run` hypothesis alive without establishing it. Six sightings in 33 days, all on a spawn of `dart run scripts/blast_radius_from_diff.dart` or another `dart run` gate; the origin of the message string is still not located and the failure is still not reproduced locally. Handled as before: a push to the PR superseded the stale run (the workflow cancels in-progress runs of a PR branch) and the next run decides.
+
 ## OI-315 — ProgressPhotoRepository.cleanupOrphanedStorage has zero callers, and the 5/day progress-photo cap is client-side only: a PRO caller can upload unlimited 8 MiB objects
 
 - **Status**: OPEN
@@ -7209,21 +7146,6 @@ Found by the M2b Part B Chrome check (360 dp, real fonts, the real card and exer
 
 **Done when.** Both stages filter `is_active = true` (a regression test that fails without the filter), deployed through the Edge Function protocol; or the filter is shown to be unnecessary by a query that finds no live name matched by a deactivated row.
 
-## OI-471 — Orphan cron_call_log_cleanup_7d(): an unconditional 7-day DELETE with no caller that would undo the OI-179 retention fix if ever scheduled
-
-- **Status**: OPEN
-- **Blocked on**: none
-- **Verified**: never
-- **Identified**: 2026-11-05 · filed via mint_oi.sh from branch `oi179-cron-dead-alert`
-
-Found by round 2 of the OI-179 plan review (migrations 090:43 and 091:22 name it) and confirmed LIVE 2026-11-05 with `pg_proc` / `cron.job` / `pg_trigger` reads: `public.cron_call_log_cleanup_7d()` exists with the body `DELETE FROM public.cron_call_log WHERE started_at < now() - interval '7 days'` (no keep-set, `SECURITY DEFINER`, search_path public/extensions/vault/private). No cron job calls it, no function body references it, no trigger. It is inert today. It is the pre-109 pruner that `cleanup_cron_call_log()` replaced.
-
-**Why it matters:** OI-179's fix (migration 169, retention 10 days) is undone the moment anyone schedules or calls this function: it prunes at 7 days again and keeps nothing.
-
-**Do:** a migration `DROP FUNCTION IF EXISTS public.cron_call_log_cleanup_7d();` (Destructive: yes, so the founder's go and a dry run). The file-based `test/contracts/security_definer_revoke_migration_test.dart` reads migrations 090/091 and is unaffected. Re-check `pg_proc`/`cron.job`/`prosrc` references immediately before the drop.
-
-**Acceptance:** the function is gone live (`to_regprocedure` is null) and no migration after the drop references it.
-
 ## OI-474 — Library Batch C2c: E230 Standing Single Leg Curl retag to bodyweight, cue rewrite, animation 0795 and its cloud change
 
 - **Status**: OPEN
@@ -7288,3 +7210,62 @@ Third piece of the Batch C2 split (OI-460 removals, OI-462 twins, this). Split o
 **Options for the founder (pick one):** (a) clear the local `coachBox` chat rows (keep the `coaching_notes` singleton) and make sure a restore does not resurrect them; (b) clear local and cloud; (c) remove the menu entry until (a) or (b) is wanted. The app is not live (testers only), so there is no user-facing urgency.
 
 **Acceptance:** the item either clears what the decision says (behavioral test: write chat rows to a real Hive box, trigger the action, read the box and the provider back, and, for (a) and (b), run a restore and assert the rows stay gone) or is removed and `coachHeaderMenuItems` and its pin in `test/contracts/telegram_surface_removed_test.dart` are updated in the same change.
+
+## OI-478 — Kept cron_call_log evidence has no reader past 14 days: telegram-admin-bot /cron window is 7 days, alert_cron_function_dead lookback is 14, and its message text says the rows leave the table (OI-199 residual)
+
+- **Status**: OPEN
+- **Blocked on**: part 1 (`/cron`) waits for the Telegram deferral (founder 2026-11-04); reopen_when: `telegram-admin-bot` is back in use. Parts 2 and 3 are not blocked.
+- **Verified**: 2026-11-06 (live reads and the two plan-review rounds of migration 172, diagnose b3e7d2)
+- **Identified**: 2026-11-06 · filed via mint_oi.sh from branch `cron-log-retention-oi199-oi471`
+
+Residual of OI-199 and OI-471 after migration 172. Migration 172 makes `cleanup_cron_call_log()` keep every function's newest success and newest row for good (at most two rows per `function_name`), so the evidence of a silent function stays in the table. Nothing reads it past 14 days, and two readers or messages are now inexact:
+
+1. **`/cron` window (Edge Function).** `telegram-admin-bot` `cmdCron` (`index.ts`, `sevenDaysAgoIso`, a 7-day `.gte()`; the `gteCol` / `gteVal` assertions in the `cmdCron queries a 7-day time window` test of `index_test.ts`) cannot show a function silent for 7 to 14 days, which is exactly when `alert_cron_function_dead` pages (days 8 to 14), so the founder cannot corroborate the page there. Align the window with the alert's 14-day lookback: `deno check --node-modules-dir=none`, a redeploy with its own go. Split out of OI-199 by the founder's scope call on 2026-11-06: the proposal "I'd do only the migration and leave out the Telegram `/cron` window change, since Telegram is deferred" was answered "Ok".
+2. **The alert's own text.** Job 32's singles message ends "If the function was retired on purpose this is the one alert; it stops once its rows leave cron_call_log": the rows no longer leave and a dead function pages up to twice (about day 8 to 9 and day 11 to 13). The summary row says "newly detected, not already alerted", which is inexact on a repeat. The fix is a new `cron.alter_job` migration (a Hermes pass, and updates to the 170 rehearsal-sync contract test and to the roster test's body reader).
+3. **Silence beyond 14 days is reported by nothing.** A function whose newest success is older than 14 days is kept in the table (migration 172) and looked for by no per-function alert or command (`alert_cron_silence` reads only the table-wide newest success, which is always kept). A retired function leaves its two rows for good, so any reader must filter against the CRON_REGISTRY roster instead of treating those rows as dead functions.
+
+**Done when.** Something lists the functions whose newest `cron_call_log` success is older than 14 days, filtered against the CRON_REGISTRY roster; `/cron` shows a function silent for 7 to 14 days; the alert text says what really happens (rows stay, up to two pages, silent after the 14-day lookback). Related: OI-194 (a cron tick whose start insert loses a race in a same-minute burst leaves no `cron_call_log` row, which `alert_cron_function_dead` reads as silence: a false critical at day 8, and with the kept row a second one at day 11 to 13; `weekly-recap-ready` fires at 14:30 UTC on Sundays beside `streak-guardian` and `protein-gap-alert`).
+
+## OI-480 — A docs-only or SQL-only batch pays the full local gate loop (about 2 hours here, against about 15 minutes of sharded CI): CLAUDE.md 4.12.8 has no code-free path, and concurrent sessions oversubscribe the 4 cores
+
+- **Status**: OPEN
+- **Blocked on**: nothing (a measurement and a plan are the next steps; the founder asked for this OI on 2026-11-06)
+- **Verified**: 2026-11-06, read-only, on the live gate loop of branch `cron-log-retention-oi199-oi471` (a migration, its tests, board and doc edits; no `lib/`): `flutter analyze --no-fatal-infos` took **116.2 s** (exit 0, 0 warnings); the full `TZ=Asia/Kolkata flutter test` ended at **139 min 56 s** (about 2 h 22 min with analyze): 13,192 passed, 14 skipped, 4 failed. The failures were the expected `applied_migrations_parity_test.dart` red (migration 172 has no ledger line before the apply), two `golden`-tagged `WardRankPill` pixel diffs (10 px; CI excludes that tag and the diff touched no `lib/`, `assets/` or `pubspec`), and two `test/scripts/land_pr_e2e_test.dart` cases that time out a `gh` stub at 400 ms on a loaded box (a documented load flake; a re-run at load 14 failed the same way, so there is no quiet-box control on this host). The slow step is the test run, not analyze.
+- **Identified**: 2026-11-06 · filed via mint_oi.sh from branch `cron-log-retention-oi199-oi471`
+
+**What was measured (and how far to trust it).**
+1. *Contention.* The host has 4 cores and 24 GB. Load average was 14.6 / 13.4 / 11.6 and rose to 17.5 during the run. `flutter_tester` processes of three other worktrees (`oi358-unique-exercise-names`, `oi454-quads`, `telegram-surface-off`) ran at the same time as this session's suite. Effective parallelism was about 1.5 (sum of per-file first-to-last event spans 11,156 s over 7,252 s of wall at the time of the read).
+2. *Concentration.* Eight files in `test/plan_generator/` carry 7,055 s of the 11,156 s attributed (63 percent), out of 1,282 test files: `injury_sweep_c_pairs46` 1,695 s (14 tests), `injury_sweep_a_pairs` 1,332 s (481 tests), `injury_sweep_d_repeat` 1,038 s, `injury_sweep_b_singles` 1,029 s, `generator_golden` 693 s, `session_set_budget_gate` 610 s, `injury_sweep_e_singles46` 590 s, `core_list_pool_gate` 68 s. Spans include queueing under contention (the OI-106 lesson), so they RANK files; they are not CPU seconds.
+3. *Inputs of those files.* `grep` of the eight: they read `assets/data/exercise_library.json`, `scripts/data/library_batch_c2_removals.json`, their own fixtures and reports, and import `lib/`. None reads `docs/`, `supabase/`, `backups/`, or a migration. The other `test/plan_generator/` files are NOT yet scanned.
+4. *Uncontended baseline.* CI runs the same suite in 4 shards of 12.8 to 15.4 minutes (run 42155652834 on `main`, 2026-11-06; the whole workflow 15.6 min), about 56 shard-minutes of work. The uncontended time of the full suite on THIS 4-core VPS has never been measured, so the split between "contention" and "the suite is simply that big here" is **NOT established**. OI-106 found local slower than CI per file even when the local box had 16 cores.
+5. *Parity gap.* The local loop ran `flutter test` without `--exclude-tags golden`, which CI passes (`.github/workflows/test.yml`); that alone produced two of the four local failures. The same loop also fails the load-sensitive `land_pr_e2e_test.dart` cases that CI passes.
+6. *A boolean "reads repo files" classifier is useless.* Traced through imports under `test/` and `scripts/`, 798 of 1,282 test files read some repo file, which is 95 percent of the attributed time, because the heavy sweeps read `assets/`. Any selection has to be path-granular, which is the fragile part ADR-0013 rejected. That is why the fix below does not select tests one by one.
+7. Minor: two `flutter_tester` processes of the retired worktree `tz-pin-catalog` (cwd deleted) are 1 day 18 hours old and idle (0 CPU seconds).
+
+**Why the cost lands on every batch.** CLAUDE.md 4.12.8 requires the COMPLETE suite before any review dispatch and again after the LAST edit ("never a hand-picked subset"), whatever the batch touched. ADR-0013 tiered `pre-push` by blast radius and ADR-0018 took the suite off `pre-commit`, but the 4.12.8 loop is not tiered. CLAUDE.md 4.3 says the opposite for a human ("don't manually re-run the full flutter test", CI does). A docs-only merge already skips the plan-review record (`test/scripts/land_pr_replay_test.dart`, "a docs-only change needs no record"), so a docs-only path exists at the merge seam and not at the local loop. The blast-radius TIER cannot key a fast path: a migration containing `SECURITY DEFINER` is catastrophic by content and still cannot reach a test that never reads a migration. A long loop also raises the price of every late edit (this OI's own board entry is one), which is `--no-verify` and skip pressure.
+
+**Prior art, so it is not re-derived.** ADR-0013 alternative 3 (per-test impact selection) was rejected as fragile; OI-106 (OPEN, P3) owns "why local is about 3.9 times slower per file than CI" and wants counterbalanced measurement first, so piece A below feeds it; OI-309 (CLOSED, the 25-minute pre-push suite re-running on every docs-only merge) and OI-461 (CLOSED 2026-11-04: the four CI shards are balanced, medians 13.4 to 14.1 minutes over 13 `main` runs, and the shard limit was raised from 20 to 30 minutes) touched the same cost from other sides and do not cover the 4.12.8 loop. This OI does NOT reopen per-test selection.
+
+**Fix (three independent pieces; plan-reviewed x2 with a B-pass, platform tier: `CLAUDE.md`, `scripts/`).**
+- **A. Remove the contention (measure first, per OI-106's protocol).** One host-wide queue around full-suite runs started by the gate-loop script (a `flock` on a lock file in the shared git dir, with the holder and age printed to a waiter), so N sessions do not run N suites on 4 cores; run the loop through `scripts/ci_test_partition.dart` and `--exclude-tags golden` so local and CI cover the same files. Record the uncontended full-suite time before and after, counterbalanced, n of at least 5 per arm.
+- **B. A code-free tier of the 4.12.8 loop, chosen by a script and not by judgment.** `scripts/local_gate_loop.sh` classifies the staged diff by path class and prints the class it chose. When every changed path is in {`docs/**`, `*.md`, `supabase/migrations/**`, `backups/**`, `test/sql/**`, test files that are not shared helpers}, the loop is: whole-project analyze, the pre-commit gate loop, every changed or new test, and the full suite MINUS a skip set. The skip set starts as ONE directory, `test/plan_generator/` (63 percent of the attributed time), and a directory enters it only when a scan proves its files read none of the changed classes; the scan is a `check_*.dart` gate shipped mutation-proven (CLAUDE.md 4.4 rule 24) and it fails closed (an unparseable or unknown read keeps the file in). Any `lib/`, `assets/`, `pubspec*`, `scripts/` or `supabase/functions/` change, an unknown path, or an empty diff selects the full loop. CI still runs everything and `safe_pr_merge.sh` still refuses a merge without green Unit Tests, so nothing unverified reaches `main`.
+- **C. Alternative to B for the founder to choose (decide in the plan).** For a code-free batch run NO local full suite: analyze, the pre-commit gates and the changed tests, then the PR's CI (about 15 minutes) is the full-suite gate, exactly as ADR-0013 does for a `feature`-tier push. Cheaper and simpler, but a red in an untouched suite appears after the push instead of before.
+
+**Done when.** The uncontended full-suite time on this VPS is measured and recorded; a second session starting a full suite waits instead of oversubscribing; CLAUDE.md 4.12.8 names the code-free tier (and its exact skip set, or option C) so the rule and the script cannot drift; a test proves the classifier selects the full loop for each of `lib/`, `assets/`, `pubspec.yaml`, `scripts/`, `supabase/functions/`, an unknown path and an empty diff; and a code-free batch's measured loop time on a quiet machine is recorded here.
+
+**Not decided here.** The code-free path class list, whether B's skip set may grow past `test/plan_generator/`, and B versus C are the founder's calls at plan time. The exact comment-only Edge Function edits of a batch like this one (which ride with a migration) need their own rule: a comment-only `supabase/functions/` diff is `code` until a gate can prove it is comment-only.
+
+## OI-481 — cron_telemetry.logCronEnd stores error_summary with only a 1000-character cap, and about 19 cron functions pass a raw String(err); since migration 172 the newest non-success row of a dead function is kept indefinitely
+
+- **Status**: OPEN
+- **Blocked on**: nothing (a plan is the next step; found by the Hermes security seat of migration 172, 2026-11-06)
+- **Verified**: 2026-11-06, read-only, on the tree of branch `cron-log-retention-oi199-oi471`: `supabase/functions/_shared/cron_telemetry.ts:87-90` is `patch.error_summary = opts.errorSummary.slice(0, 1000);` (a length cap and nothing else), and `git grep -l "errorSummary:" -- 'supabase/functions/*/index.ts'` lists 19 functions. Raw error strings go in at, for example, `compute-coach-signals/index.ts:110` and `re-engagement/index.ts:384` (`err.message`), and `morning-alert/index.ts:681`, `evaluate-rank-promotions/index.ts:387`, `weekly-recalc/index.ts:443`, `pr-detection/index.ts:249` (`String(err)`). Only `alert-critical-notify` (`telegramErrorSummary`) and `clean-orphan-media` (`runErrorSummary`, for one of its three sites) run the text through a scrubber first; `founder-digest` caps at 500 characters.
+- **Identified**: 2026-11-06 · filed via mint_oi.sh from branch `cron-log-retention-oi199-oi471`
+
+**What.** `public.cron_call_log.error_summary` is free text written by the caller. Nothing at the sink removes an identifier, an address, a token or a health value that an error message happens to carry. The Hermes security seat of migration 172 searched for a path that puts one there and found none: a PostgREST error is a plain object (`String()` gives `[object Object]`), the Gemini key is redacted by `redactSecrets` in `_shared/gemini.ts`, and no cron entry file calls `JSON.parse` on user data. So today the content is clean by habit and by the shape of the errors, not by construction.
+
+**Why it matters now.** Before migration 172 the table kept at most one non-success row past 10 days (the global newest row). From 172 it keeps the newest row of EVERY function, whatever its status, with no age limit, so a dead function's last failed row (and its `error_summary`) outlives the 10-day window for good. That is a small, bounded change (at most one such row per function name), not a leak, but it is the first time this column's content is retained without an age cap, and DPDP data minimisation is the reason to make the sink safe before a caller widens what it passes.
+
+**Fix shape (one place, then a redeploy).** Scrub in `logCronEnd` before the slice: pass the text through the existing `redactSecrets` and a small pattern pass for e-mail addresses, UUID-shaped ids and JWT/long-token shapes, then cap. A `_shared` change reaches each cron function only when that function is next redeployed, so the plan must say which of the 19 are redeployed and when (the host-shell deploy path of `supabase/functions/CLAUDE.md`). Pin it with a Deno test of `logCronEnd` fed an error string that contains each shape and a Dart source pin that `logCronEnd` is the only writer of `error_summary` (`_shared/cron_telemetry.ts:55-56` for the insert and `:92-93` for the update are the only writers in the repo today).
+
+**Done when.** `logCronEnd` removes the listed shapes before the cap, a test proves each one is removed and that a clean message passes through unchanged, and the plan names the redeploy of the cron functions.

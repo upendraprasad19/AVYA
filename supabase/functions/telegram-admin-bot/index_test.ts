@@ -1177,15 +1177,13 @@ Deno.test("cmdCron queries a 7-day time window (gte on started_at), not a row-co
   // whichever functions were stalest — live evidence showed 3 real
   // functions missing entirely. A 7-day `.gte()` window closes that
   // specific gap (correct bound, never a row count) — though it is not a
-  // COMPLETE fix: `cleanup_cron_call_log()`'s LIVE definition (migration
-  // 110, not the superseded 109 — R2-06/R2-07) spares TWO rows globally
-  // (newest success + newest any-status), still not each function's
-  // latest, so true >7-day silence still goes invisible past the
-  // retention cut (B-pass finding, same day; see the code comment above
-  // cmdCron; deeper fix tracked as OI-199).
-  // Update 2026-11-05 (OI-179, migration 169): retention is 10 days now; the
-  // 7-day gte asserted below is a window, unchanged, and is what hides silence
-  // between days 7 and 10.
+  // COMPLETE fix. History: this comment used to say `cleanup_cron_call_log()`
+  // spared only TWO rows globally, so true >7-day silence went invisible past
+  // the retention cut (OI-199). Since migration 172 the pruner
+  // keeps each function's newest success and newest row, so the rows exist;
+  // what still hides a function silent for 7 days or more is the 7-day gte
+  // asserted below, a window, unchanged on purpose (see the code comment above
+  // cmdCron; aligning it with the alert's 14-day lookback is OI-478).
   const now = new Date();
   const threeDaysAgo = new Date(now.getTime() - 3 * 24 * 60 * 60 * 1000).toISOString();
   let gteCol: string | undefined;
