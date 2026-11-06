@@ -96,20 +96,23 @@ double? readRetentionDays(String migrationSql) {
           r'CREATE\s+OR\s+REPLACE\s+FUNCTION\s+(?:public\.)?cleanup_cron_call_log\b(.*?)\$fn\$;',
           caseSensitive: false,
           dotAll: true)
-      .firstMatch(sql);
-  if (fn == null) return null;
+      .allMatches(sql)
+      .toList();
+  // The LAST definition in the file is the live one (a file may define the function twice).
+  if (fn.isEmpty) return null;
   final m = RegExp(r"started_at\s*<\s*now\(\)\s*-\s*interval\s+'(\d+)\s+(minutes?|hours?|days?)'",
           caseSensitive: false)
-      .firstMatch(fn.group(1)!);
+      .firstMatch(fn.last.group(1)!);
   return m == null ? null : _unitToDays(int.parse(m.group(1)!), m.group(2)!);
 }
 
 /// Human-readable violations; empty means the alert can fire.
 ///
-/// A lookback LARGER than retention is benign (it is only a cap, the table just
-/// holds less), so it is not a violation. A threshold at or above the retention,
-/// or at or above a stated lookback, is: the alert's input can never contain
-/// evidence that old.
+/// A lookback LARGER than retention is not a violation (the alert then sees only
+/// what the table still holds: rows younger than the retention plus, since
+/// migration 172, each function's newest success and newest row). A threshold
+/// at or above the retention, or at or above a stated lookback, is: the alert's
+/// input can never contain evidence that old.
 List<String> violations(CronCallLogWindows w, double retentionDays) {
   final out = <String>[];
   for (final t in w.thresholdDays) {

@@ -23,7 +23,7 @@ closed_count: 8
 
 findings:
   - id: C1
-    title: "group A, the exit-254 family (OI-311 sightings 2026-10-13, 10-17, 10-19, 11-06; OI-468 sighting 1 by prediction): cause measured and contained in the test spawn helper"
+    title: "group A, the exit-254 family (OI-311 sightings 2026-10-13, 10-17, 10-19 and two on 11-06; OI-468 sighting 1 by prediction): cause measured and contained in the test spawn helper"
     terminal_state: closed_in_commit
     commit: oi468-spawn-status batch commit (see header)
     verification: "test/contracts/spawn_retry_test.dart: spawnRetryDecision and isDartExecutable tables, both loops against the same scripted children, real dart children per entry point (a child that fails with the signature on its first run is retried and passes; an always-failing one stops after 3 attempts; a plain 254, the text with exit 1, the text on stdout only and an `sh` wrapper run exactly once); test/contracts/sot_registry_citations_test.dart reads its reports through finalAttempts (unit-tested). Mutation: see the diagnose doc."

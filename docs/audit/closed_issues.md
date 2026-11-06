@@ -6213,6 +6213,182 @@ Found by the batch-2 plan review (round 1, P2-12, 2026-10-20), verified by readi
 
 **Closed 2026-11-06.** Cause: Legs B had no quad exercise, and a quad exercise lists Glutes too, so the allocator refused it while Glutes sat at its weekly top. Fix (option a, one batch): Legs B swaps its Glutes / hip_isolation slot for a Quads / knee_dominant / compound slot (priority 2), and `SessionBudgetContext.quadPrimaryCreditsGlutes` is false for 6-day build_muscle only, so `BudgetMuscleGroups.creditedOf` drops Glutes from an exercise whose first listed muscle is Quads (the allocator, week 2 and titration read the one flag). Founder case Quads 8 -> 12 of 12 to 16, Glutes 16 -> 13 (credited), Hamstrings 11 -> 12; at 90 minutes beginners reach their floor of 10 and intermediate bodyweight, dumbbells and full gym reach 12. Golden: 60 keys, all 6-day build_muscle (a global rule changed 745 and was rejected). The clause "the other 6-day personas reach the floor" is only PARTLY met: 5 of 12 personas are short at 90 minutes and 9 of 12 at the 60-minute default (intermediate basic gym `cap_limited`, advanced bodyweight `co_group_limited`, the rest `time_limited`), filed as OI-477. Stated cost: a squat's glute work no longer counts in this split (founder case 22 full-credit glute sets against a credited 13 and a top of 16; a beginner about 21 against 12). A hip hinge that lists Quads first (Trap Bar Deadlift) keeps its Glutes credit. Mutants: 24 of 24 red. Kill-switch `disable_quad_legs_b` restores the old Legs B and the full Glutes credit. The 3, 4 and 5-day splits are OI-475. Device check of a 6-day plan: the founder's next build.
 
+## OI-227 — Telegram coach connect is broken (no linking token, bot says no user found) — remove UI entry points, revisit phase 2
+
+- **Status**: CLOSED · 2026-11-06 · closed by OI-466 (branch telegram-surface-off), closes-diagnose b9d3f1
+- **Blocked on**: none — UI removal is self-contained; the real fix needs the separate bot project
+- **Verified**: 2026-09-21 — founder tapped "Connect @AVYACoachBot" live, bot replied "no user found". Closure check 2026-11-06: every entry point named above is gone from lib/ (scan in test/contracts/telegram_surface_removed_test.dart).
+- **Identified**: 2026-09-21 · filed via mint_oi.sh from branch `claude/food-logging-observations-126ab3`
+
+Founder tapped "Connect @AVYACoachBot" from the AI Coach tab and Telegram
+replied "no user found" — the account-linking handshake between the app and
+the bot doesn't work end to end.
+
+Root cause on the app side: `_openTelegramBot()`
+(`lib/features/ai_coach/screens/ai_coach/recording_body.dart:13`) opens a bare
+`https://t.me/AVYACoachBot` deep link with **no linking token** — no `?start=`
+param identifying the app user. Without one, the bot (a separate project on
+OpenClaw VPS, NOT in this repo — root `CLAUDE.md:269`) has no way to associate
+the incoming Telegram chat with an `icanbefitter` account. This repo cannot fix
+the bot-side half of that handshake; it needs access to the bot project.
+
+Confirmed while investigating: this is a **different bot** from the founder's
+admin console. `@AVYACoachBot` (user-facing, meant to carry coach
+conversations + proactive nudges via `telegram_connections`, referenced in
+`morning-alert/index.ts:456-464` as a push fallback) is separate from
+`@ICanbeFitterBot` / `@IcanbefitterBot` (root `CLAUDE.md:269`,
+`supabase/functions/CLAUDE.md:55` — the `telegram-admin-bot` Edge Function,
+read-only, founder-only, allowlisted to a single chat id, powers `/digest`
+etc.). No relation between the two; fixing one says nothing about the other.
+
+Live in-app entry points that let a user reach the broken flow:
+- `lib/features/ai_coach/screens/ai_coach/compact_header.dart` — popup menu
+  item `telegram` ("Connect @AVYACoachBot").
+- `lib/features/ai_coach/screens/ai_coach/telegram_view.dart` — the
+  "CONNECT @AVYACOACHBOT" CTA on the in-app Telegram card.
+
+Founder decision 2026-09-21: full fix (proper linking token + bot-side
+handling) is phase 2. **Done in this session, uncommitted:** removed the
+"Connect @AVYACoachBot" menu item (`compact_header.dart`) and the matching CTA
+in `telegram_view.dart` (its not-connected copy now reads "Telegram — Coming
+Soon" with no button). Deliberately **kept** the `switch_channel` toggle
+("Switch to Telegram" / "Switch to In-App Chat") — `channelProvider`
+(`ai_coach_provider.dart:1075-1086`) persists `coach_channel` to Hive, so any
+user already on `channel == 'telegram'` needs that toggle to get back to chat;
+removing it too would trade this bug for a worse one (a stranded user with no
+UI path back). Verified with `flutter analyze lib/` (both touched files are
+`part of 'screen.dart'`, so only a whole-tree analyze is valid per this
+board's own common-pitfalls note) — 0 errors/warnings, 45 pre-existing infos
+unrelated to these files. `telegram_view.dart` / `channelProvider` /
+`_openTelegramBot()` left in place (dead but harmless) for phase 2.
+
+**Phase 2 must not reuse the email flow (2026-09-29, Hermes L22/L35 on `oi-182-202-subscription-state`).**
+`telegram-bot/bot.py` `receive_email` (`:281-332`) links a Telegram chat to whichever `users` row
+matches a typed email, with no proof of ownership: no code, no link, no token. Anyone who knows or
+guesses a victim's email can link their own chat to that account, chat as that user (the coach
+context is built from the victim's data via `get_user_context`), and probably replace the real
+owner's `chat_id` in `telegram_connections`, which `morning-alert` uses as a push fallback. It is
+dormant only because the feature is hidden and the bot is not deployed (founder, 2026-09-29). The
+phase-2 linking-token handshake above (the app mints a one-time token, opened as
+`t.me/AVYACoachBot?start=<token>`) removes the flaw; the email prompt must be deleted, not kept as
+a fallback.
+
+Two related items surfaced, deliberately NOT resolved by this OI:
+- `lib/shared/widgets/paywall_sheet.dart:120` markets "Weekly AI nutrition
+  report + Telegram push" as a PRO perk bullet. With the connect entry points
+  gone, no new user can ever receive that. Founder to decide whether to reword
+  it now or leave it for the phase-2 fix.
+- `lib/features/ai_coach/widgets/telegram_card.dart` (`TelegramCard`) appears
+  unreferenced anywhere else in `lib/` — looks like dead code predating
+  `telegram_view.dart`. Not touched here; separate small cleanup if confirmed.
+
+**Recommendation**: Phase 2 — design a real linking handshake (token minted
+app-side, passed via the deep link's `start` param, exchanged by the bot for
+the user's id) with whoever owns the bot project, then re-add the UI entry
+points. Until then, this OI stays open as the pointer for "why is Telegram
+missing from the Coach menu."
+
+**Resolution (2026-11-06).** Closed by OI-466 under the founder's 2026-11-04 decision that Telegram is dropped. The 2026-09-21 change removed only the "Connect @AVYACoachBot" entry points and deliberately kept the channel toggle, the "Coming Soon" view, `channelProvider` and the paywall perk; OI-466 removed all of those, so a user can no longer reach any Telegram surface and no Phase 2 is planned. The warning about `telegram-bot/bot.py` `receive_email` (it links a chat to whichever account matches a typed email, with no proof of ownership) is NOT closed with this entry: it moved to OI-476, together with the question of whether the tracked `telegram-bot/` directory and the `morning-alert` Telegram fallback are kept or deleted.
+
+## OI-466 — Telegram copy still shown in the paywall and Telegram card (Telegram permanently dropped)
+
+- **Status**: CLOSED · 2026-11-06 · branch telegram-surface-off (commit SHA stamped in docs/audit/telegram-surface-off.closure.yaml), closes-diagnose b9d3f1; pin test/contracts/telegram_surface_removed_test.dart
+- **Blocked on**: none
+- **Verified**: 2026-11-04, `paywall_sheet.dart:122` and the Telegram card copy read on branch `realtime-weight-off`. Closure check 2026-11-06: mutation table run on the final code after the B-pass, 23 of 24 mutants red and 1 known residue (adjacent string literals), see the diagnose doc.
+- **Identified**: 2026-11-04 · filed via mint_oi.sh from branch `realtime-weight-off`
+
+**What:** user-facing copy still sells Telegram ("Weekly AI nutrition report + Telegram push" in the paywall, and the Telegram card). Founder 2026-11-04: Telegram is permanently dropped.
+
+**Acceptance:** copy removed or reworded (Wardroom brand soul loaded first; psychology pass if a paywall line changes); tests/pins that cite the old strings repointed.
+
+**Resolution (2026-11-06).** The paywall perk is now `Weekly AI nutrition report` (`lib/shared/widgets/paywall_sheet.dart`, `_proBenefits`), and everything else that sold or linked Telegram to a user is gone from the app: the AI Coach "Switch to Telegram" menu item and the "Telegram - Coming Soon" view it opened, the dead `TelegramCard`, `channelProvider`, `telegramConnectionProvider` and `_openTelegramBot`. The overflow menu is now the pure function `coachHeaderMenuItems` (`Clear conversation`, plus `Upgrade to PRO` on a free account). Tests that cited the old strings were repointed, not loosened: `measurement_flag_off_identity_test.dart` now pins the chip slot by its neighbours, `coach_chat_reply_sanitization_test.dart` slices to a stable anchor, and `initial_scroll_to_bottom_test.dart` lost only the test of the retired OI-232 channel-switch listener. New pin: `test/contracts/telegram_surface_removed_test.dart` (a paywall pump for every feature label, a menu pump with each value tied to its `case`, and an exact-line source scan of `lib/`, `assets/` and `web/` with the chat area pinned as unconditional). The copy line went through the `psychology-pass-fitness` pass (verdict: keep the plain cut; the feature's NAME stays OI-325's open question). Diagnose doc `docs/diagnoses/2026-11-06-telegram-promise-removed-b9d3f1.md`; batch ledger `docs/audit/telegram-surface-off.closure.yaml`. Left on purpose: `pullRecentCrossChannelLogs` and its `source: 'telegram'` (OI-467), the `telegram_connected` / `coach_channel` names in the migrator key list, and the founder-ops `telegram-admin-bot`. The tracked `telegram-bot/` directory is OI-476. The B-pass found that the `Clear conversation` menu item does nothing (pre-existing, byte-identical before this batch): OI-479.
+
+## OI-199 — cleanup_cron_call_log() spares only TWO global rows, not each function's latest — true >7d cron silence still goes invisible to /cron
+
+- **Status**: CLOSED
+- **Blocked on**: none
+- **Update 2026-11-05 (OI-179, migration 169)**: retention is 10 days once 169 is applied, so every "7d" below reads 10 days for the purge (the `/cron` 7-day `.gte()` window is unchanged); the per-function keep-set remains this OI's fix.
+- **Also owned here (Hermes pass 2026-11-05, OI-179, two seats)**: `telegram-admin-bot` `/cron` (`index.ts` `sevenDaysAgoIso`, a 7-day `.gte()`) cannot show a function silent for 7-10 days, which is exactly when `alert_cron_function_dead` now pages, so the founder cannot corroborate the page there. Align the window with the retention (or with the per-function keep-set) when this OI is fixed: that is an Edge Function change (Deno assertion in `index_test.ts:1215-1219`, `deno check`, a redeploy with its own go).
+- **Verified**: 2026-09-14, live read of the function body — corrected same
+  day (R2-06/R2-07, review round 2) to cite migration **110**
+  (`110_cron_silence_per_function_and_cleanup_null_guard.sql:30-47`), the
+  LAST `CREATE OR REPLACE` and therefore the LIVE definition — the original
+  filing below quoted the SUPERSEDED migration 109 body (one spared row);
+  110 already widened that to two, and this OI's core finding (still not
+  PER-FUNCTION) survives the correction unchanged.
+- **Identified**: 2026-09-14 · filed via mint_oi.sh from branch `telegram-admin-bot`
+- **How found**: B-pass review of telegram-admin-bot's F4 fix (`/cron`'s
+  `.limit(200)` row-window → `.gte()` 7-day time-window). The fix's own
+  code comment claimed `cleanup_cron_call_log()` "always spares each
+  function's most recent row" — the B-pass read the live function body and
+  found this false. The LIVE (migration 110) definition:
+  ```sql
+  CREATE OR REPLACE FUNCTION public.cleanup_cron_call_log()
+  RETURNS void LANGUAGE sql SECURITY DEFINER SET search_path TO 'public'
+  AS $fn$
+    DELETE FROM public.cron_call_log
+    WHERE started_at < now() - interval '7 days'
+      AND id NOT IN (
+        SELECT id FROM (
+          (SELECT id FROM public.cron_call_log
+            WHERE status = 'success' ORDER BY started_at DESC LIMIT 1)
+          UNION
+          (SELECT id FROM public.cron_call_log
+            ORDER BY started_at DESC LIMIT 1)
+        ) AS keep_rows
+      );
+  $fn$;
+  ```
+  This spares exactly TWO rows globally (the single most-recent
+  `status='success'` row table-wide, AND the single most-recent row of any
+  status table-wide), not one per function. (109's ORIGINAL one-row body,
+  for the record, was `id IS DISTINCT FROM (SELECT id ... WHERE
+  status='success' ORDER BY started_at DESC LIMIT 1)`.)
+- **Consequence**: a cron-dispatched function silent for longer than 7 days
+  has ALL its `cron_call_log` rows purged by the next nightly
+  `cron_call_log_cleanup_daily` run and becomes invisible to
+  `/status`/`/cron`'s 7-day `.gte()` window — the same class of blind spot
+  F4 fixed (a genuinely-stale function silently missing), re-manifesting
+  past 7 days instead of past 200 rows. `alert_cron_silence` (also
+  migration 109) is a real absence-backstop for total-fleet silence, but
+  doesn't cover a single function going silent while others keep running.
+- **Fix shape (not decided)**: widen `cleanup_cron_call_log()`'s exemption
+  from two global rows to a per-`function_name` `DISTINCT ON` — e.g. spare
+  the latest row for EVERY `function_name` present, not just the two
+  fleet-wide ones. Needs a new migration (110 is applied and immutable) and
+  its own live-verify pass (confirm the DISTINCT ON exemption doesn't
+  defeat the 7-day retention's original storage-growth purpose for
+  functions that run frequently). **Precondition (R2-11, review round 2):
+  before this fix ships, it MUST exclude non-scheduled, trigger-dispatched
+  functions (`alert-critical-notify` today) from
+  `alert_cron_function_dead`'s scope** — see the cross-reference in that
+  alert's own OI (OI-179) for why: a per-function retention exemption would
+  arm the exact false-critical-alert loop that OI-179's own threshold
+  currently keeps inert by accident.
+- **Scope note**: pre-existing production infrastructure (migration 110
+  predates this branch), out of scope for the telegram-admin-bot batch's
+  own fix diff — the comment claiming this behavior was corrected in that
+  same commit (`diagnose 82b018`), and this OI tracks the deeper fix.
+
+**Closed by.** Branch `cron-log-retention-oi199-oi471`: migration 172 (`cleanup_cron_call_log()` keeps, per function_name, the newest success row and the newest row of any status, ties to the higher id; 10-day retention unchanged), applied to the live project 2026-11-06 20:47 IST after the founder's explicit go, ledger entry 172, diagnose `b3e7d2`. Verified live right after the apply: `md5(prosrc)` 6597e3e24f91126b6268b3d54aa7ea57, length 460, ACL identical, `anon` and `authenticated` cannot execute, job 41 unchanged. The keep-set itself is not observable live until a function is quiet for more than 10 days (the first deletions are about 2026-11-09 03:30 UTC). Behaviour change, measured and told to the founder: `alert_cron_function_dead` now pages a dead function twice (day 8 to 9, then day 11 to 13), never three times. The `/cron` 7-day window, the alert's own message text and a reader for silence beyond 14 days were split off with the founder's "Ok" (2026-11-06, Telegram deferred): OI-478, parked `upstream_blocked`.
+
+## OI-471 — Orphan cron_call_log_cleanup_7d(): an unconditional 7-day DELETE with no caller that would undo the OI-179 retention fix if ever scheduled
+
+- **Status**: CLOSED
+- **Blocked on**: none
+- **Verified**: 2026-11-06, live read after the apply (to_regprocedure of the orphan is null; the migration 172 request committed; harness case I and the Dart drop-form fixtures D1 to D3)
+- **Identified**: 2026-11-05 · filed via mint_oi.sh from branch `oi179-cron-dead-alert`
+
+Found by round 2 of the OI-179 plan review (migrations 090:43 and 091:22 name it) and confirmed LIVE 2026-11-05 with `pg_proc` / `cron.job` / `pg_trigger` reads: `public.cron_call_log_cleanup_7d()` exists with the body `DELETE FROM public.cron_call_log WHERE started_at < now() - interval '7 days'` (no keep-set, `SECURITY DEFINER`, search_path public/extensions/vault/private). No cron job calls it, no function body references it, no trigger. It is inert today. It is the pre-109 pruner that `cleanup_cron_call_log()` replaced.
+
+**Why it matters:** OI-179's fix (migration 169, retention 10 days) is undone the moment anyone schedules or calls this function: it prunes at 7 days again and keeps nothing.
+
+**Do:** a migration `DROP FUNCTION IF EXISTS public.cron_call_log_cleanup_7d();` (Destructive: yes, so the founder's go and a dry run). The file-based `test/contracts/security_definer_revoke_migration_test.dart` reads migrations 090/091 and is unaffected. Re-check `pg_proc`/`cron.job`/`prosrc` references immediately before the drop.
+
+**Acceptance:** the function is gone live (`to_regprocedure` is null) and no migration after the drop references it.
+
+**Closed by.** Branch `cron-log-retention-oi199-oi471`: migration 172 (`DROP FUNCTION IF EXISTS public.cron_call_log_cleanup_7d();`, no CASCADE), applied live 2026-11-06 20:47 IST in the same request as the OI-199 fix after the founder's explicit go. Pre-apply read: no dependent, no `cron.job` or function body naming it, one overload, 97 rows older than 7 days still in the table (so it had not run). The orphan's live body and ACL stay recoverable from rollback block 2 of the migration (not advised).
+
 ## OI-468 — Three unit-test CI failures returned an impossible subprocess exit status (254, 1668163832, 1752491432) that passed on re-run: find the cause or add stderr capture
 
 - **Status**: CLOSED · 2026-11-06 · branch `oi468-spawn-status` · diagnose `b7e2d9` · the commit carrying `closes-oi:` for this entry
@@ -6243,4 +6419,6 @@ Five sightings so far: July 2026 (`a7f3d1`), 2026-10-04 (the run in the heading)
 
 **Fifth sighting, with the same output (2026-11-06).** PR #224 (`oi454-quads`, the OI-454 Quads floor), CI run `42201692989` on head `948f06a9` (a sync merge of `origin/main` into the branch), job `Unit Tests shard 1/4` (job `127838267652`), attempt 1: ONE failure in `+3627 -1`, `test/contracts/blast_radius_data_deleting_paths_catastrophic_test.dart` "the real CLI agrees, and prints the MAX tier of a mixed diff" (the data-deleting twin of the second and fourth sightings' test). The first two spawns exited 0 with the expected tiers (`user_owned_buckets.ts` platform, `rolling-context/index.ts` catastrophic); the third, on `supabase/functions/_shared/purge_user_storage.ts`, exited 254 with `stdout=Running build hooks...Running build hooks...` and `stderr=File not formatted as yaml: .`, so the test's own message was `no tier printed for [supabase/functions/_shared/purge_user_storage.ts]`. The same shard, same file and same three paths passed on the previous head of this branch (`775be7da`, run `42195588267`, all four shards green), and the only difference between the two heads is the merge of `origin/main` (PR #223, OI-358: train, ai_coach and core/utils files). Neither head's diff touches a blast-radius script, `docs/blast_radius.yaml`, `pubspec.yaml` or `scripts/`, so the failure is not caused by it. The job log shows `blast_radius_progress_map_writer_paths_test.dart` running at the same second (10:20:03Z), which keeps the untested concurrent-`dart run` hypothesis alive (that test reads the registry; it was not shown to spawn). Five sightings in 33 days, all on a spawn of `dart run scripts/blast_radius_from_diff.dart` or another `dart run` gate; the origin of the message string is still not located and the failure is still not reproduced locally (the author's full local suite on `775be7da` ran 13182 passed, 0 failed, including this file).
 
-**Closed (2026-11-06, branch `oi468-spawn-status`, diagnose `b7e2d9`).** Cause measured for the four sightings that carry the text (2026-10-13, 10-17, 10-19, 11-06) and, by prediction, for 10-04: the race on `.dart_tool/native_assets.yaml` described in OI-468's closing note and the diagnose doc (the `File not formatted as yaml` string lives in the Dart front end's native-assets validator, found with `grep -a` in the SDK binaries; reproduced 40 of 40 under a truncating process and, with none, 1 of 265 and 1 of 554 `dart run` and 1 of 195 real gate scripts under load; the child never reaches `main`). The helper now retries that signature (a dart child, exit 254, the text on stderr) at most twice and prints a `[spawn-retry]` line, so this entry's caution "do NOT add a retry first" is superseded: the cause is known and the evidence is kept. NOT explained: the July 2026 `a7f3d1` (the plain form of a script copied into a throwaway repo; it reads nothing of the repo's file). The hook sites carry the same race and are OI-482 (platform tier). Reopen when: a 254 WITHOUT the signature text on any spawn, or a signature failure after three attempts.
+**Sixth sighting, with the same output (2026-11-06).** PR #227 (`cron-log-retention-oi199-oi471`, migration 172), CI run `42246629429` on head `297832c6` (a sync merge of `origin/main` into the branch made by `land_pr.sh`), job `Unit Tests shard 1/4` (job `127990434057`), attempt 1: ONE failure in `+3185 ~5 -1`, `test/contracts/blast_radius_progress_map_writer_paths_test.dart` "blast_radius.yaml — progress-map writer paths are >= account the hoist did not move the progress write into a weaker tier (Unit B / OI-84)". The spawn on `lib/shared/services/pro_phase_advance.dart` exited 0 and printed `Blast-radius: account`; the spawn on `lib/features/train/widgets/phase2_preview_card.dart` exited 254 with `stdout=Running build hooks...Running build hooks...` and `stderr=File not formatted as yaml: .`, so the test's own message was `classifier printed no tier for lib/features/train/widgets/phase2_preview_card.dart`. The same test file passes locally (5 of 5) on the same tree, and this PR's diff touches no blast-radius script, no `docs/blast_radius.yaml`, no `pubspec.yaml` and nothing under `scripts/`, so the failure is not caused by it. This is the first sighting in which the failing test is the one the fifth sighting named as the possible concurrent reader of the registry; that keeps the untested concurrent-`dart run` hypothesis alive without establishing it. Six sightings in 33 days, all on a spawn of `dart run scripts/blast_radius_from_diff.dart` or another `dart run` gate; the origin of the message string is still not located and the failure is still not reproduced locally. Handled as before: a push to the PR superseded the stale run (the workflow cancels in-progress runs of a PR branch) and the next run decides.
+
+**Closed (2026-11-06, branch `oi468-spawn-status`, diagnose `b7e2d9`).** Cause measured for the five sightings that carry the text (2026-10-13, 10-17, 10-19 and two on 2026-11-06, the sixth arriving on `main` from PR #227 while this branch was open: it fits the measured mechanism, a writer and a reader `dart run` from the repo root in one shard, and was cut before this fix) and, by prediction, for 10-04: the race on `.dart_tool/native_assets.yaml` described in OI-468's closing note and the diagnose doc (the `File not formatted as yaml` string lives in the Dart front end's native-assets validator, found with `grep -a` in the SDK binaries; reproduced 40 of 40 under a truncating process and, with none, 1 of 265 and 1 of 554 `dart run` and 1 of 195 real gate scripts under load; the child never reaches `main`). The helper now retries that signature (a dart child, exit 254, the text on stderr) at most twice and prints a `[spawn-retry]` line, so this entry's caution "do NOT add a retry first" is superseded: the cause is known and the evidence is kept. NOT explained: the July 2026 `a7f3d1` (the plain form of a script copied into a throwaway repo; it reads nothing of the repo's file). The hook sites carry the same race and are OI-482 (platform tier). Reopen when: a 254 WITHOUT the signature text on any spawn, or a signature failure after three attempts.

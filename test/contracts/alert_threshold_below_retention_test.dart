@@ -12,8 +12,9 @@ import '../helpers/migration_cap_reader.dart';
 ///
 /// The CLASS this pins: an alert that reads a pruned table needs
 /// `threshold < min(its own lookback, the table's retention)`. A lookback
-/// LARGER than retention is benign (a cap); a threshold at or above either bound
-/// is not. The pure readers live in `test/helpers/cron_call_log_windows.dart`
+/// LARGER than retention is not a violation (the alert sees what the table still
+/// holds, which since migration 172 includes each function's newest rows); a
+/// threshold at or above either bound is. The pure readers live in `test/helpers/cron_call_log_windows.dart`
 /// so the mutation cases below can feed them fixture SQL.
 void main() {
   late final double retentionDays;
@@ -28,7 +29,7 @@ void main() {
   });
 
   group('live definitions', () {
-    test('retention is read from the LAST definition (169: 10 days)', () {
+    test('retention is read from the LAST definition (10 days since 169; 172 keeps it)', () {
       expect(retentionDays, 10.0);
     });
 
@@ -199,6 +200,20 @@ void main() {
 
     test('an unparseable body returns null, never a guess', () {
       expect(readRetentionDays('SELECT 1;'), isNull);
+    });
+
+    test('a file that defines the function twice takes its retention from the LAST definition', () {
+      const two = r'''
+        CREATE OR REPLACE FUNCTION public.cleanup_cron_call_log()
+        RETURNS void LANGUAGE sql AS $fn$
+          DELETE FROM public.cron_call_log WHERE started_at < now() - interval '7 days';
+        $fn$;
+        CREATE OR REPLACE FUNCTION public.cleanup_cron_call_log()
+        RETURNS void LANGUAGE sql AS $fn$
+          DELETE FROM public.cron_call_log WHERE started_at < now() - interval '10 days';
+        $fn$;
+      ''';
+      expect(readRetentionDays(two), 10.0);
     });
   });
 

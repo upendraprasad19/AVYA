@@ -614,8 +614,8 @@ cloud sessions; **this file is the cross-session backlog.**
   `WorkoutScheduleReadService.weekIdentity()`. Two named residuals, neither deferred:
   `ai_snapshot_builder.dart` is **FOB-3's** by the board's own division (it rewrites the same lines
   to add the `hold` block and needs the ai-proxy redeploy — touching it twice would ship a
-  half-changed snapshot contract), and `telegram-bot/bot.py` is **upstream_blocked**, a separate
-  repo on the OpenClaw VPS (§2).
+  half-changed snapshot contract), and `telegram-bot/bot.py` is **upstream_blocked**, the OpenClaw VPS
+  deployment (§2; the tracked copy is `telegram-bot/`, dormant, OI-476).
 - **What's missing**: Own full ×2 per §4.12.4 (flip-on is where real user risk starts) — the four
   remaining FOB items closed first. The flip-on commit must clear **all four** `enable_hold_weeks`
   rows in the ledger (`hold-mechanic`, `hold-display`, `hold-display-fixes`, and
@@ -2999,6 +2999,8 @@ Do NOT re-propose v1. Verified clean by round 2: sending `''` to `user_profile.c
 
 
 **Note 2026-10-25 (payment-hardening hermes pass, seat C, L2).** Also measure `promo_code_uses` and `subscriptions`: no migration revokes their table privileges, so the platform default (all eight privileges, TRUNCATE included, for `anon` and `authenticated`, as migration 163 measured on `promo_codes`) is inferred, not measured. RLS blocks row access on both; TRUNCATE ignores RLS but PostgREST does not expose it.
+**Note 2026-11-06 (migration 172 Hermes pass, seat C, L2).** `cron_call_log` is one of the four tables above, and from migration 172 the bound "at most two rows per `function_name` past 10 days" rests on this default-deny alone: where RLS is off (migration 068 says it stays disabled, so any fresh replay of the migrations) or a policy appears, a client with the anon key could insert arbitrary names and each would now be kept for good. The 172 apply therefore reads `relrowsecurity` and the policy count before and after (the plan's Live apply section). Revoking `anon` and `authenticated` on this table is still this OI's job, not 172's.
+
 ## OI-185 — `check_schema_column_refs.dart` validates only the FIRST line of a multi-line insert/update map (P2, gate gap, pre-existing)
 
 - **Status**: OPEN
@@ -3351,73 +3353,6 @@ Unit 2's blocked question — what a regeneration does when the plan window is E
   itself.
 
 **UPDATE 2026-09-26 (backlog triage + `ci-green-batch-a`):** OI-234 closed as a duplicate of item 2 here (401s write no `cron_call_log` row, so `alert_edge_function_health`'s `total >= 5` guard never sees them; 0 alerts ever). Live 2026-09-26: `alert_edge_function_health`, `alert_payment_flow_health`, `alert_cron_silence` and `alert_cron_function_dead` have fired 0 alerts between them.
-
-## OI-199 — cleanup_cron_call_log() spares only TWO global rows, not each function's latest — true >7d cron silence still goes invisible to /cron
-
-- **Status**: OPEN
-- **Blocked on**: none
-- **Update 2026-11-05 (OI-179, migration 169)**: retention is 10 days once 169 is applied, so every "7d" below reads 10 days for the purge (the `/cron` 7-day `.gte()` window is unchanged); the per-function keep-set remains this OI's fix.
-- **Also owned here (Hermes pass 2026-11-05, OI-179, two seats)**: `telegram-admin-bot` `/cron` (`index.ts` `sevenDaysAgoIso`, a 7-day `.gte()`) cannot show a function silent for 7-10 days, which is exactly when `alert_cron_function_dead` now pages, so the founder cannot corroborate the page there. Align the window with the retention (or with the per-function keep-set) when this OI is fixed: that is an Edge Function change (Deno assertion in `index_test.ts:1215-1219`, `deno check`, a redeploy with its own go).
-- **Verified**: 2026-09-14, live read of the function body — corrected same
-  day (R2-06/R2-07, review round 2) to cite migration **110**
-  (`110_cron_silence_per_function_and_cleanup_null_guard.sql:30-47`), the
-  LAST `CREATE OR REPLACE` and therefore the LIVE definition — the original
-  filing below quoted the SUPERSEDED migration 109 body (one spared row);
-  110 already widened that to two, and this OI's core finding (still not
-  PER-FUNCTION) survives the correction unchanged.
-- **Identified**: 2026-09-14 · filed via mint_oi.sh from branch `telegram-admin-bot`
-- **How found**: B-pass review of telegram-admin-bot's F4 fix (`/cron`'s
-  `.limit(200)` row-window → `.gte()` 7-day time-window). The fix's own
-  code comment claimed `cleanup_cron_call_log()` "always spares each
-  function's most recent row" — the B-pass read the live function body and
-  found this false. The LIVE (migration 110) definition:
-  ```sql
-  CREATE OR REPLACE FUNCTION public.cleanup_cron_call_log()
-  RETURNS void LANGUAGE sql SECURITY DEFINER SET search_path TO 'public'
-  AS $fn$
-    DELETE FROM public.cron_call_log
-    WHERE started_at < now() - interval '7 days'
-      AND id NOT IN (
-        SELECT id FROM (
-          (SELECT id FROM public.cron_call_log
-            WHERE status = 'success' ORDER BY started_at DESC LIMIT 1)
-          UNION
-          (SELECT id FROM public.cron_call_log
-            ORDER BY started_at DESC LIMIT 1)
-        ) AS keep_rows
-      );
-  $fn$;
-  ```
-  This spares exactly TWO rows globally (the single most-recent
-  `status='success'` row table-wide, AND the single most-recent row of any
-  status table-wide), not one per function. (109's ORIGINAL one-row body,
-  for the record, was `id IS DISTINCT FROM (SELECT id ... WHERE
-  status='success' ORDER BY started_at DESC LIMIT 1)`.)
-- **Consequence**: a cron-dispatched function silent for longer than 7 days
-  has ALL its `cron_call_log` rows purged by the next nightly
-  `cron_call_log_cleanup_daily` run and becomes invisible to
-  `/status`/`/cron`'s 7-day `.gte()` window — the same class of blind spot
-  F4 fixed (a genuinely-stale function silently missing), re-manifesting
-  past 7 days instead of past 200 rows. `alert_cron_silence` (also
-  migration 109) is a real absence-backstop for total-fleet silence, but
-  doesn't cover a single function going silent while others keep running.
-- **Fix shape (not decided)**: widen `cleanup_cron_call_log()`'s exemption
-  from two global rows to a per-`function_name` `DISTINCT ON` — e.g. spare
-  the latest row for EVERY `function_name` present, not just the two
-  fleet-wide ones. Needs a new migration (110 is applied and immutable) and
-  its own live-verify pass (confirm the DISTINCT ON exemption doesn't
-  defeat the 7-day retention's original storage-growth purpose for
-  functions that run frequently). **Precondition (R2-11, review round 2):
-  before this fix ships, it MUST exclude non-scheduled, trigger-dispatched
-  functions (`alert-critical-notify` today) from
-  `alert_cron_function_dead`'s scope** — see the cross-reference in that
-  alert's own OI (OI-179) for why: a per-function retention exemption would
-  arm the exact false-critical-alert loop that OI-179's own threshold
-  currently keeps inert by accident.
-- **Scope note**: pre-existing production infrastructure (migration 110
-  predates this branch), out of scope for the telegram-admin-bot batch's
-  own fix diff — the comment claiming this behavior was corrected in that
-  same commit (`diagnose 82b018`), and this OI tracks the deeper fix.
 
 ## OI-200 — founder_metrics_ops().client_errors_today counts benign event-coded breadcrumbs, no 087-style reinclusion filter
 
@@ -3911,81 +3846,6 @@ or equivalent), never via worktree+merge, unless the author is prepared to also 
 plan-review record for the merge. Out of scope for the fix that discovered this (kept
 feature-tier deliberately, to avoid the exact recursion this OI describes) — CLAUDE.md is
 pinned `platform` tier, so this edit needs its own appropriately-reviewed commit.
-
-## OI-227 — Telegram coach connect is broken (no linking token, bot says no user found) — remove UI entry points, revisit phase 2
-
-- **Status**: OPEN
-- **Blocked on**: none — UI removal is self-contained; the real fix needs the separate bot project
-- **Verified**: 2026-09-21 — founder tapped "Connect @AVYACoachBot" live, bot replied "no user found"
-- **Identified**: 2026-09-21 · filed via mint_oi.sh from branch `claude/food-logging-observations-126ab3`
-
-Founder tapped "Connect @AVYACoachBot" from the AI Coach tab and Telegram
-replied "no user found" — the account-linking handshake between the app and
-the bot doesn't work end to end.
-
-Root cause on the app side: `_openTelegramBot()`
-(`lib/features/ai_coach/screens/ai_coach/recording_body.dart:13`) opens a bare
-`https://t.me/AVYACoachBot` deep link with **no linking token** — no `?start=`
-param identifying the app user. Without one, the bot (a separate project on
-OpenClaw VPS, NOT in this repo — root `CLAUDE.md:269`) has no way to associate
-the incoming Telegram chat with an `icanbefitter` account. This repo cannot fix
-the bot-side half of that handshake; it needs access to the bot project.
-
-Confirmed while investigating: this is a **different bot** from the founder's
-admin console. `@AVYACoachBot` (user-facing, meant to carry coach
-conversations + proactive nudges via `telegram_connections`, referenced in
-`morning-alert/index.ts:456-464` as a push fallback) is separate from
-`@ICanbeFitterBot` / `@IcanbefitterBot` (root `CLAUDE.md:269`,
-`supabase/functions/CLAUDE.md:55` — the `telegram-admin-bot` Edge Function,
-read-only, founder-only, allowlisted to a single chat id, powers `/digest`
-etc.). No relation between the two; fixing one says nothing about the other.
-
-Live in-app entry points that let a user reach the broken flow:
-- `lib/features/ai_coach/screens/ai_coach/compact_header.dart` — popup menu
-  item `telegram` ("Connect @AVYACoachBot").
-- `lib/features/ai_coach/screens/ai_coach/telegram_view.dart` — the
-  "CONNECT @AVYACOACHBOT" CTA on the in-app Telegram card.
-
-Founder decision 2026-09-21: full fix (proper linking token + bot-side
-handling) is phase 2. **Done in this session, uncommitted:** removed the
-"Connect @AVYACoachBot" menu item (`compact_header.dart`) and the matching CTA
-in `telegram_view.dart` (its not-connected copy now reads "Telegram — Coming
-Soon" with no button). Deliberately **kept** the `switch_channel` toggle
-("Switch to Telegram" / "Switch to In-App Chat") — `channelProvider`
-(`ai_coach_provider.dart:1075-1086`) persists `coach_channel` to Hive, so any
-user already on `channel == 'telegram'` needs that toggle to get back to chat;
-removing it too would trade this bug for a worse one (a stranded user with no
-UI path back). Verified with `flutter analyze lib/` (both touched files are
-`part of 'screen.dart'`, so only a whole-tree analyze is valid per this
-board's own common-pitfalls note) — 0 errors/warnings, 45 pre-existing infos
-unrelated to these files. `telegram_view.dart` / `channelProvider` /
-`_openTelegramBot()` left in place (dead but harmless) for phase 2.
-
-**Phase 2 must not reuse the email flow (2026-09-29, Hermes L22/L35 on `oi-182-202-subscription-state`).**
-`telegram-bot/bot.py` `receive_email` (`:281-332`) links a Telegram chat to whichever `users` row
-matches a typed email, with no proof of ownership: no code, no link, no token. Anyone who knows or
-guesses a victim's email can link their own chat to that account, chat as that user (the coach
-context is built from the victim's data via `get_user_context`), and probably replace the real
-owner's `chat_id` in `telegram_connections`, which `morning-alert` uses as a push fallback. It is
-dormant only because the feature is hidden and the bot is not deployed (founder, 2026-09-29). The
-phase-2 linking-token handshake above (the app mints a one-time token, opened as
-`t.me/AVYACoachBot?start=<token>`) removes the flaw; the email prompt must be deleted, not kept as
-a fallback.
-
-Two related items surfaced, deliberately NOT resolved by this OI:
-- `lib/shared/widgets/paywall_sheet.dart:120` markets "Weekly AI nutrition
-  report + Telegram push" as a PRO perk bullet. With the connect entry points
-  gone, no new user can ever receive that. Founder to decide whether to reword
-  it now or leave it for the phase-2 fix.
-- `lib/features/ai_coach/widgets/telegram_card.dart` (`TelegramCard`) appears
-  unreferenced anywhere else in `lib/` — looks like dead code predating
-  `telegram_view.dart`. Not touched here; separate small cleanup if confirmed.
-
-**Recommendation**: Phase 2 — design a real linking handshake (token minted
-app-side, passed via the deep link's `start` param, exchanged by the bot for
-the user's id) with whoever owns the bot project, then re-add the UI entry
-points. Until then, this OI stays open as the pointer for "why is Telegram
-missing from the Coach menu."
 
 ## OI-228 — AI coach shortenWorkout tool calls get stuck at status:queued with no resolution; log_workout_sheet shows wrong copy for a completed day
 
@@ -5362,7 +5222,7 @@ recurring concern again before this lands.
 ## OI-278 — Telegram bot chat cap parity: bot is disabled; when re-enabled its cap (business-rules says 10/day) must follow the new free 7 / PRO 20 chat caps
 
 - **Status**: OPEN
-- **Blocked on**: the Telegram bot (separate OpenClaw VPS project, not in this repo) is DISABLED as of 2026-10-01 per the founder; this is `upstream_blocked` until it is re-enabled. **reopen_when**: the founder re-enables the bot.
+- **Blocked on**: the Telegram bot (the founder's OpenClaw VPS deployment; the tracked copy is `telegram-bot/`, OI-476) is DISABLED as of 2026-10-01 per the founder; this is `upstream_blocked` until it is re-enabled. **reopen_when**: the founder re-enables the bot.
 - **Verified**: 2026-10-01 — `docs/architecture/business-rules.md:26` says the bot has "the same 10/day forever cap"; `enforce_chat_app_daily_limit` (live) counts only `channel='app'`, so a Telegram cap, if any, lives outside this repo.
 - **Identified**: 2026-10-01 · filed via mint_oi.sh from branch `gemini3-limits-caching`
 
@@ -5678,8 +5538,8 @@ Obligation on whoever adds that writer, BEFORE it ships: move the push to the `m
 - **Verified**: 2026-10-03: `HealthWriteService.logMeasurement` has ONE call site (`conversational_log_handler.dart:163`, fed by the model's `<ICBF_LOG>` tag); `progress_comparison_screen.dart:16-17` says "no measurements UI yet"; the onboarding baseline snapshot stores `measurements: null` (`stat_snapshot_service.dart:213`); live `body_measurements` = 0 rows / 0 users; the site list is hard-coded at `conversational_log_handler.dart:158`, `ai_coach_provider.dart:1616`, `ai_snapshot_builder.dart:1622`, `sync_service.dart:2470`, `sync_health.dart:278-281`, `ai-proxy/index.ts:983`, `ai-media-proxy/index.ts:735` and the DDL.
 - **Identified**: 2026-10-03 · filed via mint_oi.sh from branch `coach-progress-review`
 - **Why**: the coach cannot judge body-composition change without girth data, and the only way in is a chat message (which, I infer, spends one of the 7/20 daily chat units — untested). A site added in one list but missed in `sync_health.dart:278` would stay device-only (writer/reader drift).
-- **Scope (founder, 2026-10-03)**: the existing four sites, **no cloud schema change**. Fix: one site registry (Dart + TS twin + parity test against the sync payload and `live_schema_columns.json`), a batch writer (one fan-out per save), `BodyMeasurementsSheet`, a Home "due" banner in the mounted banner stack (`home_screen.dart:468-470`; NOT `PatternDetector`/`InsightCard`, which render nowhere — OI-304), a link inside the Weight sheet, Progress Comparison "Add measurements" + then-vs-now deltas, an action chip in chat that opens the sheet without sending a message, a week-1 baseline prompt. Not PRO-gated. Round 1 also found the push sends null sites (`sync_health.dart:276-283`), so a second device can blank a first device's values — L2 omits null sites and null `notes` UNGATED (a writer bug fix). **Recorded residual:** old APKs and the out-of-repo Telegram writer still push nulls, and a same-day edit never reaches a device that already holds that date (restore skips present dates, `sync_health.dart:508`; pull fills only local nulls, `sync_service.dart:2452-2482`). A server-side guard is founder question OQ-L2a (0 measurement rows exist today). Constraints: nothing on the post-workout completion screen; no new push.
-- **Progress (2026-10-11)**: **L2a shipped** (PR #99, merge fdd89da6; plan `docs/plans/coach-measurement-entry-l2a.md`, diagnose c8a4d1, bug class 2.100, closure ledger `docs/audit/coach-measurement-entry.closure.yaml`). The push now sends only the sites a device holds (finite numbers; `notes` only when a String) through one builder, `lib/core/services/sync/measurement_push_rules.dart`; the skip fingerprint keeps the legacy-shape content, so an upgrade re-pushes nothing; the hard-coded site lists became one registry `kBodyMeasurementSites` (Dart constant, TS twin `supabase/functions/_shared/body_measurement_sites.ts`, parity and derivation tests); kill switch `disable_measurement_merge_safe_push` (local configBox, default ON, kept permanently on the oi83 precedent). No UI, no migration, no Edge Function change. **Residuals (ledger rows RESIDUAL-OLD-CLIENTS, RESIDUAL-STALE):** (1) old APKs and the out-of-repo Telegram writer still push nulls, and a blanking heals only on the next local edit of that date; (2) the push still sends every held site, so a stale held value can overwrite a value another device corrected (0 live rows today). **L2b obligations (plan §0):** decide OQ-L2a before the flag flips — a server-side BEFORE UPDATE keep-old-on-NULL guard (platform tier; the only fix for residual 1), a client-side per-site pending set (the push sends only sites edited since the last confirmed upload; fixes residual 2), or accept both; `HealthWriteService.logMeasurements` writes edited sites only (notes: null = leave, String = set); `HealthReadService.measurementHistory` + `latestBySite` with the AI snapshot reader re-routed through it; `kBodyMeasurementSpecs` (label, guide line, min/max, inch threshold) keyed by the registry tokens; bounds enforced at the chat parse, the handler and the writer with a NaN-safe check (superseded 2026-10-11 by plan v3.1: no handler tier, the writer is the backstop, plan A5; see the Landing A note below); the sheet offers no clear (clearing needs tombstones, OI-280); OI-304 rides with L2b (superseded 2026-10-11: the deletion is founder decision D2 and plan v3.1 no longer schedules it). The live PostgREST omit-key probe (ledger row PROBE) is founder-owned.
+- **Scope (founder, 2026-10-03)**: the existing four sites, **no cloud schema change**. Fix: one site registry (Dart + TS twin + parity test against the sync payload and `live_schema_columns.json`), a batch writer (one fan-out per save), `BodyMeasurementsSheet`, a Home "due" banner in the mounted banner stack (`home_screen.dart:468-470`; NOT `PatternDetector`/`InsightCard`, which render nowhere — OI-304), a link inside the Weight sheet, Progress Comparison "Add measurements" + then-vs-now deltas, an action chip in chat that opens the sheet without sending a message, a week-1 baseline prompt. Not PRO-gated. Round 1 also found the push sends null sites (`sync_health.dart:276-283`), so a second device can blank a first device's values — L2 omits null sites and null `notes` UNGATED (a writer bug fix). **Recorded residual:** old APKs and the Telegram bot writer (dormant `telegram-bot/` code, OI-476) still push nulls, and a same-day edit never reaches a device that already holds that date (restore skips present dates, `sync_health.dart:508`; pull fills only local nulls, `sync_service.dart:2452-2482`). A server-side guard is founder question OQ-L2a (0 measurement rows exist today). Constraints: nothing on the post-workout completion screen; no new push.
+- **Progress (2026-10-11)**: **L2a shipped** (PR #99, merge fdd89da6; plan `docs/plans/coach-measurement-entry-l2a.md`, diagnose c8a4d1, bug class 2.100, closure ledger `docs/audit/coach-measurement-entry.closure.yaml`). The push now sends only the sites a device holds (finite numbers; `notes` only when a String) through one builder, `lib/core/services/sync/measurement_push_rules.dart`; the skip fingerprint keeps the legacy-shape content, so an upgrade re-pushes nothing; the hard-coded site lists became one registry `kBodyMeasurementSites` (Dart constant, TS twin `supabase/functions/_shared/body_measurement_sites.ts`, parity and derivation tests); kill switch `disable_measurement_merge_safe_push` (local configBox, default ON, kept permanently on the oi83 precedent). No UI, no migration, no Edge Function change. **Residuals (ledger rows RESIDUAL-OLD-CLIENTS, RESIDUAL-STALE):** (1) old APKs and the Telegram bot writer (dormant `telegram-bot/` code, OI-476) still push nulls, and a blanking heals only on the next local edit of that date; (2) the push still sends every held site, so a stale held value can overwrite a value another device corrected (0 live rows today). **L2b obligations (plan §0):** decide OQ-L2a before the flag flips — a server-side BEFORE UPDATE keep-old-on-NULL guard (platform tier; the only fix for residual 1), a client-side per-site pending set (the push sends only sites edited since the last confirmed upload; fixes residual 2), or accept both; `HealthWriteService.logMeasurements` writes edited sites only (notes: null = leave, String = set); `HealthReadService.measurementHistory` + `latestBySite` with the AI snapshot reader re-routed through it; `kBodyMeasurementSpecs` (label, guide line, min/max, inch threshold) keyed by the registry tokens; bounds enforced at the chat parse, the handler and the writer with a NaN-safe check (superseded 2026-10-11 by plan v3.1: no handler tier, the writer is the backstop, plan A5; see the Landing A note below); the sheet offers no clear (clearing needs tombstones, OI-280); OI-304 rides with L2b (superseded 2026-10-11: the deletion is founder decision D2 and plan v3.1 no longer schedules it). The live PostgREST omit-key probe (ledger row PROBE) is founder-owned.
 - **Progress (2026-10-11, L2b Landing A)**: the measurement value bounds are built on branch `coach-measurement-sheet` (plan `docs/plans/coach-measurement-sheet-l2b.md` v3.1, three review rounds, record `docs/plan-reviews/coach-measurement-sheet.md`; diagnose `7c3e9a`; closure ledger `docs/audit/coach-measurement-bounds.closure.yaml`). `kBodyMeasurementSpecs` (chest 60-200, waist 50-200, hips 60-200, arms 20-70 cm) is enforced at the chat parse, the writer (on the value rounded to 0.1 cm) and the reader (`HealthReadService.measurementHistory` / `latestBySite`, which the AI snapshot now uses); a rejection emits `measurement_value_rejected`; no kill switch (founder decision D6). The defects with an evidenced producer: an absurd finite value reached the coach as fact, a wrong-typed model field (a String `value_cm` survives the proxy) threw out of the chat parse and replaced the shown reply with the error bubble, and a future-dated record from a wrong device clock shadowed real values. A stored NaN or Infinity (it makes `buildAiContext` throw, which would stop every chat context build and every snapshot push) is a latent hazard with no in-repo producer today: the proxy turns an Infinity into null and a bare NaN fails its JSON parse; Landing B's sheet parses user text with `double.tryParse` (which accepts `NaN`, `Infinity` and `1e999`), but its input formatter keeps only a leading digit prefix, so the field cannot produce a non-finite value (corrected in Landing B; the guard is defence in depth). B-pass 2026-10-11 (docs/reviews/coach-measurement-sheet-bpass.md): the reader judges and returns the value rounded to 0.1 cm, a wrong-typed value of a registered site emits `side=wrongtype`, `latestBySiteOf` asserts its newest-first input, and `PendingLogAction` ids are unique per action. Landing B (the dark sheet, flag `enable_body_measurements`, Home banner, Weight-sheet link) and Landing C (Progress Comparison card, chat chip) are separate landings of the same plan and each gets its own review round against the merged A. The sync push is NOT bounded here: a finite out-of-range value already held locally is still pushed (ledger row LEGACY-PUSH, decision D8: bounded in L2c with the per-site pending set; L2c exists only if OQ-L2a is decided for that set). The same L2c edit must replace the two casts in `_syncMeasurements` (`log['date'] as String?`, `log['created_at'] as String?`, `sync_health.dart:277,280`): a record whose date is not a String throws there and ends the whole body_measurements push pass at that key (no in-repo writer produces one; platform-tier file, so not touched at account tier). **Progress (2026-10-12, L2b Landing B)**: the dark measurements sheet is built on branch `coach-measurement-sheet-ui` (plan `docs/plans/coach-measurement-sheet-ui.md` v3.1, three review rounds, record `docs/plan-reviews/coach-measurement-sheet-ui.md`, closure ledger `docs/audit/coach-measurement-sheet.closure.yaml`): `HealthWriteService.logMeasurements`, `BodyMeasurementsSheet`, the Home banner (due and baseline variants), the Weight-sheet link, the chat path's history refresh and the debug-only dev toggle, all behind `enable_body_measurements` (default OFF, `docs/ship_dark_pending_review.yaml`). The flag waits for Landing C (E3 Progress Comparison card, E4 chat chip) because the cut leaves no always-visible door, and for OQ-L2a, OI-310 and OI-305. Not device-checked. **Progress (2026-10-12, L2b Landing C)**: the always-visible door is built on branch `coach-measurement-surfaces` (plan `docs/plans/coach-measurement-surfaces.md` v3, record `docs/plan-reviews/coach-measurement-surfaces.md`, closure ledger `docs/audit/coach-measurement-surfaces.closure.yaml`): the "Body measurements" card on Profile -> Progress comparison (E3, a permanent "Add measurements" button, the latest value and the change since the first entry per site) and the AI Coach chip (E4), both behind the same flag. With Landing C merged the flag waits only for OQ-L2a, OI-310 and OI-305 (and its own full x2 review and B-pass). Not device-checked.
 
 ## OI-298 — No effort capture (RIR/RPE): workout_logs.rpe is never written (0 rows live) and no table has a per-exercise effort column - founder decides in or out (progress-review spec §8)
@@ -5860,7 +5720,7 @@ Found by round 1 of the plan review of `blast-radius-data-deleting-paths` (quest
 The account-deletion purge walks `USER_OWNED_BUCKETS` (`_shared/purge_user_storage.ts` is called by `delete-account/index.ts` with that list, DPDP section 17). Three ways the contract test cannot see a weakening of it:
 1. **A commented-out entry still counts.** `// "avatars",` inside the array is read as present, because comments are not stripped before the token match. The purge would stop walking `avatars` (a PUBLIC bucket: a deleted user's photo stays reachable) and this test stays green.
 2. **A post-array transformation is invisible.** Only the literal array is read, so `export const USER_OWNED_BUCKETS = [...].filter(...)` or a `.slice(...)` that drops entries changes the runtime list and not what the test sees.
-3. **Discovery covers `lib/**/*.dart` only.** A writer to a bucket the client never names (a server-side function, the out-of-repo Telegram bot) is untied from the list. This one is a documented scope limit, not fixable inside the repo for the bot; the fix is to say so in the test header and to grep `supabase/functions` for `.storage.from(` writers as a second discovery source.
+3. **Discovery covers `lib/**/*.dart` only.** A writer to a bucket the client never names (a server-side function, the Telegram bot: dormant `telegram-bot/` code, OI-476) is untied from the list. This one is a documented scope limit, not fixable inside the repo for the bot; the fix is to say so in the test header and to grep `supabase/functions` for `.storage.from(` writers as a second discovery source.
 
 Fix shape: strip TypeScript comments before extracting (the file already carries `_stripDartComments` for Dart sources; a TS twin is a few lines), require that the array literal is the whole initialiser (nothing but `;` follows the closing bracket), and add the `supabase/functions` writer scan. Regression tests, mutation-proven (rule 21): comment out one entry; append `.filter(() => true)`; add an Edge Function that uploads to an unlisted bucket.
 
@@ -5978,6 +5838,7 @@ How to use: build once from the last merged `main`, install on the phone, sign i
 - A14 `oi414-promo-no-gateway-retry` PROMO-AND-SWAP-ON-BUILD (on the first build that carries PR #174, `a69a54e0`): signed in on the phone, open the paywall and enter a known active promo code (it shows the discount) and an unknown one (it shows "Invalid promo code"); then, on a PRO account, make one day swap on the Train tab and see the allowance line count it. A gateway error after the handler ran cannot be forced from a device, so this only shows that the two flagged calls (`validate-promo`, `consume-day-swap`) still behave on normal answers. Afterwards the agent reads `client_errors` for `edge_function_no_retry_quota_call`: a row means a gateway 502/503/504 was met and the call was not sent again (LOW priority, so a missing row is not proof of none).
 - A15 `sync-storm-first-sweep` PHONE-FRESH-LAUNCH (on the first AAB that carries PR #172, `d1292a79`; ledger row U5, OI-420 and OI-423): force-stop the old app, install the AAB, sign in on the phone as `upendraprasad19@gmail.com` with the server quiet and no other client signed in, and keep the app in front for 10 minutes. Note the seconds from tapping the Google button to a usable Home screen and whether the 'Sync paused' banner appears. Afterwards the agent reads that window from the gateway and `client_errors`: the request count against the web Day-0 result (laptop, 2026-10-25: 381 requests, 0 `workout_log_exercises` upserts), `first_sweep_postponed`, and any `restore_sync_*` timeout. Then cold-start the app once more and note the seconds to Home again: OI-420 has no startup timeline events yet, so these stopwatch times are the only numbers. A day later relaunch once and the agent records the postponed sweep's request count (the phone side of S1).
 - A16 `oi358-unique-exercise-names` UNIQUE-NAMES-ON-BUILD (on the first build that carries the OI-358 fix; diagnose `e6a4d9`): on a Push day press START, tap Add Exercise, search a name already in the workout: the row is grey, tagged ALREADY IN WORKOUT, and a tap does nothing; pick a different exercise and it is added. Open Swap on a card: a name held by another card is grey the same way. On the same Swap sheet use + ADD EXERCISE and create a custom exercise named like another card: the message "... is already in this workout." shows, no UNDO, and the custom exercise stays in the library. In the coach, ask to swap one exercise for one already in today's workout: it answers that it is already there and nothing changes. Note the release-build behaviour of anything unexpected: the old crash was only ever reproduced in a test build.
+- A17 `telegram-surface-off` TG-DEVICE-CHECK (on the first build that carries the OI-466 PR; added 2026-11-06): (1) open the AI Coach tab and tap the three-dot menu: it lists `Clear conversation` (and `Upgrade to PRO` on a FREE account) and nothing about Telegram; (2) open the paywall (Profile, Go PRO): the perk list reads `Weekly AI nutrition report` with no Telegram wording; (3) on an account that had switched the coach to Telegram before (its saved `coach_channel` is `telegram`), open the AI Coach tab: the chat, quick prompts and input bar are shown, not a "Coming Soon" screen. Step 3 is the only proof of the saved-channel case, because the screen cannot be rendered in a unit test.
 
 ### B. Signed-in session or JWT (dev build, test account or the phone)
 
@@ -7218,17 +7079,6 @@ Found by the M2b Part B Chrome check (360 dp, real fonts, the real card and exer
 
 **Done when.** The guard reads an injectable clock (a `lib/` change in the card widget) so test (f) asserts the tap guard on every run, with a mutation (guard removed) that reddens it.
 
-## OI-466 — Telegram copy still shown in the paywall and Telegram card (Telegram permanently dropped)
-
-- **Status**: OPEN
-- **Blocked on**: none
-- **Verified**: 2026-11-04, `paywall_sheet.dart:122` and the Telegram card copy read on branch `realtime-weight-off`.
-- **Identified**: 2026-11-04 · filed via mint_oi.sh from branch `realtime-weight-off`
-
-**What:** user-facing copy still sells Telegram ("Weekly AI nutrition report + Telegram push" in the paywall, and the Telegram card). Founder 2026-11-04: Telegram is permanently dropped.
-
-**Acceptance:** copy removed or reworded (Wardroom brand soul loaded first; psychology pass if a paywall line changes); tests/pins that cite the old strings repointed.
-
 ## OI-467 — pullRecentCrossChannelLogs is Telegram-labelled; OI-279 replaces only the weight leg
 
 - **Status**: OPEN
@@ -7238,7 +7088,7 @@ Found by the M2b Part B Chrome check (360 dp, real fonts, the real card and exer
 
 **What:** `pullRecentCrossChannelLogs` is Telegram-labelled (`source: 'telegram'`, 24 h `created_at` window at cold start) and is now the only cold-start path for other-client weight, nutrition and measurements on an already-populated phone. With Telegram dropped it should be renamed and relabelled.
 
-**Scope note:** OI-279's pull replaces only the weight leg; nutrition waits on OI-281; measurements are covered by neither. Decide the end state of each leg, then rename/relabel in the same batch that changes it (the `source` value is read by the UI, so sweep `lib/`, `test/` and `supabase/functions/` for it first).
+**Scope note:** OI-279's pull replaces only the weight leg; nutrition waits on OI-281; measurements are covered by neither. Decide the end state of each leg, then rename/relabel in the same batch that changes it (no UI reader of the `source` value was found in `lib/` on 2026-11-06, OI-466, but sweep `lib/`, `test/` and `supabase/functions/` for it first).
 
 **Acceptance:** each leg has a named owner; the Telegram label is gone. reopen_when: OI-279 ships.
 
@@ -7265,21 +7115,6 @@ Found by the M2b Part B Chrome check (360 dp, real fonts, the real card and exer
 **What happens.** `supabase/functions/_shared/tools/exercise/getFormCues.ts` (lines 63-69, stage 1 exact `ilike`, and 90-96, stage 2 partial `ilike`) selects from `exercise_library` by name with no `is_active` filter and `limit(1)`. Since Batch C2a (migration 167) 57 cloud rows are `is_active = false`; a name that a deactivated row shares with, or contains, a live name can answer from the deactivated row. C2a handled the same-name case in the seed (a removed row that shares its name with a kept row takes that row's cues, `scripts/seed_exercise_library.js`), but not the partial stage, nor any later deactivation.
 
 **Done when.** Both stages filter `is_active = true` (a regression test that fails without the filter), deployed through the Edge Function protocol; or the filter is shown to be unnecessary by a query that finds no live name matched by a deactivated row.
-
-## OI-471 — Orphan cron_call_log_cleanup_7d(): an unconditional 7-day DELETE with no caller that would undo the OI-179 retention fix if ever scheduled
-
-- **Status**: OPEN
-- **Blocked on**: none
-- **Verified**: never
-- **Identified**: 2026-11-05 · filed via mint_oi.sh from branch `oi179-cron-dead-alert`
-
-Found by round 2 of the OI-179 plan review (migrations 090:43 and 091:22 name it) and confirmed LIVE 2026-11-05 with `pg_proc` / `cron.job` / `pg_trigger` reads: `public.cron_call_log_cleanup_7d()` exists with the body `DELETE FROM public.cron_call_log WHERE started_at < now() - interval '7 days'` (no keep-set, `SECURITY DEFINER`, search_path public/extensions/vault/private). No cron job calls it, no function body references it, no trigger. It is inert today. It is the pre-109 pruner that `cleanup_cron_call_log()` replaced.
-
-**Why it matters:** OI-179's fix (migration 169, retention 10 days) is undone the moment anyone schedules or calls this function: it prunes at 7 days again and keeps nothing.
-
-**Do:** a migration `DROP FUNCTION IF EXISTS public.cron_call_log_cleanup_7d();` (Destructive: yes, so the founder's go and a dry run). The file-based `test/contracts/security_definer_revoke_migration_test.dart` reads migrations 090/091 and is unaffected. Re-check `pg_proc`/`cron.job`/`prosrc` references immediately before the drop.
-
-**Acceptance:** the function is gone live (`to_regprocedure` is null) and no migration after the drop references it.
 
 ## OI-474 — Library Batch C2c: E230 Standing Single Leg Curl retag to bodyweight, cue rewrite, animation 0795 and its cloud change
 
@@ -7313,6 +7148,95 @@ Third piece of the Batch C2 split (OI-460 removals, OI-462 twins, this). Split o
 **What happens.** Measured on the OI-454 tree (week 1, phase 1, real `generateV4`, allocator credit, Quads weekly sets against the band floor 10 / 12 / 14 by level): 3-day intermediate basic_gym 3 (60 and 90 minutes), full_gym 7 and 8; 3-day advanced basic_gym 2, full_gym 5 and 7; 4-day intermediate basic_gym 3, full_gym 7 and 8; 4-day advanced basic_gym 3, full_gym 6 and 8; 5-day beginner basic_gym 2, full_gym 6; 5-day intermediate basic_gym 3, full_gym 7 and 8; 5-day advanced basic_gym 3, full_gym 6 and 8. The floor labels are mixed (`cap_limited`, `co_group_limited`, `time_limited`) and Glutes sit at 6 to 10, far below their top, so the 6-day cause (Glutes at the top refusing a squat) is NOT the general one. These splits have one or two leg days and their own slot lists. OI-454 changed only the 6-day build_muscle split (a Legs B quad slot plus `SessionBudgetContext.quadPrimaryCreditsGlutes`, set false for that split only; a global credit rule changed 745 of 999 generator-golden keys and was rejected).
 
 **Done when.** Each affected split's cause is named from its own allocator stats (which slot or group stopped the next set), a fix is chosen per cause (a leg-day slot, a session cap, or the credit flag for that split), the golden changes only for the splits named, and Quads reach the floor where the day's time allows. Blast radius: `platform` (plan_engine), tier L.
+
+## OI-476 — telegram-bot/ is tracked and dormant: bot.py receive_email links a Telegram chat to any account by typed email with no proof of ownership, and morning-alert still reads telegram_connections
+
+- **Status**: OPEN
+- **Blocked on**: the founder: keep or delete `telegram-bot/` and the `morning-alert` Telegram fallback (Telegram is dropped from the app, OI-466). Ledger row `TG-BOT-FATE` in `docs/audit/telegram-surface-off.closure.yaml`.
+- **Verified**: 2026-11-06, by reading (nothing run): `git ls-files telegram-bot` lists `bot.py`, `requirements.txt` and `.env.example`; `telegram-bot/bot.py:281-332` (incl. `:295-330`), `supabase/migrations/006_create_monetisation_tables.sql:58` and `supabase/functions/morning-alert/index.ts:456-465` as described below.
+- **Identified**: 2026-11-06 · filed via mint_oi.sh from branch `telegram-surface-off`
+
+**What.** Root `CLAUDE.md` and `README.md` said the Telegram bot is "Separate project (OpenClaw VPS, @ICanbeFitterBot) — NOT in this repo". It is in this repo: `telegram-bot/` is tracked. Its `receive_email` handler (`bot.py:281-332`) takes whatever email a Telegram user types and looks the account up with `get_user_by_email`. An unknown email is answered "No ICANBEFITTER account found with that email" (`:295-301`), so anyone can test whether an email has an account. For a known email it upserts `telegram_connections` (`:305-312`: `user_id`, `chat_id`, `is_active: true`, no `on_conflict`), sets `users.telegram_chat_id` and `users.telegram_connected` (`:315-320`) and replies with the account's `full_name`, the email and the PRO or FREE plan (`:322-330`), with no code, link or token that proves the person owns that email. So anyone who knows or guesses an email can (1) plant a link from their own chat to any account that has no `telegram_connections` row (every account today, since the app no longer offers a way to link) and read that account's name and plan, and (2) receive what `morning-alert` sends to `telegram_connections` rows (`morning-alert/index.ts:456-465`, `sendTelegramMessage` at `:168`): a message built from the user's snapshot (name, streak, today's workout, weight, a recent PR, yesterday's calories: `morning-alert/message.ts:17-26`). Whether it could instead REPLACE the chat of an account that already has a row is NOT established: the table has `UNIQUE (user_id)` (`supabase/migrations/006_create_monetisation_tables.sql:58`) and the upsert names no `on_conflict`, so by reading it would hit a unique violation before the `users` update; the live constraint was not checked and nothing was run (the earlier OI-227 text said "probably replace"). The bot also answers as the linked user: the coach context is built from that account's data (`get_user_by_chat_id`, `bot.py:84`). This is the warning OI-227 carried; OI-227 is closed by OI-466 and the text moved here.
+
+**Why it is not live today.** The bot is not deployed (founder, 2026-09-29) and, since OI-466 (2026-11-06), nothing in the app shows or links Telegram. This entry did not check whether `TELEGRAM_BOT_TOKEN` is set in the Edge Function secrets; if it is, `morning-alert` sends to any row that exists.
+
+**Options for the founder (pick one):** (a) delete `telegram-bot/`, the `morning-alert` Telegram branch, the `telegram_connections` table and the dead `users.telegram_connected` / `telegram_chat_id` columns (a migration, Destructive: yes, so a go and a dry run first); (b) delete the code only and leave the tables; (c) keep it dormant, add a `telegram-bot/README.md` saying "do not deploy: receive_email has no proof of ownership", and keep this OI open as the pointer. If the bot ever returns, the handshake must be a one-time token minted by the app and passed as `t.me/<bot>?start=<token>`; the email prompt must be deleted, not kept as a fallback.
+
+**Acceptance:** the decision is recorded here; for (a) or (b) the deletion lands with its own plan, review and closure ledger.
+
+## OI-479 — AI Coach 'Clear conversation' menu item does nothing: onSelected only invalidates chatHistoryProvider, whose build re-reads every row from coachBox
+
+- **Status**: OPEN
+- **Blocked on**: the founder: what "Clear conversation" should do (local rows only, or local and cloud, or drop the menu entry). Nothing is blocked technically.
+- **Verified**: 2026-11-06, by reading (nothing run): `lib/features/ai_coach/screens/ai_coach/compact_header.dart:130-132` (`case 'clear': ref.invalidate(chatHistoryProvider);`, byte-identical at `d27bf032`), `lib/features/ai_coach/providers/ai_coach_provider.dart:167-190` (`ChatHistoryNotifier.build` loops `coachBox.keys` and rebuilds the list from Hive), and `git grep -n -iE "coachBox\.(clear|delete|deleteAll)|clearChat|clearHistory|clearConversation" -- lib` returns only `lib/shared/repositories/user_repository.dart:1212` (the account wipe).
+- **Identified**: 2026-11-06 · filed via mint_oi.sh from branch `telegram-surface-off`; found by the OI-466 B-pass (a fresh Sonnet reviewer; pre-existing, not caused by that batch)
+
+**What.** The AI Coach three-dot menu offers `Clear conversation`. Choosing it only calls `ref.invalidate(chatHistoryProvider)`. Invalidating the provider makes it rebuild, and the rebuild re-reads every chat row from the local `coachBox`, so the conversation comes back exactly as it was and nothing is cleared. Nothing else in `lib/` clears or deletes chat rows except the whole-account wipe. After OI-466 removed the Telegram switch, this is the only menu entry a PRO account has (a free account also has `Upgrade to PRO`), so the menu now consists of one item that does nothing for them. The new `test/contracts/telegram_surface_removed_test.dart` pins that the entry EXISTS and is wired to its `case`; it does not claim it works.
+
+**Why it is not fixed in OI-466.** "Clear" has no single obvious meaning here: deleting local rows alone would be undone by a cloud restore if the chat rows are backed up (not investigated here), and deleting cloud rows is a Destructive call. That is a product decision plus a sync/restore design, not a Telegram removal.
+
+**Options for the founder (pick one):** (a) clear the local `coachBox` chat rows (keep the `coaching_notes` singleton) and make sure a restore does not resurrect them; (b) clear local and cloud; (c) remove the menu entry until (a) or (b) is wanted. The app is not live (testers only), so there is no user-facing urgency.
+
+**Acceptance:** the item either clears what the decision says (behavioral test: write chat rows to a real Hive box, trigger the action, read the box and the provider back, and, for (a) and (b), run a restore and assert the rows stay gone) or is removed and `coachHeaderMenuItems` and its pin in `test/contracts/telegram_surface_removed_test.dart` are updated in the same change.
+
+## OI-478 — Kept cron_call_log evidence has no reader past 14 days: telegram-admin-bot /cron window is 7 days, alert_cron_function_dead lookback is 14, and its message text says the rows leave the table (OI-199 residual)
+
+- **Status**: OPEN
+- **Blocked on**: part 1 (`/cron`) waits for the Telegram deferral (founder 2026-11-04); reopen_when: `telegram-admin-bot` is back in use. Parts 2 and 3 are not blocked.
+- **Verified**: 2026-11-06 (live reads and the two plan-review rounds of migration 172, diagnose b3e7d2)
+- **Identified**: 2026-11-06 · filed via mint_oi.sh from branch `cron-log-retention-oi199-oi471`
+
+Residual of OI-199 and OI-471 after migration 172. Migration 172 makes `cleanup_cron_call_log()` keep every function's newest success and newest row for good (at most two rows per `function_name`), so the evidence of a silent function stays in the table. Nothing reads it past 14 days, and two readers or messages are now inexact:
+
+1. **`/cron` window (Edge Function).** `telegram-admin-bot` `cmdCron` (`index.ts`, `sevenDaysAgoIso`, a 7-day `.gte()`; the `gteCol` / `gteVal` assertions in the `cmdCron queries a 7-day time window` test of `index_test.ts`) cannot show a function silent for 7 to 14 days, which is exactly when `alert_cron_function_dead` pages (days 8 to 14), so the founder cannot corroborate the page there. Align the window with the alert's 14-day lookback: `deno check --node-modules-dir=none`, a redeploy with its own go. Split out of OI-199 by the founder's scope call on 2026-11-06: the proposal "I'd do only the migration and leave out the Telegram `/cron` window change, since Telegram is deferred" was answered "Ok".
+2. **The alert's own text.** Job 32's singles message ends "If the function was retired on purpose this is the one alert; it stops once its rows leave cron_call_log": the rows no longer leave and a dead function pages up to twice (about day 8 to 9 and day 11 to 13). The summary row says "newly detected, not already alerted", which is inexact on a repeat. The fix is a new `cron.alter_job` migration (a Hermes pass, and updates to the 170 rehearsal-sync contract test and to the roster test's body reader).
+3. **Silence beyond 14 days is reported by nothing.** A function whose newest success is older than 14 days is kept in the table (migration 172) and looked for by no per-function alert or command (`alert_cron_silence` reads only the table-wide newest success, which is always kept). A retired function leaves its two rows for good, so any reader must filter against the CRON_REGISTRY roster instead of treating those rows as dead functions.
+
+**Done when.** Something lists the functions whose newest `cron_call_log` success is older than 14 days, filtered against the CRON_REGISTRY roster; `/cron` shows a function silent for 7 to 14 days; the alert text says what really happens (rows stay, up to two pages, silent after the 14-day lookback). Related: OI-194 (a cron tick whose start insert loses a race in a same-minute burst leaves no `cron_call_log` row, which `alert_cron_function_dead` reads as silence: a false critical at day 8, and with the kept row a second one at day 11 to 13; `weekly-recap-ready` fires at 14:30 UTC on Sundays beside `streak-guardian` and `protein-gap-alert`).
+
+## OI-480 — A docs-only or SQL-only batch pays the full local gate loop (about 2 hours here, against about 15 minutes of sharded CI): CLAUDE.md 4.12.8 has no code-free path, and concurrent sessions oversubscribe the 4 cores
+
+- **Status**: OPEN
+- **Blocked on**: nothing (a measurement and a plan are the next steps; the founder asked for this OI on 2026-11-06)
+- **Verified**: 2026-11-06, read-only, on the live gate loop of branch `cron-log-retention-oi199-oi471` (a migration, its tests, board and doc edits; no `lib/`): `flutter analyze --no-fatal-infos` took **116.2 s** (exit 0, 0 warnings); the full `TZ=Asia/Kolkata flutter test` ended at **139 min 56 s** (about 2 h 22 min with analyze): 13,192 passed, 14 skipped, 4 failed. The failures were the expected `applied_migrations_parity_test.dart` red (migration 172 has no ledger line before the apply), two `golden`-tagged `WardRankPill` pixel diffs (10 px; CI excludes that tag and the diff touched no `lib/`, `assets/` or `pubspec`), and two `test/scripts/land_pr_e2e_test.dart` cases that time out a `gh` stub at 400 ms on a loaded box (a documented load flake; a re-run at load 14 failed the same way, so there is no quiet-box control on this host). The slow step is the test run, not analyze.
+- **Identified**: 2026-11-06 · filed via mint_oi.sh from branch `cron-log-retention-oi199-oi471`
+
+**What was measured (and how far to trust it).**
+1. *Contention.* The host has 4 cores and 24 GB. Load average was 14.6 / 13.4 / 11.6 and rose to 17.5 during the run. `flutter_tester` processes of three other worktrees (`oi358-unique-exercise-names`, `oi454-quads`, `telegram-surface-off`) ran at the same time as this session's suite. Effective parallelism was about 1.5 (sum of per-file first-to-last event spans 11,156 s over 7,252 s of wall at the time of the read).
+2. *Concentration.* Eight files in `test/plan_generator/` carry 7,055 s of the 11,156 s attributed (63 percent), out of 1,282 test files: `injury_sweep_c_pairs46` 1,695 s (14 tests), `injury_sweep_a_pairs` 1,332 s (481 tests), `injury_sweep_d_repeat` 1,038 s, `injury_sweep_b_singles` 1,029 s, `generator_golden` 693 s, `session_set_budget_gate` 610 s, `injury_sweep_e_singles46` 590 s, `core_list_pool_gate` 68 s. Spans include queueing under contention (the OI-106 lesson), so they RANK files; they are not CPU seconds.
+3. *Inputs of those files.* `grep` of the eight: they read `assets/data/exercise_library.json`, `scripts/data/library_batch_c2_removals.json`, their own fixtures and reports, and import `lib/`. None reads `docs/`, `supabase/`, `backups/`, or a migration. The other `test/plan_generator/` files are NOT yet scanned.
+4. *Uncontended baseline.* CI runs the same suite in 4 shards of 12.8 to 15.4 minutes (run 42155652834 on `main`, 2026-11-06; the whole workflow 15.6 min), about 56 shard-minutes of work. The uncontended time of the full suite on THIS 4-core VPS has never been measured, so the split between "contention" and "the suite is simply that big here" is **NOT established**. OI-106 found local slower than CI per file even when the local box had 16 cores.
+5. *Parity gap.* The local loop ran `flutter test` without `--exclude-tags golden`, which CI passes (`.github/workflows/test.yml`); that alone produced two of the four local failures. The same loop also fails the load-sensitive `land_pr_e2e_test.dart` cases that CI passes.
+6. *A boolean "reads repo files" classifier is useless.* Traced through imports under `test/` and `scripts/`, 798 of 1,282 test files read some repo file, which is 95 percent of the attributed time, because the heavy sweeps read `assets/`. Any selection has to be path-granular, which is the fragile part ADR-0013 rejected. That is why the fix below does not select tests one by one.
+7. Minor: two `flutter_tester` processes of the retired worktree `tz-pin-catalog` (cwd deleted) are 1 day 18 hours old and idle (0 CPU seconds).
+
+**Why the cost lands on every batch.** CLAUDE.md 4.12.8 requires the COMPLETE suite before any review dispatch and again after the LAST edit ("never a hand-picked subset"), whatever the batch touched. ADR-0013 tiered `pre-push` by blast radius and ADR-0018 took the suite off `pre-commit`, but the 4.12.8 loop is not tiered. CLAUDE.md 4.3 says the opposite for a human ("don't manually re-run the full flutter test", CI does). A docs-only merge already skips the plan-review record (`test/scripts/land_pr_replay_test.dart`, "a docs-only change needs no record"), so a docs-only path exists at the merge seam and not at the local loop. The blast-radius TIER cannot key a fast path: a migration containing `SECURITY DEFINER` is catastrophic by content and still cannot reach a test that never reads a migration. A long loop also raises the price of every late edit (this OI's own board entry is one), which is `--no-verify` and skip pressure.
+
+**Prior art, so it is not re-derived.** ADR-0013 alternative 3 (per-test impact selection) was rejected as fragile; OI-106 (OPEN, P3) owns "why local is about 3.9 times slower per file than CI" and wants counterbalanced measurement first, so piece A below feeds it; OI-309 (CLOSED, the 25-minute pre-push suite re-running on every docs-only merge) and OI-461 (CLOSED 2026-11-04: the four CI shards are balanced, medians 13.4 to 14.1 minutes over 13 `main` runs, and the shard limit was raised from 20 to 30 minutes) touched the same cost from other sides and do not cover the 4.12.8 loop. This OI does NOT reopen per-test selection.
+
+**Fix (three independent pieces; plan-reviewed x2 with a B-pass, platform tier: `CLAUDE.md`, `scripts/`).**
+- **A. Remove the contention (measure first, per OI-106's protocol).** One host-wide queue around full-suite runs started by the gate-loop script (a `flock` on a lock file in the shared git dir, with the holder and age printed to a waiter), so N sessions do not run N suites on 4 cores; run the loop through `scripts/ci_test_partition.dart` and `--exclude-tags golden` so local and CI cover the same files. Record the uncontended full-suite time before and after, counterbalanced, n of at least 5 per arm.
+- **B. A code-free tier of the 4.12.8 loop, chosen by a script and not by judgment.** `scripts/local_gate_loop.sh` classifies the staged diff by path class and prints the class it chose. When every changed path is in {`docs/**`, `*.md`, `supabase/migrations/**`, `backups/**`, `test/sql/**`, test files that are not shared helpers}, the loop is: whole-project analyze, the pre-commit gate loop, every changed or new test, and the full suite MINUS a skip set. The skip set starts as ONE directory, `test/plan_generator/` (63 percent of the attributed time), and a directory enters it only when a scan proves its files read none of the changed classes; the scan is a `check_*.dart` gate shipped mutation-proven (CLAUDE.md 4.4 rule 24) and it fails closed (an unparseable or unknown read keeps the file in). Any `lib/`, `assets/`, `pubspec*`, `scripts/` or `supabase/functions/` change, an unknown path, or an empty diff selects the full loop. CI still runs everything and `safe_pr_merge.sh` still refuses a merge without green Unit Tests, so nothing unverified reaches `main`.
+- **C. Alternative to B for the founder to choose (decide in the plan).** For a code-free batch run NO local full suite: analyze, the pre-commit gates and the changed tests, then the PR's CI (about 15 minutes) is the full-suite gate, exactly as ADR-0013 does for a `feature`-tier push. Cheaper and simpler, but a red in an untouched suite appears after the push instead of before.
+
+**Done when.** The uncontended full-suite time on this VPS is measured and recorded; a second session starting a full suite waits instead of oversubscribing; CLAUDE.md 4.12.8 names the code-free tier (and its exact skip set, or option C) so the rule and the script cannot drift; a test proves the classifier selects the full loop for each of `lib/`, `assets/`, `pubspec.yaml`, `scripts/`, `supabase/functions/`, an unknown path and an empty diff; and a code-free batch's measured loop time on a quiet machine is recorded here.
+
+**Not decided here.** The code-free path class list, whether B's skip set may grow past `test/plan_generator/`, and B versus C are the founder's calls at plan time. The exact comment-only Edge Function edits of a batch like this one (which ride with a migration) need their own rule: a comment-only `supabase/functions/` diff is `code` until a gate can prove it is comment-only.
+
+## OI-481 — cron_telemetry.logCronEnd stores error_summary with only a 1000-character cap, and about 19 cron functions pass a raw String(err); since migration 172 the newest non-success row of a dead function is kept indefinitely
+
+- **Status**: OPEN
+- **Blocked on**: nothing (a plan is the next step; found by the Hermes security seat of migration 172, 2026-11-06)
+- **Verified**: 2026-11-06, read-only, on the tree of branch `cron-log-retention-oi199-oi471`: `supabase/functions/_shared/cron_telemetry.ts:87-90` is `patch.error_summary = opts.errorSummary.slice(0, 1000);` (a length cap and nothing else), and `git grep -l "errorSummary:" -- 'supabase/functions/*/index.ts'` lists 19 functions. Raw error strings go in at, for example, `compute-coach-signals/index.ts:110` and `re-engagement/index.ts:384` (`err.message`), and `morning-alert/index.ts:681`, `evaluate-rank-promotions/index.ts:387`, `weekly-recalc/index.ts:443`, `pr-detection/index.ts:249` (`String(err)`). Only `alert-critical-notify` (`telegramErrorSummary`) and `clean-orphan-media` (`runErrorSummary`, for one of its three sites) run the text through a scrubber first; `founder-digest` caps at 500 characters.
+- **Identified**: 2026-11-06 · filed via mint_oi.sh from branch `cron-log-retention-oi199-oi471`
+
+**What.** `public.cron_call_log.error_summary` is free text written by the caller. Nothing at the sink removes an identifier, an address, a token or a health value that an error message happens to carry. The Hermes security seat of migration 172 searched for a path that puts one there and found none: a PostgREST error is a plain object (`String()` gives `[object Object]`), the Gemini key is redacted by `redactSecrets` in `_shared/gemini.ts`, and no cron entry file calls `JSON.parse` on user data. So today the content is clean by habit and by the shape of the errors, not by construction.
+
+**Why it matters now.** Before migration 172 the table kept at most one non-success row past 10 days (the global newest row). From 172 it keeps the newest row of EVERY function, whatever its status, with no age limit, so a dead function's last failed row (and its `error_summary`) outlives the 10-day window for good. That is a small, bounded change (at most one such row per function name), not a leak, but it is the first time this column's content is retained without an age cap, and DPDP data minimisation is the reason to make the sink safe before a caller widens what it passes.
+
+**Fix shape (one place, then a redeploy).** Scrub in `logCronEnd` before the slice: pass the text through the existing `redactSecrets` and a small pattern pass for e-mail addresses, UUID-shaped ids and JWT/long-token shapes, then cap. A `_shared` change reaches each cron function only when that function is next redeployed, so the plan must say which of the 19 are redeployed and when (the host-shell deploy path of `supabase/functions/CLAUDE.md`). Pin it with a Deno test of `logCronEnd` fed an error string that contains each shape and a Dart source pin that `logCronEnd` is the only writer of `error_summary` (`_shared/cron_telemetry.ts:55-56` for the insert and `:92-93` for the update are the only writers in the repo today).
+
+**Done when.** `logCronEnd` removes the listed shapes before the cap, a test proves each one is removed and that a clean message passes through unchanged, and the plan names the redeploy of the cron functions.
 
 ## OI-482 — The same dart run native-assets race hits every git-hook dart run site: the parallel pre-commit gate loop fails a different gate under load with its output discarded (six at once on 2026-11-06), and prepare-commit-msg can silently drop the Blast-radius line
 

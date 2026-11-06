@@ -7,15 +7,6 @@ part of 'screen.dart';
 
 extension _RecordingBody on _AiCoachScreenState {
 
-  // ── Helpers ────────────────────────────────────────────────────
-
-  Future<void> _openTelegramBot() async {
-    final uri = Uri.parse('https://t.me/AVYACoachBot');
-    if (await canLaunchUrl(uri)) {
-      await launchUrl(uri, mode: LaunchMode.externalApplication);
-    }
-  }
-
   // ────────────────────────────────────────────────────────────────
   // F12 · Push-to-talk + morph helpers (Test #9 batch)
   // ────────────────────────────────────────────────────────────────

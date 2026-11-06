@@ -6,9 +6,9 @@ status: fixed
 tier: m_fix
 blast_radius: feature
 symptom: >-
-  Eight CI failures of unit tests that spawn a child process, in three groups. GROUP A (five sightings, OI-311 and OI-468 sighting 1):
-  a spawned `dart` exited 254, in four of them with `stderr=File not formatted as yaml: .` and `stdout=Running build hooks...Running
-  build hooks...` (2026-10-13, 10-17, 10-19, 11-06: `dart run scripts/blast_radius_from_diff.dart` from the repo root) and in one with no
+  Nine CI failures of unit tests that spawn a child process, in three groups. GROUP A (six sightings, OI-311 and OI-468 sighting 1):
+  a spawned `dart` exited 254, in five of them with `stderr=File not formatted as yaml: .` and `stdout=Running build hooks...Running
+  build hooks...` (2026-10-13, 10-17, 10-19 and twice on 11-06, the second from PR #227 after the first draft of this doc: `dart run scripts/blast_radius_from_diff.dart` from the repo root) and in one with no
   text printed (2026-10-04, the sot gate test: `dart run <repo script>` with a temp git repo as the working directory). GROUP U (one,
   July 2026 `a7f3d1`): a plain `dart <script>` of a script copied into a throwaway repo exited 254; no mechanism found. GROUP B (two,
   OI-468 sightings 2 and 3): a spawned quiet `git` returned an exit status no process can return: `git push -q -u origin main` 1668163832
@@ -20,7 +20,7 @@ concept: not_applicable — test-support spawn handling (the shared helper test/
 sot_registry_entry: not_applicable — no writer/reader pair, Hive key or cloud table is involved.
 related_bugs: [a7f3d1, e6c4a9, c3f8e1]
 recurrence: |
-  RECURRENCE of OI-311 (five sightings of the 254 family since 2026-10-04) and of the "spawn test hides its child's output" class
+  RECURRENCE of OI-311 (six sightings of the 254 family since 2026-10-04) and of the "spawn test hides its child's output" class
   (2.90, PR #79 / batch spawn-tests-env-and-stderr, e6c4a9). Those batches made the failing spawn PRINT its output; this one explains
   the 254 family and contains it. a7f3d1 is cited as the same symptom whose mechanism does NOT match (its script reads nothing of the
   repo's `native_assets.yaml`); it stays unexplained.
@@ -126,7 +126,7 @@ touched_layers_checked:
 
 ## What was seen
 Unit tests that spawn a child process failed in CI with an exit status that was not the child's answer, passed on re-run, and never
-reproduced locally: eight times in 33 days, in three groups (see `symptom`).
+reproduced locally: nine times in 33 days, in three groups (see `symptom`).
 
 ## Cause (writers and readers by file:line)
 Group A is a read-while-rewritten race on `.dart_tool/native_assets.yaml`, the file `dart run` rewrites in place (truncate, then write)
