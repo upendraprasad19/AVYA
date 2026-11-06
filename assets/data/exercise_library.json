@@ -14414,9 +14414,9 @@
     ],
     "secondary_muscles": [],
     "equipment_needed": [
-      "cables"
+      "bodyweight"
     ],
-    "logging_type": "weight_reps",
+    "logging_type": "bodyweight_reps",
     "difficulty_level": "beginner",
     "suitable_for": [
       "Beginner",
@@ -14431,19 +14431,19 @@
     "cal_per_set_est": 5.0,
     "breathing_cue": "Exhale as you curl the heel toward your glute",
     "coaching_cues": [
-      "Attach ankle strap to low cable",
-      "stand facing the stack",
-      "Keep the working knee aligned with the standing knee — don't flare it",
-      "Control the extension",
-      "don't let the weight snap the leg straight"
+      "Stand tall on one leg, hips square, touching a wall for balance if you need it",
+      "Keep the standing knee soft",
+      "Curl the heel toward your glute, thigh staying vertical",
+      "Pause at the top, lower for a slow count of two"
     ],
     "common_mistakes": [
       "Swinging the hip to complete the rep",
-      "Not fully extending the leg on the eccentric",
-      "Using too much weight — hamstrings are strong, but isolation requires control"
+      "Not fully extending the leg on the way down",
+      "Letting the thigh drift forward as the heel comes up",
+      "Dropping the leg instead of lowering it"
     ],
-    "warmup_protocol": "1×15 very light for joint warm-up",
-    "pro_tip": "Single-leg version addresses side-to-side hamstring imbalances that prone leg curl misses; great rehab and prehab tool",
+    "warmup_protocol": "1x10 per leg, slow and easy",
+    "pro_tip": "Trains one hamstring at a time, so it shows up side-to-side imbalances a two-legged curl hides. Slow the lowering to 3 seconds once 15 clean reps per leg feel easy",
     "is_indian_context": false,
     "indian_alternative": "",
     "source": "Exercise science",
@@ -14458,19 +14458,24 @@
       "Hamstrings"
     ],
     "equipment_tier": [
+      "bodyweight",
+      "home_dumbbells",
       "basic_gym",
       "full_gym"
     ],
-    "standard_swap": "Prone Leg Curl",
+    "standard_swap": "",
     "priority_tier": 2,
     "rep_range": "12-15",
     "id": "E230",
     "core_levels": [],
     "discipline": "strength",
-    "gym_availability": "standard_gym",
+    "gym_availability": "home",
     "requires_coaching": false,
     "high_impact": false,
-    "variant_family": "leg_curl"
+    "variant_family": "leg_curl",
+    "media_slug": "0795-standing-single-leg-curl",
+    "media_version": 1,
+    "media_source": "wardroom"
   },
   {
     "name": "Decline Dumbbell Press",

@@ -62,6 +62,9 @@ class _Sandbox {
     // The removals file the generator reads (Batch C2a); without it the sandbox would emit no deactivations.
     File('${dir.path}/scripts/data/library_batch_c2_removals.json')
         .writeAsStringSync(File('scripts/data/library_batch_c2_removals.json').readAsStringSync());
+    // The Batch C2c E230 retag record (a missing record is a hard stop in the generator, and its `after` must equal the library row).
+    File('${dir.path}/scripts/data/library_e230_retag.json')
+        .writeAsStringSync(File('scripts/data/library_e230_retag.json').readAsStringSync());
     File(script).writeAsStringSync(File(_generatorRel).readAsStringSync());
     File(libPath).writeAsStringSync(File(_libRel).readAsStringSync());
   }

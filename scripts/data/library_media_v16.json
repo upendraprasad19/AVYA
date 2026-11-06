@@ -3,9 +3,9 @@
     "bucket": "exercise-media",
     "ledger_completed_at": "2026-10-18T03:13:14.150Z",
     "old_rows": {
-      "entries": 137,
+      "entries": 138,
       "omitted": 0,
-      "sha256": "2214b4a4f2209b2ed185f0105b09c3e0201cdaf0408355ce226cf0bf4cb26909"
+      "sha256": "5d0305c95054f0dfa543136a07e372da31a36e539a1790c5dd2467cd73c965fb"
     },
     "origin": "AI recreation of the GIF set in `assets/exercise animations/forgetrainer_animations/gifs`; licensing risk accepted by the founder (D9, 2026-10-21)",
     "taken_down": [],
@@ -7707,6 +7707,25 @@
       "webp_bytes": 294470,
       "webp_sha256": "2cbb461d7de7080d6552dce16fcccae99be390c9373ed06b6bb6b83653a8e5c4"
     },
+    "0795-standing-single-leg-curl": {
+      "frames": 12,
+      "gif": "0795",
+      "ledger_id": "0795_Standing_Single_Leg_Curl",
+      "source_gif_sha256": "3d05d0d5a854274d43b15169c823523234d872f3c77bfd3d827ffcc2f3ef4525",
+      "status": "active",
+      "thumb_bytes": 3294,
+      "thumb_sha256": "328cd78d0c633409bbeb82863d0463e54f1835989defd7bdf2992172e89847fa",
+      "versions": [
+        {
+          "file": "webp-720/0795_Standing_Single_Leg_Curl_wardroom_720.webp",
+          "media_version": 1,
+          "webp_bytes": 252438,
+          "webp_sha256": "1009bd7d7d26896e21ab5548205e0aa2c2c21b90557f4f0c57522d15c990a451"
+        }
+      ],
+      "webp_bytes": 252438,
+      "webp_sha256": "1009bd7d7d26896e21ab5548205e0aa2c2c21b90557f4f0c57522d15c990a451"
+    },
     "0796-standing-wheel-rollout": {
       "frames": 12,
       "gif": "0796",
@@ -14517,6 +14536,7 @@
     "E222": "0668-rear-decline-bridge",
     "E224": "0196-cable-pull-through",
     "E229": "0085-barbell-romanian-deadlift",
+    "E230": "0795-standing-single-leg-curl",
     "E231": "0301-dumbbell-decline-bench-press",
     "E232": "0319-dumbbell-incline-fly",
     "E235": "0584-lateral-raise",

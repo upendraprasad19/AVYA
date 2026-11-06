@@ -1,5 +1,5 @@
 {
-  "_note": "Cumulative input of build_library_media_v16.js --old-rows. The builder reads only `entries`; the other lists record every in-library pick that is NOT applied and why, so a test can prove the partition and C2 and the founder have the gif ids.",
+  "_note": "Cumulative input of build_library_media_v16.js --old-rows. The builder reads only `entries`; the other lists record every in-library pick that is NOT applied and why, so a test can prove the partition and C2 and the founder have the gif ids. Batch C2c (OI-474) released the one retag wait, E230, into `entries` with a recorded `released_by`; `retag_waits` stays an empty list (the builder and the P3 test read it as a list).",
   "entries": [
     {
       "id": "E001",
@@ -602,6 +602,12 @@
       "equipment_checked": true
     },
     {
+      "id": "E230",
+      "gif": "0795",
+      "equipment_checked": true,
+      "released_by": "founder 2026-10-17 equipment_retag_decided (docs/audit/library-old-rows-picks-2026-10-17.json); the retag is applied in Batch C2c (OI-474), see scripts/data/library_e230_retag.json"
+    },
+    {
       "id": "E231",
       "gif": "0301",
       "equipment_checked": true
@@ -736,10 +742,5 @@
       "gif": "N001"
     }
   ],
-  "retag_waits": [
-    {
-      "id": "E230",
-      "gif": "0795"
-    }
-  ]
+  "retag_waits": []
 }

@@ -1340,5 +1340,14 @@
     "diagnose": "b2c7e4",
     "slug": "reseed_exercise_library",
     "note": "Batch C2b (OI-462, plan docs/plans/2026-11-05-library-batch-c2b-twins.md, B-pass docs/reviews/library-batch-c2b-bpass.md): UPSERTS 862 rows, adds the four twins G1368 G1489 G2567 G0474 and sets is_active=false on the six twin_pending rows E084 E211 E111 E162 E169 E179 (copying cues to the twin where the generated SQL says so); nothing deleted. Applied to project dedsavbjuwgarrhphgnl only, after the founder go (2026-11-05) on the exact file, by .claude/apply_migration_via_api.js (HTTP 201). Post-apply read-back: 925 rows, 862 active, 63 inactive; each of Ankle Circles, Sissy Squat, Seated Piriformis Stretch, Toes to Bar has one active row and one inactive old row. File sha256 = this hash (LF). Rollback is inline in the file header, needing its own go."
+  },
+  {
+    "migration": "173",
+    "applied_at": "2026-11-06T18:50:00+05:30",
+    "hash": "sha256:d1a41b6d34022f7f61da1847c94ec938f53989b94b8c1c75751f9b9740346c0a",
+    "applier": "claude-via-node-api",
+    "diagnose": "d8ac69",
+    "slug": "reseed_exercise_library",
+    "note": "Batch C2c (OI-474, plan docs/plans/2026-11-06-library-batch-c2c-e230.md, B-pass docs/reviews/library-batch-c2c-bpass.md): UPSERTS 862 rows; the one changed row is E230 Standing Single Leg Curl (a6180c06-17c6-5aa9-a538-cc606e05fbc1): equipment_needed cables to bodyweight, logging_type weight_reps to bodyweight_reps, four new coaching_cues, four new common_mistakes. No row added, removed or deactivated; nothing deleted. Applied to project dedsavbjuwgarrhphgnl only, after the founder go (2026-11-06) on the exact file, by .claude/apply_migration_via_api.js (HTTP 201). Rehearsed first in a BEGIN ... RAISE EXCEPTION wrapper (post-state bodyweight, 4 and 4, counts 925 / 862 / 63, the inline rollback restored the before values, live unchanged afterwards). Pre-apply drift check: 16 of 16 per-row md5 buckets (first uuid character) equalled migration 171. Post-apply read-back: E230 bodyweight / bodyweight_reps with the new cues; 925 rows, 862 active, 63 inactive; the same md5 query matches the expectation for 173 (bucket a = 127cb55dda2b78f6b0973f947592823e, the other 15 buckets unchanged). File sha256 = this hash (LF). Rollback is inline in the file header, needing its own go."
   }
 ]

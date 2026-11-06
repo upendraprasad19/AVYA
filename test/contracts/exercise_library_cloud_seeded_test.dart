@@ -108,8 +108,49 @@ List<String> _tupleViolations(String sql, List<Map<String, dynamic>> rows) {
   return out;
 }
 
-/// The inline rollback reactivates exactly the rows THIS batch removed (not C2a's 50) and deactivates its twins; the header counts them.
+/// Batch C2c (OI-474): the E230 retag record. `before` is what the migration's inline rollback restores.
+Map<String, dynamic> _retagRecord() => jsonDecode(File('scripts/data/library_e230_retag.json').readAsStringSync()) as Map<String, dynamic>;
+
+String _sqlArray(List<dynamic> values) => "ARRAY[${values.map((s) => "'${'$s'.replaceAll("'", "''")}'").join(',')}]::text[]";
+
+/// The restore line of the C2c migration, built in Dart from the record's `before`: the four cloud columns of E230.
+String _retagRollbackLine() {
+  final rec = _retagRecord();
+  final before = (rec['before'] as Map).cast<String, dynamic>();
+  return 'UPDATE exercise_library SET equipment_needed = ${_sqlArray(before['equipment_needed'] as List)}, '
+      "logging_type = '${before['logging_type']}', "
+      'coaching_cues = ${_sqlArray(before['coaching_cues'] as List)}, '
+      'common_mistakes = ${_sqlArray(before['common_mistakes'] as List)} '
+      "WHERE id = '${_cloudId(rec['id'] as String)}';";
+}
+
+/// The batch a seed file names in its Intent line: `(862 exercises, library v20, Batch C2c)`. The rollback text is shaped by
+/// the batch, so the checks are too; a label this test does not know is a violation, never a pass.
+String? _batchLabel(String sql) =>
+    RegExp(r'exercises, library v\d+, Batch (C2[a-z])\)').firstMatch(sql)?.group(1);
+
+/// Batch C2c: the rollback restores E230's four cloud columns from the record's `before`; the batch owns no removal and no twin,
+/// so there is no reactivation or deactivation line and no empty `IN ()` list.
+List<String> _rollbackViolationsC2c(String sql) {
+  final out = <String>[];
+  final line = _retagRollbackLine();
+  if (!sql.contains('-- Rollback strategy: inline')) out.add('no inline rollback strategy header');
+  if (!sql.contains('--   $line')) out.add('the commented rollback block does not hold the E230 restore line');
+  if (!sql.contains('-- Rollback strategy: inline   -- $line')) out.add('the Rollback strategy header does not name the E230 restore');
+  if (sql.contains('IN ()')) out.add('an empty IN () list (a SQL syntax error)');
+  if (RegExp(r'^--   UPDATE exercise_library SET is_active = (true|false) WHERE id IN', multiLine: true).hasMatch(sql)) {
+    out.add('Batch C2c removes and adds no row, so its rollback has no reactivation or deactivation line');
+  }
+  if (_removalEntries().any((e) => e['removed_in'] == 'c2c')) out.add('the removals file has an entry removed_in c2c; this batch owns none');
+  return out;
+}
+
+/// The inline rollback of the batch the file names: C2b reactivates exactly the rows it removed (not C2a's 50) and deactivates its
+/// twins, C2c restores E230. The header counts what it does.
 List<String> _rollbackViolations(String sql, List<Map<String, dynamic>> rows) {
+  final label = _batchLabel(sql);
+  if (label == 'C2c') return _rollbackViolationsC2c(sql);
+  if (label != 'C2b') return ['the Intent line names batch ${label ?? '(none)'}, which this test has no rollback shape for'];
   final out = <String>[];
   final own = _ownRemovedIds().length;
   final earlier = _removedIds().length - own;
@@ -207,7 +248,7 @@ void main() {
       expect(_tupleViolations(seedFile.readAsStringSync(), rows), isEmpty);
     });
 
-    test('the inline rollback reactivates exactly the removed rows, and the header counts them', () {
+    test('the inline rollback is the one the batch label names (C2b reactivates its removals, C2c restores E230), and the header counts it', () {
       final rows = (jsonDecode(bundledSeed.readAsStringSync()) as List).cast<Map<String, dynamic>>();
       expect(_rollbackViolations(seedFile.readAsStringSync(), rows), isEmpty);
     });
@@ -421,7 +462,8 @@ void main() {
 
     test('the generated file carries the C1 header, every row uuid and the pinned rollback', () {
       expect(plain, contains('-- Destructive?: yes'));
-      expect(plain, contains('-- Linked diagnose-doc: 2026-11-05-library-batch-c2b-twins-b2c7e4'));
+      expect(plain, contains('-- Linked diagnose-doc: 2026-11-06-library-batch-c2c-e230-d8ac69'));
+      expect(_batchLabel(plain), 'C2c', reason: 'the generator names the batch the rollback checks are shaped by');
       expect(_removalViolations(plain), isEmpty);
       expect(_removalViolations(split), isEmpty);
       expect(_tupleViolations(plain, rows), isEmpty);
@@ -440,13 +482,132 @@ void main() {
       expect(_tupleViolations(foreign.join('\n'), rows), isNotEmpty, reason: 'foreign uuid');
     });
 
-    test('MUTATION: deleting the reactivation line, or turning it into a deactivation, is a violation', () {
-      final gone = plain.replaceAll(_rollbackLine(), '');
+    // Batch C2b's rollback shape is still checked, against the applied file 171 (immutable, on disk): the shape-aware branch
+    // for a label other than the newest batch's must keep catching what it caught.
+    test('MUTATION (C2b branch, migration 171): deleting the reactivation line, or turning it into a deactivation, is a violation', () {
+      final c2b = File('supabase/migrations/171_reseed_exercise_library.sql').readAsStringSync();
+      expect(_batchLabel(c2b), 'C2b');
+      expect(_rollbackViolations(c2b, rows), isEmpty, reason: 'the applied file 171 is green under its own shape');
+      final gone = c2b.replaceAll(_rollbackLine(), '');
+      expect(gone, isNot(c2b), reason: 'the mutation must apply');
+      expect(_rollbackViolations(gone, rows), isNotEmpty, reason: 'line deleted');
+      final other = c2b.replaceAll('SET is_active = true WHERE id IN', 'SET is_active = false WHERE id IN');
+      expect(other, isNot(c2b), reason: 'the mutation must apply');
+      expect(_rollbackViolations(other, rows), isNotEmpty, reason: 'wrong direction');
+    });
+
+    // Batch C2c (OI-474): the rollback restores E230's four cloud columns. Each mutation is a way the line is lost or changed.
+    test('the C2c file restores the four E230 columns from the record before, and its arrays are verbatim those of migration 171', () {
+      final before = (_retagRecord()['before'] as Map).cast<String, dynamic>();
+      final line = _retagRollbackLine();
+      expect(plain, contains('--   $line'));
+      expect(line, contains("equipment_needed = ARRAY['cables']::text[]"));
+      expect(line, contains("logging_type = 'weight_reps'"));
+      // MIRROR: the restored values are the ones the PREVIOUS seed gave the row, byte for byte (the tuple of E230 in 171).
+      final c2b = File('supabase/migrations/171_reseed_exercise_library.sql').readAsStringSync();
+      final tuple = c2b.split('\n').singleWhere((l) => l.startsWith("('${_cloudId('E230')}'"));
+      for (final k in ['equipment_needed', 'coaching_cues', 'common_mistakes']) {
+        expect(tuple, contains(_sqlArray(before[k] as List)), reason: '$k: before must be what 171 seeded');
+      }
+      expect(tuple, contains("'${before['logging_type']}'"));
+    });
+
+    test('MUTATION (C2c): a deleted restore line, one changed cue, a dropped WHERE, an empty IN () and a stray reactivation are each a violation', () {
+      final line = _retagRollbackLine();
+      expect(_rollbackViolations(plain, rows), isEmpty);
+      final gone = plain.replaceAll('--   $line', '');
       expect(gone, isNot(plain), reason: 'the mutation must apply');
       expect(_rollbackViolations(gone, rows), isNotEmpty, reason: 'line deleted');
-      final other = plain.replaceAll('SET is_active = true WHERE id IN', 'SET is_active = false WHERE id IN');
-      expect(other, isNot(plain), reason: 'the mutation must apply');
-      expect(_rollbackViolations(other, rows), isNotEmpty, reason: 'wrong direction');
+      final cue = ((_retagRecord()['before'] as Map)['coaching_cues'] as List).first as String;
+      final edited = plain.replaceAll("'$cue'", "'${cue}x'");
+      expect(edited, isNot(plain), reason: 'the mutation must apply');
+      expect(_rollbackViolations(edited, rows), isNotEmpty, reason: 'one cue of the restore changed');
+      final noWhere = plain.replaceAll(" WHERE id = '${_cloudId('E230')}';", ';');
+      expect(noWhere, isNot(plain), reason: 'the mutation must apply');
+      expect(_rollbackViolations(noWhere, rows), isNotEmpty, reason: 'WHERE dropped');
+      expect(_rollbackViolations('$plain\n-- UPDATE exercise_library SET is_active = true WHERE id IN ();', rows), isNotEmpty, reason: 'empty IN ()');
+      expect(_rollbackViolations('$plain\n--   UPDATE exercise_library SET is_active = true WHERE id IN (\'x\');', rows), isNotEmpty, reason: 'stray reactivation');
+    });
+
+    test('an Intent line that names a batch this test has no shape for (or none) is a violation, never a pass', () {
+      final unknown = plain.replaceFirst('Batch C2c)', 'Batch C2z)');
+      expect(unknown, isNot(plain), reason: 'the mutation must apply');
+      expect(_rollbackViolations(unknown, rows), isNotEmpty);
+      final none = plain.replaceFirst(RegExp(r'exercises, library v\d+, Batch C2c\)'), 'exercises)');
+      expect(none, isNot(plain), reason: 'the mutation must apply');
+      expect(_rollbackViolations(none, rows), isNotEmpty);
+    });
+
+    test('Batch C2c owns no removal: no removals entry is removed_in c2c, and the generated file has no reactivation or twin line', () {
+      expect(_removalEntries().where((e) => e['removed_in'] == 'c2c'), isEmpty);
+      expect(plain, isNot(contains('IN ()')));
+      expect(plain, isNot(contains('SET is_active = true WHERE id IN')));
+      expect(plain, isNot(contains('SET is_active = false WHERE id IN')));
+    });
+
+    // The generator's own guard: it must refuse (exit 2, nothing written) rather than seed one thing and roll back to another.
+    test('the generator refuses a missing retag record and a record whose after differs from the library row; the unmodified pair still generates', () async {
+      Future<ProcessResult> run(Directory root, String why) => runSpawnAsync('node', ['${root.path}/scripts/seed_exercise_library.js', '999_guard_seed_exercise_library.sql', '--out', '${root.path}/out'],
+              why: why, report: (_) {})
+          .timeout(const Duration(seconds: 60));
+      final root = Directory.systemTemp.createTempSync('c2c_guard_');
+      try {
+        Directory('${root.path}/scripts/data').createSync(recursive: true);
+        Directory('${root.path}/assets/data').createSync(recursive: true);
+        File('${root.path}/scripts/seed_exercise_library.js').writeAsStringSync(File(_generator).readAsStringSync());
+        File('${root.path}/scripts/data/library_batch_c2_removals.json').writeAsStringSync(File('scripts/data/library_batch_c2_removals.json').readAsStringSync());
+        File('${root.path}/assets/data/exercise_library.json').writeAsStringSync(File('assets/data/exercise_library.json').readAsStringSync());
+        final recFile = File('${root.path}/scripts/data/library_e230_retag.json');
+
+        final missing = await run(root, 'seed generator with no retag record');
+        expect(missing.exitCode, 2, reason: '${missing.stdout}${missing.stderr}');
+        expect('${missing.stderr}', contains('retag record not found'));
+        expect(File('${root.path}/out/999_guard_seed_exercise_library.sql').existsSync(), isFalse);
+
+        final rec = _retagRecord();
+        final after = Map<String, dynamic>.from(rec['after'] as Map)..['logging_type'] = 'timed';
+        recFile.writeAsStringSync(jsonEncode({...rec, 'after': after}));
+        final drift = await run(root, 'seed generator with a record whose after differs');
+        expect(drift.exitCode, 2, reason: '${drift.stdout}${drift.stderr}');
+        expect('${drift.stderr}', allOf(contains('E230'), contains('logging_type')));
+        expect(File('${root.path}/out/999_guard_seed_exercise_library.sql').existsSync(), isFalse);
+
+        // MIRROR: the unmodified record generates, and writes the C2c shape.
+        recFile.writeAsStringSync(File('scripts/data/library_e230_retag.json').readAsStringSync());
+        final ok = await run(root, 'seed generator with the unmodified record');
+        expect(ok.exitCode, 0, reason: '${ok.stdout}${ok.stderr}');
+        expect(_batchLabel(File('${root.path}/out/999_guard_seed_exercise_library.sql').readAsStringSync()), 'C2c');
+
+        // The other two hard stops: a record that names no library row, and one with no before value for a cloud column.
+        File('${root.path}/out/999_guard_seed_exercise_library.sql').deleteSync();
+        recFile.writeAsStringSync(jsonEncode({...rec, 'id': 'E999'}));
+        final noRow = await run(root, 'seed generator with a record that names no library row');
+        expect(noRow.exitCode, 2, reason: '${noRow.stdout}${noRow.stderr}');
+        expect('${noRow.stderr}', allOf(contains('E999'), contains('not a library row')));
+        final before = Map<String, dynamic>.from(rec['before'] as Map)..remove('logging_type');
+        recFile.writeAsStringSync(jsonEncode({...rec, 'before': before}));
+        final noBefore = await run(root, 'seed generator with a record that lacks a before value');
+        expect(noBefore.exitCode, 2, reason: '${noBefore.stdout}${noBefore.stderr}');
+        expect('${noBefore.stderr}', contains('logging_type'));
+        expect(File('${root.path}/out/999_guard_seed_exercise_library.sql').existsSync(), isFalse);
+
+        // MIRROR (the branch the C2c shape never takes): a batch that DOES own removals and twins gets its reactivation and
+        // twin lines, with non-empty lists. The sandbox generator is told its batch is c2b (6 own removals, 4 twins).
+        recFile.writeAsStringSync(File('scripts/data/library_e230_retag.json').readAsStringSync());
+        final gen = File('${root.path}/scripts/seed_exercise_library.js');
+        final text = gen.readAsStringSync();
+        expect(text, contains("batchTag: 'c2c'"), reason: 'the mutation must apply');
+        gen.writeAsStringSync(text.replaceFirst("batchTag: 'c2c'", "batchTag: 'c2b'"));
+        final owns = await run(root, 'seed generator told it owns the C2b removals');
+        expect(owns.exitCode, 0, reason: '${owns.stdout}${owns.stderr}');
+        final sql = File('${root.path}/out/999_guard_seed_exercise_library.sql').readAsStringSync();
+        expect(sql, contains('--   ${_rollbackLine()}'));
+        expect(sql, contains('--   ${_twinRollbackLine()}'));
+        expect(sql, isNot(contains('IN ()')));
+        expect(sql, isNot(contains('this batch removes and adds no row')), reason: 'the header must not claim "no row" for a batch that owns some');
+      } finally {
+        root.deleteSync(recursive: true);
+      }
     });
 
     test('MUTATION (C2a): a dropped deactivation, a deactivation before the upsert and a still-upserted removed row are each a violation', () {

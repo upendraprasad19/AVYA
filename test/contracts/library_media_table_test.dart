@@ -539,7 +539,8 @@ void main() {
     });
 
     // (P7) releasing a held or retag-decided pair needs a recorded decision. E027 is held for a different kit (the picture is
-    // a plate-loaded T-bar station); E230 is the founder's decided retag, which waits for Batch C2's seed migration.
+    // a plate-loaded T-bar station); E230 is the founder's decided retag, released into `entries` by Batch C2c (OI-474) with its
+    // decision recorded in `released_by` (the input keeps `retag_waits` as an empty list).
     List<String> p7() => violations().where((s) => s.startsWith('(P7)')).toList();
 
     test('(P7) a held pair released into entries with no decision', () {
@@ -547,9 +548,16 @@ void main() {
       expectRule('P7', has: 'entry E027');
     });
 
-    test('(P7) the decided retag released into entries with no decision', () {
-      bucket('entries').add(take('retag_waits', 'E230')..['equipment_checked'] = true);
+    test('(P7) the decided retag, now in entries, needs its recorded decision: without released_by it is a violation', () {
+      final e230 = bucket('entries').firstWhere((e) => e['id'] == 'E230');
+      expect(e230['released_by'], isA<String>(), reason: 'positive control: the shipped input records the decision');
+      expect(p7(), isEmpty, reason: 'positive control: with the decision recorded it is no violation');
+      e230.remove('released_by');
       expectRule('P7', has: 'entry E230');
+    });
+
+    test('(P7) E230 is no longer a retag wait once released into entries (the list stays a list: the builder reads it as one)', () {
+      expect(bucket('retag_waits').where((e) => e['id'] == 'E230'), isEmpty);
     });
 
     test('(P7) mirror: the same release WITH a released_by decision is not a P7 violation', () {
