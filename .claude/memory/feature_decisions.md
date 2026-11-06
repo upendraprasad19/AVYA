@@ -55,7 +55,7 @@ WhatsApp AI Coach → **DEFERRED** (Telegram focus for now).
 | Phases 2-12 | `phases_2_to_12` | Auto-generate new 4-week plans after Week 4. Unlimited progression |
 | Higher daily AI coach limit | `ai_coach_unlimited` (internal id, not renamed) | Higher daily limit (20/day) on Gemini 3.1 Flash Lite — same model as free; copy never says "unlimited" |
 | AI-Personalised Morning Alert | `morning_alert_pro` | 7AM push referencing specific yesterday's data (weight, workout, streak) |
-| Weekly AI Nutrition Report | `weekly_ai_report` | Every week via Telegram + in-app (free = first report only) |
+| Weekly AI Nutrition Report | `weekly_ai_report` | Every week, in-app (free = first report only) |
 | Monthly Future Prediction | `prediction_monthly` | Fresh AI prediction card every month (free = once at onboarding) |
 | ~~Reasoning Tab~~ | ~~`reasoning_tab`~~ | RETIRED 2026-04-18 — Chat/Reasoning toggle removed; single AI coach backend. |
 | Progress Photos | `progress_photos` | Full photo timeline in Supabase Storage |

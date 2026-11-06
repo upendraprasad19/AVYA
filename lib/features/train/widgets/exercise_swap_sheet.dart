@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:icanbefitter/core/copy/wardroom_copy.dart';
 import 'package:icanbefitter/core/theme/colors.dart';
 import 'package:icanbefitter/core/theme/typography.dart';
+import 'package:icanbefitter/core/utils/exercise_name_identity.dart';
 import 'package:icanbefitter/shared/repositories/exercise_repository.dart';
 import 'package:icanbefitter/shared/repositories/plan_engine/equipment_capability.dart';
 import 'package:icanbefitter/shared/widgets/wardroom/wardroom.dart';
@@ -23,6 +25,11 @@ class ExerciseSwapSheet extends StatefulWidget {
   /// "do not enforce". Without this a bodyweight user tapping swap was offered
   /// all 259 library rows including Barbell Back Squat.
   final Set<String>? capability;
+
+  /// `exerciseNameKey`s already in the session (OI-358): those rows stay
+  /// findable by search and cannot be picked. Every session name, so a custom
+  /// outgoing exercise (left in the custom list) is covered too.
+  final Set<String> takenNames;
   final ValueChanged<SwapExerciseData> onSelect;
   final VoidCallback? onDelete;
 
@@ -36,6 +43,7 @@ class ExerciseSwapSheet extends StatefulWidget {
     this.category,
     this.equipment,
     this.capability,
+    this.takenNames = const {},
     this.onDelete,
     this.onAdd,
   });
@@ -103,6 +111,9 @@ class _ExerciseSwapSheetState extends State<ExerciseSwapSheet> {
           .toList();
     }
   }
+
+  bool _isTaken(Map<String, dynamic> ex) => widget.takenNames
+      .contains(exerciseNameKey(ex['name'] as String? ?? ''));
 
   List<Map<String, dynamic>> get _filteredLibrary {
     if (_searchQuery.isNotEmpty) {
@@ -327,6 +338,7 @@ class _ExerciseSwapSheetState extends State<ExerciseSwapSheet> {
                 ...filtered.map((ex) => _SwapItem(
                       name: ex['name'] as String? ?? 'Unknown',
                       detail: _buildDetail(ex),
+                      taken: _isTaken(ex),
                       onSelect: () => widget.onSelect(SwapExerciseData(
                         name: ex['name'] as String? ?? 'Unknown',
                         detail: _buildDetail(ex),
@@ -352,6 +364,7 @@ class _ExerciseSwapSheetState extends State<ExerciseSwapSheet> {
                         detail:
                             'Custom · ${ex['category'] ?? ''} · ${ex['logging_type'] ?? 'weight_reps'}',
                         isCustom: true,
+                        taken: _isTaken(ex),
                         onSelect: () => widget.onSelect(SwapExerciseData(
                           name: ex['name'] as String? ?? 'Custom Exercise',
                           detail: 'Custom',
@@ -399,17 +412,21 @@ class _SwapItem extends StatelessWidget {
   final VoidCallback onSelect;
   final bool isCustom;
 
+  /// OI-358: already in the session. The row and its button both go dead.
+  final bool taken;
+
   const _SwapItem({
     required this.name,
     required this.detail,
     required this.onSelect,
     this.isCustom = false,
+    this.taken = false,
   });
 
   @override
   Widget build(BuildContext context) {
     return InkWell(
-      onTap: onSelect,
+      onTap: taken ? null : onSelect,
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 12),
         decoration: const BoxDecoration(
@@ -446,6 +463,7 @@ class _SwapItem extends StatelessWidget {
                           name,
                           style: AppTypography.body.copyWith(
                             fontWeight: FontWeight.w600,
+                            color: taken ? AppColors.textGhost : null,
                           ),
                         ),
                       ),
@@ -476,21 +494,23 @@ class _SwapItem extends StatelessWidget {
                   ),
                   const SizedBox(height: 2),
                   Text(
-                    detail,
-                    style: AppTypography.bodySm.copyWith(
-                      color: AppColors.textDim,
+                    taken ? WardroomCopy.activeAlreadyInWorkoutTag : detail,
+                    style: (taken ? AppTypography.monoXs : AppTypography.bodySm)
+                        .copyWith(
+                      color: taken ? AppColors.textMute : AppColors.textDim,
                     ),
                   ),
                 ],
               ),
             ),
-            WardButton(
-              label: 'SELECT',
-              onPressed: onSelect,
-              variant: WardButtonVariant.outline,
-              size: WardButtonSize.small,
-              fullWidth: false,
-            ),
+            if (!taken)
+              WardButton(
+                label: 'SELECT',
+                onPressed: onSelect,
+                variant: WardButtonVariant.outline,
+                size: WardButtonSize.small,
+                fullWidth: false,
+              ),
           ],
         ),
       ),

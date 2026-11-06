@@ -70,7 +70,7 @@ node .claude/deploy_via_api.js dedsavbjuwgarrhphgnl <fn> .claude/_payload_<fn>.j
 | Food AI / Weekly report | Gemini 3.1 Flash Lite for text, scan meal and cart auditor; the PRO-only weekly report runs the same model with thinking on. One constant per tier in `supabase/functions/_shared/gemini.ts` (revert = one line) |
 | Plan Generator | Dart (local, queries Hive exercise_library, zero API cost) |
 | Payments | Razorpay (WebView checkout → webhook → Supabase → poll → Hive) |
-| Telegram Bot | Separate project (OpenClaw VPS, @ICanbeFitterBot) — NOT in this repo |
+| Telegram Bot | Dropped (founder, 2026-11-04). Dormant code in `telegram-bot/` (OI-476); `telegram-admin-bot` is a different, founder-ops bot |
 | Health | Google Fit / Health Connect / Samsung Health |
 
 ---
@@ -95,7 +95,7 @@ Secrets set in the dashboard, never committed: `ONESIGNAL_REST_API_KEY`, `GEMINI
 | 🏠 Home | Dashboard | Streak, weekly calendar, today's workout, nutrition snapshot, weight sparkline, PRs |
 | 🏋️ Train | Workouts | Phase plan, active workout mode, exercise swap, templates, copy week |
 | 🥗 Nutrition | Food Logging | BMR/TDEE, Log Food (AI + Scan), food search, saved meals, water, diet plan + PDF |
-| 💬 AI Coach | Chat | Chat, Telegram toggle, reasoning tab + media upload (PRO) |
+| 💬 AI Coach | Chat | Chat, media upload (PRO) |
 | 👤 Profile | Settings | Bio stats, goal, health sync, reports, subscription |
 
 ---

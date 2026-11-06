@@ -6,7 +6,7 @@ On-demand detail for `lib/features/ai_coach/CLAUDE.md`. Everything here was move
 
 _Moved verbatim from `lib/features/ai_coach/CLAUDE.md` (original lines 30-30, context-lean batch 2026-09-29)._
 
-- `screens/ai_coach_screen.dart` — chat UI + reasoning tab (PRO) + photo upload (5 free lifetime reads, then PRO; PRO capped 50/IST-day, OI-153) + suggested-actions sidebar + Telegram toggle. ⚠ There is NO video uploader: `media_picker.dart` is the only `sendWithMedia` call site and always sends `mediaType: 'image'` (`grep -rn "pickVideo\|'video'" lib/` is empty). The server's PRO video cap (10/IST-day) protects the API surface, not a UI path — this line said "photo / video upload" until 2026-09-12.
+- `screens/ai_coach/screen.dart` — chat UI + photo upload (5 free lifetime reads, then PRO; PRO capped 10/IST-day, OI-153; was 50 until Part B) + suggested-actions sidebar (the Telegram toggle was removed, OI-466; the reasoning tab was retired 2026-04-18). ⚠ There is NO video uploader: `media_picker.dart` is the only `sendWithMedia` call site and always sends `mediaType: 'image'` (`grep -rn "pickVideo\|'video'" lib/` is empty). The server's PRO video cap (5/IST-day, `PRO_VIDEO_DAILY_CAP`) protects the API surface, not a UI path — this line said "photo / video upload" until 2026-09-12.
 
 ## coach_derived_completion row (full)
 

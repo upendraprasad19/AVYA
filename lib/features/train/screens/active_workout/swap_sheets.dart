@@ -2,16 +2,42 @@ part of 'screen.dart';
 
 // ── Exercise Add / Swap / Create Sheets ──────────────────────────
 
+/// OI-358: a refusal on a path no picker row controls (a custom exercise named
+/// like one in the session, an UNDO whose name was added back). The messenger
+/// is the screen's, captured before a sheet could close over it.
+void _showExerciseNameTaken(ScaffoldMessengerState messenger, String name) {
+  messenger
+    ..hideCurrentSnackBar()
+    ..showSnackBar(
+      SnackBar(
+        behavior: SnackBarBehavior.floating,
+        backgroundColor: AppColors.card,
+        duration: const Duration(seconds: 4),
+        content: Text(
+          WardroomCopy.activeAlreadyInWorkoutTemplate
+              .replaceAll('{exercise}', name),
+          style: AppTypography.bodySm,
+        ),
+      ),
+    );
+}
+
+Set<String> _sessionNameKeys(WidgetRef ref) => exerciseNameKeysOf(
+    ref.read(activeWorkoutProvider).exercises.map((e) => e.name));
+
 void _showExercisePickerSheet(BuildContext context, WidgetRef ref) {
+  final messenger = ScaffoldMessenger.of(context);
   showModalBottomSheet(
     context: context,
     backgroundColor: Colors.transparent,
     isScrollControlled: true,
     builder: (ctx) => _ExercisePickerSheet(
+      takenNames: _sessionNameKeys(ref),
       onSelect: (exerciseData) {
-        ref.read(activeWorkoutProvider.notifier).addExercise(
+        final name = exerciseData['name'] as String? ?? 'Exercise';
+        final change = ref.read(activeWorkoutProvider.notifier).addExercise(
               ExerciseData(
-                name: exerciseData['name'] as String? ?? 'Exercise',
+                name: name,
                 sets: '${exerciseData['default_sets'] ?? 3}',
                 reps: '${exerciseData['default_reps'] ?? '10'}',
                 weight: '0kg',
@@ -33,6 +59,9 @@ void _showExercisePickerSheet(BuildContext context, WidgetRef ref) {
               ),
             );
         Navigator.of(ctx).pop();
+        if (change == SessionExerciseChange.nameTaken) {
+          _showExerciseNameTaken(messenger, name);
+        }
       },
     ),
   );
@@ -43,6 +72,7 @@ void _showSwapSheet(BuildContext context, WidgetRef ref, int exerciseIndex,
   final data = ref.read(activeWorkoutProvider);
   final currentExercise = data.exercises[exerciseIndex];
   final canDelete = data.exercises.length > 1;
+  final messenger = ScaffoldMessenger.of(context);
   showModalBottomSheet(
     context: context,
     backgroundColor: Colors.transparent,
@@ -54,8 +84,9 @@ void _showSwapSheet(BuildContext context, WidgetRef ref, int exerciseIndex,
       // ⑦ OI-89 seam 6: the user's capability — NOT `equipment` above, which
       // is the OUTGOING exercise's requirement and would invert the filter.
       capability: TrainingHistoryAnalyzer.resolveCapabilityFromProfile(),
+      takenNames: _sessionNameKeys(ref),
       onSelect: (swapEx) {
-        ref.read(activeWorkoutProvider.notifier).swapExercise(
+        final change = ref.read(activeWorkoutProvider.notifier).swapExercise(
               exerciseIndex,
               ExerciseData(
                 name: swapEx.name,
@@ -87,10 +118,15 @@ void _showSwapSheet(BuildContext context, WidgetRef ref, int exerciseIndex,
         // F11 · Ensure Home and Calendar immediately reflect the swap —
         // they read today's schedule/plan, which swapExercise has already
         // mutated in Hive, but Riverpod caches the last-read snapshot.
-        ref.invalidate(todayWorkoutProvider);
-        ref.invalidate(currentPlanProvider);
-        ref.invalidate(calendarWeekProvider);
+        if (change == SessionExerciseChange.applied) {
+          ref.invalidate(todayWorkoutProvider);
+          ref.invalidate(currentPlanProvider);
+          ref.invalidate(calendarWeekProvider);
+        }
         Navigator.of(ctx).pop();
+        if (change == SessionExerciseChange.nameTaken) {
+          _showExerciseNameTaken(messenger, swapEx.name);
+        }
       },
       onDelete: canDelete
           ? () => ref.read(activeWorkoutProvider.notifier).removeExercise(exerciseIndex)
@@ -186,10 +222,19 @@ void _openCreateAndAutoSwap(
           exerciseId: newExercise['id'] as String?,
         );
 
-        ref.read(activeWorkoutProvider.notifier).swapExercise(
+        final change = ref.read(activeWorkoutProvider.notifier).swapExercise(
               exerciseIndex,
               replacement,
             );
+        if (change != SessionExerciseChange.applied) {
+          // OI-358: the custom row stays in the library; only the swap is off,
+          // so no UNDO. A custom can share a library name, the create guard
+          // compares ids.
+          if (change == SessionExerciseChange.nameTaken && context.mounted) {
+            _showExerciseNameTaken(ScaffoldMessenger.of(context), newName);
+          }
+          return;
+        }
         ref.invalidate(todayWorkoutProvider);
         ref.invalidate(currentPlanProvider);
         ref.invalidate(calendarWeekProvider);
@@ -215,9 +260,22 @@ void _openCreateAndAutoSwap(
                 label: 'UNDO',
                 textColor: AppColors.accent,
                 onPressed: () {
-                  ref
+                  // OI-358: find the slot now. A removal on another card
+                  // during these 5 s shifts indexes without hiding this
+                  // snackbar (a move hides it), and the captured index would
+                  // then overwrite a neighbour.
+                  final slot = ref
+                      .read(activeWorkoutProvider)
+                      .exercises
+                      .indexWhere((e) => e.name == newName);
+                  if (slot < 0) return;
+                  final undone = ref
                       .read(activeWorkoutProvider.notifier)
-                      .swapExercise(exerciseIndex, original);
+                      .swapExercise(slot, original);
+                  if (undone == SessionExerciseChange.nameTaken) {
+                    _showExerciseNameTaken(messenger, original.name);
+                    return;
+                  }
                   ref.invalidate(todayWorkoutProvider);
                   ref.invalidate(currentPlanProvider);
                   ref.invalidate(calendarWeekProvider);

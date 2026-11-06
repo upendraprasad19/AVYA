@@ -186,7 +186,8 @@ class VolumeTitration {
     // which skips the group).
     int current(PlannedExercise e) => isDeload ? (e.workingSets ?? 0) : e.sets;
     Set<String> groupsOf(PlannedExercise e) => SessionBudget.isBudgeted(e, budget)
-        ? BudgetMuscleGroups.of(e.primaryMuscles ?? const [])
+        ? BudgetMuscleGroups.creditedOf(e.primaryMuscles ?? const [],
+            quadPrimaryCreditsGlutes: budget.quadPrimaryCreditsGlutes)
         : const <String>{};
     double seconds(PlannedExercise e, int sets) =>
         SessionBudget.plannedExerciseSeconds(e, budget, sets: sets, restSeconds: e.restSeconds);

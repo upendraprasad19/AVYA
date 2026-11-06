@@ -21,7 +21,7 @@ This comprehensive test plan covers:
 2. **Home Screen** - Dashboard widgets, quick actions, daily overview
 3. **Train Tab** - Workout planning, phase progression, active logging
 4. **Nutrition Tab** - Food logging, macros, meal planning, AI analysis
-5. **AI Coach** - Chat, personalization, reasoning (PRO), Telegram
+5. **AI Coach** - Chat, personalization, reasoning (PRO)
 6. **Profile & Settings** - Bio stats, health sync, subscription, reports
 7. **Data Sync** - Hive→Supabase, offline-first validation
 8. **AI Personalization** - Context injection, coaching notes, recommendations

@@ -1890,6 +1890,8 @@ class ToolDispatcher {
         return "I couldn't find the replacement exercise in your library.";
       case 'workout_completed':
         return "Today's workout is already done — edit it from the Train screen instead.";
+      case 'exercise_already_in_workout':
+        return "That exercise is already in today's workout. Pick a different one.";
       default:
         return e.message;
     }

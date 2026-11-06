@@ -6,7 +6,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:speech_to_text/speech_to_text.dart';
-import 'package:url_launcher/url_launcher.dart';
 import 'package:icanbefitter/core/theme/colors.dart';
 import 'package:icanbefitter/core/theme/spacing.dart';
 import 'package:icanbefitter/core/theme/typography.dart';
@@ -59,7 +58,6 @@ part 'chat_area.dart';
 part 'destructive_intent.dart';
 part 'welcome_view.dart';
 part 'quick_prompts.dart';
-part 'telegram_view.dart';
 part 'input_bar.dart';
 part 'attach_button.dart';
 part 'media_picker.dart';
@@ -306,11 +304,9 @@ class _AiCoachScreenState extends ConsumerState<AiCoachScreen> {
   /// APK Test #15 / Bug E — instant (no animation) jump to the bottom.
   /// `_scrollToBottom`'s 300 ms animation is fine for "new message
   /// arrived, ease into view" but wrong here — nothing is on screen yet
-  /// to ease from, whether this is the first paint or the chat subtree
-  /// remounting after a Telegram round-trip (OI-232). `jumpTo` removes
-  /// the visible scroll-from-top animation that would otherwise flash.
-  /// Two call sites: the one-shot first-paint gate below, and the
-  /// channel-switch-back listener in build() above.
+  /// to ease from, because this is the first paint. `jumpTo` removes the
+  /// visible scroll-from-top animation that would otherwise flash.
+  /// One call site: the one-shot first-paint gate in build() below.
   void _jumpToBottom() {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (_scrollController.hasClients) {
@@ -414,8 +410,6 @@ class _AiCoachScreenState extends ConsumerState<AiCoachScreen> {
     // stayed stale until a full app restart. Observed 2026-04-18 on
     // icanbefitter@gmail.com post-PRO-purchase.
     final isPro = ref.watch(subscriptionInfoProvider).isPro;
-    final telegramConnected = ref.watch(telegramConnectionProvider);
-    final channel = ref.watch(channelProvider);
 
     // Scroll when messages change or log actions appear
     ref.listen(chatHistoryProvider, (_, _) => _scrollToBottom());
@@ -424,18 +418,6 @@ class _AiCoachScreenState extends ConsumerState<AiCoachScreen> {
     ref.listen(workoutDraftProvider, (prev, next) {
       if (workoutDraftChangeScrolls(prev, next)) _scrollToBottom();
     });
-    // OI-232 — switching to Telegram and back unmounts/remounts the chat
-    // subtree (channel == 'in_app' ? _buildChatArea(...) : _buildTelegramView
-    // (...) below), and Flutter does not preserve a fresh ScrollController's
-    // offset across that. _initialScrollDone above is a ONE-SHOT gate for the
-    // screen's first paint only — it has already fired long before any later
-    // channel switch, so it never re-fires. Re-land at the bottom every time
-    // the user switches BACK into chat, instant (no animation) since there is
-    // nothing on screen yet to animate from.
-    ref.listen(channelProvider, (previous, next) {
-      if (next == 'in_app' && previous != 'in_app') _jumpToBottom();
-    });
-
     // APK Test #15 / Bug E — first-paint scroll-to-bottom. Fires once,
     // when chatHistoryProvider has loaded its first non-empty value. The
     // ref.listen calls above only fire on VALUE CHANGES, never on the
@@ -459,35 +441,30 @@ class _AiCoachScreenState extends ConsumerState<AiCoachScreen> {
                 // Plan D D-8 — AI Coach uses _buildCompactHeader as its
                 // letterhead (THE BRIDGE · 24/7 eyebrow + Aye Captain
                 // Fraunces title). No unified WardTabHeader.
-                _buildCompactHeader(isPro, channel, telegramConnected),
+                _buildCompactHeader(isPro),
 
                 // F11 · Test #9 — status strip + message count + trial
                 // countdown all consolidated INTO _buildCompactHeader. The
                 // header now owns its own meta (counter glued under UPGRADE).
 
-                // ── Chat Area or Telegram View ──
+                // ── Chat Area ──
                 Expanded(
-                  child: channel == 'in_app'
-                      ? _buildChatArea(messages, isSending)
-                      : _buildTelegramView(telegramConnected),
+                  child: _buildChatArea(messages, isSending),
                 ),
 
                 // ── Quick Prompts (only when chat is empty/welcome only) ──
-                if (channel == 'in_app' && !isSending && messages.length <= 1)
-                  _buildQuickPrompts(),
+                if (!isSending && messages.length <= 1) _buildQuickPrompts(),
 
                 // ── Body-measurements chip (L2b Landing C, E4; flag-gated, owns its checks) ──
-                if (channel == 'in_app')
-                  MeasurementChipSlot(
-                    inputFocusNode: _inputFocusNode,
-                    isSending: isSending,
-                    onShown: (height) =>
-                        keepBottomAfterChip(_scrollController, height),
-                  ),
+                MeasurementChipSlot(
+                  inputFocusNode: _inputFocusNode,
+                  isSending: isSending,
+                  onShown: (height) =>
+                      keepBottomAfterChip(_scrollController, height),
+                ),
 
                 // ── Input Bar with inline message counter ──
-                if (channel == 'in_app')
-                  _buildInputBar(isSending, messageCount, isPro),
+                _buildInputBar(isSending, messageCount, isPro),
               ],
             ),
           ),

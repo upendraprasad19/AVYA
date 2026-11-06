@@ -24,6 +24,19 @@ class PlanEngineFlags {
     }
   }
 
+  /// OI-454 kill-switch for the 6-day build_muscle Quads floor: the Legs B Quads compound slot
+  /// AND the Glutes credit rule that goes with it (they are one change). Default ON. Set
+  /// `configBox['disable_quad_legs_b'] = true` to restore the pre-OI-454 Legs B (its Glutes
+  /// hip_isolation slot) and the full Glutes credit of a squat or a lunge, for plans generated
+  /// from then on (a plan already stored is not rewritten).
+  static bool get quadLegsBEnabled {
+    try {
+      return HiveService.instance.configBox.get('disable_quad_legs_b') != true;
+    } catch (_) {
+      return true; // no Hive (pure unit test) → safe default: the new Legs B
+    }
+  }
+
   /// U3 warmup/cooldown injury filter (Ship 2). Default ON (contraindicated
   /// warmup/cooldown/cardio moves are dropped for an injured user). Set
   /// `configBox['disable_warmup_injury_filter'] = true` to revert to the

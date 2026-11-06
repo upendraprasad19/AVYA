@@ -7,7 +7,7 @@
 | Dimension | Mean |
 |---|---|
 | coverage | 97.4 |
-| balance | 64.5 |
+| balance | 64.3 |
 | volume | 67.3 |
 | progression | 75.7 |
 | personalization | 100.0 |

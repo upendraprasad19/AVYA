@@ -27,7 +27,7 @@ void main() {
     test('routes through LoggingTypeResolver.resolve', () {
       // Locate the swapExercise method body.
       final body = RegExp(
-        r'void swapExercise\(int exerciseIndex, ExerciseData newExercise\)\s*\{(.*?)\n  \}',
+        r'SessionExerciseChange swapExercise\(int exerciseIndex, ExerciseData newExercise\)\s*\{(.*?)\n  \}',
         dotAll: true,
       ).firstMatch(source);
       expect(body, isNotNull,
@@ -43,7 +43,7 @@ void main() {
 
     test('clears per-slot checkedSets / warmUpSets / setInputValues', () {
       final body = RegExp(
-        r'void swapExercise\(int exerciseIndex, ExerciseData newExercise\)\s*\{(.*?)\n  \}',
+        r'SessionExerciseChange swapExercise\(int exerciseIndex, ExerciseData newExercise\)\s*\{(.*?)\n  \}',
         dotAll: true,
       ).firstMatch(source);
       expect(body, isNotNull);

@@ -173,7 +173,7 @@ const double kChipFollowSlack = 16;
 /// After the chip appeared and took [slotHeight] from the chat, keeps a chat
 /// that was at (or within [kChipFollowSlack] of) its bottom at its bottom, so
 /// the last message stays above the chip. A chat scrolled further up, and a
-/// controller with no list attached (the Telegram view), are left alone.
+/// controller with no list attached (the welcome view), are left alone.
 void keepBottomAfterChip(ScrollController controller, double slotHeight) {
   if (!controller.hasClients) return;
   final position = controller.position;

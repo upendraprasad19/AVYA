@@ -267,7 +267,7 @@ void main() {
         .readAsStringSync()
         .replaceAll(RegExp(r'//[^\n]*'), '');
     final body = RegExp(
-      r'void swapExercise\(int exerciseIndex, ExerciseData newExercise\)\s*\{(.*?)\n  \}',
+      r'SessionExerciseChange swapExercise\(int exerciseIndex, ExerciseData newExercise\)\s*\{(.*?)\n  \}',
       dotAll: true,
     ).firstMatch(src);
     expect(body, isNotNull);
