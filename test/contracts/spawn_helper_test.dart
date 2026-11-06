@@ -480,24 +480,28 @@ void main() {
       return src.substring(start, end);
     }
 
-    test('runSpawn spawns, THEN reports that very result, then returns it', () {
+    // OI-468: the report moved INTO the retry loops (every attempt is reported, the last result
+    // returned); that ORDER is pinned in test/contracts/spawn_retry_test.dart ("the wiring").
+    // What stays pinned here is that each entry point hands ONE raw spawn, with the hermetic
+    // environment and no parent inheritance, straight to its loop with `why` and `report` carried
+    // through and nothing around the call.
+    test('runSpawn hands its raw spawn straight to the retry loop (nothing around the call)', () {
       final body = bodyOf('ProcessResult runSpawn(', 'Future<ProcessResult> runSpawnAsync(');
       expect(
-          RegExp(r'final result = Process\.runSync\([^;]*\);\s*'
-                  r'reportSpawn\(result\.exitCode, result\.stdout, result\.stderr, why, report: report\);\s*'
-                  r'return result;\s*\}')
+          RegExp(r'return retryingSpawn\(\s*\(\) => Process\.runSync\([^;]*\),\s*'
+                  r'exe: exe,\s*why: why,\s*report: report,\s*note: note,\s*\);\s*\}')
               .hasMatch(body),
           isTrue,
-          reason: 'no condition around the report, no early return before it, `why` carried through');
+          reason: 'no condition around the loop, no early return before it, `why` and `report` carried through');
       expect(body, contains('includeParentEnvironment: false'));
     });
 
     test('runSpawnAsync does the same', () {
       final body = bodyOf('Future<ProcessResult> runSpawnAsync(', 'Future<Process> startSpawn(');
       expect(
-          RegExp(r'final result = await Process\.run\([^;]*\);\s*'
-                  r'reportSpawn\(result\.exitCode, result\.stdout, result\.stderr, why, report: report\);\s*'
-                  r'return result;\s*\}')
+          RegExp(r'return retryingSpawnAsync<ProcessResult>\(\s*\(\) => Process\.run\([^;]*\),\s*'
+                  r'exitCodeOf: \(r\) => r\.exitCode,\s*stdoutOf: \(r\) => r\.stdout,\s*stderrOf: \(r\) => r\.stderr,\s*'
+                  r'exe: exe,\s*why: why,\s*report: report,\s*note: note,\s*\);\s*\}')
               .hasMatch(body),
           isTrue);
       expect(body, contains('includeParentEnvironment: false'));

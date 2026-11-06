@@ -178,6 +178,10 @@ returns the right path — export it explicitly for the build rather than conclu
 
 
 
+## Concurrent `dart run` in one package: `.dart_tool/native_assets.yaml` is rewritten in place and read by every dart child (2026-11-06)
+
+A spawned `dart` that exits 254 with `File not formatted as yaml: .` (and, when the cwd is a package, `Running build hooks...` on stdout) lost a race: `dart run` truncates and rewrites `<cwd>/.dart_tool/native_assets.yaml` (about 0.3 ms with the file empty) while any other dart child reads `<script's package>/.dart_tool/native_assets.yaml` at start-up, and dies before `main`. Do not re-run and move on, and do not read 254 as a compile error before reading stderr. In tests the spawn helper (`test/helpers/spawn.dart`) retries exactly that signature (a dart child, exit 254, the text on stderr) at most twice and prints a `[spawn-retry]` line; a test that counts the helper's reports must read each spawn's final attempt (`finalAttempts` in `sot_registry_citations_test.dart`). Not covered: `startSpawn`, `sh -c` wrappers, nested spawns, and the git hooks' own `dart run` sites (OI-482: the parallel pre-commit gate loop discards the failure text, which is why a "different gate each run under load, green alone" is probably this). Measured facts and the repeatable commands: diagnose `docs/diagnoses/2026-11-06-spawn-status-native-assets-race-b7e2d9.md`; class 2.147 in `.claude/skills/debugging/bug-classes.md`.
+
 ## Full incident detail for CLAUDE.md §4.9 rows
 
 > Moved here VERBATIM from root `CLAUDE.md` §4.9 (context-lean batch, 2026-09-29). Root keeps a `symptom | fix | pointer` table; each row below is the original, unabridged row text under its original title, so a grep on a row title still lands here.
