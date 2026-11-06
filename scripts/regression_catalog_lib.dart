@@ -99,6 +99,8 @@ const List<String> childEnvStrippedNames = <String>[
   'USDA_API_KEY',
   '_SKIP_RENDER_CHECK',
   'ANDROID_DEVICE_ID',
+  // OI-482: the git hooks' kill switch for the dart-run retry (scripts/_dart_bin.sh). EXACT name: no other AVYA_* name is stripped.
+  'AVYA_DART_RUN_RETRY',
   // Test fixture / report re-record switches: a child inheriting one would rewrite a fixture.
   'RECORD_GENERATOR_GOLDEN',
   'RECORD_LIBRARY_REFERENCE',

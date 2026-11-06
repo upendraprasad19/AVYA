@@ -13,7 +13,7 @@
 #   - re-verifies the SDK stamp (`internal/update_dart_sdk.sh`)
 #
 # That is correct for interactive use and pure waste for a hook that invokes
-# dart 18 times (13 in pre-commit alone), where the SDK cannot change between
+# dart 22 times (13 in pre-commit alone), where the SDK cannot change between
 # the first call and the last.
 #
 # MEASURED on this machine (2026-08-17, quiet, alternating order):
@@ -69,7 +69,7 @@
 case "$(printf '%s' "$0" | tr '\\' '/')" in
   */_dart_bin.sh|_dart_bin.sh)
     echo "ERROR: scripts/_dart_bin.sh must be SOURCED, not executed." >&2
-    echo "  It only defines resolve_dart_bin(); running it does nothing." >&2
+    echo "  It only defines functions (resolve_dart_bin ...); running it does nothing." >&2
     echo "  In a hook:  . scripts/_dart_bin.sh && DART_BIN=\"\$(resolve_dart_bin)\"" >&2
     echo "  One-shot:   DART_BIN=\$(sh -c '. scripts/_dart_bin.sh && resolve_dart_bin')" >&2
     exit 64  # EX_USAGE
@@ -113,4 +113,82 @@ resolve_dart_bin() {
   #    binary -- no wrapper, no tax), or a Flutter checkout not yet
   #    bootstrapped (the wrapper is what bootstraps it, so we MUST use it).
   printf '%s' "${_dbin_on_path}"
+}
+
+# ---------------------------------------------------------------------------
+# OI-482: contain the `dart run` native-assets race at the git hooks.
+#
+# `dart run` rewrites <cwd package>/.dart_tool/native_assets.yaml in place (empty for
+# ~0.3 ms) and every dart child reads <script's package>/.dart_tool/native_assets.yaml
+# while it starts; a reader inside that window exits 254 with "File not formatted as
+# yaml: ." BEFORE `main` runs, so re-running it repeats no side effect. Cause measured
+# in docs/diagnoses/2026-11-06-spawn-status-native-assets-race-b7e2d9.md; plan
+# docs/plans/2026-11-06-oi482-hook-dart-run-race.md.
+#
+# HOW IT IS USED. A hook sources this file, sets DART_BIN="$(resolve_dart_bin)" and then
+# calls `use_dart_race_retry`, which makes DART_BIN the NAME of the function below, so
+# every `"$DART_BIN" run <script>` in the hook runs it (a command name that expands to a
+# function name is resolved as the function: foreground, `( ... ) &`, pipelines, $( )).
+# The 22 call sites do not change. KILL SWITCH: AVYA_DART_RUN_RETRY=0 (exactly `0`) leaves
+# DART_BIN alone, i.e. today's call. A NEW hook copy on a tree whose helper lacks these
+# functions is a no-op because the hooks guard the call with `type`.
+#
+# BEHAVIOUR. Only `run`, only exit 254 AND "File not formatted as yaml" in the child's
+# stderr, at most 2 retries (the budget of test/helpers/spawn.dart), one note per retry
+# on stderr (it starts with a newline: real `dart run` prints "Running build hooks..."
+# with none). stdout and stdin are untouched. stderr is captured and re-emitted when the
+# child's stderr closes (not live, not a tty; a grandchild holding it open delays the
+# return; lost if the hook is interrupted; a caller that merges the streams with `2>&1` gets stdout first and stderr last; NUL bytes in stderr are dropped). With stdin CLOSED, a stdin-reading child HANGS under
+# bash (it is handed the capture pipe as fd 0; git runs pre-commit, commit-msg, prepare-commit-msg and
+# pre-merge-commit with /dev/null and pre-push with a pipe). With stdout CLOSED the child runs once,
+# plainly, WITHOUT a retry, and the shell prints "Bad file descriptor" once per call. The callers source this file
+# under `set -u` and the hooks run under `set -e`: every expansion is `${x:-}` and every
+# external that can fail is `|| :`.
+_dart_race_backoff() { sleep 1; }
+
+_dart_run_retrying() {
+  _drr_real="${DART_BIN_REAL:-dart}"
+  [ "$_drr_real" = _dart_run_retrying ] && _drr_real=dart
+  if [ "${1:-}" != "run" ]; then
+    "$_drr_real" "$@"
+    return $?
+  fi
+  _drr_n=0
+  while :; do
+    _drr_ran=0
+    _drr_rc=0
+    { _drr_ran=1; _drr_err=$("$_drr_real" "$@" 2>&1 1>&3 3>&-) || _drr_rc=$?; } 3>&1 || :
+    if [ "$_drr_ran" != 1 ]; then
+      # stdout is closed: the group could not even start. Run the child plainly, as before.
+      "$_drr_real" "$@"
+      return $?
+    fi
+    if [ "$_drr_rc" = 254 ] && [ "$_drr_n" -lt 2 ]; then
+      case "$_drr_err" in
+        *"File not formatted as yaml"*)
+          _drr_n=$((_drr_n + 1))
+          _drr_note=$(printf '%.300s' "$_drr_err" | tr '\n' ' ') || _drr_note=
+          printf '\n[dart-run-retry] native-assets race: retry %s of 2 | %s | exit=254 | stderr=%s\n' \
+            "$_drr_n" "$*" "$_drr_note" >&2 || :
+          _dart_race_backoff || :
+          continue
+          ;;
+      esac
+    fi
+    if [ -n "$_drr_err" ]; then printf '%s\n' "$_drr_err" >&2 || :; fi
+    return "$_drr_rc"
+  done
+}
+
+# Turns the retry on for the calling hook. Call right after DART_BIN is set:
+#   type use_dart_race_retry >/dev/null 2>&1 && use_dart_race_retry || true
+use_dart_race_retry() {
+  [ "${AVYA_DART_RUN_RETRY:-1}" = 0 ] && return 0
+  [ -n "${DART_BIN:-}" ] || return 0
+  [ "${DART_BIN:-}" = _dart_run_retrying ] && return 0
+  # A helper that has this setter but lost the function would make all 22 sites fail with "not found".
+  type _dart_run_retrying >/dev/null 2>&1 || return 0
+  DART_BIN_REAL="$DART_BIN"
+  DART_BIN=_dart_run_retrying
+  return 0
 }

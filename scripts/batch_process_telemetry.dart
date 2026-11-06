@@ -101,7 +101,7 @@ void main() {
       }
     } catch (_) {}
 
-    // Reader for the writer at pre-commit.sh:385 (<epoch> <gate> per failed
+    // Reader for the writer in the pre-commit gate loop's aggregation (<epoch> <gate> per failed
     // gate). Absent file => nulls (unknown); unparseable content => nulls too,
     // so it renders unknown, never 0 (bad-news-vs-no-news).
     int? gateFailures7d;

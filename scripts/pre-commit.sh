@@ -46,7 +46,7 @@ flutter() {
 
 # Resolve the Dart binary ONCE. `flutter/bin/dart` is a wrapper that takes the
 # SDK update lock and shells out to git on EVERY call; this script invokes dart
-# 12 times outside the gate loop and 75 times inside it. And the lock SERIALIZES
+# 12 times outside the gate loop and once per gate inside it (13 sites). And the lock SERIALIZES
 # concurrent callers, so the wrapper's cost scales with the job count instead of
 # dividing by it -- which is why it is also wildly VARIABLE. Measured on this
 # whole hook, same gates, all passing, both exit 0:
@@ -59,6 +59,9 @@ flutter() {
 if [ -r "$REPO_ROOT/scripts/_dart_bin.sh" ] && sh -n "$REPO_ROOT/scripts/_dart_bin.sh" 2>/dev/null; then
   . "$REPO_ROOT/scripts/_dart_bin.sh" || true
   DART_BIN="$(resolve_dart_bin)" 2>/dev/null || DART_BIN="dart"
+  # OI-482: retry the dart-run native-assets race at every "$DART_BIN" run below; the guard makes this a
+  # no-op on a tree whose helper predates it. Kill switch: AVYA_DART_RUN_RETRY=0 (see scripts/_dart_bin.sh).
+  type use_dart_race_retry >/dev/null 2>&1 && use_dart_race_retry || true
 else
   # Guarded, and the guard is load-bearing: this file runs under `set -e`, so an
   # unguarded `.` of a missing file ABORTS the hook outright. `_dart_bin.sh`.s
@@ -343,6 +346,10 @@ echo "[pre-commit] Running tech-debt audit gates (bounded-parallel)..."
 # textual markers; dropping either would make every gate read as "unwired".
 MAX_GATE_JOBS="${PRE_COMMIT_GATE_JOBS:-4}"
 GATE_FAILDIR="$(mktemp -d)"
+# OI-482 / OI-117: each gate's output is KEPT (it used to go to /dev/null, so a failing gate printed only its
+# name). A second directory, never GATE_FAILDIR: the aggregation loop below globs GATE_FAILDIR/* and treats
+# every file there as a failed gate.
+GATE_OUTDIR="$(mktemp -d)"
 GATE_JOBS=0
 for GATE in scripts/check_*.dart; do
   GATE_NAME="$(basename "$GATE")"
@@ -387,10 +394,13 @@ for GATE in scripts/check_*.dart; do
       continue
       ;;
   esac
-  # Run each gate in the background; a failing gate drops a marker file.
+  # Run each gate in the background; a failing gate drops a marker file and its exit status.
   (
-    if ! "$DART_BIN" run "$GATE" >/dev/null 2>&1; then
+    gate_rc=0
+    "$DART_BIN" run "$GATE" >"$GATE_OUTDIR/$GATE_NAME" 2>&1 || gate_rc=$?
+    if [ "$gate_rc" -ne 0 ]; then
       echo "$GATE_NAME" > "$GATE_FAILDIR/$GATE_NAME"
+      echo "$gate_rc" > "$GATE_OUTDIR/$GATE_NAME.rc"
     fi
   ) &
   GATE_JOBS=$((GATE_JOBS + 1))
@@ -400,6 +410,60 @@ for GATE in scripts/check_*.dart; do
   fi
 done
 wait || true
+# Diagnostics (OI-482, OI-117): what each gate printed. Called as `_gate_diag || true` so that NOTHING in here can
+# change GATE_FAIL or this hook's verdict (this shell runs under `set -e`; errexit is ignored inside a function
+# called in an `||` list). A retried-but-passing gate still shows its note (ONE grep over all the kept outputs: a
+# passing gate costs no fork here, and forks are slow in Git Bash); a failing gate shows its output (all of it up
+# to 60 lines, else the first 20 and the last 30; only the first 8 failing gates, so a broken shared library does
+# not print thousands of lines) and its exit status; an exit status of 129..192 (128+N: death by signal N) means the
+# gate was KILLED and could not be run, which is a different sentence from a gate that found a violation (it
+# still blocks: a gate that could not run is not a pass). A gate that ran through the retry function has its stderr
+# appended AFTER its stdout (the function re-emits it when the child's stderr closes).
+_gate_diag() {
+  # `|| :` INSIDE the substitution: grep exits 2 when ANY listed file is unreadable even though it printed the others.
+  DIAG_NOTED="$(grep -l -a '\[dart-run-retry\] native-assets race' "$GATE_OUTDIR"/* 2>/dev/null || :)"
+  if [ -n "$DIAG_NOTED" ]; then
+    printf '%s\n' "$DIAG_NOTED" | while IFS= read -r DIAG_OUT; do
+      DIAG_NAME="${DIAG_OUT##*/}"
+      grep -a -o '\[dart-run-retry\] native-assets race.*' "$DIAG_OUT" 2>/dev/null | while IFS= read -r DIAG_LINE; do
+        echo "[pre-commit] NOTE: $DIAG_NAME needed a native-assets retry: $DIAG_LINE"
+      done
+    done
+  fi
+  DIAG_PRINTED=0
+  for DIAG_MARK in "$GATE_FAILDIR"/*; do
+    [ -e "$DIAG_MARK" ] || continue   # no failures -> unexpanded glob -> skip
+    DIAG_NAME="${DIAG_MARK##*/}"
+    DIAG_OUT="$GATE_OUTDIR/$DIAG_NAME"
+    if [ "$DIAG_PRINTED" -ge 8 ]; then
+      echo "[pre-commit] --- $DIAG_NAME output not printed (the first 8 failing gates printed theirs) ---"
+    else
+      DIAG_PRINTED=$((DIAG_PRINTED + 1))
+      echo "[pre-commit] --- $DIAG_NAME output ---"
+      # `grep -a -c ''` counts an unterminated last line (wc -l does not) and a line holding a NUL byte once (without -a
+      # GNU grep counts it twice); an unreadable output counts as 0 lines.
+      DIAG_LINES="$(grep -a -c '' "$DIAG_OUT" 2>/dev/null)" || DIAG_LINES=0
+      # `cut` also ends a last line that has no newline (it would glue to the next header) and caps one huge line.
+      if [ "$DIAG_LINES" -le 60 ]; then
+        cut -c1-2000 "$DIAG_OUT"
+      else
+        head -n 20 "$DIAG_OUT" | cut -c1-2000
+        echo "[pre-commit] ... $((DIAG_LINES - 50)) lines omitted ..."
+        tail -n 30 "$DIAG_OUT" | cut -c1-2000
+      fi
+    fi
+    DIAG_RC="$(cat "$DIAG_OUT.rc" 2>/dev/null)" || DIAG_RC=""
+    [ -z "$DIAG_RC" ] || echo "[pre-commit] --- $DIAG_NAME exited $DIAG_RC ---"
+    # 129..192 = death by signal 1..64 (a real SIGKILLed `dart run` returns 137). NOT 254 or 255: those are Dart's own
+    # statuses (the front end could not load the script, or an exhausted native-assets race; an uncaught exception).
+    if [ -n "$DIAG_RC" ] && [ "$DIAG_RC" -gt 128 ] && [ "$DIAG_RC" -le 192 ]; then
+      echo "[pre-commit] $DIAG_NAME was KILLED by signal $((DIAG_RC - 128)) (from outside: memory pressure, a timeout or an interrupt?): the gate could NOT BE RUN, it did not find a violation. Re-run it alone before suspecting the change."
+    elif [ "$DIAG_RC" = 254 ]; then
+      echo "[pre-commit] $DIAG_NAME exited 254: the Dart front end could not load the gate (a compile error in it or its imports), or the native-assets race outlived the retries (see any [dart-run-retry] note above). Re-run it alone."
+    fi
+  done
+}
+_gate_diag || true
 # Aggregate: one marker file per failed gate (same UX as the old sequential loop).
 GATE_FAIL=0
 for MARK in "$GATE_FAILDIR"/*; do
@@ -412,7 +476,7 @@ for MARK in "$GATE_FAILDIR"/*; do
   echo "[pre-commit] GATE FAIL: $FAILED_NAME — re-run for details: dart run scripts/$FAILED_NAME"
   GATE_FAIL=1
 done
-rm -rf "$GATE_FAILDIR"
+rm -rf "$GATE_FAILDIR" "$GATE_OUTDIR"
 if [ "$GATE_FAIL" -ne 0 ]; then
   echo "[pre-commit] One or more gates failed. Fix root cause; do NOT use --no-verify."
   exit 1

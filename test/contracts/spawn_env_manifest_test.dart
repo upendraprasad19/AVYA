@@ -50,6 +50,8 @@ const _stripped = <String>{
   'SUPABASE_ACCESS_TOKEN', 'SUPABASE_ACCESS_TOKEN_FITNESS', 'SUPABASE_SERVICE_ROLE_KEY',
   'SUPABASE_URL', 'SUPABASE_ANON_KEY', 'RAZORPAY_KEY_ID', 'USDA_API_KEY',
   '_SKIP_RENDER_CHECK', 'ANDROID_DEVICE_ID',
+  // OI-482: the git hooks' kill switch for the dart-run retry (scripts/_dart_bin.sh)
+  'AVYA_DART_RUN_RETRY',
   // test fixture / report re-record switches (generator golden, frozen library reference, B1 and B2 gate reports)
   'RECORD_GENERATOR_GOLDEN', 'RECORD_LIBRARY_REFERENCE', 'RECORD_LIBRARY_REFERENCE_IDS', 'WRITE_CORE_LIST_REPORT',
   'WRITE_SESSION_BUDGET_REPORT', 'WRITE_REST_BY_TYPE_REPORT',
@@ -77,6 +79,9 @@ const _locator = <String>{'DART_BIN_OVERRIDE'};
 const _localShell = <String>{
   'TIER', 'REMOTE_SHA', '_BPASS_CLAIM', '_BPASS_CONTENT', '_BPASS_FILE', '_PRE_TIER',
   '_REC_CONTENT', '_REC', 'holder_started', 'owner_pid', 'n', 'unfiled', '_v',
+  // scripts/_dart_bin.sh (OI-482): the hook assigns DART_BIN before use_dart_race_retry reads it, and the function
+  // reads DART_BIN_REAL, which use_dart_race_retry assigns: neither is an input from the environment.
+  'DART_BIN', 'DART_BIN_REAL',
 };
 
 /// Variables the shell sets itself; the scan reports them separately and each must be
@@ -288,6 +293,8 @@ void main() {
         // OI-275 B1: runs a verbatim COPY of the hook with stdin fixtures; guarded by CONTRACT_SWEEP_SKIP=1.
         'test/scripts/pre_push_branch_push_skip_e2e_test.dart',
         'test/scripts/contract_sweep_e2e_test.dart',
+        // OI-482: runs the real pre-push hook against a stub dart that loses the native-assets race once; guarded by CONTRACT_SWEEP_SKIP=1.
+        'test/scripts/hooks_dart_run_retry_e2e_test.dart',
       }, reason: 'the detector must find exactly the tests that execute the hook or spawn the sweep runner');
       expect(unguarded, isEmpty,
           reason: 'these tests run the real pre-push hook (or the sweep runner) without declaring '
