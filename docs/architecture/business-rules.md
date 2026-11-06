@@ -23,7 +23,6 @@ status: scaffold
 - AI Coach — 7/day forever, no trial (Gemini 3.1 Flash Lite)
 - AI coach photo analysis — 5 image reads LIFETIME (metered on `usage_counters`); video is PRO-only
 - Voice (mic) input to AI coach — on-device transcription via `speech_to_text`; zero infra cost. Made free 2026-05-03 (Test #9 / F13).
-- Telegram bot — free (AI coach over Telegram; Telegram bot is disabled; parity with the 7/day cap is OI-278)
 - Morning alert — generic push notification
 - Weekly nutrition report — first report free (after Week 1)
 - Future Prediction card — one card post-onboarding
@@ -36,7 +35,7 @@ status: scaffold
 - AI food text analysis — unlimited (server-side abuse ceiling 200/day)
 - Scan meal camera — 10 scans/day (soft cap warning at 7/10)
 - Cart Auditor — 10 scans/day (soft cap warning at 7/10)
-- Weekly AI nutrition report + Telegram push (ongoing)
+- Weekly AI nutrition report (ongoing)
 - Future Prediction card — fresh AI prediction every month
 - Progress photos (full timeline)
 - Dedicated AI coaching with a higher daily limit (Gemini 3.1 Flash Lite — 20 messages/day, no trial window; NOT unlimited)

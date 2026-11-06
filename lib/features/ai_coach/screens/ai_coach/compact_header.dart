@@ -6,8 +6,7 @@ extension _CompactHeader on _AiCoachScreenState {
   // COMPACT HEADER — single row replaces old header + channel + reasoning
   // ────────────────────────────────────────────────────────────────
 
-  Widget _buildCompactHeader(
-      bool isPro, String channel, bool telegramConnected) {
+  Widget _buildCompactHeader(bool isPro) {
     // F11 · Test #9 — Coach header restructured to 2 rows + counter
     // glued under UPGRADE pill. Captain-cap SVG replaces the "AI" text avatar.
     final messageCount = ref.watch(messageLimitProvider);
@@ -128,13 +127,6 @@ extension _CompactHeader on _AiCoachScreenState {
                         ),
                         onSelected: (value) {
                           switch (value) {
-                            case 'switch_channel':
-                              final newChannel =
-                                  channel == 'in_app' ? 'telegram' : 'in_app';
-                              ref
-                                  .read(channelProvider.notifier)
-                                  .setChannel(newChannel);
-                              break;
                             case 'clear':
                               ref.invalidate(chatHistoryProvider);
                               break;
@@ -145,7 +137,7 @@ extension _CompactHeader on _AiCoachScreenState {
                           }
                         },
                         itemBuilder: (context) =>
-                            _menuItemsForChannel(channel, isPro),
+                            coachHeaderMenuItems(isPro: isPro),
                       ),
                     ],
                   ),
@@ -171,71 +163,47 @@ extension _CompactHeader on _AiCoachScreenState {
       ),
     );
   }
+}
 
-  // F11 · Test #9 — extracted PopupMenu items so the header body
-  // stays readable. Behaviour preserved verbatim from the prior inline list.
-  // Code-review finding 6 (2026-09-21) — telegramConnected dropped: OI-227
-  // removed the only case that read it (the connect-flow menu item).
-  List<PopupMenuEntry<String>> _menuItemsForChannel(
-      String channel, bool isPro) {
-    return [
-      PopupMenuItem(
-        value: 'switch_channel',
-        child: Row(
-          children: [
-            Icon(
-              channel == 'in_app' ? Icons.send : Icons.chat,
-              size: 16,
-              color: AppColors.textDim,
+/// The AI Coach overflow menu (OI-466). A top-level function, not a member of
+/// the `_CompactHeader` extension, so a test can pump the exact entries the
+/// real header offers: it needs no `ref` and no `context`. The menu holds
+/// `Clear conversation` and, on a free account, `Upgrade to PRO`. There is no
+/// channel switch: Telegram is dropped, and with it the toggle and the
+/// "Coming Soon" view the toggle led to.
+List<PopupMenuEntry<String>> coachHeaderMenuItems({required bool isPro}) {
+  return [
+    PopupMenuItem(
+      value: 'clear',
+      child: Row(
+        children: [
+          const Icon(Icons.delete_outline, size: 16, color: AppColors.textDim),
+          const SizedBox(width: 10),
+          Text(
+            'Clear conversation',
+            style: AppTypography.body.copyWith(
+              color: AppColors.textPrimary,
             ),
-            const SizedBox(width: 10),
-            Text(
-              channel == 'in_app'
-                  ? 'Switch to Telegram'
-                  : 'Switch to In-App Chat',
-              style: AppTypography.body.copyWith(
-                color: AppColors.textPrimary,
-              ),
-            ),
-          ],
-        ),
-      ),
-      // OI-227 — connect flow removed 2026-09-21: no linking token in the
-      // deep link, bot (separate project) can't match the Telegram session
-      // to an app account ("no user found"). Revisit in phase 2.
-      PopupMenuItem(
-        value: 'clear',
-        child: Row(
-          children: [
-            const Icon(Icons.delete_outline,
-                size: 16, color: AppColors.textDim),
-            const SizedBox(width: 10),
-            Text(
-              'Clear conversation',
-              style: AppTypography.body.copyWith(
-                color: AppColors.textPrimary,
-              ),
-            ),
-          ],
-        ),
-      ),
-      if (!isPro)
-        PopupMenuItem(
-          value: 'upgrade',
-          child: Row(
-            children: [
-              const Icon(Icons.star, size: 16, color: AppColors.proGold),
-              const SizedBox(width: 10),
-              Text(
-                'Upgrade to PRO',
-                style: AppTypography.body.copyWith(
-                  color: AppColors.proGold,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-            ],
           ),
+        ],
+      ),
+    ),
+    if (!isPro)
+      PopupMenuItem(
+        value: 'upgrade',
+        child: Row(
+          children: [
+            const Icon(Icons.star, size: 16, color: AppColors.proGold),
+            const SizedBox(width: 10),
+            Text(
+              'Upgrade to PRO',
+              style: AppTypography.body.copyWith(
+                color: AppColors.proGold,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ],
         ),
-    ];
-  }
+      ),
+  ];
 }
