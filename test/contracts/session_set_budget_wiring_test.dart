@@ -118,16 +118,17 @@ void main() {
 
   double budgetSeconds(int minutes) => (minutes - SessionBudget.warmCoolMinutes(minutes)) * 60;
 
-  /// Hard sets per budget group across one week of [p].
-  Map<String, int> weeklyTotals(Phase p, int week) {
+  /// Hard sets per budget group across one week of [p]. [sixDayBuildMuscle] applies the OI-454 credit
+  /// rule of that split (a quad-first exercise does not credit Glutes), exactly as the generator's ledger does.
+  Map<String, int> weeklyTotals(Phase p, int week, {bool sixDayBuildMuscle = false}) {
     final per = <String, int>{};
     for (final d in p.weekPlans[week].workoutDays) {
       for (final e in d.exercises) {
         final row = byName[e.exerciseName.toLowerCase()];
         if (row == null) continue;
-        for (final g in BudgetMuscleGroups.of([
+        for (final g in BudgetMuscleGroups.creditedOf([
           for (final m in (row['primary_muscles'] as List)) '$m',
-        ])) {
+        ], quadPrimaryCreditsGlutes: !sixDayBuildMuscle)) {
           per[g] = (per[g] ?? 0) + e.sets;
         }
       }
@@ -192,8 +193,9 @@ void main() {
       final heavy = gen(days: 6, level: 'advanced', phase: 3, sessionDuration: 90);
       final light = gen(days: 6, level: 'advanced', phase: 4, sessionDuration: 90);
       int most(Map<String, int> m) => m.values.reduce((a, b) => a > b ? a : b);
-      expect(most(weeklyTotals(heavy, 0)), greaterThan(14), reason: 'fixture: phase 3 goes above 14');
-      expect(most(weeklyTotals(light, 0)), lessThanOrEqualTo(14));
+      // 6-day build_muscle: the Glutes top counts a squat's glute work as the quad exercise it is (OI-454).
+      expect(most(weeklyTotals(heavy, 0, sixDayBuildMuscle: true)), greaterThan(14), reason: 'fixture: phase 3 goes above 14');
+      expect(most(weeklyTotals(light, 0, sixDayBuildMuscle: true)), lessThanOrEqualTo(14));
     });
 
     test('a body focus is the focus group: Chest goes past the ordinary top of 16', () async {
