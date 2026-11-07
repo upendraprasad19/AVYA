@@ -272,6 +272,8 @@ if [ -z "${_REC_CONTENT:-}" ] \
   if [ -r "$REPO_ROOT/scripts/_dart_bin.sh" ] && sh -n "$REPO_ROOT/scripts/_dart_bin.sh" 2>/dev/null; then
     . "$REPO_ROOT/scripts/_dart_bin.sh" || true
     _PRE_DART="$(resolve_dart_bin 2>/dev/null || echo dart)"
+    # OI-483: both sites below retry the dart run native-assets race, silently (they discard stderr).
+    DART_BIN="$_PRE_DART"; type use_dart_race_retry >/dev/null 2>&1 && use_dart_race_retry || true; _PRE_DART="$DART_BIN"
   fi
   # --ignore-submodules=none: plain `git diff` honours a `.gitmodules` `ignore = all` the branch itself
   # may carry and would drop a gitlink move from this list (B-pass F1 of OI-275 B2, diagnose 34e764

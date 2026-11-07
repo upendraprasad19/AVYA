@@ -8,6 +8,8 @@
 
 import 'dart:io';
 
+import 'dart_race_retry_lib.dart';
+
 void main() async {
   final indexPath = 'docs/adr/INDEX.md';
   final indexFile = File(indexPath);
@@ -23,10 +25,13 @@ void main() async {
   try {
     // Copy current adr/ dir into tmp? Simpler: rebuild in place, compare,
     // then restore.
-    final builderResult = await Process.run(
-      'dart',
-      ['run', 'scripts/build_adr_index.dart'],
-      runInShell: true,
+    final builderResult = await retryDartProcess(
+      () => Process.run(
+        'dart',
+        ['run', 'scripts/build_adr_index.dart'],
+        runInShell: true,
+      ),
+      label: 'scripts/build_adr_index.dart',
     );
     if (builderResult.exitCode != 0) {
       stderr.writeln('FAIL: builder errored:');

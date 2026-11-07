@@ -28,6 +28,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
+import 'dart_race_retry_lib.dart';
 import 'no_conflict_markers_lib.dart';
 import 'retire_worktree_lib.dart';
 import 'sync_resolver_lib.dart';
@@ -662,7 +663,10 @@ class _Sync {
     final snapshot = file.readAsBytesSync();
     ProcessResult r;
     try {
-      r = await Process.run(Platform.resolvedExecutable, ['scripts/build_gate_index.dart'], stdoutEncoding: utf8, stderrEncoding: utf8);
+      r = await retryDartProcess(
+        () => Process.run(Platform.resolvedExecutable, ['scripts/build_gate_index.dart'], stdoutEncoding: utf8, stderrEncoding: utf8),
+        label: 'build_gate_index.dart',
+      );
     } on ProcessException catch (e) {
       file.writeAsBytesSync(snapshot);
       lines.add(_Line('left', kGateIndexPath, 'could not start the builder: ${e.message}'));

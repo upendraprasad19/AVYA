@@ -25,6 +25,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'batch_close_lib.dart';
+import 'dart_race_retry_lib.dart';
 
 const _statePath = '.claude/.batch_close_state';
 const _killSwitch = '.claude/.batch_close.disabled';
@@ -155,12 +156,15 @@ Future<String> _readStdin() async {
 Future<String?> _telemetry(String root) async {
   ProcessResult? r;
   try {
-    r = await Process.run(
-      Platform.resolvedExecutable,
-      ['$root/scripts/batch_process_telemetry.dart'],
-      stdoutEncoding: utf8,
-      stderrEncoding: utf8,
-    ).timeout(const Duration(seconds: 10)); // ABANDONS the child on timeout, does NOT kill it — not a kill switch.
+    r = await retryDartProcess(
+      () => Process.run(
+        Platform.resolvedExecutable,
+        ['$root/scripts/batch_process_telemetry.dart'],
+        stdoutEncoding: utf8,
+        stderrEncoding: utf8,
+      ),
+      label: 'batch_process_telemetry.dart',
+    ).timeout(const Duration(seconds: 10)); // ABANDONS the child on timeout, does NOT kill it — not a kill switch; a retry may still start and dies with the hook's exit.
   } catch (_) {
     return null; // missing script, spawn failure, timeout — all silent
   }

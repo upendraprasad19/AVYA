@@ -1,4 +1,4 @@
-@Timeout(Duration(minutes: 6))
+@Timeout(Duration(minutes: 12))
 library;
 
 // Diagnose 8f3e35 (OI-384). Claude Code runs a project hook in the session's
@@ -26,6 +26,12 @@ library;
 // non-repo fixture, never the live repo, or C11 would go red during every
 // merge commit, when pre-commit's regression-catalog walk runs this file
 // (same trap as b7e4c2, `neutralCwd` in git_safety_hook_integration_test).
+//
+// OI-483: each command now runs dart through `_dart_run_retrying` when the checkout's helper can
+// be sourced, and through today's call otherwise. Exit 2 BLOCKS a tool call and any other status
+// lets it through, so a helper must not be able to change the outcome in either direction: the
+// source happens in a PROBE subshell first (C14 is the table of what a helper can do; ground truth
+// 10 of docs/plans/2026-11-07-oi483-harness-dart-race.md).
 
 import 'dart:async';
 import 'dart:convert';
@@ -48,13 +54,19 @@ const _expectedHooks = <(String, String?, String)>[
   ('SessionEnd', null, 'session_release.dart'),
 ];
 
-/// The 2.1 template. `check_alerts.dart` has always run without flags.
+/// OI-483: the retry fragment. Accepted by the SAFETY rule ONLY as this exact string.
+/// The probe says yes only by printing `ok`, so no exit status of the helper reads as success. The `;` after the `.` and
+/// the plain assignment keep the source out of an `&&` list and an `if` condition, where `set -e` is ignored.
+const retryHead = 'DART_BIN=dart; p=\$( (. scripts/_dart_bin.sh; use_dart_race_retry && echo ok) 2>/dev/null); '
+    'if [ "\$p" = ok ]; then . scripts/_dart_bin.sh; use_dart_race_retry; fi; ';
+
+/// The 2.1 template plus [retryHead]. `check_alerts.dart` has always run without flags.
 String hookTemplate(String script) {
   final flags = script == 'check_alerts.dart' ? '' : '--verbosity=error ';
   return r'r=$(git rev-parse --show-toplevel 2>/dev/null); '
       '[ -n "\$r" ] && [ -f "\$r/scripts/$script" ] || '
       r'r="${CLAUDE_PROJECT_DIR:-.}"; cd "$r" || exit 1; '
-      'dart run ${flags}scripts/$script';
+      '$retryHead"\$DART_BIN" run ${flags}scripts/$script';
 }
 
 typedef HookEntry = ({String event, String? matcher, String command});
@@ -77,7 +89,7 @@ List<HookEntry> loadHooks(String root) {
 
 /// The script a hook command runs (`scripts/<name>.dart` after `dart run`).
 String? scriptOf(String command) =>
-    RegExp(r'dart run (?:--verbosity=error )?scripts/([a-z_]+\.dart)')
+    RegExp(r'(?:dart|"\$DART_BIN") run (?:--verbosity=error )?scripts/([a-z_]+\.dart)')
         .firstMatch(command)
         ?.group(1);
 
@@ -91,10 +103,14 @@ final _dartRun = RegExp(r'^dart run (?:--verbosity=error )?scripts/[a-z_]+\.dart
 /// Violations of the plan 3.1 safety rule. Empty means the command only uses
 /// git rev-parse, `[`, `cd`, `exit`, `true`, an `r=` assignment and
 /// `dart run scripts/<name>.dart` (the stub), so executing it here cannot run
-/// a real program.
-List<String> safetyViolations(String command) {
+/// a real program. [retryHead] is removed first, as one exact string, and `"$DART_BIN" run` reads
+/// as `dart run`, so every other segment still goes through this rule and an altered head does not
+/// pass. [alsoAllow] admits one more literal, for a META mutant of the fragment and nothing else.
+List<String> safetyViolations(String command, {String? alsoAllow}) {
   final out = <String>[];
-  final text = command.replaceAll(_gitSubst, '__GITREV__');
+  var text = command.replaceAll(_gitSubst, '__GITREV__');
+  if (alsoAllow != null) text = text.replaceAll(alsoAllow, '');
+  text = text.replaceAll(retryHead, '').replaceAll('"\$DART_BIN" run', 'dart run');
   if (text.contains(r'$(') || text.contains('`')) {
     out.add('a command substitution other than `git rev-parse --<flag>`');
   }
@@ -135,20 +151,23 @@ List<String> safetyViolations(String command) {
 // ── The stub-dart runner ─────────────────────────────────────────────────
 
 class StubRun {
-  StubRun(this.exitCode, this.stderr, this.ran, this.cwd, this.lastArg,
-      this.found, this.stdin);
+  StubRun(this.exitCode, this.stdout, this.stderr, this.ran, this.cwd, this.lastArg,
+      this.found, this.stdin, this.calls, this.backoffs);
   final int exitCode;
+  final String stdout;
   final String stderr;
   final bool ran;
   final String? cwd;
   final String? lastArg;
   final bool? found;
   final String? stdin;
+  final int calls; // how many times the stub dart started
+  final int backoffs; // how many times the `sleep` stub ran
 }
 
 /// Fixtures shared by every check (built in setUpAll).
 class Fx {
-  Fx(this.base, this.a, this.d, this.w, this.x, this.nested, this.ceiling);
+  Fx(this.base, this.a, this.d, this.w, this.x, this.nested, this.ceiling, this.hostile);
   final Directory base;
   final String a; // checkout A (resolved), holds every hook script
   final String d; // decoy checkout, used as CLAUDE_PROJECT_DIR
@@ -156,10 +175,16 @@ class Fx {
   final String x; // a non-repo directory
   final String nested; // a nested `git init` inside A, no scripts/
   final String ceiling; // GIT_CEILING_DIRECTORIES
+  final String hostile; // a repo whose helper each check writes itself
 }
 
+/// The fixture the checks use: [fxHelper] (the real helper in every checkout, the retry path) or
+/// [fxBare] (no helper anywhere, today's call).
 late Fx fx;
+late Fx fxHelper;
+late Fx fxBare;
 var _fxReady = false;
+const raceStderr = 'File not formatted as yaml: .';
 const _payload = '{"probe":"8f3e35","tool_name":"Bash"}';
 const shells = ['/bin/sh', '/bin/bash'];
 
@@ -222,6 +247,9 @@ Future<StubRun> runWithStub(
   String? projectDir,
   int stubExit = 0,
   String stdin = _payload,
+  int loseRaces = 0, // the first N calls exit 254 + the signature WITHOUT reading stdin, as real dart does
+  String stubStderr = '',
+  Map<String, String> env = const {},
 }) async {
   final stub = Directory.systemTemp.createTempSync('hook_stub_');
   try {
@@ -230,14 +258,21 @@ Future<StubRun> runWithStub(
     final dart = File('${bin.path}/dart')
       ..writeAsStringSync('#!/bin/sh\n'
           "rec='${rec.path}'\n"
+          r'n=$(cat "$rec/calls" 2>/dev/null || echo 0); echo $((n + 1)) > "$rec/calls"' '\n'
+          'if [ "\$n" -lt $loseRaces ]; then echo \'$raceStderr\' >&2; exit 254; fi\n'
           r'pwd -P > "$rec/cwd"' '\n'
           r'last=""; for a in "$@"; do last=$a; done' '\n'
           r'printf %s "$last" > "$rec/last"' '\n'
           r'if [ -f "$last" ]; then echo FOUND > "$rec/found"; '
           r'else echo MISSING > "$rec/found"; fi' '\n'
           r'cat > "$rec/stdin"' '\n'
+          'echo STUB-OUT\n'
+          '${stubStderr.isEmpty ? '' : "echo '$stubStderr' >&2\n"}'
           'exit $stubExit\n');
-    final chmod = runSpawn('chmod', ['+x', dart.path], why: 'chmod the stub dart');
+    // The retry's 1 s backoff, logged and skipped.
+    final sleep = File('${bin.path}/sleep')
+      ..writeAsStringSync('#!/bin/sh\necho "\$1" >> \'${rec.path}/backoffs\'\n');
+    final chmod = runSpawn('chmod', ['+x', dart.path, sleep.path], why: 'chmod the stub dart');
     expect(chmod.exitCode, 0, reason: 'chmod of the stub dart failed');
 
     final r = await _runSpawnClosedStdinOk(
@@ -251,8 +286,9 @@ Future<StubRun> runWithStub(
         'PATH': '${bin.path}:${Platform.environment['PATH'] ?? ''}',
         'GIT_CEILING_DIRECTORIES': fx.ceiling,
         'CLAUDE_PROJECT_DIR': ?projectDir,
+        ...env,
       },
-      allowControl: const {'GIT_CEILING_DIRECTORIES'},
+      allowControl: const {'GIT_CEILING_DIRECTORIES', 'AVYA_DART_RUN_RETRY'},
     ).timeout(const Duration(seconds: 60));
 
     String? read(String name) {
@@ -262,8 +298,10 @@ Future<StubRun> runWithStub(
 
     final cwdRec = read('cwd')?.trim();
     final found = read('found')?.trim();
-    return StubRun(r.exitCode, r.stderr, cwdRec != null, cwdRec, read('last'),
-        found == null ? null : found == 'FOUND', read('stdin'));
+    final calls = int.tryParse(read('calls')?.trim() ?? '') ?? 0;
+    final backoffs = '\n'.allMatches(read('backoffs') ?? '').length;
+    return StubRun(r.exitCode, r.stdout, r.stderr, cwdRec != null, cwdRec, read('last'),
+        found == null ? null : found == 'FOUND', read('stdin'), calls, backoffs);
   } finally {
     stub.deleteSync(recursive: true);
   }
@@ -368,6 +406,124 @@ Future<List<String>> checkNested(String command, {required String shell}) async 
   ];
 }
 
+// ── OI-483: the retry and what a helper can do to the hook ──────────────
+
+/// C12: a lost race is retried, then the hook behaves as if it never happened: dart's own exit 2
+/// still blocks, the payload reaches it, stdout passes through, and one note says what happened.
+Future<List<String>> checkLostRace(String command, {required String shell}) async {
+  final r = await runWithStub(command,
+      shell: shell, cwd: fx.a, loseRaces: 1, stubExit: 2, stubStderr: 'BLOCK-MESSAGE');
+  return [
+    if (r.calls != 2) '${r.calls} calls, want 2 (stderr ${r.stderr.trim()})',
+    if (r.exitCode != 2) 'exit ${r.exitCode}, want 2',
+    if (r.stdin != _payload) 'stdin "${r.stdin}"',
+    if (!r.stdout.contains('STUB-OUT')) 'stdout "${r.stdout}"',
+    if (!r.stderr.contains('[dart-run-retry]')) 'no retry note',
+    if (!r.stderr.contains('BLOCK-MESSAGE')) 'the exit 2 message was lost',
+    if (r.backoffs != 1) '${r.backoffs} backoffs, want 1',
+  ];
+}
+
+/// C12b: the budget. Three lost races end in 254, the status of today's call, after 2 backoffs.
+Future<List<String>> checkRaceBudget(String command, {required String shell}) async {
+  final r = await runWithStub(command, shell: shell, cwd: fx.a, loseRaces: 3);
+  return [
+    if (r.calls != 3) '${r.calls} calls, want 3',
+    if (r.exitCode != 254) 'exit ${r.exitCode}, want 254',
+    if (r.backoffs != 2) '${r.backoffs} backoffs, want 2',
+    if (!r.stderr.contains(raceStderr)) 'the child stderr was lost',
+  ];
+}
+
+/// C13: no helper at all is today's call: one attempt, no note, the race's status back.
+Future<List<String>> checkHelperAbsent(String command, {required String shell}) async {
+  final helper = File('${fx.hostile}/scripts/_dart_bin.sh');
+  if (helper.existsSync()) helper.deleteSync();
+  final r = await runWithStub(command, shell: shell, cwd: fx.hostile, loseRaces: 1);
+  return [
+    if (r.calls != 1) '${r.calls} calls, want 1',
+    if (r.exitCode != 254) 'exit ${r.exitCode}, want 254',
+    if (r.stderr.contains('[dart-run-retry]')) 'a retry ran with no helper',
+  ];
+}
+
+/// C14: a helper that is valid syntax or not, and fails while it is sourced: exit 2 must come ONLY
+/// from dart, and dart must run. Each row was measured to escape a weaker guard (plan, truth 10).
+const hostileHelpers = <String, String>{
+  'syntax error': 'if then fi (',
+  'exit 3 (passes sh -n)': 'exit 3',
+  'a failing `.` (kills dash with 2)': '. /nonexistent/x',
+  'an invalid set -o': 'set -o nosuchopt',
+  'a top-level return 1': 'return 1',
+  'a readonly DART_BIN (kills the setter)': 'readonly DART_BIN=zzz',
+  'a setter that returns 1': 'use_dart_race_retry() { return 1; }',
+  'a top-level exit 0 (a clean death, the probe needs its own status)': 'exit 0',
+  'a top-level exit 7 (the status a status sentinel would use)': 'exit 7',
+};
+
+/// The same contract for text at the TOP of the helper: `set -e` with a failing command only ends a bash shell there,
+/// and only when the source is not in an `&&` list (B-pass, seat A, measured against dash, bash and bash --posix).
+const hostileHelperHeads = <String, String>{
+  'exit 0 on the first line': 'exit 0',
+  'exit 7 on the first line': 'exit 7',
+  'set -e then a failing command': 'set -e\nfalse',
+};
+
+Future<List<String>> checkHostileHelpers(String command, {required String shell}) async {
+  final real = File('scripts/_dart_bin.sh').readAsStringSync();
+  final out = <String>[];
+  final rows = <String, String>{
+    for (final row in hostileHelpers.entries) row.key: '$real\n${row.value}\n',
+    for (final row in hostileHelperHeads.entries) row.key: '${row.value}\n$real',
+  };
+  for (final row in rows.entries) {
+    File('${fx.hostile}/scripts/_dart_bin.sh').writeAsStringSync(row.value);
+    final r = await runWithStub(command, shell: shell, cwd: fx.hostile, stubExit: 2, stubStderr: 'BLOCK-MESSAGE');
+    if (r.calls != 1) out.add('[${row.key}] ${r.calls} calls, want 1 (exit ${r.exitCode})');
+    if (r.exitCode != 2) out.add('[${row.key}] exit ${r.exitCode}, want dart\'s 2');
+    if (r.stdin != _payload) out.add('[${row.key}] the payload did not reach dart');
+    if (!r.stderr.contains('BLOCK-MESSAGE')) out.add('[${row.key}] dart\'s message was lost');
+  }
+  return out;
+}
+
+/// C15: exit 2 through the function: the status, the message and stdout are all intact.
+Future<List<String>> checkBlockThroughFunction(String command, {required String shell}) async {
+  final r = await runWithStub(command, shell: shell, cwd: fx.a, stubExit: 2, stubStderr: 'BLOCK-MESSAGE');
+  return [
+    if (r.calls != 1) '${r.calls} calls, want 1',
+    if (r.exitCode != 2) 'exit ${r.exitCode}, want 2',
+    if (!r.stderr.contains('BLOCK-MESSAGE')) 'stderr "${r.stderr}"',
+    if (!r.stdout.contains('STUB-OUT')) 'stdout "${r.stdout}"',
+    if (r.stdin != _payload) 'stdin "${r.stdin}"',
+  ];
+}
+
+/// C16: the kill switch, exactly `0`, is today's call. `false` keeps the retry on.
+Future<List<String>> checkKillSwitch(String command, {required String shell}) async {
+  final off = await runWithStub(command,
+      shell: shell, cwd: fx.a, loseRaces: 1, env: const {'AVYA_DART_RUN_RETRY': '0'});
+  final on = await runWithStub(command,
+      shell: shell, cwd: fx.a, loseRaces: 1, env: const {'AVYA_DART_RUN_RETRY': 'false'});
+  return [
+    if (off.calls != 1) 'switch 0: ${off.calls} calls, want 1',
+    if (off.exitCode != 254) 'switch 0: exit ${off.exitCode}, want 254',
+    if (off.stderr.contains('[dart-run-retry]')) 'switch 0: a retry note',
+    if (on.calls != 2) 'switch false: ${on.calls} calls, want 2',
+  ];
+}
+
+/// C17: a tree whose helper predates OI-482 (a worktree on an old branch) is today's call, silently.
+Future<List<String>> checkOldHelper(String command, {required String shell}) async {
+  File('test/scripts/fixtures/pre_oi482_hooks/_dart_bin.sh.txt').copySync('${fx.hostile}/scripts/_dart_bin.sh');
+  final r = await runWithStub(command, shell: shell, cwd: fx.hostile, loseRaces: 1);
+  return [
+    if (r.calls != 1) '${r.calls} calls, want 1',
+    if (r.exitCode != 254) 'exit ${r.exitCode}, want 254',
+    if (r.stderr.contains('not found')) 'a `not found` line on stderr: ${r.stderr.trim()}',
+  ];
+}
+
 void main() {
   final root = Directory.current.path;
   final scripts = {for (final h in _expectedHooks) h.$3};
@@ -384,7 +540,6 @@ void main() {
     if (Platform.isWindows) return;
 
     final base = Directory.systemTemp.createTempSync('hook cwd ');
-    final b = base.resolveSymbolicLinksSync();
     ProcessResult git(List<String> args, String cwd) {
       final r = runSpawn('git', args,
           why: 'fixture: git ${args.join(' ')}', workingDirectory: cwd);
@@ -392,37 +547,51 @@ void main() {
       return r;
     }
 
-    void seedScripts(String dir) {
-      for (final s in scripts) {
-        File('$dir/scripts/$s').createSync(recursive: true);
+    Fx build(String name, {required bool helper}) {
+      final b = (Directory('${base.path}/$name')..createSync()).resolveSymbolicLinksSync();
+      void seedScripts(String dir) {
+        for (final s in scripts) {
+          File('$dir/scripts/$s').createSync(recursive: true);
+        }
+        if (helper) File('$root/scripts/_dart_bin.sh').copySync('$dir/scripts/_dart_bin.sh');
       }
+
+      final a = Directory('$b/repo a')..createSync();
+      git(['init', '-q'], a.path);
+      seedScripts(a.path);
+      git(['add', 'scripts'], a.path);
+      git(['-c', 'user.name=t', '-c', 'user.email=t@t', '-c', 'commit.gpgsign=false',
+          'commit', '-q', '-m', 'seed'], a.path);
+      Directory('${a.path}/sub dir').createSync();
+
+      final d = Directory('$b/decoy d')..createSync();
+      git(['init', '-q'], d.path);
+      seedScripts(d.path);
+
+      final w = '$b/wt w';
+      git(['worktree', 'add', '-q', '--detach', w], a.path);
+      Directory('$w/sub dir').createSync();
+      for (final s in scripts) {
+        expect(File('$w/scripts/$s').existsSync(), isTrue,
+            reason: 'worktree W lacks scripts/$s, so C8 would silently fall back');
+      }
+
+      final x = Directory('$b/outside x')..createSync();
+      final nested = Directory('${a.path}/nested n')..createSync();
+      git(['init', '-q'], nested.path);
+
+      final hostile = Directory('$b/hostile h')..createSync();
+      git(['init', '-q'], hostile.path);
+      for (final s in scripts) {
+        File('${hostile.path}/scripts/$s').createSync(recursive: true);
+      }
+
+      return Fx(base, a.path, d.path, w, x.path, nested.path, b, hostile.path);
     }
 
-    final a = Directory('$b/repo a')..createSync();
-    git(['init', '-q'], a.path);
-    seedScripts(a.path);
-    git(['add', 'scripts'], a.path);
-    git(['-c', 'user.name=t', '-c', 'user.email=t@t', '-c', 'commit.gpgsign=false',
-        'commit', '-q', '-m', 'seed'], a.path);
-    Directory('${a.path}/sub dir').createSync();
-
-    final d = Directory('$b/decoy d')..createSync();
-    git(['init', '-q'], d.path);
-    seedScripts(d.path);
-
-    final w = '$b/wt w';
-    git(['worktree', 'add', '-q', '--detach', w], a.path);
-    Directory('$w/sub dir').createSync();
-    for (final s in scripts) {
-      expect(File('$w/scripts/$s').existsSync(), isTrue,
-          reason: 'worktree W lacks scripts/$s, so C8 would silently fall back');
-    }
-
-    final x = Directory('$b/outside x')..createSync();
-    final nested = Directory('${a.path}/nested n')..createSync();
-    git(['init', '-q'], nested.path);
-
-    fx = Fx(base, a.path, d.path, w, x.path, nested.path, b);
+    fxHelper = build('with helper', helper: true);
+    fxBare = build('no helper', helper: false);
+    fx = fxHelper;
     _fxReady = true;
   });
 
@@ -455,23 +624,85 @@ void main() {
     setUpAll(() => commands.addAll(loadHooks(root).map((h) => h.command)));
 
     for (final shell in shells) {
-      test('[$shell] C3 C4 C4b C5 C6 C7 C8 C9 hold for every command', () async {
-        expect(File(shell).existsSync(), isTrue,
-            reason: '$shell is required on Linux/macOS CI');
+      for (final bare in [false, true]) {
+        test('[$shell] C3 C4 C4b C5 C6 C7 C8 C9 hold for every command, ${bare ? 'with no helper (today\'s call)' : 'through the helper'}', () async {
+          expect(File(shell).existsSync(), isTrue,
+              reason: '$shell is required on Linux/macOS CI');
+          fx = bare ? fxBare : fxHelper;
+          addTearDown(() => fx = fxHelper);
+          for (final c in commands) {
+            final s = scriptOf(c)!;
+            final v = <String>[
+              ...await checkSubdir(c, s, shell: shell, checkout: fx.a),
+              ...await checkFallback(c, shell: shell),
+              ...await checkNoFallback(c, shell: shell),
+              ...await checkExitCode(c, shell: shell),
+              ...await checkMissingRoot(c, shell: shell),
+              ...await checkCheckoutBeatsFallback(c, shell: shell),
+              ...await checkWorktree(c, shell: shell),
+              ...await checkNested(c, shell: shell),
+            ];
+            expect(v, isEmpty, reason: '`$c` under $shell');
+          }
+        });
+      }
+
+      test('[$shell] C12 C12b C13 C14 C15 C16 C17 hold for every command (OI-483)', () async {
         for (final c in commands) {
-          final s = scriptOf(c)!;
           final v = <String>[
-            ...await checkSubdir(c, s, shell: shell, checkout: fx.a),
-            ...await checkFallback(c, shell: shell),
-            ...await checkNoFallback(c, shell: shell),
-            ...await checkExitCode(c, shell: shell),
-            ...await checkMissingRoot(c, shell: shell),
-            ...await checkCheckoutBeatsFallback(c, shell: shell),
-            ...await checkWorktree(c, shell: shell),
-            ...await checkNested(c, shell: shell),
+            ...await checkLostRace(c, shell: shell),
+            ...await checkRaceBudget(c, shell: shell),
+            ...await checkHelperAbsent(c, shell: shell),
+            ...await checkHostileHelpers(c, shell: shell),
+            ...await checkBlockThroughFunction(c, shell: shell),
+            ...await checkKillSwitch(c, shell: shell),
+            ...await checkOldHelper(c, shell: shell),
           ];
           expect(v, isEmpty, reason: '`$c` under $shell');
         }
+      });
+
+      test('[$shell] a hook shell with errexit on and a sound helper still reaches the real hook, retry included', () async {
+        final c = loadHooks(root).firstWhere((h) => h.matcher == 'Bash').command;
+        expect(await checkBlockThroughFunction('set -e; $c', shell: shell), isEmpty);
+        expect(await checkLostRace('set -e; $c', shell: shell), isEmpty);
+      });
+
+      test('[$shell] a REAL lost race: the real SDK exits 254 on an empty yaml, the retry reaches the real hook, whose exit 2 and stdin survive', () async {
+        final c = loadHooks(root).firstWhere((h) => h.matcher == 'Bash').command;
+        final pkg = Directory('${fx.hostile}/../real sdk ${shell.split('/').last}')..createSync(recursive: true);
+        final dir = pkg.resolveSymbolicLinksSync();
+        final git = runSpawn('git', ['init', '-q'], why: 'real SDK fixture', workingDirectory: dir);
+        expect(git.exitCode, 0);
+        File('$dir/pubspec.yaml').writeAsStringSync('name: p\nenvironment:\n  sdk: ">=3.0.0 <4.0.0"\n');
+        File('$dir/.dart_tool/package_config.json')
+          ..createSync(recursive: true)
+          ..writeAsStringSync('{"configVersion":2,"packages":[{"name":"p","rootUri":"../","packageUri":"lib/","languageVersion":"3.0"}]}\n');
+        final yaml = File('$dir/.dart_tool/native_assets.yaml')..writeAsStringSync('');
+        File('$dir/scripts/git_safety_hook.dart')
+          ..createSync(recursive: true)
+          ..writeAsStringSync("import 'dart:convert';\nimport 'dart:io';\n"
+              'Future<void> main() async {\n'
+              '  final s = await stdin.transform(utf8.decoder).join();\n'
+              '  stderr.writeln("REAL HOOK GOT \$s");\n'
+              '  exit(2);\n}\n');
+        File('$root/scripts/_dart_bin.sh').copySync('$dir/scripts/_dart_bin.sh');
+        // A shim on PATH named `dart`: the real SDK, deleting the yaml after its 254 (the writer finishing).
+        final bin = Directory('$dir/.shim')..createSync();
+        final shim = File('${bin.path}/dart')
+          ..writeAsStringSync('#!/bin/sh\n"${dartBin()}" "\$@"\nrc=\$?\n'
+              '[ "\$rc" = 254 ] && echo 254 >> "$dir/.shim/lost" && rm -f "${yaml.path}"\nexit "\$rc"\n');
+        expect(runSpawn('chmod', ['+x', shim.path], why: 'chmod the shim').exitCode, 0);
+        final r = await runSpawnWithInput(shell, ['-c', c],
+            why: 'the git-safety command against the real SDK',
+            stdin: _payload,
+            workingDirectory: dir,
+            extraEnv: {'PATH': '${bin.path}:${Platform.environment['PATH'] ?? ''}'},
+            report: (_) {}).timeout(const Duration(seconds: 120));
+        expect(File('$dir/.shim/lost').readAsStringSync().trim(), '254', reason: 'attempt 1 must be a REAL 254: ${r.stderr}');
+        expect(r.stderr, contains('[dart-run-retry]'));
+        expect(r.stderr, contains('REAL HOOK GOT $_payload'));
+        expect(r.exitCode, 2, reason: r.stderr);
       });
 
       test('[$shell] C3 against the REAL repo from supabase/functions', () async {
@@ -549,7 +780,25 @@ void main() {
       'M12 unquoted \$r': good
           .replaceFirst('[ -f "\$r/scripts/$s" ]', '[ -f \$r/scripts/$s ]')
           .replaceFirst('cd "\$r"', 'cd \$r'),
+      'M18 dart run past the function': good.replaceFirst('"\$DART_BIN" run', 'dart run'),
     };
+
+    // OI-483, mutants of the fragment: each is a fixed literal the SAFETY rule admits one at a time.
+    String withHead(String head) => good.replaceFirst(retryHead, head);
+    const probe = 'p=\$( (. scripts/_dart_bin.sh; use_dart_race_retry && echo ok) 2>/dev/null); if [ "\$p" = ok ]; ';
+    final m13 = withHead('DART_BIN=dart; . scripts/_dart_bin.sh; use_dart_race_retry; ');
+    final m14 = withHead('DART_BIN=dart; if sh -n scripts/_dart_bin.sh 2>/dev/null; then . scripts/_dart_bin.sh; use_dart_race_retry; fi; ');
+    final m15 = withHead('DART_BIN=dart; p=\$( (. scripts/_dart_bin.sh; echo ok) 2>/dev/null); if [ "\$p" = ok ]; then . scripts/_dart_bin.sh; use_dart_race_retry; fi; ');
+    final m16 = withHead('DART_BIN=dart; p=\$( (. scripts/_dart_bin.sh; use_dart_race_retry && echo ok)); if [ "\$p" = ok ]; then . scripts/_dart_bin.sh; use_dart_race_retry; fi; ');
+    final m17 = withHead('${probe}then . scripts/_dart_bin.sh; use_dart_race_retry; fi; ');
+    final m19 = withHead('DART_BIN=dart; ${probe}then . scripts/_dart_bin.sh; fi; ');
+    final m20 = withHead('DART_BIN=dart; ${probe}then use_dart_race_retry; fi; ');
+    final m21 = good.replaceFirst('"\$DART_BIN" run', 'exec "\$DART_BIN" run');
+    final m22 = withHead('DART_BIN=dart; if (. scripts/_dart_bin.sh && use_dart_race_retry) >/dev/null 2>&1; then . scripts/_dart_bin.sh; use_dart_race_retry; fi; ');
+    final m23 = withHead('DART_BIN=dart; p=\$( (. scripts/_dart_bin.sh && use_dart_race_retry && echo ok) 2>/dev/null); if [ "\$p" = ok ]; then . scripts/_dart_bin.sh; use_dart_race_retry; fi; ');
+    final m24 = withHead('DART_BIN=dart; (. scripts/_dart_bin.sh; use_dart_race_retry && exit 7) >/dev/null 2>&1; if [ \$? = 7 ]; then . scripts/_dart_bin.sh; use_dart_race_retry; fi; ');
+    final m25 = withHead('DART_BIN=dart; p=\$( (. scripts/_dart_bin.sh; use_dart_race_retry && echo ok) 2>/dev/null) || :; if [ "\$p" = ok ]; then . scripts/_dart_bin.sh; use_dart_race_retry; fi; ');
+    String headOf(String mutant) => mutant.substring(mutant.indexOf('exit 1; ') + 8, mutant.indexOf('"\$DART_BIN" run'));
 
     test('every mutant differs from the template and passes the SAFETY rule '
         '(so it reaches the behaviour checks)', () {
@@ -558,6 +807,14 @@ void main() {
         expect(safetyViolations(e.value), isEmpty, reason: e.key);
       }
       expect(safetyViolations(good), isEmpty);
+      for (final m in [m13, m14, m15, m16, m17, m19, m20, m22, m23, m24, m25]) {
+        expect(m, isNot(good));
+        expect(safetyViolations(m), isNotEmpty, reason: 'only the exact fragment passes on its own: $m');
+        expect(safetyViolations(m, alsoAllow: headOf(m)), isEmpty, reason: m);
+      }
+      expect(m21, isNot(good));
+      expect(safetyViolations(m21), isNotEmpty);
+      expect(safetyViolations(m21, alsoAllow: 'exec '), isEmpty);
     });
 
     test('a hook that never reads stdin is a mutant kill, not a harness error (broken pipe, 8f3e35 flake)', () async {
@@ -577,6 +834,10 @@ void main() {
       expect(safetyViolations('cd "\$r" & sh x.sh; $tail'), isNotEmpty);
       expect(safetyViolations('cd "\$r" || exit 1\nsh x.sh; $tail'), isNotEmpty);
       expect(safetyViolations('cd "\$r" || exit 1\rsh x.sh; $tail'), isNotEmpty);
+      // The fragment is one exact string: an altered head does not pass, whatever it sources.
+      expect(safetyViolations(good.replaceFirst('then . scripts/_dart_bin.sh', 'then . /anything')), isNotEmpty);
+      expect(safetyViolations(good.replaceFirst('(. scripts/_dart_bin.sh', '(. /anything')), isNotEmpty);
+      expect(safetyViolations(good.replaceFirst('fi; ', 'fi; sh x.sh; ')), isNotEmpty);
     });
 
     for (final shell in shells) {
@@ -589,6 +850,13 @@ void main() {
         expect(await checkCheckoutBeatsFallback(good, shell: shell), isEmpty);
         expect(await checkWorktree(good, shell: shell), isEmpty);
         expect(await checkNested(good, shell: shell), isEmpty);
+        expect(await checkLostRace(good, shell: shell), isEmpty);
+        expect(await checkRaceBudget(good, shell: shell), isEmpty);
+        expect(await checkHelperAbsent(good, shell: shell), isEmpty);
+        expect(await checkHostileHelpers(good, shell: shell), isEmpty);
+        expect(await checkBlockThroughFunction(good, shell: shell), isEmpty);
+        expect(await checkKillSwitch(good, shell: shell), isEmpty);
+        expect(await checkOldHelper(good, shell: shell), isEmpty);
       });
 
       test('[$shell] each mutant is killed by its named check', () async {
@@ -608,8 +876,25 @@ void main() {
             shell: shell, checkout: fx.a));
         await killed('M12', checkSubdir(mutants['M12 unquoted \$r']!, s,
             shell: shell, checkout: fx.a));
+        await killed('M13', checkHostileHelpers(m13, shell: shell));
+        await killed('M14', checkHostileHelpers(m14, shell: shell));
+        await killed('M15', checkHostileHelpers(m15, shell: shell));
+        await killed('M16', checkOldHelper(m16, shell: shell));
+        await killed('M17', checkSubdir(m17, s, shell: shell, checkout: fx.a));
+        await killed('M18', checkLostRace(mutants['M18 dart run past the function']!, shell: shell));
+        await killed('M19', checkLostRace(m19, shell: shell));
+        await killed('M20', checkLostRace(m20, shell: shell));
+        await killed('M21', checkLostRace(m21, shell: shell));
+        await killed('M22', checkHostileHelpers(m22, shell: shell));
+        await killed('M24', checkHostileHelpers(m24, shell: shell));
       });
     }
+
+    test('M23 (`&&` after the `.`) and M25 (`|| :` on the assignment) turn `set -e` off for the probe: C14 kills both under bash; dash survives that helper either way', () async {
+      final bash = shells.firstWhere((s) => s.endsWith('bash'));
+      expect((await checkHostileHelpers(m23, shell: bash)).join('; '), contains('set -e then a failing command'));
+      expect((await checkHostileHelpers(m25, shell: bash)).join('; '), contains('set -e then a failing command'));
+    });
 
     test('M4b (`cd && dart`) is killed by C6 under dash, where a failed cd '
         'exits 2 (bash exits 1 there, so only the dash arm can see it)', () async {

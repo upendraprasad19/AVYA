@@ -100,7 +100,8 @@ void main() {
       final d = File(script).parent.path;
       final marker = '$d/resolved.marker';
       File('$d/marker_dart.sh').writeAsStringSync('#!/bin/sh\necho used > "$marker"\nexec "${dartBin()}" "\$@"\n');
-      File('$d/_dart_bin.sh').writeAsStringSync('resolve_dart_bin() {\n  echo "$d/marker_dart.sh"\n}\n');
+      // Appended to the copied helper, so the later definition wins and run_dart_cli stays.
+      File('$d/_dart_bin.sh').writeAsStringSync('resolve_dart_bin() {\n  echo "$d/marker_dart.sh"\n}\n', mode: FileMode.append);
       runSpawn('chmod', ['755', '$d/marker_dart.sh'], why: 'make the fixture dart executable');
       final r = runFixtureWrapper(c, script);
       expectResult(r, 0, 'fixture');

@@ -18,6 +18,7 @@ void main() {
   final cli = _code(_src('scripts/sync_with_main.dart'));
   final lib = _code(_src('scripts/sync_resolver_lib.dart'));
   final sh = _code(_src('scripts/sync_with_main.sh'));
+  final helper = _code(_src('scripts/_dart_bin.sh'));
 
   group('the CLI', () {
     test('catches an asynchronous leak in a guarded zone and funnels every exit through one latch', () {
@@ -92,8 +93,11 @@ void main() {
 
   group('the wrapper', () {
     test('forwards TERM to its child, waits again after a trapped signal and clamps a status above 4', () {
-      expect(sh, contains('trap \'kill -TERM "\$child" 2>/dev/null\' TERM INT HUP'));
-      expect(sh, contains('while kill -0 "\$child"'));
+      expect(sh, contains('run_dart_cli "\$DART_BIN" "\$here/sync_with_main.dart" "\$@"'));
+      expect(sh, isNot(contains('trap ')), reason: 'one signal block, in run_dart_cli (OI-483)');
+      expect(helper, contains('trap _dart_cli_on_signal TERM INT HUP'));
+      expect(helper, contains('kill -TERM "\$_dart_cli_child"'));
+      expect(helper, contains('while kill -0 "\$_dart_cli_child"'));
       expect(sh, contains('if [ "\$rc" -gt 4 ]; then'));
       expect(sh, contains('echo "result: error"'));
       expect(sh, contains('echo "result: refused"'));
