@@ -215,6 +215,35 @@ void main() {
       }
     });
 
+    test('OI-483: the plain form is retried too, argv kept, and the note names the script', () {
+      for (final script in ['scripts/x.dart', '/abs dir/x.dart']) {
+        final r = drive('rc=0\n"\$DART_BIN" "$script" a || rc=\$?\necho "RC=\$rc"', env: {'STUB_FAIL_UNTIL': '1'});
+        expect(r.out, contains('RC=0'), reason: script);
+        expect(r.calls, 2, reason: script);
+        expect(r.notes, 1, reason: script);
+        expect(r.err, contains(script));
+        expect(r.argv, ['[$script][a]', '[$script][a]']);
+      }
+    });
+
+    test('OI-483: only a first argument ENDING in .dart is the plain form: a flag first, or a longer name, runs once', () {
+      for (final args in ['--enable-asserts x.dart', 'x.dart.bak', 'x.dartx']) {
+        final r = drive('rc=0\n"\$DART_BIN" $args || rc=\$?\necho "RC=\$rc"', env: {'STUB_FAIL_UNTIL': '5'});
+        expect(r.out, contains('RC=254'), reason: 'args=[$args]');
+        expect(r.calls, 1, reason: 'args=[$args]');
+      }
+    });
+
+    test('OI-483: the plain form honours the budget and the kill switch', () {
+      final budget = drive('rc=0\n"\$DART_BIN" x.dart || rc=\$?\necho "RC=\$rc"', env: {'STUB_FAIL_UNTIL': '5'});
+      expect(budget.out, contains('RC=254'));
+      expect(budget.calls, 3);
+      final off = drive('rc=0\n"\$DART_BIN" x.dart || rc=\$?\necho "RC=\$rc"',
+          env: {'STUB_FAIL_UNTIL': '1', 'AVYA_DART_RUN_RETRY': '0'}, allowControl: _control);
+      expect(off.out, contains('RC=254'));
+      expect(off.calls, 1);
+    });
+
     test('argv survives a retry byte for byte: spaces, a glob, an empty argument, a quote', () {
       final r = drive('"\$DART_BIN" run \'a b\' \'*\' \'\' \'c"d\'', env: {'STUB_FAIL_UNTIL': '1'});
       expect(r.exit, 0);
@@ -419,6 +448,18 @@ void main() {
       }
     });
 
+    test('CANARY (OI-483): the harness form `dart run --verbosity=error` gives the same status and signature', () {
+      emptyYaml();
+      final r = runSpawn('sh', ['-c', 'echo hi | "\$0" run --verbosity=error "\$1"', dart, '$pkg/bin/x.dart'],
+          why: 'real SDK, the harness form',
+          workingDirectory: '${tmp.path}/cwd',
+          stdoutEncoding: utf8,
+          stderrEncoding: utf8);
+      expect(r.exitCode, 254);
+      expect('${r.stderr}', contains(nativeAssetsRaceSignature));
+      expect('${r.stdout}', isNot(contains('STDIN')), reason: 'it died before main');
+    });
+
     test('the signature the hooks match is the one the SDK prints and the test helper retries', () {
       expect(nativeAssetsRaceSignature, 'File not formatted as yaml');
       expect(File(helper).readAsStringSync(), contains('*"$nativeAssetsRaceSignature"*'),
@@ -435,6 +476,15 @@ void main() {
       expect(r.err, contains('exit=254 | stderr=File not formatted as yaml'));
       expect(r.backoff, ['1']);
       expect(File(yaml).existsSync(), isFalse, reason: 'the shim healed the file after the first real failure');
+    });
+
+    test('OI-483: a REAL 254 in the PLAIN form is retried to a REAL success', () {
+      emptyYaml();
+      final r = drive('cd "\$PKG"; printf \'payload\\n\' | "\$DART_BIN" bin/x.dart',
+          env: {'STUB': shim, 'REAL_DART': dart, 'PKG': pkg});
+      expect(r.exit, 0, reason: '${r.out}|${r.err}');
+      expect(r.out, 'STDIN:payload');
+      expect(r.notes, 1);
     });
 
     test('KILL SWITCH: with AVYA_DART_RUN_RETRY=0 the same real failure comes back (today\'s call)', () {

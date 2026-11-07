@@ -4,6 +4,8 @@
 
 import 'dart:io';
 
+import 'dart_race_retry_lib.dart';
+
 void main() async {
   final indexPath = 'docs/incidents/INDEX.md';
   final indexFile = File(indexPath);
@@ -14,10 +16,13 @@ void main() async {
   }
   final before = indexFile.readAsStringSync();
 
-  final result = await Process.run(
-    'dart',
-    ['run', 'scripts/build_incident_index.dart'],
-    runInShell: true,
+  final result = await retryDartProcess(
+    () => Process.run(
+      'dart',
+      ['run', 'scripts/build_incident_index.dart'],
+      runInShell: true,
+    ),
+    label: 'scripts/build_incident_index.dart',
   );
   if (result.exitCode != 0) {
     stderr.writeln('FAIL: builder errored:');

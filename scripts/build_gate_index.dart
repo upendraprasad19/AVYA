@@ -25,7 +25,7 @@
 // scripts/** + test/** + test.yml — nearly every commit — or the index silently
 // goes stale while check_gate_index_fresh.dart (which runs on EVERY commit via
 // the check_*.dart loop) blocks it, leaving an unstaged modified file behind
-// (check_adr_index_fresh.dart:20-36 rebuilds in place and never restores).
+// (check_adr_index_fresh.dart rebuilds in place and never restores).
 
 import 'dart:io';
 

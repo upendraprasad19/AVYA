@@ -23,6 +23,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
+import 'dart_race_retry_lib.dart';
 import 'land_pr_lib.dart';
 import 'retire_worktree_lib.dart' show protectedBranchReason;
 import 'safe_pr_merge_lib.dart';
@@ -517,7 +518,10 @@ class _Land {
     if (rs.code != 0) throw _Stop(resRecordFailed, 'could not check out scripts/ in the scratch clone: ${rs.err.trim()}');
     final gate = File('$dir/scripts/check_plan_review_record_exists.dart');
     if (!gate.existsSync()) throw _Stop(resRecordFailed, 'scripts/check_plan_review_record_exists.dart is missing from the merge commit');
-    final r = await _run(
+    // The scratch clone holds no .dart_tool, but dart walks UP: from <common dir>/<replay> it reads the
+    // PRIMARY's native_assets.yaml, which any `dart run` there rewrites (OI-483, a real victim of the race).
+    final r = await retryDartRace<_Child>(
+      () => _run(
         Platform.resolvedExecutable,
         [gate.path],
         cwd: dir,
@@ -531,7 +535,13 @@ class _Land {
           'GITHUB_REPOSITORY_OWNER': owner,
           'GITHUB_EVENT_PATH': '',
         },
-        stream: 'gate');
+        stream: 'gate',
+      ),
+      statusOf: (c) => c.code,
+      stderrOf: (c) => c.err,
+      label: 'check_plan_review_record_exists.dart',
+      stop: () => _interruptSignal != null,
+    );
     _checkInterrupt();
     if (!replayVerdict(r.code, r.out)) {
       throw _Stop(resRecordFailed, 'the plan-review-record gate did not print its PASS line on the merge commit (exit ${r.code})');

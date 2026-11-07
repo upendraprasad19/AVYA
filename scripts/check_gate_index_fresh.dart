@@ -20,6 +20,8 @@
 
 import 'dart:io';
 
+import 'dart_race_retry_lib.dart';
+
 const _indexPath = 'docs/audit/GATE_INDEX.md';
 
 void main() async {
@@ -31,10 +33,13 @@ void main() async {
   }
   final before = indexFile.readAsStringSync();
 
-  final result = await Process.run(
-    'dart',
-    ['run', 'scripts/build_gate_index.dart', '--warn-only'],
-    runInShell: true,
+  final result = await retryDartProcess(
+    () => Process.run(
+      'dart',
+      ['run', 'scripts/build_gate_index.dart', '--warn-only'],
+      runInShell: true,
+    ),
+    label: 'scripts/build_gate_index.dart',
   );
   if (result.exitCode != 0) {
     stderr.writeln('[gate-index-fresh] FAIL: builder errored:');

@@ -53,19 +53,9 @@ if [ "$DART_BIN" = "dart" ] && ! command -v dart >/dev/null 2>&1; then
   refuse "no dart on the PATH"
 fi
 
-"$DART_BIN" "$here/sync_with_main.dart" "$@" &
-child=$!
-# A background job of a non-interactive shell starts with SIGINT ignored, so every signal is forwarded as TERM.
-trap 'kill -TERM "$child" 2>/dev/null' TERM INT HUP
-
-rc=0
-wait "$child"
+# run_dart_cli (scripts/_dart_bin.sh) owns the signal forwarding, the wait for the real status and the race retry.
+run_dart_cli "$DART_BIN" "$here/sync_with_main.dart" "$@"
 rc=$?
-# A trapped signal makes `wait` return at once while the child is still running: wait for its real status.
-while kill -0 "$child" 2>/dev/null; do
-  wait "$child"
-  rc=$?
-done
 
 if [ "$rc" -gt 4 ]; then
   echo "sync_with_main: the CLI ended with status $rc"

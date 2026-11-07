@@ -18,13 +18,14 @@ void main() {
   final cli = code('scripts/land_pr.dart');
   final sh = read('scripts/land_pr.sh');
   final shCode = sh.split('\n').where((l) => !l.trimLeft().startsWith('#')).join('\n');
+  final helper = read('scripts/_dart_bin.sh').split('\n').where((l) => !l.trimLeft().startsWith('#')).join('\n');
 
   group('the wrapper', () {
     test('forwards none of the test seams and only the own arguments of the wrapper (the PR number and the one flag)', () {
       for (final seam in ['--gh', '--scripts-dir', '--poll-ms', '--ci-timeout-ms', '--fetch-timeout-ms', '--gh-timeout-ms', '--record-gate']) {
         expect(shCode.contains(seam), isFalse, reason: seam);
       }
-      expect(shCode, contains('"\$DART_BIN" "\$here/land_pr.dart" "\$@"'));
+      expect(shCode, contains('run_dart_cli "\$DART_BIN" "\$here/land_pr.dart" "\$@"'));
       expect(shCode, contains('[ "\$2" = "--allow-workflow-change" ]'));
     });
     test('prints result: error only for a status above 7, and exits 4 then', () {
@@ -33,15 +34,16 @@ void main() {
       expect(RegExp(r'echo "result: ').allMatches(shCode).length, 2, reason: 'refused (the usage path) and error (a status above 7)');
     });
     test('the signal handling matches the sibling wrapper (TERM to the CLI, wait for the real status)', () {
-      expect(shCode, contains("trap 'got=1; [ -n \"\$child\" ] && kill -TERM \"\$child\" 2>/dev/null' TERM INT HUP"));
-      expect(shCode.indexOf('trap '), lessThan(shCode.indexOf('land_pr.dart" "\$@" &')), reason: 'the trap must be set before the CLI starts');
-      expect(shCode, contains('[ "\$got" = 1 ] && kill -TERM "\$child"'));
-      expect(shCode, contains('while kill -0 "\$child"'));
+      expect(shCode, isNot(contains('trap ')), reason: 'one signal block, in run_dart_cli (OI-483)');
+      expect(helper, contains('trap _dart_cli_on_signal TERM INT HUP'));
+      expect(helper.indexOf('trap _dart_cli_on_signal'), lessThan(helper.indexOf('"\$@" &')), reason: 'the trap must be set before the CLI starts');
+      expect(helper, contains('if [ "\$_dart_cli_got" = 1 ]; then kill -TERM "\$_dart_cli_child"'));
+      expect(helper, contains('while kill -0 "\$_dart_cli_child"'));
       // The bash early-reap path cannot be provoked here (timing inside bash's SIGCHLD handling): pinned by shape, in order.
-      final reap = shCode.indexOf('if [ "\$rc" -gt 128 ]; then');
-      expect(reap, greaterThan(shCode.indexOf('while kill -0 "\$child"')));
-      expect(shCode.substring(reap), contains('wait "\$child" 2>/dev/null'));
-      expect(shCode.substring(reap), contains('-ne 127 ] && rc=\$rc2'));
+      final reap = helper.indexOf('if [ "\$_dc_rc" -gt 128 ]; then');
+      expect(reap, greaterThan(helper.indexOf('while kill -0 "\$_dart_cli_child"')));
+      expect(helper.substring(reap), contains('wait "\$_dart_cli_child" 2>/dev/null'));
+      expect(helper.substring(reap), contains('if [ "\$_dc_rc2" -ne 127 ]; then _dc_rc=\$_dc_rc2; fi'));
     });
     test('carries no // Gate: header (it is not a check_*.dart gate)', () {
       for (final p in ['scripts/land_pr.dart', 'scripts/land_pr_lib.dart', 'scripts/land_pr.sh']) {

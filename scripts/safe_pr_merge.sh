@@ -40,6 +40,21 @@ fi
 
 # `dart <file>` (not `dart run`): `dart run` prepends "Running build hooks..." to
 # stdout, which would pollute the output of a wrapper people read.
+#
+# OI-483: run_dart_cli retries the native-assets race and forwards TERM, INT and HUP to the child.
+# The `exec` lines stay as the fallback (no usable helper) and as the kill-switch path, so today's
+# call is reachable verbatim with AVYA_DART_RUN_RETRY=0. `set +e`: the wait status must reach the
+# function. A SIGKILL of this wrapper alone leaves the background dart running; nothing here sends
+# one (land_pr.dart passes no timeout to this wrapper).
+if [ "${AVYA_DART_RUN_RETRY:-1}" != 0 ] && type run_dart_cli >/dev/null 2>&1; then
+  set +e
+  if [ -n "$ALLOW" ]; then
+    run_dart_cli "$DART_BIN" scripts/safe_pr_merge.dart "$1" "$ALLOW"
+    exit $?
+  fi
+  run_dart_cli "$DART_BIN" scripts/safe_pr_merge.dart "$1"
+  exit $?
+fi
 if [ -n "$ALLOW" ]; then
   exec "$DART_BIN" scripts/safe_pr_merge.dart "$1" "$ALLOW"
 fi
