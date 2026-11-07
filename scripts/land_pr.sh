@@ -56,31 +56,9 @@ if [ "$DART_BIN" = "dart" ] && ! command -v dart >/dev/null 2>&1; then
   refuse "no dart on the PATH"
 fi
 
-# The trap is set BEFORE the CLI starts: a signal in the window between the two is remembered and delivered right after.
-child=''
-got=0
-# A background job of a non-interactive shell starts with SIGINT ignored, so every signal is forwarded as TERM.
-trap 'got=1; [ -n "$child" ] && kill -TERM "$child" 2>/dev/null' TERM INT HUP
-
-"$DART_BIN" "$here/land_pr.dart" "$@" &
-child=$!
-[ "$got" = 1 ] && kill -TERM "$child" 2>/dev/null
-
-rc=0
-wait "$child"
+# run_dart_cli (scripts/_dart_bin.sh) owns the signal forwarding, the wait for the real status and the race retry.
+run_dart_cli "$DART_BIN" "$here/land_pr.dart" "$@"
 rc=$?
-# A trapped signal makes `wait` return at once while the child is still running: wait for its real status.
-while kill -0 "$child" 2>/dev/null; do
-  wait "$child"
-  rc=$?
-done
-# bash may have reaped the child already (the loop above never ran and rc is the signal's 128+n): a second wait returns the
-# saved status there; dash answers 127 for a pid it already reported, and then the first status stands.
-if [ "$rc" -gt 128 ]; then
-  wait "$child" 2>/dev/null
-  rc2=$?
-  [ "$rc2" -ne 127 ] && rc=$rc2
-fi
 
 if [ "$rc" -gt 7 ]; then
   echo "land_pr: the CLI ended with status $rc"

@@ -205,6 +205,21 @@ void main() {
       expect(stdoutOf(r), isNot(contains(RegExp(r'left\s+docs/audit/GATE_INDEX'))), reason: 'the earlier left line is replaced by the resolved one');
     });
 
+    test('OI-483: the builder retries the native-assets race: a real 254 from an empty yaml, 2 notes, then the existing failure path', () {
+      for (final off in [false, true]) {
+        final c = gateScenario();
+        c.repo.write('scripts/build_gate_index.dart', builder);
+        // A permanent poison: the CLI runs from srcRoot, so only the spawned builder reads this yaml.
+        File('${c.dir}/.dart_tool/native_assets.yaml')
+          ..createSync(recursive: true)
+          ..writeAsStringSync('');
+        final r = c.run([], extra: off ? const {'AVYA_DART_RUN_RETRY': '0'} : const {}, extraAllow: const {'AVYA_DART_RUN_RETRY'});
+        expect(stdoutOf(r), contains('the builder failed (exit 254)'), reason: '${r.stderr}');
+        expect(RegExp(r'\[dart-run-retry\]').allMatches('${r.stderr}').length, off ? 0 : 2, reason: '${r.stderr}');
+        expect(File('${c.dir}/builder_ran').existsSync(), isFalse, reason: 'it died before main');
+      }
+    });
+
     test('a failing builder restores git\'s conflicted file', () {
       final c = gateScenario();
       c.repo.write('scripts/build_gate_index.dart', failing);

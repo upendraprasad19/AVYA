@@ -33,6 +33,7 @@ import '../helpers/spawn.dart';
 
 late final String _hook;
 late final String _lib;
+late final String _raceLib;
 late final String _telemetryCli;
 late final String _telemetryLib;
 
@@ -72,6 +73,8 @@ Directory _repoWithUnpushed({int commits = 2}) {
       .writeAsStringSync(File(_hook).readAsStringSync());
   File('$root/scripts/batch_close_lib.dart')
       .writeAsStringSync(File(_lib).readAsStringSync());
+  File('$root/scripts/dart_race_retry_lib.dart')
+      .writeAsStringSync(File(_raceLib).readAsStringSync());
 
   _git(root, ['init', '-q']);
   _git(root, ['config', 'user.email', 't@t.t']);
@@ -143,6 +146,7 @@ void main() {
   setUpAll(() {
     _hook = '${Directory.current.path}/scripts/batch_close_hook.dart';
     _lib = '${Directory.current.path}/scripts/batch_close_lib.dart';
+    _raceLib = '${Directory.current.path}/scripts/dart_race_retry_lib.dart';
     _telemetryCli =
         '${Directory.current.path}/scripts/batch_process_telemetry.dart';
     _telemetryLib =
@@ -307,6 +311,39 @@ body
     expect(dec['reason'], contains('process-telemetry:'));
     expect(dec['reason'], contains('review_rounds=2'));
     expect(dec['reason'], contains('mechanical_only=false'));
+  });
+
+  test('OI-483: the telemetry spawn retries the native-assets race; a loss stays silent on stdout and the checklist still emits', () async {
+    for (final off in [false, true]) {
+      final d = _repoWithTelemetry(recordContent: '---\nbranch: test\nreview_rounds: 2\nmechanical_only: false\n---\nbody\n');
+      addTearDown(() => _cleanup(d));
+      // The REAL hook, by absolute path in the plain form, so only the spawned telemetry CLI reads this yaml
+      // (dart walks UP from the script: a hook copied into the fixture would die on it itself).
+      File('${d.path}/.dart_tool/native_assets.yaml')
+        ..createSync(recursive: true)
+        ..writeAsStringSync('');
+      final r = await runSpawnWithInput(
+        dartBin(),
+        [_hook],
+        why: 'the real batch_close_hook.dart, telemetry poisoned, off=$off',
+        stdin: '{}',
+        workingDirectory: d.path,
+        extraEnv: off ? const {'AVYA_DART_RUN_RETRY': '0'} : const {},
+        allowControl: const {'AVYA_DART_RUN_RETRY'},
+      );
+      expect(r.exitCode, 0, reason: r.stderr);
+      expect(r.stdout, isNot(contains('dart-run-retry')), reason: 'stdout is the JSON the harness parses');
+      final notes = RegExp(r'\[dart-run-retry\]').allMatches(r.stderr).length;
+      // At least 1, not exactly 2: three dart starts and 2 s of backoff share a 10 s budget on a loaded machine.
+      if (off) {
+        expect(notes, 0, reason: r.stderr);
+      } else {
+        expect(notes, greaterThanOrEqualTo(1), reason: r.stderr);
+      }
+      final dec = _decision((exitCode: r.exitCode, stdout: r.stdout));
+      expect(dec?['decision'], 'block', reason: 'the checklist is unaffected: ${r.stdout}');
+      expect(dec!['reason'], isNot(contains('process-telemetry:')), reason: 'the telemetry child died before main');
+    }
   });
 
   test('corrupted record still exits 0 and the checklist still emits',
