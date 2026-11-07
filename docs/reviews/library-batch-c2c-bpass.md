@@ -4,9 +4,9 @@ staged_against: library-batch-c2c (staged tree: 29 files at the seats' read, fin
 blast_radius: platform
 reviewer: claude-sonnet-via-skill (two fresh seats, no conversation context)
 lens_set: [writer_reader_drift, blast_radius_mismatch, secrets_in_tree, guard_without_its_mirror, missing_input, asserted_fixture_value, unawaited_no_error_sink]
-findings_count: 10
+findings_count: 17
 verdict: accepted
-verdict_note: all ten handled by the working session, none left open; the founder is told in the batch summary
+verdict_note: all seventeen handled by the working session (ten in round 1, seven in the delta round of 2026-11-07), none left open; the founder is told in the batch summary
 ---
 
 # Code Review: Library Batch C2c (E230 Standing Single Leg Curl becomes a bodyweight row)
@@ -74,8 +74,49 @@ Plan `docs/plans/2026-11-06-library-batch-c2c-e230.md`, diagnose `docs/diagnoses
 - Animation 0795 in the founder's folder: sha256 equals the table's `1009bd7d...`, 252,438 bytes; the bundled still equals the `thumbnails-192` file byte for byte.
 - Blast radius: maximum staged tier `platform`; the library, media table, seed service and the new record are `account`; the new rule sits above `scripts/**`. No secrets in the diff; no Edge Function or schema change.
 
+## Delta round (2026-11-07): a second fresh seat on everything after the batch commit 0577f760
+
+One seat, tip 30ed28d0, lenses A to H: merge-resolution safety, the re-pinned Quads test, the golden, the baseline, the migration ledger, the binding-doc figures, the skill bullet, hygiene. Verdict: no merge damage. It checked 106 paths main changed since the base (98 byte-equal to main, 8 differ only by this batch's own lines), the ledger (181 records, 172 and 173 each hash their own file, the diff against main is the 173 append), the golden (574 changed keys, the same set as before the merge; 60 keys differ from the pre-merge golden), the baseline figures, and re-ran the probe (24 cells, identical to the author's log). It found 2 P1 and 5 P2; the seat also ran one command outside its list (`git merge-tree --write-tree`), which only wrote an unreferenced tree object. Each claim below was re-verified by the working session before it was acted on.
+
+## Finding 11 - P1 - binding-doc over-claim (golden split)
+- **file:line:** `docs/diagnoses/2026-11-06-library-batch-c2c-e230-d8ac69.md` (Merge with main bullet).
+- **claim:** "the SAME set of 574 keys ... so the C2c effect and its 338 / 215 / 21 split stand". An equal key set does not carry the class of each key; 45 of the 574 keys are also among the 60 keys main itself changed (OI-454), and their class was never re-measured.
+- **verification:** `node -e` over the goldens at HEAD, 77af2d56, c2f81ea4 and 1118d3b1: changed against main 574, main against base 60, intersection 45, HEAD against the pre-merge golden 60 (confirmed by the working session).
+- **status:** fixed (the doc now says the key set is unchanged, the split was measured before the merge, and 45 keys are unverified).
+
+## Finding 12 - P1 - wrong baseline and floor for Hamstrings
+- **file:line:** the diagnose doc (Interaction with OI-454 bullet), the OI-477 "Widened by Batch C2c" paragraph, the comment above `_quadsAfterC2c` in `quads_floor_6day_behavioral_test.dart`.
+- **claim:** "Hamstrings rise 5 to 12, floor 12". The 5 is `_hamstringsBefore`, the table from BEFORE OI-454, not main's figure; and the advanced floor is 14 (`session_budget.dart:432`), so "advanced 5 to 12, floor 12" was wrong twice.
+- **verification:** confirmed by reading the test (lines 75-90) and `session_budget.dart:429-433`; then measured: the same 24-cell probe run with main's library (12ae6db3, the cable E230; one tracked file swapped in a script that restores it byte-identical, probe copy deleted afterwards) gives Quads equal to the OI-454 tables in all 24 cells and Hamstrings 2 to 5 sets lower than now in 11 cells (intermediate bodyweight 90: 8 to 12; advanced bodyweight 90: 7 to 12 of 14; advanced home 90: 11 to 14).
+- **status:** fixed (the three places state the measured figures and the right floors; the net sentence is rewritten: Hamstrings up 2 to 5 sets in 11 cells against Quads down 1 to 3 in 10).
+
+## Finding 13 - P2 - stale snapshot figures in the diagnose doc
+- **claim:** "carries the entry (180 records)" and "Nothing is committed or pushed yet".
+- **status:** fixed (181 after the merge with main, each entry holding its own sha256; the state sentence names the commit, the PR, the two merges and this round).
+
+## Finding 14 - P2 - architecture doc and board counts after the widening
+- **file:line:** `docs/architecture/plan-engine-detail.md` (the OI-454 "Not reached" list), the OI-477 paragraph.
+- **claim:** both still describe the pre-C2c shortfall list (5 of 12 at 90 minutes, 9 of 12 at 60, advanced bodyweight `co_group_limited`).
+- **verification:** counted from the two probe logs by `node -e`: Quads short 9 and 5 on main, 11 and 7 now; Hamstrings short 12 and 7 on main, 12 and 5 now.
+- **status:** fixed (a clause in the architecture doc and the counts in the OI-477 paragraph).
+
+## Finding 15 - P2 - test hygiene in the re-pinned Quads test
+- **(a)** the lever-OFF "above the old one" check still reads the pre-OI-454 Quads table: no change, it is the stricter of the two and still true, and the measured-figure ratchet above it covers the same cells.
+- **(b)** the "overrides are live" test checked only `endsWith('|90')` for a label key: fixed (it also requires the key to be a real cell). Mutated once (a typo in a label key): 2 tests red, the live-override test with the direct message.
+- **(c)** the label helper cannot express "now reaches its floor": no change, no override needs it, and a cell that did would need its table changed anyway.
+- **(d)** the four new `cap_limited` cells had no cause check: fixed (the existing check, both leg days hold a quad compound at the per-exercise maximum, now runs for them and names the cell in its reason; it passes, sets [5, 5]). Mutated once (maximum minus one): red, naming `intermediate|bodyweight|90`.
+- Helpers on a key absent from every table: the two integer helpers throw (fail closed), the label helper returns null (expects no shortfall), as main's table does.
+
+## Finding 16 - P2 - skill bullet counts one reader too few
+- **claim:** the History-reader bullet says "six more"; the review row of round 1 says seven (LAST and TRY are two files).
+- **status:** fixed ("seven more", naming the two files).
+
+## Finding 17 - P2 - main moved while the review ran
+- **claim:** `origin/main` is c18a606f (PRs 228 and 229), not 12ae6db3; a merge preview is clean, with overlap in the skill file, the board and the naming glossary.
+- **status:** handled in the close-out: main is merged again after the close-out commit and the delta is checked by the same record-aware sync.
+
 ## Founder triage notes
-Triaged by the working session, not by the founder: no P0, all ten handled above (one P1, nine P2). The media upload and the migration apply were the founder's two explicit gos; nothing live had run at review time, and both ran afterwards on the final, unchanged tree (diagnose tiers 5 and 9).
+Triaged by the working session, not by the founder: no P0; round 1: all ten handled above (one P1, nine P2); delta round: all seven handled (two P1, five P2). The media upload and the migration apply were the founder's two explicit gos; nothing live had run at review time, and both ran afterwards on the final, unchanged tree (diagnose tiers 5 and 9).
 
 ## Tuning entry
-- **2026-11-06** - blast-radius platform - 10 findings; 0 false_alarm (one sub-claim by a seat, that the sign-in heal zeroes the weight, was false and checked against `fieldsClearedFor`); tuning: lens 1 gained a case worth keeping in mind, a retag of a row whose stored `logging_type` is copied into history rows needs a reader sweep of the HISTORY keyed by the stored value, not only of the library; a seat's claim about runtime behaviour must be read in the code before it goes into a binding doc.
+- **2026-11-06** - blast-radius platform - 17 findings (10 in round 1, 7 in the delta round of 2026-11-07); 0 false_alarm (one sub-claim by a seat, that the sign-in heal zeroes the weight, was false and checked against `fieldsClearedFor`); tuning: lens 1 gained a case worth keeping in mind, a retag of a row whose stored `logging_type` is copied into history rows needs a reader sweep of the HISTORY keyed by the stored value, not only of the library; a seat's claim about runtime behaviour must be read in the code before it goes into a binding doc. The delta round added: a figure compared with a table whose label says "before X" is not a delta against main; re-measure on main with the old row (one library file swapped and restored, a scratch probe) before writing "A to B" into a binding doc, and read the floor from the band table, not from the nearest example.

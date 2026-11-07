@@ -48,6 +48,7 @@ findings:
     notes: "live read-back 925 rows, 862 active, 63 inactive; ledger hash sha256:4d09a506dd5863cdeb015a28a2908d5fb4b676506caed4cbf5862af4003f7ab6 in backups/applied_migrations.json."
   - id: C2B-7
     title: "E230 Standing Single Leg Curl retag and animation moved out of this batch"
-    terminal_state: upstream_blocked
-    blocker: "OI-474 (Batch C2c) needs its own plan and the founder's picture decision"
-    reopen_when: "Batch C2c is planned"
+    terminal_state: closed_in_commit
+    commit: 0577f760
+    verification: test/contracts/library_e230_retag_test.dart
+    notes: "Closed by Batch C2c (OI-474, PR 226): E230 retagged to bodyweight, animation 0795, seed v20, migration 173. Ledger: docs/audit/library-batch-c2c.closure.yaml."

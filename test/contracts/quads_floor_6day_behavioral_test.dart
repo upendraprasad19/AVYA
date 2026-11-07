@@ -108,8 +108,8 @@ const _quadsLabel90 = <String, String>{
 
 // Batch C2c (OI-474): E230 Standing Single Leg Curl became a bodyweight row, so in bodyweight and home plans it now
 // fills the Hamstrings / knee_dominant / isolation slot that a lunge variant (crediting Quads and Glutes) filled
-// before. Measured on the merged tree, 6-day build_muscle, week 1: Hamstrings rise (for example 5 to 12 sets in
-// intermediate|bodyweight|90, where the floor is 12) and Quads fall by 1 to 3 sets in the cells below. These tables
+// before. Measured on the merged tree, 6-day build_muscle, week 1: Hamstrings rise 2 to 5 sets in 11 cells (for example 8 to 12 in
+// intermediate|bodyweight|90, floor 12; 7 to 12 in advanced|bodyweight|90, floor 14) and Quads fall by 1 to 3 sets in the cells below. These tables
 // OVERRIDE the OI-454 ones cell by cell (the OI-454 figures above stay as recorded); every other cell is unchanged.
 // A cell here that equals the OI-454 figure is a dead override, pinned by the last test of this file.
 
@@ -454,14 +454,14 @@ void main() {
             }
             // The documented CAUSE of `cap_limited` there: both leg days hold a budgeted quad compound at the
             // per-exercise maximum (the label alone also covers a session cap or a weekly top).
-            if (key == 'intermediate|basic_gym|90') {
+            if (key == 'intermediate|basic_gym|90' || _quadsLabel90C2c.containsKey(key)) {
               final quadCompoundSets = [
                 for (final d in plan.weekPlans[0].workoutDays.where((d) => d.name.startsWith('Legs')))
                   for (final e in d.exercises.where(budgeted).where(kneeQuadFirst)) e.sets,
               ];
               expect(quadCompoundSets, isNotEmpty);
               expect(quadCompoundSets.every((n) => n == SessionBudget.maxSetsPerExercise), isTrue,
-                  reason: 'quad compound sets $quadCompoundSets, maximum ${SessionBudget.maxSetsPerExercise}');
+                  reason: '$key: quad compound sets $quadCompoundSets, maximum ${SessionBudget.maxSetsPerExercise}');
             }
             // Tops, caps and minutes in all four weeks (credited sense, the rule of this split).
             auditPlan(plan, level, 1, minutes, key, bad);
@@ -634,7 +634,8 @@ void main() {
       expect(e.value, isNot(_quadsBefore[e.key]), reason: 'off: ${e.key} equals the OI-454 figure (a dead override)');
     }
     for (final e in _quadsLabel90C2c.entries) {
-      expect(e.key.endsWith('|90'), isTrue, reason: 'label: ${e.key} is not a 90-minute cell');
+      expect(e.key.endsWith('|90') && _quadsAfter.containsKey(e.key), isTrue,
+          reason: 'label: ${e.key} is not a real 90-minute cell');
       expect(e.value, isNot(_quadsLabel90[e.key]), reason: 'label: ${e.key} equals the OI-454 label (a dead override)');
     }
   });
