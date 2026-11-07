@@ -331,10 +331,53 @@ void main() {
       expect(isRegenerableIgnored('data/baseline.json'), isFalse);
       expect(isRegenerableIgnored('test/plan_generator/'), isFalse,
           reason: 'the DIRECTORY holds tracked fixtures, not just the output');
-      // Deliberately absent from the list because it is a PATTERN, not an exact
-      // path — the header forbids patterns outright. Asserting it stays FALSE
-      // pins that decision, so a later "just add a glob" change reddens here.
-      expect(isRegenerableIgnored('test/goldens/home/failures/'), isFalse);
+      // A DIFFERENT golden suite's directory is not inherited from the wardroom
+      // entry: only the one concrete path the tool emits for the one suite that
+      // exists is listed, and the pattern itself stays unclassifiable (the
+      // header forbids patterns outright). Asserting it stays FALSE pins that
+      // decision, so a later "just add a glob" change reddens here. The suite
+      // name is fictional on purpose: a real future suite (`home` is this app's
+      // own tab name) adds its own entry and must not redden an unrelated test.
+      expect(isRegenerableIgnored('test/goldens/zzsuite/failures/'), isFalse);
+    });
+
+    test('the golden comparator output of the ONE existing suite is regenerable '
+        '(it held three worktrees on a full local run), and ONLY that exact '
+        'directory', () {
+      // `git status --porcelain --ignored=matching` prints ONE line for the
+      // directory however many PNGs the Flutter comparator wrote into it. The
+      // baselines are in the sibling `goldens/`, which is tracked.
+      expect(isRegenerableIgnored('test/goldens/wardroom/failures/'), isTrue);
+      expect(isRegenerableIgnored('test\\goldens\\wardroom\\failures\\'), isTrue,
+          reason: 'the matcher normalises backslashes for every entry');
+      // Every near-miss must still BLOCK: if any passes, the entry was widened
+      // into prefix, contains, suffix, glob or case-insensitive matching.
+      for (final p in const [
+        'test/goldens/wardroom/failures/ward_rank_pill_lt_testImage.png', // inside
+        'test\\goldens\\wardroom\\failures\\x.png', // inside, Windows spelling
+        'test/goldens/wardroom/failures', // no trailing slash
+        'test/goldens/wardroom/', // parent
+        'test/goldens/', // grandparent
+        'test/', // great-grandparent
+        'test/goldens/wardroom/goldens/', // the TRACKED baselines directory
+        'test/goldens/zzsuite/failures/', // another suite: needs its own entry
+        'backup/test/goldens/wardroom/failures/', // path-prefixed
+        'test/goldens/wardroom/failures-old/', // name-extended
+        'test/goldens/wardroom/failures.bak/', // .bak form
+        'Test/Goldens/Wardroom/Failures/', // different case
+        // Spellings git never prints. They must not be normalised into the
+        // listed string: a matcher that tidied slashes or dots would widen the
+        // list to every path that merely RESOLVES to it.
+        './test/goldens/wardroom/failures/', // leading ./
+        '/test/goldens/wardroom/failures/', // leading /
+        'test/goldens/wardroom//failures/', // doubled slash
+        'test//goldens/wardroom/failures/', // doubled slash, earlier
+        'test/goldens/wardroom/failures//', // doubled trailing slash
+        'test/goldens/wardroom/./failures/', // dot segment
+      ]) {
+        expect(isRegenerableIgnored(p), isFalse,
+            reason: '$p must still keep a worktree');
+      }
     });
 
     test('the CI-reconcile queue is regenerable, or every worktree that has '

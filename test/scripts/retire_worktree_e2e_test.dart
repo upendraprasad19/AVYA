@@ -56,8 +56,11 @@ void main() {
     // scenario below is genuinely ignored rather than merely untracked.
     // `.envrc` and `.envs/` are here specifically to exercise round-2's P0:
     // `.env` prefix-matching swept them up and destroyed them.
-    File('$repo/.gitignore')
-        .writeAsStringSync('secrets/\n.env\n.envrc\n.envs/\n');
+    // `test/goldens/**/failures/` is the real repo's glob (.gitignore:193): the
+    // golden-comparator scenarios below (9, 10) need it ignored BEFORE any
+    // worktree exists, exactly like the rest of this file.
+    File('$repo/.gitignore').writeAsStringSync(
+        'secrets/\n.env\n.envrc\n.envs/\ntest/goldens/**/failures/\n');
 
     // Prove isolation BEFORE anything destructive can run.
     final top = _run('git', ['rev-parse', '--show-toplevel'], repo);
@@ -149,6 +152,32 @@ void main() {
     _run('git', ['worktree', 'lock', wt('lockedwt'), '--reason', 'do not touch'],
         repo);
 
+    // 9. merged + clean + holding ONLY the golden comparator's `failures/`
+    //    output of the one suite that exists (wardroom). A full local
+    //    `flutter test` on the VPS leaves exactly this; before the allowlist
+    //    entry it held three worktrees (diagnose in docs/diagnoses/).
+    _run('git', ['worktree', 'add', '-q', wt('goldwardroom'), '-b', 'goldwardroom'],
+        repo);
+    _run('git',
+        ['merge', '-q', '--no-ff', '-m', 'merge goldwardroom', 'goldwardroom'],
+        repo);
+    Directory('${wt("goldwardroom")}/test/goldens/wardroom/failures')
+        .createSync(recursive: true);
+    File('${wt("goldwardroom")}/test/goldens/wardroom/failures/x.png')
+        .writeAsStringSync('regenerable comparator output\n');
+
+    // 10. the MIRROR: the same glob matches `test/goldens/<other>/failures/`,
+    //     but only the one concrete path is allowlisted. A second golden suite
+    //     keeps its worktree until it is listed (the classification test makes
+    //     that listing mandatory). `zzsuite` is fictional on purpose.
+    _run('git', ['worktree', 'add', '-q', wt('goldhome'), '-b', 'goldhome'], repo);
+    _run('git', ['merge', '-q', '--no-ff', '-m', 'merge goldhome', 'goldhome'],
+        repo);
+    Directory('${wt("goldhome")}/test/goldens/zzsuite/failures')
+        .createSync(recursive: true);
+    File('${wt("goldhome")}/test/goldens/zzsuite/failures/x.png')
+        .writeAsStringSync('another suite, not allowlisted\n');
+
     // Verify the fixture is actually the shape the tests assume, rather than
     // trusting six setup commands to have all succeeded.
     for (final n in ['done-clean', 'done-dirty', 'wip']) {
@@ -163,6 +192,20 @@ void main() {
     if (!m.contains('done-clean') || !m.contains('done-dirty')) {
       throw StateError('SETUP FAILED: expected done-clean and done-dirty to be '
           'merged; got: $m');
+    }
+    // The golden scenarios only mean something if git emits the EXACT line the
+    // allowlist entry is compared against. Read the tool's own enumeration
+    // (`--ignored=matching`, retire_worktree.dart) rather than assuming it: a
+    // fixture whose ignored dir never reaches the matcher passes vacuously.
+    for (final suite in const ['wardroom', 'zzsuite']) {
+      final slug = suite == 'wardroom' ? 'goldwardroom' : 'goldhome';
+      final st = _run(
+          'git', ['status', '--porcelain', '--ignored=matching'], wt(slug));
+      final line = '!! test/goldens/$suite/failures/';
+      if (!(st.stdout as String).split('\n').map((e) => e.trim()).contains(line)) {
+        throw StateError('SETUP FAILED: $slug does not report "$line" under '
+            '--ignored=matching; got: ${st.stdout}');
+      }
     }
   });
 
@@ -224,6 +267,21 @@ void main() {
     expect(retire([]).stdout as String, contains('RETIRE  envonly'));
   });
 
+  test('golden comparator output of the wardroom suite is regenerable; another '
+      "suite's is not", () {
+    final out = retire([]).stdout as String;
+    expect(out, contains('RETIRE  goldwardroom'),
+        reason: 'test/goldens/wardroom/failures/ is written by every full local '
+            'run and must not hold a merged worktree');
+    // Anchored on the whole reason: a bare `KEEP    goldhome` would also match
+    // a KEEP for any other cause (unmerged, dirty, locked).
+    expect(
+        out,
+        matches(RegExp(
+            r'KEEP    goldhome  \[1 non-regenerable ignored file\(s\)')),
+        reason: 'only the ONE concrete path is allowlisted, not the glob');
+  });
+
   test('a slug matching nothing FAILS instead of silently sweeping orphans',
       () {
     // Round-1 F4: `--execute <unmatched-slug>` previously deleted an orphan the
@@ -252,6 +310,9 @@ void main() {
         reason: 'clean+merged should be retired');
     expect(Directory(wt('envonly')).existsSync(), isFalse,
         reason: 'only-regenerable-ignored should be retired');
+    expect(Directory(wt('goldwardroom')).existsSync(), isFalse,
+        reason: 'comparator output under test/goldens/wardroom/failures/ is '
+            'regenerable and must not keep a merged worktree');
 
     expect(Directory(wt('done-dirty')).existsSync(), isTrue,
         reason: 'THE KILLER CASE: merged but dirty must survive --execute');
@@ -267,6 +328,8 @@ void main() {
             'regenerable');
     expect(Directory(wt('lockedwt')).existsSync(), isTrue,
         reason: 'a locked worktree is an explicit do-not-touch');
+    expect(Directory(wt('goldhome')).existsSync(), isTrue,
+        reason: 'another golden suite is NOT inherited from the wardroom entry');
 
     // Surviving work is byte-intact, not merely present.
     expect(File('${wt('done-dirty')}/uncommitted.txt').readAsStringSync(),
@@ -275,6 +338,9 @@ void main() {
         'irreplaceable\n');
     expect(File('${wt('envrc')}/.envs/prod.key').readAsStringSync(),
         'irreplaceable\n');
+    expect(File('${wt('goldhome')}/test/goldens/zzsuite/failures/x.png')
+            .readAsStringSync(),
+        'another suite, not allowlisted\n');
   });
 
   // ── Branch deletion after retirement (OI-138) ──────────────────────────────
