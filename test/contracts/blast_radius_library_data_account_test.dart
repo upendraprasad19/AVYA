@@ -32,6 +32,8 @@ const _uploadToolGlob = 'scripts/upload_exercise_media.js';
 const _mediaTableGlob = 'scripts/data/library_media_v16.json';
 // Batch C2a (OI-460): the removals file decides which library rows leave every install and the cloud.
 const _removalsGlob = 'scripts/data/library_batch_c2_removals.json';
+// Batch C2c (OI-474): the E230 retag record decides what the importer writes into that row and what the migration's rollback restores.
+const _retagGlob = 'scripts/data/library_e230_retag.json';
 const _assetsGlob = 'assets/**';
 const _scriptsGlob = 'scripts/**';
 
@@ -123,6 +125,34 @@ void main() {
     test('mirror: its generator and sibling data file keep the scripts/** tier', () {
       expect(tier('scripts/library_batch_c2_removals_gen.js'), 'feature');
       expect(tier('scripts/data/library_batch_c2_other.json'), 'feature');
+    });
+  });
+
+  group('1d. the C2c E230 retag record', () {
+    test('it is account, claimed by its own rule above scripts/**, and the file exists', () {
+      expect(File(_retagGlob).existsSync(), isTrue, reason: 'positive control');
+      expect(tier(_retagGlob), 'account');
+      expect(ruleFor(_retagGlob)?.glob, _retagGlob);
+      int index(String glob) => reg.rules.indexWhere((r) => r.glob == glob);
+      expect(index(_retagGlob), lessThan(index(_scriptsGlob)));
+    });
+
+    test("the commit-time review gate's own engine reads the record as account too", () {
+      final rules = reviewGate.parseRules(yaml);
+      String gateTier(String p) {
+        for (final r in rules) {
+          if (reviewGate.globToRegExp(r.glob).hasMatch(p)) return r.tier;
+        }
+        return 'feature';
+      }
+
+      expect(gateTier(_retagGlob), 'account');
+      expect(gateTier('scripts/data/library_e230_retag_other.json'), 'feature', reason: 'mirror: a look-alike stays feature');
+    });
+
+    test('mirror: the importer that applies it and a sibling data file keep the scripts/** tier', () {
+      expect(tier('scripts/add_library_batch_c_v15.js'), 'feature');
+      expect(tier('scripts/data/library_e230_retag_other.json'), 'feature');
     });
   });
 

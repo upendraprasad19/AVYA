@@ -533,6 +533,9 @@ paths:
   # Batch C2a (2026-11-04, OI-460): the removals file decides which library rows leave every install and the cloud
   # (the seed prune set and the migration read it), so it sits at account above scripts/**.
   - { glob: "scripts/data/library_batch_c2_removals.json", tier: account }
+  # Batch C2c (2026-11-06, OI-474): the E230 retag record decides what the importer writes into that library row
+  # (equipment, tier, logging, cues) and what the seed migration's rollback restores, so it sits at account above scripts/**.
+  - { glob: "scripts/data/library_e230_retag.json", tier: account }
   - { glob: "docs/**", tier: feature }
   - { glob: "scripts/**", tier: feature }
   - { glob: "test/**", tier: feature }

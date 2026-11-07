@@ -25,6 +25,7 @@ const _srcRel = 'scripts/data/library_batch_c_source.json';
 const _injRel = 'scripts/data/library_injury_additions_v15.json';
 const _mediaRel = 'scripts/data/library_media_v16.json';
 const _mapRel = 'scripts/data/library_batch_c_media_map.json';
+const _e230Rel = 'scripts/data/library_e230_retag.json';
 const _mediaKeys = ['media_slug', 'media_version', 'media_source'];
 
 Json _readJson(String path) => jsonDecode(File(path).readAsStringSync()) as Json;
@@ -38,7 +39,7 @@ class _Tree {
     Directory('${dir.path}/scripts/data').createSync(recursive: true);
     Directory('${dir.path}/assets/data').createSync(recursive: true);
     File(script).writeAsStringSync(File(_importer).readAsStringSync());
-    for (final e in {src: _srcRel, inj: _injRel, media: _mediaRel, lib: _libRel}.entries) {
+    for (final e in {src: _srcRel, inj: _injRel, media: _mediaRel, lib: _libRel, retag: _e230Rel}.entries) {
       File(e.key).writeAsStringSync(File(e.value).readAsStringSync());
     }
   }
@@ -49,6 +50,7 @@ class _Tree {
   String get src => '${dir.path}/scripts/data/library_batch_c_source.json';
   String get inj => '${dir.path}/scripts/data/library_injury_additions_v15.json';
   String get media => '${dir.path}/scripts/data/library_media_v16.json';
+  String get retag => '${dir.path}/scripts/data/library_e230_retag.json';
 
   List<String> get base => ['--library', lib, '--source', src, '--table', inj];
 
@@ -362,6 +364,119 @@ void main() {
       expect(_hasMediaKey(lib['G0103']!), isTrue, reason: 'a row on another slug keeps its keys (the stage ran)');
       expect(lib.values.where(_hasMediaKey).length, tableRows.length - 2);
       expect(tableViolations(t.readMedia(), map, t.readLib()), isEmpty);
+    });
+  });
+
+  // Batch C2c (OI-474): the retag stage. The tree copies the real record, so every run above also exercises the
+  // equal-after no-op on the shipped library; here the library is put back to the record's `before` first.
+  group('the retag stage (Batch C2c, E230)', () {
+    // The removals file joins the tree: without it a row rebuilt from the source loses the name_aliases that file adds, so a
+    // run could never reproduce the shipped library. With it, a run on the library at `before` IS the real pipeline.
+    setUp(() => File('${t.dir.path}/scripts/data/library_batch_c2_removals.json')
+        .writeAsStringSync(File('scripts/data/library_batch_c2_removals.json').readAsStringSync()));
+
+    Json record() => _readJson(t.retag);
+    Json rec(String k) => (record()[k] as Map).cast<String, dynamic>();
+
+    /// The tree's library with E230's nine keys set back to the record's `before` (Dart round trip; the importer's own
+    /// round-trip guard proves this encoding reproduces the file's bytes, so a drift fails loudly in every case below).
+    String libAtBefore() {
+      final lib = t.readLib();
+      final i = lib.indexWhere((r) => r['id'] == 'E230');
+      lib[i] = {...lib[i], ...rec('before')};
+      return const JsonEncoder.withIndent('  ').convert(lib);
+    }
+
+    String encodeWith(void Function(Json e230) edit) {
+      final lib = t.readLib();
+      edit(lib.singleWhere((r) => r['id'] == 'E230'));
+      return const JsonEncoder.withIndent('  ').convert(lib);
+    }
+
+    test('(a) a library at before is retagged: E230 takes after in place, every other row is untouched, a rerun and --check agree', () async {
+      final beforeText = libAtBefore();
+      final beforeRows = _byId((jsonDecode(beforeText) as List).cast<Json>());
+      t.writeLibText(beforeText);
+      final r = await t.importer();
+      expect(r.exitCode, 0, reason: _out(r));
+      final rows = t.readLib();
+      final byId = _byId(rows);
+      final after = rec('after');
+      for (final k in after.keys) {
+        expect(jsonEncode(byId['E230']![k]), jsonEncode(after[k]), reason: 'E230.$k');
+      }
+      expect(byId['E230']!.keys.toList(), beforeRows['E230']!.keys.toList(), reason: 'key positions are kept (a delete-then-set would move the nine keys last)');
+      for (final e in beforeRows.entries.where((e) => e.key != 'E230')) {
+        expect(jsonEncode(byId[e.key]), jsonEncode(e.value), reason: '${e.key} must be untouched');
+      }
+      expect(rows.length, beforeRows.length);
+      expect(t.readLibText(), File(_libRel).readAsStringSync(), reason: 'the retagged library is the shipped library, byte for byte');
+      final first = t.readLibText();
+      final again = await t.importer();
+      expect(again.exitCode, 0, reason: _out(again));
+      expect(t.readLibText(), first, reason: 'a second run is byte-identical');
+      final ok = await t.importer(extra: ['--check']);
+      expect(ok.exitCode, 0, reason: _out(ok));
+    });
+
+    test('(b) --check on the library at before fails: a fresh import would retag E230', () async {
+      t.writeLibText(libAtBefore());
+      final r = await t.importer(extra: ['--check']);
+      expect(r.exitCode, isNot(0), reason: _out(r));
+    });
+
+    test('(c) a foreign E230 value (or one key already at after) is refused, naming E230 and the key, and nothing is written', () async {
+      final foreign = encodeWith((e) => e['logging_type'] = 'timed');
+      t.writeLibText(foreign);
+      final r = await t.importer();
+      expect(r.exitCode, isNot(0), reason: _out(r));
+      expect(_err(r), allOf(contains('E230'), contains('logging_type')));
+      expect(t.readLibText(), foreign, reason: 'a refused run must not write');
+
+      // MIRROR: a half-applied row (one key at after, the rest at before) is neither state.
+      final half = encodeWith((e) {
+        for (final k in rec('before').keys) {
+          e[k] = rec('before')[k];
+        }
+        e['pro_tip'] = rec('after')['pro_tip'];
+      });
+      t.writeLibText(half);
+      final h = await t.importer();
+      expect(h.exitCode, isNot(0), reason: _out(h));
+      expect(_err(h), contains('E230'));
+      // The message names the key that moved, on the after side, and not the other eight on the before side.
+      expect(_err(h), contains('key(s) at after: pro_tip'));
+      expect(_err(h), isNot(contains('key(s) at after: equipment_needed')));
+      expect(t.readLibText(), half);
+    });
+
+    test('(d) the record absent is a printed no-op: exit 0, the library at before stays at before', () async {
+      final beforeText = libAtBefore();
+      File(t.retag).deleteSync();
+      t.writeLibText(beforeText);
+      final r = await t.importer();
+      expect(r.exitCode, 0, reason: _out(r));
+      expect(_out(r), contains('retag stage skipped'));
+      expect(t.readLibText(), beforeText);
+    });
+
+    test('(e) a record naming a row that is not in the library, or whose before and after name different keys, is refused', () async {
+      final bad = record()..['id'] = 'E999';
+      File(t.retag).writeAsStringSync(jsonEncode(bad));
+      final beforeText = libAtBefore();
+      t.writeLibText(beforeText);
+      final r = await t.importer();
+      expect(r.exitCode, isNot(0), reason: _out(r));
+      expect(_err(r), contains('E999'));
+
+      final typo = _readJson(_e230Rel);
+      final afterMap = (typo['after'] as Map).cast<String, dynamic>();
+      typo['after'] = {for (final e in afterMap.entries) e.key == 'pro_tip' ? 'pro_tpi' : e.key: e.value};
+      File(t.retag).writeAsStringSync(jsonEncode(typo));
+      final t2 = await t.importer();
+      expect(t2.exitCode, isNot(0), reason: _out(t2));
+      expect(_err(t2), contains('same keys'));
+      expect(t.readLibText(), beforeText, reason: 'a refused run must not write');
     });
   });
 }

@@ -6,24 +6,24 @@
 ## Aggregate (606 personas)
 | Dimension | Mean |
 |---|---|
-| coverage | 97.5 |
-| balance | 64.5 |
-| volume | 66.9 |
-| progression | 73.3 |
+| coverage | 97.4 |
+| balance | 64.3 |
+| volume | 67.3 |
+| progression | 75.7 |
 | personalization | 100.0 |
 | safety | 100.0 |
-| realism | 91.5 |
-| overall | 82.3 |
+| realism | 92.6 |
+| overall | 82.9 |
 
 - **Unsafe plans (contraindicated exercise present): 0** (HARD invariant — must be 0)
 - **Equipment-violating plans: 0** (HARD invariant — must be 0)
-- Plans with ≥1 fallback pick: 303 / total fallback picks: 2009
-- Fallback picks by tier (baseline — shallow bodyweight pool; no-regression tracked): `{bodyweight: 1507, home_dumbbells: 433, basic_gym: 16, full_gym: 53}`
+- Plans with ≥1 fallback pick: 289 / total fallback picks: 1765
+- Fallback picks by tier (baseline — shallow bodyweight pool; no-regression tracked): `{bodyweight: 1386, home_dumbbells: 310, basic_gym: 16, full_gym: 53}`
 
 ## Curated plans (human face-validity)
 ---
 ### build_muscle | full_gym | 4d | intermediate | p1 | inj:none
-`coverage 90.0 · balance 51.7 · volume 74.8 · progression 0.0 · personalization 100.0 · safety 100.0 · realism 100.0 · **overall 69.4**`
+`coverage 90.0 · balance 51.7 · volume 73.2 · progression 0.0 · personalization 100.0 · safety 100.0 · realism 100.0 · **overall 69.2**`
 
 **Push** (Chest, shoulders, triceps)
 | Slot | Exercise | Source | Muscles | Equip |
@@ -49,7 +49,7 @@
 | Biceps/elbow_flexion | Dumbbell Alternate Bicep Curl | attempt2DropSubFocus | Biceps | dumbbells |
 | Mid Back/horizontal_pull | Barbell Bent Over Row | attempt1Exact | Lats, Rhomboids | barbell |
 | Rear Delts/shoulder_isolation | Dumbbell Rear Lateral Raise | attempt2DropSubFocus | Rear Delts | dumbbells |
-| Biceps/elbow_flexion | Dumbbell Curl | attempt2DropSubFocus | Biceps | dumbbells |
+| Biceps/elbow_flexion | Barbell Curl | attempt2DropSubFocus | Biceps | barbell |
 
 **Legs** (Quads, hams, glutes)
 | Slot | Exercise | Source | Muscles | Equip |
@@ -70,16 +70,16 @@
 | Shoulders/vertical_push | Barbell Overhead Press | attempt1Exact | Front Deltoid, Side Deltoid | barbell |
 | Lats/horizontal_pull | Chest Supported Row | attempt1Exact | Rhomboids, Lats | bench, dumbbells |
 | Lateral Delts/shoulder_isolation | Machine Lateral Raise | attempt2DropSubFocus | Lateral Delts | machines |
-| Biceps/elbow_flexion | Barbell Curl | attempt1Exact | Biceps | barbell |
+| Biceps/elbow_flexion | Dumbbell Curl | attempt1Exact | Biceps | dumbbells |
 | Triceps/elbow_extension | Self-Resisted Triceps Extension | attempt1Exact | Triceps | bodyweight |
 | Lats/horizontal_pull | Inverted Row | attempt1Exact | Rhomboids, Lats | suspension trainer |
-| Biceps/elbow_flexion | Hammer Curl | attempt2DropSubFocus | Biceps (brachialis), Forearms | dumbbells |
+| Biceps/elbow_flexion | Concentration Curl | attempt2DropSubFocus | Biceps | dumbbells |
 | Triceps/elbow_extension | Tricep Pushdown (Cable) | attempt2DropSubFocus | Triceps | cables |
 | Core/core | Cable Crunch | attempt1Exact | Abs | cables |
 
 ---
 ### lose_fat | basic_gym | 4d | beginner | p1 | inj:none
-`coverage 90.0 · balance 60.0 · volume 75.1 · progression 100.0 · personalization 100.0 · safety 100.0 · realism 100.0 · **overall 87.5**`
+`coverage 90.0 · balance 60.0 · volume 75.9 · progression 100.0 · personalization 100.0 · safety 100.0 · realism 100.0 · **overall 87.6**`
 
 **Full Body A** (Push-focused)
 | Slot | Exercise | Source | Muscles | Equip |
@@ -116,14 +116,14 @@
 |---|---|---|---|---|
 | Shoulders/vertical_push | Barbell Overhead Press | attempt1Exact | Front Deltoid, Side Deltoid | barbell |
 | Lats/vertical_pull | Chin Up | attempt1Exact | Biceps, Lats | pull-up bar |
-| Quads/knee_dominant | Reverse Lunge | attempt1Exact | Quads, Glutes | bodyweight |
+| Quads/knee_dominant | Dumbbell Lunge | attempt2DropSubFocus | Quads, Glutes | dumbbells |
 | Core/core | Pallof Press | attempt1Exact | Core (anti-rotation) | cables |
 | Core/core | Crunches | attempt2DropSubFocus | Abs | bodyweight |
 | Glutes/hip_isolation | Glute Bridge | attempt1Exact | Glutes | bodyweight |
 
 ---
 ### strength | full_gym | 4d | advanced | p2 | inj:none
-`coverage 100.0 · balance 55.0 · volume 65.5 · progression 0.0 · personalization 100.0 · safety 100.0 · realism 100.0 · **overall 70.1**`
+`coverage 100.0 · balance 55.0 · volume 65.9 · progression 0.0 · personalization 100.0 · safety 100.0 · realism 100.0 · **overall 70.2**`
 
 **Squat Day** (Squat + accessories)
 | Slot | Exercise | Source | Muscles | Equip |
@@ -159,7 +159,7 @@
 | Mid Back/horizontal_pull | Dumbbell Row | attempt1Exact | Lats, Rhomboids | dumbbells, bench |
 | Rear Delts/shoulder_isolation | Face Pull | attempt1Exact | Rear Deltoid, Rhomboids | cables |
 | Biceps/elbow_flexion | Self-Resisted Bicep Curl | attempt1Exact | Biceps | bodyweight |
-| Glutes/hip_dominant | Hip Thrust | attempt1Exact | Glutes | barbell, bench |
+| Glutes/hip_dominant | Bodyweight Good Morning | attempt1Exact | Hamstrings, Glutes | bodyweight |
 | Lats/vertical_pull | Chin Up | attempt2DropSubFocus | Biceps, Lats | pull-up bar |
 | Biceps/elbow_flexion | Dumbbell Alternate Bicep Curl | attempt2DropSubFocus | Biceps | dumbbells |
 | Core/core | Russian Twist | attempt1Exact | Obliques | bodyweight |
@@ -213,7 +213,7 @@
 
 ---
 ### build_muscle | bodyweight | 4d | intermediate | p1 | inj:none
-`coverage 100.0 · balance 51.7 · volume 77.6 · progression 100.0 · personalization 100.0 · safety 100.0 · realism 69.4 · **overall 83.1**`
+`coverage 100.0 · balance 51.7 · volume 76.7 · progression 100.0 · personalization 100.0 · safety 100.0 · realism 72.2 · **overall 83.4**`
 
 **Push** (Chest, shoulders, triceps)
 | Slot | Exercise | Source | Muscles | Equip |
@@ -222,7 +222,7 @@
 | Upper Chest/horizontal_push | Dand (Hindu Pushup) | attempt3DropTypeAndTarget ⚠ | Chest, Shoulders, Triceps, Core | bodyweight |
 | Lateral Delts/shoulder_isolation | Bodyweight Rear Delt Raise | attempt3DropTypeAndTarget ⚠ | Rear Deltoid | bodyweight |
 | Triceps/elbow_extension | Bench Dips | attempt1Exact | Triceps | elevated surface |
-| Lower Chest/horizontal_push | Deficit Push-Up | attempt3DropTypeAndTarget ⚠ | Chest | elevated surface |
+| Lower Chest/horizontal_push | Hindu Pushup | attempt3DropTypeAndTarget ⚠ | Chest, Front Delts | bodyweight |
 | Triceps/elbow_extension | Self-Resisted Triceps Extension | attempt2DropSubFocus | Triceps | bodyweight |
 | Shoulders/vertical_push | Pike Push Up | attempt1Exact | Front Deltoid, Upper Chest | bodyweight |
 | Front Delts/shoulder_isolation | Prone Y Raise | attempt3DropTypeAndTarget ⚠ | Rear Deltoid | bodyweight |
@@ -231,14 +231,14 @@
 **Pull** (Back, biceps)
 | Slot | Exercise | Source | Muscles | Equip |
 |---|---|---|---|---|
-| Lats/vertical_pull | Prone Lat Pull | attempt3DropTypeAndTarget ⚠ | Lats | bodyweight |
-| Mid Back/horizontal_pull | Towel Row | attempt2DropSubFocus | Lats, Mid Back | towel |
 | Lats/vertical_pull | Sliding Lat Pull | attempt3DropTypeAndTarget ⚠ | Lats | towel |
-| Rear Delts/shoulder_isolation | Towel Front Raise | attempt3DropTypeAndTarget ⚠ | Front Deltoid | towel |
+| Mid Back/horizontal_pull | Towel Row | attempt2DropSubFocus | Lats, Mid Back | towel |
+| Lats/vertical_pull | Doorway Isometric Lat Pull | attempt3DropTypeAndTarget ⚠ | Lats | doorway |
+| Rear Delts/shoulder_isolation | Isometric Lateral Raise | attempt3DropTypeAndTarget ⚠ | Side Deltoid | bodyweight |
 | Biceps/elbow_flexion | Self-Resisted Bicep Curl | attempt1Exact | Biceps | bodyweight |
 | Biceps/elbow_flexion | Doorframe Curl | attempt2DropSubFocus | Biceps | doorway |
 | Mid Back/horizontal_pull | Backpack Bent-Over Row | attempt2DropSubFocus | Lats, Mid Back | bodyweight |
-| Rear Delts/shoulder_isolation | Wall Shoulder Slide | attempt3DropTypeAndTarget ⚠ | Side Deltoid | wall |
+| Rear Delts/shoulder_isolation | Prone Shoulder Extension | attempt3DropTypeAndTarget ⚠ | Rear Deltoid | bodyweight |
 | Biceps/elbow_flexion | Towel Bicep Curl | attempt2DropSubFocus | Biceps | towel |
 
 **Legs** (Quads, hams, glutes)
@@ -250,7 +250,7 @@
 | Glutes/hip_isolation | Glute Bridge | attempt1Exact | Glutes | bodyweight |
 | Calves/knee_dominant | Bodyweight Standing Calf Raise | attempt2DropSubFocus | Calves | bodyweight |
 | Core/core | Russian Twist | attempt1Exact | Obliques | bodyweight |
-| Hamstrings/knee_dominant | Reverse Lunge | attempt3DropTypeAndTarget ⚠ | Quads, Glutes | bodyweight |
+| Hamstrings/knee_dominant | Standing Single Leg Curl | attempt2DropSubFocus | Hamstrings | bodyweight |
 | Hip/hip_isolation | Glute Kickback | attempt1Exact | Glutes | bodyweight |
 | Calves/knee_dominant | Donkey Calf Raise | attempt2DropSubFocus | Calves | bodyweight |
 
@@ -259,7 +259,7 @@
 |---|---|---|---|---|
 | Shoulders/vertical_push | Elevated Pike Push Up | attempt1Exact | Front Deltoid | elevated surface |
 | Lats/horizontal_pull | Table Row | attempt1Exact | Lats | elevated surface |
-| Lateral Delts/shoulder_isolation | Isometric Lateral Raise | attempt3DropTypeAndTarget ⚠ | Side Deltoid | bodyweight |
+| Lateral Delts/shoulder_isolation | Scapula Push Up | attempt3DropTypeAndTarget ⚠ | Serratus | bodyweight |
 | Biceps/elbow_flexion | Towel Hammer Curl | attempt1Exact | Biceps | towel |
 | Triceps/elbow_extension | Wall Triceps Extension | attempt1Exact | Triceps | wall |
 | Lats/horizontal_pull | Doorway Isometric Row | attempt1Exact | Lats | doorway |
@@ -269,7 +269,7 @@
 
 ---
 ### build_muscle | full_gym | 4d | intermediate | p1 | inj:shoulder
-`coverage 90.0 · balance 35.0 · volume 74.0 · progression 100.0 · personalization 100.0 · safety 100.0 · realism 85.3 · **overall 80.7**`
+`coverage 90.0 · balance 35.0 · volume 77.0 · progression 100.0 · personalization 100.0 · safety 100.0 · realism 85.3 · **overall 81.2**`
 
 **Push** (Chest, shoulders, triceps)
 | Slot | Exercise | Source | Muscles | Equip |
@@ -278,7 +278,7 @@
 | Upper Chest/horizontal_push | Chest Squeeze Press | attempt3DropTypeAndTarget ⚠ | Chest (inner), Triceps | dumbbells, bench |
 | Lateral Delts/shoulder_isolation | Face Pull | attempt3DropTypeAndTarget ⚠ | Rear Deltoid, Rhomboids | cables |
 | Triceps/elbow_extension | Cable Rope Pushdown | attempt1Exact | Triceps | cables |
-| Lower Chest/horizontal_push | Sled Push | attempt3DropTypeAndTarget ⚠ | Quads, Glutes, Core | machines |
+| Lower Chest/horizontal_push | Floor Press | attempt3DropTypeAndTarget ⚠ | Chest | dumbbells |
 | Triceps/elbow_extension | Tricep Pushdown (Cable) | attempt2DropSubFocus | Triceps | cables |
 | Shoulders/vertical_push | (safely omitted) | safelyOmitted |  |  |
 | Front Delts/shoulder_isolation | Band Pull Apart | attempt3DropTypeAndTarget ⚠ | Rear Deltoid, Rhomboids, Traps | resistance band |
@@ -325,7 +325,7 @@
 
 ---
 ### build_muscle | full_gym | 4d | advanced | p1 | inj:shoulder+knee
-`coverage 90.0 · balance 35.0 · volume 66.9 · progression 100.0 · personalization 100.0 · safety 100.0 · realism 79.4 · **overall 78.6**`
+`coverage 80.0 · balance 35.0 · volume 67.2 · progression 100.0 · personalization 100.0 · safety 100.0 · realism 79.4 · **overall 76.9**`
 
 **Push** (Chest, shoulders, triceps)
 | Slot | Exercise | Source | Muscles | Equip |
@@ -334,7 +334,7 @@
 | Upper Chest/horizontal_push | Chest Squeeze Press | attempt3DropTypeAndTarget ⚠ | Chest (inner), Triceps | dumbbells, bench |
 | Lateral Delts/shoulder_isolation | Face Pull | attempt3DropTypeAndTarget ⚠ | Rear Deltoid, Rhomboids | cables |
 | Triceps/elbow_extension | Cable Rope Pushdown | attempt1Exact | Triceps | cables |
-| Lower Chest/horizontal_push | Sled Push | attempt3DropTypeAndTarget ⚠ | Quads, Glutes, Core | machines |
+| Lower Chest/horizontal_push | Floor Press | attempt3DropTypeAndTarget ⚠ | Chest | dumbbells |
 | Triceps/elbow_extension | Tricep Pushdown (Cable) | attempt2DropSubFocus | Triceps | cables |
 | Shoulders/vertical_push | (safely omitted) | safelyOmitted |  |  |
 | Front Delts/shoulder_isolation | Band Pull Apart | attempt3DropTypeAndTarget ⚠ | Rear Deltoid, Rhomboids, Traps | resistance band |

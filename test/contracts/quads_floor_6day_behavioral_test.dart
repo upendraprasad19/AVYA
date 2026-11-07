@@ -106,6 +106,43 @@ const _quadsLabel90 = <String, String>{
   'advanced|full_gym|90': 'time_limited',
 };
 
+// Batch C2c (OI-474): E230 Standing Single Leg Curl became a bodyweight row, so in bodyweight and home plans it now
+// fills the Hamstrings / knee_dominant / isolation slot that a lunge variant (crediting Quads and Glutes) filled
+// before. Measured on the merged tree, 6-day build_muscle, week 1: Hamstrings rise 2 to 5 sets in 11 cells (for example 8 to 12 in
+// intermediate|bodyweight|90, floor 12; 7 to 12 in advanced|bodyweight|90, floor 14) and Quads fall by 1 to 3 sets in the cells below. These tables
+// OVERRIDE the OI-454 ones cell by cell (the OI-454 figures above stay as recorded); every other cell is unchanged.
+// A cell here that equals the OI-454 figure is a dead override, pinned by the last test of this file.
+
+/// `_quadsAfter` overrides (the Quads figure with the OI-454 lever ON).
+const _quadsAfterC2c = <String, int>{
+  'beginner|bodyweight|60': 9, 'beginner|home_dumbbells|60': 9,
+  'intermediate|bodyweight|60': 7, 'intermediate|bodyweight|90': 10,
+  'intermediate|home_dumbbells|60': 7, 'intermediate|home_dumbbells|90': 10,
+  'advanced|bodyweight|60': 6, 'advanced|bodyweight|90': 10,
+  'advanced|home_dumbbells|60': 6, 'advanced|home_dumbbells|90': 10,
+};
+
+/// `_quadsBefore` overrides (the Quads figure with the lever switched OFF: the old Legs B, the library as it is now).
+const _quadsOffC2c = <String, int>{
+  'intermediate|bodyweight|60': 3, 'intermediate|bodyweight|90': 3,
+  'intermediate|home_dumbbells|60': 3, 'intermediate|home_dumbbells|90': 3,
+  'advanced|bodyweight|60': 3, 'advanced|bodyweight|90': 3,
+  'advanced|home_dumbbells|60': 3, 'advanced|home_dumbbells|90': 3,
+};
+
+/// `_quadsLabel90` overrides. Two cells that reached their floor now stop short on the per-exercise cap; two that
+/// stopped short for another reason now stop on the cap.
+const _quadsLabel90C2c = <String, String>{
+  'intermediate|bodyweight|90': 'cap_limited',
+  'intermediate|home_dumbbells|90': 'cap_limited',
+  'advanced|bodyweight|90': 'cap_limited',
+  'advanced|home_dumbbells|90': 'cap_limited',
+};
+
+int _quadsAfterFor(String key) => _quadsAfterC2c[key] ?? _quadsAfter[key]!;
+int _quadsOffFor(String key) => _quadsOffC2c[key] ?? _quadsBefore[key]!;
+String? _label90For(String key) => _quadsLabel90C2c[key] ?? _quadsLabel90[key];
+
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   const testUser = 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee';
@@ -404,7 +441,7 @@ void main() {
             final (floor, top, cap) = _band[level]!;
             // Quads: at or above the measured figure, and above the old one.
             final q = fullCredit(plan, 0, 'quad');
-            if (q < _quadsAfter[key]!) bad.add('$key: Quads $q < measured ${_quadsAfter[key]}');
+            if (q < _quadsAfterFor(key)) bad.add('$key: Quads $q < measured ${_quadsAfterFor(key)}');
             if (q <= _quadsBefore[key]!) bad.add('$key: Quads $q is not above the old ${_quadsBefore[key]}');
             // Glutes (credited) keep their floor; Hamstrings never fall below the pre-change figure.
             final g = glutesWithoutQuadFirst(plan, 0);
@@ -413,18 +450,18 @@ void main() {
             if (h < _hamstringsBefore[key]!) bad.add('$key: Hamstrings $h < before ${_hamstringsBefore[key]}');
             // The allocator's own label for a Quads shortfall at 90 minutes is the documented one.
             if (minutes == 90) {
-              expect(stats.belowFloor['Quads'], _quadsLabel90[key], reason: '$key Quads label');
+              expect(stats.belowFloor['Quads'], _label90For(key), reason: '$key Quads label');
             }
             // The documented CAUSE of `cap_limited` there: both leg days hold a budgeted quad compound at the
             // per-exercise maximum (the label alone also covers a session cap or a weekly top).
-            if (key == 'intermediate|basic_gym|90') {
+            if (key == 'intermediate|basic_gym|90' || _quadsLabel90C2c.containsKey(key)) {
               final quadCompoundSets = [
                 for (final d in plan.weekPlans[0].workoutDays.where((d) => d.name.startsWith('Legs')))
                   for (final e in d.exercises.where(budgeted).where(kneeQuadFirst)) e.sets,
               ];
               expect(quadCompoundSets, isNotEmpty);
               expect(quadCompoundSets.every((n) => n == SessionBudget.maxSetsPerExercise), isTrue,
-                  reason: 'quad compound sets $quadCompoundSets, maximum ${SessionBudget.maxSetsPerExercise}');
+                  reason: '$key: quad compound sets $quadCompoundSets, maximum ${SessionBudget.maxSetsPerExercise}');
             }
             // Tops, caps and minutes in all four weeks (credited sense, the rule of this split).
             auditPlan(plan, level, 1, minutes, key, bad);
@@ -572,7 +609,7 @@ void main() {
               final key = '$level|$tier|$minutes';
               final plan = gen('build_muscle', tier, 6, level, minutes);
               final q = fullCredit(plan, 0, 'quad');
-              if (q != _quadsBefore[key]) bad.add('$key: Quads $q != old ${_quadsBefore[key]}');
+              if (q != _quadsOffFor(key)) bad.add('$key: Quads $q != old ${_quadsOffFor(key)}');
             }
           }
         }
@@ -585,5 +622,21 @@ void main() {
         expect(legsB.exercises.where(kneeQuadFirst), isEmpty, reason: 'the old Legs B holds no quad exercise');
       });
     });
+  });
+
+  test('the C2c overrides are live: each names a real cell and differs from the OI-454 figure it replaces', () {
+    for (final e in _quadsAfterC2c.entries) {
+      expect(_quadsAfter.containsKey(e.key), isTrue, reason: 'after: ${e.key} is not a cell');
+      expect(e.value, isNot(_quadsAfter[e.key]), reason: 'after: ${e.key} equals the OI-454 figure (a dead override)');
+    }
+    for (final e in _quadsOffC2c.entries) {
+      expect(_quadsBefore.containsKey(e.key), isTrue, reason: 'off: ${e.key} is not a cell');
+      expect(e.value, isNot(_quadsBefore[e.key]), reason: 'off: ${e.key} equals the OI-454 figure (a dead override)');
+    }
+    for (final e in _quadsLabel90C2c.entries) {
+      expect(e.key.endsWith('|90') && _quadsAfter.containsKey(e.key), isTrue,
+          reason: 'label: ${e.key} is not a real 90-minute cell');
+      expect(e.value, isNot(_quadsLabel90[e.key]), reason: 'label: ${e.key} equals the OI-454 label (a dead override)');
+    }
   });
 }

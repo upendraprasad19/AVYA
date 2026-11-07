@@ -11450,7 +11450,13 @@ concepts:
     behavioral_test_path_v18: test/contracts/library_seed_v18_upgrade_behavioral_test.dart  # Batch C2a 2026-11-04 (OI-460): real SeedService.seedIfNeeded on a v17 box; the 52 removed ids are pruned (kRetiredLibraryIdsNoTwin), custom and community rows survive
     behavioral_test_path_depth: test/contracts/library_depth_rule_test.dart  # Batch C2a: the depth rule on the base fixture and the shipped library, both pattern semantics, mutated
     behavioral_test_path_v19: test/contracts/library_seed_v19_upgrade_behavioral_test.dart  # Batch C2b 2026-11-05 (OI-462): real SeedService.seedIfNeeded on a v18 box; the six twin_pending rows are pruned, the four twins arrive, retired names resolve by exact name or alias, a fresh install gets the four and none of the six
+    behavioral_test_path_v20: test/contracts/library_seed_v20_upgrade_behavioral_test.dart  # Batch C2c 2026-11-06 (OI-474): real SeedService.seedIfNeeded on a v19 box holding the cable E230; it ends at v20 with the bodyweight E230 and its picture keys, every other row unchanged, a fresh install gets the new row, a v20 box is left alone
     description: |
+      Library v20 (Batch C2c, 2026-11-06, OI-474): 862 rows, one changed. E230 Standing Single Leg Curl is a bodyweight row
+      (equipment_needed [bodyweight], tier all four, logging_type bodyweight_reps, gym_availability home, new cues) and carries
+      animation 0795 (media_slug 0795-standing-single-leg-curl). The edit is scripts/data/library_e230_retag.json applied by a stage of
+      scripts/add_library_batch_c_v15.js. Cloud: the C2c seed migration re-writes all 862 rows; only E230 equipment_needed,
+      logging_type, coaching_cues and common_mistakes differ from migration 171; the inline rollback restores those four.
       Library v19 (Batch C2b, 2026-11-05, OI-462): 862 rows. The four twins G1368 G1489 G2567 G0474 ship and the six rows
       C2a kept as twin_pending (E084 E111 E162 E169 E179 E211) left (removals file `removed_in: c2b`, kRetiredLibraryIdsNoTwin);
       the depth rule is judged with the twin rows (test/fixtures/library_c2b_twin_rows.json). E043 standard_swap points at G1489.
@@ -11498,12 +11504,18 @@ concepts:
         method: scripts/repair_exercise_library_v12.js (repairText, mergeDuplicates, relabel, dropPlates)
         notes: v12 (Batch A) — 136 un-shifted text rows, cues one per item, 7 duplicates retired (name_aliases + merged_ids on the kept row), E172/E163 labels, E207/E179 plate keys dropped
       - file: lib/core/services/seed_service.dart
-        line_range: 227-276
+        line_range: 249-290
         method: _exerciseLibraryVersion (11→12) + retiredLibraryIds + pruneRetired after putAll in _seedExercises
         notes: putAll never deletes, so the prune is what removes a retired row from an existing install
       - file: supabase/migrations/162_reseed_exercise_library.sql
         method: re-seed (285 tuples incl. name_aliases) + 7 is_active=false UPDATEs copying the kept cues
         notes: applied live 2026-10-22 (backups/applied_migrations.json entry 162)
+      - file: scripts/data/library_e230_retag.json
+        method: before/after record for nine E230 keys (equipment_needed, equipment_tier, gym_availability, logging_type, standard_swap, coaching_cues, common_mistakes, warmup_protocol, pro_tip) plus frozen_sha256_before and gif 0795
+        notes: Batch C2c (OI-474) — the ONLY source of the E230 edit; the generator hard-fails when its after differs from the library row and builds the migration rollback from its before; behavioural proof test/contracts/library_e230_retag_test.dart (shipped row equals after; MIRROR hash of before against the frozen row)
+      - file: scripts/add_library_batch_c_v15.js
+        method: retagRow (readRetag, retag stage) — all nine keys at before becomes {...row, ...after}; all at after is a no-op; anything else throws; an absent record is a printed skip
+        notes: Batch C2c — re-seeded by SeedService v20; behavioural proof test/scripts/library_media_importer_test.dart retag group (cases a-e, a builds the shipped library byte for byte)
     readers:
       - file: lib/shared/repositories/exercise_repository.dart
         method: queryV4 injury filter (:335-345) + primary_muscles read (:270-282)
@@ -11516,6 +11528,28 @@ concepts:
       - file: supabase/functions/_shared/tools/exercise/getFormCues.ts
         method: reads primary_muscles/secondary_muscles/difficulty_level (:60-61)
         semantic: AI-coach form cues; was NULL for the 9 stubs pre-batch; exact-name match with no is_active filter (why 162 copies the kept cues onto the retired rows)
+      - file: lib/features/train/providers/train_provider.dart
+        line_range: 99-107
+        method: last-weight suggestion reads the LOGGED row's logging_type (weight_reps or weighted_bodyweight) before it suggests a load
+        semantic: C2c — an E230 history row logged as weight_reps (cable era) still reads as a loaded row; new logs are bodyweight_reps, so no load is suggested for them
+      - file: lib/shared/repositories/plan_engine/progression_resolver.dart
+        line_range: 239-243
+        method: _topSet skips a log whose logging_type is a bodyweight type; reached from periodization_engine.dart:108-112, whose weightCue reads "N kg (from last phase + progression)"
+        semantic: C2c — a cable-era E230 log can still seed a "N kg" cue on a phase carried over; accepted for testing accounts (diagnose 2026-11-06-library-batch-c2c-e230-d8ac69, accepted (c))
+      - file: lib/features/train/screens/active_workout/exercise_last_try_lines.dart
+        method: LAST / TRY lines built from the logged rows
+        semantic: C2c — the LAST line for E230 shows the old load until a bodyweight log replaces it
+      - file: lib/core/services/auth_session_bootstrapper.dart
+        method: a4c7d1 boot heal (healedExlog + the exlog_ loop) — retypes a logged exlog whose logging_type differs from the exerciseBox row of the same name, clearing the fields fieldsClearedFor lists for the type
+        semantic: C2c — the heal reaches only rows still in memory as Map<String, dynamic> (a restore in this sign-in); for such a row it flips the stored logging_type to bodyweight_reps and KEEPS weight_kg (fieldsClearedFor's default branch clears only duration and distance). A row read from disk is NOT retyped: the .cast throws (OI-394), the outer catch records exlog_format_normalization_heal_failed non-fatal telemetry and the loop stops for later rows, on every sign-in that meets one
+      - file: lib/core/services/logging_type_repair_migrator.dart
+        line_range: 315-322
+        method: case bodyweight_reps clears a bogus weight_kg from a logged row; one-shot per device, gated by migrationBox['logging_type_repair_v3_done'] (_flagKey at line 85; the header comment still says v1)
+        semantic: C2c — it does NOT re-run on a device that already set the flag, so it does not repair E230 history logged under the cable row; on a device with the flag unset it zeroes weight_kg on such a row
+      - file: lib/shared/repositories/plan_engine/core_list_selector.dart
+        line_range: 196
+        method: reads equipment_tier of the row
+        semantic: C2c — the tier rule passes a row when its equipment_tier list holds the user's tier; E230 now lists all four, so it passes at every tier
     contract_test_path: test/contracts/exercise_library_schema_contract_test.dart
 
   - concept: exercise_injury_tags
@@ -12044,7 +12078,7 @@ concepts:
       enforced at merge.
     writers:
       - file: docs/blast_radius.yaml
-        line_range: 39-539
+        line_range: 39-634
         method: paths list (declaration order, first match wins)
         notes: |
           THE canonical writer. Exact-path rules must be declared ABOVE the
@@ -13051,7 +13085,7 @@ concepts:
         line_range: 1-2
         method: demo_slug + demo_pair fields
       - file: lib/core/services/seed_service.dart
-        line_range: 145-145
+        line_range: 150-150
         method: _exerciseLibraryVersion
     readers:
       - file: lib/shared/widgets/exercise_plate/plate_resolver.dart
@@ -13092,10 +13126,10 @@ concepts:
       constant is bumped again. WARNING: the bucket is private; a row's keys are not a public URL.
     writers:
       - file: scripts/add_library_batch_c_v15.js
-        line_range: 154-175
+        line_range: 172-193
         method: applyMedia
       - file: lib/core/services/seed_service.dart
-        line_range: 145-145
+        line_range: 150-150
         method: _exerciseLibraryVersion
     readers:
       - file: lib/shared/widgets/exercise_plate/exercise_media_resolver.dart
@@ -13181,7 +13215,7 @@ concepts:
         line_range: 1-2
         method: coaching_cues + common_mistakes + breathing_cue + warmup_protocol fields
       - file: lib/core/services/seed_service.dart
-        line_range: 145-145
+        line_range: 150-150
         method: _exerciseLibraryVersion
     readers:
       - file: lib/shared/widgets/exercise_plate/exercise_cues.dart

@@ -142,7 +142,12 @@ class SeedService {
   //   E162 and E211 become aliases on their twin. History that names a retired id is not remapped.
   //   Without this bump an existing install keeps the six rows and never gets the twins
   //   (library_seed_v19_upgrade_behavioral_test.dart).
-  static const int _exerciseLibraryVersion = 19;
+  //   v20 (Batch C2c, OI-474, docs/plans/2026-11-06-library-batch-c2c-e230.md): E230 Standing Single
+  //   Leg Curl becomes a bodyweight row (equipment, tier, logging_type, cues; scripts/data/
+  //   library_e230_retag.json) and gains its animation 0795 (the three media keys). putAll rewrites
+  //   the row by id. Without this bump an existing install keeps the cable row and never gets the
+  //   picture (library_seed_v20_upgrade_behavioral_test.dart).
+  static const int _exerciseLibraryVersion = 20;
   static const String _exerciseVersionKey = 'exercise_library_version';
 
   /// Bump this integer whenever the bundled food_database.json changes
