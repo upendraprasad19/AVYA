@@ -32,6 +32,9 @@ _PCM_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || true)"
 if [ -n "$_PCM_ROOT" ] && [ -r "$_PCM_ROOT/scripts/_dart_bin.sh" ] && sh -n "$_PCM_ROOT/scripts/_dart_bin.sh" 2>/dev/null; then
   . "$_PCM_ROOT/scripts/_dart_bin.sh" || true
   DART_BIN="$(resolve_dart_bin)" 2>/dev/null || DART_BIN="dart"
+  # OI-482: retry the dart-run native-assets race at every "$DART_BIN" run below; the guard makes this a
+  # no-op on a tree whose helper predates it. Kill switch: AVYA_DART_RUN_RETRY=0 (see scripts/_dart_bin.sh).
+  type use_dart_race_retry >/dev/null 2>&1 && use_dart_race_retry || true
 else
   DART_BIN="dart"
 fi

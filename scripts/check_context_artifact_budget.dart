@@ -20,8 +20,8 @@
 // refused because it would have blessed one.
 //
 // WHERE THE WARN TIER IS ACTUALLY VISIBLE, because it is not where you would
-// assume. `scripts/pre-commit.sh:368` runs every gate as
-// `"$DART_BIN" run "$GATE" >/dev/null 2>&1`, so locally a PASS-with-WARN prints
+// assume. `scripts/pre-commit.sh` runs every gate with its
+// output kept in a temp file and prints it only for a FAILING gate (or a retry note), so locally a PASS-with-WARN prints
 // NOTHING and the soft band gives no local notice at all. CI does NOT suppress
 // (`.github/workflows/test.yml:264` is a bare `dart run "$GATE"`), so it does
 // surface there — but per CLAUDE.md §0 that job runs only on push to

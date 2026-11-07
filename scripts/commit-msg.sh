@@ -29,6 +29,9 @@ cd "$REPO_ROOT"
 if [ -r "$REPO_ROOT/scripts/_dart_bin.sh" ] && sh -n "$REPO_ROOT/scripts/_dart_bin.sh" 2>/dev/null; then
   . "$REPO_ROOT/scripts/_dart_bin.sh" || true
   DART_BIN="$(resolve_dart_bin)" 2>/dev/null || DART_BIN="dart"
+  # OI-482: retry the dart-run native-assets race at every "$DART_BIN" run below; the guard makes this a
+  # no-op on a tree whose helper predates it. Kill switch: AVYA_DART_RUN_RETRY=0 (see scripts/_dart_bin.sh).
+  type use_dart_race_retry >/dev/null 2>&1 && use_dart_race_retry || true
 else
   # Guarded, and the guard is load-bearing: this file runs under `set -e`, so an
   # unguarded `.` of a missing file ABORTS the hook outright. `_dart_bin.sh`.s

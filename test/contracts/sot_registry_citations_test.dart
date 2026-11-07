@@ -253,6 +253,59 @@ concepts:
 
     const goodRegistry = 'concepts:\n\n  - concept: real_concept\n    domain: x\n';
 
+    /// One report per SPAWN: the helper retries a dart child that lost the native-assets race
+    /// (OI-468) and reports every attempt, attempt n>1 under `<label> [attempt n]`. This gate
+    /// spawn is exactly such a child (exe `dart`), so a healed run would carry two reports
+    /// with the same prefix. Each such retry replaces the attempt before it, with the suffix
+    /// removed, so the assertions below read the FINAL attempt the way a single-attempt run
+    /// reads (the label of every report stays byte-identical).
+    ///
+    /// The helper appends the suffix to the END of the label, so the label is everything
+    /// before the report's first `\nexit=` (a multi-line label is fine) and the suffix is
+    /// recognised there only. One precondition: a label that itself ENDS in ` [attempt N]`
+    /// cannot be told from a retry; none of this file's labels does.
+    List<String> finalAttempts(List<String> reports) {
+      final out = <String>[];
+      for (final r in reports) {
+        final label = r.split('\nexit=').first;
+        if (out.isNotEmpty && RegExp(r' \[attempt \d+\]$').hasMatch(label)) {
+          out[out.length - 1] = r.replaceFirst(RegExp(r' \[attempt \d+\]\nexit='), '\nexit=');
+        } else {
+          out.add(r);
+        }
+      }
+      return out;
+    }
+
+    test('finalAttempts: a retried spawn counts ONCE, as its last attempt, with its label restored', () {
+      final healed = [
+        'git init\nexit=0\nstdout=\nstderr=',
+        'check on doc.md: first line\nexit=254\nstdout=Running build hooks...\nstderr=File not formatted as yaml: .',
+        'check on doc.md: first line [attempt 2]\nexit=1\nstdout=\nstderr=[sot-citations] FAIL',
+      ];
+      expect(finalAttempts(healed), [
+        'git init\nexit=0\nstdout=\nstderr=',
+        'check on doc.md: first line\nexit=1\nstdout=\nstderr=[sot-citations] FAIL',
+      ]);
+      final twice = [
+        'x\nexit=254\nstdout=\nstderr=a',
+        'x [attempt 2]\nexit=254\nstdout=\nstderr=b',
+        'x [attempt 3]\nexit=0\nstdout=\nstderr=c',
+      ];
+      expect(finalAttempts(twice), ['x\nexit=0\nstdout=\nstderr=c']);
+      expect(finalAttempts(const <String>[]), isEmpty);
+      expect(finalAttempts(['a\nexit=0', 'b\nexit=0']), ['a\nexit=0', 'b\nexit=0'], reason: 'untouched when nothing was retried');
+      // The suffix sits at the END of the label, not at the end of its first line.
+      expect(
+          finalAttempts(['two\nlines\nexit=254\nstdout=\nstderr=a', 'two\nlines [attempt 2]\nexit=0\nstdout=\nstderr=b']),
+          ['two\nlines\nexit=0\nstdout=\nstderr=b'],
+          reason: 'a multi-line label is still collapsed');
+      expect(
+          finalAttempts(['x\nexit=0', 'first [attempt 3]\nsecond\nexit=0']),
+          ['x\nexit=0', 'first [attempt 3]\nsecond\nexit=0'],
+          reason: 'a suffix-looking first line of a longer label is a separate spawn');
+    });
+
     test('exit 1 when a POST-cutoff doc cites an absent concept', () {
       final r = runGateOn(
         registryYaml: goodRegistry,
@@ -360,11 +413,11 @@ concepts:
       expect('${r.stderr}', contains('[sot-citations] FAIL'),
           reason: 'precondition: this run must have written to stderr, or the '
               'assertions below would prove nothing');
-      expect(reports.where((x) => x.startsWith(gateLabel)), hasLength(1), reason: 'one gate spawn, one report');
-      expect(reports.where((x) => x.startsWith(setupLabel)), hasLength(setupCommands),
+      expect(finalAttempts(reports).where((x) => x.startsWith(gateLabel)), hasLength(1), reason: 'one gate spawn, one report');
+      expect(finalAttempts(reports).where((x) => x.startsWith(setupLabel)), hasLength(setupCommands),
           reason: 'each fixture git command reports under its own label');
-      expect(reports, hasLength(1 + setupCommands), reason: 'nothing else spawns');
-      final gate = reports.singleWhere((x) => x.startsWith(gateLabel));
+      expect(finalAttempts(reports), hasLength(1 + setupCommands), reason: 'nothing else spawns');
+      final gate = finalAttempts(reports).singleWhere((x) => x.startsWith(gateLabel));
       expect(
           gate,
           startsWith('check_sot_registry_citations.dart on '
@@ -387,11 +440,23 @@ concepts:
       expect(r.exitCode, 0);
       expect('${r.stdout}', contains('PASS'),
           reason: 'precondition: a passing run says so on stdout');
-      expect(reports.where((x) => x.startsWith(gateLabel)), hasLength(1));
-      expect(reports, hasLength(1 + setupCommands));
-      final gate = reports.singleWhere((x) => x.startsWith(gateLabel));
+      expect(finalAttempts(reports).where((x) => x.startsWith(gateLabel)), hasLength(1));
+      expect(finalAttempts(reports), hasLength(1 + setupCommands));
+      final gate = finalAttempts(reports).singleWhere((x) => x.startsWith(gateLabel));
       expect(gate, contains('exit=0'));
       expect(gate, contains('stdout=${r.stdout}'));
+    });
+
+    test('the seven report-count sites read through finalAttempts (a healed retry adds a second report per spawn)', () {
+      // PRESENCE and COUNT, read from this file's own comment-stripped body: the helper is defined once
+      // and applied at every site that counts or selects the reports of a spawn (OI-468). A site that
+      // reads the raw list again would go red only on a HEALED run, which no real run here can produce.
+      final src = readSourceFileStripped('test/contracts/sot_registry_citations_test.dart');
+      expect(RegExp(r'List<String> finalAttempts\(').allMatches(src).length, 1);
+      expect(RegExp(r'finalAttempts\(reports\)').allMatches(src).length, 7,
+          reason: 'three where() counts, two hasLength counts and two singleWhere reads; the unit test uses its own lists');
+      expect(RegExp(r'\breports\.(?!add\b)\w+|\breports\[|expect\(reports\b').hasMatch(src), isFalse,
+          reason: 'no site may read the raw reports list (any member but add, an index, or expect on the list itself)');
     });
 
     test('runGateOn routes every spawn through the helper, and nothing else spawns', () {

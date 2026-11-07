@@ -80,7 +80,7 @@ const _allowList = <String, List<GateRunner>>{
   // it is a pure lib/ source scan (436 callsites, 1.5s) with no live dependency.
   'check_unawaited_has_error_sink.dart': [
     GateRunner.loop('ci',
-        'ADVISORY (exit 0 by design, --strict to fail). CI\'s log is its only reader: pre-commit.sh runs every loop gate as >/dev/null 2>&1, so it stays case-skipped there -- a 1.7 s no-op nobody can read. Removed from test.yml\'s case-skip 2026-09-19 (OI-155).'),
+        'ADVISORY (exit 0 by design, --strict to fail). CI\'s log is its only reader: pre-commit.sh keeps a loop gate\'s output and shows it only when the gate FAILS, so it stays case-skipped there -- a 1.7 s no-op nobody can read. Removed from test.yml\'s case-skip 2026-09-19 (OI-155).'),
   ],
   'check_razorpay_key_flavor.dart': [
     GateRunner.file('.claude/commands/build-apk.md',

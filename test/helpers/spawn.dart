@@ -19,6 +19,40 @@
 // ([defaultSpawnReport]), so a failing assertion elsewhere in the test always has the
 // child's output under it, whatever the next author remembers to write in `reason:`.
 //
+// RETRIES (OI-468, OI-311; docs/plans/2026-11-06-oi468-spawn-status.md). The three
+// result-returning helpers ([runSpawn], [runSpawnAsync], [runSpawnWithInput]) run a
+// child again, and say so, in exactly two cases where the HARNESS lost the child's
+// answer:
+//   1. NATIVE-ASSETS RACE (cause measured 2026-11-06). `dart run` rewrites
+//      `<cwd package>/.dart_tool/native_assets.yaml` in place (truncate, then write) and
+//      every `dart` child READS `<script's package>/.dart_tool/native_assets.yaml`
+//      while it starts. A reader that opens the file inside another `dart run`'s
+//      empty-file window exits 254 with `File not formatted as yaml: .`, BEFORE `main`
+//      runs. Retried (at most twice) only when the child IS the dart executable
+//      ([isDartExecutable]) AND the status is 254 AND stderr carries that text: a bare
+//      254 is a compile error, and a `sh -c "work; dart run ..."` wrapper that forwards
+//      a nested 254 could repeat the work it did first, so wrappers are not retried.
+//   2. IMPOSSIBLE STATUS. A POSIX exit code above 255 or below -255 is not a process
+//      status (two CI sightings, both from a quiet `git`; cause NOT established).
+//      Retried once, for any child, never on Windows (codes above 255 are legitimate
+//      there). For an idempotent child (git push, config, add) that cures it; for a
+//      non-idempotent child whose first attempt really ran (git worktree add, git
+//      commit) the second attempt fails with the child's own message or duplicates its
+//      effect: a diagnostic, not an explanation.
+// Every attempt is reported whole (attempt n>1 carries ` [attempt n]` on its label) and
+// ONE `[spawn-retry]` line is printed with plain `print` before each retry runs, so the
+// failed attempt's output survives a passing test (printOnFailure would drop it). The
+// decision, the budgets and the note are pure ([spawnRetryDecision], [spawnRetryNote]).
+// NOT covered: [startSpawn] callers (they drive the streams), children that are not the
+// dart executable, nested spawns. TWO LIMITS of the covered path, stated so nobody has to
+// find them: (a) "the child is dart" means "died before main" only for the dart process this
+// helper started; a Dart SCRIPT that itself spawns a nested `dart run` and forwards its
+// status and stderr is indistinguishable from the race and would be run again (no test
+// spawns such a script today); (b) a stdin payload larger than the pipe buffer written to a
+// child that already died on the race throws out of the stdin write, before any status is
+// read, so that attempt is not retried (the same as before the retry existed; the payloads
+// of the callers are small).
+//
 // WHAT THIS DOES NOT CLAIM. The child is not hermetic: variables an EXTERNAL tool
 // reads (git's HOME / ~/.gitconfig, XDG_*) still flow unless a scenario removes or
 // pins them. The completeness of the control-variable list is checked, two-way,
@@ -121,10 +155,216 @@ void defaultSpawnReport(String diag, int exitCode) {
   }
 }
 
+/// Why a finished child's result is the HARNESS's failure and not the child's answer
+/// (see the RETRIES block in the header).
+enum SpawnRetryReason { nativeAssetsRace, lostStatus }
+
+/// The native-assets race is retried at most this many times, the impossible status at
+/// most this many times; the two budgets are independent (worst case 4 attempts).
+const int spawnRaceRetryCap = 2;
+const int spawnLostStatusRetryCap = 1;
+
+/// The front end's own text when it reads an empty `.dart_tool/native_assets.yaml`.
+const String nativeAssetsRaceSignature = 'File not formatted as yaml';
+
+const int _noteExcerptLength = 300;
+
+/// True when [exe] is the Dart binary itself: its basename (split on `/` and `\`),
+/// lower-cased, minus ONE trailing `.exe` / `.bat` / `.cmd`, is `dart`. `sh`, `git`,
+/// `mydart`, `dart-wrapper`, `dart.exe.exe`, an empty string and a path that ends in a
+/// separator are not. The native-assets retry is scoped to this: only the dart process
+/// is known to die before `main` runs.
+bool isDartExecutable(String exe) {
+  var base = exe.split(RegExp(r'[\\/]')).last.toLowerCase();
+  for (final ext in const <String>['.exe', '.bat', '.cmd']) {
+    if (base.endsWith(ext)) {
+      base = base.substring(0, base.length - ext.length);
+      break;
+    }
+  }
+  return base == 'dart';
+}
+
+String _decoded(Object? v) => v is List<int> ? utf8.decode(v, allowMalformed: true) : '$v';
+
+/// The whole retry decision, pure. [raceRetriesUsed] / [lostStatusRetriesUsed] are how many
+/// retries of each reason already ran for THIS spawn. An impossible status (outside
+/// -255..255, never on Windows) is checked first and may be any child; the race needs the
+/// dart executable, exit code exactly 254 AND the signature in the decoded stderr (the
+/// stderr is only decoded when the first two hold).
+SpawnRetryReason? spawnRetryDecision({
+  required String exe,
+  required int exitCode,
+  required Object? stderr,
+  required int raceRetriesUsed,
+  required int lostStatusRetriesUsed,
+  required bool isWindows,
+}) {
+  if (!isWindows && (exitCode > 255 || exitCode < -255)) {
+    return lostStatusRetriesUsed < spawnLostStatusRetryCap ? SpawnRetryReason.lostStatus : null;
+  }
+  if (exitCode == 254 && isDartExecutable(exe) && _decoded(stderr).contains(nativeAssetsRaceSignature)) {
+    return raceRetriesUsed < spawnRaceRetryCap ? SpawnRetryReason.nativeAssetsRace : null;
+  }
+  return null;
+}
+
+/// The ONE `[spawn-retry]` line, pure. [k] is the retry about to run for [reason] and [cap]
+/// that reason's budget; [why] is the spawn's own label (no attempt suffix); [ms] the failed
+/// attempt's own time. `<len>` is the UTF-16 code-unit count of a String and the byte count
+/// of a `List<int>`; the excerpt is the decoded text with `\r` and `\n` escaped FIRST and the
+/// first 300 code units taken after that, so the line stays one line for CR and LF.
+/// LIMITS (cosmetic, a diagnostic line): a literal backslash is not escaped, so the two
+/// characters `\n` in a child's text read like an escaped newline; U+2028 and U+0085 are not
+/// escaped; the cut can land on a lone `\` or inside a surrogate pair.
+String spawnRetryNote({
+  required SpawnRetryReason reason,
+  required int k,
+  required int cap,
+  required String why,
+  required int exitCode,
+  required Object? stdout,
+  required Object? stderr,
+  required int ms,
+}) {
+  String oneLine(String s) => s.replaceAll('\r', r'\r').replaceAll('\n', r'\n');
+  String slot(Object? v) {
+    final text = _decoded(v);
+    final len = v is List<int> ? v.length : text.length;
+    final escaped = oneLine(text);
+    final cut = escaped.length > _noteExcerptLength ? escaped.substring(0, _noteExcerptLength) : escaped;
+    return '($len)=$cut';
+  }
+
+  final label = reason == SpawnRetryReason.nativeAssetsRace ? 'native-assets-race' : 'lost-status';
+  return '[spawn-retry] $label retry $k of $cap ${oneLine(why)} '
+      '| exit=$exitCode (0x${exitCode.toUnsigned(32).toRadixString(16)}) '
+      '| $ms ms | stdout${slot(stdout)} | stderr${slot(stderr)}';
+}
+
+void _defaultNote(String line) {
+  // ignore: avoid_print
+  print(line);
+}
+
+/// The retry loop of [runSpawn]: [once] performs ONE attempt (the raw spawn lives in the
+/// caller's closure). Each attempt is timed with [clock], reported whole through
+/// [reportSpawn] (attempt n>1 gets ` [attempt n]` on its label), then judged by
+/// [spawnRetryDecision]; a retry prints [note] BEFORE it runs. Returns the LAST result.
+/// [isWindows] and [clock] are test seams the public entry points never set; [note] is
+/// forwarded from their own `note:` parameter.
+ProcessResult retryingSpawn(
+  ProcessResult Function() once, {
+  required String exe,
+  required String why,
+  void Function(String diag)? report,
+  void Function(String line)? note,
+  bool? isWindows,
+  DateTime Function()? clock,
+}) {
+  final now = clock ?? DateTime.now;
+  final windows = isWindows ?? Platform.isWindows;
+  final emit = note ?? _defaultNote;
+  var race = 0;
+  var lost = 0;
+  var attempt = 1;
+  while (true) {
+    final started = now();
+    final result = once();
+    final ms = now().difference(started).inMilliseconds;
+    reportSpawn(result.exitCode, result.stdout, result.stderr, attempt == 1 ? why : '$why [attempt $attempt]',
+        report: report);
+    final reason = spawnRetryDecision(
+        exe: exe,
+        exitCode: result.exitCode,
+        stderr: result.stderr,
+        raceRetriesUsed: race,
+        lostStatusRetriesUsed: lost,
+        isWindows: windows);
+    if (reason == null) return result;
+    final int k;
+    final int cap;
+    if (reason == SpawnRetryReason.nativeAssetsRace) {
+      race++;
+      k = race;
+      cap = spawnRaceRetryCap;
+    } else {
+      lost++;
+      k = lost;
+      cap = spawnLostStatusRetryCap;
+    }
+    emit(spawnRetryNote(
+        reason: reason,
+        k: k,
+        cap: cap,
+        why: why,
+        exitCode: result.exitCode,
+        stdout: result.stdout,
+        stderr: result.stderr,
+        ms: ms));
+    attempt++;
+  }
+}
+
+/// [retryingSpawn]'s asynchronous twin, generic over the result type (a `ProcessResult` for
+/// [runSpawnAsync], a record for [runSpawnWithInput]); the accessors read the three fields.
+Future<T> retryingSpawnAsync<T>(
+  Future<T> Function() once, {
+  required int Function(T result) exitCodeOf,
+  required Object? Function(T result) stdoutOf,
+  required Object? Function(T result) stderrOf,
+  required String exe,
+  required String why,
+  void Function(String diag)? report,
+  void Function(String line)? note,
+  bool? isWindows,
+  DateTime Function()? clock,
+}) async {
+  final now = clock ?? DateTime.now;
+  final windows = isWindows ?? Platform.isWindows;
+  final emit = note ?? _defaultNote;
+  var race = 0;
+  var lost = 0;
+  var attempt = 1;
+  while (true) {
+    final started = now();
+    final result = await once();
+    final ms = now().difference(started).inMilliseconds;
+    final code = exitCodeOf(result);
+    final out = stdoutOf(result);
+    final err = stderrOf(result);
+    reportSpawn(code, out, err, attempt == 1 ? why : '$why [attempt $attempt]', report: report);
+    final reason = spawnRetryDecision(
+        exe: exe,
+        exitCode: code,
+        stderr: err,
+        raceRetriesUsed: race,
+        lostStatusRetriesUsed: lost,
+        isWindows: windows);
+    if (reason == null) return result;
+    final int k;
+    final int cap;
+    if (reason == SpawnRetryReason.nativeAssetsRace) {
+      race++;
+      k = race;
+      cap = spawnRaceRetryCap;
+    } else {
+      lost++;
+      k = lost;
+      cap = spawnLostStatusRetryCap;
+    }
+    emit(spawnRetryNote(
+        reason: reason, k: k, cap: cap, why: why, exitCode: code, stdout: out, stderr: err, ms: ms));
+    attempt++;
+  }
+}
+
 /// Runs [exe] with a control-variable-clean environment, reports its output, returns
 /// the result. ALWAYS `includeParentEnvironment: false`. [why] is required so a call
 /// cannot be wired without a label. [report] receives the diagnostic text (a test seam,
-/// so a test can SEE what would be printed); the default is [defaultSpawnReport].
+/// so a test can SEE what would be printed); the default is [defaultSpawnReport]. A child
+/// that lost its answer to the harness is run again, see the RETRIES block in the header;
+/// [note] receives each `[spawn-retry]` line (default: `print`).
 ///
 /// The encodings are declared as defaulted parameters, not `?? systemEncoding`, so an
 /// explicit `null` (raw bytes) survives.
@@ -141,23 +381,29 @@ ProcessResult runSpawn(
   Encoding? stderrEncoding = systemEncoding,
   Map<String, String>? parentEnvironment,
   void Function(String diag)? report,
+  void Function(String line)? note,
 }) {
-  final result = Process.runSync(
-    exe,
-    args,
-    workingDirectory: workingDirectory,
-    environment: hermeticEnvironment(
-        parent: parentEnvironment, remove: remove, extra: extraEnv, allowControl: allowControl),
-    includeParentEnvironment: false,
-    runInShell: runInShell,
-    stdoutEncoding: stdoutEncoding,
-    stderrEncoding: stderrEncoding,
+  return retryingSpawn(
+    () => Process.runSync(
+      exe,
+      args,
+      workingDirectory: workingDirectory,
+      environment: hermeticEnvironment(
+          parent: parentEnvironment, remove: remove, extra: extraEnv, allowControl: allowControl),
+      includeParentEnvironment: false,
+      runInShell: runInShell,
+      stdoutEncoding: stdoutEncoding,
+      stderrEncoding: stderrEncoding,
+    ),
+    exe: exe,
+    why: why,
+    report: report,
+    note: note,
   );
-  reportSpawn(result.exitCode, result.stdout, result.stderr, why, report: report);
-  return result;
 }
 
-/// [runSpawn]'s asynchronous twin (`Process.run`); keeps the raw-bytes `null` too.
+/// [runSpawn]'s asynchronous twin (`Process.run`); keeps the raw-bytes `null` too, and the
+/// same retries and [note] seam.
 Future<ProcessResult> runSpawnAsync(
   String exe,
   List<String> args, {
@@ -171,20 +417,28 @@ Future<ProcessResult> runSpawnAsync(
   Encoding? stderrEncoding = systemEncoding,
   Map<String, String>? parentEnvironment,
   void Function(String diag)? report,
-}) async {
-  final result = await Process.run(
-    exe,
-    args,
-    workingDirectory: workingDirectory,
-    environment: hermeticEnvironment(
-        parent: parentEnvironment, remove: remove, extra: extraEnv, allowControl: allowControl),
-    includeParentEnvironment: false,
-    runInShell: runInShell,
-    stdoutEncoding: stdoutEncoding,
-    stderrEncoding: stderrEncoding,
+  void Function(String line)? note,
+}) {
+  return retryingSpawnAsync<ProcessResult>(
+    () => Process.run(
+      exe,
+      args,
+      workingDirectory: workingDirectory,
+      environment: hermeticEnvironment(
+          parent: parentEnvironment, remove: remove, extra: extraEnv, allowControl: allowControl),
+      includeParentEnvironment: false,
+      runInShell: runInShell,
+      stdoutEncoding: stdoutEncoding,
+      stderrEncoding: stderrEncoding,
+    ),
+    exitCodeOf: (r) => r.exitCode,
+    stdoutOf: (r) => r.stdout,
+    stderrOf: (r) => r.stderr,
+    exe: exe,
+    why: why,
+    report: report,
+    note: note,
   );
-  reportSpawn(result.exitCode, result.stdout, result.stderr, why, report: report);
-  return result;
 }
 
 /// For the `Process.start` sites: a control-variable-clean child, and the caller
@@ -223,7 +477,8 @@ Future<Process> startSpawn(
 /// fills one pipe before reading its stdin cannot deadlock the test; the output is
 /// decoded with [stdoutEncoding] / [stderrEncoding] (`null` means UTF-8 with malformed
 /// bytes allowed). No `try/catch` around the stdin write: a site that tests a broken
-/// pipe or a kill keeps [startSpawn].
+/// pipe or a kill keeps [startSpawn]. The same retries and [note] seam as [runSpawn]; the
+/// stdin is written again on every attempt.
 Future<({int exitCode, String stdout, String stderr})> runSpawnWithInput(
   String exe,
   List<String> args, {
@@ -238,43 +493,57 @@ Future<({int exitCode, String stdout, String stderr})> runSpawnWithInput(
   Encoding? stderrEncoding = systemEncoding,
   Map<String, String>? parentEnvironment,
   void Function(String diag)? report,
+  void Function(String line)? note,
 }) async {
   if (stdin is! String && stdin is! List<int>) {
     throw ArgumentError.value(stdin, 'stdin', 'runSpawnWithInput: stdin must be a String or a List<int>');
   }
-  final process = await startSpawn(
-    exe,
-    args,
-    workingDirectory: workingDirectory,
-    remove: remove,
-    extraEnv: extraEnv,
-    allowControl: allowControl,
-    runInShell: runInShell,
-    parentEnvironment: parentEnvironment,
-  );
-  Future<List<int>> collect(Stream<List<int>> s) => s.fold<List<int>>(<int>[], (acc, chunk) => acc..addAll(chunk));
-  final outF = collect(process.stdout);
-  final errF = collect(process.stderr);
-  if (stdin is String) {
-    process.stdin.write(stdin);
-  } else {
-    process.stdin.add(stdin as List<int>);
+  // One attempt: spawn, feed stdin, drain both pipes, wait, decode. The stdin is written
+  // again on every attempt (a child that died in the front end never read it). Reporting
+  // and the retry decision live in retryingSpawnAsync.
+  Future<({int exitCode, String stdout, String stderr})> once() async {
+    final process = await startSpawn(
+      exe,
+      args,
+      workingDirectory: workingDirectory,
+      remove: remove,
+      extraEnv: extraEnv,
+      allowControl: allowControl,
+      runInShell: runInShell,
+      parentEnvironment: parentEnvironment,
+    );
+    Future<List<int>> collect(Stream<List<int>> s) => s.fold<List<int>>(<int>[], (acc, chunk) => acc..addAll(chunk));
+    final outF = collect(process.stdout);
+    final errF = collect(process.stderr);
+    if (stdin is String) {
+      process.stdin.write(stdin);
+    } else {
+      process.stdin.add(stdin as List<int>);
+    }
+    await process.stdin.close();
+    final outBytes = await outF;
+    final errBytes = await errF;
+    final code = await process.exitCode;
+    String decode(Encoding? enc, List<int> bytes) =>
+        enc == null ? utf8.decode(bytes, allowMalformed: true) : enc.decode(bytes);
+    return (exitCode: code, stdout: decode(stdoutEncoding, outBytes), stderr: decode(stderrEncoding, errBytes));
   }
-  await process.stdin.close();
-  final outBytes = await outF;
-  final errBytes = await errF;
-  final code = await process.exitCode;
-  String decode(Encoding? enc, List<int> bytes) =>
-      enc == null ? utf8.decode(bytes, allowMalformed: true) : enc.decode(bytes);
-  final out = decode(stdoutEncoding, outBytes);
-  final err = decode(stderrEncoding, errBytes);
-  reportSpawn(code, out, err, why, report: report);
-  return (exitCode: code, stdout: out, stderr: err);
+
+  return retryingSpawnAsync<({int exitCode, String stdout, String stderr})>(
+    once,
+    exitCodeOf: (r) => r.exitCode,
+    stdoutOf: (r) => r.stdout,
+    stderrOf: (r) => r.stderr,
+    exe: exe,
+    why: why,
+    report: report,
+    note: note,
+  );
 }
 
 /// Reports one finished child through [report] (default: [defaultSpawnReport]). Called
-/// by [runSpawn] / [runSpawnAsync] after the process ends, and by a `startSpawn` caller
-/// after it has collected the child's output.
+/// by the retry loops ([retryingSpawn], [retryingSpawnAsync]) after each attempt, and by a
+/// `startSpawn` caller after it has collected the child's output.
 void reportSpawn(
   int exitCode,
   Object? stdout,
