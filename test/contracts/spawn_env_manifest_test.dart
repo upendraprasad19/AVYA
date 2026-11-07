@@ -62,7 +62,7 @@ const _stripped = <String>{
 const _externalReader = <String>{'EMAIL'};
 
 /// The child needs these. HOME and USERPROFILE are also BEHAVIOUR inputs
-/// (`batch_close_hook.dart:98`, `discipline_hook.dart:190` choose which memory files are
+/// (`batch_close_hook.dart:99`, `discipline_hook.dart:190` choose which memory files are
 /// read); they are kept because git, dart and the toolchain need them, and a scenario
 /// that must pin them uses `remove` / `extra`. PATH is kept for the same reason (the toolchain
 /// needs it); the spawn tests READ it from their own environment to give a synthetic child one
@@ -97,6 +97,7 @@ const Map<String, ({int count, String kind})> _aliasAllowList = {
   'scripts/check_commit_from_worktree.dart': (count: 1, kind: 'reads'),
   'scripts/check_regression_catalog.dart': (count: 1, kind: 'forwards'),
   'scripts/contract_sweep.dart': (count: 2, kind: 'forwards and reads'),
+  'scripts/dart_race_retry_lib.dart': (count: 1, kind: 'reads'),
   'scripts/discipline_hook.dart': (count: 1, kind: 'forwards'),
   'scripts/git_safety_hook.dart': (count: 1, kind: 'reads'),
   'scripts/retire_worktree.dart': (count: 1, kind: 'forwards'),

@@ -23,16 +23,23 @@
 
 import 'dart:io';
 
+import 'dart_race_retry_lib.dart';
+
 Future<void> main() async {
-  final result = await Process.run(
-    'dart',
-    [
-      'run',
-      'scripts/check_onconflict_live_arbiter.dart',
-      '--sql',
-      'test/sql/two_user_cross_account.sql',
-    ],
-    runInShell: true,
+  // Keyed on the status AND the signature: the retry fires only before the arbiter's `main`, so it
+  // can never run the arbiter's transaction twice.
+  final result = await retryDartProcess(
+    () => Process.run(
+      'dart',
+      [
+        'run',
+        'scripts/check_onconflict_live_arbiter.dart',
+        '--sql',
+        'test/sql/two_user_cross_account.sql',
+      ],
+      runInShell: true,
+    ),
+    label: 'check_onconflict_live_arbiter.dart',
   );
   stdout.write(result.stdout);
   stderr.write(result.stderr);

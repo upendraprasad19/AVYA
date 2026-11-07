@@ -92,6 +92,24 @@ void main() {
     expect(fx.calls, containsAllInOrder(['gh pr-head', 'merge']));
   });
 
+  test('OI-483: dart walks UP, so the gate in <repo>/.git/<replay> reads <repo>/.dart_tool: a lost race there is retried, never a false record-failed on the first try', () {
+    for (final off in [false, true]) {
+      final fx = replayFixture();
+      fx.cli.featureCommit({'docs/notes.md': 'notes\n'});
+      // After the last commit: ScopeRepo does not exclude .dart_tool, `add -A` would take an earlier one. Untracked, so
+      // the dirty check does not see it. The CLI runs from srcRoot, so only the gate in the replay clone reads this file.
+      File('${fx.dir}/.dart_tool/native_assets.yaml')
+        ..createSync(recursive: true)
+        ..writeAsStringSync('');
+      final r = realReplay(fx, env: off ? const {'AVYA_DART_RUN_RETRY': '0'} : const {}, allow: const {'AVYA_DART_RUN_RETRY'});
+      expectResult(r, 5, 'record-failed');
+      expect(RegExp(r'\[dart-run-retry\]').allMatches('${r.stderr}').length, off ? 0 : 2, reason: '${r.stderr}');
+      expect(out(r), contains('File not formatted as yaml'), reason: 'the gate died on the race, not on something else');
+      expect(fx.calls, isNot(contains('merge')));
+      expect(replayDirs(fx), isEmpty, reason: 'the scratch clone is still cleaned up');
+    }
+  });
+
   test('a docs-only change needs no record: merged', () {
     final fx = replayFixture();
     fx.cli.featureCommit({'docs/notes.md': 'notes\n'});
@@ -208,6 +226,42 @@ void main() {
     expect(lastLine(o.toString()), 'result: error');
     expect(o.toString(), contains('interrupted'));
     expect(replayDirs(fx), isEmpty, reason: 'the scratch clone must be deleted');
+    expect(fx.calls, isNot(contains('merge')));
+  });
+
+  test('OI-483: a TERM while the gate is losing the race ends the run there: no retry note, no backoff, the interrupted result', () async {
+    final fx = replayFixture();
+    fx.cli.featureCommit({'docs/notes.md': 'notes\n'});
+    // A FIFO is the seam: dart's own read of the yaml blocks until the writer closes, then sees it empty and exits
+    // 254 for real. So the signal lands with the attempt demonstrably in flight, and `sg` cannot catch it first.
+    final yaml = '${fx.dir}/.dart_tool/native_assets.yaml';
+    Directory('${fx.dir}/.dart_tool').createSync(recursive: true);
+    expect(runSpawn('mkfifo', [yaml], why: 'the gate blocks inside its read of the yaml').exitCode, 0);
+    final p = await startSpawn(dartBin(), [fx.landCli, '191', ...seamArgs(fx, recordGate: false)],
+        workingDirectory: fx.dir,
+        extraEnv: fx.cli.repo.env,
+        allowControl: {'GIT_CONFIG_NOSYSTEM', 'GIT_CONFIG_GLOBAL'});
+    addTearDown(() => p.kill(ProcessSignal.sigkill));
+    final o = StringBuffer();
+    final e = StringBuffer();
+    final d1 = p.stdout.transform(utf8.decoder).forEach(o.write);
+    final d2 = p.stderr.transform(utf8.decoder).forEach(e.write);
+    final writer = await File(yaml).open(mode: FileMode.writeOnly).timeout(const Duration(seconds: 60));
+    p.kill(ProcessSignal.sigterm);
+    await Future<void>.delayed(const Duration(milliseconds: 500));
+    // A plain empty file from here on: a retry the code must not make finds the same race and does not hang the test.
+    File(yaml).deleteSync();
+    File(yaml).writeAsStringSync('');
+    await writer.close();
+    final code = await p.exitCode.timeout(const Duration(seconds: 60));
+    await Future.wait([d1, d2]);
+    reportSpawn(code, o.toString(), e.toString(), 'land_pr TERM during a lost gate race');
+    expect(code, 4, reason: '$o$e');
+    expect(lastLine(o.toString()), 'result: error');
+    expect(o.toString(), contains('interrupted'));
+    expect('$o$e', contains('File not formatted as yaml'), reason: 'the gate must really have lost the race');
+    expect('$o$e', isNot(contains('[dart-run-retry]')));
+    expect(replayDirs(fx), isEmpty);
     expect(fx.calls, isNot(contains('merge')));
   });
 

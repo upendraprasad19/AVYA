@@ -314,7 +314,7 @@ void main() {
     test('the Stop hook marker is regenerable, or every worktree that closes a '
         'batch becomes permanently unretirable', () {
       // Found live 2026-08-26: `.claude/.batch_close_state` (.gitignore:188,
-      // written by batch_close_hook.dart:29) is 41 bytes holding one sha, and
+      // written by batch_close_hook.dart:30) is 41 bytes holding one sha, and
       // the hook rewrites it on every fire. It is not precious. But the §5
       // Stop hook writes it into ANY worktree where a batch closes, so before
       // this entry EVERY such worktree reported "1 non-regenerable ignored

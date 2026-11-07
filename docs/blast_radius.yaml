@@ -305,6 +305,8 @@ paths:
   #   check_hooks_installed.dart is the only thing that detects a hook being
   #     absent; ~70% of it was rewritten in this batch.
   - { glob: "scripts/_dart_bin.sh", tier: platform }
+  # OI-483: the Dart side of the same retry, imported by land_pr.dart and sync_with_main.dart on the merge path.
+  - { glob: "scripts/dart_race_retry_lib.dart", tier: platform }
   - { glob: "scripts/check_oi_numbering_unique.dart", tier: platform }
   - { glob: "scripts/oi_numbering_lib.dart", tier: platform }
   # The bug-class twin of the OI-number gate above (2026-10-25, landing B of the merge-conflict-

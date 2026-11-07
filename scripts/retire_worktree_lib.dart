@@ -286,7 +286,7 @@ const regenerableIgnoredPaths = <String>[
   'baseline.json', // .gitignore:132
   'baseline-lints.json', // .gitignore:133
   // The Stop hook's own once-per-HEAD marker (.gitignore:188, written by
-  // scripts/batch_close_hook.dart:29). 41 bytes holding one sha; the hook
+  // scripts/batch_close_hook.dart:30). 41 bytes holding one sha; the hook
   // rewrites it whenever it fires. Added 2026-08-26 after it blocked THIS
   // batch's own retirement — and it would have blocked EVERY worktree from
   // then on, because §5's Stop hook writes it into any worktree where a batch

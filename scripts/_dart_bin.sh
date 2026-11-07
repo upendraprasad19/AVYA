@@ -1,6 +1,6 @@
 #!/bin/sh
 # Resolve a Dart binary ONCE per hook run, preferring the SDK executable over
-# the Flutter `dart` wrapper. Sourced (never executed) by the git hooks.
+# the Flutter `dart` wrapper. Sourced (never executed) by the git hooks + launchers.
 #
 # WHY THIS EXISTS
 # ---------------
@@ -133,7 +133,11 @@ resolve_dart_bin() {
 # DART_BIN alone, i.e. today's call. A NEW hook copy on a tree whose helper lacks these
 # functions is a no-op because the hooks guard the call with `type`.
 #
-# BEHAVIOUR. Only `run`, only exit 254 AND "File not formatted as yaml" in the child's
+# OI-483: the harness hook commands (.claude/settings.json) and scripts/safe_merge.sh use the
+# same two functions, and the plain form `"$DART_BIN" <file>.dart` is retried too (a plain child
+# reads the same yaml; docs/plans/2026-11-07-oi483-harness-dart-race.md).
+#
+# BEHAVIOUR. Only `run` or a first argument ending in `.dart`, only exit 254 AND "File not formatted as yaml" in the child's
 # stderr, at most 2 retries (the budget of test/helpers/spawn.dart), one note per retry
 # on stderr (it starts with a newline: real `dart run` prints "Running build hooks..."
 # with none). stdout and stdin are untouched. stderr is captured and re-emitted when the
@@ -149,10 +153,13 @@ _dart_race_backoff() { sleep 1; }
 _dart_run_retrying() {
   _drr_real="${DART_BIN_REAL:-dart}"
   [ "$_drr_real" = _dart_run_retrying ] && _drr_real=dart
-  if [ "${1:-}" != "run" ]; then
-    "$_drr_real" "$@"
-    return $?
-  fi
+  case "${1:-}" in
+    run|*.dart) ;;
+    *)
+      "$_drr_real" "$@"
+      return $?
+      ;;
+  esac
   _drr_n=0
   while :; do
     _drr_ran=0
@@ -191,4 +198,63 @@ use_dart_race_retry() {
   DART_BIN_REAL="$DART_BIN"
   DART_BIN=_dart_run_retrying
   return 0
+}
+
+# ---------------------------------------------------------------------------
+# OI-483: run_dart_cli, the supervised launcher call of land_pr.sh, sync_with_main.sh and
+# safe_pr_merge.sh. `_dart_run_retrying` cannot serve them: `$!` would name its subshell (a TERM
+# would orphan dart) and `exec` of a function fails. So dart stays a DIRECT background job, TERM,
+# INT and HUP are forwarded to its pid as TERM (a background job of a non-interactive shell starts
+# with SIGINT ignored), and the wait loop returns the child's REAL status.
+#
+# RETRY. A status of 254, at most 2 retries, no signal seen, AVYA_DART_RUN_RETRY is not exactly 0.
+# Stderr stays live, so the shell cannot read the signature: it keys on the status alone. That is
+# safe because no `main` of these CLIs exits 254 (they exit 0..7, 0..4, 0..2; an uncaught exception
+# is 255): a 254 is the front end dying BEFORE `main`, the race or a compile error, and a re-run
+# repeats no side effect. A compile error costs 2 s and is printed three times.
+#
+# The trap is set before the first start: a signal in the window is remembered and delivered right
+# after. A trapped signal makes `wait` return at once while the child still runs, hence the loop.
+# bash may have reaped the child already (the loop never ran and the status is the signal's 128+n):
+# a second wait returns the saved status there; dash answers 127 for a pid it already reported, and
+# then the first status stands. The pid is cleared once reaped, so a signal after that cannot hit a
+# reused pid. The trap stays installed after the return: the caller exits right after. The caller
+# must not run under `set -e` (the `wait` status has to reach this code).
+_dart_cli_child=
+_dart_cli_got=0
+
+_dart_cli_on_signal() {
+  _dart_cli_got=1
+  if [ -n "$_dart_cli_child" ]; then kill -TERM "$_dart_cli_child" 2>/dev/null; fi
+}
+
+run_dart_cli() {
+  _dc_n=0
+  _dart_cli_child=''
+  _dart_cli_got=0
+  trap _dart_cli_on_signal TERM INT HUP
+  while :; do
+    "$@" &
+    _dart_cli_child=$!
+    if [ "$_dart_cli_got" = 1 ]; then kill -TERM "$_dart_cli_child" 2>/dev/null; fi
+    wait "$_dart_cli_child"
+    _dc_rc=$?
+    while kill -0 "$_dart_cli_child" 2>/dev/null; do
+      wait "$_dart_cli_child"
+      _dc_rc=$?
+    done
+    if [ "$_dc_rc" -gt 128 ]; then
+      wait "$_dart_cli_child" 2>/dev/null
+      _dc_rc2=$?
+      if [ "$_dc_rc2" -ne 127 ]; then _dc_rc=$_dc_rc2; fi
+    fi
+    _dart_cli_child=''
+    if [ "$_dc_rc" != 254 ] || [ "$_dart_cli_got" = 1 ] || [ "$_dc_n" -ge 2 ] || [ "${AVYA_DART_RUN_RETRY:-1}" = 0 ]; then
+      return "$_dc_rc"
+    fi
+    _dc_n=$((_dc_n + 1))
+    printf '\n[dart-run-retry] native-assets race: retry %s of 2 | %s | exit=254 | stderr=shown above\n' "$_dc_n" "$*" >&2 || :
+    _dart_race_backoff || :
+    if [ "$_dart_cli_got" = 1 ]; then return 254; fi
+  done
 }

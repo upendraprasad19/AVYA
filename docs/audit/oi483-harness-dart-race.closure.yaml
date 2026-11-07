@@ -1,0 +1,87 @@
+# Closure ledger — oi483-harness-dart-race (OI-483)
+# Gate 40 (validate_audit_closure.dart). One terminal_state per finding; no `deferred:` key. closed_count == total_findings.
+#
+# WHAT PRODUCED THESE: the OI-483 entry, a multi-line sweep of every dart spawn, three plan-review rounds (docs/plan-reviews/oi483-harness-dart-race.md), the
+# measurements in docs/diagnoses/2026-11-07-harness-launcher-dart-race-e4c1b7.md (the walk-up, the hostile-helper table, the signal matrix), and the mutation run.
+# The OI-482 ledger's R1 row (docs/audit/oi482-hook-dart-run-race.closure.yaml) named this OI as its tracker: this batch performs it.
+#
+# `commit:` on a closed_in_commit row names the batch's single commit: the commit that ADDS this file. A commit cannot name its own SHA; find it with
+#   git log --diff-filter=A --format=%h -- docs/audit/oi483-harness-dart-race.closure.yaml
+
+batch: oi483-harness-dart-race
+plan_review_record: docs/plan-reviews/oi483-harness-dart-race.md
+diagnose_docs:
+  - docs/diagnoses/2026-11-07-harness-launcher-dart-race-e4c1b7.md
+total_findings: 12
+closed_count: 12
+
+findings:
+  - id: H1
+    title: "the 9 harness commands in .claude/settings.json retry the race through a probe subshell, with today's call as the fallback for anything the helper does wrong"
+    terminal_state: closed_in_commit
+    commit: oi483-harness-dart-race batch commit (see header)
+    verification: "test/scripts/claude_hooks_cwd_independent_test.dart executes every command string under dash and bash: C3..C9 with a helper and without, C12 lost race, C12b budget, C13 absent, C14 hostile table, C15 exit 2, C16 kill switch, C17 old helper, a real SDK lost race; META mutants M13..M21 die on their named checks."
+
+  - id: L1
+    title: "both safe_merge.sh prechecks retry the race (silently, both discard stderr); _dart_run_retrying also retries the plain form"
+    terminal_state: closed_in_commit
+    commit: oi483-harness-dart-race batch commit (see header)
+    verification: "test/scripts/safe_merge_test.dart: a lost race at both calls changes nothing; the switched-off twins show the two costs today (could not classify; a false NO-record warning on a bump). dart_run_retry_test.dart: the plain form, its budget, its switch, a real 254."
+
+  - id: L2
+    title: "land_pr.sh, sync_with_main.sh and safe_pr_merge.sh run through one run_dart_cli: a direct background child, TERM/INT/HUP forwarded, the real status, a 254 retried at most twice unless a signal was seen"
+    terminal_state: closed_in_commit
+    commit: oi483-harness-dart-race batch commit (see header)
+    verification: "test/scripts/launchers_dart_race_retry_e2e_test.dart, each launcher under sh and bash: status passthrough, healed, budget, 255 not retried, kill switch, TERM in attempt 1, attempt 2 and the backoff, INT, HUP, the real status after a TERM, the arguments, a real SDK row; a driver shadowing `kill` proves the handler signals nothing once the pid is cleared."
+    notes: "The status alone is the key because stderr stays live; no main of these CLIs exits 254 (land_pr 0..7, sync 0..4, safe_pr_merge 0..2). A compile error costs 2 s and prints three times. sync_with_main.sh gained the trap-before-start and the bash re-wait land_pr.sh already had."
+
+  - id: D1
+    title: "the 3 Dart spawns the OI listed (batch_close_hook.dart, land_pr.dart replay gate, sync_with_main.dart gate index) retry the race through scripts/dart_race_retry_lib.dart"
+    terminal_state: closed_in_commit
+    commit: oi483-harness-dart-race batch commit (see header)
+    verification: "real SDK rows with a permanent empty yaml and a kill-switch twin: batch_close_hook_e2e_test.dart, land_pr_replay_test.dart (also the regression test of the walk-up), sync_with_main_e2e_test.dart; dart_race_retry_lib_test.dart for the decision table."
+
+  - id: D2
+    title: "4 Dart spawns the OI did NOT list and the sweep found (check_adr_index_fresh.dart, check_gate_index_fresh.dart, check_incident_index_fresh.dart, check_two_user_cross_account.dart) retry the race"
+    terminal_state: closed_in_commit
+    commit: oi483-harness-dart-race batch commit (see header)
+    verification: "test/scripts/fresh_gates_race_retry_e2e_test.dart: control, 2 notes then FAIL: builder errored, kill-switch twin, for all three gates. check_two_user_cross_account.dart reaches production and is never executed by a test: the sweep pin only, presence only."
+
+  - id: D3
+    title: "the inventory is a test: every literal dart spawn under scripts/ is wrapped, one named exemption, an exact list of wrapped files"
+    terminal_state: closed_in_commit
+    commit: oi483-harness-dart-race batch commit (see header)
+    verification: "test/scripts/dart_race_retry_lib_test.dart, with positive fixtures, so a regex that stops matching cannot pass by finding nothing (it did exactly that once, during this batch)."
+    notes: "Literals only: a spawn through an executable held in a variable is out of its reach."
+
+  - id: K1
+    title: "the kill switch AVYA_DART_RUN_RETRY=0 restores today's call at every site"
+    terminal_state: closed_in_commit
+    commit: oi483-harness-dart-race batch commit (see header)
+    verification: "a twin at each site above; safe_pr_merge.sh is proved to reach the literal exec by pid (the child IS the wrapper process)."
+
+  - id: A1
+    title: "board: OI-483 archived to docs/audit/closed_issues.md with its stale Blocked-on line corrected and the Done-when answered branch by branch"
+    terminal_state: closed_in_commit
+    commit: oi483-harness-dart-race batch commit (see header)
+    verification: "docs/audit/closed_issues.md carries the entry (Status: CLOSED); docs/audit/open_issues.md has no OI-483; check_closes_oi_performed reads it at the merge"
+
+  - id: V1
+    title: "git_safety_hook.dart:217, the advisory plan-review precheck, is left unwrapped: the stated reason of the OI's Done-when"
+    terminal_state: verified_clean
+    evidence: "a lost race there is one spurious NOTE in additionalContext and enforcement is unaffected; importing the lib would add a file to the guard's compile closure, and a broken or missing import is a real 254, which the harness reads as allow (measured). dart_race_retry_lib_test.dart pins the exemption as the only bare spawn and the closure as exactly git_safety_hook.dart + git_safety_lib.dart."
+
+  - id: V2
+    title: "the flutter spawns (check_regression_catalog.dart, check_test_runtime_budget.dart, contract_sweep.dart, capture_baseline.dart, compare_baseline.dart) do not read the repo's yaml at start"
+    terminal_state: verified_clean
+    evidence: "`flutter --version --machine` in a package with an empty native_assets.yaml exits 0 (measured 2026-11-07); the tool runs from its own snapshot in the SDK. Spawned test processes are test/helpers/spawn.dart's (OI-468)."
+
+  - id: V3
+    title: "known residues of the harness commands: three straight lost races at the guard exit 254 (not turned into 2, a compile error is also 254 and would block every Bash call); a broken helper in a hook shell with errexit ends the hook (the harness shell does not set it); the hooks remain writers of the yaml; under bash a harness kill no longer hits dart directly"
+    terminal_state: verified_clean
+    evidence: "each is stated in docs/architecture/hooks.md and the plan D1. None is worse than the pre-fix state for a tree with a sane helper: the guard fails open on one lost race today, and on three straight after this change."
+
+  - id: B1
+    title: "Windows Git Bash is not measured (`wait`, `kill -0`, `$()` fds under MSYS; its `sh` is bash): a harness command, a launcher and a commit on the founder's clone"
+    terminal_state: blocked_on_user
+    reason: "needs the founder's Windows clone: run a session and `sh scripts/land_pr.sh` there, and compare a commit with and without AVYA_DART_RUN_RETRY=0 (the same check as OI-482's B1 row)"

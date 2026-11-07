@@ -632,6 +632,63 @@ void main() {
       expect('${r.stdout}${r.stderr}', isNot(contains('NO plan-review record')));
     });
 
+    // OI-483: both dart calls of the precheck run through the race retry. The shim fails the FIRST call of the scripts
+    // named in FAIL_ONLY with the real shape, then is the real dart. A lost race is silent here (both sites discard
+    // stderr), so the outcome text is the observable, and the switched-off twin is what the same race does today.
+    ProcessResult precheckWithRace(String branch, String failOnly, {bool off = false}) {
+      final shim = File('${tmp.path}/race_shim.sh')
+        ..writeAsStringSync('#!/bin/sh\n'
+            'for a in "\$@"; do case "\$a" in *.dart) s=\$(basename "\$a");; esac; done\n'
+            'case " \$FAIL_ONLY " in *" \$s "*)\n'
+            '  if [ ! -e "\$MARK_DIR/\$s" ]; then : > "\$MARK_DIR/\$s"; echo "File not formatted as yaml: ." >&2; exit 254; fi ;;\n'
+            'esac\n'
+            'exec "\$REAL_DART" "\$@"\n');
+      expect(_run('chmod', ['+x', shim.path], tmp.path).exitCode, 0);
+      final marks = Directory.systemTemp.createTempSync('race_marks_');
+      addTearDown(() => marks.deleteSync(recursive: true));
+      final r = runSpawn('sh', ['scripts/safe_merge.sh', branch],
+          why: 'safe_merge.sh with a lost race on $failOnly, off=$off',
+          workingDirectory: primary,
+          extraEnv: {
+            'DART_BIN_OVERRIDE': shim.path,
+            'FAIL_ONLY': failOnly,
+            'MARK_DIR': marks.path,
+            'REAL_DART': dartBin(),
+            if (off) 'AVYA_DART_RUN_RETRY': '0',
+          },
+          allowControl: const {'DART_BIN_OVERRIDE', 'AVYA_DART_RUN_RETRY'});
+      for (final s in failOnly.split(' ')) {
+        expect(File('${marks.path}/$s').existsSync(), isTrue, reason: 'the shim never saw $s, so nothing was proved: ${r.stdout}${r.stderr}');
+      }
+      return r;
+    }
+
+    test('OI-483: a lost race at both dart calls changes nothing: the tier is classified and the bump is still honoured', () {
+      installClassifier(primary);
+      installVersionFiles(primary);
+      installBumpCli(primary);
+      final branch = makeBumpBranch(primary, 'bump-race');
+      final r = precheckWithRace(branch, 'blast_radius_from_diff.dart version_bump_range.dart');
+      final text = '${r.stdout}${r.stderr}';
+      expect(r.exitCode, 0, reason: text);
+      expect(text, isNot(contains('could not classify')));
+      expect(text, contains('is a bare version bump'));
+      expect(text, isNot(contains('NO plan-review record')));
+    });
+
+    test('OI-483: the twins with the switch off show what each lost race costs today', () {
+      installClassifier(primary);
+      installVersionFiles(primary);
+      installBumpCli(primary);
+      final classify = makeBumpBranch(primary, 'bump-race-classify');
+      final a = precheckWithRace(classify, 'blast_radius_from_diff.dart', off: true);
+      expect('${a.stdout}${a.stderr}', contains('could not classify'));
+      final bump = makeBumpBranch(primary, 'bump-race-exempt');
+      final b = precheckWithRace(bump, 'version_bump_range.dart', off: true);
+      expect('${b.stdout}${b.stderr}', contains('NO plan-review record'), reason: 'fail closed: the exemption is lost, a false warning');
+      expect('${b.stdout}${b.stderr}', isNot(contains('is a bare version bump')));
+    });
+
     test('a bump plus ONE other file still gets the warning', () {
       installClassifier(primary);
       installVersionFiles(primary);
