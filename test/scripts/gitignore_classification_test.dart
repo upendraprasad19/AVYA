@@ -2,7 +2,7 @@
 //
 // THE CLASS FIX for the recurring unretirable-worktree bug (a9c4f2, 2026-09-04).
 //
-// Four times now, a gitignored path that repo tooling writes INTO a worktree was
+// Repeatedly now, a gitignored path that repo tooling writes INTO a worktree was
 // absent from `regenerableIgnoredPaths`, so `retire_worktree.dart` classified it
 // as precious and refused to retire the worktree — forever, silently:
 //
@@ -10,6 +10,9 @@
 //   f2a9c7  2026-08-25  test outputs      -> any worktree that RAN the suite
 //   b4d7e9  2026-08-27  the Stop marker   -> any worktree that CLOSED a batch
 //   a9c4f2  2026-09-04  the CI queue      -> any worktree that ever PUSHED
+//   e9b3c7  2026-11-07  the golden comparator's `failures/` dir -> any worktree
+//                       that ran a full local `flutter test`; fixed by listing
+//                       the one concrete path (docs/diagnoses/ has the record)
 //
 // b4d7e9's own write-up named this exact test as the durable fix and filed it
 // "as an observation rather than built here". It reached no board — a grep of
@@ -28,7 +31,13 @@
 //   - GLOB entries (`*.log`, `.claude/_payload_*.json`, `test/goldens/**/failures/`).
 //     `isRegenerableIgnored` is exact-match by design — three review rounds each
 //     found a P0 from looser matching — so a glob can never be regenerable, and
-//     the lib header's instruction for that case is to keep the worktree.
+//     the lib header's instruction for that case is to keep the worktree. What
+//     a glob PRODUCES is another matter: the concrete path git emits for it
+//     (`!! test/goldens/wardroom/failures/`) is listed exactly, like the
+//     `*.log` -> `.claude/.gate_failures.log` precedent in the lib. The golden
+//     directories are covered by the class guard at the end of the first group
+//     and by the two `git check-ignore` pins in the last group, not by the
+//     literal parser (a glob is skipped by it).
 //   - BARE names in a NESTED .gitignore (`GeneratedPluginRegistrant.java` in
 //     android/.gitignore). Without a slash, git matches them at ANY depth, so no
 //     single exact path represents them; the real deep path is classified in the
@@ -192,6 +201,46 @@ void main() {
               'matcher. Unclassified: $unclassified');
     });
 
+    test('every directory under test/goldens holding tests has its comparator `failures/` '
+        'directory classified as regenerable', () {
+      // The Flutter test comparator writes a failed comparison's diff images to
+      // `<directory of the test file>/failures/`, and .gitignore:193 ignores
+      // them with the GLOB `test/goldens/**/failures/`. The glob itself can
+      // never be regenerable (exact-match matcher), so each suite directory
+      // must be listed by its concrete path or its worktree is kept forever
+      // after a full local run. A second suite added without that listing is
+      // exactly the sixth instance of this class repeating.
+      final root = Directory('test/goldens');
+      expect(root.existsSync(), isTrue, reason: 'run from the package root');
+      // EVERY `_test.dart` under test/goldens counts, not only a file that
+      // names the comparator: a golden test can reach `matchesGoldenFile`
+      // through a helper kept elsewhere, and a symbol-name filter is blind to
+      // that (the stock comparator still writes `failures/` next to the test
+      // file). The directory is purpose-named and `.gitignore:193` covers
+      // nothing else, so listing one extra directory is the cheap error.
+      final dirs = <String>{};
+      for (final e in root.listSync(recursive: true)) {
+        final norm = e.path.replaceAll('\\', '/');
+        if (e is! File || !norm.endsWith('_test.dart')) continue;
+        dirs.add(norm.substring(0, norm.lastIndexOf('/')));
+      }
+      // Input-set guard: an empty scan would pass for any reason at all, and
+      // the one suite that exists today must be seen.
+      expect(dirs, contains('test/goldens/wardroom'),
+          reason: 'the scan found no test under test/goldens/wardroom, '
+              'so it proves nothing. Found: $dirs');
+      final missing = [
+        for (final d in dirs)
+          if (!regenerableIgnoredPaths.contains('$d/failures/')) '$d/failures/'
+      ];
+      expect(missing, isEmpty,
+          reason: 'These test directories under test/goldens write a `failures/` directory '
+              'that is ignored by .gitignore:193 (a glob) but is not in '
+              'regenerableIgnoredPaths (scripts/retire_worktree_lib.dart), so a '
+              'worktree that ran the suite can never be retired. Add each '
+              'concrete path there; do NOT loosen the matcher. Missing: $missing');
+    });
+
     test('the two classifications are disjoint — nothing is both destroyable '
         'and precious', () {
       final both = deliberatelyPreciousIgnoredPaths
@@ -245,7 +294,7 @@ void main() {
     });
   });
 
-  group('paths that must be ignored by the REPO .gitignore itself (tokens: c6f2a8; generated indexes: A2)', () {
+  group('paths that must be ignored by the REPO .gitignore itself (tokens: c6f2a8; generated indexes: A2; golden comparator output)', () {
     // Hermetic: no inherited GIT_* (pre-push runs the suite inside a hook, with
     // GIT_DIR/GIT_INDEX_FILE set) and no global/system config, so a developer's
     // own core.excludesFile cannot supply the match. The match SOURCE is then
@@ -304,6 +353,21 @@ void main() {
       test('`$indexPath` (a generated local build product) is ignored, and by .gitignore', () {
         expectIgnoredByRepo(indexPath,
             'a `git add -A` would stage a generated file and bring back the merge conflicts it was untracked to remove');
+      });
+    }
+
+    // The golden comparator's output. The allowlist entry for the directory is
+    // only safe while git really ignores it: delete the glob at .gitignore:193
+    // and the retire tool would still call the directory regenerable while
+    // `git add -A` stages the diff images. Both spellings git can see are pinned:
+    // a file inside, and the exact directory string the tool compares against.
+    for (final goldenPath in const [
+      'test/goldens/wardroom/failures/x.png',
+      'test/goldens/wardroom/failures/',
+    ]) {
+      test('`$goldenPath` (golden comparator output) is ignored, and by .gitignore', () {
+        expectIgnoredByRepo(goldenPath,
+            'a `git add -A` would stage the comparator\'s diff images, and the retire allowlist would call an unignored directory regenerable');
       });
     }
   });

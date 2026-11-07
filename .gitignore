@@ -187,7 +187,7 @@ node_modules/zod
 # Not project content; it appeared only because the SDK was installed fresh here.
 .config/
 
-# golden_toolkit writes diff artifacts here on a failed golden comparison.
+# The Flutter test comparator writes diff artifacts here on a failed golden comparison.
 # They are per-run output of a failing test, never source. Untracked previously,
 # which meant a failed golden run left 8 PNGs staged by the next `git add -A`.
 test/goldens/**/failures/

@@ -320,11 +320,26 @@ const regenerableIgnoredPaths = <String>[
   // Gate-failure telemetry log, appended by the pre-commit gate loop's
   // failure branch — the b4d7e9 class, fourth instance (§4.12.6).
   '.claude/.gate_failures.log', // .gitignore:3 (via `*.log`)
-  // DELIBERATELY ABSENT: `test/goldens/**/failures/` (.gitignore:183). It is
-  // genuinely regenerable, but it is a PATTERN, and this list's whole rule is
-  // exact-match-only — three review rounds each found a P0 here from looser
-  // matching. The header's own instruction for this case is to keep the
-  // worktree instead: inertness is recoverable, a deleted file is not.
+  // The golden comparator's failure output. The Flutter test comparator
+  // (`LocalFileComparator.generateFailureOutput`) writes `*_masterImage.png`,
+  // `*_testImage.png`, `*_isolatedDiff.png` and `*_maskedDiff.png` into a
+  // `failures/` directory NEXT TO the test file, only when a golden mismatches.
+  // The baselines are Windows-rendered, so a full local `flutter test` on the Linux
+  // VPS WITHOUT `--exclude-tags golden` (CI passes it) always mismatches and writes
+  // them; before this entry every such worktree reported "1 non-regenerable
+  // ignored file" and had to be cleaned by hand (three times: 2026-09-27,
+  // 2026-09-28/29, 2026-11-06). `.gitignore:193` ignores it as the PATTERN
+  // `test/goldens/**/failures/`; the pattern stays unclassifiable, because this
+  // list's rule is exact-match-only, but `--ignored=matching` emits ONE concrete
+  // line per directory, and that concrete path is exact, like the entries
+  // above that a glob (`*.log`) and a bare name (`GeneratedPluginRegistrant.java`)
+  // produce. Only the one suite that exists today is listed; a second golden
+  // suite keeps its worktree until its own `failures/` is listed, and
+  // `test/scripts/gitignore_classification_test.dart` fails when such a suite
+  // lands without one. Not precious: nothing but the comparator writes here,
+  // the tracked baselines live in the sibling `goldens/` directory, and the one
+  // `!!` line authorises deleting the whole subtree.
+  'test/goldens/wardroom/failures/', // .gitignore:193 (via `test/goldens/**/failures/`)
 ];
 
 /// True when an ignored path is reconstructible and so may be destroyed.
