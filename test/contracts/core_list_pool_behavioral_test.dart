@@ -228,7 +228,8 @@ void main() {
   }
 
   ({List<Map<String, dynamic>> ordered, String source, bool improvisedRemoved,
-      int nonImprovisedInPool, Set<String> families}) pool(
+      int nonImprovisedInPool, Set<String> families, bool jumpRemoved,
+      bool jumpOnlyPool, bool likeForLikeImplement}) pool(
     List<Map<String, dynamic>> rows,
     MuscleSlot s, {
     String level = 'intermediate',
@@ -699,6 +700,380 @@ void main() {
     test('plateau: a plateaued name rotates to its sibling', () async {
       await seed(hipRows);
       expect(hipPick(plateau: {'hip one'}), ['Hip Two']);
+    });
+  });
+
+  // ---------------------------------------------------------------------------
+  // Generator step 1A (docs/plans/2026-11-08-generator-step1-core-list.md)
+  // ---------------------------------------------------------------------------
+  Set<String>? capOf(String tier) => TrainingHistoryAnalyzer.resolveCapability(
+      tier: tier, exclusions: const {}, flagEnabled: true);
+  List<String> ids(List<Map<String, dynamic>> xs) =>
+      [for (final r in xs) r['id'] as String];
+
+  group('R2: jump rows leave a mixed pool', () {
+    final knee = slot('Quads', 'knee_dominant');
+    Map<String, dynamic> jump(String id, {bool plyo = true, bool impact = true}) =>
+        {
+          ..._row(id, 'Jump $id', pattern: 'knee_dominant', focus: ['Quads'],
+              discipline: plyo ? 'plyometric' : 'strength'),
+          'high_impact': impact,
+        };
+
+    test('a jump row sorting first is removed (control: priority alone would '
+        'pick it)', () {
+      final rows = [
+        jump('A_JUMP'),
+        _row('B_SQUAT', 'Squat', pattern: 'knee_dominant', focus: ['Quads'],
+            priority: 2),
+      ];
+      final r = pool(rows, knee);
+      expect(ids(r.ordered), ['B_SQUAT']);
+      expect(r.jumpRemoved, isTrue);
+      expect(r.jumpOnlyPool, isFalse);
+    });
+
+    test('either marker is enough: high_impact alone, plyometric alone', () {
+      for (final j in [
+        jump('A_IMPACT', plyo: false),
+        jump('A_PLYO', impact: false),
+      ]) {
+        final r = pool([
+          j,
+          _row('B_SQUAT', 'Squat', pattern: 'knee_dominant', focus: ['Quads']),
+        ], knee);
+        expect(ids(r.ordered), ['B_SQUAT'], reason: j['id'] as String);
+      }
+    });
+
+    test('a jump-only pool is kept, never emptying the slot', () {
+      final r = pool([jump('A_JUMP'), jump('B_JUMP')], knee);
+      expect(ids(r.ordered), ['A_JUMP', 'B_JUMP']);
+      expect(r.jumpRemoved, isFalse);
+      expect(r.jumpOnlyPool, isTrue);
+    });
+
+    test('runs before the improvised filter: a lone implement jump row cannot '
+        'outlive the improvised rows', () {
+      final r = pool([
+        {
+          ..._row('A_JUMP_DB', 'DB Jump Curl', pattern: 'elbow_flexion',
+              focus: ['Biceps'], needed: ['dumbbells'], type: ['isolation'],
+              discipline: 'plyometric'),
+        },
+        _row('B_TOWEL', 'Towel Curl', pattern: 'elbow_flexion',
+            focus: ['Biceps'], type: ['isolation']),
+      ], slot('Biceps', 'elbow_flexion', type: 'isolation'),
+          capability: capOf('home_dumbbells'));
+      expect(ids(r.ordered), ['B_TOWEL']);
+      expect(r.jumpRemoved, isTrue);
+      expect(r.improvisedRemoved, isFalse);
+    });
+
+    test('real data: no jump row leads a knee slot for an intermediate on any '
+        'tier when a non-jump core row exists', () {
+      final jumpIds = {for (final r in shipped) if (CoreListSelector.isJumpRow(r)) r['id']};
+      expect(jumpIds, containsAll(['E193', 'G3582']));
+      for (final tier in ['bodyweight', 'home_dumbbells', 'basic_gym', 'full_gym']) {
+        final r = CoreListSelector.rankedPool(
+          rows: shipped,
+          slot: knee,
+          level: 'intermediate',
+          phase: 1,
+          equipmentTier: tier,
+          capability: capOf(tier),
+          exclusions: const {},
+          isContraindicated: (_) => false,
+          pickedNames: const {},
+          demotedNames: const {},
+        );
+        expect(r.ordered, isNotEmpty, reason: tier);
+        if (!r.jumpOnlyPool) {
+          expect(r.ordered.where(CoreListSelector.isJumpRow), isEmpty,
+              reason: tier);
+        }
+      }
+    });
+  });
+
+  group('R2 through the real pick: variant B, phase 2, a Strength Squat Day', () {
+    // One non-jump row and a jump row that would win every earlier key. Once
+    // variant B (or phase 2) avoids the non-jump row, _preferNovel would walk to
+    // the jump row if it were only sorted last; the partition keeps it out.
+    final knee = slot('Quads', 'knee_dominant');
+    final rows = [
+      {
+        ..._row('A_JUMP', 'Jump Lunge', pattern: 'knee_dominant', focus: ['Quads'],
+            discipline: 'plyometric'),
+        'high_impact': true,
+      },
+      _row('B_SQUAT', 'Split Squat', pattern: 'knee_dominant', focus: ['Quads'],
+          priority: 2),
+    ];
+
+    test('variant B repeats the squat rather than take the jump row', () async {
+      await seed(rows);
+      final d = pick([day([knee], [knee])]).single;
+      expect(names(d.exercisesA), ['Split Squat']);
+      expect(names(d.exercisesB), ['Split Squat']);
+    });
+
+    test('phase 2 with the squat in the avoid set keeps the squat', () async {
+      await seed(rows);
+      final d = pick([day([knee])],
+          phase: 2, prev: {0: (a: ['split squat'], b: const <String>[])}).single;
+      expect(names(d.exercisesA), ['Split Squat']);
+    });
+
+    test('real data: Strength 4-day home_dumbbells intermediate Squat Day holds '
+        'no jump row, in either variant, phases 1 and 2', () {
+      final jumpNames = {
+        for (final r in shipped)
+          if (CoreListSelector.isJumpRow(r)) (r['name'] as String).toLowerCase()
+      };
+      for (final phase in const [1, 2]) {
+        final p = gen(
+            goal: 'strength', tier: 'home_dumbbells', days: 4, phase: phase);
+        final squatDays = [
+          for (final w in p.weekPlans.take(2))
+            for (final d in w.workoutDays)
+              if (d.name == 'Squat Day') d
+        ];
+        expect(squatDays, hasLength(2), reason: 'phase $phase');
+        for (final d in squatDays) {
+          final n = [for (final e in d.exercises) e.exerciseName.toLowerCase()];
+          expect(n.where(jumpNames.contains), isEmpty, reason: 'phase $phase $n');
+        }
+      }
+    });
+  });
+
+  group('R3 (a): like-for-like implement rows in an isolation slot', () {
+    final calves = slot('Calves', 'knee_dominant', type: 'isolation');
+    final rows = [
+      _row('A_BW', 'Bodyweight Calf Raise', pattern: 'knee_dominant',
+          focus: ['Calves'], type: ['isolation']),
+      {
+        ..._row('B_LUNGE', 'DB Lunge', pattern: 'knee_dominant',
+            focus: ['Calves'], needed: ['dumbbells']),
+        'primary_muscles': ['Quads', 'Calves'],
+      },
+      {
+        ..._row('C_SOLEUS', 'DB Seated Calf Raise', pattern: 'knee_dominant',
+            focus: ['Calves'], needed: ['dumbbells'], type: ['isolation']),
+        'primary_muscles': ['Calves (Soleus)'],
+      },
+      {
+        ..._row('D_PERONEUS', 'DB Calf Eversion', pattern: 'knee_dominant',
+            focus: ['Calves'], needed: ['dumbbells'], type: ['isolation']),
+        'primary_muscles': ['Calves (Peroneus)'],
+      },
+    ];
+
+    test('namesMuscle: equal, listed head, never a prefix or unlisted head', () {
+      expect(CoreListSelector.namesMuscle('Calves', 'calves'), isTrue);
+      expect(CoreListSelector.namesMuscle(' calves (soleus) ', 'Calves'), isTrue);
+      expect(CoreListSelector.namesMuscle('Calves (Gastrocnemius)', 'Calves'),
+          isTrue);
+      expect(CoreListSelector.namesMuscle('Calves (Peroneus)', 'Calves'), isFalse);
+      expect(CoreListSelector.namesMuscle('Calves extra', 'Calves'), isFalse);
+      expect(CoreListSelector.namesMuscle('Glutes (Medius)', 'Glutes'), isFalse);
+      expect(CoreListSelector.namesMuscle('Quads', 'Calves'), isFalse);
+    });
+
+    test('an implement user\'s pool is reduced to like-for-like rows', () {
+      final r = pool(rows, calves, capability: capOf('home_dumbbells'));
+      expect(ids(r.ordered), ['C_SOLEUS']);
+      expect(r.likeForLikeImplement, isTrue);
+    });
+
+    test('a bodyweight-only user: no reduction (the implement rows fail the '
+        'capability filter before it)', () {
+      final r = pool(rows, calves);
+      expect(r.likeForLikeImplement, isFalse);
+      expect(ids(r.ordered), ['A_BW']);
+    });
+
+    test('a compound implement row that lists the muscle first is not '
+        'like-for-like (only isolation rows are)', () {
+      final r = pool([
+        ...rows,
+        {
+          ..._row('E_DBHOP', 'DB Calf Complex', pattern: 'knee_dominant',
+              focus: ['Calves'], needed: ['dumbbells']),
+          'primary_muscles': ['Calves'],
+        },
+      ], calves, capability: capOf('home_dumbbells'));
+      expect(ids(r.ordered), ['C_SOLEUS']);
+    });
+
+    test('no like-for-like row: the pool is left alone', () {
+      final r = pool([rows[0], rows[1], rows[3]], calves,
+          capability: capOf('home_dumbbells'));
+      expect(r.likeForLikeImplement, isFalse);
+      expect(r.ordered, hasLength(3));
+    });
+
+    test('a compound slot and a core slot are not reduced', () {
+      final compound = pool(rows, slot('Calves', 'knee_dominant'),
+          capability: capOf('home_dumbbells'));
+      expect(compound.likeForLikeImplement, isFalse);
+      final core = pool([
+        _row('A_PLANK', 'Plank', pattern: 'core', focus: ['Core'],
+            type: ['isolation']),
+        _row('B_DB', 'DB Crunch', pattern: 'core', focus: ['Core'],
+            needed: ['dumbbells'], type: ['isolation']),
+      ], slot('Core', 'core', type: 'isolation'),
+          capability: capOf('home_dumbbells'));
+      expect(core.likeForLikeImplement, isFalse);
+      expect(ids(core.ordered), ['A_PLANK', 'B_DB']);
+    });
+
+    test('real data: full_gym intermediate Calves keeps both calf machines', () {
+      final r = CoreListSelector.rankedPool(
+        rows: shipped,
+        slot: calves,
+        level: 'intermediate',
+        phase: 1,
+        equipmentTier: 'full_gym',
+        capability: capOf('full_gym'),
+        exclusions: const {},
+        isContraindicated: (_) => false,
+        pickedNames: const {},
+        demotedNames: const {},
+      );
+      expect(r.likeForLikeImplement, isTrue);
+      expect(ids(r.ordered), containsAll(['E051', 'E052']));
+      for (final row in r.ordered) {
+        expect(_strs(row['exercise_type']), contains('isolation'),
+            reason: row['name'] as String);
+      }
+    });
+  });
+
+  group('R3 (b): implement fit before priority in a compound slot', () {
+    final ohp = slot('Shoulders', 'vertical_push');
+    final rows = [
+      _row('A_PIKE', 'Pike', pattern: 'vertical_push', focus: ['Shoulders']),
+      _row('B_OHP', 'Barbell OHP', pattern: 'vertical_push',
+          focus: ['Shoulders'], needed: ['barbell']),
+    ];
+
+    test('a barbell user gets the barbell row (control: bodyweight gets Pike)',
+        () {
+      expect(ids(pool(rows, ohp, capability: capOf('basic_gym')).ordered).first,
+          'B_OHP');
+      expect(ids(pool(rows, ohp).ordered).first, 'A_PIKE');
+    });
+
+    test('fit outranks priority_tier', () {
+      final r = pool([
+        rows[0],
+        {...rows[1], 'priority_tier': 2},
+      ], ohp, capability: capOf('basic_gym'));
+      expect(ids(r.ordered).first, 'B_OHP');
+    });
+
+    test('variant B of a dumbbell user walks to the other press, never to Pike '
+        '(vertical_push is an implement pattern; a key alone lost to the '
+        'phase-1 foundational key once A\'s press was avoided)', () async {
+      await seed([
+        _row('A_ARNOLD', 'Arnold Press', pattern: 'vertical_push',
+            focus: ['Shoulders'], needed: ['dumbbells']),
+        _row('B_PIKE', 'Pike', pattern: 'vertical_push', focus: ['Shoulders']),
+        {
+          ..._row('C_DBOHP', 'DB Alternate Press', pattern: 'vertical_push',
+              focus: ['Shoulders'], needed: ['dumbbells'], priority: 2),
+          'is_foundational': false,
+        },
+      ]);
+      final d = pick([day([ohp], [ohp])], tier: 'home_dumbbells').single;
+      expect(names(d.exercisesA), ['Arnold Press']);
+      expect(names(d.exercisesB), ['DB Alternate Press']);
+      final bw = pick([day([ohp], [ohp])], tier: 'bodyweight').single;
+      expect(names(bw.exercisesA), ['Pike'], reason: 'control: bodyweight keeps Pike');
+    });
+
+    test('isolation and core slots ignore the fit key', () {
+      final core = pool([
+        _row('A_BW', 'Hollow Hold', pattern: 'core', focus: ['Core']),
+        _row('B_BAR', 'Barbell Rollout', pattern: 'core', focus: ['Core'],
+            needed: ['barbell']),
+      ], slot('Core', 'core'), capability: capOf('basic_gym'));
+      expect(ids(core.ordered), ['A_BW', 'B_BAR']);
+    });
+
+    test('real data: basic_gym intermediate overhead press is E011, not Pike', () {
+      final r = CoreListSelector.rankedPool(
+        rows: shipped,
+        slot: ohp,
+        level: 'intermediate',
+        phase: 1,
+        equipmentTier: 'basic_gym',
+        capability: capOf('basic_gym'),
+        exclusions: const {},
+        isContraindicated: (_) => false,
+        pickedNames: const {},
+        demotedNames: const {},
+      );
+      expect(ids(r.ordered).first, 'E011');
+      expect(ids(r.ordered), isNot(contains('E010')),
+          reason: 'vertical_push is an implement pattern: Pike leaves the pool');
+      expect(r.improvisedRemoved, isTrue);
+    });
+  });
+
+  group('R5: glute-first last tie-break in a Glutes hinge slot', () {
+    final rows = [
+      {
+        ..._row('A_DL', 'Deadlift', needed: ['barbell']),
+        'primary_muscles': ['Lower Back', 'Glutes'],
+      },
+      {
+        ..._row('B_HT', 'Hip Thrust', needed: ['barbell']),
+        'primary_muscles': ['Glutes'],
+      },
+    ];
+
+    test('Glutes slot: glute-first wins the tie; Hamstrings slot: id order', () {
+      expect(ids(pool(rows, slot('Glutes', 'hip_dominant'),
+              capability: capOf('full_gym')).ordered),
+          ['B_HT', 'A_DL']);
+      final hams = [
+        for (final r in rows) {...r, 'target_focus': ['Glutes', 'Hamstrings']}
+      ];
+      expect(ids(pool(hams, slot('Hamstrings', 'hip_dominant'),
+              capability: capOf('full_gym')).ordered),
+          ['A_DL', 'B_HT']);
+    });
+
+    test('it is the LAST key: a better priority still wins', () {
+      final r = pool([
+        rows[0],
+        {...rows[1], 'priority_tier': 2},
+      ], slot('Glutes', 'hip_dominant'), capability: capOf('full_gym'));
+      expect(ids(r.ordered), ['A_DL', 'B_HT']);
+    });
+
+    test('real data: full_gym intermediate Glutes hinge picks E047 Hip Thrust, '
+        'Hamstrings hinge keeps E021 Deadlift', () {
+      ({List<Map<String, dynamic>> ordered, String source, bool improvisedRemoved,
+          int nonImprovisedInPool, Set<String> families, bool jumpRemoved,
+          bool jumpOnlyPool, bool likeForLikeImplement}) real(String m) =>
+          CoreListSelector.rankedPool(
+            rows: shipped,
+            slot: slot(m, 'hip_dominant'),
+            level: 'intermediate',
+            phase: 1,
+            equipmentTier: 'full_gym',
+            capability: capOf('full_gym'),
+            exclusions: const {},
+            isContraindicated: (_) => false,
+            pickedNames: const {},
+            demotedNames: const {},
+          );
+      expect(real('Glutes').ordered.first['id'], 'E047');
+      expect(real('Hamstrings').ordered.first['id'], 'E021');
     });
   });
 }

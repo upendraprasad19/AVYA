@@ -55,6 +55,8 @@ const _stripped = <String>{
   // test fixture / report re-record switches (generator golden, frozen library reference, B1 and B2 gate reports)
   'RECORD_GENERATOR_GOLDEN', 'RECORD_LIBRARY_REFERENCE', 'RECORD_LIBRARY_REFERENCE_IDS', 'WRITE_CORE_LIST_REPORT',
   'WRITE_SESSION_BUDGET_REPORT', 'WRITE_REST_BY_TYPE_REPORT',
+  // generator step 1A: the 2,304-plan audit's output directory (plan_audit_dump_test.dart)
+  'PLAN_AUDIT_OUT',
 };
 
 /// Read by an EXTERNAL tool only (git's author-identity fallback; d9e4b1): stripped,

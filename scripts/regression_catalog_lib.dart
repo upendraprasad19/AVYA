@@ -108,6 +108,8 @@ const List<String> childEnvStrippedNames = <String>[
   'WRITE_CORE_LIST_REPORT',
   'WRITE_SESSION_BUDGET_REPORT',
   'WRITE_REST_BY_TYPE_REPORT',
+  // Generator step 1A: the plan audit's output directory (a child would write 4,608 plans there).
+  'PLAN_AUDIT_OUT',
 ];
 
 /// Variables read by an EXTERNAL tool (not by any repo script), stripped because a

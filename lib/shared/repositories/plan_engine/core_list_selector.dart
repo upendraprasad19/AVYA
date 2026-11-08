@@ -25,6 +25,13 @@ class CoreListTraceSlot {
   final int nonImprovisedInPool;
   final Set<String> families;
   final String? pickedFamily;
+  /// Generator step 1A, R2: jump rows were partitioned out of a mixed pool.
+  final bool jumpRemoved;
+  /// R2: the pool held only jump rows, so they were kept (never empties a slot).
+  final bool jumpOnlyPool;
+  /// R3 (a): the isolation slot's pool held a like-for-like implement row and
+  /// was reduced to those rows.
+  final bool likeForLikeImplement;
   const CoreListTraceSlot({
     required this.day,
     required this.variant,
@@ -37,6 +44,9 @@ class CoreListTraceSlot {
     required this.nonImprovisedInPool,
     required this.families,
     required this.pickedFamily,
+    required this.jumpRemoved,
+    required this.jumpOnlyPool,
+    required this.likeForLikeImplement,
   });
 }
 
@@ -60,18 +70,57 @@ class CoreListSelector {
   static const _rank = {'beginner': 0, 'intermediate': 1, 'advanced': 2};
 
   /// Patterns where an implement row beats an improvised one (OI-387/388).
+  /// `vertical_push` joined in generator step 1A (plan v7): the R3 (b) fit key
+  /// ranked a loaded press first, but once variant B or phase 2 avoided it,
+  /// `_preferNovel` walked to Pike Push Up (foundational, so ahead of the
+  /// non-foundational dumbbell presses in phase 1); only the partition keeps it
+  /// out (gate R9 (iii), home_dumbbells advanced).
   static const _implementPatterns = {
     'elbow_flexion',
     'elbow_extension',
     'shoulder_isolation',
     'horizontal_pull',
     'vertical_pull',
+    'vertical_push',
   };
 
   /// What a bodyweight user always has: none, bodyweight and the household
   /// baseline (`EquipmentVocab.tierItems['bodyweight']`).
   static final Set<String> improvisedTokens =
       EquipmentVocab.tierItems['bodyweight']!.toSet();
+
+  /// Generator step 1A, R3 (a): a row's first-listed muscle may name a HEAD of
+  /// the slot's muscle in parentheses ("Calves (Soleus)"). Only the heads listed
+  /// here count as the same muscle; "Glutes (medius)" deliberately does not.
+  static const _sameMuscleHeads = <String, Set<String>>{
+    'calves': {'gastrocnemius', 'soleus'},
+  };
+
+  /// R3 (a): true when [firstMuscle] names [targetMuscle]: equal after
+  /// lower-casing, or a full match of `<target> (<head>)` with `<head>` in
+  /// [_sameMuscleHeads] for that target. Never a prefix match.
+  @visibleForTesting
+  static bool namesMuscle(String firstMuscle, String targetMuscle) {
+    final m = firstMuscle.trim().toLowerCase();
+    final t = targetMuscle.trim().toLowerCase();
+    if (m == t) return true;
+    for (final head in _sameMuscleHeads[t] ?? const <String>{}) {
+      if (m == '$t ($head)') return true;
+    }
+    return false;
+  }
+
+  /// Generator step 1A, R4: true when [row] is on a core list at [level] or an
+  /// easier one (the Ruling 12 emergency's rule). A retired row
+  /// (`core_levels: []`) or a row with no core fields is false.
+  static bool isCoreAtOrEasier(Map<String, dynamic> row, String level) {
+    final rank = _rank[level] ?? 0;
+    return _strs(row['core_levels']).any((l) => (_rank[l] ?? 99) <= rank);
+  }
+
+  /// R2: a jump row (high impact or plyometric discipline).
+  static bool isJumpRow(Map<String, dynamic> r) =>
+      r['high_impact'] == true || r['discipline'] == 'plyometric';
 
   static List<String> _strs(Object? v) {
     if (v is List) return [for (final e in v) e.toString()];
@@ -143,6 +192,9 @@ class CoreListSelector {
     bool improvisedRemoved,
     int nonImprovisedInPool,
     Set<String> families,
+    bool jumpRemoved,
+    bool jumpOnlyPool,
+    bool likeForLikeImplement,
   }) rankedPool({
     required List<Map<String, dynamic>> rows,
     required MuscleSlot slot,
@@ -248,7 +300,23 @@ class CoreListSelector {
         improvisedRemoved: false,
         nonImprovisedInPool: 0,
         families: families,
+        jumpRemoved: false,
+        jumpOnlyPool: false,
+        likeForLikeImplement: false,
       );
+    }
+
+    // 3b. Generator step 1A, R2: jump rows (high impact / plyometric) leave a
+    // mixed pool, BEFORE the improvised filter so a lone plyo-box implement row
+    // cannot survive it. A partition, not a sort key: `_preferNovel` walks past
+    // any ordering, so only removal keeps a jump row out of a strength slot. A
+    // jump-only pool is kept (never empties a slot).
+    final jumps = pool.where(isJumpRow).length;
+    final jumpOnlyPool = jumps == pool.length;
+    var jumpRemoved = false;
+    if (jumps > 0 && !jumpOnlyPool) {
+      pool = pool.where((r) => !isJumpRow(r)).toList();
+      jumpRemoved = true;
     }
 
     // 4. Improvised filter (OI-387/388), never emptying the pool.
@@ -257,12 +325,58 @@ class CoreListSelector {
             .every(improvisedTokens.contains);
     final nonImprovised = pool.where((r) => !improvised(r)).length;
     var improvisedRemoved = false;
-    if (needsImplementPreference(capability, equipmentTier) &&
+    final implementUser = needsImplementPreference(capability, equipmentTier);
+    if (implementUser &&
         _implementPatterns.contains(pattern) &&
         nonImprovised > 0 &&
         nonImprovised < pool.length) {
       pool = pool.where((r) => !improvised(r)).toList();
       improvisedRemoved = true;
+    }
+
+    // 4b. R3 (a): in any other non-core ISOLATION slot, an implement user's pool
+    // is reduced to the like-for-like implement rows (isolation type, first-listed
+    // muscle names the slot's muscle) when one exists. Reducing (not just
+    // dropping the improvised rows) keeps compound or other-muscle rows from
+    // reaching variant B or phase 2 once the first row is avoided.
+    var likeForLikeImplement = false;
+    if (implementUser &&
+        !_implementPatterns.contains(pattern) &&
+        pattern != 'core' &&
+        slot.exerciseType.toLowerCase() == 'isolation') {
+      bool likeForLike(Map<String, dynamic> r) {
+        if (improvised(r)) return false;
+        if (!_strs(r['exercise_type'])
+            .any((t) => t.toLowerCase() == 'isolation')) {
+          return false;
+        }
+        final prim = _strs(r['primary_muscles']);
+        return prim.isNotEmpty && namesMuscle(prim.first, slot.targetMuscle);
+      }
+
+      final ll = pool.where(likeForLike).toList();
+      if (ll.isNotEmpty) {
+        pool = ll;
+        likeForLikeImplement = true;
+      }
+    }
+
+    // R3 (b): the implement-fit key's capability (null capability reads the
+    // tier's items, as needsImplementPreference does).
+    final fitKit = capability ??
+        EquipmentVocab.tierItems[tier]?.toSet() ??
+        const <String>{};
+    final fitApplies =
+        slot.exerciseType.toLowerCase() == 'compound' && pattern != 'core';
+    bool fits(Map<String, dynamic> r) =>
+        EquipmentVocab.fromProfile(r['equipment_needed']).any(
+            (t) => fitKit.contains(t) && !improvisedTokens.contains(t));
+    // R5: last tie-break in a Glutes hinge slot, a glute-first row.
+    final gluteSlot =
+        slot.targetMuscle.toLowerCase() == 'glutes' && pattern == 'hip_dominant';
+    bool gluteFirst(Map<String, dynamic> r) {
+      final prim = _strs(r['primary_muscles']);
+      return prim.isNotEmpty && prim.first.toLowerCase().contains('glute');
     }
 
     // 5. Order: L6 partition, soft avoid, then keys a-e, ties by id.
@@ -276,8 +390,12 @@ class CoreListSelector {
           phase == 1 && !foundational(r) ? 1 : 0,
           sub != null && !subFocusMatches(r, slot) ? 1 : 0,
           _strs(r['exercise_type']).any((t) => t.toLowerCase() == type) ? 0 : 1,
+          // R3 (b): a row using an implement the user has, in a compound slot.
+          fitApplies && !fits(r) ? 1 : 0,
           (r['priority_tier'] as num?)?.toInt() ?? 3,
           foundational(r) ? 0 : 1,
+          // R5: last tie-break, Glutes hinge slots only.
+          gluteSlot && !gluteFirst(r) ? 1 : 0,
         ];
     final keyed = [for (final r in pool) (r, keys(r))];
     keyed.sort((x, y) {
@@ -293,6 +411,9 @@ class CoreListSelector {
       improvisedRemoved: improvisedRemoved,
       nonImprovisedInPool: nonImprovised,
       families: families,
+      jumpRemoved: jumpRemoved,
+      jumpOnlyPool: jumpOnlyPool,
+      likeForLikeImplement: likeForLikeImplement,
     );
   }
 }

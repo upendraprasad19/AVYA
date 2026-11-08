@@ -1,0 +1,166 @@
+# Closure ledger - generator-step1a (generator overhaul step 1, Unit 1A: core-list fixes with the pool still OFF).
+# Plan docs/plans/2026-11-08-generator-step1-core-list.md (v7, six review rounds plus the measured v7 amendment), record
+# docs/plan-reviews/generator-step1-core-list.md. Gate 40 (validate_audit_closure.dart).
+# closed_in_commit rows name the branch state until the stamp commit that follows the fix commit writes its SHA
+# (a commit cannot name its own SHA).
+batch: generator-step1a
+plan_review_record: docs/plan-reviews/generator-step1-core-list.md
+total_findings: 27
+closed_count: 27
+
+findings:
+  - id: S1A-R2-JUMP
+    title: "Jump rows (E193 Jump Squat, G3582 Lunge with Jump) led strength slots in the core-list world (1,273 week-1 rows, 573 as the lead)"
+    terminal_state: closed_in_commit
+    commit: "93550461"
+    verification: "rankedPool step 3b partitions jump rows out of a mixed pool before the improvised filter; core_list_pool_behavioral_test.dart groups 'R2: jump rows leave a mixed pool' and 'R2 through the real pick' (variant B, phase-2 avoid set, Strength Squat Day); mutations M01-M04 in diagnose 44d40a."
+
+  - id: S1A-R3A-LIKE-FOR-LIKE
+    title: "An equipped user's isolation slots outside the implement patterns kept household or compound rows where a like-for-like implement row exists"
+    terminal_state: closed_in_commit
+    commit: "93550461"
+    verification: "rankedPool step 4b reduces the pool to like-for-like implement rows; behavioral group 'R3 (a)'; data contract core_list_like_for_like_data_test.dart; gate R9 (ii); mutations M05-M09 in diagnose c756b4."
+
+  - id: S1A-R3B-FIT-KEY
+    title: "E010 Pike Push Up beat E011 Barbell Overhead Press on an id tie (56 of 56 Strength gym OHP Days ON)"
+    terminal_state: closed_in_commit
+    commit: "93550461"
+    verification: "Fit key before priority_tier in non-core compound slots, and vertical_push joins the implement patterns (plan v7: the key alone lost the second press to the foundational Pike once variant B avoided the first); behavioral group 'R3 (b)' incl. real data E011 first with E010 out of the pool and the variant-B walk; gate R9 (iii); mutations M10-M12 and gate mutation G2 in diagnose c756b4."
+
+  - id: S1A-R4-TOPUP
+    title: "The thin-day top-up used OFF candidate rules under the pool (retired E261 / E271 added); the OI-401 R9 question for the flip review"
+    terminal_state: closed_in_commit
+    commit: "93550461"
+    verification: "topUpDays coreListOnly REQUIRED, two-pass ladder; thin_day_topup_behavioral_test.dart group 'R4: core-list top-up' (both callers, the fresh memo, easier-level rule); mutations M15-M19 in diagnose 44d40a; ship_dark_pending_review.yaml note records the answer."
+
+  - id: S1A-R5-GLUTE
+    title: "The gym Glutes hinge slot took E021 Deadlift over E047 Hip Thrust on an id tie"
+    terminal_state: closed_in_commit
+    commit: "93550461"
+    verification: "Glute-first LAST key in Glutes hip_dominant slots; behavioral group 'R5' (E047 Glutes, E021 Hamstrings, last-key test); mutations M13-M14 in diagnose 44d40a."
+
+  - id: S1A-AUDIT-HARNESS
+    title: "The 2,304-plan audit lived only in a session scratchpad"
+    terminal_state: closed_in_commit
+    commit: "93550461"
+    verification: "test/plan_generator/plan_audit/ (lib, fixture unit test, PLAN_AUDIT_OUT-gated dump test); parity with the session script on both 2,304-plan dumps: 0 verdict and 0 issue differences; PLAN_AUDIT_OUT classified in spawn_env_manifest_test.dart and scripts/regression_catalog_lib.dart."
+
+  - id: S1A-DOCS
+    title: "Registry, nested CLAUDE.md, detail doc, ship-dark note and diagnose docs for step 1A"
+    terminal_state: closed_in_commit
+    commit: "93550461"
+    verification: "docs/sot_registry.yaml (core_list_pool, thin_day_topup), lib/shared/repositories/plan_engine/CLAUDE.md, docs/architecture/plan-engine-detail.md, docs/ship_dark_pending_review.yaml, diagnoses c756b4 and 44d40a."
+
+  - id: OI-146
+    title: "Library duplicates and retired ids (OI-146)"
+    terminal_state: verified_clean
+    evidence: "Commit ad896b42 (seed v12) merged the duplicates; the seven retired ids and the widened pairs are gone (E016 carries merged_ids ['E241']); plan R8."
+
+  - id: OI-484
+    title: "Equipment-fit ranking (board OI-484)"
+    terminal_state: upstream_blocked
+    blocker: "The fixed ranking is inside the ship-dark pool; users get it at the Unit 1B flip."
+    reopen_when: "Unit 1B flip"
+
+  - id: OI-485
+    title: "Core-list flip blockers (board OI-485)"
+    terminal_state: upstream_blocked
+    blocker: "The code fixes are inside the ship-dark pool, and the R1 data waits on the founder's signature; users get both at the Unit 1B flip."
+    reopen_when: "Unit 1B flip"
+
+  - id: OI-436-R6
+    title: "Full flip criteria: emergencyAnyLevel, refilled and retired / skill ids over the 998 personas and the 576-run sweep (R6)"
+    terminal_state: upstream_blocked
+    blocker: "refilled can only reach 0 when 1B removes the last-resort fallback or the founder accepts each run; measured and reported in plan section 7."
+    reopen_when: "Unit 1B plan"
+
+  - id: S1A-R1-DATA
+    title: "R1 core-list data: advanced home / bodyweight squats, bodyweight hinges above beginner, curls, calves, E291 (plan R1 table) with the R9 zeros (i) and (iv)"
+    terminal_state: blocked_on_user
+    reason: "Founder signs the R1 level table (including G1490 Staircase Calf Raise and E291 Single Leg Glute Bridge); the data and the gate zeros (i) jump picks and (iv) filled Quads / Hamstrings slots land together in one commit after the signature."
+
+  - id: S1A-NORDIC
+    title: "E046 Nordic Curl on the advanced list (hard eccentric)"
+    terminal_state: blocked_on_user
+    reason: "Founder call: put Nordic Curl on the advanced core list or leave it off."
+
+  - id: S1A-R7-GAPS
+    title: "R7 bodyweight gaps above beginner (Biceps, Lateral / Rear / Front Delts, Lower Chest, Hip / Glutes)"
+    terminal_state: blocked_on_user
+    reason: "Founder picks per slot: recommendation (b) household rows on the intermediate and advanced lists for Biceps and the three delt slots, (a) accept for Lower Chest, and a gym row for Hip / Glutes from the list in plan section 7."
+
+  - id: S1A-GLUTE-CALL
+    title: "Gym Glutes hinge slot: Hip Thrust instead of Deadlift (a coaching change named by R5)"
+    terminal_state: blocked_on_user
+    reason: "Founder confirms the R5 coaching change (the code is in; the confirmation decides whether 1B ships it as is)."
+
+  - id: 1B-1
+    title: "Flip enable_core_list_pool (full x2 review + B-pass; ship-dark entry to resolved)"
+    terminal_state: upstream_blocked
+    blocker: "Unit 1B is its own plan after 1A merges."
+    reopen_when: "Unit 1B plan"
+
+  - id: 1B-2
+    title: "Delete the old path (pickV4 cascade branch, _applyHistoryAdjustments) with the 36-file test inventory"
+    terminal_state: upstream_blocked
+    blocker: "Unit 1B is its own plan after 1A merges."
+    reopen_when: "Unit 1B plan"
+
+  - id: 1B-3
+    title: "Exercise-seam gate SeamEntry(18) and its test"
+    terminal_state: upstream_blocked
+    blocker: "Unit 1B is its own plan after 1A merges."
+    reopen_when: "Unit 1B plan"
+
+  - id: 1B-4
+    title: "The 43 sot_registry lines citing the old path or the flag"
+    terminal_state: upstream_blocked
+    blocker: "Unit 1B is its own plan after 1A merges."
+    reopen_when: "Unit 1B plan"
+
+  - id: 1B-5
+    title: "The hasCoreFields v12 guard and fixtures without core fields"
+    terminal_state: upstream_blocked
+    blocker: "Unit 1B is its own plan after 1A merges."
+    reopen_when: "Unit 1B plan"
+
+  - id: 1B-6
+    title: "The last-resort _fillSlots fallback (R6 refilled)"
+    terminal_state: upstream_blocked
+    blocker: "Unit 1B is its own plan after 1A merges."
+    reopen_when: "Unit 1B plan"
+
+  - id: 1B-7
+    title: "The Ruling 4 overlay copy and its pins"
+    terminal_state: upstream_blocked
+    blocker: "Unit 1B is its own plan after 1A merges."
+    reopen_when: "Unit 1B plan"
+
+  - id: 1B-8
+    title: "OI-148 equipment variants (founder-signed list of 12 loaded rows, same-movement link for variety)"
+    terminal_state: upstream_blocked
+    blocker: "Unit 1B is its own plan after 1A merges; the founder signs the 12-row list."
+    reopen_when: "Unit 1B plan"
+
+  - id: 1B-9
+    title: "OI-147: retire E053 Donkey Calf Raise"
+    terminal_state: upstream_blocked
+    blocker: "Unit 1B is its own plan after 1A merges."
+    reopen_when: "Unit 1B plan"
+
+  - id: 1B-10
+    title: "Core vs suitable_for disagreements (E010, E045, E255, E134)"
+    terminal_state: upstream_blocked
+    blocker: "Unit 1B is its own plan after 1A merges."
+    reopen_when: "Unit 1B plan"
+
+  - id: 1B-11
+    title: "Seed v21 and the cloud re-seed migration (its own live-apply go)"
+    terminal_state: upstream_blocked
+    blocker: "Unit 1B is its own plan after 1A merges; the live apply needs the founder's go."
+    reopen_when: "Unit 1B plan"
+
+  - id: S1A-R9-I-IV
+    title: "R9 gate zeros (i) no jump pick unless the pool was jump-only, (iv) bodyweight / home advanced Quads and Hamstrings slots filled"
+    terminal_state: blocked_on_user
+    reason: "They hold only with the R1 data (review #3 simulated 8 jump-only combinations without it), so they land in the R1 commit after the founder signs the table. Zeros (ii) and (iii) are in this commit."

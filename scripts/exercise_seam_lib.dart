@@ -56,7 +56,7 @@ const seamAllowlist = <String, SeamEntry>{
       'row the user just authored in this sheet (matched by its id) and hands '
       'it to onCreated. No capability filter: the user explicitly chose to '
       'create and add it, and it carries equipment_needed [] by design.'),
-  'lib/shared/repositories/plan_engine/exercise_selector.dart': SeamEntry(17,
+  'lib/shared/repositories/plan_engine/exercise_selector.dart': SeamEntry(18,
       'The cascade itself. Attempts 1-5, buildPinnedDays and '
       '_applyHistoryAdjustments all take the capability set as a REQUIRED '
       'parameter, so a missed call site fails to compile. 16 -> 15 on '
@@ -68,7 +68,11 @@ const seamAllowlist = <String, SeamEntry>{
       '2026-10-24 (OI-401): the thin-day top-up queries queryV4 once, in '
       '_topUpVariant; capability, exclusions and injuries are all passed as '
       'required parameters (topUpDays is the seventh capability-carrying '
-      'function), so a missed call site fails to compile.'),
+      'function), so a missed call site fails to compile. 17 -> 18 on '
+      '2026-11-08 (generator step 1A, R4): buildPinnedDays reads '
+      'exerciseRepo.getAll() only for CoreListSelector.hasCoreFields, a '
+      'boolean that picks the top-up mode (coreListOnly); it emits no row, '
+      'and topUpDays still takes capability as a required parameter.'),
   'lib/features/train/screens/template_builder_screen.dart': SeamEntry(3,
       'Seam 7. customs via doableCustom (canOfferInPicker — unverifiable-'
       'equipment customs stay visible), the default empty-query '

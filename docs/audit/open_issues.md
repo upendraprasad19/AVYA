@@ -6836,6 +6836,8 @@ Filed by the sync-storm-first-sweep batch (A1 = W1 migrator fix, W2 save progres
 
 **Done when.** The flip review either adds the missing bodyweight shoulder-safe pool rows (a library batch, with the sweep re-run) or records, per remaining persona, why the emergency path is acceptable; the numbers above are re-measured on that tree and written into the flip entry. Blast radius: `feature` (ship-dark path, default OFF).
 
+**Re-measured 2026-11-08 (generator step 1A, branch `generator-step1-core-list`, same gate command).** `emergencyAnyLevel`: the same 2 golden personas, 40 sweep runs; `refilled` 16 sweep runs; retired ids in the sweep's built lists E261 only (E271, E254, E234 gone); top-up retired additions none (R4; were E271 x4, E261 x8); skill / olympic none. Step 1A's ledger carries these as `OI-436-R6` (`upstream_blocked`, reopen at the Unit 1B plan, which owns the last-resort fallback 1B-6).
+
 ## OI-437 — Batch C1 held rows: release protocol and owners (13 token, 4 name_collision, 53 low_confidence, 9 picture) and 529 shipped rows that no picture check covers
 
 - **Status**: OPEN
@@ -7116,6 +7118,8 @@ Found by the M2b Part B Chrome check (360 dp, real fonts, the real card and exer
 
 **Done when.** Each affected split's cause is named from its own allocator stats (which slot or group stopped the next set), a fix is chosen per cause (a leg-day slot, a session cap, or the credit flag for that split), the golden changes only for the splits named, and Quads reach the floor where the day's time allows. Blast radius: `platform` (plan_engine), tier L.
 
+**Core-list world, measured 2026-11-08 (generator step 1A audit, 2,304 plans, pool forced ON).** 122 Quads muscle-weeks in 2,304 plans have 0 Quads sets where the live twin has some, every one in week 2 (variant B): gym 56 (32 of them 30-minute), home_dumbbells 66; mostly build_muscle 3 / 4 / 5-day. Example `build_muscle|3|beginner|full_gym|30|3` week 2 Legs: Sumo Deadlift, Romanian Deadlift, Glute Kickback (Cable), Machine Seated Leg Curl. The B leg day's Quads compound slot ranks after the posterior slots and is not seated at short durations. Step 1A's removal of Box Jump from the B Calves slot (R2) added 21 week-2 Quads zeros to the core-list world (Box Jump credited Quads; 11 of the 21 plans are at 0 live too), so the cause is this allocator's ordering, not the core list's rows. Same class: one home_dumbbells advanced plan's week-2 Chest zero after Pike Push Up (which credited Chest) left the pool. Step 2 of the generator overhaul owns it.
+
 ## OI-476 — telegram-bot/ is tracked and dormant: bot.py receive_email links a Telegram chat to any account by typed email with no proof of ownership, and morning-alert still reads telegram_connections
 
 - **Status**: OPEN
@@ -7204,3 +7208,66 @@ Residual of OI-199 and OI-471 after migration 172. Migration 172 makes `cleanup_
 **Fix shape (one place, then a redeploy).** Scrub in `logCronEnd` before the slice: pass the text through the existing `redactSecrets` and a small pattern pass for e-mail addresses, UUID-shaped ids and JWT/long-token shapes, then cap. A `_shared` change reaches each cron function only when that function is next redeployed, so the plan must say which of the 19 are redeployed and when (the host-shell deploy path of `supabase/functions/CLAUDE.md`). Pin it with a Deno test of `logCronEnd` fed an error string that contains each shape and a Dart source pin that `logCronEnd` is the only writer of `error_summary` (`_shared/cron_telemetry.ts:55-56` for the insert and `:92-93` for the update are the only writers in the repo today).
 
 **Done when.** `logCronEnd` removes the listed shapes before the cap, a test proves each one is removed and that a clean message passes through unchanged, and the plan names the redeploy of the cron functions.
+
+## OI-484 — Exercise ranking ignores the user's equipment: ties fall to library order, so Pike Push Up beats Barbell Overhead Press, Leg Press is never picked, and 1,700 of 1,728 equipped plans hold an unloaded pick where a loaded one fits
+
+- **Status**: OPEN
+- **Blocked on**: none
+- **Verified**: 2026-11-08 — 2,304-plan audit on main 0633a121 (4 goals x 3/4/5/6 days x 3 levels x 4 equipment tiers x 30/45/60/90 minutes x phases 1-3, no injuries, no history, real `generateV4`), run twice: live, and with `configBox['enable_core_list_pool'] = true`.
+- **Identified**: 2026-11-08 · filed via mint_oi.sh from branch `generator-step1-core-list`
+
+**What happens.** Neither picker asks whether a candidate uses equipment the user owns. The live cascade sorts `queryV4` results by compound, `priority_tier`, `is_foundational` (`exercise_repository.dart:427-438`) and `_preferNovel` returns `pool.first` with no history (`exercise_selector.dart:1589`), so a tie falls to library row order. The core-list pool sorts by its keys a-e and then by id (`core_list_selector.dart:272-289`), so a tie falls to id order. Its improvised filter (`:254-266`) covers only five arm, shoulder and pull patterns. Measured: in the 56 four-day Strength gym plans the OHP Day's overhead slot holds Pike Push Up (E010) instead of Barbell Overhead Press (E011) in 36 live and all 56 under the core list (equal keys, E010 sorts first); Leg Press is chosen 0 times live; a full-gym advanced user sees 63 of 862 exercises; 1,700 equipped plans live (1,505 core-list) hold a no-load row in a loadable pattern while a loaded row the user can perform exists at their level.
+
+**Done when.** The core-list ranking (the path that ships, OI-485) prefers a row that uses an implement the user has over an improvised one in every strength pattern, before `priority_tier`; the re-run audit shows every Strength OHP Day's overhead slot is a real press and the unloaded count falls to a named residue with each remaining row explained. Planned in step 1 of the generator overhaul (founder approval 2026-11-08). Blast radius: `platform` (plan_engine), tier L.
+
+**Step 1A (2026-11-08, branch `generator-step1-core-list`, diagnose c756b4; the pool is still OFF, so users see it at the 1B flip).** `rankedPool` now reduces an equipped user's isolation slot to like-for-like implement rows (R3 (a)), ranks a row that uses a non-household item the user has first in non-core compound slots (R3 (b)), and treats `vertical_push` as an implement pattern (plan v7: the key alone lost variant B's press to the foundational Pike Push Up). Re-run audit, core-list world, before -> after: household substitute 58 -> 44 plans, unloaded pick 1,505 -> 468, Strength gym OHP Day with Pike Push Up 56 of 56 -> 0 of 56. The residue (44, 468) is rows the R1 data and the 1B equipment variants (OI-148) cover. Live (OFF) numbers are unchanged by design.
+
+## OI-485 — Core-list pool flip blockers found by the 2,304-plan audit: Jump Squat or Lunge with Jump leads advanced home and bodyweight leg days, and bodyweight intermediate plans have weeks with no hamstring work
+
+- **Status**: OPEN
+- **Blocked on**: none
+- **Verified**: 2026-11-08 — same 2,304-plan audit as OI-484, core-list run (`enable_core_list_pool` ON), library of 862 rows.
+- **Identified**: 2026-11-08 · filed via mint_oi.sh from branch `generator-step1-core-list`
+
+**What happens.** Two data gaps in the core lists, plus one ordering gap. (1) For an advanced home_dumbbells or bodyweight user the only knee_dominant rows core at `advanced` that they can perform are E193 Jump Squat (`discipline: plyometric`, `high_impact: true`), G3582 Lunge with Jump (same) and a calf raise. Goblet Squat, Dumbbell Squat, Dumbbell Lunge and Dumbbell Rear Lunge are core at beginner and intermediate only, and Pistol Squat, Skater Squat and Dumbbell Single Leg Squat are on no list, and a lower level's core row never fills (D6). So Jump Squat leads 573 week-1 days of advanced home and bodyweight plans, and with Lunge with Jump fills 1,273 week-1 rows; the same rows are why days that open with a non-compound rose from 4 (live) to 310 (Jump Squat is typed `calisthenics`, not `compound`). (2) For a bodyweight user the only hamstring rows on a core list are E253 Bodyweight Good Morning, N11 Backpack Romanian Deadlift and E292 Sliding Leg Curl, all `core_levels: [beginner]`, so intermediate and advanced bodyweight plans have weeks with no hamstring set: weeks with 0 sets for a major muscle rose from 84 plans live to 309 under the core list, mostly Hamstrings in 3-day lose_fat / general_fitness and 4-day strength bodyweight plans. (3) `rankedPool` has no key that ranks a high-impact row below a strength row in a strength slot.
+
+**Done when.** The core lists carry non-plyometric knee_dominant rows for advanced home and bodyweight users and hamstring rows for intermediate and advanced bodyweight users (row choice approved by the founder), a high-impact row ranks below a strength row in a strength slot, and the re-run audit shows no plyometric lead lift, no zero-hamstring week and no isolation-first day caused by these rows. Together with OI-436 these are the flip blockers of `enable_core_list_pool`. Planned in step 1 of the generator overhaul. Blast radius: `platform` (plan_engine), tier L.
+
+**Step 1A (2026-11-08, branch `generator-step1-core-list`, diagnose 44d40a; pool still OFF).** Code half done: a jump row leaves a mixed pool (R2, a partition, because `_preferNovel` walks past an ordering key), the gym Glutes hinge prefers a glute-first row (R5: E047 Hip Thrust over E021 Deadlift / E045 Romanian Deadlift), and the top-up under the pool prefers core rows at the user's level or easier (R4; the gate's retired top-up additions E261 / E271 are gone). The data half (R1: non-plyometric advanced home / bodyweight squats, bodyweight hinges above beginner) waits on the founder's signature of the R1 level table, so the re-run audit still shows 1,273 week-1 jump rows (573 leads) and 310 isolation-first plans: those pools are jump-only until R1 lands. Plans with a zero-set week their live twin does not have: 246 (Hamstrings 322 muscle-weeks, all bodyweight: R1; Quads 122, all week 2 of gym and home_dumbbells plans: the variant-B leg day seats no quad slot, OI-475; Chest 5, bodyweight / home_dumbbells advanced: R7 and OI-475).
+
+## OI-486 — The day's main lift can get fewer sets than its accessories (876 of 2,304 plans; Strength Bench Day bench 2 sets, Bench Dips 5), and day order follows a name table, not the day's slot priority
+
+- **Status**: OPEN
+- **Blocked on**: none
+- **Verified**: 2026-11-08 — same 2,304-plan audit as OI-484, live run.
+- **Identified**: 2026-11-08 · filed via mint_oi.sh from branch `generator-step1-core-list`
+
+**What happens.** (1) The allocator seats every exercise at 2 sets and then grows them (OI-456 piece B, `session_set_allocator.dart`; the stated consequence in `plan_engine/CLAUDE.md` is that a lead can end at 2 sets). A compound credits several muscle groups, so it reaches a session cap or weekly top first, while an isolation keeps growing. Measured: in 876 plans live (1,073 under the core list) a day's first compound gets at least 2 fewer sets than an isolation on the same day, e.g. Strength Bench Day: Barbell Bench Press 2 sets, Bench Dips 5; Pull: Lat Pulldown, Chin Up and Barbell Row 2 each, Self-Resisted Bicep Curl 4. (2) `SequencingEngine._reorderDay` (`sequencing_engine.dart:59-95`) orders compounds by a bilateral flag and a name-keyed CNS table, so a day's priority-1 slot is not guaranteed to lead (the Strength OHP Day opened with Barbell Bench Press in 27 of 56 gym plans live).
+
+**Done when.** The lead lift grows to 3 sets (4 with the Strength focus of OI-487) before any accessory grows past 2, no accessory ends with more sets than its day's lead, the day's priority-1 slot leads the day, and the re-run audit shows 0 starved leads. Planned in step 2 of the generator overhaul, together with OI-452, OI-453, OI-475 and OI-477 (same allocator). Blast radius: `platform` (plan_engine), tier L.
+
+## OI-487 — The goal barely changes training: reps follow the phase only, Cut and Maintain give the same plan in 149 of 576 profiles, and the Strength physique focus changes nothing
+
+- **Status**: OPEN
+- **Blocked on**: none
+- **Verified**: 2026-11-08 — same 2,304-plan audit as OI-484, live run; code read on main 0633a121.
+- **Identified**: 2026-11-08 · filed via mint_oi.sh from branch `generator-step1-core-list`
+
+**What happens.** Reps come from each exercise's library `rep_range`, and the phase archetype picks its low, middle or high end (`PeriodizationEngine.archetypeForPhase`, `periodization_engine.dart:15-18`; `_applyWave` `:250-260`). The goal never enters. Measured lead-lift reps (week 1 median) are identical for all four goals: 10 / 8 / 12 in phases 1 / 2 / 3, so a Strength user does 12-15 reps in phase 3. Weekly sets differ by 2-4 (`SessionBudget._bands`). `lose_fat` and `general_fitness` share one split and both attach a cardio finisher, so they produce the same exercises, sets and reps in 149 of 576 profiles. `physique_focus = 'strength'` maps to no muscles (`TrainingHistoryAnalyzer.physiqueFocusToBodyFocus`, `training_history_analyzer.dart:127-135`), the same as Balanced, while the coach's muster screen labels it "Strength — heavy compounds" (`muster_screen.dart:63`). Onboarding offers Build / Cut / Maintain only, but Edit Profile (`edit_profile_screen.dart:126-131`) and the coach's switchGoal / regeneratePlanBlock tools still offer `strength` as a goal.
+
+**Founder decisions 2026-11-08.** Build as today. Cut: main lifts 8 / 6 / 8 reps in phases 1 / 2 / 3 for intermediate and advanced, 10 / 8 / 10 for beginners, slightly fewer weekly sets than Build. Maintain: main lifts 10 / 8 / 10, about two-thirds of Build's weekly sets. Accessories 10-15 for all. Strength is removed as a goal from Edit Profile and the coach tools; testers holding it become Build with the Strength focus; the Strength focus makes main compound lifts use the low end of their rep range with longer rest. Edit Profile labels become Cut / Maintain.
+
+**Done when.** Those rules are in the generator, the coach tools and Edit Profile; the re-run audit shows Cut and Maintain differ in every profile and reps match the table. Planned in step 3 of the generator overhaul (with OI-396, OI-166, OI-175 and OI-488). Blast radius: `platform` (plan_engine) plus the ai-proxy tools (an Edge Function deploy, its own go), tier L.
+
+## OI-488 — 90-minute sessions deliver about 52 and 59 minutes for beginners and intermediates under the 5 and 6 exercise limit: offer 90 minutes to advanced users only
+
+- **Status**: OPEN
+- **Blocked on**: none
+- **Verified**: 2026-11-08 — same 2,304-plan audit as OI-484, live run, week 1, per-day medians.
+- **Identified**: 2026-11-08 · filed via mint_oi.sh from branch `generator-step1-core-list`
+
+**What happens.** Session length is chosen only in Edit Profile (`edit_profile_screen.dart:1114`, options 30 / 45 / 60 / 90, chips read "Up to N min"; onboarding leaves it empty and the plan uses 60). A day holds at most `SessionBudget.countMax` exercises (beginner 5, intermediate 6, advanced 8) and each muscle group has a per-session set cap, so 90 minutes barely changes the plan: beginner 15 sets and about 48 minutes at 60 against 15 sets and about 52 at 90; intermediate 17 sets, 55 minutes against 18 sets, 59; advanced 19 sets, 59 minutes against 22 sets, 68 (90th percentile 89).
+
+**Founder decision 2026-11-08.** Keep the 5 / 6 / 8 exercise limit (an advanced user adds their own exercises beyond it). Offer 90 minutes to advanced users only; beginners and intermediates see 30 / 45 / 60.
+
+**Done when.** Edit Profile shows 90 only to an advanced user, a stored 90 for a beginner or intermediate is treated as 60, and a test pins both. Planned in step 3 of the generator overhaul. Blast radius: `feature` (profile UI) plus the session-minutes reader, tier M.

@@ -212,6 +212,7 @@ void main() {
     Map<int, ({List<String> a, List<String> b})>? prev,
     Set<String> plateau = const {},
     Set<String> exclusions = const {},
+    bool coreListOnly = false,
   }) =>
       ExerciseSelector.topUpDays(
         days,
@@ -225,6 +226,7 @@ void main() {
         applyInjurySubstitutePreference: subPref,
         exclusions: exclusions,
         capability: bwCapability,
+        coreListOnly: coreListOnly,
         previousPhaseByDay: prev,
         plateauAvoidNames: plateau,
       );
@@ -968,6 +970,115 @@ void main() {
       expect(n, isNot(contains('Other Custom')),
           reason: 'the generator never adds a custom (d4b8e1)');
       expect(n.length, greaterThanOrEqualTo(3));
+    });
+  });
+
+  // ---------------------------------------------------------------------------
+  // Generator step 1A, R4: with coreListOnly the ladder runs twice, core rows
+  // (at the user's level or an easier one) first, then today's ladder with a
+  // fresh memo. The founder's floor of 3 is unchanged.
+  // ---------------------------------------------------------------------------
+  group('R4: core-list top-up', () {
+    Map<String, dynamic> cored(Map<String, dynamic> r, List<String> levels) =>
+        {...r, 'core_levels': levels};
+    final sds = [_slotDay([_slot('Mid Chest', 'horizontal_push')])];
+
+    test('a core row is topped in before a non-core row (control: OFF keeps '
+        'library order)', () async {
+      await seed([
+        cored(_row('hp1', 'HP One', 'horizontal_push', 'Mid Chest',
+            type: 'compound'), const []),
+        cored(_row('hp2', 'HP Two', 'horizontal_push', 'Mid Chest',
+            type: 'compound'), const ['intermediate']),
+      ]);
+      expect(_names(topUp([_dayOf(['Seed'])], sds).single.exercisesA),
+          ['Seed', 'HP One', 'HP Two'],
+          reason: 'control: without coreListOnly the top-up takes library order');
+      expect(
+          _names(topUp([_dayOf(['Seed'])], sds, coreListOnly: true)
+              .single
+              .exercisesA),
+          ['Seed', 'HP Two', 'HP One'],
+          reason: 'pass 1 takes the core row; pass 2 still reaches the floor');
+    });
+
+    test('an easier level counts as core, a harder one does not', () async {
+      await seed([
+        cored(_row('hp1', 'HP One', 'horizontal_push', 'Mid Chest',
+            type: 'compound'), const ['advanced']),
+        cored(_row('hp2', 'HP Two', 'horizontal_push', 'Mid Chest',
+            type: 'compound'), const ['beginner']),
+      ]);
+      expect(
+          _names(topUp([_dayOf(['Seed'])], sds, coreListOnly: true)
+              .single
+              .exercisesA),
+          ['Seed', 'HP Two', 'HP One']);
+    });
+
+    test('no core row anywhere: pass 2 (a fresh memo) still reaches the floor',
+        () async {
+      await seed([..._hp(3), ..._core()]);
+      final out = topUp([_dayOf(['HP One'])], sds, coreListOnly: true).single;
+      expect(_names(out.exercisesA), ['HP One', 'HP Two', 'HP Three'],
+          reason: 'pass 1 exhausts every key; a memo carried into pass 2 would '
+              'leave the day at 1');
+    });
+
+    test('ON pickV4 exit passes coreListOnly: true', () async {
+      await HiveService.instance.configBox.put('enable_core_list_pool', true);
+      try {
+        await seed([
+          cored(_row('hpa', 'HP A', 'horizontal_push', 'Mid Chest',
+              type: 'compound'), const ['intermediate']),
+          cored(_row('hpb', 'HP B', 'horizontal_push', 'Mid Chest',
+              type: 'compound'), const []),
+          cored(_row('hpc', 'HP C', 'horizontal_push', 'Mid Chest',
+              type: 'compound'), const ['intermediate']),
+        ]);
+        final days = ExerciseSelector.pickV4(
+          slotDays: sds,
+          exerciseRepo: ExerciseRepository.instance,
+          equipmentTier: 'bodyweight',
+          effectiveExp: 'intermediate',
+          phase: 1,
+          goal: 'build_muscle',
+          injuries: const ['shoulder'],
+          capability: bwCapability,
+        );
+        expect(_names(days.single.exercisesA), ['HP A', 'HP C', 'HP B']);
+      } finally {
+        await HiveService.instance.configBox.delete('enable_core_list_pool');
+      }
+    });
+
+    test('repeat pins: coreListOnly follows the flag (control: OFF)', () async {
+      await seed([
+        cored(_row('hp1', 'HP One', 'horizontal_push', 'Mid Chest',
+            type: 'compound'), const ['intermediate']),
+        cored(_row('hp2', 'HP Two', 'horizontal_push', 'Mid Chest',
+            type: 'compound'), const []),
+        cored(_row('hp3', 'HP Three', 'horizontal_push', 'Mid Chest',
+            type: 'compound'), const ['intermediate']),
+      ]);
+      List<String> run() => _names(ExerciseSelector.buildPinnedDays(
+            frames: sds,
+            pinnedByDay: {0: (a: ['HP One'], b: ['HP One'])},
+            exerciseRepo: ExerciseRepository.instance,
+            equipmentTier: 'bodyweight',
+            effectiveExp: 'intermediate',
+            phase: 2,
+            goal: 'build_muscle',
+            injuries: const ['shoulder'],
+            capability: bwCapability,
+          ).single.exercisesA);
+      expect(run(), ['HP One', 'HP Two', 'HP Three'], reason: 'control: OFF');
+      await HiveService.instance.configBox.put('enable_core_list_pool', true);
+      try {
+        expect(run(), ['HP One', 'HP Three', 'HP Two']);
+      } finally {
+        await HiveService.instance.configBox.delete('enable_core_list_pool');
+      }
     });
   });
 }
