@@ -1,5 +1,5 @@
 # Closure ledger - generator-step1a (generator overhaul step 1, Unit 1A: core-list fixes with the pool still OFF).
-# Plan docs/plans/2026-11-08-generator-step1-core-list.md (v6, six review rounds), record
+# Plan docs/plans/2026-11-08-generator-step1-core-list.md (v7, six review rounds plus the measured v7 amendment), record
 # docs/plan-reviews/generator-step1-core-list.md. Gate 40 (validate_audit_closure.dart).
 # closed_in_commit rows name the branch state until the stamp commit that follows the fix commit writes its SHA
 # (a commit cannot name its own SHA).
@@ -12,43 +12,43 @@ findings:
   - id: S1A-R2-JUMP
     title: "Jump rows (E193 Jump Squat, G3582 Lunge with Jump) led strength slots in the core-list world (1,273 week-1 rows, 573 as the lead)"
     terminal_state: closed_in_commit
-    commit: "generator-step1-core-list (uncommitted)"
+    commit: "93550461"
     verification: "rankedPool step 3b partitions jump rows out of a mixed pool before the improvised filter; core_list_pool_behavioral_test.dart groups 'R2: jump rows leave a mixed pool' and 'R2 through the real pick' (variant B, phase-2 avoid set, Strength Squat Day); mutations M01-M04 in diagnose 44d40a."
 
   - id: S1A-R3A-LIKE-FOR-LIKE
     title: "An equipped user's isolation slots outside the implement patterns kept household or compound rows where a like-for-like implement row exists"
     terminal_state: closed_in_commit
-    commit: "generator-step1-core-list (uncommitted)"
+    commit: "93550461"
     verification: "rankedPool step 4b reduces the pool to like-for-like implement rows; behavioral group 'R3 (a)'; data contract core_list_like_for_like_data_test.dart; gate R9 (ii); mutations M05-M09 in diagnose c756b4."
 
   - id: S1A-R3B-FIT-KEY
     title: "E010 Pike Push Up beat E011 Barbell Overhead Press on an id tie (56 of 56 Strength gym OHP Days ON)"
     terminal_state: closed_in_commit
-    commit: "generator-step1-core-list (uncommitted)"
+    commit: "93550461"
     verification: "Fit key before priority_tier in non-core compound slots, and vertical_push joins the implement patterns (plan v7: the key alone lost the second press to the foundational Pike once variant B avoided the first); behavioral group 'R3 (b)' incl. real data E011 first with E010 out of the pool and the variant-B walk; gate R9 (iii); mutations M10-M12 and gate mutation G2 in diagnose c756b4."
 
   - id: S1A-R4-TOPUP
     title: "The thin-day top-up used OFF candidate rules under the pool (retired E261 / E271 added); the OI-401 R9 question for the flip review"
     terminal_state: closed_in_commit
-    commit: "generator-step1-core-list (uncommitted)"
+    commit: "93550461"
     verification: "topUpDays coreListOnly REQUIRED, two-pass ladder; thin_day_topup_behavioral_test.dart group 'R4: core-list top-up' (both callers, the fresh memo, easier-level rule); mutations M15-M19 in diagnose 44d40a; ship_dark_pending_review.yaml note records the answer."
 
   - id: S1A-R5-GLUTE
     title: "The gym Glutes hinge slot took E021 Deadlift over E047 Hip Thrust on an id tie"
     terminal_state: closed_in_commit
-    commit: "generator-step1-core-list (uncommitted)"
+    commit: "93550461"
     verification: "Glute-first LAST key in Glutes hip_dominant slots; behavioral group 'R5' (E047 Glutes, E021 Hamstrings, last-key test); mutations M13-M14 in diagnose 44d40a."
 
   - id: S1A-AUDIT-HARNESS
     title: "The 2,304-plan audit lived only in a session scratchpad"
     terminal_state: closed_in_commit
-    commit: "generator-step1-core-list (uncommitted)"
+    commit: "93550461"
     verification: "test/plan_generator/plan_audit/ (lib, fixture unit test, PLAN_AUDIT_OUT-gated dump test); parity with the session script on both 2,304-plan dumps: 0 verdict and 0 issue differences; PLAN_AUDIT_OUT classified in spawn_env_manifest_test.dart and scripts/regression_catalog_lib.dart."
 
   - id: S1A-DOCS
     title: "Registry, nested CLAUDE.md, detail doc, ship-dark note and diagnose docs for step 1A"
     terminal_state: closed_in_commit
-    commit: "generator-step1-core-list (uncommitted)"
+    commit: "93550461"
     verification: "docs/sot_registry.yaml (core_list_pool, thin_day_topup), lib/shared/repositories/plan_engine/CLAUDE.md, docs/architecture/plan-engine-detail.md, docs/ship_dark_pending_review.yaml, diagnoses c756b4 and 44d40a."
 
   - id: OI-146
