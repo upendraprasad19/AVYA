@@ -1641,8 +1641,7 @@
     "demo_slug": "diamond-push-up",
     "demo_pair": true,
     "core_levels": [
-      "intermediate",
-      "advanced"
+      "intermediate"
     ],
     "discipline": "strength",
     "gym_availability": "home",
@@ -3056,7 +3055,8 @@
     "demo_pair": true,
     "core_levels": [
       "beginner",
-      "intermediate"
+      "intermediate",
+      "advanced"
     ],
     "discipline": "strength",
     "gym_availability": "home",
@@ -3392,7 +3392,8 @@
     "rep_range": "8-12",
     "core_levels": [
       "beginner",
-      "intermediate"
+      "intermediate",
+      "advanced"
     ],
     "discipline": "strength",
     "gym_availability": "home",
@@ -3556,7 +3557,8 @@
     "demo_pair": true,
     "core_levels": [
       "beginner",
-      "intermediate"
+      "intermediate",
+      "advanced"
     ],
     "discipline": "strength",
     "gym_availability": "home",
@@ -3718,7 +3720,9 @@
     "is_foundational": false,
     "demo_slug": "nordic-hamstring-curl",
     "demo_pair": true,
-    "core_levels": [],
+    "core_levels": [
+      "advanced"
+    ],
     "discipline": "strength",
     "gym_availability": "home",
     "requires_coaching": false,
@@ -8216,7 +8220,9 @@
     "merged_ids": [
       "E225"
     ],
-    "core_levels": [],
+    "core_levels": [
+      "advanced"
+    ],
     "discipline": "strength",
     "gym_availability": "well_equipped_gym",
     "requires_coaching": false,
@@ -9778,7 +9784,6 @@
     "demo_slug": "copenhagen-plank",
     "demo_pair": false,
     "core_levels": [
-      "intermediate",
       "advanced"
     ],
     "discipline": "strength",
@@ -10349,7 +10354,9 @@
     "is_foundational": false,
     "demo_slug": "skater-squat",
     "demo_pair": true,
-    "core_levels": [],
+    "core_levels": [
+      "advanced"
+    ],
     "discipline": "strength",
     "gym_availability": "home",
     "requires_coaching": false,
@@ -15826,7 +15833,9 @@
     "priority_tier": 1,
     "rep_range": "12-15",
     "core_levels": [
-      "beginner"
+      "beginner",
+      "intermediate",
+      "advanced"
     ],
     "discipline": "strength",
     "gym_availability": "home",
@@ -15983,9 +15992,7 @@
     "rep_range": "8-12",
     "demo_slug": "towel-row",
     "demo_pair": true,
-    "core_levels": [
-      "beginner"
-    ],
+    "core_levels": [],
     "discipline": "strength",
     "gym_availability": "home",
     "requires_coaching": false,
@@ -16069,7 +16076,8 @@
     "demo_pair": true,
     "core_levels": [
       "beginner",
-      "intermediate"
+      "intermediate",
+      "advanced"
     ],
     "discipline": "strength",
     "gym_availability": "home",
@@ -16878,7 +16886,9 @@
     "priority_tier": 1,
     "rep_range": "10-12",
     "core_levels": [
-      "beginner"
+      "beginner",
+      "intermediate",
+      "advanced"
     ],
     "discipline": "strength",
     "gym_availability": "home",
@@ -16957,7 +16967,9 @@
     "priority_tier": 2,
     "rep_range": "10-12",
     "core_levels": [
-      "beginner"
+      "beginner",
+      "intermediate",
+      "advanced"
     ],
     "discipline": "strength",
     "gym_availability": "home",
@@ -17276,7 +17288,9 @@
     "priority_tier": 2,
     "rep_range": "20-30s",
     "core_levels": [
-      "beginner"
+      "beginner",
+      "intermediate",
+      "advanced"
     ],
     "discipline": "strength",
     "gym_availability": "home",
@@ -17362,7 +17376,9 @@
     "demo_slug": "prone-t-raise",
     "demo_pair": true,
     "core_levels": [
-      "beginner"
+      "beginner",
+      "intermediate",
+      "advanced"
     ],
     "discipline": "strength",
     "gym_availability": "home",
@@ -17532,7 +17548,9 @@
     "priority_tier": 2,
     "rep_range": "15-20",
     "core_levels": [
-      "beginner"
+      "beginner",
+      "intermediate",
+      "advanced"
     ],
     "discipline": "prehab",
     "gym_availability": "home",
@@ -17618,7 +17636,9 @@
     "priority_tier": 2,
     "rep_range": "12-15",
     "core_levels": [
-      "beginner"
+      "beginner",
+      "intermediate",
+      "advanced"
     ],
     "discipline": "strength",
     "gym_availability": "home",
@@ -17935,7 +17955,9 @@
     "priority_tier": 2,
     "rep_range": "20-30s",
     "core_levels": [
-      "beginner"
+      "beginner",
+      "intermediate",
+      "advanced"
     ],
     "discipline": "strength",
     "gym_availability": "home",
@@ -18249,7 +18271,9 @@
     "priority_tier": 2,
     "rep_range": "20-30s",
     "core_levels": [
-      "beginner"
+      "beginner",
+      "intermediate",
+      "advanced"
     ],
     "discipline": "strength",
     "gym_availability": "home",
@@ -18417,7 +18441,8 @@
     "demo_pair": true,
     "core_levels": [
       "beginner",
-      "intermediate"
+      "intermediate",
+      "advanced"
     ],
     "discipline": "strength",
     "gym_availability": "home",
@@ -18503,7 +18528,9 @@
     "demo_slug": "towel-hamstring-curl",
     "demo_pair": true,
     "core_levels": [
-      "beginner"
+      "beginner",
+      "intermediate",
+      "advanced"
     ],
     "discipline": "strength",
     "gym_availability": "home",
@@ -23970,7 +23997,9 @@
     "priority_tier": 2,
     "rep_range": "12-15",
     "core_levels": [
-      "beginner"
+      "beginner",
+      "intermediate",
+      "advanced"
     ],
     "discipline": "strength",
     "gym_availability": "home",
@@ -24552,7 +24581,10 @@
     "standard_swap": "",
     "priority_tier": 3,
     "rep_range": "12-15",
-    "core_levels": [],
+    "core_levels": [
+      "intermediate",
+      "advanced"
+    ],
     "discipline": "strength",
     "gym_availability": "home",
     "requires_coaching": false,
@@ -24839,7 +24871,10 @@
     "standard_swap": "",
     "priority_tier": 3,
     "rep_range": "12-15",
-    "core_levels": [],
+    "core_levels": [
+      "intermediate",
+      "advanced"
+    ],
     "discipline": "strength",
     "gym_availability": "home",
     "requires_coaching": false,
@@ -36291,7 +36326,10 @@
     "standard_swap": "",
     "priority_tier": 3,
     "rep_range": "10-15",
-    "core_levels": [],
+    "core_levels": [
+      "intermediate",
+      "advanced"
+    ],
     "discipline": "strength",
     "gym_availability": "standard_gym",
     "requires_coaching": false,
@@ -36446,7 +36484,10 @@
     "standard_swap": "",
     "priority_tier": 3,
     "rep_range": "6-10",
-    "core_levels": [],
+    "core_levels": [
+      "intermediate",
+      "advanced"
+    ],
     "discipline": "strength",
     "gym_availability": "home",
     "requires_coaching": false,
@@ -37768,7 +37809,8 @@
     "rep_range": "12-15",
     "core_levels": [
       "beginner",
-      "intermediate"
+      "intermediate",
+      "advanced"
     ],
     "discipline": "strength",
     "gym_availability": "home",
@@ -41549,7 +41591,10 @@
     "standard_swap": "",
     "priority_tier": 3,
     "rep_range": "10-15",
-    "core_levels": [],
+    "core_levels": [
+      "intermediate",
+      "advanced"
+    ],
     "discipline": "strength",
     "gym_availability": "home",
     "requires_coaching": false,
@@ -42268,7 +42313,8 @@
     "rep_range": "8-12",
     "core_levels": [
       "beginner",
-      "intermediate"
+      "intermediate",
+      "advanced"
     ],
     "discipline": "strength",
     "gym_availability": "home",
@@ -51018,7 +51064,8 @@
     "rep_range": "8-12",
     "core_levels": [
       "beginner",
-      "intermediate"
+      "intermediate",
+      "advanced"
     ],
     "discipline": "strength",
     "gym_availability": "home",
@@ -51256,7 +51303,9 @@
     "priority_tier": 2,
     "rep_range": "10-15",
     "core_levels": [
-      "beginner"
+      "beginner",
+      "intermediate",
+      "advanced"
     ],
     "discipline": "strength",
     "gym_availability": "home",
@@ -58204,7 +58253,9 @@
     "standard_swap": "",
     "priority_tier": 3,
     "rep_range": "8-12",
-    "core_levels": [],
+    "core_levels": [
+      "advanced"
+    ],
     "discipline": "strength",
     "gym_availability": "home",
     "requires_coaching": false,
@@ -58285,7 +58336,8 @@
     "rep_range": "8-12",
     "core_levels": [
       "beginner",
-      "intermediate"
+      "intermediate",
+      "advanced"
     ],
     "discipline": "strength",
     "gym_availability": "home",
@@ -58600,7 +58652,9 @@
     "standard_swap": "",
     "priority_tier": 3,
     "rep_range": "5-8",
-    "core_levels": [],
+    "core_levels": [
+      "advanced"
+    ],
     "discipline": "strength",
     "gym_availability": "home",
     "requires_coaching": false,

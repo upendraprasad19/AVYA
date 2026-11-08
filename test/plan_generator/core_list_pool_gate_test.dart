@@ -38,7 +38,9 @@ const _implementPatterns = {
   'elbow_flexion', 'elbow_extension', 'shoulder_isolation', 'horizontal_pull',
   'vertical_pull', 'vertical_push',
 };
-const _suitableDisagreeIds = {'E010', 'E020', 'E045', 'E134', 'E255'};
+// Library Batch S1a: E020, E134 and E255 now agree; E010 and E045 are the named exceptions
+// (test/contracts/library_s1_core_levels_test.dart).
+const _suitableDisagreeIds = {'E010', 'E045'};
 
 List<String> _strs(Object? v) =>
     v is List ? [for (final e in v) e.toString()] : const <String>[];
@@ -223,6 +225,22 @@ void main() {
           cell.subHit[k] = (cell.subHit[k] ?? 0) + 1;
         }
       }
+      // Library Batch S1a, R9 (iv): with the S1a core data, an uninjured bodyweight intermediate / advanced or
+      // home_dumbbells advanced user always gets a Quads compound and a Hamstrings hip_dominant compound from source
+      // `core` or `fill` (a same-family row that is core at another level); any other source (a drop, the emergency
+      // any-level pick) is a failure. Injured personas are exempt: knee and lower_back contraindications empty these cells at
+      // intermediate before and after S1a (plan v4, review #3). The pools have no slack (three Quads rows for one
+      // day's three Quads slots, two Hamstrings hinge rows for two), so dropping one of those rows turns this red.
+      if (persona.injury == null &&
+          ((persona.tier == 'bodyweight' && s.level != 'beginner') ||
+              (persona.tier == 'home_dumbbells' && s.level == 'advanced')) &&
+          s.slot.exerciseType == 'compound' &&
+          ((s.slot.targetMuscle == 'Quads' && s.slot.movementPattern == 'knee_dominant') ||
+              (s.slot.targetMuscle == 'Hamstrings' && s.slot.movementPattern == 'hip_dominant')) &&
+          s.source != 'core' &&
+          s.source != 'fill') {
+        bad.add('unfilled leg compound: ${p.key} ${s.slot.targetMuscle}/${s.slot.movementPattern} ${s.source}');
+      }
       if (s.pickedId == null) continue;
       final r = byId[s.pickedId]!;
       final id = s.pickedId!;
@@ -274,6 +292,16 @@ void main() {
           cap.any(const {'barbell', 'dumbbells'}.contains) &&
           s.nonImprovisedInPool > 0) {
         bad.add('pike over a loaded press: $where');
+      }
+      // Library Batch S1a, R9 (i): no jump row (high_impact or plyometric) is picked unless the slot's pool was
+      // jump-only (the R2 partition keeps them only then), and an uninjured persona never meets a jump-only pool:
+      // before S1a the bodyweight / home advanced Quads and bodyweight Calves pools were jump-only, so Jump Squat led
+      // the leg day. (An injured persona's contraindications may leave only jump rows; that case is reported.)
+      if ((r['high_impact'] == true || d == 'plyometric') && !s.jumpOnlyPool) {
+        bad.add('jump: $where');
+      }
+      if (s.jumpOnlyPool && persona.injury == null) {
+        bad.add('jump-only pool: $where ${s.slot.targetMuscle}/${s.slot.movementPattern}');
       }
       if (levels.isEmpty && r['variant_family'] == null) bad.add('retired: $where');
     }

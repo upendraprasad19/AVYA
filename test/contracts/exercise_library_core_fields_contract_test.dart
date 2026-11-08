@@ -137,14 +137,17 @@ void main() {
     }, _slotFocus);
   });
 
-  test('per-level core counts are 129 / 138 / 98 (73 / 91 / 67 original + 56 / 47 / 31 Batch C1)', () {
+  // Library Batch S1a (docs/plans/2026-11-08-library-batch-s1-core-data.md, Table A) moved these from 129 / 138 / 98
+  // (73 / 91 / 67 original + 56 / 47 / 31 Batch C1): 21 kept rows through scripts/data/library_s1_core_levels.json and 13
+  // source rows in scripts/data/library_batch_c_source.json. Counted by node from the library, not typed from the plan.
+  test('per-level core counts are 128 / 154 / 128 (72 / 100 / 84 original + 56 / 54 / 44 Batch C1)', () {
     final counts = {for (final l in _levels) l: 0};
     for (final r in rows) {
       for (final l in (r['core_levels'] as List).cast<String>()) {
         counts[l] = counts[l]! + 1;
       }
     }
-    expect(counts, {'beginner': 129, 'intermediate': 138, 'advanced': 98});
+    expect(counts, {'beginner': 128, 'intermediate': 154, 'advanced': 128});
   });
 
   test('the seed version is at least 13, so existing installs re-seed', () {

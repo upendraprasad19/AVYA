@@ -27,13 +27,16 @@ const _implementPatterns = {
 
 /// Recorded 2026-11-08 on the 862-row library (generator step 1A). Key:
 /// tier|level|muscle|pattern|subFocus; value: the reduced pool's ids in rank order.
+/// Library Batch S1a (2026-11-08, plan docs/plans/2026-11-08-library-batch-s1-core-data.md) moved three cells:
+/// G0339 Dumbbell Lying Hamstring Curl became core at intermediate and advanced, so it joins the full_gym Hamstrings
+/// curl cells (last: priority 3); E257 Glute Kickback became core at advanced, so the home_dumbbells advanced Glutes
+/// isolation core pool is [E257], all improvised, and no like-for-like reduction applies there any more.
 const _expected = <String, List<String>>{
   'home_dumbbells|beginner|Calves|knee_dominant|': ['E258'],
   'home_dumbbells|beginner|Calves|knee_dominant|soleus': ['E258'],
   'home_dumbbells|intermediate|Calves|knee_dominant|': ['E258', 'G0409'],
   'home_dumbbells|intermediate|Calves|knee_dominant|soleus': ['E258', 'G0409'],
   'home_dumbbells|advanced|Calves|knee_dominant|': ['G0409'],
-  'home_dumbbells|advanced|Glutes|hip_isolation|': ['G0980'],
   'home_dumbbells|advanced|Calves|knee_dominant|soleus': ['G0409'],
   'basic_gym|beginner|Calves|knee_dominant|': ['E258'],
   'basic_gym|beginner|Calves|knee_dominant|soleus': ['E258'],
@@ -52,12 +55,12 @@ const _expected = <String, List<String>>{
   'full_gym|intermediate|Calves|knee_dominant|': ['E051', 'E052', 'E258', 'G0409'],
   'full_gym|intermediate|Glutes|hip_isolation|': ['E109'],
   'full_gym|intermediate|Quads|knee_dominant|isolation': ['E043'],
-  'full_gym|intermediate|Hamstrings|knee_dominant|': ['E049', 'G0599'],
+  'full_gym|intermediate|Hamstrings|knee_dominant|': ['E049', 'G0599', 'G0339'],
   'full_gym|intermediate|Calves|knee_dominant|soleus': ['E052', 'E051', 'E258', 'G0409'],
   'full_gym|advanced|Calves|knee_dominant|': ['E051', 'E052', 'G0409'],
   'full_gym|advanced|Glutes|hip_isolation|': ['E109'],
   'full_gym|advanced|Quads|knee_dominant|isolation': ['E043'],
-  'full_gym|advanced|Hamstrings|knee_dominant|': ['E049', 'G0599'],
+  'full_gym|advanced|Hamstrings|knee_dominant|': ['E049', 'G0599', 'G0339'],
   'full_gym|advanced|Calves|knee_dominant|soleus': ['E052', 'E051', 'G0409'],
 };
 

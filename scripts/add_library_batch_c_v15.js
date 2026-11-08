@@ -20,6 +20,12 @@
 //    no-op; anything else stops the run naming the key. A later hand edit of those nine E230 keys therefore throws until
 //    the record's `after` is updated. An absent record is a printed no-op (tests copy this script into temp dirs, as for
 //    --removals); a record whose id is not a kept row stops the run.
+//  - CORE-LEVELS STAGE (Library Batch S1a, plan docs/plans/2026-11-08-library-batch-s1-core-data.md):
+//    scripts/data/library_s1_core_levels.json holds `before` and `after` of `core_levels` for KEPT rows only (G and N rows
+//    change in the source). It runs as its own pass over the kept rows AFTER the retag and E274 steps and before the media
+//    stage: a row at `before` takes `after`, a row at `after` is a no-op, anything else stops the run naming the id; an id
+//    that is not a kept row, or a duplicate id, stops the run. An absent record is a printed no-op (tests copy this script
+//    into temp dirs).
 //  - A row is built from an ALLOW-LIST: the 40 required keys, then variant_family (from the table), then skill_track,
 //    skill_step, progression_to, regression_to where non-null. Everything else in the source (confidence, note, changes,
 //    hold, _coreAdded, demo_*, a future meta key) is dropped.
@@ -230,6 +236,34 @@ function retagRow(row, rec) {
   throw new Error(`${rec.id}: the row matches neither the retag record's before nor its after; ${where} (update after, or restore the row)`);
 }
 
+// Library Batch S1a: the core-levels record for kept rows. Absent = printed no-op.
+const CORE_LEVELS = path.join(__dirname, 'data', 'library_s1_core_levels.json');
+
+function readCoreLevels() {
+  if (!fs.existsSync(CORE_LEVELS)) {
+    console.log(`core-levels stage skipped: ${CORE_LEVELS} not found`);
+    return null;
+  }
+  const rec = JSON.parse(fs.readFileSync(CORE_LEVELS, 'utf8'));
+  if (!rec || !Array.isArray(rec.rows)) throw new Error(`core-levels record ${CORE_LEVELS} has no rows array`);
+  const byId = new Map();
+  for (const e of rec.rows) {
+    if (!e || typeof e.id !== 'string' || !Array.isArray(e.before) || !Array.isArray(e.after)) {
+      throw new Error(`core-levels record ${CORE_LEVELS}: every row needs id, before and after arrays`);
+    }
+    if (byId.has(e.id)) throw new Error(`core-levels record ${CORE_LEVELS} repeats ${e.id}`);
+    byId.set(e.id, e);
+  }
+  return byId;
+}
+
+function coreLevelsRow(row, e) {
+  const cur = JSON.stringify(row.core_levels);
+  if (cur === JSON.stringify(e.after)) return row;
+  if (cur === JSON.stringify(e.before)) return { ...row, core_levels: e.after };
+  throw new Error(`${e.id}: core_levels ${cur} matches neither the core-levels record's before nor its after (update after, or restore the row)`);
+}
+
 function readRemovals() {
   if (REMOVALS === null || !fs.existsSync(REMOVALS)) {
     console.log(`removals stage skipped: ${REMOVALS === null ? '--removals none' : `${REMOVALS} not found`}`);
@@ -310,6 +344,16 @@ function main() {
   });
   if (!kept.some((r) => r.id === 'E274')) throw new Error('E274 is not in the library');
   if (retag && !kept.some((r) => r.id === retag.id)) throw new Error(`${retag.id} is not a kept row of the library (the retag record names it)`);
+  const coreLevels = readCoreLevels();
+  if (coreLevels) {
+    const keptIds = new Set(kept.map((r) => r.id));
+    const foreign = [...coreLevels.keys()].filter((i) => !keptIds.has(i));
+    if (foreign.length) throw new Error(`core-levels record names ids that are not kept rows: ${foreign.join(' ')}`);
+    for (let i = 0; i < kept.length; i++) {
+      const e = coreLevels.get(kept[i].id);
+      if (e) kept[i] = coreLevelsRow(kept[i], e);
+    }
+  }
 
   const added = shipped.map((r) => {
     const tableRow = table[r.id];

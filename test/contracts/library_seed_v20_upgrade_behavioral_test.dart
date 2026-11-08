@@ -82,7 +82,7 @@ void main() {
       expect(jsonEncode(_asJson(hive.exerciseBox.get(e.key))), e.value, reason: '${e.key} must be unchanged');
     }
     expect(hive.exerciseBox.length, bundled.length);
-    expect(hive.configBox.get('exercise_library_version') as int, 20);
+    expect(hive.configBox.get('exercise_library_version') as int, 21);
   });
 
   test('a fresh install gets the bodyweight E230 with its picture', () async {
@@ -94,19 +94,19 @@ void main() {
     expect(e230['equipment_tier'], ['bodyweight', 'home_dumbbells', 'basic_gym', 'full_gym']);
     expect(e230['media_slug'], '0795-standing-single-leg-curl');
     expect(hive.exerciseBox.length, _bundled().length);
-    expect(hive.configBox.get('exercise_library_version') as int, 20);
+    expect(hive.configBox.get('exercise_library_version') as int, 21);
   });
 
-  test('MIRROR: a box already at v20 is not rewritten (the upgrade fires only when the stored version is older)', () async {
+  test('MIRROR: a box already at the current version (v21, Library Batch S1a) is not rewritten (the upgrade fires only when the stored version is older)', () async {
     final hive = HiveService.instance;
     final shipped = _bundled().singleWhere((r) => r['id'] == 'E230');
     final marker = {..._v19E230(shipped), 'name': 'Left alone'};
     for (final r in _bundled()) {
       await hive.exerciseBox.put(r['id'], r['id'] == 'E230' ? marker : r);
     }
-    await _markSeeded(hive, 20);
+    await _markSeeded(hive, 21);
     await SeedService.instance.seedIfNeeded();
     expect(_asJson(hive.exerciseBox.get('E230'))['name'], 'Left alone');
-    expect(hive.configBox.get('exercise_library_version') as int, 20);
+    expect(hive.configBox.get('exercise_library_version') as int, 21);
   });
 }

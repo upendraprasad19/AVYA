@@ -536,6 +536,9 @@ paths:
   # Batch C2c (2026-11-06, OI-474): the E230 retag record decides what the importer writes into that library row
   # (equipment, tier, logging, cues) and what the seed migration's rollback restores, so it sits at account above scripts/**.
   - { glob: "scripts/data/library_e230_retag.json", tier: account }
+  # Library Batch S1a (2026-11-08): the core-levels record decides which core lists the kept library rows sit on (what
+  # the core-list pool offers each level), so it sits at account above scripts/**, like the E230 record.
+  - { glob: "scripts/data/library_s1_core_levels.json", tier: account }
   - { glob: "docs/**", tier: feature }
   - { glob: "scripts/**", tier: feature }
   - { glob: "test/**", tier: feature }

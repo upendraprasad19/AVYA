@@ -6780,9 +6780,9 @@
       "shipped": 633,
       "core": {
         "beginner": 56,
-        "intermediate": 47,
-        "advanced": 31,
-        "rows": 83
+        "intermediate": 54,
+        "advanced": 44,
+        "rows": 90
       }
     }
   },
@@ -12636,7 +12636,9 @@
       "variant_family": "calf_raise",
       "discipline": "strength",
       "core_levels": [
-        "beginner"
+        "beginner",
+        "intermediate",
+        "advanced"
       ],
       "skill_track": null,
       "skill_step": null,
@@ -13167,7 +13169,10 @@
       "indian_alternative": "Calf raises on a stair edge",
       "variant_family": "calf_raise",
       "discipline": "strength",
-      "core_levels": [],
+      "core_levels": [
+        "intermediate",
+        "advanced"
+      ],
       "skill_track": null,
       "skill_step": null,
       "regression_to": null,
@@ -13431,7 +13436,10 @@
       "indian_alternative": "Calf raises on a stair edge",
       "variant_family": "calf_raise",
       "discipline": "strength",
-      "core_levels": [],
+      "core_levels": [
+        "intermediate",
+        "advanced"
+      ],
       "skill_track": null,
       "skill_step": null,
       "regression_to": null,
@@ -24513,7 +24521,10 @@
       "indian_alternative": "",
       "variant_family": "leg_curl",
       "discipline": "strength",
-      "core_levels": [],
+      "core_levels": [
+        "intermediate",
+        "advanced"
+      ],
       "skill_track": null,
       "skill_step": null,
       "regression_to": null,
@@ -24649,7 +24660,10 @@
       "indian_alternative": "",
       "variant_family": "leg_curl",
       "discipline": "strength",
-      "core_levels": [],
+      "core_levels": [
+        "intermediate",
+        "advanced"
+      ],
       "skill_track": null,
       "skill_step": null,
       "regression_to": null,
@@ -25997,7 +26011,8 @@
       "discipline": "strength",
       "core_levels": [
         "beginner",
-        "intermediate"
+        "intermediate",
+        "advanced"
       ],
       "skill_track": null,
       "skill_step": null,
@@ -29716,7 +29731,10 @@
       "indian_alternative": "Water bottle lateral raises",
       "variant_family": "lateral_raise",
       "discipline": "strength",
-      "core_levels": [],
+      "core_levels": [
+        "intermediate",
+        "advanced"
+      ],
       "skill_track": null,
       "skill_step": null,
       "regression_to": null,
@@ -30436,7 +30454,8 @@
       "discipline": "strength",
       "core_levels": [
         "beginner",
-        "intermediate"
+        "intermediate",
+        "advanced"
       ],
       "skill_track": null,
       "skill_step": null,
@@ -39800,7 +39819,8 @@
       "discipline": "strength",
       "core_levels": [
         "beginner",
-        "intermediate"
+        "intermediate",
+        "advanced"
       ],
       "skill_track": null,
       "skill_step": null,
@@ -40016,7 +40036,9 @@
       "variant_family": "romanian_deadlift",
       "discipline": "strength",
       "core_levels": [
-        "beginner"
+        "beginner",
+        "intermediate",
+        "advanced"
       ],
       "skill_track": null,
       "skill_step": null,
@@ -46721,7 +46743,9 @@
       "indian_alternative": "",
       "variant_family": "single_leg_squat",
       "discipline": "strength",
-      "core_levels": [],
+      "core_levels": [
+        "advanced"
+      ],
       "skill_track": null,
       "skill_step": null,
       "regression_to": null,
@@ -46794,7 +46818,8 @@
       "discipline": "strength",
       "core_levels": [
         "beginner",
-        "intermediate"
+        "intermediate",
+        "advanced"
       ],
       "skill_track": null,
       "skill_step": null,
@@ -47080,7 +47105,9 @@
       "indian_alternative": "",
       "variant_family": "single_leg_squat",
       "discipline": "strength",
-      "core_levels": [],
+      "core_levels": [
+        "advanced"
+      ],
       "skill_track": "pistol_squat",
       "skill_step": 2,
       "regression_to": "Skater Squat",

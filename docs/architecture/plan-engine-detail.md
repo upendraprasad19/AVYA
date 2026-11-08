@@ -317,6 +317,8 @@ Plan `docs/plans/2026-11-08-generator-step1-core-list.md` (v6, six context-blind
 
 R1 (core-list data for advanced home and bodyweight squats, bodyweight hinges, curls and calves) and R7 (bodyweight arm and delt gaps) are founder-signed data and ship with the R9 gate zeros (i) and (iv); the flip and the old-path deletion are Unit 1B.
 
+**Library Batch S1a (2026-11-08, seed v21; plan `docs/plans/2026-11-08-library-batch-s1-core-data.md`, diagnose `e9a4b6`).** The R1 / R7 data shipped as `core_levels` on 34 rows (no cloud change: `core_levels` is not a cloud column). Kept rows change through `scripts/data/library_s1_core_levels.json` and an importer stage; source rows in the Batch C source. Two rows were added to keep a loaded row for equipped users: G0339 (hamstring curl, basic gym) and G0355 (a second lateral raise). The second one exposed a third way a household row reaches an equipped user's implement-pattern slot: `pickedNames` runs in `passes()` BEFORE the improvised filter, so once a day's first slot takes the only loaded row, the second slot's pool holds only household rows and the filter (which never empties a pool) cannot fire. Gate R9 (i) also fails an uninjured persona that meets a jump-only pool (the pre-S1a Jump Squat leads came from jump-only pools, which the plain wording exempted). Named exceptions to `core_levels` ⊆ `suitable_for`: E010 and E045 (`library_s1_core_levels_test.dart`).
+
 ## Thin-day top-up (OI-401, live, kill-switch `disable_thin_day_topup`)
 
 Plan `docs/plans/2026-10-24-thin-day-topup.md` (r3, two converged review rounds); diagnose `docs/diagnoses/2026-10-24-thin-day-topup-2d04d7.md`; founder decision 2026-10-23, option (b).
