@@ -147,7 +147,13 @@ class SeedService {
   //   library_e230_retag.json) and gains its animation 0795 (the three media keys). putAll rewrites
   //   the row by id. Without this bump an existing install keeps the cable row and never gets the
   //   picture (library_seed_v20_upgrade_behavioral_test.dart).
-  static const int _exerciseLibraryVersion = 20;
+  //   v21 (Library Batch S1a, docs/plans/2026-11-08-library-batch-s1-core-data.md): core_levels change on
+  //   34 rows (the founder-approved core-list levels, R1 / R7 / advanced Hip and Glutes, and level
+  //   agreement; scripts/data/library_s1_core_levels.json for kept rows, the Batch C source for the
+  //   others). Read only by the core-list pool (enable_core_list_pool). putAll rewrites the rows by
+  //   id. Without this bump an existing install keeps the old levels
+  //   (library_seed_v21_upgrade_behavioral_test.dart).
+  static const int _exerciseLibraryVersion = 21;
   static const String _exerciseVersionKey = 'exercise_library_version';
 
   /// Bump this integer whenever the bundled food_database.json changes

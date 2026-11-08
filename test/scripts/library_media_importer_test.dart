@@ -26,6 +26,7 @@ const _injRel = 'scripts/data/library_injury_additions_v15.json';
 const _mediaRel = 'scripts/data/library_media_v16.json';
 const _mapRel = 'scripts/data/library_batch_c_media_map.json';
 const _e230Rel = 'scripts/data/library_e230_retag.json';
+const _s1Rel = 'scripts/data/library_s1_core_levels.json';
 const _mediaKeys = ['media_slug', 'media_version', 'media_source'];
 
 Json _readJson(String path) => jsonDecode(File(path).readAsStringSync()) as Json;
@@ -39,7 +40,7 @@ class _Tree {
     Directory('${dir.path}/scripts/data').createSync(recursive: true);
     Directory('${dir.path}/assets/data').createSync(recursive: true);
     File(script).writeAsStringSync(File(_importer).readAsStringSync());
-    for (final e in {src: _srcRel, inj: _injRel, media: _mediaRel, lib: _libRel, retag: _e230Rel}.entries) {
+    for (final e in {src: _srcRel, inj: _injRel, media: _mediaRel, lib: _libRel, retag: _e230Rel, coreLevels: _s1Rel}.entries) {
       File(e.key).writeAsStringSync(File(e.value).readAsStringSync());
     }
   }
@@ -51,6 +52,7 @@ class _Tree {
   String get inj => '${dir.path}/scripts/data/library_injury_additions_v15.json';
   String get media => '${dir.path}/scripts/data/library_media_v16.json';
   String get retag => '${dir.path}/scripts/data/library_e230_retag.json';
+  String get coreLevels => '${dir.path}/scripts/data/library_s1_core_levels.json';
 
   List<String> get base => ['--library', lib, '--source', src, '--table', inj];
 
@@ -477,6 +479,95 @@ void main() {
       expect(t2.exitCode, isNot(0), reason: _out(t2));
       expect(_err(t2), contains('same keys'));
       expect(t.readLibText(), beforeText, reason: 'a refused run must not write');
+    });
+  });
+
+  group('the core-levels stage (Library Batch S1a)', () {
+    setUp(() => File('${t.dir.path}/scripts/data/library_batch_c2_removals.json')
+        .writeAsStringSync(File('scripts/data/library_batch_c2_removals.json').readAsStringSync()));
+
+    List<Json> recRows() => (_readJson(t.coreLevels)['rows'] as List).cast<Json>();
+
+    /// The tree's library with every record id's core_levels set back to `before` (Dart round trip, as the retag group).
+    String libAtBefore() {
+      final lib = t.readLib();
+      for (final e in recRows()) {
+        final i = lib.indexWhere((r) => r['id'] == e['id']);
+        lib[i] = {...lib[i], 'core_levels': e['before']};
+      }
+      return const JsonEncoder.withIndent('  ').convert(lib);
+    }
+
+    test('(a) a library at before takes after for every record id, E274 keeps its Mid Back fix, nothing else moves, rerun and --check agree', () async {
+      final beforeText = libAtBefore();
+      final beforeRows = _byId((jsonDecode(beforeText) as List).cast<Json>());
+      t.writeLibText(beforeText);
+      final r = await t.importer();
+      expect(r.exitCode, 0, reason: _out(r));
+      final byId = _byId(t.readLib());
+      final ids = {for (final e in recRows()) e['id'] as String};
+      for (final e in recRows()) {
+        expect(jsonEncode(byId[e['id']]!['core_levels']), jsonEncode(e['after']), reason: '${e['id']}');
+        expect(byId[e['id']]!.keys.toList(), beforeRows[e['id']]!.keys.toList(), reason: 'key positions kept');
+      }
+      // E274 is in the record AND carries the Upper Back -> Mid Back rewrite: the stage must not undo it.
+      expect(ids, contains('E274'));
+      expect(byId['E274']!['target_focus'], contains('Mid Back'));
+      expect(byId['E274']!['target_focus'], isNot(contains('Upper Back')));
+      for (final e in beforeRows.entries.where((e) => !ids.contains(e.key))) {
+        expect(jsonEncode(byId[e.key]), jsonEncode(e.value), reason: '${e.key} must be untouched');
+      }
+      expect(t.readLibText(), File(_libRel).readAsStringSync(), reason: 'the result is the shipped library, byte for byte');
+      final first = t.readLibText();
+      final again = await t.importer();
+      expect(again.exitCode, 0, reason: _out(again));
+      expect(t.readLibText(), first, reason: 'a second run is byte-identical');
+      final ok = await t.importer(extra: ['--check']);
+      expect(ok.exitCode, 0, reason: _out(ok));
+    });
+
+    test('(b) --check on the library at before fails', () async {
+      t.writeLibText(libAtBefore());
+      final r = await t.importer(extra: ['--check']);
+      expect(r.exitCode, isNot(0), reason: _out(r));
+    });
+
+    test('(c) a foreign value is refused naming the id, and nothing is written', () async {
+      final lib = t.readLib();
+      final id = recRows().first['id'] as String;
+      lib.singleWhere((r) => r['id'] == id)['core_levels'] = ['advanced', 'beginner'];
+      final foreign = const JsonEncoder.withIndent('  ').convert(lib);
+      t.writeLibText(foreign);
+      final r = await t.importer();
+      expect(r.exitCode, isNot(0), reason: _out(r));
+      expect(_err(r), allOf(contains(id), contains('core-levels record')));
+      expect(t.readLibText(), foreign, reason: 'a refused run must not write');
+    });
+
+    test('(d) the record absent is a printed no-op: the library at before stays at before', () async {
+      final beforeText = libAtBefore();
+      File(t.coreLevels).deleteSync();
+      t.writeLibText(beforeText);
+      final r = await t.importer();
+      expect(r.exitCode, 0, reason: _out(r));
+      expect(_out(r), contains('core-levels stage skipped'));
+      expect(t.readLibText(), beforeText);
+    });
+
+    test('(e) a record naming a source id or an unknown id, or repeating an id, is refused', () async {
+      final base = _readJson(_s1Rel);
+      final rows = (base['rows'] as List).cast<Json>();
+      for (final bad in [
+        [...rows, {'id': 'G0413', 'before': <String>[], 'after': <String>['advanced']}],
+        [...rows, {'id': 'E999', 'before': <String>[], 'after': <String>['advanced']}],
+        [...rows, rows.first],
+      ]) {
+        File(t.coreLevels).writeAsStringSync(jsonEncode({...base, 'rows': bad}));
+        final text = t.readLibText();
+        final r = await t.importer();
+        expect(r.exitCode, isNot(0), reason: _out(r));
+        expect(t.readLibText(), text, reason: 'a refused run must not write');
+      }
     });
   });
 }

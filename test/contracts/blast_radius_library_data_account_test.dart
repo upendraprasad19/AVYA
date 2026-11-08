@@ -34,6 +34,8 @@ const _mediaTableGlob = 'scripts/data/library_media_v16.json';
 const _removalsGlob = 'scripts/data/library_batch_c2_removals.json';
 // Batch C2c (OI-474): the E230 retag record decides what the importer writes into that row and what the migration's rollback restores.
 const _retagGlob = 'scripts/data/library_e230_retag.json';
+// Library Batch S1a: the core-levels record decides which core lists the kept rows sit on.
+const _coreLevelsGlob = 'scripts/data/library_s1_core_levels.json';
 const _assetsGlob = 'assets/**';
 const _scriptsGlob = 'scripts/**';
 
@@ -153,6 +155,30 @@ void main() {
     test('mirror: the importer that applies it and a sibling data file keep the scripts/** tier', () {
       expect(tier('scripts/add_library_batch_c_v15.js'), 'feature');
       expect(tier('scripts/data/library_e230_retag_other.json'), 'feature');
+    });
+  });
+
+  group('1e. the S1a core-levels record', () {
+    test('it is account, claimed by its own rule above scripts/**, and the file exists', () {
+      expect(File(_coreLevelsGlob).existsSync(), isTrue, reason: 'positive control');
+      expect(tier(_coreLevelsGlob), 'account');
+      expect(ruleFor(_coreLevelsGlob)?.glob, _coreLevelsGlob);
+      int index(String glob) => reg.rules.indexWhere((r) => r.glob == glob);
+      expect(index(_coreLevelsGlob), lessThan(index(_scriptsGlob)));
+    });
+
+    test("the commit-time review gate's own engine reads it as account too; a look-alike stays feature", () {
+      final rules = reviewGate.parseRules(yaml);
+      String gateTier(String p) {
+        for (final r in rules) {
+          if (reviewGate.globToRegExp(r.glob).hasMatch(p)) return r.tier;
+        }
+        return 'feature';
+      }
+
+      expect(gateTier(_coreLevelsGlob), 'account');
+      expect(gateTier('scripts/data/library_s1_core_levels_other.json'), 'feature');
+      expect(tier('scripts/data/library_s1_core_levels_other.json'), 'feature');
     });
   });
 
