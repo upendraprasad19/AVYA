@@ -11641,6 +11641,16 @@ concepts:
       over the same personas; report test/plan_generator/core_list_pool_report.md). The
       slot_focus / slot_pattern overlays are read ONLY here; the flip copies them into
       target_focus / movement_pattern and deletes them.
+      Generator step 1A (docs/plans/2026-11-08-generator-step1-core-list.md, still OFF):
+      R2 jump rows (high_impact or discipline plyometric) leave a mixed pool before the
+      improvised filter (a partition: _preferNovel walks past any ordering key); R3 (a) an
+      implement user's non-core isolation slot outside the implement patterns is
+      reduced to like-for-like implement rows (isolation type, first-listed muscle names
+      the slot's muscle, calves heads gastrocnemius/soleus); R3 (b) a fit key (a row using
+      a non-household item the user has) before priority_tier in non-core compound slots;
+      R5 a glute-first last tie-break in Glutes hip_dominant slots; R4 the thin-day top-up
+      prefers core rows on the ON paths (thin_day_topup). Trace fields jumpRemoved,
+      jumpOnlyPool, likeForLikeImplement.
     writers:
       - file: scripts/add_library_core_fields_v13.js
         method: main (applies scripts/data/library_core_fields_v13.json)
@@ -17084,6 +17094,12 @@ concepts:
       test/plan_generator/injury_sweep_b_singles_test.dart, harness test/helpers/injury_floor_sweep_lib.dart)
       plus the behavioural file. The residual (a 5/6-day beginner trimmed by VolumeFilter before the
       selector) is OI-408.
+      Generator step 1A, R4 (docs/plans/2026-11-08-generator-step1-core-list.md): topUpDays takes a
+      REQUIRED coreListOnly. True at the _pickCoreList exit, and at buildPinnedDays when the core-list
+      pool is ON and the library carries core_levels; false at the cascade exit. When true the ladder
+      runs twice: pass 1 keeps only rows core at the user's level or an easier one
+      (CoreListSelector.isCoreAtOrEasier), pass 2 is the unchanged ladder with a fresh memo, so the
+      floor of 3 is kept. OFF is byte-identical (golden).
     writers:
       - file: lib/shared/repositories/plan_engine/exercise_selector.dart
         method: topUpDays and _topUpVariant (three call sites)

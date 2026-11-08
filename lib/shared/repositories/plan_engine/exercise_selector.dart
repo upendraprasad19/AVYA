@@ -610,7 +610,8 @@ class ExerciseSelector {
           earlierFeederNamesA: earlierFeederNamesA,
           earlierFeederNamesB: earlierFeederNamesB,
         );
-        // OI-401: the ON path is path-independent for the top-up (Ruling R9).
+        // OI-401: the ON path's top-up prefers core-list rows (generator step
+        // 1A, R4) and keeps the 3-exercise floor.
         return topUpDays(
           coreDays,
           slotDays: slotDays,
@@ -623,6 +624,7 @@ class ExerciseSelector {
           applyInjurySubstitutePreference: applyInjurySubstitutePreference,
           exclusions: exclusions,
           capability: capability,
+          coreListOnly: true,
           previousPhaseByDay: previousPhaseByDay,
           plateauAvoidNames: plateauAvoidNames,
         );
@@ -740,6 +742,7 @@ class ExerciseSelector {
       applyInjurySubstitutePreference: applyInjurySubstitutePreference,
       exclusions: exclusions,
       capability: capability,
+      coreListOnly: false,
       previousPhaseByDay: previousPhaseByDay,
       plateauAvoidNames: plateauAvoidNames,
     );
@@ -861,6 +864,9 @@ class ExerciseSelector {
               nonImprovisedInPool: r.nonImprovisedInPool,
               families: r.families,
               pickedFamily: chosen?['variant_family'] as String?,
+              jumpRemoved: r.jumpRemoved,
+              jumpOnlyPool: r.jumpOnlyPool,
+              likeForLikeImplement: r.likeForLikeImplement,
             ));
           }
         }
@@ -1137,7 +1143,9 @@ class ExerciseSelector {
     }
 
     // OI-401: a variant left with 1 or 2 surviving pins is never refilled above
-    // (only an EMPTY variant is), so the top-up covers it here.
+    // (only an EMPTY variant is), so the top-up covers it here. With the core-list
+    // pool ON the repeat phase is core-list world too (generator step 1A, R4);
+    // OFF short-circuits to false (byte-identical).
     return topUpDays(
       result,
       slotDays: frames,
@@ -1150,6 +1158,8 @@ class ExerciseSelector {
       applyInjurySubstitutePreference: applyInjurySubstitutePreference,
       exclusions: exclusions,
       capability: capability,
+      coreListOnly: PlanEngineFlags.coreListPoolEnabled &&
+          CoreListSelector.hasCoreFields(exerciseRepo.getAll()),
     );
   }
 
@@ -1192,6 +1202,9 @@ class ExerciseSelector {
     required bool applyInjurySubstitutePreference,
     required Set<String> exclusions,
     required Set<String>? capability,
+    // Generator step 1A, R4: true only on the core-list (ON) paths; REQUIRED, not
+    // defaulted, so a missed call site fails to compile (the OI-89 lesson above).
+    required bool coreListOnly,
     Map<int, ({List<String> a, List<String> b})>? previousPhaseByDay,
     Set<String> plateauAvoidNames = const {},
   }) {
@@ -1237,6 +1250,7 @@ class ExerciseSelector {
           demoted,
           exerciseRepo, equipmentTier, effectiveExp, phase, injuries,
           applyInjurySubstitutePreference, exclusions, capability,
+          coreListOnly: coreListOnly,
         );
       }
       if (alias) {
@@ -1253,6 +1267,7 @@ class ExerciseSelector {
           demoted,
           exerciseRepo, equipmentTier, effectiveExp, phase, injuries,
           applyInjurySubstitutePreference, exclusions, capability,
+          coreListOnly: coreListOnly,
         );
       }
       out.add(PopulatedDay(
@@ -1282,13 +1297,19 @@ class ExerciseSelector {
     List<String> injuries,
     bool applyInjurySubstitutePreference,
     Set<String> exclusions,
-    Set<String>? capability,
-  ) {
+    Set<String>? capability, {
+    required bool coreListOnly,
+  }) {
     final out = [...current];
     final picked = {for (final e in current) e.exerciseName};
-    final exhausted = <String>{};
+    // Generator step 1A, R4: the ladder below runs once (OFF / not core-list:
+    // today's behaviour) or twice (core-list ON): pass 1 keeps only rows on a
+    // core list at the user's level or an easier one; pass 2, reached only while
+    // the variant is still under the floor, is today's ladder with a FRESH memo,
+    // so a key that held no core row is retried. The floor is unchanged.
+    var exhausted = <String>{};
 
-    bool addFrom(String pattern, String? muscle) {
+    bool addFrom(String pattern, String? muscle, {required bool coreOnly}) {
       final key = '$pattern|${muscle ?? ''}';
       if (exhausted.contains(key)) return false;
       var cands = const <Map<String, dynamic>>[];
@@ -1313,7 +1334,9 @@ class ExerciseSelector {
             capability: capability,
           ))
             if (c['discipline'] != 'calisthenics_skill' &&
-                c['discipline'] != 'olympic')
+                c['discipline'] != 'olympic' &&
+                (!coreOnly ||
+                    CoreListSelector.isCoreAtOrEasier(c, effectiveExp)))
               c
         ];
         if (cands.isNotEmpty) break;
@@ -1340,26 +1363,32 @@ class ExerciseSelector {
     }
 
     final anchors = ThinDayTopUp.anchors(slots);
-    var progress = true;
-    while (out.length < ThinDayTopUp.floor && progress) {
-      progress = false;
-      for (final anchor in anchors) {
-        if (out.length >= ThinDayTopUp.floor) break;
-        final order = [
-          anchor.pattern,
-          ...(ThinDayTopUp.neighbours[anchor.pattern] ?? const <String>[]),
-        ];
-        for (final pattern in order) {
-          if (addFrom(pattern, anchor.muscle)) {
-            progress = true;
-            break;
+    void ladder({required bool coreOnly}) {
+      exhausted = <String>{};
+      var progress = true;
+      while (out.length < ThinDayTopUp.floor && progress) {
+        progress = false;
+        for (final anchor in anchors) {
+          if (out.length >= ThinDayTopUp.floor) break;
+          final order = [
+            anchor.pattern,
+            ...(ThinDayTopUp.neighbours[anchor.pattern] ?? const <String>[]),
+          ];
+          for (final pattern in order) {
+            if (addFrom(pattern, anchor.muscle, coreOnly: coreOnly)) {
+              progress = true;
+              break;
+            }
           }
         }
       }
+      while (out.length < ThinDayTopUp.floor) {
+        if (!addFrom('core', null, coreOnly: coreOnly)) break;
+      }
     }
-    while (out.length < ThinDayTopUp.floor) {
-      if (!addFrom('core', null)) break;
-    }
+
+    if (coreListOnly) ladder(coreOnly: true);
+    ladder(coreOnly: false);
     return out;
   }
 

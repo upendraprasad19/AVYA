@@ -345,6 +345,19 @@ pending:
       E254, E234; the thin-day top-up ratchet _r9TopUpRetired stays E261 and E271
       (the kept sheet-drop rows E254 and E294 are not top-up additions);
       skill/olympic none. flip_reviewed stays false.
+      Generator step 1A (docs/plans/2026-11-08-generator-step1-core-list.md, Unit 1A,
+      the pool still OFF): rankedPool partitions jump rows out of a mixed pool (R2),
+      reduces an implement user's isolation slot to like-for-like implement rows (R3 a),
+      ranks a row the user's equipment fits before priority in compound slots (R3 b),
+      and breaks Glutes hinge ties glute-first (R5). The OI-401 question above is
+      answered by R4: on the ON paths the top-up is core-list-first (pass 1 keeps rows
+      core at the user's level or an easier one), then today's ladder, so the floor of
+      3 holds and a retired row is added only where no core row reaches the day.
+      vertical_push joined the implement patterns (plan v7). Measured ON (plan section 7):
+      Strength gym OHP Day with Pike Push Up 56/56 -> 0/56, unloaded picks 1,505 -> 468
+      plans, top-up retired additions none; emergencyAnyLevel, refilled and the jump rows
+      unchanged (R1 data waits on the founder; OI-436). The flip is Unit 1B, with the full
+      x2 review and B-pass; this entry stays pending.
 
 resolved:
   - flag: enable_session_set_budget

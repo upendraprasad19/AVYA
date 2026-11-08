@@ -36,7 +36,7 @@ const _reportPath = 'test/plan_generator/core_list_pool_report.md';
 const _rank = {'beginner': 0, 'intermediate': 1, 'advanced': 2};
 const _implementPatterns = {
   'elbow_flexion', 'elbow_extension', 'shoulder_isolation', 'horizontal_pull',
-  'vertical_pull',
+  'vertical_pull', 'vertical_push',
 };
 const _suitableDisagreeIds = {'E010', 'E020', 'E045', 'E134', 'E255'};
 
@@ -64,7 +64,11 @@ bool _skill(Map<String, dynamic> r) =>
 /// budgeted allocator trims or reshapes the topped-up days, so only E261 and E271
 /// still reach an injured user; E234 and E254 no longer do. The ratchet follows
 /// the measured set DOWN (a recorded id that stops is also a failure here).
-const _r9TopUpRetired = {'E261', 'E271'};
+/// 2026-11-08 (generator step 1A, R4): under the pool the top-up takes core rows
+/// first (at the user's level or an easier one), then today's ladder, so no
+/// retired id reaches an injured user on these personas: the set is empty. The
+/// mutation that switches pass 1 off brings E261 and E271 back (diagnose 44d40a).
+const _r9TopUpRetired = <String>{};
 
 /// Splits the built ids that are retired or skill rows into the hard failures
 /// and the R9 evidence. [without] is the same persona's built ids with the
@@ -256,6 +260,21 @@ void main() {
           needed.every(CoreListSelector.improvisedTokens.contains)) {
         bad.add('improvised: $where');
       }
+      // Generator step 1A, R9 (ii): an isolation slot reduced to like-for-like
+      // implement rows (R3 (a)) never picks an improvised row.
+      if (implement &&
+          s.likeForLikeImplement &&
+          needed.every(CoreListSelector.improvisedTokens.contains)) {
+        bad.add('improvised (like-for-like): $where');
+      }
+      // R9 (iii): a barbell or dumbbell user's vertical_push slot never picks
+      // E010 Pike Push Up while its pool held an implement row (R3 (b)).
+      if (id == 'E010' &&
+          s.slot.movementPattern == 'vertical_push' &&
+          cap.any(const {'barbell', 'dumbbells'}.contains) &&
+          s.nonImprovisedInPool > 0) {
+        bad.add('pike over a loaded press: $where');
+      }
       if (levels.isEmpty && r['variant_family'] == null) bad.add('retired: $where');
     }
 
@@ -367,10 +386,9 @@ void main() {
             'enable_core_list_pool flip review, then edit _r9TopUpRetired. '
             'Personas that got an id outside the recorded set: '
             '${topUpRetired.where((e) => !_r9TopUpRetired.contains(e.split(' ').last)).toList()}');
-    expect(topUpRetired, isNotEmpty);
-    expect(attributionReruns, greaterThan(0),
-        reason: 'the evidence above must come from attributed re-runs, not from '
-            'treating every retired id as a top-up addition');
+    // Since R4 the recorded set is empty, so there is no evidence to require and
+    // no persona needs an attribution re-run; the attribution itself stays pinned
+    // by the classifyBuilt group below.
   });
 
   test('R9 (Batch C2a): every retired id the top-up adds is a KEPT sheet-drop row, never a removed one', () async {
@@ -383,7 +401,8 @@ void main() {
     final keep = {for (final e in entries) if (e['decision'] == 'keep') e['id'] as String};
     final removed = {for (final e in entries) if (e['decision'] == 'remove') e['id'] as String};
     expect(keep, isNotEmpty, reason: 'non-vacuity: the removals file has kept rows');
-    expect(topUpRetiredIds, isNotEmpty, reason: 'non-vacuity: the top-up adds retired rows');
+    // Since generator step 1A (R4) the top-up adds no retired row on these
+    // personas (_r9TopUpRetired is empty); the checks below guard a return.
     expect(topUpRetiredIds.intersection(removed), isEmpty, reason: 'a removed row reached a built plan');
     expect(keep.containsAll(topUpRetiredIds), isTrue,
         reason: 'a retired top-up id outside the kept sheet-drop rows: ${topUpRetiredIds.difference(keep)}');
@@ -561,7 +580,8 @@ void main() {
       ..writeln()
       ..writeln('- thin-day top-up (R9) retired additions for injured users, attributed by a kill-switch re-run: '
           '${r9ById.isEmpty ? 'none' : r9ById.entries.map((e) => '${e.key} ${byId[e.key]?['name']} ×${e.value}').join('; ')} '
-          '(${{for (final e in topUpRetired) e.split(' ').first}.length} personas)')
+          '(${{for (final e in topUpRetired) e.split(' ').first}.length} personas; '
+          '$attributionReruns personas re-run for attribution)')
       ..writeln('- `emergencyAnyLevel` personas: ${emergencyKeys.length} '
           '${emergencyKeys.isEmpty ? '' : '(${emergencyKeys.join(', ')})'}')
       ..writeln('- `copied` variants: $copied')
