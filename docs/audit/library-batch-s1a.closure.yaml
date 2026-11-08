@@ -1,7 +1,7 @@
 # Closure ledger - library-batch-s1a (generator step 1 data: core-list levels, R9 (i) and (iv), seed v21).
 # Plan docs/plans/2026-11-08-library-batch-s1-core-data.md (v4, three review rounds), record
 # docs/plan-reviews/generator-step1-r1-data.md, diagnose e9a4b6. Gate 40 (validate_audit_closure.dart).
-# closed_in_commit rows name the branch state until the stamp commit that follows the fix commit writes its SHA.
+# closed_in_commit rows carry the fix commit d1a7afe8 (stamped by the commit that follows it).
 batch: library-batch-s1a
 plan_review_record: docs/plan-reviews/generator-step1-r1-data.md
 total_findings: 11
@@ -11,31 +11,31 @@ findings:
   - id: S1A-TABLE-A
     title: "core_levels of the 34 Table A rows (R1, R7, advanced Hip and Glutes, level agreement)"
     terminal_state: closed_in_commit
-    commit: "generator-step1-r1-data (uncommitted)"
+    commit: d1a7afe8
     verification: "library_s1_core_levels_test.dart (Table A restated, nothing else moved against the committed fixture, the whole-library suitable_for sweep with two named exceptions); importer and scope --check green; mutations in diagnose e9a4b6."
 
   - id: S1A-STAGE
     title: "The importer's core-levels stage for kept rows (record plus stage, never a hand edit)"
     terminal_state: closed_in_commit
-    commit: "generator-step1-r1-data (uncommitted)"
+    commit: d1a7afe8
     verification: "test/scripts/library_media_importer_test.dart group 'the core-levels stage' (a)-(e): apply, --check, foreign value refused, absent record no-op, source / unknown / repeated id refused; E274 keeps its Mid Back fix."
 
   - id: S1A-SEED-V21
     title: "Seed v21 so installs get the new levels"
     terminal_state: closed_in_commit
-    commit: "generator-step1-r1-data (uncommitted)"
+    commit: d1a7afe8
     verification: "library_seed_v21_upgrade_behavioral_test.dart (real SeedService: v20 box upgrades, fresh install, v21 box left alone); the v16 / v18 / v19 / v20 pins repointed."
 
   - id: S1A-G0339
     title: "A towel curl would have replaced the dumbbell curl in the basic_gym Hamstrings curl slot (review #2)"
     terminal_state: closed_in_commit
-    commit: "generator-step1-r1-data (uncommitted)"
+    commit: d1a7afe8
     verification: "G0339 core [intermediate, advanced]; core_list_like_for_like_data_test.dart records it in the basic and full gym curl cells."
 
   - id: S1A-G0355
     title: "A day's second Lateral Delts slot gave an equipped user Towel Lateral Raise once E013 was taken (same-day dedup reaches the household rows)"
     terminal_state: closed_in_commit
-    commit: "generator-step1-r1-data (uncommitted)"
+    commit: d1a7afe8
     verification: "G0355 core [intermediate, advanced]; audit: Towel Lateral Raise household picks 88 -> 32 plans (the pre-S1a count)."
 
   - id: S1A-OFF-IDENTITY

@@ -77,19 +77,19 @@ findings:
   - id: S1A-R1-DATA
     title: "R1 core-list data: advanced home / bodyweight squats, bodyweight hinges above beginner, curls, calves, E291 (plan R1 table) with the R9 zeros (i) and (iv)"
     terminal_state: closed_in_commit
-    commit: "generator-step1-r1-data (uncommitted)"
+    commit: d1a7afe8
     verification: "Library Batch S1a (plan docs/plans/2026-11-08-library-batch-s1-core-data.md, Table A; diagnose e9a4b6): every R1 row ships its founder-approved levels (library_s1_core_levels_test.dart); week-1 jump rows 1,273 -> 0 and Hamstrings hinge drops gone (plan Results)."
 
   - id: S1A-NORDIC
     title: "E046 Nordic Curl on the advanced list (hard eccentric)"
     terminal_state: closed_in_commit
-    commit: "generator-step1-r1-data (uncommitted)"
+    commit: d1a7afe8
     verification: "Founder 2026-11-08 (board decision d8): yes. E046 core [advanced] in Library Batch S1a (library_s1_core_levels_test.dart)."
 
   - id: S1A-R7-GAPS
     title: "R7 bodyweight gaps above beginner (Biceps, Lateral / Rear / Front Delts, Lower Chest, Hip / Glutes)"
     terminal_state: closed_in_commit
-    commit: "generator-step1-r1-data (uncommitted)"
+    commit: d1a7afe8
     verification: "Founder 2026-11-08 (d9, d11): household rows at intermediate / advanced for Biceps and Lateral / Rear Delts (plus E274 / E277 prone raises), Lower Chest left as is, E107 / G3667 / E257 for the advanced Hip and Glutes slots; shipped in Library Batch S1a. Front Delts has no bodyweight shoulder_isolation row, so that drop stays: ledgered in docs/audit/library-batch-s1a.closure.yaml (S1A-FRONT-DELTS)."
 
   - id: S1A-GLUTE-CALL
@@ -154,7 +154,7 @@ findings:
   - id: 1B-10
     title: "Core vs suitable_for disagreements E020, E134, E255 (E020 added by S1a's whole-library scan)"
     terminal_state: closed_in_commit
-    commit: "generator-step1-r1-data (uncommitted)"
+    commit: d1a7afe8
     verification: "Library Batch S1a narrowed them into suitable_for (E020 [intermediate], E134 [advanced], E255 []); library_s1_core_levels_test.dart sweeps every row. E255's alternative [intermediate, advanced] is a founder call ledgered in library-batch-s1a.closure.yaml (S1A-E255)."
 
   - id: 1B-10b
@@ -171,5 +171,5 @@ findings:
   - id: S1A-R9-I-IV
     title: "R9 gate zeros (i) no jump pick unless the pool was jump-only, and no jump-only pool for an uninjured persona, (iv) bodyweight / home advanced Quads and Hamstrings slots filled"
     terminal_state: closed_in_commit
-    commit: "generator-step1-r1-data (uncommitted)"
+    commit: d1a7afe8
     verification: "core_list_pool_gate_test.dart; mutations: the pre-S1a library red (52 jump-only pools, 34 unfilled hinges), the R2 partition off red (42 jump picks); diagnose e9a4b6."
