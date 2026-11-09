@@ -10,25 +10,25 @@ findings:
   - id: S1B2-ROWS
     title: "Nine loaded versions N14 to N22 (OI-148, founder 2026-11-08), copying their original's movement fields and injury tags"
     terminal_state: closed_in_commit
-    commit: "generator-step1-s1b2 (uncommitted)"
+    commit: ca87baba
     verification: "library_s1b2_loaded_versions_test.dart (pairs, fields, links, tags, tiers restated from the plan); importer --check and scope --check (C1 to C6) green; data mutations in diagnose b7e2c4."
 
   - id: S1B2-RULE
     title: "The same-movement rule: a loaded version and its original never share a day (founder condition)"
     terminal_state: closed_in_commit
-    commit: "generator-step1-s1b2 (uncommitted)"
+    commit: ca87baba
     verification: "same_movement_behavioral_test.dart (one test per seam), same_movement_day_gate_test.dart (998 personas, OFF and ON, hard zero), v4_diagnostic_test.dart (mirrors); seven seam mutations each red."
 
   - id: S1B2-SUITABLE
     title: "E010 Pike Push Up and E045 Romanian Deadlift suitable_for at every level (founder 2026-11-09, board d12)"
     terminal_state: closed_in_commit
-    commit: "generator-step1-s1b2 (uncommitted)"
+    commit: ca87baba
     verification: "library_s1b2_suitable_for.json through the importer's kept-row stage (library_media_importer_test.dart group); library_s1_core_levels_test.dart sweep with no exception; core_list_pool_gate_test.dart fails a picked row whose core_levels lie outside suitable_for."
 
   - id: S1B2-SEED
     title: "Seed v23 so installs at v22 get the nine rows and the two widened rows"
     terminal_state: closed_in_commit
-    commit: "generator-step1-s1b2 (uncommitted)"
+    commit: ca87baba
     verification: "library_seed_v23_upgrade_behavioral_test.dart (real SeedService.seedIfNeeded); v16 to v22 pins repointed to 23."
 
   - id: S1B2-CLOUD

@@ -142,7 +142,7 @@ findings:
   - id: 1B-8
     title: "OI-148 equipment variants (founder-approved 2026-11-08: the 9 dumbbell / kettlebell twins now, the 3 weighted rows with Batch D's dip belt token), with the same-movement rule (a twin and its sibling never share a day; does not exist today)"
     terminal_state: closed_in_commit
-    commit: "generator-step1-s1b2 (uncommitted)"
+    commit: ca87baba
     verification: "Library Batch S1b-2 (diagnose b7e2c4): N14 to N22 with same_movement_as, the SameMovement rule in both worlds, gate same_movement_day_gate_test.dart. The 3 weighted rows stay on OI-148 for Batch D's dip belt token."
 
   - id: 1B-9
@@ -160,7 +160,7 @@ findings:
   - id: 1B-10b
     title: "Core vs suitable_for disagreements E010 Pike Push Up and E045 Romanian Deadlift (named exceptions)"
     terminal_state: closed_in_commit
-    commit: "generator-step1-s1b2 (uncommitted)"
+    commit: ca87baba
     verification: "Founder decided 2026-11-09 (board d12) to widen: scripts/data/library_s1b2_suitable_for.json, both rows at every level; library_s1_core_levels_test.dart has no exception left; the S1b-2 migration carries the cloud column."
 
   - id: 1B-11
