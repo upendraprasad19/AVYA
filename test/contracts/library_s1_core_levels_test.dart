@@ -27,7 +27,9 @@ const _b = 'beginner', _i = 'intermediate', _a = 'advanced';
 /// Table A of the plan, restated here (never read from the record, so a wrong record cannot agree with itself).
 const _tableA = <String, List<String>>{
   // R1: Quads compound (dumbbells and bodyweight) at advanced.
-  'E038': [_b, _i, _a], 'G0413': [_b, _i, _a], 'G0336': [_b, _i, _a], 'G0381': [_b, _i, _a],
+  // E038 Goblet Squat left Table A in Library Batch S1b-1 (founder 2026-11-09: off the advanced gym Quads pools); it is
+  // back at its fixture value, which 'no fixture row outside Table A changed' enforces.
+  'G0413': [_b, _i, _a], 'G0336': [_b, _i, _a], 'G0381': [_b, _i, _a],
   'E044': [_b, _i, _a], 'E042': [_b, _i, _a], 'E143': [_a], 'G1476': [_a], 'G0411': [_a],
   // R1: Hamstrings hinge and curl above beginner; Nordic Curl advanced.
   'N11': [_b, _i, _a], 'E253': [_b, _i, _a], 'E292': [_b, _i, _a], 'N08': [_i, _a], 'E046': [_a],
@@ -37,7 +39,13 @@ const _tableA = <String, List<String>>{
   'E268': [_b, _i, _a], 'E269': [_b, _i, _a], 'E282': [_b, _i, _a], 'E273': [_b, _i, _a], 'E289': [_b, _i, _a],
   'E276': [_b, _i, _a], 'E274': [_b, _i, _a], 'E277': [_b, _i, _a],
   // Advanced Hip and Glutes isolation.
-  'E107': [_a], 'G3667': [_b, _i, _a], 'E257': [_b, _i, _a],
+  'G3667': [_b, _i, _a], 'E257': [_b, _i, _a],
+  // Library Batch S1b-1 (founder 2026-11-09, gym users get gym kit in the Hip slot, every level): the machine for
+  // full_gym (was [_a] in S1a) and a cables row for basic_gym, which has no machines.
+  'E107': [_b, _i, _a], 'G0168': [_b, _i, _a],
+  // ...and E109 Glute Kickback (Cable) at beginner, so a gym beginner Glutes isolation slot reduces to it (both S1b-1
+  // reviewers: otherwise E107 took that slot on the id tie with E257).
+  'E109': [_b, _i, _a],
   // A dumbbell curl for equipped users in the Hamstrings curl slot (review #2).
   'G0339': [_i, _a],
   // A second loaded lateral raise, so a day's second Lateral Delts slot keeps a dumbbell row once E013 is taken

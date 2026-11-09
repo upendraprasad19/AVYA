@@ -59,6 +59,17 @@ const _expected = <String, List<String>>{
   'full_gym|intermediate|Calves|knee_dominant|soleus': ['E052', 'E051', 'E258', 'G0409'],
   'full_gym|advanced|Calves|knee_dominant|': ['E051', 'E052', 'G0409'],
   'full_gym|advanced|Glutes|hip_isolation|': ['E109'],
+  // Library Batch S1b-1: E109 core at beginner, so a gym beginner Glutes slot reduces to it (not E107 / E048 / E257).
+  'basic_gym|beginner|Glutes|hip_isolation|': ['E109'],
+  'full_gym|beginner|Glutes|hip_isolation|': ['E109'],
+  // Library Batch S1b-1 (founder 2026-11-09, gym users get gym kit in the Hip slot): the Hip slot now reduces through
+  // the region rule (CoreListSelector._slotRegionMuscles, Abductors / Adductors) to the machine and cable rows.
+  'basic_gym|beginner|Hip|hip_isolation|': ['G0168'],
+  'basic_gym|intermediate|Hip|hip_isolation|': ['G0168'],
+  'basic_gym|advanced|Hip|hip_isolation|': ['G0168'],
+  'full_gym|beginner|Hip|hip_isolation|': ['E107', 'G0168'],
+  'full_gym|intermediate|Hip|hip_isolation|': ['E107', 'G0168'],
+  'full_gym|advanced|Hip|hip_isolation|': ['E107', 'G0168'],
   'full_gym|advanced|Quads|knee_dominant|isolation': ['E043'],
   'full_gym|advanced|Hamstrings|knee_dominant|': ['E049', 'G0599', 'G0339'],
   'full_gym|advanced|Calves|knee_dominant|soleus': ['E052', 'E051', 'G0409'],
@@ -76,7 +87,9 @@ bool _restatedLikeForLike(Map<String, dynamic> r, String muscle) {
   final m = prim.first.trim().toLowerCase();
   final t = muscle.toLowerCase();
   return m == t ||
-      (t == 'calves' && (m == 'calves (gastrocnemius)' || m == 'calves (soleus)'));
+      (t == 'calves' && (m == 'calves (gastrocnemius)' || m == 'calves (soleus)')) ||
+      // Library Batch S1b-1: the Hip slot names a region; its muscles are the abductors and adductors.
+      (t == 'hip' && (m == 'abductors' || m == 'adductors'));
 }
 
 void main() {
@@ -152,6 +165,15 @@ void main() {
         expect(_restatedLikeForLike(byId[id]!, muscle), isTrue, reason: '${e.key} $id');
       }
     }
+  });
+
+  test('the Hip region: Abductors and Adductors name Hip, Glutes and a prefix never do (Library Batch S1b-1)', () {
+    expect(CoreListSelector.namesMuscle('Abductors', 'Hip'), isTrue);
+    expect(CoreListSelector.namesMuscle('Adductors', 'Hip'), isTrue);
+    expect(CoreListSelector.namesMuscle('Glutes', 'Hip'), isFalse);
+    expect(CoreListSelector.namesMuscle('Glutes (medius)', 'Hip'), isFalse);
+    expect(CoreListSelector.namesMuscle('Abductors', 'Glutes'), isFalse);
+    expect(CoreListSelector.namesMuscle('Hip Flexors', 'Hip'), isFalse);
   });
 
   test('the calf heads: E051 and E052 qualify for Calves, Peroneus never does', () {

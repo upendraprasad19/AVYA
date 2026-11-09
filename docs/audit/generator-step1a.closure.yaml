@@ -159,11 +159,12 @@ findings:
 
   - id: 1B-10b
     title: "Core vs suitable_for disagreements E010 Pike Push Up and E045 Romanian Deadlift (named exceptions)"
-    terminal_state: blocked_on_user
-    reason: "Narrowing E010 empties the bodyweight advanced Front Delts vertical_push slot; narrowing E045 turns gym and dumbbell beginner hinges into bodyweight rows. The founder decides whether their suitable_for widens (an OFF-world change) or they stay as named exceptions (plan Decision 3 (b))."
+    terminal_state: upstream_blocked
+    blocker: "Founder decided 2026-11-09 (board d12): widen suitable_for (E010 Pike Push Up gains Advanced, E045 Romanian Deadlift gains Beginner). suitable_for is a cloud column, so the change ships with the S1b-2 migration (one live go)."
+    reopen_when: "S1b-2 plan"
 
   - id: 1B-11
-    title: "Cloud re-seed migration for the S1b rows (seed v22; S1a used v21 with no migration, since core_levels is not a cloud column)"
+    title: "Cloud re-seed migration for the S1b-2 rows (seed v23; S1a used v21 and S1b-1 v22 with no migration, since core_levels is not a cloud column)"
     terminal_state: upstream_blocked
     blocker: "Library Batch S1b; the live apply needs the founder's go."
     reopen_when: "S1b plan"

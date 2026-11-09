@@ -505,7 +505,8 @@ void main() {
 
     test('MUTATION: a source count off by one and a lost core level are each a violation', () {
       final s = _deep(src);
-      (((s['_meta'] as Map)['derived'] as Map)['core'] as Map)['beginner'] = 57;
+      final core = ((s['_meta'] as Map)['derived'] as Map)['core'] as Map;
+      core['beginner'] = (core['beginner'] as int) + 1;
       expect(_coreCountViolations(s, rows), isNotEmpty);
       final a = _deepRows(rows);
       a.firstWhere((x) => _strs(x['core_levels']).isNotEmpty)['core_levels'] = <String>[];

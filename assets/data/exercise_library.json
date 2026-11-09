@@ -3055,8 +3055,7 @@
     "demo_pair": true,
     "core_levels": [
       "beginner",
-      "intermediate",
-      "advanced"
+      "intermediate"
     ],
     "discipline": "strength",
     "gym_availability": "home",
@@ -8221,6 +8220,8 @@
       "E225"
     ],
     "core_levels": [
+      "beginner",
+      "intermediate",
       "advanced"
     ],
     "discipline": "strength",
@@ -8375,6 +8376,7 @@
     "demo_slug": "cable-kickback",
     "demo_pair": true,
     "core_levels": [
+      "beginner",
       "intermediate",
       "advanced"
     ],
@@ -37731,7 +37733,11 @@
     "standard_swap": "",
     "priority_tier": 3,
     "rep_range": "12-15",
-    "core_levels": [],
+    "core_levels": [
+      "beginner",
+      "intermediate",
+      "advanced"
+    ],
     "discipline": "strength",
     "gym_availability": "standard_gym",
     "requires_coaching": false,

@@ -6779,10 +6779,10 @@
       },
       "shipped": 633,
       "core": {
-        "beginner": 56,
-        "intermediate": 54,
-        "advanced": 44,
-        "rows": 90
+        "beginner": 57,
+        "intermediate": 55,
+        "advanced": 45,
+        "rows": 91
       }
     }
   },
@@ -25943,7 +25943,11 @@
       "indian_alternative": "Side-lying leg raise on the bottom leg",
       "variant_family": "hip_adduction",
       "discipline": "strength",
-      "core_levels": [],
+      "core_levels": [
+        "beginner",
+        "intermediate",
+        "advanced"
+      ],
       "skill_track": null,
       "skill_step": null,
       "regression_to": null,
