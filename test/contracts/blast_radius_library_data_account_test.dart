@@ -36,6 +36,8 @@ const _removalsGlob = 'scripts/data/library_batch_c2_removals.json';
 const _retagGlob = 'scripts/data/library_e230_retag.json';
 // Library Batch S1a: the core-levels record decides which core lists the kept rows sit on.
 const _coreLevelsGlob = 'scripts/data/library_s1_core_levels.json';
+// Library Batch S1b-2: the suitable_for record decides which levels E010 / E045 are offered to (every user's queryV4).
+const _suitableForGlob = 'scripts/data/library_s1b2_suitable_for.json';
 const _assetsGlob = 'assets/**';
 const _scriptsGlob = 'scripts/**';
 
@@ -179,6 +181,30 @@ void main() {
       expect(gateTier(_coreLevelsGlob), 'account');
       expect(gateTier('scripts/data/library_s1_core_levels_other.json'), 'feature');
       expect(tier('scripts/data/library_s1_core_levels_other.json'), 'feature');
+    });
+  });
+
+  group('1f. the S1b-2 suitable_for record', () {
+    test('it is account, claimed by its own rule above scripts/**, and the file exists', () {
+      expect(File(_suitableForGlob).existsSync(), isTrue, reason: 'positive control');
+      expect(tier(_suitableForGlob), 'account');
+      expect(ruleFor(_suitableForGlob)?.glob, _suitableForGlob);
+      int index(String glob) => reg.rules.indexWhere((r) => r.glob == glob);
+      expect(index(_suitableForGlob), lessThan(index(_scriptsGlob)));
+    });
+
+    test("the commit-time review gate's own engine reads it as account too; a look-alike stays feature", () {
+      final rules = reviewGate.parseRules(yaml);
+      String gateTier(String p) {
+        for (final r in rules) {
+          if (reviewGate.globToRegExp(r.glob).hasMatch(p)) return r.tier;
+        }
+        return 'feature';
+      }
+
+      expect(gateTier(_suitableForGlob), 'account');
+      expect(gateTier('scripts/data/library_s1b2_suitable_for_other.json'), 'feature');
+      expect(tier('scripts/data/library_s1b2_suitable_for_other.json'), 'feature');
     });
   });
 

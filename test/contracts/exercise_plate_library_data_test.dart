@@ -36,11 +36,11 @@ void main() {
         reason: 'v11 shipped the plates; the Batch A repair (merges, text, plate swaps) needs 12+');
   });
 
-  test('the library is 862 rows — 285 after Batch A retired 7 duplicates, plus 633 Batch C1/C2b rows, minus 56 removals (50 Batch C2a, 6 Batch C2b)', () {
+  test('the library is 871 rows — 285 after Batch A retired 7 duplicates, plus 633 Batch C1/C2b rows, minus 56 removals (50 Batch C2a, 6 Batch C2b), plus 9 Library Batch S1b-2 loaded versions', () {
     // Donkey Calf Raise stays. Its removal is OI-147, split out after review
     // round 2: it touches the cloud seed migration, a live prod apply and the
     // frozen generator baseline, none of which plates touches.
-    expect(lib.length, 862);
+    expect(lib.length, 871);
     expect(lib.any((e) => e['name'] == 'Donkey Calf Raise'), isTrue);
   });
 
@@ -54,13 +54,13 @@ void main() {
     }
   });
 
-  test('exactly 149 rows carry artwork and 713 do not (862 rows after Batch C2b, which removed E111 Sissy Squat and its plate; Batch C1 adds none, Batch M owns media)', () {
+  test('exactly 149 rows carry artwork and 722 do not (871 rows: Batch C2b removed E111 Sissy Squat and its plate; Batch C1 and Library Batch S1b-2 add none, Batch M owns media)', () {
     final withArt = lib.where((e) {
       final s = e['demo_slug'];
       return s is String && s.isNotEmpty;
     }).toList();
     expect(withArt.length, 149);
-    expect(lib.length - withArt.length, 713);
+    expect(lib.length - withArt.length, 722);
     for (final e in withArt) {
       expect(e['demo_pair'], isA<bool>(),
           reason: '${e['name']}: demo_slug without demo_pair');

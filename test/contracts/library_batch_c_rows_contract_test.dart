@@ -34,7 +34,10 @@ const _required40 = <String>[
   'injury_contraindications', 'is_bilateral', 'cns_demand', 'target_focus', 'equipment_tier', 'standard_swap',
   'priority_tier', 'rep_range', 'core_levels', 'discipline', 'gym_availability', 'requires_coaching', 'high_impact',
 ];
-const _optionalKeys = <String>{'variant_family', 'skill_track', 'skill_step', 'progression_to', 'regression_to'};
+// Library Batch S1b-2: the importer's LINK keys (slot_pattern, same_movement_as) on the nine loaded versions.
+const _optionalKeys = <String>{
+  'variant_family', 'skill_track', 'skill_step', 'progression_to', 'regression_to', 'slot_pattern', 'same_movement_as',
+};
 // Plate keys stay forbidden on new rows. The media keys (Batch M1) are allowed ONLY on ids the committed media table maps,
 // as a group, last and in this order.
 const _plateKeys = <String>{'demo_slug', 'demo_pair'};

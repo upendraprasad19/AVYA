@@ -6139,9 +6139,113 @@
           "beginner"
         ],
         "confidence": "high"
+      },
+      "N14": {
+        "name": "Dumbbell Sumo Squat",
+        "equipment_needed": [
+          "dumbbells"
+        ],
+        "core_levels": [
+          "beginner",
+          "intermediate",
+          "advanced"
+        ],
+        "confidence": "high"
+      },
+      "N15": {
+        "name": "Dumbbell Split Squat",
+        "equipment_needed": [
+          "dumbbells"
+        ],
+        "core_levels": [
+          "beginner",
+          "intermediate",
+          "advanced"
+        ],
+        "confidence": "high"
+      },
+      "N16": {
+        "name": "Dumbbell Walking Lunge",
+        "equipment_needed": [
+          "dumbbells"
+        ],
+        "core_levels": [
+          "intermediate",
+          "advanced"
+        ],
+        "confidence": "high"
+      },
+      "N17": {
+        "name": "Dumbbell Lateral Lunge",
+        "equipment_needed": [
+          "dumbbells"
+        ],
+        "core_levels": [
+          "intermediate",
+          "advanced"
+        ],
+        "confidence": "high"
+      },
+      "N18": {
+        "name": "Dumbbell Hip Thrust",
+        "equipment_needed": [
+          "dumbbells",
+          "elevated surface"
+        ],
+        "core_levels": [
+          "intermediate",
+          "advanced"
+        ],
+        "confidence": "high"
+      },
+      "N19": {
+        "name": "Dumbbell Glute Bridge",
+        "equipment_needed": [
+          "dumbbells"
+        ],
+        "core_levels": [
+          "beginner",
+          "intermediate",
+          "advanced"
+        ],
+        "confidence": "high"
+      },
+      "N20": {
+        "name": "Dumbbell Sumo Deadlift",
+        "equipment_needed": [
+          "dumbbells"
+        ],
+        "core_levels": [
+          "intermediate",
+          "advanced"
+        ],
+        "confidence": "high"
+      },
+      "N21": {
+        "name": "Kettlebell Romanian Deadlift",
+        "equipment_needed": [
+          "kettlebell"
+        ],
+        "core_levels": [
+          "beginner",
+          "intermediate",
+          "advanced"
+        ],
+        "confidence": "high"
+      },
+      "N22": {
+        "name": "Weighted Russian Twist",
+        "equipment_needed": [
+          "dumbbells"
+        ],
+        "core_levels": [
+          "intermediate",
+          "advanced"
+        ],
+        "confidence": "high"
       }
     },
-    "inputs_sha256": "8fa019bc2d5001d115204f7c4eb48b5d7ad3474fc87fa60e5dea7b8868fbecef",
+    "inputs_sha256": "a00d2d3fdad7f20195a2473cc82fa4c8a45b78e75b56f2be04c0ebb5d62ca290",
     "alias_applied": {
       "G0844": [
         "weight plate"
@@ -6770,19 +6874,19 @@
       "G3012": "Scapula dip is a scapular depression drill, not a pressing dip, so it does not share the dip family pressing pattern."
     },
     "derived": {
-      "rows": 708,
+      "rows": 717,
       "held": {
         "token": 13,
         "name_collision": 0,
         "low_confidence": 53,
         "picture": 9
       },
-      "shipped": 633,
+      "shipped": 642,
       "core": {
-        "beginner": 57,
-        "intermediate": 55,
-        "advanced": 45,
-        "rows": 91
+        "beginner": 61,
+        "intermediate": 64,
+        "advanced": 54,
+        "rows": 100
       }
     }
   },
@@ -56730,6 +56834,694 @@
       "standard_swap": "",
       "demo_slug": "pike-push-up",
       "demo_pair": true
+    },
+    {
+      "id": "N14",
+      "name": "Dumbbell Sumo Squat",
+      "category": "legs",
+      "movement_pattern": [
+        "knee_dominant"
+      ],
+      "exercise_type": [
+        "compound"
+      ],
+      "primary_muscles": [
+        "Adductors",
+        "Glutes",
+        "Quads"
+      ],
+      "secondary_muscles": [
+        "Hamstrings"
+      ],
+      "target_focus": [
+        "Glutes",
+        "Hip",
+        "Quads"
+      ],
+      "equipment_needed": [
+        "dumbbells"
+      ],
+      "logging_type": "weight_reps",
+      "difficulty_level": "beginner",
+      "suitable_for": [
+        "Beginner",
+        "Intermediate",
+        "Advanced"
+      ],
+      "default_sets": 4,
+      "default_reps": "12-15",
+      "rep_range": "8-12",
+      "default_rest_secs": 75,
+      "tempo": "",
+      "met_value": 5,
+      "cns_demand": 3,
+      "is_bilateral": true,
+      "injury_contraindications": [
+        "hip",
+        "knee"
+      ],
+      "is_foundational": false,
+      "priority_tier": 2,
+      "breathing_cue": "Inhale down, exhale up",
+      "coaching_cues": [
+        "Hold one dumbbell by the top end between the legs, arms long",
+        "Feet wide, toes turned out",
+        "Sit straight down between the heels, knees tracking over the toes",
+        "Drive up through the heels and squeeze the glutes at the top"
+      ],
+      "common_mistakes": [
+        "Letting the knees cave inward",
+        "Leaning the chest forward so the dumbbell swings"
+      ],
+      "pro_tip": "Stand on two low steps or books so the dumbbell can travel below floor level for a deeper stretch.",
+      "indian_alternative": "A filled water can or a bag of rice held between the legs works as the load",
+      "variant_family": "squat",
+      "discipline": "strength",
+      "core_levels": [
+        "beginner",
+        "intermediate",
+        "advanced"
+      ],
+      "skill_track": null,
+      "skill_step": null,
+      "regression_to": null,
+      "progression_to": null,
+      "requires_coaching": false,
+      "high_impact": false,
+      "gym_availability": "home",
+      "confidence": "high",
+      "note": "Loaded version of E147 Sumo Squat (OI-148, approved 2026-11-08). No art yet.",
+      "changes": {},
+      "same_movement_as": "E147"
+    },
+    {
+      "id": "N15",
+      "name": "Dumbbell Split Squat",
+      "category": "legs",
+      "movement_pattern": [
+        "knee_dominant"
+      ],
+      "exercise_type": [
+        "compound"
+      ],
+      "primary_muscles": [
+        "Quads",
+        "Glutes"
+      ],
+      "secondary_muscles": [
+        "Hamstrings",
+        "Calves"
+      ],
+      "target_focus": [
+        "Quads",
+        "Glutes"
+      ],
+      "equipment_needed": [
+        "dumbbells"
+      ],
+      "logging_type": "weight_reps",
+      "difficulty_level": "beginner",
+      "suitable_for": [
+        "Beginner",
+        "Intermediate",
+        "Advanced"
+      ],
+      "default_sets": 3,
+      "default_reps": "10-12",
+      "rep_range": "10-12",
+      "default_rest_secs": 60,
+      "tempo": "3-0-1-0",
+      "met_value": 5,
+      "cns_demand": 3,
+      "is_bilateral": false,
+      "injury_contraindications": [
+        "hip",
+        "knee"
+      ],
+      "is_foundational": false,
+      "priority_tier": 2,
+      "breathing_cue": "Inhale as you lower, exhale as you rise",
+      "coaching_cues": [
+        "A dumbbell in each hand, arms long at the sides",
+        "Long stance, back heel up",
+        "Lower the back knee straight down toward the floor",
+        "Push through the front foot to rise, torso tall"
+      ],
+      "common_mistakes": [
+        "Front knee collapsing inward",
+        "Stance too short so the front heel lifts"
+      ],
+      "pro_tip": "Keep the dumbbells hanging still; if they swing, the weight is too heavy for the balance.",
+      "indian_alternative": "Two filled water bottles or bags in each hand",
+      "variant_family": "split_squat",
+      "discipline": "strength",
+      "core_levels": [
+        "beginner",
+        "intermediate",
+        "advanced"
+      ],
+      "skill_track": null,
+      "skill_step": null,
+      "regression_to": null,
+      "progression_to": null,
+      "requires_coaching": false,
+      "high_impact": false,
+      "gym_availability": "home",
+      "confidence": "high",
+      "note": "Loaded version of E259 Split Squat (OI-148, approved 2026-11-08). Typed compound: a loaded split squat is a compound lift. No art yet.",
+      "changes": {},
+      "same_movement_as": "E259"
+    },
+    {
+      "id": "N16",
+      "name": "Dumbbell Walking Lunge",
+      "category": "legs",
+      "movement_pattern": [
+        "knee_dominant"
+      ],
+      "exercise_type": [
+        "compound"
+      ],
+      "primary_muscles": [
+        "Quads",
+        "Glutes"
+      ],
+      "secondary_muscles": [
+        "Hamstrings",
+        "Core"
+      ],
+      "target_focus": [
+        "Glutes",
+        "Quads"
+      ],
+      "equipment_needed": [
+        "dumbbells"
+      ],
+      "logging_type": "weight_reps",
+      "difficulty_level": "beginner",
+      "suitable_for": [
+        "Beginner",
+        "Intermediate",
+        "Advanced"
+      ],
+      "default_sets": 3,
+      "default_reps": "20 steps",
+      "rep_range": "8-12",
+      "default_rest_secs": 75,
+      "tempo": "2-0-2-0",
+      "met_value": 4.5,
+      "cns_demand": 3,
+      "is_bilateral": false,
+      "injury_contraindications": [
+        "hip",
+        "knee"
+      ],
+      "is_foundational": false,
+      "priority_tier": 1,
+      "breathing_cue": "Inhale as you step and lower, exhale as you drive up",
+      "coaching_cues": [
+        "A dumbbell in each hand, shoulders back",
+        "Step forward and lower the back knee toward the floor",
+        "Drive through the front heel into the next step",
+        "Keep the torso upright and the dumbbells still"
+      ],
+      "common_mistakes": [
+        "Short steps that push the front knee far past the toes",
+        "Letting the dumbbells pull the shoulders forward"
+      ],
+      "pro_tip": "Pick a weight you can hold for the whole walk; grip gives out before the legs on long sets.",
+      "indian_alternative": "Use a corridor or terrace and two filled bags for the load",
+      "variant_family": "lunge",
+      "discipline": "strength",
+      "core_levels": [
+        "intermediate",
+        "advanced"
+      ],
+      "skill_track": null,
+      "skill_step": null,
+      "regression_to": null,
+      "progression_to": null,
+      "requires_coaching": false,
+      "high_impact": false,
+      "gym_availability": "home",
+      "confidence": "high",
+      "note": "Loaded version of E042 Walking Lunge (OI-148, approved 2026-11-08). No art yet.",
+      "changes": {},
+      "same_movement_as": "E042"
+    },
+    {
+      "id": "N17",
+      "name": "Dumbbell Lateral Lunge",
+      "category": "legs",
+      "movement_pattern": [
+        "knee_dominant"
+      ],
+      "exercise_type": [
+        "compound"
+      ],
+      "primary_muscles": [
+        "Adductors",
+        "Quads",
+        "Glutes"
+      ],
+      "secondary_muscles": [
+        "Hamstrings",
+        "Core"
+      ],
+      "target_focus": [
+        "Glutes",
+        "Hip",
+        "Quads"
+      ],
+      "equipment_needed": [
+        "dumbbells"
+      ],
+      "logging_type": "weight_reps",
+      "difficulty_level": "intermediate",
+      "suitable_for": [
+        "Intermediate",
+        "Advanced"
+      ],
+      "default_sets": 4,
+      "default_reps": "10-12 each",
+      "rep_range": "8-12",
+      "default_rest_secs": 75,
+      "tempo": "",
+      "met_value": 5,
+      "cns_demand": 3,
+      "is_bilateral": false,
+      "injury_contraindications": [
+        "hip",
+        "knee"
+      ],
+      "is_foundational": false,
+      "priority_tier": 1,
+      "breathing_cue": "Inhale down, exhale up",
+      "coaching_cues": [
+        "Hold one dumbbell at the chest with both hands",
+        "Step wide to one side and sit the hips back over that foot",
+        "Keep the other leg straight and both feet flat",
+        "Push off the bent leg back to standing"
+      ],
+      "common_mistakes": [
+        "Bending the straight leg",
+        "Rounding the back as the hips sit back"
+      ],
+      "pro_tip": "Go only as low as the straight leg allows with the heel down; depth comes with mobility.",
+      "indian_alternative": "Hold a filled water can at the chest",
+      "variant_family": "lunge",
+      "discipline": "strength",
+      "core_levels": [
+        "intermediate",
+        "advanced"
+      ],
+      "skill_track": null,
+      "skill_step": null,
+      "regression_to": null,
+      "progression_to": null,
+      "requires_coaching": false,
+      "high_impact": false,
+      "gym_availability": "home",
+      "confidence": "high",
+      "note": "Loaded version of E145 Lateral Lunge (OI-148, approved 2026-11-08). No art yet.",
+      "changes": {},
+      "same_movement_as": "E145"
+    },
+    {
+      "id": "N18",
+      "name": "Dumbbell Hip Thrust",
+      "category": "legs",
+      "movement_pattern": [
+        "hip_dominant"
+      ],
+      "exercise_type": [
+        "compound"
+      ],
+      "primary_muscles": [
+        "Glutes"
+      ],
+      "secondary_muscles": [
+        "Hamstrings"
+      ],
+      "target_focus": [
+        "Glutes"
+      ],
+      "equipment_needed": [
+        "dumbbells",
+        "elevated surface"
+      ],
+      "logging_type": "weight_reps",
+      "difficulty_level": "intermediate",
+      "suitable_for": [
+        "Intermediate",
+        "Advanced"
+      ],
+      "default_sets": 4,
+      "default_reps": "10-15",
+      "rep_range": "8-12",
+      "default_rest_secs": 75,
+      "tempo": "2-0-2-1",
+      "met_value": 5,
+      "cns_demand": 4,
+      "is_bilateral": true,
+      "injury_contraindications": [
+        "hip"
+      ],
+      "is_foundational": false,
+      "priority_tier": 1,
+      "breathing_cue": "Exhale on thrust",
+      "coaching_cues": [
+        "Upper back against a sofa, bed or bench edge",
+        "A dumbbell across the hips, held with both hands",
+        "Drive through the heels until the body is flat from knees to shoulders",
+        "Pause and squeeze the glutes at the top"
+      ],
+      "common_mistakes": [
+        "Arching the lower back at the top",
+        "Feet too far forward so the hamstrings take over"
+      ],
+      "pro_tip": "Fold a towel under the dumbbell so the handle does not dig into the hips.",
+      "indian_alternative": "Use the edge of a bed or a sturdy diwan against a wall",
+      "variant_family": "hip_thrust",
+      "discipline": "strength",
+      "core_levels": [
+        "intermediate",
+        "advanced"
+      ],
+      "skill_track": null,
+      "skill_step": null,
+      "regression_to": null,
+      "progression_to": null,
+      "requires_coaching": false,
+      "high_impact": false,
+      "gym_availability": "home",
+      "confidence": "high",
+      "note": "Loaded version of E047 Hip Thrust (OI-148, approved 2026-11-08): dumbbell and a sofa or bed instead of barbell and bench. No art yet.",
+      "changes": {},
+      "same_movement_as": "E047"
+    },
+    {
+      "id": "N19",
+      "name": "Dumbbell Glute Bridge",
+      "category": "legs",
+      "movement_pattern": [
+        "hip_isolation"
+      ],
+      "exercise_type": [
+        "isolation"
+      ],
+      "primary_muscles": [
+        "Glutes"
+      ],
+      "secondary_muscles": [
+        "Hamstrings"
+      ],
+      "target_focus": [
+        "Glutes"
+      ],
+      "equipment_needed": [
+        "dumbbells"
+      ],
+      "logging_type": "weight_reps",
+      "difficulty_level": "beginner",
+      "suitable_for": [
+        "Beginner",
+        "Intermediate",
+        "Advanced"
+      ],
+      "default_sets": 4,
+      "default_reps": "15-20",
+      "rep_range": "12-15",
+      "default_rest_secs": 60,
+      "tempo": "2-0-2-1",
+      "met_value": 3.5,
+      "cns_demand": 2,
+      "is_bilateral": true,
+      "injury_contraindications": [],
+      "is_foundational": false,
+      "priority_tier": 3,
+      "breathing_cue": "Exhale on bridge",
+      "coaching_cues": [
+        "Lie on your back, knees bent, feet flat",
+        "Rest a dumbbell across the hips and hold it with both hands",
+        "Drive through the heels and lift the hips",
+        "Squeeze the glutes at the top, lower with control"
+      ],
+      "common_mistakes": [
+        "Pushing through the toes",
+        "Arching the lower back instead of squeezing the glutes"
+      ],
+      "pro_tip": "Pause one second at the top of every rep; the pause does more than a heavier dumbbell.",
+      "indian_alternative": "A bag of rice or a filled water can across the hips",
+      "variant_family": "glute_bridge",
+      "discipline": "strength",
+      "core_levels": [
+        "beginner",
+        "intermediate",
+        "advanced"
+      ],
+      "skill_track": null,
+      "skill_step": null,
+      "regression_to": null,
+      "progression_to": null,
+      "requires_coaching": false,
+      "high_impact": false,
+      "gym_availability": "home",
+      "confidence": "high",
+      "note": "Loaded version of E048 Glute Bridge (OI-148, approved 2026-11-08). Untagged like E048 (safe pool). No slot overlay: it fills the Glutes isolation slot; priority 3 (E048 has 2) so a gym user keeps E109 Glute Kickback (Cable) there (ruled 2026-11-09). No art yet.",
+      "changes": {},
+      "same_movement_as": "E048"
+    },
+    {
+      "id": "N20",
+      "name": "Dumbbell Sumo Deadlift",
+      "category": "legs",
+      "movement_pattern": [
+        "knee_dominant"
+      ],
+      "exercise_type": [
+        "compound"
+      ],
+      "primary_muscles": [
+        "Adductors",
+        "Glutes",
+        "Hamstrings"
+      ],
+      "secondary_muscles": [
+        "Quads",
+        "Lower Back"
+      ],
+      "target_focus": [
+        "Glutes",
+        "Hamstrings",
+        "Hip"
+      ],
+      "equipment_needed": [
+        "dumbbells"
+      ],
+      "logging_type": "weight_reps",
+      "difficulty_level": "intermediate",
+      "suitable_for": [
+        "Intermediate",
+        "Advanced"
+      ],
+      "default_sets": 4,
+      "default_reps": "8-12",
+      "rep_range": "8-12",
+      "default_rest_secs": 120,
+      "tempo": "3-1-2-0",
+      "met_value": 6,
+      "cns_demand": 3,
+      "is_bilateral": true,
+      "injury_contraindications": [
+        "hip",
+        "lower_back"
+      ],
+      "is_foundational": false,
+      "priority_tier": 1,
+      "breathing_cue": "Big breath before you lift, exhale at the top",
+      "coaching_cues": [
+        "Feet wide, toes out, one dumbbell held vertically between the legs",
+        "Push the hips back and bend the knees to reach the dumbbell",
+        "Chest up, back flat",
+        "Stand tall by driving the floor away and squeezing the glutes"
+      ],
+      "common_mistakes": [
+        "Rounding the back to reach the dumbbell",
+        "Locking the knees and turning it into a stiff-leg pull"
+      ],
+      "pro_tip": "One heavy dumbbell held by the top end is enough; keep it close to the body all the way up.",
+      "indian_alternative": "A filled water can or a heavy bag held by the handle",
+      "variant_family": "deadlift",
+      "discipline": "strength",
+      "core_levels": [
+        "intermediate",
+        "advanced"
+      ],
+      "skill_track": null,
+      "skill_step": null,
+      "regression_to": null,
+      "progression_to": null,
+      "requires_coaching": false,
+      "high_impact": false,
+      "gym_availability": "home",
+      "confidence": "high",
+      "note": "Loaded version of E050 Sumo Deadlift (OI-148, approved 2026-11-08): reps, rest and nervous-system load set for a dumbbell, not the barbell. No art yet.",
+      "changes": {},
+      "slot_pattern": [
+        "hip_dominant"
+      ],
+      "same_movement_as": "E050"
+    },
+    {
+      "id": "N21",
+      "name": "Kettlebell Romanian Deadlift",
+      "category": "legs",
+      "movement_pattern": [
+        "hip_dominant"
+      ],
+      "exercise_type": [
+        "compound"
+      ],
+      "primary_muscles": [
+        "Hamstrings",
+        "Glutes"
+      ],
+      "secondary_muscles": [
+        "Lower Back"
+      ],
+      "target_focus": [
+        "Glutes",
+        "Hamstrings"
+      ],
+      "equipment_needed": [
+        "kettlebell"
+      ],
+      "logging_type": "weight_reps",
+      "difficulty_level": "intermediate",
+      "suitable_for": [
+        "Beginner",
+        "Intermediate",
+        "Advanced"
+      ],
+      "default_sets": 4,
+      "default_reps": "10-12",
+      "rep_range": "5-8",
+      "default_rest_secs": 90,
+      "tempo": "3-1-2-0",
+      "met_value": 5.5,
+      "cns_demand": 3,
+      "is_bilateral": true,
+      "injury_contraindications": [
+        "hamstring",
+        "lower_back"
+      ],
+      "is_foundational": false,
+      "priority_tier": 1,
+      "breathing_cue": "Inhale on descent, exhale on drive",
+      "coaching_cues": [
+        "Hold the kettlebell by the handle in front of the thighs",
+        "Soft knees, push the hips straight back",
+        "Keep the kettlebell close and the spine neutral",
+        "Stand tall by squeezing the glutes"
+      ],
+      "common_mistakes": [
+        "Rounding the lower back at the bottom",
+        "Squatting the weight down instead of hinging"
+      ],
+      "pro_tip": "Stop when the hamstrings stretch, not when the kettlebell reaches the floor.",
+      "indian_alternative": "A heavy bag held by its handle works the same hinge",
+      "variant_family": "romanian_deadlift",
+      "discipline": "strength",
+      "core_levels": [
+        "beginner",
+        "intermediate",
+        "advanced"
+      ],
+      "skill_track": null,
+      "skill_step": null,
+      "regression_to": null,
+      "progression_to": null,
+      "requires_coaching": false,
+      "high_impact": false,
+      "gym_availability": "standard_gym",
+      "confidence": "high",
+      "note": "Loaded version of E045 Romanian Deadlift (OI-148, approved 2026-11-08) for kettlebell owners. No art yet.",
+      "changes": {},
+      "same_movement_as": "E045"
+    },
+    {
+      "id": "N22",
+      "name": "Weighted Russian Twist",
+      "category": "core",
+      "movement_pattern": [
+        "core"
+      ],
+      "exercise_type": [
+        "isolation"
+      ],
+      "primary_muscles": [
+        "Obliques"
+      ],
+      "secondary_muscles": [
+        "Abs"
+      ],
+      "target_focus": [
+        "Core"
+      ],
+      "equipment_needed": [
+        "dumbbells"
+      ],
+      "logging_type": "weight_reps",
+      "difficulty_level": "beginner",
+      "suitable_for": [
+        "Beginner",
+        "Intermediate",
+        "Advanced"
+      ],
+      "default_sets": 4,
+      "default_reps": "20 total",
+      "rep_range": "12-20",
+      "default_rest_secs": 60,
+      "tempo": "2-0-2-0",
+      "met_value": 3.5,
+      "cns_demand": 1,
+      "is_bilateral": true,
+      "injury_contraindications": [
+        "lower_back"
+      ],
+      "is_foundational": false,
+      "priority_tier": 2,
+      "breathing_cue": "Exhale on rotation",
+      "coaching_cues": [
+        "Sit with knees bent, lean back slightly, heels on the floor",
+        "Hold one dumbbell at the chest with both hands",
+        "Rotate the shoulders to one side, then the other",
+        "Keep the chest up and the movement slow"
+      ],
+      "common_mistakes": [
+        "Swinging the dumbbell with the arms only",
+        "Rounding the lower back"
+      ],
+      "pro_tip": "Turn the shoulders, not just the hands; the dumbbell follows the chest.",
+      "indian_alternative": "Hold a filled water bottle",
+      "variant_family": "rotation_core",
+      "discipline": "strength",
+      "core_levels": [
+        "intermediate",
+        "advanced"
+      ],
+      "skill_track": null,
+      "skill_step": null,
+      "regression_to": null,
+      "progression_to": null,
+      "requires_coaching": false,
+      "high_impact": false,
+      "gym_availability": "home",
+      "confidence": "high",
+      "note": "Loaded version of E059 Russian Twist (OI-148, approved 2026-11-08). Feet stay down: Legs Up Weighted Russian Twist (G0845) is a different variant. No art yet.",
+      "changes": {},
+      "same_movement_as": "E059"
     }
   ]
 }

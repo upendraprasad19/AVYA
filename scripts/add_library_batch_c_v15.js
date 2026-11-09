@@ -26,8 +26,10 @@
 //    stage: a row at `before` takes `after`, a row at `after` is a no-op, anything else stops the run naming the id; an id
 //    that is not a kept row, or a duplicate id, stops the run. An absent record is a printed no-op (tests copy this script
 //    into temp dirs).
+//  - SUITABLE_FOR STAGE (Library Batch S1b-2): scripts/data/library_s1b2_suitable_for.json, the core-levels contract for
+//    `suitable_for` of kept rows, run right after the core-levels stage.
 //  - A row is built from an ALLOW-LIST: the 40 required keys, then variant_family (from the table), then skill_track,
-//    skill_step, progression_to, regression_to where non-null. Everything else in the source (confidence, note, changes,
+//    skill_step, progression_to, regression_to where non-null, then slot_pattern and same_movement_as where present (LINK). Everything else in the source (confidence, note, changes,
 //    hold, _coreAdded, demo_*, a future meta key) is dropped.
 //  - Derived keys (R4): is_active, source "exercise-gif-set", is_indian_context false, standard_swap "", warmup_protocol "",
 //    cal_per_set_est = round(met_value * 1.8), equipment_tier = every tier whose items hold every equipment token.
@@ -91,6 +93,10 @@ const REQUIRED = [
   'priority_tier', 'rep_range', 'core_levels', 'discipline', 'gym_availability', 'requires_coaching', 'high_impact',
 ];
 const LADDER = ['skill_track', 'skill_step', 'progression_to', 'regression_to'];
+// Library Batch S1b-2: source keys copied through when present (after LADDER, before the media keys). slot_pattern puts
+// a loaded version in its original's ON pool (E048 / E050 carry one); same_movement_as names the original a loaded version
+// must never share a day with (SameMovement, lib/shared/repositories/plan_engine/same_movement.dart).
+const LINK = ['slot_pattern', 'same_movement_as'];
 const DERIVED_SOURCE = 'exercise-gif-set';
 // InjuryVocab.canonicalTokens (lib/core/utils/injury_vocab.dart).
 const INJURY_TOKENS = new Set([
@@ -156,6 +162,7 @@ function buildRow(src, tableRow) {
   if (!tableRow.variant_family) throw new Error(`${src.id}: the tag table row has no variant_family`);
   out.variant_family = tableRow.variant_family;
   for (const k of LADDER) if (src[k] !== undefined && src[k] !== null) out[k] = src[k];
+  for (const k of LINK) if (src[k] !== undefined && src[k] !== null) out[k] = src[k];
   return out;
 }
 
@@ -309,6 +316,36 @@ function repointStandardSwap(allRows, removals) {
   });
 }
 
+// Library Batch S1b-2: the suitable_for record for kept rows (E010, E045; founder 2026-11-09, board d12). Same contract as
+// the core-levels record: a row at `before` takes `after`, a row at `after` is a no-op, anything else stops the run;
+// an id that is not a kept row, or a duplicate id, stops the run. Absent = printed no-op (tests copy this script).
+const SUITABLE_FOR = path.join(__dirname, 'data', 'library_s1b2_suitable_for.json');
+
+function readSuitableFor() {
+  if (!fs.existsSync(SUITABLE_FOR)) {
+    console.log(`suitable_for stage skipped: ${SUITABLE_FOR} not found`);
+    return null;
+  }
+  const rec = JSON.parse(fs.readFileSync(SUITABLE_FOR, 'utf8'));
+  if (!rec || !Array.isArray(rec.rows)) throw new Error(`suitable_for record ${SUITABLE_FOR} has no rows array`);
+  const byId = new Map();
+  for (const e of rec.rows) {
+    if (!e || typeof e.id !== 'string' || !Array.isArray(e.before) || !Array.isArray(e.after)) {
+      throw new Error(`suitable_for record ${SUITABLE_FOR}: every row needs id, before and after arrays`);
+    }
+    if (byId.has(e.id)) throw new Error(`suitable_for record ${SUITABLE_FOR} repeats ${e.id}`);
+    byId.set(e.id, e);
+  }
+  return byId;
+}
+
+function suitableForRow(row, e) {
+  const cur = JSON.stringify(row.suitable_for);
+  if (cur === JSON.stringify(e.after)) return row;
+  if (cur === JSON.stringify(e.before)) return { ...row, suitable_for: e.after };
+  throw new Error(`${e.id}: suitable_for ${cur} matches neither the suitable_for record's before nor its after (update after, or restore the row)`);
+}
+
 function main() {
   const media = MEDIA_NONE ? null : readMediaTable();
   const before = fs.readFileSync(LIBRARY, 'utf8');
@@ -352,6 +389,16 @@ function main() {
     for (let i = 0; i < kept.length; i++) {
       const e = coreLevels.get(kept[i].id);
       if (e) kept[i] = coreLevelsRow(kept[i], e);
+    }
+  }
+  const suitableFor = readSuitableFor();
+  if (suitableFor) {
+    const keptIds = new Set(kept.map((r) => r.id));
+    const foreign = [...suitableFor.keys()].filter((i) => !keptIds.has(i));
+    if (foreign.length) throw new Error(`suitable_for record names ids that are not kept rows: ${foreign.join(' ')}`);
+    for (let i = 0; i < kept.length; i++) {
+      const e = suitableFor.get(kept[i].id);
+      if (e) kept[i] = suitableForRow(kept[i], e);
     }
   }
 

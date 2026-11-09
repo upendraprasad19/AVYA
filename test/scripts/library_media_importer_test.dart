@@ -27,6 +27,7 @@ const _mediaRel = 'scripts/data/library_media_v16.json';
 const _mapRel = 'scripts/data/library_batch_c_media_map.json';
 const _e230Rel = 'scripts/data/library_e230_retag.json';
 const _s1Rel = 'scripts/data/library_s1_core_levels.json';
+const _s1b2Rel = 'scripts/data/library_s1b2_suitable_for.json';
 const _mediaKeys = ['media_slug', 'media_version', 'media_source'];
 
 Json _readJson(String path) => jsonDecode(File(path).readAsStringSync()) as Json;
@@ -40,7 +41,7 @@ class _Tree {
     Directory('${dir.path}/scripts/data').createSync(recursive: true);
     Directory('${dir.path}/assets/data').createSync(recursive: true);
     File(script).writeAsStringSync(File(_importer).readAsStringSync());
-    for (final e in {src: _srcRel, inj: _injRel, media: _mediaRel, lib: _libRel, retag: _e230Rel, coreLevels: _s1Rel}.entries) {
+    for (final e in {src: _srcRel, inj: _injRel, media: _mediaRel, lib: _libRel, retag: _e230Rel, coreLevels: _s1Rel, suitableFor: _s1b2Rel}.entries) {
       File(e.key).writeAsStringSync(File(e.value).readAsStringSync());
     }
   }
@@ -53,6 +54,7 @@ class _Tree {
   String get media => '${dir.path}/scripts/data/library_media_v16.json';
   String get retag => '${dir.path}/scripts/data/library_e230_retag.json';
   String get coreLevels => '${dir.path}/scripts/data/library_s1_core_levels.json';
+  String get suitableFor => '${dir.path}/scripts/data/library_s1b2_suitable_for.json';
 
   List<String> get base => ['--library', lib, '--source', src, '--table', inj];
 
@@ -568,6 +570,114 @@ void main() {
         expect(r.exitCode, isNot(0), reason: _out(r));
         expect(t.readLibText(), text, reason: 'a refused run must not write');
       }
+    });
+  });
+
+  group('the suitable_for stage (Library Batch S1b-2)', () {
+    setUp(() => File('${t.dir.path}/scripts/data/library_batch_c2_removals.json')
+        .writeAsStringSync(File('scripts/data/library_batch_c2_removals.json').readAsStringSync()));
+
+    List<Json> recRows() => (_readJson(t.suitableFor)['rows'] as List).cast<Json>();
+
+    String libAtBefore() {
+      final lib = t.readLib();
+      for (final e in recRows()) {
+        final i = lib.indexWhere((r) => r['id'] == e['id']);
+        lib[i] = {...lib[i], 'suitable_for': e['before']};
+      }
+      return const JsonEncoder.withIndent('  ').convert(lib);
+    }
+
+    test('(a) a library at before takes after for E010 and E045, key positions kept, nothing else moves, --check agrees', () async {
+      expect({for (final e in recRows()) e['id']}, {'E010', 'E045'});
+      final beforeText = libAtBefore();
+      final beforeRows = _byId((jsonDecode(beforeText) as List).cast<Json>());
+      t.writeLibText(beforeText);
+      final r = await t.importer();
+      expect(r.exitCode, 0, reason: _out(r));
+      final byId = _byId(t.readLib());
+      final ids = {for (final e in recRows()) e['id'] as String};
+      for (final e in recRows()) {
+        expect(jsonEncode(byId[e['id']]!['suitable_for']), jsonEncode(e['after']), reason: '${e['id']}');
+        expect(byId[e['id']]!.keys.toList(), beforeRows[e['id']]!.keys.toList(), reason: 'key positions kept');
+      }
+      for (final e in beforeRows.entries.where((e) => !ids.contains(e.key))) {
+        expect(jsonEncode(byId[e.key]), jsonEncode(e.value), reason: '${e.key} must be untouched');
+      }
+      expect(t.readLibText(), File(_libRel).readAsStringSync(), reason: 'the result is the shipped library, byte for byte');
+      final ok = await t.importer(extra: ['--check']);
+      expect(ok.exitCode, 0, reason: _out(ok));
+    });
+
+    test('(b) --check on the library at before fails', () async {
+      t.writeLibText(libAtBefore());
+      final r = await t.importer(extra: ['--check']);
+      expect(r.exitCode, isNot(0), reason: _out(r));
+    });
+
+    test('(c) a foreign value is refused naming the id, and nothing is written', () async {
+      final lib = t.readLib();
+      lib.singleWhere((r) => r['id'] == 'E045')['suitable_for'] = ['Advanced'];
+      final foreign = const JsonEncoder.withIndent('  ').convert(lib);
+      t.writeLibText(foreign);
+      final r = await t.importer();
+      expect(r.exitCode, isNot(0), reason: _out(r));
+      expect(_err(r), allOf(contains('E045'), contains('suitable_for record')));
+      expect(t.readLibText(), foreign, reason: 'a refused run must not write');
+    });
+
+    test('(d) the record absent is a printed no-op: the library at before stays at before', () async {
+      final beforeText = libAtBefore();
+      File(t.suitableFor).deleteSync();
+      t.writeLibText(beforeText);
+      final r = await t.importer();
+      expect(r.exitCode, 0, reason: _out(r));
+      expect(_out(r), contains('suitable_for stage skipped'));
+      expect(t.readLibText(), beforeText);
+    });
+
+    test('(e) a record naming a source id or an unknown id, or repeating an id, is refused', () async {
+      final base = _readJson(_s1b2Rel);
+      final rows = (base['rows'] as List).cast<Json>();
+      for (final bad in [
+        [...rows, {'id': 'N14', 'before': <String>[], 'after': <String>['Advanced']}],
+        [...rows, {'id': 'E999', 'before': <String>[], 'after': <String>['Advanced']}],
+        [...rows, rows.first],
+      ]) {
+        File(t.suitableFor).writeAsStringSync(jsonEncode({...base, 'rows': bad}));
+        final text = t.readLibText();
+        final r = await t.importer();
+        expect(r.exitCode, isNot(0), reason: _out(r));
+        expect(t.readLibText(), text, reason: 'a refused run must not write');
+      }
+    });
+  });
+
+  group('the LINK pass-through (Library Batch S1b-2)', () {
+    setUp(() => File('${t.dir.path}/scripts/data/library_batch_c2_removals.json')
+        .writeAsStringSync(File('scripts/data/library_batch_c2_removals.json').readAsStringSync()));
+
+    test('slot_pattern and same_movement_as reach the library from the source, after the ladder keys and before the media keys', () async {
+      final r = await t.importer();
+      expect(r.exitCode, 0, reason: _out(r));
+      final byId = _byId(t.readLib());
+      expect(byId['N14']!['same_movement_as'], 'E147');
+      expect(byId['N20']!['slot_pattern'], ['hip_dominant']);
+      expect(byId['N20']!['same_movement_as'], 'E050');
+      expect(byId['N19']!.containsKey('slot_pattern'), isFalse, reason: 'N19 carries no overlay (founder, 2026-11-09)');
+      final keys = byId['N20']!.keys.toList();
+      expect(keys.indexOf('slot_pattern'), greaterThan(keys.indexOf('variant_family')));
+      expect(keys.last, 'same_movement_as', reason: 'an unmapped row carries no media keys after it');
+    });
+
+    test('a source key outside REQUIRED, LADDER and LINK is still dropped', () async {
+      final src = _readJson(t.src);
+      final rows = (src['rows'] as List).cast<Json>();
+      rows.singleWhere((x) => x['id'] == 'N14')['a_future_key'] = 'x';
+      File(t.src).writeAsStringSync(const JsonEncoder.withIndent('  ').convert(src));
+      final r = await t.importer();
+      expect(r.exitCode, 0, reason: _out(r));
+      expect(_byId(t.readLib())['N14']!.containsKey('a_future_key'), isFalse);
     });
   });
 }

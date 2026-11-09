@@ -3,6 +3,7 @@ import 'package:icanbefitter/shared/repositories/plan_engine/injury_substitutes.
 import 'package:icanbefitter/shared/repositories/plan_engine/models.dart';
 import 'query_v4_mirror.dart';
 import 'package:icanbefitter/shared/repositories/plan_engine/equipment_capability.dart';
+import 'package:icanbefitter/shared/repositories/plan_engine/same_movement.dart';
 
 enum CascadePickSource {
   attempt1Exact,
@@ -289,8 +290,10 @@ class CascadeTracer {
       // contraindicated pool pick; if the whole pool is contraindicated, the
       // slot is safely omitted (distinct from a bug-`(none)`).
       var poolHadContra = false;
+      // Library Batch S1b-2 mirror of the universal-pool skip: the day's names with their same-movement partners.
+      final pickedOrPartners = SameMovement.fromRows(library).expand(pickedNames);
       for (final name in pool) {
-        if (pickedNames.contains(name)) continue;
+        if (pickedOrPartners.contains(name)) continue;
         // Mirror of ExerciseRepository.search (exercise_repository.dart:43-58):
         // case-insensitive substring match on name + name_aliases.
         final q = name.toLowerCase();

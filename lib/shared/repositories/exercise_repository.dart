@@ -1,6 +1,7 @@
 import 'package:icanbefitter/core/services/hive_service.dart';
 import 'package:icanbefitter/core/utils/equipment_vocab.dart';
 import 'package:icanbefitter/shared/repositories/plan_engine/equipment_capability.dart';
+import 'package:icanbefitter/shared/repositories/plan_engine/same_movement.dart';
 
 /// Queries the exerciseBox (seeded from bundled JSON).
 ///
@@ -297,8 +298,16 @@ class ExerciseRepository {
         ? injuryExclusions.map((i) => i.toLowerCase()).toList()
         : null;
 
+    // Library Batch S1b-2: a loaded version and its original never share a day, so an excluded name also excludes its
+    // same-movement partner. Expanded ONCE per call from the full library (never the filtered view); no map is built
+    // when nothing is excluded.
+    final all = getAll();
+    final excluded = excludeNames == null || excludeNames.isEmpty
+        ? excludeNames
+        : SameMovement.fromRows(all).expand(excludeNames);
+
     // Single fused filter predicate
-    var results = getAll().where((e) {
+    var results = all.where((e) {
       // 1. Movement pattern (ALWAYS applied — never dropped)
       if (!_fieldContains(e['movement_pattern'], movementPattern)) return false;
 
@@ -404,8 +413,8 @@ class ExerciseRepository {
       if (foundationalOnly && e['is_foundational'] != true) return false;
 
       // 7. Exclude already-selected names
-      if (excludeNames != null && excludeNames.isNotEmpty) {
-        if (excludeNames.contains(e['name'] as String? ?? '')) return false;
+      if (excluded != null && excluded.isNotEmpty) {
+        if (excluded.contains(e['name'] as String? ?? '')) return false;
       }
 
       // 8. Injury exclusion

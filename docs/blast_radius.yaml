@@ -539,6 +539,9 @@ paths:
   # Library Batch S1a (2026-11-08): the core-levels record decides which core lists the kept library rows sit on (what
   # the core-list pool offers each level), so it sits at account above scripts/**, like the E230 record.
   - { glob: "scripts/data/library_s1_core_levels.json", tier: account }
+  # Library Batch S1b-2 (2026-11-09): the suitable_for record decides which levels E010 / E045 are offered to (a queryV4
+  # filter for every user) and what the seed migration's rollback restores, so it sits at account above scripts/**.
+  - { glob: "scripts/data/library_s1b2_suitable_for.json", tier: account }
   - { glob: "docs/**", tier: feature }
   - { glob: "scripts/**", tier: feature }
   - { glob: "test/**", tier: feature }

@@ -765,7 +765,8 @@
     "difficulty_level": "beginner",
     "suitable_for": [
       "Beginner",
-      "Intermediate"
+      "Intermediate",
+      "Advanced"
     ],
     "default_sets": 4,
     "default_reps": "10-15",
@@ -3591,6 +3592,7 @@
     "logging_type": "weight_reps",
     "difficulty_level": "intermediate",
     "suitable_for": [
+      "Beginner",
       "Intermediate",
       "Advanced"
     ],
@@ -67419,5 +67421,727 @@
     "skill_track": "handstand_push_up",
     "skill_step": 1,
     "progression_to": "Pike Push Up"
+  },
+  {
+    "id": "N14",
+    "name": "Dumbbell Sumo Squat",
+    "category": "legs",
+    "movement_pattern": [
+      "knee_dominant"
+    ],
+    "exercise_type": [
+      "compound"
+    ],
+    "primary_muscles": [
+      "Adductors",
+      "Glutes",
+      "Quads"
+    ],
+    "secondary_muscles": [
+      "Hamstrings"
+    ],
+    "equipment_needed": [
+      "dumbbells"
+    ],
+    "logging_type": "weight_reps",
+    "difficulty_level": "beginner",
+    "suitable_for": [
+      "Beginner",
+      "Intermediate",
+      "Advanced"
+    ],
+    "default_sets": 4,
+    "default_reps": "12-15",
+    "default_rest_secs": 75,
+    "tempo": "",
+    "met_value": 5.0,
+    "cal_per_set_est": 9.0,
+    "breathing_cue": "Inhale down, exhale up",
+    "coaching_cues": [
+      "Hold one dumbbell by the top end between the legs, arms long",
+      "Feet wide, toes turned out",
+      "Sit straight down between the heels, knees tracking over the toes",
+      "Drive up through the heels and squeeze the glutes at the top"
+    ],
+    "common_mistakes": [
+      "Letting the knees cave inward",
+      "Leaning the chest forward so the dumbbell swings"
+    ],
+    "warmup_protocol": "",
+    "pro_tip": "Stand on two low steps or books so the dumbbell can travel below floor level for a deeper stretch.",
+    "is_indian_context": false,
+    "indian_alternative": "A filled water can or a bag of rice held between the legs works as the load",
+    "source": "exercise-gif-set",
+    "is_active": true,
+    "is_foundational": false,
+    "injury_contraindications": [
+      "hip",
+      "knee"
+    ],
+    "is_bilateral": true,
+    "cns_demand": 3,
+    "target_focus": [
+      "Glutes",
+      "Hip",
+      "Quads"
+    ],
+    "equipment_tier": [
+      "home_dumbbells",
+      "basic_gym",
+      "full_gym"
+    ],
+    "standard_swap": "",
+    "priority_tier": 2,
+    "rep_range": "8-12",
+    "core_levels": [
+      "beginner",
+      "intermediate",
+      "advanced"
+    ],
+    "discipline": "strength",
+    "gym_availability": "home",
+    "requires_coaching": false,
+    "high_impact": false,
+    "variant_family": "squat",
+    "same_movement_as": "E147"
+  },
+  {
+    "id": "N15",
+    "name": "Dumbbell Split Squat",
+    "category": "legs",
+    "movement_pattern": [
+      "knee_dominant"
+    ],
+    "exercise_type": [
+      "compound"
+    ],
+    "primary_muscles": [
+      "Quads",
+      "Glutes"
+    ],
+    "secondary_muscles": [
+      "Hamstrings",
+      "Calves"
+    ],
+    "equipment_needed": [
+      "dumbbells"
+    ],
+    "logging_type": "weight_reps",
+    "difficulty_level": "beginner",
+    "suitable_for": [
+      "Beginner",
+      "Intermediate",
+      "Advanced"
+    ],
+    "default_sets": 3,
+    "default_reps": "10-12",
+    "default_rest_secs": 60,
+    "tempo": "3-0-1-0",
+    "met_value": 5.0,
+    "cal_per_set_est": 9.0,
+    "breathing_cue": "Inhale as you lower, exhale as you rise",
+    "coaching_cues": [
+      "A dumbbell in each hand, arms long at the sides",
+      "Long stance, back heel up",
+      "Lower the back knee straight down toward the floor",
+      "Push through the front foot to rise, torso tall"
+    ],
+    "common_mistakes": [
+      "Front knee collapsing inward",
+      "Stance too short so the front heel lifts"
+    ],
+    "warmup_protocol": "",
+    "pro_tip": "Keep the dumbbells hanging still; if they swing, the weight is too heavy for the balance.",
+    "is_indian_context": false,
+    "indian_alternative": "Two filled water bottles or bags in each hand",
+    "source": "exercise-gif-set",
+    "is_active": true,
+    "is_foundational": false,
+    "injury_contraindications": [
+      "hip",
+      "knee"
+    ],
+    "is_bilateral": false,
+    "cns_demand": 3,
+    "target_focus": [
+      "Quads",
+      "Glutes"
+    ],
+    "equipment_tier": [
+      "home_dumbbells",
+      "basic_gym",
+      "full_gym"
+    ],
+    "standard_swap": "",
+    "priority_tier": 2,
+    "rep_range": "10-12",
+    "core_levels": [
+      "beginner",
+      "intermediate",
+      "advanced"
+    ],
+    "discipline": "strength",
+    "gym_availability": "home",
+    "requires_coaching": false,
+    "high_impact": false,
+    "variant_family": "split_squat",
+    "same_movement_as": "E259"
+  },
+  {
+    "id": "N16",
+    "name": "Dumbbell Walking Lunge",
+    "category": "legs",
+    "movement_pattern": [
+      "knee_dominant"
+    ],
+    "exercise_type": [
+      "compound"
+    ],
+    "primary_muscles": [
+      "Quads",
+      "Glutes"
+    ],
+    "secondary_muscles": [
+      "Hamstrings",
+      "Core"
+    ],
+    "equipment_needed": [
+      "dumbbells"
+    ],
+    "logging_type": "weight_reps",
+    "difficulty_level": "beginner",
+    "suitable_for": [
+      "Beginner",
+      "Intermediate",
+      "Advanced"
+    ],
+    "default_sets": 3,
+    "default_reps": "20 steps",
+    "default_rest_secs": 75,
+    "tempo": "2-0-2-0",
+    "met_value": 4.5,
+    "cal_per_set_est": 8.0,
+    "breathing_cue": "Inhale as you step and lower, exhale as you drive up",
+    "coaching_cues": [
+      "A dumbbell in each hand, shoulders back",
+      "Step forward and lower the back knee toward the floor",
+      "Drive through the front heel into the next step",
+      "Keep the torso upright and the dumbbells still"
+    ],
+    "common_mistakes": [
+      "Short steps that push the front knee far past the toes",
+      "Letting the dumbbells pull the shoulders forward"
+    ],
+    "warmup_protocol": "",
+    "pro_tip": "Pick a weight you can hold for the whole walk; grip gives out before the legs on long sets.",
+    "is_indian_context": false,
+    "indian_alternative": "Use a corridor or terrace and two filled bags for the load",
+    "source": "exercise-gif-set",
+    "is_active": true,
+    "is_foundational": false,
+    "injury_contraindications": [
+      "hip",
+      "knee"
+    ],
+    "is_bilateral": false,
+    "cns_demand": 3,
+    "target_focus": [
+      "Glutes",
+      "Quads"
+    ],
+    "equipment_tier": [
+      "home_dumbbells",
+      "basic_gym",
+      "full_gym"
+    ],
+    "standard_swap": "",
+    "priority_tier": 1,
+    "rep_range": "8-12",
+    "core_levels": [
+      "intermediate",
+      "advanced"
+    ],
+    "discipline": "strength",
+    "gym_availability": "home",
+    "requires_coaching": false,
+    "high_impact": false,
+    "variant_family": "lunge",
+    "same_movement_as": "E042"
+  },
+  {
+    "id": "N17",
+    "name": "Dumbbell Lateral Lunge",
+    "category": "legs",
+    "movement_pattern": [
+      "knee_dominant"
+    ],
+    "exercise_type": [
+      "compound"
+    ],
+    "primary_muscles": [
+      "Adductors",
+      "Quads",
+      "Glutes"
+    ],
+    "secondary_muscles": [
+      "Hamstrings",
+      "Core"
+    ],
+    "equipment_needed": [
+      "dumbbells"
+    ],
+    "logging_type": "weight_reps",
+    "difficulty_level": "intermediate",
+    "suitable_for": [
+      "Intermediate",
+      "Advanced"
+    ],
+    "default_sets": 4,
+    "default_reps": "10-12 each",
+    "default_rest_secs": 75,
+    "tempo": "",
+    "met_value": 5.0,
+    "cal_per_set_est": 9.0,
+    "breathing_cue": "Inhale down, exhale up",
+    "coaching_cues": [
+      "Hold one dumbbell at the chest with both hands",
+      "Step wide to one side and sit the hips back over that foot",
+      "Keep the other leg straight and both feet flat",
+      "Push off the bent leg back to standing"
+    ],
+    "common_mistakes": [
+      "Bending the straight leg",
+      "Rounding the back as the hips sit back"
+    ],
+    "warmup_protocol": "",
+    "pro_tip": "Go only as low as the straight leg allows with the heel down; depth comes with mobility.",
+    "is_indian_context": false,
+    "indian_alternative": "Hold a filled water can at the chest",
+    "source": "exercise-gif-set",
+    "is_active": true,
+    "is_foundational": false,
+    "injury_contraindications": [
+      "hip",
+      "knee"
+    ],
+    "is_bilateral": false,
+    "cns_demand": 3,
+    "target_focus": [
+      "Glutes",
+      "Hip",
+      "Quads"
+    ],
+    "equipment_tier": [
+      "home_dumbbells",
+      "basic_gym",
+      "full_gym"
+    ],
+    "standard_swap": "",
+    "priority_tier": 1,
+    "rep_range": "8-12",
+    "core_levels": [
+      "intermediate",
+      "advanced"
+    ],
+    "discipline": "strength",
+    "gym_availability": "home",
+    "requires_coaching": false,
+    "high_impact": false,
+    "variant_family": "lunge",
+    "same_movement_as": "E145"
+  },
+  {
+    "id": "N18",
+    "name": "Dumbbell Hip Thrust",
+    "category": "legs",
+    "movement_pattern": [
+      "hip_dominant"
+    ],
+    "exercise_type": [
+      "compound"
+    ],
+    "primary_muscles": [
+      "Glutes"
+    ],
+    "secondary_muscles": [
+      "Hamstrings"
+    ],
+    "equipment_needed": [
+      "dumbbells",
+      "elevated surface"
+    ],
+    "logging_type": "weight_reps",
+    "difficulty_level": "intermediate",
+    "suitable_for": [
+      "Intermediate",
+      "Advanced"
+    ],
+    "default_sets": 4,
+    "default_reps": "10-15",
+    "default_rest_secs": 75,
+    "tempo": "2-0-2-1",
+    "met_value": 5.0,
+    "cal_per_set_est": 9.0,
+    "breathing_cue": "Exhale on thrust",
+    "coaching_cues": [
+      "Upper back against a sofa, bed or bench edge",
+      "A dumbbell across the hips, held with both hands",
+      "Drive through the heels until the body is flat from knees to shoulders",
+      "Pause and squeeze the glutes at the top"
+    ],
+    "common_mistakes": [
+      "Arching the lower back at the top",
+      "Feet too far forward so the hamstrings take over"
+    ],
+    "warmup_protocol": "",
+    "pro_tip": "Fold a towel under the dumbbell so the handle does not dig into the hips.",
+    "is_indian_context": false,
+    "indian_alternative": "Use the edge of a bed or a sturdy diwan against a wall",
+    "source": "exercise-gif-set",
+    "is_active": true,
+    "is_foundational": false,
+    "injury_contraindications": [
+      "hip"
+    ],
+    "is_bilateral": true,
+    "cns_demand": 4,
+    "target_focus": [
+      "Glutes"
+    ],
+    "equipment_tier": [
+      "home_dumbbells",
+      "basic_gym",
+      "full_gym"
+    ],
+    "standard_swap": "",
+    "priority_tier": 1,
+    "rep_range": "8-12",
+    "core_levels": [
+      "intermediate",
+      "advanced"
+    ],
+    "discipline": "strength",
+    "gym_availability": "home",
+    "requires_coaching": false,
+    "high_impact": false,
+    "variant_family": "hip_thrust",
+    "same_movement_as": "E047"
+  },
+  {
+    "id": "N19",
+    "name": "Dumbbell Glute Bridge",
+    "category": "legs",
+    "movement_pattern": [
+      "hip_isolation"
+    ],
+    "exercise_type": [
+      "isolation"
+    ],
+    "primary_muscles": [
+      "Glutes"
+    ],
+    "secondary_muscles": [
+      "Hamstrings"
+    ],
+    "equipment_needed": [
+      "dumbbells"
+    ],
+    "logging_type": "weight_reps",
+    "difficulty_level": "beginner",
+    "suitable_for": [
+      "Beginner",
+      "Intermediate",
+      "Advanced"
+    ],
+    "default_sets": 4,
+    "default_reps": "15-20",
+    "default_rest_secs": 60,
+    "tempo": "2-0-2-1",
+    "met_value": 3.5,
+    "cal_per_set_est": 6.0,
+    "breathing_cue": "Exhale on bridge",
+    "coaching_cues": [
+      "Lie on your back, knees bent, feet flat",
+      "Rest a dumbbell across the hips and hold it with both hands",
+      "Drive through the heels and lift the hips",
+      "Squeeze the glutes at the top, lower with control"
+    ],
+    "common_mistakes": [
+      "Pushing through the toes",
+      "Arching the lower back instead of squeezing the glutes"
+    ],
+    "warmup_protocol": "",
+    "pro_tip": "Pause one second at the top of every rep; the pause does more than a heavier dumbbell.",
+    "is_indian_context": false,
+    "indian_alternative": "A bag of rice or a filled water can across the hips",
+    "source": "exercise-gif-set",
+    "is_active": true,
+    "is_foundational": false,
+    "injury_contraindications": [],
+    "is_bilateral": true,
+    "cns_demand": 2,
+    "target_focus": [
+      "Glutes"
+    ],
+    "equipment_tier": [
+      "home_dumbbells",
+      "basic_gym",
+      "full_gym"
+    ],
+    "standard_swap": "",
+    "priority_tier": 3,
+    "rep_range": "12-15",
+    "core_levels": [
+      "beginner",
+      "intermediate",
+      "advanced"
+    ],
+    "discipline": "strength",
+    "gym_availability": "home",
+    "requires_coaching": false,
+    "high_impact": false,
+    "variant_family": "glute_bridge",
+    "same_movement_as": "E048"
+  },
+  {
+    "id": "N20",
+    "name": "Dumbbell Sumo Deadlift",
+    "category": "legs",
+    "movement_pattern": [
+      "knee_dominant"
+    ],
+    "exercise_type": [
+      "compound"
+    ],
+    "primary_muscles": [
+      "Adductors",
+      "Glutes",
+      "Hamstrings"
+    ],
+    "secondary_muscles": [
+      "Quads",
+      "Lower Back"
+    ],
+    "equipment_needed": [
+      "dumbbells"
+    ],
+    "logging_type": "weight_reps",
+    "difficulty_level": "intermediate",
+    "suitable_for": [
+      "Intermediate",
+      "Advanced"
+    ],
+    "default_sets": 4,
+    "default_reps": "8-12",
+    "default_rest_secs": 120,
+    "tempo": "3-1-2-0",
+    "met_value": 6.0,
+    "cal_per_set_est": 11.0,
+    "breathing_cue": "Big breath before you lift, exhale at the top",
+    "coaching_cues": [
+      "Feet wide, toes out, one dumbbell held vertically between the legs",
+      "Push the hips back and bend the knees to reach the dumbbell",
+      "Chest up, back flat",
+      "Stand tall by driving the floor away and squeezing the glutes"
+    ],
+    "common_mistakes": [
+      "Rounding the back to reach the dumbbell",
+      "Locking the knees and turning it into a stiff-leg pull"
+    ],
+    "warmup_protocol": "",
+    "pro_tip": "One heavy dumbbell held by the top end is enough; keep it close to the body all the way up.",
+    "is_indian_context": false,
+    "indian_alternative": "A filled water can or a heavy bag held by the handle",
+    "source": "exercise-gif-set",
+    "is_active": true,
+    "is_foundational": false,
+    "injury_contraindications": [
+      "hip",
+      "lower_back"
+    ],
+    "is_bilateral": true,
+    "cns_demand": 3,
+    "target_focus": [
+      "Glutes",
+      "Hamstrings",
+      "Hip"
+    ],
+    "equipment_tier": [
+      "home_dumbbells",
+      "basic_gym",
+      "full_gym"
+    ],
+    "standard_swap": "",
+    "priority_tier": 1,
+    "rep_range": "8-12",
+    "core_levels": [
+      "intermediate",
+      "advanced"
+    ],
+    "discipline": "strength",
+    "gym_availability": "home",
+    "requires_coaching": false,
+    "high_impact": false,
+    "variant_family": "deadlift",
+    "slot_pattern": [
+      "hip_dominant"
+    ],
+    "same_movement_as": "E050"
+  },
+  {
+    "id": "N21",
+    "name": "Kettlebell Romanian Deadlift",
+    "category": "legs",
+    "movement_pattern": [
+      "hip_dominant"
+    ],
+    "exercise_type": [
+      "compound"
+    ],
+    "primary_muscles": [
+      "Hamstrings",
+      "Glutes"
+    ],
+    "secondary_muscles": [
+      "Lower Back"
+    ],
+    "equipment_needed": [
+      "kettlebell"
+    ],
+    "logging_type": "weight_reps",
+    "difficulty_level": "intermediate",
+    "suitable_for": [
+      "Beginner",
+      "Intermediate",
+      "Advanced"
+    ],
+    "default_sets": 4,
+    "default_reps": "10-12",
+    "default_rest_secs": 90,
+    "tempo": "3-1-2-0",
+    "met_value": 5.5,
+    "cal_per_set_est": 10.0,
+    "breathing_cue": "Inhale on descent, exhale on drive",
+    "coaching_cues": [
+      "Hold the kettlebell by the handle in front of the thighs",
+      "Soft knees, push the hips straight back",
+      "Keep the kettlebell close and the spine neutral",
+      "Stand tall by squeezing the glutes"
+    ],
+    "common_mistakes": [
+      "Rounding the lower back at the bottom",
+      "Squatting the weight down instead of hinging"
+    ],
+    "warmup_protocol": "",
+    "pro_tip": "Stop when the hamstrings stretch, not when the kettlebell reaches the floor.",
+    "is_indian_context": false,
+    "indian_alternative": "A heavy bag held by its handle works the same hinge",
+    "source": "exercise-gif-set",
+    "is_active": true,
+    "is_foundational": false,
+    "injury_contraindications": [
+      "hamstring",
+      "lower_back"
+    ],
+    "is_bilateral": true,
+    "cns_demand": 3,
+    "target_focus": [
+      "Glutes",
+      "Hamstrings"
+    ],
+    "equipment_tier": [
+      "full_gym"
+    ],
+    "standard_swap": "",
+    "priority_tier": 1,
+    "rep_range": "5-8",
+    "core_levels": [
+      "beginner",
+      "intermediate",
+      "advanced"
+    ],
+    "discipline": "strength",
+    "gym_availability": "standard_gym",
+    "requires_coaching": false,
+    "high_impact": false,
+    "variant_family": "romanian_deadlift",
+    "same_movement_as": "E045"
+  },
+  {
+    "id": "N22",
+    "name": "Weighted Russian Twist",
+    "category": "core",
+    "movement_pattern": [
+      "core"
+    ],
+    "exercise_type": [
+      "isolation"
+    ],
+    "primary_muscles": [
+      "Obliques"
+    ],
+    "secondary_muscles": [
+      "Abs"
+    ],
+    "equipment_needed": [
+      "dumbbells"
+    ],
+    "logging_type": "weight_reps",
+    "difficulty_level": "beginner",
+    "suitable_for": [
+      "Beginner",
+      "Intermediate",
+      "Advanced"
+    ],
+    "default_sets": 4,
+    "default_reps": "20 total",
+    "default_rest_secs": 60,
+    "tempo": "2-0-2-0",
+    "met_value": 3.5,
+    "cal_per_set_est": 6.0,
+    "breathing_cue": "Exhale on rotation",
+    "coaching_cues": [
+      "Sit with knees bent, lean back slightly, heels on the floor",
+      "Hold one dumbbell at the chest with both hands",
+      "Rotate the shoulders to one side, then the other",
+      "Keep the chest up and the movement slow"
+    ],
+    "common_mistakes": [
+      "Swinging the dumbbell with the arms only",
+      "Rounding the lower back"
+    ],
+    "warmup_protocol": "",
+    "pro_tip": "Turn the shoulders, not just the hands; the dumbbell follows the chest.",
+    "is_indian_context": false,
+    "indian_alternative": "Hold a filled water bottle",
+    "source": "exercise-gif-set",
+    "is_active": true,
+    "is_foundational": false,
+    "injury_contraindications": [
+      "lower_back"
+    ],
+    "is_bilateral": true,
+    "cns_demand": 1,
+    "target_focus": [
+      "Core"
+    ],
+    "equipment_tier": [
+      "home_dumbbells",
+      "basic_gym",
+      "full_gym"
+    ],
+    "standard_swap": "",
+    "priority_tier": 2,
+    "rep_range": "12-20",
+    "core_levels": [
+      "intermediate",
+      "advanced"
+    ],
+    "discipline": "strength",
+    "gym_availability": "home",
+    "requires_coaching": false,
+    "high_impact": false,
+    "variant_family": "rotation_core",
+    "same_movement_as": "E059"
   }
 ]

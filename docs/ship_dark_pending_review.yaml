@@ -367,6 +367,10 @@ pending:
       Library Batch S1b-1 (2026-11-09, docs/plans/2026-11-09-library-batch-s1b1-gym-hip-goblet.md,
       seed v22): gym Hip slot reduces to the machine / cable rows (region rule in namesMuscle),
       E038 off advanced. Founder calls on S1a closed except E010 / E045 (S1b-2). Stays pending.
+      Library Batch S1b-2 (2026-11-09, docs/plans/2026-11-09-library-batch-s1b2-loaded-versions.md,
+      seed v23, not ship-dark itself: it also changes OFF): nine loaded versions with the same-movement
+      rule in both worlds; E010 / E045 suitable_for widened, so no level-agreement exception is left.
+      Still open for the flip: refilled, and S1b-3 (E053). Stays pending.
 
 resolved:
   - flag: enable_session_set_budget

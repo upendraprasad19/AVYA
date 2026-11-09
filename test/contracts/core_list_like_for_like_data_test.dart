@@ -31,21 +31,28 @@ const _implementPatterns = {
 /// G0339 Dumbbell Lying Hamstring Curl became core at intermediate and advanced, so it joins the full_gym Hamstrings
 /// curl cells (last: priority 3); E257 Glute Kickback became core at advanced, so the home_dumbbells advanced Glutes
 /// isolation core pool is [E257], all improvised, and no like-for-like reduction applies there any more.
+/// Library Batch S1b-2 (2026-11-09, plan docs/plans/2026-11-09-library-batch-s1b2-loaded-versions.md): N19 Dumbbell
+/// Glute Bridge has no slot overlay and priority 3 (founder 2026-11-09), so it joins every Glutes isolation cell: after
+/// E109 Glute Kickback (Cable) in the gym cells (priority 2 ranks first), and alone in the home_dumbbells cells, where it
+/// is the only loaded row and the reduction now drops the bodyweight E257.
 const _expected = <String, List<String>>{
   'home_dumbbells|beginner|Calves|knee_dominant|': ['E258'],
   'home_dumbbells|beginner|Calves|knee_dominant|soleus': ['E258'],
+  'home_dumbbells|beginner|Glutes|hip_isolation|': ['N19'],
   'home_dumbbells|intermediate|Calves|knee_dominant|': ['E258', 'G0409'],
   'home_dumbbells|intermediate|Calves|knee_dominant|soleus': ['E258', 'G0409'],
+  'home_dumbbells|intermediate|Glutes|hip_isolation|': ['N19'],
   'home_dumbbells|advanced|Calves|knee_dominant|': ['G0409'],
   'home_dumbbells|advanced|Calves|knee_dominant|soleus': ['G0409'],
+  'home_dumbbells|advanced|Glutes|hip_isolation|': ['N19'],
   'basic_gym|beginner|Calves|knee_dominant|': ['E258'],
   'basic_gym|beginner|Calves|knee_dominant|soleus': ['E258'],
   'basic_gym|intermediate|Calves|knee_dominant|': ['E051', 'E258', 'G0409'],
-  'basic_gym|intermediate|Glutes|hip_isolation|': ['E109'],
+  'basic_gym|intermediate|Glutes|hip_isolation|': ['E109', 'N19'],
   'basic_gym|intermediate|Hamstrings|knee_dominant|': ['G0339'],
   'basic_gym|intermediate|Calves|knee_dominant|soleus': ['E051', 'E258', 'G0409'],
   'basic_gym|advanced|Calves|knee_dominant|': ['E051', 'G0409'],
-  'basic_gym|advanced|Glutes|hip_isolation|': ['E109'],
+  'basic_gym|advanced|Glutes|hip_isolation|': ['E109', 'N19'],
   'basic_gym|advanced|Hamstrings|knee_dominant|': ['G0339'],
   'basic_gym|advanced|Calves|knee_dominant|soleus': ['E051', 'G0409'],
   'full_gym|beginner|Calves|knee_dominant|': ['E052', 'E258'],
@@ -53,15 +60,15 @@ const _expected = <String, List<String>>{
   'full_gym|beginner|Hamstrings|knee_dominant|': ['G0599'],
   'full_gym|beginner|Calves|knee_dominant|soleus': ['E052', 'E258'],
   'full_gym|intermediate|Calves|knee_dominant|': ['E051', 'E052', 'E258', 'G0409'],
-  'full_gym|intermediate|Glutes|hip_isolation|': ['E109'],
+  'full_gym|intermediate|Glutes|hip_isolation|': ['E109', 'N19'],
   'full_gym|intermediate|Quads|knee_dominant|isolation': ['E043'],
   'full_gym|intermediate|Hamstrings|knee_dominant|': ['E049', 'G0599', 'G0339'],
   'full_gym|intermediate|Calves|knee_dominant|soleus': ['E052', 'E051', 'E258', 'G0409'],
   'full_gym|advanced|Calves|knee_dominant|': ['E051', 'E052', 'G0409'],
-  'full_gym|advanced|Glutes|hip_isolation|': ['E109'],
+  'full_gym|advanced|Glutes|hip_isolation|': ['E109', 'N19'],
   // Library Batch S1b-1: E109 core at beginner, so a gym beginner Glutes slot reduces to it (not E107 / E048 / E257).
-  'basic_gym|beginner|Glutes|hip_isolation|': ['E109'],
-  'full_gym|beginner|Glutes|hip_isolation|': ['E109'],
+  'basic_gym|beginner|Glutes|hip_isolation|': ['E109', 'N19'],
+  'full_gym|beginner|Glutes|hip_isolation|': ['E109', 'N19'],
   // Library Batch S1b-1 (founder 2026-11-09, gym users get gym kit in the Hip slot): the Hip slot now reduces through
   // the region rule (CoreListSelector._slotRegionMuscles, Abductors / Adductors) to the machine and cable rows.
   'basic_gym|beginner|Hip|hip_isolation|': ['G0168'],

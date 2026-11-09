@@ -55,11 +55,10 @@ const _tableA = <String, List<String>>{
   'E020': [_i], 'E134': [_a], 'E255': [],
 };
 
-/// Rows whose core_levels stay outside suitable_for on purpose (plan Decision 2; founder decides, Decision 3 (b)).
-const _namedExceptions = <String, String>{
-  'E010': 'narrowing empties the bodyweight advanced Front Delts vertical_push compound slot (its only row)',
-  'E045': 'narrowing turns every gym and dumbbell beginner hinge into a bodyweight row (phase-1 foundational key)',
-};
+/// Rows whose core_levels stay outside suitable_for on purpose. Empty since Library Batch S1b-2: the founder widened
+/// E010 Pike Push Up (Advanced) and E045 Romanian Deadlift (Beginner) instead (2026-11-09, board d12;
+/// scripts/data/library_s1b2_suitable_for.json). A future exception goes here with its reason.
+const _namedExceptions = <String, String>{};
 
 Json _json(String path) => jsonDecode(File(path).readAsStringSync()) as Json;
 List<String> _strs(Object? v) => v is List ? v.map((e) => '$e').toList() : const [];
@@ -109,7 +108,7 @@ void main() {
     }
   });
 
-  test('core_levels lie inside suitable_for for every row except the named exceptions', () {
+  test('core_levels lie inside suitable_for for every row (no named exception since Library Batch S1b-2)', () {
     expect([
       for (final r in lib)
         if (!_namedExceptions.containsKey(r['id']) &&

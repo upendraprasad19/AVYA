@@ -49,8 +49,9 @@ void main() {
     expect(isNewRowId('E036'), isFalse);
     expect(isNewRowId('E274'), isFalse);
     expect(isNewRowId('Gx'), isFalse);
-    // 629 Batch C1 rows + the 4 Batch C2b twins (G1368 G1489 G2567 G0474) whose holds were released.
-    expect(lib.where((r) => isNewRowId(r['id'] as String)).length, 633);
+    // 629 Batch C1 rows + the 4 Batch C2b twins (G1368 G1489 G2567 G0474) whose holds were released + the 9 Library
+    // Batch S1b-2 loaded versions (N14 to N22).
+    expect(lib.where((r) => isNewRowId(r['id'] as String)).length, 642);
   });
 
   test('a clean new row yields no violation (the positive control for every case below)', () {

@@ -1,5 +1,6 @@
 import 'package:icanbefitter/core/utils/equipment_vocab.dart';
 import 'package:icanbefitter/shared/repositories/plan_engine/equipment_capability.dart';
+import 'package:icanbefitter/shared/repositories/plan_engine/same_movement.dart';
 
 /// Pure-Dart mirror of `ExerciseRepository.queryV4`.
 ///
@@ -132,10 +133,12 @@ class QueryV4Mirror {
       results = results.where((e) => e['is_foundational'] == true).toList();
     }
 
-    // 7. Exclude names
+    // 7. Exclude names, with their same-movement partners (Library Batch S1b-2), expanded from the full [source] as prod
+    // expands from getAll().
     if (excludeNames != null && excludeNames.isNotEmpty) {
+      final excluded = SameMovement.fromRows(source).expand(excludeNames);
       results = results.where((e) =>
-          !excludeNames.contains(e['name'] as String? ?? '')).toList();
+          !excluded.contains(e['name'] as String? ?? '')).toList();
     }
 
     // 8. Injury exclusion

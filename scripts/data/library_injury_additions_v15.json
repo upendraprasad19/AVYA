@@ -26,6 +26,7 @@
     "Cable Seated Wide Grip Row",
     "Cable Straight Back Seated Row",
     "Clamshell",
+    "Dumbbell Glute Bridge",
     "Dumbbell Incline Row",
     "Dumbbell Lying Rear Delt Row",
     "Elliptical Trainer",
@@ -5141,6 +5142,82 @@
       "class": "family",
       "reason": "family shoulder (push-up name)",
       "variant_family": "pike_push_up"
+    },
+    "N14": {
+      "tokens": [
+        "hip",
+        "knee"
+      ],
+      "class": "judgement",
+      "reason": "loaded version of E147 Sumo Squat, same joints",
+      "variant_family": "squat"
+    },
+    "N15": {
+      "tokens": [
+        "hip",
+        "knee"
+      ],
+      "class": "judgement",
+      "reason": "loaded version of E259 Split Squat, same joints",
+      "variant_family": "split_squat"
+    },
+    "N16": {
+      "tokens": [
+        "hip",
+        "knee"
+      ],
+      "class": "judgement",
+      "reason": "loaded version of E042 Walking Lunge, same joints",
+      "variant_family": "lunge"
+    },
+    "N17": {
+      "tokens": [
+        "hip",
+        "knee"
+      ],
+      "class": "judgement",
+      "reason": "loaded version of E145 Lateral Lunge, same joints",
+      "variant_family": "lunge"
+    },
+    "N18": {
+      "tokens": [
+        "hip"
+      ],
+      "class": "judgement",
+      "reason": "loaded version of E047 Hip Thrust, same joints",
+      "variant_family": "hip_thrust"
+    },
+    "N19": {
+      "tokens": [],
+      "class": "judgement",
+      "reason": "loaded version of E048 Glute Bridge, same joints",
+      "variant_family": "glute_bridge"
+    },
+    "N20": {
+      "tokens": [
+        "hip",
+        "lower_back"
+      ],
+      "class": "judgement",
+      "reason": "loaded version of E050 Sumo Deadlift, same joints",
+      "variant_family": "deadlift"
+    },
+    "N21": {
+      "tokens": [
+        "hamstring",
+        "lower_back"
+      ],
+      "class": "judgement",
+      "reason": "loaded version of E045 Romanian Deadlift, same joints",
+      "variant_family": "romanian_deadlift"
+    },
+    "N22": {
+      "tokens": [
+        "lower_back"
+      ],
+      "class": "judgement",
+      "reason": "loaded version of E059 Russian Twist, same joints",
+      "variant_family": "rotation_core"
     }
   }
 }

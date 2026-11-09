@@ -157,7 +157,13 @@ class SeedService {
   //   [beginner, intermediate]; E107 Hip Abduction Machine, E109 Glute Kickback (Cable) and G0168
   //   Cable Hip Adduction at every level (gym kit in the gym Hip and Glutes slots). Core-list pool
   //   only (library_seed_v22_upgrade_behavioral_test.dart).
-  static const int _exerciseLibraryVersion = 22;
+  //   v23 (Library Batch S1b-2, docs/plans/2026-11-09-library-batch-s1b2-loaded-versions.md): 9 new
+  //   rows N14 to N22, the dumbbell / kettlebell versions of 9 rows (OI-148, founder 2026-11-08), each
+  //   carrying `same_movement_as` (a version and its original never share a day: SameMovement); E010
+  //   Pike Push Up and E045 Romanian Deadlift suitable_for at every level (founder 2026-11-09). Both
+  //   reach the OFF path (queryV4). putAll writes the new rows and rewrites the two by id
+  //   (library_seed_v23_upgrade_behavioral_test.dart).
+  static const int _exerciseLibraryVersion = 23;
   static const String _exerciseVersionKey = 'exercise_library_version';
 
   /// Bump this integer whenever the bundled food_database.json changes
