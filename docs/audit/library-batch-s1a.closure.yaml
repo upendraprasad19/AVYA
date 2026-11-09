@@ -51,7 +51,7 @@ findings:
   - id: S1A-GOBLET
     title: "Goblet Squat enters the advanced basic and full gym Quads compound pools (in place of Bulgarian Split Squat / Leg Press on the id tie)"
     terminal_state: closed_in_commit
-    commit: "generator-step1-s1b (uncommitted)"
+    commit: "6038dab3"
     verification: "Founder 2026-11-09: E038 back to [beginner, intermediate] (Library Batch S1b-1, seed v22); library_s1_core_levels_test.dart holds it at the fixture value; core_list_like_for_like / gate report re-recorded."
 
   - id: S1A-SLIDING-CURL
@@ -62,7 +62,7 @@ findings:
   - id: S1A-GYM-HIP
     title: "Gym users can get Glute Kickback or Side Lying Hip Adduction (bodyweight) in the advanced Hip slot (114 audit plans for Glute Kickback)"
     terminal_state: closed_in_commit
-    commit: "generator-step1-s1b (uncommitted)"
+    commit: "6038dab3"
     verification: "Founder 2026-11-09: gym users get gym kit in the Hip slot. CoreListSelector region rule (Abductors / Adductors name Hip) + E107 Hip Abduction Machine and G0168 Cable Hip Adduction core at every level, E109 Glute Kickback (Cable) at beginner for the Glutes slot (Library Batch S1b-1, diagnose f3b8d1); core_list_like_for_like_data_test.dart cells and region pin; gate zeros for the gym Hip and Glutes isolation slots."
 
   - id: S1A-FRONT-DELTS
