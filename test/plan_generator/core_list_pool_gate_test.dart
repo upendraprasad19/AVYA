@@ -38,9 +38,12 @@ const _implementPatterns = {
   'elbow_flexion', 'elbow_extension', 'shoulder_isolation', 'horizontal_pull',
   'vertical_pull', 'vertical_push',
 };
-// Library Batch S1a: E020, E134 and E255 now agree; E010 and E045 are the named exceptions
-// (test/contracts/library_s1_core_levels_test.dart).
-const _suitableDisagreeIds = {'E010', 'E045'};
+// Library Batch S1b-2: every row's core_levels lie inside its suitable_for with no exception (E010 / E045 widened,
+// test/contracts/library_s1_core_levels_test.dart), so a picked row that disagrees is a violation, derived from the data.
+bool _coreOutsideSuitable(Map<String, dynamic> r) {
+  final sf = _strs(r['suitable_for']).map((s) => s.toLowerCase()).toSet();
+  return _strs(r['core_levels']).any((l) => !sf.contains(l));
+}
 
 List<String> _strs(Object? v) =>
     v is List ? [for (final e in v) e.toString()] : const <String>[];
@@ -271,7 +274,10 @@ void main() {
       pickCounts[id] = (pickCounts[id] ?? 0) + 1;
       if (r['high_impact'] == true) highImpact[id] = (highImpact[id] ?? 0) + 1;
       if (r['requires_coaching'] == true) coaching[id] = (coaching[id] ?? 0) + 1;
-      if (_suitableDisagreeIds.contains(id)) disagree[id] = (disagree[id] ?? 0) + 1;
+      if (_coreOutsideSuitable(r)) {
+        disagree[id] = (disagree[id] ?? 0) + 1;
+        bad.add('core_levels outside suitable_for: $where');
+      }
 
       final needed = EquipmentVocab.fromProfile(r['equipment_needed']);
       if (!EquipmentCapability.canPerform(r['equipment_needed'], cap)) {

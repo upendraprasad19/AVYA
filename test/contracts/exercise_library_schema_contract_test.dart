@@ -46,6 +46,8 @@ const _optionalKeys = <String>{
   'regression_to', 'progression_to',
   // Batch M1 (library v16): written together or not at all, by the importer's media stage.
   'media_slug', 'media_version', 'media_source',
+  // Library Batch S1b-2: the original a loaded version never shares a day with (N14 to N22; SameMovement).
+  'same_movement_as',
 };
 
 const _mediaKeys = ['media_slug', 'media_version', 'media_source'];
@@ -69,9 +71,9 @@ void main() {
   ) as List).cast<Map<String, dynamic>>();
 
   group('exercise_library schema contract (Batch 13-A D-1)', () {
-    test('the canonical schema is 40 required keys plus 14 optional', () {
+    test('the canonical schema is 40 required keys plus 15 optional (Library Batch S1b-2 added same_movement_as)', () {
       expect(_canonicalKeys.length, 40);
-      expect(_optionalKeys.length, 14);
+      expect(_optionalKeys.length, 15);
       expect(_canonicalKeys.intersection(_optionalKeys), isEmpty);
     });
 
@@ -174,8 +176,8 @@ void main() {
       // taken to 3. Calibrated against the two patterns that already worked:
       // horizontal_push had 6 baseline rows and zero missing, hip_isolation 5 and
       // zero. Six to seven is the working number; three is not.
-      expect(rows.length, 862, reason: '285 original rows + 633 Batch C1/C2b rows - 56 removals (50 Batch C2a, 6 Batch C2b)');
-      expect(rows.map((r) => r['id']).toSet().length, 862);
+      expect(rows.length, 871, reason: '285 original rows + 633 Batch C1/C2b rows - 56 removals (50 Batch C2a, 6 Batch C2b) + 9 Library Batch S1b-2 loaded versions');
+      expect(rows.map((r) => r['id']).toSet().length, 871);
       expect(rows.any((r) => r['id'] == 'E261'), isTrue);
       expect(rows.any((r) => r['id'] == 'E294'), isFalse, reason: 'E294 left in Batch C2a');
     });

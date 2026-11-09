@@ -229,6 +229,9 @@ const acceptedMentions = <String, String>{
   'G0364|bench': 'cue: "a bench or thighs" - the thighs are offered',
   'G1545|towel': 'pro_tip: "use a bar pad or towel to protect the elbows" - optional padding',
   'N13|bench': 'the row declares `elevated surface`; the cue offers "a sturdy chair or bench", as for E125',
+  // -- Library Batch S1b-2 (seed v23): the loaded versions' prose, read against each row.
+  'N18|bench': 'the row declares `elevated surface`; the cue offers "a sofa, bed or bench edge", as for N13 and E125',
+  'N18|towel': 'pro_tip: "fold a towel under the dumbbell" - optional padding, as for N04',
 };
 
 /// The result of splitting findings against [acceptedMentions].

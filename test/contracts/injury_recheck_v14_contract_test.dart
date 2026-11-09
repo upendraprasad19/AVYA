@@ -194,8 +194,8 @@ void main() {
       }
     });
 
-    test('the safe pool: 55 named rows (26 original + 29 from Batch C1) stay untagged, and nothing else does', () {
-      expect(kV14SafePool.length, 55);
+    test('the safe pool: 56 named rows (26 original + 29 from Batch C1 + Dumbbell Glute Bridge from Library Batch S1b-2) stay untagged, and nothing else does', () {
+      expect(kV14SafePool.length, 56);
       for (final n in kV14SafePool) {
         expect(tagsOf(n), isEmpty, reason: '"$n" must stay untagged (low-load / rehab)');
       }

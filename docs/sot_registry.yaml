@@ -7877,7 +7877,7 @@ concepts:
     reader_manifest_complete: true
     readers:
       - file: lib/shared/repositories/exercise_repository.dart
-        line_range: 442-465
+        line_range: 472-495
         method: getCustomExercises
         semantic: filter
         fields_read: [name, category, logging_type, type]
@@ -9764,7 +9764,7 @@ concepts:
         method: generateV4
         notes: CENTRAL normalize - canonicalizes injuries once for every generation caller
       - file: lib/shared/repositories/plan_engine/exercise_selector.dart
-        line_range: 829-896
+        line_range: 1754-1842
         method: _cascadeFill attempt-5 + _isContraindicated
         notes: U2 universal-pool injury filter + safe omission; kill-switch plan_engine_flags.dart
       - file: lib/shared/repositories/plan_engine/warmup_cooldown.dart
@@ -9774,13 +9774,13 @@ concepts:
     reader_manifest_complete: true
     readers:
       - file: lib/shared/repositories/exercise_repository.dart
-        line_range: 300-311
+        line_range: 420-430
         method: queryV4 injury match
         semantic: flag-check
         fields_read: [injury_contraindications]
         notes: exact lowercase equality (attempts 1-4) - unchanged, already correct
       - file: lib/shared/repositories/plan_engine/exercise_selector.dart
-        line_range: 829-896
+        line_range: 1754-1842
         method: _cascadeFill attempt-5 _isContraindicated
         semantic: flag-check
         fields_read: [injury_contraindications]
@@ -11504,7 +11504,7 @@ concepts:
         method: scripts/repair_exercise_library_v12.js (repairText, mergeDuplicates, relabel, dropPlates)
         notes: v12 (Batch A) — 136 un-shifted text rows, cues one per item, 7 duplicates retired (name_aliases + merged_ids on the kept row), E172/E163 labels, E207/E179 plate keys dropped
       - file: lib/core/services/seed_service.dart
-        line_range: 259-300
+        line_range: 265-306
         method: _exerciseLibraryVersion (11→12) + retiredLibraryIds + pruneRetired after putAll in _seedExercises
         notes: putAll never deletes, so the prune is what removes a retired row from an existing install
       - file: supabase/migrations/162_reseed_exercise_library.sql
@@ -11522,7 +11522,7 @@ concepts:
         semantic: a missing injury field = never excluded; muscle_primary was invisible
         notes: the E252 knee safety hole + muscle-invisibility
       - file: lib/shared/repositories/exercise_repository.dart
-        line_range: 48-111
+        line_range: 49-122
         method: getByExactName / hasExactNameWhere (exact loop, then name_aliases) + search (name or alias substring)
         semantic: a retired name resolves to its kept twin; an exact name always wins over an alias
       - file: supabase/functions/_shared/tools/exercise/getFormCues.ts
@@ -11558,7 +11558,7 @@ concepts:
     description: |
       Batch 13-B (f4c1e8) — each exercise's library `injury_contraindications` array lists
       the InjuryVocab tokens the movement is contraindicated for. The always-on queryV4
-      filter (exercise_repository.dart:411-420, exact lowercase match at :416) excludes a
+      filter (exercise_repository.dart:420-429, exact lowercase match at :425) excludes a
       row for an injured user iff its list CONTAINS the user's token; an empty/missing list
       is never excluded. 13-A closed the field-MISSING rows (e1a7c4); 13-B tags the 26
       empty-[] strength rows (hinges/rows/overhead/loaded-core) + deepens 2 under-tagged
@@ -11667,6 +11667,38 @@ concepts:
       - file: lib/shared/repositories/plan_engine/exercise_selector.dart
         method: pickV4 (first-statement delegation) + _pickCoreList
         semantic: gated on PlanEngineFlags.coreListPoolEnabled AND CoreListSelector.hasCoreFields
+
+  - concept: same_movement_rule
+    domain: workout
+    behavioral_test_path: test/contracts/same_movement_behavioral_test.dart
+    description: |
+      Library Batch S1b-2 (docs/plans/2026-11-09-library-batch-s1b2-loaded-versions.md, seed v23): a loaded version
+      (N14 to N22, OI-148) carries `same_movement_as` = its original's id, and the founder's condition (2026-11-08) is
+      that the two never share a day. Plan generation dedups a day by exact NAME, so SameMovement adds a picked name's
+      partner wherever generation checks a picked name: queryV4 excludeNames (OFF same day, OFF variant B against A for a
+      non-strength goal, top-up, L6), the universal-pool skip, the core-list picked set and B soft set, the previous-phase
+      and upper-day soft-avoid sets. Demoted and plateau names are per-exercise preferences and are NOT expanded. Swap,
+      templates and repeat pins are untouched (a user may put both on one day by hand). Gate:
+      test/plan_generator/same_movement_day_gate_test.dart (998 personas, OFF and ON, hard zero). Mirrors:
+      test/plan_generator/v4_diagnostic/query_v4_mirror.dart and cascade_tracer.dart.
+    writers:
+      - file: scripts/data/library_batch_c_source.json
+        method: N14 to N22 source rows carry same_movement_as
+      - file: scripts/add_library_batch_c_v15.js
+        method: buildRow LINK pass-through (slot_pattern, same_movement_as)
+      - file: lib/core/services/seed_service.dart
+        method: _exerciseLibraryVersion (22 to 23)
+        notes: putAll writes the nine rows into exerciseBox by id
+    readers:
+      - file: lib/shared/repositories/plan_engine/same_movement.dart
+        method: SameMovement.fromRows / expand / expandLower / partnersOf
+        semantic: pure; symmetric; not transitive; exact casing and a lowercase twin set
+      - file: lib/shared/repositories/exercise_repository.dart
+        method: queryV4 excludeNames expansion
+        semantic: once per call from getAll(), never from the filtered view; no map when nothing is excluded
+      - file: lib/shared/repositories/plan_engine/exercise_selector.dart
+        method: pickV4 / _pickCoreList avoid sets, ON picked set and softFor, topUpDays soft-avoid, _cascadeFill universal pool
+        semantic: the partner is treated as the name is (hard where the name is hard, soft where it is soft)
 
   - concept: universal_pool_fallback
     domain: workout
@@ -13095,7 +13127,7 @@ concepts:
         line_range: 1-2
         method: demo_slug + demo_pair fields
       - file: lib/core/services/seed_service.dart
-        line_range: 160-160
+        line_range: 166-166
         method: _exerciseLibraryVersion
     readers:
       - file: lib/shared/widgets/exercise_plate/plate_resolver.dart
@@ -13136,10 +13168,10 @@ concepts:
       constant is bumped again. WARNING: the bucket is private; a row's keys are not a public URL.
     writers:
       - file: scripts/add_library_batch_c_v15.js
-        line_range: 172-193
+        line_range: 185-206
         method: applyMedia
       - file: lib/core/services/seed_service.dart
-        line_range: 160-160
+        line_range: 166-166
         method: _exerciseLibraryVersion
     readers:
       - file: lib/shared/widgets/exercise_plate/exercise_media_resolver.dart
@@ -13225,7 +13257,7 @@ concepts:
         line_range: 1-2
         method: coaching_cues + common_mistakes + breathing_cue + warmup_protocol fields
       - file: lib/core/services/seed_service.dart
-        line_range: 160-160
+        line_range: 166-166
         method: _exerciseLibraryVersion
     readers:
       - file: lib/shared/widgets/exercise_plate/exercise_cues.dart

@@ -59,12 +59,24 @@ class _Sandbox {
     Directory('${dir.path}/assets/data').createSync(recursive: true);
     Directory('${dir.path}/scripts/data').createSync(recursive: true);
     Directory('${dir.path}/out').createSync();
-    // The removals file the generator reads (Batch C2a); without it the sandbox would emit no deactivations.
-    File('${dir.path}/scripts/data/library_batch_c2_removals.json')
-        .writeAsStringSync(File('scripts/data/library_batch_c2_removals.json').readAsStringSync());
-    // The Batch C2c E230 retag record (a missing record is a hard stop in the generator, and its `after` must equal the library row).
-    File('${dir.path}/scripts/data/library_e230_retag.json')
-        .writeAsStringSync(File('scripts/data/library_e230_retag.json').readAsStringSync());
+    // Every record the generator reads lives in scripts/data/library_*.json: the removals file (Batch C2a; without it
+    // the sandbox would emit no deactivations) and the kept-row records (Batch C2c E230 retag, Library Batch S1b-2
+    // suitable_for; a missing record is a hard stop in the generator). Copying the whole family, not a list of names,
+    // keeps the sandbox in step when a batch adds a record (S1b-2 added one and a named list missed it).
+    final records = Directory('scripts/data')
+        .listSync()
+        .whereType<File>()
+        .where((f) => RegExp(r'/library_[^/]*\.json$').hasMatch(f.path))
+        .toList();
+    expect(records.map((f) => f.path.split('/').last),
+        containsAll(['library_batch_c2_removals.json', 'library_e230_retag.json', 'library_s1b2_suitable_for.json']));
+    for (final f in records) {
+      File('${dir.path}/scripts/data/${f.path.split('/').last}').writeAsStringSync(f.readAsStringSync());
+    }
+    // The previous seed migration (173): the generator checks each kept-row record's `before` against its tuple there.
+    Directory('${dir.path}/supabase/migrations').createSync(recursive: true);
+    File('${dir.path}/supabase/migrations/173_reseed_exercise_library.sql')
+        .writeAsStringSync(File('supabase/migrations/173_reseed_exercise_library.sql').readAsStringSync());
     File(script).writeAsStringSync(File(_generatorRel).readAsStringSync());
     File(libPath).writeAsStringSync(File(_libRel).readAsStringSync());
   }
@@ -148,7 +160,11 @@ void main() {
     }
 
     test('a row removed', () async {
-      final rows = sb.readLib()..removeLast();
+      // The first row (an ordinary one), not the last: since Library Batch S1b-2 the last rows are the batch's new
+      // rows, and removing one of those is a hard stop in the generator (BATCH.newRowIds), not a different SQL.
+      final rows = sb.readLib();
+      expect(rows.first['id'], startsWith('E'));
+      rows.removeAt(0);
       sb.writeLib(rows);
       expect(_diffCount(await sb.generate(), migration), greaterThan(0));
     });

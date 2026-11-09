@@ -141,15 +141,15 @@ findings:
 
   - id: 1B-8
     title: "OI-148 equipment variants (founder-approved 2026-11-08: the 9 dumbbell / kettlebell twins now, the 3 weighted rows with Batch D's dip belt token), with the same-movement rule (a twin and its sibling never share a day; does not exist today)"
-    terminal_state: upstream_blocked
-    blocker: "Library Batch S1b (its own plan after S1a merges): new N rows, injury-table builder rows, scope inputs, the same-movement code rule in both worlds, and a cloud migration."
-    reopen_when: "S1b plan"
+    terminal_state: closed_in_commit
+    commit: "generator-step1-s1b2 (uncommitted)"
+    verification: "Library Batch S1b-2 (diagnose b7e2c4): N14 to N22 with same_movement_as, the SameMovement rule in both worlds, gate same_movement_day_gate_test.dart. The 3 weighted rows stay on OI-148 for Batch D's dip belt token."
 
   - id: 1B-9
     title: "OI-147: retire E053 Donkey Calf Raise"
     terminal_state: upstream_blocked
-    blocker: "Library Batch S1b: the removals generator knows only the 66-id sheet and c2a / c2b, and E053 carries media (0284-donkey-calf-raise) in the media table, the old-rows input and the stills bundle."
-    reopen_when: "S1b plan"
+    blocker: "Library Batch S1b-3 (split out of S1b-2 after its review round 1): the removals generator knows only the 66-id sheet and c2a / c2b, and E053 carries media (0284-donkey-calf-raise) in the media table, the old-rows input and the stills bundle."
+    reopen_when: "S1b-3 plan"
 
   - id: 1B-10
     title: "Core vs suitable_for disagreements E020, E134, E255 (E020 added by S1a's whole-library scan)"
@@ -159,15 +159,14 @@ findings:
 
   - id: 1B-10b
     title: "Core vs suitable_for disagreements E010 Pike Push Up and E045 Romanian Deadlift (named exceptions)"
-    terminal_state: upstream_blocked
-    blocker: "Founder decided 2026-11-09 (board d12): widen suitable_for (E010 Pike Push Up gains Advanced, E045 Romanian Deadlift gains Beginner). suitable_for is a cloud column, so the change ships with the S1b-2 migration (one live go)."
-    reopen_when: "S1b-2 plan"
+    terminal_state: closed_in_commit
+    commit: "generator-step1-s1b2 (uncommitted)"
+    verification: "Founder decided 2026-11-09 (board d12) to widen: scripts/data/library_s1b2_suitable_for.json, both rows at every level; library_s1_core_levels_test.dart has no exception left; the S1b-2 migration carries the cloud column."
 
   - id: 1B-11
     title: "Cloud re-seed migration for the S1b-2 rows (seed v23; S1a used v21 and S1b-1 v22 with no migration, since core_levels is not a cloud column)"
-    terminal_state: upstream_blocked
-    blocker: "Library Batch S1b; the live apply needs the founder's go."
-    reopen_when: "S1b plan"
+    terminal_state: blocked_on_user
+    reason: "Library Batch S1b-2 ships the generator and the seed v23; the live apply of its seed migration needs the founder's own go on the exact file (CLAUDE.md section 4.3)."
 
   - id: S1A-R9-I-IV
     title: "R9 gate zeros (i) no jump pick unless the pool was jump-only, and no jump-only pool for an uninjured persona, (iv) bodyweight / home advanced Quads and Hamstrings slots filled"

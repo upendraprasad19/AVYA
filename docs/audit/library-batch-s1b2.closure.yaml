@@ -1,0 +1,43 @@
+# Closure ledger - library-batch-s1b2 (nine loaded versions, the same-movement rule, E010 / E045 suitable_for, seed v23,
+# one cloud migration). Plan docs/plans/2026-11-09-library-batch-s1b2-loaded-versions.md (v4, three review rounds), record
+# docs/plan-reviews/generator-step1-s1b2.md, diagnose b7e2c4. Gate 40 (validate_audit_closure.dart).
+batch: library-batch-s1b2
+plan_review_record: docs/plan-reviews/generator-step1-s1b2.md
+total_findings: 6
+closed_count: 6
+
+findings:
+  - id: S1B2-ROWS
+    title: "Nine loaded versions N14 to N22 (OI-148, founder 2026-11-08), copying their original's movement fields and injury tags"
+    terminal_state: closed_in_commit
+    commit: "generator-step1-s1b2 (uncommitted)"
+    verification: "library_s1b2_loaded_versions_test.dart (pairs, fields, links, tags, tiers restated from the plan); importer --check and scope --check (C1 to C6) green; data mutations in diagnose b7e2c4."
+
+  - id: S1B2-RULE
+    title: "The same-movement rule: a loaded version and its original never share a day (founder condition)"
+    terminal_state: closed_in_commit
+    commit: "generator-step1-s1b2 (uncommitted)"
+    verification: "same_movement_behavioral_test.dart (one test per seam), same_movement_day_gate_test.dart (998 personas, OFF and ON, hard zero), v4_diagnostic_test.dart (mirrors); seven seam mutations each red."
+
+  - id: S1B2-SUITABLE
+    title: "E010 Pike Push Up and E045 Romanian Deadlift suitable_for at every level (founder 2026-11-09, board d12)"
+    terminal_state: closed_in_commit
+    commit: "generator-step1-s1b2 (uncommitted)"
+    verification: "library_s1b2_suitable_for.json through the importer's kept-row stage (library_media_importer_test.dart group); library_s1_core_levels_test.dart sweep with no exception; core_list_pool_gate_test.dart fails a picked row whose core_levels lie outside suitable_for."
+
+  - id: S1B2-SEED
+    title: "Seed v23 so installs at v22 get the nine rows and the two widened rows"
+    terminal_state: closed_in_commit
+    commit: "generator-step1-s1b2 (uncommitted)"
+    verification: "library_seed_v23_upgrade_behavioral_test.dart (real SeedService.seedIfNeeded); v16 to v22 pins repointed to 23."
+
+  - id: S1B2-CLOUD
+    title: "Cloud re-seed migration (nine INSERTs, two suitable_for changes) and its generator"
+    terminal_state: blocked_on_user
+    reason: "The live apply needs the founder's own go on the exact file (CLAUDE.md section 4.3); the generator and its tests ship in this batch."
+
+  - id: S1B2-E053
+    title: "E053 Donkey Calf Raise retirement (OI-147), split out after review round 1"
+    terminal_state: upstream_blocked
+    blocker: "Needs a non-sheet removal path and a media prune step (the removals file is bound to the 66-row sheet; E053's media is rebuilt from a hash-pinned input)."
+    reopen_when: "S1b-3 plan"

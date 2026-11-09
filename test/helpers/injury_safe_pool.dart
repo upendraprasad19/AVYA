@@ -56,6 +56,8 @@ const List<String> kV14SafePool = [
   'Cable Seated Wide Grip Row',
   'Cable Straight Back Seated Row',
   'Clamshell',
+  // Library Batch S1b-2: the loaded version of Glute Bridge, untagged like it.
+  'Dumbbell Glute Bridge',
   'Dumbbell Incline Row',
   'Dumbbell Lying Rear Delt Row',
   'Elliptical Trainer',

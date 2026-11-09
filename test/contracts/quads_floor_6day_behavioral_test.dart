@@ -380,6 +380,9 @@ void main() {
       const knownNotQuadFirst = {
         'Box Squat', 'Lateral Lunge', 'Sumo Squat', 'Cossack Squat', 'Weighted Cossack Squats', 'Curtsey Squat',
         'Skater Hops',
+        // Library Batch S1b-2: the loaded versions copy their original's primary_muscles (N14 of Sumo Squat, N17 of
+        // Lateral Lunge), so they keep the same Glutes credit on purpose.
+        'Dumbbell Sumo Squat', 'Dumbbell Lateral Lunge',
       };
       const knownHingeQuadFirst = {'Trap Bar Deadlift'};
       final notQuadFirst = <String>{};

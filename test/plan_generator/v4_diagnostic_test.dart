@@ -67,6 +67,32 @@ void main() {
       );
     });
 
+    // Library Batch S1b-2: the mirror expands excludeNames with same-movement partners from the full library, as prod
+    // queryV4 does (exercise_repository.dart), so the scorecard sees the rule.
+    test('excludeNames also removes the same-movement partner, in both directions (Library Batch S1b-2)', () {
+      List<String> names(Set<String> ex) => [
+            for (final e in QueryV4Mirror.query(library,
+                movementPattern: 'knee_dominant', equipmentTier: 'home_dumbbells', excludeNames: ex))
+              e['name'] as String
+          ];
+      expect(names({}), containsAll(['Sumo Squat', 'Dumbbell Sumo Squat']), reason: 'non-vacuity');
+      expect(names({'Sumo Squat'}), isNot(contains('Dumbbell Sumo Squat')));
+      expect(names({'Dumbbell Sumo Squat'}), isNot(contains('Sumo Squat')));
+    });
+
+    test('the tracer\'s universal pool skips a partner of a picked name (Library Batch S1b-2)', () {
+      final slot = MuscleSlot(targetMuscle: 'Glutes', movementPattern: 'hip_isolation', exerciseType: 'isolation', priority: 1);
+      final poolOnly = [
+        for (final e in library)
+          if (e['name'] == 'Glute Bridge' || e['name'] == 'Glute Kickback' || e['name'] == 'Dumbbell Glute Bridge')
+            {...e, 'movement_pattern': ['warmup']},
+      ];
+      final t = CascadeTracer.trace(poolOnly,
+          slot: slot, equipmentTier: 'home_dumbbells', effectiveExp: 'intermediate', phase: 2, injuries: const [],
+          pickedNames: {'Dumbbell Glute Bridge'});
+      expect(t.finalPick?.name, 'Glute Kickback', reason: 'Glute Bridge is the partner of the picked Dumbbell Glute Bridge');
+    });
+
     test('suitableFor="beginner" filters correctly', () {
       final results = QueryV4Mirror.query(
         library,

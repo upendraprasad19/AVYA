@@ -9,6 +9,7 @@ import 'core_list_selector.dart';
 import 'equipment_capability.dart';
 import 'injury_substitutes.dart';
 import 'models.dart';
+import 'same_movement.dart';
 import 'plan_engine_flags.dart';
 import 'thin_day_topup.dart';
 import 'training_history_analyzer.dart';
@@ -652,6 +653,10 @@ class ExerciseSelector {
     // session instead of the leftovers of the two days before it.
     final earlierPushPullA = <String>{...earlierFeederNamesA};
     final earlierPushPullB = <String>{...earlierFeederNamesB};
+    // Library Batch S1b-2: a loaded version and its original never share a day. The day / variant soft-avoid names
+    // (previous phase, upper-day feeders) carry their same-movement partners; the plateau names are a per-exercise
+    // preference and do not (plan Decision 2's table).
+    final sameMovement = SameMovement.fromRows(exerciseRepo.getAll());
     for (var i = 0; i < slotDays.length; i++) {
       final day = slotDays[i];
       final isUpper = day.dayType == 'upper';
@@ -661,14 +666,18 @@ class ExerciseSelector {
       // _selectCandidate ONLY, never queryV4/excludeNames). Empty union → same set
       // as `.toSet()` → byte-identical.
       final avoidA = {
-        ...(previousPhaseByDay?[i]?.a ?? const <String>[]),
+        ...sameMovement.expandLower({
+          ...(previousPhaseByDay?[i]?.a ?? const <String>[]),
+          if (isUpper) ...earlierPushPullA,
+        }),
         ...plateauAvoidNames,
-        if (isUpper) ...earlierPushPullA,
       };
       final avoidB = {
-        ...(previousPhaseByDay?[i]?.b ?? const <String>[]),
+        ...sameMovement.expandLower({
+          ...(previousPhaseByDay?[i]?.b ?? const <String>[]),
+          if (isUpper) ...earlierPushPullB,
+        }),
         ...plateauAvoidNames,
-        if (isUpper) ...earlierPushPullB,
       };
       // Fill variant A
       var exercisesA = _fillSlots(
@@ -792,20 +801,28 @@ class ExerciseSelector {
     // names the earlier push / pull days hold, per variant (lowercased).
     final earlierPushPullA = <String>{...earlierFeederNamesA};
     final earlierPushPullB = <String>{...earlierFeederNamesB};
+    // Library Batch S1b-2: a loaded version and its original never share a day. The day / variant soft-avoid names
+    // (previous phase, upper-day feeders) carry their same-movement partners; the plateau names are a per-exercise
+    // preference and do not (plan Decision 2's table).
+    final sameMovement = SameMovement.fromRows(exerciseRepo.getAll());
 
     for (var i = 0; i < slotDays.length; i++) {
       final day = slotDays[i];
       final hasB = day.slotsB != null;
       final isUpper = day.dayType == 'upper';
       final avoidA = {
-        ...(previousPhaseByDay?[i]?.a ?? const <String>[]),
+        ...sameMovement.expandLower({
+          ...(previousPhaseByDay?[i]?.a ?? const <String>[]),
+          if (isUpper) ...earlierPushPullA,
+        }),
         ...plateauAvoidNames,
-        if (isUpper) ...earlierPushPullA,
       };
       final avoidB = {
-        ...(previousPhaseByDay?[i]?.b ?? const <String>[]),
+        ...sameMovement.expandLower({
+          ...(previousPhaseByDay?[i]?.b ?? const <String>[]),
+          if (isUpper) ...earlierPushPullB,
+        }),
         ...plateauAvoidNames,
-        if (isUpper) ...earlierPushPullB,
       };
 
       List<PlannedExercise> fill(
@@ -850,7 +867,11 @@ class ExerciseSelector {
                   avoidNames: avoidNames);
               out.add(_buildExercise(chosen,
                   typeOverride: CoreListSelector.typeFor(chosen, slot)));
-              picked.add(chosen['name'] as String? ?? '');
+              final chosenName = chosen['name'] as String? ?? '';
+              // S1b-2: the same-day hard set carries the chosen row's same-movement partner too.
+              picked
+                ..add(chosenName)
+                ..addAll(sameMovement.partnersOf(chosenName));
             }
             trace?.slots.add(CoreListTraceSlot(
               day: i,
@@ -875,7 +896,7 @@ class ExerciseSelector {
 
       Set<String> softFor(List<PlannedExercise> a) => goal == 'strength'
           ? const <String>{}
-          : {for (final e in a) e.exerciseName};
+          : sameMovement.expand({for (final e in a) e.exerciseName});
 
       var a = fill(day.slotsA, 'A', avoidA, const {});
       var b = hasB ? fill(day.slotsB!, 'B', avoidB, softFor(a)) : a;
@@ -1214,6 +1235,11 @@ class ExerciseSelector {
 
     Set<String> lower(Iterable<String> xs) =>
         {for (final x in xs) x.toLowerCase()};
+    // Library Batch S1b-2: the variant / day soft-avoid names carry their same-movement partners (built lazily, only
+    // when a day is thin); plateau and demoted names do not (plan Decision 2's table).
+    SameMovement? sameMovementCache;
+    Set<String> withPartners(Set<String> xs) =>
+        (sameMovementCache ??= SameMovement.fromRows(exerciseRepo.getAll())).expandLower(xs);
     Set<String>? demoted;
     var anyThin = false;
     final out = <PopulatedDay>[];
@@ -1243,9 +1269,11 @@ class ExerciseSelector {
           a,
           slots.slotsA,
           {
-            ...lower(previousPhaseByDay?[i]?.a ?? const <String>[]),
+            ...withPartners({
+              ...lower(previousPhaseByDay?[i]?.a ?? const <String>[]),
+              if (!alias && !strength) ...lower(b.map((e) => e.exerciseName)),
+            }),
             ...plateau,
-            if (!alias && !strength) ...lower(b.map((e) => e.exerciseName)),
           },
           demoted,
           exerciseRepo, equipmentTier, effectiveExp, phase, injuries,
@@ -1260,9 +1288,11 @@ class ExerciseSelector {
           b,
           slots.slotsB ?? slots.slotsA,
           {
-            ...lower(previousPhaseByDay?[i]?.b ?? const <String>[]),
+            ...withPartners({
+              ...lower(previousPhaseByDay?[i]?.b ?? const <String>[]),
+              if (!strength) ...lower(a.map((e) => e.exerciseName)),
+            }),
             ...plateau,
-            if (!strength) ...lower(a.map((e) => e.exerciseName)),
           },
           demoted,
           exerciseRepo, equipmentTier, effectiveExp, phase, injuries,
@@ -1731,8 +1761,13 @@ class ExerciseSelector {
     // (cascade_tracer + scorecard) mirrors this filter and distinguishes a safe
     // omission from a bug-`(none)`.
     final pool = universalPoolV4[slot.movementPattern] ?? [];
+    // Library Batch S1b-2: the pool bypasses queryV4, so it expands the day's names with their same-movement partners
+    // itself (a day holding N19 Dumbbell Glute Bridge never also gets Glute Bridge here).
+    final pickedOrPartners = pool.isEmpty
+        ? pickedNames
+        : SameMovement.fromRows(repo.getAll()).expand(pickedNames);
     for (final name in pool) {
-      if (pickedNames.contains(name)) continue;
+      if (pickedOrPartners.contains(name)) continue;
       final matches = repo.search(name);
       if (matches.isNotEmpty) {
         // repo.search is a SUBSTRING match, so a pool name like "Push Up" also

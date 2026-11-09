@@ -76,6 +76,6 @@ void main() {
     // A custom row named like a removed row is untouched by the id prune.
     expect((hive.exerciseBox.get(_customId) as Map)['name'], 'Reverse Lunge');
     expect((hive.exerciseBox.get(_communityId) as Map)['name'], 'Shared Row');
-    expect(hive.configBox.get('exercise_library_version') as int, 22);
+    expect(hive.configBox.get('exercise_library_version') as int, 23);
   });
 }

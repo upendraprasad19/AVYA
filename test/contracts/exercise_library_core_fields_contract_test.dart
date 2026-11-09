@@ -46,6 +46,9 @@ const _slotPattern = <String, List<String>>{
   'E276': ['shoulder_isolation'],
   'E064': ['cardio'],
   'E292': ['knee_dominant'],
+  // Library Batch S1b-2: the loaded version of E050 Sumo Deadlift takes its original's overlay. N19 Dumbbell Glute Bridge
+  // does not (founder, 2026-11-09): it fills the Glutes isolation slot, where E048 is kept out by the overlay.
+  'N20': ['hip_dominant'],
   'E050': ['hip_dominant'],
   'E274': ['shoulder_isolation'],
   'E277': ['shoulder_isolation'],
@@ -140,14 +143,14 @@ void main() {
   // Library Batch S1a (docs/plans/2026-11-08-library-batch-s1-core-data.md, Table A) moved these from 129 / 138 / 98
   // (73 / 91 / 67 original + 56 / 47 / 31 Batch C1): 21 kept rows through scripts/data/library_s1_core_levels.json and 13
   // source rows in scripts/data/library_batch_c_source.json. Counted by node from the library, not typed from the plan.
-  test('per-level core counts are 131 / 156 / 128 (74 / 101 / 83 kept-row + 57 / 55 / 45 Batch C1; Library Batch S1b-1: E038 off advanced, E107 and G0168 at every level, E109 at beginner)', () {
+  test('per-level core counts are 135 / 165 / 137 (74 / 101 / 83 kept-row + 61 / 64 / 54 Batch C1 source; Library Batch S1b-1: E038 off advanced, E107 and G0168 at every level, E109 at beginner; Library Batch S1b-2: N14 to N22 add 4 / 9 / 9)', () {
     final counts = {for (final l in _levels) l: 0};
     for (final r in rows) {
       for (final l in (r['core_levels'] as List).cast<String>()) {
         counts[l] = counts[l]! + 1;
       }
     }
-    expect(counts, {'beginner': 131, 'intermediate': 156, 'advanced': 128});
+    expect(counts, {'beginner': 135, 'intermediate': 165, 'advanced': 137});
   });
 
   test('the seed version is at least 13, so existing installs re-seed', () {
