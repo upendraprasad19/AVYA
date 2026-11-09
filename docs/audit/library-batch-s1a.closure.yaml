@@ -45,25 +45,27 @@ findings:
 
   - id: S1A-E255
     title: "E255 Towel Row: [] (applied, narrows into suitable_for) or [intermediate, advanced] (fills the bodyweight Lats / Mid Back horizontal_pull drops with a household row)"
-    terminal_state: blocked_on_user
-    reason: "Founder call (plan Decision 3 (a)); the default [] is shipped."
+    terminal_state: verified_clean
+    evidence: "Founder decided 2026-11-09 (board d12): Towel Row stays off intermediate and advanced; the shipped [] stands, no change."
 
   - id: S1A-GOBLET
     title: "Goblet Squat enters the advanced basic and full gym Quads compound pools (in place of Bulgarian Split Squat / Leg Press on the id tie)"
-    terminal_state: blocked_on_user
-    reason: "Founder confirms the R1 side effect (plan Decision 3 (c))."
+    terminal_state: closed_in_commit
+    commit: "6038dab3"
+    verification: "Founder 2026-11-09: E038 back to [beginner, intermediate] (Library Batch S1b-1, seed v22); library_s1_core_levels_test.dart holds it at the fixture value; core_list_like_for_like / gate report re-recorded."
 
   - id: S1A-SLIDING-CURL
     title: "Sliding Leg Curl becomes the home_dumbbells intermediate / advanced hamstring curl (274 audit plans flag it as a household pick; no dumbbell curl works without a bench)"
-    terminal_state: blocked_on_user
-    reason: "Founder call (plan Decision 3 (f)): keep the slider curl, or prefer the bodyweight E230 there."
+    terminal_state: verified_clean
+    evidence: "Founder decided 2026-11-09 (board d12): keep Sliding Leg Curl (E230 Standing Single Leg Curl is too light for intermediate and advanced); no change."
 
   - id: S1A-GYM-HIP
     title: "Gym users can get Glute Kickback or Side Lying Hip Adduction (bodyweight) in the advanced Hip slot (114 audit plans for Glute Kickback)"
-    terminal_state: blocked_on_user
-    reason: "Founder call (plan Decision 3 (e)); the founder approved these rows for bodyweight and home users, and the like-for-like rule cannot fire for the Hip slot."
+    terminal_state: closed_in_commit
+    commit: "6038dab3"
+    verification: "Founder 2026-11-09: gym users get gym kit in the Hip slot. CoreListSelector region rule (Abductors / Adductors name Hip) + E107 Hip Abduction Machine and G0168 Cable Hip Adduction core at every level, E109 Glute Kickback (Cable) at beginner for the Glutes slot (Library Batch S1b-1, diagnose f3b8d1); core_list_like_for_like_data_test.dart cells and region pin; gate zeros for the gym Hip and Glutes isolation slots."
 
   - id: S1A-FRONT-DELTS
     title: "Bodyweight Front Delts shoulder_isolation still drops (80 advanced, 62 intermediate in the gate report): no bodyweight or household row exists"
-    terminal_state: blocked_on_user
-    reason: "Founder decides whether to accept the drop or add a row (a new library row is S1b-shaped work)."
+    terminal_state: verified_clean
+    evidence: "Founder decided 2026-11-09 (board d12): the bodyweight Front Delts gap is accepted; no row added."

@@ -245,6 +245,29 @@ void main() {
       final r = byId[s.pickedId]!;
       final id = s.pickedId!;
       final where = '${p.key} $id ${s.source}';
+      // Library Batch S1b-1 (founder 2026-11-09, "gym users, give them hip abduction machine"): an uninjured gym
+      // persona's Hip slot never picks a row whose equipment is all bodyweight / household (restated from the tier
+      // table, not from CoreListSelector).
+      // A persona that excludes the gym kit (cables or machines) falls back to the bodyweight rows by design (the
+      // reduction never empties a pool), so it is outside this zero. The Glutes isolation slot gets the same zero, and
+      // its row must list Glutes first: E107 / G0168 (Abductors / Adductors) at beginner reached it before E109 was
+      // core there (both S1b-1 reviewers).
+      final gymKitIntact = !persona.exclusions.any((e) => e == 'cables' || e == 'machines');
+      if (persona.injury == null &&
+          gymKitIntact &&
+          (persona.tier == 'basic_gym' || persona.tier == 'full_gym') &&
+          (s.slot.targetMuscle == 'Hip' || s.slot.targetMuscle == 'Glutes') &&
+          s.slot.movementPattern == 'hip_isolation') {
+        final kit = EquipmentVocab.tierItems['bodyweight']!.toSet();
+        final needs = EquipmentVocab.fromProfile(r['equipment_needed']);
+        if (needs.isEmpty || needs.every(kit.contains)) {
+          bad.add('gym ${s.slot.targetMuscle} slot got a bodyweight row: $where');
+        }
+        final first = (r['primary_muscles'] as List?)?.cast<String>().firstOrNull?.toLowerCase();
+        if (s.slot.targetMuscle == 'Glutes' && first != 'glutes') {
+          bad.add('gym Glutes slot got a non-glute row: $where');
+        }
+      }
       pickCounts[id] = (pickCounts[id] ?? 0) + 1;
       if (r['high_impact'] == true) highImpact[id] = (highImpact[id] ?? 0) + 1;
       if (r['requires_coaching'] == true) coaching[id] = (coaching[id] ?? 0) + 1;

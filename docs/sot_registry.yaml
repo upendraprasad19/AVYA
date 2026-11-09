@@ -11504,7 +11504,7 @@ concepts:
         method: scripts/repair_exercise_library_v12.js (repairText, mergeDuplicates, relabel, dropPlates)
         notes: v12 (Batch A) — 136 un-shifted text rows, cues one per item, 7 duplicates retired (name_aliases + merged_ids on the kept row), E172/E163 labels, E207/E179 plate keys dropped
       - file: lib/core/services/seed_service.dart
-        line_range: 255-296
+        line_range: 259-300
         method: _exerciseLibraryVersion (11→12) + retiredLibraryIds + pruneRetired after putAll in _seedExercises
         notes: putAll never deletes, so the prune is what removes a retired row from an existing install
       - file: supabase/migrations/162_reseed_exercise_library.sql
@@ -11547,7 +11547,7 @@ concepts:
         method: case bodyweight_reps clears a bogus weight_kg from a logged row; one-shot per device, gated by migrationBox['logging_type_repair_v3_done'] (_flagKey at line 85; the header comment still says v1)
         semantic: C2c — it does NOT re-run on a device that already set the flag, so it does not repair E230 history logged under the cable row; on a device with the flag unset it zeroes weight_kg on such a row
       - file: lib/shared/repositories/plan_engine/core_list_selector.dart
-        line_range: 196
+        line_range: 259
         method: reads equipment_tier of the row
         semantic: C2c — the tier rule passes a row when its equipment_tier list holds the user's tier; E230 now lists all four, so it passes at every tier
     contract_test_path: test/contracts/exercise_library_schema_contract_test.dart
@@ -13095,7 +13095,7 @@ concepts:
         line_range: 1-2
         method: demo_slug + demo_pair fields
       - file: lib/core/services/seed_service.dart
-        line_range: 156-156
+        line_range: 160-160
         method: _exerciseLibraryVersion
     readers:
       - file: lib/shared/widgets/exercise_plate/plate_resolver.dart
@@ -13139,7 +13139,7 @@ concepts:
         line_range: 172-193
         method: applyMedia
       - file: lib/core/services/seed_service.dart
-        line_range: 156-156
+        line_range: 160-160
         method: _exerciseLibraryVersion
     readers:
       - file: lib/shared/widgets/exercise_plate/exercise_media_resolver.dart
@@ -13225,7 +13225,7 @@ concepts:
         line_range: 1-2
         method: coaching_cues + common_mistakes + breathing_cue + warmup_protocol fields
       - file: lib/core/services/seed_service.dart
-        line_range: 156-156
+        line_range: 160-160
         method: _exerciseLibraryVersion
     readers:
       - file: lib/shared/widgets/exercise_plate/exercise_cues.dart

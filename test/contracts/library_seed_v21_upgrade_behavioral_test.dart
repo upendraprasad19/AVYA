@@ -51,11 +51,11 @@ void main() {
   setUp(() async => tempDir = await setUpHiveForTests());
   tearDown(() async => tearDownHiveForTests(tempDir));
 
-  test('precondition: 34 rows differ from the fixture (Table A)', () {
-    expect(_changedIds().length, 34);
+  test('precondition: 35 rows differ from the fixture (Table A as amended by S1b-1: E038 out, G0168 and E109 in)', () {
+    expect(_changedIds().length, 35);
   });
 
-  test('a v20 box with the old levels ends at v21 with the new levels, and every other row unchanged', () async {
+  test('a v20 box with the old levels ends at the current version (v22) with the new levels, and every other row unchanged', () async {
     final hive = HiveService.instance;
     final bundled = _bundled();
     final before = _beforeLevels();
@@ -80,7 +80,7 @@ void main() {
       expect(jsonEncode(_asJson(hive.exerciseBox.get(e.key))), e.value, reason: '${e.key} must be unchanged');
     }
     expect(hive.exerciseBox.length, bundled.length);
-    expect(hive.configBox.get('exercise_library_version') as int, 21);
+    expect(hive.configBox.get('exercise_library_version') as int, 22);
   });
 
   test('a fresh install gets the new levels', () async {
@@ -89,18 +89,18 @@ void main() {
     expect(_asJson(hive.exerciseBox.get('E046'))['core_levels'], ['advanced']);
     expect(_asJson(hive.exerciseBox.get('E255'))['core_levels'], <String>[]);
     expect(hive.exerciseBox.length, _bundled().length);
-    expect(hive.configBox.get('exercise_library_version') as int, 21);
+    expect(hive.configBox.get('exercise_library_version') as int, 22);
   });
 
-  test('MIRROR: a box already at v21 is not rewritten (the upgrade fires only when the stored version is older)', () async {
+  test('MIRROR: a box already at the current version (v22, Library Batch S1b-1) is not rewritten (the upgrade fires only when the stored version is older)', () async {
     final hive = HiveService.instance;
     final before = _beforeLevels();
     for (final r in _bundled()) {
       await hive.exerciseBox.put(r['id'], r['id'] == 'E046' ? {...r, 'core_levels': before['E046']} : r);
     }
-    await _markSeeded(hive, 21);
+    await _markSeeded(hive, 22);
     await SeedService.instance.seedIfNeeded();
     expect(jsonEncode(_asJson(hive.exerciseBox.get('E046'))['core_levels']), '[]');
-    expect(hive.configBox.get('exercise_library_version') as int, 21);
+    expect(hive.configBox.get('exercise_library_version') as int, 22);
   });
 }

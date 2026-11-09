@@ -26,9 +26,9 @@ const _customId = '7b1f6c1e-6f43-4d52-9d0c-0c0a3f1f0a01';
 const _communityId = '0d0e0f10-1112-4314-9516-171819202122';
 const _mediaKeys = ['media_slug', 'media_version', 'media_source'];
 
-/// `SeedService._exerciseLibraryVersion` (private): 21 since Library Batch S1a (20 was Batch C2c, 19 Batch C2b, 18 Batch C2a, 17 the OI-443 data step). The mutation "put the
+/// `SeedService._exerciseLibraryVersion` (private): 22 since Library Batch S1b-1 (21 was Library Batch S1a, 20 was Batch C2c, 19 Batch C2b, 18 Batch C2a, 17 the OI-443 data step). The mutation "put the
 /// constant back to 17" reddens every test below that expects an upgrade or this number.
-const _currentVersion = 21;
+const _currentVersion = 22;
 
 /// The rows the committed media table maps (G/N rows and, since v17, the old rows of the founder's picks).
 int _tableRowCount() {

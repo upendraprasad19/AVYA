@@ -1,18 +1,6 @@
 {
-  "_note": "Library Batch S1a (plan docs/plans/2026-11-08-library-batch-s1-core-data.md, Table A): core_levels of the KEPT (E) rows. Applied by the core-levels stage of scripts/add_library_batch_c_v15.js: a row at before takes after, a row at after is a no-op, anything else stops the run. G and N rows change in scripts/data/library_batch_c_source.json. Generated with node, never typed.",
+  "_note": "Library Batch S1a (plan docs/plans/2026-11-08-library-batch-s1-core-data.md, Table A): core_levels of the KEPT (E) rows. Applied by the core-levels stage of scripts/add_library_batch_c_v15.js: a row at before takes after, a row at after is a no-op, anything else stops the run. G and N rows change in scripts/data/library_batch_c_source.json. Generated with node, never typed. Library Batch S1b-1 (founder 2026-11-09): E038 Goblet Squat removed (back at its pre-S1a value, which the fixture test enforces); E107 Hip Abduction Machine at every level (gym users get gym kit in the Hip slot); E109 Glute Kickback (Cable) gains beginner, so a gym beginner Glutes isolation slot reduces to it instead of taking E107 or a bodyweight row.",
   "rows": [
-    {
-      "id": "E038",
-      "before": [
-        "beginner",
-        "intermediate"
-      ],
-      "after": [
-        "beginner",
-        "intermediate",
-        "advanced"
-      ]
-    },
     {
       "id": "E044",
       "before": [
@@ -177,6 +165,20 @@
       "id": "E107",
       "before": [],
       "after": [
+        "beginner",
+        "intermediate",
+        "advanced"
+      ]
+    },
+    {
+      "id": "E109",
+      "before": [
+        "intermediate",
+        "advanced"
+      ],
+      "after": [
+        "beginner",
+        "intermediate",
         "advanced"
       ]
     },

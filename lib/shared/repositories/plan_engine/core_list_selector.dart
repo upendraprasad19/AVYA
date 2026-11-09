@@ -96,14 +96,25 @@ class CoreListSelector {
     'calves': {'gastrocnemius', 'soleus'},
   };
 
+  /// Library Batch S1b-1 (founder 2026-11-09, "gym users get the hip abduction
+  /// machine"): the Hip slot names a region, not a muscle, so a row whose
+  /// first-listed muscle is one of these counts as like-for-like for it. Without
+  /// this the R3 (a) reduction never fired in the Hip slot and a gym user got the
+  /// bodyweight Glute Kickback or Side Lying Hip Adduction there.
+  static const _slotRegionMuscles = <String, Set<String>>{
+    'hip': {'abductors', 'adductors'},
+  };
+
   /// R3 (a): true when [firstMuscle] names [targetMuscle]: equal after
-  /// lower-casing, or a full match of `<target> (<head>)` with `<head>` in
-  /// [_sameMuscleHeads] for that target. Never a prefix match.
+  /// lower-casing, a full match of `<target> (<head>)` with `<head>` in
+  /// [_sameMuscleHeads] for that target, or a muscle of the target region in
+  /// [_slotRegionMuscles]. Never a prefix match.
   @visibleForTesting
   static bool namesMuscle(String firstMuscle, String targetMuscle) {
     final m = firstMuscle.trim().toLowerCase();
     final t = targetMuscle.trim().toLowerCase();
     if (m == t) return true;
+    if (_slotRegionMuscles[t]?.contains(m) ?? false) return true;
     for (final head in _sameMuscleHeads[t] ?? const <String>{}) {
       if (m == '$t ($head)') return true;
     }

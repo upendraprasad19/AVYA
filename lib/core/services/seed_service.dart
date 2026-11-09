@@ -153,7 +153,11 @@ class SeedService {
   //   others). Read only by the core-list pool (enable_core_list_pool). putAll rewrites the rows by
   //   id. Without this bump an existing install keeps the old levels
   //   (library_seed_v21_upgrade_behavioral_test.dart).
-  static const int _exerciseLibraryVersion = 21;
+  //   v22 (Library Batch S1b-1, founder 2026-11-09): core_levels on 4 rows: E038 Goblet Squat back to
+  //   [beginner, intermediate]; E107 Hip Abduction Machine, E109 Glute Kickback (Cable) and G0168
+  //   Cable Hip Adduction at every level (gym kit in the gym Hip and Glutes slots). Core-list pool
+  //   only (library_seed_v22_upgrade_behavioral_test.dart).
+  static const int _exerciseLibraryVersion = 22;
   static const String _exerciseVersionKey = 'exercise_library_version';
 
   /// Bump this integer whenever the bundled food_database.json changes
