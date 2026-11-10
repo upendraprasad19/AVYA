@@ -1,4 +1,5 @@
 import 'models.dart';
+import 'plan_engine_flags.dart';
 
 /// Stage 1: Maps goal + daysPerWeek + experience → training split structure.
 ///
@@ -402,16 +403,19 @@ class SplitResolver {
 
   /// V4: Returns MuscleSlotDay list with granular muscle slots.
   static List<MuscleSlotDay> selectV4(String goal, int daysPerWeek,
-      {String experienceLevel = 'intermediate', bool quadLegsB = true}) {
+      {String experienceLevel = 'intermediate', bool quadLegsB = true, bool? variantBQuad}) {
     final isBeginner = experienceLevel == 'beginner';
     if (isBeginner && daysPerWeek <= 4) {
       return _getBeginnerFullBodyV4(daysPerWeek, goal);
     }
+    // Unit 1B-Q kill-switch `disable_variant_b_quad` (OI-475 L1): read once per call, so the three B leg days
+    // of one plan never disagree. `variantBQuad` overrides it (tests).
+    final bQuad = variantBQuad ?? PlanEngineFlags.variantBQuadEnabled;
     switch (daysPerWeek) {
-      case 3: return _get3DayV4(goal);
-      case 5: return _get5DayV4(goal);
+      case 3: return _get3DayV4(goal, bQuad: bQuad);
+      case 5: return _get5DayV4(goal, bQuad: bQuad);
       case 6: return _get6DayV4(goal, quadLegsB: quadLegsB);
-      default: return _get4DayV4(goal);
+      default: return _get4DayV4(goal, bQuad: bQuad);
     }
   }
 
@@ -471,7 +475,7 @@ class SplitResolver {
 
   // ── V4: 3-day splits ──────────────────────────────────────────────
 
-  static List<MuscleSlotDay> _get3DayV4(String goal) {
+  static List<MuscleSlotDay> _get3DayV4(String goal, {bool bQuad = true}) {
     if (goal == 'lose_fat' || goal == 'general_fitness') {
       return [
         MuscleSlotDay(name: 'Full Body A', focus: 'Compound focus', dayType: 'full_body', intensity: 'strength', slotsA: [
@@ -571,7 +575,18 @@ class SplitResolver {
         const MuscleSlot(targetMuscle: 'Hip', movementPattern: 'hip_isolation', exerciseType: 'isolation', priority: 4),
         const MuscleSlot(targetMuscle: 'Core', movementPattern: 'core', exerciseType: 'isolation', priority: 5),
         const MuscleSlot(targetMuscle: 'Calves', subFocus: 'soleus', movementPattern: 'knee_dominant', exerciseType: 'isolation', priority: 5),
-      ], slotsB: [
+      ], slotsB: bQuad ? [ // Unit 1B-Q: the Quads compound sits second at priority 1
+        const MuscleSlot(targetMuscle: 'Hamstrings', movementPattern: 'hip_dominant', exerciseType: 'compound', priority: 1),
+        const MuscleSlot(targetMuscle: 'Quads', movementPattern: 'knee_dominant', exerciseType: 'compound', priority: 1),
+        const MuscleSlot(targetMuscle: 'Glutes', movementPattern: 'hip_dominant', exerciseType: 'compound', priority: 1),
+        const MuscleSlot(targetMuscle: 'Hamstrings', movementPattern: 'knee_dominant', exerciseType: 'isolation', priority: 2),
+        const MuscleSlot(targetMuscle: 'Calves', movementPattern: 'knee_dominant', exerciseType: 'isolation', priority: 3),
+        const MuscleSlot(targetMuscle: 'Glutes', movementPattern: 'hip_isolation', exerciseType: 'isolation', priority: 2),
+        const MuscleSlot(targetMuscle: 'Quads', subFocus: 'isolation', movementPattern: 'knee_dominant', exerciseType: 'isolation', priority: 4),
+        const MuscleSlot(targetMuscle: 'Hip', movementPattern: 'hip_isolation', exerciseType: 'isolation', priority: 4),
+        const MuscleSlot(targetMuscle: 'Core', movementPattern: 'core', exerciseType: 'isolation', priority: 5),
+        const MuscleSlot(targetMuscle: 'Calves', subFocus: 'soleus', movementPattern: 'knee_dominant', exerciseType: 'isolation', priority: 5),
+      ] : [ // kill-switch: the pre-1B-Q B list, verbatim
         const MuscleSlot(targetMuscle: 'Hamstrings', movementPattern: 'hip_dominant', exerciseType: 'compound', priority: 1),
         const MuscleSlot(targetMuscle: 'Glutes', movementPattern: 'hip_dominant', exerciseType: 'compound', priority: 1),
         const MuscleSlot(targetMuscle: 'Glutes', movementPattern: 'hip_isolation', exerciseType: 'isolation', priority: 2),
@@ -588,7 +603,7 @@ class SplitResolver {
 
   // ── V4: 4-day splits ──────────────────────────────────────────────
 
-  static List<MuscleSlotDay> _get4DayV4(String goal) {
+  static List<MuscleSlotDay> _get4DayV4(String goal, {bool bQuad = true}) {
     if (goal == 'build_muscle') {
       return [
         MuscleSlotDay(name: 'Push', focus: 'Chest, shoulders, triceps', dayType: 'push', intensity: 'strength', slotsA: [
@@ -643,7 +658,17 @@ class SplitResolver {
           const MuscleSlot(targetMuscle: 'Hamstrings', movementPattern: 'knee_dominant', exerciseType: 'isolation', priority: 4),
           const MuscleSlot(targetMuscle: 'Hip', movementPattern: 'hip_isolation', exerciseType: 'isolation', priority: 4),
           const MuscleSlot(targetMuscle: 'Calves', subFocus: 'soleus', movementPattern: 'knee_dominant', exerciseType: 'isolation', priority: 5),
-        ], slotsB: [
+        ], slotsB: bQuad ? [ // Unit 1B-Q: the Quads compound sits second at priority 1
+          const MuscleSlot(targetMuscle: 'Hamstrings', movementPattern: 'hip_dominant', exerciseType: 'compound', priority: 1),
+          const MuscleSlot(targetMuscle: 'Quads', movementPattern: 'knee_dominant', exerciseType: 'compound', priority: 1),
+          const MuscleSlot(targetMuscle: 'Glutes', movementPattern: 'hip_dominant', exerciseType: 'compound', priority: 1),
+          const MuscleSlot(targetMuscle: 'Hamstrings', movementPattern: 'knee_dominant', exerciseType: 'isolation', priority: 2),
+          const MuscleSlot(targetMuscle: 'Calves', movementPattern: 'knee_dominant', exerciseType: 'isolation', priority: 3),
+          const MuscleSlot(targetMuscle: 'Core', movementPattern: 'core', exerciseType: 'isolation', priority: 3),
+          const MuscleSlot(targetMuscle: 'Glutes', movementPattern: 'hip_isolation', exerciseType: 'isolation', priority: 2),
+          const MuscleSlot(targetMuscle: 'Hip', movementPattern: 'hip_isolation', exerciseType: 'isolation', priority: 4),
+          const MuscleSlot(targetMuscle: 'Calves', subFocus: 'soleus', movementPattern: 'knee_dominant', exerciseType: 'isolation', priority: 5),
+        ] : [ // kill-switch: the pre-1B-Q B list, verbatim
           const MuscleSlot(targetMuscle: 'Hamstrings', movementPattern: 'hip_dominant', exerciseType: 'compound', priority: 1),
           const MuscleSlot(targetMuscle: 'Glutes', movementPattern: 'hip_dominant', exerciseType: 'compound', priority: 1),
           const MuscleSlot(targetMuscle: 'Glutes', movementPattern: 'hip_isolation', exerciseType: 'isolation', priority: 2),
@@ -816,7 +841,7 @@ class SplitResolver {
 
   // ── V4: 5-day splits ──────────────────────────────────────────────
 
-  static List<MuscleSlotDay> _get5DayV4(String goal) {
+  static List<MuscleSlotDay> _get5DayV4(String goal, {bool bQuad = true}) {
     if (goal == 'build_muscle') {
       return [
         // Day 1: Chest
@@ -862,7 +887,16 @@ class SplitResolver {
           const MuscleSlot(targetMuscle: 'Hamstrings', movementPattern: 'knee_dominant', exerciseType: 'isolation', priority: 3),
           const MuscleSlot(targetMuscle: 'Hip', movementPattern: 'hip_isolation', exerciseType: 'isolation', priority: 4),
           const MuscleSlot(targetMuscle: 'Core', movementPattern: 'core', exerciseType: 'isolation', priority: 4),
-        ], slotsB: [
+        ], slotsB: bQuad ? [ // Unit 1B-Q: the Quads compound sits second at priority 1
+          const MuscleSlot(targetMuscle: 'Hamstrings', movementPattern: 'hip_dominant', exerciseType: 'compound', priority: 1),
+          const MuscleSlot(targetMuscle: 'Quads', movementPattern: 'knee_dominant', exerciseType: 'compound', priority: 1),
+          const MuscleSlot(targetMuscle: 'Glutes', movementPattern: 'hip_dominant', exerciseType: 'compound', priority: 1),
+          const MuscleSlot(targetMuscle: 'Hamstrings', movementPattern: 'knee_dominant', exerciseType: 'isolation', priority: 2),
+          const MuscleSlot(targetMuscle: 'Calves', movementPattern: 'knee_dominant', exerciseType: 'isolation', priority: 3),
+          const MuscleSlot(targetMuscle: 'Glutes', movementPattern: 'hip_isolation', exerciseType: 'isolation', priority: 2),
+          const MuscleSlot(targetMuscle: 'Hip', movementPattern: 'hip_isolation', exerciseType: 'isolation', priority: 4),
+          const MuscleSlot(targetMuscle: 'Core', movementPattern: 'core', exerciseType: 'isolation', priority: 4),
+        ] : [ // kill-switch: the pre-1B-Q B list, verbatim
           const MuscleSlot(targetMuscle: 'Hamstrings', movementPattern: 'hip_dominant', exerciseType: 'compound', priority: 1),
           const MuscleSlot(targetMuscle: 'Glutes', movementPattern: 'hip_dominant', exerciseType: 'compound', priority: 1),
           const MuscleSlot(targetMuscle: 'Glutes', movementPattern: 'hip_isolation', exerciseType: 'isolation', priority: 2),

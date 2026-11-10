@@ -37,6 +37,18 @@ class PlanEngineFlags {
     }
   }
 
+  /// Unit 1B-Q kill-switch (OI-475 L1): the B leg day of the 3-day (build_muscle, strength), 4-day and 5-day
+  /// build_muscle splits carries a Quads / knee_dominant / compound slot at priority 1, second. Default ON. Set
+  /// `configBox['disable_variant_b_quad'] = true` to restore the pre-1B-Q B lists verbatim, for plans generated
+  /// from then on (a plan already stored is not rewritten). Read once per `SplitResolver.selectV4` call.
+  static bool get variantBQuadEnabled {
+    try {
+      return HiveService.instance.configBox.get('disable_variant_b_quad') != true;
+    } catch (_) {
+      return true; // no Hive (pure unit test) → safe default: the new B lists
+    }
+  }
+
   /// U3 warmup/cooldown injury filter (Ship 2). Default ON (contraindicated
   /// warmup/cooldown/cardio moves are dropped for an injured user). Set
   /// `configBox['disable_warmup_injury_filter'] = true` to revert to the

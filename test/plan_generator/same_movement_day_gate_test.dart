@@ -96,8 +96,13 @@ void main() {
     expect(originalOf.length, 9, reason: 'the nine loaded versions (N14 to N22)');
     expect(daysWithMember, greaterThan(0), reason: 'non-vacuity: no day held a member of a pair');
     // Measured floors (2026-11-09, 998 personas): OFF 5 placements, ON 977. `> 0` alone let OFF collapse to one day
-    // unnoticed (B-pass seat A); a change that moves these on purpose re-measures them here.
-    expect(daysWithLoaded, greaterThanOrEqualTo(on ? 977 : 5),
+    // unnoticed (B-pass seat A); a change that moves these on purpose re-measures them here. Unit 1B-Q (2026-11-10):
+    // ON 977 -> 931 and OFF 5 (re-measured, unchanged), after the B leg day gained a Quads compound as its second slot
+    // and its Glutes isolation slot moved behind Calves / Core (plan docs/plans/2026-11-10-generator-1bq-variant-b-quads.md).
+    // The drop is N19 Dumbbell Glute Bridge, the home_dumbbells Glutes isolation pick, seated on fewer short B days
+    // (2,304-plan audit ON, weeks 1-2: N19 1444 -> 1289 placements, the other loaded versions unchanged); shared days
+    // stay 0 in both worlds.
+    expect(daysWithLoaded, greaterThanOrEqualTo(on ? 931 : 5),
         reason: 'non-vacuity: fewer days held a loaded version than measured ($daysWithLoaded)');
     expect(bad, isEmpty, reason: '${bad.length} day(s) hold a loaded version and its original');
     // ignore: avoid_print

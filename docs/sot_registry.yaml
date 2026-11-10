@@ -10825,6 +10825,46 @@ concepts:
         semantic: behavioral
     contract_test_path: test/contracts/quads_floor_6day_behavioral_test.dart
 
+  - concept: variant_b_leg_quad_compound
+    domain: workout
+    behavioral_test_path: test/contracts/variant_b_quads_behavioral_test.dart
+    description: >
+      Generator Unit 1B-Q (OI-475 L1, founder decision d13, 2026-11-10, diagnose cf970c): the B variant of the Legs day in
+      the 3-day (build_muscle and strength share it), 4-day and 5-day build_muscle splits carries a Quads / knee_dominant /
+      compound slot at priority 1, second after the Hamstrings hip_dominant compound and before the Glutes hip_dominant
+      compound, so week 2 and week 4 hold quad work. The slot count of each B day is unchanged (10 / 9 / 8): 3-day moved
+      its priority-3 Quads compound up, 4 and 5-day turned their Quads isolation slot into it. The allocator seats slots
+      in split order, so the position (second, ahead of the Glutes rows that fill the Glutes session cap) is the
+      contract; the 6-day Legs B is OI-454's (quad_primary_glute_credit). The same B lists put the Glutes hip_isolation
+      slot behind the Calves slot (4-day: and the Core slot), so the Quads compound does not push Calves / Core off the
+      day. Measured over the 2,304-plan audit: ON plans worse than their live twin 186 -> 4 (Quads 184 -> 0), live
+      zero-set plans 92 -> 28, no muscle of any kind gains a zero-set week in either world. Kill-switch
+      `disable_variant_b_quad` (PlanEngineFlags.variantBQuadEnabled, default ON, read once per selectV4 call) restores
+      the pre-1B-Q B lists verbatim (the 998-persona golden then equals main cc8286ad byte for byte). Week 4 (deload) is
+      variant B and is pinned too.
+    writers:
+      - file: lib/shared/repositories/plan_engine/split_resolver.dart
+        method: _get3DayV4 Legs slotsB, _get4DayV4 build_muscle Legs slotsB, _get5DayV4 build_muscle Legs slotsB
+      - file: lib/shared/repositories/plan_engine/plan_engine_flags.dart
+        method: variantBQuadEnabled (the kill-switch read)
+    readers:
+      - file: lib/shared/repositories/plan_engine/split_resolver.dart
+        method_or_widget: selectV4 (reads the kill-switch once and picks the B list)
+        semantic: kill-switch
+      - file: lib/shared/repositories/plan_engine/sequencing_engine.dart
+        method_or_widget: sequence (reorders each day after seating, compound first; the seat order is not the performed order)
+        semantic: performed order
+      - file: lib/shared/repositories/plan_engine/session_set_allocator.dart
+        method_or_widget: allocate (seats slots in split order up to the count band)
+        semantic: seat order
+      - file: lib/shared/repositories/plan_engine/thin_day_topup.dart
+        method_or_widget: anchors (orders an injured user's thin-day top-up anchors by slot priority)
+        semantic: slot priority
+      - file: test/contracts/variant_b_quads_behavioral_test.dart
+        method_or_widget: the split shape, and week-2 / week-4 quad, Calves and Core sets in both worlds
+        semantic: behavioral
+    contract_test_path: test/contracts/variant_b_quads_behavioral_test.dart
+
   - concept: volume_titration
     domain: workout
     behavioral_test_path: test/contracts/volume_titration_behavioral_test.dart
@@ -14618,7 +14658,7 @@ concepts:
         fields_read: [type]
         notes: whitelist shape, widened to include 'logged' by this batch
       - file: lib/shared/repositories/plan_engine/plan_engine_flags.dart
-        line_range: 487-492
+        line_range: 499-504
         method: isRestDayConsideringLogged
         semantic: flag-check
         fields_read: [type]
