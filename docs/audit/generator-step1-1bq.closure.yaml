@@ -10,31 +10,31 @@ findings:
   - id: 1BQ-SPLIT
     title: "The B leg day of the 3, 4 and 5-day splits carries a priority-1 Quads compound, second; its Glutes isolation slot sits behind Calves (4-day: and Core)"
     terminal_state: closed_in_commit
-    commit: "generator-step1-1b (uncommitted)"
+    commit: "2c933701"
     verification: "split_resolver.dart _get3DayV4 / _get4DayV4 / _get5DayV4 slotsB; test/contracts/variant_b_quads_behavioral_test.dart (66 tests); mutations in diagnose cf970c (six, each reddens 1 to 28)."
 
   - id: 1BQ-KILL-SWITCH
     title: "Kill-switch disable_variant_b_quad (PlanEngineFlags.variantBQuadEnabled, default ON) restores the old B lists verbatim"
     terminal_state: closed_in_commit
-    commit: "generator-step1-1b (uncommitted)"
+    commit: "2c933701"
     verification: "variant_b_quads_behavioral_test.dart kill-switch tests; the OFF branch is main's list verbatim, and with the key set all 998 golden personas hashed equal to main cc8286ad (0 differ). Deleted by the step-2 OI-475 L2 change (OI-475 board text). docs/naming_conventions.md row."
 
   - id: 1BQ-GOLDEN
     title: "Golden re-recorded with attribution: 242 of 998 keys, all build_muscle 3/4/5-day or strength 3-day"
     terminal_state: closed_in_commit
-    commit: "generator-step1-1b (uncommitted)"
+    commit: "2c933701"
     verification: "test/fixtures/generator_golden_hashes.json; changed keys build_muscle 3d 44, 4d 86, 5d 60, strength 3d 52, none elsewhere; the kill-switch run is the counterfactual (0 keys differ from the base fixture)."
 
   - id: 1BQ-SAME-MOVEMENT-FLOOR
     title: "Same-movement gate ON non-vacuity floor re-measured 977 -> 931, OFF 5 unchanged (shared days stay 0)"
     terminal_state: closed_in_commit
-    commit: "generator-step1-1b (uncommitted)"
+    commit: "2c933701"
     verification: "test/plan_generator/same_movement_day_gate_test.dart comment and floor (the run printed ON 931, OFF 5, 0 shared days); the drop is N19 Dumbbell Glute Bridge, the home_dumbbells Glutes isolation pick (audit ON weeks 1-2: 1444 -> 1289)."
 
   - id: 1BQ-AUDIT
     title: "2,304-plan audit: ON plans worse than their live twin 186 -> 4 (Quads 184 -> 0); zero-set plans live 92 -> 28, ON 278 -> 32; no muscle of any kind gains a zero-set week in either world"
     terminal_state: closed_in_commit
-    commit: "generator-step1-1b (uncommitted)"
+    commit: "2c933701"
     verification: "Plan section 2, final tree vs main cc8286ad (plan_audit_dump_test.dart, both worlds; per-plan credited sets from plan_dump w[].v, every muscle, every week)."
 
   - id: 1BQ-COST-QUADS
