@@ -8,15 +8,14 @@ import 'package:icanbefitter/core/constants/body_measurement_specs.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:icanbefitter/core/constants/app_constants.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
-import 'package:icanbefitter/core/services/hive_user_session.dart';
+import 'package:icanbefitter/core/services/completion_prompt_store.dart';
+import 'package:icanbefitter/features/train/services/coach_day_completion.dart';
 import 'package:icanbefitter/features/train/services/workout_completion_bookkeeping.dart';
 import 'package:icanbefitter/core/services/migrated_key.dart';
 import 'package:icanbefitter/core/services/prediction_service.dart';
 import 'package:icanbefitter/core/services/error_telemetry.dart';
 import 'package:icanbefitter/core/services/service_providers.dart';
 import 'package:icanbefitter/core/services/supabase_service.dart';
-import 'package:icanbefitter/core/services/workout_write_service.dart';
-import 'package:icanbefitter/core/services/write_result.dart';
 import 'package:icanbefitter/core/utils/ist_date.dart';
 import 'package:icanbefitter/features/auth/providers/auth_invalidation_provider.dart';
 import '../copy/coach_replies.dart';
@@ -194,6 +193,15 @@ class ChatHistoryNotifier extends Notifier<List<ChatMessage>> {
       if (kind == 'completion_prompt' && interaction['resolved_at'] != null) {
         continue;
       }
+      // Coach workout parity 1b (OI-490, decision F): a prompt for a day
+      // before IST today is inert (`CoachDayCompletion.completeOnTap` refuses
+      // it), so it is not rendered. A pure FILTER: build never writes; the
+      // stale row is resolved by `CompletionPromptStore.write`'s sweep.
+      if (kind == 'completion_prompt' &&
+          ((interaction['date'] as String?) ?? '').compareTo(istTodayStr()) <
+              0) {
+        continue;
+      }
       final createdAt = interaction['created_at'] as String? ?? '';
       entries.add(_CoachEntry(
         key: key.toString(),
@@ -354,104 +362,31 @@ class ChatHistoryNotifier extends Notifier<List<ChatMessage>> {
   /// handler + the successful [Complete workout] handler both call this),
   /// then rebuilds the thread. Idempotent: no-op if the row is missing.
   Future<void> resolveCompletionPrompt(String date) async {
-    final box = HiveService.instance.coachBox;
-    final key = 'completion_prompt_$date';
-    final raw = box.get(key);
-    if (raw is! Map) return;
-    final entry = Map<String, dynamic>.from(raw);
-    entry['resolved_at'] = DateTime.now().toIso8601String();
-    await box.put(key, entry);
+    // Coach workout parity 1b: the one prompt-row writer.
+    await CompletionPromptStore.instance.resolve(date);
     refreshFromHive();
   }
 
-  /// Unit 1 — the [Complete workout] handler. Re-reads `schedule_<date>`;
-  /// if it isn't already `completed` and isn't a REST day, marks it complete
-  /// via the canonical [WorkoutWriteService.markCompleted] (`completed_via:
-  /// 'tap'`, user-initiated). Then resolves the prompt row. Returns the
-  /// [WriteResult] so the caller can surface a snackbar. Provider
-  /// invalidation (workout / home) is the caller's job (it holds the
-  /// WidgetRef). Never throws — a failure returns a failed WriteResult and
-  /// leaves the card in place for a retry.
-  Future<WriteResult> completeWorkoutFromPrompt(String date) async {
-    // Coach workout parity 1a: the Hive owner, captured before any await; the
-    // shared completion step refuses to write if it changed.
-    final owner = HiveUserSession.currentOwnerFullId;
-    try {
-      // Unit 1 — `date` is an IST `yyyy-MM-dd` string. `markCompleted` re-applies
-      // `istDateStr` (toUtc + 5:30) internally to build its schedule/wlog keys,
-      // so we must hand it a DateTime that round-trips to the SAME calendar day
-      // regardless of host timezone. `DateTime.parse(date)` yields device-LOCAL
-      // midnight — for a user east of UTC+5:30 (e.g. UTC+13) that local midnight
-      // maps to the PREVIOUS UTC day, and +5:30 can land on the wrong date-key
-      // (the Test #11.1 double-shift trap). `DateTime.utc(y, m, d)` (UTC
-      // midnight) round-trips correctly because +5:30 keeps it on the same day.
-      // Mirrors `ai_snapshot_builder._plannedExerciseHasLog`. Computed FIRST so
-      // the SAME UTC-midnight instant drives BOTH the schedule read and the
-      // completion write (single date-key SoT).
-      final completeDate = _utcDateFromIstDateStr(date);
-      if (completeDate == null) {
-        return WriteResult.fail('Malformed date "$date".');
-      }
-      // Re-read the scheduled day through the canonical read service (repository
-      // pattern, root CLAUDE.md rule 4 — a provider never touches workoutBox
-      // directly). `getScheduleForDate` keys off `istDateStr(completeDate)`, the
-      // same IST date-key the raw `schedule_<date>` row lives under, so this is
-      // a byte-for-byte equivalent read of the same row.
-      final raw = ref
-          .read(workoutScheduleReadServiceProvider)
-          .getScheduleForDate(completeDate);
-      if (raw == null) {
-        // No schedule to complete — just resolve the stale card.
-        await resolveCompletionPrompt(date);
-        return WriteResult.fail('No scheduled workout for $date.');
-      }
-      if (raw['status'] == 'completed' || raw['type'] == 'rest') {
-        // Already done (or a rest day) — resolve the card, report success.
-        await resolveCompletionPrompt(date);
-        return WriteResult.ok(WorkoutWriteService.scheduleKey(completeDate));
-      }
-      final workoutName = (raw['workout_name'] as String?) ?? 'Workout';
-      final result = await WorkoutWriteService.instance.markCompleted(
-        date: completeDate,
-        workoutName: workoutName,
-        durationSec: 0,
-        completedVia: 'tap',
-      );
-      if (result.success) {
-        // Coach workout parity 1a (OI-379): the same after-completion step
-        // every door runs (count once per day + heal, streaks, badges, rank).
-        await WorkoutCompletionBookkeeping.instance.afterCompletion(
-          workoutDate: completeDate,
-          newlyCompleted: result.newlyCompleted,
-          expectedOwner: owner,
-          mintProgressIfMissing: false,
-          door: CompletionDoor.coachTap,
-        );
-        await resolveCompletionPrompt(date);
-      }
-      return result;
-    } catch (e, st) {
-      unawaited(ErrorTelemetry.recordNonFatal(e, st,
-          reason: 'chat_history_complete_workout_from_prompt'));
-      return WriteResult.fail(e.toString());
-    }
+  /// Unit 1 — the [Complete workout] handler. Since coach workout parity 1b
+  /// (OI-490) a thin call to the ONE tap path,
+  /// [CoachDayCompletion.completeOnTap] (door `coachTap`, `completed_via:
+  /// 'tap'`), shared with Train's COMPLETE WORKOUT button: today only (a past
+  /// partial day stays not done, decision F), never a rest / moved / no-plan
+  /// day, never a day with no exercise log; an already-completed day is a
+  /// success with no write. Rebuilds the thread so the resolved tile drops.
+  /// Provider invalidation (workout / home) is the caller's job (it holds the
+  /// WidgetRef). Never throws.
+  Future<CoachTapResult> completeWorkoutFromPrompt(String date) async {
+    final result = await CoachDayCompletion.instance
+        .completeOnTap(date: date, door: CompletionDoor.coachTap);
+    refreshFromHive();
+    return result;
   }
 
-  /// Unit 1 — parses an IST `yyyy-MM-dd` date-key into a UTC-midnight DateTime
-  /// that `WorkoutWriteService.markCompleted`'s internal `istDateStr` (toUtc +
-  /// 5:30) round-trips back to the SAME calendar day on ANY host timezone.
-  /// Returns null on a malformed string. Mirrors the split used in
-  /// `ai_snapshot_builder._plannedExerciseHasLog` so completion + the
-  /// coach-snapshot completion-check agree on the date-key.
-  static DateTime? _utcDateFromIstDateStr(String dateStr) {
-    final parts = dateStr.split('-');
-    if (parts.length != 3) return null;
-    final y = int.tryParse(parts[0]);
-    final m = int.tryParse(parts[1]);
-    final d = int.tryParse(parts[2]);
-    if (y == null || m == null || d == null) return null;
-    return DateTime.utc(y, m, d);
-  }
+  /// The IST `yyyy-MM-dd` → UTC-midnight conversion the tap uses
+  /// ([utcDateFromIstDateStr], `coach_day_completion.dart`).
+  static DateTime? _utcDateFromIstDateStr(String dateStr) =>
+      utcDateFromIstDateStr(dateStr);
 
   /// Test seam for the finding-2 timezone fix. Exposes the exact date-key
   /// conversion `completeWorkoutFromPrompt` feeds to `markCompleted`, so a
@@ -1723,11 +1658,55 @@ class DraftExercise {
 
 /// Where the chat workout card is after its last CONFIRM (B',
 /// docs/plans/train-coach-log-refresh.md).
-enum DraftCardStatus { pending, saved, savedDayNotMarked, partial, noneSaved }
+///
+/// Coach workout parity 1b (OI-490): `savedAwaitingComplete` (a partial
+/// planned day today: the completion tile is up) and `savedNotCounted` (a
+/// rest / moved / no-plan day: saved, never a counted workout).
+/// `savedDayNotMarked` is a failed mark or a partial PAST day.
+enum DraftCardStatus {
+  pending,
+  saved,
+  savedDayNotMarked,
+  savedAwaitingComplete,
+  savedNotCounted,
+  partial,
+  noneSaved,
+}
 
-/// True for the two states that show `Workout logged`.
+/// What the coach-day rule did with the card's day (1b, OI-490;
+/// `decideCoachDay`). `none`: nothing saved yet.
+enum DraftDayState {
+  completed,
+  awaitingComplete,
+  notCounted,
+  pastNotMarked,
+  markFailed,
+  none,
+}
+
+/// The saved status a fully-saved card shows for [d].
+DraftCardStatus savedStatusFor(DraftDayState d) {
+  switch (d) {
+    case DraftDayState.completed:
+    case DraftDayState.none:
+      return DraftCardStatus.saved;
+    case DraftDayState.awaitingComplete:
+      return DraftCardStatus.savedAwaitingComplete;
+    case DraftDayState.notCounted:
+      return DraftCardStatus.savedNotCounted;
+    case DraftDayState.pastNotMarked:
+    case DraftDayState.markFailed:
+      return DraftCardStatus.savedDayNotMarked;
+  }
+}
+
+/// True for every state that shows `Workout logged` (the sets were saved):
+/// such a card can neither be re-submitted nor edited.
 bool isSavedDraftStatus(DraftCardStatus s) =>
-    s == DraftCardStatus.saved || s == DraftCardStatus.savedDayNotMarked;
+    s == DraftCardStatus.saved ||
+    s == DraftCardStatus.savedDayNotMarked ||
+    s == DraftCardStatus.savedAwaitingComplete ||
+    s == DraftCardStatus.savedNotCounted;
 
 /// A complete workout draft awaiting user confirmation. Immutable: every
 /// change goes through [WorkoutDraftNotifier], which the card watches.
@@ -1755,8 +1734,17 @@ class WorkoutDraft {
   final bool hasHeldDraft;
   final bool appliedFromHold;
 
-  /// A partial card whose day mark failed shows the day line.
-  final bool dayNotMarked;
+  /// What the coach-day rule did with the day (1b), and the counts the
+  /// awaiting line shows.
+  final DraftDayState dayState;
+  final int dayPlannedCount;
+  final int dayLoggedCount;
+
+  /// The "Sets saved. Day not marked done." line applies: the mark failed,
+  /// or the day is a partial PAST day (decision F).
+  bool get dayNotMarked =>
+      dayState == DraftDayState.markFailed ||
+      dayState == DraftDayState.pastNotMarked;
 
   const WorkoutDraft({
     required this.id,
@@ -1771,7 +1759,9 @@ class WorkoutDraft {
     this.firstAttemptAt,
     this.hasHeldDraft = false,
     this.appliedFromHold = false,
-    this.dayNotMarked = false,
+    this.dayState = DraftDayState.none,
+    this.dayPlannedCount = 0,
+    this.dayLoggedCount = 0,
   });
 
   static const Object _keep = Object();
@@ -1787,7 +1777,9 @@ class WorkoutDraft {
     DateTime? firstAttemptAt,
     bool? hasHeldDraft,
     bool? appliedFromHold,
-    bool? dayNotMarked,
+    DraftDayState? dayState,
+    int? dayPlannedCount,
+    int? dayLoggedCount,
   }) =>
       WorkoutDraft(
         id: id,
@@ -1802,7 +1794,9 @@ class WorkoutDraft {
         firstAttemptAt: firstAttemptAt ?? this.firstAttemptAt,
         hasHeldDraft: hasHeldDraft ?? this.hasHeldDraft,
         appliedFromHold: appliedFromHold ?? this.appliedFromHold,
-        dayNotMarked: dayNotMarked ?? this.dayNotMarked,
+        dayState: dayState ?? this.dayState,
+        dayPlannedCount: dayPlannedCount ?? this.dayPlannedCount,
+        dayLoggedCount: dayLoggedCount ?? this.dayLoggedCount,
       );
 }
 
@@ -1905,34 +1899,42 @@ class WorkoutDraftNotifier extends Notifier<WorkoutDraft?> {
   /// for the hold, then clears or shows the held card.
   void markSaved(
     String id, {
-    required bool dayMarked,
+    required DraftDayState dayState,
+    int plannedCount = 0,
+    int loggedCount = 0,
     List<String> skippedNames = const [],
   }) {
     final cur = state;
     if (cur == null || cur.id != id) return;
     final skipped = _unionNames(cur.skippedNames, skippedNames);
+    final status = savedStatusFor(dayState);
     _emit(cur.copyWith(
       isSubmitting: false,
-      status: dayMarked
-          ? DraftCardStatus.saved
-          : DraftCardStatus.savedDayNotMarked,
+      status: status,
       skippedNames: skipped,
       note: null,
-      dayNotMarked: false,
+      dayState: dayState,
+      dayPlannedCount: plannedCount,
+      dayLoggedCount: loggedCount,
     ));
     _cancelTimer();
-    final hasNote = !dayMarked || skipped.isNotEmpty;
+    // Every state but a plain `saved` carries a line the user must read
+    // (1b: the awaiting / not-counted / not-marked lines hold 4 s, not 1.5 s).
+    final hasNote = status != DraftCardStatus.saved || skipped.isNotEmpty;
     _holdTimer = Timer(savedHoldFor(hasNote), () => _onHoldEnd(id));
   }
 
   /// Some exercises failed: the card keeps only those, by index, and names
-  /// what was saved so far. [dayMarked] is false only when something was
-  /// saved and the day could not be marked.
+  /// what was saved so far. [dayState] is what the coach-day rule did with
+  /// the day for what DID save (the not-marked line shows only for a failed
+  /// mark or a partial past day).
   void keepFailed(
     String id,
     List<int> failedIndices,
     List<String> savedThisAttempt, {
-    required bool dayMarked,
+    required DraftDayState dayState,
+    int plannedCount = 0,
+    int loggedCount = 0,
     List<String> skippedNames = const [],
   }) {
     final cur = state;
@@ -1955,7 +1957,9 @@ class WorkoutDraftNotifier extends Notifier<WorkoutDraft?> {
         failedNames: [for (final e in kept) e.name],
       ),
       failedAttempt: cur.failedAttempt + 1,
-      dayNotMarked: !dayMarked,
+      dayState: dayState,
+      dayPlannedCount: plannedCount,
+      dayLoggedCount: loggedCount,
     ));
   }
 

@@ -8,7 +8,8 @@ import 'package:icanbefitter/core/services/hive_service.dart';
 import 'package:icanbefitter/core/services/hive_user_session.dart';
 import 'package:icanbefitter/core/services/measurement_flags.dart';
 import 'package:icanbefitter/core/services/sync_service.dart';
-import 'package:icanbefitter/core/services/workout_schedule_service.dart';
+import 'package:icanbefitter/core/services/completion_prompt_store.dart';
+import 'package:icanbefitter/core/services/workout_schedule_read_service.dart';
 import 'package:icanbefitter/core/services/workout_write_service.dart';
 import 'package:icanbefitter/core/services/write_result.dart';
 import 'package:icanbefitter/features/nutrition/providers/nutrition_provider.dart';
@@ -16,6 +17,8 @@ import 'package:icanbefitter/features/home/providers/home_provider.dart';
 import 'package:icanbefitter/shared/repositories/food_repository.dart';
 import 'package:icanbefitter/features/profile/providers/body_measurements_provider.dart';
 import 'package:icanbefitter/features/train/providers/workout_surface_invalidation.dart';
+import 'package:icanbefitter/core/utils/ist_date.dart';
+import 'package:icanbefitter/features/train/services/coach_day_completion.dart';
 import 'package:icanbefitter/features/train/services/workout_completion_bookkeeping.dart';
 import '../providers/ai_coach_provider.dart';
 
@@ -298,7 +301,14 @@ class DraftSubmitOutcome {
 
   /// No usable set (`draftExerciseSets` is empty): never written, named.
   final List<int> skippedIndices;
-  final bool dayMarked;
+
+  /// What the coach-day rule did with the day (1b, OI-490).
+  final DraftDayState dayState;
+  final int plannedCount;
+  final int loggedCount;
+
+  /// The day is completed after this CONFIRM (marked now, or already done).
+  bool get dayMarked => dayState == DraftDayState.completed;
 
   const DraftSubmitOutcome({
     this.started = true,
@@ -306,7 +316,9 @@ class DraftSubmitOutcome {
     this.savedIndices = const [],
     this.failedIndices = const [],
     this.skippedIndices = const [],
-    this.dayMarked = false,
+    this.dayState = DraftDayState.none,
+    this.plannedCount = 0,
+    this.loggedCount = 0,
   });
 }
 
@@ -321,9 +333,11 @@ int _draftExerciseDurationSec(DraftExercise e) {
 /// Submit a confirmed workout draft through [WorkoutWriteService].
 ///
 /// Called by [WorkoutLogConfirmCard] on CONFIRM. Every exercise is attempted
-/// (by index); one with no usable set is skipped and named. The day is marked
-/// done as soon as anything from this card has saved, unless it was already
-/// done (`markCompleted` replaces `wlog_<date>` wholesale). A retry writes to
+/// (by index); one with no usable set is skipped and named. The day follows
+/// the coach-day rule (`decideCoachDay`, 1b): marked only when every planned
+/// exercise is logged, else the completion tile today (`markCompleted`
+/// replaces `wlog_<date>` wholesale, so an already-done day is left alone). A
+/// retry writes to
 /// the first attempt's date. Failures stay on the card with a note; the card
 /// state lives in [workoutDraftProvider], reached through the container
 /// captured before the first await, because the card can be unmounted
@@ -391,48 +405,105 @@ Future<DraftSubmitOutcome> submitWorkoutDraft(WorkoutDraft draft, WidgetRef ref)
     if (!stillCurrent()) {
       return DraftSubmitOutcome(savedIndices: saved, failedIndices: failed);
     }
+    // Coach workout parity 1b: the day decision below READS the schedule row
+    // and may write the prompt or the mark. After an account change it would
+    // read (and write into) the NEW account's boxes, so it stops here, before
+    // any read (the 1a bookkeeping guard sits later, after the mark).
+    if (HiveUserSession.currentOwnerFullId != owner) {
+      unawaited(ErrorTelemetry.logEvent('chat_card_owner_changed'));
+      return DraftSubmitOutcome(savedIndices: saved, failedIndices: failed);
+    }
 
     final savedNames = [for (final i in saved) draft.exercises[i].name];
     final skippedNames = [for (final i in skipped) draft.exercises[i].name];
     final everSaved = savedNames.isNotEmpty ||
         (container.read(workoutDraftProvider)?.savedNames.isNotEmpty ?? false);
 
-    // Mark the day as soon as anything from this card saved: Train shows a
-    // day's logs only once it is done. An already-done day (status completed
-    // AND its wlog_ present) is left alone; a completed status with no wlog_
-    // still gets one, as on origin/main (B-pass fb5048e68fae F5).
-    var dayMarked = true;
+    // Coach workout parity 1b (OI-490; plan coach-workout-parity-1b.md D2):
+    // the card follows the ONE coach-day rule (`decideCoachDay`, shared with
+    // the typed backstop, the tile and Train). It marks the day only when
+    // every planned exercise is logged (or repairs a completed row with no
+    // wlog_, the old F5); a partial day TODAY gets the "X of Y · Complete"
+    // tile; a partial PAST day (a retry after IST midnight keeps the first
+    // attempt's date) stays not done (decision F); a rest / moved / dropped /
+    // no-plan day is never marked. Before 1b the card marked the day on ANY
+    // save, which 1a would have counted permanently.
+    var dayState = DraftDayState.none;
+    var plannedCount = 0;
+    var loggedCount = 0;
     var markedNow = false;
+    var promptChanged = false;
     if (everSaved) {
-      var wasCompletedBefore = false;
+      final today = istTodayStr();
+      final dateStr = istDateStr(now);
+      Map<String, dynamic>? raw;
+      var readOk = true;
+      var hasWlog = false;
       try {
-        wasCompletedBefore = WorkoutScheduleService.instance
-                    .getScheduleForDate(now)?['status'] ==
-                'completed' &&
-            HiveService.instance.workoutBox
-                .get(WorkoutWriteService.wlogKey(now)) is Map;
+        raw = WorkoutScheduleReadService.instance.rawScheduleRow(now);
+        hasWlog = HiveService.instance.workoutBox
+            .get(WorkoutWriteService.wlogKey(now)) is Map;
       } catch (_) {
-        // The schedule box is unavailable: markCompleted reports its own failure.
+        readOk = false; // the box is unavailable: report the day as not marked
       }
-      if (!wasCompletedBefore) {
-        final result = await WorkoutWriteService.instance.markCompleted(
-          date: now,
-          workoutName: kChatWorkoutName,
-          durationSec: savedDurationSec,
+      if (!readOk) {
+        dayState = DraftDayState.markFailed;
+      } else {
+        loggedCount = raw == null ? 0 : loggedPlannedExerciseCount(now, raw);
+        plannedCount = raw == null ? 0 : plannedExercisesOf(raw).length;
+        final decision = decideCoachDay(
+          rawRow: raw,
+          loggedCount: loggedCount,
+          hasWlog: hasWlog,
+          dateStr: dateStr,
+          istToday: today,
         );
-        dayMarked = result.success;
-        markedNow = result.success;
-        // Coach workout parity 1a (OI-379): the same after-completion step
-        // Active Workout runs (count once per day + heal, streaks, badges,
-        // rank), before the invalidation below so every reader sees it.
-        if (result.success) {
-          await WorkoutCompletionBookkeeping.instance.afterCompletion(
-            workoutDate: now,
-            newlyCompleted: result.newlyCompleted,
-            expectedOwner: owner,
-            mintProgressIfMissing: false,
-            door: CompletionDoor.chatCard,
-          );
+        switch (decision) {
+          case CoachDayDecision.completeNow:
+          case CoachDayDecision.repairDone:
+            final result = await WorkoutWriteService.instance.markCompleted(
+              date: now,
+              workoutName: planWorkoutName(raw, fallback: kChatWorkoutName),
+              durationSec: savedDurationSec,
+            );
+            if (result.success) {
+              markedNow = true;
+              dayState = DraftDayState.completed;
+              // Coach workout parity 1a (OI-379): the same after-completion
+              // step Active Workout runs (count once per day + heal, streaks,
+              // badges, rank), before the invalidation below so every reader
+              // sees it.
+              await WorkoutCompletionBookkeeping.instance.afterCompletion(
+                workoutDate: now,
+                newlyCompleted: result.newlyCompleted,
+                expectedOwner: owner,
+                mintProgressIfMissing: false,
+                door: CompletionDoor.chatCard,
+              );
+              await CompletionPromptStore.instance.resolve(dateStr);
+              promptChanged = true;
+            } else {
+              dayState = DraftDayState.markFailed;
+            }
+          case CoachDayDecision.alreadyDone:
+            dayState = DraftDayState.completed;
+          case CoachDayDecision.askToComplete:
+            if (dateStr == today) {
+              await CompletionPromptStore.instance.write(
+                dateStr: dateStr,
+                plannedCount: plannedCount,
+                loggedCount: loggedCount,
+              );
+              promptChanged = true;
+              dayState = DraftDayState.awaitingComplete;
+            } else {
+              dayState = DraftDayState.pastNotMarked;
+            }
+          case CoachDayDecision.rest:
+          case CoachDayDecision.terminal:
+          case CoachDayDecision.noPlan:
+          case CoachDayDecision.future:
+            dayState = DraftDayState.notCounted;
         }
       }
     }
@@ -445,19 +516,37 @@ Future<DraftSubmitOutcome> submitWorkoutDraft(WorkoutDraft draft, WidgetRef ref)
       // compile is idempotent and rate-limited inside SyncService.
       unawaited(SyncService.instance.pushSnapshot());
     }
+    // The tile is written AFTER the coach reply rendered: rebuild the thread
+    // so it shows (or a resolved one drops) at once, as the typed path does
+    // after a log_set (A-F2).
+    if (promptChanged) {
+      try {
+        container.read(chatHistoryProvider.notifier).refreshFromHive();
+      } catch (e) {
+        debugPrint('[submitWorkoutDraft] chat refresh failed: $e');
+      }
+    }
 
     if (failed.isEmpty) {
       notifier.markSaved(draftId,
-          dayMarked: dayMarked, skippedNames: skippedNames);
+          dayState: dayState,
+          plannedCount: plannedCount,
+          loggedCount: loggedCount,
+          skippedNames: skippedNames);
     } else {
       notifier.keepFailed(draftId, failed, savedNames,
-          dayMarked: dayMarked, skippedNames: skippedNames);
+          dayState: dayState,
+          plannedCount: plannedCount,
+          loggedCount: loggedCount,
+          skippedNames: skippedNames);
     }
     return DraftSubmitOutcome(
       savedIndices: saved,
       failedIndices: failed,
       skippedIndices: skipped,
-      dayMarked: everSaved && dayMarked,
+      dayState: dayState,
+      plannedCount: plannedCount,
+      loggedCount: loggedCount,
     );
   } finally {
     // Defensive: no reachable path throws past markSaved / keepFailed.

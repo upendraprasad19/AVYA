@@ -10,6 +10,7 @@ import '../../../core/services/day_swap/day_swap_copy.dart';
 import '../../../core/services/day_swap/day_swap_result.dart';
 import '../../../core/services/error_telemetry.dart';
 import '../../../core/services/hive_service.dart';
+import '../../../core/services/completion_prompt_store.dart';
 import '../../../core/services/hive_user_session.dart';
 import '../../../core/utils/ist_date.dart';
 import '../../../core/services/nutrition_write_service.dart';
@@ -38,6 +39,7 @@ import '../../train/providers/train_provider.dart'
 import '../../train/providers/day_swap_provider.dart'
     show daySwapWeekProvider, daySwapAllowanceProvider, inProgressDateOf;
 import '../../train/providers/workout_surface_invalidation.dart';
+import '../../train/services/coach_day_completion.dart';
 import '../../train/services/workout_completion_bookkeeping.dart';
 import '../../train/repositories/workout_repository.dart';
 import '../providers/ai_coach_provider.dart' show chatHistoryProvider;
@@ -427,78 +429,83 @@ class ToolDispatcher {
   ///    auto-check miss.
   ///
   /// Idempotent: no-op when the date has no schedule, is already `completed`,
-  /// or is a REST day. Never throws into the dispatch flow. The KEPT method +
-  /// `markCompleted` call + rest-guard keep `derive_only_tool_surface_test`
-  /// green.
+  /// is moved/dropped, is a REST day, or is after IST today. Never throws into
+  /// the dispatch flow. The decision is the shared `decideCoachDay`
+  /// (`train/services/coach_day_completion.dart`, where the rest guard now
+  /// lives); this KEPT method + its `markCompleted` call keep
+  /// `derive_only_tool_surface_test` green.
   Future<void> _maybeCompleteScheduledDay(DateTime date, String dateStr,
       {required String? expectedOwner}) async {
     try {
-      final raw = HiveService.instance.workoutBox.get('schedule_$dateStr');
-      if (raw is! Map || raw['status'] == 'completed') return;
-      // C2 review-fix (e8f4a3): never auto-complete a terminal row — a
-      // rescheduled-away day's schedule_<date> is an audit placeholder, not a
-      // live plan. Stamping 'completed' over it would resurrect the moved
-      // workout on the OLD date and credit streak for a workout done
-      // elsewhere. TERMINAL rows only (see the swap guard note) — a paused
-      // day pre-batch could still be completed via the all-logged backstop.
-      if (WorkoutRepository.isTerminalScheduleRow(raw['status'] as String?)) {
+      // Coach workout parity 1b (OI-490): the ONE coach-day rule
+      // (`decideCoachDay`), shared with the chat card, the tile and Train's
+      // Complete button. It reads the STORED row (`rawScheduleRow`, the row
+      // this method always read) and keeps this method's order: completed →
+      // return; terminal (C2 e8f4a3: a rescheduled-away day is an audit
+      // placeholder, stamping it would resurrect the moved workout) → return;
+      // rest (raw['type'] == 'rest': an ad-hoc coach set never turns a rest
+      // day into a counted workout) → return; Unit 1 finding-4: an EMPTY
+      // exercises[] never vacuously auto-completes. New in 1b: a date after
+      // IST today never completes (a coach log_set can carry any date and 1a
+      // would count it permanently), and a partial PAST day gets no prompt
+      // (decision F: a forgotten day stays not done).
+      // The decision READS the row after the log's awaits and may write the
+      // prompt or the mark: after an account change it would act on the new
+      // account's boxes, so it stops before any read.
+      if (HiveUserSession.currentOwnerFullId != expectedOwner) {
+        unawaited(ErrorTelemetry.logEvent('derived_completion_owner_changed'));
         return;
       }
-      // Don't auto-complete a REST day — there's no planned workout to finish,
-      // so an ad-hoc coach-logged set shouldn't flip the rest day into a
-      // "completed workout" (which would feed streak / deployment wrongly).
-      if (raw['type'] == 'rest') return;
-
-      final planned = ((raw['exercises'] as List?) ?? const [])
-          .whereType<Map>()
-          .toList();
-      final plannedCount = planned.length;
-      final loggedCount = planned.where((ex) => _exerciseLogged(date, ex)).length;
-      // Unit 1 / finding-4 — require plannedCount > 0. An EMPTY exercises[] (a
-      // legacy / restored / ad-hoc non-rest schedule row that carries no
-      // planned exercises) must NOT vacuously auto-complete off ONE ad-hoc
-      // coach log — that resurrects the founder bug (a single logSet flipping
-      // the whole day, inflating streak / rank / deployment). With no planned
-      // exercises there is nothing to derive "done" from, so fall through to
-      // the tap-card: the user's explicit [Complete workout] tap is the ONLY
-      // path that completes a plan-less day.
-      final allLogged = plannedCount > 0 && loggedCount >= plannedCount;
-
-      final workoutName = (raw['workout_name'] as String?) ?? 'Workout';
-      if (allLogged) {
-        // Backstop: a full coach-logged workout still auto-completes.
-        final mark = await WorkoutWriteService.instance.markCompleted(
-          date: date,
-          workoutName: workoutName,
-          durationSec: 0,
-          completedVia: 'auto',
-        );
-        // Coach workout parity 1a (OI-379): the same after-completion step
-        // every door runs (count once per day + heal, streaks, badges, rank).
-        if (mark.success) {
-          await WorkoutCompletionBookkeeping.instance.afterCompletion(
-            workoutDate: date,
-            newlyCompleted: mark.newlyCompleted,
-            expectedOwner: expectedOwner,
-            mintProgressIfMissing: false,
-            door: CompletionDoor.coachAuto,
+      final raw = WorkoutScheduleReadService.instance.rawScheduleRow(date);
+      final today = istTodayStr();
+      final decision = decideCoachDay(
+        rawRow: raw,
+        loggedCount: raw == null ? 0 : loggedPlannedExerciseCount(date, raw),
+        hasWlog: HiveService.instance.workoutBox
+            .get(WorkoutWriteService.wlogKey(date)) is Map,
+        dateStr: dateStr,
+        istToday: today,
+      );
+      switch (decision) {
+        case CoachDayDecision.future:
+        case CoachDayDecision.noPlan:
+        case CoachDayDecision.alreadyDone:
+        case CoachDayDecision.repairDone:
+        case CoachDayDecision.terminal:
+        case CoachDayDecision.rest:
+          return;
+        case CoachDayDecision.completeNow:
+          // Backstop: a full coach-logged workout still auto-completes.
+          final mark = await WorkoutWriteService.instance.markCompleted(
+            date: date,
+            workoutName: (raw?['workout_name'] as String?) ?? 'Workout',
+            durationSec: 0,
+            completedVia: 'auto',
           );
-        }
-        // The day is done — resolve any earlier partial-state prompt card so
-        // it stops rendering (a coach logSet that completed the last exercise
-        // supersedes the "log more?" ask written by the previous partial log).
-        await _resolveCompletionPromptIfPresent(dateStr);
-      } else {
-        // Genuine partial (or a plan-less day, plannedCount == 0) — surface the
-        // tap-to-complete card instead of silently flipping the day. One
-        // prompt/day (date-scoped key, UPDATE-not-INSERT so the counts
-        // supersede on the next log). For plannedCount == 0 the card's progress
-        // line is suppressed (CompletionPromptCard renders none when planned==0).
-        await _writeCompletionPrompt(
-          dateStr: dateStr,
-          plannedCount: plannedCount,
-          loggedCount: loggedCount,
-        );
+          // Coach workout parity 1a (OI-379): the same after-completion step
+          // every door runs (count once per day + heal, streaks, badges, rank).
+          if (mark.success) {
+            await WorkoutCompletionBookkeeping.instance.afterCompletion(
+              workoutDate: date,
+              newlyCompleted: mark.newlyCompleted,
+              expectedOwner: expectedOwner,
+              mintProgressIfMissing: false,
+              door: CompletionDoor.coachAuto,
+            );
+          }
+          // The day is done — resolve any earlier partial-state prompt so it
+          // stops rendering.
+          await CompletionPromptStore.instance.resolve(dateStr);
+        case CoachDayDecision.askToComplete:
+          // Genuine partial (or a plan-less non-rest day) — surface the
+          // tap-to-complete tile instead of silently flipping the day. One
+          // prompt per day, superseded by the next log; TODAY only.
+          if (dateStr != today) return;
+          await CompletionPromptStore.instance.write(
+            dateStr: dateStr,
+            plannedCount: plannedExercisesOf(raw!).length,
+            loggedCount: loggedPlannedExerciseCount(date, raw),
+          );
       }
     } catch (e) {
       // Swallow — derived completion is best-effort; the log itself succeeded.
@@ -507,68 +514,6 @@ class ToolDispatcher {
           'tool_dispatch_derived_completion_failed',
           message: e.toString()));
     }
-  }
-
-  /// True when the planned exercise [ex] has an exercise-log row for [date].
-  /// Swap-tolerant: a swapped exercise counts as logged if EITHER its current
-  /// `exercise_name` OR its `swapped_from` name has a log (the user may have
-  /// logged under either during the swap). Uses the canonical
-  /// `WorkoutWriteService.exlogKey` (the same deterministic key `logExercise`
-  /// writes under) so the check reads exactly what a coach logSet wrote.
-  bool _exerciseLogged(DateTime date, Map ex) {
-    final box = HiveService.instance.workoutBox;
-    bool hasLog(String? name) {
-      if (name == null || name.trim().isEmpty) return false;
-      return box.get(WorkoutWriteService.exlogKey(date, name)) != null;
-    }
-
-    final name = ex['exercise_name'] as String?;
-    final swappedFrom = ex['swapped_from'] as String?;
-    return hasLog(name) || hasLog(swappedFrom);
-  }
-
-  /// Writes (or updates — supersede on next log) the coach completion-prompt
-  /// row under the DATE-SCOPED key `completion_prompt_<dateStr>` in coachBox.
-  /// This is a LOCAL-ONLY action row (`kind:'completion_prompt'`) — it is NOT
-  /// an `ai_coach_interaction` and is excluded from cloud push + restore (see
-  /// `sync_coach.dart`). Rendered by `ChatHistoryNotifier` as a two-button
-  /// tile. `resolved_at:null` on write; a [Complete workout] / [Log more] tap
-  /// stamps `resolved_at` so it's filtered out on the next read.
-  Future<void> _writeCompletionPrompt({
-    required String dateStr,
-    required int plannedCount,
-    required int loggedCount,
-  }) async {
-    final box = HiveService.instance.coachBox;
-    final key = 'completion_prompt_$dateStr';
-    final existing = box.get(key);
-    // Preserve the original created_at across supersede updates so the card
-    // keeps its position in the chat scroll; refresh only the counts.
-    final createdAt = (existing is Map && existing['created_at'] is String)
-        ? existing['created_at'] as String
-        : DateTime.now().toIso8601String();
-    await box.put(key, {
-      'kind': 'completion_prompt',
-      'date': dateStr,
-      'planned_count': plannedCount,
-      'logged_count': loggedCount,
-      'created_at': createdAt,
-      'resolved_at': null,
-    });
-  }
-
-  /// Unit 1 — stamps `resolved_at` on the completion-prompt row for [dateStr]
-  /// if one exists (idempotent no-op otherwise). Called when the day
-  /// auto-completes via the backstop so the earlier "log more?" card, written
-  /// by a previous partial log, stops rendering.
-  Future<void> _resolveCompletionPromptIfPresent(String dateStr) async {
-    final box = HiveService.instance.coachBox;
-    final key = 'completion_prompt_$dateStr';
-    final raw = box.get(key);
-    if (raw is! Map || raw['resolved_at'] != null) return;
-    final entry = Map<String, dynamic>.from(raw);
-    entry['resolved_at'] = DateTime.now().toIso8601String();
-    await box.put(key, entry);
   }
 
   /// Unit 1 — test seam for the derived-completion decision. Runs the exact
@@ -829,7 +774,7 @@ class ToolDispatcher {
               // `completion_prompt_<fromDate>` card (same resolve semantics
               // as the auto-complete backstop — stamp resolved_at, LOCAL-ONLY
               // kind-tagged row) so the two-button tile stops rendering.
-              await _resolveCompletionPromptIfPresent(move.fromDate);
+              await CompletionPromptStore.instance.resolve(move.fromDate);
             }
             results.add({
               'from': move.fromDate,
@@ -861,7 +806,7 @@ class ToolDispatcher {
               }
               // Review round 1 (e8f4a3) finding 7 — same stale-prompt
               // resolve as the move path (see there).
-              await _resolveCompletionPromptIfPresent(move.fromDate);
+              await CompletionPromptStore.instance.resolve(move.fromDate);
             }
             results.add({
               'from': move.fromDate,

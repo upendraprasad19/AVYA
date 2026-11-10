@@ -7216,19 +7216,6 @@ Residual of OI-199 and OI-471 after migration 172. Migration 172 makes `cleanup_
 
 **Done when.** Each mechanism is measured (writer and reader by file:line), fixed, and the audit shows 0 ON plans with a zero-set muscle their live twin lacks; a test pins the four keys in the ON world. This is item 1B-12 of the step-1 plan (`docs/plans/2026-11-08-generator-step1-core-list.md` section 9) and an entry criterion of the 1B-1 flip ("no plan worse than its live twin"). Blast radius `platform` (plan engine), tier L.
 
-## OI-490 — Coach workout parity 1b: chat card stricter completion rule, Train Logged so far + Complete workout button, rest/terminal guards on the card and tap, plan-day name
-
-- **Status**: OPEN
-- **Blocked on**: none
-- **Verified**: never
-- **Identified**: 2026-11-10 · filed via mint_oi.sh from branch `coach-workout-parity`
-
-**Problem.** Slice 1a (diagnose `0ebfcb`) makes every completion door count the workout. The chat workout card still marks the day done as soon as anything from it saves, so with counting on, one exercise logged through the card would earn a whole day's credit, permanently (the count is monotonic). The card and the completion tap also have no rest-day / moved-day / terminal-row guards, and the card names the day "Chat Workout" instead of the plan day.
-
-**Scope (founder decisions 2026-11-10: 2, A, D).** The card marks the day only when every planned exercise is logged; otherwise the "X of Y · [Complete workout]" tile. Train's today row shows "Logged so far" and a Complete workout button (phone and web). Rest/terminal guards on the card and the tap. The plan-day name on a planned day. The tile's address uses the real rank (`completion_prompt_card.dart:88` hard-codes "Recruit", see OI-375). New card copy needs founder approval (the 2026-10-21 card copy changes).
-
-**Merge-order constraint.** 1a and 1b merge in ONE PR (plan `docs/plans/coach-workout-parity-1a.md` §4, D4.6); the branch `coach-workout-parity` is not pushed until the 1b commit exists. Own plan, ×2 review, recorded in `docs/plan-reviews/coach-workout-parity.md`.
-
 ## OI-491 — Coach workout parity 1c: Active Workout opens with coach-logged exercises shown as done
 
 - **Status**: OPEN

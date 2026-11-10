@@ -237,8 +237,55 @@ Future<void> tapWrite(WidgetTester tester, Slot s, Finder f) async {
   await tester.pump(const Duration(milliseconds: 250));
 }
 
-Future<void> confirm(WidgetTester tester, Slot s) =>
-    tapWrite(tester, s, find.text(kConfirm));
+/// Coach workout parity 1b (OI-490): the card marks a day only when every
+/// PLANNED exercise is logged (founder decision 2). These cases were written
+/// when any save marked the day, so before the first CONFIRM the submit's day
+/// (the clock's IST date) is planned with exactly the draft's exercises that
+/// have a set. That keeps each case's meaning ("the card's workout is the
+/// day's plan"). A row the case seeds itself (already done, F5) is left alone,
+/// and a retry keeps the first plan. The no-plan / partial / rest outcomes
+/// are pinned in test/contracts/coach_day_completion_behavioral_test.dart.
+Future<void> seedPlanFor(WidgetTester tester, WorkoutDraft? d) async {
+  if (d == null) return;
+  // A case that closes the box on purpose (none saved) gets no plan: there is
+  // nothing to decide when nothing can be written.
+  if (!Hive.isBoxOpen(HiveUserSession.namespacedBoxName(
+      HiveService.workoutBoxName, kTestUserId))) {
+    return;
+  }
+  final day = istDateStr(DraftSubmitDebug.clock());
+  if (box.get('schedule_$day') != null) return;
+  await tester.runAsync(() => box.put('schedule_$day', {
+        'date': day,
+        'workout_name': 'Card Day',
+        'type': 'workout',
+        'status': 'planned',
+        'exercises': [
+          for (final e in d.exercises)
+            if (draftExerciseSets(e).isNotEmpty) {'exercise_name': e.name},
+        ],
+      }));
+}
+
+/// Seeds today's planned row with exactly [names] (a case that needs the
+/// plan to differ from its card).
+Future<void> seedPlan(WidgetTester tester, List<String> names) {
+  final day = istDateStr(DraftSubmitDebug.clock());
+  return tester.runAsync(() => box.put('schedule_$day', {
+        'date': day,
+        'workout_name': 'Card Day',
+        'type': 'workout',
+        'status': 'planned',
+        'exercises': [
+          for (final n in names) {'exercise_name': n},
+        ],
+      }));
+}
+
+Future<void> confirm(WidgetTester tester, Slot s) async {
+  await seedPlanFor(tester, s.draft);
+  await tapWrite(tester, s, find.text(kConfirm));
+}
 
 /// Lets the real hold timer run for [d].
 Future<void> waitReal(WidgetTester tester, Duration d) async {
@@ -452,8 +499,9 @@ void main() {
   });
 
   group('partial', () {
-    testWidgets('Bench and Row save, X stays with the note; the day is marked '
-        'once; the pencil has a tap action; a retry re-announces; a fix saves',
+    testWidgets('Bench and Row save, X stays with the note; the day is NOT '
+        'marked until X saves (1b); the pencil has a tap action; a retry '
+        're-announces; a fix saves and marks the day once',
         (tester) async {
       await ensureHive(tester);
       final sem = tester.ensureSemantics();
@@ -467,8 +515,11 @@ void main() {
       expect(exlogFor('Bench Press'), isNotNull);
       expect(exlogFor('Row'), isNotNull);
       expect(exlogFor('X'), isNull);
-      expect(rows('wlog_'), hasLength(1), reason: 'partial marks the day');
-      final wlog = Map.of(rows('wlog_').single);
+      // Coach workout parity 1b (founder decision 2): a partial card no
+      // longer marks the day; the plan (Bench, X, Row) is 2 of 3 logged, so
+      // the day waits for X or a Complete tap.
+      expect(rows('wlog_'), isEmpty, reason: 'a partial no longer marks the day');
+      expect(s.draft!.dayState, DraftDayState.awaitingComplete);
       expect(s.draft!.exercises.map((e) => e.name), ['X']);
       expect(s.draft!.status, DraftCardStatus.partial);
       const note = 'Partly logged: Bench Press, Row. Not saved: X. '
@@ -499,8 +550,9 @@ void main() {
       await confirm(tester, s);
       expect(s.draft!.status, DraftCardStatus.saved);
       expect(exlogFor('X'), isNotNull);
-      expect(rows('wlog_'), hasLength(1));
-      expect(rows('wlog_').single, wlog, reason: 'the retry does not rewrite it');
+      expect(rows('wlog_'), hasLength(1),
+          reason: 'the retry that logs the last planned exercise marks the day '
+              'once');
       await waitReal(tester, kShortHold + const Duration(milliseconds: 100));
       sem.dispose();
       await done(tester);
@@ -676,6 +728,9 @@ void main() {
       // fails (negative duration); attempt 2, unchanged, saves nothing but
       // marks the day, so Train's done-day reads change and must refresh.
       await ensureHive(tester);
+      // 1b: the plan is Plank alone, so Plank's save completes the day and
+      // the mark is attempted (and fails on the negative duration).
+      await seedPlan(tester, ['Plank']);
       final log = DisposeLog();
       final s = await pumpSlot(tester,
           seed: draftOf([badPlank(), bad('X')]), observers: [log]);
@@ -794,6 +849,8 @@ void main() {
         'edit and goes once a retry marks the day', (tester) async {
       await ensureHive(tester);
       final sem = tester.ensureSemantics();
+      // 1b: the plan is Plank alone, so its save attempts the (failing) mark.
+      await seedPlan(tester, ['Plank']);
       final s = await pumpSlot(tester, seed: draftOf([badPlank(), bad('X')]));
       await confirm(tester, s);
       expect(s.draft!.status, DraftCardStatus.partial);
@@ -834,6 +891,7 @@ void main() {
               SystemChannels.accessibility, null));
       final s = await pumpSlot(tester,
           seed: draftOf([lift('Bench Press', 60, 8)]), fillers: 8);
+      await seedPlanFor(tester, s.draft);
       final gate = DraftSubmitDebug.debugSubmitGate = Completer<void>();
       await tester.runAsync(() => tester.tap(find.text(kConfirm)));
       await tester.pump();
@@ -932,7 +990,9 @@ void main() {
       expect(exlogFor('Squat'), isNull, reason: 'the immediate tap is ignored');
       await waitReal(tester, kHeldCardTapGuard + const Duration(milliseconds: 100));
       await confirm(tester, s);
-      expect(s.draft!.status, DraftCardStatus.saved);
+      // 1b: the day's plan is the first card's (Bench, X); Bench is logged,
+      // X is not, Squat is not planned: saved, the day awaits a Complete tap.
+      expect(s.draft!.status, DraftCardStatus.savedAwaitingComplete);
       expect(exlogFor('Squat'), isNotNull);
       await waitReal(tester, kShortHold + const Duration(milliseconds: 100));
       await done(tester);
@@ -1063,6 +1123,7 @@ void main() {
         exercises: [lift('Squat', 80, 5)],
         appliedFromHold: true,
       );
+      await seedPlanFor(tester, b);
       final c = ProviderContainer(overrides: [
         authUserIdTokenProvider.overrideWithValue('u'),
         workoutDraftProvider.overrideWith(() => SeededWorkoutDraftNotifier(b)),
@@ -1091,9 +1152,10 @@ void main() {
       before = c.read(workoutDraftProvider);
       expect(before!.isSubmitting, isTrue);
       expect(before.appliedFromHold, isTrue);
-      n.markSaved('wdraft_a', dayMarked: true);
+      n.markSaved('wdraft_a', dayState: DraftDayState.completed);
       expect(identical(c.read(workoutDraftProvider), before), isTrue);
-      n.keepFailed('wdraft_a', const [0], const [], dayMarked: true);
+      n.keepFailed('wdraft_a', const [0], const [],
+          dayState: DraftDayState.completed);
       expect(identical(c.read(workoutDraftProvider), before), isTrue);
       n.endSubmit('wdraft_a');
       expect(identical(c.read(workoutDraftProvider), before), isTrue);

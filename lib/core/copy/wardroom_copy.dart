@@ -295,6 +295,49 @@ class WardroomCopy {
       'New workout waiting. Confirm or discard this one first.';
   static const coachWorkoutSkippedTemplate = 'Skipped: {names} (no usable sets).';
 
+  // Coach workout parity 1b (OI-490) — founder-approved 2026-11-10.
+  /// The chat card on a partial planned day (today).
+  static const coachWorkoutAwaitingTemplate =
+      "Saved {logged} of {planned}. Log the rest, or tap Complete workout when you're done.";
+
+  /// The same line when no logged name matches a planned one (0 of N).
+  static const coachWorkoutAwaitingNoCount =
+      "Saved. Log the rest, or tap Complete workout when you're done.";
+
+  /// The chat card on a rest, moved or no-plan day.
+  static const coachWorkoutNotCounted =
+      "Saved. Not a planned workout day, so it doesn't count as a workout.";
+
+  /// The completion tile's body (rank-neutral).
+  static const coachCompletionPromptBody =
+      'Log more exercises, or complete the workout?';
+
+  /// A Complete tap refused because the day has no exercise log.
+  static const coachTapNoLogs =
+      "Couldn't complete. Log at least one exercise first.";
+
+  /// A Complete tap whose write failed.
+  static const coachTapFailed = "Couldn't save. Try again.";
+
+  /// The success line after a Complete tap (unchanged from the tile).
+  static const coachTapCompleted = 'Workout marked complete.';
+
+  /// Train: today's row chip once something is logged.
+  static const trainInProgressChip = 'IN PROGRESS';
+
+  /// Train: today's expansion heading over the logged exercises.
+  static const trainLoggedSoFar = 'LOGGED SO FAR';
+
+  /// Train: today's complete button.
+  static const trainCompleteWorkout = 'COMPLETE WORKOUT';
+
+  /// Train: a not-done rest row with logs (chip) and a past not-done sheet
+  /// heading.
+  static const trainLoggedChip = 'LOGGED';
+
+  /// Train: the line under a not-done rest row's logs.
+  static const trainRestNotCounted = 'Rest day. Not counted as a workout.';
+
   /// TalkBack labels for the chat workout card.
   static const coachWorkoutEditSemanticsTemplate = 'Edit {name}';
   static const coachWorkoutConfirmSemantics = 'Confirm and log workout';

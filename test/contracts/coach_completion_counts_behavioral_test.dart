@@ -44,6 +44,7 @@ import 'package:icanbefitter/features/auth/providers/auth_provider.dart';
 import 'package:icanbefitter/features/train/providers/train_provider.dart';
 import 'package:icanbefitter/features/profile/providers/profile_provider.dart'
     show userStatsProvider;
+import 'package:icanbefitter/features/train/services/coach_day_completion.dart';
 import 'package:icanbefitter/features/train/services/workout_completion_bookkeeping.dart';
 
 import '../helpers/hive_test_setup.dart';
@@ -176,7 +177,7 @@ Future<void> _coachLog(WidgetTester tester, String name) =>
     });
 
 /// The completion-prompt tap.
-Future<WriteResult> _tap(WidgetTester tester) async {
+Future<CoachTapResult> _tap(WidgetTester tester) async {
   final c = ProviderContainer(overrides: [
     authStateProvider.overrideWith((ref) => const Stream.empty()),
   ]);
@@ -338,7 +339,20 @@ void main() {
         });
         expect(HiveUserSession.currentOwnerFullId, _userB);
         expect(_total(), 0, reason: 'account B\'s count is untouched');
-        expect(_events, contains('completion_bookkeeping_owner_changed'));
+        // Coach workout parity 1b: the card now stops at its own owner check,
+        // BEFORE the day decision reads (and could write the prompt or the
+        // mark into) account B's boxes; the 1a bookkeeping guard is behind it.
+        expect(_events, contains('chat_card_owner_changed'));
+        expect(
+            HiveService.instance.workoutBox.keys.where((k) =>
+                '$k'.startsWith('schedule_') || '$k'.startsWith('wlog_')),
+            isEmpty,
+            reason: 'no day row is written into account B');
+        expect(
+            HiveService.instance.coachBox.keys
+                .where((k) => '$k'.startsWith('completion_prompt_')),
+            isEmpty,
+            reason: 'no completion tile is written into account B');
       });
     }
 
@@ -370,7 +384,7 @@ void main() {
       await _coachLog(tester, 'Bench Press');
       expect(_total(), 0, reason: 'a partial day is not done');
       final r = await _tap(tester);
-      expect(r.success, isTrue);
+      expect(r, CoachTapResult.completed);
       expect(_total(), 1);
       expect(_doors(), ['coachTap:true']);
     });
@@ -393,7 +407,7 @@ void main() {
       await tester.runAsync(
           () => _seedDay(['Bench Press', 'Row'], workoutName: '  '));
       final r = await _tap(tester);
-      expect(r.success, isFalse);
+      expect(r, CoachTapResult.failed);
       expect(_total(), 0);
       expect(_calls, isEmpty);
     });

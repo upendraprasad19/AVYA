@@ -422,8 +422,8 @@ const _alwaysOk = <String>{
   'sleep_7d', 'step_history_7d', 'water_7d',
   // Unit 1 (coach-completion-tap-card) — `swapped_from` is a field of the
   // PER-EXERCISE sub-map inside `schedule_<date>['exercises']` (it IS in the
-  // `schedule` emit set, line ~103). ai_snapshot_builder._plannedExerciseHasLog
-  // reads `ex['swapped_from']` (the swap-tolerant all-logged check) on that
+  // `schedule` emit set, line ~103). loggedPlannedExerciseCount (1b; was
+  // ai_snapshot_builder._plannedExerciseHasLog) reads `ex['swapped_from']` on that
   // exercise sub-object, NOT on an exlog_/nlog_/wlog_ row. The prefix heuristic
   // mis-attributes it to exlog/nlog/wlog because ai_snapshot_builder also walks
   // those prefixes for the PR / meals / logs snapshot. (Sibling `exercise_name`
@@ -431,8 +431,8 @@ const _alwaysOk = <String>{
   'swapped_from',
   // Unit 1 (coach-completion-tap-card) — `resolved_at` is a field of the
   // LOCAL-ONLY `completion_prompt_<date>` coachBox action row (kind-tagged;
-  // written by tool_dispatcher._writeCompletionPrompt, read back by
-  // _resolveCompletionPromptIfPresent + ChatHistoryNotifier.build). It is NOT a
+  // written by CompletionPromptStore.write (1b; was in tool_dispatcher), read
+  // back by CompletionPromptStore.resolve + ChatHistoryNotifier.build). Not a
   // `schedule_*` field. The prefix heuristic mis-attributes it because
   // tool_dispatcher.dart also reads `schedule_<date>` keys in
   // _maybeCompleteScheduledDay. Sibling completion_prompt fields (kind /

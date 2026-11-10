@@ -21,7 +21,9 @@ import '../repositories/workout_repository.dart';
 
 /// Which completion door called [WorkoutCompletionBookkeeping.afterCompletion].
 /// Telemetry and the test recorder only; every door runs the same steps.
-enum CompletionDoor { activeWorkout, chatCard, coachAuto, coachTap }
+/// `trainTap` (1b, OI-490): Train's COMPLETE WORKOUT button, through
+/// `CoachDayCompletion.completeOnTap` like `coachTap`.
+enum CompletionDoor { activeWorkout, chatCard, coachAuto, coachTap, trainTap }
 
 /// One recorded call (test seam).
 @immutable
@@ -37,7 +39,8 @@ class CompletionBookkeepingCall {
 /// `WorkoutWriteService.markCompleted` succeeded — Active Workout
 /// (`_persistCompletion`), the chat workout card (`submitWorkoutDraft`), the
 /// typed all-logged backstop (`_maybeCompleteScheduledDay`) and the
-/// completion-prompt tap (`completeWorkoutFromPrompt`).
+/// completion-prompt tap (`completeWorkoutFromPrompt`) and, since 1b, Train's
+/// COMPLETE WORKOUT button (both through `CoachDayCompletion.completeOnTap`).
 ///
 /// Before this, only Active Workout did any of it (ADR-0012 assumed
 /// `markCompleted` "feeds streak / rank"; it never did).

@@ -1027,7 +1027,7 @@ concepts:
           _compactContext before serialising. Pre-compaction sites
           would 400 on the 10K server limit for historical queries.
       - file: lib/features/ai_coach/providers/ai_coach_provider.dart
-        line_range: 439-697
+        line_range: 385-632
         method: SendMessageNotifier._sendMessage retry path + media path
         semantic: pass-through
         fields_read: [<full context map>]
@@ -4104,7 +4104,8 @@ concepts:
       Coach workout parity 1a (OI-379, diagnose 0ebfcb; plan docs/plans/coach-workout-parity-1a.md rev 4). The ONE
       after-completion step every completion door calls once WorkoutWriteService.markCompleted succeeded: Active
       Workout (_persistCompletion), the chat workout card (submitWorkoutDraft), the typed all-logged backstop
-      (_maybeCompleteScheduledDay) and the completion-prompt tap (completeWorkoutFromPrompt). Before it, only Active
+      (_maybeCompleteScheduledDay) and the completion-prompt tap (completeWorkoutFromPrompt); since 1b (OI-490) both the
+      tile tap and Train's COMPLETE WORKOUT run CoachDayCompletion.completeOnTap (doors coachTap / trainTap). Before it, only Active
       Workout counted the workout, updated the streaks, wrote the streak row, checked badges and ran the rank check.
       Steps: 0 owner + null-progress guards (only Active Workout mints a default progress map); 1 the count, first
       and alone: max(stored + (newlyCompleted ? 1 : 0), completedWorkoutDayCount()), never down; 1b streak steps only
@@ -4535,7 +4536,7 @@ concepts:
         semantic: pass-through
         fields_read: [waterIntakeProvider (invalidate only — no value read)]
       - file: lib/features/ai_coach/services/conversational_log_handler.dart
-        line_range: 60-65
+        line_range: 63-68
         method: _logWater (AI chat → addWater)
         semantic: pass-through
         fields_read: [via waterIntakeProvider.notifier.addWater]
@@ -5233,7 +5234,7 @@ concepts:
         method: phaseStartAfterGap
         notes: the ONE start-date rule; pure.
       - file: lib/core/services/workout_schedule_read_service.dart
-        line_range: 2065-2076
+        line_range: 2076-2087
         method: nextPhaseStartDate
         notes: delegates to phaseStartAfterGap (gapStart false = the original rule, used by the graduation unlock).
       - file: lib/shared/services/pro_phase_advance.dart
@@ -5259,7 +5260,7 @@ concepts:
         fields_read: [schedule_<date> presence]
         notes: feeds RankService._qualifies (MCPO, officer track).
       - file: lib/features/ai_coach/services/ai_snapshot_builder.dart
-        line_range: 1393-1425
+        line_range: 1364-1396
         method: _getPlanStatus
         semantic: pass-through
         notes: the coach prompt rule is a separate Edge Function change.
@@ -5548,7 +5549,7 @@ concepts:
         # correct one failed it. B-pass finding 3, 2026-08-30.
         notes: writes sleep_log_<IST-date> key
       - file: lib/features/ai_coach/services/conversational_log_handler.dart
-        line_range: 123-160
+        line_range: 126-163
         method: _logSleep
         notes: writes to legacy 'sleep_logs' list key
     reader_manifest_complete: true
@@ -6311,7 +6312,7 @@ concepts:
         line_range: 171-176
         method: recentHistoryExchanges (shim forwarder)
       - file: lib/features/ai_coach/providers/ai_coach_provider.dart
-        line_range: 783-967
+        line_range: 718-902
         method: |
           SendMessageNotifier.send — assembles history ONCE (kill-switched) and
           threads it into BOTH chat() call sites (primary :895 + auth-retry :967).
@@ -6419,7 +6420,7 @@ concepts:
           Forwarder retained for back-compat with existing callers
           in main.dart / ai_coach_provider.dart / sync_service.dart.
       - file: lib/features/ai_coach/providers/ai_coach_provider.dart
-        line_range: 652-860
+        line_range: 587-795
         method: "`send` (SendMessageNotifier)"
         notes: |
           R3 (2026-07-07): was mislabeled `_sendMessage` (476-500, a method
@@ -6437,7 +6438,7 @@ concepts:
     reader_manifest_complete: true
     readers:
       - file: lib/features/ai_coach/providers/ai_coach_provider.dart
-        line_range: 164-309
+        line_range: 163-317
         method: ChatHistoryNotifier.build (chat scroll buffer)
         semantic: historical-series
         fields_read: [created_at, user_message, ai_response, model_used, channel, tool_calls, media_url, media_type, media_storage_path, media_save_state]
@@ -6546,15 +6547,24 @@ concepts:
       it can never corrupt ai_coach_interactions. markCompleted gained an
       idempotent under-lock status re-check so the auto-backstop racing a tap
       cannot double-stamp completed_at/completed_via.
+      Coach workout parity 1b (OI-490, diagnose 24e630): the decision itself is
+      the shared rule `decideCoachDay` (concept coach_day_completion_rule), fed
+      the RAW row; the backstop never marks a FUTURE day and writes a prompt for
+      IST today only; the prompt row is owned by CompletionPromptStore; the tap
+      is CoachDayCompletion.completeOnTap (today only). The chat workout card
+      follows the same rule (it no longer marks on any save).
     writers:
       - file: lib/features/ai_coach/services/tool_dispatcher.dart
         line_range: 1-9999
         method: _maybeCompleteScheduledDay
         notes: |
-          Derived-completion decision after a coach logSet. All-logged →
+          Derived-completion decision after a coach logSet, through
+          decideCoachDay (1b; owner guard first). completeNow →
           markCompleted(completedVia:'auto') + resolve any earlier prompt;
-          partial → _writeCompletionPrompt. KEEPS the method + markCompleted
-          call + rest-guard so derive_only_tool_surface_test stays green.
+          askToComplete on IST today → CompletionPromptStore.write; future /
+          rest / terminal / no plan / already done → nothing. KEEPS the method
+          + markCompleted call so derive_only_tool_surface_test stays green
+          (the rest literal is pinned in coach_day_completion.dart).
           Coach workout parity 1a (diagnose 0ebfcb): a successful auto mark
           then runs WorkoutCompletionBookkeeping.afterCompletion (count,
           streaks, badges, rank), the same step as every other door.
@@ -6567,12 +6577,16 @@ concepts:
           (returns success WITHOUT rewriting when already 'completed') + stamps
           completed_via on the schedule + wlog rows.
       - file: lib/features/ai_coach/providers/ai_coach_provider.dart
-        line_range: 341-392
+        line_range: 360-389
         method: completeWorkoutFromPrompt
         notes: |
-          [Complete workout] re-reads schedule_<date>; if not completed/rest →
-          markCompleted(completedVia:'tap'), then resolveCompletionPrompt stamps
-          resolved_at (also the [Log more] path). Both live on ChatHistoryNotifier.
+          Since 1b a thin call to CoachDayCompletion.completeOnTap (door
+          coachTap, completedVia 'tap'; returns CoachTapResult), then a thread
+          rebuild. resolveCompletionPrompt delegates to
+          CompletionPromptStore.resolve (also the [Log more] path). Pre-1b text:
+          [Complete workout] re-read schedule_<date>; if not completed/rest →
+          markCompleted(completedVia:'tap'), then resolveCompletionPrompt stamped
+          resolved_at. Both live on ChatHistoryNotifier.
           finding-2: passes DateTime.utc(y,m,d) (split from the IST date-key via
           _utcDateFromIstDateStr) — NOT DateTime.parse(date) (device-local
           midnight) — so markCompleted's internal istDateStr round-trips to the
@@ -6582,7 +6596,7 @@ concepts:
     reader_manifest_complete: true
     readers:
       - file: lib/features/ai_coach/providers/ai_coach_provider.dart
-        line_range: 164-223
+        line_range: 168-351
         method: build
         semantic: flag-check
         fields_read: [kind, resolved_at, date, planned_count, logged_count]
@@ -6595,7 +6609,8 @@ concepts:
           != null); the render branch 208-223 emits a
           kind:'completion_prompt' ChatMessage(promptData) for unresolved
           ones — never misreads them as user/ai turns (they carry no
-          user_message / ai_response).
+          user_message / ai_response). 1b: an unresolved prompt dated before
+          IST today is skipped too (a pure filter; build never writes).
       - file: lib/features/ai_coach/screens/ai_coach/chat_area.dart
         line_range: 46-61
         method: _buildChatArea completion-prompt branch
@@ -6647,6 +6662,110 @@ concepts:
       excluded from push + restore). markCompleted is idempotent (per-date lock +
       status re-check). The method + markCompleted call + rest-guard are KEPT so
       derive_only_tool_surface_test stays green.
+
+  - concept: coach_day_completion_rule
+    domain: ai_coach
+    behavioral_test_path: test/contracts/coach_day_completion_behavioral_test.dart
+    description: |
+      Coach workout parity 1b (OI-490, diagnose 24e630; plan
+      docs/plans/coach-workout-parity-1b.md rev 4). ONE pure rule decides what a
+      coach-logged day is: decideCoachDay(rawRow, loggedCount, hasWlog, dateStr,
+      istToday) → future / noPlan / alreadyDone / repairDone / terminal / rest /
+      completeNow / askToComplete, in that order. Fed the RAW stored row
+      (WorkoutScheduleReadService.rawScheduleRow), never the display read
+      getScheduleForDate (which hides moved/dropped rows and demotes completed
+      past rows). loggedCount is loggedPlannedExerciseCount (swap-tolerant via
+      swapped_from, canonical exlogKey). Four doors call it: the chat workout
+      card (submitWorkoutDraft), the typed backstop (_maybeCompleteScheduledDay),
+      the tile tap and Train's COMPLETE WORKOUT (both CoachDayCompletion
+      .completeOnTap, today only, refusing rest / terminal / no plan / no log).
+      Train's button shows only when canCompleteOnTap (same rule) is true, and
+      hides while an Active Workout session for IST today is in progress.
+    writers:
+      - file: lib/features/train/services/coach_day_completion.dart
+        line_range: 1-9999
+        method: decideCoachDay
+        notes: The pure rule. rest = type == 'rest' (the backstop's literal; Train's isRest also counts type 'none').
+      - file: lib/features/train/services/coach_day_completion.dart
+        line_range: 1-9999
+        method: completeOnTap
+        notes: |
+          The ONE tap path (doors coachTap / trainTap, completed_via 'tap' /
+          'train_tap'). Owner captured first; markCompleted then
+          WorkoutCompletionBookkeeping.afterCompletion; resolves the prompt.
+          Returns CoachTapResult (completed, alreadyDone, refusedNotToday,
+          refusedNotCountable, refusedNoLogs, failed), one line each.
+      - file: lib/features/ai_coach/services/conversational_log_handler.dart
+        line_range: 1-9999
+        method: submitWorkoutDraft
+        notes: |
+          Owner guard (chat_card_owner_changed) before the decision. completeNow
+          / repairDone → markCompleted with the plan day's name; askToComplete
+          today → prompt write (awaitingComplete), on a past date →
+          pastNotMarked; rest / terminal / no plan / future → notCounted.
+      - file: lib/core/services/completion_prompt_store.dart
+        line_range: 1-9999
+        method: CompletionPromptStore
+        notes: The one owner of coachBox completion_prompt_<date> (write resolves older unresolved rows; resolve is idempotent).
+    # Not reader_manifest_complete: this rule reads schedule_<date> rows but
+    # does not own them. The schedule_ owner concept above keeps the
+    # exhaustive reader list (Gate 50), and the readers below are the rule's.
+    readers:
+      - file: lib/core/services/workout_schedule_read_service.dart
+        line_range: 1-9999
+        method: rawScheduleRow
+        semantic: aggregated
+        fields_read: [status, type, exercises, workout_name]
+        notes: The decision input (no terminal filter, no completed-past demotion).
+      - file: lib/core/services/workout_read_service.dart
+        line_range: 1-9999
+        method: datesWithExerciseLogs
+        semantic: flag-check
+        fields_read: [exlog_ key date]
+        notes: One key pass; hasExerciseLogsFor gates the tap; Train reads the set once per build.
+      - file: lib/features/train/screens/train/week_rows.dart
+        line_range: 1-9999
+        method: _buildCompactRow
+        semantic: display-only
+        fields_read: [isDone, isRest, hasLogs]
+        notes: IN PROGRESS chip on today's partial row; a counted rest-type row is DONE; a not-done rest row with logs shows LOGGED.
+      - file: lib/features/train/screens/train/planned_expansion.dart
+        line_range: 1-9999
+        method: _buildPlannedExpansion
+        semantic: display-only
+        fields_read: [exlog_ rows]
+        notes: LOGGED SO FAR + COMPLETE WORKOUT (gate canCompleteOnTap).
+      - file: lib/features/train/screens/train/exercise_preview_sheet.dart
+        line_range: 1-9999
+        method: _showExercisePreviewSheet
+        semantic: display-only
+        fields_read: [exlog_ rows]
+        notes: A not-done day's logs above its plan; no Complete there (a past partial day stays not done).
+      - file: lib/features/ai_coach/widgets/workout_log_confirm_card.dart
+        line_range: 1-9999
+        method: awaitingCompleteLine
+        semantic: display-only
+        fields_read: [dayPlannedCount, dayLoggedCount]
+        notes: The saved card's "Saved X of Y" line; count-free when nothing planned was logged.
+    regression_test: test/contracts/coach_day_completion_behavioral_test.dart
+    additional_tests:
+      - test/contracts/train_logged_so_far_behavioral_test.dart
+      - test/ai_coach/workout_log_confirm_card_saved_signal_test.dart
+      - test/contracts/coach_day_completion_rule_writer_to_reader_test.dart
+    hive:
+      box: workoutBox
+      key_prefix: "schedule_"
+      key_formula: "'schedule_${istDateStr(date)}'"
+    cloud:
+      table: scheduled_workouts
+      columns: [status, completed_at]
+    sync_methods: []
+    class_constraints: |
+      1. A new door that completes a coach-logged day calls decideCoachDay on the
+         RAW row and never carries its own copy of the rule.
+      2. On the coach paths rest, moved, dropped and no-plan days never count; a
+         past partial day stays not done; a future day is never marked.
+      3. Any Complete tap goes through CoachDayCompletion.completeOnTap.
 
   - concept: coaching_notes
     domain: ai_coach
@@ -7670,7 +7789,7 @@ concepts:
           Initial weight write during onboarding routes through
           HealthWriteService.logWeight per the canonical-writer rule.
       - file: lib/features/ai_coach/services/conversational_log_handler.dart
-        line_range: 123-199
+        line_range: 126-202
         method: _logSleep + _logMeasurement
         semantic: pass-through
         fields_read: []
@@ -7750,7 +7869,7 @@ concepts:
           within 60s of an existing entry UPDATEs instead of inserting.
           Companion to the server-side placeholder dedup.
       - file: lib/features/ai_coach/providers/ai_coach_provider.dart
-        line_range: 164-309
+        line_range: 163-317
         method: ChatHistoryNotifier (display surface)
         semantic: historical-series
         fields_read: [failed, error_text, pending, ai_response, created_at]
@@ -9024,7 +9143,7 @@ concepts:
       getCurrentPlanMap, hasPlan, getCurrentCalendarWeek.
     writers:
       - file: lib/core/services/workout_schedule_read_service.dart
-        line_range: 132-2015
+        line_range: 132-2026
         method: WorkoutScheduleReadService
     reader_manifest_complete: false  # progressive caller migration; @Deprecated lint surfaces remaining
     readers:
@@ -10098,7 +10217,7 @@ concepts:
       that says LESS the more the user has logged, while still looking present.
     writers:
       - file: lib/core/services/workout_schedule_read_service.dart
-        line_range: 1155-1190
+        line_range: 1166-1201
         method: holdSnapshotBlock
         notes: |
           Returns null off a hold day. Reads activeHoldOrdinalFor/activeHoldWeeks
@@ -12092,7 +12211,7 @@ concepts:
           "don't touch" via the RPC's own COALESCE), same value + same
           projection helper, only the transport changed.
       - file: lib/core/services/workout_schedule_read_service.dart
-        line_range: 1585-1592
+        line_range: 1596-1603
         method: currentWeekColumnProjection
         notes: pure helper deciding frozen-passthrough (disabled) vs program week (enabled); behaviorally tested.
       - file: lib/features/onboarding/providers/onboarding_provider.dart
@@ -12533,15 +12652,15 @@ concepts:
       That shared walk is the drift guard.
     writers:
       - file: lib/core/services/workout_schedule_read_service.dart
-        line_range: 1811-1828
+        line_range: 1822-1839
         method: _scheduleRowsBefore
         semantic: shared-row-walk
       - file: lib/core/services/workout_schedule_read_service.dart
-        line_range: 1804-1810
+        line_range: 1815-1821
         method: pastPhaseBlocks
         semantic: strict-set
       - file: lib/core/services/workout_schedule_read_service.dart
-        line_range: 1837-1862
+        line_range: 1848-1873
         method: pastPhaseBlocksForDisplay
         semantic: display-recovery
         notes: |
@@ -14624,7 +14743,7 @@ concepts:
         notes: pulls ALL ai_coach_interactions rows for the user, no channel filter of its own — the filter lives entirely on the render side.
     readers:
       - file: lib/features/ai_coach/providers/ai_coach_provider.dart
-        line_range: 226-241
+        line_range: 234-249
         method: "ChatHistoryNotifier.build"
         semantic: flag-check
     hive:
@@ -14722,7 +14841,7 @@ concepts:
         semantic: flag-check
         fields_read: [type]
       - file: lib/core/services/workout_schedule_read_service.dart
-        line_range: 1355-1379
+        line_range: 1366-1390
         method: currentPhaseCompletionRate
         semantic: flag-check
         fields_read: [type]
@@ -16214,7 +16333,7 @@ concepts:
         method: logMeasurement + logMeasurements
         notes: Writer tier. Both validate the ROUNDED value and emit tier=writer. logMeasurements (L2b Landing B) is the sheet's batch writer - all-or-nothing, one put, one fan-out, one event per call.
       - file: lib/features/ai_coach/providers/ai_coach_provider.dart
-        line_range: 1589-1620
+        line_range: 1524-1555
         method: PendingLogActionsNotifier._parse (case log_measurement)
         notes: Chat parse tier. Type tests, never casts; checks the RAW value; emits tier=chat (a wrong-typed value of a registered site emits side=wrongtype).
       - file: lib/core/services/sync/sync_health.dart
@@ -16723,7 +16842,7 @@ concepts:
         method: body (MeasurementsCardFrame(child: _buildBody()))
         notes: L2b Landing C, E3. One line; the frame owns the flag and the height cap, so a flag-OFF screen returns its own body instance.
       - file: lib/features/ai_coach/screens/ai_coach/screen.dart
-        line_range: 458-464
+        line_range: 452-458
         method: MeasurementChipSlot (the mount line in build)
         notes: L2b Landing C, E4. Between the quick prompts and the input bar, with no condition of its own; the slot owns its flag, prompt, focus and sending checks and is given no send callback; onShown scrolls a chat that was at its bottom back to its bottom (keepBottomAfterChip).
     readers:

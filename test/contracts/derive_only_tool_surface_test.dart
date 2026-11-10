@@ -116,15 +116,33 @@ void main() {
 
     test('derived completion skips REST days (logSet on a rest day must not '
         'flip it to completed)', () {
-      // _maybeCompleteScheduledDay guards rest days: `if (raw['type'] == 'rest')
-      // return;`. Without it, an ad-hoc coach-logged set on a REST day would
+      // Without the rest guard, an ad-hoc coach-logged set on a REST day would
       // mark the day "completed" and wrongly feed streak / deployment / rank.
       // Derive-only invariant: completion derives from a PLANNED workout being
-      // logged, never from logging on a rest day. (The exact `raw['type'] ==
-      // 'rest'` string appears only in dispatcher CODE, not its comments.)
-      expect(dispatcher.contains("raw['type'] == 'rest'"), isTrue,
-          reason: 'Derived completion must skip REST days — a coach logSet on a '
-              'rest day must not auto-complete it.');
+      // logged, never from logging on a rest day.
+      //
+      // Coach workout parity 1b (OI-490): the guard moved into the ONE
+      // coach-day rule `decideCoachDay` (shared with the chat card, the tile
+      // and Train). Repointed, not loosened: the rule must return `rest` for
+      // `type == 'rest'`, the dispatcher must decide through it, and its
+      // `rest` case must return without marking. Behaviour:
+      // coach_day_completion_behavioral_test.dart.
+      final rule = _src('lib/features/train/services/coach_day_completion.dart');
+      expect(
+          rule.contains(
+              "if (rawRow['type'] == 'rest') return CoachDayDecision.rest;"),
+          isTrue,
+          reason: 'The coach-day rule must classify a REST day as rest.');
+      final at = dispatcher.indexOf('Future<void> _maybeCompleteScheduledDay(');
+      expect(at, isNonNegative);
+      final body = dispatcher.substring(at, dispatcher.indexOf('\n  }\n', at));
+      expect(body, contains('decideCoachDay('),
+          reason: 'Derived completion must decide through the shared rule.');
+      final restCase = body.indexOf('case CoachDayDecision.rest:');
+      expect(restCase, isNonNegative);
+      expect(body.substring(restCase).trimLeft(),
+          startsWith('case CoachDayDecision.rest:\n          return;'),
+          reason: 'A REST day must return before any markCompleted.');
     });
   });
 

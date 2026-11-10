@@ -140,8 +140,11 @@ void main() {
       final handler =
           src.indexOf('Future<void> _onCompleteWorkoutFromPrompt(String date)');
       expect(handler, isNot(-1));
-      final success = src.indexOf('if (result.success) {', handler);
-      final orElse = src.indexOf('} else {', success);
+      // Coach workout parity 1b: the handler maps a `CoachTapResult`; its
+      // success branch is `if (result.isSuccess) {` (no else: the snackbar
+      // line per result follows it).
+      final success = src.indexOf('if (result.isSuccess) {', handler);
+      final orElse = src.indexOf('}', success);
       expect(success, greaterThan(handler));
       expect(orElse, greaterThan(success));
       final branch = src.substring(success, orElse);
@@ -150,7 +153,7 @@ void main() {
       expect(RegExp(RegExp.escape(call)).allMatches(src).length, 1);
       expect(
           branch.replaceAll(RegExp(r'\s+'), ' '),
-          startsWith('if (result.success) { $call'),
+          startsWith('if (result.isSuccess) { $call'),
           reason: 'the refresh is the first thing a successful completion does');
       expect(src, isNot(contains('ref.invalidate(currentPlanProvider)')));
     });

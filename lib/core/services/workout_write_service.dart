@@ -575,9 +575,9 @@ class WorkoutWriteService {
   /// [completedVia] records HOW this day was completed for completion
   /// telemetry / coach-memory. Values: 'app' (UI finish button, default),
   /// 'auto' (derived all-logged backstop after a coach logSet), 'tap' (the
-  /// coach completion-prompt card's [Complete workout] button). Stamped on
-  /// both the schedule row and the wlog row so downstream analytics can
-  /// attribute completions. Unit 1 (coach-completion-tap-card).
+  /// coach tile's Complete workout), 'train_tap' (Train's COMPLETE WORKOUT,
+  /// coach parity 1b). Stamped on both the schedule row and the wlog row so
+  /// downstream analytics can attribute completions. Unit 1 (tap card).
   Future<WriteResult> markCompleted({
     required DateTime date,
     required String workoutName,

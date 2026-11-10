@@ -23,6 +23,26 @@ extension _ExercisePreviewSheet on _TrainScreenState {
         ? WorkoutRepository.instance.getExerciseLogsForDate(day.date!)
         : <Map<String, dynamic>>[];
     final hasActualLogs = actualLogs.isNotEmpty;
+    // Coach workout parity 1b (OI-490): a NOT-done day's logs (a partial chat
+    // log, or typed sets) are shown above its plan. There is no Complete
+    // button here: a past day that was never completed stays not done
+    // (decision F); today completes from its row.
+    final notDoneLogs = !day.isDone && day.date != null
+        ? WorkoutReadService.instance
+            .exerciseLogsForIstDate(istDateStr(day.date!))
+        : const <Map<String, dynamic>>[];
+    final notDoneLogRows = <Widget>[
+      if (notDoneLogs.isNotEmpty) ...[
+        for (final log in notDoneLogs)
+          ExpandedExerciseLogRow(
+            name: log['exercise_name'] as String? ?? 'Exercise',
+            detail: exerciseLogDetail(log),
+            isPr: log['is_pr'] == true,
+          ),
+        const SizedBox(height: 10),
+        _buildPreviewSectionLabel('PLANNED EXERCISES', AppColors.accent),
+      ],
+    ];
 
     showModalBottomSheet(
       context: context,
@@ -87,7 +107,11 @@ extension _ExercisePreviewSheet on _TrainScreenState {
 
               // Section label
               Text(
-                hasActualLogs ? 'LOGGED EXERCISES' : 'PLANNED EXERCISES',
+                hasActualLogs
+                    ? 'LOGGED EXERCISES'
+                    : notDoneLogs.isNotEmpty
+                        ? WardroomCopy.trainLoggedChip
+                        : 'PLANNED EXERCISES',
                 style: AppTypography.mono.copyWith(
                   color: AppColors.textMute,
                   letterSpacing: 2,
@@ -247,7 +271,9 @@ extension _ExercisePreviewSheet on _TrainScreenState {
                             ),
                           );
                         }).toList()
-                      : day.exercises.isEmpty
+                      : [
+                          ...notDoneLogRows,
+                          ...(day.exercises.isEmpty
                           ? [
                               Padding(
                                 padding: const EdgeInsets.symmetric(
@@ -297,7 +323,8 @@ extension _ExercisePreviewSheet on _TrainScreenState {
                                   ),
                                 ),
                               ],
-                            ],
+                            ]),
+                        ],
                 ),
               ),
             ],

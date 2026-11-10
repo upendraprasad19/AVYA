@@ -158,10 +158,26 @@ the tap) calls after a successful `markCompleted`. The count is +1 only on the
 day's first completion (`WriteResult.newlyCompleted`) and healed upward to the
 completed days on record. The derive-only decision itself is unchanged.
 
+## Amendment — coach workout parity 1b (2026-11-10, diagnose 24e630, OI-490)
+
+The chat workout card marked the day on ANY save, while the all-logged backstop
+required every planned exercise; with 1a counting every first completion, the
+card's rule became a permanent over-count on partial, rest, moved, dropped and
+no-plan days. Every coach door (the backstop, the chat card, the completion tile
+and Train's COMPLETE WORKOUT) now decides through ONE pure rule,
+`decideCoachDay` (`lib/features/train/services/coach_day_completion.dart`), fed
+the stored row. A partial day today offers the tile (copy: "Log more exercises,
+or complete the workout?"); a past partial day stays not done; a future day is
+never marked; rest, moved, dropped and no-plan days never count from the coach
+paths. The tap is `CoachDayCompletion.completeOnTap` (today only). The quoted
+tile copy in the Unit 1 amendment above is history. The derive-only decision is
+unchanged.
+
 ## See also
 
 - `supabase/functions/_shared/tools/registry.ts` (the 20-tool chokepoint)
 - `lib/features/ai_coach/services/tool_dispatcher.dart` (`_maybeCompleteScheduledDay`)
+- `lib/features/train/services/coach_day_completion.dart` (`decideCoachDay`, `completeOnTap`)
 - `lib/core/services/workout_write_service.dart` (`markCompleted`, `_rescanPrFor`, `logExercise`)
 - `lib/features/train/repositories/workout_repository.dart` (`loadAllExercisePRs`)
 - `test/contracts/derive_only_tool_surface_test.dart`

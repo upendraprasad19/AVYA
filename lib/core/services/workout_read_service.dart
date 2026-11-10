@@ -315,6 +315,28 @@ class WorkoutReadService {
     return null;
   }
 
+  static final RegExp _exlogDateKey = RegExp(r'^exlog_(\d{4}-\d{2}-\d{2})_');
+
+  /// Coach workout parity 1b (OI-490): the IST dates that hold at least one
+  /// exercise log, from ONE pass over the box KEYS (no row reads, no
+  /// `toMap()` scan). Every exercise-log writer keys through
+  /// `WorkoutWriteService.exlogKey` = `exlog_<istDate>_<8 hex>` (restore and
+  /// `ExlogKeyMigrator` included; `reconcileExlogIndexes` relies on the same
+  /// shape). Train computes it once per build; [hasExerciseLogsFor] is the
+  /// Complete-workout guard.
+  Set<String> datesWithExerciseLogs() {
+    final out = <String>{};
+    for (final key in HiveService.instance.workoutBox.keys) {
+      final m = _exlogDateKey.firstMatch(key.toString());
+      if (m != null) out.add(m.group(1)!);
+    }
+    return out;
+  }
+
+  /// True when [istDate] (`yyyy-MM-dd`) holds at least one exercise log.
+  bool hasExerciseLogsFor(String istDate) =>
+      datesWithExerciseLogs().contains(istDate);
+
   /// Returns the list of `exlog_*` Hive entries (as
   /// `Map<String, dynamic>`) for [istDate]. Reader-side index lookup;
   /// falls back to a workoutBox scan filtered by the writer-stamped

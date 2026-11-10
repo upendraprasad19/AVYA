@@ -38,6 +38,7 @@ import 'package:icanbefitter/core/services/hive_user_session.dart';
 import 'package:icanbefitter/core/services/sync_service.dart';
 import 'package:icanbefitter/core/services/workout_write_service.dart';
 import 'package:icanbefitter/core/services/write_result.dart';
+import 'package:icanbefitter/features/train/services/coach_day_completion.dart';
 import 'package:icanbefitter/core/utils/ist_date.dart';
 import 'package:icanbefitter/features/ai_coach/models/tool_intent.dart';
 import 'package:icanbefitter/features/ai_coach/providers/ai_coach_provider.dart';
@@ -244,9 +245,8 @@ void main() {
 
       // The chat card's [Complete workout] handler.
       final notifier = makeChatNotifier();
-      final WriteResult res =
-          await notifier.completeWorkoutFromPrompt(istDateStr(date));
-      expect(res.success, isTrue);
+      final res = await notifier.completeWorkoutFromPrompt(istDateStr(date));
+      expect(res, CoachTapResult.completed);
 
       final sched =
           HiveService.instance.workoutBox.get(WorkoutWriteService.scheduleKey(date))
@@ -449,7 +449,7 @@ void main() {
 
       final notifier = makeChatNotifier();
       final res = await notifier.completeWorkoutFromPrompt(dateStr);
-      expect(res.success, isTrue);
+      expect(res, CoachTapResult.completed);
 
       // The EXACT `schedule_<dateStr>` row (IST-keyed) must be the one that
       // flipped — not a neighbouring day. Pre-fix, markCompleted received

@@ -18,6 +18,8 @@ enum WorkoutCardState {
   submitting,
   saved,
   savedDayNotMarked,
+  savedAwaitingComplete,
+  savedNotCounted,
   partial,
   noneSaved,
 }
@@ -32,12 +34,25 @@ WorkoutCardState cardStateFor(WorkoutDraft d) {
       return WorkoutCardState.saved;
     case DraftCardStatus.savedDayNotMarked:
       return WorkoutCardState.savedDayNotMarked;
+    case DraftCardStatus.savedAwaitingComplete:
+      return WorkoutCardState.savedAwaitingComplete;
+    case DraftCardStatus.savedNotCounted:
+      return WorkoutCardState.savedNotCounted;
     case DraftCardStatus.partial:
       return WorkoutCardState.partial;
     case DraftCardStatus.noneSaved:
       return WorkoutCardState.noneSaved;
   }
 }
+
+/// Coach workout parity 1b: the partial-day line. Without a planned-name
+/// match (the coach's names differ from the plan's: 0 of N) it drops the
+/// count rather than claim nothing was saved.
+String awaitingCompleteLine(WorkoutDraft d) => d.dayLoggedCount <= 0
+    ? WardroomCopy.coachWorkoutAwaitingNoCount
+    : WardroomCopy.coachWorkoutAwaitingTemplate
+        .replaceAll('{logged}', '${d.dayLoggedCount}')
+        .replaceAll('{planned}', '${d.dayPlannedCount}');
 
 /// The header TalkBack reads when a held card appears.
 const _readyHeader = 'Workout ready to log';
@@ -118,7 +133,9 @@ class _WorkoutLogConfirmCardState
     if (draft == null) return const SizedBox.shrink();
     final view = cardStateFor(draft);
     final saved = view == WorkoutCardState.saved ||
-        view == WorkoutCardState.savedDayNotMarked;
+        view == WorkoutCardState.savedDayNotMarked ||
+        view == WorkoutCardState.savedAwaitingComplete ||
+        view == WorkoutCardState.savedNotCounted;
     final submitting = view == WorkoutCardState.submitting;
     // OI-361: nothing to write, nothing to confirm (the submit's own guard).
     final canLog = draftHasLoggableSet(draft);
@@ -138,6 +155,13 @@ class _WorkoutLogConfirmCardState
       if (view == WorkoutCardState.savedDayNotMarked ||
           (!saved && draft.dayNotMarked))
         (WardroomCopy.coachWorkoutDayNotMarked, AppColors.warn),
+      // Coach workout parity 1b (OI-490): what the coach-day rule did with a
+      // saved day that is not (yet) a counted workout. A partly-failed card
+      // keeps its fix-and-retry note only (the tile is up for the day).
+      if (view == WorkoutCardState.savedAwaitingComplete)
+        (awaitingCompleteLine(draft), AppColors.textDim),
+      if (view == WorkoutCardState.savedNotCounted)
+        (WardroomCopy.coachWorkoutNotCounted, AppColors.textDim),
       if (!saved && draft.note != null) (draft.note!, AppColors.warn),
       if (!saved && draft.skippedNames.isNotEmpty)
         (formatSkipped(draft.skippedNames), AppColors.textDim),
