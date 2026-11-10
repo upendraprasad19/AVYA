@@ -5,6 +5,7 @@ import 'package:icanbefitter/core/constants/body_measurement_sites.dart';
 import 'package:icanbefitter/core/services/error_telemetry.dart';
 import 'package:icanbefitter/core/services/health_write_service.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
+import 'package:icanbefitter/core/services/hive_user_session.dart';
 import 'package:icanbefitter/core/services/measurement_flags.dart';
 import 'package:icanbefitter/core/services/sync_service.dart';
 import 'package:icanbefitter/core/services/workout_schedule_service.dart';
@@ -15,6 +16,7 @@ import 'package:icanbefitter/features/home/providers/home_provider.dart';
 import 'package:icanbefitter/shared/repositories/food_repository.dart';
 import 'package:icanbefitter/features/profile/providers/body_measurements_provider.dart';
 import 'package:icanbefitter/features/train/providers/workout_surface_invalidation.dart';
+import 'package:icanbefitter/features/train/services/workout_completion_bookkeeping.dart';
 import '../providers/ai_coach_provider.dart';
 
 /// Routes AI-detected log actions to existing Riverpod providers.
@@ -343,6 +345,10 @@ Future<DraftSubmitOutcome> submitWorkoutDraft(WorkoutDraft draft, WidgetRef ref)
   final notifier = container.read(workoutDraftProvider.notifier);
   final now = notifier.beginSubmit(draftId, DraftSubmitDebug.clock());
   if (now == null) return const DraftSubmitOutcome(started: false);
+  // Coach workout parity 1a: the Hive owner, captured before the first await
+  // (the debug gate, then the logExercise loop); the shared completion step
+  // refuses to write if it changed.
+  final owner = HiveUserSession.currentOwnerFullId;
   bool stillCurrent() => container.read(workoutDraftProvider)?.id == draftId;
 
   final saved = <int>[];
@@ -416,6 +422,18 @@ Future<DraftSubmitOutcome> submitWorkoutDraft(WorkoutDraft draft, WidgetRef ref)
         );
         dayMarked = result.success;
         markedNow = result.success;
+        // Coach workout parity 1a (OI-379): the same after-completion step
+        // Active Workout runs (count once per day + heal, streaks, badges,
+        // rank), before the invalidation below so every reader sees it.
+        if (result.success) {
+          await WorkoutCompletionBookkeeping.instance.afterCompletion(
+            workoutDate: now,
+            newlyCompleted: result.newlyCompleted,
+            expectedOwner: owner,
+            mintProgressIfMissing: false,
+            door: CompletionDoor.chatCard,
+          );
+        }
       }
     }
 

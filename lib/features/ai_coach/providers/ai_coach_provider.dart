@@ -8,6 +8,8 @@ import 'package:icanbefitter/core/constants/body_measurement_specs.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:icanbefitter/core/constants/app_constants.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
+import 'package:icanbefitter/core/services/hive_user_session.dart';
+import 'package:icanbefitter/features/train/services/workout_completion_bookkeeping.dart';
 import 'package:icanbefitter/core/services/migrated_key.dart';
 import 'package:icanbefitter/core/services/prediction_service.dart';
 import 'package:icanbefitter/core/services/error_telemetry.dart';
@@ -371,6 +373,9 @@ class ChatHistoryNotifier extends Notifier<List<ChatMessage>> {
   /// WidgetRef). Never throws — a failure returns a failed WriteResult and
   /// leaves the card in place for a retry.
   Future<WriteResult> completeWorkoutFromPrompt(String date) async {
+    // Coach workout parity 1a: the Hive owner, captured before any await; the
+    // shared completion step refuses to write if it changed.
+    final owner = HiveUserSession.currentOwnerFullId;
     try {
       // Unit 1 — `date` is an IST `yyyy-MM-dd` string. `markCompleted` re-applies
       // `istDateStr` (toUtc + 5:30) internally to build its schedule/wlog keys,
@@ -413,6 +418,15 @@ class ChatHistoryNotifier extends Notifier<List<ChatMessage>> {
         completedVia: 'tap',
       );
       if (result.success) {
+        // Coach workout parity 1a (OI-379): the same after-completion step
+        // every door runs (count once per day + heal, streaks, badges, rank).
+        await WorkoutCompletionBookkeeping.instance.afterCompletion(
+          workoutDate: completeDate,
+          newlyCompleted: result.newlyCompleted,
+          expectedOwner: owner,
+          mintProgressIfMissing: false,
+          door: CompletionDoor.coachTap,
+        );
         await resolveCompletionPrompt(date);
       }
       return result;

@@ -145,6 +145,19 @@ stays green). The completion-prompt row is a LOCAL-ONLY coachBox action row
 `ai_coach_interaction`). Client-only; no `ai-proxy` change. Pinned by
 `test/contracts/coach_completion_prompt_test.dart`. See diagnose 280c4d.
 
+## Amendment — coach workout parity 1a (2026-11-10, diagnose 0ebfcb, OI-379)
+
+The Decision's claim that `markCompleted` "feeds streak / deployment / rank" was
+never true: `total_workouts_done`, the daily and weekly streak, the per-week
+streak row, badges and the rank check lived only in Active Workout's
+`completeWorkout`, so every coach completion marked the day and counted nothing.
+They now live in ONE shared step, `WorkoutCompletionBookkeeping.afterCompletion`
+(`lib/features/train/services/workout_completion_bookkeeping.dart`), which every
+completion door (Active Workout, the chat workout card, the all-logged backstop,
+the tap) calls after a successful `markCompleted`. The count is +1 only on the
+day's first completion (`WriteResult.newlyCompleted`) and healed upward to the
+completed days on record. The derive-only decision itself is unchanged.
+
 ## See also
 
 - `supabase/functions/_shared/tools/registry.ts` (the 20-tool chokepoint)

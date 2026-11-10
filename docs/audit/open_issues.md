@@ -6112,17 +6112,6 @@ Debug-only Riverpod assertion `actualPausedCount == expectedPausedCount`, raised
 
 The `train-coach-log-refresh` behavioural test collects exactly this error in a zone and asserts it fires on the offstage tool path: a tripwire that turns red when a Riverpod upgrade fixes it, which is when this OI closes (delete the collector then).
 
-## OI-379 — Coach-logged workouts never add to total_workouts_done or run the rank promotion check
-
-- **Status**: OPEN
-- **Blocked on**: none
-- **Verified**: never
-- **Identified**: 2026-10-21 · filed via mint_oi.sh from branch `observations-a12-web`
-
-`total_workouts_done` (rank and lifetime stats) is incremented by the Active Workout completion path, but a workout logged from the coach chat (`submitWorkoutDraft` → `WorkoutWriteService.logExercise` + `markCompleted`, or the typed `logSet` path) never increments it and never runs the rank promotion check. Invalidating `userStatsProvider` would not help: nothing writes the count. Found by the round-1 exposure review of `docs/plans/train-coach-log-refresh.md` (R1B-6b). Monotonic field: any new writer must use the only-increment guard (`lib/core/services/CLAUDE.md`, "Writer unconditionally overwrites a lifetime field").
-
-To do: decide whether a coach-logged day counts as a completed workout (founder), then route the count and the rank check through the same writer the Active Workout uses.
-
 ## OI-381 — Set counts read '1 sets' in the remaining renderers (prescriptions, workout receipt, preview screen, tool confirm card)
 
 - **Status**: OPEN
@@ -7226,3 +7215,63 @@ Residual of OI-199 and OI-471 after migration 172. Migration 172 makes `cleanup_
 - `lose_fat|3|advanced|bodyweight|30|1` and `general_fitness|3|advanced|bodyweight|30|1`: weeks 1 to 3 hold no Hamstrings set; the day's hip_dominant row is Single Leg Glute Bridge E291 (primary Glutes, target_focus Glutes), so the core-list `target()` filter alone cannot seat it in a Hamstrings slot. The path that leaves the Hamstrings slot empty is NOT established yet. Possibly the same class as OI-485's bodyweight weeks with no hamstring work (intermediate there, advanced here): check OI-485's mechanism first so the two are not fixed twice.
 
 **Done when.** Each mechanism is measured (writer and reader by file:line), fixed, and the audit shows 0 ON plans with a zero-set muscle their live twin lacks; a test pins the four keys in the ON world. This is item 1B-12 of the step-1 plan (`docs/plans/2026-11-08-generator-step1-core-list.md` section 9) and an entry criterion of the 1B-1 flip ("no plan worse than its live twin"). Blast radius `platform` (plan engine), tier L.
+
+## OI-490 — Coach workout parity 1b: chat card stricter completion rule, Train Logged so far + Complete workout button, rest/terminal guards on the card and tap, plan-day name
+
+- **Status**: OPEN
+- **Blocked on**: none
+- **Verified**: never
+- **Identified**: 2026-11-10 · filed via mint_oi.sh from branch `coach-workout-parity`
+
+**Problem.** Slice 1a (diagnose `0ebfcb`) makes every completion door count the workout. The chat workout card still marks the day done as soon as anything from it saves, so with counting on, one exercise logged through the card would earn a whole day's credit, permanently (the count is monotonic). The card and the completion tap also have no rest-day / moved-day / terminal-row guards, and the card names the day "Chat Workout" instead of the plan day.
+
+**Scope (founder decisions 2026-11-10: 2, A, D).** The card marks the day only when every planned exercise is logged; otherwise the "X of Y · [Complete workout]" tile. Train's today row shows "Logged so far" and a Complete workout button (phone and web). Rest/terminal guards on the card and the tap. The plan-day name on a planned day. The tile's address uses the real rank (`completion_prompt_card.dart:88` hard-codes "Recruit", see OI-375). New card copy needs founder approval (the 2026-10-21 card copy changes).
+
+**Merge-order constraint.** 1a and 1b merge in ONE PR (plan `docs/plans/coach-workout-parity-1a.md` §4, D4.6); the branch `coach-workout-parity` is not pushed until the 1b commit exists. Own plan, ×2 review, recorded in `docs/plan-reviews/coach-workout-parity.md`.
+
+## OI-491 — Coach workout parity 1c: Active Workout opens with coach-logged exercises shown as done
+
+- **Status**: OPEN
+- **Blocked on**: none
+- **Verified**: never
+- **Identified**: 2026-11-10 · filed via mint_oi.sh from branch `coach-workout-parity`
+
+**Problem.** Active Workout opens a day as if nothing were logged, even when the coach already logged some of its exercises, so the user can log the same exercise twice.
+
+**Scope (founder decision B, 2026-11-10).** Active Workout opens with coach-logged exercises shown as done, with no double entry. Own plan, reviews and PR after 1a+1b (OI-490).
+
+## OI-492 — Coach workout parity 2 (server): I'm done re-shows the X of Y tile, evening partial-day reminder, rank cron counts distinct completed days
+
+- **Status**: OPEN
+- **Blocked on**: none
+- **Verified**: never
+- **Identified**: 2026-11-10 · filed via mint_oi.sh from branch `coach-workout-parity`
+
+**Scope (founder decisions C, E, 3; 2026-11-10).**
+- Saying "I'm done" to the coach re-shows the "X of Y · [Complete workout]" tile; voice alone never completes.
+- The evening reminder on a partial day says "1 exercise left, finish and tap Complete", counted from `user_progress.plan_json` + `workout_log_exercises`, with a fallback line when it cannot count.
+- The rank cron (`evaluate-rank-promotions`) counts distinct completed DATES, as the client now does (`WorkoutReadService.completedWorkoutDayCount`, diagnose `0ebfcb`), so two sessions on one day count once on the server too.
+
+Each Edge Function deploy needs its own founder go (§4.3).
+
+## OI-493 — Nutrition logging parity: coach-logged and screen-logged meals differ in 20 places (survey 2026-11-10)
+
+- **Status**: OPEN
+- **Blocked on**: none
+- **Verified**: never
+- **Identified**: 2026-11-10 · filed via mint_oi.sh from branch `coach-workout-parity`
+
+**Problem.** The 2026-11-10 survey for coach workout parity found 20 differences between a meal logged from the coach and one logged from the Nutrition screen (what is stored, counted and shown). Founder decision 1 (2026-11-10): the same stored and counted result whichever way you log; only the entry UI differs. Decision 4: nutrition parity is the next unit after workouts.
+
+**To do.** Re-run the survey against the current code, then plan, review and fix every difference in one unit.
+
+## OI-494 — Food search log passes istNow() into logMeal, which applies istDateStr again (IST double shift, nutrition_provider.dart:1056)
+
+- **Status**: OPEN
+- **Blocked on**: none
+- **Verified**: never
+- **Identified**: 2026-11-10 · filed via mint_oi.sh from branch `coach-workout-parity`
+
+**Problem.** The food-search log (`lib/features/nutrition/providers/nutrition_provider.dart:1056`) passes `istNow()` as `date` into `NutritionWriteService.logMeal`, which applies `istDateStr` (UTC + 5:30) again: an already-shifted instant is shifted twice, so a meal logged late in the IST evening can land on the next day's key (the Test #11.1 double-shift trap). Found during the coach workout parity survey, 2026-11-10.
+
+**To do.** Pass the wall-clock instant (`nowWall()` / `DateTime.now()`) as every other `logMeal` caller does; a behavioural test with a late-evening clock that fails before the fix. Check the other `istNow()` arguments passed into WriteServices in the same edit.

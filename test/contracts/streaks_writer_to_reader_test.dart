@@ -49,11 +49,20 @@ void main() {
           reason: 'train_provider must define completeWorkout (streak upsert writer)');
     });
 
-    test('writer completeWorkout references streaks key', () {
+    test('writer: the shared completion step writes the streaks row', () {
+      // Coach workout parity 1a (OI-379): the weekly `streaks` row moved from
+      // completeWorkout into the ONE shared completion step. The old check
+      // (`streaks` anywhere in train_provider) would have passed vacuously.
       expect(
-          trainProvSrc.contains("'streaks'") || trainProvSrc.contains('streaks'),
+          trainProvSrc
+              .contains('WorkoutCompletionBookkeeping.instance.afterCompletion('),
           isTrue,
-          reason: 'completeWorkout must update the streaks key in healthBox');
+          reason: 'completeWorkout must call the shared completion step');
+      final step = File(
+              'lib/features/train/services/workout_completion_bookkeeping.dart')
+          .readAsStringSync();
+      expect(step.contains("await healthBox.put('streaks', existing);"), isTrue,
+          reason: 'the shared step must upsert the streaks row in healthBox');
     });
 
     test('the streak CQRS split pair exists, and the merged name does not', () {

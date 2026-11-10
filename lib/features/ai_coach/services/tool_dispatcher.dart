@@ -10,6 +10,7 @@ import '../../../core/services/day_swap/day_swap_copy.dart';
 import '../../../core/services/day_swap/day_swap_result.dart';
 import '../../../core/services/error_telemetry.dart';
 import '../../../core/services/hive_service.dart';
+import '../../../core/services/hive_user_session.dart';
 import '../../../core/utils/ist_date.dart';
 import '../../../core/services/nutrition_write_service.dart';
 import '../../../core/services/nutrition_write_source.dart';
@@ -37,6 +38,7 @@ import '../../train/providers/train_provider.dart'
 import '../../train/providers/day_swap_provider.dart'
     show daySwapWeekProvider, daySwapAllowanceProvider, inProgressDateOf;
 import '../../train/providers/workout_surface_invalidation.dart';
+import '../../train/services/workout_completion_bookkeeping.dart';
 import '../../train/repositories/workout_repository.dart';
 import '../providers/ai_coach_provider.dart' show chatHistoryProvider;
 import '../models/tool_intent.dart';
@@ -326,6 +328,10 @@ class ToolDispatcher {
   }
 
   Future<ToolExecutionResult> _executeLogSet(ToolIntent intent) async {
+    // Coach workout parity 1a: the Hive owner, captured before the first await
+    // (logExercise below); the shared completion step refuses to write if it
+    // changed.
+    final owner = HiveUserSession.currentOwnerFullId;
     final exerciseId = intent.payload['exerciseId'] as String?;
     final weightKg = (intent.payload['weightKg'] as num?)?.toDouble();
     final reps = (intent.payload['reps'] as num?)?.toInt();
@@ -390,7 +396,7 @@ class ToolDispatcher {
     // If this date has a scheduled workout that isn't already complete, mark it
     // done via the canonical writer (same one the UI finish button uses).
     // `date` (UTC midnight) + `schedDateStr` (the IST key) are aligned above.
-    await _maybeCompleteScheduledDay(date, schedDateStr);
+    await _maybeCompleteScheduledDay(date, schedDateStr, expectedOwner: owner);
 
     return ToolExecutionResult.success(
         data: {'log_id': result.logKey, 'exercise_name': name});
@@ -424,7 +430,8 @@ class ToolDispatcher {
   /// or is a REST day. Never throws into the dispatch flow. The KEPT method +
   /// `markCompleted` call + rest-guard keep `derive_only_tool_surface_test`
   /// green.
-  Future<void> _maybeCompleteScheduledDay(DateTime date, String dateStr) async {
+  Future<void> _maybeCompleteScheduledDay(DateTime date, String dateStr,
+      {required String? expectedOwner}) async {
     try {
       final raw = HiveService.instance.workoutBox.get('schedule_$dateStr');
       if (raw is! Map || raw['status'] == 'completed') return;
@@ -460,12 +467,23 @@ class ToolDispatcher {
       final workoutName = (raw['workout_name'] as String?) ?? 'Workout';
       if (allLogged) {
         // Backstop: a full coach-logged workout still auto-completes.
-        await WorkoutWriteService.instance.markCompleted(
+        final mark = await WorkoutWriteService.instance.markCompleted(
           date: date,
           workoutName: workoutName,
           durationSec: 0,
           completedVia: 'auto',
         );
+        // Coach workout parity 1a (OI-379): the same after-completion step
+        // every door runs (count once per day + heal, streaks, badges, rank).
+        if (mark.success) {
+          await WorkoutCompletionBookkeeping.instance.afterCompletion(
+            workoutDate: date,
+            newlyCompleted: mark.newlyCompleted,
+            expectedOwner: expectedOwner,
+            mintProgressIfMissing: false,
+            door: CompletionDoor.coachAuto,
+          );
+        }
         // The day is done — resolve any earlier partial-state prompt card so
         // it stops rendering (a coach logSet that completed the last exercise
         // supersedes the "log more?" ask written by the previous partial log).
@@ -559,9 +577,11 @@ class ToolDispatcher {
   /// / Supabase sync. [date] MUST be the same DateTime passed to `logExercise`
   /// so the `exlogKey`s align. Behavioral proof of the founder's bug fix.
   @visibleForTesting
-  Future<void> maybeCompleteScheduledDayForTest(
-          DateTime date, String dateStr) =>
-      _maybeCompleteScheduledDay(date, dateStr);
+  Future<void> maybeCompleteScheduledDayForTest(DateTime date, String dateStr,
+          {String? expectedOwner, bool ownerGiven = false}) =>
+      _maybeCompleteScheduledDay(date, dateStr,
+          expectedOwner:
+              ownerGiven ? expectedOwner : HiveUserSession.currentOwnerFullId);
 
   Future<ToolExecutionResult> _executeCreateCustomExercise(
       ToolIntent intent) async {

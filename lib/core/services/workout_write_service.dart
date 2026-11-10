@@ -611,8 +611,17 @@ class WorkoutWriteService {
       // contract; the per-date lock + caller gates already make double-completion
       // a benign rare race that simply re-stamps the same 'completed' state.
 
-      // 1. Update schedule entry status='completed' (preserve other fields)
+      // Coach workout parity 1a (OI-379): decide, under this lock and BEFORE
+      // any write, whether this call is the day's FIRST completion. Two doors
+      // completing one day serialise here, so exactly one sees true. A day
+      // whose wlog_ survived a reset to planned/skipped is not first again:
+      // the completed-day heal already counts its wlog (plan rev 4, R3-F4).
       final sched = box.get(sKey);
+      final newlyCompleted =
+          (sched is! Map || sched['status'] != 'completed') &&
+              box.get(wKey) == null;
+
+      // 1. Update schedule entry status='completed' (preserve other fields)
       if (sched is Map) {
         final m = Map<String, dynamic>.from(sched);
         m['status'] = 'completed';
@@ -676,7 +685,7 @@ class WorkoutWriteService {
         }
       }
 
-      return WriteResult.ok(wKey);
+      return WriteResult.ok(wKey, newlyCompleted: newlyCompleted);
     } catch (e, st) {
       // audit-2026-05-11 H-42 — telemetry pair.
       debugPrint('[WorkoutWriteService.markCompleted] $e\n$st');

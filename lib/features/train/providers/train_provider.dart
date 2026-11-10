@@ -4,15 +4,13 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:icanbefitter/core/services/error_telemetry.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
+import 'package:icanbefitter/core/services/hive_user_session.dart';
 import 'package:icanbefitter/core/services/migrated_key.dart';
 import 'package:icanbefitter/core/utils/injury_vocab.dart';
 import 'package:icanbefitter/core/theme/colors.dart';
 import 'package:icanbefitter/core/services/seed_service.dart';
-import 'package:icanbefitter/core/services/badge_service.dart';
-import 'package:icanbefitter/core/services/rank_service.dart';
 import 'package:icanbefitter/core/services/workout_read_service.dart';
 import 'package:icanbefitter/core/services/sync_flags.dart';
-import 'package:icanbefitter/core/services/sync_service.dart';
 import 'package:icanbefitter/core/services/workout_write_service.dart';
 import 'package:icanbefitter/core/services/write_result.dart';
 import 'package:icanbefitter/shared/repositories/user_repository.dart';
@@ -32,6 +30,7 @@ import 'package:icanbefitter/core/services/health_read_service.dart';
 import 'package:icanbefitter/shared/repositories/plan_engine/plan_engine_flags.dart';
 import 'package:icanbefitter/shared/repositories/plan_engine/session_estimate.dart';
 import '../repositories/workout_repository.dart';
+import '../services/workout_completion_bookkeeping.dart';
 import '../services/superset_persist_logic.dart';
 import '../services/log_exercise_logic.dart';
 import 'package:icanbefitter/features/auth/providers/auth_invalidation_provider.dart';
@@ -1464,6 +1463,12 @@ class ActiveWorkoutNotifier extends Notifier<ActiveWorkoutData> {
   bool _completing = false;
   bool get isCompleting => _completing;
 
+  /// Test seam (coach workout parity 1a): awaited after the logExercise loop,
+  /// right before the day is marked, so a test can switch account there and
+  /// prove the owner was captured at the start of the save. Null in production.
+  @visibleForTesting
+  static Completer<void>? debugBeforeMarkGate;
+
   @override
   ActiveWorkoutData build() {
     ref.watch(authUserIdTokenProvider); // c4055a — rebuild on auth change
@@ -2048,7 +2053,10 @@ class ActiveWorkoutNotifier extends Notifier<ActiveWorkoutData> {
 
   /// The save half of [completeWorkout], run once `_completing` is set.
   Future<void> _persistCompletion() async {
-    final repo = WorkoutRepository.instance;
+    // Coach workout parity 1a: the Hive owner, captured before any await (the
+    // logExercise loop below awaits); the shared step refuses to write if it
+    // changed.
+    final owner = HiveUserSession.currentOwnerFullId;
     final hive = HiveService.instance;
     // `nowWall()` (not DateTime.now()) so the dev/test clock seam reaches the
     // session date below. Byte-identical to DateTime.now() in release
@@ -2178,9 +2186,6 @@ class ActiveWorkoutNotifier extends Notifier<ActiveWorkoutData> {
       now: now,
     );
 
-    // Compute date key once — used by streak math below.
-    final dateStr = formatDateKey(workoutDate);
-
     // Plan A Task A-13: route per-exercise saves through WorkoutWriteService.
     // The service handles exlog_<date>_<hash> Hive write, exercise_log_index_<date>
     // append, chronological is_pr rescan, and fire-and-forget sync. The
@@ -2252,120 +2257,35 @@ class ActiveWorkoutNotifier extends Notifier<ActiveWorkoutData> {
       }
     }
 
+    final markGate = debugBeforeMarkGate;
+    if (markGate != null) await markGate.future;
+
     // Plan A Task A-13: schedule completion + wlog_<date> via service.
     // Replaces repo.saveWorkoutLog + repo.markWorkoutCompleted.
-    await WorkoutWriteService.instance.markCompleted(
+    final mark = await WorkoutWriteService.instance.markCompleted(
       date: workoutDate,
       workoutName: state.workoutDay?.name ?? 'Workout',
       durationSec: state.elapsedSeconds,
     );
 
-    // Update user progress + streak.
-    final progress = UserRepository.instance.getProgress() ?? {};
-    final totalDone = ((progress['total_workouts_done'] as int?) ?? 0) + 1;
-
-    // ── Daily streak (schedule-aware — skips rest days) ──
-    // Calculated on-the-fly by scanning schedule backwards.
-    // Handles rest days, schedule changes, and template swaps correctly.
-    //
-    // C-14 (audit-2026-05-11) — completeWorkout is the canonical mutation
-    // surface for streak state. D2 (f9d2e7): route through the SINGLE gated
-    // reckon site instead of calling consume directly. For a real
-    // completeWorkout (post-restore, has schedule) reckon persists missed-day
-    // freeze consumption exactly as before; the gates only suppress the
-    // pre-restore / empty-box edge (where consuming would be unsafe), still
-    // returning an accurate read-only count to store.
-    final streakDays = repo.reckonStreakDecayAndPersist();
-
-    // ── Weekly streak (kept for badge logic — not shown in UI) ───
-    //
-    // Hold state comes from holdStatusProvider — the SINGLE flag-OFF guarantee
-    // point (`hold_display_read_path`), so nothing here reads PlanEngineFlags or
-    // Hive directly. Only `isHolding`/`todayHoldOrdinal` are taken from it:
-    // its session COUNTS are stale at this point, because this method does not
-    // invalidate currentPlanProvider until the end and the awaited
-    // markCompleted above invalidates nothing (it was handed no ref). A cached
-    // HoldStatusData therefore predates the completion just written and would
-    // under-count by exactly this session — fatal at the 80% threshold.
-    // `isHolding`/`todayHoldOrdinal` cannot go stale that way (a completion
-    // never changes hold membership, and markCompleted preserves is_hold /
-    // hold_ordinal — it merges three keys, it does not replace the row).
-    // NOTE: no test can demonstrate that staleness — a fresh ProviderContainer
-    // computes the provider on first read — so do NOT "simplify" this back to
-    // holdStatus.sessionsCompleted on the strength of a green suite.
-    final planStart = WorkoutScheduleService.instance.getPlanStartDate();
-    final holdStatus = ref.read(holdStatusProvider);
-    final streakWeek = resolveStreakWeekState(
-      readSvc: ref.read(workoutScheduleReadServiceProvider),
-      planStart: planStart,
-      holdOrdinal: holdStatus.isHolding ? holdStatus.todayHoldOrdinal : null,
-      workoutDate: workoutDate,
-    );
-    final planned = streakWeek.planned;
-    final completedCount = streakWeek.completedCount;
-    final weekly = weeklyStreakAfterCompletion(
-      streakWeeks: (progress['current_streak_weeks'] as int?) ?? 0,
-      lastCountedWeekKey:
-          lastCountedWeekKeyFrom(progress['last_counted_week_key']),
-      weekKey: streakWeek.weekKey,
-      weekIsCurrent: streakWeek.weekIsCurrent,
-      planned: planned,
-      completedCount: completedCount,
-    );
-
-    await UserRepository.instance.updateProgress({
-      'total_workouts_done': totalDone,
-      'current_streak_days': streakDays,
-      'last_workout_date': dateStr,
-      'current_streak_weeks': weekly.weeks,
-      // Slice D: the calendar week LAST COUNTED (calendarWeekKey), local-only; it
-      // moves only when the counter does. The old last_streak_week (a plan week
-      // id, stamped on every completion) is no longer written or read.
-      'last_counted_week_key': weekly.marker,
-    });
-
-    // ── Create/update per-week streak row for Supabase streaks table ──
-    final weekStartDate = streakWeek.weekStartDate;
-    if (weekStartDate != null && planned > 0) {
-      final weekStartStr = formatDateKey(weekStartDate);
-      final streakId = 'streak_$weekStartStr';
-
-      final healthBox = HiveService.instance.healthBox;
-      final existing = (healthBox.get('streaks') as List?)
-              ?.map((e) => Map<String, dynamic>.from(e as Map))
-              .toList() ??
-          <Map<String, dynamic>>[];
-      final idx = existing.indexWhere((s) => s['local_id'] == streakId);
-
-      final row = <String, dynamic>{
-        'local_id': streakId,
-        'week_start': weekStartStr,
-        'workouts_planned': planned,
-        'workouts_completed': completedCount,
-        'is_streak_maintained': completedCount >= (planned * 0.8).ceil(),
-      };
-
-      if (idx >= 0) {
-        existing[idx] = row;
-      } else {
-        existing.add(row);
-      }
-      await healthBox.put('streaks', existing);
+    // Coach workout parity 1a (OI-379): the after-completion bookkeeping
+    // (lifetime count once per day + heal, daily/weekly streak, streak row,
+    // badges, rank) is the ONE shared step every completion door calls. A
+    // failed markCompleted recorded nothing, so nothing is counted.
+    if (mark.success) {
+      await WorkoutCompletionBookkeeping.instance.afterCompletion(
+        workoutDate: workoutDate,
+        newlyCompleted: mark.newlyCompleted,
+        expectedOwner: owner,
+        mintProgressIfMissing: true,
+        door: CompletionDoor.activeWorkout,
+      );
+    } else {
+      unawaited(ErrorTelemetry.logEvent('active_workout_mark_completed_failed',
+          message: mark.errorMessage ?? ''));
     }
 
     state = state.copyWith(isComplete: true, isSaved: true, detectedPRs: prDescriptions);
-
-    // Check badge unlocks after workout completion.
-    BadgeService.instance.checkAll();
-
-    // Fire-and-forget progress sync. WorkoutWriteService already fired
-    // syncWorkoutData + pushSnapshot during logExercise/markCompleted —
-    // we only need progress (separate row) + rank evaluation here.
-    unawaited(SyncService.instance.syncProgressNow());
-    // APK Test #3 / Obs 1: re-evaluate rank on every workout. Idempotent —
-    // upsert with onConflict on (user_id, rank_code). Catches in-session
-    // promotions (e.g. SD1 firing on workout 7) the moment they qualify.
-    unawaited(RankService.instance.evaluateAndPromote());
 
     // Refresh all affected providers. Riverpod batches invalidations within
     // the same synchronous frame — these won't cause separate rebuilds.

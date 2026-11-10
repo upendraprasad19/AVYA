@@ -101,6 +101,10 @@ void main() {
         // defers until the restore for THIS account settled (a fifth deciding
         // reader, on purpose), so the credit never lands before the settle.
         'lib/core/services/streak_progress_service.dart',
+        // Coach workout parity 1a (0ebfcb, 2026-11-10): the shared
+        // after-completion step writes the streak fields only behind the same
+        // gate as the reckon (a sixth deciding reader, on purpose).
+        'lib/features/train/services/workout_completion_bookkeeping.dart',
       },
           reason: 'a new file deciding on the marker must be added here on '
               'purpose (the dev simulator only MENTIONS it, in a comment)');

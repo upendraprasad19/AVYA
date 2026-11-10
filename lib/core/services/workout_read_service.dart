@@ -41,6 +41,42 @@ class WorkoutReadService {
   WorkoutReadService._();
   static final WorkoutReadService instance = WorkoutReadService._();
 
+  static final RegExp _istDatePrefix = RegExp(r'^\d{4}-\d{2}-\d{2}');
+
+  /// Coach workout parity 1a (OI-379): the number of DISTINCT IST days that
+  /// hold a completed-workout row (`wlog_*` with `type == 'workout_log'`).
+  ///
+  /// The ONE count behind the lifetime-workouts heal
+  /// (`WorkoutCompletionBookkeeping`) and `BadgeService.checkAll`. Distinct
+  /// DAYS, not rows: a legacy `wlog_<epoch-ms>` sibling of `wlog_<date>`
+  /// (the dead `saveWorkoutLog`, an old restore, both stamped by the type
+  /// backfill) must never count one day twice — restore merges the lifetime
+  /// count max-wins, so an over-count would be permanent.
+  ///
+  /// A row's day is its `date` String (prefix `yyyy-MM-dd`, precedent
+  /// `WorkoutRepository` earliest-activity walk), else the key suffix when it
+  /// has that shape; a row with neither is skipped. Every `workout_log` row
+  /// lives under a `wlog_` key (all writers checked, plan rev 2/3), so the
+  /// scan reads only those keys.
+  int completedWorkoutDayCount() {
+    final box = HiveService.instance.workoutBox;
+    final days = <String>{};
+    for (final key in box.keys) {
+      final k = key.toString();
+      if (!k.startsWith('wlog_')) continue;
+      final row = box.get(key);
+      if (row is! Map || row['type'] != 'workout_log') continue;
+      final d = row['date'];
+      if (d is String && _istDatePrefix.hasMatch(d)) {
+        days.add(d.substring(0, 10));
+        continue;
+      }
+      final suffix = k.substring(5);
+      if (_istDatePrefix.hasMatch(suffix)) days.add(suffix.substring(0, 10));
+    }
+    return days.length;
+  }
+
   // ─────────────────────────────────────────────────────────────
   //  Per-set semantic primitives
   //

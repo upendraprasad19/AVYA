@@ -114,7 +114,9 @@ const knownViolations = <String>{
   'lib/features/ai_coach/services/conversational_log_handler.dart:ConversationalLogHandler:healthBox.put',
   // E.6 — WorkoutScheduleService refactor
   'lib/features/train/providers/train_provider.dart:ActiveWorkoutNotifier:workoutBox.put',
-  'lib/features/train/providers/train_provider.dart:ActiveWorkoutNotifier:healthBox.put',
+  // Coach workout parity 1a (OI-379): the weekly `streaks` row moved out of
+  // ActiveWorkoutNotifier into the shared completion step, unchanged.
+  'lib/features/train/services/workout_completion_bookkeeping.dart:WorkoutCompletionBookkeeping:healthBox.put',
   'lib/features/train/providers/train_provider.dart:TemplatesNotifier:workoutBox.put',
   // OI-252 (2026-09-27): TemplatesNotifier.deleteTemplate's own
   // workoutBox.delete was REMOVED — it now routes through

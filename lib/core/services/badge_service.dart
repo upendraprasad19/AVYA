@@ -1,5 +1,6 @@
 import 'package:hive/hive.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
+import 'package:icanbefitter/core/services/workout_read_service.dart';
 import 'package:icanbefitter/shared/models/achievement_badge.dart';
 
 /// Tracks and unlocks achievement badges stored in Hive configBox.
@@ -92,13 +93,15 @@ class BadgeService {
   List<BadgeId> checkAll() {
     final hive = HiveService.instance;
 
-    int totalWorkouts = 0;
+    // Coach workout parity 1a: completed workout DAYS through the one shared
+    // count (distinct dates; a legacy duplicate wlog never doubles a day).
+    final int totalWorkouts =
+        WorkoutReadService.instance.completedWorkoutDayCount();
     int totalPrs = 0;
     bool hasCustomExercise = false;
     for (final raw in hive.workoutBox.values) {
       if (raw is! Map) continue;
       final m = Map<String, dynamic>.from(raw);
-      if (m['type'] == 'workout_log') totalWorkouts++;
       if (m['type'] == 'exercise_log' && m['is_pr'] == true) totalPrs++;
     }
 
