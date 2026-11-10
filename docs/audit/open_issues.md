@@ -7060,6 +7060,8 @@ Found by the M2b Part B Chrome check (360 dp, real fonts, the real card and exer
 
 **Live world, Library Batch S1b-2 (measured 2026-11-09).** Eight more live plans now have 0 Quads sets in week 2, all `build_muscle|5|beginner|basic_gym|{30,45,60,90}|{1,2}`. Once E045 Romanian Deadlift is open to beginners, it takes variant A's hinge in weeks 1 and 3. Variant B then no longer excludes Bodyweight Good Morning and picks it over Trap Bar Deadlift, the week's only Quads credit. The cause is the same as above (an even week with no knee-dominant slot); S1b-2 only changes which plans show it (plan `docs/plans/2026-11-09-library-batch-s1b2-loaded-versions.md`, Results).
 
+**Unit 1B-Q, level L1 landed (2026-11-10, branch `generator-step1-1b`, diagnose `cf970c`, founder d13; the three levels: L1 = a slot-only change to the B leg day, L2 = the credit rule, L3 = a quad hit on another day; step 1 takes L1, step 2 the rest).** The B leg day of the 3-day (build_muscle and strength), 4-day and 5-day splits carries a priority-1 Quads compound second, after the Hamstrings hinge (third left 8 advanced bodyweight / home 30-minute ON plans without quads: the Glutes session cap), and its Glutes isolation slot sits behind the Calves slot (4-day: and Core), so Calves and Core keep their week-2 sets. Kill-switch `disable_variant_b_quad` (default ON) restores the old lists; it and the old lists are deleted by the L2 change named at the end of this paragraph, which re-records these splits. Measured over the 2,304-plan audit against main: ON plans worse than their live twin 186 -> 4 (Quads 184 -> 0; the 4 left are OI-489), zero-set plans live 92 -> 28 and ON 278 -> 32, and no muscle of any kind gains a zero-set week in either world. Costs (none reaches 0): fewer week-2 sets for Quads in 52 live build_muscle 4/5-day full_gym plans (a Wall Sit seat became a loaded compound) and 14 ON plans, Glutes in 94 live / 116 ON plans (the isolation row drops at short minutes; both hinge rows still credit Glutes), Hamstrings in 74 live / 73 ON plans; plan section 2 has the full table. Still open here, for step 2: one leg day cannot reach the weekly floor, because the Glutes session cap refuses quad rows that credit Glutes (L2, the credit rule), and a quad hit on another day (L3). Status stays OPEN.
+
 ## OI-476 — telegram-bot/ is tracked and dormant: bot.py receive_email links a Telegram chat to any account by typed email with no proof of ownership, and morning-alert still reads telegram_connections
 
 - **Status**: OPEN
@@ -7211,3 +7213,16 @@ Residual of OI-199 and OI-471 after migration 172. Migration 172 makes `cleanup_
 **Founder decision 2026-11-08.** Keep the 5 / 6 / 8 exercise limit (an advanced user adds their own exercises beyond it). Offer 90 minutes to advanced users only; beginners and intermediates see 30 / 45 / 60.
 
 **Done when.** Edit Profile shows 90 only to an advanced user, a stored 90 for a beginner or intermediate is treated as 60, and a test pins both. Planned in step 3 of the generator overhaul. Blast radius: `feature` (profile UI) plus the session-minutes reader, tier M.
+
+## OI-489 — Core-list pool ON: four advanced bodyweight 30-min 3-day plans hold a zero-set muscle their live twin does not
+
+- **Status**: OPEN
+- **Blocked on**: none
+- **Verified**: never
+- **Identified**: 2026-11-10 · filed via mint_oi.sh from branch `generator-step1-1b`
+
+**What happens.** With the core-list pool ON (`enable_core_list_pool`, ship-dark, default OFF, so no tester sees it), the 2,304-plan audit (`test/plan_generator/plan_audit/plan_audit_dump_test.dart`) shows four plans with a muscle at 0 sets that their live (OFF) twin does not have. All four were present on main cc8286ad before Unit 1B-Q; 1B-Q removed the Quads half of the first two.
+- `build_muscle|3|advanced|bodyweight|30|2` and `|3`: week 2 (variant B) has no Chest set; the B Push day seats no chest row ON.
+- `lose_fat|3|advanced|bodyweight|30|1` and `general_fitness|3|advanced|bodyweight|30|1`: weeks 1 to 3 hold no Hamstrings set; the day's hip_dominant row is Single Leg Glute Bridge E291 (primary Glutes, target_focus Glutes), so the core-list `target()` filter alone cannot seat it in a Hamstrings slot. The path that leaves the Hamstrings slot empty is NOT established yet. Possibly the same class as OI-485's bodyweight weeks with no hamstring work (intermediate there, advanced here): check OI-485's mechanism first so the two are not fixed twice.
+
+**Done when.** Each mechanism is measured (writer and reader by file:line), fixed, and the audit shows 0 ON plans with a zero-set muscle their live twin lacks; a test pins the four keys in the ON world. This is item 1B-12 of the step-1 plan (`docs/plans/2026-11-08-generator-step1-core-list.md` section 9) and an entry criterion of the 1B-1 flip ("no plan worse than its live twin"). Blast radius `platform` (plan engine), tier L.

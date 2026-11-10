@@ -341,7 +341,8 @@ Dumbbell Calf Raise 6 / Machine Seated Leg Curl 2. Multi-row day changes add Hip
 **B repeats A.** R3 (a) reduces 17 of the 31 like-for-like cells to one row (`core_list_like_for_like_data_test.dart`:
 the home_dumbbells / basic_gym beginner calves E258, home_dumbbells advanced calves G0409 and Glutes G0980, the gym
 Glutes hip_isolation E109, basic_gym Hamstrings knee_dominant G0339, full_gym beginner Hamstrings G0599, the full_gym
-Quads isolation E043); variant B and phase 2 repeat that row there. Over the audit, week-1 vs week-2 same-day
+Quads isolation E043); variant B and phase 2 repeat that row there (since Unit 1B-Q the 4 and 5-day build_muscle B
+leg day has no Quads isolation slot, so E043 is no longer repeated there). Over the audit, week-1 vs week-2 same-day
 repeats went from 52,953 to 53,196 (+243, 0.5 percent). Reported, not hidden; the 1B variants (OI-148) are the remedy.
 
 **Gate report** (`test/plan_generator/core_list_pool_report.md`, 998 personas + 576-run sweep), against the committed report of
@@ -391,6 +392,9 @@ C2b replacement rows); the schema allow-list (`exercise_library_schema_contract_
 1B-10 Core-vs-`suitable_for` disagreements the gate reports: E010 Pike Push Up x1,718, E045 Romanian Deadlift x992,
 E255 Towel Row x34, E134 Copenhagen Plank x16.
 1B-11 Seed v21 and the cloud re-seed migration, with its own live-apply go.
+1B-12 OI-489 (added 2026-11-10 by Unit 1B-Q): the four ON plans with a zero-set muscle their live twin lacks
+(`build_muscle|3|advanced|bodyweight|30|2` and `|3` no Chest in week 2; `lose_fat` and `general_fitness`
+`|3|advanced|bodyweight|30|1` no Hamstrings in weeks 1 to 3). An entry criterion of the 1B-1 flip.
 
 ## 10. Review log
 

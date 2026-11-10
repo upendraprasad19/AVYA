@@ -925,7 +925,7 @@ flip_on_blockers:
         deliberately DROPPED its "WK 4 OF 4" because a hold week has no honest
         week number.
         Nobody is affected today: enable_hold_weeks is `== true`-gated and
-        DEFAULT OFF (plan_engine_flags.dart:65). This is a flip-on blocker, not
+        DEFAULT OFF (plan_engine_flags.dart:93). This is a flip-on blocker, not
         a live bug.
       fix: >
         Route phaseArcProvider's currentWeek through weekIdentity() /
