@@ -624,11 +624,9 @@ class WorkoutWriteService {
       // A tap or the typed backstop passes 0 s; racing a door that stored a
       // real duration (the chat card, Active Workout), it must not wipe it.
       // A real duration still replaces the stored one (the update contract).
-      final prevDuration = prevWlog is Map ? prevWlog['duration_seconds'] : null;
-      final keptDurationSec =
-          durationSec == 0 && prevDuration is num && prevDuration > 0
-              ? prevDuration.toInt()
-              : durationSec;
+      final keptDurationSec = durationSec == 0
+          ? (WorkoutReadService.workoutLogDurationSeconds(prevWlog) ?? 0)
+          : durationSec;
 
       // 1. Update schedule entry status='completed' (preserve other fields)
       if (sched is Map) {

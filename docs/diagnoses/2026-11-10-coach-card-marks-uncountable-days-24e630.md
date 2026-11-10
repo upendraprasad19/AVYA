@@ -273,3 +273,12 @@ T = `train_logged_so_far_behavioral_test.dart`.
   `runAsync`), so fake pumps never hid the first snackbar and the test failed with or without the guard. The test now
   removes the first snackbar by hand and asserts that no queued second one appears; that is green on the code and red
   under M11 (the failure is the second "Workout marked complete." line).
+
+**CI catch on PR #240 (shard 1/4).** The first version of the duration fix read `prevWlog['duration_seconds']` in
+`markCompleted`. `test/contracts/no_top_level_duration_seconds_reads_test.dart` allows a top-level
+`duration_seconds` read only in `WorkoutReadService` (OI-50), and its regex matches `log[` inside `prevWlog[`. The
+row is a `wlog_` row, where that field is the only shape. But renaming the variable would only have hidden the read
+from the gate, so the read now goes through a named reader, `WorkoutReadService.workoutLogDurationSeconds`. The batch's
+targeted runs missed the gate because it named none of the touched symbols. Afterwards every test that reads either
+service's source (305 files, 3,198 tests) was run. M09 was re-run on the new code: red (the duration test), with the
+file restored byte-identical.

@@ -276,6 +276,18 @@ class WorkoutReadService {
     return null;
   }
 
+  /// The stored duration of a `wlog_<date>` WORKOUT-LOG row (not an
+  /// `exlog_*` row): a top-level `duration_seconds` is that row's only
+  /// shape (`WorkoutWriteService.markCompleted` writes it). Null when the
+  /// row is absent, not a map, or holds no positive duration. Used by
+  /// `markCompleted` to keep a stored duration when a 0 s mark follows
+  /// (coach workout parity B-pass, 2026-11-10).
+  static int? workoutLogDurationSeconds(Object? wlog) {
+    if (wlog is! Map) return null;
+    final v = (wlog['duration_seconds'] as num?)?.toInt();
+    return (v != null && v > 0) ? v : null;
+  }
+
   /// TOTAL distance in km for an `exlog_*` row (OI-389), mirroring
   /// [aggregateDurationSeconds]:
   ///   1. SUM of per-set `distance_km` over [perSetList] (the longer of

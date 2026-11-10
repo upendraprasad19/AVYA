@@ -58,7 +58,7 @@ concepts:
         method: logExercise
         notes: stamps workout_log_id on every exlog row (Test #12 / Task A-3)
       - file: lib/core/services/workout_write_service.dart
-        line_range: 1141-1224
+        line_range: 1139-1222
         method: deleteLog (queues PendingExlogDeletes)
         notes: |
           OI-246 (2026-09-28). deleteLog queues the row's exact natural key
@@ -78,7 +78,7 @@ concepts:
           log resurrecting on the next full restore, and (151) a re-log after
           such a delete being silently dropped.
       - file: lib/core/services/workout_write_service.dart
-        line_range: 1726-1740
+        line_range: 1724-1738
         method: resolveSummarySetCount
         notes: |
           OI-246 (2026-09-28, round-2 review finding P3 — split from deleteLog's
@@ -364,7 +364,7 @@ concepts:
           submitWorkoutDraft) refresh the readers through
           invalidateWorkoutSurfaces (concept workout_surface_invalidation).
       - file: lib/core/services/workout_write_service.dart
-        line_range: 906-1034
+        line_range: 904-1032
         method: moveExerciseLogs
         notes: |
           C2 (e8f4a3) — re-keys partial exlog_<fromDate>_* rows onto the
@@ -434,7 +434,7 @@ concepts:
       key_formula: "'exercise_log_index_${istDateStr(date)}'"
     ist_sites:
       - { file: lib/core/utils/date_utils.dart, line: 27, fn: formatDateKey }
-      - { file: lib/core/services/workout_write_service.dart, line: 1723, fn: wlogKey }
+      - { file: lib/core/services/workout_write_service.dart, line: 1721, fn: wlogKey }
     forbidden_legacy_patterns:
       - { pattern: "workoutBox\\.keys.*manually.*date", reason: "O(n) scan — use the index key instead" }
       - { pattern: "DateTime\\.now\\(\\)\\.toIso8601String\\(\\)\\.substring\\(0,\\s*10\\)", reason: "UTC date, disagrees with IST-keyed reader; use istDateStr(DateTime.now())" }
@@ -504,11 +504,11 @@ concepts:
       drain checks ownerChangedSince at each write sink.
     writers:
       - file: lib/core/services/workout_write_service.dart
-        line_range: 1512-1518
+        line_range: 1510-1516
         method: deleteLog
         notes: PendingExlogDeletes.add at local-delete time (count = resolveSummarySetCount)
       - file: lib/core/services/workout_write_service.dart
-        line_range: 987-1045
+        line_range: 985-1043
         method: moveExerciseLogs
         notes: add for the SOURCE day (both branches), cancelFor the TARGET day
       - file: lib/core/services/workout_write_service.dart
@@ -671,7 +671,7 @@ concepts:
     restore_methods: [_restoreScheduledWorkouts, _restoreScheduleCompletions]
     provider_invalidation_set: [currentPlanProvider, calendarWeekProvider, todayWorkoutProvider]
     ist_sites:
-      - { file: lib/core/services/workout_write_service.dart, line: 1752, fn: scheduleKey }
+      - { file: lib/core/services/workout_write_service.dart, line: 1750, fn: scheduleKey }
     forbidden_legacy_patterns:
       - { pattern: "workoutBox\.put\('schedule_", reason: "Never write schedule keys directly from a widget — use WorkoutScheduleService" }
     class_constraints: |
@@ -4121,7 +4121,7 @@ concepts:
         notes: writes userBox progress (total_workouts_done, current_streak_days, current_streak_weeks, last_counted_week_key, last_workout_date), healthBox streaks, configBox unlockedBadges (BadgeService), rank_promotions (RankService), and resolves coachBox completion_prompt_<date> through CompletionPromptStore.resolve.
       - file: lib/core/services/workout_write_service.dart
         method: markCompleted
-        notes: decides WriteResult.newlyCompleted under the per-date lock before any write (no completed status AND no wlog_<date>), so two doors on one day see exactly one true.
+        notes: decides WriteResult.newlyCompleted under the per-date lock before any write (no completed status AND no wlog_<date>), so two doors on one day see exactly one true. A 0 s mark keeps a stored wlog_ duration, read through WorkoutReadService.workoutLogDurationSeconds (the one top-level duration_seconds reader, OI-50).
     readers:
       - file: lib/core/services/workout_read_service.dart
         method: completedWorkoutDayCount
@@ -4187,7 +4187,7 @@ concepts:
         line_range: 1-9999
         method: createCustomTemplate tool
       - file: lib/core/services/workout_write_service.dart
-        line_range: 1316-1371
+        line_range: 1314-1369
         method: newTemplateKey / upsertTemplate
         notes: |
           Canonical writer scaffolded 2026-05-21 / audit A3. Routes
@@ -4199,7 +4199,7 @@ concepts:
           (train_provider.saveTemplate, template_builder_screen,
           workout_repository's AI multi-day loop) routes through it.
       - file: lib/core/services/workout_write_service.dart
-        line_range: 1578-1617
+        line_range: 1576-1615
         method: deleteTemplate
         notes: |
           OI-252 — the canonical delete writer. Hive-only (layering:
@@ -6572,7 +6572,7 @@ concepts:
           then runs WorkoutCompletionBookkeeping.afterCompletion (count,
           streaks, badges, rank), the same step as every other door.
       - file: lib/core/services/workout_write_service.dart
-        line_range: 581-707
+        line_range: 581-705
         method: markCompleted
         notes: |
           Canonical completion writer. Unit 1 added completedVia (default 'app';
@@ -7118,7 +7118,7 @@ concepts:
         method: deleteAllFilesForCurrentUser
         notes: hard-wipes all Hive boxes for current user on account deletion
       - file: lib/core/services/workout_write_service.dart
-        line_range: 618-711
+        line_range: 618-709
         method: upsertScheduled
         notes: |
           upserts a scheduled workout entry to workoutBox under schedule_
@@ -7127,7 +7127,7 @@ concepts:
           line count further; caught by check_sot_registry_parity.dart
           and fixed opportunistically while touching this file.
       - file: lib/core/services/workout_write_service.dart
-        line_range: 1402-1472
+        line_range: 1400-1470
         method: deleteLog
         notes: removes an exlog_* entry + updates exercise_log_index; fires cloud delete
       - file: lib/core/services/nutrition_write_service.dart
@@ -8023,7 +8023,7 @@ concepts:
           ("8-12" ranges). Judges the write by the stored row
           (customExerciseRowLanded), throwing write_failed only when absent.
       - file: lib/core/services/workout_write_service.dart
-        line_range: 1610-1652
+        line_range: 1608-1650
         method: upsertCustomExercise
         notes: |
           Canonical writer (audit 2026-05-21 / A3). Locks per-key,

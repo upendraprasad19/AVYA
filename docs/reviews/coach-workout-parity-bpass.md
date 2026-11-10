@@ -108,7 +108,7 @@ equivalent (reason recorded). The table is in the 24e630 diagnose doc.
 
 ### Finding C3 — P2 — writer_reader_drift (registry ranges)
 - **status:** accepted, fixed.
-  - `markCompleted` 581-707.
+  - `markCompleted` 581-705.
   - `send` 784-1070 in both entries, with the chat call sites now `:896` and `:976`.
   - Every range into the files this fix round changed was remapped through the diff hunks by script (net +9 in
     `workout_write_service.dart`), with two anchors spot-checked. The parity gate passes.
