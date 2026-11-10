@@ -311,6 +311,14 @@ void main() {
         }
       }
     });
+    test('the frozen original E053 (Library Batch S1b-3) carries the base fixture\'s tags, and is absent from the library', () {
+      final base = ((jsonDecode(File('test/fixtures/library_c2_base_depth.json').readAsStringSync()) as Map<String, dynamic>)['rows'] as List).cast<Map<String, dynamic>>();
+      final src = File('scripts/build_library_injury_additions_v15.js').readAsStringSync();
+      expect(src, contains("{ id: 'E053', name: 'Donkey Calf Raise', variant_family: 'calf_raise', injury_contraindications: ['ankle'] }"));
+      expect(injuryTagsOf(base.firstWhere((l) => l['id'] == 'E053')), ['ankle'], reason: 'E053 frozen tags drifted from the base fixture');
+      expect(lib.any((l) => l['id'] == 'E053'), isFalse, reason: 'a frozen original must be gone from the library, or it would be counted twice');
+    });
+
     test('the twin rows carry their twin tags (frozen literals, mirrored against the base fixture)', () {
       final base = ((jsonDecode(File('test/fixtures/library_c2_base_depth.json').readAsStringSync()) as Map<String, dynamic>)['rows'] as List).cast<Map<String, dynamic>>();
       for (final e in kTwinLibraryRow.entries) {

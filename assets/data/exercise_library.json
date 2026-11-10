@@ -4226,81 +4226,6 @@
     "media_source": "wardroom"
   },
   {
-    "id": "E053",
-    "name": "Donkey Calf Raise",
-    "category": "legs",
-    "movement_pattern": [
-      "knee_dominant"
-    ],
-    "exercise_type": [
-      "isolation"
-    ],
-    "primary_muscles": [
-      "Calves"
-    ],
-    "secondary_muscles": [],
-    "equipment_needed": [
-      "bodyweight"
-    ],
-    "logging_type": "bodyweight_reps",
-    "difficulty_level": "beginner",
-    "suitable_for": [
-      "Beginner",
-      "Intermediate",
-      "Advanced"
-    ],
-    "default_sets": 4,
-    "default_reps": "20-25",
-    "default_rest_secs": 45,
-    "tempo": "2-0-2-2",
-    "met_value": 3.0,
-    "cal_per_set_est": 5.0,
-    "breathing_cue": "Natural breathing",
-    "coaching_cues": [
-      "Bent over at 90°",
-      "weight on balls of feet",
-      "full range"
-    ],
-    "common_mistakes": [
-      "Partial range",
-      "rushing",
-      "not using full stretch"
-    ],
-    "warmup_protocol": "",
-    "pro_tip": "Arnold's favourite calf exercise — stretch is greater than standing variation",
-    "is_indian_context": false,
-    "indian_alternative": "",
-    "source": "free-exercise-db",
-    "is_active": true,
-    "injury_contraindications": [
-      "ankle"
-    ],
-    "is_bilateral": true,
-    "cns_demand": 2,
-    "target_focus": [
-      "Calves"
-    ],
-    "equipment_tier": [
-      "bodyweight",
-      "home_dumbbells",
-      "basic_gym",
-      "full_gym"
-    ],
-    "standard_swap": "",
-    "priority_tier": 3,
-    "rep_range": "12-15",
-    "is_foundational": false,
-    "core_levels": [],
-    "discipline": "strength",
-    "gym_availability": "home",
-    "requires_coaching": false,
-    "high_impact": false,
-    "variant_family": "calf_raise",
-    "media_slug": "0284-donkey-calf-raise",
-    "media_version": 1,
-    "media_source": "wardroom"
-  },
-  {
     "id": "E054",
     "name": "Plank",
     "category": "core",
@@ -24010,6 +23935,12 @@
     "requires_coaching": false,
     "high_impact": false,
     "variant_family": "calf_raise",
+    "name_aliases": [
+      "Donkey Calf Raise"
+    ],
+    "merged_ids": [
+      "E053"
+    ],
     "media_slug": "1373-bodyweight-standing-calf-raise",
     "media_version": 1,
     "media_source": "wardroom"

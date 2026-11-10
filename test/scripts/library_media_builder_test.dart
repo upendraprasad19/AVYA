@@ -487,5 +487,79 @@ void main() {
       expect((await env.run(['--write', '--prune-only'], wardroom: false)).exitCode, 0);
       expect(File(env.table).readAsStringSync(), first);
     });
+
+    // Library Batch S1b-3 (OI-147): a RETIRED mapped row takes its files entry with it (the table keeps "every file active
+    // and referenced"); the still and the entry leave together.
+    group('--drop-unmapped', () {
+      late Directory stills;
+      setUp(() => stills = Directory('${env.dir.path}/stills')..createSync());
+      List<String> drop() => ['--write', '--prune-only', '--drop-unmapped', '--stills-dir', stills.path];
+
+      test('drops the files entry of a slug that lost its last row in this run; the other files stay active; a second run is byte-identical', () async {
+        await env.build();
+        env.writeLib(_defaultLib().where((r) => r['id'] != 'G6000').toList());
+        final r = await env.run(drop(), wardroom: false);
+        expect(r.exitCode, 0, reason: _out(r));
+        final files = (env.readTable()['files'] as Map).cast<String, Map<String, dynamic>>();
+        expect(files.containsKey('6000-alias-one'), isFalse);
+        expect(files.values.every((f) => f['status'] == 'active'), isTrue);
+        final first = File(env.table).readAsStringSync();
+        expect((await env.run(drop(), wardroom: false)).exitCode, 0);
+        expect(File(env.table).readAsStringSync(), first);
+        expect((await env.run(['--check', '--prune-only', '--drop-unmapped', '--stills-dir', stills.path], wardroom: false)).exitCode, 0);
+      });
+
+      test('refuses while the dropped slug\'s still is present, and writes nothing', () async {
+        await env.build();
+        final before = File(env.table).readAsStringSync();
+        File('${stills.path}/6000-alias-one.webp').writeAsStringSync('x');
+        env.writeLib(_defaultLib().where((r) => r['id'] != 'G6000').toList());
+        final r = await env.run(drop(), wardroom: false);
+        expect(r.exitCode, isNot(0));
+        expect(r.stderr, allOf(contains('6000-alias-one'), contains('delete it first')));
+        expect(File(env.table).readAsStringSync(), before);
+      });
+
+      test('a retired row whose slug a surviving twin still maps keeps the files entry active, still present (B-pass mirror)', () async {
+        await env.build();
+        File('${stills.path}/3643-farmer-s-walk.webp').writeAsStringSync('x');
+        env.writeLib(_defaultLib().where((r) => r['id'] != 'G3643').toList());
+        final r = await env.run(drop(), wardroom: false);
+        expect(r.exitCode, 0, reason: _out(r));
+        final t = env.readTable();
+        expect((t['rows'] as Map).containsKey('G3643'), isFalse);
+        expect((t['rows'] as Map)['N06'], '3643-farmer-s-walk');
+        expect(((t['files'] as Map)['3643-farmer-s-walk'] as Map)['status'], 'active');
+      });
+
+      test('a still of a slug that is NOT dropped never trips the refusal', () async {
+        await env.build();
+        File('${stills.path}/0103-barbell-standing-ab-rollout.webp').writeAsStringSync('x');
+        final r = await env.run(drop(), wardroom: false);
+        expect(r.exitCode, 0, reason: _out(r));
+      });
+
+      test('a file that was already unmapped before the run is kept (held-row provenance), and a taken_down slug is kept', () async {
+        await env.build();
+        env.writeLib(_defaultLib().where((r) => r['id'] != 'G6000').toList());
+        expect((await env.run(['--write', '--prune-only'], wardroom: false)).exitCode, 0); // the R13 hold: 6000 unmapped
+        expect((await env.run(drop(), wardroom: false)).exitCode, 0);
+        expect(((env.readTable()['files'] as Map)['6000-alias-one'] as Map)['status'], 'unmapped');
+        await env.build();
+        final t = env.readTable();
+        (t['_meta'] as Map)['taken_down'] = ['3643-farmer-s-walk'];
+        env.writeTable(t);
+        expect((await env.run(drop(), wardroom: false)).exitCode, 0);
+        final files = (env.readTable()['files'] as Map).cast<String, Map<String, dynamic>>();
+        expect(files['3643-farmer-s-walk']?['status'], 'taken_down');
+      });
+
+      test('refused without --prune-only', () async {
+        await env.build();
+        final r = await env.run(['--write', '--drop-unmapped'], wardroom: false);
+        expect(r.exitCode, 2);
+        expect(r.stderr, contains('--drop-unmapped needs --prune-only'));
+      });
+    });
   });
 }

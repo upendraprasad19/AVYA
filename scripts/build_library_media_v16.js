@@ -16,6 +16,11 @@
 //   --check        build and compare, byte for byte, with --table (exit 1 when they differ)
 //   --prune-only   no Wardroom folder needed: drop `rows` entries whose row left the library and
 //                  flip files nothing maps to `unmapped` (the hold recipe of R13)
+//   --drop-unmapped  (with --prune-only; Library Batch S1b-3) DROP the files entry of a slug that lost its LAST row in
+//                  this run (a retired row, not a held one), instead of flipping it to `unmapped`. A file already
+//                  unmapped before the run, and a taken_down slug, are kept. Refused while the slug's still
+//                  (<stills-dir>/<slug>.webp) is still present: the still and the entry leave together.
+//   --stills-dir P   the bundled stills folder --drop-unmapped checks (default assets/exercise_stills)
 //
 // The Wardroom folder is the founder's, untracked, and lives only in the primary checkout, so the
 // default for --wardroom-dir is found with primaryRoot() from .claude/token_path.js.
@@ -44,14 +49,14 @@ const fail = (m) => {
 function usage(msg) {
   process.stderr.write(
     `${msg}\nusage: node scripts/build_library_media_v16.js (--write | --check) [--prune-only] ` +
-      '[--table P] [--map P] [--ledger P] [--wardroom-dir P] [--library P] [--old-rows P] [--out P]\n'
+      '[--drop-unmapped] [--stills-dir P] [--table P] [--map P] [--ledger P] [--wardroom-dir P] [--library P] [--old-rows P] [--out P]\n'
   );
   process.exit(2);
 }
 
 function parseArgs(argv) {
-  const valueFlags = new Set(['--table', '--map', '--ledger', '--wardroom-dir', '--library', '--old-rows', '--out']);
-  const boolFlags = new Set(['--write', '--check', '--prune-only']);
+  const valueFlags = new Set(['--table', '--map', '--ledger', '--wardroom-dir', '--library', '--old-rows', '--out', '--stills-dir']);
+  const boolFlags = new Set(['--write', '--check', '--prune-only', '--drop-unmapped']);
   const o = {};
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
@@ -64,6 +69,8 @@ function parseArgs(argv) {
     } else usage(`unknown flag ${a}`);
   }
   if (!!o.write === !!o.check) usage('exactly one of --write and --check is required');
+  if (o.dropUnmapped && !o.pruneOnly) usage('--drop-unmapped needs --prune-only');
+  o.stillsDir = path.resolve(o.stillsDir || path.join(REPO, 'assets', 'exercise_stills'));
   o.table = path.resolve(o.table || path.join(__dirname, 'data', 'library_media_v16.json'));
   o.map = path.resolve(o.map || path.join(__dirname, 'data', 'library_batch_c_media_map.json'));
   o.library = path.resolve(o.library || path.join(REPO, 'assets', 'data', 'exercise_library.json'));
@@ -186,6 +193,17 @@ function buildPrune(a) {
   for (const [id, slug] of Object.entries(t.rows)) if (ids.has(id) && !takenDown.has(slug)) rows[id] = slug;
   const files = {};
   for (const [slug, rec] of Object.entries(t.files)) files[slug] = { ...rec };
+  if (a.dropUnmapped) {
+    // The slugs that lost their LAST row in this run: referenced by a row before, by none after. A file that was already
+    // unmapped had no row before, so it is never in this set; a taken_down slug is kept whatever happened to its rows.
+    const after = new Set(Object.values(rows));
+    const lost = [...new Set(Object.values(t.rows))].filter((slug) => !after.has(slug) && !takenDown.has(slug)).sort();
+    const stillThere = lost.filter((slug) => fs.existsSync(path.join(a.stillsDir, `${slug}.webp`)));
+    if (stillThere.length) {
+      fail(`--drop-unmapped: the still of ${stillThere.join(', ')} is still in ${a.stillsDir}; delete it first (the still and the files entry leave together)`);
+    }
+    for (const slug of lost) delete files[slug];
+  }
   setStatuses(files, rows, takenDown);
   const meta = { ...t._meta };
   if (meta.old_rows) meta.old_rows = { ...meta.old_rows, entries: oldRowCount(rows) };

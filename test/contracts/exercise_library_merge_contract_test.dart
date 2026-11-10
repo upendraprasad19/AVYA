@@ -25,6 +25,8 @@ const _merges = <String, (String, String)>{
   'E165': ('Quad Stretch', 'E216'),
   'E167': ('Cross Body Shoulder Stretch', 'E219'),
   'E168': ('Doorway Chest Stretch', 'E220'),
+  // Library Batch S1b-3 (OI-147): retired into a SOURCE-built G row through the importer's merge stage.
+  'E053': ('Donkey Calf Raise', 'G1373'),
 };
 
 void main() {
@@ -37,8 +39,8 @@ void main() {
       v is List ? v.map((e) => e.toString()).toList() : const <String>[];
 
   group('exercise_library duplicate merges (Batch A Task 2)', () {
-    test('871 rows (285 + 633 Batch C1/C2b new rows - 56 removals of C2a and C2b + 9 Library Batch S1b-2 loaded versions), and none of the 7 retired ids is a row', () {
-      expect(rows.length, 871);
+    test('870 rows (285 + 633 Batch C1/C2b new rows - 56 removals of C2a and C2b + 9 Library Batch S1b-2 loaded versions - E053 of Library Batch S1b-3), and none of the 8 retired ids is a row', () {
+      expect(rows.length, 870);
       expect(_merges.keys.where(byId.containsKey), isEmpty);
     });
 

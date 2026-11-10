@@ -28,6 +28,7 @@ const _mapRel = 'scripts/data/library_batch_c_media_map.json';
 const _e230Rel = 'scripts/data/library_e230_retag.json';
 const _s1Rel = 'scripts/data/library_s1_core_levels.json';
 const _s1b2Rel = 'scripts/data/library_s1b2_suitable_for.json';
+const _s1b3MergesRel = 'scripts/data/library_s1b3_merges.json';
 const _mediaKeys = ['media_slug', 'media_version', 'media_source'];
 
 Json _readJson(String path) => jsonDecode(File(path).readAsStringSync()) as Json;
@@ -41,7 +42,7 @@ class _Tree {
     Directory('${dir.path}/scripts/data').createSync(recursive: true);
     Directory('${dir.path}/assets/data').createSync(recursive: true);
     File(script).writeAsStringSync(File(_importer).readAsStringSync());
-    for (final e in {src: _srcRel, inj: _injRel, media: _mediaRel, lib: _libRel, retag: _e230Rel, coreLevels: _s1Rel, suitableFor: _s1b2Rel}.entries) {
+    for (final e in {src: _srcRel, inj: _injRel, media: _mediaRel, lib: _libRel, retag: _e230Rel, coreLevels: _s1Rel, suitableFor: _s1b2Rel, merges: _s1b3MergesRel}.entries) {
       File(e.key).writeAsStringSync(File(e.value).readAsStringSync());
     }
   }
@@ -55,6 +56,7 @@ class _Tree {
   String get retag => '${dir.path}/scripts/data/library_e230_retag.json';
   String get coreLevels => '${dir.path}/scripts/data/library_s1_core_levels.json';
   String get suitableFor => '${dir.path}/scripts/data/library_s1b2_suitable_for.json';
+  String get merges => '${dir.path}/scripts/data/library_s1b3_merges.json';
 
   List<String> get base => ['--library', lib, '--source', src, '--table', inj];
 
@@ -649,6 +651,97 @@ void main() {
         final r = await t.importer();
         expect(r.exitCode, isNot(0), reason: _out(r));
         expect(t.readLibText(), text, reason: 'a refused run must not write');
+      }
+    });
+  });
+
+  group('the merge stage (Library Batch S1b-3, OI-147)', () {
+    setUp(() => File('${t.dir.path}/scripts/data/library_batch_c2_removals.json')
+        .writeAsStringSync(File('scripts/data/library_batch_c2_removals.json').readAsStringSync()));
+
+    Json recFile() => _readJson(t.merges);
+    void writeRec(List<Json> rows) => File(t.merges).writeAsStringSync(jsonEncode({...recFile(), 'rows': rows}));
+
+    /// The library before the merge: E053 back at its v23 index (the restated v23 row) and G1373 without the two keys.
+    String preMerge() {
+      final fx = _readJson('test/fixtures/library_e053_row_v23.json');
+      final lib = t.readLib();
+      final i = lib.indexWhere((r) => r['id'] == 'G1373');
+      lib[i] = Map<String, dynamic>.from(lib[i])..remove('name_aliases')..remove('merged_ids');
+      lib.insert((fx['_meta'] as Json)['v23_index'] as int, (fx['row'] as Json));
+      return const JsonEncoder.withIndent('  ').convert(lib);
+    }
+
+    test('(a) a library before the merge loses E053 and G1373 gains the alias and merged_ids: the shipped bytes; a second run and --check agree', () async {
+      expect(recFile()['rows'], [
+        {'id': 'E053', 'name': 'Donkey Calf Raise', 'into': 'G1373', 'merged_in': 's1b3'},
+      ]);
+      t.writeLibText(preMerge());
+      final r1 = await t.importer();
+      expect(r1.exitCode, 0, reason: _out(r1));
+      expect(_out(r1), contains('1 merged away'));
+      expect(t.readLibText(), File(_libRel).readAsStringSync(), reason: 'run 1 (E053 present) gives the shipped library, byte for byte');
+      final r2 = await t.importer();
+      expect(r2.exitCode, 0, reason: _out(r2));
+      expect(t.readLibText(), File(_libRel).readAsStringSync(), reason: 'run 2 (E053 absent) is byte-identical');
+      final g = _byId(t.readLib())['G1373']!;
+      expect(g['name_aliases'], ['Donkey Calf Raise']);
+      expect(g['merged_ids'], ['E053']);
+      final keys = g.keys.toList();
+      expect(keys.sublist(keys.length - 5), ['name_aliases', 'merged_ids', ..._mediaKeys], reason: 'name_aliases then merged_ids, the media keys last');
+      final ok = await t.importer(extra: ['--check']);
+      expect(ok.exitCode, 0, reason: _out(ok));
+    });
+
+    test('(b) --check on the library before the merge fails', () async {
+      t.writeLibText(preMerge());
+      final r = await t.importer(extra: ['--check']);
+      expect(r.exitCode, isNot(0), reason: _out(r));
+    });
+
+    test('(c) the record is authoritative: a second record row for an id that is already absent is appended too (nothing is read back from into)', () async {
+      writeRec([
+        ...(recFile()['rows'] as List).cast<Json>(),
+        {'id': 'E998', 'name': 'Kneeling Calf Raise', 'into': 'G1373', 'merged_in': 's1b3'},
+      ]);
+      final r = await t.importer();
+      expect(r.exitCode, 0, reason: _out(r));
+      final g = _byId(t.readLib())['G1373']!;
+      expect(g['name_aliases'], ['Donkey Calf Raise', 'Kneeling Calf Raise']);
+      expect(g['merged_ids'], ['E053', 'E998']);
+    });
+
+    test('(d) the record absent is a printed no-op: E053 stays and G1373 carries neither key', () async {
+      File(t.merges).deleteSync();
+      t.writeLibText(preMerge());
+      final r = await t.importer();
+      expect(r.exitCode, 0, reason: _out(r));
+      expect(_out(r), contains('merge stage skipped'));
+      final byId = _byId(t.readLib());
+      expect(byId.containsKey('E053'), isTrue);
+      expect(byId['G1373']!.containsKey('merged_ids'), isFalse);
+      expect(byId['G1373']!.containsKey('name_aliases'), isFalse);
+    });
+
+    test('(e) refusals name the id and write nothing: a source row, a missing target, a wrong name, an alias equal to a row name, no merged_in, a repeated id, a chain', () async {
+      final row = (recFile()['rows'] as List).cast<Json>().single;
+      for (final (bad, says, pre) in [
+        ([{'id': 'G0742', 'name': 'Forward Angled Calf Raise', 'into': 'G1373', 'merged_in': 's1b3'}], 'names a source row', false),
+        ([{...row, 'into': 'G9999'}], 'G9999', false),
+        ([{...row, 'name': 'Donkey Calf Raises'}], 'the library row is', true),
+        ([{'id': 'E999', 'name': 'Seated Calf Raise', 'into': 'G1373', 'merged_in': 's1b3'}], 'equals a row name', false),
+        ([{...row}..remove('merged_in')], 'lacks merged_in', false),
+        ([row, row], 'repeats E053', false),
+        ([{'id': 'E998', 'name': 'Kneeling Calf Raise', 'into': 'E053', 'merged_in': 's1b3'}, row], 'E053 is itself merged away', false),
+        ([row, {'id': 'E998', 'name': 'Kneeling Calf Raise', 'into': 'E053', 'merged_in': 's1b3'}], 'E053 is itself merged away', false),
+      ]) {
+        writeRec(bad.cast<Json>());
+        if (pre) t.writeLibText(preMerge());
+        final text = t.readLibText();
+        final r = await t.importer();
+        expect(r.exitCode, isNot(0), reason: '$says: ${_out(r)}');
+        expect(_err(r), contains(says));
+        expect(t.readLibText(), text, reason: 'a refused run must not write ($says)');
       }
     });
   });

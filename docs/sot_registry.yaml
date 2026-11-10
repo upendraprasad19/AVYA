@@ -11450,8 +11450,16 @@ concepts:
     behavioral_test_path_v18: test/contracts/library_seed_v18_upgrade_behavioral_test.dart  # Batch C2a 2026-11-04 (OI-460): real SeedService.seedIfNeeded on a v17 box; the 52 removed ids are pruned (kRetiredLibraryIdsNoTwin), custom and community rows survive
     behavioral_test_path_depth: test/contracts/library_depth_rule_test.dart  # Batch C2a: the depth rule on the base fixture and the shipped library, both pattern semantics, mutated
     behavioral_test_path_v19: test/contracts/library_seed_v19_upgrade_behavioral_test.dart  # Batch C2b 2026-11-05 (OI-462): real SeedService.seedIfNeeded on a v18 box; the six twin_pending rows are pruned, the four twins arrive, retired names resolve by exact name or alias, a fresh install gets the four and none of the six
+    behavioral_test_path_v24: test/contracts/library_seed_v24_upgrade_behavioral_test.dart  # Library Batch S1b-3 2026-11-10 (OI-147): real SeedService.seedIfNeeded on a v23 box holding E053; it ends at v24 without E053 (merged_ids prune), G1373 written as bundled, a community row named Donkey Calf Raise and every other row unchanged, a v24 box left alone
     behavioral_test_path_v20: test/contracts/library_seed_v20_upgrade_behavioral_test.dart  # Batch C2c 2026-11-06 (OI-474): real SeedService.seedIfNeeded on a v19 box holding the cable E230; it ends at v20 with the bodyweight E230 and its picture keys, every other row unchanged, a fresh install gets the new row, a v20 box is left alone
     description: |
+      Library v24 (Library Batch S1b-3, 2026-11-10, OI-147): 870 rows. E053 Donkey Calf Raise merged into G1373 Bodyweight
+      Standing Calf Raise, the 8th merged_ids retirement and the first on a SOURCE-built kept row: the importer's merge
+      stage (scripts/data/library_s1b3_merges.json) drops E053 and gives G1373 merged_ids [E053] and name_aliases [Donkey
+      Calf Raise]; the seed prune deletes E053 from every install; the media table drops its row and 0284 file entry with
+      the bundled still (build_library_media_v16.js --drop-unmapped). Cloud: migration 175 deactivates E053 for the first
+      time (G1373's cues copied) and sets G1373 name_aliases; its inline rollback restores both, E053 with its own cues from
+      migration 174.
       Library v20 (Batch C2c, 2026-11-06, OI-474): 862 rows, one changed. E230 Standing Single Leg Curl is a bodyweight row
       (equipment_needed [bodyweight], tier all four, logging_type bodyweight_reps, gym_availability home, new cues) and carries
       animation 0795 (media_slug 0795-standing-single-leg-curl). The edit is scripts/data/library_e230_retag.json applied by a stage of
@@ -11504,7 +11512,7 @@ concepts:
         method: scripts/repair_exercise_library_v12.js (repairText, mergeDuplicates, relabel, dropPlates)
         notes: v12 (Batch A) — 136 un-shifted text rows, cues one per item, 7 duplicates retired (name_aliases + merged_ids on the kept row), E172/E163 labels, E207/E179 plate keys dropped
       - file: lib/core/services/seed_service.dart
-        line_range: 265-306
+        line_range: 271-316
         method: _exerciseLibraryVersion (11→12) + retiredLibraryIds + pruneRetired after putAll in _seedExercises
         notes: putAll never deletes, so the prune is what removes a retired row from an existing install
       - file: supabase/migrations/162_reseed_exercise_library.sql
@@ -11516,6 +11524,15 @@ concepts:
       - file: scripts/add_library_batch_c_v15.js
         method: retagRow (readRetag, retag stage) — all nine keys at before becomes {...row, ...after}; all at after is a no-op; anything else throws; an absent record is a printed skip
         notes: Batch C2c — re-seeded by SeedService v20; behavioural proof test/scripts/library_media_importer_test.dart retag group (cases a-e, a builds the shipped library byte for byte)
+      - file: scripts/data/library_s1b3_merges.json
+        method: rows retired INTO a kept row ({id, name, into, merged_in}); E053 into G1373, merged_in s1b3
+        notes: Library Batch S1b-3 (OI-147) — the ONLY source of the merge; read by the importer's merge stage and by the cloud seed generator (merged_in = batchTag selects the rows its rollback reactivates)
+      - file: scripts/add_library_batch_c_v15.js
+        method: readMerges / applyMerges (merge stage, after the standard_swap repoint, before the media stage) — drop the row when present, append merged_ids and name_aliases on `into`, check aliases against the post-drop names
+        notes: Library Batch S1b-3 — the record is authoritative (G1373 is rebuilt from the source every run); behavioural proof test/scripts/library_media_importer_test.dart merge-stage group (a-e)
+      - file: scripts/seed_exercise_library.js
+        method: BATCH S1b-3 (mergesFile, name_aliases kept-row record, previous 174), ownMerged, arrayLiterals, mergedReactivateLines
+        notes: Library Batch S1b-3 — E053's rollback reactivation splices its own cues verbatim from its 174 tuple (6 array literals, tail NULL, now()); test/contracts/exercise_library_cloud_seeded_test.dart S1b-3 shape, mutation and guard tests
     readers:
       - file: lib/shared/repositories/exercise_repository.dart
         method: queryV4 injury filter (:335-345) + primary_muscles read (:270-282)
@@ -13127,7 +13144,7 @@ concepts:
         line_range: 1-2
         method: demo_slug + demo_pair fields
       - file: lib/core/services/seed_service.dart
-        line_range: 166-166
+        line_range: 172-172
         method: _exerciseLibraryVersion
     readers:
       - file: lib/shared/widgets/exercise_plate/plate_resolver.dart
@@ -13168,10 +13185,10 @@ concepts:
       constant is bumped again. WARNING: the bucket is private; a row's keys are not a public URL.
     writers:
       - file: scripts/add_library_batch_c_v15.js
-        line_range: 185-206
+        line_range: 187-208
         method: applyMedia
       - file: lib/core/services/seed_service.dart
-        line_range: 166-166
+        line_range: 172-172
         method: _exerciseLibraryVersion
     readers:
       - file: lib/shared/widgets/exercise_plate/exercise_media_resolver.dart
@@ -13257,7 +13274,7 @@ concepts:
         line_range: 1-2
         method: coaching_cues + common_mistakes + breathing_cue + warmup_protocol fields
       - file: lib/core/services/seed_service.dart
-        line_range: 166-166
+        line_range: 172-172
         method: _exerciseLibraryVersion
     readers:
       - file: lib/shared/widgets/exercise_plate/exercise_cues.dart

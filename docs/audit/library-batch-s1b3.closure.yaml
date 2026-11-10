@@ -1,0 +1,50 @@
+# Closure ledger - library-batch-s1b3 (E053 Donkey Calf Raise merged into G1373, seed v24, one cloud migration).
+# Plan docs/plans/2026-11-10-library-batch-s1b3-retire-donkey-calf-raise.md (v5, five review rounds), record
+# docs/plan-reviews/generator-step1-s1b3.md, diagnose c3e8f1. Gate 40 (validate_audit_closure.dart).
+batch: library-batch-s1b3
+plan_review_record: docs/plan-reviews/generator-step1-s1b3.md
+total_findings: 7
+closed_count: 7
+
+findings:
+  - id: S1B3-MERGE
+    title: "E053 leaves the library and G1373 gains merged_ids [E053] and name_aliases [Donkey Calf Raise] (OI-147), through a record-driven importer merge stage"
+    terminal_state: closed_in_commit
+    commit: "generator-step1-s1b3 (uncommitted)"
+    verification: "scripts/add_library_batch_c_v15.js readMerges / applyMerges, record scripts/data/library_s1b3_merges.json; importer --check byte-identical; test/scripts/library_media_importer_test.dart merge-stage group (a)-(e); _keyViolations allows merged_ids only on merge targets (library_batch_c_rows_contract_test.dart); mutants in diagnose c3e8f1."
+
+  - id: S1B3-MEDIA
+    title: "E053's media row, its 0284 file entry and the bundled still leave together (builder --drop-unmapped); the old-rows input re-pinned"
+    terminal_state: closed_in_commit
+    commit: "generator-step1-s1b3 (uncommitted)"
+    verification: "scripts/build_library_media_v16.js --drop-unmapped / --stills-dir; library_media_builder_test.dart --drop-unmapped group; library_media_table_test.dart green (757 files, all active; the old-rows sha recomputed); docs/operations/EXERCISE_MEDIA.md counts and the known-orphan line."
+
+  - id: S1B3-SEED
+    title: "Seed v24: every install prunes E053 on its next launch"
+    terminal_state: closed_in_commit
+    commit: "generator-step1-s1b3 (uncommitted)"
+    verification: "lib/core/services/seed_service.dart _exerciseLibraryVersion 24; test/contracts/library_seed_v24_upgrade_behavioral_test.dart (v23 digest pin d858d26b computed independently from git, community row untouched, mirror at v24); the v16 to v23 version pins moved to 24; the v23 digest chain rebuilt from test/fixtures/library_e053_row_v23.json."
+
+  - id: S1B3-CLOUD
+    title: "Cloud seed generator S1b-3: first-time deactivation named in the header; the inline rollback restores G1373 name_aliases and reactivates E053 with its own cues spliced verbatim from migration 174"
+    terminal_state: closed_in_commit
+    commit: "generator-step1-s1b3 (uncommitted)"
+    verification: "scripts/seed_exercise_library.js (mergesFile, ownMerged, arrayLiterals, mergedReactivateLines, computed header sentences); supabase/migrations/175_reseed_exercise_library.sql; exercise_library_cloud_seeded_test.dart S1b-3 shape, mutation and guard tests; the S1b-2 checks re-pointed at the applied file 174."
+
+  - id: S1B3-INJURY
+    title: "Found in the build: the injury builder's original-sibling pool shrank by E053, so the founder-approved table's 'all 4 same-family originals' calf rows no longer rebuilt from scratch"
+    terminal_state: closed_in_commit
+    commit: "generator-step1-s1b3 (uncommitted)"
+    verification: "scripts/build_library_injury_additions_v15.js FROZEN_ORIGINALS (E053, tags mirrored against test/fixtures/library_c2_base_depth.json); library_batch_c_injury_coverage_test.dart from-scratch rebuild green and the frozen-original mirror test; mutant (entry removed) reddens 2."
+
+  - id: S1B3-BLAST
+    title: "The two new record files classify as account, above scripts/**"
+    terminal_state: closed_in_commit
+    commit: "generator-step1-s1b3 (uncommitted)"
+    verification: "docs/blast_radius.yaml rules; blast_radius_library_data_account_test.dart groups 1g and 1h; mutant (the merges rule removed) reddens 2."
+
+  - id: S1B3-LIVE
+    title: "Apply migration 175 to prod"
+    terminal_state: closed_in_commit
+    commit: "generator-step1-s1b3 (uncommitted)"
+    verification: "Applied live 2026-11-10 after the founder go on the exact file (sha256 3ff320a2...), HTTP 201; read-back 934 / 870 / 64, md5 3170849a6b1e5b9b6608a27ea2c7b501 equal to the rehearsal; backups/applied_migrations.json entry 175."

@@ -26,6 +26,8 @@
 //    stage: a row at `before` takes `after`, a row at `after` is a no-op, anything else stops the run naming the id; an id
 //    that is not a kept row, or a duplicate id, stops the run. An absent record is a printed no-op (tests copy this script
 //    into temp dirs).
+//  - MERGE STAGE (Library Batch S1b-3, OI-147): scripts/data/library_s1b3_merges.json, rows retired INTO a kept row (drop,
+//    then merged_ids + name_aliases on `into`), run after the standard_swap repoint and before the media stage.
 //  - SUITABLE_FOR STAGE (Library Batch S1b-2): scripts/data/library_s1b2_suitable_for.json, the core-levels contract for
 //    `suitable_for` of kept rows, run right after the core-levels stage.
 //  - A row is built from an ALLOW-LIST: the 40 required keys, then variant_family (from the table), then skill_track,
@@ -316,6 +318,62 @@ function repointStandardSwap(allRows, removals) {
   });
 }
 
+// Library Batch S1b-3 (OI-147, plan D9): the MERGE STAGE. scripts/data/library_s1b3_merges.json lists rows retired INTO a
+// kept row ({id, name, into, merged_in}). The record is authoritative: `into` may be a SOURCE row (G1373 is), which
+// buildRow rebuilds from the allow-list on every run, so nothing is ever read back from `into` to decide what to do.
+// Order: drop the row (only when present; its name must equal `name`), append `id` to into.merged_ids and `name` to
+// into.name_aliases (no duplicates, existing order kept; new keys are appended, and applyMedia then moves the media keys
+// back to the end), then check every alias against the POST-drop row names. A second run is byte-identical. Absent =
+// printed no-op, like the other stages; the cloud seed generator treats a missing file as a hard stop instead.
+const MERGES = path.join(__dirname, 'data', 'library_s1b3_merges.json');
+
+function readMerges() {
+  if (!fs.existsSync(MERGES)) {
+    console.log(`merge stage skipped: ${MERGES} not found`);
+    return [];
+  }
+  const rec = JSON.parse(fs.readFileSync(MERGES, 'utf8'));
+  if (!rec || !Array.isArray(rec.rows)) throw new Error(`merges record ${MERGES} has no rows array`);
+  const seen = new Set();
+  for (const m of rec.rows) {
+    for (const k of ['id', 'name', 'into', 'merged_in']) {
+      if (typeof m[k] !== 'string' || m[k].length === 0) throw new Error(`merges record ${MERGES}: a row lacks ${k} (${m.id || '?'})`);
+    }
+    if (seen.has(m.id)) throw new Error(`merges record ${MERGES} repeats ${m.id}`);
+    seen.add(m.id);
+  }
+  // A chain (A into B, then B into C) would drop B after it took A's alias and merged_ids, losing both silently.
+  for (const m of rec.rows) {
+    if (seen.has(m.into)) throw new Error(`merges record ${MERGES}: ${m.id}'s merge target ${m.into} is itself merged away by this record`);
+  }
+  return rec.rows;
+}
+
+function applyMerges(allRows, merges, sourceIds) {
+  let out = allRows;
+  for (const m of merges) {
+    if (sourceIds.has(m.id)) throw new Error(`${m.id}: the merges record names a source row (only a kept base row can be merged away)`);
+    const present = out.find((r) => r.id === m.id);
+    if (present && present.name !== m.name) {
+      throw new Error(`${m.id}: the merges record names it "${m.name}", the library row is "${present.name}"`);
+    }
+    out = out.filter((r) => r.id !== m.id);
+    const at = out.findIndex((r) => r.id === m.into);
+    if (at < 0) throw new Error(`${m.id}: merge target ${m.into} is not a row of the new library`);
+    const into = { ...out[at] };
+    const ids = Array.isArray(into.merged_ids) ? into.merged_ids : [];
+    const aliases = Array.isArray(into.name_aliases) ? into.name_aliases : [];
+    into.name_aliases = aliases.includes(m.name) ? aliases : [...aliases, m.name];
+    into.merged_ids = ids.includes(m.id) ? ids : [...ids, m.id];
+    out = [...out.slice(0, at), into, ...out.slice(at + 1)];
+  }
+  const names = new Set(out.map((r) => r.name.toLowerCase()));
+  for (const m of merges) {
+    if (names.has(m.name.toLowerCase())) throw new Error(`${m.id}: alias "${m.name}" equals a row name of the new library`);
+  }
+  return out;
+}
+
 // Library Batch S1b-2: the suitable_for record for kept rows (E010, E045; founder 2026-11-09, board d12). Same contract as
 // the core-levels record: a row at `before` takes `after`, a row at `after` is a no-op, anything else stops the run;
 // an id that is not a kept row, or a duplicate id, stops the run. Absent = printed no-op (tests copy this script).
@@ -416,11 +474,15 @@ function main() {
   }
   const aliased = applyAliases(finalRows, removals);
   const swapped = repointStandardSwap(aliased, removals);
-  const withMedia = media ? applyMedia(swapped, media) : swapped;
+  const merges = readMerges();
+  const merged = applyMerges(swapped, merges, sourceIds);
+  const withMedia = media ? applyMedia(merged, media) : merged;
   const next = format(withMedia);
 
   const heldCount = rows.length - shipped.length;
-  const summary = `${kept.length} kept + ${added.length} new = ${kept.length + added.length} rows (${heldCount} held source rows skipped), media keys on ${withMedia.filter((r) => 'media_slug' in r).length} rows`;
+  const mergedAway = swapped.length - merged.length;
+  const keptAfter = kept.length - mergedAway;
+  const summary = `${keptAfter} kept + ${added.length} new = ${keptAfter + added.length} rows (${heldCount} held source rows skipped, ${mergedAway} merged away), media keys on ${withMedia.filter((r) => 'media_slug' in r).length} rows`;
   if (CHECK) {
     if (next === before) {
       console.log(`check OK: the shipped file is byte-identical to a fresh import (${summary})`);

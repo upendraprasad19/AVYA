@@ -163,7 +163,13 @@ class SeedService {
   //   Pike Push Up and E045 Romanian Deadlift suitable_for at every level (founder 2026-11-09). Both
   //   reach the OFF path (queryV4). putAll writes the new rows and rewrites the two by id
   //   (library_seed_v23_upgrade_behavioral_test.dart).
-  static const int _exerciseLibraryVersion = 23;
+  //   v24 (Library Batch S1b-3, OI-147, docs/plans/2026-11-10-library-batch-s1b3-retire-donkey-calf-raise.md):
+  //   E053 Donkey Calf Raise leaves the bundle, merged into G1373 Bodyweight Standing Calf Raise, which gains
+  //   `merged_ids: [E053]` (the prune below deletes E053 from every install) and `name_aliases: [Donkey Calf
+  //   Raise]` (a plan row or template holding the old name resolves to G1373 and its cues). History keyed by
+  //   E053 keeps its name text. Without this bump an existing install keeps E053
+  //   (library_seed_v24_upgrade_behavioral_test.dart).
+  static const int _exerciseLibraryVersion = 24;
   static const String _exerciseVersionKey = 'exercise_library_version';
 
   /// Bump this integer whenever the bundled food_database.json changes
