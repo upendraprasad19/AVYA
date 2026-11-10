@@ -39,5 +39,5 @@ findings:
   - id: S1B2-E053
     title: "E053 Donkey Calf Raise retirement (OI-147), split out after review round 1"
     terminal_state: closed_in_commit
-    commit: "generator-step1-s1b3 (uncommitted)"
+    commit: "3b73896a"
     verification: "Library Batch S1b-3 (diagnose c3e8f1) took both paths it named: a record-driven importer merge stage (no sheet), and the media builder's --drop-unmapped prune with the old-rows input re-pinned (its hash recomputed by library_media_table_test). See docs/audit/library-batch-s1b3.closure.yaml."

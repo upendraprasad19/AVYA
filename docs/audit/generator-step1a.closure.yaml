@@ -148,7 +148,7 @@ findings:
   - id: 1B-9
     title: "OI-147: retire E053 Donkey Calf Raise"
     terminal_state: closed_in_commit
-    commit: "generator-step1-s1b3 (uncommitted)"
+    commit: "3b73896a"
     verification: "Library Batch S1b-3 (diagnose c3e8f1): E053 merged into G1373 through the importer merge stage (merged_ids + name_aliases), media row and still dropped (--drop-unmapped), seed v24 prune, migration 175 (cloud deactivation, rollback reactivates with its own cues). Tests: library_seed_v24_upgrade_behavioral_test.dart, library_media_importer_test.dart (merge stage), exercise_library_cloud_seeded_test.dart (S1b-3 shape)."
 
   - id: 1B-10
