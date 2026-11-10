@@ -30,7 +30,18 @@ void main() {
       // to fire syncProgressNow (separate row, not in the write service).
       expect(src, contains('WorkoutWriteService.instance.logExercise'));
       expect(src, contains('WorkoutWriteService.instance.markCompleted'));
-      expect(src, contains('unawaited(SyncService.instance.syncProgressNow())'));
+      // Coach workout parity 1a (OI-379): the progress write moved into the
+      // shared completion step, whose updateProgress fires syncProgressNow.
+      expect(src,
+          contains('WorkoutCompletionBookkeeping.instance.afterCompletion('));
+      final step = _src(
+          'lib/features/train/services/workout_completion_bookkeeping.dart');
+      expect(step, contains('await users.updateProgress('));
+      final repo = _src('lib/shared/repositories/user_repository.dart');
+      final upd = repo.indexOf('Future<void> updateProgress(');
+      expect(upd, greaterThan(-1));
+      expect(repo.substring(upd, repo.indexOf('\n  }', upd)),
+          contains('unawaited(SyncService.instance.syncProgressNow())'));
     });
   });
 

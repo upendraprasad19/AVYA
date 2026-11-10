@@ -17,15 +17,25 @@ class WriteResult {
   /// [WriteResult.invalid]). Null for success and for unexpected failures.
   final String? code;
 
+  /// Coach workout parity 1a (OI-379): set ONLY by
+  /// `WorkoutWriteService.markCompleted`. True when this call moved the day to
+  /// completed for the FIRST time: before the write, the `schedule_<date>`
+  /// row was absent or not `completed`, AND no `wlog_<date>` row existed.
+  /// Decided inside the per-date lock, so two doors completing one day can
+  /// never both see true. False for every other write and every failure.
+  final bool newlyCompleted;
+
   const WriteResult({
     required this.success,
     this.logKey,
     this.errorMessage,
     this.code,
+    this.newlyCompleted = false,
   });
 
-  factory WriteResult.ok(String logKey) =>
-      WriteResult(success: true, logKey: logKey);
+  factory WriteResult.ok(String logKey, {bool newlyCompleted = false}) =>
+      WriteResult(
+          success: true, logKey: logKey, newlyCompleted: newlyCompleted);
 
   factory WriteResult.fail(String message) =>
       WriteResult(success: false, errorMessage: message);
@@ -47,7 +57,7 @@ class WriteResult {
 
   @override
   String toString() =>
-      'WriteResult(success=$success, logKey=$logKey, error=$errorMessage, code=$code)';
+      'WriteResult(success=$success, logKey=$logKey, error=$errorMessage, code=$code, newlyCompleted=$newlyCompleted)';
 }
 
 /// Source identifier for telemetry + future per-source policy.

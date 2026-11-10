@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import 'package:icanbefitter/core/copy/wardroom_copy.dart';
 import 'package:icanbefitter/core/theme/colors.dart';
 import 'package:icanbefitter/core/theme/spacing.dart';
 import 'package:icanbefitter/core/theme/typography.dart';
@@ -85,7 +86,7 @@ class CompletionPromptCard extends StatelessWidget {
             ),
             const SizedBox(height: 6),
             Text(
-              'Recruit — log more exercises?',
+              WardroomCopy.coachCompletionPromptBody,
               style: AppTypography.body.copyWith(
                 color: AppColors.textPrimary,
                 height: 1.5,

@@ -471,6 +471,13 @@ paths:
   # lib/features/train/** is feature-tier below, so the single file is pinned
   # at account (B-pass fb5048e68fae F12a; same one-file argument as above).
   - { glob: "lib/features/train/providers/workout_surface_invalidation.dart", tier: account }
+  # Coach workout parity (OI-379 / OI-490), same one-file argument: the shared
+  # after-completion step writes total_workouts_done, the streaks, badges and
+  # the rank check (all monotonic: an over-count is permanent), and the
+  # coach-day rule decides when every coach door marks and counts a day. A diff
+  # touching only these must not classify as feature (B-pass 2026-11-10).
+  - { glob: "lib/features/train/services/workout_completion_bookkeeping.dart", tier: account }
+  - { glob: "lib/features/train/services/coach_day_completion.dart", tier: account }
   # Unit 3c / c8f3d1 (2026-08-01), same one-file argument as the two rules above:
   # pro_phase_advance.dart became THE single writer for the phase advance
   # (commitPhaseAdvance) and owns the shared advance mutex every generating

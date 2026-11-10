@@ -198,9 +198,18 @@ void main() {
   });
 
   group('wiring (PRESENCE only - the behaviour is above)', () {
-    test('completeWorkout uses the function and no longer stamps unconditionally',
+    test('the shared completion step uses the function and no longer stamps unconditionally',
         () {
-      final src = File('lib/features/train/providers/train_provider.dart')
+      // Coach workout parity 1a (OI-379): the weekly-streak block moved out of
+      // completeWorkout into the ONE shared completion step every door calls;
+      // these pins follow it there, unchanged.
+      final provider = File('lib/features/train/providers/train_provider.dart')
+          .readAsStringSync();
+      expect(provider.contains('WorkoutCompletionBookkeeping.instance.afterCompletion('),
+          isTrue,
+          reason: 'completeWorkout must call the shared step');
+      final src = File(
+              'lib/features/train/services/workout_completion_bookkeeping.dart')
           .readAsStringSync();
       final stripped = src
           .replaceAll(RegExp(r'/\*.*?\*/', dotAll: true), '')

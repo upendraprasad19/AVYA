@@ -100,6 +100,53 @@ extension _ExpandedExercises on _TrainScreenState {
   }
 
   String _formatDateKey(DateTime d) => istDateStr(d);
+
+  /// Coach workout parity 1b (OI-490): the exercise logs of a NOT-done day,
+  /// one [ExpandedExerciseLogRow] each, read through the canonical
+  /// `WorkoutReadService.exerciseLogsForIstDate` (the DONE expansion above
+  /// keeps its own read).
+  List<Widget> _loggedExerciseRows(String istDate) => [
+        for (final log
+            in WorkoutReadService.instance.exerciseLogsForIstDate(istDate))
+          ExpandedExerciseLogRow(
+            name: log['exercise_name'] as String? ?? 'Exercise',
+            detail: exerciseLogDetail(log),
+            isPr: log['is_pr'] == true,
+          ),
+      ];
+
+  /// 1b: a not-done rest row with logs, expanded: the logs, the edit button
+  /// and the line that a rest day is not a counted workout. No Complete.
+  Widget _buildLoggedRestExpansion(WorkoutDayData day) {
+    return Container(
+      color: AppColors.card,
+      padding: const EdgeInsets.fromLTRB(50, 2, 14, 10),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          ..._loggedExerciseRows(istDateStr(day.date!)),
+          Padding(
+            padding: const EdgeInsets.only(top: 6),
+            child: Text(
+              WardroomCopy.trainRestNotCounted,
+              style: AppTypography.bodySm.copyWith(color: AppColors.textDim),
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.only(top: 6),
+            child: WardButton(
+              label: 'EDIT LOG',
+              leading: const Icon(Icons.edit_outlined,
+                  size: 12, color: AppColors.textPrimary),
+              variant: WardButtonVariant.ghost,
+              size: WardButtonSize.small,
+              onPressed: () => EditWorkoutLogSheet.show(context, day.date!),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 }
 
 /// One logged exercise in the expanded DONE day (OI-371): the name wraps in

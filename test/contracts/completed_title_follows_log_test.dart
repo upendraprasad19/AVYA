@@ -442,7 +442,9 @@ void main() {
     // COMPUTED names (state.workoutDay?.name) — see the plan, section 3.
     const callers = <String, String>{
       'lib/features/ai_coach/services/tool_dispatcher.dart': 'markCompleted(',
-      'lib/features/ai_coach/providers/ai_coach_provider.dart':
+      // Coach workout parity 1b: the tile's tap and Train's COMPLETE WORKOUT
+      // share one path; its markCompleted moved out of ai_coach_provider.
+      'lib/features/train/services/coach_day_completion.dart':
           'markCompleted(',
       'lib/features/train/providers/train_provider.dart': 'markCompleted(',
       'lib/features/dev/simulation_service.dart': 'markCompleted(',

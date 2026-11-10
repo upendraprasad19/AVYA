@@ -67,23 +67,41 @@ extension _WeekRows on _TrainScreenState {
     final todayStr = istTodayStr();
     final expandedIdx = ref.watch(expandedDayProvider);
     final firstDated = weekDays.where((d) => d.date != null).toList();
+    // Coach workout parity 1b (OI-490): which dates hold an exercise log, from
+    // ONE key pass per build (never a per-row scan), so a not-done day's logs
+    // are visible (today: LOGGED SO FAR + COMPLETE WORKOUT; a rest row: its
+    // logs inline; a past day: the preview sheet).
+    final logDates = WorkoutReadService.instance.datesWithExerciseLogs();
+    bool hasLogs(WorkoutDayData d) =>
+        d.date != null && logDates.contains(istDateStr(d.date!));
 
     final card = WardCard(
       padding: EdgeInsets.zero,
       child: Column(
         children: [
           for (int i = 0; i < weekDays.length; i++) ...[
-            _buildCompactRow(context, weekDays[i], todayStr, i),
+            _buildCompactRow(
+                context, weekDays[i], todayStr, i, hasLogs(weekDays[i])),
             // Inline expanded exercises for completed days (W5)
             if (expandedIdx == i && weekDays[i].isDone && weekDays[i].date != null)
               _buildExpandedExercises(weekDays[i]),
             // Inline expanded preview + Start Workout for today-planned
+            // (1b: with LOGGED SO FAR + COMPLETE WORKOUT once something is
+            // logged)
             if (expandedIdx == i &&
                 !weekDays[i].isDone &&
                 !weekDays[i].isRest &&
                 weekDays[i].date != null &&
                 _formatDateKey(weekDays[i].date!) == todayStr)
-              _buildPlannedExpansion(context, weekDays[i]),
+              _buildPlannedExpansion(
+                  context, weekDays[i], hasLogs(weekDays[i])),
+            // 1b: a not-done rest row with logs shows them inline (never a
+            // Complete button: a rest day is not a counted workout).
+            if (expandedIdx == i &&
+                !weekDays[i].isDone &&
+                weekDays[i].isRest &&
+                hasLogs(weekDays[i]))
+              _buildLoggedRestExpansion(weekDays[i]),
             if (i < weekDays.length - 1)
               const WardRule(margin: EdgeInsets.zero),
           ],
@@ -104,8 +122,8 @@ extension _WeekRows on _TrainScreenState {
     );
   }
 
-  Widget _buildCompactRow(
-      BuildContext context, WorkoutDayData day, String todayStr, int dayIndex) {
+  Widget _buildCompactRow(BuildContext context, WorkoutDayData day,
+      String todayStr, int dayIndex, bool hasLogs) {
     // Determine if this is today
     bool isToday = false;
     if (day.date != null) {
@@ -127,12 +145,22 @@ extension _WeekRows on _TrainScreenState {
     final todayDate = DateTime(now.year, now.month, now.day);
     final isPast = day.date != null && day.date!.isBefore(todayDate);
 
+    // Coach workout parity 1b: DONE before REST everywhere in the row. A
+    // counted rest-type row (a template finished on a rest day, a synthesised
+    // `logged` row) is a done workout: DONE chip, its name, its EX count, its
+    // logs on tap. Only a NOT-done rest row renders as rest.
+    final restNotDone = day.isRest && !day.isDone;
+    // Today's planned row once something is logged: IN PROGRESS.
+    final inProgress = isToday && !day.isDone && !day.isRest && hasLogs;
+    // A not-done rest row with logs: LOGGED, expandable.
+    final restLogged = restNotDone && hasLogs;
+
     // Status
     _RowStatus status;
-    if (day.isRest) {
-      status = _RowStatus.rest;
-    } else if (day.isDone) {
+    if (day.isDone) {
       status = _RowStatus.done;
+    } else if (day.isRest) {
+      status = _RowStatus.rest;
     } else if (isToday) {
       status = _RowStatus.today;
     } else if (isPast) {
@@ -145,13 +173,19 @@ extension _WeekRows on _TrainScreenState {
     // completed days expand inline (W5); future/past show preview; rest days show recovery sheet
     final content = GestureDetector(
       onTap: () {
-        if (day.isRest) {
-          _showRestDaySheet(context);
-        } else if (isToday && !day.isDone) {
-          // Today's planned workout: expand inline preview with Start Workout button
+        if (day.isDone) {
+          // Completed days (a counted rest-type row too, 1b) expand inline to
+          // show logged exercises (W5)
           ref.read(expandedDayProvider.notifier).toggle(dayIndex);
-        } else if (day.isDone) {
-          // Completed days expand inline to show logged exercises (W5)
+        } else if (day.isRest) {
+          // 1b: a rest row with logs expands to them; otherwise the sheet.
+          if (restLogged) {
+            ref.read(expandedDayProvider.notifier).toggle(dayIndex);
+          } else {
+            _showRestDaySheet(context);
+          }
+        } else if (isToday) {
+          // Today's planned workout: expand inline preview with Start Workout button
           ref.read(expandedDayProvider.notifier).toggle(dayIndex);
         } else {
           _showExercisePreviewSheet(context, day);
@@ -181,7 +215,7 @@ extension _WeekRows on _TrainScreenState {
                 child: Text(
                   dayLabel.toUpperCase(),
                   style: AppTypography.monoXs.copyWith(
-                    color: day.isRest
+                    color: restNotDone
                         ? AppColors.textDim.withValues(alpha: 0.5)
                         : AppColors.textDim,
                     letterSpacing: 1.5,
@@ -192,12 +226,12 @@ extension _WeekRows on _TrainScreenState {
               // Workout name
               Expanded(
                 child: Text(
-                  day.isRest ? 'Rest' : day.name,
-                  style: (day.isRest
+                  restNotDone ? 'Rest' : day.name,
+                  style: (restNotDone
                           ? AppTypography.bodySm
                           : AppTypography.h3.copyWith(fontSize: 14))
                       .copyWith(
-                    color: day.isRest
+                    color: restNotDone
                         ? AppColors.textDim.withValues(alpha: 0.5)
                         : AppColors.textPrimary,
                   ),
@@ -215,8 +249,9 @@ extension _WeekRows on _TrainScreenState {
               ...daySwapRowTrailingSlot(
                   day.date != null ? istDateStr(day.date!) : null),
 
-              // Exercise count (only for workout days)
-              if (!day.isRest) ...[
+              // Exercise count (only for workout days, a counted rest-type
+              // row included)
+              if (!restNotDone) ...[
                 Text(
                   '${day.exerciseCount} EX',
                   style: AppTypography.monoXs.copyWith(
@@ -231,8 +266,11 @@ extension _WeekRows on _TrainScreenState {
               _buildStatusIndicator(
                 status,
                 isExpanded: (status == _RowStatus.done ||
-                        status == _RowStatus.today) &&
+                        status == _RowStatus.today ||
+                        restLogged) &&
                     ref.watch(expandedDayProvider) == dayIndex,
+                inProgress: inProgress,
+                restLogged: restLogged,
               ),
             ],
           ),
@@ -244,7 +282,10 @@ extension _WeekRows on _TrainScreenState {
     return DaySwapDragWrapper(date: istDateStr(day.date!), child: content);
   }
 
-  Widget _buildStatusIndicator(_RowStatus status, {bool isExpanded = false}) {
+  Widget _buildStatusIndicator(_RowStatus status,
+      {bool isExpanded = false,
+      bool inProgress = false,
+      bool restLogged = false}) {
     switch (status) {
       case _RowStatus.done:
         return Row(
@@ -263,7 +304,9 @@ extension _WeekRows on _TrainScreenState {
         return Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const WardChip(label: 'TODAY', tone: WardChipTone.gold),
+            WardChip(
+                label: inProgress ? WardroomCopy.trainInProgressChip : 'TODAY',
+                tone: WardChipTone.gold),
             const SizedBox(width: 2),
             Icon(
               isExpanded ? Icons.expand_less : Icons.expand_more,
@@ -295,7 +338,21 @@ extension _WeekRows on _TrainScreenState {
           ),
         );
       case _RowStatus.rest:
-        return const SizedBox.shrink();
+        if (!restLogged) return const SizedBox.shrink();
+        return Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const WardChip(
+                label: WardroomCopy.trainLoggedChip,
+                tone: WardChipTone.neutral),
+            const SizedBox(width: 2),
+            Icon(
+              isExpanded ? Icons.expand_less : Icons.expand_more,
+              size: 16,
+              color: AppColors.textDim.withValues(alpha: 0.6),
+            ),
+          ],
+        );
     }
   }
 }
