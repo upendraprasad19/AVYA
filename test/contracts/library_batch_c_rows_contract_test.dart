@@ -43,9 +43,22 @@ const _optionalKeys = <String>{
 const _plateKeys = <String>{'demo_slug', 'demo_pair'};
 const _mediaKeyList = <String>['media_slug', 'media_version', 'media_source'];
 /// Batch C2a (OI-460): a new row that receives a removed row's name carries `name_aliases` (non-empty), and ONLY those rows do.
+/// Library Batch S1b-3 (OI-147): so does the `into` row of the importer's merges record (G1373 takes E053's name).
 Set<String> _aliasTargets() => {
       for (final e in (jsonDecode(File('scripts/data/library_batch_c2_removals.json').readAsStringSync()) as Map<String, dynamic>)['entries'] as List)
         if ((e as Map)['decision'] == 'remove' && e['alias_to'] != null) e['alias_to'] as String,
+      ..._mergeTargets(),
+    };
+
+/// Library Batch S1b-3: the rows the importer's merge stage merged INTO; only these new rows may carry `merged_ids`.
+Set<String> _mergeTargets() => {
+      for (final m in (jsonDecode(File('scripts/data/library_s1b3_merges.json').readAsStringSync()) as Map<String, dynamic>)['rows'] as List)
+        (m as Map)['into'] as String,
+    };
+
+/// Every id the shipped library holds (a merged_ids entry must name none of them).
+Set<String> _libraryIds() => {
+      for (final r in (jsonDecode(File('assets/data/exercise_library.json').readAsStringSync()) as List)) (r as Map)['id'] as String,
     };
 
 const _newId = r'^[GN]\d';
@@ -62,8 +75,9 @@ List<Map<String, dynamic>> _deepRows(List<Map<String, dynamic>> v) =>
     (jsonDecode(jsonEncode(v)) as List).cast<Map<String, dynamic>>();
 Map<String, dynamic> _byId(List<Map<String, dynamic>> rows, String id) => rows.firstWhere((r) => r['id'] == id);
 
-List<String> _keyViolations(List<Map<String, dynamic>> rows, {Set<String>? mapped}) {
+List<String> _keyViolations(List<Map<String, dynamic>> rows, {Set<String>? mapped, Set<String>? libraryIds}) {
   final mappedIds = mapped ?? _mappedIds();
+  final liveIds = libraryIds ?? _libraryIds();
   final out = <String>[];
   for (final r in rows) {
     final id = r['id'];
@@ -79,6 +93,17 @@ List<String> _keyViolations(List<Map<String, dynamic>> rows, {Set<String>? mappe
       } else if (k == 'name_aliases') {
         if (!_aliasTargets().contains(id)) out.add('$id carries name_aliases but no removed row aliases to it');
         if (r[k] is! List || (r[k] as List).isEmpty) out.add('$id carries an empty name_aliases');
+      } else if (k == 'merged_ids') {
+        final v = r[k];
+        if (!_mergeTargets().contains(id)) out.add('$id carries merged_ids but the merges record merges nothing into it');
+        if (v is! List || v.isEmpty) {
+          out.add('$id carries an empty merged_ids');
+        } else {
+          for (final m in v) {
+            if (m is! String || !RegExp(r'^E\d+$').hasMatch(m)) out.add('$id merged_ids holds $m, not an E-id');
+            if (liveIds.contains(m)) out.add('$id merged_ids names $m, which the library still ships');
+          }
+        }
       } else if (!_required40.contains(k) && !_optionalKeys.contains(k)) {
         out.add('$id carries extra key $k');
       }
@@ -364,6 +389,17 @@ void main() {
       final aliasless = _deepRows(rows).firstWhere((r) => !_aliasTargets().contains(r['id']));
       aliasless['name_aliases'] = ['Anything'];
       expect(_keyViolations([aliasless]), isNotEmpty, reason: 'name_aliases on a row no removal aliases to');
+      // Library Batch S1b-3: merged_ids only on a merges-record target, non-empty, and naming no live row.
+      final notTarget = _deepRows(rows).firstWhere((r) => !_mergeTargets().contains(r['id']));
+      notTarget['merged_ids'] = ['E999'];
+      expect(_keyViolations([notTarget]), isNotEmpty, reason: 'merged_ids on a row the merges record merges nothing into');
+      final emptyMerged = _deepRows(rows).firstWhere((r) => r['id'] == 'G1373');
+      emptyMerged['merged_ids'] = <String>[];
+      expect(_keyViolations([emptyMerged]), isNotEmpty, reason: 'an empty merged_ids');
+      final liveMerged = _deepRows(rows).firstWhere((r) => r['id'] == 'G1373');
+      liveMerged['merged_ids'] = ['E051'];
+      expect(_keyViolations([liveMerged]), isNotEmpty, reason: 'merged_ids naming a row the library still ships');
+      expect(_keyViolations([_deepRows(rows).firstWhere((r) => r['id'] == 'G1373')]), isEmpty, reason: 'the real G1373 is clean');
       final d = _deepRows(rows)..first['progression_to'] = null;
       expect(_keyViolations(d), isNotEmpty, reason: 'a null ladder key');
       final e = _deepRows(rows)..first.remove('variant_family');

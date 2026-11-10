@@ -34,7 +34,7 @@ void main() {
 
   test('retiredLibraryIds is exactly the union of merged_ids', () {
     expect(SeedService.retiredLibraryIds(bundled),
-        {'E241', 'E240', 'E225', 'E249', 'E165', 'E167', 'E168'});
+        {'E241', 'E240', 'E225', 'E249', 'E165', 'E167', 'E168', 'E053'});
     expect(SeedService.retiredLibraryIds(const []), isEmpty);
   });
 

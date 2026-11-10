@@ -71,7 +71,14 @@ void main() {
     final c2Removed = ((jsonDecode(File('scripts/data/library_batch_c2_removals.json').readAsStringSync()) as Map<String, dynamic>)['entries'] as List)
         .where((e) => (e as Map)['decision'] == 'remove')
         .length;
-    expect(ref.length, 285 - c2Removed);
+    // Library Batch S1b-3 (OI-147) deleted E053's entry when E053 left the library (merged into G1373), named here so the
+    // count cannot absorb an unnamed removal.
+    const removedSince = {'E053'};
+    for (final id in removedSince) {
+      expect(ref.containsKey(id), isFalse, reason: '$id left the library; its frozen entry goes with it');
+      expect(byId.containsKey(id), isFalse, reason: '$id is named as removed but still ships');
+    }
+    expect(ref.length, 285 - c2Removed - removedSince.length);
     expect(bad, isEmpty, reason: 'rows whose pre-existing keys changed: $bad');
   });
 }

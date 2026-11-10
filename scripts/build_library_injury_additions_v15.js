@@ -45,6 +45,15 @@ const TWIN = {
   G0474: { from: 'E179', name: 'Toes to Bar', tags: ['lower_back', 'shoulder'] },
 };
 
+// Library Batch S1b-3 (OI-147) merged E053 Donkey Calf Raise into G1373 and removed it from the library. It was one of the
+// ORIGINAL calf_raise siblings the founder-approved table was decided against ("all 4 same-family originals"), so it stays
+// in the sibling pool as a FROZEN original (tags read from the library row before removal, at 01ed781c);
+// test/contracts/library_batch_c_injury_coverage_test.dart mirrors the tags against the base fixture. A frozen original is
+// used only while its id is absent from the library, so it can never be counted twice.
+const FROZEN_ORIGINALS = [
+  { id: 'E053', name: 'Donkey Calf Raise', variant_family: 'calf_raise', injury_contraindications: ['ankle'] },
+];
+
 const sortedUnique = (a) => [...new Set(a || [])].sort();
 const readJson = (p) => JSON.parse(fs.readFileSync(p, 'utf8'));
 
@@ -60,7 +69,8 @@ function familyTokens(row) {
 function buildRow(row, lib) {
   // ORIGINAL rows only (E-ids): the library file also holds the shipped G/N rows, and the row being built is one of them
   // (test/helpers/library_injury_floor.dart familyOriginals() filters the same way).
-  const sibs = lib.filter((l) => /^E\d/.test(l.id) && l.variant_family && l.variant_family === row.variant_family);
+  const pool = [...lib, ...FROZEN_ORIGINALS.filter((f) => !lib.some((l) => l.id === f.id))];
+  const sibs = pool.filter((l) => /^E\d/.test(l.id) && l.variant_family && l.variant_family === row.variant_family);
   const cnt = {};
   for (const l of sibs) for (const t of sortedUnique(l.injury_contraindications)) cnt[t] = (cnt[t] || 0) + 1;
   const floor = sibs.length ? Object.keys(cnt).filter((t) => cnt[t] === sibs.length) : [];

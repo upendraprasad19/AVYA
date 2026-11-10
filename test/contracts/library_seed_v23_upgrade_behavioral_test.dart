@@ -24,6 +24,18 @@ import '../helpers/hive_test_setup.dart';
 List<Map<String, dynamic>> _bundled() =>
     (jsonDecode(File('assets/data/exercise_library.json').readAsStringSync()) as List).cast<Map<String, dynamic>>();
 
+/// The v23 bundle, rebuilt from the current one: Library Batch S1b-3 (seed v24) removed E053 (re-inserted at its v23
+/// index from the restated v23 row) and gave G1373 `name_aliases` and `merged_ids` (stripped). Keeps the v22 -> v23 digest
+/// chain below byte-proven.
+List<Map<String, dynamic>> _v23Bundle() {
+  final fx = jsonDecode(File('test/fixtures/library_e053_row_v23.json').readAsStringSync()) as Map<String, dynamic>;
+  final rows = [
+    for (final r in _bundled()) r['id'] == 'G1373' ? (Map<String, dynamic>.from(r)..remove('name_aliases')..remove('merged_ids')) : r,
+  ];
+  rows.insert((fx['_meta'] as Map<String, dynamic>)['v23_index'] as int, fx['row'] as Map<String, dynamic>);
+  return rows;
+}
+
 /// The nine rows v23 adds (restated from the plan, never read from the library).
 const _newIds = ['N14', 'N15', 'N16', 'N17', 'N18', 'N19', 'N20', 'N21', 'N22'];
 
@@ -73,14 +85,14 @@ void main() {
   // (sha256 of Dart's jsonEncode of the shipped v22 assets/data/exercise_library.json at 5d64d1a9, recorded 2026-11-09).
   test('the v23 bundle is the v22 bundle plus the nine rows and the two widenings, and nothing else', () {
     final rebuilt = [
-      for (final r in _bundled())
+      for (final r in _v23Bundle())
         if (!_newIds.contains(r['id'])) (_v22Suitable[r['id']] == null ? r : {...r, 'suitable_for': _v22Suitable[r['id']]}),
     ];
     expect(sha256.convert(utf8.encode(jsonEncode(rebuilt))).toString(),
         '7a37c26c8fdc14e075c90558e4cf6adea71ab91f7614982e910d23e4962065d8');
   });
 
-  test('a v22 box ends at v23 with the nine rows and the widened suitable_for, and every other row unchanged', () async {
+  test('a v22 box ends at the current version (v24) with the nine rows and the widened suitable_for, and every other row unchanged', () async {
     final hive = HiveService.instance;
     await _putV22Box(hive);
     await _markSeeded(hive, 22);
@@ -101,16 +113,16 @@ void main() {
       expect(jsonEncode(_asJson(hive.exerciseBox.get(e.key))), e.value, reason: '${e.key} must be unchanged');
     }
     expect(hive.exerciseBox.length, _bundled().length);
-    expect(hive.configBox.get('exercise_library_version') as int, 23);
+    expect(hive.configBox.get('exercise_library_version') as int, 24);
   });
 
-  test('MIRROR: a box already at v23 is not rewritten (the upgrade fires only when the stored version is older)', () async {
+  test('MIRROR: a box already at the current version (v24, Library Batch S1b-3) is not rewritten (the upgrade fires only when the stored version is older)', () async {
     final hive = HiveService.instance;
     await _putV22Box(hive);
-    await _markSeeded(hive, 23);
+    await _markSeeded(hive, 24);
     await SeedService.instance.seedIfNeeded();
     expect(hive.exerciseBox.get('N14'), isNull);
     expect(_asJson(hive.exerciseBox.get('E045'))['suitable_for'], ['Intermediate', 'Advanced']);
-    expect(hive.configBox.get('exercise_library_version') as int, 23);
+    expect(hive.configBox.get('exercise_library_version') as int, 24);
   });
 }

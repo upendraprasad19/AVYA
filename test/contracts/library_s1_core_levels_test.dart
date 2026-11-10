@@ -85,8 +85,14 @@ void main() {
             jsonEncode(byId[e.key]!['core_levels']) != jsonEncode(e.value))
           e.key
     ], isEmpty);
-    // The fixture is the full pre-S1a library, so every row of it still ships (S1a removes nothing).
-    expect(before.keys.where((i) => !byId.containsKey(i)), isEmpty);
+    // The fixture is the full pre-S1a library (FROZEN). S1a removes nothing; the only fixture rows that no longer ship are
+    // the ones a later batch removed by name: E053 Donkey Calf Raise (Library Batch S1b-3, merged into G1373).
+    const removedSince = {'E053'};
+    for (final id in removedSince) {
+      expect(before.containsKey(id), isTrue, reason: '$id is named as removed since S1a, so the frozen fixture holds it');
+      expect(byId.containsKey(id), isFalse, reason: '$id is named as removed since S1a but still ships');
+    }
+    expect(before.keys.where((i) => !byId.containsKey(i) && !removedSince.contains(i)), isEmpty);
   });
 
   test('every Table A id actually changed (no no-op entry hides a wrong before)', () {

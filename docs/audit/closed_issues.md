@@ -6490,3 +6490,67 @@ Third piece of the Batch C2 split (OI-460 removals, OI-462 twins, this). Split o
 **Done when.** E230 is bodyweight in the library, the seed and the cloud, with its animation in the bucket; the golden effect is recorded; sweeps and scorecard are green.
 
 **Closed by.** Branch `library-batch-c2c`, PR 226: the batch commit 0577f760 (E230 retag record `scripts/data/library_e230_retag.json` applied by the importer stage, animation 0795 in the media table, seed v20, generator golden and plan-scorecard baseline re-recorded, migration 173 file and ledger entry), plus two merges of `main` (46121738, 30ed28d0). Live steps on 2026-11-06 after the founder's go on each exact artifact: the 252,438-byte animation uploaded and verified; migration 173 rehearsed in a rolled-back transaction, drift-checked 16 of 16 buckets and applied to `dedsavbjuwgarrhphgnl`. B-pass `docs/reviews/library-batch-c2c-bpass.md`; closure `docs/audit/library-batch-c2c.closure.yaml`; regression tests `test/contracts/library_e230_retag_test.dart` and `test/contracts/library_seed_v20_upgrade_behavioral_test.dart`. Cost, stated in the diagnose doc: in gym plans a loaded cable curl became an unloaded bodyweight curl logged by reps, and in 6-day build_muscle bodyweight and home plans E230 takes the Hamstrings slot a Quads-crediting lunge filled (Quads 1 to 3 sets lower in 10 cells; widened onto OI-477).
+
+## OI-147 — remove Donkey Calf Raise: a one-row deletion that touches the cloud seed, a live apply, and the frozen generator baseline (P2)
+
+- **Status**: CLOSED · 2026-11-10 · branch `generator-step1-s1b3` · diagnose `c3e8f1` · the commit carrying `closes-oi:` for this entry
+- **Blocked on**: — (resolved; the generator question was answered by G1373 Bodyweight Standing Calf Raise, added in Batch C1, and the live apply had the founder go on 2026-11-10)
+- **Verified**: 2026-08-29 — every claim below re-derived from the named file in this worktree.
+
+**Founder decision (brainstorm, exercise-plates):** Donkey Calf Raise is *"not feasible generally"*
+and should leave the library. It carries no drawing, so it was originally bundled into the
+exercise-plates batch, which is where its real cost surfaced.
+
+**Split out of `exercise-plates` on 2026-08-29** after review round 2 returned `not converged`:
+three of that round's five blockers came from this one row removal and none of them from the
+plates feature. Removing it from that batch dissolved all three. This is a separable unit with its
+own blast radius, not a deferral — the plates work never touched any of these surfaces.
+
+**What a one-row deletion actually requires:**
+
+| # | Surface | Why it fires | Evidence |
+|---|---|---|---|
+| 1 | `test/contracts/exercise_library_schema_contract_test.dart:84-85` | asserts `rows.length == 292` and `ids.toSet().length == 292` | read 2026-08-29; the file has **five** tests, not four |
+| 2 | `test/contracts/exercise_library_cloud_seeded_test.dart` | asserts the newest seed migration's tuple count equals the bundled JSON row count | `125_reseed_exercise_library.sql` = **292** tuples, JSON = **292** rows. 291 turns it red |
+| 3 | `supabase/migrations/` | that test's own guidance is that a library change **mints the NEXT seed migration** rather than rewriting one | re-mint via `scripts/seed_exercise_library.js` |
+| 4 | `backups/applied_migrations.json` | §4.5 — a migration apply pairs with a ledger update in the same commit | |
+| 5 | **live prod apply** | §4.3 — needs its own explicit founder go, separate from plan approval | |
+| 6 | `test/plan_generator/baseline/baseline_plans.md:235` | the frozen baseline shows the generator **picking this row**: `\| Calves/knee_dominant \| Donkey Calf Raise \| attempt2DropSubFocus \| Calves \| bodyweight \|` | |
+| 7 | `test/plan_generator/scorecard_gate_test.dart` | 606-persona matrix with a hard fallback ceiling | |
+
+**⚠ The generator question, which must be answered BEFORE the row goes:**
+
+Donkey Calf Raise is the **only bodyweight-tier calf isolation row in the library**. Verified by
+scanning all 292 rows for a calf `primary_muscles` entry:
+
+| row | tiers |
+|---|---|
+| **Donkey Calf Raise** | `bodyweight`, `home_dumbbells`, `basic_gym`, `full_gym` |
+| Standing Calf Raise | `basic_gym`, `full_gym` — **not bodyweight** |
+| Seated Calf Raise | `full_gym` only |
+| Dumbbell Calf Raise | `home_dumbbells`+ — **not bodyweight** |
+
+The remaining bodyweight `knee_dominant` rows (Baithak, Jump Squat, Broad Jump) are `calisthenics`,
+not `isolation`. So removing this row leaves a bodyweight user with **no calf isolation option at
+all**, and the `Calves/knee_dominant` slot — already resolving at `attempt2DropSubFocus` — falls
+through to `attempt3DropTypeAndTarget`, which the baseline itself flags `⚠`.
+
+`fallback_by_tier.bodyweight` is already 1630 of a 2862 ceiling. One extra fallback pick makes
+2863 > 2862 and the suite goes red on `main`.
+
+**This is a prediction from mechanism and citation, NOT a measurement** — the 606-persona matrix
+has not been run against a 291-row library. Run it first:
+`flutter test test/plan_generator/scorecard_gate_test.dart` against the post-removal JSON.
+
+**Three ways it can end, all terminal:**
+1. The matrix does not move → remove the row, fix surfaces 1–5, done.
+2. The matrix moves → **add a replacement bodyweight calf isolation row in the same batch**
+   (the honest fix — the founder's objection is to this exercise, not to training calves), then
+   remove.
+3. Re-baseline with the attribution written into the comment, following the precedent at
+   `scorecard_gate_test.dart:114-141`. Weakest option; only if 1 and 2 both fail.
+
+**Until then** the row stays in the library and simply shows a monogram in the plates feature
+(127 monogram rows instead of 126). Nothing about plates depends on its removal.
+
+**Closed (2026-11-10, branch `generator-step1-s1b3`, Library Batch S1b-3, diagnose `c3e8f1`, plan `docs/plans/2026-11-10-library-batch-s1b3-retire-donkey-calf-raise.md` v5, five plan-review rounds and a B-pass `docs/reviews/generator-step1-s1b3-bpass.md`, record `docs/plan-reviews/generator-step1-s1b3.md`).** The generator question this entry left open was answered before this batch: Batch C1 added G1373 Bodyweight Standing Calf Raise (same muscle, pattern, tiers and levels), so the bodyweight Calves slot keeps a calf isolation row (ending 2 without a new row). E053 is merged into G1373 through a record-driven importer merge stage (`scripts/data/library_s1b3_merges.json`): G1373 gains `merged_ids [E053]` and `name_aliases [Donkey Calf Raise]`, so a saved plan or template naming it resolves to G1373. The media table drops its row and file entry with the bundled still (builder `--drop-unmapped`); seed v24 prunes E053 from every install; migration 175 deactivated it in the cloud with G1373's cues and set the alias, applied live 2026-11-10 after the founder go (934 / 870 / 64, md5 `3170849a…`, equal to the local rehearsal; inline rollback restores E053's own cues from 174). The frozen generator golden was re-recorded with every changed key attributed: 76 of 999 (51 bodyweight, 16 home_dumbbells, 9 injury), both counterfactuals (E053 restored; alias removed) 0. Found in the build and fixed: the injury builder's original-sibling pool shrank by E053 (now a frozen original). Regression tests: `test/contracts/library_seed_v24_upgrade_behavioral_test.dart`, the merge-stage group in `test/scripts/library_media_importer_test.dart`, the `--drop-unmapped` group in `test/scripts/library_media_builder_test.dart`, `exercise_library_cloud_seeded_test.dart`; closure `docs/audit/library-batch-s1b3.closure.yaml`.

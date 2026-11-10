@@ -41,7 +41,10 @@ void main() {
     final c2Removed = ((jsonDecode(File('scripts/data/library_batch_c2_removals.json').readAsStringSync()) as Map<String, dynamic>)['entries'] as List)
         .where((e) => (e as Map)['decision'] == 'remove')
         .length;
-    expect(original, hasLength(285 - c2Removed), reason: 'the v14 library is the 285 E-id rows minus the C2a removals');
+    // Library Batch S1b-3 (OI-147) merged E053 into G1373, named so the count cannot absorb an unnamed removal.
+    const removedSince = {'E053'};
+    expect(original.where((r) => removedSince.contains(r['id'])), isEmpty);
+    expect(original, hasLength(285 - c2Removed - removedSince.length), reason: 'the v14 library is the 285 E-id rows minus the C2a removals and E053');
     expect(added, isNotEmpty, reason: 'run: node scripts/add_library_batch_c_v15.js');
     expect(bundled.firstWhere((r) => r['id'] == 'E274')['target_focus'], ['Mid Back']);
 

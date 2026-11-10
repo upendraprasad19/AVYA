@@ -3,9 +3,9 @@
     "bucket": "exercise-media",
     "ledger_completed_at": "2026-10-18T03:13:14.150Z",
     "old_rows": {
-      "entries": 138,
+      "entries": 137,
       "omitted": 0,
-      "sha256": "5d0305c95054f0dfa543136a07e372da31a36e539a1790c5dd2467cd73c965fb"
+      "sha256": "82eebf19d774b7779c42620c2dd88f87227c67dbb01a1d24f29501ff330fdc15"
     },
     "origin": "AI recreation of the GIF set in `assets/exercise animations/forgetrainer_animations/gifs`; licensing risk accepted by the founder (D9, 2026-10-21)",
     "taken_down": [],
@@ -2709,25 +2709,6 @@
       ],
       "webp_bytes": 441356,
       "webp_sha256": "f5bf280e81aa95eeb0af12f43ecce19a2b5224fdc3491d64b2b034a27315ae21"
-    },
-    "0284-donkey-calf-raise": {
-      "frames": 12,
-      "gif": "0284",
-      "ledger_id": "0284_Donkey_Calf_Raise",
-      "source_gif_sha256": "57a9a7421e1f5a90260dcf8146f2fefced990e6420ca085230ded04340eff21d",
-      "status": "active",
-      "thumb_bytes": 6426,
-      "thumb_sha256": "3cd17fcac4a762dd9a4143d1d684662e3d6e70f9e1cbe94fabee9e920ef0d168",
-      "versions": [
-        {
-          "file": "webp-720/0284_Donkey_Calf_Raise_wardroom_720.webp",
-          "media_version": 1,
-          "webp_bytes": 454440,
-          "webp_sha256": "f37d8be4ec6882b963ded156ea662b97fa4272fa9c091b40668f09df6bf6cd60"
-        }
-      ],
-      "webp_bytes": 454440,
-      "webp_sha256": "f37d8be4ec6882b963ded156ea662b97fa4272fa9c091b40668f09df6bf6cd60"
     },
     "0285-dumbbell-alternate-bicep-curl": {
       "frames": 12,
@@ -14463,7 +14444,6 @@
     "E049": "0586-lying-leg-curl",
     "E050": "0117-barbell-sumo-deadlift",
     "E052": "0594-seated-calf-raise",
-    "E053": "0284-donkey-calf-raise",
     "E055": "0276-dead-bug",
     "E056": "0175-cable-kneeling-crunch",
     "E057": "0475-hanging-straight-leg-raise",

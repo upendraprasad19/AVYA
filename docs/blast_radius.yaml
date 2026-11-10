@@ -542,6 +542,11 @@ paths:
   # Library Batch S1b-2 (2026-11-09): the suitable_for record decides which levels E010 / E045 are offered to (a queryV4
   # filter for every user) and what the seed migration's rollback restores, so it sits at account above scripts/**.
   - { glob: "scripts/data/library_s1b2_suitable_for.json", tier: account }
+  # Library Batch S1b-3 (2026-11-10, OI-147): the merges record decides which library rows leave every install (the importer
+  # drops them, the seed prune deletes them, the migration deactivates them and its rollback reactivates them); the
+  # name_aliases record decides what the seed migration's rollback restores. Both sit at account above scripts/**.
+  - { glob: "scripts/data/library_s1b3_merges.json", tier: account }
+  - { glob: "scripts/data/library_s1b3_name_aliases.json", tier: account }
   - { glob: "docs/**", tier: feature }
   - { glob: "scripts/**", tier: feature }
   - { glob: "test/**", tier: feature }

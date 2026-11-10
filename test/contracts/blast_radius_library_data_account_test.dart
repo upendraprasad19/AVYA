@@ -38,6 +38,10 @@ const _retagGlob = 'scripts/data/library_e230_retag.json';
 const _coreLevelsGlob = 'scripts/data/library_s1_core_levels.json';
 // Library Batch S1b-2: the suitable_for record decides which levels E010 / E045 are offered to (every user's queryV4).
 const _suitableForGlob = 'scripts/data/library_s1b2_suitable_for.json';
+// Library Batch S1b-3 (OI-147): the merges record decides which rows leave every install; the name_aliases record decides
+// what the migration's rollback restores.
+const _mergesGlob = 'scripts/data/library_s1b3_merges.json';
+const _namesGlob = 'scripts/data/library_s1b3_name_aliases.json';
 const _assetsGlob = 'assets/**';
 const _scriptsGlob = 'scripts/**';
 
@@ -207,6 +211,35 @@ void main() {
       expect(tier('scripts/data/library_s1b2_suitable_for_other.json'), 'feature');
     });
   });
+
+  for (final (label, glob, lookAlike) in [
+    ('1g. the S1b-3 merges record', _mergesGlob, 'scripts/data/library_s1b3_merges_other.json'),
+    ('1h. the S1b-3 name_aliases record', _namesGlob, 'scripts/data/library_s1b3_name_aliases_other.json'),
+  ]) {
+    group(label, () {
+      test('it is account, claimed by its own rule above scripts/**, and the file exists', () {
+        expect(File(glob).existsSync(), isTrue, reason: 'positive control');
+        expect(tier(glob), 'account');
+        expect(ruleFor(glob)?.glob, glob);
+        int index(String g) => reg.rules.indexWhere((r) => r.glob == g);
+        expect(index(glob), lessThan(index(_scriptsGlob)));
+      });
+
+      test("the commit-time review gate's own engine reads it as account too; a look-alike stays feature", () {
+        final rules = reviewGate.parseRules(yaml);
+        String gateTier(String p) {
+          for (final r in rules) {
+            if (reviewGate.globToRegExp(r.glob).hasMatch(p)) return r.tier;
+          }
+          return 'feature';
+        }
+
+        expect(gateTier(glob), 'account');
+        expect(gateTier(lookAlike), 'feature');
+        expect(tier(lookAlike), 'feature');
+      });
+    });
+  }
 
   group('2. order', () {
     test('both rules sit above the assets/** and scripts/** feature defaults', () {

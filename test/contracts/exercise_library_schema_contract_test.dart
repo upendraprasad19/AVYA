@@ -158,7 +158,7 @@ void main() {
       expect(offenders, isEmpty, reason: 'Rows with empty/absent primary_muscles: $offenders');
     });
 
-    test('285 rows, ids unique (E262-E294 added by OI-89; 7 retired in v12)', () {
+    test('870 rows, ids unique (285 originals incl. E262-E294 from OI-89, then the Batch A/C/S1b changes)', () {
       // 259 -> 292, in two waves with different jobs, then 292 -> 285 when Batch A
       // (seed v12) retired 7 duplicates into their twins (merged_ids).
       //
@@ -176,8 +176,9 @@ void main() {
       // taken to 3. Calibrated against the two patterns that already worked:
       // horizontal_push had 6 baseline rows and zero missing, hip_isolation 5 and
       // zero. Six to seven is the working number; three is not.
-      expect(rows.length, 871, reason: '285 original rows + 633 Batch C1/C2b rows - 56 removals (50 Batch C2a, 6 Batch C2b) + 9 Library Batch S1b-2 loaded versions');
-      expect(rows.map((r) => r['id']).toSet().length, 871);
+      expect(rows.length, 870, reason: '285 original rows + 633 Batch C1/C2b rows - 56 removals (50 Batch C2a, 6 Batch C2b) + 9 Library Batch S1b-2 loaded versions - E053 Donkey Calf Raise (Library Batch S1b-3, merged into G1373)');
+      expect(rows.map((r) => r['id']).toSet().length, 870);
+      expect(rows.any((r) => r['id'] == 'E053'), isFalse, reason: 'E053 left in Library Batch S1b-3 (merged into G1373)');
       expect(rows.any((r) => r['id'] == 'E261'), isTrue);
       expect(rows.any((r) => r['id'] == 'E294'), isFalse, reason: 'E294 left in Batch C2a');
     });
