@@ -272,7 +272,7 @@ class CoachDayCompletion {
         mintProgressIfMissing: false,
         door: door,
       );
-      await prompts.resolve(date);
+      // The prompt is resolved inside afterCompletion (owner-checked).
       return CoachTapResult.completed;
     } catch (e, st) {
       debugPrint('[CoachDayCompletion] completeOnTap failed: $e');

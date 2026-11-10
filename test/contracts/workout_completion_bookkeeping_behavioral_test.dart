@@ -22,6 +22,7 @@ library;
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:icanbefitter/core/services/completion_prompt_store.dart';
 import 'package:icanbefitter/core/services/error_telemetry.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
 import 'package:icanbefitter/core/services/hive_user_session.dart';
@@ -228,19 +229,50 @@ void main() {
       expect(p['last_workout_date'], '2026-06-04');
     });
 
-    test('restore NOT settled: only the count is written', () async {
+    test('restore NOT settled: the count, last_workout_date and badges run; '
+        'the streak steps do not (B-pass 2026-11-10)', () async {
       SyncService.instance.debugSetRestoreSettledUserIdForTest(null);
       await seedWeek(_mon, week: 1, completed: {0, 1, 2});
       await seedProgress({'total_workouts_done': 3, 'current_streak_weeks': 0});
       await door(_d(3));
       final p = progress();
       expect(p['total_workouts_done'], 4);
+      // Later-wins and unlock-only: safe on a partial restore, and Active
+      // Workout always wrote them.
+      expect(p['last_workout_date'], '2026-06-04');
+      expect(HiveService.instance.configBox.get('unlockedBadges'), isNotNull,
+          reason: 'step 6 (badges) ran');
+      // The streak steps wait for the restore.
       expect(p.containsKey('current_streak_days'), isFalse);
-      expect(p.containsKey('last_workout_date'), isFalse);
       expect(p['current_streak_weeks'], 0);
       expect(p.containsKey('last_counted_week_key'), isFalse);
       expect(HiveService.instance.healthBox.get('streaks'), isNull);
       expect(events, contains('completion_bookkeeping_restore_unsettled'));
+    });
+
+    test('step 0b: the day\'s prompt is resolved for every door, Active '
+        'Workout included', () async {
+      await seedWeek(_mon, week: 1);
+      await seedProgress({'total_workouts_done': 0});
+      final key = CompletionPromptStore.keyFor(istDateStr(_d(3)));
+      await CompletionPromptStore.instance
+          .write(dateStr: istDateStr(_d(3)), plannedCount: 5, loggedCount: 2);
+      expect((HiveService.instance.coachBox.get(key) as Map)['resolved_at'],
+          isNull);
+      await door(_d(3), via: CompletionDoor.activeWorkout, mint: true);
+      expect((HiveService.instance.coachBox.get(key) as Map)['resolved_at'],
+          isNotNull);
+    });
+
+    test('the owner changed: the prompt is not resolved', () async {
+      await seedWeek(_mon, week: 1);
+      await seedProgress({'total_workouts_done': 0});
+      final key = CompletionPromptStore.keyFor(istDateStr(_d(3)));
+      await CompletionPromptStore.instance
+          .write(dateStr: istDateStr(_d(3)), plannedCount: 5, loggedCount: 2);
+      await step(newly: true, owner: 'someone-else', ownerGiven: true);
+      expect((HiveService.instance.coachBox.get(key) as Map)['resolved_at'],
+          isNull);
     });
   });
 
@@ -400,6 +432,35 @@ void main() {
       expect(p['streak_freezes_available'], 0);
       expect(p['streak_freeze_used_dates'], ['2026-06-03']);
     });
+  });
+
+  // B-pass 2026-11-10: the owner is re-checked after EVERY await, so an
+  // account switch mid-step never writes into the new account's boxes.
+  group('the owner changes mid-step', () {
+    const other = '9e1b2c3d-1111-2222-3333-444444444444';
+
+    Future<void> switchOwner() async {
+      HiveUserSession.debugCurrentUidResolverForTests = () => other;
+      await HiveUserSession.openForUser(other);
+    }
+
+    for (final at in const ['prompt', 'count', 'progress']) {
+      test('after "$at": nothing more lands in the new account', () async {
+        await seedWeek(_mon, week: 1, completed: {0, 1, 2});
+        await seedProgress(
+            {'total_workouts_done': 3, 'current_streak_weeks': 0});
+        WorkoutCompletionBookkeeping.debugAfterAwait = (step) async {
+          if (step == at) await switchOwner();
+        };
+        await door(_d(3));
+        expect(HiveUserSession.currentOwnerFullId, other);
+        expect(HiveService.instance.userBox.get('progress'), isNull,
+            reason: 'no progress write in the new account');
+        expect(HiveService.instance.healthBox.get('streaks'), isNull,
+            reason: 'no streak row in the new account');
+        expect(events, contains('completion_bookkeeping_owner_changed'));
+      });
+    }
   });
 
   group('each step has its own try/catch', () {

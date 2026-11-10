@@ -402,6 +402,76 @@ void main() {
   });
 
   // ── A row completed early (the RAW read, not the display read) ────────
+  // ── B-pass 2026-11-10 ────────────────────────────────────────────────
+  group('B-pass fixes', () {
+    testWidgets('the backstop: a FAILED mark leaves the day\'s tile open',
+        (tester) async {
+      await _openFresh(tester);
+      // An empty plan-day name makes markCompleted refuse (non-empty rule).
+      await tester.runAsync(() =>
+          _seedDay(_now, ['Bench Press', 'Barbell Row'], workoutName: ' '));
+      await _typed(tester, _now, 'Bench Press');
+      expect(_prompt(_todayStr)!['resolved_at'], isNull, reason: 'partial');
+      await _typed(tester, _now, 'Barbell Row');
+      expect(_row(_now)!['status'], 'planned', reason: 'the mark failed');
+      expect(_prompt(_todayStr)!['resolved_at'], isNull,
+          reason: 'the tile is still the way to finish the day');
+      expect(_total(), 0);
+    });
+
+    testWidgets('the backstop: a payload date that is not plain yyyy-MM-dd '
+        'names the day by the parsed date, so today\'s partial still gets its '
+        'tile', (tester) async {
+      await _openFresh(tester);
+      await tester.runAsync(
+          () => _seedDay(_now, ['Bench Press', 'Barbell Row']));
+      final d = utcDateFromIstDateStr(_todayStr)!;
+      // An ISO date-time sorts AFTER today's yyyy-MM-dd on every day, so the
+      // raw string read as a future day (an unpadded one only differs on
+      // single-digit months or days).
+      final payload = '${_todayStr}T00:00:00';
+      await tester.runAsync(() async {
+        await _log(d, 'Bench Press');
+        await ToolDispatcher.instance
+            .maybeCompleteScheduledDayForTest(d, payload);
+      });
+      expect(_prompt(_todayStr), isNotNull);
+      expect(_prompt(_todayStr)!['logged_count'], 1);
+    });
+
+    testWidgets('the chat card: a throw after the mark still gives the card '
+        'its completed state, never an escaped error', (tester) async {
+      await _openFresh(tester);
+      await tester.runAsync(() => _seedDay(_now, ['Bench Press']));
+      WorkoutCompletionBookkeeping.debugOnCall =
+          (_) => throw StateError('bookkeeping fault');
+      final (out, _) = await _card(tester, [_lift('Bench Press')]);
+      expect(out.dayState, DraftDayState.completed);
+      expect(_row(_now)!['status'], 'completed');
+    });
+
+    testWidgets('markCompleted: a 0 s mark after a timed one keeps the '
+        'stored duration; a real duration still replaces it', (tester) async {
+      await _openFresh(tester);
+      await tester.runAsync(() => _seedDay(_now, ['Bench Press']));
+      final d = utcDateFromIstDateStr(_todayStr)!;
+      Future<void> mark(int sec) => tester.runAsync(() async {
+            final r = await WorkoutWriteService.instance.markCompleted(
+                date: d, workoutName: 'Push Day', durationSec: sec);
+            expect(r.success, isTrue);
+          });
+      int dur() => ((HiveService.instance.workoutBox
+              .get(WorkoutWriteService.wlogKey(d)) as Map)['duration_seconds']
+          as num)
+          .toInt();
+      await mark(1500);
+      await mark(0);
+      expect(dur(), 1500);
+      await mark(2400);
+      expect(dur(), 2400);
+    });
+  });
+
   group('a day completed EARLY (completed_at before its date)', () {
     testWidgets('the backstop: a partial log_set writes no tile, +0',
         (tester) async {

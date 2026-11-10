@@ -22,7 +22,7 @@ writers:
     line: 210
   - file: lib/features/ai_coach/services/conversational_log_handler.dart
     method: submitWorkoutDraft day decision (mark only on completeNow / repairDone; prompt on askToComplete today)
-    line: 454
+    line: 460
   - file: lib/features/ai_coach/services/tool_dispatcher.dart
     method: _maybeCompleteScheduledDay (backstop, now on decideCoachDay)
     line: 437
@@ -38,10 +38,10 @@ readers:
     line: 178
   - file: lib/features/train/screens/train/week_rows.dart
     method_or_widget: _buildCompactRow (IN PROGRESS / LOGGED chips; counted rest-type row is DONE)
-    line: 152
+    line: 125
   - file: lib/features/train/screens/train/planned_expansion.dart
     method_or_widget: _buildPlannedExpansion (LOGGED SO FAR + COMPLETE WORKOUT)
-    line: 24
+    line: 6
   - file: lib/features/train/screens/train/exercise_preview_sheet.dart
     method_or_widget: not-done day's logs above its plan
     line: 30
@@ -222,3 +222,54 @@ during the key iteration); the reds are real.
 pre-commit loop asked for it) was mutated by hand, one mutant at a time, each restored and checked with `cmp`: the tap
 stamping `'tap'` for the Train door (1 red), the rest guard removed from `decideCoachDay` (1 red), and
 `CompletionPromptStore.write` no longer resolving older rows (1 red).
+
+## B-pass fixes (2026-11-10, `docs/reviews/coach-workout-parity-bpass.md`)
+Three context-blind Sonnet seats reviewed `ea37ed59..ca96e754` (1a + 1b). Fixed in this batch:
+- **The prompt resolve moved into `afterCompletion`** (seat A F1, F3, F4). Writers: the backstop resolved
+  `completion_prompt_<date>` even after a FAILED mark (`tool_dispatcher.dart`, the `completeNow` branch), the card and
+  the tap resolved it after awaits with no owner re-check, and Active Workout never resolved it. Reader:
+  `ChatHistoryNotifier.build` (`ai_coach_provider.dart:193`). Now step 0b of `afterCompletion` resolves it, after a
+  successful mark only and owner-checked; a tap refusal still resolves it in `completeOnTap`.
+- **The card's decision block is guarded** (seat A F2): a throw from the decision to the last write maps to
+  `markFailed` (or `completed` when the day was already marked), reported as `chat_card_day_decision_failed`.
+- **The backstop names the day by the parsed date** (seat A F6): `istDateStr(date)`, not the payload string; a
+  mismatch logs `derived_completion_date_normalised`.
+- **`markCompleted` keeps a stored duration** when a 0 s mark (tap, backstop) follows a timed one (seat A F5).
+- **Train** (seat C F1, F5, F6): the provider container is captured before the tap's await, so a row collapsed
+  mid-tap still refreshes every surface; LOGGED SO FAR and COMPLETE WORKOUT show only when the rows list is not
+  empty (the rows read the index, then the stamped date; the key scan alone could disagree).
+- **Blast radius** (seat C F2): `coach_day_completion.dart` and `workout_completion_bookkeeping.dart` pinned at
+  `account`. Registry ranges (seat C F3) and the diagnose cites (seat C F4) recomputed; the Gate 19 baseline lines
+  explained in `0ebfcb` (seat C F7).
+
+### B-pass mutations
+Run by `scratchpad/mutbp/run.py` (each mutant applied by exact text with its count checked, the named test file run
+under `TZ=Asia/Kolkata`, the file restored and compared with `cmp`; `lib/` compared with a snapshot afterwards).
+B = `workout_completion_bookkeeping_behavioral_test.dart`, R = `coach_day_completion_behavioral_test.dart`,
+T = `train_logged_so_far_behavioral_test.dart`.
+
+| mutant | red |
+|---|---|
+| M01 the restore gate returns after the count (the old step 1b) | B 1 |
+| M02 no owner check after the count | **0, equivalent** (below) |
+| M03 no owner check after the progress write | B 1 |
+| M04 no owner check after the prompt resolve | B 1 |
+| M05 no prompt resolve in the step | B 1 |
+| M06 the backstop resolves after a failed mark (the old code) | R 1 |
+| M07 the backstop uses the payload string | R 1 (0 on the first run, see below) |
+| M08 the card's catch rethrows | R 1 |
+| M09 a 0 s mark overwrites the stored duration | R 1 |
+| M10 the invalidation waits for `mounted` (the old code) | T 1 |
+| M11 no `_busy` guard | T 1 (see below) |
+| M12 the heading follows the key scan | T 1 |
+
+- **M02 is equivalent, not untested.** `restoreSettledForCurrentUser` compares the marker with the LIVE owner, so
+  after a switch the streak steps (2, 3) are skipped anyway and the 3a check stops the progress write. Under the
+  kill switch (`disable_streak_reckon_user_gate`, restore-tick gate) the reckon would run, but only on the new
+  account's own rows, which is what that account's own reckon does at boot. The check stays as defence in depth.
+- **M07's first test was vacuous on the day it was written.** On 2026-11-10 an "unpadded" `y-m-d` string equals the
+  padded one (two-digit month and day). The test now passes `<today>T00:00:00`, which sorts after today on any day.
+- **M11's first red was a timing artefact.** The snackbar's dismiss timer is a real timer (the tap ran in
+  `runAsync`), so fake pumps never hid the first snackbar and the test failed with or without the guard. The test now
+  removes the first snackbar by hand and asserts that no queued second one appears; that is green on the code and red
+  under M11 (the failure is the second "Workout marked complete." line).

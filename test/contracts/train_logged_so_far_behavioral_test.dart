@@ -26,6 +26,7 @@ import 'package:icanbefitter/core/utils/ist_date.dart';
 import 'package:icanbefitter/features/auth/providers/auth_invalidation_provider.dart';
 import 'package:icanbefitter/features/train/providers/train_provider.dart';
 import 'package:icanbefitter/features/train/screens/train/screen.dart';
+import 'package:icanbefitter/features/train/services/workout_completion_bookkeeping.dart';
 import 'package:icanbefitter/shared/widgets/wardroom/wardroom.dart';
 
 import '../helpers/hive_test_setup.dart';
@@ -273,6 +274,82 @@ void main() {
       expect(_chip(WardroomCopy.trainInProgressChip), findsNothing);
       expect(_chip('DONE').evaluate().length, greaterThan(doneBefore),
           reason: "today's row shows DONE after the tap");
+      await _done(tester);
+    });
+
+    // B-pass 2026-11-10.
+    testWidgets('the row collapses mid-tap: the day still completes and the '
+        'week row still refreshes (IN PROGRESS gone)', (tester) async {
+      await open(tester, todayLogs: ['Squat']);
+      final c = await _pumpTrain(tester);
+      await _expand(tester, c, _todayIdx);
+      await tester.ensureVisible(find.text(WardroomCopy.trainCompleteWorkout));
+      await tester.runAsync(
+          () => tester.tap(find.text(WardroomCopy.trainCompleteWorkout)));
+      // Collapse before the tap's Hive work finishes: the button is disposed.
+      await _expand(tester, c, _todayIdx);
+      expect(find.text(WardroomCopy.trainCompleteWorkout), findsNothing);
+      await tester.runAsync(
+          () => Future<void>.delayed(const Duration(milliseconds: 300)));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 100));
+      final row = HiveService.instance.workoutBox
+          .get(WorkoutWriteService.scheduleKey(_todayNoon)) as Map;
+      expect(row['status'], 'completed');
+      expect(_chip(WardroomCopy.trainInProgressChip), findsNothing,
+          reason: 'the surfaces were invalidated without the widget');
+      await _done(tester);
+    });
+
+    testWidgets('a double tap runs the completion once', (tester) async {
+      await open(tester, todayLogs: ['Squat']);
+      final calls = <CompletionBookkeepingCall>[];
+      WorkoutCompletionBookkeeping.debugOnCall = calls.add;
+      addTearDown(WorkoutCompletionBookkeeping.debugReset);
+      final c = await _pumpTrain(tester);
+      await _expand(tester, c, _todayIdx);
+      await tester.ensureVisible(find.text(WardroomCopy.trainCompleteWorkout));
+      await tester.runAsync(() async {
+        // Both taps land before a frame disables the button.
+        await tester.tap(find.text(WardroomCopy.trainCompleteWorkout));
+        await tester.tap(find.text(WardroomCopy.trainCompleteWorkout));
+        await Future<void>.delayed(const Duration(milliseconds: 300));
+      });
+      await tester.pump();
+      expect(calls.length, 1, reason: 'one bookkeeping run');
+      expect(_total(), 2);
+      expect(find.text(WardroomCopy.coachTapCompleted), findsOneWidget);
+      // A second tap that got through would QUEUE a second snackbar (an
+      // already-done tap shows the same line). The dismiss timer is a real
+      // one (the tap ran in runAsync), so remove the first by hand and look
+      // for a queued second.
+      tester
+          .state<ScaffoldMessengerState>(find.byType(ScaffoldMessenger))
+          .removeCurrentSnackBar();
+      for (var i = 0; i < 5; i++) {
+        await tester.pump(const Duration(milliseconds: 100));
+      }
+      expect(find.text(WardroomCopy.coachTapCompleted), findsNothing,
+          reason: 'only one tap ran');
+      await _done(tester);
+    });
+
+    testWidgets('a log KEY for today whose row is stamped another day: no '
+        'LOGGED SO FAR heading and no COMPLETE WORKOUT', (tester) async {
+      await open(tester);
+      await tester.runAsync(() => HiveService.instance.workoutBox
+              .put('exlog_${istDateStr(_todayNoon)}_deadbeef', {
+            'exercise_name': 'Squat',
+            'date': istDateStr(_lastMonday),
+            'sets_detail': [
+              {'weight_kg': 50, 'reps': 8}
+            ],
+          }));
+      final c = await _pumpTrain(tester);
+      await _expand(tester, c, _todayIdx);
+      expect(find.text(WardroomCopy.trainLoggedSoFar), findsNothing);
+      expect(find.text(WardroomCopy.trainCompleteWorkout), findsNothing);
+      expect(find.text('START WORKOUT'), findsOneWidget);
       await _done(tester);
     });
 

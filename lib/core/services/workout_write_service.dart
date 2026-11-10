@@ -617,9 +617,18 @@ class WorkoutWriteService {
       // whose wlog_ survived a reset to planned/skipped is not first again:
       // the completed-day heal already counts its wlog (plan rev 4, R3-F4).
       final sched = box.get(sKey);
+      final prevWlog = box.get(wKey);
       final newlyCompleted =
           (sched is! Map || sched['status'] != 'completed') &&
-              box.get(wKey) == null;
+              prevWlog == null;
+      // A tap or the typed backstop passes 0 s; racing a door that stored a
+      // real duration (the chat card, Active Workout), it must not wipe it.
+      // A real duration still replaces the stored one (the update contract).
+      final prevDuration = prevWlog is Map ? prevWlog['duration_seconds'] : null;
+      final keptDurationSec =
+          durationSec == 0 && prevDuration is num && prevDuration > 0
+              ? prevDuration.toInt()
+              : durationSec;
 
       // 1. Update schedule entry status='completed' (preserve other fields)
       if (sched is Map) {
@@ -656,7 +665,7 @@ class WorkoutWriteService {
         'type': 'workout_log',
         'workout_name': workoutName,
         'date': dateStr,
-        'duration_seconds': durationSec,
+        'duration_seconds': keptDurationSec,
         if (rpe != null) 'rpe': rpe,
         // audit-fixwave 2026-07-02 / F19 — stamp completed_at in UTC. Pre-fix
         // this serialized device-local (IST) wall-clock into the timestamptz

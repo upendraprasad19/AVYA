@@ -382,3 +382,18 @@ Round 3 (delta, both lenses) CONVERGED: the five round-2 P1s are closed as writt
 - **The card's awaiting / not-counted lines show only once the card is saved** (a partial-failure card keeps its failure note; the live-region test (b) pins the order).
 - **COMPLETE WORKOUT is full width when it fits and scales down when it does not** (`LayoutBuilder` → `FittedBox(scaleDown)` → `ConstrainedBox(minWidth: row)` → `WardButton(fullWidth: false)`). A `WardButton` label neither wraps nor ellipsizes, and `fullWidth: true` inside a `FittedBox` is an infinite width.
 - **`completed_via` has no cloud column** (`scheduled_workouts` has none, `backups/live_schema_columns.json`); `'train_tap'` is a local Hive stamp no code branches on.
+
+## 13. B-pass changes (2026-11-10, `docs/reviews/coach-workout-parity-bpass.md`)
+
+These change what sections 4 and 12 (and the 1a plan's D2 step 1b) say; the code is the reference.
+- The doors no longer resolve the day's prompt after a mark. `afterCompletion` resolves it (step 0b) for every door,
+  Active Workout included: only after a successful mark, and only for the account the door captured. A tap refusal
+  still resolves it in `completeOnTap`.
+- 1a's restore gate now holds back only the streak steps (reckon, weekly, streak row). `last_workout_date`, badges
+  and the rank check run before the restore settles, as Active Workout always ran them. The owner is re-checked after
+  every await in the step.
+- The chat card's decision-and-act block has its own try/catch (a throw gives `markFailed`, or `completed` when the
+  day was already marked); the typed backstop names the day by the parsed date; `markCompleted` keeps a stored
+  duration when a 0 s mark follows; Train captures the provider container before the tap's await and shows LOGGED SO
+  FAR and COMPLETE WORKOUT only when it has rows to show.
+- `docs/blast_radius.yaml` pins `coach_day_completion.dart` and `workout_completion_bookkeeping.dart` at `account`.

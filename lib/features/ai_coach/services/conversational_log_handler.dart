@@ -449,61 +449,74 @@ Future<DraftSubmitOutcome> submitWorkoutDraft(WorkoutDraft draft, WidgetRef ref)
       if (!readOk) {
         dayState = DraftDayState.markFailed;
       } else {
-        loggedCount = raw == null ? 0 : loggedPlannedExerciseCount(now, raw);
-        plannedCount = raw == null ? 0 : plannedExercisesOf(raw).length;
-        final decision = decideCoachDay(
-          rawRow: raw,
-          loggedCount: loggedCount,
-          hasWlog: hasWlog,
-          dateStr: dateStr,
-          istToday: today,
-        );
-        switch (decision) {
-          case CoachDayDecision.completeNow:
-          case CoachDayDecision.repairDone:
-            final result = await WorkoutWriteService.instance.markCompleted(
-              date: now,
-              workoutName: planWorkoutName(raw, fallback: kChatWorkoutName),
-              durationSec: savedDurationSec,
-            );
-            if (result.success) {
-              markedNow = true;
+        // Everything from the decision to the last write is guarded: a throw
+        // here (a Hive put, the bookkeeping guards) must still give the card
+        // a saved state, never escape the submit (B-pass 2026-11-10). The
+        // sets are already saved; a day marked before the throw stays
+        // completed.
+        try {
+          loggedCount = raw == null ? 0 : loggedPlannedExerciseCount(now, raw);
+          plannedCount = raw == null ? 0 : plannedExercisesOf(raw).length;
+          final decision = decideCoachDay(
+            rawRow: raw,
+            loggedCount: loggedCount,
+            hasWlog: hasWlog,
+            dateStr: dateStr,
+            istToday: today,
+          );
+          switch (decision) {
+            case CoachDayDecision.completeNow:
+            case CoachDayDecision.repairDone:
+              final result = await WorkoutWriteService.instance.markCompleted(
+                date: now,
+                workoutName: planWorkoutName(raw, fallback: kChatWorkoutName),
+                durationSec: savedDurationSec,
+              );
+              if (result.success) {
+                markedNow = true;
+                dayState = DraftDayState.completed;
+                // Coach workout parity 1a (OI-379): the same after-completion
+                // step Active Workout runs (count once per day + heal, streaks,
+                // badges, rank), before the invalidation below so every reader
+                // sees it.
+                await WorkoutCompletionBookkeeping.instance.afterCompletion(
+                  workoutDate: now,
+                  newlyCompleted: result.newlyCompleted,
+                  expectedOwner: owner,
+                  mintProgressIfMissing: false,
+                  door: CompletionDoor.chatCard,
+                );
+                // afterCompletion resolved the day's prompt (owner-checked).
+                promptChanged = true;
+              } else {
+                dayState = DraftDayState.markFailed;
+              }
+            case CoachDayDecision.alreadyDone:
               dayState = DraftDayState.completed;
-              // Coach workout parity 1a (OI-379): the same after-completion
-              // step Active Workout runs (count once per day + heal, streaks,
-              // badges, rank), before the invalidation below so every reader
-              // sees it.
-              await WorkoutCompletionBookkeeping.instance.afterCompletion(
-                workoutDate: now,
-                newlyCompleted: result.newlyCompleted,
-                expectedOwner: owner,
-                mintProgressIfMissing: false,
-                door: CompletionDoor.chatCard,
-              );
-              await CompletionPromptStore.instance.resolve(dateStr);
-              promptChanged = true;
-            } else {
-              dayState = DraftDayState.markFailed;
-            }
-          case CoachDayDecision.alreadyDone:
-            dayState = DraftDayState.completed;
-          case CoachDayDecision.askToComplete:
-            if (dateStr == today) {
-              await CompletionPromptStore.instance.write(
-                dateStr: dateStr,
-                plannedCount: plannedCount,
-                loggedCount: loggedCount,
-              );
-              promptChanged = true;
-              dayState = DraftDayState.awaitingComplete;
-            } else {
-              dayState = DraftDayState.pastNotMarked;
-            }
-          case CoachDayDecision.rest:
-          case CoachDayDecision.terminal:
-          case CoachDayDecision.noPlan:
-          case CoachDayDecision.future:
-            dayState = DraftDayState.notCounted;
+            case CoachDayDecision.askToComplete:
+              if (dateStr == today) {
+                await CompletionPromptStore.instance.write(
+                  dateStr: dateStr,
+                  plannedCount: plannedCount,
+                  loggedCount: loggedCount,
+                );
+                promptChanged = true;
+                dayState = DraftDayState.awaitingComplete;
+              } else {
+                dayState = DraftDayState.pastNotMarked;
+              }
+            case CoachDayDecision.rest:
+            case CoachDayDecision.terminal:
+            case CoachDayDecision.noPlan:
+            case CoachDayDecision.future:
+              dayState = DraftDayState.notCounted;
+          }
+        } catch (e, st) {
+          debugPrint('[submitWorkoutDraft] day decision failed: $e');
+          unawaited(ErrorTelemetry.recordNonFatal(e, st,
+              reason: 'chat_card_day_decision_failed'));
+          dayState =
+              markedNow ? DraftDayState.completed : DraftDayState.markFailed;
         }
       }
     }

@@ -434,8 +434,17 @@ class ToolDispatcher {
   /// (`train/services/coach_day_completion.dart`, where the rest guard now
   /// lives); this KEPT method + its `markCompleted` call keep
   /// `derive_only_tool_surface_test` green.
-  Future<void> _maybeCompleteScheduledDay(DateTime date, String dateStr,
+  Future<void> _maybeCompleteScheduledDay(DateTime date, String payloadDateStr,
       {required String? expectedOwner}) async {
+    // The day key comes from the parsed [date] (UTC midnight of the IST day),
+    // the same key the log was written under, never the raw payload string:
+    // an unpadded or malformed string would compare wrongly against IST
+    // today and name a different prompt row (B-pass 2026-11-10).
+    final dateStr = istDateStr(date);
+    if (dateStr != payloadDateStr) {
+      unawaited(ErrorTelemetry.logEvent('derived_completion_date_normalised',
+          message: 'payload=$payloadDateStr key=$dateStr'));
+    }
     try {
       // Coach workout parity 1b (OI-490): the ONE coach-day rule
       // (`decideCoachDay`), shared with the chat card, the tile and Train's
@@ -493,9 +502,9 @@ class ToolDispatcher {
               door: CompletionDoor.coachAuto,
             );
           }
-          // The day is done — resolve any earlier partial-state prompt so it
-          // stops rendering.
-          await CompletionPromptStore.instance.resolve(dateStr);
+          // The day's prompt is resolved inside afterCompletion: only after a
+          // successful mark, and only for the captured account (B-pass
+          // 2026-11-10).
         case CoachDayDecision.askToComplete:
           // Genuine partial (or a plan-less non-rest day) — surface the
           // tap-to-complete tile instead of silently flipping the day. One

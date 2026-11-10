@@ -21,7 +21,13 @@ extension _PlannedExpansion on _TrainScreenState {
     final sessionIsToday = isResuming &&
         sessionDate != null &&
         istDateStr(sessionDate) == istTodayStr();
-    final showComplete = hasLogs &&
+    // The rows decide, not the key scan alone: the rows read the index,
+    // then each row's stamped date, so a key whose row says another day
+    // shows no heading and no button (B-pass 2026-11-10).
+    final loggedRows =
+        hasLogs ? _loggedExerciseRows(dayStr) : const <Widget>[];
+    final showLogs = loggedRows.isNotEmpty;
+    final showComplete = showLogs &&
         !sessionIsToday &&
         CoachDayCompletion.instance.canCompleteOnTap(dayStr);
     return Container(
@@ -30,10 +36,10 @@ extension _PlannedExpansion on _TrainScreenState {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          if (hasLogs) ...[
+          if (showLogs) ...[
             _buildPreviewSectionLabel(
                 WardroomCopy.trainLoggedSoFar, AppColors.ok),
-            ..._loggedExerciseRows(dayStr),
+            ...loggedRows,
             Padding(
               padding: const EdgeInsets.only(top: 6, bottom: 10),
               child: WardButton(
@@ -133,13 +139,17 @@ class _CompleteTodayButtonState extends ConsumerState<_CompleteTodayButton> {
   Future<void> _complete() async {
     if (_busy) return;
     setState(() => _busy = true);
+    // Captured before the await: the row can collapse mid-tap, and the
+    // surfaces must refresh even then (only the snackbar needs the widget).
+    final container = ProviderScope.containerOf(context, listen: false);
     try {
       final result = await CoachDayCompletion.instance.completeOnTap(
           date: widget.dateStr, door: CompletionDoor.trainTap);
-      if (!mounted) return;
       if (result.isSuccess) {
-        invalidateWorkoutSurfaces(ref.invalidate, source: 'train_complete');
+        invalidateWorkoutSurfaces(container.invalidate,
+            source: 'train_complete');
       }
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(

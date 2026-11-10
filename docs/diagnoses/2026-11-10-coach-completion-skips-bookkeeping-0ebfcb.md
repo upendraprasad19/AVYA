@@ -15,10 +15,10 @@ sot_registry_entry: workout_completion_bookkeeping
 writers:
   - file: lib/features/train/services/workout_completion_bookkeeping.dart
     method: WorkoutCompletionBookkeeping.afterCompletion (steps 0-6; the ONE writer of the after-completion fields)
-    line: 83
+    line: 104
   - file: lib/core/services/workout_write_service.dart
     method: markCompleted decides newlyCompleted under the per-date lock before any write
-    line: 620
+    line: 621
 readers:
   - file: lib/core/services/workout_read_service.dart
     method_or_widget: completedWorkoutDayCount (distinct completed days; the heal floor and the badge count)
@@ -62,9 +62,10 @@ proposed_fix: >-
   reports newlyCompleted (no completed status and no wlog_ before this call, decided under its per-date lock);
   ONE shared step WorkoutCompletionBookkeeping.afterCompletion, called by all four doors only after a successful
   mark, with the Hive owner captured as each door's first statement: count first (+1 on a first completion, healed
-  up to the distinct completed days on record, never down), then, once this user's restore has settled, the daily
-  reckon, the weekly streak, one progress write (last_workout_date later-wins), the streak row, badges and the rank
-  check, each step in its own try/catch. BadgeService counts distinct completed days.
+  up to the distinct completed days on record, never down), then the daily reckon and the weekly streak (only once
+  this user's restore has settled), one progress write (last_workout_date later-wins), the streak row (settled only),
+  badges and the rank check, each step in its own try/catch; the owner is re-checked after every await, and the
+  day's completion prompt is resolved there for every door (B-pass 2026-11-10). BadgeService counts distinct completed days.
 regression_test_planned:
   - test/contracts/workout_completion_bookkeeping_behavioral_test.dart
   - test/workout_write_service/mark_completed_test.dart
@@ -96,8 +97,9 @@ touched_layers_checked:
 impact_analysis: >-
   Every coach completion now counts once per day and updates the streaks, badges and rank check exactly as Active
   Workout does. A second Active Workout session on a day already completed no longer adds a workout. A tester whose
-  count is below their completed days heals upward on the next completion. While the restore has not settled only
-  the count runs (the next completion after it settles does the rest).
+  count is below their completed days heals upward on the next completion. While the restore has not settled the
+  streak steps wait (the next completion after it settles does them); the count, last_workout_date, badges and the
+  rank check still run, as Active Workout always ran them.
 ---
 
 # Coach completions skip the after-completion bookkeeping (0ebfcb)
@@ -112,7 +114,7 @@ alone. ADR-0012 assumed `markCompleted` feeds streak and rank; it never did.
   `wlog_<date>` before this call, decided under the per-date lock, so two doors on one day see exactly one true.
 - `WorkoutCompletionBookkeeping.afterCompletion` is the one shared step (plan D2): owner and null-progress guards,
   the count first (`max(stored + (newly ? 1 : 0), completedWorkoutDayCount())`, read as `num`), the restore-settled
-  gate (the same expression as the reckon: the marker, or the restore tick when `disable_streak_reckon_user_gate` is
+  gate on the streak steps only (the same expression as the reckon: the marker, or the restore tick when `disable_streak_reckon_user_gate` is
   on, so the kill switch moves both together), reckon, weekly (hold ordinal `activeHoldOrdinalFor(nowWall())`), the owner re-check, one progress write
   (`last_workout_date` through `laterIsoDate`, the one date rule the restore merge also uses, so a backdated coach
   log never pulls it back and a stored date after IST today + 1 is repaired), the streak row, badges and the rank
@@ -155,3 +157,30 @@ separates them, and it reddens.
 **Test harness note.** A gate Completer created in the fake-async test zone never resumes a submit held inside
 `tester.runAsync` (its completion is queued on the fake zone's microtask queue). T3 creates its gates inside
 `runAsync`.
+
+**Gate 19 baseline (+8 lines, B-pass 2026-11-10 asked why).** `backups/gate19_drift_baseline.txt` gained eight
+`workout_read_service.dart :: wlog_* :: {...}` lines. They are false positives of the heuristic, not reads of fields
+nobody writes: before 1a the file never named the `'wlog_'` literal (`git show ea37ed59:lib/core/services/workout_read_service.dart | grep -c "'wlog_'"` is 0), and `completedWorkoutDayCount` (`:66`) now does,
+so Gate 19 attributes every map field the file reads to `wlog_` rows. The eight fields (`reps`, `sets_detail`,
+`distance_km` and the rest) are `exlog_` row reads elsewhere in the file (for example `:106`, `:206`); the new code
+reads only `type` and `date` from a `wlog_` row. The lines were added by hand, not by `--update-baseline`, which also
+prunes unrelated entries.
+
+## B-pass fixes (2026-11-10, `docs/reviews/coach-workout-parity-bpass.md`)
+- **Restore not settled (seat B F1, P1).** The gate used to stop the step after the count, so an Active Workout
+  finish before the restore settled skipped `last_workout_date`, badges and the rank check, which the old
+  `_persistCompletion` always ran. Now only the streak steps (reckon, weekly, streak row) wait; `last_workout_date`
+  (later-wins), badges and rank (unlock / promote only) run. Writer `workout_completion_bookkeeping.dart` step 1b;
+  readers `BadgeService.checkAll`, `RankService.evaluateAndPromote`, `mergeCloudProgress` (`laterIsoDate`).
+- **Owner re-checked after every await (seat B F2).** `_ownerChanged` runs after the prompt resolve, after the
+  count and after the progress write, so an account switch mid-step never writes the old account's streak row or
+  badges into the new account.
+- **The prompt resolve moved into the step (seat A F1, F3, F4).** The doors resolved `completion_prompt_<date>`
+  themselves: the backstop even after a FAILED mark, none re-checked the owner, and Active Workout never did. Now
+  step 0b resolves it, after a successful mark only and owner-checked.
+- **`markCompleted` keeps a stored duration (seat A F5).** A 0 s mark (tap, backstop) racing a timed save no
+  longer wipes `duration_seconds`; a real duration still replaces it.
+- Tests: `workout_completion_bookkeeping_behavioral_test.dart` (restore-unsettled rewritten; prompt resolve for
+  Active Workout; owner change after prompt / count / progress, three cases), and the 1b files below. Mutation
+  table: `docs/diagnoses/2026-11-10-coach-card-marks-uncountable-days-24e630.md`, section "B-pass mutations".
+

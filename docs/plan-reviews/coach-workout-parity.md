@@ -5,6 +5,8 @@ blast_radius: account
 review_rounds: 3
 ground_truth_verified: true
 verdict: converged
+bpass: accepted
+bpass_review: docs/reviews/coach-workout-parity-bpass.md
 ---
 
 # Plan-review record — coach workout parity (1a + 1b)

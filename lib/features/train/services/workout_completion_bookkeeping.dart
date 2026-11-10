@@ -3,6 +3,7 @@ import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart';
 import 'package:icanbefitter/core/services/badge_service.dart';
+import 'package:icanbefitter/core/services/completion_prompt_store.dart';
 import 'package:icanbefitter/core/services/error_telemetry.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
 import 'package:icanbefitter/core/services/hive_user_session.dart';
@@ -68,11 +69,27 @@ class WorkoutCompletionBookkeeping {
   @visibleForTesting
   static int Function()? debugCompletedDayCount;
 
+  /// Awaited right after the named await ('prompt', 'count', 'progress'),
+  /// so a test can change the Hive owner mid-step.
+  @visibleForTesting
+  static Future<void> Function(String step)? debugAfterAwait;
+
   @visibleForTesting
   static void debugReset() {
     debugOnCall = null;
     debugThrowAtStep = null;
     debugCompletedDayCount = null;
+    debugAfterAwait = null;
+  }
+
+  /// True (and the event logged) when the Hive owner is no longer the one
+  /// the door captured: every later write would land in another account.
+  static bool _ownerChanged(
+      String? expectedOwner, CompletionDoor door, String step) {
+    if (HiveUserSession.currentOwnerFullId == expectedOwner) return false;
+    unawaited(ErrorTelemetry.logEvent('completion_bookkeeping_owner_changed',
+        message: 'door=${door.name} step=$step'));
+    return true;
   }
 
   static void _fault(String step) {
@@ -95,11 +112,21 @@ class WorkoutCompletionBookkeeping {
     debugOnCall?.call(CompletionBookkeepingCall(door, dateStr, newlyCompleted));
 
     // 0. Guards.
-    if (HiveUserSession.currentOwnerFullId != expectedOwner) {
-      unawaited(ErrorTelemetry.logEvent('completion_bookkeeping_owner_changed',
-          message: 'door=${door.name}'));
-      return;
+    if (_ownerChanged(expectedOwner, door, 'start')) return;
+
+    // 0b. The day is done: resolve its "X of Y" prompt for EVERY door
+    //     (Active Workout included), here rather than in each door, so a
+    //     failed mark never resolves it (this step runs only after a
+    //     successful mark) and an account change never resolves another
+    //     account's prompt (owner checked above). B-pass 2026-11-10.
+    try {
+      await CompletionPromptStore.instance.resolve(dateStr);
+    } catch (e, st) {
+      _report(e, st, 'prompt', door);
     }
+    await debugAfterAwait?.call('prompt');
+    if (_ownerChanged(expectedOwner, door, 'prompt')) return;
+
     final users = UserRepository.instance;
     if (users.getProgress() == null && !mintProgressIfMissing) {
       unawaited(ErrorTelemetry.logEvent('completion_bookkeeping_no_progress',
@@ -129,11 +156,16 @@ class WorkoutCompletionBookkeeping {
     } catch (e, st) {
       _report(e, st, 'count', door);
     }
+    await debugAfterAwait?.call('count');
+    if (_ownerChanged(expectedOwner, door, 'count')) return;
 
-    // 1b. Streak fields only once this user's restore has settled: a partial
-    //     schedule would write a low daily streak (not monotonic) or a weekly
-    //     credit computed from too few rows (permanent). The next completion
-    //     after the restore settles does the rest. The SAME gate as
+    // 1b. The STREAK steps (2, 3 and the streak row) only once this user's
+    //     restore has settled: a partial schedule would write a low daily
+    //     streak (not monotonic) or a weekly credit computed from too few
+    //     rows (permanent). The next completion after the restore settles
+    //     does the rest. last_workout_date (later-wins), badges and the rank
+    //     check (unlock / promote only) still run, as Active Workout always
+    //     ran them (B-pass 2026-11-10). The SAME gate as
     //     reckonStreakDecayAndPersist, kill switch included
     //     (disable_streak_reckon_user_gate falls back to the restore tick), so
     //     the switch never leaves completions unable to update a streak.
@@ -144,16 +176,17 @@ class WorkoutCompletionBookkeeping {
       unawaited(ErrorTelemetry.logEvent(
           'completion_bookkeeping_restore_unsettled',
           message: 'door=${door.name}'));
-      return;
     }
 
     // 2. Daily streak (the reckon persists freeze debits itself).
     int? streakDays;
-    try {
-      _fault('reckon');
-      streakDays = WorkoutRepository.instance.reckonStreakDecayAndPersist();
-    } catch (e, st) {
-      _report(e, st, 'reckon', door);
+    if (restoreSettled) {
+      try {
+        _fault('reckon');
+        streakDays = WorkoutRepository.instance.reckonStreakDecayAndPersist();
+      } catch (e, st) {
+        _report(e, st, 'reckon', door);
+      }
     }
 
     // 3. Weekly streak. The hold ordinal is the same flag-gated value
@@ -169,36 +202,34 @@ class WorkoutCompletionBookkeeping {
       int completedCount
     })? streakWeek;
     ({int weeks, int marker})? weekly;
-    try {
-      _fault('weekly');
-      // ignore: deprecated_member_use — ref-free door; singleton until full provider migration
-      final readSvc = WorkoutScheduleReadService.instance;
-      streakWeek = resolveStreakWeekState(
-        readSvc: readSvc,
-        planStart: WorkoutScheduleService.instance.getPlanStartDate(),
-        holdOrdinal: readSvc.activeHoldOrdinalFor(nowWall()),
-        workoutDate: day,
-      );
-      final progress = users.getProgress() ?? const <String, dynamic>{};
-      weekly = weeklyStreakAfterCompletion(
-        streakWeeks: (progress['current_streak_weeks'] as num?)?.toInt() ?? 0,
-        lastCountedWeekKey:
-            lastCountedWeekKeyFrom(progress['last_counted_week_key']),
-        weekKey: streakWeek.weekKey,
-        weekIsCurrent: streakWeek.weekIsCurrent,
-        planned: streakWeek.planned,
-        completedCount: streakWeek.completedCount,
-      );
-    } catch (e, st) {
-      _report(e, st, 'weekly', door);
+    if (restoreSettled) {
+      try {
+        _fault('weekly');
+        // ignore: deprecated_member_use — ref-free door; singleton until full provider migration
+        final readSvc = WorkoutScheduleReadService.instance;
+        streakWeek = resolveStreakWeekState(
+          readSvc: readSvc,
+          planStart: WorkoutScheduleService.instance.getPlanStartDate(),
+          holdOrdinal: readSvc.activeHoldOrdinalFor(nowWall()),
+          workoutDate: day,
+        );
+        final progress = users.getProgress() ?? const <String, dynamic>{};
+        weekly = weeklyStreakAfterCompletion(
+          streakWeeks: (progress['current_streak_weeks'] as num?)?.toInt() ?? 0,
+          lastCountedWeekKey:
+              lastCountedWeekKeyFrom(progress['last_counted_week_key']),
+          weekKey: streakWeek.weekKey,
+          weekIsCurrent: streakWeek.weekIsCurrent,
+          planned: streakWeek.planned,
+          completedCount: streakWeek.completedCount,
+        );
+      } catch (e, st) {
+        _report(e, st, 'weekly', door);
+      }
     }
 
-    // 3a. Step 1 awaited: re-check the owner before the remaining writes.
-    if (HiveUserSession.currentOwnerFullId != expectedOwner) {
-      unawaited(ErrorTelemetry.logEvent('completion_bookkeeping_owner_changed',
-          message: 'door=${door.name} step=progress'));
-      return;
-    }
+    // 3a. Re-check the owner before the progress write.
+    if (_ownerChanged(expectedOwner, door, 'progress')) return;
 
     // 4. One progress write. last_workout_date only ever moves later, so a
     //    backdated coach log never pulls it back: the ONE date rule,
@@ -220,6 +251,8 @@ class WorkoutCompletionBookkeeping {
     } catch (e, st) {
       _report(e, st, 'progress', door);
     }
+    await debugAfterAwait?.call('progress');
+    if (_ownerChanged(expectedOwner, door, 'streak_row')) return;
 
     // 5. Per-week streak row for the Supabase streaks table.
     try {

@@ -391,3 +391,8 @@ Run the full loop before each review dispatch (§4.12.8): `flutter analyze --no-
 - **Test seam:** `ActiveWorkoutNotifier.debugBeforeMarkGate` (awaited after the `logExercise` loop, right before the mark; null in production), so T3 can switch account deterministically for the Active Workout door, as `DraftSubmitDebug.debugBeforeMarkGate` already allows for the chat card.
 - **Step 1b mirrors the reckon's kill switch:** the full suite showed that the restore-settled marker's reader manifest (`streak_decay_restore_settled_marker_writer_to_reader_test`) lists every deciding reader by name, so the new step was added there as the sixth. Step 1b reads exactly the reckon's expression (`SyncFlags.streakReckonUserGateEnabled ? restoreSettledForCurrentUser : restoreCompletedTick > 0`), so `disable_streak_reckon_user_gate` moves both gates together instead of leaving the bookkeeping stricter than the reckon it calls. T1 pins both arms (mutations M7, M13).
 - **Mutation M1** did not redden the "completed status, no wlog_" card case the plan predicted (+1 and the heal both give 1 there); the second Active Workout session separates them. Recorded in the diagnose doc.
+
+**B-pass change (2026-11-10).** D2 step 1b as built holds back only the streak steps (reckon, weekly, streak row);
+`last_workout_date`, badges and the rank check run before the restore settles, and the owner is re-checked after
+every await. The day's completion prompt is now resolved inside the step. See `docs/plans/coach-workout-parity-1b.md`
+section 13 and `docs/reviews/coach-workout-parity-bpass.md`.
