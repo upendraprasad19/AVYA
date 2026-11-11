@@ -2,9 +2,9 @@
 branch: coach-workout-parity-tile
 scope: Coach workout parity slice S3 (OI-492, founder decision C). "I'm done" in chat makes the app's own "X of Y - Complete workout" tile appear, with one tap total. A new capability-gated tool requestCompletionTile becomes an auto-run intent (no APPLY card) that re-runs the app's own decideCoachDay and re-shows the local tile row. The coach never completes a day (ADR-0012). Also covered are the kill switch, the fail-closed capability gate and a UTC created_at fix for the tile row.
 blast_radius: platform
-review_rounds: 5
+review_rounds: 7
 ground_truth_verified: true
-verdict: in_review
+verdict: converged
 ---
 
 # Plan-review record: coach workout parity S3 (the completion tile tool)
@@ -70,3 +70,21 @@ Seat B returned `converged`. It walked the full prompt in order for the partial,
 - 5.1 claimed the second time-zone run is in the gate loop, but 7.7 did not list it.
 
 Both are folded into rev 11 with the mechanical items (changelog "Rev 11").
+
+## Round 6 (rev 11, confirmation, one seat)
+The seat returned `needs-changes` with two P2s that were text completeness only, with no design finding:
+- cleanup and doc-pass instructions lived only in changelog rows;
+- two assertions promised in 3.1 were missing from the 5.1 test list.
+
+Every design disposition of revs 8 to 11 was confirmed present and correct in the body. Root fix in rev 12: section 3.1.1, an AUTHORITATIVE build checklist that lists every S3 item in commit order, including the cleanups, so the build never depends on a changelog row. The two assertions were added to 5.1, and the mechanical items fixed.
+
+## Round 7 (rev 12, completeness, one seat)
+The seat returned `needs-changes` with four P2s, all text completeness, and no design finding. That makes four rounds in a row (rounds 4 to 7) with no design or mechanism finding.
+- the surfacing-door count pin had no named test file;
+- commit A added `reshow` without a commit-A test for it;
+- commit B (`feat`) had no place to record its mutations;
+- the rev 12 naming additions and the section 1 `tool_intent.dart` cell had not landed in the body.
+
+The seat mapped every changelog row of revs 7 to 12 to a 3.1.1 item and confirmed every path and symbol against HEAD. Rev 13 applies all four P2s and the mechanical items (stale anchors, the `:16` wording, the process steps as item 20, the registry-range and Gate 42 notes in item 19). Commit A's tests already carry the reshow case (M59a reddens in commit A's own file, both zones).
+
+Verdict: `converged`. The design has been stable since round 4. The last three rounds found only text that had not been transcribed, and 3.1.1 now holds every build item. The B-pass reviews the built diff against 3.1.1.
