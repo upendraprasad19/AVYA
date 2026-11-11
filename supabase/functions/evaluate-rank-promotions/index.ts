@@ -34,6 +34,8 @@ import {
 import { isAuthorizedCronCall } from "../_shared/cron_auth.ts";
 import { logCronStart, logCronEnd } from "../_shared/cron_telemetry.ts";
 import { fetchAllByIds, fetchAllPages } from "../_shared/paged_fetch.ts";
+import { fetchPagesBounded } from "../_shared/paged_fetch_bounded.ts";
+import { countDistinctDates } from "../_shared/distinct_dates.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -102,7 +104,19 @@ async function fetchInChunks(
   }
 }
 
-serve(async (req: Request) => {
+/**
+ * Injectable seam (coach workout parity 2, S0). Only the client factory goes
+ * through `deps`; auth and telemetry stay direct calls (the adoption contracts
+ * pin them as literal call sites).
+ */
+export interface EvaluateRankPromotionsDeps {
+  createClient: typeof createClient;
+}
+
+export const handler = async (
+  req: Request,
+  deps: EvaluateRankPromotionsDeps = realDeps(),
+): Promise<Response> => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
   }
@@ -125,7 +139,7 @@ serve(async (req: Request) => {
   const logId = await logCronStart("evaluate-rank-promotions");
 
   try {
-    const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+    const supabase = deps.createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
     // 1. Pull the user roster (id + signup time).
     //    OI-79: paged. This is the WHOLE roster with no filter, so it is the
@@ -209,19 +223,37 @@ serve(async (req: Request) => {
         (now.getTime() - signupAt.getTime()) / (7 * 24 * 3600 * 1000),
       );
 
-      // Total workouts done (cloud source of truth).
+      // Total workouts done (cloud source of truth): DISTINCT completed days
+      // (distinct `workout_logs.date`), like the client's
+      // `completedWorkoutDayCount`. A head ROW count over-counted the dates that
+      // carry two rows (coach workout parity 2, OI-492).
       // Unit C (§2.24) — per-user reads in this whole-batch cron CAPTURE the error
       // and SKIP just this user (console.error + continue, matching the insert-error
       // idiom at the upsert below). Pre-fix a silent failure coerced to `?? 0` / null
       // → a WRONG rank state (streak/workouts/deployments read as 0) → a generic or
       // mis-graded promotion ceremony. A top-level throw would zero the WHOLE day's
       // promotions, so skip-one-user (self-heals next daily run) is correct here.
-      const { count: totalWorkouts, error: totalWErr } = await supabase
-        .from("workout_logs")
-        .select("*", { count: "exact", head: true })
-        .eq("user_id", userId);
-      if (totalWErr) {
-        console.error(`[evaluate-rank-promotions] user=${userId} totalWorkouts err`, totalWErr);
+      let totalWorkouts: number;
+      try {
+        const res = await fetchPagesBounded<{ date: string | null }>(
+          (withCount) =>
+            supabase
+              .from("workout_logs")
+              .select("id, date", withCount ? { count: "exact" } : undefined)
+              .eq("user_id", userId),
+          {
+            orderBy: [{ column: "id" }],
+            maxPages: 20,
+            label: "evaluate-rank-promotions workout-days",
+          },
+        );
+        // A cut would UNDER-count: fail this user, never show a wrong number.
+        if (res.truncated) throw new Error("workout_logs read truncated");
+        totalWorkouts = countDistinctDates(res.rows);
+      } catch (e) {
+        // Skip this user (self-heals next night); a top-level throw would zero
+        // the whole night's promotions.
+        console.error(`[evaluate-rank-promotions] user=${userId} totalWorkouts err`, e);
         continue;
       }
 
@@ -243,7 +275,7 @@ serve(async (req: Request) => {
 
       const state: EvalState = {
         streak: (progressRow?.current_streak_days as number | undefined) ?? 0,
-        totalWorkouts: totalWorkouts ?? 0,
+        totalWorkouts,
         weeksSinceSignup,
         deploymentsComplete:
           (progressRow?.deployments_complete as number | undefined) ?? 0,
@@ -391,4 +423,15 @@ serve(async (req: Request) => {
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } },
     );
   }
-});
+};
+
+/** The production wiring: the real function itself (no call text here). */
+export function realDeps(): EvaluateRankPromotionsDeps {
+  return { createClient };
+}
+
+if (import.meta.main) {
+  // Wrapped, not `serve(handler)`: serve's Handler passes `(req, connInfo)`
+  // and handler's second parameter is deps.
+  serve((req) => handler(req));
+}

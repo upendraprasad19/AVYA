@@ -7,6 +7,7 @@ import 'package:flutter_svg/flutter_svg.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:speech_to_text/speech_to_text.dart';
 import 'package:icanbefitter/core/theme/colors.dart';
+import 'package:icanbefitter/features/train/services/coach_day_completion.dart';
 import 'package:icanbefitter/core/theme/spacing.dart';
 import 'package:icanbefitter/core/theme/typography.dart';
 import 'package:icanbefitter/core/constants/app_constants.dart';
@@ -78,6 +79,9 @@ class AiCoachScreen extends ConsumerStatefulWidget {
   static List<ToolIntent> filterVisibleIntents(List<ToolIntent> intents) {
     final coachBox = HiveService.instance.coachBox;
     return intents.where((i) {
+      // Coach workout parity S3: an auto-run intent (the "I'm done" tile) is
+      // never a card, even if one reached state some other way.
+      if (kAutoRunIntentTypes.contains(i.type)) return false;
       if (i.status == ToolIntentStatus.pending ||
           i.status == ToolIntentStatus.executing ||
           i.status == ToolIntentStatus.failed) {
@@ -349,11 +353,11 @@ class _AiCoachScreenState extends ConsumerState<AiCoachScreen> {
 
   // ── Unit 1 (coach-completion-tap-card) — completion-prompt handlers ──
 
-  /// [Complete workout] — re-reads `schedule_<date>`; if still not
-  /// completed / rest, marks the day complete via the canonical writer
-  /// (`completed_via:'tap'`), resolves the prompt row, then invalidates the
-  /// workout + home readers so the calendar / today's-workout / streak / plan
-  /// UI reflect the completion immediately.
+  /// [Complete workout] — the shared tap path
+  /// (`CoachDayCompletion.completeOnTap`, `completed_via:'tap'`): today only,
+  /// never a rest / moved / no-plan day or a day with no log. On success it
+  /// invalidates the workout + home readers so the calendar / today's-workout
+  /// / streak / plan UI reflect the completion immediately.
   Future<void> _onCompleteWorkoutFromPrompt(String date) async {
     if (_completingPromptDate != null) return; // one in-flight completion
     setState(() => _completingPromptDate = date);
@@ -362,29 +366,22 @@ class _AiCoachScreenState extends ConsumerState<AiCoachScreen> {
           .read(chatHistoryProvider.notifier)
           .completeWorkoutFromPrompt(date);
       if (!mounted) return;
-      if (result.success) {
+      // Coach workout parity 1b: one line per result (a refusal is not a
+      // "try again" case), shared with Train's COMPLETE WORKOUT button.
+      if (result.isSuccess) {
         // Refresh every reader of schedule_<date>.status.
         invalidateWorkoutSurfaces(ref.invalidate, source: 'completion_prompt');
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              'Workout marked complete.',
-              style: AppTypography.body.copyWith(color: AppColors.ok),
-            ),
-            backgroundColor: AppColors.card,
-          ),
-        );
-      } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              "Couldn't complete the workout — try again.",
-              style: AppTypography.body.copyWith(color: AppColors.bad),
-            ),
-            backgroundColor: AppColors.card,
-          ),
-        );
       }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            result.message,
+            style: AppTypography.body.copyWith(
+                color: result.isSuccess ? AppColors.ok : AppColors.bad),
+          ),
+          backgroundColor: AppColors.card,
+        ),
+      );
     } finally {
       if (mounted) setState(() => _completingPromptDate = null);
     }

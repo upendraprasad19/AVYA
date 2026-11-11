@@ -51,6 +51,19 @@ const seamPatterns = <String>[
 /// map in the same commit, stating what the new site does about capability —
 /// that decision is the whole point of the gate.
 const seamAllowlist = <String, SeamEntry>{
+  // Coach workout parity 1c (2026-11-11): a SUBSTRING match, not a seam. The
+  // pattern 'PlannedExercise(' matches the identifier
+  // `loggedNameForPlannedExercise(`, which only reads an `exlog_*` row by name
+  // (a log that already exists) and returns that name. Nothing is put in front
+  // of a user or into a plan, so equipment capability does not apply.
+  'lib/features/train/services/coach_day_completion.dart': SeamEntry(2,
+      'substring match of loggedNameForPlannedExercise( (definition and the '
+      'loggedPlannedExerciseCount call): reads an existing exlog row by name, '
+      'emits no exercise; capability not applicable'),
+  'lib/features/train/services/chat_logged_exercises.dart': SeamEntry(1,
+      'substring match of loggedNameForPlannedExercise( in chatLoggedEntryFor: '
+      'reads the coach-logged exlog row for a session exercise already on '
+      'screen, emits no exercise; capability not applicable'),
   'lib/features/train/widgets/create_custom_exercise_sheet.dart': SeamEntry(1,
       'd5c2e8 read-back only: after createCustomExercise it reads back the ONE '
       'row the user just authored in this sheet (matched by its id) and hands '

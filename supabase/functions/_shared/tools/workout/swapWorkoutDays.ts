@@ -15,7 +15,6 @@
 
 import { z } from "npm:zod@3.25.76";
 import type { ToolDefinition } from "../types.ts";
-import { CAPABILITY_SWAP_WORKOUT_DAYS } from "../../day_swap_routing.ts";
 
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -63,7 +62,10 @@ export const swapWorkoutDaysTool: ToolDefinition<Args> = {
   kind: "write",
   confirmationClass: "reviewable",
   tier: "pro",
-  requiresCapability: CAPABILITY_SWAP_WORKOUT_DAYS,
+  // A string LITERAL (coach workout parity S3): the coverage gate's regex
+  // cannot read an identifier, so `CAPABILITY_SWAP_WORKOUT_DAYS` was invisible
+  // to it. requestCompletionTile_test.ts pins literal === the exported const.
+  requiresCapability: "swap_workout_days",
   description:
     "Swap the scheduled content of two days within the same Mon-Sun week (e.g. trade Friday's and Saturday's workouts, or move a single workout to another day this week). Content moves; the identity of each date (phase, week, hold state) stays. Always review the two-day move plan before confirming.",
   selectionHints:

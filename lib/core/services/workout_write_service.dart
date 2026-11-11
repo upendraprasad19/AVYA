@@ -282,6 +282,16 @@ class WorkoutWriteService {
         'logging_type': resolvedType,
         'source': source.code,
         'notes': ?notes,
+        // Coach workout parity 1c (C1b): the sticky Hive-LOCAL marker that
+        // the coach logged (or appended to) this row. `source` is the LAST
+        // writer's, so an app append after a chat log would otherwise lose
+        // the fact. Carried forward when the existing row has it or was
+        // written by the coach, set when this write is the coach's. Not
+        // flag-gated; never pushed (`_buildExlogPushBundle` names its fields).
+        if (existingMap?['coach_logged'] == true ||
+            existingMap?['source'] == WriteSource.aiCoach.code ||
+            source == WriteSource.aiCoach)
+          'coach_logged': true,
         'updated_at_ms': DateTime.now().millisecondsSinceEpoch,
       };
 
@@ -575,9 +585,9 @@ class WorkoutWriteService {
   /// [completedVia] records HOW this day was completed for completion
   /// telemetry / coach-memory. Values: 'app' (UI finish button, default),
   /// 'auto' (derived all-logged backstop after a coach logSet), 'tap' (the
-  /// coach completion-prompt card's [Complete workout] button). Stamped on
-  /// both the schedule row and the wlog row so downstream analytics can
-  /// attribute completions. Unit 1 (coach-completion-tap-card).
+  /// coach tile's Complete workout), 'train_tap' (Train's COMPLETE WORKOUT,
+  /// coach parity 1b). Stamped on both the schedule row and the wlog row so
+  /// downstream analytics can attribute completions. Unit 1 (tap card).
   Future<WriteResult> markCompleted({
     required DateTime date,
     required String workoutName,
@@ -611,8 +621,24 @@ class WorkoutWriteService {
       // contract; the per-date lock + caller gates already make double-completion
       // a benign rare race that simply re-stamps the same 'completed' state.
 
-      // 1. Update schedule entry status='completed' (preserve other fields)
+      // Coach workout parity 1a (OI-379): decide, under this lock and BEFORE
+      // any write, whether this call is the day's FIRST completion. Two doors
+      // completing one day serialise here, so exactly one sees true. A day
+      // whose wlog_ survived a reset to planned/skipped is not first again:
+      // the completed-day heal already counts its wlog (plan rev 4, R3-F4).
       final sched = box.get(sKey);
+      final prevWlog = box.get(wKey);
+      final newlyCompleted =
+          (sched is! Map || sched['status'] != 'completed') &&
+              prevWlog == null;
+      // A tap or the typed backstop passes 0 s; racing a door that stored a
+      // real duration (the chat card, Active Workout), it must not wipe it.
+      // A real duration still replaces the stored one (the update contract).
+      final keptDurationSec = durationSec == 0
+          ? (WorkoutReadService.workoutLogDurationSeconds(prevWlog) ?? 0)
+          : durationSec;
+
+      // 1. Update schedule entry status='completed' (preserve other fields)
       if (sched is Map) {
         final m = Map<String, dynamic>.from(sched);
         m['status'] = 'completed';
@@ -647,7 +673,7 @@ class WorkoutWriteService {
         'type': 'workout_log',
         'workout_name': workoutName,
         'date': dateStr,
-        'duration_seconds': durationSec,
+        'duration_seconds': keptDurationSec,
         if (rpe != null) 'rpe': rpe,
         // audit-fixwave 2026-07-02 / F19 — stamp completed_at in UTC. Pre-fix
         // this serialized device-local (IST) wall-clock into the timestamptz
@@ -676,7 +702,7 @@ class WorkoutWriteService {
         }
       }
 
-      return WriteResult.ok(wKey);
+      return WriteResult.ok(wKey, newlyCompleted: newlyCompleted);
     } catch (e, st) {
       // audit-2026-05-11 H-42 — telemetry pair.
       debugPrint('[WorkoutWriteService.markCompleted] $e\n$st');
@@ -1133,6 +1159,17 @@ class WorkoutWriteService {
           merged['volume_kg'] =
               sideVolume(existing, existingSets) + sideVolume(row, movedSets);
           merged['updated_at_ms'] = DateTime.now().millisecondsSinceEpoch;
+          // Coach workout parity 1c (C1b): the merged row is a chat row when
+          // EITHER side was. The OR is ASSIGNED (true, or the key removed),
+          // so a marked moved row is not lost under an unmarked existing one.
+          if (existing['coach_logged'] == true ||
+              row['coach_logged'] == true ||
+              existing['source'] == WriteSource.aiCoach.code ||
+              row['source'] == WriteSource.aiCoach.code) {
+            merged['coach_logged'] = true;
+          } else {
+            merged.remove('coach_logged');
+          }
           // Keep the existing row's workout_log_id — its session owns the
           // destination day (the moved row's source id is stale here).
           await box.put(newKey, merged);

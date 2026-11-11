@@ -160,6 +160,16 @@ class WardroomCopy {
   static const activeLoggedSemantics = 'Logged';
   static const activeReopenHint = 'Re-open';
 
+  /// Coach workout parity 1c (OI-491, founder-approved 2026-11-10): an
+  /// exercise the coach already logged in chat opens DONE in Active Workout
+  /// with this label (button and eyebrow), and TalkBack reads the semantics.
+  static const activeLoggedInChatLabel = 'LOGGED IN CHAT';
+  static const activeLoggedInChatSemantics = 'Logged in chat';
+
+  /// Founder F2 (2026-11-11): the text action on a re-opened chat exercise
+  /// that puts it back to DONE while no new set is checked.
+  static const activeKeepLoggedInChat = 'KEEP AS LOGGED';
+
   /// TalkBack announcement after a RE-OPEN.
   static const activeReopenedAnnouncementTemplate = '{exercise} re-opened';
 
@@ -269,6 +279,16 @@ class WardroomCopy {
   static const activeFinishZeroSetBlocked =
       "No working sets logged (warm-ups don't count). Log one to complete, or cancel the workout.";
 
+  /// Coach workout parity 1c, founder F3 (2026-11-11): FINISH on a day where
+  /// EVERY exercise is already logged in chat (COMPLETE stays disabled).
+  static const activeFinishAllLoggedInChat =
+      'Everything today is already logged in chat. Re-open an exercise to add sets, or cancel the workout.';
+
+  /// Coach workout parity 1c, founder F4 (2026-11-11): FINISH on a MIXED day
+  /// (some exercise has a chat log, not all are chat-done, nothing new saved).
+  static const activeFinishNoNewSets =
+      "No new sets logged this session (warm-ups don't count). Log one to complete, or cancel the workout.";
+
   /// OI-361: the chat workout card's CONFIRM is disabled when no exercise has a
   /// set to write.
   static const coachDraftNoSets =
@@ -294,6 +314,49 @@ class WardroomCopy {
   static const coachWorkoutHeldNotice =
       'New workout waiting. Confirm or discard this one first.';
   static const coachWorkoutSkippedTemplate = 'Skipped: {names} (no usable sets).';
+
+  // Coach workout parity 1b (OI-490) — founder-approved 2026-11-10.
+  /// The chat card on a partial planned day (today).
+  static const coachWorkoutAwaitingTemplate =
+      "Saved {logged} of {planned}. Log the rest, or tap Complete workout when you're done.";
+
+  /// The same line when no logged name matches a planned one (0 of N).
+  static const coachWorkoutAwaitingNoCount =
+      "Saved. Log the rest, or tap Complete workout when you're done.";
+
+  /// The chat card on a rest, moved or no-plan day.
+  static const coachWorkoutNotCounted =
+      "Saved. Not a planned workout day, so it doesn't count as a workout.";
+
+  /// The completion tile's body (rank-neutral).
+  static const coachCompletionPromptBody =
+      'Log more exercises, or complete the workout?';
+
+  /// A Complete tap refused because the day has no exercise log.
+  static const coachTapNoLogs =
+      "Couldn't complete. Log at least one exercise first.";
+
+  /// A Complete tap whose write failed.
+  static const coachTapFailed = "Couldn't save. Try again.";
+
+  /// The success line after a Complete tap (unchanged from the tile).
+  static const coachTapCompleted = 'Workout marked complete.';
+
+  /// Train: today's row chip once something is logged.
+  static const trainInProgressChip = 'IN PROGRESS';
+
+  /// Train: today's expansion heading over the logged exercises.
+  static const trainLoggedSoFar = 'LOGGED SO FAR';
+
+  /// Train: today's complete button.
+  static const trainCompleteWorkout = 'COMPLETE WORKOUT';
+
+  /// Train: a not-done rest row with logs (chip) and a past not-done sheet
+  /// heading.
+  static const trainLoggedChip = 'LOGGED';
+
+  /// Train: the line under a not-done rest row's logs.
+  static const trainRestNotCounted = 'Rest day. Not counted as a workout.';
 
   /// TalkBack labels for the chat workout card.
   static const coachWorkoutEditSemanticsTemplate = 'Edit {name}';

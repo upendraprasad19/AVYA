@@ -32,12 +32,14 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 
+import 'package:icanbefitter/core/services/completion_prompt_store.dart';
 import 'package:icanbefitter/core/services/guarded_box.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
 import 'package:icanbefitter/core/services/hive_user_session.dart';
 import 'package:icanbefitter/core/services/sync_service.dart';
 import 'package:icanbefitter/core/services/workout_write_service.dart';
 import 'package:icanbefitter/core/services/write_result.dart';
+import 'package:icanbefitter/features/train/services/coach_day_completion.dart';
 import 'package:icanbefitter/core/utils/ist_date.dart';
 import 'package:icanbefitter/features/ai_coach/models/tool_intent.dart';
 import 'package:icanbefitter/features/ai_coach/providers/ai_coach_provider.dart';
@@ -244,9 +246,8 @@ void main() {
 
       // The chat card's [Complete workout] handler.
       final notifier = makeChatNotifier();
-      final WriteResult res =
-          await notifier.completeWorkoutFromPrompt(istDateStr(date));
-      expect(res.success, isTrue);
+      final res = await notifier.completeWorkoutFromPrompt(istDateStr(date));
+      expect(res, CoachTapResult.completed);
 
       final sched =
           HiveService.instance.workoutBox.get(WorkoutWriteService.scheduleKey(date))
@@ -449,7 +450,7 @@ void main() {
 
       final notifier = makeChatNotifier();
       final res = await notifier.completeWorkoutFromPrompt(dateStr);
-      expect(res.success, isTrue);
+      expect(res, CoachTapResult.completed);
 
       // The EXACT `schedule_<dateStr>` row (IST-keyed) must be the one that
       // flipped — not a neighbouring day. Pre-fix, markCompleted received
@@ -521,6 +522,145 @@ void main() {
           reason: 'A plan-less day writes the tap-card instead of completing.');
       expect(prompt!['planned_count'], 0);
       expect(prompt['resolved_at'], isNull);
+    });
+  });
+  // ── f3d704 — the tile's created_at is UTC with Z ──────────────────────
+  //
+  // ChatHistoryNotifier.build sorts every coachBox row by its created_at
+  // STRING. CoachInteractionRepository stamps chat rows in UTC with `Z`; the
+  // prompt row used DateTime.now().toIso8601String() (device-local, no `Z`),
+  // so in IST the tile sorted 5.5 h LATE (under every later chat row) and
+  // west of UTC it sorted EARLY. Run this file under TZ=Asia/Kolkata AND
+  // TZ=Etc/GMT+12: each zone reddens a different half of the ordering test
+  // against the pre-fix stamp.
+  group('f3d704 — completion_prompt created_at is UTC', () {
+    Future<void> putChatRow(String key, DateTime utc) async {
+      await HiveService.instance.coachBox.put(key, {
+        'user_message': 'msg $key',
+        'ai_response': 'reply $key',
+        'created_at': utc.toUtc().toIso8601String(),
+      });
+    }
+
+    test('a new row stamps created_at in UTC with Z', () async {
+      final before = DateTime.now().toUtc();
+      await CompletionPromptStore.instance
+          .write(dateStr: istTodayStr(), plannedCount: 3, loggedCount: 1);
+      final stamp = completionPrompt(istTodayStr())!['created_at'] as String;
+      expect(stamp.endsWith('Z'), isTrue,
+          reason: 'created_at must be UTC ISO-8601 with Z (got $stamp).');
+      final parsed = DateTime.parse(stamp);
+      expect(parsed.isBefore(before.subtract(const Duration(seconds: 1))),
+          isFalse);
+      expect(
+          parsed.isAfter(DateTime.now().toUtc().add(const Duration(seconds: 1))),
+          isFalse);
+    });
+
+    test('a kept local stamp (pre-fix row) is normalised to the same instant',
+        () async {
+      final today = istTodayStr();
+      final localStamp = DateTime(2026, 11, 11, 10, 0, 5).toIso8601String();
+      expect(localStamp.endsWith('Z'), isFalse);
+      await HiveService.instance.coachBox.put(
+          CompletionPromptStore.keyFor(today), {
+        'kind': 'completion_prompt',
+        'date': today,
+        'planned_count': 3,
+        'logged_count': 1,
+        'created_at': localStamp,
+        'resolved_at': null,
+      });
+      await CompletionPromptStore.instance
+          .write(dateStr: today, plannedCount: 3, loggedCount: 2);
+      final row = completionPrompt(today)!;
+      final stamp = row['created_at'] as String;
+      expect(stamp.endsWith('Z'), isTrue,
+          reason: 'The keep path must normalise a local stamp to UTC.');
+      expect(DateTime.parse(stamp).isAtSameMomentAs(DateTime.parse(localStamp)),
+          isTrue,
+          reason: 'Normalising keeps the SAME instant (the tile keeps its '
+              'place); it never re-stamps.');
+      expect(row['logged_count'], 2);
+    });
+
+    test('a kept UTC stamp round-trips unchanged', () async {
+      final today = istTodayStr();
+      const utcStamp = '2026-11-11T04:30:05.123456Z';
+      await HiveService.instance.coachBox.put(
+          CompletionPromptStore.keyFor(today), {
+        'kind': 'completion_prompt',
+        'date': today,
+        'planned_count': 3,
+        'logged_count': 1,
+        'created_at': utcStamp,
+        'resolved_at': null,
+      });
+      await CompletionPromptStore.instance
+          .write(dateStr: today, plannedCount: 3, loggedCount: 2);
+      expect(completionPrompt(today)!['created_at'], utcStamp);
+    });
+
+    test(
+        'the tile sorts between a chat row one second before it and one '
+        'second after it (any host TZ)', () async {
+      final today = istTodayStr();
+      await putChatRow('chat_before',
+          DateTime.now().toUtc().subtract(const Duration(seconds: 1)));
+      await CompletionPromptStore.instance
+          .write(dateStr: today, plannedCount: 3, loggedCount: 1);
+      await putChatRow(
+          'chat_after', DateTime.now().toUtc().add(const Duration(seconds: 1)));
+
+      final messages = makeChatNotifier().build();
+      final tileAt =
+          messages.indexWhere((m) => m.kind == 'completion_prompt');
+      final beforeAt =
+          messages.indexWhere((m) => m.text == 'reply chat_before');
+      final afterAt = messages.indexWhere((m) => m.text == 'msg chat_after');
+      expect(tileAt, isNonNegative);
+      expect(beforeAt, isNonNegative);
+      expect(afterAt, isNonNegative);
+      expect(beforeAt < tileAt, isTrue,
+          reason: 'A chat row one second OLDER than the tile must render '
+              'above it (TZ=${DateTime.now().timeZoneName}).');
+      expect(tileAt < afterAt, isTrue,
+          reason: 'A chat row one second NEWER than the tile must render '
+              'below it (TZ=${DateTime.now().timeZoneName}).');
+    });
+
+    test('reshow stamps a fresh UTC created_at and reopens a resolved row',
+        () async {
+      final today = istTodayStr();
+      const oldStamp = '2026-01-01T00:00:00.000Z';
+      await HiveService.instance.coachBox.put(
+          CompletionPromptStore.keyFor(today), {
+        'kind': 'completion_prompt',
+        'date': today,
+        'planned_count': 3,
+        'logged_count': 1,
+        'created_at': oldStamp,
+        'resolved_at': '2026-01-01T00:05:00.000Z',
+      });
+      final before = DateTime.now().toUtc();
+      await CompletionPromptStore.instance.write(
+          dateStr: today, plannedCount: 3, loggedCount: 2, reshow: true);
+      final row = completionPrompt(today)!;
+      final stamp = row['created_at'] as String;
+      expect(stamp, isNot(oldStamp));
+      expect(stamp.endsWith('Z'), isTrue);
+      expect(
+          DateTime.parse(stamp)
+              .isBefore(before.subtract(const Duration(seconds: 1))),
+          isFalse,
+          reason: 'reshow stamps NOW, so the tile sorts under the reply.');
+      expect(row['resolved_at'], isNull);
+      expect(row['logged_count'], 2);
+
+      // Without reshow the same call keeps the stamp.
+      await CompletionPromptStore.instance
+          .write(dateStr: today, plannedCount: 3, loggedCount: 3);
+      expect(completionPrompt(today)!['created_at'], stamp);
     });
   });
 }

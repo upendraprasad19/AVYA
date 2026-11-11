@@ -53,6 +53,9 @@ import '../../widgets/readiness_sheet.dart';
 import '../../widgets/day_swap_row_trailing.dart';
 import '../../widgets/day_swap_drag_wrapper.dart';
 import '../../widgets/day_swap_allowance_line.dart';
+import '../../providers/workout_surface_invalidation.dart';
+import '../../services/coach_day_completion.dart';
+import '../../services/workout_completion_bookkeeping.dart' show CompletionDoor;
 
 part 'plan_header.dart';
 part 'hero_cards.dart';

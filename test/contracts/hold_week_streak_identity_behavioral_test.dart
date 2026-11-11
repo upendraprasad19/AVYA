@@ -474,7 +474,24 @@ void main() {
   });
 
   group('wiring (PRESENCE-ONLY — cannot catch a behavioural revert)', () {
-    test('the streak block branches via holdStatusProvider, not the flag', () {
+    test('the streak block takes the flag-gated hold ordinal, not the flag', () {
+      // Coach workout parity 1a (OI-379, contract amended on purpose): the
+      // streak block lives in the ref-free shared completion step, which reads
+      // the SAME flag-gated value holdStatusProvider exposes
+      // (`isHolding ? todayHoldOrdinal : null` == activeHoldOrdinalFor(nowWall()),
+      // the one flag-OFF gate both call). The helper's own body is still in
+      // train_provider.dart.
+      final step = File(
+              'lib/features/train/services/workout_completion_bookkeeping.dart')
+          .readAsStringSync()
+          .split('\n')
+          .map((l) => l.replaceFirst(RegExp(r'//.*$'), ''))
+          .join('\n');
+      expect(step.contains('resolveStreakWeekState('), isTrue);
+      expect(step.contains('holdOrdinal: readSvc.activeHoldOrdinalFor(nowWall())'),
+          isTrue);
+      expect(step.contains('PlanEngineFlags'), isFalse,
+          reason: 'the step must not read the flag directly');
       final src = File('lib/features/train/providers/train_provider.dart')
           .readAsStringSync();
       // Strip comments so prose mentioning a symbol cannot satisfy the check.
@@ -485,7 +502,6 @@ void main() {
           .join('\n');
 
       expect(stripped.contains('resolveStreakWeekState('), isTrue);
-      expect(stripped.contains('ref.read(holdStatusProvider)'), isTrue);
 
       // The single flag-OFF guarantee point is holdStatusProvider; the streak
       // path must not re-derive hold state from the flag or from Hive.

@@ -1,18 +1,17 @@
 import 'dart:async';
+import 'dart:math' as math;
 import 'dart:ui';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:icanbefitter/core/services/error_telemetry.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
+import 'package:icanbefitter/core/services/hive_user_session.dart';
 import 'package:icanbefitter/core/services/migrated_key.dart';
 import 'package:icanbefitter/core/utils/injury_vocab.dart';
 import 'package:icanbefitter/core/theme/colors.dart';
 import 'package:icanbefitter/core/services/seed_service.dart';
-import 'package:icanbefitter/core/services/badge_service.dart';
-import 'package:icanbefitter/core/services/rank_service.dart';
 import 'package:icanbefitter/core/services/workout_read_service.dart';
 import 'package:icanbefitter/core/services/sync_flags.dart';
-import 'package:icanbefitter/core/services/sync_service.dart';
 import 'package:icanbefitter/core/services/workout_write_service.dart';
 import 'package:icanbefitter/core/services/write_result.dart';
 import 'package:icanbefitter/shared/repositories/user_repository.dart';
@@ -32,8 +31,12 @@ import 'package:icanbefitter/core/services/health_read_service.dart';
 import 'package:icanbefitter/shared/repositories/plan_engine/plan_engine_flags.dart';
 import 'package:icanbefitter/shared/repositories/plan_engine/session_estimate.dart';
 import '../repositories/workout_repository.dart';
+import '../services/workout_completion_bookkeeping.dart';
 import '../services/superset_persist_logic.dart';
 import '../services/log_exercise_logic.dart';
+import '../services/chat_logged_exercises.dart';
+import '../services/coach_day_completion.dart';
+import '../services/log_exercise_flags.dart';
 import 'package:icanbefitter/features/auth/providers/auth_invalidation_provider.dart';
 import 'package:icanbefitter/features/home/providers/home_provider.dart';
 import 'package:icanbefitter/core/constants/equipment_defaults.dart';
@@ -1233,6 +1236,13 @@ class ActiveWorkoutData {
   // Names of exercises the user RE-OPENED (§1). Never pruned in a session; the
   // FINISH guard filters it to exercises present now with nothing to save.
   final Set<String> reopenedExercises;
+  // Coach workout parity 1c (OI-491): exercises the coach already logged in
+  // chat for the session date, keyed by `exerciseNameKey` (chatLoggedKey).
+  // ONE snapshot taken at [ActiveWorkoutNotifier.startWorkout] (plus the
+  // introduced-name read of a swap/add). The coach's sets live ONLY here,
+  // never in checkedSets/setInputValues, so FINISH cannot save them again.
+  // MUST be threaded through copyWith (the 1x/sec timer).
+  final Map<String, ChatLoggedExercise> loggedInChat;
 
   const ActiveWorkoutData({
     this.workoutDay,
@@ -1250,6 +1260,7 @@ class ActiveWorkoutData {
     this.readinessLevel,
     this.suggestedInputs = const {},
     this.reopenedExercises = const {},
+    this.loggedInChat = const {},
   });
 
   ActiveWorkoutData copyWith({
@@ -1268,6 +1279,7 @@ class ActiveWorkoutData {
     ReadinessLevel? readinessLevel,
     Set<String>? suggestedInputs,
     Set<String>? reopenedExercises,
+    Map<String, ChatLoggedExercise>? loggedInChat,
   }) {
     return ActiveWorkoutData(
       workoutDay: workoutDay ?? this.workoutDay,
@@ -1288,6 +1300,7 @@ class ActiveWorkoutData {
       readinessLevel: readinessLevel ?? this.readinessLevel,
       suggestedInputs: suggestedInputs ?? this.suggestedInputs,
       reopenedExercises: reopenedExercises ?? this.reopenedExercises,
+      loggedInChat: loggedInChat ?? this.loggedInChat,
     );
   }
 
@@ -1392,7 +1405,25 @@ class ActiveWorkoutData {
     return warmUpSets.containsKey('$exerciseIndex-$setIndex');
   }
 
+  /// The chat entry of the exercise at [exerciseIndex], or null (also for an
+  /// out-of-range index).
+  ChatLoggedExercise? chatEntry(int exerciseIndex) {
+    if (exerciseIndex < 0 || exerciseIndex >= exercises.length) return null;
+    return loggedInChat[chatLoggedKey(exercises[exerciseIndex].name)];
+  }
+
+  /// The exercise at [exerciseIndex] has a chat entry (done or re-opened).
+  bool isChatLogged(int exerciseIndex) => chatEntry(exerciseIndex) != null;
+
+  /// A chat-logged exercise the user has NOT re-opened: it is done and shows
+  /// LOGGED IN CHAT. Once re-opened, the ordinary done rule applies to its
+  /// (reduced) new rows.
+  bool isChatLoggedDone(int exerciseIndex) =>
+      isChatLogged(exerciseIndex) &&
+      !reopenedExercises.contains(exercises[exerciseIndex].name);
+
   bool isExerciseDone(int exerciseIndex) {
+    if (isChatLoggedDone(exerciseIndex)) return true;
     final exercise = exercises[exerciseIndex];
     final numSets = int.tryParse(exercise.sets) ?? 3;
     for (int i = 0; i < numSets; i++) {
@@ -1449,6 +1480,13 @@ class ActiveWorkoutData {
   }
 }
 
+/// Coach workout parity 1c (R6B-F1): the ONE predicate "a row of exercise
+/// [index] is checked" (any `checkedSets` key `'$index-'`, warm-ups
+/// included). Both the card's KEEP AS LOGGED visibility and the
+/// [ActiveWorkoutNotifier.keepChatLogged] guard read it, so they cannot drift.
+bool hasCheckedRow(ActiveWorkoutData data, int index) =>
+    data.checkedSets.keys.any((k) => k.startsWith('$index-'));
+
 /// What an attempt to add or swap an exercise did (OI-358). A plain bool could
 /// not tell a stale slot from a taken name, and only the second has a message.
 enum SessionExerciseChange { applied, nameTaken, invalidSlot }
@@ -1463,6 +1501,12 @@ class ActiveWorkoutNotifier extends Notifier<ActiveWorkoutData> {
   /// checks this to keep an UNDO from removing sets the save is reading.
   bool _completing = false;
   bool get isCompleting => _completing;
+
+  /// Test seam (coach workout parity 1a): awaited after the logExercise loop,
+  /// right before the day is marked, so a test can switch account there and
+  /// prove the owner was captured at the start of the save. Null in production.
+  @visibleForTesting
+  static Completer<void>? debugBeforeMarkGate;
 
   @override
   ActiveWorkoutData build() {
@@ -1511,6 +1555,10 @@ class ActiveWorkoutNotifier extends Notifier<ActiveWorkoutData> {
       exercises = _applyReadinessSetDrop(exercises);
     }
 
+    // Coach workout parity 1c (C2): the one chat snapshot, after the Red-day
+    // drop (plannedSets reads the dropped count) and before the state build.
+    final loggedInChat = _chatLoggedSnapshot(day, exercises);
+
     state = ActiveWorkoutData(
       workoutDay: day,
       exercises: exercises,
@@ -1519,6 +1567,7 @@ class ActiveWorkoutNotifier extends Notifier<ActiveWorkoutData> {
       warmUpSets: const {},
       sessionDetrainingFactor: sessionFactor,
       readinessLevel: level,
+      loggedInChat: loggedInChat,
     );
 
     // Use wall-clock elapsed time so the timer survives phone lock / app pause.
@@ -1529,6 +1578,70 @@ class ActiveWorkoutNotifier extends Notifier<ActiveWorkoutData> {
         state = state.copyWith(elapsedSeconds: elapsed);
       }
     });
+  }
+
+  /// Coach workout parity 1c (C2): which of [exercises] the coach already
+  /// logged in chat for the session date. Flag OFF gives `{}` (byte-identical
+  /// to before). The `swapped_from` names come from the plan row ONLY when the
+  /// session date IS the plan day (a past day replaced by today has another
+  /// day's swaps). The WHOLE snapshot sits in an outer guard (any failure
+  /// discards the partial map and START proceeds as today); each row has its
+  /// own guard (a bad row opens plain, the others still map). Telemetry
+  /// reports counts and error types only, never row values.
+  Map<String, ChatLoggedExercise> _chatLoggedSnapshot(
+    WorkoutDayData day,
+    List<ExerciseData> exercises,
+  ) {
+    try {
+      if (!LogExerciseFlags.logExerciseButtonEnabled) return const {};
+      final sessionDate =
+          resolveSessionDate(scheduledDate: day.date, now: nowWall());
+      final swappedFrom = <String, String>{};
+      final planDate = day.date;
+      if (planDate != null &&
+          formatDateKey(planDate) == formatDateKey(sessionDate)) {
+        final row =
+            WorkoutScheduleReadService.instance.rawScheduleRow(planDate);
+        if (row != null) {
+          for (final ex in plannedExercisesOf(row)) {
+            final name = ex['exercise_name'];
+            final from = ex['swapped_from'];
+            if (name is String && from is String && from.trim().isNotEmpty) {
+              swappedFrom[exerciseNameKey(name)] = from;
+            }
+          }
+        }
+      }
+      final out = <String, ChatLoggedExercise>{};
+      var failed = 0;
+      for (final ex in exercises) {
+        try {
+          final from = swappedFrom[exerciseNameKey(ex.name)];
+          final entry = chatLoggedEntryFor(
+            sessionDate,
+            {'exercise_name': ex.name, 'swapped_from': ?from},
+            fallbackLoggingType: ex.loggingType,
+            plannedSets: int.tryParse(ex.sets) ?? 3,
+          );
+          if (entry != null) out[chatLoggedKey(ex.name)] = entry;
+        } catch (e) {
+          failed++;
+          debugPrint('[ActiveWorkout] chat snapshot row skipped: '
+              '${e.runtimeType}');
+        }
+      }
+      if (failed > 0) {
+        debugPrint('[ActiveWorkout] chat snapshot: $failed row(s) skipped');
+        unawaited(ErrorTelemetry.logEvent('active_workout_chat_snapshot_failed',
+            message: 'rows=$failed'));
+      }
+      return out;
+    } catch (e) {
+      debugPrint('[ActiveWorkout] chat snapshot failed: ${e.runtimeType}');
+      unawaited(ErrorTelemetry.logEvent('active_workout_chat_snapshot_failed',
+          message: 'outer:${e.runtimeType}'));
+      return const {};
+    }
   }
 
   /// ⑥ Batch 6 (W2.3) Red-day adjustment: trim ONE set from the FIRST isolation
@@ -1564,6 +1677,8 @@ class ActiveWorkoutNotifier extends Notifier<ActiveWorkoutData> {
   }
 
   void toggleSet(int exerciseIndex, int setIndex) {
+    // Coach workout parity 1c (R6A-F5): a done chat exercise has no rows.
+    if (state.isChatLoggedDone(exerciseIndex)) return;
     final key = '$exerciseIndex-$setIndex';
     final newChecked = Map<String, bool>.from(state.checkedSets);
     if (newChecked.containsKey(key)) {
@@ -1584,6 +1699,8 @@ class ActiveWorkoutNotifier extends Notifier<ActiveWorkoutData> {
     // reads (completeWorkout reads them per exercise across awaits).
     if (_completing || state.isSaved || state.isComplete) return;
     if (exerciseIndex < 0 || exerciseIndex >= state.exercises.length) return;
+    // Coach workout parity 1c (R6A-F5): a done chat exercise has no rows.
+    if (state.isChatLoggedDone(exerciseIndex)) return;
     final numSets = int.tryParse(state.exercises[exerciseIndex].sets) ?? 3;
     final newChecked = Map<String, bool>.from(state.checkedSets);
     var added = false;
@@ -1627,6 +1744,69 @@ class ActiveWorkoutNotifier extends Notifier<ActiveWorkoutData> {
       reopenedExercises: reopened
           ? {...state.reopenedExercises, exerciseName}
           : null,
+    );
+    return true;
+  }
+
+  /// Coach workout parity 1c (C5): RE-OPEN of an exercise the coach logged in
+  /// chat. The name joins `reopenedExercises` and the slot's `sets` becomes
+  /// the rows still to log, `max(1, plannedSets - coachCount)`, in ONE state
+  /// change. Only the NEW rows are ever saved; the coach's sets stay in
+  /// `loggedInChat`. Refuses (false, state untouched), in this order: index
+  /// out of range, a save running, saved, complete, [name] not the slot's
+  /// exercise, the slot has no chat entry, already re-opened.
+  bool reopenChatLogged(int index, String name) {
+    if (index < 0 || index >= state.exercises.length) return false;
+    if (_completing) return false;
+    if (state.isSaved) return false;
+    if (state.isComplete) return false;
+    final slot = state.exercises[index];
+    if (slot.name != name) return false;
+    final entry = state.loggedInChat[chatLoggedKey(slot.name)];
+    if (entry == null) return false;
+    if (state.reopenedExercises.contains(slot.name)) return false;
+    final rows = math.max(1, entry.plannedSets - entry.coachCount);
+    final exercises = List<ExerciseData>.from(state.exercises);
+    exercises[index] = slot.copyWith(sets: '$rows');
+    state = state.copyWith(
+      exercises: exercises,
+      reopenedExercises: {...state.reopenedExercises, slot.name},
+    );
+    return true;
+  }
+
+  /// Coach workout parity 1c (C5, founder F2 `KEEP AS LOGGED`): undo a chat
+  /// re-open while no new row is checked. Removes the name from
+  /// `reopenedExercises`, restores `sets = plannedSets`, and clears the
+  /// index's `warmUpSets`, `setInputValues` and `suggestedInputs` (nothing is
+  /// checked, so no logged data is lost; stale typed values cannot leak into
+  /// a later re-open or the typed-unsaved warning). Refuses (false, state
+  /// untouched), in this order: index out of range, a save running, saved,
+  /// complete, [name] not the slot's exercise, no chat entry, not re-opened,
+  /// a checked row ([hasCheckedRow], shared with the card's KEEP visibility).
+  bool keepChatLogged(int index, String name) {
+    if (index < 0 || index >= state.exercises.length) return false;
+    if (_completing) return false;
+    if (state.isSaved) return false;
+    if (state.isComplete) return false;
+    final slot = state.exercises[index];
+    if (slot.name != name) return false;
+    final entry = state.loggedInChat[chatLoggedKey(slot.name)];
+    if (entry == null) return false;
+    if (!state.reopenedExercises.contains(slot.name)) return false;
+    if (hasCheckedRow(state, index)) return false;
+    final exercises = List<ExerciseData>.from(state.exercises);
+    exercises[index] = slot.copyWith(sets: '${entry.plannedSets}');
+    final prefix = '$index-';
+    state = state.copyWith(
+      exercises: exercises,
+      reopenedExercises: {...state.reopenedExercises}..remove(slot.name),
+      warmUpSets: Map<String, bool>.from(state.warmUpSets)
+        ..removeWhere((k, _) => k.startsWith(prefix)),
+      setInputValues: Map<String, SetInputValues>.from(state.setInputValues)
+        ..removeWhere((k, _) => k.startsWith(prefix)),
+      suggestedInputs: {...state.suggestedInputs}
+        ..removeWhere((k) => k.startsWith(prefix)),
     );
     return true;
   }
@@ -1744,8 +1924,40 @@ class ActiveWorkoutNotifier extends Notifier<ActiveWorkoutData> {
             exerciseId: newExercise.exerciseId,
           );
 
+    // Coach workout parity 1c (C4): a name the coach logged in chat opens DONE
+    // wherever it appears, with its own planned count. Swapping AWAY from a
+    // re-opened chat exercise X hands the slot X's planned count (not X's
+    // reduced `sets`). A name not in the snapshot gets ONE introduced-name
+    // read of today's row (not a mid-session sync of the others).
+    final outgoing = state.exercises[exerciseIndex];
+    final outgoingEntry = state.loggedInChat[chatLoggedKey(outgoing.name)];
+    final outgoingPlanned =
+        (outgoingEntry != null &&
+                state.reopenedExercises.contains(outgoing.name))
+            ? outgoingEntry.plannedSets
+            : null;
+    var loggedInChat = state.loggedInChat;
+    var incomingSets = resolved.sets;
+    final incomingEntry = loggedInChat[chatLoggedKey(resolved.name)];
+    if (incomingEntry != null) {
+      incomingSets = '${incomingEntry.plannedSets}';
+    } else {
+      final effectiveSets =
+          outgoingPlanned != null ? '$outgoingPlanned' : resolved.sets;
+      final read = _introducedChatEntry(resolved,
+          plannedSets: int.tryParse(effectiveSets) ?? 3);
+      if (read != null) {
+        loggedInChat = {...loggedInChat, chatLoggedKey(resolved.name): read};
+        incomingSets = '${read.plannedSets}';
+      } else if (outgoingPlanned != null) {
+        incomingSets = '$outgoingPlanned';
+      }
+    }
+
     final newExercises = List<ExerciseData>.from(state.exercises);
-    newExercises[exerciseIndex] = resolved;
+    newExercises[exerciseIndex] = incomingSets == resolved.sets
+        ? resolved
+        : resolved.copyWith(sets: incomingSets);
 
     // APK Test #12 / Theme A-4 — wipe per-slot ephemeral state so the
     // new exercise starts clean.
@@ -1773,16 +1985,56 @@ class ActiveWorkoutNotifier extends Notifier<ActiveWorkoutData> {
       // to the same name starts unmarked (B-pass finding 4).
       reopenedExercises: {...state.reopenedExercises}
         ..remove(state.exercises[exerciseIndex].name),
+      loggedInChat: loggedInChat,
     );
     return SessionExerciseChange.applied;
   }
 
   SessionExerciseChange addExercise(ExerciseData exercise) {
     if (_nameInSession(exercise.name)) return SessionExerciseChange.nameTaken;
+    // Coach workout parity 1c (C4): see swapExercise.
+    var loggedInChat = state.loggedInChat;
+    var added = exercise;
+    final entry = loggedInChat[chatLoggedKey(exercise.name)];
+    if (entry != null) {
+      added = exercise.copyWith(sets: '${entry.plannedSets}');
+    } else {
+      final read = _introducedChatEntry(exercise,
+          plannedSets: int.tryParse(exercise.sets) ?? 3);
+      if (read != null) {
+        loggedInChat = {...loggedInChat, chatLoggedKey(exercise.name): read};
+        added = exercise.copyWith(sets: '${read.plannedSets}');
+      }
+    }
     state = state.copyWith(
-      exercises: [...state.exercises, exercise],
+      exercises: [...state.exercises, added],
+      loggedInChat: loggedInChat,
     );
     return SessionExerciseChange.applied;
+  }
+
+  /// Coach workout parity 1c (C4, B3-F3): ONE synchronous, flag-gated read of
+  /// today's row for a name a swap/add introduces (the snapshot's accept
+  /// rule, no `swapped_from`). Null on a miss, flag OFF or any error.
+  ChatLoggedExercise? _introducedChatEntry(
+    ExerciseData exercise, {
+    required int plannedSets,
+  }) {
+    try {
+      if (!LogExerciseFlags.logExerciseButtonEnabled) return null;
+      final date = resolveSessionDate(
+          scheduledDate: state.workoutDay?.date, now: nowWall());
+      return chatLoggedEntryFor(
+        date,
+        {'exercise_name': exercise.name},
+        fallbackLoggingType: exercise.loggingType,
+        plannedSets: plannedSets,
+      );
+    } catch (e) {
+      debugPrint('[ActiveWorkout] introduced-name chat read skipped: '
+          '${e.runtimeType}');
+      return null;
+    }
   }
 
   void removeExercise(int exerciseIndex) {
@@ -2048,7 +2300,10 @@ class ActiveWorkoutNotifier extends Notifier<ActiveWorkoutData> {
 
   /// The save half of [completeWorkout], run once `_completing` is set.
   Future<void> _persistCompletion() async {
-    final repo = WorkoutRepository.instance;
+    // Coach workout parity 1a: the Hive owner, captured before any await (the
+    // logExercise loop below awaits); the shared step refuses to write if it
+    // changed.
+    final owner = HiveUserSession.currentOwnerFullId;
     final hive = HiveService.instance;
     // `nowWall()` (not DateTime.now()) so the dev/test clock seam reaches the
     // session date below. Byte-identical to DateTime.now() in release
@@ -2064,16 +2319,31 @@ class ActiveWorkoutNotifier extends Notifier<ActiveWorkoutData> {
     final bestWeightMap = <String, double>{};
     final bestRepsMap = <String, int>{};
     final bestDurationMap = <String, int>{};
-    for (final raw in hive.workoutBox.values) {
-      if (raw is! Map) continue;
-      final log = Map<String, dynamic>.from(raw);
-      if (log['type'] != 'exercise_log') continue;
-      final name = (log['exercise_name'] as String? ?? '').toLowerCase();
+    // Rows come from the shared `exlog_` key predicate, NOT a `type` filter
+    // (only the restore writer stamps `type`). Per-set maxima throughout, and
+    // the maps are keyed by `exerciseNameKey` on both the write and lookup side.
+    // A PR beats the best from STRICTLY EARLIER IST dates (the same rule as the
+    // badge count, `BadgeService.countBeatenPrs`): rows dated on the session's
+    // own save date (a coach log earlier today) are skipped. The date is the
+    // one `_persistCompletion` saves to, computed before the scan.
+    final scanSessionIstDate = istDateStr(resolveSessionDate(
+      scheduledDate: state.workoutDay?.date,
+      now: now,
+    ));
+    for (final log in WorkoutReadService.exlogRows(hive.workoutBox)) {
+      if (WorkoutReadService.istDateForExlogRow(log) == scanSessionIstDate) {
+        continue;
+      }
+      final name = exerciseNameKey(log['exercise_name'] as String? ?? '');
       if (name.isEmpty) continue;
-      final w = (log['weight_kg'] as num?)?.toDouble() ?? 0;
+      final w = WorkoutReadService.bestPerSetWeight(log);
       if (w > (bestWeightMap[name] ?? 0)) bestWeightMap[name] = w;
-      // Per-set best reps: prefer stored best, fallback to estimated average
-      final bestSetReps = (log['best_single_set_reps'] as int?);
+      // Per-set best reps: per-set max first, then stored best, then the old
+      // average for rows with no per-set list.
+      final perSetReps = WorkoutReadService.bestPerSetReps(log);
+      final bestSetReps = perSetReps > 0
+          ? perSetReps
+          : (log['best_single_set_reps'] as num?)?.toInt();
       // Drift-fix 2026-05-24 / T16 orphan — WorkoutWriteService.logExercise
       // emits canonical `set_number`; legacy `sets_completed` lingers on
       // older rows only. Dual-name read with canonical-first preference
@@ -2133,7 +2403,7 @@ class ActiveWorkoutNotifier extends Notifier<ActiveWorkoutData> {
         }
         if (currentWeight <= 0) continue;
 
-        final bestPrevious = bestWeightMap[exercise.name.toLowerCase()] ?? 0;
+        final bestPrevious = bestWeightMap[exerciseNameKey(exercise.name)] ?? 0;
         if (currentWeight > bestPrevious && bestPrevious > 0) {
           prDescriptions.add(
               '${exercise.name}: ${currentWeight.toStringAsFixed(1)}kg (was ${bestPrevious.toStringAsFixed(1)}kg)');
@@ -2154,7 +2424,7 @@ class ActiveWorkoutNotifier extends Notifier<ActiveWorkoutData> {
         }
         if (currentReps <= 0) continue;
 
-        final bestPrevious = bestRepsMap[exercise.name.toLowerCase()] ?? 0;
+        final bestPrevious = bestRepsMap[exerciseNameKey(exercise.name)] ?? 0;
         if (currentReps > bestPrevious && bestPrevious > 0) {
           prDescriptions.add(
               '${exercise.name}: $currentReps reps (was $bestPrevious reps)');
@@ -2177,9 +2447,6 @@ class ActiveWorkoutNotifier extends Notifier<ActiveWorkoutData> {
       scheduledDate: state.workoutDay?.date,
       now: now,
     );
-
-    // Compute date key once — used by streak math below.
-    final dateStr = formatDateKey(workoutDate);
 
     // Plan A Task A-13: route per-exercise saves through WorkoutWriteService.
     // The service handles exlog_<date>_<hash> Hive write, exercise_log_index_<date>
@@ -2252,120 +2519,35 @@ class ActiveWorkoutNotifier extends Notifier<ActiveWorkoutData> {
       }
     }
 
+    final markGate = debugBeforeMarkGate;
+    if (markGate != null) await markGate.future;
+
     // Plan A Task A-13: schedule completion + wlog_<date> via service.
     // Replaces repo.saveWorkoutLog + repo.markWorkoutCompleted.
-    await WorkoutWriteService.instance.markCompleted(
+    final mark = await WorkoutWriteService.instance.markCompleted(
       date: workoutDate,
       workoutName: state.workoutDay?.name ?? 'Workout',
       durationSec: state.elapsedSeconds,
     );
 
-    // Update user progress + streak.
-    final progress = UserRepository.instance.getProgress() ?? {};
-    final totalDone = ((progress['total_workouts_done'] as int?) ?? 0) + 1;
-
-    // ── Daily streak (schedule-aware — skips rest days) ──
-    // Calculated on-the-fly by scanning schedule backwards.
-    // Handles rest days, schedule changes, and template swaps correctly.
-    //
-    // C-14 (audit-2026-05-11) — completeWorkout is the canonical mutation
-    // surface for streak state. D2 (f9d2e7): route through the SINGLE gated
-    // reckon site instead of calling consume directly. For a real
-    // completeWorkout (post-restore, has schedule) reckon persists missed-day
-    // freeze consumption exactly as before; the gates only suppress the
-    // pre-restore / empty-box edge (where consuming would be unsafe), still
-    // returning an accurate read-only count to store.
-    final streakDays = repo.reckonStreakDecayAndPersist();
-
-    // ── Weekly streak (kept for badge logic — not shown in UI) ───
-    //
-    // Hold state comes from holdStatusProvider — the SINGLE flag-OFF guarantee
-    // point (`hold_display_read_path`), so nothing here reads PlanEngineFlags or
-    // Hive directly. Only `isHolding`/`todayHoldOrdinal` are taken from it:
-    // its session COUNTS are stale at this point, because this method does not
-    // invalidate currentPlanProvider until the end and the awaited
-    // markCompleted above invalidates nothing (it was handed no ref). A cached
-    // HoldStatusData therefore predates the completion just written and would
-    // under-count by exactly this session — fatal at the 80% threshold.
-    // `isHolding`/`todayHoldOrdinal` cannot go stale that way (a completion
-    // never changes hold membership, and markCompleted preserves is_hold /
-    // hold_ordinal — it merges three keys, it does not replace the row).
-    // NOTE: no test can demonstrate that staleness — a fresh ProviderContainer
-    // computes the provider on first read — so do NOT "simplify" this back to
-    // holdStatus.sessionsCompleted on the strength of a green suite.
-    final planStart = WorkoutScheduleService.instance.getPlanStartDate();
-    final holdStatus = ref.read(holdStatusProvider);
-    final streakWeek = resolveStreakWeekState(
-      readSvc: ref.read(workoutScheduleReadServiceProvider),
-      planStart: planStart,
-      holdOrdinal: holdStatus.isHolding ? holdStatus.todayHoldOrdinal : null,
-      workoutDate: workoutDate,
-    );
-    final planned = streakWeek.planned;
-    final completedCount = streakWeek.completedCount;
-    final weekly = weeklyStreakAfterCompletion(
-      streakWeeks: (progress['current_streak_weeks'] as int?) ?? 0,
-      lastCountedWeekKey:
-          lastCountedWeekKeyFrom(progress['last_counted_week_key']),
-      weekKey: streakWeek.weekKey,
-      weekIsCurrent: streakWeek.weekIsCurrent,
-      planned: planned,
-      completedCount: completedCount,
-    );
-
-    await UserRepository.instance.updateProgress({
-      'total_workouts_done': totalDone,
-      'current_streak_days': streakDays,
-      'last_workout_date': dateStr,
-      'current_streak_weeks': weekly.weeks,
-      // Slice D: the calendar week LAST COUNTED (calendarWeekKey), local-only; it
-      // moves only when the counter does. The old last_streak_week (a plan week
-      // id, stamped on every completion) is no longer written or read.
-      'last_counted_week_key': weekly.marker,
-    });
-
-    // ── Create/update per-week streak row for Supabase streaks table ──
-    final weekStartDate = streakWeek.weekStartDate;
-    if (weekStartDate != null && planned > 0) {
-      final weekStartStr = formatDateKey(weekStartDate);
-      final streakId = 'streak_$weekStartStr';
-
-      final healthBox = HiveService.instance.healthBox;
-      final existing = (healthBox.get('streaks') as List?)
-              ?.map((e) => Map<String, dynamic>.from(e as Map))
-              .toList() ??
-          <Map<String, dynamic>>[];
-      final idx = existing.indexWhere((s) => s['local_id'] == streakId);
-
-      final row = <String, dynamic>{
-        'local_id': streakId,
-        'week_start': weekStartStr,
-        'workouts_planned': planned,
-        'workouts_completed': completedCount,
-        'is_streak_maintained': completedCount >= (planned * 0.8).ceil(),
-      };
-
-      if (idx >= 0) {
-        existing[idx] = row;
-      } else {
-        existing.add(row);
-      }
-      await healthBox.put('streaks', existing);
+    // Coach workout parity 1a (OI-379): the after-completion bookkeeping
+    // (lifetime count once per day + heal, daily/weekly streak, streak row,
+    // badges, rank) is the ONE shared step every completion door calls. A
+    // failed markCompleted recorded nothing, so nothing is counted.
+    if (mark.success) {
+      await WorkoutCompletionBookkeeping.instance.afterCompletion(
+        workoutDate: workoutDate,
+        newlyCompleted: mark.newlyCompleted,
+        expectedOwner: owner,
+        mintProgressIfMissing: true,
+        door: CompletionDoor.activeWorkout,
+      );
+    } else {
+      unawaited(ErrorTelemetry.logEvent('active_workout_mark_completed_failed',
+          message: mark.errorMessage ?? ''));
     }
 
     state = state.copyWith(isComplete: true, isSaved: true, detectedPRs: prDescriptions);
-
-    // Check badge unlocks after workout completion.
-    BadgeService.instance.checkAll();
-
-    // Fire-and-forget progress sync. WorkoutWriteService already fired
-    // syncWorkoutData + pushSnapshot during logExercise/markCompleted —
-    // we only need progress (separate row) + rank evaluation here.
-    unawaited(SyncService.instance.syncProgressNow());
-    // APK Test #3 / Obs 1: re-evaluate rank on every workout. Idempotent —
-    // upsert with onConflict on (user_id, rank_code). Catches in-session
-    // promotions (e.g. SD1 firing on workout 7) the moment they qualify.
-    unawaited(RankService.instance.evaluateAndPromote());
 
     // Refresh all affected providers. Riverpod batches invalidations within
     // the same synchronous frame — these won't cause separate rebuilds.

@@ -1,3 +1,5 @@
+import 'package:hive/hive.dart';
+
 import '../utils/ist_date.dart';
 import 'hive_service.dart';
 
@@ -40,6 +42,42 @@ import 'hive_service.dart';
 class WorkoutReadService {
   WorkoutReadService._();
   static final WorkoutReadService instance = WorkoutReadService._();
+
+  static final RegExp _istDatePrefix = RegExp(r'^\d{4}-\d{2}-\d{2}');
+
+  /// Coach workout parity 1a (OI-379): the number of DISTINCT IST days that
+  /// hold a completed-workout row (`wlog_*` with `type == 'workout_log'`).
+  ///
+  /// The ONE count behind the lifetime-workouts heal
+  /// (`WorkoutCompletionBookkeeping`) and `BadgeService.checkAll`. Distinct
+  /// DAYS, not rows: a legacy `wlog_<epoch-ms>` sibling of `wlog_<date>`
+  /// (the dead `saveWorkoutLog`, an old restore, both stamped by the type
+  /// backfill) must never count one day twice — restore merges the lifetime
+  /// count max-wins, so an over-count would be permanent.
+  ///
+  /// A row's day is its `date` String (prefix `yyyy-MM-dd`, precedent
+  /// `WorkoutRepository` earliest-activity walk), else the key suffix when it
+  /// has that shape; a row with neither is skipped. Every `workout_log` row
+  /// lives under a `wlog_` key (all writers checked, plan rev 2/3), so the
+  /// scan reads only those keys.
+  int completedWorkoutDayCount() {
+    final box = HiveService.instance.workoutBox;
+    final days = <String>{};
+    for (final key in box.keys) {
+      final k = key.toString();
+      if (!k.startsWith('wlog_')) continue;
+      final row = box.get(key);
+      if (row is! Map || row['type'] != 'workout_log') continue;
+      final d = row['date'];
+      if (d is String && _istDatePrefix.hasMatch(d)) {
+        days.add(d.substring(0, 10));
+        continue;
+      }
+      final suffix = k.substring(5);
+      if (_istDatePrefix.hasMatch(suffix)) days.add(suffix.substring(0, 10));
+    }
+    return days.length;
+  }
 
   // ─────────────────────────────────────────────────────────────
   //  Per-set semantic primitives
@@ -240,6 +278,18 @@ class WorkoutReadService {
     return null;
   }
 
+  /// The stored duration of a `wlog_<date>` WORKOUT-LOG row (not an
+  /// `exlog_*` row): a top-level `duration_seconds` is that row's only
+  /// shape (`WorkoutWriteService.markCompleted` writes it). Null when the
+  /// row is absent, not a map, or holds no positive duration. Used by
+  /// `markCompleted` to keep a stored duration when a 0 s mark follows
+  /// (coach workout parity B-pass, 2026-11-10).
+  static int? workoutLogDurationSeconds(Object? wlog) {
+    if (wlog is! Map) return null;
+    final v = (wlog['duration_seconds'] as num?)?.toInt();
+    return (v != null && v > 0) ? v : null;
+  }
+
   /// TOTAL distance in km for an `exlog_*` row (OI-389), mirroring
   /// [aggregateDurationSeconds]:
   ///   1. SUM of per-set `distance_km` over [perSetList] (the longer of
@@ -278,6 +328,53 @@ class WorkoutReadService {
     }
     return null;
   }
+
+  /// The ONE `exlog_*` key predicate for readers that walk the whole box.
+  /// Yields a defensive copy of every value stored under a key that starts
+  /// with `exlog_` and is a `Map`. Readers must NOT filter exercise-log rows
+  /// on the `type` field: only the cloud-restore writer stamps
+  /// `type: 'exercise_log'`; `WorkoutWriteService.logExercise` never does
+  /// (same drift class as `graduationStatsProvider`, diagnose 89d56c).
+  static Iterable<Map<String, dynamic>> exlogRows(Box<dynamic> box) sync* {
+    for (final key in box.keys) {
+      if (!key.toString().startsWith('exlog_')) continue;
+      final raw = box.get(key);
+      if (raw is! Map) continue;
+      yield Map<String, dynamic>.from(raw);
+    }
+  }
+
+  /// One exercise-log row by its Hive key (the caller builds the key with
+  /// `WorkoutWriteService.exlogKey`), as a defensive copy; null when absent or
+  /// not a map. Coach workout parity 1c: Active Workout's chat snapshot and
+  /// the introduced-name read go through it, never through a raw box get.
+  static Map<String, dynamic>? exerciseLogRow(String key) {
+    final raw = HiveService.instance.workoutBox.get(key);
+    if (raw is! Map) return null;
+    return Map<String, dynamic>.from(raw);
+  }
+
+  static final RegExp _exlogDateKey = RegExp(r'^exlog_(\d{4}-\d{2}-\d{2})_');
+
+  /// Coach workout parity 1b (OI-490): the IST dates that hold at least one
+  /// exercise log, from ONE pass over the box KEYS (no row reads, no
+  /// `toMap()` scan). Every exercise-log writer keys through
+  /// `WorkoutWriteService.exlogKey` = `exlog_<istDate>_<8 hex>` (restore and
+  /// `ExlogKeyMigrator` included; `reconcileExlogIndexes` relies on the same
+  /// shape). Train computes it once per build; [hasExerciseLogsFor] is the
+  /// Complete-workout guard.
+  Set<String> datesWithExerciseLogs() {
+    final out = <String>{};
+    for (final key in HiveService.instance.workoutBox.keys) {
+      final m = _exlogDateKey.firstMatch(key.toString());
+      if (m != null) out.add(m.group(1)!);
+    }
+    return out;
+  }
+
+  /// True when [istDate] (`yyyy-MM-dd`) holds at least one exercise log.
+  bool hasExerciseLogsFor(String istDate) =>
+      datesWithExerciseLogs().contains(istDate);
 
   /// Returns the list of `exlog_*` Hive entries (as
   /// `Map<String, dynamic>`) for [istDate]. Reader-side index lookup;

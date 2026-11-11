@@ -41,6 +41,24 @@ check_ai_tool_dispatcher_coverage.dart:
     `flutter test test/scripts/ai_tool_dispatcher_coverage_lib_test.dart`
     in this worktree: 9/9 before, 8/9 under the mutation, 9/9 after
     restore.
+    Addendum 2026-11-11 (coach workout parity S3, OI-492): the gate now
+    fails CLOSED when a tool sets `requiresCapability:` (outside comments)
+    with anything the literal regex cannot read (`unreadableCapability`,
+    reported by checkCoverage); swapWorkoutDays.ts writes its capability as
+    a literal. Mutation M40: `unreadableCapability: declaresCapability &&
+    capMatch == null` -> `false`, applied by exact-string replacement
+    (anchor count 1), restored by sha256. 14/14 before, 2 red under the
+    mutation (the identifier write-tool and read-tool cases), 14/14 after.
+    Real-tree run: PASS (15 write tools); reverting swapWorkoutDays.ts to
+    the identifier (M41a) makes it FAIL with "1 capabilities this gate
+    cannot read".
+    B-pass (seat 1 F3): both the literal match and the declaration check
+    now read the comment-stripped source, so a commented-out literal next
+    to a live identifier fails closed. New case "a commented-out LITERAL
+    next to a live identifier still fails closed" (line and block comment);
+    15/15 green. Mutants S7 (literal match on the raw source) and S8
+    (declaration check on the raw source) each redden the file; M40 and
+    M41a re-run red after the change.
 
 check_alerts.dart:
   grandfathered: 2026-08-10

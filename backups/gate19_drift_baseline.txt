@@ -222,6 +222,14 @@ lib/core/services/template_service.dart :: schedule_* :: rest_seconds
 lib/core/services/template_service.dart :: schedule_* :: superset_group
 lib/core/services/template_service.dart :: schedule_* :: template_id
 lib/core/services/workout_read_service.dart :: exlog_* :: reps
+lib/core/services/workout_read_service.dart :: wlog_* :: distance_km
+lib/core/services/workout_read_service.dart :: wlog_* :: duration_sec
+lib/core/services/workout_read_service.dart :: wlog_* :: exercise_name
+lib/core/services/workout_read_service.dart :: wlog_* :: reps
+lib/core/services/workout_read_service.dart :: wlog_* :: reps_completed
+lib/core/services/workout_read_service.dart :: wlog_* :: sets
+lib/core/services/workout_read_service.dart :: wlog_* :: sets_detail
+lib/core/services/workout_read_service.dart :: wlog_* :: weight_kg
 lib/core/services/workout_schedule_read_service.dart :: schedule_* :: days_per_week
 lib/core/services/workout_schedule_read_service.dart :: schedule_* :: effective_exp
 lib/core/services/workout_schedule_read_service.dart :: schedule_* :: equipment

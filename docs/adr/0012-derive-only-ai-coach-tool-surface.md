@@ -145,10 +145,57 @@ stays green). The completion-prompt row is a LOCAL-ONLY coachBox action row
 `ai_coach_interaction`). Client-only; no `ai-proxy` change. Pinned by
 `test/contracts/coach_completion_prompt_test.dart`. See diagnose 280c4d.
 
+## Amendment — coach workout parity 1a (2026-11-10, diagnose 0ebfcb, OI-379)
+
+The Decision's claim that `markCompleted` "feeds streak / deployment / rank" was
+never true: `total_workouts_done`, the daily and weekly streak, the per-week
+streak row, badges and the rank check lived only in Active Workout's
+`completeWorkout`, so every coach completion marked the day and counted nothing.
+They now live in ONE shared step, `WorkoutCompletionBookkeeping.afterCompletion`
+(`lib/features/train/services/workout_completion_bookkeeping.dart`), which every
+completion door (Active Workout, the chat workout card, the all-logged backstop,
+the tap) calls after a successful `markCompleted`. The count is +1 only on the
+day's first completion (`WriteResult.newlyCompleted`) and healed upward to the
+completed days on record. The derive-only decision itself is unchanged.
+
+## Amendment — coach workout parity 1b (2026-11-10, diagnose 24e630, OI-490)
+
+The chat workout card marked the day on ANY save, while the all-logged backstop
+required every planned exercise; with 1a counting every first completion, the
+card's rule became a permanent over-count on partial, rest, moved, dropped and
+no-plan days. Every coach door (the backstop, the chat card, the completion tile
+and Train's COMPLETE WORKOUT) now decides through ONE pure rule,
+`decideCoachDay` (`lib/features/train/services/coach_day_completion.dart`), fed
+the stored row. A partial day today offers the tile (copy: "Log more exercises,
+or complete the workout?"); a past partial day stays not done; a future day is
+never marked; rest, moved, dropped and no-plan days never count from the coach
+paths. The tap is `CoachDayCompletion.completeOnTap` (today only). The quoted
+tile copy in the Unit 1 amendment above is history. The derive-only decision is
+unchanged.
+
+## Amendment — coach workout parity S3 (2026-11-11, OI-492)
+
+"I'm done" in chat makes the app's own completion tile appear, one tap total
+(founder decision C). A new tool, `requestCompletionTile` (FREE, gated by the
+client capability `request_completion_tile`), asserts nothing: it asks the app
+to re-run its own rule (`decideCoachDay`) for IST today and to re-show its own
+tile, and the client writes the tile row only for a part-logged day
+(`CoachDayCompletion.offerTileIfPartial`). It never calls `markCompleted`,
+`completeOnTap` or `afterCompletion`; the tap stays the user's. It is not an
+APPLY card: the intent runs at once on the client (an auto-run type). The
+registry holds 22 entries (FREE 10 / PRO 12); a client that declares no
+capability still sees the 20 legacy tools. Pinned by the derive-only slice
+group in `derive_only_tool_surface_test.dart` (the dispatch method and
+`offerTileIfPartial` hold no completion writer; exactly two callers of the
+derived completion). The derive-only decision is unchanged.
+
 ## See also
 
-- `supabase/functions/_shared/tools/registry.ts` (the 20-tool chokepoint)
+- `supabase/functions/_shared/tools/registry.ts` (the tool chokepoint: 22 entries, 20 without a capability)
+- `supabase/functions/_shared/tools/workout/requestCompletionTile.ts` + `_shared/completion_tile_routing.ts` (S3, the tile request)
+- `test/contracts/coach_completion_tile_tool_behavioral_test.dart` (S3)
 - `lib/features/ai_coach/services/tool_dispatcher.dart` (`_maybeCompleteScheduledDay`)
+- `lib/features/train/services/coach_day_completion.dart` (`decideCoachDay`, `completeOnTap`)
 - `lib/core/services/workout_write_service.dart` (`markCompleted`, `_rescanPrFor`, `logExercise`)
 - `lib/features/train/repositories/workout_repository.dart` (`loadAllExercisePRs`)
 - `test/contracts/derive_only_tool_surface_test.dart`

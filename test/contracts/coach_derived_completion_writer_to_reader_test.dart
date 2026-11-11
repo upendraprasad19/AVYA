@@ -47,6 +47,7 @@ import 'package:icanbefitter/core/services/hive_user_session.dart';
 import 'package:icanbefitter/core/services/sync_service.dart';
 import 'package:icanbefitter/core/services/workout_write_service.dart';
 import 'package:icanbefitter/core/services/write_result.dart';
+import 'package:icanbefitter/features/train/services/coach_day_completion.dart';
 import 'package:icanbefitter/core/utils/ist_date.dart';
 import 'package:icanbefitter/features/ai_coach/models/tool_intent.dart';
 import 'package:icanbefitter/features/ai_coach/providers/ai_coach_provider.dart';
@@ -276,9 +277,8 @@ void main() {
 
       // WRITER — the [Complete workout] card handler → markCompleted(tap).
       final notifier = makeChatNotifier();
-      final WriteResult res =
-          await notifier.completeWorkoutFromPrompt(dateStr);
-      expect(res.success, isTrue);
+      final res = await notifier.completeWorkoutFromPrompt(dateStr);
+      expect(res, CoachTapResult.completed);
 
       // READER — the schedule row round-trips the tap-derived completion.
       final sched = scheduleRow(date);

@@ -1,5 +1,7 @@
 import 'package:hive/hive.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
+import 'package:icanbefitter/core/services/workout_read_service.dart';
+import 'package:icanbefitter/core/utils/exercise_name_identity.dart';
 import 'package:icanbefitter/shared/models/achievement_badge.dart';
 
 /// Tracks and unlocks achievement badges stored in Hive configBox.
@@ -87,20 +89,54 @@ class BadgeService {
 
   int get unlockedCount => _getUnlocked().length;
 
+  /// PURE, synchronous. Counts the exercise-log rows whose best per-set weight
+  /// beats the best per-set weight of every STRICTLY earlier-dated row of the
+  /// same exercise ([exerciseNameKey]). A first-ever log (no earlier row, or an
+  /// earlier max of 0) never counts. A row with no IST date is skipped.
+  static int countBeatenPrs(Iterable<Map> exlogRows) {
+    final groups = <String, List<MapEntry<String, double>>>{};
+    for (final raw in exlogRows) {
+      final row = Map<String, dynamic>.from(raw);
+      final key = exerciseNameKey(row['exercise_name']?.toString() ?? '');
+      if (key.isEmpty) continue;
+      final date = WorkoutReadService.istDateForExlogRow(row);
+      if (date == null) continue;
+      groups
+          .putIfAbsent(key, () => [])
+          .add(MapEntry(date, WorkoutReadService.bestPerSetWeight(row)));
+    }
+    var count = 0;
+    for (final rows in groups.values) {
+      for (final r in rows) {
+        var earlierMax = 0.0;
+        for (final other in rows) {
+          if (other.key.compareTo(r.key) < 0 && other.value > earlierMax) {
+            earlierMax = other.value;
+          }
+        }
+        final w = r.value;
+        if (earlierMax > 0 && w > earlierMax) count++;
+      }
+    }
+    return count;
+  }
+
   /// Convenience: gathers all stats from Hive and checks all badge conditions.
   /// Call this after any trigger event (workout complete, meal logged, weight logged, etc.).
   List<BadgeId> checkAll() {
     final hive = HiveService.instance;
 
-    int totalWorkouts = 0;
-    int totalPrs = 0;
+    // Coach workout parity 1a: completed workout DAYS through the one shared
+    // count (distinct dates; a legacy duplicate wlog never doubles a day).
+    final int totalWorkouts =
+        WorkoutReadService.instance.completedWorkoutDayCount();
+    // Rows come from the shared `exlog_` key predicate (the `type` field is
+    // stamped only by the restore writer), and a PR is computed from the rows
+    // themselves, never from the stored `is_pr` (a back-filled earlier heavier
+    // row leaves a stale flag).
+    final int totalPrs =
+        countBeatenPrs(WorkoutReadService.exlogRows(hive.workoutBox));
     bool hasCustomExercise = false;
-    for (final raw in hive.workoutBox.values) {
-      if (raw is! Map) continue;
-      final m = Map<String, dynamic>.from(raw);
-      if (m['type'] == 'workout_log') totalWorkouts++;
-      if (m['type'] == 'exercise_log' && m['is_pr'] == true) totalPrs++;
-    }
 
     for (final key in hive.customBox.keys) {
       if (key is String && key.startsWith('custom_exercise_')) {

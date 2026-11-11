@@ -990,12 +990,23 @@ class WorkoutScheduleReadService {
     return map;
   }
 
+  /// Coach workout parity 1b (OI-490): the stored `schedule_<date>` row AS
+  /// WRITTEN — no terminal filter AND no completed-in-the-past demotion.
+  /// Exactly the row the typed all-logged backstop has always read
+  /// (`workoutBox.get('schedule_$dateStr')`), so the shared coach-day rule
+  /// (`decideCoachDay`) sees `moved`/`dropped` rows and a row completed early
+  /// for a later date reads `completed`, never `planned`.
+  Map<String, dynamic>? rawScheduleRow(DateTime date) {
+    final data = _hive.workoutBox.get('$_schedulePrefix${_dateKey(date)}');
+    return data is Map ? Map<String, dynamic>.from(data) : null;
+  }
+
   /// RAW row read for [date] — NO invisible-status filtering.
   ///
-  /// The only read surface that sees terminal `moved`/`dropped` rows (and
-  /// `paused`). For sync restore, audit and streak-walk callers that need
-  /// every row. The completed-in-the-future → planned demotion still applies
-  /// (that guard is about `completed_at`, not visibility).
+  /// Sees terminal `moved`/`dropped` rows (and `paused`). For sync restore,
+  /// audit and streak-walk callers that need every row. The
+  /// completed-in-the-future → planned demotion still applies (that guard is
+  /// about `completed_at`, not visibility); [rawScheduleRow] skips it.
   Map<String, dynamic>? getScheduleRowForDate(DateTime date) {
     final key = '$_schedulePrefix${_dateKey(date)}';
     final data = _hive.workoutBox.get(key);

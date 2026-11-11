@@ -7,6 +7,7 @@ import {
   rescheduleWeekTool,
   shortenWorkoutTool,
   swapExerciseTool,
+  requestCompletionTileTool,
   swapWorkoutDaysTool,
 } from "./workout/index.ts";
 import {
@@ -44,6 +45,8 @@ const ALL_TOOLS: ToolDefinition<any, any>[] = [
   rescheduleWeekTool, // workout / write / destructive / PRO
   // day-swapper-sync-load batch (2026-09-27) — spec §5.8
   swapWorkoutDaysTool, // workout / write / reviewable / PRO / requiresCapability
+  // coach workout parity S3 (OI-492)
+  requestCompletionTileTool, // workout / write / trivial / FREE / requiresCapability / auto-run
   // Phase B.5
   generateHotelWorkoutTool, // workout / write / destructive / PRO
   // ── Phase C: nutrition family ─────────────────────────────────────

@@ -8,7 +8,7 @@
 //   - Recovery after slip  (first workout back after 3+ day gap)
 //   - PR after bad sleep   (PR set when previous night's sleep < 6h)
 //   - Pre-dawn workout     (logged_at IST hour < 6)
-//   - First in-streak Saturday (Saturday + 14+ workouts in last 28 days)
+//   - First in-streak Saturday (Saturday + 14+ distinct workout days in the last 28 IST dates)
 //
 // Festival/wedding heuristic deferred to Test #5 (festival calendar not wired).
 //
@@ -21,6 +21,7 @@ import { isAuthorizedCronCall } from "../_shared/cron_auth.ts";
 import { logCronStart, logCronEnd } from "../_shared/cron_telemetry.ts";
 import { buildDayMap } from "../_shared/exercise_day.ts";
 import { recentLivePrs } from "../_shared/recent_prs.ts";
+import { readDeepStreak } from "./streak_gate.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -330,15 +331,10 @@ async function checkFirstInStreakSaturday(
   const istNow = new Date(Date.now() + 5.5 * 60 * 60 * 1000);
   if (istNow.getUTCDay() !== 6) return null;  // 6 = Saturday
 
-  // Count distinct workout days in last 28 days as proxy for streak depth
-  const since28d = new Date(Date.now() - 28 * 24 * 60 * 60 * 1000).toISOString();
-  const { count } = await supabase
-    .from("workout_logs")
-    .select("*", { count: "exact", head: true })
-    .eq("user_id", userId)
-    .gte("logged_at", since28d);
-
-  if ((count ?? 0) < 14) return null;  // fewer than 14 sessions in 28 days — not a deep streak
+  // Deep streak = at least 14 DISTINCT completed IST days among the last 28
+  // IST dates (the callout promises "two weeks of consistent work"; the gate
+  // used to count rows). See streak_gate.ts.
+  if (!(await readDeepStreak(supabase, userId))) return null;
 
   // Confirm a workout was actually logged today (IST)
   const todayIST = istNow.toISOString().substring(0, 10);

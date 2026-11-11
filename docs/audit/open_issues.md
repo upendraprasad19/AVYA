@@ -6114,17 +6114,6 @@ Debug-only Riverpod assertion `actualPausedCount == expectedPausedCount`, raised
 
 The `train-coach-log-refresh` behavioural test collects exactly this error in a zone and asserts it fires on the offstage tool path: a tripwire that turns red when a Riverpod upgrade fixes it, which is when this OI closes (delete the collector then).
 
-## OI-379 — Coach-logged workouts never add to total_workouts_done or run the rank promotion check
-
-- **Status**: OPEN
-- **Blocked on**: none
-- **Verified**: never
-- **Identified**: 2026-10-21 · filed via mint_oi.sh from branch `observations-a12-web`
-
-`total_workouts_done` (rank and lifetime stats) is incremented by the Active Workout completion path, but a workout logged from the coach chat (`submitWorkoutDraft` → `WorkoutWriteService.logExercise` + `markCompleted`, or the typed `logSet` path) never increments it and never runs the rank promotion check. Invalidating `userStatsProvider` would not help: nothing writes the count. Found by the round-1 exposure review of `docs/plans/train-coach-log-refresh.md` (R1B-6b). Monotonic field: any new writer must use the only-increment guard (`lib/core/services/CLAUDE.md`, "Writer unconditionally overwrites a lifetime field").
-
-To do: decide whether a coach-logged day counts as a completed workout (founder), then route the count and the rank check through the same writer the Active Workout uses.
-
 ## OI-381 — Set counts read '1 sets' in the remaining renderers (prescriptions, workout receipt, preview screen, tool confirm card)
 
 - **Status**: OPEN
@@ -7189,6 +7178,28 @@ Residual of OI-199 and OI-471 after migration 172. Migration 172 makes `cleanup_
 **Founder decision 2026-11-08.** Keep the 5 / 6 / 8 exercise limit (an advanced user adds their own exercises beyond it). Offer 90 minutes to advanced users only; beginners and intermediates see 30 / 45 / 60.
 
 **Done when.** Edit Profile shows 90 only to an advanced user, a stored 90 for a beginner or intermediate is treated as 60, and a test pins both. Planned in step 3 of the generator overhaul. Blast radius: `feature` (profile UI) plus the session-minutes reader, tier M.
+
+## OI-493 — Nutrition logging parity: coach-logged and screen-logged meals differ in 20 places (survey 2026-11-10)
+
+- **Status**: OPEN
+- **Blocked on**: none
+- **Verified**: never
+- **Identified**: 2026-11-10 · filed via mint_oi.sh from branch `coach-workout-parity`
+
+**Problem.** The 2026-11-10 survey for coach workout parity found 20 differences between a meal logged from the coach and one logged from the Nutrition screen (what is stored, counted and shown). Founder decision 1 (2026-11-10): the same stored and counted result whichever way you log; only the entry UI differs. Decision 4: nutrition parity is the next unit after workouts.
+
+**To do.** Re-run the survey against the current code, then plan, review and fix every difference in one unit.
+
+## OI-494 — Food search log passes istNow() into logMeal, which applies istDateStr again (IST double shift, nutrition_provider.dart:1056)
+
+- **Status**: OPEN
+- **Blocked on**: none
+- **Verified**: never
+- **Identified**: 2026-11-10 · filed via mint_oi.sh from branch `coach-workout-parity`
+
+**Problem.** The food-search log (`lib/features/nutrition/providers/nutrition_provider.dart:1056`) passes `istNow()` as `date` into `NutritionWriteService.logMeal`, which applies `istDateStr` (UTC + 5:30) again: an already-shifted instant is shifted twice, so a meal logged late in the IST evening can land on the next day's key (the Test #11.1 double-shift trap). Found during the coach workout parity survey, 2026-11-10.
+
+**To do.** Pass the wall-clock instant (`nowWall()` / `DateTime.now()`) as every other `logMeal` caller does; a behavioural test with a late-evening clock that fails before the fix. Check the other `istNow()` arguments passed into WriteServices in the same edit.
 
 ## OI-495 — Unit 1B-F2: copy the core-list overlay labels (slot_focus / slot_pattern) into target_focus / movement_pattern, seed and cloud re-seed
 

@@ -31,7 +31,6 @@ import 'package:icanbefitter/core/services/workout_schedule_read_service.dart';
 import 'package:icanbefitter/core/services/workout_read_service.dart';
 import 'package:icanbefitter/core/services/workout_schedule_service.dart';
 import 'package:icanbefitter/core/utils/gap_policy.dart';
-import 'package:icanbefitter/core/services/workout_write_service.dart';
 import 'package:icanbefitter/core/utils/date_utils.dart';
 import 'package:icanbefitter/core/utils/ist_date.dart';
 import 'package:icanbefitter/shared/repositories/user_repository.dart';
@@ -40,6 +39,7 @@ import 'package:icanbefitter/features/nutrition/repositories/nutrition_repositor
 import 'package:icanbefitter/features/ai_coach/repositories/ai_coach_repository.dart';
 import 'package:icanbefitter/features/ai_coach/services/pattern_detector.dart';
 import 'package:icanbefitter/features/train/services/active_workout_persistence.dart';
+import 'package:icanbefitter/features/train/services/coach_day_completion.dart';
 import 'package:icanbefitter/core/services/swap_service.dart';
 import 'package:icanbefitter/core/services/day_swap/day_swap_allowance.dart';
 import 'package:icanbefitter/core/services/day_swap/day_swap_copy.dart';
@@ -1186,14 +1186,14 @@ class AiSnapshotBuilder {
     // mirroring the app's Finish + the dispatcher's all-logged backstop).
     // Swap-tolerant: a planned exercise counts as logged if EITHER its current
     // name OR its `swapped_from` name has an exlog row for this date.
-    final planned = ((schedule['exercises'] as List?) ?? const [])
-        .whereType<Map>()
-        .toList();
-    final totalPlanned = planned.length;
-    var totalLogged = 0;
-    for (final ex in planned) {
-      if (_plannedExerciseHasLog(dateStr, ex)) totalLogged++;
-    }
+    // Coach workout parity 1b: the ONE swap-tolerant count
+    // (`loggedPlannedExerciseCount`), shared with the backstop, the chat card
+    // and Train, so the coach's "3 of 5" can never disagree with them.
+    final totalPlanned = plannedExercisesOf(schedule).length;
+    final scheduleDate = utcDateFromIstDateStr(dateStr);
+    final totalLogged = scheduleDate == null
+        ? 0
+        : loggedPlannedExerciseCount(scheduleDate, schedule);
     // finding-4 — require totalPlanned > 0. A plan-less day (empty exercises[])
     // is NOT "all logged": with nothing planned there is no "done" to derive,
     // and the dispatcher no longer vacuously auto-completes it. Reporting
@@ -1271,35 +1271,6 @@ class AiSnapshotBuilder {
       if (durationMin > 0) 'duration_min': durationMin,
       if (km > 0) 'distance_km': km,
     };
-  }
-
-  /// Unit 1 — true when the planned exercise [ex] has an exlog row for
-  /// [dateStr] (swap-tolerant). Mirrors the dispatcher's `_exerciseLogged`.
-  /// Uses the canonical `WorkoutWriteService.exlogKey` so it reads exactly
-  /// what `logExercise` wrote.
-  ///
-  /// [dateStr] is an IST `yyyy-MM-dd` string. `exlogKey` re-applies
-  /// `istDateStr` internally (adds +5:30), so we must hand it a DateTime that
-  /// round-trips to the SAME date-string regardless of host timezone —
-  /// `DateTime.utc(y, m, d)` (a UTC midnight) does, because +5:30 keeps it on
-  /// the same calendar day. Passing `istDateOf(DateTime.parse(dateStr))` would
-  /// double-apply the offset (the Test #11.1 double-shift trap).
-  bool _plannedExerciseHasLog(String dateStr, Map ex) {
-    final parts = dateStr.split('-');
-    if (parts.length != 3) return false;
-    final y = int.tryParse(parts[0]);
-    final m = int.tryParse(parts[1]);
-    final d = int.tryParse(parts[2]);
-    if (y == null || m == null || d == null) return false;
-    final date = DateTime.utc(y, m, d);
-    bool hasLog(String? name) {
-      if (name == null || name.trim().isEmpty) return false;
-      return _hive.workoutBox.get(WorkoutWriteService.exlogKey(date, name)) !=
-          null;
-    }
-
-    return hasLog(ex['exercise_name'] as String?) ||
-        hasLog(ex['swapped_from'] as String?);
   }
 
   List<Map<String, dynamic>> _getWeekLookahead() {

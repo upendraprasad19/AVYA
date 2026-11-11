@@ -6555,6 +6555,63 @@ has not been run against a 291-row library. Run it first:
 
 **Closed (2026-11-10, branch `generator-step1-s1b3`, Library Batch S1b-3, diagnose `c3e8f1`, plan `docs/plans/2026-11-10-library-batch-s1b3-retire-donkey-calf-raise.md` v5, five plan-review rounds and a B-pass `docs/reviews/generator-step1-s1b3-bpass.md`, record `docs/plan-reviews/generator-step1-s1b3.md`).** The generator question this entry left open was answered before this batch: Batch C1 added G1373 Bodyweight Standing Calf Raise (same muscle, pattern, tiers and levels), so the bodyweight Calves slot keeps a calf isolation row (ending 2 without a new row). E053 is merged into G1373 through a record-driven importer merge stage (`scripts/data/library_s1b3_merges.json`): G1373 gains `merged_ids [E053]` and `name_aliases [Donkey Calf Raise]`, so a saved plan or template naming it resolves to G1373. The media table drops its row and file entry with the bundled still (builder `--drop-unmapped`); seed v24 prunes E053 from every install; migration 175 deactivated it in the cloud with G1373's cues and set the alias, applied live 2026-11-10 after the founder go (934 / 870 / 64, md5 `3170849a…`, equal to the local rehearsal; inline rollback restores E053's own cues from 174). The frozen generator golden was re-recorded with every changed key attributed: 76 of 999 (51 bodyweight, 16 home_dumbbells, 9 injury), both counterfactuals (E053 restored; alias removed) 0. Found in the build and fixed: the injury builder's original-sibling pool shrank by E053 (now a frozen original). Regression tests: `test/contracts/library_seed_v24_upgrade_behavioral_test.dart`, the merge-stage group in `test/scripts/library_media_importer_test.dart`, the `--drop-unmapped` group in `test/scripts/library_media_builder_test.dart`, `exercise_library_cloud_seeded_test.dart`; closure `docs/audit/library-batch-s1b3.closure.yaml`.
 
+## OI-379 — Coach-logged workouts never add to total_workouts_done or run the rank promotion check
+
+- **Status**: CLOSED
+- **Blocked on**: none
+- **Verified**: never
+- **Identified**: 2026-10-21 · filed via mint_oi.sh from branch `observations-a12-web`
+
+`total_workouts_done` (rank and lifetime stats) is incremented by the Active Workout completion path, but a workout logged from the coach chat (`submitWorkoutDraft` → `WorkoutWriteService.logExercise` + `markCompleted`, or the typed `logSet` path) never increments it and never runs the rank promotion check. Invalidating `userStatsProvider` would not help: nothing writes the count. Found by the round-1 exposure review of `docs/plans/train-coach-log-refresh.md` (R1B-6b). Monotonic field: any new writer must use the only-increment guard (`lib/core/services/CLAUDE.md`, "Writer unconditionally overwrites a lifetime field").
+
+To do: decide whether a coach-logged day counts as a completed workout (founder), then route the count and the rank check through the same writer the Active Workout uses.
+
+**Closed (2026-11-10, branch `coach-workout-parity`, coach workout parity slice 1a, diagnose `0ebfcb`, plan `docs/plans/coach-workout-parity-1a.md` rev 4, three plan-review rounds, record `docs/plan-reviews/coach-workout-parity.md`).** Founder decisions 2026-11-10: a coach-logged day counts the same as an Active Workout day, two sessions on one day count once. One shared step, `WorkoutCompletionBookkeeping.afterCompletion` (`lib/features/train/services/workout_completion_bookkeeping.dart`), now runs for all four completion doors (Active Workout, the chat card, the all-logged backstop, the tap) after a successful `markCompleted`: the count (+1 only on the day's first completion, `WriteResult.newlyCompleted`, healed upward to the distinct completed days on record, never down), the daily and weekly streak, the streak row, badges and the rank check, with the owner captured at each door's start. Regression tests: `test/contracts/workout_completion_bookkeeping_behavioral_test.dart`, `test/contracts/coach_completion_counts_behavioral_test.dart`, the `newlyCompleted` group in `test/workout_write_service/mark_completed_test.dart` (16 mutations, each red). It merges together with slice 1b (OI-490). Follow-ons: OI-490 (1b), OI-491 (1c), OI-492 (server, incl. the rank cron's distinct-date count).
+
+## OI-490 — Coach workout parity 1b: chat card stricter completion rule, Train Logged so far + Complete workout button, rest/terminal guards on the card and tap, plan-day name
+
+- **Status**: CLOSED
+- **Blocked on**: none
+- **Verified**: never
+- **Identified**: 2026-11-10 · filed via mint_oi.sh from branch `coach-workout-parity`
+
+**Problem.** Slice 1a (diagnose `0ebfcb`) makes every completion door count the workout. The chat workout card still marks the day done as soon as anything from it saves, so with counting on, one exercise logged through the card would earn a whole day's credit, permanently (the count is monotonic). The card and the completion tap also have no rest-day / moved-day / terminal-row guards, and the card names the day "Chat Workout" instead of the plan day.
+
+**Scope (founder decisions 2026-11-10: 2, A, D).** The card marks the day only when every planned exercise is logged; otherwise the "X of Y · [Complete workout]" tile. Train's today row shows "Logged so far" and a Complete workout button (phone and web). Rest/terminal guards on the card and the tap. The plan-day name on a planned day. The tile's address uses the real rank (`completion_prompt_card.dart:88` hard-codes "Recruit", see OI-375). New card copy needs founder approval (the 2026-10-21 card copy changes).
+
+**Merge-order constraint.** 1a and 1b merge in ONE PR (plan `docs/plans/coach-workout-parity-1a.md` §4, D4.6); the branch `coach-workout-parity` is not pushed until the 1b commit exists. Own plan, ×2 review, recorded in `docs/plan-reviews/coach-workout-parity.md`.
+
+**Closed (2026-11-10, branch `coach-workout-parity`, coach workout parity slice 1b, diagnose `24e630`, plan `docs/plans/coach-workout-parity-1b.md` rev 4, three plan-review rounds, record `docs/plan-reviews/coach-workout-parity.md`).** One pure rule, `decideCoachDay` (`lib/features/train/services/coach_day_completion.dart`, fed the stored row), now decides every coach door: the chat card marks the day (with the plan day's name) only when every planned exercise is logged; a partial day today shows "Saved X of Y" and the tile; a past partial day stays not done; a future day is never marked; rest, moved, dropped and no-plan days are saved but never counted. The tile tap and Train's new COMPLETE WORKOUT share one tap path, `CoachDayCompletion.completeOnTap` (today only). Train shows IN PROGRESS and LOGGED SO FAR on today's partial row, a counted rest-type row as DONE, a rest day's logs as LOGGED, and a past unfinished day's logs in its sheet. The tile body is rank-neutral ("Log more exercises, or complete the workout?", founder-approved), so the hard-coded "Recruit" is gone from the tile (OI-375 stays open for the FC2 acknowledgement). Regression tests: `test/contracts/coach_day_completion_behavioral_test.dart`, `test/contracts/train_logged_so_far_behavioral_test.dart` and the reseeded `test/ai_coach/workout_log_confirm_card_saved_signal_test.dart` (41 mutations, each red; table in the diagnose doc). Merges together with slice 1a (OI-379). Follow-ons: OI-491 (1c), OI-492 (server), OI-493 (nutrition parity).
+
+## OI-491 — Coach workout parity 1c: Active Workout opens with coach-logged exercises shown as done
+
+- **Status**: CLOSED
+- **Blocked on**: none
+- **Verified**: never
+- **Identified**: 2026-11-10 · filed via mint_oi.sh from branch `coach-workout-parity`
+
+**Problem.** Active Workout opens a day as if nothing were logged, even when the coach already logged some of its exercises, so the user can log the same exercise twice.
+
+**Scope (founder decision B, 2026-11-10).** Active Workout opens with coach-logged exercises shown as done, with no double entry. Own plan, reviews and PR after 1a+1b (OI-490).
+
+**Closed (2026-11-11, branch `coach-workout-parity-1c`, coach workout parity slice 1c, plan `docs/plans/coach-workout-parity-1c.md` rev 7, six plan-review rounds, record `docs/plan-reviews/coach-workout-parity-1c.md`, B-pass `docs/reviews/coach-workout-parity-1c-bpass.md`).** `startWorkout` takes one name-keyed snapshot of the exercises the coach logged in chat for the session date (`ActiveWorkoutData.loggedInChat`, `lib/features/train/services/chat_logged_exercises.dart`); such an exercise opens DONE with LOGGED IN CHAT and the coach's chips. RE-OPEN adds rows after the coach's sets and only the new rows save, appended to the coach's `exlog_` row; KEEP AS LOGGED undoes a re-open while nothing is checked. A sticky Hive-local `coach_logged` marker survives app appends, moves and key migration and is never pushed. Header and FINISH counts include the coach's sets; three FINISH blocked lines (founder copy). Tests: `test/contracts/active_workout_logged_in_chat_behavioral_test.dart`, `test/features/train/log_exercise/log_exercise_card_logged_in_chat_test.dart`, `test/sync/exlog_coach_logged_push_behavioral_test.dart`; 82 mutants red. Device check: with the Landing 1 check (L1-13), after a founder-started build.
+
+## OI-492 — Coach workout parity 2 (server): I'm done re-shows the X of Y tile, evening partial-day reminder, rank cron counts distinct completed days
+
+- **Status**: CLOSED
+- **Blocked on**: none
+- **Verified**: never
+- **Identified**: 2026-11-10 · filed via mint_oi.sh from branch `coach-workout-parity`
+
+**Scope (founder decisions C, E, 3; 2026-11-10).**
+- Saying "I'm done" to the coach re-shows the "X of Y · [Complete workout]" tile; voice alone never completes.
+- The evening reminder on a partial day says "1 exercise left, finish and tap Complete", counted from `user_progress.plan_json` + `workout_log_exercises`, with a fallback line when it cannot count.
+- The rank cron (`evaluate-rank-promotions`) counts distinct completed DATES, as the client now does (`WorkoutReadService.completedWorkoutDayCount`, diagnose `0ebfcb`), so two sessions on one day count once on the server too.
+
+Each Edge Function deploy needs its own founder go (§4.3).
+
+**Closed (2026-11-11, branches `coach-workout-parity-server` (S0-S2, PR #241, merge `72862b2f`, diagnoses `f9bf1c` and `c97729`, all six Edge Functions deployed from main with the founder's go) and `coach-workout-parity-tile` (S3), plan `docs/plans/coach-workout-parity-2-server.md` rev 13, record `docs/plan-reviews/coach-workout-parity-tile.md` (seven rounds)).** C: the FREE tool `requestCompletionTile` (capability `request_completion_tile`) re-shows the app's own tile through an auto-run intent; the client writes it only for a part-logged IST today and never completes (ADR-0012 amendment). The tile's `created_at` is UTC (diagnose `f3d704`). E and 3 landed in #241. Open after the merge: the `ai-proxy` deploy of S3 (its own founder go), and the device check after the next build.
+
 ## OI-489 — Core-list pool ON: four advanced bodyweight 30-min 3-day plans hold a zero-set muscle their live twin does not
 
 - **Status**: CLOSED · 2026-11-12 · branch `generator-step1-1bf` · Unit 1B-F · diagnose `39eb2a` · the commit carrying `closes-oi:` for this entry

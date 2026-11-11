@@ -17,6 +17,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:icanbefitter/core/copy/wardroom_copy.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
+import 'package:icanbefitter/core/services/workout_write_service.dart';
+import 'package:icanbefitter/core/utils/ist_date.dart';
 import 'package:icanbefitter/core/theme/typography.dart';
 import 'package:icanbefitter/features/ai_coach/providers/ai_coach_provider.dart';
 import 'package:icanbefitter/features/ai_coach/services/conversational_log_handler.dart';
@@ -178,6 +180,22 @@ void main() {
       final seed = draft([lift('Squat', sets: 2), lift('Row')]);
       await pumpWithDraft(tester, seed, (r) => ref = r);
       expect(find.text(WardroomCopy.coachDraftNoSets), findsNothing);
+
+      // Coach workout parity 1b: the card marks a day only when every planned
+      // exercise is logged (founder decision 2). The day is planned with
+      // exactly the draft's loggable exercise (Row has no set: skipped), so
+      // "a draft with a set completes" keeps its meaning.
+      final today = DateTime.now();
+      await tester.runAsync(() => HiveService.instance.workoutBox
+              .put(WorkoutWriteService.scheduleKey(today), {
+            'date': istDateStr(today),
+            'type': 'workout',
+            'status': 'planned',
+            'workout_name': 'Leg Day',
+            'exercises': [
+              {'exercise_name': 'Squat'},
+            ],
+          }));
 
       await tester.runAsync(() => submitWorkoutDraft(seed, ref));
       expect(anyKey('exlog_'), isTrue);
