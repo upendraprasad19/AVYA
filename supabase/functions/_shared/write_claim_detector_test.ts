@@ -285,3 +285,40 @@ Deno.test("a wrapped or double-spaced prescribed line still matches; a curly apo
   assertEquals(d.negation, true);
   assertEquals(d.unsafe_claims, 0);
 });
+
+// ── Coach workout parity S3 (OI-492, plan 4.1 detector rule) ────────────
+// Every coach line of the completion tile, run through the REAL detector: no
+// sentence with a claim token lacks a safe marker or a negation.
+Deno.test("completion tile (S3): every 4.1 reply line has unsafe_claims == 0", async () => {
+  const m = await import("./completion_tile_routing.ts");
+  const lines = [
+    m.COMPLETION_TILE_REPLY_LINE,
+    m.TILE_NOT_PARTIAL_COMPLETED_LINE,
+    m.TILE_NOT_PARTIAL_NO_PLAN_LINE,
+    m.TILE_NOT_PARTIAL_ALL_LOGGED_LINE,
+    m.TILE_NOT_PARTIAL_NOTHING_LOGGED_LINE,
+    m.COMPLETION_TILE_FC2_AUTO_TEXT,
+  ];
+  for (const line of lines) {
+    const d = detectWriteClaim(line, {
+      ...none,
+      typedIntentTypes: ["request_completion_tile"],
+    });
+    assert(d === null || d.unsafe_claims === 0, `unsafe claim in: ${line}`);
+  }
+});
+
+Deno.test("completion tile (S3): positive control, the pre-rev-7 all-logged line is unsafe", () => {
+  const d = detectWriteClaim("Every planned exercise is logged.", none)!;
+  assertEquals(d.unsafe_claims, 1);
+});
+
+Deno.test("completion tile (S3): the tile intent counts as typed_other", () => {
+  const d = detectWriteClaim(
+    "Nothing logged yet. Send the sets and I'll queue it.",
+    { ...none, typedIntentTypes: ["request_completion_tile"] },
+  )!;
+  assert(d !== null);
+  assertEquals(d.typed_other, 1);
+  assertEquals(d.typed_log, 0);
+});

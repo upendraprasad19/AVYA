@@ -102,5 +102,14 @@ void main(List<String> args) async {
     stderr.writeln('\n  Fix: add the capability string to '
         'kCoachClientCapabilities (coach_client_capabilities.dart).');
   }
+  if (result.unreadableCapabilities.isNotEmpty) {
+    stderr.writeln('\n[check_ai_tool_dispatcher_coverage] FAIL — '
+        '${result.unreadableCapabilities.length} capabilities this gate cannot read:');
+    for (final c in result.unreadableCapabilities) {
+      stderr.writeln('  $c');
+    }
+    stderr.writeln('\n  Fix: write `requiresCapability: "<capability>"` as a '
+        'string literal (the gate reads only literals).');
+  }
   exit(1);
 }

@@ -65,6 +65,12 @@ import { CAPTAIN_MANUAL } from "../_shared/captain_manual.ts";
 import { parseClientCapabilities } from "../_shared/client_capabilities.ts";
 import { daySwapRoutingBlock } from "../_shared/day_swap_routing.ts";
 import {
+  applyCompletionTileKillSwitch,
+  completionTileRoutingBlock,
+  completionTileWriteClaimAddendum,
+  memoryIntentSummary,
+} from "../_shared/completion_tile_routing.ts";
+import {
   icbfLogInstructions,
   isWriteClaimRuleDisabled,
   writeClaimSuffix,
@@ -332,9 +338,16 @@ serve(async (req: Request) => {
     } = body;
     // Unit 3 (day-swapper-sync-load) — CLIENT-CONTROLLED, so validated
     // defensively before it ever reaches a tool filter or a prompt block.
-    // Absent (every client before Task 27 ships) parses to an empty set,
-    // which is exactly today's behaviour: no tool has requiresCapability yet.
-    const capabilities = parseClientCapabilities(client_capabilities);
+    // Absent (an app build that declares nothing) parses to an empty set, so
+    // every capability-gated tool (swapWorkoutDays, requestCompletionTile) is
+    // withheld. Coach workout parity S3: the kill switch
+    // DISABLE_COMPLETION_TILE_TOOL (exactly "true", read once per request)
+    // removes request_completion_tile here, before the prompt blocks and the
+    // tool loop read the set, which is identical to an old app build.
+    const capabilities = applyCompletionTileKillSwitch(
+      parseClientCapabilities(client_capabilities),
+      Deno.env.get("DISABLE_COMPLETION_TILE_TOOL"),
+    );
 
     // ── Request-size limits (rule 18) — ONE owner, before any branch runs ──
     // Single-owner audit 2026-09-26, P0 #5: the prediction branch ran before
@@ -1029,6 +1042,12 @@ Rules: identify every distinct food product, use ACCURATE nutrition values from 
       // capability set. See _shared/day_swap_routing.ts for why this is not
       // left for the model to infer.
       promptParts.push(daySwapRoutingBlock(isProUser, capabilities, ruleOn));
+      // Coach workout parity S3: the "I'm done" tile block, only for a client
+      // that declared request_completion_tile. Pushed only when non-empty: an
+      // empty part would still add a separator and change the prompt bytes
+      // for every old app build.
+      const tileBlock = completionTileRoutingBlock(capabilities);
+      if (tileBlock) promptParts.push(tileBlock);
     }
     if (coachMemoryBlock) {
       // FC7 / Hermes P2-FC7-1: coach_memory is user-derived text (extracted from
@@ -1128,6 +1147,10 @@ yet" — never make up a number.
 `;
 
     systemPrompt = dayInjection + systemPrompt + "\n\n" + antiFabricationRule + writeClaimSuffix(ruleOn);
+    // Coach workout parity S3: the tile addendum comes AFTER the write-claim
+    // rule, so it is the last text the model reads ("" without the
+    // capability or with the rule off).
+    systemPrompt += completionTileWriteClaimAddendum(capabilities, ruleOn);
 
     // Smoke-test log: confirms CAPTAIN_MANUAL is wired in every chat turn.
     console.log(`[ai-proxy] system_prompt_size=${systemPrompt.length} captain_manual=${systemPrompt.includes("THE CAPTAIN — STATIC MANUAL")} write_claim_rule=${ruleOn}`);
@@ -1310,9 +1333,9 @@ yet" — never make up a number.
     if (!loop.hadHardFailure && (cleanReply.trim().length > 0 || loop.intents.length === 0)) {
       (async () => {
         try {
-          const intentSummary = loop.intents.length > 0
-            ? ` [queued: ${loop.intents.map((i) => i.type).join(", ")}]`
-            : "";
+          // Coach workout parity S3: an auto-run intent (the tile) is
+          // marked " [requested: completion tile]", never "queued".
+          const intentSummary = memoryIntentSummary(loop.intents);
           const content_ = `User: ${message}\nCoach: ${cleanReply}${intentSummary}`;
           const embedding = await getEmbedding(content_, "RETRIEVAL_DOCUMENT");
           if (!embedding) return;

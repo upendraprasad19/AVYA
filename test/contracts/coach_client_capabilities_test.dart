@@ -11,6 +11,11 @@ void main() {
     expect(kCoachClientCapabilities, contains('swap_workout_days'));
   });
 
+  // Coach workout parity S3 (OI-492, M2): the auto-run "I'm done" tile.
+  test('declares request_completion_tile', () {
+    expect(kCoachClientCapabilities, contains('request_completion_tile'));
+  });
+
   test('every entry matches the server-side validation regex ^[a-z_]{1,48}\$', () {
     final pattern = RegExp(r'^[a-z_]{1,48}$');
     for (final cap in kCoachClientCapabilities) {

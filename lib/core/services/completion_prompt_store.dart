@@ -29,17 +29,28 @@ class CompletionPromptStore {
   /// in the chat scroll; only the counts refresh. Any OLDER unresolved prompt
   /// row is resolved in the same call (the sweep lives in a write path, never
   /// in a provider build).
+  ///
+  /// [reshow] (coach workout parity S3, the "I'm done" tile): stamp a FRESH
+  /// `created_at` so the tile sorts under the reply that asked for it.
+  ///
+  /// `created_at` is UTC with `Z` (diagnose f3d704): `ChatHistoryNotifier.build`
+  /// sorts it as a string against the chat rows, which
+  /// `CoachInteractionRepository` stamps in UTC. A local stamp without `Z`
+  /// sorted 5.5 h late in IST. A kept stamp written before this fix is
+  /// normalised to the same instant in UTC.
   Future<void> write({
     required String dateStr,
     required int plannedCount,
     required int loggedCount,
+    bool reshow = false,
   }) async {
     final box = HiveService.instance.coachBox;
     final key = keyFor(dateStr);
     final existing = box.get(key);
-    final createdAt = (existing is Map && existing['created_at'] is String)
-        ? existing['created_at'] as String
-        : DateTime.now().toIso8601String();
+    final createdAt =
+        (!reshow && existing is Map && existing['created_at'] is String)
+            ? utcStamp(existing['created_at'] as String)
+            : DateTime.now().toUtc().toIso8601String();
     await box.put(key, {
       'kind': 'completion_prompt',
       'date': dateStr,
@@ -50,6 +61,11 @@ class CompletionPromptStore {
     });
     await _resolveOlderThan(dateStr);
   }
+
+  /// [stamp] as UTC ISO-8601 with `Z`, the same instant; an unparseable
+  /// value is returned unchanged.
+  static String utcStamp(String stamp) =>
+      DateTime.tryParse(stamp)?.toUtc().toIso8601String() ?? stamp;
 
   /// Stamps `resolved_at` on the prompt row for [dateStr] if one exists and is
   /// still open (idempotent no-op otherwise).

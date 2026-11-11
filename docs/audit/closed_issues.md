@@ -6595,3 +6595,19 @@ To do: decide whether a coach-logged day counts as a completed workout (founder)
 **Scope (founder decision B, 2026-11-10).** Active Workout opens with coach-logged exercises shown as done, with no double entry. Own plan, reviews and PR after 1a+1b (OI-490).
 
 **Closed (2026-11-11, branch `coach-workout-parity-1c`, coach workout parity slice 1c, plan `docs/plans/coach-workout-parity-1c.md` rev 7, six plan-review rounds, record `docs/plan-reviews/coach-workout-parity-1c.md`, B-pass `docs/reviews/coach-workout-parity-1c-bpass.md`).** `startWorkout` takes one name-keyed snapshot of the exercises the coach logged in chat for the session date (`ActiveWorkoutData.loggedInChat`, `lib/features/train/services/chat_logged_exercises.dart`); such an exercise opens DONE with LOGGED IN CHAT and the coach's chips. RE-OPEN adds rows after the coach's sets and only the new rows save, appended to the coach's `exlog_` row; KEEP AS LOGGED undoes a re-open while nothing is checked. A sticky Hive-local `coach_logged` marker survives app appends, moves and key migration and is never pushed. Header and FINISH counts include the coach's sets; three FINISH blocked lines (founder copy). Tests: `test/contracts/active_workout_logged_in_chat_behavioral_test.dart`, `test/features/train/log_exercise/log_exercise_card_logged_in_chat_test.dart`, `test/sync/exlog_coach_logged_push_behavioral_test.dart`; 82 mutants red. Device check: with the Landing 1 check (L1-13), after a founder-started build.
+
+## OI-492 — Coach workout parity 2 (server): I'm done re-shows the X of Y tile, evening partial-day reminder, rank cron counts distinct completed days
+
+- **Status**: CLOSED
+- **Blocked on**: none
+- **Verified**: never
+- **Identified**: 2026-11-10 · filed via mint_oi.sh from branch `coach-workout-parity`
+
+**Scope (founder decisions C, E, 3; 2026-11-10).**
+- Saying "I'm done" to the coach re-shows the "X of Y · [Complete workout]" tile; voice alone never completes.
+- The evening reminder on a partial day says "1 exercise left, finish and tap Complete", counted from `user_progress.plan_json` + `workout_log_exercises`, with a fallback line when it cannot count.
+- The rank cron (`evaluate-rank-promotions`) counts distinct completed DATES, as the client now does (`WorkoutReadService.completedWorkoutDayCount`, diagnose `0ebfcb`), so two sessions on one day count once on the server too.
+
+Each Edge Function deploy needs its own founder go (§4.3).
+
+**Closed (2026-11-11, branches `coach-workout-parity-server` (S0-S2, PR #241, merge `72862b2f`, diagnoses `f9bf1c` and `c97729`, all six Edge Functions deployed from main with the founder's go) and `coach-workout-parity-tile` (S3), plan `docs/plans/coach-workout-parity-2-server.md` rev 13, record `docs/plan-reviews/coach-workout-parity-tile.md` (seven rounds)).** C: the FREE tool `requestCompletionTile` (capability `request_completion_tile`) re-shows the app's own tile through an auto-run intent; the client writes it only for a part-logged IST today and never completes (ADR-0012 amendment). The tile's `created_at` is UTC (diagnose `f3d704`). E and 3 landed in #241. Open after the merge: the `ai-proxy` deploy of S3 (its own founder go), and the device check after the next build.

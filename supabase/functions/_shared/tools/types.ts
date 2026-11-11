@@ -51,7 +51,11 @@ export interface ToolCallRecord {
     | "capability_blocked"
     | "unknown"
     | "failed"
-    | "timeout";
+    | "timeout"
+    // Coach workout parity S3 (requestCompletionTile): a recorded tile
+    // request, and one dropped because sets are logged in the same turn.
+    | "tile_requested"
+    | "not_needed";
   // deno-lint-ignore no-explicit-any
   args?: Record<string, any>;
   latency_ms?: number;
@@ -77,6 +81,15 @@ export interface ToolDefinition<TArgs = unknown, TResult = unknown> {
    * old client build is never offered a tool it cannot execute.
    */
   requiresCapability?: string;
+  /**
+   * Coach workout parity S3: the functionResponse note and status for a tool
+   * that is NOT queued for an APPLY card (only requestCompletionTile, an
+   * auto-run intent). Read only by the tool loop's dedicated tile branch; the
+   * generic write branch never reads them, so every other tool's
+   * functionResponse is unchanged.
+   */
+  queuedNote?: string;
+  queuedStatus?: string;
   /** Plain-text description sent to Gemini in the function declaration. Tell the model when to call this. */
   description: string;
   /**

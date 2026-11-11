@@ -43,6 +43,8 @@ import '../../train/services/coach_day_completion.dart';
 import '../../train/services/workout_completion_bookkeeping.dart';
 import '../../train/repositories/workout_repository.dart';
 import '../providers/ai_coach_provider.dart' show chatHistoryProvider;
+import '../providers/pending_tool_intents_provider.dart'
+    show pendingToolIntentsProvider;
 import '../models/tool_intent.dart';
 import 'hotel_workout_planner.dart';
 import 'injury_swap_planner.dart';
@@ -94,10 +96,16 @@ class ToolDispatcher {
   ///  6. Return result
   ///
   /// On any error, returns ToolExecutionResult.failure — never throws.
+  ///
+  /// [pendingIntents] (coach workout parity S3): the caller's view of
+  /// `pendingToolIntentsProvider`. `PendingToolIntentsNotifier.addIntents`
+  /// passes its own state, because its `ref` cannot read its own provider
+  /// (Riverpod: a provider cannot depend on itself). Only the tile reads it.
   Future<ToolExecutionResult> execute(
     Ref ref,
-    ToolIntent intent,
-  ) async {
+    ToolIntent intent, {
+    List<ToolIntent>? pendingIntents,
+  }) async {
     // 1. Expiry check
     if (intent.isExpired) {
       return const ToolExecutionResult.failure(
@@ -165,6 +173,10 @@ class ToolDispatcher {
         case 'log_meal_by_text':
           result = await _executeLogMealByText(intent);
           break;
+        case 'request_completion_tile':
+          result = await _executeRequestCompletionTile(intent, ref,
+              pendingIntents: pendingIntents);
+          break;
         default:
           return ToolExecutionResult.failure(
             'Unknown tool intent type: ${intent.type}',
@@ -191,6 +203,22 @@ class ToolDispatcher {
       }
 
       if (!result.success) return result;
+
+      // Coach workout parity S3: the tile request changes only the LOCAL-only
+      // completion_prompt row (never synced), so it skips the workout
+      // invalidation, syncWorkoutData and pushSnapshot below. It rebuilds the
+      // chat thread so the tile shows at once, and still stamps the marker
+      // (a replay of the same intent id is a no-op).
+      if (intent.type == 'request_completion_tile') {
+        try {
+          ref.read(chatHistoryProvider.notifier).refreshFromHive();
+        } catch (e, st) {
+          debugPrint(
+              '[tool_dispatcher] refresh chatHistoryProvider failed: $e\n$st');
+        }
+        await _stampDispatched(intent);
+        return result;
+      }
 
       // 4. Fire family-appropriate invalidation + sync.
       //    Workout intents → workout providers + syncWorkoutData.
@@ -237,18 +265,9 @@ class ToolDispatcher {
       }
       unawaited(SyncService.instance.pushSnapshot());
 
-      // C-4 / C-6: stamp a Hive marker so the chat thread can filter out
-      // already-dispatched intents even if the in-memory provider state is
-      // lost (hot restart, low-memory background kill). The marker is a
-      // belt-and-braces complement to ToolIntent.status — primary state
-      // remains in PendingToolIntentsNotifier; this just survives process
-      // death.
-      try {
-        await HiveService.instance.coachBox.put(
-          'intent_${intent.id}_dispatched_at',
-          DateTime.now().toIso8601String(),
-        );
-      } catch (_) {/* never block on telemetry */}
+      // C-4 / C-6: the Hive marker (a belt-and-braces complement to
+      // ToolIntent.status that survives process death; see _stampDispatched).
+      await _stampDispatched(intent);
 
       return result;
     } on ConcurrentEditException catch (e) {
@@ -525,6 +544,19 @@ class ToolDispatcher {
     }
   }
 
+  /// C-4 / C-6: stamp a Hive marker so the chat thread can filter out
+  /// already-dispatched intents even if the in-memory provider state is lost
+  /// (hot restart, low-memory background kill), and so a replay of the same
+  /// intent id is a no-op (step 1a of [execute]).
+  Future<void> _stampDispatched(ToolIntent intent) async {
+    try {
+      await HiveService.instance.coachBox.put(
+        'intent_${intent.id}_dispatched_at',
+        DateTime.now().toIso8601String(),
+      );
+    } catch (_) {/* never block on telemetry */}
+  }
+
   /// Unit 1 — test seam for the derived-completion decision. Runs the exact
   /// same logic `_executeLogSet` invokes after a coach `logSet` (all-logged
   /// backstop OR partial → completion-prompt row), without needing a live Ref
@@ -536,6 +568,39 @@ class ToolDispatcher {
       _maybeCompleteScheduledDay(date, dateStr,
           expectedOwner:
               ownerGiven ? expectedOwner : HiveUserSession.currentOwnerFullId);
+
+  /// Coach workout parity S3 (OI-492): the "I'm done" tile. An auto-run
+  /// intent (no APPLY card; `PendingToolIntentsNotifier.addIntents` runs it
+  /// at once). Re-runs the app's own decision through
+  /// `CoachDayCompletion.offerTileIfPartial` and never completes anything.
+  /// Every outcome is a success (a "nothing to show" outcome must not become
+  /// a failed intent).
+  Future<ToolExecutionResult> _executeRequestCompletionTile(
+      ToolIntent intent, Ref ref,
+      {List<ToolIntent>? pendingIntents}) async {
+    // The owner first, as every coach door does; offerTileIfPartial captures
+    // it again and re-checks it before its write.
+    final owner = HiveUserSession.currentOwnerFullId;
+    if (owner == null) {
+      return const ToolExecutionResult.success(
+          data: CompletionTileOutcome.ownerChanged);
+    }
+    // Only a log_set APPLY that is RUNNING right now races the tile's counts
+    // (its own write surfaces the tile). A card still waiting for APPLY does
+    // NOT block: it may never be applied, or be for another day, and the
+    // coach has just promised a tile (B-pass seat 2 F2). The tile shows the
+    // counts as they are; a later APPLY re-runs the app's own decision. A
+    // failed, applied, rejected or expired card is not racing anything.
+    final List<ToolIntent> pending =
+        pendingIntents ?? ref.read(pendingToolIntentsProvider);
+    final hasPendingLogSet = pending.any((i) =>
+        i.type == 'log_set' &&
+        i.status == ToolIntentStatus.executing &&
+        !i.isExpired);
+    final outcome = await CoachDayCompletion.instance
+        .offerTileIfPartial(hasPendingLogSet: hasPendingLogSet);
+    return ToolExecutionResult.success(data: outcome);
+  }
 
   Future<ToolExecutionResult> _executeCreateCustomExercise(
       ToolIntent intent) async {

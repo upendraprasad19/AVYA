@@ -1027,7 +1027,7 @@ concepts:
           _compactContext before serialising. Pre-compaction sites
           would 400 on the 10K server limit for historical queries.
       - file: lib/features/ai_coach/providers/ai_coach_provider.dart
-        line_range: 385-632
+        line_range: 407-678
         method: SendMessageNotifier._sendMessage retry path + media path
         semantic: pass-through
         fields_read: [<full context map>]
@@ -6318,10 +6318,11 @@ concepts:
         line_range: 171-176
         method: recentHistoryExchanges (shim forwarder)
       - file: lib/features/ai_coach/providers/ai_coach_provider.dart
-        line_range: 784-1070
+        line_range: 831-1122
         method: |
           SendMessageNotifier.send — assembles history ONCE (kill-switched) and
-          threads it into BOTH chat() call sites (primary :896 + auth-retry :976).
+          threads it into BOTH chat() call sites (primary :948 + auth-retry :1028),
+          both in `_sendBody` (the `send` wrapper claims the in-flight flag first).
       - file: lib/core/services/ai_service.dart
         line_range: 1-9999
         method: |
@@ -6426,13 +6427,15 @@ concepts:
           Forwarder retained for back-compat with existing callers
           in main.dart / ai_coach_provider.dart / sync_service.dart.
       - file: lib/features/ai_coach/providers/ai_coach_provider.dart
-        line_range: 784-1070
+        line_range: 831-1122
         method: "`send` (SendMessageNotifier)"
         notes: |
           R3 (2026-07-07): was mislabeled `_sendMessage` (476-500, a method
           that no longer exists). The two-write orchestration
           (saveUserMessagePending → chat → updateInteractionWithResponse,
-          incl. the auth-retry path) lives in `send`.
+          incl. the auth-retry path) lives in `_sendBody`, called by the `send`
+          wrapper, which claims the in-flight flag before the first await and
+          releases it in `finally` (diagnose 3e7b41).
       - file: lib/features/ai_coach/repositories/coach_interaction_repository.dart
         line_range: 139-147
         method: recordMediaSaveDecision
@@ -6455,6 +6458,12 @@ concepts:
           so failed/pending retry hits the right row (Unit 8: now also
           on the success-path USER bubble, not just the AI error bubble
           — needed so the save-consent chip can target the right row).
+          refreshFromHive (diagnose 3e7b41): a send in flight survives the
+          rebuild. Its loading bubble is in memory only and carries the
+          turn's coachKey; the rebuilt list drops that turn's pending
+          "didn't finish" error bubble and the loading bubble stays LAST, so
+          the reply's replaceLastMessage swaps only the loading bubble.
+          Test test/contracts/coach_chat_refresh_during_send_test.dart.
       - file: lib/features/ai_coach/services/ai_snapshot_builder.dart
         line_range: 1-9999
         method: buildAiContext is_first_ever_message count
@@ -6559,6 +6568,10 @@ concepts:
       IST today only; the prompt row is owned by CompletionPromptStore; the tap
       is CoachDayCompletion.completeOnTap (today only). The chat workout card
       follows the same rule (it no longer marks on any save).
+      Coach workout parity S3 (OI-492): a third writer of the prompt row is the
+      "I'm done" tile request (concept coach_completion_tile_request), through
+      CompletionPromptStore.write(reshow: true); created_at is UTC with Z
+      (diagnose f3d704).
     writers:
       - file: lib/features/ai_coach/services/tool_dispatcher.dart
         line_range: 1-9999
@@ -6583,7 +6596,7 @@ concepts:
           (returns success WITHOUT rewriting when already 'completed') + stamps
           completed_via on the schedule + wlog rows.
       - file: lib/features/ai_coach/providers/ai_coach_provider.dart
-        line_range: 360-389
+        line_range: 382-411
         method: completeWorkoutFromPrompt
         notes: |
           Since 1b a thin call to CoachDayCompletion.completeOnTap (door
@@ -6605,7 +6618,7 @@ concepts:
         line_range: 168-351
         method: build
         semantic: flag-check
-        fields_read: [kind, resolved_at, date, planned_count, logged_count]
+        fields_read: [kind, resolved_at, date, planned_count, logged_count, created_at]
         notes: |
           ChatHistoryNotifier.build (declared 164; re-based 2026-07-30 —
           Unit 8 / coach-media-consent inserted ~60 lines above it for the
@@ -6617,6 +6630,9 @@ concepts:
           ones — never misreads them as user/ai turns (they carry no
           user_message / ai_response). 1b: an unresolved prompt dated before
           IST today is skipped too (a pure filter; build never writes).
+          created_at is ordered as a STRING against the UTC chat rows
+          (entries.sort), so the prompt row's stamp must be UTC with Z
+          (diagnose f3d704; ordering test runs under two host zones).
       - file: lib/features/ai_coach/screens/ai_coach/chat_area.dart
         line_range: 46-61
         method: _buildChatArea completion-prompt branch
@@ -6718,7 +6734,7 @@ concepts:
       - file: lib/core/services/completion_prompt_store.dart
         line_range: 1-9999
         method: CompletionPromptStore
-        notes: The one owner of coachBox completion_prompt_<date> (write resolves older unresolved rows; resolve is idempotent).
+        notes: The one owner of coachBox completion_prompt_<date> (write resolves older unresolved rows; resolve is idempotent). created_at is UTC ISO-8601 with Z (diagnose f3d704): a new row and a reshow stamp DateTime.now().toUtc(); the keep path normalises a stored stamp to the same instant in UTC (utcStamp), because ChatHistoryNotifier.build sorts it as a string against UTC chat rows. resolved_at stays local (only null-checked).
     # Not reader_manifest_complete: this rule reads schedule_<date> rows but
     # does not own them. The schedule_ owner concept above keeps the
     # exhaustive reader list (Gate 50), and the readers below are the rule's.
@@ -6778,6 +6794,68 @@ concepts:
       2. On the coach paths rest, moved, dropped and no-plan days never count; a
          past partial day stays not done; a future day is never marked.
       3. Any Complete tap goes through CoachDayCompletion.completeOnTap.
+
+  - concept: coach_completion_tile_request
+    domain: ai_coach
+    behavioral_test_path: test/contracts/coach_completion_tile_tool_behavioral_test.dart
+    description: |
+      Coach workout parity S3 (OI-492, founder decision C; plan
+      docs/plans/coach-workout-parity-2-server.md 3.1 / 3.1.1). "I'm done" in chat
+      makes the app's own completion tile appear, one tap total. The server tool
+      requestCompletionTile (capability request_completion_tile, a string literal)
+      is never queued inside a tool-loop round: a call records the request
+      (functionResponse tile_requested, or not_needed when a log_set intent is
+      queued in the turn; decided after the loop from the real intents) and ONE intent request_completion_tile is pushed
+      after the loop. The intent is AUTO-RUN on the client (kAutoRunIntentTypes):
+      PendingToolIntentsNotifier.addIntents dispatches it at once with its own
+      state as pendingIntents and never puts it in state. The dispatcher computes
+      hasPendingLogSet (a log_set card executing, not expired) and calls
+      CoachDayCompletion.offerTileIfPartial, which re-runs decideCoachDay for IST
+      today and writes the completion_prompt row (CompletionPromptStore.write,
+      reshow: true) ONLY for askToComplete with a log today. Nothing is ever
+      completed (ADR-0012); the row itself is owned by coach_derived_completion.
+    writers:
+      - file: lib/features/train/services/coach_day_completion.dart
+        line_range: 264-340
+        method: offerTileIfPartial
+        notes: The decision and the reshow write (owner captured first, re-checked before the write); every non-shown outcome logs completion_tile_not_shown and writes nothing.
+      - file: lib/features/ai_coach/services/tool_dispatcher.dart
+        line_range: 578-603
+        method: _executeRequestCompletionTile
+        notes: Computes hasPendingLogSet from pendingIntents (else the provider) and returns success for every CompletionTileOutcome. The post-step early branch skips invalidation, sync and pushSnapshot, refreshes the chat and stamps the marker.
+      - file: lib/features/ai_coach/providers/pending_tool_intents_provider.dart
+        line_range: 33-62
+        method: addIntents
+        notes: Partitions auto-run intents out of state (queued cards are added first) and dispatches each once.
+    readers:
+      - file: lib/features/ai_coach/providers/ai_coach_provider.dart
+        line_range: 168-351
+        method: build
+        semantic: display-only
+        fields_read: [kind, resolved_at, date, planned_count, logged_count, created_at]
+        notes: ChatHistoryNotifier.build renders the re-shown tile; its fresh UTC created_at sorts it under the reply that asked for it.
+      - file: lib/features/ai_coach/screens/ai_coach/screen.dart
+        line_range: 79-113
+        method: filterVisibleIntents
+        semantic: flag-check
+        fields_read: [type]
+        notes: Drops an auto-run intent even if one reached state (never a card).
+    regression_test: test/contracts/coach_completion_tile_tool_behavioral_test.dart
+    additional_tests:
+      - test/contracts/derive_only_tool_surface_test.dart
+      - test/contracts/coach_client_capabilities_test.dart
+      - test/contracts/coach_write_claim_wiring_test.dart
+      - supabase/functions/_shared/tool-loop_completion_tile_note_test.ts
+      - supabase/functions/_shared/completion_tile_routing_test.ts
+      - supabase/functions/_shared/tools/__tests__/requestCompletionTile_test.ts
+      - supabase/functions/_shared/tools/__tests__/registry_completion_tile_test.ts
+    sync_methods: []
+    class_constraints: |
+      1. The tile request never completes: no markCompleted, completeOnTap or
+         afterCompletion on its path (derive_only_tool_surface_test slice group).
+      2. A new tool whose APPLY surfaces the tile (a new caller of
+         _maybeCompleteScheduledDay) joins TILE_SURFACING_TOOL_NAMES.
+      3. An auto-run intent never enters pendingToolIntentsProvider state.
 
   - concept: coaching_notes
     domain: ai_coach
@@ -14698,7 +14776,7 @@ concepts:
       key — NOT reused directly for chat to avoid corrupting that key).
     writers:
       - file: supabase/functions/_shared/tool-loop.ts
-        line_range: 248
+        line_range: 299
         method: runToolLoop
         notes: the raw Gemini text this concept cleans on the client side.
     readers:
@@ -16992,7 +17070,7 @@ concepts:
         method: body (MeasurementsCardFrame(child: _buildBody()))
         notes: L2b Landing C, E3. One line; the frame owns the flag and the height cap, so a flag-OFF screen returns its own body instance.
       - file: lib/features/ai_coach/screens/ai_coach/screen.dart
-        line_range: 452-458
+        line_range: 455-461
         method: MeasurementChipSlot (the mount line in build)
         notes: L2b Landing C, E4. Between the quick prompts and the input bar, with no condition of its own; the slot owns its flag, prompt, focus and sending checks and is given no send callback; onShown scrolls a chat that was at its bottom back to its bottom (keepBottomAfterChip).
     readers:

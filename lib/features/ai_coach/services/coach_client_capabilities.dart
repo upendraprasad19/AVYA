@@ -14,4 +14,7 @@
 
 const List<String> kCoachClientCapabilities = <String>[
   'swap_workout_days',
+  // Coach workout parity S3 (OI-492): this build runs the auto-run
+  // `request_completion_tile` intent (the "I'm done" tile).
+  'request_completion_tile',
 ];

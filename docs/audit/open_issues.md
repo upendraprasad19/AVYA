@@ -7216,20 +7216,6 @@ Residual of OI-199 and OI-471 after migration 172. Migration 172 makes `cleanup_
 
 **Done when.** Each mechanism is measured (writer and reader by file:line), fixed, and the audit shows 0 ON plans with a zero-set muscle their live twin lacks; a test pins the four keys in the ON world. This is item 1B-12 of the step-1 plan (`docs/plans/2026-11-08-generator-step1-core-list.md` section 9) and an entry criterion of the 1B-1 flip ("no plan worse than its live twin"). Blast radius `platform` (plan engine), tier L.
 
-## OI-492 — Coach workout parity 2 (server): I'm done re-shows the X of Y tile, evening partial-day reminder, rank cron counts distinct completed days
-
-- **Status**: OPEN
-- **Blocked on**: none
-- **Verified**: never
-- **Identified**: 2026-11-10 · filed via mint_oi.sh from branch `coach-workout-parity`
-
-**Scope (founder decisions C, E, 3; 2026-11-10).**
-- Saying "I'm done" to the coach re-shows the "X of Y · [Complete workout]" tile; voice alone never completes.
-- The evening reminder on a partial day says "1 exercise left, finish and tap Complete", counted from `user_progress.plan_json` + `workout_log_exercises`, with a fallback line when it cannot count.
-- The rank cron (`evaluate-rank-promotions`) counts distinct completed DATES, as the client now does (`WorkoutReadService.completedWorkoutDayCount`, diagnose `0ebfcb`), so two sessions on one day count once on the server too.
-
-Each Edge Function deploy needs its own founder go (§4.3).
-
 ## OI-493 — Nutrition logging parity: coach-logged and screen-logged meals differ in 20 places (survey 2026-11-10)
 
 - **Status**: OPEN

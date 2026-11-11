@@ -37,6 +37,14 @@ enum ToolIntentStatus {
   expired,
 }
 
+/// Coach workout parity S3 (OI-492): intent types the client runs at once,
+/// with no APPLY card. `PendingToolIntentsNotifier.addIntents` never puts
+/// them in its state (a card in state renders a "Logged" pill once
+/// executed), and `AiCoachScreen.filterVisibleIntents` drops them too. Mirror
+/// of the server's `AUTO_RUN_INTENT_TYPES`
+/// (`supabase/functions/_shared/completion_tile_routing.ts`).
+const Set<String> kAutoRunIntentTypes = {'request_completion_tile'};
+
 /// A typed write intent emitted by the server-side AI coach tool registry.
 /// The client confirms with the user, then [ToolDispatcher.execute]s it
 /// against the right Hive repository.
