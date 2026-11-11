@@ -1,3 +1,5 @@
+import 'package:hive/hive.dart';
+
 import '../utils/ist_date.dart';
 import 'hive_service.dart';
 
@@ -325,6 +327,21 @@ class WorkoutReadService {
       if (parsed != null) return istDateStr(parsed);
     }
     return null;
+  }
+
+  /// The ONE `exlog_*` key predicate for readers that walk the whole box.
+  /// Yields a defensive copy of every value stored under a key that starts
+  /// with `exlog_` and is a `Map`. Readers must NOT filter exercise-log rows
+  /// on the `type` field: only the cloud-restore writer stamps
+  /// `type: 'exercise_log'`; `WorkoutWriteService.logExercise` never does
+  /// (same drift class as `graduationStatsProvider`, diagnose 89d56c).
+  static Iterable<Map<String, dynamic>> exlogRows(Box<dynamic> box) sync* {
+    for (final key in box.keys) {
+      if (!key.toString().startsWith('exlog_')) continue;
+      final raw = box.get(key);
+      if (raw is! Map) continue;
+      yield Map<String, dynamic>.from(raw);
+    }
   }
 
   static final RegExp _exlogDateKey = RegExp(r'^exlog_(\d{4}-\d{2}-\d{2})_');

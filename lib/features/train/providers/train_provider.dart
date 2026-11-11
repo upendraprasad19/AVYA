@@ -2072,16 +2072,31 @@ class ActiveWorkoutNotifier extends Notifier<ActiveWorkoutData> {
     final bestWeightMap = <String, double>{};
     final bestRepsMap = <String, int>{};
     final bestDurationMap = <String, int>{};
-    for (final raw in hive.workoutBox.values) {
-      if (raw is! Map) continue;
-      final log = Map<String, dynamic>.from(raw);
-      if (log['type'] != 'exercise_log') continue;
-      final name = (log['exercise_name'] as String? ?? '').toLowerCase();
+    // Rows come from the shared `exlog_` key predicate, NOT a `type` filter
+    // (only the restore writer stamps `type`). Per-set maxima throughout, and
+    // the maps are keyed by `exerciseNameKey` on both the write and lookup side.
+    // A PR beats the best from STRICTLY EARLIER IST dates (the same rule as the
+    // badge count, `BadgeService.countBeatenPrs`): rows dated on the session's
+    // own save date (a coach log earlier today) are skipped. The date is the
+    // one `_persistCompletion` saves to, computed before the scan.
+    final scanSessionIstDate = istDateStr(resolveSessionDate(
+      scheduledDate: state.workoutDay?.date,
+      now: now,
+    ));
+    for (final log in WorkoutReadService.exlogRows(hive.workoutBox)) {
+      if (WorkoutReadService.istDateForExlogRow(log) == scanSessionIstDate) {
+        continue;
+      }
+      final name = exerciseNameKey(log['exercise_name'] as String? ?? '');
       if (name.isEmpty) continue;
-      final w = (log['weight_kg'] as num?)?.toDouble() ?? 0;
+      final w = WorkoutReadService.bestPerSetWeight(log);
       if (w > (bestWeightMap[name] ?? 0)) bestWeightMap[name] = w;
-      // Per-set best reps: prefer stored best, fallback to estimated average
-      final bestSetReps = (log['best_single_set_reps'] as int?);
+      // Per-set best reps: per-set max first, then stored best, then the old
+      // average for rows with no per-set list.
+      final perSetReps = WorkoutReadService.bestPerSetReps(log);
+      final bestSetReps = perSetReps > 0
+          ? perSetReps
+          : (log['best_single_set_reps'] as num?)?.toInt();
       // Drift-fix 2026-05-24 / T16 orphan — WorkoutWriteService.logExercise
       // emits canonical `set_number`; legacy `sets_completed` lingers on
       // older rows only. Dual-name read with canonical-first preference
@@ -2141,7 +2156,7 @@ class ActiveWorkoutNotifier extends Notifier<ActiveWorkoutData> {
         }
         if (currentWeight <= 0) continue;
 
-        final bestPrevious = bestWeightMap[exercise.name.toLowerCase()] ?? 0;
+        final bestPrevious = bestWeightMap[exerciseNameKey(exercise.name)] ?? 0;
         if (currentWeight > bestPrevious && bestPrevious > 0) {
           prDescriptions.add(
               '${exercise.name}: ${currentWeight.toStringAsFixed(1)}kg (was ${bestPrevious.toStringAsFixed(1)}kg)');
@@ -2162,7 +2177,7 @@ class ActiveWorkoutNotifier extends Notifier<ActiveWorkoutData> {
         }
         if (currentReps <= 0) continue;
 
-        final bestPrevious = bestRepsMap[exercise.name.toLowerCase()] ?? 0;
+        final bestPrevious = bestRepsMap[exerciseNameKey(exercise.name)] ?? 0;
         if (currentReps > bestPrevious && bestPrevious > 0) {
           prDescriptions.add(
               '${exercise.name}: $currentReps reps (was $bestPrevious reps)');
