@@ -524,6 +524,10 @@ class LogExerciseController {
     required bool Function(int exerciseIndex, Set<int> setIndexes,
             {required String exerciseName, bool reopened})
         unlogSets,
+    // Coach workout parity 1c (C5): the route for an exercise the coach
+    // logged in chat (`ActiveWorkoutNotifier.reopenChatLogged`). Optional, so
+    // existing callers are unchanged.
+    bool Function(int index, String name)? reopenChatLogged,
   }) {
     if (shouldIgnoreLog(
         now: _clock(), lastAdvanceAt: _lastAdvanceAt, window: kReopenGuard)) {
@@ -535,6 +539,15 @@ class LogExerciseController {
         exerciseIndex >= data.exercises.length ||
         !data.isExerciseDone(exerciseIndex)) {
       return const LogOutcome(LogOutcomeKind.noop);
+    }
+    if (reopenChatLogged != null && data.isChatLoggedDone(exerciseIndex)) {
+      final ok = reopenChatLogged(
+          exerciseIndex, data.exercises[exerciseIndex].name);
+      if (!ok) return const LogOutcome(LogOutcomeKind.noop);
+      // Stamped exactly as the ordinary re-open below (R6B-F5).
+      _lastAdvanceAt = _clock();
+      _lastAdvanceWindow = kRevealGuard;
+      return const LogOutcome(LogOutcomeKind.reopened);
     }
     final numSets = int.tryParse(data.exercises[exerciseIndex].sets) ?? 3;
     final checked = {
@@ -684,12 +697,23 @@ bool allExercisesLogged(ActiveWorkoutData data) {
 
 // ── FINISH guard + working counts (flip batch §3, OI-361 §3b) ─────────────
 
-/// `(saved, total)` working sets: `saved` is exactly what `completeWorkout`
-/// writes (`saveableSetIndexes`), `total` the template sets minus warm-ups.
+/// `(saved, total)` working sets for the day: `saved` is what is logged for
+/// the day, i.e. what `completeWorkout` writes (`saveableSetIndexes`) PLUS the
+/// sets the coach already logged in chat (coach workout parity 1c, C6);
+/// `total` is the template sets minus warm-ups, with a chat exercise counting
+/// its `coachCount` on BOTH sides (a re-opened one adds its new rows to
+/// `total`). The save predicates do not read this, so the zero-set block
+/// (OI-361) is unaffected.
 ({int saved, int total}) workingSetCounts(ActiveWorkoutData data) {
   var saved = 0;
   var total = 0;
   for (var i = 0; i < data.exercises.length; i++) {
+    final chat = data.chatEntry(i);
+    if (chat != null) {
+      saved += chat.coachCount;
+      total += chat.coachCount;
+      if (data.isChatLoggedDone(i)) continue;
+    }
     saved += data.saveableSetIndexes(i).length;
     final numSets = int.tryParse(data.exercises[i].sets) ?? 3;
     for (var s = 0; s < numSets; s++) {
@@ -735,12 +759,22 @@ FinishGuard finishGuard(ActiveWorkoutData data) {
   final skipped = <String>[];
   final partial = <({String name, int saved, int working})>[];
   for (var i = 0; i < data.exercises.length; i++) {
+    // Coach workout parity 1c (C6): a chat-done exercise has nothing to save
+    // and nothing to warn about.
+    if (data.isChatLoggedDone(i)) continue;
     final exercise = data.exercises[i];
     final saved = data.saveableSetIndexes(i).length;
     final numSets = int.tryParse(exercise.sets) ?? 3;
     if (saved == 0) {
-      if (data.reopenedExercises.contains(exercise.name)) {
+      // A re-opened CHAT exercise with no new set keeps the coach's sets:
+      // not "Not saved". Only the typed check still lists it.
+      if (data.reopenedExercises.contains(exercise.name) &&
+          !data.isChatLogged(i)) {
         reopened.add(exercise.name);
+      } else if (data.isChatLogged(i)) {
+        if (_hasTypedUnloggedValue(data, i, exercise.loggingType)) {
+          typed.add(exercise.name);
+        }
       } else if (_hasTypedUnloggedValue(data, i, exercise.loggingType)) {
         typed.add(exercise.name);
       } else {

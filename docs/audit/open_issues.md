@@ -7216,17 +7216,6 @@ Residual of OI-199 and OI-471 after migration 172. Migration 172 makes `cleanup_
 
 **Done when.** Each mechanism is measured (writer and reader by file:line), fixed, and the audit shows 0 ON plans with a zero-set muscle their live twin lacks; a test pins the four keys in the ON world. This is item 1B-12 of the step-1 plan (`docs/plans/2026-11-08-generator-step1-core-list.md` section 9) and an entry criterion of the 1B-1 flip ("no plan worse than its live twin"). Blast radius `platform` (plan engine), tier L.
 
-## OI-491 — Coach workout parity 1c: Active Workout opens with coach-logged exercises shown as done
-
-- **Status**: OPEN
-- **Blocked on**: none
-- **Verified**: never
-- **Identified**: 2026-11-10 · filed via mint_oi.sh from branch `coach-workout-parity`
-
-**Problem.** Active Workout opens a day as if nothing were logged, even when the coach already logged some of its exercises, so the user can log the same exercise twice.
-
-**Scope (founder decision B, 2026-11-10).** Active Workout opens with coach-logged exercises shown as done, with no double entry. Own plan, reviews and PR after 1a+1b (OI-490).
-
 ## OI-492 — Coach workout parity 2 (server): I'm done re-shows the X of Y tile, evening partial-day reminder, rank cron counts distinct completed days
 
 - **Status**: OPEN

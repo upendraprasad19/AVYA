@@ -2,6 +2,26 @@ part of 'screen.dart';
 
 // ── Finish + Cancel Dialogs ──────────────────────────────────────
 
+/// Coach workout parity 1c (C6, founder F3/F4): the line under a blocked
+/// FINISH (nothing new to save), chosen over the LIVE exercise list:
+/// - every live exercise is chat-done: everything is already logged in chat;
+/// - some live slot has a chat entry (done or re-opened) but not every slot
+///   is chat-done: no new sets this session (the mixed-day line);
+/// - no live slot has a chat entry: today's zero-set line.
+/// COMPLETE stays disabled in all three (OI-361).
+String finishBlockedLine(ActiveWorkoutData data) {
+  final n = data.exercises.length;
+  var allChatDone = n > 0;
+  var anyChatEntry = false;
+  for (var i = 0; i < n; i++) {
+    if (!data.isChatLoggedDone(i)) allChatDone = false;
+    if (data.isChatLogged(i)) anyChatEntry = true;
+  }
+  if (allChatDone) return WardroomCopy.activeFinishAllLoggedInChat;
+  if (anyChatEntry) return WardroomCopy.activeFinishNoNewSets;
+  return WardroomCopy.activeFinishZeroSetBlocked;
+}
+
 /// [onComplete] runs in the COMPLETE handler, before the dialog closes and the
 /// (un-awaited) save starts: the screen clears its UNDO toast there (batch 2).
 ///
@@ -216,8 +236,7 @@ List<Widget> _finishSummaryLines(ActiveWorkoutData data,
         padding: const EdgeInsets.only(top: 6),
         child: Text(text, style: AppTypography.bodySm.copyWith(color: color)),
       );
-  final blockedLine =
-      line(WardroomCopy.activeFinishZeroSetBlocked, AppColors.warn);
+  final blockedLine = line(finishBlockedLine(data), AppColors.warn);
   if (!logMode) {
     return [
       Text(

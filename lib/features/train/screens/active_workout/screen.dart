@@ -23,6 +23,7 @@ import 'package:icanbefitter/shared/widgets/exercise_plate/plate_flags.dart';
 import 'package:icanbefitter/shared/widgets/wardroom/wardroom.dart';
 import '../../providers/train_provider.dart';
 import '../../services/active_workout_persistence.dart';
+import '../../services/chat_logged_exercises.dart';
 import '../../services/exercise_move_logic.dart';
 import '../../services/log_exercise_flags.dart';
 import '../../services/log_exercise_logic.dart';
@@ -264,6 +265,8 @@ class _ActiveWorkoutScreenState extends ConsumerState<ActiveWorkoutScreen> {
       exerciseIndex: exIdx,
       readState: () => ref.read(activeWorkoutProvider),
       unlogSets: ref.read(activeWorkoutProvider.notifier).unlogSets,
+      reopenChatLogged:
+          ref.read(activeWorkoutProvider.notifier).reopenChatLogged,
     );
     if (outcome.kind != LogOutcomeKind.reopened) return;
     if (_logUndo?.exerciseIndex == exIdx) _clearLogUndo();
@@ -685,6 +688,11 @@ class _ActiveWorkoutScreenState extends ConsumerState<ActiveWorkoutScreen> {
                                 : null,
                             onReopenExercise: logMode && !data.isSaved
                                 ? () => _onReopenExercise(exIdx)
+                                : null,
+                            onKeepChatLogged: logMode && !data.isSaved
+                                ? () => ref
+                                    .read(activeWorkoutProvider.notifier)
+                                    .keepChatLogged(exIdx, exercise.name)
                                 : null,
                             onToggleSet: (setIdx) {
                               final wasChecked =

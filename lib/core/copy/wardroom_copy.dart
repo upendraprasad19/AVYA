@@ -160,6 +160,16 @@ class WardroomCopy {
   static const activeLoggedSemantics = 'Logged';
   static const activeReopenHint = 'Re-open';
 
+  /// Coach workout parity 1c (OI-491, founder-approved 2026-11-10): an
+  /// exercise the coach already logged in chat opens DONE in Active Workout
+  /// with this label (button and eyebrow), and TalkBack reads the semantics.
+  static const activeLoggedInChatLabel = 'LOGGED IN CHAT';
+  static const activeLoggedInChatSemantics = 'Logged in chat';
+
+  /// Founder F2 (2026-11-11): the text action on a re-opened chat exercise
+  /// that puts it back to DONE while no new set is checked.
+  static const activeKeepLoggedInChat = 'KEEP AS LOGGED';
+
   /// TalkBack announcement after a RE-OPEN.
   static const activeReopenedAnnouncementTemplate = '{exercise} re-opened';
 
@@ -268,6 +278,16 @@ class WardroomCopy {
   /// Names warm-ups: an all-warm-up session reads "0/N" (flip R7-04).
   static const activeFinishZeroSetBlocked =
       "No working sets logged (warm-ups don't count). Log one to complete, or cancel the workout.";
+
+  /// Coach workout parity 1c, founder F3 (2026-11-11): FINISH on a day where
+  /// EVERY exercise is already logged in chat (COMPLETE stays disabled).
+  static const activeFinishAllLoggedInChat =
+      'Everything today is already logged in chat. Re-open an exercise to add sets, or cancel the workout.';
+
+  /// Coach workout parity 1c, founder F4 (2026-11-11): FINISH on a MIXED day
+  /// (some exercise has a chat log, not all are chat-done, nothing new saved).
+  static const activeFinishNoNewSets =
+      "No new sets logged this session (warm-ups don't count). Log one to complete, or cancel the workout.";
 
   /// OI-361: the chat workout card's CONFIRM is disabled when no exercise has a
   /// set to write.

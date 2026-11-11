@@ -119,6 +119,8 @@ class CardHarness {
   /// and re-pump it on the SAME container: a card re-init (flip §2 P5).
   final Widget app;
   int reopenCalls = 0;
+  int keepCalls = 0;
+  bool? keepResult;
   ActiveWorkoutData get state => container.read(activeWorkoutProvider);
 }
 
@@ -222,6 +224,14 @@ Future<CardHarness> pumpCard(
   void onReopen() {
     h.reopenCalls++;
     final data = container.read(activeWorkoutProvider);
+    // Coach workout parity 1c: a chat-done card re-opens through the chat
+    // route, as the screen's controller does.
+    if (data.isChatLoggedDone(0)) {
+      container
+          .read(activeWorkoutProvider.notifier)
+          .reopenChatLogged(0, data.exercises[0].name);
+      return;
+    }
     final n = int.tryParse(data.exercises[0].sets) ?? 3;
     container.read(activeWorkoutProvider.notifier).unlogSets(
         0, {for (var i = 0; i < n; i++) if (data.isSetChecked(0, i)) i},
@@ -242,6 +252,15 @@ Future<CardHarness> pumpCard(
           onLongPressHeader: onLongPressHeader,
           onLogExercise: logMode ? onLog : null,
           onReopenExercise: logMode ? onReopen : null,
+          onKeepChatLogged: logMode
+              ? () {
+                  h.keepCalls++;
+                  h.keepResult = container
+                      .read(activeWorkoutProvider.notifier)
+                      .keepChatLogged(0,
+                          container.read(activeWorkoutProvider).exercises[0].name);
+                }
+              : null,
           onHandleForTest: onHandleForTest,
         ),
       ),
