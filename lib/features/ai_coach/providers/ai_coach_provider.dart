@@ -353,8 +353,30 @@ class ChatHistoryNotifier extends Notifier<List<ChatMessage>> {
   /// Bug #19 — Force a rebuild from coachBox after a save/update so the UI
   /// reflects pending/failed/success transitions immediately. Used by
   /// [SendMessageNotifier] in addition to its in-memory bubble updates.
+  ///
+  /// A send in flight survives the rebuild (diagnose 3e7b41): its loading
+  /// bubble lives only in memory, and its Hive row is still `pending`, which
+  /// [build] renders as a "didn't finish" error (the crash-leftover case).
+  /// The tool dispatcher refreshes after a log_set APPLY or the S3 tile,
+  /// which can run while a reply is pending. So the in-flight row's AI-side
+  /// bubble (matched by the loading bubble's `coachKey`) is dropped and the
+  /// loading bubble stays LAST: the reply's [replaceLastMessage] then swaps
+  /// the loading bubble and nothing else (a tile written meanwhile stays).
+  /// Every exit of a send replaces its loading bubble, so a loading bubble in
+  /// state means a send is in flight.
   void refreshFromHive() {
-    state = build();
+    final rebuilt = build();
+    final inFlight = state.where((m) => m.isLoading).toList();
+    if (inFlight.isEmpty) {
+      state = rebuilt;
+      return;
+    }
+    final keys = inFlight.map((m) => m.coachKey).whereType<String>().toSet();
+    state = [
+      ...rebuilt.where(
+          (m) => !(!m.isUser && m.isError && keys.contains(m.coachKey))),
+      ...inFlight,
+    ];
   }
 
   /// Unit 1 (coach-completion-tap-card) — stamps `resolved_at` on the
@@ -587,6 +609,12 @@ class SendMessageNotifier extends Notifier<bool> {
   bool build() => false; // isLoading
 
   /// Send a message with an attached media URL (PRO photo analysis).
+  ///
+  /// The in-flight flag is claimed SYNCHRONOUSLY, before the first await
+  /// (diagnose 3e7b41): it used to be set only after the pending row was
+  /// written, so two taps in one frame (a double Retry, Retry plus a chip)
+  /// both passed the guard and left an orphan loading bubble. Released in
+  /// `finally` on every exit, early returns included.
   Future<void> sendWithMedia(
     String message, {
     required String mediaUrl,
@@ -594,7 +622,23 @@ class SendMessageNotifier extends Notifier<bool> {
     String? mediaStoragePath,
   }) async {
     if (state) return; // Already sending
+    state = true;
+    try {
+      await _sendWithMediaBody(message,
+          mediaUrl: mediaUrl,
+          mediaType: mediaType,
+          mediaStoragePath: mediaStoragePath);
+    } finally {
+      state = false;
+    }
+  }
 
+  Future<void> _sendWithMediaBody(
+    String message, {
+    required String mediaUrl,
+    required String mediaType,
+    String? mediaStoragePath,
+  }) async {
     final chatNotifier = ref.read(chatHistoryProvider.notifier);
     final repo = AiCoachRepository.instance;
     final captionForLog = message.isEmpty ? 'Analyse this photo' : message;
@@ -623,15 +667,15 @@ class SendMessageNotifier extends Notifier<bool> {
       mediaStoragePath: mediaStoragePath,
     ));
 
-    // Add loading placeholder
+    // Add loading placeholder (its coachKey ties it to this turn's pending
+    // row for refreshFromHive, diagnose 3e7b41).
     chatNotifier.addMessage(ChatMessage(
       text: '',
       isUser: false,
       timestamp: DateTime.now(),
       isLoading: true,
+      coachKey: coachKey,
     ));
-
-    state = true;
 
     try {
       final context = repo.buildAiContext();
@@ -781,6 +825,9 @@ class SendMessageNotifier extends Notifier<bool> {
     }
   }
 
+  /// The in-flight flag is claimed SYNCHRONOUSLY, before the first await, and
+  /// released in `finally` on every exit (diagnose 3e7b41; see
+  /// [sendWithMedia]).
   Future<void> send(
     String message, {
     /// Bug #19 — When non-null, the retry path reuses an existing pending/failed
@@ -790,7 +837,15 @@ class SendMessageNotifier extends Notifier<bool> {
   }) async {
     if (message.trim().isEmpty) return;
     if (state) return; // Already sending
+    state = true;
+    try {
+      await _sendBody(message, existingCoachKey: existingCoachKey);
+    } finally {
+      state = false;
+    }
+  }
 
+  Future<void> _sendBody(String message, {String? existingCoachKey}) async {
     final chatNotifier = ref.read(chatHistoryProvider.notifier);
     final limitNotifier = ref.read(messageLimitProvider.notifier);
     final currentLimit = ref.read(messageLimitProvider);
@@ -842,22 +897,20 @@ class SendMessageNotifier extends Notifier<bool> {
       ));
     }
 
-    // Add loading placeholder (or replace existing failed bubble with loading)
+    // Add loading placeholder (or replace existing failed bubble with
+    // loading). Its coachKey ties it to this turn's pending row, so a
+    // refreshFromHive while the reply is pending keeps it (diagnose 3e7b41).
+    // On a retry the loading bubble goes in FIRST, so the refresh drops the
+    // row's old error bubble instead of re-rendering it as "didn't finish".
+    chatNotifier.addMessage(ChatMessage(
+      text: '',
+      isUser: false,
+      timestamp: DateTime.now(),
+      isLoading: true,
+      coachKey: coachKey,
+    ));
     if (existingCoachKey != null) {
       chatNotifier.refreshFromHive();
-      chatNotifier.addMessage(ChatMessage(
-        text: '',
-        isUser: false,
-        timestamp: DateTime.now(),
-        isLoading: true,
-      ));
-    } else {
-      chatNotifier.addMessage(ChatMessage(
-        text: '',
-        isUser: false,
-        timestamp: DateTime.now(),
-        isLoading: true,
-      ));
     }
 
     // Unit 2 — coach short-term memory: assemble the last N complete exchanges
@@ -880,7 +933,6 @@ class SendMessageNotifier extends Notifier<bool> {
       debugPrint('[AiCoachProvider.send] history assembly failed (ignored): $e');
     }
 
-    state = true;
 
     try {
       // Build FULL context from all Hive boxes via repository,

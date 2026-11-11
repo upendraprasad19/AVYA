@@ -4,9 +4,9 @@ staged_against: b635fc97 (branch coach-workout-parity-tile; commit A 3c500fc0 an
 blast_radius: platform
 reviewer: claude-sonnet-via-skill (two fresh context-blind seats, S1 server + gate, S2 client)
 lens_set: [writer_reader_drift, function_exception_swallow, blast_radius_mismatch, secrets_in_tree, unawaited_no_error_sink, guard_without_its_mirror, missing_input, asserted_fixture_value]
-findings_count: 7
+findings_count: 9
 verdict: accepted
-verdict_note: no P0 or P1; seven P2. Six are fixed in commit B with mutation-proven tests. S2-F3 led to a pre-existing chat bug on the log_set APPLY path, which is fixed as its own commit (diagnose 3e7b41), so the tile path's own narrow race is closed with it.
+verdict_note: no P0 or P1; nine P2. Six are fixed in commit B with mutation-proven tests. S2-F3 led to a pre-existing chat bug on the log_set APPLY path, fixed as its own commit C (diagnose 3e7b41), which closes the tile path's narrow race too; a third seat reviewed commit C and its two P2 are fixed in C.
 ---
 
 # Code Review: coach workout parity S3, the completion tile tool (OI-492)
@@ -65,6 +65,12 @@ The full Flutter suite (`TZ=Asia/Kolkata`, golden excluded) ran during the revie
 - **claim:** No test drove an EARLIER batch's card through `addIntents`, the path that had the Riverpod self-read defect; only a same-batch mix was covered.
 - **fix:** Test: `addIntents([log_set executing])`, then `addIntents([tile])`: `pendingWrites`, nothing written, no non-fatal. Mutant B7 (drop `pendingIntents: state`) red.
 - **status:** fixed
+
+## Review seat on commit C (the 3e7b41 fix; one fresh context-blind Sonnet seat)
+Scope: the `ai_coach_provider.dart` diff and its new test, the 8 lenses, the same command rules (mutation of that file only, sha256-restored). Two P2:
+- **C-F1 — P2 — guard_without_its_mirror.** `send` and `sendWithMedia` set the in-flight flag only AFTER their first await, so two taps in one frame (a double Retry: `chat_area.dart` does not gate Retry on sending; Retry plus a suggestion chip) both passed `if (state) return`. Each added a loading bubble; the first reply replaced the second's bubble, the second reply replaced the first reply, and one bubble was orphaned. Before the fix a refresh happened to wipe it; with the new refresh rule it would have stayed. **Fixed:** each method is a thin wrapper that claims the flag synchronously after its guard and releases it in `finally`; the bodies moved unchanged into `_sendBody` / `_sendWithMediaBody`, placed right after their wrappers so other tests' source slices still hold them. Tests through the real notifier: two sends in one frame, two media sends in one frame, the free-limit early return releases the flag. Mutants Q1 to Q4 red (Q4 needed the early-return case; it was green before that case existed).
+- **C-F2 — P2 — asserted_fixture_value.** The retry reorder was pinned only by a source grep; the retry test re-implemented the sequence by hand. **Fixed:** a fake `AiService` holds the model call open, and the test drives the real `send(existingCoachKey:)`, refreshes mid-flight and checks the dots, no error, and nothing left after the reply. R5 and R6 now redden this behavioural case as well as the pin.
+The seat's clean probes: nothing between the moved loading add and its old position depends on order (history assembly reads Hive); `coachKey` on a loading bubble reaches no consumer (Retry needs `isError`, the media chip `isUser`); an account switch mid-send rebuilds the chat as before (unchanged by the diff).
 
 S2 also checked the registry `line_range`s it could reach and found them accurate. They were recomputed from anchors after the fixes.
 
