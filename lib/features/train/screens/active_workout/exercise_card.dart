@@ -52,6 +52,10 @@ class _ExerciseCard extends ConsumerStatefulWidget {
   /// Tapping LOGGED calls it; null in review mode and on the per-set path.
   final VoidCallback? onReopenExercise;
 
+  /// Coach workout parity 1c (C5): KEEP AS LOGGED on a re-opened chat
+  /// exercise (`ActiveWorkoutNotifier.keepChatLogged`). Null hides it.
+  final VoidCallback? onKeepChatLogged;
+
   // ⇄ swap / ⇅ move (docs/plans/active-workout-swap-move.md Task 5). In move
   // mode the card routes its own taps by [moveRole]: a target's whole header
   // places, the source's cancels, a done card ignores every tap.
@@ -96,6 +100,7 @@ class _ExerciseCard extends ConsumerStatefulWidget {
     required this.onFocus,
     this.onLogExercise,
     this.onReopenExercise,
+    this.onKeepChatLogged,
     required this.onMove,
     required this.onMoveHere,
     this.moveModeActive = false,
@@ -472,6 +477,17 @@ class _ExerciseCardState extends ConsumerState<_ExerciseCard>
     _syncPulse();
     final oldCount = int.tryParse(oldWidget.exercise.sets) ?? 3;
     final newCount = int.tryParse(widget.exercise.sets) ?? 3;
+
+    // Coach workout parity 1c (B-pass S2-F3): KEEP AS LOGGED cleared this
+    // index's captured values and suggested marks. Rebuild the controllers so
+    // the fields never hold text the provider no longer has, and a later
+    // RE-OPEN starts exactly like the first one (prefill + suggested marks).
+    if (oldWidget.exercise.name == widget.exercise.name &&
+        _chatKeptBack(oldWidget.data, widget.data)) {
+      _disposeControllers();
+      _initControllers();
+      return;
+    }
 
     // Exercise swap: full rebuild needed (different pre-fills, weight, reps).
     if (oldWidget.exercise.name != widget.exercise.name) {
@@ -976,7 +992,7 @@ class _ExerciseCardState extends ConsumerState<_ExerciseCard>
     switch (widget.exercise.loggingType) {
       case 'weighted_bodyweight':
       case 'weight_reps':
-        return '${widget.exercise.sets} sets · ${widget.exercise.reps} reps · ${widget.exercise.rest} rest';
+        return '${_metaSets()} sets · ${widget.exercise.reps} reps · ${widget.exercise.rest} rest';
       default:
         return _metaText();
     }
@@ -985,18 +1001,92 @@ class _ExerciseCardState extends ConsumerState<_ExerciseCard>
   String _metaText() {
     switch (widget.exercise.loggingType) {
       case 'timed':
-        return '${widget.exercise.sets} sets · ${widget.exercise.reps}s · ${widget.exercise.rest} rest';
+        return '${_metaSets()} sets · ${widget.exercise.reps}s · ${widget.exercise.rest} rest';
       case 'cardio':
         return '${widget.exercise.reps} min · ${widget.exercise.rest} rest';
       case 'distance':
         return '${widget.exercise.reps} · ${widget.exercise.rest} rest';
       case 'bodyweight_reps':
-        return '${widget.exercise.sets} sets · ${widget.exercise.reps} reps · ${widget.exercise.rest} rest';
+        return '${_metaSets()} sets · ${widget.exercise.reps} reps · ${widget.exercise.rest} rest';
       case 'weighted_bodyweight':
-        return '${widget.exercise.sets} sets · ${widget.exercise.reps} reps · +${widget.exercise.weight} · ${widget.exercise.rest} rest';
+        return '${_metaSets()} sets · ${widget.exercise.reps} reps · +${widget.exercise.weight} · ${widget.exercise.rest} rest';
       default: // weight_reps
-        return '${widget.exercise.sets} sets · ${widget.exercise.reps} reps · ${widget.exercise.weight} · ${widget.exercise.rest} rest';
+        return '${_metaSets()} sets · ${widget.exercise.reps} reps · ${widget.exercise.weight} · ${widget.exercise.rest} rest';
     }
+  }
+
+  /// The set count the meta line prints: a chat-logged exercise shows its
+  /// PLANNED count (coach workout parity 1c, C3), not the re-open's reduced
+  /// `sets` (the stepper shows the new-row count; intended).
+  String _metaSets() {
+    final chat = _chatEntryIn(widget.data);
+    return chat != null ? '${chat.plannedSets}' : widget.exercise.sets;
+  }
+
+  /// Coach workout parity 1c: this card's chat entry in [data] (LOG mode
+  /// only). Builders pass their `data` PARAMETER, never `widget.data` (the
+  /// logging viewer hosts them with its own fresh read).
+  ChatLoggedExercise? _chatEntryIn(ActiveWorkoutData data) => _logMode
+      ? data.loggedInChat[chatLoggedKey(widget.exercise.name)]
+      : null;
+
+  /// A chat entry went from re-opened ([before]) back to done ([after]): the
+  /// KEEP AS LOGGED transition.
+  bool _chatKeptBack(ActiveWorkoutData before, ActiveWorkoutData after) =>
+      _chatEntryIn(after) != null &&
+      before.reopenedExercises.contains(widget.exercise.name) &&
+      !after.reopenedExercises.contains(widget.exercise.name);
+
+  /// The eyebrow (LOGGED IN CHAT) and the coach's chips; [keep] adds the
+  /// KEEP AS LOGGED action on the eyebrow row.
+  Widget _chatLoggedHeader(ChatLoggedExercise chat, {required bool keep}) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  WardroomCopy.activeLoggedInChatLabel,
+                  style: AppTypography.monoXs.copyWith(
+                    color: AppColors.ok,
+                    letterSpacing: 1.5,
+                  ),
+                ),
+              ),
+              if (keep)
+                Semantics(
+                  button: true,
+                  child: GestureDetector(
+                    behavior: HitTestBehavior.opaque,
+                    onTap: widget.onKeepChatLogged,
+                    child: ConstrainedBox(
+                      constraints: const BoxConstraints(minHeight: 44),
+                      child: Center(
+                        child: Text(
+                          WardroomCopy.activeKeepLoggedInChat,
+                          style: AppTypography.monoXs.copyWith(
+                            color: AppColors.accent,
+                            letterSpacing: 1.5,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          WardSetChips(
+            loggingType: chat.loggingType,
+            perSetBreakdown: chatLoggedChips(chat.sets),
+          ),
+        ],
+      ),
+    );
   }
 
   /// Build the table header labels based on logging type. [logMode] has no
@@ -1055,10 +1145,25 @@ class _ExerciseCardState extends ConsumerState<_ExerciseCard>
   /// the viewer its own fresh read) and [nodeFor] looks up the focus node of a
   /// box (each host has its own: one node cannot sit under two fields).
   Widget _entryRows(ActiveWorkoutData data, EntryFocusNodeFor nodeFor) {
+    // Coach workout parity 1c (C3): the chat branch FIRST.
+    final chat = _chatEntryIn(data);
+    final chatReopened =
+        chat != null && data.reopenedExercises.contains(widget.exercise.name);
+    if (chat != null && !chatReopened) {
+      return _chatLoggedHeader(chat, keep: false);
+    }
+    final coachCount = chat?.coachCount ?? 0;
     final numSets = _setCountFor(data);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        if (chat != null)
+          _chatLoggedHeader(
+            chat,
+            keep: !data.isSaved &&
+                widget.onKeepChatLogged != null &&
+                !hasCheckedRow(data, widget.exerciseIndex),
+          ),
         // Table header row
         Row(children: _tableHeaderLabels(logMode: _logMode)),
 
@@ -1091,7 +1196,9 @@ class _ExerciseCardState extends ConsumerState<_ExerciseCard>
                     repsController: _repsControllers[setIdx],
                     durationController: _durationControllers[setIdx],
                     distanceController: _distanceControllers[setIdx],
-                    setNumber: setIdx + 1,
+                    // 1c: a re-opened chat exercise numbers its new rows
+                    // after the coach's sets.
+                    setNumber: setIdx + 1 + coachCount,
                     isWarmUp: isWarmUp,
                     isCompleted: isChecked,
                     isChecked: isChecked,
@@ -1200,6 +1307,18 @@ class _ExerciseCardState extends ConsumerState<_ExerciseCard>
     BuildContext? focusContext,
   }) {
     final reviewMode = data.isSaved;
+    // Coach workout parity 1c (C3): the chat branch FIRST (before the
+    // validation scan, so a blank field never blocks a done chat exercise).
+    final chat = _chatEntryIn(data);
+    if (chat != null &&
+        !data.reopenedExercises.contains(widget.exercise.name)) {
+      return _LogExerciseButton(
+        label: WardroomCopy.activeLoggedInChatLabel,
+        style: _LogButtonStyle.logged,
+        semanticsLabel: WardroomCopy.activeLoggedInChatSemantics,
+        onTap: reviewMode ? null : widget.onReopenExercise,
+      );
+    }
     final numSets = _setCountFor(data);
     return ListenableBuilder(
       listenable: Listenable.merge([
@@ -1898,12 +2017,17 @@ class _LogExerciseButton extends StatelessWidget {
     required this.style,
     this.subline,
     this.onTap,
+    this.semanticsLabel,
   });
 
   final String label;
   final String? subline;
   final _LogButtonStyle style;
   final VoidCallback? onTap;
+
+  /// The logged style's TalkBack label (coach workout parity 1c: "Logged in
+  /// chat"); null keeps "Logged".
+  final String? semanticsLabel;
 
   @override
   Widget build(BuildContext context) {
@@ -1929,7 +2053,7 @@ class _LogExerciseButton extends StatelessWidget {
       onTap: onTap,
       onTapHint: logged && enabled ? WardroomCopy.activeReopenHint : null,
       label: logged
-          ? WardroomCopy.activeLoggedSemantics
+          ? (semanticsLabel ?? WardroomCopy.activeLoggedSemantics)
           : (subline == null ? label : '$label. $subline'),
       excludeSemantics: true,
       child: GestureDetector(
@@ -2055,6 +2179,7 @@ Widget debugExerciseCardHostForTest({
   bool isInSupersetGroupMode = false,
   LogExerciseCallback? onLogExercise,
   VoidCallback? onReopenExercise,
+  VoidCallback? onKeepChatLogged,
   // ⇄ / ⇅ (docs/plans/active-workout-swap-move.md Task 5).
   VoidCallback? onFocus,
   VoidCallback? onSwap,
@@ -2099,6 +2224,7 @@ Widget debugExerciseCardHostForTest({
       onLongPressHeader: onLongPressHeader ?? () {},
       onLogExercise: onLogExercise,
       onReopenExercise: onReopenExercise,
+      onKeepChatLogged: onKeepChatLogged,
       onHandleForTest: onHandleForTest,
     );
   });

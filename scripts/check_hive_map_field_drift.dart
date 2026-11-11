@@ -76,6 +76,10 @@ const _expectedEmitFields = <String, Set<String>>{
     'duration_sec', 'volume',
     // Restore writers stamp these:
     'is_swapped', 'original_date',
+    // Coach workout parity 1c (C1b): the sticky Hive-local chat marker,
+    // written by logExercise / moveExerciseLogs / ExlogKeyMigrator and read
+    // by Active Workout's chat snapshot (chat_logged_exercises.dart).
+    'coach_logged',
   },
   // nlog_* writer: NutritionWriteService.logMeal
   'nlog': {

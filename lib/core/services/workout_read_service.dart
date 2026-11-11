@@ -344,6 +344,16 @@ class WorkoutReadService {
     }
   }
 
+  /// One exercise-log row by its Hive key (the caller builds the key with
+  /// `WorkoutWriteService.exlogKey`), as a defensive copy; null when absent or
+  /// not a map. Coach workout parity 1c: Active Workout's chat snapshot and
+  /// the introduced-name read go through it, never through a raw box get.
+  static Map<String, dynamic>? exerciseLogRow(String key) {
+    final raw = HiveService.instance.workoutBox.get(key);
+    if (raw is! Map) return null;
+    return Map<String, dynamic>.from(raw);
+  }
+
   static final RegExp _exlogDateKey = RegExp(r'^exlog_(\d{4}-\d{2}-\d{2})_');
 
   /// Coach workout parity 1b (OI-490): the IST dates that hold at least one
