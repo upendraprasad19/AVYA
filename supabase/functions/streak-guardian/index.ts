@@ -20,7 +20,8 @@ import {
 import { isAuthorizedCronCall } from "../_shared/cron_auth.ts";
 import { logCronStart, logCronEnd } from "../_shared/cron_telemetry.ts";
 import { fetchAllByIds, fetchAllPages } from "../_shared/paged_fetch.ts";
-import { pickStreakMessage } from "./message.ts";
+import { loadPartialDays, type PartialDayInfo } from "../_shared/partial_day_loader.ts";
+import { selectStreakMessage } from "./message.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -42,8 +43,42 @@ function getTodayIST(): string {
   return istDate.toISOString().split("T")[0];
 }
 
+/**
+ * Injectable seams (coach workout parity 2). Only the client factory, the
+ * partial-day loader and the push sender go through `deps`; auth and telemetry
+ * stay direct calls (the adoption contracts pin them as literal call sites).
+ */
+export interface StreakGuardianDeps {
+  createClient: typeof createClient;
+  loadPartialDays: typeof loadPartialDays;
+  sendPushNotification: typeof sendPushNotification;
+}
+
+/**
+ * Call-site guard around the partial-day loader (B4-F4): the real loader never
+ * throws, but an injected or future one must not be able to abort the cron.
+ * A failure degrades to an empty map (every user gets today's family message).
+ */
+async function safeLoad(
+  deps: StreakGuardianDeps,
+  // deno-lint-ignore no-explicit-any
+  supabase: any,
+  userIds: string[],
+  todayIST: string,
+): Promise<Map<string, PartialDayInfo>> {
+  try {
+    return await deps.loadPartialDays(supabase, userIds, todayIST);
+  } catch (e) {
+    console.error(`[partial-day] loader threw: ${e instanceof Error ? e.name : "unknown"}`);
+    return new Map<string, PartialDayInfo>();
+  }
+}
+
 // Audit C-4 (2026-05-11, closes-diagnose 7ad0c4): added CRON_SECRET / service-role-key gate.
-serve(async (req: Request) => {
+export const handler = async (
+  req: Request,
+  deps: StreakGuardianDeps = realDeps(),
+): Promise<Response> => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
   }
@@ -64,7 +99,7 @@ serve(async (req: Request) => {
   const logId = await logCronStart("streak-guardian");
 
   try {
-    const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+    const supabase = deps.createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
     const todayIST = getTodayIST();
 
     // 1. Find users with active streaks > 2 weeks.
@@ -188,6 +223,15 @@ serve(async (req: Request) => {
       );
     }
 
+    // Partial coach days get the "N exercise(s) left" line. The loader receives
+    // ONLY users that survive the preference gate (same pure predicate as the
+    // per-user check in the loop; nothing new is read). Users blocked only by
+    // the dedup gate are still loaded: that gate is a per-user DB read.
+    const eligible = prefsDegraded ? [] : atRiskUsers
+      .filter((u) => isNotificationEnabled(notifPrefs, u.user_id as string, "streak_alerts"))
+      .map((u) => u.user_id as string);
+    const partial = await safeLoad(deps, supabase, eligible, todayIST);
+
     let sent = 0;
     let skipped = 0;
 
@@ -272,14 +316,15 @@ serve(async (req: Request) => {
       // ago. Removed rather than date-bounded: `pr-detection` is a separate
       // cron with a correct 20-minute lookback that already owns "you just
       // hit a PR" in real time. Diagnose e3b9d7.
-      const { title, message } = pickStreakMessage({
+      const { title, message } = selectStreakMessage({
         streakDays,
         streakWeeks,
         weight,
         targetWeight,
+        partialDay: partial.get(userId) ?? null,
       });
 
-      const ok = await sendPushNotification({
+      const ok = await deps.sendPushNotification({
         userId,
         title,
         message,
@@ -323,4 +368,15 @@ serve(async (req: Request) => {
       },
     );
   }
-});
+};
+
+/** The production wiring: the real functions themselves (no call text here). */
+export function realDeps(): StreakGuardianDeps {
+  return { createClient, loadPartialDays, sendPushNotification };
+}
+
+if (import.meta.main) {
+  // Wrapped, not `serve(handler)`: serve's Handler passes `(req, connInfo)`
+  // and handler's second parameter is deps.
+  serve((req) => handler(req));
+}

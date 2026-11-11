@@ -1,3 +1,5 @@
+import type { PartialDayInfo } from "../_shared/partial_day_count.ts";
+
 export interface StreakInput {
   streakDays: number;
   streakWeeks: number;
@@ -49,4 +51,24 @@ export function pickStreakMessage(input: StreakInput): StreakMessage {
 
   const variants = standardVariants(streakWeeks, streakDays);
   return { title: "Don't break your streak!", message: variants[streakDays % variants.length] };
+}
+
+/**
+ * The family title always comes from pickStreakMessage. On a partial day
+ * (some, not all planned exercises logged) the message becomes ONE count-only
+ * line for every family; otherwise it is exactly pickStreakMessage's message
+ * (coach workout parity 2, OI-492).
+ */
+export function selectStreakMessage(
+  input: StreakInput & { partialDay?: PartialDayInfo | null },
+): StreakMessage {
+  const picked = pickStreakMessage(input);
+  const pd = input.partialDay;
+  if (pd && pd.left >= 1) {
+    return {
+      title: picked.title,
+      message: `${pd.left} exercise${pd.left === 1 ? "" : "s"} left in ${pd.workoutName}. Finish and tap Complete to keep your ${input.streakDays}-day streak.`,
+    };
+  }
+  return picked;
 }
