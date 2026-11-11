@@ -13,8 +13,9 @@
 // Spec: docs/superpowers/specs/2026-09-26-day-swapper-design.md §5.8, §6.4.
 // Capability string (decided in brief_common.md, this batch): "swap_workout_days".
 
-// Exported: Task 27's swapWorkoutDays tool imports this for its
-// `requiresCapability`, so the spelling lives in exactly one place.
+// Exported for this file's routing and for tests. Since coach workout parity S3
+// the swapWorkoutDays tool writes the same string as a LITERAL (the coverage
+// gate reads only literals); a Deno test pins literal === this const.
 export const CAPABILITY_SWAP_WORKOUT_DAYS = "swap_workout_days";
 
 export type DaySwapRoutingCase = "pro_capable" | "pro_old_app" | "free";

@@ -79,6 +79,9 @@ class AiCoachScreen extends ConsumerStatefulWidget {
   static List<ToolIntent> filterVisibleIntents(List<ToolIntent> intents) {
     final coachBox = HiveService.instance.coachBox;
     return intents.where((i) {
+      // Coach workout parity S3: an auto-run intent (the "I'm done" tile) is
+      // never a card, even if one reached state some other way.
+      if (kAutoRunIntentTypes.contains(i.type)) return false;
       if (i.status == ToolIntentStatus.pending ||
           i.status == ToolIntentStatus.executing ||
           i.status == ToolIntentStatus.failed) {

@@ -115,9 +115,10 @@ server-side AI agent (`ai-proxy` Edge Function → Gemini 3.1 Flash Lite) that h
 **tool access** to log raw workouts / meals, do confirmed plan edits, swap
 exercises, and read the user's recent activity snapshot. The surface is
 **derive-only** (ADR-0012): the AI logs raw input only — PRs, completion, and
-calorie targets are *computed* by the app, never AI-asserted. **21 tools total
-(FREE 9 / PRO 12)** since the day-swapper + sync-load batch added `swapWorkoutDays`
-(20 total, FREE 9 / PRO 11, after the 2026-05-31 prune, before that) — see
+calorie targets are *computed* by the app, never AI-asserted. **22 tools total
+(FREE 10 / PRO 12)** since coach workout parity S3 added `requestCompletionTile`
+(2026-11-11; 21, FREE 9 / PRO 12, after the day-swapper + sync-load batch added
+`swapWorkoutDays`; 20 total, FREE 9 / PRO 11, after the 2026-05-31 prune) — see
 `coach_swap_workout_days` below; a client that omits `client_capabilities`
 entirely still sees exactly the 20 legacy tools (`allTools` requires the
 capability string to be present, not merely PRO).

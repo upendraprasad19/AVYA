@@ -52,6 +52,7 @@ Shared helpers live under `_shared/`:
 
 - `_shared/ist_date.ts` — IST date helpers (mirror of `lib/core/utils/ist_date.dart`).
 - `_shared/cron_auth.ts` — service-role-key gate for every cron-dispatched function.
+- `_shared/completion_tile_routing.ts` (coach workout parity S3, OI-492): owns the tile consts (`CAPABILITY_REQUEST_COMPLETION_TILE`, `REQUEST_COMPLETION_TILE_TOOL_NAME`, `AUTO_RUN_INTENT_TYPES`, `TILE_SURFACING_TOOL_NAMES`), the routing block, the write-claim addendum, `applyCompletionTileKillSwitch` and `memoryIntentSummary`; imports nothing from `_shared/tools/`.
 - `_shared/distinct_dates.ts` (`countDistinctDates`, the ONE server completed-day counter), `_shared/partial_day_count.ts` (pure partial-day count + kill-switch predicate), `_shared/partial_day_loader.ts` (`loadPartialDays`, batched, never throws).
 - Cron functions with a test seam (`workout-window-closing`, `streak-guardian`, `evaluate-rank-promotions`, `weekly-recalc`) `export const handler = (req, deps = realDeps())` and `if (import.meta.main) serve((req) => handler(req))` (a bare `serve(handler)` would pass connInfo as `deps`).
 - `_shared/cron_telemetry.ts` — adoption-gated telemetry helper (test
@@ -106,7 +107,13 @@ Captain-Manual block by `(isPro, capabilities)`; full routing contract and `clie
 rules are in `lib/features/ai_coach/CLAUDE.md` `coach_swap_workout_days`. A capability-gated tool needs
 BOTH checks: the OFFER-time filter (`allTools(isPro, capabilities)` in `registry.ts`) AND the EXECUTION-time
 re-check in `tool-loop.ts` (`capability_blocked` / `capability_required`) — the model can emit a
-functionCall BY NAME for a tool it was never offered.
+functionCall BY NAME for a tool it was never offered. Write `requiresCapability` as a string LITERAL:
+`check_ai_tool_dispatcher_coverage.dart` reads only literals and fails closed on anything else (S3). The
+second gated tool, `requestCompletionTile` (capability `request_completion_tile`), is an AUTO-RUN intent:
+the tool loop records the call and pushes one intent after the loop (`tile_requested` / `not_needed`), the
+block and the addendum come from `_shared/completion_tile_routing.ts`, and the kill switch
+`DISABLE_COMPLETION_TILE_TOOL` (exactly `true`, read once per request in `ai-proxy`) removes the capability
+before anything reads it.
 
 ## AI Architecture (canonical)
 

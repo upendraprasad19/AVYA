@@ -122,4 +122,119 @@ export const plainTool = {
       contains('check_ai_tool_dispatcher_coverage'),
     );
   });
+
+  // Coach workout parity S3 (plan 3.1 step 5, M40): fail CLOSED when a tool
+  // sets requiresCapability with something the literal regex cannot read.
+  group('unreadable capability (fail closed)', () {
+    const identifierTool = '''
+import { CAPABILITY_X } from "../../x_routing.ts";
+export const xTool = {
+  name: "xTool",
+  kind: "write",
+  requiresCapability: CAPABILITY_X,
+  intentBuilder: (args) => ({ type: "x_type" }),
+};
+''';
+
+    test('an identifier capability is reported and is a violation', () {
+      final tools = parseTools({'workout/x.ts': identifierTool});
+      expect(tools.single.unreadableCapability, isTrue);
+      expect(tools.single.requiresCapability, isNull);
+      final result = checkCoverage(
+        tools: tools,
+        dispatcherSrc: "case 'x_type':",
+        clientCapabilities: {'x'},
+      );
+      expect(result.unreadableCapabilities, hasLength(1));
+      expect(result.unreadableCapabilities.single,
+          contains('write the capability as a string literal'));
+      expect(result.unreadableCapabilities.single, contains('workout/x.ts'));
+      expect(result.isViolation, isTrue);
+    });
+
+    test('a read tool with an identifier capability is reported too', () {
+      final tools = parseTools({
+        'progress/r.ts': identifierTool.replaceFirst('"write"', '"read"'),
+      });
+      final result = checkCoverage(
+        tools: tools,
+        dispatcherSrc: '',
+        clientCapabilities: const {},
+      );
+      expect(result.unreadableCapabilities, hasLength(1));
+      expect(result.isViolation, isTrue);
+    });
+
+    test('a literal capability is clean', () {
+      final tools = parseTools({
+        'workout/x.ts':
+            identifierTool.replaceFirst('CAPABILITY_X,', '"x",'),
+      });
+      expect(tools.single.unreadableCapability, isFalse);
+      expect(tools.single.requiresCapability, 'x');
+      final result = checkCoverage(
+        tools: tools,
+        dispatcherSrc: "case 'x_type':",
+        clientCapabilities: {'x'},
+      );
+      expect(result.unreadableCapabilities, isEmpty);
+      expect(result.isViolation, isFalse);
+    });
+
+    test('a commented-out requiresCapability is not flagged', () {
+      final tools = parseTools({
+        'workout/c.ts': '''
+export const cTool = {
+  name: "cTool",
+  kind: "write",
+  // requiresCapability: SOME_CONST,
+  /* requiresCapability: OTHER_CONST, */
+  intentBuilder: (args) => ({ type: "c_type" }),
+};
+''',
+      });
+      expect(tools.single.unreadableCapability, isFalse);
+      final result = checkCoverage(
+        tools: tools,
+        dispatcherSrc: "case 'c_type':",
+        clientCapabilities: const {},
+      );
+      expect(result.isViolation, isFalse);
+    });
+
+    test('a commented-out LITERAL next to a live identifier still fails '
+        'closed (B-pass seat 1 F3)', () {
+      for (final comment in [
+        '  // requiresCapability: "x",\n',
+        '  /* requiresCapability: "x", */\n',
+      ]) {
+        final tools = parseTools({
+          'workout/x.ts': identifierTool.replaceFirst(
+              '  requiresCapability: CAPABILITY_X,',
+              '$comment  requiresCapability: CAPABILITY_X,'),
+        });
+        expect(tools.single.requiresCapability, isNull, reason: comment);
+        expect(tools.single.unreadableCapability, isTrue, reason: comment);
+        final result = checkCoverage(
+          tools: tools,
+          dispatcherSrc: "case 'x_type':",
+          clientCapabilities: {'x'},
+        );
+        expect(result.isViolation, isTrue, reason: comment);
+      }
+    });
+
+    test('a tool without requiresCapability is not flagged', () {
+      final tools = parseTools({
+        'workout/p.ts': '''
+export const pTool = {
+  name: "pTool",
+  kind: "write",
+  intentBuilder: (args) => ({ type: "p_type" }),
+};
+''',
+      });
+      expect(tools.single.unreadableCapability, isFalse);
+    });
+  });
 }

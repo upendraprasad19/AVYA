@@ -6559,6 +6559,10 @@ concepts:
       IST today only; the prompt row is owned by CompletionPromptStore; the tap
       is CoachDayCompletion.completeOnTap (today only). The chat workout card
       follows the same rule (it no longer marks on any save).
+      Coach workout parity S3 (OI-492): a third writer of the prompt row is the
+      "I'm done" tile request (concept coach_completion_tile_request), through
+      CompletionPromptStore.write(reshow: true); created_at is UTC with Z
+      (diagnose f3d704).
     writers:
       - file: lib/features/ai_coach/services/tool_dispatcher.dart
         line_range: 1-9999
@@ -6781,6 +6785,68 @@ concepts:
       2. On the coach paths rest, moved, dropped and no-plan days never count; a
          past partial day stays not done; a future day is never marked.
       3. Any Complete tap goes through CoachDayCompletion.completeOnTap.
+
+  - concept: coach_completion_tile_request
+    domain: ai_coach
+    behavioral_test_path: test/contracts/coach_completion_tile_tool_behavioral_test.dart
+    description: |
+      Coach workout parity S3 (OI-492, founder decision C; plan
+      docs/plans/coach-workout-parity-2-server.md 3.1 / 3.1.1). "I'm done" in chat
+      makes the app's own completion tile appear, one tap total. The server tool
+      requestCompletionTile (capability request_completion_tile, a string literal)
+      is never queued inside a tool-loop round: a call records the request
+      (functionResponse tile_requested, or not_needed when a log_set intent is
+      queued in the turn; decided after the loop from the real intents) and ONE intent request_completion_tile is pushed
+      after the loop. The intent is AUTO-RUN on the client (kAutoRunIntentTypes):
+      PendingToolIntentsNotifier.addIntents dispatches it at once with its own
+      state as pendingIntents and never puts it in state. The dispatcher computes
+      hasPendingLogSet (a log_set card executing, not expired) and calls
+      CoachDayCompletion.offerTileIfPartial, which re-runs decideCoachDay for IST
+      today and writes the completion_prompt row (CompletionPromptStore.write,
+      reshow: true) ONLY for askToComplete with a log today. Nothing is ever
+      completed (ADR-0012); the row itself is owned by coach_derived_completion.
+    writers:
+      - file: lib/features/train/services/coach_day_completion.dart
+        line_range: 264-340
+        method: offerTileIfPartial
+        notes: The decision and the reshow write (owner captured first, re-checked before the write); every non-shown outcome logs completion_tile_not_shown and writes nothing.
+      - file: lib/features/ai_coach/services/tool_dispatcher.dart
+        line_range: 578-603
+        method: _executeRequestCompletionTile
+        notes: Computes hasPendingLogSet from pendingIntents (else the provider) and returns success for every CompletionTileOutcome. The post-step early branch skips invalidation, sync and pushSnapshot, refreshes the chat and stamps the marker.
+      - file: lib/features/ai_coach/providers/pending_tool_intents_provider.dart
+        line_range: 33-62
+        method: addIntents
+        notes: Partitions auto-run intents out of state (queued cards are added first) and dispatches each once.
+    readers:
+      - file: lib/features/ai_coach/providers/ai_coach_provider.dart
+        line_range: 168-351
+        method: build
+        semantic: display-only
+        fields_read: [kind, resolved_at, date, planned_count, logged_count, created_at]
+        notes: ChatHistoryNotifier.build renders the re-shown tile; its fresh UTC created_at sorts it under the reply that asked for it.
+      - file: lib/features/ai_coach/screens/ai_coach/screen.dart
+        line_range: 79-113
+        method: filterVisibleIntents
+        semantic: flag-check
+        fields_read: [type]
+        notes: Drops an auto-run intent even if one reached state (never a card).
+    regression_test: test/contracts/coach_completion_tile_tool_behavioral_test.dart
+    additional_tests:
+      - test/contracts/derive_only_tool_surface_test.dart
+      - test/contracts/coach_client_capabilities_test.dart
+      - test/contracts/coach_write_claim_wiring_test.dart
+      - supabase/functions/_shared/tool-loop_completion_tile_note_test.ts
+      - supabase/functions/_shared/completion_tile_routing_test.ts
+      - supabase/functions/_shared/tools/__tests__/requestCompletionTile_test.ts
+      - supabase/functions/_shared/tools/__tests__/registry_completion_tile_test.ts
+    sync_methods: []
+    class_constraints: |
+      1. The tile request never completes: no markCompleted, completeOnTap or
+         afterCompletion on its path (derive_only_tool_surface_test slice group).
+      2. A new tool whose APPLY surfaces the tile (a new caller of
+         _maybeCompleteScheduledDay) joins TILE_SURFACING_TOOL_NAMES.
+      3. An auto-run intent never enters pendingToolIntentsProvider state.
 
   - concept: coaching_notes
     domain: ai_coach
@@ -14701,7 +14767,7 @@ concepts:
       key — NOT reused directly for chat to avoid corrupting that key).
     writers:
       - file: supabase/functions/_shared/tool-loop.ts
-        line_range: 248
+        line_range: 299
         method: runToolLoop
         notes: the raw Gemini text this concept cleans on the client side.
     readers:
@@ -16995,7 +17061,7 @@ concepts:
         method: body (MeasurementsCardFrame(child: _buildBody()))
         notes: L2b Landing C, E3. One line; the frame owns the flag and the height cap, so a flag-OFF screen returns its own body instance.
       - file: lib/features/ai_coach/screens/ai_coach/screen.dart
-        line_range: 452-458
+        line_range: 455-461
         method: MeasurementChipSlot (the mount line in build)
         notes: L2b Landing C, E4. Between the quick prompts and the input bar, with no condition of its own; the slot owns its flag, prompt, focus and sending checks and is given no send callback; onShown scrolls a chat that was at its bottom back to its bottom (keepBottomAfterChip).
     readers:

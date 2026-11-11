@@ -40,6 +40,19 @@ void main() {
       expect(proxy, isNot(contains('FITNESS DATA LOGGING — INSTANT')));
     });
 
+    // Coach workout parity S3 (OI-492, plan 5.1): the tile block and the
+    // kill switch reach the prompt and the capability set BEFORE the loop;
+    // the addendum never repeats the counted suffix call.
+    test('tile block and kill switch are wired before runToolLoop({', () {
+      final loopAt = proxy.indexOf('runToolLoop({');
+      expect(loopAt, isNot(-1));
+      expect(count(proxy, 'completionTileRoutingBlock('), 1);
+      expect(count(proxy, 'applyCompletionTileKillSwitch('), 1);
+      expect(proxy.indexOf('completionTileRoutingBlock('), lessThan(loopAt));
+      expect(proxy.indexOf('applyCompletionTileKillSwitch('), lessThan(loopAt));
+      expect(count(proxy, 'completionTileWriteClaimAddendum(capabilities, ruleOn)'), 1);
+    });
+
     test('the tool loop gets the rule', () {
       final call = proxy.indexOf('runToolLoop({');
       expect(call, isNot(-1));

@@ -1,5 +1,8 @@
+import 'dart:async';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'package:icanbefitter/core/services/error_telemetry.dart';
 import 'package:icanbefitter/features/auth/providers/auth_invalidation_provider.dart';
 
 import '../models/tool_intent.dart';
@@ -22,14 +25,40 @@ class PendingToolIntentsNotifier extends Notifier<List<ToolIntent>> {
 
   /// Add intents received from a new ai-proxy response.
   /// Filters out duplicates by id (idempotent if response is replayed).
+  ///
+  /// Coach workout parity S3: an auto-run intent ([kAutoRunIntentTypes], the
+  /// "I'm done" tile) never enters `state`; it is dispatched once, at once.
+  /// The partition lives here so it covers every caller. A replay of the same
+  /// intent id is a no-op in the dispatcher (its Hive marker).
   void addIntents(List<ToolIntent> intents) {
     if (intents.isEmpty) return;
-    _expireStale(); // sweep before adding
-    final existingIds = state.map((i) => i.id).toSet();
-    final fresh =
-        intents.where((i) => !existingIds.contains(i.id)).toList();
-    if (fresh.isEmpty) return;
-    state = [...state, ...fresh];
+    final queued =
+        intents.where((i) => !kAutoRunIntentTypes.contains(i.type)).toList();
+    if (queued.isNotEmpty) {
+      _expireStale(); // sweep before adding
+      final existingIds = state.map((i) => i.id).toSet();
+      final fresh =
+          queued.where((i) => !existingIds.contains(i.id)).toList();
+      if (fresh.isNotEmpty) state = [...state, ...fresh];
+    }
+    // After the queued cards are in state, so the dispatcher sees the whole
+    // list (a log_set APPLY that is running blocks the tile; a card waiting
+    // for APPLY does not). The dispatcher gets this state directly: this
+    // notifier's ref cannot read its own provider.
+    for (final intent in intents) {
+      if (!kAutoRunIntentTypes.contains(intent.type)) continue;
+      unawaited(
+        ToolDispatcher.instance
+            .execute(ref, intent, pendingIntents: state)
+            .catchError(
+          (Object e, StackTrace st) {
+            unawaited(ErrorTelemetry.recordNonFatal(e, st,
+                reason: 'auto_run_intent_dispatch'));
+            return ToolExecutionResult.failure(e.toString());
+          },
+        ),
+      );
+    }
   }
 
   /// User confirmed an intent. Sets status=executing, dispatches, then

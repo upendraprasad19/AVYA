@@ -38,6 +38,31 @@ export function okToolCall(
   };
 }
 
+/**
+ * Several functionCall parts in ONE model response (coach workout parity S3:
+ * the same-response and repeated-call tile cases). The first part carries the
+ * thought signature, as Gemini 3 sends it.
+ */
+export function okToolCalls(
+  calls: Array<{ name: string; args: Record<string, unknown> }>,
+  thoughtSignature = "sig",
+): FakeReply {
+  const parts = calls.map((c, i) => {
+    const part: Record<string, unknown> = {
+      functionCall: { name: c.name, args: c.args },
+    };
+    if (i === 0) part.thoughtSignature = thoughtSignature;
+    return part;
+  });
+  return {
+    status: 200,
+    json: {
+      candidates: [{ content: { parts } }],
+      usageMetadata: { totalTokenCount: 7 },
+    },
+  };
+}
+
 export function httpError(status: number, message = `HTTP ${status}`): FakeReply {
   return {
     status,

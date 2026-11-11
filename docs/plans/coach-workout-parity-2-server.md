@@ -12,6 +12,18 @@
 - **Not in this plan:** Active Workout showing coach-logged exercises (1c, OI-491); nutrition parity (OI-493); any change to `decideCoachDay`, `markCompleted`, `WorkoutCompletionBookkeeping`, the existing tile buttons or the typed backstop.
 - **S3 status (2026-11-11):** S1 + S2 MERGED (PR #241, `72862b2f`) and deployed. S3 is on branch `coach-workout-parity-tile` (cut from `main` `c81d1041`), record `docs/plan-reviews/coach-workout-parity-tile.md`. **Rev 7 applies the S3 round-1 dispositions** (changelog "Rev 7" below; T1A = seat A, T1B = seat B); **rev 8 applies the round-2 dispositions** (changelog "Rev 8", T2A / T2B; no P0 or P1 in round 2); **rev 9 applies the round-3 dispositions** (changelog "Rev 9", T3A / T3B); **rev 10 applies the round-4 dispositions** (changelog "Rev 10"; round 4: seat A converged, seat B three P2 prompt-text items); **rev 11 applies the round-5 dispositions** (round 5: seat B converged; seat A two one-line P2 text items, changelog "Rev 11"); **rev 12** applies the round-6 confirmation items and adds 3.1.1, the AUTHORITATIVE S3 build checklist: every S3 build item, including cleanups that earlier lived only in changelog rows. The builder works from 3.1.1; a changelog row is history, never an instruction. Line numbers in S3 text are re-anchored at `c81d1041`; cite by symbol where a line can drift.
 
+## Rev 14: as built after the S3 B-pass (2026-11-11; review `docs/reviews/coach-workout-parity-tile-bpass.md`)
+
+The build followed 3.1.1 (rev 13). The 2-seat B-pass (no P0/P1) changed three behaviours; where this note and an earlier section differ, this note is the as-built truth.
+
+| ID | Change | Supersedes |
+|---|---|---|
+| BP2-F2 | `hasPendingLogSet` is a `log_set` intent with status `executing` (its APPLY is running) and not expired. A card still `pending` (waiting for APPLY) no longer blocks the tile: it may never be applied or may be for another day, while the coach has just promised a tile. The tile shows the counts as they are; a later APPLY re-runs the app's own decision. Tests: the pending card gives `shown`; the mixed batch shows the tile; an earlier batch's `executing` card reaches the dispatcher through `addIntents` (`pendingWrites`). | 3.1 client 2/3, 3.1.1 items 16-17, 5.1 rev 7/8 row, M45a-e, T1A-2, T2B-2, R10 |
+| BP1-F1 | The same-response drop no longer keys on the `logSet` NAME. A tile call is `not_needed` at the call only when a `log_set` intent is already queued; otherwise it is recorded, and the post-loop `tileWillPush()` drops it only if a `log_set` intent was really queued (an invalid `logSet` queues nothing, so the tile still shows). A tile call in a response that also calls `logSet` gets `COMPLETION_TILE_SAME_RESPONSE_NOTE` (model-facing; covers both outcomes). | 3.1 server 1c-1e, M32/M32b |
+| BP1-F3 | The coverage gate reads `requiresCapability` (the literal match and the declaration check) from the comment-stripped source, so a commented-out literal next to a live identifier fails closed. | 3.1.1 gate item, M40 |
+
+Also added (tests only): the post-loop catch is exercised by swapping the registry tool's `intentBuilder` for a throwing one (every tile record `failed`, no tile intent; BP1-F2), and a dispatch with no owner returns success with `ownerChanged` and writes nothing (BP2-F1). BP2-F3 (a `refreshFromHive` could drop an in-flight loading bubble) is accepted with its reason in the review file.
+
 ## Rev 13 changelog (S3 review round 7, completeness; T7D = seat D; no design finding)
 
 | Id | Sev | Disposition | Where |

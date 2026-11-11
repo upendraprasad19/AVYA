@@ -5,6 +5,8 @@ blast_radius: platform
 review_rounds: 7
 ground_truth_verified: true
 verdict: converged
+bpass: accepted
+bpass_review: docs/reviews/coach-workout-parity-tile-bpass.md
 ---
 
 # Plan-review record: coach workout parity S3 (the completion tile tool)
@@ -88,3 +90,71 @@ The seat returned `needs-changes` with four P2s, all text completeness, and no d
 The seat mapped every changelog row of revs 7 to 12 to a 3.1.1 item and confirmed every path and symbol against HEAD. Rev 13 applies all four P2s and the mechanical items (stale anchors, the `:16` wording, the process steps as item 20, the registry-range and Gate 42 notes in item 19). Commit A's tests already carry the reshow case (M59a reddens in commit A's own file, both zones).
 
 Verdict: `converged`. The design has been stable since round 4. The last three rounds found only text that had not been transcribed, and 3.1.1 now holds every build item. The B-pass reviews the built diff against 3.1.1.
+
+## S3 build mutation record (commit B)
+
+Harness: each mutant applied by exact-string replacement (each anchor asserted to occur exactly once, the replacement asserted present), the named tests run (Dart under `TZ=Asia/Kolkata`, plus `TZ=Etc/GMT+12` where listed; Deno with `--no-check`), then every file restored and checked by sha256 (`ALL RESTORED`). Every red below is a named assertion failure, not a compile or syntax error. Numbers are failing test cases.
+
+| id | edit | result |
+|---|---|---|
+| M1 | `requiresCapability` line removed from `requestCompletionTile.ts` | RED: registry (2: the no-caps goldens), tool-loop capability gate (1), tool test (1) |
+| M2 | `'request_completion_tile'` dropped from `kCoachClientCapabilities` | RED: `coach_client_capabilities_test` (1), real-tree gate run (exit 1) |
+| M3 | `_executeRequestCompletionTile` calls `completeOnTap` first | RED: derive-only slice (1), behavioural (6) |
+| M4 | `completeNow` maps to `shown` | RED: all-logged case (1) |
+| M5 | `hasExerciseLogsFor` guard dropped | RED: no-logs case (1) |
+| M6 | owner re-check disabled | RED: owner-change case (1) |
+| M7 | `addIntents` stops partitioning | RED: state-empty and mixed-batch cases (2) |
+| M8 | `filterVisibleIntents` keeps the tile | RED: filter case (1) |
+| M9 | `reshow` ignored (old `created_at` kept) | RED: both reshow-ordering cases, both zones (2 + 2) |
+| M10 | block returned without the capability | RED: routing test |
+| M11 | tile branch sends the generic `QUEUED_NOTE` | RED: case (i) |
+| M12 | FC2 auto-run line never used | RED: case (vi) |
+| M13 | `trigger` enum removed | RED: schema and non-empty-properties cases |
+| M28 | kill switch no longer deletes | RED: kill-switch case |
+| M32 | B-F1 suppression removed entirely | RED: cross-round and same-response cases |
+| M32b | only the per-response check kept | RED: the cross-round cases and (vii) (3) |
+| M33 | FC2 `every` -> `some` | RED: (iv) meal + tile throw case |
+| M36 | kill switch case-insensitive | RED: `"TRUE"` case |
+| M39a | tile status `queued_for_user_confirmation` | RED: case (i) |
+| M39b | `queuedStatus` set on `logSet` | RED: registry "no other tool" case |
+| M40 | gate fail-closed branch neutered (`unreadableCapability: false`) | RED: `ai_tool_dispatcher_coverage_lib_test` (2: identifier write and read tools) |
+| M41a | `swapWorkoutDays.ts` back to the identifier | RED: real-tree gate run ("1 capabilities this gate cannot read") |
+| M41b | tile capability literal altered | RED: literal === const case |
+| M44 | one tile intent pushed per recorded request | RED: case (v) |
+| M45a-e | `hasPendingLogSet` forced false / `pending` dropped / `executing` dropped / `!isExpired` dropped / `log_set` type check dropped | RED: 3 / 2 / 1 / 1 / 1 (the pending, executing, expired and swap_exercise cases, as planned) |
+| M58 | catch reads `intents.length > 0` only | RED: case (vi) (apology, alert `hadQueuedIntent:false`) |
+| M59a | reshow stamps local time | RED: IST 2, GMT+12 3 (the reshow-ordering and UTC cases) |
+| M59b | non-reshow new row stamps local time | GREEN here, as it must be: the tile writes only with `reshow: true`. This mutant reddens in commit A's `coach_completion_prompt_test.dart` (3 cases, both zones; diagnose f3d704). The plan's 5.2 cell naming the tile file for (b) is corrected by this note. |
+| M60 | a third `_maybeCompleteScheduledDay(` call inside the tile method | RED: derive-only (2: the slice and the two-door pin) |
+| M61a / M61b | `memoryIntentSummary` keeps auto-run types / `index.ts` inlines the old expression | RED / RED |
+| M62a-h | addendum before the suffix; addendum absolute; `total_logged >= 1`; `total_planned > total_logged`; precedence bullet removed; rest condition removed; never-bullet unscoped; action-not-read removed | all RED (`completion_tile_routing_test.ts`) |
+
+Survivors: none. One defect was found BEFORE the run by the new behavioural test (the auto-run chain): `addIntents` handed the dispatcher the notifier's own `ref`, and the dispatcher read `pendingToolIntentsProvider` through it, which Riverpod refuses (a provider cannot depend on itself), so the tile would never have shown from the chat. Fixed by passing the notifier's state as `execute(..., pendingIntents:)`; queued cards are added to state first, so a same-batch `log_set` counts as pending (mixed-batch case).
+
+## B-pass round mutation record (after the 2-seat B-pass)
+
+The B-pass (`docs/reviews/coach-workout-parity-tile-bpass.md`) changed three behaviours (plan rev 14): `hasPendingLogSet` is an `executing` `log_set` only; the same-response tile drop is decided after the loop from the real intents; the coverage gate reads the comment-stripped source. The whole set was re-run on the fixed tree with the same harness (54 mutants). M32, M32b and M45a-e were retired because their anchors no longer exist; B1-B5 and S1-S4 cover the same guards in their new form. Every kept M-row above re-ran RED except M59b (GREEN, as recorded). The "mixed-batch case" sentence above is superseded: a same-batch `log_set` card is `pending` and no longer blocks the tile.
+
+| id | edit | result |
+|---|---|---|
+| B1 | F2 reverted (`pending` blocks again) | RED (the waiting-card and mixed-batch cases) |
+| B2 | `executing` -> `pending` | RED (the executing and earlier-batch cases) |
+| B3 | `!isExpired` dropped | RED (expired executing mirror) |
+| B4 | `log_set` type check dropped | RED (executing swap_exercise mirror) |
+| B5 | `hasPendingLogSet` forced false | RED (executing cases) |
+| B6 | owner-null early return removed | RED (no-owner case) |
+| B7 | `addIntents` stops passing `pendingIntents: state` | RED (earlier-batch case: the Riverpod self-read) |
+| B8 | marker stamp dropped from the tile branch | RED (the chain waits on the marker; structure pin) |
+| B9 | `filterVisibleIntents` keeps the tile | RED |
+| S1 | F1 reverted (`responseHasTileSurfacingWrite ||` back in the drop) | RED (the invalid-logSet cases) |
+| S2 | the early `log_set`-already-queued drop removed | RED ([logSet, tile] response shape) |
+| S3 | same-response note -> the tool's `queuedNote` | RED |
+| S4 | `tileWillPush()` ignores intents | RED (valid same-response cases) |
+| S5 | post-loop catch stops marking records `failed` | RED (throwing-builder case) |
+| S6 | post-loop catch rethrows | RED (throwing-builder case) |
+| S7 | gate literal match on the raw source | RED (commented-literal case) |
+| S8 | gate declaration check on the raw source | RED (commented-out declaration case) |
+| S9 | `addIntents` stops adding queued cards to state | RED (log_set still enters state) |
+
+Survivors: none (M59b green as recorded above).
+

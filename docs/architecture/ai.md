@@ -23,9 +23,9 @@ Every chat turn now embeds the user's message via `getEmbedding(text, "RETRIEVAL
 
 **Phase A (accumulation)** has been running since 2026-03-31 (migration `20260331000001_add_pgvector_memory.sql`): `ai-proxy/index.ts:635` + `rolling-context/index.ts:210` embed every chat turn + nightly summary into `memory_embeddings`. No Phase B backfill needed — older coaching_notes reach the coach via the recent-N fallback. Retrieval hit rates become meaningful only after users accumulate ~10+ conversations.
 
-## Tool-calling (since ai-proxy v44, 2026-04-20) — 21 AI coach tools (derive-only surface)
+## Tool-calling (since ai-proxy v44, 2026-04-20) — 22 AI coach tools (derive-only surface)
 
-`ai-proxy` chat channel uses Gemini function-calling via `_shared/tool-loop.ts` (multi-round, max 3 rounds, validation feedback to model). 21 typed tools across 5 families, defined in `_shared/tools/<family>/<tool>.ts` and registered in `_shared/tools/registry.ts` (`ALL_TOOLS`, re-counted live 2026-09-28). Tier filtering: free users see 9 FREE tools; PRO sees 20 or 21 depending on the capability handshake below.
+`ai-proxy` chat channel uses Gemini function-calling via `_shared/tool-loop.ts` (multi-round, max 3 rounds, validation feedback to model). 22 typed tools across 5 families, defined in `_shared/tools/<family>/<tool>.ts` and registered in `_shared/tools/registry.ts` (`ALL_TOOLS`, 22 entries since coach workout parity S3, 2026-11-11). Tier filtering: free users see 9 FREE tools, or 10 with `request_completion_tile`; PRO sees 20 to 22 depending on the capability handshake below.
 
 **Derive-only prune (2026-05-31, ADR-0012):** the surface dropped 24→20 by removing 4 tools that let the AI assert a *derived* value or future state — a progression-gaming / data-integrity hole. Removed: `logPR` (PR derives from `logSet` via `_rescanPrFor`/`loadAllExercisePRs`), `markWorkoutComplete` (completion now derives — a coach `logSet` on a scheduled day auto-calls `markCompleted` via the dispatcher's `_maybeCompleteScheduledDay` once every planned exercise is logged; since 2026-11-10 every coach door decides through the shared `decideCoachDay`, OI-490 / `24e630`), `adjustCaloricTarget` (target stays derived from the plan), `prelog` (no pre-logging — users log raw input daily as they eat). Principle: **the user logs raw input; the app computes the rest.** (Pre-2026-05-16 audit, this doc claimed 20 tools / 6 FREE / 20 PRO — drift from registry growth across Tests #12–#16, since pruned back to 20 with a different composition. Verified live against `_shared/tools/registry.ts` + `test/contracts/derive_only_tool_surface_test.dart`.)
 
@@ -37,7 +37,9 @@ non-array → empty set, only the first 32 raw entries considered, each survivin
 must match `^[a-z_]{1,48}$` or is dropped — silently, never a 400, unlike an over-limit
 `message`/`snapshot_json` which DO 400). An absent/empty `capabilities` set (every
 caller before this field existed, and any client build that predates it) therefore sees
-exactly the 20 legacy tools; a client declaring the capability sees 21. See
+exactly the 20 legacy tools; a client declaring the capability sees 21. A second
+capability, `request_completion_tile` (coach workout parity S3), adds the FREE tool
+`requestCompletionTile`: a client declaring it sees one more, both, 22. See
 `supabase/functions/CLAUDE.md` `consume-day-swap` and
 `lib/features/ai_coach/CLAUDE.md` `coach_swap_workout_days` for the routing block
 (`day_swap_routing.ts`) and the execution-time `capability_blocked` re-check
@@ -46,7 +48,7 @@ being offered it.
 
 | Family | Tools |
 |---|---|
-| Workout (8) | `swapExercise`, `logSet`, `shortenWorkout`, `createCustomExercise`, `modifyWorkoutForInjury`, `rescheduleWeek`, `swapWorkoutDays` (PRO + capability-gated), `generateHotelWorkout` |
+| Workout (9) | `swapExercise`, `logSet`, `shortenWorkout`, `createCustomExercise`, `modifyWorkoutForInjury`, `rescheduleWeek`, `swapWorkoutDays` (PRO + capability-gated), `requestCompletionTile` (FREE + capability-gated, auto-run), `generateHotelWorkout` |
 | Progress (4) | `getProgressSummary`, `getExerciseHistory`, `getPromotionStatus`, `getPRTimeline` |
 | Nutrition (3) | `logMealByText`, `suggestMeal`, `getNutritionHistory` |
 | Plan (5) | `regeneratePlanBlock`, `pausePlan`, `switchGoal`, `createCustomTemplate`, `scheduleTemplate` |
@@ -55,6 +57,8 @@ being offered it.
 **Coach read tools and `workout_log_exercises` (L1b, 2026-10-07):** the progress tools, `weekly-report`, `weekly-recalc`, `pr-detection`, `i-see-you-callout` and `future-prediction` read summary rows through ONE rule (`_shared/live_exercise_rows.ts`, SoT `wle_live_summary_read_contract`): drop tombstones, one live row per (user, workout_log_id, exercise_id), dedupe before any `is_pr` filter or cap. A row's day is the date whose UUID v5 is its `workout_log_id` (`_shared/uuid_v5.ts`, `exercise_day.ts`); `completed_at` is the write time, so day windows select by id, not by `completed_at`. `reps` is CUMULATIVE across sets (tool field `total_reps`); volume = best weight x total reps (still overstates pyramid sets). Long reads page through `fetchPagesBounded` (count on page 0, `truncated` flag); `getPRTimeline` returns at most 50 PRs with `truncated`; `getNutritionHistory` `per_day` attaches items only up to 31 days.
 
 **Hive-first hybrid architecture:** READ tools (e.g. `getProgressSummary`, `getExerciseHistory`, `suggestMeal`) execute server-side and feed Gemini results in same turn. WRITE tools emit typed `ToolIntent` to client; client confirms via card/sheet, then writes Hive + fire-and-forget syncs (matching the existing CLAUDE.md §4.4 rule 1 mutation pattern).
+
+**Auto-run intents (coach workout parity S3, OI-492):** `requestCompletionTile` ("I'm done") is not an APPLY card. The tool loop never queues it inside a round: a call records the request (functionResponse status `tile_requested` with the tool's own `queuedNote`, or `not_needed` when a `log_set` intent is already queued; a tile call in a response that also calls `logSet` gets `COMPLETION_TILE_SAME_RESPONSE_NOTE`, and the post-loop check drops it only if a `log_set` intent was really queued, so an invalid `logSet` never hides the tile) and ONE `request_completion_tile` intent is pushed after the loop, before FC2. `ToolDefinition.queuedStatus` / `queuedNote` are read only by that branch, so every other tool's functionResponse is byte-identical. FC2 uses its own line when every intent is auto-run (`AUTO_RUN_INTENT_TYPES`); the Gemini-throw catch counts a recorded tile request as queued work (`tileWillPush()`). The client runs the intent at once (`kAutoRunIntentTypes`) and re-runs its own rule (`CoachDayCompletion.offerTileIfPartial`): the tile shows only for a part-logged IST today and no `log_set` APPLY is running (a card still waiting for APPLY does not block it), and nothing is ever completed. The memory marker is ` [requested: completion tile]` (`memoryIntentSummary`). Kill switch `DISABLE_COMPLETION_TILE_TOOL`.
 
 3 confirmation classes: trivial (5s auto-confirm card), reviewable (explicit inline card), destructive (bottom-sheet with diff preview). Per-intent dispatch in `lib/features/ai_coach/services/tool_dispatcher.dart`. 1-hour intent TTL + concurrent-edit guards on every dispatch.
 

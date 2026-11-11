@@ -151,6 +151,37 @@ DateTime? utcDateFromIstDateStr(String dateStr) {
   return DateTime.utc(y, m, d);
 }
 
+/// Coach workout parity S3 (OI-492): what one "I'm done" tile request did
+/// ([CoachDayCompletion.offerTileIfPartial]). Only [shown] writes; every other
+/// outcome writes nothing and is logged as `completion_tile_not_shown`.
+enum CompletionTileOutcome {
+  /// The day is part logged: the tile row was (re-)written for IST today.
+  shown,
+
+  /// The day is already completed (`alreadyDone` or `repairDone`).
+  alreadyDone,
+
+  /// No plan row, rest, moved/dropped, or (never for today) a future day.
+  notCountable,
+
+  /// Every planned exercise is logged (`completeNow`): the backstop or
+  /// Train's Complete button covers it.
+  allLogged,
+
+  /// Nothing is logged today: a tap would be refused (`refusedNoLogs`).
+  noLogs,
+
+  /// A `log_set` card is still waiting for APPLY (or applying): its APPLY
+  /// surfaces the tile with the right counts.
+  pendingWrites,
+
+  /// The Hive owner changed before the write.
+  ownerChanged,
+
+  /// An exception (recorded); nothing written.
+  failed,
+}
+
 /// What one Complete tap did ([CoachDayCompletion.completeOnTap]).
 enum CoachTapResult {
   completed,
@@ -212,6 +243,100 @@ class CoachDayCompletion {
     return (decision == CoachDayDecision.completeNow ||
             decision == CoachDayDecision.askToComplete) &&
         WorkoutReadService.instance.hasExerciseLogsFor(date);
+  }
+
+  /// Test seam (coach workout parity S3): awaited between the decision and
+  /// the tile write, so a test can change the Hive owner there.
+  @visibleForTesting
+  static Future<void> Function()? debugBeforeTileWrite;
+
+  /// Coach workout parity S3 (OI-492, founder decision C): the "I'm done"
+  /// tile. Re-runs the app's own rule for IST today and (re-)shows the
+  /// completion tile ONLY when the day is part logged: `askToComplete` and at
+  /// least one exercise log today. The row is written with `reshow: true`
+  /// (a fresh UTC `created_at`, so it sorts under the reply that asked for
+  /// it; `resolved_at` cleared). Never completes anything: the tap stays the
+  /// user's ([completeOnTap]). [hasPendingLogSet] (computed by the coach
+  /// dispatcher; this service never imports the coach feature) wins first: a
+  /// `log_set` APPLY running right now would make the counts stale, and its
+  /// own write surfaces the tile. A card still waiting for APPLY does not
+  /// set the flag (B-pass seat 2 F2).
+  Future<CompletionTileOutcome> offerTileIfPartial({
+    required bool hasPendingLogSet,
+  }) async {
+    final owner = HiveUserSession.currentOwnerFullId;
+    var outcome = CompletionTileOutcome.failed;
+    try {
+      final date = istTodayStr();
+      final day = utcDateFromIstDateStr(date);
+      final row = day == null
+          ? null
+          : WorkoutScheduleReadService.instance.rawScheduleRow(day);
+      final decision = decideCoachDay(
+        rawRow: row,
+        loggedCount: (day == null || row == null)
+            ? 0
+            : loggedPlannedExerciseCount(day, row),
+        hasWlog: day != null &&
+            HiveService.instance.workoutBox.get(WorkoutWriteService.wlogKey(day))
+                is Map,
+        dateStr: date,
+        istToday: date,
+      );
+      if (hasPendingLogSet) {
+        outcome = CompletionTileOutcome.pendingWrites;
+      } else {
+        switch (decision) {
+          case CoachDayDecision.alreadyDone:
+          case CoachDayDecision.repairDone:
+            outcome = CompletionTileOutcome.alreadyDone;
+          case CoachDayDecision.future:
+          case CoachDayDecision.noPlan:
+          case CoachDayDecision.rest:
+          case CoachDayDecision.terminal:
+            outcome = CompletionTileOutcome.notCountable;
+          case CoachDayDecision.completeNow:
+            outcome = CompletionTileOutcome.allLogged;
+          case CoachDayDecision.askToComplete:
+            outcome = WorkoutReadService.instance.hasExerciseLogsFor(date)
+                ? CompletionTileOutcome.shown
+                : CompletionTileOutcome.noLogs;
+        }
+      }
+      if (outcome == CompletionTileOutcome.shown) {
+        final hook = debugBeforeTileWrite;
+        if (hook != null) await hook();
+        if (HiveUserSession.currentOwnerFullId != owner) {
+          outcome = CompletionTileOutcome.ownerChanged;
+        } else {
+          await CompletionPromptStore.instance.write(
+            dateStr: date,
+            plannedCount: plannedExercisesOf(row!).length,
+            loggedCount: loggedPlannedExerciseCount(day!, row),
+            reshow: true,
+          );
+        }
+      }
+    } catch (e, st) {
+      outcome = CompletionTileOutcome.failed;
+      debugPrint('[CoachDayCompletion] offerTileIfPartial failed: $e');
+      unawaited(
+        ErrorTelemetry.recordNonFatal(
+          e,
+          st,
+          reason: 'coach_completion_tile_offer',
+        ),
+      );
+    }
+    if (outcome != CompletionTileOutcome.shown) {
+      unawaited(
+        ErrorTelemetry.logEvent(
+          'completion_tile_not_shown',
+          message: outcome.name,
+        ),
+      );
+    }
+    return outcome;
   }
 
   /// Completes [date] (`yyyy-MM-dd`, IST) on the user's explicit tap.

@@ -99,7 +99,7 @@ Deno.test("swapWorkoutDays — metadata: PRO, reviewable, workout family, write,
   assertEquals(swapWorkoutDaysTool.requiresCapability, "swap_workout_days");
 });
 
-Deno.test("swapWorkoutDays — requiresCapability is the CAPABILITY_SWAP_WORKOUT_DAYS constant, not a re-typed literal", async () => {
+Deno.test("swapWorkoutDays — requiresCapability is a string literal equal to the CAPABILITY_SWAP_WORKOUT_DAYS constant (the coverage gate reads only literals)", async () => {
   const { CAPABILITY_SWAP_WORKOUT_DAYS } = await import("../../../day_swap_routing.ts");
   assertEquals(swapWorkoutDaysTool.requiresCapability, CAPABILITY_SWAP_WORKOUT_DAYS);
 });

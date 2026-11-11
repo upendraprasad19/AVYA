@@ -29,6 +29,11 @@
  *                                    model can self-correct on the next round
  *         elif tool.kind === 'read': run handler with maxLatencyMs timeout,
  *                                    feed back the data (or error)
+ *         elif requestCompletionTile: (coach workout parity S3) no intent
+ *                                    in the loop; record the request (or
+ *                                    "not_needed" when sets are logged this
+ *                                    turn) and push ONE auto-run intent
+ *                                    after the loop
  *         else (write):              build typed intent via tool.intentBuilder,
  *                                    push to intents[], feed back
  *                                    {status: "queued_for_user_confirmation"}
@@ -70,6 +75,14 @@ import {
   refundableFailure,
 } from "./gemini.ts";
 import { type AttemptStatusLike, reportGeminiExhaustion } from "./gemini_failure_alert.ts";
+import {
+  AUTO_RUN_INTENT_TYPES,
+  COMPLETION_TILE_FC2_AUTO_TEXT,
+  COMPLETION_TILE_NOT_NEEDED_NOTE,
+  COMPLETION_TILE_SAME_RESPONSE_NOTE,
+  REQUEST_COMPLETION_TILE_TOOL_NAME,
+  TILE_SURFACING_TOOL_NAMES,
+} from "./completion_tile_routing.ts";
 
 const MAX_ROUNDS = 3;
 
@@ -307,6 +320,17 @@ export async function runToolLoop(opts: ToolLoopOptions): Promise<ToolLoopResult
   let hadHardFailure = false;
   let failureKind: ToolLoopResult["failureKind"] = "none";
 
+  // Coach workout parity S3 (requestCompletionTile): the tile is never queued
+  // inside the loop. A call only records the request; after the loop ONE
+  // intent is pushed, and only when no log_set intent exists (the logged sets
+  // surface the tile themselves once the user taps APPLY). `tileLogRecords`
+  // are the toolCallsLog entries of the recorded requests, rewritten to
+  // "not_needed" if a later round logs sets.
+  let tileRequested = false;
+  const tileLogRecords: ToolCallRecord[] = [];
+  const tileWillPush = () =>
+    tileRequested && !intents.some((i) => i.type === "log_set");
+
   // Tier-filtered tool list passed to the model. Pre-converted once
   // (registry is small; conversion is cheap; doing it once avoids
   // re-walking the Zod schemas every round).
@@ -357,7 +381,11 @@ export async function runToolLoop(opts: ToolLoopOptions): Promise<ToolLoopResult
       // needs to know whether the user actually got their action done
       // (logSet etc. queued) or got nothing at all. Read BEFORE the FC2
       // block below so both consult the identical, un-mutated `intents`.
-      const hadQueuedIntent = intents.length > 0;
+      // Coach workout parity S3: a tile request recorded in an earlier round
+      // is pushed only after the loop, so it is counted here through
+      // `tileWillPush()`; otherwise a throw in the summarisation round would
+      // apologise and refund over a tile the user is about to see.
+      const hadQueuedIntent = intents.length > 0 || tileWillPush();
       await reportGeminiExhaustion(
         opts.ctx.sb,
         "ai_proxy_gemini_exhausted",
@@ -414,6 +442,14 @@ export async function runToolLoop(opts: ToolLoopOptions): Promise<ToolLoopResult
     // Process each tool call. Each call yields exactly one functionResponse
     // part, in order — Gemini matches them positionally, so 1:1 is mandatory.
     const responseParts: GeminiPart[] = [];
+    // Coach workout parity S3: a tile request in a response that also CALLS
+    // logSet gets a note that covers both outcomes. It is NOT dropped here:
+    // that logSet may fail validation and queue nothing, so the post-loop
+    // `tileWillPush()` decides from the real intents (B-pass seat 1 F1).
+    // Computed before the per-call loop, so call order does not matter.
+    const responseHasTileSurfacingWrite = resp.functionCalls.some((c) =>
+      TILE_SURFACING_TOOL_NAMES.has(c.name)
+    );
 
     for (const call of resp.functionCalls) {
       const startMs = Date.now();
@@ -493,6 +529,56 @@ export async function runToolLoop(opts: ToolLoopOptions): Promise<ToolLoopResult
                 path: i.path.join("."),
                 message: i.message,
               })),
+            },
+          },
+        });
+        continue;
+      }
+
+      // ── Completion tile (coach workout parity S3) ─────────────────
+      // After the capability check and the Zod validation (an invalid
+      // trigger is invalid_args above). No intent is built here: the request
+      // is recorded and ONE intent is pushed after the loop. The generic
+      // write branch below is untouched, so every other tool's
+      // functionResponse is byte-identical.
+      if (call.name === REQUEST_COMPLETION_TILE_TOOL_NAME) {
+        // A log_set intent ALREADY queued (an earlier round, or earlier in
+        // this response) is definite: its APPLY surfaces the tile.
+        if (intents.some((i) => i.type === "log_set")) {
+          toolCallsLog.push({
+            name: call.name,
+            status: "not_needed",
+            args: parsed.data as Record<string, unknown>,
+          });
+          responseParts.push({
+            functionResponse: {
+              name: call.name,
+              response: {
+                status: "not_needed",
+                note: COMPLETION_TILE_NOT_NEEDED_NOTE,
+              },
+            },
+          });
+          continue;
+        }
+        tileRequested = true;
+        const record: ToolCallRecord = {
+          name: call.name,
+          status: "tile_requested",
+          args: parsed.data as Record<string, unknown>,
+        };
+        toolCallsLog.push(record);
+        tileLogRecords.push(record);
+        responseParts.push({
+          functionResponse: {
+            name: call.name,
+            response: {
+              status: tool.queuedStatus ?? "tile_requested",
+              ...(responseHasTileSurfacingWrite
+                ? { note: COMPLETION_TILE_SAME_RESPONSE_NOTE }
+                : writeClaimRule && tool.queuedNote
+                ? { note: tool.queuedNote }
+                : {}),
             },
           },
         });
@@ -645,6 +731,35 @@ export async function runToolLoop(opts: ToolLoopOptions): Promise<ToolLoopResult
     messages.push({ role: "user", parts: responseParts });
   }
 
+  // Coach workout parity S3: the single post-loop tile push. Reached from
+  // every exit (terminal text, rounds exhausted, the Gemini-throw break) and
+  // BEFORE the FC2 block, so `intents` is complete when FC2 decides. A
+  // repeated request only set the same flag, so at most ONE tile intent. A
+  // log_set from a LATER round drops the request: its log entries become
+  // "not_needed".
+  if (tileWillPush()) {
+    const tileTool = byName(REQUEST_COMPLETION_TILE_TOOL_NAME);
+    try {
+      if (!tileTool?.intentBuilder) throw new Error("no_intent_builder");
+      const partial = await tileTool.intentBuilder(
+        { trigger: "user_says_done" },
+        opts.ctx,
+      );
+      intents.push({
+        ...partial,
+        id: crypto.randomUUID(),
+        createdAt: new Date().toISOString(),
+      });
+    } catch (e) {
+      for (const r of tileLogRecords) {
+        r.status = "failed";
+        r.error = String(e);
+      }
+    }
+  } else if (tileRequested) {
+    for (const r of tileLogRecords) r.status = "not_needed";
+  }
+
   // Loop exhausted without a terminal text response.
   // B3: Replace the raw "ran out of steps" leak with a Captain-voice
   // degrade-gracefully message. The original copy leaked internal
@@ -657,8 +772,11 @@ export async function runToolLoop(opts: ToolLoopOptions): Promise<ToolLoopResult
     // the queued action POSITIVELY — never leak an apology / "ran out of steps"
     // message over the confirmation card the user is looking at.
     if (intents.length > 0) {
-      finalText =
-        "Copy that, Recruit — I've queued that below. Review the details and tap APPLY to confirm.";
+      // Coach workout parity S3: when every intent is auto-run (the tile)
+      // there is no APPLY card to point at.
+      finalText = intents.every((i) => AUTO_RUN_INTENT_TYPES.has(i.type))
+        ? COMPLETION_TILE_FC2_AUTO_TEXT
+        : "Copy that, Recruit — I've queued that below. Review the details and tap APPLY to confirm.";
     } else {
       console.log(`[tool-loop] max rounds (${maxRounds}) exhausted without terminal response`);
       finalText = HARD_FAILURE_APOLOGY_ROUNDS_EXHAUSTED;
