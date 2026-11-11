@@ -1915,10 +1915,7 @@ class WorkoutRepository {
   /// from Profile Service Record on screen build (rare).
   List<double> getAllExerciseLogKeysForLifetimeSum() {
     final out = <double>[];
-    for (final v in _hive.workoutBox.values) {
-      if (v is! Map) continue;
-      final type = v['type']?.toString();
-      if (type != 'exercise_log') continue;
+    for (final v in WorkoutReadService.exlogRows(_hive.workoutBox)) {
       final raw = v['volume_kg'];
       if (raw is num) out.add(raw.toDouble());
     }

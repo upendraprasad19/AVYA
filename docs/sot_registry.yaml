@@ -112,8 +112,8 @@ concepts:
           NO LONGER hand-rolled here — both delegate to WorkoutReadService
           (below), so this reader and the edit sheet cannot disagree again.
       - file: lib/core/services/workout_read_service.dart
-        line_range: 134-238
-        method: aggregateSetCount (:186) / hasAggregateSetCount (:202) / aggregateDurationSeconds (:227)
+        line_range: 215-278
+        method: aggregateSetCount (:227) / hasAggregateSetCount (:243) / aggregateDurationSeconds (:268)
         semantic: aggregated
         fields_read: [set_number, sets_completed, sets, sets_detail, duration_seconds, duration_sec]
         notes: |
@@ -1597,7 +1597,7 @@ concepts:
           made TODAY without waiting for tomorrow's rollover) is still
           NOT wired — filed as OI-267, not silently dropped.
       - file: lib/core/services/badge_service.dart
-        line_range: 119-122
+        line_range: 155-158
         method: BadgeService weight-log counter
         semantic: aggregated
         fields_read: [healthBox.keys with prefix weight_]
@@ -1982,7 +1982,7 @@ concepts:
         semantic: per-row
         fields_read: [completed_at]
       - file: lib/core/services/badge_service.dart
-        line_range: 88-98
+        line_range: 129-132
         method: totalWorkouts
         semantic: count
         fields_read: [type]
@@ -4177,7 +4177,7 @@ concepts:
       so partial-failure recovery is row-level instead of template-level.
     writers:
       - file: lib/features/train/providers/train_provider.dart
-        line_range: 2502-2515
+        line_range: 2437-2450
         method: TemplatesNotifier.saveTemplate (single-day; multi-day templates
           land via tool_dispatcher.createCustomTemplate entry below)
       - file: lib/features/train/screens/template_builder_screen.dart
@@ -4226,7 +4226,7 @@ concepts:
     reader_manifest_complete: true
     readers:
       - file: lib/features/train/providers/train_provider.dart
-        line_range: 2484-2500
+        line_range: 2419-2435
         method: TemplatesNotifier.build
         semantic: pass-through
         fields_read: [type, name, exercises, assigned_days, exercise_count, group_id, group_day_index, group_total_days, last_used_at, created_at, updated_at]
@@ -4740,7 +4740,7 @@ concepts:
           Forward-filled across 7-day window (last-known value carries
           on un-weighed days). Skipping is a bug — gap should not show 0.
       - file: lib/core/services/badge_service.dart
-        line_range: 119-122
+        line_range: 155-158
         method: BadgeService weight-log count
         semantic: aggregated
         fields_read: [healthBox.keys with prefix weight_]
@@ -5473,7 +5473,7 @@ concepts:
     reader_manifest_complete: false
     readers:
       - file: lib/core/services/badge_service.dart
-        line_range: 92-136
+        line_range: 126-171
         method: checkAll
         semantic: pass-through
         fields_read: [current_streak_weeks]
@@ -7919,7 +7919,7 @@ concepts:
       single-set value across a logged exercise" delegates here.
     writers:
       - file: lib/core/services/workout_read_service.dart
-        line_range: 1-182
+        line_range: 1-184
         method: WorkoutReadService (static + instance methods)
         notes: |
           Reads only — the "writer" label here is the canonical owner
@@ -17888,3 +17888,59 @@ concepts:
         semantic: size-only
         notes: budgets docs/audit/OPEN_INDEX.md by size; measured as built locally, CI builds it first.
     regression_test: test/scripts/local_indexes_e2e_test.dart
+
+  # 81c4e2 — exlog_* rows are found by KEY, never by the `type` field (only the restore writer stamps it).
+  - concept: exlog_rows_read_path
+    domain: workout
+    behavioral_test_path: test/contracts/exlog_type_filter_reader_drift_behavioral_test.dart
+    description: |
+      The whole-box walk over exlog_* rows. WorkoutReadService.exlogRows(box) is the ONE key predicate (key starts
+      with exlog_ and value is a Map; yields a copy). WorkoutWriteService.logExercise (the device writer) never
+      stamps type; only _restoreExerciseLogs stamps type 'exercise_log', so a reader that filters on type sees
+      restored rows and nothing logged on the phone (81c4e2; earlier instance 89d56c). Readers: the FINISH PR scan
+      (per-set maxima, exerciseNameKey, skips rows dated on the session date), BadgeService.countBeatenPrs (a row
+      beating the max of STRICTLY earlier IST dates, earlier max > 0, no is_pr read; founder 2026-11-10) and the
+      Profile lifetime volume. Guard: test/contracts/exlog_type_field_read_ban_test.dart bans the quoted literal
+      'exercise_log' in lib/ outside the restore writer's one map entry.
+    writers:
+      - file: lib/core/services/workout_write_service.dart
+        line_range: 135-420
+        method: logExercise (device writer; no type field)
+        semantic: per-row
+      - file: lib/core/services/sync/sync_workout.dart
+        line_range: 972-1230
+        method: _restoreExerciseLogs (stamps type 'exercise_log')
+        semantic: per-row
+    reader_manifest_complete: false
+    readers:
+      - file: lib/core/services/workout_read_service.dart
+        line_range: 332-345
+        method: exlogRows
+        semantic: per-row
+        fields_read: [key prefix exlog_]
+      - file: lib/features/train/providers/train_provider.dart
+        line_range: 2072-2110
+        method: ActiveWorkoutNotifier FINISH PR scan
+        semantic: max
+        fields_read: [exercise_name, sets, weight_kg, reps_completed, date]
+      - file: lib/core/services/badge_service.dart
+        line_range: 92-122
+        method: countBeatenPrs
+        semantic: count
+        fields_read: [exercise_name, sets, weight_kg, date]
+      - file: lib/core/services/badge_service.dart
+        line_range: 126-171
+        method: checkAll (totalPrs)
+        semantic: count
+        fields_read: [via countBeatenPrs]
+      - file: lib/features/train/repositories/workout_repository.dart
+        line_range: 1916-1923
+        method: getAllExerciseLogKeysForLifetimeSum
+        semantic: aggregated
+        fields_read: [volume_kg]
+    regression_test: test/contracts/exlog_type_field_read_ban_test.dart
+    hive:
+      box: workoutBox
+      key_formula: "exlog_<IST date>_<uuid5 8 hex> (workout_write_service.exlogKey)"
+    sync_methods: [_syncExerciseLogs]
+    restore_methods: [_restoreExerciseLogs]
