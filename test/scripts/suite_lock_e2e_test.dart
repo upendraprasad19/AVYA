@@ -10,6 +10,7 @@
 // children below never inherit it from such a suite; the one scenario that sets it says so in `allowControl`.
 //
 // Linux-only where it reads /proc (the stub's fd-9 probe); flock is required (the VPS has /usr/bin/flock).
+@TestOn('linux')
 @Timeout(Duration(minutes: 5))
 library;
 
@@ -226,7 +227,7 @@ void main() {
 
     test('--no-wait with the lock held returns 1 at once and names the last recorded holder', () async {
       File('${fx.lockFile}.holder').writeAsStringSync('pid=4242 since=x dir=/somewhere\n');
-      await holdLockFor(fx);
+      await _holdLockFor(fx);
       final r = await fx.start('. scripts/_suite_lock.sh; suite_lock_acquire --no-wait; echo "rc=\$?"');
       expect(await r.done.timeout(const Duration(seconds: 10)), 0);
       expect(r.out.toString(), contains('rc=1'));
@@ -234,12 +235,28 @@ void main() {
     });
 
     test('with the nesting marker the waiting mode returns 0 at once, even with the lock held', () async {
-      await holdLockFor(fx);
+      await _holdLockFor(fx);
       final r = await fx.start('. scripts/_suite_lock.sh; suite_lock_acquire; echo "rc=\$?"',
           env: {_marker: '1'}, allowControl: {_marker});
       expect(await r.done.timeout(const Duration(seconds: 10)), 0);
       expect(r.out.toString(), contains('rc=0'));
       expect(r.err.toString(), isEmpty, reason: 'the marker path is silent');
+    });
+
+    test('the lock is shared by every worktree of the clone: held in the main checkout, a linked worktree is refused', () async {
+      for (final args in [
+        ['-c', 'user.email=t@example.com', '-c', 'user.name=t', 'commit', '--quiet', '--allow-empty', '-m', 'seed'],
+        ['worktree', 'add', '--quiet', '${fx.root}/wt'],
+      ]) {
+        final g = runSpawn('git', args, why: 'suite_lock: ${args.join(' ')}', workingDirectory: fx.repo);
+        expect(g.exitCode, 0, reason: '${g.stderr}');
+      }
+      Directory('${fx.root}/wt/scripts').createSync();
+      File('scripts/_suite_lock.sh').copySync('${fx.root}/wt/scripts/_suite_lock.sh');
+      await _holdLockFor(fx);
+      final r = await fx.start('cd "${fx.root}/wt" && . scripts/_suite_lock.sh; suite_lock_acquire --no-wait; echo "rc=\$?"');
+      expect(await r.done.timeout(const Duration(seconds: 10)), 0);
+      expect(r.out.toString(), contains('rc=1'), reason: 'the linked worktree must resolve the SAME common-dir lock: ${r.err}');
     });
 
     test('the waiting mode with a free lock returns 0 and records the holder', () async {
@@ -274,7 +291,7 @@ void main() {
 
     test('another suite holds the lock: the full-suite path refuses at once (exit 1) and never runs the suite', () async {
       stageHook(brokenHelper: false);
-      await holdLockFor(fx);
+      await _holdLockFor(fx);
       final r = await pushFull();
       expect(await r.done.timeout(const Duration(seconds: 30)), 1, reason: '${r.out}\n${r.err}');
       expect(hookCalls(), ['analyze'], reason: 'analyze runs, the suite does not');
@@ -283,7 +300,7 @@ void main() {
 
     test('the same, with the nesting marker: the suite runs (a hook inside a locked suite must not wait on it)', () async {
       stageHook(brokenHelper: false);
-      await holdLockFor(fx);
+      await _holdLockFor(fx);
       final r = await pushFull(env: {_marker: '1'}, allow: {_marker});
       expect(await r.done.timeout(const Duration(seconds: 30)), 0, reason: '${r.out}\n${r.err}');
       expect(hookCalls(), ['analyze', 'test']);
@@ -331,9 +348,11 @@ void main() {
   });
 }
 
-/// Holds the throwaway repo's lock from a separate `flock … sleep` process until the fixture is disposed.
-Future<void> holdLockFor(_Fx fx) async {
-  await fx.start('exec flock "${fx.lockFile}" sleep 30');
+/// Holds the throwaway repo's lock until the fixture is disposed. ONE process: the shell takes the lock on fd 9 and
+/// then becomes `sleep` (exec keeps the pid and the fd), so there is no forked child that a kill could orphan
+/// (`flock <file> sleep` forks one).
+Future<void> _holdLockFor(_Fx fx) async {
+  await fx.start('exec 9>>"${fx.lockFile}"; flock 9; exec sleep 30');
   await fx.waitFor(() {
     final t = runSpawn('flock', ['-n', fx.lockFile, 'true'], why: 'suite_lock: is the lock held yet');
     return t.exitCode != 0;

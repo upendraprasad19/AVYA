@@ -4,7 +4,7 @@ blast_radius: platform
 review_rounds: 3
 ground_truth_verified: true
 verdict: converged
-bpass: pending
+bpass: accepted
 bpass_review: docs/reviews/review-ci-suite-lock-bpass.md
 ---
 
@@ -43,3 +43,10 @@ only at catastrophic tier (header :5-9); local full suite 76:52–116:28 min ove
 - B (`test/scripts/suite_lock_e2e_test.dart`, 10 mutants, every one red): no serialisation 4; no `9>&-` in the runner
   2; missing-flock returns 1 → 1; marker ignored 2; `--no-wait` ignored 2; no `sh -n` guard in pre-push 2; no exec
   guard 2; runner without marker 1; pre-push acquire removed 2; pre-commit FULL acquire removed 1.
+
+## B-pass
+
+`docs/reviews/review-ci-suite-lock-bpass.md` (fresh Sonnet seat on `0867aa61` after `land_pr --ci-only` → `ci-green`):
+no P0–P2, three P3 (§0 hook summary + FRESH_CLONE.md, git < 2.31 common-dir resolution, a test-file analyzer info
+and platform guard), all fixed on the branch; a cross-worktree lock test was added and the lock-holder fixture made a
+single process.

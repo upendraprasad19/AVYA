@@ -51,9 +51,14 @@ suite_lock_acquire() {
   if [ "${AVYA_SUITE_LOCK_HELD:-}" = "1" ]; then
     return 0
   fi
-  _sl_dir=$(git rev-parse --path-format=absolute --git-common-dir 2>/dev/null) || _sl_dir=""
+  # `--git-common-dir` may print a RELATIVE path; resolve it with cd/pwd (portable to git < 2.31, which lacks
+  # `--path-format=absolute`). Two steps, so an empty answer can never become `cd ""` (= stay here).
+  _sl_dir=$(git rev-parse --git-common-dir 2>/dev/null) || _sl_dir=""
+  if [ -n "$_sl_dir" ]; then
+    _sl_dir=$(cd "$_sl_dir" 2>/dev/null && pwd) || _sl_dir=""
+  fi
   if [ -z "$_sl_dir" ]; then
-    echo "[suite-lock] WARNING: not inside a git repository; running WITHOUT the one-suite-at-a-time lock." >&2
+    echo "[suite-lock] WARNING: cannot resolve the git common dir (not inside a git repository?); running WITHOUT the one-suite-at-a-time lock." >&2
     return 0
   fi
   if ! command -v flock >/dev/null 2>&1; then
