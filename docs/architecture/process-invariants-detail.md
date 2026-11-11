@@ -86,7 +86,8 @@
   `safe_push_terminal_result_record_writer_to_reader_test.dart` (12, the
   shell-writer/Dart-reader key contract both ways) + `safe_push_test.dart`
   (12 new, real repos) = **51**, mutation-proven on 15 legs.
-- **Don't manually re-run the full `flutter test`** when the hooks/CI will run it anyway — run targeted tests during dev; CI on the PR + `main` are the full-suite gates, and pre-push on a `main`/`develop` push at ≥account (a ≥account BRANCH push skips the local suite since 2026-10-10, OI-275; merge a PR only via `sh scripts/safe_pr_merge.sh <pr>`). CI is the full-suite source-of-truth.
+- **Never run the full `flutter test` by hand** — run targeted tests during dev; CI on the PR + `main` are the full-suite gates, and pre-push on a `main`/`develop` push at ≥account (a ≥account BRANCH push skips the local suite since 2026-10-10, OI-275; merge a PR only via `sh scripts/safe_pr_merge.sh <pr>`). CI is the full-suite source-of-truth; review rounds take it through `sh scripts/land_pr.sh <pr> --ci-only` (§4.12.8). A LOCAL full run goes only through `sh scripts/run_full_suite.sh` (in the background): CI's invocation under a machine-wide `flock` (`scripts/_suite_lock.sh`), so a second local suite waits instead of competing for the cores; the hooks' own full-suite paths (pre-push `run_full_suite`, `PRE_COMMIT_FULL`/`PRE_COMMIT_LEGACY`) take the same lock with `--no-wait` and refuse (exit 1) while another suite runs. **Why (2026-11-11):** the 4-core VPS (1 thread per core) sat at 0 % idle, load 9.6, run queue 3–7, `wa`/`si`/`so` 0 — CPU-bound only, with 15 GB RAM free — because two sessions ran full suites at once; a local full suite measured 76:52–116:28 min over 11 runs (2026-11-09..11) against ~16 min on CI's 4 shards, and five full local runs finished that one day. Stated limits: a full `flutter test` typed by hand is not serialised (only this rule stands against it); `/build-apk` Gate 5 stays a bare `flutter test` (it also runs the goldens; `--from-green` skips it). Plan `docs/plans/review-ci-suite-lock.md`.
+- **Standing permission for review CI (founder, 2026-11-11):** committing on the session's own feature branch, opening that branch's PR and pushing it, for the §4.12.8 CI leg, need no per-action ask ("I give you the standing permission to push feature branches for review CI"; CI runs only for a PR, so the commit and the PR are part of the same act). It never covers `main`/`develop`, a merge, an APK build, a live prod apply or --no-verify. Review-CI pushes are exempt from "push once per logical batch": each new push supersedes the PR's previous run (`test.yml` concurrency group).
 - APK build from a CI-green, already-pushed `main` may use `/build-apk --from-green` to skip the redundant gate re-run (keeps the clean build + size + on-main/versionCode/.env gates).
 - **≥account code-review is SELF-INITIATED, before the merge.** For any batch whose blast-radius is ≥`account` and that touches code / schema / Edge Functions, run `/code-review` (B-pass) BEFORE the `--no-ff` merge to `main` — do NOT wait to be asked. The pre-commit echo (§0) is a reminder, not the gate; the discipline is the agent's. (Docs/process-only ≥account changes — e.g. CLAUDE.md edits — take a self-consistency review of the wording instead of an adversarial bug-hunt.) Codified 2026-06-07 after a ≥account alert batch merged to local `main` un-reviewed and a P0 (alert blind to `event`-coded failures) survived until a founder-prompted push-time review caught it.
 - **Live prod apply needs its own explicit go.** Applying a migration (`apply_migration`) or deploying an Edge Function to the prod project requires explicit per-action authorization EVEN WHEN the batch plan was approved — plan approval ≠ deploy approval. A classifier block on a live apply is CORRECT; get the explicit ok, never work around it.
@@ -297,13 +298,24 @@ Two standing invariants, codified after a 4-round pre-implementation review of t
    parallel, integrated in one pass, with the coordinator re-verifying one mutation per unit by
    hand (§4.4 rule 21) rather than trusting the units' self-reported reds.
 
-8. **Full gate loop before review dispatch (NON-NEGOTIABLE — adopted from ICANBEFITTER, 2026-09-23).**
+8. **Full gate loop before review dispatch (NON-NEGOTIABLE — adopted from ICANBEFITTER, 2026-09-23; CI leg 2026-11-11).**
    Before dispatching ANY review round that has a diff to look at, run the COMPLETE gate suite:
    ```bash
-   flutter analyze --no-fatal-infos   # the WHOLE project, exactly as pre-push runs it
-   flutter test
-   dart run scripts/pre-commit.sh   # or attempt git commit to trigger the loop
+   flutter analyze --no-fatal-infos   # LOCAL: the WHOLE project, exactly as pre-push runs it
+   sh scripts/pre-commit.sh           # LOCAL: or attempt the commit to trigger the loop
+   # the full flutter test, from CI (2026-11-11): commit the draft, open the branch's PR (not a draft), then
+   sh scripts/land_pr.sh <pr> --ci-only   # in the background; dispatch only on `result: ci-green`
    ```
+   **The full suite comes from CI since 2026-11-11** (founder decision, plan `docs/plans/review-ci-suite-lock.md`).
+   Until then this step ran `flutter test` locally before every review dispatch, i.e. 2–4 full local suites per batch
+   on top of CI's own runs; on the 4-core VPS one took 76:52–116:28 min (11 runs, 2026-11-09..11) against ~16 min on
+   CI's 4 shards, and two sessions' suites at once starved the box (load 9.6, 0 % idle). `--ci-only` syncs with main,
+   pushes (standing permission, §4.3 above) and waits for the SAME judge `safe_pr_merge` uses, then stops before the
+   merge; `ci-green` (exit 0, shared with `merged`, so read the word) is a review gate, not merge-readiness. The sync
+   may add a merge commit, and the review is dispatched after it, on the head that went green. **Catastrophic tier
+   exception:** `check_code_review_pass_exists.dart` blocks the COMMIT of a catastrophic diff until a review of the
+   STAGED diff exists, so CI cannot run before that review: such a batch takes its pre-review full suite locally,
+   `sh scripts/run_full_suite.sh` (one local suite at a time, see §4.3).
    The analyze line was `flutter analyze lib/` until 2026-10-24: the `local-indexes` batch (platform tier) passed that loop, two reviewer rounds and its own full suite, and a B-pass seat then found a `warning -` (`unnecessary_non_null_assertion`) in a NEW file under `test/scripts/`. `pre-push` runs `flutter analyze --no-fatal-infos` on EVERY push and aborts on a warning, so the branch could not have been pushed; `lib/` alone cannot see `test/` or `scripts/`, which is where a platform-tier batch writes most of its code.
    NOT a hand-picked subset. Hand-picked subsets miss gates. A review that only runs "the relevant ones" is choosing which gates the next reviewer does NOT see. The measure: a `profile-phase-fixes` batch ran 8 gates by hand, skipped 2, and the commit failed on one of the skipped ones. That gap did not exist in the review because nothing in the review ran that gate. Run the full loop — the loop exists to remove the judgment about which gates are relevant.
 

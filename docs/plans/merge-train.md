@@ -127,6 +127,7 @@ closed. `gh` calls have a deadline (`--gh-timeout-ms`, default 60 s); ten consec
 | 5 | `record-failed` | the replay of the plan-review-record gate did not print its PASS line |
 | 6 | `merge-refused` | `safe_pr_merge.sh` exited 1 and the PR is not MERGED |
 | 7 | `merge-unverified` | `safe_pr_merge.sh` exited 2 or any other status (usage, or the merge ran and its state could not be confirmed) and the PR is not MERGED after a re-read |
+| 0 | `ci-green` | added 2026-11-11 (`docs/plans/review-ci-suite-lock.md`): with `--ci-only` (review CI, CLAUDE.md §4.12.8) CI is green on the pushed head and the run stopped before the main-moved check, the record replay and the merge; exit 0 is shared with `merged`, so read the word |
 
 A wrapper child status above 7 or a signal is `result: error`, exit 4.
 

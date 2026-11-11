@@ -85,6 +85,17 @@ else
   DART_BIN="dart"
 fi
 
+# One LOCAL full suite at a time on this machine (scripts/_suite_lock.sh, CLAUDE.md §4.12.8,
+# docs/plans/review-ci-suite-lock.md): the full-suite paths below take the machine-wide lock with --no-wait
+# (this hook runs inside safe_commit/safe_push's git lock, so it refuses instead of sitting on it). Same guard
+# as _dart_bin.sh above: an absent or corrupt helper leaves no-op functions, so an old or partial tree keeps
+# today's behaviour.
+if [ -r "$REPO_ROOT/scripts/_suite_lock.sh" ] && sh -n "$REPO_ROOT/scripts/_suite_lock.sh" 2>/dev/null; then
+  . "$REPO_ROOT/scripts/_suite_lock.sh" || true
+fi
+type suite_lock_acquire >/dev/null 2>&1 || suite_lock_acquire() { :; }
+type suite_lock_release >/dev/null 2>&1 || suite_lock_release() { :; }
+
 # COST SPLIT (2026-08-11 — this script is scripts/pre-commit.sh; the literal
 # path is kept in this header because scripts/check_hooks_installed.dart
 # (Gate 32) looks for it in the INSTALLED hook to prove the hook is ours.
@@ -175,11 +186,15 @@ unset _v _hatch
 if [ "${PRE_COMMIT_FULL:-0}" = "1" ]; then
   echo "[pre-commit] PRE_COMMIT_FULL=1 → flutter analyze + flutter test (full suite)..."
   flutter analyze --no-fatal-infos
-  flutter test
+  suite_lock_acquire --no-wait || exit 1
+  flutter test 9>&-
+  suite_lock_release
 elif [ "${PRE_COMMIT_LEGACY:-0}" = "1" ]; then
   echo "[pre-commit] PRE_COMMIT_LEGACY=1 → flutter analyze + flutter test test/contracts/..."
   flutter analyze --no-fatal-infos
-  flutter test test/contracts/
+  suite_lock_acquire --no-wait || exit 1
+  flutter test test/contracts/ 9>&-
+  suite_lock_release
 else
   echo "[pre-commit] lean path — analyze + test suite run at pre-push."
   echo "[pre-commit] (PRE_COMMIT_FULL=1 runs the full suite here; PRE_COMMIT_LEGACY=1 the old contracts subset.)"

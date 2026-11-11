@@ -117,9 +117,12 @@ void main() {
       ],
       why: 'REAL scripts/pre-commit.sh with stub flutter/dart first on PATH, extra=$extra',
       workingDirectory: Directory.current.path,
-      extraEnv: {'STUB_LOG': _toPosixPath(log.path), ...extra},
-      // The hatch variables are set ON PURPOSE by the scenarios that pass them in `extra`.
-      allowControl: const {'PRE_COMMIT_FULL', 'PRE_COMMIT_LEGACY'},
+      // AVYA_SUITE_LOCK_HELD=1 on EVERY run: the REAL hook in the REAL repo takes the machine-wide one-suite lock
+      // (scripts/_suite_lock.sh) on the hatch paths; inside a suite started by scripts/run_full_suite.sh that lock is
+      // held by the suite itself, and the marker makes the hook skip it (docs/plans/review-ci-suite-lock.md).
+      extraEnv: {'STUB_LOG': _toPosixPath(log.path), 'AVYA_SUITE_LOCK_HELD': '1', ...extra},
+      // The hatch variables (and the lock marker) are set ON PURPOSE.
+      allowControl: const {'PRE_COMMIT_FULL', 'PRE_COMMIT_LEGACY', 'AVYA_SUITE_LOCK_HELD'},
     );
   }
 

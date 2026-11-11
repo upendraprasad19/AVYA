@@ -24,6 +24,10 @@ const List<String> syncResultWords = <String>[
 typedef LandResult = ({String word, int code});
 
 const LandResult resMerged = (word: 'merged', code: 0);
+
+/// `--ci-only` (review CI, CLAUDE.md §4.12.8): CI is green on the pushed head and the run stopped before the merge.
+/// Exit 0 like [resMerged]: a caller reads the `result:` word, never only the status.
+const LandResult resCiGreen = (word: 'ci-green', code: 0);
 const LandResult resNeedsHuman = (word: 'needs-human', code: 1);
 const LandResult resRefused = (word: 'refused', code: 2);
 const LandResult resCiFailed = (word: 'ci-failed', code: 3);
@@ -39,6 +43,7 @@ const int maxCliStatus = 7;
 /// The exit statuses that are the CLI's own, by `result:` word (the table of plan section 3.1).
 const Map<String, int> exitCodeByWord = <String, int>{
   'merged': 0,
+  'ci-green': 0,
   'needs-human': 1,
   'refused': 2,
   'ci-failed': 3,

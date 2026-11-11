@@ -7,10 +7,15 @@
 // runs in, only through those wrappers, and never runs a raw git commit/push or `gh pr merge`.
 //
 // stdout: child output is passed through with a `<name>> ` prefix on every line, so exactly one line starts with `result:`
-// and it is the last. Exit codes (the CLI's own: 0..7): 0 merged, 1 needs-human, 2 refused, 3 ci-failed|ci-timeout, 4 error,
+// and it is the last. Exit codes (the CLI's own: 0..7): 0 merged (or `ci-green` with --ci-only), 1 needs-human, 2 refused, 3 ci-failed|ci-timeout, 4 error,
 // 5 record-failed, 6 merge-refused, 7 merge-unverified. The wrapper maps a higher status or a signal to `result: error`, 4.
 //
-// Flags are the PR number and `--allow-workflow-change` (forwarded to the merge wrapper). Test seams, never forwarded by the
+// `--ci-only` (review CI, CLAUDE.md §4.12.8): the same preconditions, sync, push and CI wait, then `result: ci-green`,
+// exit 0, and NOTHING after the CI wait (no main-moved round, no PR-head check, no record replay, no merge). CI ran on
+// the PR merge ref GitHub computed when the run started, so `ci-green` is a review gate, not merge-readiness; a caller
+// reads the result word, never only the status (0 is also `merged`). With it, invoking pushes but never merges.
+//
+// Flags are the PR number, `--allow-workflow-change` (forwarded to the merge wrapper) and `--ci-only`, each at most once. Test seams, never forwarded by the
 // wrapper: --gh "<cmd>", --scripts-dir <dir>, --poll-ms, --ci-timeout-ms, --fetch-timeout-ms, --gh-timeout-ms,
 // --record-gate "<cmd>". Reads no environment variable; children inherit the environment. Run directly (not through the
 // wrapper) with a seam, it is a test harness: `--record-gate` skips the replay.
@@ -53,6 +58,7 @@ class _Child {
 class _Opts {
   String pr = '';
   bool allowWorkflowChange = false;
+  bool ciOnly = false;
   String gh = 'gh';
   String? scriptsDir;
   int pollMs = 30000;
@@ -98,6 +104,8 @@ Future<void> _finish(LandResult r) async {
   exit(r.code);
 }
 
+const String _usage = 'usage: sh scripts/land_pr.sh <pr> [--allow-workflow-change] [--ci-only]';
+
 _Opts _parse(List<String> args) {
   final o = _Opts();
   var havePr = false;
@@ -119,7 +127,11 @@ _Opts _parse(List<String> args) {
     }
 
     if (a == '--allow-workflow-change') {
+      if (o.allowWorkflowChange) throw _Stop(resRefused, '--allow-workflow-change given twice ($_usage)');
       o.allowWorkflowChange = true;
+    } else if (a == '--ci-only') {
+      if (o.ciOnly) throw _Stop(resRefused, '--ci-only given twice ($_usage)');
+      o.ciOnly = true;
     } else if (valueOf('--gh') case final v?) {
       o.gh = v;
     } else if (valueOf('--scripts-dir') case final v?) {
@@ -135,15 +147,15 @@ _Opts _parse(List<String> args) {
     } else if (valueOf('--record-gate') case final v?) {
       o.recordGate = v;
     } else if (a.startsWith('-')) {
-      throw _Stop(resRefused, 'unknown argument "$a" (usage: sh scripts/land_pr.sh <pr> [--allow-workflow-change])');
+      throw _Stop(resRefused, 'unknown argument "$a" ($_usage)');
     } else if (!havePr && RegExp(r'^[0-9]+$').hasMatch(a)) {
       o.pr = a;
       havePr = true;
     } else {
-      throw _Stop(resRefused, 'unexpected argument "$a" (usage: sh scripts/land_pr.sh <pr> [--allow-workflow-change])');
+      throw _Stop(resRefused, 'unexpected argument "$a" ($_usage)');
     }
   }
-  if (!havePr) throw _Stop(resRefused, 'a PR number is required (usage: sh scripts/land_pr.sh <pr> [--allow-workflow-change])');
+  if (!havePr) throw _Stop(resRefused, 'a PR number is required ($_usage)');
   return o;
 }
 
@@ -360,6 +372,10 @@ class _Land {
       // 3. CI
       phase = 'ci';
       await _waitCi(head);
+      if (o.ciOnly) {
+        _say('--ci-only: CI is green on ${head.substring(0, 8)}; stopping before the merge (a review gate, not merge-readiness)');
+        return resCiGreen;
+      }
       // 4. did main move?
       phase = 'fetch';
       final fm = await _git(['fetch', '--quiet', 'origin', '+refs/heads/main:refs/remotes/origin/main'], timeoutMs: o.fetchTimeoutMs);

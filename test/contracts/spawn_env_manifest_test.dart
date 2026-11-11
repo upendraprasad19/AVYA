@@ -52,6 +52,8 @@ const _stripped = <String>{
   '_SKIP_RENDER_CHECK', 'ANDROID_DEVICE_ID',
   // OI-482: the git hooks' kill switch for the dart-run retry (scripts/_dart_bin.sh)
   'AVYA_DART_RUN_RETRY',
+  // the one-local-full-suite lock's nesting marker (scripts/_suite_lock.sh, scripts/run_full_suite.sh)
+  'AVYA_SUITE_LOCK_HELD',
   // test fixture / report re-record switches (generator golden, frozen library reference, B1 and B2 gate reports)
   'RECORD_GENERATOR_GOLDEN', 'RECORD_LIBRARY_REFERENCE', 'RECORD_LIBRARY_REFERENCE_IDS', 'WRITE_CORE_LIST_REPORT',
   'WRITE_SESSION_BUDGET_REPORT', 'WRITE_REST_BY_TYPE_REPORT',
@@ -298,6 +300,9 @@ void main() {
         'test/scripts/contract_sweep_e2e_test.dart',
         // OI-482: runs the real pre-push hook against a stub dart that loses the native-assets race once; guarded by CONTRACT_SWEEP_SKIP=1.
         'test/scripts/hooks_dart_run_retry_e2e_test.dart',
+        // review-ci-suite-lock (2026-11-11): runs a COPY of the hook in a throwaway repo against the one-suite lock;
+        // guarded by CONTRACT_SWEEP_SKIP=1.
+        'test/scripts/suite_lock_e2e_test.dart',
       }, reason: 'the detector must find exactly the tests that execute the hook or spawn the sweep runner');
       expect(unguarded, isEmpty,
           reason: 'these tests run the real pre-push hook (or the sweep runner) without declaring '

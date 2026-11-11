@@ -63,7 +63,12 @@ import '../helpers/spawn.dart';
 // (cmd.exe cannot run an extensionless PATH stub) and would select this very
 // test -> recursion. The kill switch makes the sweep exit before any work, so
 // every hook run sets CONTRACT_SWEEP_SKIP=1 ON PURPOSE.
-const Set<String> _setOnPurpose = {'CONTRACT_SWEEP_SKIP', 'PRE_PUSH_FULL'};
+//
+// AVYA_SUITE_LOCK_HELD=1 on EVERY run (docs/plans/review-ci-suite-lock.md): this test runs the REAL hook in the REAL
+// repo, and a hook that reaches run_full_suite takes the machine-wide one-suite lock (scripts/_suite_lock.sh). Inside
+// a suite started by scripts/run_full_suite.sh that lock is held by the suite itself; the marker makes the hook skip
+// it, so this test never waits on (or touches) the real lock however the outer suite was started.
+const Set<String> _setOnPurpose = {'CONTRACT_SWEEP_SKIP', 'PRE_PUSH_FULL', 'AVYA_SUITE_LOCK_HELD'};
 
 /// `C:\a\b` / `C:/a/b` -> `/c/a/b`. Git Bash ignores Windows-form PATH entries
 /// outright, which is the trap documented in this file's header.
@@ -116,6 +121,7 @@ void main() {
       workingDirectory: Directory.current.path,
       extraEnv: {
         'CONTRACT_SWEEP_SKIP': '1',
+        'AVYA_SUITE_LOCK_HELD': '1',
         'FLUTTER_STUB_LOG': logPosix,
         if (prePushFull) 'PRE_PUSH_FULL': '1',
       },

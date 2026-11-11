@@ -88,6 +88,19 @@ void main() {
             'nothing to do with the pushed change.\n  pre-push: $pre');
   });
 
+  test('scripts/run_full_suite.sh (the LOCAL full suite under the one-suite lock) runs the SAME invocation as CI', () {
+    // docs/plans/review-ci-suite-lock.md: the script is the only sanctioned local full run (CLAUDE.md §4.12.8), so a
+    // drift from CI here is the same false-red trap as in pre-push.
+    final line = File('scripts/run_full_suite.sh')
+        .readAsLinesSync()
+        .map((l) => l.trim())
+        .firstWhere((l) => !l.startsWith('#') && !l.startsWith('echo ') && _invocation.hasMatch(l), orElse: () => '');
+    expect(line, isNotEmpty, reason: 'no flutter test line found in run_full_suite.sh');
+    expect(line, contains('--exclude-tags golden'));
+    expect(line, contains('TZ=Asia/Kolkata'));
+    expect(RegExp(r'flutter\s+test\s+test/\s').hasMatch(line), isTrue, reason: 'the whole test/ tree, as CI: $line');
+  });
+
   test('the invocation is inside run_full_suite, not stranded in a comment', () {
     final body = File('scripts/pre-push.sh').readAsStringSync();
     final start = body.indexOf('run_full_suite() {');
