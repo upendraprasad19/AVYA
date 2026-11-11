@@ -3,8 +3,9 @@ import { createClient, SupabaseClient } from "https://esm.sh/@supabase/supabase-
 import { istDateStr } from "../_shared/ist_date.ts";
 import { isAuthorizedCronCall } from "../_shared/cron_auth.ts";
 import { logCronEnd, logCronStart } from "../_shared/cron_telemetry.ts";
-import { fetchAllByIds } from "../_shared/paged_fetch.ts";
+import { fetchAllByIds, fetchAllPages } from "../_shared/paged_fetch.ts";
 import { excludeDeletedLogs, liveLogsForWindow } from "./live_log_filter.ts";
+import { completedDayCounts, mergeMonotonicTotal } from "./completed_days.ts";
 import { buildDayMap, istDatesEnding, windowLogIds } from "../_shared/exercise_day.ts";
 
 const corsHeaders = {
@@ -166,7 +167,19 @@ async function fetchAllRows<T>(
   return allRows;
 }
 
-serve(async (req: Request) => {
+/**
+ * Injectable seam (coach workout parity 2, S0). Only the client factory goes
+ * through `deps`; auth and telemetry stay direct calls (the adoption contracts
+ * pin them as literal call sites).
+ */
+export interface WeeklyRecalcDeps {
+  createClient: typeof createClient;
+}
+
+export const handler = async (
+  req: Request,
+  deps: WeeklyRecalcDeps = realDeps(),
+): Promise<Response> => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
   }
@@ -214,7 +227,7 @@ serve(async (req: Request) => {
 
     // Cron-shaped job: service-role client, authorized by the CRON_SECRET gate
     // above rather than by a caller JWT.
-    const supabaseClient = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+    const supabaseClient = deps.createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
     // audit-2026-05-11 H-8 — 4-week window now IST-anchored so the
     // weekly recalc covers IST weeks not UTC weeks (5h30m drift
@@ -233,7 +246,7 @@ serve(async (req: Request) => {
     // Read from workout_log_exercises (per-exercise data) instead of workout_logs
     // (which now stores summary rows after sync refactor). All-user read:
     // `idx_wle_workout_log_id` serves the `.in("workout_log_id", ...)`.
-    const [rawLogs, allScheduled] = await Promise.all([
+    const [rawLogs, allScheduled, completedLogRows] = await Promise.all([
       fetchAllByIds<{ id: number | string; user_id: string; workout_log_id: string | null; exercise_id: string; exercise_name: string; set_number: number | null; is_pr: boolean | null; weight_kg: number | null; reps: number | null; completed_at: string; deleted_at: string | null }>(
         (chunk) =>
           supabaseClient
@@ -259,7 +272,32 @@ serve(async (req: Request) => {
         fourWeeksAgoStr,
         "id", // OI-79: PK — scheduled_date repeats across users.
       ),
+      // Completed days: `workout_logs` is the cloud mirror of `wlog_<date>`
+      // (written by `markCompleted` only), the same set the client counts in
+      // `completedWorkoutDayCount`. The floor for `total_workouts_done` comes
+      // from here, never from exercise rows, so a partial day cannot lift it.
+      // Same 28 IST dates as the window above (OI-492).
+      // This read only feeds a floor that can RAISE the lifetime counter, so
+      // its failure must not veto the tick (B-pass S1-F1): on error the map
+      // is empty, `mergeMonotonicTotal` keeps every stored total, and the
+      // experience levels are still written. Next Sunday raises the floor.
+      fetchAllPages<{ id: number | string; user_id: string; date: string | null }>(
+        () =>
+          supabaseClient
+            .from("workout_logs")
+            .select("id, user_id, date")
+            .gte("date", windowDates[0])
+            .lte("date", windowDates[27]),
+        { orderBy: "id", label: "weekly-recalc completed-days" },
+      ).catch((err) => {
+        console.error(
+          `[weekly-recalc] completed-days read failed; total_workouts_done kept as stored this tick`,
+          err,
+        );
+        return [] as Array<{ id: number | string; user_id: string; date: string | null }>;
+      }),
     ]);
+    const completedByUser = completedDayCounts(completedLogRows);
 
     // OI-246 follow-up (round-2 review finding P2) — exclude tombstoned rows
     // BEFORE deriving allLogs, so a deleted exercise log never reaches the
@@ -316,10 +354,9 @@ serve(async (req: Request) => {
 
       const level = calculateExperienceLevel(userLogs, userScheduled);
       levels.set(userId, level);
-      // Count distinct workout dates, not exercise rows.
-      // Each row is a per-exercise summary; a 6-exercise workout = 6 rows but 1 workout.
-      const distinctDates = new Set(userLogs.map((l) => l.date));
-      workoutCounts.set(userId, distinctDates.size);
+      // Distinct COMPLETED days (workout_logs.date), not exercise rows and not
+      // partial days: see completedLogRows above.
+      workoutCounts.set(userId, completedByUser.get(userId) ?? 0);
     }
 
     console.log(
@@ -378,7 +415,7 @@ serve(async (req: Request) => {
         chunk.map((userId) => {
           const recomputed = workoutCounts.get(userId) || 0;
           const existing = existingProgress.get(userId) || 0;
-          const monotonicTotal = Math.max(recomputed, existing);
+          const monotonicTotal = mergeMonotonicTotal(recomputed, existing);
           return supabaseClient
             .from("user_progress")
             .upsert(
@@ -450,4 +487,15 @@ serve(async (req: Request) => {
       },
     );
   }
-});
+};
+
+/** The production wiring: the real function itself (no call text here). */
+export function realDeps(): WeeklyRecalcDeps {
+  return { createClient };
+}
+
+if (import.meta.main) {
+  // Wrapped, not `serve(handler)`: serve's Handler passes `(req, connInfo)`
+  // and handler's second parameter is deps.
+  serve((req) => handler(req));
+}

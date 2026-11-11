@@ -67,9 +67,9 @@ All 8 cron-driven Edge Functions in prod. Each uses `_shared/proactive_dedup.ts`
 | # | Trigger | Edge Function | Cron (UTC → IST) | Tier |
 |---|---|---|---|---|
 | 1 | Morning Brief | `morning-alert` | (existing 2-stage) → 7am IST | both |
-| 2 | Workout Window Closing | `workout-window-closing` | `30 15 * * *` → 21:00 IST | both |
+| 2 | Workout Window Closing | `workout-window-closing` | `30 15 * * *` → 21:00 IST | both. A partial coach day (some, not all planned exercises logged, no completed log) gets "N exercise(s) left" and opens `/train`; every other user keeps the "haven't seen it logged" line and `/ai_coach` (`partial_day_reminder_count`; kill switch `DISABLE_PARTIAL_DAY_REMINDER`) |
 | 3 | Protein Gap Alert | `protein-gap-alert` | `30 14 * * *` → 20:00 IST | PRO |
-| 4 | Streak Protection | `streak-guardian` | (existing) → 20:00 IST | both |
+| 4 | Streak Protection | `streak-guardian` | (existing) → 20:00 IST | both. Same partial-day body (streak family title unchanged); the 8 pm and 9 pm pushes can both carry it on one day (accepted) |
 | 5 | PR Detection | `pr-detection` | `*/15 * * * *` → near-real-time | both |
 | 6 | Plateau Alert | `plateau-alert` | `30 13 * * *` → 19:00 IST | PRO |
 | 7 | Weekly Recap | `weekly-recap-ready` | (existing) → Sunday | both |

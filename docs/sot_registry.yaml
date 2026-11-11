@@ -8782,7 +8782,7 @@ concepts:
           qualified))`. Helper at line 61 is the canonical comparator
           and the unit under behavioral test.
       - file: supabase/functions/evaluate-rank-promotions/index.ts
-        line_range: 319-340
+        line_range: 378-399
         method: evaluate-rank-promotions cron sync block
         notes: |
           Mirrors the client guard server-side. Reads existing
@@ -8790,7 +8790,9 @@ concepts:
           issues the .update() when winner.ordinal > currentOrdinal.
           Deployed as v7 2026-05-27. Line range shifted from 227-251
           due to OPT-E's batch pre-fetch + chunking-helper insertions
-          above this block (2026-07-08) — block logic unchanged.
+          above this block (2026-07-08) — block logic unchanged. Re-anchored
+          319-340 -> 378-399 (2026-11-11, coach-workout-parity-2 S1: the
+          distinct-day count and the exported handler seam moved the block).
     reader_manifest_complete: true
     readers:
       - file: lib/core/services/rank_service.dart
@@ -12576,13 +12578,13 @@ concepts:
         fields_read: [weekly_recap.enabled]
         notes: INLINE reader — does NOT use _shared/notification_prefs.ts.
       - file: supabase/functions/streak-guardian/index.ts
-        line_range: 177-182
+        line_range: 262-265
         method: inline snapshot read
         semantic: flag-check
         fields_read: [streak_alerts.enabled]
         notes: INLINE reader — does NOT use _shared/notification_prefs.ts.
       - file: supabase/functions/workout-window-closing/index.ts
-        line_range: 233-238
+        line_range: 328-331
         method: inline snapshot read
         semantic: flag-check
         fields_read: [workout_reminders.enabled]
@@ -12853,7 +12855,7 @@ concepts:
       raw page. Fails SAFE: an empty set sends to nobody, never to everybody.
     writers:
       - file: supabase/functions/streak-guardian/index.ts
-        line_range: 94-96
+        line_range: 132-134
         method: eligibility select + gte
         semantic: one-row-gates-and-supplies
       - file: supabase/functions/weekly-recap-ready/index.ts
@@ -12870,7 +12872,7 @@ concepts:
         semantic: canonical-pro-predicate
     readers:
       - file: supabase/functions/streak-guardian/index.ts
-        line_range: 264
+        line_range: 308
         method: streakDays
         semantic: reads-the-selected-row
         # Corrected 2026-09-16 (was 214) -- B-pass on cron-ai-removal
@@ -16130,10 +16132,143 @@ concepts:
         method: recentLivePrs (pr-detection, i-see-you-callout)
         semantic: aggregated
         fields_read: [workout_log_id, exercise_id, set_number, is_pr, completed_at]
+      - file: supabase/functions/_shared/partial_day_loader.ts
+        method: loadPartialDays (9 pm / 8 pm partial-day count; today's workout_log_id, tombstones excluded, names only)
+        semantic: aggregated
+        fields_read: [user_id, workout_log_id, exercise_id, exercise_name, deleted_at]
       - file: supabase/functions/future-prediction/index.ts
         method: generateLocalPrediction liftPrediction
         semantic: aggregated
         fields_read: [workout_log_id, exercise_id, set_number, is_pr, weight_kg, completed_at]
+
+  - concept: partial_day_reminder_count
+    domain: ai_coach
+    behavioral_test_path: supabase/functions/_shared/partial_day_loader_test.ts
+    additional_tests:
+      - supabase/functions/_shared/partial_day_count_test.ts
+      - supabase/functions/workout-window-closing/index_test.ts
+      - supabase/functions/streak-guardian/index_test.ts
+    description: |
+      Coach workout parity 2 S2 (diagnose c97729; plan docs/plans/coach-workout-parity-2-server.md rev 6).
+      On a day with SOME but not all planned exercises logged through the coach (no completed
+      workout_logs row yet) the 9 pm push (workout-window-closing) and the 8 pm push (streak-guardian)
+      said the user had not trained. ONE server helper now counts the left-over exercises:
+      countPartialDay(planRow, loggedNames) over TODAY'S plan row (user_progress.plan_json ->
+      schedules -> schedule_<IST today>) and the user's live workout_log_exercises rows for today's
+      workout_log_id (UUID v5 of workout_<IST date>, tombstones excluded). A planned exercise counts
+      as logged by exercise_name OR swapped_from (lower-cased, trimmed). It returns null ("cannot count":
+      no plan row, rest / moved / dropped / completed row, nothing logged, all logged, stale plan, read
+      failure) and the caller keeps today's line. loadPartialDays batches the reads (chunks <= 100 users;
+      the fallback plan read chunks of PLAN_FALLBACK_CHUNK_SIZE) and NEVER throws; each cron also wraps
+      it in a call-site safeLoad. Kill switch: env DISABLE_PARTIAL_DAY_REMINDER, exactly lowercase "true"
+      (read once per run in the loader). The partial 9 pm push opens /train (the screen where the
+      partial line is shown), every other push keeps /ai_coach. The 8 pm and 9 pm pushes can both
+      carry the partial line on one day: accepted (plan B-F9 / R3).
+      Client counterpart: the Train partial row and the coach tile count the same way
+      (coach_day_completion_rule, loggedPlannedExerciseCount).
+    writers:
+      - file: supabase/functions/_shared/partial_day_count.ts
+        line_range: 59-105
+        method: countPartialDay
+        notes: The pure count (matched / planned, swapped_from tolerant, stale-plan guard); partialDayWorkoutName at 113-122, partialDayKillSwitchOn at 125-127.
+      - file: supabase/functions/_shared/partial_day_loader.ts
+        line_range: 73-183
+        method: loadPartialDays
+        notes: Kill switch at 84; plan read 90-110; wle read 112-122; never throws (read-level catch).
+    reader_manifest_complete: true
+    readers:
+      - file: supabase/functions/workout-window-closing/index.ts
+        line_range: 296-296
+        method: handler (safeLoad call; pd -> selectWindowClosingMessage at 365 and windowClosingScreen at 372)
+        semantic: aggregated
+        fields_read: [left, workoutName]
+        notes: The 9 pm push; the screen is /train for a partial user, /ai_coach otherwise.
+      - file: supabase/functions/streak-guardian/index.ts
+        line_range: 233-233
+        method: handler (safeLoad call; partialDay passed to selectStreakMessage at 319)
+        semantic: aggregated
+        fields_read: [left, workoutName]
+        notes: The 8 pm push; the title stays the streak family's, only the body changes.
+    regression_test: supabase/functions/_shared/partial_day_loader_test.ts
+    hive:
+      box: null
+      key: null
+      shape: "Not applicable: service-role Deno crons with no Hive access."
+    cloud:
+      table: user_progress
+      columns: [plan_json]
+    sync_methods: []
+    restore_methods: []
+    class_constraints: |
+      1. A new reminder that says "you have not trained" calls loadPartialDays first and keeps today's
+         line only for a null result; it never re-derives the count.
+      2. The loader never throws and the call site wraps it (safeLoad).
+      3. The kill switch DISABLE_PARTIAL_DAY_REMINDER is exactly lowercase "true".
+
+  - concept: completed_day_count_server
+    domain: workout
+    behavioral_test_path: supabase/functions/_shared/distinct_dates_test.ts
+    additional_tests:
+      - supabase/functions/evaluate-rank-promotions/index_test.ts
+      - supabase/functions/weekly-recalc/index_test.ts
+      - supabase/functions/weekly-recalc/completed_days_test.ts
+      - supabase/functions/_shared/tools/__tests__/getPromotionStatus_test.ts
+      - supabase/functions/i-see-you-callout/streak_gate_test.ts
+    description: |
+      Coach workout parity 2 S1 (diagnose f9bf1c; plan docs/plans/coach-workout-parity-2-server.md rev 6).
+      The server counted workout_logs ROWS (the rank job's ceremony total via a head:true count,
+      weekly-recalc's total_workouts_done floor from workout_log_exercises dates, getPromotionStatus,
+      and the i-see-you-callout Saturday gate), while the client counts DISTINCT completed days
+      (WorkoutReadService.completedWorkoutDayCount); a date with two rows over-counted. ONE helper now
+      counts: countDistinctDates(rows) = size of the Set of non-empty, trimmed YYYY-MM-DD `date` strings
+      (NULL / empty / malformed ignored). Every server counter reads workout_logs `date` and passes it
+      through the helper; a truncated read THROWS (never an under-count). total_workouts_done stays a
+      monotonic lifetime counter (mergeMonotonicTotal = max(recomputed, existing), diagnose 3a7b9f).
+    writers:
+      - file: supabase/functions/_shared/distinct_dates.ts
+        line_range: 22-33
+        method: countDistinctDates
+        notes: The ONE server day counter.
+    reader_manifest_complete: true
+    readers:
+      - file: supabase/functions/evaluate-rank-promotions/index.ts
+        line_range: 252-252
+        method: handler (ceremony totalWorkouts)
+        semantic: aggregated
+        fields_read: [date]
+        notes: A truncated read fails that user only; the others are promoted.
+      - file: supabase/functions/weekly-recalc/index.ts
+        line_range: 300-300
+        method: handler (completedDayCounts; floor merged by mergeMonotonicTotal at 418)
+        semantic: aggregated
+        fields_read: [date]
+        notes: The helper completedDayCounts is weekly-recalc/completed_days.ts:12-23, mergeMonotonicTotal 30-35.
+      - file: supabase/functions/_shared/tools/progress/getPromotionStatus.ts
+        line_range: 164-164
+        method: getPromotionStatus (all-time total; cadence via recent28Dates at 79-87, used at 211)
+        semantic: aggregated
+        fields_read: [date]
+        notes: A truncated all-time read throws.
+      - file: supabase/functions/i-see-you-callout/streak_gate.ts
+        line_range: 18-49
+        method: hasDeepStreak / readDeepStreak (Saturday gate, called from index.ts:337)
+        semantic: aggregated
+        fields_read: [date]
+        notes: 14 distinct completed days among the last 28 IST dates.
+    regression_test: supabase/functions/_shared/distinct_dates_test.ts
+    hive:
+      box: null
+      key: null
+      shape: "Not applicable: service-role Deno crons / tools with no Hive access. Client counterpart: WorkoutReadService.completedWorkoutDayCount (lib/core/services/workout_read_service.dart)."
+    cloud:
+      table: workout_logs
+      columns: [user_id, date]
+    sync_methods: []
+    restore_methods: []
+    class_constraints: |
+      1. A server "how many workouts" number counts DISTINCT completed dates through countDistinctDates,
+         never rows (head:true counts of workout_logs are banned for this purpose).
+      2. A truncated or failed read throws; it never yields a smaller number.
 
   - concept: streak_freeze_notice
     domain: workout

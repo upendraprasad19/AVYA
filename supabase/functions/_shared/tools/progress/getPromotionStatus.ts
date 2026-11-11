@@ -12,6 +12,8 @@ import { LADDER, GATES } from "../../rank_engine.ts";
 import { rankDisplayFor, rankAddressFor } from "../../ceremony_text.ts";
 import { istDateStr } from "../../ist_date.ts";
 import { fetchPagesBounded } from "../../paged_fetch_bounded.ts";
+import { countDistinctDates } from "../../distinct_dates.ts";
+import { istDatesEnding } from "../../exercise_day.ts";
 
 const schema = z.object({
   scenario_cadence: z
@@ -66,6 +68,22 @@ interface PromotionStatusResult {
   streak_days: number;
   deployments_complete: number;
   ladder: LadderEntry[];
+}
+
+/**
+ * Distinct completed IST dates inside the last 28 IST dates (the same window
+ * weekly-recalc uses: `istDatesEnding(28, now)[0]` is the window start, and a
+ * `>=` on `YYYY-MM-DD` strings is a chronological compare). `now` is a
+ * default-param seam so tests can fix the clock.
+ */
+export function recent28Dates(
+  rows: ReadonlyArray<{ date?: string | null }>,
+  now: Date = new Date(),
+): number {
+  const start = istDatesEnding(28, now)[0];
+  return countDistinctDates(
+    rows.filter((r) => typeof r.date === "string" && r.date >= start),
+  );
 }
 
 function isoDatePlusDays(days: number): string {
@@ -123,23 +141,27 @@ async function handler(
   );
 
   // ── 3. Total workouts (all-time) ──────────────────────────────────────────
-  const { count: totalWorkoutsCount, error: totalWErr } = await sb
-    .from("workout_logs")
-    .select("*", { count: "exact", head: true })
-    .eq("user_id", userId);
-  if (totalWErr) throw totalWErr;
-  const totalWorkouts = totalWorkoutsCount ?? 0;
-
-  // ── 4. Actual cadence: workouts in last 28 days → workouts/week ───────────
-  // NOTE: workout_logs uses logged_at (completed_at does not exist on this table).
-  const cutoff28 = new Date(Date.now() - 28 * 86_400_000).toISOString();
-  const { count: recent28Count, error: recent28Err } = await sb
-    .from("workout_logs")
-    .select("*", { count: "exact", head: true })
-    .eq("user_id", userId)
-    .gte("logged_at", cutoff28);
-  if (recent28Err) throw recent28Err;
-  const actualCadence = Number(((recent28Count ?? 0) / 4).toFixed(2));
+  // DISTINCT completed days (distinct `workout_logs.date`), the client's
+  // `completedWorkoutDayCount` rule: the table holds one row per completed day
+  // plus a few double-row dates, so a ROW count over-counted (OI-492). A paged
+  // read, not the 365-day read below: a year cut would under-count a lifetime.
+  const allTimeRes = await fetchPagesBounded<{ date: string | null }>(
+    (withCount) =>
+      sb
+        .from("workout_logs")
+        .select("date", withCount ? { count: "exact" } : undefined)
+        .eq("user_id", userId),
+    {
+      orderBy: [{ column: "date", ascending: false }, { column: "id" }],
+      maxPages: 20,
+      label: "getPromotionStatus:all-time",
+    },
+  );
+  // A cut-off would silently UNDER-count a lifetime total: refuse, do not show.
+  if (allTimeRes.truncated) {
+    throw new Error("getPromotionStatus query failed: workout_logs read truncated");
+  }
+  const totalWorkouts = countDistinctDates(allTimeRes.rows);
 
   // ── 5. Progress row: deployments via current_phase ────────────────────────
   // user_progress does NOT have current_streak_days, deployments_complete, or
@@ -172,7 +194,7 @@ async function handler(
         .gte("date", cutoff365),
     {
       orderBy: [{ column: "date", ascending: false }, { column: "id" }],
-      maxPages: 20, // workout_logs has one row per exercise: a year is far below 20,000
+      maxPages: 20, // workout_logs has one row per completed day (plus a few double-row dates): a year is far below 20,000
       label: "getPromotionStatus:dates",
     },
   );
@@ -181,6 +203,12 @@ async function handler(
     throw new Error("getPromotionStatus query failed: workout_logs read truncated");
   }
   const dateLogs = dateLogsRes.rows;
+
+  // ── 4. Actual cadence: distinct completed days in the last 28 IST dates ───
+  // Derived from the 365-day `date` read above (no extra query). The window
+  // moved from `logged_at` (a timestamp) to the IST `date` column the streak
+  // uses, so cadence, streak and total share one day definition.
+  const actualCadence = Number((recent28Dates(dateLogs) / 4).toFixed(2));
 
   // Deduplicate dates and sort descending. Cast `dateLogs` (typed `any` via the
   // `sb: any` context) to a typed row array so `.map` yields `string[]` — otherwise
