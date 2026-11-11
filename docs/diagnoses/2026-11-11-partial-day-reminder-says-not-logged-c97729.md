@@ -86,7 +86,7 @@ touched_layers_checked:
   - { tier: 1, name: client_code, status: verified, evidence: "No client change in S2. /train already shows the partial day (planned_expansion.dart, 24e630); the push now opens it." }
   - { tier: 2, name: hive_local_state, status: not_applicable, evidence: "Service-role crons; no Hive access." }
   - { tier: 3, name: postgres_schema, status: verified, evidence: "No schema change. user_progress.plan_json and workout_log_exercises (user_id, workout_log_id, exercise_id, exercise_name, deleted_at) exist in backups/live_schema_columns.json; the template-literal select strings keep check_schema_column_refs.dart from reading the jsonb path as a column." }
-  - { tier: 4, name: postgres_data, status: not_applicable, evidence: "Read-only reads; no data written. This batch ran no live query." }
+  - { tier: 4, name: postgres_data, status: verified, evidence: "U2 (2026-11-11, founder go, read-only): the primary arrow-path select returned HTTP 200 and matched the fallback on 35 of 35 user_progress rows, 13 of them non-null (see Hard precondition U2). No data written." }
   - { tier: 5, name: migrations_applied, status: not_applicable, evidence: "No migration." }
   - { tier: 6, name: edge_function_code_vs_deploy, status: not_applicable, evidence: "Code only in this batch. The deploy of workout-window-closing and streak-guardian is a separate founder go; the deploy step verifies the version via GET /functions/<slug>, reads the first run's [partial-day] log line, and flips nothing else." }
   - { tier: 7, name: cron_jobs, status: not_applicable, evidence: "No schedule change (031 at 21:00 IST, 061 at 20:00 IST; CRON_REGISTRY Notes only). The deploy step reads cron.job_run_details for non-2xx after the first run." }
@@ -122,13 +122,23 @@ rest-day user with a streak still gets the 8 pm streak push (unchanged, out of s
 Also accepted (R4, B-F10): the app shows the tile for an off-plan-only log; the server returns null for it and keeps
 today's line.
 
-## Hard precondition U2 (NOT yet verified, a gate on the deploy go)
+## Hard precondition U2 (VERIFIED live 2026-11-11, read-only)
 The primary plan read is a PostgREST select with a hyphenated JSON arrow path and an alias:
-`today_row:plan_json->schedules->schedule_<YYYY-MM-DD>` on `user_progress`. This batch ran no live query, so whether
-PostgREST accepts that shape is UNVERIFIED. It must be verified live, read-only, through the function's own path, and the
-result written into this document, BEFORE the deploy go. The fallback (`planRead: "fallback"`, selecting
-`schedules:plan_json->schedules` in chunks of `PLAN_FALLBACK_CHUNK_SIZE` = 10 and picking today's key in code) is tested,
-so a rejected shape is a one-line switch, not a redesign.
+`today_row:plan_json->schedules->schedule_<YYYY-MM-DD>` on `user_progress` (`_shared/partial_day_loader.ts:106`).
+It was verified live with the founder's go on 2026-11-11, read-only, through the service-role PostgREST REST path that
+the function's client uses. The check made two GETs per run and printed only status codes, counts and key shapes (no
+row values, no user ids). Project `dedsavbjuwgarrhphgnl`.
+- **Run 1, today's key.** `schedule_2026-11-11` on the first 20 rows by id. The primary read returned HTTP 200, with the
+  `today_row` key on every row. The fallback read returned HTTP 200. They agreed on 20 of 20. All 20 were null (no
+  row for today), so this run proves only that the shape is ACCEPTED, not that the values match.
+- **Run 2, a populated key.** The date key most present among the fallback rows was `schedule_2026-10-05` (13 of the
+  35 rows the table holds). The primary read for those rows returned HTTP 200 with 13 non-null rows. Primary and
+  fallback agreed on 35 of 35, including all 13 non-null rows (deep, key-sorted equality), with 0 disagree. Each
+  non-null value is the schedule object, with top-level keys including `date`, `exercises` (an array of 7 in the two printed), `status`, `type` and `workout_name`.
+
+Result: `planRead: "primary"` ships unchanged. The fallback (`schedules:plan_json->schedules` in chunks of
+`PLAN_FALLBACK_CHUNK_SIZE` = 10, today's key picked in code) stays tested and remains the one-line switch if a
+PostgREST upgrade ever rejects the shape.
 
 ## Mutation evidence (rule 21)
 Run by `mutate.py` in the session scratchpad (backup copy, apply, confirm applied, run the named test, restore, `cmp`);

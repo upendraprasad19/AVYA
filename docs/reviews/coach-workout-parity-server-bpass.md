@@ -54,6 +54,7 @@ Step 0 and step 0b were clean (no `MM`/`AM`; HEAD...origin/main = 0 0).
 - **claim:** No other select in the repo uses a JSON-arrow path with a hyphenated key. If PostgREST rejects it, the loader catches the error and every user gets the old line: safe, but the feature is silently off.
 - **verification:** `grep -rnE 'select\(.*->' supabase/functions lib --include=*.ts --include=*.dart`
 - **status:** accepted as the recorded hard gate U2 (plan B4-F8, diagnose c97729 "Hard precondition U2"). The exact select string is checked live, read-only, before the S2 deploy go: the primary read is compared with the fallback read for the same rows. A rejection switches `planRead` to the fallback (chunk 10) before the deploy. No deploy runs without that record.
+  **U2 result (2026-11-11):** verified live, read-only. The primary select returned HTTP 200 and matched the fallback on 35 of 35 rows, 13 of them non-null. `planRead: "primary"` ships unchanged.
 
 ## Finding 5 — P2 — guard_without_its_mirror (seat S2)
 - **file:line:** supabase/functions/_shared/partial_day_count.ts:98-101 (stale-plan guard)
