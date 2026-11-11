@@ -396,6 +396,12 @@ E255 Towel Row x34, E134 Copenhagen Plank x16.
 (`build_muscle|3|advanced|bodyweight|30|2` and `|3` no Chest in week 2; `lose_fat` and `general_fitness`
 `|3|advanced|bodyweight|30|1` no Hamstrings in weeks 1 to 3). An entry criterion of the 1B-1 flip.
 
+Amended by Unit 1B-F (2026-11-11, `docs/plans/2026-11-10-generator-1bf-flip.md`): Unit 1B ran as 1B-F, which closes
+1B-1 to 1B-6 and 1B-12 (1B-9 closed by S1b-3, 1B-10's E010 / E045 by S1b-2; 1B-8 and the rest of 1B-10 per the
+1B-F closure ledger, `docs/audit/generator-step1-1bf.closure.yaml`). Items 1B-7 (the overlay copy) and 1B-11
+(its seed and cloud re-seed migration) were split out under §4.12.1 into Unit 1B-F2 (OI-495, its plan in section 11
+of the 1B-F plan), which starts when 1B-F merges.
+
 ## 10. Review log
 
 **Review #1 (Sonnet, context-blind):** 5 P1, 8 P2, P3s; folded in v2 (scope split, R1 rows by slot, calf rows, top-up

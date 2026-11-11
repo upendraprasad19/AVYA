@@ -33,10 +33,11 @@ void main() {
       // the count now follows the user's minutes (SessionSetAllocator).
     }, skip: 'Phase 7 scaffold — needs onboarding fixture user.');
 
-    test('T3 — cascade attempts stay within attempt1 / 2 for build_muscle / full_gym',
+    test('T3 — the core-list pool leaves no day empty for build_muscle / full_gym',
         () {
-      // Use sample_plans_report-style diagnostics. Target: 0
-      // attempt3/universalPool/(none) for the canonical combos.
+      // Unit 1B-F deleted the 5-attempt cascade (and the attempt3 / universal-pool
+      // diagnostics this scaffold named); core_list_pool_gate_test.dart holds the
+      // no-empty-day zero over the 998 golden personas. Target here: the same on device.
     }, skip: 'Phase 7 scaffold — needs onboarding fixture user.');
 
     test('T4 — Start Workout opens correct logging_type per exercise', () {

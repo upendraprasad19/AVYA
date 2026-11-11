@@ -282,12 +282,14 @@ pending:
 # is currently UNFIXED. A holder today would be told a falsehood by the coach
 # and by the Sunday push.
 
+resolved:
   - flag: enable_core_list_pool
     branch: library-batch-b
     build_commit: 06c02bed  # the commit that adds PlanEngineFlags.coreListPoolEnabled
     build_date: 2026-10-22
-    flip_reviewed: false
-    flip_commit: null
+    flip_reviewed: true
+    flip_commit: null  # the Unit 1B-F commit on branch generator-step1-1bf; SHA stamped before the push
+    flip_review_record: docs/plan-reviews/generator-step1-1bf.md
     note: >
       Batch B1 core-list pool (docs/plans/2026-10-22-library-core-list-pool.md).
       DEFAULT OFF; OFF is byte-identical (test/plan_generator/generator_golden_test.dart,
@@ -375,8 +377,26 @@ pending:
       seed v24, not ship-dark itself: it changes OFF): E053 Donkey Calf Raise merged into G1373 (already
       the core-list calf row; E053 had no core_levels, so the ON pool is unchanged). Still open for the
       flip: refilled. Stays pending.
+      RESOLVED by Unit 1B-F (2026-11-11, docs/plans/2026-11-10-generator-1bf-flip.md, plan v19,
+      17 review rounds to convergence plus the Ruling 5c amendment; B-pass in the review record). The
+      core-list pool is the only picker: the flag, PlanEngineFlags.coreListPoolEnabled, hasCoreFields,
+      the 5-attempt cascade, the universal pool and its kill switch disable_injury_universal_filter,
+      the V3 pick, the R6 refill (CoreListTrace.refilled) and the mirrors are deleted (CLAUDE.md 4.6
+      step 4, in the same commit). Criteria at the flip: refilled has no subject (the refill is
+      deleted; the doubly-empty day takes easier-or-equal core rows, then the top-up, and the gate
+      holds a hard zero of empty days over its 1,036 personas: the 998, 12 exclude-everything, 26
+      scorecard); retired ids in the built lists are a hard zero (Ruling 8: 0 over the 11,520-run
+      pair grid and every floor-sweep block, asserted by the new test); emergencyAnyLevel 0 since
+      S1a. The regenerated report (core_list_pool_report.md, 2026-11-12): emergencyAnyLevel 0
+      personas; the 576-run multi-injury sweep (reported, not gated) emergencyAnyLevel in 16 runs,
+      retired and skill / olympic picks in its built lists none (the refill line is gone with R6).
+      The OI-401 question is answered by 1A's R4 (the
+      top-up is core-list-first at every exit). The flip commit does NOT copy slot_focus /
+      slot_pattern into target_focus / movement_pattern although B1 Ruling 4 said it would: that
+      overlay copy is split out under 4.12.1 as Unit 1B-F2 (OI-495). The generator golden was
+      re-recorded once: every changed key equals the pre-flip ON world with Ruling 5 (OI-489)
+      applied; Ruling 5c changes no golden key.
 
-resolved:
   - flag: enable_session_set_budget
     branch: session-set-budget
     build_commit: 1bd25c20  # the commit that added PlanEngineFlags.sessionSetBudgetEnabled

@@ -2,8 +2,10 @@
 // rule. A loaded version (N14 to N22) carries `same_movement_as: <original id>`; the founder's condition (2026-11-08) is
 // that a version and its original never share a day. Generation dedups a day by NAME, so the rule is: wherever a name
 // is checked, its partner's name is checked too. `expand` adds the partners to a name set; callers pass the result to
-// the check they already run (queryV4 excludeNames, the universal-pool skip, the core-list `passes`, the soft-avoid
-// sets). Per-exercise preferences (demoted, plateau) are NOT expanded (plan Decision 2's table).
+// the check they already run (queryV4 excludeNames, the core-list `passes`, the soft-avoid sets). Plateau names are
+// per-exercise preferences and are NOT expanded. Demoted names: since Unit 1B-F (Ruling 7) a demoted ORIGINAL's loaded
+// versions are demoted with it, one direction (`ExerciseSelector._demotedWithLoadedVersions`), on the core path and the
+// top-up (amending plan Decision 2's table; the universal pool it also listed was deleted).
 //
 // Pure: built from the full library rows (never a filtered view, or a partner a filter removed would be missed).
 // Symmetric: E147 expands to N14 and N14 to E147. Not transitive: two versions of one original would not exclude each

@@ -279,7 +279,7 @@ class ExerciseRepository {
     Set<String>? excludeNames,
     List<String>? injuryExclusions,
     // ⑥ slice B1: user-excluded equipment (canonical, floor-sanitized tokens).
-    // REQUIRED (not optional) so a missed cascade call site fails to COMPILE
+    // REQUIRED (not optional) so a missed call site fails to COMPILE
     // rather than silently skip the drop — equipment exclusion is a HARD
     // constraint that must reach every pick path. Empty set → inert.
     required Set<String> exclusions,

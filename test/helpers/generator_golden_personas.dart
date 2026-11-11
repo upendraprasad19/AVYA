@@ -8,6 +8,7 @@
 // persona is independent of the order the caller runs them in.
 
 import 'package:icanbefitter/core/services/hive_service.dart';
+import 'package:icanbefitter/core/utils/equipment_vocab.dart';
 import 'package:icanbefitter/shared/repositories/plan_engine/models.dart';
 import 'package:icanbefitter/shared/repositories/plan_engine/plan_generator.dart';
 
@@ -131,6 +132,17 @@ List<GoldenPersona> generatorGoldenPersonas() {
           () => _gen(tier: tier, phase: phase, injuries: [injury]),
         ));
       }
+    }
+  }
+  // Unit 1B-F, Ruling 4: one exclude-everything persona per tier and level (capability = the floor {none, bodyweight,
+  // wall}), the extreme the deleted att5 floor invariant covered; the core-list gate holds its no-empty-day zero here.
+  for (final tier in goldenTiers) {
+    for (final level in _levels) {
+      out.add(GoldenPersona(
+        'extra',
+        'excludeall|$tier|build_muscle|4d|$level|p1',
+        () => _gen(tier: tier, level: level, exclusions: EquipmentVocab.canonicalTokens.toList()),
+      ));
     }
   }
   for (final excl in ['barbell', 'pull-up bar']) {

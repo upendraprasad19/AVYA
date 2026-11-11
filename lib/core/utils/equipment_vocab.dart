@@ -240,8 +240,9 @@ class EquipmentVocab {
   /// The user's equipment EXCLUSIONS as a floor-sanitized canonical Set (⑥ B1):
   /// normalize to canonical tokens, then STRIP `none`/`bodyweight` so a user can
   /// never exclude the bodyweight floor — a pure-bodyweight exercise is thus
-  /// never droppable and the universal-pool floor always survives an
-  /// exclude-everything. This is the single derivation of the exclusion set (the
+  /// never droppable and an exclude-everything user keeps the bodyweight rows
+  /// (the universal pool this once protected was deleted by Unit 1B-F; the
+  /// golden's exclude-everything personas hold the no-empty-day zero). This is the single derivation of the exclusion set (the
   /// plan engine flag-gates the CALL); unit-pinned so the flag-read seam has a
   /// cheap direct test.
   static Set<String> floorSanitizedExclusions(Iterable<String>? raw) {

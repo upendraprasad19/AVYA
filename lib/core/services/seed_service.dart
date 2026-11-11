@@ -106,8 +106,9 @@ class SeedService {
   //   selection fields added to every row (core_levels, discipline,
   //   gym_availability, requires_coaching, high_impact; optional variant_family,
   //   slot_focus, slot_pattern, skill ladder keys); five safety-direction injury
-  //   tags (Task 1b). New keys only, read by CoreListSelector behind
-  //   enable_core_list_pool; no cloud column (plan Ruling 2).
+  //   tags (Task 1b). New keys only, read by CoreListSelector (behind
+  //   enable_core_list_pool until Unit 1B-F made it the only picker); no cloud
+  //   column (plan Ruling 2).
   // v14 (injury re-check, docs/plans/2026-10-23-library-injury-recheck.md, d30de7):
   //   the founder rejected the 13-B "kept safe for variety" carve-out, so 104 rows
   //   gained 148 injury_contraindications tokens (additions only; Push Up is now
@@ -150,7 +151,7 @@ class SeedService {
   //   v21 (Library Batch S1a, docs/plans/2026-11-08-library-batch-s1-core-data.md): core_levels change on
   //   34 rows (the founder-approved core-list levels, R1 / R7 / advanced Hip and Glutes, and level
   //   agreement; scripts/data/library_s1_core_levels.json for kept rows, the Batch C source for the
-  //   others). Read only by the core-list pool (enable_core_list_pool). putAll rewrites the rows by
+  //   others). Read only by the core-list pool (the only picker since Unit 1B-F). putAll rewrites the rows by
   //   id. Without this bump an existing install keeps the old levels
   //   (library_seed_v21_upgrade_behavioral_test.dart).
   //   v22 (Library Batch S1b-1, founder 2026-11-09): core_levels on 4 rows: E038 Goblet Squat back to
@@ -161,7 +162,7 @@ class SeedService {
   //   rows N14 to N22, the dumbbell / kettlebell versions of 9 rows (OI-148, founder 2026-11-08), each
   //   carrying `same_movement_as` (a version and its original never share a day: SameMovement); E010
   //   Pike Push Up and E045 Romanian Deadlift suitable_for at every level (founder 2026-11-09). Both
-  //   reach the OFF path (queryV4). putAll writes the new rows and rewrites the two by id
+  //   reached the then-live OFF path (queryV4). putAll writes the new rows and rewrites the two by id
   //   (library_seed_v23_upgrade_behavioral_test.dart).
   //   v24 (Library Batch S1b-3, OI-147, docs/plans/2026-11-10-library-batch-s1b3-retire-donkey-calf-raise.md):
   //   E053 Donkey Calf Raise leaves the bundle, merged into G1373 Bodyweight Standing Calf Raise, which gains
@@ -169,7 +170,12 @@ class SeedService {
   //   Raise]` (a plan row or template holding the old name resolves to G1373 and its cues). History keyed by
   //   E053 keeps its name text. Without this bump an existing install keeps E053
   //   (library_seed_v24_upgrade_behavioral_test.dart).
-  static const int _exerciseLibraryVersion = 24;
+  //   v25 (Unit 1B-F, Ruling 12, founder d19, docs/plans/2026-11-10-generator-1bf-flip.md): the 14 lower-body jump
+  //   rows (E063, E065, E066, E193, E202 through the importer's injury-tag record; G1473, G1472, G0053, G0371, G3219,
+  //   G3361, G3222, G1201, G3656 through the injury table) gain `hip` in injury_contraindications, so a hip-injured
+  //   user is never handed a row that lands from flight. Bundle-only (no cloud column); putAll rewrites the 14 by id.
+  //   Without this bump an existing install keeps them untagged (library_seed_v25_upgrade_behavioral_test.dart).
+  static const int _exerciseLibraryVersion = 25;
   static const String _exerciseVersionKey = 'exercise_library_version';
 
   /// Bump this integer whenever the bundled food_database.json changes

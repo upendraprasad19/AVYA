@@ -1,13 +1,14 @@
 // Library Batch S1b-2 (plan docs/plans/2026-11-09-library-batch-s1b2-loaded-versions.md, Decision 6): the founder's
 // condition (2026-11-08) that a loaded version and its original never share a day, gated on the PRODUCTION path.
 //
-// The REAL generateV4 over the 998 golden personas, with the core-list pool OFF (today's path for every user) and ON
-// (ship-dark), each variant's day of each week read from the built Phase. Hard zero: no day holds a row and the row its
+// The REAL generateV4 over the 1,010 golden personas (998 plus Unit 1B-F's 12 exclude-everything ones; the core-list pool, the only picker since Unit 1B-F deleted the
+// `enable_core_list_pool` flag and the cascade), each variant's day of each week read from the built Phase. Hard zero: no day holds a row and the row its
 // `same_movement_as` names. The oracle restates the link from the raw library JSON (it never calls SameMovement), so a
-// broken helper cannot pass its own test. Non-vacuity: in each world, days holding a member of a pair must exist, and
-// some must hold a LOADED version (otherwise the zero would say nothing about the rule).
+// broken helper cannot pass its own test. Non-vacuity: days holding a member of a pair must exist, and some must hold a
+// LOADED version (otherwise the zero would say nothing about the rule).
 //
-// Mutations (diagnose doc): the queryV4 expansion removed (OFF red), the ON picked partners removed (ON red).
+// Mutations (diagnose doc): the picked partners removed (red). The queryV4 expansion, which reddened the deleted OFF
+// world, is held by test/contracts/same_movement_behavioral_test.dart test 1.
 @Timeout(Duration(minutes: 20))
 library;
 
@@ -67,8 +68,7 @@ void main() {
     } catch (_) {}
   });
 
-  Future<void> runWorld(bool on) async {
-    await HiveService.instance.configBox.put('enable_core_list_pool', on);
+  test('no day holds a loaded version and its original', () async {
     final bad = <String>[];
     var daysWithMember = 0, daysWithLoaded = 0;
     for (final p in generatorGoldenPersonas()) {
@@ -92,7 +92,6 @@ void main() {
         }
       }
     }
-    await HiveService.instance.configBox.put('enable_core_list_pool', false);
     expect(originalOf.length, 9, reason: 'the nine loaded versions (N14 to N22)');
     expect(daysWithMember, greaterThan(0), reason: 'non-vacuity: no day held a member of a pair');
     // Measured floors (2026-11-09, 998 personas): OFF 5 placements, ON 977. `> 0` alone let OFF collapse to one day
@@ -101,15 +100,12 @@ void main() {
     // and its Glutes isolation slot moved behind Calves / Core (plan docs/plans/2026-11-10-generator-1bq-variant-b-quads.md).
     // The drop is N19 Dumbbell Glute Bridge, the home_dumbbells Glutes isolation pick, seated on fewer short B days
     // (2,304-plan audit ON, weeks 1-2: N19 1444 -> 1289 placements, the other loaded versions unchanged); shared days
-    // stay 0 in both worlds.
-    expect(daysWithLoaded, greaterThanOrEqualTo(on ? 931 : 5),
+    // stay 0 in both worlds. Unit 1B-F deleted the OFF world; the ON floor below is re-measured on the flipped tree.
+    expect(daysWithLoaded, greaterThanOrEqualTo(931),
         reason: 'non-vacuity: fewer days held a loaded version than measured ($daysWithLoaded)');
     expect(bad, isEmpty, reason: '${bad.length} day(s) hold a loaded version and its original');
     // ignore: avoid_print
-    print('same-movement gate ${on ? 'ON' : 'OFF'}: $daysWithMember day(s) with a member, '
+    print('same-movement gate: $daysWithMember day(s) with a member, '
         '$daysWithLoaded loaded-version placement(s), 0 shared days');
-  }
-
-  test('OFF (every user today): no day holds a loaded version and its original', () => runWorld(false));
-  test('ON (core-list pool, ship-dark): no day holds a loaded version and its original', () => runWorld(true));
+  });
 }

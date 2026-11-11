@@ -105,7 +105,7 @@ The top of the Train screen is the week's schedule: no "TODAY'S WORKOUT" eyebrow
 
 ## See also
 
-- `lib/shared/repositories/plan_engine/CLAUDE.md` — plan generator V4 + cascade.
+- `lib/shared/repositories/plan_engine/CLAUDE.md` — plan generator V4 + the core-list pool (the only picker since Unit 1B-F).
 - `lib/features/home/CLAUDE.md` — Today's Workout Card + receipt entry point.
 - `lib/core/services/CLAUDE.md` — `WorkoutWriteService` + sync fan-out.
 - `docs/architecture/train-detail.md` — moved-out history, provenance and full test inventory for this file.

@@ -84,7 +84,7 @@ void main() {
           actual.entries.toList()..sort((a, b) => a.key.compareTo(b.key)));
       File(_fixturePath).writeAsStringSync(
           '${const JsonEncoder.withIndent('  ').convert({
-                '_meta': {'recorded_on': 'library-batch-c C1 (914-row library)', 'personas': actual.length},
+                '_meta': {'recorded_on': 'Unit 1B-F (the core-list pool the only picker, seed v25)', 'personas': actual.length},
                 ...sorted,
               })}\n');
     }
@@ -165,7 +165,7 @@ void main() {
   });
 
   test('golden: persona count matches the fixture', () {
-    expect(personas.length, 998);
+    expect(personas.length, 1010); // 998 + Unit 1B-F's 12 exclude-everything personas (Ruling 4)
     if (!record) {
       final fixture = jsonDecode(File(_fixturePath).readAsStringSync())
           as Map<String, dynamic>;

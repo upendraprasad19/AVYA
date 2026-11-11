@@ -73,6 +73,9 @@ void main() {
     test('the library JSON and every injury-tag table on disk are account', () {
       final tables = tablesOnDisk();
       expect(tables, isNotEmpty, reason: 'positive control: the v14 table exists');
+      // Unit 1B-F (seed v25): the injury-tag record for kept rows is claimed by the same rule (a SAFETY change).
+      expect(tables, contains('scripts/data/library_injury_additions_v25.json'),
+          reason: 'the v25 injury-tag record is on disk and matched by the tables rule');
       for (final p in [_libraryGlob, ...tables]) {
         expect(tier(p), 'account', reason: p);
         expect(ruleFor(p)?.glob, p == _libraryGlob ? _libraryGlob : _tablesGlob,

@@ -12,7 +12,7 @@
 // (the ship-dark guarantee that closes the rejected-intersection 41-regression);
 // (2) exclude 'cables' @ full_gym → no selected exercise requires cables;
 // (3) exclude EVERYTHING → a valid bodyweight plan still fills every slot AND no
-// selected exercise requires an excluded item (the att5 floor holds); (4) a
+// selected exercise requires an excluded item; (4) a
 // bare-String / un-normalized community exerciseBox row is excluded correctly and
 // never crashes (the e9d1c7 read class).
 
@@ -26,9 +26,10 @@ import 'package:hive_flutter/hive_flutter.dart';
 import 'package:icanbefitter/core/services/guarded_box.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
 import 'package:icanbefitter/core/utils/equipment_vocab.dart';
-import 'package:icanbefitter/shared/repositories/plan_engine/exercise_selector.dart';
+import 'package:icanbefitter/shared/repositories/plan_engine/core_list_selector.dart';
 import 'package:icanbefitter/shared/repositories/plan_engine/models.dart';
 import 'package:icanbefitter/shared/repositories/plan_engine/plan_generator.dart';
+import 'package:icanbefitter/shared/repositories/plan_engine/training_history_analyzer.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -256,9 +257,9 @@ void main() {
     await exBox.put('community_test_row', {
       'id': 'community_test_row',
       'name': 'Community Cable Move',
-      'movement_pattern': 'horizontal_pull',
-      'exercise_type': 'isolation',
-      'target_focus': 'lats',
+      'movement_pattern': ['horizontal_pull'],
+      'exercise_type': ['compound'],
+      'target_focus': ['Lats'],
       'primary_muscles': ['Lats'],
       'equipment_tier': ['full_gym'],
       'suitable_for': ['Beginner', 'Intermediate', 'Advanced'],
@@ -267,10 +268,38 @@ void main() {
       'default_reps': '12',
       'rep_range': '10-15',
       'equipment_needed': 'Cable Machine', // BARE STRING + un-normalized casing
+      // Unit 1B-F: the core-list pool (the only picker since the flip) reads only rows on a core list, so the row
+      // carries `core_levels`; the positive control below shows it enters a slot's pool when nothing is excluded.
+      'core_levels': ['beginner', 'intermediate', 'advanced'],
+      'priority_tier': 1,
     });
     addTearDown(() => exBox.delete('community_test_row'));
 
     await setFlag(true);
+    // Positive control on the picker's own filter (rankedPool, the core-list pool's hard filter): with nothing
+    // excluded the row is a candidate for a Lats horizontal_pull slot; excluding cables drops it. The bare-String
+    // equipment_needed is read by the same EquipmentVocab.fromProfile both times.
+    List<Map<String, dynamic>> poolFor(Set<String> excl) => CoreListSelector.rankedPool(
+          rows: [Map<String, dynamic>.from(exBox.get('community_test_row') as Map)],
+          slot: MuscleSlot(
+            targetMuscle: 'Lats',
+            movementPattern: 'horizontal_pull',
+            exerciseType: 'compound',
+            priority: 1,
+          ),
+          level: 'intermediate',
+          phase: 1,
+          equipmentTier: 'full_gym',
+          capability: TrainingHistoryAnalyzer.resolveCapability(
+              tier: 'full_gym', exclusions: excl, flagEnabled: true),
+          exclusions: excl,
+          isContraindicated: (_) => false,
+          pickedNames: const {},
+          demotedNames: const {},
+        ).ordered;
+    expect(poolFor(const {}).map((r) => r['name']), ['Community Cable Move'],
+        reason: 'control: the community row is a candidate when nothing is excluded');
+    expect(poolFor(const {'cables'}), isEmpty);
     // Must not throw (the e9d1c7 crash class) and must exclude the community row.
     late Phase plan;
     expect(() => plan = gen(exclusions: const ['cables']), returnsNormally,
@@ -286,45 +315,5 @@ void main() {
         reason: 'the un-normalized community row ["Cable Machine"] normalizes to '
             'cables on read and is excluded — B1 is correct before B2.');
     await setFlag(false);
-  });
-
-  test('att5 FLOOR INVARIANT: every universalPoolV4 pattern retains a bodyweight '
-      'survivor under exclude-everything (B-pass P2-1)', () {
-    // The att5 skip's "never empties a slot" guarantee is a property of the pool
-    // DATA + library tags, NOT of floor-sanitize. vertical_pull + elbow_flexion
-    // survive ONLY via Inverted Row (equipment_needed:['bodyweight']) today —
-    // this pins the invariant so a retag/removal of a pool floor move red-flags
-    // here instead of silently dropping a bodyweight-only user's slots.
-    final rows = jsonDecode(
-      File('assets/data/exercise_library.json').readAsStringSync(),
-    ) as List;
-    final eqByName = <String, dynamic>{};
-    for (final r in rows.whereType<Map>()) {
-      eqByName[(r['name'] as String).toLowerCase()] = r['equipment_needed'];
-    }
-    bool survives(String name) {
-      final eq = eqByName[name.toLowerCase()];
-      if (eq == null) return true; // not in library → placeholder = bodyweight
-      final canon = EquipmentVocab.fromProfile(eq).toSet();
-      return canon.isEmpty || canon.every((t) => t == 'bodyweight');
-    }
-    final patternsWithoutSurvivor = <String>[];
-    ExerciseSelector.universalPoolV4.forEach((pattern, pool) {
-      if (!pool.any(survives)) patternsWithoutSurvivor.add(pattern);
-    });
-    // Batch C2a (OI-460): survives() above returns true for a name the library does not carry, so a pool name whose row was
-    // REMOVED would still count as a survivor. Each pattern must keep one entry that resolves to a real row by exact name.
-    final patternsWithoutResolvedSurvivor = <String>[];
-    ExerciseSelector.universalPoolV4.forEach((pattern, pool) {
-      final ok = pool.any((n) => eqByName.containsKey(n.toLowerCase()) && survives(n));
-      if (!ok) patternsWithoutResolvedSurvivor.add(pattern);
-    });
-    expect(patternsWithoutResolvedSurvivor, isEmpty,
-        reason: 'every universalPoolV4 pattern must keep a bodyweight-only entry that resolves to a shipped row by exact name '
-            '(a removed name passes survives() vacuously). Offenders: $patternsWithoutResolvedSurvivor');
-    expect(patternsWithoutSurvivor, isEmpty,
-        reason: 'every universalPoolV4 pattern must retain ≥1 bodyweight-surviving '
-            'pool move so the att5 exclusion skip never empties a slot. '
-            'Offenders: $patternsWithoutSurvivor');
   });
 }

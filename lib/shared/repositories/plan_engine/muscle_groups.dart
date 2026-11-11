@@ -1,8 +1,8 @@
 // Batch 9 (W2.7 volume titration) — canonical library-muscle-token → major
 // muscle-group map.
 //
-// Shared by the plan-quality scorecard (`test/plan_generator/plan_scorecard.dart`,
-// whose `_groupOf` now delegates here) AND `VolumeTitration` — which aggregates
+// Read by `VolumeTitration` (the plan-quality scorecard that also delegated here was
+// deleted with the cascade mirrors in Unit 1B-F) — which aggregates
 // the per-exercise e1RM trend and clamps weekly sets at the GROUP level, so the
 // [MEV,MRV] band is a science-valid PER-GROUP landmark rather than a
 // per-fragmented-sub-token one (the library splits e.g. chest into

@@ -15,7 +15,10 @@
 // GATED in every block: no unsafe main pick, no unsafe warm-up / cool-down pick, no pick whose name is not a library row
 // (such a pick would be skipped silently by the tag lookup, so `unsafe == 0` could hide it), no main pick the run's
 // equipment tier cannot perform (`unperformable`, EquipmentCapability, read from the library row) and no exercise twice in
-// one day (`duplicates`); no empty day and no one-exercise day; every scanned plan week has the day count the run asked
+// one day (`duplicates`); no main pick that is a retired row (the core-list gate's definition: empty `core_levels` and no
+// `variant_family`) or a calisthenics-skill / olympic row, and none of Ruling 12's 14 jump rows for a hip-injured run (Unit
+// 1B-F, docs/plans/2026-11-10-generator-1bf-flip.md; the tag check above catches them through `hip` too, this one by id, so a
+// dropped tag still fails); no empty day; every scanned plan week has the day count the run asked
 // for (a day that never appears is neither empty nor thin); and the scan saw days and picks at all. GATED in singles
 // (both), pairs (both) and repeat: no day under 3 exercises ("thin"; the thin-day top-up, OI-401, takes it to 0, and the 629
 // rows of Batch C1 took the last two pairs personas, OI-408, to 0 as well). Out of scope: the cardio finisher (WorkoutDay.finisher). It takes no injuries and no screen shows it (OI-396).
@@ -46,9 +49,18 @@ const kSweepTiers = ['bodyweight', 'home_dumbbells', 'basic_gym', 'full_gym'];
 const kSweepGoals = ['build_muscle', 'lose_fat', 'strength', 'general_fitness'];
 const kSweepLevels = ['beginner', 'intermediate', 'advanced'];
 
+/// Unit 1B-F, Ruling 12 (founder d19): the 14 lower-body jump rows tagged `hip` in seed v25 (G3582 Lunge with Jump
+/// already carried it). A hip-injured run must hold none of them, whatever the tags say.
+const kHipJumpIds = {
+  'E063', 'E065', 'E066', 'E193', 'E202', 'G1473', 'G1472', 'G0053', 'G0371', 'G3219', 'G3361', 'G3222', 'G1201', 'G3656',
+};
+
 class SweepTally {
   int runs = 0, days = 0, picks = 0, empty = 0, thin = 0, unsafeMain = 0, unsafeWarm = 0;
   int unresolvedMain = 0, unresolvedWarm = 0, unperformable = 0, duplicates = 0, wrongDayCount = 0;
+  int flagged = 0, hipJump = 0;
+  final flaggedPicks = <String>{};
+  final hipJumpPicks = <String>{};
   final sizes = <int, int>{};
   final thinBy = <String, int>{};
   String block = '';
@@ -69,6 +81,9 @@ class SweepHarness {
   late Directory _tempDir;
   final tagsByName = <String, Set<String>>{};
   final needsByName = <String, Object?>{};
+  final idByName = <String, String>{};
+  /// Library names that are retired (empty `core_levels`, no `variant_family`) or skill / olympic rows, with the reason.
+  final flaggedByName = <String, String>{};
 
   static SweepHarness install() {
     TestWidgetsFlutterBinding.ensureInitialized();
@@ -100,7 +115,15 @@ class SweepHarness {
       tagsByName[(m['name'] as String).toLowerCase()] = {
         if (ic is List) ...ic.map((t) => t.toString().toLowerCase()),
       };
-      needsByName[(m['name'] as String).toLowerCase()] = m['equipment_needed'];
+      final lname = (m['name'] as String).toLowerCase();
+      needsByName[lname] = m['equipment_needed'];
+      idByName[lname] = (m['id'] ?? '').toString();
+      final levels = m['core_levels'];
+      if ((levels is! List || levels.isEmpty) && m['variant_family'] == null) {
+        flaggedByName[lname] = 'retired';
+      } else if (m['discipline'] == 'calisthenics_skill' || m['discipline'] == 'olympic') {
+        flaggedByName[lname] = '${m['discipline']}';
+      }
     }
     HiveService.instance.markInitializedForTests();
     await HiveUserSession.openForUser(_testUser);
@@ -123,6 +146,9 @@ class SweepHarness {
     required int phase,
     required List<String> injuries,
     Map<int, ({List<String> a, List<String> b})>? pins,
+    // Unit 1B-F (d23): null keeps generateV4's default length, so every 60-minute block and ceiling is unchanged.
+    int? minutes,
+    List<String> exclusions = const [],
   }) =>
       PlanGenerator.instance.generateV4(
         goal: goal,
@@ -131,7 +157,8 @@ class SweepHarness {
         phase: phase,
         experienceLevel: level,
         injuries: injuries,
-        equipmentExclusions: const [],
+        sessionDuration: minutes,
+        equipmentExclusions: exclusions,
         previousWeights: const {},
         pinnedExercisesByDay: pins,
       );
@@ -177,6 +204,18 @@ class SweepHarness {
                 '${day.exercises.map((e) => e.exerciseName).join(', ')}');
           }
         }
+        for (final e in day.exercises) {
+          final lname = e.exerciseName.toLowerCase();
+          final why = flaggedByName[lname];
+          if (why != null) {
+            t.flagged++;
+            t.flaggedPicks.add('$label: ${e.exerciseName} ($why)');
+          }
+          if (injuries.contains('hip') && kHipJumpIds.contains(idByName[lname])) {
+            t.hipJump++;
+            t.hipJumpPicks.add('$label: ${e.exerciseName}');
+          }
+        }
         void check(Iterable<PlannedExercise> list, bool main) {
           for (final e in list) {
             t.picks++;
@@ -213,7 +252,8 @@ class SweepHarness {
         'thin(<3) ${t.thin} one-exercise ${t.oneExercise.length} '
         'unsafe-main ${t.unsafeMain} unsafe-warm/cool ${t.unsafeWarm} '
         'unresolved-main ${t.unresolvedMain} unresolved-warm/cool ${t.unresolvedWarm} '
-        'unperformable ${t.unperformable} duplicates ${t.duplicates}\n'
+        'unperformable ${t.unperformable} duplicates ${t.duplicates} '
+        'retired/skill/olympic ${t.flagged} hip-jump ${t.hipJump}\n'
         '[$block] sizes $sizes\n'
         '[$block] thin by ${t.thinBy}\n'
         '[$block] unsafe ${(t.unsafe.toList()..sort())}\n'
@@ -239,6 +279,8 @@ class SweepHarness {
         reason: 'main picks the run\'s equipment tier cannot perform: ${t.cannotPerform}');
     expect(t.duplicates, 0, reason: 'a name twice in one day: ${t.duplicated}');
     expect(t.empty, 0, reason: 'a day with no exercise at all: ${t.emptyDays}');
+    expect(t.flagged, 0, reason: 'a retired, skill or olympic main pick: ${(t.flaggedPicks.toList()..sort()).take(10).toList()}');
+    expect(t.hipJump, 0, reason: 'a Ruling 12 jump row for a hip-injured run: ${(t.hipJumpPicks.toList()..sort()).take(10).toList()}');
   }
 
   /// Measured ceilings of the days the session set budget leaves thin, per block (the block name `report` is given): the
@@ -262,16 +304,24 @@ class SweepHarness {
   /// (probe, 2026-11-04): the 3 base sets, not the rest. Old 4/3/2 base sets with the new rests gives 30; the new 3 base
   /// sets with the old intensity-keyed rests gives 32. So a former 2-set endurance day now starts at 3 and a small
   /// injured pool spends its weekly band sooner.
+  /// Unit 1B-F (2026-11-11, the core-list pool the only picker; docs/plans/2026-11-10-generator-1bf-flip.md Ruling 8,
+  /// founder d16 / d23, owned by OI-452's 3-exercise day floor): re-recorded once on the final tree. Three ceilings ROSE,
+  /// `pairs` home_dumbbells 10 -> 20, basic_gym 22 -> 30, full_gym 14 -> 20 thin days and 0 -> 2 / 2 / 0 one-exercise days:
+  /// every one a shoulder + elbow day (Upper / Pull / Push of a 5-day split) whose press, lateral-raise and arm slots have
+  /// an empty core pool, where the deleted cascade filled them from the whole library (retired Floor Press, Bodyweight Rear
+  /// Delt Raise); the top-up's neighbour rows credit Back, and pass A's Back weekly top refuses a later day's third row.
+  /// The rest fell: `pairs46` home / basic / full 12 / 8 / 4 -> 0, `repeat bodyweight` 2 -> 0. The new block
+  /// `f_repeat_pairs30` (the pinned repeat over the 15 pairs at 30 minutes, beginner) is recorded at its measured counts.
   static const Map<String, (int thin, int one)> kThinCeilings = {
     'pairs bodyweight': (0, 0),
-    'pairs home_dumbbells': (10, 0),
-    'pairs basic_gym': (22, 0),
-    'pairs full_gym': (14, 0),
+    'pairs home_dumbbells': (20, 2),
+    'pairs basic_gym': (30, 2),
+    'pairs full_gym': (20, 0),
     'pairs46 bodyweight': (0, 0),
-    'pairs46 home_dumbbells': (12, 0),
-    'pairs46 basic_gym': (8, 0),
-    'pairs46 full_gym': (4, 0),
-    'repeat bodyweight': (2, 0),
+    'pairs46 home_dumbbells': (0, 0),
+    'pairs46 basic_gym': (0, 0),
+    'pairs46 full_gym': (0, 0),
+    'repeat bodyweight': (0, 0),
     'repeat home_dumbbells': (0, 0),
     'repeat basic_gym': (0, 0),
     'repeat full_gym': (0, 0),
@@ -283,6 +333,10 @@ class SweepHarness {
     'singles46 home_dumbbells': (0, 0),
     'singles46 basic_gym': (0, 0),
     'singles46 full_gym': (0, 0),
+    'f_repeat_pairs30 bodyweight': (60, 8),
+    'f_repeat_pairs30 home_dumbbells': (120, 2),
+    'f_repeat_pairs30 basic_gym': (94, 2),
+    'f_repeat_pairs30 full_gym': (27, 0),
   };
 
   /// Every block: thin days (under 3 exercises) and one-exercise days match the measured
@@ -345,21 +399,48 @@ class SweepHarness {
     return t;
   }
 
-  SweepTally runRepeat(String tier, List<int> days) {
+  SweepTally runRepeat(String tier, List<int> days, {int? minutes}) {
     final t = SweepTally();
     for (final injury in kSweepInjuries) {
       for (final goal in kSweepGoals) {
         for (final level in kSweepLevels) {
           for (final d in days) {
-            final first = gen(tier: tier, goal: goal, level: level, days: d, phase: 1, injuries: const []);
+            final first = gen(tier: tier, goal: goal, level: level, days: d, phase: 1, injuries: const [], minutes: minutes);
             final pins = namesByDay(first);
             scan(
               t,
-              gen(tier: tier, goal: goal, level: level, days: d, phase: 2, injuries: [injury], pins: pins),
+              gen(tier: tier, goal: goal, level: level, days: d, phase: 2, injuries: [injury], pins: pins, minutes: minutes),
               [injury],
               '$injury|$tier|$goal|$level|${d}d|p2-pinned',
               d,
             );
+          }
+        }
+      }
+    }
+    return t;
+  }
+
+  /// Unit 1B-F, Ruling 8 (d23): the pinned repeat over the 15 pairs at [minutes], [levels] only, every goal and 3-6 days.
+  /// The pins are the uninjured phase-1 plan at the SAME length (one per goal, level and day count, shared by the pairs).
+  SweepTally runRepeatPairs(String tier, {required int minutes, List<String> levels = const ['beginner']}) {
+    final t = SweepTally();
+    for (final goal in kSweepGoals) {
+      for (final level in levels) {
+        for (final d in const [3, 4, 5, 6]) {
+          final pins = namesByDay(
+              gen(tier: tier, goal: goal, level: level, days: d, phase: 1, injuries: const [], minutes: minutes));
+          for (var i = 0; i < kSweepPairInjuries.length; i++) {
+            for (var j = i + 1; j < kSweepPairInjuries.length; j++) {
+              final pair = [kSweepPairInjuries[i], kSweepPairInjuries[j]];
+              scan(
+                t,
+                gen(tier: tier, goal: goal, level: level, days: d, phase: 2, injuries: pair, pins: pins, minutes: minutes),
+                pair,
+                '${pair.join('+')}|$tier|$goal|$level|${d}d|p2-pinned|${minutes}min',
+                d,
+              );
+            }
           }
         }
       }

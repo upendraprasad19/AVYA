@@ -5,12 +5,14 @@
 //
 // Drives the REAL PlanGenerator.instance.generateV4 through the Hive-boot harness
 // (seed the FULL library into exerciseBox, call the real engine) — so the
-// _selectCandidate re-rank inside _cascadeFill is exercised end-to-end.
+// _selectCandidate re-rank inside `_pickCoreList` is exercised end-to-end (Unit
+// 1B-F deleted `_cascadeFill`; the top-up's own call is pinned in
+// thin_day_topup_behavioral_test.dart, "curated sub that sorts last").
 //
 // Proves:
 //  (1) ON prefers a curated sub — a shoulder-injured user's plan differs from OFF,
 //      and every ON-only pick is a curated InjurySubstitutes['shoulder'] name.
-//  (2) SAFETY — every cascade-selected exercise in the ON plan is shoulder-safe
+//  (2) SAFETY — every selected exercise in the ON plan is shoulder-safe
 //      (the re-rank runs on the post-injury-filter list → can't surface a
 //      contraindicated exercise).
 //  (3) INJURY-GATED — with NO injuries, ON == OFF (preferredFor([]) == [] → no-op).

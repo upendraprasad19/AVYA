@@ -1,4 +1,4 @@
-// Source-grep contract for plan generator targetCount + cascade depth.
+// Source-grep contract for plan generator targetCount (the cascade-depth half went with the cascade, Unit 1B-F).
 //
 // Originally landed as T-10 of `audit_2026_05_11_t1_t11_contracts_test.dart`.
 // Split per concept per tech-debt audit 2026-05-20 T12.
@@ -22,25 +22,7 @@ void main() {
       expect(src.contains("weekCharacter == 'deload'"), isTrue,
           reason: 'the deload (priority-1 only) rule must stay');
     });
-
-    test('exercise_selector cascade has the 5-attempt pattern', () {
-      final src = _src(
-          'lib/shared/repositories/plan_engine/exercise_selector.dart');
-      // Per lib/shared/repositories/plan_engine/CLAUDE.md the cascade has 5 attempts ending in
-      // universalPool. The canonical entry point is `_cascadeFill`
-      // and the comment "5-attempt cascade" / "5 attempts" pins the
-      // shape.
-      expect(src.contains('_cascadeFill'), isTrue,
-          reason: '_cascadeFill cascade entry point must exist.');
-      expect(
-        src.contains('5-attempt') ||
-            src.contains('5 attempt') ||
-            src.contains('5 attempts'),
-        isTrue,
-        reason: 'cascade must be documented as 5-attempt per lib/shared/repositories/plan_engine/CLAUDE.md.',
-      );
-      expect(src.contains('universalPool'), isTrue,
-          reason: 'universalPool fallback must exist (terminal attempt).');
-    });
+    // Unit 1B-F: the source-grep for the cascade's 5-attempt shape (`_cascadeFill`, the universal pool) was
+    // deleted with the cascade; the core-list path's own tests hold the picker.
   });
 }

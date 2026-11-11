@@ -137,7 +137,7 @@ void main() {
     final base = warmupCooldownNames(gen(injuries: const []));
 
     // ⚠ 2026-08-05 (e2d6b8): compare only the knee moves that are NOT themselves
-    // wrist-loading. `Jump Rope` is tagged {'knee','ankle','wrist'}
+    // wrist-loading. `Jump Rope` is tagged {'knee','ankle','wrist','hip'} (hip since seed v25)
     // (warmup_cooldown.dart:43) and lives ONLY in the _gymCardio pool
     // (warmup_cooldown.dart:110), so dropping it for a wrist injury is CORRECT —
     // it is not the wrist filter leaking into knee moves.
@@ -165,8 +165,8 @@ void main() {
     // Precedent: warmup_library_injury_mirror_test.dart pins the same map by
     // value rather than deriving from it.
     expect(WarmupCooldownSelector.moveInjuries['Jump Rope'],
-        {'knee', 'ankle', 'wrist'},
-        reason: 'Jump Rope must stay knee+ankle+wrist tagged. The wristTagged '
+        {'knee', 'ankle', 'wrist', 'hip'},
+        reason: 'Jump Rope must stay knee+ankle+wrist(+hip since seed v25, Unit 1B-F) tagged. The wristTagged '
             'exclusion above is hardcoded on this fact; if the tags change, fix '
             'both together rather than letting the exclusion drift.');
 

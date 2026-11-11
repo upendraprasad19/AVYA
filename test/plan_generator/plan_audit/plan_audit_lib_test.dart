@@ -39,6 +39,7 @@ final _lib = {
         pattern: ['elbow_flexion'], needed: ['dumbbells'], type: ['isolation'],
         muscles: ['Biceps']),
     _ex('Pike Push Up', pattern: ['vertical_push'], muscles: ['Front Deltoid']),
+    _ex('Skater Squat', type: ['calisthenics']),
     _ex('Barbell Overhead Press',
         pattern: ['vertical_push'], needed: ['barbell'], muscles: ['Front Deltoid']),
     _ex('Lateral Raise',
@@ -129,6 +130,33 @@ void main() {
     expect(r.issues.where((i) => i.code == 'zero_muscle'), hasLength(3));
   });
 
+  // Unit 1B-F (OI-485 (3)): iso_first reads the BUILT type, x[7], when the dump carries it. Both directions: a row the
+  // library calls `calisthenics` built as `compound` is a compound opener (the 12 strength Squat Days that opened
+  // with E143 Skater Squat), and a library compound built as `isolation` is not.
+  List<Object> built(String name, int sets, String type) => [name, sets, '10', 60, 0, 0, <String>[], type];
+  test('iso_first: a library non-compound built as compound is a compound opener', () {
+    final r = auditor.audit(_plan([
+      [built('Skater Squat', 3, 'compound'), built('Goblet Squat', 3, 'compound')],
+    ]));
+    expect(r.isoFirstDays, 0);
+    final lib = auditor.audit(_plan([
+      [['Skater Squat', 3], ['Goblet Squat', 3]],
+    ]));
+    expect(lib.isoFirstDays, 1, reason: 'non-vacuity: without x[7] the library type flags the day');
+  });
+  test('iso_first: a library compound built as isolation opens the day as an isolation', () {
+    final r = auditor.audit(_plan([
+      [built('Goblet Squat', 3, 'isolation'), built('Bodyweight Squat', 3, 'compound')],
+    ]));
+    expect(r.isoFirstDays, 1);
+  });
+  test('iso_first: only a built `compound` counts as compound (a third type, e.g. calisthenics, does not)', () {
+    final r = auditor.audit(_plan([
+      [built('Goblet Squat', 3, 'calisthenics'), built('Bodyweight Squat', 3, 'compound')],
+    ]));
+    expect(r.isoFirstDays, 1);
+  });
+
   test('iso_first and lead_starved count on week 1', () {
     final r = auditor.audit(_plan([
       [['Dumbbell Curl', 3], ['Goblet Squat', 3]],
@@ -182,7 +210,7 @@ void main() {
     expect(codes(r), ['no_deload']);
   });
 
-  test('summary counts plans per code, and the table renders both worlds', () {
+  test('summary counts plans per code, and the table renders one column per summary', () {
     final a = auditor.audit(_plan([
       [['Bodyweight Squat', 3]],
     ]));
@@ -193,7 +221,10 @@ void main() {
     expect(s.plans, 2);
     expect(s.code('unloaded'), 1);
     expect(s.verdicts, {'needs_work': 1, 'suitable': 1});
-    final t = sectionOneTable(s, s);
+    expect(sectionOneTable([('this tree', s)]),
+        contains('| plans with an unloaded pick where a loaded row fits | 1 |\n'));
+    final t = sectionOneTable([('before', s), ('after', s)]);
+    expect(t, contains('| measure | before | after |\n|---|---|---|'));
     expect(t, contains('| plans with an unloaded pick where a loaded row fits | 1 | 1 |'));
   });
 }

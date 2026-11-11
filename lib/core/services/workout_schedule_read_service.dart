@@ -897,7 +897,7 @@ class WorkoutScheduleReadService {
   /// this call on `crossPhaseVarietyEnabled && pins == null`.
   Map<int, ({List<String> a, List<String> b})> previousPhaseNamesByDay() {
     // Ship-dark, service-layer gate: flag OFF → no getWeek reads, empty avoid-set
-    // → the cascade is byte-identical. The callers pass this only when pins==null.
+    // → the picker is byte-identical. The callers pass this only when pins==null.
     if (!PlanEngineFlags.crossPhaseVarietyEnabled) return const {};
     return previousPhaseNamesFrom(week1: getWeek(1), week2: getWeek(2));
   }

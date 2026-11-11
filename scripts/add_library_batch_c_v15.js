@@ -30,6 +30,9 @@
 //    then merged_ids + name_aliases on `into`), run after the standard_swap repoint and before the media stage.
 //  - SUITABLE_FOR STAGE (Library Batch S1b-2): scripts/data/library_s1b2_suitable_for.json, the core-levels contract for
 //    `suitable_for` of kept rows, run right after the core-levels stage.
+//  - INJURY-TAG STAGE (Unit 1B-F, Ruling 12, d19): scripts/data/library_injury_additions_v25.json, the same contract for
+//    `injury_contraindications` of kept rows (the five lower-body jump E-rows gain `hip`), run right after the
+//    suitable_for stage. New rows take their tags from the injury table, never from this record.
 //  - A row is built from an ALLOW-LIST: the 40 required keys, then variant_family (from the table), then skill_track,
 //    skill_step, progression_to, regression_to where non-null, then slot_pattern and same_movement_as where present (LINK). Everything else in the source (confidence, note, changes,
 //    hold, _coreAdded, demo_*, a future meta key) is dropped.
@@ -404,6 +407,36 @@ function suitableForRow(row, e) {
   throw new Error(`${e.id}: suitable_for ${cur} matches neither the suitable_for record's before nor its after (update after, or restore the row)`);
 }
 
+// Unit 1B-F (Ruling 12, founder d19 2026-11-10): the injury-tag record for kept rows. Same contract as the
+// suitable_for record: a row at `before` takes `after`, a row at `after` is a no-op, anything else stops the run; an id
+// that is not a kept row, or a duplicate id, stops the run. Absent = printed no-op (tests copy this script).
+const INJURY_TAGS = path.join(__dirname, 'data', 'library_injury_additions_v25.json');
+
+function readInjuryTags() {
+  if (!fs.existsSync(INJURY_TAGS)) {
+    console.log(`injury-tag stage skipped: ${INJURY_TAGS} not found`);
+    return null;
+  }
+  const rec = JSON.parse(fs.readFileSync(INJURY_TAGS, 'utf8'));
+  if (!rec || !Array.isArray(rec.rows)) throw new Error(`injury-tag record ${INJURY_TAGS} has no rows array`);
+  const byId = new Map();
+  for (const e of rec.rows) {
+    if (!e || typeof e.id !== 'string' || !Array.isArray(e.before) || !Array.isArray(e.after)) {
+      throw new Error(`injury-tag record ${INJURY_TAGS}: every row needs id, before and after arrays`);
+    }
+    if (byId.has(e.id)) throw new Error(`injury-tag record ${INJURY_TAGS} repeats ${e.id}`);
+    byId.set(e.id, e);
+  }
+  return byId;
+}
+
+function injuryTagsRow(row, e) {
+  const cur = JSON.stringify(row.injury_contraindications);
+  if (cur === JSON.stringify(e.after)) return row;
+  if (cur === JSON.stringify(e.before)) return { ...row, injury_contraindications: e.after };
+  throw new Error(`${e.id}: injury_contraindications ${cur} matches neither the injury-tag record's before nor its after (update after, or restore the row)`);
+}
+
 function main() {
   const media = MEDIA_NONE ? null : readMediaTable();
   const before = fs.readFileSync(LIBRARY, 'utf8');
@@ -457,6 +490,16 @@ function main() {
     for (let i = 0; i < kept.length; i++) {
       const e = suitableFor.get(kept[i].id);
       if (e) kept[i] = suitableForRow(kept[i], e);
+    }
+  }
+  const injuryTags = readInjuryTags();
+  if (injuryTags) {
+    const keptIds = new Set(kept.map((r) => r.id));
+    const foreign = [...injuryTags.keys()].filter((i) => !keptIds.has(i));
+    if (foreign.length) throw new Error(`injury-tag record names ids that are not kept rows: ${foreign.join(' ')}`);
+    for (let i = 0; i < kept.length; i++) {
+      const e = injuryTags.get(kept[i].id);
+      if (e) kept[i] = injuryTagsRow(kept[i], e);
     }
   }
 

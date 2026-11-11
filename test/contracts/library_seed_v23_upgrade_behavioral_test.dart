@@ -29,8 +29,15 @@ List<Map<String, dynamic>> _bundled() =>
 /// chain below byte-proven.
 List<Map<String, dynamic>> _v23Bundle() {
   final fx = jsonDecode(File('test/fixtures/library_e053_row_v23.json').readAsStringSync()) as Map<String, dynamic>;
+  // Unit 1B-F (seed v25) tagged 14 rows `hip`; their v24 (= v23) tags are restated in library_hip_tags_v24.json.
+  final hip = ((jsonDecode(File('test/fixtures/library_hip_tags_v24.json').readAsStringSync()) as Map<String, dynamic>)['rows']
+      as Map<String, dynamic>);
   final rows = [
-    for (final r in _bundled()) r['id'] == 'G1373' ? (Map<String, dynamic>.from(r)..remove('name_aliases')..remove('merged_ids')) : r,
+    for (final r0 in _bundled())
+      () {
+        final r = hip.containsKey(r0['id']) ? (Map<String, dynamic>.from(r0)..['injury_contraindications'] = hip[r0['id']]) : r0;
+        return r['id'] == 'G1373' ? (Map<String, dynamic>.from(r)..remove('name_aliases')..remove('merged_ids')) : r;
+      }(),
   ];
   rows.insert((fx['_meta'] as Map<String, dynamic>)['v23_index'] as int, fx['row'] as Map<String, dynamic>);
   return rows;
@@ -92,7 +99,7 @@ void main() {
         '7a37c26c8fdc14e075c90558e4cf6adea71ab91f7614982e910d23e4962065d8');
   });
 
-  test('a v22 box ends at the current version (v24) with the nine rows and the widened suitable_for, and every other row unchanged', () async {
+  test('a v22 box ends at the current version (v25) with the nine rows and the widened suitable_for, and every other row unchanged', () async {
     final hive = HiveService.instance;
     await _putV22Box(hive);
     await _markSeeded(hive, 22);
@@ -113,16 +120,16 @@ void main() {
       expect(jsonEncode(_asJson(hive.exerciseBox.get(e.key))), e.value, reason: '${e.key} must be unchanged');
     }
     expect(hive.exerciseBox.length, _bundled().length);
-    expect(hive.configBox.get('exercise_library_version') as int, 24);
+    expect(hive.configBox.get('exercise_library_version') as int, 25);
   });
 
-  test('MIRROR: a box already at the current version (v24, Library Batch S1b-3) is not rewritten (the upgrade fires only when the stored version is older)', () async {
+  test('MIRROR: a box already at the current version (v25, Unit 1B-F) is not rewritten (the upgrade fires only when the stored version is older)', () async {
     final hive = HiveService.instance;
     await _putV22Box(hive);
-    await _markSeeded(hive, 24);
+    await _markSeeded(hive, 25);
     await SeedService.instance.seedIfNeeded();
     expect(hive.exerciseBox.get('N14'), isNull);
     expect(_asJson(hive.exerciseBox.get('E045'))['suitable_for'], ['Intermediate', 'Advanced']);
-    expect(hive.configBox.get('exercise_library_version') as int, 24);
+    expect(hive.configBox.get('exercise_library_version') as int, 25);
   });
 }

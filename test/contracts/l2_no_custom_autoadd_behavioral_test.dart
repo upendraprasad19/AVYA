@@ -6,7 +6,9 @@
 // `ExerciseSelector._applyHistoryAdjustments` (phase >= 2) appended EVERY custom
 // whose primary_muscles substring-matched any slot of the day, uncapped. L2 was
 // removed; L6 (demote a lift the user swapped away from) in the same post-pass
-// stays.
+// stays. Unit 1B-F deleted that post-pass with the cascade: L6 now lives in the
+// core-list path (`_pickCoreList`'s demoted set, read by `rankedPool`'s
+// `demotedNames` partition and the avoid set), which test (4) pins.
 //
 // Real Hive + the full seeded library + a user-scoped customBox, the REAL
 // PlanGenerator.generateV4 at phase >= 2 (the only phases L2 ran at).
@@ -156,7 +158,7 @@ void main() {
         after.weekPlans.first.workoutDays.first.exercises.map((e) => e.exerciseName);
     expect(firstDay.contains(victim), isFalse,
         reason: 'L6 (kept) must still swap a demoted lift for a same-pattern '
-            'alternative — removing L2 must not disable the shared post-pass.');
+            'alternative.');
     expect(allNames(after).where(customs.containsKey), isEmpty);
   });
 }

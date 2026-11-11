@@ -5023,6 +5023,7 @@
     "is_foundational": true,
     "injury_contraindications": [
       "ankle",
+      "hip",
       "knee",
       "wrist"
     ],
@@ -5192,6 +5193,7 @@
     "is_foundational": true,
     "injury_contraindications": [
       "ankle",
+      "hip",
       "knee",
       "shoulder",
       "wrist"
@@ -5277,6 +5279,7 @@
     "is_foundational": true,
     "injury_contraindications": [
       "ankle",
+      "hip",
       "knee"
     ],
     "is_bilateral": true,
@@ -12470,6 +12473,7 @@
     "is_active": true,
     "injury_contraindications": [
       "ankle",
+      "hip",
       "knee"
     ],
     "is_bilateral": true,
@@ -12797,6 +12801,7 @@
     "is_active": true,
     "injury_contraindications": [
       "ankle",
+      "hip",
       "knee"
     ],
     "is_bilateral": true,
@@ -20002,6 +20007,7 @@
     "is_foundational": false,
     "injury_contraindications": [
       "ankle",
+      "hip",
       "knee"
     ],
     "is_bilateral": true,
@@ -23392,6 +23398,7 @@
     "is_foundational": false,
     "injury_contraindications": [
       "ankle",
+      "hip",
       "knee",
       "lower_back",
       "shoulder",
@@ -32823,6 +32830,7 @@
     "is_foundational": false,
     "injury_contraindications": [
       "ankle",
+      "hip",
       "knee"
     ],
     "is_bilateral": true,
@@ -39115,6 +39123,7 @@
     "is_foundational": false,
     "injury_contraindications": [
       "ankle",
+      "hip",
       "knee",
       "lower_back"
     ],
@@ -45376,6 +45385,7 @@
     "is_foundational": false,
     "injury_contraindications": [
       "ankle",
+      "hip",
       "knee",
       "lower_back"
     ],
@@ -52697,6 +52707,7 @@
     "is_foundational": false,
     "injury_contraindications": [
       "ankle",
+      "hip",
       "knee"
     ],
     "is_bilateral": true,
@@ -56683,6 +56694,7 @@
     "is_foundational": false,
     "injury_contraindications": [
       "ankle",
+      "hip",
       "knee"
     ],
     "is_bilateral": false,
@@ -58823,6 +58835,7 @@
     "is_foundational": false,
     "injury_contraindications": [
       "ankle",
+      "hip",
       "knee"
     ],
     "is_bilateral": true,
@@ -60182,6 +60195,7 @@
     "is_foundational": false,
     "injury_contraindications": [
       "ankle",
+      "hip",
       "knee"
     ],
     "is_bilateral": true,

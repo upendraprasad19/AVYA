@@ -29,6 +29,7 @@ const _e230Rel = 'scripts/data/library_e230_retag.json';
 const _s1Rel = 'scripts/data/library_s1_core_levels.json';
 const _s1b2Rel = 'scripts/data/library_s1b2_suitable_for.json';
 const _s1b3MergesRel = 'scripts/data/library_s1b3_merges.json';
+const _v25InjRel = 'scripts/data/library_injury_additions_v25.json';
 const _mediaKeys = ['media_slug', 'media_version', 'media_source'];
 
 Json _readJson(String path) => jsonDecode(File(path).readAsStringSync()) as Json;
@@ -42,7 +43,7 @@ class _Tree {
     Directory('${dir.path}/scripts/data').createSync(recursive: true);
     Directory('${dir.path}/assets/data').createSync(recursive: true);
     File(script).writeAsStringSync(File(_importer).readAsStringSync());
-    for (final e in {src: _srcRel, inj: _injRel, media: _mediaRel, lib: _libRel, retag: _e230Rel, coreLevels: _s1Rel, suitableFor: _s1b2Rel, merges: _s1b3MergesRel}.entries) {
+    for (final e in {src: _srcRel, inj: _injRel, media: _mediaRel, lib: _libRel, retag: _e230Rel, coreLevels: _s1Rel, suitableFor: _s1b2Rel, merges: _s1b3MergesRel, injuryTags: _v25InjRel}.entries) {
       File(e.key).writeAsStringSync(File(e.value).readAsStringSync());
     }
   }
@@ -57,6 +58,7 @@ class _Tree {
   String get coreLevels => '${dir.path}/scripts/data/library_s1_core_levels.json';
   String get suitableFor => '${dir.path}/scripts/data/library_s1b2_suitable_for.json';
   String get merges => '${dir.path}/scripts/data/library_s1b3_merges.json';
+  String get injuryTags => '${dir.path}/scripts/data/library_injury_additions_v25.json';
 
   List<String> get base => ['--library', lib, '--source', src, '--table', inj];
 
@@ -647,6 +649,92 @@ void main() {
         [...rows, rows.first],
       ]) {
         File(t.suitableFor).writeAsStringSync(jsonEncode({...base, 'rows': bad}));
+        final text = t.readLibText();
+        final r = await t.importer();
+        expect(r.exitCode, isNot(0), reason: _out(r));
+        expect(t.readLibText(), text, reason: 'a refused run must not write');
+      }
+    });
+  });
+
+  // Unit 1B-F, Ruling 12 (founder d19): the five lower-body jump E-rows gain `hip`. Mutations (rule 21, each reddens a
+  // test below): the stage call removed from main() ((a) and (b)); a `before` mismatch accepted, the row left as it is
+  // ((c)); the record ignored by --check (the stage skipped when CHECK is set: (b)).
+  group('the injury-tag stage (Unit 1B-F, seed v25)', () {
+    setUp(() => File('${t.dir.path}/scripts/data/library_batch_c2_removals.json')
+        .writeAsStringSync(File('scripts/data/library_batch_c2_removals.json').readAsStringSync()));
+
+    List<Json> recRows() => (_readJson(t.injuryTags)['rows'] as List).cast<Json>();
+
+    String libAtBefore() {
+      final lib = t.readLib();
+      for (final e in recRows()) {
+        final i = lib.indexWhere((r) => r['id'] == e['id']);
+        lib[i] = {...lib[i], 'injury_contraindications': e['before']};
+      }
+      return const JsonEncoder.withIndent('  ').convert(lib);
+    }
+
+    test('(a) a library at before takes after for the five E-rows, key positions kept, nothing else moves, --check agrees', () async {
+      expect({for (final e in recRows()) e['id']}, {'E063', 'E065', 'E066', 'E193', 'E202'});
+      for (final e in recRows()) {
+        expect([...(e['after'] as List)], [...(e['before'] as List), 'hip']..sort(), reason: '${e['id']}: after = before + hip');
+      }
+      final beforeText = libAtBefore();
+      final beforeRows = _byId((jsonDecode(beforeText) as List).cast<Json>());
+      t.writeLibText(beforeText);
+      final r = await t.importer();
+      expect(r.exitCode, 0, reason: _out(r));
+      final byId = _byId(t.readLib());
+      final ids = {for (final e in recRows()) e['id'] as String};
+      for (final e in recRows()) {
+        expect(jsonEncode(byId[e['id']]!['injury_contraindications']), jsonEncode(e['after']), reason: '${e['id']}');
+        expect(byId[e['id']]!.keys.toList(), beforeRows[e['id']]!.keys.toList(), reason: 'key positions kept');
+      }
+      for (final e in beforeRows.entries.where((e) => !ids.contains(e.key))) {
+        expect(jsonEncode(byId[e.key]), jsonEncode(e.value), reason: '${e.key} must be untouched');
+      }
+      expect(t.readLibText(), File(_libRel).readAsStringSync(), reason: 'the result is the shipped library, byte for byte');
+      final ok = await t.importer(extra: ['--check']);
+      expect(ok.exitCode, 0, reason: _out(ok));
+    });
+
+    test('(b) --check on the library at before fails (a hand edit of an E-row cannot pass)', () async {
+      t.writeLibText(libAtBefore());
+      final r = await t.importer(extra: ['--check']);
+      expect(r.exitCode, isNot(0), reason: _out(r));
+    });
+
+    test('(c) a foreign value is refused naming the id, and nothing is written', () async {
+      final lib = t.readLib();
+      lib.singleWhere((r) => r['id'] == 'E193')['injury_contraindications'] = ['knee'];
+      final foreign = const JsonEncoder.withIndent('  ').convert(lib);
+      t.writeLibText(foreign);
+      final r = await t.importer();
+      expect(r.exitCode, isNot(0), reason: _out(r));
+      expect(_err(r), allOf(contains('E193'), contains('injury-tag record')));
+      expect(t.readLibText(), foreign, reason: 'a refused run must not write');
+    });
+
+    test('(d) the record absent is a printed no-op: the library at before stays at before', () async {
+      final beforeText = libAtBefore();
+      File(t.injuryTags).deleteSync();
+      t.writeLibText(beforeText);
+      final r = await t.importer();
+      expect(r.exitCode, 0, reason: _out(r));
+      expect(_out(r), contains('injury-tag stage skipped'));
+      expect(t.readLibText(), beforeText);
+    });
+
+    test('(e) a record naming a source id or an unknown id, or repeating an id, is refused', () async {
+      final base = _readJson(_v25InjRel);
+      final rows = (base['rows'] as List).cast<Json>();
+      for (final bad in [
+        [...rows, {'id': 'G1472', 'before': <String>['ankle', 'hip', 'knee'], 'after': <String>['ankle', 'hip', 'knee']}],
+        [...rows, {'id': 'E999', 'before': <String>[], 'after': <String>['hip']}],
+        [...rows, rows.first],
+      ]) {
+        File(t.injuryTags).writeAsStringSync(jsonEncode({...base, 'rows': bad}));
         final text = t.readLibText();
         final r = await t.importer();
         expect(r.exitCode, isNot(0), reason: _out(r));

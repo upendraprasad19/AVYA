@@ -317,7 +317,7 @@ class TrainingHistoryAnalyzer {
       // token). That branch was unreachable from production while this method
       // gated on `tier == 'bodyweight'` — removing the gate is exactly what makes
       // it reachable, so a corrupt `equipment_access` would otherwise hand the
-      // user barbell work at attempt 1. Mirrors equipmentAccessOf's fail-safe
+      // user barbell work at the first pick. Mirrors equipmentAccessOf's fail-safe
       // default. The policy lives HERE, in the producer, so the vocabulary
       // primitive keeps its contract for the AI-coach snapshot path.
       final resolvedTier =

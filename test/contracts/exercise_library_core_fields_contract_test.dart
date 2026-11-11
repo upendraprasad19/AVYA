@@ -1,7 +1,7 @@
 // Batch B1 Task 2 — the core-list selection fields on the shipped library
 // (seed v13). Written by scripts/add_library_core_fields_v13.js from the
 // committed table scripts/data/library_core_fields_v13.json; read by
-// CoreListSelector (Task 3) behind `enable_core_list_pool`.
+// CoreListSelector (Task 3; behind `enable_core_list_pool` until Unit 1B-F).
 //
 // Every literal below was computed from the data (code-review lens 8): the
 // discarded ids from the table, the overlay values from plan Rulings 3(a) and
