@@ -6605,7 +6605,7 @@ concepts:
         line_range: 168-351
         method: build
         semantic: flag-check
-        fields_read: [kind, resolved_at, date, planned_count, logged_count]
+        fields_read: [kind, resolved_at, date, planned_count, logged_count, created_at]
         notes: |
           ChatHistoryNotifier.build (declared 164; re-based 2026-07-30 —
           Unit 8 / coach-media-consent inserted ~60 lines above it for the
@@ -6617,6 +6617,9 @@ concepts:
           ones — never misreads them as user/ai turns (they carry no
           user_message / ai_response). 1b: an unresolved prompt dated before
           IST today is skipped too (a pure filter; build never writes).
+          created_at is ordered as a STRING against the UTC chat rows
+          (entries.sort), so the prompt row's stamp must be UTC with Z
+          (diagnose f3d704; ordering test runs under two host zones).
       - file: lib/features/ai_coach/screens/ai_coach/chat_area.dart
         line_range: 46-61
         method: _buildChatArea completion-prompt branch
@@ -6718,7 +6721,7 @@ concepts:
       - file: lib/core/services/completion_prompt_store.dart
         line_range: 1-9999
         method: CompletionPromptStore
-        notes: The one owner of coachBox completion_prompt_<date> (write resolves older unresolved rows; resolve is idempotent).
+        notes: The one owner of coachBox completion_prompt_<date> (write resolves older unresolved rows; resolve is idempotent). created_at is UTC ISO-8601 with Z (diagnose f3d704): a new row and a reshow stamp DateTime.now().toUtc(); the keep path normalises a stored stamp to the same instant in UTC (utcStamp), because ChatHistoryNotifier.build sorts it as a string against UTC chat rows. resolved_at stays local (only null-checked).
     # Not reader_manifest_complete: this rule reads schedule_<date> rows but
     # does not own them. The schedule_ owner concept above keeps the
     # exhaustive reader list (Gate 50), and the readers below are the rule's.
