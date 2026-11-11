@@ -9,6 +9,7 @@ import 'sync/sync_skip_index.dart';
 import 'sync_flags.dart';
 import 'sync_service.dart';
 import 'workout_write_service.dart';
+import 'write_result.dart';
 
 /// One-shot migration from `exlog_<timestamp>_<hash>` (Test #5 and
 /// earlier) to `exlog_<istDateStr>_<hash(name)>` (Plan A).
@@ -141,6 +142,20 @@ class ExlogKeyMigrator {
         'reps_completed': totalReps,
         'volume_kg': volume,
       };
+      // Coach workout parity 1c (C1b): a merged group is a chat row when ANY
+      // member was (the marker, or a coach `source`), not only the base. A
+      // lone row keeps exactly what `...base` carried, so the W1 unchanged
+      // skip below still holds for it.
+      if (group.length > 1) {
+        final anyChat = group.any((m) =>
+            m.value['coach_logged'] == true ||
+            m.value['source'] == WriteSource.aiCoach.code);
+        if (anyChat) {
+          candidate['coach_logged'] = true;
+        } else {
+          candidate.remove('coach_logged');
+        }
+      }
 
       // sync-storm-first-sweep W1 — a lone canonical row that the rewrite would
       // leave byte-equal is left alone. `.first` (not `.single`) so a

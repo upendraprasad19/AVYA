@@ -94,19 +94,39 @@ List<Map> plannedExercisesOf(Map row) =>
 /// reads exactly what a coach log or the chat card wrote. (Moved from
 /// `ToolDispatcher._exerciseLogged`; the snapshot builder's copy reads it too.)
 int loggedPlannedExerciseCount(DateTime date, Map row) {
+  return plannedExercisesOf(row)
+      .where((ex) => loggedNameForPlannedExercise(date, ex) != null)
+      .length;
+}
+
+/// The name under which planned exercise [ex] has an exercise log for [date],
+/// or null. Lookup order (coach workout parity 1c, B3-F4): the CURRENT
+/// `exercise_name` row if it exists and passes [accept]; else the
+/// `swapped_from` row if it exists and passes [accept]; else null.
+///
+/// With [accept] null the existence test is `box.get(key) != null` (NOT
+/// `is Map`), so [loggedPlannedExerciseCount] reads exactly what it read
+/// before the extraction (any value under the key counts). Active Workout's
+/// chat snapshot passes `isChatLoggedRow` as [accept].
+String? loggedNameForPlannedExercise(
+  DateTime date,
+  Map ex, {
+  bool Function(Map row)? accept,
+}) {
   final box = HiveService.instance.workoutBox;
-  bool hasLog(String? name) {
+  bool hit(String? name) {
     if (name == null || name.trim().isEmpty) return false;
-    return box.get(WorkoutWriteService.exlogKey(date, name)) != null;
+    final value = box.get(WorkoutWriteService.exlogKey(date, name));
+    if (value == null) return false;
+    if (accept == null) return true;
+    return value is Map && accept(value);
   }
 
-  return plannedExercisesOf(row)
-      .where(
-        (ex) =>
-            hasLog(ex['exercise_name'] as String?) ||
-            hasLog(ex['swapped_from'] as String?),
-      )
-      .length;
+  final current = ex['exercise_name'] as String?;
+  if (hit(current)) return current;
+  final swappedFrom = ex['swapped_from'] as String?;
+  if (hit(swappedFrom)) return swappedFrom;
+  return null;
 }
 
 /// The plan day's name for a mark: the row's `workout_name` unless it is

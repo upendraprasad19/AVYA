@@ -282,6 +282,16 @@ class WorkoutWriteService {
         'logging_type': resolvedType,
         'source': source.code,
         'notes': ?notes,
+        // Coach workout parity 1c (C1b): the sticky Hive-LOCAL marker that
+        // the coach logged (or appended to) this row. `source` is the LAST
+        // writer's, so an app append after a chat log would otherwise lose
+        // the fact. Carried forward when the existing row has it or was
+        // written by the coach, set when this write is the coach's. Not
+        // flag-gated; never pushed (`_buildExlogPushBundle` names its fields).
+        if (existingMap?['coach_logged'] == true ||
+            existingMap?['source'] == WriteSource.aiCoach.code ||
+            source == WriteSource.aiCoach)
+          'coach_logged': true,
         'updated_at_ms': DateTime.now().millisecondsSinceEpoch,
       };
 
@@ -1149,6 +1159,17 @@ class WorkoutWriteService {
           merged['volume_kg'] =
               sideVolume(existing, existingSets) + sideVolume(row, movedSets);
           merged['updated_at_ms'] = DateTime.now().millisecondsSinceEpoch;
+          // Coach workout parity 1c (C1b): the merged row is a chat row when
+          // EITHER side was. The OR is ASSIGNED (true, or the key removed),
+          // so a marked moved row is not lost under an unmarked existing one.
+          if (existing['coach_logged'] == true ||
+              row['coach_logged'] == true ||
+              existing['source'] == WriteSource.aiCoach.code ||
+              row['source'] == WriteSource.aiCoach.code) {
+            merged['coach_logged'] = true;
+          } else {
+            merged.remove('coach_logged');
+          }
           // Keep the existing row's workout_log_id — its session owns the
           // destination day (the moved row's source id is stale here).
           await box.put(newKey, merged);
