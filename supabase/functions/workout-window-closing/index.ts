@@ -36,7 +36,8 @@ import { isAuthorizedCronCall } from "../_shared/cron_auth.ts";
 import { sanitizeIdentifier } from "../_shared/sanitize_for_prompt.ts";
 import { logCronStart, logCronEnd } from "../_shared/cron_telemetry.ts";
 import { fetchAllByIds, fetchAllPages } from "../_shared/paged_fetch.ts";
-import { buildWindowClosingMessage } from "./message.ts";
+import { loadPartialDays, type PartialDayInfo } from "../_shared/partial_day_loader.ts";
+import { selectWindowClosingMessage, windowClosingScreen } from "./message.ts";
 import {
   deletedTemplateIds,
   excludeDeletedTemplateRows,
@@ -60,8 +61,42 @@ function getTodayIST(): string {
   return istDate.toISOString().split("T")[0];
 }
 
+/**
+ * Injectable seams (coach workout parity 2). Only the client factory, the
+ * partial-day loader and the push sender go through `deps`; auth and telemetry
+ * stay direct calls (the adoption contracts pin them as literal call sites).
+ */
+export interface WindowClosingDeps {
+  createClient: typeof createClient;
+  loadPartialDays: typeof loadPartialDays;
+  sendPushNotification: typeof sendPushNotification;
+}
+
+/**
+ * Call-site guard around the partial-day loader (B4-F4): the real loader never
+ * throws, but an injected or future one must not be able to abort the cron.
+ * A failure degrades to an empty map (every user gets today's line).
+ */
+async function safeLoad(
+  deps: WindowClosingDeps,
+  // deno-lint-ignore no-explicit-any
+  supabase: any,
+  userIds: string[],
+  todayIST: string,
+): Promise<Map<string, PartialDayInfo>> {
+  try {
+    return await deps.loadPartialDays(supabase, userIds, todayIST);
+  } catch (e) {
+    console.error(`[partial-day] loader threw: ${e instanceof Error ? e.name : "unknown"}`);
+    return new Map<string, PartialDayInfo>();
+  }
+}
+
 // Audit C-4 (2026-05-11, closes-diagnose 7ad0c4): added CRON_SECRET / service-role-key gate.
-serve(async (req: Request) => {
+export const handler = async (
+  req: Request,
+  deps: WindowClosingDeps = realDeps(),
+): Promise<Response> => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
   }
@@ -83,7 +118,7 @@ serve(async (req: Request) => {
   const logId = await logCronStart("workout-window-closing");
 
   try {
-    const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+    const supabase = deps.createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
     const todayIST = getTodayIST();
 
     // 1. Find all scheduled workouts today that are NOT completed/paused/
@@ -255,10 +290,17 @@ serve(async (req: Request) => {
         [...atRiskByUser.keys()],
       );
 
+    // Partial coach days (some, not all planned exercises logged) get the
+    // "N exercise(s) left" line instead of "haven't seen it logged". Loaded
+    // once, before the first send, so its `[partial-day]` line precedes them.
+    const partial = await safeLoad(deps, supabase, [...atRiskByUser.keys()], todayIST);
+
     let sent = 0;
     let dedupSkipped = 0;
     let prefSkipped = 0;
     let errors = 0;
+    let partialSent = 0;
+    let partialFallback = 0;
 
     for (const [userId, sched] of atRiskByUser) {
       // 4a. Notification preference check.
@@ -319,17 +361,20 @@ serve(async (req: Request) => {
       const workoutName = (templateId && templateNameById.get(templateId)) ||
         "your workout";
 
-      const message = buildWindowClosingMessage(firstName, workoutName);
+      const pd = partial.get(userId) ?? null;
+      const message = selectWindowClosingMessage(pd, firstName, workoutName);
 
       try {
-        const ok = await sendPushNotification({
+        const ok = await deps.sendPushNotification({
           userId,
           title: "Workout window closing",
           message,
-          screen: "/ai_coach",
+          screen: windowClosingScreen(pd),
         });
         if (ok) {
           sent++;
+          if (pd && pd.left >= 1) partialSent++;
+          else partialFallback++;
           await markProactiveSent(supabase, userId, "workout_window");
         } else {
           errors++;
@@ -344,7 +389,7 @@ serve(async (req: Request) => {
     }
 
     console.log(
-      `[workout-window-closing] request_id=${requestId} checked=${atRiskByUser.size} sent=${sent} dedup_skipped=${dedupSkipped} pref_skipped=${prefSkipped} errors=${errors}`,
+      `[workout-window-closing] request_id=${requestId} checked=${atRiskByUser.size} sent=${sent} dedup_skipped=${dedupSkipped} pref_skipped=${prefSkipped} errors=${errors} partial_sent=${partialSent} partial_fallback=${partialFallback}`,
     );
 
     await logCronEnd(logId, "success", { httpStatus: 200, requestId });
@@ -356,6 +401,8 @@ serve(async (req: Request) => {
         dedup_skipped: dedupSkipped,
         pref_skipped: prefSkipped,
         errors,
+        partial_sent: partialSent,
+        partial_fallback: partialFallback,
       }),
       {
         status: 200,
@@ -378,4 +425,15 @@ serve(async (req: Request) => {
       },
     );
   }
-});
+};
+
+/** The production wiring: the real functions themselves (no call text here). */
+export function realDeps(): WindowClosingDeps {
+  return { createClient, loadPartialDays, sendPushNotification };
+}
+
+if (import.meta.main) {
+  // Wrapped, not `serve(handler)`: serve's Handler passes `(req, connInfo)`
+  // and handler's second parameter is deps.
+  serve((req) => handler(req));
+}

@@ -29,14 +29,14 @@
 | 031 | `proactive_re_engagement` (10) | `30 06 * * *` | 12:00 | `re-engagement` | `cron_secret` | Win-back nudge for lapsed users |
 | 031 | `proactive_plateau_alert` (11) | `30 13 * * *` | 19:00 | `plateau-alert` | `cron_secret` | PRO-only; flags weight/lift plateaus |
 | 031 | `proactive_protein_gap_alert` (12) | `30 14 * * *` | 20:00 | `protein-gap-alert` | `cron_secret` | PRO-only protein-deficit nudge |
-| 031 | `proactive_workout_window_closing` (13) | `30 15 * * *` | 21:00 | `workout-window-closing` | `cron_secret` | Evening pre-bed training nudge |
-| 040 | `evaluate_rank_promotions` (14) | `30 18 * * *` | **00:00** (next day) | `evaluate-rank-promotions` | `cron_secret` | Monotonic — promotes only, never demotes |
-| 043 | `i-see-you-daily` (15) | `0 14 * * *` | 19:30 | `i-see-you-callout` | `cron_secret` | Self-limiting to recently-active users |
+| 031 | `proactive_workout_window_closing` (13) | `30 15 * * *` | 21:00 | `workout-window-closing` | `cron_secret` | Evening pre-bed training nudge. Partial coach day: "N exercise(s) left" line, opens `/train` (`DISABLE_PARTIAL_DAY_REMINDER` reverts) |
+| 040 | `evaluate_rank_promotions` (14) | `30 18 * * *` | **00:00** (next day) | `evaluate-rank-promotions` | `cron_secret` | Monotonic — promotes only, never demotes. Ceremony `totalWorkouts` = distinct completed days (`countDistinctDates`), not rows |
+| 043 | `i-see-you-daily` (15) | `0 14 * * *` | 19:30 | `i-see-you-callout` | `cron_secret` | Self-limiting to recently-active users. Saturday gate = 14 distinct completed days in the last 28 IST dates (`streak_gate.ts`), not rows |
 | 046 | `morning_alert_deliver_late` (16) | `*/15 22-23 * * *` | every 15 min, 03:30–05:29 | `morning-alert` (deliver) | `cron_secret` | Per-user delivery-slot sweep |
 | 046 | `morning_alert_deliver_early` (17) | `*/15 0-6 * * *` | every 15 min, 05:30–12:29 | `morning-alert` (deliver) | `cron_secret` | Per-user delivery-slot sweep |
 | 047 | `clean_orphan_media_daily` (18) | `0 3 * * *` | 08:30 | `clean-orphan-media` | `cron_secret` | **DELETES Storage objects** — highest-consequence endpoint behind the shared secret |
 | 061 | `rolling-context-nightly` (19) | `0 21 * * *` | 02:30 | `rolling-context` | `cron_secret` | Nightly AI context rebuild; **DELETES** summarised `ai_coach_interactions` turns (catastrophic tier since 2026-10-12) |
-| 061 | `streak-guardian-daily` (20) | `30 14 * * *` | 20:00 | `streak-guardian` | `cron_secret` | Nudges streaks at risk |
+| 061 | `streak-guardian-daily` (20) | `30 14 * * *` | 20:00 | `streak-guardian` | `cron_secret` | Nudges streaks at risk. Partial coach day: body says "N exercise(s) left" (title unchanged); `DISABLE_PARTIAL_DAY_REMINDER` reverts |
 | 061 | `weekly_recap_ready_sunday` (21) | `30 14 * * 0` | **Sun 20:00** | `weekly-recap-ready` | `cron_secret` | PRO-only. Sends the "Sunday Brief ready" PUSH — **calls no model at all** (`grep -cE 'geminiChat\|generateContent' → 0`). ⚠ Corrected 2026-08-10: this said "Gemini 2.5 Pro", which is `weekly-report` — a different function. `supabase/functions/CLAUDE.md` already flagged the confusion; the registry had not caught up. The PRO gate is server-side via `_shared/subscription.ts` `fetchProUserIds` (diagnose e3b9d7) — before that it had NO subscription check and every active free user got it. Slowest cadence in the fleet — the reason `alert_cron_function_dead` uses an 8-day window |
 | 061 | `expiry_reminder_daily` (22) | `0 9 * * *` | 14:30 | `expiry-reminder` | `cron_secret` | Subscription expiry nudges |
 | 076 | `alert_payment_flow_health` (26) | `7 * * * *` | hourly, :07 UTC | (intra-DB) | n/a | Needs ≥3 new subscriptions in 24h to fire — effectively dormant at current scale |
