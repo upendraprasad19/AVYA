@@ -7141,3 +7141,20 @@ Residual of OI-199 and OI-471 after migration 172. Migration 172 makes `cleanup_
 **Likely shape (not yet traced).** The fixture's `now` and `todayScheduled` are host-local `DateTime(...)` values while `resolveSessionDate` compares IST days, so off IST "today" is judged a different day and the clamp path returns `now`. Writer/reader names to be confirmed by reading `resolveSessionDate` before any fix.
 
 **Done when.** The test passes under UTC, Asia/Kolkata and a zone east of IST, with either the fixture built in IST terms or the function fixed if the host zone leaks into a real decision (in which case it is a product bug: a diagnose doc and a behavioural test). Blast radius `feature` (Train).
+
+## OI-501 — Physique focus: glutes_legs starves Calves (a focus group), chest_shoulders_arms starves lead lifts and is inert in 977 of 2,304 plans (t108, input to step 2)
+
+- **Status**: OPEN
+- **Blocked on**: step 2 of the generator (its plan, task board t201, takes this as an input; founder 2026-11-12: findings from step 1's measurements feed step 2, not new step-1 units)
+- **Verified**: 2026-11-12 — measured, not fixed: the 2,304-plan audit run three times on main cf122dd1 (no focus; `PLAN_AUDIT_FOCUS=glutes_legs`; `PLAN_AUDIT_FOCUS=chest_shoulders_arms`), compared key by key
+- **Identified**: 2026-11-12 · filed via mint_oi.sh from branch `generator-t108-physique`
+
+**What it is.** Task t108 extended the plan audit with the two physique-focus values that change a plan (`glutes_legs`, `chest_shoulders_arms`; `balanced`, `strength` and none add nothing). A focus never changes the no-focus plan (the no-focus dump is byte-identical). What it does to the focus plans:
+- `glutes_legs` (focus groups Glutes, Quads, Hamstrings, Calves): 1,582 of 2,304 plans change. Glutes / Quads / Hamstrings rise (+27,751 / +10,118 / +7,755 sets over all plan-weeks), verdicts suitable 513 -> 710, starved lead lifts 2,284 -> 1,274. But **Calves, a focus group, fall** (-4,628 sets; raised in 3 plan-weeks; 80 plan-weeks newly at 0, all `general_fitness`, 6 days, 30 minutes: beginner and intermediate, every tier), and plans with an unloaded pick where a loaded row fits 58 -> 99. Cause (read, not yet proven by a probe): the allocator grows slots in split order, so the earlier glute / quad / hamstring slots take the extra sets and the clock, and the late calf slot gives way (in `general_fitness|6|beginner|bodyweight|30|1` the Legs + Core day's calf raise is replaced by a second Glute Kickback). The calf rows' muscle names are not the cause (`Calves`, matched by `BudgetMuscleGroups`).
+- `chest_shoulders_arms` (Chest, Shoulders, Triceps, Biceps): 1,327 plans change; Shoulders / Chest / Biceps rise (+20,265 / +10,227 / +8,197), Triceps least (+2,506). Verdicts suitable 513 -> 484, **starved lead lifts 2,284 -> 2,690**, no-deload 54 -> 57.
+- **Inert plans**: no focus group gains a set in any week in 722 (`glutes_legs`) and 977 (`chest_shoulders_arms`) plans, mostly 30 and 45 minutes (438 + 228; 486 + 382): a short day has no time for the +1.
+- Not a finding: days over their minutes rise (3,553 -> 4,776 / 4,455), every one by exactly 1 minute, the estimator's rounding the no-focus run shows too.
+- The audit's own `over_top` counted a focus group against the normal top; t108 made it use `SessionBudget.focusWeeklyTop` (25), so over_top is 410 / 393, not 1,296 / 1,339.
+
+**Done when.** Step 2's plan decides each point with the founder (a focus group that falls; leads starved by focus accessories; whether a short session should honour focus at all) and its build re-runs this audit for both focus values.
+

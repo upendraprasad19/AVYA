@@ -438,3 +438,21 @@ E051 and E052 as like-for-like); K2 two same-muscle slots on one day (stated, re
 K3 R5 wording (top-ranked pool vs real pick). Reviewer verdict: "one short fix converges; I expect no further rounds".
 
 **Review #6 (Sonnet, context-blind, on v6):** no P0, no P1, 3 P3; verdict "converged". The head table fixes the calf cells and changes no other slot (0 non-calf differences against raw equality over the grid); every other `<target> (<x>)` first muscle in the library (Triceps / Biceps heads, Chest (inner), Core (anti-rotation), Quads (eccentric), Glutes (medius)) sits in a slot R3 (a) does not touch or is excluded on purpose. Folded: L1 the full-gym beginner soleus cell is reported; L2 lower-cased full-match compare and a negative pin; L3 K2's cell list confirmed.
+
+## 11. Task t108: the plan review with a physique focus (2026-11-12)
+
+Founder call 2026-11-12: t108 covers physique focus only; the simulated phase-1 history moves to step 4's t404 (the same
+work), and what t108 finds goes into step 2's plan, not a new step-1 unit. Injuries were covered earlier (every pair of
+6 injuries at 30 / 45 / 60 minutes and the 46,512-run grid of 3-9 injuries, in Unit 1B-F's record).
+
+- **Harness.** `plan_audit_dump_test.dart` takes `PLAN_AUDIT_FOCUS=glutes_legs | chest_shoulders_arms` and passes that
+  token's muscles as `bodyFocus` (what `TrainingHistoryAnalyzer.resolveBodyFocus` returns for a profile holding it with
+  no history); keys are unchanged, so a focus run compares with the no-focus run key by key. A focus run's dump also
+  records the focus groups (`fg`), and `plan_audit_lib.dart`'s `over_top` uses `SessionBudget.focusWeeklyTop` (25) for
+  them, as the generator's ledger does (the first run counted focus groups against the normal top: 1,296 / 1,339 false
+  over_top flags). The no-focus dump and audit are byte-identical to Unit 1B-F2's (sha256 5b3da296... / 345e11a7...).
+- **Results** (main cf122dd1, 2,304 plans each): filed as **OI-501**, an input to step 2. `glutes_legs`: suitable
+  513 -> 710, starved leads 2,284 -> 1,274, but Calves (a focus group) fall and reach 0 in 80 plan-weeks (6-day general
+  fitness at 30 minutes), unloaded picks 58 -> 99. `chest_shoulders_arms`: suitable 513 -> 484, starved leads 2,284 ->
+  2,690. No focus group gains a set in 722 / 977 plans (mostly 30-45 minutes). Days over their minutes: only the 1-minute
+  rounding the no-focus run has too.
