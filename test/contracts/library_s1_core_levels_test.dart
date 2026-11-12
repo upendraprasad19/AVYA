@@ -49,8 +49,9 @@ const _tableA = <String, List<String>>{
   // A dumbbell curl for equipped users in the Hamstrings curl slot (review #2).
   'G0339': [_i, _a],
   // A second loaded lateral raise, so a day's second Lateral Delts slot keeps a dumbbell row once E013 is taken
-  // (the improvised filter then removes the towel move; measured 2026-11-08, 5-day home_dumbbells).
-  'G0355': [_i, _a],
+  // (the improvised filter then removes the towel move; measured 2026-11-08, 5-day home_dumbbells). Unit 1B-R (founder
+  // d24, seed v26) added beginner: the 5- and 6-day beginner Shoulders + Arms days had no second loaded raise (OI-387).
+  'G0355': [_b, _i, _a],
   // Level agreement.
   'E020': [_i], 'E134': [_a], 'E255': [],
 };

@@ -41540,6 +41540,7 @@
     "priority_tier": 3,
     "rep_range": "10-15",
     "core_levels": [
+      "beginner",
       "intermediate",
       "advanced"
     ],

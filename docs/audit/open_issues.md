@@ -6092,21 +6092,6 @@ example a dated audit row, or Dependabot's gradle ecosystem limited to these coo
 founder decides the review cadence. Each bump: change the pin map and `_expectedPins`, run a test
 payment on a device, and record the new version.
 
-## OI-387 — Library: 6 kept bodyweight rows (E272 E273 E276 E277 E289 E290) invisible to their slot label
-
-- **Status**: OPEN
-- **Blocked on**: the founder's level call for the second loaded lateral-raise row (below); the flip it waited on shipped (Unit 1B-F, PR #248, 2026-11-12)
-- **Verified**: 2026-11-12 — 2,304-plan audit on main 775b99f4 (`plan_audit_dump_test.dart`, `audit.json` sha256 9fe860fa6b700ea5..., byte-identical to Unit 1B-F's final run); `core_list_pool_behavioral_test.dart` `OI-387` group green on main with no flag.
-- **Identified**: 2026-10-22 · filed via mint_oi.sh from branch `library-data-repair`
-
-**The defect.** E272, E273, E289 and E290 carry `target_focus: ["Shoulders"]`, and E276 and E277 carry "Upper Back". Neither is a slot label, and their `primary_muscles` ("Side/Rear Deltoid", "Rhomboids") contain none, so attempts 1-2 never return them. A bodyweight Lateral Delts slot is empty today.
-
-Batch A did NOT relabel them. `_preferNovel` (`exercise_selector.dart:1054-1066`) walks past the first sorted entries whenever `avoidNames` is non-empty, so a Phase 2+ home user's Lateral Delts pool would become [E013, E273, E289] and flip from Lateral Raise to Towel Lateral Raise. E276/E277 would stay inert anyway, because every Mid Back slot is `compound`.
-
-**Done when.** Batch B's equipment-aware pool offers these rows to no-equipment users only, their `target_focus` carries the slot label, and a behavioural test covers the bodyweight hit and the home/gym miss with `previousPhaseByDay` set.
-
-**After the flip (2026-11-12).** The flip made the fix live: the core-list pool reads the rows' `slot_focus` overlay ("Lateral Delts", copied into `target_focus` by OI-495), a bodyweight beginner's Lateral Delts slot gets E273 / E289, and an implement user's `shoulder_isolation` pool drops improvised rows (step 4 of `rankedPool`). Residue, measured: 16 plans (32 day-weeks) still show E273 Towel Lateral Raise to a user with dumbbells: every one is `build_muscle|5|beginner|home_dumbbells or basic_gym|*|1 or 2`, the Shoulders + Arms day, which has TWO Lateral Delts slots. E013 Lateral Raise takes the first; same-day dedup (`pickedNames`) removes it before the improvised filter runs, and no other loaded lateral-raise row is core at beginner (G0355 Dumbbell Single Arm Lateral Raise and G0178 Cable Lateral Raise are core at intermediate and advanced only; G0311 / G0396 / G0356 are on no core list), so the filter's `nonImprovised > 0` test fails and Towel Lateral Raise is picked. The fix is data: one loaded lateral-raise row core at beginner (G0355 is `suitable_for` Beginner already). Adding a core level is the founder's call (the level table, d8 / d12).
-
 ## OI-389 — Cardio logs lose their minutes and distance: logExercise zeroes durationSec for every non-timed type and never writes distance_km
 
 - **Status**: OPEN
@@ -7117,9 +7102,9 @@ Added 2026-11-12 (Landing A, branch `oi493-nutrition-parity`, diagnose ec6f6c): 
 
 **What it is.** Items 1B-7 and 1B-11 of the step-1 plan (`docs/plans/2026-11-08-generator-step1-core-list.md` section 9), split out of Unit 1B-F under §4.12.1 (three review rounds each found overlay pins the previous one missed). B1 Ruling 4 said the flip commit would copy `slot_pattern` into `movement_pattern` (13 rows) and `slot_focus` into `target_focus` (19 rows) and delete both keys; Unit 1B-F (the flip) did NOT, and its `enable_core_list_pool` `resolved:` note in `docs/ship_dark_pending_review.yaml` says so. Until this lands the core-list picker reads the overlay labels while `queryV4` (the thin-day top-up's non-core ladder, injured users only) reads the old ones on those rows: the mixed-label state. Display labels change on the 19 / 13 rows.
 
-**Plan.** Section 11 of `docs/plans/2026-11-10-generator-1bf-flip.md` holds the pins table (every writer and pin of the two keys), the data path (library JSON, importer, seed v26, a cloud re-seed migration minted with `scripts/mint_migration.sh`, rehearsed in the local docker postgres, applied live only on the founder's explicit go) and the runtime check (a second device check after its build).
+**Plan.** Section 11 of `docs/plans/2026-11-10-generator-1bf-flip.md` holds the pins table (every writer and pin of the two keys), the data path (library JSON, importer, seed v27 (v26 went to Unit 1B-R, G0355 at beginner), a cloud re-seed migration minted with `scripts/mint_migration.sh`, rehearsed in the local docker postgres, applied live only on the founder's explicit go) and the runtime check (a second device check after its build).
 
-**Done when.** No library row carries `slot_focus` / `slot_pattern`; the 13 / 19 rows carry the copied values; `CoreListSelector` reads `movement_pattern` / `target_focus` directly; seed v26 and the cloud migration applied and ledgered; the founder's device check after the build. Blast radius `account` (library data) plus the cloud migration; its own plan, x2 review and B-pass.
+**Done when.** No library row carries `slot_focus` / `slot_pattern`; the 13 / 19 rows carry the copied values; `CoreListSelector` reads `movement_pattern` / `target_focus` directly; seed v27 and the cloud migration applied and ledgered; the founder's device check after the build. Blast radius `account` (library data) plus the cloud migration; its own plan, x2 review and B-pass.
 
 ## OI-496 — Minor-muscle zero weeks on the core-list pool (Triceps / Core / Biceps / Calves), owned by step 2's weekly floor (d14)
 
@@ -7134,22 +7119,6 @@ Added 2026-11-12 (Landing A, branch `oi493-nutrition-parity`, diagnose ec6f6c): 
 
 **Done when.** Step 2's weekly floor lands and the 2,304-plan audit shows 0 minor-muscle zero weeks the live twin (as recorded at the flip) did not have, or the founder accepts a stated residue. Owner: step 2 (d14). Blast radius `platform` (plan engine).
 
-## OI-497 — A loaded version loses to its bodyweight original where the equipment-fit key does not reach: isolation-typed Quads slot and phase 1
-
-- **Status**: OPEN
-- **Blocked on**: none
-- **Verified**: 2026-11-12 — 2,304-plan audit on main 775b99f4 (`audit.json` sha256 9fe860fa6b700ea5..., byte-identical to Unit 1B-F's final run) plus a `CoreListTrace` probe of four home_dumbbells plans (build_muscle 4-day intermediate phases 1-2, advanced phase 2; strength 4-day advanced phase 2).
-- **Identified**: 2026-11-12 · filed via mint_oi.sh from branch `step1-oi-closeout`
-
-**What happens.** `CoreListSelector.rankedPool` ranks by keys a-e then id (`core_list_selector.dart`, step 5). The R3 (b) fit key ("a row using an implement the user has") applies only in a COMPOUND slot (`fitApplies`), and it sits after key d, `phase == 1 && !foundational`. The nine S1b-2 loaded versions (N14 to N22) are not `is_foundational`; their bodyweight originals are. Two places follow:
-- The 4-day Legs A day's Quads slot is typed `isolation` (subFocus `isolation`, `knee_dominant`). For home_dumbbells there is no loaded quad isolation row, so R3 (a)'s like-for-like reduction finds nothing, the fit key does not apply, the exercise-type key ties (both lunges are compound), and `is_foundational` decides: E042 Walking Lunge over N16 Dumbbell Walking Lunge. 373 plans (367 home_dumbbells issues, 6 basic_gym), every phase, intermediate and advanced (beginner from phase 3, where the effective level rises).
-- In phase 1 key d ranks every foundational bodyweight row over a non-foundational loaded one in compound slots too: E291 Single Leg Glute Bridge (122 plans) and E253 Bodyweight Good Morning (58 plans), all tiers with equipment, phase 1 only.
-
-**Why it is a choice, not a defect.** Phase 1 preferring foundational rows is deliberate (step 1A kept key d; a beginner learns the pattern first), and a lunge in an isolation-typed slot is the split's own typing. Moving either changes many plans (at least the 373 + 180 above) and is a coaching call.
-
-**Done when.** The founder chooses, with the measured plan count for each: (a) the fit key also applies in an isolation-typed slot to compound rows (dumbbell lunge in the Legs A Quads slot), (b) a loaded version outranks its own foundational original in phase 1 (`same_movement_as` pair only), or neither; the chosen rule is built with the 2,304-plan audit and golden re-run. Owner: step 1 (the step-1 OI board close-out found it). Blast radius `platform` (plan engine).
-
-
 ## OI-498 — Laptop clone: sync main with GitHub and reinstall the git hooks (suite lock, PR #246)
 
 - **Status**: OPEN
@@ -7162,3 +7131,14 @@ Added 2026-11-12 (Landing A, branch `oi493-nutrition-parity`, diagnose ec6f6c): 
 **Do on the laptop (Git Bash, from the clone's MAIN folder, on `main`).** `git checkout main`, `git fetch origin main`, `git merge --ff-only origin/main`, then `sh scripts/setup-hooks.sh` (it refuses a tree behind or diverged from `origin/main`). A `Permission denied` on a hook file means a stale tree: update it and re-run, never chmod or delete a hook by hand. Expected there: no `flock` on Windows Git Bash / macOS, so the lock prints a WARNING and fails open; nothing blocks.
 
 **Done when.** On the laptop: `grep -c suite_lock_acquire .git/hooks/pre-push .git/hooks/pre-commit` prints a non-zero count for both, and `git log -1 --oneline` on `main` shows `837f62aa` or later. Blast radius `feature` (no code change; a per-clone install step).
+
+## OI-499 — Delete the disable_loaded_wins kill switch and its golden fixture after the 1B-R device check
+
+- **Status**: OPEN
+- **Blocked on**: none
+- **Verified**: never
+- **Identified**: 2026-11-12 · filed via mint_oi.sh from branch `generator-step1-1br`
+
+**What it is.** Unit 1B-R (diagnose `e4b7a2`, plan `docs/plans/2026-11-12-generator-1br-loaded-wins.md` Ruling 4) ships the loaded-wins ranking (OI-497, founder d25) default ON behind the kill switch `disable_loaded_wins` (`PlanEngineFlags.loadedWinsEnabled`, read once per `_pickCoreList` call; `rankedPool(loadedWins:)`). Its OFF world is pinned by `test/fixtures/generator_golden_hashes_loaded_wins_off.json` (1,010 personas) through `test/plan_generator/loaded_wins_kill_switch_golden_test.dart`. CLAUDE.md §4.6 step 4: the old path is deleted once the new one is verified, and it is tracked here until then.
+
+**Done when.** The founder's device check passes (a home-dumbbell plan's leg day shows a loaded lunge or squat; a beginner phase-1 plan's glute hinge is loaded; with the 1B-F check, before 1B-F2 merges), then one commit deletes the flag getter, the `loadedWins` parameter and its OFF branches in `rankedPool` (Ruling 2's compound-only guard and the `loadedWins &&` in `topFit`'s guard), the fixture, the kill-switch test, the T7 unit asserts that call `loadedWins: false`, and the `naming_conventions.md` row. Owner: generator step 2 (its allocator rebuild touches the same ranking). Blast radius `platform` (plan engine).

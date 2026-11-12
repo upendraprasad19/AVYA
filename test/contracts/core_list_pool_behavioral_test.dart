@@ -980,7 +980,9 @@ void main() {
       expect(names(bw.exercisesA), ['Pike'], reason: 'control: bodyweight keeps Pike');
     });
 
-    test('isolation and core slots ignore the fit key', () {
+    // Core only: since Unit 1B-R (Ruling 2) the fit key applies in isolation slots too; its isolation counterpart is
+    // T1 in loaded_wins_behavioral_test.dart.
+    test('core slots ignore the fit key', () {
       final core = pool([
         _row('A_BW', 'Hollow Hold', pattern: 'core', focus: ['Core']),
         _row('B_BAR', 'Barbell Rollout', pattern: 'core', focus: ['Core'],

@@ -175,7 +175,12 @@ class SeedService {
   //   G3361, G3222, G1201 through the injury table, G3656 set by hand in it) gain `hip` in injury_contraindications, so a hip-injured
   //   user is never handed a row that lands from flight. Bundle-only (no cloud column); putAll rewrites the 14 by id.
   //   Without this bump an existing install keeps them untagged (library_seed_v25_upgrade_behavioral_test.dart).
-  static const int _exerciseLibraryVersion = 25;
+  //   v26 (Unit 1B-R, Ruling 1, founder d24, docs/plans/2026-11-12-generator-1br-loaded-wins.md): G0355 Dumbbell Single
+  //   Arm Lateral Raise gains `beginner` in core_levels (through scripts/data/library_batch_c_source.json), so a beginner
+  //   day with two lateral-raise slots gets a second loaded raise instead of Towel Lateral Raise (OI-387). Bundle-only
+  //   (no cloud column); putAll rewrites the row by id. Without this bump an existing install keeps the old levels
+  //   (library_seed_v26_upgrade_behavioral_test.dart).
+  static const int _exerciseLibraryVersion = 26;
   static const String _exerciseVersionKey = 'exercise_library_version';
 
   /// Bump this integer whenever the bundled food_database.json changes
