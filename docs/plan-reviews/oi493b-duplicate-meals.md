@@ -5,7 +5,8 @@ blast_radius: account
 review_rounds: 2
 ground_truth_verified: true
 verdict: converged
-bpass: pending
+bpass: accepted
+bpass_review: docs/reviews/oi493b-duplicate-meals-bpass.md
 ---
 
 # Plan-review record: OI-493 Landing B
@@ -36,3 +37,10 @@ callers are `tool_confirm_card.dart:48,75` and `tool_confirm_sheet.dart:50`), th
 continuations), and every line reference in rev 2.
 
 The rounds went 0 P1 -> 0 P1 with shrinking P2 counts (8 -> 2); the plan is executed as rev 2.1.
+
+## Build and B-pass
+Draft committed `2a27c7dc` after the local gate loop (whole-project analyze 0 warnings, pre-commit gates, targeted tests
+under Kolkata and UTC, 20/20 mutants red); the full suite ran on CI for PR #253 (`land_pr --ci-only`: ci-green on
+`2a27c7dc`). B-pass on that head, two fresh Sonnet seats (A read-only, lenses 1-5/7/8; B lens 6 by mutation): no P0/P1,
+5 P2 and 7 P3, all fixed or closed with a reason in `520a7e0a` (second mutant batch 12/12 red). Review
+`docs/reviews/oi493b-duplicate-meals-bpass.md`, verdict accepted.
