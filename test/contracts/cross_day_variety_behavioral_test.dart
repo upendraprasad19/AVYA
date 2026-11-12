@@ -197,8 +197,11 @@ void main() {
             shared += pushCore.where(push.contains).length;
           }
         }
-        // 10 shared lifts measured with the fix; an avoid applied to every day would remove them.
-        expect(shared, 10);
+        // 10 shared lifts measured with the fix; an avoid applied to every day would remove them. 12 since Unit 1B-R's
+        // Ruling 1 (seed v26, G0355 core at beginner; the same with `disable_loaded_wins` set): basic_gym's and
+        // home_dumbbells' Push B no longer hold Towel Lateral Raise (OI-387), and that seat goes to Dumbbell Fly /
+        // Incline Push Up, which Push A holds too.
+        expect(shared, 12);
       },
     );
 

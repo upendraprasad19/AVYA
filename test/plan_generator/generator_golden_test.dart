@@ -84,7 +84,7 @@ void main() {
           actual.entries.toList()..sort((a, b) => a.key.compareTo(b.key)));
       File(_fixturePath).writeAsStringSync(
           '${const JsonEncoder.withIndent('  ').convert({
-                '_meta': {'recorded_on': 'Unit 1B-F (the core-list pool the only picker, seed v25)', 'personas': actual.length},
+                '_meta': {'recorded_on': 'Unit 1B-R (loaded wins, disable_loaded_wins default ON; seed v26)', 'personas': actual.length},
                 ...sorted,
               })}\n');
     }

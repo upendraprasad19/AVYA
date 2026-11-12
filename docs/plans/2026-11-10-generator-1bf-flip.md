@@ -1483,7 +1483,7 @@ labels; after the flip `queryV4` serves the top-up only and the top-up then read
 removes the mixed-label state an injured user's day would otherwise have. Display labels change on the 19 / 13 rows
 (for advanced users E114 reads "Shoulders, Front Delts, Upper Chest", E264 "Lats, Mid Back": `formatMuscleLabel` joins all of `target_focus`). No row in the set carries a `warmup` pattern, so warm-up eligibility
 is unchanged (checked: E064 Rowing Machine loses `horizontal_pull`, keeps `cardio`). Data path: library JSON, the
-importer, seed v26 (v25 is this unit's, Ruling 12), and a cloud re-seed migration (cloud stores `movement_pattern`, first element; `target_focus` is
+importer, seed v27 (v25 is this unit's, Ruling 12; v26 is Unit 1B-R's, G0355 at beginner), and a cloud re-seed migration (cloud stores `movement_pattern`, first element; `target_focus` is
 not a cloud column): minted with `scripts/mint_migration.sh`, rehearsed in the local docker postgres inside BEGIN ...
 ROLLBACK, applied live only on the founder's explicit go, ledgered in `backups/applied_migrations.json`.
 

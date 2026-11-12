@@ -6795,3 +6795,38 @@ exercise — before that, these five were invisible to any check in the repo.
 | E273 Towel Lateral Raise (`improvised`) | home_dumbbells 16, basic_gym 16 (16 plans) | 5-day beginner build, phases 1-2 | same-day dedup of the second Lateral Delts slot, OI-387 |
 
 **Closed (2026-11-12, branch `step1-oi-closeout`).** Every clause of "Done when" is met on main: an equipped user's implement row outranks an improvised one in every strength pattern (the improvised filter and R3 (a) / (b)); every Strength OHP Day's overhead slot is a real press (Pike Push Up 0 of 56); the unloaded residue is named row by row above, each cause traced with `CoreListTrace` on the real generator (probe of four home_dumbbells plans, 2026-11-12). What remains is not an equipment-blind tie but a ranking choice (the fit key's reach and phase 1's foundational key), filed as OI-497 for the founder; the hamstring-curl, hip and soleus rows are the absence of a loaded row the user can use, and the Towel Lateral Raise row is OI-387.
+
+## OI-387 — Library: 6 kept bodyweight rows (E272 E273 E276 E277 E289 E290) invisible to their slot label
+
+- **Status**: CLOSED · 2026-11-12 · branch `generator-step1-1br` · the commit carrying `closes-oi:` for this entry
+- **Blocked on**: — (resolved by Unit 1B-R)
+- **Verified**: 2026-11-12 — 2,304-plan audit on main 775b99f4 (`plan_audit_dump_test.dart`, `audit.json` sha256 9fe860fa6b700ea5..., byte-identical to Unit 1B-F's final run); `core_list_pool_behavioral_test.dart` `OI-387` group green on main with no flag.
+- **Identified**: 2026-10-22 · filed via mint_oi.sh from branch `library-data-repair`
+
+**The defect.** E272, E273, E289 and E290 carry `target_focus: ["Shoulders"]`, and E276 and E277 carry "Upper Back". Neither is a slot label, and their `primary_muscles` ("Side/Rear Deltoid", "Rhomboids") contain none, so attempts 1-2 never return them. A bodyweight Lateral Delts slot is empty today.
+
+Batch A did NOT relabel them. `_preferNovel` (`exercise_selector.dart:1054-1066`) walks past the first sorted entries whenever `avoidNames` is non-empty, so a Phase 2+ home user's Lateral Delts pool would become [E013, E273, E289] and flip from Lateral Raise to Towel Lateral Raise. E276/E277 would stay inert anyway, because every Mid Back slot is `compound`.
+
+**Done when.** Batch B's equipment-aware pool offers these rows to no-equipment users only, their `target_focus` carries the slot label, and a behavioural test covers the bodyweight hit and the home/gym miss with `previousPhaseByDay` set.
+
+**After the flip (2026-11-12).** The flip made the fix live: the core-list pool reads the rows' `slot_focus` overlay ("Lateral Delts", copied into `target_focus` by OI-495), a bodyweight beginner's Lateral Delts slot gets E273 / E289, and an implement user's `shoulder_isolation` pool drops improvised rows (step 4 of `rankedPool`). Residue, measured: 16 plans (32 day-weeks) still show E273 Towel Lateral Raise to a user with dumbbells: every one is `build_muscle|5|beginner|home_dumbbells or basic_gym|*|1 or 2`, the Shoulders + Arms day, which has TWO Lateral Delts slots. E013 Lateral Raise takes the first; same-day dedup (`pickedNames`) removes it before the improvised filter runs, and no other loaded lateral-raise row is core at beginner (G0355 Dumbbell Single Arm Lateral Raise and G0178 Cable Lateral Raise are core at intermediate and advanced only; G0311 / G0396 / G0356 are on no core list), so the filter's `nonImprovised > 0` test fails and Towel Lateral Raise is picked. The fix is data: one loaded lateral-raise row core at beginner (G0355 is `suitable_for` Beginner already). Adding a core level is the founder's call (the level table, d8 / d12).
+
+**Closed (2026-11-12, Unit 1B-R, branch `generator-step1-1br`, diagnose `e4b7a2`).** Founder d24: G0355 Dumbbell Single Arm Lateral Raise is core at beginner (seed v26). Correction: the residue above is 32 plans / 96 day-weeks (5-day AND 6-day `build_muscle|*|beginner|home_dumbbells or basic_gym`, phases 1-2, 4 per cell), not 16 / 32. Measured on the final tree: equipped plans showing Towel Lateral Raise 32 -> 0; a bodyweight beginner's Lateral Delts slot still gets E273 / E289.
+
+## OI-497 — A loaded version loses to its bodyweight original where the equipment-fit key does not reach: isolation-typed Quads slot and phase 1
+
+- **Status**: CLOSED · 2026-11-12 · branch `generator-step1-1br` · the commit carrying `closes-oi:` for this entry
+- **Blocked on**: — (resolved by Unit 1B-R)
+- **Verified**: 2026-11-12 — 2,304-plan audit on main 775b99f4 (`audit.json` sha256 9fe860fa6b700ea5..., byte-identical to Unit 1B-F's final run) plus a `CoreListTrace` probe of four home_dumbbells plans (build_muscle 4-day intermediate phases 1-2, advanced phase 2; strength 4-day advanced phase 2).
+- **Identified**: 2026-11-12 · filed via mint_oi.sh from branch `step1-oi-closeout`
+
+**What happens.** `CoreListSelector.rankedPool` ranks by keys a-e then id (`core_list_selector.dart`, step 5). The R3 (b) fit key ("a row using an implement the user has") applies only in a COMPOUND slot (`fitApplies`), and it sits after key d, `phase == 1 && !foundational`. The nine S1b-2 loaded versions (N14 to N22) are not `is_foundational`; their bodyweight originals are. Two places follow:
+- The 4-day Legs A day's Quads slot is typed `isolation` (subFocus `isolation`, `knee_dominant`). For home_dumbbells there is no loaded quad isolation row, so R3 (a)'s like-for-like reduction finds nothing, the fit key does not apply, the exercise-type key ties (both lunges are compound), and `is_foundational` decides: E042 Walking Lunge over N16 Dumbbell Walking Lunge. 373 plans (367 home_dumbbells issues, 6 basic_gym), every phase, intermediate and advanced (beginner from phase 3, where the effective level rises).
+- In phase 1 key d ranks every foundational bodyweight row over a non-foundational loaded one in compound slots too: E291 Single Leg Glute Bridge (122 plans) and E253 Bodyweight Good Morning (58 plans), all tiers with equipment, phase 1 only.
+
+**Why it is a choice, not a defect.** Phase 1 preferring foundational rows is deliberate (step 1A kept key d; a beginner learns the pattern first), and a lunge in an isolation-typed slot is the split's own typing. Moving either changes many plans (at least the 373 + 180 above) and is a coaching call.
+
+**Done when.** The founder chooses, with the measured plan count for each: (a) the fit key also applies in an isolation-typed slot to compound rows (dumbbell lunge in the Legs A Quads slot), (b) a loaded version outranks its own foundational original in phase 1 (`same_movement_as` pair only), or neither; the chosen rule is built with the 2,304-plan audit and golden re-run. Owner: step 1 (the step-1 OI board close-out found it). Blast radius `platform` (plan engine).
+
+**Closed (2026-11-12, Unit 1B-R, branch `generator-step1-1br`, diagnose `e4b7a2`).** Founder d25: the loaded move wins, on the leg day and in phase 1. Built as both of the options above, generalised: (a) the R3 (b) fit key applies in every non-core slot (Ruling 2), and (b) in phase 1 a bodyweight row gives way to the loaded row the walk will reach when that row matches the slot at least as well (Ruling 3; not limited to `same_movement_as` pairs). 2,304-plan audit: equipped plans with Walking Lunge 373 -> 0; equipped phase-1 plans with Single Leg Glute Bridge / Bodyweight Good Morning 122 / 58 -> 0 / 0; 443 plans change (0 bodyweight); `unloaded` plans 440 -> 116, the rest library gaps (no loaded home leg curl, hip or soleus row left for the slot; plan section 4). Kill switch `disable_loaded_wins`; its deletion is OI-499.
+

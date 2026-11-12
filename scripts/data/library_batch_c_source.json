@@ -6883,7 +6883,7 @@
       },
       "shipped": 642,
       "core": {
-        "beginner": 61,
+        "beginner": 62,
         "intermediate": 64,
         "advanced": 54,
         "rows": 100
@@ -29840,6 +29840,7 @@
       "variant_family": "lateral_raise",
       "discipline": "strength",
       "core_levels": [
+        "beginner",
         "intermediate",
         "advanced"
       ],

@@ -35,6 +35,19 @@ class PlanEngineFlags {
     }
   }
 
+  /// Unit 1B-R kill-switch (OI-497, founder d25): for an equipped user the loaded move wins over the bodyweight one
+  /// (`CoreListSelector.rankedPool`'s fit key in every non-core slot, and in phase 1 a bodyweight row gives way to the
+  /// loaded row that will be picked when it matches the slot as well). Default ON. Set
+  /// `configBox['disable_loaded_wins'] = true` to restore the pre-1B-R ranking verbatim, for plans generated from then
+  /// on (a plan already stored is not rewritten). Read once per `_pickCoreList` call.
+  static bool get loadedWinsEnabled {
+    try {
+      return HiveService.instance.configBox.get('disable_loaded_wins') != true;
+    } catch (_) {
+      return true; // no Hive (pure unit test) → safe default: the new ranking
+    }
+  }
+
   /// U3 warmup/cooldown injury filter (Ship 2). Default ON (contraindicated
   /// warmup/cooldown/cardio moves are dropped for an injured user). Set
   /// `configBox['disable_warmup_injury_filter'] = true` to revert to the

@@ -117,6 +117,8 @@ class ExerciseSelector {
     // ignore: invalid_use_of_visible_for_testing_member
     final trace = CoreListSelector.debugTrace;
     trace?.delegations++;
+    // Unit 1B-R kill switch `disable_loaded_wins`: read once per call, so every slot of this pick agrees.
+    final loadedWins = PlanEngineFlags.loadedWinsEnabled;
     // L6: original-case names, compared exactly; a demoted original's loaded versions with it (Unit 1B-F, S1b-2).
     final demoted = _demotedWithLoadedVersions(
         phase >= 2 ? TrainingHistoryAnalyzer.demotedExercises() : const <String>{}, rows);
@@ -180,7 +182,11 @@ class ExerciseSelector {
               pickedNames: picked,
               demotedNames: demoted,
               softAvoidNames: softAvoid,
+              // Unit 1B-R: the names `_selectCandidate` / `_preferNovel` will skip, so Ruling 3 measures against the
+              // loaded row that will actually be picked.
+              walkedNames: avoidNames,
               anyCoreLevel: anyCoreLevel,
+              loadedWins: loadedWins,
             );
             Map<String, dynamic>? chosen;
             if (r.source != 'drop') {
