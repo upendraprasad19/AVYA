@@ -2300,62 +2300,6 @@ checking what its name claims.
 
 ---
 
-## OI-146 — three duplicate exercise rows, two of them dead, one skewing selection (P2)
-
-- **Status**: OPEN
-- **Blocked on**: nothing. Needs a decision on whether the flexibility twins are intentional.
-- **Verified**: 2026-08-29 — name-normalised (case, punctuation, word order) across all 292 rows of
-  `assets/data/exercise_library.json`, then each name grepped against `lib/` for live references.
-
-- **The three pairs**:
-
-  | dead row | live twin | reference count in `lib/` |
-  |---|---|---|
-  | E167 `Cross Body Shoulder Stretch` (flexibility) | E219 `Cross-body Shoulder Stretch` (cooldown) | 0 vs **5** |
-  | E168 `Doorway Chest Stretch` (flexibility) | E220 `Chest Doorway Stretch` (cooldown) | 0 vs **6** |
-  | E016 `Close Grip Bench Press` | E241 `Close-Grip Bench Press` | 0 vs 0 — see below |
-
-- **Why the first two are not symmetric**: `warmup_cooldown.dart` selects cool-downs from
-  HARDCODED name lists (`_cooldownStretches`, `warmup_cooldown.dart:142-146`), not from the
-  library `category`. Only the `cooldown`-category spelling is named there, so the
-  `flexibility`-category twin is unreachable through that path and duplicates a row that is live.
-- **Why E016/E241 is the worse one**: both are byte-identical in `category`, `logging_type`,
-  `equipment_needed` and `primary_muscles`, and neither is hardcoded anywhere — so BOTH sit in the
-  generator's selectable pool. That gives one exercise **double the selection probability** of
-  every neighbour in its slot, silently skewing variety. This is a selection-fairness bug, not
-  cosmetic.
-- **What to check before deleting anything**: whether a plan already generated for a live user
-  pins the dead spelling (`schedule_*` rows store the NAME), and whether
-  `exlog_*` history keyed on the dead name would orphan. The exlog key is
-  `exercise_name.hashCode`, so a rename is NOT free — see `lib/features/train/CLAUDE.md`
-  `exercise_logs_read_path`.
-- **Found by**: the founder, eyeballing the plate-assignment review — his note on
-  Captain's Chair Leg Raise read "this is same as knee raise. duplicate", which prompted the audit.
-
-### WIDENED 2026-08-29 — it is EIGHT pairs, not three
-
-The original audit compared names to names. A second audit, run because the founder said
-"there were repetitions again" for the third time, compared them **by the drawing each one
-claims** — two library rows fighting over one catalogue drawing is the same duplicate, found
-by a different route. That surfaced five more:
-
-| pair | why the name audit missed it |
-|---|---|
-| E?? `V-Up` / `V-Ups` | plural only — normalised the same, but they are two rows |
-| `Hip Abduction Machine` / `Hip Abductor Machine` | one letter |
-| `Standing Quad Stretch` / `Quad Stretch` | one is a prefix of the other |
-| `Battle Ropes` / `Battle Rope Wave` | different word count |
-| `Overhead Tricep Cable Extension` / `Overhead Cable Extension` | one word dropped |
-
-⚠ **The lesson for the next audit is the method, not the count.** Name-normalisation and
-drawing-claim-collision find DIFFERENT duplicates, and neither is a superset of the other. Run
-both. The claim-collision audit is only possible because the plates work assigns a drawing per
-exercise — before that, these five were invisible to any check in the repo.
-
-- **Related**: `docs/plans/exercise-plates-spec.md`, OI-145, and
-  `memory/feedback_green_check_input_set_width.md` (the check whose input set was too narrow —
-  it compared contested-vs-proposed and never looked at the confirmed tier).
-
 ## OI-148 — 23 equipment-variant exercises the plate mapping surfaced, blocked on a selection-skew answer (P2)
 
 - **Status**: OPEN
@@ -6148,33 +6092,11 @@ example a dated audit row, or Dependabot's gradle ecosystem limited to these coo
 founder decides the review cadence. Each bump: change the pin map and `_expectedPins`, run a test
 payment on a device, and record the new version.
 
-## OI-385 — Generator: 27 library rows in slot patterns are unreachable on attempts 1-2 (exercise_type has neither compound nor isolation)
-
-- **Status**: OPEN
-- **Blocked on**: the flip of `enable_core_list_pool` (Batch B1, branch `library-batch-b`, ship-dark DEFAULT OFF; flip criteria in `docs/ship_dark_pending_review.yaml`). The fix is built behind that flag; OFF plans are unchanged (generator golden).
-- **Verified**: 2026-10-23 — with the flag ON, `test/contracts/core_list_pool_behavioral_test.dart` `OI-385: a calisthenics-typed compound row is typed compound` (E264 Table Row, `["calisthenics","compound"]`, fills a bodyweight beginner compound slot typed `compound`); the ON-world gate `test/plan_generator/core_list_pool_gate_test.dart` holds 0 equipment, level and improvised-pick violations over 998 personas.
-- **Identified**: 2026-10-22 · filed via mint_oi.sh from branch `library-data-repair`
-
-**The defect.** `queryV4` matches `exercise_type` exactly against the slot's `compound` / `isolation` on attempts 1-2 (`lib/shared/repositories/exercise_repository.dart` ~:365), and every `MuscleSlot` in `split_resolver.dart` asks for one of those two. 27 rows in the 11 slot patterns carry neither: 25 are typed only `calisthenics`, 4 include `cardio`. They include E022 Pull Up, E020, E054, E055, E064, E066, E069, E071-E073, E075, E077, E101-E103, E134-E136, E143, E177, E179, E180 and E193-E197. They are reachable only through the attempt-3 pattern-only fallback. (Counted 2026-10-22; an earlier figure of 57 also included rows outside the slot patterns.)
-
-**Done when.** Batch B's pool selects by `discipline` / core lists, and a behavioural test shows a calisthenics-typed core row filling an on-target slot.
-
-## OI-386 — Generator: 11 of 13 attempt-1 sub-focus strings match 0 rows (slot long_head vs data 'Long Head')
-
-- **Status**: OPEN
-- **Blocked on**: the flip of `enable_core_list_pool` (Batch B1, branch `library-batch-b`, ship-dark DEFAULT OFF; flip criteria in `docs/ship_dark_pending_review.yaml`). The fix is built behind that flag; OFF plans are unchanged (generator golden).
-- **Verified**: 2026-10-23 — with the flag ON, `test/contracts/core_list_pool_behavioral_test.dart` `OI-386 unit: a Triceps (Long Head) row ranks first for Triceps / long_head` and `OI-386 real data: a Core / obliques slot picks an obliques row`; the ON-world gate `test/plan_generator/core_list_pool_gate_test.dart` holds 0 equipment, level and improvised-pick violations over 998 personas.
-- **Identified**: 2026-10-22 · filed via mint_oi.sh from branch `library-data-repair`
-
-**The defect.** Attempt 1 builds the string "<targetMuscle> (<subFocus>)" (`exercise_selector.dart:1088-1090`) from snake_case slot tokens (`long_head`, `short_head`, `lateral_head`…), while the data says "Long Head". Only "Lats (width)" (5 rows) and "Mid Back (thickness)" (16) can ever match, so 11 of 13 attempt-1 strings fall straight through to attempt 2. Humanising the tokens would make attempt 1 live and reshape many plans, which needs the generator batch's review.
-
-**Done when.** Slot sub-focus and row `target_focus` share one vocabulary, attempt 1 matches for every sub-focus that has rows, and the scorecard pick diff is reviewed.
-
 ## OI-387 — Library: 6 kept bodyweight rows (E272 E273 E276 E277 E289 E290) invisible to their slot label
 
 - **Status**: OPEN
-- **Blocked on**: the flip of `enable_core_list_pool` (Batch B1, branch `library-batch-b`, ship-dark DEFAULT OFF; flip criteria in `docs/ship_dark_pending_review.yaml`). The fix is built behind that flag; OFF plans are unchanged (generator golden).
-- **Verified**: 2026-10-23 — with the flag ON, `test/contracts/core_list_pool_behavioral_test.dart` `OI-387 gym tiers after phase 1 pick no improvised shoulder row when the pool has an implement row` and `OI-387 bodyweight beginner phase 2, 5 days: Lateral Delts gets a raise`; the ON-world gate `test/plan_generator/core_list_pool_gate_test.dart` holds 0 equipment, level and improvised-pick violations over 998 personas.
+- **Blocked on**: the founder's level call for the second loaded lateral-raise row (below); the flip it waited on shipped (Unit 1B-F, PR #248, 2026-11-12)
+- **Verified**: 2026-11-12 — 2,304-plan audit on main 775b99f4 (`plan_audit_dump_test.dart`, `audit.json` sha256 9fe860fa6b700ea5..., byte-identical to Unit 1B-F's final run); `core_list_pool_behavioral_test.dart` `OI-387` group green on main with no flag.
 - **Identified**: 2026-10-22 · filed via mint_oi.sh from branch `library-data-repair`
 
 **The defect.** E272, E273, E289 and E290 carry `target_focus: ["Shoulders"]`, and E276 and E277 carry "Upper Back". Neither is a slot label, and their `primary_muscles` ("Side/Rear Deltoid", "Rhomboids") contain none, so attempts 1-2 never return them. A bodyweight Lateral Delts slot is empty today.
@@ -6183,16 +6105,7 @@ Batch A did NOT relabel them. `_preferNovel` (`exercise_selector.dart:1054-1066`
 
 **Done when.** Batch B's equipment-aware pool offers these rows to no-equipment users only, their `target_focus` carries the slot label, and a behavioural test covers the bodyweight hit and the home/gym miss with `previousPhaseByDay` set.
 
-## OI-388 — Generator: gym plans serve bodyweight-only self-resisted curls and triceps extensions (150 of 165 full_gym and 140 of 150 basic_gym matrix plans)
-
-- **Status**: OPEN
-- **Blocked on**: the flip of `enable_core_list_pool` (Batch B1, branch `library-batch-b`, ship-dark DEFAULT OFF; flip criteria in `docs/ship_dark_pending_review.yaml`). The fix is built behind that flag; OFF plans are unchanged (generator golden).
-- **Verified**: 2026-10-23 — with the flag ON, `test/contracts/core_list_pool_behavioral_test.dart` `OI-388: a full_gym beginner gets no self-resisted curl or extension` and `owned equipment turns the implement preference on`; the ON-world gate `test/plan_generator/core_list_pool_gate_test.dart` holds 0 equipment, level and improvised-pick violations over 998 personas.
-- **Identified**: 2026-10-22 · filed via mint_oi.sh from branch `library-data-repair`
-
-**The defect.** E268 Self-Resisted Bicep Curl and E270 Self-Resisted Triceps Extension (OI-89 wave 1, `equipment_needed: ["bodyweight"]`) carry `priority_tier: 1`, `is_foundational: true` and every `equipment_tier`, so they sort ahead of Barbell Curl (E031, `priority_tier: 2`) and the cable/dumbbell rows. In the matrix, 150 of 165 full_gym plans and 140 of 150 basic_gym plans hold a bodyweight-only E262+ row: Self-Resisted Bicep Curl 290 picks, Self-Resisted Triceps Extension 234, Single Leg Glute Bridge 28, Standing Single Leg Hinge 16, Prone Y Raise 1 (gym tiers). `test/plan_generator/sample_plans_output.md` shows it for build_muscle full_gym (Pull day: Self-Resisted Bicep Curl, then Barbell Curl).
-
-**Done when.** A gym user's arm slots draw equipment rows first (bodyweight-only rows only when nothing else fits), bodyweight users with no implement keep their current picks, and a behavioural test covers both sides on the real generator. Under the core-list pool the preference is keyed on CAPABILITY, not the tier label, so home_dumbbells users (who have dumbbells) and bodyweight users who OWN an implement also leave the improvised rows wherever an implement row fits (amended 2026-10-23, Batch B1).
+**After the flip (2026-11-12).** The flip made the fix live: the core-list pool reads the rows' `slot_focus` overlay ("Lateral Delts", copied into `target_focus` by OI-495), a bodyweight beginner's Lateral Delts slot gets E273 / E289, and an implement user's `shoulder_isolation` pool drops improvised rows (step 4 of `rankedPool`). Residue, measured: 16 plans (32 day-weeks) still show E273 Towel Lateral Raise to a user with dumbbells: every one is `build_muscle|5|beginner|home_dumbbells or basic_gym|*|1 or 2`, the Shoulders + Arms day, which has TWO Lateral Delts slots. E013 Lateral Raise takes the first; same-day dedup (`pickedNames`) removes it before the improvised filter runs, and no other loaded lateral-raise row is core at beginner (G0355 Dumbbell Single Arm Lateral Raise and G0178 Cable Lateral Raise are core at intermediate and advanced only; G0311 / G0396 / G0356 are on no core list), so the filter's `nonImprovised > 0` test fails and Towel Lateral Raise is picked. The fix is data: one loaded lateral-raise row core at beginner (G0355 is `suitable_for` Beginner already). Adding a core level is the founder's call (the level table, d8 / d12).
 
 ## OI-389 — Cardio logs lose their minutes and distance: logExercise zeroes durationSec for every non-timed type and never writes distance_km
 
@@ -7143,19 +7056,6 @@ Residual of OI-199 and OI-471 after migration 172. Migration 172 makes `cleanup_
 
 **Done when.** `logCronEnd` removes the listed shapes before the cap, a test proves each one is removed and that a clean message passes through unchanged, and the plan names the redeploy of the cron functions.
 
-## OI-484 — Exercise ranking ignores the user's equipment: ties fall to library order, so Pike Push Up beats Barbell Overhead Press, Leg Press is never picked, and 1,700 of 1,728 equipped plans hold an unloaded pick where a loaded one fits
-
-- **Status**: OPEN
-- **Blocked on**: none
-- **Verified**: 2026-11-08 — 2,304-plan audit on main 0633a121 (4 goals x 3/4/5/6 days x 3 levels x 4 equipment tiers x 30/45/60/90 minutes x phases 1-3, no injuries, no history, real `generateV4`), run twice: live, and with `configBox['enable_core_list_pool'] = true`.
-- **Identified**: 2026-11-08 · filed via mint_oi.sh from branch `generator-step1-core-list`
-
-**What happens.** Neither picker asks whether a candidate uses equipment the user owns. The live cascade sorts `queryV4` results by compound, `priority_tier`, `is_foundational` (`exercise_repository.dart:427-438`) and `_preferNovel` returns `pool.first` with no history (`exercise_selector.dart:1589`), so a tie falls to library row order. The core-list pool sorts by its keys a-e and then by id (`core_list_selector.dart:272-289`), so a tie falls to id order. Its improvised filter (`:254-266`) covers only five arm, shoulder and pull patterns. Measured: in the 56 four-day Strength gym plans the OHP Day's overhead slot holds Pike Push Up (E010) instead of Barbell Overhead Press (E011) in 36 live and all 56 under the core list (equal keys, E010 sorts first); Leg Press is chosen 0 times live; a full-gym advanced user sees 63 of 862 exercises; 1,700 equipped plans live (1,505 core-list) hold a no-load row in a loadable pattern while a loaded row the user can perform exists at their level.
-
-**Done when.** The core-list ranking (the path that ships, OI-485) prefers a row that uses an implement the user has over an improvised one in every strength pattern, before `priority_tier`; the re-run audit shows every Strength OHP Day's overhead slot is a real press and the unloaded count falls to a named residue with each remaining row explained. Planned in step 1 of the generator overhaul (founder approval 2026-11-08). Blast radius: `platform` (plan_engine), tier L.
-
-**Step 1A (2026-11-08, branch `generator-step1-core-list`, diagnose c756b4; the pool is still OFF, so users see it at the 1B flip).** `rankedPool` now reduces an equipped user's isolation slot to like-for-like implement rows (R3 (a)), ranks a row that uses a non-household item the user has first in non-core compound slots (R3 (b)), and treats `vertical_push` as an implement pattern (plan v7: the key alone lost variant B's press to the foundational Pike Push Up). Re-run audit, core-list world, before -> after: household substitute 58 -> 44 plans, unloaded pick 1,505 -> 468, Strength gym OHP Day with Pike Push Up 56 of 56 -> 0 of 56. The residue (44, 468) is rows the R1 data and the 1B equipment variants (OI-148) cover. Live (OFF) numbers are unchanged by design.
-
 ## OI-486 — The day's main lift can get fewer sets than its accessories (876 of 2,304 plans; Strength Bench Day bench 2 sets, Bench Dips 5), and day order follows a name table, not the day's slot priority
 
 - **Status**: OPEN
@@ -7209,7 +7109,7 @@ Added 2026-11-11 (OI-494 review): the coach `logMeal` path in `lib/features/ai_c
 ## OI-495 — Unit 1B-F2: copy the core-list overlay labels (slot_focus / slot_pattern) into target_focus / movement_pattern, seed and cloud re-seed
 
 - **Status**: OPEN
-- **Blocked on**: Unit 1B-F merging (starts when 1B-F merges); its cloud migration then waits on the founder's live-apply go
+- **Blocked on**: nothing to start (Unit 1B-F merged 2026-11-12, PR #248, merge 9bbae8a6); its cloud migration waits on the founder's live-apply go
 - **Verified**: never
 - **Identified**: 2026-11-11 · filed via mint_oi.sh from branch `generator-step1-1bf`
 
@@ -7231,6 +7131,22 @@ Added 2026-11-11 (OI-494 review): the coach `logMeal` path in `lib/features/ai_c
 **Mechanism (measured with a temporary allocator print, `docs/plans/2026-11-10-generator-1bf-flip.md` section 4).** Writer: `SessionSetAllocator._variant` pass A (`session_set_allocator.dart`, `// 3. Pass A`): the count band, the clock refusal and Ruling 5's guards. Reader: the week's per-muscle sets of the periodized plan. Per cause (Triceps / Core / Biceps / Calves cells): the clock alone 128 / 60 / 0 / 18; a hold ranked ahead of the slot 160 / 64 / 20 / 0; guard (a) only-credit 20 / 8 / 18 / 0; the count band 0 / 0 / 78 / 0. None is OI-489's defect. It needs a weekly minimum per muscle that outranks a day's rank order: step 2's weekly floor.
 
 **Done when.** Step 2's weekly floor lands and the 2,304-plan audit shows 0 minor-muscle zero weeks the live twin (as recorded at the flip) did not have, or the founder accepts a stated residue. Owner: step 2 (d14). Blast radius `platform` (plan engine).
+
+## OI-497 — A loaded version loses to its bodyweight original where the equipment-fit key does not reach: isolation-typed Quads slot and phase 1
+
+- **Status**: OPEN
+- **Blocked on**: none
+- **Verified**: 2026-11-12 — 2,304-plan audit on main 775b99f4 (`audit.json` sha256 9fe860fa6b700ea5..., byte-identical to Unit 1B-F's final run) plus a `CoreListTrace` probe of four home_dumbbells plans (build_muscle 4-day intermediate phases 1-2, advanced phase 2; strength 4-day advanced phase 2).
+- **Identified**: 2026-11-12 · filed via mint_oi.sh from branch `step1-oi-closeout`
+
+**What happens.** `CoreListSelector.rankedPool` ranks by keys a-e then id (`core_list_selector.dart`, step 5). The R3 (b) fit key ("a row using an implement the user has") applies only in a COMPOUND slot (`fitApplies`), and it sits after key d, `phase == 1 && !foundational`. The nine S1b-2 loaded versions (N14 to N22) are not `is_foundational`; their bodyweight originals are. Two places follow:
+- The 4-day Legs A day's Quads slot is typed `isolation` (subFocus `isolation`, `knee_dominant`). For home_dumbbells there is no loaded quad isolation row, so R3 (a)'s like-for-like reduction finds nothing, the fit key does not apply, the exercise-type key ties (both lunges are compound), and `is_foundational` decides: E042 Walking Lunge over N16 Dumbbell Walking Lunge. 373 plans (367 home_dumbbells issues, 6 basic_gym), every phase, intermediate and advanced (beginner from phase 3, where the effective level rises).
+- In phase 1 key d ranks every foundational bodyweight row over a non-foundational loaded one in compound slots too: E291 Single Leg Glute Bridge (122 plans) and E253 Bodyweight Good Morning (58 plans), all tiers with equipment, phase 1 only.
+
+**Why it is a choice, not a defect.** Phase 1 preferring foundational rows is deliberate (step 1A kept key d; a beginner learns the pattern first), and a lunge in an isolation-typed slot is the split's own typing. Moving either changes many plans (at least the 373 + 180 above) and is a coaching call.
+
+**Done when.** The founder chooses, with the measured plan count for each: (a) the fit key also applies in an isolation-typed slot to compound rows (dumbbell lunge in the Legs A Quads slot), (b) a loaded version outranks its own foundational original in phase 1 (`same_movement_as` pair only), or neither; the chosen rule is built with the 2,304-plan audit and golden re-run. Owner: step 1 (the step-1 OI board close-out found it). Blast radius `platform` (plan engine).
+
 
 ## OI-498 — Laptop clone: sync main with GitHub and reinstall the git hooks (suite lock, PR #246)
 
