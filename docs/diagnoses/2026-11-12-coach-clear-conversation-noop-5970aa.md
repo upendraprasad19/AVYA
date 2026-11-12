@@ -162,10 +162,30 @@ GREATEST removed (C2 red), the INSERT-branch clamp removed (C4b red; it survived
 against a user who already had a row), the anon REVOKE removed (C8 red, both checks).
 
 ## Live apply
-Pending the founder's explicit go (CLAUDE.md 4.3). Post-apply checks: `information_schema.columns` for the column,
-`pg_proc` for `prosecdef = false` and the `proconfig`, and `has_function_privilege('anon',
-'public.raise_coach_chat_cleared_at(timestamptz)', 'execute') = false` live (the migrations CLAUDE.md row: the
-default-privilege grant lives in no migration file).
+APPLIED 2026-11-12 on the founder's explicit "Apply 177" (CLAUDE.md 4.3), version `20261112093239`, ledgered in
+`backups/applied_migrations.json`. Post-apply checks, run live: `information_schema.columns` shows the column as
+`timestamptz`, nullable; `pg_proc` shows `prosecdef = false` and `proconfig` `{search_path=public, pg_temp}`;
+`has_function_privilege('anon', 'public.raise_coach_chat_cleared_at(timestamptz)', 'execute')` is false and
+`authenticated` is true (the migrations CLAUDE.md row: the default-privilege grant lives in no migration file); 0 rows
+hold a value.
+
+## B-pass (2026-11-12, `docs/reviews/oi479-clear-conversation-bpass.md`)
+A fresh Sonnet reviewer read the CI-green head `19b3c23b`: no P0, P1 or P2, five P3. Two were changed:
+- **F2, the clear flow had no error sink.** The header runs `confirmClearCoachConversation` unawaited, so a throw
+  from `CoachChatClear.clear()` (the user box closed by a sign-out mid-flow) reached the zone uncaught. The flow now
+  catches it, records `coach_chat_clear_failed` and shows "Couldn't clear this chat. Try again." Test: T8 "a clear that
+  throws is reported and told". Mutation: the try/catch removed (`grep -c coach_chat_clear_failed` = 0), 1 test red
+  (that one), file restored byte-identical (sha256).
+- **F4, stale registry cites.** `_restoreUserPreferences` cited `1085-1176` (real `1088-1179`). The check then widened
+  to every cite into a file this batch touched. Three spans were already stale on `main`, and the batch's `+N` shift
+  carried them along: `_syncUserPreferences` `588-673` (real `663-753`), the inline `_restoreUserPreferences`
+  `971-1033`, and `ChatHistoryNotifier.build` `165-327` (real `172-361`). The shift also skipped 13 bare single-line
+  cites in `auth_provider.dart` and `ai_coach_provider.dart`. Each was re-derived from the code: a bare cite is right
+  when its line text equals `main`'s text at `main`'s cited line, and now 15 of 15 match. The class is OI-262, where
+  this measurement is recorded.
+Not changed: F1 (its suggested read-time clamp is the round-1 F2 regression; the fast-clock case is bounded by the
+skew, plan 3.1), F3 (the Home tip is out of scope by the founder's "only clear the conversation in the chat"; C1),
+F5 (already recorded on OI-253).
 
 ## Residuals (accepted)
 - Clock skew between a device and the server shifts the hide boundary by that skew for server-stamped (restored) rows

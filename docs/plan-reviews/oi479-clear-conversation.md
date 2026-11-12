@@ -5,7 +5,7 @@ blast_radius: platform
 review_rounds: 3
 ground_truth_verified: true
 verdict: converged
-bpass: pending
+bpass: accepted
 bpass_review: docs/reviews/oi479-clear-conversation-bpass.md
 ---
 
@@ -45,3 +45,10 @@ clear (the stub's GET responders are synchronous); T7 split into a behavioural p
 timed-out sign-out push must not arm the next user's sweep (`fromSignOut` logs only).
 
 The rounds went 2 P1 -> 1 P1 -> 1 P1 (mechanical) with no new mechanism class in round 3; the plan is executed as rev 3.
+
+## B-pass (code review of the CI-green head 19b3c23b)
+A fresh Sonnet reviewer, `docs/reviews/oi479-clear-conversation-bpass.md`: no P0, P1 or P2; five P3. Two were fixed: the
+clear flow's missing error sink (F2) and stale registry cites (F4, widened to every cite into a touched file). Two were
+false alarms with reasons: F1's suggested read-time clamp is the round-1 F2 regression, and F3 is outside the founder's
+"only clear the conversation in the chat". F5 was already recorded on OI-253. The tier is platform (the diff touches
+`lib/core/services/sync/**`); this record said account until the CI inventory fix.

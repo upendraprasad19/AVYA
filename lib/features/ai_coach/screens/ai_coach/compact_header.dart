@@ -212,7 +212,28 @@ Future<void> confirmClearCoachConversation(
   );
   if (confirmed != true || !context.mounted) return;
   if (ref.read(sendMessageProvider)) return;
-  final cleared = await CoachChatClear.clear();
+  // The header runs this unawaited: a throw here (the user box closed by a
+  // sign-out mid-flow) would reach the zone as an uncaught error. Report it
+  // and tell the user nothing was cleared (B-pass F2).
+  final bool cleared;
+  try {
+    cleared = await CoachChatClear.clear();
+  } catch (e, st) {
+    unawaited(ErrorTelemetry.recordNonFatal(e, st,
+        reason: 'coach_chat_clear_failed'));
+    if (context.mounted) {
+      ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+        SnackBar(
+          content: Text(
+            "Couldn't clear this chat. Try again.",
+            style: AppTypography.body.copyWith(color: AppColors.bad),
+          ),
+          backgroundColor: AppColors.card,
+        ),
+      );
+    }
+    return;
+  }
   if (!cleared || !context.mounted) return;
   ref.invalidate(chatHistoryProvider);
 }

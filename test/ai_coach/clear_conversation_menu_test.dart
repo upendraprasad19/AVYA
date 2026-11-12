@@ -6,6 +6,7 @@
 //   pushes it and the thread re-renders hidden.
 // * A send that starts while the dialog is open makes CLEAR a no-op (that
 //   turn's row predates the marker; its reply would vanish).
+// * A clear that throws is reported (coach_chat_clear_failed) and told.
 // * Pending action cards are not touched by a clear (coordinator call C2).
 @Timeout(Duration(minutes: 2))
 library;
@@ -16,6 +17,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:icanbefitter/core/services/coach_chat_clear.dart';
+import 'package:icanbefitter/core/services/error_telemetry.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
 import 'package:icanbefitter/core/services/hive_user_session.dart';
 import 'package:icanbefitter/core/theme/typography.dart';
@@ -232,6 +234,34 @@ void main() {
     expect(CoachChatClear.clearedAt(), isNull);
     expect(pushed, isEmpty);
     expect(find.text('users=1'), findsOneWidget);
+  });
+
+  testWidgets('a clear that throws is reported and told, never uncaught '
+      '(B-pass F2)', (tester) async {
+    await seedChat(tester);
+    await pumpHost(tester);
+    final reasons = <String>[];
+    ErrorTelemetry.debugOnRecordNonFatalForTests =
+        (e, st, {required reason, extra}) => reasons.add(reason);
+    // A synchronous throw from the push call is a throw out of clear() itself
+    // (the production push is async; this stands in for a closed user box).
+    CoachChatClear.debugPushOverride = (_) => throw StateError('box closed');
+    addTearDown(() {
+      ErrorTelemetry.debugOnRecordNonFatalForTests = null;
+      CoachChatClear.debugPushOverride = (owner) async => pushed.add(owner);
+    });
+    late Future<void> flow;
+    await tester.runAsync(() async {
+      flow = confirmClearCoachConversation(hostContext, hostRef);
+    });
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('coach_clear_confirm')));
+    await tester.pump();
+    // Without the catch, this await rethrows the StateError.
+    await tester.runAsync(() => flow);
+    await tester.pumpAndSettle();
+    expect(reasons, ['coach_chat_clear_failed']);
+    expect(find.text("Couldn't clear this chat. Try again."), findsOneWidget);
   });
 
   test('C2: the clear flow never touches the pending action cards', () {

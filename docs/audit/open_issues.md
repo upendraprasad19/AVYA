@@ -4676,6 +4676,17 @@ Symptom, measured 2026-09-28 against `scripts/check_sot_registry_parity.dart`:
   a mutation-proven test (the gate already has a rule-24 ledger entry).
 - **Source**: founder-queued during the day-swapper-sync-load batch after repeated hand
   re-derivation of shifted citations.
+- **Instance 2026-11-12 (OI-479 B-pass, `5970aa`)**: in the 9 files OI-479 touched, a scan that
+  compares each cited span's start with the cited method's declaration flagged 58 cites more than
+  6 lines away. Some are whole-file `1-9999` or prose cites and not wrong. Three were stale BEFORE
+  the batch and passed parity because the name still fell inside the span:
+  `_syncUserPreferences` `588-673` (real `663-748`), `_restoreUserPreferences` `1080-1150` (real
+  `1083-1153`) and the inline `971-1033` (same method). OI-479's own `+N` shift carried each of
+  them along. 13 bare single-number cites (`line_range: 332`, `line: 913`) were not shifted at all,
+  because the shift helper, like the gate, read only `N-M`. OI-479 re-derived every cite for a
+  method it changed from the code itself (a bare cite is right when the text at the cited line
+  equals main's text at main's cited line: 15 of 15 match), and left the other cites as they are.
+  The window check in the fix shape above would have caught all three stale ranges.
 
 ## OI-260 — 4 sibling reportGeminiExhaustion-wiring tests (weekly-report/assess-body-composition/ai-media-proxy/rolling-context) share e35936's exact literal-string blind spot if any adopts an injectable geminiChatFn seam
 

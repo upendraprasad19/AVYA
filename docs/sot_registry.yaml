@@ -6500,7 +6500,7 @@ concepts:
           The ONE local writer (max-wins, no await between read and put);
           CoachChatClear.clear stamps the device now and fires the push.
       - file: lib/core/services/sync/sync_profile.dart
-        line_range: 1085-1176
+        line_range: 1088-1179
         method: _restoreUserPreferences
         notes: |
           Removes the column before the generic merge (never lands in
@@ -6526,7 +6526,7 @@ concepts:
     reader_manifest_complete: true
     readers:
       - file: lib/features/ai_coach/providers/ai_coach_provider.dart
-        line_range: 172-221
+        line_range: 172-361
         method: build
         semantic: filter
         fields_read: [created_at, kind]
@@ -6620,7 +6620,7 @@ concepts:
     reader_manifest_complete: true
     readers:
       - file: lib/features/ai_coach/providers/ai_coach_provider.dart
-        line_range: 165-327
+        line_range: 172-361
         method: ChatHistoryNotifier.build (chat scroll buffer)
         semantic: historical-series
         fields_read: [created_at, user_message, ai_response, model_used, channel, tool_calls, media_url, media_type, media_storage_path, media_save_state]
@@ -7142,7 +7142,7 @@ concepts:
       - { file: supabase/functions/assess-body-composition/index.ts, line_range: 86-224, method: "serve handler — 30-day rate-limit block", notes: "Also read-merge-write: selects existing coaching_notes, JSON.parse, sets last_bf_assessed_at, re-upserts onConflict user_id — never a blind overwrite of daily-snapshot's keys." }
     reader_manifest_complete: false
     readers:
-      - { file: lib/core/services/sync/sync_profile.dart, line_range: 976-1038, method: _restoreUserPreferences, semantic: pass-through, notes: "Generic .select() on user_preferences pulls the whole row, incl. coaching_notes, into Hive on restore. The client never writes this key back (see class_constraints below) — reader_manifest_complete is false because nothing in lib/ currently parses this JSON's individual keys client-side; it round-trips opaquely." }
+      - { file: lib/core/services/sync/sync_profile.dart, line_range: 1088-1179, method: _restoreUserPreferences, semantic: pass-through, notes: "Generic .select() on user_preferences pulls the whole row, incl. coaching_notes, into Hive on restore. The client never writes this key back (see class_constraints below) — reader_manifest_complete is false because nothing in lib/ currently parses this JSON's individual keys client-side; it round-trips opaquely." }
       - { file: supabase/functions/restore-user-snapshot/index.ts, line: 167, method: "serve handler", semantic: pass-through, notes: "Server-side restore endpoint selects user_preferences.* (incl. coaching_notes) back to a fresh install / reinstall." }
     cloud:
       table: user_preferences
@@ -12734,7 +12734,7 @@ concepts:
           record, so an unrestored device can no longer assert an all-enabled
           default over the stored copy.
       - file: lib/core/services/sync/sync_profile.dart
-        line_range: 588-673
+        line_range: 663-753
         method: _syncUserPreferences
         semantic: latest
         notes: |
@@ -12772,7 +12772,7 @@ concepts:
           a corrupted or half-written value cannot silently darken a
           notification. Swallows storage errors and returns {} (=> all-enabled).
       - file: lib/core/services/sync/sync_profile.dart
-        line_range: 1085-1176
+        line_range: 1088-1179
         method: _restoreUserPreferences
         semantic: latest
         fields_read: [enabled]
@@ -13000,7 +13000,7 @@ concepts:
       .timeout() frees the AWAITER and does NOT cancel the request.
     writers:
       - file: lib/features/auth/providers/auth_provider.dart
-        line_range: 913
+        line_range: 914
         method: signOutInProgress
         semantic: teardown-window-flag
       - file: lib/features/auth/providers/auth_provider.dart
@@ -13189,19 +13189,19 @@ concepts:
       user's position worse. Kill-switch configBox.disable_sign_in_timeout.
     writers:
       - file: lib/features/auth/providers/auth_provider.dart
-        line_range: 215
+        line_range: 216
         method: signInTimeout
         semantic: the-ceiling-constant
       - file: lib/features/auth/providers/auth_provider.dart
-        line_range: 250
+        line_range: 251
         method: boundSignIn
         semantic: applies-the-ceiling-injectable-test-seam
       - file: lib/features/auth/providers/auth_provider.dart
-        line_range: 257
+        line_range: 258
         method: signInWithEmail
         semantic: sets-loading-then-error-on-timeout
       - file: lib/features/auth/providers/auth_provider.dart
-        line_range: 293
+        line_range: 294
         method: _performEmailSignIn
         semantic: the-bounded-sequence-itself
     readers:
@@ -13316,15 +13316,15 @@ concepts:
       path and never to the OAuth ENTRY path.
     writers:
       - file: lib/features/auth/providers/auth_provider.dart
-        line_range: 418
+        line_range: 419
         method: OAuth completion watch
         semantic: subscribes-to-onAuthStateChange-after-launch
       - file: lib/features/auth/providers/auth_provider.dart
-        line_range: 447
+        line_range: 448
         method: cancelOAuthWatch
         semantic: teardown-also-wired-to-ref-onDispose
       - file: lib/features/auth/providers/auth_provider.dart
-        line_range: 533
+        line_range: 534
         method: signInWithGoogle
         semantic: launches-the-redirect-then-arms-the-watch
     readers:
@@ -14955,23 +14955,23 @@ concepts:
         notes: the raw Gemini text this concept cleans on the client side.
     readers:
       - file: lib/features/ai_coach/providers/ai_coach_provider.dart
-        line_range: 695
+        line_range: 704
         method: "SendMessageNotifier.sendWithMedia"
         semantic: display-only
       - file: lib/features/ai_coach/providers/ai_coach_provider.dart
-        line_range: 956
+        line_range: 965
         method: "SendMessageNotifier.send (primary)"
         semantic: display-only
       - file: lib/features/ai_coach/providers/ai_coach_provider.dart
-        line_range: 1036
+        line_range: 1045
         method: "SendMessageNotifier.send (auth-retry)"
         semantic: display-only
       - file: lib/features/ai_coach/providers/ai_coach_provider.dart
-        line_range: 332
+        line_range: 341
         method: "ChatHistoryNotifier.build (success render)"
         semantic: display-only
       - file: lib/features/ai_coach/providers/ai_coach_provider.dart
-        line_range: 300
+        line_range: 309
         method: "ChatHistoryNotifier.build (isFailed fallback render)"
         semantic: display-only
     forbidden_legacy_patterns:
