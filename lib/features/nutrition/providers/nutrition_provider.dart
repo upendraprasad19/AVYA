@@ -16,6 +16,7 @@ import 'package:icanbefitter/core/services/supabase_service.dart';
 import 'package:icanbefitter/core/services/sync_service.dart';
 import 'package:icanbefitter/core/utils/bmr_calculator.dart';
 import 'package:icanbefitter/core/utils/ist_date.dart';
+import 'package:icanbefitter/core/utils/single_flight.dart';
 import 'package:icanbefitter/core/services/badge_service.dart';
 import 'package:icanbefitter/shared/repositories/user_repository.dart';
 import 'package:icanbefitter/shared/repositories/food_repository.dart';
@@ -932,7 +933,18 @@ class AiBreakdownNotifier extends Notifier<AiBreakdownData?> {
   /// or failure. A `success: false, errorMessage: 'no_state'` result is
   /// returned on double-tap (state already cleared by a prior successful
   /// save) rather than failing silently.
+  ///
+  /// OI-493 Landing B (B7): one save at a time (`SingleFlight` key `aitext`,
+  /// held here so it survives a card remount, where the card's own `_saving`
+  /// starts fresh); a second call while one runs returns
+  /// [WriteResult.inFlight] and writes nothing.
   Future<WriteResult> saveMeal({String mealType = 'snacks'}) async {
+    return await SingleFlight.run<WriteResult>(
+            'aitext', () => _saveMealOnce(mealType: mealType)) ??
+        WriteResult.inFlight();
+  }
+
+  Future<WriteResult> _saveMealOnce({required String mealType}) async {
     final data = state;
     if (data == null) {
       return WriteResult.noState();
@@ -1101,7 +1113,7 @@ class FoodLogNotifier extends Notifier<void> {
     // so all consumers get it uniformly. `allowUndo: false` because this
     // entry point doesn't surface an UNDO snackbar (separate from the food
     // search sheet's delete-with-undo path); set to true if the call-site
-    // wants `restoreLastDeleted()` to work.
+    // wants `restoreLastDeleted(expectedKey:)` to work.
     final result = await NutritionWriteService.instance.deleteLog(
       logKey: logId,
       allowUndo: false,

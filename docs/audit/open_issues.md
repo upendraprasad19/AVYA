@@ -7108,6 +7108,8 @@ Added 2026-11-11 (OI-494 review): the coach `logMeal` path in `lib/features/ai_c
 
 Added 2026-11-12 (Landing A, branch `oi493-nutrition-parity`, diagnose ec6f6c): the unit was split under §4.12.1 (plan `docs/plans/oi493-nutrition-parity.md`). Landing A fixes differences 1-6, 9, 10, 12 and 14 (one coach meal writer `CoachMealLog.write`; day and slot from the reported instant, slot by the screen's clock rule; parsed items with fibre; the tag's own estimate; no AI-text unit; the server refuses a non-today date; six `food_name` readers read `items[]`, with a source guard). 11's `source` half is verified clean (no such cloud column). Landing B (`docs/plans/oi493b-duplicate-meals.md`: the same meal twice adds an entry, the zero-override fallback, concurrent dispatch) closes this OI with the closure ledger. Open after A merges: the `ai-proxy` deploy (founder go) and the device check after the next build.
 
+Added 2026-11-12 (Landing B, branch `oi493b-duplicate-meals`, diagnose 4cb58f): the same meal logged twice is two entries (first free occurrence key in `logMeal`, `moveMealLog`, both UNDO paths and `NlogKeyMigrator`); UNDO restores only its own row and never across accounts; a double tap, a remounted AI-text / scan card or a remounted coach tag card saves once (`SingleFlight`, the handler's in-flight map); an AI total of 0 falls back to the items. Every one of the 14 differences is terminal in `docs/audit/oi493-nutrition-parity.closure.yaml`. Still open (why this OI stays OPEN): the `ai-proxy` deploy from `main` (founder go; D3's server-side date rule is live only after it) and the device check after the next build (coach and screen meals, a repeat, UNDO).
+
 ## OI-495 — Unit 1B-F2: copy the core-list overlay labels (slot_focus / slot_pattern) into target_focus / movement_pattern, seed and cloud re-seed
 
 - **Status**: OPEN
@@ -7162,3 +7164,16 @@ Added 2026-11-12 (Landing A, branch `oi493-nutrition-parity`, diagnose ec6f6c): 
 **Do on the laptop (Git Bash, from the clone's MAIN folder, on `main`).** `git checkout main`, `git fetch origin main`, `git merge --ff-only origin/main`, then `sh scripts/setup-hooks.sh` (it refuses a tree behind or diverged from `origin/main`). A `Permission denied` on a hook file means a stale tree: update it and re-run, never chmod or delete a hook by hand. Expected there: no `flock` on Windows Git Bash / macOS, so the lock prints a WARNING and fails open; nothing blocks.
 
 **Done when.** On the laptop: `grep -c suite_lock_acquire .git/hooks/pre-push .git/hooks/pre-commit` prints a non-zero count for both, and `git log -1 --oneline` on `main` shows `837f62aa` or later. Blast radius `feature` (no code change; a per-clone install step).
+
+## OI-500 — session_date_and_home_start test fails on a non-IST host (CI pins IST, so main stays green)
+
+- **Status**: OPEN
+- **Blocked on**: none
+- **Verified**: never
+- **Identified**: 2026-11-12 · filed via mint_oi.sh from branch `oi493b-duplicate-meals`
+
+**What happens.** `TZ=UTC flutter test test/contracts/session_date_and_home_start_behavioral_test.dart` fails one test, "scheduled day IS today -> unchanged (healthy path byte-identical)": Expected the same `DateTime` instance (2026-07-20 06:00) back from `resolveSessionDate`, Actual a new 2026-07-20 19:30. Reproduced on `main` `e1becc8d` at 05:59 UTC 2026-11-12, so it is not caused by the branch that found it (OI-493 Landing B ran the targeted tests under both Kolkata and UTC). CI pins `TZ=Asia/Kolkata`, so the CI suite and `main` stay green; any developer or CI leg on a non-IST host sees a red test.
+
+**Likely shape (not yet traced).** The fixture's `now` and `todayScheduled` are host-local `DateTime(...)` values while `resolveSessionDate` compares IST days, so off IST "today" is judged a different day and the clamp path returns `now`. Writer/reader names to be confirmed by reading `resolveSessionDate` before any fix.
+
+**Done when.** The test passes under UTC, Asia/Kolkata and a zone east of IST, with either the fixture built in IST terms or the function fixed if the host zone leaks into a real decision (in which case it is a product bug: a diagnose doc and a behavioural test). Blast radius `feature` (Train).

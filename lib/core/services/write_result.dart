@@ -55,6 +55,15 @@ class WriteResult {
   /// Use instead of comparing `errorMessage == 'no_state'` directly.
   bool get isNoState => !success && errorMessage == 'no_state';
 
+  /// OI-493 Landing B: the same save is already running (a `SingleFlight`
+  /// null run, e.g. a remounted AI breakdown card tapped while its first save
+  /// is in flight). The UI shows a neutral "Saving meal…", not "Already saved."
+  /// (the first save may still fail) and not an error.
+  factory WriteResult.inFlight() => WriteResult.fail('in_flight');
+
+  /// True when this result is [WriteResult.inFlight].
+  bool get isInFlight => !success && errorMessage == 'in_flight';
+
   @override
   String toString() =>
       'WriteResult(success=$success, logKey=$logKey, error=$errorMessage, code=$code, newlyCompleted=$newlyCompleted)';

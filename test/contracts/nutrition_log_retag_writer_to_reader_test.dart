@@ -100,204 +100,120 @@ void main() {
       expect(moved['meal_type'], 'dinner');
     });
 
-    test(
-        'moveMealLog merges items and clamps totals when two logs collide '
-        'at the same destination key', () async {
-      // Two logs with IDENTICAL items (same items → same computeLogKey
-      // hash) logged into two DIFFERENT source slots, both moved into the
-      // SAME destination slot, must land at the SAME newKey and merge —
-      // exercising the `existingAtDestination is Map` branch.
-      const items = [
-        FoodItem(
-          name: 'Oats',
-          quantityG: 100,
-          calories: 300,
-          protein: 10,
-          carbs: 50,
-          fat: 5,
-          fiber: 4,
-        ),
-      ];
-      final date = DateTime(2026, 9, 20);
+    // OI-493 Landing B (B3, founder decision F4): the collision MERGE these
+    // three tests used to pin is gone. A move into a slot already holding the
+    // same meal writes the first FREE occurrence (`<dest>_2`): two entries
+    // stay two. The FC6 clamp-after-recompute and the macroUpdates ordering
+    // they also protected are re-pinned on the moved row.
+    const oats = [
+      FoodItem(
+        name: 'Oats',
+        quantityG: 100,
+        calories: 300,
+        protein: 10,
+        carbs: 50,
+        fat: 5,
+        fiber: 4,
+      ),
+    ];
 
-      final firstLog = await NutritionWriteService.instance.logMeal(
+    Future<(String, String)> logTwiceInTwoSlots(List<FoodItem> items) async {
+      final date = DateTime(2026, 9, 20);
+      final first = await NutritionWriteService.instance.logMeal(
         date: date,
         mealType: 'breakfast',
         items: items,
         source: NutritionWriteSource.manualSearch,
       );
-      final secondLog = await NutritionWriteService.instance.logMeal(
+      final second = await NutritionWriteService.instance.logMeal(
         date: date,
         mealType: 'lunch',
         items: items,
         source: NutritionWriteSource.manualSearch,
       );
-      expect(firstLog.success, isTrue);
-      expect(secondLog.success, isTrue);
+      expect(first.success, isTrue);
+      expect(second.success, isTrue);
+      return (first.logKey!, second.logKey!);
+    }
+
+    test(
+        'moveMealLog keeps two entries apart when the destination already '
+        'holds the same meal (OI-493 Landing B)', () async {
+      final (firstKey, secondKey) = await logTwiceInTwoSlots(oats);
 
       final firstMove = await NutritionWriteService.instance.moveMealLog(
-        logKey: firstLog.logKey!,
+        logKey: firstKey,
         newMealType: 'dinner',
       );
       expect(firstMove.success, isTrue);
       final destinationKey = firstMove.logKey!;
 
       final secondMove = await NutritionWriteService.instance.moveMealLog(
-        logKey: secondLog.logKey!,
+        logKey: secondKey,
         newMealType: 'dinner',
       );
       expect(secondMove.success, isTrue);
-      // Collision: both moves must land at the SAME key (same date +
-      // mealType + identical-items hash).
-      expect(secondMove.logKey, destinationKey);
+      expect(secondMove.logKey, '${destinationKey}_2',
+          reason: 'the second move takes the first free occurrence');
 
       final box = HiveService.instance.nutritionBox;
-      expect(box.get(firstLog.logKey!), isNull);
-      expect(box.get(secondLog.logKey!), isNull);
+      expect(box.get(firstKey), isNull);
+      expect(box.get(secondKey), isNull);
 
-      final merged =
-          Map<String, dynamic>.from(box.get(destinationKey) as Map);
-      expect(merged['meal_type'], 'dinner');
-      final mergedItems = merged['items'] as List;
-      expect(mergedItems, hasLength(2),
-          reason: 'both source logs\' items must be unioned on collision');
-      // Two identical items (300 kcal / 10P / 50C / 5F / 4Fi each) summed.
-      expect(merged['total_calories'], 600);
-      expect(merged['total_protein'], 20);
-      expect(merged['total_carbs'], 100);
-      expect(merged['total_fat'], 10);
-      expect(merged['total_fiber'], 8);
-      // Every field the collision branch recomputes must still be within
-      // the FC6 clamp ceilings — proves _clampMealPayload ran on the
-      // POST-merge row, not the pre-merge one (review round 1 Important
-      // finding: clamp was called BEFORE the merge, so a merge that pushed
-      // a total past the ceiling would have written an unclamped value).
-      expect(merged['total_calories'], lessThanOrEqualTo(15000));
-      expect(merged['total_protein'], lessThanOrEqualTo(2000));
+      for (final key in [destinationKey, '${destinationKey}_2']) {
+        final row = Map<String, dynamic>.from(box.get(key) as Map);
+        expect(row['meal_type'], 'dinner');
+        expect(row['id'], key);
+        expect(row['log_key'], key);
+        expect(row['items'], hasLength(1),
+            reason: 'no merge: each entry keeps its own item');
+        expect(row['total_calories'], 300);
+      }
     });
 
     test(
-        'moveMealLog clamps the POST-merge total, not the pre-merge one, '
-        'on a collision (review round 1 Important finding)', () async {
-      // Two logs whose items are each individually under the per-meal
-      // ceiling (_kMaxMealCalories=15000) but whose MERGED sum exceeds it.
-      // If _clampMealPayload ran BEFORE the collision-merge recompute (the
-      // pre-fix order), the pre-merge total (9000, under ceiling) would
-      // pass through unclamped, and the merge step would then overwrite
-      // total_calories with the unclamped 18000. Correct (post-merge
-      // clamp) order must leave the written total at the 15000 ceiling.
-      const items = [
-        FoodItem(
-          name: 'Mega Bar',
-          quantityG: 500,
-          calories: 9000,
-          protein: 10,
-          carbs: 50,
-          fat: 5,
-          fiber: 4,
-        ),
-      ];
-      final date = DateTime(2026, 9, 20);
-
-      final firstLog = await NutritionWriteService.instance.logMeal(
-        date: date,
-        mealType: 'breakfast',
-        items: items,
-        source: NutritionWriteSource.manualSearch,
-      );
-      final secondLog = await NutritionWriteService.instance.logMeal(
-        date: date,
-        mealType: 'lunch',
-        items: items,
-        source: NutritionWriteSource.manualSearch,
-      );
-
-      final firstMove = await NutritionWriteService.instance.moveMealLog(
-        logKey: firstLog.logKey!,
+        'moveMealLog clamps the written total AFTER macroUpdates '
+        '(FC6, re-pinned without the merge)', () async {
+      final (firstKey, _) = await logTwiceInTwoSlots(oats);
+      final moved = await NutritionWriteService.instance.moveMealLog(
+        logKey: firstKey,
         newMealType: 'snacks',
+        macroUpdates: const {'total_calories': 18000},
       );
-      final destinationKey = firstMove.logKey!;
-      final secondMove = await NutritionWriteService.instance.moveMealLog(
-        logKey: secondLog.logKey!,
-        newMealType: 'snacks',
-      );
-      expect(secondMove.logKey, destinationKey,
-          reason: 'both moves must collide at the same destination key');
-
-      final merged = Map<String, dynamic>.from(
-          HiveService.instance.nutritionBox.get(destinationKey) as Map);
-      // Unclamped merge would be 9000 + 9000 = 18000, which exceeds the
-      // 15000 ceiling — the write must never persist that raw value.
-      expect(merged['total_calories'], 15000,
-          reason:
-              'merged total (18000) must be clamped to the 15000 ceiling '
-              'AFTER the merge recompute, not left at the pre-merge '
-              'per-source value');
+      expect(moved.success, isTrue);
+      final row = Map<String, dynamic>.from(
+          HiveService.instance.nutritionBox.get(moved.logKey!) as Map);
+      expect(row['total_calories'], 15000,
+          reason: 'an over-ceiling total must be clamped after macroUpdates '
+              'are applied, never written raw');
     });
 
     test(
-        'moveMealLog applies macroUpdates on top of a collision-merge, not '
-        'the other way around (B-pass finding, 2026-09-20)', () async {
-      // Pre-fix: the collision branch unconditionally recomputed every
-      // total_* field from the merged item list AFTER macroUpdates had
-      // already been applied to `row`, silently discarding the caller's
-      // explicit macro edit whenever the destination slot already held a
-      // log. This is exactly the Edit Macros sheet's real call shape: a
-      // user can both retag AND edit macros in one SAVE.
-      const items = [
-        FoodItem(
-          name: 'Oats',
-          quantityG: 100,
-          calories: 300,
-          protein: 10,
-          carbs: 50,
-          fat: 5,
-          fiber: 4,
-        ),
-      ];
-      final date = DateTime(2026, 9, 20);
-
-      final firstLog = await NutritionWriteService.instance.logMeal(
-        date: date,
-        mealType: 'breakfast',
-        items: items,
-        source: NutritionWriteSource.manualSearch,
-      );
-      final secondLog = await NutritionWriteService.instance.logMeal(
-        date: date,
-        mealType: 'lunch',
-        items: items,
-        source: NutritionWriteSource.manualSearch,
-      );
-
+        'moveMealLog applies macroUpdates to the moved occurrence only, '
+        'not to the entry already at the destination', () async {
+      final (firstKey, secondKey) = await logTwiceInTwoSlots(oats);
       final firstMove = await NutritionWriteService.instance.moveMealLog(
-        logKey: firstLog.logKey!,
+        logKey: firstKey,
         newMealType: 'dinner',
       );
       final destinationKey = firstMove.logKey!;
-
-      // Second move collides at `destinationKey` AND carries an explicit
-      // macro override — the two effects the pre-fix ordering couldn't
-      // combine correctly.
       final secondMove = await NutritionWriteService.instance.moveMealLog(
-        logKey: secondLog.logKey!,
+        logKey: secondKey,
         newMealType: 'dinner',
         macroUpdates: const {'total_calories': 42},
       );
       expect(secondMove.success, isTrue);
-      expect(secondMove.logKey, destinationKey,
-          reason: 'both moves must collide at the same destination key');
+      expect(secondMove.logKey, '${destinationKey}_2');
 
-      final merged = Map<String, dynamic>.from(
-          HiveService.instance.nutritionBox.get(destinationKey) as Map);
-      // Pre-fix this would read 600 (the merged item-fold total), silently
-      // discarding the caller's macroUpdates.
-      expect(merged['total_calories'], 42,
-          reason: 'an explicit macroUpdates value must win over the '
-              'collision-merge recompute, not be silently discarded by it');
-      // The item merge itself must still have happened — macroUpdates
-      // overriding totals must not skip the items union.
-      expect(merged['items'], hasLength(2));
+      final box = HiveService.instance.nutritionBox;
+      final movedRow = Map<String, dynamic>.from(
+          box.get('${destinationKey}_2') as Map);
+      final destRow =
+          Map<String, dynamic>.from(box.get(destinationKey) as Map);
+      expect(movedRow['total_calories'], 42,
+          reason: 'the caller\'s macro edit applies to the moved row');
+      expect(destRow['total_calories'], 300,
+          reason: 'the entry already at the destination is untouched');
     });
 
     test('moveMealLog rejects an unknown mealType', () async {

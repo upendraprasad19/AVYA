@@ -86,7 +86,7 @@ Every Hive key composed from a prefix lives here. **Never reuse a prefix for a d
 | `schedule_`                   | `schedule_<istdate>`                | workoutBox    | Schedule entry (status, exercises)         |
 | `tmpl_`                       | `tmpl_<timestamp>`                  | workoutBox    | Workout template (single or multi-day)     |
 | `undo_`                       | `undo_<logKey>`                     | workoutBox    | Undo stash for completed workout           |
-| `nlog_`                       | `nlog_<timestamp>_<hash>`           | nutritionBox  | Nutrition log (meal)                       |
+| `nlog_`                       | `nlog_<IST date>_<slot>_<8 hex>[_<n>]` | nutritionBox  | Nutrition log (meal); `_<n>` = occurrence |
 | `flog_`                       | `flog_<loggedAt>_<foodNameHash>`    | nutritionBox  | Single food log entry (delete-undo stash)  |
 | `target_override_`            | `target_override_<istdate>`         | nutritionBox  | Per-day calorie target override            |
 | `weight_`                     | `weight_<istdate>`                  | healthBox     | Weight log entry                           |
@@ -594,6 +594,9 @@ Every term that has SPECIFIC meaning in this app. New features that use any of t
 | **reshow** | `CompletionPromptStore.write(reshow: true)`: a fresh UTC `created_at` and `resolved_at: null`. | The default keep path (keeps `created_at`, normalised to UTC; diagnose f3d704). |
 | **completion_tile_not_shown** | `client_errors.op_type`: a tile request that wrote nothing; `message` is the `CompletionTileOutcome` name. | |
 | **DISABLE_COMPLETION_TILE_TOOL** | Edge Function secret (`ai-proxy`), a KILL switch: exactly lowercase `true` removes `request_completion_tile` from the request's capabilities. | An ENABLE flag; absent means ON. |
+| **occurrence key** / **kNlogKeyShape** / **firstFreeLogKey** / **baseLogKey** | OI-493 Landing B (`nutrition_write_service.dart`): the same meal logged again the same IST day in the same slot is a second row at `<base>_2`, `<base>_3`, ... (`firstFreeLogKey`, chosen and put with no `await` between). `kNlogKeyShape` is the ONE anchored shape `^(nlog_<date>_<slot>_<8 hex>)(_<n>)?$`; `baseLogKey` returns its group 1. | NOT a cloud concept: the cloud keeps one `nutrition_logs` row per (date, slot) and a second serving is a second ITEM. NOT a bare `_\d+$` strip (an 8-hex hash can be all digits). |
+| **SingleFlight** | `lib/core/utils/single_flight.dart` (OI-493 Landing B): `SingleFlight.run(key, op)` returns null without calling `op` while the same key is in flight (a static set, so a remounted widget shares it); released in `finally`. Keys name the write identity (`search|<food>|<grams>|<slot>`, `recent|...`, `barcode|...`, `aitext`, `scan`). | NOT a debounce or a dedup window: a tap after the first save finishes runs again (F4). |
+| **WriteResult.inFlight** / **isInFlight** | `write_result.dart`: the same save is already running (a SingleFlight null run); the AI-text card shows a neutral "Saving meal…". | NOT `noState` ("Already saved."), which means the breakdown was already saved and cleared. |
 
 ---
 
