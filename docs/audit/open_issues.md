@@ -7095,6 +7095,8 @@ Added 2026-11-12 (Landing A, branch `oi493-nutrition-parity`, diagnose ec6f6c): 
 
 Added 2026-11-12 (Landing B, branch `oi493b-duplicate-meals`, diagnose 4cb58f): the same meal logged twice is two entries (first free occurrence key in `logMeal`, `moveMealLog`, both UNDO paths and `NlogKeyMigrator`); UNDO restores only its own row and never across accounts; a double tap, a remounted AI-text / scan card or a remounted coach tag card saves once (`SingleFlight`, the handler's in-flight map); an AI total of 0 falls back to the items. Every one of the 14 differences is terminal in `docs/audit/oi493-nutrition-parity.closure.yaml`. Still open (why this OI stays OPEN): the `ai-proxy` deploy from `main` (founder go; D3's server-side date rule is live only after it) and the device check after the next build (coach and screen meals, a repeat, UNDO).
 
+Added 2026-11-12 (deploy, founder go): `ai-proxy` v101 is live from `main` 692cb371 (verify_jwt false; the deployed `index.ts`, `logMealByText.ts` and `food_parser.ts` match git byte for byte through the decoded `/body`; smoke and anon boot-verify 401 from the module). The web app (Vercel production, `app.icanbefitter.com`) serves the same commit. Still open: the device check, which can start on the web app now and repeats on the phone after the next build.
+
 ## OI-495 — Unit 1B-F2: copy the core-list overlay labels (slot_focus / slot_pattern) into target_focus / movement_pattern, seed and cloud re-seed
 
 - **Status**: OPEN
