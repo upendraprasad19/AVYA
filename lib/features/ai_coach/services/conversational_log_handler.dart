@@ -41,8 +41,35 @@ class ConversationalLogHandler {
 
   const ConversationalLogHandler(this.ref);
 
+  /// OI-493 Landing B (B6): the save in flight for each action id. STATIC
+  /// because a handler is built fresh per call (`LogConfirmCard._execute`), so
+  /// a card remounted while its first save runs reaches the same entry.
+  static final Map<String, Future<bool>> _inFlight = <String, Future<bool>>{};
+
+  @visibleForTesting
+  static int get debugInFlightCount => _inFlight.length;
+
   /// Execute a pending log action. Returns true on success.
-  Future<bool> executeAction(PendingLogAction action) async {
+  ///
+  /// One action, one write (OI-493 Landing B, B6): a second call for the same
+  /// action id while the first runs returns the SAME future (the same bool),
+  /// so a remounted card's countdown cannot save the meal twice. The entry is
+  /// dropped when the save completes (success or failure), so a failed save
+  /// can be retried.
+  Future<bool> executeAction(PendingLogAction action) {
+    final running = _inFlight[action.id];
+    if (running != null) return running;
+    // A block body, never `() => _inFlight.remove(id)`: `remove` returns the
+    // removed value, which IS this future, and `whenComplete` awaits a future
+    // its callback returns, so the save would wait on itself forever.
+    final future = _executeOnce(action).whenComplete(() {
+      _inFlight.remove(action.id);
+    });
+    _inFlight[action.id] = future;
+    return future;
+  }
+
+  Future<bool> _executeOnce(PendingLogAction action) async {
     try {
       switch (action.type) {
         case LogActionType.water:
@@ -81,8 +108,15 @@ class ConversationalLogHandler {
     final kg = (data['weight_kg'] as num?)?.toDouble();
     if (kg == null || kg < 20 || kg > 300) return false;
     await ref.read(weightLogNotifierProvider.notifier).logWeight(kg);
-    ref.invalidate(weightHistoryProvider);
-    ref.invalidate(todayWeightLoggedProvider);
+    // A card unmounted during the save disposes this WidgetRef; a stored
+    // weight must not turn into a failure (and a re-save) because the
+    // refresh threw (OI-493 Landing B B-pass, the _logFood rule).
+    try {
+      ref.invalidate(weightHistoryProvider);
+      ref.invalidate(todayWeightLoggedProvider);
+    } catch (e) {
+      debugPrint('[ConversationalLogHandler] weight refresh skipped: $e');
+    }
     return true;
   }
 

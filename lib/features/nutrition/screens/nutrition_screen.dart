@@ -635,7 +635,7 @@ class _NutritionScreenState extends ConsumerState<NutritionScreen>
 
   /// Plan C-14 — Confirm sheet + 10s UNDO snackbar via
   /// `NutritionWriteService.deleteLog(allowUndo: true)` +
-  /// `restoreLastDeleted()`.
+  /// `restoreLastDeleted(expectedKey:)`.
   Future<void> _confirmAndDeleteLog(
       BuildContext context, Map<String, dynamic> meal) async {
     final logKey = meal['id'] as String?;
@@ -726,7 +726,10 @@ class _NutritionScreenState extends ConsumerState<NutritionScreen>
           label: 'UNDO',
           textColor: AppColors.accent,
           onPressed: () async {
-            await NutritionWriteService.instance.restoreLastDeleted();
+            // OI-493 Landing B (B2): restore only the row THIS snackbar
+            // deleted (after two deletes the stash holds the second one).
+            await NutritionWriteService.instance
+                .restoreLastDeleted(expectedKey: logKey);
           },
         ),
       ),

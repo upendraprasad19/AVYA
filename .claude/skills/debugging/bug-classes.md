@@ -2108,3 +2108,21 @@ added, false of the flip being performed.
 - **Fix pattern:** ONE writer for the concept (`CoachMealLog.write`) that every door calls with the same inputs the screen uses (the instant the meal was reported for day and slot, the parsed items), and a source guard on the reader key: count the token per file with comments stripped against an EXACT allowlist, so the next reader of the absent key reds the build instead of degrading.
 - **Test shape:** real Hive, both doors and the screen door writing the same meal, compared field for field; the instant driven through `ToolIntent.fromJson` (UTC-flagged) under three host zones; the guard's mutants are a double-quoted read and a `const` key read.
 - **Regression test:** `test/contracts/coach_vs_screen_meal_log_parity_test.dart`, `test/contracts/nlog_food_name_reader_guard_test.dart` (diagnose ec6f6c; recurrence of 8b3d4e; OI-493 Landing A).
+
+### 2.152 A whenComplete cleanup that returns the map's removed value awaits its own future (NEW 2026-11-12)
+
+- **Telltale:** a test (or the app) hangs forever right after a save that visibly finished; no error, no timeout inside `testWidgets` (the fake clock never fires the file's `@Timeout`).
+- **Root-cause shape:** `final f = op().whenComplete(() => _inFlight.remove(id)); _inFlight[id] = f;`. `Map.remove` returns the removed VALUE, which is `f` itself, and `whenComplete` awaits a Future its callback returns, so `f` waits on `f`.
+- **Why it survives review:** the arrow body reads as a void cleanup; the analyzer accepts it (the callback's type is `FutureOr<void> Function()`).
+- **Fix pattern:** a block body that returns nothing: `whenComplete(() { _inFlight.remove(id); })`, with a comment naming the trap.
+- **Test shape:** call the guarded operation and await it with the real map: a hang is the red. Bisect a silent hang with prints on the path (the write completed, the cleanup was the stall).
+- **Regression test:** `test/contracts/nlog_repeat_adds_entry_behavioral_test.dart` R6 (diagnose 4cb58f; OI-493 Landing B).
+
+### 2.153 A content-hash key makes a repeat overwrite the first entry; every writer of that key must pick a free occurrence (NEW 2026-11-12)
+
+- **Telltale:** logging the same meal again replaces the first one (the day counts it once); UNDO puts a deleted row back over a newer one; a move or a boot migrator folds two entries into one.
+- **Root-cause shape:** the row key is a hash of its CONTENT (`nlog_<day>_<slot>_<hash of names and grams>`), so equal content means an equal key, and every `put` to a computed key overwrites. The writer, the UNDO paths, the move and the migrator each computed a key and put to it.
+- **Why it survives review:** with one row per content key the overwrite looked like idempotence ("logging twice is harmless"), and the cloud side (one row per slot, items concatenated) already kept repeats, so only the device collapsed them.
+- **Fix pattern:** one shape with an occurrence suffix (`<base>_<n>`), ONE anchored regex for it (an 8-hex hash can be all digits, so a bare `_\d+$` strip is wrong), a pure `firstFreeLogKey(taken, base)`, chosen and put with no `await` between (Hive inserts into its keystore synchronously). Then every other writer of the key (UNDO, move, migrator) uses it too, and every double-tap path gets a guard keyed on the write identity, since a repeat is no longer harmless.
+- **Test shape:** real Hive: three repeats (`base`, `_2`, `_3`), two un-awaited writes (mutant: an `await` between choice and put), delete + relog + UNDO, a move into an occupied slot, the migrator on a fresh flag; count rows AND the day's totals.
+- **Regression test:** `test/contracts/nlog_repeat_adds_entry_behavioral_test.dart` (diagnose 4cb58f; OI-493 Landing B).

@@ -7,6 +7,8 @@ import 'package:mobile_scanner/mobile_scanner.dart';
 import 'package:icanbefitter/core/services/barcode_service.dart';
 import 'package:icanbefitter/core/services/nutrition_write_service.dart';
 import 'package:icanbefitter/core/services/nutrition_write_source.dart';
+import 'package:icanbefitter/core/services/write_result.dart';
+import 'package:icanbefitter/core/utils/single_flight.dart';
 import 'package:icanbefitter/core/theme/colors.dart';
 import 'package:icanbefitter/core/theme/spacing.dart';
 import 'package:icanbefitter/core/theme/typography.dart';
@@ -170,24 +172,32 @@ class _BarcodeBodyState extends ConsumerState<BarcodeBody> {
     // Plan C-12: route through NutritionWriteService.logMeal so per-item
     // rows reach nutrition_log_items + provider invalidation runs.
     // Barcode source is free + unlimited (no counter increment).
-    final result = await NutritionWriteService.instance.logMeal(
-      date: DateTime.now(),
-      mealType: ref.read(mealTypeProvider),
-      items: [
-        FoodItem(
-          name: food.brand != null
-              ? '${food.name} (${food.brand})'
-              : food.name,
-          quantityG: _servingG,
-          calories: food.caloriesForServing(_servingG),
-          protein: food.proteinForServing(_servingG),
-          carbs: food.carbsForServing(_servingG),
-          fat: food.fatForServing(_servingG),
-          fiber: food.fiberForServing(_servingG),
-        ),
-      ],
-      source: NutritionWriteSource.barcode,
+    final slot = ref.read(mealTypeProvider);
+    final name =
+        food.brand != null ? '${food.name} (${food.brand})' : food.name;
+    final grams = _servingG;
+    // OI-493 Landing B (B7): a double tap logs once; a tap after the first
+    // save finishes logs again (F4). Null: the first tap's save is running.
+    final result = await SingleFlight.run<WriteResult>(
+      'barcode|$name|$grams|$slot',
+      () => NutritionWriteService.instance.logMeal(
+        date: DateTime.now(),
+        mealType: slot,
+        items: [
+          FoodItem(
+            name: name,
+            quantityG: grams,
+            calories: food.caloriesForServing(grams),
+            protein: food.proteinForServing(grams),
+            carbs: food.carbsForServing(grams),
+            fat: food.fatForServing(grams),
+            fiber: food.fiberForServing(grams),
+          ),
+        ],
+        source: NutritionWriteSource.barcode,
+      ),
     );
+    if (result == null) return;
 
     if (!mounted) return;
     if (result.success) {

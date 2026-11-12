@@ -95,6 +95,10 @@ const _expectedEmitFields = <String, Set<String>>{
     'kcal',
     // Restore-path legacy field names (Test #6 dual-name fallback):
     'name', 'calories_kcal',
+    // logMeal stamps the chosen (occurrence) key into both `id` and
+    // `log_key`; NlogKeyMigrator re-stamps both and records `migrated_from`
+    // (OI-493 Landing B, diagnose 4cb58f: an interrupted run re-reads it).
+    'log_key', 'migrated_from',
   },
   // schedule_* writer: WorkoutScheduleService → WorkoutWriteService.upsertScheduled
   'schedule': {

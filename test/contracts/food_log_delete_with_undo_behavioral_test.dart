@@ -66,7 +66,8 @@ void main() {
 
       // UNDO.
       final restoreResult =
-          await NutritionWriteService.instance.restoreLastDeleted();
+          await NutritionWriteService.instance
+              .restoreLastDeleted(expectedKey: logKey);
       expect(restoreResult.success, isTrue,
           reason: 'restoreLastDeleted must succeed when stash is populated');
 
@@ -95,7 +96,8 @@ void main() {
 
       // A second restoreLastDeleted must fail (stash cleared after first restore).
       final secondRestore =
-          await NutritionWriteService.instance.restoreLastDeleted();
+          await NutritionWriteService.instance
+              .restoreLastDeleted(expectedKey: logKey);
       expect(secondRestore.success, isFalse,
           reason:
               'stash must be cleared after first restore; second call must fail');
@@ -141,7 +143,8 @@ void main() {
 
       // Restore must fail (stash was not set).
       final restoreResult =
-          await NutritionWriteService.instance.restoreLastDeleted();
+          await NutritionWriteService.instance
+              .restoreLastDeleted(expectedKey: logKey);
       expect(restoreResult.success, isFalse,
           reason:
               'allowUndo:false must NOT populate the stash; '

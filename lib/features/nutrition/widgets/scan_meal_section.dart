@@ -6,6 +6,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:icanbefitter/core/constants/app_constants.dart';
 import 'package:icanbefitter/core/services/nutrition_write_service.dart';
 import 'package:icanbefitter/core/services/nutrition_write_source.dart';
+import 'package:icanbefitter/core/services/write_result.dart';
+import 'package:icanbefitter/core/utils/single_flight.dart';
 import 'package:icanbefitter/core/theme/colors.dart';
 import 'package:icanbefitter/core/theme/spacing.dart';
 import 'package:icanbefitter/core/theme/typography.dart';
@@ -412,7 +414,6 @@ class _ScanResultEditorState extends ConsumerState<_ScanResultEditor> {
       );
       return;
     }
-    setState(() => _saving = true);
 
     // Slot — inferred default or user-override via the MealSlotChip shown
     // at the top of the editor (PR Part C.3, 2026-04-24). Reads the same
@@ -440,19 +441,32 @@ class _ScanResultEditorState extends ConsumerState<_ScanResultEditor> {
             ))
         .toList();
 
-    final result = await NutritionWriteService.instance.logMeal(
-      date: DateTime.now(),
-      mealType: mealType,
-      items: items,
-      overrideTotalCals: _totalKcal,
-      overrideTotalProtein: _sumMacro((i) => i.protein),
-      source: NutritionWriteSource.scan,
-    );
+    // OI-493 Landing B (B7): one scan save at a time, shared across a
+    // remount (this widget's `_saving` starts fresh on one). The flight is
+    // taken BEFORE `_saving` is set (the op sets it), so a skipped run leaves
+    // the button usable.
+    // Captured before the await (a non-autoDispose provider): an editor
+    // unmounted during its save must still clear the scan, or a remounted
+    // editor would offer the same meal for a second save (B-pass seat A).
+    final scanNotifier = ref.read(scanMealProvider.notifier);
+    final result = await SingleFlight.run<WriteResult>('scan', () {
+      setState(() => _saving = true);
+      return NutritionWriteService.instance.logMeal(
+        date: DateTime.now(),
+        mealType: mealType,
+        items: items,
+        overrideTotalCals: _totalKcal,
+        overrideTotalProtein: _sumMacro((i) => i.protein),
+        source: NutritionWriteSource.scan,
+      );
+    });
+    // Null: this scan's first save is still running; it decides.
+    if (result == null) return;
 
+    if (result.success) scanNotifier.clear();
     if (!mounted) return;
     final messenger = ScaffoldMessenger.of(context);
     if (result.success) {
-      ref.read(scanMealProvider.notifier).clear();
       messenger.showSnackBar(
         const SnackBar(
           content: Text('Meal saved ✓'),

@@ -57,15 +57,24 @@ class _LogConfirmCardState extends ConsumerState<LogConfirmCard>
     setState(() => _isExecuting = true);
     _countdownController.stop();
 
+    // OI-493 Landing B (B6): captured BEFORE the await (a non-autoDispose
+    // provider), so a card unmounted during its save still marks the action
+    // logged (the shared action object: a remounted card's countdown stops)
+    // and still clears it.
+    final actions = ref.read(pendingLogActionsProvider.notifier);
     final handler = ConversationalLogHandler(ref);
     final success = await handler.executeAction(widget.action);
 
-    if (success && mounted) {
-      ref.read(pendingLogActionsProvider.notifier).markLogged(widget.action.id);
+    if (success) {
+      actions.markLogged(widget.action.id);
+      if (!mounted) {
+        actions.removeSettled();
+        return;
+      }
       // Brief "Logged ✓" state, then remove
       await Future.delayed(const Duration(milliseconds: 1500));
       if (mounted) {
-        ref.read(pendingLogActionsProvider.notifier).removeSettled();
+        actions.removeSettled();
       }
     } else if (mounted) {
       setState(() => _isExecuting = false);

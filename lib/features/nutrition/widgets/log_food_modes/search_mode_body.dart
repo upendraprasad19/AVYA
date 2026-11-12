@@ -8,6 +8,7 @@ import 'package:icanbefitter/core/services/nutrition_write_source.dart';
 import 'package:icanbefitter/core/theme/colors.dart';
 import 'package:icanbefitter/core/theme/spacing.dart';
 import 'package:icanbefitter/core/theme/typography.dart';
+import 'package:icanbefitter/core/utils/single_flight.dart';
 import 'package:icanbefitter/features/home/providers/home_provider.dart';
 import 'package:icanbefitter/shared/repositories/food_repository.dart';
 import 'package:icanbefitter/shared/widgets/wardroom/wardroom.dart';
@@ -201,11 +202,20 @@ class _SearchResultsList extends ConsumerWidget {
           onTap: () async {
             final qty =
                 (item['standard_serving_g'] as num?)?.toDouble() ?? 100.0;
-            await ref.read(foodLogProvider.notifier).logFood(
-                  food: item,
-                  mealType: ref.read(mealTypeProvider),
-                  quantityG: qty,
-                );
+            final slot = ref.read(mealTypeProvider);
+            // OI-493 Landing B (B7): a double tap logs once; a tap after the
+            // first save finishes logs again (F4). Keyed on the write
+            // identity, so a different food is never blocked.
+            final ran = await SingleFlight.run<bool>(
+                searchTapFlightKey(item, qty, slot), () async {
+              await ref.read(foodLogProvider.notifier).logFood(
+                    food: item,
+                    mealType: slot,
+                    quantityG: qty,
+                  );
+              return true;
+            });
+            if (ran == null) return; // the first tap's save is running
             onLogged();
           },
         );
@@ -257,7 +267,14 @@ class _RecentLogs extends ConsumerWidget {
                 .copyWith(color: AppColors.textDim),
           ),
           onTap: () async {
-            await _relogFromHistory(ref, item);
+            final slot = ref.read(mealTypeProvider);
+            // OI-493 Landing B (B7): one save per double tap (see search).
+            final ran = await SingleFlight.run<bool>(
+                recentTapFlightKey(item, slot), () async {
+              await _relogFromHistory(ref, item, slot);
+              return true;
+            });
+            if (ran == null) return;
             onLogged();
           },
         );
@@ -329,11 +346,23 @@ FoodItem relogItem(FoodItem stored) => stored.quantityG > 0
         fiber: stored.fiber,
       );
 
-Future<void> _relogFromHistory(WidgetRef ref, FoodItem stored) async {
+/// OI-493 Landing B (B7): the `SingleFlight` key of a search result tap:
+/// the food (id, else name), the grams and the slot.
+@visibleForTesting
+String searchTapFlightKey(Map<String, dynamic> food, double grams, String slot) =>
+    'search|${food['id'] ?? food['name']}|$grams|$slot';
+
+/// OI-493 Landing B (B7): the `SingleFlight` key of a recent-list tap.
+@visibleForTesting
+String recentTapFlightKey(FoodItem stored, String slot) =>
+    'recent|${stored.name}|${relogItem(stored).quantityG}|$slot';
+
+Future<void> _relogFromHistory(
+    WidgetRef ref, FoodItem stored, String slot) async {
   final item = relogItem(stored);
   await NutritionWriteService.instance.logMeal(
     date: DateTime.now(),
-    mealType: ref.read(mealTypeProvider),
+    mealType: slot,
     items: [item],
     source: NutritionWriteSource.manualSearch,
   );

@@ -39,8 +39,8 @@ void main() {
     expect(r2.success, true);
     expect(box.containsKey(r1.logKey!), false);
 
-    final restored =
-        await NutritionWriteService.instance.restoreLastDeleted();
+    final restored = await NutritionWriteService.instance
+        .restoreLastDeleted(expectedKey: r1.logKey!);
     expect(restored.success, true);
     expect(box.containsKey(r1.logKey!), true);
   });
@@ -65,8 +65,8 @@ void main() {
       logKey: r1.logKey!,
       allowUndo: false,
     );
-    final restored =
-        await NutritionWriteService.instance.restoreLastDeleted();
+    final restored = await NutritionWriteService.instance
+        .restoreLastDeleted(expectedKey: r1.logKey!);
     expect(restored.success, false);
     expect(restored.errorMessage, contains('nothing to restore'));
   });
