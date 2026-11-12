@@ -18,6 +18,8 @@
 @Timeout(Duration(minutes: 2))
 library;
 
+import 'dart:io';
+
 import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -640,6 +642,165 @@ void main() {
         expect(written['protein'], stored.protein);
         expect(written['fiber'], stored.fiber);
       }
+    });
+  });
+
+  // ── B-pass mirrors (seats A and B, 2026-11-12) ────────────────────────
+
+  group('B-pass mirrors', () {
+    PendingLogAction? addTag(ProviderContainer c, Map<String, dynamic> data) {
+      c.read(pendingLogActionsProvider.notifier).addActions([
+        {'action': 'log_food', 'data': data},
+      ], c.read(_refProvider), coverage: TypedLogCoverage.empty);
+      final actions = c.read(pendingLogActionsProvider);
+      return actions.isEmpty ? null : actions.last;
+    }
+
+    test('A1 any slot naming a snack is snacks, at any hour', () {
+      // 13:30 IST and 20:00 IST: the clock would say lunch / dinner.
+      for (final at in [
+        DateTime.parse('2026-11-12T08:00:00Z'),
+        DateTime.parse('2026-11-12T14:30:00Z'),
+      ]) {
+        expect(resolveCoachMealSlot('snack', at), 'snacks');
+        expect(resolveCoachMealSlot('Evening snack', at), 'snacks');
+        expect(resolveCoachMealSlot(' SNACKS ', at), 'snacks');
+      }
+    });
+
+    test('B1 a failed write: the tool answers failure, no badge check, '
+        'the failure is reported', () async {
+      var badgeCalls = 0;
+      CoachMealLog.debugBadgeCheck = () => badgeCalls++;
+      final c = container();
+      // The put throws on a closed box, so logMeal returns a failure.
+      await HiveService.instance.nutritionBox.close();
+      final res = await dispatch(c, mealIntent(createdAt: recentCreatedAt()));
+      expect(res.success, isFalse);
+      expect(res.errorMessage, 'Could not log that meal.');
+      expect(badgeCalls, 0, reason: 'no badge check for a meal not stored');
+      expect(events, contains('tool_dispatch_log_meal_by_text_failed'));
+    });
+
+    test('B1 CoachMealLog.write on a failed write returns the failure and '
+        'skips the badge check', () async {
+      var badgeCalls = 0;
+      CoachMealLog.debugBadgeCheck = () => badgeCalls++;
+      await HiveService.instance.nutritionBox.close();
+      final r = await CoachMealLog.write(
+          at: nowWall(), mealType: 'lunch', items: coachItemsFromParsedMeal({}));
+      expect(r.success, isFalse);
+      expect(badgeCalls, 0);
+    });
+
+    testWidgets('B2 a tag with no meal_type: the card shows the slot it writes '
+        '(clock 07:30Z)', (tester) async {
+      final c = container();
+      final at = DateTime.parse(_p4Instant);
+      setTestClockTo(at);
+      final action = addTag(c, {'food_name': 'Rajma rice', 'calories_estimate': 420});
+      expect(action, isNotNull);
+      final ok = await runTag(tester, c, action!);
+      expect(ok, isTrue);
+      final slot = onlyRow()['meal_type'] as String;
+      expect(slot, inferMealSlot(at.toLocal()));
+      expect(action.displayText,
+          'Rajma rice — ${slot[0].toUpperCase()}${slot.substring(1)}');
+      final expected = _p4ByOffsetMinutes[at.toLocal().timeZoneOffset.inMinutes];
+      if (expected != null) expect(slot, expected);
+    });
+
+    test('B6 a tag with negative calories shows no card; quantity 0 -> 100 g',
+        () {
+      final c = container();
+      expect(addTag(c, {'food_name': 'X', 'calories_estimate': -50}), isNull);
+      final item =
+          coachItemFromTag({'food_name': 'Y', 'calories_estimate': 90, 'quantity_g': 0});
+      expect(item!.quantityG, 100.0);
+      final neg =
+          coachItemFromTag({'food_name': 'Y', 'calories_estimate': 90, 'quantity_g': -5});
+      expect(neg!.quantityG, 100.0);
+    });
+
+    test('B4 deleteLog audits exactly the food rows', () async {
+      final box = HiveService.instance.nutritionBox;
+      Future<String?> auditFor(String key, Map<String, dynamic> row) async {
+        await box.delete('recent_deletes');
+        await box.put(key, row);
+        final r = await NutritionWriteService.instance
+            .deleteLog(logKey: key, allowUndo: false);
+        expect(r.success, isTrue, reason: key);
+        final audit = box.get('recent_deletes') as List?;
+        return audit == null ? null : (audit.first as Map)['food_name'] as String;
+      }
+
+      final today = istTodayStr();
+      // items but no meal_type: not a food log
+      expect(
+          await auditFor('nlog_a', {
+            'date': today,
+            'items': [
+              {'name': 'Oats'}
+            ],
+          }),
+          isNull);
+      // a meal_type and an EMPTY items[] and no name: not a food log
+      expect(
+          await auditFor('nlog_b', {
+            'date': today,
+            'meal_type': 'lunch',
+            'items': <Map>[],
+          }),
+          isNull);
+      // a legacy flat row named by `name`: audited
+      expect(
+          await auditFor('nlog_c', {
+            'date': today,
+            'meal_type': 'snacks',
+            'name': 'Legacy chana',
+            'total_calories': 150,
+          }),
+          'Legacy chana');
+      // items with a meal_type: audited with the item names
+      expect(
+          await auditFor('nlog_d', {
+            'date': today,
+            'meal_type': 'dinner',
+            'items': [
+              {'name': 'Roti'},
+              {'name': 'Dal'}
+            ],
+          }),
+          'Roti · Dal');
+    });
+
+    test('B5 recent list: case-insensitive dedup, item order inside a meal, '
+        'blank names skipped', () {
+      final t = DateTime.now().toUtc();
+      final rows = [
+        {
+          'created_at': t.toIso8601String(),
+          'items': [
+            {'name': 'Dal', 'quantity_g': 100, 'calories': 120},
+            {'name': 'dal', 'quantity_g': 50, 'calories': 60},
+            {'name': '   ', 'quantity_g': 10, 'calories': 5},
+            {'name': 'Rice', 'quantity_g': 150, 'calories': 200},
+          ],
+        },
+      ];
+      final out = recentLoggedItems(rows,
+          cutoff: t.subtract(const Duration(days: 14)));
+      expect(out.map((i) => i.name), ['Dal', 'Rice'],
+          reason: 'first-written item wins a tie; "dal" is a duplicate of '
+              '"Dal"; a blank name is skipped');
+      expect(out.first.quantityG, 100.0);
+    });
+
+    test('A5 the data export counts the exported rows, not the box length', () {
+      final src = File('lib/features/profile/screens/profile/export_data.dart')
+          .readAsStringSync();
+      expect(src, isNot(contains('nutritionBox.length')));
+      expect(src, contains("data['nutrition_logs_count'] = nutrition.length;"));
     });
   });
 }

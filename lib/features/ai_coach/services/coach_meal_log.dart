@@ -72,9 +72,14 @@ const _kMealSlots = {'breakfast', 'lunch', 'dinner', 'snacks'};
 /// valid one, else the Nutrition screen's clock rule for [at]. `.toLocal()` is
 /// load-bearing: the tool's `createdAt` is UTC-flagged and [inferMealSlot]
 /// reads the raw hour, so without it a 13:00 IST lunch reads as breakfast.
+///
+/// Any value naming a snack ("snack", "Evening snack") is `snacks`: the old
+/// coach paths mapped every unknown value to `snacks`, and a snack reported at
+/// dinner time must not become dinner (B-pass seat A, P2).
 String resolveCoachMealSlot(String? raw, DateTime at) {
   final lower = raw?.trim().toLowerCase() ?? '';
   if (_kMealSlots.contains(lower)) return lower;
+  if (lower.contains('snack')) return 'snacks';
   return inferMealSlot(at.toLocal());
 }
 

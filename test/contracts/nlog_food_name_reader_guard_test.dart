@@ -13,6 +13,11 @@
 // compares the per-file count to an EXACT allowlist. A new `food_name` token
 // anywhere, an extra one in an allowed file, or a dropped allowed one fails:
 // a changed count means re-reading that site and re-taking the count here.
+//
+// Token-level by design: a key built at run time ('food_' + 'name', an
+// interpolation, a const imported from another file) is not seen. Such a
+// read would be deliberate and visible in review; this guard catches the
+// accidental `row['food_name']` that 8b3d4e and OI-493 were both made of.
 library;
 
 import 'dart:io';

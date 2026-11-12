@@ -58,7 +58,11 @@ class NutritionWriteService {
   void attachContainer(ProviderContainer c) => _container = c;
 
   /// Creates a `nutrition_logs` row + N `nutrition_log_items` rows
-  /// atomically. Increments counter per source.
+  /// atomically. Increments no counter (counters live at the API-call site).
+  ///
+  /// [date] is any instant (device-local, or UTC-flagged like a server
+  /// `createdAt`); its IST day is taken ONCE here (`istDateStr`). Never pass
+  /// `istNow()` (already shifted; OI-494).
   Future<WriteResult> logMeal({
     required DateTime date,
     required String mealType,
@@ -79,7 +83,7 @@ class NutritionWriteService {
       );
     }
 
-    // 2. Compute key (IST-anchored — caller passes IST DateTime)
+    // 2. Compute key (IST-anchored: computeLogKey takes the IST day of `date`)
     final key = computeLogKey(istDate: date, mealType: mealType, items: items);
 
     // 3. Compute totals (Atwater fallback per item if calories=0)

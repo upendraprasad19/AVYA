@@ -27,7 +27,7 @@ writers:
     line: 96
   - file: lib/core/services/nutrition_write_service.dart
     method: logMeal (unchanged; items[] carry the names, no top-level food_name)
-    line: 62
+    line: 66
 readers:
   - file: lib/features/ai_coach/services/ai_snapshot_builder.dart
     method_or_widget: _getMealsToday (meals_today names)
@@ -40,7 +40,7 @@ readers:
     line: 276
   - file: lib/core/services/nutrition_write_service.dart
     method_or_widget: deleteLog hasFoodMeta + recent_deletes entry
-    line: 525
+    line: 529
 hive_key_prefix: nlog_
 hive_key_formula: "nutritionBox['nlog_<istDateStr(date)>_<meal_type>_<v5 8 hex of sorted name|grams>'] (computeLogKey; unchanged)"
 sync_methods:
@@ -164,6 +164,34 @@ Each mutant applied (count checked), the named test run, file restored.
 | M12 | dispatcher reads the payload date | 2 (yesterday, tomorrow; a malformed date is equivalent: `tryParse` null) |
 | G1 | double-quoted `log["food_name"]` read in ai_snapshot_builder | 1 (guard) |
 | G2 | `const _k = 'food_name'` in nutrition_screen | 1 (guard) |
+
+## B-pass (two seats, head 93ec6cf0, CI green) and what changed
+Review file `docs/reviews/` (cited by the plan-review record). No P0/P1. Fixed in this batch:
+- Seat A P2: a slot naming a snack ("snack", "Evening snack") now writes `snacks` (the clock rule would have put an
+  evening snack under dinner); the old paths sent every unknown value to `snacks`.
+- Seat A P3: `date: null` is accepted as "today" (`.nullish()`; zodToGemini marks the field nullable); the export's
+  `nutrition_logs_count` counts the exported rows (the box also holds `recent_deletes`); stale `logMeal` comments;
+  registry ranges re-taken (`logMeal`, `_parse` log_measurement, five reply-sanitizer anchors).
+- Seat B P2/P3 (unpinned mirrors, now pinned): the tool's failure branch and no badge check on a failed write; the
+  tag card's slot text with no `meal_type` at lunch time; IST vs UTC "today" on the server (FakeTime 01:30 IST); the
+  three other `hasFoodMeta` legs; recent-list dedup, tie order and blank names; negative calories and 0 g on a tag.
+Kept as designed (plan): a calorie-less tag shows no card (counted by telemetry); a legacy flat row without
+`items[]` adds nothing to the recent list (D9); the zero-override fallback is Landing B; the guard is token-level
+(stated in its header). Mutants for the new tests:
+
+| # | Mutant | Red |
+|---|---|---|
+| R1 | snack alias line removed | 1 |
+| R2 | tool failure branch `if (false)` | 1 |
+| R3 | badge check on a failed write | 2 |
+| R4 | tag card slot `?? 'snacks'` | 1 |
+| R5 | tag accepts negative calories | 1 |
+| R6 | tag keeps 0 g | 1 |
+| R7-R9 | `hasFoodMeta` meal_type leg / non-empty items / legacy `name` leg | 1 each |
+| R10-R12 | recent list dedup on raw name / tie order reversed / blank name kept | 1 each |
+| R13 | export count from the box length | 1 |
+| S4 | server "today" as the UTC date | 1 |
+| S5 | `.optional()` instead of `.nullish()` | 1 |
 
 ## Residuals (accepted, plan section 5)
 - Landing B: the same meal twice adds an entry, the zero-override fallback, concurrent dispatch of one intent.

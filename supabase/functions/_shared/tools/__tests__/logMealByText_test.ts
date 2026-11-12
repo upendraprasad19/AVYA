@@ -6,6 +6,7 @@ import {
 import { logMealByTextTool } from "../nutrition/logMealByText.ts";
 import { zodToGeminiSchema } from "../zodToGemini.ts";
 import { istDateStr } from "../../ist_date.ts";
+import { FakeTime } from "https://deno.land/std@0.224.0/testing/time.ts";
 
 // Note: intentBuilder is async and calls Gemini via parseFoodText.
 // We don't exercise it here — schema + metadata coverage only.
@@ -146,4 +147,27 @@ Deno.test("logMealByText — the model is told to omit date and mealType", () =>
   // The old "default to 'snacks'" promise is gone (the app infers the slot).
   assert(!JSON.stringify(props).includes("snacks' if omitted"));
   assertStringIncludes(logMealByTextTool.description, "log it to the user's nutrition");
+});
+
+Deno.test("logMealByText — a null date means today (zodToGemini marks it nullable)", () => {
+  const r = logMealByTextTool.schema.safeParse({
+    description: "dal chawal 2 katoris",
+    date: null,
+  });
+  assertEquals(r.success, true);
+});
+
+Deno.test("logMealByText — 'today' is the IST date, not the UTC date (01:30 IST)", () => {
+  // 2026-11-12T20:00Z is 01:30 IST on 2026-11-13.
+  const time = new FakeTime(new Date("2026-11-12T20:00:00Z"));
+  try {
+    const ok = logMealByTextTool.schema.safeParse({
+      description: "dal chawal 2 katoris",
+      date: "2026-11-13",
+    });
+    assertEquals(ok.success, true, "the IST date is today");
+    assertEquals(refusalMessages("2026-11-12"), [TODAY_ONLY], "the UTC date is yesterday in IST");
+  } finally {
+    time.restore();
+  }
 });

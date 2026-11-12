@@ -688,13 +688,13 @@ concepts:
       read result['total_calories'] at top level of an AI response.
     writers:
       - file: lib/core/services/nutrition_write_service.dart
-        line_range: 54-150
+        line_range: 60-160
         method: logMeal
         notes: |
           Computes totalCals/Protein/Carbs/Fat/Fiber from items[].
           Atwater fallback applied per FoodItem.kcalWithFallback.
       - file: lib/features/ai_coach/services/coach_meal_log.dart
-        line_range: 33-141
+        line_range: 33-146
         method: CoachMealLog.write + coachItemsFromParsedMeal / coachItemFromTag
         notes: |
           OI-493 Landing A: the ONE coach meal writer (tool and food tag)
@@ -854,7 +854,7 @@ concepts:
       old slot's cloud row is not explicitly tombstoned.
     writers:
       - file: lib/core/services/nutrition_write_service.dart
-        line_range: 361-485
+        line_range: 365-489
         method: moveMealLog
         notes: |
           Reads the row at the old key, recomputes the key via
@@ -902,14 +902,14 @@ concepts:
           with allowUndo: true → 10s SnackBar UNDO → restoreLastDeleted.
           Service handles both Hive write + cloud delete projection.
       - file: lib/core/services/nutrition_write_service.dart
-        line_range: 269-328
+        line_range: 273-332
         method: deleteLog + restoreLastDeleted (in-memory stash)
         notes: |
           Canonical writer for the new path. deleteLog stashes the deleted
           row in-memory; restoreLastDeleted pops it back at the original
           key. Fires provider invalidation + cloud delete projection.
       - file: lib/core/services/nutrition_write_service.dart
-        line_range: 602-631
+        line_range: 606-635
         method: restoreFoodLog (Map-based restore for legacy snackbar)
     # audit-2026-05-16 reader-side — readers of the food-log-delete /
     # restore surface (writer ARE the delete sites; readers below
@@ -1567,7 +1567,7 @@ concepts:
         line_range: 1-276
         method: logExercise (workout series)
       - file: lib/core/services/nutrition_write_service.dart
-        line_range: 54-142
+        line_range: 60-160
         method: logMeal (calorie + protein series)
     reader_manifest_complete: true
     readers:
@@ -2016,10 +2016,10 @@ concepts:
       WriteService output keys are a contract with every consumer.
     writers:
       - file: lib/core/services/nutrition_write_service.dart
-        line_range: 54-150
+        line_range: 60-160
         method: logMeal
       - file: lib/features/ai_coach/services/coach_meal_log.dart
-        line_range: 33-141
+        line_range: 33-146
         method: CoachMealLog.write (OI-493; names in items[], never a top-level food_name)
     # audit-2026-05-16 reader-side — same reader set as
     # nutrition_total_calories plus a few that consume the items[]
@@ -4586,10 +4586,10 @@ concepts:
         line_range: 1205-1275
         method: SavedMealsNotifier.saveMealPreset + relogSavedMeal + deleteSavedMeal (delegators — relogSavedMeal no longer bumps times_used, a8e3f1)
       - file: lib/core/services/nutrition_write_service.dart
-        line_range: 450-591
+        line_range: 454-595
         method: saveMealPreset (keys Hive via savedMealKey(name) — diagnose b8d5c2) + deleteSavedMeal + restoreFoodLog (sole writers post-C-12)
       - file: lib/core/services/nutrition_write_service.dart
-        line_range: 627-751
+        line_range: 631-755
         method: relogSavedMeal (owns the times_used bump for BOTH formats — a8e3f1) + saveMealAsTemplate (meal_<hash> templates; a re-save keeps times_used)
       - file: lib/core/services/saved_meal_key_migrator.dart
         line_range: 1-100
@@ -7218,7 +7218,7 @@ concepts:
         method: deleteLog
         notes: removes an exlog_* entry + updates exercise_log_index; fires cloud delete
       - file: lib/core/services/nutrition_write_service.dart
-        line_range: 475-569
+        line_range: 479-573
         method: deleteLog
         notes: removes nlog_* entry from nutritionBox + fires cloud delete (shifted by the moveMealLog insertion, obs 1 2026-09-20 batch — see nutrition_log_retag)
     reader_manifest_complete: true
@@ -8568,7 +8568,7 @@ concepts:
         fields_read: []
         notes: Fired at :58/:285/:883; invalidates subscriptionInfoProvider + messageLimitProvider.
       - file: lib/core/services/nutrition_write_service.dart
-        line_range: 941-941
+        line_range: 945-945
         method: onStateChanged
         semantic: callback-invocation
         fields_read: []
@@ -14768,23 +14768,23 @@ concepts:
         notes: the raw Gemini text this concept cleans on the client side.
     readers:
       - file: lib/features/ai_coach/providers/ai_coach_provider.dart
-        line_range: 676
+        line_range: 695
         method: "SendMessageNotifier.sendWithMedia"
         semantic: display-only
       - file: lib/features/ai_coach/providers/ai_coach_provider.dart
-        line_range: 911
+        line_range: 956
         method: "SendMessageNotifier.send (primary)"
         semantic: display-only
       - file: lib/features/ai_coach/providers/ai_coach_provider.dart
-        line_range: 986
+        line_range: 1036
         method: "SendMessageNotifier.send (auth-retry)"
         semantic: display-only
       - file: lib/features/ai_coach/providers/ai_coach_provider.dart
-        line_range: 291
+        line_range: 332
         method: "ChatHistoryNotifier.build (success render)"
         semantic: display-only
       - file: lib/features/ai_coach/providers/ai_coach_provider.dart
-        line_range: 267
+        line_range: 300
         method: "ChatHistoryNotifier.build (isFailed fallback render)"
         semantic: display-only
     forbidden_legacy_patterns:
@@ -16548,7 +16548,7 @@ concepts:
         method: logMeasurement + logMeasurements
         notes: Writer tier. Both validate the ROUNDED value and emit tier=writer. logMeasurements (L2b Landing B) is the sheet's batch writer - all-or-nothing, one put, one fan-out, one event per call.
       - file: lib/features/ai_coach/providers/ai_coach_provider.dart
-        line_range: 1530-1561
+        line_range: 1606-1638
         method: PendingLogActionsNotifier._parse (case log_measurement)
         notes: Chat parse tier. Type tests, never casts; checks the RAW value; emits tier=chat (a wrong-typed value of a registered site emits side=wrongtype).
       - file: lib/core/services/sync/sync_health.dart

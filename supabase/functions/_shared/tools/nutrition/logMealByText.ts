@@ -19,7 +19,9 @@ const schema = z.object({
       message:
         "Only today's meals can be logged. Ask the user to add an earlier meal from the Nutrition tab.",
     },
-  ).optional().describe("Only today's meals can be logged; omit it."),
+  // .nullish(): zodToGemini marks the field nullable, so the model may send
+  // null for "no date" (B-pass seat A); null and absent both mean today.
+  ).nullish().describe("Only today's meals can be logged; omit it."),
   mealType: z.enum(["breakfast", "lunch", "dinner", "snacks"]).optional()
     .describe(
       "Omit unless the user named the meal; the app picks it from the time of day.",
