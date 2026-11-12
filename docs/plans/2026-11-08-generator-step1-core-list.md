@@ -449,13 +449,17 @@ work), and what t108 finds goes into step 2's plan, not a new step-1 unit. Injur
   token's muscles as `bodyFocus` (what `TrainingHistoryAnalyzer.resolveBodyFocus` returns for a profile holding it with
   no history); keys are unchanged, so a focus run compares with the no-focus run key by key. A focus run's dump also
   records the focus groups (`fg`), and `plan_audit_lib.dart`'s `over_top` uses `SessionBudget.focusWeeklyTop` (25) for
-  them, as the generator's ledger does (the first run counted focus groups against the normal top: 1,296 / 1,339 false
-  over_top flags). The no-focus dump and audit are byte-identical to Unit 1B-F2's (sha256 5b3da296... / 345e11a7...).
+  them, as the generator's ledger does (the first run counted focus groups against the normal top: it flagged 1,296 /
+  1,339 plans, 886 / 946 of them falsely). The no-focus `plan_dump.jsonl` is byte-identical to Unit 1B-F2's (sha256
+  5b3da296...), and the no-focus `audit.json` is the same before and after the `over_top` change, so the change moves
+  no no-focus result.
 - **Results** (main cf122dd1, 2,304 plans each): filed as **OI-501**, an input to step 2. `glutes_legs`: suitable
-  513 -> 710, starved leads 2,284 -> 1,274, but Calves (a focus group) fall and reach 0 in 80 plan-weeks (6-day general
-  fitness at 30 minutes), unloaded picks 58 -> 99. `chest_shoulders_arms`: suitable 513 -> 484, starved leads 2,284 ->
-  2,690. No focus group gains a set in 722 / 977 plans (mostly 30-45 minutes). Days over their minutes: only the 1-minute
-  rounding the no-focus run has too.
+  513 -> 710, starved-lead flags 2,284 -> 1,274, but Calves (a focus group) fall by 4,628 sets (lowered in 2,343
+  plan-weeks, mostly at 45-60 minutes; 0 in 80 plan-weeks of 6-day general fitness at 30 minutes) and Core by 2,022;
+  unloaded picks 58 -> 99 flags (46 -> 93 plans). `chest_shoulders_arms`: suitable 513 -> 484, starved-lead flags
+  2,284 -> 2,690, but the lead is not cut (week 1: lead sets rise on 1,439 days, fall on 118): a focus accessory
+  reaches 5 sets beside a lead at 2-3, and `lead_starved` does not know the focus. No focus group gains a set in
+  722 / 977 plans (mostly 30-45 minutes). Days over their minutes: only the 1-minute rounding the no-focus run has too.
 - **Not a duplicate of Unit 1B-F's focus grid.** `test/plan_generator/focus_grid_dump_test.dart` (5,760 plans, 30 and
   45 minutes) checks one allocator guard (a hold that credits a focus group gives way only to a slot that brings a
   major group); t108 runs the whole suitability audit with a focus at 30-90 minutes. `PLAN_AUDIT_FOCUS` is classified
