@@ -56,7 +56,10 @@ wrong, for example after an install made with sudo.)
   missing or stale; CI builds them strict).
 - **`pre-push`** runs `flutter analyze` on every push, then the full `flutter test` when the
   pushed range is ≥`account` blast-radius — except on a branch push, where CI on the open PR is that gate
-  (since 2026-10-10, OI-275; merge via `sh scripts/safe_pr_merge.sh <pr>`).
+  (since 2026-10-10, OI-275; merge via `sh scripts/safe_pr_merge.sh <pr>`). Every hook full-suite path (this
+  one, `PRE_COMMIT_FULL` / `PRE_COMMIT_LEGACY`) refuses with exit 1 while another LOCAL full suite holds the
+  machine-wide lock (`scripts/_suite_lock.sh`, 2026-11-11); a local full run of your own goes through
+  `sh scripts/run_full_suite.sh`, which waits for it instead (docs/architecture/hooks.md).
 
 See CLAUDE.md §0 for the bypass policy and the `PRE_COMMIT_LEGACY` / `PRE_COMMIT_FULL` /
 `PRE_PUSH_FULL` escape hatches.

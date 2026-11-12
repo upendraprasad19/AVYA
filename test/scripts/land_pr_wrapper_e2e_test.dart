@@ -38,7 +38,7 @@ ProcessResult runFixtureWrapper(LandFixture fx, String script, {List<String> arg
 
 void main() {
   group('the wrapper arguments', () {
-    test('any argument shape but `<pr> [--allow-workflow-change]` is a usage error owned by the wrapper: refused, exit 2, nothing asked of gh', () {
+    test('any argument shape but `<pr> [--allow-workflow-change] [--ci-only]` is a usage error owned by the wrapper: refused, exit 2, nothing asked of gh', () {
       final fx = LandFixture.create();
       for (final args in [
         <String>[],
@@ -52,6 +52,11 @@ void main() {
         ['191', '--poll-ms', '1'],
         ['191', '--record-gate', 'x'],
         ['191', '--allow-workflow-change', 'extra'],
+        ['--ci-only'],
+        ['--ci-only', '191'],
+        ['191', '--ci-only', '--ci-only'],
+        ['191', '--allow-workflow-change', '--allow-workflow-change'],
+        ['191', '--ci-only', '--allow-workflow-change', 'extra'],
         ['1x'],
         [''],
       ]) {
@@ -59,13 +64,18 @@ void main() {
         expectResult(r, 2, 'refused');
         expect(stdoutOf(r), contains('land_pr: refused:'), reason: args.join(' '));
         // The WRAPPER owns this refusal (the CLI would refuse some of these too, with its own words).
-        final wrapperOwned = args.isNotEmpty && args[0] == '--allow-workflow-change'
+        final flags = {'--allow-workflow-change', '--ci-only'};
+        final wrapperOwned = args.isNotEmpty && flags.contains(args[0])
             ? 'the PR number comes first'
-            : args.length == 2 && args[0] == '191'
-                ? 'unknown argument'
-                : args.length == 1
-                    ? 'is not a PR number'
-                    : 'land_pr: refused:';
+            : args.length > 3
+                ? 'usage: sh scripts/land_pr.sh <pr> [--allow-workflow-change] [--ci-only]'
+                : args.length >= 2 && args[0] == '191' && args.toSet().length < args.length
+                    ? 'given twice'
+                    : args.length >= 2 && args[0] == '191'
+                        ? 'unknown argument'
+                        : args.length == 1
+                            ? 'is not a PR number'
+                            : 'land_pr: refused:';
         expect(stdoutOf(r), contains(wrapperOwned), reason: args.join(' '));
       }
       expect(fx.log, isEmpty, reason: 'the wrapper refused before anything ran');
@@ -76,6 +86,16 @@ void main() {
       final script = fixtureScripts(fx, 'void main(List<String> a) {\n  stdout.writeln("args=\${a.join("|")}");\n  stdout.writeln("result: merged");\n}');
       expect(stdoutOf(runFixtureWrapper(fx, script, args: ['191', '--allow-workflow-change'])), contains('args=191|--allow-workflow-change'));
       expect(stdoutOf(runFixtureWrapper(fx, script, args: ['191'])), contains('args=191\n'));
+    });
+
+    test('--ci-only is forwarded to the CLI alone and together with --allow-workflow-change, in either order', () {
+      final fx = LandFixture.create();
+      final script = fixtureScripts(fx, 'void main(List<String> a) {\n  stdout.writeln("args=\${a.join("|")}");\n  stdout.writeln("result: ci-green");\n}');
+      expect(stdoutOf(runFixtureWrapper(fx, script, args: ['191', '--ci-only'])), contains('args=191|--ci-only\n'));
+      expect(stdoutOf(runFixtureWrapper(fx, script, args: ['191', '--ci-only', '--allow-workflow-change'])),
+          contains('args=191|--ci-only|--allow-workflow-change\n'));
+      expect(stdoutOf(runFixtureWrapper(fx, script, args: ['191', '--allow-workflow-change', '--ci-only'])),
+          contains('args=191|--allow-workflow-change|--ci-only\n'));
     });
 
     test('it works against a repository that holds none of the scripts, from a subdirectory', () {

@@ -96,6 +96,17 @@ else
   DART_BIN="dart"
 fi
 
+# One LOCAL full suite at a time on this machine (scripts/_suite_lock.sh, CLAUDE.md §4.12.8,
+# docs/plans/review-ci-suite-lock.md): the full-suite paths below take the machine-wide lock with --no-wait
+# (this hook runs inside safe_commit/safe_push's git lock, so it refuses instead of sitting on it). Same guard
+# as _dart_bin.sh above: an absent or corrupt helper leaves no-op functions, so an old or partial tree keeps
+# today's behaviour.
+if [ -r "$REPO_ROOT/scripts/_suite_lock.sh" ] && sh -n "$REPO_ROOT/scripts/_suite_lock.sh" 2>/dev/null; then
+  . "$REPO_ROOT/scripts/_suite_lock.sh" || true
+fi
+type suite_lock_acquire >/dev/null 2>&1 || suite_lock_acquire() { :; }
+type suite_lock_release >/dev/null 2>&1 || suite_lock_release() { :; }
+
 # Same git-hook env leak the pre-commit hook guards against — see the long
 # comment on the `flutter()` wrapper in scripts/pre-commit.sh. GIT_DIR overrides
 # `git -C`, so flutter reading its own version out of $FLUTTER_ROOT gets THIS
@@ -164,7 +175,8 @@ echo "[pre-push] contract sweep (targeted SoT contract tests, warn-only baseline
 # reddens rather than silently re-opening the gap.
 run_full_suite() {
   echo "[pre-push] $1 -> flutter test (full suite, CI-equivalent invocation)..."
-  TZ=Asia/Kolkata flutter test test/ --exclude-tags golden
+  suite_lock_acquire --no-wait || exit 1
+  TZ=Asia/Kolkata flutter test test/ --exclude-tags golden 9>&-
   echo "[pre-push] OK -- full suite green."
   exit 0
 }
