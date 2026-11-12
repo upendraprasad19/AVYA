@@ -113,6 +113,8 @@ const List<String> childEnvStrippedNames = <String>[
   'WRITE_REST_BY_TYPE_REPORT',
   // Generator step 1A: the plan audit's output directory (a child would write 4,608 plans there).
   'PLAN_AUDIT_OUT',
+  // t108: the plan audit's physique focus (a child would audit focus plans under a no-focus label).
+  'PLAN_AUDIT_FOCUS',
   // Unit 1B-F: the injured and focus grid dumps' output directories (hours of plan generation in a child).
   'INJURED_GRID_OUT',
   'FOCUS_GRID_OUT',

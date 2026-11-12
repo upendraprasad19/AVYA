@@ -11,9 +11,12 @@
 //   k   "goal|days|level|tier|minutes|phase"
 //   el  effective level
 //   b   [weekly band bottom, top]
+//   fg  (only with a physique focus, t108) the focus groups, whose weekly top is SessionBudget.focusWeeklyTop
 //   w   weeks: [{d: [{n: day name, x: [[name, sets, ...]], min: estimated minutes}],
 //               v: {muscle group: week sets}}]
 library;
+
+import 'package:icanbefitter/shared/repositories/plan_engine/session_budget.dart';
 
 const _household = {
   'bodyweight', 'wall', 'doorway', 'elevated surface', 'foot anchor', 'towel', 'none',
@@ -240,9 +243,15 @@ class PlanAuditor {
       add('minor', 'under_floor',
           'Week 1: ${under.length} of 6 major muscles under the $bottom-set target (${under.join(', ')}).');
     }
-    final over = [for (final m in majorMuscles) if (vol(w1, m) > top) m];
+    // t108: a focus group's weekly top is SessionBudget.focusWeeklyTop (founder F3), as the generator's ledger has it.
+    final focus = {for (final g in (p['fg'] as List? ?? const [])) '$g'};
+    final over = [
+      for (final m in majorMuscles)
+        if (vol(w1, m) > (focus.contains(m) ? SessionBudget.focusWeeklyTop : top)) m
+    ];
     if (over.isNotEmpty) {
-      add('minor', 'over_top', 'Week 1: ${over.join(', ')} above the $top-set top.');
+      add('minor', 'over_top', 'Week 1: ${over.join(', ')} above the $top-set top'
+          '${focus.isEmpty ? '' : ' (${SessionBudget.focusWeeklyTop} for a focus group)'}.');
     }
     if (weeks.length > 1) {
       for (final m in majorMuscles) {

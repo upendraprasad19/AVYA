@@ -227,4 +227,26 @@ void main() {
     expect(t, contains('| measure | before | after |\n|---|---|---|'));
     expect(t, contains('| plans with an unloaded pick where a loaded row fits | 1 | 1 |'));
   });
+
+  // t108: a focus group's weekly top is SessionBudget.focusWeeklyTop (25), as the generator's ledger has it; a group
+  // outside the focus keeps the band's top (20 here). MIRROR: the same volume with no `fg` is over the top.
+  test('over_top: a focus group may reach the focus top; a non-focus group and a no-focus plan may not', () {
+    final vol = {..._full, 'Glutes': 24, 'Chest': 21};
+    final focused = _plan([
+      [['Goblet Squat', 3], ['Dumbbell Curl', 3]],
+    ], vol: vol)
+      ..['fg'] = ['Calves', 'Glutes', 'Hamstrings', 'Quads'];
+    final issue = auditor.audit(focused).issues.singleWhere((i) => i.code == 'over_top');
+    expect(issue.text, contains('Chest'));
+    expect(issue.text, isNot(contains('Glutes')));
+    final plain = auditor.audit(_plan([
+      [['Goblet Squat', 3], ['Dumbbell Curl', 3]],
+    ], vol: vol));
+    expect(plain.issues.singleWhere((i) => i.code == 'over_top').text, contains('Glutes'));
+    final tooMuch = _plan([
+      [['Goblet Squat', 3], ['Dumbbell Curl', 3]],
+    ], vol: {..._full, 'Glutes': 26})
+      ..['fg'] = ['Glutes'];
+    expect(auditor.audit(tooMuch).issues.singleWhere((i) => i.code == 'over_top').text, contains('Glutes'));
+  });
 }

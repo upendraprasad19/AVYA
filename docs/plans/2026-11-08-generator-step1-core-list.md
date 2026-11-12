@@ -438,3 +438,30 @@ E051 and E052 as like-for-like); K2 two same-muscle slots on one day (stated, re
 K3 R5 wording (top-ranked pool vs real pick). Reviewer verdict: "one short fix converges; I expect no further rounds".
 
 **Review #6 (Sonnet, context-blind, on v6):** no P0, no P1, 3 P3; verdict "converged". The head table fixes the calf cells and changes no other slot (0 non-calf differences against raw equality over the grid); every other `<target> (<x>)` first muscle in the library (Triceps / Biceps heads, Chest (inner), Core (anti-rotation), Quads (eccentric), Glutes (medius)) sits in a slot R3 (a) does not touch or is excluded on purpose. Folded: L1 the full-gym beginner soleus cell is reported; L2 lower-cased full-match compare and a negative pin; L3 K2's cell list confirmed.
+
+## 11. Task t108: the plan review with a physique focus (2026-11-12)
+
+Founder call 2026-11-12: t108 covers physique focus only; the simulated phase-1 history moves to step 4's t404 (the same
+work), and what t108 finds goes into step 2's plan, not a new step-1 unit. Injuries were covered earlier (every pair of
+6 injuries at 30 / 45 / 60 minutes and the 46,512-run grid of 3-9 injuries, in Unit 1B-F's record).
+
+- **Harness.** `plan_audit_dump_test.dart` takes `PLAN_AUDIT_FOCUS=glutes_legs | chest_shoulders_arms` and passes that
+  token's muscles as `bodyFocus` (what `TrainingHistoryAnalyzer.resolveBodyFocus` returns for a profile holding it with
+  no history); keys are unchanged, so a focus run compares with the no-focus run key by key. A focus run's dump also
+  records the focus groups (`fg`), and `plan_audit_lib.dart`'s `over_top` uses `SessionBudget.focusWeeklyTop` (25) for
+  them, as the generator's ledger does (the first run counted focus groups against the normal top: it flagged 1,296 /
+  1,339 plans, 886 / 946 of them falsely). The no-focus `plan_dump.jsonl` is byte-identical to Unit 1B-F2's (sha256
+  5b3da296...), and the no-focus `audit.json` is the same before and after the `over_top` change, so the change moves
+  no no-focus result.
+- **Results** (main cf122dd1, 2,304 plans each): filed as **OI-501**, an input to step 2. `glutes_legs`: suitable
+  513 -> 710, starved-lead flags 2,284 -> 1,274, but Calves (a focus group) fall by 4,628 sets (lowered in 2,343
+  plan-weeks, mostly at 45-60 minutes; 0 in 80 plan-weeks of 6-day general fitness at 30 minutes) and Core by 2,022;
+  unloaded picks 58 -> 99 flags (46 -> 93 plans). `chest_shoulders_arms`: suitable 513 -> 484, starved-lead flags
+  2,284 -> 2,690, but the lead is not cut (week 1: lead sets rise on 1,439 days, fall on 118): a focus accessory
+  reaches 5 sets beside a lead at 2-3, and `lead_starved` does not know the focus. No focus group gains a set in
+  722 / 977 plans (mostly 30-45 minutes). Days over their minutes: only the 1-minute rounding the no-focus run has too.
+- **Not a duplicate of Unit 1B-F's focus grid.** `test/plan_generator/focus_grid_dump_test.dart` (5,760 plans, 30 and
+  45 minutes) checks one allocator guard (a hold that credits a focus group gives way only to a slot that brings a
+  major group); t108 runs the whole suitability audit with a focus at 30-90 minutes. `PLAN_AUDIT_FOCUS` is classified
+  beside `PLAN_AUDIT_OUT` (`spawn_env_manifest_test.dart`, `scripts/regression_catalog_lib.dart`: stripped from a
+  child, which would otherwise audit focus plans under a no-focus label).
