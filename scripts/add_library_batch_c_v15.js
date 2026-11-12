@@ -33,8 +33,15 @@
 //  - INJURY-TAG STAGE (Unit 1B-F, Ruling 12, d19): scripts/data/library_injury_additions_v25.json, the same contract for
 //    `injury_contraindications` of kept rows (the five lower-body jump E-rows gain `hip`), run right after the
 //    suitable_for stage. New rows take their tags from the injury table, never from this record.
+//  - OVERLAY-COPY STAGE (Generator Unit 1B-F2, OI-495, seed v27): scripts/data/library_overlay_copy_v27.json, the 26 kept
+//    rows that carried a core-list overlay. MULTI-KEY: a row whose movement_pattern, target_focus, slot_pattern and
+//    slot_focus all equal the record's `before` (an overlay key the record does not name must be absent) takes `after`
+//    (movement_pattern and target_focus in place, both overlay keys removed); a row at `after` with no overlay key is a
+//    no-op; anything else stops the run naming the id and the key; an id that is not a kept row, or a duplicate, stops
+//    the run. Run right after the injury-tag stage. Absent = printed no-op (tests copy this script).
 //  - A row is built from an ALLOW-LIST: the 40 required keys, then variant_family (from the table), then skill_track,
-//    skill_step, progression_to, regression_to where non-null, then slot_pattern and same_movement_as where present (LINK). Everything else in the source (confidence, note, changes,
+//    skill_step, progression_to, regression_to where non-null, then same_movement_as where present (LINK; slot_pattern
+//    left it with Unit 1B-F2, whose N20 carries its pattern in movement_pattern). Everything else in the source (confidence, note, changes,
 //    hold, _coreAdded, demo_*, a future meta key) is dropped.
 //  - Derived keys (R4): is_active, source "exercise-gif-set", is_indian_context false, standard_swap "", warmup_protocol "",
 //    cal_per_set_est = round(met_value * 1.8), equipment_tier = every tier whose items hold every equipment token.
@@ -98,10 +105,11 @@ const REQUIRED = [
   'priority_tier', 'rep_range', 'core_levels', 'discipline', 'gym_availability', 'requires_coaching', 'high_impact',
 ];
 const LADDER = ['skill_track', 'skill_step', 'progression_to', 'regression_to'];
-// Library Batch S1b-2: source keys copied through when present (after LADDER, before the media keys). slot_pattern puts
+// Library Batch S1b-2: source keys copied through when present (after LADDER, before the media keys). Unit 1B-F2 removed
+// slot_pattern from this list (N20's pattern moved into its movement_pattern). Before that: slot_pattern put
 // a loaded version in its original's ON pool (E048 / E050 carry one); same_movement_as names the original a loaded version
 // must never share a day with (SameMovement, lib/shared/repositories/plan_engine/same_movement.dart).
-const LINK = ['slot_pattern', 'same_movement_as'];
+const LINK = ['same_movement_as'];
 const DERIVED_SOURCE = 'exercise-gif-set';
 // InjuryVocab.canonicalTokens (lib/core/utils/injury_vocab.dart).
 const INJURY_TOKENS = new Set([
@@ -437,6 +445,50 @@ function injuryTagsRow(row, e) {
   throw new Error(`${e.id}: injury_contraindications ${cur} matches neither the injury-tag record's before nor its after (update after, or restore the row)`);
 }
 
+// Generator Unit 1B-F2 (OI-495): the overlay-copy record for kept rows (header, OVERLAY-COPY STAGE).
+const OVERLAY_COPY = path.join(__dirname, 'data', 'library_overlay_copy_v27.json');
+const OVERLAY_KEYS = ['slot_pattern', 'slot_focus'];
+const COPY_KEYS = ['movement_pattern', 'target_focus', ...OVERLAY_KEYS];
+
+function readOverlayCopy() {
+  if (!fs.existsSync(OVERLAY_COPY)) {
+    console.log(`overlay-copy stage skipped: ${OVERLAY_COPY} not found`);
+    return null;
+  }
+  const rec = JSON.parse(fs.readFileSync(OVERLAY_COPY, 'utf8'));
+  if (!rec || !Array.isArray(rec.rows)) throw new Error(`overlay-copy record ${OVERLAY_COPY} has no rows array`);
+  const byId = new Map();
+  for (const e of rec.rows) {
+    const ok = e && typeof e.id === 'string' && e.before && typeof e.before === 'object' && e.after &&
+      Array.isArray(e.after.movement_pattern) && Array.isArray(e.after.target_focus) &&
+      Array.isArray(e.before.movement_pattern) && Array.isArray(e.before.target_focus) &&
+      OVERLAY_KEYS.some((k) => Array.isArray(e.before[k]));
+    if (!ok) {
+      throw new Error(`overlay-copy record ${OVERLAY_COPY}: every row needs an id, a before with movement_pattern, target_focus and at least one overlay key, and an after with movement_pattern and target_focus`);
+    }
+    if (byId.has(e.id)) throw new Error(`overlay-copy record ${OVERLAY_COPY} repeats ${e.id}`);
+    byId.set(e.id, e);
+  }
+  return byId;
+}
+
+function overlayCopyRow(row, e) {
+  const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+  const atAfter = same(row.movement_pattern, e.after.movement_pattern) && same(row.target_focus, e.after.target_focus) &&
+    OVERLAY_KEYS.every((k) => !(k in row));
+  if (atAfter) return row;
+  const off = COPY_KEYS.find((k) => !same(row[k], e.before[k]));
+  if (off !== undefined) {
+    throw new Error(`${e.id}: ${off} ${JSON.stringify(row[off])} matches neither the overlay-copy record's before nor its after (update the record, or restore the row)`);
+  }
+  const out = {};
+  for (const [k, v] of Object.entries(row)) {
+    if (OVERLAY_KEYS.includes(k)) continue;
+    out[k] = k === 'movement_pattern' ? e.after.movement_pattern : k === 'target_focus' ? e.after.target_focus : v;
+  }
+  return out;
+}
+
 function main() {
   const media = MEDIA_NONE ? null : readMediaTable();
   const before = fs.readFileSync(LIBRARY, 'utf8');
@@ -467,7 +519,8 @@ function main() {
   const kept = base.filter((r) => !sourceIds.has(r.id) && !removeIds.has(r.id)).map((r) => {
     if (retag && r.id === retag.id) return retagRow(r, retag);
     if (r.id !== 'E274') return r;
-    // E274 Prone T Raise: target_focus Upper Back -> Mid Back (slot_focus already carries Mid Back).
+    // E274 Prone T Raise: target_focus Upper Back -> Mid Back (the core-list label also carried Mid Back; since seed v27 the
+    // overlay-copy stage writes E274's whole target_focus, and this map is a no-op on its after).
     return { ...r, target_focus: r.target_focus.map((f) => (f === 'Upper Back' ? 'Mid Back' : f)) };
   });
   if (!kept.some((r) => r.id === 'E274')) throw new Error('E274 is not in the library');
@@ -500,6 +553,16 @@ function main() {
     for (let i = 0; i < kept.length; i++) {
       const e = injuryTags.get(kept[i].id);
       if (e) kept[i] = injuryTagsRow(kept[i], e);
+    }
+  }
+  const overlayCopy = readOverlayCopy();
+  if (overlayCopy) {
+    const keptIds = new Set(kept.map((r) => r.id));
+    const foreign = [...overlayCopy.keys()].filter((i) => !keptIds.has(i));
+    if (foreign.length) throw new Error(`overlay-copy record names ids that are not kept rows: ${foreign.join(' ')}`);
+    for (let i = 0; i < kept.length; i++) {
+      const e = overlayCopy.get(kept[i].id);
+      if (e) kept[i] = overlayCopyRow(kept[i], e);
     }
   }
 

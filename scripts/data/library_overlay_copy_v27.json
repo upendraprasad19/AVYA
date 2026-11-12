@@ -1,0 +1,679 @@
+{
+  "_meta": {
+    "unit": "Generator Unit 1B-F2 (OI-495), seed v27",
+    "plan": "docs/plans/2026-11-12-generator-1bf2-overlay-copy.md",
+    "what": "The 26 kept rows that carried a core-list overlay (slot_pattern / slot_focus): movement_pattern := slot_pattern and target_focus := slot_focus, then both overlay keys are removed. Applied by the OVERLAY-COPY STAGE of scripts/add_library_batch_c_v15.js (before = every key named must equal the row and every overlay key not named must be absent; after = the row holds after and no overlay key). N20, a source row, changes in scripts/data/library_batch_c_source.json."
+  },
+  "rows": [
+    {
+      "id": "E015",
+      "name": "Front Raise",
+      "before": {
+        "movement_pattern": [
+          "vertical_push"
+        ],
+        "target_focus": [
+          "Front Delts"
+        ],
+        "slot_pattern": [
+          "shoulder_isolation"
+        ]
+      },
+      "after": {
+        "movement_pattern": [
+          "shoulder_isolation"
+        ],
+        "target_focus": [
+          "Front Delts"
+        ]
+      }
+    },
+    {
+      "id": "E046",
+      "name": "Nordic Curl",
+      "before": {
+        "movement_pattern": [
+          "hip_dominant"
+        ],
+        "target_focus": [
+          "Hamstrings"
+        ],
+        "slot_pattern": [
+          "knee_dominant"
+        ]
+      },
+      "after": {
+        "movement_pattern": [
+          "knee_dominant"
+        ],
+        "target_focus": [
+          "Hamstrings"
+        ]
+      }
+    },
+    {
+      "id": "E048",
+      "name": "Glute Bridge",
+      "before": {
+        "movement_pattern": [
+          "hip_isolation"
+        ],
+        "target_focus": [
+          "Glutes"
+        ],
+        "slot_pattern": [
+          "hip_dominant"
+        ]
+      },
+      "after": {
+        "movement_pattern": [
+          "hip_dominant"
+        ],
+        "target_focus": [
+          "Glutes"
+        ]
+      }
+    },
+    {
+      "id": "E050",
+      "name": "Sumo Deadlift",
+      "before": {
+        "movement_pattern": [
+          "knee_dominant"
+        ],
+        "target_focus": [
+          "Glutes",
+          "Hamstrings",
+          "Hip"
+        ],
+        "slot_pattern": [
+          "hip_dominant"
+        ]
+      },
+      "after": {
+        "movement_pattern": [
+          "hip_dominant"
+        ],
+        "target_focus": [
+          "Glutes",
+          "Hamstrings",
+          "Hip"
+        ]
+      }
+    },
+    {
+      "id": "E064",
+      "name": "Rowing Machine",
+      "before": {
+        "movement_pattern": [
+          "cardio",
+          "horizontal_pull"
+        ],
+        "target_focus": [
+          "full body",
+          "full back"
+        ],
+        "slot_focus": [
+          "Full Body",
+          "Mid Back"
+        ],
+        "slot_pattern": [
+          "cardio"
+        ]
+      },
+      "after": {
+        "movement_pattern": [
+          "cardio"
+        ],
+        "target_focus": [
+          "Full Body",
+          "Mid Back"
+        ]
+      }
+    },
+    {
+      "id": "E090",
+      "name": "Suitcase Carry",
+      "before": {
+        "movement_pattern": [
+          "core"
+        ],
+        "target_focus": [
+          "Core"
+        ],
+        "slot_focus": [
+          "Core",
+          "Core/Obliques",
+          "Forearms"
+        ]
+      },
+      "after": {
+        "movement_pattern": [
+          "core"
+        ],
+        "target_focus": [
+          "Core",
+          "Core/Obliques",
+          "Forearms"
+        ]
+      }
+    },
+    {
+      "id": "E114",
+      "name": "Landmine Press",
+      "before": {
+        "movement_pattern": [
+          "vertical_push"
+        ],
+        "target_focus": [
+          "Front Delts",
+          "Upper Chest"
+        ],
+        "slot_focus": [
+          "Shoulders",
+          "Front Delts",
+          "Upper Chest"
+        ]
+      },
+      "after": {
+        "movement_pattern": [
+          "vertical_push"
+        ],
+        "target_focus": [
+          "Shoulders",
+          "Front Delts",
+          "Upper Chest"
+        ]
+      }
+    },
+    {
+      "id": "E118",
+      "name": "Pec Deck",
+      "before": {
+        "movement_pattern": [
+          "horizontal_push"
+        ],
+        "target_focus": [
+          "Lower Chest",
+          "Mid Chest"
+        ],
+        "slot_focus": [
+          "Mid Chest"
+        ]
+      },
+      "after": {
+        "movement_pattern": [
+          "horizontal_push"
+        ],
+        "target_focus": [
+          "Mid Chest"
+        ]
+      }
+    },
+    {
+      "id": "E122",
+      "name": "Spider Curl",
+      "before": {
+        "movement_pattern": [
+          "elbow_flexion"
+        ],
+        "target_focus": [
+          "Biceps"
+        ],
+        "slot_focus": [
+          "Biceps (Short Head)"
+        ]
+      },
+      "after": {
+        "movement_pattern": [
+          "elbow_flexion"
+        ],
+        "target_focus": [
+          "Biceps (Short Head)"
+        ]
+      }
+    },
+    {
+      "id": "E127",
+      "name": "Reverse Hyper",
+      "before": {
+        "movement_pattern": [
+          "hip_isolation"
+        ],
+        "target_focus": [
+          "Glutes",
+          "Hamstrings",
+          "Lower Back"
+        ],
+        "slot_pattern": [
+          "hip_dominant"
+        ]
+      },
+      "after": {
+        "movement_pattern": [
+          "hip_dominant"
+        ],
+        "target_focus": [
+          "Glutes",
+          "Hamstrings",
+          "Lower Back"
+        ]
+      }
+    },
+    {
+      "id": "E133",
+      "name": "Landmine Rotation",
+      "before": {
+        "movement_pattern": [
+          "core",
+          "flexibility"
+        ],
+        "target_focus": [
+          "Core"
+        ],
+        "slot_focus": [
+          "Core",
+          "Core/Obliques"
+        ]
+      },
+      "after": {
+        "movement_pattern": [
+          "core",
+          "flexibility"
+        ],
+        "target_focus": [
+          "Core",
+          "Core/Obliques"
+        ]
+      }
+    },
+    {
+      "id": "E172",
+      "name": "Dumbbell Side Bend",
+      "before": {
+        "movement_pattern": [
+          "core"
+        ],
+        "target_focus": [
+          "Core"
+        ],
+        "slot_focus": [
+          "Core/Obliques"
+        ]
+      },
+      "after": {
+        "movement_pattern": [
+          "core"
+        ],
+        "target_focus": [
+          "Core/Obliques"
+        ]
+      }
+    },
+    {
+      "id": "E175",
+      "name": "Bicycle Crunch",
+      "before": {
+        "movement_pattern": [
+          "core"
+        ],
+        "target_focus": [
+          "Core"
+        ],
+        "slot_focus": [
+          "Core/Obliques"
+        ]
+      },
+      "after": {
+        "movement_pattern": [
+          "core"
+        ],
+        "target_focus": [
+          "Core/Obliques"
+        ]
+      }
+    },
+    {
+      "id": "E186",
+      "name": "Kettlebell Goblet Press",
+      "before": {
+        "movement_pattern": [
+          "vertical_push"
+        ],
+        "target_focus": [
+          "Front Delts",
+          "Mid Chest",
+          "Triceps"
+        ],
+        "slot_focus": [
+          "Front Delts",
+          "Shoulders",
+          "Mid Chest",
+          "Triceps"
+        ]
+      },
+      "after": {
+        "movement_pattern": [
+          "vertical_push"
+        ],
+        "target_focus": [
+          "Front Delts",
+          "Shoulders",
+          "Mid Chest",
+          "Triceps"
+        ]
+      }
+    },
+    {
+      "id": "E198",
+      "name": "Lunge with Twist",
+      "before": {
+        "movement_pattern": [
+          "core"
+        ],
+        "target_focus": [
+          "Glutes",
+          "Quads"
+        ],
+        "slot_focus": [
+          "Glutes",
+          "Quads",
+          "Core/Obliques"
+        ],
+        "slot_pattern": [
+          "knee_dominant"
+        ]
+      },
+      "after": {
+        "movement_pattern": [
+          "knee_dominant"
+        ],
+        "target_focus": [
+          "Glutes",
+          "Quads",
+          "Core/Obliques"
+        ]
+      }
+    },
+    {
+      "id": "E222",
+      "name": "Kas Glute Bridge",
+      "before": {
+        "movement_pattern": [
+          "hip_isolation"
+        ],
+        "target_focus": [
+          "Glutes"
+        ],
+        "slot_pattern": [
+          "hip_dominant"
+        ]
+      },
+      "after": {
+        "movement_pattern": [
+          "hip_dominant"
+        ],
+        "target_focus": [
+          "Glutes"
+        ]
+      }
+    },
+    {
+      "id": "E264",
+      "name": "Table Row",
+      "before": {
+        "movement_pattern": [
+          "horizontal_pull"
+        ],
+        "target_focus": [
+          "Back"
+        ],
+        "slot_focus": [
+          "Lats",
+          "Mid Back"
+        ]
+      },
+      "after": {
+        "movement_pattern": [
+          "horizontal_pull"
+        ],
+        "target_focus": [
+          "Lats",
+          "Mid Back"
+        ]
+      }
+    },
+    {
+      "id": "E272",
+      "name": "Prone Y Raise",
+      "before": {
+        "movement_pattern": [
+          "shoulder_isolation"
+        ],
+        "target_focus": [
+          "Shoulders"
+        ],
+        "slot_focus": [
+          "Shoulders",
+          "Rear Delts"
+        ]
+      },
+      "after": {
+        "movement_pattern": [
+          "shoulder_isolation"
+        ],
+        "target_focus": [
+          "Shoulders",
+          "Rear Delts"
+        ]
+      }
+    },
+    {
+      "id": "E273",
+      "name": "Towel Lateral Raise",
+      "before": {
+        "movement_pattern": [
+          "shoulder_isolation"
+        ],
+        "target_focus": [
+          "Shoulders"
+        ],
+        "slot_focus": [
+          "Lateral Delts",
+          "Shoulders"
+        ]
+      },
+      "after": {
+        "movement_pattern": [
+          "shoulder_isolation"
+        ],
+        "target_focus": [
+          "Lateral Delts",
+          "Shoulders"
+        ]
+      }
+    },
+    {
+      "id": "E274",
+      "name": "Prone T Raise",
+      "before": {
+        "movement_pattern": [
+          "horizontal_pull"
+        ],
+        "target_focus": [
+          "Mid Back"
+        ],
+        "slot_focus": [
+          "Mid Back",
+          "Rear Delts"
+        ],
+        "slot_pattern": [
+          "shoulder_isolation"
+        ]
+      },
+      "after": {
+        "movement_pattern": [
+          "shoulder_isolation"
+        ],
+        "target_focus": [
+          "Mid Back",
+          "Rear Delts"
+        ]
+      }
+    },
+    {
+      "id": "E275",
+      "name": "Doorway Isometric Row",
+      "before": {
+        "movement_pattern": [
+          "horizontal_pull"
+        ],
+        "target_focus": [
+          "Back"
+        ],
+        "slot_focus": [
+          "Lats",
+          "Mid Back"
+        ]
+      },
+      "after": {
+        "movement_pattern": [
+          "horizontal_pull"
+        ],
+        "target_focus": [
+          "Lats",
+          "Mid Back"
+        ]
+      }
+    },
+    {
+      "id": "E276",
+      "name": "Standing Towel Pull Apart",
+      "before": {
+        "movement_pattern": [
+          "horizontal_pull"
+        ],
+        "target_focus": [
+          "Upper Back"
+        ],
+        "slot_focus": [
+          "Rear Delts",
+          "Mid Back"
+        ],
+        "slot_pattern": [
+          "shoulder_isolation"
+        ]
+      },
+      "after": {
+        "movement_pattern": [
+          "shoulder_isolation"
+        ],
+        "target_focus": [
+          "Rear Delts",
+          "Mid Back"
+        ]
+      }
+    },
+    {
+      "id": "E277",
+      "name": "Prone W Raise",
+      "before": {
+        "movement_pattern": [
+          "horizontal_pull"
+        ],
+        "target_focus": [
+          "Upper Back"
+        ],
+        "slot_focus": [
+          "Mid Back",
+          "Rear Delts"
+        ],
+        "slot_pattern": [
+          "shoulder_isolation"
+        ]
+      },
+      "after": {
+        "movement_pattern": [
+          "shoulder_isolation"
+        ],
+        "target_focus": [
+          "Mid Back",
+          "Rear Delts"
+        ]
+      }
+    },
+    {
+      "id": "E289",
+      "name": "Isometric Lateral Raise",
+      "before": {
+        "movement_pattern": [
+          "shoulder_isolation"
+        ],
+        "target_focus": [
+          "Shoulders"
+        ],
+        "slot_focus": [
+          "Lateral Delts",
+          "Shoulders"
+        ]
+      },
+      "after": {
+        "movement_pattern": [
+          "shoulder_isolation"
+        ],
+        "target_focus": [
+          "Lateral Delts",
+          "Shoulders"
+        ]
+      }
+    },
+    {
+      "id": "E290",
+      "name": "Prone Shoulder Extension",
+      "before": {
+        "movement_pattern": [
+          "shoulder_isolation"
+        ],
+        "target_focus": [
+          "Shoulders"
+        ],
+        "slot_focus": [
+          "Shoulders",
+          "Rear Delts"
+        ]
+      },
+      "after": {
+        "movement_pattern": [
+          "shoulder_isolation"
+        ],
+        "target_focus": [
+          "Shoulders",
+          "Rear Delts"
+        ]
+      }
+    },
+    {
+      "id": "E292",
+      "name": "Sliding Leg Curl",
+      "before": {
+        "movement_pattern": [
+          "hip_dominant"
+        ],
+        "target_focus": [
+          "Hamstrings"
+        ],
+        "slot_pattern": [
+          "knee_dominant"
+        ]
+      },
+      "after": {
+        "movement_pattern": [
+          "knee_dominant"
+        ],
+        "target_focus": [
+          "Hamstrings"
+        ]
+      }
+    }
+  ]
+}

@@ -5,7 +5,9 @@
 //
 // Every literal below was computed from the data (code-review lens 8): the
 // discarded ids from the table, the overlay values from plan Rulings 3(a) and
-// 4, the per-level counts over the 219 kept rows.
+// 4, the per-level counts over the 219 kept rows. Since seed v27 (Generator Unit
+// 1B-F2, OI-495) the overlays live in the rows' own fields: the two tables below
+// are the copied movement_pattern / target_focus, and no row carries an overlay key.
 import 'dart:convert';
 import 'dart:io';
 
@@ -36,8 +38,9 @@ const _discarded = {
   'E288', 'E293', 'E294',
 };
 
-/// Plan Ruling 3(a): ON-only movement pattern overlay.
-const _slotPattern = <String, List<String>>{
+/// Plan Ruling 3(a): the movement pattern overlay, copied into movement_pattern by seed v27 (Unit 1B-F2; it was the
+/// `slot_pattern` key).
+const _copiedPattern = <String, List<String>>{
   'E015': ['shoulder_isolation'],
   'E048': ['hip_dominant'],
   'E222': ['hip_dominant'],
@@ -47,7 +50,7 @@ const _slotPattern = <String, List<String>>{
   'E064': ['cardio'],
   'E292': ['knee_dominant'],
   // Library Batch S1b-2: the loaded version of E050 Sumo Deadlift takes its original's overlay. N19 Dumbbell Glute Bridge
-  // does not (founder, 2026-11-09): it fills the Glutes isolation slot, where E048 is kept out by the overlay.
+  // does not (founder, 2026-11-09): it fills the Glutes isolation slot, where E048 is kept out by its pattern.
   'N20': ['hip_dominant'],
   'E050': ['hip_dominant'],
   'E274': ['shoulder_isolation'],
@@ -55,8 +58,8 @@ const _slotPattern = <String, List<String>>{
   'E198': ['knee_dominant'],
 };
 
-/// Plan Ruling 4: ON-only target-focus overlay.
-const _slotFocus = <String, List<String>>{
+/// Plan Ruling 4: the target-focus overlay, copied into target_focus by seed v27 (it was the `slot_focus` key).
+const _copiedFocus = <String, List<String>>{
   'E064': ['Full Body', 'Mid Back'],
   'E114': ['Shoulders', 'Front Delts', 'Upper Chest'],
   'E118': ['Mid Chest'],
@@ -128,16 +131,18 @@ void main() {
     ], isEmpty);
   });
 
-  test('slot_pattern and slot_focus sit on exactly the ruled ids and values',
+  test('no row carries an overlay key, and the 27 rows carry the copied pattern and focus (seed v27, Unit 1B-F2)',
       () {
-    expect({
-      for (final r in rows)
-        if (r.containsKey('slot_pattern')) id(r): r['slot_pattern']
-    }, _slotPattern);
-    expect({
-      for (final r in rows)
-        if (r.containsKey('slot_focus')) id(r): r['slot_focus']
-    }, _slotFocus);
+    expect(
+        rows.where((r) => r.containsKey('slot_pattern') || r.containsKey('slot_focus')).map(id),
+        isEmpty);
+    final byId = {for (final r in rows) id(r): r};
+    for (final e in _copiedPattern.entries) {
+      expect(byId[e.key]!['movement_pattern'], e.value, reason: '${e.key} movement_pattern');
+    }
+    for (final e in _copiedFocus.entries) {
+      expect(byId[e.key]!['target_focus'], e.value, reason: '${e.key} target_focus');
+    }
   });
 
   // Library Batch S1a (docs/plans/2026-11-08-library-batch-s1-core-data.md, Table A) moved these from 129 / 138 / 98

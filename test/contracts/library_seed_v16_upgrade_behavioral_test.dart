@@ -26,9 +26,9 @@ const _customId = '7b1f6c1e-6f43-4d52-9d0c-0c0a3f1f0a01';
 const _communityId = '0d0e0f10-1112-4314-9516-171819202122';
 const _mediaKeys = ['media_slug', 'media_version', 'media_source'];
 
-/// `SeedService._exerciseLibraryVersion` (private): 26 since Unit 1B-R (25 was Unit 1B-F, 24 was Library Batch S1b-3, 23 was Library Batch S1b-2, 22 was Library Batch S1b-1, 21 was Library Batch S1a, 20 was Batch C2c, 19 Batch C2b, 18 Batch C2a, 17 the OI-443 data step). The mutation "put the
+/// `SeedService._exerciseLibraryVersion` (private): 27 since Unit 1B-F2 (26 was Unit 1B-R, 25 was Unit 1B-F, 24 was Library Batch S1b-3, 23 was Library Batch S1b-2, 22 was Library Batch S1b-1, 21 was Library Batch S1a, 20 was Batch C2c, 19 Batch C2b, 18 Batch C2a, 17 the OI-443 data step). The mutation "put the
 /// constant back to 17" reddens every test below that expects an upgrade or this number.
-const _currentVersion = 26;
+const _currentVersion = 27;
 
 /// The rows the committed media table maps (G/N rows and, since v17, the old rows of the founder's picks).
 int _tableRowCount() {
@@ -93,7 +93,8 @@ void main() {
 
     expectSeededLikeBundled(bundled);
     // E274 keeps the v15 relabel; the upgrade changed nothing but the three keys.
-    expect(Map<String, dynamic>.from(hive.exerciseBox.get('E274') as Map)['target_focus'], ['Mid Back']);
+    // (Mid Back present, Upper Back gone: since seed v27 the row also carries the copied overlay label Rear Delts.)
+    expect(Map<String, dynamic>.from(hive.exerciseBox.get('E274') as Map)['target_focus'], allOf(contains('Mid Back'), isNot(contains('Upper Back'))));
   });
 
   test('an install that skipped v15 (stored 13) also reaches the current version with the new rows and the media fields', () async {

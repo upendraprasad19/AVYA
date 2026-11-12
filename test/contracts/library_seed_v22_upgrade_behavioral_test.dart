@@ -61,7 +61,7 @@ void main() {
     expect(byId['E109']!['core_levels'], ['beginner', 'intermediate', 'advanced']);
   });
 
-  test('a v21 box ends at the current version (v26) with the v22 levels, and every other row unchanged', () async {
+  test('a v21 box ends at the current version (v27) with the v22 levels, and every other row unchanged', () async {
     final hive = HiveService.instance;
     await _putV21Box(hive);
     await _markSeeded(hive, 21);
@@ -80,15 +80,15 @@ void main() {
       expect(jsonEncode(_asJson(hive.exerciseBox.get(e.key))), e.value, reason: '${e.key} must be unchanged');
     }
     expect(hive.exerciseBox.length, _bundled().length);
-    expect(hive.configBox.get('exercise_library_version') as int, 26);
+    expect(hive.configBox.get('exercise_library_version') as int, 27);
   });
 
-  test('MIRROR: a box already at the current version (v26, Unit 1B-R) is not rewritten (the upgrade fires only when the stored version is older)', () async {
+  test('MIRROR: a box already at the current version (v27, Unit 1B-F2) is not rewritten (the upgrade fires only when the stored version is older)', () async {
     final hive = HiveService.instance;
     await _putV21Box(hive);
-    await _markSeeded(hive, 26);
+    await _markSeeded(hive, 27);
     await SeedService.instance.seedIfNeeded();
     expect(_asJson(hive.exerciseBox.get('E038'))['core_levels'], ['beginner', 'intermediate', 'advanced']);
-    expect(hive.configBox.get('exercise_library_version') as int, 26);
+    expect(hive.configBox.get('exercise_library_version') as int, 27);
   });
 }
