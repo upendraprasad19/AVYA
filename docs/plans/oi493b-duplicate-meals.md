@@ -189,6 +189,11 @@ against the moved occurrence row); `restoreLastDeleted` callers take `expectedKe
 - A second device restores two servings as ONE row with two items (one cloud row per slot); deleting that entry
   removes both servings on that device. Pinned by R9.
 - OI-281 (a fully deleted meal returns from the cloud at cold start) is unchanged.
+- When the cloud slot holds items this device lacks (another device logged to the same day and slot), the restore
+  (`_restoreNutritionLogs`, `sync_nutrition.dart:740-775`) replaces ALL of this device's rows for that slot with ONE
+  merged row of the multiset union: no item is lost, but separate entries (including occurrence rows) become one, and
+  a per-row total override is re-summed from item fields. Pre-existing for any two meals in one slot (one cloud row per
+  slot); B-pass seat A F3. Not reached while a single device logs.
 - `meals_today` lists two equal entries (they are two servings).
 - A tap after the first save completes logs again: that is F4, not a double tap.
 - Legacy `nlog_<ms>` rows (testers only) are re-keyed to the hashCode shape, not v5.

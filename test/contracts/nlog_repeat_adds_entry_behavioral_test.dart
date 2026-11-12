@@ -38,6 +38,7 @@ import 'package:icanbefitter/features/ai_coach/services/coach_meal_log.dart';
 import 'package:icanbefitter/features/ai_coach/services/conversational_log_handler.dart';
 import 'package:icanbefitter/features/auth/providers/auth_provider.dart';
 import 'package:icanbefitter/features/nutrition/providers/nutrition_provider.dart';
+import 'package:icanbefitter/features/nutrition/widgets/log_food_modes/search_mode_body.dart';
 
 import '../nutrition_write_service/helpers/nws_test_setup.dart';
 
@@ -111,20 +112,27 @@ void main() {
   });
 
   group('R1/R2 a repeat adds an entry (B1)', () {
-    test('R1 the same meal three times -> base, base_2, base_3; the day counts '
-        'it three times', () async {
+    test('R1 the same meal five times -> base, base_2 .. base_5; the day '
+        'counts it five times', () async {
       final base = await _log();
       final second = await _log();
       final third = await _log();
+      final fourth = await _log();
+      final fifth = await _log();
       expect(second, '${base}_2');
       expect(third, '${base}_3');
-      expect(_nlogKeys(), [base, '${base}_2', '${base}_3']);
+      expect(fourth, '${base}_4',
+          reason: 'the search keeps walking past every taken occurrence '
+              '(B-pass seat B: a `while` -> `if` mutant survived at 3)');
+      expect(fifth, '${base}_5');
+      expect(_nlogKeys(),
+          [base, '${base}_2', '${base}_3', '${base}_4', '${base}_5']);
       for (final k in _nlogKeys()) {
         expect(_row(k)['id'], k);
         expect(_row(k)['log_key'], k);
       }
       expect(NutritionReadService.instance.totalMacrosForDate(_day)['calories'],
-          600);
+          1000);
     });
 
     test('R1 a different slot or different grams is its own base key',
@@ -191,6 +199,10 @@ void main() {
       expect(undo.success, isTrue);
       expect(undo.logKey, '${base}_2');
       expect(_nlogKeys(), [base, '${base}_2']);
+      expect(_row('${base}_2')['id'], '${base}_2',
+          reason: 'the restored row names its own key, or a later delete / '
+              'edit / move would act on the other entry');
+      expect(_row('${base}_2')['log_key'], '${base}_2');
       expect(stashed['id'], base, reason: 'the caller\'s copy is untouched');
       expect(stashed['log_key'], base);
     });
@@ -203,6 +215,89 @@ void main() {
           .restoreLastDeleted(expectedKey: base);
       expect(undo.logKey, base);
       expect(_nlogKeys(), [base]);
+    });
+
+    test('restoreFoodLog is one-shot: the same copy restored twice writes one '
+        'row', () async {
+      final base = await _log();
+      final stashed = _row(base);
+      await NutritionWriteService.instance
+          .deleteLog(logKey: base, allowUndo: false, writeAuditLog: false);
+      final first = await NutritionWriteService.instance.restoreFoodLog(stashed);
+      final second =
+          await NutritionWriteService.instance.restoreFoodLog(stashed);
+      expect(first.success, isTrue);
+      expect(second.success, isFalse,
+          reason: 'a second tap on the same UNDO must not add a copy');
+      expect(_nlogKeys(), [base]);
+    });
+
+    test('the owner record keeps the last 16 deletes: an UNDO survives 15 '
+        'later deletes and is refused after 16', () async {
+      Future<String> logAndDelete(int i) async {
+        final k = await _log(items: [
+          FoodItem(
+              name: 'Item $i',
+              quantityG: 100,
+              calories: 100,
+              protein: 1,
+              carbs: 1,
+              fat: 1,
+              fiber: 0),
+        ]);
+        await NutritionWriteService.instance
+            .deleteLog(logKey: k, allowUndo: false, writeAuditLog: false);
+        return k;
+      }
+
+      final a = await _log();
+      final stashedA = _row(a);
+      await NutritionWriteService.instance
+          .deleteLog(logKey: a, allowUndo: false, writeAuditLog: false);
+      for (var i = 0; i < 15; i++) {
+        await logAndDelete(i);
+      }
+      expect(
+          (await NutritionWriteService.instance.restoreFoodLog(stashedA))
+              .success,
+          isTrue,
+          reason: 'A is the 16th most recent delete: still recorded');
+
+      final b = await _log(slot: 'dinner');
+      final stashedB = _row(b);
+      await NutritionWriteService.instance
+          .deleteLog(logKey: b, allowUndo: false, writeAuditLog: false);
+      for (var i = 100; i < 116; i++) {
+        await logAndDelete(i);
+      }
+      expect(
+          (await NutritionWriteService.instance.restoreFoodLog(stashedB))
+              .success,
+          isFalse,
+          reason: 'B fell out of the 16-entry record');
+    });
+
+    test('a taken legacy (non-occurrence-shape) key is restored in place, as '
+        'before', () async {
+      const legacyKey = 'nlog_1731247200000';
+      final box = HiveService.instance.nutritionBox;
+      final row = <String, dynamic>{
+        'id': legacyKey,
+        'date': '2026-11-12',
+        'meal_type': 'lunch',
+        'total_calories': 100,
+        'items': [
+          {'name': 'Tea', 'quantity_g': 100.0, 'calories': 100.0}
+        ],
+      };
+      await box.put(legacyKey, row);
+      await NutritionWriteService.instance
+          .deleteLog(logKey: legacyKey, allowUndo: false, writeAuditLog: false);
+      await box.put(legacyKey, {...row, 'total_calories': 999});
+      final undo = await NutritionWriteService.instance.restoreFoodLog(row);
+      expect(undo.logKey, legacyKey,
+          reason: 'only occurrence-shape keys move to a free occurrence');
+      expect(_nlogKeys(), [legacyKey]);
     });
 
     test('two deletes, then the FIRST snackbar\'s UNDO restores nothing; the '
@@ -336,6 +431,7 @@ void main() {
       };
       await box.put(restoredKey, restored);
       Map<String, dynamic> legacy(int ms) => {
+            'note_tag': 'legacy-$ms',
             'date': '2026-11-10',
             'meal_type': 'dinner',
             'total_calories': 300,
@@ -363,6 +459,9 @@ void main() {
       expect(rekeyed, hasLength(2),
           reason: 'two equal legacy servings stay two entries');
       expect(NutritionWriteService.baseLogKey(rekeyed[1]), rekeyed[0]);
+      expect(_row(rekeyed[0])['note_tag'], 'legacy-1',
+          reason: 'oldest first: the older row takes the base key');
+      expect(_row(rekeyed[1])['note_tag'], 'legacy-2');
       for (final k in rekeyed) {
         expect(_row(k)['id'], k);
         expect(NutritionWriteService.kNlogKeyShape.hasMatch(k), isTrue);
@@ -451,6 +550,45 @@ void main() {
     });
   });
 
+  group('R6b two different coach actions are never one flight', () {
+    testWidgets('two actions with different ids save two meals at once',
+        (tester) async {
+      final c = ProviderContainer(overrides: [
+        authStateProvider.overrideWith((ref) => const Stream.empty()),
+      ]);
+      addTearDown(c.dispose);
+      late WidgetRef ref;
+      await tester.pumpWidget(UncontrolledProviderScope(
+        container: c,
+        child: Consumer(builder: (_, r, _) {
+          ref = r;
+          return const SizedBox();
+        }),
+      ));
+      PendingLogAction tag(String id, String food) => PendingLogAction(
+            id: id,
+            type: LogActionType.food,
+            data: {
+              'food_name': food,
+              'calories_estimate': 140,
+              'meal_type': 'breakfast',
+            },
+            displayText: '$food — Breakfast',
+            createdAt: DateTime.utc(2026, 11, 12, 3),
+          );
+      final results = await tester.runAsync(() async {
+        final f1 = ConversationalLogHandler(ref).executeAction(tag('a', 'Idli'));
+        final f2 =
+            ConversationalLogHandler(ref).executeAction(tag('b', 'Vada'));
+        expect(identical(f1, f2), isFalse);
+        return Future.wait([f1, f2]);
+      });
+      expect(results, [true, true]);
+      expect(_nlogKeys(), hasLength(2));
+      await tester.pumpWidget(const SizedBox());
+    });
+  });
+
   group('R7 one tap, one entry (B7)', () {
     test('SingleFlight: same key skipped while in flight, other keys run, '
         'released after completion and after a throw', () async {
@@ -495,6 +633,28 @@ void main() {
       expect(_nlogKeys(), hasLength(1));
     });
 
+    test('screen tap keys name the write identity: food, grams and slot',
+        () {
+      final dal = <String, dynamic>{'id': 'f1', 'name': 'Dal'};
+      final base = searchTapFlightKey(dal, 150, 'lunch');
+      expect(searchTapFlightKey(dal, 150, 'dinner'), isNot(base));
+      expect(searchTapFlightKey(dal, 200, 'lunch'), isNot(base));
+      expect(searchTapFlightKey({'id': 'f2', 'name': 'Dal'}, 150, 'lunch'),
+          isNot(base),
+          reason: 'two foods sharing a name are two writes');
+      expect(searchTapFlightKey(dal, 150, 'lunch'), base);
+      const stored = FoodItem(
+          name: 'Dal',
+          quantityG: 150,
+          calories: 180,
+          protein: 9,
+          carbs: 25,
+          fat: 3,
+          fiber: 5);
+      expect(recentTapFlightKey(stored, 'lunch'),
+          isNot(recentTapFlightKey(stored, 'dinner')));
+    });
+
     test('source pins: each screen site wraps its write in SingleFlight with '
         'the write identity', () {
       String src(String p) => File(p).readAsStringSync();
@@ -517,6 +677,22 @@ void main() {
       expect(scan.indexOf('setState(() => _saving = true);'),
           greaterThan(scanRun),
           reason: 'the flight is taken BEFORE _saving is set');
+      final capture = scan.indexOf(
+          'final scanNotifier = ref.read(scanMealProvider.notifier);');
+      expect(capture, isNot(-1));
+      expect(capture, lessThan(scanRun),
+          reason: 'the scan notifier is captured before the save awaits');
+      final clear = scan.indexOf('if (result.success) scanNotifier.clear();');
+      expect(clear, greaterThan(scanRun));
+      expect(scan.indexOf('if (!mounted) return;', scanRun), greaterThan(clear),
+          reason: 'an unmounted editor still clears its saved scan (B-pass)');
+      final handler = src(
+          'lib/features/ai_coach/services/conversational_log_handler.dart');
+      final weight = handler.substring(
+          handler.indexOf('Future<bool> _logWeight('),
+          handler.indexOf('Future<bool> _logFood('));
+      expect(weight, contains('try {\n      ref.invalidate(weightHistoryProvider);'),
+          reason: 'a refresh on a disposed ref never fails a stored weight');
       final provider =
           src('lib/features/nutrition/providers/nutrition_provider.dart');
       expect(provider, contains("'aitext', () => _saveMealOnce("));
@@ -546,6 +722,12 @@ void main() {
           items: meal, overrideTotalCals: 450, overrideTotalProtein: 30);
       expect(_row(k)['total_calories'], 450);
       expect(_row(k)['total_protein'], 30);
+    });
+    test('a negative override falls back to the items too', () async {
+      final k = await _log(
+          items: meal, overrideTotalCals: -50, overrideTotalProtein: -5);
+      expect(_row(k)['total_calories'], 300);
+      expect(_row(k)['total_protein'], 20);
     });
     test('items all 0 with override 0 stays 0', () async {
       final k = await _log(items: const [

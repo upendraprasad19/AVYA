@@ -108,8 +108,15 @@ class ConversationalLogHandler {
     final kg = (data['weight_kg'] as num?)?.toDouble();
     if (kg == null || kg < 20 || kg > 300) return false;
     await ref.read(weightLogNotifierProvider.notifier).logWeight(kg);
-    ref.invalidate(weightHistoryProvider);
-    ref.invalidate(todayWeightLoggedProvider);
+    // A card unmounted during the save disposes this WidgetRef; a stored
+    // weight must not turn into a failure (and a re-save) because the
+    // refresh threw (OI-493 Landing B B-pass, the _logFood rule).
+    try {
+      ref.invalidate(weightHistoryProvider);
+      ref.invalidate(todayWeightLoggedProvider);
+    } catch (e) {
+      debugPrint('[ConversationalLogHandler] weight refresh skipped: $e');
+    }
     return true;
   }
 

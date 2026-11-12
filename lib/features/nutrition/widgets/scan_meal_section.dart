@@ -445,6 +445,10 @@ class _ScanResultEditorState extends ConsumerState<_ScanResultEditor> {
     // remount (this widget's `_saving` starts fresh on one). The flight is
     // taken BEFORE `_saving` is set (the op sets it), so a skipped run leaves
     // the button usable.
+    // Captured before the await (a non-autoDispose provider): an editor
+    // unmounted during its save must still clear the scan, or a remounted
+    // editor would offer the same meal for a second save (B-pass seat A).
+    final scanNotifier = ref.read(scanMealProvider.notifier);
     final result = await SingleFlight.run<WriteResult>('scan', () {
       setState(() => _saving = true);
       return NutritionWriteService.instance.logMeal(
@@ -459,10 +463,10 @@ class _ScanResultEditorState extends ConsumerState<_ScanResultEditor> {
     // Null: this scan's first save is still running; it decides.
     if (result == null) return;
 
+    if (result.success) scanNotifier.clear();
     if (!mounted) return;
     final messenger = ScaffoldMessenger.of(context);
     if (result.success) {
-      ref.read(scanMealProvider.notifier).clear();
       messenger.showSnackBar(
         const SnackBar(
           content: Text('Meal saved ✓'),

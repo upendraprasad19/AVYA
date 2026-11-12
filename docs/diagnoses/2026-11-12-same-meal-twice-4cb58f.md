@@ -148,6 +148,23 @@ A scripted harness applied each mutant (exact-string replace, count asserted == 
 | M20 | scan sets `_saving` before taking the flight | scan_meal_section | new file (source pin) | 1 |
 | M21 | `restoreFoodLog` without the owner guard | nutrition_write_service | new file | 1 |
 
+After the B-pass (its mutation seat found six unpinned mirrors, all test gaps, none a defect), the tests were extended
+and a second batch run the same way, 12 of 12 red:
+
+| # | Mutant | File | Red |
+|---|---|---|---|
+| B1 | `while` -> `if` in `firstFreeLogKey` (a 4th serving overwrites the 3rd) | nutrition_write_service | 1 (R1 five servings) |
+| B2 | `restoreFoodLog` puts the raw map (stale `id` / `log_key`) | nutrition_write_service | 1 |
+| B3 | `restoreFoodLog` keeps the owner record (a second UNDO adds a copy) | nutrition_write_service | 1 |
+| B4a / B4b | owner record cap 1 / 17 | nutrition_write_service | 1 / 1 |
+| B5 | a negative override kept | nutrition_write_service | 1 |
+| B6 | restore target ignores the key shape | nutrition_write_service | 1 |
+| B7 | migrator newest first | nlog_key_migrator | 1 |
+| B8 | handler reuses ANY running save | conversational_log_handler | 1 (R6b) |
+| B9 | search tap key without the slot | search_mode_body | 2 |
+| B10 | scan clears only when mounted (B-pass seat A F1) | scan_meal_section | 1 |
+| B11 | weight refresh unguarded (seat A F6) | conversational_log_handler | 1 |
+
 Not mutated: the null half of the owner rule (`recorded != null && current != null`). A delete cannot run with no owner
 (the user boxes are closed), so `null == null` is not reachable through the public API; the null check is kept as
 defence in depth and the reachable case (signed in at delete, signed out at UNDO) is tested.
@@ -159,6 +176,11 @@ removed future, which is the future itself, so the first R6 run hung; a block bo
 - A second device restores two servings as ONE row with two items (one cloud row per slot); deleting that entry removes
   both servings on that device. Pinned by R9.
 - OI-281 (a fully deleted meal returns from the cloud at cold start) is unchanged.
+- When the cloud slot holds items this device lacks (another device logged to the same day and slot), the restore
+  (`_restoreNutritionLogs`, `sync_nutrition.dart:740-775`) replaces ALL of this device's rows for that slot with ONE
+  merged row of the multiset union: no item is lost, but separate entries (including occurrence rows) become one, and
+  a per-row total override is re-summed from item fields. Pre-existing for any two meals in one slot (one cloud row per
+  slot); B-pass seat A F3. Not reached while a single device logs.
 - `meals_today` lists two equal entries (they are two servings).
 - A tap after the first save completes logs again (F4).
 - Legacy `nlog_<ms>` rows (testers only) are re-keyed to the hashCode shape, not v5. (A run interrupted between a put
