@@ -685,12 +685,16 @@ class AiSnapshotBuilder {
 
   Map<String, dynamic> _getThisWeekWorkouts() {
     final workoutBox = _hive.workoutBox;
-    final now = istNow();
-    final weekStart = now.subtract(Duration(days: now.weekday - 1));
+    // OI-494 (diagnose 4f9b2e): day arithmetic on the WALL instant, the IST
+    // weekday from istDateOf, and istDateStr applied once. Feeding istNow()
+    // into istDateStr shifted twice: from 18:30 IST "today" was tomorrow.
+    final wall = nowWall();
+    final istWeekday = istDateOf(wall).weekday;
+    final weekStart = wall.subtract(Duration(days: istWeekday - 1));
     final weekEnd = weekStart.add(const Duration(days: 6));
     final weekStartStr = istDateStr(weekStart);
     final weekEndStr = istDateStr(weekEnd);
-    final todayStr = istDateStr(now);
+    final todayStr = istDateStr(wall);
 
     int completed = 0;
     int planned = 0;
@@ -751,7 +755,8 @@ class AiSnapshotBuilder {
     final result = <Map<String, dynamic>>[];
 
     for (int i = 0; i < days; i++) {
-      final d = istNow().subtract(Duration(days: i));
+      // OI-494: the wall instant; istDateStr applies the IST shift once.
+      final d = nowWall().subtract(Duration(days: i));
       final dateStr = istDateStr(d);
       final raw = healthBox.get('step_$dateStr');
       if (raw is Map) {

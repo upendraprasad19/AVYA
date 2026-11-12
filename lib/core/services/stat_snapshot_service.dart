@@ -314,7 +314,7 @@ class StatSnapshotService {
       final photos = (photoUrls ?? [])
           .map((u) => {
                 'url': u,
-                'taken_at': istNow().toIso8601String(),
+                'taken_at': nowWall().toUtc().toIso8601String(),
                 'angle': 'front',
               })
           .toList();

@@ -763,12 +763,12 @@ concepts:
         semantic: aggregated
         fields_read: [total_calories, date]
       - file: lib/features/nutrition/providers/nutrition_provider.dart
-        line_range: 1640-1699
+        line_range: 1658-1717
         method: WeeklyNutritionNotifier.build
         semantic: historical-series
         fields_read: [total_calories, total_protein, date, is_saved_meal]
       - file: lib/features/nutrition/providers/nutrition_provider.dart
-        line_range: 987-1021
+        line_range: 1096-1120
         method: FoodLogNotifier.deleteFoodLog (audit log capture)
         semantic: display-only
         fields_read: [total_calories, calories, food_name, name, meal_type, date]
@@ -914,7 +914,7 @@ concepts:
     reader_manifest_complete: true
     readers:
       - file: lib/features/nutrition/providers/nutrition_provider.dart
-        line_range: 987-1034
+        line_range: 1096-1133
         method: FoodLogNotifier.deleteFoodLog + restoreFoodLog
         semantic: pass-through
         fields_read: [via box.get(logId), Hive nlog_* full map]
@@ -924,7 +924,7 @@ concepts:
           to NutritionWriteService.restoreFoodLog. Same provider also
           delegates DeleteNutritionLogNotifier.delete to WriteService.deleteLog.
       - file: lib/features/nutrition/providers/nutrition_provider.dart
-        line_range: 1708-1723
+        line_range: 1726-1741
         method: DeleteNutritionLogNotifier.delete
         semantic: pass-through
         fields_read: [via NutritionWriteService.deleteLog(allowUndo: true)]
@@ -1365,7 +1365,7 @@ concepts:
     reader_manifest_complete: true
     readers:
       - file: lib/features/nutrition/providers/nutrition_provider.dart
-        line_range: 1580-1583
+        line_range: 1755-1758
         method: waterTargetProvider (Provider<int>)
         semantic: pass-through
         fields_read: [via WaterTargetService.instance.currentTargetMl()]
@@ -2036,12 +2036,12 @@ concepts:
         semantic: aggregated
         fields_read: [total_calories, total_protein, total_carbs, total_fat, total_fiber, date, is_saved_meal]
       - file: lib/features/nutrition/providers/nutrition_provider.dart
-        line_range: 280-340
+        line_range: 321-378
         method: DailyNutritionNotifier.build (per-slot bucketing)
         semantic: aggregated
         fields_read: [date, meal_type, is_saved_meal, items[]]
       - file: lib/features/nutrition/providers/nutrition_provider.dart
-        line_range: 1640-1699
+        line_range: 1658-1717
         method: WeeklyNutritionNotifier.build
         semantic: historical-series
         fields_read: [total_calories, total_protein, date, is_saved_meal]
@@ -2124,7 +2124,7 @@ concepts:
       food-search (custom foods appear alongside the bundled DB).
     writers:
       - file: lib/features/nutrition/providers/nutrition_provider.dart
-        line_range: 1249-1315
+        line_range: 1289-1355
         method: addCustomFood
         semantic: hive-write + immediate sync
         notes: |
@@ -2132,7 +2132,7 @@ concepts:
           + foodBox[<v5>], then unawaited(SyncService.instance.syncCustomItemsNow()).
     readers:
       - file: lib/features/nutrition/providers/nutrition_provider.dart
-        line_range: 1355-1356
+        line_range: 1358-1359
         method: customFoodProvider
         semantic: hive-read
         notes: |
@@ -4459,7 +4459,7 @@ concepts:
       the same key. Synced to water_logs cloud table with UNIQUE(user_id, date).
     writers:
       - file: lib/features/nutrition/providers/nutrition_provider.dart
-        line_range: 394-417
+        line_range: 422-445
         method: WaterIntakeNotifier.addWater + increment + decrement
         notes: Routes through HealthWriteService.setWaterMl (audit-2026-05-16 E.7).
       - file: lib/core/services/health_write_service.dart
@@ -4477,7 +4477,7 @@ concepts:
     reader_manifest_complete: true
     readers:
       - file: lib/features/nutrition/providers/nutrition_provider.dart
-        line_range: 382-421
+        line_range: 410-449
         method: WaterIntakeNotifier.build (waterIntakeProvider)
         semantic: latest
         fields_read: [healthBox['water_ml_<istToday>'] (raw int)]
@@ -4565,7 +4565,7 @@ concepts:
     sync_methods: [_syncWaterLogs]
     restore_methods: [_restoreWaterLogs]
     ist_sites:
-      - { file: lib/features/nutrition/providers/nutrition_provider.dart, line: 409, fn: WaterIntakeNotifier.build }
+      - { file: lib/features/nutrition/providers/nutrition_provider.dart, line: 412, fn: WaterIntakeNotifier.build }
       - { file: lib/core/services/health_write_service.dart, line: 336, fn: setWaterMl }
     telemetry:
       failure_op_types: [upsert_water_log]
@@ -4582,7 +4582,7 @@ concepts:
       Hive restore uses same hash key so cross-device restores don't duplicate.
     writers:
       - file: lib/features/nutrition/providers/nutrition_provider.dart
-        line_range: 1105-1178
+        line_range: 1205-1275
         method: SavedMealsNotifier.saveMealPreset + relogSavedMeal + deleteSavedMeal (delegators — relogSavedMeal no longer bumps times_used, a8e3f1)
       - file: lib/core/services/nutrition_write_service.dart
         line_range: 448-580
@@ -4604,7 +4604,7 @@ concepts:
       - { file: lib/features/auth/screens/restoring_screen.dart, reason: "checks SavedMealKeyMigrator flag (config.get('saved_meal_key_migration_v1')) — not a saved_meal_* row reader; diagnose b8d5c2" }
     readers:
       - file: lib/features/nutrition/providers/nutrition_provider.dart
-        line_range: 1070-1103
+        line_range: 1171-1202
         method: SavedMealsNotifier.build (savedMealsProvider)
         semantic: aggregated
         fields_read: [nutritionBox entries with is_saved_meal=true OR meal_*+is_template=true, times_used]
@@ -4617,7 +4617,7 @@ concepts:
         semantic: pass-through
         fields_read: [via savedMealsProvider — name, total_calories, items[], id, times_used]
       - file: lib/features/nutrition/providers/nutrition_provider.dart
-        line_range: 305-325
+        line_range: 321-378
         method: DailyNutritionNotifier.build (skip-filter)
         semantic: flag-check
         fields_read: [is_saved_meal]
@@ -4630,7 +4630,7 @@ concepts:
         semantic: flag-check
         fields_read: [is_saved_meal]
       - file: lib/features/nutrition/providers/nutrition_provider.dart
-        line_range: 1510-1514
+        line_range: 1675-1678
         method: WeeklyNutritionNotifier (skip is_saved_meal)
         semantic: flag-check
         fields_read: [is_saved_meal]
@@ -5266,7 +5266,7 @@ concepts:
         fields_read: [schedule_<date> presence]
         notes: feeds RankService._qualifies (MCPO, officer track).
       - file: lib/features/ai_coach/services/ai_snapshot_builder.dart
-        line_range: 1364-1396
+        line_range: 1369-1412
         method: _getPlanStatus
         semantic: pass-through
         notes: the coach prompt rule is a separate Edge Function change.
@@ -5488,7 +5488,7 @@ concepts:
         fields_read: [current_streak_weeks]
         notes: fires the streak-risk insight when weeks > 2.
       - file: lib/features/ai_coach/services/ai_snapshot_builder.dart
-        line_range: 62-140
+        line_range: 67-246
         method: buildAiContext
         semantic: pass-through
         fields_read: [current_streak_weeks]
@@ -7119,7 +7119,7 @@ concepts:
         semantic: pass-through
         fields_read: []
       - file: lib/features/nutrition/providers/nutrition_provider.dart
-        line_range: 980-993
+        line_range: 981-995
         method: "AiBreakdownNotifier.saveMeal catch block"
         semantic: pass-through
         fields_read: []
@@ -7847,7 +7847,7 @@ concepts:
           legacy list — see sleep_logs concept dual-key hazard). Save
           path delegates to HealthWriteService.logSleep at line 502.
       - file: lib/features/nutrition/providers/nutrition_provider.dart
-        line_range: 380-500
+        line_range: 410-536
         method: WaterIntakeNotifier + UrineColorNotifier + HydrationSaveNotifier
         semantic: latest
         fields_read: [water_ml, urine_color, hydration]
@@ -16149,7 +16149,7 @@ concepts:
         fields_read: [coach_extraction_locked_fields]
         notes: the only reader of the lock list itself
       - file: lib/features/ai_coach/services/ai_snapshot_builder.dart
-        line_range: 1023-1032
+        line_range: 1029-1038
         method: _getCoachMemoryForContext
         semantic: pass-through
         fields_read: [locked_field_conflicts]
