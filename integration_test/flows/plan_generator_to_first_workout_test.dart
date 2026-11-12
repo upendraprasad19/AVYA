@@ -37,7 +37,7 @@ void main() {
         () {
       // Unit 1B-F deleted the 5-attempt cascade (and the attempt3 / universal-pool
       // diagnostics this scaffold named); core_list_pool_gate_test.dart holds the
-      // no-empty-day zero over the 998 golden personas. Target here: the same on device.
+      // no-empty-day zero over the 1,010 golden personas. Target here: the same on device.
     }, skip: 'Phase 7 scaffold — needs onboarding fixture user.');
 
     test('T4 — Start Workout opens correct logging_type per exercise', () {

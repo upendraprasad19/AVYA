@@ -5,7 +5,8 @@
 // Per run (the floor sweep's own `scan` and `expectSafe`): no empty day, no unsafe / unperformable / unresolved /
 // duplicate pick, no retired, skill or olympic id, none of Ruling 12's 14 jump rows for a hip-injured run. Per test: the
 // thin (1-2 exercises) and one-exercise day counts over weeks 1-2 are EXACT ratchets recorded on the final tree (a rise is
-// a regression, a fall means the number here is stale), and the run count equals the fixture's.
+// a regression, a fall means the number here is stale), and the run count equals the fixture's. The ratchet is a NET
+// count per tier: a run that thins while another fills stays green (B-pass seat C); the per-run zeros above are exact.
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
@@ -56,6 +57,8 @@ void defineR6RemovedRunsTests(
     expect(all.length, 2637, reason: 'the whole fixture');
     expect(byTier, runCounts);
     expect(ceilings.keys.toSet(), runCounts.keys.toSet());
+    // Every counted tier is one the per-tier tests below run (B-pass seat C): a typo would be counted, never run.
+    expect(kSweepTiers.toSet().containsAll(runCounts.keys), isTrue, reason: '${runCounts.keys} vs $kSweepTiers');
   });
   for (final tier in kSweepTiers) {
     if (!runCounts.containsKey(tier)) continue;
@@ -82,7 +85,7 @@ void defineR6RemovedRunsTests(
           pins: pins,
           exclusions: r.block == 'pairs9_exclall' ? excludeAll : const [],
         );
-        h.scan(t, p, r.injuries, r.label, r.days);
+        h.scan(t, p, r.injuries, r.label, r.days, exclusions: r.block == 'pairs9_exclall' ? excludeAll : const []);
       }
       h.report('$domain $goal $tier', t, sw);
       expect(t.runs, runCounts[tier]);

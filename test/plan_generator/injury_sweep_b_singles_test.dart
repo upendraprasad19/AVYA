@@ -45,7 +45,7 @@ void main() {
   });
 
   // B-pass finding (reviewer B, 2026-10-26): the pin above is on the constants, and nothing stopped a block file from
-  // dropping its own `for (final tier in kSweepTiers)` loop or changing its day list. This reads the five files (comments
+  // dropping its own `for (final tier in kSweepTiers)` loop or changing its day list. This reads the six files (comments
   // stripped) and pins each block's loop and call, so the shared-loop assumption is checked in each file, not assumed.
   test('every block file loops all of kSweepTiers exactly once and runs its own block with its own day list', () {
     // Patterns are regexes with every bracket escaped, so this file (which holds them as text) cannot match itself.
@@ -55,6 +55,8 @@ void main() {
       'injury_sweep_a_pairs_test.dart': RegExp(r'h\.runPairs\(tier, const \[3, 5\]\)'),
       'injury_sweep_c_pairs46_test.dart': RegExp(r'h\.runPairs\(tier, const \[4, 6\]\)'),
       'injury_sweep_d_repeat_test.dart': RegExp(r'h\.runRepeat\(tier, const \[3, 4, 5, 6\]\)'),
+      // Unit 1B-F (Ruling 8, d23), block 6 (B-pass seat C): its per-tier run count cannot see a lost tier.
+      'injury_sweep_f_repeat_pairs30_test.dart': RegExp(r'h\.runRepeatPairs\(tier, minutes: 30\)'),
     };
     for (final e in blocks.entries) {
       final text = File('test/plan_generator/${e.key}')

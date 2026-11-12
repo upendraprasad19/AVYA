@@ -172,7 +172,7 @@ class SeedService {
   //   (library_seed_v24_upgrade_behavioral_test.dart).
   //   v25 (Unit 1B-F, Ruling 12, founder d19, docs/plans/2026-11-10-generator-1bf-flip.md): the 14 lower-body jump
   //   rows (E063, E065, E066, E193, E202 through the importer's injury-tag record; G1473, G1472, G0053, G0371, G3219,
-  //   G3361, G3222, G1201, G3656 through the injury table) gain `hip` in injury_contraindications, so a hip-injured
+  //   G3361, G3222, G1201 through the injury table, G3656 set by hand in it) gain `hip` in injury_contraindications, so a hip-injured
   //   user is never handed a row that lands from flight. Bundle-only (no cloud column); putAll rewrites the 14 by id.
   //   Without this bump an existing install keeps them untagged (library_seed_v25_upgrade_behavioral_test.dart).
   static const int _exerciseLibraryVersion = 25;

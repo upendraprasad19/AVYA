@@ -6925,6 +6925,20 @@ Found by the sync-storm-first-sweep batch while measuring its Day-0 web check (l
 
 **Done when.** Plan reviewed twice; the allocator keeps every day at 3 or more exercises (or says why a day cannot); the weekly-top invariant is restated for the exception; `kThinCeilings` for days under 3 drops to 0 (or to a named residue); mutants prove it. Blast radius: `platform` (plan_engine), tier L.
 
+**Measured at the Unit 1B-F flip (2026-11-12, `generator-step1-1bf`; the core-list pool is the only picker).** The 15-pair injured grid (phases 1-3 plus the pinned repeat, weeks 1-2, 103,680 day-weeks per session length), live = main's OFF world before the flip, flip = the final tree's plan engine (the B-pass allocator change, a 1e-6 tolerance and a stats counter, moved no plan in the 2,304-plan audit or the golden):
+
+| day-weeks | 30 min live -> flip | 45 min live -> flip | 60 min live -> flip |
+|---|---|---|---|
+| empty | 0 -> 0 | 0 -> 0 | 0 -> 0 |
+| thin (1-2 exercises) | 427 -> 520 | 341 -> 344 | 341 -> 352 |
+| one-exercise | 8 -> 20 | 8 -> 20 | 8 -> 20 |
+| thin phase 1 / 2 / 3 / repeat | 70/70/20/267 -> 70/70/44/336 | 70/70/20/181 -> 70/70/44/160 | 70/70/20/181 -> 70/70/44/168 |
+| thin bodyweight / home / basic / full | 109/137/109/72 -> 62/189/182/87 | 66/104/103/68 -> 26/113/128/77 | 66/104/103/68 -> 26/113/134/79 |
+| one-exercise bodyweight / home / basic / full | 8/0/0/0 -> 8/6/6/0 | 8/0/0/0 -> 8/6/6/0 | 8/0/0/0 -> 8/6/6/0 |
+| hip-pair day-weeks with a jump row | 1,529 -> 0 | 1,321 -> 0 | 1,318 -> 0 |
+
+The flip equals prototype H3 and main's pre-flip ON world on every count above (30 min: 292 lines differ from H3, all Ruling 5c's timed-hold evictions on 30-minute days, no count moves; 45 min: identical to H3). The whole injured grid on the final tree (46,512 runs, 418,608 day-weeks, nine blocks): 0 empty, 0 unsafe or unperformable, 0 hip jump rows, 2,286 thin day-weeks and 94 one-exercise days, most in `quads_all` (basic gym 476 thin / 24 one, full gym 312, home 194 / 12) and `triples_eq` (basic 316 / 16, full 208, home 182 / 12). The CI hard test's ratchets (r9 284 thin / 16 one-exercise; the d17 extension, all nine injuries on bodyweight, 182 / 6) and `kThinCeilings` hold these as ceilings until this item's floor lands (founder d16 / d23: ship the flip, OI-452 next).
+
 ## OI-453 — A repeat phase keeps its exercise list when the user's minutes go up: keep pinned compounds, spend the spare time on extra sets then appended accessories
 
 - **Status**: OPEN

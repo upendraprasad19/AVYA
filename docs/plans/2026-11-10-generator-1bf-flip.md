@@ -473,7 +473,8 @@ measures it and pins it with a behavioral test; if the measured day is not a cor
 mechanism before any code for it. Measured before code (round 7, no R6, the 15-pair grid; prototypes H and J agree here): every bodyweight shoulder + wrist
 Push-type day (Push, Push + Core, Upper Push, Push B) is core rows only, e.g. Plank, Dead Bug, Hollow Body Hold.
 
-**Ruling 7, tests and mirrors.** Every test in the inventory's sections 2.1 to 2.3 is handled in Task 2; the files
+**Ruling 7, tests and mirrors.** (Line numbers in this ruling are the pre-flip tree's, `ea37ed59`; the final tree's are in
+the registry and the diagnose doc.) Every test in the inventory's sections 2.1 to 2.3 is handled in Task 2; the files
 that pin the OLD path get this disposition (protection, then its home after the flip):
 
 | file | protection | after the flip |
@@ -1003,8 +1004,10 @@ commit does NOT copy the overlay although B1 Ruling 4 said it would (Ruling 9).
 
 ## 8. Diagnose
 
-`docs/diagnoses/2026-11-10-...` for OI-489 (Ruling 5): writer `SessionSetAllocator._variant` lines 220-250, reader
-pass A, contract test `test/contracts/allocator_timed_row_eviction_behavioral_test.dart`, SoT registry concept.
+`docs/diagnoses/2026-11-12-generator-1bf-timed-hold-clock-39eb2a.md` for OI-489 (Ruling 5), Ruling 5c and Ruling 12:
+writer `SessionSetAllocator._variant` (step 1, the holds' time; `evictFor`), reader pass A and the empty-day guard,
+contract test `test/contracts/allocator_timed_hold_eviction_behavioral_test.dart` (the name the build used), SoT
+registry concept `session_set_budget`.
 
 ## 9. Review log
 
@@ -1398,6 +1401,13 @@ doc (`39eb2a`) and the closure:
   The focus grid differs from H3's dump in 70 of 103,680 lines, all in the same 5 plan keys (closure `FOCUS_GRID`, both
   sha256). The golden: every one of the 998 keys equals main's pre-flip ON world (Rulings 5, 5c and 12 change none) plus
   the 12 exclude-everything keys.
+- Task 5, injured grids (closure `INJURED_GRID`, tables on OI-452): the 15-pair grid at 30 / 45 / 60 minutes holds 0
+  empty days, thin 520 / 344 / 352 and one-exercise 20 at each (live 427 / 341 / 341 and 8), equal to H3 and main ON on
+  every count, and no hip pair gets a jump row (live 1,529 / 1,321 / 1,318). The nine-block grid (46,512 runs): 0 empty,
+  0 unsafe, 0 hip jump rows; thin 2,286, one-exercise 94, OI-452's.
+- B-pass (`docs/reviews/generator-step1-1bf-bpass.md`): 0 P0 / P1, 9 P2, 11 P3, each fixed or answered; the allocator
+  change (guard (c)'s 1e-6 tolerance in one helper, `rowsSeen` on a copied B day) moves no plan: the 2,304-plan audit
+  re-run is byte-identical and the golden unchanged.
 
 ## 10. Founder decisions (asked once each, 2026-11-10 and 2026-11-11; d16 asked twice, d17 and d23 asked with an explanation, d19-d21 asked together)
 

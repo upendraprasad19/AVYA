@@ -114,6 +114,10 @@ findings:
     blocker: "OI-452 (the 3-exercise day floor; its own plan next, founder d16 'Ship, OI-452 next' and d23)."
     reopen_when: "OI-452's plan lands."
     notes: "Recorded ratchets: kThinCeilings (pairs 20 / 30 / 20 thin and 2 / 2 / 0 one-exercise; pairs46 and repeat bodyweight 0; f_repeat_pairs30 60/8, 120/2, 94/2, 27/0); the hard test r9 284 thin / 16 one-exercise, ext 182 / 6 (all 9 injuries on bodyweight, d17). The 15-pair grid tables at 30 / 45 / 60 minutes are appended to OI-452."
+  - id: INJURED_GRID
+    title: "Injured grid on the final tree: the 15-pair grid at 30 / 45 / 60 minutes against live, H3 and main ON, and the nine-block grid"
+    terminal_state: verified_clean
+    evidence: "15-pair grid (103,680 day-weeks per length; zz probes in scratch trees at f86dce17's plan engine, sha256 m30 ef57d9d10e1def49..., m45 a03ef5ed6b5429b6..., m60 4bdc830d8a4687cd...): 0 empty at every length; thin 427 -> 520 / 341 -> 344 / 341 -> 352 and one-exercise 8 -> 20 at each, equal to H3 and main ON on every count (m30 292 lines differ from H3, all Ruling 5c's hold evictions; m45 identical); hip-pair day-weeks with a jump row 1,529 / 1,321 / 1,318 -> 0. Nine-block grid (46,512 runs, 418,608 day-weeks, injured_grid_dump sha256 3af07f41...): 0 empty, 0 unsafe or unperformable, 0 hip jump rows, 0 unknown names; thin 2,286, one-exercise 94 (OI-452's, INJURED_THIN_DAYS). The B-pass allocator change moved no plan: the 2,304-plan audit re-run is byte-identical (7c49ba92...) and the golden unchanged. Tables on OI-452."
   - id: COMMUNITY_ROWS
     title: "Approved community rows (source community, no core_levels) leave generation with the cascade"
     terminal_state: closed_in_commit
@@ -144,5 +148,10 @@ findings:
     terminal_state: closed_in_commit
     commit: generator-step1-1bf@branch
     verification: "All 998 previous keys changed against the committed live-world hashes and every one equals main's pre-flip ON world, prototype H3's and the flip + 5c snapshot (Rulings 5, 5c and 12 change no golden key); 12 exclude-everything keys added; record label 'Unit 1B-F (the core-list pool the only picker, seed v25)', 1,010 personas."
+  - id: BPASS
+    title: "B-pass (4 Sonnet seats on f86dce17): 0 P0 / P1, 9 P2, 11 P3; every one fixed or answered (docs/reviews/generator-step1-1bf-bpass.md)"
+    terminal_state: closed_in_commit
+    commit: generator-step1-1bf@branch
+    verification: "Code / test fixes each mutated red: guard (c)'s 1e-6 tolerance through fitsAfterEviction (tolerance removed; pass A's exact re-check), rowsSeen on a copied B day (counter dropped), the hip warm-up test (Jumping Jacks without hip), the sixth sweep block in the block-file guard (minutes 45), the R6 scan reading the run's exclusions (generator not excluded). The golden, the session-budget gate, the OI-489 pins and the 2,304-plan audit re-run on the fixed tree."
 
-closed_count: 27
+closed_count: 29

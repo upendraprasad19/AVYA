@@ -117,7 +117,10 @@ void main() {
     await _putV24Box(hive);
     await _markSeeded(hive, 25);
     await SeedService.instance.seedIfNeeded();
-    expect(_asJson(hive.exerciseBox.get('E193'))['injury_contraindications'], isNot(contains('hip')));
+    // Every one of the 14 rows keeps its v24 tags (B-pass seat B: one row alone could not see a per-row rewrite).
+    for (final id in _hipIds) {
+      expect(_asJson(hive.exerciseBox.get(id))['injury_contraindications'], isNot(contains('hip')), reason: id);
+    }
     expect(hive.configBox.get('exercise_library_version') as int, 25);
   });
 }

@@ -131,6 +131,17 @@ void main() {
         reason: 'no knee-loading warmup/cooldown move for a knee injury');
   });
 
+  // Unit 1B-F, Ruling 12 (founder d19, seed v25): Jumping Jacks and Jump Rope land from flight, so a hip injury drops
+  // them like the library rows E202 / E063 (warmup_library_injury_mirror_test pins the map against the library).
+  test('hip injury DROPS Jumping Jacks and Jump Rope (Ruling 12)', () {
+    const jumpMoves = {'Jumping Jacks', 'Jump Rope'};
+    expect(warmupCooldownNames(gen(injuries: const [])).intersection(jumpMoves), isNotEmpty,
+        reason: 'non-vacuity: the uninjured plan must hand out a jump warm-up');
+    final names = warmupCooldownNames(gen(injuries: const ['hip']));
+    expect(names.intersection(jumpMoves), isEmpty, reason: 'no jump warm-up for a hip injury');
+    expect(names, isNotEmpty, reason: 'the warm-up / cool-down floor still holds for a hip injury');
+  });
+
   test('irrelevant injury (wrist) leaves knee/leg moves untouched', () {
     final names = warmupCooldownNames(gen(injuries: const ['wrist']));
     // A wrist injury must not drop leg/knee moves.

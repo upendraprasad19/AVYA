@@ -7,9 +7,10 @@
 // files). Nothing was removed from the sweep: every injury x tier x goal x level x day-count x phase run still happens, with
 // the same gates (the tier loop moved out of the run functions into the tests, so the ORDER of the runs differs, the set does
 // not). A tier dropped from [kSweepTiers], or a block file that dropped its own tier loop, would silently lose a quarter of the
-// runs: injury_sweep_b_singles_test.dart pins the lists and reads all five files for the loop and the call.
+// runs: injury_sweep_b_singles_test.dart pins the lists and reads every block file (six since Unit 1B-F added
+// f_repeat_pairs30) for the loop and the call.
 //
-// The REAL PlanGenerator.instance.generateV4, flag OFF (the path users get). The tag lookup reads
+// The REAL PlanGenerator.instance.generateV4 (the core-list pool, the only picker since Unit 1B-F). The tag lookup reads
 // assets/data/exercise_library.json, the same file the generator is seeded from.
 //
 // GATED in every block: no unsafe main pick, no unsafe warm-up / cool-down pick, no pick whose name is not a library row
@@ -165,12 +166,15 @@ class SweepHarness {
 
   /// [dayCount] is the training days a week the run asked for: a plan week that has more or fewer days than that is
   /// counted, so a day that never appears (neither empty nor thin, because it is not there) cannot hide.
-  void scan(SweepTally t, Phase p, List<String> injuries, String label, int dayCount) {
+  /// [exclusions]: the run's equipment exclusions (Unit 1B-F, B-pass seat C), so `unperformable` checks the run's own
+  /// capability and an excluded item that leaks into a pick is caught (the generator floor-sanitizes them the same way).
+  void scan(SweepTally t, Phase p, List<String> injuries, String label, int dayCount,
+      {List<String> exclusions = const []}) {
     t.runs++;
     // The label is `<injuries>|<tier>|...`; the capability set is what the
     // generator itself resolves for that tier with no owned items and no exclusions.
     final capability =
-        EquipmentVocab.effectiveItems(label.split('|')[1], null, null);
+        EquipmentVocab.effectiveItems(label.split('|')[1], null, exclusions);
     for (final wk in p.weekPlans.take(2)) {
       if (wk.workoutDays.length != dayCount) {
         t.wrongDayCount++;

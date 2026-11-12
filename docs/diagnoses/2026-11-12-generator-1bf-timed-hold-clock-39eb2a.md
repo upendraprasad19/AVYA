@@ -39,7 +39,8 @@ writers:
 readers:
   - { file: lib/shared/repositories/plan_engine/session_set_allocator.dart, method_or_widget: "pass A: refuses a slot that does not fit the clock; with Ruling 5 calls evictFor when the slot brings the week a first credit", line: 435 }
   - { file: lib/shared/repositories/plan_engine/session_set_allocator.dart, method_or_widget: "the empty-day guard: forces the lead; with Ruling 5c calls evictFor(d, pick.rank, ...) first", line: 481 }
-  - { file: lib/shared/repositories/plan_engine/core_list_selector.dart, method_or_widget: "rankedPool hard filter (injury_contraindications), read through _pickCoreList / _selectCandidate", line: 322 }
+  - { file: lib/shared/repositories/plan_engine/core_list_selector.dart, method_or_widget: "rankedPool hard filter (injury_contraindications, isContraindicated), read through _pickCoreList / _selectCandidate", line: 265 }
+  - { file: lib/shared/repositories/plan_engine/core_list_selector.dart, method_or_widget: "rankedPool keeps a jump-only pool rather than empty the slot (Ruling 12's reader before the hip tags)", line: 322 }
 hive_key_prefix: "schedule_<date>.exercises[] (workoutBox); plan_json.workouts[].exercises (the plan blob); exerciseBox rows (seed v25)"
 hive_key_formula: "PlannedExercise.sets -> WorkoutDay.toMap exercises[].sets; exerciseBox[id].injury_contraindications"
 sync_methods:
@@ -141,6 +142,16 @@ E202.
   the ids `P2F` < `P2NF` already gave the expected order; the ids now make key order the exact reverse of the expected
   order, with a precondition assert, and the mutant is red.
 
+- B-pass fixes (docs/reviews/generator-step1-1bf-bpass.md): guard (c)'s tolerance through
+  `SessionSetAllocator.fitsAfterEviction` (mutants: tolerance removed, red; pass A's re-check back to an exact `<=`,
+  red); `rowsSeen` counts a copied B day's evicted holds (counter dropped, red); the hip warm-up test (Jumping Jacks
+  without `hip`, red); the sixth sweep block in the block-file guard (`minutes: 45`, red); the R6 scan reads the run's
+  exclusions (the generator not given them while the scan is: red, "Nordic Curl needs [foot anchor]").
+- Task 3 / 4 / 5 harness mutants: the CI hard test (a retired row injected, another tier's ratchet, a forced empty
+  day: red; the empty-day assertion removed with a forced empty day: green, so that assertion is the only guard); the
+  gate's exclude-everything empty-day zero (one persona forced empty: red); `iso_first`'s built type (ignored: red;
+  `!= 'isolation'`: red after a third-type case was added); Ruling 6's Push-day test (the top-up off: red).
+
 ## Measured on the final tree
 
 - 2,304-plan audit (no injuries) against live (main's OFF world), main ON and prototype H (`audit_1bq_d`, `audit_1bf_pH`):
@@ -157,3 +168,9 @@ E202.
 - Core-list gate (1,036 personas): green; report regenerated (`emergencyAnyLevel` 0 personas; the 576-run sweep 16
   runs, no retired / skill / olympic pick in its built lists).
 - CI hard test (2,637 runs): 0 empty, 0 flagged, 0 hip jump rows; thin / one-exercise r9 284 / 16, ext 182 / 6.
+- 15-pair injured grid (103,680 day-weeks per session length) against live: thin 427 -> 520 (30 min), 341 -> 344 (45),
+  341 -> 352 (60); one-exercise 8 -> 20 at each; 0 empty; hip-pair day-weeks with a jump row 1,529 / 1,321 / 1,318 -> 0;
+  every count equal to H3 and main ON (30 min: 292 lines differ from H3, all Ruling 5c's). Nine-block injured grid
+  (46,512 runs): 0 empty, 0 unsafe, 0 hip jump rows; thin 2,286, one-exercise 94 (OI-452, tables there).
+- After the B-pass fixes: the 2,304-plan audit is byte-identical to the run before them; golden, session-budget gate,
+  OI-489 pins, plateau rotation, sweep b and v25 tests green.

@@ -11,6 +11,8 @@
 // budget 1440 s, count floor 4; a compound lift ('M') at 2 sets costs 336 s, an isolation ('I') 256.8 s, a hold
 // ('B') at 3 sets and 60 s rest 324 s, at 4 sets 444 s. Each test states the time arithmetic it rests on, and the
 // costs are asserted once below so a change to the budget model reddens that test, not every fixture silently.
+import 'dart:io';
+
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:icanbefitter/shared/repositories/plan_engine/models.dart';
@@ -400,6 +402,10 @@ void main() {
       expect(names(out[0]), ['chest', 'bi', 'plank', 'plank']);
       expect(names(out[0], b: true), names(out[0]));
       expect(setsOf(out[0], b: true), setsOf(out[0]));
+      // rowsSeen is the selector's rows before any eviction in BOTH variants (B-pass seat A): B's copied day counts
+      // the plank A evicted.
+      expect(SessionSetAllocator.debugLastStats!['A']!.rowsSeen, [5]);
+      expect(SessionSetAllocator.debugLastStats!['B']!.rowsSeen, [5]);
     });
 
     test('a day with no starved slot is left exactly as the selector built it', () {
@@ -582,6 +588,30 @@ void main() {
         ]),
       ], minutes: 30, focus: {'Core'});
       expect(names(out2[0]), ['chest', 'bi', 'plank', 'calfplank']);
+    });
+  });
+
+  // Guard (c)'s tolerance (B-pass seat A, 2026-11-12): the eviction decision sums the freed seconds in its own order and
+  // the ledger subtracts each hold's cost one at a time, so at an exact boundary they can differ by an ulp. Both the
+  // decision and pass A's check after the evictions read `fitsAfterEviction`, so they cannot disagree.
+  group('guard (c): one comparison, with a 1e-6 tolerance', () {
+    test('an ulp over the boundary fits; a real overrun does not', () {
+      expect(0.1 + 0.2 > 0.3, isTrue, reason: 'precondition: the float sum lands an ulp over');
+      expect(SessionSetAllocator.fitsAfterEviction(0.1 + 0.2, 0.3), isTrue);
+      expect(SessionSetAllocator.fitsAfterEviction(300.0, 300.0), isTrue);
+      expect(SessionSetAllocator.fitsAfterEviction(300.0 + 5e-7, 300.0), isTrue);
+      expect(SessionSetAllocator.fitsAfterEviction(300.0 + 2e-6, 300.0), isFalse);
+      expect(SessionSetAllocator.fitsAfterEviction(301.0, 300.0), isFalse);
+    });
+    test('the decision, its final check and pass A\'s re-check all read it (presence: no allocator fixture reaches an ulp)', () {
+      final src = File('lib/shared/repositories/plan_engine/session_set_allocator.dart').readAsStringSync();
+      for (final site in const [
+        'if (fitsAfterEviction(need, ledger.secondsLeft(d) + freed)) break;',
+        'if (chosen.isEmpty || !fitsAfterEviction(need, ledger.secondsLeft(d) + freed)) return false;',
+        'fitsNow = fitsAfterEviction(seconds(s, k), ledger.secondsLeft(d));',
+      ]) {
+        expect(src.split(site).length - 1, 1, reason: site);
+      }
     });
   });
 }
