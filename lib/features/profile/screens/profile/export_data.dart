@@ -10,7 +10,6 @@ extension _ExportData on _ProfileScreenState {
       'exported_at': DateTime.now().toIso8601String(),
       'profile': Map<String, dynamic>.from(hive.userBox.get('profile') as Map? ?? {}),
       'workout_logs_count': hive.workoutBox.length,
-      'nutrition_logs_count': hive.nutritionBox.length,
       'health_logs_count': hive.healthBox.length,
     };
 
@@ -27,6 +26,9 @@ extension _ExportData on _ProfileScreenState {
       if (raw is Map) nutrition.add(Map<String, dynamic>.from(raw));
     }
     data['nutrition_logs'] = nutrition;
+    // The count of the rows exported, not the box length: the box also holds
+    // non-row keys (the `recent_deletes` audit list, OI-493).
+    data['nutrition_logs_count'] = nutrition.length;
 
     // Collect health logs
     final health = <Map<String, dynamic>>[];

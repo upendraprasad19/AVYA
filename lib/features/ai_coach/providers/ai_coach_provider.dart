@@ -22,6 +22,7 @@ import '../copy/coach_replies.dart';
 import '../copy/workout_draft_copy.dart';
 import '../repositories/ai_coach_repository.dart';
 import '../repositories/coach_interaction_repository.dart';
+import '../services/coach_meal_log.dart';
 import 'pending_tool_intents_provider.dart';
 import '../models/tool_intent.dart';
 
@@ -1438,6 +1439,10 @@ class PendingLogAction {
   bool isLogged;
   bool isDismissed;
 
+  /// When the card was created (OI-493): a food tag logs on this instant's
+  /// IST day, because its 5 s countdown can cross midnight.
+  final DateTime createdAt;
+
   PendingLogAction({
     required this.id,
     required this.type,
@@ -1445,7 +1450,8 @@ class PendingLogAction {
     required this.displayText,
     this.isLogged = false,
     this.isDismissed = false,
-  });
+    DateTime? createdAt,
+  }) : createdAt = createdAt ?? nowWall();
 }
 
 class PendingLogActionsNotifier extends Notifier<List<PendingLogAction>> {
@@ -1567,14 +1573,24 @@ class PendingLogActionsNotifier extends Notifier<List<PendingLogAction>> {
         );
 
       case 'log_food':
-        final name = data['food_name'] as String? ?? 'Food';
-        final meal = data['meal_type'] as String? ?? 'snacks';
-        final cap = meal.isEmpty ? 'Snacks' : meal[0].toUpperCase() + meal.substring(1);
+        // OI-493: the tag writes the coach's own estimate, so a tag with no
+        // usable calories shows no card (it used to save a food-database
+        // match or an invented 200 kcal). Counted, never silent.
+        final item = coachItemFromTag(data);
+        if (item == null) {
+          unawaited(ErrorTelemetry.logEvent(
+              'coach_food_tag_dropped_no_calories'));
+          return null;
+        }
+        final createdAt = nowWall();
+        final meal = resolveCoachMealSlot(data['meal_type'] as String?, createdAt);
+        final cap = meal[0].toUpperCase() + meal.substring(1);
         return PendingLogAction(
           id: id,
           type: LogActionType.food,
           data: data,
-          displayText: '$name — $cap',
+          displayText: '${item.name} — $cap',
+          createdAt: createdAt,
         );
 
       case 'log_sleep':

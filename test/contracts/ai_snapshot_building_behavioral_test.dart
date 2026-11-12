@@ -19,6 +19,7 @@
 import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
+import 'package:icanbefitter/core/utils/ist_date.dart';
 import 'package:icanbefitter/features/ai_coach/services/ai_snapshot_builder.dart';
 
 import '../helpers/hive_test_setup.dart';
@@ -34,11 +35,9 @@ void main() {
     await tearDownHiveForTests(tempDir);
   });
 
-  String todayStr() {
-    final now = DateTime.now();
-    return '${now.year}-${now.month.toString().padLeft(2, '0')}-'
-        '${now.day.toString().padLeft(2, '0')}';
-  }
+  // The IST date, as the writer stamps and _getMealsToday reads it (was the
+  // device-local date, wrong between 18:30 and 24:00 UTC).
+  String todayStr() => istTodayStr();
 
   test(
       'buildAiContext() meals_today includes today nlog_ rows with correct calorie total',
@@ -51,7 +50,10 @@ void main() {
       'id': 'nlog_breakfast_1',
       'date': today,
       'meal_type': 'breakfast',
-      'food_name': 'Oats',
+      // OI-493: the writer's shape: names live in items[], no top-level food_name.
+      'items': [
+        {'name': 'Oats'},
+      ],
       'total_calories': 150,
       'total_protein': 5,
       'total_carbs': 27,
@@ -61,7 +63,10 @@ void main() {
       'id': 'nlog_breakfast_2',
       'date': today,
       'meal_type': 'breakfast',
-      'food_name': 'Banana',
+      // OI-493: the writer's shape: names live in items[], no top-level food_name.
+      'items': [
+        {'name': 'Banana'},
+      ],
       'total_calories': 90,
       'total_protein': 1,
       'total_carbs': 23,
@@ -72,7 +77,10 @@ void main() {
       'id': 'nlog_lunch_1',
       'date': today,
       'meal_type': 'lunch',
-      'food_name': 'Chicken Breast',
+      // OI-493: the writer's shape: names live in items[], no top-level food_name.
+      'items': [
+        {'name': 'Chicken Breast'},
+      ],
       'total_calories': 165,
       'total_protein': 31,
       'total_carbs': 0,
@@ -123,7 +131,10 @@ void main() {
       'id': 'nlog_old',
       'date': '2020-01-01',
       'meal_type': 'dinner',
-      'food_name': 'Old food',
+      // OI-493: the writer's shape: names live in items[], no top-level food_name.
+      'items': [
+        {'name': 'Old food'},
+      ],
       'total_calories': 500,
       'total_protein': 20,
       'total_carbs': 60,

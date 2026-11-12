@@ -7091,6 +7091,8 @@ Residual of OI-199 and OI-471 after migration 172. Migration 172 makes `cleanup_
 
 Added 2026-11-11 (OI-494 review): the coach `logMeal` path in `lib/features/ai_coach/services/tool_dispatcher.dart` (the `DateTime.tryParse('<YYYY-MM-DD>')` passed as `date:`) parses the coach's date string as LOCAL midnight, so on a device east of IST (for example UTC+9) the meal lands on the previous IST day. It is one of the differences this unit must fix, with a behavioural test under a non-IST zone.
 
+Added 2026-11-12 (Landing A, branch `oi493-nutrition-parity`, diagnose ec6f6c): the unit was split under §4.12.1 (plan `docs/plans/oi493-nutrition-parity.md`). Landing A fixes differences 1-6, 9, 10, 12 and 14 (one coach meal writer `CoachMealLog.write`; day and slot from the reported instant, slot by the screen's clock rule; parsed items with fibre; the tag's own estimate; no AI-text unit; the server refuses a non-today date; six `food_name` readers read `items[]`, with a source guard). 11's `source` half is verified clean (no such cloud column). Landing B (`docs/plans/oi493b-duplicate-meals.md`: the same meal twice adds an entry, the zero-override fallback, concurrent dispatch) closes this OI with the closure ledger. Open after A merges: the `ai-proxy` deploy (founder go) and the device check after the next build.
+
 ## OI-495 — Unit 1B-F2: copy the core-list overlay labels (slot_focus / slot_pattern) into target_focus / movement_pattern, seed and cloud re-seed
 
 - **Status**: OPEN
@@ -7116,6 +7118,19 @@ Added 2026-11-11 (OI-494 review): the coach `logMeal` path in `lib/features/ai_c
 **Mechanism (measured with a temporary allocator print, `docs/plans/2026-11-10-generator-1bf-flip.md` section 4).** Writer: `SessionSetAllocator._variant` pass A (`session_set_allocator.dart`, `// 3. Pass A`): the count band, the clock refusal and Ruling 5's guards. Reader: the week's per-muscle sets of the periodized plan. Per cause (Triceps / Core / Biceps / Calves cells): the clock alone 128 / 60 / 0 / 18; a hold ranked ahead of the slot 160 / 64 / 20 / 0; guard (a) only-credit 20 / 8 / 18 / 0; the count band 0 / 0 / 78 / 0. None is OI-489's defect. It needs a weekly minimum per muscle that outranks a day's rank order: step 2's weekly floor.
 
 **Done when.** Step 2's weekly floor lands and the 2,304-plan audit shows 0 minor-muscle zero weeks the live twin (as recorded at the flip) did not have, or the founder accepts a stated residue. Owner: step 2 (d14). Blast radius `platform` (plan engine).
+
+## OI-498 — Laptop clone: sync main with GitHub and reinstall the git hooks (suite lock, PR #246)
+
+- **Status**: OPEN
+- **Blocked on**: the founder's laptop (only the founder can run it there; picked up next time the laptop is opened)
+- **Verified**: never
+- **Identified**: 2026-11-12 · filed via mint_oi.sh from branch `oi-laptop-hooks-resync`
+
+**What it is.** Git hooks are per-clone, read-only COPIES (`scripts/setup-hooks.sh`); a `git pull` updates the scripts but never the installed hooks. PR #246 (`837f62aa`, 2026-11-12) changed `scripts/pre-push.sh` and `scripts/pre-commit.sh` (the one-local-full-suite lock, `scripts/_suite_lock.sh`) and added `land_pr --ci-only` and `scripts/run_full_suite.sh`. The VPS clone was reinstalled the same day; the founder's laptop clone was not, so its hooks are the pre-#246 copies (they keep working, without the lock).
+
+**Do on the laptop (Git Bash, from the clone's MAIN folder, on `main`).** `git checkout main`, `git fetch origin main`, `git merge --ff-only origin/main`, then `sh scripts/setup-hooks.sh` (it refuses a tree behind or diverged from `origin/main`). A `Permission denied` on a hook file means a stale tree: update it and re-run, never chmod or delete a hook by hand. Expected there: no `flock` on Windows Git Bash / macOS, so the lock prints a WARNING and fails open; nothing blocks.
+
+**Done when.** On the laptop: `grep -c suite_lock_acquire .git/hooks/pre-push .git/hooks/pre-commit` prints a non-zero count for both, and `git log -1 --oneline` on `main` shows `837f62aa` or later. Blast radius `feature` (no code change; a per-clone install step).
 
 ## OI-499 — Delete the disable_loaded_wins kill switch and its golden fixture after the 1B-R device check
 

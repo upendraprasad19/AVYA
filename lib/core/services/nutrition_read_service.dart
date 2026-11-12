@@ -77,6 +77,21 @@ class NutritionReadService {
     return kFallbackMealName;
   }
 
+  /// [deriveMealDisplayName] cut to at most [maxRunes] runes (OI-493), for the
+  /// places a long multi-item name would be costly: the coach snapshot (rule 18
+  /// budget), the `recent_deletes` entry and a template's default name.
+  static String shortMealDisplayName(Map<String, dynamic> meal,
+          {String slot = '', int maxRunes = 80}) =>
+      cutToRunes(deriveMealDisplayName(meal, slot: slot), maxRunes);
+
+  /// [text] cut to at most [maxRunes] runes. Counting runes, not UTF-16 units,
+  /// never leaves a lone surrogate, which a jsonb column rejects.
+  static String cutToRunes(String text, int maxRunes) {
+    final runes = text.runes;
+    if (runes.length <= maxRunes) return text;
+    return String.fromCharCodes(runes.take(maxRunes));
+  }
+
   // ─────────────────────────────────────────────────────────────
   //  Macro summation primitives
   // ─────────────────────────────────────────────────────────────

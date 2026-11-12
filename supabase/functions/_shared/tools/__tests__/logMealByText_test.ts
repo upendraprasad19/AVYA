@@ -1,5 +1,12 @@
-import { assertEquals } from "https://deno.land/std@0.224.0/assert/mod.ts";
+import {
+  assert,
+  assertEquals,
+  assertStringIncludes,
+} from "https://deno.land/std@0.224.0/assert/mod.ts";
 import { logMealByTextTool } from "../nutrition/logMealByText.ts";
+import { zodToGeminiSchema } from "../zodToGemini.ts";
+import { istDateStr } from "../../ist_date.ts";
+import { FakeTime } from "https://deno.land/std@0.224.0/testing/time.ts";
 
 // Note: intentBuilder is async and calls Gemini via parseFoodText.
 // We don't exercise it here — schema + metadata coverage only.
@@ -15,7 +22,8 @@ Deno.test("logMealByText — schema accepts valid description only", () => {
 Deno.test("logMealByText — schema accepts valid description + date + mealType", () => {
   const result = logMealByTextTool.schema.safeParse({
     description: "paneer tikka 6 pieces with naan",
-    date: "2026-04-20",
+    // OI-493 Landing A: only today's IST date passes (was a fixed 2026-04-20).
+    date: istDateStr(),
     mealType: "lunch",
   });
   assertEquals(result.success, true);
@@ -87,4 +95,79 @@ Deno.test("logMealByText — metadata", () => {
 Deno.test("logMealByText — description present and non-empty", () => {
   assertEquals(typeof logMealByTextTool.description, "string");
   assertEquals(logMealByTextTool.description.length > 0, true);
+});
+
+// ---- OI-493 Landing A (founder F3, "today only") ------------------------
+// The app logs a coach meal on the IST day the intent was created and ignores
+// the payload date, so a non-today date is refused at the schema, with a
+// message the model reads back (tool-loop invalid_args) and can tell the user.
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+const TODAY_ONLY =
+  "Only today's meals can be logged. Ask the user to add an earlier meal from the Nutrition tab.";
+
+function refusalMessages(date: string): string[] {
+  const r = logMealByTextTool.schema.safeParse({
+    description: "dal chawal 2 katoris",
+    date,
+  });
+  assertEquals(r.success, false, `date=${date} must be refused`);
+  return r.success ? [] : r.error.issues.map((i) => i.message);
+}
+
+Deno.test("logMealByText — yesterday (IST) is refused with the today-only message", () => {
+  const yesterday = istDateStr(new Date(Date.now() - DAY_MS));
+  assertEquals(refusalMessages(yesterday), [TODAY_ONLY]);
+});
+
+Deno.test("logMealByText — tomorrow (IST) is refused with the today-only message", () => {
+  const tomorrow = istDateStr(new Date(Date.now() + DAY_MS));
+  assertEquals(refusalMessages(tomorrow), [TODAY_ONLY]);
+});
+
+Deno.test("logMealByText — today (IST) and an absent date are accepted", () => {
+  for (const args of [
+    { description: "dal chawal 2 katoris", date: istDateStr() },
+    { description: "dal chawal 2 katoris" },
+  ]) {
+    const r = logMealByTextTool.schema.safeParse(args);
+    assertEquals(r.success, true, JSON.stringify(args));
+  }
+});
+
+Deno.test("logMealByText — the model is told to omit date and mealType", () => {
+  // deno-lint-ignore no-explicit-any
+  const props = zodToGeminiSchema(logMealByTextTool.schema as any).properties!;
+  assertEquals(props.date.description, "Only today's meals can be logged; omit it.");
+  assertEquals(props.date.type, "STRING");
+  assertEquals(
+    props.mealType.description,
+    "Omit unless the user named the meal; the app picks it from the time of day.",
+  );
+  // The old "default to 'snacks'" promise is gone (the app infers the slot).
+  assert(!JSON.stringify(props).includes("snacks' if omitted"));
+  assertStringIncludes(logMealByTextTool.description, "log it to the user's nutrition");
+});
+
+Deno.test("logMealByText — a null date means today (zodToGemini marks it nullable)", () => {
+  const r = logMealByTextTool.schema.safeParse({
+    description: "dal chawal 2 katoris",
+    date: null,
+  });
+  assertEquals(r.success, true);
+});
+
+Deno.test("logMealByText — 'today' is the IST date, not the UTC date (01:30 IST)", () => {
+  // 2026-11-12T20:00Z is 01:30 IST on 2026-11-13.
+  const time = new FakeTime(new Date("2026-11-12T20:00:00Z"));
+  try {
+    const ok = logMealByTextTool.schema.safeParse({
+      description: "dal chawal 2 katoris",
+      date: "2026-11-13",
+    });
+    assertEquals(ok.success, true, "the IST date is today");
+    assertEquals(refusalMessages("2026-11-12"), [TODAY_ONLY], "the UTC date is yesterday in IST");
+  } finally {
+    time.restore();
+  }
 });

@@ -59,6 +59,9 @@ Shared helpers live under `_shared/`:
   `cron_telemetry_adoption_test.dart` enforces every cron-dispatched function uses it).
 - `_shared/tools/` — AI coach tool implementations (`logSet`, `logMealByText`,
   `logPR`, etc.). Imported via `from "../_shared/tools/..."` (parent dir — NOT `./_shared/`).
+  `logMealByText` refuses a `date` other than today's IST date (`.refine`, the message reaches the model as
+  `invalid_args`; the client logs on the intent's `createdAt` day and ignores the field) and `food_parser.ts`
+  `normaliseParsedItems` gives every item a finite `fiber_g` >= 0 (OI-493 Landing A).
 
 ## Deploy protocol
 

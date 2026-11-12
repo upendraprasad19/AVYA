@@ -221,24 +221,15 @@ class _RecentLogs extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final box = HiveService.instance.nutritionBox;
-    // Last 14 days, dedupe by food_name, top 8.
-    final cutoff = DateTime.now().subtract(const Duration(days: 14));
-    final entries = <String, Map<String, dynamic>>{};
+    final rows = <Map<String, dynamic>>[];
     for (final key in box.keys) {
       if (key is! String || !key.startsWith('nlog_')) continue;
       final raw = box.get(key);
-      if (raw is! Map) continue;
-      final createdAtStr =
-          (raw['created_at'] ?? raw['logged_at']) as String?;
-      if (createdAtStr == null) continue;
-      final createdAt = DateTime.tryParse(createdAtStr);
-      if (createdAt == null || createdAt.isBefore(cutoff)) continue;
-      final name = (raw['food_name'] as String?) ?? '';
-      if (name.isEmpty || entries.containsKey(name)) continue;
-      entries[name] = Map<String, dynamic>.from(raw);
-      if (entries.length >= 8) break;
+      if (raw is Map) rows.add(Map<String, dynamic>.from(raw));
     }
-    if (entries.isEmpty) {
+    final list = recentLoggedItems(rows,
+        cutoff: DateTime.now().subtract(const Duration(days: 14)));
+    if (list.isEmpty) {
       return Center(
         child: Padding(
           padding: const EdgeInsets.symmetric(vertical: 24),
@@ -250,7 +241,6 @@ class _RecentLogs extends ConsumerWidget {
         ),
       );
     }
-    final list = entries.values.toList();
     return ListView.separated(
       itemCount: list.length,
       separatorBuilder: (_, _) =>
@@ -260,10 +250,9 @@ class _RecentLogs extends ConsumerWidget {
         return ListTile(
           dense: true,
           contentPadding: EdgeInsets.zero,
-          title: Text(item['food_name'] as String? ?? 'Unknown',
-              style: AppTypography.body),
+          title: Text(item.name, style: AppTypography.body),
           subtitle: Text(
-            '${(item['total_calories'] as num?)?.toInt() ?? 0} kcal',
+            '${item.calories.round()} kcal',
             style: AppTypography.bodySm
                 .copyWith(color: AppColors.textDim),
           ),
@@ -277,29 +266,71 @@ class _RecentLogs extends ConsumerWidget {
   }
 }
 
-/// Re-log a previous nutrition_log row.
-///
-/// T-12 / audit-2026-05-11 — routed through
-/// `NutritionWriteService.logMeal` so the new `nlog_*` row inherits
-/// the canonical field shape (IST date, deterministic key, `items[]`
-/// array). Pre-fix this wrote a flat-totals row directly to Hive with
-/// no `items[]`, so `_syncNutritionLogs` cloud projection wrote 0
-/// rows to `nutrition_log_items`. Same C-12 sibling bug class.
-///
-/// The "recent foods" surface only carries flat totals, so we
-/// synthesise a single `FoodItem` from the source name + quantity +
-/// macros — same approach used by `FoodLogNotifier.logFood`.
-Future<void> _relogFromHistory(
-    WidgetRef ref, Map<String, dynamic> source) async {
-  final item = FoodItem(
-    name: (source['food_name'] ?? 'Unknown') as String,
-    quantityG: (source['quantity_g'] as num?)?.toDouble() ?? 100.0,
-    calories: (source['total_calories'] as num?)?.toDouble() ?? 0,
-    protein: (source['total_protein'] as num?)?.toDouble() ?? 0,
-    carbs: (source['total_carbs'] as num?)?.toDouble() ?? 0,
-    fat: (source['total_fat'] as num?)?.toDouble() ?? 0,
-    fiber: (source['total_fiber'] as num?)?.toDouble() ?? 0,
-  );
+/// The Search tab's "recent" list (OI-493): every item of the `nlog_` rows
+/// logged since [cutoff], newest first, one entry per lowercased name, at most
+/// [limit]. Names live in `items[]` (the writer never writes a top-level
+/// `food_name`, which this list used to read, so it was always empty). An item
+/// that does not parse or has no name is skipped, so one bad item never blanks
+/// the list; a legacy flat row without `items[]` adds nothing.
+@visibleForTesting
+List<FoodItem> recentLoggedItems(Iterable<Map<String, dynamic>> rows,
+    {required DateTime cutoff, int limit = 8}) {
+  final dated = <(DateTime, int, FoodItem)>[];
+  var seq = 0;
+  for (final row in rows) {
+    final stamp = row['created_at'] ?? row['logged_at'];
+    final at = stamp is String ? DateTime.tryParse(stamp) : null;
+    if (at == null || at.isBefore(cutoff)) continue;
+    final items = row['items'];
+    if (items is! List) continue;
+    for (final e in items) {
+      if (e is! Map) continue;
+      try {
+        final item = FoodItem.fromMap(Map<String, dynamic>.from(e));
+        if (item.name.trim().isEmpty) continue;
+        dated.add((at, seq++, item));
+      } catch (_) {
+        continue;
+      }
+    }
+  }
+  dated.sort((x, y) {
+    final byTime = y.$1.compareTo(x.$1);
+    return byTime != 0 ? byTime : x.$2.compareTo(y.$2);
+  });
+  final seen = <String>{};
+  final out = <FoodItem>[];
+  for (final (_, _, item) in dated) {
+    if (!seen.add(item.name.trim().toLowerCase())) continue;
+    out.add(item);
+    if (out.length >= limit) break;
+  }
+  return out;
+}
+
+/// Re-log an item from the "recent" list exactly as it was stored (name,
+/// grams, macros, fibre; no rescale), so a coach item at the 100 g sentinel and
+/// a screen item with real grams each log as first written. A 0 g item is
+/// relogged at the 100 g sentinel. Routed through `NutritionWriteService.logMeal`
+/// (T-12) so the new row has the canonical shape.
+/// The item a tap on a recent entry logs again: the stored item as it is,
+/// except a 0 g item (an old coach write) takes the 100 g sentinel the other
+/// AI writers use, so the copy shows a portion and edits like them.
+@visibleForTesting
+FoodItem relogItem(FoodItem stored) => stored.quantityG > 0
+    ? stored
+    : FoodItem(
+        name: stored.name,
+        quantityG: 100.0,
+        calories: stored.calories,
+        protein: stored.protein,
+        carbs: stored.carbs,
+        fat: stored.fat,
+        fiber: stored.fiber,
+      );
+
+Future<void> _relogFromHistory(WidgetRef ref, FoodItem stored) async {
+  final item = relogItem(stored);
   await NutritionWriteService.instance.logMeal(
     date: DateTime.now(),
     mealType: ref.read(mealTypeProvider),

@@ -22,11 +22,13 @@ void main() {
     );
   });
 
-  test('aiCoachTool maps to featureAiTextLogPro', () {
+  // OI-493 Landing A: a coach meal spends no AI-text unit (the server never
+  // counts the coach parse).
+  test('aiCoachTool maps to no counter', () {
     expect(
       NutritionWriteService.counterFeatureForSource(
           NutritionWriteSource.aiCoachTool),
-      AppConstants.featureAiTextLogPro,
+      isNull,
     );
   });
 
