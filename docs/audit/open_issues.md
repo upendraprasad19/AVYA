@@ -7227,13 +7227,4 @@ Residual of OI-199 and OI-471 after migration 172. Migration 172 makes `cleanup_
 
 **To do.** Re-run the survey against the current code, then plan, review and fix every difference in one unit.
 
-## OI-494 — Food search log passes istNow() into logMeal, which applies istDateStr again (IST double shift, nutrition_provider.dart:1056)
-
-- **Status**: OPEN
-- **Blocked on**: none
-- **Verified**: never
-- **Identified**: 2026-11-10 · filed via mint_oi.sh from branch `coach-workout-parity`
-
-**Problem.** The food-search log (`lib/features/nutrition/providers/nutrition_provider.dart:1056`) passes `istNow()` as `date` into `NutritionWriteService.logMeal`, which applies `istDateStr` (UTC + 5:30) again: an already-shifted instant is shifted twice, so a meal logged late in the IST evening can land on the next day's key (the Test #11.1 double-shift trap). Found during the coach workout parity survey, 2026-11-10.
-
-**To do.** Pass the wall-clock instant (`nowWall()` / `DateTime.now()`) as every other `logMeal` caller does; a behavioural test with a late-evening clock that fails before the fix. Check the other `istNow()` arguments passed into WriteServices in the same edit.
+Added 2026-11-11 (OI-494 review): the coach `logMeal` path in `lib/features/ai_coach/services/tool_dispatcher.dart` (the `DateTime.tryParse('<YYYY-MM-DD>')` passed as `date:`) parses the coach's date string as LOCAL midnight, so on a device east of IST (for example UTC+9) the meal lands on the previous IST day. It is one of the differences this unit must fix, with a behavioural test under a non-IST zone.

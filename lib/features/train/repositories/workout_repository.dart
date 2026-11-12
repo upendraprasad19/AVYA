@@ -638,8 +638,8 @@ class WorkoutRepository {
     final box = _hive.workoutBox;
     // IST is UTC+5:30; today derived from IST midnight upper-bound.
     final nowUtc = nowWall().toUtc(); // seam-aware (dev time-travel / year-sim)
-    final istNow = nowUtc.add(const Duration(hours: 5, minutes: 30));
-    final istToday = DateTime(istNow.year, istNow.month, istNow.day);
+    final istWall = nowUtc.add(const Duration(hours: 5, minutes: 30));
+    final istToday = DateTime(istWall.year, istWall.month, istWall.day);
     final windowStart = istToday.subtract(Duration(days: windowWeeks * 7));
 
     int scheduled = 0;

@@ -883,8 +883,8 @@ extension SyncServiceProfile on SyncService {
       //
       // Hermes h7F2 (diagnose f1c6b4): this runs on EVERY launch — skip the
       // write when the merge changed nothing. `updated_at` is left out of the
-      // comparison because updateProfile re-stamps it with istNow() on every
-      // call, so it can never match and would defeat the skip; nothing else
+      // comparison because updateProfile re-stamps it (the current UTC instant)
+      // on every call, so it can never match and would defeat the skip; nothing else
       // about the profile changed in that case. Kill switch
       // disable_restore_write_if_changed.
       if (SyncFlags.restoreWriteIfChangedEnabled &&

@@ -6611,3 +6611,16 @@ To do: decide whether a coach-logged day counts as a completed workout (founder)
 Each Edge Function deploy needs its own founder go (§4.3).
 
 **Closed (2026-11-11, branches `coach-workout-parity-server` (S0-S2, PR #241, merge `72862b2f`, diagnoses `f9bf1c` and `c97729`, all six Edge Functions deployed from main with the founder's go) and `coach-workout-parity-tile` (S3), plan `docs/plans/coach-workout-parity-2-server.md` rev 13, record `docs/plan-reviews/coach-workout-parity-tile.md` (seven rounds)).** C: the FREE tool `requestCompletionTile` (capability `request_completion_tile`) re-shows the app's own tile through an auto-run intent; the client writes it only for a part-logged IST today and never completes (ADR-0012 amendment). The tile's `created_at` is UTC (diagnose `f3d704`). E and 3 landed in #241. Open after the merge: the `ai-proxy` deploy of S3 (its own founder go), and the device check after the next build.
+
+## OI-494 — Food search log passes istNow() into logMeal, which applies istDateStr again (IST double shift, nutrition_provider.dart:1056)
+
+- **Status**: CLOSED
+- **Blocked on**: none
+- **Verified**: never
+- **Identified**: 2026-11-10 · filed via mint_oi.sh from branch `coach-workout-parity`
+
+**Problem.** The food-search log (`lib/features/nutrition/providers/nutrition_provider.dart:1056`) passes `istNow()` as `date` into `NutritionWriteService.logMeal`, which applies `istDateStr` (UTC + 5:30) again: an already-shifted instant is shifted twice, so a meal logged late in the IST evening can land on the next day's key (the Test #11.1 double-shift trap). Found during the coach workout parity survey, 2026-11-10.
+
+**To do.** Pass the wall-clock instant (`nowWall()` / `DateTime.now()`) as every other `logMeal` caller does; a behavioural test with a late-evening clock that fails before the fix. Check the other `istNow()` arguments passed into WriteServices in the same edit.
+
+**Closed (2026-11-12, branch `oi494-food-search-date`, diagnose `4f9b2e`, plan `docs/plans/oi494-ist-double-shift.md`, record `docs/plan-reviews/oi494-food-search-date.md` (two plan-review rounds; it names the B-pass review, two seats))** The bug was wider than filed: `istNow()` is UTC-flagged, so the double shift hit every device, an IST phone included, from 18:30 IST. `FoodLogNotifier.logFood` (food search and the coach food card) passes `nowWall()`; the coach snapshot's `this_week_workouts` window and `step_history_7d` work on the wall instant with the IST weekday from `istDateOf`. The last `istNow()` uses in `lib/` (profile `updated_at`, snapshot photo `taken_at`, both a `Z` string 5:30 ahead) now write the UTC instant, and the `istNow()` doc comment says what the value is. Test: `test/contracts/ist_now_double_shift_behavioral_test.dart` (A, B, B2, C, E behavioural, under four host zones; D bans any `istNow` token in `lib/` outside `ist_date.dart`, D0 pins its scanner); 9 mutants red. One cloud row from a tester sits on the next day and was not healed (pre-launch). Device check: log a food-search meal after 18:30 IST and see it under today, after the next founder-started build.

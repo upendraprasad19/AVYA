@@ -101,19 +101,26 @@ void main() {
       );
     });
 
-    test('FoodLogNotifier.logFood uses IST date for NutritionWriteService.logMeal',
+    test('FoodLogNotifier.logFood passes the wall instant to NutritionWriteService.logMeal',
         () {
       final body = _extractMethodBody(
         providerSrc,
         'Future<({bool success, String? error, String? logKey})> logFood(',
       );
+      // OI-494 (diagnose 4f9b2e): this pin used to REQUIRE istNow(), which is
+      // the bug: logMeal applies istDateStr itself, so istNow() was shifted
+      // twice. The wall instant is right; the IST day comes from logMeal.
+      // Presence only; the behaviour is ist_now_double_shift_behavioral_test.
       expect(
         body,
-        contains('istNow()'),
-        reason:
-            'logMeal date must be the current IST instant per docs/architecture/sync.md '
-            'IST-throughout rule — Device-local DateTime.now() drifts on '
-            'users outside UTC+5:30',
+        contains('date: nowWall(),'),
+        reason: 'logMeal must get the wall instant (it applies the IST shift '
+            'once itself)',
+      );
+      expect(
+        body,
+        isNot(contains('date: istNow()')),
+        reason: 'istNow() into a WriteService date: is the double shift',
       );
     });
 

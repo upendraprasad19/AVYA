@@ -64,8 +64,14 @@ DateTime _wallNow() {
 /// previously read the raw system clock and ignored the seam).
 DateTime nowWall() => _wallNow();
 
-/// Current IST instant (returned as a "naive" DateTime in IST wall
-/// clock — `isUtc` is false but the components ARE IST values).
+/// The current time as IST wall-clock COMPONENTS (year..second read as IST).
+///
+/// The value is UTC-FLAGGED (`isUtc` is true) and is NOT the current instant:
+/// it is the instant plus 5:30. Read its components; never pass it to
+/// [istDateStr] / [istDateOf] / [istMidnight] or into a WriteService `date:`
+/// argument, which apply the IST shift again (the double shift, OI-494,
+/// diagnoses fe579a / 4f9b2e: from 18:30 IST it yields tomorrow on every
+/// device). For a date key use [istTodayStr] or `istDateStr(nowWall())`.
 DateTime istNow() {
   return _wallNow().toUtc().add(_istOffset);
 }
