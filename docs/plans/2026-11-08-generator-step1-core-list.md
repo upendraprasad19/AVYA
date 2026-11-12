@@ -456,3 +456,8 @@ work), and what t108 finds goes into step 2's plan, not a new step-1 unit. Injur
   fitness at 30 minutes), unloaded picks 58 -> 99. `chest_shoulders_arms`: suitable 513 -> 484, starved leads 2,284 ->
   2,690. No focus group gains a set in 722 / 977 plans (mostly 30-45 minutes). Days over their minutes: only the 1-minute
   rounding the no-focus run has too.
+- **Not a duplicate of Unit 1B-F's focus grid.** `test/plan_generator/focus_grid_dump_test.dart` (5,760 plans, 30 and
+  45 minutes) checks one allocator guard (a hold that credits a focus group gives way only to a slot that brings a
+  major group); t108 runs the whole suitability audit with a focus at 30-90 minutes. `PLAN_AUDIT_FOCUS` is classified
+  beside `PLAN_AUDIT_OUT` (`spawn_env_manifest_test.dart`, `scripts/regression_catalog_lib.dart`: stripped from a
+  child, which would otherwise audit focus plans under a no-focus label).
