@@ -1,10 +1,9 @@
 // ⑦ OI-89 Task 5 — the behavioural proof, on the PRODUCTION runtime path.
 //
 // A bodyweight-tier user must never be handed an exercise they cannot perform.
-// This drives the real `ExerciseSelector.pickV4` -> `_cascadeFill`, not the
-// diagnostic mirror (`cascade_tracer.dart` never calls the production selector
-// and holds no reference to PlanEngineFlags — nothing flag-gated can be
-// measured through it).
+// This drives the real `ExerciseSelector.pickV4` (the core-list pool since Unit
+// 1B-F deleted the cascade and its diagnostic mirror), so the hand rows below
+// carry `core_levels`: the pool reads only rows on a core list.
 //
 // THE ORACLE READS `equipmentNeeded` OFF THE BUILT `PlannedExercise`, never
 // `equipment_tier`. The first attempt at OI-89 used an oracle that read the same
@@ -59,6 +58,7 @@ Map<String, dynamic> _ex(
       'default_rest_secs': 60,
       'rep_range': '8-12',
       'logging_type': 'reps',
+      'core_levels': ['beginner', 'intermediate', 'advanced'],
     };
 
 void main() {

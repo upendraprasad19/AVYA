@@ -1,13 +1,15 @@
-// Batch B1 Task 4 — the ON-world gate for the core-list pool.
+// Batch B1 Task 4 — the gate for the core-list pool (the only picker since Unit 1B-F
+// deleted the `enable_core_list_pool` flag and the cascade it gated).
 //
-// Flag ON, the 998 golden personas, the REAL generateV4, provenance from
+// The 1,010 golden personas (998 until Unit 1B-F added 12 exclude-everything ones) plus 26 'scorecard' personas,
+// the REAL generateV4, provenance from
 // CoreListSelector.debugTrace (written by production, read here). Hard counts
-// below must be 0 over those 998 personas — and only those; the multi-injury
+// below must be 0 over those personas — and only those; the multi-injury
 // sweep in the report is reported, not gated. The one carve-out: a retired row
 // the thin-day top-up (OI-401, plan R9) adds for an injured user is recorded
 // evidence, pinned in _r9TopUpRetired; B1's own picks and any skill row stay hard.
 //
-// Report (also runs the OFF comparison and the multi-injury sweep):
+// Report (also runs the multi-injury sweep):
 //   WRITE_CORE_LIST_REPORT=1 TZ=Asia/Kolkata flutter test test/plan_generator/core_list_pool_gate_test.dart
 // → test/plan_generator/core_list_pool_report.md
 @Timeout(Duration(minutes: 10))
@@ -55,11 +57,10 @@ bool _skill(Map<String, dynamic> r) =>
     r['discipline'] == 'calisthenics_skill' || r['discipline'] == 'olympic';
 
 /// Rows B1 calls retired that the thin-day top-up (OI-401) adds for an injured
-/// user, measured on the 998 golden personas: the top-up reads the OFF-path
-/// candidates, not the core list (plan R9). Whether a top-up under B1 should be
-/// core-list-only is the `enable_core_list_pool` flip review's question
-/// (`docs/ship_dark_pending_review.yaml`). The set is a ratchet: a NEW retired
-/// id appearing here fails the gate and wants a decision.
+/// user, measured on the 998 golden personas: the top-up read the OFF-path
+/// candidates, not the core list (plan R9). Unit 1B-F (the flip) made the top-up
+/// core-list-only (`ladder(coreOnly: true)` always). The set is a ratchet: a NEW
+/// retired id appearing here fails the gate and wants a decision.
 /// 2026-10-24 (285 rows): E234, E261, E271. 2026-10-26 (Batch C1, 914 rows):
 /// E254 Doorframe Curl joined, for shoulder-injured bodyweight 4-day
 /// intermediate builds at phases 1 and 2 (the top-up's biceps neighbour move,
@@ -104,16 +105,22 @@ const _r9TopUpRetired = <String>{};
 class _Persona {
   final String kind, tier, level;
   final int phase;
-  final String? injury;
+  /// Unit 1B-F (Task 3): a key may carry an injury pair ('shoulder+knee'); a row is contraindicated when it names ANY.
+  final List<String> injuries;
   final List<String> exclusions, owned;
   _Persona(String key)
       : kind = key.split('|')[0],
         tier = _field(key, 'tier'),
         level = _field(key, 'level'),
         phase = int.parse(key.split('|').last.substring(1)),
-        injury = key.startsWith('injury|') ? key.split('|')[1] : null,
-        exclusions =
-            key.startsWith('exclusion|') ? [key.split('|')[1]] : const [],
+        injuries = key.startsWith('injury|') ? key.split('|')[1].split('+') : const [],
+        exclusions = key.startsWith('exclusion|')
+            ? [key.split('|')[1]]
+            : key.startsWith('excludeall|')
+                // The generator never excludes the floor (`floorSanitizedExclusions` strips none / bodyweight / wall),
+                // so the oracle reads the same sanitized set; the raw token list would flag every bodyweight pick.
+                ? EquipmentVocab.floorSanitizedExclusions(EquipmentVocab.canonicalTokens).toList()
+                : const [],
         owned = key.startsWith('owned|')
             ? goldenOwnedEquipment['${_field(key, 'tier')}|${_field(key, 'level')}']!
             : const [];
@@ -131,7 +138,7 @@ class _Persona {
 class _Cell {
   int core = 0, fill = 0, drop = 0, emergency = 0, bTotal = 0, bRepeat = 0;
   final dropTypes = <String, int>{};
-  final onSizes = <int>[], offSizes = <int>[];
+  final onSizes = <int>[];
   final subTotal = <String, int>{}, subHit = <String, int>{};
 }
 
@@ -176,7 +183,6 @@ void main() {
     byId = {for (final r in rows) r['id'] as String: r};
     HiveService.instance.markInitializedForTests();
     await HiveUserSession.openForUser(testUser);
-    await HiveService.instance.configBox.put('enable_core_list_pool', true);
   });
 
   tearDownAll(() async {
@@ -194,7 +200,7 @@ void main() {
           for (final d in w.workoutDays) d.exercises.length
       ];
 
-  /// Runs [p] ON and returns every hard-count violation it produced.
+  /// Runs [p] and returns every hard-count violation it produced.
   Future<List<String>> check(GoldenPersona p) async {
     final persona = _Persona(p.key);
     final trace = CoreListTrace();
@@ -234,7 +240,7 @@ void main() {
       // any-level pick) is a failure. Injured personas are exempt: knee and lower_back contraindications empty these cells at
       // intermediate before and after S1a (plan v4, review #3). The pools have no slack (three Quads rows for one
       // day's three Quads slots, two Hamstrings hinge rows for two), so dropping one of those rows turns this red.
-      if (persona.injury == null &&
+      if (persona.injuries.isEmpty &&
           ((persona.tier == 'bodyweight' && s.level != 'beginner') ||
               (persona.tier == 'home_dumbbells' && s.level == 'advanced')) &&
           s.slot.exerciseType == 'compound' &&
@@ -256,7 +262,7 @@ void main() {
       // its row must list Glutes first: E107 / G0168 (Abductors / Adductors) at beginner reached it before E109 was
       // core there (both S1b-1 reviewers).
       final gymKitIntact = !persona.exclusions.any((e) => e == 'cables' || e == 'machines');
-      if (persona.injury == null &&
+      if (persona.injuries.isEmpty &&
           gymKitIntact &&
           (persona.tier == 'basic_gym' || persona.tier == 'full_gym') &&
           (s.slot.targetMuscle == 'Hip' || s.slot.targetMuscle == 'Glutes') &&
@@ -296,8 +302,7 @@ void main() {
                   .contains(s.level[0].toUpperCase() + s.level.substring(1)))) {
         bad.add('level: $where bad fill at ${s.level}');
       }
-      if (persona.injury != null &&
-          _strs(r['injury_contraindications']).contains(persona.injury)) {
+      if (_strs(r['injury_contraindications']).any(persona.injuries.contains)) {
         bad.add('injury: $where');
       }
       if (needed.any(persona.exclusions.contains)) bad.add('excluded: $where');
@@ -329,7 +334,7 @@ void main() {
       if ((r['high_impact'] == true || d == 'plyometric') && !s.jumpOnlyPool) {
         bad.add('jump: $where');
       }
-      if (s.jumpOnlyPool && persona.injury == null) {
+      if (s.jumpOnlyPool && persona.injuries.isEmpty) {
         bad.add('jump-only pool: $where ${s.slot.targetMuscle}/${s.slot.movementPattern}');
       }
       if (levels.isEmpty && r['variant_family'] == null) bad.add('retired: $where');
@@ -351,7 +356,7 @@ void main() {
 
     // Lists: a (day, variant) the user actually sees as picked.
     final replaced = {
-      for (final e in [...trace.copied, ...trace.emergencyAnyLevel, ...trace.refilled])
+      for (final e in [...trace.copied, ...trace.emergencyAnyLevel])
         '${e.day}|${e.variant}'
     };
     final drops = <String, int>{};
@@ -365,11 +370,8 @@ void main() {
         if (e.value > 1) bad.add('drops: ${p.key} list ${e.key} drops ${e.value}');
       }
     }
-    if (persona.injury != null) {
+    if (persona.injuries.isNotEmpty) {
       injuredLists[p.key] = drops.values.toList();
-    }
-    for (final e in trace.refilled) {
-      bad.add('refilled: ${p.key} day ${e.day} ${e.variant}');
     }
     copied += trace.copied.length;
     if (trace.emergencyAnyLevel.isNotEmpty) emergencyKeys.add(p.key);
@@ -398,7 +400,7 @@ void main() {
     final built = classifyBuilt(
       built: builtIds(phase),
       without: without,
-      injured: persona.injury != null,
+      injured: persona.injuries.isNotEmpty,
       isRetired: (id) => byId[id] != null && _retired(byId[id]!),
       isSkill: (id) => byId[id] != null && _skill(byId[id]!),
     );
@@ -413,7 +415,30 @@ void main() {
     return bad;
   }
 
-  final personas = generatorGoldenPersonas();
+  // Unit 1B-F, Task 3 (Ruling 7): the deleted scorecard's 606 personas, compared with the golden grid; the ones the
+  // grid does not hold join the gate as the 'scorecard' group (the scorecard's hard `== 0` equipment violations move
+  // here). Missing from the golden: the wrist / hip / ankle injuries and the shoulder + knee pair, beginner and advanced
+  // injured users, and the cables / resistance-band exclusions (its phase 6 picks as phase 5 does). full_gym, 4 days,
+  // build_muscle, phase 1, as the scorecard ran them.
+  final golden = generatorGoldenPersonas();
+  final goldenKeys = {for (final p in golden) p.key};
+  final scorecard = <GoldenPersona>[
+    for (final level in const ['beginner', 'intermediate', 'advanced']) ...[
+      for (final inj in const ['lower_back', 'knee', 'shoulder', 'wrist', 'hip', 'ankle', 'shoulder+knee'])
+        GoldenPersona('scorecard', 'injury|$inj|full_gym|build_muscle|4d|$level|p1', () => PlanGenerator.instance.generateV4(
+            goal: 'build_muscle', equipment: 'full_gym', daysPerWeek: 4, phase: 1, experienceLevel: level,
+            injuries: inj.split('+'), previousWeights: const {})),
+      for (final (tier, excl) in const [('basic_gym', 'cables'), ('basic_gym', 'barbell'), ('home_dumbbells', 'resistance band')])
+        GoldenPersona('scorecard', 'exclusion|$excl|$tier|build_muscle|4d|$level|p1', () => PlanGenerator.instance.generateV4(
+            goal: 'build_muscle', equipment: tier, daysPerWeek: 4, phase: 1, experienceLevel: level,
+            equipmentExclusions: [excl], previousWeights: const {})),
+    ],
+  ].where((p) => !goldenKeys.contains(p.key)).toList();
+  final personas = [...golden, ...scorecard];
+  test('Task 3: the scorecard personas the golden grid lacks are added (26 of 30; 4 are golden keys)', () {
+    expect(scorecard.length, 26);
+    expect({for (final p in scorecard) p.key}.length, 26);
+  });
   // One run per persona however the tests are selected: the R9 test below needs
   // every persona checked and must not depend on the group tests having run first.
   final checked = <String, List<String>>{};
@@ -439,8 +464,8 @@ void main() {
     // Exact, not a subset: an empty evidence list (a broken re-run) must fail too.
     expect(topUpRetiredIds, _r9TopUpRetired,
         reason: 'a NEW retired id reached an injured user through the thin-day '
-            'top-up under B1 ON (or a recorded one stopped): decide it at the '
-            'enable_core_list_pool flip review, then edit _r9TopUpRetired. '
+            'top-up (or a recorded one stopped): decide it in a plan review, '
+            'then edit _r9TopUpRetired. '
             'Personas that got an id outside the recorded set: '
             '${topUpRetired.where((e) => !_r9TopUpRetired.contains(e.split(' ').last)).toList()}');
     // Since R4 the recorded set is empty, so there is no evidence to require and
@@ -510,21 +535,9 @@ void main() {
   });
 
   test('report', () async {
-    // OFF comparison: same personas, flag absent.
-    final config = HiveService.instance.configBox;
-    await config.delete('enable_core_list_pool');
-    for (final p in personas) {
-      final persona = _Persona(p.key);
-      final level = PlanGenerator.effectiveLevel(persona.level, persona.phase);
-      cells.putIfAbsent('${persona.tier}|$level', _Cell.new)
-          .offSizes
-          .addAll(strengthSizes(p.run()));
-    }
-    await config.put('enable_core_list_pool', true);
-
     // Multi-injury sweep: every tier × level × days, phases 1-2, every pair.
     const injuries = ['knee', 'shoulder', 'lower_back', 'wrist'];
-    var runs = 0, sweepEmergency = 0, sweepRefilled = 0;
+    var runs = 0, sweepEmergency = 0;
     final sweepRetired = <String>{};
     final sweepSkill = <String>{};
     for (final tier in goldenTiers) {
@@ -547,10 +560,8 @@ void main() {
                 CoreListSelector.debugTrace = null;
                 runs++;
                 if (trace.emergencyAnyLevel.isNotEmpty) sweepEmergency++;
-                if (trace.refilled.isNotEmpty) sweepRefilled++;
-                // The BUILT lists, not the trace: a refilled variant runs the
-                // OFF cascade (universal pool included), whose picks the
-                // trace never sees (B-pass F1).
+                // The BUILT lists, not the trace: the thin-day top-up's
+                // additions never reach the trace (B-pass F1).
                 for (final id in builtIds(out)) {
                   final r = byId[id];
                   if (r == null) continue;
@@ -573,24 +584,24 @@ void main() {
     }
 
     final out = StringBuffer()
-      ..writeln('# Core-list pool — ON-world report (Batch B1 Task 4)')
+      ..writeln('# Core-list pool — report (Batch B1 Task 4; one world since Unit 1B-F)')
       ..writeln()
       ..writeln('Generated by `test/plan_generator/core_list_pool_gate_test.dart` '
           '(`WRITE_CORE_LIST_REPORT=1`) over the ${personas.length} golden personas, '
-          'flag ON, real `generateV4`. The gate\'s hard zeros cover these personas '
+          'real `generateV4`. The gate\'s hard zeros cover these personas '
           'only; the multi-injury sweep below is reported, not gated.')
       ..writeln()
       ..writeln('## Per tier × effective level')
       ..writeln()
       ..writeln('| cell | core | fill | drop | emergency | B repeats A | '
-          'strength/day ON | strength/day OFF |')
-      ..writeln('|---|---|---|---|---|---|---|---|');
+          'strength/day |')
+      ..writeln('|---|---|---|---|---|---|---|');
     final keys = cells.keys.toList()..sort();
     for (final k in keys) {
       final c = cells[k]!;
       final rate = c.bTotal == 0 ? '-' : '${(100 * c.bRepeat / c.bTotal).toStringAsFixed(1)}%';
       out.writeln('| $k | ${c.core} | ${c.fill} | ${c.drop} | ${c.emergency} | '
-          '$rate | ${stats(c.onSizes)} | ${stats(c.offSizes)} |');
+          '$rate | ${stats(c.onSizes)} |');
     }
     out
       ..writeln()
@@ -645,8 +656,8 @@ void main() {
       ..writeln('- injured personas with a list dropping 2+ slots: '
           '${injuredMulti.length} ${injuredMulti.isEmpty ? '' : '(${injuredMulti.join(', ')})'}')
       ..writeln('- multi-injury sweep ($runs runs, every pair of '
-          '${injuries.join('/')}): emergencyAnyLevel in $sweepEmergency, '
-          'refilled in $sweepRefilled; built lists: retired picks ${sweepRetired.isEmpty ? 'none' : sweepRetired.join(', ')}, '
+          '${injuries.join('/')}): emergencyAnyLevel in $sweepEmergency; '
+          'built lists: retired picks ${sweepRetired.isEmpty ? 'none' : sweepRetired.join(', ')}, '
           'skill/olympic picks ${sweepSkill.isEmpty ? 'none' : sweepSkill.join(', ')}')
       ..writeln('- core-vs-suitable_for disagreements picked: '
           '${disagree.isEmpty ? 'none' : top(disagree, 10)}')

@@ -6,8 +6,8 @@
 // Before: B was the posterior variant with the Quads compound at priority 3 in sixth place (3-day) or no Quads
 // compound at all (4 and 5-day), so the allocator never seated quad work at 30 to 60 minutes. The live picker hid it
 // by putting a quad-crediting row into a non-quad slot; the core-list pool (Unit 1B-F) picks each slot's own row and
-// showed 184 plans of the 2,304-plan audit with no Quads in week 2 that their live twin had. So the live-world quad tests
-// below are regression guards (they pass on the old lists too); the shape tests and the pool-ON tests discriminate.
+// showed 184 plans of the 2,304-plan audit with no Quads in week 2 that their live twin had. Unit 1B-F deleted the live
+// (cascade) world and its tests here; the core-list tests below discriminate, with the shape tests.
 //
 // The set counts below read the BUILT plan with a restated reader (the library row's primary_muscles), never the
 // allocator's ledger or BudgetMuscleGroups.
@@ -233,72 +233,67 @@ void main() {
     });
   });
 
-  for (final pool in [false, true]) {
-    final world = pool ? 'core-list pool ON' : 'live (pool OFF)';
-    group(world, () {
-      setUp(() async => HiveService.instance.configBox.put('enable_core_list_pool', pool));
-      tearDown(() async => HiveService.instance.configBox.delete('enable_core_list_pool'));
+  group('core-list pool ON', () {
 
-      for (final days in [3, 4, 5]) {
-        for (final tier in ['bodyweight', 'full_gym']) {
-          for (final minutes in [30, 60]) {
-            test('build_muscle ${days}d $tier $minutes min: week 2 (variant B) holds quad sets', () {
-              final p = gen('build_muscle', tier, days, minutes);
-              expect(quadSets(p, 1), greaterThan(0), reason: 'week 2 lost all quad work');
-              expect(p.weekPlans[3].weekCharacter, 'deload');
-              expect(quadSets(p, 3), greaterThan(0), reason: 'week 4 (deload, variant B) lost all quad work');
-              expect(hamSets(p, 1), greaterThan(0), reason: 'week 2 lost all hamstring work');
-              final legs2 = p.weekPlans[1].workoutDays.firstWhere((d) => d.name == 'Legs');
-              expect(legs2.exercises.any((e) => primary(e.exerciseName).firstOrNull == 'Hamstrings'), isTrue,
-                  reason: 'B keeps a hamstring-first row (the posterior mirror)');
-            });
-          }
+    for (final days in [3, 4, 5]) {
+      for (final tier in ['bodyweight', 'full_gym']) {
+        for (final minutes in [30, 60]) {
+          test('build_muscle ${days}d $tier $minutes min: week 2 (variant B) holds quad sets', () {
+            final p = gen('build_muscle', tier, days, minutes);
+            expect(quadSets(p, 1), greaterThan(0), reason: 'week 2 lost all quad work');
+            expect(p.weekPlans[3].weekCharacter, 'deload');
+            expect(quadSets(p, 3), greaterThan(0), reason: 'week 4 (deload, variant B) lost all quad work');
+            expect(hamSets(p, 1), greaterThan(0), reason: 'week 2 lost all hamstring work');
+            final legs2 = p.weekPlans[1].workoutDays.firstWhere((d) => d.name == 'Legs');
+            expect(legs2.exercises.any((e) => primary(e.exerciseName).firstOrNull == 'Hamstrings'), isTrue,
+                reason: 'B keeps a hamstring-first row (the posterior mirror)');
+          });
         }
       }
+    }
 
-      // The eight audit personas (goal|days|level|tier|minutes|phase) that measured the order: with the Quads compound
-      // THIRD (after both hinges) the core-list pool left week 2 without quads, because the Glutes session cap refused
-      // the quad row after the hinge and the bridge. Second is what holds them.
-      for (final k in const [
-        'build_muscle|3|advanced|bodyweight|30|2',
-        'build_muscle|3|advanced|bodyweight|30|3',
-        'build_muscle|4|advanced|bodyweight|30|2',
-        'build_muscle|4|advanced|bodyweight|30|3',
-        'build_muscle|5|advanced|bodyweight|30|2',
-        'build_muscle|5|advanced|bodyweight|30|3',
-        'strength|3|advanced|bodyweight|30|1',
-        'strength|3|advanced|home_dumbbells|30|1',
-      ]) {
-        test('$k: week 2 holds quad sets', () {
-          final f = k.split('|');
-          final p = gen(f[0], f[3], int.parse(f[1]), int.parse(f[4]), level: f[2], phase: int.parse(f[5]));
-          expect(quadSets(p, 1), greaterThan(0));
-        });
-      }
-
-      // Round 2: personas that measured week 2 AND week 4 with no Calves / no Core set when the Glutes isolation slot
-      // sat fourth (audit, live and pool ON). Each must hold that muscle in both B weeks in both worlds. These guard the
-      // Glutes slot's position; they do not detect a no-op (on main, live world, 6 of the 7 already hold the muscle).
-      for (final (k, muscles) in const [
-        ('strength|3|intermediate|basic_gym|45|1', {'calves'}),
-        ('strength|3|intermediate|bodyweight|60|2', {'calves'}),
-        ('build_muscle|3|intermediate|full_gym|60|1', {'calves'}),
-        ('build_muscle|3|advanced|bodyweight|45|2', {'calves'}),
-        ('build_muscle|5|advanced|bodyweight|45|2', {'calves'}),
-        ('build_muscle|4|intermediate|basic_gym|60|1', {'core', 'abs', 'obliques'}),
-        ('build_muscle|4|intermediate|full_gym|45|2', {'core', 'abs', 'obliques'}),
-      ]) {
-        test('$k: weeks 2 and 4 hold ${muscles.first} sets', () {
-          final f = k.split('|');
-          final p = gen(f[0], f[3], int.parse(f[1]), int.parse(f[4]), level: f[2], phase: int.parse(f[5]));
-          expect(setsOf(p, 1, muscles), greaterThan(0), reason: 'week 2: ${[for (final d in p.weekPlans[1].workoutDays) '${d.name}: ${d.exercises.map((e) => '${e.exerciseName} ${e.sets}').join(', ')}']}');
-          expect(setsOf(p, 3, muscles), greaterThan(0), reason: 'week 4');
-        });
-      }
-
-      test('strength 3d full_gym 60 min: week 2 holds quad sets', () {
-        expect(quadSets(gen('strength', 'full_gym', 3, 60), 1), greaterThan(0));
+    // The eight audit personas (goal|days|level|tier|minutes|phase) that measured the order: with the Quads compound
+    // THIRD (after both hinges) the core-list pool left week 2 without quads, because the Glutes session cap refused
+    // the quad row after the hinge and the bridge. Second is what holds them.
+    for (final k in const [
+      'build_muscle|3|advanced|bodyweight|30|2',
+      'build_muscle|3|advanced|bodyweight|30|3',
+      'build_muscle|4|advanced|bodyweight|30|2',
+      'build_muscle|4|advanced|bodyweight|30|3',
+      'build_muscle|5|advanced|bodyweight|30|2',
+      'build_muscle|5|advanced|bodyweight|30|3',
+      'strength|3|advanced|bodyweight|30|1',
+      'strength|3|advanced|home_dumbbells|30|1',
+    ]) {
+      test('$k: week 2 holds quad sets', () {
+        final f = k.split('|');
+        final p = gen(f[0], f[3], int.parse(f[1]), int.parse(f[4]), level: f[2], phase: int.parse(f[5]));
+        expect(quadSets(p, 1), greaterThan(0));
       });
+    }
+
+    // Round 2: personas that measured week 2 AND week 4 with no Calves / no Core set when the Glutes isolation slot
+    // sat fourth (audit, live and pool ON). Each must hold that muscle in both B weeks. These guard the Glutes slot's
+    // position; they do not detect a no-op on the deleted live world (6 of the 7 already held the muscle there).
+    for (final (k, muscles) in const [
+      ('strength|3|intermediate|basic_gym|45|1', {'calves'}),
+      ('strength|3|intermediate|bodyweight|60|2', {'calves'}),
+      ('build_muscle|3|intermediate|full_gym|60|1', {'calves'}),
+      ('build_muscle|3|advanced|bodyweight|45|2', {'calves'}),
+      ('build_muscle|5|advanced|bodyweight|45|2', {'calves'}),
+      ('build_muscle|4|intermediate|basic_gym|60|1', {'core', 'abs', 'obliques'}),
+      ('build_muscle|4|intermediate|full_gym|45|2', {'core', 'abs', 'obliques'}),
+    ]) {
+      test('$k: weeks 2 and 4 hold ${muscles.first} sets', () {
+        final f = k.split('|');
+        final p = gen(f[0], f[3], int.parse(f[1]), int.parse(f[4]), level: f[2], phase: int.parse(f[5]));
+        expect(setsOf(p, 1, muscles), greaterThan(0), reason: 'week 2: ${[for (final d in p.weekPlans[1].workoutDays) '${d.name}: ${d.exercises.map((e) => '${e.exerciseName} ${e.sets}').join(', ')}']}');
+        expect(setsOf(p, 3, muscles), greaterThan(0), reason: 'week 4');
+      });
+    }
+
+    test('strength 3d full_gym 60 min: week 2 holds quad sets', () {
+      expect(quadSets(gen('strength', 'full_gym', 3, 60), 1), greaterThan(0));
     });
-  }
+  });
 }

@@ -131,13 +131,24 @@ void main() {
         reason: 'no knee-loading warmup/cooldown move for a knee injury');
   });
 
+  // Unit 1B-F, Ruling 12 (founder d19, seed v25): Jumping Jacks and Jump Rope land from flight, so a hip injury drops
+  // them like the library rows E202 / E063 (warmup_library_injury_mirror_test pins the map against the library).
+  test('hip injury DROPS Jumping Jacks and Jump Rope (Ruling 12)', () {
+    const jumpMoves = {'Jumping Jacks', 'Jump Rope'};
+    expect(warmupCooldownNames(gen(injuries: const [])).intersection(jumpMoves), isNotEmpty,
+        reason: 'non-vacuity: the uninjured plan must hand out a jump warm-up');
+    final names = warmupCooldownNames(gen(injuries: const ['hip']));
+    expect(names.intersection(jumpMoves), isEmpty, reason: 'no jump warm-up for a hip injury');
+    expect(names, isNotEmpty, reason: 'the warm-up / cool-down floor still holds for a hip injury');
+  });
+
   test('irrelevant injury (wrist) leaves knee/leg moves untouched', () {
     final names = warmupCooldownNames(gen(injuries: const ['wrist']));
     // A wrist injury must not drop leg/knee moves.
     final base = warmupCooldownNames(gen(injuries: const []));
 
     // ⚠ 2026-08-05 (e2d6b8): compare only the knee moves that are NOT themselves
-    // wrist-loading. `Jump Rope` is tagged {'knee','ankle','wrist'}
+    // wrist-loading. `Jump Rope` is tagged {'knee','ankle','wrist','hip'} (hip since seed v25)
     // (warmup_cooldown.dart:43) and lives ONLY in the _gymCardio pool
     // (warmup_cooldown.dart:110), so dropping it for a wrist injury is CORRECT —
     // it is not the wrist filter leaking into knee moves.
@@ -165,8 +176,8 @@ void main() {
     // Precedent: warmup_library_injury_mirror_test.dart pins the same map by
     // value rather than deriving from it.
     expect(WarmupCooldownSelector.moveInjuries['Jump Rope'],
-        {'knee', 'ankle', 'wrist'},
-        reason: 'Jump Rope must stay knee+ankle+wrist tagged. The wristTagged '
+        {'knee', 'ankle', 'wrist', 'hip'},
+        reason: 'Jump Rope must stay knee+ankle+wrist(+hip since seed v25, Unit 1B-F) tagged. The wristTagged '
             'exclusion above is hardcoded on this fact; if the tags change, fix '
             'both together rather than letting the exclusion drift.');
 

@@ -214,12 +214,7 @@ The plan generator runs entirely in Dart on-device — no API calls, no latency.
 
 **MuscleSlot architecture:** Each workout day is defined as an ordered list of MuscleSlots. Each slot maps to one of 11 movement patterns (horizontal_push, vertical_pull, hip_hinge, knee_dominant, etc.) with a `targetFocus` (e.g., "chest", "lats") and `equipmentTier`.
 
-**5-attempt cascading fallback per slot:**
-1. Exact match: movement pattern + target focus + equipment tier + rep range
-2. Relax rep range
-3. Relax equipment tier (accept one tier up)
-4. Relax both
-5. Category-only fallback (any exercise in the right muscle group)
+**Core-list picker per slot:** each slot takes the top of a ranked pool of the library rows on a core list for the user's level (`CoreListSelector.rankedPool`): a hard filter (movement pattern, equipment the user can perform, exclusions, injuries), then ranking keys (implement fit, priority, foundational). A slot with no safe row is dropped, never filled with an off-pattern or unsafe move; an injured user's thin day is then topped up to 3 moves. (The 5-attempt cascade this replaced was deleted in Unit 1B-F, 2026-11-11.)
 
 **Trainer-wisdom splits:** Push/Pull/Legs, Upper/Lower, Full Body — selected by goal + days/week combination. Beginner plans default to full-body regardless of split preference.
 

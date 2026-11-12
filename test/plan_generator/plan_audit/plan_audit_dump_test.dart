@@ -6,12 +6,14 @@
 //     test/plan_generator/plan_audit/plan_audit_dump_test.dart
 //
 // Grid: 4 goals x 3/4/5/6 days x 3 levels x 4 tiers x 30/45/60/90 min x phases
-// 1-3; no injuries, no history, no focus. Runs the real generateV4 twice (live,
-// then configBox['enable_core_list_pool'] = true) and writes into PLAN_AUDIT_OUT:
-//   plan_dump_{off,on}.jsonl   one line per plan (the shape plan_audit_lib reads;
-//                              the last line is {"exercises": ...})
-//   audit_{off,on}.json        per-plan verdict + issues
-//   section1.md                the plan's section 1 table, OFF beside ON
+// 1-3; no injuries, no history, no focus. Runs the real generateV4 once (one world
+// since Unit 1B-F deleted the `enable_core_list_pool` flag and the cascade) and
+// writes into PLAN_AUDIT_OUT:
+//   plan_dump.jsonl   one line per plan (the shape plan_audit_lib reads; the last
+//                     line is {"exercises": ...})
+//   audit.json        per-plan verdict + issues
+//   section1.md       the plan's section 1 table
+// A before/after comparison runs this test on each tree into its own directory.
 @Timeout(Duration(minutes: 120))
 library;
 
@@ -123,8 +125,10 @@ void main() {
           for (final g in groups) {
             vol[g] = (vol[g] ?? 0) + e.sets;
           }
+          // x[7], Unit 1B-F (OI-485 (3)): the BUILT type (after the picker's typeOverride), which SequencingEngine
+          // orders by; the per-name header map above keeps one type per name.
           exList.add([e.exerciseName, e.sets, e.reps, e.restSeconds,
-              e.durationSeconds, e.supersetGroup, groups.toList()]);
+              e.durationSeconds, e.supersetGroup, groups.toList(), e.exerciseType]);
         }
         int? mins;
         try {
@@ -145,16 +149,9 @@ void main() {
     };
   }
 
-  Future<AuditSummary> world(String name, {required bool on}) async {
-    final config = HiveService.instance.configBox;
-    if (on) {
-      await config.put('enable_core_list_pool', true);
-    } else {
-      await config.delete('enable_core_list_pool');
-    }
-    expect(PlanEngineFlags.coreListPoolEnabled, on);
+  Future<AuditSummary> run() async {
     final auditor = PlanAuditor(byExactName);
-    final dump = File('$outDir/plan_dump_$name.jsonl').openSync(mode: FileMode.write);
+    final dump = File('$outDir/plan_dump.jsonl').openSync(mode: FileMode.write);
     final exercises = <String, Map<String, dynamic>>{};
     final results = <PlanAuditResult>[];
     for (final goal in const ['build_muscle', 'lose_fat', 'general_fitness', 'strength']) {
@@ -174,25 +171,22 @@ void main() {
     }
     dump.writeStringSync('${jsonEncode({'exercises': exercises})}\n');
     dump.closeSync();
-    File('$outDir/audit_$name.json').writeAsStringSync(jsonEncode({
+    File('$outDir/audit.json').writeAsStringSync(jsonEncode({
       for (final r in results)
         r.key: {
           'v': r.verdict,
           'i': [for (final i in r.issues) [i.severity, i.code, i.text]],
         }
     }));
-    await config.delete('enable_core_list_pool');
     return AuditSummary.of(results);
   }
 
-  test('2,304-plan audit, OFF and ON', () async {
-    final off = await world('off', on: false);
-    final on = await world('on', on: true);
-    expect(off.plans, 2304);
-    expect(on.plans, 2304);
+  test('2,304-plan audit', () async {
+    final s = await run();
+    expect(s.plans, 2304);
     File('$outDir/section1.md').writeAsStringSync(
         '# Plan audit (2,304 plans, no injuries, no history)\n\n'
-        '${sectionOneTable(off, on)}\n\n'
-        'Codes OFF: ${off.codes}\n\nCodes ON: ${on.codes}\n');
+        '${sectionOneTable([('this tree', s)])}\n\n'
+        'Codes: ${s.codes}\n');
   }, skip: outDir == null ? 'set PLAN_AUDIT_OUT to run the plan audit' : false);
 }

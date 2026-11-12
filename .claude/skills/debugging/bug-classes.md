@@ -662,6 +662,8 @@ added, false of the flip being performed.
 
 ### 2.53 A MIRROR harness stops modelling production, so it is green in every world (NEW 2026-08-28)
 
+- **Status (Unit 1B-F, 2026-11-12):** the mirrors this class names (`CascadeTracer`, `QueryV4Mirror`, the scorecard) were deleted with the cascade; the gates now run the real `generateV4` (`core_list_pool_gate_test.dart`, the golden, the CI hard test `r6_removed_runs_*`). The lesson stands for any new harness: do not add a mirror back.
+
 - **Telltale, and it is unmistakable once you look for it:** you toggle the input the
   batch exists to ship, re-run the measurement harness, and the numbers come back
   **byte-identical**. Not close — identical. On OI-89 the 606-persona scorecard

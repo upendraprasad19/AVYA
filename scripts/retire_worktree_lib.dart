@@ -279,8 +279,9 @@ const regenerableIgnoredPaths = <String>[
   // Before this, any worktree that ran the full suite could never retire — the
   // tool reported "1 non-regenerable ignored file" for a file a test had just
   // written. Enumerated from .gitignore, not guessed:
-  'test/plan_generator/v4_diagnostic_output.md', // .gitignore:112, written by
-  // test/plan_generator/v4_diagnostic_test.dart:234
+  'test/plan_generator/v4_diagnostic_output.md', // .gitignore:123, written by
+  // test/plan_generator/v4_diagnostic_test.dart until Unit 1B-F deleted it; kept so
+  // a worktree that ran the old suite still retires.
   'analyze_output.txt', // .gitignore:107
   'flutter_test_output.txt', // .gitignore:108
   'baseline.json', // .gitignore:132

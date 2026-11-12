@@ -84,7 +84,7 @@ void main(List<String> args) async {
   }
 
   // ── 3. Test file naming — test/contracts/*.dart MUST end with _test.dart ──
-  // Other test subdirs (helpers/, plan_generator/v4_diagnostic/, supabase/,
+  // Other test subdirs (helpers/, plan_generator/plan_audit/, supabase/,
   // *_write_service/helpers/) intentionally contain non-test fixture / report
   // files; only the contracts/ dir is strict.
   final contractsDir = Directory('$projectRoot/test/contracts');

@@ -9,8 +9,8 @@
 // substring match on the library row's primary_muscles), never from the allocator's own ledger, except
 // where the test says it compares the two on purpose.
 //
-// The sweep also pins, on the PRODUCTION path (core-list pool OFF, which the gate's build_muscle subset
-// does not run): every group's credited weekly total under its top and its session total under its
+// The sweep also pins, on the PRODUCTION path (the core-list pool, the only picker since Unit 1B-F; the tables were
+// first measured on the deleted cascade and carry per-cell overrides measured at the flip): every group's credited weekly total under its top and its session total under its
 // cap in all four weeks, every day inside its minutes, Glutes at or above the level floor, Hamstrings
 // never below the pre-change figure, and the allocator's label for each Quads shortfall at 90 minutes.
 //
@@ -139,9 +139,68 @@ const _quadsLabel90C2c = <String, String>{
   'advanced|home_dumbbells|90': 'cap_limited',
 };
 
-int _quadsAfterFor(String key) => _quadsAfterC2c[key] ?? _quadsAfter[key]!;
-int _quadsOffFor(String key) => _quadsOffC2c[key] ?? _quadsBefore[key]!;
-String? _label90For(String key) => _quadsLabel90C2c[key] ?? _quadsLabel90[key];
+// Unit 1B-F (docs/plans/2026-11-10-generator-1bf-flip.md, 2026-11-11): the core-list pool became the only picker, so the
+// production path these tables pin moved from the deleted cascade to the core path. Measured on the flipped tree (week 1,
+// 6-day build_muscle, a probe over the same 24 cells); each table below OVERRIDES the ones above cell by cell, and a cell
+// equal to what it replaces is a dead override (the last test). With the lever ON, Quads rise in all 13 changed cells
+// (for example advanced|basic_gym|60 5 to 8); the switched-off figures are the old Legs B on the core path. Hamstrings
+// fall below the pre-OI-454 cascade figure in six gym cells (intermediate basic_gym / full_gym 60: 11 to 9; advanced
+// basic_gym 60: 12 to 8, 90: 13 to 12; advanced full_gym 60: 12 to 8, 90: 13 to 11): the flip's own trade against the
+// cascade's picks (the flipped tree equals the pre-flip pool-ON world on the golden personas), named in the 1B-F diagnose
+// doc; no cell reaches 0. At 90 minutes no Quads shortfall is `cap_limited` any more (the core path's quad compounds
+// stop short of the per-exercise maximum), so the cap-cause check below has no cell to read and is kept for a later one.
+
+/// `_quadsAfter` overrides at the flip (core path, lever ON).
+const _quadsAfter1BF = <String, int>{
+  'intermediate|bodyweight|60': 10, 'intermediate|bodyweight|90': 12,
+  'intermediate|home_dumbbells|60': 9, 'intermediate|home_dumbbells|90': 12,
+  'intermediate|basic_gym|60': 9, 'intermediate|basic_gym|90': 12,
+  'advanced|bodyweight|60': 7, 'advanced|bodyweight|90': 13,
+  'advanced|home_dumbbells|60': 7, 'advanced|home_dumbbells|90': 12,
+  'advanced|basic_gym|60': 8, 'advanced|basic_gym|90': 11,
+  'advanced|full_gym|60': 9,
+};
+
+/// `_quadsBefore` overrides at the flip (core path, lever switched OFF).
+const _quadsOff1BF = <String, int>{
+  'intermediate|bodyweight|60': 4, 'intermediate|bodyweight|90': 4,
+  'intermediate|home_dumbbells|60': 4, 'intermediate|home_dumbbells|90': 4,
+  'intermediate|basic_gym|60': 4, 'intermediate|basic_gym|90': 4,
+  'advanced|bodyweight|60': 5, 'advanced|bodyweight|90': 5,
+  'advanced|home_dumbbells|60': 4, 'advanced|home_dumbbells|90': 4,
+  'advanced|basic_gym|60': 5, 'advanced|basic_gym|90': 8,
+};
+
+/// `_hamstringsBefore` overrides at the flip: the six gym cells the core path holds below the cascade figure.
+const _hamstrings1BF = <String, int>{
+  'intermediate|basic_gym|60': 9, 'intermediate|full_gym|60': 9,
+  'advanced|basic_gym|60': 8, 'advanced|basic_gym|90': 12,
+  'advanced|full_gym|60': 8, 'advanced|full_gym|90': 11,
+};
+
+/// The one cell whose credited Glutes sit below the level floor at the flip (advanced floor 14), an EXACT ratchet:
+/// advanced|basic_gym|60 holds 12. It is the pre-flip pool-ON plan (golden key grid|basic_gym|build_muscle|6d|advanced|p1,
+/// equal before and after the flip); a below-band week is the class step 2's weekly floor owns (founder d14 / d20).
+const _glutesBelowFloor1BF = <String, int>{'advanced|basic_gym|60': 12};
+
+/// `_quadsLabel90` overrides at the flip; `null` = the cell reaches its floor.
+const _quadsLabel90_1BF = <String, String?>{
+  'intermediate|bodyweight|90': null,
+  'intermediate|home_dumbbells|90': null,
+  'intermediate|basic_gym|90': null,
+  'advanced|bodyweight|90': 'time_limited',
+  'advanced|home_dumbbells|90': 'time_limited',
+};
+
+int _quadsAfterBeforeFlip(String key) => _quadsAfterC2c[key] ?? _quadsAfter[key]!;
+int _quadsOffBeforeFlip(String key) => _quadsOffC2c[key] ?? _quadsBefore[key]!;
+String? _label90BeforeFlip(String key) => _quadsLabel90C2c[key] ?? _quadsLabel90[key];
+
+int _quadsAfterFor(String key) => _quadsAfter1BF[key] ?? _quadsAfterBeforeFlip(key);
+int _quadsOffFor(String key) => _quadsOff1BF[key] ?? _quadsOffBeforeFlip(key);
+int _hamstringsFor(String key) => _hamstrings1BF[key] ?? _hamstringsBefore[key]!;
+String? _label90For(String key) =>
+    _quadsLabel90_1BF.containsKey(key) ? _quadsLabel90_1BF[key] : _label90BeforeFlip(key);
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -432,7 +491,7 @@ void main() {
           reason: 'Legs B: ${legsB.exercises.map((e) => e.exerciseName).toList()}');
     });
 
-    test('sweep: 3 levels x 4 tiers x {60, 90} min on the production path (core-list pool OFF)', () {
+    test('sweep: 3 levels x 4 tiers x {60, 90} min on the production path (the core-list pool)', () {
       final bad = <String>[];
       for (final level in _levels) {
         for (final tier in _tiers) {
@@ -448,16 +507,21 @@ void main() {
             if (q <= _quadsBefore[key]!) bad.add('$key: Quads $q is not above the old ${_quadsBefore[key]}');
             // Glutes (credited) keep their floor; Hamstrings never fall below the pre-change figure.
             final g = glutesWithoutQuadFirst(plan, 0);
-            if (g < floor) bad.add('$key: credited Glutes $g < floor $floor');
+            final gExc = _glutesBelowFloor1BF[key];
+            if (gExc != null) {
+              if (g != gExc) bad.add('$key: credited Glutes $g != recorded $gExc (Unit 1B-F exception)');
+            } else if (g < floor) {
+              bad.add('$key: credited Glutes $g < floor $floor');
+            }
             final h = fullCredit(plan, 0, 'hamstring');
-            if (h < _hamstringsBefore[key]!) bad.add('$key: Hamstrings $h < before ${_hamstringsBefore[key]}');
+            if (h < _hamstringsFor(key)) bad.add('$key: Hamstrings $h < recorded ${_hamstringsFor(key)}');
             // The allocator's own label for a Quads shortfall at 90 minutes is the documented one.
             if (minutes == 90) {
               expect(stats.belowFloor['Quads'], _label90For(key), reason: '$key Quads label');
             }
             // The documented CAUSE of `cap_limited` there: both leg days hold a budgeted quad compound at the
             // per-exercise maximum (the label alone also covers a session cap or a weekly top).
-            if (key == 'intermediate|basic_gym|90' || _quadsLabel90C2c.containsKey(key)) {
+            if (minutes == 90 && _label90For(key) == 'cap_limited') {
               final quadCompoundSets = [
                 for (final d in plan.weekPlans[0].workoutDays.where((d) => d.name.startsWith('Legs')))
                   for (final e in d.exercises.where(budgeted).where(kneeQuadFirst)) e.sets,
@@ -640,6 +704,24 @@ void main() {
       expect(e.key.endsWith('|90') && _quadsAfter.containsKey(e.key), isTrue,
           reason: 'label: ${e.key} is not a real 90-minute cell');
       expect(e.value, isNot(_quadsLabel90[e.key]), reason: 'label: ${e.key} equals the OI-454 label (a dead override)');
+    }
+    for (final e in _quadsAfter1BF.entries) {
+      expect(e.value, isNot(_quadsAfterBeforeFlip(e.key)), reason: 'after (1B-F): ${e.key} is a dead override');
+    }
+    for (final e in _quadsOff1BF.entries) {
+      expect(e.value, isNot(_quadsOffBeforeFlip(e.key)), reason: 'off (1B-F): ${e.key} is a dead override');
+    }
+    for (final e in _hamstrings1BF.entries) {
+      expect(_hamstringsBefore.containsKey(e.key), isTrue, reason: 'hamstrings (1B-F): ${e.key} is not a cell');
+      expect(e.value, isNot(_hamstringsBefore[e.key]), reason: 'hamstrings (1B-F): ${e.key} is a dead override');
+    }
+    for (final e in _glutesBelowFloor1BF.entries) {
+      expect(_quadsAfter.containsKey(e.key), isTrue, reason: 'glutes (1B-F): ${e.key} is not a cell');
+      expect(e.value, lessThan(_band[e.key.split('|').first]!.$1), reason: 'glutes (1B-F): ${e.key} is not below its floor');
+    }
+    for (final e in _quadsLabel90_1BF.entries) {
+      expect(e.key.endsWith('|90') && _quadsAfter.containsKey(e.key), isTrue, reason: 'label (1B-F): ${e.key}');
+      expect(e.value, isNot(_label90BeforeFlip(e.key)), reason: 'label (1B-F): ${e.key} is a dead override');
     }
   });
 }

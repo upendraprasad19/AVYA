@@ -3,8 +3,8 @@
 // The REAL `PlanGenerator.generateV4` (the session set budget is always on since the 2026-11-02 flip), over
 // 4 goals x 4 tiers x days {3,4,5,6} x 3 levels x phases {1,4,5} x minutes
 // {30,60,90} = 1,728 runs, plus 48 runs with no minutes at all (build_muscle,
-// phase 1: the 60-minute default), plus a focus grid. `enable_core_list_pool` is
-// ON for the build_muscle subset.
+// phase 1: the 60-minute default), plus a focus grid. Every goal runs on the core-list pool (the only picker since Unit
+// 1B-F deleted the `enable_core_list_pool` flag; before it, only the build_muscle subset ran ON).
 //
 // Hard zeros (every one is asserted; a non-empty list prints the first offenders):
 //  - time:        a day (any of the 4 weeks) whose INDEPENDENT minutes, with its
@@ -468,7 +468,6 @@ void main() {
       final bad = <String, List<String>>{};
       var runs = 0;
       for (final goal in _goals) {
-        await HiveService.instance.configBox.put('enable_core_list_pool', goal == 'build_muscle');
         for (final days in _dayCounts) {
           for (final level in _levels) {
             for (final phase in _phases) {
@@ -484,13 +483,11 @@ void main() {
           }
         }
       }
-      await HiveService.instance.configBox.delete('enable_core_list_pool');
       expectNoZeros(bad, runs, 4 * 4 * 3 * 3 * 3 + 12);
     });
   }
 
   test('hard zeros with a focus muscle (cap 12, top 25) and the founder case', () async {
-    await HiveService.instance.configBox.put('enable_core_list_pool', true);
     final bad = <String, List<String>>{};
     var runs = 0;
     for (final days in _dayCounts) {
@@ -530,7 +527,6 @@ void main() {
       }
       _agg.founder[focus.isEmpty ? 'none' : focus.first] = md.toString();
     }
-    await HiveService.instance.configBox.delete('enable_core_list_pool');
     expectNoZeros(bad, runs, 4 * 3 * 2 + 2);
   });
 
@@ -538,7 +534,6 @@ void main() {
     // The grid's four goal tokens are not the app's five: onboarding also offers
     // `recompose`, which the generator plans as build_muscle but through its own
     // cardio path. And an injured user's days are thinner (top-up, exclusions).
-    await HiveService.instance.configBox.put('enable_core_list_pool', true);
     final bad = <String, List<String>>{};
     var runs = 0;
     for (final tier in const ['full_gym', 'home_dumbbells']) {
@@ -562,7 +557,6 @@ void main() {
         }
       }
     }
-    await HiveService.instance.configBox.delete('enable_core_list_pool');
     expectNoZeros(bad, runs, 2 * 3 * 3 + 3 * 3 * 3);
   });
 

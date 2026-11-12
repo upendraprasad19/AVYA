@@ -14,7 +14,7 @@ class WarmupCooldownSelector {
   /// U3 (warmup/cooldown injury filter): the injury tokens each FIXED warmup/
   /// cooldown/cardio move loads (canonical InjuryVocab vocabulary).
   ///
-  /// - MAIN-cascade-selectable moves (Push Up, Band Pull Apart, Baithak) use
+  /// - MAIN-pick-selectable moves (Push Up, Band Pull Apart, Baithak) use
   ///   their EXACT library `injury_contraindications`, so a move is never dropped
   ///   from warmup while the main plan keeps it (Push Up is dropped for a shoulder
   ///   injury in both — the library tags it wrist + shoulder since v14).
@@ -23,11 +23,11 @@ class WarmupCooldownSelector {
   ///   []` despite clearly loading an area); the v14 injury re-check (founder
   ///   2026-10-23) tagged those rows to match this map.
   ///
-  /// EVERY key below now equals the library row's tags, pinned for all 27 by
+  /// EVERY key below now equals the library row's tags, pinned for all 26 by
   /// `warmup_library_injury_mirror_test.dart`. The main-move library under-tagging
   /// that used to be left to "a separate library-audit batch" was closed by v14.
   static const _moveInjuries = <String, Set<String>>{
-    // main-cascade-selectable → library injury_contraindications (verified)
+    // main-pick-selectable → library injury_contraindications (verified)
     'Push Up': {'wrist', 'shoulder'},
     'Band Pull Apart': <String>{},
     'Baithak (Hindu Squat)': {'hip', 'knee'},
@@ -41,9 +41,9 @@ class WarmupCooldownSelector {
     'High Knees': {'knee', 'hip', 'ankle'},
     'Leg Swings': {'hip', 'hamstring'},
     'Hip Circles': {'hip'},
-    'Jumping Jacks': {'knee', 'ankle'}, // impact; overhead swing is low-load (cf Arm Circles)
+    'Jumping Jacks': {'knee', 'ankle', 'hip'}, // impact; overhead swing is low-load (cf Arm Circles)
     'Spot Jogging': {'knee', 'ankle'},
-    'Jump Rope': {'knee', 'ankle', 'wrist'},
+    'Jump Rope': {'knee', 'ankle', 'wrist', 'hip'},
     'Cycling (Stationary)': <String>{}, // low-impact
     'Running (Treadmill)': {'knee', 'ankle', 'hip'},
     'Slow Walking': <String>{}, // universally-safe cooldown / floor anchor
@@ -90,7 +90,7 @@ class WarmupCooldownSelector {
 
   /// The full move → injury-token map. Exposed for the value-agreement drift test:
   /// the presence-only [mappedMoves] guard cannot catch a VALUE mismatch between a
-  /// main-cascade-overlap move's hard-coded tags here and its library
+  /// main-pick-overlap move's hard-coded tags here and its library
   /// `injury_contraindications` (Batch 13-B — the mirror-drift gap Round-1 flagged).
   @visibleForTesting
   static Map<String, Set<String>> get moveInjuries => _moveInjuries;

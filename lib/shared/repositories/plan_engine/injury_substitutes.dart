@@ -1,19 +1,19 @@
 /// ①.1d (Batch 11-C) — curated per-injury safe-substitute PREFERENCE.
 ///
-/// When the cascade fills an exercise slot, `queryV4`'s injury filter
-/// (`injuryExclusions`) has ALREADY removed every contraindicated exercise.
-/// This map lets `_cascadeFill` PREFER a curated, joint-friendlier safe
+/// When the picker fills an exercise slot (`_pickCoreList`, or the thin-day
+/// top-up through `queryV4`), the injury filter has ALREADY removed every
+/// contraindicated exercise. This map lets `_selectCandidate` PREFER a curated, joint-friendlier safe
 /// substitute among the already-safe, same-`movement_pattern` candidates —
 /// instead of whatever `queryV4`'s compound/priority/foundational sort ranked
 /// first. It therefore CAN NEVER surface a contraindicated exercise (it only
 /// re-ranks the post-filter candidate list), and it is a PREFERENCE: when no
-/// curated sub is a candidate for the slot, the cascade pick is unchanged.
+/// curated sub is a candidate for the slot, the pick is unchanged.
 ///
 /// Keys = `InjuryVocab` canonical tokens. Values = ordered preferred substitute
 /// EXACT library names (foundational / machine / dumbbell variants first =
 /// joint-friendlier), each VERIFIED present + same-pattern + NOT tagged for the
 /// injury against `assets/data/exercise_library.json` (Batch 11-C; re-verified for the v14 tags, 285 rows).
-/// Hive/Flutter-FREE so the pure-Dart cascade tracer can import it.
+/// Hive/Flutter-FREE (it was imported by the pure-Dart cascade tracer, deleted by Unit 1B-F).
 ///
 /// Covers 5 of the 9 `InjuryVocab` tokens — `ankle`/`elbow`/`hamstring`/`neck` have no
 /// curated list → safe fallthrough by construction. v14 (founder 2026-10-23) tagged
