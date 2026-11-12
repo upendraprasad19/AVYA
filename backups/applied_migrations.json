@@ -1379,7 +1379,7 @@
   },
   {
     "migration": "176",
-    "applied_at": "2026-11-12T16:30:00+05:30",
+    "applied_at": "2026-11-12T14:45:00+05:30",
     "hash": "sha256:d278ad6d69b54c4b0fd7b49726d4433dcfb5ddc73d2d0f05bb21f7092113448c",
     "applier": "claude-via-node-api",
     "diagnose": "f2c7a9",

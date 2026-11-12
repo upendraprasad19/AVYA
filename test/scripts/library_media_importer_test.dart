@@ -659,9 +659,10 @@ void main() {
     });
   });
 
-  // Unit 1B-F, Ruling 12 (founder d19): the five lower-body jump E-rows gain `hip`. Mutations (rule 21, each reddens a
-  // test below): the stage call removed from main() ((a) and (b)); a `before` mismatch accepted, the row left as it is
-  // ((c)); the record ignored by --check (the stage skipped when CHECK is set: (b)).
+  // Generator Unit 1B-F2 (OI-495, seed v27): the 26 kept overlay rows take the record's after and lose both overlay keys.
+  // Mutations (rule 21, each reddens a test below): the stage call removed from main() ((a) and (b)); a partial match
+  // accepted ((c)); an unnamed overlay key left on the row ((c2)); the after-is-the-overlay check in readOverlayCopy
+  // removed ((e), its refusal text).
   group('the overlay-copy stage (Unit 1B-F2, seed v27)', () {
     setUp(() => File('${t.dir.path}/scripts/data/library_batch_c2_removals.json')
         .writeAsStringSync(File('scripts/data/library_batch_c2_removals.json').readAsStringSync()));
@@ -776,6 +777,9 @@ void main() {
     });
   });
 
+  // Unit 1B-F, Ruling 12 (founder d19): the five lower-body jump E-rows gain `hip`. Mutations (rule 21, each reddens a
+  // test below): the stage call removed from main() ((a) and (b)); a `before` mismatch accepted, the row left as it is
+  // ((c)); the record ignored by --check (the stage skipped when CHECK is set: (b)).
   group('the injury-tag stage (Unit 1B-F, seed v25)', () {
     setUp(() => File('${t.dir.path}/scripts/data/library_batch_c2_removals.json')
         .writeAsStringSync(File('scripts/data/library_batch_c2_removals.json').readAsStringSync()));

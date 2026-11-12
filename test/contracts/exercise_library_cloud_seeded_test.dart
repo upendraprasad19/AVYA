@@ -929,9 +929,10 @@ void main() {
         // MUTATION (the Unit 1B-F2 emitter fix): a rollback that restores the TEXT column through the array path writes a
         // text[] literal, which Postgres silently assignment-casts to the text `{vertical_push}` (no error). The sandbox
         // generator loses its firstOrNull mapping.
-        const fixed = "(TEXT_FROM_ARRAY.has(column) ? sqlEscape(firstOrNull(v)) : cloudValue(v))";
+        const fixed = 'const restoreValue = (column, v) => COLUMN_SQL[column](v);';
         expect(genText, contains(fixed), reason: 'the mutation must apply');
-        gen.writeAsStringSync(genText.replaceFirst(fixed, '(cloudValue(v))'));
+        gen.writeAsStringSync(genText.replaceFirst(
+            fixed, 'const restoreValue = (column, v) => (Array.isArray(v) ? sqlTextArray(v) : sqlEscape(v));'));
         final arrays = await _runSandbox(root, 'seed generator whose restore emitter writes arrays');
         expect(arrays.exitCode, 0, reason: '${arrays.stdout}${arrays.stderr}');
         final arraySql = _sandboxOut(root).readAsStringSync();
@@ -998,6 +999,22 @@ void main() {
         expect(_sandboxOut(root).readAsStringSync(), contains("'weight on balls of feet','don''t [stop] short']::text[], common_mistakes = "));
         _sandboxOut(root).deleteSync();
         prevFile.writeAsStringSync(prevText);
+
+        // B-pass 1B-F2 finding 3: a rollback restores through the INSERT's own coercion. G1373's 174 tuple writes
+        // name_aliases as NULL; a record whose before is [] passes the tuple guard (the INSERT writes [] as NULL too) and
+        // must restore NULL, never ARRAY[]::text[] (an empty array is not "no alias" to getFormCues' readers).
+        final recFile = File('${root.path}/scripts/data/library_s1b3_name_aliases.json');
+        final recText = recFile.readAsStringSync();
+        final rec = _s1b3Record();
+        final recRow = (rec['rows'] as List).cast<Map<String, dynamic>>().single;
+        recFile.writeAsStringSync(jsonEncode({...rec, 'rows': [{...recRow, 'before': <String>[]}]}));
+        final empty = await _runSandbox(root, 'a name_aliases record whose before is []');
+        expect(empty.exitCode, 0, reason: '${empty.stdout}${empty.stderr}');
+        final emptySql = _sandboxOut(root).readAsStringSync();
+        expect(emptySql, contains("--   UPDATE exercise_library SET name_aliases = NULL WHERE id = '${_cloudId('G1373')}';"));
+        expect(emptySql, isNot(contains('SET name_aliases = ARRAY[]')));
+        _sandboxOut(root).deleteSync();
+        recFile.writeAsStringSync(recText);
 
         // MIRROR: the unmodified files generate, and write the S1b-3 shape.
         final ok = await _runSandbox(root, 'seed generator with the S1b-3 BATCH');

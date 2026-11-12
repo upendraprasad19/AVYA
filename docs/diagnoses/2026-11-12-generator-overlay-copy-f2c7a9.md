@@ -162,3 +162,14 @@ Each applied (grep count checked) and restored (cmp against a copy):
 
 The rollback emitter's silent cast is recorded as debugging skill class 2.154 (`.claude/skills/debugging/bug-classes.md`,
 SKILL.md table): a JSON array written into a TEXT column is not refused by Postgres, it becomes the text `{x}`.
+
+## Review fixes (round 4 and B-pass)
+
+- `readOverlayCopy` refuses a record row whose `after` is not the overlay its `before` carries; importer test (e)
+  asserts each refusal's text. Mutant: the check removed reddens (e).
+- The seed generator has ONE per-column coercion (`COLUMN_SQL`) shared by the INSERT tuple and every kept-row rollback,
+  so a rollback restores exactly what the INSERT writes (`name_aliases` [] as NULL, defaulted columns as their default,
+  the TEXT-from-array columns as their first element). Migration 176 regenerates byte-identical. Mutant: the generic
+  coercion for `name_aliases` reddens the S1b-3 sandbox's [] restore test.
+- The pool-identity test was vacuous (it restated the per-row identity) and is removed; the planted-overlay test keeps
+  the sweep over every V4 slot's pool.
