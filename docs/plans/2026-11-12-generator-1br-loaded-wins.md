@@ -326,3 +326,10 @@ switch and its fixture logged (`closed_in_commit`), the cost (`verified_clean`, 
   explained; three more knock-on swaps listed. Verified clean: the code equals the prototype, `walkedNames` is exactly
   `_preferNovel`'s skip set (case handling included), H3 = H byte for byte, every section 4 number, the seed-test list
   complete, the data chain.
+- **Build and B-pass (2026-11-12).** Built as v4. Final tree: the 2,304-plan audit byte-identical to prototype H3
+  (`audit.json` and `plan_dump.jsonl`); golden 229 keys (Ruling 1 alone 20, the switch 213); the kill-switch test equal
+  to the r0 fixture; 25 mutants red (26 with M23 below). One build finding: `cross_day_variety_behavioral_test.dart`'s Push A / Push B pin
+  moved 10 -> 12 from Ruling 1 alone (Push B no longer holds Towel Lateral Raise); re-pinned with the reason. B-pass
+  (`docs/reviews/generator-step1-1br-bpass.md`, one Sonnet seat on the CI-green head b459c6da): P2 the `walkedNames`
+  wiring in `_pickCoreList` was unprotected (T5's fixture gives the same pick either way): T5b added, M23 red; P3 the
+  "will actually be picked" wording qualified for curated injury substitutes.

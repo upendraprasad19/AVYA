@@ -414,7 +414,9 @@ class CoreListSelector {
     // past), when `topFit` matches the slot at least as well. So the pick is `topFit` or a bodyweight row that matches
     // BETTER, never a worse-matching loaded row; key d still decides across foundational status, as before. A gym
     // user's loaded rows keep their order (the key is 0 for each); a bodyweight user is unchanged (no `topFit`). Under
-    // Ruling 12's emergency the easier-gap key comes first, as in the sort.
+    // Ruling 12's emergency the easier-gap key comes first, as in the sort. For an injured user whose pool holds curated
+    // substitutes, `_selectCandidate` picks from that list in its own order, so this key is inert there (it changes
+    // neither the list's members nor their order).
     int byRest(Map<String, dynamic> x, Map<String, dynamic> y) {
       final a = [if (anyCoreLevel) easierGap(x)!, ...restKeys(x)];
       final b = [if (anyCoreLevel) easierGap(y)!, ...restKeys(y)];

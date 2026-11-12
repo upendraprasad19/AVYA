@@ -17,7 +17,7 @@
 // `walkedNames` [T3d]; M15 `topFit` ignores the soft avoid [T10b]; M16 `topFit` chosen by id [T3f]; M17 the default
 // `topFitMatch` 4 -> 3 [T14, T6]; M18 the new key before the soft-avoid key [T10]; M19 no `toLowerCase()` in the walked
 // check [T3d]; M20 `topFit` ignores demoted names [T10c]; M21 `byRest` without the easier gap [T12b]; M22 the new key
-// before the easier-gap key [T12b].
+// before the easier-gap key [T12b]; M23 `_pickCoreList` does not pass `walkedNames` [T5b] (B-pass finding 1).
 @Timeout(Duration(minutes: 10))
 library;
 
@@ -430,6 +430,35 @@ void main() {
       await HiveService.instance.configBox.put('disable_loaded_wins', true);
       final off = run();
       expect(off[1].exercisesA.single.exerciseName, 'Push Up', reason: 'switch off: the pre-1B-R walk');
+    });
+
+    // B-pass finding 1: `_pickCoreList` must hand its avoid names to `rankedPool` as `walkedNames`. In T5 the walked
+    // row and the next loaded row match the slot equally, so a `topFit` that is the walked row picks the same row. Here
+    // the walked row C matches best, the next loaded row B misses the type, and the bodyweight row A hits it: with the
+    // wiring `topFit` is B, A matches better and stays ahead of B, and the Upper day takes A; without it `topFit` is C,
+    // A goes behind B, and the walk past C lands on B (a worse-matching loaded row, which Ruling 3 rules out).
+    test('T5b: the walked best loaded row is not topFit (real pickV4, the walkedNames wiring)', () async {
+      final chest = _slot('Mid Chest', 'horizontal_push');
+      await seed([
+        _row('A_BW', 'Push Up', pattern: 'horizontal_push', focus: ['Mid Chest']),
+        _row('B_ISO', 'Machine Chest Fly',
+            pattern: 'horizontal_push', focus: ['Mid Chest'], needed: ['machines'], type: const ['isolation']),
+        _row('C_DB', 'Dumbbell Bench Press', pattern: 'horizontal_push', focus: ['Mid Chest'], needed: ['dumbbells']),
+      ]);
+      final days = ExerciseSelector.pickV4(
+        slotDays: [
+          MuscleSlotDay(name: 'Chest', focus: 'chest', dayType: 'push', intensity: 'hypertrophy', slotsA: [chest]),
+          MuscleSlotDay(name: 'Upper', focus: 'upper', dayType: 'upper', intensity: 'hypertrophy', slotsA: [chest]),
+        ],
+        exerciseRepo: ExerciseRepository.instance,
+        equipmentTier: 'full_gym',
+        effectiveExp: 'intermediate',
+        phase: 1,
+        goal: 'build_muscle',
+        capability: _cap('full_gym'),
+      );
+      expect(days[0].exercisesA.single.exerciseName, 'Dumbbell Bench Press', reason: 'precondition: the feeder pick');
+      expect(days[1].exercisesA.single.exerciseName, 'Push Up');
     });
 
     test('T6: a bodyweight user\'s order is unchanged for every slot of every split, phases 1-3, every level', () {

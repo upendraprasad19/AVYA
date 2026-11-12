@@ -11989,7 +11989,8 @@ concepts:
       phase 1 a key before the foundational key sorts a non-fitting row behind topFit (the first
       fitting row by the rest keys that the walk will not skip: demoted, soft-avoided or in
       walkedNames, the lowercase avoidNames _pickCoreList.fill passes) when topFit matches the
-      slot at least as well (slotMatch = 2 * subMiss + typeMiss). Kill switch configBox
+      slot at least as well (slotMatch = 2 * subMiss + typeMiss); for an injured user with curated
+      substitutes in the pool _selectCandidate's own list decides and the key is inert. Kill switch configBox
       disable_loaded_wins (PlanEngineFlags.loadedWinsEnabled, default ON); OFF equals
       test/fixtures/generator_golden_hashes_loaded_wins_off.json
       (test/plan_generator/loaded_wins_kill_switch_golden_test.dart).

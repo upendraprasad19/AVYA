@@ -17,7 +17,7 @@ findings:
     title: "Phase 1: a bodyweight row gives way to topFit, the loaded row the walk will reach, when it matches the slot at least as well (Ruling 3); equipped phase-1 plans with Single Leg Glute Bridge / Bodyweight Good Morning 122 / 58 -> 0 / 0"
     terminal_state: closed_in_commit
     commit: generator-step1-1br@branch
-    verification: "core_list_selector.dart slotMatch / byRest / topFit and the key before key d; exercise_selector.dart passes avoidNames as walkedNames; loaded_wins_behavioral_test.dart T3-T14 and T5 (the Upper + Core walk on the real pickV4); mutations M2-M22 red (diagnose e4b7a2); 443 plans change, 0 bodyweight."
+    verification: "core_list_selector.dart slotMatch / byRest / topFit and the key before key d; exercise_selector.dart passes avoidNames as walkedNames; loaded_wins_behavioral_test.dart T3-T14, T5 (the Upper + Core walk on the real pickV4) and T5b (the walkedNames wiring, B-pass finding 1); mutations M2-M23 red (diagnose e4b7a2); 443 plans change, 0 bodyweight."
 
   - id: 1BR-OI387-G0355
     title: "G0355 Dumbbell Single Arm Lateral Raise core at beginner (Ruling 1, seed v26): equipped plans showing Towel Lateral Raise 32 plans / 96 day-weeks -> 0"

@@ -74,6 +74,8 @@ proposed_fix: |
   Ruling 3 (d25, phase 1): in phase 1 a non-fitting row sorts behind `topFit`, the first fitting row by the rest keys
   (the easier-gap key first under Ruling 12's emergency) that the walk will not skip, when `topFit` matches the slot at
   least as well (`slotMatch = 2 * subMiss + typeMiss`). The pick is `topFit` or a bodyweight row that matches better.
+  For an injured user whose pool holds curated substitutes, `_selectCandidate` picks from that list in its own order
+  (`exercise_selector.dart` `_selectCandidate`), so the key is inert there (B-pass finding 2).
   Ruling 4: kill switch `disable_loaded_wins` (PlanEngineFlags.loadedWinsEnabled, default ON), read once per
   _pickCoreList call; OFF restores Rulings 2 and 3 to r0 byte for byte (pinned by the 1,010-persona fixture
   test/fixtures/generator_golden_hashes_loaded_wins_off.json).
@@ -88,7 +90,7 @@ impact_analysis: |
   load a row (bodyweight plans byte-identical, T6 and the audit). The seed bump touches the shared exercise library on
   every device (bundle only). The app is not live; testers regenerate.
 touched_layers_checked:
-  - { layer: client_code, status: fixed_in_this_batch, evidence: "core_list_selector.dart rankedPool (Rulings 2-3), plan_engine_flags.dart, exercise_selector.dart _pickCoreList; flutter analyze clean; loaded_wins_behavioral_test 28 tests green; mutations M1-M22 red (below)" }
+  - { layer: client_code, status: fixed_in_this_batch, evidence: "core_list_selector.dart rankedPool (Rulings 2-3), plan_engine_flags.dart, exercise_selector.dart _pickCoreList; flutter analyze clean; loaded_wins_behavioral_test 29 tests green; mutations M1-M23 red (below)" }
   - { layer: hive_local_state, status: fixed_in_this_batch, evidence: "exerciseBox re-seeded v25 -> v26 (library_seed_v26_upgrade_behavioral_test: a v25 box upgrades, G0355 as bundled, every other row unchanged; MIRROR: a v26 box is not rewritten)" }
   - { layer: postgres_schema, status: verified, evidence: "information_schema on dedsavbjuwgarrhphgnl, read-only, 2026-11-12: exercise_library has no core_levels, is_foundational, priority_tier or same_movement_as column; agrees with backups/live_schema_columns.json" }
   - { layer: postgres_data, status: not_applicable, evidence: "no cloud write in this unit; the cloud exercise_library overlay copy is Unit 1B-F2 (OI-495, now seed v27)" }
@@ -121,12 +123,13 @@ loaded row the walk would skip (review round 2). H3 (Ruling 3) = H's 443 plans, 
 
 `test/contracts/loaded_wins_behavioral_test.dart`, `loaded_wins_kill_switch_golden_test.dart` and the seed v26
 test, each mutant applied by the scratchpad runner (applied-check by grep count, sources restored and checked by
-sha256 after the run): all 25 mutants red, none by a compile error (JSON reporter, failing tests named).
+sha256 after the run): all 26 mutants red (M23 after T5b), none by a compile error (JSON reporter, failing tests named).
 
 - Ruling 2: M1 `fitApplies` back to compound only (T1, T8); M9a `loadedWins` ignored by Ruling 2 (T1 switch-off).
 - Ruling 3, the key: M2 dropped (8: T3, T3d, T3f, T4, T4b, T10, T12b, T5); M3 after key d (6); M5 the match test made `true` (14, incl. T2, T3b); M5b `<=` -> `<` (6); M7 `!fits` -> `fits` (11, incl. T13, T8); M18 before the soft-avoid key (T10, T12, T12b); M22 before the easier-gap key (T12, T12b).
 - Ruling 3, `topFit`: M4 `phase == 1` dropped and M4b `phase >= 1` (T3d, the phase-2 order); M8 `fitApplies` dropped (T9); M9b `loadedWins` ignored by Ruling 3 (T3 switch-off, T4, T5); M14 `walkedNames` ignored and M19 its `toLowerCase()` dropped (T3d); M15 the soft avoid ignored (T10b); M20 the demoted check dropped (T10c); M16 by id (T3d, T3f, T12b); M21 `byRest` without the easier gap (T12b); M17 the no-`topFit` default 4 -> 3 (T1 switch-off, T14).
 - `slotMatch`: M11 without the sub-focus term (T3c, T3e); M13 weights swapped (T3e). `fits`: M6 improvised items counted as loaded (11, incl. T1, T8).
+- The wiring (B-pass finding 1): M23 the `walkedNames: avoidNames` argument deleted from `_pickCoreList` (`grep -c` 0) reddened nothing until T5b was added (T5's walked and next loaded rows match the slot equally); with T5b, only T5b reddens. T5b is green on the real code.
 - Ruling 4: M10 the flag read ignored in `_pickCoreList` (T5's switch-off control on the real `pickV4`; the T7 golden is its 1,010-persona form).
 - Ruling 1, data: M12 `beginner` removed from G0355 in the asset (4: the v26 precondition, two core-level data tests, T8's Towel Lateral Raise case). `_exerciseLibraryVersion` back to 25 reddens the v26 test's "a v25 box ends at v26" (run separately, constant restored, `grep -c` checked both ways).
 
