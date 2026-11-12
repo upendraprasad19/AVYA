@@ -446,4 +446,13 @@ extension SyncServiceCoach on SyncService {
     if (userId == null) return;
     await _restoreCoachMemory(userId);
   }
+
+  /// OI-479 test seam — drives [_restoreCoachInteractions] with INJECTED
+  /// `ai_coach_interactions` rows ([preFetched] is required, so this never
+  /// reaches the network).
+  @visibleForTesting
+  Future<void> restoreCoachInteractionsForTest(String userId,
+          {required Object? preFetched}) =>
+      _restoreCoachInteractions(userId, '2020-01-01T00:00:00Z',
+          preFetched: preFetched);
 }

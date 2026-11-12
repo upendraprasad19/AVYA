@@ -630,6 +630,7 @@ paths:
   # schedule merge, which delegates its hybrid-rest predicate and its week bounds there so the two cannot disagree.
   - { glob: "lib/core/services/streak_progress_service.dart", tier: platform }   # restore freeze merge (mergeFreezeProgress); also the streak-freeze writer
   - { glob: "lib/core/services/day_swap/day_swap_rules.dart", tier: platform }   # rules the schedule merge delegates to; writes the arranged_at_ms stamp it compares
+  - { glob: "lib/core/services/coach_chat_clear.dart", tier: platform }   # restore merge of the coach clear marker (raiseTo, max-wins; OI-479, diagnose 5970aa)
   # The identity a template push keys on: restore rebuilds Hive keys from the cloud id, and the migrator rewrites
   # legacy keys before any push (OI-252).
   - { glob: "lib/core/services/template_identity.dart", tier: platform }   # the cloud primary key a template push uses (cloudIdFromKey / templateKeyFor)

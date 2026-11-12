@@ -11,6 +11,9 @@ extension _CompactHeader on _AiCoachScreenState {
     // glued under UPGRADE pill. Captain-cap SVG replaces the "AI" text avatar.
     final messageCount = ref.watch(messageLimitProvider);
     final cap = AppConstants.freeAiMessagesPerDay;
+    // OI-479 — "Clear conversation" is disabled while a reply is in flight
+    // (text `send` and `sendWithMedia` both hold this flag).
+    final isSending = ref.watch(sendMessageProvider);
 
     return Container(
       padding: const EdgeInsets.fromLTRB(18, 14, 14, 12),
@@ -128,7 +131,8 @@ extension _CompactHeader on _AiCoachScreenState {
                         onSelected: (value) {
                           switch (value) {
                             case 'clear':
-                              ref.invalidate(chatHistoryProvider);
+                              unawaited(
+                                  confirmClearCoachConversation(context, ref));
                               break;
                             case 'upgrade':
                               showPaywallSheet(context,
@@ -137,7 +141,7 @@ extension _CompactHeader on _AiCoachScreenState {
                           }
                         },
                         itemBuilder: (context) =>
-                            coachHeaderMenuItems(isPro: isPro),
+                            coachHeaderMenuItems(isPro: isPro, isSending: isSending),
                       ),
                     ],
                   ),
@@ -165,16 +169,92 @@ extension _CompactHeader on _AiCoachScreenState {
   }
 }
 
+/// OI-479 (diagnose 5970aa) — "Clear conversation". HIDES the thread (the
+/// marker in `CoachChatClear`); nothing is deleted and the coach keeps its
+/// long-term memory. Asks first. A reply that started while the dialog was
+/// open (a retry tap, a photo upload finishing into `sendWithMedia`) cancels
+/// the clear: that turn's row predates the marker, so its reply would vanish.
+/// Pending action cards (meal / workout / tool APPLY) are deliberately left
+/// alone (coordinator call C2: they are actions, not conversation).
+///
+/// A top-level function so a widget test can drive it with a real `ref`.
+Future<void> confirmClearCoachConversation(
+    BuildContext context, WidgetRef ref) async {
+  final confirmed = await showDialog<bool>(
+    context: context,
+    builder: (ctx) => AlertDialog(
+      backgroundColor: AppColors.card,
+      title: Text(
+        'Clear this chat?',
+        style: AppTypography.body.copyWith(
+          fontWeight: FontWeight.w800,
+          color: AppColors.textPrimary,
+        ),
+      ),
+      content: Text(
+        'Messages leave this screen. Your coach still remembers your '
+        'goals, injuries and preferences.',
+        style: AppTypography.body.copyWith(color: AppColors.textDim),
+      ),
+      actions: [
+        TextButton(
+          key: const ValueKey('coach_clear_cancel'),
+          onPressed: () => Navigator.of(ctx).pop(false),
+          child: const Text('CANCEL'),
+        ),
+        TextButton(
+          key: const ValueKey('coach_clear_confirm'),
+          onPressed: () => Navigator.of(ctx).pop(true),
+          child: const Text('CLEAR', style: TextStyle(color: AppColors.accent)),
+        ),
+      ],
+    ),
+  );
+  if (confirmed != true || !context.mounted) return;
+  if (ref.read(sendMessageProvider)) return;
+  // The header runs this unawaited: a throw here (the user box closed by a
+  // sign-out mid-flow) would reach the zone as an uncaught error. Report it
+  // and tell the user nothing was cleared (B-pass F2).
+  final bool cleared;
+  try {
+    cleared = await CoachChatClear.clear();
+  } catch (e, st) {
+    unawaited(ErrorTelemetry.recordNonFatal(e, st,
+        reason: 'coach_chat_clear_failed'));
+    if (context.mounted) {
+      ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+        SnackBar(
+          content: Text(
+            "Couldn't clear this chat. Try again.",
+            style: AppTypography.body.copyWith(color: AppColors.bad),
+          ),
+          backgroundColor: AppColors.card,
+        ),
+      );
+    }
+    return;
+  }
+  if (!cleared || !context.mounted) return;
+  ref.invalidate(chatHistoryProvider);
+}
+
 /// The AI Coach overflow menu (OI-466). A top-level function, not a member of
 /// the `_CompactHeader` extension, so a test can pump the exact entries the
 /// real header offers: it needs no `ref` and no `context`. The menu holds
 /// `Clear conversation` and, on a free account, `Upgrade to PRO`. There is no
 /// channel switch: Telegram is dropped, and with it the toggle and the
 /// "Coming Soon" view the toggle led to.
-List<PopupMenuEntry<String>> coachHeaderMenuItems({required bool isPro}) {
+///
+/// OI-479: `Clear conversation` is disabled while [isSending] (a reply is in
+/// flight); it opens a confirmation dialog in the header's handler.
+List<PopupMenuEntry<String>> coachHeaderMenuItems({
+  required bool isPro,
+  bool isSending = false,
+}) {
   return [
     PopupMenuItem(
       value: 'clear',
+      enabled: !isSending,
       child: Row(
         children: [
           const Icon(Icons.delete_outline, size: 16, color: AppColors.textDim),

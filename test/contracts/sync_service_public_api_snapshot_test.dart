@@ -59,6 +59,9 @@ void main() {
         'pushReadinessForSyncDomain', // ⑥ 6-C
         'restoreReadinessForSyncDomain', // ⑥ 6-C
         'syncWeightNow',
+        // OI-479 (diagnose 5970aa): pushes the coach clear marker through the
+        // monotonic RPC; called by CoachChatClear.clear and the sign-out teardown.
+        'pushCoachChatClearedAt',
         'syncWorkoutData',
         // H1a (Unit H) — non-coalesced variant for awaited callers.
         'syncWorkoutDataNow',
@@ -167,6 +170,12 @@ void main() {
         // cannot run under the unit harness).
         'markFreshDeviceForTest',
         'postponeFirstSweepForTest',
+        // OI-479 (diagnose 5970aa) - @visibleForTesting seams: inject the
+        // user_preferences / coach_interactions rows and run the preferences
+        // push; delegate to the private helpers, production path unchanged.
+        'restoreUserPreferencesForTest',
+        'syncUserPreferencesForTest',
+        'restoreCoachInteractionsForTest',
       };
 
       final files = <File>[

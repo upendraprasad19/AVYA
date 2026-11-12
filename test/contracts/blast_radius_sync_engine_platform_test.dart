@@ -109,6 +109,7 @@ const _engine = <String>[
   '${_services}plan_window_reanchor.dart',
   '${_services}streak_progress_service.dart',
   '${_services}day_swap/day_swap_rules.dart',
+  '${_services}coach_chat_clear.dart',
   '${_services}template_identity.dart',
   '${_services}template_identity_migrator.dart',
   '${_services}singleton_lifecycle_registry.dart',

@@ -9,6 +9,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:icanbefitter/core/constants/app_constants.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
 import 'package:icanbefitter/core/services/completion_prompt_store.dart';
+import 'package:icanbefitter/core/services/coach_chat_clear.dart';
 import 'package:icanbefitter/features/train/services/coach_day_completion.dart';
 import 'package:icanbefitter/features/train/services/workout_completion_bookkeeping.dart';
 import 'package:icanbefitter/core/services/migrated_key.dart';
@@ -177,6 +178,10 @@ class ChatHistoryNotifier extends Notifier<List<ChatMessage>> {
     // surface failed/pending entries with their key (needed for the Retry
     // button to update the right row instead of inserting a duplicate).
     final entries = <_CoachEntry>[];
+    // OI-479 — "Clear conversation" hides every row created at or before the
+    // marker (read ONCE per build). Today's unresolved completion tile is
+    // exempt (D3); it still goes once the day is completed or resolved.
+    final clearedAt = CoachChatClear.clearedAt();
     for (final key in coachBox.keys) {
       final raw = coachBox.get(key);
       if (raw is! Map) continue;
@@ -201,6 +206,10 @@ class ChatHistoryNotifier extends Notifier<List<ChatMessage>> {
       if (kind == 'completion_prompt' &&
           ((interaction['date'] as String?) ?? '').compareTo(istTodayStr()) <
               0) {
+        continue;
+      }
+      if (kind != 'completion_prompt' &&
+          CoachChatClear.isHiddenByClear(interaction, clearedAt)) {
         continue;
       }
       final createdAt = interaction['created_at'] as String? ?? '';

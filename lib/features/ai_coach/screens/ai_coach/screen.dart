@@ -17,6 +17,7 @@ import 'package:icanbefitter/features/profile/providers/profile_provider.dart';
 import 'package:icanbefitter/features/train/providers/workout_surface_invalidation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart' show FileOptions;
 import 'package:icanbefitter/core/services/supabase_service.dart';
+import 'package:icanbefitter/core/services/coach_chat_clear.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
 import 'package:icanbefitter/core/services/sync_service.dart';
 import 'package:icanbefitter/shared/widgets/paywall_sheet.dart';

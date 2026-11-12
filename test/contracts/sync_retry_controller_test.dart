@@ -553,6 +553,9 @@ void main() {
         'upsert_scheduled_workout', 'upsert_streak', 'upsert_template_exercise',
         'upsert_user_preferences', 'upsert_user_profile', 'upsert_workout_log',
         'upsert_workout_log_sets', 'upsert_workout_template',
+        // OI-479: the "Clear conversation" marker push. A swept push: the
+        // sweep re-sends it through _syncUserPreferences.
+        'upsert_coach_chat_cleared_at',
       };
       const notArmed = <String>{
         'backfill_custom_entity_ids', 'check_and_sync', 'check_and_sync_snapshot',

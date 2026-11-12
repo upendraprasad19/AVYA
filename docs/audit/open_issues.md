@@ -4502,6 +4502,12 @@ sign-out before `userBox` clears. Surfaced during OI-252's B-pass (finding 7,
 field rather than fixed in that batch (narrow, pre-existing gap; not a regression from OI-252's
 change, and no evidence it's hit in production yet).
 
+Added 2026-11-12 (OI-479, diagnose 5970aa): a second instance of the class. The AI Coach "Clear conversation" marker
+`userBox['coach_chat_cleared_at']` is pushed best-effort (on clear, on every `_syncUserPreferences`, and for 2 s first
+in `AuthNotifier._teardown` before `clearAllData`). A clear made OFFLINE and followed by a sign-out before reconnecting
+is still lost with the wiped `userBox`, and the next sign-in restores the old thread. The durable cross-session queue
+this entry needs would cover it.
+
 ## OI-256 — Profile field-level conflict resolution: per-field merge instead of whole-object overwrite (user_profile sync)
 
 - **Status**: OPEN
@@ -4670,6 +4676,17 @@ Symptom, measured 2026-09-28 against `scripts/check_sot_registry_parity.dart`:
   a mutation-proven test (the gate already has a rule-24 ledger entry).
 - **Source**: founder-queued during the day-swapper-sync-load batch after repeated hand
   re-derivation of shifted citations.
+- **Instance 2026-11-12 (OI-479 B-pass, `5970aa`)**: in the 9 files OI-479 touched, a scan that
+  compares each cited span's start with the cited method's declaration flagged 58 cites more than
+  6 lines away. Some are whole-file `1-9999` or prose cites and not wrong. Three were stale BEFORE
+  the batch and passed parity because the name still fell inside the span:
+  `_syncUserPreferences` `588-673` (real `663-748`), `_restoreUserPreferences` `1080-1150` (real
+  `1083-1153`) and the inline `971-1033` (same method). OI-479's own `+N` shift carried each of
+  them along. 13 bare single-number cites (`line_range: 332`, `line: 913`) were not shifted at all,
+  because the shift helper, like the gate, read only `N-M`. OI-479 re-derived every cite for a
+  method it changed from the code itself (a bare cite is right when the text at the cited line
+  equals main's text at main's cited line: 15 of 15 match), and left the other cites as they are.
+  The window check in the fix shape above would have caught all three stale ranges.
 
 ## OI-260 — 4 sibling reportGeminiExhaustion-wiring tests (weekly-report/assess-body-composition/ai-media-proxy/rolling-context) share e35936's exact literal-string blind spot if any adopts an injectable geminiChatFn seam
 
@@ -6973,7 +6990,7 @@ Found by the M2b Part B Chrome check (360 dp, real fonts, the real card and exer
 ## OI-479 — AI Coach 'Clear conversation' menu item does nothing: onSelected only invalidates chatHistoryProvider, whose build re-reads every row from coachBox
 
 - **Status**: OPEN
-- **Blocked on**: the founder: what "Clear conversation" should do (local rows only, or local and cloud, or drop the menu entry). Nothing is blocked technically.
+- **Blocked on**: the founder's live-apply go for migration 177, then the device check after the next build (the code is on branch `oi479-clear-conversation`). The product decision is made (below).
 - **Verified**: 2026-11-06, by reading (nothing run): `lib/features/ai_coach/screens/ai_coach/compact_header.dart:130-132` (`case 'clear': ref.invalidate(chatHistoryProvider);`, byte-identical at `d27bf032`), `lib/features/ai_coach/providers/ai_coach_provider.dart:167-190` (`ChatHistoryNotifier.build` loops `coachBox.keys` and rebuilds the list from Hive), and `git grep -n -iE "coachBox\.(clear|delete|deleteAll)|clearChat|clearHistory|clearConversation" -- lib` returns only `lib/shared/repositories/user_repository.dart:1212` (the account wipe).
 - **Identified**: 2026-11-06 · filed via mint_oi.sh from branch `telegram-surface-off`; found by the OI-466 B-pass (a fresh Sonnet reviewer; pre-existing, not caused by that batch)
 
@@ -6984,6 +7001,15 @@ Found by the M2b Part B Chrome check (360 dp, real fonts, the real card and exer
 **Options for the founder (pick one):** (a) clear the local `coachBox` chat rows (keep the `coaching_notes` singleton) and make sure a restore does not resurrect them; (b) clear local and cloud; (c) remove the menu entry until (a) or (b) is wanted. The app is not live (testers only), so there is no user-facing urgency.
 
 **Acceptance:** the item either clears what the decision says (behavioral test: write chat rows to a real Hive box, trigger the action, read the box and the provider back, and, for (a) and (b), run a restore and assert the rows stay gone) or is removed and `coachHeaderMenuItems` and its pin in `test/contracts/telegram_surface_removed_test.dart` are updated in the same change.
+
+Added 2026-11-12 (founder decisions, plan `docs/plans/2026-11-12-oi479-clear-conversation.md`, diagnose `5970aa`):
+D1 clear = HIDE, never delete (cloud chat rows feed coach memory, the weekly report and server jobs; a local delete
+comes back on restore); D2 the coach's short-term history starts fresh, long-term memory kept; D3 today's unresolved
+completion tile stays until the day is done; D4 the clear time syncs to the cloud (`user_preferences.coach_chat_cleared_at`,
+migration 177, RPC `raise_coach_chat_cleared_at`); D5 semantic recall of past conversations kept (no Edge Function
+change). Implemented on branch `oi479-clear-conversation` (plan converged after three review rounds). Done when:
+migration 177 applied live and ledgered, the PR merged, and on a device: clear the chat, the thread empties, the coach
+does not refer to the hidden turns, and after a sign-out and sign-in (online) the thread stays empty.
 
 ## OI-478 — Kept cron_call_log evidence has no reader past 14 days: telegram-admin-bot /cron window is 7 days, alert_cron_function_dead lookback is 14, and its message text says the rows leave the table (OI-199 residual)
 

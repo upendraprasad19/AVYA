@@ -745,6 +745,11 @@ extension SyncServiceProfile on SyncService {
         await _reportSyncFailure(opType: 'upsert_user_preferences', error: e);
       } catch (_) {}
     }
+    // OI-479 — OUTSIDE the try above and unconditional: an upsert or
+    // notification-RPC failure must never skip the marker push, and a marker
+    // failure must never be reported as `upsert_user_preferences`. This is the
+    // retry leg of a push `CoachChatClear.clear` lost offline. Never throws.
+    await pushCoachChatClearedAt(userId);
   }
 
   /// [preFetched] / [preFetchedUsers] (C3 single-call): when injected, the
@@ -1103,6 +1108,10 @@ extension SyncServiceProfile on SyncService {
       // shadow copy today, which is precisely how the next reader would come to
       // pick the wrong one.
       final cloudNotificationPrefs = cloud.remove('notification_preferences');
+      // OI-479 — the "Clear conversation" marker has its own monotonic home
+      // (`userBox['coach_chat_cleared_at']`, adopted below); it must never be
+      // folded into `userBox['preferences']`.
+      final cloudCoachChatClearedAt = cloud.remove('coach_chat_cleared_at');
 
       // F6 · Merge semantics — cloud non-null wins, Hive preserved for nulls.
       final existing = _hive.userBox.get('preferences');
@@ -1141,6 +1150,23 @@ extension SyncServiceProfile on SyncService {
       if (cloudNotificationPrefs != null) {
         await NotificationPrefsRepository.adoptFromCloud(cloudNotificationPrefs);
       }
+
+      // OI-479 — adopt the cloud "Clear conversation" marker: max(local, cloud),
+      // the cloud value capped at this device's now (a server instant ahead of
+      // a slow device clock would otherwise hide what the device writes next).
+      // Its OWN block with a FRESH owner check: an account swap can land in
+      // either await above, and `wrapUserScopedBox` would then serve the new
+      // account's box. `raiseTo` reads the local marker and writes with no
+      // await in between, so a clear made during the fetch is never lowered.
+      if (cloudCoachChatClearedAt is String) {
+        final cloudAt = DateTime.tryParse(cloudCoachChatClearedAt)?.toUtc();
+        if (cloudAt != null) {
+          final deviceNow = DateTime.now().toUtc();
+          final capped = cloudAt.isAfter(deviceNow) ? deviceNow : cloudAt;
+          if (ownerChangedSince(userId)) return;
+          await CoachChatClear.raiseTo(capped);
+        }
+      }
     } catch (e, st) {
       debugPrint('[SyncService._restoreUserPreferences] $e');
       // audit-2026-05-11 H-42 — telemetry pair.
@@ -1148,6 +1174,52 @@ extension SyncServiceProfile on SyncService {
           reason: 'sync_service_restore_user_preferences', skipServerPost: true));
       try {
         await _reportSyncFailure(opType: 'restore_user_preferences', error: e);
+      } catch (_) {}
+    }
+  }
+
+  /// OI-479 (diagnose 5970aa) — push the "Clear conversation" marker to
+  /// `user_preferences.coach_chat_cleared_at` through the monotonic RPC
+  /// `raise_coach_chat_cleared_at` (migration 177: GREATEST, clamped to the
+  /// server's now, NULL refused). Never through the preferences upsert, a
+  /// wholesale replace that would let an older device lower a newer clear.
+  ///
+  /// NEVER throws. Callers: `CoachChatClear.clear` (fire-and-forget),
+  /// `_syncUserPreferences` (the retry leg; also reached by the sweep) and the
+  /// sign-out teardown ([fromSignOut], best effort before the wipe). The
+  /// pushed-memory `'<marker>|<IST day>'` skips a repeat push and lets a cloud
+  /// value lost out of band heal within a day.
+  ///
+  /// With [fromSignOut] a failure is only logged and no memory is written: a
+  /// timed-out sign-out push keeps running after `clearAllData`, and
+  /// `_reportSyncFailure` would mark a sweep owed and arm the retry controller
+  /// for the NEXT user.
+  Future<void> pushCoachChatClearedAt(String userId,
+      {bool fromSignOut = false}) async {
+    try {
+      if (ownerChangedSince(userId)) return;
+      final marker = CoachChatClear.clearedAt();
+      if (marker == null) return;
+      final iso = marker.toIso8601String();
+      final memory = '$iso|${istDateStr(nowWall())}';
+      if (_hive.userBox.get(CoachChatClear.pushedKey) == memory) return;
+      await _supabase.ensureFreshToken();
+      if (ownerChangedSince(userId)) return;
+      await _supabase.client
+          .rpc('raise_coach_chat_cleared_at', params: {'p_at': iso});
+      if (fromSignOut || ownerChangedSince(userId)) return;
+      await _hive.userBox.put(CoachChatClear.pushedKey, memory);
+    } catch (e) {
+      if (fromSignOut || ownerChangedSince(userId)) {
+        unawaited(ErrorTelemetry.logEvent(
+          'coach_chat_cleared_at_push_failed',
+          message: 'fromSignOut=$fromSignOut: '
+              '${ErrorTelemetry.redactRowValues('$e')}',
+        ));
+        return;
+      }
+      try {
+        await _reportSyncFailure(opType: 'upsert_coach_chat_cleared_at', error: e);
       } catch (_) {}
     }
   }
@@ -1197,6 +1269,18 @@ extension SyncServiceProfile on SyncService {
   Future<void> syncUserProgressForTest(String userId,
           {bool fromQueue = false}) =>
       _syncUserProgress(userId, fromQueue: fromQueue);
+
+  /// OI-479 test seam — drives [_restoreUserPreferences]. Omit [preFetched]
+  /// to take the NETWORK path (a test points the client at a stub server).
+  @visibleForTesting
+  Future<void> restoreUserPreferencesForTest(String userId,
+          {Object? preFetched = _kNoInject}) =>
+      _restoreUserPreferences(userId, preFetched: preFetched);
+
+  /// OI-479 test seam — drives [_syncUserPreferences] (and so its marker push).
+  @visibleForTesting
+  Future<void> syncUserPreferencesForTest(String userId) =>
+      _syncUserPreferences(userId);
 
   /// Hermes h7F2 (diagnose f1c6b4) test seam — drives [_restoreUserProgress]
   /// with INJECTED `user_progress` rows. [preFetched] must be passed (even as
