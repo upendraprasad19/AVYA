@@ -7150,3 +7150,15 @@ Added 2026-11-12 (Landing A, branch `oi493-nutrition-parity`, diagnose ec6f6c): 
 **Done when.** The founder chooses, with the measured plan count for each: (a) the fit key also applies in an isolation-typed slot to compound rows (dumbbell lunge in the Legs A Quads slot), (b) a loaded version outranks its own foundational original in phase 1 (`same_movement_as` pair only), or neither; the chosen rule is built with the 2,304-plan audit and golden re-run. Owner: step 1 (the step-1 OI board close-out found it). Blast radius `platform` (plan engine).
 
 
+## OI-498 — Laptop clone: sync main with GitHub and reinstall the git hooks (suite lock, PR #246)
+
+- **Status**: OPEN
+- **Blocked on**: the founder's laptop (only the founder can run it there; picked up next time the laptop is opened)
+- **Verified**: never
+- **Identified**: 2026-11-12 · filed via mint_oi.sh from branch `oi-laptop-hooks-resync`
+
+**What it is.** Git hooks are per-clone, read-only COPIES (`scripts/setup-hooks.sh`); a `git pull` updates the scripts but never the installed hooks. PR #246 (`837f62aa`, 2026-11-12) changed `scripts/pre-push.sh` and `scripts/pre-commit.sh` (the one-local-full-suite lock, `scripts/_suite_lock.sh`) and added `land_pr --ci-only` and `scripts/run_full_suite.sh`. The VPS clone was reinstalled the same day; the founder's laptop clone was not, so its hooks are the pre-#246 copies (they keep working, without the lock).
+
+**Do on the laptop (Git Bash, from the clone's MAIN folder, on `main`).** `git checkout main`, `git fetch origin main`, `git merge --ff-only origin/main`, then `sh scripts/setup-hooks.sh` (it refuses a tree behind or diverged from `origin/main`). A `Permission denied` on a hook file means a stale tree: update it and re-run, never chmod or delete a hook by hand. Expected there: no `flock` on Windows Git Bash / macOS, so the lock prints a WARNING and fails open; nothing blocks.
+
+**Done when.** On the laptop: `grep -c suite_lock_acquire .git/hooks/pre-push .git/hooks/pre-commit` prints a non-zero count for both, and `git log -1 --oneline` on `main` shows `837f62aa` or later. Blast radius `feature` (no code change; a per-clone install step).
