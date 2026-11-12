@@ -8,9 +8,9 @@
 //   • U2 (end-to-end): a `shoulder` injury must remove EVERY shoulder-contra
 //     exercise from the plan; non-vacuity is shown by the same UNINJURED persona
 //     still getting shoulder-loaded exercises. (Batch 13-A moved the
-//     shoulder_isolation universal-pool fallback to the SAFE E261, so the
-//     attempt-5 filter + its `disable_injury_universal_filter` kill-switch are now
-//     proven deterministically in injury_safe_omission_production_test.dart.)
+//     shoulder_isolation universal-pool fallback to the SAFE E261; Unit 1B-F
+//     deleted that pool and its kill-switch, and the safe omission on the core
+//     path is proven in injury_safe_omission_production_test.dart.)
 //   • U4 HIGH-3: the AI-coach "regenerate my plan" path (which DROPPED injuries)
 //     must exclude a knee-injured user's knee-contraindicated exercises.
 

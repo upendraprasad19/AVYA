@@ -130,6 +130,13 @@ class SessionSetAllocator {
   @visibleForTesting
   static Map<String, AllocationStats>? debugLastStats;
 
+  /// Ruling 5, guard (c): whether a slot costing [need] seconds fits [left] seconds, with a 1e-6 tolerance. Eviction
+  /// sums the freed seconds in its own order while the ledger subtracts each hold's cost one at a time, so at an exact
+  /// boundary the two can differ by an ulp; the decision and the check after the evictions both use this one
+  /// comparison so they agree (B-pass, seat A).
+  @visibleForTesting
+  static bool fitsAfterEviction(double need, double left) => need <= left + 1e-6;
+
   /// Allocate [days]. Which exercises are budgeted is [SessionBudget.isBudgeted]
   /// (a custom, a timed / cardio / distance row and one with no library match keep
   /// their sets). A budgeted exercise's muscles are the ones it carries
@@ -157,7 +164,7 @@ class SessionSetAllocator {
         if (_sameNames(days[d].exercisesA, days[d].exercisesB)) copy[d] = a.byDay[d];
       }
       final b = _variant([for (final d in days) d.exercisesB], days, ctx, rowsByName, copy,
-          stats['B'] = AllocationStats(), copyFrom: stats['A']);
+          stats['B'] = AllocationStats(), copyFrom: stats['A'], copyEvicted: a.evicted);
       bOut = b.out;
     }
     debugLastStats = stats;
@@ -186,6 +193,9 @@ class SessionSetAllocator {
     return true;
   }
 
+  /// The six major muscle groups (the audit's flip criterion and the parent plan's flip row).
+  static const _majorGroups = {'Chest', 'Back', 'Shoulders', 'Quads', 'Hamstrings', 'Glutes'};
+
   /// The budget-group tokens of [ex]: the muscles it carries (copied from the row
   /// that was actually picked), else those of [row]. A value that is not a list
   /// reads as none, never throws.
@@ -200,7 +210,7 @@ class SessionSetAllocator {
 
   // ── One variant ──────────────────────────────────────────────────────────
 
-  static ({List<List<PlannedExercise>> out, List<List<_Slot>> byDay}) _variant(
+  static ({List<List<PlannedExercise>> out, List<List<_Slot>> byDay, Map<int, Set<int>> evicted}) _variant(
     List<List<PlannedExercise>> lists,
     List<PopulatedDay> days,
     SessionBudgetContext ctx,
@@ -208,6 +218,7 @@ class SessionSetAllocator {
     Map<int, List<_Slot>>? copy,
     AllocationStats stats, {
     AllocationStats? copyFrom,
+    Map<int, Set<int>>? copyEvicted,
   }) {
     final n = days.length;
     final ledger = BudgetLedger(ctx, n);
@@ -216,11 +227,22 @@ class SessionSetAllocator {
     final entries = List<List<(PlannedExercise, _Slot?)>>.generate(n, (_) => []);
     final all = <_Slot>[];
     final nonBudgeted = List<int>.filled(n, 0);
+    // A copied day's holds that variant A evicted: not in this variant's ledger or count, but the selector supplied
+    // them, so `rowsSeen` (the selector's rows before any eviction, both variants) still counts them.
+    final copiedEvicted = List<int>.filled(n, 0);
+    // OI-489 (Unit 1B-F, Ruling 5): the day's library timed rows ("holds"), spent first like every not-budgeted row,
+    // but a hold ranked AFTER a time-starved slot may give way to it (pass A). `before` is the number of budgeted
+    // slots ahead of the hold, `pos` its index in the day's list (a copied B day mirrors A's evictions by position,
+    // since two holds can share a name).
+    final timed = List<List<({int before, int pos, PlannedExercise ex, double cost, Set<String> groups})>>.generate(
+        n, (_) => []);
+    final evicted = <PlannedExercise>{};
 
     // 1. Classify, and spend the not-budgeted rows' time first.
     for (var d = 0; d < n; d++) {
       var rank = 0;
-      for (final ex in lists[d]) {
+      for (var pos = 0; pos < lists[d].length; pos++) {
+        final ex = lists[d][pos];
         final arch = SessionBudget.archetypeOfPlanned(ex, ctx);
         if (!SessionBudget.isBudgeted(ex, ctx)) {
           // Ruling 8: a timed row at its OWN rest, a rep-based custom at its archetype's
@@ -228,10 +250,25 @@ class SessionSetAllocator {
           final rest = SessionBudget.isRepBased(ex.loggingType)
               ? SessionBudget.restForArchetype(arch)
               : ex.restSeconds;
-          ledger.add(d, const {}, 0,
-              SessionBudget.plannedExerciseSeconds(ex, ctx, sets: ex.sets, restSeconds: rest));
+          final cost = SessionBudget.plannedExerciseSeconds(ex, ctx, sets: ex.sets, restSeconds: rest);
+          if (ex.customOrigin == null &&
+              ex.loggingType == 'timed' &&
+              ctx.archetypeByName.containsKey(ex.exerciseName.toLowerCase())) {
+            timed[d].add((
+                before: rank,
+                pos: pos,
+                ex: ex,
+                cost: cost,
+                groups: _groupsOf(ex, rows[ex.exerciseName.toLowerCase()], ctx)));
+          }
+          if ((copy?.containsKey(d) ?? false) && (copyEvicted?[d]?.contains(pos) ?? false)) {
+            evicted.add(ex);
+            copiedEvicted[d]++;
+          } else {
+            ledger.add(d, const {}, 0, cost);
+            nonBudgeted[d]++;
+          }
           entries[d].add((ex, null));
-          nonBudgeted[d]++;
         } else {
           final slot = _Slot(
             d,
@@ -249,9 +286,11 @@ class SessionSetAllocator {
       }
     }
 
+    // The selector's own reach per day, before any eviction: the count floor and `selectorThin` read it.
+    final reachRows = [for (var d = 0; d < n; d++) nonBudgeted[d] + byDay[d].length];
     for (var d = 0; d < n; d++) {
       stats.slotsSeen.add(byDay[d].length);
-      stats.rowsSeen.add(byDay[d].length + nonBudgeted[d]);
+      stats.rowsSeen.add(byDay[d].length + nonBudgeted[d] + copiedEvicted[d]);
     }
 
     // 2. Days copied from variant A enter the ledger as they are.
@@ -301,6 +340,47 @@ class SessionSetAllocator {
       seated[e.key] = byDay[e.key].where((s) => s.admitted).length;
     }
 
+    // Ruling 5: which library holds of day [d], ranked after rank [rank], give way so a slot costing [need] seconds
+    // fits the clock. Scanned last first; never a hold whose groups [credited] (with the other kept holds) would no
+    // longer cover, never below the day's count floor, a hold crediting a major or focus group only when [bringsMajor];
+    // decided before anything is evicted (all or nothing). Evicts the chosen holds and returns whether any went.
+    bool evictFor(int d, int rank, double need, Set<String> credited, {required bool bringsMajor}) {
+      final kept = [for (final t in timed[d]) if (!evicted.contains(t.ex)) t];
+      Set<String> creditedWithout(Set<PlannedExercise> gone) => {
+            ...credited,
+            for (final t in kept) if (!gone.contains(t.ex)) ...t.groups,
+          };
+      // The day's reach (its kept holds plus every slot the selector supplied) after n evictions must stay at or
+      // above the count floor, so pass A2 can still bring the day to it.
+      final reachNow = nonBudgeted[d] + byDay[d].length;
+      final floor = SessionBudget.countFloor(ctx.minutes);
+      final chosen = <PlannedExercise>{};
+      var freed = 0.0;
+      for (final t in kept.reversed) {
+        if (t.before <= rank) continue;
+        if (fitsAfterEviction(need, ledger.secondsLeft(d) + freed)) break;
+        if (reachNow - (chosen.length + 1) < floor) break;
+        if (!bringsMajor && t.groups.any(_majorGroups.contains)) continue;
+        // A hold crediting a group the user focuses on gives way only to a slot that brings a major group (rounds
+        // 9-10: majors first, then focus, then the other minors).
+        if (!bringsMajor && t.groups.any(ctx.focusGroups.contains)) continue;
+        final trial = {...chosen, t.ex};
+        if (!t.groups.every(creditedWithout(trial).contains)) continue;
+        chosen.add(t.ex);
+        freed += t.cost;
+      }
+      // Guard (c): the same comparison, with its tolerance, as pass A's check after the evictions.
+      if (chosen.isEmpty || !fitsAfterEviction(need, ledger.secondsLeft(d) + freed)) return false;
+      for (final t in kept) {
+        if (!chosen.contains(t.ex)) continue;
+        evicted.add(t.ex);
+        ledger.add(d, const {}, 0, -t.cost);
+        nonBudgeted[d]--;
+        target[d]++;
+      }
+      return true;
+    }
+
     // 3. Pass A: priority-rank admission.
     var maxRank = 0;
     for (final d in allocateDays) {
@@ -338,7 +418,37 @@ class SessionSetAllocator {
 
         // Every exercise is SEATED at 2 sets; pass B grows it to the base sets.
         const k = 2;
-        final fitsNow = ledger.fits(d, s.groups, k, seconds(s, k));
+        var fitsNow = ledger.fits(d, s.groups, k, seconds(s, k));
+        if (!fitsNow && reserved(k) && ledger.fits(d, s.groups, k, double.negativeInfinity)) {
+          // Time alone refuses a slot that would give the day its FIRST credit for one of its groups:
+          // library timed rows ranked AFTER it may give way, last first, but never a hold that is the
+          // day's only credit for one of its own groups; decided before anything is evicted, and never
+          // below the day's count floor.
+          final seatedGroups = {
+            for (final o in byDay[d]) if (o.admitted) ...o.groups,
+          };
+          // Week-aware (rounds 6-7): only a group the week has no credit for yet counts as new: no budgeted set in the
+          // ledger and no kept library timed row on any day of this variant, this day included (holds enter the
+          // ledger with no groups).
+          final weekHoldGroups = {
+            for (final dayTimed in timed)
+              for (final t in dayTimed)
+                if (!evicted.contains(t.ex)) ...t.groups,
+          };
+          final newGroups = {
+            for (final g in s.groups)
+              // A slot seated on this day has already put its sets in the ledger, so `week(g) == 0` covers it.
+              if (ledger.week(g) == 0 && !weekHoldGroups.contains(g))
+                g,
+          };
+          // A hold that credits a major group gives way only to a slot whose new credit includes a major group.
+          if (newGroups.isNotEmpty &&
+              evictFor(d, r, seconds(s, k), {...s.groups, ...seatedGroups},
+                  bringsMajor: newGroups.any(_majorGroups.contains))) {
+            // Caps and tops were checked before anything was evicted, and an eviction changes neither.
+            fitsNow = fitsAfterEviction(seconds(s, k), ledger.secondsLeft(d));
+          }
+        }
         if (fitsNow && !reserved(k)) s.reserveBlocked = true;
         if (fitsNow && reserved(k)) {
           s
@@ -374,6 +484,14 @@ class SessionSetAllocator {
         stats.timeForcedFirst++;
       }
       stats.forcedDays.add(d);
+      // Ruling 5c (Unit 1B-F, found by the session-budget gate once every goal ran on the core-list pool): the lead
+      // comes in either way, so the first-credit condition of pass A does not apply; the holds ranked after it give way
+      // under pass A's other guards when that brings the day back inside its minutes. Without it the lead is forced past
+      // the clock (lose_fat|4|advanced|bodyweight|30|1, Upper Pull: four holds and Sliding Lat Pull, 32.6 minutes).
+      if (seconds(pick, 2) > ledger.secondsLeft(d)) {
+        evictFor(d, pick.rank, seconds(pick, 2), pick.groups,
+            bringsMajor: pick.groups.any(_majorGroups.contains));
+      }
       pick
         ..sets = 2
         ..admitted = true
@@ -390,7 +508,7 @@ class SessionSetAllocator {
     final floorBase = SessionBudget.countFloor(ctx.minutes);
     int rowsOf(int d) => nonBudgeted[d] + byDay[d].where((s) => s.admitted).length;
     int floorOf(int d) {
-      final reach = nonBudgeted[d] + byDay[d].length;
+      final reach = reachRows[d];
       return floorBase < reach ? floorBase : reach;
     }
 
@@ -440,7 +558,7 @@ class SessionSetAllocator {
     // passes spend weekly top, so a day short only because of the forcing bound still says `clock`
     // (B-pass P3-1).
     for (final d in allocateDays) {
-      if (nonBudgeted[d] + byDay[d].length < floorBase) {
+      if (reachRows[d] < floorBase) {
         stats.selectorThin.add(d);
       } else if (rowsOf(d) < floorBase) {
         final remaining = [
@@ -529,13 +647,19 @@ class SessionSetAllocator {
       for (var d = 0; d < n; d++)
         [
           for (final (ex, slot) in entries[d])
-            if (slot == null)
-              ex
-            else if (slot.admitted)
+            if (slot == null) ...[
+              if (!evicted.contains(ex)) ex,
+            ] else if (slot.admitted)
               ex.copyWith(sets: slot.sets),
         ],
     ];
-    return (out: out, byDay: byDay);
+    final ev = <int, Set<int>>{};
+    for (var d = 0; d < n; d++) {
+      for (final t in timed[d]) {
+        if (evicted.contains(t.ex)) (ev[d] ??= {}).add(t.pos);
+      }
+    }
+    return (out: out, byDay: byDay, evicted: ev);
   }
 
   // ── Why a grant was refused ──────────────────────────────────────────────

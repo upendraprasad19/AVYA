@@ -80,7 +80,7 @@ void main() {
       expect(hive.exerciseBox.containsKey(id), isTrue, reason: '$id must arrive');
     }
     expect(hive.exerciseBox.length, bundled.length);
-    expect(hive.configBox.get('exercise_library_version') as int, 24);
+    expect(hive.configBox.get('exercise_library_version') as int, 25);
   });
 
   test('every retired name still resolves to its twin: exact name for four, alias for two', () async {

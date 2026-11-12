@@ -99,6 +99,14 @@ class PlanAuditor {
   bool _compound(String name) =>
       _strs(lib[name]?['exercise_type']).contains('compound');
 
+  /// Unit 1B-F (OI-485 (3)): a day row's BUILT type, `x[7]` (`PlannedExercise.exerciseType` after the picker's
+  /// `typeOverride`, the type SequencingEngine orders by); a row without it (an older dump) falls back to the library
+  /// row's type. E143 Skater Squat is `calisthenics` in the library and `compound` when built in a compound slot.
+  bool _builtCompound(List x) {
+    final t = x.length > 7 ? x[7] : null;
+    return t is String ? t == 'compound' : _compound(x[0] as String);
+  }
+
   /// A jump row, as the core-list R2 partition defines it.
   bool isJump(String name) {
     final r = lib[name];
@@ -298,7 +306,7 @@ class PlanAuditor {
         add('moderate', 'lead_starved',
             '${d['n']}: lead lift ${lead[0]} gets ${lead[1]} sets while ${biggest[0]} gets ${biggest[1]}.');
       }
-      final types = [for (final x in list) _compound(x[0] as String)];
+      final types = [for (final x in list) _builtCompound(x)];
       if (!types.first && types.skip(1).any((t) => t)) {
         isoFirst++;
         add('minor', 'iso_first',
@@ -392,28 +400,23 @@ class AuditSummary {
 }
 
 /// Section 1 of the plan, OFF beside ON.
-String sectionOneTable(AuditSummary off, AuditSummary on) {
-  String row(String label, Object a, Object b) => '| $label | $a | $b |';
+/// The plan's section 1 table, one column per (label, summary). Unit 1B-F made the dump one-world; a comparison
+/// against a pre-change tree passes that tree's summary as a second column.
+String sectionOneTable(List<(String, AuditSummary)> cols) {
+  String row(String label, String Function(AuditSummary s) cell) =>
+      '| $label | ${cols.map((c) => cell(c.$2)).join(' | ')} |';
   return [
-    '| measure | live (OFF) | core-list (ON) |',
-    '|---|---|---|',
-    row('plans', off.plans, on.plans),
+    '| measure | ${cols.map((c) => c.$1).join(' | ')} |',
+    '|---|${cols.map((_) => '---|').join()}',
+    row('plans', (s) => '${s.plans}'),
     row('verdict not suitable / needs work / suitable',
-        '${off.verdicts['not_suitable'] ?? 0} / ${off.verdicts['needs_work'] ?? 0} / ${off.verdicts['suitable'] ?? 0}',
-        '${on.verdicts['not_suitable'] ?? 0} / ${on.verdicts['needs_work'] ?? 0} / ${on.verdicts['suitable'] ?? 0}'),
-    row('plans with a household substitute while the user has real equipment',
-        off.code('improvised'), on.code('improvised')),
-    row('plans with an unloaded pick where a loaded row fits',
-        off.code('unloaded'), on.code('unloaded')),
-    row('Strength 4-day gym OHP Day with Pike Push Up',
-        '${off.ohpPikeDays} of ${off.ohpDays}', '${on.ohpPikeDays} of ${on.ohpDays}'),
-    row('plans with a major muscle at 0 sets in week 1, 2 or 3',
-        off.code('zero_muscle'), on.code('zero_muscle')),
-    row('week-1 days opening with a non-compound (plans / days)',
-        '${off.isoFirstPlans} / ${off.isoFirstDays}', '${on.isoFirstPlans} / ${on.isoFirstDays}'),
-    row('jump rows in week 1 (as the lead)',
-        '${off.jumpRows} (${off.jumpLeads})', '${on.jumpRows} (${on.jumpLeads})'),
-    row('plans with a lead lift 2+ sets under an isolation',
-        off.code('lead_starved'), on.code('lead_starved')),
+        (s) => '${s.verdicts['not_suitable'] ?? 0} / ${s.verdicts['needs_work'] ?? 0} / ${s.verdicts['suitable'] ?? 0}'),
+    row('plans with a household substitute while the user has real equipment', (s) => '${s.code('improvised')}'),
+    row('plans with an unloaded pick where a loaded row fits', (s) => '${s.code('unloaded')}'),
+    row('Strength 4-day gym OHP Day with Pike Push Up', (s) => '${s.ohpPikeDays} of ${s.ohpDays}'),
+    row('plans with a major muscle at 0 sets in week 1, 2 or 3', (s) => '${s.code('zero_muscle')}'),
+    row('week-1 days opening with a non-compound (plans / days)', (s) => '${s.isoFirstPlans} / ${s.isoFirstDays}'),
+    row('jump rows in week 1 (as the lead)', (s) => '${s.jumpRows} (${s.jumpLeads})'),
+    row('plans with a lead lift 2+ sets under an isolation', (s) => '${s.code('lead_starved')}'),
   ].join('\n');
 }

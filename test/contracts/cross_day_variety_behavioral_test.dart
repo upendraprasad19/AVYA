@@ -155,12 +155,17 @@ void main() {
         final m = measure();
         // Before OI-458: 409 pairs in 42 of 72 plans (measured on the
         // unchanged selector). The ratchet is the measured figure after the fix.
+        // Unit 1B-F (the flip to the core-list path, 2026-11-11) re-measured it:
+        // 70 pairs in 38 plans on the deleted cascade, 75 in 17 on the core list.
+        // 69 of the 75 are home_dumbbells Upper days whose core pool for the slot
+        // holds only the names Push / Pull already took (kickbacks, curls, the
+        // bent-over row); the other 6 are basic_gym 5-day beginner Lateral Raise.
         expect(
           m.pairs,
-          lessThanOrEqualTo(70),
+          lessThanOrEqualTo(75),
           reason: m.sample.take(20).join('\n'),
         );
-        expect(m.plans, lessThanOrEqualTo(38));
+        expect(m.plans, lessThanOrEqualTo(17));
         // The residue is a pool too shallow to offer anything else (the avoid is soft and bounded).
         expect(m.pairs, lessThan(409 ~/ 4));
       },
@@ -197,34 +202,29 @@ void main() {
       },
     );
 
-    test(
-      'the ship-dark core-list path avoids too (flag ON, real library)',
-      () async {
-        final trace = CoreListTrace();
-        CoreListSelector.debugTrace = trace;
-        await HiveService.instance.configBox.put('enable_core_list_pool', true);
-        try {
-          final m = measure(
-            tiers: ['full_gym', 'basic_gym'],
-            goals: ['build_muscle', 'general_fitness'],
-          );
-          expect(
-            trace.delegations,
-            greaterThan(0),
-            reason: 'the ON path must have run',
-          );
-          // 155 pairs on the ON path without the avoid, 2 with it.
-          expect(
-            m.pairs,
-            lessThanOrEqualTo(2),
-            reason: m.sample.take(10).join('\n'),
-          );
-        } finally {
-          CoreListSelector.debugTrace = null;
-          await HiveService.instance.configBox.delete('enable_core_list_pool');
-        }
-      },
-    );
+    test('the core-list path avoids too (real library)', () async {
+      final trace = CoreListTrace();
+      CoreListSelector.debugTrace = trace;
+      try {
+        final m = measure(
+          tiers: ['full_gym', 'basic_gym'],
+          goals: ['build_muscle', 'general_fitness'],
+        );
+        expect(
+          trace.delegations,
+          greaterThan(0),
+          reason: 'the core-list path must have run',
+        );
+        // 155 pairs on the ON path without the avoid, 2 with it.
+        expect(
+          m.pairs,
+          lessThanOrEqualTo(2),
+          reason: m.sample.take(10).join('\n'),
+        );
+      } finally {
+        CoreListSelector.debugTrace = null;
+      }
+    });
 
     test(
       'an injured user (shoulder): fewer repeats and never a contraindicated pick',
@@ -261,71 +261,60 @@ void main() {
     );
 
     test(
-      'a repeat phase that fresh-fills the Upper day (no pins for it) also avoids (cascade and core-list)',
+      'a repeat phase that fresh-fills the Upper day (no pins for it) also avoids',
       () async {
-        try {
-          for (final coreOn in [false, true]) {
-            if (coreOn) {
-              await HiveService.instance.configBox.put(
-                'enable_core_list_pool',
-                true,
-              );
+        var pairs = 0;
+        for (final tier in ['full_gym', 'basic_gym']) {
+          for (final level in ['intermediate', 'advanced']) {
+            final first = gen(
+              goal: 'build_muscle',
+              tier: tier,
+              days: 4,
+              level: level,
+              minutes: 60,
+            );
+            final wk = first.weekPlans;
+            // Pin Push, Pull and Legs from the first phase; leave the Upper day (index 3) unpinned.
+            final pins = {
+              for (var d = 0; d < 3; d++)
+                d: (
+                  a: [
+                    for (final e in wk[0].workoutDays[d].exercises)
+                      e.exerciseName,
+                  ],
+                  b: [
+                    for (final e in wk[1].workoutDays[d].exercises)
+                      e.exerciseName,
+                  ],
+                ),
+            };
+            final plan = gen(
+              goal: 'build_muscle',
+              tier: tier,
+              days: 4,
+              level: level,
+              minutes: 60,
+              phase: 2,
+              pins: pins,
+            );
+            for (var w = 0; w < 2; w++) {
+              final days = plan.weekPlans[w].workoutDays;
+              final feeders = {
+                for (final d in days)
+                  if (d.name == 'Push' || d.name == 'Pull')
+                    ...d.exercises.map((e) => e.exerciseName),
+              };
+              pairs += days
+                  .firstWhere((d) => d.name == 'Upper')
+                  .exercises
+                  .where((e) => feeders.contains(e.exerciseName))
+                  .length;
             }
-            var pairs = 0;
-            for (final tier in ['full_gym', 'basic_gym']) {
-              for (final level in ['intermediate', 'advanced']) {
-                final first = gen(
-                  goal: 'build_muscle',
-                  tier: tier,
-                  days: 4,
-                  level: level,
-                  minutes: 60,
-                );
-                final wk = first.weekPlans;
-                // Pin Push, Pull and Legs from the first phase; leave the Upper day (index 3) unpinned.
-                final pins = {
-                  for (var d = 0; d < 3; d++)
-                    d: (
-                      a: [
-                        for (final e in wk[0].workoutDays[d].exercises)
-                          e.exerciseName,
-                      ],
-                      b: [
-                        for (final e in wk[1].workoutDays[d].exercises)
-                          e.exerciseName,
-                      ],
-                    ),
-                };
-                final plan = gen(
-                  goal: 'build_muscle',
-                  tier: tier,
-                  days: 4,
-                  level: level,
-                  minutes: 60,
-                  phase: 2,
-                  pins: pins,
-                );
-                for (var w = 0; w < 2; w++) {
-                  final days = plan.weekPlans[w].workoutDays;
-                  final feeders = {
-                    for (final d in days)
-                      if (d.name == 'Push' || d.name == 'Pull')
-                        ...d.exercises.map((e) => e.exerciseName),
-                  };
-                  pairs += days
-                      .firstWhere((d) => d.name == 'Upper')
-                      .exercises
-                      .where((e) => feeders.contains(e.exerciseName))
-                      .length;
-                }
-              }
-            }
-            // 32 pairs without the avoid on the cascade (the one-frame fresh fill saw no earlier day), 0 with the seed.
-            expect(pairs, 0, reason: 'core-list ON: $coreOn');
           }
-        } finally {
-          await HiveService.instance.configBox.delete('enable_core_list_pool');
         }
+        // 32 pairs without the avoid on the cascade (the one-frame fresh fill saw no earlier day), 0 with the seed.
+        // Unit 1B-F deleted the cascade; the core-list path keeps the zero.
+        expect(pairs, 0);
       },
     );
   });

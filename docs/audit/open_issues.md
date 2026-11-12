@@ -2359,7 +2359,7 @@ exercise — before that, these five were invisible to any check in the repo.
 ## OI-148 — 23 equipment-variant exercises the plate mapping surfaced, blocked on a selection-skew answer (P2)
 
 - **Status**: OPEN
-- **Blocked on**: the selection-skew question below. Not on artwork — every one of the 23 already has its drawing identified in `docs/plans/exercise-plates-mapping.json`'s source adjudication.
+- **Blocked on**: upstream for 3 rows (the weighted rows wait on Batch D's plan, founder d11; `reopen_when`: Batch D's plan lands); the founder for 11 rows (not in d10's approved list, so adding any is the founder's pick). The selection-skew question below is answered (refreshed 2026-11-12, Unit 1B-F closure `1B-8_OI-148_*`).
 - **Verified**: 2026-08-29 — each named row checked absent from all 292 rows of `assets/data/exercise_library.json`.
 
 **Split out of `exercise-plates`.** The plate adjudication found the catalogue depicts several
@@ -2385,6 +2385,8 @@ times. Answer it before any of these ship.
 
 **Not blocking the plates feature.** `Barbell Curl` keeps its name and its `ez-bar-curl` drawing
 (founder, 2026-08-29), so nothing in the shipping 165 depends on this.
+
+**Refreshed 2026-11-12 (Unit 1B-F, item 1B-8).** The selection-skew blocker is answered by the same-movement rule (Library Batch S1b-2, seed v23: a loaded version and its original never share a day, `same_movement_day_gate_test.dart`), and nine loaded versions (N14 to N22) shipped there. Of the rest: the 3 weighted rows wait on Batch D (d11); the other 11 of the 23 were not in d10's approved list. This entry stays open for those 14.
 
 ## OI-152 — six-plus call sites fire `syncX()` and `pushSnapshot()` back to back, doubling round-trips per user action (P3)
 
@@ -6752,19 +6754,6 @@ Filed by the sync-storm-first-sweep batch (A1 = W1 migrator fix, W2 save progres
 
 **Done when.** The scorer is changed; a test builds a family whose phase 2 total is 10 percent below phase 1 and shows it scores 0, and the 75 one-set families score 100; `baseline_scorecard.json` is regenerated and the diagnose doc of that batch names the before and after. Blast radius: `feature` (test tooling only).
 
-## OI-436 — B1 core-list flip criteria still unmet after Batch C1: emergencyAnyLevel in 2 golden personas and 58 of 576 multi-injury runs, refilled in 34 of 576
-
-- **Status**: OPEN
-- **Blocked on**: upstream, the `enable_core_list_pool` flip review (`docs/ship_dark_pending_review.yaml`). Batch C1 adds rows and tags only; B1 stays OFF and no flag changed. `reopen_when`: that flip review, or a library batch that adds bodyweight shoulder-safe rows for the 4-day intermediate build.
-- **Verified**: 2026-10-26 - by running `WRITE_CORE_LIST_REPORT=1 TZ=Asia/Kolkata flutter test test/plan_generator/core_list_pool_gate_test.dart` on the Batch C1 tree (914 rows), compared with the report committed at `HEAD` (285 rows): the golden-persona `emergencyAnyLevel` personas are the same 2 (`injury|shoulder|bodyweight|build_muscle|4d|intermediate|p1` and `p2`); the multi-injury sweep (576 runs, every pair of knee / shoulder / lower_back / wrist) went from `emergencyAnyLevel` in 74 runs to 58 and stayed at `refilled` in 34; the retired rows in the built lists of that sweep went from E261, E234 to E144, E261, E254, E294, E271, E234; skill and olympic rows: none in either. The hard zeros of the gate (998 personas, the file's 12 tests: four tiers plus the extra group, R9, five classifyBuilt cases and the report) pass.
-- **Identified**: 2026-10-26 · filed via mint_oi.sh from branch `library-batch-c`
-
-**What.** The `enable_core_list_pool` entry in `docs/ship_dark_pending_review.yaml` lists the flip criteria: `emergencyAnyLevel` 0 after Batch C, and `refilled` 0 with no retired or skill / olympic id in the BUILT lists over the multi-injury sweep too. The plan of Batch C1 (R6 and Task 5.5) says that if `emergencyAnyLevel` stays above 0, C1 ships anyway and the gap is filed with a `reopen_when`. It stays above 0, so this is that entry. The 629 new rows moved the sweep's `emergencyAnyLevel` down by 16 runs and did not touch the shoulder-injured bodyweight 4-day intermediate persona or the 34 refilled runs.
-
-**Done when.** The flip review either adds the missing bodyweight shoulder-safe pool rows (a library batch, with the sweep re-run) or records, per remaining persona, why the emergency path is acceptable; the numbers above are re-measured on that tree and written into the flip entry. Blast radius: `feature` (ship-dark path, default OFF).
-
-**Re-measured 2026-11-08 (generator step 1A, branch `generator-step1-core-list`, same gate command).** `emergencyAnyLevel`: the same 2 golden personas, 40 sweep runs; `refilled` 16 sweep runs; retired ids in the sweep's built lists E261 only (E271, E254, E234 gone); top-up retired additions none (R4; were E271 x4, E261 x8); skill / olympic none. Step 1A's ledger carries these as `OI-436-R6` (`upstream_blocked`, reopen at the Unit 1B plan, which owns the last-resort fallback 1B-6).
-
 ## OI-437 — Batch C1 held rows: release protocol and owners (13 token, 4 name_collision, 53 low_confidence, 9 picture) and 529 shipped rows that no picture check covers
 
 - **Status**: OPEN
@@ -6935,6 +6924,20 @@ Found by the sync-storm-first-sweep batch while measuring its Day-0 web check (l
 **Founder direction (2026-11-03).** File and pick up later. Recommended design: a hard floor of 3 exercises per day; a day below the floor may exceed the weekly band by a few sets, only for those days (a guard with its own stats). A first attempt (restore removed slots over the weekly top) fixed the sweeps but broke `session_set_allocator_behavioral_test` (weekly top 16 to 26) and the budget gate, so it was reverted: this needs a plan, not a tweak.
 
 **Done when.** Plan reviewed twice; the allocator keeps every day at 3 or more exercises (or says why a day cannot); the weekly-top invariant is restated for the exception; `kThinCeilings` for days under 3 drops to 0 (or to a named residue); mutants prove it. Blast radius: `platform` (plan_engine), tier L.
+
+**Measured at the Unit 1B-F flip (2026-11-12, `generator-step1-1bf`; the core-list pool is the only picker).** The 15-pair injured grid (phases 1-3 plus the pinned repeat, weeks 1-2, 103,680 day-weeks per session length), live = main's OFF world before the flip, flip = the final tree's plan engine (the B-pass allocator change, a 1e-6 tolerance and a stats counter, moved no plan in the 2,304-plan audit or the golden):
+
+| day-weeks | 30 min live -> flip | 45 min live -> flip | 60 min live -> flip |
+|---|---|---|---|
+| empty | 0 -> 0 | 0 -> 0 | 0 -> 0 |
+| thin (1-2 exercises) | 427 -> 520 | 341 -> 344 | 341 -> 352 |
+| one-exercise | 8 -> 20 | 8 -> 20 | 8 -> 20 |
+| thin phase 1 / 2 / 3 / repeat | 70/70/20/267 -> 70/70/44/336 | 70/70/20/181 -> 70/70/44/160 | 70/70/20/181 -> 70/70/44/168 |
+| thin bodyweight / home / basic / full | 109/137/109/72 -> 62/189/182/87 | 66/104/103/68 -> 26/113/128/77 | 66/104/103/68 -> 26/113/134/79 |
+| one-exercise bodyweight / home / basic / full | 8/0/0/0 -> 8/6/6/0 | 8/0/0/0 -> 8/6/6/0 | 8/0/0/0 -> 8/6/6/0 |
+| hip-pair day-weeks with a jump row | 1,529 -> 0 | 1,321 -> 0 | 1,318 -> 0 |
+
+The flip equals prototype H3 and main's pre-flip ON world on every count above (30 min: 292 lines differ from H3, all Ruling 5c's timed-hold evictions on 30-minute days, no count moves; 45 min: identical to H3). The whole injured grid on the final tree (46,512 runs, 418,608 day-weeks, nine blocks): 0 empty, 0 unsafe or unperformable, 0 hip jump rows, 2,286 thin day-weeks and 94 one-exercise days, most in `quads_all` (basic gym 476 thin / 24 one, full gym 312, home 194 / 12) and `triples_eq` (basic 316 / 16, full 208, home 182 / 12). The CI hard test's ratchets (r9 284 thin / 16 one-exercise; the d17 extension, all nine injuries on bodyweight, 182 / 6) and `kThinCeilings` hold these as ceilings until this item's floor lands (founder d16 / d23: ship the flip, OI-452 next).
 
 ## OI-453 — A repeat phase keeps its exercise list when the user's minutes go up: keep pinned compounds, spend the spare time on extra sets then appended accessories
 
@@ -7153,19 +7156,6 @@ Residual of OI-199 and OI-471 after migration 172. Migration 172 makes `cleanup_
 
 **Step 1A (2026-11-08, branch `generator-step1-core-list`, diagnose c756b4; the pool is still OFF, so users see it at the 1B flip).** `rankedPool` now reduces an equipped user's isolation slot to like-for-like implement rows (R3 (a)), ranks a row that uses a non-household item the user has first in non-core compound slots (R3 (b)), and treats `vertical_push` as an implement pattern (plan v7: the key alone lost variant B's press to the foundational Pike Push Up). Re-run audit, core-list world, before -> after: household substitute 58 -> 44 plans, unloaded pick 1,505 -> 468, Strength gym OHP Day with Pike Push Up 56 of 56 -> 0 of 56. The residue (44, 468) is rows the R1 data and the 1B equipment variants (OI-148) cover. Live (OFF) numbers are unchanged by design.
 
-## OI-485 — Core-list pool flip blockers found by the 2,304-plan audit: Jump Squat or Lunge with Jump leads advanced home and bodyweight leg days, and bodyweight intermediate plans have weeks with no hamstring work
-
-- **Status**: OPEN
-- **Blocked on**: none
-- **Verified**: 2026-11-08 — same 2,304-plan audit as OI-484, core-list run (`enable_core_list_pool` ON), library of 862 rows.
-- **Identified**: 2026-11-08 · filed via mint_oi.sh from branch `generator-step1-core-list`
-
-**What happens.** Two data gaps in the core lists, plus one ordering gap. (1) For an advanced home_dumbbells or bodyweight user the only knee_dominant rows core at `advanced` that they can perform are E193 Jump Squat (`discipline: plyometric`, `high_impact: true`), G3582 Lunge with Jump (same) and a calf raise. Goblet Squat, Dumbbell Squat, Dumbbell Lunge and Dumbbell Rear Lunge are core at beginner and intermediate only, and Pistol Squat, Skater Squat and Dumbbell Single Leg Squat are on no list, and a lower level's core row never fills (D6). So Jump Squat leads 573 week-1 days of advanced home and bodyweight plans, and with Lunge with Jump fills 1,273 week-1 rows; the same rows are why days that open with a non-compound rose from 4 (live) to 310 (Jump Squat is typed `calisthenics`, not `compound`). (2) For a bodyweight user the only hamstring rows on a core list are E253 Bodyweight Good Morning, N11 Backpack Romanian Deadlift and E292 Sliding Leg Curl, all `core_levels: [beginner]`, so intermediate and advanced bodyweight plans have weeks with no hamstring set: weeks with 0 sets for a major muscle rose from 84 plans live to 309 under the core list, mostly Hamstrings in 3-day lose_fat / general_fitness and 4-day strength bodyweight plans. (3) `rankedPool` has no key that ranks a high-impact row below a strength row in a strength slot.
-
-**Done when.** The core lists carry non-plyometric knee_dominant rows for advanced home and bodyweight users and hamstring rows for intermediate and advanced bodyweight users (row choice approved by the founder), a high-impact row ranks below a strength row in a strength slot, and the re-run audit shows no plyometric lead lift, no zero-hamstring week and no isolation-first day caused by these rows. Together with OI-436 these are the flip blockers of `enable_core_list_pool`. Planned in step 1 of the generator overhaul. Blast radius: `platform` (plan_engine), tier L.
-
-**Step 1A (2026-11-08, branch `generator-step1-core-list`, diagnose 44d40a; pool still OFF).** Code half done: a jump row leaves a mixed pool (R2, a partition, because `_preferNovel` walks past an ordering key), the gym Glutes hinge prefers a glute-first row (R5: E047 Hip Thrust over E021 Deadlift / E045 Romanian Deadlift), and the top-up under the pool prefers core rows at the user's level or easier (R4; the gate's retired top-up additions E261 / E271 are gone). The data half (R1: non-plyometric advanced home / bodyweight squats, bodyweight hinges above beginner) waits on the founder's signature of the R1 level table, so the re-run audit still shows 1,273 week-1 jump rows (573 leads) and 310 isolation-first plans: those pools are jump-only until R1 lands. Plans with a zero-set week their live twin does not have: 246 (Hamstrings 322 muscle-weeks, all bodyweight: R1; Quads 122, all week 2 of gym and home_dumbbells plans: the variant-B leg day seats no quad slot, OI-475; Chest 5, bodyweight / home_dumbbells advanced: R7 and OI-475).
-
 ## OI-486 — The day's main lift can get fewer sets than its accessories (876 of 2,304 plans; Strength Bench Day bench 2 sets, Bench Dips 5), and day order follows a name table, not the day's slot priority
 
 - **Status**: OPEN
@@ -7203,19 +7193,6 @@ Residual of OI-199 and OI-471 after migration 172. Migration 172 makes `cleanup_
 
 **Done when.** Edit Profile shows 90 only to an advanced user, a stored 90 for a beginner or intermediate is treated as 60, and a test pins both. Planned in step 3 of the generator overhaul. Blast radius: `feature` (profile UI) plus the session-minutes reader, tier M.
 
-## OI-489 — Core-list pool ON: four advanced bodyweight 30-min 3-day plans hold a zero-set muscle their live twin does not
-
-- **Status**: OPEN
-- **Blocked on**: none
-- **Verified**: never
-- **Identified**: 2026-11-10 · filed via mint_oi.sh from branch `generator-step1-1b`
-
-**What happens.** With the core-list pool ON (`enable_core_list_pool`, ship-dark, default OFF, so no tester sees it), the 2,304-plan audit (`test/plan_generator/plan_audit/plan_audit_dump_test.dart`) shows four plans with a muscle at 0 sets that their live (OFF) twin does not have. All four were present on main cc8286ad before Unit 1B-Q; 1B-Q removed the Quads half of the first two.
-- `build_muscle|3|advanced|bodyweight|30|2` and `|3`: week 2 (variant B) has no Chest set; the B Push day seats no chest row ON.
-- `lose_fat|3|advanced|bodyweight|30|1` and `general_fitness|3|advanced|bodyweight|30|1`: weeks 1 to 3 hold no Hamstrings set; the day's hip_dominant row is Single Leg Glute Bridge E291 (primary Glutes, target_focus Glutes), so the core-list `target()` filter alone cannot seat it in a Hamstrings slot. The path that leaves the Hamstrings slot empty is NOT established yet. Possibly the same class as OI-485's bodyweight weeks with no hamstring work (intermediate there, advanced here): check OI-485's mechanism first so the two are not fixed twice.
-
-**Done when.** Each mechanism is measured (writer and reader by file:line), fixed, and the audit shows 0 ON plans with a zero-set muscle their live twin lacks; a test pins the four keys in the ON world. This is item 1B-12 of the step-1 plan (`docs/plans/2026-11-08-generator-step1-core-list.md` section 9) and an entry criterion of the 1B-1 flip ("no plan worse than its live twin"). Blast radius `platform` (plan engine), tier L.
-
 ## OI-493 — Nutrition logging parity: coach-logged and screen-logged meals differ in 20 places (survey 2026-11-10)
 
 - **Status**: OPEN
@@ -7237,3 +7214,29 @@ Residual of OI-199 and OI-471 after migration 172. Migration 172 makes `cleanup_
 **Problem.** The food-search log (`lib/features/nutrition/providers/nutrition_provider.dart:1056`) passes `istNow()` as `date` into `NutritionWriteService.logMeal`, which applies `istDateStr` (UTC + 5:30) again: an already-shifted instant is shifted twice, so a meal logged late in the IST evening can land on the next day's key (the Test #11.1 double-shift trap). Found during the coach workout parity survey, 2026-11-10.
 
 **To do.** Pass the wall-clock instant (`nowWall()` / `DateTime.now()`) as every other `logMeal` caller does; a behavioural test with a late-evening clock that fails before the fix. Check the other `istNow()` arguments passed into WriteServices in the same edit.
+
+## OI-495 — Unit 1B-F2: copy the core-list overlay labels (slot_focus / slot_pattern) into target_focus / movement_pattern, seed and cloud re-seed
+
+- **Status**: OPEN
+- **Blocked on**: Unit 1B-F merging (starts when 1B-F merges); its cloud migration then waits on the founder's live-apply go
+- **Verified**: never
+- **Identified**: 2026-11-11 · filed via mint_oi.sh from branch `generator-step1-1bf`
+
+**What it is.** Items 1B-7 and 1B-11 of the step-1 plan (`docs/plans/2026-11-08-generator-step1-core-list.md` section 9), split out of Unit 1B-F under §4.12.1 (three review rounds each found overlay pins the previous one missed). B1 Ruling 4 said the flip commit would copy `slot_pattern` into `movement_pattern` (13 rows) and `slot_focus` into `target_focus` (19 rows) and delete both keys; Unit 1B-F (the flip) did NOT, and its `enable_core_list_pool` `resolved:` note in `docs/ship_dark_pending_review.yaml` says so. Until this lands the core-list picker reads the overlay labels while `queryV4` (the thin-day top-up's non-core ladder, injured users only) reads the old ones on those rows: the mixed-label state. Display labels change on the 19 / 13 rows.
+
+**Plan.** Section 11 of `docs/plans/2026-11-10-generator-1bf-flip.md` holds the pins table (every writer and pin of the two keys), the data path (library JSON, importer, seed v26, a cloud re-seed migration minted with `scripts/mint_migration.sh`, rehearsed in the local docker postgres, applied live only on the founder's explicit go) and the runtime check (a second device check after its build).
+
+**Done when.** No library row carries `slot_focus` / `slot_pattern`; the 13 / 19 rows carry the copied values; `CoreListSelector` reads `movement_pattern` / `target_focus` directly; seed v26 and the cloud migration applied and ledgered; the founder's device check after the build. Blast radius `account` (library data) plus the cloud migration; its own plan, x2 review and B-pass.
+
+## OI-496 — Minor-muscle zero weeks on the core-list pool (Triceps / Core / Biceps / Calves), owned by step 2's weekly floor (d14)
+
+- **Status**: OPEN
+- **Blocked on**: none
+- **Verified**: never
+- **Identified**: 2026-11-11 · filed via mint_oi.sh from branch `generator-step1-1bf`
+
+**What happens.** On the core-list pool (the only picker since Unit 1B-F, 2026-11-11) some plans hold a MINOR muscle at 0 sets in a week where the deleted cascade's twin held sets. Measured over the 2,304-plan audit (prototype H, the shipped allocator): Triceps 308 cells / 86 plans, Core 132 / 52, Biceps 116 / 36, Calves 18 / 9. The pool-ON world had them before the flip too (main ON: Biceps 124 / 38); Unit 1B-F creates none (0 zero cells newly against main's ON world) and heals few. Founder d14 (2026-11-10): ship the flip with this residue, fix in step 2.
+
+**Mechanism (measured with a temporary allocator print, `docs/plans/2026-11-10-generator-1bf-flip.md` section 4).** Writer: `SessionSetAllocator._variant` pass A (`session_set_allocator.dart`, `// 3. Pass A`): the count band, the clock refusal and Ruling 5's guards. Reader: the week's per-muscle sets of the periodized plan. Per cause (Triceps / Core / Biceps / Calves cells): the clock alone 128 / 60 / 0 / 18; a hold ranked ahead of the slot 160 / 64 / 20 / 0; guard (a) only-credit 20 / 8 / 18 / 0; the count band 0 / 0 / 78 / 0. None is OI-489's defect. It needs a weekly minimum per muscle that outranks a day's rank order: step 2's weekly floor.
+
+**Done when.** Step 2's weekly floor lands and the 2,304-plan audit shows 0 minor-muscle zero weeks the live twin (as recorded at the flip) did not have, or the founder accepts a stated residue. Owner: step 2 (d14). Blast radius `platform` (plan engine).

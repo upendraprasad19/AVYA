@@ -1,5 +1,3 @@
-import 'dart:math';
-
 import 'package:flutter/foundation.dart';
 import 'package:icanbefitter/core/services/sync_flags.dart';
 import 'package:icanbefitter/core/utils/equipment_vocab.dart';
@@ -14,538 +12,15 @@ import 'plan_engine_flags.dart';
 import 'thin_day_topup.dart';
 import 'training_history_analyzer.dart';
 
-/// Stage 2: Constraint-based exercise picker.
-///
-/// V3 additions: injury exclusion, body focus isolation, beginner non-negotiables,
-/// session duration guidance.
+/// Stage 2: the exercise picker. Every generation picks from the core lists ([pickV4] -> `_pickCoreList`, then the
+/// thin-day top-up [topUpDays]); a repeat phase pins the previous phase's names ([buildPinnedDays]). Unit 1B-F
+/// (docs/plans/2026-11-10-generator-1bf-flip.md) deleted the five-attempt cascade, its universal bodyweight pool, the
+/// L6 post-pass and the uncalled V3 `pick`.
 class ExerciseSelector {
-  /// Hard minimum exercises per workout day for both A and B variants.
-  static const int hardFloor = 5;
-
-  /// Categories to broaden across when [_broadenSelection] runs out.
-  static const _broadenCategories = <String, List<String>>{
-    'push':           ['Push'],
-    'pull':           ['Pull'],
-    'legs':           ['Legs'],
-    'upper':          ['Push', 'Pull'],
-    'shoulders_arms': ['Push', 'Pull'],
-    'full_body':      ['Push', 'Pull', 'Legs', 'Core'],
-  };
-
-  /// Hardcoded universal-bodyweight pool.
-  static const _universalPool = <String, List<String>>{
-    'push':           ['Push Up', 'Incline Push Up', 'Pike Push Up', 'Decline Push Up', 'Wall Push Up'],
-    'pull':           ['Inverted Row', 'TRX Row', 'Inverted Row', 'Plank', 'Dead Bug'],
-    'legs':           ['Baithak (Hindu Squat)', 'Forward Lunge', 'Glute Bridge', 'Single Leg Romanian Deadlift', 'Standing Calf Raise'],
-    'upper':          ['Push Up', 'Pike Push Up', 'Inverted Row', 'Plank', 'Inverted Row'],
-    'shoulders_arms': ['Pike Push Up', 'Handstand Hold', 'Inverted Row', 'Plank', 'Plank'],
-    'full_body':      ['Push Up', 'Inverted Row', 'Baithak (Hindu Squat)', 'Plank', 'Glute Bridge'],
-  };
-
-  /// Timed universal names.
-  static const _timedUniversal = <String>{
-    'Plank', 'Dead Bug', 'Hollow Body Hold', 'Side Plank',
-    'Handstand Hold', 'Copenhagen Plank',
-  };
-
-  /// Session duration → exercise count guideline.
-  static const _durationExerciseCounts = <int, int>{
-    30: 4,
-    45: 5,
-    60: 6,
-    90: 8,
-  };
-
-  /// Default exercise counts by daysPerWeek × experience.
-  static const defaultExerciseCounts = <int, Map<String, int>>{
-    3: {'beginner': 5, 'intermediate': 6, 'advanced': 6},
-    4: {'beginner': 5, 'intermediate': 5, 'advanced': 6},
-    5: {'beginner': 5, 'intermediate': 5, 'advanced': 5},
-    6: {'beginner': 5, 'intermediate': 5, 'advanced': 5},
-  };
-
-  /// Picks exercises for A and B variants of each day.
-  static List<PopulatedDay> pick({
-    required List<DaySlot> splitPlan,
-    required ExerciseRepository exerciseRepo,
-    required List<String> equipmentList,
-    required String effectiveExp,
-    required int phase,
-    required int maxPerDay,
-    required String goal,
-    List<String> injuries = const [],
-    List<String> bodyFocus = const [],
-  }) {
-    final result = <PopulatedDay>[];
-
-    for (final slot in splitPlan) {
-      // Cap spec counts to maxPerDay
-      final cappedA = _capSpecs(slot.specsA, maxPerDay);
-      final bSpecs = slot.specsB ?? slot.specsA;
-      final cappedB = _capSpecs(bSpecs, maxPerDay);
-
-      // Select Variant A exercises
-      var exercisesA = _selectForSpecs(
-        cappedA, exerciseRepo, equipmentList, effectiveExp, phase,
-        injuries: injuries,
-      );
-
-      // V3: Inject beginner non-negotiables
-      exercisesA = _injectNonNegotiables(
-        exercisesA, effectiveExp, slot.dayType, exerciseRepo, equipmentList,
-      );
-
-      // Enforce hard floor of 5 on Variant A
-      exercisesA = _broadenSelection(
-        current: exercisesA,
-        slot: slot,
-        equipmentList: equipmentList,
-        effectiveExp: effectiveExp,
-        repo: exerciseRepo,
-        variant: 'A',
-        excludeNamesParam: null,
-      );
-
-      // Select Variant B exercises, excluding A names
-      final excludeNames = exercisesA.map((e) => e.exerciseName).toSet();
-
-      // For strength goal, allow primary compound overlap
-      final firstSpecCount = cappedA.isNotEmpty ? cappedA.first.count : 0;
-      Set<String> effectiveExclude;
-      if (goal == 'strength' && exercisesA.length >= firstSpecCount) {
-        effectiveExclude = exercisesA
-            .skip(firstSpecCount)
-            .map((e) => e.exerciseName)
-            .toSet();
-      } else {
-        effectiveExclude = excludeNames;
-      }
-
-      var exercisesB = _selectForSpecs(
-        cappedB, exerciseRepo, equipmentList, effectiveExp, phase,
-        excludeNames: effectiveExclude,
-        injuries: injuries,
-      );
-
-      // V3: Inject beginner non-negotiables for B variant too
-      exercisesB = _injectNonNegotiables(
-        exercisesB, effectiveExp, slot.dayType, exerciseRepo, equipmentList,
-      );
-
-      exercisesB = _broadenSelection(
-        current: exercisesB,
-        slot: slot,
-        equipmentList: equipmentList,
-        effectiveExp: effectiveExp,
-        repo: exerciseRepo,
-        variant: 'B',
-        excludeNamesParam: effectiveExclude,
-      );
-
-      // V3: Body focus — append extra isolation for focus muscles
-      exercisesA = _appendBodyFocusIsolation(
-        exercisesA, slot, exerciseRepo, equipmentList, effectiveExp, bodyFocus,
-      );
-      exercisesB = _appendBodyFocusIsolation(
-        exercisesB, slot, exerciseRepo, equipmentList, effectiveExp, bodyFocus,
-      );
-
-      result.add(PopulatedDay(
-        name: slot.name, focus: slot.focus,
-        dayType: slot.dayType, intensity: slot.intensity,
-        exercisesA: exercisesA,
-        exercisesB: slot.specsB != null
-            ? exercisesB.map((e) => e.copyWith(variant: 'B')).toList()
-            : exercisesA,
-      ));
-    }
-    return result;
-  }
-
-  /// V3: Resolve maxPerDay considering session duration.
-  static int resolveMaxPerDay({
-    required int daysPerWeek,
-    required String effectiveExp,
-    int? sessionDuration,
-  }) {
-    if (sessionDuration != null) {
-      return _durationExerciseCounts[sessionDuration] ??
-          defaultExerciseCounts[daysPerWeek]?[effectiveExp] ?? 5;
-    }
-    return defaultExerciseCounts[daysPerWeek]?[effectiveExp] ?? 5;
-  }
-
-  // ── V3: Beginner non-negotiables ─────────────────────────────
-
-  /// Inject squats + push-ups into beginner full-body days if not already present.
-  static List<PlannedExercise> _injectNonNegotiables(
-    List<PlannedExercise> exercises,
-    String effectiveExp,
-    String dayType,
-    ExerciseRepository repo,
-    List<String> equipmentList,
-  ) {
-    if (effectiveExp != 'beginner') return exercises;
-    if (dayType != 'full_body') return exercises;
-
-    final names = exercises.map((e) => e.exerciseName.toLowerCase()).toSet();
-    final result = List<PlannedExercise>.from(exercises);
-
-    // Inject Baithak (Hindu Squat) if no squat variant present
-    if (!names.any((n) => n.contains('squat'))) {
-      final squat = repo.search('Baithak (Hindu Squat)');
-      if (squat.isNotEmpty) {
-        result.insert(0, _buildExercise(squat.first));
-      } else {
-        result.insert(0, PlannedExercise(
-          exerciseId: 'baithak_hindu_squat',
-          exerciseName: 'Baithak (Hindu Squat)',
-          loggingType: 'bodyweight_reps',
-          sets: 3, reps: '10', restSeconds: 60,
-          category: 'Legs',
-          equipmentNeeded: const ['bodyweight'],
-        ));
-      }
-    }
-
-    // Inject Push Up if no push-up variant present
-    if (!names.any((n) => n.contains('push-up') || n.contains('push up') || n.contains('pushup'))) {
-      final pushup = repo.search('Push Up');
-      if (pushup.isNotEmpty) {
-        result.insert(1, _buildExercise(pushup.first));
-      } else {
-        result.insert(1, PlannedExercise(
-          exerciseId: 'push_up',
-          exerciseName: 'Push Up',
-          loggingType: 'bodyweight_reps',
-          sets: 3, reps: '10', restSeconds: 60,
-          category: 'Push',
-          equipmentNeeded: const ['bodyweight'],
-        ));
-      }
-    }
-
-    return result;
-  }
-
-  // ── V3: Body focus isolation ──────────────────────────────────
-
-  /// Append 1 extra isolation exercise for each focus muscle on relevant days.
-  static List<PlannedExercise> _appendBodyFocusIsolation(
-    List<PlannedExercise> exercises,
-    DaySlot slot,
-    ExerciseRepository repo,
-    List<String> equipmentList,
-    String effectiveExp,
-    List<String> bodyFocus,
-  ) {
-    if (bodyFocus.isEmpty) return exercises;
-
-    final result = List<PlannedExercise>.from(exercises);
-    final pickedNames = result.map((e) => e.exerciseName).toSet();
-
-    for (final focus in bodyFocus) {
-      // Check if this day's specs target this focus muscle
-      final dayTargetsFocus = slot.specsA.any((s) {
-        final cat = s.category.toLowerCase();
-        final focusLower = focus.toLowerCase();
-        // Map body focus to relevant categories
-        if (focusLower == 'chest' || focusLower == 'shoulders' || focusLower == 'triceps') {
-          return cat == 'push';
-        }
-        if (focusLower == 'back' || focusLower == 'biceps') {
-          return cat == 'pull';
-        }
-        if (focusLower == 'legs' || focusLower == 'glutes') {
-          return cat == 'legs';
-        }
-        if (focusLower == 'core' || focusLower == 'abs') {
-          return cat == 'core';
-        }
-        return false;
-      });
-
-      if (!dayTargetsFocus) continue;
-
-      // Find an isolation exercise for this focus muscle not already picked
-      final category = _focusToCategory(focus);
-      final candidates = repo.query(
-        category: category,
-        equipment: equipmentList,
-        suitableFor: effectiveExp == 'advanced' ? null : effectiveExp,
-        targetMuscles: [focus],
-        limit: 10,
-      );
-
-      // Filter for isolation exercises not already in the list
-      for (final c in candidates) {
-        final name = c['name'] as String? ?? '';
-        final rawType = c['exercise_type'];
-        final type = rawType is List ? (rawType.isNotEmpty ? rawType.first.toString() : '') : (rawType as String? ?? '');
-        if (name.isEmpty || pickedNames.contains(name)) continue;
-        if (type != 'isolation') continue;
-
-        result.add(_buildExercise(c));
-        pickedNames.add(name);
-        break; // Only +1 per focus muscle per day
-      }
-    }
-
-    return result;
-  }
-
-  /// Map body focus muscle name to exercise library category.
-  static String _focusToCategory(String focus) {
-    final f = focus.toLowerCase();
-    if (f == 'chest' || f == 'shoulders' || f == 'triceps') return 'Push';
-    if (f == 'back' || f == 'biceps') return 'Pull';
-    if (f == 'legs' || f == 'glutes') return 'Legs';
-    if (f == 'core' || f == 'abs') return 'Core';
-    return 'Push'; // fallback
-  }
-
-  // ── Existing logic (broadening, spec selection, etc.) ─────────
-
-  /// Top up [current] until it has at least [hardFloor] exercises.
-  static List<PlannedExercise> _broadenSelection({
-    required List<PlannedExercise> current,
-    required DaySlot slot,
-    required List<String> equipmentList,
-    required String effectiveExp,
-    required ExerciseRepository repo,
-    required String variant,
-    required Set<String>? excludeNamesParam,
-  }) {
-    if (current.length >= hardFloor) return current;
-
-    final result = List<PlannedExercise>.from(current);
-    final pickedNames = result.map((e) => e.exerciseName).toSet();
-    final dayName = slot.name;
-
-    final specCategories = slot.specsA.map((s) => s.category).toSet().toList();
-    final categories = specCategories.isNotEmpty
-        ? specCategories
-        : (_broadenCategories[slot.dayType] ?? const ['Push', 'Pull', 'Legs', 'Core']);
-
-    final allTargets = <String>[
-      for (final s in slot.specsA) ...?s.targetMuscles,
-    ];
-    final allExcludes = <String>[
-      for (final s in slot.specsA) ...?s.excludeMuscles,
-    ];
-
-    for (var retry = 1; retry <= 4 && result.length < hardFloor; retry++) {
-      if (retry >= 2) {
-        debugPrint(
-          '[plan_generator] broadening retry=$retry day=$dayName variant=$variant exp=$effectiveExp eq=${equipmentList.length} have=${result.length}',
-        );
-      }
-
-      final dropTarget    = retry >= 1;
-      final dropExclude   = retry >= 2;
-      final dropExp       = retry >= 3;
-      final dropEquipment = retry >= 4;
-
-      for (final cat in categories) {
-        if (result.length >= hardFloor) break;
-
-        final candidates = repo.query(
-          category: cat,
-          equipment: dropEquipment ? null : equipmentList,
-          suitableFor: dropExp ? null : effectiveExp,
-          targetMuscles:
-              dropTarget ? null : (allTargets.isEmpty ? null : allTargets),
-          excludeMuscles:
-              dropExclude ? null : (allExcludes.isEmpty ? null : allExcludes),
-          limit: 50,
-        );
-
-        for (final c in candidates) {
-          if (result.length >= hardFloor) break;
-          final name = c['name'] as String? ?? '';
-          if (name.isEmpty || pickedNames.contains(name)) continue;
-          if (!dropExclude && (excludeNamesParam?.contains(name) ?? false)) {
-            continue;
-          }
-          result.add(_buildExercise(c).copyWith(variant: variant));
-          pickedNames.add(name);
-        }
-      }
-    }
-
-    // Final safety net: hardcoded universal-bodyweight pool.
-    if (result.length < hardFloor) {
-      debugPrint(
-        '[plan_generator] universal pool fired day=$dayName variant=$variant short=${hardFloor - result.length} exp=$effectiveExp eq=${equipmentList.join(",")}',
-      );
-      final pool = _universalPool[slot.dayType] ?? _universalPool['upper']!;
-      for (final exName in pool) {
-        if (result.length >= hardFloor) break;
-        if (pickedNames.contains(exName)) continue;
-        final repoMatch = repo.search(exName);
-        if (repoMatch.isNotEmpty) {
-          result.add(_buildExercise(repoMatch.first).copyWith(variant: variant));
-        } else {
-          result.add(_buildUniversalFallback(exName, variant));
-        }
-        pickedNames.add(exName);
-      }
-    }
-
-    return result;
-  }
-
-  static PlannedExercise _buildUniversalFallback(String name, String variant) {
-    final isTimed = _timedUniversal.contains(name);
-    return PlannedExercise(
-      exerciseId: name.toLowerCase().replaceAll(' ', '_'),
-      exerciseName: name,
-      loggingType: isTimed ? 'timed' : 'bodyweight_reps',
-      sets: 3,
-      reps: isTimed ? '30s' : '10',
-      restSeconds: 60,
-      durationSeconds: isTimed ? 30 : null,
-      category: _categoryForUniversalName(name),
-      equipmentNeeded: const ['bodyweight'],
-      variant: variant,
-    );
-  }
-
-  static String _categoryForUniversalName(String name) {
-    if (_universalPool['push']!.contains(name)) return 'Push';
-    if (_universalPool['pull']!.contains(name)) return 'Pull';
-    if (_universalPool['legs']!.contains(name)) return 'Legs';
-    return 'Core';
-  }
-
-  static List<CSpec> _capSpecs(List<CSpec> specs, int maxPerDay) {
-    final total = specs.fold<int>(0, (sum, s) => sum + s.count);
-    if (total <= maxPerDay) return specs;
-
-    final capped = specs.map((s) => CSpec(s.category, s.count,
-        target: s.targetMuscles, exclude: s.excludeMuscles)).toList();
-    var excess = total - maxPerDay;
-    for (var i = capped.length - 1; i >= 0 && excess > 0; i--) {
-      final trim = min(excess, capped[i].count - 1);
-      capped[i] = CSpec(capped[i].category, capped[i].count - trim,
-          target: capped[i].targetMuscles, exclude: capped[i].excludeMuscles);
-      excess -= trim;
-    }
-    return capped;
-  }
-
-  static List<PlannedExercise> _selectForSpecs(
-    List<CSpec> specs,
-    ExerciseRepository repo,
-    List<String> equipment,
-    String effectiveExp,
-    int phase, {
-    Set<String>? excludeNames,
-    List<String> injuries = const [],
-  }) {
-    final exercises = <PlannedExercise>[];
-
-    for (final spec in specs) {
-      var candidates = repo.query(
-        category: spec.category,
-        equipment: equipment,
-        suitableFor: effectiveExp == 'advanced' ? null : effectiveExp,
-        foundationalOnly: phase == 1,
-        targetMuscles: spec.targetMuscles,
-        excludeMuscles: spec.excludeMuscles,
-        limit: spec.count + 4,
-      );
-
-      // Exclude already-selected exercise names
-      if (excludeNames != null && excludeNames.isNotEmpty) {
-        candidates = candidates
-            .where((c) => !excludeNames.contains(c['name'] as String? ?? ''))
-            .toList();
-      }
-
-      // Also exclude exercises already picked in this variant
-      final pickedNames = exercises.map((e) => e.exerciseName).toSet();
-      candidates = candidates
-          .where((c) => !pickedNames.contains(c['name'] as String? ?? ''))
-          .toList();
-
-      // V3: Injury exclusion filter
-      if (injuries.isNotEmpty) {
-        candidates = candidates.where((c) {
-          final contraindications = c['injury_contraindications'];
-          if (contraindications is! List || contraindications.isEmpty) return true;
-          // Exclude if any user injury matches any contraindication
-          for (final injury in injuries) {
-            if (contraindications.any((ci) =>
-                ci.toString().toLowerCase() == injury.toLowerCase())) {
-              return false;
-            }
-          }
-          return true;
-        }).toList();
-      }
-
-      final selected = candidates.length <= spec.count
-          ? candidates
-          : candidates.sublist(0, spec.count);
-
-      for (final ex in selected) {
-        exercises.add(_buildExercise(ex));
-      }
-    }
-    return exercises;
-  }
-
   // ── V4: Muscle-slot architecture ─────────────────────────────────
 
-  /// V4 universal bodyweight pool — keyed by movement pattern.
-  /// Used as Attempt 5 (last resort) in the cascade.
-  static const universalPoolV4 = <String, List<String>>{
-    'horizontal_push':    ['Push Up', 'Incline Push Up', 'Wall Push Up', 'Decline Push Up', 'Diamond Push Up'],
-    'vertical_push':      ['Pike Push Up', 'Handstand Hold', 'Dand (Hindu Pushup)'],
-    // ⑦ OI-89: APPEND ONLY. Every pre-existing entry keeps its exact position
-    // and the new rows go on the END.
-    //
-    // This is not stylistic. att5 does NOT check equipment_tier -- it resolves a
-    // pool name through repo.search and applies capability, exclusions and
-    // injuries. (Corrected B1 Task 1: OI-89 wrote "since OI-89 capability" here,
-    // but the check lived only in the cascade_tracer mirror until B1 Task 1.)
-    // Capability is non-null at EVERY tier since OI-144, so the first pool entry
-    // the user can PERFORM wins; with the floor switched off
-    // (`disable_equipment_capability_floor`) capability is null and the first
-    // unpicked entry wins outright. Either way the ORDER decides the pick, so
-    // reordering silently changes what users are prescribed.
-    //
-    // The B-pass caught this batch doing exactly that: an earlier draft promoted
-    // `Dip (Parallel Bars)` to the head of elbow_extension, and `parallel bars`
-    // is NOT granted by home_dumbbells -- so a home user reaching att5 would have
-    // been handed a dip station where the previous order gave them a Diamond
-    // Push Up. The tails below are what keep the SKIP from emptying a slot;
-    // pinned by the att5 FLOOR INVARIANT test, which reddened on exactly three
-    // patterns when the retag moved Pull Up / Chin Up / Inverted Row / TRX Row
-    // off the floor.
-    'horizontal_pull':    ['Inverted Row', 'TRX Row', 'Table Row', 'Towel Row',
-                           'Prone Reverse Snow Angel'],
-    'vertical_pull':      ['Pull Up', 'Chin Up', 'Inverted Row',
-                           'Sliding Lat Pull', 'Doorway Isometric Lat Pull',
-                           'Prone Lat Pull Hold'],
-    'knee_dominant':      ['Baithak (Hindu Squat)', 'Forward Lunge', 'Bulgarian Split Squat', 'Jump Squat'],
-    'hip_dominant':       ['Glute Bridge', 'Single Leg Romanian Deadlift', 'Good Morning'],
-    'core':               ['Plank', 'Dead Bug', 'Hollow Body Hold', 'Bicycle Crunch', 'Mountain Climber'],
-    'elbow_flexion':      ['Chin Up', 'Inverted Row', 'Doorframe Curl',
-                           'Towel Bicep Curl', 'Self-Resisted Bicep Curl'],
-    'elbow_extension':    ['Diamond Push Up', 'Bench Dips', 'Chest Dip',
-                           'Wall Triceps Extension',
-                           'Self-Resisted Triceps Extension'],
-    'shoulder_isolation': ['Bodyweight Rear Delt Raise', 'Band Pull Apart', 'Arm Circles',
-                           'Prone Y Raise', 'Towel Lateral Raise'],
-    'hip_isolation':      ['Glute Bridge', 'Glute Kickback'],
-  };
-
-  /// V4: Pick exercises for MuscleSlotDays using 5-attempt cascading fallback.
-  /// movement_pattern is NEVER dropped across all 5 attempts. (The thin-day
-  /// top-up post-pass, [topUpDays], may add a neighbouring pattern to an injured
-  /// user's day left under 3 exercises.)
+  /// Picks every day's exercises from the core lists ([_pickCoreList]), then tops up an injured user's thin day
+  /// ([topUpDays]).
   static List<PopulatedDay> pickV4({
     required List<MuscleSlotDay> slotDays,
     required ExerciseRepository exerciseRepo,
@@ -554,193 +29,29 @@ class ExerciseSelector {
     required int phase,
     required String goal,
     List<String> injuries = const [],
-    // U2 kill-switch (§4.6, platform tier): when true (default), attempt-5
-    // universal-pool picks are injury-filtered like attempts 1-4. false =
-    // verbatim pre-U2 behavior (pool bypasses the injury filter). Default ON is
-    // fail-safe — a caller that forgets the flag still gets the safe path.
-    bool applyInjuryUniversalFilter = true,
-    // ①.1d (Batch 11-C): curated injury-substitute preference. Default false →
-    // inert (verbatim cascade pick). Threaded to every _fillSlots → _cascadeFill.
+    // ①.1d (Batch 11-C): curated injury-substitute preference inside [_selectCandidate]. Kill switch
+    // `disable_injury_substitute_pref`.
     bool applyInjurySubstitutePreference = false,
-    // ⑥ slice B1: user-excluded equipment (canonical, floor-sanitized). Default
-    // `const {}` (unset caller / flag OFF) → every downstream drop inert →
-    // byte-identical. A HARD constraint threaded to every pick path.
+    // ⑥ slice B1: user-excluded equipment (canonical, floor-sanitized). Default `const {}` -> no drop. A HARD
+    // constraint on every pick path.
     Set<String> exclusions = const {},
-    // ⑦ OI-89: the user's real capability set, or NULL for "do not enforce".
-    // REQUIRED (not defaulted) so a missed call site fails to COMPILE — a
-    // defaulted parameter is exactly how buildPinnedDays stayed unfloored
-    // through three earlier drafts of this work.
+    // ⑦ OI-89: the user's real capability set, or NULL for "do not enforce". REQUIRED (not defaulted) so a missed
+    // call site fails to COMPILE.
     required Set<String>? capability,
-    // W3.4 (Batch 11-B): per-day previous-phase picks (LOWERCASED names) → the
-    // cascade avoids repeating them when a same-pattern sibling exists. null →
-    // avoidNames empty everywhere → inert. Only the fresh-advance caller passes it.
+    // W3.4 (Batch 11-B): per-day previous-phase picks (LOWERCASED names), soft-avoided. null -> none. Only the
+    // fresh-advance caller passes it.
     Map<int, ({List<String> a, List<String> b})>? previousPhaseByDay,
-    // W3.5 (Batch 12-B plateau rotation): plateaued compound NAMES (lowercased) to
-    // SOFT-avoid GLOBALLY (every day/variant) so a stuck lift rotates to a
-    // same-pattern sibling. Unioned into avoidA/avoidB → _preferNovel (soft, bounded).
-    // Default `{}` → union no-op → byte-identical. Only generateV4 passes it.
+    // W3.5 (Batch 12-B plateau rotation): plateaued compound NAMES (lowercased) soft-avoided on every day and
+    // variant. Default `{}`. Only generateV4 passes it.
     Set<String> plateauAvoidNames = const {},
-    // OI-458: lowercased names the push / pull / shoulders_arms days BEFORE these
-    // slotDays hold, per variant. Only the repeat-phase fresh fill passes them (it
-    // calls this with ONE frame, so the loop below cannot see the earlier days).
-    // Empty -> byte-identical.
+    // OI-458: lowercased names the push / pull / shoulders_arms days BEFORE these slotDays hold, per variant. Only
+    // the repeat-phase fresh fill passes them (it calls this with ONE frame).
     Set<String> earlierFeederNamesA = const {},
     Set<String> earlierFeederNamesB = const {},
   }) {
-    // Batch B1: the core-list pool, ship-dark (`enable_core_list_pool`). OFF, or
-    // a library with no `core_levels` (a v12 Hive box), runs the cascade below
-    // verbatim.
-    if (PlanEngineFlags.coreListPoolEnabled) {
-      final rows = exerciseRepo.getAll();
-      if (CoreListSelector.hasCoreFields(rows)) {
-        final coreDays = _pickCoreList(
-          rows: rows,
-          slotDays: slotDays,
-          exerciseRepo: exerciseRepo,
-          equipmentTier: equipmentTier,
-          effectiveExp: effectiveExp,
-          phase: phase,
-          goal: goal,
-          injuries: injuries,
-          applyInjuryUniversalFilter: applyInjuryUniversalFilter,
-          applyInjurySubstitutePreference: applyInjurySubstitutePreference,
-          exclusions: exclusions,
-          capability: capability,
-          previousPhaseByDay: previousPhaseByDay,
-          plateauAvoidNames: plateauAvoidNames,
-          earlierFeederNamesA: earlierFeederNamesA,
-          earlierFeederNamesB: earlierFeederNamesB,
-        );
-        // OI-401: the ON path's top-up prefers core-list rows (generator step
-        // 1A, R4) and keeps the 3-exercise floor.
-        return topUpDays(
-          coreDays,
-          slotDays: slotDays,
-          exerciseRepo: exerciseRepo,
-          equipmentTier: equipmentTier,
-          effectiveExp: effectiveExp,
-          phase: phase,
-          goal: goal,
-          injuries: injuries,
-          applyInjurySubstitutePreference: applyInjurySubstitutePreference,
-          exclusions: exclusions,
-          capability: capability,
-          coreListOnly: true,
-          previousPhaseByDay: previousPhaseByDay,
-          plateauAvoidNames: plateauAvoidNames,
-        );
-      }
-    }
-    final result = <PopulatedDay>[];
-
-    // 2026-05-31 personalization lever L6 — read history ONCE per generation
-    // (Phase 2+ only; empty/no-op for Phase 1 or no data). It feeds a
-    // SUPPLEMENTARY post-selection pass (see `_applyHistoryAdjustments`),
-    // deliberately kept OUT of the 5-attempt cascade so the 0-fallback
-    // (attempt3/universalPool/none) target is preserved — the cascade still
-    // picks library exercises first; we only reshuffle afterward.
-    //
-    // L2 (auto-append the user's custom exercises) was REMOVED 2026-10-21
-    // (founder decision, diagnose d4b8e1): it appended every muscle-matching
-    // custom to every day, uncapped. Customs enter a plan only through an
-    // explicit user/coach action (swap, add, template, coach swapExercise).
-    final demoted = phase >= 2
-        ? TrainingHistoryAnalyzer.demotedExercises()
-        : const <String>{};
-
-    // OI-458: names the earlier push / pull days of this plan hold, per variant
-    // (lowercased). An `upper` day SOFT-avoids them, so it reads as a new
-    // session instead of the leftovers of the two days before it.
-    final earlierPushPullA = <String>{...earlierFeederNamesA};
-    final earlierPushPullB = <String>{...earlierFeederNamesB};
-    // Library Batch S1b-2: a loaded version and its original never share a day. The day / variant soft-avoid names
-    // (previous phase, upper-day feeders) carry their same-movement partners; the plateau names are a per-exercise
-    // preference and do not (plan Decision 2's table).
-    final sameMovement = SameMovement.fromRows(exerciseRepo.getAll());
-    for (var i = 0; i < slotDays.length; i++) {
-      final day = slotDays[i];
-      final isUpper = day.dayType == 'upper';
-      // W3.4 (Batch 11-B) variety + W3.5 (Batch 12-B) plateau rotation: the SOFT
-      // avoid-names for THIS day — the previous phase's per-day A/B picks UNIONED
-      // with the GLOBAL plateaued-compound names (both lowercased; feed
-      // _selectCandidate ONLY, never queryV4/excludeNames). Empty union → same set
-      // as `.toSet()` → byte-identical.
-      final avoidA = {
-        ...sameMovement.expandLower({
-          ...(previousPhaseByDay?[i]?.a ?? const <String>[]),
-          if (isUpper) ...earlierPushPullA,
-        }),
-        ...plateauAvoidNames,
-      };
-      final avoidB = {
-        ...sameMovement.expandLower({
-          ...(previousPhaseByDay?[i]?.b ?? const <String>[]),
-          if (isUpper) ...earlierPushPullB,
-        }),
-        ...plateauAvoidNames,
-      };
-      // Fill variant A
-      var exercisesA = _fillSlots(
-        day.slotsA, exerciseRepo, equipmentTier, effectiveExp, phase,
-        injuries: injuries, excludeNames: {},
-        applyInjuryUniversalFilter: applyInjuryUniversalFilter,
-        applyInjurySubstitutePreference: applyInjurySubstitutePreference,
-        avoidNames: avoidA,
-        exclusions: exclusions,
-        capability: capability,
-      );
-
-      // Fill variant B: use slotsB if defined, exclude A names for variety
-      List<PlannedExercise> exercisesB;
-      if (day.slotsB != null) {
-        final aNames = exercisesA.map((e) => e.exerciseName).toSet();
-        exercisesB = _fillSlots(
-          day.slotsB!, exerciseRepo, equipmentTier, effectiveExp, phase,
-          injuries: injuries, excludeNames: goal == 'strength' ? {} : aNames,
-          applyInjuryUniversalFilter: applyInjuryUniversalFilter,
-          applyInjurySubstitutePreference: applyInjurySubstitutePreference,
-          avoidNames: avoidB,
-          exclusions: exclusions,
-          capability: capability,
-        );
-      } else {
-        exercisesB = exercisesA;
-      }
-
-      // 2026-05-31 personalization L6 — supplementary post-pass.
-      if (phase >= 2 && demoted.isNotEmpty) {
-        exercisesA = _applyHistoryAdjustments(
-          exercisesA, day.slotsA, exerciseRepo, equipmentTier, effectiveExp,
-          phase, injuries, demoted,
-          exclusions: exclusions,
-          capability: capability,
-        );
-        if (!identical(exercisesB, exercisesA) && day.slotsB != null) {
-          exercisesB = _applyHistoryAdjustments(
-            exercisesB, day.slotsB!, exerciseRepo, equipmentTier, effectiveExp,
-            phase, injuries, demoted,
-            exclusions: exclusions,
-            capability: capability,
-          );
-        } else {
-          exercisesB = exercisesA;
-        }
-      }
-
-      if (_feedsUpperAvoid(day.dayType)) {
-        earlierPushPullA.addAll(exercisesA.map((e) => e.exerciseName.toLowerCase()));
-        earlierPushPullB.addAll(exercisesB.map((e) => e.exerciseName.toLowerCase()));
-      }
-
-      result.add(PopulatedDay(
-        name: day.name, focus: day.focus,
-        dayType: day.dayType, intensity: day.intensity,
-        exercisesA: exercisesA, exercisesB: exercisesB,
-      ));
-    }
-    // OI-401: an injured user's day the filters left under the floor is topped up.
-    return topUpDays(
-      result,
+    final rows = exerciseRepo.getAll();
+    final coreDays = _pickCoreList(
+      rows: rows,
       slotDays: slotDays,
       exerciseRepo: exerciseRepo,
       equipmentTier: equipmentTier,
@@ -751,7 +62,25 @@ class ExerciseSelector {
       applyInjurySubstitutePreference: applyInjurySubstitutePreference,
       exclusions: exclusions,
       capability: capability,
-      coreListOnly: false,
+      previousPhaseByDay: previousPhaseByDay,
+      plateauAvoidNames: plateauAvoidNames,
+      earlierFeederNamesA: earlierFeederNamesA,
+      earlierFeederNamesB: earlierFeederNamesB,
+    );
+    // OI-401: an injured user's thin day is topped up, core-list rows first (generator step 1A, R4), with the
+    // 3-exercise floor.
+    return topUpDays(
+      coreDays,
+      slotDays: slotDays,
+      exerciseRepo: exerciseRepo,
+      equipmentTier: equipmentTier,
+      effectiveExp: effectiveExp,
+      phase: phase,
+      goal: goal,
+      injuries: injuries,
+      applyInjurySubstitutePreference: applyInjurySubstitutePreference,
+      exclusions: exclusions,
+      capability: capability,
       previousPhaseByDay: previousPhaseByDay,
       plateauAvoidNames: plateauAvoidNames,
     );
@@ -762,14 +91,12 @@ class ExerciseSelector {
   static bool _feedsUpperAvoid(String dayType) =>
       dayType == 'push' || dayType == 'pull' || dayType == 'shoulders_arms';
 
-  /// Batch B1: the ON path of [pickV4] (plan Task 3). Each slot takes the top
-  /// of [CoreListSelector.rankedPool] through [_selectCandidate]. Variant B
-  /// SOFT-avoids A's names (they sort last instead of being excluded, unlike
-  /// OFF), so a slot whose only core rows A used repeats A rather than drop.
-  /// An emptied variant copies the other; a day with both variants empty takes
-  /// core rows of any level (Ruling 12), and only then the OFF cascade.
-  /// The OFF L6 post-pass is not run: it queries queryV4 and would swap in
-  /// non-core rows, so L6 is a partition inside rankedPool instead.
+  /// The picker (Batch B1; the only path since Unit 1B-F). Each slot takes the top of [CoreListSelector.rankedPool]
+  /// through [_selectCandidate]. Variant B SOFT-avoids A's names (they sort last, never excluded), so a slot whose
+  /// only core rows A used repeats A rather than drop. An emptied variant copies the other; a day with both variants
+  /// empty takes core rows of any level (B1 Ruling 12), and a day still empty is left to [topUpDays] (injured users).
+  /// L6 is a partition inside rankedPool: a demoted row sorts last, and so do the loaded versions of a demoted
+  /// original ([_demotedWithLoadedVersions]).
   static List<PopulatedDay> _pickCoreList({
     required List<Map<String, dynamic>> rows,
     required List<MuscleSlotDay> slotDays,
@@ -779,7 +106,6 @@ class ExerciseSelector {
     required int phase,
     required String goal,
     required List<String> injuries,
-    required bool applyInjuryUniversalFilter,
     required bool applyInjurySubstitutePreference,
     required Set<String> exclusions,
     required Set<String>? capability,
@@ -791,14 +117,12 @@ class ExerciseSelector {
     // ignore: invalid_use_of_visible_for_testing_member
     final trace = CoreListSelector.debugTrace;
     trace?.delegations++;
-    // L6: original-case names, compared exactly (as _applyHistoryAdjustments).
-    final demoted = phase >= 2
-        ? TrainingHistoryAnalyzer.demotedExercises()
-        : const <String>{};
+    // L6: original-case names, compared exactly; a demoted original's loaded versions with it (Unit 1B-F, S1b-2).
+    final demoted = _demotedWithLoadedVersions(
+        phase >= 2 ? TrainingHistoryAnalyzer.demotedExercises() : const <String>{}, rows);
     final demotedLower = {for (final n in demoted) n.toLowerCase()};
     final result = <PopulatedDay>[];
-    // OI-458, as in the cascade path of [pickV4]: an `upper` day soft-avoids the
-    // names the earlier push / pull days hold, per variant (lowercased).
+    // OI-458: an `upper` day soft-avoids the names the earlier push / pull days hold, per variant (lowercased).
     final earlierPushPullA = <String>{...earlierFeederNamesA};
     final earlierPushPullB = <String>{...earlierFeederNamesB};
     // Library Batch S1b-2: a loaded version and its original never share a day. The day / variant soft-avoid names
@@ -925,36 +249,6 @@ class ExerciseSelector {
         }
         copyIfOneEmpty();
       }
-      if (a.isEmpty && b.isEmpty) {
-        // Last resort: what OFF brings today, so never a regression versus OFF.
-        a = _fillSlots(
-          day.slotsA, exerciseRepo, equipmentTier, effectiveExp, phase,
-          injuries: injuries, excludeNames: {},
-          applyInjuryUniversalFilter: applyInjuryUniversalFilter,
-          applyInjurySubstitutePreference: applyInjurySubstitutePreference,
-          avoidNames: avoidA,
-          exclusions: exclusions,
-          capability: capability,
-        );
-        trace?.refilled.add((day: i, variant: 'A'));
-        if (hasB) {
-          final aNames = a.map((e) => e.exerciseName).toSet();
-          b = _fillSlots(
-            day.slotsB!, exerciseRepo, equipmentTier, effectiveExp, phase,
-            injuries: injuries,
-            excludeNames: goal == 'strength' ? {} : aNames,
-            applyInjuryUniversalFilter: applyInjuryUniversalFilter,
-            applyInjurySubstitutePreference: applyInjurySubstitutePreference,
-            avoidNames: avoidB,
-            exclusions: exclusions,
-            capability: capability,
-          );
-          trace?.refilled.add((day: i, variant: 'B'));
-        } else {
-          b = a;
-        }
-      }
-
       if (_feedsUpperAvoid(day.dayType)) {
         earlierPushPullA.addAll(a.map((e) => e.exerciseName.toLowerCase()));
         earlierPushPullB.addAll(b.map((e) => e.exerciseName.toLowerCase()));
@@ -969,8 +263,29 @@ class ExerciseSelector {
     return result;
   }
 
+  /// Unit 1B-F (Ruling 7; S1b-2's L6 rule kept on the core path): a user who moved away from an ORIGINAL row is not
+  /// handed its loaded version in its place, so the loaded versions of each demoted original (rows whose
+  /// `same_movement_as` names the original's id) are demoted with it. One direction only: a demoted loaded version
+  /// does not demote its original. Exact names in, exact names out; [demoted] itself when nothing is added.
+  static Set<String> _demotedWithLoadedVersions(Set<String> demoted, List<Map<String, dynamic>> rows) {
+    if (demoted.isEmpty) return demoted;
+    final ids = <Object?>{
+      for (final r in rows)
+        if (demoted.contains(r['name'])) r['id'],
+    };
+    Set<String>? out;
+    for (final r in rows) {
+      final to = r['same_movement_as'];
+      final name = r['name'];
+      if (to is String && name is String && ids.contains(to) && !demoted.contains(name)) {
+        (out ??= {...demoted}).add(name);
+      }
+    }
+    return out ?? demoted;
+  }
+
   /// ⑧ 8-A / UNIT 2-cap (W2.5 repeat-content) — build [PopulatedDay]s from a
-  /// PINNED exercise SELECTION instead of the [pickV4] cascade.
+  /// PINNED exercise SELECTION instead of the [pickV4] picker.
   ///
   /// "Repeat the last phase" is implemented as: reuse the prior phase's exercise
   /// NAMES, slotted into the CURRENT-profile split [frames], then let the normal
@@ -978,7 +293,7 @@ class ExerciseSelector {
   /// ACTUAL last-logged weight BY NAME and periodization re-applies the wave. A
   /// raw plan-blob copy would instead re-decay an already-cooked `suggested_weight`
   /// (double-decay) AND bypass the injury/equipment filters that live INSIDE the
-  /// cascade. Pinning only the SELECTION avoids both.
+  /// picker. Pinning only the SELECTION avoids both.
   ///
   /// Each day carries BOTH variant-A names (weeks 1 & 3) AND variant-B names
   /// (weeks 2 & 4): the split alternates anterior/posterior emphasis across weeks
@@ -989,26 +304,24 @@ class ExerciseSelector {
   /// else `B == A` (:557-566) — never a collapse.
   ///
   /// Because this bypasses [pickV4], it re-applies the three HARD constraints
-  /// (capability + explicit-lack + safety) queryV4 attempts 1-4 enforce — but
-  /// NOT the soft equipment-TIER match:
+  /// (capability + explicit-lack + safety) the picker enforces — but NOT the soft
+  /// equipment-TIER match:
   ///  - equipment capability (B1 Task 1) — `EquipmentCapability.canOfferInPicker`
   ///    against [capability]: a library row must be performable; a user-authored
   ///    custom with no recorded equipment is kept, one that records kit the
   ///    user lacks is dropped. Null [capability] = do not enforce.
   ///  - equipment-exclusion    (exercise_repository.dart:282-285) — the user's
-  ///    explicit `equipment_exclusions` (items they lack); a HARD constraint the
-  ///    cascade keeps even at att4.
+  ///    explicit `equipment_exclusions` (items they lack); a HARD constraint on
+  ///    every pick path.
   ///  - injury contraindication (exercise_repository.dart:324-334) — applied
-  ///    UNGATED. att1-4 always drops a contraindicated pick when injuries are
-  ///    present; the `applyInjuryUniversalFilter` kill-switch governs ONLY the
-  ///    att-5 universal pool, not this primary-path filter. A user who added an
-  ///    injury since the prior phase must never get the old contraindicated lift
-  ///    repeated. (This deviates from the pre-implementation plan note, which
-  ///    mirrored att-5's gated skip — the wrong reference for a pin.)
+  ///    UNGATED, as the picker applies it. A user who added an injury since the
+  ///    prior phase must never get the old contraindicated lift repeated. (The
+  ///    gated universal-pool skip this once contrasted with was deleted by Unit
+  ///    1B-F.)
   ///  - equipment-TIER is deliberately NOT re-applied: it is a SOFT selection
-  ///    heuristic the cascade itself RELAXES at attempt-4 (a shallow slot can be
-  ///    filled by an off-tier move), so re-filtering would silently DROP a
-  ///    same-tier att4 pick from a faithful repeat. Cross-tier faithfulness is the
+  ///    heuristic (the deleted cascade relaxed it; the picker reads capability
+  ///    instead), so re-filtering would silently DROP a pick from a faithful
+  ///    repeat. Cross-tier faithfulness is the
   ///    CALLER's contract: UNIT 2-int gates the repeat on the prior phase's
   ///    equipment-tier being UNCHANGED (alongside goal + daysPerWeek), so a
   ///    tier-inappropriate pin never reaches here. Mirrors ⑥ B1's "equipment_tier
@@ -1017,7 +330,7 @@ class ExerciseSelector {
   /// A pinned name is resolved to its EXACT library row
   /// ([ExerciseRepository.getByExactName]) or, failing that, the user's matching
   /// custom exercise; a name absent from BOTH is DROPPED. If a variant ends up
-  /// empty (every pin dropped), it FRESH-FILLS via the normal [pickV4] cascade for
+  /// empty (every pin dropped), it FRESH-FILLS via the normal [pickV4] for
   /// that single frame — so a repeat day degrades to at worst the SAME safe
   /// slot-omission a fresh generation would produce, never a bespoke `(none)`.
   ///
@@ -1039,7 +352,6 @@ class ExerciseSelector {
     required int phase,
     required String goal,
     List<String> injuries = const [],
-    bool applyInjuryUniversalFilter = true,
     bool applyInjurySubstitutePreference = false, // ①.1d (Batch 11-C) — fresh-fill only
     Set<String> exclusions = const {},
     // ⑦ OI-89: capability set, or NULL for 'do not enforce'. REQUIRED so a
@@ -1054,9 +366,8 @@ class ExerciseSelector {
         customsCache ??= exerciseRepo.getCustomExercises();
 
     // Resolve a pinned NAME list → built exercises, re-applying the HARD filters the
-    // cascade (queryV4 att1-4) enforces: capability + equipment-EXCLUSION + UNGATED
-    // injury. Tier is NOT re-applied (soft/att4-relaxed; the caller guarantees
-    // same-tier). A name
+    // picker enforces: capability + equipment-EXCLUSION + UNGATED injury. Tier is
+    // NOT re-applied (soft; the caller guarantees same-tier). A name
     // absent from BOTH the library and the user's customs is dropped.
     List<PlannedExercise> resolve(List<String> names) {
       final picked = <PlannedExercise>[];
@@ -1106,7 +417,7 @@ class ExerciseSelector {
       final frame = frames[i];
       final pins = pinnedByDay[i];
 
-      // A fresh single-frame cascade, computed at most once per frame — for the MF-1
+      // A fresh single-frame pick, computed at most once per frame — for the MF-1
       // empty-variant fill AND the B-variant fallback (so weeks 2/4 never collapse
       // onto weeks 1/3). pickV4 emits exactly one PopulatedDay per slotDay.
       PopulatedDay? freshCache;
@@ -1122,7 +433,6 @@ class ExerciseSelector {
             phase: phase,
             goal: goal,
             injuries: injuries,
-            applyInjuryUniversalFilter: applyInjuryUniversalFilter,
             applyInjurySubstitutePreference: applyInjurySubstitutePreference,
             exclusions: exclusions,
             capability: capability,
@@ -1179,8 +489,6 @@ class ExerciseSelector {
       applyInjurySubstitutePreference: applyInjurySubstitutePreference,
       exclusions: exclusions,
       capability: capability,
-      coreListOnly: PlanEngineFlags.coreListPoolEnabled &&
-          CoreListSelector.hasCoreFields(exerciseRepo.getAll()),
     );
   }
 
@@ -1191,11 +499,11 @@ class ExerciseSelector {
   /// The injury filter drops a slot when no safe candidate exists (the
   /// safe-omission rule), and nothing refills the day afterwards, so an injured
   /// user could get one or two exercises, or none. This post-pass runs on the
-  /// finished [days] at the three places a day list leaves the selector
-  /// ([pickV4]'s cascade, the B1 `_pickCoreList` return, and [buildPinnedDays]).
+  /// finished [days] at the two places a day list leaves the selector ([pickV4]'s
+  /// `_pickCoreList` return and [buildPinnedDays]).
   /// Per variant (A and B separately) with fewer than [ThinDayTopUp.floor]
-  /// exercises it adds safe moves through the same `queryV4` filters the cascade
-  /// uses (injury, capability, exclusions, experience): first the day's own
+  /// exercises it adds safe moves through `queryV4`'s filters (injury,
+  /// capability, exclusions, experience), core rows first (R4): first the day's own
   /// (muscle, pattern) anchors, own pattern before its neighbours
   /// ([ThinDayTopUp.neighbours]); then `core`; then it stops, so a day the stages
   /// cannot lift stays short (OI-408).
@@ -1223,9 +531,6 @@ class ExerciseSelector {
     required bool applyInjurySubstitutePreference,
     required Set<String> exclusions,
     required Set<String>? capability,
-    // Generator step 1A, R4: true only on the core-list (ON) paths; REQUIRED, not
-    // defaulted, so a missed call site fails to compile (the OI-89 lesson above).
-    required bool coreListOnly,
     Map<int, ({List<String> a, List<String> b})>? previousPhaseByDay,
     Set<String> plateauAvoidNames = const {},
   }) {
@@ -1255,8 +560,9 @@ class ExerciseSelector {
       }
       anyThin = true;
       // Read lazily and once per call: only a thin day in phase 2+ needs it.
+      // A demoted original's loaded versions are demoted with it (Unit 1B-F, as in [_pickCoreList]).
       demoted ??= phase >= 2
-          ? lower(TrainingHistoryAnalyzer.demotedExercises())
+          ? lower(_demotedWithLoadedVersions(TrainingHistoryAnalyzer.demotedExercises(), exerciseRepo.getAll()))
           : const <String>{};
       final slots = slotDays[i];
       final alias = identical(d.exercisesA, d.exercisesB);
@@ -1278,7 +584,6 @@ class ExerciseSelector {
           demoted,
           exerciseRepo, equipmentTier, effectiveExp, phase, injuries,
           applyInjurySubstitutePreference, exclusions, capability,
-          coreListOnly: coreListOnly,
         );
       }
       if (alias) {
@@ -1297,7 +602,6 @@ class ExerciseSelector {
           demoted,
           exerciseRepo, equipmentTier, effectiveExp, phase, injuries,
           applyInjurySubstitutePreference, exclusions, capability,
-          coreListOnly: coreListOnly,
         );
       }
       out.add(PopulatedDay(
@@ -1327,16 +631,13 @@ class ExerciseSelector {
     List<String> injuries,
     bool applyInjurySubstitutePreference,
     Set<String> exclusions,
-    Set<String>? capability, {
-    required bool coreListOnly,
-  }) {
+    Set<String>? capability,
+  ) {
     final out = [...current];
     final picked = {for (final e in current) e.exerciseName};
-    // Generator step 1A, R4: the ladder below runs once (OFF / not core-list:
-    // today's behaviour) or twice (core-list ON): pass 1 keeps only rows on a
-    // core list at the user's level or an easier one; pass 2, reached only while
-    // the variant is still under the floor, is today's ladder with a FRESH memo,
-    // so a key that held no core row is retried. The floor is unchanged.
+    // Generator step 1A, R4: the ladder below runs twice: pass 1 keeps only rows on a core list at the user's level
+    // or an easier one; pass 2, reached only while the variant is still under the floor, is the full ladder with a
+    // FRESH memo, so a key that held no core row is retried. The floor is unchanged.
     var exhausted = <String>{};
 
     bool addFrom(String pattern, String? muscle, {required bool coreOnly}) {
@@ -1344,8 +645,8 @@ class ExerciseSelector {
       if (exhausted.contains(key)) return false;
       var cands = const <Map<String, dynamic>>[];
       // Phase 1 asks for foundational rows first (a beginner gets Plank before
-      // Farmers Carry), then relaxes, as the cascade's attempts do one at a time.
-      // The core stage does so in EVERY phase: the cascade types its core slots
+      // Farmers Carry), then relaxes, as the deleted cascade's attempts did.
+      // The core stage does so in EVERY phase: the deleted cascade typed its core slots
       // 'isolation', the top-up has no slot type, and queryV4 sorts compound
       // first, so from phase 2 an advanced user was handed Dragon Flag or L-Sit
       // Hold (B-pass F1). A skill or olympic row is never a filler at any stage.
@@ -1375,9 +676,9 @@ class ExerciseSelector {
         exhausted.add(key);
         return false;
       }
-      // L6 (the cascade swaps a swapped-out pick for a same-pattern alternative
-      // when one exists; this runs after that post-pass): a demoted name is
-      // topped back in only when it is the sole candidate left. A soft avoid
+      // L6 (the picker sorts a swapped-out pick last; this runs after it): a
+      // demoted name, and a demoted original's loaded versions, are topped back in
+      // only when they are the sole candidates left. A soft avoid
       // would not do: the injury-substitute preference narrows the pool first.
       final fresh = [
         for (final c in cands)
@@ -1417,99 +718,9 @@ class ExerciseSelector {
       }
     }
 
-    if (coreListOnly) ladder(coreOnly: true);
+    ladder(coreOnly: true);
     ladder(coreOnly: false);
     return out;
-  }
-
-  // ── 2026-05-31 personalization lever L6 ───────────────────────────
-
-  /// Supplementary post-selection adjustment (runs AFTER the cascade has fully
-  /// populated a day). Reshuffles only — never starves the cascade, never adds:
-  ///
-  ///   L6 (demote swapped-out): if a cascade-picked exercise is in [demoted]
-  ///   (the user previously swapped away from it) AND a non-demoted alternative
-  ///   in the SAME movement pattern exists in the library pool (and isn't
-  ///   already picked), swap to the alternative. If no clean alternative exists
-  ///   we keep the original — we never drop a slot.
-  ///
-  /// L2 (append the user's matching custom exercises) lived here until
-  /// 2026-10-21 and was removed (diagnose d4b8e1) — the generator never
-  /// auto-adds a custom exercise.
-  ///
-  /// Implemented as a post-pass (not inside `_cascadeFill`) on purpose: keeping
-  /// L6 out of the cascade guarantees the `sample_plans_report.dart`
-  /// 0-fallback target is unaffected (the demote-swap only ever exchanges one
-  /// library pick for another).
-  static List<PlannedExercise> _applyHistoryAdjustments(
-    List<PlannedExercise> picked,
-    List<MuscleSlot> slots,
-    ExerciseRepository repo,
-    String equipmentTier,
-    String effectiveExp,
-    int phase,
-    List<String> injuries,
-    Set<String> demoted, {
-    required Set<String> exclusions, // ⑥ B1 (compile-enforced thread)
-    // ⑦ OI-89: capability set, or NULL for 'do not enforce'. REQUIRED so a
-    // missed call site fails to COMPILE — a defaulted parameter is exactly
-    // how buildPinnedDays stayed unfloored through three earlier drafts.
-    required Set<String>? capability,
-  }) {
-    final result = List<PlannedExercise>.from(picked);
-    final pickedNames = result.map((e) => e.exerciseName).toSet();
-
-    // L6: try to replace each demoted pick with a same-movement-pattern
-    // non-demoted library alternative.
-    if (demoted.isNotEmpty) {
-      for (var i = 0; i < result.length; i++) {
-        final ex = result[i];
-        if (!demoted.contains(ex.exerciseName)) continue;
-
-        // Find the slot whose movement pattern this pick most likely served.
-        final pattern = _patternForPick(ex, slots);
-        if (pattern == null) continue;
-
-        final alternatives = repo.queryV4(
-          movementPattern: pattern,
-          equipmentTier: equipmentTier,
-          suitableFor: effectiveExp == 'advanced' ? null : effectiveExp,
-          excludeNames: pickedNames,
-          injuryExclusions: injuries.isEmpty ? null : injuries,
-          exclusions: exclusions,
-          capability: capability,
-        );
-        for (final c in alternatives) {
-          final name = c['name'] as String? ?? '';
-          if (name.isEmpty || demoted.contains(name)) continue;
-          // Swap to the non-demoted alternative.
-          final replacement = _buildExercise(c).copyWith(variant: ex.variant);
-          result[i] = replacement;
-          pickedNames.remove(ex.exerciseName);
-          pickedNames.add(name);
-          break;
-        }
-      }
-    }
-
-    return result;
-  }
-
-  /// The movement pattern a cascade-picked exercise most likely served, found
-  /// by matching the pick's category/muscles back to a slot on the day. Returns
-  /// null when no confident match exists (then L6 leaves the pick untouched).
-  static String? _patternForPick(PlannedExercise ex, List<MuscleSlot> slots) {
-    final muscles = (ex.primaryMuscles ?? const [])
-        .map((m) => m.toLowerCase())
-        .toList();
-    for (final s in slots) {
-      final target = s.targetMuscle.toLowerCase();
-      if (muscles.any((m) => m.contains(target) || target.contains(m))) {
-        return s.movementPattern;
-      }
-    }
-    // Fallback: a single-slot day, or no muscle metadata — use first slot.
-    return slots.isNotEmpty ? slots.first.movementPattern : null;
   }
 
   static List<String> _muscleTokens(Object? raw) {
@@ -1559,50 +770,8 @@ class ExerciseSelector {
     );
   }
 
-  /// Fill a list of MuscleSlots with exercises via 5-attempt cascade.
-  static List<PlannedExercise> _fillSlots(
-    List<MuscleSlot> slots,
-    ExerciseRepository repo,
-    String equipmentTier,
-    String effectiveExp,
-    int phase, {
-    required List<String> injuries,
-    required Set<String> excludeNames,
-    bool applyInjuryUniversalFilter = true,
-    bool applyInjurySubstitutePreference = false, // ①.1d (Batch 11-C)
-    Set<String> avoidNames = const {}, // W3.4 (Batch 11-B) — SOFT variety bias
-    required Set<String> exclusions, // ⑥ B1 (required — compile-enforced thread)
-    // ⑦ OI-89: the user's real capability set, or NULL for "do not enforce".
-    // REQUIRED (not defaulted) so a missed call site fails to COMPILE — a
-    // defaulted parameter is exactly how buildPinnedDays stayed unfloored
-    // through three earlier drafts of this work.
-    required Set<String>? capability,
-  }) {
-    final exercises = <PlannedExercise>[];
-    final pickedNames = Set<String>.from(excludeNames);
-
-    for (final slot in slots) {
-      for (var i = 0; i < slot.count; i++) {
-        final exercise = _cascadeFill(
-          slot, repo, equipmentTier, effectiveExp, phase,
-          injuries: injuries, pickedNames: pickedNames,
-          applyInjuryUniversalFilter: applyInjuryUniversalFilter,
-          applyInjurySubstitutePreference: applyInjurySubstitutePreference,
-          avoidNames: avoidNames,
-          exclusions: exclusions,
-          capability: capability,
-        );
-        if (exercise != null) {
-          exercises.add(exercise);
-          pickedNames.add(exercise.exerciseName);
-        }
-      }
-    }
-    return exercises;
-  }
-
-  /// Pick a candidate from a NON-EMPTY, already-safe (post injury-filter),
-  /// same-pattern `queryV4` result list.
+  /// Pick a candidate from a NON-EMPTY, already-safe (post injury-filter) pool: a [CoreListSelector.rankedPool]
+  /// order or a top-up `queryV4` result.
   /// ①.1d (Batch 11-C): the injury-substitute preference narrows the POOL to the
   /// curated, map-order-sorted subs (else the full candidate list).
   /// W3.4 (Batch 11-B): `_preferNovel` then breaks ties WITHIN that pool toward a
@@ -1652,175 +821,6 @@ class ExerciseSelector {
       }
     }
     return pool.first;
-  }
-
-  /// movement_pattern is NEVER dropped (the thin-day top-up, [topUpDays], runs
-  /// after the cascade and may add a neighbouring pattern).
-  static PlannedExercise? _cascadeFill(
-    MuscleSlot slot,
-    ExerciseRepository repo,
-    String equipmentTier,
-    String effectiveExp,
-    int phase, {
-    required List<String> injuries,
-    required Set<String> pickedNames,
-    bool applyInjuryUniversalFilter = true,
-    bool applyInjurySubstitutePreference = false, // ①.1d (Batch 11-C)
-    Set<String> avoidNames = const {}, // W3.4 (Batch 11-B) — SOFT variety bias ONLY
-    required Set<String> exclusions, // ⑥ B1 (required — compile-enforced thread)
-    // ⑦ OI-89: capability set, or NULL for 'do not enforce'. REQUIRED so a
-    // missed call site fails to COMPILE — a defaulted parameter is exactly
-    // how buildPinnedDays stayed unfloored through three earlier drafts.
-    required Set<String>? capability,
-  }) {
-    // Attempt 1: Exact target + subFocus + equipment + type + experience
-    var candidates = repo.queryV4(
-      movementPattern: slot.movementPattern,
-      targetFocus: slot.subFocus != null
-          ? '${slot.targetMuscle} (${slot.subFocus})'
-          : null,
-      targetMuscle: slot.targetMuscle,
-      equipmentTier: equipmentTier,
-      exerciseType: slot.exerciseType,
-      suitableFor: effectiveExp == 'advanced' ? null : effectiveExp,
-      foundationalOnly: phase == 1,
-      excludeNames: pickedNames,
-      injuryExclusions: injuries.isEmpty ? null : injuries,
-      exclusions: exclusions,
-      capability: capability,
-    );
-    if (candidates.isNotEmpty) {
-      return _buildExercise(_selectCandidate(candidates,
-          injuries: injuries,
-          applyInjurySubstitutePreference: applyInjurySubstitutePreference,
-          avoidNames: avoidNames));
-    }
-
-    // Attempt 2: Drop subFocus (broader target within same muscle)
-    candidates = repo.queryV4(
-      movementPattern: slot.movementPattern,
-      targetMuscle: slot.targetMuscle,
-      equipmentTier: equipmentTier,
-      exerciseType: slot.exerciseType,
-      suitableFor: effectiveExp == 'advanced' ? null : effectiveExp,
-      excludeNames: pickedNames,
-      injuryExclusions: injuries.isEmpty ? null : injuries,
-      exclusions: exclusions,
-      capability: capability,
-    );
-    if (candidates.isNotEmpty) {
-      return _buildExercise(_selectCandidate(candidates,
-          injuries: injuries,
-          applyInjurySubstitutePreference: applyInjurySubstitutePreference,
-          avoidNames: avoidNames));
-    }
-
-    // Attempt 3: Drop target + exercise type (any exercise in movement pattern with equipment)
-    candidates = repo.queryV4(
-      movementPattern: slot.movementPattern,
-      equipmentTier: equipmentTier,
-      suitableFor: effectiveExp == 'advanced' ? null : effectiveExp,
-      excludeNames: pickedNames,
-      injuryExclusions: injuries.isEmpty ? null : injuries,
-      exclusions: exclusions,
-      capability: capability,
-    );
-    if (candidates.isNotEmpty) {
-      return _buildExercise(_selectCandidate(candidates,
-          injuries: injuries,
-          applyInjurySubstitutePreference: applyInjurySubstitutePreference,
-          avoidNames: avoidNames));
-    }
-
-    // Attempt 4: Drop equipment TIER (allow any tier in the movement pattern).
-    // ⑥ B1: the exclusion filter is KEPT here — a dropped TIER is a soft
-    // curation heuristic, but an EXCLUDED item is a hard "user lacks it"
-    // constraint. att5's floor-sanitized bodyweight pool is the safe catch.
-    candidates = repo.queryV4(
-      movementPattern: slot.movementPattern,
-      suitableFor: effectiveExp == 'advanced' ? null : effectiveExp,
-      excludeNames: pickedNames,
-      injuryExclusions: injuries.isEmpty ? null : injuries,
-      exclusions: exclusions,
-      capability: capability,
-    );
-    if (candidates.isNotEmpty) {
-      return _buildExercise(_selectCandidate(candidates,
-          injuries: injuries,
-          applyInjurySubstitutePreference: applyInjurySubstitutePreference,
-          avoidNames: avoidNames));
-    }
-
-    // Attempt 5: Universal bodyweight pool.
-    // U2 (injury safety): the pool bypasses queryV4, so — unlike attempts 1-4 —
-    // it must apply the injury-contraindication exclusion itself, or a
-    // contraindicated bodyweight move (e.g. Pike Push Up for a shoulder injury)
-    // can still be handed to an injured user here. If EVERY pool move for this
-    // pattern is contraindicated, the slot is SAFELY OMITTED (return null) —
-    // fewer-but-safe beats injuring the user. The Batch-0 measurement harness
-    // (cascade_tracer + scorecard) mirrors this filter and distinguishes a safe
-    // omission from a bug-`(none)`.
-    final pool = universalPoolV4[slot.movementPattern] ?? [];
-    // Library Batch S1b-2: the pool bypasses queryV4, so it expands the day's names with their same-movement partners
-    // itself (a day holding N19 Dumbbell Glute Bridge never also gets Glute Bridge here).
-    final pickedOrPartners = pool.isEmpty
-        ? pickedNames
-        : SameMovement.fromRows(repo.getAll()).expand(pickedNames);
-    for (final name in pool) {
-      if (pickedOrPartners.contains(name)) continue;
-      final matches = repo.search(name);
-      if (matches.isNotEmpty) {
-        // repo.search is a SUBSTRING match, so a pool name like "Push Up" also
-        // matches "Pike Push Up" / "Incline Push Up". Resolve to the EXACT-name
-        // record so the injury check AND the built exercise are the intended
-        // pool move — not an accidental superstring (which could otherwise flip
-        // the safety verdict or build the wrong exercise). Falls back to the
-        // first substring match when the pool name has no exact library row.
-        final resolved = matches.firstWhere(
-          (m) => (m['name'] as String?)?.toLowerCase() == name.toLowerCase(),
-          orElse: () => matches.first,
-        );
-        // B1 Task 1: the pool picks by NAME, so the capability floor queryV4
-        // applies at attempts 1-4 must be applied here too. OI-89 put this
-        // check in the diagnostic mirror (cascade_tracer) only, which hid the
-        // leak from the scorecard. Same order as the mirror: capability, then
-        // exclusions, then injury. A placeholder (no library row) builds
-        // `['bodyweight']` below and stays allowed.
-        if (capability != null &&
-            !EquipmentCapability.canPerform(
-                resolved['equipment_needed'], capability)) {
-          continue;
-        }
-        // ⑥ B1 (mirror the U2 injury skip): the att5 pool bypasses queryV4, so
-        // it must apply the equipment-exclusion drop itself — else a pool move
-        // requiring excluded equipment (e.g. Pull Up ['pull-up bar'] for a
-        // pull-up-bar-excluding user) leaks. Floor-sanitize guarantees ≥1
-        // pure-bodyweight move per movement_pattern, so a skip NEVER empties the
-        // slot — it just prefers the bodyweight fallback (Inverted Row over Pull
-        // Up). Empty set → inert.
-        if (exclusions.isNotEmpty &&
-            EquipmentVocab.fromProfile(resolved['equipment_needed'])
-                .any(exclusions.contains)) {
-          continue; // skip an excluded-equipment pool pick, try the next
-        }
-        if (applyInjuryUniversalFilter &&
-            _isContraindicated(resolved, injuries)) {
-          continue; // skip contraindicated pool pick, try the next
-        }
-        return _buildExercise(resolved);
-      }
-      // Not in the library: a hardcoded placeholder move whose contraindications
-      // we cannot inspect. When the user has injuries and the filter is on, skip
-      // the un-vettable placeholder rather than risk an unsafe move.
-      if (applyInjuryUniversalFilter && injuries.isNotEmpty) continue;
-      return _buildUniversalFallback(name, 'A');
-    }
-
-    // No on-target OR injury-safe universal pick — slot safely omitted (a null
-    // cascade result is skipped by the caller, shortening that day). Reachable
-    // ONLY when applyInjuryUniversalFilter is on AND the whole pool is
-    // contraindicated; with an empty injury list this stays "should never happen".
-    return null;
   }
 
   /// True when [ex]'s `injury_contraindications` intersects [injuries].

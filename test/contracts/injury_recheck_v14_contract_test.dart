@@ -238,14 +238,16 @@ void main() {
     // moves a persona reaches changed; Bicycle Crunch reaches no persona any
     // more; and since OI-456 piece A, rest by exercise type, Hip Abduction Machine reaches none either:
     // re-searched 2026-11-04, Hip Thrust is in and gone for hip on the same persona). Each move IS in the
-    // uninjured plan (positive control).
+    // uninjured plan (positive control). Unit 1B-F (2026-11-11, the core-list pool the only picker): Crunches reaches
+    // no build_muscle persona on the core path (probe over 4 tiers x 3 levels x 3/4/5 days); V-Up, its v14
+    // lower_back sibling (E176), is in the same bodyweight / advanced / 3-day plan and replaces it.
     const reached = <(String, String, String, String, int)>[
       ('Push Up', 'shoulder', 'bodyweight', 'beginner', 3),
       ('Lat Pulldown', 'shoulder', 'basic_gym', 'beginner', 3),
       ('Chin Up', 'elbow', 'basic_gym', 'intermediate', 4),
       ('Russian Twist', 'lower_back', 'bodyweight', 'beginner', 3),
       ('Hip Abduction Machine', 'hip', 'full_gym', 'advanced', 3),
-      ('Crunches', 'lower_back', 'bodyweight', 'advanced', 3),
+      ('V-Up', 'lower_back', 'bodyweight', 'advanced', 3),
       ('Hip Thrust', 'hip', 'full_gym', 'advanced', 3),
     ];
     for (final (move, injury, tier, level, days) in reached) {

@@ -1,7 +1,8 @@
-// Batch B1 Task 3 — the core-list pool (`enable_core_list_pool`, ship-dark).
+// Batch B1 Task 3 — the core-list pool (the only picker since Unit 1B-F deleted the
+// `enable_core_list_pool` flag and the cascade it gated).
 //
 // Drives the REAL ExerciseSelector.pickV4 / PlanGenerator.generateV4 over the
-// shipped library (or crafted rows) with the flag ON. Provenance comes from
+// shipped library (or crafted rows). Provenance comes from
 // CoreListSelector.debugTrace, which production writes and only tests read —
 // not a reimplementation, so no new mirror (plan Ruling 9).
 @Timeout(Duration(minutes: 10))
@@ -24,7 +25,6 @@ import 'package:icanbefitter/shared/repositories/plan_engine/models.dart';
 import 'package:icanbefitter/shared/repositories/plan_engine/plan_generator.dart';
 import 'package:icanbefitter/shared/repositories/plan_engine/training_history_analyzer.dart';
 
-import '../../scripts/migration_ledger_hash_lib.dart' show sha256Hex;
 import '../helpers/generator_golden_personas.dart';
 
 const _rank = {'beginner': 0, 'intermediate': 1, 'advanced': 2};
@@ -126,7 +126,6 @@ void main() {
 
   setUp(() async {
     await seed(shipped);
-    await HiveService.instance.configBox.put('enable_core_list_pool', true);
     trace = CoreListTrace();
     CoreListSelector.debugTrace = trace;
   });
@@ -134,7 +133,6 @@ void main() {
   tearDown(() async {
     CoreListSelector.debugTrace = null;
     final config = HiveService.instance.configBox;
-    await config.delete('enable_core_list_pool');
     await config.delete('disable_equipment_capability_floor');
     await HiveService.instance.userBox.delete('profile');
     final workout = HiveService.instance.workoutBox;
@@ -252,11 +250,9 @@ void main() {
         anyCoreLevel: anyCoreLevel,
       );
 
-  test('OFF is the golden', () async {
-    await HiveService.instance.configBox.delete('enable_core_list_pool');
-    final fixture = jsonDecode(
-            File('test/fixtures/generator_golden_hashes.json').readAsStringSync())
-        as Map<String, dynamic>;
+  // Unit 1B-F (Ruling 7): replaces "OFF is the golden". The core-list gate holds the same zero over the 998 golden
+  // personas; this is the fast local copy on four of them.
+  test('no empty day', () async {
     const keys = [
       'grid|bodyweight|build_muscle|4d|beginner|p1',
       'grid|home_dumbbells|lose_fat|3d|intermediate|p2',
@@ -265,11 +261,14 @@ void main() {
     ];
     final personas = {for (final p in generatorGoldenPersonas()) p.key: p};
     for (final k in keys) {
-      expect(sha256Hex(utf8.encode(jsonEncode(personas[k]!.run().toMap()))),
-          fixture[k],
-          reason: k);
+      final p = personas[k]!.run();
+      for (final w in p.weekPlans) {
+        for (final d in w.workoutDays) {
+          expect(d.exercises, isNotEmpty, reason: '$k week ${w.weekNumber} ${d.name}');
+        }
+      }
     }
-    expect(trace.delegations, 0);
+    expect(picks(), isNotEmpty);
   });
 
   test('every ON pick is core for the effective level, or a fill core at no '
@@ -523,26 +522,20 @@ void main() {
     expect(dropped.ordered, isEmpty);
   });
 
-  test('stale library delegates to OFF', () async {
+  // Unit 1B-F (Ruling 7): replaces "stale library delegates to OFF" and "mixed library". With no cascade behind
+  // it, a library without `core_levels` has no core row at any level, so nothing is picked: no name-picked fallback
+  // bypasses the level, capability and injury filters.
+  test('a library without core_levels picks nothing', () async {
     await seed([
       for (final r in shipped) Map<String, dynamic>.from(r)..remove('core_levels')
     ]);
-    final fixture = jsonDecode(
-            File('test/fixtures/generator_golden_hashes.json').readAsStringSync())
-        as Map<String, dynamic>;
-    final p = gen(tier: 'full_gym', level: 'intermediate');
-    expect(trace.delegations, 0);
-    expect(sha256Hex(utf8.encode(jsonEncode(p.toMap()))),
-        fixture['grid|full_gym|build_muscle|4d|intermediate|p1']);
-  });
-
-  test('mixed library', () async {
-    await seed([
-      for (final r in shipped)
-        r['id'] == 'E001' ? r : (Map<String, dynamic>.from(r)..remove('core_levels'))
+    final days = pick([
+      day([slot('Chest', 'horizontal_push'), slot('Glutes', 'hip_dominant')],
+          [slot('Chest', 'horizontal_push'), slot('Glutes', 'hip_dominant')]),
     ]);
-    pick([day([slot('Chest', 'horizontal_push')])]);
-    expect(trace.delegations, 1);
+    expect(picks(), isEmpty);
+    expect(days.single.exercisesA, isEmpty);
+    expect(days.single.exercisesB, isEmpty);
   });
 
   test('community and custom rows never selected', () async {
@@ -597,7 +590,6 @@ void main() {
     expect(names(d.exercisesA), ['Lower Core']);
     expect(names(d.exercisesB), ['Lower Core']);
     expect(trace.emergencyAnyLevel.map((e) => e.day), contains(0));
-    expect(trace.refilled, isEmpty);
   });
 
   group('any-level emergency gives easier core moves only (Ruling 12)', () {
@@ -619,12 +611,6 @@ void main() {
       final r = pool(rows, slot('Glutes', 'hip_dominant'), anyCoreLevel: true);
       expect([for (final x in r.ordered) x['id']], ['B_BEG']);
     });
-  });
-
-  test('OFF cascade only as the last resort', () async {
-    await seed([_row('X1', 'Core Move', pattern: 'core', focus: ['Core'])]);
-    pick([day([slot('Glutes', 'hip_dominant')], [slot('Glutes', 'hip_dominant')])]);
-    expect(trace.refilled.map((e) => e.day), contains(0));
   });
 
   test('injured user keeps the soft avoid and L6', () async {

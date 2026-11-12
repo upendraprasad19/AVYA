@@ -6,8 +6,8 @@
 /// the library grows; `injury_vocab_library_contract_test` pins the live token SET).
 ///
 /// The engine matches injuries by **exact lowercase equality**
-/// (`exercise_repository.dart` queryV4 `:335-345`; `exercise_selector.dart` the
-/// universal-pool filter). So every injury value that reaches the engine — from
+/// (`exercise_repository.dart` queryV4; `exercise_selector.dart` `_isContraindicated`,
+/// the core-list pick's hard filter). So every injury value that reaches the engine — from
 /// the Edit-Profile chips, a stored profile map, a restored cloud row, or the
 /// AI-coach muster/induction free-text — MUST be normalized to one of these
 /// tokens first. Otherwise the filter silently no-ops: the whole reason this

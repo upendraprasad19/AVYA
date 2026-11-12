@@ -282,7 +282,7 @@ class CSpec {
 class MuscleSlot {
   final String targetMuscle;    // e.g., 'Lats', 'Biceps', 'Quads'
   final String? subFocus;       // e.g., 'width', 'short_head', 'thickness'
-  final String movementPattern; // e.g., 'vertical_pull' — NEVER dropped in cascade
+  final String movementPattern; // e.g., 'vertical_pull' — the core-list pool never crosses it
   final String exerciseType;    // 'compound' | 'isolation'
   final int priority;           // 1=primary, 2=secondary, 3=accessory
   final int count;              // exercises to fill for this slot (usually 1)

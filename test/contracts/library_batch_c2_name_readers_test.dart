@@ -1,11 +1,11 @@
 // test/contracts/library_batch_c2_name_readers_test.dart
 //
-// Batch C2a (OI-460): production code quotes exercise names (the universal pool, the injury substitutes, the warm-up and
-// cool-down lists). A name that matched a REMOVED row resolves to nothing after the removal, silently (queryV4 / search
+// Batch C2a (OI-460): production code quotes exercise names (the injury substitutes, the warm-up and cool-down lists;
+// the universal pools were deleted with the cascade in Unit 1B-F). A name that matched a REMOVED row resolves to nothing after the removal, silently (queryV4 / search
 // return no row, the slot falls through). This pins every quoted name against the shipped library: a name resolves to at
 // most one row by name or alias, and a name equal to a removed row's name resolves to EXACTLY one (its alias target).
 //
-// Mutation: re-add `Reverse Lunge` to the knee_dominant pool; the removed row's name then resolves to nothing -> red.
+// Mutation: re-add a removed row's name to a quoted list; it then resolves to nothing -> red (the MUTATION test below).
 @Timeout(Duration(minutes: 2))
 library;
 
@@ -13,7 +13,6 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:icanbefitter/shared/repositories/plan_engine/exercise_selector.dart';
 import 'package:icanbefitter/shared/repositories/plan_engine/injury_substitutes.dart';
 import 'package:icanbefitter/shared/repositories/plan_engine/warmup_cooldown.dart';
 
@@ -38,27 +37,8 @@ List<String> resolve(List<Map<String, dynamic>> lib, String name) => [
           r['id'] as String
     ];
 
-/// The names in the private `_universalPool` (the pre-V4 fallback pool), read from source: it has no public accessor.
-Set<String> _legacyUniversalPoolNames() {
-  final src = File('lib/shared/repositories/plan_engine/exercise_selector.dart').readAsStringSync();
-  final start = src.indexOf('static const _universalPool = <String, List<String>>{');
-  expect(start, greaterThan(-1), reason: '_universalPool declaration moved');
-  final block = src.substring(start, src.indexOf('};', start));
-  // Names live inside the `[...]` value lists; the map keys are outside them, so quote pairs never misalign.
-  final names = <String>{
-    for (final list in RegExp(r'\[([^\]]*)\]').allMatches(block))
-      for (final m in RegExp(r"'([^']+)'").allMatches(list.group(1)!)) m.group(1)!,
-  };
-  expect(names, isNotEmpty);
-  return names;
-}
-
 /// Every (source, name) quoted by production code.
 Map<String, Set<String>> quotedNames() => {
-      'universalPoolV4': {
-        for (final l in ExerciseSelector.universalPoolV4.values) ...l,
-      },
-      'ExerciseSelector._universalPool': _legacyUniversalPoolNames(),
       'InjurySubstitutes._preferred': {
         for (final inj in const ['shoulder', 'knee', 'lower_back', 'wrist', 'hip', 'elbow', 'ankle', 'neck'])
           ...InjurySubstitutes.preferredFor([inj]),
@@ -115,7 +95,7 @@ void main() {
     final q = quotedNames();
     final withGhost = {
       ...q,
-      'mutated pool': {...q['universalPoolV4']!, 'Ghost Removed Row'},
+      'mutated list': {...q['InjurySubstitutes._preferred']!, 'Ghost Removed Row'},
     };
     // A removed name no shipped row carries: nothing resolves it.
     final ghostLib = lib;

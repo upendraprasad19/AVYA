@@ -93,7 +93,7 @@ lib/
         models.dart                     # MuscleSlot, MuscleSlotDay
         split_resolver.dart             # Stage 1: muscle-level day splits (8-10 P1-P5 slots/day)
         volume_filter.dart              # Stage 1.5: keeps every slot; deload = priority-1 only
-        exercise_selector.dart          # Stage 2: 5-attempt cascade within movement patterns
+        exercise_selector.dart          # Stage 2: the core-list picker within movement patterns + thin-day top-up
         sequencing_engine.dart          # Stage 3: CNS ordering
         periodization_engine.dart       # Stage 4: DUP + exercise-specific rep_range
         superset_engine.dart            # Stage 5: pairing
@@ -211,7 +211,7 @@ lib/
         models.dart            # MuscleSlot, MuscleSlotDay, CSpec (legacy)
         split_resolver.dart    # Trainer-wisdom splits → MuscleSlotDay[]
         volume_filter.dart     # Stage 1.5: keeps every slot; deload = priority-1 only
-        exercise_selector.dart # 5-attempt cascading fallback
+        exercise_selector.dart # core-list picker + thin-day top-up
         plan_generator.dart    # Pipeline orchestrator (generateV4)
         periodization_engine.dart # DUP + exercise-specific rep_range
         sequencing_engine.dart # CNS ordering
@@ -235,7 +235,7 @@ supabase/{migrations, functions}/                     # SQL + Edge Functions (TS
 - `lib/shared/repositories/plan_generator.dart` — workout plan generation (CLAUDE rule #14: untouchable without explicit approval)
 - `lib/shared/repositories/plan_engine/volume_filter.dart` — Stage 1.5 deload-week slot filter (the fixed-count `targetCount` trim was deleted by the B2 flip, 2026-11-02)
 - `lib/core/utils/exercise_display.dart` — Experience-level exercise label formatting
-- `test/plan_generator/v4_diagnostic_test.dart` — pure-Dart V4 pipeline tracer. Run this when plan generator output looks wrong; emits `test/plan_generator/v4_diagnostic_output.md`. Mirrors `exercise_repository.queryV4` + `exercise_selector._cascadeFill`; any change to either production file requires an equivalent update to the mirror.
+- `test/plan_generator/core_list_pool_gate_test.dart` — the real `generateV4` over the 1,010 golden personas and 26 scorecard personas with hard zeros; run it (and `plan_audit/plan_audit_dump_test.dart`, `PLAN_AUDIT_OUT=<dir>`) when plan generator output looks wrong. The pure-Dart cascade tracer `v4_diagnostic_test.dart` was deleted with the cascade (Unit 1B-F).
 - `lib/features/nutrition/providers/diet_plan_provider.dart` — ONE reader of `configBox['saved_diet_plan']`. Returns `Map<String, PlannedSlot>` keyed by slot (breakfast/lunch/dinner/snack). Consumed by `TodaysMealsCard` to render "FROM YOUR DIET PLAN" hints on empty slots. `diet_plan_screen._savePlan` invalidates this provider after writing the plan (PR AH.5).
 - `lib/features/profile/providers/weekly_report_data_provider.dart` — ONE source for Weekly Report 4-up sparklines. Reads last-7-days series from `healthBox` (weight, forward-filled), `nutritionBox` (calories + protein, zero-filled), `workoutBox` (0/1 per day). Consumed only by `WeeklyReportCard` (PR AH.8). Invalidate after any mutation if you want real-time refresh; the card is not watched elsewhere.
 - `docs/sot_registry.yaml` — canonical machine-readable registry of every single-source-of-truth concept (writers + readers + regression tests + class constraints). Cross-referenced by every fix involving a writer/reader contract. Keep in sync when this bullet list, the Source-of-Truth Rules, the Hive field-name contract, the Sync fan-out contract, or the Restore-completeness sync sub-section change.

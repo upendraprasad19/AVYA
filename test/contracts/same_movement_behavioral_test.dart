@@ -3,8 +3,16 @@
 // a small library of REAL rows (E147 Sumo Squat / N14 Dumbbell Sumo Squat, E048 Glute Bridge / N19 Dumbbell Glute Bridge)
 // so a single seam decides the outcome; the oracle reads the built PlannedExercise names, never the helper.
 //
-// Mutations (diagnose doc): the queryV4 expansion removed (tests 1, 2, 4, 6 red); the universal-pool skip reverted (test
-// 5 red); the ON picked partners removed (test 3 red); demoted names expanded (test 7 red).
+// Unit 1B-F (plan docs/plans/2026-11-10-generator-1bf-flip.md, Ruling 7): the core-list pool is the only picker, so tests 2
+// (OFF same day) and 5 (the universal pool) went with the cascade; tests 4, 6 and 7 run on the core path at `level:
+// 'beginner'` (E147's `core_levels` is beginner only), and 6b / 6c are new. The core path only sorts a demoted row last, so
+// `_pickCoreList` and `topUpDays` widen the demoted set by the loaded versions of each demoted ORIGINAL (one direction),
+// which amends S1b-2's Decision 2 row "Demoted names ... no" for this path.
+//
+// Mutations (diagnose doc): the queryV4 expansion removed (test 1 red); the picked partners removed (test 3 red);
+// `softFor` stops expanding (test 4 red: B = Dumbbell Sumo Squat); the widening applied both ways (test 7 red, only);
+// the widening dropped (tests 6 and 6b red); the widening in `rankedPool`'s demoted set but not the avoid names (test 6b
+// red, only); the top-up reading the unwidened set (test 6c red).
 import 'dart:convert';
 import 'dart:io';
 
@@ -18,6 +26,8 @@ import 'package:icanbefitter/core/services/hive_user_session.dart';
 import 'package:icanbefitter/shared/repositories/exercise_repository.dart';
 import 'package:icanbefitter/shared/repositories/plan_engine/exercise_selector.dart';
 import 'package:icanbefitter/shared/repositories/plan_engine/models.dart';
+
+import '../plan_engine_v4/_helpers.dart' show exercise;
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -45,7 +55,6 @@ void main() {
   });
 
   tearDown(() async {
-    await HiveService.instance.configBox.put('enable_core_list_pool', false);
     for (final k in HiveService.instance.workoutBox.keys.toList()) {
       await HiveService.instance.workoutBox.delete(k);
     }
@@ -72,8 +81,6 @@ void main() {
   /// A third knee_dominant compound row that sorts after E147 / N14 (priority 3), so it is the fallback.
   Map<String, dynamic> testSquat() =>
       {...byId['E042']!, 'id': 'X001', 'name': 'Test Squat', 'priority_tier': 3, 'core_levels': ['beginner', 'intermediate', 'advanced']};
-
-  Map<String, dynamic> warmup(String id) => {...byId[id]!, 'movement_pattern': ['warmup']};
 
   MuscleSlot slot(String pattern, String muscle, String type) =>
       MuscleSlot(targetMuscle: muscle, movementPattern: pattern, exerciseType: type, priority: 1);
@@ -109,34 +116,18 @@ void main() {
     expect(q({'Dumbbell Sumo Squat'}), isNot(contains('Sumo Squat')));
   });
 
-  test('2. OFF same day: two Quads slots never hold Sumo Squat and Dumbbell Sumo Squat together', () async {
-    await seed([byId['E147']!, byId['N14']!]);
-    final a = names(pick(day([knee, knee])).exercisesA);
-    expect(a, isNotEmpty, reason: 'non-vacuity');
-    expect(a.contains('Sumo Squat') && a.contains('Dumbbell Sumo Squat'), isFalse, reason: '$a');
-  });
-
-  test('3. ON (core-list pool) same day: a beginner day never holds the pair either', () async {
-    await HiveService.instance.configBox.put('enable_core_list_pool', true);
+  test('3. same day: a beginner day never holds the pair', () async {
     await seed([byId['E147']!, byId['N14']!, testSquat()]);
     final a = names(pick(day([knee, knee]), level: 'beginner').exercisesA);
     expect(a.where((n) => n == 'Sumo Squat' || n == 'Dumbbell Sumo Squat').length, 1, reason: '$a');
   });
 
-  test('4. OFF variant B (non-strength) never holds the partner of an A pick', () async {
+  test('4. variant B (non-strength) soft-avoids the partner of an A pick', () async {
     await seed([byId['E147']!, byId['N14']!, testSquat()]);
-    final d = pick(day([knee], [knee]));
-    expect(names(d.exercisesA), ['Sumo Squat'], reason: 'E147 sorts first (same keys, lower id)');
-    expect(names(d.exercisesB), ['Test Squat'], reason: 'B excludes A and its partner');
-  });
-
-  test('5. universal pool: a day holding Dumbbell Glute Bridge does not get Glute Bridge from the bodyweight pool', () async {
-    await seed([byId['N19']!, warmup('E048'), warmup('E257')]);
-    final iso = slot('hip_isolation', 'Glutes', 'isolation');
-    final a = names(pick(day([iso, iso])).exercisesA);
-    expect(a.first, 'Dumbbell Glute Bridge');
-    expect(a, isNot(contains('Glute Bridge')), reason: '$a');
-    expect(a, contains('Glute Kickback'), reason: 'the pool moves on to its next name');
+    final d = pick(day([knee], [knee]), level: 'beginner');
+    expect(names(d.exercisesA), ['Dumbbell Sumo Squat'],
+        reason: 'the loaded version ranks first for a home_dumbbells user (implement fit)');
+    expect(names(d.exercisesB), ['Test Squat'], reason: 'B soft-avoids A and its partner (softFor)');
   });
 
   test('6. L6: a demoted Sumo Squat is not replaced by its own loaded version', () async {
@@ -148,8 +139,61 @@ void main() {
         {'name': 'Test Squat', 'swapped_from': 'Sumo Squat'},
       ],
     });
-    final a = names(pick(day([knee])).exercisesA);
+    final a = names(pick(day([knee]), level: 'beginner').exercisesA);
     expect(a, ['Test Squat'], reason: 'L6 swaps Sumo Squat out and skips its partner');
+  });
+
+  Future<void> demoteSumo() async {
+    final yesterday = DateTime.now().subtract(const Duration(days: 1)).toIso8601String().substring(0, 10);
+    await HiveService.instance.workoutBox.put('schedule_$yesterday', {
+      'date': yesterday,
+      'exercises': [
+        {'name': 'Test Squat', 'swapped_from': 'Sumo Squat'},
+      ],
+    });
+  }
+
+  test('6b. L6 avoid names: with every candidate avoided, the pick falls back to the pool head, never the partner', () async {
+    // Test Squat is the previous phase's pick (avoided); Sumo Squat is demoted, and so is its loaded version. With the
+    // loaded version in the avoid names every candidate is avoided and `_preferNovel` takes the pool head (Test Squat,
+    // the only row not demoted); with it only in `rankedPool`'s demoted partition the pick walks to Dumbbell Sumo Squat.
+    await seed([byId['E147']!, byId['N14']!, testSquat()]);
+    await demoteSumo();
+    final d = ExerciseSelector.pickV4(
+      slotDays: [day([knee])],
+      exerciseRepo: ExerciseRepository.instance,
+      equipmentTier: 'home_dumbbells',
+      effectiveExp: 'beginner',
+      phase: 2,
+      goal: 'build_muscle',
+      exclusions: const {},
+      capability: null,
+      // Lowercase, as production writes it (WorkoutScheduleReadService.previousPhaseNamesByDay).
+      previousPhaseByDay: {0: (a: ['test squat'], b: ['test squat'])},
+    ).first;
+    expect(names(d.exercisesA), ['Test Squat']);
+  });
+
+  test('6c. the thin-day top-up: a demoted Sumo Squat is not topped in as its loaded version', () async {
+    // Injury `shoulder` (E147 and N14 carry hip and knee, which would drop them and pass vacuously), phase 2 (the demoted
+    // set is read only from phase 2), a day holding two non-squat rows so one more is added.
+    await seed([byId['E147']!, byId['N14']!, testSquat()]);
+    await demoteSumo();
+    final held = [exercise(name: 'Row One'), exercise(name: 'Row Two')];
+    final out = ExerciseSelector.topUpDays(
+      [PopulatedDay(name: 'Test Day', focus: 'legs', dayType: 'legs', intensity: 'hypertrophy', exercisesA: held, exercisesB: held)],
+      slotDays: [day([knee])],
+      exerciseRepo: ExerciseRepository.instance,
+      equipmentTier: 'home_dumbbells',
+      effectiveExp: 'beginner',
+      phase: 2,
+      goal: 'build_muscle',
+      injuries: const ['shoulder'],
+      applyInjurySubstitutePreference: false,
+      exclusions: const {},
+      capability: null,
+    ).single;
+    expect(names(out.exercisesA), ['Row One', 'Row Two', 'Test Squat']);
   });
 
   test('7. MIRROR: a demoted loaded version does not demote its original (demoted names are per exercise)', () async {
@@ -161,6 +205,6 @@ void main() {
         {'name': 'Test Squat', 'swapped_from': 'Dumbbell Sumo Squat'},
       ],
     });
-    expect(names(pick(day([knee])).exercisesA), ['Sumo Squat']);
+    expect(names(pick(day([knee]), level: 'beginner').exercisesA), ['Sumo Squat']);
   });
 }

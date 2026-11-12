@@ -1,12 +1,13 @@
 // U2 safe-omission on the PRODUCTION runtime path (rule 21).
 //
-// The synthetic tracer test (injury_safe_omission_test.dart) proves the harness
-// mirror; this proves the real `ExerciseSelector.pickV4` -> `_cascadeFill`
-// return-null path. A Hive library is seeded so the ONLY exercises for a
-// movement pattern are its three universal-pool members, all contraindicated
-// for the user. attempts 1-4 (queryV4 injuryExclusions) exclude them; attempt-5
-// filters the pool; with nothing safe left, the slot is SAFELY OMITTED (the
-// PopulatedDay has zero exercises) — never a contraindicated pick, never a crash.
+// The real `ExerciseSelector.pickV4` (the core-list pool, the only picker since
+// Unit 1B-F deleted the cascade and its universal pool). A Hive library is seeded
+// so the ONLY exercises for a movement pattern are three core rows, all
+// contraindicated for the user. `CoreListSelector.rankedPool`'s hard filter drops
+// them, so the slot is empty; the thin-day top-up then asks `queryV4` with the
+// injury exclusions and finds nothing safe either. The slot is SAFELY OMITTED
+// (the PopulatedDay has zero exercises) — never a contraindicated pick, never a
+// crash.
 
 import 'dart:io';
 
@@ -55,17 +56,17 @@ void main() {
     await Hive.openBox(HiveService.configBoxName);
     await Hive.openBox(HiveService.migrationBoxName);
 
-    // Seed a library where the ONLY shoulder_isolation exercises are the three
-    // universal-pool members — all shoulder-contraindicated.
+    // Seed a library where the ONLY shoulder_isolation exercises are three core
+    // rows — all shoulder-contraindicated.
     final exBox = await Hive.openBox(HiveService.exerciseBoxName);
     for (final n in const ['Pike Push Up', 'Arm Circles', 'Band Pull Apart']) {
       await exBox.put(n, {
         'id': n.toLowerCase().replaceAll(' ', '_'),
         'name': n,
-        'movement_pattern': 'shoulder_isolation',
-        'exercise_type': 'isolation',
-        'target_focus': 'rear delt',
-        'primary_muscles': ['rear deltoid'],
+        'movement_pattern': ['shoulder_isolation'],
+        'exercise_type': ['isolation'],
+        'target_focus': ['Rear Delts'],
+        'primary_muscles': ['Rear Delts'],
         'equipment_tier': ['full_gym'],
         'suitable_for': ['Beginner', 'Intermediate', 'Advanced'],
         'is_foundational': true,
@@ -73,6 +74,8 @@ void main() {
         'default_reps': '12',
         'rep_range': '10-15',
         'injury_contraindications': ['shoulder'],
+        'equipment_needed': ['bodyweight'],
+        'core_levels': ['beginner', 'intermediate', 'advanced'],
       });
     }
     HiveService.instance.markInitializedForTests();
@@ -124,24 +127,5 @@ void main() {
     );
     expect(days.first.exercisesA, isNotEmpty,
         reason: 'an uninjured user must still get an exercise for the slot');
-  });
-
-  test('filter off (kill-switch path): contraindicated pool pick returns', () {
-    final days = ExerciseSelector.pickV4(
-      slotDays: [dayWithShoulderIsoSlot()],
-      exerciseRepo: ExerciseRepository.instance,
-      equipmentTier: 'full_gym',
-      effectiveExp: 'advanced',
-      phase: 1,
-      goal: 'build_muscle',
-      capability: null, // ⑦ OI-89 inert: this suite tests injury omission
-      injuries: const ['shoulder'],
-      applyInjuryUniversalFilter: false,
-    );
-    // Attempts 1-4 still exclude via queryV4, so the slot only fills from the
-    // (now-unfiltered) universal pool — proving the flag gates exactly the U2
-    // attempt-5 behavior.
-    expect(days.first.exercisesA, isNotEmpty,
-        reason: 'filter disabled -> the universal pool reverts to unfiltered');
   });
 }

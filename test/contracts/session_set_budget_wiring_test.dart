@@ -265,15 +265,19 @@ void main() {
 
     test('a thin day of an injured user: the top-up fills it before the allocator, which budgets the add', () async {
       final config = HiveService.instance.configBox;
-      // Built with the top-up's kill-switch set, then without it. 30 minutes, a
-      // beginner on a bodyweight tier with a wrist and a shoulder injury.
+      // Built with the top-up's kill-switch set, then without it. 30 minutes, an
+      // intermediate on a bodyweight tier with a wrist and a shoulder injury, 3 days.
+      // Unit 1B-F (the core-list pool the only picker): the old persona (beginner, 5 days)
+      // was picked on the deleted cascade; on the core path its kill-switched build has an
+      // empty day. Re-derived by a probe: this persona's day 0 holds Russian Twist and
+      // Bicycle Crunch without the top-up, and the top-up adds Plank.
       List<String> day0(Phase p) =>
           [for (final e in p.weekPlans.first.workoutDays[0].exercises) e.exerciseName];
       await config.put('disable_thin_day_topup', true);
       final thin = gen(
           tier: 'bodyweight',
-          level: 'beginner',
-          days: 5,
+          level: 'intermediate',
+          days: 3,
           injuries: ['wrist', 'shoulder'],
           sessionDuration: 30);
       expect(thin.weekPlans.first.workoutDays.every((d) => d.exercises.isNotEmpty), isTrue);
@@ -282,8 +286,8 @@ void main() {
       await config.delete('disable_thin_day_topup');
       final filled = gen(
           tier: 'bodyweight',
-          level: 'beginner',
-          days: 5,
+          level: 'intermediate',
+          days: 3,
           injuries: ['wrist', 'shoulder'],
           sessionDuration: 30);
       expect(day0(filled).length, 3);

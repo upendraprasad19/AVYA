@@ -10,20 +10,6 @@ import 'package:icanbefitter/core/utils/phase_completion.dart';
 class PlanEngineFlags {
   PlanEngineFlags._();
 
-  /// U2 universal-pool injury filter. Default ON (attempt-5 pool picks are
-  /// injury-filtered like attempts 1-4). Set
-  /// `configBox['disable_injury_universal_filter'] = true` to revert to the
-  /// verbatim pre-U2 behavior (the pool bypasses the injury filter).
-  static bool get injuryUniversalFilterEnabled {
-    try {
-      return HiveService.instance.configBox
-              .get('disable_injury_universal_filter') !=
-          true;
-    } catch (_) {
-      return true; // no Hive (pure unit test) → safe default: filter ON
-    }
-  }
-
   /// OI-454 kill-switch for the 6-day build_muscle Quads floor: the Legs B Quads compound slot
   /// AND the Glutes credit rule that goes with it (they are one change). Default ON. Set
   /// `configBox['disable_quad_legs_b'] = true` to restore the pre-OI-454 Legs B (its Glutes
@@ -168,7 +154,7 @@ class PlanEngineFlags {
   /// **FLIPPED ON 2026-08-05** (`deps-board-equipment`). Was ship-dark DEFAULT
   /// OFF behind `enable_equipment_exclusions`; the kill-switch is now
   /// `disable_equipment_exclusions` and the default is ON, matching the four
-  /// sibling default-ON flags in this file (`disable_injury_universal_filter`,
+  /// sibling default-ON flags in this file then (`disable_injury_universal_filter`, deleted with the universal pool by Unit 1B-F,
   /// `disable_warmup_injury_filter`, `disable_detraining_decay`,
   /// `disable_cardio_goal_default`).
   ///
@@ -181,8 +167,8 @@ class PlanEngineFlags {
   ///
   /// ⚠ **This flag gates TWO behaviours; a reviewer must weigh both.**
   /// 1. `plan_generator.dart:140-142` — the exclusion set is sourced from the
-  ///    profile instead of `{}`, so every `.isNotEmpty`-guarded drop (queryV4
-  ///    att1-4 / att5 pool / L6 swap) becomes live. Affects
+  ///    profile instead of `{}`, so every `.isNotEmpty`-guarded drop (the
+  ///    core-list pool's hard filter, queryV4, repeat pins) becomes live. Affects
   ///    only users who actually set an exclusion.
   /// 2. `plan_generator.dart:298-308` — ⑥ C2's `hasGymOverride` stops being
   ///    `null`. Per diagnose b7a4e2 the fallback predicate it defers to was
@@ -333,8 +319,8 @@ class PlanEngineFlags {
   /// **FLIPPED ON 2026-08-28** (`oi89-bodyweight-floor`). Was ship-dark DEFAULT
   /// OFF behind `enable_equipment_capability_floor`; the kill-switch is now
   /// `disable_equipment_capability_floor` and the default is ON, matching the
-  /// five sibling default-ON flags in this file (`disable_equipment_exclusions`,
-  /// `disable_injury_universal_filter`, `disable_warmup_injury_filter`,
+  /// five sibling default-ON flags in this file then (`disable_equipment_exclusions`,
+  /// `disable_injury_universal_filter` (deleted by Unit 1B-F), `disable_warmup_injury_filter`,
   /// `disable_detraining_decay`, `disable_cardio_goal_default`).
   ///
   /// **Why it is flipped in the same batch that built it:** the collection half
@@ -343,15 +329,16 @@ class PlanEngineFlags {
   /// alongside a generator that is not reading the field. `equipment_tier` alone
   /// still leaks — measured with this flag OFF against the CORRECTED library,
   /// the bodyweight tier carried 468 equipment violations, because the attempt-5
-  /// universal pool bypasses queryV4 entirely and picks by NAME. The tier fix and
+  /// universal pool (deleted by Unit 1B-F) bypassed queryV4 entirely and picked by NAME. The tier fix and
   /// the capability fix each close a hole the other cannot reach.
   ///
   /// **Fail-OPEN on the way in, fail-CLOSED on the way through:**
   /// `resolveCapability` returns null (do not enforce) only when this flag is
   /// off or Hive is unreadable — so a storage fault can never empty a plan. It
   /// answers at EVERY tier since OI-144, and an unknown tier resolves to
-  /// `bodyweight`. Since B1 Task 1 the attempt-5 pool and repeat pins check it
-  /// too (they had been unchecked; only the diagnostic mirror did). `EquipmentCapability.canPerform` then fails CLOSED on an
+  /// `bodyweight`. Since B1 Task 1 repeat pins check it too (they had been
+  /// unchecked; only the diagnostic mirror did), as did the attempt-5 pool until
+  /// Unit 1B-F deleted it. `EquipmentCapability.canPerform` then fails CLOSED on an
   /// unreadable requirement, which is why warm-up and finisher moves had to have
   /// `equipmentNeeded` POPULATED before this could be switched on at all.
   ///
@@ -371,13 +358,13 @@ class PlanEngineFlags {
   }
 
   /// ①.1d (Batch 11-C): curated per-injury safe-substitute PREFERENCE. LIVE
-  /// since 2026-09-16 (OI-53). `_cascadeFill` re-ranks the already-safe
+  /// since 2026-09-16 (OI-53). `_selectCandidate` (from `_pickCoreList` and the top-up) re-ranks the already-safe
   /// (post-injury-filter), same-pattern candidate list to PREFER a curated
   /// `InjurySubstitutes` sub over queryV4's generic sort. It re-ranks the
   /// POST-filter list so it can NEVER surface a contraindicated exercise; a
   /// PREFERENCE (falls through when no curated sub is a candidate).
   /// Kill-switch `configBox['disable_injury_substitute_pref'] = true` restores
-  /// the verbatim `candidates.first` pick at every attempt.
+  /// the verbatim `candidates.first` pick.
   static bool get injurySubstitutePreferenceEnabled {
     try {
       return HiveService.instance.configBox
@@ -390,7 +377,7 @@ class PlanEngineFlags {
 
   /// W3.4 (Batch 11-B): cross-phase VARIETY. LIVE since 2026-09-16 (OI-53). A
   /// fresh phase advance passes the PREVIOUS phase's per-slot picks as
-  /// `avoidNames` to `_cascadeFill`, and the pure `_selectCandidate`
+  /// `avoidNames` to `_pickCoreList`, and the pure `_selectCandidate`
   /// (`_preferNovel` inner) prefers a same-pattern SIBLING not used last phase
   /// (bounded — never forces a wrong pattern / empties a slot). Read at the
   /// SERVICE layer to gate the `previousPhaseNamesByDay()` read.
@@ -427,27 +414,12 @@ class PlanEngineFlags {
     }
   }
 
-  /// Batch B1 (docs/plans/2026-10-22-library-core-list-pool.md): pick strength
-  /// exercises from the per-level CORE LIST (`CoreListSelector`) instead of the
-  /// 5-attempt cascade. Ship-dark DEFAULT OFF (§4.6 — changes what is
-  /// prescribed); OFF → `pickV4`'s cascade runs verbatim (the generator golden
-  /// proves it). Also inert while the library carries no `core_levels` (a v12
-  /// Hive box). Set `configBox['enable_core_list_pool'] = true` to enable.
-  static bool get coreListPoolEnabled {
-    try {
-      return HiveService.instance.configBox.get('enable_core_list_pool') ==
-          true;
-    } catch (_) {
-      return false;
-    }
-  }
-
   /// OI-401 thin-day top-up. Default ON: a generated day left with fewer than 3
   /// exercises by injury filtering gets safe moves for its own muscles added
   /// (own pattern, then a neighbouring pattern, then core, then stop). Applies to
   /// injured users only; an uninjured plan is returned untouched.
   ///
-  /// Unlike [injuryUniversalFilterEnabled] and [warmupInjuryFilterEnabled], which
+  /// Unlike [warmupInjuryFilterEnabled] (and the universal pool's injury filter Unit 1B-F deleted), which
   /// DROP moves, this ADDS them; it ships ON anyway because the thin days are the
   /// live result of the v14 injury tags and every account is a testing account
   /// pre-launch (`docs/plans/2026-10-24-thin-day-topup.md`, Ruling R3). Kill-switch
