@@ -145,6 +145,22 @@ class _AiBreakdownCardState extends ConsumerState<AiBreakdownCard> {
                                 );
                                 // State cleared by notifier on success; widget
                                 // will unmount — no need to reset _saving.
+                              } else if (result.isInFlight) {
+                                // OI-493 Landing B (B7): this card was remounted
+                                // while its first save runs; that save decides.
+                                // Neutral, not "Already saved." (it may still
+                                // fail) and not an error.
+                                setState(() => _saving = false);
+                                messenger.showSnackBar(
+                                  SnackBar(
+                                    content: Text(
+                                      'Saving meal…',
+                                      style: AppTypography.body,
+                                    ),
+                                    backgroundColor: AppColors.card,
+                                    duration: const Duration(seconds: 2),
+                                  ),
+                                );
                               } else {
                                 setState(() => _saving = false);
                                 messenger.showSnackBar(

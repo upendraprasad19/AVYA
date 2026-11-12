@@ -12,6 +12,7 @@ import '../../features/nutrition/providers/nutrition_provider.dart'
     show dailyNutritionProvider, foodLogProvider, macroTargetsProvider;
 import 'error_telemetry.dart';
 import 'hive_service.dart';
+import 'hive_user_session.dart';
 import 'nutrition_read_service.dart';
 import 'nutrition_write_source.dart';
 import 'sync_service.dart';
@@ -83,14 +84,27 @@ class NutritionWriteService {
       );
     }
 
-    // 2. Compute key (IST-anchored: computeLogKey takes the IST day of `date`)
-    final key = computeLogKey(istDate: date, mealType: mealType, items: items);
+    // 2. Compute the BASE key (IST-anchored: computeLogKey takes the IST day
+    //    of `date`). The row is written to the first FREE occurrence of it
+    //    (OI-493 Landing B, founder decision F4: the same meal logged twice is
+    //    two entries), chosen in step 4 right before the put.
+    final baseKey =
+        computeLogKey(istDate: date, mealType: mealType, items: items);
 
-    // 3. Compute totals (Atwater fallback per item if calories=0)
-    final totalCals = overrideTotalCals ??
+    // 3. Compute totals (Atwater fallback per item if calories=0). An
+    //    override applies only when > 0 (OI-493 Landing B, B8): an AI total
+    //    that came back 0 (the coach tool defaults a missing total to 0)
+    //    must not store a meal whose items carry calories as 0 kcal.
+    final itemsCals =
         items.fold<double>(0, (a, i) => a + i.kcalWithFallback).round();
-    final totalProtein = overrideTotalProtein ??
-        items.fold<double>(0, (a, i) => a + i.protein).round();
+    final itemsProtein = items.fold<double>(0, (a, i) => a + i.protein).round();
+    final totalCals = (overrideTotalCals != null && overrideTotalCals > 0)
+        ? overrideTotalCals
+        : itemsCals;
+    final totalProtein =
+        (overrideTotalProtein != null && overrideTotalProtein > 0)
+            ? overrideTotalProtein
+            : itemsProtein;
     final totalCarbs = items.fold<double>(0, (a, i) => a + i.carbs).round();
     final totalFat = items.fold<double>(0, (a, i) => a + i.fat).round();
     final totalFiber = items.fold<double>(0, (a, i) => a + i.fiber).round();
@@ -103,8 +117,9 @@ class NutritionWriteService {
       // Pre-fix only `log_key` was set → readers' `meal['id']` returned null
       // → edit silently no-op'd, dismissible had no key. Stamp both for
       // forward + legacy compat. Same value for both.
-      'id': key,
-      'log_key': key,
+      // Both are re-stamped with the chosen occurrence key in step 4.
+      'id': baseKey,
+      'log_key': baseKey,
       'date': dateStr,
       'meal_type': mealType,
       'total_calories': totalCals,
@@ -120,8 +135,18 @@ class NutritionWriteService {
 
     // 4. Hive write (FC6: clamp absurd calorie/macro values first)
     _clampMealPayload(payload);
+    final String key;
     try {
-      await HiveService.instance.nutritionBox.put(key, payload);
+      // OI-493 Landing B (B1): choose the first free occurrence and put it
+      // with NO `await` between the choice and the put. Hive inserts into its
+      // keystore synchronously before its first await (hive 2.2.3
+      // `BoxImpl._writeFrames`), so two un-awaited calls with equal input
+      // write two rows. Inside the try: the box getter can throw.
+      final box = HiveService.instance.nutritionBox;
+      key = firstFreeLogKey(box.containsKey, baseKey);
+      payload['id'] = key;
+      payload['log_key'] = key;
+      await box.put(key, payload);
     } catch (e, st) {
       // audit-2026-05-11 H-42 — telemetry pair.
       debugPrint('[NutritionWriteService] Hive put failed: $e\n$st');
@@ -366,8 +391,9 @@ class NutritionWriteService {
   /// optionally applies macro edits in the same atomic write.
   ///
   /// Mirrors `WorkoutWriteService.moveExerciseLogs` (workout_write_service.dart
-  /// :728-854): recompute the canonical key with the new slot, write there
-  /// (merging item lists on collision), delete the old key.
+  /// :728-854): recompute the canonical key with the new slot, write to its
+  /// first free occurrence (OI-493 Landing B: a slot already holding the same
+  /// meal keeps two entries, no merge), delete the old key.
   ///
   /// LOCAL-ONLY cloud consistency, same accepted residual as
   /// moveExerciseLogs and as this file's own deleteLog/editLog: this method
@@ -410,43 +436,16 @@ class NutritionWriteService {
       return WriteResult.fail('moveMealLog: source row has no date');
     }
     final date = DateTime.parse(dateStr);
-    final newKey =
+    final baseKey =
         computeLogKey(istDate: date, mealType: newMealType, items: rawItems);
 
     row['meal_type'] = newMealType;
-    row['id'] = newKey;
-    row['log_key'] = newKey;
     row['logged_at'] = DateTime.now().toUtc().toIso8601String();
 
-    final existingAtDestination = box.get(newKey);
-    if (existingAtDestination is Map) {
-      // Collision — two logs landing in the same slot+item-hash bucket.
-      // Merge items (union) and recompute totals, same shape as editLog's
-      // items-changed branch.
-      final destRow = Map<String, dynamic>.from(existingAtDestination);
-      final destItems = ((destRow['items'] as List?) ?? const [])
-          .map((e) => FoodItem.fromMap(Map<String, dynamic>.from(e as Map)))
-          .toList();
-      final mergedItems = [...destItems, ...rawItems];
-      row['items'] = mergedItems.map((i) => i.toMap()).toList();
-      row['total_calories'] = mergedItems.fold<double>(
-          0, (a, i) => a + i.kcalWithFallback).round();
-      row['total_protein'] =
-          mergedItems.fold<double>(0, (a, i) => a + i.protein).round();
-      row['total_carbs'] =
-          mergedItems.fold<double>(0, (a, i) => a + i.carbs).round();
-      row['total_fat'] =
-          mergedItems.fold<double>(0, (a, i) => a + i.fat).round();
-      row['total_fiber'] =
-          mergedItems.fold<double>(0, (a, i) => a + i.fiber).round();
-    }
-
     if (macroUpdates != null) {
-      // Applied AFTER any collision-merge recompute above (B-pass finding,
-      // 2026-09-20) — the merge branch unconditionally recomputes every
-      // total_* field from the merged item list, so applying macroUpdates
-      // BEFORE it let a caller's explicit macro edit be silently discarded
-      // whenever the destination slot already held a log. Reject an
+      // The collision-merge this once followed was removed by OI-493
+      // Landing B (B3): the moved row goes to the first FREE occurrence of
+      // the destination key, so two entries stay two. Reject an
       // `items` key here the same way editLog's own recompute branch owns
       // `items` exclusively — a caller passing items through macroUpdates
       // would otherwise silently bypass the totals recompute and corrupt
@@ -457,15 +456,19 @@ class NutritionWriteService {
       row.addAll(safeMacroUpdates);
     }
 
-    // FC6 — clamp AFTER the collision-merge recompute AND macroUpdates
-    // (not before either), so whichever version of `row` actually gets
-    // written (moved-only, merged-with-destination, or macro-overridden)
-    // has its totals + per-item values bounded. Mirrors editLog/
-    // appendItemsToMeal, which both clamp after their own recompute for
-    // the same reason (review round 1 finding).
+    // FC6 — clamp AFTER macroUpdates, so whichever version of `row` gets
+    // written (moved-only or macro-overridden) has its totals + per-item
+    // values bounded. Mirrors editLog / appendItemsToMeal, which both clamp
+    // after their own recompute (review round 1 finding).
     _clampMealPayload(row);
 
+    final String newKey;
     try {
+      // OI-493 Landing B (B3): the first free occurrence at the destination,
+      // chosen and put with no `await` between (same rule as logMeal).
+      newKey = firstFreeLogKey(box.containsKey, baseKey);
+      row['id'] = newKey;
+      row['log_key'] = newKey;
       await box.put(newKey, row);
       await box.delete(logKey);
     } catch (e, st) {
@@ -507,6 +510,10 @@ class NutritionWriteService {
       return WriteResult.fail('logKey $logKey not found');
     }
 
+    // OI-493 Landing B (B2): bind this delete to the current Hive owner for
+    // BOTH UNDO paths (the stash below, and a caller's own copy restored via
+    // restoreFoodLog), so an UNDO never writes into another account's box.
+    _rememberDeleteOwner(logKey);
     if (allowUndo) {
       _lastDeletedPayload = Map<String, dynamic>.from(raw as Map);
       _lastDeletedKey = logKey;
@@ -584,16 +591,36 @@ class NutritionWriteService {
     return WriteResult.ok(logKey);
   }
 
-  /// Re-puts the last-deleted log under its original key. Returns an
-  /// error WriteResult if no stash exists.
-  Future<WriteResult> restoreLastDeleted() async {
+  /// Re-puts the last-deleted log. Returns an error WriteResult if no stash
+  /// exists.
+  ///
+  /// OI-493 Landing B (B2):
+  /// - [expectedKey] is the key the caller's snackbar deleted. The stash holds
+  ///   only the LATEST delete, so after two deletes in a row the first
+  ///   snackbar's UNDO is a no-op instead of restoring the second row (the
+  ///   stash is kept for the second snackbar).
+  /// - The delete must have been made under the current Hive owner (both
+  ///   non-null), else the stash is dropped and nothing is written.
+  /// - The row goes back under its own key when that key is free, else under
+  ///   the first free occurrence of its base key (the same meal was logged
+  ///   again inside the UNDO window): an UNDO never overwrites a newer entry.
+  Future<WriteResult> restoreLastDeleted({required String expectedKey}) async {
     final payload = _lastDeletedPayload;
     final key = _lastDeletedKey;
-    if (payload == null || key == null) {
+    if (payload == null || key == null || key != expectedKey) {
       return WriteResult.fail('nothing to restore');
     }
+    if (!_deleteOwnedByCurrentOwner(key)) {
+      _lastDeletedPayload = null;
+      _lastDeletedKey = null;
+      _deletedOwnerByKey.remove(key);
+      return WriteResult.fail('nothing to restore');
+    }
+    final String target;
     try {
-      await HiveService.instance.nutritionBox.put(key, payload);
+      final box = HiveService.instance.nutritionBox;
+      target = _restoreTargetKey(box.containsKey, key);
+      await box.put(target, _withLogKey(payload, target));
     } catch (e, st) {
       // audit-2026-05-11 H-42 — telemetry pair.
       debugPrint('[NutritionWriteService] restoreLastDeleted failed: $e\n$st');
@@ -603,6 +630,7 @@ class NutritionWriteService {
     }
     _lastDeletedPayload = null;
     _lastDeletedKey = null;
+    _deletedOwnerByKey.remove(key);
 
     _invalidateNutritionProviders();
     try {
@@ -615,12 +643,53 @@ class NutritionWriteService {
           reason: 'nutrition_write_service_sync_skipped'));
     }
 
-    return WriteResult.ok(key);
+    return WriteResult.ok(target);
   }
 
   // Stash for undo. Keyed by logKey.
   Map<String, dynamic>? _lastDeletedPayload;
   String? _lastDeletedKey;
+
+  /// OI-493 Landing B (B2): the Hive owner each recent delete was made under,
+  /// oldest first, capped at [_kDeleteOwnerMemory] keys.
+  final Map<String, String?> _deletedOwnerByKey = <String, String?>{};
+  static const int _kDeleteOwnerMemory = 16;
+
+  void _rememberDeleteOwner(String key) {
+    _deletedOwnerByKey.remove(key);
+    _deletedOwnerByKey[key] = HiveUserSession.currentOwnerHash;
+    while (_deletedOwnerByKey.length > _kDeleteOwnerMemory) {
+      _deletedOwnerByKey.remove(_deletedOwnerByKey.keys.first);
+    }
+  }
+
+  /// True only when [key]'s delete was recorded and both the recorded and
+  /// the current owner hash are non-null and equal. A null on either side
+  /// (signed out, a full delete) refuses.
+  bool _deleteOwnedByCurrentOwner(String key) {
+    if (!_deletedOwnerByKey.containsKey(key)) return false;
+    final recorded = _deletedOwnerByKey[key];
+    final current = HiveUserSession.currentOwnerHash;
+    return recorded != null && current != null && recorded == current;
+  }
+
+  /// Where an UNDO puts [key]'s row back: [key] itself when free; when taken
+  /// and [key] has the `nlog_` occurrence shape, the first free occurrence of
+  /// its base key; otherwise [key] (a non-`nlog_` row keeps the old
+  /// behaviour).
+  static String _restoreTargetKey(bool Function(String) taken, String key) {
+    if (!taken(key) || !kNlogKeyShape.hasMatch(key)) return key;
+    return firstFreeLogKey(taken, baseLogKey(key));
+  }
+
+  /// A copy of [row] whose `id` / `log_key` name [key]. Never mutates [row].
+  static Map<String, dynamic> _withLogKey(
+      Map<String, dynamic> row, String key) {
+    final copy = Map<String, dynamic>.from(row);
+    copy['id'] = key;
+    copy['log_key'] = key;
+    return copy;
+  }
 
   // audit-fixwave 2026-07-02 / F14 — removed dead `logWater`. It wrote a
   // `water_<date>` key to nutritionBox that NO sync helper reads (a latent
@@ -871,7 +940,10 @@ class NutritionWriteService {
   }
 
   /// C-12 (audit-2026-05-11) — restore a previously-deleted food log
-  /// row at its original Hive key.
+  /// row at its original Hive key, or (OI-493 Landing B, B2) at the first
+  /// free occurrence of its base key when that key was taken meanwhile. The
+  /// delete must have gone through [deleteLog] under the current Hive owner;
+  /// [log] is copied, never mutated.
   ///
   /// Used by the food-log undo flow on the nutrition screen. Distinct
   /// from [restoreLastDeleted] which relies on the in-memory stash —
@@ -883,8 +955,15 @@ class NutritionWriteService {
     if (key == null || key.isEmpty) {
       return WriteResult.fail('log["id"] must be a non-empty string');
     }
+    if (!_deleteOwnedByCurrentOwner(key)) {
+      _deletedOwnerByKey.remove(key);
+      return WriteResult.fail('nothing to restore');
+    }
+    final String target;
     try {
-      await HiveService.instance.nutritionBox.put(key, log);
+      final box = HiveService.instance.nutritionBox;
+      target = _restoreTargetKey(box.containsKey, key);
+      await box.put(target, _withLogKey(log, target));
     } catch (e, st) {
       // audit-2026-05-11 H-42 — telemetry pair.
       debugPrint(
@@ -905,7 +984,8 @@ class NutritionWriteService {
           reason: 'nutrition_write_service_sync_skipped'));
     }
 
-    return WriteResult.ok(key);
+    _deletedOwnerByKey.remove(key);
+    return WriteResult.ok(target);
   }
 
   // ---- private helpers ----
@@ -982,6 +1062,30 @@ class NutritionWriteService {
     final dateStr = istDateStr(istDate);
     final itemsHash = _stableItemsHash(items);
     return 'nlog_${dateStr}_${mealType}_$itemsHash';
+  }
+
+  /// OI-493 Landing B: the ONE shape of a current `nlog_` key, optionally
+  /// with an occurrence suffix (`_2`, `_3`, ... for the same meal logged again
+  /// the same day in the same slot). Group 1 is the base key. Anchored on the
+  /// 8-hex hash: about 2.3% of hashes are all digits, so a bare `_\d+$` strip
+  /// would cut a hash off a base key.
+  static final RegExp kNlogKeyShape =
+      RegExp(r'^(nlog_\d{4}-\d{2}-\d{2}_[a-z]+_[0-9a-f]{8})(_\d+)?$');
+
+  /// The base key of an occurrence key; any other key is returned unchanged.
+  static String baseLogKey(String key) =>
+      kNlogKeyShape.firstMatch(key)?.group(1) ?? key;
+
+  /// [base] when free, else the first free `<base>_2`, `<base>_3`, ...
+  /// Pure: callers pass the box's `containsKey` and put the result with no
+  /// `await` in between (Hive inserts into its keystore synchronously).
+  static String firstFreeLogKey(bool Function(String key) taken, String base) {
+    if (!taken(base)) return base;
+    var n = 2;
+    while (taken('${base}_$n')) {
+      n++;
+    }
+    return '${base}_$n';
   }
 
   /// Canonical Hive key for a saved-meal preset: `saved_meal_<v5(name)>`.
