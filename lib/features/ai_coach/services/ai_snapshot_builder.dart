@@ -24,6 +24,7 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:icanbefitter/core/services/health_read_service.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
+import 'package:icanbefitter/core/services/nutrition_read_service.dart';
 import 'package:icanbefitter/core/services/subscription_service.dart';
 import 'package:icanbefitter/core/services/rank_ladder_data.dart';
 import 'package:icanbefitter/core/services/rank_service.dart';
@@ -861,7 +862,9 @@ class AiSnapshotBuilder {
       final slot = _canonicalSlot(mealType);
 
       bySlot.putIfAbsent(slot, () => []).add({
-        'name': log['food_name'] ?? 'Unknown',
+        // OI-493: the writer keeps names in items[] (never a top-level
+        // food_name), so this read every meal as "Unknown".
+        'name': NutritionReadService.shortMealDisplayName(log),
         'kcal': (log['total_calories'] as num?)?.toInt() ?? 0,
         'protein_g': (log['total_protein'] as num?)?.toInt() ?? 0,
         'carbs_g': (log['total_carbs'] as num?)?.toInt() ?? 0,

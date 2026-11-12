@@ -3,7 +3,6 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../../core/constants/app_constants.dart';
 import '../../../core/constants/fitness_goals.dart';
 import '../../../core/services/day_swap/day_swap_allowance.dart';
 import '../../../core/services/day_swap/day_swap_copy.dart';
@@ -13,12 +12,9 @@ import '../../../core/services/hive_service.dart';
 import '../../../core/services/completion_prompt_store.dart';
 import '../../../core/services/hive_user_session.dart';
 import '../../../core/utils/ist_date.dart';
-import '../../../core/services/nutrition_write_service.dart';
-import '../../../core/services/nutrition_write_source.dart';
 import '../../../core/services/subscription_service.dart';
 import '../../../core/services/swap_service.dart';
 import '../../../core/services/sync_service.dart';
-import '../../../core/services/usage_counter_service.dart';
 import '../../../core/services/workout_schedule_read_service.dart';
 import '../../../core/services/workout_schedule_service.dart';
 import '../../../core/services/workout_write_service.dart';
@@ -46,6 +42,7 @@ import '../providers/ai_coach_provider.dart' show chatHistoryProvider;
 import '../providers/pending_tool_intents_provider.dart'
     show pendingToolIntentsProvider;
 import '../models/tool_intent.dart';
+import 'coach_meal_log.dart';
 import 'hotel_workout_planner.dart';
 import 'injury_swap_planner.dart';
 import 'pause_plan_planner.dart';
@@ -1615,13 +1612,20 @@ class ToolDispatcher {
     });
   }
 
-  /// B-10 (APK Test #6 spec §5.5): chat-mode food log MUST decrement the
-  /// same visible counter as the LogFood sheet AI tab. The increment is
-  /// wired centrally by NutritionWriteService.logMeal — passing
-  /// `source: NutritionWriteSource.aiCoachTool` below maps to
-  /// `featureAiTextLogPro`. Server-side cap enforcement still lives in
-  /// migration 024 (food_text_daily_limit_reached trigger). Do NOT
-  /// duplicate the increment here — single source of truth is the writer.
+  /// OI-493 Landing A: a coach meal from the `logMealByText` tool. It writes
+  /// through [CoachMealLog.write], the one coach meal writer, so it stores the
+  /// parsed items (with fibre) the way the Nutrition screen's AI-text tab does.
+  ///
+  /// Day and slot both come from `intent.createdAt`, the server's stamp for when
+  /// the meal was reported (the intent expires after 1 h, so a 23:50 dinner
+  /// applied at 00:10 still lands on the evening it was eaten). The payload
+  /// `date` is ignored: the server refuses any date but today before an intent
+  /// exists (`logMealByText.ts`).
+  ///
+  /// No usage counter: the server's food-text cap (migration 129) counts only
+  /// `food_text_analysis` rows, and this parse runs inside a chat call, which
+  /// the chat limit already counts. A client increment here drifted below the
+  /// server's number (OI-493 D8).
   Future<ToolExecutionResult> _executeLogMealByText(ToolIntent intent) async {
     final p = intent.payload;
     final description = p['original_description'] as String?;
@@ -1630,45 +1634,22 @@ class ToolDispatcher {
       return const ToolExecutionResult.failure(
           'Invalid log_meal_by_text intent payload.');
     }
-
-    // Resolve date — default to today if the intent didn't specify one.
-    final dateRaw = p['date'] as String?;
-    final date = (dateRaw == null || dateRaw.isEmpty)
-        ? _todayDateString()
-        : dateRaw;
-
-    final mealType = _validateMealType(p['meal_type'] as String?);
     final totalCal = (p['total_calories'] as num?)?.toInt() ?? 0;
     final protein = (p['total_protein_g'] as num?)?.toInt() ?? 0;
-    final carbs = (p['total_carbs_g'] as num?)?.toInt() ?? 0;
-    final fat = (p['total_fat_g'] as num?)?.toInt() ?? 0;
-    final servingDesc =
-        (p['serving_description'] as String?)?.trim().isNotEmpty == true
-            ? p['serving_description'] as String
-            : '1 serving';
 
     try {
-      final logId = await _writeFoodLogFromIntent(
-        date: date,
-        foodName: foodName.trim(),
-        mealType: mealType,
-        totalCalories: totalCal,
-        protein: protein,
-        carbs: carbs,
-        fat: fat,
-        servingDescription: servingDesc,
-        source: NutritionWriteSource.aiCoachTool,
+      final result = await CoachMealLog.write(
+        at: intent.createdAt,
+        mealType: p['meal_type'] as String?,
+        items: coachItemsFromParsedMeal(p),
+        overrideTotalCals: totalCal,
+        overrideTotalProtein: protein,
       );
-      // Test #11 M1: increment AI text counter at the API-call site.
-      // The Gemini function-calling turn already fired (server counted it
-      // in ai_coach_interactions). Increment client counter so the
-      // food_logger_section "X remaining" display stays in sync.
-      unawaited(UsageCounterService.instance.increment(
-        AppConstants.featureAiTextLogPro,
-        SubscriptionService.instance.isPro(),
-      ));
+      if (!result.success) {
+        throw StateError(result.errorMessage ?? 'logMeal failed');
+      }
       return ToolExecutionResult.success(data: {
-        'log_id': logId,
+        'log_id': result.logKey,
         'food_name': foodName,
         'total_calories': totalCal,
       });
@@ -1681,69 +1662,6 @@ class ToolDispatcher {
           message: clipped));
       return const ToolExecutionResult.failure('Could not log that meal.');
     }
-  }
-
-  /// Write a meal-by-text log via NutritionWriteService.
-  ///
-  /// Plan C-13 — routes through the service so:
-  ///   • Hive write + cloud projection (BOTH nutrition_logs AND
-  ///     nutrition_log_items rows) happen via the canonical writer.
-  ///   • Counter increments per source (aiCoachTool → featureAiTextLogPro;
-  ///     prelog → no counter, since speculative pre-logs shouldn't burn
-  ///     the daily AI text quota until the user confirms).
-  ///   • Provider invalidation + fire-and-forget sync runs uniformly.
-  ///
-  /// `uniqueSuffix` is preserved as a no-op for callers (prelog still
-  /// passes it). The service's content-addressed key (format:
-  /// `nlog_[date]_[mealType]_[itemsHash]`) is naturally collision-resistant
-  /// when the items list differs, which is true across all 21 prelog meals.
-  Future<String> _writeFoodLogFromIntent({
-    required String date,
-    required String foodName,
-    required String mealType,
-    required int totalCalories,
-    required int protein,
-    required int carbs,
-    required int fat,
-    required String servingDescription,
-    required NutritionWriteSource source,
-    String? uniqueSuffix,
-  }) async {
-    final parsed = DateTime.tryParse(date) ?? DateTime.now();
-    final result = await NutritionWriteService.instance.logMeal(
-      date: parsed,
-      mealType: mealType,
-      items: [
-        FoodItem(
-          name: foodName,
-          // Test #11 M4: the AI coach tool parses free-text and returns
-          // pre-computed total macros — no per-item gram value is in the
-          // intent payload. Use 100.0 (canonical "per 100g" sentinel) so
-          // cloud nutrition_log_items.quantity_g is non-zero and useful
-          // for future server-side analytics joins.
-          quantityG: 100.0,
-          calories: totalCalories.toDouble(),
-          protein: protein.toDouble(),
-          carbs: carbs.toDouble(),
-          fat: fat.toDouble(),
-          fiber: 0,
-        ),
-      ],
-      overrideTotalCals: totalCalories,
-      overrideTotalProtein: protein,
-      source: source,
-    );
-
-    if (!result.success) {
-      throw StateError(result.errorMessage ?? 'logMeal failed');
-    }
-    return result.logKey ?? 'nlog_unknown_$uniqueSuffix';
-  }
-
-  String _validateMealType(String? raw) {
-    const valid = ['breakfast', 'lunch', 'dinner', 'snacks'];
-    final lower = raw?.toLowerCase() ?? '';
-    return valid.contains(lower) ? lower : 'snacks';
   }
 
   bool _isNutritionIntent(String type) {
@@ -1837,10 +1755,10 @@ class ToolDispatcher {
     } catch (e, st) {
       debugPrint('[tool_dispatcher] invalidate macroTargetsProvider failed: $e\n$st');
     }
-    // C4 — the coach meal path increments featureAiTextLogPro
-    // (_executeLogByText) but never refreshed the "X remaining" read;
-    // the manual path invalidates it (food_logger_section.dart). Same
-    // reader, same rule.
+    // C4 — refresh the "X remaining" read the manual path refreshes
+    // (food_logger_section.dart). Since OI-493 the coach meal path no longer
+    // increments featureAiTextLogPro (the server never charged it), so this
+    // is a plain refresh, kept harmless.
     try {
       ref.invalidate(aiTextLogRemainingProvider);
     } catch (e, st) {

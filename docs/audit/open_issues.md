@@ -7206,6 +7206,8 @@ Residual of OI-199 and OI-471 after migration 172. Migration 172 makes `cleanup_
 
 Added 2026-11-11 (OI-494 review): the coach `logMeal` path in `lib/features/ai_coach/services/tool_dispatcher.dart` (the `DateTime.tryParse('<YYYY-MM-DD>')` passed as `date:`) parses the coach's date string as LOCAL midnight, so on a device east of IST (for example UTC+9) the meal lands on the previous IST day. It is one of the differences this unit must fix, with a behavioural test under a non-IST zone.
 
+Added 2026-11-12 (Landing A, branch `oi493-nutrition-parity`, diagnose ec6f6c): the unit was split under §4.12.1 (plan `docs/plans/oi493-nutrition-parity.md`). Landing A fixes differences 1-6, 9, 10, 12 and 14 (one coach meal writer `CoachMealLog.write`; day and slot from the reported instant, slot by the screen's clock rule; parsed items with fibre; the tag's own estimate; no AI-text unit; the server refuses a non-today date; six `food_name` readers read `items[]`, with a source guard). 11's `source` half is verified clean (no such cloud column). Landing B (`docs/plans/oi493b-duplicate-meals.md`: the same meal twice adds an entry, the zero-override fallback, concurrent dispatch) closes this OI with the closure ledger. Open after A merges: the `ai-proxy` deploy (founder go) and the device check after the next build.
+
 ## OI-495 — Unit 1B-F2: copy the core-list overlay labels (slot_focus / slot_pattern) into target_focus / movement_pattern, seed and cloud re-seed
 
 - **Status**: OPEN

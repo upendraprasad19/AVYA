@@ -58,9 +58,11 @@ Map<String, dynamic> _workoutAction(List<String> exerciseNames) => {
       },
     };
 
+// OI-493: a tag needs calories_estimate to show a card at all, so without it
+// the suppression test below would pass whatever the dedup did.
 const _foodAction = {
   'action': 'log_food',
-  'data': {'food_name': 'Roti', 'meal_type': 'lunch'},
+  'data': {'food_name': 'Roti', 'meal_type': 'lunch', 'calories_estimate': 120},
 };
 
 final _refProvider = Provider<Ref>((ref) => ref);
@@ -136,6 +138,17 @@ void main() {
       addTearDown(c.dispose);
       run(c, [_workoutAction(['Bench Press'])], const []);
       expect(c.read(workoutDraftProvider), isNotNull);
+    });
+
+    test('KEEPS exactly one log_food action when no intent covers it', () {
+      final c = ProviderContainer();
+      addTearDown(c.dispose);
+      run(c, [Map<String, dynamic>.from(_foodAction)], const []);
+      final actions = c.read(pendingLogActionsProvider);
+      expect(actions, hasLength(1),
+          reason: 'the fixture must yield a card when unsuppressed, so the '
+              'suppression test is not vacuous');
+      expect(actions.single.type, LogActionType.food);
     });
 
     test('suppresses a log_food action when a log_meal_by_text intent covers it',

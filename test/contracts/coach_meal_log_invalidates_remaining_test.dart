@@ -1,3 +1,6 @@
+// OI-493 Landing A: the coach meal no longer increments the counter (the
+// server never counted it); the invalidation below is kept as a refresh.
+//
 // C4 (ai-coach-ux-tool-integrity) — the coach meal-log path
 // (_executeLogMealByText in tool_dispatcher.dart) increments
 // UsageCounterService.featureAiTextLogPro, but the dispatcher's
@@ -48,10 +51,10 @@ void main() {
         body,
         contains('ref.invalidate(aiTextLogRemainingProvider)'),
         reason:
-            'The coach meal path increments featureAiTextLogPro '
-            '(_executeLogMealByText) but never refreshed the "X remaining" '
-            'read. The manual path invalidates the same provider '
-            '(food_logger_section.dart). Same reader, same rule.',
+            'The coach meal path refreshes the "X remaining" read after a '
+            'log (since OI-493 it spends no unit, so this keeps a count '
+            'refreshed by another path in step; harmless). The manual '
+            'path invalidates the same provider (food_logger_section.dart).',
       );
     });
 

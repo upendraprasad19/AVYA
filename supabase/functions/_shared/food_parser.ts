@@ -33,6 +33,10 @@ export interface ParsedMealItem {
   protein_g: number;
   carbs_g: number;
   fat_g: number;
+  // OI-493 Landing A: fibre per item, written to the item like the Nutrition
+  // screen's AI-text tab does. Always a finite number >= 0 after
+  // normaliseParsedItems (0 when the model omits it).
+  fiber_g: number;
 }
 
 export interface ParsedMeal {
@@ -63,8 +67,8 @@ Return ONLY valid JSON matching this schema (no markdown, no code fences):
   "serving_description": "2 katori dal + 1 katori chawal",
   "confidence": "high" | "medium" | "low",
   "items": [
-    { "name": "Dal", "quantity": "2 katori", "calories": 250, "protein_g": 12, "carbs_g": 30, "fat_g": 6 },
-    { "name": "Chawal", "quantity": "1 katori", "calories": 200, "protein_g": 6, "carbs_g": 30, "fat_g": 6 }
+    { "name": "Dal", "quantity": "2 katori", "calories": 250, "protein_g": 12, "carbs_g": 30, "fat_g": 6, "fiber_g": 8 },
+    { "name": "Chawal", "quantity": "1 katori", "calories": 200, "protein_g": 6, "carbs_g": 30, "fat_g": 6, "fiber_g": 1 }
   ]
 }
 
@@ -72,6 +76,36 @@ confidence rules:
 - "high"   : standard dish with clear quantity
 - "medium" : dish or quantity is approximate
 - "low"    : dish is uncommon, or quantity is vague — surface this so the user reviews carefully`;
+
+/**
+ * The per-item rules applied to the model's `items` (pure; `parseFoodText`
+ * calls it, and it is what `food_parser_test.ts` covers, since the Gemini call
+ * has no test seam).
+ *
+ * - Not an array (Gemini sometimes omits items on terse descriptions): [].
+ * - Macros coerced to numbers; calories missing or <= 0 fall back to Atwater
+ *   (4P + 4C + 9F; matches docs/architecture/sync.md:134, retired root §19
+ *   entry #35 "Scan meal saves 0 kcal").
+ * - `fiber_g` (OI-493 Landing A): kept when a finite number >= 0, else 0.
+ */
+export function normaliseParsedItems(raw: unknown): ParsedMealItem[] {
+  if (!Array.isArray(raw)) return [];
+  for (const item of raw as ParsedMealItem[]) {
+    const p = Number(item.protein_g ?? 0);
+    const c = Number(item.carbs_g ?? 0);
+    const f = Number(item.fat_g ?? 0);
+    item.protein_g = p;
+    item.carbs_g = c;
+    item.fat_g = f;
+    const cal = Number(item.calories ?? 0);
+    item.calories = cal > 0 ? cal : Math.round(4 * p + 4 * c + 9 * f);
+    const fib = item.fiber_g;
+    item.fiber_g = typeof fib === "number" && Number.isFinite(fib) && fib >= 0
+      ? fib
+      : 0;
+  }
+  return raw as ParsedMealItem[];
+}
 
 /**
  * Parse a free-text meal description into structured nutrition.
@@ -126,21 +160,7 @@ export async function parseFoodText(description: string): Promise<ParsedMeal> {
     throw new Error(`food_parser: invalid JSON from Gemini: ${String(e)}`);
   }
 
-  // Defensive — Gemini sometimes omits items entirely on terse descriptions.
-  parsed.items = Array.isArray(parsed.items) ? parsed.items : [];
-
-  // Per-item Atwater fallback (matches docs/architecture/sync.md:134; retired
-  // root §19 entry #35 "Scan meal saves 0 kcal").
-  for (const item of parsed.items) {
-    const p = Number(item.protein_g ?? 0);
-    const c = Number(item.carbs_g ?? 0);
-    const f = Number(item.fat_g ?? 0);
-    item.protein_g = p;
-    item.carbs_g = c;
-    item.fat_g = f;
-    const cal = Number(item.calories ?? 0);
-    item.calories = cal > 0 ? cal : Math.round(4 * p + 4 * c + 9 * f);
-  }
+  parsed.items = normaliseParsedItems(parsed.items);
 
   // Recompute meal totals from items if absent or zero.
   if (!parsed.total_calories || parsed.total_calories <= 0) {

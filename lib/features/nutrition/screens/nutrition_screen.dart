@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:icanbefitter/core/services/error_telemetry.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
+import 'package:icanbefitter/core/services/nutrition_read_service.dart';
 import 'package:icanbefitter/core/services/nutrition_write_service.dart';
 import 'package:icanbefitter/core/services/subscription_service.dart';
 import 'package:icanbefitter/features/home/widgets/streak_explainer_sheet.dart';
@@ -639,7 +640,8 @@ class _NutritionScreenState extends ConsumerState<NutritionScreen>
       BuildContext context, Map<String, dynamic> meal) async {
     final logKey = meal['id'] as String?;
     if (logKey == null) return;
-    final name = meal['food_name'] as String? ?? 'this meal';
+    // OI-493: names live in items[]; a top-level food_name is never written.
+    final name = NutritionReadService.shortMealDisplayName(meal);
     final kcal = (meal['total_calories'] as num?)?.round() ?? 0;
     final protein = (meal['total_protein'] as num?)?.round() ?? 0;
 
@@ -737,7 +739,8 @@ class _NutritionScreenState extends ConsumerState<NutritionScreen>
       BuildContext context, Map<String, dynamic> meal) async {
     final logKey = meal['id'] as String?;
     if (logKey == null) return;
-    final defaultName = meal['food_name'] as String? ?? 'Saved Meal';
+    // OI-493: names live in items[]; a top-level food_name is never written.
+    final defaultName = NutritionReadService.shortMealDisplayName(meal);
     final controller = TextEditingController(text: defaultName);
     final name = await showModalBottomSheet<String>(
       context: context,
