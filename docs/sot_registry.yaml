@@ -10128,7 +10128,7 @@ concepts:
         method: generateV4
         notes: CENTRAL normalize - canonicalizes injuries once for every generation caller
       - file: lib/shared/repositories/plan_engine/exercise_selector.dart
-        line_range: 830-842
+        line_range: 836-848
         method: _isContraindicated (passed to CoreListSelector.rankedPool by _pickCoreList; buildPinnedDays.resolve)
         notes: U2 introduced it for the universal pool (deleted with the pool and its kill switch by Unit 1B-F, 2026-11-11); ungated; a slot with no safe row is omitted, then the thin-day top-up
       - file: lib/shared/repositories/plan_engine/warmup_cooldown.dart
@@ -10144,7 +10144,7 @@ concepts:
         fields_read: [injury_contraindications]
         notes: exact lowercase equality (attempts 1-4) - unchanged, already correct
       - file: lib/shared/repositories/plan_engine/exercise_selector.dart
-        line_range: 830-842
+        line_range: 836-848
         method: _isContraindicated (the core-list pick's hard filter and the repeat pins)
         semantic: flag-check
         fields_read: [injury_contraindications]
@@ -11913,7 +11913,7 @@ concepts:
         method: scripts/repair_exercise_library_v12.js (repairText, mergeDuplicates, relabel, dropPlates)
         notes: v12 (Batch A) — 136 un-shifted text rows, cues one per item, 7 duplicates retired (name_aliases + merged_ids on the kept row), E172/E163 labels, E207/E179 plate keys dropped
       - file: lib/core/services/seed_service.dart
-        line_range: 271-316
+        line_range: 276-321
         method: _exerciseLibraryVersion (11→12) + retiredLibraryIds + pruneRetired after putAll in _seedExercises
         notes: putAll never deletes, so the prune is what removes a retired row from an existing install
       - file: supabase/migrations/162_reseed_exercise_library.sql
@@ -11965,7 +11965,7 @@ concepts:
         method: case bodyweight_reps clears a bogus weight_kg from a logged row; one-shot per device, gated by migrationBox['logging_type_repair_v3_done'] (_flagKey at line 85; the header comment still says v1)
         semantic: C2c — it does NOT re-run on a device that already set the flag, so it does not repair E230 history logged under the cable row; on a device with the flag unset it zeroes weight_kg on such a row
       - file: lib/shared/repositories/plan_engine/core_list_selector.dart
-        line_range: 259
+        line_range: 255
         method: reads equipment_tier of the row
         semantic: C2c — the tier rule passes a row when its equipment_tier list holds the user's tier; E230 now lists all four, so it passes at every tier
     contract_test_path: test/contracts/exercise_library_schema_contract_test.dart
@@ -12056,6 +12056,7 @@ concepts:
   - concept: core_list_pool
     domain: workout
     behavioral_test_path: test/contracts/core_list_pool_behavioral_test.dart
+    behavioral_test_path_loaded_wins: test/contracts/loaded_wins_behavioral_test.dart
     description: |
       Batch B1 (docs/plans/2026-10-22-library-core-list-pool.md), the ONLY picker since Unit 1B-F
       (docs/plans/2026-11-10-generator-1bf-flip.md, 2026-11-11), which deleted the configBox flag
@@ -12082,6 +12083,16 @@ concepts:
       R5 a glute-first last tie-break in Glutes hip_dominant slots; R4 the thin-day top-up
       prefers core rows (thin_day_topup). Trace fields jumpRemoved,
       jumpOnlyPool, likeForLikeImplement.
+      Unit 1B-R (docs/plans/2026-11-12-generator-1br-loaded-wins.md, OI-497, founder d25,
+      diagnose e4b7a2): the R3 (b) fit key applies in every non-core slot (same position); in
+      phase 1 a key before the foundational key sorts a non-fitting row behind topFit (the first
+      fitting row by the rest keys that the walk will not skip: demoted, soft-avoided or in
+      walkedNames, the lowercase avoidNames _pickCoreList.fill passes) when topFit matches the
+      slot at least as well (slotMatch = 2 * subMiss + typeMiss); for an injured user with curated
+      substitutes in the pool _selectCandidate's own list decides and the key is inert. Kill switch configBox
+      disable_loaded_wins (PlanEngineFlags.loadedWinsEnabled, default ON); OFF equals
+      test/fixtures/generator_golden_hashes_loaded_wins_off.json
+      (test/plan_generator/loaded_wins_kill_switch_golden_test.dart).
     writers:
       - file: scripts/add_library_core_fields_v13.js
         method: main (applies scripts/data/library_core_fields_v13.json)
@@ -12097,7 +12108,11 @@ concepts:
         semantic: the pool, pure; every Hive list field mapped toString before comparing
       - file: lib/shared/repositories/plan_engine/exercise_selector.dart
         method: pickV4 (calls _pickCoreList, then topUpDays) + _pickCoreList
-        semantic: unconditional since Unit 1B-F (no flag, no library-shape check)
+        semantic: unconditional since Unit 1B-F (no flag, no library-shape check); reads
+          PlanEngineFlags.loadedWinsEnabled once per call and passes avoidNames as walkedNames (Unit 1B-R)
+      - file: lib/shared/repositories/plan_engine/plan_engine_flags.dart
+        method: loadedWinsEnabled
+        semantic: configBox['disable_loaded_wins'] != true; no Hive -> true
 
   - concept: same_movement_rule
     domain: workout
@@ -13534,7 +13549,7 @@ concepts:
         line_range: 1-2
         method: demo_slug + demo_pair fields
       - file: lib/core/services/seed_service.dart
-        line_range: 178-178
+        line_range: 183-183
         method: _exerciseLibraryVersion
     readers:
       - file: lib/shared/widgets/exercise_plate/plate_resolver.dart
@@ -13578,7 +13593,7 @@ concepts:
         line_range: 187-208
         method: applyMedia
       - file: lib/core/services/seed_service.dart
-        line_range: 178-178
+        line_range: 183-183
         method: _exerciseLibraryVersion
     readers:
       - file: lib/shared/widgets/exercise_plate/exercise_media_resolver.dart
@@ -13664,7 +13679,7 @@ concepts:
         line_range: 1-2
         method: coaching_cues + common_mistakes + breathing_cue + warmup_protocol fields
       - file: lib/core/services/seed_service.dart
-        line_range: 178-178
+        line_range: 183-183
         method: _exerciseLibraryVersion
     readers:
       - file: lib/shared/widgets/exercise_plate/exercise_cues.dart
@@ -15011,7 +15026,7 @@ concepts:
         fields_read: [type]
         notes: whitelist shape, widened to include 'logged' by this batch
       - file: lib/shared/repositories/plan_engine/plan_engine_flags.dart
-        line_range: 471-476
+        line_range: 484-489
         method: isRestDayConsideringLogged
         semantic: flag-check
         fields_read: [type]

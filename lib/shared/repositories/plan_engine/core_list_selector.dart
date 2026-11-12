@@ -212,7 +212,9 @@ class CoreListSelector {
     required Set<String> pickedNames,
     required Set<String> demotedNames,
     Set<String> softAvoidNames = const {},
+    Set<String> walkedNames = const {},
     bool anyCoreLevel = false,
+    bool loadedWins = true,
   }) {
     final pattern = slot.movementPattern;
     final muscle = slot.targetMuscle.toLowerCase();
@@ -371,8 +373,11 @@ class CoreListSelector {
     final fitKit = capability ??
         EquipmentVocab.tierItems[tier]?.toSet() ??
         const <String>{};
+    // Unit 1B-R, Ruling 2 (founder d25): the fit key orders rows of equal sub-focus and type match in every non-core
+    // slot, isolation-typed ones included (the quad slot typed `isolation` held bodyweight Walking Lunge over Step Up and
+    // Dumbbell Walking Lunge). `loadedWins: false` (kill switch `disable_loaded_wins`) restores compound slots only.
     final fitApplies =
-        slot.exerciseType.toLowerCase() == 'compound' && pattern != 'core';
+        pattern != 'core' && (loadedWins || slot.exerciseType.toLowerCase() == 'compound');
     bool fits(Map<String, dynamic> r) =>
         EquipmentVocab.fromProfile(r['equipment_needed']).any(
             (t) => fitKit.contains(t) && !improvisedTokens.contains(t));
@@ -388,10 +393,12 @@ class CoreListSelector {
     final sub = slot.subFocus;
     final type = slot.exerciseType.toLowerCase();
     bool foundational(Map<String, dynamic> r) => r['is_foundational'] == true;
-    List<int> keys(Map<String, dynamic> r) => [
-          demotedNames.contains(r['name']) ? 1 : 0,
-          softAvoidNames.contains(r['name']) ? 1 : 0,
-          anyCoreLevel ? easierGap(r)! : 0,
+    // How well a row matches the slot: the sub-focus and type keys below, folded into one number (lower is better).
+    int slotMatch(Map<String, dynamic> r) =>
+        (sub != null && !subFocusMatches(r, slot) ? 2 : 0) +
+        (_strs(r['exercise_type']).any((t) => t.toLowerCase() == type) ? 0 : 1);
+    // Keys d onward (the order before Unit 1B-R's key).
+    List<int> restKeys(Map<String, dynamic> r) => [
           phase == 1 && !foundational(r) ? 1 : 0,
           sub != null && !subFocusMatches(r, slot) ? 1 : 0,
           _strs(r['exercise_type']).any((t) => t.toLowerCase() == type) ? 0 : 1,
@@ -401,6 +408,44 @@ class CoreListSelector {
           foundational(r) ? 0 : 1,
           // R5: last tie-break, Glutes hinge slots only.
           gluteSlot && !gluteFirst(r) ? 1 : 0,
+        ];
+    // Unit 1B-R, Ruling 3 (founder d25): in phase 1 a bodyweight row gives way to `topFit`, the loaded row that will
+    // actually be picked (the first fitting row by the keys that follow, skipping the rows `_preferNovel` will walk
+    // past), when `topFit` matches the slot at least as well. So the pick is `topFit` or a bodyweight row that matches
+    // BETTER, never a worse-matching loaded row; key d still decides across foundational status, as before. A gym
+    // user's loaded rows keep their order (the key is 0 for each); a bodyweight user is unchanged (no `topFit`). Under
+    // Ruling 12's emergency the easier-gap key comes first, as in the sort. For an injured user whose pool holds curated
+    // substitutes, `_selectCandidate` picks from that list in its own order, so this key is inert there (it changes
+    // neither the list's members nor their order).
+    int byRest(Map<String, dynamic> x, Map<String, dynamic> y) {
+      final a = [if (anyCoreLevel) easierGap(x)!, ...restKeys(x)];
+      final b = [if (anyCoreLevel) easierGap(y)!, ...restKeys(y)];
+      for (var i = 0; i < a.length; i++) {
+        final c = a[i].compareTo(b[i]);
+        if (c != 0) return c;
+      }
+      return (x['id'] ?? '').toString().compareTo((y['id'] ?? '').toString());
+    }
+    Map<String, dynamic>? topFit;
+    if (loadedWins && phase == 1 && fitApplies) {
+      for (final r in pool) {
+        final n = r['name'] as String? ?? '';
+        if (!fits(r) ||
+            demotedNames.contains(n) ||
+            softAvoidNames.contains(n) ||
+            walkedNames.contains(n.toLowerCase())) {
+          continue;
+        }
+        if (topFit == null || byRest(r, topFit) < 0) topFit = r;
+      }
+    }
+    final topFitMatch = topFit == null ? 4 : slotMatch(topFit); // 4: no row matches that badly, the key is 0
+    List<int> keys(Map<String, dynamic> r) => [
+          demotedNames.contains(r['name']) ? 1 : 0,
+          softAvoidNames.contains(r['name']) ? 1 : 0,
+          anyCoreLevel ? easierGap(r)! : 0,
+          !fits(r) && topFitMatch <= slotMatch(r) ? 1 : 0,
+          ...restKeys(r),
         ];
     final keyed = [for (final r in pool) (r, keys(r))];
     keyed.sort((x, y) {
