@@ -285,3 +285,15 @@ retry on the next launch. The §4.6 exception is stated in the plan-review recor
   Rounds 1-3 each found pins only in the test harnesses around the cloud seed generator and the seed tests (the
   mechanism converged at round 2): the build runs the whole `test/contracts/` and the review CI, and round 4 reviews
   the draft diff (§4.12.5), where a missed pin is a red test rather than a reading.
+- **Round 4 (Sonnet, context-blind, 2026-11-12, on the BUILT diff after review CI was green on 7ca1233b): converged
+  (0 P0 / P1).** P2 (1): the pool-identity test in `library_overlay_copy_test.dart` was vacuous (the per-row test already
+  makes the two libraries content-equal) and four records cited it as independent proof: the test is removed, its slot
+  sweep lives in the planted-overlay test, and the diagnose, closure, SoT registry and OI-495 now cite the per-row
+  identity, the planted-overlay guard, the golden and the plan dump. P3: the LINK line (109 -> 112) and "20 blocks" (24)
+  citations; `seed_service.dart:127-128` / `:190` in `exercise_plate_library_data_test.dart` (stale on main) -> 227-228 /
+  314; `readOverlayCopy` now refuses a record row whose `after` is not the overlay its `before` carries, and test (e)
+  asserts each refusal's text (the check removed reddens it); the two display-only readers (`ai_snapshot_builder.dart:614`,
+  `injury_swap_planner.dart:196`) named in the diagnose. Verified clean by the round: the asset against the record and
+  main field by field; N20; the importer's idempotency and refusals; the v26 rebuild equal to main's asset; the planted
+  test non-vacuous; `_s1b3Batch` equal to main's BATCH; 176 vs 175 exactly 12 tuples, the rollback values; the registry
+  ranges.

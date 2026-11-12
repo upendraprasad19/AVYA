@@ -750,21 +750,28 @@ void main() {
       expect(t.readLibText(), beforeText);
     });
 
-    test('(e) a record naming a source id or an unknown id, or repeating an id, is refused', () async {
+    test('(e) a record naming a source id or an unknown id, repeating an id, or whose after is not its overlay, is refused, naming why', () async {
       final base = _readJson(_f2CopyRel);
       final rows = (base['rows'] as List).cast<Json>();
       final bogus = {
         'before': {'movement_pattern': ['x'], 'target_focus': ['y'], 'slot_pattern': ['z']},
         'after': {'movement_pattern': ['z'], 'target_focus': ['y']},
       };
-      for (final bad in [
-        [...rows, {'id': 'N20', ...bogus}],
-        [...rows, {'id': 'E999', ...bogus}],
-        [...rows, rows.first],
+      final e015 = rows.firstWhere((e) => e['id'] == 'E015');
+      final notOverlay = {
+        ...e015,
+        'after': {...(e015['after'] as Map).cast<String, dynamic>(), 'movement_pattern': ['vertical_push']},
+      };
+      for (final (bad, says) in [
+        ([...rows, {'id': 'N20', ...bogus}], 'not kept rows'),
+        ([...rows, {'id': 'E999', ...bogus}], 'not kept rows'),
+        ([...rows, rows.first], 'repeats ${rows.first['id']}'),
+        ([for (final e in rows) e['id'] == 'E015' ? notOverlay : e], 'E015 after is not the overlay'),
       ]) {
         File(t.overlayCopy).writeAsStringSync(jsonEncode({...base, 'rows': bad}));
         final r = await t.importer();
         expect(r.exitCode, isNot(0), reason: _out(r));
+        expect(_out(r), contains(says), reason: says);
       }
     });
   });

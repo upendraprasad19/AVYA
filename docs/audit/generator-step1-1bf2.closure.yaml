@@ -17,7 +17,7 @@ findings:
     title: "CoreListSelector reads the rows' own movement_pattern / target_focus (three reads), so the picker, queryV4 (the thin-day top-up) and the muscle label read one set of labels"
     terminal_state: closed_in_commit
     commit: generator-step1-1bf2@branch
-    verification: "core_list_selector.dart patternOk, target, subFocusMatches; library_overlay_copy_test.dart group 2 (pool identity over every V4 slot, phase 1 and 2, bodyweight and full_gym) and group 3 (a planted overlay moves no pool; the old reader would have moved some); the three overlay reads restored one at a time each redden group 3."
+    verification: "core_list_selector.dart patternOk, target, subFocusMatches; library_overlay_copy_test.dart group 2 (per-row identity with the old reader on the v26 library) and group 3 (a planted overlay moves no core-list pool of any V4 slot, phase 1 and 2, bodyweight and full_gym; the old reader would have moved some); whole-plan identity: golden and the 2,304-plan dump; the three overlay reads restored one at a time each redden group 3."
 
   - id: 1BF2-SEED-V27
     title: "Seed v27: a v26 install rewrites the 27 rows by id and changes nothing else"

@@ -2126,3 +2126,12 @@ added, false of the flip being performed.
 - **Fix pattern:** one shape with an occurrence suffix (`<base>_<n>`), ONE anchored regex for it (an 8-hex hash can be all digits, so a bare `_\d+$` strip is wrong), a pure `firstFreeLogKey(taken, base)`, chosen and put with no `await` between (Hive inserts into its keystore synchronously). Then every other writer of the key (UNDO, move, migrator) uses it too, and every double-tap path gets a guard keyed on the write identity, since a repeat is no longer harmless.
 - **Test shape:** real Hive: three repeats (`base`, `_2`, `_3`), two un-awaited writes (mutant: an `await` between choice and put), delete + relog + UNDO, a move into an occupied slot, the migrator on a fresh flag; count rows AND the day's totals.
 - **Regression test:** `test/contracts/nlog_repeat_adds_entry_behavioral_test.dart` (diagnose 4cb58f; OI-493 Landing B).
+
+### 2.154 A generator writes a JSON array into a TEXT column, and Postgres accepts it silently as the text `{x}` (NEW 2026-11-12)
+
+- **Telltale:** a cloud column that should read `vertical_push` reads `{vertical_push}` after a rollback or re-seed; no error was ever logged, and the migration's own header said the rollback was safe.
+- **Root-cause shape:** the JSON library holds `movement_pattern` / `exercise_type` as arrays; the cloud columns are TEXT. The INSERT path flattened them (`firstOrNull`), but the seed generator's ROLLBACK emitter used the generic array path (`cloudValue` -> `ARRAY[...]::text[]`), and no record had targeted those columns before Unit 1B-F2.
+- **Why it survives review:** three review rounds and the plan said Postgres "rejects" a text[] literal in a TEXT column, so a wrong emitter looked self-detecting. It is not: an assignment cast through text I/O writes `{vertical_push}` with `UPDATE 1`.
+- **Fix pattern:** map the TEXT-from-array columns through the same flattening as the INSERT (`TEXT_FROM_ARRAY` / `restoreValue` in `scripts/seed_exercise_library.js`); assert the emitted literal SHAPE (a bare quoted string) in a test; run any "Postgres rejects X" claim in the local docker rehearsal before relying on it.
+- **Test shape:** the generated rollback lines rebuilt in Dart from the record's `before` first element; a sandbox copy of the generator with the flattening removed must be reported by the shape check.
+- **Regression test:** `test/contracts/exercise_library_cloud_seeded_test.dart` (Unit 1B-F2 tests and the sandbox mutation; diagnose f2c7a9).

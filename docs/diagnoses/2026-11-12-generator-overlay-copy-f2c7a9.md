@@ -34,7 +34,7 @@ recurrence: |
 writers:
   - { file: scripts/data/library_overlay_copy_v27.json, method_or_widget: "the overlay-copy record: 26 kept rows, before {movement_pattern, target_focus, slot_focus?, slot_pattern?} and after {movement_pattern, target_focus}", line: 1 }
   - { file: scripts/add_library_batch_c_v15.js, method_or_widget: "the OVERLAY-COPY STAGE: readOverlayCopy, overlayCopyRow (at before -> after with both keys removed; at after left alone; anything else refused)", line: 475 }
-  - { file: scripts/add_library_batch_c_v15.js, method_or_widget: "LINK = ['same_movement_as'] (slot_pattern left the pass-through)", line: 109 }
+  - { file: scripts/add_library_batch_c_v15.js, method_or_widget: "LINK = ['same_movement_as'] (slot_pattern left the pass-through)", line: 112 }
   - { file: scripts/data/library_batch_c_source.json, method_or_widget: "N20 movement_pattern knee_dominant -> hip_dominant, its slot_pattern removed", line: 57297 }
   - { file: lib/core/services/seed_service.dart, method_or_widget: "_exerciseLibraryVersion 26 -> 27", line: 189 }
   - { file: supabase/migrations/176_reseed_exercise_library.sql, method_or_widget: "re-seed: 12 rows' movement_pattern (TEXT, first element) change; inline rollback restores the 12 old values as bare strings", line: 1 }
@@ -45,6 +45,8 @@ readers:
   - { file: lib/core/utils/exercise_display.dart, method_or_widget: "ExerciseDisplay.formatMuscleLabel (the label changes on the 19 slot_focus rows)", line: 9 }
   - { file: lib/core/services/swap_service.dart, method_or_widget: "a swap copies the incoming row's target_focus into the plan row (display only)", line: 576 }
   - { file: lib/core/services/seed_service.dart, method_or_widget: "seedIfNeeded version gate: a v26 box rewrites the 27 rows by id", line: 228 }
+  - { file: lib/features/ai_coach/services/ai_snapshot_builder.dart, method_or_widget: "snapshot exercise label (reads category first; target_focus unchanged in effect for the 27 rows)", line: 614 }
+  - { file: lib/features/ai_coach/services/injury_swap_planner.dart, method_or_widget: "reads target_focus only when it is a String; library rows hold a List, so no change", line: 196 }
 hive_key_prefix: "exerciseBox rows (seed v27); plan_json.workouts[].exercises[].target_focus (stored plan rows keep the label they were generated or swapped with)"
 hive_key_formula: "exerciseBox[<id>].movement_pattern / target_focus for the 27 ids"
 sync_methods:
@@ -82,7 +84,7 @@ proposed_fix: |
   (TEXT_FROM_ARRAY).
   Ruling 5 (scope): no kill switch. Section 4.6 names the plan generator among its triggers, so this is a stated
   exception: there is no new code path to gate (the reader change is an identity on the shipped data, proved by the
-  golden, the plan dump and library_overlay_copy_test.dart's pool identity over every V4 slot); the one output change,
+  golden, the plan dump and library_overlay_copy_test.dart's per-row identity with the old reader); the one output change,
   the injured top-up, is bounded by the exact sweep ratchet; the founder ruled the copy into the flip with no gate (B1
   Ruling 4). Ship-dark (section 4.12.4) was considered: a data flag would need both label sets shipped side by side,
   which is the overlay this unit removes.
@@ -92,8 +94,8 @@ proposed_fix: |
   unchanged but its injured top-up keeps the new labels. A full data rollback is a seed v28 writing the overlays back
   (the record's before) plus migration 176's inline rollback.
 regression_test_planned: |
-  test/contracts/library_overlay_copy_test.dart (the data; the per-row and per-slot identity with the old reader on the
-  v26 library; a planted overlay moves no pool, and would have moved pools under the old reader);
+  test/contracts/library_overlay_copy_test.dart (the data; the per-row identity with the old reader on the v26 library;
+  a planted overlay moves no core-list pool of any V4 slot, and would have moved pools under the old reader);
   test/contracts/library_seed_v27_upgrade_behavioral_test.dart (a v26 box ends at v27, the 27 rows as bundled, every
   other row unchanged, the v26 sha256 pin; MIRROR);
   test/scripts/library_media_importer_test.dart group "the overlay-copy stage" (a) to (e);
@@ -155,3 +157,8 @@ Each applied (grep count checked) and restored (cmp against a copy):
 - The importer's stage (test/scripts/library_media_importer_test.dart): at before -> after; `--check` fails at before;
   a partial match refused naming the id and key; an unnamed overlay key refused; an absent record a no-op; a source,
   unknown or repeated id refused.
+
+## Skill self-evolution
+
+The rollback emitter's silent cast is recorded as debugging skill class 2.154 (`.claude/skills/debugging/bug-classes.md`,
+SKILL.md table): a JSON array written into a TEXT column is not refused by Postgres, it becomes the text `{x}`.

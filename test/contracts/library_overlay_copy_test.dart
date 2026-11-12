@@ -5,11 +5,11 @@
 //   1. the data: no row carries an overlay key, and each of the 27 rows holds the record's `after` (N20, a Batch C source
 //      row, holds the source's value);
 //   2. the identity: what the old reader (`slot_pattern ?? movement_pattern`, `slot_focus ?? target_focus`) saw on the v26
-//      library is exactly what the new reader sees on the v27 library, row by row, and the core-list pool of every V4 slot
-//      (every goal, 3 to 6 days, every level, phase 1 and 2, variant B quad on and off, bodyweight and full_gym) is the
-//      same list in the same order;
+//      library is exactly what the new reader sees on the v27 library, row by row (a whole-plan identity is the golden
+//      and the 2,304-plan dump; a pool-level comparison here would only restate this row identity, round-4 review);
 //   3. the reader: the selector no longer reads an overlay key. A `slot_pattern` / `slot_focus` planted on the 27 rows with
-//      their v26 values (the opposite direction of the copy) must not move one pool.
+//      their v26 values (the opposite direction of the copy) must not move one core-list pool of any V4 slot (every goal,
+//      3 to 6 days, every level, phase 1 and 2, variant B quad on and off, bodyweight and full_gym).
 //
 // Mutations (each reddens a test here; recorded in the diagnose doc): skip the importer's overlay-copy stage (the rows keep
 // their overlays: test 1); leave one overlay key in place (test 1); edit one row's `after` in the record (test 1); restore
@@ -130,25 +130,6 @@ void main() {
       final v26 = [for (final r in shipped) withOverlaysV26(r)];
       expect(v26.where((r) => _overlayKeys.any(r.containsKey)).length, 27);
       expect(withOverlaysV26(byId['E048']!)['movement_pattern'], ['hip_isolation']);
-    });
-
-    test('the core-list pool of every V4 slot is the same list on the v27 library as on the v26 library under the old reader', () {
-      final slots = _allSlots();
-      expect(slots.length, greaterThan(50), reason: 'the slot sweep must see the V4 catalogue');
-      final v26Seen = [for (final r in shipped) _oldReaderView(withOverlaysV26(r))];
-      final diffs = <String>[];
-      var nonEmpty = 0;
-      for (final (slot, level) in slots) {
-        for (final phase in [1, 2]) {
-          for (final tier in ['bodyweight', 'full_gym']) {
-            final a = _pool(shipped, slot, level, phase, tier);
-            if (!a.endsWith('| ')) nonEmpty++;
-            if (a != _pool(v26Seen, slot, level, phase, tier)) diffs.add('$slot $level p$phase $tier');
-          }
-        }
-      }
-      expect(diffs, isEmpty);
-      expect(nonEmpty, greaterThan(slots.length), reason: 'most pools are non-empty: the comparison is not vacuous');
     });
   });
 

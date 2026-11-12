@@ -317,7 +317,7 @@ class SweepHarness {
   /// The rest fell: `pairs46` home / basic / full 12 / 8 / 4 -> 0, `repeat bodyweight` 2 -> 0. The new block
   /// `f_repeat_pairs30` (the pinned repeat over the 15 pairs at 30 minutes, beginner) is recorded at its measured counts.
   /// Unit 1B-F2 (seed v27, OI-495: the core-list overlays copied into movement_pattern / target_focus, so the thin-day
-  /// top-up's queryV4 reads the same labels as the picker) re-measured all 20 blocks: one FELL, `f_repeat_pairs30
+  /// top-up's queryV4 reads the same labels as the picker) re-measured all 24 blocks: one FELL, `f_repeat_pairs30
   /// full_gym` 27 -> 21 thin days (one-exercise days stay 0); the top-up now finds the copied-pattern rows for a thin
   /// day's slot. None rose. Diagnose doc of Unit 1B-F2.
   static const Map<String, (int thin, int one)> kThinCeilings = {

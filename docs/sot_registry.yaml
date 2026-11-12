@@ -12075,8 +12075,8 @@ concepts:
       docs/plans/2026-11-12-generator-1bf2-overlay-copy.md) copied the slot_focus / slot_pattern
       overlays into target_focus / movement_pattern on 27 rows and removed both keys; rankedPool
       reads the rows' own fields, so the picker, queryV4 (the thin-day top-up) and the muscle
-      label read one set of labels (proof test/contracts/library_overlay_copy_test.dart: pool
-      identity over every V4 slot, and a planted overlay key moves no pool).
+      label read one set of labels (proof test/contracts/library_overlay_copy_test.dart: per-row
+      identity with the old reader, and a planted overlay key moves no pool of any V4 slot).
       Generator step 1A (docs/plans/2026-11-08-generator-step1-core-list.md, live with the flip):
       R2 jump rows (high_impact or discipline plyometric) leave a mixed pool before the
       improvised filter (a partition: _preferNovel walks past any ordering key); R3 (a) an

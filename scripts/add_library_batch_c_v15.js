@@ -466,6 +466,12 @@ function readOverlayCopy() {
     if (!ok) {
       throw new Error(`overlay-copy record ${OVERLAY_COPY}: every row needs an id, a before with movement_pattern, target_focus and at least one overlay key, and an after with movement_pattern and target_focus`);
     }
+    // The copy IS the overlay: `after` must be what the core-list reader saw (round-4 review finding 3).
+    const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+    if (!same(e.after.movement_pattern, e.before.slot_pattern ?? e.before.movement_pattern) ||
+        !same(e.after.target_focus, e.before.slot_focus ?? e.before.target_focus)) {
+      throw new Error(`overlay-copy record ${OVERLAY_COPY}: ${e.id} after is not the overlay its before carries (slot_pattern ?? movement_pattern, slot_focus ?? target_focus)`);
+    }
     if (byId.has(e.id)) throw new Error(`overlay-copy record ${OVERLAY_COPY} repeats ${e.id}`);
     byId.set(e.id, e);
   }
