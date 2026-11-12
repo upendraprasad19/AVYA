@@ -1,11 +1,11 @@
 # Closure ledger — step1-oi-closeout (generator overhaul step 1: the issue-board entries Unit 1B-F's flip finished,
 # re-measured on main 775b99f4 after PR #248). Gate 40 (validate_audit_closure.dart): one terminal_state per entry,
 # no `deferred:` key. Docs-only: no code, no plan, no diagnose doc (nothing is fixed here; the fixes shipped in the
-# commits named per entry). OI-387 and OI-484 stay OPEN on the board with their residue measured there (they are
-# not items of this batch: their remaining work is step 1's next unit, board task t1110).
+# commits named per entry). OI-387 stays OPEN on the board (16 plans; a core level on a loaded lateral-raise row is the
+# founder's level call). OI-497 is filed by this batch for the ranking choice OI-484's residue trace found.
 
 batch: step1-oi-closeout
-closed_count: 5
+closed_count: 7
 
 findings:
   - id: OI-385
@@ -24,6 +24,14 @@ findings:
     title: "Three duplicate exercise rows"
     terminal_state: verified_clean
     evidence: "Seed v12 (ad896b42) merged them: the library holds E016 (merged_ids [E241]), E219, E220 and no E241 / E167 / E168, re-checked on main 2026-11-12 (step-1 plan R8)."
+  - id: OI-484
+    title: "Exercise ranking ignores the user's equipment"
+    terminal_state: verified_clean
+    evidence: "2,304-plan audit on main 775b99f4 (audit.json sha256 9fe860fa6b700ea5...): Strength 4-day gym OHP Day with Pike Push Up 0 of 56; unloaded 440 plans (live 1,700), improvised 275 (live 3,016 issues). Every residue row's cause traced with CoreListTrace on the real generateV4 (four home_dumbbells plans, 2026-11-12) and named in the closed entry; the ranking choice it leaves is OI-497."
+  - id: OI-497
+    title: "A loaded version loses to its bodyweight original where the fit key does not reach (filed)"
+    terminal_state: blocked_on_user
+    reason: "A coaching choice with a measured plan count (373 plans for the isolation-typed Quads slot, 180 for phase 1); the founder picks (a), (b) or neither."
   - id: OI-495
     title: "Unit 1B-F2 overlay copy: blocker text"
     terminal_state: closed_in_commit

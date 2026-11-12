@@ -7056,35 +7056,6 @@ Residual of OI-199 and OI-471 after migration 172. Migration 172 makes `cleanup_
 
 **Done when.** `logCronEnd` removes the listed shapes before the cap, a test proves each one is removed and that a clean message passes through unchanged, and the plan names the redeploy of the cron functions.
 
-## OI-484 — Exercise ranking ignores the user's equipment: ties fall to library order, so Pike Push Up beats Barbell Overhead Press, Leg Press is never picked, and 1,700 of 1,728 equipped plans hold an unloaded pick where a loaded one fits
-
-- **Status**: OPEN
-- **Blocked on**: none (step 1, after Unit 1B-F)
-- **Verified**: 2026-11-12 — 2,304-plan audit on main 775b99f4 (`plan_audit_dump_test.dart`, `audit.json` sha256 9fe860fa6b700ea5..., byte-identical to Unit 1B-F's final run).
-- **Identified**: 2026-11-08 · filed via mint_oi.sh from branch `generator-step1-core-list`
-
-**What happens.** Neither picker asks whether a candidate uses equipment the user owns. The live cascade sorts `queryV4` results by compound, `priority_tier`, `is_foundational` (`exercise_repository.dart:427-438`) and `_preferNovel` returns `pool.first` with no history (`exercise_selector.dart:1589`), so a tie falls to library row order. The core-list pool sorts by its keys a-e and then by id (`core_list_selector.dart:272-289`), so a tie falls to id order. Its improvised filter (`:254-266`) covers only five arm, shoulder and pull patterns. Measured: in the 56 four-day Strength gym plans the OHP Day's overhead slot holds Pike Push Up (E010) instead of Barbell Overhead Press (E011) in 36 live and all 56 under the core list (equal keys, E010 sorts first); Leg Press is chosen 0 times live; a full-gym advanced user sees 63 of 862 exercises; 1,700 equipped plans live (1,505 core-list) hold a no-load row in a loadable pattern while a loaded row the user can perform exists at their level.
-
-**Done when.** The core-list ranking (the path that ships, OI-485) prefers a row that uses an implement the user has over an improvised one in every strength pattern, before `priority_tier`; the re-run audit shows every Strength OHP Day's overhead slot is a real press and the unloaded count falls to a named residue with each remaining row explained. Planned in step 1 of the generator overhaul (founder approval 2026-11-08). Blast radius: `platform` (plan_engine), tier L.
-
-**Step 1A (2026-11-08, branch `generator-step1-core-list`, diagnose c756b4; the pool is still OFF, so users see it at the 1B flip).** `rankedPool` now reduces an equipped user's isolation slot to like-for-like implement rows (R3 (a)), ranks a row that uses a non-household item the user has first in non-core compound slots (R3 (b)), and treats `vertical_push` as an implement pattern (plan v7: the key alone lost variant B's press to the foundational Pike Push Up). Re-run audit, core-list world, before -> after: household substitute 58 -> 44 plans, unloaded pick 1,505 -> 468, Strength gym OHP Day with Pike Push Up 56 of 56 -> 0 of 56. The residue (44, 468) is rows the R1 data and the 1B equipment variants (OI-148) cover. Live (OFF) numbers are unchanged by design.
-
-**After the flip (2026-11-12, Unit 1B-F, PR #248; measured on main).** Strength 4-day gym OHP Day with Pike Push Up: 0 of 56 (live before the flip 36, core list before step 1A 56). Plans with an `unloaded` flag: 440 (695 issues; live before the flip 1,700 plans / 6,225 issues). Plans with an `improvised` flag: 275 (307 issues; live 3,016 issues). The residue by row:
-
-| row | tier (issues) | where | explanation |
-|---|---|---|---|
-| E042 Walking Lunge | home_dumbbells 367, basic_gym 6 (373 plans) | intermediate / advanced every phase, beginner phase 3 | N16 Dumbbell Walking Lunge is core at intermediate / advanced; in phase 1 the foundational key (key d, ahead of the R3 (b) fit key) ranks E042 (foundational) over N16 (not). Phases 2-3: NOT established (the fit key should rank N16 first); traced next |
-| E291 Single Leg Glute Bridge | home_dumbbells 82, basic_gym 20, full_gym 20 (122 plans) | phase 1 only | phase-1 foundational key ahead of the fit key (N19 / N20 / E047 not foundational) |
-| E253 Bodyweight Good Morning | home_dumbbells 50, basic_gym 4, full_gym 4 (58 plans) | phase 1 only | same phase-1 foundational key |
-| N08 Hamstring Walkout | home_dumbbells 48 | build_muscle, intermediate phases 1-3, beginner phase 3 | NOT established; traced next |
-| E257 Glute Kickback | home_dumbbells 46 | advanced | hip_isolation slot, R3 (a) like-for-like: N19 Dumbbell Glute Bridge is `hip_isolation` too; NOT established why it is not chosen; traced next |
-| E046 Nordic Curl | home_dumbbells 36 | build_muscle advanced, every phase | NOT established; traced next |
-| G1373 Bodyweight Standing Calf Raise | home_dumbbells 12 | advanced build / strength | NOT established (G0409 is core at advanced); traced next |
-| E292 Sliding Leg Curl (`improvised`) | home_dumbbells 253, basic_gym 22 (275 plans) | every level | kept by the founder (d12: "Sliding Leg Curl stays the home-dumbbell hamstring curl") |
-| E273 Towel Lateral Raise (`improvised`) | home_dumbbells 16, basic_gym 16 (16 plans) | 5-day beginner build, phases 1-2 | same-day dedup of the second Lateral Delts slot, OI-387 |
-
-The OHP pass mark is met. The unloaded residue is not yet fully explained, so this stays open: the next step-1 unit traces the four NOT-established rows with `CoreListTrace` and fixes the ranking or the data, with the phase-1 foundational-key question (does a loaded version outrank its foundational bodyweight original in phase 1?) put to the founder with its measured cost.
-
 ## OI-486 — The day's main lift can get fewer sets than its accessories (876 of 2,304 plans; Strength Bench Day bench 2 sets, Bench Dips 5), and day order follows a name table, not the day's slot priority
 
 - **Status**: OPEN
@@ -7160,3 +7131,20 @@ Added 2026-11-11 (OI-494 review): the coach `logMeal` path in `lib/features/ai_c
 **Mechanism (measured with a temporary allocator print, `docs/plans/2026-11-10-generator-1bf-flip.md` section 4).** Writer: `SessionSetAllocator._variant` pass A (`session_set_allocator.dart`, `// 3. Pass A`): the count band, the clock refusal and Ruling 5's guards. Reader: the week's per-muscle sets of the periodized plan. Per cause (Triceps / Core / Biceps / Calves cells): the clock alone 128 / 60 / 0 / 18; a hold ranked ahead of the slot 160 / 64 / 20 / 0; guard (a) only-credit 20 / 8 / 18 / 0; the count band 0 / 0 / 78 / 0. None is OI-489's defect. It needs a weekly minimum per muscle that outranks a day's rank order: step 2's weekly floor.
 
 **Done when.** Step 2's weekly floor lands and the 2,304-plan audit shows 0 minor-muscle zero weeks the live twin (as recorded at the flip) did not have, or the founder accepts a stated residue. Owner: step 2 (d14). Blast radius `platform` (plan engine).
+
+## OI-497 — A loaded version loses to its bodyweight original where the equipment-fit key does not reach: isolation-typed Quads slot and phase 1
+
+- **Status**: OPEN
+- **Blocked on**: none
+- **Verified**: 2026-11-12 — 2,304-plan audit on main 775b99f4 (`audit.json` sha256 9fe860fa6b700ea5..., byte-identical to Unit 1B-F's final run) plus a `CoreListTrace` probe of four home_dumbbells plans (build_muscle 4-day intermediate phases 1-2, advanced phase 2; strength 4-day advanced phase 2).
+- **Identified**: 2026-11-12 · filed via mint_oi.sh from branch `step1-oi-closeout`
+
+**What happens.** `CoreListSelector.rankedPool` ranks by keys a-e then id (`core_list_selector.dart`, step 5). The R3 (b) fit key ("a row using an implement the user has") applies only in a COMPOUND slot (`fitApplies`), and it sits after key d, `phase == 1 && !foundational`. The nine S1b-2 loaded versions (N14 to N22) are not `is_foundational`; their bodyweight originals are. Two places follow:
+- The 4-day Legs A day's Quads slot is typed `isolation` (subFocus `isolation`, `knee_dominant`). For home_dumbbells there is no loaded quad isolation row, so R3 (a)'s like-for-like reduction finds nothing, the fit key does not apply, the exercise-type key ties (both lunges are compound), and `is_foundational` decides: E042 Walking Lunge over N16 Dumbbell Walking Lunge. 373 plans (367 home_dumbbells issues, 6 basic_gym), every phase, intermediate and advanced (beginner from phase 3, where the effective level rises).
+- In phase 1 key d ranks every foundational bodyweight row over a non-foundational loaded one in compound slots too: E291 Single Leg Glute Bridge (122 plans) and E253 Bodyweight Good Morning (58 plans), all tiers with equipment, phase 1 only.
+
+**Why it is a choice, not a defect.** Phase 1 preferring foundational rows is deliberate (step 1A kept key d; a beginner learns the pattern first), and a lunge in an isolation-typed slot is the split's own typing. Moving either changes many plans (at least the 373 + 180 above) and is a coaching call.
+
+**Done when.** The founder chooses, with the measured plan count for each: (a) the fit key also applies in an isolation-typed slot to compound rows (dumbbell lunge in the Legs A Quads slot), (b) a loaded version outranks its own foundational original in phase 1 (`same_movement_as` pair only), or neither; the chosen rule is built with the 2,304-plan audit and golden re-run. Owner: step 1 (the step-1 OI board close-out found it). Blast radius `platform` (plan engine).
+
+
