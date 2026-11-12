@@ -250,6 +250,10 @@ void main() {
         // user_progress (_syncUserProgress) for the week-marker behavioral test;
         // restore is _restoreUserProgress.
         'UserProgressForTest',
+        // OI-479 (diagnose 5970aa): @visibleForTesting entry point that runs
+        // _syncUserPreferences (and its coach clear-marker push) for the sync
+        // test; restore is _restoreUserPreferences.
+        'UserPreferencesForTest',
       };
       const restoreOnlyAllowlist = <String>{
         'IfNeeded',

@@ -3,7 +3,7 @@ bug_id: 5970aa
 date: 2026-11-12
 batch: oi479-clear-conversation
 status: fixed
-blast_radius: account
+blast_radius: platform
 symptom: >-
   The AI Coach overflow menu item "Clear conversation" did nothing: the chat thread was unchanged after choosing it
   (OI-479, found by the OI-466 B-pass). Its handler only invalidated chatHistoryProvider, whose build re-reads every

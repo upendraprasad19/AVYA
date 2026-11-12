@@ -1,7 +1,7 @@
 ---
 branch: oi479-clear-conversation
 scope: OI-479 AI Coach "Clear conversation" (founder D1-D5, 2026-11-12). Clear HIDES the thread by one monotonic instant (userBox['coach_chat_cleared_at']); the thread, the coach history replay and the client dedup skip rows at or before it; today's unresolved completion tile is kept; the instant syncs to user_preferences.coach_chat_cleared_at through the monotonic RPC raise_coach_chat_cleared_at (migration 177) and is adopted on restore max-wins; a 2 s best-effort push before the sign-out wipe. Nothing is deleted.
-blast_radius: account
+blast_radius: platform
 review_rounds: 3
 ground_truth_verified: true
 verdict: converged
