@@ -436,6 +436,14 @@ overwrite a present local row (`if (box.get(key) != null) continue;`).
 - **Timestamp-merge (per-writer exception):** `_restoreScheduledWorkouts` reconciles
   schedule *status* cloud↔local (keep-local-when-cloud-stale, d9b2c5) — it is NOT
   additive because schedule status genuinely needs merging.
+- **Max-wins (monotonic marker):** `_restoreUserPreferences` adopts
+  `user_preferences.coach_chat_cleared_at` (the AI Coach "Clear conversation" marker,
+  OI-479, `5970aa`) as `max(local, min(cloud, device now))`, after a fresh owner check
+  and with the local value read at the sink; it never lands in `userBox['preferences']`.
+  The cloud side is raised only by `raise_coach_chat_cleared_at` (GREATEST), never by
+  the preferences upsert, a wholesale replace that would let an older device lower it.
+  Hidden chat rows are still restored in full (`_restoreCoachInteractions`); the marker
+  hides them at read time.
 - **Trade-off:** offline-first local-wins — a row edited on a 2nd device won't overwrite
   the local copy. Revisit with cloud-newer-wins if true multi-device editing is a goal.
 - **Deletion survives restore via a server-side rename-on-delete trigger, NOT via the

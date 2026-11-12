@@ -1376,5 +1376,14 @@
     "diagnose": "c3e8f1",
     "slug": "reseed_exercise_library",
     "note": "Library Batch S1b-3 (OI-147, plan docs/plans/2026-11-10-library-batch-s1b3-retire-donkey-calf-raise.md, B-pass docs/reviews/generator-step1-s1b3-bpass.md): UPSERTS 870 rows; the two changed rows are E053 Donkey Calf Raise (c0315d6e-fb12-57b8-89f7-49fdf6e35a6c), deactivated for the first time with G1373's coaching_cues and common_mistakes copied, and G1373 Bodyweight Standing Calf Raise (70ddc326-6ceb-5b6e-903b-09de1d1be776), name_aliases set to [Donkey Calf Raise]. No row inserted; nothing deleted. Applied to project dedsavbjuwgarrhphgnl only, after the founder go (2026-11-10) on the exact file, by .claude/apply_migration_via_api.js (HTTP 201). Rehearsed first in local docker (supabase/postgres 17.6.1.084): 074..174 replayed gave 934 / 871 / 63 and content md5 fd91c822e22819c993b2ed541620a496, equal to live; 175 gave 934 / 870 / 64, 2 rows changed, md5 3170849a6b1e5b9b6608a27ea2c7b501, unchanged by a second apply; the inline rollback returned 934 / 871 / 63 with 0 rows differing. Pre-apply live (re-read just before): 934 / 871 / 63, md5 fd91c822e22819c993b2ed541620a496. Post-apply read-back: 934 / 870 / 64, md5 3170849a6b1e5b9b6608a27ea2c7b501 (equal to the rehearsal), E053 inactive with G1373's cues, G1373 name_aliases [Donkey Calf Raise]. File sha256 = this hash (LF). Rollback is inline in the file header, needing its own go."
+  },
+  {
+    "migration": "177",
+    "applied_at": "2026-11-12T15:02:39+05:30",
+    "hash": "sha256:f549796126880c65b0a26c36556a03532d9b90d425cf07adc464c48e3ddf2c74",
+    "applier": "claude-via-mcp",
+    "diagnose": "5970aa",
+    "slug": "coach_chat_cleared_at",
+    "note": "OI-479 (plan docs/plans/2026-11-12-oi479-clear-conversation.md): adds user_preferences.coach_chat_cleared_at timestamptz NULL and public.raise_coach_chat_cleared_at(timestamptz) (SECURITY INVOKER, search_path public, pg_temp; GREATEST(stored, LEAST(p_at, now())); refuses NULL p_at and no auth.uid(); EXECUTE revoked from PUBLIC and anon, granted to authenticated). No row rewritten. Applied to project dedsavbjuwgarrhphgnl only, after the founder go (2026-11-12, 'Apply 177'), via MCP apply_migration on the exact file (sha256 f5497961..., copied and verified before the apply); registered as version 20261112093239. Rehearsed first in local docker (supabase/postgres 17.6.1.084, test/sql/coach_chat_cleared_at_local.sh, 18 cases, 4 mutants red). Post-apply live: column timestamp with time zone / nullable; prosecdef false; proconfig {search_path=public, pg_temp}; has_function_privilege anon false, authenticated true; proacl {postgres,authenticated,service_role}; 0 rows with a value. Rollback: the inline DROP FUNCTION + DROP COLUMN at the end of the file."
   }
 ]

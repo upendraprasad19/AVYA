@@ -14,6 +14,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:icanbefitter/core/services/auth_session_bootstrapper.dart';
 import 'package:icanbefitter/core/services/error_telemetry.dart';
 import 'package:icanbefitter/core/services/supabase_service.dart';
+import 'package:icanbefitter/core/services/sync_service.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
 import 'package:icanbefitter/core/services/hive_user_session.dart';
 import 'package:icanbefitter/core/services/migrated_key.dart';
@@ -1007,6 +1008,21 @@ class AuthNotifier extends Notifier<AuthState2> {
 
   /// The teardown sequence itself. Order is load-bearing — see [signOut].
   Future<void> _teardown() async {
+    // OI-479 (diagnose 5970aa) — best-effort push of the "Clear conversation"
+    // marker BEFORE the wipe: `clearAllData` clears `userBox`, so a clear the
+    // cloud has not seen yet would otherwise be lost and the next sign-in would
+    // restore the old thread. Bounded to 2 s inside `signOutTimeout`; never
+    // throws; the session is still live here (`auth.signOut` runs third).
+    final clearMarkerUid = _supabase.currentUser?.id;
+    if (clearMarkerUid != null) {
+      try {
+        await SyncService.instance
+            .pushCoachChatClearedAt(clearMarkerUid, fromSignOut: true)
+            .timeout(const Duration(seconds: 2));
+      } catch (e) {
+        debugPrint('[auth/signOut] coach clear-marker push skipped: $e');
+      }
+    }
     try {
       await UserRepository.instance.clearAllData();
     } catch (e) {
