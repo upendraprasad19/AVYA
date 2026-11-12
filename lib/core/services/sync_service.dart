@@ -9,6 +9,7 @@ import 'package:icanbefitter/core/services/error_telemetry.dart';
 import 'package:icanbefitter/core/services/completed_title_healer.dart';
 import 'package:icanbefitter/core/services/health_sync_service.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
+import 'package:icanbefitter/core/services/coach_chat_clear.dart';
 import 'package:icanbefitter/core/services/hive_user_session.dart';
 import 'package:icanbefitter/core/services/migrated_key.dart';
 import 'package:icanbefitter/core/services/paginate_all.dart';

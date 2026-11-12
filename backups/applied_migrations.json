@@ -1385,5 +1385,14 @@
     "diagnose": "f2c7a9",
     "slug": "reseed_exercise_library",
     "note": "Generator Unit 1B-F2 (OI-495, plan docs/plans/2026-11-12-generator-1bf2-overlay-copy.md): UPSERTS 870 rows; the 12 changed rows take the core-list pattern as their movement_pattern (TEXT, first element): E015 Front Raise vertical_push->shoulder_isolation, E046 Nordic Curl hip_dominant->knee_dominant, E048 Glute Bridge hip_isolation->hip_dominant, E050 Sumo Deadlift knee_dominant->hip_dominant, E127 Reverse Hyper hip_isolation->hip_dominant, E198 Lunge with Twist core->knee_dominant, E222 Kas Glute Bridge hip_isolation->hip_dominant, E274 Prone T Raise, E276 Standing Towel Pull Apart, E277 Prone W Raise horizontal_pull->shoulder_isolation, E292 Sliding Leg Curl hip_dominant->knee_dominant, N20 Dumbbell Sumo Deadlift knee_dominant->hip_dominant. No row added, removed or deactivated; nothing deleted. Applied to project dedsavbjuwgarrhphgnl with .claude/apply_migration_via_api.js (HTTP 201) on the founder's explicit go in chat (2026-11-12). Rehearsed first in a local docker postgres (175 loaded as the live state): exactly 12 rows changed, the inline rollback restored the pre-state, ROLLBACK clean. Pre-apply live: 934 / 870 / 64, the 12 rows at the old values, md5 of every other row 9b21684fee91c607ca7d509c0f7ab5a6. Post-apply read-back: 934 / 870 / 64, the other rows' md5 unchanged (9b21684fee91c607ca7d509c0f7ab5a6), the 12 rows at the new values. File sha256 = this hash (LF). Rollback is inline in the file header (12 UPDATEs restoring the old TEXT values), needing its own go."
+  },
+  {
+    "migration": "177",
+    "applied_at": "2026-11-12T15:02:39+05:30",
+    "hash": "sha256:f549796126880c65b0a26c36556a03532d9b90d425cf07adc464c48e3ddf2c74",
+    "applier": "claude-via-mcp",
+    "diagnose": "5970aa",
+    "slug": "coach_chat_cleared_at",
+    "note": "OI-479 (plan docs/plans/2026-11-12-oi479-clear-conversation.md): adds user_preferences.coach_chat_cleared_at timestamptz NULL and public.raise_coach_chat_cleared_at(timestamptz) (SECURITY INVOKER, search_path public, pg_temp; GREATEST(stored, LEAST(p_at, now())); refuses NULL p_at and no auth.uid(); EXECUTE revoked from PUBLIC and anon, granted to authenticated). No row rewritten. Applied to project dedsavbjuwgarrhphgnl only, after the founder go (2026-11-12, 'Apply 177'), via MCP apply_migration on the exact file (sha256 f5497961..., copied and verified before the apply); registered as version 20261112093239. Rehearsed first in local docker (supabase/postgres 17.6.1.084, test/sql/coach_chat_cleared_at_local.sh, 18 cases, 4 mutants red). Post-apply live: column timestamp with time zone / nullable; prosecdef false; proconfig {search_path=public, pg_temp}; has_function_privilege anon false, authenticated true; proacl {postgres,authenticated,service_role}; 0 rows with a value. Rollback: the inline DROP FUNCTION + DROP COLUMN at the end of the file."
   }
 ]

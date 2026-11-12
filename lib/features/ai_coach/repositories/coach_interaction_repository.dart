@@ -17,6 +17,7 @@
 // CoachMemoryService so this file only owns interaction persistence.
 
 import 'package:flutter/foundation.dart';
+import 'package:icanbefitter/core/services/coach_chat_clear.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
 import 'package:icanbefitter/core/utils/ist_date.dart';
 import '../services/coach_memory_service.dart';
@@ -173,6 +174,10 @@ class CoachInteractionRepository {
     final cutoff = now.subtract(window);
     String? bestKey;
     DateTime bestCreated = DateTime.fromMillisecondsSinceEpoch(0);
+    // OI-479 — a row hidden by "Clear conversation" is never reused: "hi",
+    // clear, "hi" within the window must mint a NEW, visible row, or the new
+    // question and its reply land in the hidden one.
+    final clearedAt = CoachChatClear.clearedAt();
     for (final entry in _hive.coachBox.toMap().entries) {
       final key = entry.key;
       final raw = entry.value;
@@ -189,6 +194,7 @@ class CoachInteractionRepository {
       final created = DateTime.tryParse(createdStr);
       if (created == null) continue;
       if (created.isBefore(cutoff)) continue;
+      if (CoachChatClear.isHiddenByClear(map, clearedAt)) continue;
       if (created.isAfter(bestCreated)) {
         bestCreated = created;
         bestKey = key;
@@ -360,6 +366,9 @@ class CoachInteractionRepository {
   List<Map<String, dynamic>> recentHistoryExchanges(
       {int limit = 8, String? excludeKey}) {
     final rows = <Map<String, dynamic>>[];
+    // OI-479 (D2) — the coach's short-term memory starts after a "Clear
+    // conversation": rows at or before the marker are never replayed.
+    final clearedAt = CoachChatClear.clearedAt();
     for (final entry in _hive.coachBox.toMap().entries) {
       final key = entry.key;
       final raw = entry.value;
@@ -385,6 +394,7 @@ class CoachInteractionRepository {
       final ai = (map['ai_response'] as String?)?.trim() ?? '';
       if (user.isEmpty || ai.isEmpty) continue;
       if ((map['created_at'] as String?) == null) continue;
+      if (CoachChatClear.isHiddenByClear(map, clearedAt)) continue;
       rows.add(map);
     }
 

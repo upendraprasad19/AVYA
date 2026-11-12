@@ -370,7 +370,8 @@ void main() {
       final header = _normalised(
           'lib/features/ai_coach/screens/ai_coach/compact_header.dart');
       expect(
-        countOf(header, 'itemBuilder:(context)=>coachHeaderMenuItems(isPro:isPro),'),
+        countOf(header,
+            'itemBuilder:(context)=>coachHeaderMenuItems(isPro:isPro,isSending:isSending),'),
         1,
         reason: 'T2 proves the function; this ties it to the real button',
       );
