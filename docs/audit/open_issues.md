@@ -7231,3 +7231,16 @@ Added 2026-11-11 (OI-494 review): the coach `logMeal` path in `lib/features/ai_c
 **Mechanism (measured with a temporary allocator print, `docs/plans/2026-11-10-generator-1bf-flip.md` section 4).** Writer: `SessionSetAllocator._variant` pass A (`session_set_allocator.dart`, `// 3. Pass A`): the count band, the clock refusal and Ruling 5's guards. Reader: the week's per-muscle sets of the periodized plan. Per cause (Triceps / Core / Biceps / Calves cells): the clock alone 128 / 60 / 0 / 18; a hold ranked ahead of the slot 160 / 64 / 20 / 0; guard (a) only-credit 20 / 8 / 18 / 0; the count band 0 / 0 / 78 / 0. None is OI-489's defect. It needs a weekly minimum per muscle that outranks a day's rank order: step 2's weekly floor.
 
 **Done when.** Step 2's weekly floor lands and the 2,304-plan audit shows 0 minor-muscle zero weeks the live twin (as recorded at the flip) did not have, or the founder accepts a stated residue. Owner: step 2 (d14). Blast radius `platform` (plan engine).
+
+## OI-498 — Laptop clone: sync main with GitHub and reinstall the git hooks (suite lock, PR #246)
+
+- **Status**: OPEN
+- **Blocked on**: the founder's laptop (only the founder can run it there; picked up next time the laptop is opened)
+- **Verified**: never
+- **Identified**: 2026-11-12 · filed via mint_oi.sh from branch `oi-laptop-hooks-resync`
+
+**What it is.** Git hooks are per-clone, read-only COPIES (`scripts/setup-hooks.sh`); a `git pull` updates the scripts but never the installed hooks. PR #246 (`837f62aa`, 2026-11-12) changed `scripts/pre-push.sh` and `scripts/pre-commit.sh` (the one-local-full-suite lock, `scripts/_suite_lock.sh`) and added `land_pr --ci-only` and `scripts/run_full_suite.sh`. The VPS clone was reinstalled the same day; the founder's laptop clone was not, so its hooks are the pre-#246 copies (they keep working, without the lock).
+
+**Do on the laptop (Git Bash, from the clone's MAIN folder, on `main`).** `git checkout main`, `git fetch origin main`, `git merge --ff-only origin/main`, then `sh scripts/setup-hooks.sh` (it refuses a tree behind or diverged from `origin/main`). A `Permission denied` on a hook file means a stale tree: update it and re-run, never chmod or delete a hook by hand. Expected there: no `flock` on Windows Git Bash / macOS, so the lock prints a WARNING and fails open; nothing blocks.
+
+**Done when.** On the laptop: `grep -c suite_lock_acquire .git/hooks/pre-push .git/hooks/pre-commit` prints a non-zero count for both, and `git log -1 --oneline` on `main` shows `837f62aa` or later. Blast radius `feature` (no code change; a per-clone install step).
