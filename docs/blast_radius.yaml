@@ -305,6 +305,10 @@ paths:
   #   check_hooks_installed.dart is the only thing that detects a hook being
   #     absent; ~70% of it was rewritten in this batch.
   - { glob: "scripts/_dart_bin.sh", tier: platform }
+  # The one-local-full-suite lock (2026-11-11, docs/plans/review-ci-suite-lock.md): sourced by pre-push.sh and
+  # pre-commit.sh (a hook dependency, same reasoning as _dart_bin.sh above), and its runner.
+  - { glob: "scripts/_suite_lock.sh", tier: platform }
+  - { glob: "scripts/run_full_suite.sh", tier: platform }
   # OI-483: the Dart side of the same retry, imported by land_pr.dart and sync_with_main.dart on the merge path.
   - { glob: "scripts/dart_race_retry_lib.dart", tier: platform }
   - { glob: "scripts/check_oi_numbering_unique.dart", tier: platform }
