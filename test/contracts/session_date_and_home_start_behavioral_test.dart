@@ -85,14 +85,24 @@ void main() {
 
   // ── FIX 1 ───────────────────────────────────────────────────────────
   group('resolveSessionDate — a session is dated when it was PERFORMED', () {
-    final now = DateTime(2026, 7, 20, 19, 30);
+    // OI-500: every fixture is a UTC INSTANT, so its IST day is the same on any
+    // host zone. A host-local `DateTime(2026, 7, 20, 19, 30)` is IST 21 July
+    // 01:00 on a UTC host, which made "today" a different day off IST.
+    final now = DateTime.utc(2026, 7, 20, 14, 0); // IST 2026-07-20 19:30
+
+    test('fixtures sit on the IST days the cases below assume', () {
+      expect(formatDateKey(now), '2026-07-20');
+      expect(formatDateKey(DateTime.utc(2026, 7, 14, 2, 30)), '2026-07-14');
+      expect(formatDateKey(DateTime.utc(2026, 7, 20, 0, 30)), '2026-07-20');
+      expect(formatDateKey(DateTime.utc(2026, 8, 3, 2, 30)), '2026-08-03');
+    });
 
     test('STALE scheduled day (the bug) → today, never the past date', () {
       // CurrentPlanData.todayWorkout's fallback returns "first non-rest,
       // non-done workout in the current week" — a PAST day when today has no
       // match. Before the fix this date flowed straight into logExercise(),
       // markCompleted() and the streak key.
-      final stale = DateTime(2026, 7, 14, 8, 0); // 6 days earlier
+      final stale = DateTime.utc(2026, 7, 14, 2, 30); // IST 07-14 08:00
       final resolved = resolveSessionDate(scheduledDate: stale, now: now);
 
       expect(formatDateKey(resolved), formatDateKey(now));
@@ -102,7 +112,8 @@ void main() {
 
     test('scheduled day IS today → unchanged (healthy path byte-identical)',
         () {
-      final todayScheduled = DateTime(2026, 7, 20, 6, 0);
+      final todayScheduled =
+          DateTime.utc(2026, 7, 20, 0, 30); // IST 07-20 06:00
       final resolved =
           resolveSessionDate(scheduledDate: todayScheduled, now: now);
 
@@ -116,7 +127,7 @@ void main() {
     });
 
     test('FUTURE scheduled day → today', () {
-      final future = DateTime(2026, 8, 3, 8, 0);
+      final future = DateTime.utc(2026, 8, 3, 2, 30); // IST 08-03 08:00
       expect(
           formatDateKey(resolveSessionDate(scheduledDate: future, now: now)),
           formatDateKey(now));
