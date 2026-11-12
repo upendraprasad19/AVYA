@@ -1165,7 +1165,7 @@
     "name": "Front Raise",
     "category": "push",
     "movement_pattern": [
-      "vertical_push"
+      "shoulder_isolation"
     ],
     "exercise_type": [
       "isolation"
@@ -1238,9 +1238,6 @@
     "requires_coaching": false,
     "high_impact": false,
     "variant_family": "front_raise",
-    "slot_pattern": [
-      "shoulder_isolation"
-    ],
     "media_slug": "0310-dumbbell-front-raise",
     "media_version": 1,
     "media_source": "wardroom"
@@ -3660,7 +3657,7 @@
     "name": "Nordic Curl",
     "category": "legs",
     "movement_pattern": [
-      "hip_dominant"
+      "knee_dominant"
     ],
     "exercise_type": [
       "isolation"
@@ -3729,9 +3726,6 @@
     "requires_coaching": false,
     "high_impact": false,
     "variant_family": "leg_curl",
-    "slot_pattern": [
-      "knee_dominant"
-    ],
     "skill_track": "nordic_curl",
     "skill_step": 2,
     "media_slug": "1766-nordic-hamstring-curl",
@@ -3825,7 +3819,7 @@
     "name": "Glute Bridge",
     "category": "legs",
     "movement_pattern": [
-      "hip_isolation"
+      "hip_dominant"
     ],
     "exercise_type": [
       "isolation"
@@ -3896,9 +3890,6 @@
     "requires_coaching": false,
     "high_impact": false,
     "variant_family": "glute_bridge",
-    "slot_pattern": [
-      "hip_dominant"
-    ],
     "media_slug": "3013-low-glute-bridge-on-floor",
     "media_version": 1,
     "media_source": "wardroom"
@@ -3986,7 +3977,7 @@
     "name": "Sumo Deadlift",
     "category": "legs",
     "movement_pattern": [
-      "knee_dominant"
+      "hip_dominant"
     ],
     "exercise_type": [
       "compound"
@@ -4064,9 +4055,6 @@
     "requires_coaching": false,
     "high_impact": false,
     "variant_family": "deadlift",
-    "slot_pattern": [
-      "hip_dominant"
-    ],
     "media_slug": "0117-barbell-sumo-deadlift",
     "media_version": 1,
     "media_source": "wardroom"
@@ -5057,8 +5045,7 @@
     "name": "Rowing Machine",
     "category": "cardio",
     "movement_pattern": [
-      "cardio",
-      "horizontal_pull"
+      "cardio"
     ],
     "exercise_type": [
       "cardio"
@@ -5111,8 +5098,8 @@
     "is_bilateral": true,
     "cns_demand": 1,
     "target_focus": [
-      "full body",
-      "full back"
+      "Full Body",
+      "Mid Back"
     ],
     "equipment_tier": [
       "basic_gym",
@@ -5128,14 +5115,7 @@
     "gym_availability": "standard_gym",
     "requires_coaching": false,
     "high_impact": false,
-    "variant_family": "cardio_rower",
-    "slot_focus": [
-      "Full Body",
-      "Mid Back"
-    ],
-    "slot_pattern": [
-      "cardio"
-    ]
+    "variant_family": "cardio_rower"
   },
   {
     "id": "E065",
@@ -6840,7 +6820,9 @@
     "is_bilateral": false,
     "cns_demand": 3,
     "target_focus": [
-      "Core"
+      "Core",
+      "Core/Obliques",
+      "Forearms"
     ],
     "equipment_tier": [
       "home_dumbbells",
@@ -6859,12 +6841,7 @@
     "gym_availability": "home",
     "requires_coaching": false,
     "high_impact": false,
-    "variant_family": "carry",
-    "slot_focus": [
-      "Core",
-      "Core/Obliques",
-      "Forearms"
-    ]
+    "variant_family": "carry"
   },
   {
     "id": "E091",
@@ -8610,6 +8587,7 @@
     "is_bilateral": true,
     "cns_demand": 3,
     "target_focus": [
+      "Shoulders",
       "Front Delts",
       "Upper Chest"
     ],
@@ -8628,12 +8606,7 @@
     "gym_availability": "well_equipped_gym",
     "requires_coaching": false,
     "high_impact": false,
-    "variant_family": "shoulder_press",
-    "slot_focus": [
-      "Shoulders",
-      "Front Delts",
-      "Upper Chest"
-    ]
+    "variant_family": "shoulder_press"
   },
   {
     "id": "E117",
@@ -8768,7 +8741,6 @@
     "is_bilateral": true,
     "cns_demand": 2,
     "target_focus": [
-      "Lower Chest",
       "Mid Chest"
     ],
     "equipment_tier": [
@@ -8786,9 +8758,6 @@
     "requires_coaching": false,
     "high_impact": false,
     "variant_family": "chest_fly",
-    "slot_focus": [
-      "Mid Chest"
-    ],
     "media_slug": "0596-seated-fly",
     "media_version": 1,
     "media_source": "wardroom"
@@ -9067,7 +9036,7 @@
     "is_bilateral": true,
     "cns_demand": 2,
     "target_focus": [
-      "Biceps"
+      "Biceps (Short Head)"
     ],
     "equipment_tier": [
       "basic_gym",
@@ -9084,10 +9053,7 @@
     "gym_availability": "standard_gym",
     "requires_coaching": false,
     "high_impact": false,
-    "variant_family": "biceps_curl",
-    "slot_focus": [
-      "Biceps (Short Head)"
-    ]
+    "variant_family": "biceps_curl"
   },
   {
     "id": "E123",
@@ -9257,7 +9223,7 @@
     "name": "Reverse Hyper",
     "category": "legs",
     "movement_pattern": [
-      "hip_isolation"
+      "hip_dominant"
     ],
     "exercise_type": [
       "isolation"
@@ -9326,9 +9292,6 @@
     "requires_coaching": false,
     "high_impact": false,
     "variant_family": "back_extension",
-    "slot_pattern": [
-      "hip_dominant"
-    ],
     "media_slug": "1423-reverse-hyper-on-flat-bench",
     "media_version": 1,
     "media_source": "wardroom"
@@ -9619,7 +9582,8 @@
     "is_bilateral": true,
     "cns_demand": 1,
     "target_focus": [
-      "Core"
+      "Core",
+      "Core/Obliques"
     ],
     "equipment_tier": [
       "basic_gym",
@@ -9635,10 +9599,6 @@
     "requires_coaching": false,
     "high_impact": false,
     "variant_family": "rotation_core",
-    "slot_focus": [
-      "Core",
-      "Core/Obliques"
-    ],
     "media_slug": "0562-landmine-180",
     "media_version": 1,
     "media_source": "wardroom"
@@ -11222,7 +11182,7 @@
     "is_bilateral": true,
     "cns_demand": 1,
     "target_focus": [
-      "Core"
+      "Core/Obliques"
     ],
     "equipment_tier": [
       "home_dumbbells",
@@ -11241,9 +11201,6 @@
     "requires_coaching": false,
     "high_impact": false,
     "variant_family": "side_bend",
-    "slot_focus": [
-      "Core/Obliques"
-    ],
     "media_slug": "0407-dumbbell-side-bend",
     "media_version": 1,
     "media_source": "wardroom"
@@ -11468,7 +11425,7 @@
     "is_bilateral": true,
     "cns_demand": 1,
     "target_focus": [
-      "Core"
+      "Core/Obliques"
     ],
     "equipment_tier": [
       "bodyweight",
@@ -11490,9 +11447,6 @@
     "requires_coaching": false,
     "high_impact": false,
     "variant_family": "crunch",
-    "slot_focus": [
-      "Core/Obliques"
-    ],
     "media_slug": "0003-bicycle-crunch",
     "media_version": 1,
     "media_source": "wardroom"
@@ -12015,6 +11969,7 @@
     "cns_demand": 3,
     "target_focus": [
       "Front Delts",
+      "Shoulders",
       "Mid Chest",
       "Triceps"
     ],
@@ -12030,13 +11985,7 @@
     "gym_availability": "well_equipped_gym",
     "requires_coaching": false,
     "high_impact": false,
-    "variant_family": "shoulder_press",
-    "slot_focus": [
-      "Front Delts",
-      "Shoulders",
-      "Mid Chest",
-      "Triceps"
-    ]
+    "variant_family": "shoulder_press"
   },
   {
     "id": "E187",
@@ -12513,7 +12462,7 @@
     "name": "Lunge with Twist",
     "category": "core",
     "movement_pattern": [
-      "core"
+      "knee_dominant"
     ],
     "exercise_type": [
       "compound"
@@ -12568,7 +12517,8 @@
     "cns_demand": 1,
     "target_focus": [
       "Glutes",
-      "Quads"
+      "Quads",
+      "Core/Obliques"
     ],
     "equipment_tier": [
       "bodyweight",
@@ -12588,14 +12538,6 @@
     "requires_coaching": false,
     "high_impact": false,
     "variant_family": "lunge",
-    "slot_focus": [
-      "Glutes",
-      "Quads",
-      "Core/Obliques"
-    ],
-    "slot_pattern": [
-      "knee_dominant"
-    ],
     "media_slug": "1688-lunge-with-twist",
     "media_version": 1,
     "media_source": "wardroom"
@@ -14025,7 +13967,7 @@
     "name": "Kas Glute Bridge",
     "category": "legs",
     "movement_pattern": [
-      "hip_isolation"
+      "hip_dominant"
     ],
     "exercise_type": [
       "isolation"
@@ -14096,9 +14038,6 @@
     "requires_coaching": false,
     "high_impact": false,
     "variant_family": "glute_bridge",
-    "slot_pattern": [
-      "hip_dominant"
-    ],
     "media_slug": "0668-rear-decline-bridge",
     "media_version": 1,
     "media_source": "wardroom"
@@ -16568,7 +16507,8 @@
     "is_bilateral": true,
     "cns_demand": 3,
     "target_focus": [
-      "Back"
+      "Lats",
+      "Mid Back"
     ],
     "equipment_tier": [
       "bodyweight",
@@ -16586,11 +16526,7 @@
     "gym_availability": "home",
     "requires_coaching": false,
     "high_impact": false,
-    "variant_family": "inverted_row",
-    "slot_focus": [
-      "Lats",
-      "Mid Back"
-    ]
+    "variant_family": "inverted_row"
   },
   {
     "id": "E266",
@@ -17128,7 +17064,8 @@
     "is_bilateral": true,
     "cns_demand": 1,
     "target_focus": [
-      "Shoulders"
+      "Shoulders",
+      "Rear Delts"
     ],
     "equipment_tier": [
       "bodyweight",
@@ -17146,11 +17083,7 @@
     "gym_availability": "home",
     "requires_coaching": false,
     "high_impact": false,
-    "variant_family": "y_raise",
-    "slot_focus": [
-      "Shoulders",
-      "Rear Delts"
-    ]
+    "variant_family": "y_raise"
   },
   {
     "id": "E273",
@@ -17210,6 +17143,7 @@
     "is_bilateral": true,
     "cns_demand": 1,
     "target_focus": [
+      "Lateral Delts",
       "Shoulders"
     ],
     "equipment_tier": [
@@ -17230,18 +17164,14 @@
     "gym_availability": "home",
     "requires_coaching": false,
     "high_impact": false,
-    "variant_family": "lateral_raise",
-    "slot_focus": [
-      "Lateral Delts",
-      "Shoulders"
-    ]
+    "variant_family": "lateral_raise"
   },
   {
     "id": "E274",
     "name": "Prone T Raise",
     "category": "pull",
     "movement_pattern": [
-      "horizontal_pull"
+      "shoulder_isolation"
     ],
     "exercise_type": [
       "calisthenics",
@@ -17296,7 +17226,8 @@
     "is_bilateral": true,
     "cns_demand": 1,
     "target_focus": [
-      "Mid Back"
+      "Mid Back",
+      "Rear Delts"
     ],
     "equipment_tier": [
       "bodyweight",
@@ -17318,14 +17249,7 @@
     "gym_availability": "home",
     "requires_coaching": false,
     "high_impact": false,
-    "variant_family": "rear_delt_fly",
-    "slot_focus": [
-      "Mid Back",
-      "Rear Delts"
-    ],
-    "slot_pattern": [
-      "shoulder_isolation"
-    ]
+    "variant_family": "rear_delt_fly"
   },
   {
     "id": "E275",
@@ -17387,7 +17311,8 @@
     "is_bilateral": true,
     "cns_demand": 2,
     "target_focus": [
-      "Back"
+      "Lats",
+      "Mid Back"
     ],
     "equipment_tier": [
       "bodyweight",
@@ -17405,18 +17330,14 @@
     "gym_availability": "home",
     "requires_coaching": false,
     "high_impact": false,
-    "variant_family": "row",
-    "slot_focus": [
-      "Lats",
-      "Mid Back"
-    ]
+    "variant_family": "row"
   },
   {
     "id": "E276",
     "name": "Standing Towel Pull Apart",
     "category": "pull",
     "movement_pattern": [
-      "horizontal_pull"
+      "shoulder_isolation"
     ],
     "exercise_type": [
       "calisthenics",
@@ -17470,7 +17391,8 @@
     "is_bilateral": true,
     "cns_demand": 1,
     "target_focus": [
-      "Upper Back"
+      "Rear Delts",
+      "Mid Back"
     ],
     "equipment_tier": [
       "bodyweight",
@@ -17490,21 +17412,14 @@
     "gym_availability": "home",
     "requires_coaching": false,
     "high_impact": false,
-    "variant_family": "rear_delt_fly",
-    "slot_focus": [
-      "Rear Delts",
-      "Mid Back"
-    ],
-    "slot_pattern": [
-      "shoulder_isolation"
-    ]
+    "variant_family": "rear_delt_fly"
   },
   {
     "id": "E277",
     "name": "Prone W Raise",
     "category": "pull",
     "movement_pattern": [
-      "horizontal_pull"
+      "shoulder_isolation"
     ],
     "exercise_type": [
       "calisthenics",
@@ -17558,7 +17473,8 @@
     "is_bilateral": true,
     "cns_demand": 1,
     "target_focus": [
-      "Upper Back"
+      "Mid Back",
+      "Rear Delts"
     ],
     "equipment_tier": [
       "bodyweight",
@@ -17578,14 +17494,7 @@
     "gym_availability": "home",
     "requires_coaching": false,
     "high_impact": false,
-    "variant_family": "rotator_cuff",
-    "slot_focus": [
-      "Mid Back",
-      "Rear Delts"
-    ],
-    "slot_pattern": [
-      "shoulder_isolation"
-    ]
+    "variant_family": "rotator_cuff"
   },
   {
     "id": "E278",
@@ -18193,6 +18102,7 @@
     "is_bilateral": true,
     "cns_demand": 1,
     "target_focus": [
+      "Lateral Delts",
       "Shoulders"
     ],
     "equipment_tier": [
@@ -18213,11 +18123,7 @@
     "gym_availability": "home",
     "requires_coaching": false,
     "high_impact": false,
-    "variant_family": "lateral_raise",
-    "slot_focus": [
-      "Lateral Delts",
-      "Shoulders"
-    ]
+    "variant_family": "lateral_raise"
   },
   {
     "id": "E290",
@@ -18278,7 +18184,8 @@
     "is_bilateral": true,
     "cns_demand": 1,
     "target_focus": [
-      "Shoulders"
+      "Shoulders",
+      "Rear Delts"
     ],
     "equipment_tier": [
       "bodyweight",
@@ -18294,11 +18201,7 @@
     "gym_availability": "home",
     "requires_coaching": false,
     "high_impact": false,
-    "variant_family": "rear_delt_fly",
-    "slot_focus": [
-      "Shoulders",
-      "Rear Delts"
-    ]
+    "variant_family": "rear_delt_fly"
   },
   {
     "id": "E291",
@@ -18392,7 +18295,7 @@
     "name": "Sliding Leg Curl",
     "category": "legs",
     "movement_pattern": [
-      "hip_dominant"
+      "knee_dominant"
     ],
     "exercise_type": [
       "calisthenics",
@@ -18470,10 +18373,7 @@
     "gym_availability": "home",
     "requires_coaching": false,
     "high_impact": false,
-    "variant_family": "leg_curl",
-    "slot_pattern": [
-      "knee_dominant"
-    ]
+    "variant_family": "leg_curl"
   },
   {
     "id": "G0103",
@@ -67854,7 +67754,7 @@
     "name": "Dumbbell Sumo Deadlift",
     "category": "legs",
     "movement_pattern": [
-      "knee_dominant"
+      "hip_dominant"
     ],
     "exercise_type": [
       "compound"
@@ -67929,9 +67829,6 @@
     "requires_coaching": false,
     "high_impact": false,
     "variant_family": "deadlift",
-    "slot_pattern": [
-      "hip_dominant"
-    ],
     "same_movement_as": "E050"
   },
   {

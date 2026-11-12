@@ -38,11 +38,11 @@ const _canonicalKeys = <String>{
 // Duplicate merges (library v12, Batch A): `name_aliases` and `merged_ids` sit
 // only on the 7 rows that absorbed a retired twin.
 // Core-list (library v13, Batch B1 Task 2): `variant_family` is absent on the
-// 66 discarded rows; `slot_focus` / `slot_pattern` are ON-only overlays on 19 /
-// 12 rows; the skill-ladder keys sit only on skill rows.
+// 66 discarded rows; the skill-ladder keys sit only on skill rows. (`slot_focus` / `slot_pattern` were ON-only
+// overlays until seed v27, Unit 1B-F2, copied them into target_focus / movement_pattern and removed both keys.)
 const _optionalKeys = <String>{
   'demo_slug', 'demo_pair', 'name_aliases', 'merged_ids',
-  'variant_family', 'slot_focus', 'slot_pattern', 'skill_track', 'skill_step',
+  'variant_family', 'skill_track', 'skill_step',
   'regression_to', 'progression_to',
   // Batch M1 (library v16): written together or not at all, by the importer's media stage.
   'media_slug', 'media_version', 'media_source',
@@ -71,9 +71,9 @@ void main() {
   ) as List).cast<Map<String, dynamic>>();
 
   group('exercise_library schema contract (Batch 13-A D-1)', () {
-    test('the canonical schema is 40 required keys plus 15 optional (Library Batch S1b-2 added same_movement_as)', () {
+    test('the canonical schema is 40 required keys plus 13 optional (Unit 1B-F2 removed slot_focus and slot_pattern)', () {
       expect(_canonicalKeys.length, 40);
-      expect(_optionalKeys.length, 15);
+      expect(_optionalKeys.length, 13);
       expect(_canonicalKeys.intersection(_optionalKeys), isEmpty);
     });
 

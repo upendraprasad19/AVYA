@@ -57298,7 +57298,7 @@
       "name": "Dumbbell Sumo Deadlift",
       "category": "legs",
       "movement_pattern": [
-        "knee_dominant"
+        "hip_dominant"
       ],
       "exercise_type": [
         "compound"
@@ -57369,9 +57369,6 @@
       "confidence": "high",
       "note": "Loaded version of E050 Sumo Deadlift (OI-148, approved 2026-11-08): reps, rest and nervous-system load set for a dumbbell, not the barbell. No art yet.",
       "changes": {},
-      "slot_pattern": [
-        "hip_dominant"
-      ],
       "same_movement_as": "E050"
     },
     {

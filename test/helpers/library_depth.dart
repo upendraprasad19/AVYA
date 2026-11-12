@@ -6,7 +6,9 @@
 //
 // The pattern is read under BOTH semantics the plan engine uses:
 //  - movementPattern: `movement_pattern`;
-//  - slotPattern: `slot_pattern ?? movement_pattern` (lib/shared/repositories/plan_engine/core_list_selector.dart:166).
+//  - slotPattern: `slot_pattern ?? movement_pattern` (the core-list reader until seed v27). Unit 1B-F2 copied every
+//    slot_pattern into movement_pattern and removed the key, so on the shipped library both semantics now agree; the
+//    slot semantics stays because the frozen C2 `depth_before` cells were measured under it.
 // The keep set is the UNION of the two. The cell key matches scripts/library_batch_c2_removals_gen.js
 // ("mp|" / "slot|" + injuries joined with + + "/" + pattern + "/" + tier), so a frozen `depth_before` can be compared.
 library;

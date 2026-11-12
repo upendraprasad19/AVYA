@@ -70,15 +70,15 @@ class _Sandbox {
         .toList();
     expect(records.map((f) => f.path.split('/').last),
         containsAll(['library_batch_c2_removals.json', 'library_e230_retag.json', 'library_s1b2_suitable_for.json',
-          'library_s1b3_merges.json', 'library_s1b3_name_aliases.json']));
+          'library_s1b3_merges.json', 'library_s1b3_name_aliases.json', 'library_f2_movement_pattern.json']));
     for (final f in records) {
       File('${dir.path}/scripts/data/${f.path.split('/').last}').writeAsStringSync(f.readAsStringSync());
     }
-    // The previous seed migration (174 since Library Batch S1b-3): the generator checks each kept-row record's `before`
-    // against its tuple there, and reads a merged row's own cues from it for the rollback.
+    // The previous seed migration (175 since Unit 1B-F2; 174 for Library Batch S1b-3): the generator checks each kept-row
+    // record's `before` against its tuple there, and reads a merged row's own cues from it for the rollback.
     Directory('${dir.path}/supabase/migrations').createSync(recursive: true);
-    File('${dir.path}/supabase/migrations/174_reseed_exercise_library.sql')
-        .writeAsStringSync(File('supabase/migrations/174_reseed_exercise_library.sql').readAsStringSync());
+    File('${dir.path}/supabase/migrations/175_reseed_exercise_library.sql')
+        .writeAsStringSync(File('supabase/migrations/175_reseed_exercise_library.sql').readAsStringSync());
     File(script).writeAsStringSync(File(_generatorRel).readAsStringSync());
     File(libPath).writeAsStringSync(File(_libRel).readAsStringSync());
   }

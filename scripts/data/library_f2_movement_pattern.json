@@ -1,0 +1,130 @@
+{
+  "_meta": {
+    "unit": "Generator Unit 1B-F2 (library v27, seed v27, OI-495)",
+    "plan": "docs/plans/2026-11-12-generator-1bf2-overlay-copy.md",
+    "column": "movement_pattern",
+    "what": "The 12 rows whose cloud movement_pattern (TEXT, the first element of the JSON array) changes when the core-list slot_pattern overlay is copied into movement_pattern. E064 Rowing Machine is left out: its first element stays cardio. before / after are the JSON arrays; the cloud seed generator flattens them to the first element."
+  },
+  "rows": [
+    {
+      "id": "E015",
+      "name": "Front Raise",
+      "before": [
+        "vertical_push"
+      ],
+      "after": [
+        "shoulder_isolation"
+      ]
+    },
+    {
+      "id": "E046",
+      "name": "Nordic Curl",
+      "before": [
+        "hip_dominant"
+      ],
+      "after": [
+        "knee_dominant"
+      ]
+    },
+    {
+      "id": "E048",
+      "name": "Glute Bridge",
+      "before": [
+        "hip_isolation"
+      ],
+      "after": [
+        "hip_dominant"
+      ]
+    },
+    {
+      "id": "E050",
+      "name": "Sumo Deadlift",
+      "before": [
+        "knee_dominant"
+      ],
+      "after": [
+        "hip_dominant"
+      ]
+    },
+    {
+      "id": "E127",
+      "name": "Reverse Hyper",
+      "before": [
+        "hip_isolation"
+      ],
+      "after": [
+        "hip_dominant"
+      ]
+    },
+    {
+      "id": "E198",
+      "name": "Lunge with Twist",
+      "before": [
+        "core"
+      ],
+      "after": [
+        "knee_dominant"
+      ]
+    },
+    {
+      "id": "E222",
+      "name": "Kas Glute Bridge",
+      "before": [
+        "hip_isolation"
+      ],
+      "after": [
+        "hip_dominant"
+      ]
+    },
+    {
+      "id": "E274",
+      "name": "Prone T Raise",
+      "before": [
+        "horizontal_pull"
+      ],
+      "after": [
+        "shoulder_isolation"
+      ]
+    },
+    {
+      "id": "E276",
+      "name": "Standing Towel Pull Apart",
+      "before": [
+        "horizontal_pull"
+      ],
+      "after": [
+        "shoulder_isolation"
+      ]
+    },
+    {
+      "id": "E277",
+      "name": "Prone W Raise",
+      "before": [
+        "horizontal_pull"
+      ],
+      "after": [
+        "shoulder_isolation"
+      ]
+    },
+    {
+      "id": "E292",
+      "name": "Sliding Leg Curl",
+      "before": [
+        "hip_dominant"
+      ],
+      "after": [
+        "knee_dominant"
+      ]
+    },
+    {
+      "id": "N20",
+      "name": "Dumbbell Sumo Deadlift",
+      "before": [
+        "knee_dominant"
+      ],
+      "after": [
+        "hip_dominant"
+      ]
+    }
+  ]
+}

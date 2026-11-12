@@ -82,7 +82,7 @@ void main() {
       ('E070', 'Front Lever Hold', 'core', 'elbow'),
       ('E121', 'Renegade Row', 'horizontal_pull', 'wrist'),
       ('E121', 'Renegade Row', 'horizontal_pull', 'shoulder'),
-      ('E127', 'Reverse Hyper', 'hip_isolation', 'lower_back'),
+      ('E127', 'Reverse Hyper', 'hip_dominant', 'lower_back'), // hip_isolation until seed v27 (Unit 1B-F2 copied its slot_pattern)
       ('E173', 'Decline Sit Up', 'core', 'lower_back'),
     ];
     List<String> query(String pattern, List<String>? injuries) => [

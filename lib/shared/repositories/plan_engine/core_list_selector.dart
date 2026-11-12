@@ -167,7 +167,7 @@ class CoreListSelector {
 
   /// Sort key b (OI-386): does [row] serve [slot]'s sub-focus? `cable` means
   /// the canonical `cables` token; `isolation` the exercise type; otherwise a
-  /// label in `(slot_focus ?? target_focus) ∪ primary_muscles` whose normalised
+  /// label in `target_focus ∪ primary_muscles` whose normalised
   /// form contains the normalised "$targetMuscle $subFocus". False when the
   /// slot has no sub-focus.
   static bool subFocusMatches(Map<String, dynamic> row, MuscleSlot slot) {
@@ -181,7 +181,7 @@ class CoreListSelector {
     }
     final needle = _norm('${slot.targetMuscle} $sub');
     return [
-      ..._strs(row['slot_focus'] ?? row['target_focus']),
+      ..._strs(row['target_focus']),
       ..._strs(row['primary_muscles']),
     ].any((l) => _norm(l).contains(needle));
   }
@@ -222,9 +222,9 @@ class CoreListSelector {
     final levelRank = _rank[level] ?? 0;
 
     bool patternOk(Map<String, dynamic> r) =>
-        _strs(r['slot_pattern'] ?? r['movement_pattern']).contains(pattern);
+        _strs(r['movement_pattern']).contains(pattern);
     bool target(Map<String, dynamic> r) =>
-        _strs(r['slot_focus'] ?? r['target_focus'])
+        _strs(r['target_focus'])
             .any((l) => l.toLowerCase().contains(muscle)) ||
         _strs(r['primary_muscles']).any((m) => m.toLowerCase().contains(muscle));
     List<String> levels(Map<String, dynamic> r) => _strs(r['core_levels']);

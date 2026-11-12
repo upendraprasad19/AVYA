@@ -7082,8 +7082,8 @@ Residual of OI-199 and OI-471 after migration 172. Migration 172 makes `cleanup_
 ## OI-495 — Unit 1B-F2: copy the core-list overlay labels (slot_focus / slot_pattern) into target_focus / movement_pattern, seed and cloud re-seed
 
 - **Status**: OPEN
-- **Blocked on**: nothing to start (Unit 1B-F merged 2026-11-12, PR #248, merge 9bbae8a6); its cloud migration waits on the founder's live-apply go
-- **Verified**: never
+- **Blocked on**: the founder's device check after the next build (the only leg left). Built by Unit 1B-F2 (branch `generator-step1-1bf2`, diagnose `f2c7a9`, plan `docs/plans/2026-11-12-generator-1bf2-overlay-copy.md`): the 27 rows copied and both keys removed, `CoreListSelector` on the rows' own fields, seed v27, migration 176 applied live 2026-11-12 on the founder's go and ledgered
+- **Verified**: 2026-11-12 (data, reader, seed, cloud; not on a device) — `library_overlay_copy_test.dart` (per-row identity with the old reader, planted-overlay guard over every V4 slot's pool), golden 1,010 personas equal, 2,304-plan dump byte-identical, sweep `f_repeat_pairs30 full_gym` 27 -> 21 thin days, live read-back of 176 (the 12 rows at the new values, every other row's md5 unchanged)
 - **Identified**: 2026-11-11 · filed via mint_oi.sh from branch `generator-step1-1bf`
 
 **What it is.** Items 1B-7 and 1B-11 of the step-1 plan (`docs/plans/2026-11-08-generator-step1-core-list.md` section 9), split out of Unit 1B-F under §4.12.1 (three review rounds each found overlay pins the previous one missed). B1 Ruling 4 said the flip commit would copy `slot_pattern` into `movement_pattern` (13 rows) and `slot_focus` into `target_focus` (19 rows) and delete both keys; Unit 1B-F (the flip) did NOT, and its `enable_core_list_pool` `resolved:` note in `docs/ship_dark_pending_review.yaml` says so. Until this lands the core-list picker reads the overlay labels while `queryV4` (the thin-day top-up's non-core ladder, injured users only) reads the old ones on those rows: the mixed-label state. Display labels change on the 19 / 13 rows.
