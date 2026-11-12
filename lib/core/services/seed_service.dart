@@ -105,7 +105,8 @@ class SeedService {
   // v13 (Batch B1, docs/plans/2026-10-22-library-core-list-pool.md): core-list
   //   selection fields added to every row (core_levels, discipline,
   //   gym_availability, requires_coaching, high_impact; optional variant_family,
-  //   slot_focus, slot_pattern, skill ladder keys); five safety-direction injury
+  //   slot_focus, slot_pattern (copied into target_focus / movement_pattern and removed
+  //   by v27), skill ladder keys); five safety-direction injury
   //   tags (Task 1b). New keys only, read by CoreListSelector (behind
   //   enable_core_list_pool until Unit 1B-F made it the only picker); no cloud
   //   column (plan Ruling 2).
@@ -180,7 +181,12 @@ class SeedService {
   //   day with two lateral-raise slots gets a second loaded raise instead of Towel Lateral Raise (OI-387). Bundle-only
   //   (no cloud column); putAll rewrites the row by id. Without this bump an existing install keeps the old levels
   //   (library_seed_v26_upgrade_behavioral_test.dart).
-  static const int _exerciseLibraryVersion = 26;
+  //   v27 (Generator Unit 1B-F2, OI-495, docs/plans/2026-11-12-generator-1bf2-overlay-copy.md): the core-list overlays
+  //   are copied into the rows' own fields (slot_pattern -> movement_pattern on 13 rows, slot_focus -> target_focus on
+  //   19; 27 rows) and both overlay keys are removed, so the picker, queryV4 (the thin-day top-up) and the muscle label
+  //   read one set of labels. The cloud movement_pattern of 12 rows changes in its reseed migration. Without this bump
+  //   an existing install keeps the overlays (library_seed_v27_upgrade_behavioral_test.dart).
+  static const int _exerciseLibraryVersion = 27;
   static const String _exerciseVersionKey = 'exercise_library_version';
 
   /// Bump this integer whenever the bundled food_database.json changes

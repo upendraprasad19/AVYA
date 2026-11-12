@@ -56,7 +56,7 @@ void main() {
     expect(_changedIds().length, 35);
   });
 
-  test('a v20 box with the old levels ends at the current version (v26) with the new levels, and every other row unchanged', () async {
+  test('a v20 box with the old levels ends at the current version (v27) with the new levels, and every other row unchanged', () async {
     final hive = HiveService.instance;
     final bundled = _bundled();
     final before = _beforeLevels();
@@ -81,7 +81,7 @@ void main() {
       expect(jsonEncode(_asJson(hive.exerciseBox.get(e.key))), e.value, reason: '${e.key} must be unchanged');
     }
     expect(hive.exerciseBox.length, bundled.length);
-    expect(hive.configBox.get('exercise_library_version') as int, 26);
+    expect(hive.configBox.get('exercise_library_version') as int, 27);
   });
 
   test('a fresh install gets the new levels', () async {
@@ -90,18 +90,18 @@ void main() {
     expect(_asJson(hive.exerciseBox.get('E046'))['core_levels'], ['advanced']);
     expect(_asJson(hive.exerciseBox.get('E255'))['core_levels'], <String>[]);
     expect(hive.exerciseBox.length, _bundled().length);
-    expect(hive.configBox.get('exercise_library_version') as int, 26);
+    expect(hive.configBox.get('exercise_library_version') as int, 27);
   });
 
-  test('MIRROR: a box already at the current version (v26, Unit 1B-R) is not rewritten (the upgrade fires only when the stored version is older)', () async {
+  test('MIRROR: a box already at the current version (v27, Unit 1B-F2) is not rewritten (the upgrade fires only when the stored version is older)', () async {
     final hive = HiveService.instance;
     final before = _beforeLevels();
     for (final r in _bundled()) {
       await hive.exerciseBox.put(r['id'], r['id'] == 'E046' ? {...r, 'core_levels': before['E046']} : r);
     }
-    await _markSeeded(hive, 26);
+    await _markSeeded(hive, 27);
     await SeedService.instance.seedIfNeeded();
     expect(jsonEncode(_asJson(hive.exerciseBox.get('E046'))['core_levels']), '[]');
-    expect(hive.configBox.get('exercise_library_version') as int, 26);
+    expect(hive.configBox.get('exercise_library_version') as int, 27);
   });
 }

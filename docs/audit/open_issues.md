@@ -6185,6 +6185,8 @@ To plan (full diagnose template, recurrence class): keep `durationSec` for `card
 
 Class (b) of OI-390: a workout date derived outside IST. Inventory (OI-390 plan `docs/plans/dow-skip-rate.md` §1 "Not changed"): streak anchor stop `workout_repository.dart:387-389`; `_earliestUserAnchor` `wlog_` source parsed as local midnight `:174-186`; `lapseFacts` walk `workout_schedule_read_service.dart:2155-2159`; `_getPlanStatus` `since`/`sinceStart` `ai_snapshot_builder.dart:1361-1376`; `getDaysSinceLastWorkout` `workout_repository.dart:1298-1322`; generator keys local midnights through `istDateStr` `workout_schedule_read_service.dart:238,271-276` → `workout_write_service.dart:1600`; `DateTime.now()` at `workout_repository.dart:1024,1118,1218,1328` and `pattern_detector.dart:84,118,168,359`; `blankGapBeforePlan` local `inDays`. Exposure today: none (users in IST, pre-launch). Acceptance case: DOW notice weekday under `TZ=Asia/Tokyo` with device-generated rows.
 
+Added 2026-11-12 (OI-500 close-out): one more local-midnight site, `train_provider.dart:929` (`parsedDate = DateTime.tryParse(dateStr)` from the schedule key, becomes `WorkoutDayData.date`). On a device east of IST (UTC+8, UTC+9) local midnight of the day is the PREVIOUS IST day, so `formatDateKey(day.date)` names yesterday. `resolveSessionDate` is safe with it (an IST-day mismatch returns `now`, the same IST day); every other reader of `WorkoutDayData.date` that keys by `formatDateKey` belongs to this inventory and was not traced here.
+
 ## OI-398 — rolling-context re-embeds the same coach interaction on several nights (no dedupe on original_interaction_id; 31 repeats in the week of 10-12)
 
 - **Status**: OPEN
@@ -7108,8 +7110,8 @@ Residual of OI-199 and OI-471 after migration 172. Migration 172 makes `cleanup_
 ## OI-495 — Unit 1B-F2: copy the core-list overlay labels (slot_focus / slot_pattern) into target_focus / movement_pattern, seed and cloud re-seed
 
 - **Status**: OPEN
-- **Blocked on**: nothing to start (Unit 1B-F merged 2026-11-12, PR #248, merge 9bbae8a6); its cloud migration waits on the founder's live-apply go
-- **Verified**: never
+- **Blocked on**: the founder's device check after the next build (the only leg left). Built by Unit 1B-F2 (branch `generator-step1-1bf2`, diagnose `f2c7a9`, plan `docs/plans/2026-11-12-generator-1bf2-overlay-copy.md`): the 27 rows copied and both keys removed, `CoreListSelector` on the rows' own fields, seed v27, migration 176 applied live 2026-11-12 on the founder's go and ledgered
+- **Verified**: 2026-11-12 (data, reader, seed, cloud; not on a device) — `library_overlay_copy_test.dart` (per-row identity with the old reader, planted-overlay guard over every V4 slot's pool), golden 1,010 personas equal, 2,304-plan dump byte-identical, sweep `f_repeat_pairs30 full_gym` 27 -> 21 thin days, live read-back of 176 (the 12 rows at the new values, every other row's md5 unchanged)
 - **Identified**: 2026-11-11 · filed via mint_oi.sh from branch `generator-step1-1bf`
 
 **What it is.** Items 1B-7 and 1B-11 of the step-1 plan (`docs/plans/2026-11-08-generator-step1-core-list.md` section 9), split out of Unit 1B-F under §4.12.1 (three review rounds each found overlay pins the previous one missed). B1 Ruling 4 said the flip commit would copy `slot_pattern` into `movement_pattern` (13 rows) and `slot_focus` into `target_focus` (19 rows) and delete both keys; Unit 1B-F (the flip) did NOT, and its `enable_core_list_pool` `resolved:` note in `docs/ship_dark_pending_review.yaml` says so. Until this lands the core-list picker reads the overlay labels while `queryV4` (the thin-day top-up's non-core ladder, injured users only) reads the old ones on those rows: the mixed-label state. Display labels change on the 19 / 13 rows.
@@ -7154,16 +7156,3 @@ Residual of OI-199 and OI-471 after migration 172. Migration 172 makes `cleanup_
 **What it is.** Unit 1B-R (diagnose `e4b7a2`, plan `docs/plans/2026-11-12-generator-1br-loaded-wins.md` Ruling 4) ships the loaded-wins ranking (OI-497, founder d25) default ON behind the kill switch `disable_loaded_wins` (`PlanEngineFlags.loadedWinsEnabled`, read once per `_pickCoreList` call; `rankedPool(loadedWins:)`). Its OFF world is pinned by `test/fixtures/generator_golden_hashes_loaded_wins_off.json` (1,010 personas) through `test/plan_generator/loaded_wins_kill_switch_golden_test.dart`. CLAUDE.md §4.6 step 4: the old path is deleted once the new one is verified, and it is tracked here until then.
 
 **Done when.** The founder's device check passes (a home-dumbbell plan's leg day shows a loaded lunge or squat; a beginner phase-1 plan's glute hinge is loaded; with the 1B-F check, before 1B-F2 merges), then one commit deletes the flag getter, the `loadedWins` parameter and its OFF branches in `rankedPool` (Ruling 2's compound-only guard and the `loadedWins &&` in `topFit`'s guard), the fixture, the kill-switch test, the T7 unit asserts that call `loadedWins: false`, and the `naming_conventions.md` row. Owner: generator step 2 (its allocator rebuild touches the same ranking). Blast radius `platform` (plan engine).
-
-## OI-500 — session_date_and_home_start test fails on a non-IST host (CI pins IST, so main stays green)
-
-- **Status**: OPEN
-- **Blocked on**: none
-- **Verified**: never
-- **Identified**: 2026-11-12 · filed via mint_oi.sh from branch `oi493b-duplicate-meals`
-
-**What happens.** `TZ=UTC flutter test test/contracts/session_date_and_home_start_behavioral_test.dart` fails one test, "scheduled day IS today -> unchanged (healthy path byte-identical)": Expected the same `DateTime` instance (2026-07-20 06:00) back from `resolveSessionDate`, Actual a new 2026-07-20 19:30. Reproduced on `main` `e1becc8d` at 05:59 UTC 2026-11-12, so it is not caused by the branch that found it (OI-493 Landing B ran the targeted tests under both Kolkata and UTC). CI pins `TZ=Asia/Kolkata`, so the CI suite and `main` stay green; any developer or CI leg on a non-IST host sees a red test.
-
-**Likely shape (not yet traced).** The fixture's `now` and `todayScheduled` are host-local `DateTime(...)` values while `resolveSessionDate` compares IST days, so off IST "today" is judged a different day and the clamp path returns `now`. Writer/reader names to be confirmed by reading `resolveSessionDate` before any fix.
-
-**Done when.** The test passes under UTC, Asia/Kolkata and a zone east of IST, with either the fixture built in IST terms or the function fixed if the host zone leaks into a real decision (in which case it is a product bug: a diagnose doc and a behavioural test). Blast radius `feature` (Train).

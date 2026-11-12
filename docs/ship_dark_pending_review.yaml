@@ -393,7 +393,8 @@ resolved:
       The OI-401 question is answered by 1A's R4 (the
       top-up is core-list-first at every exit). The flip commit does NOT copy slot_focus /
       slot_pattern into target_focus / movement_pattern although B1 Ruling 4 said it would: that
-      overlay copy is split out under 4.12.1 as Unit 1B-F2 (OI-495). The generator golden was
+      overlay copy is split out under 4.12.1 as Unit 1B-F2 (OI-495), which made it at seed v27
+      (2026-11-12, migration 176; no flag: a data copy). The generator golden was
       re-recorded once: every changed key equals the pre-flip ON world with Ruling 5 (OI-489)
       applied; Ruling 5c changes no golden key.
 

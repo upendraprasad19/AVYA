@@ -42,6 +42,10 @@ const _suitableForGlob = 'scripts/data/library_s1b2_suitable_for.json';
 // what the migration's rollback restores.
 const _mergesGlob = 'scripts/data/library_s1b3_merges.json';
 const _namesGlob = 'scripts/data/library_s1b3_name_aliases.json';
+// Generator Unit 1B-F2 (OI-495): the overlay-copy record decides what the importer writes into 27 rows' movement_pattern /
+// target_focus; the movement_pattern record decides what the migration's rollback restores.
+const _overlayCopyGlob = 'scripts/data/library_overlay_copy_v27.json';
+const _f2PatternGlob = 'scripts/data/library_f2_movement_pattern.json';
 const _assetsGlob = 'assets/**';
 const _scriptsGlob = 'scripts/**';
 
@@ -218,6 +222,8 @@ void main() {
   for (final (label, glob, lookAlike) in [
     ('1g. the S1b-3 merges record', _mergesGlob, 'scripts/data/library_s1b3_merges_other.json'),
     ('1h. the S1b-3 name_aliases record', _namesGlob, 'scripts/data/library_s1b3_name_aliases_other.json'),
+    ('1i. the Unit 1B-F2 overlay-copy record', _overlayCopyGlob, 'scripts/data/library_overlay_copy_v27_other.json'),
+    ('1j. the Unit 1B-F2 movement_pattern record', _f2PatternGlob, 'scripts/data/library_f2_movement_pattern_other.json'),
   ]) {
     group(label, () {
       test('it is account, claimed by its own rule above scripts/**, and the file exists', () {

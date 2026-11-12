@@ -22,6 +22,7 @@ import 'package:icanbefitter/core/services/seed_service.dart';
 
 import '../helpers/hive_test_setup.dart';
 import '../helpers/library_g0355_v25.dart';
+import '../helpers/library_overlay_v26.dart';
 
 const _hipIds = [
   'E063', 'E065', 'E066', 'E193', 'E202', 'G1473', 'G1472', 'G0053', 'G0371', 'G3219', 'G3361', 'G3222', 'G1201', 'G3656',
@@ -44,7 +45,8 @@ List<Map<String, dynamic>> _v24Bundle() {
   return [
     for (final r in _bundled())
       // Unit 1B-R (seed v26) gave G0355 `beginner`; the v24 bundle keeps its v25 levels.
-      withG0355V25(tags.containsKey(r['id']) ? (Map<String, dynamic>.from(r)..['injury_contraindications'] = tags[r['id']]) : r),
+      // Unit 1B-F2 (seed v27) copied the overlays; the v24 bundle keeps them.
+      withOverlaysV26(withG0355V25(tags.containsKey(r['id']) ? (Map<String, dynamic>.from(r)..['injury_contraindications'] = tags[r['id']]) : r)),
   ];
 }
 
@@ -92,13 +94,13 @@ void main() {
         '5470450a61073fbd6e2683dd323b1f38f6319b43123144d1c306eecda2b2ab13');
   });
 
-  test('a v24 box ends at the current version (v26): the 14 rows are written as bundled, every other row but G0355 '
+  test('a v24 box ends at the current version (v27): the 14 rows are written as bundled, every other row but G0355 '
       '(seed v26) is unchanged', () async {
     final hive = HiveService.instance;
     await _putV24Box(hive);
     await _markSeeded(hive, 24);
     final others = {
-      for (final id in hive.exerciseBox.keys.where((k) => !_hipIds.contains(k) && k != g0355Id))
+      for (final id in hive.exerciseBox.keys.where((k) => !_hipIds.contains(k) && k != g0355Id && !overlayRowIdsV27.contains(k)))
         id as String: jsonEncode(_asJson(hive.exerciseBox.get(id)))
     };
 
@@ -112,19 +114,19 @@ void main() {
       expect(jsonEncode(_asJson(hive.exerciseBox.get(e.key))), e.value, reason: '${e.key} must be unchanged');
     }
     expect(hive.exerciseBox.length, _bundled().length);
-    expect(hive.configBox.get('exercise_library_version') as int, 26);
+    expect(hive.configBox.get('exercise_library_version') as int, 27);
   });
 
-  test('MIRROR: a box already at the current version (v26) is not rewritten (the upgrade fires only when the stored '
+  test('MIRROR: a box already at the current version (v27) is not rewritten (the upgrade fires only when the stored '
       'version is older)', () async {
     final hive = HiveService.instance;
     await _putV24Box(hive);
-    await _markSeeded(hive, 26);
+    await _markSeeded(hive, 27);
     await SeedService.instance.seedIfNeeded();
     // Every one of the 14 rows keeps its v24 tags (B-pass seat B: one row alone could not see a per-row rewrite).
     for (final id in _hipIds) {
       expect(_asJson(hive.exerciseBox.get(id))['injury_contraindications'], isNot(contains('hip')), reason: id);
     }
-    expect(hive.configBox.get('exercise_library_version') as int, 26);
+    expect(hive.configBox.get('exercise_library_version') as int, 27);
   });
 }

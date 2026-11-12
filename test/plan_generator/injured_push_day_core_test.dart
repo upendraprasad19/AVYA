@@ -43,7 +43,7 @@ void main() {
                   bad.add('not a library row: $where ${e.exerciseName}');
                   continue;
                 }
-                final pattern = strs(r['slot_pattern']).isNotEmpty ? strs(r['slot_pattern']) : strs(r['movement_pattern']);
+                final pattern = strs(r['movement_pattern']); // the overlays were copied in by seed v27 (Unit 1B-F2)
                 if (!pattern.contains('core')) bad.add('not a core row: $where ${e.exerciseName} $pattern');
                 if (strs(r['injury_contraindications']).any(injuries.contains)) {
                   bad.add('contraindicated: $where ${e.exerciseName}');

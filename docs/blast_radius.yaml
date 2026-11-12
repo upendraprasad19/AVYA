@@ -558,6 +558,11 @@ paths:
   # name_aliases record decides what the seed migration's rollback restores. Both sit at account above scripts/**.
   - { glob: "scripts/data/library_s1b3_merges.json", tier: account }
   - { glob: "scripts/data/library_s1b3_name_aliases.json", tier: account }
+  # Generator Unit 1B-F2 (2026-11-12, OI-495): the overlay-copy record decides what the importer writes into the 27 rows'
+  # movement_pattern / target_focus (what the core-list pool, queryV4 and the muscle label read for every user); the
+  # movement_pattern record decides what the seed migration's rollback restores. Both sit at account above scripts/**.
+  - { glob: "scripts/data/library_overlay_copy_v27.json", tier: account }
+  - { glob: "scripts/data/library_f2_movement_pattern.json", tier: account }
   - { glob: "docs/**", tier: feature }
   - { glob: "scripts/**", tier: feature }
   - { glob: "test/**", tier: feature }

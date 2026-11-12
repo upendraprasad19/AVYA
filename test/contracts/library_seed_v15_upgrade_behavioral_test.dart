@@ -46,7 +46,9 @@ void main() {
     expect(original.where((r) => removedSince.contains(r['id'])), isEmpty);
     expect(original, hasLength(285 - c2Removed - removedSince.length), reason: 'the v14 library is the 285 E-id rows minus the C2a removals and E053');
     expect(added, isNotEmpty, reason: 'run: node scripts/add_library_batch_c_v15.js');
-    expect(bundled.firstWhere((r) => r['id'] == 'E274')['target_focus'], ['Mid Back']);
+    // Batch C1's E274 relabel (Upper Back -> Mid Back); since seed v27 (Unit 1B-F2) its target_focus also carries the
+    // copied overlay label Rear Delts, so the pin is the relabel itself: Mid Back present, Upper Back gone.
+    expect(bundled.firstWhere((r) => r['id'] == 'E274')['target_focus'], allOf(contains('Mid Back'), isNot(contains('Upper Back'))));
 
     final hive = HiveService.instance;
     for (final r in original) {
@@ -74,7 +76,7 @@ void main() {
       expect(hive.exerciseBox.containsKey(r['id']), isTrue, reason: '${r['id']} was lost');
     }
     final e274 = Map<String, dynamic>.from(hive.exerciseBox.get('E274') as Map);
-    expect(e274['target_focus'], ['Mid Back']);
+    expect(e274['target_focus'], allOf(contains('Mid Back'), isNot(contains('Upper Back')))); // the relabel (see above)
     expect(Map<String, dynamic>.from(hive.exerciseBox.get(_customId) as Map)['name'], 'My Own Curl');
     expect(Map<String, dynamic>.from(hive.exerciseBox.get(_communityId) as Map)['name'], 'Shared Row');
     expect(hive.exerciseBox.length, original.length + added.length + 2);
