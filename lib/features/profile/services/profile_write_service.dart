@@ -26,7 +26,7 @@ import '../../../core/utils/ist_date.dart';
 /// Every public method:
 ///   1. Acquires the singleton mutex so concurrent goal/weight/profile
 ///      edits merge serially instead of racing on read-modify-write.
-///   2. Stamps `updated_at` (IST ISO-8601) on the resulting map.
+///   2. Stamps `updated_at` (the UTC instant, ISO-8601 with Z) on the resulting map.
 ///   3. Performs the single `userBox.put('profile', ...)`.
 ///   4. Fires `SyncService.syncProfileNow(userId)` fire-and-forget
 ///      so the upstream user_profile row stays current (skipped when
@@ -64,7 +64,7 @@ class ProfileWriteService {
     await _withLock(() async {
       try {
         final stamped = Map<String, dynamic>.from(profile);
-        stamped['updated_at'] = istNow().toIso8601String();
+        stamped['updated_at'] = nowWall().toUtc().toIso8601String();
         await HiveService.instance.userBox.put('profile', stamped);
         if (!skipSync) _fireSync();
       } catch (e, st) {
@@ -92,7 +92,7 @@ class ProfileWriteService {
             ? Map<String, dynamic>.from(existing)
             : <String, dynamic>{};
         final merged = <String, dynamic>{...base, ...patch};
-        merged['updated_at'] = istNow().toIso8601String();
+        merged['updated_at'] = nowWall().toUtc().toIso8601String();
         await box.put('profile', merged);
         _fireSync();
       } catch (e, st) {

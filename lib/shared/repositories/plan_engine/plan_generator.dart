@@ -94,8 +94,8 @@ class PlanGenerator {
     Map<String, double>? previousWeights,
     List<String> equipmentExclusions = const [], // ⑥ B1 (default → no-op)
     // ⑧ 8-A / UNIT 2-cap (W2.5 repeat-content): day-INDEX → prior-phase exercise
-    // NAMES to PIN into the current split frames instead of running the cascade
-    // (SHIP-DARK; null → the normal pickV4 cascade → byte-identical). Faithful
+    // NAMES to PIN into the current split frames instead of running the picker
+    // (null → the normal pickV4 core-list pick). Faithful
     // only when the prior phase's goal+daysPerWeek match the current profile —
     // the caller (UNIT 2-int) gates on that. Value = per-day (variant-A names for
     // weeks 1/3, variant-B names for weeks 2/4) — see buildPinnedDays.
@@ -106,8 +106,8 @@ class PlanGenerator {
     // onboarding) is untouched regardless of `enable_volume_titration`.
     bool applyVolumeTitration = false,
     // W3.4 (Batch 11-B cross-phase variety): day-INDEX → prior-phase A/B picks
-    // (LOWERCASED) → the cascade avoids repeating them when a same-pattern sibling
-    // exists. null → avoidNames empty → byte-identical. Passed ONLY on a fresh
+    // (LOWERCASED) → the picker avoids repeating them when a same-pattern sibling
+    // exists. null → avoidNames empty. Passed ONLY on a fresh
     // advance with the flag ON (mutually exclusive with pinnedExercisesByDay).
     Map<int, ({List<String> a, List<String> b})>? previousPhaseByDay,
     // W3.5 (Batch 12-A plateau escalation): opt-in intent — applied ONLY on a fresh
@@ -132,9 +132,9 @@ class PlanGenerator {
     // ⑥ slice B1 (mirror the injury seam above): derive the equipment-EXCLUSIONS
     // Set ONCE — flag-gated + normalized to canonical + floor-sanitized
     // (none/bodyweight can never be excluded, so the bodyweight floor always
-    // survives). OFF or empty ⇒ `{}` ⇒ every downstream drop (queryV4 att1-4 /
-    // att5 pool / L2 custom-append / L6 swap) is `.isNotEmpty`-inert ⇒
-    // byte-identical to pre-B1. Threaded to pickV4 like normalizedInjuries.
+    // survives). OFF or empty ⇒ `{}` ⇒ every downstream drop (the core-list pool,
+    // the top-up's queryV4, the repeat pins) is `.isNotEmpty`-inert.
+    // Threaded to pickV4 like normalizedInjuries.
     // ⑥ slice C1 — the central-read ACTIVATION: source the exclusions from the
     // user's `equipment_exclusions` profile field (Customize UI) via the flag-gated
     // plan-engine helper (mirrors resolveBodyFocus). The `equipmentExclusions`
@@ -178,10 +178,10 @@ class PlanGenerator {
 
     // Stage 2: Exercise selection with filtered slots. ⑧ 8-A/2-cap: when a pinned
     // selection is supplied (repeat-content), slot those exercise NAMES into the
-    // SAME frames instead of running the cascade — the tail (Stage 0 decay +
-    // periodization) then runs UNCHANGED. null → verbatim pickV4 → byte-identical.
+    // SAME frames instead of running the picker — the tail (Stage 0 decay +
+    // periodization) then runs UNCHANGED. null → pickV4 (the core-list pick).
     // W3.5 (Batch 12-B plateau rotation): the plateaued compound NAMES to SOFT-avoid
-    // in the cascade so a stuck lift rotates to a same-pattern sibling. Computed as a
+    // in the picker so a stuck lift rotates to a same-pattern sibling. Computed as a
     // STATEMENT (can't live in the ternary else) + guarded `pins == null` so pins ⟂
     // plateau is STRUCTURAL. {} when off / pins → union no-op → byte-identical.
     final plateauAvoid =
@@ -198,8 +198,6 @@ class PlanGenerator {
             phase: phase,
             goal: planGoal,
             injuries: normalizedInjuries,
-            applyInjuryUniversalFilter:
-                PlanEngineFlags.injuryUniversalFilterEnabled,
             applyInjurySubstitutePreference:
                 PlanEngineFlags.injurySubstitutePreferenceEnabled,
             exclusions: equipmentExclusionSet,
@@ -213,8 +211,6 @@ class PlanGenerator {
             phase: phase,
             goal: planGoal,
             injuries: normalizedInjuries,
-            applyInjuryUniversalFilter:
-                PlanEngineFlags.injuryUniversalFilterEnabled,
             applyInjurySubstitutePreference:
                 PlanEngineFlags.injurySubstitutePreferenceEnabled,
             exclusions: equipmentExclusionSet,
@@ -249,7 +245,7 @@ class PlanGenerator {
     }
 
     // 2026-05-31 personalization lever L5 (weak-point → bodyFocus).
-    // SAFE lever — does NOT touch the exercise-selection cascade. When the user
+    // SAFE lever — does NOT touch the exercise picker. When the user
     // hasn't explicitly chosen a body focus and we're on Phase 2+, auto-populate
     // it from training history: the laggard muscle groups (lowest recent volume
     // share) become bodyFocus tokens, which PeriodizationEngine turns into +1 set

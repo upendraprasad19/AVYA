@@ -1,5 +1,5 @@
 // Library Batch S1a (plan docs/plans/2026-11-08-library-batch-s1-core-data.md, Table A): core_levels for the core-list
-// pool (enable_core_list_pool, still OFF), founder-approved 2026-11-08.
+// pool (then behind enable_core_list_pool; the only picker since Unit 1B-F), founder-approved 2026-11-08.
 //
 // Kept (E) rows change through scripts/data/library_s1_core_levels.json, applied by the core-levels stage of
 // scripts/add_library_batch_c_v15.js; source (G, N) rows change in scripts/data/library_batch_c_source.json. The

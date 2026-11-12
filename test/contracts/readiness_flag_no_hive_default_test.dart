@@ -3,7 +3,7 @@
 // setUp. Deliberately does NOT initialise Hive: HiveService.getBox throws
 // StateError when uninitialised, which is what makes the catch branch run.
 //
-// Precedent for a no-Hive context in this suite:
+// Precedent for a no-Hive context in this suite: the deleted (Unit 1B-F)
 // test/plan_generator/generator_matrix.dart ("PlanEngineFlags reads Hive and
 // this harness runs without it").
 import 'package:flutter_test/flutter_test.dart';

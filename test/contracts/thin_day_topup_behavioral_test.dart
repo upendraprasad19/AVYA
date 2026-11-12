@@ -212,7 +212,6 @@ void main() {
     Map<int, ({List<String> a, List<String> b})>? prev,
     Set<String> plateau = const {},
     Set<String> exclusions = const {},
-    bool coreListOnly = false,
   }) =>
       ExerciseSelector.topUpDays(
         days,
@@ -226,7 +225,6 @@ void main() {
         applyInjurySubstitutePreference: subPref,
         exclusions: exclusions,
         capability: bwCapability,
-        coreListOnly: coreListOnly,
         previousPhaseByDay: prev,
         plateauAvoidNames: plateau,
       );
@@ -297,17 +295,17 @@ void main() {
       expect(unperformable(mainOf(after), bwCapability), isEmpty);
     });
 
-    test('shoulder+elbow bodyweight advanced 4-day: week-2 back day is lifted and safe',
+    test('shoulder+elbow bodyweight advanced 4-day: week-2 shoulders/back day is lifted and safe',
         () async {
       await killSwitch(on: true);
       final before = gen(
           level: 'advanced', days: 4, injuries: ['shoulder', 'elbow']);
-      expect(dayOf(before, 1, 'Back, biceps').exercises, isEmpty,
-          reason: 'precondition: the week-2 back day is empty on main');
+      expect(dayOf(before, 1, 'Shoulders, back, arms').exercises, hasLength(1),
+          reason: 'precondition: the week-2 shoulders/back day holds one move with the kill-switch set');
       await killSwitch(on: false);
       final after = gen(
           level: 'advanced', days: 4, injuries: ['shoulder', 'elbow']);
-      final lifted = dayOf(after, 1, 'Back, biceps').exercises;
+      final lifted = dayOf(after, 1, 'Shoulders, back, arms').exercises;
       expect(lifted.length, greaterThanOrEqualTo(3));
       expect(unsafe(lifted, ['shoulder', 'elbow']), isEmpty);
       expect(unperformable(lifted, bwCapability), isEmpty);
@@ -364,16 +362,15 @@ void main() {
 
     test('B1 ON: the core-list path adds safe, performable moves to a thin day',
         () async {
-      await HiveService.instance.configBox.put('enable_core_list_pool', true);
       final trace = CoreListTrace();
       CoreListSelector.debugTrace = trace;
       try {
         await killSwitch(on: true);
         final before = gen(level: 'beginner', days: 5, injuries: ['shoulder']);
         expect(trace.delegations, greaterThan(0),
-            reason: 'precondition: the ON path ran');
+            reason: 'precondition: the core-list path ran');
         expect(dayOf(before, 0, 'Chest focus').exercises.length, lessThan(3),
-            reason: 'precondition: thin under B1 ON with the kill-switch set');
+            reason: 'precondition: thin with the kill-switch set');
         await killSwitch(on: false);
         final after = gen(level: 'beginner', days: 5, injuries: ['shoulder']);
         final lifted = dayOf(after, 0, 'Chest focus').exercises;
@@ -391,10 +388,10 @@ void main() {
       Future<List<PlannedExercise>> added(List<String> excl) async {
         await killSwitch(on: true);
         final off = gen(
-            level: 'advanced', days: 4, injuries: ['shoulder', 'wrist'], exclusions: excl);
+            level: 'advanced', days: 5, injuries: ['shoulder', 'wrist'], exclusions: excl);
         await killSwitch(on: false);
         final on = gen(
-            level: 'advanced', days: 4, injuries: ['shoulder', 'wrist'], exclusions: excl);
+            level: 'advanced', days: 5, injuries: ['shoulder', 'wrist'], exclusions: excl);
         final out = <PlannedExercise>[];
         for (var w = 0; w < 2; w++) {
           for (var i = 0; i < on.weekPlans[w].workoutDays.length; i++) {
@@ -426,14 +423,14 @@ void main() {
       final off = gen(
           tier: 'home_dumbbells', goal: 'general_fitness', level: 'beginner', days: 6,
           injuries: ['shoulder', 'elbow']);
-      expect(dayOf(off, 0, 'Chest, shoulders, triceps').exercises.length, lessThan(3),
+      expect(dayOf(off, 0, 'Upper push + core').exercises.length, lessThan(3),
           reason: 'precondition: thin with the kill-switch set');
       await killSwitch(on: false);
       final on = gen(
           tier: 'home_dumbbells', goal: 'general_fitness', level: 'beginner', days: 6,
           injuries: ['shoulder', 'elbow']);
-      final offNames = _names(dayOf(off, 0, 'Chest, shoulders, triceps').exercises).toSet();
-      final addedNames = _names(dayOf(on, 0, 'Chest, shoulders, triceps').exercises)
+      final offNames = _names(dayOf(off, 0, 'Upper push + core').exercises).toSet();
+      final addedNames = _names(dayOf(on, 0, 'Upper push + core').exercises)
           .where((n) => !offNames.contains(n))
           .toList();
       expect(addedNames, ['Plank']);
@@ -864,6 +861,20 @@ void main() {
               ['Seed', 'Other Press One', 'Other Press Two']);
         });
 
+        // Unit 1B-F (Ruling 7): the top-up is one of the two surviving callers of `_selectCandidate`; this pins that
+        // its call passes the preference on (the curated sub sorts LAST in library order here, so only the re-rank
+        // can lead with it).
+        test('the preference leads the top-up with a curated sub that sorts last (control: off)', () async {
+          await seed([
+            _row('a1', 'Other Press One', 'horizontal_push', 'Mid Chest', type: 'compound'),
+            _row('a2', 'Other Press Two', 'horizontal_push', 'Mid Chest', type: 'compound'),
+            _row('z1', 'Machine Chest Press', 'horizontal_push', 'Mid Chest', type: 'compound'),
+          ]);
+          expect(_names(topUp([_dayOf(['Seed'])], sds, subPref: false).single.exercisesA)[1], 'Other Press One',
+              reason: 'control: without the preference the top-up takes library order');
+          expect(_names(topUp([_dayOf(['Seed'])], sds, subPref: true).single.exercisesA)[1], 'Machine Chest Press');
+        });
+
         test('a demoted row that is the only candidate left is still used '
             '(a slot is never dropped)', () async {
           await seed([rows.first]);
@@ -974,17 +985,17 @@ void main() {
   });
 
   // ---------------------------------------------------------------------------
-  // Generator step 1A, R4: with coreListOnly the ladder runs twice, core rows
-  // (at the user's level or an easier one) first, then today's ladder with a
-  // fresh memo. The founder's floor of 3 is unchanged.
+  // Generator step 1A, R4: the ladder runs twice, core rows (at the user's level
+  // or an easier one) first, then today's ladder with a fresh memo. The founder's
+  // floor of 3 is unchanged. Since Unit 1B-F (the flip) this is the only top-up:
+  // the library-order control (`coreListOnly: false`) was deleted with the flag.
   // ---------------------------------------------------------------------------
   group('R4: core-list top-up', () {
     Map<String, dynamic> cored(Map<String, dynamic> r, List<String> levels) =>
         {...r, 'core_levels': levels};
     final sds = [_slotDay([_slot('Mid Chest', 'horizontal_push')])];
 
-    test('a core row is topped in before a non-core row (control: OFF keeps '
-        'library order)', () async {
+    test('a core row is topped in before a non-core row', () async {
       await seed([
         cored(_row('hp1', 'HP One', 'horizontal_push', 'Mid Chest',
             type: 'compound'), const []),
@@ -992,12 +1003,6 @@ void main() {
             type: 'compound'), const ['intermediate']),
       ]);
       expect(_names(topUp([_dayOf(['Seed'])], sds).single.exercisesA),
-          ['Seed', 'HP One', 'HP Two'],
-          reason: 'control: without coreListOnly the top-up takes library order');
-      expect(
-          _names(topUp([_dayOf(['Seed'])], sds, coreListOnly: true)
-              .single
-              .exercisesA),
           ['Seed', 'HP Two', 'HP One'],
           reason: 'pass 1 takes the core row; pass 2 still reaches the floor');
     });
@@ -1009,25 +1014,21 @@ void main() {
         cored(_row('hp2', 'HP Two', 'horizontal_push', 'Mid Chest',
             type: 'compound'), const ['beginner']),
       ]);
-      expect(
-          _names(topUp([_dayOf(['Seed'])], sds, coreListOnly: true)
-              .single
-              .exercisesA),
+      expect(_names(topUp([_dayOf(['Seed'])], sds).single.exercisesA),
           ['Seed', 'HP Two', 'HP One']);
     });
 
     test('no core row anywhere: pass 2 (a fresh memo) still reaches the floor',
         () async {
       await seed([..._hp(3), ..._core()]);
-      final out = topUp([_dayOf(['HP One'])], sds, coreListOnly: true).single;
+      final out = topUp([_dayOf(['HP One'])], sds).single;
       expect(_names(out.exercisesA), ['HP One', 'HP Two', 'HP Three'],
           reason: 'pass 1 exhausts every key; a memo carried into pass 2 would '
               'leave the day at 1');
     });
 
-    test('ON pickV4 exit passes coreListOnly: true', () async {
-      await HiveService.instance.configBox.put('enable_core_list_pool', true);
-      try {
+    test('the pickV4 exit takes the core row first', () async {
+      {
         await seed([
           cored(_row('hpa', 'HP A', 'horizontal_push', 'Mid Chest',
               type: 'compound'), const ['intermediate']),
@@ -1047,12 +1048,10 @@ void main() {
           capability: bwCapability,
         );
         expect(_names(days.single.exercisesA), ['HP A', 'HP C', 'HP B']);
-      } finally {
-        await HiveService.instance.configBox.delete('enable_core_list_pool');
       }
     });
 
-    test('repeat pins: coreListOnly follows the flag (control: OFF)', () async {
+    test('repeat pins: the top-up takes the core row first', () async {
       await seed([
         cored(_row('hp1', 'HP One', 'horizontal_push', 'Mid Chest',
             type: 'compound'), const ['intermediate']),
@@ -1072,22 +1071,18 @@ void main() {
             injuries: const ['shoulder'],
             capability: bwCapability,
           ).single.exercisesA);
-      expect(run(), ['HP One', 'HP Two', 'HP Three'], reason: 'control: OFF');
-      await HiveService.instance.configBox.put('enable_core_list_pool', true);
-      try {
-        expect(run(), ['HP One', 'HP Three', 'HP Two']);
-      } finally {
-        await HiveService.instance.configBox.delete('enable_core_list_pool');
-      }
+      expect(run(), ['HP One', 'HP Three', 'HP Two']);
     });
   });
 }
 
-/// The shoulder+elbow advanced 4-day week-2 back day the final code produces (empty on
-/// main), in order. Recorded from the first run on the 914-row library (Batch C1,
-/// 2026-10-26); it replaced the knee+hip persona, whose day the 629 new rows filled.
+/// The shoulder+elbow advanced 4-day week-2 shoulders/back day the final code produces, in order. Unit 1B-F (the
+/// flip to the core-list path) re-recorded it: on the core path the old week-2 back day is no longer empty, so the
+/// test moved to this day, which holds one move with the kill-switch set and gains an
+/// own-pattern row and a core row from the top-up. Earlier record: the 914-row library's back day (Batch C1,
+/// 2026-10-26).
 const kShoulderElbowWeek2BackDay = <String>[
   'Backpack Bent-Over Row',
-  'Plank',
-  'Bodyweight Rear Delt Raise',
+  'Dead Bug',
+  'V-Up',
 ];

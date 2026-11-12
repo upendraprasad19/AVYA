@@ -237,9 +237,17 @@ void main() {
     test('planned_this_week counts type==workout days, excluding rest + travel',
         () async {
       await HiveService.instance.userBox.put('profile', {'id': 'u4'});
-      final now = istNow();
-      final weekStart = now.subtract(Duration(days: now.weekday - 1));
-      String dk(int offset) => istDateStr(weekStart.add(Duration(days: offset)));
+      // OI-494 (diagnose 4f9b2e): this oracle used to build the week from
+      // istDateStr(istNow()...), the same double shift as the code, so from
+      // 18:30 IST it agreed with a window one day late. Pin the clock (Sunday
+      // 2026-11-15 22:30 IST, the evening a shift shows) and spell the week.
+      setTestClockTo(DateTime.utc(2026, 11, 15, 17, 0));
+      addTearDown(resetTestClock);
+      const week = [
+        '2026-11-09', '2026-11-10', '2026-11-11', '2026-11-12',
+        '2026-11-13', '2026-11-14', '2026-11-15',
+      ];
+      String dk(int offset) => week[offset];
       // REAL schedule-row shape (workout_schedule_read_service.dart:160): a
       // workout day is type:'workout' (split lives in workout_name) with a date
       // field; rest days are type:'rest'. 3 workout + 1 rest + 1 travel → 3.

@@ -78,8 +78,9 @@ void main() {
         () {
       // The restore + audit REMOVED rows from the bodyweight tier (16 of them,
       // Chin Up included). A correction that empties a pattern has traded one bug
-      // for another: the cascade would fall through to universalPoolV4 and hand
-      // back the very rows the floor just rejected.
+      // for another: the cascade fell through to universalPoolV4 and handed back
+      // the very rows the floor just rejected (Unit 1B-F deleted that pool; an
+      // emptied pattern now drops the slot, which this floor still guards).
       //
       // Two thresholds, because they answer different questions:
       //   baseline — performable with the bodyweight tier's items

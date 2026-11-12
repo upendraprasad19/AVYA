@@ -1,12 +1,13 @@
-// Batch B1 Task 1 — the attempt-5 universal pool and repeat-phase pins must
-// check equipment CAPABILITY on the PRODUCTION path (diagnose
-// docs/diagnoses/2026-10-22-att5-capability-mirror-only-b1c4e7.md).
+// Batch B1 Task 1 — repeat-phase pins must check equipment CAPABILITY on the
+// PRODUCTION path (diagnose docs/diagnoses/2026-10-22-att5-capability-mirror-only-b1c4e7.md).
 //
-// OI-89 added the capability skip to the diagnostic MIRROR only
-// (test/plan_generator/v4_diagnostic/cascade_tracer.dart), so the scorecard
+// OI-89 added the capability skip to the diagnostic MIRROR only, so the scorecard
 // could never see a production leak. This file drives the real
-// ExerciseSelector.pickV4 / buildPinnedDays. The oracle reads `equipmentNeeded`
-// off the BUILT PlannedExercise, never the predicate's own input.
+// ExerciseSelector.buildPinnedDays. The oracle reads `equipmentNeeded` off the
+// BUILT PlannedExercise, never the predicate's own input. Unit 1B-F deleted the
+// attempt-5 universal pool (and the mirror) with the cascade, and with them this
+// file's two pool tests: the core-list path has no name-picked fallback that
+// bypasses the capability filter.
 import 'dart:convert';
 import 'dart:io';
 
@@ -22,16 +23,6 @@ import 'package:icanbefitter/shared/repositories/plan_engine/equipment_capabilit
 import 'package:icanbefitter/shared/repositories/plan_engine/exercise_selector.dart';
 import 'package:icanbefitter/shared/repositories/plan_engine/models.dart';
 import 'package:icanbefitter/shared/repositories/plan_engine/training_history_analyzer.dart';
-
-/// The universalPoolV4['vertical_pull'] names, in pool order.
-const _pool = [
-  'Pull Up',
-  'Chin Up',
-  'Inverted Row',
-  'Sliding Lat Pull',
-  'Doorway Isometric Lat Pull',
-  'Prone Lat Pull Hold',
-];
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -80,19 +71,6 @@ void main() {
     }
   }
 
-  /// Only the six real pool rows, retagged `warmup` so attempts 1-4 find no
-  /// `vertical_pull` row and the slot reaches attempt 5, which resolves the
-  /// pool by NAME.
-  Future<void> seedPoolOnly() async {
-    final box = Hive.box(HiveService.exerciseBoxName);
-    await box.clear();
-    for (final name in _pool) {
-      final row = library.firstWhere((r) => r['name'] == name);
-      await box.put(row['id'] as String,
-          {...row, 'movement_pattern': ['warmup']});
-    }
-  }
-
   MuscleSlot slot(String pattern, String muscle) => MuscleSlot(
         targetMuscle: muscle,
         movementPattern: pattern,
@@ -107,22 +85,6 @@ void main() {
         intensity: 'hypertrophy',
         slotsA: slots,
       );
-
-  List<PlannedExercise> att5Picks(Set<String>? capability) => ExerciseSelector
-      .pickV4(
-        slotDays: [
-          day([slot('vertical_pull', 'Lats'), slot('vertical_pull', 'Lats')])
-        ],
-        exerciseRepo: ExerciseRepository.instance,
-        equipmentTier: 'bodyweight',
-        effectiveExp: 'intermediate',
-        phase: 1,
-        goal: 'build_muscle',
-        exclusions: const {},
-        capability: capability,
-      )
-      .first
-      .exercisesA;
 
   List<PopulatedDay> pinned(Object pins, Set<String>? capability) =>
       ExerciseSelector.buildPinnedDays(
@@ -154,24 +116,6 @@ void main() {
 
   List<String> names(List<PlannedExercise> xs) =>
       [for (final x in xs) x.exerciseName];
-
-  test('att5 skips a pool move the user cannot perform', () async {
-    await seedPoolOnly();
-    final capability = bodyweight()!;
-    final picks = att5Picks(capability);
-    expect(picks, isNotEmpty, reason: 'the pool has performable tails');
-    for (final p in picks) {
-      expect(EquipmentCapability.canPerform(p.equipmentNeeded, capability),
-          isTrue,
-          reason: '${p.exerciseName} needs ${p.equipmentNeeded}');
-    }
-    expect(picks.first.exerciseName, isNot('Pull Up'));
-  });
-
-  test('capability null keeps today\'s att5 order', () async {
-    await seedPoolOnly();
-    expect(att5Picks(null).first.exerciseName, 'Pull Up');
-  });
 
   test('a lone library pin the user cannot perform is dropped; the emptied '
       'variant is refilled',

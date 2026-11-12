@@ -18,9 +18,8 @@
 //      duplicate week-1).
 //  (3) A/B DISTINCT — pinning day 0 with `(a:[X], b:[Y])`, X≠Y, puts X in the
 //      A-weeks (1 & 3) and Y in the B-weeks (2 & 4) — never the same list twice.
-//  (4) INJURY UNGATED — a newly-contraindicated pin is DROPPED even though
-//      `disable_injury_universal_filter` governs only the att-5 pool; the emptied
-//      variant FRESH-FILLS.
+//  (4) INJURY UNGATED — a newly-contraindicated pin is DROPPED (no kill-switch
+//      reaches it); the emptied variant FRESH-FILLS.
 //  (5) TIER KEPT — a pin whose equipment_tier omits the user's tier is KEPT (tier
 //      is a soft att4-relaxed heuristic; the caller guarantees same-tier). The
 //      pin's equipment is performable; capability is the hard check (B1 Task 1).

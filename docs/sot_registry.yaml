@@ -763,12 +763,12 @@ concepts:
         semantic: aggregated
         fields_read: [total_calories, date]
       - file: lib/features/nutrition/providers/nutrition_provider.dart
-        line_range: 1640-1699
+        line_range: 1658-1717
         method: WeeklyNutritionNotifier.build
         semantic: historical-series
         fields_read: [total_calories, total_protein, date, is_saved_meal]
       - file: lib/features/nutrition/providers/nutrition_provider.dart
-        line_range: 987-1021
+        line_range: 1096-1120
         method: FoodLogNotifier.deleteFoodLog (audit log capture)
         semantic: display-only
         fields_read: [total_calories, calories, food_name, name, meal_type, date]
@@ -914,7 +914,7 @@ concepts:
     reader_manifest_complete: true
     readers:
       - file: lib/features/nutrition/providers/nutrition_provider.dart
-        line_range: 987-1034
+        line_range: 1096-1133
         method: FoodLogNotifier.deleteFoodLog + restoreFoodLog
         semantic: pass-through
         fields_read: [via box.get(logId), Hive nlog_* full map]
@@ -924,7 +924,7 @@ concepts:
           to NutritionWriteService.restoreFoodLog. Same provider also
           delegates DeleteNutritionLogNotifier.delete to WriteService.deleteLog.
       - file: lib/features/nutrition/providers/nutrition_provider.dart
-        line_range: 1708-1723
+        line_range: 1726-1741
         method: DeleteNutritionLogNotifier.delete
         semantic: pass-through
         fields_read: [via NutritionWriteService.deleteLog(allowUndo: true)]
@@ -1365,7 +1365,7 @@ concepts:
     reader_manifest_complete: true
     readers:
       - file: lib/features/nutrition/providers/nutrition_provider.dart
-        line_range: 1580-1583
+        line_range: 1755-1758
         method: waterTargetProvider (Provider<int>)
         semantic: pass-through
         fields_read: [via WaterTargetService.instance.currentTargetMl()]
@@ -2036,12 +2036,12 @@ concepts:
         semantic: aggregated
         fields_read: [total_calories, total_protein, total_carbs, total_fat, total_fiber, date, is_saved_meal]
       - file: lib/features/nutrition/providers/nutrition_provider.dart
-        line_range: 280-340
+        line_range: 321-378
         method: DailyNutritionNotifier.build (per-slot bucketing)
         semantic: aggregated
         fields_read: [date, meal_type, is_saved_meal, items[]]
       - file: lib/features/nutrition/providers/nutrition_provider.dart
-        line_range: 1640-1699
+        line_range: 1658-1717
         method: WeeklyNutritionNotifier.build
         semantic: historical-series
         fields_read: [total_calories, total_protein, date, is_saved_meal]
@@ -2124,7 +2124,7 @@ concepts:
       food-search (custom foods appear alongside the bundled DB).
     writers:
       - file: lib/features/nutrition/providers/nutrition_provider.dart
-        line_range: 1249-1315
+        line_range: 1289-1355
         method: addCustomFood
         semantic: hive-write + immediate sync
         notes: |
@@ -2132,7 +2132,7 @@ concepts:
           + foodBox[<v5>], then unawaited(SyncService.instance.syncCustomItemsNow()).
     readers:
       - file: lib/features/nutrition/providers/nutrition_provider.dart
-        line_range: 1355-1356
+        line_range: 1358-1359
         method: customFoodProvider
         semantic: hive-read
         notes: |
@@ -4459,7 +4459,7 @@ concepts:
       the same key. Synced to water_logs cloud table with UNIQUE(user_id, date).
     writers:
       - file: lib/features/nutrition/providers/nutrition_provider.dart
-        line_range: 394-417
+        line_range: 422-445
         method: WaterIntakeNotifier.addWater + increment + decrement
         notes: Routes through HealthWriteService.setWaterMl (audit-2026-05-16 E.7).
       - file: lib/core/services/health_write_service.dart
@@ -4477,7 +4477,7 @@ concepts:
     reader_manifest_complete: true
     readers:
       - file: lib/features/nutrition/providers/nutrition_provider.dart
-        line_range: 382-421
+        line_range: 410-449
         method: WaterIntakeNotifier.build (waterIntakeProvider)
         semantic: latest
         fields_read: [healthBox['water_ml_<istToday>'] (raw int)]
@@ -4565,7 +4565,7 @@ concepts:
     sync_methods: [_syncWaterLogs]
     restore_methods: [_restoreWaterLogs]
     ist_sites:
-      - { file: lib/features/nutrition/providers/nutrition_provider.dart, line: 409, fn: WaterIntakeNotifier.build }
+      - { file: lib/features/nutrition/providers/nutrition_provider.dart, line: 412, fn: WaterIntakeNotifier.build }
       - { file: lib/core/services/health_write_service.dart, line: 336, fn: setWaterMl }
     telemetry:
       failure_op_types: [upsert_water_log]
@@ -4582,7 +4582,7 @@ concepts:
       Hive restore uses same hash key so cross-device restores don't duplicate.
     writers:
       - file: lib/features/nutrition/providers/nutrition_provider.dart
-        line_range: 1105-1178
+        line_range: 1205-1275
         method: SavedMealsNotifier.saveMealPreset + relogSavedMeal + deleteSavedMeal (delegators — relogSavedMeal no longer bumps times_used, a8e3f1)
       - file: lib/core/services/nutrition_write_service.dart
         line_range: 448-580
@@ -4604,7 +4604,7 @@ concepts:
       - { file: lib/features/auth/screens/restoring_screen.dart, reason: "checks SavedMealKeyMigrator flag (config.get('saved_meal_key_migration_v1')) — not a saved_meal_* row reader; diagnose b8d5c2" }
     readers:
       - file: lib/features/nutrition/providers/nutrition_provider.dart
-        line_range: 1070-1103
+        line_range: 1171-1202
         method: SavedMealsNotifier.build (savedMealsProvider)
         semantic: aggregated
         fields_read: [nutritionBox entries with is_saved_meal=true OR meal_*+is_template=true, times_used]
@@ -4617,7 +4617,7 @@ concepts:
         semantic: pass-through
         fields_read: [via savedMealsProvider — name, total_calories, items[], id, times_used]
       - file: lib/features/nutrition/providers/nutrition_provider.dart
-        line_range: 305-325
+        line_range: 321-378
         method: DailyNutritionNotifier.build (skip-filter)
         semantic: flag-check
         fields_read: [is_saved_meal]
@@ -4630,7 +4630,7 @@ concepts:
         semantic: flag-check
         fields_read: [is_saved_meal]
       - file: lib/features/nutrition/providers/nutrition_provider.dart
-        line_range: 1510-1514
+        line_range: 1675-1678
         method: WeeklyNutritionNotifier (skip is_saved_meal)
         semantic: flag-check
         fields_read: [is_saved_meal]
@@ -5266,7 +5266,7 @@ concepts:
         fields_read: [schedule_<date> presence]
         notes: feeds RankService._qualifies (MCPO, officer track).
       - file: lib/features/ai_coach/services/ai_snapshot_builder.dart
-        line_range: 1364-1396
+        line_range: 1369-1412
         method: _getPlanStatus
         semantic: pass-through
         notes: the coach prompt rule is a separate Edge Function change.
@@ -5488,7 +5488,7 @@ concepts:
         fields_read: [current_streak_weeks]
         notes: fires the streak-risk insight when weeks > 2.
       - file: lib/features/ai_coach/services/ai_snapshot_builder.dart
-        line_range: 62-140
+        line_range: 67-246
         method: buildAiContext
         semantic: pass-through
         fields_read: [current_streak_weeks]
@@ -7119,7 +7119,7 @@ concepts:
         semantic: pass-through
         fields_read: []
       - file: lib/features/nutrition/providers/nutrition_provider.dart
-        line_range: 980-993
+        line_range: 981-995
         method: "AiBreakdownNotifier.saveMeal catch block"
         semantic: pass-through
         fields_read: []
@@ -7374,7 +7374,7 @@ concepts:
           + fires syncProfileNow + pushSnapshot.
       - file: lib/shared/repositories/plan_engine/exercise_selector.dart
         line_range: 1-9999
-        method: ExerciseSelector cascade fill
+        method: ExerciseSelector core-list pick (rankedPool isContraindicated) + top-up (queryV4 injuryExclusions)
         semantic: flag-check
         fields_read: [injuries]
         notes: |
@@ -7847,7 +7847,7 @@ concepts:
           legacy list — see sleep_logs concept dual-key hazard). Save
           path delegates to HealthWriteService.logSleep at line 502.
       - file: lib/features/nutrition/providers/nutrition_provider.dart
-        line_range: 380-500
+        line_range: 410-536
         method: WaterIntakeNotifier + UrineColorNotifier + HydrationSaveNotifier
         semantic: latest
         fields_read: [water_ml, urine_color, hydration]
@@ -9998,7 +9998,8 @@ concepts:
       vocab-drift bug (UI back never matched library lower_back, so a back injury
       excluded 0 exercises), the threading drops (7 entry points passed no
       injuries), the universal-pool bypass (attempt-5 handed out
-      contraindicated bodyweight moves), and — Ship 3 (U5) — the collection gap
+      contraindicated bodyweight moves; the pool itself is deleted by Unit 1B-F,
+      2026-11-11), and — Ship 3 (U5) — the collection gap
       where onboarding hard-coded injuries to ['none'] so an injured user's plan
       was never injury-filtered because the data was never captured. Diagnose
       a1f6c3.
@@ -10028,9 +10029,9 @@ concepts:
         method: generateV4
         notes: CENTRAL normalize - canonicalizes injuries once for every generation caller
       - file: lib/shared/repositories/plan_engine/exercise_selector.dart
-        line_range: 1754-1842
-        method: _cascadeFill attempt-5 + _isContraindicated
-        notes: U2 universal-pool injury filter + safe omission; kill-switch plan_engine_flags.dart
+        line_range: 830-842
+        method: _isContraindicated (passed to CoreListSelector.rankedPool by _pickCoreList; buildPinnedDays.resolve)
+        notes: U2 introduced it for the universal pool (deleted with the pool and its kill switch by Unit 1B-F, 2026-11-11); ungated; a slot with no safe row is omitted, then the thin-day top-up
       - file: lib/shared/repositories/plan_engine/warmup_cooldown.dart
         line_range: 90-200
         method: attach (_moveInjuries + _moveIsContra)
@@ -10044,11 +10045,11 @@ concepts:
         fields_read: [injury_contraindications]
         notes: exact lowercase equality (attempts 1-4) - unchanged, already correct
       - file: lib/shared/repositories/plan_engine/exercise_selector.dart
-        line_range: 1754-1842
-        method: _cascadeFill attempt-5 _isContraindicated
+        line_range: 830-842
+        method: _isContraindicated (the core-list pick's hard filter and the repeat pins)
         semantic: flag-check
         fields_read: [injury_contraindications]
-        notes: U2 - the universal pool now applies the same match (was bypassed pre-fix)
+        notes: U2 - the same exact-lowercase match as queryV4; the universal pool it was written for is deleted (Unit 1B-F)
     contract_test_path: test/contracts/injury_vocab_library_contract_test.dart
 
   - concept: bodyweight_trend_nudge
@@ -10852,6 +10853,8 @@ concepts:
       dayType come from the current frame; tier is NOT re-filtered here) — the caller (UNIT
       2-int, LIVE since 2026-09-16 — OI-53 batch 2) gates on all three + owns the
       kill-switch disable_adherence_gate.
+      Unit 1B-F (2026-11-11): the pickV4 cascade, its attempts and att-5 named above are deleted;
+      the fresh fill and every generation pick from the core-list pool (concept core_list_pool).
     writers:
       - file: lib/shared/repositories/plan_engine/exercise_selector.dart
         method: ExerciseSelector.buildPinnedDays
@@ -10859,9 +10862,8 @@ concepts:
           per frame-INDEX: resolve pinned names (getByExactName → getCustomExercises → drop);
           re-apply capability (B1 Task 1, b1c4e7: EquipmentCapability.canOfferInPicker —
           a `[]` custom is kept, a custom recording kit the user lacks is dropped; proof
-          test/contracts/universal_pool_capability_behavioral_test.dart) +
-          equip-exclusion (:282-285 mirror) + UNGATED _isContraindicated (:324-334
-          mirror, NOT att-5 gated); tier NOT re-applied (soft/att4-relaxed; caller gates
+          test/contracts/universal_pool_capability_behavioral_test.dart, whose pool tests left with the pool) +
+          equip-exclusion + UNGATED _isContraindicated; tier NOT re-applied (soft/att4-relaxed; caller gates
           same-tier); per-variant resolve(a)→exercisesA, resolve(b)→exercisesB via
           _buildExercise/_buildCustomExercise; empty variant → pickV4([frame]) fresh-fill (A)
           / fresh B-variant (B when slotsB≠null, else B=A); customs scanned once (lazy);
@@ -10905,17 +10907,18 @@ concepts:
       replacement stays injuryExclusions-filtered) and arguably correct (explicit user
       demote beats app suggestion). generator_matrix.dart's CascadeTracer.trace call is
       intentionally NOT wired (param defaults false) → the frozen D3 baseline is unmoved.
+      Unit 1B-F (2026-11-11): the cascade, L6 _applyHistoryAdjustments, applyInjuryUniversalFilter
+      and the mirrors (cascade_tracer, generator_matrix) are deleted. The preference now
+      re-ranks inside _selectCandidate at its two callers: _pickCoreList (the rankedPool slot
+      pick) and the thin-day top-up (_topUpVariant).
     writers:
       - file: lib/shared/repositories/plan_engine/injury_substitutes.dart
         method: InjurySubstitutes._preferred (curated map) + preferredFor (ordered/deduped/lowercased)
       - file: lib/shared/repositories/plan_engine/exercise_selector.dart
-        method: _selectCandidate (re-rank at the 4 _cascadeFill attempt sites) + applyInjurySubstitutePreference thread (pickV4 / buildPinnedDays / _fillSlots / _cascadeFill)
+        method: _selectCandidate (re-rank at its two callers, _pickCoreList and _topUpVariant) + applyInjurySubstitutePreference thread (pickV4 / buildPinnedDays / _pickCoreList / topUpDays)
       - file: lib/shared/repositories/plan_engine/plan_generator.dart
         method: generateV4 (resolves PlanEngineFlags.injurySubstitutePreferenceEnabled → both pickV4 + buildPinnedDays calls)
     readers:
-      - file: test/plan_generator/v4_diagnostic/cascade_tracer.dart
-        method_or_widget: _selectCandidateName mirror (keeps the pure-Dart cascade tracer in lockstep; QueryV4Mirror unchanged)
-        semantic: mirror
       - file: test/contracts/injury_substitute_preference_behavioral_test.dart
         method_or_widget: drives real generateV4 — ON re-ranks vs OFF, post-filter safety, injury-gated inertness, uncurated fallthrough
         semantic: behavioral
@@ -10930,7 +10933,7 @@ concepts:
       just-finished phase's per-day A/B picks (getWeek(1)/getWeek(2), LOWERCASED,
       the SAME rows repeatPinsFrom reads but WITHOUT the G5 gate) and threads them as
       `previousPhaseByDay` → generateV4 → pickV4 (indexed per-day avoidA/avoidB) →
-      _fillSlots → _cascadeFill → `_selectCandidate._preferNovel`, which prefers a
+      _pickCoreList (the cascade until Unit 1B-F) → `_selectCandidate._preferNovel`, which prefers a
       same-`movement_pattern` sibling NOT used last phase. SOFT bias: feeds
       _selectCandidate ONLY, NEVER queryV4/pickedNames/excludeNames — so it can never
       hard-empty a slot (BOUNDED: falls to pool.first when only last-phase picks
@@ -10942,12 +10945,11 @@ concepts:
       {} → no getWeek reads → avoidNames empty → byte-identical). NO migration/restore entry
       (reads existing schedule_* rows). NOTES: shared `_exerciseNamesOfRow` /
       `_namesByDayIndex` parsers (extracted from repeatPinsFrom — one parser, #1 drift
-      class). attempt-5 (universal pool) is NOT variety-eligible (never calls
-      _selectCandidate — stays as safe as today). daysPerWeek/split-shape change across
+      class). daysPerWeek/split-shape change across
       advance → day-index misalignment is a HARMLESS no-op (a stale avoid-name that
-      matches no pattern-locked candidate falls to .first). L6 _applyHistoryAdjustments
-      (phase≥2) may re-swap a novel pick toward a demoted exercise (still
-      injury-filtered → safe). buildPinnedDays UNCHANGED (variety ⟂ pins). Covers only
+      matches no pattern-locked candidate falls to .first). A demoted row sorts last in
+      rankedPool (the L6 partition; the OFF L6 post-pass, attempt 5 and the cascade are
+      deleted by Unit 1B-F, 2026-11-11). buildPinnedDays UNCHANGED (variety ⟂ pins). Covers only
       the pickV4 branch (mutually-exclusive with the repeat-content buildPinnedDays branch).
     writers:
       - file: lib/core/services/workout_schedule_read_service.dart
@@ -10960,17 +10962,14 @@ concepts:
       - file: lib/shared/repositories/plan_engine/plan_generator.dart
         method: generate/generateV4 previousPhaseByDay → pickV4 (NOT buildPinnedDays)
       - file: lib/shared/repositories/plan_engine/exercise_selector.dart
-        method: pickV4 (indexed loop → avoidA/avoidB) / _fillSlots / _cascadeFill avoidNames thread + _selectCandidate._preferNovel
+        method: pickV4 (indexed loop → avoidA/avoidB) / _pickCoreList avoidNames thread + _selectCandidate._preferNovel
     readers:
-      - file: test/plan_generator/v4_diagnostic/cascade_tracer.dart
-        method_or_widget: _selectCandidateName + _preferNovelName mirror (trace gains avoidNames; QueryV4Mirror unchanged)
-        semantic: mirror
       - file: test/contracts/cross_phase_variety_behavioral_test.dart
         method_or_widget: drives real generateV4 (full_gym/advanced) — variety changes the SET, null=deterministic, bounded, injury-safe
         semantic: behavioral
       - file: lib/shared/repositories/plan_engine/core_list_selector.dart
-        method_or_widget: CoreListSelector.rankedPool (enable_core_list_pool ON, Batch B1)
-        semantic: _pickCoreList passes the previous phase names to _selectCandidate as avoidNames (soft, as OFF)
+        method_or_widget: CoreListSelector.rankedPool (the only picker since Unit 1B-F)
+        semantic: _pickCoreList passes the previous phase names to _selectCandidate as avoidNames (soft)
     contract_test_path: test/contracts/cross_phase_variety_behavioral_test.dart
 
   - concept: upper_day_cross_day_variety
@@ -10978,17 +10977,16 @@ concepts:
     behavioral_test_path: test/contracts/cross_day_variety_behavioral_test.dart
     description: >
       OI-458 — an `upper` day SOFT-avoids the names the earlier push / pull / shoulders_arms days of the same plan hold,
-      per variant (A with A, B with B, lowercased). `ExerciseSelector.pickV4` (cascade) and `_pickCoreList` (ship-dark)
-      union them into avoidA / avoidB, which feed ONLY `_selectCandidate._preferNovel` (never queryV4, pickedNames or
+      per variant (A with A, B with B, lowercased). `ExerciseSelector._pickCoreList` (the only picker since Unit 1B-F)
+      unions them into avoidA / avoidB, which feed ONLY `_selectCandidate._preferNovel` (never queryV4, pickedNames or
       excludeNames), so the avoid can never empty a slot or change a pattern, equipment, injury or exclusion filter;
       a pool with nothing else repeats. Day types come from the split (`MuscleSlotDay.dayType`) via
-      `_feedsUpperAvoid`. Every other day type is unchanged (6-day Push A / Push B repeats stay deliberate). Not
-      mirrored in cascade_tracer (it counts attempts; the tiebreak sits inside one pool), as W3.4 / W3.5 are not.
+      `_feedsUpperAvoid`. Every other day type is unchanged (6-day Push A / Push B repeats stay deliberate).
       The repeat phase's one-frame fresh fill (`buildPinnedDays` -> `fresh()`) passes the earlier feeder frames' names as
       `earlierFeederNamesA/B`. topUpDays (injured users) does not widen its soft avoid.
     writers:
       - file: lib/shared/repositories/plan_engine/exercise_selector.dart
-        method: pickV4 day loop (earlierPushPullA/B, isUpper, _feedsUpperAvoid) and _pickCoreList day loop
+        method: _pickCoreList day loop (earlierPushPullA/B, isUpper, _feedsUpperAvoid)
     readers:
       - file: lib/shared/repositories/plan_engine/exercise_selector.dart
         method_or_widget: _selectCandidate._preferNovel (the avoid set is read here only)
@@ -11066,7 +11064,6 @@ concepts:
       unchanged. Paired with the Legs B slot swap (`SplitResolver._get6DayV4`, Quads / knee_dominant / compound,
       priority 2). Kill-switch `disable_quad_legs_b` (`PlanEngineFlags.quadLegsBEnabled`, default ON) restores both. The gate oracle
       (`session_set_budget_gate_test.dart`, `_credited`) restates the rule independently.
-      Not mirrored in cascade_tracer (it counts cascade attempts, not set credit).
     writers:
       - file: lib/shared/repositories/plan_engine/plan_generator.dart
         method: generateV4 SessionBudgetContext(quadPrimaryCreditsGlutes:)
@@ -11222,8 +11219,8 @@ concepts:
       routes to the deload rung, not +sets. `phase >= 2` self-gate (PRO — free is phase
       1; the fresh-advance callers are PRO-gated → inherits the server-verified
       phases_2_to_12 gate). No migration / no restore entry (Hive-read-only; exlog +
-      readiness already sync+restore). No scorecard/mirror wiring (generator_matrix /
-      cascade_tracer untouched → frozen D3 baseline unmoved).
+      readiness already sync+restore). No scorecard/mirror wiring (both mirrors were
+      deleted by Unit 1B-F, 2026-11-11).
       B2 (session set budget, always on since 2026-11-02, concept session_set_budget): a plateau +1 is refused inside
       applyToWeeks when the BudgetLedger has no room; mergePlateauSetDeltas is unchanged.
     writers:
@@ -11268,16 +11265,16 @@ concepts:
     description: >
       W3.5 (Batch 12-B, PRO) — plateau escalation rung-3 EXERCISE ROTATION. At a genuine
       FRESH phase advance the plateaued COMPOUND lifts (same detector as rung-2 — flat
-      MAX-Epley e1RM ≥3 sessions ≥28d, 63-day window) are SOFT-avoided in the cascade so
+      MAX-Epley e1RM ≥3 sessions ≥28d, 63-day window) are SOFT-avoided in the pick so
       each rotates to a same-`movement_pattern` sibling next phase.
       `PlateauScan.plateauedExerciseNames({phase})` (per-exercise sibling of
       plateauedGroups, LOWERCASED, SAME gates: enable_plateau_escalation +
       enable_readiness + phase>=2 + !fatigue) → computed in `generateV4` (guarded
       `applyPlateauEscalation && pins == null`) → `pickV4 plateauAvoidNames` → UNIONED
-      GLOBALLY into every day's avoidA/avoidB → `_fillSlots`/`_cascadeFill`/
+      GLOBALLY into every day's avoidA/avoidB → `_pickCoreList` (the cascade until Unit 1B-F) →
       `_selectCandidate._preferNovel` (the SAME 11-B seam). SOFT + BOUNDED: feeds
       _selectCandidate ONLY (never queryV4/excludeNames) on a guaranteed-non-empty pool
-      → never empties a slot / wrong pattern / disturbs the attempt-5 injury floor;
+      → never empties a slot / wrong pattern / disturbs an injury filter;
       falls to `pool.first` (the stuck lift RETAINED) on a shallow pool. Ship-dark:
       reuses `enable_plateau_escalation` (NO new flag), INDEPENDENT of 11-B's
       `crossPhaseVarietyEnabled`. DEFAULT OFF / opt-in false → plateauAvoid `{}` → the
@@ -11286,10 +11283,10 @@ concepts:
       pre-existing 11-B). rung-2 (+sets) and rung-3 (rotation) BOTH fire (no cross-gate);
       the +1 lands on the fresh sibling's group, MRV-clamped. rung-1 explainability NOT
       built (terminal: out-of-scope + causally imprecise + breaks pure-compute). No
-      migration/restore (Hive-read-only). cascade_tracer `_preferNovelName` +
-      generator_matrix UNCHANGED → frozen D3 baseline unmoved. ⚠ L6
-      `_applyHistoryAdjustments` (phase≥2, demoted) may re-add a rotated lift —
-      consistent with rung-3 being SOFT.
+      migration/restore (Hive-read-only). Unit 1B-F (2026-11-11) deleted the cascade, the
+      L6 post-pass `_applyHistoryAdjustments` and the mirrors; a demoted row now sorts last
+      in rankedPool, which may still leave a rotated lift as the slot's pick — consistent
+      with rung-3 being SOFT.
     writers:
       - file: lib/shared/repositories/plan_engine/plateau_scan.dart
         method: PlateauScan.plateauedExerciseNames
@@ -11316,8 +11313,8 @@ concepts:
         method_or_widget: seeds exlog_* flat plateaus for the baseline plan's compounds → rotation (non-vacuous) + independence + ship-dark + slot-count-invariance + bounded + injury-safe + fatigued-no-rotation + gates
         semantic: behavioral
       - file: lib/shared/repositories/plan_engine/core_list_selector.dart
-        method_or_widget: CoreListSelector.rankedPool (enable_core_list_pool ON, Batch B1)
-        semantic: _pickCoreList unions plateauAvoidNames into avoidNames (soft, as OFF)
+        method_or_widget: CoreListSelector.rankedPool (the only picker since Unit 1B-F)
+        semantic: _pickCoreList unions plateauAvoidNames into avoidNames (soft)
     contract_test_path: test/contracts/plateau_rotation_behavioral_test.dart
 
   - concept: repeat_content_scheduling
@@ -11650,9 +11647,9 @@ concepts:
         semantic: hard-filter
         notes: null capability skips it entirely; the tier block is now a fall-through, not an early `return true`
       - file: lib/shared/repositories/plan_engine/exercise_selector.dart
-        method: pickV4 / _fillSlots / _cascadeFill / buildPinnedDays / _applyHistoryAdjustments
+        method: pickV4 / _pickCoreList / buildPinnedDays / topUpDays / _topUpVariant
         semantic: hard-filter
-        notes: `required Set<String>? capability` on all eight (pickV4, _pickCoreList, buildPinnedDays, _applyHistoryAdjustments, _fillSlots, _cascadeFill, topUpDays, _topUpVariant) — required-not-defaulted, so the compiler enumerates call sites. The two NAME-resolving paths that bypass queryV4 — _cascadeFill attempt 5 (canPerform) and buildPinnedDays.resolve (canOfferInPicker) — apply it themselves since B1 Task 1 (b1c4e7); before that only the cascade_tracer mirror did. Production-path proof test/contracts/universal_pool_capability_behavioral_test.dart
+        notes: `Set<String>? capability` on the five (pickV4, _pickCoreList, buildPinnedDays, topUpDays, _topUpVariant; required on the four private and top-up ones), so the compiler enumerates call sites. The one NAME-resolving path that bypasses queryV4, buildPinnedDays.resolve (canOfferInPicker), applies it itself since B1 Task 1 (b1c4e7); _pickCoreList hands it to rankedPool's hard filter. Unit 1B-F (2026-11-11) deleted _fillSlots, _cascadeFill (and attempt 5's canPerform), _applyHistoryAdjustments and the cascade_tracer mirror. Production-path proof test/contracts/bodyweight_capability_leak_test.dart (core path) and test/contracts/universal_pool_capability_behavioral_test.dart (repeat pins)
       - file: lib/shared/repositories/plan_engine/warmup_cooldown.dart
         method: attach (all three pools, under the existing injury floor)
         semantic: hard-filter
@@ -11670,7 +11667,7 @@ concepts:
         semantic: advisory
         notes: decision 7 — the coach was given the tier LABEL and had to guess what it contained
       - file: lib/shared/repositories/plan_engine/core_list_selector.dart
-        method: CoreListSelector.rankedPool (enable_core_list_pool ON, Batch B1)
+        method: CoreListSelector.rankedPool (the only picker since Unit 1B-F)
         semantic: hard filter F requires EquipmentCapability.canPerform when capability != null, else the queryV4 tier rule; needsImplementPreference is keyed on the capability set, never the tier label
     contract_test_path: test/contracts/bodyweight_capability_leak_test.dart
 
@@ -11754,7 +11751,8 @@ concepts:
     behavioral_test_path_v18: test/contracts/library_seed_v18_upgrade_behavioral_test.dart  # Batch C2a 2026-11-04 (OI-460): real SeedService.seedIfNeeded on a v17 box; the 52 removed ids are pruned (kRetiredLibraryIdsNoTwin), custom and community rows survive
     behavioral_test_path_depth: test/contracts/library_depth_rule_test.dart  # Batch C2a: the depth rule on the base fixture and the shipped library, both pattern semantics, mutated
     behavioral_test_path_v19: test/contracts/library_seed_v19_upgrade_behavioral_test.dart  # Batch C2b 2026-11-05 (OI-462): real SeedService.seedIfNeeded on a v18 box; the six twin_pending rows are pruned, the four twins arrive, retired names resolve by exact name or alias, a fresh install gets the four and none of the six
-    behavioral_test_path_v24: test/contracts/library_seed_v24_upgrade_behavioral_test.dart  # Library Batch S1b-3 2026-11-10 (OI-147): real SeedService.seedIfNeeded on a v23 box holding E053; it ends at v24 without E053 (merged_ids prune), G1373 written as bundled, a community row named Donkey Calf Raise and every other row unchanged, a v24 box left alone
+    behavioral_test_path_v25: test/contracts/library_seed_v25_upgrade_behavioral_test.dart  # Unit 1B-F 2026-11-11 (Ruling 12): real SeedService.seedIfNeeded on a v24 box (the 14 jump rows at their v24 tags, test/fixtures/library_hip_tags_v24.json); it ends at v25 with the 14 rows as bundled and every other row unchanged, a v25 box left alone; the v24 bundle digest pinned
+    behavioral_test_path_v24: test/contracts/library_seed_v24_upgrade_behavioral_test.dart  # Library Batch S1b-3 2026-11-10 (OI-147): real SeedService.seedIfNeeded on a v23 box holding E053; it ends at v24 without E053 (merged_ids prune), G1373 written as bundled, a community row named Donkey Calf Raise and every other row unchanged, a box at the current version (v25 since Unit 1B-F) left alone
     behavioral_test_path_v20: test/contracts/library_seed_v20_upgrade_behavioral_test.dart  # Batch C2c 2026-11-06 (OI-474): real SeedService.seedIfNeeded on a v19 box holding the cable E230; it ends at v20 with the bodyweight E230 and its picture keys, every other row unchanged, a fresh install gets the new row, a v20 box is left alone
     description: |
       Library v24 (Library Batch S1b-3, 2026-11-10, OI-147): 870 rows. E053 Donkey Calf Raise merged into G1373 Bodyweight
@@ -11905,6 +11903,15 @@ concepts:
       tagged shoulder and 29 names left untagged as safe-pool additions (kV14SafePool 33 to 62,
       4.6 percent of the new rows against 11.6 percent of the original 285-row library and 6.8 percent of the 914-row library). The tag table is
       add-only and merge-preserving (scripts/build_library_injury_additions_v15.js).
+      v25 (Unit 1B-F, Ruling 12, founder d19 2026-11-10, docs/plans/2026-11-10-generator-1bf-flip.md): the 14
+      lower-body jump rows that land from flight gain `hip`: E063, E065, E066, E193 and E202 through the importer's
+      injury-tag record (scripts/data/library_injury_additions_v25.json, {id, before, after}; the importer keeps E-rows
+      verbatim, so the record is what makes a hand edit fail --check), the eight G rows of the jump and burpee families
+      through the table (rebuilt by the builder: the family floor gains hip once the E originals carry it; G3582's
+      row was rebuilt too, it already carried hip) and G3656 by hand in the table (judgement row, d19). The 4 upper-body plyometric rows stay untagged. Seed v25
+      (bundle-only: no cloud column); test/contracts/library_seed_v25_upgrade_behavioral_test.dart, the importer's
+      injury-tag group in test/scripts/library_media_importer_test.dart, and the floor sweep's by-id hip-jump zero
+      (test/helpers/injury_floor_sweep_lib.dart kHipJumpIds). The warm-up's Jumping Jacks and Jump Rope gain hip too.
     writers:
       - file: assets/data/exercise_library.json
         method: injury_contraindications field (26 rows tagged + 2 deepened, UNION with existing)
@@ -11933,7 +11940,7 @@ concepts:
         semantic: a row is excluded for an injured user iff injury_contraindications contains the token
         notes: empty/missing list = never excluded (the under-tagging hole 13-B and v14 close)
       - file: lib/shared/repositories/plan_engine/exercise_selector.dart
-        method: V3 injury filter (:470-482) and _isContraindicated (:1456-1468, attempt 5 and repeat pins)
+        method: _isContraindicated (:830-842; the core-list pick and the repeat pins; the V3 filter and attempt 5 were deleted by Unit 1B-F)
         semantic: the same exact-lowercase intersection as queryV4
       - file: lib/shared/repositories/plan_engine/warmup_cooldown.dart
         method: attach (_moveIsContra) — reads its OWN _moveInjuries table, not the library field
@@ -11943,26 +11950,30 @@ concepts:
         semantic: every curated sub is a library row NOT tagged for its own injury (injury_recheck_v14_contract_test.dart); v14 removed the names it tagged and added Floor Press, Chest Squeeze Press and Machine High Row to shoulder
         notes: warmup mirror _moveInjuries value-agreement guarded by warmup_library_injury_mirror_test
       - file: lib/shared/repositories/plan_engine/core_list_selector.dart
-        method: CoreListSelector.rankedPool (enable_core_list_pool ON, Batch B1)
-        semantic: hard filter F drops a row whose injury_contraindications contains a user token, through the shared ExerciseSelector._isContraindicated passed in as isContraindicated (ungated, as attempts 1-4)
+        method: CoreListSelector.rankedPool (the only picker since Unit 1B-F)
+        semantic: hard filter F drops a row whose injury_contraindications contains a user token, through the shared ExerciseSelector._isContraindicated passed in as isContraindicated (ungated, as queryV4)
     contract_test_path: test/contracts/injury_undertag_13b_contract_test.dart
 
   - concept: core_list_pool
     domain: workout
     behavioral_test_path: test/contracts/core_list_pool_behavioral_test.dart
     description: |
-      Batch B1 (docs/plans/2026-10-22-library-core-list-pool.md), ship-dark: with configBox
-      enable_core_list_pool == true AND a library carrying core_levels, ExerciseSelector.pickV4
-      delegates to _pickCoreList, which picks each slot from CoreListSelector.rankedPool: core
+      Batch B1 (docs/plans/2026-10-22-library-core-list-pool.md), the ONLY picker since Unit 1B-F
+      (docs/plans/2026-11-10-generator-1bf-flip.md, 2026-11-11), which deleted the configBox flag
+      enable_core_list_pool, hasCoreFields and the 5-attempt cascade: ExerciseSelector.pickV4
+      runs _pickCoreList over getAll(), which picks each slot from CoreListSelector.rankedPool: core
       rows for the effective level, else a same-variant_family row core only at a HIGHER level
       (never lower, D6), else drop. Variant B soft-avoids A; an emptied variant copies the other;
-      a doubly-empty day takes easier-or-equal core rows, nearest level first (Ruling 12), then the OFF cascade. OFF (flag
-      absent) or a v12 box runs the cascade verbatim (test/plan_generator/generator_golden_test.dart,
-      998 personas). ON-world gate test/plan_generator/core_list_pool_gate_test.dart (hard zeros
-      over the same personas; report test/plan_generator/core_list_pool_report.md). The
-      slot_focus / slot_pattern overlays are read ONLY here; the flip copies them into
-      target_focus / movement_pattern and deletes them.
-      Generator step 1A (docs/plans/2026-11-08-generator-step1-core-list.md, still OFF):
+      a doubly-empty day takes easier-or-equal core rows, nearest level first (Ruling 12), then
+      the thin-day top-up; a slot with nothing is omitted. A library without core_levels picks
+      nothing (the seed carries them since v13). Golden test/plan_generator/generator_golden_test.dart
+      (1,010 personas: the 998 re-recorded at the flip equal to the pre-flip ON world, plus 12
+      exclude-everything personas). Gate test/plan_generator/core_list_pool_gate_test.dart (hard
+      zeros incl. no empty day, over those personas plus 26 scorecard personas, 1,036; report
+      test/plan_generator/core_list_pool_report.md). The slot_focus /
+      slot_pattern overlays are read ONLY here; copying them into target_focus /
+      movement_pattern is Unit 1B-F2.
+      Generator step 1A (docs/plans/2026-11-08-generator-step1-core-list.md, live with the flip):
       R2 jump rows (high_impact or discipline plyometric) leave a mixed pool before the
       improvised filter (a partition: _preferNovel walks past any ordering key); R3 (a) an
       implement user's non-core isolation slot outside the implement patterns is
@@ -11970,7 +11981,7 @@ concepts:
       the slot's muscle, calves heads gastrocnemius/soleus); R3 (b) a fit key (a row using
       a non-household item the user has) before priority_tier in non-core compound slots;
       R5 a glute-first last tie-break in Glutes hip_dominant slots; R4 the thin-day top-up
-      prefers core rows on the ON paths (thin_day_topup). Trace fields jumpRemoved,
+      prefers core rows (thin_day_topup). Trace fields jumpRemoved,
       jumpOnlyPool, likeForLikeImplement.
     writers:
       - file: scripts/add_library_core_fields_v13.js
@@ -11983,11 +11994,11 @@ concepts:
         notes: re-seeds the new keys into exerciseBox by id
     readers:
       - file: lib/shared/repositories/plan_engine/core_list_selector.dart
-        method: CoreListSelector.rankedPool / hasCoreFields / typeFor / subFocusMatches
-        semantic: the ON pool, pure; every Hive list field mapped toString before comparing
+        method: CoreListSelector.rankedPool / typeFor / subFocusMatches
+        semantic: the pool, pure; every Hive list field mapped toString before comparing
       - file: lib/shared/repositories/plan_engine/exercise_selector.dart
-        method: pickV4 (first-statement delegation) + _pickCoreList
-        semantic: gated on PlanEngineFlags.coreListPoolEnabled AND CoreListSelector.hasCoreFields
+        method: pickV4 (calls _pickCoreList, then topUpDays) + _pickCoreList
+        semantic: unconditional since Unit 1B-F (no flag, no library-shape check)
 
   - concept: same_movement_rule
     domain: workout
@@ -11996,12 +12007,14 @@ concepts:
       Library Batch S1b-2 (docs/plans/2026-11-09-library-batch-s1b2-loaded-versions.md, seed v23): a loaded version
       (N14 to N22, OI-148) carries `same_movement_as` = its original's id, and the founder's condition (2026-11-08) is
       that the two never share a day. Plan generation dedups a day by exact NAME, so SameMovement adds a picked name's
-      partner wherever generation checks a picked name: queryV4 excludeNames (OFF same day, OFF variant B against A for a
-      non-strength goal, top-up, L6), the universal-pool skip, the core-list picked set and B soft set, the previous-phase
-      and upper-day soft-avoid sets. Demoted and plateau names are per-exercise preferences and are NOT expanded. Swap,
+      partner wherever generation checks a picked name: queryV4 excludeNames (the top-up), the core-list picked set
+      and B soft set, the previous-phase and upper-day soft-avoid sets. Plateau names are per-exercise preferences and
+      are NOT expanded. Demoted names (amended by Unit 1B-F, Ruling 7, 2026-11-11): a demoted ORIGINAL's loaded versions
+      are demoted with it (one direction; ExerciseSelector._demotedWithLoadedVersions), read by _pickCoreList (rankedPool's
+      demoted set and the avoid set) and by the top-up; a demoted loaded version does not demote its original. Swap,
       templates and repeat pins are untouched (a user may put both on one day by hand). Gate:
-      test/plan_generator/same_movement_day_gate_test.dart (998 personas, OFF and ON, hard zero). Mirrors:
-      test/plan_generator/v4_diagnostic/query_v4_mirror.dart and cascade_tracer.dart.
+      test/plan_generator/same_movement_day_gate_test.dart (998 personas, hard zero). The OFF cascade, the universal
+      pool and the two mirrors this entry once named are deleted (Unit 1B-F).
     writers:
       - file: scripts/data/library_batch_c_source.json
         method: N14 to N22 source rows carry same_movement_as
@@ -12018,34 +12031,8 @@ concepts:
         method: queryV4 excludeNames expansion
         semantic: once per call from getAll(), never from the filtered view; no map when nothing is excluded
       - file: lib/shared/repositories/plan_engine/exercise_selector.dart
-        method: pickV4 / _pickCoreList avoid sets, ON picked set and softFor, topUpDays soft-avoid, _cascadeFill universal pool
-        semantic: the partner is treated as the name is (hard where the name is hard, soft where it is soft)
-
-  - concept: universal_pool_fallback
-    domain: workout
-    behavioral_test_path: test/contracts/universal_pool_mirror_test.dart
-    description: |
-      Batch 13-A (c3f9b2) — universalPoolV4 (exercise_selector.dart:497-509) is the
-      attempt-5 last-resort fallback pool keyed by movement_pattern. Had duplicates
-      (Inverted Row/Glute Bridge ×2) + wrong-pattern CORE moves (Dead Bug in
-      horizontal_pull, Side Plank in hip_isolation) + Pike Push Up (a vertical push) as
-      the shoulder_isolation/rear-delt fallback. cascade_tracer.dart holds a MANUAL copy
-      the scorecard runs off — untested for equality (H5 silent-drift). Fixed: deduped +
-      on-pattern bodyweight rows (Towel Row/Glute Kickback/E261) + an equality test
-      pinning the tracer copy == production.
-    writers:
-      - file: lib/shared/repositories/plan_engine/exercise_selector.dart
-        method: universalPoolV4 (:497-509)
-        notes: deduped + pattern-corrected; shoulder_isolation → E261 Bodyweight Rear Delt Raise
-      - file: test/plan_generator/v4_diagnostic/cascade_tracer.dart
-        method: universalPoolV4Mirror (:53, renamed public)
-        notes: edited in lockstep; pinned equal by the mirror test
-    readers:
-      - file: lib/shared/repositories/plan_engine/exercise_selector.dart
-        method: _cascadeFill attempt-5 (:1152)
-        semantic: resolves each pool name via repo.search, injury+equipment-filters, else omits
-        notes: on-pattern bodyweight fallback per movement_pattern
-    contract_test_path: test/contracts/universal_pool_mirror_test.dart
+        method: _pickCoreList avoid sets, picked set and softFor, topUpDays soft-avoid, _demotedWithLoadedVersions
+        semantic: the partner is treated as the name is (hard where the name is hard, soft where it is soft); a demoted original widens to its loaded versions, one direction
 
   - concept: equipment_vocab
     domain: workout
@@ -12131,7 +12118,7 @@ concepts:
       pins, and from future planned rows by a one-time repair.
     writers:
       - file: lib/shared/repositories/plan_engine/exercise_selector.dart
-        method: pickV4 → _applyHistoryAdjustments (L6 only; gate phase >= 2 && demoted.isNotEmpty)
+        method: pickV4 → _pickCoreList (L6 as the rankedPool demoted partition, phase >= 2; the _applyHistoryAdjustments post-pass was deleted by Unit 1B-F)
         semantic: library picks only; no custom is ever appended
       - file: lib/shared/repositories/plan_engine/exercise_selector.dart
         method: buildPinnedDays (custom fallback for a pinned name absent from the library)
@@ -12205,11 +12192,11 @@ concepts:
       (`PlanEngineFlags.equipmentExclusionsEnabled`, ship-dark default OFF §4.6) +
       `EquipmentVocab.floorSanitizedExclusions` (normalize to canonical + STRIP
       none/bodyweight so the bodyweight floor is never excludable). Threaded as a
-      `Set<String>` to EVERY pick path: queryV4 att1-4 (the drop is BEFORE the
-      :268 tier short-circuit + KEPT at att4 since exclusion is a HARD constraint
-      unlike the soft tier), the att5 universal-pool skip (mirrors U2's injury
-      skip; the per-pattern bodyweight floor keeps the slot non-empty), and the
-      L6 demote-swap (the L2 custom-append was removed 2026-10-21, d4b8e1). Reads every equipment_needed
+      `Set<String>` to EVERY pick path: queryV4 (the drop is BEFORE the
+      :268 tier short-circuit; exclusion is a HARD constraint unlike the soft tier),
+      rankedPool's hard filter and the repeat pins. Unit 1B-F (2026-11-11) deleted the
+      cascade attempts, the att5 universal-pool skip and the L6 demote-swap that also
+      carried it (the L2 custom-append was removed 2026-10-21, d4b8e1). Reads every equipment_needed
       crash-safe + normalizing via `EquipmentVocab.fromProfile`, so B1 is correct
       for un-normalized community rows independent of B2. The queryV4 `exclusions`
       param is REQUIRED (compile-time thread enforcement). Scope boundary: the
@@ -12226,9 +12213,9 @@ concepts:
         semantic: drop iff EquipmentVocab.fromProfile(equipment_needed).any(exclusions.contains)
         notes: BEFORE the no-tier :291 return-true short-circuit so community rows are subject; crash-safe read
       - file: lib/shared/repositories/plan_engine/exercise_selector.dart
-        method: pickV4/_fillSlots/_cascadeFill (att1-4 + att5 skip) + _applyHistoryAdjustments (L6)
-        semantic: exclusions threaded to every pick path; att5 mirrors U2 injury skip
-        notes: att4 KEEPS exclusions (hard constraint); att5 floor-sanitize keeps the slot non-empty
+        method: pickV4 / _pickCoreList (rankedPool exclusions) / buildPinnedDays.resolve / topUpDays (queryV4 exclusions)
+        semantic: exclusions threaded to every pick path
+        notes: a slot with no row left is omitted, then topped up (the att5 bodyweight floor left with the pool, Unit 1B-F)
       - file: lib/shared/repositories/plan_engine/plan_engine_flags.dart
         method: equipmentExclusionsEnabled (ship-dark, == true default OFF)
       - file: lib/features/profile/screens/edit_profile_screen.dart
@@ -12265,7 +12252,7 @@ concepts:
         semantic: no exercise requires an excluded item
         notes: consumed by Train screen / active workout; ⑥ C1 wired the equipment_exclusions profile central-read (TrainingHistoryAnalyzer.resolveEquipmentExclusions @ generateV4 :100)
       - file: lib/shared/repositories/plan_engine/core_list_selector.dart
-        method: CoreListSelector.rankedPool (enable_core_list_pool ON, Batch B1)
+        method: CoreListSelector.rankedPool (the only picker since Unit 1B-F)
         semantic: hard filter F drops a row needing any excluded token, independently of capability (two kill switches, as queryV4)
     contract_test_path: test/contracts/equipment_exclusion_filter_behavioral_test.dart
 
@@ -13448,7 +13435,7 @@ concepts:
         line_range: 1-2
         method: demo_slug + demo_pair fields
       - file: lib/core/services/seed_service.dart
-        line_range: 172-172
+        line_range: 178-178
         method: _exerciseLibraryVersion
     readers:
       - file: lib/shared/widgets/exercise_plate/plate_resolver.dart
@@ -13492,7 +13479,7 @@ concepts:
         line_range: 187-208
         method: applyMedia
       - file: lib/core/services/seed_service.dart
-        line_range: 172-172
+        line_range: 178-178
         method: _exerciseLibraryVersion
     readers:
       - file: lib/shared/widgets/exercise_plate/exercise_media_resolver.dart
@@ -13578,7 +13565,7 @@ concepts:
         line_range: 1-2
         method: coaching_cues + common_mistakes + breathing_cue + warmup_protocol fields
       - file: lib/core/services/seed_service.dart
-        line_range: 172-172
+        line_range: 178-178
         method: _exerciseLibraryVersion
     readers:
       - file: lib/shared/widgets/exercise_plate/exercise_cues.dart
@@ -14925,7 +14912,7 @@ concepts:
         fields_read: [type]
         notes: whitelist shape, widened to include 'logged' by this batch
       - file: lib/shared/repositories/plan_engine/plan_engine_flags.dart
-        line_range: 499-504
+        line_range: 471-476
         method: isRestDayConsideringLogged
         semantic: flag-check
         fields_read: [type]
@@ -16162,7 +16149,7 @@ concepts:
         fields_read: [coach_extraction_locked_fields]
         notes: the only reader of the lock list itself
       - file: lib/features/ai_coach/services/ai_snapshot_builder.dart
-        line_range: 1023-1032
+        line_range: 1029-1038
         method: _getCoachMemoryForContext
         semantic: pass-through
         fields_read: [locked_field_conflicts]
@@ -17568,30 +17555,28 @@ concepts:
     description: |
       OI-401 (diagnose 2d04d7, founder option b, 2026-10-23). An injured user's generated day with
       fewer than ThinDayTopUp.floor (3) exercises per variant is topped up by
-      ExerciseSelector.topUpDays at the three places a day list leaves the selector (pickV4 cascade
-      end, the B1 _pickCoreList return, buildPinnedDays end): the day's own (muscle, pattern)
+      ExerciseSelector.topUpDays at the places a day list leaves the selector (three until Unit 1B-F
+      deleted the pickV4 cascade end; now the _pickCoreList return in pickV4 and buildPinnedDays end): the day's own (muscle, pattern)
       anchors in slot-priority order, own pattern before its neighbours (ThinDayTopUp.neighbours),
-      then core, then stop. Every candidate comes from the cascade's own queryV4 (injury,
+      then core, then stop. Every candidate comes from queryV4 (injury,
       capability, exclusions, experience), phase 1 (and the core stage in every phase) asks for
       foundational rows first, a skill or olympic row is never added, and the avoid
       sets (previous phase, plateau, the other variant) are SOFT and lower-cased; L6 demoted
       names leave the candidate pool unless they are all that is left.
       Injured users only: an uninjured user, the kill-switch (configBox disable_thin_day_topup,
       default ON), a length mismatch and a list with no thin day all return the same list
-      instance. plan_generator.dart is not edited (rule 14). The scorecard mirrors never call the
-      selector and cannot see this; the proof is the five-block sweep (block 1
+      instance. plan_generator.dart is not edited (rule 14). The proof is the five-block sweep (block 1
       test/plan_generator/injury_sweep_b_singles_test.dart, harness test/helpers/injury_floor_sweep_lib.dart)
       plus the behavioural file. The residual (a 5/6-day beginner trimmed by VolumeFilter before the
       selector) is OI-408.
-      Generator step 1A, R4 (docs/plans/2026-11-08-generator-step1-core-list.md): topUpDays takes a
-      REQUIRED coreListOnly. True at the _pickCoreList exit, and at buildPinnedDays when the core-list
-      pool is ON and the library carries core_levels; false at the cascade exit. When true the ladder
-      runs twice: pass 1 keeps only rows core at the user's level or an easier one
+      Generator step 1A, R4 (docs/plans/2026-11-08-generator-step1-core-list.md): the ladder runs
+      twice at every exit (the coreListOnly parameter was deleted with the cascade exit by Unit 1B-F):
+      pass 1 keeps only rows core at the user's level or an easier one
       (CoreListSelector.isCoreAtOrEasier), pass 2 is the unchanged ladder with a fresh memo, so the
-      floor of 3 is kept. OFF is byte-identical (golden).
+      floor of 3 is kept.
     writers:
       - file: lib/shared/repositories/plan_engine/exercise_selector.dart
-        method: topUpDays and _topUpVariant (three call sites)
+        method: topUpDays and _topUpVariant (two call sites: pickV4, buildPinnedDays)
         semantic: post-pass on the finished List<PopulatedDay>; adds PlannedExercise rows built by _buildExercise
         notes: the ONE new queryV4 call site (exercise-seam allowlist 16 to 17)
       - file: lib/shared/repositories/plan_engine/thin_day_topup.dart
@@ -17625,7 +17610,12 @@ concepts:
       its minutes), and each builds its own BudgetLedger over it, so the same predicate decides every
       grant. Customs, timed / cardio / distance rows and rows with no library row are NOT budgeted:
       they keep their sets and only spend time (Ruling 8; a cardio / distance / timed row prescribed
-      in minutes spends those minutes). Display: budgetedDayMinutes / homeCardMinutes price a stored
+      in minutes spends those minutes). Amended by Unit 1B-F (OI-489, 2026-11-11, reversing the B2
+      plan's "a timed row ... is never removed"): a LIBRARY timed row ranked after a slot the clock
+      alone refuses may give way when that slot brings the week a first credit for one of its groups
+      (Ruling 5: never the day's only credit for a group, never below the count floor, a major or focus
+      hold only for a major), and to the empty-day guard's forced lead (Ruling 5c, without the
+      first-credit condition); proof test/contracts/allocator_timed_hold_eviction_behavioral_test.dart. Display: budgetedDayMinutes / homeCardMinutes price a stored
       plan day with the same model, and the coach's shortenDay prices a day with it; a day the model
       cannot read uses the one shared fallback (fallbackDayMinutes / fallbackExerciseListSeconds).
       generator_golden_test.dart (998 personas) was re-recorded wholesale at the flip. The proof is

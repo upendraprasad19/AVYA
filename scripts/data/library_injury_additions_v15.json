@@ -210,10 +210,11 @@
     "G0053": {
       "tokens": [
         "ankle",
+        "hip",
         "knee"
       ],
       "class": "floor",
-      "reason": "floor ankle+knee (all 3 same-family originals)",
+      "reason": "floor ankle+hip+knee (all 3 same-family originals)",
       "variant_family": "jump"
     },
     "G0054": {
@@ -1347,10 +1348,11 @@
     "G0371": {
       "tokens": [
         "ankle",
+        "hip",
         "knee"
       ],
       "class": "floor",
-      "reason": "floor ankle+knee (all 3 same-family originals)",
+      "reason": "floor ankle+hip+knee (all 3 same-family originals)",
       "variant_family": "jump"
     },
     "G0372": {
@@ -3065,12 +3067,13 @@
     "G1201": {
       "tokens": [
         "ankle",
+        "hip",
         "knee",
         "shoulder",
         "wrist"
       ],
       "class": "floor",
-      "reason": "floor ankle+knee+shoulder+wrist (all 1 same-family originals)",
+      "reason": "floor ankle+hip+knee+shoulder+wrist (all 1 same-family originals)",
       "variant_family": "burpee"
     },
     "G1254": {
@@ -3772,19 +3775,21 @@
     "G1472": {
       "tokens": [
         "ankle",
+        "hip",
         "knee"
       ],
       "class": "floor",
-      "reason": "floor ankle+knee (all 3 same-family originals)",
+      "reason": "floor ankle+hip+knee (all 3 same-family originals)",
       "variant_family": "jump"
     },
     "G1473": {
       "tokens": [
         "ankle",
+        "hip",
         "knee"
       ],
       "class": "floor",
-      "reason": "floor ankle+knee (all 3 same-family originals)",
+      "reason": "floor ankle+hip+knee (all 3 same-family originals)",
       "variant_family": "jump"
     },
     "G1476": {
@@ -4664,19 +4669,21 @@
     "G3219": {
       "tokens": [
         "ankle",
+        "hip",
         "knee"
       ],
       "class": "floor",
-      "reason": "floor ankle+knee (all 3 same-family originals)",
+      "reason": "floor ankle+hip+knee (all 3 same-family originals)",
       "variant_family": "jump"
     },
     "G3222": {
       "tokens": [
         "ankle",
+        "hip",
         "knee"
       ],
       "class": "floor",
-      "reason": "floor ankle+knee (all 3 same-family originals)",
+      "reason": "floor ankle+hip+knee (all 3 same-family originals)",
       "variant_family": "jump"
     },
     "G3237": {
@@ -4780,10 +4787,11 @@
     "G3361": {
       "tokens": [
         "ankle",
+        "hip",
         "knee"
       ],
       "class": "floor",
-      "reason": "floor ankle+knee (all 3 same-family originals)",
+      "reason": "floor ankle+hip+knee (all 3 same-family originals)",
       "variant_family": "jump"
     },
     "G3418": {
@@ -4895,10 +4903,11 @@
     "G3582": {
       "tokens": [
         "ankle",
+        "hip",
         "knee"
       ],
       "class": "floor",
-      "reason": "floor ankle+knee (all 3 same-family originals)",
+      "reason": "floor ankle+hip+knee (all 3 same-family originals)",
       "variant_family": "jump"
     },
     "G3635": {
@@ -4937,9 +4946,11 @@
       "variant_family": "lunge"
     },
     "G3656": {
-      "tokens": [],
+      "tokens": [
+        "hip"
+      ],
       "class": "judgement",
-      "reason": "no same-family original or name rule; the source tags (ankle+knee) stand",
+      "reason": "founder d19 (Unit 1B-F, Ruling 12, 2026-11-10): a run lands from flight, so hip joins the source tags (ankle+knee); no same-family original or name rule",
       "variant_family": "cardio_run"
     },
     "G3662": {

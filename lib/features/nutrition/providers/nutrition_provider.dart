@@ -1052,8 +1052,11 @@ class FoodLogNotifier extends Notifier<void> {
         .toDouble() *
         ratio;
 
+    // OI-494 (diagnose 4f9b2e): pass the WALL instant. logMeal applies
+    // istDateStr itself; istNow() is already shifted (and UTC-flagged), so it
+    // was shifted twice and a log from 18:30 IST on landed on tomorrow.
     final result = await NutritionWriteService.instance.logMeal(
-      date: istNow(),
+      date: nowWall(),
       mealType: mealType.toLowerCase(),
       items: [
         FoodItem(

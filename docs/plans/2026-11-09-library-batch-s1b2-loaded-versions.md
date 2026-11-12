@@ -90,6 +90,13 @@ the exact file (§4.3). No bucket write.
      | Demoted names (`:789, 1354, 1437-1454`; `core_list_selector.dart:398`) | per-exercise preference | no |
      | Plateau avoid (`plateauAvoidNames`, `:660-670, 800-815`, top-up) | per-exercise preference | no |
 
+     **Amended by Unit 1B-F (2026-11-11, `docs/plans/2026-11-10-generator-1bf-flip.md`, Ruling 7):** the cascade,
+     the universal pool, L6's post-pass and the mirrors in this table are deleted; the core-list pool is the only
+     picker. The "Demoted names ... no" row no longer holds there: a demoted ORIGINAL's loaded versions are demoted
+     with it (one direction; `ExerciseSelector._demotedWithLoadedVersions`), read by `_pickCoreList` (rankedPool's
+     demoted set and the avoid set) and by the top-up, so a user who moved away from E147 is not handed N14. A
+     demoted loaded version does not demote its original. Plateau names stay per exercise.
+
      **L6 consequence (stated):** L6 passes the day's `pickedNames`, which still holds the demoted pick while its
      replacement is chosen, so the partner is not that replacement (a user who moved away from E147 is not handed
      N14 in its place). After a swap the demoted name leaves the set (`exercise_selector.dart:1458`), so a later swap
@@ -164,6 +171,8 @@ the exact file (§4.3). No bucket write.
       day with E147 and N14 (both orders), OFF and ON; a day holding N19 makes the universal pool skip E048; OFF
       non-strength B never holds A's partner, ON B avoids it softly; L6 with E147 demoted never substitutes N14;
       a demoted or plateau name's partner is NOT avoided for that reason alone.
+      (Amended by Unit 1B-F, Ruling 7: this now holds for plateau names only; a demoted original's loaded versions
+      are demoted with it on the core path and the top-up.)
 - [ ] Gate (Decision 6).
 - [ ] Mutations (applied, `grep -c`): `queryV4` expansion removed; universal-pool skip reverted; ON `passes`
       reverted; helper one-directional; a mirror left unexpanded; demoted set wrongly expanded.

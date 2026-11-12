@@ -1,7 +1,7 @@
 // Batch B1 (docs/plans/2026-10-22-library-core-list-pool.md, spec §4): the
 // core-list pool. Pure and static — ExerciseSelector._pickCoreList calls
-// [CoreListSelector.rankedPool] once per slot when `enable_core_list_pool` is
-// ON and the library carries `core_levels`; with the flag OFF nothing here runs.
+// [CoreListSelector.rankedPool] once per slot, for every generation since Unit 1B-F
+// (docs/plans/2026-11-10-generator-1bf-flip.md) deleted the flag and the cascade.
 //
 // Every list field read from Hive arrives as List<dynamic>; [_strs] maps it to
 // strings before comparing.
@@ -53,14 +53,13 @@ class CoreListTraceSlot {
 /// Provenance of the ON path, written by production code and read only by
 /// tests (plan Ruling 9) — not a reimplementation, so not a mirror.
 class CoreListTrace {
+  /// `_pickCoreList` calls (one per `pickV4`; before Unit 1B-F, the times `pickV4` delegated to the pool).
   int delegations = 0;
   final List<CoreListTraceSlot> slots = [];
   /// (day, variant) whose emptied list copied the other variant's.
   final List<({int day, String variant})> copied = [];
   /// (day, variant) re-run with core rows of ANY level (both variants empty).
   final List<({int day, String variant})> emergencyAnyLevel = [];
-  /// (day, variant) that fell back to the OFF cascade (`_fillSlots`).
-  final List<({int day, String variant})> refilled = [];
 }
 
 class CoreListSelector {
@@ -138,11 +137,6 @@ class CoreListSelector {
     if (v is String) return [v];
     return const [];
   }
-
-  /// True iff any row carries a `core_levels` key. A v12 Hive box has none, so
-  /// the ON path delegates to the OFF cascade until the v13 re-seed lands.
-  static bool hasCoreFields(Iterable<Map<String, dynamic>> rows) =>
-      rows.any((r) => r.containsKey('core_levels'));
 
   /// True iff the user has any kit beyond the improvised set. Keyed on the
   /// capability set, not the tier label, so a bodyweight user who OWNS

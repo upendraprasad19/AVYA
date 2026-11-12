@@ -24,14 +24,29 @@ import '../helpers/hive_test_setup.dart';
 List<Map<String, dynamic>> _bundled() =>
     (jsonDecode(File('assets/data/exercise_library.json').readAsStringSync()) as List).cast<Map<String, dynamic>>();
 
+/// Unit 1B-F (seed v25) added `hip` to 14 rows; the older bundle keeps their v24 tags, restated in
+/// test/fixtures/library_hip_tags_v24.json (never read from git: CI checks out shallow).
+Map<String, List<String>> _hipTagsV24() => {
+      for (final e in ((jsonDecode(File('test/fixtures/library_hip_tags_v24.json').readAsStringSync())
+              as Map<String, dynamic>)['rows'] as Map<String, dynamic>)
+          .entries)
+        e.key: [for (final t in e.value as List) '$t'],
+    };
+
+Map<String, dynamic> _withV24Tags(Map<String, dynamic> r, Map<String, List<String>> tags) =>
+    tags.containsKey(r['id']) ? (Map<String, dynamic>.from(r)..['injury_contraindications'] = tags[r['id']]) : r;
+
 Map<String, dynamic> _fixture() =>
     jsonDecode(File('test/fixtures/library_e053_row_v23.json').readAsStringSync()) as Map<String, dynamic>;
 
-/// The v23 bundle, rebuilt: E053 back at its v23 index (the restated v23 row) and G1373 without the two keys.
+/// The v23 bundle, rebuilt: E053 back at its v23 index (the restated v23 row), G1373 without the two keys and the 14
+/// rows at their v24 tags.
 List<Map<String, dynamic>> _v23Bundle() {
   final fx = _fixture();
+  final tags = _hipTagsV24();
   final rows = [
-    for (final r in _bundled()) r['id'] == 'G1373' ? (Map<String, dynamic>.from(r)..remove('name_aliases')..remove('merged_ids')) : r,
+    for (final r in _bundled().map((r) => _withV24Tags(r, tags)))
+      r['id'] == 'G1373' ? (Map<String, dynamic>.from(r)..remove('name_aliases')..remove('merged_ids')) : r,
   ];
   rows.insert((fx['_meta'] as Map<String, dynamic>)['v23_index'] as int, fx['row'] as Map<String, dynamic>);
   return rows;
@@ -77,13 +92,14 @@ void main() {
         'd858d26b59e0a7574f779c59f3910647200eb206a4805126122bbc936f8daeff');
   });
 
-  test('a v23 box ends at v24: E053 is gone, G1373 is written as bundled, the community row and every other row are unchanged', () async {
+  test('a v23 box ends at the current version (v25): E053 is gone, G1373 is written as bundled, the community row and every other row are unchanged', () async {
     final hive = HiveService.instance;
     await _putV23Box(hive);
     await _markSeeded(hive, 23);
     expect(hive.exerciseBox.containsKey('E053'), isTrue, reason: 'precondition: the v23 box holds E053');
     final others = {
-      for (final id in hive.exerciseBox.keys.where((k) => k != 'E053' && k != 'G1373'))
+      // The 14 rows Unit 1B-F tagged (seed v25) leave this snapshot: the box ends at the current version.
+      for (final id in hive.exerciseBox.keys.where((k) => k != 'E053' && k != 'G1373' && !_hipTagsV24().containsKey(k)))
         id as String: jsonEncode(_asJson(hive.exerciseBox.get(id)))
     };
 
@@ -97,16 +113,16 @@ void main() {
     }
     expect(_asJson(hive.exerciseBox.get(_communityId))['name'], 'Donkey Calf Raise', reason: 'the prune deletes ids, never a name');
     expect(hive.exerciseBox.length, _bundled().length + 1);
-    expect(hive.configBox.get('exercise_library_version') as int, 24);
+    expect(hive.configBox.get('exercise_library_version') as int, 25);
   });
 
-  test('MIRROR: a box already at v24 is not rewritten (the upgrade fires only when the stored version is older)', () async {
+  test('MIRROR: a box already at the current version (v25, Unit 1B-F) is not rewritten (the upgrade fires only when the stored version is older)', () async {
     final hive = HiveService.instance;
     await _putV23Box(hive);
-    await _markSeeded(hive, 24);
+    await _markSeeded(hive, 25);
     await SeedService.instance.seedIfNeeded();
     expect(hive.exerciseBox.containsKey('E053'), isTrue);
     expect(_asJson(hive.exerciseBox.get('G1373')).containsKey('merged_ids'), isFalse);
-    expect(hive.configBox.get('exercise_library_version') as int, 24);
+    expect(hive.configBox.get('exercise_library_version') as int, 25);
   });
 }

@@ -59,6 +59,9 @@ const _stripped = <String>{
   'WRITE_SESSION_BUDGET_REPORT', 'WRITE_REST_BY_TYPE_REPORT',
   // generator step 1A: the 2,304-plan audit's output directory (plan_audit_dump_test.dart)
   'PLAN_AUDIT_OUT',
+  // Unit 1B-F: the injured grid (46,512 runs) and focus grid (5,760 plans) dumps' output directories
+  'INJURED_GRID_OUT',
+  'FOCUS_GRID_OUT',
 };
 
 /// Read by an EXTERNAL tool only (git's author-identity fallback; d9e4b1): stripped,
