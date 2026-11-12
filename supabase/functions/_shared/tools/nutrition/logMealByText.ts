@@ -1,17 +1,30 @@
 import { z } from "npm:zod@3.25.76";
 import type { ToolDefinition } from "../types.ts";
 import { parseFoodText } from "../../food_parser.ts";
+import { istDateStr } from "../../ist_date.ts";
 
 const schema = z.object({
   description: z.string().min(3).max(500).describe(
     "Free-text description of the meal. Examples: 'dal chawal 2 katoris', 'a plate of biryani and raita', 'paneer tikka 6 pieces with naan'. Be specific about quantities — the parser handles Indian portion units (katori, plate, piece, slice).",
   ),
-  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().describe(
-    "Date the meal was eaten (YYYY-MM-DD). Defaults to today if omitted.",
-  ),
+  // OI-493 Landing A (founder F3, "today only"): the app logs a coach meal on
+  // the IST day the intent was created and ignores this field, so a past or
+  // future date would silently land on today. Refuse it here, where the model
+  // reads the message (tool-loop invalid_args) and can tell the user. Checked
+  // at parse time; the client's day comes from the server's createdAt, stamped
+  // after the multi-second food parse, so the check stays server-side only.
+  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).refine(
+    (d) => d === istDateStr(),
+    {
+      message:
+        "Only today's meals can be logged. Ask the user to add an earlier meal from the Nutrition tab.",
+    },
+  // .nullish(): zodToGemini marks the field nullable, so the model may send
+  // null for "no date" (B-pass seat A); null and absent both mean today.
+  ).nullish().describe("Only today's meals can be logged; omit it."),
   mealType: z.enum(["breakfast", "lunch", "dinner", "snacks"]).optional()
     .describe(
-      "Optional meal type. The system will default to 'snacks' if omitted.",
+      "Omit unless the user named the meal; the app picks it from the time of day.",
     ),
 });
 

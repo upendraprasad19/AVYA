@@ -9,7 +9,10 @@
 //     calls increment on success (API-call site)
 //   - cart_auditor_section (via nutrition_provider CartAuditorNotifier) calls
 //     increment at the analyseCart API-call site
-//   - tool_dispatcher calls increment for aiCoachTool after successful write
+//   - tool_dispatcher does NOT increment for a coach meal (OI-493 Landing A:
+//     the coach's parse is not a food_text_analysis call, so it spent a
+//     client unit the server never counts; the behavioral twin is P7 in
+//     test/contracts/coach_vs_screen_meal_log_parity_test.dart)
 //
 // These tests are fast (file I/O only, no Hive, no Flutter) and run as part
 // of `flutter test` without a device.
@@ -167,33 +170,40 @@ void main() {
     });
 
     test(
-        'tool_dispatcher._executeLogMealByText calls UsageCounterService.increment '
-        'after successful write',
+        'tool_dispatcher._executeLogMealByText does NOT call '
+        'UsageCounterService (OI-493: a coach meal spends no AI-text unit)',
         () async {
       final source = await File(
               'lib/features/ai_coach/services/tool_dispatcher.dart')
           .readAsString();
 
-      // Locate the method DEFINITION (not a call site), identified by its
-      // full async signature. There may be multiple hits for the name alone
-      // (e.g. in a switch case), so anchor on the 'Future<ToolExecutionResult>'
-      // return type + name combo.
+      // Locate the method DEFINITION (not the switch case) and slice to the
+      // method's own end, never a fixed-size window.
       final methodIdx =
           source.indexOf('Future<ToolExecutionResult> _executeLogMealByText(');
       expect(methodIdx, isNot(-1),
           reason:
               'Could not find _executeLogMealByText definition in '
               'tool_dispatcher.dart');
-
-      // Use 2000 chars — the method is ~60 lines.
-      final methodBody = source.substring(methodIdx, methodIdx + 2000);
+      final end = source.indexOf('\n  }\n', methodIdx);
+      expect(end, greaterThan(methodIdx));
+      final methodBody = source.substring(methodIdx, end);
+      expect(methodBody, contains('CoachMealLog.write('),
+          reason: 'the slice must be the real method body');
       expect(
         methodBody,
-        contains('UsageCounterService.instance.increment'),
+        isNot(contains('UsageCounterService')),
         reason:
-            'AI coach tool log_meal_by_text must increment the AI text counter '
-            'after a successful write (Test #11 M1).',
+            'The coach meal parse is not a food_text_analysis call: the '
+            'server trigger never counts it, so a client increment drifted '
+            'the "X remaining" count (OI-493 Landing A, D8).',
       );
+      expect(methodBody, isNot(contains('featureAiTextLogPro')));
+      expect(
+          File('lib/features/ai_coach/services/coach_meal_log.dart')
+              .readAsStringSync(),
+          isNot(contains('UsageCounterService')),
+          reason: 'nor in the shared coach meal writer');
     });
   });
 
@@ -252,31 +262,39 @@ void main() {
       );
     });
 
-    test('tool_dispatcher._writeFoodLogFromIntent does not write quantityG: 0',
+    test('coach_meal_log coachItemsFromParsedMeal does not write quantityG: 0',
         () async {
+      // OI-493 Landing A: tool_dispatcher._writeFoodLogFromIntent was
+      // deleted; the coach tool's items come from coachItemsFromParsedMeal.
       final source = await File(
-              'lib/features/ai_coach/services/tool_dispatcher.dart')
+              'lib/features/ai_coach/services/coach_meal_log.dart')
           .readAsString();
 
-      final methodIdx = source.indexOf('Future<String> _writeFoodLogFromIntent(');
+      final methodIdx =
+          source.indexOf('List<FoodItem> coachItemsFromParsedMeal(');
       expect(methodIdx, isNot(-1),
-          reason:
-              'Could not find _writeFoodLogFromIntent in tool_dispatcher.dart');
-
-      final methodBody = source.substring(methodIdx, methodIdx + 1000);
+          reason: 'Could not find coachItemsFromParsedMeal in '
+              'coach_meal_log.dart');
+      final end = source.indexOf('\n}\n', methodIdx);
+      expect(end, greaterThan(methodIdx));
+      final methodBody = source.substring(methodIdx, end);
       expect(
         methodBody,
         isNot(contains('quantityG: 0')),
-        reason:
-            '_writeFoodLogFromIntent must not write quantityG: 0 '
+        reason: 'coachItemsFromParsedMeal must not write quantityG: 0 '
             '(Test #11 M4).',
       );
       expect(
-        methodBody,
-        contains('quantityG: 100.0'),
-        reason:
-            '_writeFoodLogFromIntent must use quantityG: 100.0 as fallback.',
+        'quantityG: 100.0'.allMatches(methodBody).length,
+        2,
+        reason: 'both the per-item and the totals fallback item use the '
+            '100.0 sentinel.',
       );
+      expect(
+          File('lib/features/ai_coach/services/tool_dispatcher.dart')
+              .readAsStringSync(),
+          isNot(contains('_writeFoodLogFromIntent')),
+          reason: 'the old second writer stays deleted');
     });
   });
 }

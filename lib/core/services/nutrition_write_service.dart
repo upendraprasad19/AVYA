@@ -12,6 +12,7 @@ import '../../features/nutrition/providers/nutrition_provider.dart'
     show dailyNutritionProvider, foodLogProvider, macroTargetsProvider;
 import 'error_telemetry.dart';
 import 'hive_service.dart';
+import 'nutrition_read_service.dart';
 import 'nutrition_write_source.dart';
 import 'sync_service.dart';
 import 'write_result.dart';
@@ -57,7 +58,11 @@ class NutritionWriteService {
   void attachContainer(ProviderContainer c) => _container = c;
 
   /// Creates a `nutrition_logs` row + N `nutrition_log_items` rows
-  /// atomically. Increments counter per source.
+  /// atomically. Increments no counter (counters live at the API-call site).
+  ///
+  /// [date] is any instant (device-local, or UTC-flagged like a server
+  /// `createdAt`); its IST day is taken ONCE here (`istDateStr`). Never pass
+  /// `istNow()` (already shifted; OI-494).
   Future<WriteResult> logMeal({
     required DateTime date,
     required String mealType,
@@ -78,7 +83,7 @@ class NutritionWriteService {
       );
     }
 
-    // 2. Compute key (IST-anchored — caller passes IST DateTime)
+    // 2. Compute key (IST-anchored: computeLogKey takes the IST day of `date`)
     final key = computeLogKey(istDate: date, mealType: mealType, items: items);
 
     // 3. Compute totals (Atwater fallback per item if calories=0)
@@ -131,7 +136,8 @@ class NutritionWriteService {
     //    • AI text  → food_logger_section.dart _analyse() success path
     //    • Scan meal → nutrition_provider.dart ScanMealNotifier.scanImage() success path
     //    • Cart auditor → nutrition_provider.dart CartAuditorNotifier.analyseCart() success path
-    //    • AI coach tool → tool_dispatcher.dart _executeLogMealByText() success path
+    //    • AI coach meal → NO counter (OI-493 Landing A): the coach's parse is
+    //      not a food_text_analysis call, so the server never counts it.
     //    The dead `_counterFeatureForSource` switch is kept for documentation
     //    and future reference (see counterFeatureForSource @visibleForTesting export).
 
@@ -515,9 +521,15 @@ class NutritionWriteService {
     // non-meal nutritionBox keys (water logs, etc.) so we don't pollute
     // the coach's correction history with non-food deletions.
     if (writeAuditLog && raw is Map) {
-      final hasFoodMeta = (raw['food_name'] != null ||
-              raw['name'] != null) &&
-          raw['meal_type'] != null;
+      // OI-493: a logMeal row keeps its names in items[] and never has a
+      // top-level food_name/name, so this audit (the coach's correction
+      // history) was never written for any meal. A row with a meal_type and
+      // a non-empty items[] (or the legacy top-level name) is a food log.
+      final rawItems = raw['items'];
+      final hasFoodMeta = raw['meal_type'] != null &&
+          ((rawItems is List && rawItems.isNotEmpty) ||
+              raw['food_name'] != null ||
+              raw['name'] != null);
       if (hasFoodMeta) {
         try {
           final deletes = (box.get('recent_deletes') as List?)
@@ -525,7 +537,10 @@ class NutritionWriteService {
                   .toList() ??
               <Map>[];
           deletes.insert(0, {
-            'food_name': raw['food_name'] ?? raw['name'] ?? '',
+            'food_name': raw['food_name'] ??
+                raw['name'] ??
+                NutritionReadService.shortMealDisplayName(
+                    Map<String, dynamic>.from(raw)),
             'meal_type': raw['meal_type'] ?? '',
             'calories': raw['total_calories'] ?? raw['calories'] ?? 0,
             'deleted_at': DateTime.now().toIso8601String(),
@@ -898,8 +913,9 @@ class NutritionWriteService {
   String? _counterFeatureForSource(NutritionWriteSource s) {
     switch (s) {
       case NutritionWriteSource.aiText:
-      case NutritionWriteSource.aiCoachTool:
         return AppConstants.featureAiTextLogPro;
+      case NutritionWriteSource.aiCoachTool:
+        return null; // OI-493: a coach meal spends no AI-text unit
       case NutritionWriteSource.scan:
         return AppConstants.featureScanMealPro;
       case NutritionWriteSource.cart:

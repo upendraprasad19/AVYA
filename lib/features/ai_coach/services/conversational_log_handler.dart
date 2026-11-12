@@ -14,20 +14,21 @@ import 'package:icanbefitter/core/services/workout_write_service.dart';
 import 'package:icanbefitter/core/services/write_result.dart';
 import 'package:icanbefitter/features/nutrition/providers/nutrition_provider.dart';
 import 'package:icanbefitter/features/home/providers/home_provider.dart';
-import 'package:icanbefitter/shared/repositories/food_repository.dart';
 import 'package:icanbefitter/features/profile/providers/body_measurements_provider.dart';
 import 'package:icanbefitter/features/train/providers/workout_surface_invalidation.dart';
 import 'package:icanbefitter/core/utils/ist_date.dart';
 import 'package:icanbefitter/features/train/services/coach_day_completion.dart';
 import 'package:icanbefitter/features/train/services/workout_completion_bookkeeping.dart';
 import '../providers/ai_coach_provider.dart';
+import 'coach_meal_log.dart';
 
 /// Routes AI-detected log actions to existing Riverpod providers.
 ///
 /// Each action type maps to an existing write path:
 /// - water → [WaterIntakeNotifier.addWater]
 /// - weight → [WeightLogNotifier.logWeight]
-/// - food → [FoodLogNotifier.logFood] (with fuzzy Hive search)
+/// - food → [CoachMealLog.write] (the coach's own estimate; the one coach
+///   meal writer, shared with the `logMealByText` tool, OI-493)
 /// - sleep → [HealthWriteService.logSleep]
 /// - measurement → [HealthWriteService.logMeasurement] (the bounds and the
 ///   0.1 cm rounding are enforced there; the chat parse already drops an
@@ -49,7 +50,7 @@ class ConversationalLogHandler {
         case LogActionType.weight:
           return await _logWeight(action.data);
         case LogActionType.food:
-          return await _logFood(action.data);
+          return await _logFood(action.data, action.createdAt);
         case LogActionType.sleep:
           return await _logSleep(action.data);
         case LogActionType.measurement:
@@ -87,39 +88,29 @@ class ConversationalLogHandler {
 
   // ── Food ────────────────────────────────────────────────────────
 
-  Future<bool> _logFood(Map<String, dynamic> data) async {
-    final foodName = data['food_name'] as String? ?? '';
-    final mealType = _validateMealType(data['meal_type'] as String?);
-    final quantityG = (data['quantity_g'] as num?)?.toDouble() ?? 100.0;
-
-    if (foodName.isEmpty) return false;
-
-    // Fuzzy search Hive foodBox (case-insensitive substring match)
-    final matches = FoodRepository.instance.search(foodName, limit: 5);
-
-    final Map<String, dynamic> foodMap;
-    if (matches.isNotEmpty) {
-      foodMap = matches.first; // best substring match from 5K database
-    } else {
-      // No match — create a minimal food map from AI calorie estimates.
-      // Scale per-serving estimates back to per-100g so
-      // FoodLogNotifier.logFood() calculates correctly.
-      foodMap = _buildEstimatedFood(data, quantityG);
+  /// OI-493 Landing A: a `log_food` tag writes what the `logMealByText` tool
+  /// writes, through the one coach meal writer: the coach's own name and
+  /// estimate (never a food-database substitute, never invented defaults),
+  /// the slot by the screen's clock rule when the tag names none, and the day
+  /// of [at], the card's creation (its 5 s countdown can cross midnight).
+  Future<bool> _logFood(Map<String, dynamic> data, DateTime at) async {
+    final item = coachItemFromTag(data);
+    if (item == null) return false;
+    final r = await CoachMealLog.write(
+      at: at,
+      mealType: data['meal_type'] as String?,
+      items: [item],
+    );
+    if (r.success) {
+      // logMeal refreshes the core nutrition providers; the weekly chart is
+      // the one it does not cover (FoodLogNotifier.logFood adds it too). A
+      // disposed widget must not turn a stored meal into a failure.
+      try {
+        ref.invalidate(weeklyNutritionProvider);
+      } catch (e) {
+        debugPrint('[ConversationalLogHandler] weekly refresh skipped: $e');
+      }
     }
-
-    // audit-fixwave 2026-07-02 / F2 — HONOR the write result. Pre-fix this
-    // returned bare `true` regardless of whether the log actually persisted,
-    // so a failed food write (e.g. logFood returns success:false without
-    // throwing) still flipped LogConfirmCard to the green "LOGGED ✓" state — a
-    // false-success card contradicting a 0-row write. Sibling handlers
-    // (_logSleep/_logMeasurement) already return result.success; food now does
-    // too. foodLogProvider.logFood returns ({bool success, String? error,
-    // String? logKey}) (nutrition_provider.dart).
-    final r = await ref.read(foodLogProvider.notifier).logFood(
-          food: foodMap,
-          mealType: mealType,
-          quantityG: quantityG,
-        );
     return r.success;
   }
 
@@ -213,36 +204,6 @@ class ConversationalLogHandler {
     }
   }
 
-  // ── Helpers ────────────────────────────────────────────────────
-
-  String _validateMealType(String? raw) {
-    const valid = ['breakfast', 'lunch', 'dinner', 'snacks'];
-    final lower = raw?.toLowerCase() ?? '';
-    return valid.contains(lower) ? lower : 'snacks';
-  }
-
-  /// Build a minimal food map from AI calorie estimates, scaled to per-100g.
-  ///
-  /// FoodLogNotifier.logFood() multiplies per-100g values by (quantityG / 100),
-  /// so we must scale the AI's per-serving estimates back to per-100g first.
-  Map<String, dynamic> _buildEstimatedFood(
-      Map<String, dynamic> data, double quantityG) {
-    final factor = quantityG > 0 ? 100.0 / quantityG : 1.0;
-    return {
-      'id': 'chat_food_${DateTime.now().millisecondsSinceEpoch}',
-      'name': data['food_name'] ?? 'Unknown Food',
-      'calories_per_100g':
-          ((data['calories_estimate'] as num?)?.toDouble() ?? 200) * factor,
-      'protein_per_100g':
-          ((data['protein_estimate'] as num?)?.toDouble() ?? 10) * factor,
-      'carbs_per_100g':
-          ((data['carbs_estimate'] as num?)?.toDouble() ?? 25) * factor,
-      'fat_per_100g':
-          ((data['fat_estimate'] as num?)?.toDouble() ?? 5) * factor,
-      'fiber_per_100g': 0.0,
-      'source': 'chat_estimate',
-    };
-  }
 }
 
 /// The sets [submitWorkoutDraft] writes for one draft exercise: only sets

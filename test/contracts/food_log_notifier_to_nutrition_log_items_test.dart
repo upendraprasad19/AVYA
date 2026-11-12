@@ -185,18 +185,24 @@ void main() {
       );
     });
 
-    test('conversational_log_handler.dart calls logFood and does not destructure result',
-        () {
+    test('conversational_log_handler.dart writes a food tag through '
+        'CoachMealLog.write (OI-493), not a database food', () {
       final handlerSrc = _src(
         'lib/features/ai_coach/services/conversational_log_handler.dart',
       );
-      expect(
-        handlerSrc,
-        contains('.logFood('),
-        reason:
-            'conversational_log_handler._logFood must still delegate to '
-            'FoodLogNotifier.logFood via foodLogProvider.notifier',
-      );
+      final idx = handlerSrc.indexOf('Future<bool> _logFood(');
+      expect(idx, isNot(-1));
+      final end = handlerSrc.indexOf('\n  }\n', idx);
+      expect(end, greaterThan(idx));
+      final body = handlerSrc.substring(idx, end);
+      expect(body, contains('CoachMealLog.write('),
+          reason: 'OI-493 Landing A: the tag writes the coach\'s own estimate '
+              'through the one coach meal writer, the same as the tool');
+      expect(handlerSrc, isNot(contains('FoodRepository')),
+          reason: 'the food-database substitute (and its invented defaults) '
+              'is gone');
+      expect(body, isNot(contains('.logFood(')),
+          reason: 'no second path through FoodLogNotifier');
     });
   });
 }

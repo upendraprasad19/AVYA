@@ -1,11 +1,12 @@
 // test/ai_coach/food_log_counter_increments_from_chat_test.dart
 //
-// B-11: pin the contract that chat-mode food log decrements the same
-// visible counter as the LogFood sheet AI tab. The increment is wired
-// centrally inside NutritionWriteService — passing
-// NutritionWriteSource.aiCoachTool maps to featureAiTextLogPro. This
-// test asserts that mapping (the source-of-truth) so any future drift
-// fails fast.
+// B-11 pinned that a chat-mode food log decremented the same visible counter
+// as the LogFood sheet AI tab (aiCoachTool -> featureAiTextLogPro).
+// OI-493 Landing A reversed it: the coach's meal parse is not a
+// food_text_analysis call, the server trigger never counts it, so the client
+// increment drifted the "X remaining" count. aiCoachTool now maps to no
+// counter (the mapping is documentation; nothing increments from it — the
+// behavioral pin is P7 in coach_vs_screen_meal_log_parity_test.dart).
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
@@ -28,16 +29,14 @@ void main() {
     await tearDownHiveForTests(tempDir);
   });
 
-  test('NutritionWriteSource.aiCoachTool maps to featureAiTextLogPro',
+  test('NutritionWriteSource.aiCoachTool maps to no counter (OI-493)',
       () async {
     final feature = NutritionWriteService.counterFeatureForSource(
       NutritionWriteSource.aiCoachTool,
     );
-    expect(feature, AppConstants.featureAiTextLogPro,
-        reason:
-            'aiCoachTool source must increment featureAiTextLogPro so the '
-            'chat-mode food log decrements the same counter as the LogFood '
-            'sheet AI tab (spec §5.5 obs #15).');
+    expect(feature, isNull,
+        reason: 'a coach meal spends no AI-text unit: the server never '
+            'counts the coach parse (OI-493 Landing A, D8).');
   });
 
   test('aiText source ALSO maps to featureAiTextLogPro (parity)', () async {
@@ -49,10 +48,8 @@ void main() {
 
   test('UsageCounterService.increment advances the visible counter',
       () async {
-    // Smoke-test the increment path that NutritionWriteService.logMeal
-    // calls after a successful aiCoachTool write. We bypass the writer
-    // and increment directly — the wiring contract is pinned by the
-    // mapping test above.
+    // Smoke-test the increment path the Nutrition screen's AI-text tab uses
+    // (food_logger_section._analyse).
     HiveService.instance.configBox; // ensure box is open
     const isPro = false;
 
