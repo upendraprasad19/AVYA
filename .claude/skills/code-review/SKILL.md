@@ -194,6 +194,11 @@ When invoked, this skill should:
    a sub-defect and its widened test were verified working-tree-only and never `git add`-ed;
    the reviewer caught it by resetting to `git show :<path>` content. Lens 10 is the
    reviewer-side half; this is the check that makes the author's "done" mean the index.
+   **Review CI (2026-11-11, CLAUDE.md §4.12.8):** below catastrophic tier the draft is COMMITTED and its full suite
+   comes from CI (`sh scripts/land_pr.sh <pr> --ci-only` → `result: ci-green`) before dispatch, so the reviewer reads
+   the committed three-dot diff (`origin/main...HEAD`) of the head that went green; this index check then only
+   guards against uncommitted leftovers. A catastrophic diff is still reviewed STAGED (its commit is gated on that
+   review), with its pre-review full suite from `sh scripts/run_full_suite.sh`.
 0b. **Refuse to dispatch on a stale base.** After `git fetch origin main`, run
    `git rev-list --left-right --count HEAD...origin/main`; if the right-hand number is non-zero, run
    `git diff --name-status $(git merge-base HEAD origin/main) origin/main` and intersect it with the

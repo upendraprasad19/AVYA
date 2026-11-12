@@ -118,6 +118,40 @@ void main() {
     });
   });
 
+  group('--ci-only (review CI, CLAUDE.md §4.12.8)', () {
+    test('CI green: result ci-green, exit 0, and the run ends at the CI wait (no PR-head check, record gate, merge)', () {
+      final fx = LandFixture.create();
+      final r = fx.land(extra: ['--ci-only']);
+      expectResult(r, 0, 'ci-green');
+      expect(fx.calls, ['gh repo', 'gh pr-pre', 'gh pr-files', 'sync', 'gh check-runs']);
+      expect(out(r), contains('stopping before the merge'));
+    });
+    test('a red required job is still ci-failed, exit 3 (the flag changes nothing before green)', () {
+      final fx = LandFixture.create();
+      fx.q('check-runs', 1, checkRunsBody({...allGreen(), 'Analyze': 'completed/failure'}));
+      final r = fx.land(extra: ['--ci-only']);
+      expectResult(r, 3, 'ci-failed');
+      expect(fx.calls, isNot(contains('merge')));
+    });
+    test('an unpushed commit is pushed and CI is read for the PUSHED head, then ci-green', () {
+      final fx = LandFixture.create();
+      fx.cli.featureCommit({'lib/b.dart': 'b\n'}, msg: 'add b');
+      final local = fx.cli.head;
+      final r = fx.land(extra: ['--ci-only']);
+      expectResult(r, 0, 'ci-green');
+      expect(fx.calls, ['gh repo', 'gh pr-pre', 'gh pr-files', 'sync', 'push', 'gh check-runs']);
+      expect(fx.log.firstWhere((l) => l.contains(' gh check-runs ')), contains('/commits/$local/check-runs'));
+      expect(fx.cli.repo.must(['ls-remote', 'origin', 'refs/heads/feature']), startsWith(local));
+    });
+    test('--ci-only given twice is refused before anything runs', () {
+      final fx = LandFixture.create();
+      final r = runLand(fx, ['191', '--ci-only', '--ci-only']);
+      expectResult(r, 2, 'refused');
+      expect(out(r), contains('--ci-only given twice'));
+      expect(fx.log, isEmpty);
+    });
+  });
+
   group('waiting for CI', () {
     test('a red required job is ci-failed, exit 3, and the job is named', () {
       final fx = LandFixture.create();

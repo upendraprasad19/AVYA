@@ -26,7 +26,10 @@ void main() {
         expect(shCode.contains(seam), isFalse, reason: seam);
       }
       expect(shCode, contains('run_dart_cli "\$DART_BIN" "\$here/land_pr.dart" "\$@"'));
-      expect(shCode, contains('[ "\$2" = "--allow-workflow-change" ]'));
+      // The grammar (`<pr>` first, then `--allow-workflow-change` and/or `--ci-only`, each once) is owned by the
+      // wrapper and exercised by land_pr_wrapper_e2e_test.dart; these pin the two flags it knows.
+      expect(shCode, contains('--allow-workflow-change) [ "\$seen_wf" = 0 ]'));
+      expect(shCode, contains('--ci-only) [ "\$seen_ci" = 0 ]'));
     });
     test('prints result: error only for a status above 7, and exits 4 then', () {
       expect(shCode, contains('if [ "\$rc" -gt 7 ]'));

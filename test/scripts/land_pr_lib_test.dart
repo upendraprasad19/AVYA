@@ -117,11 +117,11 @@ void main() {
 
   group('the exit table', () {
     test('every result constant agrees with exitCodeByWord and stays within the CLI range', () {
-      for (final r in [resMerged, resNeedsHuman, resRefused, resCiFailed, resCiTimeout, resError, resRecordFailed, resMergeRefused, resMergeUnverified]) {
+      for (final r in [resMerged, resCiGreen, resNeedsHuman, resRefused, resCiFailed, resCiTimeout, resError, resRecordFailed, resMergeRefused, resMergeUnverified]) {
         expect(exitCodeByWord[r.word], r.code, reason: r.word);
         expect(r.code, lessThanOrEqualTo(maxCliStatus));
       }
-      expect(exitCodeByWord.length, 9);
+      expect(exitCodeByWord.length, 10);
       expect(maxCliStatus, 7);
     });
   });
