@@ -31,7 +31,7 @@ const _rows = <String, (String, String, List<String>, List<String>)>{
 /// Keys a loaded version copies from its original unchanged (Decision 1).
 const _copied = [
   'category', 'movement_pattern', 'primary_muscles', 'secondary_muscles', 'target_focus', 'difficulty_level',
-  'priority_tier', 'tempo', 'is_bilateral', 'default_sets', 'variant_family', 'slot_pattern', 'injury_contraindications',
+  'priority_tier', 'tempo', 'is_bilateral', 'default_sets', 'variant_family', 'injury_contraindications',
 ];
 
 List<String> _strs(Object? v) => v is List ? v.map((e) => '$e').toList() : const [];
@@ -62,13 +62,14 @@ void main() {
       final r = byId[e.key]!;
       final o = byId[e.value.$1]!;
       for (final k in _copied) {
-        if (e.key == 'N19' && (k == 'slot_pattern' || k == 'priority_tier')) continue;
+        if (e.key == 'N19' && (k == 'movement_pattern' || k == 'priority_tier')) continue;
         expect(jsonEncode(r[k]), jsonEncode(o[k]), reason: '${e.key}.$k vs ${o['id']}');
       }
       if (e.key == 'N19') {
         // Founder, 2026-11-09 (after the Task 3 audit): N19 drops E048's ON overlay so the Glutes isolation slot offers it.
-        expect(r.containsKey('slot_pattern'), isFalse, reason: 'N19 carries no slot_pattern');
-        expect(o['slot_pattern'], ['hip_dominant'], reason: 'E048 keeps its overlay');
+        // Since seed v27 (Unit 1B-F2) the overlay is E048's own movement_pattern; N19 keeps hip_isolation.
+        expect(r['movement_pattern'], ['hip_isolation'], reason: 'N19 stays in the Glutes isolation pattern');
+        expect(o['movement_pattern'], ['hip_dominant'], reason: 'E048 carries its copied overlay');
         // Founder, 2026-11-09: priority 3 (E048 has 2), level with E109 Glute Kickback (Cable), so a gym user keeps the cable row.
         expect([r['priority_tier'], o['priority_tier']], [3, 2]);
       }

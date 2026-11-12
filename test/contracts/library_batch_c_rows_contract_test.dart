@@ -34,9 +34,10 @@ const _required40 = <String>[
   'injury_contraindications', 'is_bilateral', 'cns_demand', 'target_focus', 'equipment_tier', 'standard_swap',
   'priority_tier', 'rep_range', 'core_levels', 'discipline', 'gym_availability', 'requires_coaching', 'high_impact',
 ];
-// Library Batch S1b-2: the importer's LINK keys (slot_pattern, same_movement_as) on the nine loaded versions.
+// Library Batch S1b-2: the importer's LINK key (same_movement_as) on the nine loaded versions. (slot_pattern was a LINK
+// key too until seed v27, Unit 1B-F2, copied it into movement_pattern.)
 const _optionalKeys = <String>{
-  'variant_family', 'skill_track', 'skill_step', 'progression_to', 'regression_to', 'slot_pattern', 'same_movement_as',
+  'variant_family', 'skill_track', 'skill_step', 'progression_to', 'regression_to', 'same_movement_as',
 };
 // Plate keys stay forbidden on new rows. The media keys (Batch M1) are allowed ONLY on ids the committed media table maps,
 // as a group, last and in this order.
@@ -282,8 +283,12 @@ List<String> _coreCountViolations(Map<String, dynamic> src, List<Map<String, dyn
 }
 
 List<String> _e274Violations(List<Map<String, dynamic>> lib) {
+  // Batch C1's one kept-row edit relabelled E274 Upper Back -> Mid Back. Since seed v27 (Unit 1B-F2) the row also
+  // carries the copied overlay label Rear Delts, so the invariant is the relabel: Mid Back present, Upper Back gone.
   final tf = _strs(_byId(lib, 'E274')['target_focus']);
-  return tf.join('|') == 'Mid Back' ? const [] : ['E274 target_focus is $tf, want [Mid Back]'];
+  return tf.contains('Mid Back') && !tf.contains('Upper Back')
+      ? const []
+      : ['E274 target_focus is $tf, want Mid Back and no Upper Back'];
 }
 
 /// Every non-null ladder link of a new row names exactly one row of the final library.
@@ -567,7 +572,7 @@ void main() {
       expect(_linkViolations(b), isNotEmpty, reason: 'two rows share the target name');
     });
 
-    test('E274 target_focus is Mid Back (the only kept-row edit of Batch C1)', () {
+    test('E274 target_focus holds Mid Back and no Upper Back (the only kept-row edit of Batch C1)', () {
       expect(_e274Violations(lib), isEmpty);
     });
 

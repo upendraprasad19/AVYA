@@ -30,6 +30,7 @@ const _s1Rel = 'scripts/data/library_s1_core_levels.json';
 const _s1b2Rel = 'scripts/data/library_s1b2_suitable_for.json';
 const _s1b3MergesRel = 'scripts/data/library_s1b3_merges.json';
 const _v25InjRel = 'scripts/data/library_injury_additions_v25.json';
+const _f2CopyRel = 'scripts/data/library_overlay_copy_v27.json';
 const _mediaKeys = ['media_slug', 'media_version', 'media_source'];
 
 Json _readJson(String path) => jsonDecode(File(path).readAsStringSync()) as Json;
@@ -43,7 +44,7 @@ class _Tree {
     Directory('${dir.path}/scripts/data').createSync(recursive: true);
     Directory('${dir.path}/assets/data').createSync(recursive: true);
     File(script).writeAsStringSync(File(_importer).readAsStringSync());
-    for (final e in {src: _srcRel, inj: _injRel, media: _mediaRel, lib: _libRel, retag: _e230Rel, coreLevels: _s1Rel, suitableFor: _s1b2Rel, merges: _s1b3MergesRel, injuryTags: _v25InjRel}.entries) {
+    for (final e in {src: _srcRel, inj: _injRel, media: _mediaRel, lib: _libRel, retag: _e230Rel, coreLevels: _s1Rel, suitableFor: _s1b2Rel, merges: _s1b3MergesRel, injuryTags: _v25InjRel, overlayCopy: _f2CopyRel}.entries) {
       File(e.key).writeAsStringSync(File(e.value).readAsStringSync());
     }
   }
@@ -59,6 +60,7 @@ class _Tree {
   String get suitableFor => '${dir.path}/scripts/data/library_s1b2_suitable_for.json';
   String get merges => '${dir.path}/scripts/data/library_s1b3_merges.json';
   String get injuryTags => '${dir.path}/scripts/data/library_injury_additions_v25.json';
+  String get overlayCopy => '${dir.path}/scripts/data/library_overlay_copy_v27.json';
 
   List<String> get base => ['--library', lib, '--source', src, '--table', inj];
 
@@ -657,6 +659,124 @@ void main() {
     });
   });
 
+  // Generator Unit 1B-F2 (OI-495, seed v27): the 26 kept overlay rows take the record's after and lose both overlay keys.
+  // Mutations (rule 21, each reddens a test below): the stage call removed from main() ((a) and (b)); a partial match
+  // accepted ((c)); an unnamed overlay key left on the row ((c2)); the after-is-the-overlay check in readOverlayCopy
+  // removed ((e), its refusal text).
+  group('the overlay-copy stage (Unit 1B-F2, seed v27)', () {
+    setUp(() => File('${t.dir.path}/scripts/data/library_batch_c2_removals.json')
+        .writeAsStringSync(File('scripts/data/library_batch_c2_removals.json').readAsStringSync()));
+
+    List<Json> recRows() => (_readJson(t.overlayCopy)['rows'] as List).cast<Json>();
+
+    /// The library with the 26 kept rows at the record's `before` (target fields in place, overlay keys after
+    /// variant_family, slot_focus first: the v26 layout).
+    String libAtBefore() {
+      final lib = t.readLib();
+      for (final e in recRows()) {
+        final i = lib.indexWhere((r) => r['id'] == e['id']);
+        final b = (e['before'] as Map).cast<String, dynamic>();
+        final out = <String, dynamic>{};
+        for (final kv in lib[i].entries) {
+          out[kv.key] = b.containsKey(kv.key) ? b[kv.key] : kv.value;
+          if (kv.key == 'variant_family') {
+            if (b.containsKey('slot_focus')) out['slot_focus'] = b['slot_focus'];
+            if (b.containsKey('slot_pattern')) out['slot_pattern'] = b['slot_pattern'];
+          }
+        }
+        lib[i] = out;
+      }
+      return const JsonEncoder.withIndent('  ').convert(lib);
+    }
+
+    test('(a) a library at before takes after on the 26 rows, overlay keys removed, nothing else moves, --check agrees', () async {
+      expect(recRows(), hasLength(26));
+      final beforeText = libAtBefore();
+      expect(beforeText, contains('"slot_pattern"'), reason: 'precondition: the overlays are back');
+      final beforeRows = _byId((jsonDecode(beforeText) as List).cast<Json>());
+      t.writeLibText(beforeText);
+      final r = await t.importer();
+      expect(r.exitCode, 0, reason: _out(r));
+      final byId = _byId(t.readLib());
+      final ids = {for (final e in recRows()) e['id'] as String};
+      for (final e in recRows()) {
+        final row = byId[e['id']]!;
+        final after = (e['after'] as Map).cast<String, dynamic>();
+        expect(jsonEncode(row['movement_pattern']), jsonEncode(after['movement_pattern']), reason: '${e['id']}');
+        expect(jsonEncode(row['target_focus']), jsonEncode(after['target_focus']), reason: '${e['id']}');
+        expect(row.containsKey('slot_pattern') || row.containsKey('slot_focus'), isFalse, reason: '${e['id']}');
+      }
+      for (final e in beforeRows.entries.where((e) => !ids.contains(e.key))) {
+        expect(jsonEncode(byId[e.key]), jsonEncode(e.value), reason: '${e.key} must be untouched');
+      }
+      expect(t.readLibText(), File(_libRel).readAsStringSync(), reason: 'the result is the shipped library, byte for byte');
+      final ok = await t.importer(extra: ['--check']);
+      expect(ok.exitCode, 0, reason: _out(ok));
+    });
+
+    test('(b) --check on the library at before fails (a hand edit of a kept row cannot pass)', () async {
+      t.writeLibText(libAtBefore());
+      final r = await t.importer(extra: ['--check']);
+      expect(r.exitCode, isNot(0), reason: _out(r));
+    });
+
+    test('(c) a partial match is refused naming the id and the key, and nothing is written', () async {
+      final lib = (jsonDecode(libAtBefore()) as List).cast<Json>();
+      // E048 at before, but its pattern already copied while the overlay key stays: neither before nor after.
+      lib.singleWhere((r) => r['id'] == 'E048')['movement_pattern'] = ['hip_dominant'];
+      final partial = const JsonEncoder.withIndent('  ').convert(lib);
+      t.writeLibText(partial);
+      final r = await t.importer();
+      expect(r.exitCode, isNot(0), reason: _out(r));
+      expect(_err(r), allOf(contains('E048'), contains('movement_pattern'), contains('overlay-copy record')));
+      expect(t.readLibText(), partial, reason: 'a refused run must not write');
+    });
+
+    test('(c2) an overlay key the record does not name is refused (E015 has no slot_focus)', () async {
+      final lib = (jsonDecode(libAtBefore()) as List).cast<Json>();
+      lib.singleWhere((r) => r['id'] == 'E015')['slot_focus'] = ['Front Delts'];
+      t.writeLibText(const JsonEncoder.withIndent('  ').convert(lib));
+      final r = await t.importer();
+      expect(r.exitCode, isNot(0), reason: _out(r));
+      expect(_err(r), allOf(contains('E015'), contains('slot_focus')));
+    });
+
+    test('(d) the record absent is a printed no-op: the library at before stays at before', () async {
+      final beforeText = libAtBefore();
+      File(t.overlayCopy).deleteSync();
+      t.writeLibText(beforeText);
+      final r = await t.importer();
+      expect(r.exitCode, 0, reason: _out(r));
+      expect(_out(r), contains('overlay-copy stage skipped'));
+      expect(t.readLibText(), beforeText);
+    });
+
+    test('(e) a record naming a source id or an unknown id, repeating an id, or whose after is not its overlay, is refused, naming why', () async {
+      final base = _readJson(_f2CopyRel);
+      final rows = (base['rows'] as List).cast<Json>();
+      final bogus = {
+        'before': {'movement_pattern': ['x'], 'target_focus': ['y'], 'slot_pattern': ['z']},
+        'after': {'movement_pattern': ['z'], 'target_focus': ['y']},
+      };
+      final e015 = rows.firstWhere((e) => e['id'] == 'E015');
+      final notOverlay = {
+        ...e015,
+        'after': {...(e015['after'] as Map).cast<String, dynamic>(), 'movement_pattern': ['vertical_push']},
+      };
+      for (final (bad, says) in [
+        ([...rows, {'id': 'N20', ...bogus}], 'not kept rows'),
+        ([...rows, {'id': 'E999', ...bogus}], 'not kept rows'),
+        ([...rows, rows.first], 'repeats ${rows.first['id']}'),
+        ([for (final e in rows) e['id'] == 'E015' ? notOverlay : e], 'E015 after is not the overlay'),
+      ]) {
+        File(t.overlayCopy).writeAsStringSync(jsonEncode({...base, 'rows': bad}));
+        final r = await t.importer();
+        expect(r.exitCode, isNot(0), reason: _out(r));
+        expect(_out(r), contains(says), reason: says);
+      }
+    });
+  });
+
   // Unit 1B-F, Ruling 12 (founder d19): the five lower-body jump E-rows gain `hip`. Mutations (rule 21, each reddens a
   // test below): the stage call removed from main() ((a) and (b)); a `before` mismatch accepted, the row left as it is
   // ((c)); the record ignored by --check (the stage skipped when CHECK is set: (b)).
@@ -838,17 +958,29 @@ void main() {
     setUp(() => File('${t.dir.path}/scripts/data/library_batch_c2_removals.json')
         .writeAsStringSync(File('scripts/data/library_batch_c2_removals.json').readAsStringSync()));
 
-    test('slot_pattern and same_movement_as reach the library from the source, after the ladder keys and before the media keys', () async {
+    test('same_movement_as reaches the library from the source, after the ladder keys and before the media keys', () async {
       final r = await t.importer();
       expect(r.exitCode, 0, reason: _out(r));
       final byId = _byId(t.readLib());
       expect(byId['N14']!['same_movement_as'], 'E147');
-      expect(byId['N20']!['slot_pattern'], ['hip_dominant']);
       expect(byId['N20']!['same_movement_as'], 'E050');
-      expect(byId['N19']!.containsKey('slot_pattern'), isFalse, reason: 'N19 carries no overlay (founder, 2026-11-09)');
+      // Unit 1B-F2 (seed v27): N20's overlay moved into its own movement_pattern; LINK no longer carries slot_pattern.
+      expect(byId['N20']!['movement_pattern'], ['hip_dominant']);
+      expect(byId['N20']!.containsKey('slot_pattern'), isFalse);
+      expect(byId['N19']!['movement_pattern'], ['hip_isolation'], reason: 'N19 keeps its pattern (founder, 2026-11-09)');
       final keys = byId['N20']!.keys.toList();
-      expect(keys.indexOf('slot_pattern'), greaterThan(keys.indexOf('variant_family')));
+      expect(keys.indexOf('same_movement_as'), greaterThan(keys.indexOf('variant_family')));
       expect(keys.last, 'same_movement_as', reason: 'an unmapped row carries no media keys after it');
+    });
+
+    test('a slot_pattern key in the source no longer reaches the library (Unit 1B-F2 removed it from LINK)', () async {
+      final src = _readJson(t.src);
+      final n20 = (src['rows'] as List).cast<Json>().firstWhere((r) => r['id'] == 'N20');
+      n20['slot_pattern'] = ['hip_dominant'];
+      File(t.src).writeAsStringSync(const JsonEncoder.withIndent('  ').convert(src));
+      final r = await t.importer();
+      expect(r.exitCode, 0, reason: _out(r));
+      expect(_byId(t.readLib())['N20']!.containsKey('slot_pattern'), isFalse);
     });
 
     test('a source key outside REQUIRED, LADDER and LINK is still dropped', () async {

@@ -1,7 +1,7 @@
 // test/contracts/exercise_plate_library_data_test.dart
 //
 // The version constant is the ONLY thing that delivers a new library field to an
-// install that already seeded: seed_service.dart:127-128 re-seeds iff
+// install that already seeded: seed_service.dart:227-228 re-seeds iff
 // stored < constant, so shipping demo_slug WITHOUT bumping it is a silent no-op
 // -- no existing user ever receives the field and nothing fails loudly.
 import 'dart:convert';
@@ -165,7 +165,7 @@ void main() {
       expect(read(id)['demo_slug'], isNull, reason: 'precondition');
 
       // The re-seed writes the bundled row over it. This is what putAll does at
-      // seed_service.dart:190 -- assert the OUTCOME, not the call.
+      // seed_service.dart:314 -- assert the OUTCOME, not the call.
       final fresh = lib.firstWhere((e) => e['id'] == id);
       await box.putAll({id: fresh});
 

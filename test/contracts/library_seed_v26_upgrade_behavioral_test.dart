@@ -21,12 +21,14 @@ import 'package:icanbefitter/core/services/seed_service.dart';
 
 import '../helpers/hive_test_setup.dart';
 import '../helpers/library_g0355_v25.dart';
+import '../helpers/library_overlay_v26.dart';
 
 List<Map<String, dynamic>> _bundled() =>
     (jsonDecode(File('assets/data/exercise_library.json').readAsStringSync()) as List).cast<Map<String, dynamic>>();
 
 /// The v25 bundle, rebuilt: the current asset with G0355's v25 levels restored.
-List<Map<String, dynamic>> _v25Bundle() => [for (final r in _bundled()) withG0355V25(r)];
+// Unit 1B-F2 (seed v27) copied the overlays; the v25 bundle keeps them.
+List<Map<String, dynamic>> _v25Bundle() => [for (final r in _bundled()) withOverlaysV26(withG0355V25(r))];
 
 Future<void> _markSeeded(HiveService hive, int exerciseVersion) async {
   await hive.configBox.put('seeded', true);
@@ -64,13 +66,13 @@ void main() {
         'ea479a1ee98b1c906cec680cda1da167e4fba5704dc88a65e13212eaf5ff874e');
   });
 
-  test('a v25 box ends at v26: G0355 is written as bundled, every other row is unchanged', () async {
+  test('a v25 box ends at the current version (v27): G0355 is written as bundled, every other row is unchanged', () async {
     final hive = HiveService.instance;
     await _putV25Box(hive);
     await _markSeeded(hive, 25);
     expect(_asJson(hive.exerciseBox.get(g0355Id))['core_levels'], g0355CoreLevelsV25, reason: 'precondition');
     final others = {
-      for (final id in hive.exerciseBox.keys.where((k) => k != g0355Id))
+      for (final id in hive.exerciseBox.keys.where((k) => k != g0355Id && !overlayRowIdsV27.contains(k)))
         id as String: jsonEncode(_asJson(hive.exerciseBox.get(id)))
     };
 
@@ -82,15 +84,15 @@ void main() {
       expect(jsonEncode(_asJson(hive.exerciseBox.get(e.key))), e.value, reason: '${e.key} must be unchanged');
     }
     expect(hive.exerciseBox.length, _bundled().length);
-    expect(hive.configBox.get('exercise_library_version') as int, 26);
+    expect(hive.configBox.get('exercise_library_version') as int, 27);
   });
 
-  test('MIRROR: a box already at v26 is not rewritten (the upgrade fires only when the stored version is older)', () async {
+  test('MIRROR: a box already at the current version (v27) is not rewritten (the upgrade fires only when the stored version is older)', () async {
     final hive = HiveService.instance;
     await _putV25Box(hive);
-    await _markSeeded(hive, 26);
+    await _markSeeded(hive, 27);
     await SeedService.instance.seedIfNeeded();
     expect(_asJson(hive.exerciseBox.get(g0355Id))['core_levels'], g0355CoreLevelsV25);
-    expect(hive.configBox.get('exercise_library_version') as int, 26);
+    expect(hive.configBox.get('exercise_library_version') as int, 27);
   });
 }

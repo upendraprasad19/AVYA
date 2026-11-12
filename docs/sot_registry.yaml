@@ -11878,7 +11878,8 @@ concepts:
       name_aliases on their replacement. Cloud: the C2a seed migration sets is_active=false on the 50.
       Library v13 (Batch B1, 2026-10-23): 40 required keys (+ core_levels, discipline,
       gym_availability, requires_coaching, high_impact) and 11 optional (+ variant_family,
-      slot_focus, slot_pattern, skill_track, skill_step, regression_to, progression_to);
+      slot_focus, slot_pattern, skill_track, skill_step, regression_to, progression_to; slot_focus and
+      slot_pattern retired at v27, Unit 1B-F2: copied into target_focus / movement_pattern, keys removed);
       values pinned by test/contracts/exercise_library_core_fields_contract_test.dart, every
       pre-existing key frozen by test/contracts/exercise_library_frozen_reference_test.dart.
       Concept core_list_pool owns their reader.
@@ -11913,7 +11914,7 @@ concepts:
         method: scripts/repair_exercise_library_v12.js (repairText, mergeDuplicates, relabel, dropPlates)
         notes: v12 (Batch A) — 136 un-shifted text rows, cues one per item, 7 duplicates retired (name_aliases + merged_ids on the kept row), E172/E163 labels, E207/E179 plate keys dropped
       - file: lib/core/services/seed_service.dart
-        line_range: 276-321
+        line_range: 282-327
         method: _exerciseLibraryVersion (11→12) + retiredLibraryIds + pruneRetired after putAll in _seedExercises
         notes: putAll never deletes, so the prune is what removes a retired row from an existing install
       - file: supabase/migrations/162_reseed_exercise_library.sql
@@ -12070,9 +12071,12 @@ concepts:
       (1,010 personas: the 998 re-recorded at the flip equal to the pre-flip ON world, plus 12
       exclude-everything personas). Gate test/plan_generator/core_list_pool_gate_test.dart (hard
       zeros incl. no empty day, over those personas plus 26 scorecard personas, 1,036; report
-      test/plan_generator/core_list_pool_report.md). The slot_focus /
-      slot_pattern overlays are read ONLY here; copying them into target_focus /
-      movement_pattern is Unit 1B-F2.
+      test/plan_generator/core_list_pool_report.md). Unit 1B-F2 (seed v27, OI-495,
+      docs/plans/2026-11-12-generator-1bf2-overlay-copy.md) copied the slot_focus / slot_pattern
+      overlays into target_focus / movement_pattern on 27 rows and removed both keys; rankedPool
+      reads the rows' own fields, so the picker, queryV4 (the thin-day top-up) and the muscle
+      label read one set of labels (proof test/contracts/library_overlay_copy_test.dart: per-row
+      identity with the old reader, and a planted overlay key moves no pool of any V4 slot).
       Generator step 1A (docs/plans/2026-11-08-generator-step1-core-list.md, live with the flip):
       R2 jump rows (high_impact or discipline plyometric) leave a mixed pool before the
       improvised filter (a partition: _preferNovel walks past any ordering key); R3 (a) an
@@ -12098,10 +12102,16 @@ concepts:
         method: main (applies scripts/data/library_core_fields_v13.json)
         notes: idempotent; refuses an id mismatch; checks the byte round-trip before writing
       - file: assets/data/exercise_library.json
-        method: core_levels / discipline / gym_availability / requires_coaching / high_impact (+ optional variant_family, slot_focus, slot_pattern, skill keys)
+        method: core_levels / discipline / gym_availability / requires_coaching / high_impact (+ optional variant_family, skill keys; the slot_focus / slot_pattern overlays were removed at v27)
       - file: lib/core/services/seed_service.dart
         method: _exerciseLibraryVersion (12→13)
         notes: re-seeds the new keys into exerciseBox by id
+      - file: scripts/add_library_batch_c_v15.js
+        method: the overlay-copy stage (applies scripts/data/library_overlay_copy_v27.json)
+        notes: Unit 1B-F2; a kept row at the record's before takes its after (movement_pattern, target_focus) and loses both overlay keys; at after it is left alone; anything else is refused
+      - file: lib/core/services/seed_service.dart
+        method: _exerciseLibraryVersion (26 to 27)
+        notes: putAll writes the 27 copied rows into exerciseBox by id (Unit 1B-F2)
     readers:
       - file: lib/shared/repositories/plan_engine/core_list_selector.dart
         method: CoreListSelector.rankedPool / typeFor / subFocusMatches
@@ -12133,7 +12143,7 @@ concepts:
       - file: scripts/data/library_batch_c_source.json
         method: N14 to N22 source rows carry same_movement_as
       - file: scripts/add_library_batch_c_v15.js
-        method: buildRow LINK pass-through (slot_pattern, same_movement_as)
+        method: buildRow LINK pass-through (same_movement_as; slot_pattern left the list at seed v27, Unit 1B-F2)
       - file: lib/core/services/seed_service.dart
         method: _exerciseLibraryVersion (22 to 23)
         notes: putAll writes the nine rows into exerciseBox by id
@@ -12542,7 +12552,7 @@ concepts:
       enforced at merge.
     writers:
       - file: docs/blast_radius.yaml
-        line_range: 39-634
+        line_range: 39-663
         method: paths list (declaration order, first match wins)
         notes: |
           THE canonical writer. Exact-path rules must be declared ABOVE the
@@ -13549,7 +13559,7 @@ concepts:
         line_range: 1-2
         method: demo_slug + demo_pair fields
       - file: lib/core/services/seed_service.dart
-        line_range: 183-183
+        line_range: 189-189
         method: _exerciseLibraryVersion
     readers:
       - file: lib/shared/widgets/exercise_plate/plate_resolver.dart
@@ -13590,10 +13600,10 @@ concepts:
       constant is bumped again. WARNING: the bucket is private; a row's keys are not a public URL.
     writers:
       - file: scripts/add_library_batch_c_v15.js
-        line_range: 187-208
+        line_range: 198-219
         method: applyMedia
       - file: lib/core/services/seed_service.dart
-        line_range: 183-183
+        line_range: 189-189
         method: _exerciseLibraryVersion
     readers:
       - file: lib/shared/widgets/exercise_plate/exercise_media_resolver.dart
@@ -13679,7 +13689,7 @@ concepts:
         line_range: 1-2
         method: coaching_cues + common_mistakes + breathing_cue + warmup_protocol fields
       - file: lib/core/services/seed_service.dart
-        line_range: 183-183
+        line_range: 189-189
         method: _exerciseLibraryVersion
     readers:
       - file: lib/shared/widgets/exercise_plate/exercise_cues.dart

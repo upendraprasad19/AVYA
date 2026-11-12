@@ -44,35 +44,36 @@ const LEDGER_PATH = path.join(ROOT, 'backups', 'applied_migrations.json');
 // What the generated file says about itself. Edit this block for the next batch. The header text below is derived from it,
 // from the kept-row records and from the removals file.
 const BATCH = {
-  label: 'library v24, Batch S1b-3',
-  diagnose: '2026-11-10-library-batch-s1b3-retire-donkey-calf-raise-c3e8f1',
-  // Rows the Batch C1 importer wrote carry this `source` literal: the C1 rows, the four Batch C2b twins and this batch's nine.
+  label: 'library v27, Unit 1B-F2',
+  diagnose: '2026-11-12-generator-overlay-copy-f2c7a9',
+  // Rows the Batch C1 importer wrote carry this `source` literal: the C1 rows, the four Batch C2b twins and the S1b-2 nine.
   newRowSource: 'exercise-gif-set',
   // The removals file carries `removed_in` ('c2a' | 'c2b') per remove entry: ALL are deactivated (idempotent), but a batch's
-  // rollback reactivates only the ones it removed itself. Library Batch S1b-3 removes no row through that file (its tag
-  // matches no entry); it MERGES one (mergesFile below), and the same tag selects the merges this batch owns.
-  batchTag: 's1b3',
+  // rollback reactivates only the ones it removed itself. Unit 1B-F2 removes and merges no row (its tag matches no entry
+  // of either file).
+  batchTag: 'f2',
   removalsFile: path.join(ROOT, 'scripts', 'data', 'library_batch_c2_removals.json'),
   // Kept-row records ({id, before, after} rows for ONE cloud column each): the library row must equal `after` (a record that
   // drifted from the library would seed one thing and roll back to another); `before` is what the inline rollback restores.
-  // Library Batch S1b-3: G1373 name_aliases (it takes E053's name). The S1b-2 suitable_for record is live (migration 174)
-  // and re-seeds as unchanged rows, so it is not a record of this batch.
+  // Unit 1B-F2: movement_pattern on the 12 rows whose first element changes (the core-list slot_pattern copied in). The
+  // S1b-3 name_aliases record is live (migration 175) and re-seeds as an unchanged row, so it is not a record of this batch.
   keptRowRecords: [
     {
-      file: path.join(ROOT, 'scripts', 'data', 'library_s1b3_name_aliases.json'),
-      column: 'name_aliases',
-      note: 'OI-147: G1373 Bodyweight Standing Calf Raise takes the name of E053 Donkey Calf Raise, merged into it',
+      file: path.join(ROOT, 'scripts', 'data', 'library_f2_movement_pattern.json'),
+      column: 'movement_pattern',
+      note: "movement_pattern first element: the picker's slot pattern (12 rows; E064 keeps cardio)",
     },
   ],
-  // Rows this batch INSERTs. The cloud never deletes, so the rollback would deactivate them. Library Batch S1b-3 adds none.
+  // Rows this batch INSERTs. The cloud never deletes, so the rollback would deactivate them. Unit 1B-F2 adds none.
   newRowIds: [],
   newRowNote: 'none',
   // The importer's merges record ({id, name, into, merged_in}): rows retired INTO a kept row. The rows whose merged_in is
   // batchTag are this batch's own: deactivated here for the first time, and reactivated (with their own cues from the
-  // previous seed) by its rollback. A missing file is a hard stop.
+  // previous seed) by its rollback. A missing file is a hard stop. Unit 1B-F2 owns no merge; the S1b-3 merge (E053 into
+  // G1373) re-runs as an idempotent retire UPDATE.
   mergesFile: path.join(ROOT, 'scripts', 'data', 'library_s1b3_merges.json'),
   // The seed migration this one follows: its text is the other half of the rollback sentence.
-  previousMigration: '174',
+  previousMigration: '175',
 };
 
 function fail(msg) {
@@ -174,10 +175,36 @@ console.log(`Loaded ${data.length} exercises from ${JSON_PATH}`);
 
 // One VALUES tuple per row. Also used by the kept-row guard below, which rebuilds a record row with its `before` value
 // and requires that tuple to equal the row's line in the previous seed migration.
+// The SQL literal of each cloud column, in INSERT order. The ONE coercion per column: the VALUES tuple and a kept-row
+// record's inline rollback both use it, so a rollback restores exactly what the INSERT would write (B-pass 1B-F2
+// finding 3: the rollback had its own generic coercion, wrong for TEXT-from-array columns, name_aliases [] and the
+// defaulted columns).
+const COLUMN_SQL = {
+  name: (v) => sqlEscape(v),
+  category: (v) => sqlEscape(v),
+  movement_pattern: (v) => sqlEscape(firstOrNull(v)),
+  exercise_type: (v) => sqlEscape(firstOrNull(v)),
+  primary_muscles: (v) => sqlTextArray(v),
+  secondary_muscles: (v) => sqlTextArray(v),
+  equipment_needed: (v) => sqlTextArray(v),
+  logging_type: (v) => sqlEscape(v ?? 'weight_reps'),
+  difficulty_level: (v) => sqlEscape(v),
+  suitable_for: (v) => sqlTextArray(v),
+  coaching_cues: (v) => sqlTextArray(v),
+  common_mistakes: (v) => sqlTextArray(v),
+  default_sets: (v) => num(v),
+  default_reps: (v) => sqlEscape(v),
+  default_rest_secs: (v) => num(v),
+  source: (v) => sqlEscape(v ?? 'icanbefitter_seed'),
+  is_active: (v) => sqlEscape(v ?? true),
+  is_indian_context: (v) => sqlEscape(v ?? false),
+  name_aliases: (v) => sqlTextArrayOrNull(v),
+};
+
 function tupleOf(item) {
   const uuid = uuidv5(`exercise_library|${item.id}`, NAMESPACE);
   // Single-line per row keeps the generated file under MCP / read limits.
-  return `(${sqlEscape(uuid)}, ${sqlEscape(item.name)}, ${sqlEscape(item.category)}, ${sqlEscape(firstOrNull(item.movement_pattern))}, ${sqlEscape(firstOrNull(item.exercise_type))}, ${sqlTextArray(item.primary_muscles)}, ${sqlTextArray(item.secondary_muscles)}, ${sqlTextArray(item.equipment_needed)}, ${sqlEscape(item.logging_type ?? 'weight_reps')}, ${sqlEscape(item.difficulty_level)}, ${sqlTextArray(item.suitable_for)}, ${sqlTextArray(item.coaching_cues)}, ${sqlTextArray(item.common_mistakes)}, ${num(item.default_sets)}, ${sqlEscape(item.default_reps)}, ${num(item.default_rest_secs)}, ${sqlEscape(item.source ?? 'icanbefitter_seed')}, ${sqlEscape(item.is_active ?? true)}, ${sqlEscape(item.is_indian_context ?? false)}, ${sqlTextArrayOrNull(item.name_aliases)}, now())`;
+  return `(${sqlEscape(uuid)}, ${Object.entries(COLUMN_SQL).map(([k, f]) => f(item[k])).join(', ')}, now())`;
 }
 const valueTuples = data.map(tupleOf);
 
@@ -350,9 +377,7 @@ function arrayLiterals(tuple) {
 // Kept-row records (Batch C2c's single retag, generalised by Library Batch S1b-2). A missing record, a missing row, a
 // record row whose `after` differs from the library row, or a column the cloud table does not hold, is a hard stop. The
 // rollback restores each record row's column from `before`, through the same escapers the INSERT uses.
-const CLOUD_COLUMNS = new Set(['name', 'category', 'movement_pattern', 'exercise_type', 'primary_muscles', 'secondary_muscles',
-  'equipment_needed', 'logging_type', 'difficulty_level', 'suitable_for', 'coaching_cues', 'common_mistakes', 'default_sets',
-  'default_reps', 'default_rest_secs', 'source', 'is_active', 'is_indian_context', 'name_aliases']);
+const CLOUD_COLUMNS = new Set(Object.keys(COLUMN_SQL));
 // The previous seed migration's tuples by cloud uuid (a missing file is a hard stop: the guard never passes on no input).
 const previousTuples = (() => {
   const dir = path.join(ROOT, 'supabase', 'migrations');
@@ -368,7 +393,11 @@ const previousTuples = (() => {
   if (out.size === 0) fail(`previous seed migration ${name} holds no tuple`);
   return out;
 })();
-const cloudValue = (v) => (Array.isArray(v) ? sqlTextArray(v) : sqlEscape(v));
+// A rollback restores a column through the INSERT's own coercion (COLUMN_SQL). Unit 1B-F2: movement_pattern and
+// exercise_type are TEXT although the JSON holds an array, and a text[] literal is not refused there: Postgres
+// assignment-casts it to the text '{vertical_push}'. The same rule writes name_aliases [] as NULL and a null logging_type,
+// source or flag as the INSERT's default.
+const restoreValue = (column, v) => COLUMN_SQL[column](v);
 // A merged row's rollback: active again, with the cues the previous seed gave it (the retire UPDATE copied the kept row's).
 // Its tuple there must hold exactly 6 array literals (primary, secondary, equipment, suitable_for, coaching_cues,
 // common_mistakes; a row with no alias writes name_aliases as a bare NULL) and end `NULL, now())`.
@@ -420,7 +449,7 @@ for (const rec of BATCH.keptRowRecords) {
       fail(`${e.id}: the row with the record's before is not the tuple the previous seed migration (${BATCH.previousMigration}) wrote (a wrong before, or another column changed too)`);
     }
     changed.push({ id: e.id, name: row.name, column: rec.column, note: rec.note,
-      rollback: `UPDATE exercise_library SET ${rec.column} = ${cloudValue(e.before)} WHERE id = '${idOf(e.id)}';` });
+      rollback: `UPDATE exercise_library SET ${rec.column} = ${restoreValue(rec.column, e.before)} WHERE id = '${idOf(e.id)}';` });
   }
 }
 const changedSentence = changed.length
@@ -445,7 +474,7 @@ const sql = `-- Intent: RE-SEED cloud exercise_library from bundled assets/data/
 --     pro_tip, image_*, gif_url, equipment_tier, cns_demand, target_focus, priority_tier,
 --     rep_range, is_foundational, is_bilateral, standard_swap, indian_alternative,
 --     injury_contraindications, core_levels, discipline, gym_availability, requires_coaching,
---     high_impact, variant_family, slot_pattern, same_movement_as and the ladder keys) are not surfaced in cloud schema yet —
+--     high_impact, variant_family, same_movement_as and the ladder keys) are not surfaced in cloud schema yet —
 --     they live in the bundled Hive box. Add columns + a follow-up backfill migration when a
 --     reader needs them.
 

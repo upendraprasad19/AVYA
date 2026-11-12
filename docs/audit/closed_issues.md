@@ -6830,6 +6830,28 @@ Batch A did NOT relabel them. `_preferNovel` (`exercise_selector.dart:1054-1066`
 
 **Closed (2026-11-12, Unit 1B-R, branch `generator-step1-1br`, diagnose `e4b7a2`).** Founder d25: the loaded move wins, on the leg day and in phase 1. Built as both of the options above, generalised: (a) the R3 (b) fit key applies in every non-core slot (Ruling 2), and (b) in phase 1 a bodyweight row gives way to the loaded row the walk will reach when that row matches the slot at least as well (Ruling 3; not limited to `same_movement_as` pairs). 2,304-plan audit: equipped plans with Walking Lunge 373 -> 0; equipped phase-1 plans with Single Leg Glute Bridge / Bodyweight Good Morning 122 / 58 -> 0 / 0; 443 plans change (0 bodyweight); `unloaded` plans 440 -> 116, the rest library gaps (no loaded home leg curl, hip or soleus row left for the slot; plan section 4). Kill switch `disable_loaded_wins`; its deletion is OI-499.
 
+
+## OI-493 — Nutrition logging parity: coach-logged and screen-logged meals differ in 20 places (survey 2026-11-10)
+
+- **Status**: CLOSED · 2026-11-12 · Landing A PR #251 (merge e1becc8d, closes-diagnose ec6f6c), Landing B PR #253 (merge 692cb371, closes-diagnose 4cb58f), ai-proxy v101 deployed and recorded in PR #254; closure ledger `docs/audit/oi493-nutrition-parity.closure.yaml` 21 of 21 terminal; behavioral tests test/contracts/coach_vs_screen_meal_log_parity_test.dart and test/contracts/nlog_repeat_adds_entry_behavioral_test.dart. The device check moved to OI-348 row A18 (founder decision 2026-11-12, as OI-358, OI-414 and OI-466 did).
+- **Blocked on**: none
+- **Verified**: 2026-11-12, by the closure ledger (21 of 21 terminal), CI green on main for both merges, and the decoded ai-proxy v101 files compared with git 692cb371 byte for byte; the founder's device check is OI-348 A18
+- **Identified**: 2026-11-10 · filed via mint_oi.sh from branch `coach-workout-parity`
+
+**Problem.** The 2026-11-10 survey for coach workout parity found 20 differences between a meal logged from the coach and one logged from the Nutrition screen (what is stored, counted and shown). Founder decision 1 (2026-11-10): the same stored and counted result whichever way you log; only the entry UI differs. Decision 4: nutrition parity is the next unit after workouts.
+
+**To do.** Re-run the survey against the current code, then plan, review and fix every difference in one unit.
+
+Added 2026-11-11 (OI-494 review): the coach `logMeal` path in `lib/features/ai_coach/services/tool_dispatcher.dart` (the `DateTime.tryParse('<YYYY-MM-DD>')` passed as `date:`) parses the coach's date string as LOCAL midnight, so on a device east of IST (for example UTC+9) the meal lands on the previous IST day. It is one of the differences this unit must fix, with a behavioural test under a non-IST zone.
+
+Added 2026-11-12 (Landing A, branch `oi493-nutrition-parity`, diagnose ec6f6c): the unit was split under §4.12.1 (plan `docs/plans/oi493-nutrition-parity.md`). Landing A fixes differences 1-6, 9, 10, 12 and 14 (one coach meal writer `CoachMealLog.write`; day and slot from the reported instant, slot by the screen's clock rule; parsed items with fibre; the tag's own estimate; no AI-text unit; the server refuses a non-today date; six `food_name` readers read `items[]`, with a source guard). 11's `source` half is verified clean (no such cloud column). Landing B (`docs/plans/oi493b-duplicate-meals.md`: the same meal twice adds an entry, the zero-override fallback, concurrent dispatch) closes this OI with the closure ledger. Open after A merges: the `ai-proxy` deploy (founder go) and the device check after the next build.
+
+Added 2026-11-12 (Landing B, branch `oi493b-duplicate-meals`, diagnose 4cb58f): the same meal logged twice is two entries (first free occurrence key in `logMeal`, `moveMealLog`, both UNDO paths and `NlogKeyMigrator`); UNDO restores only its own row and never across accounts; a double tap, a remounted AI-text / scan card or a remounted coach tag card saves once (`SingleFlight`, the handler's in-flight map); an AI total of 0 falls back to the items. Every one of the 14 differences is terminal in `docs/audit/oi493-nutrition-parity.closure.yaml`. Still open (why this OI stays OPEN): the `ai-proxy` deploy from `main` (founder go; D3's server-side date rule is live only after it) and the device check after the next build (coach and screen meals, a repeat, UNDO).
+
+Added 2026-11-12 (deploy, founder go): `ai-proxy` v101 is live from `main` 692cb371 (verify_jwt false; the deployed `index.ts`, `logMealByText.ts` and `food_parser.ts` match git byte for byte through the decoded `/body`; smoke and anon boot-verify 401 from the module). The web app (Vercel production, `app.icanbefitter.com`) serves the same commit. Still open: the device check, which can start on the web app now and repeats on the phone after the next build.
+
+Closed 2026-11-12 (founder): the code is merged, the server deploy is live and recorded, and the web app serves both landings. The remaining founder check (coach and screen meals, a repeat, a double tap, UNDO, the non-IST zone and the one-time key conversion on the phone) is OI-348 row A18; its result is recorded there.
+
 ## OI-500 — session_date_and_home_start test fails on a non-IST host (CI pins IST, so main stays green)
 
 - **Status**: CLOSED · 2026-11-12 · branch `oi500-session-date-tz` · the commit carrying `closes-oi:` for this entry

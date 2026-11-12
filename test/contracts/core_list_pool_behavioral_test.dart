@@ -490,18 +490,19 @@ void main() {
       pick([day([slot('Core', 'core', type: 'isolation', sub: 'obliques')])]);
       final s = picks().single;
       expect(
-          [..._strs(byId[s.pickedId]!['slot_focus'] ??
-              byId[s.pickedId]!['target_focus']),
+          [..._strs(byId[s.pickedId]!['target_focus']),
             ..._strs(byId[s.pickedId]!['primary_muscles'])],
           contains('Core/Obliques'));
       expect(['E090', 'E175'], contains(s.pickedId));
     });
   });
 
-  test('slot_pattern fills the Front Delts isolation slot', () {
+  // Since seed v27 (Unit 1B-F2) E015's copied movement_pattern is what puts it in this slot (it was a slot_pattern overlay).
+  test('the copied movement_pattern fills the Front Delts isolation slot', () {
     pick([day([slot('Front Delts', 'shoulder_isolation', type: 'isolation')])]);
     final s = picks().single;
     expect(s.pickedId, 'E015');
+    expect(_strs(byId['E015']!['movement_pattern']), contains('shoulder_isolation'));
     expect(s.source, 'core');
   });
 
