@@ -2,6 +2,8 @@ import 'package:flutter/foundation.dart' show visibleForTesting;
 
 import 'budget_muscle_groups.dart';
 import 'models.dart';
+import 'plan_engine_flags.dart';
+import 'sequencing_engine.dart';
 import 'session_budget.dart';
 
 /// What one variant ('A' or 'B') of an allocation did, for the ON-world gate and
@@ -61,7 +63,23 @@ class AllocationStats {
   /// lift was not kept (another exercise of the day was), and [groups] are the
   /// budget groups it credits.
   final List<FirstLift> firstLifts = [];
+
+  /// Unit 2A (OI-486): which world this variant's allocation was kept from: `lead` (R1 + R2), `capped` (R2 only) or
+  /// `main` (the pre-2A allocation, R3's fallback). Null when the lead-first rule is off.
+  String? leadWorld;
+
+  /// Unit 2A: one entry per allocated day that has an admitted budgeted exercise: the day's lead (the row the sequencer
+  /// opens the day with, `SequencingEngine.openerOf`, which [firstLifts]' rank 0 often is not). [boundBy] is null when
+  /// the lead reached the base sets, else the first group whose session cap or weekly top refuses its next set,
+  /// `clock` when only the day's time does, or `unexplained` when nothing refuses it at the end. Filled in every world.
+  /// A day variant B copies from A carries A's entry for it, so B's list covers B's whole week; in day order.
+  final List<LeadSeat> leadSeats = [];
 }
+
+typedef LeadSeat = ({int day, int rank, String name, int sets, String? boundBy});
+
+/// Unit 2A, R3: the three allocations each variant is tried in.
+enum _World { lead, capped, main }
 
 typedef FirstLift = ({
   int day,
@@ -117,7 +135,13 @@ class _Slot {
 /// lift stays and the lead lift is dropped; its [AllocationStats.firstLifts] entry
 /// then reads `sets: 0`, and the gate counts such days in the report.
 ///
-/// Pure: no Hive, no flag read. Runs after the exercises are picked and BEFORE
+/// Unit 2A (OI-486, founder d26-d29): with the lead-first rule on, a day's LEAD is the budgeted row the sequencer
+/// will open it with (`SequencingEngine.openerOf`); R1 seats it at the base sets in pass A when that fits, R2 keeps
+/// every other budgeted row at most 1 set above it in pass C (pass D, the focus pass, is exempt), and R3 keeps, per
+/// variant, the first of the lead, capped and main worlds that is not worse than main ([worldIsWorse]).
+///
+/// Pure apart from one flag read: [allocate] reads `PlanEngineFlags.leadFirstEnabled` when its `leadFirst` argument
+/// is null. Runs after the exercises are picked and BEFORE
 /// `PeriodizationEngine.apply`, titration, sequencing and the superset pairer, so
 /// the rank is the split's slot-priority order (not the compound-first order the
 /// sequencer gives later) and there is no superset time credit (Ruling 5).
@@ -142,12 +166,19 @@ class SessionSetAllocator {
   /// their sets). A budgeted exercise's muscles are the ones it carries
   /// (`PlannedExercise.primaryMuscles`, copied from the row that was picked), else
   /// those of its row in [rowsByName] (lowercased name -> library row).
+  ///
+  /// [leadFirst] turns the Unit 2A rule on or off for this call; null reads the kill switch
+  /// (`PlanEngineFlags.leadFirstEnabled`, default ON). Off is the pre-2A allocation byte for byte.
   static List<PopulatedDay> allocate({
     required List<PopulatedDay> days,
     required SessionBudgetContext ctx,
     required Map<String, Map<String, dynamic>> rowsByName,
     required bool is6Day,
+    bool? leadFirst,
   }) {
+    if (leadFirst ?? PlanEngineFlags.leadFirstEnabled) {
+      return _allocateLeadFirst(days: days, ctx: ctx, rowsByName: rowsByName, is6Day: is6Day);
+    }
     final stats = <String, AllocationStats>{};
     final lists = [for (final d in days) d.exercisesA];
     final a = _variant(lists, days, ctx, rowsByName, null, stats['A'] = AllocationStats());
@@ -166,6 +197,108 @@ class SessionSetAllocator {
       final b = _variant([for (final d in days) d.exercisesB], days, ctx, rowsByName, copy,
           stats['B'] = AllocationStats(), copyFrom: stats['A'], copyEvicted: a.evicted);
       bOut = b.out;
+    }
+    debugLastStats = stats;
+    return [
+      for (var d = 0; d < days.length; d++)
+        PopulatedDay(
+          name: days[d].name,
+          focus: days[d].focus,
+          dayType: days[d].dayType,
+          intensity: days[d].intensity,
+          exercisesA: a.out[d],
+          exercisesB: bOut[d],
+        ),
+    ];
+  }
+
+  /// Unit 2A, R3: whether a world's allocation is worse than main's: a day holds fewer rows (budgeted and not) than
+  /// `min(floor, main's rows that day)`, or a group main trains in the week (weekly sets > 0) is at 0. Pure. Says
+  /// nothing about a group's weekly sets otherwise, a swapped exercise or a day's minutes (plan section 3).
+  @visibleForTesting
+  static bool worldIsWorse(
+    List<int> rows,
+    Map<String, int> weekly,
+    List<int> mainRows,
+    Map<String, int> mainWeekly,
+    int floor,
+  ) {
+    for (var d = 0; d < mainRows.length; d++) {
+      final want = mainRows[d] < floor ? mainRows[d] : floor;
+      if ((d < rows.length ? rows[d] : 0) < want) return true;
+    }
+    for (final e in mainWeekly.entries) {
+      if (e.value > 0 && (weekly[e.key] ?? 0) == 0) return true;
+    }
+    return false;
+  }
+
+  /// Unit 2A, R3: each variant allocated in the lead (L), capped (C) and main (M) worlds; a variant keeps L when it is
+  /// not worse than M, else C when C is not, else M. B's M is main's B (over main A's copied days); B's L and C copy
+  /// the CHOSEN A's days and stats. When neither B world holds, the whole plan falls back to main (A = M, B = M_B), so
+  /// the kept B is never an unchecked mix. The 6-day path keeps B = A.
+  static List<PopulatedDay> _allocateLeadFirst({
+    required List<PopulatedDay> days,
+    required SessionBudgetContext ctx,
+    required Map<String, Map<String, dynamic>> rowsByName,
+    required bool is6Day,
+  }) {
+    final floor = SessionBudget.countFloor(ctx.minutes);
+    List<int> rowsOf(List<List<PlannedExercise>> out) => [for (final d in out) d.length];
+    bool worse(List<List<PlannedExercise>> w, AllocationStats ws, List<List<PlannedExercise>> m, AllocationStats ms) =>
+        worldIsWorse(rowsOf(w), ws.weekly, rowsOf(m), ms.weekly, floor);
+
+    final listsA = [for (final d in days) d.exercisesA];
+    final sAM = AllocationStats()..leadWorld = 'main';
+    final aM = _variant(listsA, days, ctx, rowsByName, null, sAM);
+    var sA = AllocationStats()..leadWorld = 'lead';
+    var a = _variant(listsA, days, ctx, rowsByName, null, sA, world: _World.lead);
+    if (worse(a.out, sA, aM.out, sAM)) {
+      final sC = AllocationStats()..leadWorld = 'capped';
+      final c = _variant(listsA, days, ctx, rowsByName, null, sC, world: _World.capped);
+      if (!worse(c.out, sC, aM.out, sAM)) {
+        (a, sA) = (c, sC);
+      } else {
+        // Not reachable today (B review, seat 3, M14): the capped world seats exactly main's rows (passes A, A2 and B
+        // are main's; passes C and D seat nothing and only add sets), so it is never worse than main in A; the gate
+        // pins A's worlds at lead / capped only. Kept so a later pass that seats or removes after pass B stays safe.
+        (a, sA) = (aM, sAM);
+      }
+    }
+
+    final stats = <String, AllocationStats>{'A': sA};
+    var bOut = a.out;
+    if (!is6Day) {
+      // A day whose B list is the same object as A's, or has the same names, copies the given A allocation (P2-7).
+      Map<int, List<_Slot>> copyOf(List<List<_Slot>> byDay) => {
+            for (var d = 0; d < days.length; d++)
+              if (_sameNames(days[d].exercisesA, days[d].exercisesB)) d: byDay[d],
+          };
+      final listsB = [for (final d in days) d.exercisesB];
+      final sBM = AllocationStats()..leadWorld = 'main';
+      final bM = _variant(listsB, days, ctx, rowsByName, copyOf(aM.byDay), sBM,
+          copyFrom: sAM, copyEvicted: aM.evicted);
+      ({List<List<PlannedExercise>> out, List<List<_Slot>> byDay, Map<int, Set<int>> evicted})? kept;
+      AllocationStats? sB;
+      for (final w in const [_World.lead, _World.capped]) {
+        final st = AllocationStats()..leadWorld = w.name;
+        final b = _variant(listsB, days, ctx, rowsByName, copyOf(a.byDay), st,
+            copyFrom: sA, copyEvicted: a.evicted, world: w);
+        if (!worse(b.out, st, bM.out, sBM)) {
+          (kept, sB) = (b, st);
+          break;
+        }
+      }
+      if (kept == null || sB == null) {
+        // Neither B world holds: the whole plan falls back to main (A = M, B = M_B; A's stats become M's).
+        a = aM;
+        stats['A'] = sAM;
+        stats['B'] = sBM;
+        bOut = bM.out;
+      } else {
+        stats['B'] = sB;
+        bOut = kept.out;
+      }
     }
     debugLastStats = stats;
     return [
@@ -219,6 +352,7 @@ class SessionSetAllocator {
     AllocationStats stats, {
     AllocationStats? copyFrom,
     Map<int, Set<int>>? copyEvicted,
+    _World world = _World.main,
   }) {
     final n = days.length;
     final ledger = BudgetLedger(ctx, n);
@@ -321,6 +455,8 @@ class SessionSetAllocator {
         final below = copyFrom.belowCount[d];
         if (below != null) stats.belowCount[d] = below;
         if (copyFrom.selectorThin.contains(d)) stats.selectorThin.add(d);
+        // Unit 2A: a copied day's lead is A's lead on it, at A's sets (B review, seat 1 finding 2).
+        stats.leadSeats.addAll(copyFrom.leadSeats.where((e) => e.day == d));
       }
     }
 
@@ -381,6 +517,20 @@ class SessionSetAllocator {
       return true;
     }
 
+    // Unit 2A: each day's opener, the budgeted row the sequencer will put first, taken before allocation (R1's lead).
+    _Slot? openerAmong(Iterable<_Slot> slots) {
+      final list = slots.toList();
+      final ex = SequencingEngine.openerOf([for (final o in list) o.exercise]);
+      for (final o in list) {
+        if (identical(o.exercise, ex)) return o;
+      }
+      return null;
+    }
+
+    final opener = <_Slot?>[
+      for (var d = 0; d < n; d++) world == _World.main ? null : openerAmong(byDay[d]),
+    ];
+
     // 3. Pass A: priority-rank admission.
     var maxRank = 0;
     for (final d in allocateDays) {
@@ -414,6 +564,20 @@ class SessionSetAllocator {
             ..removed = true
             ..why = {for (final g in s.groups) g: _Why.target};
           continue;
+        }
+
+        // Unit 2A, R1: the lead world seats the day's lead at the base sets when that fits (time, caps, top and, at
+        // rank 0, the reservation; never an eviction). Else it is handled exactly as on main, below.
+        if (world == _World.lead && identical(s, opener[d])) {
+          const kb = SessionBudget.baseSets;
+          if (ledger.fits(d, s.groups, kb, seconds(s, kb)) && reserved(kb)) {
+            s
+              ..sets = kb
+              ..admitted = true;
+            seated[d]++;
+            ledger.add(d, s.groups, kb, seconds(s, kb));
+            continue;
+          }
         }
 
         // Every exercise is SEATED at 2 sets; pass B grows it to the base sets.
@@ -585,8 +749,26 @@ class SessionSetAllocator {
       }
     }
 
-    // 5. Passes C and D: +1 rounds until a round adds nothing.
-    void grow(Map<String, int> targets) {
+    // Unit 2A: the day's lead once admission is final (passes B to D seat nothing): the opener when admitted, else
+    // the opener of the admitted slots, the row week 2 caps against too.
+    final lead = <_Slot?>[
+      for (var d = 0; d < n; d++)
+        opener[d] != null && opener[d]!.admitted
+            ? opener[d]
+            : openerAmong([for (final o in byDay[d]) if (o.admitted) o]),
+    ];
+
+    // Unit 2A, R2: outside the main world, a budgeted slot that is not its day's lead never grows past the lead's
+    // sets + 1. Pass B is not capped (it grows to the base sets, and the lead holds at least 2).
+    bool underLead(_Slot s) {
+      if (world == _World.main) return true;
+      final l = lead[s.day];
+      if (l == null || identical(l, s)) return true;
+      return s.sets + 1 <= l.sets + 1;
+    }
+
+    // 5. Passes C and D: +1 rounds until a round adds nothing. [focusPass]: pass D, exempt from R2 (founder d27).
+    void grow(Map<String, int> targets, {bool focusPass = false}) {
       final order = <_Slot>[
         for (final s in all)
           if (s.admitted && allocateDays.contains(s.day)) s,
@@ -599,6 +781,7 @@ class SessionSetAllocator {
           if (target == null || ledger.week(g) >= target) continue;
           for (final s in order) {
             if (!s.groups.contains(g) || s.sets >= SessionBudget.maxSetsPerExercise) continue;
+            if (!focusPass && !underLead(s)) continue;
             final dt = seconds(s, s.sets + 1) - seconds(s, s.sets);
             if (ledger.fits(s.day, s.groups, 1, dt)) {
               s.sets++;
@@ -615,7 +798,7 @@ class SessionSetAllocator {
     grow({for (final g in BudgetMuscleGroups.groups) g: bottom});
     // In a lighter phase the ledger's weekly top IS the band bottom for every group,
     // focus included, so this pass cannot add a set there.
-    grow({for (final g in ctx.focusGroups) g: SessionBudget.focusWeeklyTop});
+    grow({for (final g in ctx.focusGroups) g: SessionBudget.focusWeeklyTop}, focusPass: true);
 
     // 6. Stats.
     for (final g in BudgetMuscleGroups.groups) {
@@ -642,6 +825,21 @@ class SessionSetAllocator {
         groups: lead.groups,
       ));
     }
+
+    for (final d in allocateDays) {
+      final l = world == _World.main
+          ? openerAmong([for (final o in byDay[d]) if (o.admitted) o])
+          : lead[d];
+      if (l == null) continue;
+      String? boundBy;
+      if (l.sets < SessionBudget.baseSets) {
+        final dt = seconds(l, l.sets + 1) - seconds(l, l.sets);
+        boundBy = _firstBlockingGroup(ledger, d, l, 1, null) ??
+            (dt > ledger.secondsLeft(d) ? 'clock' : 'unexplained');
+      }
+      stats.leadSeats.add((day: d, rank: l.rank, name: l.exercise.exerciseName, sets: l.sets, boundBy: boundBy));
+    }
+    stats.leadSeats.sort((x, y) => x.day.compareTo(y.day));
 
     final out = <List<PlannedExercise>>[
       for (var d = 0; d < n; d++)

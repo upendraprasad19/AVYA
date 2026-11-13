@@ -253,6 +253,8 @@ void main() {
         const goals = ['build_muscle', 'strength', 'lose_fat', 'general_fitness'];
         const levels = ['beginner', 'intermediate', 'advanced'];
         var checked = 0;
+        // Days actually past their minutes (key plan/week/day -> seconds over, 0.1 s): pinned exactly below.
+        final over = <String, double>{};
         for (var plan = 0; plan < 60; plan++) {
           final nDays = 3 + rnd.nextInt(4);
           final is6 = nDays == 6;
@@ -337,8 +339,18 @@ void main() {
                   ),
                 );
               }
-              expect(ledger.secondsLeft(d), greaterThanOrEqualTo(-1e-6),
+              // OI-456 piece B: a day the count floor force-seated (pass A2, `countForced` of the variant this week
+              // reads) may be up to `maxForcedOverSeconds` over. Unit 2A (2026-11-13): before 2A no seed reached A2;
+              // now 15 day-weeks of seed plans 16, 54, 55 and 57 do (10.8 to 90 s over, weeks 1-3), pinned below.
+              final variant = !is6 && (w == 1 || w == 3) ? 'B' : 'A';
+              final bound = stats[variant]!.countForced.containsKey(d)
+                  ? -SessionBudget.maxForcedOverSeconds - 1e-6
+                  : -1e-6;
+              expect(ledger.secondsLeft(d), greaterThanOrEqualTo(bound),
                   reason: 'plan $plan week $w day $d time');
+              if (ledger.secondsLeft(d) < -1e-6) {
+                over['$plan/$w/$d'] = (-ledger.secondsLeft(d) * 10).roundToDouble() / 10;
+              }
             }
             for (final g in BudgetMuscleGroups.groups) {
               expect(ledger.week(g), lessThanOrEqualTo(ledger.weeklyTop(g)),
@@ -351,6 +363,14 @@ void main() {
           }
         }
         expect(checked, greaterThan(40), reason: 'the guard must not skip most plans');
+        // The count-forced excuse above is used by exactly these days, by exactly these seconds (B review, seat 2
+        // finding 3): a new forced day, or a deeper overrun, is a change to look at, not a pass.
+        expect(over, <String, double>{
+          '16/0/0': 90.0, '16/1/0': 90.0, '16/2/0': 90.0, //
+          '54/0/1': 66.0, '54/0/2': 75.6, '54/1/1': 66.0, '54/1/2': 75.6, '54/2/1': 66.0, '54/2/2': 75.6, //
+          '55/0/4': 54.0, '55/1/1': 10.8, '55/2/4': 54.0, //
+          '57/0/1': 10.8, '57/1/1': 10.8, '57/2/1': 10.8,
+        });
       });
     });
   });

@@ -166,6 +166,19 @@ void main() {
     expect(codes(r), containsAll(['iso_first', 'lead_starved']));
   });
 
+  // Step 2A (founder d27): a row crediting a focus group may end above its lead, so lead_starved does not compare it.
+  // x[6] is the row's credited groups, as plan_audit_dump_test writes it. MIRROR: the same plan with no `fg` is flagged,
+  // and a focus plan whose biggest row is OUTSIDE the focus is flagged too.
+  test('lead_starved skips a row that credits a focus group (d27)', () {
+    List<List<Object>> day(String iso, List<String> groups) =>
+        [['Goblet Squat', 2, '10', 60, 0, 0, ['Quads', 'Glutes']], [iso, 4, '12', 60, 0, 0, groups]];
+    Map<String, dynamic> plan(String iso, List<String> groups, List<String> fg) =>
+        _plan([day(iso, groups)])..['fg'] = fg;
+    expect(codes(auditor.audit(plan('Lateral Raise', ['Shoulders'], ['Shoulders']))), isNot(contains('lead_starved')));
+    expect(codes(auditor.audit(plan('Lateral Raise', ['Shoulders'], []))), contains('lead_starved'));
+    expect(codes(auditor.audit(plan('Lateral Raise', ['Shoulders'], ['Biceps']))), contains('lead_starved'));
+  });
+
   test('jump rows in week 1, and as the lead', () {
     final r = auditor.audit(_plan([
       [['Jump Squat', 3], ['Goblet Squat', 3]],

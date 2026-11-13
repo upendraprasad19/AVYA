@@ -26,6 +26,7 @@ import 'package:icanbefitter/shared/repositories/plan_engine/budget_muscle_group
 import 'package:icanbefitter/shared/repositories/plan_engine/models.dart';
 import 'package:icanbefitter/shared/repositories/plan_engine/plan_generator.dart';
 import 'package:icanbefitter/shared/repositories/plan_engine/session_budget.dart';
+import 'package:icanbefitter/shared/repositories/plan_engine/session_set_allocator.dart';
 
 import '../helpers/generator_golden_personas.dart' show customPinName, namesByDay;
 
@@ -166,10 +167,27 @@ void main() {
 
     test('the profile minutes size the sessions when the caller passes none', () async {
       await HiveService.instance.userBox.put('profile', {'session_duration_minutes': 30});
+      SessionSetAllocator.debugLastStats = null;
       final on = gen();
-      for (final d in allDays(on)) {
-        expect(mainSeconds(d), lessThanOrEqualTo(budgetSeconds(30) + 1e-6));
+      final stats = SessionSetAllocator.debugLastStats!;
+      // Unit 2A (2026-11-13): a day the count floor force-seated (pass A2, `countForced` of the variant the week reads:
+      // B in weeks 2 and 4 of this 4-day plan) may be up to `maxForcedOverSeconds` over (founder d26 / d28): eight
+      // day-weeks here, 10.8 to 75.6 s over since R1 seats the lead at 3 (pinned below). Every other day fits 30
+      // minutes; at 60 minutes every day would have 3000 s, far past either bound.
+      final over = <String, double>{};
+      for (final w in on.weekPlans) {
+        for (var i = 0; i < w.workoutDays.length; i++) {
+          final forced = stats[w.weekInPhase.isEven ? 'B' : 'A']!.countForced.containsKey(i);
+          final bound = budgetSeconds(30) + (forced ? SessionBudget.maxForcedOverSeconds : 0) + 1e-6;
+          final secs = mainSeconds(w.workoutDays[i]);
+          expect(secs, lessThanOrEqualTo(bound), reason: 'week ${w.weekInPhase} day $i');
+          if (secs > budgetSeconds(30) + 1e-6) over['${w.weekInPhase}/$i'] = ((secs - budgetSeconds(30)) * 10).roundToDouble() / 10;
+        }
       }
+      // The excuse is used by exactly these days, by exactly these seconds (B review, seat 2 finding 3).
+      expect(over, <String, double>{
+        '1/0': 39.6, '1/1': 10.8, '1/2': 39.6, '2/2': 75.6, '2/3': 39.6, '3/0': 39.6, '3/1': 10.8, '3/2': 39.6,
+      });
     });
 
     test('a caller-supplied duration beats the profile', () async {

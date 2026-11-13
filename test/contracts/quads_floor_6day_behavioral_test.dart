@@ -34,6 +34,7 @@ import 'package:icanbefitter/shared/repositories/plan_engine/budget_muscle_group
 import 'package:icanbefitter/shared/repositories/plan_engine/models.dart';
 import 'package:icanbefitter/shared/repositories/plan_engine/plan_engine_flags.dart';
 import 'package:icanbefitter/shared/repositories/plan_engine/plan_generator.dart';
+import 'package:icanbefitter/shared/repositories/plan_engine/sequencing_engine.dart';
 import 'package:icanbefitter/shared/repositories/plan_engine/session_budget.dart';
 import 'package:icanbefitter/shared/repositories/plan_engine/session_set_allocator.dart';
 import 'package:icanbefitter/shared/repositories/plan_engine/split_resolver.dart';
@@ -196,11 +197,51 @@ int _quadsAfterBeforeFlip(String key) => _quadsAfterC2c[key] ?? _quadsAfter[key]
 int _quadsOffBeforeFlip(String key) => _quadsOffC2c[key] ?? _quadsBefore[key]!;
 String? _label90BeforeFlip(String key) => _quadsLabel90C2c[key] ?? _quadsLabel90[key];
 
-int _quadsAfterFor(String key) => _quadsAfter1BF[key] ?? _quadsAfterBeforeFlip(key);
-int _quadsOffFor(String key) => _quadsOff1BF[key] ?? _quadsOffBeforeFlip(key);
+// Unit 2A (OI-486, docs/plans/2026-11-12-generator-step2-allocator.md, 2026-11-13): the lead-first allocator. Measured
+// on the 2A tree over the same 24 cells; each table below OVERRIDES the 1B-F ones cell by cell (a cell equal to what it
+// replaces is a dead override, the last test). With the lever ON, Quads fall in four beginner cells and rise in none:
+// the leg days open with a bilateral hinge (Bodyweight Good Morning on bodyweight), the sequencer's opener, at 3 sets,
+// so R2 holds each unilateral quad compound at the lead + 1 = 4 instead of 5 (bodyweight 60: 9 to 8, 90: 10 to 8;
+// home_dumbbells and basic_gym 90: 10 to 9). The three 90-minute cells read `cap_limited` (R2 has no `_Why` of its
+// own, plan section 5), and the cap-cause check below accepts the R2 hold as that cause. Weekly minimums are unit 2C's
+// (OI-501). Switched off, the old Legs B moves in 16 cells (the lead at 3 changes what time is left).
+
+/// `_quadsAfter` overrides at 2A (lever ON).
+const _quadsAfter2A = <String, int>{
+  'beginner|bodyweight|60': 8, 'beginner|bodyweight|90': 8,
+  'beginner|home_dumbbells|90': 9, 'beginner|basic_gym|90': 9,
+};
+
+/// `_quadsBefore` overrides at 2A (lever switched OFF).
+const _quadsOff2A = <String, int>{
+  'beginner|bodyweight|60': 3, 'beginner|bodyweight|90': 3,
+  'beginner|home_dumbbells|60': 3, 'beginner|home_dumbbells|90': 3,
+  'beginner|basic_gym|60': 3, 'beginner|basic_gym|90': 3,
+  'intermediate|bodyweight|60': 5, 'intermediate|bodyweight|90': 5,
+  'intermediate|home_dumbbells|60': 5, 'intermediate|home_dumbbells|90': 5,
+  'intermediate|basic_gym|60': 5, 'intermediate|basic_gym|90': 5,
+  'intermediate|full_gym|90': 7,
+  'advanced|home_dumbbells|60': 5, 'advanced|home_dumbbells|90': 5,
+  'advanced|full_gym|90': 7,
+};
+
+/// `_quadsLabel90` overrides at 2A.
+const _quadsLabel90_2A = <String, String?>{
+  'beginner|bodyweight|90': 'cap_limited',
+  'beginner|home_dumbbells|90': 'cap_limited',
+  'beginner|basic_gym|90': 'cap_limited',
+};
+
+int _quadsAfterBefore2A(String key) => _quadsAfter1BF[key] ?? _quadsAfterBeforeFlip(key);
+int _quadsOffBefore2A(String key) => _quadsOff1BF[key] ?? _quadsOffBeforeFlip(key);
+String? _label90Before2A(String key) =>
+    _quadsLabel90_1BF.containsKey(key) ? _quadsLabel90_1BF[key] : _label90BeforeFlip(key);
+
+int _quadsAfterFor(String key) => _quadsAfter2A[key] ?? _quadsAfterBefore2A(key);
+int _quadsOffFor(String key) => _quadsOff2A[key] ?? _quadsOffBefore2A(key);
 int _hamstringsFor(String key) => _hamstrings1BF[key] ?? _hamstringsBefore[key]!;
 String? _label90For(String key) =>
-    _quadsLabel90_1BF.containsKey(key) ? _quadsLabel90_1BF[key] : _label90BeforeFlip(key);
+    _quadsLabel90_2A.containsKey(key) ? _quadsLabel90_2A[key] : _label90Before2A(key);
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -519,16 +560,18 @@ void main() {
             if (minutes == 90) {
               expect(stats.belowFloor['Quads'], _label90For(key), reason: '$key Quads label');
             }
-            // The documented CAUSE of `cap_limited` there: both leg days hold a budgeted quad compound at the
-            // per-exercise maximum (the label alone also covers a session cap or a weekly top).
+            // The documented CAUSE of `cap_limited` there: every budgeted quad compound on the leg days is held, at
+            // the per-exercise maximum or (Unit 2A, R2) at its day's lead + 1, the lead being the sequencer's opener of
+            // the day's budgeted rows (the label alone also covers a session cap or a weekly top).
             if (minutes == 90 && _label90For(key) == 'cap_limited') {
-              final quadCompoundSets = [
+              final held = <(int, int)>[
                 for (final d in plan.weekPlans[0].workoutDays.where((d) => d.name.startsWith('Legs')))
-                  for (final e in d.exercises.where(budgeted).where(kneeQuadFirst)) e.sets,
+                  for (final e in d.exercises.where(budgeted).where(kneeQuadFirst))
+                    (e.sets, SequencingEngine.openerOf(d.exercises.where(budgeted).toList())!.sets),
               ];
-              expect(quadCompoundSets, isNotEmpty);
-              expect(quadCompoundSets.every((n) => n == SessionBudget.maxSetsPerExercise), isTrue,
-                  reason: '$key: quad compound sets $quadCompoundSets, maximum ${SessionBudget.maxSetsPerExercise}');
+              expect(held, isNotEmpty);
+              expect(held.every((h) => h.$1 == SessionBudget.maxSetsPerExercise || h.$1 == h.$2 + 1), isTrue,
+                  reason: '$key: (quad compound sets, lead sets) $held, maximum ${SessionBudget.maxSetsPerExercise}');
             }
             // Tops, caps and minutes in all four weeks (credited sense, the rule of this split).
             auditPlan(plan, level, 1, minutes, key, bad);
@@ -704,6 +747,17 @@ void main() {
       expect(e.key.endsWith('|90') && _quadsAfter.containsKey(e.key), isTrue,
           reason: 'label: ${e.key} is not a real 90-minute cell');
       expect(e.value, isNot(_quadsLabel90[e.key]), reason: 'label: ${e.key} equals the OI-454 label (a dead override)');
+    }
+    for (final e in _quadsAfter2A.entries) {
+      expect(e.value, isNot(_quadsAfterBefore2A(e.key)), reason: 'after (2A): ${e.key} is a dead override');
+    }
+    for (final e in _quadsOff2A.entries) {
+      expect(e.value, isNot(_quadsOffBefore2A(e.key)), reason: 'off (2A): ${e.key} is a dead override');
+    }
+    for (final e in _quadsLabel90_2A.entries) {
+      expect(e.key.endsWith('|90') && _quadsAfter.containsKey(e.key), isTrue,
+          reason: 'label (2A): ${e.key} is not a real 90-minute cell');
+      expect(e.value, isNot(_label90Before2A(e.key)), reason: 'label (2A): ${e.key} is a dead override');
     }
     for (final e in _quadsAfter1BF.entries) {
       expect(e.value, isNot(_quadsAfterBeforeFlip(e.key)), reason: 'after (1B-F): ${e.key} is a dead override');

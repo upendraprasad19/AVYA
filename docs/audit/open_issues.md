@@ -6857,6 +6857,8 @@ Found by the sync-storm-first-sweep batch while measuring its Day-0 web check (l
 
 The flip equals prototype H3 and main's pre-flip ON world on every count above (30 min: 292 lines differ from H3, all Ruling 5c's timed-hold evictions on 30-minute days, no count moves; 45 min: identical to H3). The whole injured grid on the final tree (46,512 runs, 418,608 day-weeks, nine blocks): 0 empty, 0 unsafe or unperformable, 0 hip jump rows, 2,286 thin day-weeks and 94 one-exercise days, most in `quads_all` (basic gym 476 thin / 24 one, full gym 312, home 194 / 12) and `triples_eq` (basic 316 / 16, full 208, home 182 / 12). The CI hard test's ratchets (r9 284 thin / 16 one-exercise; the d17 extension, all nine injuries on bodyweight, 182 / 6) and `kThinCeilings` hold these as ceilings until this item's floor lands (founder d16 / d23: ship the flip, OI-452 next).
 
+**Unit 2A (2026-11-13, diagnose `d4a7e2`), input to unit 2B.** The 15-pair pinned repeat at 30 minutes is a day thinner in three blocks: `f_repeat_pairs30` home_dumbbells 120 -> 121, basic_gym 94 -> 96, full_gym 21 -> 22 (every added day a lower_back + elbow pair; one-exercise and empty days unchanged). Cause measured: the pins come from the uninjured phase-1 plan, which 2A changed (pins from a switch-off phase 1 give exactly the old counts); within one generation 2A never holds fewer rows than main or the count floor.
+
 ## OI-453 — A repeat phase keeps its exercise list when the user's minutes go up: keep pinned compounds, spend the spare time on extra sets then appended accessories
 
 - **Status**: OPEN
@@ -6972,6 +6974,8 @@ Found by the M2b Part B Chrome check (360 dp, real fonts, the real card and exer
 
 **Unit 1B-Q, level L1 landed (2026-11-10, branch `generator-step1-1b`, diagnose `cf970c`, founder d13; the three levels: L1 = a slot-only change to the B leg day, L2 = the credit rule, L3 = a quad hit on another day; step 1 takes L1, step 2 the rest).** The B leg day of the 3-day (build_muscle and strength), 4-day and 5-day splits carries a priority-1 Quads compound second, after the Hamstrings hinge (third left 8 advanced bodyweight / home 30-minute ON plans without quads: the Glutes session cap), and its Glutes isolation slot sits behind the Calves slot (4-day: and Core), so Calves and Core keep their week-2 sets. Kill-switch `disable_variant_b_quad` (default ON) restores the old lists; it and the old lists are deleted by the L2 change named at the end of this paragraph, which re-records these splits. Measured over the 2,304-plan audit against main: ON plans worse than their live twin 186 -> 4 (Quads 184 -> 0; the 4 left are OI-489), zero-set plans live 92 -> 28 and ON 278 -> 32, and no muscle of any kind gains a zero-set week in either world. Costs (none reaches 0): fewer week-2 sets for Quads in 52 live build_muscle 4/5-day full_gym plans (a Wall Sit seat became a loaded compound) and 14 ON plans, Glutes in 94 live / 116 ON plans (the isolation row drops at short minutes; both hinge rows still credit Glutes), Hamstrings in 74 live / 73 ON plans; plan section 2 has the full table. Still open here, for step 2: one leg day cannot reach the weekly floor, because the Glutes session cap refuses quad rows that credit Glutes (L2, the credit rule), and a quad hit on another day (L3). Status stays OPEN.
 
+**Unit 2A (2026-11-13, diagnose `d4a7e2`), input to unit 2C.** In the 6-day build_muscle beginner plans the leg days open with a bilateral hinge (Bodyweight Good Morning on bodyweight), the sequencer's opener, at 3 sets, and the lead cap (lead + 1) holds the unilateral quad compound at 4: Quads fall in four cells, bodyweight 60: 9 -> 8, 90: 10 -> 8, home_dumbbells and basic_gym 90: 10 -> 9 (floor 10; `quads_floor_6day_behavioral_test.dart` 2A layer, the three 90-minute cells now `cap_limited`). Loaded versions (same-movement gate personas, weeks 1-2, switch set vs unset): days holding one 992 -> 719. N19 Dumbbell Glute Bridge 633 -> 379; N16 Dumbbell Walking Lunge 8 -> 0, so it reaches no persona day. The picker is unchanged: the home_dumbbells Glutes isolation leaves short leg days, the same Glutes cost (B review, seat 2).
+
 ## OI-476 — telegram-bot/ is tracked and dormant: bot.py receive_email links a Telegram chat to any account by typed email with no proof of ownership, and morning-alert still reads telegram_connections
 
 - **Status**: OPEN
@@ -7070,17 +7074,6 @@ Residual of OI-199 and OI-471 after migration 172. Migration 172 makes `cleanup_
 
 **Done when.** `logCronEnd` removes the listed shapes before the cap, a test proves each one is removed and that a clean message passes through unchanged, and the plan names the redeploy of the cron functions.
 
-## OI-486 — The day's main lift can get fewer sets than its accessories (876 of 2,304 plans; Strength Bench Day bench 2 sets, Bench Dips 5), and day order follows a name table, not the day's slot priority
-
-- **Status**: OPEN
-- **Blocked on**: none
-- **Verified**: 2026-11-08 — same 2,304-plan audit as OI-484, live run.
-- **Identified**: 2026-11-08 · filed via mint_oi.sh from branch `generator-step1-core-list`
-
-**What happens.** (1) The allocator seats every exercise at 2 sets and then grows them (OI-456 piece B, `session_set_allocator.dart`; the stated consequence in `plan_engine/CLAUDE.md` is that a lead can end at 2 sets). A compound credits several muscle groups, so it reaches a session cap or weekly top first, while an isolation keeps growing. Measured: in 876 plans live (1,073 under the core list) a day's first compound gets at least 2 fewer sets than an isolation on the same day, e.g. Strength Bench Day: Barbell Bench Press 2 sets, Bench Dips 5; Pull: Lat Pulldown, Chin Up and Barbell Row 2 each, Self-Resisted Bicep Curl 4. (2) `SequencingEngine._reorderDay` (`sequencing_engine.dart:59-95`) orders compounds by a bilateral flag and a name-keyed CNS table, so a day's priority-1 slot is not guaranteed to lead (the Strength OHP Day opened with Barbell Bench Press in 27 of 56 gym plans live).
-
-**Done when.** The lead lift grows to 3 sets (4 with the Strength focus of OI-487) before any accessory grows past 2, no accessory ends with more sets than its day's lead, the day's priority-1 slot leads the day, and the re-run audit shows 0 starved leads. Planned in step 2 of the generator overhaul, together with OI-452, OI-453, OI-475 and OI-477 (same allocator). Blast radius: `platform` (plan_engine), tier L.
-
 ## OI-487 — The goal barely changes training: reps follow the phase only, Cut and Maintain give the same plan in 149 of 576 profiles, and the Strength physique focus changes nothing
 
 - **Status**: OPEN
@@ -7178,6 +7171,7 @@ Residual of OI-199 and OI-471 after migration 172. Migration 172 makes `cleanup_
 
 **Done when.** Step 2's plan decides each point with the founder (a focus group that falls, and the Core / Chest cost outside the focus; whether a focus accessory may sit above the lead, and so whether `lead_starved` should know the focus; whether a short session should honour focus at all) and its build re-runs this audit for both focus values.
 
+**Unit 2A (2026-11-13, the lead-first allocator, diagnose `d4a7e2`).** The lead finding is closed: founder d27 exempts focus exercises from the lead cap (the focus pass and week 2), and the audit's `lead_starved` skips a focus row. Measured (2,304 plans each; main's focus dumps re-audited with the skip, so 793 / 1,118 above read 672 / 1,004): starved-lead plans `glutes_legs` 672 -> 45 (suitable 706 -> 840), `chest_shoulders_arms` 1,004 -> 47 (suitable 531 -> 886). Still open for unit 2C (weekly minimums): extra sets a focus adds over no focus, main -> 2A: Calves -4,628 -> -837 under `glutes_legs`; Core under `glutes_legs` -2,022 -> -2,458; Biceps under `chest_shoulders_arms` +8,197 -> +9,632. The inert-plan and short-session points stand.
 
 ## OI-502 — Coach chat shows message times in UTC, and the daily count and coaching-notes 'today' checks miss 00:00-05:30 IST (created_at is UTC since 2026-09-27)
 
@@ -7218,3 +7212,14 @@ Residual of OI-199 and OI-471 after migration 172. Migration 172 makes `cleanup_
 - **Still open after the merge**: the device check (send a turn, sign out and in, one row), then delete the kill switch
   `configBox['disable_coach_client_key_restore']` and the old restore loop (CLAUDE.md 4.6 step 4). Optional, its own
   go: delete the 90 live same-instant `in_app_orphan` echoes (plan C6).
+
+## OI-504 — Delete the disable_lead_first kill switch and its golden fixture after the 2A device check
+
+- **Status**: OPEN
+- **Blocked on**: none
+- **Verified**: never
+- **Identified**: 2026-11-13 · filed via mint_oi.sh from branch `generator-step2-allocator`
+
+**What it is.** Unit 2A (diagnose `d4a7e2`, plan `docs/plans/2026-11-12-generator-step2-allocator.md`) ships the lead-first allocator (OI-486, founder d26-d29) default ON behind the kill switch `disable_lead_first` (`PlanEngineFlags.leadFirstEnabled`, read by `SessionSetAllocator.allocate` and `PeriodizationEngine.apply` unless their `leadFirst` argument is given). Its OFF world is pinned by `test/fixtures/generator_golden_hashes_lead_first_off.json` (main 9fc3b043's hashes, 1,010 personas) through `test/plan_generator/lead_first_kill_switch_golden_test.dart`.
+
+**Done when.** The founder's device check passes (a gym plan's push day opens with its press at 3 sets or more and no accessory more than 1 set above it; a 30-minute day stays within a few minutes of its length), then one commit deletes the flag getter, the `leadFirst` parameters and the main-world branches they select (`allocate`'s pre-2A body and `_weekTwoGains`' `capToLead: false`; the main world itself stays, R3 needs it), the fixture, the kill-switch test, the `leadFirst: false` / `true` cases in `lead_first_allocator_behavioral_test.dart` group 6 and in the tests that run main's arithmetic (the eviction preconditions, rest-by-type (e)), the `disable_lead_first` probe in `lead_first_gate_test.dart`, and the `naming_conventions.md` row. Blast radius `platform` (plan engine).

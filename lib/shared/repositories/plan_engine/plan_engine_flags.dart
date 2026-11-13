@@ -48,6 +48,21 @@ class PlanEngineFlags {
     }
   }
 
+  /// Unit 2A kill-switch (OI-486, founder d26-d29): the lead-first set allocator. A day's lead (the budgeted row the
+  /// sequencer opens it with) is seated at the base sets when that fits, no other budgeted row ends more than 1 set
+  /// above it (focus rows excepted, in the focus pass and in week 2), and each variant falls back to the capped world,
+  /// then to main's, when the new one would leave a day under its count floor or a group at 0. Default ON. Set
+  /// `configBox['disable_lead_first'] = true` to restore the pre-2A allocation and week-2 gains verbatim, for plans
+  /// generated from then on (a plan already stored is not rewritten). Read once by `SessionSetAllocator.allocate` and
+  /// once by `PeriodizationEngine.apply` per generation, each overridable by its `leadFirst` argument.
+  static bool get leadFirstEnabled {
+    try {
+      return HiveService.instance.configBox.get('disable_lead_first') != true;
+    } catch (_) {
+      return true; // no Hive (pure unit test) → safe default: the lead-first allocator
+    }
+  }
+
   /// U3 warmup/cooldown injury filter (Ship 2). Default ON (contraindicated
   /// warmup/cooldown/cardio moves are dropped for an injured user). Set
   /// `configBox['disable_warmup_injury_filter'] = true` to revert to the

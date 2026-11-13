@@ -306,7 +306,13 @@ class PlanAuditor {
       }
       final lead = list.first;
       var biggest = list.first;
+      // Step 2A (founder d27): an exercise crediting a focus group may end above the lead, so it is not compared.
+      bool focusRow(List<Object?> x) {
+        final groups = x.length > 6 ? x[6] : null;
+        return focus.isNotEmpty && groups is List && groups.any((g) => focus.contains('$g'));
+      }
       for (final x in list) {
+        if (focusRow(x)) continue;
         if ((x[1] as int) > (biggest[1] as int)) biggest = x;
       }
       if (_compound(lead[0] as String) &&
