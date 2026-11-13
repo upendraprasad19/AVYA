@@ -11349,6 +11349,45 @@ concepts:
         semantic: behavioral
     contract_test_path: test/contracts/lead_first_allocator_behavioral_test.dart
 
+  - concept: day_floor
+    domain: workout
+    behavioral_test_path: test/contracts/day_floor_behavioral_test.dart
+    description: >
+      Generator Unit 2B (OI-452, founder d30-d33, 2026-11-13, diagnose b3f1d8, plan
+      docs/plans/2026-11-13-generator-step2b-day-floor.md): the 3-exercise day floor. After pass A2 a day whose rows
+      (budgeted and not) are under min(3, its reach) seats remaining slots at 2 sets past a group's weekly top: no excess
+      limit, every phase, up to its reach, not bound by the clock; never past a session cap, never a reservation-blocked
+      slot; choice SessionSetAllocator.floorPrefers (fewest groups over the top, least excess, cheapest; ties to the
+      lowest rank). AllocationStats.floorSeats names each seat (FloorSeat: name, sets, overTop, overClock); a floor seat
+      is never in countForced; belowCount keeps the label pass A2 left. With Unit 2A the worlds are chosen with the floor
+      off, then the chosen A and B are re-run with it (B copies the floored A and its floorSeats). Restated budget
+      invariant (test/helpers/budget_invariant_oracle.dart): week <= top + the floor's over-top sets; time <= budget +
+      countForced seconds + overClock seat seconds. Kill-switch disable_day_floor (PlanEngineFlags.dayFloorEnabled,
+      default ON), read by allocate unless its dayFloor argument is given, in both 2A paths; OFF equals main 8a2e1c5a
+      (test/fixtures/day_floor_off_hashes.json). plan_generator.dart is not touched.
+    writers:
+      - file: lib/shared/repositories/plan_engine/session_set_allocator.dart
+        method: allocate (the flag read) / _allocateLeadFirst (F3 re-runs) / _variant (the floor after pass A2, floorSeats, the label snapshot) / floorPrefers (F2)
+      - file: lib/shared/repositories/plan_engine/plan_engine_flags.dart
+        method: dayFloorEnabled (the kill-switch read)
+    readers:
+      - file: lib/shared/repositories/plan_engine/session_budget.dart
+        method_or_widget: BudgetLedger.fits (an over-top group fits no further set, so passes B, C, D never grow a floor seat)
+        semantic: budget
+      - file: lib/shared/repositories/plan_engine/periodization_engine.dart
+        method_or_widget: _weekTwoGains (week 2 gains nothing on an over-top group; week 4 keeps a seat at 2)
+        semantic: weeks
+      - file: lib/shared/repositories/plan_engine/plan_generator.dart
+        method_or_widget: generateV4 (calls allocate without the argument, so it reads the flag)
+        semantic: kill-switch
+      - file: test/helpers/budget_invariant_oracle.dart
+        method_or_widget: BudgetInvariantOracle (every test reader of the weekly top and the day's time)
+        semantic: invariant
+      - file: test/plan_generator/day_floor_gate_test.dart
+        method_or_widget: pairs p1 / p4 and the 30-minute pinned repeat, floor on vs off, weeks 1-4
+        semantic: behavioral
+    contract_test_path: test/contracts/day_floor_behavioral_test.dart
+
   - concept: volume_titration
     domain: workout
     behavioral_test_path: test/contracts/volume_titration_behavioral_test.dart
@@ -15160,7 +15199,7 @@ concepts:
         fields_read: [type]
         notes: whitelist shape, widened to include 'logged' by this batch
       - file: lib/shared/repositories/plan_engine/plan_engine_flags.dart
-        line_range: 499-504
+        line_range: 513-518
         method: isRestDayConsideringLogged
         semantic: flag-check
         fields_read: [type]

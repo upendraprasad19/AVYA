@@ -17,6 +17,8 @@ void main() {
     domain: 'ext',
     goal: 'lose_fat',
     runCounts: const {'bodyweight': 180, 'home_dumbbells': 99, 'basic_gym': 22},
-    ceilings: const {'bodyweight': (18, 0), 'home_dumbbells': (8, 0), 'basic_gym': (0, 0)},
+    // Unit 2B (OI-452, diagnose b3f1d8): the 3-exercise day floor leaves no thin or one-exercise day here; was
+    // const {'bodyweight': (18, 0), 'home_dumbbells': (8, 0), 'basic_gym': (0, 0)},
+    ceilings: const {'bodyweight': (0, 0), 'home_dumbbells': (0, 0), 'basic_gym': (0, 0)},
   );
 }

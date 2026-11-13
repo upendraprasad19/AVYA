@@ -17,6 +17,8 @@ void main() {
     domain: 'r9',
     goal: 'build_muscle',
     runCounts: const {'bodyweight': 292, 'home_dumbbells': 25, 'basic_gym': 7, 'full_gym': 1},
-    ceilings: const {'bodyweight': (4, 2), 'home_dumbbells': (4, 0), 'basic_gym': (8, 0), 'full_gym': (1, 0)},
+    // Unit 2B (OI-452, diagnose b3f1d8): the 3-exercise day floor leaves no thin or one-exercise day here; was
+    // const {'bodyweight': (4, 2), 'home_dumbbells': (4, 0), 'basic_gym': (8, 0), 'full_gym': (1, 0)},
+    ceilings: const {'bodyweight': (0, 0), 'home_dumbbells': (0, 0), 'basic_gym': (0, 0), 'full_gym': (0, 0)},
   );
 }

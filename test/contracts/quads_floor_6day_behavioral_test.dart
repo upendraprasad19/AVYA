@@ -39,6 +39,8 @@ import 'package:icanbefitter/shared/repositories/plan_engine/session_budget.dart
 import 'package:icanbefitter/shared/repositories/plan_engine/session_set_allocator.dart';
 import 'package:icanbefitter/shared/repositories/plan_engine/split_resolver.dart';
 
+import '../helpers/budget_invariant_oracle.dart';
+
 const _levels = ['beginner', 'intermediate', 'advanced'];
 const _tiers = ['bodyweight', 'home_dumbbells', 'basic_gym', 'full_gym'];
 
@@ -282,19 +284,26 @@ void main() {
     } catch (_) {}
   });
 
+  /// Unit 2B: the allocator stats of each generated plan, so `auditPlan` reads the shared oracle's floor allowances.
+  final statsOf = Expando<Map<String, AllocationStats>>('allocator stats');
   Phase gen(String goal, String tier, int days, String level, int minutes,
-          {int phase = 1, List<String> focus = const []}) =>
-      PlanGenerator.instance.generateV4(
-        goal: goal,
-        equipment: tier,
-        daysPerWeek: days,
-        phase: phase,
-        experienceLevel: level,
-        injuries: const [],
-        bodyFocus: focus,
-        sessionDuration: minutes,
-        previousWeights: const {},
-      );
+      {int phase = 1, List<String> focus = const []}) {
+    SessionSetAllocator.debugLastStats = null;
+    final plan = PlanGenerator.instance.generateV4(
+      goal: goal,
+      equipment: tier,
+      daysPerWeek: days,
+      phase: phase,
+      experienceLevel: level,
+      injuries: const [],
+      bodyFocus: focus,
+      sessionDuration: minutes,
+      previousWeights: const {},
+    );
+    final stats = SessionSetAllocator.debugLastStats;
+    if (stats != null) statsOf[plan] = stats;
+    return plan;
+  }
 
   List<String> musclesOf(PlannedExercise e) =>
       [for (final m in (byName[e.exerciseName.toLowerCase()]?['primary_muscles'] as List? ?? const [])) '$m'];
@@ -349,7 +358,11 @@ void main() {
     int cap(String grp) => (!lighter && focusGroups.contains(grp)) ? 12 : bandCap;
     for (var w = 0; w < plan.weekPlans.length; w++) {
       final weekly = <String, int>{};
-      for (final d in plan.weekPlans[w].workoutDays) {
+      // Unit 2B (the shared oracle, `budget_invariant_oracle.dart`): this week's variant (6-day: A only).
+      final vStats = statsOf[plan]?[w == 1 || w == 3 ? 'B' : 'A'] ?? statsOf[plan]?['A'];
+      final days = plan.weekPlans[w].workoutDays;
+      for (var di = 0; di < days.length; di++) {
+        final d = days[di];
         final session = <String, int>{};
         for (final e in d.exercises.where(budgeted)) {
           for (final grp in BudgetMuscleGroups.creditedOf(musclesOf(e), quadPrimaryCreditsGlutes: false)) {
@@ -361,12 +374,16 @@ void main() {
           if (n > cap(grp)) bad.add('$key p$phase w${w + 1} ${d.name}: $grp $n > session cap ${cap(grp)}');
         });
         final secs = SessionBudget.estimateDaySecondsFromPlanDay(d.toMap(), rowsById);
-        if (secs > (minutes + 2) * 60) {
+        final floorClock = BudgetInvariantOracle.floorOverClockSeconds(vStats, di, d.exercises,
+            (e) => SessionBudget.estimateDaySecondsFromPlanDay(
+                WorkoutDay(dayNumber: 0, name: '', focus: '', exercises: [e]).toMap(), rowsById));
+        if (secs > (minutes + 2) * 60 + floorClock) {
           bad.add('$key p$phase w${w + 1} ${d.name}: ${(secs / 60).toStringAsFixed(1)} min > ${minutes + 2}');
         }
       }
       weekly.forEach((grp, n) {
-        if (n > top(grp)) bad.add('$key p$phase w${w + 1}: $grp $n > weekly top ${top(grp)}');
+        final ceiling = BudgetInvariantOracle.weekCeiling(top(grp), vStats, grp);
+        if (n > ceiling) bad.add('$key p$phase w${w + 1}: $grp $n > weekly top ${top(grp)} (+ floor: $ceiling)');
       });
     }
   }

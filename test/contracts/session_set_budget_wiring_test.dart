@@ -28,6 +28,7 @@ import 'package:icanbefitter/shared/repositories/plan_engine/plan_generator.dart
 import 'package:icanbefitter/shared/repositories/plan_engine/session_budget.dart';
 import 'package:icanbefitter/shared/repositories/plan_engine/session_set_allocator.dart';
 
+import '../helpers/budget_invariant_oracle.dart';
 import '../helpers/generator_golden_personas.dart' show customPinName, namesByDay;
 
 
@@ -177,8 +178,14 @@ void main() {
       final over = <String, double>{};
       for (final w in on.weekPlans) {
         for (var i = 0; i < w.workoutDays.length; i++) {
-          final forced = stats[w.weekInPhase.isEven ? 'B' : 'A']!.countForced.containsKey(i);
-          final bound = budgetSeconds(30) + (forced ? SessionBudget.maxForcedOverSeconds : 0) + 1e-6;
+          final vs = stats[w.weekInPhase.isEven ? 'B' : 'A']!;
+          final forced = vs.countForced.containsKey(i);
+          // Unit 2B (the shared oracle): plus the seconds of the day's `overClock` floor seats (d33, no bound).
+          double secsOf(PlannedExercise e) => mainSeconds(WorkoutDay(dayNumber: 0, name: '', focus: '', exercises: [e]));
+          final bound = budgetSeconds(30) +
+              (forced ? SessionBudget.maxForcedOverSeconds : 0) +
+              BudgetInvariantOracle.floorOverClockSeconds(vs, i, w.workoutDays[i].exercises, secsOf) +
+              1e-6;
           final secs = mainSeconds(w.workoutDays[i]);
           expect(secs, lessThanOrEqualTo(bound), reason: 'week ${w.weekInPhase} day $i');
           if (secs > budgetSeconds(30) + 1e-6) over['${w.weekInPhase}/$i'] = ((secs - budgetSeconds(30)) * 10).roundToDouble() / 10;

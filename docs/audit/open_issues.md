@@ -1836,7 +1836,7 @@ cloud sessions; **this file is the cross-session backlog.**
   grep, plus a 12th (`weekly_calendar.dart`) found only by the final whole-branch review because
   its predicate was split across two booleans instead of one joined expression. All 12 now
   delegate to `PlanEngineFlags.isRestDayConsideringLogged(type)`
-  (`lib/shared/repositories/plan_engine/plan_engine_flags.dart:499-504`), which reads
+  (`lib/shared/repositories/plan_engine/plan_engine_flags.dart:513-518`), which reads
   `configBox['enable_logged_counts_as_phase_training_day']` (default OFF — every site is
   byte-identical to the pre-fix inline ternary until the flag flips) and, when ON, delegates to
   the new `isPhaseCompletionTrainingType` (`lib/core/utils/phase_completion.dart:80-81`).
@@ -6830,35 +6830,6 @@ Found by the sync-storm-first-sweep batch while measuring its Day-0 web check (l
 
 **Done when.** A fresh web boot with the cloud flag true never changes `streak_freezes_available` locally or in the cloud; a genuine first upgrade still gets its 3 (also when the restore is slow); a behavioral test covers both and each guard is mutated. Blast radius: `platform` (sync/restore + subscription). Founder scope call pending: fold into a later batch or its own plan (the OI is the tracked item).
 
-## OI-452 — A day can end with 1 or 2 exercises when its muscle groups' weekly band is spent (6-day beginner weeks, injured pools): add a 3-exercise day floor
-
-- **Status**: OPEN
-- **Blocked on**: none
-- **Verified**: never
-- **Identified**: 2026-11-03 · filed via mint_oi.sh from branch `oi-thin-days-repeat-phase`
-
-**What happens.** After the session set budget flip (PR #195, 2026-11-03) the allocator can leave a day with 1 or 2 exercises when the weekly band of that day's muscle groups is already spent by earlier days (6-day beginner general_fitness weeks, top 10 sets per group; injured pools). Measured by the 20 injury-sweep blocks (`test/helpers/injury_floor_sweep_lib.dart`, `kThinCeilings`, exact counts): 14 to 197 days under 3 exercises and 0 to 24 one-exercise days per block of 2,160 to 3,888 days; no empty day. Closure row `SBF-THIN-DAYS` (`docs/audit/set-budget-flip.closure.yaml`). A user should not go to the gym for a 10-minute, two-exercise session.
-
-**Founder direction (2026-11-03).** File and pick up later. Recommended design: a hard floor of 3 exercises per day; a day below the floor may exceed the weekly band by a few sets, only for those days (a guard with its own stats). A first attempt (restore removed slots over the weekly top) fixed the sweeps but broke `session_set_allocator_behavioral_test` (weekly top 16 to 26) and the budget gate, so it was reverted: this needs a plan, not a tweak.
-
-**Done when.** Plan reviewed twice; the allocator keeps every day at 3 or more exercises (or says why a day cannot); the weekly-top invariant is restated for the exception; `kThinCeilings` for days under 3 drops to 0 (or to a named residue); mutants prove it. Blast radius: `platform` (plan_engine), tier L.
-
-**Measured at the Unit 1B-F flip (2026-11-12, `generator-step1-1bf`; the core-list pool is the only picker).** The 15-pair injured grid (phases 1-3 plus the pinned repeat, weeks 1-2, 103,680 day-weeks per session length), live = main's OFF world before the flip, flip = the final tree's plan engine (the B-pass allocator change, a 1e-6 tolerance and a stats counter, moved no plan in the 2,304-plan audit or the golden):
-
-| day-weeks | 30 min live -> flip | 45 min live -> flip | 60 min live -> flip |
-|---|---|---|---|
-| empty | 0 -> 0 | 0 -> 0 | 0 -> 0 |
-| thin (1-2 exercises) | 427 -> 520 | 341 -> 344 | 341 -> 352 |
-| one-exercise | 8 -> 20 | 8 -> 20 | 8 -> 20 |
-| thin phase 1 / 2 / 3 / repeat | 70/70/20/267 -> 70/70/44/336 | 70/70/20/181 -> 70/70/44/160 | 70/70/20/181 -> 70/70/44/168 |
-| thin bodyweight / home / basic / full | 109/137/109/72 -> 62/189/182/87 | 66/104/103/68 -> 26/113/128/77 | 66/104/103/68 -> 26/113/134/79 |
-| one-exercise bodyweight / home / basic / full | 8/0/0/0 -> 8/6/6/0 | 8/0/0/0 -> 8/6/6/0 | 8/0/0/0 -> 8/6/6/0 |
-| hip-pair day-weeks with a jump row | 1,529 -> 0 | 1,321 -> 0 | 1,318 -> 0 |
-
-The flip equals prototype H3 and main's pre-flip ON world on every count above (30 min: 292 lines differ from H3, all Ruling 5c's timed-hold evictions on 30-minute days, no count moves; 45 min: identical to H3). The whole injured grid on the final tree (46,512 runs, 418,608 day-weeks, nine blocks): 0 empty, 0 unsafe or unperformable, 0 hip jump rows, 2,286 thin day-weeks and 94 one-exercise days, most in `quads_all` (basic gym 476 thin / 24 one, full gym 312, home 194 / 12) and `triples_eq` (basic 316 / 16, full 208, home 182 / 12). The CI hard test's ratchets (r9 284 thin / 16 one-exercise; the d17 extension, all nine injuries on bodyweight, 182 / 6) and `kThinCeilings` hold these as ceilings until this item's floor lands (founder d16 / d23: ship the flip, OI-452 next).
-
-**Unit 2A (2026-11-13, diagnose `d4a7e2`), input to unit 2B.** The 15-pair pinned repeat at 30 minutes is a day thinner in three blocks: `f_repeat_pairs30` home_dumbbells 120 -> 121, basic_gym 94 -> 96, full_gym 21 -> 22 (every added day a lower_back + elbow pair; one-exercise and empty days unchanged). Cause measured: the pins come from the uninjured phase-1 plan, which 2A changed (pins from a switch-off phase 1 give exactly the old counts); within one generation 2A never holds fewer rows than main or the count floor.
-
 ## OI-453 — A repeat phase keeps its exercise list when the user's minutes go up: keep pinned compounds, spend the spare time on extra sets then appended accessories
 
 - **Status**: OPEN
@@ -7223,3 +7194,14 @@ Residual of OI-199 and OI-471 after migration 172. Migration 172 makes `cleanup_
 **What it is.** Unit 2A (diagnose `d4a7e2`, plan `docs/plans/2026-11-12-generator-step2-allocator.md`) ships the lead-first allocator (OI-486, founder d26-d29) default ON behind the kill switch `disable_lead_first` (`PlanEngineFlags.leadFirstEnabled`, read by `SessionSetAllocator.allocate` and `PeriodizationEngine.apply` unless their `leadFirst` argument is given). Its OFF world is pinned by `test/fixtures/generator_golden_hashes_lead_first_off.json` (main 9fc3b043's hashes, 1,010 personas) through `test/plan_generator/lead_first_kill_switch_golden_test.dart`.
 
 **Done when.** The founder's device check passes (a gym plan's push day opens with its press at 3 sets or more and no accessory more than 1 set above it; a 30-minute day stays within a few minutes of its length), then one commit deletes the flag getter, the `leadFirst` parameters and the main-world branches they select (`allocate`'s pre-2A body and `_weekTwoGains`' `capToLead: false`; the main world itself stays, R3 needs it), the fixture, the kill-switch test, the `leadFirst: false` / `true` cases in `lead_first_allocator_behavioral_test.dart` group 6 and in the tests that run main's arithmetic (the eviction preconditions, rest-by-type (e)), the `disable_lead_first` probe in `lead_first_gate_test.dart`, and the `naming_conventions.md` row. Blast radius `platform` (plan engine).
+
+## OI-506 — Delete the disable_day_floor kill switch and its fixture after the 2B device check
+
+- **Status**: OPEN
+- **Blocked on**: none
+- **Verified**: never
+- **Identified**: 2026-11-13 · filed via mint_oi.sh from branch `generator-step2b-day-floor`
+
+**What it is.** Unit 2B (diagnose `b3f1d8`, plan `docs/plans/2026-11-13-generator-step2b-day-floor.md`) ships the 3-exercise day floor (OI-452, founder d30-d33) default ON behind the kill switch `disable_day_floor` (`PlanEngineFlags.dayFloorEnabled`, read by `SessionSetAllocator.allocate` unless its `dayFloor` argument is given, in both Unit 2A paths). Its OFF world is pinned by `test/fixtures/day_floor_off_hashes.json` (injured personas, main 8a2e1c5a's hashes, plus the four `disable_lead_first` x `disable_day_floor` combinations on a sample) through `test/plan_generator/day_floor_kill_switch_test.dart`.
+
+**Done when.** The founder's device check passes (an injured plan, e.g. a 6-day beginner with two injuries, shows no day under 3 exercises; a floored day stays usable in the gym), then one commit deletes the flag getter, the `dayFloor` parameter and the floor-off branches (`_allocateLeadFirst`'s floor-off tail and the 6-day re-run's guard; the world choice stays floor-off), the fixture, the kill-switch test, the `dayFloor: false` cases in `day_floor_behavioral_test.dart` (F5 and the floor-off controls) and `day_floor_gate_test.dart` (its OFF comparison, kept as a pinned history or dropped), and the `naming_conventions.md` row. Blast radius `platform` (plan engine).

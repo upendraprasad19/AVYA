@@ -114,7 +114,8 @@ void main() {
         f.row('h$i', [groups[i]], reps: '5-8');
       }
       final days = [f.day('strength', [for (var i = 0; i < 4; i++) f.ex('h$i')])];
-      final out = f.run(days, minutes: 15);
+      // Unit 2B: the day floor off, so pass A2's own bound is what this reads.
+      final out = f.run(days, minutes: 15, dayFloor: false);
       expect(out[0].exercisesA.length, 2);
       expect(statsA().countForced[0]!.length, 1);
       expect(statsA().belowCount, {0: 'clock'});
@@ -122,6 +123,14 @@ void main() {
       final over = spent - (15 - SessionBudget.warmCoolMinutes(15)) * 60;
       expect(over, greaterThan(0));
       expect(over, lessThanOrEqualTo(SessionBudget.maxForcedOverSeconds));
+      // With the floor (d33): A2 still forces ONE (h1, inside its bound); the 3-exercise floor then seats h2 past the
+      // clock (`overClock`, not in countForced). 3 rows = the count floor at 15 minutes, so no label.
+      final floored = f.run(days, minutes: 15);
+      expect([for (final e in floored[0].exercisesA) e.exerciseName], ['h0', 'h1', 'h2']);
+      expect([for (final c in statsA().countForced[0]!) c.name], ['h1']);
+      expect(statsA().floorSeats[0]!.single.name, 'h2');
+      expect(statsA().floorSeats[0]!.single.overClock, isTrue);
+      expect(statsA().belowCount, isEmpty);
     });
 
     test('(f) a day whose time is already negative still force-seats while the total overrun stays inside the bound', () {
@@ -236,9 +245,19 @@ void main() {
         }
         days.add(f.day('strength', [for (var i = 0; i < 5; i++) f.ex('c$d$i')]));
       }
-      f.run(days, minutes: 90, goal: 'general_fitness', level: 'beginner');
+      f.run(days, minutes: 90, goal: 'general_fitness', level: 'beginner', dayFloor: false);
       expect(statsA().weekly['Chest'], 10);
       expect(statsA().countForced, isEmpty);
+      expect(statsA().belowCount[2], 'cap_top');
+      // Unit 2B (d30): pass A2 still never passes the top; the 3-exercise day floor does, by founder decision, and
+      // names each such seat. Rows [2, 2, 1] -> [3, 3, 3]: 10 + 4 x 2 = 18. The count label is still A2's.
+      final floored = f.run(days, minutes: 90, goal: 'general_fitness', level: 'beginner');
+      expect([for (final d in floored) d.exercisesA.length], [3, 3, 3]);
+      expect(statsA().weekly['Chest'], 18);
+      expect(statsA().countForced, isEmpty);
+      expect([for (final v in statsA().floorSeats.values) for (final x in v) x.overTop], [
+        for (var i = 0; i < 4; i++) ['Chest'],
+      ]);
       expect(statsA().belowCount[2], 'cap_top');
     });
 
