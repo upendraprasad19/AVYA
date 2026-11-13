@@ -4,6 +4,7 @@ import 'dart:convert';
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 import 'package:icanbefitter/core/constants/app_constants.dart';
+import 'package:icanbefitter/core/services/coach_call_budget.dart';
 import 'package:icanbefitter/core/services/error_telemetry.dart';
 import 'package:icanbefitter/core/services/singleton_lifecycle_registry.dart';
 import 'package:icanbefitter/core/services/supabase_service.dart';
@@ -365,9 +366,20 @@ class AiService {
   /// [clientKey] (OI-503): the chat row's Hive key (`coach_<ms>`). The server
   /// stores it on its row so the restore writes that row back at the same key
   /// (one turn, one local row). Sent in BOTH transports.
+  ///
+  /// [clientRetry] (OI-505 fix 4): true ONLY when the user pressed Retry on this
+  /// turn's own bubble. The server then returns the turn's stored answer when it
+  /// already finished it, instead of running it again. A new ask, and every
+  /// automatic re-send of a first send, leave it false. Sent in BOTH transports.
+  ///
+  /// [budget] (OI-505 fix 2): the caller's time limit; once it expires this call
+  /// sends nothing more (see [CoachCallBudget]).
   Future<AiChatResponse> chat(
       String message, Map<String, dynamic> context,
-      {List<Map<String, dynamic>>? history, String? clientKey}) async {
+      {List<Map<String, dynamic>>? history,
+      String? clientKey,
+      bool clientRetry = false,
+      CoachCallBudget? budget}) async {
     final compact = _compactContext(context);
     try {
       final response = await _supabase.callFunction(
@@ -380,7 +392,9 @@ class AiService {
           // Unit 2 — coach short-term memory (optional; omitted when empty/off).
           if (history != null && history.isNotEmpty) 'history': history,
           'client_key': ?clientKey,
+          if (clientRetry) 'client_retry': true,
         },
+        budget: budget,
       );
 
       if (response.status != 200) {
@@ -401,10 +415,15 @@ class AiService {
           e.type == DioExceptionType.connectionTimeout ||
           e.type == DioExceptionType.unknown) {
         return _directHttpCall('ai-proxy', message, compact,
-            history: history, clientKey: clientKey);
+            history: history,
+            clientKey: clientKey,
+            clientRetry: clientRetry,
+            budget: budget);
       }
       rethrow;
     } catch (e) {
+      // OI-505: an abandoned call's own stop is not a failure to report.
+      if (e is TimeoutException) rethrow;
       final errStr = e.toString();
       final clipped = errStr.length > 500 ? errStr.substring(0, 500) : errStr;
       unawaited(
@@ -412,7 +431,10 @@ class AiService {
       // Web fallback: 'Failed to fetch' is thrown by the browser fetch API
       if (errStr.contains('Failed to fetch')) {
         return _directHttpCall('ai-proxy', message, compact,
-            history: history, clientKey: clientKey);
+            history: history,
+            clientKey: clientKey,
+            clientRetry: clientRetry,
+            budget: budget);
       }
       rethrow;
     }
@@ -493,7 +515,10 @@ class AiService {
   /// surfacing the first 502 to the user.
   Future<AiChatResponse> _directHttpCall(
       String functionName, String message, Map<String, dynamic> context,
-      {List<Map<String, dynamic>>? history, String? clientKey}) async {
+      {List<Map<String, dynamic>>? history,
+      String? clientKey,
+      bool clientRetry = false,
+      CoachCallBudget? budget}) async {
     final url = '${AppConstants.supabaseUrl}/functions/v1/$functionName';
     // BUG-C (d3a1c7): fresh USER token or fail clearly — NEVER fall back to the
     // anon key for an authed Edge Function. ai-proxy validates the Bearer token
@@ -513,6 +538,9 @@ class AiService {
       throw AiServiceException('No active session. Please sign in again.',
           statusCode: 401);
     }
+    // OI-505: the token work above can outlast the caller's time limit; the
+    // first POST of this fallback is a send like any other.
+    budget?.throwIfExpired();
 
     final compact = _compactContext(context);
     final response = await _retryHttpColdStart(
@@ -526,6 +554,7 @@ class AiService {
           // Unit 2 — coach short-term memory (optional; omitted when empty/off).
           if (history != null && history.isNotEmpty) 'history': history,
           'client_key': ?clientKey,
+          if (clientRetry) 'client_retry': true,
         },
         options: Options(
           headers: {
@@ -540,6 +569,7 @@ class AiService {
         ),
       ),
       functionName: functionName,
+      budget: budget,
     );
 
     if (response.statusCode != 200) {
@@ -596,10 +626,26 @@ class AiService {
   Future<Response<dynamic>> _retryHttpColdStart(
     Future<Response<dynamic>> Function() invoke, {
     required String functionName,
+    CoachCallBudget? budget,
+  }) =>
+      retryHttpColdStart(invoke, functionName: functionName, budget: budget);
+
+  /// The loop behind [_retryHttpColdStart], static so a test can drive it with
+  /// an invoker and a sleep (OI-505: an abandoned coach call stops sending).
+  @visibleForTesting
+  static Future<Response<dynamic>> retryHttpColdStart(
+    Future<Response<dynamic>> Function() invoke, {
+    required String functionName,
+    CoachCallBudget? budget,
+    Future<void> Function(Duration)? sleep,
   }) async {
+    final wait = sleep ?? (d) => Future<void>.delayed(d);
     int coldStartAttempt = 0;
     int storageRaceAttempt = 0;
     while (true) {
+      // OI-505: first send, cold-start branch and storage-race branch all pass
+      // through here; an abandoned call sends nothing more.
+      budget?.throwIfExpired();
       final resp = await invoke();
       final isColdStart = resp.statusCode == 502 ||
           resp.statusCode == 503 ||
@@ -615,7 +661,7 @@ class AiService {
           message:
               'fn=$functionName attempt=${coldStartAttempt + 1} status=${resp.statusCode} backoff_ms=$backoffMs path=direct_http',
         ));
-        await Future<void>.delayed(Duration(milliseconds: backoffMs));
+        await wait(Duration(milliseconds: backoffMs));
         coldStartAttempt++;
         continue;
       }
@@ -628,7 +674,7 @@ class AiService {
           message:
               'fn=$functionName attempt=${storageRaceAttempt + 1} status=400 error_type=storage backoff_ms=$backoffMs',
         ));
-        await Future<void>.delayed(Duration(milliseconds: backoffMs));
+        await wait(Duration(milliseconds: backoffMs));
         storageRaceAttempt++;
         continue;
       }
@@ -680,6 +726,9 @@ class AiService {
     Map<String, dynamic> context, {
     // OI-503: the media row's Hive key, as in [chat]. Both transports.
     String? clientKey,
+    // OI-505 fix 2: the caller's time limit. No retry marker: a photo turn has
+    // no Retry button and always mints a new key.
+    CoachCallBudget? budget,
   }) async {
     final compact = _compactContext(context);
     try {
@@ -693,6 +742,7 @@ class AiService {
           'snapshot_json': compact,
           'client_key': ?clientKey,
         },
+        budget: budget,
       );
 
       if (response.status != 200) {
@@ -710,7 +760,7 @@ class AiService {
           e.type == DioExceptionType.connectionTimeout ||
           e.type == DioExceptionType.unknown) {
         return _directMediaHttpCall(message, mediaUrl, mediaType, compact,
-            clientKey: clientKey);
+            clientKey: clientKey, budget: budget);
       }
       rethrow;
     } catch (e) {
@@ -720,7 +770,7 @@ class AiService {
           message: clipped));
       if (errStr.contains('Failed to fetch')) {
         return _directMediaHttpCall(message, mediaUrl, mediaType, compact,
-            clientKey: clientKey);
+            clientKey: clientKey, budget: budget);
       }
       rethrow;
     }
@@ -739,6 +789,7 @@ class AiService {
     String mediaType,
     Map<String, dynamic> context, {
     String? clientKey,
+    CoachCallBudget? budget,
   }) async {
     final url = '${AppConstants.supabaseUrl}/functions/v1/ai-media-proxy';
     // BUG-C (d3a1c7): fresh USER token or fail clearly — NEVER fall back to the
@@ -759,6 +810,8 @@ class AiService {
       throw AiServiceException('No active session. Please sign in again.',
           statusCode: 401);
     }
+    // OI-505: as in `_directHttpCall`, the first POST is a send.
+    budget?.throwIfExpired();
 
     final compact = _compactContext(context);
     final response = await _retryHttpColdStart(
@@ -782,6 +835,7 @@ class AiService {
         ),
       ),
       functionName: 'ai-media-proxy',
+      budget: budget,
     );
 
     if (response.statusCode != 200) {

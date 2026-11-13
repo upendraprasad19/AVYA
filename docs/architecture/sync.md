@@ -454,6 +454,19 @@ overwrite a present local row (`if (box.get(key) != null) continue;`).
   local reply is never replaced, `created_at` and media fields are never touched. Unkeyed
   rows keep `coach_<server ms>`. The push never sends a `cloud_restore` row back. Kill
   switch `configBox['disable_coach_client_key_restore']` (restore only).
+- **Late link and the Retry of a finished turn (coach chat, OI-505, `b7e1f3` / `c8f2a4` /
+  `d9a3b5`):** the push's text lookup for a row with no cloud id is anchored to the KEY's
+  instant (`coachTurnInstantFromKey`: `created_at` from 5 min before to 10 min after it, only
+  rows with no `client_key`, nearest to the instant wins, up to 10 read), not to `now - 5 min`,
+  so an old turn that is linked hours later (a stuck send, a re-sign-in) finds its server row
+  instead of uploading a second keyed one; the old `now - 5 min` lookup stays as step 2
+  (device clock skew). Kill switch `configBox['disable_coach_turn_time_window']` (step 1 only).
+  The chat call has a time limit owned by `SendMessageNotifier` (75 s chat, 120 s photo, 90 s
+  whole turn including the one 401 re-send); `CoachCallBudget.expired` stops the abandoned
+  call's own retry loops. ai-proxy reuses a FINISHED turn when the body carries `client_key`
+  and `client_retry: true` (sent only by the Retry button): the newest complete text-only row
+  of that key (not older than 6 h) is replayed, a young pending row answers 503 `in_progress`,
+  anything else runs as before. Kill switch env `DISABLE_CLIENT_KEY_REPLAY` = `1`.
 - **Trade-off:** offline-first local-wins — a row edited on a 2nd device won't overwrite
   the local copy. Revisit with cloud-newer-wins if true multi-device editing is a goal.
 - **Deletion survives restore via a server-side rename-on-delete trigger, NOT via the

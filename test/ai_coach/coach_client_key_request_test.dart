@@ -23,6 +23,7 @@ import 'package:hive_flutter/hive_flutter.dart';
 
 import 'package:icanbefitter/core/services/ai_service.dart';
 import 'package:icanbefitter/core/services/guarded_box.dart';
+import 'package:icanbefitter/core/services/coach_call_budget.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
 import 'package:icanbefitter/core/services/hive_user_session.dart';
 import 'package:icanbefitter/core/services/service_providers.dart';
@@ -36,19 +37,29 @@ import 'package:icanbefitter/features/auth/providers/auth_provider.dart';
 const _user = 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee';
 
 class _Call {
-  _Call(this.clientKey, this.inFlightDuringCall);
+  _Call(this.clientKey, this.inFlightDuringCall,
+      {this.clientRetry = false, this.budget});
   final String? clientKey;
   final bool inFlightDuringCall;
+
+  /// OI-505 fix 4: the Retry marker the notifier passed (chat only).
+  final bool clientRetry;
+
+  /// OI-505 fix 2: the per-call budget the notifier passed.
+  final CoachCallBudget? budget;
   final done = Completer<AiChatResponse>();
 }
 
 class _RecordingAi implements AiService {
   final calls = <_Call>[];
 
-  _Call _record(String? clientKey) {
+  _Call _record(String? clientKey,
+      {bool clientRetry = false, CoachCallBudget? budget}) {
     final c = _Call(
       clientKey,
       clientKey != null && CoachInteractionRepository.isInFlight(clientKey),
+      clientRetry: clientRetry,
+      budget: budget,
     );
     calls.add(c);
     return c;
@@ -56,13 +67,17 @@ class _RecordingAi implements AiService {
 
   @override
   Future<AiChatResponse> chat(String message, Map<String, dynamic> context,
-          {List<Map<String, dynamic>>? history, String? clientKey}) =>
-      _record(clientKey).done.future;
+          {List<Map<String, dynamic>>? history,
+          String? clientKey,
+          bool clientRetry = false,
+          CoachCallBudget? budget}) =>
+      _record(clientKey, clientRetry: clientRetry, budget: budget).done.future;
 
   @override
   Future<AiChatResponse> chatWithMedia(String message, String mediaUrl,
-          String mediaType, Map<String, dynamic> context, {String? clientKey}) =>
-      _record(clientKey).done.future;
+          String mediaType, Map<String, dynamic> context,
+          {String? clientKey, CoachCallBudget? budget}) =>
+      _record(clientKey, budget: budget).done.future;
 
   @override
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
@@ -186,6 +201,9 @@ void main() {
       final key = onlyChatKey();
       expect(ai.calls.single.clientKey, key);
       expect(ai.calls.single.inFlightDuringCall, isTrue);
+      expect(ai.calls.single.clientRetry, isFalse,
+          reason: 'OI-505: a NEW ask never carries the Retry marker, so a deliberate repeat is never served a stored answer');
+      expect(ai.calls.single.budget, isNotNull, reason: 'OI-505: every chat call carries its budget');
       final before = c.read(messageLimitProvider);
       ai.calls.single.done.complete(reply('Push day'));
       await f;
@@ -220,6 +238,8 @@ void main() {
       await untilCalls(1);
       expect(ai.calls.single.clientKey, key);
       expect(ai.calls.single.inFlightDuringCall, isTrue);
+      expect(ai.calls.single.clientRetry, isTrue,
+          reason: 'OI-505 fix 4: the Retry button (existingCoachKey) is the ONLY sender of the marker');
       final before = c.read(messageLimitProvider);
       ai.calls.single.done.complete(reply('ok'));
       await f;
@@ -251,18 +271,26 @@ void main() {
 
     test('all four request bodies carry client_key; both fallbacks receive it', () {
       expect("'client_key': ?clientKey,".allMatches(svc).length, 4);
+      // OI-505: the fallbacks also receive the Retry marker (chat only) and the
+      // call budget; the exact text is repointed, never loosened.
       expect(
-        "_directHttpCall('ai-proxy', message, compact,\n            history: history, clientKey: clientKey);"
+        "_directHttpCall('ai-proxy', message, compact,\n            history: history,\n            clientKey: clientKey,\n            clientRetry: clientRetry,\n            budget: budget);"
             .allMatches(svc)
             .length,
         2,
       );
       expect(
-        '_directMediaHttpCall(message, mediaUrl, mediaType, compact,\n            clientKey: clientKey);'
+        '_directMediaHttpCall(message, mediaUrl, mediaType, compact,\n            clientKey: clientKey, budget: budget);'
             .allMatches(svc)
             .length,
         2,
       );
+    });
+
+    test('the Retry marker is in BOTH chat bodies (transport and fallback) and in no media body', () {
+      expect("if (clientRetry) 'client_retry': true,".allMatches(svc).length, 2);
+      final media = svc.substring(svc.indexOf('Future<AiChatResponse> chatWithMedia('));
+      expect(media, isNot(contains('client_retry')));
     });
 
     test('predict sends no key', () {
@@ -271,9 +299,17 @@ void main() {
       expect(body, isNot(contains('client_key')));
     });
 
-    test('both chat calls of a send (primary and auth retry) and the media call pass the key',
+    test('both chat calls of a send (primary and auth re-send) go through _chatBounded; it and the media call pass the key',
         () {
-      expect('clientKey: coachKey'.allMatches(provider).length, 3);
+      // OI-505: one helper owns the timeout, the budget and the Retry marker.
+      final viaHelper = RegExp(
+          r'_chatBounded\(\s*message,\s*\w+,\s*history: coachHistory,\s*coachKey: coachKey,\s*isRetry: existingCoachKey != null,');
+      expect(viaHelper.allMatches(provider).length, 2,
+          reason: 'primary send and auth re-send, both with the history and the marker');
+      expect('clientKey: coachKey,\n            clientRetry: isRetry,'.allMatches(provider).length, 1,
+          reason: 'the helper forwards the key and the marker');
+      expect('clientKey: coachKey,\n            budget: mediaBudget,'.allMatches(provider).length, 1,
+          reason: 'the media call passes the key and its budget');
     });
 
     test('the count opens a try at once, and the finally releases it, in both send bodies', () {
