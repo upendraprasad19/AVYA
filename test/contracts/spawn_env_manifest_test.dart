@@ -57,6 +57,8 @@ const _stripped = <String>{
   // test fixture / report re-record switches (generator golden, frozen library reference, B1 and B2 gate reports)
   'RECORD_GENERATOR_GOLDEN', 'RECORD_LIBRARY_REFERENCE', 'RECORD_LIBRARY_REFERENCE_IDS', 'WRITE_CORE_LIST_REPORT',
   'WRITE_SESSION_BUDGET_REPORT', 'WRITE_REST_BY_TYPE_REPORT',
+  // Unit 2B: the day-floor kill-switch fixture's recorder (day_floor_kill_switch_test.dart)
+  'RECORD_DAY_FLOOR_HASHES',
   // generator step 1A: the 2,304-plan audit's output directory (plan_audit_dump_test.dart); t108: its physique focus
   'PLAN_AUDIT_OUT', 'PLAN_AUDIT_FOCUS',
   // Unit 1B-F: the injured grid (46,512 runs) and focus grid (5,760 plans) dumps' output directories

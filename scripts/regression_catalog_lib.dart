@@ -111,6 +111,8 @@ const List<String> childEnvStrippedNames = <String>[
   'WRITE_CORE_LIST_REPORT',
   'WRITE_SESSION_BUDGET_REPORT',
   'WRITE_REST_BY_TYPE_REPORT',
+  // Unit 2B: the day-floor kill-switch fixture's recorder (test/plan_generator/day_floor_kill_switch_test.dart).
+  'RECORD_DAY_FLOOR_HASHES',
   // Generator step 1A: the plan audit's output directory (a child would write 4,608 plans there).
   'PLAN_AUDIT_OUT',
   // t108: the plan audit's physique focus (a child would audit focus plans under a no-focus label).
