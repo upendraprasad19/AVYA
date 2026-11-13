@@ -12,11 +12,23 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 class StubRequest {
-  StubRequest(this.method, this.path, this.query, this.headers, this.body);
+  StubRequest(this.method, this.path, this.query, this.headers, this.body,
+      [Map<String, List<String>>? queryAll])
+      : queryAll = queryAll ??
+            {
+              for (final e in query.entries) e.key: [e.value],
+            };
 
   final String method;
   final String path;
+
+  /// Each parameter's LAST value (`Uri.queryParameters`): a column filtered
+  /// twice (`gte` and `lte` on one column) collapses here; use [queryAll].
   final Map<String, String> query;
+
+  /// Every value of every parameter (`Uri.queryParametersAll`), so a range on
+  /// one column keeps both bounds (OI-505 push tests).
+  final Map<String, List<String>> queryAll;
   final Map<String, String> headers;
 
   /// Decoded JSON body (a Map or a List), the raw string if it is not JSON,
@@ -205,7 +217,7 @@ class SyncStubServer {
     final request = _pagedRequestCount++;
     final rows = <Map<String, dynamic>>[
       for (final row in pagedTables[table]!)
-        if (_passesFilters(row, r.query)) row,
+        if (_passesFilters(row, r.queryAll)) row,
     ];
     final terms = _orderTerms(r.query['order']);
     var ordered = rows;
@@ -243,29 +255,41 @@ class SyncStubServer {
     return page;
   }
 
-  bool _passesFilters(Map<String, dynamic> row, Map<String, String> query) {
+  bool _passesFilters(
+      Map<String, dynamic> row, Map<String, List<String>> query) {
     for (final e in query.entries) {
       if (_reservedParams.contains(e.key)) continue;
-      final dot = e.value.indexOf('.');
-      if (dot < 0) {
-        throw StateError('paged stub: unmodelled filter ${e.key}=${e.value}');
+      for (final value in e.value) {
+        final dot = value.indexOf('.');
+        if (dot < 0) {
+          throw StateError('paged stub: unmodelled filter ${e.key}=$value');
+        }
+        final op = value.substring(0, dot);
+        final operand = value.substring(dot + 1);
+        if (!row.containsKey(e.key)) {
+          throw StateError('paged stub: filter column ${e.key} is not a column '
+              'of the seeded rows');
+        }
+        if (op == 'is') {
+          // `is.null` (OI-505): the only `is` operand a test uses.
+          if (operand != 'null') {
+            throw StateError('paged stub: unmodelled is.$operand on ${e.key}');
+          }
+          if (row[e.key] != null) return false;
+          continue;
+        }
+        final c = _compareValue(row[e.key], operand);
+        final ok = switch (op) {
+          'eq' => c == 0,
+          'gt' => c > 0,
+          'gte' => c >= 0,
+          'lt' => c < 0,
+          'lte' => c <= 0,
+          _ => throw StateError(
+              'paged stub: unmodelled operator $op on ${e.key}'),
+        };
+        if (!ok) return false;
       }
-      final op = e.value.substring(0, dot);
-      final operand = e.value.substring(dot + 1);
-      if (!row.containsKey(e.key)) {
-        throw StateError('paged stub: filter column ${e.key} is not a column of '
-            'the seeded rows');
-      }
-      final c = _compareValue(row[e.key], operand);
-      final ok = switch (op) {
-        'eq' => c == 0,
-        'gt' => c > 0,
-        'gte' => c >= 0,
-        'lt' => c < 0,
-        'lte' => c <= 0,
-        _ => throw StateError('paged stub: unmodelled operator $op on ${e.key}'),
-      };
-      if (!ok) return false;
     }
     return true;
   }
@@ -365,7 +389,8 @@ class SyncStubServer {
     final headers = <String, String>{};
     req.headers.forEach((k, v) => headers[k] = v.join(','));
     final r = StubRequest(
-        req.method, req.uri.path, req.uri.queryParameters, headers, body);
+        req.method, req.uri.path, req.uri.queryParameters, headers, body,
+        req.uri.queryParametersAll);
     requests.add(r);
     final res = req.response..headers.contentType = ContentType.json;
     final conditionalFailure =

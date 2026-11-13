@@ -24,6 +24,7 @@ import 'package:icanbefitter/core/services/ai_service.dart';
 import 'package:icanbefitter/core/services/completion_prompt_store.dart';
 import 'package:icanbefitter/core/services/error_telemetry.dart';
 import 'package:icanbefitter/core/services/guarded_box.dart';
+import 'package:icanbefitter/core/services/coach_call_budget.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
 import 'package:icanbefitter/core/services/hive_user_session.dart';
 import 'package:icanbefitter/core/services/service_providers.dart';
@@ -45,7 +46,10 @@ class _FakeAi implements AiService {
 
   @override
   Future<AiChatResponse> chat(String message, Map<String, dynamic> context,
-      {List<Map<String, dynamic>>? history, String? clientKey}) {
+      {List<Map<String, dynamic>>? history,
+      String? clientKey,
+      bool clientRetry = false,
+      CoachCallBudget? budget}) {
     final c = Completer<AiChatResponse>();
     calls.add(c);
     return c.future;
@@ -53,7 +57,8 @@ class _FakeAi implements AiService {
 
   @override
   Future<AiChatResponse> chatWithMedia(String message, String mediaUrl,
-      String mediaType, Map<String, dynamic> context, {String? clientKey}) {
+      String mediaType, Map<String, dynamic> context,
+      {String? clientKey, CoachCallBudget? budget}) {
     final c = Completer<AiChatResponse>();
     calls.add(c);
     return c.future;

@@ -82,7 +82,11 @@ import {
 import { istDateStr } from "../_shared/ist_date.ts";
 import { reportGeminiExhaustion } from "../_shared/gemini_failure_alert.ts";
 import { validateAiProxyInput } from "../_shared/ai_proxy_input_limits.ts";
-import { dedupDecision } from "../_shared/chat_dedup.ts";
+import {
+  dedupDecision,
+  LEGACY_LOG_ACTIONS_MARKER,
+  resolveKeyedReplay,
+} from "../_shared/chat_dedup.ts";
 import { sanitizeClientKey } from "../_shared/client_key.ts";
 import {
   type AiTier,
@@ -337,6 +341,9 @@ serve(async (req: Request) => {
       history,
       client_capabilities,
       client_key,
+      // OI-505 fix 4: sent by the app ONLY on its Retry button; strictly `true`
+      // counts (resolveKeyedReplay), anything else is a new ask.
+      client_retry,
     } = body;
     // Unit 3 (day-swapper-sync-load) — CLIENT-CONTROLLED, so validated
     // defensively before it ever reaches a tool filter or a prompt block.
@@ -835,9 +842,42 @@ Rules: identify every distinct food product, use ACCURATE nutrition values from 
     // (DISABLE_WRITE_CLAIM_RULE exactly "true" disables; OFF = today's bytes).
     const ruleOn = !isWriteClaimRuleDisabled();
 
+    // ── OI-505 fix 4: a Retry of a finished turn reuses it ──
+    // Only with `client_retry === true` and a valid `client_key`: the row of the
+    // SAME turn is replayed (no reservation, no unit), or a still-working first
+    // run answers 503 in_progress. Everything else falls through to the 30 s
+    // text dedup below, unchanged. Kill switch DISABLE_CLIENT_KEY_REPLAY=1.
+    const keyed = await resolveKeyedReplay({
+      clientRetry: client_retry,
+      clientKey: sanitizeClientKey(client_key),
+      message,
+      nowMs: Date.now(),
+      loopThrewSentinel: MODEL_USED_LOOP_THREW_SENTINEL,
+      killSwitch: Deno.env.get("DISABLE_CLIENT_KEY_REPLAY") === "1",
+      fetchRows: async (turnKey) => {
+        const { data, error } = await supabaseClient
+          .from("ai_coach_interactions")
+          .select("id, user_message, ai_response, model_used, tokens_used, tool_calls, created_at")
+          .eq("user_id", userId)
+          .eq("client_key", turnKey)
+          .eq("channel", "app")
+          .order("created_at", { ascending: false })
+          .limit(5);
+        if (error) throw error;
+        return data;
+      },
+    });
+    if (keyed.kind === "in_progress") {
+      console.log(`[ai-proxy] Keyed retry while the first run is still working for user ${userId}`);
+      return new Response(JSON.stringify(keyed.body), {
+        status: keyed.status,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
     // ── Deduplication: return cached response for same user+message in last 30s ──
     const dedupCutoff = new Date(Date.now() - DEDUP_WINDOW_SECS * 1000).toISOString();
-    const { data: recentDup } = await supabaseClient
+    let { data: recentDup } = await supabaseClient
       .from("ai_coach_interactions")
       .select("id, ai_response, model_used, tokens_used")
       .eq("user_id", userId)
@@ -847,6 +887,9 @@ Rules: identify every distinct food product, use ACCURATE nutrition values from 
       .order("created_at", { ascending: false })
       .limit(1)
       .maybeSingle();
+
+    // OI-505 fix 4: a finished turn of the same key replaces the text dedup's row.
+    if (keyed.kind === "replay") recentDup = keyed.row as unknown as typeof recentDup;
 
     // A failed attempt replays its failure, never its internal marker as a
     // reply, and never re-runs (that would spend another cap unit) —
@@ -1303,6 +1346,20 @@ yet" — never make up a number.
         "chat",
       )) >= 0;
     }
+    // OI-505 fix 4: the stored reply no longer carries legacy `[LOG...]` tags, so
+    // a replay could not give them back; mark the row and a Retry re-runs it.
+    const storedToolCalls = extracted.actions.length > 0
+      ? [
+        ...loop.toolCallsLog,
+        {
+          name: LEGACY_LOG_ACTIONS_MARKER,
+          status: "queued" as const,
+          args: { count: extracted.actions.length },
+        },
+      ]
+      : loop.toolCallsLog.length > 0
+      ? loop.toolCallsLog
+      : null;
     if (chatReservationId) {
       const { error: resolveErr } = await supabaseClient
         .from("ai_coach_interactions")
@@ -1311,7 +1368,7 @@ yet" — never make up a number.
           ai_response: cleanReply,
           model_used: rowModelUsed,
           tokens_used: loop.tokensUsed,
-          tool_calls: loop.toolCallsLog.length > 0 ? loop.toolCallsLog : null,
+          tool_calls: storedToolCalls,
         })
         .eq("id", chatReservationId);
       if (resolveErr) {

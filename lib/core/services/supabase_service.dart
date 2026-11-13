@@ -7,6 +7,7 @@ import 'package:hive_flutter/hive_flutter.dart';
 import 'package:icanbefitter/core/constants/app_constants.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import 'coach_call_budget.dart';
 import 'error_telemetry.dart';
 
 /// Singleton wrapper around the Supabase client.
@@ -402,6 +403,8 @@ class SupabaseService {
     // first answer instead of being sent again: the handler may already have
     // run, and a second send would spend a second unit.
     bool spendsQuotaPerCall = false,
+    // OI-505: a coach call's budget; an abandoned call stops sending.
+    CoachCallBudget? budget,
   }) async {
     // Proactive token refresh — avoids sending an expired JWT
     final token = await ensureFreshToken();
@@ -419,6 +422,8 @@ class SupabaseService {
         throw Exception('No active session. Please sign in again.');
       }
     }
+    // OI-505: the refresh above can outlast the caller's time limit.
+    budget?.throwIfExpired();
 
     // APK Test #15.5 / Bug c01d57 — bounded retry loop on transient
     // cold-start 502/503/504. Edge Function logs (2026-05-15 09:33 IST)
@@ -446,6 +451,7 @@ class SupabaseService {
       functionName: name,
       retryOn500: retryOn500,
       spendsQuotaPerCall: spendsQuotaPerCall,
+      budget: budget,
     );
   }
 
@@ -524,10 +530,14 @@ class SupabaseService {
     List<int> storageRaceBackoffsMs = _storageRaceBackoffsMs,
     bool retryOn500 = false,
     bool spendsQuotaPerCall = false,
+    CoachCallBudget? budget,
   }) async {
     int coldStartAttempt = 0;
     int storageRaceAttempt = 0;
     while (true) {
+      // OI-505: an abandoned coach call sends nothing more (first send,
+      // cold-start branch and storage-race branch all pass through here).
+      budget?.throwIfExpired();
       try {
         return await invoke();
       } on FunctionException catch (e) {

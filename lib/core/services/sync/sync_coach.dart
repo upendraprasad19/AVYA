@@ -112,6 +112,74 @@ final RegExp kCoachRowKeyPattern = RegExp(r'^coach_[0-9]+$');
 /// on every pass.
 final RegExp kCoachClientKeyPattern = RegExp(r'^coach_[0-9]{10,16}$');
 
+// ── OI-505 (a): the push's late link is anchored to the TURN, not to now ──
+//
+// Plan docs/plans/2026-11-13-coach-late-link-timeout-retry.md fix 1, diagnose
+// b7e1f3. The text lookup below looked for a server row of the same words
+// created in the last 5 minutes BEFORE NOW; a turn linked later than that (a
+// tab closed right after sending, a long outage) found nothing and was
+// uploaded again as a second, keyed `in_app_orphan` row. Step 1 anchors the
+// window to the turn's own instant (read from its key) instead; step 2 is the
+// old query, kept verbatim, so nothing the old window caught is lost (a phone
+// clock skewed by minutes, a turn the server received late).
+
+/// configBox kill switch: `true` skips step 1 (the old window only).
+const String kDisableCoachTurnTimeWindow = 'disable_coach_turn_time_window';
+
+/// Step 1's window around the turn instant `T`: `[T - 5 min, T + 10 min]`.
+/// The upper bound stays small so a LATER unrelated row with the same words
+/// (the same meal typed the next morning, a cross-channel row 30 min on) is
+/// never stamped onto a turn that has no server row of its own.
+const Duration kCoachTurnWindowBefore = Duration(minutes: 5);
+const Duration kCoachTurnWindowAfter = Duration(minutes: 10);
+
+/// Rows read by step 1; the nearest to `T` wins, so a window with several
+/// same-text rows cannot cut the right one off.
+const int kCoachTurnWindowLimit = 10;
+
+/// The turn's own instant from its `coach_<ms>` key, or null when the key is
+/// not a valid client key or its milliseconds are outside DateTime's range
+/// (a 16-digit key can be). A null sends the row to step 2.
+DateTime? coachTurnInstantFromKey(String key) {
+  if (!kCoachClientKeyPattern.hasMatch(key)) return null;
+  final ms = int.tryParse(key.substring('coach_'.length));
+  if (ms == null) return null;
+  try {
+    return DateTime.fromMillisecondsSinceEpoch(ms, isUtc: true);
+  } on Object {
+    return null;
+  }
+}
+
+/// The candidate whose `created_at` is nearest to [turn]. Rows with no
+/// parseable `created_at`, and rows whose id is in [excludeIds] (already
+/// stamped onto ANOTHER local turn), are skipped. Ties keep the earlier row.
+/// Pure: the push test and the plan's L11 pin it.
+Map<String, dynamic>? nearestRowToInstant(
+  List rows,
+  DateTime turn, {
+  Set<String> excludeIds = const <String>{},
+}) {
+  Map<String, dynamic>? best;
+  int? bestGap;
+  for (final raw in rows) {
+    if (raw is! Map) continue;
+    final row = Map<String, dynamic>.from(raw);
+    final id = row['id'];
+    if (id is! String || id.isEmpty || excludeIds.contains(id)) continue;
+    final created = DateTime.tryParse('${row['created_at']}');
+    if (created == null) continue;
+    final gap =
+        created.millisecondsSinceEpoch - turn.millisecondsSinceEpoch;
+    final abs = gap < 0 ? -gap : gap;
+    if (bestGap == null || abs < bestGap) {
+      best = row;
+      bestGap = abs;
+    }
+  }
+  return best;
+}
+
 final RegExp _coachMediaTag = RegExp(r'^\[(?:Photo(?::[^\]]*)?|Video)\]\s*');
 
 /// The turn's text with the media tag removed, so the phone's `[Photo] cap`
@@ -288,6 +356,17 @@ extension SyncServiceCoach on SyncService {
   /// inflation) wasn't worth the catch.
   Future<void> _syncCoachInteractions(String userId) async {
     final coachBox = _hive.coachBox;
+    // OI-505: cloud ids already stamped onto a local turn, by id -> its key, so
+    // step 1 never stamps one server row onto two turns.
+    final stampedIds = <String, String>{};
+    for (final k in coachBox.keys) {
+      if (k is! String || !k.startsWith('coach_')) continue;
+      final v = coachBox.get(k);
+      final stamped = v is Map ? v['id'] : null;
+      if (stamped is String && SyncService._looksLikeUuid(stamped)) {
+        stampedIds[stamped] = k;
+      }
+    }
     for (final key in coachBox.keys) {
       if (key is! String || !key.startsWith('coach_')) continue;
       final raw = coachBox.get(key);
@@ -351,6 +430,7 @@ extension SyncServiceCoach on SyncService {
             final keyedId = keyed?['id'] as String?;
             if (keyedId != null && keyedId.isNotEmpty) {
               await _stampCoachCloudId(key, keyedId);
+              stampedIds[keyedId] = key;
               continue;
             }
           } catch (e, st) {
@@ -365,6 +445,23 @@ extension SyncServiceCoach on SyncService {
 
         final userMsg = (entry['user_message'] as String? ?? '').trim();
         if (userMsg.isNotEmpty) {
+          // OI-505 step 1: a server row of this turn anchored to the turn's
+          // own instant (see the header above [kDisableCoachTurnTimeWindow]).
+          // No hit, an unparseable key or the kill switch: step 2 below, the
+          // pre-OI-505 lookup, runs unchanged.
+          final windowRow = await _lookupCoachTurnWindowRow(
+            userId,
+            key,
+            userMsg,
+            keyLookupFailed: keyLookupFailed,
+            stampedIds: stampedIds,
+          );
+          final windowId = windowRow?['id'] as String?;
+          if (windowId != null && windowId.isNotEmpty) {
+            await _stampCoachCloudId(key, windowId);
+            stampedIds[windowId] = key;
+            continue;
+          }
           final cutoff =
               DateTime.now().toUtc().subtract(const Duration(minutes: 5));
           final existing = await _supabase.client
@@ -440,6 +537,50 @@ extension SyncServiceCoach on SyncService {
         } catch (_) {}
       }
     }
+  }
+
+  /// OI-505 step 1: the server row of this turn, found by the turn's own
+  /// instant. Null when the kill switch is on, the key carries no valid
+  /// instant, or no candidate exists (the caller then runs the old lookup).
+  ///
+  /// Candidates: same user, same text (first 500 characters, as the old
+  /// lookup), `created_at` in `[T - 5 min, T + 10 min]`, and, unless the key
+  /// lookup failed (the column may not exist), no `client_key` at all: a row
+  /// of another turn's key is never this turn, and this turn's own key was
+  /// already looked up exactly. The row NEAREST to `T` that is not already
+  /// stamped onto another local turn wins.
+  Future<Map<String, dynamic>?> _lookupCoachTurnWindowRow(
+    String userId,
+    String key,
+    String userMsg, {
+    required bool keyLookupFailed,
+    required Map<String, String> stampedIds,
+  }) async {
+    if (_hive.configBox.get(kDisableCoachTurnTimeWindow) == true) return null;
+    final turn = coachTurnInstantFromKey(key);
+    if (turn == null) return null;
+    var query = _supabase.client
+        .from('ai_coach_interactions')
+        .select('id, created_at')
+        .eq('user_id', userId)
+        .eq('user_message',
+            userMsg.substring(0, userMsg.length > 500 ? 500 : userMsg.length))
+        .gte('created_at',
+            turn.subtract(kCoachTurnWindowBefore).toIso8601String())
+        .lte('created_at',
+            turn.add(kCoachTurnWindowAfter).toIso8601String());
+    if (!keyLookupFailed) query = query.isFilter('client_key', null);
+    final rows = await query
+        .order('created_at', ascending: true)
+        .limit(kCoachTurnWindowLimit);
+    return nearestRowToInstant(
+      rows,
+      turn,
+      excludeIds: {
+        for (final e in stampedIds.entries)
+          if (e.value != key) e.key,
+      },
+    );
   }
 
   /// OI-503 (round 3 F8): writes ONLY `id` onto a FRESH read of the row, with

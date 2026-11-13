@@ -7223,3 +7223,31 @@ Residual of OI-199 and OI-471 after migration 172. Migration 172 makes `cleanup_
 **What it is.** Unit 2A (diagnose `d4a7e2`, plan `docs/plans/2026-11-12-generator-step2-allocator.md`) ships the lead-first allocator (OI-486, founder d26-d29) default ON behind the kill switch `disable_lead_first` (`PlanEngineFlags.leadFirstEnabled`, read by `SessionSetAllocator.allocate` and `PeriodizationEngine.apply` unless their `leadFirst` argument is given). Its OFF world is pinned by `test/fixtures/generator_golden_hashes_lead_first_off.json` (main 9fc3b043's hashes, 1,010 personas) through `test/plan_generator/lead_first_kill_switch_golden_test.dart`.
 
 **Done when.** The founder's device check passes (a gym plan's push day opens with its press at 3 sets or more and no accessory more than 1 set above it; a 30-minute day stays within a few minutes of its length), then one commit deletes the flag getter, the `leadFirst` parameters and the main-world branches they select (`allocate`'s pre-2A body and `_weekTwoGains`' `capToLead: false`; the main world itself stays, R3 needs it), the fixture, the kill-switch test, the `leadFirst: false` / `true` cases in `lead_first_allocator_behavioral_test.dart` group 6 and in the tests that run main's arithmetic (the eviction preconditions, rest-by-type (e)), the `disable_lead_first` probe in `lead_first_gate_test.dart`, and the `naming_conventions.md` row. Blast radius `platform` (plan engine).
+
+## OI-505 — Coach chat: an old turn linked late uploads a second server row, the chat call has no timeout, and a Retry of a turn the server already finished inserts a second row
+
+- **Status**: OPEN
+- **Blocked on**: none
+- **Identified**: 2026-11-13 · filed via mint_oi.sh from branch `coach-late-link-timeout-retry`
+- **Verified**: 2026-11-13, live, read-only, test account (web app on an iPhone):
+  - 07:00 IST turn: one real server row (`b5f81db2`) plus a keyed `in_app_orphan` uploaded at 12:31 IST (5.5 h later): the
+    push's text lookup asked for rows from the last 5 minutes only.
+  - 12:11 IST turn: the request hung through a Supabase outage (12:10:55-12:19:51 IST, restarted with the founder's go) and
+    the app showed "Something went wrong" 19 minutes later; the Retry at 12:35 inserted a second row under the same key.
+- **Cause**: (a) `_syncCoachInteractions` text lookup anchored to `now - 5 min`; (b) `AiService.chat` has no time limit;
+  (c) ai-proxy's text dedup looks back 30 s only and the cap trigger is `BEFORE INSERT`, so a slow Retry reserves a second row
+  and spends a unit. (a) is a recurrence of the 2026-05-16 cross-channel dedup class.
+- **Plan**: `docs/plans/2026-11-13-coach-late-link-timeout-retry.md` (rev 5, converged after four review rounds). Diagnoses
+  `b7e1f3` (late link), `c8f2a4` (no timeout), `d9a3b5` (Retry of a finished turn).
+- **Fix (branch `coach-late-link-timeout-retry`)**: (a) step 1 of the push lookup is anchored to the key's instant (-5/+10 min,
+  rows with no key, nearest wins), the old query stays as step 2, switch `disable_coach_turn_time_window`; (b) the notifier
+  bounds every coach call (chat 75 s, photo 120 s, turn 90 s incl. the one 401 re-send), `CoachCallBudget` stops the abandoned
+  call's retry loops, a TimeoutException is classified by type; (c) the Retry button sends `client_retry: true` and ai-proxy
+  reuses a finished text-only turn of that key (6 h cap, 503 `in_progress` for a young pending row, env
+  `DISABLE_CLIENT_KEY_REPLAY=1`). No migration. Only `ai-proxy` is redeployed.
+- **Still open after the merge**: the ai-proxy deploy needs its own go (deploy before or with the client build; an old ai-proxy
+  ignores `client_retry`); a data repair of the two surplus rows needs its own go (ids shown first, BEGIN/ROLLBACK rehearsal);
+  the live smoke (a finished turn re-sent with the same key and `client_retry: true`: `deduplicated: true`, no new row, no
+  unit); a device check; then delete the kill switches `disable_coach_turn_time_window` and `DISABLE_CLIENT_KEY_REPLAY`
+  (CLAUDE.md 4.6 step 4). Known limit, not closed: a Retry tapped while the FIRST request is still stuck before ai-proxy's
+  reservation insert can spend a second unit (no client cancel of the wire request exists).
