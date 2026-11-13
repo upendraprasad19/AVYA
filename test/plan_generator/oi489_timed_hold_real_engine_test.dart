@@ -24,6 +24,7 @@ import 'package:icanbefitter/shared/repositories/plan_engine/plan_generator.dart
 import 'package:icanbefitter/shared/repositories/plan_engine/session_budget.dart';
 import 'package:icanbefitter/shared/repositories/plan_engine/session_set_allocator.dart';
 
+import '../helpers/budget_invariant_oracle.dart';
 import '../helpers/injury_floor_sweep_lib.dart';
 
 /// Sets credited to [group] in each week of [phase] (weeks 1-4), by each exercise's own primary muscles.
@@ -99,7 +100,9 @@ void main() {
           final isForced = stats[variant]!.countForced.containsKey(i);
           if (isForced) forced.add('week ${w.weekInPhase} ${d.name}');
           if (minutes > 32) over['week ${w.weekInPhase} ${d.name}'] = (minutes * 10).roundToDouble() / 10;
-          final limit = 32 + (isForced ? SessionBudget.maxForcedOverSeconds / 60 : 0);
+          // Unit 2B (the shared oracle): plus the overrun of the day's `overClock` floor seats (d33, no bound).
+          final floorClock = BudgetInvariantOracle.floorOverClockSeconds(stats[variant], i);
+          final limit = 32 + (isForced ? SessionBudget.maxForcedOverSeconds / 60 : 0) + floorClock / 60;
           expect(minutes, lessThanOrEqualTo(limit), reason: 'week ${w.weekNumber} ${d.name}: ${minutes.toStringAsFixed(1)}');
         }
       }

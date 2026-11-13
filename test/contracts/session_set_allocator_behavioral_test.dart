@@ -16,6 +16,7 @@ import 'package:icanbefitter/shared/repositories/plan_engine/models.dart';
 import 'package:icanbefitter/shared/repositories/plan_engine/session_budget.dart';
 import 'package:icanbefitter/shared/repositories/plan_engine/session_set_allocator.dart';
 
+import '../helpers/budget_invariant_oracle.dart';
 import '../helpers/session_budget_fixtures.dart';
 
 AllocationStats statsA() => SessionSetAllocator.debugLastStats!['A']!;
@@ -121,7 +122,8 @@ void main() {
             f.ex('bi'),
           ]),
       ];
-      final out = f.run(days, minutes: 30, goal: 'general_fitness', level: 'beginner');
+      // Unit 2B: the day floor off, the pre-2B arithmetic above.
+      final out = f.run(days, minutes: 30, goal: 'general_fitness', level: 'beginner', dayFloor: false);
       expect(setsOf(out[0]), [('cl', 5)]);
       for (final d in out.skip(1)) {
         expect(setsOf(d).where((e) => e.$1 != 'plank'), [('bi', 2)]);
@@ -132,6 +134,18 @@ void main() {
       expect(first.sets, 5);
       expect(first.desired, 3);
       expect(first.boundBy, isNull);
+
+      // With the floor (d33): days 1-4 hold plank + bi = 2 rows, so the floor seats cl at 2 past the clock on each;
+      // Chest reaches its top (2 + 4 x 2 = 10) and day 0's lead stays at 2, below its desired 3, bound by Chest.
+      final floored = f.run(days, minutes: 30, goal: 'general_fitness', level: 'beginner');
+      expect(setsOf(floored[0]), [('cl', 2)]);
+      for (final d in floored.skip(1)) {
+        expect(setsOf(d).where((e) => e.$1 != 'plank'), [('cl', 2), ('bi', 2)]);
+      }
+      expect(statsA().weekly['Chest'], 10);
+      expect([for (final d in [1, 2, 3, 4]) statsA().floorSeats[d]!.single.overClock], [true, true, true, true]);
+      final lead = statsA().firstLifts.firstWhere((l) => l.day == 0);
+      expect((lead.sets, lead.desired, lead.boundBy), (2, 3, 'Chest'));
     });
 
     test('boundBy is null when only TIME held the lead lift below its desired sets (B-pass R1 P2-1)', () {
@@ -233,12 +247,18 @@ void main() {
         f.row('c${d}1', ['Chest']);
         days.add(f.day('strength', [f.ex('c${d}0'), f.ex('c${d}1')]));
       }
-      final out = f.run(days, minutes: 90);
+      final out = f.run(days, minutes: 90, dayFloor: false);
       // OI-456 piece B: ten 2-set seats would be 20 > 16: lead lifts seat first (5 x 2 = 10),
       // then the accessories until the top (3 more x 2 = 16), the last two days keep one.
       expect([for (final d in out) d.exercisesA.first.sets], [2, 2, 2, 2, 2]);
       expect(statsA().weekly['Chest'], 16);
       expect([for (final d in out) d.exercisesA.length], [2, 2, 2, 1, 1]);
+      // Unit 2B (d32): with the day floor the last two days, handed 2 slots each, are floored to 2 past the top:
+      // 16 + 2 x 2 = 20, named in floorSeats (the restated invariant: top + the floor's over-top sets).
+      final floored = f.run(days, minutes: 90);
+      expect([for (final d in floored) d.exercisesA.length], [2, 2, 2, 2, 2]);
+      expect(statsA().weekly['Chest'], 20);
+      expect(BudgetInvariantOracle.weekCeiling(16, statsA(), 'Chest'), 20);
     });
 
     test('lighter phase: every weekly total stays at the band bottom, focus included', () {
@@ -251,8 +271,14 @@ void main() {
         }
         days.add(f.day('hypertrophy', [for (final n in names) f.ex(n)]));
       }
-      f.run(days, minutes: 90, lighter: true, focus: {'Chest'});
+      f.run(days, minutes: 90, lighter: true, focus: {'Chest'}, dayFloor: false);
       expect(statsA().weekly['Chest'], 12);
+      // Unit 2B (d31): the floor runs in a lighter phase too. Rows [2, 2, 1, 1] at the bottom (12); the floor takes
+      // every day to 3: 12 + 6 x 2 = 24, each seat over the top (cap 8 per day holds: 3 x 2 = 6).
+      final floored = f.run(days, minutes: 90, lighter: true, focus: {'Chest'});
+      expect([for (final d in floored) d.exercisesA.length], [3, 3, 3, 3]);
+      expect(statsA().weekly['Chest'], 24);
+      expect(BudgetInvariantOracle.weekCeiling(12, statsA(), 'Chest'), 24);
     });
 
     test('lighter phase: a focus group falls back to the ordinary session cap of 8, not 12', () {
@@ -636,6 +662,8 @@ void main() {
       var guarded = 0;
       // Days actually past their minutes (plan/variant/day -> seconds over, 0.1 s): pinned exactly below.
       final over = <String, double>{};
+      // Unit 2B: floor seats over the sweep (all, past a top, past the clock), pinned below.
+      var floorSeats = 0, floorOverTop = 0, floorOverClock = 0;
       for (var plan = 0; plan < 220; plan++) {
         final nDays = 3 + rnd.nextInt(4);
         final is6 = nDays == 6;
@@ -691,8 +719,20 @@ void main() {
             days: days, ctx: ctx, rowsByName: byName, is6Day: is6);
         expect(out.length, nDays);
 
+        double secs(PlannedExercise e) => SessionBudget.exerciseSeconds(
+              archetype: ctx.archetypeByName[e.exerciseName.toLowerCase()]!,
+              sets: e.sets,
+              restSeconds: SessionBudget.restForArchetype(ctx.archetypeByName[e.exerciseName.toLowerCase()]!),
+            );
         for (final variant in is6 ? ['A'] : ['A', 'B']) {
           final stats = SessionSetAllocator.debugLastStats![variant]!;
+          for (final v in stats.floorSeats.values) {
+            for (final x in v) {
+              floorSeats++;
+              if (x.overTop.isNotEmpty) floorOverTop++;
+              if (x.overClock) floorOverClock++;
+            }
+          }
           final forced = stats.timeForcedFirst + stats.capForcedFirst;
           if (forced > 0) guarded++;
           final ledger = BudgetLedger(ctx, nDays);
@@ -716,12 +756,7 @@ void main() {
                     [for (final m in (byName[e.exerciseName.toLowerCase()]!['primary_muscles']
                         as List)) '$m']),
                 e.sets,
-                SessionBudget.exerciseSeconds(
-                  archetype: ctx.archetypeByName[e.exerciseName.toLowerCase()]!,
-                  sets: e.sets,
-                  restSeconds: SessionBudget.restForArchetype(
-                      ctx.archetypeByName[e.exerciseName.toLowerCase()]!),
-                ),
+                secs(e),
               );
             }
           }
@@ -732,9 +767,13 @@ void main() {
               // so the excuse was never needed; now 25 variant-days in 12 seed plans do (10.8 to 198 s over; the first,
               // seed plan 15's day 1: the lead seated at 3 leaves a 2-set Kneeling Close Grip Push Up to A2, 90 s), pinned
               // exactly at the end of the sweep.
-              final bound = stats.countForced.containsKey(d) ? -SessionBudget.maxForcedOverSeconds - 1e-6 : -1e-6;
-              expect(ledger.secondsLeft(d), greaterThanOrEqualTo(bound),
+              // Unit 2B: through the shared oracle (budget_invariant_oracle.dart): the day may also run over by the
+              // overrun of its `overClock` floor seats (d33, no bound). A count-forced day keeps the 300 s allowance.
+              final allowance = (stats.countForced.containsKey(d) ? SessionBudget.maxForcedOverSeconds : 0) +
+                  BudgetInvariantOracle.floorOverClockSeconds(stats, d);
+              expect(ledger.secondsLeft(d), greaterThanOrEqualTo(-allowance - 1e-6),
                   reason: 'plan $plan $variant day $d time');
+              expect(BudgetInvariantOracle.floorSeatsDisjointFromCountForced(stats), isTrue);
               if (ledger.secondsLeft(d) < -1e-6) {
                 over['$plan/$variant/$d'] = (-ledger.secondsLeft(d) * 10).roundToDouble() / 10;
               }
@@ -742,8 +781,9 @@ void main() {
           }
           for (final g in BudgetMuscleGroups.groups) {
             if (forced == 0) {
-              expect(ledger.week(g), lessThanOrEqualTo(ledger.weeklyTop(g)),
-                  reason: 'plan $plan $variant $g weekly');
+              expect(ledger.week(g),
+                  lessThanOrEqualTo(BudgetInvariantOracle.weekCeiling(ledger.weeklyTop(g), stats, g)),
+                  reason: 'plan $plan $variant $g weekly (top + the floor\'s over-top sets)');
             }
             for (var d = 0; d < nDays; d++) {
               if (forced == 0) {
@@ -762,6 +802,11 @@ void main() {
         '149/B/2': 10.8, '151/A/2': 10.8, '151/B/2': 10.8, '182/A/0': 154.8, '182/A/2': 10.8, '182/B/2': 10.8,
         '215/B/1': 10.8,
       });
+      // ignore: avoid_print
+      print('seeded sweep: floor seats $floorSeats, past a top $floorOverTop, past the clock $floorOverClock');
+      // Measured 2026-11-13: 12 seats, every one past a top (the reason the week check reads the oracle), none past
+      // the clock (so the pinned `over` map above is unchanged by the floor).
+      expect((floorSeats, floorOverTop, floorOverClock), (12, 12, 0));
       // `guarded` is reported, not asserted: random picks seldom empty a whole day,
       // and the guard itself is pinned by the crafted 'guard' test above.
       // ignore: avoid_print
@@ -889,12 +934,19 @@ void main() {
           f.ex('bi'),
         ]),
       ];
-      final out = f.run(days, minutes: 30, goal: 'general_fitness', level: 'beginner');
+      final out = f.run(days, minutes: 30, goal: 'general_fitness', level: 'beginner', dayFloor: false);
       expect(setsOf(out[0]).where((e) => e.$1 != 'plank'), [('bi', 2)]);
       final lead = statsA().firstLifts.single;
       expect(lead.sets, 0);
       expect(lead.groups, {'Chest'});
       expect(statsA().timeForcedFirst, 0);
+      // Unit 2B (d33): the policy gains "and from a thin day". The day holds plank + bi = 2 rows, so the day floor
+      // seats the lead at 2 past the clock (overClock), never in countForced.
+      final floored = f.run(days, minutes: 30, goal: 'general_fitness', level: 'beginner');
+      expect(setsOf(floored[0]).where((e) => e.$1 != 'plank'), [('cl', 2), ('bi', 2)]);
+      expect(statsA().floorSeats[0]!.single.name, 'cl');
+      expect(statsA().floorSeats[0]!.single.overClock, isTrue);
+      expect(statsA().countForced, isEmpty);
     });
   });
 }

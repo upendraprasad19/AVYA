@@ -47,6 +47,12 @@ class AllocationStats {
   /// than the count floor (nothing the allocator can seat).
   final List<int> selectorThin = [];
 
+  /// Unit 2B (OI-452, founder d30-d33): per day, each slot the 3-exercise floor seated at 2 sets. [FloorSeat.overTop]
+  /// names the groups it took past their weekly top; [FloorSeat.overClock] is true when the seat did not fit the day's
+  /// remaining seconds when it was seated (d33: the floor is not bound by the clock). A floor seat is never in
+  /// [countForced]. Variant B inherits A's entries for the days it copies.
+  final Map<int, List<FloorSeat>> floorSeats = {};
+
   /// Hard sets per budget group across the week, after the allocation.
   final Map<String, int> weekly = {};
 
@@ -77,6 +83,18 @@ class AllocationStats {
 }
 
 typedef LeadSeat = ({int day, int rank, String name, int sets, String? boundBy});
+
+/// Unit 2B: one slot the 3-exercise day floor seated (see [AllocationStats.floorSeats]). [overBy] is each over-top
+/// group's excess this seat added (week + 2 - top at seat time, capped at the seat's 2 sets); [overSeconds] is the part of
+/// the seat's seconds that did not fit the day's remaining seconds (0 unless [overClock]).
+typedef FloorSeat = ({
+  String name,
+  int sets,
+  List<String> overTop,
+  Map<String, int> overBy,
+  bool overClock,
+  double overSeconds,
+});
 
 /// Unit 2A, R3: the three allocations each variant is tried in.
 enum _World { lead, capped, main }
@@ -154,6 +172,19 @@ class SessionSetAllocator {
   @visibleForTesting
   static Map<String, AllocationStats>? debugLastStats;
 
+  /// Unit 2B, F2: whether the day floor prefers candidate [a] to [b]: the fewer groups taken past their weekly top
+  /// ([over]), then the smaller sum of those excesses ([excess]), then the cheaper seat at 2 sets ([seconds]). A full tie
+  /// is false, so the caller, walking a day's slots in rank order, keeps the lowest rank. No lead preference.
+  @visibleForTesting
+  static bool floorPrefers(
+    ({int over, int excess, double seconds}) a,
+    ({int over, int excess, double seconds}) b,
+  ) {
+    if (a.over != b.over) return a.over < b.over;
+    if (a.excess != b.excess) return a.excess < b.excess;
+    return a.seconds < b.seconds;
+  }
+
   /// Ruling 5, guard (c): whether a slot costing [need] seconds fits [left] seconds, with a 1e-6 tolerance. Eviction
   /// sums the freed seconds in its own order while the ledger subtracts each hold's cost one at a time, so at an exact
   /// boundary the two can differ by an ulp; the decision and the check after the evictions both use this one
@@ -169,19 +200,23 @@ class SessionSetAllocator {
   ///
   /// [leadFirst] turns the Unit 2A rule on or off for this call; null reads the kill switch
   /// (`PlanEngineFlags.leadFirstEnabled`, default ON). Off is the pre-2A allocation byte for byte.
+  /// [dayFloor] turns the Unit 2B 3-exercise day floor on or off for this call; null reads its kill switch
+  /// (`PlanEngineFlags.dayFloorEnabled`, default ON). Off is the pre-2B allocation byte for byte, in both 2A paths.
   static List<PopulatedDay> allocate({
     required List<PopulatedDay> days,
     required SessionBudgetContext ctx,
     required Map<String, Map<String, dynamic>> rowsByName,
     required bool is6Day,
     bool? leadFirst,
+    bool? dayFloor,
   }) {
+    final floorOn = dayFloor ?? PlanEngineFlags.dayFloorEnabled;
     if (leadFirst ?? PlanEngineFlags.leadFirstEnabled) {
-      return _allocateLeadFirst(days: days, ctx: ctx, rowsByName: rowsByName, is6Day: is6Day);
+      return _allocateLeadFirst(days: days, ctx: ctx, rowsByName: rowsByName, is6Day: is6Day, dayFloor: floorOn);
     }
     final stats = <String, AllocationStats>{};
     final lists = [for (final d in days) d.exercisesA];
-    final a = _variant(lists, days, ctx, rowsByName, null, stats['A'] = AllocationStats());
+    final a = _variant(lists, days, ctx, rowsByName, null, stats['A'] = AllocationStats(), dayFloor: floorOn);
 
     List<List<PlannedExercise>> bOut;
     if (is6Day) {
@@ -195,7 +230,7 @@ class SessionSetAllocator {
         if (_sameNames(days[d].exercisesA, days[d].exercisesB)) copy[d] = a.byDay[d];
       }
       final b = _variant([for (final d in days) d.exercisesB], days, ctx, rowsByName, copy,
-          stats['B'] = AllocationStats(), copyFrom: stats['A'], copyEvicted: a.evicted);
+          stats['B'] = AllocationStats(), copyFrom: stats['A'], copyEvicted: a.evicted, dayFloor: floorOn);
       bOut = b.out;
     }
     debugLastStats = stats;
@@ -242,6 +277,7 @@ class SessionSetAllocator {
     required SessionBudgetContext ctx,
     required Map<String, Map<String, dynamic>> rowsByName,
     required bool is6Day,
+    required bool dayFloor,
   }) {
     final floor = SessionBudget.countFloor(ctx.minutes);
     List<int> rowsOf(List<List<PlannedExercise>> out) => [for (final d in out) d.length];
@@ -253,12 +289,15 @@ class SessionSetAllocator {
     final aM = _variant(listsA, days, ctx, rowsByName, null, sAM);
     var sA = AllocationStats()..leadWorld = 'lead';
     var a = _variant(listsA, days, ctx, rowsByName, null, sA, world: _World.lead);
+    var wA = _World.lead;
     if (worse(a.out, sA, aM.out, sAM)) {
       final sC = AllocationStats()..leadWorld = 'capped';
       final c = _variant(listsA, days, ctx, rowsByName, null, sC, world: _World.capped);
       if (!worse(c.out, sC, aM.out, sAM)) {
         (a, sA) = (c, sC);
+        wA = _World.capped;
       } else {
+        wA = _World.main;
         // Not reachable today (B review, seat 3, M14): the capped world seats exactly main's rows (passes A, A2 and B
         // are main's; passes C and D seat nothing and only add sets), so it is never worse than main in A; the gate
         // pins A's worlds at lead / capped only. Kept so a later pass that seats or removes after pass B stays safe.
@@ -280,16 +319,32 @@ class SessionSetAllocator {
           copyFrom: sAM, copyEvicted: aM.evicted);
       ({List<List<PlannedExercise>> out, List<List<_Slot>> byDay, Map<int, Set<int>> evicted})? kept;
       AllocationStats? sB;
+      var wB = _World.main;
       for (final w in const [_World.lead, _World.capped]) {
         final st = AllocationStats()..leadWorld = w.name;
         final b = _variant(listsB, days, ctx, rowsByName, copyOf(a.byDay), st,
             copyFrom: sA, copyEvicted: a.evicted, world: w);
         if (!worse(b.out, st, bM.out, sBM)) {
-          (kept, sB) = (b, st);
+          (kept, sB, wB) = (b, st, w);
           break;
         }
       }
       if (kept == null || sB == null) {
+        wA = _World.main;
+        wB = _World.main;
+      }
+      if (dayFloor) {
+        // Unit 2B, F3: the worlds were chosen with the floor off; the chosen ones are re-run with it on, A first, then
+        // B copying the FLOORED A (a copied day carries its floor sets and `floorSeats` into B's week).
+        final sAF = AllocationStats()..leadWorld = wA.name;
+        a = _variant(listsA, days, ctx, rowsByName, null, sAF, world: wA, dayFloor: true);
+        final sBF = AllocationStats()..leadWorld = wB.name;
+        final bF = _variant(listsB, days, ctx, rowsByName, copyOf(a.byDay), sBF,
+            copyFrom: sAF, copyEvicted: a.evicted, world: wB, dayFloor: true);
+        stats['A'] = sAF;
+        stats['B'] = sBF;
+        bOut = bF.out;
+      } else if (kept == null || sB == null) {
         // Neither B world holds: the whole plan falls back to main (A = M, B = M_B; A's stats become M's).
         a = aM;
         stats['A'] = sAM;
@@ -299,6 +354,12 @@ class SessionSetAllocator {
         stats['B'] = sB;
         bOut = kept.out;
       }
+    } else if (dayFloor) {
+      // Unit 2B, F3 on the 6-day path (B = A): the chosen A world re-run with the floor.
+      final sAF = AllocationStats()..leadWorld = wA.name;
+      a = _variant(listsA, days, ctx, rowsByName, null, sAF, world: wA, dayFloor: true);
+      stats['A'] = sAF;
+      bOut = a.out;
     }
     debugLastStats = stats;
     return [
@@ -353,6 +414,7 @@ class SessionSetAllocator {
     AllocationStats? copyFrom,
     Map<int, Set<int>>? copyEvicted,
     _World world = _World.main,
+    bool dayFloor = false,
   }) {
     final n = days.length;
     final ledger = BudgetLedger(ctx, n);
@@ -457,6 +519,8 @@ class SessionSetAllocator {
         if (copyFrom.selectorThin.contains(d)) stats.selectorThin.add(d);
         // Unit 2A: a copied day's lead is A's lead on it, at A's sets (B review, seat 1 finding 2).
         stats.leadSeats.addAll(copyFrom.leadSeats.where((e) => e.day == d));
+        final fo = copyFrom.floorSeats[d];
+        if (fo != null) stats.floorSeats[d] = List.of(fo);
       }
     }
 
@@ -718,6 +782,87 @@ class SessionSetAllocator {
       }
     }
 
+    // Unit 2B (OI-452): the label a day under its count floor gets is what stopped pass A2 (`clock` or `cap_top`); it is
+    // taken BEFORE the floor, which can seat the very slots `canForce` reads (plan v6 §2 F4).
+    final labelBeforeFloor = <int, String>{};
+    for (final d in allocateDays) {
+      if (reachRows[d] >= floorBase && rowsOf(d) < floorBase) {
+        final remaining = [
+          for (final s in byDay[d])
+            if (!s.admitted && !s.reserveBlocked && !s.why.values.contains(_Why.target)) s,
+        ];
+        labelBeforeFloor[d] = remaining.any((s) => canForce(d, s)) ? 'clock' : 'cap_top';
+      }
+    }
+
+    // 4b'. Unit 2B (OI-452, founder d30-d33): the 3-exercise day floor. A day whose rows (budgeted and not) are under
+    // min(3, its reach) seats a remaining slot at 2 sets past a group's weekly top, with no limit on the excess (d30), in
+    // every phase (d31), up to its reach (d32), and not bound by the clock (d33); never past a session cap, never a
+    // slot the rank-0 reservation blocked. One slot per day per round. Choice: the fewest groups over their top, then
+    // the least excess, then the cheapest; no lead preference; ties to the lowest rank.
+    if (dayFloor) {
+      const floorRows = 3;
+      int excessAfter(_Slot s, String g) => ledger.week(g) + 2 - ledger.weeklyTop(g);
+      int overCount(_Slot s) => s.groups.where((g) => excessAfter(s, g) > 0).length;
+      int overSum(_Slot s) => s.groups.fold(0, (a, g) => a + (excessAfter(s, g) > 0 ? excessAfter(s, g) : 0));
+      // No count-target guard is needed: a slot is target-removed only once `seated[d] >= target[d]`, i.e. the day holds
+      // the level's count max (5 or more) in rows, and the floor acts only below 3 rows (pinned in
+      // day_floor_behavioral_test, 'the count target').
+      bool canFloor(int d, _Slot s) {
+        if (s.admitted || s.reserveBlocked) return false;
+        for (final g in s.groups) {
+          if (ledger.session(d, g) + 2 > ledger.cap(g)) return false;
+        }
+        return true;
+      }
+
+      var seatedAny = true;
+      while (seatedAny) {
+        seatedAny = false;
+        for (final d in allocateDays) {
+          final want = reachRows[d] < floorRows ? reachRows[d] : floorRows;
+          if (byDay[d].isEmpty || rowsOf(d) >= want) continue;
+          _Slot? best;
+          for (final s in byDay[d]) {
+            if (!canFloor(d, s)) continue;
+            if (best == null) {
+              best = s;
+              continue;
+            }
+            if (floorPrefers((over: overCount(s), excess: overSum(s), seconds: seconds(s, 2)),
+                (over: overCount(best), excess: overSum(best), seconds: seconds(best, 2)))) {
+              best = s;
+            }
+          }
+          if (best == null) continue;
+          final overBy = {
+            for (final g in best.groups)
+              if (excessAfter(best, g) > 0) g: excessAfter(best, g) > 2 ? 2 : excessAfter(best, g),
+          };
+          final overTop = overBy.keys.toList();
+          final left = ledger.secondsLeft(d);
+          final overClock = seconds(best, 2) > left;
+          final overSeconds = !overClock ? 0.0 : (left > 0 ? seconds(best, 2) - left : seconds(best, 2));
+          best
+            ..sets = 2
+            ..admitted = true
+            ..removed = false
+            ..why = const {};
+          ledger.add(d, best.groups, 2, seconds(best, 2));
+          (stats.floorSeats[d] ??= []).add(
+              (
+                name: best.exercise.exerciseName,
+                sets: 2,
+                overTop: overTop,
+                overBy: overBy,
+                overClock: overClock,
+                overSeconds: overSeconds,
+              ));
+          seatedAny = true;
+        }
+      }
+    }
+
     // The count verdict is final here (passes B, C and D add no row), and it is read BEFORE the grow
     // passes spend weekly top, so a day short only because of the forcing bound still says `clock`
     // (B-pass P3-1).
@@ -725,11 +870,7 @@ class SessionSetAllocator {
       if (reachRows[d] < floorBase) {
         stats.selectorThin.add(d);
       } else if (rowsOf(d) < floorBase) {
-        final remaining = [
-          for (final s in byDay[d])
-            if (!s.admitted && !s.reserveBlocked && !s.why.values.contains(_Why.target)) s,
-        ];
-        stats.belowCount[d] = remaining.any((s) => canForce(d, s)) ? 'clock' : 'cap_top';
+        stats.belowCount[d] = labelBeforeFloor[d]!;
       }
     }
 

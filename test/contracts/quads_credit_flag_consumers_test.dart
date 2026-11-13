@@ -41,18 +41,38 @@ void main() {
   }
 
   test('allocator: with the rule the squats are not refused for Glutes; without it they are', () {
+    // Unit 2B: the day floor is off here, so the two runs differ ONLY in the credit flag; the floor's own effect on
+    // this fixture is pinned in the next test.
     final (f, days) = sixDays();
     final off = SessionSetAllocator.allocate(
-        days: days, ctx: ctxFor(f, credits: true), rowsByName: f.rows, is6Day: true);
+        days: days, ctx: ctxFor(f, credits: true), rowsByName: f.rows, is6Day: true, dayFloor: false);
     final offStats = SessionSetAllocator.debugLastStats!['A']!;
     final on = SessionSetAllocator.allocate(
-        days: days, ctx: ctxFor(f, credits: false), rowsByName: f.rows, is6Day: true);
+        days: days, ctx: ctxFor(f, credits: false), rowsByName: f.rows, is6Day: true, dayFloor: false);
     final onStats = SessionSetAllocator.debugLastStats!['A']!;
 
     expect(setsGrid(off.map((d) => d.exercisesA)), [[2, 2], [2, 2], [2], [2], [2], [2]]);
     expect(offStats.weekly, {'Quads': 4, 'Glutes': 16}, reason: 'Glutes at its top refuses the squats');
     expect(setsGrid(on.map((d) => d.exercisesA)), [[3, 3], [3, 3], [3, 3], [3, 3], [2, 2], [2, 2]]);
     expect(onStats.weekly, {'Quads': 16, 'Glutes': 16}, reason: 'the squats credit Quads only');
+  });
+
+  test('allocator with the Unit 2B day floor (d32): the full-credit days handed two slots are floored to two', () {
+    // Full credit: days 2-5 keep only their glute row (Glutes at its top), each reach 2, so the floor seats the squat
+    // at 2 past the Glutes top: Glutes 16 + 4 x 2 = 24, Quads 4 + 8 = 12. Under the rule nothing is thin.
+    final (f, days) = sixDays();
+    final off = SessionSetAllocator.allocate(
+        days: days, ctx: ctxFor(f, credits: true), rowsByName: f.rows, is6Day: true, dayFloor: true);
+    final offStats = SessionSetAllocator.debugLastStats!['A']!;
+    expect(setsGrid(off.map((d) => d.exercisesA)), [[2, 2], [2, 2], [2, 2], [2, 2], [2, 2], [2, 2]]);
+    expect(offStats.weekly, {'Quads': 12, 'Glutes': 24});
+    expect([for (final d in [2, 3, 4, 5]) offStats.floorSeats[d]!.single.overTop], [
+      for (var i = 0; i < 4; i++) ['Glutes'],
+    ]);
+    final on = SessionSetAllocator.allocate(
+        days: days, ctx: ctxFor(f, credits: false), rowsByName: f.rows, is6Day: true, dayFloor: true);
+    expect(setsGrid(on.map((d) => d.exercisesA)), [[3, 3], [3, 3], [3, 3], [3, 3], [2, 2], [2, 2]]);
+    expect(SessionSetAllocator.debugLastStats!['A']!.floorSeats, isEmpty);
   });
 
   test('allocator: a quad-first row that also lists Hamstrings (Trap Bar Deadlift) keeps its Glutes credit under the rule', () {
@@ -75,8 +95,9 @@ void main() {
   test('PeriodizationEngine.apply week 2: the same allocation gains sets only under the rule', () {
     final (f, days) = sixDays();
     // The allocation the OLD credit produced (Quads starved), then the week-2 gains priced both ways.
+    // The day floor off (Unit 2B): this test reads week 2 over the pre-2B allocation, which leaves days 2-5 thin.
     final allocated = SessionSetAllocator.allocate(
-        days: days, ctx: ctxFor(f, credits: true), rowsByName: f.rows, is6Day: true);
+        days: days, ctx: ctxFor(f, credits: true), rowsByName: f.rows, is6Day: true, dayFloor: false);
     List<List<int>> week2(bool credits) => [
           for (final d in PeriodizationEngine.apply(
                   populated: allocated, phase: 1, is6Day: true, budget: ctxFor(f, credits: credits))[1]

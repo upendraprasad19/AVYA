@@ -328,11 +328,15 @@ class SweepHarness {
   /// count floor, but a pinned repeat starts from the PREVIOUS phase's plan, which 2A changed (a phase-1 day that holds
   /// one exercise fewer pins one fewer). The C2a precedent above (`repeat bodyweight` 0 -> 4) is the same class. Owned by
   /// unit 2B (the 3-exercise day floor, OI-452); diagnose doc of Unit 2A.
+  /// Unit 2B (OI-452, diagnose `b3f1d8`, 2026-11-13): the 3-exercise day floor seats a thin day's remaining slots past
+  /// the weekly top (founder d30-d33), so every block is 0 / 0. Before it: `pairs` home_dumbbells 20 / 2, basic_gym
+  /// 30 / 2, full_gym 20 / 0; `f_repeat_pairs30` bodyweight 60 / 8, home_dumbbells 121 / 2, basic_gym 96 / 2, full_gym
+  /// 22 / 0 (369 thin days, 16 one-exercise); every other block was already 0 / 0.
   static const Map<String, (int thin, int one)> kThinCeilings = {
     'pairs bodyweight': (0, 0),
-    'pairs home_dumbbells': (20, 2),
-    'pairs basic_gym': (30, 2),
-    'pairs full_gym': (20, 0),
+    'pairs home_dumbbells': (0, 0),
+    'pairs basic_gym': (0, 0),
+    'pairs full_gym': (0, 0),
     'pairs46 bodyweight': (0, 0),
     'pairs46 home_dumbbells': (0, 0),
     'pairs46 basic_gym': (0, 0),
@@ -349,10 +353,10 @@ class SweepHarness {
     'singles46 home_dumbbells': (0, 0),
     'singles46 basic_gym': (0, 0),
     'singles46 full_gym': (0, 0),
-    'f_repeat_pairs30 bodyweight': (60, 8),
-    'f_repeat_pairs30 home_dumbbells': (121, 2),
-    'f_repeat_pairs30 basic_gym': (96, 2),
-    'f_repeat_pairs30 full_gym': (22, 0),
+    'f_repeat_pairs30 bodyweight': (0, 0),
+    'f_repeat_pairs30 home_dumbbells': (0, 0),
+    'f_repeat_pairs30 basic_gym': (0, 0),
+    'f_repeat_pairs30 full_gym': (0, 0),
   };
 
   /// Every block: thin days (under 3 exercises) and one-exercise days match the measured

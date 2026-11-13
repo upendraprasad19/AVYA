@@ -54,6 +54,8 @@ import 'package:icanbefitter/shared/repositories/plan_engine/plan_generator.dart
 import 'package:icanbefitter/shared/repositories/plan_engine/session_budget.dart';
 import 'package:icanbefitter/shared/repositories/plan_engine/session_set_allocator.dart';
 
+import '../helpers/budget_invariant_oracle.dart';
+
 const _goals = ['build_muscle', 'lose_fat', 'strength', 'general_fitness'];
 const _tiers = ['bodyweight', 'home_dumbbells', 'basic_gym', 'full_gym'];
 const _dayCounts = [3, 4, 5, 6];
@@ -315,7 +317,6 @@ void main() {
       // Weeks 2 and 4 show the B list of a day (the 6-day plan has one list).
       final variant = (w == 1 || w == 3) && p.days != 6 ? 'B' : 'A';
       final forcedDays = stats?[variant]?.forcedDays ?? const <int>[];
-      final countForced = stats?[variant]?.countForced ?? const <int, List<({String name, int sets})>>{};
       final days = plan.weekPlans[w].workoutDays;
       for (var di = 0; di < days.length; di++) {
         final d = days[di];
@@ -352,21 +353,20 @@ void main() {
           // the allocator) is over by at most those slots' own seconds, and never by
           // more than the forcing bound plus the display slack over the user's minutes.
           // When the guard also filled the day, its lead lift is subtracted too.
-          var forcedSeconds = 0.0;
-          for (final f in countForced[di] ?? const <({String name, int sets})>[]) {
-            for (final e in d.exercises) {
-              if (e.exerciseName == f.name) forcedSeconds += exSeconds(e);
-            }
-          }
+          final forcedSeconds = BudgetInvariantOracle.countForcedSeconds(stats?[variant], di, d.exercises, exSeconds);
+          // Unit 2B (d33, the shared oracle `budget_invariant_oracle.dart`): the day may also run over by the overrun
+          // of its `overClock` floor seats (`overSeconds`), with no bound.
+          final floorClockSeconds =
+              BudgetInvariantOracle.floorOverClockSeconds(stats?[variant], di);
           final guardSeconds = (lead != null && forcedDays.contains(di)) ? exSeconds(lead) : 0.0;
           // The overrun over the user's minutes is bounded by the FORCING itself (at most
           // maxForcedOverSeconds of it, B-pass P2-1 / P2-2), so a forced slot cannot mask an
           // unrelated overrun; the display slack is the 2 minutes of `limitMin`.
           final forcedPart =
               forcedSeconds > SessionBudget.maxForcedOverSeconds ? SessionBudget.maxForcedOverSeconds.toDouble() : forcedSeconds;
-          final countExplained = forcedSeconds > 0 &&
-              mins - (forcedSeconds + guardSeconds) / 60 <= limitMin &&
-              mins - p.effMinutes <= (forcedPart + guardSeconds) / 60 + 2;
+          final countExplained = forcedSeconds + floorClockSeconds > 0 &&
+              mins - (forcedSeconds + floorClockSeconds + guardSeconds) / 60 <= limitMin &&
+              mins - p.effMinutes <= (forcedPart + floorClockSeconds + guardSeconds) / 60 + 2;
           final explained = guardExplained || countExplained;
           if (explained) {
             _agg.timeForcedOver.add(mins - p.effMinutes); // minutes over the user's own minutes
@@ -382,7 +382,8 @@ void main() {
         });
       }
       weekGroups.forEach((g, n) {
-        if (n > p.top(g)) {
+        // Unit 2B: the top plus the sets the day floor seated past it in this week's variant (the shared oracle).
+        if (n > BudgetInvariantOracle.weekCeiling(p.top(g), stats?[variant], g)) {
           fail(p.lighter ? 'lighter phase' : 'caps',
               'week ${w + 1} $g $n > weekly ${p.lighter ? 'band bottom' : 'top'} ${p.top(g)}');
         }
