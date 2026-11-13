@@ -14,7 +14,7 @@ sot_registry_entry: coach_interactions (writer SendMessageNotifier._sendKeyed / 
 writers:
   - file: lib/features/ai_coach/providers/ai_coach_provider.dart
     method: SendMessageNotifier._chatBounded / _sendKeyed / _sendWithMediaKeyed
-    line: 980
+    line: 978
   - file: lib/core/services/coach_call_budget.dart
     method: CoachCallBudget (limits, expired flag)
     line: 16

@@ -863,7 +863,12 @@ Rules: identify every distinct food product, use ACCURATE nutrition values from 
           .eq("channel", "app")
           .order("created_at", { ascending: false })
           .limit(5);
-        if (error) throw error;
+        if (error) {
+          // A fixed string only (never the error: it can echo row data). The
+          // resolver treats the throw as "no keyed row" and chat goes on.
+          console.warn("[ai-proxy] keyed replay lookup failed; falling through");
+          throw error;
+        }
         return data;
       },
     });

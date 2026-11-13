@@ -83,8 +83,10 @@ String? _coachCreatedAtFromKey(String key) {
   if (!key.startsWith('coach_')) return null;
   final ms = int.tryParse(key.substring('coach_'.length));
   if (ms == null) return null;
-  return DateTime.fromMillisecondsSinceEpoch(ms, isUtc: true)
-      .toIso8601String();
+  final at = DateTime.fromMillisecondsSinceEpoch(ms, isUtc: true);
+  // A year beyond 9999 prints as `+010000-...`, which the wire refuses.
+  if (at.year > 9999) return null;
+  return at.toIso8601String();
 }
 
 // ── OI-503: one coach turn = one local row (the shared turn key) ─────────
@@ -145,7 +147,9 @@ DateTime? coachTurnInstantFromKey(String key) {
   final ms = int.tryParse(key.substring('coach_'.length));
   if (ms == null) return null;
   try {
-    return DateTime.fromMillisecondsSinceEpoch(ms, isUtc: true);
+    final at = DateTime.fromMillisecondsSinceEpoch(ms, isUtc: true);
+    // A year beyond 9999 prints as `+010000-...`, which the wire refuses.
+    return at.year > 9999 ? null : at;
   } on Object {
     return null;
   }
@@ -362,6 +366,11 @@ extension SyncServiceCoach on SyncService {
     for (final k in coachBox.keys) {
       if (k is! String || !k.startsWith('coach_')) continue;
       final v = coachBox.get(k);
+      // A restored copy (`source: cloud_restore`, id = the cloud id) is a COPY
+      // of a server row, not a turn that can compete for one: counting it
+      // would bar the very row it copies from the unlinked local turn that
+      // owns it (B-pass A-F1, restore-then-push order).
+      if (v is Map && v['source'] == 'cloud_restore') continue;
       final stamped = v is Map ? v['id'] : null;
       if (stamped is String && SyncService._looksLikeUuid(stamped)) {
         stampedIds[stamped] = k;
@@ -449,13 +458,22 @@ extension SyncServiceCoach on SyncService {
           // own instant (see the header above [kDisableCoachTurnTimeWindow]).
           // No hit, an unparseable key or the kill switch: step 2 below, the
           // pre-OI-505 lookup, runs unchanged.
-          final windowRow = await _lookupCoachTurnWindowRow(
-            userId,
-            key,
-            userMsg,
-            keyLookupFailed: keyLookupFailed,
-            stampedIds: stampedIds,
-          );
+          Map<String, dynamic>? windowRow;
+          try {
+            windowRow = await _lookupCoachTurnWindowRow(
+              userId,
+              key,
+              userMsg,
+              keyLookupFailed: keyLookupFailed,
+              stampedIds: stampedIds,
+            );
+          } catch (e, st) {
+            // A failed step 1 must not skip step 2 and the upload (B-pass
+            // A-F2): fall through to the pre-OI-505 lookup.
+            unawaited(ErrorTelemetry.recordNonFatal(e, st,
+                reason: 'coach_turn_window_lookup_failed',
+                skipServerPost: true));
+          }
           final windowId = windowRow?['id'] as String?;
           if (windowId != null && windowId.isNotEmpty) {
             await _stampCoachCloudId(key, windowId);

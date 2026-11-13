@@ -422,6 +422,8 @@ class AiService {
       }
       rethrow;
     } catch (e) {
+      // OI-505: an abandoned call's own stop is not a failure to report.
+      if (e is TimeoutException) rethrow;
       final errStr = e.toString();
       final clipped = errStr.length > 500 ? errStr.substring(0, 500) : errStr;
       unawaited(

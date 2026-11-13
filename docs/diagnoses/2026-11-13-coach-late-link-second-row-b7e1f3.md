@@ -16,7 +16,7 @@ sot_registry_entry: coach_interactions (writer _syncCoachInteractions text looku
 writers:
   - file: lib/core/services/sync/sync_coach.dart
     method: SyncServiceCoach._syncCoachInteractions (text lookup, steps 1 and 2) and _lookupCoachTurnWindowRow
-    line: 357
+    line: 361
 readers:
   - file: lib/features/ai_coach/providers/ai_coach_provider.dart
     method_or_widget: ChatHistoryNotifier.build (one bubble pair per coach_<ms> row)
@@ -118,3 +118,9 @@ Script `mut505a.py` (session scratchpad). 12 mutants, all red.
 | M10 | limit 1 | RED |
 | M11 | lower bound 1 min | RED |
 | M12 | upper bound removed | RED |
+
+B-pass additions (script `mut505e.py`; findings A-F1 and A-F2 of `docs/reviews/`, fixed in this batch): a restored
+sibling (`source: cloud_restore`, id = the cloud id) no longer bars its own server row from the unlinked local turn (L13,
+restore-then-push); a key whose instant is beyond year 9999 skips step 1 (L14) and a throwing step 1 falls through to
+step 2 and the upload (L15). Mutants Q1 (restored copies counted in `stampedIds`: RED L13), Q2 (year guard removed: RED
+L14), Q3 (a typed catch that does not catch the step-1 failure: RED L15).

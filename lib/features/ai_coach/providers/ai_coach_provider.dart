@@ -965,8 +965,6 @@ class SendMessageNotifier extends Notifier<bool> {
     }
   }
 
-  /// The rest of [_sendBody] once the turn's key is known and counted in
-  /// flight (OI-503). Its body is unchanged from before the split.
   /// OI-505 test seam: replaces the session refresh before an auth re-send.
   @visibleForTesting
   static Future<void> Function()? refreshSessionOverride;
@@ -999,6 +997,8 @@ class SendMessageNotifier extends Notifier<bool> {
     });
   }
 
+  /// The rest of [_sendBody] once the turn's key is known and counted in
+  /// flight (OI-503). Its body is unchanged from before the split.
   Future<void> _sendKeyed(
     String message,
     String coachKey, {

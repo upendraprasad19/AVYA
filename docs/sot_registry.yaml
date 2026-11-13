@@ -6393,7 +6393,7 @@ concepts:
           label is what dedupDecision reads on the next request):
           supabase/functions/_shared/row_model_label_test.ts.
       - file: lib/core/services/sync/sync_coach.dart
-        line_range: 599-798
+        line_range: 617-816
         method: "`_restoreCoachInteractions` (SyncServiceCoach extension)"
         notes: |
           Plan-review round 1 finding, same diagnose — the RESTORE-path twin
@@ -6659,7 +6659,7 @@ concepts:
           Nightly walks of coachBox.values to extract facts +
           patterns into coaching_notes singleton + memory_embeddings.
       - file: lib/core/services/sync/sync_coach.dart
-        line_range: 357-798
+        line_range: 361-816
         method: _syncCoachInteractions (push) + _restoreCoachInteractions (pull)
         semantic: pass-through
         fields_read: [<all interaction fields>]
@@ -7099,7 +7099,7 @@ concepts:
           cap. Never truncate in the writer — truncation is the trimmer's
           job so the on-disk corpus stays complete.
       - file: lib/core/services/sync/sync_coach.dart
-        line_range: 321-322
+        line_range: 325-326
         method: syncCoachMemoryNow upward projection
         semantic: pass-through
         fields_read: [coaching_notes]
@@ -7108,7 +7108,7 @@ concepts:
           cloud column 'coach_notes' (different word). Before this
           projection the column was 100% NULL across all users.
       - file: lib/core/services/sync/sync_coach.dart
-        line_range: 810-866
+        line_range: 828-884
         method: _restoreCoachMemory downward sync
         semantic: pass-through
         fields_read: [coach_notes]
@@ -7837,7 +7837,7 @@ concepts:
       reader drift instance).
     writers:
       - file: lib/core/services/sync/sync_coach.dart
-        line_range: 294-339
+        line_range: 298-343
         method: syncCoachMemoryNow
         notes: |
           The Hive read uses 'coaching_notes' (singular Hive key); the
@@ -7864,7 +7864,7 @@ concepts:
           Server-side reader. Pulls coach_memory.coach_notes for the
           nightly summary prompt context.
       - file: lib/core/services/sync/sync_coach.dart
-        line_range: 810-866
+        line_range: 828-884
         method: _restoreCoachMemory (downward pull)
         semantic: pass-through
         fields_read: [coach_notes]
@@ -8138,7 +8138,7 @@ concepts:
     reader_manifest_complete: true
     readers:
       - file: lib/core/services/sync/sync_coach.dart
-        line_range: 357-540
+        line_range: 361-558
         method: _syncCoachInteractions (push side cross-channel dedup)
         semantic: flag-check
         fields_read: [id, channel, user_message, created_at]
@@ -13329,24 +13329,24 @@ concepts:
       Precedent it mirrors: AuthNotifier._inFlightSignOut and SyncCoalescer.
     writers:
       - file: lib/core/services/supabase_service.dart
-        line_range: 204
+        line_range: 205
         method: _inFlightRefresh
         semantic: the-shared-in-flight-future
       - file: lib/core/services/supabase_service.dart
-        line_range: 243
+        line_range: 244
         method: coalescedRefresh
         semantic: join-never-race-injectable-test-seam
       - file: lib/core/services/supabase_service.dart
-        line_range: 324
+        line_range: 325
         method: ensureFreshToken
         semantic: expiry-branch-delegates-to-the-join
       - file: lib/core/services/supabase_service.dart
-        line_range: 352
+        line_range: 353
         method: _refreshToken
         semantic: the-refresh-itself-single-call-site
     readers:
       - file: lib/core/services/supabase_service.dart
-        line_range: 248
+        line_range: 249
         method: disableRefreshJoin
         semantic: kill-switch-read
     hive:
@@ -15081,7 +15081,7 @@ concepts:
       proactive channel can't repeat the same silent drop.
     writers:
       - file: lib/core/services/sync/sync_coach.dart
-        line_range: 599-798
+        line_range: 617-816
         method: _restoreCoachInteractions
         notes: pulls ALL ai_coach_interactions rows for the user, no channel filter of its own — the filter lives entirely on the render side.
     readers:

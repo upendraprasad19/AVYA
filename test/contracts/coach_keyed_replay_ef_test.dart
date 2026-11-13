@@ -8,9 +8,10 @@
 // `resolveKeyedReplay` (behavioural Deno tests: _shared/chat_dedup_keyed_test.ts).
 //
 // ai-proxy starts `serve(` at module scope and cannot be imported by a Deno
-// test, so the handler's WIRING is pinned here as presence: the call order is
-// also proven by the live smoke after the deploy (registry entry is
-// `presence_only: true` for that reason).
+// test, so the handler's WIRING is pinned here as presence only (the registry
+// concept cites the Deno resolver test as its behavioral path; these pins are
+// the presence half): the call order is also proven by the live smoke after the
+// deploy.
 import 'package:flutter_test/flutter_test.dart';
 
 import '../helpers/read_screen_source.dart';
@@ -31,7 +32,8 @@ void main() {
     });
 
     test('the resolver runs after the cap/auth block, before the text dedup and before the reservation', () {
-      final isPro = proxy.indexOf('const isProUser = await checkPro(');
+      // The chat path's own anchor: `checkPro(` first appears on the food path.
+      final isPro = proxy.indexOf('const ruleOn = !isWriteClaimRuleDisabled();');
       final keyed = proxy.indexOf('await resolveKeyedReplay({');
       final dedupAt = proxy.indexOf('const dedupCutoff');
       final reserve = proxy.indexOf('const chatReservation = await supabaseClient');

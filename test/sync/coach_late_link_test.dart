@@ -270,6 +270,66 @@ void main() {
     expect(box().get(key), isNotNull);
   });
 
+  test('L13 (B-pass A-F1): restore BEFORE push: the restored sibling of the server row does not bar that row from the unlinked local turn', () async {
+    final turn = now.subtract(const Duration(hours: 5));
+    final key = _keyAt(turn);
+    final serverAt = turn.add(const Duration(seconds: 23));
+    h.server.pagedTables['ai_coach_interactions'] = [_row(_u1, serverAt)];
+    await seed(key); // the local turn, no cloud id yet
+    await SyncService.instance.restoreCoachInteractionsForTest(kTestUserId, preFetched: [
+      _row(_u1, serverAt),
+    ]);
+    final sibling = 'coach_${serverAt.millisecondsSinceEpoch}';
+    final restored = box().get(sibling) as Map;
+    expect(restored['source'], 'cloud_restore');
+    expect(restored['id'], _u1, reason: 'the restored copy carries the cloud id');
+    await push();
+    expect(writes(), isEmpty,
+        reason: 'the server row already exists: no second keyed row may be uploaded');
+    expect((box().get(key) as Map)['id'], _u1);
+  });
+
+  test('L15 (B-pass A-F2): step 1 throws: step 2 and the upload still run (no turn is stranded behind a bad window read)', () async {
+    h.server.pagedTables.remove('ai_coach_interactions');
+    final turn = now.subtract(const Duration(hours: 3));
+    final key = _keyAt(turn);
+    h.server.getResponders['ai_coach_interactions'] = (r) {
+      // Only the step-1 read (two created_at bounds) answers a body the client
+      // cannot parse as a row list.
+      if ((r.queryAll['created_at']?.length ?? 0) == 2) return {'unexpected': 'object'};
+      return const [];
+    };
+    await seed(key);
+    await push();
+    expect(reads().where(isStep1), hasLength(1), reason: 'step 1 ran and failed');
+    expect(reads().where(isStep2), hasLength(1), reason: 'step 2 still ran after the failed step 1');
+    final up = writes().map((w) => _bodyRow(w.body)).toList();
+    expect(up, hasLength(1));
+    expect(up.single['client_key'], key, reason: 'the turn is not stranded: it uploads as its own keyed row');
+  });
+
+  test('L14 (B-pass A-F2): a 16-digit key above year 9999 skips step 1 (no request with a +010000 timestamp)', () async {
+    const key = 'coach_1763000000000';
+    expect(coachTurnInstantFromKey(key), isNotNull, reason: 'a 13-digit key is a normal instant');
+    // 253402300800000 ms = year 10000-01-01; 15 digits, inside DateTime's range.
+    const beyond = 'coach_253402300800000';
+    expect(coachTurnInstantFromKey(beyond), isNull, reason: 'year 10000 prints as +010000-...');
+    await box().put(beyond, {
+      'id': beyond,
+      'user_message': _text,
+      'ai_response': 'a',
+      'model_used': 'gemini',
+      'created_at': DateTime.now().toUtc().toIso8601String(),
+    });
+    await push();
+    expect(reads().where(isStep1), isEmpty);
+    for (final r in h.server.requests) {
+      for (final v in r.queryAll.values.expand((l) => l)) {
+        expect(v.contains('+0'), isFalse, reason: 'no out-of-range timestamp on the wire: $v');
+      }
+    }
+  });
+
   test('L11: two candidates in the window: the one NEAREST to the turn wins, not the first by time', () async {
     final turn = now.subtract(const Duration(hours: 3));
     final key = _keyAt(turn);

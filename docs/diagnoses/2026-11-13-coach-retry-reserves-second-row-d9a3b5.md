@@ -18,7 +18,7 @@ writers:
 readers:
   - file: supabase/functions/_shared/chat_dedup.ts
     method_or_widget: resolveKeyedReplay / keyedReplayVerdict (the keyed lookup before the text dedup)
-    line: 130
+    line: 186
   - file: supabase/functions/ai-proxy/index.ts
     method_or_widget: the replay_reply branch (one reply body)
     line: 920
@@ -99,7 +99,7 @@ legacy-marker rows, object and null `tool_calls`, age cap, unparseable `created_
 `resolveKeyedReplay` wiring with an injected lookup (no fetch without the strict boolean, without a key, under the kill
 switch; the exact 503 body; a failed lookup never blocks chat).
 `test/contracts/coach_keyed_replay_ef_test.dart`: presence pins for the handler wiring (ai-proxy starts `serve(` at module
-scope), registered `presence_only`.
+scope); the registry concept `coach_keyed_retry_replay` cites the Deno resolver test as its behavioral path and these pins as the presence half.
 
 ## Mutation evidence (rule 21)
 Script `mut505c.py` (session scratchpad): exact-string replacement with a count check; the source restored in a `finally`
