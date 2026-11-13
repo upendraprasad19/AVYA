@@ -7173,6 +7173,46 @@ Residual of OI-199 and OI-471 after migration 172. Migration 172 makes `cleanup_
 
 **Unit 2A (2026-11-13, the lead-first allocator, diagnose `d4a7e2`).** The lead finding is closed: founder d27 exempts focus exercises from the lead cap (the focus pass and week 2), and the audit's `lead_starved` skips a focus row. Measured (2,304 plans each; main's focus dumps re-audited with the skip, so 793 / 1,118 above read 672 / 1,004): starved-lead plans `glutes_legs` 672 -> 45 (suitable 706 -> 840), `chest_shoulders_arms` 1,004 -> 47 (suitable 531 -> 886). Still open for unit 2C (weekly minimums): extra sets a focus adds over no focus, main -> 2A: Calves -4,628 -> -837 under `glutes_legs`; Core under `glutes_legs` -2,022 -> -2,458; Biceps under `chest_shoulders_arms` +8,197 -> +9,632. The inert-plan and short-session points stand.
 
+## OI-502 — Coach chat shows message times in UTC, and the daily count and coaching-notes 'today' checks miss 00:00-05:30 IST (created_at is UTC since 2026-09-27)
+
+- **Status**: OPEN
+- **Blocked on**: none. The fix is in branch `coach-chat-time-dup`; the device check comes after its merge.
+- **Verified**: 2026-11-13. Founder screenshot: a turn sent at 07:00 IST shows `01:30`. Code read:
+  - `chat_area.dart:71-72` prints the hour and minute of a UTC DateTime (`ai_coach_provider.dart:276` parses a `Z` string).
+  - `getTodayUserMessageCount` (`coach_interaction_repository.dart:268`) and `extractAndAppendCoachingNotes`
+    (`coach_memory_service.dart:80`) test `created_at.startsWith(istDateStr(now))`. That misses every 00:00-05:30 IST row.
+- **Identified**: 2026-11-13 · filed via mint_oi.sh from branch `coach-chat-time-dup`
+- **Cause**: `created_at` has been written as UTC (`Z`) since 2026-09-27 (`80557539`); these readers still read it as a
+  local clock or as an IST date string.
+- **Plan**: `docs/plans/2026-11-13-coach-chat-time-dup.md` sections 2 and 3. The same batch removes the Home coach tip
+  (founder decision 2026-11-13), the fourth reader of this kind.
+- **Fix (branch `coach-chat-time-dup`, diagnose `b6d2e8`)**: the bubble uses `chatClockLabel` (device clock); the daily
+  count and the coaching-notes loop use `isIsoOnIstDay`; the Home coach tip is removed. Still open after the merge: the
+  device check (a turn sent before 05:30 IST counts as today; the bubble shows the device's time).
+
+## OI-503 — A coach chat turn appears twice after a restore: the restore keys the cloud copy by the server created_at, the local copy by the phone clock, and never matches them
+
+- **Status**: OPEN
+- **Blocked on**: none. The fix is in branch `coach-chat-time-dup`; the device check comes after its merge.
+- **Verified**: 2026-11-13, live, read-only.
+  - The founder's screenshot shows one question twice, each with its reply.
+  - `ai_coach_interactions` holds ONE row for it (`b5f81db2`, 01:30:50 UTC).
+  - The edge logs show one ai-proxy request.
+  - `client_errors` shows a full restore running 01:30:34-01:31:17, the same minute.
+- **Identified**: 2026-11-13 · filed via mint_oi.sh from branch `coach-chat-time-dup`
+- **Cause**: the local row is keyed by the phone's clock (`mintCoachKey`). The restore keys the cloud copy by the server's
+  `created_at` (`sync_coach.dart:302-306`) and never reads the cloud id the push stamps into the local row
+  (`sync_coach.dart:216-226`, whose comment says it is "so subsequent restores collapse"). Recurrence of the APK Test #12.8
+  Bug #1 class (restore key != writer key).
+- **Plan**: `docs/plans/2026-11-13-coach-chat-time-dup.md` section 4 (rev 3.3): a shared turn key. Diagnose `d4a7c9`.
+- **Fix (branch `coach-chat-time-dup`)**: migration 178 adds `ai_coach_interactions.client_key`; ai-proxy and
+  ai-media-proxy store the phone's row key; the restore writes the cloud row back AT that key; the push never sends a
+  restored row back. Order: migration 178 live -> both Edge Functions deployed and smoke-tested -> merge. A turn sent
+  before the fix heals on sign-out and sign-in.
+- **Still open after the merge**: the device check (send a turn, sign out and in, one row), then delete the kill switch
+  `configBox['disable_coach_client_key_restore']` and the old restore loop (CLAUDE.md 4.6 step 4). Optional, its own
+  go: delete the 90 live same-instant `in_app_orphan` echoes (plan C6).
+
 ## OI-504 — Delete the disable_lead_first kill switch and its golden fixture after the 2A device check
 
 - **Status**: OPEN

@@ -663,6 +663,35 @@ class SendMessageNotifier extends Notifier<bool> {
       mediaStoragePath: mediaStoragePath,
     );
 
+    // OI-503: live from the key until after the last Hive write (see
+    // [_sendBody]).
+    CoachInteractionRepository.beginInFlight(coachKey);
+    try {
+      await _sendWithMediaKeyed(
+        coachKey,
+        captionForLog: captionForLog,
+        mediaUrl: mediaUrl,
+        mediaType: mediaType,
+        mediaStoragePath: mediaStoragePath,
+        chatNotifier: chatNotifier,
+        repo: repo,
+      );
+    } finally {
+      CoachInteractionRepository.endInFlight(coachKey);
+    }
+  }
+
+  /// The rest of [_sendWithMediaBody] once the turn's key is known and counted
+  /// in flight (OI-503). Its body is unchanged from before the split.
+  Future<void> _sendWithMediaKeyed(
+    String coachKey, {
+    required String captionForLog,
+    required String mediaUrl,
+    required String mediaType,
+    required String? mediaStoragePath,
+    required ChatHistoryNotifier chatNotifier,
+    required AiCoachRepository repo,
+  }) async {
     // Add user message with media thumbnail. coachKey is threaded through
     // (Unit 8) so updateMessageMediaState can find this exact bubble again
     // once the AI reply lands, and so the save-consent chip's Hive write
@@ -695,6 +724,7 @@ class SendMessageNotifier extends Notifier<bool> {
         mediaUrl,
         mediaType,
         context,
+        clientKey: coachKey,
       );
 
       // A2a (2026-09-21) — strip a JSON/YAML-shaped Gemini reply before it
@@ -878,26 +908,56 @@ class SendMessageNotifier extends Notifier<bool> {
     //
     // On retry, we reuse the existing key so we update the same row instead
     // of duplicating history.
-    String coachKey;
-    if (existingCoachKey != null) {
-      coachKey = existingCoachKey;
-      // Reset the existing row back to pending state for the retry attempt.
-      final raw = HiveService.instance.coachBox.get(coachKey);
-      if (raw is Map) {
-        final entry = Map<String, dynamic>.from(raw);
-        entry['pending'] = true;
-        entry['failed'] = false;
-        entry['ai_response'] = '';
-        entry.remove('error_text');
-        await HiveService.instance.coachBox.put(coachKey, entry);
-      }
-    } else {
-      coachKey = await repo.saveUserMessagePending(
-        userMessage: message,
-        mode: 'quick',
-      );
-    }
+    final String coachKey = existingCoachKey ??
+        await repo.saveUserMessagePending(
+          userMessage: message,
+          mode: 'quick',
+        );
 
+    // OI-503 (plan docs/plans/2026-11-13-coach-chat-time-dup.md, C3): this
+    // turn is live from the moment its key is known until after its last Hive
+    // write, so a cloud restore or push running meanwhile never writes into
+    // it. The `try` opens AT the count, before the Retry's reset put, so no
+    // throw, return or early exit can leak the count.
+    CoachInteractionRepository.beginInFlight(coachKey);
+    try {
+      if (existingCoachKey != null) {
+        // Reset the existing row back to pending state for the retry attempt.
+        final raw = HiveService.instance.coachBox.get(coachKey);
+        if (raw is Map) {
+          final entry = Map<String, dynamic>.from(raw);
+          entry['pending'] = true;
+          entry['failed'] = false;
+          entry['ai_response'] = '';
+          entry.remove('error_text');
+          await HiveService.instance.coachBox.put(coachKey, entry);
+        }
+      }
+      await _sendKeyed(
+        message,
+        coachKey,
+        existingCoachKey: existingCoachKey,
+        chatNotifier: chatNotifier,
+        limitNotifier: limitNotifier,
+        isPro: isPro,
+        repo: repo,
+      );
+    } finally {
+      CoachInteractionRepository.endInFlight(coachKey);
+    }
+  }
+
+  /// The rest of [_sendBody] once the turn's key is known and counted in
+  /// flight (OI-503). Its body is unchanged from before the split.
+  Future<void> _sendKeyed(
+    String message,
+    String coachKey, {
+    required String? existingCoachKey,
+    required ChatHistoryNotifier chatNotifier,
+    required MessageLimitNotifier limitNotifier,
+    required bool isPro,
+    required AiCoachRepository repo,
+  }) async {
     // Add user message (skip on retry — the bubble already exists in history)
     if (existingCoachKey == null) {
       chatNotifier.addMessage(ChatMessage(
@@ -955,7 +1015,7 @@ class SendMessageNotifier extends Notifier<bool> {
       // cap (free 7 / PRO 20, `_shared/ai_limits.ts`; no trial) — the client no longer picks a backend.
       final aiResponse = await ref
           .read(aiServiceProvider)
-          .chat(message, context, history: coachHistory);
+          .chat(message, context, history: coachHistory, clientKey: coachKey);
 
       // Replace loading with actual response
       // A2a (2026-09-21) — strip a JSON/YAML-shaped Gemini reply before it
@@ -1035,7 +1095,8 @@ class SendMessageNotifier extends Notifier<bool> {
           // (else a token-refresh retry silently drops conversation continuity).
           final retryResponse = await ref
               .read(aiServiceProvider)
-              .chat(message, retryEnriched, history: coachHistory);
+              .chat(message, retryEnriched,
+                  history: coachHistory, clientKey: coachKey);
 
           // Retry succeeded — update UI and return
           // A2a (2026-09-21) — same guard as the primary send path above;

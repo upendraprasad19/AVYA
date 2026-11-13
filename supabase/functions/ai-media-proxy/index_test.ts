@@ -379,6 +379,23 @@ Deno.test("checkFreeImageQuota: under the ceiling proceeds (returns null)", asyn
   assertEquals(res, null);
 });
 
+Deno.test("checkFreeImageQuota: the paywall row carries the phone's key (OI-503), null when absent", async () => {
+  const rows: Record<string, unknown>[] = [];
+  const mk = (): SupabaseClient => {
+    const read: Record<string, unknown> = {};
+    for (const m of ["select", "eq"]) read[m] = () => read;
+    read.maybeSingle = () => Promise.resolve({ data: { used: 5 }, error: null });
+    const ins = { insert: (row: Record<string, unknown>) => { rows.push(row); return Promise.resolve({ data: null, error: null }); } };
+    return { from: (t: string) => (t === "usage_counters" ? read : ins) } as unknown as SupabaseClient;
+  };
+  await checkFreeImageQuota(mk(), "u1", "https://x/y.jpg", "image", "hi", "coach_1763000000000");
+  await checkFreeImageQuota(mk(), "u1", "https://x/y.jpg", "image", "hi");
+  assertEquals(rows.length, 2);
+  assertEquals(rows[0].client_key, "coach_1763000000000");
+  assertEquals(rows[0].channel, "image_paywall");
+  assertEquals(rows[1].client_key, null, "an older caller (no key) logs an unkeyed row");
+});
+
 // ---------------------------------------------------------------------------
 // handleRequest — the module boots without a server and answers the cheap paths
 // ---------------------------------------------------------------------------

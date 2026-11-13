@@ -68,8 +68,8 @@ extension _ChatArea on _AiCoachScreenState {
             );
           }
 
-          final time =
-              '${message.timestamp.hour.toString().padLeft(2, '0')}:${message.timestamp.minute.toString().padLeft(2, '0')}';
+          // OI-502: the stored time is UTC (`Z`); show it on the device's clock.
+          final time = chatClockLabel(message.timestamp);
 
           // Bug #19 — Wire Retry button on failed AI bubbles. The provider
           // will reuse the same coachBox row (via existingCoachKey) so

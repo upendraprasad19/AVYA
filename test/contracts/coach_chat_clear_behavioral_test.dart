@@ -10,7 +10,8 @@
 //   T3 CoachInteractionRepository._findRecentDuplicateMessageKey (via
 //      saveUserMessagePending): a repeat of a hidden message mints a NEW row.
 // Readers that must NOT change (T4): getTodayUserMessageCount, the snapshot's
-//   first-message flag, the coaching-notes extraction, the Home coach tip.
+//   first-message flag, the coaching-notes extraction. (The Home coach tip,
+//   once listed here, was removed by OI-502.)
 // T5: a cloud restore that re-puts old rows keeps them hidden.
 //
 // Real Hive throughout; no Supabase (the push is not exercised here: see
@@ -300,14 +301,13 @@ void main() {
     });
 
     test(
-      'the first-message flag, coaching notes and Home tip never read the marker',
+      'the first-message flag and coaching notes never read the marker',
       () {
         // Presence-only pins (each reader is deliberately unchanged, plan §3.2):
         // the mutation for this test is ADDING the marker filter to one of them.
         for (final path in const [
           'lib/features/ai_coach/services/ai_snapshot_builder.dart',
           'lib/features/ai_coach/services/coach_memory_service.dart',
-          'lib/features/home/providers/home_provider.dart',
           'lib/core/services/badge_service.dart',
         ]) {
           expect(

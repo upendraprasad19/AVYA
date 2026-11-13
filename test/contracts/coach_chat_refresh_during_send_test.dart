@@ -45,7 +45,7 @@ class _FakeAi implements AiService {
 
   @override
   Future<AiChatResponse> chat(String message, Map<String, dynamic> context,
-      {List<Map<String, dynamic>>? history}) {
+      {List<Map<String, dynamic>>? history, String? clientKey}) {
     final c = Completer<AiChatResponse>();
     calls.add(c);
     return c.future;
@@ -53,7 +53,7 @@ class _FakeAi implements AiService {
 
   @override
   Future<AiChatResponse> chatWithMedia(String message, String mediaUrl,
-      String mediaType, Map<String, dynamic> context) {
+      String mediaType, Map<String, dynamic> context, {String? clientKey}) {
     final c = Completer<AiChatResponse>();
     calls.add(c);
     return c.future;

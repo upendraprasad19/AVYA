@@ -4,6 +4,7 @@ import { encode as base64Encode } from "https://deno.land/std@0.177.0/encoding/b
 import { geminiChat, labelForModel, MODEL_FLASH_LITE } from "../_shared/gemini.ts";
 import { reportGeminiExhaustion } from "../_shared/gemini_failure_alert.ts";
 import { COACH_REPLIES } from "../_shared/coach_replies.ts";
+import { sanitizeClientKey } from "../_shared/client_key.ts";
 import { istDayStartIso } from "../_shared/ist_date.ts";
 import {
   isWriteClaimRuleDisabled,
@@ -286,6 +287,8 @@ export async function checkFreeImageQuota(
   mediaUrl: string,
   mediaType: unknown,
   message: string,
+  // OI-503: the phone's key of this turn, already sanitized (null = unkeyed).
+  clientKey: string | null = null,
 ): Promise<Response | null> {
   const usedSoFar = await readFreeImageQuota(supabaseClient, userId);
 
@@ -338,6 +341,7 @@ export async function checkFreeImageQuota(
       model_used: "paywall",
       tokens_used: 0,
       created_at: new Date().toISOString(),
+      client_key: clientKey,
     });
     return new Response(
       JSON.stringify({
@@ -372,6 +376,8 @@ async function videoPaywallReply(
   userId: string,
   message: string,
   mediaUrl: string,
+  // OI-503: the phone's key of this turn, already sanitized (null = unkeyed).
+  clientKey: string | null = null,
 ): Promise<Response> {
   const reply = COACH_REPLIES.videoPaywall;
   await supabaseClient.from("ai_coach_interactions").insert({
@@ -383,6 +389,7 @@ async function videoPaywallReply(
     model_used: "paywall",
     tokens_used: 0,
     created_at: new Date().toISOString(),
+    client_key: clientKey,
   });
   return new Response(
     JSON.stringify({
@@ -600,12 +607,17 @@ export async function handleRequest(req: Request): Promise<Response> {
     } catch (_err) {
       throw new HttpError(400, "validation", "Request body is not valid JSON");
     }
-    const { message, media_url, media_type, snapshot_json } = body as {
+    const { message, media_url, media_type, snapshot_json, client_key } = body as {
       message?: unknown;
       media_url?: unknown;
       media_type?: unknown;
       snapshot_json?: unknown;
+      client_key?: unknown;
     };
+    // OI-503: the phone's key of this turn, sanitized ONCE and written on every
+    // row this request logs (both paywalls and the analysis), so the restore
+    // writes the row back at that key. Malformed or absent = null (unkeyed).
+    const clientKey = sanitizeClientKey(client_key);
 
     if (!message || typeof message !== "string") {
       return new Response(
@@ -708,7 +720,7 @@ export async function handleRequest(req: Request): Promise<Response> {
     // entirely — reconciliation would correctly find it wasn't a video, but
     // nothing downstream would have checked the free-image ceiling at all.
     if (!isVideo && !isPro) {
-      const refusal = await checkFreeImageQuota(supabaseClient, userId, media_url, media_type, message);
+      const refusal = await checkFreeImageQuota(supabaseClient, userId, media_url, media_type, message, clientKey);
       if (refusal) return refusal;
     }
 
@@ -804,7 +816,7 @@ export async function handleRequest(req: Request): Promise<Response> {
       isVideo = servedAsVideo;
     }
     if (isVideo && !isPro) {
-      return await videoPaywallReply(supabaseClient, userId, message, media_url);
+      return await videoPaywallReply(supabaseClient, userId, message, media_url, clientKey);
     }
     // Mirror of the pre-fetch fast path above, for the caller whose CLAIM
     // said "video": that check never ran for them (isVideo was still true),
@@ -813,7 +825,7 @@ export async function handleRequest(req: Request): Promise<Response> {
     // claim=image case this repeats the pre-fetch read — an extra advisory
     // SELECT, same day, same result; correctness over one saved round trip.)
     if (!isVideo && !isPro) {
-      const refusal = await checkFreeImageQuota(supabaseClient, userId, media_url, media_type, message);
+      const refusal = await checkFreeImageQuota(supabaseClient, userId, media_url, media_type, message, clientKey);
       if (refusal) return refusal;
     }
     const proQuotaKey = isVideo ? PRO_VIDEO_QUOTA_KEY : PRO_IMAGE_QUOTA_KEY;
@@ -1008,6 +1020,7 @@ export async function handleRequest(req: Request): Promise<Response> {
         model_used: modelLabel,
         tokens_used: tokensUsed,
         created_at: new Date().toISOString(),
+        client_key: clientKey,
       });
     if (interactionLogError) {
       console.error(

@@ -58,6 +58,7 @@ import 'package:icanbefitter/features/profile/services/notification_prefs_reposi
 import 'package:icanbefitter/features/profile/services/profile_target_recompute.dart';
 import 'package:icanbefitter/features/ai_coach/models/coach_memory.dart';
 import 'package:icanbefitter/features/ai_coach/repositories/ai_coach_repository.dart';
+import 'package:icanbefitter/features/ai_coach/repositories/coach_interaction_repository.dart';
 import 'package:icanbefitter/features/profile/services/profile_write_service.dart';
 import 'package:icanbefitter/shared/repositories/plan_engine/plan_engine_flags.dart';
 import 'package:icanbefitter/shared/repositories/user_repository.dart';
@@ -200,6 +201,8 @@ class SyncService {
     // the 2026-09-17 spurious debit.)
     _restoreSettledUserId = null;
     _lastRestoreWithheldReason = null;
+    // OI-503: the previous account's live coach sends are not this account's.
+    CoachInteractionRepository.clearInFlight();
 
     // Complete any in-flight health-sync waiter so callers awaiting
     // the previous user's pass do not hang on the new user's session.

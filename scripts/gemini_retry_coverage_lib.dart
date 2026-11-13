@@ -103,8 +103,11 @@ class AiEntryPoint {
 }
 
 const aiNetworkEntryPoints = <AiEntryPoint>[
+  // OI-503 repoint: send -> _sendBody -> _sendKeyed. The send's catches
+  // (and its telemetry) live in _sendKeyed since the in-flight split, 8201
+  // chars past `send(`, beyond the search window.
   AiEntryPoint('lib/features/ai_coach/providers/ai_coach_provider.dart',
-      'Future<void> send(', 'SendMessageNotifier.send'),
+      'Future<void> _sendKeyed(', 'SendMessageNotifier.send (_sendKeyed)'),
   AiEntryPoint('lib/features/ai_coach/providers/ai_coach_provider.dart',
       'Future<void> sendWithMedia(', 'SendMessageNotifier.sendWithMedia'),
   AiEntryPoint('lib/features/nutrition/providers/nutrition_provider.dart',
