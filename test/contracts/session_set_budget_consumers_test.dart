@@ -328,11 +328,6 @@ void main() {
           for (var w = 0; w < 4; w++) {
             final ledger = BudgetLedger(ctx, nDays);
             final variant = !is6 && (w == 1 || w == 3) ? 'B' : 'A';
-            double secs(PlannedExercise e) => SessionBudget.exerciseSeconds(
-                  archetype: ctx.archetypeByName[e.exerciseName.toLowerCase()]!,
-                  sets: e.sets,
-                  restSeconds: e.restSeconds,
-                );
             for (var d = 0; d < nDays; d++) {
               for (final e in weeks[w].workoutDays[d].exercises) {
                 ledger.add(
@@ -349,11 +344,10 @@ void main() {
               // OI-456 piece B: a day the count floor force-seated (pass A2, `countForced` of the variant this week
               // reads) may be up to `maxForcedOverSeconds` over. Unit 2A (2026-11-13): before 2A no seed reached A2;
               // now 15 day-weeks of seed plans 16, 54, 55 and 57 do (10.8 to 90 s over, weeks 1-3), pinned below.
-              // Unit 2B (the shared oracle, `budget_invariant_oracle.dart`): plus the seconds of the day's `overClock`
+              // Unit 2B (the shared oracle, `budget_invariant_oracle.dart`): plus the overrun of the day's `overClock`
               // floor seats (d33, no bound).
               final bound = -(stats[variant]!.countForced.containsKey(d) ? SessionBudget.maxForcedOverSeconds : 0) -
-                  BudgetInvariantOracle.floorOverClockSeconds(
-                      stats[variant], d, weeks[w].workoutDays[d].exercises, secs) -
+                  BudgetInvariantOracle.floorOverClockSeconds(stats[variant], d) -
                   1e-6;
               expect(ledger.secondsLeft(d), greaterThanOrEqualTo(bound),
                   reason: 'plan $plan week $w day $d time');

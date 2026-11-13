@@ -374,9 +374,7 @@ void main() {
           if (n > cap(grp)) bad.add('$key p$phase w${w + 1} ${d.name}: $grp $n > session cap ${cap(grp)}');
         });
         final secs = SessionBudget.estimateDaySecondsFromPlanDay(d.toMap(), rowsById);
-        final floorClock = BudgetInvariantOracle.floorOverClockSeconds(vStats, di, d.exercises,
-            (e) => SessionBudget.estimateDaySecondsFromPlanDay(
-                WorkoutDay(dayNumber: 0, name: '', focus: '', exercises: [e]).toMap(), rowsById));
+        final floorClock = BudgetInvariantOracle.floorOverClockSeconds(vStats, di);
         if (secs > (minutes + 2) * 60 + floorClock) {
           bad.add('$key p$phase w${w + 1} ${d.name}: ${(secs / 60).toStringAsFixed(1)} min > ${minutes + 2}');
         }

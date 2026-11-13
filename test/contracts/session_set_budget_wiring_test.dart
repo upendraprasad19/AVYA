@@ -180,11 +180,10 @@ void main() {
         for (var i = 0; i < w.workoutDays.length; i++) {
           final vs = stats[w.weekInPhase.isEven ? 'B' : 'A']!;
           final forced = vs.countForced.containsKey(i);
-          // Unit 2B (the shared oracle): plus the seconds of the day's `overClock` floor seats (d33, no bound).
-          double secsOf(PlannedExercise e) => mainSeconds(WorkoutDay(dayNumber: 0, name: '', focus: '', exercises: [e]));
+          // Unit 2B (the shared oracle): plus the overrun of the day's `overClock` floor seats (d33, no bound).
           final bound = budgetSeconds(30) +
               (forced ? SessionBudget.maxForcedOverSeconds : 0) +
-              BudgetInvariantOracle.floorOverClockSeconds(vs, i, w.workoutDays[i].exercises, secsOf) +
+              BudgetInvariantOracle.floorOverClockSeconds(vs, i) +
               1e-6;
           final secs = mainSeconds(w.workoutDays[i]);
           expect(secs, lessThanOrEqualTo(bound), reason: 'week ${w.weekInPhase} day $i');

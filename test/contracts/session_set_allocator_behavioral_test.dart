@@ -768,10 +768,9 @@ void main() {
               // seed plan 15's day 1: the lead seated at 3 leaves a 2-set Kneeling Close Grip Push Up to A2, 90 s), pinned
               // exactly at the end of the sweep.
               // Unit 2B: through the shared oracle (budget_invariant_oracle.dart): the day may also run over by the
-              // seconds of its `overClock` floor seats (d33, no bound). A count-forced day keeps the 300 s allowance.
-              final got = variant == 'A' ? out[d].exercisesA : out[d].exercisesB;
+              // overrun of its `overClock` floor seats (d33, no bound). A count-forced day keeps the 300 s allowance.
               final allowance = (stats.countForced.containsKey(d) ? SessionBudget.maxForcedOverSeconds : 0) +
-                  BudgetInvariantOracle.floorOverClockSeconds(stats, d, got, secs);
+                  BudgetInvariantOracle.floorOverClockSeconds(stats, d);
               expect(ledger.secondsLeft(d), greaterThanOrEqualTo(-allowance - 1e-6),
                   reason: 'plan $plan $variant day $d time');
               expect(BudgetInvariantOracle.floorSeatsDisjointFromCountForced(stats), isTrue);

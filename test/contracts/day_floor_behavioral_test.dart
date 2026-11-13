@@ -116,6 +116,9 @@ void main() {
           4: ['Row 41:2:Back:false', 'Row 42:2:Back:false'],
         });
         expect(statsA().weekly['Back'], 30);
+        // Each seat's exact excess: Back was at or past its top before every seat, so each adds its full 2 sets.
+        expect({for (final v in statsA().floorSeats.values) for (final x in v) '${x.overBy}:${x.overSeconds}'},
+            {'{Back: 2}:0.0'});
         expect({for (final d in out) for (final e in d.exercisesA) e.sets}, {2});
         expect(statsA().belowCount, {0: 'cap_top', 1: 'cap_top', 2: 'cap_top', 3: 'cap_top', 4: 'cap_top'});
         expect(statsA().countForced, isEmpty);
@@ -132,7 +135,8 @@ void main() {
       // Day 0: Row (Back, the lead), PullA and PullB (Back + Biceps); days 1-6: one Curl each, Biceps 12 = the top.
       // Lead world (kept: same rows as main): Row at 3; PullA and PullB refused by the Biceps top. The floor seats PullA
       // (Back 3 + 2 = 5 <= 6), then PullB would make Back 7 > 6: refused, the day ends at 2 rows. In the main world (the
-      // rule off) Row sits at 2, so both seat (Back 6): the cap is the only thing that stopped PullB.
+      // rule off) Row sits at 2, so both seat (Back 6): the cap is the only thing that stopped PullB. (Row ends at 4:
+      // pass C grows the lead after the floor, Back 4 + 2 = 6 = the cap.)
       final f = Fx()
         ..row('Row', ['Lats'])
         ..row('PullA', ['Lats', 'Biceps'])
@@ -215,6 +219,9 @@ void main() {
       }
       expect(ledger.secondsLeft(0), lessThan(0));
       expect(ledger.secondsLeft(0) + 336, greaterThan(0), reason: 'ChestA left less than 336 s, more than 0');
+      // `overSeconds` is exactly the day's overrun (the part of the seat that did not fit), not the seat's 336 s.
+      expect(statsA().floorSeats[0]!.single.overSeconds, closeTo(-ledger.secondsLeft(0), 1e-6));
+      expect(statsA().floorSeats[0]!.single.overBy, isEmpty);
 
       final off = f.run(days, minutes: 30, goal: 'general_fitness', level: 'beginner', leadFirst: false, dayFloor: false);
       expect([for (final e in off[0].exercisesA) e.exerciseName], ['Sink', 'ChestA']);
@@ -317,6 +324,48 @@ void main() {
       f.run(days, level: 'beginner', leadFirst: false, dayFloor: true);
       expect(seats(statsA())[0], ['Y:2:Back:false', 'X:2:Back+Biceps:false']);
     });
+
+    // B-pass seat 3, finding 3-2: a group the seat takes exactly TO its top (excess 0), or leaves under it (negative
+    // excess), is not over: it adds nothing to the over count, the excess sum, `overTop` or `overBy`.
+    test('a group landing exactly at its top is not over: the full tie keeps the earlier slot, overTop names Back only',
+        () {
+      // build_muscle beginner (top 12). Days 1-5: PullUp (Back + Biceps), day 6: Row (Back): Back 12, Biceps 10. Day 0:
+      // Bench, then X (Back + Biceps: Biceps lands at 12, not over), then Y (Back). Both take one group 2 past its top
+      // at 336 s, so X (earlier) is seated first, recording Back alone; then Y (Back 16, overBy capped at 2).
+      final f = Fx()
+        ..row('Bench', ['Chest'])
+        ..row('PullUp', ['Lats', 'Biceps'])
+        ..row('Row', ['Lats'])
+        ..row('X', ['Lats', 'Biceps'])
+        ..row('Y', ['Lats']);
+      final days = [
+        f.day('hypertrophy', [f.ex('Bench'), f.ex('X'), f.ex('Y')]),
+        for (var i = 0; i < 5; i++) f.day('hypertrophy', [f.ex('PullUp')]),
+        f.day('hypertrophy', [f.ex('Row')]),
+      ];
+      f.run(days, level: 'beginner', leadFirst: false, dayFloor: true);
+      expect(seats(statsA())[0], ['X:2:Back:false', 'Y:2:Back:false']);
+      expect([for (final s in statsA().floorSeats[0]!) s.overBy], [
+        {'Back': 2},
+        {'Back': 2},
+      ]);
+    });
+
+    test('a group left under its top does not lower the excess: the full tie keeps the earlier slot', () {
+      // Days 1-6: Row (Back): Back 12, Biceps 0. Day 0: Bench, then Y (Back), then X (Back + Biceps, Biceps 2 of 12).
+      // Both take Back 2 past its top; X's Biceps headroom (-10) does not make its excess smaller, so Y stays first.
+      final f = Fx()
+        ..row('Bench', ['Chest'])
+        ..row('Row', ['Lats'])
+        ..row('X', ['Lats', 'Biceps'])
+        ..row('Y', ['Lats']);
+      final days = [
+        f.day('hypertrophy', [f.ex('Bench'), f.ex('Y'), f.ex('X')]),
+        for (var i = 0; i < 6; i++) f.day('hypertrophy', [f.ex('Row')]),
+      ];
+      f.run(days, level: 'beginner', leadFirst: false, dayFloor: true);
+      expect(seats(statsA())[0], ['Y:2:Back:false', 'X:2:Back:false']);
+    });
   });
 
   group('F3. the worlds', () {
@@ -376,6 +425,33 @@ void main() {
       expect({for (final v in statsA().floorSeats.values) for (final s in v) s.overClock}, {false});
       expect(BudgetInvariantOracle.floorSeatsDisjointFromCountForced(statsA()), isTrue);
     });
+
+    // B-pass seat 3, finding 3-1: the oracle is exact per group and per day, over hand-built stats.
+    test('the oracle sums each group\'s own overBy and each day\'s own overSeconds, nothing per seat or per name', () {
+      FloorSeat fs(String name, Map<String, int> overBy, double overSeconds) => (
+            name: name,
+            sets: 2,
+            overTop: overBy.keys.toList(),
+            overBy: overBy,
+            overClock: overSeconds > 0,
+            overSeconds: overSeconds,
+          );
+      final s = AllocationStats();
+      s.floorSeats[0] = [
+        fs('A', {'Chest': 1, 'Back': 2}, 0),
+        fs('A', {'Back': 2}, 120.5),
+      ];
+      s.floorSeats[2] = [fs('B', {'Biceps': 2}, 40)];
+      expect(BudgetInvariantOracle.floorOverTopSets(s, 'Chest'), 1);
+      expect(BudgetInvariantOracle.floorOverTopSets(s, 'Back'), 4);
+      expect(BudgetInvariantOracle.floorOverTopSets(s, 'Biceps'), 2);
+      expect(BudgetInvariantOracle.floorOverTopSets(s, 'Quads'), 0);
+      expect(BudgetInvariantOracle.weekCeiling(12, s, 'Chest'), 13);
+      expect(BudgetInvariantOracle.floorOverClockSeconds(s, 0), 120.5);
+      expect(BudgetInvariantOracle.floorOverClockSeconds(s, 1), 0);
+      expect(BudgetInvariantOracle.floorOverClockSeconds(s, 2), 40);
+      expect(BudgetInvariantOracle.floorOverTopSets(null, 'Back'), 0);
+    });
   });
 
   group('interactions', () {
@@ -412,6 +488,8 @@ void main() {
       for (final w in [0, 1, 2, 3]) {
         expect({for (final d in weeks[w].workoutDays) for (final e in d.exercises) e.sets}, {2},
             reason: 'week ${w + 1}');
+        // ... and every week keeps the floored rows (3 a day): no later week drops a floor seat.
+        expect([for (final d in weeks[w].workoutDays) d.exercises.length], [3, 3, 3, 3, 3], reason: 'week ${w + 1}');
       }
     });
 
@@ -446,10 +524,13 @@ void main() {
       expect(setsOf(off[0]), [('chest', 4), ('plank', 6)]);
     });
 
-    test('the count target: the floor never takes a day past the level\'s count max', () {
-      // The floor seats only while rows < 3, and every level's count max is at least 5.
-      for (final level in ['beginner', 'intermediate', 'advanced']) {
-        expect(SessionBudget.countMax(level), greaterThanOrEqualTo(5));
+    test('the count target: the PREMISE that lets canFloor skip a target guard', () {
+      // Not a behaviour test (B-pass seat 2, finding 2-1): a slot is target-removed only once the day holds the level's
+      // count max in rows (`seated[d] >= target[d]`, target = count max - the not-budgeted rows), and the floor acts only
+      // below 3 rows, so a target-removed slot can never be floored. That holds while every count max is at least the
+      // floor's 3; this pins the premise, so lowering a count max under 3 reddens here before canFloor needs a guard.
+      for (final level in ['beginner', 'intermediate', 'advanced', 'unknown']) {
+        expect(SessionBudget.countMax(level), greaterThanOrEqualTo(3), reason: level);
       }
     });
   });

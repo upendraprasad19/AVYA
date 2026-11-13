@@ -73,7 +73,8 @@ proposed_fix: |
   ties to the lowest rank; no lead preference.
   F3: with Unit 2A on, the worlds are chosen with the floor off, then the chosen A and B are re-run with it (B copying
   the floored A); the 6-day path re-runs A.
-  F4: AllocationStats.floorSeats (FloorSeat: name, sets, overTop, overClock); never in countForced; belowCount keeps
+  F4: AllocationStats.floorSeats (FloorSeat: name, sets, overTop, overBy = each group's exact excess, overClock,
+  overSeconds = the overrun); never in countForced; belowCount keeps
   the label A2 left (a snapshot taken before the floor).
   F5: kill switch disable_day_floor (PlanEngineFlags.dayFloorEnabled, default ON) and allocate(dayFloor:), in both 2A
   paths. The budget invariant is restated in one shared test oracle.
@@ -190,3 +191,26 @@ Each mutant applied once (count checked, file restored byte for byte after each)
 The shared oracle, against `day_floor_behavioral_test`, `session_set_allocator_behavioral_test` and
 `exercise_count_band_behavioral_test`: O1 `weekCeiling` without the floor allowance, 9 red (the floor fixtures, the
 re-recorded weekly top and lighter phase, the seeded sweep); O2 `overClock` seconds never excused, 2 red.
+
+## B-pass (docs/reviews/generator-step2b-day-floor-bpass.md)
+
+Three fresh Sonnet seats ran on d7013d29 (CI green): 0 P0 or P1. Fixed in the review commit:
+- `FloorSeat` gains `overBy` (each over-top group's exact excess, at most 2) and `overSeconds` (the part of the seat
+  past the seconds left; the whole seat when none were left). The shared oracle sums those exactly, instead of 2 sets
+  and the full seat seconds per seat matched by name (seat 2, finding 2-4).
+- The count-target test is now a premise pin (every count max >= 3), plus a `canFloor` comment explaining why the
+  floor needs no target guard (S1-2, 2-1).
+- Stale `day_floor_gate_test.dart` citations repointed to the three gate files and their lib (S1-1, 2-2).
+- Rows asserted per week in the weeks 1-4 fixture (2-5), and two test comments (2-3, 2-6).
+
+Seat 3 ran 32 new mutants on the post-fix tree, and 26 were red. Of the 6 green:
+- 3-1: the oracle summing the first `overBy` value, or a flat 2 per `overTop` group (m08, m09). Fixed by an oracle
+  unit test over hand-built stats.
+- 3-2: a group exactly at its top counted as over (m13 in the over count, m29 in `overTop` / `overBy`), and a group
+  under its top lowering the excess (m30). Fixed by two F2 fixtures (at-top tie, under-top tie).
+- m19 (the floor seat's `why` reset) and m06 (`overClock` `>=`): equivalent. `why` is read only for non-admitted slots
+  and nothing un-admits a floor seat; at exact equality, `overSeconds` is 0 either way.
+
+The coordinator re-applied m08, m09, m13, m29 and m30 after the fixes. Each one is now red in exactly one test, the
+test written for it (`day_floor_behavioral_test`, 22 passed and 1 failed each), and the files were restored with a
+sha256 check after each.

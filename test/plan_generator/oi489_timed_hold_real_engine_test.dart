@@ -100,10 +100,8 @@ void main() {
           final isForced = stats[variant]!.countForced.containsKey(i);
           if (isForced) forced.add('week ${w.weekInPhase} ${d.name}');
           if (minutes > 32) over['week ${w.weekInPhase} ${d.name}'] = (minutes * 10).roundToDouble() / 10;
-          // Unit 2B (the shared oracle): plus the seconds of the day's `overClock` floor seats (d33, no bound).
-          double secsOf(PlannedExercise e) => SessionBudget.estimateDaySecondsFromPlanDay(
-              WorkoutDay(dayNumber: 0, name: '', focus: '', exercises: [e]).toMap(), rowsById);
-          final floorClock = BudgetInvariantOracle.floorOverClockSeconds(stats[variant], i, d.exercises, secsOf);
+          // Unit 2B (the shared oracle): plus the overrun of the day's `overClock` floor seats (d33, no bound).
+          final floorClock = BudgetInvariantOracle.floorOverClockSeconds(stats[variant], i);
           final limit = 32 + (isForced ? SessionBudget.maxForcedOverSeconds / 60 : 0) + floorClock / 60;
           expect(minutes, lessThanOrEqualTo(limit), reason: 'week ${w.weekNumber} ${d.name}: ${minutes.toStringAsFixed(1)}');
         }

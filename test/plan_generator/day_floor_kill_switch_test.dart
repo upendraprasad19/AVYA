@@ -120,7 +120,9 @@ void main() {
       if (fixture[e.key] != comboHash(e.value)) diffs.add(e.key);
     }
     expect(diffs, isEmpty, reason: '${diffs.length} keys differ; first 10: ${diffs.take(10).join(', ')}');
-    // The floor acts on this sample, so the floor-on pins prove something: count the keys it changes.
+    // A FIXTURE-content guard, not the live check (B-pass seat 2, finding 2-3): the sample must hold days the floor
+    // changes, or the floor-on keys pin nothing. The live check is `diffs` above: a switch ignored in either 2A path
+    // turns the main-recorded floor-off keys red there.
     var changed = 0;
     for (final k in all.keys.where((k) => k.contains('|fl_on|'))) {
       if (fixture[k] != fixture[k.replaceFirst('|fl_on|', '|fl_off|')]) changed++;

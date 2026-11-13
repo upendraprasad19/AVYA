@@ -84,8 +84,17 @@ class AllocationStats {
 
 typedef LeadSeat = ({int day, int rank, String name, int sets, String? boundBy});
 
-/// Unit 2B: one slot the 3-exercise day floor seated (see [AllocationStats.floorSeats]).
-typedef FloorSeat = ({String name, int sets, List<String> overTop, bool overClock});
+/// Unit 2B: one slot the 3-exercise day floor seated (see [AllocationStats.floorSeats]). [overBy] is each over-top
+/// group's excess this seat added (week + 2 - top at seat time, capped at the seat's 2 sets); [overSeconds] is the part of
+/// the seat's seconds that did not fit the day's remaining seconds (0 unless [overClock]).
+typedef FloorSeat = ({
+  String name,
+  int sets,
+  List<String> overTop,
+  Map<String, int> overBy,
+  bool overClock,
+  double overSeconds,
+});
 
 /// Unit 2A, R3: the three allocations each variant is tried in.
 enum _World { lead, capped, main }
@@ -796,6 +805,9 @@ class SessionSetAllocator {
       int excessAfter(_Slot s, String g) => ledger.week(g) + 2 - ledger.weeklyTop(g);
       int overCount(_Slot s) => s.groups.where((g) => excessAfter(s, g) > 0).length;
       int overSum(_Slot s) => s.groups.fold(0, (a, g) => a + (excessAfter(s, g) > 0 ? excessAfter(s, g) : 0));
+      // No count-target guard is needed: a slot is target-removed only once `seated[d] >= target[d]`, i.e. the day holds
+      // the level's count max (5 or more) in rows, and the floor acts only below 3 rows (pinned in
+      // day_floor_behavioral_test, 'the count target').
       bool canFloor(int d, _Slot s) {
         if (s.admitted || s.reserveBlocked) return false;
         for (final g in s.groups) {
@@ -823,11 +835,14 @@ class SessionSetAllocator {
             }
           }
           if (best == null) continue;
-          final overTop = [
+          final overBy = {
             for (final g in best.groups)
-              if (excessAfter(best, g) > 0) g,
-          ];
-          final overClock = seconds(best, 2) > ledger.secondsLeft(d);
+              if (excessAfter(best, g) > 0) g: excessAfter(best, g) > 2 ? 2 : excessAfter(best, g),
+          };
+          final overTop = overBy.keys.toList();
+          final left = ledger.secondsLeft(d);
+          final overClock = seconds(best, 2) > left;
+          final overSeconds = !overClock ? 0.0 : (left > 0 ? seconds(best, 2) - left : seconds(best, 2));
           best
             ..sets = 2
             ..admitted = true
@@ -835,7 +850,14 @@ class SessionSetAllocator {
             ..why = const {};
           ledger.add(d, best.groups, 2, seconds(best, 2));
           (stats.floorSeats[d] ??= []).add(
-              (name: best.exercise.exerciseName, sets: 2, overTop: overTop, overClock: overClock));
+              (
+                name: best.exercise.exerciseName,
+                sets: 2,
+                overTop: overTop,
+                overBy: overBy,
+                overClock: overClock,
+                overSeconds: overSeconds,
+              ));
           seatedAny = true;
         }
       }

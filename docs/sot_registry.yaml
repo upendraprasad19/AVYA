@@ -11371,11 +11371,12 @@ concepts:
       (budgeted and not) are under min(3, its reach) seats remaining slots at 2 sets past a group's weekly top: no excess
       limit, every phase, up to its reach, not bound by the clock; never past a session cap, never a reservation-blocked
       slot; choice SessionSetAllocator.floorPrefers (fewest groups over the top, least excess, cheapest; ties to the
-      lowest rank). AllocationStats.floorSeats names each seat (FloorSeat: name, sets, overTop, overClock); a floor seat
+      lowest rank). AllocationStats.floorSeats names each seat (FloorSeat: name, sets, overTop, overBy, overClock,
+      overSeconds); a floor seat
       is never in countForced; belowCount keeps the label pass A2 left. With Unit 2A the worlds are chosen with the floor
       off, then the chosen A and B are re-run with it (B copies the floored A and its floorSeats). Restated budget
-      invariant (test/helpers/budget_invariant_oracle.dart): week <= top + the floor's over-top sets; time <= budget +
-      countForced seconds + overClock seat seconds. Kill-switch disable_day_floor (PlanEngineFlags.dayFloorEnabled,
+      invariant (test/helpers/budget_invariant_oracle.dart): week <= top + the floor's exact over-top sets (overBy); time <=
+      budget + countForced seconds + the overClock seats' overrun (overSeconds). Kill-switch disable_day_floor (PlanEngineFlags.dayFloorEnabled,
       default ON), read by allocate unless its dayFloor argument is given, in both 2A paths; OFF equals main 8a2e1c5a
       (test/fixtures/day_floor_off_hashes.json). plan_generator.dart is not touched.
     writers:
@@ -11396,8 +11397,8 @@ concepts:
       - file: test/helpers/budget_invariant_oracle.dart
         method_or_widget: BudgetInvariantOracle (every test reader of the weekly top and the day's time)
         semantic: invariant
-      - file: test/plan_generator/day_floor_gate_test.dart
-        method_or_widget: pairs p1 / p4 and the 30-minute pinned repeat, floor on vs off, weeks 1-4
+      - file: test/helpers/day_floor_gate_lib.dart
+        method_or_widget: DayFloorGate (day_floor_gate_pairs_p1_test / _pairs_p4_test / _rep30_test, floor on vs off, weeks 1-4, the floor-off digests)
         semantic: behavioral
     contract_test_path: test/contracts/day_floor_behavioral_test.dart
 

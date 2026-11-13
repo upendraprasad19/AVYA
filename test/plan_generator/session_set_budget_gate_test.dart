@@ -354,10 +354,10 @@ void main() {
           // more than the forcing bound plus the display slack over the user's minutes.
           // When the guard also filled the day, its lead lift is subtracted too.
           final forcedSeconds = BudgetInvariantOracle.countForcedSeconds(stats?[variant], di, d.exercises, exSeconds);
-          // Unit 2B (d33, the shared oracle `budget_invariant_oracle.dart`): the day may also run over by the seconds
-          // of its `overClock` floor seats, with no bound.
+          // Unit 2B (d33, the shared oracle `budget_invariant_oracle.dart`): the day may also run over by the overrun
+          // of its `overClock` floor seats (`overSeconds`), with no bound.
           final floorClockSeconds =
-              BudgetInvariantOracle.floorOverClockSeconds(stats?[variant], di, d.exercises, exSeconds);
+              BudgetInvariantOracle.floorOverClockSeconds(stats?[variant], di);
           final guardSeconds = (lead != null && forcedDays.contains(di)) ? exSeconds(lead) : 0.0;
           // The overrun over the user's minutes is bounded by the FORCING itself (at most
           // maxForcedOverSeconds of it, B-pass P2-1 / P2-2), so a forced slot cannot mask an
