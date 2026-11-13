@@ -461,7 +461,7 @@ extension SyncServiceCoach on SyncService {
       // OI-503: the keyed restore, unless the kill switch is set (then the
       // pre-OI-503 loop below runs unchanged).
       if (_hive.configBox.get(kDisableCoachClientKeyRestore) != true) {
-        await _restoreCoachRowsKeyed(userId, rows);
+        await _applyKeyedCoachRows(userId, rows);
         return;
       }
 
@@ -535,7 +535,7 @@ extension SyncServiceCoach on SyncService {
   /// (`coach_<server ms>`). Every write re-checks the account first, and each
   /// decision (in-flight check, read, decide, put) is one synchronous slice:
   /// no await between the read of the local row and the `put(` call.
-  Future<void> _restoreCoachRowsKeyed(String userId, List rows) async {
+  Future<void> _applyKeyedCoachRows(String userId, List rows) async {
     final box = _hive.coachBox;
     final keyed = <String, List<Map<String, dynamic>>>{};
     final unkeyed = <Map<String, dynamic>>[];

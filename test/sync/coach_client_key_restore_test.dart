@@ -1,7 +1,7 @@
 // BEHAVIORAL TEST — OI-503 restore (plan docs/plans/2026-11-13-coach-chat-time-dup.md
 // section 4 C5, tests k1-k23; migration 178; diagnose d4a7c9).
 //
-// Writer: SyncService._restoreCoachInteractions -> _restoreCoachRowsKeyed
+// Writer: SyncService._restoreCoachInteractions -> _applyKeyedCoachRows
 //   (lib/core/services/sync/sync_coach.dart), which writes a cloud row that
 //   carries `client_key` back AT that key.
 // Readers: ChatHistoryNotifier.build (one bubble pair per turn) and

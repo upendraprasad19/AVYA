@@ -17,7 +17,7 @@ concept: coach_interactions
 sot_registry_entry: coach_interactions (writer _restoreCoachInteractions keyed path; writer _syncCoachInteractions key lookup + orphan client_key; cloud column client_key) and coach_client_key (new concept)
 writers:
   - file: lib/core/services/sync/sync_coach.dart
-    method: SyncServiceCoach._restoreCoachRowsKeyed (the cloud row back AT its client_key; unkeyed rows at coach_<server ms>)
+    method: SyncServiceCoach._applyKeyedCoachRows (the cloud row back AT its client_key; unkeyed rows at coach_<server ms>)
     line: 538
   - file: lib/core/services/sync/sync_coach.dart
     method: SyncServiceCoach._syncCoachInteractions (key lookup first, keyed orphan, cloud_restore rows never pushed, fresh-read stamp)
@@ -40,7 +40,7 @@ hive_key_formula: "coachBox['coach_<phone ms>'] = {id (cloud uuid once known), u
 sync_methods:
   - _syncCoachInteractions (push)
 restore_methods:
-  - _restoreCoachInteractions -> _restoreCoachRowsKeyed (kill switch configBox['disable_coach_client_key_restore'] keeps the old loop verbatim)
+  - _restoreCoachInteractions -> _applyKeyedCoachRows (kill switch configBox['disable_coach_client_key_restore'] keeps the old loop verbatim)
 cloud_table: ai_coach_interactions
 cloud_columns: [client_key, id, user_message, ai_response, model_used, created_at, channel]
 contract_test_path: test/sync/coach_client_key_restore_test.dart

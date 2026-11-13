@@ -185,9 +185,14 @@ void main() {
       expect(tip, isNotNull);
     });
 
-    test('home_provider.dart has isEmpty guard before sentences.last', () {
+    // OI-502 repoint (2026-11-13): the guarded `.last` lived in the Home coach
+    // tip (_getLatestCoachTip), which the founder removed. With the tip gone
+    // there is no `sentences.last` left in home_provider.dart to guard; this
+    // pin now keeps the unguarded read from coming back.
+    test('home_provider.dart no longer reads sentences.last (the coach tip is removed)', () {
       final src = _src('lib/features/home/providers/home_provider.dart');
-      expect(src, contains('if (sentences.isEmpty) return null;'));
+      expect(src, isNot(contains('sentences.last')));
+      expect(src, isNot(contains('_getLatestCoachTip')));
     });
   });
 

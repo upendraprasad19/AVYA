@@ -6675,7 +6675,7 @@ concepts:
           key up BEFORE the text lookup, sends client_key on the orphan only
           for a key matching ^coach_[0-9]{10,16}$ and only when the lookup did
           not throw, and stamps `id` onto a fresh read (_stampCoachCloudId).
-          The restore (_restoreCoachRowsKeyed) writes a keyed cloud row back AT
+          The restore (_applyKeyedCoachRows) writes a keyed cloud row back AT
           its key (fill rules, stale-copy delete, echo skip: plan section 4 C5);
           unkeyed rows keep coach_<server ms> with id = the cloud uuid. Kill
           switch configBox['disable_coach_client_key_restore'] keeps the old

@@ -252,6 +252,16 @@ const _declined = <String, String>{
       'the coach-memory model: pushSnapshot (sync_service.dart) parses the '
       'returned coach_memory row with CoachMemory.fromJson and mirrors it into '
       'Hive; a type, no decision',
+  'lib/features/ai_coach/repositories/coach_interaction_repository.dart':
+      'the coach chat row repository (OI-503): sync_service.dart imports it '
+      'only to call CoachInteractionRepository.clearInFlight() on an account '
+      'switch, and sync_coach.dart reads isInFlight(key); the in-flight counter '
+      'is in-memory and written by SendMessageNotifier (a feature file). The '
+      'decisions it feeds (skip a live row in the push, never fill it in the '
+      'restore) live in sync_coach.dart, which is platform; the same shape as '
+      'the pro_phase_advance.dart lock-completer read below. If the engine '
+      'ever calls a coachBox writer of this file, it stops being '
+      'declined-eligible',
   'lib/features/ai_coach/repositories/ai_coach_repository.dart':
       'builds the AI context a snapshot carries: compileDailySnapshot calls '
       'AiCoachRepository.instance.buildAiContext(); a payload builder that '
