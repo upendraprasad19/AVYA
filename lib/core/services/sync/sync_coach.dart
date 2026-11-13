@@ -369,14 +369,24 @@ extension SyncServiceCoach on SyncService {
               DateTime.now().toUtc().subtract(const Duration(minutes: 5));
           final existing = await _supabase.client
               .from('ai_coach_interactions')
-              .select('id, channel, created_at')
+              // OI-503 B-pass A-F1: read the hit's key too, when the
+              // column is known to exist (a failed key lookup means it may
+              // not, and naming it would fail this lookup as well).
+              .select(sendKey && !keyLookupFailed
+                  ? 'id, channel, created_at, client_key'
+                  : 'id, channel, created_at')
               .eq('user_id', userId)
               .eq('user_message', userMsg.substring(
                   0, userMsg.length > 500 ? 500 : userMsg.length))
               .gte('created_at', cutoff.toIso8601String())
               .limit(1)
               .maybeSingle();
-          if (existing != null) {
+          // OI-503 B-pass A-F1: a text hit that carries ANOTHER turn's key
+          // is that turn, not this one (the same words re-sent: a failed K1,
+          // then K2 succeeded). Stamping its id here would mark K1 synced
+          // under K2's cloud id; K1 goes up as its own (keyed) orphan instead.
+          final hitKey = existing?['client_key'];
+          if (existing != null && !(hitKey is String && hitKey != key)) {
             // Server already has a row for this turn (any channel) — drop
             // the orphan write. Stamp the Hive entry with the cloud id
             // so future cold restores collapse cleanly on the
@@ -630,9 +640,12 @@ extension SyncServiceCoach on SyncService {
 
     for (final map in unkeyed) {
       if (ownerChangedSince(userId)) return;
+      // B-pass A-F3: an unkeyed row with no parseable instant is never an
+      // echo (a keyed row without one fingerprints as `text|null`).
       if (map['client_key'] == null &&
+          _coachRowInstant(map) != null &&
           keyedFingerprints.contains('${coachTurnText(map['user_message'] as String?)}|'
-              '${_coachRowInstant(map)?.millisecondsSinceEpoch}')) {
+              '${_coachRowInstant(map)!.millisecondsSinceEpoch}')) {
         continue;
       }
       final hiveKey = coachUnkeyedRestoreKey(map);

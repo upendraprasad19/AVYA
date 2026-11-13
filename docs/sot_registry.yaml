@@ -6393,7 +6393,7 @@ concepts:
           label is what dedupDecision reads on the next request):
           supabase/functions/_shared/row_model_label_test.ts.
       - file: lib/core/services/sync/sync_coach.dart
-        line_range: 448-644
+        line_range: 458-657
         method: "`_restoreCoachInteractions` (SyncServiceCoach extension)"
         notes: |
           Plan-review round 1 finding, same diagnose — the RESTORE-path twin
@@ -6659,7 +6659,7 @@ concepts:
           Nightly walks of coachBox.values to extract facts +
           patterns into coaching_notes singleton + memory_embeddings.
       - file: lib/core/services/sync/sync_coach.dart
-        line_range: 289-644
+        line_range: 289-657
         method: _syncCoachInteractions (push) + _restoreCoachInteractions (pull)
         semantic: pass-through
         fields_read: [<all interaction fields>]
@@ -6672,7 +6672,8 @@ concepts:
           turn's identity on both sides. ai-proxy / ai-media-proxy store it as
           ai_coach_interactions.client_key. The push skips cloud_restore rows
           and rows in flight (CoachInteractionRepository.isInFlight), looks the
-          key up BEFORE the text lookup, sends client_key on the orphan only
+          key up BEFORE the text lookup (which never stamps a hit carrying
+          ANOTHER turn's key, B-pass A-F1), sends client_key on the orphan only
           for a key matching ^coach_[0-9]{10,16}$ and only when the lookup did
           not throw, and stamps `id` onto a fresh read (_stampCoachCloudId).
           The restore (_applyKeyedCoachRows) writes a keyed cloud row back AT
@@ -7094,7 +7095,7 @@ concepts:
           cloud column 'coach_notes' (different word). Before this
           projection the column was 100% NULL across all users.
       - file: lib/core/services/sync/sync_coach.dart
-        line_range: 413-421
+        line_range: 669-725
         method: _restoreCoachMemory downward sync
         semantic: pass-through
         fields_read: [coach_notes]
@@ -7850,7 +7851,7 @@ concepts:
           Server-side reader. Pulls coach_memory.coach_notes for the
           nightly summary prompt context.
       - file: lib/core/services/sync/sync_coach.dart
-        line_range: 413-421
+        line_range: 669-725
         method: _restoreCoachMemory (downward pull)
         semantic: pass-through
         fields_read: [coach_notes]
@@ -8124,7 +8125,7 @@ concepts:
     reader_manifest_complete: true
     readers:
       - file: lib/core/services/sync/sync_coach.dart
-        line_range: 289-644
+        line_range: 289-443
         method: _syncCoachInteractions (push side cross-channel dedup)
         semantic: flag-check
         fields_read: [id, channel, user_message, created_at]
@@ -15027,7 +15028,7 @@ concepts:
       proactive channel can't repeat the same silent drop.
     writers:
       - file: lib/core/services/sync/sync_coach.dart
-        line_range: 448-644
+        line_range: 458-657
         method: _restoreCoachInteractions
         notes: pulls ALL ai_coach_interactions rows for the user, no channel filter of its own — the filter lives entirely on the render side.
     readers:

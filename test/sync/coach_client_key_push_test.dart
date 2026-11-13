@@ -133,7 +133,9 @@ void main() {
     await push();
     expect(h.server.pagedErrors.any((e) => e.contains('client_key')), isTrue,
         reason: 'precondition: the key lookup failed on the missing column');
-    expect(reads().any((r) => r.query['user_message'] == 'eq.q'), isTrue);
+    final textLookup = reads().firstWhere((r) => r.query['user_message'] == 'eq.q');
+    expect(textLookup.query['select'], isNot(contains('client_key')),
+        reason: 'a database without the column would fail the text lookup too');
     final row = _bodyRow(writes().single.body);
     expect(row.containsKey('client_key'), isFalse);
   });
@@ -192,6 +194,23 @@ void main() {
     };
     await push();
     expect(box().get(_k), isNull);
+  });
+
+  test('p10: a text hit that carries ANOTHER turn\'s key is not stamped; this turn goes up as its own keyed orphan (B-pass A-F1)',
+      () async {
+    const k2 = 'coach_1763000020000';
+    h.server.pagedTables['ai_coach_interactions'] = [
+      _serverRow(key: k2, at: DateTime.now().toUtc().subtract(const Duration(minutes: 1))),
+    ];
+    await seed(_k); // K1: same words, its own send never reached the server
+    await push();
+    expect(reads()[1].query['select'], contains('client_key'),
+        reason: 'the text lookup must read the hit\'s key to tell the turns apart');
+    expect((box().get(_k) as Map)['id'], isNot(_cloudId),
+        reason: 'K2\'s cloud id must not be stamped onto K1');
+    final row = _bodyRow(writes().single.body);
+    expect(row['client_key'], _k);
+    expect(row['channel'], 'in_app_orphan');
   });
 
   test('p9: a cloud_restore row with a non-uuid id (old restore loop) is neither looked up nor upserted',

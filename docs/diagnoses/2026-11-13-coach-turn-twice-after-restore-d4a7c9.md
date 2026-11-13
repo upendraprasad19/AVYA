@@ -135,7 +135,7 @@ See `proposed_fix` above and the plan, section 4 (rev 3.3, converged after five 
 ## Mutation evidence (rule 21)
 Each mutant was applied by exact-string replacement with a count check (exactly one match, else NOT APPLIED), its test
 files were run under `TZ=Asia/Kolkata`, and the file was restored and checked by sha256. Script `mut503.py` in the
-session scratchpad. 40 mutants of the client, server and SQL, 39 red, 1 equivalent (C6).
+session scratchpad. 44 mutants of the client, server and SQL, 43 red, 1 equivalent (C6).
 
 | id | mutation | result |
 |---|---|---|
@@ -175,4 +175,8 @@ session scratchpad. 40 mutants of the client, server and SQL, 39 red, 1 equivale
 | E2 | ai-media-proxy's analysis insert drops it | RED 1 (Dart pin) |
 | E3 | ai-media-proxy's image paywall insert drops it | RED 1 (Deno paywall test) |
 | E4 | `sanitizeClientKey` unanchored | RED (Deno `client_key_test.ts`) |
+| P9 | (B-pass A-F1) the push stamps a text hit carrying another turn's key | RED 1 (p10) |
+| P10 | (B-pass A-F1) the text lookup never reads the hit's key | RED 1 (p10, request shape) |
+| P11 | (B-pass A-F1) the text lookup names `client_key` even after a failed key lookup | RED 1 (p5) |
+| R17 | (B-pass A-F3) the echo skip ignores a missing instant | RED 1 (k24) |
 | M1-M4 | migration 178: CHECK removed / unanchored / index removed / `RESET` removed | RED 6 / 2 / 2 / 1 (`test/sql/coach_client_key_local.sh`) |

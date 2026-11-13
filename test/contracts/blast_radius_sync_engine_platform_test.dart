@@ -259,7 +259,13 @@ const _declined = <String, String>{
       'is in-memory and written by SendMessageNotifier (a feature file). The '
       'decisions it feeds (skip a live row in the push, never fill it in the '
       'restore) live in sync_coach.dart, which is platform; the same shape as '
-      'the pro_phase_advance.dart lock-completer read below. If the engine '
+      'the pro_phase_advance.dart lock-completer read below. The counter IS '
+      'a correctness input to those decisions (B-pass F1): a change to '
+      'beginInFlight / endInFlight / isInFlight / clearInFlight semantics can '
+      'make the restore fill a live turn or the push skip a row, so such an '
+      'edit takes the platform pipeline by hand (its tests are '
+      'test/sync/coach_client_key_restore_test.dart k3, k19 and '
+      'test/ai_coach/coach_client_key_request_test.dart). If the engine '
       'ever calls a coachBox writer of this file, it stops being '
       'declined-eligible',
   'lib/features/ai_coach/repositories/ai_coach_repository.dart':

@@ -5,6 +5,8 @@ blast_radius: platform
 review_rounds: 5
 ground_truth_verified: true
 verdict: converged
+bpass: accepted
+bpass_review: docs/reviews/coach-chat-time-dup-bpass.md
 ---
 
 # Plan-review record: coach chat times, duplicate turns, Home tip removal
@@ -42,3 +44,9 @@ test p9. Four P3s taken: the Retry branch opens its `try` at `beginInFlight`; `o
 slice ends at the `put(` call; `RESET lock_timeout`; `client_key` only for a key matching the CHECK regex.
 
 Rounds 3, 4 and 5 found no P0; rounds 4 and 5 found no P1, and round 5 found no new mechanism class.
+
+## B-pass (code review of the CI-green head e0944a4b)
+Two fresh Sonnet seats, `docs/reviews/coach-chat-time-dup-bpass.md`: no P0 or P1. One P2 fixed (the push's text lookup
+no longer stamps a hit that carries another turn's key), three P3 fixed (two registry ranges stale since main, an echo
+fingerprint without an instant, the blast-radius decline reason), three answered without a change (deploy order is plan
+C7; the gate anchor; one range measured correct). Each fix mutated: P9, P10, P11, R17 red.

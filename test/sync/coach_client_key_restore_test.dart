@@ -377,6 +377,16 @@ void main() {
       expect(kCoachRowKeyPattern.hasMatch('coach_1a2b3c'), isFalse);
     });
 
+    test('k24: a keyed row and an unkeyed row that BOTH lack a parseable created_at are not an echo (B-pass A-F3)',
+        () async {
+      final keyed = _cloud(n: 1)..['created_at'] = 'not-a-date';
+      final unkeyed = _cloud(n: 2, key: null)..['created_at'] = 'also-bad';
+      await restore([keyed, unkeyed]);
+      expect(box().get(coachUnkeyedRestoreKey(unkeyed)), isNotNull,
+          reason: 'no instant on either side: no fingerprint, so the row is written');
+      expect(box().get(_k), isNotNull);
+    });
+
     test('k22b: a cloud row with an unparseable created_at never deletes a coach_<hex> row', () async {
       final cloud = _cloud(n: 1)..['created_at'] = 'not-a-date';
       final hexKey = coachUnkeyedRestoreKey(cloud);
