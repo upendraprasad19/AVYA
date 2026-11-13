@@ -15,7 +15,6 @@ import 'package:icanbefitter/core/services/write_result.dart';
 // and is now invoked from DayRolloverObserver / splash, not from
 // StreakFreezeNotifier.build().
 import 'package:icanbefitter/core/services/workout_schedule_service.dart';
-import 'package:icanbefitter/core/utils/date_utils.dart';
 import 'package:icanbefitter/core/utils/ist_date.dart';
 import 'package:icanbefitter/core/services/badge_service.dart';
 import 'package:icanbefitter/shared/repositories/user_repository.dart';
@@ -681,23 +680,19 @@ class AiInsightNotifier extends Notifier<String?> {
   @override
   String? build() {
     ref.watch(authUserIdTokenProvider); // c4055a — rebuild on auth change
-    final now = DateTime.now();
 
-    // 1. Always compute insight from LOCAL schedule data (source of truth).
+    // Computed from LOCAL schedule data (source of truth).
     // Diagnose c7e3a9 (recurrence of b3c9d4) — WATCH today's row instead of
     // reading it: a ref.read here refreshed only when a writer ALSO
     // remembered to invalidate aiInsightProvider, and the day-swap batch and
     // ~15 other writers did not. Every writer already refreshes the Today
     // card via todayWorkoutProvider, so the insight now follows it.
-    final insight = _computeScheduleInsight(ref.watch(todayWorkoutProvider));
-
-    // 2. Optionally append a coach tip from today's latest AI interaction
-    final coachTip = _getLatestCoachTip(now);
-    if (coachTip != null) {
-      return '$insight\n💡 $coachTip';
-    }
-
-    return insight;
+    //
+    // OI-502 (founder decision 2026-11-13): the "💡" coach tip that used to be
+    // appended here (the last sentence of today's latest coach reply) is
+    // removed. Measured over every reply of the 60 days before: it never
+    // produced a tip, only follow-up questions, error lines and sign-offs.
+    return _computeScheduleInsight(ref.watch(todayWorkoutProvider));
   }
 
   /// Build insight from today's schedule row (as read by todayWorkoutProvider,
@@ -717,37 +712,6 @@ class AiInsightNotifier extends Notifier<String?> {
       }
     }
     return 'No workout scheduled for today. A good day for active recovery!';
-  }
-
-  /// Extract a short tip from the latest AI coach response today.
-  /// Returns the last sentence (≤80 chars) or null.
-  String? _getLatestCoachTip(DateTime now) {
-    final coachBox = HiveService.instance.coachBox;
-    final todayPrefix = formatDateKey(now);
-    String? latestResponse;
-    String latestDate = '';
-
-    for (final raw in coachBox.values) {
-      if (raw is! Map) continue;
-      final interaction = Map<String, dynamic>.from(raw);
-      final createdAt = interaction['created_at'] as String? ?? '';
-      if (!createdAt.startsWith(todayPrefix)) continue;
-      if (interaction['failed'] == true) continue;
-      final response = interaction['ai_response'] as String?;
-      if (response != null && createdAt.compareTo(latestDate) > 0) {
-        latestDate = createdAt;
-        latestResponse = response;
-      }
-    }
-
-    if (latestResponse == null) return null;
-
-    // Extract last sentence as a concise tip — skip if it's too long
-    final sentences = latestResponse.split(RegExp(r'[.!?]\s+'));
-    if (sentences.isEmpty) return null;
-    final tip = sentences.last.trim();
-    if (tip.length > 80 || tip.length < 10) return null;
-    return tip;
   }
 }
 

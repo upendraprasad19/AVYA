@@ -83,6 +83,7 @@ import { istDateStr } from "../_shared/ist_date.ts";
 import { reportGeminiExhaustion } from "../_shared/gemini_failure_alert.ts";
 import { validateAiProxyInput } from "../_shared/ai_proxy_input_limits.ts";
 import { dedupDecision } from "../_shared/chat_dedup.ts";
+import { sanitizeClientKey } from "../_shared/client_key.ts";
 import {
   type AiTier,
   chatCapFor,
@@ -335,6 +336,7 @@ serve(async (req: Request) => {
       image_base64,
       history,
       client_capabilities,
+      client_key,
     } = body;
     // Unit 3 (day-swapper-sync-load) — CLIENT-CONTROLLED, so validated
     // defensively before it ever reaches a tool filter or a prompt block.
@@ -910,6 +912,10 @@ Rules: identify every distinct food product, use ACCURATE nutrition values from 
         ai_response: "",
         model_used: "pending",
         tokens_used: 0,
+        // OI-503: the phone's key of this turn, so the restore writes the row
+        // back at that key (one turn, one local row). A malformed or absent key
+        // is null, and the reservation goes ahead unkeyed.
+        client_key: sanitizeClientKey(client_key),
       })
       .select("id")
       .single();

@@ -36,6 +36,46 @@ class CoachInteractionRepository {
 
   final HiveService _hive = HiveService.instance;
 
+  // ── OI-503: turns whose send is still running ─────────────────────────
+  //
+  // A COUNTER per chat row key, not a set: the 60 s dedup
+  // (`_findRecentDuplicateMessageKey` skips only failed rows) can hand two
+  // live sends the SAME pending key, and a set would release the key when
+  // the first send ends. `SendMessageNotifier` begins a key right after it is
+  // known and ends it in a `finally` after the last Hive write; the cloud
+  // restore and the push read [isInFlight] so they never write into, or push,
+  // a turn whose reply the live send is about to write itself. An app restart
+  // empties the map (no send is live then); `SyncService._onUserChanged`
+  // clears it on an account switch. Plan
+  // docs/plans/2026-11-13-coach-chat-time-dup.md section 4 (C3).
+  static final Map<String, int> _inFlight = <String, int>{};
+
+  /// Counts one more live send of [key].
+  static void beginInFlight(String key) =>
+      _inFlight[key] = (_inFlight[key] ?? 0) + 1;
+
+  /// Releases one live send of [key]. A key that is not counted (cleared by
+  /// an account switch while the send's `finally` was pending) is a no-op:
+  /// the count never goes negative.
+  static void endInFlight(String key) {
+    final n = _inFlight[key];
+    if (n == null) return;
+    if (n <= 1) {
+      _inFlight.remove(key);
+    } else {
+      _inFlight[key] = n - 1;
+    }
+  }
+
+  /// True while at least one send of [key] is live.
+  static bool isInFlight(String key) => (_inFlight[key] ?? 0) > 0;
+
+  /// Forgets every live send (account switch).
+  static void clearInFlight() => _inFlight.clear();
+
+  @visibleForTesting
+  static int inFlightCountForTests(String key) => _inFlight[key] ?? 0;
+
   /// Saves an AI interaction to coachBox.
   Future<String> saveInteraction({
     required String userMessage,
@@ -286,7 +326,7 @@ class CoachInteractionRepository {
               interaction['refunded'] == true)) {
         continue;
       }
-      if (createdAt.startsWith(todayStr) &&
+      if (isIsoOnIstDay(createdAt, todayStr) &&
           hasUserMsg != null &&
           hasUserMsg.isNotEmpty) {
         count++;

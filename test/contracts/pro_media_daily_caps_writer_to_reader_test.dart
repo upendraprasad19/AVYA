@@ -244,7 +244,7 @@ void main() {
           reason: 'the one remaining site must be POST-fetch, on the server-verified type');
       expect(sites[0], lessThan(RegExp(r'const proQuotaKey\s*=').firstMatch(src)!.start),
           reason: 'the paywall precedes the key derivation and the consume');
-      expect(_count(src, 'return await videoPaywallReply(supabaseClient, userId, message, media_url);'), 1);
+      expect(_count(src, 'return await videoPaywallReply(supabaseClient, userId, message, media_url, clientKey);'), 1);
       expect(_count(src, 'gate_reason: "video_pro_only"'), 1);
       expect(_count(src, 'channel: "video_paywall"'), 1);
     });
@@ -266,7 +266,7 @@ void main() {
               'site (claim=video, served=image) are both required');
       expect(sites[0], lessThan(fetchCall), reason: 'the fast path runs before the Storage fetch');
       expect(sites[1], greaterThan(fetchCall), reason: 'the mirror runs after reconciliation');
-      expect(_count(src, 'await checkFreeImageQuota(supabaseClient, userId, media_url, media_type, message)'), 2,
+      expect(_count(src, 'await checkFreeImageQuota(supabaseClient, userId, media_url, media_type, message, clientKey)'), 2,
           reason: 'both sites delegate to the ONE helper, so the reply, the log row and the '
               'gate_reasons cannot drift between them');
     });
