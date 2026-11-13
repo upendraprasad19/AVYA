@@ -66,6 +66,13 @@ void main() {
       .where((r) => r.method == 'GET' && r.table == 'ai_coach_interactions')
       .toList();
   List<StubRequest> writes() => h.server.writesTo('ai_coach_interactions');
+  // OI-505: the push now reads up to three times per unlinked turn: the key
+  // lookup, step 1 (a created_at RANGE: gte and lte), step 2 (the old text
+  // lookup: one created_at bound).
+  bool isStep1(StubRequest r) =>
+      r.queryAll['user_message'] != null && (r.queryAll['created_at']?.length ?? 0) == 2;
+  bool isStep2(StubRequest r) =>
+      r.queryAll['user_message'] != null && (r.queryAll['created_at']?.length ?? 0) == 1;
 
   test('p1: a keyed cloud row stamps the local row, and nothing is upserted', () async {
     h.server.pagedTables['ai_coach_interactions'] = [_serverRow()];
@@ -83,8 +90,11 @@ void main() {
     ];
     await seed(_k);
     await push();
-    expect(reads(), hasLength(2));
-    expect(reads()[1].query['user_message'], 'eq.q');
+    expect(reads(), hasLength(3),
+        reason: 'the key lookup, step 1 (anchored to the 2025 key: a miss), step 2');
+    expect(isStep1(reads()[1]), isTrue);
+    expect(isStep2(reads()[2]), isTrue);
+    expect(reads()[2].query['user_message'], 'eq.q');
     expect(writes(), isEmpty);
     expect((box().get(_k) as Map)['id'], _cloudId);
   });
@@ -133,9 +143,12 @@ void main() {
     await push();
     expect(h.server.pagedErrors.any((e) => e.contains('client_key')), isTrue,
         reason: 'precondition: the key lookup failed on the missing column');
-    final textLookup = reads().firstWhere((r) => r.query['user_message'] == 'eq.q');
-    expect(textLookup.query['select'], isNot(contains('client_key')),
-        reason: 'a database without the column would fail the text lookup too');
+    for (final textLookup in reads().where((r) => r.query['user_message'] == 'eq.q')) {
+      expect(textLookup.query['select'], isNot(contains('client_key')),
+          reason: 'a database without the column would fail the text lookup too');
+      expect(textLookup.query.containsKey('client_key'), isFalse,
+          reason: 'step 1 must not filter on the missing column either');
+    }
     final row = _bodyRow(writes().single.body);
     expect(row.containsKey('client_key'), isFalse);
   });
@@ -204,7 +217,7 @@ void main() {
     ];
     await seed(_k); // K1: same words, its own send never reached the server
     await push();
-    expect(reads()[1].query['select'], contains('client_key'),
+    expect(reads().firstWhere(isStep2).query['select'], contains('client_key'),
         reason: 'the text lookup must read the hit\'s key to tell the turns apart');
     expect((box().get(_k) as Map)['id'], isNot(_cloudId),
         reason: 'K2\'s cloud id must not be stamped onto K1');

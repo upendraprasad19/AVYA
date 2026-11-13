@@ -7,6 +7,7 @@ import 'package:icanbefitter/core/constants/body_measurement_sites.dart';
 import 'package:icanbefitter/core/constants/body_measurement_specs.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:icanbefitter/core/constants/app_constants.dart';
+import 'package:icanbefitter/core/services/coach_call_budget.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
 import 'package:icanbefitter/core/services/completion_prompt_store.dart';
 import 'package:icanbefitter/core/services/coach_chat_clear.dart';
@@ -15,6 +16,7 @@ import 'package:icanbefitter/features/train/services/workout_completion_bookkeep
 import 'package:icanbefitter/core/services/migrated_key.dart';
 import 'package:icanbefitter/core/services/prediction_service.dart';
 import 'package:icanbefitter/core/services/error_telemetry.dart';
+import 'package:icanbefitter/core/services/ai_service.dart' show AiChatResponse;
 import 'package:icanbefitter/core/services/service_providers.dart';
 import 'package:icanbefitter/core/services/supabase_service.dart';
 import 'package:icanbefitter/core/utils/ist_date.dart';
@@ -719,13 +721,23 @@ class SendMessageNotifier extends Notifier<bool> {
     try {
       final context = repo.buildAiContext();
 
-      final aiResponse = await ref.read(aiServiceProvider).chatWithMedia(
-        captionForLog,
-        mediaUrl,
-        mediaType,
-        context,
-        clientKey: coachKey,
-      );
+      // OI-505 fix 2: a photo turn is bounded too (120 s), and an abandoned
+      // call stops sending (the budget).
+      final mediaBudget = CoachCallBudget();
+      final aiResponse = await ref
+          .read(aiServiceProvider)
+          .chatWithMedia(
+            captionForLog,
+            mediaUrl,
+            mediaType,
+            context,
+            clientKey: coachKey,
+            budget: mediaBudget,
+          )
+          .timeout(CoachCallBudget.effectiveMediaTimeout, onTimeout: () {
+        mediaBudget.expired = true;
+        throw TimeoutException('coach photo call timed out');
+      });
 
       // A2a (2026-09-21) — strip a JSON/YAML-shaped Gemini reply before it
       // ever reaches the chat bubble. The Hive-persisted copy below keeps
@@ -808,7 +820,13 @@ class SendMessageNotifier extends Notifier<bool> {
           errStr2.contains("error_type: 'storage'") ||
           errStr2.contains('error_type":"storage"') ||
           errStr2.contains('Only Supabase Storage URLs are allowed');
-      if (errStr2.contains('Failed host lookup') || errStr2.contains('SocketException')) {
+      // OI-505: classified by TYPE: a TimeoutException's text can carry digits
+      // that match the status substrings below. The photo may still be analysed
+      // on the server (a free user's 5-image meter spends a unit per attempt).
+      if (e is TimeoutException) {
+        errorMsg =
+            'The photo is taking too long. It may still be analysed, so check the chat in a minute before sending it again.';
+      } else if (errStr2.contains('Failed host lookup') || errStr2.contains('SocketException')) {
         errorMsg = 'No internet connection. Please check your network and try again.';
       } else if (errStr2.contains('Image too large') || errStr2.contains('max 5242880')) {
         errorMsg = 'That photo is too large (max 5 MB). Please pick a smaller one or retake at lower resolution.';
@@ -947,6 +965,38 @@ class SendMessageNotifier extends Notifier<bool> {
     }
   }
 
+  /// OI-505 test seam: replaces the session refresh before an auth re-send.
+  @visibleForTesting
+  static Future<void> Function()? refreshSessionOverride;
+
+  /// OI-505 fix 2 and 4: ONE bounded send of the chat call. The primary send
+  /// and the auth re-send both go through it, so both carry the turn's key, its
+  /// history and the Retry marker (`clientRetry`, true only when the user
+  /// pressed Retry on this turn's own bubble), and both are bounded by
+  /// [timeout]. On timeout the call's [CoachCallBudget] is marked expired, so
+  /// the abandoned call sends nothing more, and a [TimeoutException] is thrown.
+  Future<AiChatResponse> _chatBounded(
+    String message,
+    Map<String, dynamic> context, {
+    required List<Map<String, dynamic>>? history,
+    required String coachKey,
+    required bool isRetry,
+    required Duration timeout,
+  }) {
+    final budget = CoachCallBudget();
+    return ref
+        .read(aiServiceProvider)
+        .chat(message, context,
+            history: history,
+            clientKey: coachKey,
+            clientRetry: isRetry,
+            budget: budget)
+        .timeout(timeout, onTimeout: () {
+      budget.expired = true;
+      throw TimeoutException('coach chat call timed out');
+    });
+  }
+
   /// The rest of [_sendBody] once the turn's key is known and counted in
   /// flight (OI-503). Its body is unchanged from before the split.
   Future<void> _sendKeyed(
@@ -1004,6 +1054,10 @@ class SendMessageNotifier extends Notifier<bool> {
     }
 
 
+    // OI-505 fix 2: ONE stopwatch for the whole turn, the auth re-send in the
+    // catch included (a hard 90 s deadline, see [CoachCallBudget]).
+    final turnWatch = Stopwatch()..start();
+    var resendTimedOut = false;
     try {
       // Build FULL context from all Hive boxes via repository,
       // then enrich with historical data if the message is a historical query.
@@ -1013,9 +1067,14 @@ class SendMessageNotifier extends Notifier<bool> {
       // Single Gemini-backed endpoint (ai-proxy) handles both free + PRO
       // 2026-04-18 onward. Free/PRO differentiation is the server-side daily
       // cap (free 7 / PRO 20, `_shared/ai_limits.ts`; no trial) — the client no longer picks a backend.
-      final aiResponse = await ref
-          .read(aiServiceProvider)
-          .chat(message, context, history: coachHistory, clientKey: coachKey);
+      final aiResponse = await _chatBounded(
+        message,
+        context,
+        history: coachHistory,
+        coachKey: coachKey,
+        isRetry: existingCoachKey != null,
+        timeout: CoachCallBudget.effectiveChatTimeout,
+      );
 
       // Replace loading with actual response
       // A2a (2026-09-21) — strip a JSON/YAML-shaped Gemini reply before it
@@ -1074,14 +1133,23 @@ class SendMessageNotifier extends Notifier<bool> {
 
       // Detect session/auth errors — refresh token and auto-retry ONCE.
       // Single inline retry (not recursive) prevents the old infinite-loop bug.
-      final isAuthError = errStr.contains('No active session') ||
-          errStr.contains('401') || errStr.contains('unauthorized') ||
-          errStr.contains('jwt') || errStr.contains('Session expired');
+      //
+      // OI-505: a TimeoutException is classified by TYPE, never by its text (a
+      // Duration prints digits such as `0:00:40.140123`, which contain `401`),
+      // and an auth error that arrives after 60 s is not re-sent: the whole
+      // turn stays inside the 90 s deadline.
+      final isTimeout = e is TimeoutException;
+      final isAuthError = !isTimeout &&
+          (errStr.contains('No active session') ||
+              errStr.contains('401') || errStr.contains('unauthorized') ||
+              errStr.contains('jwt') || errStr.contains('Session expired'));
 
-      if (isAuthError) {
+      if (isAuthError && turnWatch.elapsed <= CoachCallBudget.effectiveLatestAuthResend) {
         debugPrint('[AiCoachProvider] Auth error detected, refreshing token + auto-retry...');
         try {
-          await SupabaseService.instance.client.auth.refreshSession();
+          await (refreshSessionOverride?.call() ??
+                  SupabaseService.instance.client.auth.refreshSession())
+              .timeout(CoachCallBudget.effectiveAuthRefreshTimeout);
           debugPrint('[AiCoachProvider] Hard refresh succeeded — retrying once...');
 
           // Single inline retry after successful token refresh.
@@ -1093,10 +1161,14 @@ class SendMessageNotifier extends Notifier<bool> {
           // A7 / B5 D9-D10 — canonical provider path.
           // Unit 2 — the retry MUST carry the same history as the primary send
           // (else a token-refresh retry silently drops conversation continuity).
-          final retryResponse = await ref
-              .read(aiServiceProvider)
-              .chat(message, retryEnriched,
-                  history: coachHistory, clientKey: coachKey);
+          final retryResponse = await _chatBounded(
+            message,
+            retryEnriched,
+            history: coachHistory,
+            coachKey: coachKey,
+            isRetry: existingCoachKey != null,
+            timeout: CoachCallBudget.resendTimeout(turnWatch.elapsed),
+          );
 
           // Retry succeeded — update UI and return
           // A2a (2026-09-21) — same guard as the primary send path above;
@@ -1138,6 +1210,9 @@ class SendMessageNotifier extends Notifier<bool> {
           return; // Success — skip error message below
         } catch (retryErr) {
           debugPrint('[AiCoachProvider] Auto-retry after refresh failed: $retryErr');
+          // OI-505: a re-send (or its refresh) that timed out shows the timeout
+          // copy, not the original auth error's text.
+          resendTimedOut = retryErr is TimeoutException;
           // Fall through to error message
         }
       }
@@ -1149,7 +1224,14 @@ class SendMessageNotifier extends Notifier<bool> {
       unawaited(ErrorTelemetry.logEvent('ai_coach_send_message_apology_shown',
           message: clipped));
       final String errorMsg;
-      if (errStr.contains('Failed host lookup') ||
+      if (isTimeout || resendTimedOut) {
+        errorMsg = 'The coach took too long to answer. Tap Retry to ask again.';
+      } else if (errStr.contains('in_progress')) {
+        // OI-505 fix 4: the server is still working on this turn (a Retry sent
+        // while the first run was pending). Matched BEFORE the 502/503/504
+        // branch below, which would show it as "temporarily unavailable".
+        errorMsg = 'The coach is still working on your last message. Tap Retry in a moment.';
+      } else if (errStr.contains('Failed host lookup') ||
           errStr.contains('Failed to fetch') ||
           errStr.contains('SocketException')) {
         errorMsg = 'No internet connection. Please check your network and try again.';

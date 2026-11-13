@@ -1038,7 +1038,7 @@ concepts:
           _compactContext before serialising. Pre-compaction sites
           would 400 on the 10K server limit for historical queries.
       - file: lib/features/ai_coach/providers/ai_coach_provider.dart
-        line_range: 417-717
+        line_range: 419-719
         method: SendMessageNotifier._sendMessage retry path + media path
         semantic: pass-through
         fields_read: [<full context map>]
@@ -6393,7 +6393,7 @@ concepts:
           label is what dedupDecision reads on the next request):
           supabase/functions/_shared/row_model_label_test.ts.
       - file: lib/core/services/sync/sync_coach.dart
-        line_range: 458-657
+        line_range: 617-816
         method: "`_restoreCoachInteractions` (SyncServiceCoach extension)"
         notes: |
           Plan-review round 1 finding, same diagnose — the RESTORE-path twin
@@ -6418,7 +6418,7 @@ concepts:
         line_range: 171-176
         method: recentHistoryExchanges (shim forwarder)
       - file: lib/features/ai_coach/providers/ai_coach_provider.dart
-        line_range: 871-1193
+        line_range: 889-1275
         method: |
           SendMessageNotifier.send — assembles history ONCE (kill-switched) and
           threads it into BOTH chat() call sites (primary :948 + auth-retry :1028),
@@ -6527,7 +6527,7 @@ concepts:
     reader_manifest_complete: true
     readers:
       - file: lib/features/ai_coach/providers/ai_coach_provider.dart
-        line_range: 172-361
+        line_range: 174-363
         method: build
         semantic: filter
         fields_read: [created_at, kind]
@@ -6601,7 +6601,7 @@ concepts:
           Forwarder retained for back-compat with existing callers
           in main.dart / ai_coach_provider.dart / sync_service.dart.
       - file: lib/features/ai_coach/providers/ai_coach_provider.dart
-        line_range: 871-1193
+        line_range: 889-1275
         method: "`send` (SendMessageNotifier)"
         notes: |
           R3 (2026-07-07): was mislabeled `_sendMessage` (476-500, a method
@@ -6621,7 +6621,7 @@ concepts:
     reader_manifest_complete: true
     readers:
       - file: lib/features/ai_coach/providers/ai_coach_provider.dart
-        line_range: 172-361
+        line_range: 174-363
         method: ChatHistoryNotifier.build (chat scroll buffer)
         semantic: historical-series
         fields_read: [created_at, user_message, ai_response, model_used, channel, tool_calls, media_url, media_type, media_storage_path, media_save_state]
@@ -6659,7 +6659,7 @@ concepts:
           Nightly walks of coachBox.values to extract facts +
           patterns into coaching_notes singleton + memory_embeddings.
       - file: lib/core/services/sync/sync_coach.dart
-        line_range: 289-657
+        line_range: 361-816
         method: _syncCoachInteractions (push) + _restoreCoachInteractions (pull)
         semantic: pass-through
         fields_read: [<all interaction fields>]
@@ -6684,6 +6684,19 @@ concepts:
           test/sync/coach_client_key_restore_test.dart,
           test/sync/coach_client_key_push_test.dart,
           test/ai_coach/coach_client_key_request_test.dart.
+          OI-505 (diagnoses b7e1f3, c8f2a4, d9a3b5): the push's text lookup is
+          two steps. Step 1 is anchored to the instant the key encodes
+          (coachTurnInstantFromKey; created_at -5 min to +10 min, rows with no
+          client_key only, up to 10 read, the nearest wins; kill switch
+          configBox['disable_coach_turn_time_window']); step 2 is the old
+          now - 5 min query. A turn linked hours late therefore stamps its
+          server row instead of uploading a keyed duplicate. The notifier
+          bounds every coach call (CoachCallBudget: chat 75 s, photo 120 s,
+          turn 90 s) and the Retry of a finished turn is replayed by ai-proxy
+          (concept coach_keyed_retry_replay). Tests
+          test/sync/coach_late_link_test.dart,
+          test/ai_coach/coach_chat_timeout_test.dart,
+          test/core/coach_call_budget_test.dart.
     reader_allow_files:
       # 'coach_memory' is a sibling singleton key in coachBox (NOT a
       # coach_* interaction row). These callers read coach_memory, not
@@ -6780,7 +6793,7 @@ concepts:
           (returns success WITHOUT rewriting when already 'completed') + stamps
           completed_via on the schedule + wlog rows.
       - file: lib/features/ai_coach/providers/ai_coach_provider.dart
-        line_range: 392-421
+        line_range: 394-423
         method: completeWorkoutFromPrompt
         notes: |
           Since 1b a thin call to CoachDayCompletion.completeOnTap (door
@@ -6799,7 +6812,7 @@ concepts:
     reader_manifest_complete: true
     readers:
       - file: lib/features/ai_coach/providers/ai_coach_provider.dart
-        line_range: 170-361
+        line_range: 172-363
         method: build
         semantic: flag-check
         fields_read: [kind, resolved_at, date, planned_count, logged_count, created_at]
@@ -7013,7 +7026,7 @@ concepts:
         notes: Partitions auto-run intents out of state (queued cards are added first) and dispatches each once.
     readers:
       - file: lib/features/ai_coach/providers/ai_coach_provider.dart
-        line_range: 170-361
+        line_range: 172-363
         method: build
         semantic: display-only
         fields_read: [kind, resolved_at, date, planned_count, logged_count, created_at]
@@ -7086,7 +7099,7 @@ concepts:
           cap. Never truncate in the writer — truncation is the trimmer's
           job so the on-disk corpus stays complete.
       - file: lib/core/services/sync/sync_coach.dart
-        line_range: 253-254
+        line_range: 325-326
         method: syncCoachMemoryNow upward projection
         semantic: pass-through
         fields_read: [coaching_notes]
@@ -7095,7 +7108,7 @@ concepts:
           cloud column 'coach_notes' (different word). Before this
           projection the column was 100% NULL across all users.
       - file: lib/core/services/sync/sync_coach.dart
-        line_range: 669-725
+        line_range: 828-884
         method: _restoreCoachMemory downward sync
         semantic: pass-through
         fields_read: [coach_notes]
@@ -7824,7 +7837,7 @@ concepts:
       reader drift instance).
     writers:
       - file: lib/core/services/sync/sync_coach.dart
-        line_range: 226-271
+        line_range: 298-343
         method: syncCoachMemoryNow
         notes: |
           The Hive read uses 'coaching_notes' (singular Hive key); the
@@ -7851,7 +7864,7 @@ concepts:
           Server-side reader. Pulls coach_memory.coach_notes for the
           nightly summary prompt context.
       - file: lib/core/services/sync/sync_coach.dart
-        line_range: 669-725
+        line_range: 828-884
         method: _restoreCoachMemory (downward pull)
         semantic: pass-through
         fields_read: [coach_notes]
@@ -8125,7 +8138,7 @@ concepts:
     reader_manifest_complete: true
     readers:
       - file: lib/core/services/sync/sync_coach.dart
-        line_range: 289-443
+        line_range: 361-558
         method: _syncCoachInteractions (push side cross-channel dedup)
         semantic: flag-check
         fields_read: [id, channel, user_message, created_at]
@@ -8143,7 +8156,7 @@ concepts:
           within 60s of an existing entry UPDATEs instead of inserting.
           Companion to the server-side placeholder dedup.
       - file: lib/features/ai_coach/providers/ai_coach_provider.dart
-        line_range: 165-327
+        line_range: 167-329
         method: ChatHistoryNotifier (display surface)
         semantic: historical-series
         fields_read: [failed, error_text, pending, ai_response, created_at]
@@ -9149,7 +9162,7 @@ concepts:
       - { file: lib/core/services/subscription_service.dart, line: 17, method: "SubscriptionService._() constructor → _registerLifecycle()", notes: "Re-fires onStateChanged so Riverpod consumers re-read the new user's PRO state." }
       - { file: lib/core/services/workout_schedule_service.dart, line: 177, method: "WorkoutScheduleService._() constructor → _registerLifecycle()", notes: "All state in workoutBox / userBox; reset hook is a no-op placeholder." }
       - { file: lib/core/services/usage_counter_service.dart, line: 13, method: "UsageCounterService._() constructor → _registerLifecycle()", notes: "Counters live in per-user userBox; reset hook is a no-op placeholder." }
-      - { file: lib/core/services/ai_service.dart, line: 54, method: "AiService._() constructor → _registerLifecycle()", notes: "Reset closes + drops the cached http.Client via dispose()." }
+      - { file: lib/core/services/ai_service.dart, line: 76, method: "AiService._() constructor → _registerLifecycle()", notes: "Reset closes + drops the cached http.Client via dispose()." }
       - { file: lib/core/services/razorpay_service.dart, line: 30, method: "RazorpayService._() constructor → _registerLifecycle()", notes: "Reset nulls _onSuccess / _onFailure / _pendingPlan and clears _pendingCheckouts (OI-341 B2b)." }
       - { file: lib/core/services/seed_service.dart, line: 36, method: "SeedService._() constructor → _registerLifecycle()", notes: "Seeds are shared-box; reset is a no-op placeholder." }
       - { file: lib/core/services/prediction_service.dart, line: 1, method: "PredictionService._() constructor → SingletonLifecycleRegistry.register", notes: "Added 2026-09-26 (B-pass round 2, single-owner-a): PredictionService was the one singleton in this family never registered, so a device-level account switch never cleared PredictionAttemptGate's in-flight Future — the new account's own tap could join the old account's stale request via PredictionAttemptGate.run's `if (running != null) return running;`. Reset hook (`_onUserChanged`) calls `_gate.clearInFlightForAccountChange()`, which nulls `_inFlight` so the next call starts fresh rather than joining." }
@@ -13316,24 +13329,24 @@ concepts:
       Precedent it mirrors: AuthNotifier._inFlightSignOut and SyncCoalescer.
     writers:
       - file: lib/core/services/supabase_service.dart
-        line_range: 204
+        line_range: 205
         method: _inFlightRefresh
         semantic: the-shared-in-flight-future
       - file: lib/core/services/supabase_service.dart
-        line_range: 243
+        line_range: 244
         method: coalescedRefresh
         semantic: join-never-race-injectable-test-seam
       - file: lib/core/services/supabase_service.dart
-        line_range: 324
+        line_range: 325
         method: ensureFreshToken
         semantic: expiry-branch-delegates-to-the-join
       - file: lib/core/services/supabase_service.dart
-        line_range: 352
+        line_range: 353
         method: _refreshToken
         semantic: the-refresh-itself-single-call-site
     readers:
       - file: lib/core/services/supabase_service.dart
-        line_range: 248
+        line_range: 249
         method: disableRefreshJoin
         semantic: kill-switch-read
     hive:
@@ -15016,23 +15029,23 @@ concepts:
         notes: the raw Gemini text this concept cleans on the client side.
     readers:
       - file: lib/features/ai_coach/providers/ai_coach_provider.dart
-        line_range: 704
+        line_range: 706
         method: "SendMessageNotifier.sendWithMedia"
         semantic: display-only
       - file: lib/features/ai_coach/providers/ai_coach_provider.dart
-        line_range: 965
+        line_range: 1015
         method: "SendMessageNotifier.send (primary)"
         semantic: display-only
       - file: lib/features/ai_coach/providers/ai_coach_provider.dart
-        line_range: 1045
+        line_range: 1104
         method: "SendMessageNotifier.send (auth-retry)"
         semantic: display-only
       - file: lib/features/ai_coach/providers/ai_coach_provider.dart
-        line_range: 341
+        line_range: 343
         method: "ChatHistoryNotifier.build (success render)"
         semantic: display-only
       - file: lib/features/ai_coach/providers/ai_coach_provider.dart
-        line_range: 309
+        line_range: 311
         method: "ChatHistoryNotifier.build (isFailed fallback render)"
         semantic: display-only
     forbidden_legacy_patterns:
@@ -15068,12 +15081,12 @@ concepts:
       proactive channel can't repeat the same silent drop.
     writers:
       - file: lib/core/services/sync/sync_coach.dart
-        line_range: 458-657
+        line_range: 617-816
         method: _restoreCoachInteractions
         notes: pulls ALL ai_coach_interactions rows for the user, no channel filter of its own — the filter lives entirely on the render side.
     readers:
       - file: lib/features/ai_coach/providers/ai_coach_provider.dart
-        line_range: 244-259
+        line_range: 246-261
         method: "ChatHistoryNotifier.build"
         semantic: flag-check
     hive:
@@ -16796,7 +16809,7 @@ concepts:
         method: logMeasurement + logMeasurements
         notes: Writer tier. Both validate the ROUNDED value and emit tier=writer. logMeasurements (L2b Landing B) is the sheet's batch writer - all-or-nothing, one put, one fan-out, one event per call.
       - file: lib/features/ai_coach/providers/ai_coach_provider.dart
-        line_range: 1676-1708
+        line_range: 1758-1790
         method: PendingLogActionsNotifier._parse (case log_measurement)
         notes: Chat parse tier. Type tests, never casts; checks the RAW value; emits tier=chat (a wrong-typed value of a registered site emits side=wrongtype).
       - file: lib/core/services/sync/sync_health.dart
@@ -17626,6 +17639,49 @@ concepts:
         semantic: log-only
         notes: Labels a reply; never changes it; never logs reply text or the user id.
     regression_test: test/contracts/coach_write_claim_wiring_test.dart
+
+  - concept: coach_keyed_retry_replay
+    domain: ai_coach
+    behavioral_test_path: supabase/functions/_shared/chat_dedup_keyed_test.ts
+    description: |
+      OI-505 fix 4 (diagnose d9a3b5). A RETRY of a finished coach turn reuses it
+      instead of reserving a second row (and spending a second unit). The app
+      sends client_retry: true ONLY on its Retry button (AiService.chat, both
+      transports, the 401 re-send included) with the turn's client_key (OI-503).
+      ai-proxy then reads up to 5 rows of (user, client_key, channel app) BEFORE
+      the 30 s text dedup and the reservation, through _shared/chat_dedup.ts
+      resolveKeyedReplay: the newest complete text-only row of the same message
+      (not older than 6 h) is replayed through the existing replay_reply branch;
+      a pending row younger than 150 s answers 503 in_progress; everything else
+      falls through. A row whose reply carried an APPLY card, a completion tile
+      or legacy [LOG...] tags (the resolution UPDATE appends a legacy_log_actions
+      record) is re-run, never replayed. Kill switch env DISABLE_CLIENT_KEY_REPLAY
+      = "1". The resolver and verdict are behaviourally tested in Deno; the
+      handler WIRING (ai-proxy starts serve( at module scope and cannot be
+      imported) is source-pinned, presence only, in
+      test/contracts/coach_keyed_replay_ef_test.dart; the call order is also
+      proven by the live smoke after the deploy.
+    writers:
+      - file: lib/core/services/ai_service.dart
+        line_range: 1-9999
+        method: AiService.chat (client_retry on a Retry, invoke and direct-HTTP bodies)
+        notes: Never set on a new ask, the cold-start retry or any media body.
+      - file: supabase/functions/ai-proxy/index.ts
+        line_range: 1-9999
+        method: resolution UPDATE (storedToolCalls: legacy_log_actions marker)
+        notes: The marker keeps a reply that carried legacy log tags out of the replay.
+    readers:
+      - file: supabase/functions/_shared/chat_dedup.ts
+        line_range: 1-9999
+        method: resolveKeyedReplay / keyedReplayVerdict
+        semantic: replay-or-in-progress-or-none
+        notes: Strict boolean true on client_retry; a failed lookup never blocks chat.
+      - file: supabase/functions/ai-proxy/index.ts
+        line_range: 1-9999
+        method: keyed lookup before the text dedup; the replay_reply branch
+        semantic: pass-through
+        notes: logWriteClaimDetection stays at exactly 2 call sites.
+    regression_test: test/contracts/coach_keyed_replay_ef_test.dart
 
   - concept: cardio_duration_distance
     domain: workout
