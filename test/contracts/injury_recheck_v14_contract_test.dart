@@ -241,9 +241,12 @@ void main() {
     // uninjured plan (positive control). Unit 1B-F (2026-11-11, the core-list pool the only picker): Crunches reaches
     // no build_muscle persona on the core path (probe over 4 tiers x 3 levels x 3/4/5 days); V-Up, its v14
     // lower_back sibling (E176), is in the same bodyweight / advanced / 3-day plan and replaces it. Unit 2A (2026-11-13,
-    // the lead-first allocator): the 3-day full_gym / advanced plan no longer holds Hip Abduction Machine (measured; the
-    // allocation of that plan changed, the cause per row was not traced); a re-search over the same grid finds it in the 4- and 5-day full_gym / advanced plans,
-    // gone for hip in both, so the 4-day plan replaces it.
+    // the lead-first allocator): the 3-day full_gym / advanced plan no longer holds Hip Abduction Machine. Traced (B
+    // review): its Legs day holds five Glutes-crediting rows (Barbell Back Squat, Deadlift, Hip Thrust, Glute Kickback
+    // (Cable), Hip Abduction Machine), at 2 sets each exactly the advanced Glutes session cap (10); R1 seats the lead,
+    // Barbell Back Squat, at 3, so Hip Abduction Machine's 2 sets would make 11 and the cap refuses it, and the day's
+    // eighth seat goes to Hanging Leg Raise (Core): the plan's D-2A-2 swap class. A re-search over the same grid finds
+    // it in the 4- and 5-day full_gym / advanced plans, gone for hip in both, so the 4-day plan replaces it.
     const reached = <(String, String, String, String, int)>[
       ('Push Up', 'shoulder', 'bodyweight', 'beginner', 3),
       ('Lat Pulldown', 'shoulder', 'basic_gym', 'beginner', 3),

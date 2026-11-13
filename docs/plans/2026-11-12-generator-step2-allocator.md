@@ -369,7 +369,7 @@ Whole-engine (real `generateV4`):
 - `generator_golden_test.dart` re-recorded (1,010 personas); every changed key is a 2A key (the OFF fixture equals main's
   hashes).
 - `session_set_budget_gate_test.dart`: the lead-lift precondition, counters and overrun accounting re-read (section 4).
-- The injury sweeps (`injury_floor_sweep_lib.dart`, `kThinCeilings`): an exact-equality ratchet (`expectNoThin`, `:354-362`,
+- The injury sweeps (`injury_floor_sweep_lib.dart`, `kThinCeilings`): an exact-equality ratchet (`expectNoThin`, `:361-371`,
   fails on a fall too). A block that falls is re-recorded with the measured value and the reason. (The build found
   three `f_repeat_pairs30` blocks rising through the repeat phase's pins, section 3: re-recorded with the cause.)
 - `plan_audit_dump_test.dart` with no focus and both focus values, and phases 4-5: section 3's numbers.

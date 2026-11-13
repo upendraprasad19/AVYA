@@ -4,7 +4,7 @@ blast_radius: platform
 review_rounds: 7
 ground_truth_verified: true
 verdict: converged
-bpass: pending
+bpass: accepted
 bpass_review: docs/reviews/generator-step2-allocator-bpass.md
 ---
 
@@ -48,4 +48,11 @@ The build re-measures every figure on the clean implementation, and the B-pass r
 
 ## B-pass
 
-Pending: `/code-review` on the built diff before the merge.
+Accepted 2026-11-13 (`docs/reviews/generator-step2-allocator-bpass.md`). Three fresh Sonnet seats reviewed commit
+e2486ce8 after CI went green on it.
+
+Result: 0 P0, 0 P1, 3 P2, 11 P3. Every finding is fixed in the review commit or verified clean with evidence:
+- B's `leadSeats` now cover the days B copies from A.
+- The v14 pin's cause was traced (the Glutes session cap).
+- The count-forced excuse is pinned to exact days and seconds in four sweeps.
+- Three fallback / week-2 mirrors got fixtures (M16, M5, M9), and each mutant reddens.

@@ -303,6 +303,10 @@ void main() {
       ], minutes: 90, level: 'beginner');
       expect([for (final e in out[0].exercisesA) e.exerciseName], ['lead', 'i0', 'i1', 'i2', 'i3']);
       expect(out[0].exercisesA.first.sets, greaterThanOrEqualTo(3));
+      // The names alone are main's too (main seats five rows at 2 and grows them): the lead world must be the one kept,
+      // with the lead as the day's seat (B review, seat 2 finding 2).
+      expect(statsA().leadWorld, 'lead');
+      expect(statsA().leadSeats.single.name, 'lead');
     });
   });
 
@@ -487,6 +491,9 @@ void main() {
       expect(statsA().leadWorld, 'capped');
       expect(statsA().countForced, isEmpty);
       expect(statsB().countForced, isEmpty);
+      // B's days are all copies: its leadSeats are A's (day order), so B's list covers B's week (B review, seat 1).
+      expect(statsB().leadSeats, statsA().leadSeats);
+      expect([for (final e in statsB().leadSeats) e.day], [0, 1]);
       expect(setsOf(out[0]), [('sink0', 7), ('lead', 2), ('i1', 2), ('i2', 2), ('i3', 2)]);
       expect(setsOf(out[0], b: true), setsOf(out[0]));
     });
@@ -521,6 +528,10 @@ void main() {
       expect(statsB().leadWorld, 'lead');
       expect(setsOf(out[0]), [('lead', 3), ('acc1', 3), ('acc2', 2), ('acc3', 2)]);
       expect(setsOf(out[0], b: true), setsOf(out[0]));
+      // The days swapped: B allocates day 0 and copies day 1, and its leadSeats still read in day order.
+      f.run([days[1], days[0]], minutes: 30, is6Day: false);
+      expect(statsB().leadWorld, 'lead');
+      expect([for (final e in statsB().leadSeats) e.day], [0, 1]);
     });
 
     test('neither B world holds: the whole plan falls back to main (A = M, B = M_B; A\'s stats are main\'s)', () {
@@ -534,6 +545,37 @@ void main() {
       expect(setsOf(out[0]), main);
       expect(setsOf(out[0], b: true), main);
       expect(statsB().weekly['Calves'], 2);
+      // Day 1's B list differs from A's: B is main's B, not main's A (B review, seat 3 finding 1).
+      expect([for (final e in out[1].exercisesB) e.exerciseName], ['ham']);
+      expect([for (final e in out[1].exercisesA) e.exerciseName], ['calf']);
+      final off = f.run(days, minutes: 30, is6Day: false, leadFirst: false);
+      expect(setsOf(out[1], b: true), setsOf(off[1], b: true));
+    });
+
+    test('a copied B day evicts the hold the CHOSEN A evicted, not main\'s A', () {
+      // 30 minutes, not 6-day, the same list in A and B (B copies A). sink (2 isolation sets, 256.8), the lead (Back
+      // compound), acc (Biceps), ham (Hamstrings, the week's first), then hold (a library timed row crediting Biceps,
+      // 324). Main: 256.8 + 324 + 336 + 256.8 + 256.8 = 1430.4 of 1440, nothing evicted. The lead world: the lead at 3
+      // (522) leaves ham refused by the clock alone (1616.4); ham brings a first Hamstrings credit, the hold is not the
+      // day's only Biceps credit, so the hold gives way (1292.4, 4 rows: the floor), and pass B grows acc to 3 with the
+      // 147.6 s left (1.2 left). B's copy must drop the same hold;
+      // reading main A's evictions it would keep it (and run 186 s over).
+      final f = Fx();
+      f.row('sink', ['Chest'], type: 'isolation');
+      f.row('lead', ['Lats']);
+      f.row('acc', ['Biceps'], type: 'isolation');
+      f.row('ham', ['Hamstrings'], type: 'isolation');
+      f.row('hold', ['Biceps'], reps: '30-60', logging: 'timed');
+      List<PlannedExercise> list() => [
+            _sink(f, 'sink', 2), f.ex('lead'), f.ex('acc'), f.ex('ham'),
+            f.ex('hold', sets: 3, logging: 'timed', rest: 60),
+          ];
+      final out = f.run([f.day('hypertrophy', list(), b: list())], minutes: 30, is6Day: false);
+      expect(statsA().leadWorld, 'lead');
+      expect(setsOf(out[0]), [('sink', 2), ('lead', 3), ('acc', 3), ('ham', 2)]);
+      expect(setsOf(out[0], b: true), setsOf(out[0]));
+      final off = f.run([f.day('hypertrophy', list(), b: list())], minutes: 30, is6Day: false, leadFirst: false);
+      expect([for (final e in off[0].exercisesA) e.exerciseName], ['sink', 'lead', 'acc', 'ham', 'hold']);
     });
 
     test('the 6-day path allocates B as A (a different B list is ignored, and no B stats are written)', () {
@@ -581,6 +623,17 @@ void main() {
     test('a lead refused its week-2 set holds an accessory and a hold to the lead + 1', () {
       expect(week2(days([lead, acc, hold])), [3, 4, 4]);
       expect(week2(days([lead, acc, hold]), leadFirst: false), [3, 5, 5]);
+    });
+
+    test('a day with no budgeted row has no lead: its rows are not capped against row 0', () {
+      // Day 0 holds two holds only (neither budgeted): nothing is the lead, so Side Hold gains as it does with the rule
+      // off. Taking row 0 as the lead would hold Side Hold to Short Hold + 1 (B review, seat 3 finding 3).
+      final day0 = [
+        _pe('Short Hold', 'isolation', sets: 2, logging: 'timed'),
+        _pe('Side Hold', 'isolation', sets: 4, logging: 'timed'),
+      ];
+      expect(week2(days(day0)), week2(days(day0), leadFirst: false));
+      expect(week2(days(day0)).last, greaterThan(3));
     });
 
     test('a focus row is not held (founder d27)', () {

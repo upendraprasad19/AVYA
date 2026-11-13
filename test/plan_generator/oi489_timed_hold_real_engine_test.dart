@@ -86,22 +86,28 @@ void main() {
       final p = gen(goal, 1, days: 4);
       final stats = SessionSetAllocator.debugLastStats!;
       final forced = <String>[];
+      final over = <String, double>{};
       for (final w in p.weekPlans) {
         for (var i = 0; i < w.workoutDays.length; i++) {
           final d = w.workoutDays[i];
           final minutes = SessionBudget.estimateDaySecondsFromPlanDay(d.toMap(), rowsById) / 60;
           // Unit 2A (2026-11-13): a day the count floor force-seated (pass A2, `countForced` of the variant the week
           // reads: B in weeks 2 and 4) may be up to `maxForcedOverSeconds` over, the accepted overrun (founder d26 /
-          // d28): week 1's Lower Body is 32.9 minutes since its lead is seated at 3. Every other day keeps 30 + 2.
+          // d28): Lower Body is 32.9 minutes in weeks 1-3 (both goals) since its lead is seated at 3 (pinned below).
+          // Every other day keeps 30 + 2.
           final variant = w.weekInPhase.isEven ? 'B' : 'A';
           final isForced = stats[variant]!.countForced.containsKey(i);
           if (isForced) forced.add('week ${w.weekInPhase} ${d.name}');
+          if (minutes > 32) over['week ${w.weekInPhase} ${d.name}'] = (minutes * 10).roundToDouble() / 10;
           final limit = 32 + (isForced ? SessionBudget.maxForcedOverSeconds / 60 : 0);
           expect(minutes, lessThanOrEqualTo(limit), reason: 'week ${w.weekNumber} ${d.name}: ${minutes.toStringAsFixed(1)}');
         }
       }
       // The Ruling 5c day itself (Upper Pull) is never excused.
       expect(forced.where((f) => f.contains('Pull')), isEmpty, reason: 'forced: $forced');
+      // The excuse is used by exactly these days, at exactly these minutes (B review, seat 2 finding 3).
+      expect(over, <String, double>{'week 1 Lower Body': 32.9, 'week 2 Lower Body': 32.9, 'week 3 Lower Body': 32.9},
+          reason: goal);
     });
   }
 }

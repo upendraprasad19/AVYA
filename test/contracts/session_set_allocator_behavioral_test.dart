@@ -634,6 +634,8 @@ void main() {
       const goals = ['build_muscle', 'strength', 'lose_fat', 'general_fitness'];
       const levels = ['beginner', 'intermediate', 'advanced'];
       var guarded = 0;
+      // Days actually past their minutes (plan/variant/day -> seconds over, 0.1 s): pinned exactly below.
+      final over = <String, double>{};
       for (var plan = 0; plan < 220; plan++) {
         final nDays = 3 + rnd.nextInt(4);
         final is6 = nDays == 6;
@@ -726,12 +728,16 @@ void main() {
           if (forced == 0) {
             for (var d = 0; d < nDays; d++) {
               // OI-456 piece B: a day the count floor force-seated (pass A2, named in `countForced`) may be up to
-              // `maxForcedOverSeconds` over; every other day fits. Unit 2A (2026-11-13): seed plan 15's day 1 is
-              // the first such day in this sweep (the lead seated at 3 leaves a 2-set Kneeling Close Grip Push Up
-              // to A2, 90 s over); before 2A no seed reached A2, so the excuse was never needed.
+              // `maxForcedOverSeconds` over; every other day fits. Unit 2A (2026-11-13): before 2A no seed reached A2,
+              // so the excuse was never needed; now 25 variant-days in 12 seed plans do (10.8 to 198 s over; the first,
+              // seed plan 15's day 1: the lead seated at 3 leaves a 2-set Kneeling Close Grip Push Up to A2, 90 s), pinned
+              // exactly at the end of the sweep.
               final bound = stats.countForced.containsKey(d) ? -SessionBudget.maxForcedOverSeconds - 1e-6 : -1e-6;
               expect(ledger.secondsLeft(d), greaterThanOrEqualTo(bound),
                   reason: 'plan $plan $variant day $d time');
+              if (ledger.secondsLeft(d) < -1e-6) {
+                over['$plan/$variant/$d'] = (-ledger.secondsLeft(d) * 10).roundToDouble() / 10;
+              }
             }
           }
           for (final g in BudgetMuscleGroups.groups) {
@@ -748,6 +754,14 @@ void main() {
           }
         }
       }
+      // The count-forced excuse is used by exactly these days, by exactly these seconds (B review, seat 2 finding 3).
+      expect(over, <String, double>{
+        '15/A/1': 90.0, '37/A/0': 10.8, '37/B/0': 118.8, '68/A/1': 10.8, '100/A/1': 10.8, '100/A/3': 198.0,
+        '100/B/1': 10.8, '100/B/3': 198.0, '101/B/0': 90.0, '106/A/1': 54.0, '106/A/2': 10.8, '106/B/2': 10.8,
+        '131/A/3': 54.0, '131/A/4': 10.8, '142/A/3': 54.0, '149/A/0': 75.6, '149/A/2': 10.8, '149/B/0': 75.6,
+        '149/B/2': 10.8, '151/A/2': 10.8, '151/B/2': 10.8, '182/A/0': 154.8, '182/A/2': 10.8, '182/B/2': 10.8,
+        '215/B/1': 10.8,
+      });
       // `guarded` is reported, not asserted: random picks seldom empty a whole day,
       // and the guard itself is pinned by the crafted 'guard' test above.
       // ignore: avoid_print

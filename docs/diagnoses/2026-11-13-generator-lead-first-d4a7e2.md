@@ -135,12 +135,16 @@ plan (sections 2-4).
 
 - `session_set_allocator_behavioral_test.dart`: three crafted days re-recorded (the lead at 3; the focus cap of 12
   reached by five rows, one fewer); the 30-minute day is now count-forced 90 s over (A2 names `bi`); the seeded sweep
-  excuses exactly A2's documented 300 s on a `countForced` day (seed plan 15, 90 s).
+  excuses A2's documented 300 s on a `countForced` day.
+  - The B review pinned the excused days exactly: 25 variant-days in 12 seed plans, 10.8 to 198 s over.
+  - So a new forced day, or a deeper overrun, reddens.
 - `session_set_budget_consumers_test.dart` and `session_set_budget_wiring_test.dart`: the same A2 excuse, per day and
-  per the variant the week reads (seed plan 16 90 s; the wiring plan 39.6 s).
+  per the variant the week reads, each pinned exactly.
+  - Consumers: 15 day-weeks of seed plans 16, 54, 55 and 57, 10.8 to 90 s over.
+  - Wiring: 8 day-weeks, 10.8 to 75.6 s over.
 - `exercise_count_band_behavioral_test.dart` (c): the forced 4th lift now 284.4 s over (was 76.8), inside 300 s.
 - `oi489_timed_hold_real_engine_test.dart`: a count-forced day may take the 5 minutes; the Ruling 5c Upper Pull day is
-  asserted never excused.
+  asserted never excused. The excused days are pinned exactly: Lower Body at 32.9 minutes in weeks 1-3, both goals.
 - `allocator_timed_hold_eviction_behavioral_test.dart` (2 fixtures) and `rest_by_type_behavioral_test.dart` (e): run in
   the main world (`leadFirst: false`); their hand-worked arithmetic is main's and the guard / pricing they test is the
   same code in every world.
@@ -150,6 +154,9 @@ plan (sections 2-4).
   switched-off cells), dead-override checks extended.
 - `cross_day_variety_behavioral_test.dart`: shared Push A / B lifts 12 -> 10 (Dumbbell Fly gives its seat).
 - `injury_recheck_v14_contract_test.dart`: the Hip Abduction Machine persona re-searched (full_gym advanced 4-day).
+  Cause traced in the B review. The 3-day plan's Legs day holds five Glutes-crediting rows; at 2 sets each they fill
+  the advanced Glutes session cap (10). R1 seats the lead (Barbell Back Squat) at 3, so the cap refuses Hip Abduction
+  Machine, and Hanging Leg Raise takes the eighth seat (the D-2A-2 swap class).
 - `same_movement_day_gate_test.dart`: the loaded-version floor 931 -> 719 (main 992; N19 633 -> 379), shared days 0.
 - `injury_floor_sweep_lib.dart` `kThinCeilings`: see the next section.
 

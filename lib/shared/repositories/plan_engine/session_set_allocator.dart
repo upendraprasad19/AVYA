@@ -72,6 +72,7 @@ class AllocationStats {
   /// opens the day with, `SequencingEngine.openerOf`, which [firstLifts]' rank 0 often is not). [boundBy] is null when
   /// the lead reached the base sets, else the first group whose session cap or weekly top refuses its next set,
   /// `clock` when only the day's time does, or `unexplained` when nothing refuses it at the end. Filled in every world.
+  /// A day variant B copies from A carries A's entry for it, so B's list covers B's whole week; in day order.
   final List<LeadSeat> leadSeats = [];
 }
 
@@ -258,6 +259,9 @@ class SessionSetAllocator {
       if (!worse(c.out, sC, aM.out, sAM)) {
         (a, sA) = (c, sC);
       } else {
+        // Not reachable today (B review, seat 3, M14): the capped world seats exactly main's rows (passes A, A2 and B
+        // are main's; passes C and D seat nothing and only add sets), so it is never worse than main in A; the gate
+        // pins A's worlds at lead / capped only. Kept so a later pass that seats or removes after pass B stays safe.
         (a, sA) = (aM, sAM);
       }
     }
@@ -451,6 +455,8 @@ class SessionSetAllocator {
         final below = copyFrom.belowCount[d];
         if (below != null) stats.belowCount[d] = below;
         if (copyFrom.selectorThin.contains(d)) stats.selectorThin.add(d);
+        // Unit 2A: a copied day's lead is A's lead on it, at A's sets (B review, seat 1 finding 2).
+        stats.leadSeats.addAll(copyFrom.leadSeats.where((e) => e.day == d));
       }
     }
 
@@ -833,6 +839,7 @@ class SessionSetAllocator {
       }
       stats.leadSeats.add((day: d, rank: l.rank, name: l.exercise.exerciseName, sets: l.sets, boundBy: boundBy));
     }
+    stats.leadSeats.sort((x, y) => x.day.compareTo(y.day));
 
     final out = <List<PlannedExercise>>[
       for (var d = 0; d < n; d++)
