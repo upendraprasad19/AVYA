@@ -1,0 +1,62 @@
+# Closure ledger - generator-step2-allocator (Unit 2A, OI-486: the lead-first set allocator). Plan
+# docs/plans/2026-11-12-generator-step2-allocator.md (v8), record docs/plan-reviews/generator-step2-allocator.md,
+# diagnose d4a7e2. Gate 40 (validate_audit_closure.dart).
+batch: generator-step2-allocator
+plan_review_record: docs/plan-reviews/generator-step2-allocator.md
+total_findings: 9
+closed_count: 9
+
+findings:
+  - id: 2A-LEAD-OPENER
+    title: "A day's lead is the row the sequencer opens it with: SequencingEngine.openerOf over the day's budgeted rows (one sort shared with _reorderDay, whose output is unchanged), or over the admitted slots when that row is not admitted"
+    terminal_state: closed_in_commit
+    commit: generator-step2-allocator@branch
+    verification: "sequencing_engine.dart openerOf / _sorted; lead_first_allocator_behavioral_test.dart group 1 (bilateral, CNS, isolation-only, tied rows in both orders, a library sweep of every same-pattern pair in both orders against _reorderDay's first row, the admitted-slot fallback, a hold that would sort first); lead_first_gate_test.dart (0 openers moved over 1,010 personas); golden with the switch set equals main."
+
+  - id: 2A-R1-SEAT
+    title: "R1: pass A seats the lead at the base 3 when time, caps, top, the count target and (rank 0) the reservation allow, never by an eviction; else exactly as before"
+    terminal_state: closed_in_commit
+    commit: generator-step2-allocator@branch
+    verification: "session_set_allocator.dart _variant pass A; behavioral group 2 (rank 0 and rank 2 leads at 3; the clock, the session cap and the reservation each leave it at 2; the count target counted once); mutants in the diagnose doc."
+
+  - id: 2A-R2-CAP
+    title: "R2: pass C holds every other budgeted slot at the lead's sets + 1; pass D (focus) is exempt (founder d27)"
+    terminal_state: closed_in_commit
+    commit: generator-step2-allocator@branch
+    verification: "_variant underLead / grow(focusPass); behavioral group 3 (4, not 3 or 5; a focus row passes in pass D; the cap reads the opener, not rank 0) and group 4 (the capped world, with and without focus); lead_first_gate_test.dart: 0 budgeted rows at the lead + 2 over 18,080 day-weeks."
+
+  - id: 2A-R3-FALLBACK
+    title: "R3: each variant keeps the lead, else the capped, else main's world, the first not worse than main (worldIsWorse); B copies the chosen A; neither B world holding sends the whole plan to main; leadWorld and leadSeats recorded"
+    terminal_state: closed_in_commit
+    commit: generator-step2-allocator@branch
+    verification: "_allocateLeadFirst, worldIsWorse; behavioral group 4 (the pure function's boundary, thin day and zero-group cases; capped kept; B over the chosen A; the whole-plan fallback with main's stats; B's copied stats from the kept A; the 6-day path); lead_first_gate_test.dart pins the kept worlds (A 944 / 66, B 768 / 2, never main)."
+
+  - id: 2A-R5-WEEK2
+    title: "R5: week 2 holds a row that is not the lead and credits no focus group, a hold included, to the lead's week-2 sets + 1"
+    terminal_state: closed_in_commit
+    commit: generator-step2-allocator@branch
+    verification: "periodization_engine.dart _weekTwoGains; behavioral group 5 (a refused lead holds an accessory and a hold; a focus row is not held; a gaining lead lets the accessory gain; the opener at rank 2; the B list's opener in week 2)."
+
+  - id: 2A-KILL-SWITCH
+    title: "Kill switch disable_lead_first (PlanEngineFlags.leadFirstEnabled, default ON), read by allocate and apply unless their leadFirst argument is given; OFF equals main 9fc3b043 byte for byte; plan_generator.dart untouched"
+    terminal_state: closed_in_commit
+    commit: generator-step2-allocator@branch
+    verification: "plan_engine_flags.dart; behavioral group 6 (unset ON, set OFF, the argument overriding both ways for allocate and apply); test/plan_generator/lead_first_kill_switch_golden_test.dart against test/fixtures/generator_golden_hashes_lead_first_off.json (main's hashes, 1,010 personas, green)."
+
+  - id: 2A-AUDIT-FOCUS-SKIP
+    title: "The plan audit's lead_starved skips a row crediting a focus group (founder d27)"
+    terminal_state: closed_in_commit
+    commit: generator-step2-allocator@branch
+    verification: "test/plan_generator/plan_audit/plan_audit_lib.dart; plan_audit_lib_test.dart (skipped with the focus, flagged with no focus and with a different focus); the skip removed reddens it."
+
+  - id: 2A-PINS-REREAD
+    title: "Every existing pin the rule moves re-read and re-recorded with its measured value and reason (allocator, count band, eviction, rest-by-type, consumers, wiring, rotation, quads floor 2A layer, cross-day variety, injury recheck v14, same-movement floor, the oi489 real-engine bound, both goldens)"
+    terminal_state: closed_in_commit
+    commit: generator-step2-allocator@branch
+    verification: "72 test files that reach generateV4 / the changed stages run on the final tree; each moved pin listed with its cause in the diagnose doc d4a7e2; session_set_budget_gate_test.dart green with its limits unchanged (d28's conditional raise not needed)."
+
+  - id: 2A-THIN-CEILINGS
+    title: "kThinCeilings rose in f_repeat_pairs30 (home_dumbbells 120 -> 121, basic_gym 94 -> 96, full_gym 21 -> 22): a pinned repeat starts from a 2A phase-1 plan; the plan's 'cannot rise' claim corrected"
+    terminal_state: closed_in_commit
+    commit: generator-step2-allocator@branch
+    verification: "probe: pins from a switch-off phase 1 with phase 2 ON give exactly the old 60 / 120 / 94 / 21; ceilings re-recorded with the cause in injury_floor_sweep_lib.dart; the residue is an input to unit 2B (the 3-exercise day floor, OI-452) on the OI board."

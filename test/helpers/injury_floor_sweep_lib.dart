@@ -320,6 +320,14 @@ class SweepHarness {
   /// top-up's queryV4 reads the same labels as the picker) re-measured all 24 blocks: one FELL, `f_repeat_pairs30
   /// full_gym` 27 -> 21 thin days (one-exercise days stay 0); the top-up now finds the copied-pattern rows for a thin
   /// day's slot. None rose. Diagnose doc of Unit 1B-F2.
+  /// Unit 2A (the lead-first allocator, OI-486, 2026-11-13) re-measured all 24 blocks: 21 held, three ROSE, all in
+  /// `f_repeat_pairs30`: home_dumbbells 120 -> 121, basic_gym 94 -> 96, full_gym 21 -> 22 thin days (one-exercise days
+  /// unchanged, no empty day), every added day a lower_back + elbow pair. MEASURED cause (probe): the pins. With pins
+  /// from the phase-1 plan generated with `disable_lead_first` set and phase 2 generated with the rule ON, all four
+  /// blocks give exactly the old 60 / 120 / 94 / 21: within one generation R3 keeps every day at main's rows or the
+  /// count floor, but a pinned repeat starts from the PREVIOUS phase's plan, which 2A changed (a phase-1 day that holds
+  /// one exercise fewer pins one fewer). The C2a precedent above (`repeat bodyweight` 0 -> 4) is the same class. Owned by
+  /// unit 2B (the 3-exercise day floor, OI-452); diagnose doc of Unit 2A.
   static const Map<String, (int thin, int one)> kThinCeilings = {
     'pairs bodyweight': (0, 0),
     'pairs home_dumbbells': (20, 2),
@@ -342,9 +350,9 @@ class SweepHarness {
     'singles46 basic_gym': (0, 0),
     'singles46 full_gym': (0, 0),
     'f_repeat_pairs30 bodyweight': (60, 8),
-    'f_repeat_pairs30 home_dumbbells': (120, 2),
-    'f_repeat_pairs30 basic_gym': (94, 2),
-    'f_repeat_pairs30 full_gym': (21, 0),
+    'f_repeat_pairs30 home_dumbbells': (121, 2),
+    'f_repeat_pairs30 basic_gym': (96, 2),
+    'f_repeat_pairs30 full_gym': (22, 0),
   };
 
   /// Every block: thin days (under 3 exercises) and one-exercise days match the measured

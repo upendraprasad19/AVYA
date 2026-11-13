@@ -200,8 +200,11 @@ void main() {
         // 10 shared lifts measured with the fix; an avoid applied to every day would remove them. 12 since Unit 1B-R's
         // Ruling 1 (seed v26, G0355 core at beginner; the same with `disable_loaded_wins` set): basic_gym's and
         // home_dumbbells' Push B no longer hold Towel Lateral Raise (OI-387), and that seat goes to Dumbbell Fly /
-        // Incline Push Up, which Push A holds too.
-        expect(shared, 12);
+        // Incline Push Up, which Push A holds too. 10 since Unit 2A (the lead-first allocator, 2026-11-13): full_gym's and
+        // basic_gym's Push A seat Dumbbell Bench Press at 3 (its lead; main: 2 sets under a 5-set Cable Rope Pushdown),
+        // so Dumbbell Fly (Chest, which Push B holds too) gives its seat to Overhead Tricep Extension; the avoid is
+        // not involved (the same with the switch set gives 12).
+        expect(shared, 10);
       },
     );
 

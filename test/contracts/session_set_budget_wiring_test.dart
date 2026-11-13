@@ -26,6 +26,7 @@ import 'package:icanbefitter/shared/repositories/plan_engine/budget_muscle_group
 import 'package:icanbefitter/shared/repositories/plan_engine/models.dart';
 import 'package:icanbefitter/shared/repositories/plan_engine/plan_generator.dart';
 import 'package:icanbefitter/shared/repositories/plan_engine/session_budget.dart';
+import 'package:icanbefitter/shared/repositories/plan_engine/session_set_allocator.dart';
 
 import '../helpers/generator_golden_personas.dart' show customPinName, namesByDay;
 
@@ -166,10 +167,23 @@ void main() {
 
     test('the profile minutes size the sessions when the caller passes none', () async {
       await HiveService.instance.userBox.put('profile', {'session_duration_minutes': 30});
+      SessionSetAllocator.debugLastStats = null;
       final on = gen();
-      for (final d in allDays(on)) {
-        expect(mainSeconds(d), lessThanOrEqualTo(budgetSeconds(30) + 1e-6));
+      final stats = SessionSetAllocator.debugLastStats!;
+      // Unit 2A (2026-11-13): a day the count floor force-seated (pass A2, `countForced` of the variant the week reads:
+      // B in weeks 2 and 4 of this 4-day plan) may be up to `maxForcedOverSeconds` over (founder d26 / d28); one day
+      // here is 39.6 s over since its lead is seated at 3. Every other day fits 30 minutes; at 60 minutes every day
+      // would have 3000 s, far past either bound.
+      var forcedDays = 0;
+      for (final w in on.weekPlans) {
+        for (var i = 0; i < w.workoutDays.length; i++) {
+          final forced = stats[w.weekInPhase.isEven ? 'B' : 'A']!.countForced.containsKey(i);
+          if (forced) forcedDays++;
+          final bound = budgetSeconds(30) + (forced ? SessionBudget.maxForcedOverSeconds : 0) + 1e-6;
+          expect(mainSeconds(w.workoutDays[i]), lessThanOrEqualTo(bound), reason: 'week ${w.weekInPhase} day $i');
+        }
       }
+      expect(forcedDays, lessThan(allDays(on).length), reason: 'most days fit the 30 minutes outright');
     });
 
     test('a caller-supplied duration beats the profile', () async {

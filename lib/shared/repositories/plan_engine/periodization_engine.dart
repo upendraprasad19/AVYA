@@ -2,6 +2,8 @@ import 'dart:math';
 
 import 'budget_muscle_groups.dart';
 import 'models.dart';
+import 'plan_engine_flags.dart';
+import 'sequencing_engine.dart';
 import 'session_budget.dart';
 
 /// Stage 4: Periodization — 4 cycling archetypes + volume wave.
@@ -63,8 +65,11 @@ class PeriodizationEngine {
   ///
   /// [stashWorkingBase] — ⑥ 7-B-1 (W2.4): the deload week (weekIdx 3) ALSO stashes
   /// the peak-equivalent working sets/reps per exercise (for a lossless un-deload).
-  /// Resolved upstream from PlanEngineFlags.triggeredDeloadEnabled so this stage
-  /// stays pure (no Hive read).
+  /// Resolved upstream from PlanEngineFlags.triggeredDeloadEnabled.
+  ///
+  /// [leadFirst] — Unit 2A (OI-486), R5: week 2 holds a row that is not its day's lead to the lead's week-2 sets + 1
+  /// (see [_weekTwoGains]). Null reads the kill switch `PlanEngineFlags.leadFirstEnabled` (default ON), this stage's
+  /// one Hive read; a caller that passes it keeps the stage pure.
   static List<WeekPlan> apply({
     required List<PopulatedDay> populated,
     required int phase,
@@ -72,12 +77,16 @@ class PeriodizationEngine {
     Map<String, double>? previousWeights,
     bool stashWorkingBase = false,
     required SessionBudgetContext budget,
+    bool? leadFirst,
   }) {
     final archetype = archetypeForPhase(phase);
+    final capToLead = leadFirst ?? PlanEngineFlags.leadFirstEnabled;
 
     return List.generate(4, (weekIdx) {
       final useB = !is6Day && (weekIdx == 1 || weekIdx == 3);
-      final gains = weekIdx == 1 ? _weekTwoGains(populated, useB, budget) : const <(int, int)>{};
+      final gains = weekIdx == 1
+          ? _weekTwoGains(populated, useB, budget, capToLead: capToLead)
+          : const <(int, int)>{};
 
       final workoutDays = <WorkoutDay>[];
       for (int d = 0; d < populated.length; d++) {
@@ -149,8 +158,12 @@ class PeriodizationEngine {
   /// the ledger says it fits and it is under the per-exercise limit. Not-budgeted
   /// rows come last (they are not part of the priority order) and gain a set only
   /// when the day's time allows (Ruling 8).
+  ///
+  /// [capToLead] (Unit 2A, R5): a row that is not its day's lead (`SequencingEngine.openerOf` over the day's budgeted
+  /// rows, the allocator's definition) and credits no focus group, a not-budgeted row included, gains only while its
+  /// week-2 sets stay at most the lead's week-2 sets + 1 (founder d26, d27).
   static Set<(int, int)> _weekTwoGains(
-      List<PopulatedDay> populated, bool useB, SessionBudgetContext budget) {
+      List<PopulatedDay> populated, bool useB, SessionBudgetContext budget, {required bool capToLead}) {
     final n = populated.length;
     final ledger = BudgetLedger(budget, n);
     final ranked = List.generate(n, (_) => <int>[]);
@@ -190,10 +203,26 @@ class PeriodizationEngine {
       }
     }
 
+    // Unit 2A, R5: each day's lead, as an index into the week's list (-1: no budgeted row, or the rule is off).
+    final lead = List<int>.filled(n, -1);
+    if (capToLead) {
+      for (var d = 0; d < n; d++) {
+        final list = useB ? populated[d].exercisesB : populated[d].exercisesA;
+        final opener = SequencingEngine.openerOf([for (final i in ranked[d]) list[i]]);
+        lead[d] = ranked[d].firstWhere((i) => identical(list[i], opener), orElse: () => -1);
+      }
+    }
+
     final gained = <(int, int)>{};
     void tryGain(int d, int i, {required bool budgeted}) {
-      final ex = (useB ? populated[d].exercisesB : populated[d].exercisesA)[i];
+      final list = useB ? populated[d].exercisesB : populated[d].exercisesA;
+      final ex = list[i];
       if (budgeted && ex.sets >= SessionBudget.maxSetsPerExercise) return;
+      final l = lead[d];
+      if (l >= 0 && l != i && !groups[(d, i)]!.any(budget.focusGroups.contains)) {
+        final leadSets = list[l].sets + (gained.contains((d, l)) ? 1 : 0);
+        if (ex.sets + 1 > leadSets + 1) return;
+      }
       final rest = restOf[(d, i)]!;
       final dt = SessionBudget.plannedExerciseSeconds(ex, budget, sets: ex.sets + 1, restSeconds: rest) -
           SessionBudget.plannedExerciseSeconds(ex, budget, sets: ex.sets, restSeconds: rest);

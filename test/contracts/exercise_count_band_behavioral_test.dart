@@ -80,13 +80,17 @@ void main() {
       }
       final days = [f.day('strength', [for (var i = 0; i < 4; i++) f.ex('h$i')])];
       final out = f.run(days, minutes: 30);
-      expect(setsOf(out[0]), [('h0', 2), ('h1', 2), ('h2', 2), ('h3', 2)]);
+      // Unit 2A: h0, the day's lead (the sequencer's opener), is seated at the base 3 (R1); h1 and h2 fit at 2 and the
+      // floor forces h3, now 284.4 s over (586.8 + 3 x 379.2 - 1440) instead of 76.8 s (4 x 379.2 - 1440), still
+      // inside the 300 s bound (founder d26 / d28: the accepted overrun).
+      expect(setsOf(out[0]), [('h0', 3), ('h1', 2), ('h2', 2), ('h3', 2)]);
       expect(statsA().countForced.keys, [0]);
       expect(statsA().countForced[0]!.map((e) => e.name), ['h3']);
       expect(statsA().belowCount, isEmpty);
-      final spent = 4 * SessionBudget.exerciseSeconds(archetype: 'H', sets: 2, restSeconds: 150);
+      final spent = SessionBudget.exerciseSeconds(archetype: 'H', sets: 3, restSeconds: 150) +
+          3 * SessionBudget.exerciseSeconds(archetype: 'H', sets: 2, restSeconds: 150);
       final over = spent - (30 - SessionBudget.warmCoolMinutes(30)) * 60;
-      expect(over, greaterThan(0), reason: 'fixture: the 4th lift really overruns');
+      expect(over, closeTo(284.4, 1e-6), reason: 'fixture: the 4th lift really overruns');
       expect(over, lessThanOrEqualTo(SessionBudget.maxForcedOverSeconds));
     });
 

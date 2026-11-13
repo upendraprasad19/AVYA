@@ -337,7 +337,14 @@ void main() {
                   ),
                 );
               }
-              expect(ledger.secondsLeft(d), greaterThanOrEqualTo(-1e-6),
+              // OI-456 piece B: a day the count floor force-seated (pass A2, `countForced` of the variant this week
+              // reads) may be up to `maxForcedOverSeconds` over. Unit 2A (2026-11-13): seed plan 16's day 0 is the
+              // first such day in this sweep (90 s over); before 2A no seed reached A2.
+              final variant = !is6 && (w == 1 || w == 3) ? 'B' : 'A';
+              final bound = stats[variant]!.countForced.containsKey(d)
+                  ? -SessionBudget.maxForcedOverSeconds - 1e-6
+                  : -1e-6;
+              expect(ledger.secondsLeft(d), greaterThanOrEqualTo(bound),
                   reason: 'plan $plan week $w day $d time');
             }
             for (final g in BudgetMuscleGroups.groups) {

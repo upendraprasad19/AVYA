@@ -205,8 +205,8 @@ void main() {
       expect(allNames(gen(true)), allNames(gen(false)));
     });
 
-    test('slot-count-invariance: rotation is a SWAP, not an add (a day never loses a row, '
-        'and the time budget seats at most one more)', () async {
+    test('slot-count-invariance: rotation is a SWAP, not an add (the selector hands the same rows; '
+        'the budget changes a day by the measured rows only)', () async {
       final off = gen(false);
       final offSeen = {
         for (final e in SessionSetAllocator.debugLastStats!.entries) e.key: List<int>.of(e.value.rowsSeen),
@@ -228,13 +228,20 @@ void main() {
       // Rotation itself only widens the selector's avoid set (`plateauAvoidNames`, a soft
       // avoid), so it cannot add a slot; what is left to pin here is the bound. Sets may
       // differ via default_sets: not asserted.
+      final deltas = <String, int>{};
       for (var w = 0; w < off.weekPlans.length; w++) {
         for (var d = 0; d < off.weekPlans[w].workoutDays.length; d++) {
           final delta = on.weekPlans[w].workoutDays[d].exercises.length -
               off.weekPlans[w].workoutDays[d].exercises.length;
-          expect(delta, inInclusiveRange(0, 1), reason: 'week ${w + 1}, day ${d + 1}');
+          if (delta != 0) deltas['w${w + 1}d${d + 1}'] = delta;
         }
       }
+      // Unit 2A (OI-486, 2026-11-13): re-recorded EXACT. The lead-first allocator seats each day's opener at the base
+      // 3, so a rotated-in opener that costs more can leave its day one row short: variant B's day 1 (weeks 2 and 4)
+      // opens with Dumbbell Standing Alternate Overhead Press at 3 and holds 7 rows against 8 (its count floor is 5;
+      // the accepted cost, founder d26). Before 2A the bound was [0, 1] per day (+1 on 4 of the 16 days). The
+      // selector-stage equality above is the swap claim and is unchanged.
+      expect(deltas, {'w2d1': -1, 'w4d1': -1});
     });
 
     test('bounded: heavy rotation seeding never empties a slot / crashes', () async {

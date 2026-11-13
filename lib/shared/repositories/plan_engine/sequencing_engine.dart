@@ -55,10 +55,22 @@ class SequencingEngine {
     }).toList();
   }
 
-  /// Reorder a single day's exercises by the 6 rules.
-  static List<PlannedExercise> _reorderDay(List<PlannedExercise> exercises) {
-    if (exercises.length <= 1) return exercises;
+  /// Unit 2A (OI-486): the row of [exercises] this engine puts first in the day (`_reorderDay`'s first row on the
+  /// same list), or null for an empty list. Pure. `SessionSetAllocator` and `PeriodizationEngine` call it over a day's
+  /// budgeted rows to find the day's lead, the row the user lifts first, so the lead-first rule caps against the row
+  /// the sequencer will really open with. Shares `_sorted` with `_reorderDay`, so the two cannot drift apart.
+  static PlannedExercise? openerOf(List<PlannedExercise> exercises) {
+    if (exercises.isEmpty) return null;
+    final (:compounds, :isolations) = _sorted(exercises);
+    return compounds.isNotEmpty ? compounds.first : isolations.first;
+  }
 
+  /// Rules 1-3: the day's compounds (bilateral before unilateral, then CNS demand descending) and isolations (CNS
+  /// demand descending), each a new list. Ties keep the input order: `List.sort` is an insertion sort, which is
+  /// stable, below 32 elements, and no day holds 32 rows. `openerOf` relies on that to name the same row as
+  /// `_reorderDay` on a tie (pinned by `lead_first_allocator_behavioral_test.dart`, the tied-rows test).
+  static ({List<PlannedExercise> compounds, List<PlannedExercise> isolations}) _sorted(
+      List<PlannedExercise> exercises) {
     // Separate into compounds and isolations
     final compounds = <PlannedExercise>[];
     final isolations = <PlannedExercise>[];
@@ -82,6 +94,14 @@ class SequencingEngine {
 
     // Rule 3: Sort isolations by CNS demand DESC
     isolations.sort((a, b) => _cnsDemand(b).compareTo(_cnsDemand(a)));
+    return (compounds: compounds, isolations: isolations);
+  }
+
+  /// Reorder a single day's exercises by the 6 rules.
+  static List<PlannedExercise> _reorderDay(List<PlannedExercise> exercises) {
+    if (exercises.length <= 1) return exercises;
+
+    final (:compounds, :isolations) = _sorted(exercises);
 
     // Rule 1: Compounds first, then isolations
     final result = [...compounds, ...isolations];

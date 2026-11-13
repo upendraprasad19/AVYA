@@ -22,6 +22,7 @@ import 'package:icanbefitter/shared/repositories/plan_engine/budget_muscle_group
 import 'package:icanbefitter/shared/repositories/plan_engine/models.dart';
 import 'package:icanbefitter/shared/repositories/plan_engine/plan_generator.dart';
 import 'package:icanbefitter/shared/repositories/plan_engine/session_budget.dart';
+import 'package:icanbefitter/shared/repositories/plan_engine/session_set_allocator.dart';
 
 import '../helpers/injury_floor_sweep_lib.dart';
 
@@ -75,19 +76,32 @@ void main() {
   });
 
   for (final goal in const ['lose_fat', 'general_fitness']) {
-    test('Ruling 5c: $goal|4|advanced|bodyweight|30|1 keeps every day of weeks 1-4 inside 30 + 2 minutes', () {
+    test('Ruling 5c: $goal|4|advanced|bodyweight|30|1 keeps every day of weeks 1-4 inside 30 + 2 minutes (a count-forced day: + 5)', () {
       final rowsById = {
         for (final r in (jsonDecode(File('assets/data/exercise_library.json').readAsStringSync()) as List)
             .cast<Map<String, dynamic>>())
           r['id'] as String: r,
       };
+      SessionSetAllocator.debugLastStats = null;
       final p = gen(goal, 1, days: 4);
+      final stats = SessionSetAllocator.debugLastStats!;
+      final forced = <String>[];
       for (final w in p.weekPlans) {
-        for (final d in w.workoutDays) {
+        for (var i = 0; i < w.workoutDays.length; i++) {
+          final d = w.workoutDays[i];
           final minutes = SessionBudget.estimateDaySecondsFromPlanDay(d.toMap(), rowsById) / 60;
-          expect(minutes, lessThanOrEqualTo(32), reason: 'week ${w.weekNumber} ${d.name}: ${minutes.toStringAsFixed(1)}');
+          // Unit 2A (2026-11-13): a day the count floor force-seated (pass A2, `countForced` of the variant the week
+          // reads: B in weeks 2 and 4) may be up to `maxForcedOverSeconds` over, the accepted overrun (founder d26 /
+          // d28): week 1's Lower Body is 32.9 minutes since its lead is seated at 3. Every other day keeps 30 + 2.
+          final variant = w.weekInPhase.isEven ? 'B' : 'A';
+          final isForced = stats[variant]!.countForced.containsKey(i);
+          if (isForced) forced.add('week ${w.weekInPhase} ${d.name}');
+          final limit = 32 + (isForced ? SessionBudget.maxForcedOverSeconds / 60 : 0);
+          expect(minutes, lessThanOrEqualTo(limit), reason: 'week ${w.weekNumber} ${d.name}: ${minutes.toStringAsFixed(1)}');
         }
       }
+      // The Ruling 5c day itself (Upper Pull) is never excused.
+      expect(forced.where((f) => f.contains('Pull')), isEmpty, reason: 'forced: $forced');
     });
   }
 }

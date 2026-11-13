@@ -74,6 +74,7 @@ class Fx {
     bool lighter = false,
     Set<String> focus = const {},
     bool is6Day = true,
+    bool? leadFirst,
   }) =>
       SessionSetAllocator.allocate(
         days: days,
@@ -81,6 +82,7 @@ class Fx {
             minutes: minutes, goal: goal, level: level, lighter: lighter, focus: focus),
         rowsByName: rows,
         is6Day: is6Day,
+        leadFirst: leadFirst,
       );
 }
 

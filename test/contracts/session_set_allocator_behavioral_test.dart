@@ -185,17 +185,21 @@ void main() {
             }(),
         ].fold(0.0, (a, b) => a + b);
 
-    test('no cap binds (one exercise per group): only time does, and the day fits', () {
+    test('no cap binds (one exercise per group): only time and the count floor do', () {
       final budget = (30 - SessionBudget.warmCoolMinutes(30)) * 60;
       final (hyp, fh) = dayOf('hypertrophy');
       final (str, fs) = dayOf('strength');
       final outH = fh.run(hyp, minutes: 30);
       final outS = fs.run(str, minutes: 30);
-      // OI-456 piece B: the day seats its first four exercises at 2 sets (the time left
-      // after them cannot take a 5th at 2 or grow any to 3).
-      expect(setsOf(outH[0]), [('chest', 2), ('back', 2), ('delts', 2), ('bi', 2)]);
-      expect(secondsOf(outH[0], fh, 'hypertrophy'), lessThanOrEqualTo(budget));
-      expect(secondsOf(outS[0], fs, 'strength'), lessThanOrEqualTo(budget));
+      // OI-456 piece B: the day holds its first four exercises (the count floor at 30 minutes). Unit 2A: the day's
+      // lead (chest, the sequencer's opener) is seated at the base 3 first (R1), so only three fit the clock and the
+      // count floor force-seats bi at 2 (pass A2, named in countForced), 90 s over the budget, inside the
+      // 300 s bound (founder d26 / d28: the accepted overrun). Before 2A: [chest 2, back 2, delts 2, bi 2], inside.
+      expect(setsOf(outH[0]), [('chest', 3), ('back', 2), ('delts', 2), ('bi', 2)]);
+      expect(secondsOf(outH[0], fh, 'hypertrophy'), closeTo(budget + 90, 1e-6));
+      expect(secondsOf(outS[0], fs, 'strength'), closeTo(budget + 90, 1e-6));
+      fs.run(str, minutes: 30);
+      expect(statsA().countForced, {0: [(name: 'bi', sets: 2)]});
       // OI-456: the day's intensity no longer sets rest or sets, so the same exercise list
       // holds the SAME sets on a strength day and a hypertrophy day (it used to hold fewer
       // on the strength day, whose 150 s rests were the cause of the 4 / 6 / 4 / 9 skew).
@@ -213,8 +217,12 @@ void main() {
       final plain = f.run(mk(), minutes: 90);
       // OI-456 piece B: lifts are seated at 2 sets: 4 x 2 = 8 and the cap leaves none for c4, c5.
       expect(setsOf(plain[0]), [('c0', 2), ('c1', 2), ('c2', 2), ('c3', 2)]);
+      // Unit 2A: the plain day falls back to the capped world (R3: the lead at 3 would leave 3 rows, under main's
+      // 4), so it is unchanged. The focus day keeps the lead world: c0 at 3 (R1) and the cap of 12 reached by five
+      // rows (main: six at 2); 5 rows is the count floor, so the lost row is the accepted cost (founder d26).
       final focus = f.run(mk(), minutes: 90, focus: {'Chest'});
-      expect(setsOf(focus[0]), [('c0', 2), ('c1', 2), ('c2', 2), ('c3', 2), ('c4', 2), ('c5', 2)]);
+      expect(setsOf(focus[0]), [('c0', 3), ('c1', 3), ('c2', 2), ('c3', 2), ('c4', 2)]);
+      expect(statsA().weekly['Chest'], 12);
     });
 
     test('weekly top: a non-focus group stays at 16 (intermediate build_muscle)', () {
@@ -257,8 +265,9 @@ void main() {
       // week and the 12-set focus cap; only the ordinary cap of 8 stops it at 2 sets.
       final lighter = f.run(mk(), minutes: 90, lighter: true, focus: {'Chest'});
       expect(setsOf(lighter[0]), [('c0', 2), ('c1', 2), ('c2', 2), ('c3', 2)]);
+      // Unit 2A: the lead world, as in the session-cap test above (main: six rows at 2).
       final ordinary = f.run(mk(), minutes: 90, focus: {'Chest'});
-      expect(setsOf(ordinary[0]), [('c0', 2), ('c1', 2), ('c2', 2), ('c3', 2), ('c4', 2), ('c5', 2)]);
+      expect(setsOf(ordinary[0]), [('c0', 3), ('c1', 3), ('c2', 2), ('c3', 2), ('c4', 2)]);
     });
 
     test('focus reaches past the ordinary top (16) and stops at 25', () {
@@ -716,7 +725,12 @@ void main() {
           }
           if (forced == 0) {
             for (var d = 0; d < nDays; d++) {
-              expect(ledger.secondsLeft(d), greaterThanOrEqualTo(-1e-6),
+              // OI-456 piece B: a day the count floor force-seated (pass A2, named in `countForced`) may be up to
+              // `maxForcedOverSeconds` over; every other day fits. Unit 2A (2026-11-13): seed plan 15's day 1 is
+              // the first such day in this sweep (the lead seated at 3 leaves a 2-set Kneeling Close Grip Push Up
+              // to A2, 90 s over); before 2A no seed reached A2, so the excuse was never needed.
+              final bound = stats.countForced.containsKey(d) ? -SessionBudget.maxForcedOverSeconds - 1e-6 : -1e-6;
+              expect(ledger.secondsLeft(d), greaterThanOrEqualTo(bound),
                   reason: 'plan $plan $variant day $d time');
             }
           }

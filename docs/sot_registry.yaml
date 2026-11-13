@@ -10812,7 +10812,7 @@ concepts:
     writers:
       - file: lib/shared/repositories/plan_engine/periodization_engine.dart
         method: apply (stamps weekCharacter per week — EXISTING)
-        line: 132
+        line: 146
         notes: >
           `weekCharacter: _waveNames[weekIdx]` — serialized as snake_case
           `week_character` via WeekPlan.toMap (models.dart:79). 7-A adds NO writer;
@@ -11297,6 +11297,46 @@ concepts:
         method_or_widget: the split shape, and week-2 / week-4 quad, Calves and Core sets in both worlds
         semantic: behavioral
     contract_test_path: test/contracts/variant_b_quads_behavioral_test.dart
+
+  - concept: lead_first
+    domain: workout
+    behavioral_test_path: test/contracts/lead_first_allocator_behavioral_test.dart
+    description: >
+      Generator Unit 2A (OI-486, founder d26-d29, 2026-11-13, diagnose d4a7e2, plan
+      docs/plans/2026-11-12-generator-step2-allocator.md): the lead-first set allocator. A day's LEAD is the budgeted row
+      the sequencer will open it with (SequencingEngine.openerOf, which shares _reorderDay's sort); when that row is not
+      admitted, openerOf over the day's admitted slots, the same row week 2 caps against. R1: pass A seats the lead at
+      SessionBudget.baseSets when time, caps, top, the count target and (rank 0) the reservation allow, never by an
+      eviction; else exactly as before. R2: in pass C no other budgeted slot grows past the lead's sets + 1; pass D (the
+      focus pass) is exempt. R3: each variant is allocated in the lead, capped and main worlds and keeps the first that
+      is not worse than main (SessionSetAllocator.worldIsWorse: a day under min(count floor, main's rows) or a group
+      main trains at 0); B's lead / capped worlds copy the CHOSEN A's days and stats; neither B world holding sends the
+      whole plan to main; AllocationStats.leadWorld names the kept world and leadSeats each day's lead and what bound it.
+      R5: PeriodizationEngine._weekTwoGains holds a row that is not the lead and credits no focus group (a hold
+      included) to the lead's week-2 sets + 1. Kill-switch disable_lead_first (PlanEngineFlags.leadFirstEnabled, default
+      ON), read by allocate and apply unless their leadFirst argument is given; OFF equals main 9fc3b043 byte for byte
+      over the 1,010 golden personas (generator_golden_hashes_lead_first_off.json). plan_generator.dart is not touched.
+    writers:
+      - file: lib/shared/repositories/plan_engine/session_set_allocator.dart
+        method: allocate (the flag read) / _allocateLeadFirst (R3) / _variant (R1 seat, R2 underLead, leadSeats)
+      - file: lib/shared/repositories/plan_engine/periodization_engine.dart
+        method: apply (the flag read) / _weekTwoGains (R5)
+      - file: lib/shared/repositories/plan_engine/plan_engine_flags.dart
+        method: leadFirstEnabled (the kill-switch read)
+    readers:
+      - file: lib/shared/repositories/plan_engine/sequencing_engine.dart
+        method_or_widget: openerOf (the lead; one sort shared with _reorderDay, List.sort stable below 32 rows)
+        semantic: performed order
+      - file: lib/shared/repositories/plan_engine/plan_generator.dart
+        method_or_widget: generateV4 (calls allocate and apply without the argument, so both read the flag)
+        semantic: kill-switch
+      - file: test/plan_generator/plan_audit/plan_audit_lib.dart
+        method_or_widget: PlanAuditor.audit lead_starved (skips a row crediting a focus group, d27)
+        semantic: audit
+      - file: test/plan_generator/lead_first_gate_test.dart
+        method_or_widget: 1,010 golden personas, no budgeted row at the lead + 2, the opener unchanged, leadWorld pinned
+        semantic: behavioral
+    contract_test_path: test/contracts/lead_first_allocator_behavioral_test.dart
 
   - concept: volume_titration
     domain: workout
@@ -15109,7 +15149,7 @@ concepts:
         fields_read: [type]
         notes: whitelist shape, widened to include 'logged' by this batch
       - file: lib/shared/repositories/plan_engine/plan_engine_flags.dart
-        line_range: 484-489
+        line_range: 499-504
         method: isRestDayConsideringLogged
         semantic: flag-check
         fields_read: [type]

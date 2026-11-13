@@ -193,6 +193,9 @@ void main() {
       // 586.8 s and leaves 853.2 s: c1 and c2 seat at 2 sets (336 s each) and 181.2 s are left, so
       // neither grows to 3 (+186 s). Priced at the stale 75 s (406.8 s) 361.2 s would be left and c1 would
       // grow to 3 (OI-456 piece B: the sets, not the count, show the price).
+      // Unit 2A: the main world (`leadFirst: false`). With the lead-first rule c1, the day's opener, is seated at 3 at
+      // either price ([3, 2] both), so the fixture could no longer see the price; the pricing is the same code in
+      // every world.
       final f = Fx();
       f.row('cust', ['Core'], reps: '5-8');
       f.row('c1', ['Chest']);
@@ -209,6 +212,7 @@ void main() {
         ctx: f.ctx(days, minutes: 30),
         rowsByName: f.rows,
         is6Day: true,
+        leadFirst: false,
       );
       expect([for (final e in out[0].exercisesA) e.exerciseName], ['cust', 'c1', 'c2']);
       expect([for (final e in out[0].exercisesA) e.sets].skip(1), [2, 2]);
@@ -428,7 +432,9 @@ void main() {
       expect(measured['basic_gym|4|beginner|60'], [5, 5, 5, 5]);
       expect(measured['basic_gym|4|advanced|60'], [8, 8, 8, 8]);
       expect(measured['full_gym|3|intermediate|60'], [6, 6, 6]);
-      expect(measured['full_gym|5|intermediate|60'], [6, 6, 6, 6, 6]);
+      // Unit 2A (2026-11-13): day 2 holds 5 (the lead seated at 3 leaves time for one row fewer; 5 is the count
+      // floor at 60 minutes; founder d26, the accepted cost). Before 2A: [6, 6, 6, 6, 6].
+      expect(measured['full_gym|5|intermediate|60'], [6, 5, 6, 6, 6]);
       expect(measured['full_gym|6|intermediate|60'], [6, 6, 6, 6, 6, 6]);
       // Before OI-456 the same persona measured 4 / 6 / 4 / 9 (a spread of 5).
       expect(spread, 0, reason: 'tester counts: $tester');

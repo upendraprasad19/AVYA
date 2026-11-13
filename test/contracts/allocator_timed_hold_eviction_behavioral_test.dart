@@ -271,13 +271,16 @@ void main() {
       // 60 minutes, budget 3000, lose_fat advanced (8 a day, so the 3 holds leave 5 seats; Chest session cap 8):
       // holds 1332, 1668 left; c1-c4 seat at 2 sets (Chest 8 = the cap; 324 left); chestbi (336) is refused by time
       // AND by the Chest cap: no eviction, deadbug stays.
+      // Unit 2A: run in the main world (`leadFirst: false`). The eviction guard is the same code in every world, but
+      // this arithmetic is main's: with c1 (the opener) seated at 3, 474 s are left and chestbi fits the clock, so
+      // the fixture would test the cap alone (the ON world keeps c1-c3 and all three holds).
       final f = lib();
       final out = f.run([
         f.day('hypertrophy', [
           f.ex('c1'), f.ex('c2'), f.ex('c3'), f.ex('c4'), f.ex('chestbi'),
           hold(f, 'plank', sets: 4), hold(f, 'hollow', sets: 4), hold(f, 'deadbug', sets: 4),
         ])
-      ], minutes: 60, goal: 'lose_fat', level: 'advanced');
+      ], minutes: 60, goal: 'lose_fat', level: 'advanced', leadFirst: false);
       expect(names(out[0]), ['c1', 'c2', 'c3', 'c4', 'plank', 'hollow', 'deadbug']);
     });
 
@@ -305,13 +308,16 @@ void main() {
       // 60 minutes, intermediate (6 a day): holds 684 + 684 + 444 = 1812, 1188 left, and they take 3 of the 6, so
       // the day seats 3 slots: chest, back, hinge (1008, 180 left). quad is refused by the COUNT (and would be by
       // time): no eviction, the third hold stays.
+      // Unit 2A: run in the main world (`leadFirst: false`), as above: with chest (the opener) seated at 3, hinge is
+      // refused by time inside the count and evicts deadbug for its first Hamstrings / Glutes credit (a correct
+      // eviction, so the count is no longer what refuses).
       final f = lib();
       final out = f.run([
         f.day('hypertrophy', [
           f.ex('chest'), f.ex('back'), f.ex('hinge'), f.ex('quad'),
           hold(f, 'plank', sets: 6), hold(f, 'hollow', sets: 6), hold(f, 'deadbug', sets: 4),
         ])
-      ], minutes: 60);
+      ], minutes: 60, leadFirst: false);
       expect(names(out[0]), ['chest', 'back', 'hinge', 'plank', 'hollow', 'deadbug']);
     });
 

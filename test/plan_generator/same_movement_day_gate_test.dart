@@ -101,7 +101,12 @@ void main() {
     // The drop is N19 Dumbbell Glute Bridge, the home_dumbbells Glutes isolation pick, seated on fewer short B days
     // (2,304-plan audit ON, weeks 1-2: N19 1444 -> 1289 placements, the other loaded versions unchanged); shared days
     // stay 0 in both worlds. Unit 1B-F deleted the OFF world; the ON floor below is re-measured on the flipped tree.
-    expect(daysWithLoaded, greaterThanOrEqualTo(931),
+    // Unit 2A (the lead-first allocator, 2026-11-13): 992 on main 9fc3b043 -> 719 (probe over these personas, weeks 1-2,
+    // `disable_lead_first` set vs unset): N19 Dumbbell Glute Bridge 633 -> 379, N18 Dumbbell Hip Thrust 182 -> 164, N16
+    // Dumbbell Walking Lunge 8 -> 0, N20 Dumbbell Sumo Deadlift 127 -> 126, N22 Weighted Russian Twist 42 -> 50. The
+    // picker is unchanged; the allocator seats each day's lead at 3 and the home_dumbbells Glutes isolation leaves
+    // short leg days (plan section 4: Glutes -1,768 sets; weekly minimums are unit 2C's). Shared days stay 0.
+    expect(daysWithLoaded, greaterThanOrEqualTo(719),
         reason: 'non-vacuity: fewer days held a loaded version than measured ($daysWithLoaded)');
     expect(bad, isEmpty, reason: '${bad.length} day(s) hold a loaded version and its original');
     // ignore: avoid_print
