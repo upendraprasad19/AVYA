@@ -163,3 +163,18 @@ DateTime sundayOfIst(DateTime t) {
 bool isSameIstDate(DateTime a, DateTime b) {
   return istDateStr(a) == istDateStr(b);
 }
+
+/// True when the ISO-8601 instant [iso] falls on the IST calendar date
+/// [istDay] (`YYYY-MM-DD`). OI-502: a coach row's `created_at` has been UTC
+/// (`Z`) since 2026-09-27, and a restored one carries `+00:00`, so its own
+/// leading date is the UTC date; between 00:00 and 05:30 IST that is the
+/// previous day, and a `startsWith(istDay)` test misses the row. The instant
+/// is converted to IST first. A zone-less (pre-2026-09-27) string is read as
+/// this device's local clock, as `DateTime.parse` does. Empty or unparseable:
+/// false.
+bool isIsoOnIstDay(String? iso, String istDay) {
+  if (iso == null || iso.isEmpty) return false;
+  final parsed = DateTime.tryParse(iso);
+  if (parsed == null) return false;
+  return istDateStr(parsed) == istDay;
+}

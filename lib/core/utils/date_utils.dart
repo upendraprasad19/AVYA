@@ -52,3 +52,13 @@ int? dayOfWeekFromDate(String date) {
   if (parsed == null) return null;
   return parsed.weekday - 1;
 }
+
+/// `HH:mm` of [t] on this device's own clock: the time a chat bubble shows
+/// (OI-502). A UTC instant (a coach row's `created_at` since 2026-09-27) is
+/// converted first; a local DateTime is unchanged. The device clock, not IST,
+/// on purpose: it is what the status bar shows next to the bubble.
+String chatClockLabel(DateTime t) {
+  final local = t.toLocal();
+  return '${local.hour.toString().padLeft(2, '0')}:'
+      '${local.minute.toString().padLeft(2, '0')}';
+}

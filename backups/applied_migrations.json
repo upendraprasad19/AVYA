@@ -1394,5 +1394,14 @@
     "diagnose": "5970aa",
     "slug": "coach_chat_cleared_at",
     "note": "OI-479 (plan docs/plans/2026-11-12-oi479-clear-conversation.md): adds user_preferences.coach_chat_cleared_at timestamptz NULL and public.raise_coach_chat_cleared_at(timestamptz) (SECURITY INVOKER, search_path public, pg_temp; GREATEST(stored, LEAST(p_at, now())); refuses NULL p_at and no auth.uid(); EXECUTE revoked from PUBLIC and anon, granted to authenticated). No row rewritten. Applied to project dedsavbjuwgarrhphgnl only, after the founder go (2026-11-12, 'Apply 177'), via MCP apply_migration on the exact file (sha256 f5497961..., copied and verified before the apply); registered as version 20261112093239. Rehearsed first in local docker (supabase/postgres 17.6.1.084, test/sql/coach_chat_cleared_at_local.sh, 18 cases, 4 mutants red). Post-apply live: column timestamp with time zone / nullable; prosecdef false; proconfig {search_path=public, pg_temp}; has_function_privilege anon false, authenticated true; proacl {postgres,authenticated,service_role}; 0 rows with a value. Rollback: the inline DROP FUNCTION + DROP COLUMN at the end of the file."
+  },
+  {
+    "migration": "178",
+    "applied_at": "2026-11-13T08:35:38+05:30",
+    "hash": "sha256:0e4e5f6f9634eaed33748cea344bef43f900ee7ec797b1b05aa3372fc32c98da",
+    "applier": "claude-via-mcp",
+    "diagnose": "d4a7c9",
+    "slug": "coach_client_key",
+    "note": "OI-503 (plan docs/plans/2026-11-13-coach-chat-time-dup.md section 4 C1): adds ai_coach_interactions.client_key text NULL with CONSTRAINT ai_coach_interactions_client_key_format CHECK (client_key IS NULL OR client_key ~ '^coach_[0-9]{10,16}$') and the partial index idx_ai_coach_interactions_user_client_key (user_id, client_key) WHERE client_key IS NOT NULL; SET lock_timeout 5s / RESET. No row rewritten. Applied to project dedsavbjuwgarrhphgnl only, after the founder go (2026-11-13, 'Ok'), via MCP apply_migration on the exact file text; registered as version 20261113030538. Rehearsed first in local docker (supabase/postgres 17.6.1.084, test/sql/coach_client_key_local.sh, 14 cases, 4 mutants red). Pre-apply live: 12 columns, no client_key, last migration 177. Post-apply live: client_key text / nullable as the 13th column; the CHECK and the index definitions equal the file; 0 keyed rows. Rollback: the inline DROP INDEX + DROP COLUMN at the end of the file, only after the Edge Functions that write the column are redeployed to their previous versions."
   }
 ]

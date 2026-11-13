@@ -87,6 +87,133 @@ String? _coachCreatedAtFromKey(String key) {
       .toIso8601String();
 }
 
+// ── OI-503: one coach turn = one local row (the shared turn key) ─────────
+//
+// Plan docs/plans/2026-11-13-coach-chat-time-dup.md section 4 (C4, C5),
+// migration 178, diagnose d4a7c9. The phone sends its Hive key of a turn
+// (`coach_<ms>`) as `client_key`; ai-proxy / ai-media-proxy store it on the
+// cloud row. The restore writes that row back AT the key, so the sending
+// phone's row and the cloud row are one row, and another device gets the same
+// key. Pure rules here; the I/O is in [SyncServiceCoach].
+
+/// configBox kill switch: `true` restores coach rows with the pre-OI-503 loop
+/// (kept verbatim). It gates the RESTORE only; key emission and the push's key
+/// lookup stay on (both harmless: a key nobody reads changes nothing, and the
+/// lookup falls back on a throw).
+const String kDisableCoachClientKeyRestore = 'disable_coach_client_key_restore';
+
+/// A coach chat row key. Only keys of this shape are ever targeted, deleted or
+/// compared by the restore: `coach_memory` and other singletons share the box.
+final RegExp kCoachRowKeyPattern = RegExp(r'^coach_[0-9]+$');
+
+/// The key shape the server's CHECK (`ai_coach_interactions_client_key_format`)
+/// and `_shared/client_key.ts` accept. A `coach_<hex>` key (a restored row with
+/// an unparseable `created_at`) is never sent: the CHECK would refuse the upsert
+/// on every pass.
+final RegExp kCoachClientKeyPattern = RegExp(r'^coach_[0-9]{10,16}$');
+
+final RegExp _coachMediaTag = RegExp(r'^\[(?:Photo(?::[^\]]*)?|Video)\]\s*');
+
+/// The turn's text with the media tag removed, so the phone's `[Photo] cap`
+/// and the server's `[Photo: image] cap` / `[Video] cap` compare equal.
+String coachTurnText(String? userMessage) =>
+    (userMessage ?? '').trim().replaceFirst(_coachMediaTag, '').trim();
+
+/// A cloud row that carries a real reply: non-empty, not the `pending`
+/// reservation, not a hard failure (an apology text or the loop-threw marker).
+bool isCompleteCloudCoachRow(Map row) {
+  final reply = (row['ai_response'] as String? ?? '').trim();
+  final model = row['model_used'] as String?;
+  return reply.isNotEmpty &&
+      model != 'pending' &&
+      !isRestoredHardFailureRow(
+        aiResponse: row['ai_response'] as String?,
+        modelUsed: model,
+      );
+}
+
+/// A local row still waiting for (or missing) its reply.
+bool isIncompleteLocalCoachRow(Map local) =>
+    local['failed'] == true ||
+    local['pending'] == true ||
+    (local['ai_response'] as String? ?? '').trim().isEmpty;
+
+DateTime? _coachRowInstant(Map row, [String? key]) {
+  final parsed = DateTime.tryParse(row['created_at'] as String? ?? '');
+  if (parsed != null) return parsed;
+  if (key == null) return null;
+  final ms = int.tryParse(key.startsWith('coach_') ? key.substring(6) : '');
+  return ms == null ? null : DateTime.fromMillisecondsSinceEpoch(ms, isUtc: true);
+}
+
+/// One cloud row per key: a complete row over an incomplete one, then the
+/// latest `created_at`; on a tie the later row in [rows] (the fetch order).
+Map<String, dynamic> pickKeyedCloudCoachRow(List<Map<String, dynamic>> rows) {
+  var best = rows.first;
+  for (final r in rows.skip(1)) {
+    final rc = isCompleteCloudCoachRow(r), bc = isCompleteCloudCoachRow(best);
+    if (rc != bc) {
+      if (rc) best = r;
+      continue;
+    }
+    final ri = _coachRowInstant(r), bi = _coachRowInstant(best);
+    if (bi == null || (ri != null && !ri.isBefore(bi))) best = r;
+  }
+  return best;
+}
+
+/// Round 4 F1: a `failed` local row the user has already re-sent: a newer local
+/// row with the same turn text, not failed, within 60 s after it. Filling the
+/// failed row from the cloud would show that exchange twice.
+bool isResentFailedCoachRow(Map<dynamic, dynamic> box, String key, Map local) {
+  if (local['failed'] != true) return false;
+  final at = _coachRowInstant(local, key);
+  if (at == null) return false;
+  final text = coachTurnText(local['user_message'] as String?);
+  for (final k in box.keys) {
+    if (k is! String || k == key || !kCoachRowKeyPattern.hasMatch(k)) continue;
+    final other = box[k];
+    if (other is! Map || other['failed'] == true) continue;
+    if (coachTurnText(other['user_message'] as String?) != text) continue;
+    final oat = _coachRowInstant(other, k);
+    if (oat == null) continue;
+    final d = oat.difference(at);
+    if (d > Duration.zero && d <= const Duration(seconds: 60)) return true;
+  }
+  return false;
+}
+
+/// The local row a cloud row restores to (the same fields the pre-OI-503
+/// loop writes), with `id` = the cloud uuid.
+Map<String, dynamic> coachRowFromCloud(Map<String, dynamic> map) => {
+      'id': map['id'],
+      'user_message': map['user_message'] ?? '',
+      'ai_response': map['ai_response'] ?? '',
+      'model_used': map['model_used'] ?? 'unknown',
+      'mode': isRestoredMediaRow(map['user_message'] as String?)
+          ? 'media'
+          : 'quick',
+      'is_user_message': true,
+      'created_at': map['created_at'],
+      'channel': map['channel'],
+      'source': 'cloud_restore',
+      'had_hard_failure': isRestoredHardFailureRow(
+        aiResponse: map['ai_response'] as String?,
+        modelUsed: map['model_used'] as String?,
+      ),
+    };
+
+/// The unkeyed restore key of a cloud row (the pre-OI-503 derivation).
+String coachUnkeyedRestoreKey(Map<String, dynamic> map) {
+  final ts = DateTime.tryParse(map['created_at'] as String? ?? '')
+          ?.millisecondsSinceEpoch ??
+      0;
+  final id = map['id'] as String? ?? '';
+  return ts > 0
+      ? 'coach_$ts'
+      : 'coach_${id.hashCode.toUnsigned(32).toRadixString(16)}';
+}
+
 /// Sync + restore for AI coach surfaces: coach_memory (induction state +
 /// coach_notes) and ai_coach_interactions (chat history). See CLAUDE.md
 /// §11 for the AI architecture context.
@@ -174,6 +301,12 @@ extension SyncServiceCoach on SyncService {
       // the prefix guard above skips them; this is the belt-and-braces
       // semantic guard in case a future writer changes the key shape.)
       if (entry['kind'] != null) continue;
+      // OI-503 (round 5 P2-a): a row restored from the cloud is already there.
+      // Pushing it once it is older than the 5-minute text window created the
+      // `in_app_orphan` echoes; with a key it would create KEYED echoes.
+      if (entry['source'] == 'cloud_restore') continue;
+      // OI-503 (round 3 F8): a live send's server row may not exist yet.
+      if (CoachInteractionRepository.isInFlight(key)) continue;
 
       try {
         final rawId = entry['id'];
@@ -200,29 +333,67 @@ extension SyncServiceCoach on SyncService {
         // the same user_message within the last 5 minutes. If hit, skip
         // the orphan write — the server-side row IS the source of truth
         // for that turn regardless of channel.
+        // OI-503 (C4): the server row of this turn carries the phone's key.
+        // Look it up FIRST; no hit falls through to the text lookup below
+        // (older rows carry no key). A throw (a database without the column)
+        // also falls through, and the orphan then goes up without the key.
+        final sendKey = kCoachClientKeyPattern.hasMatch(key);
+        var keyLookupFailed = false;
+        if (sendKey) {
+          try {
+            final keyed = await _supabase.client
+                .from('ai_coach_interactions')
+                .select('id')
+                .eq('user_id', userId)
+                .eq('client_key', key)
+                .limit(1)
+                .maybeSingle();
+            final keyedId = keyed?['id'] as String?;
+            if (keyedId != null && keyedId.isNotEmpty) {
+              await _stampCoachCloudId(key, keyedId);
+              continue;
+            }
+          } catch (e, st) {
+            keyLookupFailed = true;
+            debugPrint('[SyncService._syncCoachInteractions] key lookup: $e');
+            // Local telemetry only: a database without the column would fail
+            // this lookup for every row on every pass.
+            unawaited(ErrorTelemetry.recordNonFatal(e, st,
+                reason: 'coach_client_key_lookup_failed', skipServerPost: true));
+          }
+        }
+
         final userMsg = (entry['user_message'] as String? ?? '').trim();
         if (userMsg.isNotEmpty) {
           final cutoff =
               DateTime.now().toUtc().subtract(const Duration(minutes: 5));
           final existing = await _supabase.client
               .from('ai_coach_interactions')
-              .select('id, channel, created_at')
+              // OI-503 B-pass A-F1: read the hit's key too, when the
+              // column is known to exist (a failed key lookup means it may
+              // not, and naming it would fail this lookup as well).
+              .select(sendKey && !keyLookupFailed
+                  ? 'id, channel, created_at, client_key'
+                  : 'id, channel, created_at')
               .eq('user_id', userId)
               .eq('user_message', userMsg.substring(
                   0, userMsg.length > 500 ? 500 : userMsg.length))
               .gte('created_at', cutoff.toIso8601String())
               .limit(1)
               .maybeSingle();
-          if (existing != null) {
+          // OI-503 B-pass A-F1: a text hit that carries ANOTHER turn's key
+          // is that turn, not this one (the same words re-sent: a failed K1,
+          // then K2 succeeded). Stamping its id here would mark K1 synced
+          // under K2's cloud id; K1 goes up as its own (keyed) orphan instead.
+          final hitKey = existing?['client_key'];
+          if (existing != null && !(hitKey is String && hitKey != key)) {
             // Server already has a row for this turn (any channel) — drop
             // the orphan write. Stamp the Hive entry with the cloud id
             // so future cold restores collapse cleanly on the
             // `coach_<ts>` derivation path in _restoreCoachInteractions.
             final cloudId = existing['id'] as String?;
             if (cloudId != null && cloudId.isNotEmpty) {
-              final updated = Map<String, dynamic>.from(entry);
-              updated['id'] = cloudId;
-              await coachBox.put(key, updated);
+              await _stampCoachCloudId(key, cloudId);
             }
             continue;
           }
@@ -247,6 +418,8 @@ extension SyncServiceCoach on SyncService {
           // fallback entirely (G2 gate) and derives the time from the Hive key
           // as UTC (`_coachCreatedAtFromKey`), which already covers it.
           if (createdAt != null) 'created_at': createdAt,
+          // OI-503: keyed, so a later restore writes it back at this key.
+          if (sendKey && !keyLookupFailed) 'client_key': key,
         };
         await _supabase.client
             .from('ai_coach_interactions')
@@ -256,10 +429,7 @@ extension SyncServiceCoach on SyncService {
         // dedup-hit branch above (:186-191). Without this, `entry['id']`
         // never becomes a real UUID, so the rawId guard at :148-150 never
         // catches the row and it re-upserts on every single sync pass.
-        if (entry['id'] != cloudId) {
-          final updated = Map<String, dynamic>.from(entry)..['id'] = cloudId;
-          await coachBox.put(key, updated);
-        }
+        await _stampCoachCloudId(key, cloudId);
       } catch (e, st) {
         debugPrint('[SyncService._syncCoachInteractions] $e');
         // audit-2026-05-11 H-42 — telemetry pair.
@@ -270,6 +440,16 @@ extension SyncServiceCoach on SyncService {
         } catch (_) {}
       }
     }
+  }
+
+  /// OI-503 (round 3 F8): writes ONLY `id` onto a FRESH read of the row, with
+  /// no await between the read and the put. The push used to write back the
+  /// copy it took before its network awaits, which could undo a restore's
+  /// fill or re-create a row deleted meanwhile (a null fresh read: no put).
+  Future<void> _stampCoachCloudId(String key, String cloudId) async {
+    final fresh = _hive.coachBox.get(key);
+    if (fresh is! Map || fresh['id'] == cloudId) return;
+    await _hive.coachBox.put(key, Map<String, dynamic>.from(fresh)..['id'] = cloudId);
   }
 
   /// Restores AI coach interactions from Supabase (for chat history on new device).
@@ -287,6 +467,13 @@ extension SyncServiceCoach on SyncService {
               .order('created_at')
               .limit(1000)
           : (preFetched as List? ?? const []);
+
+      // OI-503: the keyed restore, unless the kill switch is set (then the
+      // pre-OI-503 loop below runs unchanged).
+      if (_hive.configBox.get(kDisableCoachClientKeyRestore) != true) {
+        await _applyKeyedCoachRows(userId, rows);
+        return;
+      }
 
       for (final row in rows) {
         final map = Map<String, dynamic>.from(row as Map);
@@ -348,6 +535,124 @@ extension SyncServiceCoach on SyncService {
       try {
         await _reportSyncFailure(opType: 'restore_coach_interactions', error: e);
       } catch (_) {}
+    }
+  }
+
+  /// OI-503 (plan section 4, C5): one turn, one local row.
+  ///
+  /// Cloud rows WITH a valid `client_key` are grouped by it and each group
+  /// restores to that key; rows without one keep the pre-OI-503 derivation
+  /// (`coach_<server ms>`). Every write re-checks the account first, and each
+  /// decision (in-flight check, read, decide, put) is one synchronous slice:
+  /// no await between the read of the local row and the `put(` call.
+  Future<void> _applyKeyedCoachRows(String userId, List rows) async {
+    final box = _hive.coachBox;
+    final keyed = <String, List<Map<String, dynamic>>>{};
+    final unkeyed = <Map<String, dynamic>>[];
+    for (final row in rows) {
+      final map = Map<String, dynamic>.from(row as Map);
+      if ((map['id'] as String? ?? '').isEmpty) continue;
+      final ck = map['client_key'];
+      if (ck is String && kCoachClientKeyPattern.hasMatch(ck)) {
+        (keyed[ck] ??= []).add(map);
+      } else {
+        unkeyed.add(map);
+      }
+    }
+    // Round 3 F3: an unkeyed row with the same turn text and the same instant
+    // as a keyed row is a legacy echo of that turn (a pre-OI-503 orphan push
+    // of a restored copy); writing it would re-create the stale copy.
+    final keyedFingerprints = <String>{
+      for (final g in keyed.values)
+        for (final m in g)
+          '${coachTurnText(m['user_message'] as String?)}|'
+              '${_coachRowInstant(m)?.millisecondsSinceEpoch}',
+    };
+
+    final occupiedKeys = <String>{};
+    for (final entry in keyed.entries) {
+      if (ownerChangedSince(userId)) return;
+      final key = entry.key;
+      final group = entry.value;
+      final cloud = pickKeyedCloudCoachRow(group);
+      final cloudId = cloud['id'] as String;
+      // ── one synchronous slice: in-flight check, read, decide, put( ──
+      final inFlight = CoachInteractionRepository.isInFlight(key);
+      final local = box.get(key);
+      Map<String, dynamic>? next;
+      var occupied = false;
+      if (local is! Map) {
+        if (!inFlight) next = coachRowFromCloud(cloud);
+      } else if (coachTurnText(local['user_message'] as String?) !=
+          coachTurnText(cloud['user_message'] as String?)) {
+        occupied = true; // round 3 F2: another turn holds this key
+      } else {
+        final updated = Map<String, dynamic>.from(local);
+        var changed = false;
+        final localId = local['id'];
+        if (!(localId is String && SyncService._looksLikeUuid(localId))) {
+          updated['id'] = cloudId;
+          changed = true;
+        }
+        if (!inFlight &&
+            isIncompleteLocalCoachRow(local) &&
+            isCompleteCloudCoachRow(cloud) &&
+            !isResentFailedCoachRow(box.toMap(), key, local)) {
+          updated['ai_response'] = cloud['ai_response'] ?? '';
+          updated['model_used'] = cloud['model_used'] ?? 'unknown';
+          updated['had_hard_failure'] = isRestoredHardFailureRow(
+            aiResponse: cloud['ai_response'] as String?,
+            modelUsed: cloud['model_used'] as String?,
+          );
+          updated['pending'] = false;
+          updated['failed'] = false;
+          updated.remove('error_text');
+          changed = true;
+        }
+        if (changed) next = updated;
+      }
+      if (next != null) await box.put(key, next);
+      // ── end of the slice ──
+
+      if (occupied) {
+        occupiedKeys.add(key);
+        // The cloud row goes down the unkeyed path at its own server key.
+        for (final m in group) {
+          unkeyed.add(m);
+        }
+        continue;
+      }
+      // A stale copy an earlier, pre-key build made of THESE cloud rows:
+      // `source: cloud_restore` at `coach_<that row's ms>`, same text.
+      for (final m in group) {
+        final copyKey = coachUnkeyedRestoreKey(m);
+        if (copyKey == key || !kCoachRowKeyPattern.hasMatch(copyKey)) continue;
+        if (ownerChangedSince(userId)) return;
+        final copy = box.get(copyKey);
+        if (copy is Map &&
+            copy['source'] == 'cloud_restore' &&
+            copy['user_message'] == m['user_message'] &&
+            !CoachInteractionRepository.isInFlight(copyKey)) {
+          await box.delete(copyKey);
+        }
+      }
+    }
+
+    for (final map in unkeyed) {
+      if (ownerChangedSince(userId)) return;
+      // B-pass A-F3: an unkeyed row with no parseable instant is never an
+      // echo (a keyed row without one fingerprints as `text|null`).
+      if (map['client_key'] == null &&
+          _coachRowInstant(map) != null &&
+          keyedFingerprints.contains('${coachTurnText(map['user_message'] as String?)}|'
+              '${_coachRowInstant(map)!.millisecondsSinceEpoch}')) {
+        continue;
+      }
+      final hiveKey = coachUnkeyedRestoreKey(map);
+      // Never over the row that occupies a key, nor into a live send.
+      if (occupiedKeys.contains(hiveKey)) continue;
+      if (CoachInteractionRepository.isInFlight(hiveKey)) continue;
+      await box.put(hiveKey, coachRowFromCloud(map));
     }
   }
 

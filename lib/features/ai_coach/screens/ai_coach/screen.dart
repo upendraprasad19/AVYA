@@ -10,6 +10,7 @@ import 'package:icanbefitter/core/theme/colors.dart';
 import 'package:icanbefitter/features/train/services/coach_day_completion.dart';
 import 'package:icanbefitter/core/theme/spacing.dart';
 import 'package:icanbefitter/core/theme/typography.dart';
+import 'package:icanbefitter/core/utils/date_utils.dart' show chatClockLabel;
 import 'package:icanbefitter/core/constants/app_constants.dart';
 import 'package:icanbefitter/core/services/error_telemetry.dart';
 import 'package:icanbefitter/core/services/subscription_service.dart';

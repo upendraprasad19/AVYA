@@ -21,7 +21,8 @@ import 'sync_service.dart';
 ///   * the client dedup scan (`_findRecentDuplicateMessageKey`), so a repeat of a
 ///     hidden message mints a new, visible row.
 /// Nothing else reads it: the daily message count, the first-message flag, the
-/// coaching-notes extraction and the Home tip deliberately see every row.
+/// coaching-notes extraction deliberately see every row (the Home coach tip,
+/// once a reader here too, was removed by OI-502).
 ///
 /// Monotonic everywhere: [clear] and the restore adoption write `max(stored, new)`,
 /// and the cloud copy (`user_preferences.coach_chat_cleared_at`, migration 177) is

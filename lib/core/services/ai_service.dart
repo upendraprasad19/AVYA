@@ -361,9 +361,13 @@ class AiService {
   ///
   /// Returns an [AiChatResponse] with reply text and any detected
   /// log actions, or throws on failure.
+  ///
+  /// [clientKey] (OI-503): the chat row's Hive key (`coach_<ms>`). The server
+  /// stores it on its row so the restore writes that row back at the same key
+  /// (one turn, one local row). Sent in BOTH transports.
   Future<AiChatResponse> chat(
       String message, Map<String, dynamic> context,
-      {List<Map<String, dynamic>>? history}) async {
+      {List<Map<String, dynamic>>? history, String? clientKey}) async {
     final compact = _compactContext(context);
     try {
       final response = await _supabase.callFunction(
@@ -375,6 +379,7 @@ class AiService {
           'client_capabilities': kCoachClientCapabilities,
           // Unit 2 — coach short-term memory (optional; omitted when empty/off).
           if (history != null && history.isNotEmpty) 'history': history,
+          'client_key': ?clientKey,
         },
       );
 
@@ -395,7 +400,8 @@ class AiService {
       if (e.type == DioExceptionType.connectionError ||
           e.type == DioExceptionType.connectionTimeout ||
           e.type == DioExceptionType.unknown) {
-        return _directHttpCall('ai-proxy', message, compact, history: history);
+        return _directHttpCall('ai-proxy', message, compact,
+            history: history, clientKey: clientKey);
       }
       rethrow;
     } catch (e) {
@@ -405,7 +411,8 @@ class AiService {
           ErrorTelemetry.logEvent('ai_service_chat_failed', message: clipped));
       // Web fallback: 'Failed to fetch' is thrown by the browser fetch API
       if (errStr.contains('Failed to fetch')) {
-        return _directHttpCall('ai-proxy', message, compact, history: history);
+        return _directHttpCall('ai-proxy', message, compact,
+            history: history, clientKey: clientKey);
       }
       rethrow;
     }
@@ -486,7 +493,7 @@ class AiService {
   /// surfacing the first 502 to the user.
   Future<AiChatResponse> _directHttpCall(
       String functionName, String message, Map<String, dynamic> context,
-      {List<Map<String, dynamic>>? history}) async {
+      {List<Map<String, dynamic>>? history, String? clientKey}) async {
     final url = '${AppConstants.supabaseUrl}/functions/v1/$functionName';
     // BUG-C (d3a1c7): fresh USER token or fail clearly — NEVER fall back to the
     // anon key for an authed Edge Function. ai-proxy validates the Bearer token
@@ -518,6 +525,7 @@ class AiService {
           'client_capabilities': kCoachClientCapabilities,
           // Unit 2 — coach short-term memory (optional; omitted when empty/off).
           if (history != null && history.isNotEmpty) 'history': history,
+          'client_key': ?clientKey,
         },
         options: Options(
           headers: {
@@ -669,8 +677,10 @@ class AiService {
     String message,
     String mediaUrl,
     String mediaType,
-    Map<String, dynamic> context,
-  ) async {
+    Map<String, dynamic> context, {
+    // OI-503: the media row's Hive key, as in [chat]. Both transports.
+    String? clientKey,
+  }) async {
     final compact = _compactContext(context);
     try {
       final response = await _supabase.callFunction(
@@ -681,6 +691,7 @@ class AiService {
           'media_type': mediaType,
           'context': compact,
           'snapshot_json': compact,
+          'client_key': ?clientKey,
         },
       );
 
@@ -698,7 +709,8 @@ class AiService {
       if (e.type == DioExceptionType.connectionError ||
           e.type == DioExceptionType.connectionTimeout ||
           e.type == DioExceptionType.unknown) {
-        return _directMediaHttpCall(message, mediaUrl, mediaType, compact);
+        return _directMediaHttpCall(message, mediaUrl, mediaType, compact,
+            clientKey: clientKey);
       }
       rethrow;
     } catch (e) {
@@ -707,7 +719,8 @@ class AiService {
       unawaited(ErrorTelemetry.logEvent('ai_service_chat_with_media_failed',
           message: clipped));
       if (errStr.contains('Failed to fetch')) {
-        return _directMediaHttpCall(message, mediaUrl, mediaType, compact);
+        return _directMediaHttpCall(message, mediaUrl, mediaType, compact,
+            clientKey: clientKey);
       }
       rethrow;
     }
@@ -724,8 +737,9 @@ class AiService {
     String message,
     String mediaUrl,
     String mediaType,
-    Map<String, dynamic> context,
-  ) async {
+    Map<String, dynamic> context, {
+    String? clientKey,
+  }) async {
     final url = '${AppConstants.supabaseUrl}/functions/v1/ai-media-proxy';
     // BUG-C (d3a1c7): fresh USER token or fail clearly — NEVER fall back to the
     // anon key for an authed Edge Function. ai-proxy validates the Bearer token
@@ -756,6 +770,7 @@ class AiService {
           'media_type': mediaType,
           'context': compact,
           'snapshot_json': compact,
+          'client_key': ?clientKey,
         },
         options: Options(
           headers: {

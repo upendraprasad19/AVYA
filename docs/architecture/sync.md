@@ -444,6 +444,16 @@ overwrite a present local row (`if (box.get(key) != null) continue;`).
   the preferences upsert, a wholesale replace that would let an older device lower it.
   Hidden chat rows are still restored in full (`_restoreCoachInteractions`); the marker
   hides them at read time.
+- **Shared turn key (coach chat, OI-503, `d4a7c9`):** a coach turn's identity is the
+  phone's Hive key (`coach_<ms>`), carried through the server as
+  `ai_coach_interactions.client_key` (migration 178; written by ai-proxy, ai-media-proxy
+  and the keyed orphan push). `_restoreCoachInteractions` writes a keyed cloud row back AT
+  that key: absent -> written; same turn text -> `id` stamped, and the reply filled only
+  when the local row is incomplete, not in flight (`CoachInteractionRepository.isInFlight`),
+  not already re-sent, and the cloud row is complete; different text -> left alone. A
+  local reply is never replaced, `created_at` and media fields are never touched. Unkeyed
+  rows keep `coach_<server ms>`. The push never sends a `cloud_restore` row back. Kill
+  switch `configBox['disable_coach_client_key_restore']` (restore only).
 - **Trade-off:** offline-first local-wins — a row edited on a 2nd device won't overwrite
   the local copy. Revisit with cloud-newer-wins if true multi-device editing is a goal.
 - **Deletion survives restore via a server-side rename-on-delete trigger, NOT via the

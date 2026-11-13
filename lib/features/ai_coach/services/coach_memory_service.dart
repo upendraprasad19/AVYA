@@ -86,7 +86,8 @@ class CoachMemoryService {
       if (raw is! Map) continue;
       final interaction = Map<String, dynamic>.from(raw);
       final createdAt = interaction['created_at'] as String? ?? '';
-      if (!createdAt.startsWith(todayStr)) continue;
+      // OI-502: compare the instant's IST day, not the UTC string's date.
+      if (!isIsoOnIstDay(createdAt, todayStr)) continue;
 
       final userMsg = interaction['user_message'] as String?;
       final aiResponse = interaction['ai_response'] as String?;

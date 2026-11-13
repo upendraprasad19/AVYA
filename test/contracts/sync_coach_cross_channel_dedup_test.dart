@@ -41,7 +41,10 @@ void main() {
       final start = src.indexOf('Future<void> _syncCoachInteractions(');
       expect(start, isNot(-1),
           reason: '_syncCoachInteractions method must exist');
-      final end = (start + 4500).clamp(0, src.length);
+      // OI-503 repoint: the method grew (the client_key lookup runs first), so
+      // the slice is the whole method instead of a fixed 4500 characters.
+      final end = src.indexOf('\n  }\n', start);
+      expect(end, greaterThan(start));
       methodSlice = src.substring(start, end);
     });
 
@@ -101,9 +104,22 @@ void main() {
               'On dedup hit, the Hive entry must be re-put with the cloud '
               "row's id so subsequent restores collapse rather than create "
               'sibling rows.');
-      expect(between.contains('coachBox.put('), isTrue,
-          reason:
-              'The cloud-id stamp must be persisted via coachBox.put(key, ...).');
+      // OI-503 repoint: the stamp goes through _stampCoachCloudId, which
+      // writes only `id` onto a FRESH read (round 3 F8).
+      expect(between.contains('_stampCoachCloudId(key, cloudId)'), isTrue,
+          reason: 'The cloud-id stamp must be persisted (via _stampCoachCloudId).');
+      final helper = src.indexOf('Future<void> _stampCoachCloudId(');
+      expect(helper, isNot(-1));
+      expect(src.substring(helper, src.indexOf('\n  }\n', helper)),
+          contains('_hive.coachBox.put(key,'));
+    });
+
+    test('OI-503: the client_key lookup runs BEFORE the text lookup, which stays', () {
+      final keyIdx = methodSlice.indexOf(".eq('client_key', key)");
+      final textIdx = methodSlice.indexOf(".eq('user_message',");
+      expect(keyIdx, isNot(-1));
+      expect(textIdx, greaterThan(keyIdx),
+          reason: 'older rows carry no key: the text lookup must still run, second');
     });
   });
 }
