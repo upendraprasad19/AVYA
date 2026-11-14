@@ -1791,7 +1791,7 @@ concepts:
         semantic: transformed
         fields_read: [diet_strategy]
       - file: supabase/functions/weekly-report/index.ts
-        line_range: 206-217
+        line_range: 206-218
         method: "handler profile read (Unit 3b-3 B-pass: selects diet_strategy; dietStrategyOn = DISABLE_DIET_STRATEGY_MANUAL_RULES not exactly 'true', read once; the line goes under the protein target in the user message, empty with the switch off; source pins weekly-report/index_test.ts)"
         semantic: pass-through
         fields_read: [diet_strategy]
