@@ -105,6 +105,23 @@ Deno.test("weekly-report reads diet_strategy; the line only with the switch on",
   );
 });
 
+// 3b-3 B-pass seat D finding 1: these tests run with --no-check and read the
+// source as text, so a deleted import would stay green here; pin both.
+Deno.test("weekly-report imports the strategy line and its switch", () => {
+  const code = stripComments(source);
+  assert(
+    /import \{[^}]*\bdietStrategyManualRulesOff\b[^}]*\} from "\.\.\/_shared\/captain_manual\.ts";/
+      .test(code),
+    "dietStrategyManualRulesOff is imported from the captain manual",
+  );
+  assert(
+    code.includes(
+      'import { weeklyReportDietStrategyLine } from "../_shared/diet_strategies.ts";',
+    ),
+    "weeklyReportDietStrategyLine is imported",
+  );
+});
+
 Deno.test("weekly-report puts the strategy line under the protein target", () => {
   const code = stripComments(source);
   const at = code.indexOf("- Daily protein target: ${proteinTarget}g${dietStrategyLine ? `\\n${dietStrategyLine}` : \"\"}\n\n**THIS WEEK'S NUTRITION");

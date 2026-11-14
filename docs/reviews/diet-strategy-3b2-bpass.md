@@ -92,6 +92,8 @@ The 3b-3 B-pass (`docs/reviews/diet-strategy-3b3-bpass.md`, seat A) found two se
 |---|---|---|---|
 | A2 | P2 | `weekly-report` shows the week's average carbs with no target and knows nothing of the strategy, so the model may tell a Keto user to eat more carbs | `_shared/diet_strategies.ts` `weeklyReportDietStrategyLine(raw, isPro)`: a Low carb / Keto line under the protein target (do not grade carbs or fat, never push carbs; calories and protein unchanged), empty for Balanced, unreadable or no PRO; the profile read selects `diet_strategy` (always: a conditional select string defeats supabase-js row typing, and migration 179 is live); the line is off with `DISABLE_DIET_STRATEGY_MANUAL_RULES`. Inert until 3b-3 (the column is NULL for every live row). Tests: `_shared/diet_strategies_test.ts` (behaviour), `weekly-report/index_test.ts` (wiring, comment-stripped). Mutants M1–M8 (the line empty for keto, no PRO check, PRO forced, switch ignored, line dropped, column dropped, switch read removed, line moved): 8 of 8 red |
 | A1 | P3 | the manual comment and `supabase/functions/CLAUDE.md` said only the chat snapshot carries `profile.diet_strategy`; the daily snapshot push carries it too | reworded in both and in the registry: both carry it, no prompt builder reads a stored snapshot |
+| D1 (fix review) | P2 | the weekly-report pins run with `--no-check` on the source text, so a deleted import stayed green | a test pins both imports (comment-stripped); mutants (each import deleted) 2 of 2 red. Accepted: the pins match the exact text, so a `deno fmt` reflow turns them red with correct code (loud, not a false green) |
+| D6 (fix review) | P3 | the new registry range 206-217 stopped mid-statement | 206-218 (through `.single()`) |
 
 ## Founder triage notes
 
