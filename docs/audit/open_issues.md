@@ -7227,3 +7227,12 @@ Residual of OI-199 and OI-471 after migration 172. Migration 172 makes `cleanup_
 4. **The history names retired exercises.** `workout_log_sets.exercise_id` is text holding the exercise NAME (no foreign key; none of the 848 rows matches a library id). 10 sets name an exercise that exists only as a retired row. Diagnose `9c4b1e` says "0 rows point at an inactive row", which is true for the id-keyed tables (`template_exercises`, `workout_logs`, `workout_log_exercises`) and was never measured for this name-keyed one. The app is not live, so these are tester rows; it is the same `found: false` cost as item 3, on exercises a tester really logged.
 
 **Done when.** One L-tier unit with its own plan (an Edge Function in the `ai-proxy` bundle, so a deploy with its own founder go): stage 2 orders deterministically (for example shortest name, then name) and a test lists the candidates in the wrong order; both stages escape `\`, `%` and `_` before the call and a test sends `%` and `_`; the tool resolves a name through `name_aliases` before it answers `found: false`, and the plan states which of the 10 history names an alias covers and records the rest as an intended `found: false`. Each new protection is mutated (CLAUDE.md section 4.4 rule 21), and the diagnose says what was mutated.
+
+## OI-510 — Delete the three food-type kill switches (DISABLE_FOOD_TYPE_EXTRACTION_RULES, DISABLE_SUGGESTMEAL_STORED_FOOD_TYPE, DISABLE_FOOD_TYPE_MANUAL_RULES) and their old paths after the founder's coach check
+
+- **Status**: OPEN
+- **Blocked on**: the founder's coach check after Unit 2b's Edge Functions are live and Unit 2a has merged (the switches are the rollback lever until then)
+- **Verified**: 2026-11-14, the three switches exist in `supabase/functions/daily-snapshot/index.ts` (`foodTypeExtractionRulesOff`), `supabase/functions/_shared/tools/nutrition/suggestMeal.ts` (`suggestMealStoredFoodTypeOff`, `legacyHandler`, `NON_VEG_KEYWORDS`) and `supabase/functions/_shared/captain_manual.ts` (`foodTypeManualRulesOff`, `CAPTAIN_MANUAL_LEGACY_FOOD`; weekly-report's legacy diet line)
+- **Identified**: 2026-11-14 · filed via mint_oi.sh from branch `diet-food-type-server`
+
+Diet plan Unit 2b (diagnose `c9bc6a`, plan `docs/plans/diet-food-type-server.md`). Removing a switch deletes its old path in the same commit and needs a full x2 plan review again (CLAUDE.md §4.12.4). Also remove the `LEGACY_DIET_PREFERENCE_SCHEMA_LINE` constant, the legacy fixtures in the Deno tests, the `captainManual(` safe marker's legacy note, and the naming-conventions rows.

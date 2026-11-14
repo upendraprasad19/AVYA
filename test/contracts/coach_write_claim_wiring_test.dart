@@ -30,7 +30,9 @@ void main() {
     test('the prompt pieces come from the builders', () {
       expect(
           count(proxy,
-              'const promptParts: string[] = [CAPTAIN_MANUAL, icbfLogInstructions(ruleOn)];'),
+              // Diet plan Unit 2b: the manual comes from captainManual()
+              // (DISABLE_FOOD_TYPE_MANUAL_RULES), never the bare constant.
+              'const promptParts: string[] = [captainManual(), icbfLogInstructions(ruleOn)];'),
           1);
       expect(count(proxy, 'writeClaimSuffix(ruleOn)'), 1);
       expect(
