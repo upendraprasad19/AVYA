@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/foundation.dart' show visibleForTesting;
@@ -107,10 +108,46 @@ class SupabaseTestHelper {
     await _client.from(table).delete().eq('user_id', userId);
   }
 
-  /// Restores [deleteRows] to the real implementation. Call in tearDown.
+  /// Per-call bound on one table's delete inside [cleanup].
+  ///
+  /// WHY (diagnose `5c8e2f`): `dart:io` and supabase-dart set NO request or
+  /// connect timeout, and `cleanup()` runs 12 sequential round trips inside the
+  /// test's own 30 s budget (`setUp` is billed to the test). One request that
+  /// never left the runner for ~26 s (main pushes of PR #260 and PR #264: edge
+  /// logs show zero requests in the gap) therefore failed T1/T2 with a bare
+  /// "Test timed out after 30 seconds". A healthy call takes ~0.25 s.
+  @visibleForTesting
+  static Duration deleteCallTimeout = const Duration(seconds: 8);
+
+  /// Restores [deleteRows], [deleteCallTimeout] and the signed-in id seam.
+  /// Call in tearDown.
   @visibleForTesting
   static void resetSeams() {
     deleteRows = _realDeleteRows;
+    deleteCallTimeout = const Duration(seconds: 8);
+    _userId = null;
+  }
+
+  /// Seam: pretends [id] is the signed-in user so [cleanup] can be driven
+  /// without a live session. The [qaUserIds] guard still applies in full.
+  @visibleForTesting
+  static void debugSetSignedInIdForTests(String? id) {
+    _userId = id;
+  }
+
+  /// One table's delete, bounded by [deleteCallTimeout], retried ONCE on a
+  /// timeout (the stuck socket stays busy, so the retry opens a fresh
+  /// connection). A second timeout is rethrown: swallowing it would leave rows
+  /// behind and surface later as a misleading assertion failure.
+  static Future<void> _deleteBounded(String table, String id) async {
+    for (var attempt = 1;; attempt++) {
+      try {
+        await deleteRows(table, id).timeout(deleteCallTimeout);
+        return;
+      } on TimeoutException {
+        if (attempt >= 2) rethrow;
+      }
+    }
   }
 
   /// Refuses any delete whose target is not a designated QA account.
@@ -363,7 +400,9 @@ class SupabaseTestHelper {
 
     for (final table in tables) {
       try {
-        await deleteRows(table, id);
+        await _deleteBounded(table, id);
+      } on TimeoutException {
+        rethrow; // twice-stuck: loud, never a silent skip (see _deleteBounded)
       } catch (_) {
         // Table might not exist or have no matching rows — skip.
       }
