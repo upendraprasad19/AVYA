@@ -8,6 +8,20 @@ import 'package:icanbefitter/core/constants/food_types.dart';
 import 'package:icanbefitter/core/utils/effective_macro_targets.dart';
 import '../providers/nutrition_provider.dart';
 
+/// Whether a change of the EFFECTIVE strategy needs a new plan: never
+/// before the first generation or load ([planEpoch] 0; the first post-frame
+/// generation reads the live strategy itself, and a listener run before it
+/// would generate twice and drop a loaded plan: 3b-1b round 4 finding 2,
+/// B-pass seat B finding 2), and only when the plan it would ask for
+/// differs from the one asked for last.
+bool dietPlanNeedsRegeneration({
+  required int planEpoch,
+  required DietStrategy effective,
+  required FoodType foodType,
+  required DietStrategy requested,
+}) =>
+    planEpoch > 0 && planStrategyFor(effective, foodType) != requested;
+
 /// The strategy and carb target of one plan request.
 typedef DietPlanRequest = ({DietStrategy strategy, double? carbTarget});
 

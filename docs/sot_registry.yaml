@@ -1446,15 +1446,19 @@ concepts:
           Wrappers over MigratedKey.write/read for the
           'saved_diet_plan' key (userBox per Test #11.1 migration).
       - file: lib/features/nutrition/screens/diet_plan_screen.dart
-        line_range: 330-389
+        line_range: 331-391
         method: _savePlan (UI save handler)
         notes: |
           Builds planData map → calls saveDietPlan → fires
           syncSavedDietPlan to cloud → invalidates dietPlanProvider.
-          Unit 3b-1b: with DietStrategyFlags on, the top-level
-          `diet_strategy` stamp is the strategy the plan was BUILT for
+          Unit 3b-1b: with DietStrategyFlags on, two top-level stamps:
+          `diet_strategy` = the strategy the plan was BUILT for
           (_planStrategy: builtFor after a generation, Balanced on the
-          legacy generator, the stamp after a load), never the live one.
+          legacy generator, the stamp after a load), never the live one;
+          `diet_strategy_requested` = the strategy it was ASKED for
+          (_requestedStrategy), which savedPlanMatchesStrategy reads first,
+          so a plan built Balanced after a fallback still loads for its
+          request (B-pass P1).
       - file: lib/core/services/sync/sync_restore_completeness.dart
         line_range: 557-590
         method: _restoreSavedDietPlan
@@ -1466,7 +1470,7 @@ concepts:
     reader_manifest_complete: true
     readers:
       - file: lib/features/nutrition/providers/diet_plan_provider.dart
-        line_range: 113-182
+        line_range: 118-186
         method: DietPlanNotifier.build (dietPlanProvider)
         semantic: aggregated
         fields_read: [meals[], meals[].name, meals[].items[], items[].name, items[].calories, items[].protein]
@@ -1488,7 +1492,7 @@ concepts:
           Passes plannedSlots into TodaysMealsCard which renders the
           "FROM YOUR DIET PLAN" hint on every empty slot.
       - file: lib/features/nutrition/screens/diet_plan_screen.dart
-        line_range: 102-131
+        line_range: 103-131
         method: _generatePlan (entry-point check for existing saved plan)
         semantic: pass-through
         fields_read: [via UserRepository.instance.getSavedDietPlan() — Map<String, dynamic>?]
@@ -1499,10 +1503,16 @@ concepts:
           differs from the profile's food type is not loaded (a fresh plan
           is generated, a notice shows once per session); a plan without
           food_type loads as before. Unit 3b-1b: with the flag on, a plan
-          whose `diet_strategy` stamp does not match
-          planStrategyFor(effective, foodType) is not loaded either (no
-          notice); a change of the effective strategy re-runs this check
-          (ref.listenManual, idempotent on _requestedStrategy).
+          whose stamp (`diet_strategy_requested`, else `diet_strategy`)
+          does not match planStrategyFor(effective, foodType) is not loaded
+          either (no notice); a change of the effective strategy re-runs
+          this check (ref.listenManual, idempotent on _requestedStrategy,
+          never before the first plan: dietPlanNeedsRegeneration).
+      - file: lib/features/nutrition/screens/diet_plan_screen.dart
+        line_range: 273-502
+        method: _loadSavedPlan + _swapItem + _sharePlanAsPdf (Unit 3b-1b; the diet_strategy stamp becomes _planStrategy only with DietStrategyFlags on, Balanced otherwise; the swap gets it as the BUILT strategy and the PDF names it via dietPlanPdfStrategyLabel)
+        semantic: transformed
+        fields_read: [diet_strategy]
     regression_test: test/contracts/restore_completeness_writes_test.dart
     hive:
       box: configBox
@@ -1664,12 +1674,12 @@ concepts:
         semantic: filtered
         fields_read: [diet_preference via DietPlanInputs.dietPreference, is_veg, is_vegan, name, catalog family]
       - file: lib/features/nutrition/providers/diet_plan_provider.dart
-        line_range: 113-182
+        line_range: 118-186
         method: DietPlanNotifier.build (watches userProfileProvider.select(foodTypeOfProfile); {} for a saved plan of another food type)
         semantic: filtered
         fields_read: [diet_preference, saved plan food_type]
       - file: lib/features/nutrition/screens/diet_plan_screen.dart
-        line_range: 102-191
+        line_range: 103-192
         method: _generatePlan + _changeFoodType (selector; mismatch notice once per session)
         semantic: pass-through
         fields_read: [diet_preference, saved plan food_type]
@@ -1761,7 +1771,7 @@ concepts:
       3a; the strategy keeps that pre-existing split, it does not add one.
     writers:
       - file: lib/features/profile/providers/profile_provider.dart
-        line_range: 148-190
+        line_range: 147-188
         method: setDietStrategy + _applyDietStrategy (UserProfileNotifier; the Diet Plan screen's door)
         notes: |
           Serialised; captures the user id at call time and writes nothing
@@ -1811,12 +1821,12 @@ concepts:
         semantic: transformed
         fields_read: [diet_strategy]
       - file: lib/features/nutrition/services/diet_plan_strategy_state.dart
-        line_range: 1-44
-        method: dietPlanRequestFor (Unit 3b-1b; the Diet Plan screen's plan request from strategy_index; Keto + Vegan asks for Low carb with the Low carb carb target)
+        line_range: 1-58
+        method: dietPlanRequestFor + dietPlanNeedsRegeneration (Unit 3b-1b; regeneration never before the first plan; the Diet Plan screen's plan request from strategy_index; Keto + Vegan asks for Low carb with the Low carb carb target)
         semantic: transformed
         fields_read: [strategy_index, carbs, diet_strategy (via resolveBaseMacroPack for the vegan pair)]
       - file: lib/features/nutrition/screens/diet_plan_screen.dart
-        line_range: 74-100
+        line_range: 74-101
         method: initState listener + _onEffectiveStrategy (Unit 3b-1b; regenerates once per change of planStrategyFor(effective, foodType))
         semantic: pass-through
         fields_read: [strategy_index]
@@ -4207,7 +4217,7 @@ concepts:
           splash-time verify doesn't downgrade an optimistic isPro=true
           before the webhook lands.
       - file: lib/features/profile/providers/profile_provider.dart
-        line_range: 484-530
+        line_range: 484-567
         method: subscriptionInfoProvider (isVerifying field)
         semantic: flag-check
         fields_read: [isPaymentInFlight]
@@ -6264,7 +6274,7 @@ concepts:
       public URL is identical after a re-upload; the stored `?v=` is what moves.
     writers:
       - file: lib/features/profile/providers/profile_provider.dart
-        line_range: 250-391
+        line_range: 215-370
         method: uploadAvatar / uploadBanner
         notes: |
           Store ProfileImageUrl.versioned(publicUrl, version: now-millis) into

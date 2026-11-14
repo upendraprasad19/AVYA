@@ -163,6 +163,43 @@ void main() {
       }
     });
 
+    test('savedPlanMatchesStrategy: the REQUESTED stamp wins; a garbage '
+        'stamp is Balanced (3b-1b B-pass P1, seat C finding 6)', () {
+      // A plan built Balanced after a fallback, requested Keto.
+      const fellBack = {
+        'diet_strategy': 'balanced',
+        'diet_strategy_requested': 'keto',
+      };
+      expect(savedPlanMatchesStrategy(fellBack, DietStrategy.keto), isTrue);
+      expect(
+          savedPlanMatchesStrategy(fellBack, DietStrategy.balanced), isFalse);
+      expect(savedPlanMatchesStrategy(const {'diet_strategy': 'paleo'},
+          DietStrategy.balanced), isTrue);
+      expect(savedPlanMatchesStrategy(const {'diet_strategy': 'paleo'},
+          DietStrategy.keto), isFalse);
+    });
+
+    test('dietPlanNeedsRegeneration: never before the first plan; only for '
+        'a different request (round 4 finding 2)', () {
+      bool needs(int epoch, DietStrategy effective, FoodType t,
+              DietStrategy requested) =>
+          dietPlanNeedsRegeneration(
+              planEpoch: epoch,
+              effective: effective,
+              foodType: t,
+              requested: requested);
+      expect(needs(0, DietStrategy.keto, FoodType.nonVeg,
+          DietStrategy.balanced), isFalse,
+          reason: 'the first generation reads the live strategy itself');
+      expect(needs(1, DietStrategy.keto, FoodType.nonVeg,
+          DietStrategy.balanced), isTrue);
+      expect(needs(1, DietStrategy.keto, FoodType.nonVeg, DietStrategy.keto),
+          isFalse);
+      expect(needs(3, DietStrategy.keto, FoodType.vegan,
+          DietStrategy.lowCarb), isFalse,
+          reason: 'vegan Keto asks for the same Low carb plan');
+    });
+
     test('the plan request: flag off and Balanced send no carb target; Keto '
         'sends its own; vegan Keto asks for Low carb with the LOW CARB '
         'target', () {
@@ -201,6 +238,10 @@ void main() {
           enabled: true);
       expect(vegan.strategy, DietStrategy.lowCarb);
       expect(vegan.carbTarget, closeTo(_carbsFor(DietStrategy.lowCarb), 0.5));
+      // Literals for the 2400 / 150 / 270 fixture (seat C finding 5), so the
+      // expectation is not only the code's own macroSplit.
+      expect(vegan.carbTarget, closeTo(120, 0.5));
+      expect(keto.carbTarget, closeTo(30, 0.5));
       expect(_carbsFor(DietStrategy.lowCarb),
           greaterThan(_carbsFor(DietStrategy.keto) + 20),
           reason: 'the two targets differ, so the assertion can tell them '
@@ -393,6 +434,36 @@ void main() {
     Future<void> save(WidgetTester tester) =>
         _tapReal(tester, find.byIcon(Icons.save_outlined));
 
+    /// The names every swap sheet on the screen offers (each sheet opened
+    /// and closed in turn).
+    Future<List<String>> offeredSwapNames(WidgetTester tester) async {
+      final offered = <String>[];
+      final icons = find.byIcon(Icons.swap_horiz);
+      final n = tester.widgetList(icons).length;
+      expect(n, greaterThan(0), reason: 'precondition: swappable items');
+      for (var i = 0; i < n; i++) {
+        await tester.tap(icons.at(i));
+        await _settle(tester);
+        final sheet = find.byType(BottomSheet);
+        if (sheet.evaluate().isEmpty) continue; // the no-swap snackbar
+        for (final tile in tester.widgetList<ListTile>(find.descendant(
+            of: sheet, matching: find.byType(ListTile)))) {
+          final title = tile.title;
+          if (title is Text) offered.add(title.data ?? '');
+        }
+        await tester.tapAt(const Offset(10, 10)); // the barrier
+        await _settle(tester);
+      }
+      return offered;
+    }
+
+    Set<String> lowCarbNames() => {
+          for (final r in catalogRows)
+            if (kDietPlanCatalog
+                .any((e) => e.foodId == r['id'] && e.lowCarbOnly))
+              r['name'] as String,
+        };
+
     bool isGrain(String id) {
       final e = kDietPlanCatalog.firstWhere((c) => c.foodId == id);
       return e.roles.every((r) => r == DietRole.grain);
@@ -435,10 +506,20 @@ void main() {
       await seed(tester, extra: const {'diet_strategy': 'keto'});
       await tester.runAsync(() => HiveService.instance.configBox
           .put(DietPlanFlags.disableCuratedKey, true));
-      await pumpScreen(tester);
+      final c = await pumpScreen(tester);
       expect(find.text(kBalancedPlanNote), findsOneWidget);
       await save(tester);
       expect(_savedPlan()?['diet_strategy'], 'balanced');
+      // 3b-1b B-pass P1: the plan still belongs to its Keto request, so it
+      // gives hints and loads again (no new generation on re-open).
+      expect(_savedPlan()?['diet_strategy_requested'], 'keto');
+      expect(c.read(dietPlanProvider), isNotEmpty);
+      final shownBefore = _savedIds();
+      await tester.pumpWidget(const SizedBox());
+      await pumpScreen(tester);
+      expect(debugDietPlanGenerations, 1, reason: 'the saved plan loaded');
+      expect(find.text(kBalancedPlanNote), findsOneWidget);
+      expect(_savedIds(), shownBefore);
     });
 
     testWidgets('the legacy generator (kill switch) under Keto: no swap '
@@ -451,36 +532,14 @@ void main() {
       await tester.runAsync(() => HiveService.instance.configBox
           .put(DietPlanFlags.disableCuratedKey, true));
       await pumpScreen(tester);
-      final lowCarbNames = {
-        for (final r in catalogRows)
-          if (kDietPlanCatalog
-              .any((e) => e.foodId == r['id'] && e.lowCarbOnly))
-            r['name'] as String,
-      };
-      expect(lowCarbNames, hasLength(14), reason: 'precondition');
-      final offered = <String>[];
-      final icons = find.byIcon(Icons.swap_horiz);
-      final n = tester.widgetList(icons).length;
-      expect(n, greaterThan(0), reason: 'precondition: swappable items');
-      for (var i = 0; i < n; i++) {
-        await tester.tap(icons.at(i));
-        await _settle(tester);
-        final sheet = find.byType(BottomSheet);
-        if (sheet.evaluate().isEmpty) continue; // the no-swap snackbar
-        for (final tile in tester.widgetList<ListTile>(find.descendant(
-            of: sheet, matching: find.byType(ListTile)))) {
-          final title = tile.title;
-          if (title is Text) offered.add(title.data ?? '');
-        }
-        await tester.tapAt(const Offset(10, 10)); // the barrier
-        await _settle(tester);
-      }
+      expect(lowCarbNames(), hasLength(14), reason: 'precondition');
+      final offered = await offeredSwapNames(tester);
       expect(offered, isNotEmpty, reason: 'precondition: some alternatives');
-      expect(offered.toSet().intersection(lowCarbNames), isEmpty);
+      expect(offered.toSet().intersection(lowCarbNames()), isEmpty);
     });
 
     testWidgets('a strategy change regenerates ONCE and the saved stamp '
-        'follows; a food-type change does not also fire the listener',
+        'follows; a Veg tap under Keto regenerates once through its door',
         (tester) async {
       await seed(tester);
       final c = await pumpScreen(tester);
@@ -495,8 +554,8 @@ void main() {
       await save(tester);
       expect(_savedPlan()?['diet_strategy'], 'keto');
 
-      // Non-veg -> Veg: the food-type door regenerates; the effective
-      // strategy is unchanged, so the listener must not add a second.
+      // Non-veg -> Veg: the food-type door regenerates once (the plan it
+      // asks for stays Keto, so nothing else may generate).
       await _tapReal(tester, find.text('Veg'));
       expect(debugDietPlanGenerations, 3);
     });
@@ -622,6 +681,50 @@ void main() {
       await _tapReal(tester, find.byIcon(Icons.refresh));
       await save(tester);
       expect(_savedPlan()!.containsKey('diet_strategy'), isFalse);
+    });
+
+    testWidgets('flag OFF: a plan saved as Keto with the flag on loads as '
+        'Balanced for the swap (round 4 finding 1, seat C finding 1)',
+        (tester) async {
+      await seed(tester, extra: const {'diet_strategy': 'keto'});
+      await pumpScreen(tester);
+      await save(tester);
+      expect(_savedPlan()?['diet_strategy'], 'keto');
+      final ketoOffers = await offeredSwapNames(tester);
+      expect(ketoOffers.toSet().intersection(lowCarbNames()), isNotEmpty,
+          reason: 'precondition: this plan\'s Keto swaps do offer Low carb '
+              'only foods, so the flag-off check below can see a leak');
+      await tester.pumpWidget(const SizedBox());
+      DietStrategyFlags.debugEnabledOverride = false;
+      await pumpScreen(tester);
+      expect(debugDietPlanGenerations, 1, reason: 'the saved plan loaded');
+      final offered = await offeredSwapNames(tester);
+      expect(offered.toSet().intersection(lowCarbNames()), isEmpty);
+    });
+
+    testWidgets('Keto, Non-veg -> Vegan: one generation into a Low carb plan '
+        'with the vegan line; back to Non-veg restores Keto (round 4 '
+        'finding 3, seat C finding 3)', (tester) async {
+      await seed(tester, extra: const {'diet_strategy': 'keto'});
+      await pumpScreen(tester);
+      expect(debugDietPlanGenerations, 1);
+      expect(find.text(kVeganKetoPlanNote), findsNothing);
+      await _tapReal(tester, find.text('Vegan'));
+      expect(debugDietPlanGenerations, 2);
+      expect(find.text(kVeganKetoPlanNote), findsOneWidget);
+      expect(
+          tester.getSemantics(_chip(DietStrategy.keto)).flagsCollection
+              .isEnabled,
+          Tristate.isFalse);
+      await save(tester);
+      expect(_savedPlan()?['diet_strategy'], 'low_carb');
+      expect(_savedPlan()?['diet_strategy_requested'], 'low_carb');
+      await _tapReal(tester, find.text('Non-veg'));
+      expect(debugDietPlanGenerations, 3);
+      expect(find.text(kVeganKetoPlanNote), findsNothing);
+      await save(tester);
+      expect(_savedPlan()?['diet_strategy'], 'keto');
+      expect(_savedIds().where(isGrain), isEmpty);
     });
 
     testWidgets('a swap sheet opened before a regeneration changes nothing',

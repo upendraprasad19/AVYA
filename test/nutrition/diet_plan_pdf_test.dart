@@ -35,6 +35,18 @@ void main() {
     expect(bytes.length, greaterThan(500));
   });
 
+  // 3b-1b B-pass seat C finding 2: the builder renders the header through
+  // dietPlanPdfHeaderLines WITH the plan note, so the note cannot silently
+  // drop out of the PDF while the helper's own tests stay green.
+  test('PRESENCE: the builder renders the header lines with the plan note',
+      () {
+    final src =
+        File('lib/features/nutrition/services/diet_plan_pdf.dart').readAsStringSync();
+    expect(src, contains('for (final line in dietPlanPdfHeaderLines('));
+    final call = src.substring(src.indexOf('for (final line in dietPlanPdfHeaderLines('));
+    expect(call.substring(0, call.indexOf(')')), contains('planNote: planNote'));
+  });
+
   // Diet plan Unit 3a (B-pass seat C finding 3): the header names the
   // strategy only when one applies; null keeps the pre-3a line exactly.
   test('sub-header: the strategy is named only when one applies', () {

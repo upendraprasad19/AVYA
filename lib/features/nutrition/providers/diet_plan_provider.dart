@@ -20,7 +20,12 @@ import 'nutrition_provider.dart';
 /// ONLY with [DietStrategyFlags.enabled]: with the flag off a stamped plan
 /// still loads (today's behaviour).
 bool savedPlanMatchesStrategy(Map<dynamic, dynamic> plan, DietStrategy current) {
-  final stamp = plan['diet_strategy'];
+  // The strategy the plan was REQUESTED for, when stamped (3b-1b B-pass
+  // seats A and B, P1): a plan built Balanced after a fallback (the legacy
+  // generator, a missing carb target) still belongs to its Keto / Low carb
+  // request, or it could never load again. `diet_strategy` stays the BUILT
+  // strategy (the swap, the PDF label and the plan note read it).
+  final stamp = plan['diet_strategy_requested'] ?? plan['diet_strategy'];
   if (stamp == null) return current == DietStrategy.balanced;
   return dietStrategyOf(stamp) == current;
 }

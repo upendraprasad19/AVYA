@@ -93,7 +93,8 @@ class _DietPlanScreenState extends ConsumerState<DietPlanScreen> {
   /// A change of the EFFECTIVE strategy (a tap, Edit Profile, a PRO lapse
   /// or renewal): re-run the saved-plan check and generate, once.
   void _onEffectiveStrategy(DietStrategy effective) {
-    if (planStrategyFor(effective, _foodType) == _requestedStrategy) return;
+    if (!dietPlanNeedsRegeneration(planEpoch: _planEpoch, effective: effective,
+        foodType: _foodType, requested: _requestedStrategy)) return;
     _checkedSaved = false;
     _regenerations = 0;
     _generatePlan();
@@ -338,6 +339,8 @@ class _DietPlanScreenState extends ConsumerState<DietPlanScreen> {
       // Stamped only with the flag on: the strategy the plan was BUILT for
       // (Unit 3b §3.6; savedPlanMatchesStrategy reads it).
       if (DietStrategyFlags.enabled) 'diet_strategy': _planStrategy.storageKey,
+      if (DietStrategyFlags.enabled)
+        'diet_strategy_requested': _requestedStrategy.storageKey,
       'meals': _mealPlans
           .map((m) => {
                 'name': m.name,
@@ -418,7 +421,10 @@ class _DietPlanScreenState extends ConsumerState<DietPlanScreen> {
     }).toList();
     // Unit 3b §3.6: the stamp (absent = Balanced) is what this plan was
     // built for; only a matching plan is loaded with the flag on.
-    _planStrategy = dietStrategyOf(planData['diet_strategy']);
+    // Flag off: Balanced, as before 3b (round 4 finding 1).
+    _planStrategy = DietStrategyFlags.enabled
+        ? dietStrategyOf(planData['diet_strategy'])
+        : DietStrategy.balanced;
     _requestedStrategy = _currentPlanStrategy();
     _planEpoch++;
     if (mounted) setState(() => _saved = true);
