@@ -3,8 +3,8 @@
 # Gate 40 (validate_audit_closure.dart). One terminal_state per item; no `deferred:` key.
 
 batch: generator-step2c-b
-total_findings: 14
-closed_count: 14
+total_findings: 16
+closed_count: 16
 
 _commit: &wip "generator-step2c-b (uncommitted at authoring)"
 
@@ -92,3 +92,16 @@ findings:
     terminal_state: closed_in_commit
     commit: *wip
     verification: "the gate: OFF 28 not_suitable, ON 0; the 2,304-plan audit of the built tree 965 / 1,339 / 0, byte-equal to b25"
+
+  - id: C2CB-15
+    title: "CI round 1 (PR #279): a re-run day could end SHORTER than R's (the allowance spent a dropped row's time on sets; with forcingBound 0 the count floor cannot force past it); the step-5 fallback now also fires on a shorter day (_fewerRows, both paths)"
+    terminal_state: closed_in_commit
+    commit: *wip
+    verification: "rep30 day-floor gate: 1 of 960 plans (home_dumbbells, 4 day-weeks) lost Dumbbell Curl, now 0 lost; session_allowance_behavioral_test's seeded sweep asserts rows = R under 60 (was <=, which a shorter day passed: 4 of 220 plans held one); mutants M31 (5-day trigger) and M32 (6-day trigger) each red on that equality assertion; the 2,304-plan grid is byte-identical with and without the guard (30 / 45 gate ON digest 7420fa32 unchanged, 60 / 90 digest ab71bd63 identical)"
+
+  - id: C2CB-16
+    title: "CI round 1: the 2B day-floor gate assumed nothing changes rows but the floor; its pins now come from main's world (2C off), a 2C-b swap (same row count, every new row a walked target or minimum seat, AllocationStats.walkedTargets) is counted not failed, and rep30's knock-on is re-pinned (d47: the allowance replaces the 300 s forcing bound)"
+    terminal_state: closed_in_commit
+    commit: *wip
+    verification: "day_floor_gate_{rep30,pairs_p1,pairs_p4}_test, all 12 tier-blocks green locally with bad {}: the OFF digests equal main 8a2e1c5a again (rep30 had moved only through the pins; pins differ 3 -> 0), 2C-b swaps pinned (pairs_p1 bodyweight 10 / home_dumbbells 6, pairs_p4 4 / 6, rep30 0), and these equal the lost counts CI reported under the seats-only excuse, i.e. the walkedTargets excuse is what turns them from red to counted; rep30 knock-on 4 / 3 / 0 / 0 -> 40 / 30 / 48 / 21 (same names, fewer sets than floor-off: the allowance replaces the forcing bound, d47)"
+

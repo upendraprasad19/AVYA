@@ -175,7 +175,11 @@ cost is 17 more zero-week pairs.
 4. *Protect-first* (F3): if a protective group is still at 0, re-run both variants with only the protective targets
    (all new targets dropped together). A new target (1 or 2) never takes the row of a group the plan already trains.
 5. *Fallback, the terminal guard* (F3, round 1 A-2): if a protective group is STILL at 0, the output is R, verbatim,
-   at every length (no allowance either). Nothing runs after it.
+   at every length (no allowance either). Nothing runs after it. **Built (CI round 1 on PR #279):** the same fallback
+   also fires when some day holds FEWER exercises than R's (the row guard). The allowance re-run can spend a dropped
+   row's time on extra sets, and with the allowance the count floor cannot force past it (forcing bound 0). CI's
+   rep30 day-floor gate found 1 such plan in 960, and the seeded sweep found 4 in 220; the 2,304-plan grid has none,
+   so the audit numbers in §4 stand.
 
 Every re-run in steps 1, 3 and 4 carries the same arguments: the chosen world, `dayFloor: true`, and under 60 the
 allowance, the row cap and R's hold evictions. At 60+ steps 1-4 run without the allowance or the row cap, so the output can

@@ -1,8 +1,8 @@
 // Unit 2C-b, S4 (docs/plans/2026-11-14-generator-step2c-b-weekly-minimum.md, founder d42 / d44 / d47): the one
 // under-60 allowance. A ledger built with `allowance: true` under 60 minutes adds `SessionBudget.allowanceSeconds`
 // (285 s) to each day's budget and forces nothing further (`forcingBound` 0: never stacked with the count floor's
-// 300 s); at 60+ and without the flag it is today's ledger. The allocator re-runs the chosen worlds with it, at most the
-// reference R's rows per day (d44: sets, never an extra exercise), and stamps `PopulatedDay.allowance` on every day
+// 300 s); at 60+ and without the flag it is today's ledger. The allocator re-runs the chosen worlds with it, exactly the
+// reference R's rows per day (d44: sets, never an extra exercise; a re-run that drops a row falls back to R), and stamps `PopulatedDay.allowance` on every day
 // when it used it; `PeriodizationEngine._weekTwoGains` follows that stamp, `VolumeTitration` never takes the allowance
 // (plan round 4 R4-1: it titrates `WeekPlan`s, which carry no stamp).
 //
@@ -197,7 +197,7 @@ void main() {
           r,
     ];
 
-    test('220 random plans: time inside budget + the allowance (or the forcing bound), caps, tops; rows <= R under 60; '
+    test('220 random plans: time inside budget + the allowance (or the forcing bound), caps, tops; rows = R under 60; '
         'at 60+ R exactly unless the minimum seated', () {
       final rnd = Random(20261114);
       const intensities = ['strength', 'hypertrophy', 'endurance'];
@@ -277,7 +277,9 @@ void main() {
           if (minutes < 60) {
             final r0 = rowsOf(off, b: b), r1 = rowsOf(on, b: b);
             for (var d = 0; d < nDays; d++) {
-              expect(r1[d], lessThanOrEqualTo(r0[d]), reason: 'plan $plan $v day $d: R\'s rows cap the day (d44)');
+              // R's rows cap the day (d44), and a day never ends shorter than R's: a re-run that dropped a row falls
+              // back to R (the step-5 row guard; before it, 4 of these 220 plans held a shorter day).
+              expect(r1[d], r0[d], reason: 'plan $plan $v day $d: R\'s rows exactly (d44, the row guard)');
               if (r1[d] < r0[d]) fewerRows++;
             }
           }
@@ -302,7 +304,7 @@ void main() {
       final digest = sha256Hex(utf8.encode(digestLines.join('\n')));
       // ignore: avoid_print
       print('2C-b sweep digest: $digest');
-      expect(digest, '86d2017b6d9f47e66b8b960a8964c83fcd75a85a53b61d843096559bc7a77146');
+      expect(digest, '464c08de643fcec46fe173bebb6d0a1696f3347ac2a255085b60f9307fc5d6a0');
       expect(equal60, greaterThan(30), reason: 'the sweep must reach 60+ plans');
     });
   });

@@ -66,6 +66,11 @@ class AllocationStats {
   /// seated for. Never in [countForced]. Variant B inherits A's entries for the days it copies.
   final Map<int, List<({String name, String group})>> minimumSeats = {};
 
+  /// Unit 2C-b (the walk, d35 / d48): per day, each target slot the walk moved ahead of its selector rank and the group
+  /// it moved for. Whether pass A then admits it is the allocation's to say; a reader (the day-floor gate) checks that
+  /// a row new on the day is one of these or a [minimumSeats] entry. Variant B inherits A's entries for copied days.
+  final Map<int, List<({String name, String group})>> walkedTargets = {};
+
   /// For each group still below its weekly floor: `cap_limited`,
   /// `co_group_limited`, `time_limited`, `copy_day_limited` (variant B only: the
   /// exercises that could take a set sit on a day copied from A, which B never
@@ -110,6 +115,16 @@ typedef FloorSeat = ({
 enum _World { lead, capped, main }
 
 /// One variant's allocation: its rows per day, its slots per day and the holds it evicted per day.
+/// Unit 2C-b's row guard: some day of [now] holds fewer exercises than the same day of [ref] (R, the floor re-run).
+/// The allowance only adds sets to the rows R holds (d44) and a minimum seat swaps or adds a row, so a shorter day
+/// means the re-run lost an exercise R kept; the caller falls back to R verbatim.
+bool _fewerRows(List<List<PlannedExercise>> now, List<List<PlannedExercise>> ref) {
+  for (var d = 0; d < ref.length; d++) {
+    if (now[d].length < ref[d].length) return true;
+  }
+  return false;
+}
+
 typedef _Alloc = ({List<List<PlannedExercise>> out, List<List<_Slot>> byDay, Map<int, Set<int>> evicted});
 
 typedef FirstLift = ({
@@ -474,9 +489,11 @@ class SessionSetAllocator {
             bOut = runB(a, stats['A']!, sBP, pB).out;
             stats['B'] = sBP;
           }
-          // Step 5, the terminal guard: still a protective group at 0, so the output is R verbatim (no allowance
-          // either). Nothing runs after it.
-          if (anyLost()) {
+          // Step 5, the terminal guard: still a protective group at 0, or a day holding fewer exercises than R's (the
+          // allowance re-run spent a dropped row's time on sets, and with the allowance the count floor cannot force
+          // past it: CI, the rep30 day-floor gate), so the output is R verbatim (no allowance either). Nothing runs
+          // after it.
+          if (anyLost() || _fewerRows(a.out, aR.out) || _fewerRows(bOut, bR.out)) {
             a = aR;
             stats['A'] = sAR;
             stats['B'] = sBR;
@@ -535,13 +552,13 @@ class SessionSetAllocator {
                 if (e.value > 0 && (now[e.key] ?? 0) == 0 && !exempt(e.key)) e.key,
             };
         var fellBack = false;
-        if (prot6(stats['A']!.credited).isNotEmpty) {
+        if (prot6(stats['A']!.credited).isNotEmpty || _fewerRows(a.out, aR.out)) {
           final p6 = {for (final g in t6) if ((pre6[g] ?? 0) > 0) g};
           final sP = AllocationStats()..leadWorld = wA.name;
           a = run6(sP, p6);
           stats['A'] = sP;
           bOut = a.out;
-          if (prot6(sP.credited).isNotEmpty) {
+          if (prot6(sP.credited).isNotEmpty || _fewerRows(a.out, aR.out)) {
             a = aR;
             stats['A'] = sAR;
             bOut = a.out;
@@ -724,6 +741,8 @@ class SessionSetAllocator {
         if (fo != null) stats.floorSeats[d] = List.of(fo);
         final mo = copyFrom.minimumSeats[d];
         if (mo != null) stats.minimumSeats[d] = List.of(mo);
+        final wo = copyFrom.walkedTargets[d];
+        if (wo != null) stats.walkedTargets[d] = List.of(wo);
       }
     }
 
@@ -831,6 +850,7 @@ class SessionSetAllocator {
         if (at > base + moved[bd]) {
           walk[bd].remove(best);
           walk[bd].insert(base + moved[bd], best);
+          (stats.walkedTargets[bd] ??= []).add((name: best.exercise.exerciseName, group: g));
         }
         if (at >= base) moved[bd]++;
       }

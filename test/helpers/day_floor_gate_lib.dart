@@ -46,6 +46,11 @@ class DayFloorTally {
   int gained = 0;
   int knockOn = 0;
   int pinsDiffer = 0;
+  /// Unit 2C-b: day-weeks where a weekly-minimum target took an OFF row's place: the same row count, and every row new
+  /// on the day is that week's variant's walked target or minimum seat on that day (`AllocationStats.walkedTargets`,
+  /// `minimumSeats`). The swap of plan docs/plans/2026-11-14-generator-step2c-b-weekly-minimum.md (d35 / d48), not a
+  /// loss; a day with fewer rows than OFF, or any other new row, is still `lost`.
+  int swapped = 0;
   /// Day-weeks with a budgeted row at the day's lead + 2 or more, the floor OFF: a Unit 2A residue (the whole-plan
   /// fallback to the `main` world, where R2 does not apply), not the floor's; pinned, and the floor may add none.
   int leadPlus2Off = 0;
@@ -53,8 +58,8 @@ class DayFloorTally {
   final bad = <String, List<String>>{};
   void fail(String zero, String why) => (bad[zero] ??= []).add(why);
 
-  /// The pinned shape: (runs, day-weeks, thin OFF, gained, knock-on, lead + 2 OFF).
-  (int, int, int, int, int, int) get counts => (runs, dayWeeks, thinOff, gained, knockOn, leadPlus2Off);
+  /// The pinned shape: (runs, day-weeks, thin OFF, gained, knock-on, lead + 2 OFF, 2C-b swaps).
+  (int, int, int, int, int, int, int) get counts => (runs, dayWeeks, thinOff, gained, knockOn, leadPlus2Off, swapped);
 }
 
 typedef _Gen = ({Phase plan, Map<String, AllocationStats> stats});
@@ -138,9 +143,24 @@ class DayFloorGate {
         if (b.length < 3) t.thinOff++;
         final namesOn = [for (final e in a) e.exerciseName];
         final namesOff = [for (final e in b) e.exerciseName];
+        final targetRows = {
+          for (final m in [...?stats?.minimumSeats[d], ...?stats?.walkedTargets[d]]) m.name,
+        };
+        final added = [
+          for (final n in namesOn)
+            if (!namesOff.contains(n)) n,
+        ];
+        final swap = a.length == b.length && added.isNotEmpty && added.every(targetRows.contains);
+        var dayLost = false;
         for (final n in namesOff) {
-          if (!namesOn.contains(n)) t.fail('lost', '$where: $n ($namesOff -> $namesOn)');
+          if (namesOn.contains(n)) continue;
+          if (swap) {
+            dayLost = true;
+          } else {
+            t.fail('lost', '$where: $n ($namesOff -> $namesOn)');
+          }
         }
+        if (dayLost) t.swapped++;
         if (a.length > b.length) {
           t.gained++;
           if (b.length >= 3) t.fail('gained past 3', '$where: ${b.length} -> ${a.length}');
@@ -195,7 +215,10 @@ class DayFloorGate {
   /// Every persona of [block] on [tier] (`day_floor_personas.dart`), each generated with the floor on and off. A
   /// pinned repeat's pins are the uninjured phase-1 plan generated with the floor ON (as the app does) and with it OFF;
   /// both repeats take the ON pins, so the comparison isolates the floor, and `pinsDiffer` counts the pin lists the
-  /// worlds disagree on (0: an uninjured 30-minute plan is not floored, so the OFF repeat is exactly main's).
+  /// worlds disagree on (0: an uninjured 30-minute plan is not floored, so the OFF repeat is exactly main's). Unit 2C-b:
+  /// the pins are generated with 2C switched off (`disable_balanced_week`), i.e. main's pins, because the weekly
+  /// minimum and the allowance change the uninjured 30-minute plan the floor alone does not; the ON repeat still runs
+  /// the floor and 2C-b over them.
   DayFloorTally run(String block, String tier) {
     final t = DayFloorTally();
     final pinCache = <String, Map<int, ({List<String> a, List<String> b})>>{};
@@ -204,14 +227,16 @@ class DayFloorGate {
       Map<int, ({List<String> a, List<String> b})>? pins;
       if (p.pinned) {
         pins = pinCache.putIfAbsent('${p.goal}|${p.level}|${p.days}', () {
-          final on = dayFloorPins(h, p);
-          box.put('disable_day_floor', true);
+          box.put('disable_balanced_week', true);
           try {
+            final on = dayFloorPins(h, p);
+            box.put('disable_day_floor', true);
             if ('${dayFloorPins(h, p)}' != '$on') t.pinsDiffer++;
+            return on;
           } finally {
             box.delete('disable_day_floor');
+            box.delete('disable_balanced_week');
           }
-          return on;
         });
       }
       _Gen g(bool floor, {bool balancedWeekOff = false}) => _gen(
@@ -236,11 +261,11 @@ class DayFloorGate {
   }
 
   /// Reports [t], then records or checks the OFF digest and asserts the pinned counts.
-  void finish(String block, String tier, DayFloorTally t, (int, int, int, int, int, int) expected) {
+  void finish(String block, String tier, DayFloorTally t, (int, int, int, int, int, int, int) expected) {
     final digest = dayFloorDigest(t.offHashes);
     // ignore: avoid_print
     print('[day floor $block $tier] runs ${t.runs} day-weeks ${t.dayWeeks} thin ON ${t.thinOn} OFF ${t.thinOff} '
-        'gained ${t.gained} knock-on ${t.knockOn} lead+2 OFF ${t.leadPlus2Off} pins differ ${t.pinsDiffer} OFF digest $digest '
+        'gained ${t.gained} knock-on ${t.knockOn} lead+2 OFF ${t.leadPlus2Off} 2C-b swaps ${t.swapped} pins differ ${t.pinsDiffer} OFF digest $digest '
         'bad ${{for (final e in t.bad.entries) e.key: e.value.length}}');
     for (final e in t.bad.entries) {
       // ignore: avoid_print
@@ -254,6 +279,7 @@ class DayFloorGate {
     expect(t.bad, isEmpty);
     expect(t.thinOn, 0);
     expect(t.pinsDiffer, 0);
-    expect(t.counts, expected, reason: '(runs, day-weeks, thin OFF, gained, knock-on, lead + 2 OFF) for $block $tier');
+    expect(t.counts, expected,
+        reason: '(runs, day-weeks, thin OFF, gained, knock-on, lead + 2 OFF, 2C-b swaps) for $block $tier');
   }
 }

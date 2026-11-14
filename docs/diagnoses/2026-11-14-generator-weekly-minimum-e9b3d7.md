@@ -35,19 +35,19 @@ recurrence: |
   - the OI-456 count band (maxForcedOverSeconds).
   None of them sets a weekly minimum across variants or lets a short day run past its minutes.
 writers:
-  - { file: lib/shared/repositories/plan_engine/session_set_allocator.dart, method_or_widget: "_allocateLeadFirst: the 2C-b steps 1-5 on the 5-day path", line: 380 }
-  - { file: lib/shared/repositories/plan_engine/session_set_allocator.dart, method_or_widget: "_allocateLeadFirst: the 2C-b steps on the 6-day path", line: 504 }
-  - { file: lib/shared/repositories/plan_engine/session_set_allocator.dart, method_or_widget: "_variant: the walk (targets after rank 0 and the 2A opener)", line: 807 }
-  - { file: lib/shared/repositories/plan_engine/session_set_allocator.dart, method_or_widget: "_variant: the weekly minimum pass (minimumSeats)", line: 1107 }
-  - { file: lib/shared/repositories/plan_engine/session_set_allocator.dart, method_or_widget: "_variant: the row cap (rowCap) and R's hold evictions (refEvicted)", line: 741 }
-  - { file: lib/shared/repositories/plan_engine/session_set_allocator.dart, method_or_widget: "PopulatedDay(allowance: allowanceUsed) on every returned day", line: 565 }
+  - { file: lib/shared/repositories/plan_engine/session_set_allocator.dart, method_or_widget: "_allocateLeadFirst: the 2C-b steps 1-5 on the 5-day path", line: 395 }
+  - { file: lib/shared/repositories/plan_engine/session_set_allocator.dart, method_or_widget: "_allocateLeadFirst: the 2C-b steps on the 6-day path", line: 521 }
+  - { file: lib/shared/repositories/plan_engine/session_set_allocator.dart, method_or_widget: "_variant: the walk (targets after rank 0 and the 2A opener; walkedTargets)", line: 826 }
+  - { file: lib/shared/repositories/plan_engine/session_set_allocator.dart, method_or_widget: "_variant: the weekly minimum pass (minimumSeats)", line: 1127 }
+  - { file: lib/shared/repositories/plan_engine/session_set_allocator.dart, method_or_widget: "_variant: the row cap (rowCap) and R's hold evictions (refEvicted)", line: 760 }
+  - { file: lib/shared/repositories/plan_engine/session_set_allocator.dart, method_or_widget: "PopulatedDay(allowance: allowanceUsed) on every returned day", line: 582 }
   - { file: lib/shared/repositories/plan_engine/session_budget.dart, method_or_widget: "SessionBudget.allowanceSeconds (285, d47); BudgetLedger(allowance:) and forcingBound", line: 421 }
   - { file: lib/shared/repositories/plan_engine/models.dart, method_or_widget: "PopulatedDay.allowance (default false)", line: 362 }
 readers:
   - { file: lib/shared/repositories/plan_engine/periodization_engine.dart, method_or_widget: "_weekTwoGains: BudgetLedger(allowance: populated.first.allowance)", line: 169 }
-  - { file: lib/shared/repositories/plan_engine/session_set_allocator.dart, method_or_widget: "pass A2 and the minimum pass read ledger.forcingBound (0 with the allowance)", line: 996 }
+  - { file: lib/shared/repositories/plan_engine/session_set_allocator.dart, method_or_widget: "pass A2 and the minimum pass read ledger.forcingBound (0 with the allowance)", line: 1016 }
   - { file: lib/shared/repositories/plan_engine/volume_titration.dart, method_or_widget: "applyToWeeks keeps BudgetLedger(allowance: false) (round 4 R4-1: WeekPlans carry no stamp)", line: 181 }
-  - { file: lib/features/profile/screens/edit_profile_screen.dart, method_or_widget: "_buildSessionDurationSelector: the chip reads 'About N min'", line: 1152 }
+  - { file: lib/features/profile/screens/edit_profile_screen.dart, method_or_widget: "_buildSessionDurationSelector: the chip reads 'About N min'", line: 1169 }
 hive_key_prefix: "configBox['disable_balanced_week'] (2C's one switch, d37; read by allocate unless balancedWeek: is given); plan_json.workouts[] (the plan blob)"
 hive_key_formula: "PopulatedDay lists (allocator) -> PeriodizationEngine.apply -> WorkoutDay.toMap; PopulatedDay.allowance is never stored"
 sync_methods:
@@ -68,6 +68,7 @@ cross_account_guard: "unchanged: generation writes through the existing plan wri
 forbidden_patterns_checked:
   - { pattern: "an output change with 2A off or 2B off (crafted: weekly_minimum 'where it runs'; real engine: the gate's 48-plan digests with disable_lead_first / disable_day_floor)", absent: true }
   - { pattern: "a day under 60 minutes with more or fewer rows than today (the gate: 1,152 plans, all four weeks)", absent: true }
+  - { pattern: "a day holding fewer exercises than R anywhere (the step-5 row guard `_fewerRows`, both paths; the seeded sweep asserts rows = R under 60; the rep30 day-floor gate, 960 injured pinned plans)", absent: true }
   - { pattern: "a group today trains newly at 0 except Calves at 30 minutes (the gate: exactly 143 plan-weeks, d45)", absent: true }
   - { pattern: "a plan gaining a major issue (the gate, 1,152 plans; the 2,304-plan audit)", absent: true }
   - { pattern: "plan_generator.dart changed (rule 14; the stamp rides on PopulatedDay, which generateV4 passes through unchanged)", absent: true }
@@ -224,6 +225,8 @@ pins every ON allocation by digest) and `weekly_minimum_gate_test` (G, 1,152 rea
 | M28 | the allowance is 300 s | green | RED | RED |
 | M29 | a copied day does not inherit minimum seats | RED | green | green |
 | M30 | target 1 (d35) is not computed | RED | green | RED |
+| M31 | the row guard off on the 5-day path (CI round 1) | green | RED | green |
+| M32 | the row guard off on the 6-day path (CI round 1) | green | RED | green |
 
 M20 survived the first run (the 6-day test covers only the 6-day branch). The 5-day Calves test was added, and M20
 then turned W red (1 test). M21 survived the first run too. The sweep digest was added after that run, and M21 then
@@ -244,6 +247,48 @@ probe days (beginner and intermediate, 2 to 4 customs):
   skip is a second door on that rule.
 - M10. Inside the walk the loop index equals the slot's rank for every slot `evictFor` is called on, except a walked
   target. No input has a walked target that evicts a hold.
+
+## CI round 1 (PR #279, head f126fcc1): what the 2B day-floor gate found
+
+CI's unit shards failed in the three 2B day-floor gate files (`day_floor_gate_{rep30,pairs_p1,pairs_p4}_test`), 8 of
+12 tier-blocks. The targeted runs before the push had not included them. Three separate causes:
+
+1. **A real defect: a 30-minute day lost an exercise.** In `shoulder+lower_back|home_dumbbells|build_muscle|beginner|
+   5d|p2-pinned|30min`, day 5 in R (the floor ON, 2C-b off) is [Resistance Band Seated Straight Back Row x2, Suitcase
+   Carry x4, Dead Bug x3, Dumbbell Curl x2]. With 2C-b it was [Row x3, Carry x4, Dead Bug x3]. The allowance re-run
+   gave the row its third set first, and with the allowance the count floor cannot force the curl past the budget
+   (`forcingBound` 0, d47). Biceps was still credited elsewhere in the week, so no protective target fired. The row
+   cap is an upper bound only, so nothing caught a SHORTER day.
+   - Measured on rep30 (960 injured, pinned 30-minute plans, ON against R on identical pins): 1 plan, 4 day-weeks.
+   - The seeded sweep held 4 of 220 such plans (1.8 %). It asserted `rows <= R`, which a shorter day satisfies: the
+     test checked the wrong direction.
+   - The 2,304-plan grid has none: the 30 / 45 gate ON digest is unchanged, and the 60 / 90 half hashes identically
+     with and without the guard (ab71bd63, 1,152 plans).
+   - **Fix:** the step-5 terminal fallback (R verbatim, no allowance) also fires when any day holds fewer exercises
+     than R's (`_fewerRows`, on the 5-day path for A and B and on the 6-day path in both checks). The sweep now asserts
+     rows = R per day under 60, and its digest is re-pinned (4 plans fall back).
+   - **Mutants:** M31 (the 5-day trigger removed) and M32 (the 6-day triggers removed) each redden the sweep's
+     equality assertion itself ("plan 5 B day 3" and "plan 156 A day 4", expected 5 rows, actual 4), not only its
+     digest.
+2. **The gate's kill-switch digest moved through its pins, not through OFF.** A pinned repeat's pins are the
+   uninjured phase-1 plan with the floor ON, and 2C-b changes that plan ("pins differ" 0 -> 3), so the floor-OFF repeat
+   no longer equalled main. The pins now come from main's world (`disable_balanced_week` set while they are generated).
+   `pinsDiffer` is back to 0, and every OFF digest equals main 8a2e1c5a's fixture again.
+3. **2C-b's swap read as a loss.** At 60 minutes a walked target (d35 / d48) can take the row of a group the week
+   still trains: Bench Dips (Triceps) for Pike Push Up, and Dumbbell Alternate Bicep Curl for Dumbbell Rear Lateral
+   Raise, in knee + lower_back strength 3-day plans. This is the design, but the 2B gate's "nothing lost vs the floor
+   off" predates it.
+   - The allocator records each slot the walk moved in `AllocationStats.walkedTargets`, inherited on copied days.
+   - The gate counts a day as a 2C-b swap only when the row count is the same and every row new on the day is a
+     walked target or a minimum seat. Anything else is still `lost`.
+   - Swaps pinned: pairs_p1 bodyweight 10 / home_dumbbells 6, pairs_p4 4 / 6, rep30 0. These are exactly the lost
+     counts CI reported under a seats-only excuse, so that run is the mutant without `walkedTargets`, and it was red.
+
+**Also re-pinned, with its cause.** rep30's knock-on (same exercises, fewer sets than floor-off) moved from
+4 / 3 / 0 / 0 to 40 / 30 / 48 / 21 day-weeks of 4,320 per tier. Against R on identical pins (measured before the
+row guard), 36 / 30 / 48 / 21 day-weeks hold fewer sets and 1,907 to 2,620 per tier hold more. This is d47's trade: the 285 s allowance
+replaces the count floor's 300 s forcing bound and never stacks with it, so a day R forced past its budget can hold
+fewer sets. It is a cost, stated here and in the plan; it is not a defect.
 
 ## Not covered by a crafted fixture (stated)
 
