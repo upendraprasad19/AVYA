@@ -1,10 +1,10 @@
 part of 'screen.dart';
 
 // Round-2 review (2026-07-30) — same analyzer limitation media_picker.dart
-// and recording_body.dart already carry this exact ignore for: `setState`
-// is @protected on State, and the analyzer doesn't model "extension on the
-// same State subclass" as an allowed access site even though the runtime
-// semantics are fine. Needed once _onSaveCoachMedia/_onDeclineCoachMedia
+// already carries this exact ignore for: `setState` is @protected on State,
+// and the analyzer doesn't model "extension on the same State subclass" as an
+// allowed access site even though the runtime semantics are fine. Needed once
+// _onSaveCoachMedia/_onDeclineCoachMedia
 // started calling setState for the isSavingMedia in-flight UI signal.
 // ignore_for_file: invalid_use_of_protected_member
 

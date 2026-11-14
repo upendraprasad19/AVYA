@@ -147,7 +147,7 @@ class _PaywallSheetState extends ConsumerState<PaywallSheet> {
       case 'AI Food Analysis':
         return 'Let AI analyse what you ate and log it instantly with accurate macros.';
       case 'Voice Notes':
-        return 'Just talk to your coach \u2014 push-to-talk voice input for hands-free logging.';
+        return 'Just talk to your coach. Tap the mic, say it, and log hands-free.';
       case 'Monthly Prediction':
         return 'Get an updated AI prediction of your fitness progress every month.';
       case 'Weekly AI Report':

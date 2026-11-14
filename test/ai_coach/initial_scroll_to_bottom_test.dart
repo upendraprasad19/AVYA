@@ -142,16 +142,25 @@ String _extractGateWindow(String src) {
   return src.substring(start, end);
 }
 
-/// Extracts the initState method body so the forbidden-pattern test can
-/// scope precisely. Window is sized to encompass the whole initState
-/// (~50 lines) without bleeding into _initSpeech or other methods.
+/// Extracts the SCREEN's initState method body so the forbidden-pattern test
+/// scopes precisely. The folder's sources are concatenated and the composer
+/// (`CoachComposer` in input_bar.dart) has its own `initState`, which sorts
+/// first: a bare first-match `indexOf('void initState() {')` would silently pin
+/// the composer instead. So the slice starts at the screen's state class and
+/// ends at the method's own closing brace (a fixed-size window would bleed into
+/// the next method as the code around it changes).
 String _extractInitStateWindow(String src) {
-  const marker = 'void initState() {';
-  final start = src.indexOf(marker);
-  if (start < 0) {
-    fail('Could not locate initState marker.');
+  final cls = src.indexOf('class _AiCoachScreenState');
+  if (cls < 0) {
+    fail('Could not locate class _AiCoachScreenState.');
   }
-  // initState in this file is ~12 lines / ~400 chars
-  final end = (start + 500).clamp(0, src.length);
+  final start = src.indexOf('void initState() {', cls);
+  if (start < 0) {
+    fail('Could not locate the screen\'s initState marker.');
+  }
+  final end = src.indexOf('\n  }\n', start);
+  if (end < 0) {
+    fail('Could not locate the end of the screen\'s initState.');
+  }
   return src.substring(start, end);
 }

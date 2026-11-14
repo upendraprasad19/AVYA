@@ -42,7 +42,7 @@ class CoachMediaRepository {
   /// `clean-orphan-media`, needlessly duplicating storage once a permanent
   /// copy exists) — in practice this branch fires only for a PRO user who
   /// downgrades in the narrow window between uploading a photo (photo
-  /// attach is PRO-gated at every LIVE entry point — `recording_body.dart`'s
+  /// attach is PRO-gated at every LIVE entry point — `media_picker.dart`'s
   /// `_onTapAttach` (what the real input-bar attach button calls) and
   /// `media_picker.dart`'s own `SubscriptionService.gate` call in
   /// `_pickImage`; `attach_button.dart` is an older attach-button build

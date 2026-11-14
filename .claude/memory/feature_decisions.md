@@ -59,7 +59,7 @@ WhatsApp AI Coach → **DEFERRED** (Telegram focus for now).
 | Monthly Future Prediction | `prediction_monthly` | Fresh AI prediction card every month (free = once at onboarding) |
 | ~~Reasoning Tab~~ | ~~`reasoning_tab`~~ | RETIRED 2026-04-18 — Chat/Reasoning toggle removed; single AI coach backend. |
 | Progress Photos | `progress_photos` | Full photo timeline in Supabase Storage |
-| Voice Notes to AI Coach | `voice_notes` | Push-to-talk in AI Coach screen |
+| ~~Voice Notes to AI Coach~~ | ~~`voice_notes`~~ | NOT PRO: voice input has been FREE since Test #9; since 2026-11-14 one tap-to-start, tap-to-stop mic on the coach composer AND the nutrition Log sheet (plan `docs/plans/voice-input-unified.md`). |
 | Scan Meal Camera (PRO) | `scan_meal_pro` | 3 scans/day (soft cap warning at 2/3). Free = 3/month |
 | Cart Auditor (PRO) | `cart_auditor_pro` | 3 scans/day (soft cap warning at 2/3). Free = 1/month |
 | AI Food Text Analysis (PRO) | `ai_text_log_pro` | 10 logs/day. Free = 3/day |
