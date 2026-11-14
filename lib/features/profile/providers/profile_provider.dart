@@ -5,6 +5,7 @@ import 'package:flutter/painting.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_cropper/image_cropper.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:icanbefitter/core/constants/diet_strategies.dart';
 import 'package:icanbefitter/core/constants/food_types.dart';
 import 'package:icanbefitter/core/constants/subscription_plans.dart';
 import 'package:icanbefitter/core/services/error_telemetry.dart';
@@ -13,6 +14,12 @@ import 'package:icanbefitter/core/services/health_write_service.dart';
 import 'package:icanbefitter/core/services/write_result.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
 import 'package:icanbefitter/features/train/providers/train_provider.dart';
+import 'package:icanbefitter/features/home/providers/home_provider.dart'
+    show nutritionSummaryProvider;
+import 'package:icanbefitter/features/nutrition/providers/diet_plan_provider.dart'
+    show dietPlanProvider;
+import 'package:icanbefitter/features/nutrition/providers/nutrition_provider.dart'
+    show dailyNutritionProvider, macroTargetsProvider;
 import 'package:icanbefitter/core/services/migrated_key.dart';
 import 'package:icanbefitter/core/services/subscription_service.dart';
 import 'package:icanbefitter/core/utils/ist_date.dart';
@@ -69,6 +76,9 @@ class UserProfileNotifier extends Notifier<Map<String, dynamic>> {
   // Serialises setFoodType calls; a field survives build() re-runs.
   Future<bool> _foodTypeChain = Future<bool>.value(true);
 
+  // Serialises setDietStrategy calls (diet plan Unit 3a).
+  Future<bool> _dietStrategyChain = Future<bool>.value(true);
+
   @override
   Map<String, dynamic> build() {
     ref.watch(authUserIdTokenProvider); // c4055a — rebuild on auth change
@@ -93,8 +103,9 @@ class UserProfileNotifier extends Notifier<Map<String, dynamic>> {
   /// type itself changed: it guards the server's rollback path, where the
   /// daily-snapshot extraction may write the column again. The Nutrition
   /// hints rebuild through DietPlanNotifier's watch of this provider; no
-  /// target recompute (the food type does not feed BMR/TDEE; Unit 3's
-  /// strategy will, and is added here then).
+  /// target recompute (the food type does not feed BMR/TDEE, and neither
+  /// does the diet strategy: it changes only how carb and fat targets are
+  /// SHOWN, see [setDietStrategy]).
   ///
   /// Returns true when [next] is the stored food type afterwards (written, or
   /// already stored); false when the call was dropped because the account
@@ -133,6 +144,44 @@ class UserProfileNotifier extends Notifier<Map<String, dynamic>> {
     } else {
       fx.pushSnapshot();
     }
+    return true;
+  }
+
+  /// THE write door for the diet strategy (`diet_strategy`, diet plan
+  /// Unit 3a, docs/plans/diet-strategy.md §3.4), used by the Diet Plan
+  /// screen's selector. Same shape as [setFoodType]: serialised, dropped
+  /// (false) when the account changed while queued, a no-op (true) when the
+  /// value is already stored. ONE field write: no target is written (the
+  /// strategy is applied when targets are READ, `effectiveMacroTargets`), so
+  /// calories, protein and the stored carb/fat never change here. The
+  /// patch fires the profile sync; the snapshot push is not awaited; no
+  /// extraction lock (the coach extraction never writes a strategy).
+  /// PRO is the caller's gate (`gateAndVerify`), not checked here.
+  Future<bool> setDietStrategy(DietStrategy next) {
+    final fx = debugFoodTypeEffects ?? FoodTypeWriteEffects.real;
+    final uidAtCall = fx.currentUserId();
+    final run = _dietStrategyChain
+        .catchError((Object _) => false)
+        .then((_) => _applyDietStrategy(next, uidAtCall, fx));
+    _dietStrategyChain = run;
+    return run;
+  }
+
+  Future<bool> _applyDietStrategy(
+    DietStrategy next,
+    String? uidAtCall,
+    FoodTypeWriteEffects fx,
+  ) async {
+    if (fx.currentUserId() != uidAtCall) return false; // account changed while queued
+    final stored = UserRepository.instance.getProfile()?['diet_strategy'];
+    if (stored is String && stored == next.storageKey) return true;
+    await updateProfile({'diet_strategy': next.storageKey});
+    ref.invalidate(macroTargetsProvider);
+    ref.invalidate(dailyNutritionProvider);
+    ref.invalidate(nutritionSummaryProvider);
+    ref.invalidate(dietPlanProvider);
+    final signedIn = uidAtCall != null && uidAtCall.isNotEmpty;
+    if (signedIn) fx.pushSnapshot();
     return true;
   }
 

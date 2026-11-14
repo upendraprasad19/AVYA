@@ -82,6 +82,24 @@ void main() {
       }
     });
 
+    test('diet plan Unit 3a: Diet Strategy has its own subtitle and its call '
+        'sites pass the display label', () {
+      final paywallSrc = File(_paywall).readAsStringSync();
+      expect(paywallSrc, contains("case 'Diet Strategy':"));
+      final actions = File(
+              'lib/features/nutrition/services/diet_strategy_actions.dart')
+          .readAsStringSync();
+      expect(actions, contains("const String kDietStrategyPaywallLabel = 'Diet Strategy';"));
+      for (final f in [
+        'lib/features/nutrition/services/diet_strategy_actions.dart',
+        'lib/features/profile/screens/edit_profile_screen.dart',
+      ]) {
+        expect(File(f).readAsStringSync(),
+            contains('feature: kDietStrategyPaywallLabel'),
+            reason: '$f must open the paywall with the display label');
+      }
+    });
+
     test('the locked rows are the labels the screen actually sends', () {
       final notifSrc = File(_notifSettings).readAsStringSync();
 

@@ -521,6 +521,13 @@ paths:
   # directory glob because lib/app.dart is the only file at that path.
   - { glob: "lib/app.dart", tier: account }
 
+  # Diet plan Unit 3a (2026-11-14): the profile push (sync_profile.dart) calls dietStrategyPushEntry, which decides
+  # whether the `diet_strategy` key is sent and with which value (the column's CHECK rejects the whole upsert on a
+  # stray value), and DietStrategyFlags gates it. Push rules, so engine code (the sync-engine completeness test
+  # lists both in _engine). Declared ABOVE the lib/features/nutrition/** feature rule below (first match wins).
+  - { glob: "lib/core/constants/diet_strategies.dart", tier: platform }   # dietStrategyPushEntry: the diet_strategy push rule
+  - { glob: "lib/features/nutrition/services/diet_strategy_flags.dart", tier: platform }   # DietStrategyFlags (ship-dark, gates the push key)
+
   # ----- feature (explicit overrides over default) -----
   - { glob: "lib/features/profile/**", tier: feature }
   - { glob: "lib/features/train/**", tier: feature }

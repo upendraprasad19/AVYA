@@ -213,7 +213,9 @@ void main() {
 
     test('initState registers the restore-tick listener', () {
       final start = source.indexOf('void initState() {');
-      final end = source.indexOf('Future<void> _initSpeech()');
+      // The next method after initState (it was `_initSpeech` before the speech
+      // session moved out of the screen).
+      final end = source.indexOf('void _onRestoreCompleted() {');
       expect(start, greaterThanOrEqualTo(0));
       expect(end, greaterThan(start));
       final body = source.substring(start, end);
@@ -238,7 +240,10 @@ void main() {
     test('dispose removes the listener (no leak)', () {
       final start = source.indexOf('void dispose() {');
       expect(start, greaterThanOrEqualTo(0));
-      final end = source.indexOf('_speech?.stop();', start);
+      // `_messageController.dispose()` is the first statement after the
+      // listener removal (it followed `_speech?.stop()` before the speech
+      // session moved into the composer).
+      final end = source.indexOf('_messageController.dispose();', start);
       expect(end, greaterThan(start));
       final body = source.substring(start, end);
       expect(

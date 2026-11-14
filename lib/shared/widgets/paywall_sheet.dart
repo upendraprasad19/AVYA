@@ -147,7 +147,7 @@ class _PaywallSheetState extends ConsumerState<PaywallSheet> {
       case 'AI Food Analysis':
         return 'Let AI analyse what you ate and log it instantly with accurate macros.';
       case 'Voice Notes':
-        return 'Just talk to your coach \u2014 push-to-talk voice input for hands-free logging.';
+        return 'Just talk to your coach. Tap the mic, say it, and log hands-free.';
       case 'Monthly Prediction':
         return 'Get an updated AI prediction of your fitness progress every month.';
       case 'Weekly AI Report':
@@ -162,6 +162,8 @@ class _PaywallSheetState extends ConsumerState<PaywallSheet> {
         return 'Get a nudge when your protein is falling short, while the day can still be saved.';
       case 'Plateau Check':
         return 'Get told the moment your progress stalls, with the change that breaks it.';
+      case 'Diet Strategy':
+        return 'Low carb and keto targets, set for your goal.';
       case 'Day Swaps':
         return 'Life happens. Move a workout to another day this week without losing your plan.';
       default:

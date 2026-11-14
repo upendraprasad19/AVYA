@@ -103,6 +103,7 @@ class SubscriptionService {
     AppConstants.featurePredictionMonthly,
     AppConstants.featurePhotoAnalysis,
     AppConstants.featureAdaptiveWorkouts,
+    AppConstants.featureDietStrategy,
   ];
 
   // ── Hive Keys ───────────────────────────────────────────────

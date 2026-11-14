@@ -409,13 +409,15 @@ class _NutritionScreenState extends ConsumerState<NutritionScreen>
               children: [
                 // Food-type tag + info icon row (compact). Diet plan Unit 2a:
                 // the user sees which food type the targets and the diet
-                // plan follow; Unit 3 appends the strategy (" · KETO").
+                // plan follow; Unit 3a appends the strategy (" · KETO"),
+                // carried with the numbers in DailyNutritionData.
                 // Tapping the tag opens the Diet Plan screen.
                 Row(
                   children: [
                     Flexible(
                       child: FoodTypeTag(
                         profile: profile,
+                        strategy: nutrition.strategy,
                         onTap: () => context.go('/nutrition/diet-plan'),
                       ),
                     ),

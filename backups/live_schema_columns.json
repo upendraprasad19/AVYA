@@ -4,8 +4,8 @@
     "project_id": "dedsavbjuwgarrhphgnl",
     "captured_at": "2026-08-26",
     "captured_via": "SELECT table_name, array_agg(column_name) FROM information_schema.columns WHERE table_schema='public' GROUP BY table_name",
-    "regenerated_at": "2026-11-13",
-    "regenerated_for": "migration 178 (coach_client_key, OI-503): added public.ai_coach_interactions.client_key (text, nullable), applied 2026-11-13, cloud version 20261113030538. A live information_schema.columns read of public.ai_coach_interactions before the apply matched this file's 12 columns; after the apply client_key is the 13th. Earlier: migration 177 (coach_chat_cleared_at, OI-479, applied 2026-11-12, cloud version 20261112093239): added public.user_preferences.coach_chat_cleared_at (timestamptz, nullable). A live information_schema.columns read of public.user_preferences before the apply matched this file's 9 columns; after the apply the new column is the 10th. Earlier: migration 159 (referral_reward_on_conversion, applied 2026-10-13, cloud version 20261013040701): added public.referral_redemptions.converted_at, referrer_reward_days and referrer_credited_at (all nullable). A live information_schema.columns read of public.referral_redemptions after the apply matched this file (11 columns, the three new ones last). Earlier regeneration: migration 152 (OI-202), dropped users.subscription_status and users.subscription_expires_at."
+    "regenerated_at": "2026-11-14",
+    "regenerated_for": "migration 179 (diet_strategy, diet plan Unit 3a): added public.user_profile.diet_strategy (text, nullable), applied 2026-11-14, cloud version 20261114151515. A live information_schema.columns read of public.user_profile before the apply counted 40 columns with no diet_strategy; after the apply it is the 41st. Earlier: migration 178 (coach_client_key, OI-503): added public.ai_coach_interactions.client_key (text, nullable), applied 2026-11-13, cloud version 20261113030538. A live information_schema.columns read of public.ai_coach_interactions before the apply matched this file's 12 columns; after the apply client_key is the 13th. Earlier: migration 177 (coach_chat_cleared_at, OI-479, applied 2026-11-12, cloud version 20261112093239): added public.user_preferences.coach_chat_cleared_at (timestamptz, nullable). A live information_schema.columns read of public.user_preferences before the apply matched this file's 9 columns; after the apply the new column is the 10th. Earlier: migration 159 (referral_reward_on_conversion, applied 2026-10-13, cloud version 20261013040701): added public.referral_redemptions.converted_at, referrer_reward_days and referrer_credited_at (all nullable). A live information_schema.columns read of public.referral_redemptions after the apply matched this file (11 columns, the three new ones last). Earlier regeneration: migration 152 (OI-202), dropped users.subscription_status and users.subscription_expires_at."
   },
   "storage_buckets": [
     "chat-media",
@@ -530,7 +530,8 @@
       "preferred_workout_time",
       "equipment_exclusions",
       "equipment_owned",
-      "coach_extraction_locked_fields"
+      "coach_extraction_locked_fields",
+      "diet_strategy"
     ],
     "user_progress": [
       "id",

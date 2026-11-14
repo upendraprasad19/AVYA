@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart' show FunctionException;
 import 'package:icanbefitter/core/constants/app_constants.dart';
+import 'package:icanbefitter/core/constants/diet_strategies.dart';
 import 'package:icanbefitter/core/services/error_telemetry.dart';
 import 'package:icanbefitter/core/services/health_write_service.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
@@ -15,6 +16,7 @@ import 'package:icanbefitter/core/services/write_result.dart';
 import 'package:icanbefitter/core/services/supabase_service.dart';
 import 'package:icanbefitter/core/services/sync_service.dart';
 import 'package:icanbefitter/core/utils/bmr_calculator.dart';
+import 'package:icanbefitter/core/utils/effective_macro_targets.dart';
 import 'package:icanbefitter/core/utils/ist_date.dart';
 import 'package:icanbefitter/core/utils/single_flight.dart';
 import 'package:icanbefitter/core/services/badge_service.dart';
@@ -25,6 +27,11 @@ import 'package:icanbefitter/features/nutrition/repositories/nutrition_repositor
 import 'package:icanbefitter/features/nutrition/services/diet_plan_generator.dart';
 import 'package:uuid/uuid.dart';
 import 'package:icanbefitter/features/auth/providers/auth_invalidation_provider.dart';
+import 'package:icanbefitter/features/home/providers/home_provider.dart'
+    show restoreCompletedTickProvider;
+import 'package:icanbefitter/features/nutrition/services/diet_strategy_flags.dart';
+import 'package:icanbefitter/features/profile/providers/profile_provider.dart'
+    show subscriptionInfoProvider;
 // OI-36 (2026-05-17) — home_provider import dropped. deleteFoodLog now
 // delegates to NutritionWriteService.deleteLog which fires the canonical
 // provider invalidation batch (including aiInsightProvider /
@@ -45,12 +52,54 @@ import 'package:icanbefitter/core/services/water_target_service.dart';
 /// Macro targets (protein/carb/fat) are NOT scaled — the override is a
 /// signed kcal delta only, intentionally narrow in scope. Result is
 /// clamped to [800, 6000] for safety.
+///
+/// Diet plan Unit 3a (docs/plans/diet-strategy.md §3.3): the stored or
+/// recomputed pack goes through [effectiveMacroTargets] BEFORE the calorie
+/// override, so a PRO user's non-Balanced `diet_strategy` changes the carb
+/// and fat targets (never calories or protein). The strategy those numbers
+/// were made for rides in the same map as `'strategy_index'` (absent =
+/// Balanced; read with `dietStrategyOfTargets`). With [strategyEnabled] false
+/// (the 3a default) the output is byte-identical to before 3a.
 Map<String, double> _resolveNutritionTargets(
   Map<String, dynamic>? profile, {
   DateTime? date,
+  bool strategyEnabled = false,
+  bool pro = false,
 }) {
-  Map<String, double> targets;
+  final base = _resolveBaseTargets(profile);
+  if (base == null) {
+    // Last resort hardcoded defaults (Balanced: the strategy is not applied).
+    return _applyCalorieOverride({
+      'daily_calories': 2400,
+      'protein_grams': 184,
+      'carb_grams': 280,
+      'fat_grams': 80,
+    }, date);
+  }
+  return _applyCalorieOverride(
+    _applyDietStrategy(base, profile!, enabled: strategyEnabled, pro: pro),
+    date,
+  );
+}
 
+/// Diet plan Unit 3a: the Balanced pack the shown targets start from (the
+/// stored four-pack, else the recompute from the profile's inputs), before
+/// any strategy or calorie override. Null when only the hard-coded defaults
+/// are left (the strategy never applies to those). The Diet Plan selector's
+/// confirm dialog previews from this same pack, so its OLD side equals the
+/// targets on screen.
+MacroPack? resolveBaseMacroPack(Map<String, dynamic>? profile) {
+  final base = _resolveBaseTargets(profile);
+  if (base == null) return null;
+  return (
+    calories: base['daily_calories']!,
+    protein: base['protein_grams']!,
+    carbs: base['carb_grams']!,
+    fat: base['fat_grams']!,
+  );
+}
+
+Map<String, double>? _resolveBaseTargets(Map<String, dynamic>? profile) {
   // OBS-11 (2026-06-21) — dual-name read for `carb_grams`. The cloud column +
   // the restore/sync path (sync_profile `_restoreUserProfile`, sync_service)
   // use the PLURAL `carbs_grams`; this reader + Home + onboarding use the
@@ -67,13 +116,12 @@ Map<String, double> _resolveNutritionTargets(
       profile['protein_grams'] != null &&
       carbCanonical != null &&
       profile['fat_grams'] != null) {
-    targets = {
+    return {
       'daily_calories': (profile['daily_calories'] as num).toDouble(),
       'protein_grams': (profile['protein_grams'] as num).toDouble(),
       'carb_grams': (carbCanonical as num).toDouble(),
       'fat_grams': (profile['fat_grams'] as num).toDouble(),
     };
-    return _applyCalorieOverride(targets, date);
   }
 
   // Try to recalculate from profile inputs.
@@ -108,22 +156,16 @@ Map<String, double> _resolveNutritionTargets(
         pacePreference: (profile['pace_preference'] as String?) ?? 'balanced',
         bodyFatPercent: bodyFat,
       );
-      return _applyCalorieOverride({
+      return {
         'daily_calories': targets.dailyCalories.toDouble(),
         'protein_grams': targets.proteinGrams.toDouble(),
         'carb_grams': targets.carbGrams.toDouble(),
         'fat_grams': targets.fatGrams.toDouble(),
-      }, date);
+      };
     }
   }
 
-  // Last resort hardcoded defaults.
-  return _applyCalorieOverride({
-    'daily_calories': 2400,
-    'protein_grams': 184,
-    'carb_grams': 280,
-    'fat_grams': 80,
-  }, date);
+  return null;
 }
 
 /// @visibleForTesting alias for [_resolveNutritionTargets] — OBS-11 dual-name
@@ -133,8 +175,53 @@ Map<String, double> _resolveNutritionTargets(
 Map<String, double> resolveNutritionTargetsForTest(
   Map<String, dynamic>? profile, {
   DateTime? date,
+  bool strategyEnabled = false,
+  bool pro = false,
 }) =>
-    _resolveNutritionTargets(profile, date: date);
+    _resolveNutritionTargets(profile,
+        date: date, strategyEnabled: strategyEnabled, pro: pro);
+
+/// Diet plan Unit 3a: runs [effectiveMacroTargets] over a resolved
+/// (pre-override) pack. Returns [targets] itself when the strategy does not
+/// apply, so the flag-off map is the very same map as before 3a.
+Map<String, double> _applyDietStrategy(
+  Map<String, double> targets,
+  Map<String, dynamic> profile, {
+  required bool enabled,
+  required bool pro,
+}) {
+  if (!enabled) return targets;
+  final effective = effectiveMacroTargets(
+    (
+      calories: targets['daily_calories']!,
+      protein: targets['protein_grams']!,
+      carbs: targets['carb_grams']!,
+      fat: targets['fat_grams']!,
+    ),
+    profile['diet_strategy'],
+    pro: pro,
+    enabled: enabled,
+  )!;
+  if (effective.strategy == DietStrategy.balanced) return targets;
+  return {
+    'daily_calories': effective.calories,
+    'protein_grams': effective.protein,
+    'carb_grams': effective.carbs,
+    'fat_grams': effective.fat,
+    'strategy_index': effective.strategy.index.toDouble(),
+  };
+}
+
+/// Diet plan Unit 3a (plan §3.3): the strategy inputs a targets provider
+/// passes to [_resolveNutritionTargets]. ONLY when the flag is on does it
+/// watch the PRO state and the restore tick, so a flag-off provider keeps
+/// exactly its pre-3a dependency set.
+({bool enabled, bool pro}) _watchDietStrategyInputs(Ref ref) {
+  if (!DietStrategyFlags.enabled) return (enabled: false, pro: false);
+  final pro = ref.watch(subscriptionInfoProvider.select((s) => s.isPro));
+  ref.watch(restoreCompletedTickProvider);
+  return (enabled: true, pro: pro);
+}
 
 /// Applies an active `target_override_<date>` calorie delta to the
 /// resolved targets map. Macros are intentionally NOT scaled (the AI
@@ -291,6 +378,11 @@ class DailyNutritionData {
   final double fiberTarget;
   final Map<String, List<Map<String, dynamic>>> meals;
 
+  /// Diet plan Unit 3a: the strategy the carb/fat targets above were made
+  /// for (the calorie card's `FoodTypeTag` label). Balanced unless a PRO
+  /// user's non-Balanced strategy applies.
+  final DietStrategy strategy;
+
   const DailyNutritionData({
     this.calories = 0,
     this.protein = 0,
@@ -303,6 +395,7 @@ class DailyNutritionData {
     this.fatTarget = 80,
     this.fiberTarget = 30,
     this.meals = const {},
+    this.strategy = DietStrategy.balanced,
   });
 
   /// Flat list of all meals for display in "Today's Meals" section.
@@ -356,7 +449,11 @@ class DailyNutritionNotifier extends Notifier<DailyNutritionData> {
     // Pass selectedDate so any in-flight (legacy, draining) calorie-target
     // override is applied for the displayed day. The AI tool that wrote these
     // was removed 2026-05-31 — target is derive-only going forward.
-    final targets = _resolveNutritionTargets(profile, date: selectedDate);
+    final strategyInputs = _watchDietStrategyInputs(ref);
+    final targets = _resolveNutritionTargets(profile,
+        date: selectedDate,
+        strategyEnabled: strategyInputs.enabled,
+        pro: strategyInputs.pro);
     final calorieTarget = targets['daily_calories']!;
     final proteinTarget = targets['protein_grams']!;
     final carbTarget = targets['carb_grams']!;
@@ -375,6 +472,7 @@ class DailyNutritionNotifier extends Notifier<DailyNutritionData> {
       fatTarget: fatTarget,
       fiberTarget: fiberTarget,
       meals: meals,
+      strategy: dietStrategyOfTargets(targets),
     );
   }
 }
@@ -390,7 +488,10 @@ class MacroTargetsNotifier extends Notifier<Map<String, double>> {
   Map<String, double> build() {
     ref.watch(authUserIdTokenProvider); // c4055a — rebuild on auth change
     final profile = UserRepository.instance.getProfile();
-    final targets = _resolveNutritionTargets(profile);
+    final strategyInputs = _watchDietStrategyInputs(ref);
+    final targets = _resolveNutritionTargets(profile,
+        strategyEnabled: strategyInputs.enabled, pro: strategyInputs.pro);
+    final strategyIndex = targets['strategy_index'];
     return {
       'bmr': (profile?['bmr'] as num?)?.toDouble() ?? 0,
       'tdee': (profile?['tdee'] as num?)?.toDouble() ?? 0,
@@ -398,6 +499,8 @@ class MacroTargetsNotifier extends Notifier<Map<String, double>> {
       'protein': targets['protein_grams']!,
       'carbs': targets['carb_grams']!,
       'fat': targets['fat_grams']!,
+      // Diet plan Unit 3a: absent = Balanced (dietStrategyOfTargets).
+      'strategy_index': ?strategyIndex,
     };
   }
 }

@@ -31,4 +31,29 @@ void main() {
     expect(files, greaterThan(50), reason: 'precondition: the sweep saw the tree');
     expect(hits, isEmpty);
   });
+
+  // Diet plan Unit 3a (docs/plans/diet-strategy.md §4 test 8): the diet
+  // strategy never reaches workout generation either. Home is NOT swept here:
+  // its nutrition summary is one of the three carb/fat target readers by
+  // design (plan §3.3); its workout providers do not read the strategy.
+  test('plan engine and Train never read the diet strategy', () {
+    final pattern = RegExp(r"diet_strategy|dietStrategy|DietStrategy|diet_strategies\.dart|effectiveMacroTargets|macroSplit");
+    final hits = <String>[];
+    var files = 0;
+    for (final dir in [
+      'lib/shared/repositories/plan_engine',
+      'lib/features/train',
+    ]) {
+      for (final f in Directory(dir).listSync(recursive: true)) {
+        if (f is! File || !f.path.endsWith('.dart')) continue;
+        files++;
+        final lines = f.readAsLinesSync();
+        for (var i = 0; i < lines.length; i++) {
+          if (pattern.hasMatch(lines[i])) hits.add('${f.path}:${i + 1}');
+        }
+      }
+    }
+    expect(files, greaterThan(50), reason: 'precondition: the sweep saw the tree');
+    expect(hits, isEmpty);
+  });
 }
