@@ -40,6 +40,7 @@ import 'package:icanbefitter/features/profile/providers/profile_provider.dart';
 import 'package:icanbefitter/features/profile/services/profile_target_recompute.dart';
 import 'package:icanbefitter/shared/repositories/user_repository.dart';
 
+import '../helpers/dart_source_scan.dart';
 import '../helpers/hive_test_setup.dart';
 
 class _Fx {
@@ -203,10 +204,78 @@ void main() {
     expect((snap['profile'] as Map)['diet_strategy_label'], 'Keto');
   }
 
-  group('2b ship-dark identity (flag at its 3a default)', () {
-    test('kDietStrategyDefaultOn is false and enabled reads false', () {
-      expect(kDietStrategyDefaultOn, isFalse);
+  // Unit 3b-3 round 1 finding 2: the profile push is the only writer of the
+  // live user_profile.diet_strategy column; its call site passes the flag.
+  // B-pass seat C finding 1: comments are stripped (a commented-out call
+  // stayed green) and the call must sit inside the map _syncUserProfile
+  // upserts, not anywhere in the file.
+  test('PRESENCE: the profile push gates the diet_strategy entry on the flag',
+      () {
+    final src = stripDartComments(
+        File('lib/core/services/sync/sync_profile.dart').readAsStringSync());
+    final start = src.indexOf('Future<void> _syncUserProfile(');
+    expect(start, greaterThanOrEqualTo(0));
+    final open = src.indexOf('final payload = <String, dynamic>{', start);
+    final close = src.indexOf('\n    };\n', open);
+    final upsert = src.indexOf('.upsert(payload, onConflict: \'user_id\')', close);
+    final queued = src.indexOf('_executeUserProfileUpsert(payload)', close);
+    final nextMethod = src.indexOf('\n  Future<', start + 1);
+    expect(open, greaterThan(start));
+    expect(close, greaterThan(open));
+    expect(upsert, greaterThan(close), reason: 'the map is what is upserted');
+    expect(upsert, lessThan(nextMethod), reason: 'in the same method');
+    // Seat D finding 2: the queued path sends the same map, and nothing
+    // between the map and the sends changes it.
+    expect(queued, inExclusiveRange(close, nextMethod));
+    final afterMap = src.substring(close, nextMethod);
+    expect(RegExp(r'\bpayload\s*(\[|\.\.|\.(remove|add|addAll|putIfAbsent|update|clear)\b|=[^=])')
+            .hasMatch(afterMap),
+        isFalse,
+        reason: 'payload is not mutated or reassigned after it is built');
+    final payloadMap = src.substring(open, close);
+    expect(
+        RegExp(r'\.\.\.dietStrategyPushEntry\(p, enabled: DietStrategyFlags\.enabled\),')
+            .allMatches(payloadMap)
+            .length,
+        1);
+    // No second, unflagged way into the map.
+    expect(payloadMap.contains("'diet_strategy'"), isFalse);
+    expect(RegExp(r'dietStrategyPushEntry\(').allMatches(src).length, 1,
+        reason: 'one call site in the file');
+  });
+
+  // B-pass seat C finding 1: the call site's own expression, run against the
+  // real kill switch (no seam): the switch keeps diet_strategy out of the push.
+  test('the push entry with the real kill switch: nothing; without it: the key',
+      () async {
+    final profile = <String, dynamic>{'diet_strategy': 'keto'};
+    expect(DietStrategyFlags.debugEnabledOverride, isNull);
+    expect(dietStrategyPushEntry(profile, enabled: DietStrategyFlags.enabled),
+        {'diet_strategy': 'keto'});
+    await HiveService.instance.configBox.put(DietStrategyFlags.disableKey, true);
+    expect(dietStrategyPushEntry(profile, enabled: DietStrategyFlags.enabled),
+        isEmpty);
+  });
+
+  // Unit 3b-3 flipped the constant on: the OFF path is now the local kill
+  // switch configBox['disable_diet_strategy'], so this group runs through it
+  // (the real Hive key, no test seam) and must still show 3a's identity.
+  group('2b ship-dark identity (the kill switch after the 3b-3 flip)', () {
+    setUp(() async {
+      await HiveService.instance.configBox
+          .put(DietStrategyFlags.disableKey, true);
+    });
+
+    test('kDietStrategyDefaultOn is true; the kill switch turns enabled off',
+        () async {
+      expect(kDietStrategyDefaultOn, isTrue);
       expect(DietStrategyFlags.enabled, isFalse);
+      await HiveService.instance.configBox.delete(DietStrategyFlags.disableKey);
+      expect(DietStrategyFlags.enabled, isTrue);
+      // Only exactly true is the switch.
+      await HiveService.instance.configBox
+          .put(DietStrategyFlags.disableKey, 'true');
+      expect(DietStrategyFlags.enabled, isTrue);
     });
 
     for (final extra in <Map<String, dynamic>>[
@@ -347,11 +416,20 @@ void main() {
       expectKeto(readAll());
     });
 
-    test('4: the kill switch reverts every reader at once', () async {
+    test('4: the kill switch (the real key) reverts every reader on its next '
+        'build', () async {
       await _setPro(true);
       await seed(const {'diet_strategy': 'keto'});
       expectKeto(readAll());
-      DietStrategyFlags.debugEnabledOverride = false;
+      // Unit 3b-3 round 1 finding 1: the real configBox key, no seam. The
+      // providers read the switch when they build, so they are rebuilt here
+      // the way an app start rebuilds them; the snapshot needs nothing.
+      DietStrategyFlags.debugEnabledOverride = null;
+      await HiveService.instance.configBox
+          .put(DietStrategyFlags.disableKey, true);
+      expect((AiSnapshotBuilder.instance.buildAiContext()['profile']
+              as Map).containsKey('diet_strategy'), isFalse,
+          reason: 'the snapshot follows the switch at once');
       c.invalidate(macroTargetsProvider);
       c.invalidate(dailyNutritionProvider);
       c.invalidate(nutritionSummaryProvider);

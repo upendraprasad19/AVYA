@@ -231,7 +231,8 @@ void main() {
     });
 
     testWidgets('PRO: the dialog shows the helper before/after; Cancel '
-        'writes nothing; Switch writes, says so and shows the meals note',
+        'writes nothing; Switch writes, says so and shows the Keto medical '
+        'note',
         (tester) async {
       await seed(tester, pro: true);
       await pumpSection(tester);
@@ -258,9 +259,10 @@ void main() {
           tester, find.byKey(const ValueKey('diet_strategy_confirm_switch')));
       expect(_stored(), 'keto');
       expect(find.text('Targets updated for Keto'), findsOneWidget);
-      expect(
-          find.text('Meals for Keto come in the next update. '
-              'This plan uses balanced meals.'),
+      // Unit 3b: the 3a "Meals for Keto come in the next update" line is
+      // gone (the plan follows the strategy); the medical note shows.
+      expect(find.textContaining('come in the next update'), findsNothing);
+      expect(find.byKey(const ValueKey('diet_strategy_keto_medical_note')),
           findsOneWidget);
       expect(tester.getSemantics(chip(DietStrategy.keto)).flagsCollection
           .isSelected, Tristate.isTrue);
@@ -291,7 +293,8 @@ void main() {
     });
 
     testWidgets('no targets and no inputs to compute them (hard-coded '
-        'defaults, never strategy-shaped): no dialog, the field is written',
+        'defaults, never strategy-shaped): Low carb has no dialog and is '
+        'written; Keto asks first (the medical note, Unit 3b), no rows',
         (tester) async {
       await tester.runAsync(() async {
         await UserRepository.instance.updateProfileFields({'full_name': 'T'});
@@ -300,13 +303,24 @@ void main() {
             DateTime.now().add(const Duration(days: 30)).toIso8601String());
       });
       await pumpSection(tester);
-      await _tapReal(tester, chip(DietStrategy.keto));
+      await _tapReal(tester, chip(DietStrategy.lowCarb));
       expect(find.byKey(const ValueKey('diet_strategy_confirm_dialog')),
           findsNothing);
-      expect(_stored(), 'keto');
+      expect(_stored(), 'low_carb');
       // B-pass seat B finding 3: no shown number moved, so no "updated".
-      expect(find.text('Diet strategy set to Keto.'), findsOneWidget);
-      expect(find.text('Targets updated for Keto'), findsNothing);
+      expect(find.text('Diet strategy set to Low carb.'), findsOneWidget);
+      expect(find.text('Targets updated for Low carb'), findsNothing);
+
+      await _tapReal(tester, chip(DietStrategy.keto));
+      expect(find.byKey(const ValueKey('diet_strategy_confirm_dialog')),
+          findsOneWidget);
+      expect(find.byKey(const ValueKey('diet_strategy_confirm_keto_note')),
+          findsOneWidget);
+      expect(find.text('Your daily targets change:'), findsNothing);
+      await _tapReal(
+          tester, find.byKey(const ValueKey('diet_strategy_confirm_switch')));
+      // (its snackbar queues behind the Low carb one still on screen)
+      expect(_stored(), 'keto');
     });
 
     testWidgets('a write that throws says so and stores nothing (B-pass seat '
@@ -484,7 +498,11 @@ void main() {
           RegExp(r"if \(DietStrategyFlags\.enabled\)\s*'diet_strategy':")
               .hasMatch(src),
           isTrue);
-      expect("'diet_strategy'".allMatches(src).length, 1);
+      // Unit 3b: one WRITE site (the stamp in the plan map, gated); the other
+      // occurrence is the load's READ of the stamp.
+      expect(RegExp(r"'diet_strategy':").allMatches(src).length, 1);
+      expect("planData['diet_strategy']".allMatches(src).length, 1);
+      expect("'diet_strategy'".allMatches(src).length, 2);
     });
   });
 }

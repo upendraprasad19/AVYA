@@ -137,7 +137,9 @@ Future<void> handleDietStrategyTap(
   );
   final notifier = ref.read(userProfileProvider.notifier);
 
-  if (preview != null && !preview.sameShown) {
+  // Unit 3b §3.8: a change to Keto always asks (the medical note), even
+  // when the targets would not move or are unknown.
+  if (next == DietStrategy.keto || (preview != null && !preview.sameShown)) {
     final confirmed = await showDietStrategyConfirmDialog(
       context,
       next: next,
@@ -193,7 +195,10 @@ Future<bool?> confirmEditProfileDietStrategy(
     next: next,
     currentPro: pro,
   );
-  if (preview == null || preview.sameShown) return true;
+  // Unit 3b §3.8: Keto always asks (the medical note).
+  if (next != DietStrategy.keto && (preview == null || preview.sameShown)) {
+    return true;
+  }
   final confirmed =
       await showDietStrategyConfirmDialog(context, next: next, preview: preview);
   return confirmed ? true : null;

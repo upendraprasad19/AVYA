@@ -7,10 +7,16 @@
 // entry.
 library;
 
+import 'dart:io';
+
 import 'package:flutter_test/flutter_test.dart';
+import 'package:icanbefitter/core/services/hive_service.dart';
+import 'package:icanbefitter/features/nutrition/services/diet_strategy_flags.dart';
 import 'package:icanbefitter/core/constants/diet_strategies.dart';
 import 'package:icanbefitter/core/utils/bmr_calculator.dart';
 import 'package:icanbefitter/core/utils/effective_macro_targets.dart';
+
+import '../helpers/dart_source_scan.dart';
 
 void main() {
   group('macroSplit', () {
@@ -179,6 +185,34 @@ void main() {
       expect(r.carbs, 30);
       expect(r.fat, ((2400 - 600 - 120) / 9).round().toDouble());
     });
+  });
+
+  // Unit 3b-3 round 1 finding 8: with no Hive box (a pure unit test, or a
+  // read that throws) the flag is the build default, which is ON since the
+  // flip; no seam is set here.
+  test('enabled with no Hive and no seam is the build default (on)', () {
+    expect(DietStrategyFlags.debugEnabledOverride, isNull);
+    // B-pass seat C finding 6: the precondition, so a later Hive setUp in
+    // this file cannot turn this into a test of the box read.
+    expect(() => HiveService.instance.configBox, throwsA(anything));
+    expect(kDietStrategyDefaultOn, isTrue);
+    expect(DietStrategyFlags.enabled, isTrue);
+  });
+
+  // B-pass seat C finding 2: the fleet-wide off (a build with the constant
+  // false) cannot be executed while the constant is true, so its order is
+  // pinned: the seam first, then the constant, then the box read.
+  test('PRESENCE: enabled checks the build constant before the box', () {
+    final src = stripDartComments(
+        File('lib/features/nutrition/services/diet_strategy_flags.dart')
+            .readAsStringSync());
+    final getter = src.substring(src.indexOf('static bool get enabled {'));
+    final seam = getter.indexOf('if (override != null) return override;');
+    final guard = getter.indexOf('if (!kDietStrategyDefaultOn) return false;');
+    final read = getter.indexOf('HiveService.instance.configBox');
+    expect(seam, greaterThan(0));
+    expect(guard, greaterThan(seam));
+    expect(read, greaterThan(guard));
   });
 
   group('vocabulary', () {

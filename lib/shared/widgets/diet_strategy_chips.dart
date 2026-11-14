@@ -19,6 +19,7 @@ class DietStrategyChips extends StatelessWidget {
     required this.onChanged,
     required this.isPro,
     this.enabled = true,
+    this.disabled = const {},
   });
 
   /// The EFFECTIVE strategy (the one the shown targets were made for).
@@ -30,6 +31,12 @@ class DietStrategyChips extends StatelessWidget {
 
   /// False while a change is being saved; taps are ignored.
   final bool enabled;
+
+  /// Strategies not offered (Unit 3b §3.5: Keto for a Vegan food type). A
+  /// disabled chip ignores taps and is announced as disabled; a disabled chip
+  /// that is also the [value] still renders selected (the stored pair is
+  /// legal data). The caller shows the reason line.
+  final Set<DietStrategy> disabled;
 
   static const double minChipHeight = 44;
 
@@ -47,16 +54,18 @@ class DietStrategyChips extends StatelessWidget {
   Widget _chip(DietStrategy s) {
     final isSelected = s == value;
     final locked = !isPro && s != DietStrategy.balanced;
+    final off = disabled.contains(s);
+    final tappable = enabled && !off;
     return Semantics(
       button: true,
       selected: isSelected,
-      enabled: enabled,
+      enabled: tappable,
       label: locked ? '${s.label}, PRO' : s.label,
-      onTap: enabled ? () => onChanged(s) : null,
+      onTap: tappable ? () => onChanged(s) : null,
       excludeSemantics: true,
       child: GestureDetector(
         key: ValueKey('diet_strategy_chip_${s.storageKey}'),
-        onTap: enabled ? () => onChanged(s) : null,
+        onTap: tappable ? () => onChanged(s) : null,
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 180),
           constraints: const BoxConstraints(minHeight: minChipHeight),
@@ -79,11 +88,14 @@ class DietStrategyChips extends StatelessWidget {
                 style: AppTypography.body.copyWith(
                   fontSize: 13,
                   fontWeight: isSelected ? FontWeight.w700 : FontWeight.w400,
-                  color:
-                      isSelected ? AppColors.accent : AppColors.textPrimary,
+                  color: isSelected
+                      ? AppColors.accent
+                      : off
+                          ? AppColors.textDisabled
+                          : AppColors.textPrimary,
                 ),
               ),
-              if (locked) ...[
+              if (locked && !off) ...[
                 const SizedBox(width: 6),
                 Text(
                   'PRO',
