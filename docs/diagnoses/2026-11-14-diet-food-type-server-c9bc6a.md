@@ -126,7 +126,7 @@ doors (Unit 2a), and the coach reads it from the snapshot.
 
 ## Build-time corrections
 
-Plan §8: the two watermark tests needed a different reply; the profile read
+Plan §8 (and Unit 2a's B-pass finding 1, mirrored here: `normalizeFoodType` reads null/undefined as the default and any other non-string as `veg`; the shared fixture gained three rows). The two watermark tests needed a different reply; the profile read
 runs before the queries; `captainManual(` is a sanitiser safe marker; one
 Dart pin repointed; the SoT entry is created here and completed by 2a.
 
@@ -168,6 +168,7 @@ runs; every mutant is valid TS).
 | B16 | weekly-report keeps the raw line | captain_manual_food_type | 1 |
 | B17 | `fake_sb` numeric compare reverted | suggestMeal | 3 |
 | B18 | pescatarian capsule exclusion off | suggestMeal | 2 |
+| B19 | a corrupt non-string reads as the default again (Unit 2a B-pass F1 mirror) | food_types_test | 1 (the whole non-string test; the shared fixture rows also fail) |
 
 Declared limits: weekly-report's prompt line and the two `captainManual()`
 call sites are presence pins (the handlers build the prompt inline under a

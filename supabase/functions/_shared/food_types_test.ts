@@ -38,9 +38,13 @@ Deno.test("knownFoodType: every fixture row", () => {
   }
 });
 
-Deno.test("non-string input: tolerant = default, strict = null", () => {
-  for (const v of [undefined, 3, true, {}, ["veg"]]) {
+Deno.test("non-string input: nothing = default, corrupt = veg, strict = null", () => {
+  for (const v of [undefined, null]) {
     assertEquals(normalizeFoodType(v), DEFAULT_FOOD_TYPE);
+    assertEquals(knownFoodType(v), null);
+  }
+  for (const v of [3, true, {}, ["non_veg"]]) {
+    assertEquals(normalizeFoodType(v), "veg");
     assertEquals(knownFoodType(v), null);
   }
   assertEquals(DEFAULT_FOOD_TYPE, "non_veg");

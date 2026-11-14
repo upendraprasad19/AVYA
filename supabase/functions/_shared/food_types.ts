@@ -73,7 +73,11 @@ function canon(raw: string): string {
 
 /** Tolerant read of any stored or legacy value (Dart `foodTypeOf`). */
 export function normalizeFoodType(raw: unknown): FoodTypeKey {
-  if (typeof raw !== "string") return DEFAULT_FOOD_TYPE;
+  // Nothing stored = the default. Any other non-string (a number, a list,
+  // an object) is a corrupt value and reads as Veg, the strictest common
+  // type, so a bad write never puts meat on a plate (Unit 2a B-pass F1).
+  if (raw === null || raw === undefined) return DEFAULT_FOOD_TYPE;
+  if (typeof raw !== "string") return "veg";
   const key = canon(raw);
   if (key === "") return DEFAULT_FOOD_TYPE;
   if (STRATEGY_SPELLINGS.has(key)) return DEFAULT_FOOD_TYPE;

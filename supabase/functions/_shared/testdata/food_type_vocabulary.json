@@ -1,5 +1,5 @@
 {
-  "_comment": "Food-type vocabulary (diet plan Unit 2, docs/plans/diet-food-type.md section 2.1). expected = tolerant read (Dart foodTypeOf, TS normalizeFoodType); known = strict read (TS knownFoodType: null for never-chosen, diet strategies and unknown values). Read by test/core/food_types_test.dart and supabase/functions/_shared/food_types_test.ts.",
+  "_comment": "Food-type vocabulary (diet plan Unit 2, docs/plans/diet-food-type.md section 2.1). expected = tolerant read (Dart foodTypeOf, TS normalizeFoodType); known = strict read (TS knownFoodType: null for never-chosen, diet strategies and unknown values). Read by test/core/food_types_test.dart and supabase/functions/_shared/food_types_test.ts. Non-string inputs: null = never chosen (non_veg); any other non-string (a corrupt value) = veg, strict null.",
   "rows": [
     {
       "input": "veg",
@@ -178,6 +178,23 @@
     },
     {
       "input": "paleo",
+      "expected": "veg",
+      "known": null
+    },
+    {
+      "input": 42,
+      "expected": "veg",
+      "known": null
+    },
+    {
+      "input": true,
+      "expected": "veg",
+      "known": null
+    },
+    {
+      "input": [
+        "non_veg"
+      ],
       "expected": "veg",
       "known": null
     }

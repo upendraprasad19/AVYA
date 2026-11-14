@@ -163,3 +163,4 @@ Diagnose doc (FULL); `supabase/functions/CLAUDE.md` (shared module + switches); 
 - **SoT:** 2b lands first, so it CREATES `diet_preference_vocabulary` with the server half; Unit 2a folds its client writers/readers into the same entry when it syncs with `main`.
 - **Mutation B9** (meat rule loses `murgh`) survived the first test set: every fixture with `murgh` lacked an egg/fish word and was dropped anyway. A hand list of mixed egg/fish + meat dishes (one meat word each) was added.
 - **Switch removal:** OI-510.
+- **Unit 2a B-pass F1 mirror:** `normalizeFoodType` now reads null/undefined as the default (Non-veg) and any other non-string (a corrupt value) as `veg`, the strictest common type, matching Dart `foodTypeOf`. The shared fixture (`_shared/testdata/food_type_vocabulary.json`) is byte-identical to Unit 2a's and gained the rows `42`, `true`, `["non_veg"]`. Mutation B19.
