@@ -43,6 +43,7 @@ const SAFE_MARKERS = [
   "asPrincipalMessage(",
   "asAuthoredPrompt(",
   "captainPrompt(",
+  "captainManual(", // authored text only (Unit 2b: CAPTAIN_MANUAL or its pre-2b food-rule twin)
   "CAPTAIN_MANUAL",
   "SYSTEM_PROMPT",
   ".text", // a FencedBlock

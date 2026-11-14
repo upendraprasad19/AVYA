@@ -7241,3 +7241,12 @@ state), the legacy-only tests (`diet_plan_generator_test.dart`,
 `diet_plan_quality_constraints_test.dart` minus the repointed swap pin,
 the legacy archetype parts of `food_database_tagged_test.dart`), and the
 d3c7a9 pitfall row in `lib/features/nutrition/CLAUDE.md`.
+
+## OI-510 — Delete the three food-type kill switches (DISABLE_FOOD_TYPE_EXTRACTION_RULES, DISABLE_SUGGESTMEAL_STORED_FOOD_TYPE, DISABLE_FOOD_TYPE_MANUAL_RULES) and their old paths after the founder's coach check
+
+- **Status**: OPEN
+- **Blocked on**: the founder's coach check after Unit 2b's Edge Functions are live and Unit 2a has merged (the switches are the rollback lever until then)
+- **Verified**: 2026-11-14, the three switches exist in `supabase/functions/daily-snapshot/index.ts` (`foodTypeExtractionRulesOff`), `supabase/functions/_shared/tools/nutrition/suggestMeal.ts` (`suggestMealStoredFoodTypeOff`, `legacyHandler`, `NON_VEG_KEYWORDS`) and `supabase/functions/_shared/captain_manual.ts` (`foodTypeManualRulesOff`, `CAPTAIN_MANUAL_LEGACY_FOOD`; weekly-report's legacy diet line)
+- **Identified**: 2026-11-14 · filed via mint_oi.sh from branch `diet-food-type-server`
+
+Diet plan Unit 2b (diagnose `c9bc6a`, plan `docs/plans/diet-food-type-server.md`). Removing a switch deletes its old path in the same commit and needs a full x2 plan review again (CLAUDE.md §4.12.4). Also remove the `LEGACY_DIET_PREFERENCE_SCHEMA_LINE` constant, the legacy fixtures in the Deno tests, the `captainManual(` safe marker's legacy note, and the naming-conventions rows.

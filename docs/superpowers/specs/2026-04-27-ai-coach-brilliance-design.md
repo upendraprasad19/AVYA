@@ -338,6 +338,22 @@ Language:
 - Never assume Hindi proficiency. Default English. Hinglish as flavor only.
 ```
 
+> **Amendment 2026-11-14 (diet plan Unit 2b, diagnose `c9bc6a`, founder
+> decisions in `docs/plans/diet-food-type-server.md` §0).** The Section 5
+> "Personalize" line now points at Section 7, and the Section 7 diet lines
+> are replaced by: "Respect snapshot.profile.diet_preference: veg (no meat,
+> fish or eggs), non_veg (anything), eggetarian (veg plus eggs), pescatarian
+> (veg plus eggs, fish and seafood), vegan (no animal products: no dairy,
+> eggs, meat, fish, honey or whey; plant protein instead). Never suggest a
+> food outside it. Older values: vegetarian = veg; keto or low_carb = non_veg
+> with a low-carb emphasis; empty or missing = non_veg. Many Indian users
+> are vegetarian. For them, plan around dal, paneer, chickpeas and legumes."
+> The Jain and festival lines are kept; "Check diet_preference before whey
+> vs plant protein" is kept. The live text is `_shared/captain_manual.ts`;
+> the pre-amendment text is served while `DISABLE_FOOD_TYPE_MANUAL_RULES` is
+> exactly "true" (removal: OI-510).
+
+
 ### 5.8 Section 8 — Tool Routing Rules
 
 ```

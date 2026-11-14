@@ -70,6 +70,48 @@ type ExtractionResult =
   | { ok: true; facts: ExtractedFacts }
   | { ok: false };
 
+// Diet plan Unit 2b (2026-11-14, plan diet-food-type-server §2.2): the
+// extraction no longer produces a food type at all. The user's choice
+// (user_profile.diet_preference, written only by the app's two doors) is
+// the ONLY source; a copy in the coach notes would be re-embedded on every
+// run and retrieved by the coach after the user changed it.
+// Kill switch: DISABLE_FOOD_TYPE_EXTRACTION_RULES exactly "true" = the
+// pre-2b path verbatim (prompt line kept, nothing dropped, the candidate
+// upsert/lock loop sees diet_preference). Read per call.
+export function foodTypeExtractionRulesOff(): boolean {
+  return Deno.env.get("DISABLE_FOOD_TYPE_EXTRACTION_RULES") === "true";
+}
+
+// The pre-2b schema line, emitted only when the switch is ON.
+export const LEGACY_DIET_PREFERENCE_SCHEMA_LINE =
+  '  "diet_preference": "vegetarian|vegan|non_veg|keto|pescatarian",\n';
+
+// B-pass finding 5: the model can name the food type under another key
+// (`diet`, `dietary_preference`, `food_type`, ...); the merge copies every
+// key it gets, so those are dropped too. `food_preferences` (likes,
+// dislikes, allergies) is NOT a food type and is kept.
+export const FOOD_TYPE_FACT_KEYS: ReadonlySet<string> = new Set([
+  "diet_preference",
+  "diet_preferences",
+  "diet",
+  "diet_type",
+  "dietary_preference",
+  "dietary_preferences",
+  "dietary_type",
+  "food_type",
+  "eating_type",
+  "vegetarian",
+  "is_vegetarian",
+  "is_vegan",
+]);
+
+/** A copy of [facts] without any food-type key. Pure. */
+export function dropFoodType(facts: ExtractedFacts): ExtractedFacts {
+  return Object.fromEntries(
+    Object.entries(facts).filter(([k]) => !FOOD_TYPE_FACT_KEYS.has(k.toLowerCase())),
+  ) as ExtractedFacts;
+}
+
 // a2a (single-owner batch, 2026-09-27): exported + geminiChatFn injectable so
 // tests can drive this without a live Gemini call. Default is the real
 // import — no production call site passes a second argument.
@@ -93,6 +135,7 @@ export async function extractCoachingNotes(
     mergeCoachMemoryFieldsFn?: typeof mergeCoachMemoryFields;
   } = {},
 ): Promise<ExtractionResult> {
+  const foodTypeRulesOff = foodTypeExtractionRulesOff();
   // readStartIso is captured ONCE, before the query, so a row inserted
   // WHILE this function runs is excluded rather than racing into the next
   // bucket's read too. floorIso is the 48h recovery bound (an offline user
@@ -235,8 +278,7 @@ ${safeConvo.text}
 
 Return ONLY valid JSON (no markdown, no code fences). Include only fields that were explicitly mentioned:
 {
-  "diet_preference": "vegetarian|vegan|non_veg|keto|pescatarian",
-  "injuries": ["knee","back","shoulder","hip","wrist","ankle"],
+${foodTypeRulesOff ? LEGACY_DIET_PREFERENCE_SCHEMA_LINE : ""}  "injuries": ["knee","back","shoulder","hip","wrist","ankle"],
   "lifestyle_activity": "desk_job|lightly_active|very_active_job",
   "lifestyle_notes": "brief note on lifestyle context they mentioned",
   "food_preferences": "foods they like, dislike, or are allergic to",
@@ -312,6 +354,9 @@ If nothing was found, return: {}`;
     console.error("Failed to parse extraction response:", rawText);
     return { ok: false };
   }
+  // Unit 2b: drop a food type before the empty check, so a reply holding
+  // ONLY diet_preference merges nothing and still advances the watermark.
+  if (!foodTypeRulesOff) extracted = dropFoodType(extracted);
 
   // B-pass finding 1 (2026-09-27): merge BEFORE advancing the watermark.
   // The first draft advanced the watermark here unconditionally on ANY
@@ -367,6 +412,10 @@ export async function mergeCoachingNotes(
   userId: string,
   extracted: ExtractedFacts,
 ): Promise<void> {
+  // Unit 2b: the seam drops a food type too (callers and tests may pass one).
+  const foodTypeRulesOff = foodTypeExtractionRulesOff();
+  if (!foodTypeRulesOff) extracted = dropFoodType(extracted);
+
   // Load existing coaching_notes
   const { data: prefRow } = await supabase
     .from("user_preferences")
@@ -383,6 +432,13 @@ export async function mergeCoachingNotes(
 
   // Merge: extracted values overwrite existing only if non-empty
   const merged = { ...existing };
+  // Unit 2b: an inherited copy is removed too, so old notes heal on the
+  // user's next extraction (and the embedding text below no longer has it).
+  if (!foodTypeRulesOff) {
+    for (const k of Object.keys(merged)) {
+      if (FOOD_TYPE_FACT_KEYS.has(k.toLowerCase())) delete merged[k];
+    }
+  }
   for (const [key, value] of Object.entries(extracted)) {
     if (value !== undefined && value !== null && value !== "") {
       merged[key] = value;
@@ -424,8 +480,11 @@ export async function mergeCoachingNotes(
     console.error("[daily-snapshot] embed coaching_notes error:", e);
   }
 
-  // Also update lifestyle_activity and diet_preference directly on user_profile
-  // if extracted, so recalculateTargets() picks them up immediately.
+  // Also update lifestyle_activity (and, only with
+  // DISABLE_FOOD_TYPE_EXTRACTION_RULES=true, diet_preference) directly on
+  // user_profile if extracted, so recalculateTargets() picks them up
+  // immediately. With the switch OFF `extracted` holds no diet_preference
+  // (dropped above), so it never reaches the upsert or the lock loop.
   //
   // a2b-2 (single-owner batch, 2026-09-27): these three fields are ALSO
   // writable directly by the user (Edit Profile save; injuries additionally

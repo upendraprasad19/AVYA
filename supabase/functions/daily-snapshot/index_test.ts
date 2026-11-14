@@ -507,6 +507,8 @@ function fakeSupabase(opts: {
   // generic (table !== "ai_coach_interactions") branch below.
   userProfileRow?: Record<string, unknown> | null;
   coachMemoryRow?: Record<string, unknown> | null;
+  // Unit 2b: an existing user_preferences row (coaching_notes JSON string).
+  userPreferencesRow?: Record<string, unknown> | null;
 }) {
   const rows = opts.convoRows ?? [];
   return {
@@ -522,6 +524,9 @@ function fakeSupabase(opts: {
         }
         if (table === "coach_memory" && opts.coachMemoryRow !== undefined) {
           return { data: opts.coachMemoryRow, error: null };
+        }
+        if (table === "user_preferences" && opts.userPreferencesRow !== undefined) {
+          return { data: opts.userPreferencesRow, error: null };
         }
         if (table !== "ai_coach_interactions") {
           const isSingle = calls.some((c) => c.method === "maybeSingle");
@@ -747,7 +752,7 @@ Deno.test("extractCoachingNotes: a syntactically-valid but non-object Gemini rep
 });
 
 Deno.test("extractCoachingNotes: a mergeCoachingNotesFn failure does NOT advance the watermark, and skips mergeCoachMemoryFieldsFn entirely (B-pass finding 1)", async () => {
-  const newRow = row({ created_at: pgTs(-1_000), user_message: "I'm vegetarian" });
+  const newRow = row({ created_at: pgTs(-1_000), user_message: "I have a desk job" });
   let watermarkAdvanced = false;
   let memoryMergeCalled = false;
   const supabase = fakeSupabase({
@@ -756,7 +761,9 @@ Deno.test("extractCoachingNotes: a mergeCoachingNotesFn failure does NOT advance
       if (table === "coach_memory") watermarkAdvanced = true;
     },
   });
-  const gemini = fakeGemini(JSON.stringify({ diet_preference: "vegetarian" }));
+  // Unit 2b: a field that still merges (a diet_preference-only reply is
+  // dropped before the merge and would never reach the failing merge fn).
+  const gemini = fakeGemini(JSON.stringify({ lifestyle_activity: "desk_job" }));
 
   const result = await extractCoachingNotes(supabase, "u1", null, {
     geminiChatFn: gemini.fn,
@@ -785,7 +792,7 @@ Deno.test("extractCoachingNotes: a mergeCoachingNotesFn failure does NOT advance
 });
 
 Deno.test("extractCoachingNotes: a mergeCoachMemoryFieldsFn failure ALSO does NOT advance the watermark (B-pass finding 1, second call in the sequence)", async () => {
-  const newRow = row({ created_at: pgTs(-1_000), user_message: "I'm vegetarian" });
+  const newRow = row({ created_at: pgTs(-1_000), user_message: "I have a desk job" });
   let watermarkAdvanced = false;
   let notesMergeCalled = false;
   const supabase = fakeSupabase({
@@ -794,7 +801,9 @@ Deno.test("extractCoachingNotes: a mergeCoachMemoryFieldsFn failure ALSO does NO
       if (table === "coach_memory") watermarkAdvanced = true;
     },
   });
-  const gemini = fakeGemini(JSON.stringify({ diet_preference: "vegetarian" }));
+  // Unit 2b: a field that still merges (a diet_preference-only reply is
+  // dropped before the merge and would never reach the failing merge fn).
+  const gemini = fakeGemini(JSON.stringify({ lifestyle_activity: "desk_job" }));
 
   const result = await extractCoachingNotes(supabase, "u1", null, {
     geminiChatFn: gemini.fn,
@@ -951,15 +960,15 @@ Deno.test("mergeCoachMemoryFields no longer writes last_extraction_at (source pr
 Deno.test("mergeCoachingNotes: an unlocked field is applied to user_profile normally", async () => {
   const upserts: Array<{ table: string; payload: Record<string, unknown> }> = [];
   const supabase = fakeSupabase({
-    userProfileRow: { coach_extraction_locked_fields: [], diet_preference: "non_veg" },
+    userProfileRow: { coach_extraction_locked_fields: [], lifestyle_activity: "very_active_job" },
     onUpsert: (table, payload) => upserts.push({ table, payload }),
   });
 
-  await mergeCoachingNotes(supabase, "u1", { diet_preference: "vegetarian" });
+  await mergeCoachingNotes(supabase, "u1", { lifestyle_activity: "desk_job" });
 
   const profileUpsert = upserts.find((u) => u.table === "user_profile");
   assert(profileUpsert, "user_profile must be upserted when nothing is locked");
-  assertEquals(profileUpsert!.payload.diet_preference, "vegetarian");
+  assertEquals(profileUpsert!.payload.lifestyle_activity, "desk_job");
   assert(
     !upserts.some((u) => u.table === "coach_memory"),
     "no conflict marker should be written when the field isn't locked",
@@ -970,18 +979,18 @@ Deno.test("mergeCoachingNotes: a locked field with a DIFFERENT attempted value i
   const upserts: Array<{ table: string; payload: Record<string, unknown> }> = [];
   const supabase = fakeSupabase({
     userProfileRow: {
-      coach_extraction_locked_fields: ["diet_preference"],
-      diet_preference: "vegetarian",
+      coach_extraction_locked_fields: ["lifestyle_activity"],
+      lifestyle_activity: "desk_job",
     },
     coachMemoryRow: null,
     onUpsert: (table, payload) => upserts.push({ table, payload }),
   });
 
-  await mergeCoachingNotes(supabase, "u1", { diet_preference: "non_veg" });
+  await mergeCoachingNotes(supabase, "u1", { lifestyle_activity: "very_active_job" });
 
   const profileUpsert = upserts.find((u) => u.table === "user_profile");
   assert(
-    !profileUpsert || !("diet_preference" in profileUpsert.payload),
+    !profileUpsert || !("lifestyle_activity" in profileUpsert.payload),
     "a locked field must NEVER be overwritten by extraction, even when the " +
       "attempted value differs from what the user set",
   );
@@ -989,11 +998,11 @@ Deno.test("mergeCoachingNotes: a locked field with a DIFFERENT attempted value i
   assert(memoryUpsert, "a real conflict (differing value) must write a marker");
   const conflicts = memoryUpsert!.payload.locked_field_conflicts as Record<string, unknown>;
   assertEquals(
-    (conflicts.diet_preference as { attempted_value: unknown }).attempted_value,
-    "non_veg",
+    (conflicts.lifestyle_activity as { attempted_value: unknown }).attempted_value,
+    "very_active_job",
   );
   assert(
-    typeof (conflicts.diet_preference as { at: unknown }).at === "string",
+    typeof (conflicts.lifestyle_activity as { at: unknown }).at === "string",
     "the conflict marker must carry a timestamp",
   );
 });
@@ -1002,13 +1011,13 @@ Deno.test("mergeCoachingNotes: a locked field re-confirmed with the SAME value i
   const upserts: Array<{ table: string; payload: Record<string, unknown> }> = [];
   const supabase = fakeSupabase({
     userProfileRow: {
-      coach_extraction_locked_fields: ["diet_preference"],
-      diet_preference: "vegetarian",
+      coach_extraction_locked_fields: ["lifestyle_activity"],
+      lifestyle_activity: "desk_job",
     },
     onUpsert: (table, payload) => upserts.push({ table, payload }),
   });
 
-  await mergeCoachingNotes(supabase, "u1", { diet_preference: "vegetarian" });
+  await mergeCoachingNotes(supabase, "u1", { lifestyle_activity: "desk_job" });
 
   assertEquals(
     upserts.filter((u) => u.table === "user_profile" || u.table === "coach_memory").length,
@@ -1065,25 +1074,25 @@ Deno.test("mergeCoachingNotes: a NEW conflict merges over an EXISTING one for a 
   const upserts: Array<{ table: string; payload: Record<string, unknown> }> = [];
   const supabase = fakeSupabase({
     userProfileRow: {
-      coach_extraction_locked_fields: ["diet_preference", "lifestyle_activity"],
-      diet_preference: "vegetarian",
+      coach_extraction_locked_fields: ["lifestyle_activity", "injuries"],
       lifestyle_activity: "desk_job",
+      injuries: ["knee"],
     },
     coachMemoryRow: {
       locked_field_conflicts: {
-        lifestyle_activity: { attempted_value: "very_active_job", at: "2026-09-01T00:00:00.000Z" },
+        injuries: { attempted_value: ["back"], at: "2026-09-01T00:00:00.000Z" },
       },
     },
     onUpsert: (table, payload) => upserts.push({ table, payload }),
   });
 
-  await mergeCoachingNotes(supabase, "u1", { diet_preference: "non_veg" });
+  await mergeCoachingNotes(supabase, "u1", { lifestyle_activity: "very_active_job" });
 
   const memoryUpsert = upserts.find((u) => u.table === "coach_memory");
   assert(memoryUpsert, "expected a coach_memory upsert recording the new conflict");
   const conflicts = memoryUpsert!.payload.locked_field_conflicts as Record<string, unknown>;
   assert(
-    "lifestyle_activity" in conflicts,
+    "injuries" in conflicts,
     "upsertCoachMemory's ON CONFLICT DO UPDATE SET replaces this jsonb column " +
       "wholesale — mergeCoachingNotes must merge over the EXISTING stored " +
       "conflicts itself, or this run's write silently erases a prior run's " +
@@ -1091,8 +1100,8 @@ Deno.test("mergeCoachingNotes: a NEW conflict merges over an EXISTING one for a 
       "preferences bug, one column over)",
   );
   assertEquals(
-    (conflicts.diet_preference as { attempted_value: unknown }).attempted_value,
-    "non_veg",
+    (conflicts.lifestyle_activity as { attempted_value: unknown }).attempted_value,
+    "very_active_job",
   );
 });
 
@@ -1126,13 +1135,13 @@ Deno.test("mergeCoachingNotes: DISABLE_COACH_EXTRACTION_LOCK_GUARD=true writes a
     const upserts: Array<{ table: string; payload: Record<string, unknown> }> = [];
     const supabase = fakeSupabase({
       userProfileRow: {
-        coach_extraction_locked_fields: ["diet_preference"],
-        diet_preference: "vegetarian",
+        coach_extraction_locked_fields: ["lifestyle_activity"],
+        lifestyle_activity: "desk_job",
       },
       onUpsert: (table, payload) => upserts.push({ table, payload }),
     });
 
-    await mergeCoachingNotes(supabase, "u1", { diet_preference: "non_veg" });
+    await mergeCoachingNotes(supabase, "u1", { lifestyle_activity: "very_active_job" });
 
     const profileUpsert = upserts.find((u) => u.table === "user_profile");
     assert(
@@ -1140,7 +1149,7 @@ Deno.test("mergeCoachingNotes: DISABLE_COACH_EXTRACTION_LOCK_GUARD=true writes a
       "with the kill-switch on, a locked field must be written exactly like " +
         "the pre-a2b-2 behavior, ignoring the lock",
     );
-    assertEquals(profileUpsert!.payload.diet_preference, "non_veg");
+    assertEquals(profileUpsert!.payload.lifestyle_activity, "very_active_job");
     assert(
       !upserts.some((u) => u.table === "coach_memory"),
       "the kill-switch path must never write a conflict marker — there is " +
@@ -1160,19 +1169,201 @@ Deno.test("mergeCoachingNotes: with the kill-switch OFF (default), the lock is s
   const upserts: Array<{ table: string; payload: Record<string, unknown> }> = [];
   const supabase = fakeSupabase({
     userProfileRow: {
-      coach_extraction_locked_fields: ["diet_preference"],
-      diet_preference: "vegetarian",
+      coach_extraction_locked_fields: ["lifestyle_activity"],
+      lifestyle_activity: "desk_job",
     },
     onUpsert: (table, payload) => upserts.push({ table, payload }),
   });
 
-  await mergeCoachingNotes(supabase, "u1", { diet_preference: "non_veg" });
+  await mergeCoachingNotes(supabase, "u1", { lifestyle_activity: "very_active_job" });
 
   const profileUpsert = upserts.find((u) => u.table === "user_profile");
   assert(
-    !profileUpsert || !("diet_preference" in profileUpsert.payload),
+    !profileUpsert || !("lifestyle_activity" in profileUpsert.payload),
     "with the switch unset (default), the lock must still be enforced — " +
       "this is the mutation check: flipping the guard's comparison to " +
       "`!== \"true\"`, or defaulting it truthy, would redden this test",
   );
+});
+
+// ── Diet plan Unit 2b (2026-11-14, plan diet-food-type-server §2.2, T2): the
+// extraction never produces a food type. The user's choice in
+// user_profile.diet_preference is the only source; a copy in the notes
+// would be re-embedded and retrieved by the coach after the user changed it.
+// DISABLE_FOOD_TYPE_EXTRACTION_RULES exactly "true" restores the old path.
+
+function notesOf(upserts: Array<{ table: string; payload: Record<string, unknown> }>) {
+  const u = upserts.find((x) => x.table === "user_preferences");
+  assert(u, "expected a user_preferences (coaching_notes) upsert");
+  return JSON.parse(u!.payload.coaching_notes as string) as Record<string, unknown>;
+}
+
+Deno.test("Unit 2b: mergeCoachingNotes drops an extracted food type everywhere, even for a LOCKED field with a different value", async () => {
+  const upserts: Array<{ table: string; payload: Record<string, unknown> }> = [];
+  const supabase = fakeSupabase({
+    userProfileRow: {
+      coach_extraction_locked_fields: ["diet_preference"],
+      diet_preference: "veg",
+    },
+    coachMemoryRow: null,
+    onUpsert: (table, payload) => upserts.push({ table, payload }),
+  });
+
+  await mergeCoachingNotes(supabase, "u1", {
+    diet_preference: "non_veg",
+    lifestyle_activity: "desk_job",
+  });
+
+  const notes = notesOf(upserts);
+  assert(!("diet_preference" in notes), "the notes (and so the embedding text) carry no food type");
+  assertEquals(notes.lifestyle_activity, "desk_job");
+  const profileUpsert = upserts.find((u) => u.table === "user_profile");
+  assert(profileUpsert, "the other field is still applied");
+  assert(!("diet_preference" in profileUpsert!.payload), "never written to user_profile");
+  assert(
+    !upserts.some((u) => u.table === "coach_memory"),
+    "no conflict marker: the extraction no longer proposes a food type at all",
+  );
+});
+
+Deno.test("Unit 2b: an inherited diet_preference in the existing notes is removed on the next merge", async () => {
+  const upserts: Array<{ table: string; payload: Record<string, unknown> }> = [];
+  const supabase = fakeSupabase({
+    userPreferencesRow: {
+      coaching_notes: JSON.stringify({ diet_preference: "keto", food_preferences: "likes dal" }),
+    },
+    userProfileRow: { coach_extraction_locked_fields: [] },
+    onUpsert: (table, payload) => upserts.push({ table, payload }),
+  });
+
+  await mergeCoachingNotes(supabase, "u1", { supplement_use: "creatine" });
+
+  const notes = notesOf(upserts);
+  assert(!("diet_preference" in notes), "the stale copy heals");
+  assertEquals(notes.food_preferences, "likes dal", "other facts survive");
+  assertEquals(notes.supplement_use, "creatine");
+});
+
+Deno.test("Unit 2b B-pass 5: a food type under another key is dropped from the reply AND from inherited notes", async () => {
+  const upserts: Array<{ table: string; payload: Record<string, unknown> }> = [];
+  const supabase = fakeSupabase({
+    userPreferencesRow: {
+      coaching_notes: JSON.stringify({ Diet: "veg", food_type: "vegan", food_preferences: "likes dal" }),
+    },
+    userProfileRow: { coach_extraction_locked_fields: [] },
+    onUpsert: (table, payload) => upserts.push({ table, payload }),
+  });
+
+  // Model-invented keys, one each (the merge copies every key it gets).
+  await mergeCoachingNotes(supabase, "u1", {
+    diet: "vegetarian",
+    dietary_preference: "vegan",
+    diet_type: "keto",
+    is_vegetarian: true,
+    Food_Type: "pescatarian",
+    supplement_use: "creatine",
+  } as unknown as Parameters<typeof mergeCoachingNotes>[2]);
+
+  const notes = notesOf(upserts);
+  for (const k of ["diet", "Diet", "dietary_preference", "diet_type", "is_vegetarian", "food_type", "Food_Type"]) {
+    assert(!(k in notes), `notes kept ${k}`);
+  }
+  assertEquals(notes.food_preferences, "likes dal", "likes and dislikes are not a food type");
+  assertEquals(notes.supplement_use, "creatine");
+});
+
+Deno.test("Unit 2b: a reply holding ONLY a food type merges nothing and still advances the watermark", async () => {
+  const newRow = row({ created_at: pgTs(-1_000), user_message: "I'm vegetarian" });
+  let watermarkAdvanced = false;
+  let mergeCalled = false;
+  const supabase = fakeSupabase({
+    convoRows: [newRow],
+    onUpsert: (table) => {
+      if (table === "coach_memory") watermarkAdvanced = true;
+    },
+  });
+  const gemini = fakeGemini(JSON.stringify({ diet_preference: "vegetarian" }));
+
+  const result = await extractCoachingNotes(supabase, "u1", null, {
+    geminiChatFn: gemini.fn,
+    mergeCoachingNotesFn: () => {
+      mergeCalled = true;
+      return Promise.resolve();
+    },
+    mergeCoachMemoryFieldsFn: () => Promise.resolve(),
+  });
+
+  assert(result.ok);
+  if (result.ok) assertEquals(result.facts, {}, "the food type is dropped from the facts");
+  assert(!mergeCalled, "nothing left to merge");
+  assert(watermarkAdvanced, "an empty extraction still advances, exactly like {}");
+});
+
+Deno.test("Unit 2b: the extraction prompt no longer asks for a food type", async () => {
+  const newRow = row({ created_at: pgTs(-1_000), user_message: "hello" });
+  const supabase = fakeSupabase({ convoRows: [newRow] });
+  const gemini = fakeGemini("{}");
+  await extractCoachingNotes(supabase, "u1", null, { geminiChatFn: gemini.fn });
+  const prompt = String(gemini.calls[0].userPrompt);
+  assert(!prompt.includes('"diet_preference"'), "no diet_preference line in the schema");
+  assert(prompt.includes('"injuries"'), "the rest of the schema is intact");
+});
+
+Deno.test("Unit 2b: DISABLE_FOOD_TYPE_EXTRACTION_RULES=true restores the old path (prompt line, notes, user_profile upsert)", async () => {
+  Deno.env.set("DISABLE_FOOD_TYPE_EXTRACTION_RULES", "true");
+  try {
+    const newRow = row({ created_at: pgTs(-1_000), user_message: "I'm vegetarian" });
+    const gemini = fakeGemini(JSON.stringify({ diet_preference: "vegetarian" }));
+    let merged: Record<string, unknown> | null = null;
+    await extractCoachingNotes(fakeSupabase({ convoRows: [newRow] }), "u1", null, {
+      geminiChatFn: gemini.fn,
+      mergeCoachingNotesFn: (_s, _u, facts) => {
+        merged = facts as Record<string, unknown>;
+        return Promise.resolve();
+      },
+      mergeCoachMemoryFieldsFn: () => Promise.resolve(),
+    });
+    assert(
+      String(gemini.calls[0].userPrompt).includes(
+        '"diet_preference": "vegetarian|vegan|non_veg|keto|pescatarian"',
+      ),
+      "switch ON: today's schema line",
+    );
+    assertEquals(merged, { diet_preference: "vegetarian" }, "switch ON: nothing dropped");
+
+    const upserts: Array<{ table: string; payload: Record<string, unknown> }> = [];
+    await mergeCoachingNotes(
+      fakeSupabase({
+        userProfileRow: { coach_extraction_locked_fields: [], diet_preference: "non_veg" },
+        onUpsert: (table, payload) => upserts.push({ table, payload }),
+      }),
+      "u1",
+      { diet_preference: "vegetarian" },
+    );
+    assertEquals(notesOf(upserts).diet_preference, "vegetarian");
+    const profileUpsert = upserts.find((u) => u.table === "user_profile");
+    assertEquals(profileUpsert!.payload.diet_preference, "vegetarian");
+  } finally {
+    Deno.env.delete("DISABLE_FOOD_TYPE_EXTRACTION_RULES");
+  }
+});
+
+Deno.test("Unit 2b: the switch is read as exactly \"true\" (any other value keeps the new rules)", async () => {
+  for (const v of ["TRUE", "1", "yes", ""]) {
+    Deno.env.set("DISABLE_FOOD_TYPE_EXTRACTION_RULES", v);
+    try {
+      const upserts: Array<{ table: string; payload: Record<string, unknown> }> = [];
+      await mergeCoachingNotes(
+        fakeSupabase({
+          userProfileRow: { coach_extraction_locked_fields: [] },
+          onUpsert: (table, payload) => upserts.push({ table, payload }),
+        }),
+        "u1",
+        { diet_preference: "vegetarian", supplement_use: "whey" },
+      );
+      assert(!("diet_preference" in notesOf(upserts)), `value ${JSON.stringify(v)}`);
+    } finally {
+      Deno.env.delete("DISABLE_FOOD_TYPE_EXTRACTION_RULES");
+    }
+  }
 });

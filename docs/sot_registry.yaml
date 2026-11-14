@@ -1099,7 +1099,7 @@ concepts:
       of e4a1b7/OI-98 on a different key inside the same blob.
     writers:
       - { file: supabase/functions/_shared/snapshot_merge.ts, line_range: 16-28, method: mergeSnapshotJson, notes: "Pure merge — existing row spread first, incoming client payload layered on top so it wins on any shared key. Mutation-proven: reverting to `return incoming;` reddens 2 of 4 tests in snapshot_merge_test.ts." }
-      - { file: supabase/functions/daily-snapshot/index.ts, line_range: 340-398, method: "serve handler", notes: "Reads the existing row via .maybeSingle() at :363 (never .single() — a first-ever snapshot of the day has no existing row, which is a legitimate empty merge base, not an error; a genuine query error is logged at :378 (the console.error call itself, not the surrounding comment — a pre-existing imprecision in this note, corrected while re-deriving the other citations here) rather than silently degrading), merges via mergeSnapshotJson at :384, upserts the MERGED result at :397. Gated behind DISABLE_SNAPSHOT_MERGE_SAFE_UPSERT (:357, code-review finding 2 — platform tier's feature_flag requirement) which falls back to the verbatim pre-fix blind-replace. Wiring pinned by index_test.ts (source-grep — importing this module boots a real server, no import.meta.main guard, so the test reads source text rather than importing). Line numbers shifted +1 by the observation-batch-and-digest-redesign merge (PR #32, 2026-09-22) inserting one unrelated line earlier in the same file — re-verify by grep, not by citation." }
+      - { file: supabase/functions/daily-snapshot/index.ts, line_range: 689-754, method: "serve handler", notes: "Reads the existing row via .maybeSingle() at :719 (never .single() — a first-ever snapshot of the day has no existing row, which is a legitimate empty merge base, not an error; a genuine query error is logged at :728 (the console.error call itself, not the surrounding comment — a pre-existing imprecision in this note, corrected while re-deriving the other citations here) rather than silently degrading), merges via mergeSnapshotJson at :734, upserts the MERGED result at :743. Gated behind DISABLE_SNAPSHOT_MERGE_SAFE_UPSERT (:708, code-review finding 2 — platform tier's feature_flag requirement) which falls back to the verbatim pre-fix blind-replace. Wiring pinned by index_test.ts (source-grep — importing this module boots a real server, no import.meta.main guard, so the test reads source text rather than importing). Line numbers shifted +1 by the observation-batch-and-digest-redesign merge (PR #32, 2026-09-22) inserting one unrelated line earlier in the same file — re-verify by grep, not by citation. Re-derived from anchors 2026-11-14 (diet plan Unit 2b) after its insertions earlier in the file, and again after its B-pass fixes (+24); the previous range had already drifted." }
       - { file: lib/core/services/sync_service.dart, line: 1212, method: "compileDailySnapshot", notes: "Code-review finding 1 (2026-09-21): fitness_summary is ALSO cron-owned (rolling-context writes it), but unlike morning_alert the client DOES carry a local mirror of it in aiContext (buildAiContext() serves both this push and the live ai-proxy chat body, and the chat use case needs it). Sending it here would let the client's lagging/possibly-empty mirror win the merge on a key it does carry. Explicitly removed from the push payload only — buildAiContext()'s direct chat-context use is untouched. Behavioral: test/contracts/daily_snapshot_fitness_summary_omission_test.dart (mutation-proven — reverting the .remove() call reddens both tests)." }
     reader_manifest_complete: false
     readers:
@@ -7188,7 +7188,8 @@ concepts:
       unrelated column, same English name only). This column has TWO
       server-side writers, each a read-merge-write over the same JSON so
       neither clobbers the other's keys: daily-snapshot (extracted AI
-      facts — diet_preference, injuries, lifestyle_activity, etc. plus
+      facts — injuries, lifestyle_activity, etc.; since Unit 2b NEVER
+      diet_preference, and an inherited copy is deleted on merge — plus
       last_extracted_at) and assess-body-composition (the
       last_bf_assessed_at 30-day PRO rate-limit stamp, piggybacked here to
       avoid a migration for one timestamp). The client is a PURE CONSUMER
@@ -7197,7 +7198,7 @@ concepts:
       server's value, destroying both coach memory and the BF% rate limit
       in one write.
     writers:
-      - { file: supabase/functions/daily-snapshot/index.ts, line_range: 354-428, method: mergeCoachingNotes, notes: "Read-merge-write: selects existing coaching_notes, JSON.parse, merges extracted facts (non-empty values only) + last_extracted_at, re-upserts onConflict user_id. Gated behind the a2a private_mode check (2026-09-27, diagnose c3f8e6) — never reached when the user's coach_memory.private_mode is true. Called from INSIDE extractCoachingNotes now, not the handler (B-pass finding 1, 2026-09-27, diagnose a2b1c7 — gates the watermark advance on merge success). Line range shifted twice by the a2b-1 batch's own insertions earlier in the same file (once by the watermark/metering rewrite, again by the B-pass remediation) — re-verify by grep, not by citation, per this repo's own common-pitfalls row on line-count drift." }
+      - { file: supabase/functions/daily-snapshot/index.ts, line_range: 406-574, method: mergeCoachingNotes, notes: "Read-merge-write: selects existing coaching_notes, JSON.parse, merges extracted facts (non-empty values only) + last_extracted_at, re-upserts onConflict user_id. Gated behind the a2a private_mode check (2026-09-27, diagnose c3f8e6) — never reached when the user's coach_memory.private_mode is true. Called from INSIDE extractCoachingNotes now, not the handler (B-pass finding 1, 2026-09-27, diagnose a2b1c7 — gates the watermark advance on merge success). Line range shifted twice by the a2b-1 batch's own insertions earlier in the same file (once by the watermark/metering rewrite, again by the B-pass remediation) — re-verify by grep, not by citation, per this repo's own common-pitfalls row on line-count drift." }
       - { file: supabase/functions/assess-body-composition/index.ts, line_range: 86-224, method: "serve handler — 30-day rate-limit block", notes: "Also read-merge-write: selects existing coaching_notes, JSON.parse, sets last_bf_assessed_at, re-upserts onConflict user_id — never a blind overwrite of daily-snapshot's keys." }
     reader_manifest_complete: false
     readers:
@@ -12740,7 +12741,7 @@ concepts:
         fields_read: [current_week]
         notes: push copy 'Week ${currentWeek} debrief ready' (:76). Pure interpolation — no EF redeploy needed; fixing the column fixes the push.
       - file: supabase/functions/weekly-report/index.ts
-        line_range: 146-460
+        line_range: 147-461
         method: weekly brief userMessage
         semantic: pass-through
         fields_read: [current_week]
@@ -16444,6 +16445,63 @@ concepts:
       hybrid even before the one-time repair runs -- this is the SEPARATE
       writer path, not the same code as this concept's own fix.
 
+  - concept: diet_preference_vocabulary
+    domain: auth_profile
+    behavioral_test_path: supabase/functions/_shared/food_types_test.ts
+    description: |
+      The user's food type, stored as user_profile.diet_preference (text,
+      no CHECK). Diet plan Unit 2 (2026-11-14) makes ONE closed vocabulary:
+      veg, non_veg, eggetarian, pescatarian, vegan; default non_veg. This
+      entry is the SERVER half (Unit 2b, diagnose c9bc6a): every server
+      reader goes through supabase/functions/_shared/food_types.ts
+      normalizeFoodType (tolerant: null/'' and keto/low_carb -> non_veg,
+      legacy spellings -> their type, any other non-empty value -> veg) or
+      knownFoodType (strict, null for anything outside the spelling table).
+      The table is pinned by the shared fixture
+      supabase/functions/_shared/testdata/food_type_vocabulary.json, which
+      the client normaliser's test (Unit 2a) reads too. The coach extraction
+      no longer WRITES the field (see coach_extraction_locked_fields); the
+      client half (writers, the Diet Plan reader) is added by Unit 2a.
+    writers:
+      - file: supabase/functions/_shared/food_types.ts
+        line_range: 75-104
+        method: normalizeFoodType + knownFoodType + dietPreferenceLine (the vocabulary itself)
+    readers:
+      - file: supabase/functions/protein-gap-alert/message.ts
+        line_range: 40-45
+        method: pickQuickFix (5 x 3 quick-fix table by food type)
+        semantic: filtered
+        fields_read: [diet_preference]
+      - file: supabase/functions/_shared/tools/nutrition/suggestMeal.ts
+        line_range: 164-317
+        method: readStoredFoodType + handler (stored food type filters food_database by is_veg / is_vegan; egg/fish name rules for the is_veg = false rows; DISABLE_SUGGESTMEAL_STORED_FOOD_TYPE)
+        semantic: filtered
+        fields_read: [diet_preference, is_veg, is_vegan, name]
+      - file: supabase/functions/weekly-report/index.ts
+        line_range: 513-527
+        method: "prompt line 'Diet preference:' via dietPreferenceLine (presence pin: the handler builds the prompt inline under serve(); DISABLE_FOOD_TYPE_MANUAL_RULES restores the raw line)"
+        semantic: pass-through
+        fields_read: [diet_preference]
+      - file: supabase/functions/_shared/captain_manual.ts
+        line_range: 455-485
+        method: captainManual (the prompt rule naming the five food types; DISABLE_FOOD_TYPE_MANUAL_RULES serves CAPTAIN_MANUAL_LEGACY_FOOD)
+        semantic: pass-through
+        fields_read: [snapshot.profile.diet_preference]
+    cloud:
+      table: user_profile
+      columns: [diet_preference]
+    sync_methods: []
+    restore_methods: []
+    provider_invalidation_set: []
+    class_constraints: |
+      Never compare a raw diet_preference string on the server: read it
+      through normalizeFoodType / knownFoodType. The extraction must never
+      produce a food type (it is the user's choice, user_profile only).
+      Kill switches (each exactly "true"): DISABLE_FOOD_TYPE_EXTRACTION_RULES
+      (daily-snapshot), DISABLE_SUGGESTMEAL_STORED_FOOD_TYPE (suggestMeal),
+      DISABLE_FOOD_TYPE_MANUAL_RULES (captain manual + weekly-report line);
+      their removal is tracked on the OI board.
+
   - concept: coach_extraction_locked_fields
     domain: ai_coach
     behavioral_test_path: supabase/functions/daily-snapshot/index_test.ts
@@ -16473,6 +16531,14 @@ concepts:
       CoachMemory.readFromBox(...).toJson() WHOLESALE into the AI's prompt
       context (subject to private_mode), so any field added to the
       CoachMemory schema is live in the prompt with no further plumbing.
+
+      Diet plan Unit 2b (2026-11-14, diagnose c9bc6a): the extraction no
+      longer proposes diet_preference at all (prompt line removed,
+      dropFoodType before the merge, an inherited notes copy deleted), so
+      it never reaches the user_profile upsert or this lock loop. The lock
+      on diet_preference stays as the guard for the switch-ON path
+      (DISABLE_FOOD_TYPE_EXTRACTION_RULES=true restores the old behaviour).
+      The mechanism tests now drive lifestyle_activity / injuries.
 
       Array-value comparison (injuries) uses a sorted-copy compare, never
       `!==`/`==` — the cross-language reference-equality class this repo's
@@ -16522,7 +16588,7 @@ concepts:
           real onboarding_provider.dart payload never includes this key
           today).
       - file: supabase/functions/daily-snapshot/index.ts
-        line_range: 354-495
+        line_range: 406-574
         method: mergeCoachingNotes
         notes: |
           Reads coach_extraction_locked_fields + the three current field
@@ -16537,7 +16603,7 @@ concepts:
     reader_manifest_complete: true
     readers:
       - file: supabase/functions/daily-snapshot/index.ts
-        line_range: 354-495
+        line_range: 406-574
         method: mergeCoachingNotes
         semantic: flag-check
         fields_read: [coach_extraction_locked_fields]

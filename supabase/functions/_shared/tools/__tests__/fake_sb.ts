@@ -9,6 +9,12 @@ export interface FakeCall {
   filters: Array<[string, string, unknown]>;
 }
 
+function cmp(a: unknown, b: unknown): number {
+  if (typeof a === "number" && typeof b === "number") return a - b;
+  const x = String(a), y = String(b);
+  return x < y ? -1 : x > y ? 1 : 0;
+}
+
 export function fakeSb(tables: Record<string, any[]>, opts: { pageCap?: number } = {}) {
   const calls: FakeCall[] = [];
   const client = {
@@ -31,10 +37,12 @@ export function fakeSb(tables: Record<string, any[]>, opts: { pageCap?: number }
               case "in": return (val as unknown[]).includes(v);
               case "is": return val === null ? (v === null || v === undefined) : v === val;
               case "ilike": return new RegExp("^" + String(val).replace(/[.*+?^${}()|[\]\\]/g, "\\$&").replace(/%/g, ".*") + "$", "i").test(String(v ?? ""));
-              case "gte": return v !== null && v !== undefined && String(v) >= String(val);
-              case "gt": return v !== null && v !== undefined && String(v) > String(val);
-              case "lte": return v !== null && v !== undefined && String(v) <= String(val);
-              case "lt": return v !== null && v !== undefined && String(v) < String(val);
+              // Numbers compare as numbers (diet plan Unit 2b: "90" <= "880" is
+              // false as strings); everything else (ISO dates) as strings.
+              case "gte": return v !== null && v !== undefined && cmp(v, val) >= 0;
+              case "gt": return v !== null && v !== undefined && cmp(v, val) > 0;
+              case "lte": return v !== null && v !== undefined && cmp(v, val) <= 0;
+              case "lt": return v !== null && v !== undefined && cmp(v, val) < 0;
               default: return true;
             }
           })
