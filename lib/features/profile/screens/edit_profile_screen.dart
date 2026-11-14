@@ -1853,17 +1853,6 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
       await ref.read(userProfileProvider.notifier).updateProfile(updates);
       await ref.read(userProfileProvider.notifier).recalculateTargets();
 
-      // Bug B fix (APK Test #3, 2026-04-26): Edit Profile previously wrote
-      // only to Hive. user_profile in Supabase stayed empty/stale forever,
-      // which broke AI coach context (the snapshot reads from Hive but
-      // server-side helpers like rolling-context need the cloud row).
-      // Fire-and-forget so sync failures don't block the Save UX.
-      final supaUserId = SupabaseService.instance.client.auth.currentUser?.id;
-      if (supaUserId != null) {
-        unawaited(SyncService.instance.syncProfileNow(supaUserId));
-        unawaited(SyncService.instance.pushSnapshot());
-      }
-
       // a2b-2 (single-owner batch, 2026-09-27): lock any of the three
       // coach-extraction-shared fields the user ACTUALLY changed this save,
       // so the next daily-snapshot extraction pass can't overwrite this
@@ -1878,8 +1867,24 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
         injuries: _injuries,
         originalInjuries: _originalInjuries,
       );
-      if (fieldsToLock.isNotEmpty) {
-        unawaited(UserRepository.lockCoachExtractionFields(fieldsToLock));
+      final Future<void> lockDone = fieldsToLock.isNotEmpty
+          ? UserRepository.lockCoachExtractionFields(fieldsToLock)
+          : Future<void>.value();
+
+      // Bug B fix (APK Test #3, 2026-04-26): Edit Profile previously wrote
+      // only to Hive. user_profile in Supabase stayed empty/stale forever,
+      // which broke AI coach context (the snapshot reads from Hive but
+      // server-side helpers like rolling-context need the cloud row).
+      // Fire-and-forget so sync failures don't block the Save UX.
+      final supaUserId = SupabaseService.instance.client.auth.currentUser?.id;
+      if (supaUserId != null) {
+        unawaited(SyncService.instance.syncProfileNow(supaUserId));
+        // Diet plan Unit 2a B-pass finding 5: the snapshot push can run the
+        // coach extraction, so it goes out after the lock call finishes
+        // (best-effort, never throws); the save itself never waits on it.
+        unawaited(lockDone.whenComplete(SyncService.instance.pushSnapshot));
+      } else {
+        unawaited(lockDone);
       }
 
       // Refresh downstream views that cache profile-derived targets/state.

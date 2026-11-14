@@ -249,6 +249,42 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.textContaining('Your saved plan was for Non-veg'), findsNothing);
     expect(find.text('Chicken Breast (grilled)'), findsNothing);
+
+    // B-pass 3: a plan saved before food types (no food_type) whose foods do
+    // not fit Veg is not loaded either (it could otherwise be re-saved as a
+    // "Veg" plan), and the notice does not invent a type for it.
+    await tester.runAsync(() async {
+      await UserRepository.instance.saveDietPlan(<String, dynamic>{
+        'id': 'diet_plan_43',
+        'created_at': DateTime(2026, 11, 1).toIso8601String(),
+        'meals': [
+          {
+            'name': 'Lunch',
+            'items': [
+              {
+                'food_id': 'F0019',
+                'name': 'Chicken Breast (grilled)',
+                'serving_desc': '1 piece',
+                'serving_g': 120.0,
+                'calories': 198,
+                'protein': 37,
+                'carbs': 0,
+                'fat': 4,
+                'category': 'protein'
+              }
+            ],
+          }
+        ],
+      });
+    });
+    await tester.pumpWidget(const SizedBox());
+    await tester.pumpWidget(
+      ProviderScope(child: MaterialApp(home: DietPlanScreen())),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('Chicken Breast (grilled)'), findsNothing);
+    expect(find.textContaining('Your saved plan has foods outside Veg'),
+        findsOneWidget);
   });
 
   // Diet plan Unit 2a (plan §2.2.5): the Diet Plan screen's selector writes
@@ -259,14 +295,22 @@ void main() {
     const testUserId = 'abab7777-abab-abab-abab-abababababab';
     debugResetDietPlanMismatchNotices();
     var fail = false;
+    var switchAfterCapture = false;
+    var uidReads = 0;
     var locks = 0;
     UserProfileNotifier.debugFoodTypeEffects = FoodTypeWriteEffects(
       currentUserId: () {
         if (fail) throw StateError('session read failed');
+        uidReads++;
+        // B-pass 2: an account switch between the tap and the write.
+        if (switchAfterCapture && uidReads.isEven) return 'someone-else';
         return testUserId;
       },
       pushSnapshot: () {},
-      lockFields: (_) => locks++,
+      lockFields: (_) {
+        locks++;
+        return Future<void>.value();
+      },
     );
     addTearDown(() => UserProfileNotifier.debugFoodTypeEffects = null);
     await tester.runAsync(() async {
@@ -310,6 +354,26 @@ void main() {
     });
     await tester.pumpAndSettle();
     expect(stored(), 'eggetarian', reason: 'a failed change stores nothing');
+    expect(find.textContaining("Couldn't change the food type"), findsOneWidget);
+    expect(find.text('EGGETARIAN'), findsOneWidget);
+
+    // B-pass 2: a change dropped by an account switch is not announced as
+    // a rebuilt plan, and the screen keeps the old type.
+    ScaffoldMessenger.of(tester.element(find.byType(DietPlanScreen)))
+        .clearSnackBars();
+    await tester.pumpAndSettle();
+    fail = false;
+    switchAfterCapture = true;
+    uidReads = 0;
+    final pesc = find.byKey(const ValueKey('food_type_chip_pescatarian'));
+    await tester.ensureVisible(pesc);
+    await tester.runAsync(() async {
+      await tester.tap(pesc);
+      await Future<void>.delayed(const Duration(milliseconds: 300));
+    });
+    await tester.pumpAndSettle();
+    expect(stored(), 'eggetarian');
+    expect(find.textContaining('Plan rebuilt for Pescatarian'), findsNothing);
     expect(find.textContaining("Couldn't change the food type"), findsOneWidget);
     expect(find.text('EGGETARIAN'), findsOneWidget);
   });

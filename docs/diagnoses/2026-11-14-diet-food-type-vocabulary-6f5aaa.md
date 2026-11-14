@@ -220,3 +220,41 @@ restored from a copy.
 Declared limits: Edit Profile's chip wiring and onboarding's `setAnswer`
 literal are presence pins (stated above); the workout-isolation sweep (T6)
 is presence only by nature.
+
+## B-pass fixes (2026-11-14, `docs/reviews/diet-food-type-bpass.md`)
+
+Five P3 findings on 74085219, all fixed here:
+
+1. `foodTypeOf`: `null` reads as the default (Non-veg); any other non-String
+   (a corrupt list, number or bool) reads as Veg, the strictest common type.
+   The shared fixture gained `42`, `true`, `["non_veg"]`; Unit 2b mirrors it
+   (`normalizeFoodType`, b76694b1, mutation B19 there).
+2. `setFoodType` returns `Future<bool>`: false only when the account changed
+   while the call was queued; the Diet Plan screen then shows "Couldn't
+   change the food type" instead of "Plan rebuilt".
+3. `savedPlanMatchesFoodType` judges a plan saved without `food_type` by its
+   items (food-box row + `passesDiet` with the catalog family from the new
+   `dietCatalogFamily`), so a re-save can no longer stamp a chicken plan Veg.
+4. Edit Profile registry ranges re-anchored on the final tree.
+5. Both doors push the snapshot only after the coach lock call finishes
+   (or fails): `lockFields(...).catchError(...).whenComplete(pushSnapshot)`
+   in the provider, `lockDone.whenComplete(pushSnapshot)` in Edit Profile.
+
+To stay under the 800-line screen ceiling, `_MealPlan` and `_PlanFoodItem`
+moved to the part file `lib/features/nutrition/screens/diet_plan_screen_models.dart`.
+
+| # | Guard broken | Tests | Failing |
+|---|---|---|---|
+| F1 | a corrupt non-String reads as the default again | food_types_test | 4 |
+| F2a | `_applyFoodType` drops the account check | writer/reader | 1 |
+| F2b | the screen ignores `applied` | diet_plan_screen_no_modal | 1 |
+| F3a | legacy items not judged | writer/reader | 1 |
+| F3b | catalog family dropped from the legacy check (survived the first set; a family test was added) | writer/reader | 1 |
+| F3c | a missing food-box row passes | writer/reader | 2 |
+| F5a | provider pushes before the lock | writer/reader | 2 |
+| F5b | a failed lock skips the push | writer/reader | 1 |
+| F5c | Edit Profile pushes before the lock | coach_extraction_locked_fields | 1 |
+
+Each mutant was applied by a script that asserted one anchor match and the
+edit present, ran the listed tests, restored the file and checked its
+sha256; no result is a compile error.

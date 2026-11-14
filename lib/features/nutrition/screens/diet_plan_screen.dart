@@ -23,6 +23,8 @@ import '../services/diet_plan_generator.dart';
 import '../services/diet_plan_pdf.dart';
 import '../services/diet_plan_swap.dart';
 
+part 'diet_plan_screen_models.dart';
+
 // Diet plan Unit 2a: the "your saved plan was for X" notice shows once per
 // (saved plan id, food type) per app session.
 final Set<String> _mismatchNoticeShown = <String>{};
@@ -95,12 +97,15 @@ class _DietPlanScreenState extends ConsumerState<DietPlanScreen> {
   void _noticeSavedPlanMismatch(Map<String, dynamic> savedPlan) {
     final key = '${savedPlan['id']}|${_foodType.storageKey}';
     if (!_mismatchNoticeShown.add(key) || !mounted) return;
-    final was = foodTypeOf(savedPlan['food_type']).label;
+    final now = _foodType.label;
+    // A plan saved before food types existed has no food_type to name.
+    final first = savedPlan['food_type'] == null
+        ? 'Your saved plan has foods outside $now.'
+        : 'Your saved plan was for ${foodTypeOf(savedPlan['food_type']).label}.';
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(
-          'Your saved plan was for $was. Here is a ${_foodType.label} plan; '
-          'save to keep it.',
+          '$first Here is a $now plan; save to keep it.',
           style: AppTypography.body.copyWith(fontSize: 13),
         ),
         backgroundColor: AppColors.card,
@@ -114,8 +119,15 @@ class _DietPlanScreenState extends ConsumerState<DietPlanScreen> {
     if (_changingFoodType || next == _foodType) return;
     setState(() => _changingFoodType = true);
     try {
-      await ref.read(userProfileProvider.notifier).setFoodType(next);
+      final applied =
+          await ref.read(userProfileProvider.notifier).setFoodType(next);
       if (!mounted) return;
+      // B-pass finding 2: a call dropped by an account change wrote nothing;
+      // never announce a plan for a type that is not stored.
+      if (!applied) {
+        _showFoodTypeChangeFailed();
+        return;
+      }
       setState(() => _foodType = next);
       _generateFreshPlan();
       ScaffoldMessenger.of(context).showSnackBar(
@@ -131,20 +143,22 @@ class _DietPlanScreenState extends ConsumerState<DietPlanScreen> {
       unawaited(ErrorTelemetry.recordNonFatal(e, st,
           reason: 'diet_plan_food_type_change'));
       // The chips still show the old type (nothing changed); say so.
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              "Couldn't change the food type. Try again.",
-              style: AppTypography.body.copyWith(fontSize: 13),
-            ),
-            backgroundColor: AppColors.card,
-          ),
-        );
-      }
+      if (mounted) _showFoodTypeChangeFailed();
     } finally {
       if (mounted) setState(() => _changingFoodType = false);
     }
+  }
+
+  void _showFoodTypeChangeFailed() {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          "Couldn't change the food type. Try again.",
+          style: AppTypography.body.copyWith(fontSize: 13),
+        ),
+        backgroundColor: AppColors.card,
+      ),
+    );
   }
 
   void _generateFreshPlan() {
@@ -747,47 +761,3 @@ class _DietPlanScreenState extends ConsumerState<DietPlanScreen> {
 }
 
 // ── Data Models ─────────────────────────────────────────────────
-
-class _MealPlan {
-  final String name;
-  final String? slotKey; // generator slot key; derived from name on load
-  final List<_PlanFoodItem> items;
-  final int targetCalories;
-  final int targetProtein;
-
-  _MealPlan({
-    required this.name,
-    this.slotKey,
-    required this.items,
-    required this.targetCalories,
-    required this.targetProtein,
-  });
-}
-
-class _PlanFoodItem {
-  final String foodId;
-  final String name;
-  final String servingDesc;
-  final double servingG;
-  final int calories;
-  final int protein;
-  final int carbs;
-  final int fat;
-  final String category;
-  /// Curated catalog role (`DietRole.name`); null for a loaded saved plan
-  /// (re-derived by the swap sheet). Never written to the saved JSON.
-  final String? role;
-
-  _PlanFoodItem({
-    required this.foodId,
-    required this.name,
-    required this.servingDesc,
-    required this.servingG,
-    required this.calories,
-    required this.protein,
-    required this.carbs,
-    required this.fat,
-    required this.category,
-    this.role,
-  });
-}

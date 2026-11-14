@@ -49,12 +49,15 @@ class FoodTypeWriteEffects {
 
   final String? Function() currentUserId;
   final void Function() pushSnapshot;
-  final void Function(List<String> fields) lockFields;
+
+  /// Best-effort (never throws in production); awaited only to ORDER the
+  /// snapshot push after it, never by the write door itself.
+  final Future<void> Function(List<String> fields) lockFields;
 
   static final FoodTypeWriteEffects real = FoodTypeWriteEffects(
     currentUserId: () => SupabaseService.instance.currentUser?.id,
     pushSnapshot: () => unawaited(SyncService.instance.pushSnapshot()),
-    lockFields: (f) => unawaited(UserRepository.lockCoachExtractionFields(f)),
+    lockFields: UserRepository.lockCoachExtractionFields,
   );
 }
 
@@ -64,7 +67,7 @@ class UserProfileNotifier extends Notifier<Map<String, dynamic>> {
   static FoodTypeWriteEffects? debugFoodTypeEffects;
 
   // Serialises setFoodType calls; a field survives build() re-runs.
-  Future<void> _foodTypeChain = Future<void>.value();
+  Future<bool> _foodTypeChain = Future<bool>.value(true);
 
   @override
   Map<String, dynamic> build() {
@@ -92,30 +95,45 @@ class UserProfileNotifier extends Notifier<Map<String, dynamic>> {
   /// hints rebuild through DietPlanNotifier's watch of this provider; no
   /// target recompute (the food type does not feed BMR/TDEE; Unit 3's
   /// strategy will, and is added here then).
-  Future<void> setFoodType(FoodType next) {
+  ///
+  /// Returns true when [next] is the stored food type afterwards (written, or
+  /// already stored); false when the call was dropped because the account
+  /// changed while it was queued (B-pass finding 2: the caller must not
+  /// announce a change that did not happen).
+  Future<bool> setFoodType(FoodType next) {
     final fx = debugFoodTypeEffects ?? FoodTypeWriteEffects.real;
     final uidAtCall = fx.currentUserId();
     final run = _foodTypeChain
-        .catchError((Object _) {})
+        .catchError((Object _) => false)
         .then((_) => _applyFoodType(next, uidAtCall, fx));
     _foodTypeChain = run;
     return run;
   }
 
-  Future<void> _applyFoodType(
+  Future<bool> _applyFoodType(
     FoodType next,
     String? uidAtCall,
     FoodTypeWriteEffects fx,
   ) async {
-    if (fx.currentUserId() != uidAtCall) return; // account changed while queued
+    if (fx.currentUserId() != uidAtCall) return false; // account changed while queued
     final stored = UserRepository.instance.getProfile()?['diet_preference'];
-    if (stored is String && stored == next.storageKey) return;
+    if (stored is String && stored == next.storageKey) return true;
     final changed = foodTypeOf(stored) != next;
     await updateProfile({'diet_preference': next.storageKey});
     final signedIn = uidAtCall != null && uidAtCall.isNotEmpty;
-    if (!signedIn) return;
-    fx.pushSnapshot();
-    if (changed) fx.lockFields(const ['diet_preference']);
+    if (!signedIn) return true;
+    if (changed) {
+      // B-pass finding 5: the snapshot push can run the coach extraction, so
+      // it goes out only after the lock call has finished (or failed). Not
+      // awaited here: the write door never waits on the network.
+      unawaited(fx
+          .lockFields(const ['diet_preference'])
+          .catchError((Object _) {})
+          .whenComplete(fx.pushSnapshot));
+    } else {
+      fx.pushSnapshot();
+    }
+    return true;
   }
 
   Future<void> saveFullProfile(Map<String, dynamic> profile) async {

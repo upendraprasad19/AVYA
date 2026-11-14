@@ -30,9 +30,12 @@ void main() {
     });
   }
 
-  test('non-string input reads as the default', () {
-    expect(foodTypeOf(42), kDefaultFoodType);
-    expect(foodTypeOf(const ['veg']), kDefaultFoodType);
+  test('null is the default; a non-null non-string (corrupt) value is Veg', () {
+    expect(foodTypeOf(null), kDefaultFoodType);
+    expect(foodTypeOf(42), FoodType.veg);
+    expect(foodTypeOf(true), FoodType.veg);
+    expect(foodTypeOf(const ['non_veg']), FoodType.veg);
+    expect(foodTypeOfProfile(const {'diet_preference': 7}), FoodType.veg);
   });
 
   test('every storageKey round-trips; labels are the founder wording', () {

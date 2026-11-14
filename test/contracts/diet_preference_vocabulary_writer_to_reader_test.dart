@@ -20,6 +20,7 @@
 // type in DietPlanNotifier; onboarding default back to 'veg'.
 library;
 
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -28,6 +29,7 @@ import 'package:icanbefitter/core/constants/food_types.dart';
 import 'package:icanbefitter/features/ai_coach/services/ai_snapshot_builder.dart';
 import 'package:icanbefitter/features/auth/providers/auth_invalidation_provider.dart';
 import 'package:icanbefitter/features/nutrition/providers/diet_plan_provider.dart';
+import 'package:icanbefitter/features/nutrition/services/diet_plan_catalog.dart';
 import 'package:icanbefitter/features/onboarding/providers/onboarding_provider.dart';
 import 'package:icanbefitter/features/profile/providers/profile_provider.dart';
 import 'package:icanbefitter/shared/repositories/user_repository.dart';
@@ -36,22 +38,43 @@ import '../helpers/hive_test_setup.dart';
 
 class _Fx {
   String? uid = 'user-a';
+
+  /// When set, currentUserId answers this from its SECOND read on (the
+  /// first read is setFoodType's capture): an account switch while queued.
+  String? uidAfterFirstRead;
+  int _uidReads = 0;
   int pushes = 0;
   final locks = <List<String>>[];
+  final events = <String>[];
   bool throwOnNextPush = false;
 
+  /// When set, the lock call does not finish until this completes.
+  Completer<void>? lockGate;
+
   FoodTypeWriteEffects get effects => FoodTypeWriteEffects(
-        currentUserId: () => uid,
+        currentUserId: () {
+          _uidReads++;
+          if (uidAfterFirstRead != null && _uidReads > 1) return uidAfterFirstRead;
+          return uid;
+        },
         pushSnapshot: () {
           pushes++;
+          events.add('push');
           if (throwOnNextPush) {
             throwOnNextPush = false;
             throw StateError('push failed');
           }
         },
-        lockFields: (f) => locks.add(List.of(f)),
+        lockFields: (f) {
+          locks.add(List.of(f));
+          events.add('lock');
+          return lockGate?.future ?? Future<void>.value();
+        },
       );
 }
+
+/// Lets the chained lock -> push (fire-and-forget) run.
+Future<void> settle() => Future<void>.delayed(Duration.zero);
 
 Map<String, dynamic> _plan(String? foodType) => {
       'id': 'diet_plan_1',
@@ -144,7 +167,8 @@ void main() {
 
     test('a real change writes the key, pushes the snapshot and locks', () async {
       await seed('non_veg');
-      await notifier().setFoodType(FoodType.pescatarian);
+      expect(await notifier().setFoodType(FoodType.pescatarian), isTrue);
+      await settle();
       expect(stored(), 'pescatarian');
       expect(fx.pushes, 1);
       expect(fx.locks, [
@@ -163,6 +187,7 @@ void main() {
     test('a legacy spelling of the same type is rewritten without a lock', () async {
       await seed('vegetarian');
       await notifier().setFoodType(FoodType.veg);
+      await settle();
       expect(stored(), 'veg');
       expect(fx.pushes, 1);
       expect(fx.locks, isEmpty);
@@ -182,29 +207,55 @@ void main() {
       final a = notifier().setFoodType(FoodType.veg);
       final b = notifier().setFoodType(FoodType.nonVeg);
       await Future.wait([a, b]);
+      await settle();
       expect(stored(), 'non_veg');
       // non_veg -> veg (a change) then veg -> non_veg (a change).
       expect(fx.locks.length, 2);
     });
 
     test('a failed link does not block the next', () async {
-      await seed('non_veg');
+      // A spelling-only rewrite pushes synchronously inside the link, so a
+      // throwing push fails that link.
+      await seed('vegetarian');
       fx.throwOnNextPush = true;
       final a = notifier().setFoodType(FoodType.veg);
       final b = notifier().setFoodType(FoodType.vegan);
       await expectLater(a, throwsStateError);
-      await b;
+      expect(await b, isTrue);
       expect(stored(), 'vegan');
     });
 
-    test('a call queued across an account change writes nothing', () async {
+    test('a call queued across an account change writes nothing and says so',
+        () async {
       await seed('non_veg');
-      final a = notifier().setFoodType(FoodType.veg);
-      fx.uid = 'user-b'; // signed out / switched before the call ran
-      await a;
+      fx.uidAfterFirstRead = 'user-b'; // switched before the call ran
+      expect(await notifier().setFoodType(FoodType.veg), isFalse);
+      await settle();
       expect(stored(), 'non_veg');
       expect(fx.pushes, 0);
       expect(fx.locks, isEmpty);
+    });
+
+    test('B-pass 5: the snapshot push waits for the lock call to finish', () async {
+      await seed('non_veg');
+      fx.lockGate = Completer<void>();
+      expect(await notifier().setFoodType(FoodType.veg), isTrue,
+          reason: 'the write door does not wait on the network');
+      await settle();
+      expect(fx.events, ['lock'], reason: 'no push before the lock lands');
+      fx.lockGate!.complete();
+      await settle();
+      expect(fx.events, ['lock', 'push']);
+    });
+
+    test('B-pass 5: a failed lock call still lets the push go out', () async {
+      await seed('non_veg');
+      fx.lockGate = Completer<void>();
+      final done = notifier().setFoodType(FoodType.vegan);
+      await done;
+      fx.lockGate!.completeError(StateError('rpc down'));
+      await settle();
+      expect(fx.events, ['lock', 'push']);
     });
 
     test('signed out: the value is written, no push and no lock', () async {
@@ -251,21 +302,71 @@ void main() {
         sub.close();
       });
 
-      test('a plan saved before Unit 2a (no food_type) still gives hints',
-          () async {
-        await seed('vegan');
+      test('a plan saved before Unit 2a (no food_type) gives hints only when '
+          'its foods fit (B-pass 3)', () async {
+        // Chicken, no food_type: fine for Non-veg ...
+        await seed('non_veg');
         await UserRepository.instance.saveDietPlan(_plan(null));
+        final sub = c.listen(dietPlanProvider, (_, _) {});
         expect(c.read(dietPlanProvider).keys, contains('lunch'));
+        // ... not for Vegan (the food box has no row for it here, so it
+        // cannot be shown to fit either).
+        await notifier().updateProfile({'diet_preference': 'vegan'});
+        expect(c.read(dietPlanProvider), isEmpty);
+        sub.close();
       });
     });
   });
 
   test('savedPlanMatchesFoodType', () {
-    expect(savedPlanMatchesFoodType(_plan(null), FoodType.veg), isTrue);
+    // A legacy plan (no food_type) is judged by its foods (B-pass 3).
+    Map<String, dynamic>? chicken(String _) =>
+        {'id': 'F0019', 'name': 'Chicken Breast (grilled)', 'is_veg': false, 'is_vegan': false};
+    Map<String, dynamic>? dal(String _) =>
+        {'id': 'F0019', 'name': 'Moong Dal', 'is_veg': true, 'is_vegan': true};
+    expect(savedPlanMatchesFoodType(_plan(null), FoodType.nonVeg), isTrue);
+    expect(savedPlanMatchesFoodType(_plan(null), FoodType.veg, rowOf: chicken), isFalse);
+    expect(savedPlanMatchesFoodType(_plan(null), FoodType.pescatarian, rowOf: chicken), isFalse);
+    expect(savedPlanMatchesFoodType(_plan(null), FoodType.veg, rowOf: dal), isTrue);
+    expect(savedPlanMatchesFoodType(_plan(null), FoodType.vegan, rowOf: dal), isTrue);
+    expect(savedPlanMatchesFoodType(_plan(null), FoodType.veg, rowOf: (_) => null), isFalse,
+        reason: 'a food the box does not hold cannot be shown to fit');
     expect(savedPlanMatchesFoodType(_plan('veg'), FoodType.veg), isTrue);
     expect(savedPlanMatchesFoodType(_plan('vegetarian'), FoodType.veg), isTrue);
     expect(savedPlanMatchesFoodType(_plan('non_veg'), FoodType.veg), isFalse);
     expect(savedPlanMatchesFoodType(_plan('eggetarian'), FoodType.pescatarian),
         isFalse);
+  });
+
+  test('savedPlanMatchesFoodType judges a legacy item by its catalog family',
+      () {
+    // F0021 is the catalog's boiled egg (DietFamily.egg), F0024 a fish row
+    // (DietFamily.fish). Both rows are is_veg false, so only the family
+    // admits them: without it every egg or fish item fails the Veg rule.
+    Map<String, dynamic> legacy(String id) => {
+          'id': 'diet_plan_legacy',
+          'meals': [
+            {
+              'name': 'Breakfast',
+              'items': [
+                {'food_id': id, 'name': id},
+              ],
+            },
+          ],
+        };
+    Map<String, dynamic>? nonVegRow(String id) =>
+        {'id': id, 'name': id, 'is_veg': false, 'is_vegan': false};
+    expect(dietCatalogFamily('F0021'), DietFamily.egg);
+    expect(dietCatalogFamily('F0024'), DietFamily.fish);
+    expect(savedPlanMatchesFoodType(legacy('F0021'), FoodType.eggetarian,
+        rowOf: nonVegRow), isTrue);
+    expect(savedPlanMatchesFoodType(legacy('F0021'), FoodType.pescatarian,
+        rowOf: nonVegRow), isTrue);
+    expect(savedPlanMatchesFoodType(legacy('F0024'), FoodType.pescatarian,
+        rowOf: nonVegRow), isTrue);
+    expect(savedPlanMatchesFoodType(legacy('F0024'), FoodType.eggetarian,
+        rowOf: nonVegRow), isFalse);
+    expect(savedPlanMatchesFoodType(legacy('F0021'), FoodType.veg,
+        rowOf: nonVegRow), isFalse);
   });
 }

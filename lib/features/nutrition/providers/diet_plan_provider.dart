@@ -3,17 +3,49 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:icanbefitter/core/constants/food_types.dart';
 import 'package:icanbefitter/features/auth/providers/auth_invalidation_provider.dart';
 import 'package:icanbefitter/features/profile/providers/profile_provider.dart';
+import 'package:icanbefitter/shared/repositories/food_repository.dart';
 import 'package:icanbefitter/shared/repositories/user_repository.dart';
+
+import '../services/diet_plan_catalog.dart';
+import '../services/diet_plan_generator.dart';
 
 /// Whether a saved diet plan may be shown for [current] (diet plan Unit 2a,
 /// docs/plans/diet-food-type.md §2.4). A plan saved with a `food_type` of
 /// another type is not shown: its foods would be off-diet (a saved chicken
-/// plan after the user picked Veg). A plan saved before Unit 2a has no
-/// `food_type` and is shown as before (test accounts only, pre-launch).
-bool savedPlanMatchesFoodType(Map<dynamic, dynamic> plan, FoodType current) {
+/// plan after the user picked Veg).
+///
+/// A plan saved before Unit 2a has no `food_type`. It is shown when its
+/// FOODS fit [current] (every item's food row passes `passesDiet`, with its
+/// catalog family; a row the food box does not hold does not fit), and
+/// always for Non-veg. B-pass finding 3: showing such a plan unconditionally
+/// let a re-save stamp a chicken plan with the user's Veg type, after which
+/// it matched forever. [rowOf] is a test seam (default: the food box).
+bool savedPlanMatchesFoodType(
+  Map<dynamic, dynamic> plan,
+  FoodType current, {
+  Map<String, dynamic>? Function(String foodId)? rowOf,
+}) {
   final saved = plan['food_type'];
-  if (saved == null) return true;
-  return foodTypeOf(saved) == current;
+  if (saved != null) return foodTypeOf(saved) == current;
+  if (current == FoodType.nonVeg) return true;
+  final lookup = rowOf ?? FoodRepository.instance.getById;
+  final meals = plan['meals'];
+  if (meals is! List) return true; // nothing to judge
+  for (final m in meals) {
+    final items = m is Map ? m['items'] : null;
+    if (items is! List) continue;
+    for (final it in items) {
+      final id = it is Map ? it['food_id'] : null;
+      if (id is! String) return false;
+      final row = lookup(id);
+      if (row == null ||
+          !DietPlanGenerator.passesDiet(row, current.storageKey,
+              family: dietCatalogFamily(id))) {
+        return false;
+      }
+    }
+  }
+  return true;
 }
 
 /// One planned meal slot derived from the saved diet plan

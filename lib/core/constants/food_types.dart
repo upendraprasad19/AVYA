@@ -11,7 +11,9 @@
 //
 // Fail-safe direction: a value that was never chosen (null, '') is the
 // founder's default, Non-veg. A NON-EMPTY value this table does not know is
-// read as Veg: an unknown deliberate choice must never be served meat.
+// read as Veg: an unknown deliberate choice must never be served meat. A
+// non-null value that is not a string at all (a corrupt Hive value) is not
+// "never chosen" either, so it reads as Veg too (B-pass finding 1).
 //
 // The table is pinned by the shared fixture
 // supabase/functions/_shared/testdata/food_type_vocabulary.json, which the
@@ -75,7 +77,8 @@ String _canon(String raw) =>
 
 /// Tolerant read of any stored or legacy value.
 FoodType foodTypeOf(Object? raw) {
-  if (raw is! String) return kDefaultFoodType;
+  if (raw == null) return kDefaultFoodType;
+  if (raw is! String) return FoodType.veg;
   final key = _canon(raw);
   if (key.isEmpty) return kDefaultFoodType;
   return _spellings[key] ?? FoodType.veg;

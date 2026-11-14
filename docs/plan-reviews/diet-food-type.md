@@ -5,7 +5,7 @@ blast_radius: platform
 review_rounds: 4
 ground_truth_verified: true
 verdict: converged
-bpass: pending
+bpass: accepted
 bpass_review: docs/reviews/diet-food-type-bpass.md
 ---
 
@@ -32,7 +32,7 @@ Ground truth: each reviewer read the cited files at `3da92d26` and re-derived th
 
 ## B-pass
 
-Pending: `docs/reviews/diet-food-type-bpass.md` after review CI is green.
+Accepted: `docs/reviews/diet-food-type-bpass.md` (fresh Sonnet seat on 74085219, review CI green). No P0/P1/P2; five P3 findings (a corrupt non-String read as Non-veg; a dropped write announced as done; a legacy plan re-stamped with the current type; two stale Edit Profile registry ranges; the snapshot push fired before the coach lock), all fixed on this branch with mutations F1 to F5c (diagnose `6f5aaa`). Finding 1 is mirrored in Unit 2b (b76694b1).
 
 ## Build evidence
 
