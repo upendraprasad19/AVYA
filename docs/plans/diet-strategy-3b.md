@@ -8,7 +8,7 @@ With `DietStrategyFlags` on, a Keto user sees 30 g carbs / 187 g fat targets abo
 
 ## 2. Landings (execution mode: inline, one worktree per landing, each its own PR)
 
-- **3b-1a — catalog, asset, generator, swap (dark).** §3.1–§3.4, §3.7. The only part every user receives is the asset re-seed (14 rows flip `is_everyday` to true) and a Balanced-identical generator and swap sheet; the strategy paths are reached only through `DietStrategyFlags` (still OFF) and tests. Blast radius platform (asset + seed version).
+- **3b-1a — catalog, asset, generator, swap (dark).** §3.1–§3.4, §3.7. What every user receives: the asset re-seed (14 rows flip `is_everyday` to true), a Balanced-identical generator and swap sheet, and one deliberate change (round 4 finding 1): `dietCatalogFamily` knows fried egg F0371 / cheese omelette F0790 (egg family), so a pre-Unit-2a saved plan holding them loads for an eggetarian or pescatarian (tested); the strategy paths are reached only through `DietStrategyFlags` (still OFF) and tests. Blast radius platform (asset + seed version).
 - **3b-1b — screen, saved plan, copy (dark).** §3.5, §3.6, §3.8, §3.9. Every change behind the flag.
 - **3b-2 server — coach text and `suggestMeal`.** §5. Inert until the client writes `diet_strategy` (only with the flag on) and until the snapshot carries `diet_strategy` (only with the flag on). EF deploys need the founder's go (ai-proxy, weekly-report).
 - **3b-3 flip.** §6.
@@ -95,7 +95,7 @@ Every 3b-1a/b behaviour except the asset re-seed is behind `DietStrategyFlags.en
   - `supabase/functions/_shared/captain_manual_food_type_test.ts` literals for the "Older values" line and the legacy text → updated in 3b-2 with the reworded line; `curated_diet_plan_test.dart` T1 "no fats" → the banned set is asserted over the BALANCED pool (`!e.lowCarbOnly`), and a new assertion lists the four fat entries as exactly the `lowCarbOnly` `fat`-role set; T1 categories: unchanged rule, no exception needed (Pomfret Fry dropped); T1 identical-macros, id uniqueness, imports-nothing, T7 serving texts: run over all entries including the new ones; T1 mirror: after re-running `scripts/patch_food_database_v4.dart`. The whole file is run against the build before the plan's done-criteria.
 - **Asset:** the 14 ids flip to `is_everyday: true` (`scripts/patch_food_database_v4.dart` re-run: a 14-line diff, 165 everyday rows); `_foodLibraryVersion` 4 → 5 (`seed_service.dart:211`; `:242` re-seeds when stored < constant); `food_library_v4_upgrade_behavioral_test.dart` extended: a v4 box re-seeds to v5 and the 14 ids read true.
 - **Balanced goldens:** generator SHA (§3.3) and swap SHA (§3.4).
-- **T10 strategy matrix** (`test/nutrition/curated_diet_plan_strategy_test.dart`, real asset, 16 archetypes × 50 seeds × {Low carb, Keto}; vegan Keto is the defensive path and is asserted in T11, not floored): zero fallbacks; Keto plans hold no grain, fruit or breakfast main and no item over the cap; template shape per strategy; every `lowCarbOnly` entry reachable, and in Keto; no `lowCarbOnly` food in a Balanced plan; caps with the override; carbs mean ≤ 1.25× target; kcal and protein floors PER ARCHETYPE = the built code's minimum − 0.02 (30 rows, raise only). Built-code minima: kcal 0.68–0.95, protein 0.40–0.91; the lowest are the veg/vegan Low carb cuts (stated limit, §3.1).
+- **T10 strategy matrix** (`test/nutrition/curated_diet_plan_strategy_test.dart`, real asset, 16 archetypes × 50 seeds × {Low carb, Keto}; vegan Keto is the defensive path and is asserted in T11, not floored): zero fallbacks; Keto plans hold no grain, fruit or breakfast main and no item over the cap; template shape per strategy; every `lowCarbOnly` entry reachable, and in Keto; no `lowCarbOnly` food in a Balanced plan; caps with the override; carbs mean ≤ 1.25× target; kcal and protein floors PER ARCHETYPE = the built code's minimum − 0.02 (30 rows, raise only). Built-code minima (the test table): kcal 0.68–0.93, protein 0.40–0.94; since the B-pass also ceilings and a fiber floor per strategy (kcal max ≤ 1.12; per-plan carbs ≤ 1.50 Low carb / 1.33 Keto; fiber ≥ 0.31 / 0.11 of 30 g), the literal templates, the literal override map, and a plan past a Balanced cap; the lowest are the veg/vegan Low carb cuts (stated limit, §3.1).
 - **Swap:** Keto alternatives respect the cap and the strategy's templates (`fat` resolves); Balanced never offers `lowCarbOnly`.
 - Throwaway harnesses (`test/nutrition/zz_*`) are deleted before the commit (round 3 finding 8); their durable parts are G1/G2/T10.
 - **Mutants (each applied, counted, run, red):** Balanced sees `lowCarbOnly` (generator; swap candidate loop; swap role scan / family map); keto carb cap off; cap applied to fat-role items; vegan Keto not mapped in the generator; carb term off in `_sizeSlot`; carb term off in `_dayScore`; fiber aim Balanced for keto; override caps used for Balanced; override keys dropped; templates swapped; null `carbTarget` not normalised; `builtFor` not Balanced after a fallback; `resolveSwapRole` on Balanced templates.
@@ -167,7 +167,29 @@ Every 3b-1a/b behaviour except the asset re-seed is behind `DietStrategyFlags.en
 | 10 | P3 | note precedence; stale §9 rows | the fallback line wins over the vegan line; §9 rows 4/5 superseded by §10 rows 3/5 |
 | 11 | P3 | `lastStrategyUsed` wording | superseded by `generatePlan` / `builtFor` (§3.3) |
 
-## 12. 3b-1b as built (2026-11-14)
+## 12. 3b-1a round 4 and B-pass dispositions (2026-11-14)
+
+Round 4 (confirmation, context-blind, on `ea5d8146`): no P0/P1; 3 P2, 3 P3. B-pass seats A, B, C (context-blind, CI green): no P0/P1; P2s and P3s below. Fixed in the follow-up commit unless stated.
+
+| # | Source | Sev | Finding | Disposition |
+|---|---|---|---|---|
+| 1 | R4 F1, A F3, B F5 | P2 | `dietCatalogFamily` now gives F0371 / F0790 the egg family: a legacy unstamped plan holding them loads for eggetarian / pescatarian; the record claimed "only the re-seed" | kept (correct: they are egg dishes); tested in `diet_preference_vocabulary_writer_to_reader_test.dart`; §2, the record, the nutrition CLAUDE.md say so |
+| 2 | R4 F2, C F4 | P2 | the cap test reads the override it checks; nothing shows the override is used | literal pin of the override and `kKetoItemCarbCap`; a test that some plan goes past a Balanced cap (measured: paneer, soy, dairy, fat); vegan Keto plans judged by Balanced caps |
+| 3 | R4 F3, C F1 | P2 | `_dayScore` carb term and fiber aim mutants not shown red; no calorie ceiling or fiber floor | the mutants were run (A6 day carb term off: red; A7 keto fiber aim 0.8: red; run log in the B-pass file); added kcal ceiling, per-plan carb ceiling and fiber floor per strategy, measured |
+| 4 | C F2 | P2 | the carb bound is one mean | per-plan carb ceiling per strategy added (above) |
+| 5 | C F3 | P2 | template content test is circular | literal template table for Keto and Low carb, shares sum to 1 for every strategy |
+| 6 | C F5 | P2 | swap assertions could pass vacuously | Keto: alternatives non-empty, an over-cap entry exists for a swapped role; a Low carb swap case; the Balanced role check compares a Low carb only id with an id outside the catalog, and Keto resolves ghee to `fat` |
+| 7 | C F6 | P2 | hand-copied 14-id sets | both asserted equal to the catalog's `lowCarbOnly` set |
+| 8 | A F1, F2 | P2 | stale registry ranges (`passesDiet`, `seed_service` prune block) | `1339-1376`, `289-334`, recomputed from the anchors |
+| 9 | B F1 | P2 | the swap does not repeat `_normalised`: a caller passing the REQUESTED strategy gets Keto rules on a Balanced plan | contract stated on `swapAlternatives`: pass `builtFor` / the saved stamp; 3b-1b passes `_planStrategy` and adds a test (a legacy plan under Keto offers no Low carb only food) |
+| 10 | C F7 | P3 | `built` collected, never asserted | per-plan `builtFor` asserted (vegan Keto: Balanced) |
+| 11 | B F2 | P3 | a swapped Keto item at a larger portion can exceed the per-item cap | accepted and stated on `swapAlternatives`: the generator applies the same cap at the smallest portion and its larger portions can too |
+| 12 | B F3 | P3 | a failed v5 re-seed leaves the 14 rows `is_everyday: false`: the generator uses them, the swap treats them as retired | accepted: `_seedFoods` retries on the next launch; the swap then shows fewer options for a launch |
+| 13 | A F4, R4 F5 | P3 | a loaded plan (no saved role) resolves a dual-role item (coconut, paneer, cheddar) to the first role in enum order | accepted: the saved JSON's item key set is pinned since Unit 1; the swap offers alternatives of a role the slot allows |
+| 14 | B F4, A F5, R4 F4 | P3 | misplaced doc comment; "151 foods"; minima numbers; registry v4 sentence | fixed |
+| 15 | R4 F6, C F8 | P3 | golden provenance self-attested | the goldens were captured by running the G1/G2 bodies on a detached `origin/main` 21db03c7 worktree before the catalog append (session scratch `u3b/mainref`); recorded in the B-pass file |
+
+## 13. 3b-1b as built (2026-11-14)
 
 Built in worktree `diet-strategy-3b1b` on top of 3b-1a (`ea5d8146`). Where the build departs from §3.5–§3.9, the reason:
 
@@ -179,3 +201,4 @@ Built in worktree `diet-strategy-3b1b` on top of 3b-1a (`ea5d8146`). Where the b
 - **PDF:** `dietPlanPdfHeaderLines` (pure, tested) builds the header lines including the note; `dietPlanPdfStrategyLabel(_planStrategy)` names the plan's strategy (round 3 finding 1).
 - **Test seam:** `debugDietPlanGenerations` counts fresh generations (the one-generation-per-change tests).
 - Tests: `test/nutrition/diet_plan_strategy_screen_test.dart` (21, on Hive with the catalog's real food rows); repointed: `diet_strategy_selector_test.dart` (the meals-note test now asserts the medical note; the no-targets test splits Low carb, no dialog, from Keto, which asks; the screen literal count is write-shaped), `diet_plan_pdf_test.dart`, `diet_plan_curated_switch_test.dart` (the routing expression). Mutants B1–B15 (listener missing / not idempotent, `_checkedSaved` not reset, live strategy stamped, note inverted, screen check off / applied with the flag off, unstamped matched for Keto, provider check with the flag off, Keto dialog skipped on both doors, stale swap applied, vegan request with the Keto target, disabled chip tappable, request ignoring the flag): 15 of 15 red.
+- **After the 3b-1a B-pass (merged in):** a 22nd screen test, the kill switch under Keto, opens every swap sheet and asserts no Low carb only food is offered (3b-1a seat B finding 1: the swap must get the BUILT strategy). Mutant B16, the screen passing `_requestedStrategy` to the swap: red (that test).

@@ -441,6 +441,44 @@ void main() {
       expect(_savedPlan()?['diet_strategy'], 'balanced');
     });
 
+    testWidgets('the legacy generator (kill switch) under Keto: no swap '
+        'offers a Low carb only food (the swap gets the BUILT strategy)',
+        (tester) async {
+      // 3b-1a B-pass seat B finding 1: swapAlternatives does not repeat the
+      // generator's fallback, so the screen must pass the plan's built
+      // strategy (Balanced here), never the requested Keto.
+      await seed(tester, extra: const {'diet_strategy': 'keto'});
+      await tester.runAsync(() => HiveService.instance.configBox
+          .put(DietPlanFlags.disableCuratedKey, true));
+      await pumpScreen(tester);
+      final lowCarbNames = {
+        for (final r in catalogRows)
+          if (kDietPlanCatalog
+              .any((e) => e.foodId == r['id'] && e.lowCarbOnly))
+            r['name'] as String,
+      };
+      expect(lowCarbNames, hasLength(14), reason: 'precondition');
+      final offered = <String>[];
+      final icons = find.byIcon(Icons.swap_horiz);
+      final n = tester.widgetList(icons).length;
+      expect(n, greaterThan(0), reason: 'precondition: swappable items');
+      for (var i = 0; i < n; i++) {
+        await tester.tap(icons.at(i));
+        await _settle(tester);
+        final sheet = find.byType(BottomSheet);
+        if (sheet.evaluate().isEmpty) continue; // the no-swap snackbar
+        for (final tile in tester.widgetList<ListTile>(find.descendant(
+            of: sheet, matching: find.byType(ListTile)))) {
+          final title = tile.title;
+          if (title is Text) offered.add(title.data ?? '');
+        }
+        await tester.tapAt(const Offset(10, 10)); // the barrier
+        await _settle(tester);
+      }
+      expect(offered, isNotEmpty, reason: 'precondition: some alternatives');
+      expect(offered.toSet().intersection(lowCarbNames), isEmpty);
+    });
+
     testWidgets('a strategy change regenerates ONCE and the saved stamp '
         'follows; a food-type change does not also fire the listener',
         (tester) async {

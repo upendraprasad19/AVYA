@@ -2,10 +2,10 @@
 branch: diet-strategy-3b
 date: 2026-11-14
 blast_radius: account
-review_rounds: 3
+review_rounds: 4
 ground_truth_verified: true
-verdict: pending
-bpass: pending
+verdict: converged
+bpass: accepted
 bpass_review: docs/reviews/diet-strategy-3b-bpass.md
 ---
 
@@ -24,7 +24,8 @@ Plan: `docs/plans/diet-strategy-3b.md` (revision 4; round dispositions in its §
 | 1 | context-blind Sonnet on rev 1 | changes required | 3 P1 + 6 P2 | plan §9 (vegan fold removed, `builtFor`, test repoints, split 1a/1b) |
 | 2 | context-blind Sonnet on rev 2 | changes required | 3 P1 + 4 P2 | plan §10 (vegan data mechanism removed, Balanced filters `lowCarbOnly` before every scan) |
 | 3 | context-blind Sonnet on rev 3 | changes required | 1 P1 (1b) + 8 P2 | plan §11; 1a findings 2, 3, 8 built and tested; 1b/2 findings carried into those landings |
+| 4 | context-blind Sonnet, confirmation on the built commit `ea5d8146` | converged (no P0/P1) | 3 P2 + 3 P3 | plan §12; every P2 fixed in the B-pass fix commit (tests pinned literally, the A6/A7 mutants run red) |
 
 ## B-pass
 
-Pending.
+Accepted: `docs/reviews/diet-strategy-3b-bpass.md` (three context-blind seats on `ea5d8146`, no P0/P1; every P2 fixed, P3s fixed or accepted with reasons in plan §12). The new pins of the fix commit were each mutated once (F1 to F4): three red at once, F3 survived and its test was tightened, then red (the review file lists the counts).

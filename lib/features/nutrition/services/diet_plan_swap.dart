@@ -96,6 +96,15 @@ DietRole? resolveSwapRole({
 }
 
 /// Up to [limit] ready-to-use replacement items (portion-sized, role set).
+///
+/// [strategy] must be the strategy the plan was BUILT for
+/// (`generatePlan(...).builtFor`, or a saved plan's stamp), never the one
+/// requested: the generator turns some requests into Balanced (a legacy
+/// fallback, a missing carb target, vegan Keto) and this function does not
+/// repeat that rule (3b-1a B-pass seat B finding 1). Accepted (seat B
+/// finding 2): an alternative's portion is matched on calories, so a Keto
+/// swap can land above the per-item carb cap at a larger portion, as a
+/// generated Keto item can; the item cap applies at the smallest portion.
 List<DietPlanFoodItem> swapAlternatives({
   required String foodId,
   required String category,
