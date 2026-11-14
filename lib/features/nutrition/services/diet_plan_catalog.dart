@@ -30,6 +30,8 @@ enum DietRole {
   side,
   fruit,
   snack,
+  /// Unit 3b: a cooking fat or coconut added to a low-carb / keto meal.
+  fat,
 }
 
 /// Day-level variety groups. Caps live in [dietFamilyDailyCap].
@@ -53,7 +55,19 @@ enum DietFamily {
   nut,
   roast,
   dried,
+  /// Unit 3b: ghee, butter, coconut, coconut milk.
+  fat,
 }
+
+/// Unit 3b: Low carb / Keto days lean on paneer, dairy and added fat, so
+/// those caps are higher there (every other cap is the Balanced one in
+/// [dietFamilyDailyCap]).
+const Map<DietFamily, int> dietFamilyLowCarbCapOverride = {
+  DietFamily.paneer: 2,
+  DietFamily.dairy: 3,
+  DietFamily.fat: 4,
+  DietFamily.soy: 2,
+};
 
 /// Max items of a family in one day. A family absent from this map is
 /// uncapped (only per-day id uniqueness applies).
@@ -72,6 +86,7 @@ const Map<DietFamily, int> dietFamilyDailyCap = {
   DietFamily.sprouts: 1,
   DietFamily.dal: 2,
   DietFamily.dairy: 2,
+  DietFamily.fat: 3,
 };
 
 /// Key-ingredient words: no two items in one meal may share one
@@ -102,7 +117,13 @@ class CatalogEntry {
   final List<DietRole> roles;
   final DietFamily family;
   final List<double> portions;
-  const CatalogEntry(this.foodId, this.roles, this.family, this.portions);
+
+  /// Unit 3b: true for a food offered ONLY in Low carb / Keto plans (plain
+  /// vegetables, ghee, full-fat paneer...). Balanced plans never see it, so
+  /// their candidate pool, and with it every Balanced plan, is unchanged.
+  final bool lowCarbOnly;
+  const CatalogEntry(this.foodId, this.roles, this.family, this.portions,
+      {this.lowCarbOnly = false});
 }
 
 /// The catalog. Order matters only as the swap sheet's tie-break.
@@ -998,6 +1019,36 @@ const List<CatalogEntry> kDietPlanCatalog = [
     DietFamily.grain,
     [0.5, 1.0, 1.5],
   ), // Lemon Rice
+  // ── Unit 3b: Low carb / Keto only (docs/plans/diet-strategy-3b.md) ──
+  CatalogEntry('F0402', [DietRole.fat], DietFamily.fat, [1.0, 2.0, 3.0, 4.0, 5.0],
+      lowCarbOnly: true), // Ghee (1 tsp)
+  CatalogEntry('F0403', [DietRole.fat], DietFamily.fat, [0.5, 1.0, 1.5, 2.0],
+      lowCarbOnly: true), // Butter (1 tbsp)
+  CatalogEntry('F0483', [DietRole.fat, DietRole.snack], DietFamily.fat,
+      [0.5, 1.0, 1.5], lowCarbOnly: true), // Coconut (Fresh, Grated)
+  CatalogEntry('F0383', [DietRole.fat], DietFamily.fat, [1.0, 2.0],
+      lowCarbOnly: true), // Coconut Milk (1/4 cup)
+  CatalogEntry('F0371', [DietRole.breakfastProtein], DietFamily.egg,
+      [1.0, 1.5], lowCarbOnly: true), // Egg (Fried), 2 eggs
+  CatalogEntry('F0790', [DietRole.breakfastProtein], DietFamily.egg, [1.0],
+      lowCarbOnly: true), // Cheese Omelette
+  CatalogEntry('F0023',
+      [DietRole.breakfastProtein, DietRole.mainProtein, DietRole.snack],
+      DietFamily.paneer, [0.5, 1.0, 1.5, 2.0], lowCarbOnly: true), // Paneer
+  CatalogEntry('F0398', [DietRole.breakfastProtein, DietRole.snack],
+      DietFamily.dairy, [1.0, 2.0], lowCarbOnly: true), // Cheddar Cheese (1 oz)
+  CatalogEntry('F0394', [DietRole.mainProtein], DietFamily.paneer,
+      [1.0, 1.5, 2.0], lowCarbOnly: true), // Paneer (Full Fat)
+  CatalogEntry('F0348', [DietRole.mainProtein], DietFamily.chicken,
+      [1.0, 1.5, 2.0], lowCarbOnly: true), // Chicken Thigh (grilled)
+  CatalogEntry('F1022', [DietRole.sabzi], DietFamily.veg, [1.0, 1.5, 2.0],
+      lowCarbOnly: true), // Cauliflower (cooked)
+  CatalogEntry('F1024', [DietRole.sabzi], DietFamily.veg, [0.5, 1.0, 1.5],
+      lowCarbOnly: true), // Spinach (cooked)
+  CatalogEntry('F0040', [DietRole.sabzi], DietFamily.veg, [0.5, 1.0, 1.5],
+      lowCarbOnly: true), // Bhindi (Okra)
+  CatalogEntry('F0264', [DietRole.sabzi], DietFamily.veg, [1.0],
+      lowCarbOnly: true), // Capsicum (Green)
 ];
 
 final Map<String, DietFamily> _familyById = {
