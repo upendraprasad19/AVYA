@@ -138,6 +138,17 @@ const _engine = <String>[
 /// Costs are measured: commits over the 60 days to 2026-10-03 whose whole file
 /// list classified below platform under the registry at 4259d0ed.
 const _declined = <String, String>{
+  // --- lib/core/constants/ ---
+  'lib/core/constants/food_types.dart':
+      'the food-type vocabulary: diet_strategies.dart (engine file, for the '
+      'diet_strategy push rule) imports it since diet plan Unit 3b-1b only so '
+      'planStrategyFor can name the vegan pair (FoodType.vegan). The engine '
+      'calls dietStrategyPushEntry, which never reads a food type; the '
+      'diet_preference push in sync_profile.dart passes the stored string '
+      'through unchanged. Declined on cost: every food-type change (labels, '
+      'tags, the five keys) would become a full pipeline run. If the engine '
+      'ever normalises or rewrites diet_preference through this file, it '
+      'stops being declined-eligible',
   // --- lib/core/services/ ---
   '${_services}completed_title_healer.dart':
       'a computation applied to the winners AFTER the restore merge (OI-284): '
