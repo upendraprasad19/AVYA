@@ -204,7 +204,11 @@ void main() {
     expect((press.ohpDays, press.ohpPikeDays), (1, 0));
   });
 
-  test('over_time: +6..10 min moderate, more than +10 major', () {
+  test('over_time: +7..10 min moderate, more than +10 major; +6 is within the 2C-b allowance (d47)', () {
+    final ok = auditor.audit(_plan([
+      [['Goblet Squat', 3]],
+    ], minutes: 66));
+    expect(ok.issues.where((i) => i.code == 'over_time'), isEmpty);
     final mod = auditor.audit(_plan([
       [['Goblet Squat', 3]],
     ], minutes: 67));

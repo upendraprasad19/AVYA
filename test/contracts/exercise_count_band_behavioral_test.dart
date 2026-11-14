@@ -12,6 +12,10 @@
 @Timeout(Duration(minutes: 15))
 library;
 
+// Unit 2C-b (docs/plans/2026-11-14-generator-step2c-b-weekly-minimum.md §5, the policy for existing tests): these
+// fixtures pin the pre-2C-b mechanics, so their allocations run with `balancedWeek: false`; 2C-b's own behaviour
+// is pinned in weekly_minimum_behavioral_test.dart and session_allowance_behavioral_test.dart.
+
 import 'dart:convert';
 import 'dart:io';
 
@@ -56,7 +60,7 @@ void main() {
 
     test('(b) the target: a day of 8 distinct-group slots holds 5 / 6 / 8 by level, all at 3 sets when time allows', () {
       for (final (level, want) in [('beginner', 5), ('intermediate', 6), ('advanced', 8)]) {
-        final f = Fx();
+        final f = Fx(balancedWeek: false);
         for (var i = 0; i < 8; i++) {
           f.row('iso$i', [_distinctGroups[i]], type: 'isolation', reps: '10-15');
         }
@@ -73,7 +77,7 @@ void main() {
     });
 
     test('(c) four heavy lifts at 30 minutes: the floor forces the 4th, the day overruns by less than the bound', () {
-      final f = Fx();
+      final f = Fx(balancedWeek: false);
       const groups = ['Chest', 'Lats', 'Quads', 'Hamstrings'];
       for (var i = 0; i < 4; i++) {
         f.row('h$i', [groups[i]], reps: '5-8'); // compound, lower bound 5 -> H
@@ -95,7 +99,7 @@ void main() {
     });
 
     test('(d) the force never passes a cap or a weekly top: a day of 6 Chest lifts at 90 min (beginner cap 6) stays short', () {
-      final f = Fx();
+      final f = Fx(balancedWeek: false);
       for (var i = 0; i < 6; i++) {
         f.row('c$i', ['Chest']);
       }
@@ -108,7 +112,7 @@ void main() {
     });
 
     test('(e) the forcing bound: four heavy lifts at 15 minutes force ONE (not all), the rest stay out and the day says why', () {
-      final f = Fx();
+      final f = Fx(balancedWeek: false);
       const groups = ['Chest', 'Lats', 'Quads', 'Hamstrings'];
       for (var i = 0; i < 4; i++) {
         f.row('h$i', [groups[i]], reps: '5-8');
@@ -139,7 +143,7 @@ void main() {
       // empty-day guard puts the lead on (-57.6 s); the floor then force-seats ONE more (-261.6 s,
       // inside -300) and refuses the third (-465.6 s). `fits` would refuse the second one: it reads a
       // negative `secondsLeft` as "no room" even for 0 seconds.
-      final f = Fx();
+      final f = Fx(balancedWeek: false);
       f.row('wall', ['Core'], type: 'isolation', reps: '30-60', logging: 'timed');
       const groups = ['Chest', 'Lats', 'Quads'];
       for (var i = 0; i < 3; i++) {
@@ -160,7 +164,7 @@ void main() {
     });
 
     test('(g) a copied day inherits the forced slots (variant B copies A, forced seats included)', () {
-      final f = Fx();
+      final f = Fx(balancedWeek: false);
       const groups = ['Chest', 'Lats', 'Quads', 'Hamstrings'];
       for (var i = 0; i < 4; i++) {
         f.row('h$i', [groups[i]], reps: '5-8');
@@ -172,6 +176,7 @@ void main() {
         ctx: f.ctx(days, minutes: 30),
         rowsByName: f.rows,
         is6Day: false,
+        balancedWeek: false,
       );
       expect(statsA().countForced[0]!.map((e) => e.name), ['h3']);
       expect(statsB().countForced[0]!.map((e) => e.name), ['h3']);
@@ -181,7 +186,7 @@ void main() {
       // A timed row spends 482.4 s; two heavy lifts seat (758 s); then 199.6 s are left, and neither the
       // M lift (336 s, rank 2) nor the isolation (257 s, rank 3) fits. rows = 3 < 4: the floor forces
       // the cheaper isolation (-57.4 s), not the earlier M lift (-136.4 s).
-      final f = Fx();
+      final f = Fx(balancedWeek: false);
       f.row('wall', ['Core'], type: 'isolation', reps: '30-60', logging: 'timed');
       f.row('h0', ['Chest'], reps: '5-8');
       f.row('h1', ['Lats'], reps: '5-8');
@@ -199,7 +204,7 @@ void main() {
     });
 
     test('(j) not-budgeted rows count against the maximum: 3 timed rows leave an intermediate day 3 budgeted slots', () {
-      final f = Fx();
+      final f = Fx(balancedWeek: false);
       for (var i = 0; i < 3; i++) {
         f.row('t$i', ['Core'], type: 'isolation', reps: '30-60', logging: 'timed');
       }
@@ -221,7 +226,7 @@ void main() {
       // Lighter phase (weekly top = band bottom = 12): two days of two Chest lifts. 4 x 2 = 8, 4 more sets to the
       // top. Pass B spreads them (3, 3 / 3, 3); without it the bottom pass would pile them on the first lift
       // (5, 2 / 3, 2).
-      final f = Fx();
+      final f = Fx(balancedWeek: false);
       for (var i = 0; i < 4; i++) {
         f.row('c$i', ['Chest']);
       }
@@ -237,7 +242,7 @@ void main() {
       // general_fitness beginner: Chest top 10, session cap 6. Days 0 and 1 spend the week (6 + 4); day 2 keeps
       // its lead lift only and its 4 other Chest slots could be forced past the top (session cap 6 allows 2
       // more seats): they must not be.
-      final f = Fx();
+      final f = Fx(balancedWeek: false);
       final days = <PopulatedDay>[];
       for (var d = 0; d < 3; d++) {
         for (var i = 0; i < 5; i++) {
@@ -262,7 +267,7 @@ void main() {
     });
 
     test('(n) a day whose selector supplied fewer slots than the floor is selectorThin, not belowCount', () {
-      final f = Fx();
+      final f = Fx(balancedWeek: false);
       for (var i = 0; i < 3; i++) {
         f.row('iso$i', [_distinctGroups[i]], type: 'isolation', reps: '10-15');
       }
@@ -274,7 +279,7 @@ void main() {
     });
 
     test('(o) not-budgeted rows past the maximum: 6 timed rows leave target 0 and the empty-day guard seats ONE lead (7 rows, named)', () {
-      final f = Fx();
+      final f = Fx(balancedWeek: false);
       for (var i = 0; i < 6; i++) {
         f.row('t$i', ['Core'], type: 'isolation', reps: '30-60', logging: 'timed');
       }
@@ -294,7 +299,7 @@ void main() {
       // A timed row spends 1100.4 s, leaving 339.6 s. The heavy lead (379 s at 2 sets) does not fit, the first
       // isolation (257 s) does and seats (82.6 s left). rows = 2 < 4. The bound allows the lead (-296.4 s, inside
       // -300) but then nothing else: the lead is forced, not a second isolation.
-      final f = Fx();
+      final f = Fx(balancedWeek: false);
       f.row('wall', ['Core'], type: 'isolation', reps: '30-60', logging: 'timed');
       f.row('lead', ['Chest'], reps: '5-8');
       f.row('i0', ['Biceps'], type: 'isolation', reps: '10-15');
@@ -314,7 +319,7 @@ void main() {
     });
 
     test('(k) a group whose only slots the count left out is labelled count_limited, not cap_limited', () {
-      final f = Fx();
+      final f = Fx(balancedWeek: false);
       for (var i = 0; i < 8; i++) {
         f.row('iso$i', [_distinctGroups[i]], type: 'isolation', reps: '10-15');
       }
@@ -328,7 +333,7 @@ void main() {
     test('(h) the lead lift: boundBy is null when only time kept it below 3 (the reservation is not re-applied after pass B)', () {
       // One Chest lead lift beside a timed filler: 456 s are left after the filler, 2 sets of the
       // lift fit (336 s) and a 3rd does not (+186 s): time alone, so boundBy is null.
-      final f = Fx();
+      final f = Fx(balancedWeek: false);
       f.row('cl', ['Chest']);
       f.row('plank', ['Core'], type: 'isolation', reps: '30-60', logging: 'timed');
       final days = [

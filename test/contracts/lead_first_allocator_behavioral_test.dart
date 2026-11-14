@@ -10,6 +10,10 @@
 // stated (weekly band 12-16, session cap 8, count max 6); a compound ('M', 120 s rest) costs 336 s at 2 sets and 522 s
 // at 3 (+186 a set), an isolation ('I', 75 s rest) 256.8 s at 2 and 403.2 s at 3 (+146.4 a set); budgets 1440 s at
 // 30 minutes (count floor 4), 2220 s at 45 and 4560 s at 90 (floor 5).
+// Unit 2C-b (docs/plans/2026-11-14-generator-step2c-b-weekly-minimum.md §5, the policy for existing tests): these
+// fixtures pin the pre-2C-b mechanics, so their allocations run with `balancedWeek: false`; 2C-b's own behaviour
+// is pinned in weekly_minimum_behavioral_test.dart and session_allowance_behavioral_test.dart.
+
 import 'dart:convert';
 import 'dart:io';
 
@@ -139,7 +143,7 @@ void main() {
       // CNS 3) seat at 2 (218.4 s left); the heavy compound (the opener, rank 2) fits neither at 3 (586.8) nor at 2
       // (379.2) and has no hold to evict; iso3 does not fit either, and the count floor (4) forces iso3 at 2 (38.4 s
       // over). The admitted slots' opener is the Leg Press Calf Raise (CNS 3), not iso1 (rank 0, CNS 1).
-      final f = Fx();
+      final f = Fx(balancedWeek: false);
       f.row('cust', ['Chest']);
       f.row('iso1', ['Biceps'], type: 'isolation');
       f.row('Leg Press Calf Raise', ['Calves'], type: 'isolation');
@@ -169,7 +173,7 @@ void main() {
     }
 
     test('a lead at rank 0 is seated at 3 when it fits; no other slot is seated at 3 in pass A', () {
-      final f = Fx();
+      final f = Fx(balancedWeek: false);
       final days = rankZero(f);
       expect(setsOf(f.run(days, minutes: 30)[0]), [('lead', 3), ('acc1', 3), ('acc2', 2), ('acc3', 2)]);
       expect(statsA().leadWorld, 'lead');
@@ -182,7 +186,7 @@ void main() {
     test('a lead at rank 2 (the opener, not rank 0) is seated at 3 at its own rank', () {
       // ON: iso1 256.8, iso2 513.6, lead at 3 1035.6, iso3 1292.4, iso4 refused (147.6 left); pass B: iso1 to 3.
       // R1 on rank 0 instead would seat iso1 at 3 and the lead at 2: [3, 3, 2, 2].
-      final f = Fx();
+      final f = Fx(balancedWeek: false);
       f.row('iso1', ['Biceps'], type: 'isolation');
       f.row('iso2', ['Triceps'], type: 'isolation');
       f.row('lead', ['Lats']);
@@ -203,7 +207,7 @@ void main() {
       // lead is openerOf over the BUDGETED rows: lead at 3 (522), acc1 and acc2 at 2 (80.4 s left); acc3 does not fit
       // (the hold sits before it, so it is not evicted) and the day holds the floor (4). Fed every row, R1 would find no
       // slot and seat the lead at 2: [wallsit, lead 2, acc1 2, acc2 2, acc3 2].
-      final f = Fx();
+      final f = Fx(balancedWeek: false);
       f.row('wallsit', ['Quads'], reps: '30-60', logging: 'timed');
       f.row('lead', ['Lats']);
       f.row('acc1', ['Biceps'], type: 'isolation');
@@ -222,7 +226,7 @@ void main() {
       // A custom H sink at 5 sets (1002 s) leaves 438 s: the lead does not fit at 3 (522) but does at 2 (336, 102
       // left); acc (256.8) does not fit, and the count floor (3: the day's reach) forces it, 154.8 s over. A fits
       // check that priced the lead at 2 would seat it at 3.
-      final f = Fx();
+      final f = Fx(balancedWeek: false);
       f.row('cust', ['Core'], reps: '5-8');
       f.row('lead', ['Lats']);
       f.row('acc', ['Biceps'], type: 'isolation');
@@ -242,7 +246,7 @@ void main() {
       // the lead (Back compound, the opener) at 3 would be 7 > 6, so it is seated at 2 (Back 6); x (Biceps) at 2.
       // Pass B: Back is at its cap, x grows to 3. Pass C: Biceps is under its floor, but x is capped at the lead + 1
       // = 3 (main grows it to the per-exercise maximum, 5).
-      final f = Fx();
+      final f = Fx(balancedWeek: false);
       f.row('b1', ['Lats'], type: 'isolation');
       f.row('b2', ['Lats'], type: 'isolation');
       f.row('lead', ['Lats']);
@@ -257,7 +261,7 @@ void main() {
     test('the rank-0 reservation refuses 3: every lead at 2, exactly as on main', () {
       // build_muscle beginner (Back top 12), six days each led by a Back compound. Day 0's lead at 3 would leave
       // 12 - 3 = 9 < 2 x 5 for the later five; at 2 it leaves 10. Every later lead likewise; the last fills the top.
-      final f = Fx();
+      final f = Fx(balancedWeek: false);
       f.row('row', ['Lats']);
       final days = [for (var i = 0; i < 6; i++) f.day('hypertrophy', [f.ex('row')])];
       final on = f.run(days, minutes: 90, level: 'beginner');
@@ -271,7 +275,7 @@ void main() {
       // leave 12 - 3 = 9 < 2 x 5 for the later rank-0 flies, so P is seated at 2 and every fly fits (Chest 12). Read
       // against the later days' leads (no Chest), P would take 3 and day 5's fly would no longer fit the top: the lead
       // world a row short there, and A would fall back to the capped world.
-      final f = Fx();
+      final f = Fx(balancedWeek: false);
       f.row('P', ['Chest']);
       f.row('fly', ['Chest'], type: 'isolation');
       final others = ['Lats', 'Quads', 'Hamstrings', 'Glutes', 'Shoulders'];
@@ -292,7 +296,7 @@ void main() {
 
     test('the lead seated at 3 counts once against the day\'s target: a day at its target seats no extra row', () {
       // beginner (5 a day), 90 minutes: the lead at 3, then four isolations at 2; the sixth slot is left out by the count.
-      final f = Fx();
+      final f = Fx(balancedWeek: false);
       f.row('lead', ['Lats']);
       final groups = ['Biceps', 'Triceps', 'Shoulders', 'Calves', 'Core'];
       for (var i = 0; i < 5; i++) {
@@ -315,7 +319,7 @@ void main() {
     // floor (12) by the end of pass B: row 3 + b1 3 + b2 3 + b3 3, so pass C never grows a Back row and the lead stays
     // at 3. Pass C then grows curl towards the Biceps floor: capped at 3 + 1 = 4 (main: 5).
     (Fx, List<PopulatedDay>) fixture() {
-      final f = Fx();
+      final f = Fx(balancedWeek: false);
       f.row('row', ['Lats']);
       f.row('curl', ['Biceps'], type: 'isolation');
       for (final b in ['b1', 'b2', 'b3']) {
@@ -363,7 +367,7 @@ void main() {
       // 2). Days 1-2 bring Triceps to its floor (t1 3 + t2 3 + t3 3 + a 3 = 12), so a stays at 3. Back has only L, so
       // pass C grows L to 4 and 5 and b with it (b <= L + 1): b ends at 5. Read against rank 0 (a, at 3), b would stop
       // at 4.
-      final f = Fx();
+      final f = Fx(balancedWeek: false);
       f.row('a', ['Triceps'], type: 'isolation');
       f.row('b', ['Biceps'], type: 'isolation');
       f.row('L', ['Lats']);
@@ -402,7 +406,7 @@ void main() {
     test('the lead world zeroing a group is not kept: the capped world is (and it is never worse than main in A)', () {
       // R1's rank-0 fixture with acc4 crediting Calves (the week's only Calves): the lead world drops it, so A keeps
       // the capped world: main's pass A, five rows at 2.
-      final f = Fx();
+      final f = Fx(balancedWeek: false);
       f.row('lead', ['Lats']);
       f.row('acc1', ['Biceps'], type: 'isolation');
       f.row('acc2', ['Triceps'], type: 'isolation');
@@ -435,7 +439,7 @@ void main() {
       // and day 0's lead2 is Quads), Biceps under its floor: c capped at r + 1 = 4. With a Biceps focus, pass D takes
       // c to 5.
       for (final (focus, want) in [(<String>{}, 4), ({'Biceps'}, 5)]) {
-        final f = Fx();
+        final f = Fx(balancedWeek: false);
         f.row('r', ['Lats']);
         f.row('x1', ['Lats'], type: 'isolation');
         f.row('x2', ['Lats'], type: 'isolation');
@@ -455,7 +459,7 @@ void main() {
       // world. Day 1: a (Triceps, rank 0), b (Biceps), L (Back compound, the opener, rank 2), all at 3 after pass B;
       // Triceps reaches its floor on days 2-3 (a 3 + t1 3 + t2 3 + t3 3). Pass C grows L to 5 and b with it (1993.2 s
       // of 2220). Read against rank 0 (a, at 3), b would stop at 4.
-      final f = Fx();
+      final f = Fx(balancedWeek: false);
       f.row('a', ['Triceps'], type: 'isolation');
       f.row('b', ['Biceps'], type: 'isolation');
       f.row('L', ['Lats']);
@@ -478,7 +482,7 @@ void main() {
       // world the lead at 3 leaves i3 to the count floor (forced, 61.2 s over: countForced); in the capped world the
       // day fits (2095.2 s), nothing forced. Day 1 makes the lead world worse (above), so A keeps the capped world, and
       // B, whose days are all copies, must report the capped world's countForced (none), not the lead world's.
-      final f = Fx();
+      final f = Fx(balancedWeek: false);
       f.row('sink0', ['Chest'], type: 'isolation');
       f.row('lead', ['Lats']);
       f.row('i1', ['Biceps'], type: 'isolation');
@@ -501,7 +505,7 @@ void main() {
     // Not 6-day. Day 0 (the same list in A and B, so B copies A's allocation): the R1 rank-0 fixture with acc4 on
     // Calves; the lead world drops acc4. Day 1 differs between the variants: A holds a Calves isolation.
     (Fx, List<PopulatedDay>) copyFixture({required bool bHasCalves}) {
-      final f = Fx();
+      final f = Fx(balancedWeek: false);
       f.row('lead', ['Lats']);
       f.row('acc1', ['Biceps'], type: 'isolation');
       f.row('acc2', ['Triceps'], type: 'isolation');
@@ -560,7 +564,7 @@ void main() {
       // day's only Biceps credit, so the hold gives way (1292.4, 4 rows: the floor), and pass B grows acc to 3 with the
       // 147.6 s left (1.2 left). B's copy must drop the same hold;
       // reading main A's evictions it would keep it (and run 186 s over).
-      final f = Fx();
+      final f = Fx(balancedWeek: false);
       f.row('sink', ['Chest'], type: 'isolation');
       f.row('lead', ['Lats']);
       f.row('acc', ['Biceps'], type: 'isolation');
@@ -689,7 +693,7 @@ void main() {
 
     // The R1 rank-0 fixture: ON [3, 3, 2, 2], OFF five rows at 2.
     List<(String, int)> allocated(bool? leadFirst) {
-      final f = Fx();
+      final f = Fx(balancedWeek: false);
       f.row('lead', ['Lats']);
       f.row('acc1', ['Biceps'], type: 'isolation');
       f.row('acc2', ['Triceps'], type: 'isolation');

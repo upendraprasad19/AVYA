@@ -356,6 +356,11 @@ class PopulatedDay {
   final List<PlannedExercise> exercisesA;
   final List<PlannedExercise> exercisesB;
 
+  /// Unit 2C-b (S4): true when the allocator sized this plan's days with the under-60 allowance
+  /// (`SessionBudget.allowanceSeconds`); one value for every day of a plan. Read by
+  /// `PeriodizationEngine._weekTwoGains`; never persisted.
+  final bool allowance;
+
   const PopulatedDay({
     required this.name,
     required this.focus,
@@ -363,6 +368,7 @@ class PopulatedDay {
     required this.intensity,
     required this.exercisesA,
     required this.exercisesB,
+    this.allowance = false,
   });
 }
 

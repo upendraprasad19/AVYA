@@ -4,8 +4,13 @@ import 'package:icanbefitter/shared/repositories/plan_engine/models.dart';
 import 'package:icanbefitter/shared/repositories/plan_engine/session_budget.dart';
 import 'package:icanbefitter/shared/repositories/plan_engine/session_set_allocator.dart';
 
-/// Crafted library rows, keyed by lowercased name like the production map.
+/// Crafted library rows, keyed by lowercased name like the production map. [balancedWeek] is the default [run]
+/// passes to `allocate(balancedWeek:)` (null reads the kill switch, ON): a file that pins pre-2C-b mechanics builds
+/// `Fx(balancedWeek: false)` (Unit 2C-b's test policy, plan §5).
 class Fx {
+  Fx({this.balancedWeek});
+
+  final bool? balancedWeek;
   final rows = <String, Map<String, dynamic>>{};
 
   void row(String name, List<String> muscles,
@@ -76,6 +81,7 @@ class Fx {
     bool is6Day = true,
     bool? leadFirst,
     bool? dayFloor,
+    bool? balancedWeek,
   }) =>
       SessionSetAllocator.allocate(
         days: days,
@@ -85,6 +91,7 @@ class Fx {
         is6Day: is6Day,
         leadFirst: leadFirst,
         dayFloor: dayFloor,
+        balancedWeek: balancedWeek ?? this.balancedWeek,
       );
 }
 

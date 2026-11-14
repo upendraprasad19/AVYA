@@ -1611,7 +1611,7 @@ concepts:
           fires syncProfileNow); signed in: pushSnapshot, and the
           coach-extraction lock ONLY when the food type itself changed.
       - file: lib/features/profile/screens/edit_profile_screen.dart
-        line_range: 1743-2145
+        line_range: 1745-2147
         method: _save (writes _foodType.storageKey; lock compare on canonical keys)
       - file: lib/features/onboarding/providers/onboarding_provider.dart
         line_range: 999-1000
@@ -1647,7 +1647,7 @@ concepts:
         semantic: pass-through
         fields_read: [diet_preference]
       - file: lib/features/profile/screens/edit_profile_screen.dart
-        line_range: 1270-1290
+        line_range: 1272-1292
         method: _buildDietPreferenceChips (FoodTypeChips; no Keto)
         semantic: pass-through
         fields_read: [diet_preference]
@@ -5949,7 +5949,7 @@ concepts:
         method: completeOnboarding
         notes: writes to userBox['profile']['full_name'] + syncs to users table
       - file: lib/features/profile/screens/edit_profile_screen.dart
-        line_range: 1743-2145
+        line_range: 1745-2147
         method: _save
         notes: calls syncProfileNow after updating userBox
       - file: lib/features/profile/services/profile_write_service.dart
@@ -10445,7 +10445,7 @@ concepts:
         method: InjuryVocab.normalize / canonicalTokens / chipTokens / toggleChip
         notes: canonical 9-token set + read-side alias (back to lower_back, free-text to token); Ship 3 added chipTokens (single chip-UI source == none ∪ canonicalTokens) + chipLabel + pure toggleChip shared by both chip screens
       - file: lib/features/profile/screens/edit_profile_screen.dart
-        line_range: 1291-1356
+        line_range: 1293-1358
         method: _buildInjuriesChips + profile reader
         notes: chips emit canonical tokens (via InjuryVocab.chipTokens/toggleChip Ship 3); reader normalizes legacy stored values
       - file: lib/features/onboarding/screens/details_screen.dart
@@ -11686,6 +11686,52 @@ concepts:
         method_or_widget: 288 build_muscle plans at 60 / 90 minutes; the Quads residue per (days, level), week 2 never week 1, repeats bounded, OFF digest
         semantic: behavioral
     contract_test_path: test/contracts/balanced_week_behavioral_test.dart
+
+  - concept: weekly_minimum
+    domain: workout
+    behavioral_test_path: test/contracts/weekly_minimum_behavioral_test.dart
+    description: >
+      Generator Unit 2C-b (founder d35, d38, d42, d44, d45, d47-d49, 2026-11-14, diagnose e9b3d7, plan
+      docs/plans/2026-11-14-generator-step2c-b-weekly-minimum.md v5): the weekly minimum (S3) and the one under-60
+      allowance (S4), on the lead-first path with the day floor ON only (2A or 2B off: the pre-2C-b allocation byte for
+      byte). The reference R is the floor re-run of the chosen worlds (today's output). Under 60 resolved minutes the
+      chosen worlds are re-run with BudgetLedger(allowance: true) (SessionBudget.allowanceSeconds 285 s added to the
+      day budget, forcingBound 0: never stacked with the count floor's 300 s), at most R's rows per day (d44: sets,
+      never an extra exercise) and R's hold evictions. Targets per variant: (1, d35) a group the other variant credits,
+      (2, d38) a focus group at 0, (3) a group R or the first re-run credits that is now at 0; credit counts kept library
+      holds (AllocationStats.credited); Calves under 45 minutes is never a target. The walk moves each target's cheapest
+      slot after rank 0 and the 2A opener (d48 keeps the lead); the minimum pass seats a target still at 0 at 2 sets
+      within the forcing bound (AllocationStats.minimumSeats, never countForced). A fixpoint of at most 4 rounds,
+      protect-first, then the fallback to R verbatim (the terminal guard). The allocator stamps PopulatedDay.allowance
+      (true only when it used the allowance and did not fall back); PeriodizationEngine._weekTwoGains follows it;
+      VolumeTitration never takes the allowance (it titrates WeekPlans). Kill switch: 2C's disable_balanced_week
+      (d37), as allocate(balancedWeek:); OFF returns R. The Edit Profile chip reads `About N min`; the plan audit's
+      over-time bound is +6 (d47). No rule-14 edit: generateV4 passes the allocator's PopulatedDay list unchanged to
+      PeriodizationEngine.apply.
+    writers:
+      - file: lib/shared/repositories/plan_engine/session_set_allocator.dart
+        method: _allocateLeadFirst (the 2C-b steps, both paths; the allowance stamp) / _variant (walk, minimum pass, rowCap, refEvicted)
+      - file: lib/shared/repositories/plan_engine/session_budget.dart
+        method: SessionBudget.allowanceSeconds / BudgetLedger(allowance:) / BudgetLedger.forcingBound
+      - file: lib/shared/repositories/plan_engine/models.dart
+        method: PopulatedDay.allowance
+    readers:
+      - file: lib/shared/repositories/plan_engine/periodization_engine.dart
+        method_or_widget: _weekTwoGains (BudgetLedger(allowance: populated.first.allowance))
+        semantic: week 2's +1 sees the allocation's own day budget
+      - file: lib/shared/repositories/plan_engine/session_set_allocator.dart
+        method_or_widget: pass A2 and the minimum pass (ledger.forcingBound)
+        semantic: no forcing past the allowance
+      - file: lib/features/profile/screens/edit_profile_screen.dart
+        method_or_widget: _buildSessionDurationSelector (the `About N min` chip)
+        semantic: copy
+      - file: test/plan_generator/weekly_minimum_gate_test.dart
+        method_or_widget: 1,152 real plans at 30 / 45 minutes ON vs OFF (verdicts, majors, groups newly at 0, rows, zero weeks, minutes, the stamp, the fallback); 2A / 2B off digests
+        semantic: behavioral
+      - file: test/contracts/session_allowance_behavioral_test.dart
+        method_or_widget: the ledger, the stamp per path, the row cap and time, the readers, a 220-plan seeded sweep through the shared oracle
+        semantic: behavioral
+    contract_test_path: test/contracts/weekly_minimum_behavioral_test.dart
 
   - concept: volume_titration
     domain: workout
@@ -16708,7 +16754,7 @@ concepts:
           once, a much smaller harm than blocking the profile save this
           runs alongside.
       - file: lib/features/profile/screens/edit_profile_screen.dart
-        line_range: 1861-1890
+        line_range: 1863-1892
         method: "_save (via the pure computeCoachExtractionFieldsToLock helper)"
         notes: |
           Locks only fields that ACTUALLY changed this save (diet_preference /
@@ -18329,7 +18375,7 @@ concepts:
     domain: auth_profile
     behavioral_test_path: test/contracts/session_set_budget_wiring_test.dart
     description: |
-      Batch B2 (Task 0). The profile field session_duration_minutes (Edit Profile offers 30 / 45 / 60 / 90, labelled `Up to N min`) is the
+      Batch B2 (Task 0). The profile field session_duration_minutes (Edit Profile offers 30 / 45 / 60 / 90, labelled `About N min` since Unit 2C-b: a 30 / 45-minute day may run up to about 5 minutes over, concept weekly_minimum) is the
       INPUT of the session set budget. Empty means 60 (founder F2; the Edit Profile default was 90 and is now
       60, unflagged: pre-launch every account is a test account, Ruling 7; the 9 live rows at 90 stay 90).
       generateV4 resolves its minutes as SessionBudget.resolveMinutes(param: sessionDuration, profileValue:
@@ -18363,6 +18409,9 @@ concepts:
       - file: lib/core/services/workout_schedule_read_service.dart
         method: _buildRepeatPins (foreignDayNamesFor minutes:)
         semantic: Unit 2C-a, the resolved minutes of the NEW phase decide which split family's day names refuse the pins
+      - file: lib/shared/repositories/plan_engine/session_budget.dart
+        method: BudgetLedger(allowance:) (SessionBudget.allowanceSeconds, forcingBound)
+        semantic: Unit 2C-b, under 60 resolved minutes the allocator's re-runs add the 285 s allowance (concept weekly_minimum)
       - file: lib/shared/services/pro_phase_advance.dart
         method: _runAdvanceWith
         semantic: passes the stored minutes to generateV4 as sessionDuration

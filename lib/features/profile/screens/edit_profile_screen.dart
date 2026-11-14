@@ -1146,8 +1146,10 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
                         : AppColors.border,
                   ),
                 ),
+                // Unit 2C-b (S4, d42 / d47): a day under 60 may run up to about 5 minutes over, so the chip reads
+                // "About", not "Up to".
                 child: Text(
-                  'Up to $min min',
+                  'About $min min',
                   style: AppTypography.body.copyWith(fontSize: 13, fontWeight: selected ? FontWeight.w700 : FontWeight.w500, color: selected
                         ? AppColors.accent
                         : AppColors.textDim),
