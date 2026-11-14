@@ -5,6 +5,7 @@ import 'package:flutter/painting.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_cropper/image_cropper.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:icanbefitter/core/constants/food_types.dart';
 import 'package:icanbefitter/core/constants/subscription_plans.dart';
 import 'package:icanbefitter/core/services/error_telemetry.dart';
 import 'package:icanbefitter/core/services/health_sync_service.dart';
@@ -18,6 +19,7 @@ import 'package:icanbefitter/core/utils/ist_date.dart';
 import 'package:icanbefitter/core/services/workout_schedule_service.dart';
 import 'package:icanbefitter/features/train/repositories/workout_repository.dart';
 import 'package:icanbefitter/core/services/supabase_service.dart';
+import 'package:icanbefitter/core/services/sync_service.dart';
 import 'package:icanbefitter/core/theme/colors.dart';
 import 'package:icanbefitter/features/profile/services/profile_target_recompute.dart';
 import 'package:icanbefitter/features/auth/providers/auth_invalidation_provider.dart';
@@ -35,7 +37,38 @@ class UploadOutcome {
 
 // ── User Profile ─────────────────────────────────────────────────
 
+/// The side effects of a food-type change (diet plan Unit 2a), injectable for
+/// tests: who is signed in, the coach snapshot push and the coach-extraction
+/// lock.
+class FoodTypeWriteEffects {
+  const FoodTypeWriteEffects({
+    required this.currentUserId,
+    required this.pushSnapshot,
+    required this.lockFields,
+  });
+
+  final String? Function() currentUserId;
+  final void Function() pushSnapshot;
+
+  /// Best-effort (never throws in production); awaited only to ORDER the
+  /// snapshot push after it, never by the write door itself.
+  final Future<void> Function(List<String> fields) lockFields;
+
+  static final FoodTypeWriteEffects real = FoodTypeWriteEffects(
+    currentUserId: () => SupabaseService.instance.currentUser?.id,
+    pushSnapshot: () => unawaited(SyncService.instance.pushSnapshot()),
+    lockFields: UserRepository.lockCoachExtractionFields,
+  );
+}
+
 class UserProfileNotifier extends Notifier<Map<String, dynamic>> {
+  /// Test seam for [setFoodType]'s side effects.
+  @visibleForTesting
+  static FoodTypeWriteEffects? debugFoodTypeEffects;
+
+  // Serialises setFoodType calls; a field survives build() re-runs.
+  Future<bool> _foodTypeChain = Future<bool>.value(true);
+
   @override
   Map<String, dynamic> build() {
     ref.watch(authUserIdTokenProvider); // c4055a — rebuild on auth change
@@ -45,6 +78,62 @@ class UserProfileNotifier extends Notifier<Map<String, dynamic>> {
   Future<void> updateProfile(Map<String, dynamic> fields) async {
     await UserRepository.instance.updateProfileFields(fields);
     state = UserRepository.instance.getProfile() ?? {};
+  }
+
+  /// THE write door for the user's food type (`diet_preference`), used by the
+  /// Diet Plan screen's selector (docs/plans/diet-food-type.md §2.2.2).
+  ///
+  /// Calls are serialised: each waits for the previous one (a failed link
+  /// does not block the next) and then reads the OLD value from the stored
+  /// profile, so two quick taps end with the second one stored. A call made
+  /// by one signed-in user that runs after a sign-out or account switch does
+  /// nothing. The value written is always [FoodType.storageKey]; a legacy
+  /// spelling of the same type (stored `vegetarian`, chosen Veg) is rewritten
+  /// without locking. The coach-extraction lock is taken only when the food
+  /// type itself changed: it guards the server's rollback path, where the
+  /// daily-snapshot extraction may write the column again. The Nutrition
+  /// hints rebuild through DietPlanNotifier's watch of this provider; no
+  /// target recompute (the food type does not feed BMR/TDEE; Unit 3's
+  /// strategy will, and is added here then).
+  ///
+  /// Returns true when [next] is the stored food type afterwards (written, or
+  /// already stored); false when the call was dropped because the account
+  /// changed while it was queued (B-pass finding 2: the caller must not
+  /// announce a change that did not happen).
+  Future<bool> setFoodType(FoodType next) {
+    final fx = debugFoodTypeEffects ?? FoodTypeWriteEffects.real;
+    final uidAtCall = fx.currentUserId();
+    final run = _foodTypeChain
+        .catchError((Object _) => false)
+        .then((_) => _applyFoodType(next, uidAtCall, fx));
+    _foodTypeChain = run;
+    return run;
+  }
+
+  Future<bool> _applyFoodType(
+    FoodType next,
+    String? uidAtCall,
+    FoodTypeWriteEffects fx,
+  ) async {
+    if (fx.currentUserId() != uidAtCall) return false; // account changed while queued
+    final stored = UserRepository.instance.getProfile()?['diet_preference'];
+    if (stored is String && stored == next.storageKey) return true;
+    final changed = foodTypeOf(stored) != next;
+    await updateProfile({'diet_preference': next.storageKey});
+    final signedIn = uidAtCall != null && uidAtCall.isNotEmpty;
+    if (!signedIn) return true;
+    if (changed) {
+      // B-pass finding 5: the snapshot push can run the coach extraction, so
+      // it goes out only after the lock call has finished (or failed). Not
+      // awaited here: the write door never waits on the network.
+      unawaited(fx
+          .lockFields(const ['diet_preference'])
+          .catchError((Object _) {})
+          .whenComplete(fx.pushSnapshot));
+    } else {
+      fx.pushSnapshot();
+    }
+    return true;
   }
 
   Future<void> saveFullProfile(Map<String, dynamic> profile) async {

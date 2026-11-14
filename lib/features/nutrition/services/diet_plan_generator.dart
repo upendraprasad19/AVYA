@@ -20,7 +20,10 @@
 // Reads from FoodRepository.instance (Hive foodBox). Zero network.
 
 import 'dart:math';
+import 'package:icanbefitter/core/constants/food_types.dart';
 import 'package:icanbefitter/shared/repositories/food_repository.dart';
+
+import 'diet_plan_catalog.dart';
 
 /// One meal slot in a generated diet plan.
 class DietMealPlan {
@@ -83,7 +86,9 @@ class DietPlanFoodItem {
 class DietPlanInputs {
   final int calorieTarget;
   final int proteinTarget;
-  final String dietPreference; // 'veg' | 'vegan' | 'non-veg'
+  // A FoodType.storageKey ('veg' | 'non_veg' | 'eggetarian' | 'pescatarian'
+  // | 'vegan'); legacy spellings are normalised by passesDiet (Unit 2a).
+  final String dietPreference;
   final int fiberTarget; // from profile['fiber_grams'] ?? 30 (nutrition_provider.dart)
   final int? seed; // optional override for deterministic test runs
 
@@ -1311,10 +1316,29 @@ class DietPlanGenerator {
   /// Public so the manual swap UI (diet_plan_screen._swapItem) applies the
   /// SAME diet-preference rule as generation — plan-review round 2, finding 5:
   /// a veg user could be offered Chicken Breast in the swap sheet.
-  static bool passesDiet(Map<String, dynamic> food, String dietPref) {
+  ///
+  /// Diet plan Unit 2a: [dietPref] is normalised through `foodTypeOf` (legacy
+  /// spellings such as 'non-veg' / 'vegetarian' keep working). [family] is
+  /// the curated catalog family of the row, when the caller has one: an
+  /// eggetarian may eat [DietFamily.egg] rows and a pescatarian egg and
+  /// [DietFamily.fish] rows, and that exception is checked BEFORE both veg
+  /// checks (the `_nonVegNames` blocklist lists the boiled egg rows). Without
+  /// a family (the legacy generator), eggetarian and pescatarian get the veg
+  /// rule: never meat. Unknown non-empty strings are read as veg.
+  static bool passesDiet(
+    Map<String, dynamic> food,
+    String dietPref, {
+    DietFamily? family,
+  }) {
     final name = food['name'] as String? ?? '';
-    final pref = dietPref.toLowerCase();
-    if (pref == 'vegan') {
+    final type = foodTypeOf(dietPref);
+    if (type == FoodType.nonVeg) return true; // everything passes
+    if (type == FoodType.eggetarian && family == DietFamily.egg) return true;
+    if (type == FoodType.pescatarian &&
+        (family == DietFamily.egg || family == DietFamily.fish)) {
+      return true;
+    }
+    if (type == FoodType.vegan) {
       if (_nonVegNames.contains(name)) return false;
       // The DB's own is_vegan field is AUTHORITATIVE on the 1431-row real
       // data (all dals/pulses vegan=true; every dairy/paneer/whey row
@@ -1330,16 +1354,14 @@ class DietPlanGenerator {
       // positive signal (already implied by passing the checks above).
       return true;
     }
-    if (pref == 'veg' || pref == 'vegetarian') {
-      // is_veg authoritative on real data (B-pass finding 2 — the 9-name
-      // blocklist leaked 187 is_veg=false rows, 117 generator-reachable:
-      // 'Anda Paratha' into staples fillers, chicken variants via
-      // Strategy C / _highestProteinFallback). Blocklist remains as the
-      // untagged-row fallback.
-      if (food['is_veg'] == false) return false;
-      return !_nonVegNames.contains(name);
-    }
-    return true; // non-veg: everything passes
+    // veg, and eggetarian / pescatarian for every non-excepted row.
+    // is_veg authoritative on real data (B-pass finding 2 — the 9-name
+    // blocklist leaked 187 is_veg=false rows, 117 generator-reachable:
+    // 'Anda Paratha' into staples fillers, chicken variants via
+    // Strategy C / _highestProteinFallback). Blocklist remains as the
+    // untagged-row fallback.
+    if (food['is_veg'] == false) return false;
+    return !_nonVegNames.contains(name);
   }
 
   // ── Generation-time quality filters (2026-09 meal-quality batch) ──

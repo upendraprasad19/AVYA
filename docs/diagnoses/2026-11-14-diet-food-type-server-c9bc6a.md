@@ -212,3 +212,26 @@ notes rows parse). Mutations B20 to B31.
 Order: daily-snapshot, protein-gap-alert, weekly-report, ai-proxy, from the
 merged `main` SHA, each with the founder's go and a rollback dry-run first.
 Then the stale-copy cleanup with its own go. Then Unit 2a's PR merges.
+
+**Done 2026-11-14 (founder go for all five steps in chat).** PR #271 merged
+as `fa888563`. Deployed from that SHA, in order, each boot-verified by the
+module's own 401 body (anon bearer for `verify_jwt=true`; no bearer for the
+`false` ones) and a clean `function_logs` window (`booted`, no errors):
+
+| function | before | after | verify_jwt | rollback payload (dry-run, git SHA) |
+|---|---|---|---|---|
+| daily-snapshot | v34 | v35 | true | `ca2f6f46` |
+| protein-gap-alert | v20 | v21 | false | `8c158b65` (forward-deploy the saved payload with `false`; skill §6.13) |
+| weekly-report | v37 | v38 | true | `9e8b6d09` |
+| ai-proxy | v104 | v105 | false | `291ccba1` (same §6.13 note) |
+
+Besides 2b, each bundle carried only changes already on `main` since its last
+deploy: comment-only edits (`cron_telemetry.ts`, `notification_prefs.ts`,
+`snapshot_merge.ts`), a type-only field (`coach_memory.ts`) and the Captain
+manual's plan-status text (already live in ai-proxy v104).
+
+Cleanup SQL (its own go), one transaction that aborted unless the counts
+matched: 18 `memory_embeddings` daily summaries, 0 `coach_memory`, 3
+`user_preferences.coaching_notes` rows. After: 0 rows hold `diet_preference`
+in either table, no embedding empty, every notes row valid JSON. Then Unit
+2a (PR #270) merges.

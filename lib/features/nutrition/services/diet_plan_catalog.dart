@@ -999,3 +999,12 @@ const List<CatalogEntry> kDietPlanCatalog = [
     [0.5, 1.0, 1.5],
   ), // Lemon Rice
 ];
+
+final Map<String, DietFamily> _familyById = {
+  for (final e in kDietPlanCatalog) e.foodId: e.family,
+};
+
+/// The catalog family of [foodId], or null for a food outside the catalog
+/// (diet plan Unit 2a: the egg / fish exception of `passesDiet` needs it to
+/// judge a saved plan's items).
+DietFamily? dietCatalogFamily(String foodId) => _familyById[foodId];
