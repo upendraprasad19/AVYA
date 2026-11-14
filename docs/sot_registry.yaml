@@ -1099,7 +1099,7 @@ concepts:
       of e4a1b7/OI-98 on a different key inside the same blob.
     writers:
       - { file: supabase/functions/_shared/snapshot_merge.ts, line_range: 16-28, method: mergeSnapshotJson, notes: "Pure merge — existing row spread first, incoming client payload layered on top so it wins on any shared key. Mutation-proven: reverting to `return incoming;` reddens 2 of 4 tests in snapshot_merge_test.ts." }
-      - { file: supabase/functions/daily-snapshot/index.ts, line_range: 665-730, method: "serve handler", notes: "Reads the existing row via .maybeSingle() at :695 (never .single() — a first-ever snapshot of the day has no existing row, which is a legitimate empty merge base, not an error; a genuine query error is logged at :704 (the console.error call itself, not the surrounding comment — a pre-existing imprecision in this note, corrected while re-deriving the other citations here) rather than silently degrading), merges via mergeSnapshotJson at :710, upserts the MERGED result at :719. Gated behind DISABLE_SNAPSHOT_MERGE_SAFE_UPSERT (:684, code-review finding 2 — platform tier's feature_flag requirement) which falls back to the verbatim pre-fix blind-replace. Wiring pinned by index_test.ts (source-grep — importing this module boots a real server, no import.meta.main guard, so the test reads source text rather than importing). Line numbers shifted +1 by the observation-batch-and-digest-redesign merge (PR #32, 2026-09-22) inserting one unrelated line earlier in the same file — re-verify by grep, not by citation. Re-derived from anchors 2026-11-14 (diet plan Unit 2b) after its insertions earlier in the file; the previous range had already drifted." }
+      - { file: supabase/functions/daily-snapshot/index.ts, line_range: 689-754, method: "serve handler", notes: "Reads the existing row via .maybeSingle() at :719 (never .single() — a first-ever snapshot of the day has no existing row, which is a legitimate empty merge base, not an error; a genuine query error is logged at :728 (the console.error call itself, not the surrounding comment — a pre-existing imprecision in this note, corrected while re-deriving the other citations here) rather than silently degrading), merges via mergeSnapshotJson at :734, upserts the MERGED result at :743. Gated behind DISABLE_SNAPSHOT_MERGE_SAFE_UPSERT (:708, code-review finding 2 — platform tier's feature_flag requirement) which falls back to the verbatim pre-fix blind-replace. Wiring pinned by index_test.ts (source-grep — importing this module boots a real server, no import.meta.main guard, so the test reads source text rather than importing). Line numbers shifted +1 by the observation-batch-and-digest-redesign merge (PR #32, 2026-09-22) inserting one unrelated line earlier in the same file — re-verify by grep, not by citation. Re-derived from anchors 2026-11-14 (diet plan Unit 2b) after its insertions earlier in the file, and again after its B-pass fixes (+24); the previous range had already drifted." }
       - { file: lib/core/services/sync_service.dart, line: 1212, method: "compileDailySnapshot", notes: "Code-review finding 1 (2026-09-21): fitness_summary is ALSO cron-owned (rolling-context writes it), but unlike morning_alert the client DOES carry a local mirror of it in aiContext (buildAiContext() serves both this push and the live ai-proxy chat body, and the chat use case needs it). Sending it here would let the client's lagging/possibly-empty mirror win the merge on a key it does carry. Explicitly removed from the push payload only — buildAiContext()'s direct chat-context use is untouched. Behavioral: test/contracts/daily_snapshot_fitness_summary_omission_test.dart (mutation-proven — reverting the .remove() call reddens both tests)." }
     reader_manifest_complete: false
     readers:
@@ -7162,7 +7162,7 @@ concepts:
       server's value, destroying both coach memory and the BF% rate limit
       in one write.
     writers:
-      - { file: supabase/functions/daily-snapshot/index.ts, line_range: 379-463, method: mergeCoachingNotes, notes: "Read-merge-write: selects existing coaching_notes, JSON.parse, merges extracted facts (non-empty values only) + last_extracted_at, re-upserts onConflict user_id. Gated behind the a2a private_mode check (2026-09-27, diagnose c3f8e6) — never reached when the user's coach_memory.private_mode is true. Called from INSIDE extractCoachingNotes now, not the handler (B-pass finding 1, 2026-09-27, diagnose a2b1c7 — gates the watermark advance on merge success). Line range shifted twice by the a2b-1 batch's own insertions earlier in the same file (once by the watermark/metering rewrite, again by the B-pass remediation) — re-verify by grep, not by citation, per this repo's own common-pitfalls row on line-count drift." }
+      - { file: supabase/functions/daily-snapshot/index.ts, line_range: 406-574, method: mergeCoachingNotes, notes: "Read-merge-write: selects existing coaching_notes, JSON.parse, merges extracted facts (non-empty values only) + last_extracted_at, re-upserts onConflict user_id. Gated behind the a2a private_mode check (2026-09-27, diagnose c3f8e6) — never reached when the user's coach_memory.private_mode is true. Called from INSIDE extractCoachingNotes now, not the handler (B-pass finding 1, 2026-09-27, diagnose a2b1c7 — gates the watermark advance on merge success). Line range shifted twice by the a2b-1 batch's own insertions earlier in the same file (once by the watermark/metering rewrite, again by the B-pass remediation) — re-verify by grep, not by citation, per this repo's own common-pitfalls row on line-count drift." }
       - { file: supabase/functions/assess-body-composition/index.ts, line_range: 86-224, method: "serve handler — 30-day rate-limit block", notes: "Also read-merge-write: selects existing coaching_notes, JSON.parse, sets last_bf_assessed_at, re-upserts onConflict user_id — never a blind overwrite of daily-snapshot's keys." }
     reader_manifest_complete: false
     readers:
@@ -16437,7 +16437,7 @@ concepts:
         semantic: filtered
         fields_read: [diet_preference]
       - file: supabase/functions/_shared/tools/nutrition/suggestMeal.ts
-        line_range: 145-280
+        line_range: 164-317
         method: readStoredFoodType + handler (stored food type filters food_database by is_veg / is_vegan; egg/fish name rules for the is_veg = false rows; DISABLE_SUGGESTMEAL_STORED_FOOD_TYPE)
         semantic: filtered
         fields_read: [diet_preference, is_veg, is_vegan, name]
@@ -16552,7 +16552,7 @@ concepts:
           real onboarding_provider.dart payload never includes this key
           today).
       - file: supabase/functions/daily-snapshot/index.ts
-        line_range: 379-530
+        line_range: 406-574
         method: mergeCoachingNotes
         notes: |
           Reads coach_extraction_locked_fields + the three current field
@@ -16567,7 +16567,7 @@ concepts:
     reader_manifest_complete: true
     readers:
       - file: supabase/functions/daily-snapshot/index.ts
-        line_range: 379-530
+        line_range: 406-574
         method: mergeCoachingNotes
         semantic: flag-check
         fields_read: [coach_extraction_locked_fields]

@@ -31,10 +31,10 @@ related_bugs: [a2b2f1, 6f5aaa]
 sot_registry_entry: diet_preference_vocabulary (new, server half); coach_extraction_locked_fields; user_preferences_coaching_notes
 writers:
   - { file: supabase/functions/_shared/food_types.ts, method: normalizeFoodType / knownFoodType / dietPreferenceLine, line: 75 }
-  - { file: supabase/functions/daily-snapshot/index.ts, method: dropFoodType + extractCoachingNotes prompt + mergeCoachingNotes (no longer writes diet_preference), line: 90 }
+  - { file: supabase/functions/daily-snapshot/index.ts, method: dropFoodType + extractCoachingNotes prompt + mergeCoachingNotes (no longer writes diet_preference), line: 109 }
 readers:
   - { file: supabase/functions/protein-gap-alert/message.ts, method_or_widget: pickQuickFix, line: 40 }
-  - { file: supabase/functions/_shared/tools/nutrition/suggestMeal.ts, method_or_widget: readStoredFoodType + handler, line: 145 }
+  - { file: supabase/functions/_shared/tools/nutrition/suggestMeal.ts, method_or_widget: readStoredFoodType + handler, line: 164 }
   - { file: supabase/functions/weekly-report/index.ts, method_or_widget: "'Diet preference:' prompt line", line: 513 }
   - { file: supabase/functions/_shared/captain_manual.ts, method_or_widget: captainManual (the food-type rule), line: 482 }
   - { file: supabase/functions/ai-proxy/index.ts, method_or_widget: "promptParts = [captainManual(), ...]", line: 1094 }
@@ -46,7 +46,7 @@ cloud_table: user_profile
 cloud_columns: [diet_preference]
 contract_test_path: supabase/functions/_shared/food_types_test.ts
 ist_handling:
-  - { file: supabase/functions/daily-snapshot/index.ts, line: 90, fn: "dropFoodType (no date key; IST unchanged elsewhere)" }
+  - { file: supabase/functions/daily-snapshot/index.ts, line: 109, fn: "dropFoodType (no date key; IST unchanged elsewhere)" }
 provider_invalidations: []
 telemetry_op_types:
   success: []
