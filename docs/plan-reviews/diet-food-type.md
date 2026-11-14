@@ -13,7 +13,7 @@ bpass_review: docs/reviews/diet-food-type-bpass.md
 
 Plan: `docs/plans/diet-food-type.md` (revision 5; per-round dispositions in its §7). Diagnose `6f5aaa` (recurrence of `a2b2f1`, concept `diet_preference_vocabulary`). Closes OI-257.
 
-**Pre-merge condition: do not merge before Unit 2b's Edge Functions are deployed (versions recorded in 2b's diagnose doc).** A merge to `main` deploys the web app (`vercel.json` builds `main` only), and before 2b the server mishandles the new keys (plan header, round 3 finding 1).
+**Pre-merge condition: do not merge before Unit 2b's Edge Functions are deployed (versions recorded in 2b's diagnose doc). SATISFIED 2026-11-14: 2b merged as `fa888563`; daily-snapshot v35, protein-gap-alert v21, weekly-report v38, ai-proxy v105 live; cleanup SQL applied.** A merge to `main` deploys the web app (`vercel.json` builds `main` only), and before 2b the server mishandles the new keys (plan header, round 3 finding 1).
 
 Founder decisions (chat 2026-11-14): food types Veg, Non-veg, Eggetarian, Pescatarian, Vegan; default Non-veg; FREE; selectable on the Diet Plan screen and in Edit Profile; shown on the Nutrition calorie card; the coach knows it; workout generation is unaffected. Keto / low carb are a PRO strategy (Unit 3).
 
