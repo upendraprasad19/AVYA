@@ -200,7 +200,15 @@ class SeedService {
   /// untagged v2 rows and the generator's quality filters silently no-op
   /// (missing field ⇒ UPF=false / matches-all) — plan-review round 1,
   /// finding 1.
-  static const int _foodLibraryVersion = 3;
+  ///
+  /// v4 (2026-11-14 diet plan Unit 1): every row gains `is_everyday` (true
+  /// exactly for the curated diet-plan catalog), 66 processed rows go
+  /// `is_ultra_processed` false -> true (colas incl. Thums Up, jams,
+  /// packaged juices…), 3 plain rows go true -> false (F0708 roasted chana,
+  /// F0709 roasted makhana, F0710 plain makhana; 69 changes in all), and
+  /// seven everyday rows are appended (F1442-F1448). Without the bump the
+  /// catalog's new ids are skipped and the swap sheet's retire flag is absent.
+  static const int _foodLibraryVersion = 4;
   static const String _foodVersionKey = 'food_library_version';
 
   final HiveService _hive = HiveService.instance;

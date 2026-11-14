@@ -99,6 +99,45 @@ void main() {
     expect(clean('Almonds'), isTrue, reason: 'Almonds must never be UPF-flagged');
   });
 
+  test('v4 (diet plan Unit 1): is_everyday on every row + spot-checks', () {
+    final byId = {for (final r in rows) r['id'] as String: r};
+    for (final r in rows) {
+      expect(r['is_everyday'], isA<bool>(),
+          reason: '${r['id']} (${r['name']}): is_everyday must be a bool');
+    }
+    for (final id in ['F0522', 'F1268', 'F1421', 'F1253', 'F1264', 'F1368']) {
+      expect(byId[id]!['is_ultra_processed'], isTrue,
+          reason: '$id ${byId[id]!['name']} must be UPF');
+    }
+    for (final id in ['F0708', 'F0710']) {
+      expect(byId[id]!['is_ultra_processed'], isFalse,
+          reason: '$id ${byId[id]!['name']} is plain roasted, not UPF');
+    }
+    expect(byId['F0011']!['is_everyday'], isTrue, reason: 'Toor Dal');
+    for (final id in ['F1115', 'F1063', 'F0402', 'F0690']) {
+      expect(byId[id]!['is_everyday'], isFalse,
+          reason: '$id ${byId[id]!['name']} is not everyday');
+    }
+  });
+
+  test('v4 new rows F1442-F1448: present, derived fields consistent', () {
+    final byId = {for (final r in rows) r['id'] as String: r};
+    double r1(num v) => (v * 10).round() / 10;
+    for (var n = 1442; n <= 1448; n++) {
+      final r = byId['F$n'];
+      expect(r, isNotNull, reason: 'F$n missing');
+      final g = (r!['standard_serving_g'] as num).toDouble();
+      for (final k in ['calories', 'protein', 'carbs', 'fat']) {
+        expect(r['${k}_std'],
+            r1((r['${k}_per_100g'] as num) * g / 100),
+            reason: 'F$n ${k}_std');
+      }
+      expect(r['is_ultra_processed'], isFalse);
+      expect(r['is_indian'], isTrue);
+      expect(r['source'], 'icanbefitter_seed_v4');
+    }
+  });
+
   test('row count >= 1431 and the original id set is fully preserved', () {
     expect(rows.length, greaterThanOrEqualTo(1431));
     final ids = rows.map((r) => r['id'] as String).toSet();
