@@ -115,6 +115,9 @@ const _engine = <String>[
   '${_services}singleton_lifecycle_registry.dart',
   'lib/shared/repositories/user_repository.dart',
   'lib/features/profile/services/notification_prefs_repository.dart',
+  // Diet plan Unit 3a: the diet_strategy push rule and its ship-dark flag.
+  'lib/core/constants/diet_strategies.dart',
+  'lib/features/nutrition/services/diet_strategy_flags.dart',
 ];
 
 /// lib/ files an engine file reaches that stay BELOW platform — the engine only

@@ -620,17 +620,17 @@ concepts:
           against stale `completed_at` mismatching the requested date
           (Test #13 Bug 5.3 — do NOT call .toLocal() before _dateKey).
       - file: lib/features/home/providers/home_provider.dart
-        line_range: 76-134
+        line_range: 79-137
         method: calendarWeekProvider per-day fetch
         semantic: pass-through
         fields_read: [via WorkoutScheduleService.getScheduleForDate(date)]
       - file: lib/features/home/providers/home_provider.dart
-        line_range: 549-564
+        line_range: 552-567
         method: todayWorkoutProvider
         semantic: pass-through
         fields_read: [via WorkoutScheduleService.getScheduleForDate(DateTime.now())]
       - file: lib/features/home/providers/home_provider.dart
-        line_range: 679-719
+        line_range: 714-754
         method: aiInsightProvider (next-workout consistency hint)
         semantic: pass-through
         fields_read: [via ref.watch(todayWorkoutProvider) — derives from the Today card's row (c7e3a9, test/contracts/ai_insight_follows_today_row_test.dart)]
@@ -732,12 +732,12 @@ concepts:
           lowercased name, top 8); relogs the stored item (0 g -> 100 g).
           Was a read of a top-level food_name the writer never writes.
       - file: lib/features/nutrition/screens/nutrition_screen.dart
-        line_range: 651-749
+        line_range: 653-751
         method: _confirmAndDeleteLog (delete confirmation chip)
         semantic: display-only
         fields_read: [total_calories, total_protein]
       - file: lib/features/nutrition/screens/nutrition_screen.dart
-        line_range: 921-1086
+        line_range: 923-1088
         method: _showEditMacrosSheet (edit macros bottom sheet)
         semantic: display-only
         fields_read: [total_calories, total_protein, total_carbs, total_fat, total_fiber]
@@ -766,12 +766,12 @@ concepts:
         semantic: aggregated
         fields_read: [total_calories, date]
       - file: lib/features/nutrition/providers/nutrition_provider.dart
-        line_range: 1670-1729
+        line_range: 1773-1832
         method: WeeklyNutritionNotifier.build
         semantic: historical-series
         fields_read: [total_calories, total_protein, date, is_saved_meal]
       - file: lib/features/nutrition/providers/nutrition_provider.dart
-        line_range: 1108-1132
+        line_range: 1211-1235
         method: FoodLogNotifier.deleteFoodLog (delegates to NutritionWriteService.deleteLog, OI-36)
         semantic: display-only
         fields_read: [total_calories, calories, items[], food_name (legacy flat row), name, meal_type, date]
@@ -779,7 +779,7 @@ concepts:
           Reads pre-delete log entry to stash audit row in
           'recent_deletes' bucket; falls back to legacy 'calories' key.
       - file: lib/features/home/providers/home_provider.dart
-        line_range: 739-785
+        line_range: 774-820
         method: RecentFoodLogsNotifier.build
         semantic: display-only
         fields_read: [total_calories, total_protein, total_carbs, total_fat, items[] (names via deriveMealDisplayName, 8b3d4e), meal_type, date]
@@ -889,14 +889,14 @@ concepts:
       directly from a widget.
     writers:
       - file: lib/features/nutrition/screens/nutrition_screen.dart
-        line_range: 852-917
+        line_range: 854-919
         method: _confirmAndDeleteFoodLog
         notes: |
           Legacy 5s-undo path. Reads the Hive row before delete, stashes
           it locally, then calls FoodLogNotifier.deleteFoodLog and shows
           a 5-second SnackBar with UNDO → FoodLogNotifier.restoreFoodLog.
       - file: lib/features/nutrition/screens/nutrition_screen.dart
-        line_range: 651-749
+        line_range: 653-751
         method: _confirmAndDeleteLog
         notes: |
           Plan C-14 path. Confirm sheet → NutritionWriteService.deleteLog
@@ -925,7 +925,7 @@ concepts:
     reader_manifest_complete: true
     readers:
       - file: lib/features/nutrition/providers/nutrition_provider.dart
-        line_range: 1108-1145
+        line_range: 1211-1248
         method: FoodLogNotifier.deleteFoodLog + restoreFoodLog
         semantic: pass-through
         fields_read: [via box.get(logId), Hive nlog_* full map]
@@ -935,7 +935,7 @@ concepts:
           to NutritionWriteService.restoreFoodLog. Same provider also
           delegates DeleteNutritionLogNotifier.delete to WriteService.deleteLog.
       - file: lib/features/nutrition/providers/nutrition_provider.dart
-        line_range: 1738-1753
+        line_range: 1841-1856
         method: DeleteNutritionLogNotifier.delete
         semantic: pass-through
         fields_read: [via NutritionWriteService.deleteLog(allowUndo: true)]
@@ -1046,7 +1046,7 @@ concepts:
           Rebuilds the context via buildAiContext() between retry
           rounds so the snapshot reflects post-mutation Hive state.
       - file: lib/core/services/sync_service.dart
-        line_range: 805-850
+        line_range: 807-852
         method: pushSnapshot (coalesced) -> pushSnapshotNow (body)
         semantic: pass-through
         fields_read: [<full context map>]
@@ -1100,7 +1100,7 @@ concepts:
     writers:
       - { file: supabase/functions/_shared/snapshot_merge.ts, line_range: 16-28, method: mergeSnapshotJson, notes: "Pure merge — existing row spread first, incoming client payload layered on top so it wins on any shared key. Mutation-proven: reverting to `return incoming;` reddens 2 of 4 tests in snapshot_merge_test.ts." }
       - { file: supabase/functions/daily-snapshot/index.ts, line_range: 689-754, method: "serve handler", notes: "Reads the existing row via .maybeSingle() at :719 (never .single() — a first-ever snapshot of the day has no existing row, which is a legitimate empty merge base, not an error; a genuine query error is logged at :728 (the console.error call itself, not the surrounding comment — a pre-existing imprecision in this note, corrected while re-deriving the other citations here) rather than silently degrading), merges via mergeSnapshotJson at :734, upserts the MERGED result at :743. Gated behind DISABLE_SNAPSHOT_MERGE_SAFE_UPSERT (:708, code-review finding 2 — platform tier's feature_flag requirement) which falls back to the verbatim pre-fix blind-replace. Wiring pinned by index_test.ts (source-grep — importing this module boots a real server, no import.meta.main guard, so the test reads source text rather than importing). Line numbers shifted +1 by the observation-batch-and-digest-redesign merge (PR #32, 2026-09-22) inserting one unrelated line earlier in the same file — re-verify by grep, not by citation. Re-derived from anchors 2026-11-14 (diet plan Unit 2b) after its insertions earlier in the file, and again after its B-pass fixes (+24); the previous range had already drifted." }
-      - { file: lib/core/services/sync_service.dart, line: 1212, method: "compileDailySnapshot", notes: "Code-review finding 1 (2026-09-21): fitness_summary is ALSO cron-owned (rolling-context writes it), but unlike morning_alert the client DOES carry a local mirror of it in aiContext (buildAiContext() serves both this push and the live ai-proxy chat body, and the chat use case needs it). Sending it here would let the client's lagging/possibly-empty mirror win the merge on a key it does carry. Explicitly removed from the push payload only — buildAiContext()'s direct chat-context use is untouched. Behavioral: test/contracts/daily_snapshot_fitness_summary_omission_test.dart (mutation-proven — reverting the .remove() call reddens both tests)." }
+      - { file: lib/core/services/sync_service.dart, line: 1214, method: "compileDailySnapshot", notes: "Code-review finding 1 (2026-09-21): fitness_summary is ALSO cron-owned (rolling-context writes it), but unlike morning_alert the client DOES carry a local mirror of it in aiContext (buildAiContext() serves both this push and the live ai-proxy chat body, and the chat use case needs it). Sending it here would let the client's lagging/possibly-empty mirror win the merge on a key it does carry. Explicitly removed from the push payload only — buildAiContext()'s direct chat-context use is untouched. Behavioral: test/contracts/daily_snapshot_fitness_summary_omission_test.dart (mutation-proven — reverting the .remove() call reddens both tests)." }
     reader_manifest_complete: false
     readers:
       - { file: supabase/functions/morning-alert/index.ts, line: 413, method_or_widget: "deliver mode — snap.snapshot_json?.morning_alert", semantic: latest, notes: "The concrete consumer whose silent skip (if (!alertMsg) return; — no log, no error) motivated this fix." }
@@ -1151,10 +1151,10 @@ concepts:
     behavioral_test_path_cqrs: test/contracts/subscription_cqrs_behavioral_test.dart
     writers:
       - file: lib/core/services/subscription_service.dart
-        line_range: 1048-1088
+        line_range: 1049-1089
         method: _downgradeLocally (the SINGLE downgrade sink — every path funnels here)
       - file: lib/core/services/subscription_service.dart
-        line_range: 414-480
+        line_range: 415-481
         method: _enforceEntitlementInvariants (cross-account guard + genuine-expiry downgrade)
         notes: |
           OI-44 Unit 6 (diagnose a9c4e1) — the MUTATING half extracted out of
@@ -1163,7 +1163,7 @@ concepts:
           never on the cross-account wipe; it survives the expiresAt wipe so the
           Home expiry banner can surface "PRO expired".
       - file: lib/core/services/subscription_service.dart
-        line_range: 481-489
+        line_range: 482-490
         method: evaluateEntitlement (explicit public enforcement entry point)
         notes: |
           Called at the two moments local state can BECOME cross-account:
@@ -1172,15 +1172,15 @@ concepts:
           refreshFromSupabase does NOT cover it (it decides from the SERVER
           response and never compares Hive profile.id against the session).
       - file: lib/core/services/subscription_service.dart
-        line_range: 258-337
+        line_range: 259-338
         method: writeSubscriptionState (atomic putAll; clears pro_lapsed_at on renewal)
       - file: lib/core/services/subscription_service.dart
-        line_range: 878-977
+        line_range: 879-978
         method: verifyFromServer (server-confirmed upgrade / anti-spoof downgrade)
     reader_manifest_complete: true
     readers:
       - file: lib/core/services/subscription_service.dart
-        line_range: 338-366
+        line_range: 339-367
         method: isPro — the DECISION entry point
         semantic: flag-check
         fields_read: [isPro, expiresAt, plan]
@@ -1189,7 +1189,7 @@ concepts:
           byte-identical to the pre-split version, so all 32 decision callsites
           keep their defense-in-depth. Use this for an entitlement DECISION.
       - file: lib/core/services/subscription_service.dart
-        line_range: 367-391
+        line_range: 368-392
         method: proStateSnapshot — the PURE read
         semantic: flag-check
         fields_read: [isPro, expiresAt]
@@ -1200,7 +1200,7 @@ concepts:
           (build -> isPro -> _downgradeLocally -> onStateChanged -> app.dart:47
           ref.invalidate). Diagnose a9c4e1.
       - file: lib/core/services/subscription_service.dart
-        line_range: 610-700
+        line_range: 611-701
         method: gateAndVerify (gate() retained as a @Deprecated shim at :578)
         semantic: flag-check
         fields_read: [isPro, expiresAt, plan]
@@ -1212,7 +1212,7 @@ concepts:
           (phases_2_to_12, ai_coach_unlimited, progress_photos) through
           verifyFromServer() with a 5-min cache TTL.
       - file: lib/features/profile/providers/profile_provider.dart
-        line_range: 458-516
+        line_range: 507-565
         method: SubscriptionInfoNotifier / subscriptionInfoProvider
         semantic: pass-through
         fields_read: [isPro, expiresAt, plan, isVerifying]
@@ -1223,7 +1223,7 @@ concepts:
           razorpay_service.dart:733 (_invalidateSubscriptionProviders). Its build() MUST use proStateSnapshot(),
           never isPro() — pinned by subscription_cqrs_behavioral_test group E.
       - file: lib/features/home/providers/home_provider.dart
-        line_range: 543-546
+        line_range: 546-549
         method: subscriptionExpiryBannerProvider
         semantic: derived
         fields_read: [isPro, daysUntilExpiry, proLapsedAt]
@@ -1376,7 +1376,7 @@ concepts:
     reader_manifest_complete: true
     readers:
       - file: lib/features/nutrition/providers/nutrition_provider.dart
-        line_range: 1767-1770
+        line_range: 1870-1873
         method: waterTargetProvider (Provider<int>)
         semantic: pass-through
         fields_read: [via WaterTargetService.instance.currentTargetMl()]
@@ -1446,7 +1446,7 @@ concepts:
           Wrappers over MigratedKey.write/read for the
           'saved_diet_plan' key (userBox per Test #11.1 migration).
       - file: lib/features/nutrition/screens/diet_plan_screen.dart
-        line_range: 339-394
+        line_range: 342-401
         method: _savePlan (UI save handler)
         notes: |
           Builds planData map → calls saveDietPlan → fires
@@ -1480,7 +1480,7 @@ concepts:
           Passes plannedSlots into TodaysMealsCard which renders the
           "FROM YOUR DIET PLAN" hint on every empty slot.
       - file: lib/features/nutrition/screens/diet_plan_screen.dart
-        line_range: 70-96
+        line_range: 73-99
         method: _generatePlan (entry-point check for existing saved plan)
         semantic: pass-through
         fields_read: [via UserRepository.instance.getSavedDietPlan() — Map<String, dynamic>?]
@@ -1601,7 +1601,7 @@ concepts:
       concept; merged into one entry at 2a's sync with main.)
     writers:
       - file: lib/features/profile/providers/profile_provider.dart
-        line_range: 98-140
+        line_range: 93-148
         method: setFoodType + _applyFoodType (UserProfileNotifier; the Diet Plan screen's door)
         notes: |
           Serialised through a chained future (a failed link does not block
@@ -1611,7 +1611,7 @@ concepts:
           fires syncProfileNow); signed in: pushSnapshot, and the
           coach-extraction lock ONLY when the food type itself changed.
       - file: lib/features/profile/screens/edit_profile_screen.dart
-        line_range: 1743-2145
+        line_range: 1794-2230
         method: _save (writes _foodType.storageKey; lock compare on canonical keys)
       - file: lib/features/onboarding/providers/onboarding_provider.dart
         line_range: 999-1000
@@ -1637,32 +1637,32 @@ concepts:
         semantic: filtered
         fields_read: [diet_preference, saved plan food_type]
       - file: lib/features/nutrition/screens/diet_plan_screen.dart
-        line_range: 70-147
+        line_range: 73-150
         method: _generatePlan + _changeFoodType (selector; mismatch notice once per session)
         semantic: pass-through
         fields_read: [diet_preference, saved plan food_type]
       - file: lib/features/nutrition/widgets/food_type_tag.dart
-        line_range: 12-43
+        line_range: 16-57
         method: FoodTypeTag (Nutrition calorie card; opens the Diet Plan screen)
         semantic: pass-through
         fields_read: [diet_preference]
       - file: lib/features/profile/screens/edit_profile_screen.dart
-        line_range: 1270-1290
+        line_range: 1287-1341
         method: _buildDietPreferenceChips (FoodTypeChips; no Keto)
         semantic: pass-through
         fields_read: [diet_preference]
       - file: lib/features/ai_coach/services/ai_snapshot_builder.dart
-        line_range: 69-251
+        line_range: 108-303
         method: buildAiContext (profile.diet_preference canonical + diet_preference_label)
         semantic: pass-through
         fields_read: [diet_preference]
       - file: lib/core/services/sync/sync_profile.dart
-        line_range: 160-260
+        line_range: 160-264
         method: _syncUserProfile (push to user_profile, value passed through)
         semantic: pass-through
         fields_read: [diet_preference]
       - file: lib/core/services/sync_service.dart
-        line_range: 1397-1460
+        line_range: 1399-1462
         method: _replayPendingOnboardingSync (value passed through)
         semantic: pass-through
         fields_read: [diet_preference]
@@ -1697,6 +1697,90 @@ concepts:
     cloud:
       table: user_profile
       columns: [diet_preference]
+    sync_methods: [syncProfileNow, pushSnapshot]
+
+  - concept: diet_strategy_targets
+    domain: nutrition
+    behavioral_test_path: test/contracts/diet_strategy_targets_writer_to_reader_test.dart
+    description: |
+      Diet plan Unit 3a (2026-11-14, docs/plans/diet-strategy.md), SHIPPED
+      DARK behind DietStrategyFlags.enabled (constant kDietStrategyDefaultOn
+      = false; Unit 3b flips it). The user's diet strategy, stored as the
+      profile key `diet_strategy` (userBox profile map; cloud
+      user_profile.diet_strategy, migration 179, CHECK balanced|low_carb|keto,
+      NULL = balanced). PRO (local gateAndVerify). The CHOICE only: the
+      stored four-pack (daily_calories, protein_grams, carb_grams /
+      carbs_grams, fat_grams) stays the Balanced split and no writer of it
+      changes. The strategy is applied when targets are READ, by ONE pure
+      helper effectiveMacroTargets (applies only when the flag is on, the
+      user is PRO, the stored strategy is not Balanced and the pack is real:
+      calories, protein and carbs > 0); calories and protein are never
+      changed; carbs/fat come from BmrCalculator.macroSplit. The applied
+      strategy travels WITH the numbers (`strategy_index` in the targets
+      map, DailyNutritionData.strategy, the snapshot's own call), so a label
+      never sits over numbers made for another strategy. Never read by
+      workout generation; never set by the coach extraction.
+      Stated limit (plan §3.3, B-pass seat A finding 1): Home and the
+      snapshot apply the strategy only to a COMPLETE stored four-pack, while
+      _resolveNutritionTargets also applies it to its recompute fallback. A
+      profile with recompute inputs but no stored pack (never seen after
+      onboarding, which writes all four) already disagrees between Home's
+      250/65 defaults, the snapshot's zeros and Nutrition's recompute before
+      3a; the strategy keeps that pre-existing split, it does not add one.
+    writers:
+      - file: lib/features/profile/providers/profile_provider.dart
+        line_range: 150-188
+        method: setDietStrategy + _applyDietStrategy (UserProfileNotifier; the Diet Plan screen's door)
+        notes: |
+          Serialised; captures the user id at call time and writes nothing
+          (false) if it changed; no-op on an equal stored key; ONE field
+          write through updateProfile (ProfileWriteService.patchProfile,
+          which fires syncProfileNow); invalidates macroTargetsProvider,
+          dailyNutritionProvider, nutritionSummaryProvider, dietPlanProvider;
+          signed in: pushSnapshot (no extraction lock).
+      - file: lib/features/profile/screens/edit_profile_screen.dart
+        line_range: 1794-1934
+        method: _save (adds diet_strategy only with the flag on, for a chip different from the EFFECTIVE strategy, after confirmEditProfileDietStrategy; PRO re-checked at Save)
+        notes: |
+          PRESENCE ONLY for the screen wiring (B-pass seat C finding 3): the
+          chip's PRO gate (_onDietStrategyChip), the flag-gated seed and the
+          single `updates['diet_strategy']` site are pinned by source grep in
+          test/nutrition/diet_strategy_selector_test.dart. Reason: the screen
+          is a 2,300-line form whose Save also reschedules workouts and
+          recomputes targets; a widget test of it would mostly exercise that.
+          The decision the wiring calls (confirmEditProfileDietStrategy:
+          null / true / false) and the saved-message helper
+          (editProfileSavedMessage) are tested behaviourally in the same file.
+      - file: lib/core/services/sync/sync_profile.dart
+        line_range: 160-240
+        method: _syncUserProfile (push via dietStrategyPushEntry; flag-gated, canonical key)
+    readers:
+      - file: lib/features/nutrition/providers/nutrition_provider.dart
+        line_range: 44-226
+        method: _resolveNutritionTargets + resolveBaseMacroPack + _applyDietStrategy + _watchDietStrategyInputs (feeds macroTargetsProvider with strategy_index, DailyNutritionData.strategy)
+        semantic: transformed
+        fields_read: [diet_strategy, daily_calories, protein_grams, carb_grams, carbs_grams, fat_grams]
+      - file: lib/features/home/providers/home_provider.dart
+        line_range: 592-670
+        method: NutritionSummaryNotifier.build (helper on a complete stored pack only; watches only with the flag on)
+        semantic: transformed
+        fields_read: [diet_strategy, daily_calories, protein_grams, carb_grams, carbs_grams, fat_grams]
+      - file: lib/features/ai_coach/services/ai_snapshot_builder.dart
+        line_range: 70-224
+        method: _dietStrategyTargets + buildAiContext (daily_targets carbs/fat, profile.diet_strategy / diet_strategy_label; no new key with the flag off)
+        semantic: transformed
+        fields_read: [diet_strategy, daily_calories, protein_grams, carb_grams, carbs_grams, fat_grams]
+      - file: lib/core/utils/effective_macro_targets.dart
+        line_range: 1-68
+        method: effectiveMacroTargets (the one rule)
+        semantic: transformed
+        fields_read: [diet_strategy]
+    hive:
+      box: userBox
+      key_prefix: "profile"
+    cloud:
+      table: user_profile
+      columns: [diet_strategy]
     sync_methods: [syncProfileNow, pushSnapshot]
     restore_methods: [_restoreUserProfile]
     provider_invalidation_set: [userProfileProvider]
@@ -2274,7 +2358,7 @@ concepts:
           Acts on the row's own id / log_key, which every writer stamps
           with the chosen occurrence key; never recomputes a key.
       - file: lib/features/ai_coach/services/ai_snapshot_builder.dart
-        line_range: 849-897
+        line_range: 901-949
         method: _getMealsToday
         semantic: aggregated
         fields_read: [meal_type, items[], total_calories]
@@ -2315,17 +2399,17 @@ concepts:
         semantic: aggregated
         fields_read: [total_calories, total_protein, total_carbs, total_fat, total_fiber, date, is_saved_meal]
       - file: lib/features/nutrition/providers/nutrition_provider.dart
-        line_range: 322-379
+        line_range: 415-477
         method: DailyNutritionNotifier.build (per-slot bucketing)
         semantic: aggregated
         fields_read: [date, meal_type, is_saved_meal, items[]]
       - file: lib/features/nutrition/providers/nutrition_provider.dart
-        line_range: 1670-1729
+        line_range: 1773-1832
         method: WeeklyNutritionNotifier.build
         semantic: historical-series
         fields_read: [total_calories, total_protein, date, is_saved_meal]
       - file: lib/features/home/providers/home_provider.dart
-        line_range: 739-785
+        line_range: 774-820
         method: RecentFoodLogsNotifier.build
         semantic: display-only
         fields_read: [total_calories, total_protein, total_carbs, total_fat, items[] (names via deriveMealDisplayName, 8b3d4e), meal_type, date]
@@ -2403,7 +2487,7 @@ concepts:
       food-search (custom foods appear alongside the bundled DB).
     writers:
       - file: lib/features/nutrition/providers/nutrition_provider.dart
-        line_range: 1301-1367
+        line_range: 1404-1470
         method: addCustomFood
         semantic: hive-write + immediate sync
         notes: |
@@ -2411,7 +2495,7 @@ concepts:
           + foodBox[<v5>], then unawaited(SyncService.instance.syncCustomItemsNow()).
     readers:
       - file: lib/features/nutrition/providers/nutrition_provider.dart
-        line_range: 1370-1371
+        line_range: 1473-1474
         method: customFoodProvider
         semantic: hive-read
         notes: |
@@ -2734,7 +2818,7 @@ concepts:
         line_range: 1-9999
         method: _syncScheduledWorkouts (confirmed :1778; constructs a SyncSkipIndex(domain: SyncSkipDomain.sched) and drives the FK-resilient upsert through its pushIfChanged closure -- the helper stores index[scheduled_date]=fp ON CONFIRMED ONLY; commit(liveKeys:) prunes to live schedule_ dates + persists after the loop)
       - file: lib/core/services/sync_service.dart
-        line_range: 293-326
+        line_range: 295-328
         method: schedPayloadFingerprint (pure static, byte-identical) + _schedHashSkipDisabled kill-switch getter
       - file: lib/features/dev/simulation_service.dart
         line_range: 103-183
@@ -2958,7 +3042,7 @@ concepts:
         line_range: 201-432
         method: _syncNutritionLogs (constructs a SyncSkipIndex(domain: SyncSkipDomain.nlog) and drives the parent + item + vacuum writes through its pushIfChanged closure -- stores index[slotId]=nlogFp ON CONFIRMED FULL-BUNDLE SUCCESS ONLY; commit(liveKeys:) prunes to live slots + persists after the loop, or CLEARS the index entirely when disabled)
       - file: lib/core/services/sync_service.dart
-        line_range: 363-423
+        line_range: 365-425
         method: nlogPayloadFingerprint / nlogHashSkipDisabledFor (pure statics, byte-identical -- plan D4) + _hashSkipKillSwitchOn(SyncSkipDomain) (generic kill-switch reader shared with exlog, replaces the deleted _nlogHashSkipDisabled getter)
       - file: lib/features/dev/simulation_service.dart
         line_range: 103-183
@@ -3201,7 +3285,7 @@ concepts:
     reader_manifest_complete: false
     readers:
       - file: lib/core/services/sync_service.dart
-        line_range: 2219-2424
+        line_range: 2221-2426
         method: _attemptSingleCallRestore
         semantic: aggregated
         fields_read: [schema_version, tables]
@@ -3261,7 +3345,7 @@ concepts:
       assumption (it cannot detect a lowered production cap).
     writers:
       - file: lib/core/services/sync_service.dart
-        line_range: 3101-3172
+        line_range: 3103-3174
         method: _fetchAllRows
         notes: |
           The ONE paging loop: owner-scoped (.eq user_id) first, optional since filter,
@@ -3580,7 +3664,7 @@ concepts:
           step. Uses _safeRestoreOp wrapper to keep one surface's
           failure from aborting the rest.
       - file: lib/core/services/sync_service.dart
-        line_range: 1886-2093
+        line_range: 1888-2095
         method: _restoreFromCloudForUserCore
         semantic: aggregated
         fields_read: [<the body of restoreFromCloudForUser, moved verbatim by OI-284>]
@@ -3599,7 +3683,7 @@ concepts:
           routing to /home (15s timeout safety). Cancels in-flight
           restore when user_profile is null (brand-new user).
       - file: lib/core/services/sync_service.dart
-        line_range: 686-695
+        line_range: 688-697
         method: restoreFromCloud (legacy entry point)
         semantic: pass-through
         fields_read: []
@@ -3914,7 +3998,7 @@ concepts:
           back to configBox (legacy). UserConfigMigrator one-shot
           copies legacy values on first authenticated launch.
       - file: lib/core/services/subscription_service.dart
-        line_range: 95-160
+        line_range: 95-161
         method: SubscriptionService (is_pro / expires_at / plan /
                 paymentInFlightOrder / paymentInFlightUntil)
         semantic: pass-through
@@ -4055,12 +4139,12 @@ concepts:
       seconds after a splash-time verify.
     writers:
       - file: lib/core/services/subscription_service.dart
-        line_range: 217-229
+        line_range: 218-230
         method: markPaymentInFlight
     reader_manifest_complete: true
     readers:
       - file: lib/core/services/subscription_service.dart
-        line_range: 181-241
+        line_range: 182-242
         method: isPaymentInFlight / clearPaymentInFlight / paymentInFlightOrderId
         semantic: flag-check
         fields_read: [paymentInFlightOrder, paymentInFlightUntil]
@@ -4069,7 +4153,7 @@ concepts:
           ceiling as fallback safety cap). Legacy paymentInFlightUntil read
           once per device after upgrade until first event-based write.
       - file: lib/core/services/subscription_service.dart
-        line_range: 1021-1118
+        line_range: 1022-1119
         method: verifyFromServer (isPaymentInFlight guard; gateAndVerify at 729 and refreshFromSupabase at 834 also read it)
         semantic: flag-check
         fields_read: [paymentInFlightOrder]
@@ -4078,7 +4162,7 @@ concepts:
           splash-time verify doesn't downgrade an optimistic isPro=true
           before the webhook lands.
       - file: lib/features/profile/providers/profile_provider.dart
-        line_range: 433-479
+        line_range: 482-528
         method: subscriptionInfoProvider (isVerifying field)
         semantic: flag-check
         fields_read: [isPaymentInFlight]
@@ -4252,12 +4336,12 @@ concepts:
     reader_manifest_complete: true
     readers:
       - file: lib/features/home/providers/home_provider.dart
-        line_range: 76-134
+        line_range: 79-137
         method: calendarWeekProvider per-day status check
         semantic: flag-check
         fields_read: [status, completed_at]
       - file: lib/features/home/providers/home_provider.dart
-        line_range: 549-564
+        line_range: 552-567
         method: todayWorkoutProvider
         semantic: flag-check
         fields_read: [status, completed_at, exercises]
@@ -4656,7 +4740,7 @@ concepts:
           per-set MAX. Pre-fix returned cumulative SUM for bodyweight_reps
           + timed. Closes-diagnose: 2026-05-16-pr-cumulative-bug
       - file: lib/features/home/providers/home_provider.dart
-        line_range: 933-944
+        line_range: 968-979
         method: AllExercisePRsNotifier.build (wraps loadAllExercisePRs)
         semantic: pass-through
         fields_read: [via loadAllExercisePRs]
@@ -4738,7 +4822,7 @@ concepts:
       the same key. Synced to water_logs cloud table with UNIQUE(user_id, date).
     writers:
       - file: lib/features/nutrition/providers/nutrition_provider.dart
-        line_range: 423-446
+        line_range: 526-549
         method: WaterIntakeNotifier.addWater + increment + decrement
         notes: Routes through HealthWriteService.setWaterMl (audit-2026-05-16 E.7).
       - file: lib/core/services/health_write_service.dart
@@ -4756,7 +4840,7 @@ concepts:
     reader_manifest_complete: true
     readers:
       - file: lib/features/nutrition/providers/nutrition_provider.dart
-        line_range: 411-450
+        line_range: 514-553
         method: WaterIntakeNotifier.build (waterIntakeProvider)
         semantic: latest
         fields_read: [healthBox['water_ml_<istToday>'] (raw int)]
@@ -4844,7 +4928,7 @@ concepts:
     sync_methods: [_syncWaterLogs]
     restore_methods: [_restoreWaterLogs]
     ist_sites:
-      - { file: lib/features/nutrition/providers/nutrition_provider.dart, line: 412, fn: WaterIntakeNotifier.build }
+      - { file: lib/features/nutrition/providers/nutrition_provider.dart, line: 515, fn: WaterIntakeNotifier.build }
       - { file: lib/core/services/health_write_service.dart, line: 336, fn: setWaterMl }
     telemetry:
       failure_op_types: [upsert_water_log]
@@ -4861,7 +4945,7 @@ concepts:
       Hive restore uses same hash key so cross-device restores don't duplicate.
     writers:
       - file: lib/features/nutrition/providers/nutrition_provider.dart
-        line_range: 1217-1287
+        line_range: 1320-1390
         method: SavedMealsNotifier.saveMealPreset + relogSavedMeal + deleteSavedMeal (delegators — relogSavedMeal no longer bumps times_used, a8e3f1)
       - file: lib/core/services/nutrition_write_service.dart
         line_range: 845-989
@@ -4883,7 +4967,7 @@ concepts:
       - { file: lib/features/auth/screens/restoring_screen.dart, reason: "checks SavedMealKeyMigrator flag (config.get('saved_meal_key_migration_v1')) — not a saved_meal_* row reader; diagnose b8d5c2" }
     readers:
       - file: lib/features/nutrition/providers/nutrition_provider.dart
-        line_range: 1183-1214
+        line_range: 1286-1317
         method: SavedMealsNotifier.build (savedMealsProvider)
         semantic: aggregated
         fields_read: [nutritionBox entries with is_saved_meal=true OR meal_*+is_template=true, times_used]
@@ -4896,7 +4980,7 @@ concepts:
         semantic: pass-through
         fields_read: [via savedMealsProvider — name, total_calories, items[], id, times_used]
       - file: lib/features/nutrition/providers/nutrition_provider.dart
-        line_range: 322-379
+        line_range: 415-477
         method: DailyNutritionNotifier.build (skip-filter)
         semantic: flag-check
         fields_read: [is_saved_meal]
@@ -4909,7 +4993,7 @@ concepts:
         semantic: flag-check
         fields_read: [is_saved_meal]
       - file: lib/features/nutrition/providers/nutrition_provider.dart
-        line_range: 1690-1690
+        line_range: 1793-1793
         method: WeeklyNutritionNotifier (skip is_saved_meal)
         semantic: flag-check
         fields_read: [is_saved_meal]
@@ -4970,7 +5054,7 @@ concepts:
         method: HealthWriteService.logWeight
         canonical: true
       - file: lib/features/home/providers/home_provider.dart
-        line_range: 869-903
+        line_range: 904-938
         method: WeightLogNotifier.logWeight
         delegate: true
         notes: |
@@ -4996,7 +5080,7 @@ concepts:
     reader_manifest_complete: true
     readers:
       - file: lib/features/home/providers/home_provider.dart
-        line_range: 642-674
+        line_range: 677-709
         method: WeightHistoryNotifier.build (weightHistoryProvider)
         semantic: historical-series
         fields_read: [type, weight_kg, date]
@@ -5103,7 +5187,7 @@ concepts:
         line_range: 1-9999
         method: reckonStreakDecayAndPersist (D2 f9d2e7 — single gated consume site; rollover + every completion door through WorkoutCompletionBookkeeping.afterCompletion + the post-restore reckon; gated on SyncService.restoreSettledForCurrentUser (per-account marker, b4e7a1) + non-empty-schedule)
       - file: lib/features/home/providers/home_provider.dart
-        line_range: 241-268
+        line_range: 244-271
         method: restoreCompletedTickProvider (restore-tick bridge; both chip notifiers watch it)
     reader_manifest_complete: true
     readers:
@@ -5129,14 +5213,14 @@ concepts:
           INTEND to consume a freeze should use it. Never trust a cached
           streak number for rank gates.
       - file: lib/features/home/providers/home_provider.dart
-        line_range: 270-299
+        line_range: 273-302
         method: StreakNotifier.build (streakProvider)
         semantic: pass-through
         fields_read: []
         notes: |
           Pure delegating provider. Returns WorkoutRepository.instance.currentStreak().
       - file: lib/features/home/providers/home_provider.dart
-        line_range: 303-340
+        line_range: 306-343
         method: StreakFreezeNotifier.build (streakFreezeProvider)
         semantic: pass-through
         fields_read: [streak_freezes_available, streak_freezes_last_refill]
@@ -5388,20 +5472,20 @@ concepts:
       before the legacy fan-out re-runs the ops.
     writers:
       - file: lib/core/services/sync_service.dart
-        line_range: 1981-1999
+        line_range: 1983-2001
         method: _settleRestoreMarker
         notes: |
           The ONE marker writer; the decision is the pure
           `shouldSettleRestoreMarker` (result.succeeded, no streak-critical
           failure, uid non-null, live uid == uid, Hive owner == uid).
       - file: lib/core/services/sync_service.dart
-        line_range: 2007-2017
+        line_range: 2009-2019
         method: restoreFromCloudForUser
         notes: |
           Wrapper shape pinned by completed_title_follows_log_test.dart: runs the
           core inside `RestoreFailureCollector.run`, heals titles, THEN settles.
       - file: lib/core/services/sync_service.dart
-        line_range: 190-255
+        line_range: 192-257
         method: _onUserChanged
         notes: clears `_restoreSettledUserId` and the withheld reason on an account swap, as its FIRST statement (every later step can throw; B-pass F3).
       - file: lib/core/services/sync/sync_restore_failure_collector.dart
@@ -5419,7 +5503,7 @@ concepts:
           a stale failure from the aborted attempt cannot hold the marker closed
           (B-pass reviewer B F4).
       - file: lib/core/services/sync_service.dart
-        line_range: 2930-3003
+        line_range: 2932-3005
         method: _reportSyncFailure
         notes: first statement calls `RestoreFailureCollector.note(opType)`; the single failure funnel.
       - file: lib/core/services/day_rollover_service.dart
@@ -5545,7 +5629,7 @@ concepts:
         fields_read: [schedule_<date> presence]
         notes: feeds RankService._qualifies (MCPO, officer track).
       - file: lib/features/ai_coach/services/ai_snapshot_builder.dart
-        line_range: 1376-1419
+        line_range: 1428-1471
         method: _getPlanStatus
         semantic: pass-through
         notes: the coach prompt rule is a separate Edge Function change.
@@ -5616,7 +5700,7 @@ concepts:
         method: _mergeFreezeFamily
         notes: the post-pass; delegates to StreakProgressService.mergeFreezeProgress.
       - file: lib/core/services/sync/sync_profile.dart
-        line_range: 931-1029
+        line_range: 935-1033
         method: _restoreUserProgress
         notes: owner guard before the put, then `unawaited(syncFreezes())` when the merge scheduled a push.
       - file: lib/core/services/auth_session_bootstrapper.dart
@@ -5685,7 +5769,7 @@ concepts:
         method: mergeCloudProgress
         notes: the date branch inside the cloud-copy loop; laterIsoDate at 125.
       - file: lib/core/services/sync/sync_profile.dart
-        line_range: 931-1029
+        line_range: 935-1033
         method: _restoreUserProgress
         notes: passes istToday; the push sends p_last_workout_date.
       - file: lib/core/services/auth_session_bootstrapper.dart
@@ -5698,7 +5782,7 @@ concepts:
     reader_manifest_complete: false
     readers:
       - file: lib/core/services/sync/sync_profile.dart
-        line_range: 931-1029
+        line_range: 935-1033
         method: _restoreUserProgress
         semantic: pass-through
         fields_read: [last_workout_date, current_streak_weeks]
@@ -5767,7 +5851,7 @@ concepts:
         fields_read: [current_streak_weeks]
         notes: fires the streak-risk insight when weeks > 2.
       - file: lib/features/ai_coach/services/ai_snapshot_builder.dart
-        line_range: 69-251
+        line_range: 108-303
         method: buildAiContext
         semantic: pass-through
         fields_read: [current_streak_weeks]
@@ -5825,7 +5909,7 @@ concepts:
           entry always wins (the block no-ops when a row already exists).
           Consumed by the readiness sheet's SLEEP axis via sleepAxisFromHours.
       - file: lib/features/profile/providers/profile_provider.dart
-        line_range: 634-642
+        line_range: 683-691
         method: logSleep
         # Was `BiometricNotifier.logSleep`. check_sot_registry_parity's
         # _extractSymbol takes the FIRST identifier of a dotted value, so the
@@ -5840,7 +5924,7 @@ concepts:
     reader_manifest_complete: true
     readers:
       - file: lib/features/profile/providers/profile_provider.dart
-        line_range: 512-569
+        line_range: 561-618
         method: BiometricNotifier.build (biometricProvider)
         semantic: latest
         fields_read: [type, sleep_hours, date]
@@ -5919,7 +6003,7 @@ concepts:
     sync_methods: [_syncSleepLogs]
     restore_methods: [_restoreSleepLogs]
     ist_sites:
-      - { file: lib/features/profile/providers/profile_provider.dart, line: 639, fn: logSleep }
+      - { file: lib/features/profile/providers/profile_provider.dart, line: 688, fn: logSleep }
     telemetry:
       failure_op_types: [upsert_sleep_log]
     class_constraints: |
@@ -5949,7 +6033,7 @@ concepts:
         method: completeOnboarding
         notes: writes to userBox['profile']['full_name'] + syncs to users table
       - file: lib/features/profile/screens/edit_profile_screen.dart
-        line_range: 1743-2145
+        line_range: 1794-2230
         method: _save
         notes: calls syncProfileNow after updating userBox
       - file: lib/features/profile/services/profile_write_service.dart
@@ -5963,7 +6047,7 @@ concepts:
     reader_manifest_complete: true
     readers:
       - file: lib/core/services/sync/sync_profile.dart
-        line_range: 679-823
+        line_range: 683-827
         method: _restoreUserProfile
         semantic: pass-through
         fields_read: [full_name, email]
@@ -6011,7 +6095,7 @@ concepts:
           defect) — closed with a dedicated assertion, verified to fail on
           that same mutation before being accepted.
       - file: lib/features/profile/providers/profile_provider.dart
-        line_range: 64-76
+        line_range: 71-86
         method: UserProfileNotifier.build
         semantic: pass-through
         fields_read: [full_name]
@@ -6037,7 +6121,7 @@ concepts:
           independent getProfile() read in no invalidateOnRetry list, so it
           cached the pre-restore map for the whole session.
       - file: lib/features/home/providers/home_provider.dart
-        line_range: 140-167
+        line_range: 143-170
         method: UserGreetingNotifier.build (userGreetingProvider)
         semantic: display-only
         fields_read: [full_name]
@@ -6046,7 +6130,7 @@ concepts:
           first space; fallback "there". b3c9d4 — DERIVED from
           userProfileProvider; does not read Hive itself.
       - file: lib/features/home/providers/home_provider.dart
-        line_range: 191-223
+        line_range: 194-226
         method: UserFirstNameNotifier.build (userFirstNameProvider)
         semantic: display-only
         fields_read: [full_name]
@@ -6058,7 +6142,7 @@ concepts:
           hasProfile field reports profile.isNotEmpty (the source maps an
           absent map to {}, where getProfile() returned null).
       - file: lib/features/home/providers/home_provider.dart
-        line_range: 227-239
+        line_range: 230-242
         method: UserInitialNotifier.build (userInitialProvider)
         semantic: display-only
         fields_read: [full_name]
@@ -6135,7 +6219,7 @@ concepts:
       public URL is identical after a re-upload; the stored `?v=` is what moves.
     writers:
       - file: lib/features/profile/providers/profile_provider.dart
-        line_range: 199-340
+        line_range: 248-389
         method: uploadAvatar / uploadBanner
         notes: |
           Store ProfileImageUrl.versioned(publicUrl, version: now-millis) into
@@ -6155,7 +6239,7 @@ concepts:
           Passes the stored URL to ProfileIdentity via ProfileImageUrl.forDisplay
           (verbatim). Was _addCacheBuster (per-build ?t= timestamp) — removed.
       - file: lib/core/services/sync/sync_profile.dart
-        line_range: 145-266
+        line_range: 145-270
         method: _syncUserProfile
         semantic: pass-through
         fields_read: [avatar_url, banner_url]
@@ -6168,7 +6252,7 @@ concepts:
           after Unit 3b's own P1 fix (pushOnboardingProgressSnapshot, inserted
           earlier in the file) shifted both down ~80 lines each.
       - file: lib/core/services/sync/sync_profile.dart
-        line_range: 679-823
+        line_range: 683-827
         method: _restoreUserProfile
         semantic: pass-through
         fields_read: [avatar_url, banner_url]
@@ -6219,7 +6303,7 @@ concepts:
           onboarding_completed_at) to cloud fire-and-forget; preserves the
           sync-before-referral order.
       - file: lib/core/services/sync/sync_profile.dart
-        line_range: 145-266
+        line_range: 145-270
         method: _syncUserProfile (via syncProfileNow)
         notes: |
           DURABLE recurring writer (c4d8a2). Pre-fix this canonical profile->cloud
@@ -6679,14 +6763,14 @@ concepts:
           The ONE local writer (max-wins, no await between read and put);
           CoachChatClear.clear stamps the device now and fires the push.
       - file: lib/core/services/sync/sync_profile.dart
-        line_range: 1088-1179
+        line_range: 1092-1183
         method: _restoreUserPreferences
         notes: |
           Removes the column before the generic merge (never lands in
           userBox['preferences']); adopts it max-wins, capped at device now,
           in its own block with a fresh ownerChangedSince.
       - file: lib/core/services/sync/sync_profile.dart
-        line_range: 1197-1225
+        line_range: 1201-1229
         method: pushCoachChatClearedAt
         notes: |
           Cloud push through raise_coach_chat_cleared_at; IST-day pushed-memory;
@@ -7026,7 +7110,7 @@ concepts:
           plan-less day (total_planned == 0) — consistent with the dispatcher no
           longer vacuously auto-completing a plan-less day.
       - file: lib/features/home/providers/home_provider.dart
-        line_range: 134-562
+        line_range: 137-565
         method: calendarWeekProvider (~132) + todayWorkoutProvider (~518)
         semantic: flag-check
         fields_read: [status, completed_at_ms]
@@ -7345,7 +7429,7 @@ concepts:
       - { file: supabase/functions/assess-body-composition/index.ts, line_range: 86-224, method: "serve handler — 30-day rate-limit block", notes: "Also read-merge-write: selects existing coaching_notes, JSON.parse, sets last_bf_assessed_at, re-upserts onConflict user_id — never a blind overwrite of daily-snapshot's keys." }
     reader_manifest_complete: false
     readers:
-      - { file: lib/core/services/sync/sync_profile.dart, line_range: 1088-1179, method: _restoreUserPreferences, semantic: pass-through, notes: "Generic .select() on user_preferences pulls the whole row, incl. coaching_notes, into Hive on restore. The client never writes this key back (see class_constraints below) — reader_manifest_complete is false because nothing in lib/ currently parses this JSON's individual keys client-side; it round-trips opaquely." }
+      - { file: lib/core/services/sync/sync_profile.dart, line_range: 1092-1183, method: _restoreUserPreferences, semantic: pass-through, notes: "Generic .select() on user_preferences pulls the whole row, incl. coaching_notes, into Hive on restore. The client never writes this key back (see class_constraints below) — reader_manifest_complete is false because nothing in lib/ currently parses this JSON's individual keys client-side; it round-trips opaquely." }
       - { file: supabase/functions/restore-user-snapshot/index.ts, line: 167, method: "serve handler", semantic: pass-through, notes: "Server-side restore endpoint selects user_preferences.* (incl. coaching_notes) back to a fresh install / reinstall." }
     cloud:
       table: user_preferences
@@ -7428,7 +7512,7 @@ concepts:
     reader_manifest_complete: true
     readers:
       - file: lib/core/services/sync_service.dart
-        line_range: 2583-2648
+        line_range: 2585-2650
         method: _reportSyncFailure (funnel — all sync failures route through here)
         semantic: pass-through
         fields_read: []
@@ -7445,7 +7529,7 @@ concepts:
           Fires hive_session_opened / hive_session_closed /
           hive_session_reopen_noop events for every owner transition.
       - file: lib/core/services/subscription_service.dart
-        line_range: 197-1228
+        line_range: 198-1229
         method: subscription refresh + verify events
         semantic: pass-through
         fields_read: []
@@ -7495,7 +7579,7 @@ concepts:
         semantic: pass-through
         fields_read: []
       - file: lib/features/nutrition/providers/nutrition_provider.dart
-        line_range: 993-1007
+        line_range: 1096-1110
         method: "AiBreakdownNotifier.saveMeal catch block"
         semantic: pass-through
         fields_read: []
@@ -8266,7 +8350,7 @@ concepts:
     reader_manifest_complete: true
     readers:
       - file: lib/features/home/providers/home_provider.dart
-        line_range: 642-930
+        line_range: 677-965
         method: WeightHistoryNotifier + WeightLogNotifier + todayWeightLoggedProvider
         semantic: historical-series
         fields_read: [type, weight_kg, date]
@@ -8275,7 +8359,7 @@ concepts:
           WeightLogNotifier.logWeight (line 779) calls HealthWriteService.logWeight
           + invalidates the canonical provider set.
       - file: lib/features/profile/providers/profile_provider.dart
-        line_range: 512-604
+        line_range: 561-653
         method: BiometricNotifier (sleep) + logSleep
         semantic: latest
         fields_read: [type, sleep_hours, date]
@@ -8284,7 +8368,7 @@ concepts:
           legacy list — see sleep_logs concept dual-key hazard). Save
           path delegates to HealthWriteService.logSleep at line 502.
       - file: lib/features/nutrition/providers/nutrition_provider.dart
-        line_range: 411-537
+        line_range: 514-640
         method: WaterIntakeNotifier + UrineColorNotifier + HydrationSaveNotifier
         semantic: latest
         fields_read: [water_ml, urine_color, hydration]
@@ -8998,7 +9082,7 @@ concepts:
     reader_manifest_complete: true
     readers:
       - file: lib/core/services/subscription_service.dart
-        line_range: 257-257
+        line_range: 258-258
         method: onStateChanged
         semantic: callback-invocation
         fields_read: []
@@ -9398,7 +9482,7 @@ concepts:
       2026-05-20 A7 audit; PredictionService added 2026-09-26, B-pass
       round 2, single-owner-a — see its writers: entry above.)
     writers:
-      - { file: lib/core/services/sync_service.dart, line: 83, method: "SyncService._() constructor → _registerLifecycle()", notes: "Resets _healthSyncCompleter / restoreProgressLabel / _restoreCancelled." }
+      - { file: lib/core/services/sync_service.dart, line: 85, method: "SyncService._() constructor → _registerLifecycle()", notes: "Resets _healthSyncCompleter / restoreProgressLabel / _restoreCancelled." }
       - { file: lib/core/services/subscription_service.dart, line: 17, method: "SubscriptionService._() constructor → _registerLifecycle()", notes: "Re-fires onStateChanged so Riverpod consumers re-read the new user's PRO state." }
       - { file: lib/core/services/workout_schedule_service.dart, line: 177, method: "WorkoutScheduleService._() constructor → _registerLifecycle()", notes: "All state in workoutBox / userBox; reset hook is a no-op placeholder." }
       - { file: lib/core/services/usage_counter_service.dart, line: 13, method: "UsageCounterService._() constructor → _registerLifecycle()", notes: "Counters live in per-user userBox; reset hook is a no-op placeholder." }
@@ -10445,7 +10529,7 @@ concepts:
         method: InjuryVocab.normalize / canonicalTokens / chipTokens / toggleChip
         notes: canonical 9-token set + read-side alias (back to lower_back, free-text to token); Ship 3 added chipTokens (single chip-UI source == none ∪ canonicalTokens) + chipLabel + pure toggleChip shared by both chip screens
       - file: lib/features/profile/screens/edit_profile_screen.dart
-        line_range: 1291-1356
+        line_range: 1342-1407
         method: _buildInjuriesChips + profile reader
         notes: chips emit canonical tokens (via InjuryVocab.chipTokens/toggleChip Ship 3); reader normalizes legacy stored values
       - file: lib/features/onboarding/screens/details_screen.dart
@@ -12864,7 +12948,7 @@ concepts:
       the banner is week-model work, out of scope here.
     writers:
       - file: lib/core/services/sync/sync_profile.dart
-        line_range: 388-462
+        line_range: 392-466
         method: _syncUserProgress
         notes: |
           THE canonical writer. Projects the program week into the current_week
@@ -12892,7 +12976,7 @@ concepts:
           at :969 (the cloud progress row; both cites re-derived 2026-11-14 from
           the 'current_week': 1 literal, the old 473 / 786 had drifted). NOT routed through the projection (no need).
       - file: lib/core/services/sync_service.dart
-        line_range: 1088-1092
+        line_range: 1090-1094
         method: _replayPendingOnboardingSync (NO LONGER writes current_week)
         notes: |
           B-pass F1: this boot-replay used to pass the frozen Hive current_week
@@ -13127,7 +13211,7 @@ concepts:
           Never throws: an escape here would kill the user's ENTIRE daily
           snapshot via compileDailySnapshot -> pushSnapshotNow, not just prefs.
       - file: lib/core/services/sync_service.dart
-        line_range: 1115-1172
+        line_range: 1117-1174
         method: compileDailySnapshot
         semantic: pass-through
         notes: >
@@ -13137,7 +13221,7 @@ concepts:
           record, so an unrestored device can no longer assert an all-enabled
           default over the stored copy.
       - file: lib/core/services/sync/sync_profile.dart
-        line_range: 663-753
+        line_range: 667-757
         method: _syncUserPreferences
         semantic: latest
         notes: |
@@ -13175,7 +13259,7 @@ concepts:
           a corrupted or half-written value cannot silently darken a
           notification. Swallows storage errors and returns {} (=> all-enabled).
       - file: lib/core/services/sync/sync_profile.dart
-        line_range: 1088-1179
+        line_range: 1092-1183
         method: _restoreUserPreferences
         semantic: latest
         fields_read: [enabled]
@@ -13426,7 +13510,7 @@ concepts:
           (→913) despite the gate not flagging it, found by grepping the
           symbol directly rather than trusting the gate's silence on it.
       - file: lib/core/services/sync_service.dart
-        line_range: 2788-2788
+        line_range: 2790-2790
         method: restoreOpTimeout
         semantic: per-op-ceiling
         notes: day-swapper + sync-load Task 20 fix1 (diagnose a9d3f6) shifted
@@ -13437,7 +13521,7 @@ concepts:
           an N-M line_range — but left stale it would misdirect a future
           reader by the same +14).
       - file: lib/core/services/sync_service.dart
-        line_range: 2811-2815
+        line_range: 2813-2817
         method: applyRestoreCeiling
         semantic: apply-ceiling
         notes: day-swapper + sync-load Task 20 shifted this range (+148 lines,
@@ -13447,7 +13531,7 @@ concepts:
           blocks on a citation you shifted). Shifted again by task-20-fix1
           (diagnose a9d3f6, +14 lines, same method) for the same reason.
       - file: lib/core/services/sync_service.dart
-        line_range: 2827-2829
+        line_range: 2829-2831
         method: restoreFailureReason
         semantic: telemetry-reason-split
         notes: same shift as applyRestoreCeiling directly above, both times; all three re-derived +3 by the Hermes sync_epoch_seen doc comment (2026-09-28), then +1 (with _safeRestoreOp) by the plan_engine_flags import the merge-review F4 fix added (a3e7d9).
@@ -13462,7 +13546,7 @@ concepts:
         method: _authRedirect
         semantic: delegates-to-pure-fn
       - file: lib/core/services/sync_service.dart
-        line_range: 2810-2852
+        line_range: 2812-2854
         method: _safeRestoreOp
         semantic: bounded-await
     hive:
@@ -14908,7 +14992,7 @@ concepts:
           — which is why ai-proxy's 60s dedup refresh does not burn a slot.
     readers:
       - file: lib/core/constants/app_constants.dart
-        line_range: 84-87
+        line_range: 87-90
         method: freeAiTextLogsPerDay
         semantic: client-constant
         notes: must equal the trigger's FREE arm; pinned by the behavioral_test_path above
@@ -15530,7 +15614,7 @@ concepts:
         fields_read: [type]
         notes: "Task 29 (wave-3 carry item 2) re-derived this as a METHOD-SPANNING range (signature to closing brace, confirmed by direct read) rather than the previous 5-line window -- needsHeal was repointed 3 times this batch (T21, T22, T21-fix1: T22 added an import + the L2 write-only-if-differs block inside mergeScheduleBundleIntoHive; T21-fix1 shortened _mondayOfIsoWeek to delegate to DaySwapRules.mondayOf; all three land ABOVE needsHeal in the same file, so the method body itself is unchanged but every narrow line_range citing it goes stale on each shift). A method-spanning range absorbs future shifts of code ABOVE it without going stale again for this reason; only a change to needsHeal's OWN body would require re-deriving this citation."
       - file: lib/features/home/providers/home_provider.dart
-        line_range: 98-719
+        line_range: 101-754
         method: "calendar week status classifier feeding streak-banner remaining-count / StreakWarningEligibility / AI-insight quick-text (3 sites)"
         semantic: flag-check
         fields_read: [type]
@@ -16708,7 +16792,7 @@ concepts:
           once, a much smaller harm than blocking the profile save this
           runs alongside.
       - file: lib/features/profile/screens/edit_profile_screen.dart
-        line_range: 1861-1890
+        line_range: 1944-1973
         method: "_save (via the pure computeCoachExtractionFieldsToLock helper)"
         notes: |
           Locks only fields that ACTUALLY changed this save (diet_preference /
@@ -16747,7 +16831,7 @@ concepts:
         fields_read: [coach_extraction_locked_fields]
         notes: the only reader of the lock list itself
       - file: lib/features/ai_coach/services/ai_snapshot_builder.dart
-        line_range: 1036-1045
+        line_range: 1088-1097
         method: _getCoachMemoryForContext
         semantic: pass-through
         fields_read: [locked_field_conflicts]
@@ -18615,7 +18699,7 @@ concepts:
         semantic: cloud-write
     readers:
       - file: lib/shared/widgets/paywall_sheet.dart
-        line_range: 200-251
+        line_range: 202-253
         method: _validatePromoCode — valid == true, else shows data['reason']; the call passes spendsQuotaPerCall (OI-414), so a thrown gateway error reaches the catch after one attempt
         semantic: cloud-read
       - file: supabase/functions/_shared/founder_digest_content.ts

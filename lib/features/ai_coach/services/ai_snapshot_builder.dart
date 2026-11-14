@@ -48,7 +48,10 @@ import 'package:icanbefitter/core/services/day_swap/day_swap_result.dart';
 import 'package:icanbefitter/core/services/day_swap/day_swap_rules.dart';
 import '../models/coach_memory.dart';
 import 'package:icanbefitter/core/constants/equipment_defaults.dart';
+import 'package:icanbefitter/core/constants/diet_strategies.dart';
 import 'package:icanbefitter/core/constants/food_types.dart';
+import 'package:icanbefitter/core/utils/effective_macro_targets.dart';
+import 'package:icanbefitter/features/nutrition/services/diet_strategy_flags.dart';
 import 'package:icanbefitter/shared/repositories/plan_engine/training_history_analyzer.dart';
 
 /// Builder for the AI Coach user_daily_snapshot context map.
@@ -63,6 +66,42 @@ class AiSnapshotBuilder {
   static AiSnapshotBuilder get instance => _instance;
 
   final HiveService _hive = HiveService.instance;
+
+  /// Diet plan Unit 3a: null when [DietStrategyFlags.enabled] is false (no
+  /// new key, raw `daily_targets`). With the flag on: the strategy the shown
+  /// targets were made for, plus the carb/fat to send, which are the
+  /// strategy's only when the stored pack is complete and the user is PRO
+  /// (otherwise the raw stored values, carried unchanged, and Balanced).
+  ({DietStrategy strategy, double? carbs, double? fat})? _dietStrategyTargets(
+    Map<dynamic, dynamic> profile,
+  ) {
+    if (!DietStrategyFlags.enabled) return null;
+    const balanced = (strategy: DietStrategy.balanced, carbs: null, fat: null);
+    final calories = profile['daily_calories'] as num?;
+    final protein = profile['protein_grams'] as num?;
+    final carbs = (profile['carb_grams'] ?? profile['carbs_grams']) as num?;
+    final fat = profile['fat_grams'] as num?;
+    if (calories == null || protein == null || carbs == null || fat == null) {
+      return balanced;
+    }
+    final effective = effectiveMacroTargets(
+      (
+        calories: calories.toDouble(),
+        protein: protein.toDouble(),
+        carbs: carbs.toDouble(),
+        fat: fat.toDouble(),
+      ),
+      profile['diet_strategy'],
+      pro: SubscriptionService.instance.proStateSnapshot(),
+      enabled: true,
+    )!;
+    if (effective.strategy == DietStrategy.balanced) return balanced;
+    return (
+      strategy: effective.strategy,
+      carbs: effective.carbs,
+      fat: effective.fat,
+    );
+  }
 
   /// Builds the full AI context map from all Hive boxes.
   /// This is the user_daily_snapshot that gets sent with every AI message.
@@ -88,6 +127,12 @@ class AiSnapshotBuilder {
     final effectiveEquipment =
         TrainingHistoryAnalyzer.effectiveEquipmentForSnapshot(profile);
 
+    // Diet plan Unit 3a (docs/plans/diet-strategy.md §3.3/§3.9): the coach
+    // sees the SHOWN carb/fat targets and the strategy they were made for.
+    // null with the flag off: `daily_targets` keeps its raw reads and the new
+    // keys are omitted, so the snapshot is byte-identical to before 3a.
+    final dietStrategyTargets = _dietStrategyTargets(profile);
+
     final snapshot = <String, dynamic>{
       'is_first_ever_message': isFirstEverMessage,
       'profile': {
@@ -111,6 +156,10 @@ class AiSnapshotBuilder {
         // spelling or ''), plus its label for the coach.
         'diet_preference': foodTypeOfProfile(profile).storageKey,
         'diet_preference_label': foodTypeOfProfile(profile).label,
+        if (dietStrategyTargets != null) ...{
+          'diet_strategy': dietStrategyTargets.strategy.storageKey,
+          'diet_strategy_label': dietStrategyTargets.strategy.label,
+        },
         'injuries': profile['injuries'] ?? '',
         'bmr': profile['bmr'] ?? 0,
         'tdee': profile['tdee'] ?? 0,
@@ -164,10 +213,13 @@ class AiSnapshotBuilder {
       'daily_targets': {
         'calories': (profile['daily_calories'] as num?)?.toDouble() ?? 0,
         'protein': (profile['protein_grams'] as num?)?.toDouble() ?? 0,
-        'carbs': ((profile['carb_grams'] ?? profile['carbs_grams']) as num?)
+        'carbs': dietStrategyTargets?.carbs ??
+            ((profile['carb_grams'] ?? profile['carbs_grams']) as num?)
                 ?.toDouble() ??
             0,
-        'fat': (profile['fat_grams'] as num?)?.toDouble() ?? 0,
+        'fat': dietStrategyTargets?.fat ??
+            (profile['fat_grams'] as num?)?.toDouble() ??
+            0,
       },
       'this_week_workouts': _getThisWeekWorkouts(),
       'today_nutrition': _getTodayNutrition(),

@@ -234,6 +234,10 @@ extension SyncServiceProfile on SyncService {
       if (SyncService._hasValue(p['lifestyle_activity'])) 'lifestyle_activity': p['lifestyle_activity'],
       if (SyncService._hasValue(p['pace_preference'])) 'pace_preference': p['pace_preference'],
       if (SyncService._hasValue(p['diet_preference'])) 'diet_preference': p['diet_preference'],
+      // Diet plan Unit 3a (docs/plans/diet-strategy.md §3.10): column
+      // `user_profile.diet_strategy` (migration 179). Flag-gated and canonical
+      // (dietStrategyPushEntry).
+      ...dietStrategyPushEntry(p, enabled: DietStrategyFlags.enabled),
       if (SyncService._hasValue(p['injuries'])) 'injuries': p['injuries'] is List ? p['injuries'] : <String>[],
       if (SyncService._hasValue(p['city'])) 'city': p['city'],
       if (SyncService._hasNumber(p['bmr'])) 'bmr': (p['bmr'] as num).round(),

@@ -10,6 +10,7 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:icanbefitter/core/constants/diet_strategies.dart';
 import 'package:icanbefitter/features/nutrition/widgets/food_type_tag.dart';
 
 Widget _host(Map<String, dynamic> profile, VoidCallback onTap) => MaterialApp(
@@ -52,8 +53,30 @@ void main() {
         .readAsStringSync();
     final card = src.substring(src.indexOf('Widget _buildCalorieCard('));
     expect(
-        RegExp(r"FoodTypeTag\(\s*profile:\s*profile,\s*onTap:\s*\(\)\s*=>\s*context\.go\('/nutrition/diet-plan'\),")
+        RegExp(r"FoodTypeTag\(\s*profile:\s*profile,\s*strategy:\s*nutrition\.strategy,\s*onTap:\s*\(\)\s*=>\s*context\.go\('/nutrition/diet-plan'\),")
             .hasMatch(card),
-        isTrue);
+        isTrue,
+        reason: 'diet plan Unit 3a (9b): the label takes the strategy carried '
+            'WITH the card numbers (DailyNutritionData.strategy)');
+  });
+
+  // Diet plan Unit 3a (plan §4 test 9b): the strategy comes from the caller,
+  // the same object as the numbers; the tag never reads `diet_strategy`.
+  testWidgets('the strategy tag comes from the parameter, never the profile',
+      (tester) async {
+    await tester.pumpWidget(_host(
+        {'diet_preference': 'non_veg', 'diet_strategy': 'keto'}, () {}));
+    expect(find.text('NON-VEG'), findsOneWidget,
+        reason: 'a stored keto with no carried strategy shows no tag');
+    await tester.pumpWidget(MaterialApp(
+      home: Scaffold(
+        body: FoodTypeTag(
+          profile: const {'diet_preference': 'non_veg'},
+          strategy: DietStrategy.keto,
+          onTap: () {},
+        ),
+      ),
+    ));
+    expect(find.text('NON-VEG \u00B7 KETO'), findsOneWidget);
   });
 }
