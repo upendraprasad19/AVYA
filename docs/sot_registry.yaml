@@ -1724,12 +1724,12 @@ concepts:
         semantic: filtered
         fields_read: [diet_preference, is_veg, is_vegan, name]
       - file: supabase/functions/weekly-report/index.ts
-        line_range: 513-527
+        line_range: 527-541
         method: "prompt line 'Diet preference:' via dietPreferenceLine (presence pin: the handler builds the prompt inline under serve(); DISABLE_FOOD_TYPE_MANUAL_RULES restores the raw line)"
         semantic: pass-through
         fields_read: [diet_preference]
       - file: supabase/functions/_shared/captain_manual.ts
-        line_range: 460-508
+        line_range: 460-512
         method: captainManual (the prompt rule naming the five food types; DISABLE_FOOD_TYPE_MANUAL_RULES serves CAPTAIN_MANUAL_LEGACY_FOOD; the "Older values" line says keto / low_carb are old food-type spellings, the strategy is its own field)
         semantic: pass-through
         fields_read: [snapshot.profile.diet_preference]
@@ -1837,10 +1837,20 @@ concepts:
         semantic: filtered
         fields_read: [diet_strategy, carbs_std, category]
       - file: supabase/functions/_shared/captain_manual.ts
-        line_range: 486-508
-        method: "DIET_STRATEGY_MANUAL_PASSAGE + captainManual (Unit 3b-2: SECTION 7 tells the model to plan to snapshot.daily_targets carbs/fat for low_carb / keto, never to change the strategy in chat, and the Keto medical note; inert without snapshot.profile.diet_strategy, which only the chat snapshot carries with the app's flag on (weekly-report bundles the passage but never sends the key); DISABLE_DIET_STRATEGY_MANUAL_RULES removes the passage, composed after the food-type switch)"
+        line_range: 486-512
+        method: "DIET_STRATEGY_MANUAL_PASSAGE + captainManual (Unit 3b-2: SECTION 7 tells the model to plan to snapshot.daily_targets carbs/fat for low_carb / keto, never to change the strategy in chat, and the Keto medical note; inert without snapshot.profile.diet_strategy, which the app's buildAiContext adds with its flag on; the chat snapshot and the daily snapshot push carry it, but no prompt builder reads a stored snapshot (ai-proxy gets the live chat snapshot, weekly-report none); DISABLE_DIET_STRATEGY_MANUAL_RULES removes the passage, composed after the food-type switch)"
         semantic: pass-through
         fields_read: [snapshot.profile.diet_strategy, snapshot.daily_targets.carbs, snapshot.daily_targets.fat]
+      - file: supabase/functions/_shared/diet_strategies.ts
+        line_range: 16-34
+        method: "weeklyReportDietStrategyLine (Unit 3b-3 B-pass seat A finding 2: a Low carb / Keto line for a PRO caller telling the model not to grade carbs or fat and never to push carbs; empty for Balanced, unreadable or no PRO)"
+        semantic: transformed
+        fields_read: [diet_strategy]
+      - file: supabase/functions/weekly-report/index.ts
+        line_range: 206-217
+        method: "handler profile read (Unit 3b-3 B-pass: selects diet_strategy; dietStrategyOn = DISABLE_DIET_STRATEGY_MANUAL_RULES not exactly 'true', read once; the line goes under the protein target in the user message, empty with the switch off; source pins weekly-report/index_test.ts)"
+        semantic: pass-through
+        fields_read: [diet_strategy]
     hive:
       box: userBox
       key_prefix: "profile"
@@ -1867,7 +1877,8 @@ concepts:
       = balanced). suggestMeal applies it only to a PRO caller
       (ctx.isPro, server-verified) whose profile read succeeded. Kill
       switches (each exactly "true"): DISABLE_SUGGESTMEAL_DIET_STRATEGY,
-      DISABLE_DIET_STRATEGY_MANUAL_RULES; removal tracked with OI-510.
+      DISABLE_DIET_STRATEGY_MANUAL_RULES (also the weekly-report line);
+      removal tracked with OI-510.
 
   - concept: food_is_everyday
     domain: nutrition
@@ -13092,7 +13103,7 @@ concepts:
         fields_read: [current_week]
         notes: push copy 'Week ${currentWeek} debrief ready' (:76). Pure interpolation — no EF redeploy needed; fixing the column fixes the push.
       - file: supabase/functions/weekly-report/index.ts
-        line_range: 147-461
+        line_range: 150-470
         method: weekly brief userMessage
         semantic: pass-through
         fields_read: [current_week]

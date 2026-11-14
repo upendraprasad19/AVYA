@@ -38,3 +38,7 @@ The three plan rounds of `docs/plans/diet-strategy-3b.md` each covered §5 (the 
 ## B-pass
 
 Accepted: `docs/reviews/diet-strategy-3b2-bpass.md` (three context-blind seats on `638041b5`; no P0/P1; P2s fixed except the food-type switch interaction, accepted and pinned). Fixes: the strategy note on every answer, protein powders left out under a cap, the strategy column read only when it can apply, a shared spelling vector with the Dart side, boundary and precondition tests.
+
+## After the B-pass (2026-11-15)
+
+The Unit 3b-3 B-pass found two server gaps in this landing (seat A findings 1 and 2: the weekly report had no strategy line, and two comments said only the chat snapshot carries the key). Both are fixed on this branch so the deploys before the 3b-3 go carry them; the fix and its eight mutants are in the addendum of `docs/reviews/diet-strategy-3b2-bpass.md`, and the 3b-3 B-pass covered the change (a fresh seat on this delta).

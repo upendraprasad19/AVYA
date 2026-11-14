@@ -85,3 +85,29 @@ Deno.test(
     );
   },
 );
+
+// Unit 3b-3 B-pass seat A finding 2: the report reads the strategy (behind the
+// manual switch) and puts the line right under the protein target. The line's
+// own text is tested on weeklyReportDietStrategyLine (_shared/diet_strategies_test.ts).
+Deno.test("weekly-report reads diet_strategy; the line only with the switch on", () => {
+  const code = stripComments(source);
+  assert(
+    code.includes("const dietStrategyOn = !dietStrategyManualRulesOff();"),
+    "the switch is read once",
+  );
+  assert(
+    /\.from\("user_profile"\)\s*\.select\(\s*"[^"]*, diet_strategy",/.test(code),
+    "the profile read selects diet_strategy",
+  );
+  assert(
+    code.includes("const dietStrategyLine = dietStrategyOn\n      ? weeklyReportDietStrategyLine(userProfile?.diet_strategy, Boolean(hasPro))\n      : \"\";"),
+    "the line uses the stored strategy and the PRO answer, empty with the switch off",
+  );
+});
+
+Deno.test("weekly-report puts the strategy line under the protein target", () => {
+  const code = stripComments(source);
+  const at = code.indexOf("- Daily protein target: ${proteinTarget}g${dietStrategyLine ? `\\n${dietStrategyLine}` : \"\"}\n\n**THIS WEEK'S NUTRITION");
+  assert(at >= 0, "the line sits right after the protein target, nothing when empty");
+  assert(code.indexOf("const dietStrategyLine =") < at, "computed before the message");
+});

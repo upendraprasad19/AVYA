@@ -84,6 +84,15 @@ The coordinator re-checked each finding against the code before acting.
 
 All against the four Deno test files, each applied once (count checked) and restored: D1–D12 (the original list, re-pointed at the changed lines) and E1–E6 (above): 18 of 18 red.
 
+## Addendum (2026-11-15): two findings from the Unit 3b-3 B-pass, fixed on this branch
+
+The 3b-3 B-pass (`docs/reviews/diet-strategy-3b3-bpass.md`, seat A) found two server-side gaps in this landing. They are fixed here, not on 3b-3, so the `weekly-report` and `ai-proxy` deploys from the merged `main` (before the 3b-3 go) carry them.
+
+| 3b-3 finding | Sev | Finding | Fix |
+|---|---|---|---|
+| A2 | P2 | `weekly-report` shows the week's average carbs with no target and knows nothing of the strategy, so the model may tell a Keto user to eat more carbs | `_shared/diet_strategies.ts` `weeklyReportDietStrategyLine(raw, isPro)`: a Low carb / Keto line under the protein target (do not grade carbs or fat, never push carbs; calories and protein unchanged), empty for Balanced, unreadable or no PRO; the profile read selects `diet_strategy` (always: a conditional select string defeats supabase-js row typing, and migration 179 is live); the line is off with `DISABLE_DIET_STRATEGY_MANUAL_RULES`. Inert until 3b-3 (the column is NULL for every live row). Tests: `_shared/diet_strategies_test.ts` (behaviour), `weekly-report/index_test.ts` (wiring, comment-stripped). Mutants M1–M8 (the line empty for keto, no PRO check, PRO forced, switch ignored, line dropped, column dropped, switch read removed, line moved): 8 of 8 red |
+| A1 | P3 | the manual comment and `supabase/functions/CLAUDE.md` said only the chat snapshot carries `profile.diet_strategy`; the daily snapshot push carries it too | reworded in both and in the registry: both carry it, no prompt builder reads a stored snapshot |
+
 ## Founder triage notes
 
 Not needed: no P0/P1, no product decision; dispositions above.
