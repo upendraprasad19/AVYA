@@ -339,12 +339,12 @@ REFUSAL STYLE:
 
 DIET:
 - Respect snapshot.profile.diet_preference: veg (no meat, fish or eggs), non_veg (anything), eggetarian (veg plus eggs), pescatarian (veg plus eggs, fish and seafood), vegan (no animal products: no dairy, eggs, meat, fish, honey or whey; plant protein instead). Never suggest a food outside it.
-- Older values: vegetarian = veg; keto or low_carb = non_veg (a food type; the diet strategy is a separate field, below); empty or missing = non_veg.
+- Older values: vegetarian = veg; keto or low_carb = non_veg (a food type; the diet strategy is a separate field, snapshot.profile.diet_strategy); empty or missing = non_veg.
 - Many Indian users are vegetarian. For them, plan around dal, paneer, chickpeas and legumes.
 - Jain restrictions: no root vegetables (potato, onion, garlic). Verify before suggesting.
 - Check diet_preference before whey vs plant protein.
 - Diet strategy (snapshot.profile.diet_strategy: balanced, low_carb or keto; absent = balanced) is separate from the food type. For low_carb or keto, plan to snapshot.daily_targets.carbs and fat; calories and protein do not change.
-- keto: no rice, roti, bread, fruit, sugar or gravy curries. Build meals from eggs, paneer, cheese, meat, fish, plain vegetables, ghee, nuts and seeds. Vegan with keto: plan low_carb meals from plant foods (no vegan keto day exists).
+- keto: no rice, roti, bread, fruit, sugar or gravy curries. Build meals from eggs, paneer, cheese, meat, fish, plain vegetables, ghee, nuts and seeds. Vegan with keto: plan low_carb meals from plant foods (no vegan keto day exists) and say their carbs will be above the keto target.
 - low_carb: one grain portion at lunch, none at dinner; fruit in small portions.
 - Never change the diet strategy or the food type in chat; the user changes them on the Diet Plan screen.
 - Keto is not for everyone: anyone who takes diabetes medicine, is pregnant or breastfeeding, or has kidney disease should check with their doctor first.
@@ -468,7 +468,7 @@ the \`getNutritionHistory\` tool — that data is NOT in your snapshot.
 // the constant). Removal of the switch: tracked on the OI board.
 export const FOOD_TYPE_MANUAL_RULES_NEW = [
   "- Personalize to the user's food type (snapshot.profile.diet_preference; the rules are in SECTION 7, DIET) and protein delivery (snapshot.nutrition_trend_7d.protein_avg vs target)\n",
-  "- Respect snapshot.profile.diet_preference: veg (no meat, fish or eggs), non_veg (anything), eggetarian (veg plus eggs), pescatarian (veg plus eggs, fish and seafood), vegan (no animal products: no dairy, eggs, meat, fish, honey or whey; plant protein instead). Never suggest a food outside it.\n- Older values: vegetarian = veg; keto or low_carb = non_veg (a food type; the diet strategy is a separate field, below); empty or missing = non_veg.\n- Many Indian users are vegetarian. For them, plan around dal, paneer, chickpeas and legumes.\n- Jain restrictions: no root vegetables (potato, onion, garlic). Verify before suggesting.\n- Check diet_preference before whey vs plant protein.\n",
+  "- Respect snapshot.profile.diet_preference: veg (no meat, fish or eggs), non_veg (anything), eggetarian (veg plus eggs), pescatarian (veg plus eggs, fish and seafood), vegan (no animal products: no dairy, eggs, meat, fish, honey or whey; plant protein instead). Never suggest a food outside it.\n- Older values: vegetarian = veg; keto or low_carb = non_veg (a food type; the diet strategy is a separate field, snapshot.profile.diet_strategy); empty or missing = non_veg.\n- Many Indian users are vegetarian. For them, plan around dal, paneer, chickpeas and legumes.\n- Jain restrictions: no root vegetables (potato, onion, garlic). Verify before suggesting.\n- Check diet_preference before whey vs plant protein.\n",
 ] as const;
 export const FOOD_TYPE_MANUAL_RULES_LEGACY = [
   "- Personalize to user's diet (snapshot.profile.diet_preference) and protein delivery (snapshot.nutrition_trend_7d.protein_avg vs target)\n",
@@ -492,7 +492,7 @@ export function foodTypeManualRulesOff(): boolean {
 // DISABLE_DIET_STRATEGY_MANUAL_RULES is exactly "true" (read per call).
 export const DIET_STRATEGY_MANUAL_PASSAGE =
   "- Diet strategy (snapshot.profile.diet_strategy: balanced, low_carb or keto; absent = balanced) is separate from the food type. For low_carb or keto, plan to snapshot.daily_targets.carbs and fat; calories and protein do not change.\n" +
-  "- keto: no rice, roti, bread, fruit, sugar or gravy curries. Build meals from eggs, paneer, cheese, meat, fish, plain vegetables, ghee, nuts and seeds. Vegan with keto: plan low_carb meals from plant foods (no vegan keto day exists).\n" +
+  "- keto: no rice, roti, bread, fruit, sugar or gravy curries. Build meals from eggs, paneer, cheese, meat, fish, plain vegetables, ghee, nuts and seeds. Vegan with keto: plan low_carb meals from plant foods (no vegan keto day exists) and say their carbs will be above the keto target.\n" +
   "- low_carb: one grain portion at lunch, none at dinner; fruit in small portions.\n" +
   "- Never change the diet strategy or the food type in chat; the user changes them on the Diet Plan screen.\n" +
   "- Keto is not for everyone: anyone who takes diabetes medicine, is pregnant or breastfeeding, or has kidney disease should check with their doctor first.\n";

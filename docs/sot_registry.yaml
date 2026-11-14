@@ -1677,7 +1677,7 @@ concepts:
         semantic: filtered
         fields_read: [diet_preference]
       - file: supabase/functions/_shared/tools/nutrition/suggestMeal.ts
-        line_range: 165-362
+        line_range: 165-378
         method: readStoredProfile + handler (stored food type filters food_database by is_veg / is_vegan; egg/fish name rules for the is_veg = false rows; DISABLE_SUGGESTMEAL_STORED_FOOD_TYPE; the same row read carries diet_strategy since Unit 3b-2)
         semantic: filtered
         fields_read: [diet_preference, is_veg, is_vegan, name]
@@ -1776,13 +1776,13 @@ concepts:
         semantic: transformed
         fields_read: [diet_strategy]
       - file: supabase/functions/_shared/tools/nutrition/suggestMeal.ts
-        line_range: 165-362
-        method: "carbsStdCapFor + readStoredProfile + handler (Unit 3b-2: user_profile.diet_strategy through normalizeDietStrategy; only when the read succeeded, ctx.isPro and DISABLE_SUGGESTMEAL_DIET_STRATEGY is not exactly 'true'; keto caps carbs_std at 6 g, a vegan keto caller and low carb at 25 g, inside foodQuery before its literal limit; a note names the filter)"
+        line_range: 165-378
+        method: "carbsStdCapFor + readStoredProfile + handler (Unit 3b-2: user_profile.diet_strategy through normalizeDietStrategy; only when the read succeeded, ctx.isPro and DISABLE_SUGGESTMEAL_DIET_STRATEGY is not exactly 'true'; keto caps carbs_std at 6 g, a vegan keto caller and low carb at 25 g, inside foodQuery before its literal limit, protein powders (category supplements) left out under a cap; the note is pushed before any early return; with the switch on or a free caller the read selects diet_preference alone; DISABLE_SUGGESTMEAL_STORED_FOOD_TYPE routes to the pre-2b legacyHandler, which applies no cap)"
         semantic: filtered
-        fields_read: [diet_strategy, carbs_std]
+        fields_read: [diet_strategy, carbs_std, category]
       - file: supabase/functions/_shared/captain_manual.ts
         line_range: 486-508
-        method: "DIET_STRATEGY_MANUAL_PASSAGE + captainManual (Unit 3b-2: SECTION 7 tells the model to plan to snapshot.daily_targets carbs/fat for low_carb / keto, never to change the strategy in chat, and the Keto medical note; inert without snapshot.profile.diet_strategy, which only the chat snapshot carries with the app's flag on; DISABLE_DIET_STRATEGY_MANUAL_RULES removes the passage, composed after the food-type switch)"
+        method: "DIET_STRATEGY_MANUAL_PASSAGE + captainManual (Unit 3b-2: SECTION 7 tells the model to plan to snapshot.daily_targets carbs/fat for low_carb / keto, never to change the strategy in chat, and the Keto medical note; inert without snapshot.profile.diet_strategy, which only the chat snapshot carries with the app's flag on (weekly-report bundles the passage but never sends the key); DISABLE_DIET_STRATEGY_MANUAL_RULES removes the passage, composed after the food-type switch)"
         semantic: pass-through
         fields_read: [snapshot.profile.diet_strategy, snapshot.daily_targets.carbs, snapshot.daily_targets.fat]
     hive:

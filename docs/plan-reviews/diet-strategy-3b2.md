@@ -4,8 +4,8 @@ date: 2026-11-14
 blast_radius: platform
 review_rounds: 3
 ground_truth_verified: true
-verdict: pending
-bpass: pending
+verdict: converged
+bpass: accepted
 bpass_review: docs/reviews/diet-strategy-3b2-bpass.md
 ---
 
@@ -31,10 +31,10 @@ The three plan rounds of `docs/plans/diet-strategy-3b.md` each covered §5 (the 
 
 ## Build verification
 
-- Deno: `_shared/tools/__tests__/suggestMeal_test.ts` (Unit 3b-2 block, 7 tests), `_shared/captain_manual_diet_strategy_test.ts` (4 tests), `_shared/captain_manual_food_type_test.ts` (unchanged, passes with the reworded line): 51 pass. Whole tree: 1,726 pass, 2 fail with `AddrInUse` (the known port-8000 VPS quirk; CI is the source).
+- Deno: `_shared/tools/__tests__/suggestMeal_test.ts` (Unit 3b-2 block, 11 tests), `_shared/captain_manual_diet_strategy_test.ts` (4), `_shared/diet_strategies_test.ts` (3), `_shared/captain_manual_food_type_test.ts` (unchanged): 57 pass. Dart: `test/core/diet_strategy_vocabulary_test.dart` (17). Whole Deno tree: only the known port-8000 `AddrInUse` failures (CI is the source).
 - `deno check --node-modules-dir=none` on `ai-proxy/index.ts` and `weekly-report/index.ts`: clean.
-- Mutants D1–D12, each applied once (count 1) and restored, run against the three test files: template loses the keto line, manual switch ignored, manual switch applied only on the new food-type base, keto cap 6 -> 7, low carb cap 25 -> 30, `isPro` check dropped, a read error applies keto, the query cap not applied, vegan keto gets the keto cap, the switch case-insensitive, an unknown strategy read as keto, the cap on the main query only: 12 of 12 red.
+- Mutants D1–D12 and E1–E6, each applied once and restored: 18 of 18 red (list in the B-pass file).
 
 ## B-pass
 
-Pending.
+Accepted: `docs/reviews/diet-strategy-3b2-bpass.md` (three context-blind seats on `638041b5`; no P0/P1; P2s fixed except the food-type switch interaction, accepted and pinned). Fixes: the strategy note on every answer, protein powders left out under a cap, the strategy column read only when it can apply, a shared spelling vector with the Dart side, boundary and precondition tests.

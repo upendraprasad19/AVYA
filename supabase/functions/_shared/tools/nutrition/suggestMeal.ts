@@ -169,7 +169,14 @@ type FoodRow = {
 // keeps the vegan fail-safe and applies no strategy. Only with ctx.isPro
 // (server-verified). The column is written only by an app with the strategy
 // switched on, so until then every row is balanced (no cap). Kill switch:
-// DISABLE_SUGGESTMEAL_DIET_STRATEGY exactly "true" (read per call).
+// DISABLE_SUGGESTMEAL_DIET_STRATEGY exactly "true" (read per call); with it
+// on, the profile read selects diet_preference alone, exactly as before.
+// Under a cap the protein powders (category "supplements") are left out:
+// they are the densest rows under 6 g and would fill the top five, while
+// the manual builds keto meals from food (3b-2 B-pass seat B finding 2).
+// The food-type switch DISABLE_SUGGESTMEAL_STORED_FOOD_TYPE routes to the
+// verbatim pre-2b legacyHandler, which applies no cap either (accepted,
+// B-pass finding 1: that switch restores the whole pre-2b tool).
 export const KETO_CARBS_STD_CAP = 6;
 export const LOW_CARB_CARBS_STD_CAP = 25;
 
@@ -184,14 +191,19 @@ export function carbsStdCapFor(strategy: DietStrategyKey, foodType: FoodTypeKey)
   return null;
 }
 
-/** The caller's stored food type and strategy; null when the read failed. */
+/**
+ * The caller's stored food type and strategy; null when the read failed.
+ * [withStrategy] false reads diet_preference alone (the strategy is then
+ * balanced), so a strategy-off call never touches the newer column.
+ */
 async function readStoredProfile(
   ctx: ToolContext,
+  withStrategy: boolean,
 ): Promise<{ foodType: FoodTypeKey; strategy: DietStrategyKey } | null> {
   try {
     const { data, error } = await ctx.sb
       .from("user_profile")
-      .select("diet_preference, diet_strategy")
+      .select(withStrategy ? "diet_preference, diet_strategy" : "diet_preference")
       .eq("user_id", ctx.userId)
       .limit(1);
     if (error) return null;
@@ -219,12 +231,23 @@ async function handler(ctx: ToolContext, args: Args): Promise<SuggestMealRespons
   // the table (the unbounded-read gate, L1b B8); filters chain after it.
   // 500 for the main query, 250 for the is_veg = false rows (196 live).
   const notes: string[] = [];
-  const profile = await readStoredProfile(ctx);
-  const stored = profile?.foodType ?? null;
   // Unit 3b-2: the strategy's carb cap, PRO only, never on a failed read.
-  const strategy: DietStrategyKey =
-    profile !== null && ctx.isPro && !suggestMealDietStrategyOff() ? profile.strategy : "balanced";
+  // ctx.isPro is defence in depth: suggestMeal is a tier "pro" tool, so
+  // the tool loop refuses a free caller before this handler runs.
+  const usesStrategy = ctx.isPro && !suggestMealDietStrategyOff();
+  const profile = await readStoredProfile(ctx, usesStrategy);
+  const stored = profile?.foodType ?? null;
+  const strategy: DietStrategyKey = profile !== null && usesStrategy ? profile.strategy : "balanced";
   const carbCap = carbsStdCapFor(strategy, stored ?? "vegan");
+  if (carbCap !== null) {
+    // Pushed before any early return, so an empty answer names the cap too
+    // (B-pass seat A finding 1). A vegan keto caller gets the low carb cap
+    // and is told so.
+    notes.push(
+      `Filtered for diet strategy: ${carbCap === KETO_CARBS_STD_CAP ? "Keto" : "Low carb"} ` +
+        `(at most ${carbCap} g carbs per serving; protein powders left out).`,
+    );
+  }
 
   const foodQuery = (main: boolean) => {
     // B-pass finding 6: the veg tables hold more rows than the limit (1,241
@@ -235,7 +258,7 @@ async function handler(ctx: ToolContext, args: Args): Promise<SuggestMealRespons
       : sb.from("food_database").select(cols).order("protein_std", { ascending: false }).limit(250);
     // PostgREST applies every filter before the limit, so the 500 rows kept
     // are the most protein-rich rows UNDER the cap (all three query sites).
-    const capped = carbCap === null ? q : q.lte("carbs_std", carbCap);
+    const capped = carbCap === null ? q : q.lte("carbs_std", carbCap).neq("category", "supplements");
     return args.cuisine === "indian" ? capped.eq("is_indian", true) : capped;
   };
 
@@ -339,13 +362,6 @@ async function handler(ctx: ToolContext, args: Args): Promise<SuggestMealRespons
   }
   if (stored !== null) {
     notes.push(`Filtered for food type: ${foodTypeLabel(type)}.`);
-  }
-  if (carbCap !== null) {
-    notes.push(
-      // A vegan keto caller gets the low carb cap and is told so.
-      `Filtered for diet strategy: ${carbCap === KETO_CARBS_STD_CAP ? "Keto" : "Low carb"} ` +
-        `(at most ${carbCap} g carbs per serving).`,
-    );
   }
   if (args.mealType) {
     notes.push(`Meal context: ${args.mealType}. Picks are not filtered by meal type — model should use this to narrate selection.`);

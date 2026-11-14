@@ -15,12 +15,14 @@ import {
 const FOOD = "DISABLE_FOOD_TYPE_MANUAL_RULES";
 const STRAT = "DISABLE_DIET_STRATEGY_MANUAL_RULES";
 
+// Restores each variable's previous value (B-pass seat C finding 7).
 function withEnv<T>(env: Record<string, string>, fn: () => T): T {
+  const before = Object.keys(env).map((k) => [k, Deno.env.get(k)] as const);
   for (const [k, v] of Object.entries(env)) Deno.env.set(k, v);
   try {
     return fn();
   } finally {
-    for (const k of Object.keys(env)) Deno.env.delete(k);
+    for (const [k, v] of before) v === undefined ? Deno.env.delete(k) : Deno.env.set(k, v);
   }
 }
 
@@ -43,7 +45,7 @@ Deno.test("the passage says what the plan says", () => {
     "snapshot.daily_targets.carbs and fat; calories and protein do not change",
     "keto: no rice, roti, bread, fruit, sugar or gravy curries",
     "eggs, paneer, cheese, meat, fish, plain vegetables, ghee, nuts and seeds",
-    "Vegan with keto: plan low_carb meals from plant foods",
+    "Vegan with keto: plan low_carb meals from plant foods (no vegan keto day exists) and say their carbs will be above the keto target",
     "low_carb: one grain portion at lunch, none at dinner",
     "Never change the diet strategy or the food type in chat",
     "diabetes medicine, is pregnant or breastfeeding, or has kidney disease",
@@ -54,7 +56,7 @@ Deno.test("the passage says what the plan says", () => {
 
 Deno.test("the Older values line is reworded in BOTH copies (template and the food-type string)", () => {
   const now =
-    "- Older values: vegetarian = veg; keto or low_carb = non_veg (a food type; the diet strategy is a separate field, below); empty or missing = non_veg.";
+    "- Older values: vegetarian = veg; keto or low_carb = non_veg (a food type; the diet strategy is a separate field, snapshot.profile.diet_strategy); empty or missing = non_veg.";
   assertEquals(count(CAPTAIN_MANUAL, now), 1);
   assert(FOOD_TYPE_MANUAL_RULES_NEW[1].includes(now));
   assert(!CAPTAIN_MANUAL.includes("non_veg with a low-carb emphasis"));
@@ -64,7 +66,14 @@ Deno.test("the four switch combinations (each exactly \"true\")", () => {
   const noPassage = (s: string) => s.replace(DIET_STRATEGY_MANUAL_PASSAGE, "");
   assertEquals(captainManual(), CAPTAIN_MANUAL);
   assertEquals(withEnv({ [FOOD]: "true" }, captainManual), CAPTAIN_MANUAL_LEGACY_FOOD);
-  assertEquals(withEnv({ [STRAT]: "true" }, captainManual), noPassage(CAPTAIN_MANUAL));
+  // Independent of the code's own .replace (B-pass seat C finding 4).
+  const stratOnly = withEnv({ [STRAT]: "true" }, captainManual);
+  assertEquals(stratOnly, noPassage(CAPTAIN_MANUAL));
+  assertEquals(stratOnly.length, CAPTAIN_MANUAL.length - DIET_STRATEGY_MANUAL_PASSAGE.length);
+  for (const line of ["Diet strategy (", "Never change the diet strategy", "- keto: no rice"]) {
+    assert(!stratOnly.includes(line), line);
+  }
+  assert(stratOnly.includes("- Festival eating:"), "the rest of SECTION 7 stays");
   assertEquals(
     withEnv({ [FOOD]: "true", [STRAT]: "true" }, captainManual),
     noPassage(CAPTAIN_MANUAL_LEGACY_FOOD),
