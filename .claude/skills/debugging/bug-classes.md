@@ -2146,3 +2146,22 @@ added, false of the flip being performed.
 - **Fix pattern:** read every `state` value the method needs into locals BEFORE the open and pass them to helpers (`resolveStartDate(a)`); when moving a session-open call, grep the method for `state.` reads after its new position.
 - **Test shape:** run the real method with the session closed and the uid resolver seam set (`onboarding_hive_session_open_before_write_test.dart` C1), assert the SAVED values equal the inputs; mutant: move the capture below the open (compiling form) and watch C1 redden.
 - **Regression test:** `test/contracts/onboarding_hive_session_open_before_write_test.dart` C1 + `test/contracts/onboarding_single_commit_test.dart` (resolveStartDate) (diagnose d86bad).
+
+### 2.156 A pipeline stage that rebuilds a model object drops a field added after it was written (NEW 2026-11-14)
+
+- **Telltale:** a new per-day field (`MuscleSlotDay.avoidEarlier`) is set by the writer and read by the consumer, the
+  unit tests of both pass, and the end-to-end measure does not move. In the v2 prototype the 4-day repeats went 86 -> 464
+  where the avoid should have lowered them.
+- **Root-cause shape:** a stage between writer and reader (`VolumeFilter.filterDays`) builds a NEW object field by field
+  from the old one, so any field added later is silently reset to its default. It is the writer/reader drift class with
+  the drift inside a copy, not a key name.
+- **Why it survives review:** the writer and reader are both in the diff; the copy stage is not, and nothing fails to
+  compile because the field has a default.
+- **Fix pattern:** carry the field in every rebuilding stage (grep each `ClassName(` construction in the pipeline when
+  adding a field with a default); prefer a `copyWith` so the next field is carried by construction.
+- **Test shape:** a direct test of the rebuilding stage for every value of the field, plus a test through the real
+  pipeline (rebuild stage, then consumer) with a crafted pool. A mutant that resets the field in the copy must go red.
+- **Masking found by mutation (same batch):** a cross-day avoid for variant B looked covered because B's within-day
+  avoid of its own A pushed it off the same row. Give each avoid source a fixture where it alone can move the pick.
+- **Regression test:** `test/contracts/balanced_week_behavioral_test.dart` ("the filter carry", "sameType, variant B on
+  its own"); diagnose c7e5a1.
