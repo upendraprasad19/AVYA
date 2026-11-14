@@ -1,8 +1,10 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import '../onboarding_step_telemetry.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:icanbefitter/core/copy/wardroom_copy.dart';
 import 'package:icanbefitter/core/services/error_telemetry.dart';
 
 import 'package:icanbefitter/core/theme/colors.dart';
@@ -13,7 +15,6 @@ import 'package:icanbefitter/core/services/supabase_service.dart';
 import 'package:icanbefitter/core/utils/bmr_calculator.dart';
 import 'package:icanbefitter/shared/widgets/wardroom/wardroom.dart';
 import '../providers/onboarding_provider.dart';
-import 'package:icanbefitter/features/ai_coach/services/induction_service.dart';
 import 'package:icanbefitter/core/constants/equipment_defaults.dart';
 
 /// Final step (3/3) of the handoff onboarding flow — plan preview +
@@ -21,13 +22,17 @@ import 'package:icanbefitter/core/constants/equipment_defaults.dart';
 /// PlanScreen, lines 285–382).
 ///
 /// Shows the three-phase campaign outline plus a 4-stat Phase I
-/// targets card. "REPORT FOR DUTY" reuses the existing
+/// targets card, then the pledge card and the single "I COMMIT" button
+/// (onboarding-fuse-commit, 2026-11-14: the Muster question and the
+/// separate Induction screen are gone). The button reuses the existing
 /// [OnboardingNotifier.completeOnboarding] pipeline — maps the
 /// collected step data onto its `answers` schema with sensible
 /// defaults, then calls `completeOnboarding()` which saves profile,
-/// generates Phase 1, schedules workouts, sets onboarded flag, and
-/// pushes the AI snapshot. On success we route to `/home`; on failure
-/// we surface the pipeline's error message.
+/// generates Phase 1, schedules workouts, records the commitment, sets
+/// the onboarded flag, and pushes the AI snapshot. On success we route
+/// to `/home`; on failure we surface the pipeline's error message.
+/// (The handler keeps its historical name `_onReportForDuty`: a dozen
+/// docs, tests and SoT entries cite it.)
 class PlanScreen extends ConsumerStatefulWidget {
   const PlanScreen({super.key, required this.data});
 
@@ -41,6 +46,12 @@ class PlanScreen extends ConsumerStatefulWidget {
 class _PlanScreenState extends ConsumerState<PlanScreen> {
   bool _submitting = false;
   String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    logOnboardingStep('plan');
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -66,6 +77,8 @@ class _PlanScreenState extends ConsumerState<PlanScreen> {
                 _phaseBlocks(),
                 const SizedBox(height: 14),
                 _targetsCard(targets),
+                const SizedBox(height: 14),
+                _pledgeCard(),
                 if (_error != null) ...[
                   const SizedBox(height: 16),
                   _errorBanner(_error!),
@@ -317,6 +330,64 @@ class _PlanScreenState extends ConsumerState<PlanScreen> {
     );
   }
 
+  /// The pledge that used to be the separate Induction screen's three
+  /// coach messages, cut to one card (founder, 2026-11-14).
+  Widget _pledgeCard() {
+    final full = (widget.data['full_name'] as String?)?.trim() ?? '';
+    final first = full.isEmpty ? '' : full.split(RegExp(r'\s+')).first;
+    final greeting = first.isEmpty
+        ? WardroomCopy.onboardingPledgeGreetingNoName
+        : WardroomCopy.onboardingPledgeGreetingTemplate
+            .replaceFirst('{name}', first);
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: AppColors.card,
+        border: Border.all(color: AppColors.line2),
+        borderRadius: BorderRadius.circular(AppRadius.card),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            greeting,
+            style: AppTypography.body.copyWith(
+              color: AppColors.textPrimary,
+              fontWeight: FontWeight.w700,
+              height: 1.5,
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            WardroomCopy.onboardingPledgeBody,
+            style: AppTypography.body.copyWith(
+              color: AppColors.textDim,
+              height: 1.5,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            WardroomCopy.onboardingPledgeContract,
+            style: AppTypography.body.copyWith(
+              color: AppColors.accent,
+              fontWeight: FontWeight.w700,
+              height: 1.5,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            WardroomCopy.onboardingPledgeSeal,
+            style: AppTypography.body.copyWith(
+              color: AppColors.textPrimary,
+              height: 1.5,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _cta(BuildContext context) {
     return Column(
       children: [
@@ -342,7 +413,7 @@ class _PlanScreenState extends ConsumerState<PlanScreen> {
                     ),
                   )
                 : Text(
-                    'REPORT FOR DUTY \u2192',
+                    WardroomCopy.onboardingCommitCta,
                     style: AppTypography.mono.copyWith(
                       fontSize: 13,
                       color: AppColors.bgDeep,
@@ -352,18 +423,7 @@ class _PlanScreenState extends ConsumerState<PlanScreen> {
                   ),
           ),
         ),
-        const SizedBox(height: 12),
-        Center(
-          child: Text(
-            'Plan shaped by 14 years of disciplined coaching.',
-            style: AppTypography.bodyS.copyWith(
-              color: AppColors.textMute,
-              fontStyle: FontStyle.italic,
-            ),
-            textAlign: TextAlign.center,
-          ),
-        ),
-        const SizedBox(height: 10),
+        const SizedBox(height: 14),
         GestureDetector(
           onTap: () => context.go(
             '/onboarding/details',
@@ -550,8 +610,10 @@ class _PlanScreenState extends ConsumerState<PlanScreen> {
         // user's side: the guard fired because this account is already set up,
         // so the right response is to take them home, not to show a red box.
         if (err == 'already_onboarded') {
-          final inducted = InductionService.instance.inductionCompleted;
-          context.go(inducted ? '/home' : '/coach/muster');
+          // Stamps nothing (onboarding-fuse-commit): the cloud says this
+          // account is set up, and a fresh commitment could overwrite its
+          // real one before coach memory is restored.
+          context.go('/home');
           return;
         }
         setState(() {
@@ -560,8 +622,10 @@ class _PlanScreenState extends ConsumerState<PlanScreen> {
         });
         return;
       }
-      final alreadyInducted = InductionService.instance.inductionCompleted;
-      context.go(alreadyInducted ? '/home' : '/coach/muster');
+      unawaited(ErrorTelemetry.logEvent('onboarding_commit'));
+      // The commitment was recorded inside completeOnboarding, before the
+      // onboarded flag; nothing is asked after I COMMIT.
+      context.go('/home');
     } catch (e) {
       final errStr = e.toString();
       final clipped = errStr.length > 500 ? errStr.substring(0, 500) : errStr;

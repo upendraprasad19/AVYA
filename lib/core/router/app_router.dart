@@ -30,8 +30,6 @@ import 'package:icanbefitter/features/train/screens/preview_workout_screen.dart'
 import 'package:icanbefitter/features/nutrition/screens/nutrition_screen.dart';
 import 'package:icanbefitter/features/nutrition/screens/diet_plan_screen.dart';
 import 'package:icanbefitter/features/ai_coach/screens/ai_coach/screen.dart';
-import 'package:icanbefitter/features/ai_coach/screens/induction_screen.dart';
-import 'package:icanbefitter/features/ai_coach/screens/muster_screen.dart';
 import 'package:icanbefitter/features/profile/screens/profile/screen.dart';
 import 'package:icanbefitter/features/profile/screens/edit_profile_screen.dart';
 import 'package:icanbefitter/features/profile/screens/rank_ladder_screen.dart';
@@ -48,7 +46,6 @@ import 'package:icanbefitter/features/profile/screens/notification_settings_scre
 import 'package:icanbefitter/features/profile/screens/delete_account_screen.dart';
 import 'package:icanbefitter/features/onboarding/screens/plan_generation_screen.dart';
 import 'package:icanbefitter/shared/repositories/plan_generator.dart';
-import 'package:icanbefitter/features/ai_coach/services/induction_service.dart';
 import 'package:icanbefitter/features/dev/dev_panel_screen.dart';
 import 'package:icanbefitter/features/admin/screens/admin_dashboard_screen.dart';
 
@@ -361,16 +358,19 @@ class AppRouter {
         },
       ),
 
-      // ── Captain's induction + muster (full-screen, no tab bar) ───────────
+      // ── Retired: Captain's induction + muster ────────────────────────────
+      // onboarding-fuse-commit (2026-11-14): the pledge and I COMMIT moved
+      // onto the Plan screen and the muster question was dropped. The paths
+      // stay as redirects so an old bookmark or a tester's reload lands on
+      // Home. go_router runs the TOP-LEVEL redirect first, so a signed-out
+      // or un-onboarded user is still sent to sign-in / onboarding.
       GoRoute(
         path: '/coach/induction',
-        name: 'coachInduction',
-        builder: (context, state) => const InductionScreen(),
+        redirect: (context, state) => '/home',
       ),
       GoRoute(
         path: '/coach/muster',
-        name: 'coachMuster',
-        builder: (context, state) => const MusterScreen(),
+        redirect: (context, state) => '/home',
       ),
 
       // ── Dev panel (DEBUG ONLY) — time-travel + rank inspection ───────────
@@ -674,11 +674,6 @@ class AppRouter {
     // bouncing the user back to /onboarding every tap.
     final isOnOnboarding = state.matchedLocation.startsWith('/onboarding') ||
         state.matchedLocation.startsWith('/plan-generation');
-    // Induction + muster are post-auth, pre-home full-screen flows.
-    // Let them self-navigate without redirect interference.
-    final isOnCoachInduction =
-        state.matchedLocation.startsWith('/coach/induction') ||
-        state.matchedLocation.startsWith('/coach/muster');
 
     // Dev panel (debug only) — always reachable, no auth/onboarding gate,
     // so it works on a fresh web build for time-travel verification.
@@ -703,18 +698,6 @@ class AppRouter {
     // Signup-confirmation screen — always passthrough for the same reason.
     if (isOnConfirm) return null;
 
-    // Idempotency: already-inducted users landing on /coach/induction or
-    // /coach/muster (deep-link, hot reload, back-navigation) get bounced to
-    // /home. Un-inducted users pass through so InductionScreen/MusterScreen
-    // can run their flows.
-    if (isOnCoachInduction) {
-      if (HiveService.instance.isInitialized &&
-          InductionService.instance.inductionCompleted) {
-        return '/home';
-      }
-      return null;
-    }
-
     // Guard against Hive not yet initialized (startup race).
     if (!HiveService.instance.isInitialized) return null;
 
@@ -733,8 +716,8 @@ class AppRouter {
     // SERVE EMPTY under FIX-1 Part A instead of throwing — which would
     // mis-route an onboarded user to /onboarding. Route through /restoring
     // instead: it opens the session (openForUser) then re-runs this tree with
-    // a valid owner + the correct destination. /splash, /restoring, and
-    // /coach/induction|muster are handled above; onboarding self-navigates
+    // a valid owner + the correct destination. /splash and /restoring are
+    // handled above; onboarding self-navigates
     // pre-session so it is exempt. RestoringScreen._onContinueAnyway opens the
     // session before popping, so the escape-hatch can't re-trap here.
     if (shouldGateOnSessionOpen(

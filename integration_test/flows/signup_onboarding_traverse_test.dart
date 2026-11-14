@@ -2,7 +2,7 @@
 //
 // Critical untested flow: cold launch → Welcome → email sign-up →
 // terms accept → Mission Brief → Identity → Goal → Stats → Details
-// → Plan REPORT FOR DUTY → home. The 6-screen stepped onboarding
+// → Plan I COMMIT → home. The 6-screen stepped onboarding
 // flow (lib/features/onboarding/CLAUDE.md) has no end-to-end coverage; each screen has
 // widget tests but the inter-screen state-passing (via GoRouter
 // state.extra) is exercised only by manual smoke testing.
@@ -40,10 +40,10 @@ void main() {
     test('T4 — Goal → Stats → Details state-passing preserves all answers',
         () {
       // Each step spreads `...widget.initial` into outgoing extras.
-      // Test that REPORT FOR DUTY on Plan has all 14 fields collected.
+      // Test that I COMMIT on Plan has all 14 fields collected.
     }, skip: 'Phase 7 scaffold — needs Supabase Auth test mode.');
 
-    test('T5 — REPORT FOR DUTY writes user_profile + sets onboarding_completed_at',
+    test('T5 — I COMMIT writes user_profile + sets onboarding_completed_at',
         () {
       // OnboardingNotifier.completeOnboarding does the upsert +
       // stamps onboarding_completed_at. Verify cloud row exists +

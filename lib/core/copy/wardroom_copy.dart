@@ -586,7 +586,20 @@ class WardroomCopy {
   /// Plan screen.
   static const onboardingPlanEyebrow = 'YOUR CAMPAIGN';
   static const onboardingPlanTitleTemplate = '12-week {goal} protocol.';
-  static const onboardingReportCta = 'REPORT FOR DUTY →';
+  static const onboardingCommitCta = 'I COMMIT →';
+
+  /// Plan screen pledge card (onboarding-fuse-commit, 2026-11-14): replaces
+  /// the separate Induction screen. `{name}` is the recruit's first name.
+  static const onboardingPledgeGreetingTemplate =
+      'Recruit {name}, welcome aboard.';
+  static const onboardingPledgeGreetingNoName = 'Recruit, welcome aboard.';
+  static const onboardingPledgeBody =
+      "I'm your AI Coach. Show up, log honestly, tell me when something "
+      "hurts. I'll handle the rest.";
+  static const onboardingPledgeContract =
+      'Hold the line: your first rank in the opening weeks, Petty Officer by '
+      "month three, Lieutenant if you stay on it. That's the contract.";
+  static const onboardingPledgeSeal = 'Tap below to seal it.';
   static const onboardingPhaseITitle = 'Foundation';
   static const onboardingPhaseIWeeks = 'WEEKS 1–4';
   static const onboardingPhaseIIITitle = 'Capacity';

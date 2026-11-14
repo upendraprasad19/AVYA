@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../onboarding_step_telemetry.dart';
 import 'package:go_router/go_router.dart';
 
 import 'package:icanbefitter/core/theme/colors.dart';
@@ -35,7 +36,7 @@ class GoalScreen extends StatefulWidget {
 
   /// Route-extras carrying forward Identity's `full_name`, `date_of_birth`,
   /// and `sex`. Forwarded verbatim to Stats / Details / Plan so the final
-  /// profile write at REPORT FOR DUTY has every field it needs.
+  /// profile write at I COMMIT has every field it needs.
   final Map<String, dynamic>? identity;
 
   @override
@@ -73,6 +74,7 @@ class _GoalScreenState extends State<GoalScreen> {
   @override
   void initState() {
     super.initState();
+    logOnboardingStep('goal');
     // A legacy `recomp` / `strength` arriving in the route extras (in-progress
     // tester, chat flow) has no card any more: fall back to the pre-selected
     // default so a card is always selected and CONTINUE never forwards a hidden

@@ -170,8 +170,9 @@ lib/
         welcome_screen.dart          # Stepped flow entry — / onboarding (NEW default)
         goal_screen.dart             # /onboarding/goal (NEW)
         stats_screen.dart            # /onboarding/stats (NEW)
-        plan_screen.dart             # /onboarding/plan — "REPORT FOR DUTY" CTA (NEW)
+        plan_screen.dart             # /onboarding/plan — pledge card + "I COMMIT" CTA (the last screen; muster/induction screens deleted 2026-11-14)
         onboarding_chat_screen.dart  # LEGACY — now only at /onboarding/chat for rollback
+      onboarding/onboarding_step_telemetry.dart  # onboarding step telemetry (onboarding-fuse-commit, 2026-11-14)
       profile/screens/
         settings_screen.dart         # Wardroom refresh (PR AC)
         notifications_screen.dart    # Wardroom notifications inbox (PR AF)

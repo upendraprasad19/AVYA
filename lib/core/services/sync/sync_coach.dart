@@ -818,8 +818,10 @@ extension SyncServiceCoach on SyncService {
   /// Pulls coach_memory induction state from Supabase into local coachBox.
   ///
   /// Run on restoreFromCloud so returning users (new device or post-logout)
-  /// skip the InductionScreen — the cloud row already has [induction_completed_at]
-  /// and all muster answers. If the user has no coach_memory row yet (un-inducted),
+  /// get their induction state back — the cloud row already has
+  /// [induction_completed_at] and any legacy muster answers (the Induction
+  /// and Muster screens were retired 2026-11-14; the commitment is now
+  /// stamped by the Plan screen's I COMMIT inside completeOnboarding). If the user has no coach_memory row yet (un-inducted),
   /// maybeSingle() returns null and we skip silently.
   /// [preFetched] (C3 single-call): injected `coach_memory` object|null;
   /// legacy callers omit it → network `maybeSingle` read. An injected `null`
