@@ -486,10 +486,14 @@ export function foodTypeManualRulesOff(): boolean {
 // Diet plan Unit 3b-2 (2026-11-14, docs/plans/diet-strategy-3b.md §5): the
 // DIET STRATEGY passage of SECTION 7, outside every FOOD_TYPE_MANUAL_RULES
 // string so the food-type switch never touches it. It is conditional on
-// snapshot.profile.diet_strategy, a key only the CHAT snapshot carries and
-// only with the app's DietStrategyFlags on, so it is inert everywhere else
-// (weekly-report bundles the manual but has no daily_targets). Removed when
-// DISABLE_DIET_STRATEGY_MANUAL_RULES is exactly "true" (read per call).
+// snapshot.profile.diet_strategy, which the app's buildAiContext adds only
+// with its DietStrategyFlags on. The chat snapshot and the daily snapshot push
+// (user_daily_snapshots) both carry it, but no prompt builder reads a STORED
+// snapshot: captainManual() reaches only ai-proxy (the live chat snapshot) and
+// weekly-report (no snapshot; it states the strategy in its own user message,
+// _shared/diet_strategies.ts weeklyReportDietStrategyLine). Removed, together
+// with that weekly-report line, when DISABLE_DIET_STRATEGY_MANUAL_RULES is
+// exactly "true" (read per call).
 export const DIET_STRATEGY_MANUAL_PASSAGE =
   "- Diet strategy (snapshot.profile.diet_strategy: balanced, low_carb or keto; absent = balanced) is separate from the food type. For low_carb or keto, plan to snapshot.daily_targets.carbs and fat; calories and protein do not change.\n" +
   "- keto: no rice, roti, bread, fruit, sugar or gravy curries. Build meals from eggs, paneer, cheese, meat, fish, plain vegetables, ghee, nuts and seeds. Vegan with keto: plan low_carb meals from plant foods (no vegan keto day exists) and say their carbs will be above the keto target.\n" +
