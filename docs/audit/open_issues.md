@@ -2945,7 +2945,7 @@ This gets MORE visible once OI-166 Unit 2 caps `regeneratePlanBlock` at the 4-we
 - `seed_service.dart:185-192` — *"writes every exercise into exerciseBox keyed by its `id`"*. So the Hive key IS `E001`; a NAME does not resolve on the library branch (only on the custom branch)
 - `ai_snapshot_builder.dart` — `grep -c "exercise_library"` → **0**. No library key in the snapshot at all
 - its `custom_exercises` key reads `_hive.customBox` (`_readCustomExercises`) — **user-created only**, not the built-in 292
-- `getFormCues` (the only library-touching read tool) resolves a NAME → cues/mistakes/muscles/difficulty/logging_type and **returns no `id`** (`getFormCues.ts:74-86`, `:101-113`). So there is no name→id recovery hop either
+- `getFormCues` (the only library-touching read tool) resolves a NAME → cues/mistakes/muscles/difficulty/logging_type and **returns no `id`** (the exact and the partial return blocks of `getFormCues.ts`). So there is no name→id recovery hop either
 
 ⇒ The tool descriptions are honest about the cage: `createCustomTemplate.ts:5-6` *"Use the exact `exercise_id` from `snapshot.today_workout.exercises[]` OR `snapshot.custom_exercises[]`. **Never invent IDs.**"*; `swapExercise.ts:8-10` identical for `newExerciseId`.
 

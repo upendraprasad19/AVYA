@@ -21,9 +21,11 @@ related_bugs: [c2a7f1, c3e8f1, c1d7a4, b7d3e1, f2c7a9]
 recurrence: |
   A recurrence of the soft-delete-flag writer / reader drift class (CLAUDE.md section 4.1, the default suspect): a
   WRITER introduced `is_active = false` rows (Batch A merges, C2a / C2b removals, migrations 164, 167, 171, 174-176) and
-  one READER never learned to skip them. c2a7f1 (C2a) is the writer batch and noted the gap (it made a retired row that
-  shares a name with a kept row copy the kept row's cues "because getFormCues has no is_active filter") and filed OI-438;
-  c3e8f1 (S1b-3) hit it again with E053 and recorded it in its B-pass; the OI board carried it twice. No earlier fix of
+  one READER never learned to skip them. c1d7a4 (Batch C1) found the gap and filed OI-438 (tier-6 evidence, its
+  rollback deactivates 629 rows); the C2 plan (docs/plans/2026-10-25-library-batch-c2-removals.md:129) states that the
+  retired row copies the kept twin's cues "because getFormCues has no is_active filter", a workaround the Batch A seed
+  already used; c2a7f1 (C2a) is only the writer batch and never mentions getFormCues; c3e8f1 (S1b-3) hit it again with
+  E053 and recorded it in its B-pass; the OI board carried it twice. No earlier fix of
   this reader exists; the known-good fix of the class is applied: the READER filters, and a test lists the retired row
   FIRST so a missing filter shows as the retired row's cues.
 writers:
@@ -58,7 +60,7 @@ proposed_fix: |
   Add `.eq("is_active", true)` after `.ilike(...)` and before `.limit(1)` on BOTH queries in getFormCues.ts. Design call
   put to the founder 2026-11-13 and answered "strict filter": the alternative (sort active first, let a retired-only name
   still answer) was rejected because both OIs say "add the filter", a row deactivated because its cues were bad (the
-  rollbacks of migrations 164 and 174-176) must stop being served, and only about 14 of the 56 retired-only names resolve
+  rollback of migration 164, which deactivates its 629 rows, and the E053 reactivation of 175) must stop being served, and only about 14 of the 56 retired-only names resolve
   in the Hive client anyway (6 `alias_to` entries plus the 8 merges; 44 are "Sheet drop"), so users cannot reach the rest.
   Cost, accepted: those retired-only names answer `found: false` and the coach uses general knowledge. Rollback: revert
   the commit and redeploy `ai-proxy`; the data is untouched.
@@ -71,7 +73,10 @@ regression_test_planned: |
 impact_analysis: |
   Platform tier (`_shared/**`), one reader in one Edge Function bundle (`ai-proxy`). Live behaviour change after the
   deploy: the four same-name pairs answer from the active row (cues identical today), the 56 retired-only names answer
-  `found: false`. No schema change, no data change, no client change. Needs the founder's go to deploy `ai-proxy`.
+  `found: false`, and four retired names that a live name CONTAINS (Lat Stretch, Prone Lat Pull, Piriformis Stretch,
+  Quad Stretch) fall through to stage 2 and answer with that live row (`matched_via: partial`); three have exactly one
+  candidate, but "Quad Stretch" has two (Standing Quad Stretch, Banded Quad Stretch) and stage 2 has no tie-break, so
+  its answer is an arbitrary one of the two (before: the retired row, which carried Standing Quad Stretch's cues). No schema change, no data change, no client change. Needs the founder's go to deploy `ai-proxy`.
 touched_layers_checked:
   - { layer: client_code, status: not_applicable, evidence: "no lib/ file reads exercise_library through Supabase (grep 2026-11-13); the Hive client already skips retired rows (seed prune)" }
   - { layer: postgres_schema, status: verified, evidence: "exercise_library.is_active is bool DEFAULT true (002_create_fitness_tables.sql:30; backups/live_schema_columns.json); foreign keys template_exercises_exercise_id_fkey and workout_logs_exercise_id_fkey to exercise_library(id) read live from pg_constraint 2026-11-13" }
@@ -119,6 +124,10 @@ Each applied (the diff against a saved copy counted) and restored (`cmp` against
 - `.order("is_active", { ascending: false })` in place of `.eq` on both (the rejected prefer-active design): 3 red
   (retired-only, retired-exact-then-live, both-queries-filter), proving the tests encode the strict decision.
 - `exercise_library_cloud_seeded_test.dart` presence pin: one `.eq` removed reddens exactly 1 test.
+- B-pass reviewer's 9 mutations reproduce these counts. Two survive and are equivalent mutants: `.neq("is_active", false)`
+  on both (PostgREST has the same effect, and it drops NULL like `.eq`; only the "both queries carry the filter" test
+  reddens) and `.eq` placed after `.limit(1)` (PostgREST filters are order-independent; `sb` is `any`, so `deno check`
+  passes). A string `"true"` reddens 4, a column typo in stage 2 reddens 3.
 
 ## Not fixed here (recorded as findings, none is a new unit)
 

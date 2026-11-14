@@ -12124,7 +12124,7 @@ concepts:
         semantic: a retired name resolves to its kept twin; an exact name always wins over an alias
       - file: supabase/functions/_shared/tools/exercise/getFormCues.ts
         method: reads primary_muscles/secondary_muscles/difficulty_level (:60-61)
-        semantic: AI-coach form cues; was NULL for the 9 stubs pre-batch; both queries filter is_active = true (OI-438/OI-469: a retired row never answers; the seed's cue copy onto retired rows, from migration 162, is now defence in depth)
+        semantic: AI-coach form cues; was NULL for the 9 stubs pre-batch; both queries filter is_active = true in code (OI-438/OI-469; live after the ai-proxy deploy: a retired row never answers; the seed's cue copy onto retired rows, from migration 162, is now defence in depth)
       - file: lib/features/train/providers/train_provider.dart
         line_range: 103-111
         method: last-weight suggestion reads the LOGGED row's logging_type (weight_reps or weighted_bodyweight) before it suggests a load
