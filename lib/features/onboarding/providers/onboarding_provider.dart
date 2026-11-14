@@ -17,6 +17,7 @@ import 'package:icanbefitter/core/services/sync_service.dart';
 import 'package:icanbefitter/core/services/workout_schedule_service.dart';
 import 'package:icanbefitter/features/auth/providers/auth_invalidation_provider.dart';
 import 'package:icanbefitter/features/auth/providers/referral_code_stash_provider.dart';
+import 'package:icanbefitter/features/ai_coach/services/induction_service.dart';
 import 'dart:async';
 import 'package:icanbefitter/shared/repositories/user_repository.dart';
 import 'package:icanbefitter/shared/repositories/plan_generator.dart';
@@ -259,8 +260,14 @@ class OnboardingNotifier extends Notifier<OnboardingState> {
   }
 
   /// Resolves the start date from the user's selection.
-  DateTime resolveStartDate() {
-    final choice = state.answers['start_date'] as String? ?? 'this_monday';
+  ///
+  /// [answers] lets [completeOnboarding] pass the answers it captured before
+  /// opening the Hive session: the open can rebuild this notifier and empty
+  /// `state.answers` (onboarding-fuse-commit), which used to turn a chosen
+  /// start date back into the 'this_monday' default.
+  DateTime resolveStartDate([Map<String, dynamic>? answers]) {
+    final choice = (answers ?? state.answers)['start_date'] as String? ??
+        'this_monday';
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
 
@@ -346,6 +353,38 @@ class OnboardingNotifier extends Notifier<OnboardingState> {
     }
   }
 
+  /// Test hook: called between the commitment stamps and `setOnboarded` in
+  /// [finalizeLocalCommit], so a test can inject a throw there and prove the
+  /// order. Null in production.
+  @visibleForTesting
+  static Future<void> Function()? debugAfterStampsForTests;
+
+  /// The last LOCAL step of [completeOnboarding] (onboarding-fuse-commit,
+  /// 2026-11-14): record the I COMMIT pledge (the Plan screen's button) and
+  /// the induction stamp, then mark onboarding complete. The old Muster and
+  /// Induction screens did the first two minutes later, on routes of their
+  /// own; they are gone.
+  ///
+  /// `recordCommitment` only when no commitment exists yet, so a retry never
+  /// overwrites a real `committed_at`.
+  @visibleForTesting
+  static Future<void> finalizeLocalCommit() async {
+    // With no Hive session both guards below read false, but every coachBox
+    // write then throws (GuardedBox), so a pledge cannot be overwritten: the
+    // throw lands in completeOnboarding's catch with the onboarded flag still
+    // false (B-pass F2; pinned by onboarding_single_commit_test).
+    final induction = InductionService.instance;
+    if (!induction.hasCommitted) {
+      await induction.recordCommitment();
+    }
+    if (!induction.inductionCompleted) {
+      await induction.completeInduction();
+    }
+    final hook = debugAfterStampsForTests;
+    if (hook != null) await hook();
+    await UserRepository.instance.setOnboarded();
+  }
+
   /// Saves profile, generates plan, schedules workouts to calendar dates.
   ///
   /// Returns the generated [Phase] for the animation screen to display,
@@ -371,6 +410,27 @@ class OnboardingNotifier extends Notifier<OnboardingState> {
     // prevented, not just the cloud half.
     //
     // Kill-switch `configBox['disable_onboarding_overwrite_guard']` (§4.6).
+    //
+    // Open the user-scoped Hive session FIRST (onboarding-fuse-commit,
+    // 2026-11-14). It used to be opened just before `saveProfile` (diagnose
+    // b3f9e7); it moved up so `HiveUserSession.currentOwnerFullId` is known
+    // when the profile map is built (the map now carries `id`) and the
+    // commitment stamps below read a real session. Idempotent and it swallows
+    // its own open failure; the try/catch keeps anything else from escaping
+    // before the method's own `try` and leaving `isCompleting` stuck.
+    //
+    // Capture the answers BEFORE the open: if this call actually opens the
+    // session, the owner edge re-emits `authUserIdTokenProvider`, this
+    // notifier's `build()` re-runs and `state.answers` comes back EMPTY. The
+    // old placement (after the guard) only survived because `a` had already
+    // been read. Pinned by onboarding_hive_session_open_before_write_test C1.
+    final a = state.answers;
+    try {
+      await HiveUserSession.ensureOpenedForCurrentSession();
+    } catch (e, st) {
+      unawaited(ErrorTelemetry.recordNonFatal(e, st,
+          reason: 'onboarding_session_open_failed'));
+    }
     if (await _alreadyOnboardedInCloud()) {
       state = state.copyWith(
         isCompleting: false,
@@ -380,7 +440,6 @@ class OnboardingNotifier extends Notifier<OnboardingState> {
     }
 
     try {
-      final a = state.answers;
 
       final fullName = a['full_name'] as String? ?? '';
       final dobString = a['date_of_birth'] as String? ?? '';
@@ -464,7 +523,14 @@ class OnboardingNotifier extends Notifier<OnboardingState> {
         'days_per_week': daysPerWeek,
       });
 
+      final ownerId = HiveUserSession.currentOwnerFullId;
       final profile = {
+        // The owner's auth uid (onboarding-fuse-commit). Without it the saved
+        // profile had no `id` until the bootstrapper stamped one later, so
+        // `InductionService`'s cloud sync was skipped and `_ensureLocalUser`
+        // (auth_provider) read the profile as another account's and could
+        // clear it. Omitted when no session opened (never a guess).
+        if (ownerId != null) 'id': ownerId,
         // OBS-13 — title-case at the writer (textCapitalization.words is a mobile
         // keyboard hint only; web saves a lowercase-typed name verbatim).
         'full_name': titleCaseName(fullName),
@@ -475,6 +541,10 @@ class OnboardingNotifier extends Notifier<OnboardingState> {
         'target_weight_kg': targetWeightKg,
         'primary_goal': primaryGoal,
         'pace_preference': (a['pace_preference'] as String?) ?? 'balanced', // Bug #24
+        // Muster no longer asks it (onboarding-fuse-commit): 'balanced' is the
+        // neutral value (no bring-up, TrainingHistoryAnalyzer
+        // .physiqueFocusToBodyFocus) and the user changes it in Edit Profile.
+        'physique_focus': 'balanced',
         'fitness_experience': fitnessExperience,
         'days_per_week': daysPerWeek,
         'equipment_access': equipmentAccess,
@@ -506,13 +576,9 @@ class OnboardingNotifier extends Notifier<OnboardingState> {
         'updated_at': DateTime.now().toIso8601String(),
       };
 
-      // Defensive guard (Unit 1, follow-up to diagnose b3f9e7, 2026-08-03):
-      // today RestoringScreen's parallel restoreFromCloudForUser() always
-      // opens the Hive session before onboarding can be reached, but that
-      // is an INCIDENTAL ordering property of RestoringScreen, not an
-      // invariant this method enforces itself. Idempotent no-op on the
-      // already-safe path (see docs/diagnoses -- onboarding-oauth-session-order).
-      await HiveUserSession.ensureOpenedForCurrentSession();
+      // Session: opened at the top of this method, before the cloud guard
+      // (diagnose b3f9e7 guard, moved by onboarding-fuse-commit). Not
+      // re-opened here.
 
       // Use saveProfile (not updateProfileFields) to guarantee a clean
       // slate. updateProfileFields merges onto existing data, which would
@@ -564,7 +630,7 @@ class OnboardingNotifier extends Notifier<OnboardingState> {
       }
 
       // Generate plan AND schedule to calendar dates via WorkoutScheduleService
-      final startDate = resolveStartDate();
+      final startDate = resolveStartDate(a);
       final phase = await WorkoutScheduleService.instance.generateAndSchedule(
         goal: primaryGoal,
         equipment: equipmentAccess,
@@ -592,7 +658,11 @@ class OnboardingNotifier extends Notifier<OnboardingState> {
         'plan_generated_at': DateTime.now().toIso8601String(),
       });
 
-      await _userRepo.setOnboarded();
+      // The commitment is part of the commit (onboarding-fuse-commit): the
+      // stamps land BEFORE the onboarded flag, so `isOnboarded == true` means
+      // profile + plan + progress + commitment are all durable, and a throw
+      // anywhere above leaves the flag false for a clean retry.
+      await finalizeLocalCommit();
 
       // Note: the AI coach has no trial (removed 2026-06-07 / F1) — it's a
       // flat 7/day forever (PRO 20/day), server-enforced. No trial-start key is written
@@ -612,7 +682,7 @@ class OnboardingNotifier extends Notifier<OnboardingState> {
       // ── Hive-first navigation (diagnose a1f9c4) ─────────────────
       // Every LOCAL write above (profile, plan, progress, onboarded-stamp) is
       // durable. The cloud sync + schedule push + referral redeem + verify are
-      // network I/O — they MUST NOT block REPORT FOR DUTY (rule 1): a slow /
+      // network I/O — they MUST NOT block I COMMIT (rule 1): a slow /
       // cold / stalled backend (e.g. the fresh-signup sync flood on the free
       // tier) stranded the spinner forever, because the awaited cloud calls
       // below never resolved AND never threw (the 10s retry only fires on a
@@ -674,7 +744,7 @@ class OnboardingNotifier extends Notifier<OnboardingState> {
   }
 
   /// Cloud catch-up after onboarding's LOCAL writes are durable. Fire-and-forget
-  /// (Hive-first — diagnose a1f9c4) so REPORT FOR DUTY navigation never blocks on
+  /// (Hive-first — diagnose a1f9c4) so I COMMIT navigation never blocks on
   /// a slow / stalled backend. ORDER MATTERS: the user_profile/users upsert
   /// (`_syncOnboardingToSupabase`) must land before the referral EF reads the
   /// public.users row, so those stay sequential. Uses singletons only (no `ref`

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../onboarding_step_telemetry.dart';
 import 'package:go_router/go_router.dart';
 
 import 'package:icanbefitter/core/theme/colors.dart';
@@ -51,6 +52,7 @@ class _IdentityScreenState extends State<IdentityScreen> {
   @override
   void initState() {
     super.initState();
+    logOnboardingStep('identity');
     final init = widget.initial ?? const <String, dynamic>{};
     _name = TextEditingController(text: init['full_name'] as String? ?? '');
     _name.addListener(() {

@@ -13,13 +13,19 @@ import 'package:icanbefitter/shared/repositories/user_repository.dart';
 /// Hive keys (in coachBox):
 ///   committed_at              ISO datetime when user tapped I COMMIT
 ///   committed_to_lt_cdr       bool, set true on commitment
-///   induction_completed_at    ISO datetime when the induction sequence
-///                             (muster + I COMMIT) finished
-///   body_part_priorities      → the one live muster answer (physique focus)
+///   induction_completed_at    ISO datetime when the induction finished
+///
+/// Since onboarding-fuse-commit (2026-11-14) both stamps are written by
+/// `OnboardingNotifier.finalizeLocalCommit`, the last local step of the Plan
+/// screen's single I COMMIT tap. The Muster and Induction screens are gone.
+///
+///   body_part_priorities /
 ///   why_now / definition_of_winning / known_injuries / typical_wake_time /
-///   preferred_workout_time    → RETIRED muster questions (diagnose e2b8a4,
-///                             2026-09-19). No longer written by any live
-///                             flow — injuries and wake/workout-time are
+///   preferred_workout_time    → RETIRED muster answers (the last live one,
+///                             body_part_priorities, retired with the Muster
+///                             screen on 2026-11-14; the rest by diagnose
+///                             e2b8a4, 2026-09-19). No longer written by any
+///                             live flow — injuries and wake/workout-time are
 ///                             either collected during onboarding
 ///                             (`profile['injuries']`) or left to Edit
 ///                             Profile (`profile['wake_up_time']` /
@@ -52,92 +58,56 @@ class InductionService {
     return HiveService.instance.coachBox.get('induction_completed_at') != null;
   }
 
+  /// Test hook: receives the uid each sync is fired for, just before the
+  /// unawaited sync (which swallows its own failure and cannot be observed).
+  /// Null in production.
+  @visibleForTesting
+  static void Function(String uid)? debugOnSyncUidForTests;
+
+  /// The uid to sync coach memory for: the open Hive session's owner (the
+  /// same source [hasCommitted] / [inductionCompleted] read), falling back
+  /// to the profile's `id`. Before onboarding-fuse-commit only the profile
+  /// `id` was read, and onboarding saved a profile with no `id`, so the sync
+  /// was silently skipped.
+  String? _syncUid() {
+    final owner = HiveUserSession.currentOwnerFullId;
+    if (owner != null) return owner;
+    try {
+      return (HiveService.instance.userBox.get('profile') as Map?)?['id']
+          as String?;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  void _syncCoachMemory({bool pushSnapshot = false}) {
+    final uid = _syncUid();
+    if (uid == null) {
+      unawaited(ErrorTelemetry.logEvent('induction_sync_skipped_no_uid'));
+      return;
+    }
+    debugOnSyncUidForTests?.call(uid);
+    unawaited(SyncService.instance.syncCoachMemoryNow(uid));
+    if (pushSnapshot) unawaited(SyncService.instance.pushSnapshot());
+  }
+
   /// Records the I COMMIT tap. Writes Hive immediately, fires sync to Supabase
   /// fire-and-forget per docs/architecture/sync.md.
   Future<void> recordCommitment() async {
     final now = DateTime.now().toIso8601String();
     await HiveService.instance.coachBox.put('committed_at', now);
     await HiveService.instance.coachBox.put('committed_to_lt_cdr', true);
-    final userId =
-        (HiveService.instance.userBox.get('profile') as Map?)?['id'] as String?;
-    if (userId != null) {
-      unawaited(SyncService.instance.syncCoachMemoryNow(userId));
-    }
+    _syncCoachMemory();
   }
 
-  // why_now / definition_of_winning / known_injuries / typical_wake_time /
-  // preferred_workout_time are deliberately absent — retired (see class
-  // header). recordMusterAnswer is muster's only caller and muster no
-  // longer asks any of them; body_part_priorities (physique focus) is the
-  // one still-live question.
-  static const _allowedMusterKeys = {
-    'body_part_priorities',
-  };
-
-  /// Records a single muster answer to [HiveService.coachBox] AND bridges
-  /// the value to [userBox['profile']] for keys that map to profile
-  /// fields. Per docs/architecture/sync.md "Source of Truth Rules" — the muster is
-  /// the SoT for these facts; profile reads from a mirrored copy so Edit
-  /// Profile and plan generator see the values.
-  ///
-  /// Throws [ArgumentError] on unknown key. Profile-bridge failures are
-  /// logged via [ErrorTelemetry] but do not throw — the coachBox write
-  /// already succeeded; the bridge re-runs on next attempt.
-  Future<void> recordMusterAnswer(String key, dynamic value) async {
-    if (!_allowedMusterKeys.contains(key)) {
-      throw ArgumentError('Unknown muster key: $key');
-    }
-    await HiveService.instance.coachBox.put(key, value);
-
-    // B2b — bridge into userBox['profile'].
-    try {
-      await _bridgeToProfile(key, value);
-    } catch (e, st) {
-      debugPrint('[InductionService._bridgeToProfile] $key failed: $e');
-      unawaited(ErrorTelemetry.recordNonFatal(e, st,
-          reason: 'muster_bridge_to_profile'));
-    }
-  }
-
-  Future<void> _bridgeToProfile(String musterKey, dynamic value) async {
-    final Map<String, dynamic> fields;
-    switch (musterKey) {
-      case 'body_part_priorities':
-        final v = (value as List).cast<String>();
-        // Only bridge single-select (B2d). Multi-select legacy data
-        // (length > 1) is left in coachBox without a fuzzy guess.
-        if (v.length != 1) return;
-        fields = {'physique_focus': v.first};
-      default:
-        // Unreachable: recordMusterAnswer's _allowedMusterKeys guard only
-        // ever lets 'body_part_priorities' reach here.
-        return;
-    }
-
-    await UserRepository.instance.updateProfileFields(fields);
-
-    final uid = SupabaseService.instance.currentUser?.id;
-    if (uid != null) {
-      unawaited(SyncService.instance.syncProfileNow(uid));
-      unawaited(SyncService.instance.pushSnapshot());
-    }
-  }
-
-  /// Marks the whole induction sequence (muster + I COMMIT) complete. Writes
-  /// Hive + fires sync + pushSnapshot fire-and-forget per
-  /// docs/architecture/sync.md. Called from InductionScreen's I COMMIT
-  /// handler (diagnose e2b8a4, 2026-09-19 — muster now runs BEFORE the
-  /// induction narrative, so nothing is asked after I COMMIT; this is the
-  /// terminal stamp for the whole sequence, not just muster).
+  /// Marks the induction complete. Writes Hive + fires sync + pushSnapshot
+  /// fire-and-forget per docs/architecture/sync.md. Called from
+  /// `OnboardingNotifier.finalizeLocalCommit` right after [recordCommitment]
+  /// (onboarding-fuse-commit, 2026-11-14).
   Future<void> completeInduction() async {
     final now = DateTime.now().toIso8601String();
     await HiveService.instance.coachBox.put('induction_completed_at', now);
-    final userId =
-        (HiveService.instance.userBox.get('profile') as Map?)?['id'] as String?;
-    if (userId != null) {
-      unawaited(SyncService.instance.syncCoachMemoryNow(userId));
-      unawaited(SyncService.instance.pushSnapshot());
-    }
+    _syncCoachMemory(pushSnapshot: true);
   }
 
   /// Migration flag key for the one-shot bridge backfill. Stored in

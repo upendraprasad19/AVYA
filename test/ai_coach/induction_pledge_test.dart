@@ -1,5 +1,5 @@
-import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:icanbefitter/core/copy/wardroom_copy.dart';
 
 /// OBS-1 / diagnose f1a9d3 — the "I COMMIT" pledge must describe the ACTUAL
 /// rank engine (time + consistency), never a false workout-count threshold.
@@ -13,13 +13,18 @@ import 'package:flutter_test/flutter_test.dart';
 ///
 /// Founder picked framing B: anchor the commit on the nearer fast ranks with
 /// Lieutenant named as the destination. Engine unchanged — copy only.
+///
+/// onboarding-fuse-commit (2026-11-14): the pledge moved from the retired
+/// Induction screen to the Plan screen's pledge card (`WardroomCopy
+/// .onboardingPledge*`), cut to one card by the founder. These checks now
+/// read the copy constants themselves, so whole phrases are matched. The
+/// "Eighty percent" sentence was cut with the rest of the long speech; the
+/// consistency mechanism is now carried by "if you stay on it".
 void main() {
-  late String src;
-
-  setUpAll(() {
-    src = File('lib/features/ai_coach/screens/induction_screen.dart')
-        .readAsStringSync();
-  });
+  const src = '${WardroomCopy.onboardingPledgeGreetingTemplate} '
+      '${WardroomCopy.onboardingPledgeBody} '
+      '${WardroomCopy.onboardingPledgeContract} '
+      '${WardroomCopy.onboardingPledgeSeal}';
 
   test('pledge must NOT claim a false workout-count gate (OBS-1 regression)', () {
     expect(src.contains('104 workouts'), isFalse,
@@ -34,22 +39,15 @@ void main() {
         reason: 'the false "104 workouts ≈ six months" promise (real gate 2 yrs)');
   });
 
-  // NOTE: these assert single-line-safe substrings — the copy is split across
-  // concatenated Dart string literals (line-wrap), so a multi-word phrase like
-  // 'Petty Officer' is NOT a contiguous substring of the SOURCE.
   test('pledge anchors on the nearer ranks + Lieutenant as the destination (B)', () {
-    expect(src.contains('Petty'), isTrue,
-        reason: 'framing B anchors the commit on the fast nearer ranks (Petty Officer)');
-    expect(src.contains('month three'), isTrue,
-        reason: 'the nearer-rank timeline (Petty Officer by month three)');
-    expect(src.contains('Lieutenant'), isTrue,
-        reason: 'Lieutenant is named as the destination (Become a Lt)');
+    expect(src.contains('Petty Officer by month three'), isTrue,
+        reason: 'framing B anchors the commit on the fast nearer ranks');
+    expect(src.contains('Lieutenant if you stay on it'), isTrue,
+        reason: 'Lieutenant is the destination, earned by consistency');
   });
 
-  test('pledge describes the real mechanism — consistency, not a count', () {
-    expect(src.contains('Eighty percent'), isTrue,
-        reason: 'officer ranks gate on 80% completion (the real engine)');
-    expect(src.contains('contract'), isTrue,
-        reason: 'Navy voice — the commitment is "the contract"');
+  test('pledge keeps the Navy contract voice', () {
+    expect(src.contains("That's the contract."), isTrue);
+    expect(src.contains('Tap below to seal it.'), isTrue);
   });
 }
