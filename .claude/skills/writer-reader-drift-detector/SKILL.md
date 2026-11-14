@@ -206,10 +206,13 @@ Behavioral tests catch all of these.
 ### 6.3 "We have the SoT registry, that's enough"
 The SoT registry is a contract; it doesn't enforce itself. A registry entry can drift from reality. Always re-verify file:line citations from the registry before trusting them. Per `feedback_audit_findings_require_live_verification.md`.
 
+### 6.4 "A retired row is hidden, so every reader already skips it" (NEW 2026-11-13, OI-438 / OI-469, diagnose 9c4b1e)
+A writer that retires rows with `is_active = false` (never DELETE, because foreign keys point at them) leaves every OTHER reader of that table answering from retired rows until each one filters. Telltale: a reader written before the first retirement (`.ilike(...).limit(1)` with no ORDER BY, so the planner picks between an active and a retired twin). Before choosing the fix, measure live how many retired rows have NO active twin (here 56 of 64): a plain filter turns those into "not found", and that is a product call for the founder, not a detail. Test with the RETIRED row listed FIRST in the fixture (an unfiltered `limit(1)` then returns it); mutate each stage's filter on its own. Regression: `supabase/functions/_shared/tools/__tests__/getFormCues_test.ts`.
+
 ---
 
 ## Self-evolution
 
 Append a 10th, 11th, Nth instance to §2 when a new drift bug ships. Update §6 with new pitfalls. New skill files when drift bugs cluster around a sub-pattern (e.g. "cron-scoped drift" or "Edge-Function payload drift").
 
-Last evolved: B5 D1 of tech-debt audit 2026-05-20 (initial creation; 9-instance recurrence threshold met).
+Last evolved: 2026-11-13 (§6.4, soft-delete reader drift, OI-438 / OI-469). Before that: B5 D1 of tech-debt audit 2026-05-20 (initial creation; 9-instance recurrence threshold met).
