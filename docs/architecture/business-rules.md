@@ -22,7 +22,7 @@ status: scaffold
 - Steps + sleep sync (Google Fit / Health Connect)
 - AI Coach — 7/day forever, no trial (Gemini 3.1 Flash Lite)
 - AI coach photo analysis — 5 image reads LIFETIME (metered on `usage_counters`); video is PRO-only
-- Voice (mic) input to AI coach — on-device transcription via `speech_to_text`; zero infra cost. Made free 2026-05-03 (Test #9 / F13).
+- Voice (mic) input on the AI coach composer AND the nutrition Log sheet's AI tab, on the phone and on the web — speech recognition by the device's or the browser's own service (it may send the audio to its provider; never described as on-device); zero infra cost to us. Made free 2026-05-03 (Test #9 / F13); unified tap-to-start / tap-to-stop with Stop and Send 2026-11-14. A spoken meal goes through the existing `food_text_analysis` call and counts against its daily units (10 free / 200 PRO), nothing extra.
 - Morning alert — generic push notification
 - Weekly nutrition report — first report free (after Week 1)
 - Future Prediction card — one card post-onboarding
@@ -40,7 +40,6 @@ status: scaffold
 - Progress photos (full timeline)
 - Dedicated AI coaching with a higher daily limit (Gemini 3.1 Flash Lite — 20 messages/day, no trial window; NOT unlimited)
 - AI coach photo / video analysis — **10 image reads + 5 video reads per IST day** (OI-153, founder decision 2026-09-12; lowered from 50/10 by Part B, founder 2026-10-01; enforced atomically server-side, reset at midnight IST, an in-app coach reply at the ceiling — not the paywall). ⚠ Not "unlimited": every copy string that promised unlimited media reads was reworded the same day, and `test/contracts/coach_replies_test.dart` pins the word absent
-- Audio-First UI (voice notes to AI coach)
 - Morning alert — AI-personalised message with yesterday's data
 - Adaptive workout recommendations from biometric data (Phase 2)
 

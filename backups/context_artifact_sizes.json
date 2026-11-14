@@ -20,12 +20,12 @@
     "recorded_at": "2026-11-11T22:36:53.547352Z"
   },
   "lib/core/services/CLAUDE.md": {
-    "bytes": 38219,
-    "recorded_at": "2026-11-11T22:36:53.547352Z"
+    "bytes": 40905,
+    "recorded_at": "2026-11-14T11:10:37.245204Z"
   },
   "lib/features/ai_coach/CLAUDE.md": {
-    "bytes": 25815,
-    "recorded_at": "2026-11-11T22:36:53.547352Z"
+    "bytes": 31510,
+    "recorded_at": "2026-11-14T11:10:37.245204Z"
   },
   "lib/features/auth/CLAUDE.md": {
     "bytes": 20499,

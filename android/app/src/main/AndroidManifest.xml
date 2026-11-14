@@ -115,6 +115,13 @@
             <action android:name="android.intent.action.PROCESS_TEXT"/>
             <data android:mimeType="text/plain"/>
         </intent>
+        <!-- Speech input (AI Coach + nutrition Log sheet): on Android 11+ the app
+             can only see a recognition service it declares here, so without it
+             SpeechRecognizer.isRecognitionAvailable can report false on a device
+             that has one. -->
+        <intent>
+            <action android:name="android.speech.RecognitionService"/>
+        </intent>
         <!-- Health Connect: required to check if Health Connect is available on device -->
         <package android:name="com.google.android.apps.healthdata" />
     </queries>
