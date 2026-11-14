@@ -17,6 +17,7 @@ import 'dart:io';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
+import 'package:icanbefitter/core/services/hive_user_session.dart';
 import 'package:icanbefitter/features/ai_coach/services/induction_service.dart';
 import 'package:icanbefitter/features/auth/providers/auth_provider.dart';
 import 'package:icanbefitter/features/onboarding/providers/onboarding_provider.dart';
@@ -77,6 +78,24 @@ void main() {
 
       expect(HiveService.instance.coachBox.get('committed_at'), earlier);
       expect(UserRepository.instance.isOnboarded, isTrue);
+    });
+  });
+
+  group('finalizeLocalCommit without a session (B-pass F2)', () {
+    test(
+        'refuses and writes nothing: hasCommitted reads false, but the '
+        'user-scoped box refuses every write without a session',
+        () async {
+      await HiveService.instance.coachBox.put('committed_at', 'earlier');
+      await HiveUserSession.closeAll();
+
+      await expectLater(
+          OnboardingNotifier.finalizeLocalCommit(), throwsStateError);
+
+      await HiveUserSession.openForUser(kTestUserId);
+      expect(HiveService.instance.coachBox.get('committed_at'), 'earlier',
+          reason: 'no overwrite of a real pledge while the session is closed');
+      expect(UserRepository.instance.isOnboarded, isFalse);
     });
   });
 

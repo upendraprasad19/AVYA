@@ -369,6 +369,10 @@ class OnboardingNotifier extends Notifier<OnboardingState> {
   /// overwrites a real `committed_at`.
   @visibleForTesting
   static Future<void> finalizeLocalCommit() async {
+    // With no Hive session both guards below read false, but every coachBox
+    // write then throws (GuardedBox), so a pledge cannot be overwritten: the
+    // throw lands in completeOnboarding's catch with the onboarded flag still
+    // false (B-pass F2; pinned by onboarding_single_commit_test).
     final induction = InductionService.instance;
     if (!induction.hasCommitted) {
       await induction.recordCommitment();

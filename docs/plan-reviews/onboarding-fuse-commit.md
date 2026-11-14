@@ -6,7 +6,8 @@ review_rounds: 5
 ground_truth_verified: true
 verdict: converged
 mechanical_only: true
-bpass: pending
+bpass: accepted
+bpass_review: docs/reviews/40877fa9d842-review.md
 ---
 
 # Plan-review record: onboarding single commit (Plan + Induction fused, Muster removed)
@@ -23,7 +24,7 @@ Five independent, context-blind Sonnet rounds, each verifying claims against cod
 | 4 | 0 | 2 | Design confirmed. Uid source switched to `HiveUserSession.currentOwnerFullId` (Supabase `currentUser` is null in every unit test); throw-injection hook for the order test; latent profile wipe in `_ensureLocalUser` found (closed by writing `id`). |
 | 5 | 0 | 1 (mechanical) | Wrong test constant name; P2s applied (pure predicate for the wipe decision, try/catch around the hoisted session open, hook reset, FK race ruled out via signup trigger 039). |
 
-Converged at round 5: no P0, the only P1 mechanical. B-pass (`/code-review`) runs on the diff before the merge; this record's `bpass:` is updated then.
+Converged at round 5: no P0, the only P1 mechanical. B-pass (`/code-review`) on 40877fa9 after CI green: 2 P2, F1 fixed (registry ranges re-derived), F2 false alarm (pinned). `docs/reviews/40877fa9d842-review.md`.
 
 ## Found during execution (not in any review round)
 

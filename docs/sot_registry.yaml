@@ -1410,7 +1410,7 @@ concepts:
           value; reads the provider for the live progress bar. Calls
           setUserOverride + ref.invalidate(waterTargetProvider) on save.
       - file: lib/features/onboarding/providers/onboarding_provider.dart
-        line_range: 335-345
+        line_range: 342-352
         method: completeOnboarding (seed water_target_ml on profile)
         semantic: pass-through
         fields_read: [via WaterTargetService.computeFromProfile(profile-like map)]
@@ -2349,7 +2349,7 @@ concepts:
       defect this concept exists to fix.
     writers:
       - file: lib/features/auth/providers/auth_provider.dart
-        line_range: 1306-1311
+        line_range: 1315-1320
         method: terms-write block inside _ensureLocalUser (not itself a named method)
         semantic: hive-write
         notes: |
@@ -3751,7 +3751,7 @@ concepts:
         semantic: flag-check
         fields_read: [onboarding_completed]
       - file: lib/features/auth/providers/auth_provider.dart
-        line_range: 361-481
+        line_range: 370-490
         method: _ensureLocalUser / signOut hooks
         semantic: flag-check
         fields_read: [onboarding_completed]
@@ -5766,7 +5766,7 @@ concepts:
       APK Test #12.8 / Bug #2 root cause.
     writers:
       - file: lib/features/onboarding/providers/onboarding_provider.dart
-        line_range: 263-700
+        line_range: 271-766
         method: completeOnboarding
         notes: writes to userBox['profile']['full_name'] + syncs to users table
       - file: lib/features/profile/screens/edit_profile_screen.dart
@@ -6010,7 +6010,7 @@ concepts:
       completeOnboarding() stamps both Hive and cloud.
     writers:
       - file: lib/features/onboarding/providers/onboarding_provider.dart
-        line_range: 338-660
+        line_range: 345-726
         method: completeOnboarding
         notes: |
           Stamps onboarding_completed_at in the Hive profile map (durable BEFORE
@@ -6033,7 +6033,7 @@ concepts:
           screen, a false positive would block every genuine new signup.
           Kill-switch disable_onboarding_overwrite_guard.
       - file: lib/features/onboarding/providers/onboarding_provider.dart
-        line_range: 683-750
+        line_range: 749-816
         method: _syncOnboardingAndPostActions
         notes: |
           Background cloud catch-up (a1f9c4) — syncs the profile (incl.
@@ -6224,7 +6224,7 @@ concepts:
           midnight is wrong east of IST; the streak moves over in Batch B
           (OI-397).
       - file: lib/features/auth/providers/auth_provider.dart
-        line_range: 361-481
+        line_range: 370-490
         method: _ensureLocalUser (mid-onboarding resume)
         semantic: flag-check
         fields_read: [onboarding_completed]
@@ -6236,7 +6236,7 @@ concepts:
           where Hive flag got cleared but cloud carries truth) is now
           inside AuthSessionBootstrapper.hydrateFromCloud.
       - file: lib/features/onboarding/providers/onboarding_provider.dart
-        line_range: 178-200
+        line_range: 179-201
         method: OnboardingNotifier.completeOnboarding
         semantic: flag-check
         fields_read: [onboarding_completed, onboarding_completed_at]
@@ -6514,7 +6514,7 @@ concepts:
           failure -> upsert_coach_chat_cleared_at (a swept push), except
           fromSignOut, which only logs coach_chat_cleared_at_push_failed.
       - file: lib/features/auth/providers/auth_provider.dart
-        line_range: 1010-1043
+        line_range: 1019-1052
         method: _teardown
         notes: |
           2 s best-effort push (fromSignOut) BEFORE clearAllData wipes userBox.
@@ -7107,7 +7107,7 @@ concepts:
           cloud column 'coach_notes' (different word). Before this
           projection the column was 100% NULL across all users.
       - file: lib/core/services/sync/sync_coach.dart
-        line_range: 828-884
+        line_range: 830-886
         method: _restoreCoachMemory downward sync
         semantic: pass-through
         fields_read: [coach_notes]
@@ -7274,7 +7274,7 @@ concepts:
           + subscription_refresh_* + subscription_verify_non_200 +
           subscription_refresh_grace_skip events.
       - file: lib/features/auth/providers/auth_provider.dart
-        line_range: 106-551
+        line_range: 106-560
         method: auth lifecycle events
         semantic: pass-through
         fields_read: []
@@ -7427,7 +7427,7 @@ concepts:
           UI entry to deleteAllFilesForCurrentUser. After Edge Function
           succeeds, wipes Hive, signs out, and routes to /sign-in.
       - file: lib/features/auth/providers/auth_provider.dart
-        line_range: 106-551
+        line_range: 106-560
         method: signOut + _ensureLocalUser lifecycle
         semantic: pass-through
         fields_read: []
@@ -7924,7 +7924,7 @@ concepts:
           Server-side reader. Pulls coach_memory.coach_notes for the
           nightly summary prompt context.
       - file: lib/core/services/sync/sync_coach.dart
-        line_range: 828-884
+        line_range: 830-886
         method: _restoreCoachMemory (downward pull)
         semantic: pass-through
         fields_read: [coach_notes]
@@ -8128,7 +8128,7 @@ concepts:
           weight_logs, body_measurements, water_logs, daily_steps).
           Restore writes back with IST-anchored keys.
       - file: lib/features/onboarding/providers/onboarding_provider.dart
-        line_range: 405-415
+        line_range: 460-470
         method: OnboardingNotifier weight seed
         semantic: pass-through
         fields_read: []
@@ -8570,7 +8570,7 @@ concepts:
           ErrorTelemetry.recordNonFatal. Wraps response into typed
           RedemptionResult (success / errorMessage / alreadyRedeemed).
       - file: lib/features/auth/providers/auth_provider.dart
-        line_range: 397-421
+        line_range: 406-430
         method: AuthNotifier.signUpWithEmail(referralCode:)
         notes: |
           c7b4d2 (2026-09-26): the sign-up field's code is stored in auth
@@ -8578,7 +8578,7 @@ concepts:
           at sign-in, which ran before the users row existed and never ran
           when email confirmation returned no session.
       - file: lib/features/onboarding/providers/onboarding_provider.dart
-        line_range: 683-750
+        line_range: 749-816
         method: _syncOnboardingAndPostActions
         notes: |
           The one client redeem point for new users, AFTER the users upsert.
@@ -10269,11 +10269,11 @@ concepts:
         method: _buildInjuriesChips + profile reader
         notes: chips emit canonical tokens (via InjuryVocab.chipTokens/toggleChip Ship 3); reader normalizes legacy stored values
       - file: lib/features/onboarding/screens/details_screen.dart
-        line_range: 52-652
+        line_range: 53-654
         method: _InjuriesSection chip + _toggleInjury + initState seed + _onContinue extras
         notes: Ship 3 (U5) - onboarding Details collects injuries via the shared InjuryVocab.chipTokens/toggleChip chip (pre-selected 'No injuries' default); initState seeds _injuries from widget.data so the plan→details ADJUST-PLAN round-trip preserves the selection; writes 'injuries' into the plan route extras
       - file: lib/features/onboarding/screens/plan_screen.dart
-        line_range: 520-535
+        line_range: 580-595
         method: _onReportForDuty setAnswer('injuries', ...)
         notes: Ship 3 (U5) - reads the collected injuries from widget.data['injuries'] (was hard-coded ['none']); preserves the ['none'] sentinel; generateV4 normalizes centrally
       - file: lib/shared/repositories/plan_engine/plan_generator.dart
@@ -12650,13 +12650,14 @@ concepts:
         method: currentWeekColumnProjection
         notes: pure helper deciding frozen-passthrough (disabled) vs program week (enabled); behaviorally tested.
       - file: lib/features/onboarding/providers/onboarding_provider.dart
-        line_range: 473-473
+        line_range: 650-650
         method: onboarding completion (initial + step)
         notes: |
           Writes current_week:1 at onboarding — correct-BY-CONSTRUCTION (a new
           user is always at program week 1) and equal to what the projection
           would compute, so it never disagrees with the canonical writer. Also
-          at :786. NOT routed through the projection (no need).
+          at :969 (the cloud progress row; both cites re-derived 2026-11-14 from
+          the 'current_week': 1 literal, the old 473 / 786 had drifted). NOT routed through the projection (no need).
       - file: lib/core/services/sync_service.dart
         line_range: 1088-1092
         method: _replayPendingOnboardingSync (NO LONGER writes current_week)
@@ -13169,11 +13170,11 @@ concepts:
       .timeout() frees the AWAITER and does NOT cancel the request.
     writers:
       - file: lib/features/auth/providers/auth_provider.dart
-        line_range: 914
+        line_range: 923
         method: signOutInProgress
         semantic: teardown-window-flag
       - file: lib/features/auth/providers/auth_provider.dart
-        line_range: 960-997
+        line_range: 969-1006
         method: signOut
         semantic: set-in-try-clear-in-finally
         notes: >-
@@ -13224,7 +13225,7 @@ concepts:
         semantic: branch-order-is-the-fix
         notes: signOutInProgress MUST be tested BEFORE the onboarding read. Shifted +8 by profile-share-grow-order (the `photos` GoRoute inserted above, in the Profile branch) — repointed per the parity gate's minimum-fix convention.
       - file: lib/core/router/app_router.dart
-        line_range: 610-719
+        line_range: 610-702
         method: _authRedirect
         semantic: delegates-to-pure-fn
       - file: lib/core/services/sync_service.dart
@@ -13485,15 +13486,15 @@ concepts:
       path and never to the OAuth ENTRY path.
     writers:
       - file: lib/features/auth/providers/auth_provider.dart
-        line_range: 419
+        line_range: 428
         method: OAuth completion watch
         semantic: subscribes-to-onAuthStateChange-after-launch
       - file: lib/features/auth/providers/auth_provider.dart
-        line_range: 448
+        line_range: 457
         method: cancelOAuthWatch
         semantic: teardown-also-wired-to-ref-onDispose
       - file: lib/features/auth/providers/auth_provider.dart
-        line_range: 534
+        line_range: 543
         method: signInWithGoogle
         semantic: launches-the-redirect-then-arms-the-watch
     readers:
@@ -13719,7 +13720,7 @@ concepts:
         semantic: captures-Uri.base-before-GoRouter-boots
     readers:
       - file: lib/core/router/app_router.dart
-        line_range: 140-160
+        line_range: 137-157
         method: "/confirm GoRoute pageBuilder"
         semantic: falls-back-to-pendingConfirmTokenHash-when-query-params-empty
     hive:
