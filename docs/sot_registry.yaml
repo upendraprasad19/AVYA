@@ -12076,6 +12076,7 @@ concepts:
   - concept: exercise_library_schema
     domain: workout
     behavioral_test_path: test/contracts/exercise_library_schema_contract_test.dart
+    behavioral_test_path_form_cues: supabase/functions/_shared/tools/__tests__/getFormCues_test.ts  # OI-438/OI-469: fake client applies eq/ilike/limit; retired row listed first; both stages
     behavioral_test_path_prune: test/contracts/library_seed_prune_behavioral_test.dart  # Batch A 46fc99: real Hive box, retired id deleted, kept + community keys survive, a shipped id is never pruned
     behavioral_test_path_alias: test/contracts/exercise_alias_lookup_behavioral_test.dart  # Batch A 46fc99: retired names resolve via name_aliases, exact name wins (mirror), queryV4 serves the kept twin
     behavioral_test_path_panel: test/contracts/coaching_panel_numeric_breathing_behavioral_test.dart  # Batch A b7d3e1: rendered panel suppresses a numeric breathing_cue, Surya Namaskar mirror renders it
@@ -12178,7 +12179,7 @@ concepts:
         semantic: a retired name resolves to its kept twin; an exact name always wins over an alias
       - file: supabase/functions/_shared/tools/exercise/getFormCues.ts
         method: reads primary_muscles/secondary_muscles/difficulty_level (:60-61)
-        semantic: AI-coach form cues; was NULL for the 9 stubs pre-batch; exact-name match with no is_active filter (why 162 copies the kept cues onto the retired rows)
+        semantic: AI-coach form cues; was NULL for the 9 stubs pre-batch; both queries filter is_active = true in code (OI-438/OI-469; live after the ai-proxy deploy: a retired row never answers; the seed's cue copy onto retired rows, from migration 162, is now defence in depth)
       - file: lib/features/train/providers/train_provider.dart
         line_range: 103-111
         method: last-weight suggestion reads the LOGGED row's logging_type (weight_reps or weighted_bodyweight) before it suggests a load
