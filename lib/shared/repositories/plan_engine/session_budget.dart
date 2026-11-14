@@ -414,6 +414,12 @@ class SessionBudget {
   /// The most seconds the count floor may push one day past its budget.
   static const int maxForcedOverSeconds = 300;
 
+  /// Unit 2C-b (S4, founder d42 / d47): the one allowance a day under 60 minutes may run past its budget, as SETS on the
+  /// rows today's allocation holds (d44: never an extra exercise). A ledger built with `allowance: true` adds it to the
+  /// day budget and then forces nothing further (`BudgetLedger.forcingBound` 0), so the two never stack. 285 s, not 300:
+  /// the displayed minutes run past the ledger, and 285 s is the least that fixes today's 28 not_suitable plans.
+  static const int allowanceSeconds = 285;
+
   // ── Bands and caps (Ruling 4) ────────────────────────────────────────────
 
   /// A focus muscle may go to this many hard sets a week (founder F3).
@@ -523,11 +529,18 @@ class SessionBudgetContext {
 /// match) enter through [add] with an empty group set and zero sets: they spend
 /// the day's time and nothing else.
 class BudgetLedger {
-  BudgetLedger(this.ctx, int dayCount)
+  BudgetLedger(this.ctx, int dayCount, {bool allowance = false})
       : _spentSeconds = List<double>.filled(dayCount, 0.0),
         _session = List<Map<String, int>>.generate(dayCount, (_) => <String, int>{}),
         _dayBudgetSeconds = (ctx.minutes - SessionBudget.warmCoolMinutes(ctx.minutes)) * 60.0 -
-            ctx.finisherSeconds;
+            ctx.finisherSeconds +
+            (allowance && ctx.minutes < 60 ? SessionBudget.allowanceSeconds.toDouble() : 0.0),
+        forcingBound =
+            allowance && ctx.minutes < 60 ? 0.0 : SessionBudget.maxForcedOverSeconds.toDouble();
+
+  /// How far past the day's budget the allocator's count passes (A2, the minimum) may force a row: 0 on an allowance
+  /// ledger under 60 minutes (the allowance replaces it, d42: never stacked), else [SessionBudget.maxForcedOverSeconds].
+  final double forcingBound;
 
   final SessionBudgetContext ctx;
   final double _dayBudgetSeconds;

@@ -1,0 +1,94 @@
+# Closure ledger — Generator Unit 2C-b: the weekly minimum (S3) and the under-60 allowance (S4).
+# Plan docs/plans/2026-11-14-generator-step2c-b-weekly-minimum.md (v5), diagnose e9b3d7, founder d35-d49.
+# Gate 40 (validate_audit_closure.dart). One terminal_state per item; no `deferred:` key.
+
+batch: generator-step2c-b
+total_findings: 14
+closed_count: 14
+
+_commit: &wip "generator-step2c-b (uncommitted at authoring)"
+
+findings:
+  - id: C2CB-1
+    title: "S4: one under-60 allowance of 285 s (d42 / d47), forcing bound 0 with it (never stacked)"
+    terminal_state: closed_in_commit
+    commit: *wip
+    verification: "session_allowance_behavioral_test 'the ledger'; mutants M27 (stacked bound) and M28 (300 s) red; the gate's display bound (max +6)"
+
+  - id: C2CB-2
+    title: "F2: the row cap is R's rows (the floor re-run), not the floor-OFF world's (v11b gave 2,397 short day-weeks more rows)"
+    terminal_state: closed_in_commit
+    commit: *wip
+    verification: "the gate: every 30 / 45-minute day holds exactly OFF's rows, all four weeks (1,152 plans); the sweep: rows <= R; mutant M06 red"
+
+  - id: C2CB-3
+    title: "F4: the allowance re-run keeps R's hold evictions (refEvicted), under 60 only"
+    terminal_state: closed_in_commit
+    commit: *wip
+    verification: "byte-equal replay of the chosen prototype run (b25); mutant M07 (see the diagnose doc's table)"
+
+  - id: C2CB-4
+    title: "S3 targets: d35 cross-variant, d38 focus, protective; credit counts kept holds; Calves under 45 never (d45, d49)"
+    terminal_state: closed_in_commit
+    commit: *wip
+    verification: "weekly_minimum_behavioral_test target 1, target 2 (6-day), hold credit, Calves at 30; the gate (newly-0 only Calves at 30: 143); mutants M18 / M19 / M20 / M30 red (M20 by the 5-day Calves test)"
+
+  - id: C2CB-5
+    title: "The minimum pass: cheapest slot at 2 sets; count, cap, top, forcing-bound guards; minimumSeats (copied days inherit)"
+    terminal_state: closed_in_commit
+    commit: *wip
+    verification: "weekly_minimum_behavioral_test (seat, bound, count, top, copy-day); the shared oracle excuses minimum seats within the forcing bound; mutants M13 / M14 / M29 red (the count and cap guards M11 / M12 / M15 are backstops no input reaches: diagnose e9b3d7, Mutations)"
+
+  - id: C2CB-6
+    title: "The walk: targets after rank 0 and the 2A opener (round 1 A-8; d48 keeps the lead); evictFor uses the slot's rank"
+    terminal_state: closed_in_commit
+    commit: *wip
+    verification: "the gate's exact counts (zero-week pairs 71, verdicts 657 / 495 / 0); mutants M08 / M09 red (M10, the eviction rank, survives: no input walks a target that evicts a hold, diagnose e9b3d7)"
+
+  - id: C2CB-7
+    title: "F3 (parent round 3 B-7): protect-first and the fallback to R verbatim, the terminal guard"
+    terminal_state: closed_in_commit
+    commit: *wip
+    verification: "the gate: the stamp is false on exactly the two fallback plans and their whole plan equals OFF; mutants M21 / M22 / M23"
+
+  - id: C2CB-8
+    title: "Round 3 R3-3 / round 4 R4-1: the allowance signal on PopulatedDay; _weekTwoGains follows it, VolumeTitration never takes it"
+    terminal_state: closed_in_commit
+    commit: *wip
+    verification: "session_allowance_behavioral_test (the stamp per path, the titration refusal); the gate's fallback plans equal OFF in week 2; mutants M02 / M03 / M04 / M05"
+
+  - id: C2CB-9
+    title: "Where it runs: lead-first with the floor ON only; 2A off / 2B off byte for byte; the switch as allocate(balancedWeek:)"
+    terminal_state: closed_in_commit
+    commit: *wip
+    verification: "weekly_minimum_behavioral_test 'where it runs'; the gate's 48-plan digests with disable_lead_first / disable_day_floor; balanced_week_gate_test OFF digest unchanged; mutant M25"
+
+  - id: C2CB-10
+    title: "Worlds are chosen with the allowance off (the lead keeps its base sets where it does today)"
+    terminal_state: closed_in_commit
+    commit: *wip
+    verification: "BudgetLedger's default allowance is false; byte-equal replay; mutant M26"
+
+  - id: C2CB-11
+    title: "Round 2 A-6: test readers of time go through the shared oracle with an allowance excuse; five own-limit tests moved"
+    terminal_state: closed_in_commit
+    commit: *wip
+    verification: "budget_invariant_oracle.excusedSeconds(allowanceSeconds:) and minimumSeatSeconds; session_set_budget_wiring_test, oi489_timed_hold_real_engine_test, session_set_budget_gate_test read SessionSetAllocator.debugLastAllowance; the 2C-b ON seeded sweep"
+
+  - id: C2CB-12
+    title: "Round 2 A-3: existing crafted allocator tests pin pre-2C-b mechanics with balancedWeek: false"
+    terminal_state: closed_in_commit
+    commit: *wip
+    verification: "Fx(balancedWeek:) in session_budget_fixtures.dart; five crafted files and two exact-over sweeps named in the diagnose doc with their cause"
+
+  - id: C2CB-13
+    title: "Parent round 2 A-6: the 'Up to N min' chip; the audit's over-time bound moves to +6 (d47)"
+    terminal_state: closed_in_commit
+    commit: *wip
+    verification: "session_duration_chip_wording_test pins 'About N min' and refuses 'Up to'; plan_audit_lib_test pins +6 clean, +7 moderate"
+
+  - id: C2CB-14
+    title: "Today's 28 not_suitable plans (lose_fat / general_fitness 3-day 30-minute, Shoulders at 0)"
+    terminal_state: closed_in_commit
+    commit: *wip
+    verification: "the gate: OFF 28 not_suitable, ON 0; the 2,304-plan audit of the built tree 965 / 1,339 / 0, byte-equal to b25"

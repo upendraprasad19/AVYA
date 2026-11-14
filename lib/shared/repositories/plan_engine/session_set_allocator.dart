@@ -56,6 +56,16 @@ class AllocationStats {
   /// Hard sets per budget group across the week, after the allocation.
   final Map<String, int> weekly = {};
 
+  /// Unit 2C-b (hold credit): the groups of the library holds (timed rows) this variant kept.
+  final Set<String> holdGroups = {};
+
+  /// Unit 2C-b: the groups this variant credits: [weekly], plus each group only a kept hold trains (read as 1).
+  Map<String, int> get credited => {...weekly, for (final g in holdGroups) if (!weekly.containsKey(g)) g: 1};
+
+  /// Unit 2C-b (S3, founder d35 / d38): per day, each slot the weekly minimum seated at 2 sets and the group it was
+  /// seated for. Never in [countForced]. Variant B inherits A's entries for the days it copies.
+  final Map<int, List<({String name, String group})>> minimumSeats = {};
+
   /// For each group still below its weekly floor: `cap_limited`,
   /// `co_group_limited`, `time_limited`, `copy_day_limited` (variant B only: the
   /// exercises that could take a set sit on a day copied from A, which B never
@@ -98,6 +108,9 @@ typedef FloorSeat = ({
 
 /// Unit 2A, R3: the three allocations each variant is tried in.
 enum _World { lead, capped, main }
+
+/// One variant's allocation: its rows per day, its slots per day and the holds it evicted per day.
+typedef _Alloc = ({List<List<PlannedExercise>> out, List<List<_Slot>> byDay, Map<int, Set<int>> evicted});
 
 typedef FirstLift = ({
   int day,
@@ -172,6 +185,11 @@ class SessionSetAllocator {
   @visibleForTesting
   static Map<String, AllocationStats>? debugLastStats;
 
+  /// Unit 2C-b: the `allowance` the last [allocate] call stamped on its days (S4), so a test reading a whole
+  /// `generateV4` plan can apply the shared oracle's allowance excuse. No production reader.
+  @visibleForTesting
+  static bool? debugLastAllowance;
+
   /// Unit 2B, F2: whether the day floor prefers candidate [a] to [b]: the fewer groups taken past their weekly top
   /// ([over]), then the smaller sum of those excesses ([excess]), then the cheaper seat at 2 sets ([seconds]). A full tie
   /// is false, so the caller, walking a day's slots in rank order, keeps the lowest rank. No lead preference.
@@ -202,6 +220,9 @@ class SessionSetAllocator {
   /// (`PlanEngineFlags.leadFirstEnabled`, default ON). Off is the pre-2A allocation byte for byte.
   /// [dayFloor] turns the Unit 2B 3-exercise day floor on or off for this call; null reads its kill switch
   /// (`PlanEngineFlags.dayFloorEnabled`, default ON). Off is the pre-2B allocation byte for byte, in both 2A paths.
+  /// [balancedWeek] turns Unit 2C-b (the weekly minimum and the under-60 allowance) on or off for this call; null reads
+  /// 2C's kill switch (`PlanEngineFlags.balancedWeekEnabled`, default ON). 2C-b runs only on the lead-first path with
+  /// the floor on; off, or on any other path, the allocation is the pre-2C-b one byte for byte.
   static List<PopulatedDay> allocate({
     required List<PopulatedDay> days,
     required SessionBudgetContext ctx,
@@ -209,10 +230,17 @@ class SessionSetAllocator {
     required bool is6Day,
     bool? leadFirst,
     bool? dayFloor,
+    bool? balancedWeek,
   }) {
     final floorOn = dayFloor ?? PlanEngineFlags.dayFloorEnabled;
     if (leadFirst ?? PlanEngineFlags.leadFirstEnabled) {
-      return _allocateLeadFirst(days: days, ctx: ctx, rowsByName: rowsByName, is6Day: is6Day, dayFloor: floorOn);
+      return _allocateLeadFirst(
+          days: days,
+          ctx: ctx,
+          rowsByName: rowsByName,
+          is6Day: is6Day,
+          dayFloor: floorOn,
+          balancedWeek: floorOn && (balancedWeek ?? PlanEngineFlags.balancedWeekEnabled));
     }
     final stats = <String, AllocationStats>{};
     final lists = [for (final d in days) d.exercisesA];
@@ -234,6 +262,7 @@ class SessionSetAllocator {
       bOut = b.out;
     }
     debugLastStats = stats;
+    debugLastAllowance = false;
     return [
       for (var d = 0; d < days.length; d++)
         PopulatedDay(
@@ -278,7 +307,11 @@ class SessionSetAllocator {
     required Map<String, Map<String, dynamic>> rowsByName,
     required bool is6Day,
     required bool dayFloor,
+    required bool balancedWeek,
   }) {
+    // Unit 2C-b (S4): true when the returned days were sized with the under-60 allowance; read by `_weekTwoGains`.
+    var allowanceUsed = false;
+    final under60 = ctx.minutes < 60;
     final floor = SessionBudget.countFloor(ctx.minutes);
     List<int> rowsOf(List<List<PlannedExercise>> out) => [for (final d in out) d.length];
     bool worse(List<List<PlannedExercise>> w, AllocationStats ws, List<List<PlannedExercise>> m, AllocationStats ms) =>
@@ -344,6 +377,114 @@ class SessionSetAllocator {
         stats['A'] = sAF;
         stats['B'] = sBF;
         bOut = bF.out;
+        if (balancedWeek) {
+          // Unit 2C-b (plan docs/plans/2026-11-14-generator-step2c-b-weekly-minimum.md, founder d35-d49). The floor
+          // re-run above is the reference R (the pre-2C-b output). Every re-run below keeps the chosen worlds; under 60
+          // it takes the allowance (S4), at most R's rows per day (d44: sets, never an extra exercise) and R's hold
+          // evictions; at 60+ it runs without them, so only minimum seats can differ from R.
+          final aR = a, sAR = sAF, bR = bF, sBR = sBF;
+          final capA = under60 ? [for (final d in aR.out) d.length] : null;
+          final capB = under60 ? [for (final d in bR.out) d.length] : null;
+          final refA = under60 ? aR.evicted : null;
+          final refB = under60 ? bR.evicted : null;
+          _Alloc runA(AllocationStats st, Set<String> minGroups) => _variant(listsA, days, ctx, rowsByName, null, st,
+              world: wA, dayFloor: true, allowance: under60, minGroups: minGroups, rowCap: capA, refEvicted: refA);
+          _Alloc runB(_Alloc aNow, AllocationStats sANow, AllocationStats st, Set<String> minGroups) =>
+              _variant(listsB, days, ctx, rowsByName, copyOf(aNow.byDay), st,
+                  copyFrom: sANow,
+                  copyEvicted: aNow.evicted,
+                  world: wB,
+                  dayFloor: true,
+                  allowance: under60,
+                  minGroups: minGroups,
+                  rowCap: capB,
+                  refEvicted: refB);
+
+          // Step 1: the allowance re-run, A then B copying the new A.
+          final sA1 = AllocationStats()..leadWorld = wA.name;
+          final a1 = runA(sA1, const {});
+          final sB1 = AllocationStats()..leadWorld = wB.name;
+          final b1 = runB(a1, sA1, sB1, const {});
+          a = a1;
+          stats['A'] = sA1;
+          stats['B'] = sB1;
+          bOut = b1.out;
+
+          // Step 2, the targets. 1 (d35): a group the other variant credits and this one does not; 2 (d38): a focus
+          // group this variant does not credit; 3 (protective): a group R or step 1 credits that is now at 0. Calves
+          // under 45 minutes is never a target of any kind (d45, d49).
+          bool exempt(String g) => g == 'Calves' && ctx.minutes < 45;
+          Set<String> need(Map<String, int> mine, Map<String, int> other) => {
+                for (final e in other.entries)
+                  if (e.value > 0 && (mine[e.key] ?? 0) == 0 && !exempt(e.key)) e.key,
+                for (final g in ctx.focusGroups)
+                  if ((mine[g] ?? 0) == 0 && !exempt(g)) g,
+              };
+          Set<String> lost(Map<String, int> pre, Map<String, int> now, Set<String> t) => {
+                for (final e in pre.entries)
+                  if (e.value > 0 && (now[e.key] ?? 0) == 0 && !t.contains(e.key) && !exempt(e.key)) e.key,
+              };
+          final preA = {for (final e in sAR.credited.entries) if (e.value > 0) e.key: e.value};
+          final preB = {for (final e in sBR.credited.entries) if (e.value > 0) e.key: e.value};
+          for (final e in sA1.credited.entries) {
+            if (e.value > 0) preA[e.key] = e.value;
+          }
+          for (final e in sB1.credited.entries) {
+            if (e.value > 0) preB[e.key] = e.value;
+          }
+          var tA = {...need(sA1.credited, sB1.credited), ...lost(preA, sA1.credited, const {})};
+          var tB = lost(preB, sB1.credited, const {});
+
+          // Step 3: the fixpoint, at most 4 rounds: A with its targets, then B against the new A (target 1 for B is
+          // read against the current A); a protective group now at 0 joins its variant's targets.
+          for (var it = 0; it < 4; it++) {
+            if (tA.isNotEmpty) {
+              final st = AllocationStats()..leadWorld = wA.name;
+              a = runA(st, tA);
+              stats['A'] = st;
+            } else {
+              a = a1;
+              stats['A'] = sA1;
+            }
+            tB = {...tB, ...need(sB1.credited, stats['A']!.credited)};
+            if (tA.isNotEmpty || tB.isNotEmpty) {
+              final st = AllocationStats()..leadWorld = wB.name;
+              bOut = runB(a, stats['A']!, st, tB).out;
+              stats['B'] = st;
+            }
+            final lA = lost(preA, stats['A']!.credited, tA);
+            final lB = lost(preB, stats['B']!.credited, tB);
+            if (lA.isEmpty && lB.isEmpty) break;
+            tA = {...tA, ...lA};
+            tB = {...tB, ...lB};
+          }
+
+          bool anyLost() =>
+              lost(preA, stats['A']!.credited, const {}).isNotEmpty ||
+              lost(preB, stats['B']!.credited, const {}).isNotEmpty;
+          // Step 4, protect-first: a group R or step 1 credits is still at 0, so a NEW target (1 or 2) took its row.
+          // Re-run both variants with the protective targets only.
+          if (anyLost()) {
+            final pA = {for (final g in tA) if ((preA[g] ?? 0) > 0) g};
+            final pB = {for (final g in tB) if ((preB[g] ?? 0) > 0) g};
+            final sAP = AllocationStats()..leadWorld = wA.name;
+            a = pA.isEmpty ? a1 : runA(sAP, pA);
+            stats['A'] = pA.isEmpty ? sA1 : sAP;
+            final sBP = AllocationStats()..leadWorld = wB.name;
+            bOut = runB(a, stats['A']!, sBP, pB).out;
+            stats['B'] = sBP;
+          }
+          // Step 5, the terminal guard: still a protective group at 0, so the output is R verbatim (no allowance
+          // either). Nothing runs after it.
+          if (anyLost()) {
+            a = aR;
+            stats['A'] = sAR;
+            stats['B'] = sBR;
+            bOut = bR.out;
+          } else {
+            allowanceUsed = under60;
+          }
+        }
       } else if (kept == null || sB == null) {
         // Neither B world holds: the whole plan falls back to main (A = M, B = M_B; A's stats become M's).
         a = aM;
@@ -360,8 +501,58 @@ class SessionSetAllocator {
       a = _variant(listsA, days, ctx, rowsByName, null, sAF, world: wA, dayFloor: true);
       stats['A'] = sAF;
       bOut = a.out;
+      if (balancedWeek) {
+        // Unit 2C-b on the 6-day path: the same steps with B = A; no target 1, and the protective set is R's credit.
+        final aR = a, sAR = sAF;
+        final cap6 = under60 ? [for (final d in aR.out) d.length] : null;
+        final ref6 = under60 ? aR.evicted : null;
+        _Alloc run6(AllocationStats st, Set<String> minGroups) => _variant(listsA, days, ctx, rowsByName, null, st,
+            world: wA, dayFloor: true, allowance: under60, minGroups: minGroups, rowCap: cap6, refEvicted: ref6);
+        bool exempt(String g) => g == 'Calves' && ctx.minutes < 45;
+        final s1 = AllocationStats()..leadWorld = wA.name;
+        a = run6(s1, const {});
+        stats['A'] = s1;
+        bOut = a.out;
+        final pre6 = {for (final e in sAR.credited.entries) if (e.value > 0) e.key: e.value};
+        Set<String> lost6(Map<String, int> now, Set<String> t) => {
+              for (final e in pre6.entries)
+                if (e.value > 0 && (now[e.key] ?? 0) == 0 && !t.contains(e.key) && !exempt(e.key)) e.key,
+              for (final g in ctx.focusGroups)
+                if ((now[g] ?? 0) == 0 && !t.contains(g) && !exempt(g)) g,
+            };
+        var t6 = lost6(s1.credited, const {});
+        for (var it = 0; it < 4 && t6.isNotEmpty; it++) {
+          final st = AllocationStats()..leadWorld = wA.name;
+          a = run6(st, t6);
+          stats['A'] = st;
+          bOut = a.out;
+          final l = lost6(st.credited, t6);
+          if (l.isEmpty) break;
+          t6 = {...t6, ...l};
+        }
+        Set<String> prot6(Map<String, int> now) => {
+              for (final e in pre6.entries)
+                if (e.value > 0 && (now[e.key] ?? 0) == 0 && !exempt(e.key)) e.key,
+            };
+        var fellBack = false;
+        if (prot6(stats['A']!.credited).isNotEmpty) {
+          final p6 = {for (final g in t6) if ((pre6[g] ?? 0) > 0) g};
+          final sP = AllocationStats()..leadWorld = wA.name;
+          a = run6(sP, p6);
+          stats['A'] = sP;
+          bOut = a.out;
+          if (prot6(sP.credited).isNotEmpty) {
+            a = aR;
+            stats['A'] = sAR;
+            bOut = a.out;
+            fellBack = true;
+          }
+        }
+        allowanceUsed = under60 && !fellBack;
+      }
     }
     debugLastStats = stats;
+    debugLastAllowance = allowanceUsed;
     return [
       for (var d = 0; d < days.length; d++)
         PopulatedDay(
@@ -371,6 +562,7 @@ class SessionSetAllocator {
           intensity: days[d].intensity,
           exercisesA: a.out[d],
           exercisesB: bOut[d],
+          allowance: allowanceUsed,
         ),
     ];
   }
@@ -404,7 +596,11 @@ class SessionSetAllocator {
 
   // ── One variant ──────────────────────────────────────────────────────────
 
-  static ({List<List<PlannedExercise>> out, List<List<_Slot>> byDay, Map<int, Set<int>> evicted}) _variant(
+  /// Unit 2C-b's arguments (all off by default, so every other call is unchanged): [minGroups] are the weekly
+  /// minimum's targets (the walk and the minimum pass); [allowance] builds the ledger with the under-60 allowance
+  /// (`SessionBudget.allowanceSeconds`, forcing bound 0); [rowCap] caps each day's rows at the reference's (d44);
+  /// [refEvicted] evicts the holds the reference evicted on the days this variant does not copy.
+  static _Alloc _variant(
     List<List<PlannedExercise>> lists,
     List<PopulatedDay> days,
     SessionBudgetContext ctx,
@@ -415,9 +611,13 @@ class SessionSetAllocator {
     Map<int, Set<int>>? copyEvicted,
     _World world = _World.main,
     bool dayFloor = false,
+    Set<String> minGroups = const {},
+    bool allowance = false,
+    List<int>? rowCap,
+    Map<int, Set<int>>? refEvicted,
   }) {
     final n = days.length;
-    final ledger = BudgetLedger(ctx, n);
+    final ledger = BudgetLedger(ctx, n, allowance: allowance);
     final byDay = List<List<_Slot>>.generate(n, (_) => <_Slot>[]);
     // Per day, per exercise: its slot, or null when the exercise is not budgeted.
     final entries = List<List<(PlannedExercise, _Slot?)>>.generate(n, (_) => []);
@@ -457,7 +657,8 @@ class SessionSetAllocator {
                 cost: cost,
                 groups: _groupsOf(ex, rows[ex.exerciseName.toLowerCase()], ctx)));
           }
-          if ((copy?.containsKey(d) ?? false) && (copyEvicted?[d]?.contains(pos) ?? false)) {
+          if (((copy?.containsKey(d) ?? false) && (copyEvicted?[d]?.contains(pos) ?? false)) ||
+              (!(copy?.containsKey(d) ?? false) && (refEvicted?[d]?.contains(pos) ?? false))) {
             evicted.add(ex);
             copiedEvicted[d]++;
           } else {
@@ -521,6 +722,8 @@ class SessionSetAllocator {
         stats.leadSeats.addAll(copyFrom.leadSeats.where((e) => e.day == d));
         final fo = copyFrom.floorSeats[d];
         if (fo != null) stats.floorSeats[d] = List.of(fo);
+        final mo = copyFrom.minimumSeats[d];
+        if (mo != null) stats.minimumSeats[d] = List.of(mo);
       }
     }
 
@@ -535,6 +738,12 @@ class SessionSetAllocator {
     final target = <int>[
       for (var d = 0; d < n; d++) levelMax - nonBudgeted[d] < 0 ? 0 : levelMax - nonBudgeted[d],
     ];
+    if (rowCap != null) {
+      for (var d = 0; d < n; d++) {
+        final c = rowCap[d] - nonBudgeted[d];
+        if (c < target[d]) target[d] = c < 0 ? 0 : c;
+      }
+    }
     final seated = List<int>.filled(n, 0);
     for (final e in (copy ?? const <int, List<_Slot>>{}).entries) {
       seated[e.key] = byDay[e.key].where((s) => s.admitted).length;
@@ -595,6 +804,38 @@ class SessionSetAllocator {
       for (var d = 0; d < n; d++) world == _World.main ? null : openerAmong(byDay[d]),
     ];
 
+    // Unit 2C-b, the walk: pass A walks [walk], a copy of [byDay] in which each target group's cheapest slot follows the
+    // rank-0 slot, the day's 2A opener (when it sits later) and earlier moved targets (a target already inside that
+    // segment counts as moved). byDay (ranks, copies, passes B / C / D, every other reader) keeps the selector order.
+    final walk = [for (final l in byDay) [...l]];
+    final moved = List<int>.filled(n, 0);
+    for (final g in ([...minGroups]..sort())) {
+      if (allocateDays.any((d) => byDay[d].isNotEmpty && byDay[d][0].groups.contains(g))) continue;
+      _Slot? best;
+      var bd = -1;
+      for (final d in allocateDays) {
+        for (var i = 1; i < byDay[d].length; i++) {
+          final s = byDay[d][i];
+          if (!s.groups.contains(g)) continue;
+          if (best == null || seconds(s, 2) < seconds(best, 2)) {
+            best = s;
+            bd = d;
+          }
+        }
+      }
+      if (best != null) {
+        final op = opener[bd];
+        final opAt = op == null ? 0 : walk[bd].indexOf(op);
+        final base = (opAt > 0 ? opAt : 0) + 1;
+        final at = walk[bd].indexOf(best);
+        if (at > base + moved[bd]) {
+          walk[bd].remove(best);
+          walk[bd].insert(base + moved[bd], best);
+        }
+        if (at >= base) moved[bd]++;
+      }
+    }
+
     // 3. Pass A: priority-rank admission.
     var maxRank = 0;
     for (final d in allocateDays) {
@@ -603,7 +844,7 @@ class SessionSetAllocator {
     for (var r = 0; r < maxRank; r++) {
       for (final d in allocateDays) {
         if (r >= byDay[d].length) continue;
-        final s = byDay[d][r];
+        final s = walk[d][r];
         // Rank-0 reservation (round-3 P1-1): leave room for the later days' lead lifts.
         final later = <String, int>{};
         if (r == 0) {
@@ -671,7 +912,7 @@ class SessionSetAllocator {
           };
           // A hold that credits a major group gives way only to a slot whose new credit includes a major group.
           if (newGroups.isNotEmpty &&
-              evictFor(d, r, seconds(s, k), {...s.groups, ...seatedGroups},
+              evictFor(d, s.rank, seconds(s, k), {...s.groups, ...seatedGroups},
                   bringsMajor: newGroups.any(_majorGroups.contains))) {
             // Caps and tops were checked before anything was evicted, and an eviction changes neither.
             fitsNow = fitsAfterEviction(seconds(s, k), ledger.secondsLeft(d));
@@ -752,7 +993,7 @@ class SessionSetAllocator {
         !s.admitted &&
         !s.reserveBlocked &&
         canForce(d, s) &&
-        ledger.secondsLeft(d) - seconds(s, 2) >= -SessionBudget.maxForcedOverSeconds;
+        ledger.secondsLeft(d) - seconds(s, 2) >= -ledger.forcingBound;
 
     var forcedAny = true;
     while (forcedAny) {
@@ -863,6 +1104,45 @@ class SessionSetAllocator {
       }
     }
 
+    // Unit 2C-b, the weekly minimum (S3): each target group still at 0 this week, and not credited by a hold this run
+    // kept, takes its cheapest remaining slot at 2 sets (ties: the day with the most seconds left): never an admitted,
+    // reservation-blocked or count-target-refused slot, never past the day's admitted-row target (which holds the row
+    // cap), a session cap or another group's weekly top, and within the ledger's forcing bound.
+    final targets = minGroups.toList()..sort();
+    final keptHoldGroups = <String>{
+      for (var d = 0; d < n; d++)
+        for (final t in timed[d])
+          if (!evicted.contains(t.ex)) ...t.groups,
+    };
+    for (final g in targets) {
+      if (ledger.week(g) > 0 || keptHoldGroups.contains(g)) continue;
+      _Slot? best;
+      var bd = -1;
+      for (final d in allocateDays) {
+        for (final s in byDay[d]) {
+          if (s.admitted || s.reserveBlocked || !s.groups.contains(g)) continue;
+          if (s.why.values.contains(_Why.target) || byDay[d].where((x) => x.admitted).length >= target[d]) continue;
+          if (s.groups.any((x) => ledger.session(d, x) + 2 > ledger.cap(x))) continue;
+          if (s.groups.any((x) => x != g && ledger.week(x) + 2 > ledger.weeklyTop(x))) continue;
+          if (ledger.secondsLeft(d) - seconds(s, 2) < -ledger.forcingBound) continue;
+          if (best == null || seconds(s, 2) < seconds(best, 2) ||
+              (seconds(s, 2) == seconds(best, 2) && ledger.secondsLeft(d) > ledger.secondsLeft(bd))) {
+            best = s;
+            bd = d;
+          }
+        }
+      }
+      if (best == null) continue;
+      best
+        ..sets = 2
+        ..admitted = true
+        ..removed = false
+        ..why = const {};
+      ledger.add(bd, best.groups, 2, seconds(best, 2));
+      seated[bd]++;
+      (stats.minimumSeats[bd] ??= []).add((name: best.exercise.exerciseName, group: g));
+    }
+
     // The count verdict is final here (passes B, C and D add no row), and it is read BEFORE the grow
     // passes spend weekly top, so a day short only because of the forcing bound still says `clock`
     // (B-pass P3-1).
@@ -947,6 +1227,11 @@ class SessionSetAllocator {
       if (w > 0) stats.weekly[g] = w;
       if (w < bottom) stats.belowFloor[g] = _label(g, all, ledger, copy?.keys.toSet() ?? const <int>{});
     }
+    for (var d = 0; d < n; d++) {
+      for (final t in timed[d]) {
+        if (!evicted.contains(t.ex)) stats.holdGroups.addAll(t.groups);
+      }
+    }
     for (final d in allocateDays) {
       if (byDay[d].isEmpty) continue;
       final lead = byDay[d].first;
@@ -1000,6 +1285,7 @@ class SessionSetAllocator {
     }
     return (out: out, byDay: byDay, evicted: ev);
   }
+
 
   // ── Why a grant was refused ──────────────────────────────────────────────
 

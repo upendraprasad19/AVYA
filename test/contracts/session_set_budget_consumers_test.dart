@@ -313,8 +313,11 @@ void main() {
               for (final e in byName.entries) e.key: SessionBudget.archetypeOfRow(e.value),
             },
           );
+          // Unit 2C-b (plan §5): this sweep pins the pre-2C-b seconds exactly (the `over` map below), so it runs with
+          // `balancedWeek: false`; the same sweep with 2C-b ON, through the shared oracle's allowance excuse, is in
+          // session_allowance_behavioral_test.dart.
           final out = SessionSetAllocator.allocate(
-              days: days, ctx: ctx, rowsByName: byName, is6Day: is6);
+              days: days, ctx: ctx, rowsByName: byName, is6Day: is6, balancedWeek: false);
           final stats = SessionSetAllocator.debugLastStats!;
           if (stats.values.any((s) => s.timeForcedFirst + s.capForcedFirst > 0)) continue;
 

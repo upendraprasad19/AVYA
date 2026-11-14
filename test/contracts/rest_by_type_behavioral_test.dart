@@ -13,6 +13,10 @@
 @Timeout(Duration(minutes: 12))
 library;
 
+// Unit 2C-b (docs/plans/2026-11-14-generator-step2c-b-weekly-minimum.md §5, the policy for existing tests): these
+// fixtures pin the pre-2C-b mechanics, so their allocations run with `balancedWeek: false`; 2C-b's own behaviour
+// is pinned in weekly_minimum_behavioral_test.dart and session_allowance_behavioral_test.dart.
+
 import 'dart:convert';
 import 'dart:io';
 
@@ -54,7 +58,7 @@ List<int> _setsOfDay(List<WeekPlan> weeks, int week, int day) =>
 void main() {
   group('crafted fixtures', () {
     test('(a) the stamp: each rep-based exercise carries its OWN archetype rest, in every week', () {
-      final f = Fx();
+      final f = Fx(balancedWeek: false);
       f.row('heavy', ['Chest'], reps: '5-8'); // compound, lower bound 5  -> H
       f.row('mid', ['Lats'], reps: '8-12'); // compound, lower bound 8   -> M
       f.row('iso', ['Biceps'], type: 'isolation', reps: '10-15'); // isolation -> I
@@ -81,7 +85,7 @@ void main() {
       // Strength / intermediate: band (10, 14). One single-group exercise per group, on
       // every day, at 3 sets = 12 a week per group: inside the band and under the top, so
       // `grow` adds nothing and the only thing left to differ is the day's intensity.
-      final f = Fx();
+      final f = Fx(balancedWeek: false);
       final names = {
         'bench': ('Chest', 'compound', '5-8'),
         'row': ('Lats', 'compound', '8-12'),
@@ -100,6 +104,7 @@ void main() {
         ctx: f.ctx(days, minutes: 90, goal: 'strength'),
         rowsByName: f.rows,
         is6Day: true,
+        balancedWeek: false,
       );
       for (final d in allocated) {
         expect([for (final e in d.exercisesA) e.sets], everyElement(SessionBudget.baseSets),
@@ -131,7 +136,7 @@ void main() {
     });
 
     test('(c) deload: min(sets, max(2, floor(0.6 x sets))) for 1..5 sets, and the day keeps its count', () {
-      final f = Fx();
+      final f = Fx(balancedWeek: false);
       final names = ['a', 'b', 'c', 'd', 'e'];
       for (final n in names) {
         f.row(n, ['Chest']);
@@ -159,7 +164,7 @@ void main() {
       // A 3rd iso set costs 1.2 x (47 + 75) = 146.4 s at the archetype rest (does NOT fit)
       // but 1.2 x (47 + 30) = 92.4 s at the stale one (would fit).
       Fx build() {
-        final f = Fx();
+        final f = Fx(balancedWeek: false);
         f.row('iso', ['Biceps'], type: 'isolation', reps: '10-15');
         f.row('plank', ['Core'], type: 'isolation', reps: '30-60', logging: 'timed');
         return f;
@@ -196,7 +201,7 @@ void main() {
       // Unit 2A: the main world (`leadFirst: false`). With the lead-first rule c1, the day's opener, is seated at 3 at
       // either price ([3, 2] both), so the fixture could no longer see the price; the pricing is the same code in
       // every world.
-      final f = Fx();
+      final f = Fx(balancedWeek: false);
       f.row('cust', ['Core'], reps: '5-8');
       f.row('c1', ['Chest']);
       f.row('c2', ['Lats']);
@@ -212,6 +217,7 @@ void main() {
         ctx: f.ctx(days, minutes: 30),
         rowsByName: f.rows,
         is6Day: true,
+        balancedWeek: false,
         leadFirst: false,
       );
       expect([for (final e in out[0].exercisesA) e.exerciseName], ['cust', 'c1', 'c2']);
@@ -232,7 +238,7 @@ void main() {
       // Day budget 1440 s. A 2-set isolation at 75 s costs 1.2 x (45 + 2 x 47 + 75) = 256.8 s, so 5 fit
       // (1284 s) and a 6th does not (1540.8 s). Priced at the old 38 s rest it costs 212.4 s, and all six
       // would be admitted (1274 s): a mutant that prices at the day's rest turns this red.
-      final f = Fx();
+      final f = Fx(balancedWeek: false);
       const groups = ['Chest', 'Lats', 'Quads', 'Biceps', 'Triceps', 'Hamstrings'];
       for (var i = 0; i < groups.length; i++) {
         f.row('iso$i', [groups[i]], type: 'isolation', reps: '10-15');
@@ -243,6 +249,7 @@ void main() {
         ctx: f.ctx(days, minutes: 30),
         rowsByName: f.rows,
         is6Day: true,
+        balancedWeek: false,
       );
       final kept = out[0].exercisesA;
       expect(kept.length, 5);
@@ -263,7 +270,7 @@ void main() {
       // at the true price (no gain) and 1440 - 924 - 298.8 = 217.2 s at the stale price
       // (a gain), so a mutant that prices at `ex.restSeconds` gains a set and this fails.
       Fx build() {
-        final f = Fx();
+        final f = Fx(balancedWeek: false);
         f.row('cust', ['Chest'], reps: '5-8');
         f.row('plank', ['Core'], type: 'isolation', reps: '30-60', logging: 'timed');
         return f;

@@ -5,6 +5,10 @@
 // Every literal in the crafted tests was computed first with an independent
 // reference model of the plan's algorithm (written from the plan text, not from
 // the Dart code), then checked by hand where it was small enough to.
+// Unit 2C-b (docs/plans/2026-11-14-generator-step2c-b-weekly-minimum.md §5, the policy for existing tests): these
+// fixtures pin the pre-2C-b mechanics, so their allocations run with `balancedWeek: false`; 2C-b's own behaviour
+// is pinned in weekly_minimum_behavioral_test.dart and session_allowance_behavioral_test.dart.
+
 import 'dart:convert';
 import 'dart:io';
 import 'dart:math';
@@ -25,7 +29,7 @@ AllocationStats statsB() => SessionSetAllocator.debugLastStats!['B']!;
 void main() {
   group('priority-rank admission', () {
     test('priority: a day of 4 chest exercises seats all four at 2 sets (the count wins), never [3, 3, 2, removed]', () {
-      final f = Fx();
+      final f = Fx(balancedWeek: false);
       for (final n in ['c1', 'c2', 'c3', 'c4']) {
         f.row(n, ['Chest']);
       }
@@ -40,7 +44,7 @@ void main() {
     });
 
     test('round-robin by rank: 4 days of Back lead lifts are seated before any accessory, then everyone sits at 2', () {
-      final f = Fx();
+      final f = Fx(balancedWeek: false);
       f.row('row', ['Lats']);
       f.row('pulldown', ['Lats']);
       final days = [
@@ -60,7 +64,7 @@ void main() {
 
     test('rank-0 reservation: every lead lift keeps >= 2 sets when the group top binds', () {
       // general_fitness beginner: Chest top 10, cap 6. Every day desires 3 (OI-456), whatever its intensity.
-      final f = Fx();
+      final f = Fx(balancedWeek: false);
       f.row('bench', ['Chest']);
       f.row('press', ['Triceps'], type: 'isolation', reps: '10-15');
       final days = [
@@ -85,7 +89,7 @@ void main() {
     test('rank-0 reservation counts only the later days whose lead lift credits the SAME group', () {
       // Six strength days, six different lead groups. A reservation that counted every
       // later day would hold 2 x 5 sets of Chest back and refuse the first lead lift.
-      final f = Fx();
+      final f = Fx(balancedWeek: false);
       final names = {
         'bench': 'Chest', 'row': 'Lats', 'sq': 'Quads', 'rdl': 'Hamstrings', 'ht': 'Glutes',
         'ohp': 'Shoulders',
@@ -104,7 +108,7 @@ void main() {
       // (Chest, top 10) are protected. Those four are then refused for time (a 270 s
       // gap fits a 2-set Biceps curl, 257 s, but not a 2-set Chest lift, 282 s), so
       // the reservation was never needed and the floor pass grows day 0's lift to 5.
-      final f = Fx();
+      final f = Fx(balancedWeek: false);
       f.row('cl', ['Chest']);
       f.row('bi', ['Biceps'], type: 'isolation', reps: '10-15');
       f.row('plank', ['Core'], type: 'isolation', reps: '30-60', logging: 'timed');
@@ -155,7 +159,7 @@ void main() {
       // three do not (522 s). The ledger already holds the 2 granted sets when the
       // allocator asks what stopped the 3rd, so the question is "would ONE more fit?"
       // (2 + 1 <= 6): only time says no.
-      final f = Fx();
+      final f = Fx(balancedWeek: false);
       f.row('cl', ['Chest']);
       f.row('plank', ['Core'], type: 'isolation', reps: '30-60', logging: 'timed');
       expect(SessionBudget.exerciseSeconds(archetype: 'B', sets: 6, restSeconds: 110), closeTo(984.0, 1e-6));
@@ -180,7 +184,7 @@ void main() {
         ];
 
     (List<PopulatedDay>, Fx) dayOf(String intensity) {
-      final f = Fx();
+      final f = Fx(balancedWeek: false);
       for (final (n, m) in eight()) {
         f.row(n, [m]);
       }
@@ -223,7 +227,7 @@ void main() {
 
   group('caps and tops', () {
     test('session cap: intermediate 8 per muscle, focus 12', () {
-      final f = Fx();
+      final f = Fx(balancedWeek: false);
       for (var i = 0; i < 6; i++) {
         f.row('c$i', ['Chest']);
       }
@@ -240,7 +244,7 @@ void main() {
     });
 
     test('weekly top: a non-focus group stays at 16 (intermediate build_muscle)', () {
-      final f = Fx();
+      final f = Fx(balancedWeek: false);
       final days = <PopulatedDay>[];
       for (var d = 0; d < 5; d++) {
         f.row('c${d}0', ['Chest']);
@@ -262,7 +266,7 @@ void main() {
     });
 
     test('lighter phase: every weekly total stays at the band bottom, focus included', () {
-      final f = Fx();
+      final f = Fx(balancedWeek: false);
       final days = <PopulatedDay>[];
       for (var d = 0; d < 4; d++) {
         final names = [for (var j = 0; j < 3; j++) 'c$d$j'];
@@ -282,7 +286,7 @@ void main() {
     });
 
     test('lighter phase: a focus group falls back to the ordinary session cap of 8, not 12', () {
-      final f = Fx();
+      final f = Fx(balancedWeek: false);
       for (var i = 0; i < 6; i++) {
         f.row('c$i', ['Chest']);
       }
@@ -297,7 +301,7 @@ void main() {
     });
 
     test('focus reaches past the ordinary top (16) and stops at 25', () {
-      final f = Fx();
+      final f = Fx(balancedWeek: false);
       final days = <PopulatedDay>[];
       for (var d = 0; d < 4; d++) {
         f.row('c${d}0', ['Chest']);
@@ -309,7 +313,7 @@ void main() {
     });
 
     test('terminates: every focus exercise at 5 sets with time left returns', () {
-      final f = Fx();
+      final f = Fx(balancedWeek: false);
       for (var i = 0; i < 3; i++) {
         f.row('c$i', ['Chest']);
       }
@@ -322,7 +326,7 @@ void main() {
 
   group('rows that are not budgeted', () {
     test('no-group exercise: a Burpee is checked against time only and never throws', () {
-      final f = Fx();
+      final f = Fx(balancedWeek: false);
       f.row('burpee', ['Full Body'], type: 'calisthenics', reps: '10-20', logging: 'bodyweight_reps');
       f.row('sq', ['Quads', 'Glutes']);
       expect(BudgetMuscleGroups.of(['Full Body']), isEmpty);
@@ -336,7 +340,7 @@ void main() {
     });
 
     test('not budgeted: a repeat pin and a timed plank keep their sets; a budgeted row is trimmed', () {
-      final f = Fx();
+      final f = Fx(balancedWeek: false);
       f.row('plank', ['Core'], type: 'isolation', reps: '30-60', logging: 'timed');
       f.row('pin', ['Chest']);
       f.row('b1', ['Chest']);
@@ -354,7 +358,7 @@ void main() {
     });
 
     test('guard: a day whose not-budgeted rows spend the budget still gets one lift at 2 sets', () {
-      final f = Fx();
+      final f = Fx(balancedWeek: false);
       f.row('plank', ['Core'], type: 'isolation', reps: '30-60', logging: 'timed');
       f.row('c1', ['Chest']);
       f.row('c2', ['Lats']);
@@ -381,7 +385,7 @@ void main() {
     // Days 0 and 1 fill Chest to its weekly top of 16 (3 + 3 + 2 each); day 2's six
     // planks (6 x 444 s) overspend its 2220 s budget, so pass A admits nothing there.
     (List<PopulatedDay>, Fx) crowdedChestWeek(List<String> afterChest) {
-      final f = Fx();
+      final f = Fx(balancedWeek: false);
       f.row('plank', ['Core'], type: 'isolation', reps: '30-60', logging: 'timed');
       f.row('bi', ['Biceps'], type: 'isolation', reps: '10-15');
       for (var i = 1; i <= 9; i++) {
@@ -425,7 +429,7 @@ void main() {
     });
 
     test('not-budgeted rest: a timed row is timed at its OWN rest, not the lift\'s 120 s', () {
-      final f = Fx();
+      final f = Fx(balancedWeek: false);
       f.row('plank', ['Core'], type: 'isolation', reps: '30-60', logging: 'timed');
       f.row('sq', ['Quads']);
       final days = [
@@ -444,7 +448,7 @@ void main() {
 
   group('B variant', () {
     test('a B list equal to A is copied, not re-allocated, so those days match exactly', () {
-      final f = Fx();
+      final f = Fx(balancedWeek: false);
       for (final (n, m) in [
         ('a1', 'Chest'), ('a2', 'Lats'), ('b1', 'Quads'), ('s1', 'Hamstrings'), ('s2', 'Glutes'),
       ]) {
@@ -466,7 +470,7 @@ void main() {
     });
 
     test('a copied day is never grown in B, even when its group is below the floor there', () {
-      final f = Fx();
+      final f = Fx(balancedWeek: false);
       for (final n in ['b1', 'b2', 'e1']) {
         f.row(n, ['Biceps'], type: 'isolation', reps: '10-15');
       }
@@ -492,7 +496,7 @@ void main() {
     });
 
     test('a 6-day plan allocates A only and gives B the same sets', () {
-      final f = Fx();
+      final f = Fx(balancedWeek: false);
       f.row('x', ['Chest']);
       f.row('y', ['Quads']);
       final days = [f.day('hypertrophy', [f.ex('x'), f.ex('y')])];
@@ -507,7 +511,7 @@ void main() {
       // Biceps sits at rank 1 on day 0 and at rank 0 on days 1 and 2. Each curl starts
       // at 3 (total 9) and build_muscle beginner needs 10: the one extra set goes to
       // day 1's rank-0 curl, not to day 0's earlier-day rank-1 curl, and nothing more.
-      final f = Fx();
+      final f = Fx(balancedWeek: false);
       f.row('ch', ['Chest']);
       for (final n in ['b0', 'b1', 'b2']) {
         f.row(n, ['Biceps'], type: 'isolation', reps: '10-15');
@@ -525,7 +529,7 @@ void main() {
     });
 
     test('a floor of 12 is reached exactly: 5 + 4 + 3, never 13', () {
-      final f = Fx();
+      final f = Fx(balancedWeek: false);
       for (var i = 0; i < 3; i++) {
         f.row('e$i', ['Biceps'], type: 'isolation', reps: '10-15');
       }
@@ -538,7 +542,7 @@ void main() {
 
   group('floor labels', () {
     test('cap_limited: every crediting exercise is at its own session cap', () {
-      final f = Fx();
+      final f = Fx(balancedWeek: false);
       f.row('c1', ['Chest']);
       f.row('c2', ['Chest']);
       f.run([f.day('strength', [f.ex('c1'), f.ex('c2')])], minutes: 90);
@@ -546,14 +550,14 @@ void main() {
     });
 
     test('not_trained_by_split: no exercise in the week credits the group', () {
-      final f = Fx();
+      final f = Fx(balancedWeek: false);
       f.row('c1', ['Chest']);
       f.run([f.day('strength', [f.ex('c1')])], minutes: 90);
       expect(statsA().belowFloor['Calves'], 'not_trained_by_split');
     });
 
     test('co_group_limited: the group is below its floor only because a co-group is at its top', () {
-      final f = Fx();
+      final f = Fx(balancedWeek: false);
       f.row('squat', ['Quads', 'Glutes']);
       for (final n in ['ht1', 'ht2', 'ht3', 'ht4']) {
         f.row(n, ['Glutes']);
@@ -570,7 +574,7 @@ void main() {
     });
 
     test('time_limited: a crediting exercise was removed for time alone', () {
-      final f = Fx();
+      final f = Fx(balancedWeek: false);
       f.row('a', ['Chest']);
       f.row('b', ['Chest']);
       f.row('c', ['Biceps'], type: 'isolation', reps: '10-15');
@@ -580,7 +584,7 @@ void main() {
 
     test('time_limited wins over cap_limited when one crediting exercise is removed for time '
         'and another sits at its cap', () {
-      final f = Fx();
+      final f = Fx(balancedWeek: false);
       for (final n in ['t1', 't2', 't3', 'x']) {
         f.row(n, ['Triceps']);
       }
@@ -603,7 +607,7 @@ void main() {
 
   group('contract', () {
     test('the input days are not mutated and the output keeps the exercise order', () {
-      final f = Fx();
+      final f = Fx(balancedWeek: false);
       for (final n in ['a', 'b', 'c']) {
         f.row(n, ['Chest']);
       }
@@ -616,7 +620,7 @@ void main() {
     });
 
     test('an empty plan and an all-custom day do not crash', () {
-      final f = Fx();
+      final f = Fx(balancedWeek: false);
       expect(f.run(const [], minutes: 60), isEmpty);
       f.row('pin', ['Chest']);
       final out = f.run(
@@ -628,7 +632,7 @@ void main() {
     });
 
     test('a day with no budgeted exercise is left as is (no forced lift)', () {
-      final f = Fx();
+      final f = Fx(balancedWeek: false);
       f.row('plank', ['Core'], type: 'isolation', reps: '30-60', logging: 'timed');
       final out = f.run(
         [f.day('hypertrophy', [f.ex('plank', sets: 3, logging: 'timed', rest: 30)])],
@@ -716,7 +720,9 @@ void main() {
           },
         );
         final out = SessionSetAllocator.allocate(
-            days: days, ctx: ctx, rowsByName: byName, is6Day: is6);
+            // Unit 2C-b (plan §5): this sweep pins the pre-2C-b seconds exactly (the `over` map below); the 2C-b ON
+            // sweep, through the shared oracle's allowance excuse, is in session_allowance_behavioral_test.dart.
+            days: days, ctx: ctx, rowsByName: byName, is6Day: is6, balancedWeek: false);
         expect(out.length, nDays);
 
         double secs(PlannedExercise e) => SessionBudget.exerciseSeconds(
@@ -814,7 +820,7 @@ void main() {
     });
 
     test('deterministic: the same input gives the same output', () {
-      final f = Fx();
+      final f = Fx(balancedWeek: false);
       for (final n in ['a', 'b', 'c', 'd']) {
         f.row(n, ['Chest']);
       }
@@ -829,7 +835,7 @@ void main() {
 
   group('B-pass fixes (docs/reviews/session-set-budget-bpass.md)', () {
     test('R2 P3-8: the muscles an exercise CARRIES win over its row', () {
-      final f = Fx();
+      final f = Fx(balancedWeek: false);
       f.row('x', ['Chest']);
       final carried = f.ex('x').copyWith(primaryMuscles: ['Lats']);
       f.run([f.day('hypertrophy', [carried])], minutes: 90);
@@ -838,7 +844,7 @@ void main() {
     });
 
     test('R2 P3-8: a primary_muscles value that is not a list reads as no muscle, it does not throw', () {
-      final f = Fx();
+      final f = Fx(balancedWeek: false);
       final e = f.ex('x'); // built before the row exists, so it carries no muscles
       f.rows['x'] = {
         'name': 'x',
@@ -855,7 +861,7 @@ void main() {
     test('R1 P3-2: a row the context does not know is NOT budgeted, however many rows the caller passes', () {
       // SessionBudget.isBudgeted (ctx.archetypeByName) is the one rule: a name that is in
       // rowsByName but not in the context keeps its 9 sets, as apply and titration see it.
-      final f = Fx();
+      final f = Fx(balancedWeek: false);
       f.row('a', ['Chest']);
       final days = [f.day('strength', [f.ex('a'), f.ex('ghost', sets: 9)])];
       final out = SessionSetAllocator.allocate(
@@ -872,6 +878,7 @@ void main() {
           },
         },
         is6Day: true,
+        balancedWeek: false,
       );
       expect(out[0].exercisesA.firstWhere((e) => e.exerciseName == 'ghost').sets, 9);
       expect(statsA().weekly.containsKey('Back'), isFalse);
@@ -881,7 +888,7 @@ void main() {
       // ['x, y', 'z'] and ['x', 'y, z'] both print as "[x, y, z]". B must be allocated
       // on its own: its 6-set timed row leaves 270 s, so 'y, z' gets the guard's 2 sets,
       // not the 4 that A's first exercise got.
-      final f = Fx();
+      final f = Fx(balancedWeek: false);
       f.row('x, y', ['Chest']);
       f.row('z', ['Lats']);
       f.row('x', ['Core'], type: 'isolation', reps: '30-60', logging: 'timed');
@@ -906,7 +913,7 @@ void main() {
       // reach a 5th (894 s). The same row prescribed "30s" costs 84 s and leaves the bench
       // its 3, then the floor pass grows it to 5.
       Map<String, int> benchSets(String reps) {
-        final f = Fx();
+        final f = Fx(balancedWeek: false);
         f.row('bench', ['Chest']);
         f.row('run', ['Core'], type: 'cardio', reps: '20-30', logging: 'cardio');
         final run = f.ex('run', sets: 1, logging: 'cardio', rest: 60).copyWith(reps: reps);
@@ -923,7 +930,7 @@ void main() {
       // EMPTY day (guard), not from the day's clock. When 2 sets of it cost more than the
       // time left and a 2-set isolation costs less, the isolation is kept and the day's
       // firstLifts entry reads sets 0. The gate counts these days in the report.
-      final f = Fx();
+      final f = Fx(balancedWeek: false);
       f.row('cl', ['Chest']);
       f.row('bi', ['Biceps'], type: 'isolation', reps: '10-15');
       f.row('plank', ['Core'], type: 'isolation', reps: '30-60', logging: 'timed');
