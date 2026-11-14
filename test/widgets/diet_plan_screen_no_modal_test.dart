@@ -35,6 +35,7 @@ import 'package:hive/hive.dart';
 import 'package:icanbefitter/core/services/guarded_box.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
 import 'package:icanbefitter/core/services/hive_user_session.dart';
+import 'package:icanbefitter/features/profile/providers/profile_provider.dart';
 import 'package:icanbefitter/features/nutrition/screens/diet_plan_screen.dart';
 import 'package:icanbefitter/shared/repositories/user_repository.dart';
 import 'package:path_provider_platform_interface/path_provider_platform_interface.dart';
@@ -191,5 +192,189 @@ void main() {
     expect(find.byIcon(Icons.check_circle), findsOneWidget,
         reason:
             'toolbar Save icon must reflect the already-saved state for a loaded plan');
+  });
+
+  // Diet plan Unit 2a (docs/plans/diet-food-type.md §2.4, T5): a saved plan
+  // built for another food type is NOT loaded (a saved chicken plan after the
+  // user picked Veg); a fresh plan is generated and the notice shows once per
+  // (saved plan id, food type) per session. Runs after the test above, so
+  // Hive and the path_provider mock are already up.
+  testWidgets('a saved plan of another food type is not loaded; notice once',
+      (WidgetTester tester) async {
+    const testUserId = 'ffff6666-ffff-ffff-ffff-ffffffffffff';
+    debugResetDietPlanMismatchNotices();
+    await tester.runAsync(() async {
+      await HiveUserSession.openForUser(testUserId);
+      await UserRepository.instance
+          .updateProfileFields({'diet_preference': 'veg'});
+      await UserRepository.instance.saveDietPlan(<String, dynamic>{
+        'id': 'diet_plan_42',
+        'created_at': DateTime(2026, 11, 14).toIso8601String(),
+        'food_type': 'non_veg',
+        'meals': [
+          {
+            'name': 'Lunch',
+            'items': [
+              {
+                'food_id': 'F0019',
+                'name': 'Chicken Breast (grilled)',
+                'serving_desc': '1 piece',
+                'serving_g': 120.0,
+                'calories': 198,
+                'protein': 37,
+                'carbs': 0,
+                'fat': 4,
+                'category': 'protein'
+              }
+            ],
+          }
+        ],
+      });
+    });
+
+    await tester.pumpWidget(
+      ProviderScope(child: MaterialApp(home: DietPlanScreen())),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('Chicken Breast (grilled)'), findsNothing,
+        reason: 'a plan saved for Non-veg must not load for a Veg user');
+    expect(find.textContaining('Your saved plan was for Non-veg'),
+        findsOneWidget);
+
+    // Re-open the screen in the same session: no second notice.
+    await tester.pumpWidget(const SizedBox());
+    await tester.pumpWidget(
+      ProviderScope(child: MaterialApp(home: DietPlanScreen())),
+    );
+    await tester.pumpAndSettle();
+    expect(find.textContaining('Your saved plan was for Non-veg'), findsNothing);
+    expect(find.text('Chicken Breast (grilled)'), findsNothing);
+
+    // B-pass 3: a plan saved before food types (no food_type) whose foods do
+    // not fit Veg is not loaded either (it could otherwise be re-saved as a
+    // "Veg" plan), and the notice does not invent a type for it.
+    await tester.runAsync(() async {
+      await UserRepository.instance.saveDietPlan(<String, dynamic>{
+        'id': 'diet_plan_43',
+        'created_at': DateTime(2026, 11, 1).toIso8601String(),
+        'meals': [
+          {
+            'name': 'Lunch',
+            'items': [
+              {
+                'food_id': 'F0019',
+                'name': 'Chicken Breast (grilled)',
+                'serving_desc': '1 piece',
+                'serving_g': 120.0,
+                'calories': 198,
+                'protein': 37,
+                'carbs': 0,
+                'fat': 4,
+                'category': 'protein'
+              }
+            ],
+          }
+        ],
+      });
+    });
+    await tester.pumpWidget(const SizedBox());
+    await tester.pumpWidget(
+      ProviderScope(child: MaterialApp(home: DietPlanScreen())),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('Chicken Breast (grilled)'), findsNothing);
+    expect(find.textContaining('Your saved plan has foods outside Veg'),
+        findsOneWidget);
+  });
+
+  // Diet plan Unit 2a (plan §2.2.5): the Diet Plan screen's selector writes
+  // through setFoodType, rebuilds the plan and says so; a failed change says
+  // so and leaves the stored value alone.
+  testWidgets('food-type chips: a change is stored and announced; a failure '
+      'is announced and stores nothing', (WidgetTester tester) async {
+    const testUserId = 'abab7777-abab-abab-abab-abababababab';
+    debugResetDietPlanMismatchNotices();
+    var fail = false;
+    var switchAfterCapture = false;
+    var uidReads = 0;
+    var locks = 0;
+    UserProfileNotifier.debugFoodTypeEffects = FoodTypeWriteEffects(
+      currentUserId: () {
+        if (fail) throw StateError('session read failed');
+        uidReads++;
+        // B-pass 2: an account switch between the tap and the write.
+        if (switchAfterCapture && uidReads.isEven) return 'someone-else';
+        return testUserId;
+      },
+      pushSnapshot: () {},
+      lockFields: (_) {
+        locks++;
+        return Future<void>.value();
+      },
+    );
+    addTearDown(() => UserProfileNotifier.debugFoodTypeEffects = null);
+    await tester.runAsync(() async {
+      await HiveUserSession.openForUser(testUserId);
+      await UserRepository.instance
+          .updateProfileFields({'diet_preference': 'non_veg'});
+    });
+
+    await tester.pumpWidget(
+      ProviderScope(child: MaterialApp(home: DietPlanScreen())),
+    );
+    await tester.pumpAndSettle();
+    String? stored() =>
+        UserRepository.instance.getProfile()?['diet_preference'] as String?;
+
+    final egg = find.byKey(const ValueKey('food_type_chip_eggetarian'));
+    await tester.ensureVisible(egg);
+    await tester.pumpAndSettle();
+    // The Hive write is real I/O: run the tap's work outside fake async.
+    await tester.runAsync(() async {
+      await tester.tap(egg);
+      await Future<void>.delayed(const Duration(milliseconds: 300));
+    });
+    await tester.pumpAndSettle();
+    expect(stored(), 'eggetarian');
+    expect(locks, 1);
+    expect(find.textContaining('Plan rebuilt for Eggetarian'), findsOneWidget);
+    expect(find.text('EGGETARIAN'), findsOneWidget,
+        reason: 'the header tag follows the new food type');
+
+    // Dismiss the snackbar, then make the next change fail.
+    ScaffoldMessenger.of(tester.element(find.byType(DietPlanScreen)))
+        .clearSnackBars();
+    await tester.pumpAndSettle();
+    fail = true;
+    final vegan = find.byKey(const ValueKey('food_type_chip_vegan'));
+    await tester.ensureVisible(vegan);
+    await tester.runAsync(() async {
+      await tester.tap(vegan);
+      await Future<void>.delayed(const Duration(milliseconds: 300));
+    });
+    await tester.pumpAndSettle();
+    expect(stored(), 'eggetarian', reason: 'a failed change stores nothing');
+    expect(find.textContaining("Couldn't change the food type"), findsOneWidget);
+    expect(find.text('EGGETARIAN'), findsOneWidget);
+
+    // B-pass 2: a change dropped by an account switch is not announced as
+    // a rebuilt plan, and the screen keeps the old type.
+    ScaffoldMessenger.of(tester.element(find.byType(DietPlanScreen)))
+        .clearSnackBars();
+    await tester.pumpAndSettle();
+    fail = false;
+    switchAfterCapture = true;
+    uidReads = 0;
+    final pesc = find.byKey(const ValueKey('food_type_chip_pescatarian'));
+    await tester.ensureVisible(pesc);
+    await tester.runAsync(() async {
+      await tester.tap(pesc);
+      await Future<void>.delayed(const Duration(milliseconds: 300));
+    });
+    await tester.pumpAndSettle();
+    expect(stored(), 'eggetarian');
+    expect(find.textContaining('Plan rebuilt for Pescatarian'), findsNothing);
+    expect(find.textContaining("Couldn't change the food type"), findsOneWidget);
+    expect(find.text('EGGETARIAN'), findsOneWidget);
   });
 }

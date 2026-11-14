@@ -122,7 +122,9 @@ List<DietPlanFoodItem> swapAlternatives({
     if (row == null || row.isEmpty) continue;
     if (row['is_everyday'] == false) continue; // retired by the asset
     if (row['is_ultra_processed'] == true) continue;
-    if (!DietPlanGenerator.passesDiet(row, dietPreference)) continue;
+    if (!DietPlanGenerator.passesDiet(row, dietPreference, family: e.family)) {
+      continue;
+    }
     final cap = dietFamilyDailyCap[e.family];
     if (cap != null && (familyCount[e.family] ?? 0) >= cap) {
       continue;

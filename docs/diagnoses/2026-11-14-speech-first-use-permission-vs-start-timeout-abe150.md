@@ -21,7 +21,7 @@ recurrence: >-
   start_timeout, speech_to_text and "permission dialog" found only the
   unrelated Telegram note (b9d3f1). The class of the bug (a timer armed at a
   gesture that also covers an OS prompt the same call chain raises) is new;
-  bug-class 2.157 now carries the first-use shape. The old coach avoided it
+  bug-class 2.158 now carries the first-use shape. The old coach avoided it
   only by accident: it called initialize at screen mount, with no timer.
 related_bugs: []
 sot_registry_entry: speech_input_session_owner (ranges recomputed; description now states the first-use budget)

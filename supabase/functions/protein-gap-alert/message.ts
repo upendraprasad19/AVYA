@@ -1,33 +1,46 @@
+import { type FoodTypeKey, normalizeFoodType } from "../_shared/food_types.ts";
+
 /**
- * Diet values from user_profile.diet_preference. The REAL vocabulary the
- * client's own Edit Profile chips write (edit_profile_screen.dart
- * `_buildDietPreferenceChips`) is: 'non_veg' / 'vegetarian' / 'vegan' /
- * 'pescatarian' / 'keto'. 'veg' is ALSO live — it is onboarding's documented
- * default (lib/features/onboarding/CLAUDE.md: "diet_preference defaults to
- * 'veg' (Indian-first default)") for every user who has not yet visited Edit
- * Profile — so both 'veg' AND 'vegetarian' must be treated as vegetarian.
- * ('eggetarian' does NOT exist anywhere in the client or onboarding vocabulary
- * — corrected 2026-09-27, a2b-2 batch, after grep confirmed zero writers; the
- * prior version of this comment and this file's own test both asserted a
- * value that could never occur in production.)
- *   - 'veg' / 'vegetarian' / 'vegan' → vegetarian suggestions (paneer, milk, almonds)
- *   - 'non_veg' / 'pescatarian' / 'keto' / null → all options on the table (chicken, eggs)
+ * The quick fix by food type (diet plan Unit 2b, 2026-11-14, plan
+ * diet-food-type-server §2.3). `diet` is user_profile.diet_preference in ANY
+ * spelling (onboarding's old 'veg', Edit Profile's 'vegetarian' / 'keto',
+ * the canonical five keys); it is read through the ONE normaliser
+ * (_shared/food_types.ts): null / '' / keto -> non_veg, an unknown value ->
+ * veg. Bands: >= 40 g, >= 20 g, else. Each new cell covers its band's lower
+ * bound; the veg and non-veg cells are unchanged copy.
  */
+const QUICK_FIX: Record<FoodTypeKey, [string, string, string]> = {
+  veg: [
+    "200g paneer + a glass of milk.",
+    "100g paneer or a scoop of whey.",
+    "a glass of milk + 30g almonds.",
+  ],
+  eggetarian: [
+    "4 boiled eggs + 100g paneer.",
+    "3 boiled eggs + a glass of milk.",
+    "2 boiled eggs.",
+  ],
+  pescatarian: [
+    "200g fish (rohu, tuna) or 3 boiled eggs + a glass of milk.",
+    "100g fish + a glass of milk.",
+    "2 boiled eggs.",
+  ],
+  vegan: [
+    "200g firm tofu + a cup of soy milk, or 50g dry soya chunks.",
+    "50g dry soya chunks or a cup of roasted chana.",
+    "30g roasted peanuts + a cup of soy milk.",
+  ],
+  non_veg: [
+    "150g chicken breast or 4 boiled eggs.",
+    "100g chicken or 3 boiled eggs.",
+    "2 boiled eggs.",
+  ],
+};
+
 export function pickQuickFix(gap: number, diet: string | null): string {
-  const isVeg = diet === "veg" || diet === "vegetarian" || diet === "vegan";
-  if (gap >= 40) {
-    return isVeg
-      ? "Quick fix: 200g paneer + a glass of milk."
-      : "Quick fix: 150g chicken breast or 4 boiled eggs.";
-  }
-  if (gap >= 20) {
-    return isVeg
-      ? "Quick fix: 100g paneer or a scoop of whey."
-      : "Quick fix: 100g chicken or 3 boiled eggs.";
-  }
-  return isVeg
-    ? "Quick fix: a glass of milk + 30g almonds."
-    : "Quick fix: 2 boiled eggs.";
+  const row = QUICK_FIX[normalizeFoodType(diet)];
+  const cell = gap >= 40 ? row[0] : gap >= 20 ? row[1] : row[2];
+  return `Quick fix: ${cell}`;
 }
 
 export function buildProteinGapMessage(firstName: string | null, gap: number, diet: string | null): string {

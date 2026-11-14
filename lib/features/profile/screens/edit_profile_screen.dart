@@ -11,6 +11,7 @@ import 'package:icanbefitter/core/services/error_telemetry.dart';
 import 'package:icanbefitter/core/services/migrated_key.dart';
 import 'package:icanbefitter/core/services/supabase_service.dart';
 import 'package:icanbefitter/core/services/subscription_service.dart';
+import 'package:icanbefitter/core/constants/food_types.dart';
 import 'package:icanbefitter/core/services/sync_service.dart';
 import 'package:icanbefitter/core/services/prediction_service.dart';
 import 'package:icanbefitter/core/theme/colors.dart';
@@ -22,6 +23,7 @@ import 'package:icanbefitter/core/utils/equipment_vocab.dart';
 import 'package:icanbefitter/core/utils/injury_vocab.dart';
 import 'package:icanbefitter/core/utils/name_format.dart';
 import 'package:icanbefitter/shared/repositories/user_repository.dart';
+import 'package:icanbefitter/shared/widgets/food_type_chips.dart';
 import 'package:icanbefitter/shared/widgets/paywall_sheet.dart';
 import 'package:icanbefitter/shared/widgets/responsive_picker_builder.dart';
 import 'package:icanbefitter/features/home/providers/home_provider.dart';
@@ -58,7 +60,9 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
   List<String> _originalEquipmentOwned = <String>[];
   int _daysPerWeek = 4;
   String _lifestyleActivity = 'desk_job';
-  String _dietPreference = 'non_veg';
+  // Diet plan Unit 2a: the food type, read through the one normaliser so a
+  // stored legacy spelling (`vegetarian`, `keto`) highlights the right chip.
+  FoodType _foodType = kDefaultFoodType;
   String _pacePreference = 'balanced'; // Bug #24
   int? _sessionDuration; // 30, 45, 60, 90
   String _physiqueFocus = 'balanced'; // balanced, glutes_legs, chest_shoulders_arms, strength
@@ -101,7 +105,7 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
   /// against later AI-coach-extraction overwrite (migration 148). A field
   /// re-saved with its UNCHANGED value is deliberately NOT locked — locking
   /// is meant to fire on a real edit, not on every save of the screen.
-  late String _originalDietPreference;
+  late FoodType _originalFoodType;
   late String _originalLifestyleActivity;
 
   /// b3c9d4 — what we last wrote into [_nameController] ourselves. Used to
@@ -232,7 +236,7 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
         (profile['lifestyle_activity'] as String?) ?? 'desk_job';
     // Theme C · Test #8 — Indian-first default; matches onboarding's
     // implicit default which already writes 'veg' for new users.
-    _dietPreference = (profile['diet_preference'] as String?) ?? 'veg';
+    _foodType = foodTypeOfProfile(profile);
     _pacePreference = (profile['pace_preference'] as String?) ?? 'balanced'; // Bug #24
     // A legacy/restored profile missing the field lands on the engine's own
     // default (60, B2 Ruling 7; it was 90 under Theme C · Test #8). The saved
@@ -304,7 +308,7 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
     _originalSessionDuration = _sessionDuration;
     _originalPhysiqueFocus = _physiqueFocus;
     _originalInjuries = List<String>.of(_injuries);
-    _originalDietPreference = _dietPreference;
+    _originalFoodType = _foodType;
     _originalLifestyleActivity = _lifestyleActivity;
     _originalTargetWeight = targetKgRaw ?? 0.0;
   }
@@ -1264,53 +1268,19 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
   // ── Diet Preference ──────────────────────────────────────────────
 
   Widget _buildDietPreferenceChips() {
-    const options = {
-      'non_veg': 'Non-Veg',
-      'vegetarian': 'Vegetarian',
-      'vegan': 'Vegan',
-      'pescatarian': 'Pescatarian',
-      'keto': 'Keto',
-    };
+    // Diet plan Unit 2a: the shared selector (same five choices as the Diet
+    // Plan screen). Keto is a diet STRATEGY, not a food type (Unit 3).
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          'Diet Preference',
+          'Food type',
           style: AppTypography.body.copyWith(fontSize: 13, color: AppColors.textDim),
         ),
         const SizedBox(height: 8),
-        Wrap(
-          spacing: 8,
-          runSpacing: 8,
-          children: options.entries.map((entry) {
-            final isSelected = _dietPreference == entry.key;
-            return GestureDetector(
-              onTap: () => setState(() => _dietPreference = entry.key),
-              child: AnimatedContainer(
-                duration: const Duration(milliseconds: 180),
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 16,
-                  vertical: 10,
-                ),
-                decoration: BoxDecoration(
-                  color: isSelected ? AppColors.accentTint : AppColors.input,
-                  borderRadius: BorderRadius.circular(AppRadius.pill),
-                  border: Border.all(
-                    color: isSelected
-                        ? AppColors.accent.withValues(alpha: 0.4)
-                        : AppColors.border,
-                    width: isSelected ? 1.5 : 1,
-                  ),
-                ),
-                child: Text(
-                  entry.value,
-                  style: AppTypography.body.copyWith(fontSize: 13, fontWeight: isSelected ? FontWeight.w700 : FontWeight.w400, color: isSelected
-                        ? AppColors.accent
-                        : AppColors.textPrimary),
-                ),
-              ),
-            );
-          }).toList(),
+        FoodTypeChips(
+          value: _foodType,
+          onChanged: (t) => setState(() => _foodType = t),
         ),
       ],
     );
@@ -1863,7 +1833,7 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
         'pace_preference': _pacePreference, // Bug #24
         'activity_level': derivedActivityLevel,
         'days_per_week': _daysPerWeek,
-        'diet_preference': _dietPreference,
+        'diet_preference': _foodType.storageKey,
         'injuries': _injuries,
         'city': _cityController.text.trim(),
         'phone': _phoneController.text.trim(),
@@ -1883,6 +1853,24 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
       await ref.read(userProfileProvider.notifier).updateProfile(updates);
       await ref.read(userProfileProvider.notifier).recalculateTargets();
 
+      // a2b-2 (single-owner batch, 2026-09-27): lock any of the three
+      // coach-extraction-shared fields the user ACTUALLY changed this save,
+      // so the next daily-snapshot extraction pass can't overwrite this
+      // manual edit (migration 148). A field re-saved with its unchanged
+      // value is deliberately not locked — see the trackers' doc comment.
+      final fieldsToLock = computeCoachExtractionFieldsToLock(
+        // Canonical keys: re-saving a stored `vegetarian` as Veg is no change.
+        dietPreference: _foodType.storageKey,
+        originalDietPreference: _originalFoodType.storageKey,
+        lifestyleActivity: _lifestyleActivity,
+        originalLifestyleActivity: _originalLifestyleActivity,
+        injuries: _injuries,
+        originalInjuries: _originalInjuries,
+      );
+      final Future<void> lockDone = fieldsToLock.isNotEmpty
+          ? UserRepository.lockCoachExtractionFields(fieldsToLock)
+          : Future<void>.value();
+
       // Bug B fix (APK Test #3, 2026-04-26): Edit Profile previously wrote
       // only to Hive. user_profile in Supabase stayed empty/stale forever,
       // which broke AI coach context (the snapshot reads from Hive but
@@ -1891,24 +1879,12 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
       final supaUserId = SupabaseService.instance.client.auth.currentUser?.id;
       if (supaUserId != null) {
         unawaited(SyncService.instance.syncProfileNow(supaUserId));
-        unawaited(SyncService.instance.pushSnapshot());
-      }
-
-      // a2b-2 (single-owner batch, 2026-09-27): lock any of the three
-      // coach-extraction-shared fields the user ACTUALLY changed this save,
-      // so the next daily-snapshot extraction pass can't overwrite this
-      // manual edit (migration 148). A field re-saved with its unchanged
-      // value is deliberately not locked — see the trackers' doc comment.
-      final fieldsToLock = computeCoachExtractionFieldsToLock(
-        dietPreference: _dietPreference,
-        originalDietPreference: _originalDietPreference,
-        lifestyleActivity: _lifestyleActivity,
-        originalLifestyleActivity: _originalLifestyleActivity,
-        injuries: _injuries,
-        originalInjuries: _originalInjuries,
-      );
-      if (fieldsToLock.isNotEmpty) {
-        unawaited(UserRepository.lockCoachExtractionFields(fieldsToLock));
+        // Diet plan Unit 2a B-pass finding 5: the snapshot push can run the
+        // coach extraction, so it goes out after the lock call finishes
+        // (best-effort, never throws); the save itself never waits on it.
+        unawaited(lockDone.whenComplete(SyncService.instance.pushSnapshot));
+      } else {
+        unawaited(lockDone);
       }
 
       // Refresh downstream views that cache profile-derived targets/state.

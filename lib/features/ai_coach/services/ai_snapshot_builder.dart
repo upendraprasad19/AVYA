@@ -48,6 +48,7 @@ import 'package:icanbefitter/core/services/day_swap/day_swap_result.dart';
 import 'package:icanbefitter/core/services/day_swap/day_swap_rules.dart';
 import '../models/coach_memory.dart';
 import 'package:icanbefitter/core/constants/equipment_defaults.dart';
+import 'package:icanbefitter/core/constants/food_types.dart';
 import 'package:icanbefitter/shared/repositories/plan_engine/training_history_analyzer.dart';
 
 /// Builder for the AI Coach user_daily_snapshot context map.
@@ -106,7 +107,10 @@ class AiSnapshotBuilder {
         // recommend a barbell row to a bodyweight user and be self-consistent.
         'equipment_effective': ?effectiveEquipment,
         'activity_level': profile['activity_level'] ?? '',
-        'diet_preference': profile['diet_preference'] ?? '',
+        // Diet plan Unit 2a: the canonical food-type key (never a raw legacy
+        // spelling or ''), plus its label for the coach.
+        'diet_preference': foodTypeOfProfile(profile).storageKey,
+        'diet_preference_label': foodTypeOfProfile(profile).label,
         'injuries': profile['injuries'] ?? '',
         'bmr': profile['bmr'] ?? 0,
         'tdee': profile['tdee'] ?? 0,

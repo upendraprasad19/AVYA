@@ -173,8 +173,14 @@ void main() {
       expect(editProfile, contains('final fieldsToLock = computeCoachExtractionFieldsToLock('));
       expect(
         editProfile,
-        contains('unawaited(UserRepository.lockCoachExtractionFields(fieldsToLock))'),
+        contains('? UserRepository.lockCoachExtractionFields(fieldsToLock)'),
       );
+      // Diet plan Unit 2a B-pass finding 5: the snapshot push waits for the
+      // lock call, and the lock is computed BEFORE the push is scheduled.
+      final lockAt = editProfile.indexOf('? UserRepository.lockCoachExtractionFields(fieldsToLock)');
+      final pushAt = editProfile.indexOf('unawaited(lockDone.whenComplete(SyncService.instance.pushSnapshot));');
+      expect(pushAt, greaterThan(lockAt));
+      expect(lockAt, greaterThan(0));
     });
 
     test('computeCoachExtractionFieldsToLock only names the 3 known lockable fields', () {

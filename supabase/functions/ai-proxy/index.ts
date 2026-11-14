@@ -61,7 +61,7 @@ import {
   sanitizeJsonForPrompt,
 } from "../_shared/sanitize_for_prompt.ts";
 import type { ToolContext } from "../_shared/tools/index.ts";
-import { CAPTAIN_MANUAL } from "../_shared/captain_manual.ts";
+import { captainManual } from "../_shared/captain_manual.ts";
 import { parseClientCapabilities } from "../_shared/client_capabilities.ts";
 import { daySwapRoutingBlock } from "../_shared/day_swap_routing.ts";
 import {
@@ -1089,7 +1089,9 @@ Rules: identify every distinct food product, use ACCURATE nutrition values from 
     //                             over 10000 chars)
     //   retrievalBlock            ≤ ~1.2 KB (5 × 200 chars + header)
     // Total ceiling ≈ 35 KB, far under Gemini 3.1 Flash Lite's context limit.
-    const promptParts: string[] = [CAPTAIN_MANUAL, icbfLogInstructions(ruleOn)];
+    // Unit 2b: captainManual() serves the pre-2b food rules when
+    // DISABLE_FOOD_TYPE_MANUAL_RULES is exactly "true".
+    const promptParts: string[] = [captainManual(), icbfLogInstructions(ruleOn)];
     if (isChatChannel) {
       // Unit 3 (day-swapper-sync-load) — deterministic per-request routing
       // block, chosen server-side from isProUser + the parsed client
