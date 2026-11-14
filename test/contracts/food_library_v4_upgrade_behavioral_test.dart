@@ -23,6 +23,7 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
 import 'package:icanbefitter/core/services/seed_service.dart';
+import 'package:icanbefitter/features/nutrition/services/diet_plan_catalog.dart';
 
 import '../helpers/hive_test_setup.dart';
 
@@ -80,6 +81,12 @@ void main() {
     final src = File('lib/core/services/seed_service.dart').readAsStringSync();
     expect(RegExp(r'static const int _foodLibraryVersion = 5;').hasMatch(src),
         isTrue);
+  });
+
+  test('the 14 ids are exactly the catalog\'s Low carb / Keto only entries '
+      '(B-pass seat C finding 6)', () {
+    expect(_v5Everyday,
+        {for (final e in kDietPlanCatalog) if (e.lowCarbOnly) e.foodId});
   });
 
   test('precondition: the 14 ids are everyday in the asset', () {

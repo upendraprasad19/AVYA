@@ -59,10 +59,9 @@ enum DietFamily {
   fat,
 }
 
-/// Max items of a family in one day. A family absent from this map is
-/// uncapped (only per-day id uniqueness applies).
 /// Unit 3b: Low carb / Keto days lean on paneer, dairy and added fat, so
-/// those caps are higher there (every other cap is the Balanced one).
+/// those caps are higher there (every other cap is the Balanced one in
+/// [dietFamilyDailyCap]).
 const Map<DietFamily, int> dietFamilyLowCarbCapOverride = {
   DietFamily.paneer: 2,
   DietFamily.dairy: 3,
@@ -70,6 +69,8 @@ const Map<DietFamily, int> dietFamilyLowCarbCapOverride = {
   DietFamily.soy: 2,
 };
 
+/// Max items of a family in one day. A family absent from this map is
+/// uncapped (only per-day id uniqueness applies).
 const Map<DietFamily, int> dietFamilyDailyCap = {
   DietFamily.soy: 1,
   DietFamily.paneer: 1,

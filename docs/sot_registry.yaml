@@ -1515,7 +1515,8 @@ concepts:
       What goes into a generated diet plan. Since 2026-11-14 (diet plan
       Unit 1, diagnose 83ac8a, closes OI-214; recurrence of d3c7a9) the
       Diet Plan screen uses CuratedDietPlanGenerator: ONLY foods from the
-      hand-curated catalog (kDietPlanCatalog, 151 everyday Indian foods;
+      hand-curated catalog (kDietPlanCatalog, 151 everyday Indian foods,
+      plus 14 Low carb / Keto only entries since Unit 3b-1a;
       roles, day-capped families, allowed portions; no macros — numbers
       come from the foodBox row), a fixed template per slot (breakfast =
       main + protein (+fruit); lunch = protein + one grain + sabzi + side;
@@ -1529,7 +1530,8 @@ concepts:
       layer) remains reachable through the local kill switch
       configBox['disable_curated_diet_plan'] (DietPlanFlags) until the
       founder's device check; its deletion is on the OI board. Food
-      library seed version 4 (_foodLibraryVersion) ships the v4 asset.
+      library seed version 4 (_foodLibraryVersion) shipped the v4 asset;
+      version 5 (Unit 3b-1a, below) is current.
       Diet plan Unit 3b-1a (2026-11-14, docs/plans/diet-strategy-3b.md):
       DietPlanInputs carries the strategy and the EFFECTIVE carb target;
       Low carb / Keto use their own templates (curatedTemplatesFor: Keto
@@ -1645,7 +1647,7 @@ concepts:
     # map has two dozen readers of other fields (user_full_name owns that list).
     readers:
       - file: lib/features/nutrition/services/diet_plan_generator.dart
-        line_range: 1328-1365
+        line_range: 1339-1376
         method: passesDiet (normalises; eggetarian admits the egg family, pescatarian egg + fish, before both veg checks)
         semantic: filtered
         fields_read: [diet_preference via DietPlanInputs.dietPreference, is_veg, is_vegan, name, catalog family]
@@ -12481,7 +12483,7 @@ concepts:
         method: scripts/repair_exercise_library_v12.js (repairText, mergeDuplicates, relabel, dropPlates)
         notes: v12 (Batch A) — 136 un-shifted text rows, cues one per item, 7 duplicates retired (name_aliases + merged_ids on the kept row), E172/E163 labels, E207/E179 plate keys dropped
       - file: lib/core/services/seed_service.dart
-        line_range: 282-327
+        line_range: 289-334
         method: _exerciseLibraryVersion (11→12) + retiredLibraryIds + pruneRetired after putAll in _seedExercises
         notes: putAll never deletes, so the prune is what removes a retired row from an existing install
       - file: supabase/migrations/162_reseed_exercise_library.sql
