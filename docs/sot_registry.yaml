@@ -1212,7 +1212,7 @@ concepts:
           (phases_2_to_12, ai_coach_unlimited, progress_photos) through
           verifyFromServer() with a 5-min cache TTL.
       - file: lib/features/profile/providers/profile_provider.dart
-        line_range: 507-565
+        line_range: 509-567
         method: SubscriptionInfoNotifier / subscriptionInfoProvider
         semantic: pass-through
         fields_read: [isPro, expiresAt, plan, isVerifying]
@@ -1446,11 +1446,15 @@ concepts:
           Wrappers over MigratedKey.write/read for the
           'saved_diet_plan' key (userBox per Test #11.1 migration).
       - file: lib/features/nutrition/screens/diet_plan_screen.dart
-        line_range: 342-401
+        line_range: 330-389
         method: _savePlan (UI save handler)
         notes: |
           Builds planData map → calls saveDietPlan → fires
           syncSavedDietPlan to cloud → invalidates dietPlanProvider.
+          Unit 3b-1b: with DietStrategyFlags on, the top-level
+          `diet_strategy` stamp is the strategy the plan was BUILT for
+          (_planStrategy: builtFor after a generation, Balanced on the
+          legacy generator, the stamp after a load), never the live one.
       - file: lib/core/services/sync/sync_restore_completeness.dart
         line_range: 557-590
         method: _restoreSavedDietPlan
@@ -1462,7 +1466,7 @@ concepts:
     reader_manifest_complete: true
     readers:
       - file: lib/features/nutrition/providers/diet_plan_provider.dart
-        line_range: 97-160
+        line_range: 113-182
         method: DietPlanNotifier.build (dietPlanProvider)
         semantic: aggregated
         fields_read: [meals[], meals[].name, meals[].items[], items[].name, items[].calories, items[].protein]
@@ -1470,7 +1474,11 @@ concepts:
           Canonical reader. Maps free-form slot name → canonical
           'breakfast/lunch/dinner/snack' bucket; sums calories +
           protein; picks first item name as firstFoodName for the
-          pre-filled food search.
+          pre-filled food search. Unit 3b-1b: with DietStrategyFlags on
+          it watches macroTargetsProvider.select(dietStrategyOfTargets)
+          and gives no hints for a plan whose stamp is not
+          planStrategyFor(effective, foodType) (savedPlanMatchesStrategy;
+          unstamped = Balanced). No watch, no check with the flag off.
       - file: lib/features/nutrition/screens/nutrition_screen.dart
         line_range: 280-292
         method: nutrition tab (TODAY'S MEALS section)
@@ -1480,7 +1488,7 @@ concepts:
           Passes plannedSlots into TodaysMealsCard which renders the
           "FROM YOUR DIET PLAN" hint on every empty slot.
       - file: lib/features/nutrition/screens/diet_plan_screen.dart
-        line_range: 73-99
+        line_range: 102-131
         method: _generatePlan (entry-point check for existing saved plan)
         semantic: pass-through
         fields_read: [via UserRepository.instance.getSavedDietPlan() — Map<String, dynamic>?]
@@ -1490,7 +1498,11 @@ concepts:
           Since Unit 2a (6f5aaa): a saved plan whose top-level food_type
           differs from the profile's food type is not loaded (a fresh plan
           is generated, a notice shows once per session); a plan without
-          food_type loads as before.
+          food_type loads as before. Unit 3b-1b: with the flag on, a plan
+          whose `diet_strategy` stamp does not match
+          planStrategyFor(effective, foodType) is not loaded either (no
+          notice); a change of the effective strategy re-runs this check
+          (ref.listenManual, idempotent on _requestedStrategy).
     regression_test: test/contracts/restore_completeness_writes_test.dart
     hive:
       box: configBox
@@ -1619,7 +1631,7 @@ concepts:
       concept; merged into one entry at 2a's sync with main.)
     writers:
       - file: lib/features/profile/providers/profile_provider.dart
-        line_range: 93-148
+        line_range: 91-146
         method: setFoodType + _applyFoodType (UserProfileNotifier; the Diet Plan screen's door)
         notes: |
           Serialised through a chained future (a failed link does not block
@@ -1629,7 +1641,7 @@ concepts:
           fires syncProfileNow); signed in: pushSnapshot, and the
           coach-extraction lock ONLY when the food type itself changed.
       - file: lib/features/profile/screens/edit_profile_screen.dart
-        line_range: 1794-2230
+        line_range: 1799-2235
         method: _save (writes _foodType.storageKey; lock compare on canonical keys)
       - file: lib/features/onboarding/providers/onboarding_provider.dart
         line_range: 999-1000
@@ -1650,12 +1662,12 @@ concepts:
         semantic: filtered
         fields_read: [diet_preference via DietPlanInputs.dietPreference, is_veg, is_vegan, name, catalog family]
       - file: lib/features/nutrition/providers/diet_plan_provider.dart
-        line_range: 97-160
+        line_range: 113-182
         method: DietPlanNotifier.build (watches userProfileProvider.select(foodTypeOfProfile); {} for a saved plan of another food type)
         semantic: filtered
         fields_read: [diet_preference, saved plan food_type]
       - file: lib/features/nutrition/screens/diet_plan_screen.dart
-        line_range: 73-150
+        line_range: 102-191
         method: _generatePlan + _changeFoodType (selector; mismatch notice once per session)
         semantic: pass-through
         fields_read: [diet_preference, saved plan food_type]
@@ -1665,7 +1677,7 @@ concepts:
         semantic: pass-through
         fields_read: [diet_preference]
       - file: lib/features/profile/screens/edit_profile_screen.dart
-        line_range: 1287-1341
+        line_range: 1288-1346
         method: _buildDietPreferenceChips (FoodTypeChips; no Keto)
         semantic: pass-through
         fields_read: [diet_preference]
@@ -1747,17 +1759,20 @@ concepts:
       3a; the strategy keeps that pre-existing split, it does not add one.
     writers:
       - file: lib/features/profile/providers/profile_provider.dart
-        line_range: 150-188
+        line_range: 148-190
         method: setDietStrategy + _applyDietStrategy (UserProfileNotifier; the Diet Plan screen's door)
         notes: |
           Serialised; captures the user id at call time and writes nothing
           (false) if it changed; no-op on an equal stored key; ONE field
           write through updateProfile (ProfileWriteService.patchProfile,
           which fires syncProfileNow); invalidates macroTargetsProvider,
-          dailyNutritionProvider, nutritionSummaryProvider, dietPlanProvider;
-          signed in: pushSnapshot (no extraction lock).
+          dailyNutritionProvider, nutritionSummaryProvider; signed in:
+          pushSnapshot (no extraction lock). Unit 3b-1b: no longer
+          invalidates dietPlanProvider (it watches the effective strategy
+          itself; invalidating a provider that watches userProfileProvider
+          from inside it is a CircularDependencyError in debug builds).
       - file: lib/features/profile/screens/edit_profile_screen.dart
-        line_range: 1794-1934
+        line_range: 1799-1939
         method: _save (adds diet_strategy only with the flag on, for a chip different from the EFFECTIVE strategy, after confirmEditProfileDietStrategy; PRO re-checked at Save)
         notes: |
           PRESENCE ONLY for the screen wiring (B-pass seat C finding 3): the
@@ -1793,6 +1808,16 @@ concepts:
         method: effectiveMacroTargets (the one rule)
         semantic: transformed
         fields_read: [diet_strategy]
+      - file: lib/features/nutrition/services/diet_plan_strategy_state.dart
+        line_range: 1-44
+        method: dietPlanRequestFor (Unit 3b-1b; the Diet Plan screen's plan request from strategy_index; Keto + Vegan asks for Low carb with the Low carb carb target)
+        semantic: transformed
+        fields_read: [strategy_index, carbs, diet_strategy (via resolveBaseMacroPack for the vegan pair)]
+      - file: lib/features/nutrition/screens/diet_plan_screen.dart
+        line_range: 74-100
+        method: initState listener + _onEffectiveStrategy (Unit 3b-1b; regenerates once per change of planStrategyFor(effective, foodType))
+        semantic: pass-through
+        fields_read: [strategy_index]
     hive:
       box: userBox
       key_prefix: "profile"
@@ -4180,7 +4205,7 @@ concepts:
           splash-time verify doesn't downgrade an optimistic isPro=true
           before the webhook lands.
       - file: lib/features/profile/providers/profile_provider.dart
-        line_range: 482-528
+        line_range: 484-530
         method: subscriptionInfoProvider (isVerifying field)
         semantic: flag-check
         fields_read: [isPaymentInFlight]
@@ -5927,7 +5952,7 @@ concepts:
           entry always wins (the block no-ops when a row already exists).
           Consumed by the readiness sheet's SLEEP axis via sleepAxisFromHours.
       - file: lib/features/profile/providers/profile_provider.dart
-        line_range: 683-691
+        line_range: 685-693
         method: logSleep
         # Was `BiometricNotifier.logSleep`. check_sot_registry_parity's
         # _extractSymbol takes the FIRST identifier of a dotted value, so the
@@ -5942,7 +5967,7 @@ concepts:
     reader_manifest_complete: true
     readers:
       - file: lib/features/profile/providers/profile_provider.dart
-        line_range: 561-618
+        line_range: 563-620
         method: BiometricNotifier.build (biometricProvider)
         semantic: latest
         fields_read: [type, sleep_hours, date]
@@ -6051,7 +6076,7 @@ concepts:
         method: completeOnboarding
         notes: writes to userBox['profile']['full_name'] + syncs to users table
       - file: lib/features/profile/screens/edit_profile_screen.dart
-        line_range: 1794-2230
+        line_range: 1799-2235
         method: _save
         notes: calls syncProfileNow after updating userBox
       - file: lib/features/profile/services/profile_write_service.dart
@@ -6113,7 +6138,7 @@ concepts:
           defect) — closed with a dedicated assertion, verified to fail on
           that same mutation before being accepted.
       - file: lib/features/profile/providers/profile_provider.dart
-        line_range: 71-86
+        line_range: 69-84
         method: UserProfileNotifier.build
         semantic: pass-through
         fields_read: [full_name]
@@ -6237,7 +6262,7 @@ concepts:
       public URL is identical after a re-upload; the stored `?v=` is what moves.
     writers:
       - file: lib/features/profile/providers/profile_provider.dart
-        line_range: 248-389
+        line_range: 250-391
         method: uploadAvatar / uploadBanner
         notes: |
           Store ProfileImageUrl.versioned(publicUrl, version: now-millis) into
@@ -8377,7 +8402,7 @@ concepts:
           WeightLogNotifier.logWeight (line 779) calls HealthWriteService.logWeight
           + invalidates the canonical provider set.
       - file: lib/features/profile/providers/profile_provider.dart
-        line_range: 561-653
+        line_range: 563-655
         method: BiometricNotifier (sleep) + logSleep
         semantic: latest
         fields_read: [type, sleep_hours, date]
@@ -10547,7 +10572,7 @@ concepts:
         method: InjuryVocab.normalize / canonicalTokens / chipTokens / toggleChip
         notes: canonical 9-token set + read-side alias (back to lower_back, free-text to token); Ship 3 added chipTokens (single chip-UI source == none ∪ canonicalTokens) + chipLabel + pure toggleChip shared by both chip screens
       - file: lib/features/profile/screens/edit_profile_screen.dart
-        line_range: 1342-1407
+        line_range: 1347-1412
         method: _buildInjuriesChips + profile reader
         notes: chips emit canonical tokens (via InjuryVocab.chipTokens/toggleChip Ship 3); reader normalizes legacy stored values
       - file: lib/features/onboarding/screens/details_screen.dart
@@ -16810,7 +16835,7 @@ concepts:
           once, a much smaller harm than blocking the profile save this
           runs alongside.
       - file: lib/features/profile/screens/edit_profile_screen.dart
-        line_range: 1944-1973
+        line_range: 1949-1978
         method: "_save (via the pure computeCoachExtractionFieldsToLock helper)"
         notes: |
           Locks only fields that ACTUALLY changed this save (diet_preference /

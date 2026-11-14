@@ -49,12 +49,15 @@ void main() {
         'Generated on 14 Nov 2026  |  Food type: Non-veg  |  Strategy: Keto');
   });
 
-  test('PRESENCE: the screen passes the strategy carried with the targets', () {
+  // Unit 3b round 3 finding 1: the PDF names the strategy the PLAN was built
+  // for (3a named the targets'), plus the note when they differ. The
+  // behaviour of both helpers is in diet_plan_strategy_screen_test.dart.
+  test('PRESENCE: the screen passes the PLAN strategy and the plan note', () {
     final src = File('lib/features/nutrition/screens/diet_plan_screen.dart')
         .readAsStringSync();
-    expect(src, contains('strategyLabel: _pdfStrategyLabel(targets),'));
-    expect(src, contains('final s = dietStrategyOfTargets(targets);'));
-    expect(src, contains('return s == DietStrategy.balanced ? null : s.label;'));
+    expect(src,
+        contains('strategyLabel: dietPlanPdfStrategyLabel(_planStrategy),'));
+    expect(src, contains('planNote: _planNote(targets),'));
     // The header tag over the same map the numbers come from.
     expect(
         RegExp(r'withDietStrategyTag\(\s*_foodType\.shortLabel,\s*dietStrategyOfTargets\(targets\)\)')

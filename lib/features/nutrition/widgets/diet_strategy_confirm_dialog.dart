@@ -5,6 +5,11 @@
 // Profile. It shows the targets before and after; carbs and fat always,
 // calories and protein only when they move (Edit Profile, when other edited
 // fields feed the recompute).
+//
+// Unit 3b (docs/plans/diet-strategy-3b.md §3.8): a change TO Keto always
+// shows this dialog with the Keto medical note, even when the targets would
+// not move or are unknown; then [preview] is null or same-shown and the
+// dialog has no number rows.
 import 'package:flutter/material.dart';
 import 'package:icanbefitter/core/constants/diet_strategies.dart';
 import 'package:icanbefitter/core/theme/colors.dart';
@@ -17,7 +22,7 @@ import '../services/diet_strategy_actions.dart';
 Future<bool> showDietStrategyConfirmDialog(
   BuildContext context, {
   required DietStrategy next,
-  required DietStrategyChangePreview preview,
+  required DietStrategyChangePreview? preview,
 }) async {
   final result = await showDialog<bool>(
     context: context,
@@ -35,20 +40,24 @@ class DietStrategyConfirmDialog extends StatelessWidget {
   });
 
   final DietStrategy next;
-  final DietStrategyChangePreview preview;
+  final DietStrategyChangePreview? preview;
 
   @override
   Widget build(BuildContext context) {
-    final b = preview.before;
-    final a = preview.after;
-    final moves = preview.caloriesOrProteinMove;
+    final p = preview;
+    final showRows = p != null && !p.sameShown;
+    final moves = showRows && p.caloriesOrProteinMove;
     final rows = <String>[
-      if (moves && b.calories.round() != a.calories.round())
-        'Calories ${b.calories.round()} kcal → ${a.calories.round()} kcal',
-      if (moves && b.protein.round() != a.protein.round())
-        'Protein ${b.protein.round()} g → ${a.protein.round()} g',
-      'Carbs ${b.carbs.round()} g → ${a.carbs.round()} g',
-      'Fat ${b.fat.round()} g → ${a.fat.round()} g',
+      if (showRows) ...[
+        if (moves && p.before.calories.round() != p.after.calories.round())
+          'Calories ${p.before.calories.round()} kcal → '
+              '${p.after.calories.round()} kcal',
+        if (moves && p.before.protein.round() != p.after.protein.round())
+          'Protein ${p.before.protein.round()} g → '
+              '${p.after.protein.round()} g',
+        'Carbs ${p.before.carbs.round()} g → ${p.after.carbs.round()} g',
+        'Fat ${p.before.fat.round()} g → ${p.after.fat.round()} g',
+      ],
     ];
     final body = AppTypography.body.copyWith(
         fontSize: 13, color: AppColors.textSecondary);
@@ -69,21 +78,29 @@ class DietStrategyConfirmDialog extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('Your daily targets change:', style: body),
-          const SizedBox(height: 8),
-          for (final r in rows)
-            Padding(
-              padding: const EdgeInsets.only(bottom: 4),
-              child: Text(r,
-                  style: body.copyWith(color: AppColors.textPrimary)),
+          if (showRows) ...[
+            Text('Your daily targets change:', style: body),
+            const SizedBox(height: 8),
+            for (final r in rows)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 4),
+                child: Text(r,
+                    style: body.copyWith(color: AppColors.textPrimary)),
+              ),
+            const SizedBox(height: 8),
+            Text(
+              moves
+                  ? 'Calories and protein also change because you edited other fields.'
+                  : 'Calories and protein stay the same.',
+              style: body,
             ),
-          const SizedBox(height: 8),
-          Text(
-            moves
-                ? 'Calories and protein also change because you edited other fields.'
-                : 'Calories and protein stay the same.',
-            style: body,
-          ),
+          ],
+          if (next == DietStrategy.keto) ...[
+            if (showRows) const SizedBox(height: 12),
+            Text(kKetoMedicalNote,
+                key: const ValueKey('diet_strategy_confirm_keto_note'),
+                style: body),
+          ],
         ],
       ),
       actions: [

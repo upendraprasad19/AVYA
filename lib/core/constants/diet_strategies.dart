@@ -15,6 +15,8 @@
 // cannot read (null, empty, unknown, not a string) is Balanced.
 library;
 
+import 'food_types.dart';
+
 enum DietStrategy {
   balanced('balanced', 'Balanced', ''),
   lowCarb('low_carb', 'Low carb', 'LOW CARB'),
@@ -77,4 +79,49 @@ Map<String, String> dietStrategyPushEntry(
   final raw = profile['diet_strategy'];
   if (raw == null || (raw is String && raw.trim().isEmpty)) return const {};
   return {'diet_strategy': dietStrategyOf(raw).storageKey};
+}
+
+/// The strategy the Diet Plan screen REQUESTS a plan for (Unit 3b,
+/// docs/plans/diet-strategy-3b.md §3.5): Low carb for Keto + Vegan (no vegan
+/// keto day exists in the catalog), otherwise the effective strategy. The
+/// only place the vegan pair is named; the pair itself stays ordinary data.
+DietStrategy planStrategyFor(DietStrategy effective, FoodType foodType) =>
+    effective == DietStrategy.keto && foodType == FoodType.vegan
+        ? DietStrategy.lowCarb
+        : effective;
+
+/// The Keto medical note (Unit 3b §3.8): under the strategy chips on both
+/// screens while Keto is selected, and in the confirm dialog for every change
+/// to Keto.
+const String kKetoMedicalNote =
+    'Keto is not for everyone. Check with your doctor first if you take '
+    'diabetes medicine, are pregnant or breastfeeding, or have kidney disease.';
+
+/// Under the chips when the food type is Vegan (the Keto chip is disabled).
+const String kVeganKetoChipReason =
+    'Keto needs eggs, dairy, fish or meat. Vegan plans can use Low carb.';
+
+/// Under the Diet Plan header for a vegan Keto user's Low carb plan.
+const String kVeganKetoPlanNote =
+    'Keto meals need eggs, dairy, fish or meat. '
+    'This vegan plan is a Low carb plan.';
+
+/// Under the Diet Plan header when the plan is Balanced while a non-Balanced
+/// strategy is in effect (the legacy generator or its fallback).
+const String kBalancedPlanNote = 'This plan uses balanced meals.';
+
+/// The note for a displayed plan built for [planStrategy] while [effective]
+/// is the user's strategy, or null when they agree (Unit 3b §3.6). The
+/// Balanced line wins over the vegan line (round 3 finding 10).
+String? dietPlanStrategyNote({
+  required DietStrategy planStrategy,
+  required DietStrategy effective,
+  required FoodType foodType,
+}) {
+  if (planStrategy == effective) return null;
+  if (planStrategy == DietStrategy.balanced) return kBalancedPlanNote;
+  if (planStrategy == planStrategyFor(effective, foodType)) {
+    return kVeganKetoPlanNote;
+  }
+  return null;
 }
