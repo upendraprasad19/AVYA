@@ -1,0 +1,1441 @@
+{
+  "_note": "core_levels of every library row before Library Batch S1a (generated from assets/data/exercise_library.json at c2841edb). Read by test/contracts/library_s1_core_levels_test.dart; CI checks out shallow, so no test reads git history. FROZEN: never re-record this file; a later batch that changes core_levels adds its own before-fixture.",
+  "core_levels": {
+    "E001": [
+      "intermediate",
+      "advanced"
+    ],
+    "E002": [
+      "beginner",
+      "intermediate",
+      "advanced"
+    ],
+    "E003": [
+      "intermediate",
+      "advanced"
+    ],
+    "E004": [
+      "intermediate",
+      "advanced"
+    ],
+    "E005": [
+      "beginner",
+      "intermediate"
+    ],
+    "E006": [
+      "beginner",
+      "intermediate",
+      "advanced"
+    ],
+    "E007": [],
+    "E008": [
+      "intermediate",
+      "advanced"
+    ],
+    "E009": [
+      "beginner",
+      "intermediate"
+    ],
+    "E010": [
+      "intermediate",
+      "advanced"
+    ],
+    "E011": [
+      "intermediate",
+      "advanced"
+    ],
+    "E012": [
+      "beginner",
+      "intermediate"
+    ],
+    "E013": [
+      "beginner",
+      "intermediate",
+      "advanced"
+    ],
+    "E014": [
+      "beginner",
+      "intermediate",
+      "advanced"
+    ],
+    "E015": [
+      "beginner",
+      "intermediate",
+      "advanced"
+    ],
+    "E016": [
+      "intermediate",
+      "advanced"
+    ],
+    "E017": [
+      "beginner",
+      "intermediate",
+      "advanced"
+    ],
+    "E018": [
+      "intermediate",
+      "advanced"
+    ],
+    "E019": [
+      "beginner",
+      "intermediate"
+    ],
+    "E020": [
+      "intermediate",
+      "advanced"
+    ],
+    "E021": [
+      "intermediate",
+      "advanced"
+    ],
+    "E022": [
+      "intermediate",
+      "advanced"
+    ],
+    "E023": [
+      "intermediate",
+      "advanced"
+    ],
+    "E024": [
+      "beginner",
+      "intermediate",
+      "advanced"
+    ],
+    "E025": [
+      "beginner",
+      "intermediate",
+      "advanced"
+    ],
+    "E026": [
+      "beginner",
+      "intermediate"
+    ],
+    "E027": [
+      "intermediate",
+      "advanced"
+    ],
+    "E029": [
+      "beginner",
+      "intermediate"
+    ],
+    "E030": [
+      "beginner",
+      "intermediate"
+    ],
+    "E031": [
+      "intermediate",
+      "advanced"
+    ],
+    "E032": [
+      "beginner",
+      "intermediate",
+      "advanced"
+    ],
+    "E033": [
+      "beginner",
+      "intermediate",
+      "advanced"
+    ],
+    "E034": [],
+    "E035": [
+      "beginner",
+      "intermediate"
+    ],
+    "E036": [
+      "intermediate",
+      "advanced"
+    ],
+    "E037": [
+      "advanced"
+    ],
+    "E038": [
+      "beginner",
+      "intermediate"
+    ],
+    "E039": [
+      "beginner",
+      "intermediate",
+      "advanced"
+    ],
+    "E040": [
+      "intermediate",
+      "advanced"
+    ],
+    "E041": [
+      "intermediate",
+      "advanced"
+    ],
+    "E042": [
+      "beginner",
+      "intermediate"
+    ],
+    "E043": [
+      "beginner",
+      "intermediate",
+      "advanced"
+    ],
+    "E044": [
+      "beginner",
+      "intermediate"
+    ],
+    "E045": [
+      "beginner",
+      "intermediate",
+      "advanced"
+    ],
+    "E046": [],
+    "E047": [
+      "intermediate",
+      "advanced"
+    ],
+    "E048": [
+      "beginner"
+    ],
+    "E049": [
+      "intermediate",
+      "advanced"
+    ],
+    "E050": [
+      "intermediate",
+      "advanced"
+    ],
+    "E051": [
+      "intermediate",
+      "advanced"
+    ],
+    "E052": [
+      "beginner",
+      "intermediate",
+      "advanced"
+    ],
+    "E053": [],
+    "E054": [
+      "beginner",
+      "intermediate"
+    ],
+    "E055": [
+      "beginner"
+    ],
+    "E056": [
+      "intermediate",
+      "advanced"
+    ],
+    "E057": [
+      "intermediate",
+      "advanced"
+    ],
+    "E058": [
+      "advanced"
+    ],
+    "E059": [
+      "beginner",
+      "intermediate"
+    ],
+    "E060": [
+      "beginner",
+      "intermediate"
+    ],
+    "E061": [
+      "beginner",
+      "intermediate",
+      "advanced"
+    ],
+    "E062": [],
+    "E063": [],
+    "E064": [],
+    "E065": [],
+    "E066": [
+      "intermediate"
+    ],
+    "E067": [
+      "beginner",
+      "intermediate",
+      "advanced"
+    ],
+    "E068": [],
+    "E069": [],
+    "E070": [],
+    "E071": [],
+    "E072": [],
+    "E073": [],
+    "E074": [],
+    "E076": [
+      "intermediate",
+      "advanced"
+    ],
+    "E077": [],
+    "E078": [],
+    "E080": [],
+    "E083": [],
+    "E085": [],
+    "E086": [],
+    "E087": [
+      "intermediate",
+      "advanced"
+    ],
+    "E088": [],
+    "E089": [
+      "intermediate",
+      "advanced"
+    ],
+    "E090": [
+      "beginner",
+      "intermediate"
+    ],
+    "E091": [
+      "advanced"
+    ],
+    "E092": [
+      "advanced"
+    ],
+    "E093": [
+      "beginner"
+    ],
+    "E094": [
+      "advanced"
+    ],
+    "E095": [
+      "intermediate"
+    ],
+    "E096": [],
+    "E097": [
+      "intermediate",
+      "advanced"
+    ],
+    "E098": [
+      "beginner",
+      "intermediate",
+      "advanced"
+    ],
+    "E099": [],
+    "E100": [],
+    "E102": [
+      "beginner"
+    ],
+    "E103": [
+      "intermediate",
+      "advanced"
+    ],
+    "E104": [
+      "intermediate",
+      "advanced"
+    ],
+    "E105": [
+      "intermediate",
+      "advanced"
+    ],
+    "E106": [
+      "beginner",
+      "intermediate",
+      "advanced"
+    ],
+    "E107": [],
+    "E108": [],
+    "E109": [
+      "intermediate",
+      "advanced"
+    ],
+    "E110": [
+      "beginner",
+      "intermediate"
+    ],
+    "E112": [],
+    "E113": [
+      "intermediate",
+      "advanced"
+    ],
+    "E114": [],
+    "E117": [],
+    "E118": [],
+    "E119": [],
+    "E120": [],
+    "E121": [
+      "intermediate",
+      "advanced"
+    ],
+    "E122": [],
+    "E123": [
+      "intermediate",
+      "advanced"
+    ],
+    "E124": [
+      "beginner",
+      "intermediate"
+    ],
+    "E127": [],
+    "E129": [],
+    "E131": [],
+    "E132": [
+      "beginner"
+    ],
+    "E133": [],
+    "E134": [
+      "intermediate",
+      "advanced"
+    ],
+    "E135": [],
+    "E136": [],
+    "E139": [],
+    "E140": [
+      "intermediate"
+    ],
+    "E141": [],
+    "E142": [],
+    "E143": [],
+    "E145": [
+      "intermediate"
+    ],
+    "E147": [
+      "beginner"
+    ],
+    "E148": [],
+    "E149": [],
+    "E151": [],
+    "E152": [],
+    "E155": [],
+    "E159": [],
+    "E161": [],
+    "E166": [],
+    "E171": [],
+    "E172": [],
+    "E173": [
+      "intermediate",
+      "advanced"
+    ],
+    "E174": [
+      "beginner",
+      "intermediate"
+    ],
+    "E175": [
+      "beginner",
+      "intermediate"
+    ],
+    "E176": [
+      "advanced"
+    ],
+    "E177": [
+      "intermediate",
+      "advanced"
+    ],
+    "E180": [],
+    "E181": [],
+    "E182": [],
+    "E185": [],
+    "E186": [],
+    "E187": [],
+    "E188": [],
+    "E189": [],
+    "E190": [],
+    "E191": [],
+    "E193": [
+      "intermediate",
+      "advanced"
+    ],
+    "E198": [
+      "intermediate"
+    ],
+    "E200": [],
+    "E201": [],
+    "E202": [],
+    "E203": [],
+    "E205": [],
+    "E206": [],
+    "E207": [],
+    "E208": [],
+    "E209": [],
+    "E212": [],
+    "E213": [],
+    "E214": [],
+    "E215": [],
+    "E216": [],
+    "E217": [],
+    "E219": [],
+    "E220": [],
+    "E221": [],
+    "E222": [],
+    "E224": [
+      "beginner"
+    ],
+    "E226": [],
+    "E229": [],
+    "E230": [],
+    "E231": [],
+    "E232": [
+      "intermediate",
+      "advanced"
+    ],
+    "E234": [],
+    "E235": [
+      "beginner",
+      "intermediate"
+    ],
+    "E236": [],
+    "E238": [
+      "beginner",
+      "intermediate"
+    ],
+    "E239": [
+      "intermediate",
+      "advanced"
+    ],
+    "E242": [],
+    "E244": [],
+    "E245": [],
+    "E246": [
+      "beginner"
+    ],
+    "E247": [],
+    "E248": [
+      "intermediate",
+      "advanced"
+    ],
+    "E250": [
+      "beginner"
+    ],
+    "E251": [
+      "beginner",
+      "intermediate"
+    ],
+    "E252": [
+      "beginner"
+    ],
+    "E253": [
+      "beginner"
+    ],
+    "E254": [],
+    "E255": [
+      "beginner"
+    ],
+    "E257": [
+      "beginner",
+      "intermediate"
+    ],
+    "E258": [
+      "beginner",
+      "intermediate"
+    ],
+    "E259": [
+      "beginner"
+    ],
+    "E260": [
+      "beginner",
+      "intermediate",
+      "advanced"
+    ],
+    "E261": [],
+    "E262": [
+      "advanced",
+      "intermediate"
+    ],
+    "E263": [],
+    "E264": [
+      "beginner"
+    ],
+    "E266": [],
+    "E267": [
+      "beginner"
+    ],
+    "E268": [
+      "beginner"
+    ],
+    "E269": [
+      "beginner"
+    ],
+    "E270": [
+      "beginner"
+    ],
+    "E271": [],
+    "E272": [],
+    "E273": [
+      "beginner"
+    ],
+    "E274": [
+      "beginner"
+    ],
+    "E275": [],
+    "E276": [
+      "beginner"
+    ],
+    "E277": [
+      "beginner"
+    ],
+    "E278": [
+      "beginner"
+    ],
+    "E280": [
+      "beginner"
+    ],
+    "E281": [],
+    "E282": [
+      "beginner"
+    ],
+    "E283": [],
+    "E284": [
+      "beginner"
+    ],
+    "E286": [
+      "beginner"
+    ],
+    "E289": [
+      "beginner"
+    ],
+    "E290": [],
+    "E291": [
+      "beginner",
+      "intermediate"
+    ],
+    "E292": [
+      "beginner"
+    ],
+    "G0103": [],
+    "G0805": [],
+    "G0419": [
+      "advanced"
+    ],
+    "G1712": [],
+    "G0517": [],
+    "G0537": [],
+    "G0028": [],
+    "G1368": [],
+    "G3669": [],
+    "G0523": [],
+    "G3297": [],
+    "G0573": [
+      "beginner"
+    ],
+    "G3117": [],
+    "G0239": [
+      "beginner",
+      "intermediate"
+    ],
+    "G3144": [
+      "beginner"
+    ],
+    "G0746": [],
+    "G0690": [],
+    "G1365": [],
+    "N10": [
+      "beginner"
+    ],
+    "G1473": [],
+    "G0640": [],
+    "G1680": [
+      "intermediate",
+      "advanced"
+    ],
+    "G1285": [],
+    "G0488": [],
+    "G1254": [],
+    "G1719": [],
+    "G1256": [],
+    "G1257": [],
+    "G0122": [],
+    "G1258": [],
+    "G0352": [],
+    "G1623": [],
+    "G1624": [],
+    "G1743": [],
+    "G0748": [
+      "beginner",
+      "intermediate"
+    ],
+    "G0751": [],
+    "G0753": [],
+    "G0757": [
+      "beginner",
+      "intermediate"
+    ],
+    "G1625": [],
+    "G1308": [],
+    "G1309": [],
+    "G1317": [],
+    "G1331": [],
+    "G0026": [],
+    "G0291": [],
+    "G2300": [
+      "beginner"
+    ],
+    "G0524": [],
+    "N12": [
+      "beginner"
+    ],
+    "G0968": [
+      "beginner"
+    ],
+    "G1634": [],
+    "G0285": [
+      "beginner",
+      "intermediate",
+      "advanced"
+    ],
+    "G0322": [],
+    "G1661": [
+      "advanced"
+    ],
+    "G0382": [],
+    "G0393": [],
+    "G2741": [],
+    "G0575": [
+      "beginner",
+      "intermediate"
+    ],
+    "G3123": [],
+    "G1683": [],
+    "N01": [
+      "beginner"
+    ],
+    "G0262": [],
+    "G0493": [
+      "beginner"
+    ],
+    "G3561": [],
+    "G1201": [],
+    "G0469": [],
+    "G0999": [],
+    "G1000": [],
+    "G1370": [],
+    "G0088": [],
+    "G1372": [],
+    "G1373": [
+      "beginner"
+    ],
+    "G1375": [],
+    "G1379": [],
+    "G0400": [],
+    "G0409": [
+      "intermediate",
+      "advanced"
+    ],
+    "G0742": [],
+    "G1383": [],
+    "G1384": [],
+    "G1387": [],
+    "G1395": [],
+    "G1393": [],
+    "G0773": [],
+    "G1490": [],
+    "G1390": [],
+    "G1398": [],
+    "G0750": [],
+    "G0009": [],
+    "G0989": [],
+    "G1287": [],
+    "G1300": [],
+    "G1299": [],
+    "G3124": [],
+    "G0039": [
+      "advanced"
+    ],
+    "G1297": [],
+    "G1750": [],
+    "G0572": [
+      "beginner"
+    ],
+    "G1431": [],
+    "G1327": [],
+    "G0253": [],
+    "N09": [
+      "beginner"
+    ],
+    "G0295": [],
+    "G0552": [],
+    "G0260": [],
+    "G0976": [],
+    "G0089": [],
+    "G1631": [],
+    "G0403": [],
+    "G0421": [],
+    "G1682": [],
+    "N06": [],
+    "G3643": [],
+    "N04": [],
+    "G1419": [],
+    "G0154": [],
+    "G1005": [],
+    "G0873": [],
+    "G0212": [],
+    "G0874": [],
+    "G0277": [],
+    "G0595": [
+      "beginner",
+      "intermediate"
+    ],
+    "G0635": [],
+    "G0299": [],
+    "G0080": [],
+    "G0106": [],
+    "G0110": [],
+    "G1629": [],
+    "G1630": [],
+    "G1413": [],
+    "G1641": [],
+    "G0190": [],
+    "G0391": [],
+    "G1670": [],
+    "G0429": [],
+    "G0425": [],
+    "G0446": [],
+    "G0447": [
+      "beginner",
+      "intermediate",
+      "advanced"
+    ],
+    "G0451": [],
+    "G0599": [
+      "beginner",
+      "intermediate",
+      "advanced"
+    ],
+    "G1458": [],
+    "G3769": [],
+    "G1756": [],
+    "G0157": [],
+    "G0300": [
+      "beginner",
+      "intermediate"
+    ],
+    "G0752": [],
+    "G0075": [],
+    "G2470": [],
+    "G2292": [
+      "beginner",
+      "intermediate"
+    ],
+    "G1022": [],
+    "G0076": [],
+    "G0202": [],
+    "G1328": [],
+    "G0377": [],
+    "G0762": [],
+    "G0669": [],
+    "G0492": [],
+    "G1451": [],
+    "G0815": [],
+    "G0529": [],
+    "G0530": [],
+    "G0862": [],
+    "G0038": [],
+    "G1632": [],
+    "G3287": [],
+    "G0338": [],
+    "G2141": [],
+    "G1548": [],
+    "G3007": [],
+    "G0337": [],
+    "G0448": [],
+    "G1366": [],
+    "G6005": [],
+    "G0532": [],
+    "G1437": [],
+    "G0455": [],
+    "G3303": [],
+    "G0570": [],
+    "G0620": [
+      "intermediate"
+    ],
+    "G1298": [],
+    "G0160": [],
+    "G1358": [],
+    "G0993": [],
+    "G0179": [],
+    "G0302": [],
+    "G1276": [],
+    "G1279": [],
+    "G0602": [
+      "beginner",
+      "intermediate"
+    ],
+    "G0359": [],
+    "G1472": [
+      "intermediate"
+    ],
+    "G3635": [],
+    "G3470": [
+      "beginner"
+    ],
+    "G3194": [],
+    "G3301": [],
+    "G0083": [],
+    "G2135": [],
+    "G0579": [
+      "beginner",
+      "intermediate"
+    ],
+    "G0978": [],
+    "G0041": [],
+    "G0335": [],
+    "G0387": [],
+    "G0392": [],
+    "G0024": [],
+    "G0029": [
+      "advanced"
+    ],
+    "G0533": [],
+    "G1433": [],
+    "G3315": [],
+    "G3299": [],
+    "G3281": [
+      "beginner",
+      "intermediate"
+    ],
+    "G1409": [
+      "intermediate",
+      "advanced"
+    ],
+    "G1424": [],
+    "G1709": [],
+    "G0534": [
+      "beginner"
+    ],
+    "G0090": [],
+    "G0115": [],
+    "G0749": [],
+    "G0046": [],
+    "G0755": [],
+    "G0140": [],
+    "G3193": [],
+    "G1648": [],
+    "G0298": [],
+    "G0320": [],
+    "G0370": [],
+    "G1674": [],
+    "G1678": [],
+    "G1669": [],
+    "G1671": [],
+    "G0303": [],
+    "G1617": [],
+    "G0321": [],
+    "G1619": [],
+    "G0340": [],
+    "G0339": [],
+    "G1576": [],
+    "N08": [],
+    "G0518": [],
+    "G0526": [],
+    "G0535": [],
+    "G0525": [],
+    "G0473": [],
+    "G0006": [],
+    "G0548": [],
+    "G0213": [],
+    "G0193": [],
+    "G1356": [],
+    "G1436": [],
+    "G3662": [
+      "advanced"
+    ],
+    "G3006": [],
+    "G1774": [],
+    "G0710": [],
+    "G0168": [],
+    "G3667": [
+      "beginner",
+      "intermediate"
+    ],
+    "G1775": [],
+    "G1408": [],
+    "G1466": [],
+    "G0484": [],
+    "G0865": [],
+    "G0491": [],
+    "G0866": [],
+    "G0996": [],
+    "N05": [],
+    "G2611": [],
+    "G0324": [],
+    "G0427": [],
+    "G0424": [],
+    "G0661": [],
+    "G1422": [],
+    "G0538": [],
+    "G0174": [],
+    "G0053": [],
+    "G2464": [],
+    "G0394": [],
+    "G0398": [],
+    "G0354": [
+      "advanced"
+    ],
+    "G0472": [
+      "intermediate",
+      "advanced"
+    ],
+    "G1761": [],
+    "G0826": [],
+    "G0257": [],
+    "G3639": [],
+    "G3288": [],
+    "G3418": [],
+    "G1355": [],
+    "G1346": [],
+    "G1410": [],
+    "G0007": [],
+    "G0153": [],
+    "G1347": [],
+    "G0977": [],
+    "G3237": [],
+    "G0178": [
+      "intermediate",
+      "advanced"
+    ],
+    "G0215": [],
+    "G0192": [],
+    "G0311": [],
+    "G0326": [],
+    "G0323": [],
+    "G0348": [],
+    "G0345": [],
+    "G0380": [
+      "beginner",
+      "intermediate",
+      "advanced"
+    ],
+    "G2317": [],
+    "G0396": [],
+    "G0355": [],
+    "G0379": [],
+    "G0794": [],
+    "G3300": [],
+    "G0988": [],
+    "G0180": [
+      "beginner",
+      "intermediate",
+      "advanced"
+    ],
+    "G1435": [],
+    "G1434": [],
+    "G0054": [
+      "advanced"
+    ],
+    "G0336": [
+      "beginner",
+      "intermediate"
+    ],
+    "G0769": [],
+    "G1456": [],
+    "G1438": [],
+    "G0553": [],
+    "G0774": [],
+    "G0716": [],
+    "G0362": [],
+    "G3679": [],
+    "G1399": [],
+    "G2705": [],
+    "G2706": [],
+    "G0519": [],
+    "G3420": [],
+    "G1391": [],
+    "G0738": [],
+    "G1385": [],
+    "G1392": [],
+    "G6003": [],
+    "G0107": [],
+    "G0980": [],
+    "G1730": [],
+    "G0118": [],
+    "G0189": [],
+    "G0293": [
+      "beginner",
+      "intermediate"
+    ],
+    "G1359": [],
+    "G1361": [],
+    "G3548": [],
+    "G0091": [],
+    "G0414": [
+      "intermediate",
+      "advanced"
+    ],
+    "G1685": [],
+    "G0069": [],
+    "G1353": [],
+    "G1015": [],
+    "G0536": [],
+    "G1405": [],
+    "G3147": [],
+    "G1364": [],
+    "G1388": [],
+    "G2567": [],
+    "G0544": [],
+    "G0371": [],
+    "G3665": [],
+    "G1587": [],
+    "G0070": [],
+    "G0081": [],
+    "G0195": [],
+    "G0209": [],
+    "G1646": [],
+    "G1647": [],
+    "G0372": [],
+    "G0384": [],
+    "G0402": [],
+    "G1663": [],
+    "G1414": [],
+    "G1627": [],
+    "G0452": [],
+    "G2287": [],
+    "G0036": [],
+    "G0296": [],
+    "G3545": [],
+    "G1281": [],
+    "G0388": [],
+    "G0520": [],
+    "G0546": [],
+    "G1425": [],
+    "G0754": [],
+    "G0758": [],
+    "G0764": [],
+    "G0072": [],
+    "G0374": [],
+    "G0305": [],
+    "G0721": [],
+    "G0991": [],
+    "G0017": [
+      "beginner"
+    ],
+    "G0970": [
+      "beginner"
+    ],
+    "G0015": [],
+    "G0688": [],
+    "G1432": [],
+    "G1429": [],
+    "G0974": [
+      "beginner"
+    ],
+    "G0983": [],
+    "G0208": [],
+    "G3563": [],
+    "G0073": [],
+    "G2285": [],
+    "G1700": [],
+    "G0528": [],
+    "G0975": [],
+    "G1273": [],
+    "G0259": [],
+    "G1274": [],
+    "G0471": [],
+    "G2398": [],
+    "G3211": [],
+    "G1701": [],
+    "G0642": [],
+    "G3021": [],
+    "G0699": [],
+    "G0725": [],
+    "G0778": [],
+    "G0806": [],
+    "G1311": [],
+    "G0172": [],
+    "G0490": [],
+    "G1564": [],
+    "G1512": [],
+    "G0613": [],
+    "G0415": [],
+    "G0689": [],
+    "G0378": [
+      "beginner",
+      "intermediate",
+      "advanced"
+    ],
+    "G3664": [],
+    "G0078": [
+      "advanced"
+    ],
+    "G0381": [
+      "beginner",
+      "intermediate"
+    ],
+    "G0677": [],
+    "G0084": [],
+    "N11": [
+      "beginner"
+    ],
+    "G0200": [
+      "beginner",
+      "intermediate"
+    ],
+    "G0386": [],
+    "G1319": [],
+    "G0049": [],
+    "G0139": [
+      "beginner",
+      "intermediate"
+    ],
+    "G3166": [],
+    "G3162": [],
+    "G0214": [],
+    "G0218": [],
+    "G0327": [],
+    "G0541": [],
+    "G1345": [],
+    "G0571": [],
+    "G0588": [],
+    "G1350": [
+      "beginner",
+      "intermediate"
+    ],
+    "G1585": [],
+    "G0845": [],
+    "G3012": [],
+    "G3219": [],
+    "G2397": [],
+    "G0547": [],
+    "G0997": [
+      "beginner"
+    ],
+    "G0148": [],
+    "G0219": [],
+    "G0404": [],
+    "G3546": [],
+    "G3547": [],
+    "G0405": [
+      "beginner",
+      "intermediate",
+      "advanced"
+    ],
+    "G0361": [
+      "beginner",
+      "intermediate",
+      "advanced"
+    ],
+    "G0587": [
+      "beginner",
+      "intermediate"
+    ],
+    "G3122": [],
+    "G0765": [],
+    "G0766": [],
+    "G0050": [],
+    "G0328": [],
+    "G0759": [],
+    "G0235": [],
+    "G0216": [],
+    "G0863": [],
+    "G0864": [],
+    "G1271": [],
+    "G3699": [],
+    "G1018": [],
+    "G0095": [
+      "intermediate",
+      "advanced"
+    ],
+    "G0220": [],
+    "G0329": [],
+    "G0604": [],
+    "G0767": [],
+    "G0002": [],
+    "G0222": [],
+    "G0223": [],
+    "G0691": [],
+    "G3544": [],
+    "G0664": [
+      "advanced"
+    ],
+    "G0286": [],
+    "G1403": [],
+    "G1489": [],
+    "G0851": [],
+    "G3204": [],
+    "G0981": [],
+    "G0992": [],
+    "G0071": [],
+    "G0495": [],
+    "G3202": [],
+    "G0507": [],
+    "G3203": [],
+    "G3201": [],
+    "G1758": [
+      "beginner",
+      "intermediate"
+    ],
+    "G0001": [],
+    "G3670": [
+      "advanced"
+    ],
+    "G3361": [
+      "intermediate"
+    ],
+    "G2142": [],
+    "G0035": [],
+    "G1721": [],
+    "G0067": [],
+    "G3888": [],
+    "G0542": [],
+    "G0776": [],
+    "N02": [],
+    "G0101": [],
+    "G1362": [],
+    "G1363": [],
+    "G2329": [],
+    "G1001": [],
+    "G0099": [],
+    "G0768": [],
+    "G0068": [],
+    "G0124": [],
+    "G3533": [
+      "beginner",
+      "intermediate"
+    ],
+    "G0411": [],
+    "G0413": [
+      "beginner",
+      "intermediate"
+    ],
+    "G2803": [],
+    "G0578": [
+      "beginner"
+    ],
+    "G0744": [],
+    "G1476": [],
+    "G0770": [
+      "beginner",
+      "intermediate"
+    ],
+    "G0786": [],
+    "G3222": [],
+    "G1003": [
+      "beginner"
+    ],
+    "G2311": [],
+    "G3291": [],
+    "G0063": [],
+    "G2805": [
+      "advanced"
+    ],
+    "G1008": [],
+    "G0114": [],
+    "G2796": [],
+    "G1009": [],
+    "G1023": [],
+    "G0432": [
+      "beginner",
+      "intermediate"
+    ],
+    "G3298": [],
+    "G1010": [],
+    "G0116": [],
+    "G0434": [],
+    "G1002": [],
+    "G3656": [],
+    "G3142": [],
+    "G0808": [
+      "beginner"
+    ],
+    "G0574": [],
+    "G3542": [],
+    "G0436": [],
+    "G3304": [],
+    "G0539": [],
+    "G3305": [
+      "advanced"
+    ],
+    "G0550": [],
+    "N03": [],
+    "G1389": [],
+    "G1418": [],
+    "G0443": [],
+    "G2312": [],
+    "G1582": [],
+    "G3214": [],
+    "G1468": [],
+    "G3218": [],
+    "G3215": [],
+    "G0474": [],
+    "G3640": [],
+    "G0813": [
+      "intermediate"
+    ],
+    "G0591": [],
+    "G0814": [
+      "intermediate",
+      "advanced"
+    ],
+    "G0092": [],
+    "G0109": [],
+    "G1771": [],
+    "G0149": [],
+    "G1727": [],
+    "G0231": [],
+    "G0306": [],
+    "G1733": [],
+    "G0351": [],
+    "G0423": [],
+    "G1748": [
+      "intermediate",
+      "advanced"
+    ],
+    "G0607": [
+      "beginner",
+      "intermediate"
+    ],
+    "G1752": [],
+    "G1723": [],
+    "G0817": [],
+    "G1011": [],
+    "G0094": [],
+    "G0112": [],
+    "G2399": [],
+    "G0243": [],
+    "G0583": [],
+    "G0307": [],
+    "G0236": [],
+    "G0331": [],
+    "G2802": [],
+    "G0985": [],
+    "G1007": [],
+    "G0990": [],
+    "G1013": [
+      "beginner"
+    ],
+    "G1313": [],
+    "G0120": [],
+    "G0123": [],
+    "G0246": [],
+    "G0363": [
+      "intermediate",
+      "advanced"
+    ],
+    "G0775": [],
+    "G0796": [],
+    "G0554": [],
+    "G3582": [
+      "advanced"
+    ],
+    "G3663": [],
+    "G0498": [
+      "beginner",
+      "intermediate"
+    ],
+    "G0356": [],
+    "G0464": [],
+    "G1686": [],
+    "G2616": [],
+    "G1428": [],
+    "G0994": [],
+    "G1016": [],
+    "G0082": [],
+    "G0104": [],
+    "G0126": [],
+    "G0210": [],
+    "G0224": [],
+    "G0247": [],
+    "G0365": [],
+    "G0368": [],
+    "G0366": [],
+    "G1441": [],
+    "G0367": [],
+    "G0369": [],
+    "G0397": [],
+    "G0358": [],
+    "G1415": [],
+    "G0364": [],
+    "G1017": [],
+    "G3541": [],
+    "G1494": [],
+    "G1545": [],
+    "N07": [],
+    "N13": [
+      "beginner"
+    ]
+  }
+}

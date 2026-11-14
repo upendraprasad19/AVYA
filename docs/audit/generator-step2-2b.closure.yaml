@@ -1,0 +1,56 @@
+# Closure ledger - generator-step2b-day-floor (Unit 2B, OI-452: the 3-exercise day floor). Plan
+# docs/plans/2026-11-13-generator-step2b-day-floor.md (v6), record docs/plan-reviews/generator-step2b-day-floor.md,
+# diagnose b3f1d8. Gate 40 (validate_audit_closure.dart).
+batch: generator-step2b-day-floor
+plan_review_record: docs/plan-reviews/generator-step2b-day-floor.md
+total_findings: 8
+closed_count: 8
+
+findings:
+  - id: 2B-F1-FLOOR
+    title: "F1: after pass A2 a day under min(3, its reach) rows seats remaining slots at 2 sets past a group's weekly top: no excess limit (d30), every phase (d31), up to its reach (d32), not bound by the clock (d33); never past a session cap, never a reservation-blocked slot"
+    terminal_state: closed_in_commit
+    commit: generator-step2b-day-floor@branch
+    verification: "session_set_allocator.dart _variant (the floor block); day_floor_behavioral_test.dart F1 (past the top, the session cap, the reservation, the clock and the label, the reach, the lighter phase, below 25 minutes); the gate files (no day under 3 in pairs p1 / p4 and the 30-minute repeat, weeks 1-4); mutants in the diagnose doc."
+
+  - id: 2B-F2-ORDER
+    title: "F2: the floor seats the slot with the fewest groups over their top, then the least excess, then the cheapest; ties to the lowest rank; no lead preference"
+    terminal_state: closed_in_commit
+    commit: generator-step2b-day-floor@branch
+    verification: "SessionSetAllocator.floorPrefers (pure, @visibleForTesting); day_floor_behavioral_test.dart F2 (each key decisive, a full tie keeps the earlier candidate, an isolation before compounds ranked above it, one group over before two)."
+
+  - id: 2B-F3-WORLDS
+    title: "F3: the Unit 2A worlds are chosen with the floor off, then the chosen A and B are re-run with it (B copying the floored A and its floorSeats); the 6-day path re-runs A"
+    terminal_state: closed_in_commit
+    commit: generator-step2b-day-floor@branch
+    verification: "_allocateLeadFirst (wA / wB, the floor re-runs); day_floor_behavioral_test.dart F3 (the capped world kept although the floored lead world would hold; B's copied days carry A's floor sets and floorSeats, both 2A paths)."
+
+  - id: 2B-F4-STATS
+    title: "F4: AllocationStats.floorSeats names each seat (name, sets, overTop, overClock); a floor seat is never in countForced; belowCount keeps the label pass A2 left (taken before the floor)"
+    terminal_state: closed_in_commit
+    commit: generator-step2b-day-floor@branch
+    verification: "_variant (labelBeforeFloor, floorSeats, the B copy); day_floor_behavioral_test.dart (overClock exact, the clock label kept where the floor changes what canForce sees, disjoint from countForced on every fixture through the oracle)."
+
+  - id: 2B-F5-KILL-SWITCH
+    title: "F5: kill switch disable_day_floor (PlanEngineFlags.dayFloorEnabled, default ON) and allocate(dayFloor:), in both 2A paths; OFF equals main 8a2e1c5a"
+    terminal_state: closed_in_commit
+    commit: generator-step2b-day-floor@branch
+    verification: "plan_engine_flags.dart dayFloorEnabled; day_floor_behavioral_test.dart F5 (absent ON, set OFF, the argument overrides, both 2A paths); the gate's floor-off digests over every gate persona equal main 8a2e1c5a (test/fixtures/day_floor_off_hashes.json, recorded on a detached 8a2e1c5a checkout); day_floor_kill_switch_test.dart pins the four disable_lead_first x disable_day_floor combinations on an injured sample. Deletion after the device check: OI-506."
+
+  - id: 2B-INVARIANT
+    title: "The budget invariant is restated (week <= top + the floor's over-top sets; the session cap holds; time <= budget + countForced + overClock seconds) and every test reader of the weekly top and the day's time goes through one shared oracle"
+    terminal_state: closed_in_commit
+    commit: generator-step2b-day-floor@branch
+    verification: "test/helpers/budget_invariant_oracle.dart; wired into session_set_budget_gate_test (time and week), session_set_budget_consumers_test, session_set_allocator_behavioral_test (seeded sweep; 12 floor seats pinned), session_set_budget_wiring_test, oi489_timed_hold_real_engine_test, quads_floor_6day_behavioral_test auditPlan, and the day-floor gate; lead_first_gate_test reads neither (checked)."
+
+  - id: 2B-RERECORD
+    title: "Every red the floor caused on the built tree is listed with its cause and re-recorded: kThinCeilings and the eight r6 ratchets to 0, count-band (e) and (m), quads credit consumers, four crafted allocator tests"
+    terminal_state: closed_in_commit
+    commit: generator-step2b-day-floor@branch
+    verification: "diagnose b3f1d8, section 'Every red on the built tree' (79 files run before any re-record: 1,014 passed, 41 red, each attributed to d30-d33); each crafted test keeps its original under dayFloor: false and pins the floor-on result."
+
+  - id: 2B-DOCS
+    title: "Docs: nested plan_engine/CLAUDE.md (the floor, the lead-protection sentence per d33), plan-engine-detail.md, naming_conventions.md, SoT day_floor, OI-452 archived, OI-506 minted for the kill switch's deletion"
+    terminal_state: closed_in_commit
+    commit: generator-step2b-day-floor@branch
+    verification: "the files named; SoT day_floor carries behavioral_test_path test/contracts/day_floor_behavioral_test.dart."

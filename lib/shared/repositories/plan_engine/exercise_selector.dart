@@ -1,0 +1,907 @@
+import 'package:flutter/foundation.dart';
+import 'package:icanbefitter/core/services/sync_flags.dart';
+import 'package:icanbefitter/core/utils/equipment_vocab.dart';
+
+import '../exercise_repository.dart';
+import 'core_list_selector.dart';
+import 'equipment_capability.dart';
+import 'injury_substitutes.dart';
+import 'models.dart';
+import 'same_movement.dart';
+import 'plan_engine_flags.dart';
+import 'thin_day_topup.dart';
+import 'training_history_analyzer.dart';
+
+/// Stage 2: the exercise picker. Every generation picks from the core lists ([pickV4] -> `_pickCoreList`, then the
+/// thin-day top-up [topUpDays]); a repeat phase pins the previous phase's names ([buildPinnedDays]). Unit 1B-F
+/// (docs/plans/2026-11-10-generator-1bf-flip.md) deleted the five-attempt cascade, its universal bodyweight pool, the
+/// L6 post-pass and the uncalled V3 `pick`.
+class ExerciseSelector {
+  // ── V4: Muscle-slot architecture ─────────────────────────────────
+
+  /// Picks every day's exercises from the core lists ([_pickCoreList]), then tops up an injured user's thin day
+  /// ([topUpDays]).
+  static List<PopulatedDay> pickV4({
+    required List<MuscleSlotDay> slotDays,
+    required ExerciseRepository exerciseRepo,
+    required String equipmentTier,
+    required String effectiveExp,
+    required int phase,
+    required String goal,
+    List<String> injuries = const [],
+    // ①.1d (Batch 11-C): curated injury-substitute preference inside [_selectCandidate]. Kill switch
+    // `disable_injury_substitute_pref`.
+    bool applyInjurySubstitutePreference = false,
+    // ⑥ slice B1: user-excluded equipment (canonical, floor-sanitized). Default `const {}` -> no drop. A HARD
+    // constraint on every pick path.
+    Set<String> exclusions = const {},
+    // ⑦ OI-89: the user's real capability set, or NULL for "do not enforce". REQUIRED (not defaulted) so a missed
+    // call site fails to COMPILE.
+    required Set<String>? capability,
+    // W3.4 (Batch 11-B): per-day previous-phase picks (LOWERCASED names), soft-avoided. null -> none. Only the
+    // fresh-advance caller passes it.
+    Map<int, ({List<String> a, List<String> b})>? previousPhaseByDay,
+    // W3.5 (Batch 12-B plateau rotation): plateaued compound NAMES (lowercased) soft-avoided on every day and
+    // variant. Default `{}`. Only generateV4 passes it.
+    Set<String> plateauAvoidNames = const {},
+    // OI-458: lowercased names the push / pull / shoulders_arms days BEFORE these slotDays hold, per variant. Only
+    // the repeat-phase fresh fill passes them (it calls this with ONE frame).
+    Set<String> earlierFeederNamesA = const {},
+    Set<String> earlierFeederNamesB = const {},
+  }) {
+    final rows = exerciseRepo.getAll();
+    final coreDays = _pickCoreList(
+      rows: rows,
+      slotDays: slotDays,
+      exerciseRepo: exerciseRepo,
+      equipmentTier: equipmentTier,
+      effectiveExp: effectiveExp,
+      phase: phase,
+      goal: goal,
+      injuries: injuries,
+      applyInjurySubstitutePreference: applyInjurySubstitutePreference,
+      exclusions: exclusions,
+      capability: capability,
+      previousPhaseByDay: previousPhaseByDay,
+      plateauAvoidNames: plateauAvoidNames,
+      earlierFeederNamesA: earlierFeederNamesA,
+      earlierFeederNamesB: earlierFeederNamesB,
+    );
+    // OI-401: an injured user's thin day is topped up, core-list rows first (generator step 1A, R4), with the
+    // 3-exercise floor.
+    return topUpDays(
+      coreDays,
+      slotDays: slotDays,
+      exerciseRepo: exerciseRepo,
+      equipmentTier: equipmentTier,
+      effectiveExp: effectiveExp,
+      phase: phase,
+      goal: goal,
+      injuries: injuries,
+      applyInjurySubstitutePreference: applyInjurySubstitutePreference,
+      exclusions: exclusions,
+      capability: capability,
+      previousPhaseByDay: previousPhaseByDay,
+      plateauAvoidNames: plateauAvoidNames,
+    );
+  }
+
+  /// OI-458: the day types whose picks an `upper` day soft-avoids. The 5-day
+  /// build_muscle split pairs 'Upper + Core' with a 'Shoulders + Arms' day.
+  static bool _feedsUpperAvoid(String dayType) =>
+      dayType == 'push' || dayType == 'pull' || dayType == 'shoulders_arms';
+
+  /// The picker (Batch B1; the only path since Unit 1B-F). Each slot takes the top of [CoreListSelector.rankedPool]
+  /// through [_selectCandidate]. Variant B SOFT-avoids A's names (they sort last, never excluded), so a slot whose
+  /// only core rows A used repeats A rather than drop. An emptied variant copies the other; a day with both variants
+  /// empty takes core rows of any level (B1 Ruling 12), and a day still empty is left to [topUpDays] (injured users).
+  /// L6 is a partition inside rankedPool: a demoted row sorts last, and so do the loaded versions of a demoted
+  /// original ([_demotedWithLoadedVersions]).
+  static List<PopulatedDay> _pickCoreList({
+    required List<Map<String, dynamic>> rows,
+    required List<MuscleSlotDay> slotDays,
+    required ExerciseRepository exerciseRepo,
+    required String equipmentTier,
+    required String effectiveExp,
+    required int phase,
+    required String goal,
+    required List<String> injuries,
+    required bool applyInjurySubstitutePreference,
+    required Set<String> exclusions,
+    required Set<String>? capability,
+    required Map<int, ({List<String> a, List<String> b})>? previousPhaseByDay,
+    required Set<String> plateauAvoidNames,
+    required Set<String> earlierFeederNamesA,
+    required Set<String> earlierFeederNamesB,
+  }) {
+    // ignore: invalid_use_of_visible_for_testing_member
+    final trace = CoreListSelector.debugTrace;
+    trace?.delegations++;
+    // Unit 1B-R kill switch `disable_loaded_wins`: read once per call, so every slot of this pick agrees.
+    final loadedWins = PlanEngineFlags.loadedWinsEnabled;
+    // L6: original-case names, compared exactly; a demoted original's loaded versions with it (Unit 1B-F, S1b-2).
+    final demoted = _demotedWithLoadedVersions(
+        phase >= 2 ? TrainingHistoryAnalyzer.demotedExercises() : const <String>{}, rows);
+    final demotedLower = {for (final n in demoted) n.toLowerCase()};
+    final result = <PopulatedDay>[];
+    // OI-458: an `upper` day soft-avoids the names the earlier push / pull days hold, per variant (lowercased).
+    final earlierPushPullA = <String>{...earlierFeederNamesA};
+    final earlierPushPullB = <String>{...earlierFeederNamesB};
+    // Unit 2C-a (d35, d46): the names every earlier day of this plan holds, per variant and `dayType` (lowercased), for a
+    // day whose `avoidEarlier` asks to soft-avoid them (`sameType`: the earlier days of its own type; `all`: every
+    // earlier day). Soft only: `_preferNovel` sorts them last, never `excludeNames`.
+    final earlierByTypeA = <String, Set<String>>{};
+    final earlierByTypeB = <String, Set<String>>{};
+    // Library Batch S1b-2: a loaded version and its original never share a day. The day / variant soft-avoid names
+    // (previous phase, upper-day feeders) carry their same-movement partners; the plateau names are a per-exercise
+    // preference and do not (plan Decision 2's table).
+    final sameMovement = SameMovement.fromRows(exerciseRepo.getAll());
+
+    for (var i = 0; i < slotDays.length; i++) {
+      final day = slotDays[i];
+      final hasB = day.slotsB != null;
+      final isUpper = day.dayType == 'upper';
+      Iterable<String> earlier(Map<String, Set<String>> byType) => switch (day.avoidEarlier) {
+            EarlierDayAvoid.none => const <String>[],
+            EarlierDayAvoid.sameType => byType[day.dayType] ?? const <String>{},
+            EarlierDayAvoid.all => byType.values.expand((names) => names),
+          };
+      final avoidA = {
+        ...sameMovement.expandLower({
+          ...(previousPhaseByDay?[i]?.a ?? const <String>[]),
+          if (isUpper) ...earlierPushPullA,
+          ...earlier(earlierByTypeA),
+        }),
+        ...plateauAvoidNames,
+      };
+      final avoidB = {
+        ...sameMovement.expandLower({
+          ...(previousPhaseByDay?[i]?.b ?? const <String>[]),
+          if (isUpper) ...earlierPushPullB,
+          ...earlier(earlierByTypeB),
+        }),
+        ...plateauAvoidNames,
+      };
+
+      List<PlannedExercise> fill(
+        List<MuscleSlot> slots,
+        String variant,
+        Set<String> avoid,
+        Set<String> softAvoid, {
+        bool anyCoreLevel = false,
+      }) {
+        final out = <PlannedExercise>[];
+        final picked = <String>{};
+        // The curated injury-substitute narrowing inside _selectCandidate
+        // re-sorts the pool, so the soft avoid and L6 must ALSO be avoid
+        // names there, or injured users bypass them.
+        final avoidNames = {
+          ...avoid,
+          for (final n in softAvoid) n.toLowerCase(),
+          ...demotedLower,
+        };
+        for (final slot in slots) {
+          for (var k = 0; k < slot.count; k++) {
+            final r = CoreListSelector.rankedPool(
+              rows: rows,
+              slot: slot,
+              level: effectiveExp,
+              phase: phase,
+              equipmentTier: equipmentTier,
+              capability: capability,
+              exclusions: exclusions,
+              isContraindicated: (row) => _isContraindicated(row, injuries),
+              pickedNames: picked,
+              demotedNames: demoted,
+              softAvoidNames: softAvoid,
+              // Unit 1B-R: the names `_selectCandidate` / `_preferNovel` will skip, so Ruling 3 measures against the
+              // loaded row that will actually be picked.
+              walkedNames: avoidNames,
+              anyCoreLevel: anyCoreLevel,
+              loadedWins: loadedWins,
+            );
+            Map<String, dynamic>? chosen;
+            if (r.source != 'drop') {
+              chosen = _selectCandidate(r.ordered,
+                  injuries: injuries,
+                  applyInjurySubstitutePreference:
+                      applyInjurySubstitutePreference,
+                  avoidNames: avoidNames);
+              out.add(_buildExercise(chosen,
+                  typeOverride: CoreListSelector.typeFor(chosen, slot)));
+              final chosenName = chosen['name'] as String? ?? '';
+              // S1b-2: the same-day hard set carries the chosen row's same-movement partner too.
+              picked
+                ..add(chosenName)
+                ..addAll(sameMovement.partnersOf(chosenName));
+            }
+            trace?.slots.add(CoreListTraceSlot(
+              day: i,
+              variant: variant,
+              slot: slot,
+              level: effectiveExp,
+              source: anyCoreLevel && r.source != 'drop' ? 'emergency' : r.source,
+              pickedId: chosen?['id'] as String?,
+              poolSize: r.ordered.length,
+              improvisedRemoved: r.improvisedRemoved,
+              nonImprovisedInPool: r.nonImprovisedInPool,
+              families: r.families,
+              pickedFamily: chosen?['variant_family'] as String?,
+              jumpRemoved: r.jumpRemoved,
+              jumpOnlyPool: r.jumpOnlyPool,
+              likeForLikeImplement: r.likeForLikeImplement,
+            ));
+          }
+        }
+        return out;
+      }
+
+      Set<String> softFor(List<PlannedExercise> a) => goal == 'strength'
+          ? const <String>{}
+          : sameMovement.expand({for (final e in a) e.exerciseName});
+
+      var a = fill(day.slotsA, 'A', avoidA, const {});
+      var b = hasB ? fill(day.slotsB!, 'B', avoidB, softFor(a)) : a;
+
+      // An emptied variant copies the other (one trace entry per variant).
+      void copyIfOneEmpty() {
+        if (!hasB) return;
+        if (a.isEmpty && b.isNotEmpty) {
+          a = b;
+          trace?.copied.add((day: i, variant: 'A'));
+        } else if (b.isEmpty && a.isNotEmpty) {
+          b = a;
+          trace?.copied.add((day: i, variant: 'B'));
+        }
+      }
+
+      copyIfOneEmpty();
+      if (a.isEmpty && b.isEmpty) {
+        a = fill(day.slotsA, 'A', avoidA, const {}, anyCoreLevel: true);
+        trace?.emergencyAnyLevel.add((day: i, variant: 'A'));
+        if (hasB) {
+          b = fill(day.slotsB!, 'B', avoidB, softFor(a), anyCoreLevel: true);
+          trace?.emergencyAnyLevel.add((day: i, variant: 'B'));
+        } else {
+          b = a;
+        }
+        copyIfOneEmpty();
+      }
+      (earlierByTypeA[day.dayType] ??= <String>{}).addAll(a.map((e) => e.exerciseName.toLowerCase()));
+      (earlierByTypeB[day.dayType] ??= <String>{}).addAll(b.map((e) => e.exerciseName.toLowerCase()));
+      if (_feedsUpperAvoid(day.dayType)) {
+        earlierPushPullA.addAll(a.map((e) => e.exerciseName.toLowerCase()));
+        earlierPushPullB.addAll(b.map((e) => e.exerciseName.toLowerCase()));
+      }
+
+      result.add(PopulatedDay(
+        name: day.name, focus: day.focus,
+        dayType: day.dayType, intensity: day.intensity,
+        exercisesA: a, exercisesB: b,
+      ));
+    }
+    return result;
+  }
+
+  /// Unit 1B-F (Ruling 7; S1b-2's L6 rule kept on the core path): a user who moved away from an ORIGINAL row is not
+  /// handed its loaded version in its place, so the loaded versions of each demoted original (rows whose
+  /// `same_movement_as` names the original's id) are demoted with it. One direction only: a demoted loaded version
+  /// does not demote its original. Exact names in, exact names out; [demoted] itself when nothing is added.
+  static Set<String> _demotedWithLoadedVersions(Set<String> demoted, List<Map<String, dynamic>> rows) {
+    if (demoted.isEmpty) return demoted;
+    final ids = <Object?>{
+      for (final r in rows)
+        if (demoted.contains(r['name'])) r['id'],
+    };
+    Set<String>? out;
+    for (final r in rows) {
+      final to = r['same_movement_as'];
+      final name = r['name'];
+      if (to is String && name is String && ids.contains(to) && !demoted.contains(name)) {
+        (out ??= {...demoted}).add(name);
+      }
+    }
+    return out ?? demoted;
+  }
+
+  /// ⑧ 8-A / UNIT 2-cap (W2.5 repeat-content) — build [PopulatedDay]s from a
+  /// PINNED exercise SELECTION instead of the [pickV4] picker.
+  ///
+  /// "Repeat the last phase" is implemented as: reuse the prior phase's exercise
+  /// NAMES, slotted into the CURRENT-profile split [frames], then let the normal
+  /// generateV4 tail run — so stage-0 [ProgressionResolver.resolve] re-decays the
+  /// ACTUAL last-logged weight BY NAME and periodization re-applies the wave. A
+  /// raw plan-blob copy would instead re-decay an already-cooked `suggested_weight`
+  /// (double-decay) AND bypass the injury/equipment filters that live INSIDE the
+  /// picker. Pinning only the SELECTION avoids both.
+  ///
+  /// Each day carries BOTH variant-A names (weeks 1 & 3) AND variant-B names
+  /// (weeks 2 & 4): the split alternates anterior/posterior emphasis across weeks
+  /// and [PeriodizationEngine] reads `exercisesB` for the B-weeks
+  /// (`useB = !is6Day && weekIdx∈{1,3}`), so a naive single-list `B == A` would make
+  /// a repeat's weeks 2/4 DUPLICATE weeks 1/3. When a day supplies no B names, B is
+  /// derived the way [pickV4] does — a fresh B-variant fill when `slotsB != null`,
+  /// else `B == A` (:557-566) — never a collapse.
+  ///
+  /// Because this bypasses [pickV4], it re-applies the three HARD constraints
+  /// (capability + explicit-lack + safety) the picker enforces — but NOT the soft
+  /// equipment-TIER match:
+  ///  - equipment capability (B1 Task 1) — `EquipmentCapability.canOfferInPicker`
+  ///    against [capability]: a library row must be performable; a user-authored
+  ///    custom with no recorded equipment is kept, one that records kit the
+  ///    user lacks is dropped. Null [capability] = do not enforce.
+  ///  - equipment-exclusion    (exercise_repository.dart:282-285) — the user's
+  ///    explicit `equipment_exclusions` (items they lack); a HARD constraint on
+  ///    every pick path.
+  ///  - injury contraindication (exercise_repository.dart:324-334) — applied
+  ///    UNGATED, as the picker applies it. A user who added an injury since the
+  ///    prior phase must never get the old contraindicated lift repeated. (The
+  ///    gated universal-pool skip this once contrasted with was deleted by Unit
+  ///    1B-F.)
+  ///  - equipment-TIER is deliberately NOT re-applied: it is a SOFT selection
+  ///    heuristic (the deleted cascade relaxed it; the picker reads capability
+  ///    instead), so re-filtering would silently DROP a pick from a faithful
+  ///    repeat. Cross-tier faithfulness is the
+  ///    CALLER's contract: UNIT 2-int gates the repeat on the prior phase's
+  ///    equipment-tier being UNCHANGED (alongside goal + daysPerWeek), so a
+  ///    tier-inappropriate pin never reaches here. Mirrors ⑥ B1's "equipment_tier
+  ///    filter UNTOUCHED" exclusion contract.
+  ///
+  /// A pinned name is resolved to its EXACT library row
+  /// ([ExerciseRepository.getByExactName]) or, failing that, the user's matching
+  /// custom exercise; a name absent from BOTH is DROPPED. If a variant ends up
+  /// empty (every pin dropped), it FRESH-FILLS via the normal [pickV4] for
+  /// that single frame — so a repeat day degrades to at worst the SAME safe
+  /// slot-omission a fresh generation would produce, never a bespoke `(none)`.
+  ///
+  /// Day-cardinality: [frames] come from the CURRENT profile's daysPerWeek; pinned
+  /// entries map BY INDEX. A frame with no pinned entry (days↑) fresh-fills; pinned
+  /// entries beyond `frames.length` (days↓) are dropped.
+  ///
+  /// SHIP-DARK: reached only when a caller passes `pinnedExercisesByDay` to
+  /// generateV4 (none does in 8-A — inert; the `null` branch is byte-identical).
+  /// The repeat is faithful only when the prior phase's goal + daysPerWeek + tier
+  /// match the current profile (`intensity`/`dayType` come from the current frame)
+  /// — the caller (UNIT 2-int) gates on that.
+  static List<PopulatedDay> buildPinnedDays({
+    required List<MuscleSlotDay> frames,
+    required Map<int, ({List<String> a, List<String> b})> pinnedByDay,
+    required ExerciseRepository exerciseRepo,
+    required String equipmentTier,
+    required String effectiveExp,
+    required int phase,
+    required String goal,
+    List<String> injuries = const [],
+    bool applyInjurySubstitutePreference = false, // ①.1d (Batch 11-C) — fresh-fill only
+    Set<String> exclusions = const {},
+    // ⑦ OI-89: capability set, or NULL for 'do not enforce'. REQUIRED so a
+    // missed call site fails to COMPILE — a defaulted parameter is exactly
+    // how buildPinnedDays stayed unfloored through three earlier drafts.
+    required Set<String>? capability,
+  }) {
+    final result = <PopulatedDay>[];
+    // Custom exercises are scanned at most ONCE (lazily, on the first library miss).
+    List<Map<String, dynamic>>? customsCache;
+    List<Map<String, dynamic>> customs() =>
+        customsCache ??= exerciseRepo.getCustomExercises();
+
+    // Resolve a pinned NAME list → built exercises, re-applying the HARD filters the
+    // picker enforces: capability + equipment-EXCLUSION + UNGATED injury. Tier is
+    // NOT re-applied (soft; the caller guarantees same-tier). A name
+    // absent from BOTH the library and the user's customs is dropped.
+    List<PlannedExercise> resolve(List<String> names) {
+      final picked = <PlannedExercise>[];
+      final seen = <String>{}; // per-variant dedupe
+      for (final name in names) {
+        final lower = name.trim().toLowerCase();
+        if (lower.isEmpty || !seen.add(lower)) continue;
+        Map<String, dynamic>? row = exerciseRepo.getByExactName(name);
+        var isCustom = false;
+        if (row == null) {
+          for (final c in customs()) {
+            if ((c['name'] as String?)?.trim().toLowerCase() == lower) {
+              row = c;
+              isCustom = true;
+              break;
+            }
+          }
+        }
+        if (row == null) continue; // absent library + custom → drop the pin.
+        // 0. capability (B1 Task 1). A user-authored custom with no recorded
+        // equipment is kept (the creation sheet stores `[]`); a custom that
+        // records kit the user lacks is dropped like a library row.
+        if (capability != null &&
+            !EquipmentCapability.canOfferInPicker(
+                row['equipment_needed'], capability,
+                isCustom: isCustom)) {
+          continue;
+        }
+        // 1. equipment-exclusion (exercise_repository.dart:282-285).
+        if (exclusions.isNotEmpty &&
+            EquipmentVocab.fromProfile(row['equipment_needed'])
+                .any(exclusions.contains)) {
+          continue;
+        }
+        // 2. injury (exercise_repository.dart:324-334) — UNGATED (see docstring).
+        if (_isContraindicated(row, injuries)) continue;
+        picked.add(
+          isCustom ? _buildCustomExercise(row, 'A') : _buildExercise(row),
+        );
+      }
+      return picked;
+    }
+
+    final feederNamesA = <String>{};
+    final feederNamesB = <String>{};
+    for (var i = 0; i < frames.length; i++) {
+      final frame = frames[i];
+      final pins = pinnedByDay[i];
+
+      // A fresh single-frame pick, computed at most once per frame — for the MF-1
+      // empty-variant fill AND the B-variant fallback (so weeks 2/4 never collapse
+      // onto weeks 1/3). pickV4 emits exactly one PopulatedDay per slotDay.
+      PopulatedDay? freshCache;
+      PopulatedDay fresh() => freshCache ??= pickV4(
+            // OI-458: this call sees ONE frame, so hand it what the earlier
+            // push / pull / shoulders_arms frames of this plan hold.
+            earlierFeederNamesA: feederNamesA,
+            earlierFeederNamesB: feederNamesB,
+            slotDays: [frame],
+            exerciseRepo: exerciseRepo,
+            equipmentTier: equipmentTier,
+            effectiveExp: effectiveExp,
+            phase: phase,
+            goal: goal,
+            injuries: injuries,
+            applyInjurySubstitutePreference: applyInjurySubstitutePreference,
+            exclusions: exclusions,
+            capability: capability,
+          ).first;
+
+      // Variant A (weeks 1 & 3). Empty (all pins dropped) → fresh-fill (MF-1).
+      var exercisesA = resolve(pins?.a ?? const []);
+      if (exercisesA.isEmpty) exercisesA = fresh().exercisesA;
+
+      // Variant B (weeks 2 & 4). Prefer the pinned B; else derive it the way pickV4
+      // does — a fresh B-variant when slotsB≠null (NEVER `B = A`, which would
+      // duplicate weeks 1/3), or B==A when the split has no B-slots (:557-566).
+      final bNames = pins?.b ?? const <String>[];
+      List<PlannedExercise> exercisesB;
+      if (bNames.isNotEmpty) {
+        exercisesB = resolve(bNames);
+        if (exercisesB.isEmpty) {
+          exercisesB = frame.slotsB != null ? fresh().exercisesB : exercisesA;
+        }
+      } else if (frame.slotsB == null) {
+        exercisesB = exercisesA;
+      } else {
+        exercisesB = fresh().exercisesB;
+      }
+
+      if (_feedsUpperAvoid(frame.dayType)) {
+        feederNamesA.addAll(exercisesA.map((e) => e.exerciseName.toLowerCase()));
+        feederNamesB.addAll(exercisesB.map((e) => e.exerciseName.toLowerCase()));
+      }
+
+      result.add(PopulatedDay(
+        name: frame.name,
+        focus: frame.focus,
+        dayType: frame.dayType,
+        intensity: frame.intensity,
+        exercisesA: exercisesA,
+        exercisesB: exercisesB,
+      ));
+    }
+
+    // OI-401: a variant left with 1 or 2 surviving pins is never refilled above
+    // (only an EMPTY variant is), so the top-up covers it here. With the core-list
+    // pool ON the repeat phase is core-list world too (generator step 1A, R4);
+    // OFF short-circuits to false (byte-identical).
+    return topUpDays(
+      result,
+      slotDays: frames,
+      exerciseRepo: exerciseRepo,
+      equipmentTier: equipmentTier,
+      effectiveExp: effectiveExp,
+      phase: phase,
+      goal: goal,
+      injuries: injuries,
+      applyInjurySubstitutePreference: applyInjurySubstitutePreference,
+      exclusions: exclusions,
+      capability: capability,
+    );
+  }
+
+  // ── OI-401 thin-day top-up ─────────────────────────────────────────
+
+  /// OI-401 (founder option b, 2026-10-23): top up an injured user's thin day.
+  ///
+  /// The injury filter drops a slot when no safe candidate exists (the
+  /// safe-omission rule), and nothing refills the day afterwards, so an injured
+  /// user could get one or two exercises, or none. This post-pass runs on the
+  /// finished [days] at the two places a day list leaves the selector ([pickV4]'s
+  /// `_pickCoreList` return and [buildPinnedDays]).
+  /// Per variant (A and B separately) with fewer than [ThinDayTopUp.floor]
+  /// exercises it adds safe moves through `queryV4`'s filters (injury,
+  /// capability, exclusions, experience), core rows first (R4): first the day's own
+  /// (muscle, pattern) anchors, own pattern before its neighbours
+  /// ([ThinDayTopUp.neighbours]); then `core`; then it stops, so a day the stages
+  /// cannot lift stays short (OI-408).
+  ///
+  /// Uninjured users get [days] back untouched (the same instance), as does a
+  /// call with the kill-switch `disable_thin_day_topup` set, a length mismatch
+  /// between [days] and [slotDays], or a list in which no day is thin.
+  ///
+  /// The avoid sets are SOFT (a re-order inside [_selectCandidate], never an
+  /// exclusion) and lower-cased here: A avoids the previous phase's picks, the
+  /// plateau names and B's names; B avoids the same plus A's names (A's AFTER
+  /// its own top-up). Both skip the other variant for `strength` goals, and A
+  /// skips B for an alias day (B IS A). The L6 demoted names are stronger: they
+  /// leave the candidate pool unless they are all that is left.
+  @visibleForTesting
+  static List<PopulatedDay> topUpDays(
+    List<PopulatedDay> days, {
+    required List<MuscleSlotDay> slotDays,
+    required ExerciseRepository exerciseRepo,
+    required String equipmentTier,
+    required String effectiveExp,
+    required int phase,
+    required String goal,
+    required List<String> injuries,
+    required bool applyInjurySubstitutePreference,
+    required Set<String> exclusions,
+    required Set<String>? capability,
+    Map<int, ({List<String> a, List<String> b})>? previousPhaseByDay,
+    Set<String> plateauAvoidNames = const {},
+  }) {
+    if (injuries.isEmpty) return days;
+    if (!PlanEngineFlags.thinDayTopupEnabled) return days;
+    if (days.length != slotDays.length) return days;
+
+    Set<String> lower(Iterable<String> xs) =>
+        {for (final x in xs) x.toLowerCase()};
+    // Library Batch S1b-2: the variant / day soft-avoid names carry their same-movement partners (built lazily, only
+    // when a day is thin); plateau and demoted names do not (plan Decision 2's table).
+    SameMovement? sameMovementCache;
+    Set<String> withPartners(Set<String> xs) =>
+        (sameMovementCache ??= SameMovement.fromRows(exerciseRepo.getAll())).expandLower(xs);
+    Set<String>? demoted;
+    var anyThin = false;
+    final out = <PopulatedDay>[];
+    for (var i = 0; i < days.length; i++) {
+      final d = days[i];
+      final aThin = ThinDayTopUp.applies(
+          injuries: injuries, count: d.exercisesA.length);
+      final bThin = ThinDayTopUp.applies(
+          injuries: injuries, count: d.exercisesB.length);
+      if (!aThin && !bThin) {
+        out.add(d);
+        continue;
+      }
+      anyThin = true;
+      // Read lazily and once per call: only a thin day in phase 2+ needs it.
+      // A demoted original's loaded versions are demoted with it (Unit 1B-F, as in [_pickCoreList]).
+      demoted ??= phase >= 2
+          ? lower(_demotedWithLoadedVersions(TrainingHistoryAnalyzer.demotedExercises(), exerciseRepo.getAll()))
+          : const <String>{};
+      final slots = slotDays[i];
+      final alias = identical(d.exercisesA, d.exercisesB);
+      final strength = goal == 'strength';
+      final plateau = lower(plateauAvoidNames);
+      var a = d.exercisesA;
+      var b = d.exercisesB;
+      if (aThin) {
+        a = _topUpVariant(
+          a,
+          slots.slotsA,
+          {
+            ...withPartners({
+              ...lower(previousPhaseByDay?[i]?.a ?? const <String>[]),
+              if (!alias && !strength) ...lower(b.map((e) => e.exerciseName)),
+            }),
+            ...plateau,
+          },
+          demoted,
+          exerciseRepo, equipmentTier, effectiveExp, phase, injuries,
+          applyInjurySubstitutePreference, exclusions, capability,
+        );
+      }
+      if (alias) {
+        b = a;
+      } else if (bThin) {
+        b = _topUpVariant(
+          b,
+          slots.slotsB ?? slots.slotsA,
+          {
+            ...withPartners({
+              ...lower(previousPhaseByDay?[i]?.b ?? const <String>[]),
+              if (!strength) ...lower(a.map((e) => e.exerciseName)),
+            }),
+            ...plateau,
+          },
+          demoted,
+          exerciseRepo, equipmentTier, effectiveExp, phase, injuries,
+          applyInjurySubstitutePreference, exclusions, capability,
+        );
+      }
+      out.add(PopulatedDay(
+        name: d.name,
+        focus: d.focus,
+        dayType: d.dayType,
+        intensity: d.intensity,
+        exercisesA: a,
+        exercisesB: b,
+      ));
+    }
+    return anyThin ? out : days;
+  }
+
+  /// One variant's top-up (see [topUpDays]). Candidates only ever shrink as moves
+  /// are picked, so a (pattern, muscle) query that returns nothing is never
+  /// repeated for this variant.
+  static List<PlannedExercise> _topUpVariant(
+    List<PlannedExercise> current,
+    List<MuscleSlot> slots,
+    Set<String> softAvoid,
+    Set<String> demoted,
+    ExerciseRepository repo,
+    String equipmentTier,
+    String effectiveExp,
+    int phase,
+    List<String> injuries,
+    bool applyInjurySubstitutePreference,
+    Set<String> exclusions,
+    Set<String>? capability,
+  ) {
+    final out = [...current];
+    final picked = {for (final e in current) e.exerciseName};
+    // Generator step 1A, R4: the ladder below runs twice: pass 1 keeps only rows on a core list at the user's level
+    // or an easier one; pass 2, reached only while the variant is still under the floor, is the full ladder with a
+    // FRESH memo, so a key that held no core row is retried. The floor is unchanged.
+    var exhausted = <String>{};
+
+    bool addFrom(String pattern, String? muscle, {required bool coreOnly}) {
+      final key = '$pattern|${muscle ?? ''}';
+      if (exhausted.contains(key)) return false;
+      var cands = const <Map<String, dynamic>>[];
+      // Phase 1 asks for foundational rows first (a beginner gets Plank before
+      // Farmers Carry), then relaxes, as the deleted cascade's attempts did.
+      // The core stage does so in EVERY phase: the deleted cascade typed its core slots
+      // 'isolation', the top-up has no slot type, and queryV4 sorts compound
+      // first, so from phase 2 an advanced user was handed Dragon Flag or L-Sit
+      // Hold (B-pass F1). A skill or olympic row is never a filler at any stage.
+      final foundationalFirst = phase == 1 || pattern == 'core';
+      for (final foundational in [if (foundationalFirst) true, false]) {
+        cands = [
+          for (final c in repo.queryV4(
+            movementPattern: pattern,
+            targetMuscle: muscle,
+            equipmentTier: equipmentTier,
+            suitableFor: effectiveExp == 'advanced' ? null : effectiveExp,
+            foundationalOnly: foundational,
+            excludeNames: picked,
+            injuryExclusions: injuries,
+            exclusions: exclusions,
+            capability: capability,
+          ))
+            if (c['discipline'] != 'calisthenics_skill' &&
+                c['discipline'] != 'olympic' &&
+                (!coreOnly ||
+                    CoreListSelector.isCoreAtOrEasier(c, effectiveExp)))
+              c
+        ];
+        if (cands.isNotEmpty) break;
+      }
+      if (cands.isEmpty) {
+        exhausted.add(key);
+        return false;
+      }
+      // L6 (the picker sorts a swapped-out pick last; this runs after it): a
+      // demoted name, and a demoted original's loaded versions, are topped back in
+      // only when they are the sole candidates left. A soft avoid
+      // would not do: the injury-substitute preference narrows the pool first.
+      final fresh = [
+        for (final c in cands)
+          if (!demoted.contains(((c['name'] as String?) ?? '').toLowerCase())) c
+      ];
+      final chosen = _selectCandidate(fresh.isNotEmpty ? fresh : cands,
+          injuries: injuries,
+          applyInjurySubstitutePreference: applyInjurySubstitutePreference,
+          avoidNames: softAvoid);
+      out.add(_buildExercise(chosen));
+      picked.add(chosen['name'] as String? ?? '');
+      return true;
+    }
+
+    final anchors = ThinDayTopUp.anchors(slots);
+    void ladder({required bool coreOnly}) {
+      exhausted = <String>{};
+      var progress = true;
+      while (out.length < ThinDayTopUp.floor && progress) {
+        progress = false;
+        for (final anchor in anchors) {
+          if (out.length >= ThinDayTopUp.floor) break;
+          final order = [
+            anchor.pattern,
+            ...(ThinDayTopUp.neighbours[anchor.pattern] ?? const <String>[]),
+          ];
+          for (final pattern in order) {
+            if (addFrom(pattern, anchor.muscle, coreOnly: coreOnly)) {
+              progress = true;
+              break;
+            }
+          }
+        }
+      }
+      while (out.length < ThinDayTopUp.floor) {
+        if (!addFrom('core', null, coreOnly: coreOnly)) break;
+      }
+    }
+
+    ladder(coreOnly: true);
+    ladder(coreOnly: false);
+    return out;
+  }
+
+  static List<String> _muscleTokens(Object? raw) {
+    if (raw is List) {
+      return raw
+          .map((m) => m.toString().toLowerCase().trim())
+          .where((m) => m.isNotEmpty)
+          .toList();
+    }
+    if (raw is String && raw.trim().isNotEmpty) {
+      return [raw.toLowerCase().trim()];
+    }
+    return const [];
+  }
+
+  /// Build a PlannedExercise from a user `custom_exercise_*` map — used only by
+  /// `buildPinnedDays` (a repeat pin that names a custom). Custom maps use
+  /// `default_logging_type` (sheet field) or `logging_type`.
+  static PlannedExercise _buildCustomExercise(
+    Map<String, dynamic> c,
+    String variant,
+  ) {
+    final equipRaw = c['equipment_needed'];
+    final equipList = equipRaw is List
+        ? equipRaw.map((e) => e.toString()).toList()
+        : <String>[];
+    final muscles = _muscleTokens(c['primary_muscles']);
+    return PlannedExercise(
+      exerciseId: c['id'] as String? ?? '',
+      exerciseName: c['name'] as String? ?? 'Custom',
+      loggingType: c['default_logging_type'] as String? ??
+          c['logging_type'] as String? ??
+          'weight_reps',
+      sets: c['default_sets'] as int? ?? 3,
+      reps: (c['default_reps'] ?? '10').toString(),
+      restSeconds: c['default_rest_secs'] as int? ?? 60,
+      durationSeconds: c['default_duration_seconds'] as int?,
+      category: c['category'] as String?,
+      equipmentNeeded: equipList,
+      primaryMuscles: muscles.isEmpty ? null : muscles,
+      variant: variant,
+      // c3e9a4: a pinned custom is a deliberate one (the previous phase held
+      // it); the L2 repair predicate keeps an exercise carrying this stamp.
+      // Behind the same kill switch as the strip, so setting it restores the
+      // generator output of the build before.
+      customOrigin: SyncFlags.l2CustomStripEnabled ? 'repeat_pin' : null,
+    );
+  }
+
+  /// Pick a candidate from a NON-EMPTY, already-safe (post injury-filter) pool: a [CoreListSelector.rankedPool]
+  /// order or a top-up `queryV4` result.
+  /// ①.1d (Batch 11-C): the injury-substitute preference narrows the POOL to the
+  /// curated, map-order-sorted subs (else the full candidate list).
+  /// W3.4 (Batch 11-B): `_preferNovel` then breaks ties WITHIN that pool toward a
+  /// same-pattern sibling NOT used by the previous phase (`avoidNames`).
+  /// Both OFF (avoidNames empty AND injury-sub off) → `candidates.first` (verbatim).
+  /// Cannot surface a contraindicated exercise (the list is already injury-filtered).
+  static Map<String, dynamic> _selectCandidate(
+    List<Map<String, dynamic>> candidates, {
+    required List<String> injuries,
+    required bool applyInjurySubstitutePreference,
+    Set<String> avoidNames = const {}, // W3.4 (Batch 11-B) cross-phase variety
+  }) {
+    var pool = candidates;
+    if (applyInjurySubstitutePreference) {
+      final prefs = InjurySubstitutes.preferredFor(injuries);
+      if (prefs.isNotEmpty) {
+        final subs = candidates
+            .where(
+                (c) => prefs.contains((c['name'] as String? ?? '').toLowerCase()))
+            .toList();
+        if (subs.isNotEmpty) {
+          // Honor the curated (foundational/joint-friendlier-first) order — NOT
+          // queryV4's compound/priority sort. Every sub is in prefs → indexOf >= 0.
+          subs.sort((a, b) => prefs
+              .indexOf((a['name'] as String? ?? '').toLowerCase())
+              .compareTo(prefs.indexOf((b['name'] as String? ?? '').toLowerCase())));
+          pool = subs;
+        }
+      }
+    }
+    return _preferNovel(pool, avoidNames);
+  }
+
+  /// W3.4 (Batch 11-B) cross-phase variety tiebreak: within an ALREADY-ordered,
+  /// NON-EMPTY [pool], prefer the first candidate NOT used by the previous phase
+  /// for this slot ([avoidNames], EXACT lowercased); if every remaining option was
+  /// last phase's pick, keep `pool.first` (BOUNDED — never empties, never a wrong
+  /// pattern). [avoidNames] empty → `pool.first` (verbatim, byte-identical).
+  static Map<String, dynamic> _preferNovel(
+    List<Map<String, dynamic>> pool,
+    Set<String> avoidNames,
+  ) {
+    if (avoidNames.isEmpty) return pool.first;
+    for (final c in pool) {
+      if (!avoidNames.contains((c['name'] as String? ?? '').toLowerCase())) {
+        return c;
+      }
+    }
+    return pool.first;
+  }
+
+  /// True when [ex]'s `injury_contraindications` intersects [injuries].
+  /// Mirrors the queryV4 injury match (exercise_repository.dart:288-294): exact
+  /// lowercase equality on canonical tokens. Callers pass an already-canonical
+  /// injury list (InjuryVocab.normalize upstream).
+  static bool _isContraindicated(
+    Map<String, dynamic> ex,
+    List<String> injuries,
+  ) {
+    if (injuries.isEmpty) return false;
+    final contra = ex['injury_contraindications'];
+    if (contra is! List || contra.isEmpty) return false;
+    for (final injury in injuries) {
+      final inj = injury.toLowerCase();
+      if (contra.any((c) => c.toString().toLowerCase() == inj)) return true;
+    }
+    return false;
+  }
+
+  /// Build a PlannedExercise from an exercise map.
+  static String? _extractFirst(dynamic field) {
+    if (field is List) return field.isNotEmpty ? field.first.toString() : null;
+    return field as String?;
+  }
+
+  /// [typeOverride] (B1, OI-385): the core-list path passes
+  /// `CoreListSelector.typeFor`; null keeps the first `exercise_type` entry.
+  static PlannedExercise _buildExercise(Map<String, dynamic> ex,
+      {String? typeOverride}) {
+    final equipRaw = ex['equipment_needed'];
+    final equipList = equipRaw is List
+        ? equipRaw.map((e) => e.toString()).toList()
+        : <String>[];
+
+    final musclesRaw = ex['primary_muscles'];
+    final muscles = musclesRaw is List
+        ? musclesRaw.map((m) => m.toString()).toList()
+        : <String>[];
+
+    final cues = ex['coaching_cues'];
+    final notes = (cues is List && cues.isNotEmpty) ? cues.first.toString() : null;
+
+    // V4: carry exercise-specific rep range through the pipeline
+    final repRange = ex['rep_range'] as String?;
+
+    return PlannedExercise(
+      exerciseId: ex['id'] as String? ?? '',
+      exerciseName: ex['name'] as String? ?? 'Unknown',
+      loggingType: ex['logging_type'] as String? ?? 'weight_reps',
+      sets: ex['default_sets'] as int? ?? 3,
+      reps: ex['default_reps'] as String? ?? '10',
+      restSeconds: ex['default_rest_secs'] as int? ?? 60,
+      durationSeconds: ex['default_duration_secs'] as int?,
+      notes: notes,
+      exerciseType: typeOverride ?? _extractFirst(ex['exercise_type']),
+      category: ex['category'] as String?,
+      equipmentNeeded: equipList,
+      primaryMuscles: muscles,
+      variant: 'A',
+      repRange: repRange,
+    );
+  }
+}

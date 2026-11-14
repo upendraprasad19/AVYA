@@ -1,0 +1,96 @@
+# Closure ledger — Free-tier "Hold the Line" DISPLAY (Slices 2-6).
+# Gate 40 (validate_audit_closure.dart). One terminal_state per finding; no
+# `deferred:` key. Branch: hold-display. Slice 1 (the holdWeek writer, branch
+# hold-mechanic, merge 7ca850d9) shipped the DATA; this batch makes it visible.
+#
+# Scope boundary (NOT deferred findings — a different project): the 16 P0s in
+# docs/plan-reviews/free-tier-hold-findings.md are about UN-CLAMPING the phase
+# to 4+N weeks everywhere (getCurrentWeekNumber / getProgramWeek / totalWeeks
+# and their 11 consumers). This batch deliberately never touches those; it adds
+# a parallel hold-specific read path keyed on is_hold / hold_ordinal / date, so
+# none of those P0s are reachable from this diff. See D4.
+
+batch: hold-display
+plan_review_record: docs/plan-reviews/hold-display.md
+bpass_review: docs/reviews/hold-display-bpass.md
+total_findings: 10
+closed_count: 10
+
+_commit: &wip "hold-display (uncommitted)"
+_read_test: &rtest test/contracts/hold_display_read_path_test.dart
+
+findings:
+  - id: R1
+    title: "Read path: holdWeeks() / holdOrdinalForDate() / holdWeekSessionProgress() surface is_hold + hold_ordinal"
+    terminal_state: closed_in_commit
+    commit: *wip
+    verification: *rtest
+    notes: "additive to WorkoutScheduleReadService; every hold is materialized by the REAL holdWeek() writer in the test, so writer/reader drift fails the suite."
+  - id: R2
+    title: "Deload cadence: isDeloadHold(n) = n % 4 == 0 mirrors the writer, which never persists the boolean"
+    terminal_state: closed_in_commit
+    commit: *wip
+    verification: *rtest
+    notes: "pure + static so the write/display agreement is behaviorally testable; H4/H8/H12 pinned."
+  - id: R3
+    title: "Unlimited holds: the hold readers inherit none of the 12-week caps other readers apply (founder decision #4)"
+    terminal_state: closed_in_commit
+    commit: *wip
+    verification: *rtest
+    notes: "13-hold test asserts every ordinal survives; P0-13's 12-week ceiling is in readers this batch does not call."
+  - id: U1
+    title: "Today card: date-sourced branch so a hold week's workout is reachable at all"
+    terminal_state: closed_in_commit
+    commit: *wip
+    verification: *rtest
+    notes: "ROOT CAUSE — holdWeek stamps week=4+ordinal but CurrentPlanData.weeks holds only the phase's 4 weeks, so getWeek(5) is empty and the by-week today lookup silently finds nothing. Hero card takes workoutDayForDate(nowWall()) when holdStatus.isHolding; START WORKOUT unaffected."
+  - id: U2
+    title: "Chip strip: HoldChipGroup (H-n chips, ✓ on completed, dashed upcoming-deload preview, read-only week sheet)"
+    terminal_state: closed_in_commit
+    commit: *wip
+    verification: "test/contracts/week_selector_past_phases_test.dart (REGRESSION-ONLY — it pins the pre-existing past-phase render order this batch must not break; there is NO widget-level test of the hold chips themselves). Data feeding the chips is covered by hold_display_read_path_test.dart."
+    notes: "own file (week_selector.dart is already 1040 lines). Chips never drive selectedWeekProvider — week 5 would route to the 'hasn't started yet' placeholder. B-pass F3: the earlier `verification` here overclaimed — reworded rather than implying hold-UI coverage that does not exist."
+  - id: U3
+    title: "Header honesty: HOLDING · Hn pill; eyebrow drops the WK n OF m it cannot truthfully fill; SESSIONS progress from the hold week"
+    terminal_state: closed_in_commit
+    commit: *wip
+    verification: "test/contracts/phase_relative_week_label_test.dart (REGRESSION-ONLY — pins that the non-holding banner string survives; no widget test asserts the pill renders). Its inputs are covered by the holdStatusProvider tests in hold_display_read_path_test.dart."
+    notes: "during a hold the selected week is the phase's ORIGINAL week 4, so its day tallies describe a month-old week. Non-holding path renders verbatim, keeping the pinned 'WK ${plan.currentWeek} OF 4' banner string. B-pass F3: verification wording corrected to stop overclaiming."
+  - id: U4
+    title: "Entry point: hold promoted to an accented pill beside the upgrade CTA; the enable_hold_weeks branch de-duplicated to runFreeTierRepeatWrite"
+    terminal_state: closed_in_commit
+    commit: *wip
+    verification: *rtest
+    notes: "the flag branch previously existed in TWO independently-edited call sites (keep_training_phase1_action + plan_expired_card) — exactly the shape that drifts. Snackbar copy is flag-aware ('week 4 again' is false for a hold)."
+  - id: B1
+    title: "B-pass P1: hold chips lingered + were RELABELLED after a PRO phase advance — hold readers now scoped to the current plan window"
+    terminal_state: closed_in_commit
+    commit: *wip
+    verification: *rtest
+    notes: >
+      Found by the self-initiated ≥account B-pass (docs/reviews/hold-display-bpass.md F1).
+      _holdDatesByOrdinal scanned ALL is_hold rows ever written, so after a converting
+      user advanced to Phase 2 their Phase-1 holds still rendered — under the NEW phase's
+      numeral, and double-rendered alongside pastPhaseBlocks() which correctly owns them.
+      Fix: bound both _holdDatesByOrdinal and holdOrdinalForDate to `date >= plan_start`
+      (uniform across the whole hold read surface). Rows are NEVER deleted — they are real
+      history. Pinned by the "hold scoping" group.
+  - id: B2
+    title: "B-pass P2: holdStatusProvider's flag-OFF early return was never executed by a test, and cited a test file that did not exist"
+    terminal_state: closed_in_commit
+    commit: *wip
+    verification: *rtest
+    notes: >
+      B-pass F2. The one line carrying the entire ship-dark guarantee was untested, and the
+      doc comment cited `hold_status_flag_off_test.dart`, which was never written (the
+      unverified-claim class — memory/feedback_mistake_unverified_done_claims.md). Fixed:
+      real ProviderContainer tests for BOTH the rollback case (flag ON → holds taken → flag
+      OFF ⇒ provider still empty) and the flag-ON happy path; citation corrected to the
+      tests that actually exist. B-pass F4 (a wrong SoT line_range, 56-115 → 56-99) and F3
+      (closure verification wording that overclaimed hold-UI coverage) fixed in the same pass.
+  - id: D4
+    title: "Ship-dark: every new surface reads ONE branch point (holdStatus.isHolding), empty whenever the flag is OFF"
+    terminal_state: closed_in_commit
+    commit: *wip
+    verification: *rtest
+    notes: "flag-OFF group proves the legacy redoWeek4 path stamps is_hold on no row, so holdWeeks() is empty and every hold surface renders nothing. This is the §4.12.4 ship_dark_build evidence. Un-clamp work (P0-1/2/6/7/8/9/12/13) is out of scope by construction, not deferred — no clamped reader is modified."

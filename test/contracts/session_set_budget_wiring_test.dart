@@ -1,0 +1,333 @@
+// B2 Task 6 (docs/plans/2026-10-22-session-set-budget.md): `generateV4` wiring.
+//
+// The REAL PlanGenerator over the shipped library. Every session is sized by the
+// user's minutes (the flag and the OFF path were deleted with the flip,
+// 2026-11-02): the volume filter keeps every split slot, the allocator sizes the
+// days, and `apply`, titration and the warm-up take the same context. The generator
+// golden (`generator_golden_test.dart`) pins the whole output.
+//
+// The time oracle below is test-local and independent of the allocator: it prices
+// each exercise the plan finally carries with the Q4 constants, at the rest the
+// plan carries, from the library row's own type and rep range.
+@Timeout(Duration(minutes: 5))
+library;
+
+import 'dart:convert';
+import 'dart:io';
+
+import 'package:flutter/services.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:hive_flutter/hive_flutter.dart';
+
+import 'package:icanbefitter/core/services/guarded_box.dart';
+import 'package:icanbefitter/core/services/hive_service.dart';
+import 'package:icanbefitter/core/services/hive_user_session.dart';
+import 'package:icanbefitter/shared/repositories/plan_engine/budget_muscle_groups.dart';
+import 'package:icanbefitter/shared/repositories/plan_engine/models.dart';
+import 'package:icanbefitter/shared/repositories/plan_engine/plan_generator.dart';
+import 'package:icanbefitter/shared/repositories/plan_engine/session_budget.dart';
+import 'package:icanbefitter/shared/repositories/plan_engine/session_set_allocator.dart';
+
+import '../helpers/budget_invariant_oracle.dart';
+import '../helpers/generator_golden_personas.dart' show customPinName, namesByDay;
+
+
+
+void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
+  const testUser = 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee';
+  late Directory tempDir;
+  late Map<String, Map<String, dynamic>> byName;
+
+  setUpAll(() async {
+    tempDir = await Directory.systemTemp.createTemp('session_budget_wiring');
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(
+      const MethodChannel('plugins.flutter.io/path_provider'),
+      (_) async => tempDir.path,
+    );
+    Hive.init(tempDir.path);
+    GuardedBox.testBypassOwnership = true;
+    await Hive.openBox(HiveService.configBoxName);
+    await Hive.openBox(HiveService.migrationBoxName);
+    final exBox = await Hive.openBox(HiveService.exerciseBoxName);
+    final rows = (jsonDecode(File('assets/data/exercise_library.json').readAsStringSync())
+            as List)
+        .map((r) => Map<String, dynamic>.from(r as Map))
+        .toList();
+    for (final r in rows) {
+      await exBox.put((r['id'] ?? r['name']).toString(), r);
+    }
+    byName = {for (final r in rows) (r['name'] as String).toLowerCase(): r};
+    HiveService.instance.markInitializedForTests();
+    await HiveUserSession.openForUser(testUser);
+  });
+
+  tearDownAll(() async {
+    await HiveUserSession.closeAll();
+    GuardedBox.testBypassOwnership = false;
+    await Hive.close();
+    try {
+      if (tempDir.existsSync()) tempDir.deleteSync(recursive: true);
+    } catch (_) {}
+  });
+
+  tearDown(() async {
+    await HiveService.instance.configBox.delete('disable_thin_day_topup');
+    await HiveService.instance.userBox.delete('profile');
+  });
+
+  Phase gen({
+    String tier = 'full_gym',
+    String goal = 'build_muscle',
+    int days = 4,
+    String level = 'intermediate',
+    int phase = 1,
+    int? sessionDuration,
+    List<String> injuries = const [],
+    List<String> bodyFocus = const [],
+    Map<int, ({List<String> a, List<String> b})>? pins,
+  }) =>
+      PlanGenerator.instance.generateV4(
+        goal: goal,
+        equipment: tier,
+        daysPerWeek: days,
+        phase: phase,
+        experienceLevel: level,
+        injuries: injuries,
+        bodyFocus: bodyFocus,
+        sessionDuration: sessionDuration,
+        previousWeights: const {},
+        pinnedExercisesByDay: pins,
+      );
+
+  /// Modelled seconds of a day's main exercises, priced independently.
+  double mainSeconds(WorkoutDay d) {
+    var total = 0.0;
+    for (final e in d.exercises) {
+      final row = byName[e.exerciseName.toLowerCase()];
+      total += SessionBudget.exerciseSeconds(
+        archetype: row == null ? 'B' : SessionBudget.archetypeOfRow(row),
+        sets: e.sets,
+        restSeconds: e.restSeconds,
+      );
+    }
+    return total;
+  }
+
+  Iterable<WorkoutDay> allDays(Phase p) =>
+      [for (final w in p.weekPlans) ...w.workoutDays];
+
+  double budgetSeconds(int minutes) => (minutes - SessionBudget.warmCoolMinutes(minutes)) * 60;
+
+  /// Hard sets per budget group across one week of [p]. [sixDayBuildMuscle] applies the OI-454 credit
+  /// rule of that split (a quad-first exercise does not credit Glutes), exactly as the generator's ledger does.
+  Map<String, int> weeklyTotals(Phase p, int week, {bool sixDayBuildMuscle = false}) {
+    final per = <String, int>{};
+    for (final d in p.weekPlans[week].workoutDays) {
+      for (final e in d.exercises) {
+        final row = byName[e.exerciseName.toLowerCase()];
+        if (row == null) continue;
+        for (final g in BudgetMuscleGroups.creditedOf([
+          for (final m in (row['primary_muscles'] as List)) '$m',
+        ], quadPrimaryCreditsGlutes: !sixDayBuildMuscle)) {
+          per[g] = (per[g] ?? 0) + e.sets;
+        }
+      }
+    }
+    return per;
+  }
+
+  /// The most hard sets any one budget group gets in a single week-1 session, credited as the generator's ledger credits
+  /// them ([quadPrimaryCreditsGlutes], restated: Unit 2C-a's balanced week and the 6-day
+  /// build_muscle split do not count a squat's glute work against the Glutes cap).
+  int maxGroupSession(Phase p, {bool quadPrimaryCreditsGlutes = true}) {
+    var best = 0;
+    for (final d in p.weekPlans.first.workoutDays) {
+      final per = <String, int>{};
+      for (final e in d.exercises) {
+        final row = byName[e.exerciseName.toLowerCase()];
+        if (row == null) continue;
+        for (final g in BudgetMuscleGroups.creditedOf([
+          for (final m in (row['primary_muscles'] as List)) '$m',
+        ], quadPrimaryCreditsGlutes: quadPrimaryCreditsGlutes)) {
+          per[g] = (per[g] ?? 0) + e.sets;
+        }
+      }
+      for (final v in per.values) {
+        if (v > best) best = v;
+      }
+    }
+    return best;
+  }
+
+  group('the budget is always on (flag deleted 2026-11-02)', () {
+    test('every split slot is kept: a beginner 6-day plan holds more than the old fixed 4 exercises', () async {
+      final on = gen(days: 6, level: 'beginner', sessionDuration: 90);
+      expect(on.weekPlans.first.workoutDays.map((d) => d.exercises.length).reduce((a, b) => a > b ? a : b),
+          greaterThan(4));
+    });
+
+    test('the profile minutes size the sessions when the caller passes none', () async {
+      await HiveService.instance.userBox.put('profile', {'session_duration_minutes': 30});
+      SessionSetAllocator.debugLastStats = null;
+      final on = gen();
+      final stats = SessionSetAllocator.debugLastStats!;
+      // Unit 2A (2026-11-13): a day the count floor force-seated (pass A2, `countForced` of the variant the week reads:
+      // B in weeks 2 and 4 of this 4-day plan) may be up to `maxForcedOverSeconds` over (founder d26 / d28): eight
+      // day-weeks here, 10.8 to 75.6 s over since R1 seats the lead at 3 (pinned below). Every other day fits 30
+      // minutes; at 60 minutes every day would have 3000 s, far past either bound.
+      final over = <String, double>{};
+      for (final w in on.weekPlans) {
+        for (var i = 0; i < w.workoutDays.length; i++) {
+          final vs = stats[w.weekInPhase.isEven ? 'B' : 'A']!;
+          final forced = vs.countForced.containsKey(i);
+          // Unit 2B (the shared oracle): plus the overrun of the day's `overClock` floor seats (d33, no bound).
+          final bound = budgetSeconds(30) +
+              (forced ? SessionBudget.maxForcedOverSeconds : 0) +
+              BudgetInvariantOracle.floorOverClockSeconds(vs, i) +
+              1e-6;
+          final secs = mainSeconds(w.workoutDays[i]);
+          expect(secs, lessThanOrEqualTo(bound), reason: 'week ${w.weekInPhase} day $i');
+          if (secs > budgetSeconds(30) + 1e-6) over['${w.weekInPhase}/$i'] = ((secs - budgetSeconds(30)) * 10).roundToDouble() / 10;
+        }
+      }
+      // The excuse is used by exactly these days, by exactly these seconds (B review, seat 2 finding 3).
+      expect(over, <String, double>{
+        '1/0': 39.6, '1/1': 10.8, '1/2': 39.6, '2/2': 75.6, '2/3': 39.6, '3/0': 39.6, '3/1': 10.8, '3/2': 39.6,
+      });
+    });
+
+    test('a caller-supplied duration beats the profile', () async {
+      await HiveService.instance.userBox.put('profile', {'session_duration_minutes': 30});
+      final on = gen(sessionDuration: 90);
+      final longest = allDays(on).map(mainSeconds).reduce((a, b) => a > b ? a : b);
+      expect(longest, greaterThan(budgetSeconds(30)));
+      expect(longest, lessThanOrEqualTo(budgetSeconds(90) + 1e-6));
+    });
+
+    test('with no minutes anywhere the session is budgeted at 60', () async {
+      final on = gen();
+      final longest = allDays(on).map(mainSeconds).reduce((a, b) => a > b ? a : b);
+      expect(longest, lessThanOrEqualTo(budgetSeconds(60) + 1e-6));
+      expect(longest, greaterThan(budgetSeconds(30)));
+    });
+
+    test('phase 4 is a lighter phase: no group is above the band bottom, where phase 3 is', () async {
+      // An advanced build_muscle user: band 14-20. Phase 3 may go to the top; phase 4
+      // (a deload-archetype phase) holds every group to the bottom, 14.
+      final heavy = gen(days: 6, level: 'advanced', phase: 3, sessionDuration: 90);
+      final light = gen(days: 6, level: 'advanced', phase: 4, sessionDuration: 90);
+      int most(Map<String, int> m) => m.values.reduce((a, b) => a > b ? a : b);
+      // 6-day build_muscle: the Glutes top counts a squat's glute work as the quad exercise it is (OI-454).
+      expect(most(weeklyTotals(heavy, 0, sixDayBuildMuscle: true)), greaterThan(14), reason: 'fixture: phase 3 goes above 14');
+      expect(most(weeklyTotals(light, 0, sixDayBuildMuscle: true)), lessThanOrEqualTo(14));
+    });
+
+    test('a body focus is the focus group: Chest goes past the ordinary top of 16', () async {
+      // Unit 2C-a: on the 6-day split (unchanged). The 5-day balanced week (Push / Pull / Legs / Upper / Lower + Core,
+      // two chest days) holds 13 chest sets with a chest focus at 90 minutes; today's 5-day body-part split had a
+      // Chest day. A measured cost, reported with 2C-a.
+      final plain = gen(days: 6, sessionDuration: 90);
+      final focused = gen(days: 6, sessionDuration: 90, bodyFocus: const ['chest']);
+      expect(weeklyTotals(plain, 0)['Chest'] ?? 0, lessThanOrEqualTo(16));
+      expect(weeklyTotals(focused, 0)['Chest']!, greaterThan(16));
+      expect(weeklyTotals(focused, 0)['Chest']!, lessThanOrEqualTo(25));
+    });
+
+    test('the warm-up lead-in and the cool-down walk scale with the minutes', () async {
+      final on30 = gen(sessionDuration: 30);
+      final day = on30.weekPlans.first.workoutDays.first;
+      expect(day.warmup.first.reps, '60s');
+      expect(day.cooldown.first.reps, '60s');
+      final on90 = gen(sessionDuration: 90);
+      expect(on90.weekPlans.first.workoutDays.first.warmup.first.reps, '300s');
+    });
+
+    test('the volume-titration and plateau pass receives the same budget (source seam)', () {
+      // A source check proves PRESENCE only. The behaviour of a budgeted
+      // `applyToWeeks` is pinned in session_set_budget_consumers_test.dart.
+      final src = File('lib/shared/repositories/plan_engine/plan_generator.dart')
+          .readAsLinesSync()
+          .where((l) => !l.trimLeft().startsWith('//'))
+          .join(String.fromCharCode(10));
+      expect(src, contains('VolumeTitration.applyToWeeks(weekPlans, deltas, budget: budget)'));
+    });
+
+    test('the level is the EFFECTIVE level: a beginner at phase 5 is budgeted as advanced', () async {
+      // Session caps by level (build_muscle): beginner 6, advanced 10.
+      final first = gen(days: 3, level: 'beginner', phase: 1, sessionDuration: 90);
+      final later = gen(days: 3, level: 'beginner', phase: 5, sessionDuration: 90);
+      // build_muscle 3-day at 90 minutes is a balanced week (Unit 2C-a S2), restated: a quad-first row credits Quads,
+      // not Glutes.
+      const credit = false;
+      expect(maxGroupSession(first, quadPrimaryCreditsGlutes: credit), lessThanOrEqualTo(6));
+      expect(maxGroupSession(later, quadPrimaryCreditsGlutes: credit), greaterThan(6));
+      expect(maxGroupSession(later, quadPrimaryCreditsGlutes: credit), lessThanOrEqualTo(10));
+    });
+
+    test('repeat pins: library pins are budgeted, a custom pin keeps its sets', () async {
+      const customKey = 'custom_exercise_golden-band-row';
+      await HiveService.instance.customBox.put(customKey, {
+        'type': 'exercise',
+        'name': customPinName,
+        'equipment_needed': <String>[],
+        'primary_muscles': ['Lats'],
+        'movement_pattern': ['horizontal_pull'],
+        'logging_type': 'weight_reps',
+      });
+      try {
+        final prior = namesByDay(gen());
+        final day0 = prior[0]!;
+        prior[0] = (a: [...day0.a, customPinName], b: day0.b);
+        final pinnedLibrary = day0.a.length;
+
+        final on = gen(phase: 2, pins: prior, sessionDuration: 30);
+        final onDay = on.weekPlans[0].workoutDays[0].exercises;
+        final onCustom = onDay.firstWhere((e) => e.exerciseName == customPinName);
+        expect(onCustom.sets, 3); // its own, untouched
+        expect(onCustom.customOrigin, 'repeat_pin');
+        final library = onDay.where((e) => e.exerciseName != customPinName).length;
+        expect(library, lessThan(pinnedLibrary), reason: '30 minutes trims the library pins');
+        expect(library, greaterThanOrEqualTo(1));
+      } finally {
+        await HiveService.instance.customBox.delete(customKey);
+      }
+    });
+
+    test('a thin day of an injured user: the top-up fills it before the allocator, which budgets the add', () async {
+      final config = HiveService.instance.configBox;
+      // Built with the top-up's kill-switch set, then without it. 30 minutes, an
+      // intermediate on a bodyweight tier with a wrist and a shoulder injury, 3 days.
+      // Unit 1B-F (the core-list pool the only picker): the old persona (beginner, 5 days)
+      // was picked on the deleted cascade; on the core path its kill-switched build has an
+      // empty day. Re-derived by a probe: this persona's day 0 holds Russian Twist and
+      // Bicycle Crunch without the top-up, and the top-up adds Plank.
+      List<String> day0(Phase p) =>
+          [for (final e in p.weekPlans.first.workoutDays[0].exercises) e.exerciseName];
+      await config.put('disable_thin_day_topup', true);
+      final thin = gen(
+          tier: 'bodyweight',
+          level: 'intermediate',
+          days: 3,
+          injuries: ['wrist', 'shoulder'],
+          sessionDuration: 30);
+      expect(thin.weekPlans.first.workoutDays.every((d) => d.exercises.isNotEmpty), isTrue);
+      expect(day0(thin).length, 2, reason: 'fixture: the thin day, without the top-up');
+
+      await config.delete('disable_thin_day_topup');
+      final filled = gen(
+          tier: 'bodyweight',
+          level: 'intermediate',
+          days: 3,
+          injuries: ['wrist', 'shoulder'],
+          sessionDuration: 30);
+      expect(day0(filled).length, 3);
+      expect(day0(filled).toSet().containsAll(day0(thin)), isTrue);
+      // The add is budgeted like any generated exercise: the day still fits 30 minutes.
+      for (final w in filled.weekPlans) {
+        expect(mainSeconds(w.workoutDays[0]), lessThanOrEqualTo(budgetSeconds(30) + 1e-6));
+      }
+    });
+  });
+}

@@ -1,0 +1,91 @@
+# Closure ledger — food-logging-observations batch (branch
+# claude/food-logging-observations-126ab3): 11 B-pass/round-2/scoped-re-review
+# findings surfaced across the 10-task implementation. Gate 40
+# (validate_audit_closure.dart). One terminal_state per finding; no
+# `deferred:` key. 11 items, over the §4.2 >=4 threshold.
+#
+# No single diagnose-doc covers the whole batch — each fix has its own
+# diagnose-doc (rule 22), cited per finding below. Fix-round commits (all on
+# this branch, none pushed/merged): e3c96e08 / 7fa29427 / d9ca0c32 / 07941c4b /
+# f939fb3c / d522a3ca, plus a final doc-correction commit for FLO-11.
+
+batch: food-logging-observations
+total_findings: 11
+closed_count: 11
+
+findings:
+  - id: FLO-1
+    title: "hive_user_session.dart (Task 8, parallel Hive box open) is platform-tier per blast_radius.yaml, whose requires: list includes feature_flag — none existed"
+    terminal_state: closed_in_commit
+    commit: e3c96e08
+    verification: "Added `disable_parallel_hive_box_open` configBox kill-switch restoring the verbatim pre-Task-8 sequential loop when set. Mutation-proven: `flutter test test/contracts/hive_user_session_box_open_parallel_test.dart` — broke the sequential fallback to skip box 1, confirmed RED (`Expected: true Actual: <false>`), reverted, 5/5 green."
+    notes: "Diagnose: docs/diagnoses/2026-09-20-hive-user-session-parallel-open-missing-flag-f4c8b1.md. Found by B-pass reviewer A (lens 3, blast_radius_mismatch)."
+
+  - id: FLO-2
+    title: "ai-proxy/_shared/gemini_failure_alert.ts (Tasks 9-10, Telegram alert on Gemini exhaustion) is platform-tier — same feature_flag gap as FLO-1"
+    terminal_state: closed_in_commit
+    commit: 7fa29427
+    verification: "Added `DISABLE_GEMINI_FAILURE_ALERT` Deno env-secret check, returning before any Supabase call when set. Mutation-proven: `deno test --no-check --allow-all --node-modules-dir=none supabase/functions/_shared/gemini_failure_alert_test.ts` — removed the guard, confirmed RED (0 vs 1 inserted rows expected), reverted, 7/7 green."
+    notes: "Diagnose: docs/diagnoses/2026-09-20-gemini-failure-alert-missing-flag-b6e2a4.md. Found by B-pass reviewer A (lens 3, blast_radius_mismatch), same finding as FLO-1 on a second file."
+
+  - id: FLO-3
+    title: "food_search_sheet.dart has zero live callers (dead code) yet its own doc comments and todays_meals_card.dart's doc comment still describe it as a valid wiring target"
+    terminal_state: closed_in_commit
+    commit: e3c96e08
+    verification: "`grep -rn showFoodSearchSheet lib/ test/` returns zero call sites — nutrition_screen.dart's slot CTAs route exclusively through showLogFoodSheet per this same batch's Task 7. File deleted (`git show e3c96e08 --stat` shows the delete)."
+    notes: "Found by B-pass reviewer A (lens 2, writer_reader_drift). Doc-comment corrections for todays_meals_card.dart and meal_slot_inference.dart landed in commit f939fb3c (diagnose e1c5b8), since those doc fixes were part of the same review round as the vocabulary bundle."
+
+  - id: FLO-4
+    title: "moveMealLog's collision-merge branch recomputes total_* fields AFTER macroUpdates was already applied, silently discarding an explicit caller macro override on any retag-with-macros-edit"
+    terminal_state: closed_in_commit
+    commit: d9ca0c32
+    verification: "Moved the macroUpdates-apply block to after the collision-merge block closes. Mutation-proven: `flutter test test/contracts/nutrition_log_retag_writer_to_reader_test.dart --plain-name \"macroUpdates on top of a collision-merge\"` — reverted the fix, confirmed RED (`Expected: <42> Actual: <600>`), re-applied, full file green."
+    notes: "Diagnose: docs/diagnoses/2026-09-20-movemeal-log-macro-updates-clobbered-d9a3f7.md. Found by B-pass reviewer B (lens 6, guard_without_its_mirror), reproduced live before landing anywhere near main."
+
+  - id: FLO-5
+    title: "LogFoodSheet's header title reads the static widget.lockedSlot constructor field instead of the live mealTypeProvider value, so a tab's own slot selector can silently move the write destination while the header keeps showing the originally-tapped slot"
+    terminal_state: closed_in_commit
+    commit: f939fb3c
+    verification: "Changed to `ref.watch(mealTypeProvider)`. Mutation-proven: `flutter test test/widgets/log_food_sheet_locked_slot_test.dart` — reverted to `widget.lockedSlot!`, confirmed RED on the 'header title stays in sync' test, reverted, 4/4 green."
+    notes: "Diagnose: docs/diagnoses/2026-09-20-meal-slot-vocabulary-and-reactivity-e1c5b8.md. Found by B-pass reviewer B (lens 6, guard_without_its_mirror)."
+
+  - id: FLO-6
+    title: "inferMealSlot() has zero callers in lib/ yet its doc comment claims it is the AI/Scan auto-assign path, while MealTypeNotifier.build() carries its own inline duplicate of the same time-window logic"
+    terminal_state: closed_in_commit
+    commit: f939fb3c
+    verification: "MealTypeNotifier.build() now delegates to `inferMealSlot(DateTime.now())` directly instead of an inline duplicate, closing the drift and making the doc comment true. `grep -n 'inferMealSlot' lib/features/nutrition/providers/nutrition_provider.dart` confirms the single call site."
+    notes: "Diagnose: docs/diagnoses/2026-09-20-meal-slot-vocabulary-and-reactivity-e1c5b8.md. Found by B-pass reviewer B (lens 8, asserted_fixture_value / dead-code class)."
+
+  - id: FLO-7
+    title: "round-2 plan review: TodaysMealsCard's Snack card writes singular 'snack', NutritionWriteService only accepts plural 'snacks' — every write from that entry point silently dropped; LogFoodSheet.initState only re-infers the slot when locked, leaking a stale slot into the free-floating '+ LOG FOOD' entry; Edit Macros SAVE predicate compares against the raw meal_type field instead of the selector's own resolved initial value, false-positive-retagging legacy 'snack' rows"
+    terminal_state: closed_in_commit
+    commit: f939fb3c
+    verification: "MealTypeNotifier.select normalizes 'snack'->'snacks'; LogFoodSheet.initState unconditionally re-infers; resolveInitialMealSlot() extracted and used on both sides of the Edit Macros comparison. Mutation-proven individually for all 3 sub-fixes — see test/nutrition/meal_slot_vocabulary_test.dart and test/widgets/log_food_sheet_locked_slot_test.dart's per-fix mutation notes in docs/diagnoses/2026-09-20-meal-slot-vocabulary-and-reactivity-e1c5b8.md."
+    notes: "Diagnose: docs/diagnoses/2026-09-20-meal-slot-vocabulary-and-reactivity-e1c5b8.md. Three sub-findings from the round-2 context-blind plan review, bundled into one commit since they touch overlapping files in the same meal-slot layer."
+
+  - id: FLO-8
+    title: "reportGeminiExhaustion's summary/context_json used only the constant dedup-key string across all 3 ai-proxy request types, making three otherwise-identical Telegram alerts indistinguishable except by timestamp"
+    terminal_state: closed_in_commit
+    commit: 07941c4b
+    verification: "Added an `endpoint?` parameter used only in summary/context_json (never the dedup key), wired the 3 ai-proxy call sites to pass their own request-type string. Mutation-proven: dropped the `?? source` fallback, confirmed RED, reverted, 9/9 green."
+    notes: "Diagnose: docs/diagnoses/2026-09-20-gemini-failure-alert-missing-endpoint-c7f4d1.md. Found by B-pass reviewer B."
+
+  - id: FLO-9
+    title: "Task 8's own acceptance-criterion timing test ('boxes open concurrently, not sequentially') is not a reliable discriminator of true parallelism in a fast temp-dir test environment"
+    terminal_state: verified_clean
+    evidence: "Pre-existing, self-documented limitation (the test file's own comment already says its primary value is the source-shape assertion, the timing assertion is a secondary signal — 'out of scope to fake here' for making Hive box-open artificially slow). Not a NEW defect introduced by this batch. The FLO-1 feature-flag fix (same commit e3c96e08) makes the residual risk moot in practice: a production regression to true sequential behavior needs no code change to fix, just flipping the kill-switch. No further action taken."
+    notes: "Round-2 plan review finding P2-4. Accepted as a documented test-design tradeoff, not fixed further — fixing it would require making the test artificially slow the box-open, which the original Task 8 author already correctly assessed as out of scope for a unit test."
+
+  - id: FLO-10
+    title: "Two more ai-proxy Gemini call sites (plain chat ~:692, tool-calling geminiChatWithTools ~:1009) have no reportGeminiExhaustion wiring — the alert feature's stated purpose (\"alert on terminal Gemini failures\") is broader than what got wired"
+    terminal_state: closed_in_commit
+    commit: d522a3ca
+    verification: "Confirmed via `grep -n reportGeminiExhaustion supabase/functions/ai-proxy/index.ts` — exactly 3 call sites (lines 443/603/646), none at :692 or in the tool-calling path. Confirmed via Task 10's own brief (.superpowers/sdd/2026-09-20-food-logging-observations/task-10-brief.md) that the plan explicitly named exactly these 3 call sites in its Files section — this is a plan-scope boundary, not an omission. Filed as OI-226 (docs/audit/open_issues.md) with fix direction, so the gap has a tracked terminal state per §4.2 rather than living only in a review nobody re-reads."
+    notes: "Round-2 plan review finding P2-5. Closed by FILING (the finding itself is closed — the underlying gap stays OPEN as OI-226, same 'closed by being filed' pattern as unit4-cruft-triage's U4-6)."
+
+  - id: FLO-11
+    title: "Scoped re-review of the fix round (SDD closing pattern): nested lib/features/nutrition/CLAUDE.md still documented the deleted food_search_sheet.dart and mis-described log_food_sheet.dart's corrected reactive behavior as 'locks for the sheet's lifetime'; docs/sot_registry.yaml's nutrition_log_retag concept was cited by diagnose e1c5b8 for a writer/reader that isn't actually that concept's durable Hive/cloud contract; two file:line citations had drifted by one line; supabase/functions/CLAUDE.md never documented the new gemini_failure_alert feature at all"
+    terminal_state: closed_in_commit
+    commit: "food-logging-observations (uncommitted at authoring — lands in this fix-round's doc-correction commit)"
+    verification: "lib/features/nutrition/CLAUDE.md: `grep -n food_search_sheet lib/features/nutrition/CLAUDE.md` now returns zero hits; the log_food_sheet.dart and diet-plan-hint rows corrected to match current behavior. docs/diagnoses/2026-09-20-meal-slot-vocabulary-and-reactivity-e1c5b8.md: concept/sot_registry_entry changed to not_applicable (consistent with its own cross_account_guard field); line citations corrected to 1363/117 (verified via sed -n against the real files). supabase/functions/CLAUDE.md: added the gemini_failure_alert SoT contract row, including the OI-226 scope-boundary note."
+    notes: "Found by a fresh context-blind scoped re-review dispatched per the subagent-driven-development skill's own closing pattern ('Final findings? ONE fix dispatch, one scoped re-review, adjudicate residuals'). All 4 sub-findings verified independently before fixing (none taken on the reviewer's word alone). A 5th finding from the same review — a one-frame header-flicker risk on LogFoodSheet's very first build, from the deferred addPostFrameCallback seed write — was investigated, a fix drafted and mutation-tested, and REJECTED: the mutation reddened zero tests (Flutter's TestWidgetsFlutterBinding resolves initState's postFrameCallbacks within the same pumpWidget() call, so no widget-test pump() can observe the race window), so both the fix and its non-discriminating test were reverted per root CLAUDE.md §4.4 rule 21 rather than shipped unverified — documented in e1c5b8's own 'Residual, examined and rejected' section rather than silently dropped."

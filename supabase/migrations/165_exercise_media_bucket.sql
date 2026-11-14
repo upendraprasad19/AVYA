@@ -1,0 +1,123 @@
+-- Intent: Create the PRIVATE Storage bucket exercise-media (webp only, 1,500,000 bytes per object) and its one read policy, exercise_media_authenticated_read: a logged-in, non-anonymous user may read the exercise animations and nobody else may (no anon role, no public link, no write grant); this is the minimal login gate of Batch M1, which the app-delivery batch (M2) may replace with signed links issued per account.
+-- Destructive?: yes   -- the literal reading of "yes if it DROPs", as migration 154's header does: the block holds DROP POLICY IF EXISTS of this migration's own policy (absent on the first run) and an ON CONFLICT DO UPDATE of one bucket row (absent on the first run, which the apply procedure reads live first); no row is read or rewritten and no data is lost only if that bucket row is absent
+-- Rollback strategy: inline   -- commented block at the end of the file: drop the policy, then empty the bucket and delete it through the Storage API (scripts/upload_exercise_media.js --delete-bucket), because Storage owns the files behind its rows; needs its own explicit go (CLAUDE.md 4.3)
+-- Linked diagnose-doc: b4e7a2
+--
+-- exercise_media_bucket
+--
+-- Plan: docs/plans/2026-10-27-library-batch-m1-media-data.md (R7, R15). The live apply needs the founder's
+-- explicit go for that apply (CLAUDE.md 4.3). The migration NUMBER appears only in the file name, never in a
+-- line of this text, so the draft under docs/plans/library-batch-m/ and the file under supabase/migrations/ are
+-- byte-identical.
+--
+-- WHAT IT DOES. ONE statement (a DO block), so the bucket and its policy commit or roll back together:
+--
+--   (1) the bucket "exercise-media": private (public = false), 1,500,000 bytes per object (the largest of the
+--       616 Wardroom animations is 987,558 bytes), image/webp only. ON CONFLICT DO UPDATE makes a re-run set
+--       the same three values.
+--   (2) ONE policy on storage.objects, exercise_media_authenticated_read: FOR SELECT TO authenticated, for this
+--       bucket only, and only when the session is not an anonymous sign-in. The founder's rule is that only a
+--       person who has installed the app and logged in reaches these files. There is NO policy for the anon
+--       role and NONE for INSERT, UPDATE or DELETE: the upload tool uses the service-role key, which bypasses
+--       row level security, and the app never writes here.
+--   (3) a read-back self-check that raises (and so rolls the whole block back) if the bucket row or the policy is
+--       not what (1) and (2) say, or if any OTHER policy of storage.objects names this bucket.
+--
+-- WHO CAN READ. A logged-in, non-anonymous user, with their JWT on the authenticated Storage route or through a
+-- signed URL. Not: the anon role, a visitor holding only a file name or the public-route URL (a private bucket
+-- does not serve it), or an anonymous-sign-in session (the second clause of the policy). NOT STOPPED HERE: a
+-- scraper who signs up (sign-up is open); that is the per-account cap, the CAPTCHA and the Spend Cap alert of
+-- the plan's call 7. The clause reads the claim name "is_anonymous" from the JWT; that Auth emits that exact
+-- name is documented behaviour and UNVERIFIED here (the role probe builds the claim by hand, so it proves this
+-- SQL and not Auth). The (select auth.jwt()) wrap is the repo's initplan rule (migration 100).
+--
+-- BLIND SPOT OF THE TEXT PINS. test/contracts/exercise_media_bucket_private_test.dart pins this text and the
+-- other migrations that NAME the bucket. A later migration that does not name it (an unscoped policy on
+-- storage.objects for anon, a GRANT, an UPDATE of storage.buckets without the id) is not caught by text; the
+-- guard for that class is the role probe, test/sql/exercise_media_bucket_live_verify.sql, re-run after any
+-- storage-policy change.
+--
+-- LOCKS (a LOWER bound; see migration 154's header for the full account). Policy DDL on storage.objects takes
+-- ACCESS EXCLUSIVE locks on the auth, realtime and storage tables through the supautils hooks, even for a no-op
+-- DROP POLICY IF EXISTS; all are held until the block commits (milliseconds on an idle database). lock_timeout
+-- bounds each wait at 5 s and a timeout aborts the whole block cleanly, so a re-run is safe. Apply off-peak,
+-- with no test session active.
+--
+-- Verification after apply (founder-visible, read-only): test/sql/exercise_media_bucket_live_verify.sql writes its
+-- fixtures INSIDE one always-aborting DO block (nothing persists). The rehearsal that precedes the apply is the same
+-- file with this block's body inserted at its marker, plus test/sql/exercise_media_bucket_wrong_policies_rehearsal.sql
+-- (rehearsal only: five wrong variants must each go RED).
+
+DO $mig$
+BEGIN
+  -- a lock wait longer than 5 s aborts the whole block: nothing is applied, a re-run is idempotent
+  PERFORM set_config('lock_timeout', '5s', true);
+
+  -- (1) the private bucket
+  INSERT INTO storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+  VALUES ('exercise-media', 'exercise-media', false, 1500000, ARRAY['image/webp'])
+  ON CONFLICT (id) DO UPDATE SET
+    public = EXCLUDED.public,
+    file_size_limit = EXCLUDED.file_size_limit,
+    allowed_mime_types = EXCLUDED.allowed_mime_types;
+
+  -- (2) the one read policy (re-runnable: dropped and re-created under the same name)
+  DROP POLICY IF EXISTS exercise_media_authenticated_read ON storage.objects;
+  CREATE POLICY exercise_media_authenticated_read ON storage.objects
+    FOR SELECT TO authenticated
+    USING (
+      bucket_id = 'exercise-media'
+      AND coalesce(((select auth.jwt()) ->> 'is_anonymous')::boolean, false) = false
+    );
+
+  -- (3) read-back self-check: any miss raises and rolls the block back
+  IF NOT EXISTS (
+    SELECT 1 FROM storage.buckets
+    WHERE id = 'exercise-media'
+      AND public = false
+      AND file_size_limit = 1500000
+      AND allowed_mime_types = ARRAY['image/webp']
+  ) THEN
+    RAISE EXCEPTION 'exercise_media_bucket self-check: the bucket row is not private, 1500000 bytes, image/webp';
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies
+    WHERE schemaname = 'storage' AND tablename = 'objects'
+      AND policyname = 'exercise_media_authenticated_read'
+      AND cmd = 'SELECT'
+      AND roles = ARRAY['authenticated']::name[]
+      AND qual LIKE '%exercise-media%'
+      AND strpos(qual, 'is_anonymous') > 0
+  ) THEN
+    RAISE EXCEPTION 'exercise_media_bucket self-check: the read policy is missing or is not SELECT TO authenticated with the bucket and is_anonymous predicates';
+  END IF;
+
+  IF (
+    SELECT count(*) FROM pg_policies
+    WHERE schemaname = 'storage' AND tablename = 'objects'
+      AND (coalesce(qual, '') LIKE '%exercise-media%' OR coalesce(with_check, '') LIKE '%exercise-media%')
+  ) <> 1 THEN
+    RAISE EXCEPTION 'exercise_media_bucket self-check: some other policy of storage.objects names exercise-media';
+  END IF;
+END
+$mig$;
+
+-- ── Rollback (inline) ──────────────────────────────────────────────────────
+-- Needs its own explicit go (CLAUDE.md 4.3). Two steps, in this order:
+--
+--   1. Drop the policy (SQL, one statement; same lock footprint as the forward block, same off-peak advice):
+--
+--      DO $rb$
+--      BEGIN
+--        PERFORM set_config('lock_timeout', '5s', true);
+--        DROP POLICY IF EXISTS exercise_media_authenticated_read ON storage.objects;
+--      END
+--      $rb$;
+--
+--   2. Empty the bucket and delete it THROUGH THE STORAGE API, not SQL (Storage owns the files behind the
+--      rows, and a direct SQL delete from its tables is refused or would leave the files orphaned):
+--
+--      node scripts/upload_exercise_media.js --delete-bucket --execute --confirm-bucket exercise-media --report <path outside the repository>
+--
+-- Nothing else depends on the bucket before Batch M2; no table, function or app build references it.

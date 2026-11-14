@@ -1,0 +1,56 @@
+// usage: node classify.js attr_before.json attr_after.json golden_changed_keys.json
+const fs = require('fs');
+const [bp, ap, kp] = process.argv.slice(2);
+const B = JSON.parse(fs.readFileSync(bp, 'utf8'));
+const A = JSON.parse(fs.readFileSync(ap, 'utf8'));
+const changed = JSON.parse(fs.readFileSync(kp, 'utf8'));
+const key = (x) => x.join('\u0001');
+const res = { newPick: [], contentOnly: [], contentPlusOther: [], ripple: [], harnessBug: [], leftE230: [], hashSameButChanged: [] };
+const byGroup = {};
+for (const k of changed) {
+  const b = B[k], a = A[k];
+  if (!b || !a) throw new Error('missing key ' + k);
+  const e0 = b.ex.some((x) => x[1] === 'E230');
+  const e1 = a.ex.some((x) => x[1] === 'E230');
+  const bs = new Map(), as_ = new Map();
+  // multiset of (id,name,sha) so a moved position is not a change
+  const cnt = (list) => { const m = new Map(); for (const x of list) { const kk = x[1] + '|' + x[3]; m.set(kk, (m.get(kk) || 0) + 1); } return m; };
+  const mb = cnt(b.ex), ma = cnt(a.ex);
+  const diff = [];
+  for (const [kk, n] of mb) if ((ma.get(kk) || 0) < n) diff.push(['-', kk.split('|')[0]]);
+  for (const [kk, n] of ma) if ((mb.get(kk) || 0) < n) diff.push(['+', kk.split('|')[0]]);
+  const posDiff = b.ex.length !== a.ex.length || b.ex.some((x, i) => key(x) !== key(a.ex[i]));
+  const skDiff = b.sk !== a.sk;
+  const grp = k.split('|')[0];
+  byGroup[grp] = byGroup[grp] || { n: 0, newPick: 0, contentOnly: 0, contentPlusOther: 0, ripple: 0, harnessBug: 0 };
+  byGroup[grp].n++;
+  let cls;
+  if (!e0 && e1) cls = 'newPick';
+  else if (e0 && !e1) { res.leftE230.push(k); cls = 'ripple'; }
+  else if (e0 && e1) {
+    const e230diff = diff.filter((d) => d[1] === 'E230').length > 0;
+    const otherDiff = diff.filter((d) => d[1] !== 'E230').length > 0;
+    cls = e230diff ? (otherDiff || skDiff ? 'contentPlusOther' : 'contentOnly') : (diff.length || skDiff || posDiff ? 'ripple' : 'harnessBug');
+  } else {
+    cls = diff.length || skDiff || posDiff ? 'ripple' : 'harnessBug';
+  }
+  res[cls].push(k);
+  byGroup[grp][cls]++;
+}
+const out = {};
+for (const c of Object.keys(res)) out[c] = res[c].length;
+console.log('changed keys', changed.length, out);
+console.log(byGroup);
+for (const c of ['ripple', 'harnessBug', 'contentPlusOther', 'leftE230']) {
+  if (res[c].length) console.log(c, 'sample', res[c].slice(0, 6));
+}
+// what the new picks displaced, and what class 2 changed
+const disp = {};
+for (const k of res.newPick) {
+  const mb = new Map(), ma = new Map();
+  for (const x of B[k].ex) mb.set(x[1] + '|' + x[2], (mb.get(x[1] + '|' + x[2]) || 0) + 1);
+  for (const x of A[k].ex) ma.set(x[1] + '|' + x[2], (ma.get(x[1] + '|' + x[2]) || 0) + 1);
+  for (const [kk, n] of mb) if ((ma.get(kk) || 0) < n) disp[kk.split('|')[1]] = (disp[kk.split('|')[1]] || 0) + 1;
+}
+console.log('displaced (class 1, by name, counted per key):', Object.entries(disp).sort((x, y) => y[1] - x[1]).slice(0, 12));
+fs.writeFileSync(process.argv[5] || 'classify_out.json', JSON.stringify(res));

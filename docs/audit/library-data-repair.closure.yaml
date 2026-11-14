@@ -1,0 +1,182 @@
+# Closure ledger — library-data-repair (Batch A of the exercise-library programme)
+# Gate 40 (validate_audit_closure.dart). One terminal_state per item; no
+# `deferred:` key. Plan docs/plans/2026-10-22-library-data-repair.md, spec
+# docs/superpowers/specs/2026-10-21-exercise-library-comprehensive-design.md §9 row A.
+
+batch: library-data-repair
+plan_review_record: docs/plan-reviews/library-data-repair.md
+bpass_review: docs/reviews/library-data-repair-bpass.md
+diagnose_docs:
+  - docs/diagnoses/2026-10-22-library-text-shift-b7d3e1.md
+  - docs/diagnoses/2026-10-22-library-duplicates-46fc99.md
+  - docs/diagnoses/2026-10-22-library-label-typo-2390f5.md
+  - docs/diagnoses/2026-10-22-library-plate-frame-order-e7f118.md
+
+findings:
+  # ── The four data repairs ─────────────────────────────────────────
+  - id: A1
+    title: "136 library rows' text fields shifted one column; cues stored as one packed string (OI-149, corrected: recoverable)"
+    terminal_state: closed_in_commit
+    commit: 4514cf0c
+    verification: >
+      repairText un-shifts by file key order and splits every cue list; contract test 6/6 (RED
+      5/6 first), mutation reddened it. OI-149 archived to closed_issues.md with the correction.
+      Cloud copy fixed by migration 162 (A6).
+
+  - id: A2
+    title: "7 duplicate rows retired into their twins; name_aliases + merged_ids; seed prune; v12"
+    terminal_state: closed_in_commit
+    commit: ad896b42
+    verification: >
+      Four new tests (20) RED first; five mutations each reddened their test; the pick diff over
+      606 personas changed only expected classes (diagnose 46fc99, Task 5 section).
+
+  - id: A3
+    title: "E172 Dumbbell Side Bend and E163 Foam Roll IT Band labelled 'Lats'"
+    terminal_state: closed_in_commit
+    commit: 467dcb26
+    verification: >
+      library_label_typo_behavioral_test 2/2 over the real queryV4 (RED 0/2 first); mutation
+      (typo restored) reddened both.
+
+  - id: A4
+    title: "19 plates showed END before START; E207/E179 pointed at another movement's drawing"
+    terminal_state: closed_in_commit
+    commit: 7dab2e4b
+    verification: >
+      exercise_plate_swap_record_test against hashes recorded before the swap (RED 3/4 first);
+      two mutations reddened it; visual check of Pike Push Up and Pull Up rendered with headless
+      Edge.
+
+  - id: A5
+    title: "Generator verification of the data change (pick diff, scorecard gate, generator tests)"
+    terminal_state: closed_in_commit
+    commit: b62bb5c3
+    verification: >
+      238 changed picks in 203 personas, all in expected classes; scorecard gate PASS against the
+      frozen baseline (2,862 fallbacks, mean 86.2); 120/120 generator behavioural tests (IST).
+
+  - id: A6
+    title: "Cloud exercise_library carried the shifted text and the duplicates (migration 162)"
+    terminal_state: closed_in_commit
+    commit: a88b92c7
+    verification: >
+      Rehearsed on prod inside BEGIN/ROLLBACK (all checks true, live unchanged afterwards), then
+      applied (HTTP 201) on the founder's go; post-apply checks by UUID v5: 285 active, 7 retired
+      inactive, 7 aliases, E013 repaired, E165 = E216 cues, E260 fix intact. Ledger entry 162 in
+      the same commit.
+
+  # ── B-pass (docs/reviews/library-data-repair-bpass.md) ───────────
+  - id: B1
+    title: "P2 — 'Rollback: re-apply 125' was not an inverse (name_aliases, 126's E260 fix)"
+    terminal_state: closed_in_commit
+    commit: 8515a7f3
+    verification: "Inline three-step rollback block; header test RED on the old SQL, GREEN after regeneration."
+
+  - id: B2
+    title: "P2 — 'Destructive?: no' contradicts the template ('rewrites rows' is yes)"
+    terminal_state: closed_in_commit
+    commit: 8515a7f3
+    verification: "Header now 'yes'; the founder chose the prod rehearsal over a branch dry-run at the live-apply go."
+
+  - id: B3
+    title: "P2 — the cloud-seeded test was blind to the UPDATE order"
+    terminal_state: closed_in_commit
+    commit: 8515a7f3
+    verification: "Order test added; mutation (UPDATEs before the INSERT) reddened it."
+
+  - id: B4
+    title: "P2 — different-pattern twins' selection fields unpinned"
+    terminal_state: closed_in_commit
+    commit: 8515a7f3
+    verification: "E016/E216/E219/E220 pinned to pre-merge values; mutation (E219 gains Mid Back) reddened it."
+
+  - id: B5
+    title: "P2 — numeric-breathing tests: no positive control on the sheet, source-grep only on the panel"
+    terminal_state: closed_in_commit
+    commit: 8515a7f3
+    verification: "Sheet positive control added; new rendered panel test with mirror; mutation (guard -> false) reddened the synthetic case only."
+
+  - id: B6
+    title: "P2 — the prune trusted the build-time 'no shipped id in merged_ids' invariant"
+    terminal_state: closed_in_commit
+    commit: 8515a7f3
+    verification: "retiredLibraryIds subtracts shipped ids; new case RED first ({E241, E097}); mutation reddened it."
+
+  - id: B7
+    title: "P2 — stale counts (plates registry entry, two comments, target-focus CSV)"
+    terminal_state: closed_in_commit
+    commit: 8515a7f3
+    verification: "All four updated to the v12 numbers (156 rows / 152 slugs / 290 SVGs; 113 of 285 empty warm-ups; E172 Core, E163 Legs)."
+
+  # ── Surfaced, owned by Batch B ────────────────────────────────────
+  - id: OI-385
+    title: "27 library rows in slot patterns unreachable on attempts 1-2 (exercise_type calisthenics)"
+    terminal_state: upstream_blocked
+    blocker: "Batch B generator rework (spec §9 row B): making them reachable reshapes plans outside its ship-dark flag and ×2 review"
+    reopen_when: "Batch B's plan is approved"
+
+  - id: OI-386
+    title: "11 of 13 attempt-1 sub-focus strings match 0 rows (snake_case slot vs 'Long Head' data)"
+    terminal_state: upstream_blocked
+    blocker: "Batch B generator rework (spec §9 row B)"
+    reopen_when: "Batch B's plan is approved"
+
+  - id: OI-387
+    title: "6 kept bodyweight rows invisible to their slot label"
+    terminal_state: upstream_blocked
+    blocker: "Batch B equipment-aware pool: relabelling on today's pool hands towel moves to home/gym users via _preferNovel"
+    reopen_when: "Batch B's plan is approved"
+
+  - id: OI-388
+    title: "Gym plans serve bodyweight-only Self-Resisted curls/extensions (150/165 full_gym, 140/150 basic_gym)"
+    terminal_state: upstream_blocked
+    blocker: "Batch B core-list pool (spec §4.1); same counts before and after Batch A"
+    reopen_when: "Batch B's plan is approved"
+
+  # ── Checked and clean ─────────────────────────────────────────────
+  - id: V1
+    title: "By-name scans that bypass the repo see a retired name"
+    terminal_state: verified_clean
+    evidence: >
+      workout_write_service.dart:303-317, auth_session_bootstrapper.dart:1202,
+      logging_type_repair_migrator.dart:125 fall back to data-shape inference, which gives the
+      seven movements the same logging_type (diagnose 46fc99).
+
+  - id: V2
+    title: "Progression / PR series under a retired name do not join the kept name"
+    terminal_state: verified_clean
+    evidence: "Cloud holds 0 logs, sets or template rows under the retired names, ids or UUIDs (read-only, 2026-10-22); every account is a testing account (CLAUDE.md §1)."
+
+  - id: V3
+    title: "Stored plans that still hold a retired id"
+    terminal_state: verified_clean
+    evidence: >
+      8 of 20 test-account user_progress.plan_json blobs hold E225 and 1 holds E241; every by-id
+      reader is null-safe and the planned row's NAME resolves through the alias; no store build
+      ever shipped a pre-v12 library (diagnose 46fc99).
+
+  - id: V4
+    title: "E107 Hip Abduction Machine is now foundational and untagged for hip injuries"
+    terminal_state: verified_clean
+    evidence: "Founder 13-B carve-out keeps hip machines untagged (k13bKeptSafe); E225's 'hip' tag is not carried over by design (diagnose 46fc99)."
+
+  - id: V5
+    title: "Scorecard volume dimension 69.6 -> 69.2"
+    terminal_state: verified_clean
+    evidence: >
+      Gate passes, overall 86.2 unchanged. 87% is the kept V-Up's own 4-set prescription; ~0.1 is
+      a synonym the test scorer double counts while production titration and plateau scan
+      collect a SET of groups per row (measured by removing it and regenerating).
+
+  # ── Owed to the founder ───────────────────────────────────────────
+  - id: F1
+    title: "Device check after the next build"
+    terminal_state: blocked_on_user
+    reason: >
+      Founder: on a build from main, a repaired exercise shows separate cue bullets; Pike Push Up
+      START/END are right; search 'close-grip' finds Close Grip Bench Press; a coach form-cue
+      question returns real cues.
+
+total_findings: 23
+closed_count: 23

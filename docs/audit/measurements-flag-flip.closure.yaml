@@ -1,0 +1,71 @@
+# Closure ledger - measurements-flag-flip, the L2b flip of enable_body_measurements to default ON (2026-10-16). One terminal_state per
+# unit, no `deferred:` key. The rows that closed in the code commit carry the code commit's SHA (fa41470d), written by the stamp commit that follows it
+# (a commit cannot name its own SHA; the Landing B and C shape). The plan is docs/plans/measurements-flag-flip.md, its record
+# docs/plan-reviews/measurements-flag-flip.md, the B-pass docs/reviews/measurements-flag-flip-bpass.md (same commit as these rows).
+batch: measurements-flag-flip
+plan_review_record: docs/plan-reviews/measurements-flag-flip.md
+diagnose_docs: []
+total_findings: 14
+closed_count: 14
+
+findings:
+  - id: FLIP-CODE
+    title: "MeasurementFlags.bodyMeasurementsEnabled reads ON unless a stored bool false (absent or any non-bool value is ON; an unopened box or a thrown read is OFF); the dev panel row and toast read KILLED"
+    terminal_state: closed_in_commit
+    commit: fa41470d
+    verification: "lib/core/services/measurement_flags.dart (the getter), lib/features/dev/dev_panel_screen.dart (row and toast), test/contracts/measurement_flag_off_identity_test.dart (absent ON; false OFF; 'false', 'true', 0, 1, 0.5, 'off', 'on', a List and a Map ON; delete returns to ON; unopened OFF; the toast and row source pins)"
+  - id: TESTS
+    title: "the tests that assumed absent means OFF are rewritten, and the production default (the key never written) is exercised through the real widgets"
+    terminal_state: closed_in_commit
+    commit: fa41470d
+    verification: "test/contracts/measurement_flag_off_identity_test.dart, test/contracts/user_scoped_provider_rebuilds_on_auth_change_test.dart, test/contracts/day_rollover_provider_invalidation_behavioral_test.dart (fixture states false), plus the new rows 'the key never written (the default ON)' in test/home/measurement_slots_test.dart and test/ai_coach/measurement_chip_slot_test.dart; the full suite on the final tree: TZ=Asia/Kolkata flutter test --exclude-tags golden finished 9630 passed, 9 skipped, 0 failed; an earlier run of the same tree failed one row (test/ai_coach/measurement_chip_slot_test.dart 'a real save() clears the due prompt under a mounted slot': it waited for the post-save refresh without the one real tick the card's end-to-end row already has), the row got the tick and passed in three isolated runs and the re-run; flutter analyze lib/: no error or warning (59 pre-existing infos)"
+  - id: MUTATION
+    title: "mutation proof of the getter and of the new widget rows"
+    terminal_state: closed_in_commit
+    commit: fa41470d
+    verification: "run by the author on copies of the getter restored in a finally: default false, catch true, == true, ignore a stored false (all RED on the flag test); default false and == true RED on the two new widget rows; the reviewer's survivors (not List/Map, not double, num off) RED after the loop gained 0.5, a List and a Map; two equivalents (stored != false, stored is! bool || stored). Text in docs/reviews/measurements-flag-flip-bpass.md"
+  - id: DOCS
+    title: "default OFF / dark wording replaced in the nested CLAUDE.md files, functionality-flow (HOME-24, COACH-21, PROF-20, PROF-21), sot_registry, naming_conventions and the provider doc comment"
+    terminal_state: closed_in_commit
+    commit: fa41470d
+    verification: "git grep -n 'default OFF' over the files listed returns no measurement-flag hit; the remaining mentions are the historical Landing B and C ledgers, plan-reviews and tuning history"
+  - id: REGISTRY-RULE-STAYS
+    title: "the exact-path platform rule for measurement_flags.dart in docs/blast_radius.yaml stays (an earlier note said the flip deletes it)"
+    terminal_state: verified_clean
+    evidence: "the file is now the kill switch of a default-ON flag, so a later edit is as risky as this one; docs/blast_radius.yaml:535 and its pin test/contracts/blast_radius_measurement_flags_test.dart pass; the comment and docs/ship_dark_pending_review.yaml say the rule goes with the flag under OI-345"
+  - id: REVIEWS
+    title: "the full x2 plan review and the B-pass"
+    terminal_state: verified_clean
+    evidence: "docs/plan-reviews/measurements-flag-flip.md (review_rounds 2, ground_truth_verified true, verdict converged, bpass accepted) and docs/reviews/measurements-flag-flip-bpass.md (21 findings, 0 P0, every one dispositioned)"
+  - id: LEGACY-PUSH-ACCEPTED
+    title: "finite out-of-range values already held locally are still pushed by _syncMeasurements (the Landing A row LEGACY-PUSH)"
+    terminal_state: verified_clean
+    evidence: "the founder accepted it in chat on 2026-10-16 (\"ok\" to the plain-words explanation, with: the app is in testing and all data is internal testers' data); L2c (the per-site pending set) is not built; sync_health.dart is untouched by this batch. The Landing A ledger row itself is reopened as blocked_on_user by PR #117 and is closed by that acceptance when both are on main"
+  - id: POLICY-CHECK
+    title: "the updated privacy policy is published at the existing link and covers what the flipped surfaces collect (OI-310 content half)"
+    terminal_state: verified_clean
+    evidence: "fetched 2026-10-16 from https://icanbefitter.com/privacy (HTTP 200, 'Last updated: October 2026'): names AVYA Fit, 'Body weight and body measurements' as health data, Google Gemini and the other processors, AI processing / each health source / notifications as separate choices, withdrawal, retention ('until you delete it') and in-app Delete Account, the DPDP rights, a Grievance Officer, and 'You must be 13 or older' with a date of birth asked at sign-up"
+  - id: AGE-POLICY-GAP
+    title: "the published policy says 13 or older with a date-of-birth check at sign-up; the build still accepts age 10 (identity_screen.dart:82) and stores no policy version"
+    terminal_state: verified_clean
+    evidence: "the age-floor and consent batch is merged: PR #119 (1684edf1, 2026-10-17) puts the floor of 13 on all three date-of-birth pickers and stamps terms_version v2 on a new sign-up; OI-305 and OI-310 stay OPEN until the founder's device check (DEVICE-CHECK-AGE-CONSENT of docs/audit/age-floor-signup-consent.closure.yaml), and existing accounts are not re-asked (OI-346)"
+  - id: MERGE-ORDER
+    title: "the merge order: PR #117, then the age-floor and consent batch, then this flip (the first two are merged: #117 aa7a1586, #119 1684edf1)"
+    terminal_state: blocked_on_user
+    reason: "the founder merges this flip; merging this flip to main also publishes it on the production web app (app.icanbefitter.com) for every signed-in user, and a release build has no switch short of a new build"
+  - id: CLOUD-ROWS-RECHECK
+    title: "the OQ-L2a acceptance rests on a cloud count of 0 body_measurements rows read on 2026-10-11"
+    terminal_state: blocked_on_user
+    reason: "a fresh read-only count (select count(*) from body_measurements on project dedsavbjuwgarrhphgnl) needs the founder's go for live SQL; the answer does not change the code, it confirms or corrects the acceptance basis"
+  - id: FLIPPED-BUILD-CHECK
+    title: "the founder's check of the RELEASE build that carries the default ON: the Home banner, the Weight-sheet link, the Progress comparison card, the chat chip, the entry sheet, on a phone and on the web app"
+    terminal_state: blocked_on_user
+    reason: "founder-owned; replaces the debug-build framing of AGENT-WEB-CHECK and DEVICE-CHECK-C of docs/audit/coach-measurement-surfaces.closure.yaml (the real-font header at 360 dp, the chip's scroll follow, TalkBack, Back-dismiss are the items)"
+  - id: KILL-SWITCH-LIMITS
+    title: "a stored false is erased by sign-out and a release build has no writer of false; there is no remote switch"
+    terminal_state: verified_clean
+    evidence: "user_repository.dart:1211 clears configBox; app_router.dart:378-380 registers /dev under kDebugMode only; stated in the getter doc, plan section 1 and the founder's audience statement; the plan names RemoteConfig as the founder's decision if the audience widens before OI-345"
+  - id: OFF-PATH-REMOVAL
+    title: "remove MeasurementFlags, measurementsEnabledProvider, every flag read, the dev toggle, the OFF-identity assertions, the registry rule and its pin, and the ship-dark entry"
+    terminal_state: blocked_on_user
+    reason: "OI-345 tracks it (CLAUDE.md 4.6 step 4: the founder schedules the roll, so it is tracked); it starts after FLIPPED-BUILD-CHECK is recorded and is plan-reviewed x2 with a B-pass"
