@@ -36,7 +36,7 @@ extension _PrivacyDialog on _ProfileScreenState {
             ),
             const SizedBox(height: 6),
             Text(
-              '\u2022 Camera: Meal scanning\n\u2022 Health Connect: Steps & sleep\n\u2022 Storage: Progress photos',
+              '\u2022 Camera: Meal scanning\n\u2022 Microphone: Voice input. Your phone or browser turns speech into text and may send the audio to its provider.\n\u2022 Health Connect: Steps & sleep\n\u2022 Storage: Progress photos',
               style: AppTypography.bodySm
                   .copyWith(color: AppColors.textDim, height: 1.5),
             ),

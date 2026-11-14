@@ -532,7 +532,7 @@ void main() {
 
     // L2b Landing C: the chat chip's ONE host line. Comment-stripped,
     // whitespace-insensitive and sliced to screen.dart's own `build`: the
-    // declarations of `_buildQuickPrompts` and `_buildInputBar` live in part
+    // declarations of `_buildQuickPrompts` and `CoachComposer` live in part
     // files that sort before screen.dart in the concatenation (and in this
     // file's body), and would fool a plain indexOf.
     test('the AI Coach screen mounts the chip slot once, with no condition of '
@@ -551,15 +551,16 @@ void main() {
         countOf(
           build,
           '_buildQuickPrompts(),MeasurementChipSlot('
-          'inputFocusNode:_inputFocusNode,isSending:isSending,'
+          'inputFocusNode:_inputFocusNode,'
+          'isSending:isSending||_composerListening,'
           'onShown:(height)=>keepBottomAfterChip(_scrollController,height)),'
-          '_buildInputBar(',
+          'CoachComposer(',
         ),
         1,
       );
       final prompts = build.indexOf('_buildQuickPrompts()');
       final chip = build.indexOf('MeasurementChipSlot(');
-      final bar = build.indexOf('_buildInputBar(');
+      final bar = build.indexOf('CoachComposer(');
       expect(prompts, greaterThanOrEqualTo(0));
       expect(chip, greaterThan(prompts));
       expect(bar, greaterThan(chip));
@@ -570,14 +571,25 @@ void main() {
     // mount their own TextField, so nothing else sees this binding.
     test('the composer TextField is bound to the focus node the chip slot gets',
         () {
+      // Two links, both pinned: the screen hands ONE node to the chip and to
+      // the composer, and the composer's field is bound to the node it is given.
       final bar = strip('lib/features/ai_coach/screens/ai_coach/input_bar.dart')
           .replaceAll(RegExp(r'\s+'), '');
-      expect(countOf(bar, 'TextField(controller:_messageController,'
-          'focusNode:_inputFocusNode,'), 1);
+      expect(countOf(bar, 'TextField(controller:widget.controller,'
+          'focusNode:widget.focusNode,'), 1);
       final screen = strip('lib/features/ai_coach/screens/ai_coach/screen.dart')
           .replaceAll(RegExp(r'\s+'), '');
       expect(countOf(screen, 'final_inputFocusNode=FocusNode('), 1,
           reason: 'one node, owned by the screen state');
+      expect(countOf(screen, 'MeasurementChipSlot(inputFocusNode:_inputFocusNode,'),
+          1,
+          reason: 'the chip gets the screen node');
+      expect(
+          countOf(screen,
+              'CoachComposer(controller:_messageController,'
+              'focusNode:_inputFocusNode,'),
+          1,
+          reason: 'the composer gets the SAME node');
     });
 
     test('the quick prompts are unchanged: one PromptChip, one send per tap, '

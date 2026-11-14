@@ -6,10 +6,20 @@ part of 'screen.dart';
 // call it under the analyzer's default rules even when the extension is
 // on the same State subclass. The runtime semantics are fine — this is
 // purely an analyzer rule that doesn't model "extension on State".
-// File-level ignore matches the same pattern recording_body.dart needs.
+// File-level ignore matches the same pattern chat_area.dart needs.
 // ignore_for_file: invalid_use_of_protected_member
 
 extension _MediaPicker on _AiCoachScreenState {
+
+  /// The paperclip in the composer. F12 · routes to the media picker; a free
+  /// user sees the paywall (photo attach is PRO).
+  void _onTapAttach(bool isPro) {
+    if (!isPro) {
+      showPaywallSheet(context, feature: 'Photo Analysis');
+      return;
+    }
+    _showMediaSourceSheet();
+  }
 
   /// Shows a bottom sheet with Camera and Gallery options.
   void _showMediaSourceSheet() {

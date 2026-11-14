@@ -1274,8 +1274,8 @@ concepts:
         semantic: display-only
         fields_read: [isPro]
       - file: lib/features/nutrition/widgets/food_logger_section.dart
-        line_range: 48-105
-        method: FoodLoggerSection build (gate + reactive watch)
+        line_range: 151-246
+        method: FoodLoggerSection _passesUsageGate + build (gate + reactive watch)
         semantic: display-only
         fields_read: [isPro]
       - file: lib/features/train/providers/day_swap_provider.dart
@@ -7210,7 +7210,7 @@ concepts:
         fields_read: [kind, resolved_at, date, planned_count, logged_count, created_at]
         notes: ChatHistoryNotifier.build renders the re-shown tile; its fresh UTC created_at sorts it under the reply that asked for it.
       - file: lib/features/ai_coach/screens/ai_coach/screen.dart
-        line_range: 81-115
+        line_range: 83-117
         method: filterVisibleIntents
         semantic: flag-check
         fields_read: [type]
@@ -14917,7 +14917,7 @@ concepts:
         method: _limit — returns 999999 for PRO, the client constant for free
         semantic: client-read
       - file: lib/features/nutrition/widgets/food_logger_section.dart
-        line_range: 105-109
+        line_range: 243-247
         method: build — meter shown on the Log Food tab
         semantic: client-read
       - file: lib/features/profile/screens/profile/subscription_section.dart
@@ -17655,7 +17655,7 @@ concepts:
         method: body (MeasurementsCardFrame(child: _buildBody()))
         notes: L2b Landing C, E3. One line; the frame owns the flag and the height cap, so a flag-OFF screen returns its own body instance.
       - file: lib/features/ai_coach/screens/ai_coach/screen.dart
-        line_range: 457-463
+        line_range: 370-376
         method: MeasurementChipSlot (the mount line in build)
         notes: L2b Landing C, E4. Between the quick prompts and the input bar, with no condition of its own; the slot owns its flag, prompt, focus and sending checks and is given no send callback; onShown scrolls a chat that was at its bottom back to its bottom (keepBottomAfterChip).
     readers:
@@ -18878,3 +18878,66 @@ concepts:
         fields_read: [loggedInChat, reopenedExercises]
     regression_test: test/sync/exlog_coach_logged_push_behavioral_test.dart
 
+
+  # voice input unified (plan docs/plans/voice-input-unified.md) - ONE owner of the speech_to_text singleton.
+  - concept: speech_input_session_owner
+    domain: cross_domain
+    behavioral_test_path: test/core/speech_input_controller_behavioral_test.dart
+    additional_tests:
+      - test/core/speech_input_options_test.dart
+      - test/core/speech_input_lifecycle_test.dart
+      - test/contracts/android_speech_queries_test.dart
+      - test/ai_coach/coach_composer_speech_test.dart
+      - test/widgets/food_logger_speech_test.dart
+      - test/widgets/food_logger_send_test.dart
+    description: |
+      The `speech_to_text` plugin is a process-wide singleton with ONE result
+      listener and no session ids. SpeechInputService is its only owner: it binds
+      exactly one session (a SpeechSessionSink) just before `listen`, serialises
+      engine calls, waits for the old session to quiesce plus a short settle, retries
+      once for error_busy / error_client, and cancels an ownerless `listening` at once.
+      Each SpeechInputController (one per host: the coach composer, the nutrition Log
+      sheet) is a three-state machine (idle, starting, listening) with ONE end path
+      `_finish` and a latch, so exactly one SpeechSessionEnd reaches the host (none
+      for `disposed`). A session drops results, notListening and done until its
+      own `listening`; errors are classified and acted on in `starting` too.
+      The first `initialize` is where Android asks for the microphone, so until the
+      engine is initialised the pre-listen budget is the long first-use one, and
+      the listen budget and the one-restart window start at the listen itself.
+      Stop / Send / Cancel act on the words already on screen and never await the
+      plugin's final. SpeechInputLifecycle ends a session when its tab goes out of
+      sight or the app is hidden / paused. Nothing is persisted: the words live in
+      the host's text field until the host sends them.
+    writers:
+      - file: lib/core/services/speech_input_service.dart
+        line_range: 324-651
+        method: SpeechInputService (begin / release / _onStatus / _cancelOwnerless)
+        semantic: per-session
+      - file: lib/core/services/speech_input_controller.dart
+        line_range: 101-596
+        method: SpeechInputController (_finish latch, start / stop / send / cancel)
+        semantic: per-session
+      - file: lib/core/services/speech_input_lifecycle.dart
+        line_range: 12-80
+        method: SpeechInputLifecycle (_endWhenSettled)
+        semantic: per-session
+    reader_manifest_complete: true
+    readers:
+      - file: lib/features/ai_coach/screens/ai_coach/input_bar.dart
+        line_range: 136-195
+        method: CoachComposer (_onSpeechEnd - commit / send / tooShort / discard)
+        semantic: per-session
+        fields_read: [transcript, reason, failure, empty]
+      - file: lib/features/nutrition/widgets/food_logger_section.dart
+        line_range: 83-145
+        method: FoodLoggerSection (_speech, _onSpeechEnd, _joinSpeech)
+        semantic: per-session
+        fields_read: [transcript, reason, failure, empty]
+    hive:
+      box: in_memory_only  # session-only, nothing persisted
+      key_prefix: ""
+    cloud:
+      table: ""
+      columns: []
+    sync_methods: []
+    regression_test: test/core/speech_input_controller_behavioral_test.dart

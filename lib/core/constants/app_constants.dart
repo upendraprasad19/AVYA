@@ -58,8 +58,9 @@ class AppConstants {
   static const String featureCartAuditorPro = 'cart_auditor_pro';   // 10/day PRO (free=1/day)
   static const String featureAiTextLogPro = 'ai_text_log_pro';      // Unlimited PRO (free=10/day)
   // audit-2026-05-16 E.8 — `featureVoiceNotes` constant deleted.
-  // Voice has been free since Test #9 F13 (zero on-device compute cost via
-  // speech_to_text) and the constant had 0 `gate()` callsites.
+  // Voice has been free since Test #9 F13 (no infra cost to us: the phone's or
+  // the browser's own speech service does the work) and the constant had 0
+  // `gate()` callsites.
   static const String featureMorningAlertPro = 'morning_alert_pro'; // AI-personalised (free=generic)
   static const String featurePredictionMonthly = 'prediction_monthly'; // Monthly card (free=once)
   static const String featureAdaptiveWorkouts = 'adaptive_workouts'; // Phase 2

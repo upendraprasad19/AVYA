@@ -5,14 +5,17 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:speech_to_text/speech_to_text.dart';
 import 'package:icanbefitter/core/theme/colors.dart';
 import 'package:icanbefitter/features/train/services/coach_day_completion.dart';
 import 'package:icanbefitter/core/theme/spacing.dart';
 import 'package:icanbefitter/core/theme/typography.dart';
 import 'package:icanbefitter/core/utils/date_utils.dart' show chatClockLabel;
 import 'package:icanbefitter/core/constants/app_constants.dart';
+import 'package:icanbefitter/core/copy/speech_input_copy.dart';
 import 'package:icanbefitter/core/services/error_telemetry.dart';
+import 'package:icanbefitter/core/services/speech_input_controller.dart';
+import 'package:icanbefitter/core/services/speech_input_lifecycle.dart';
+import 'package:icanbefitter/core/services/speech_input_service.dart';
 import 'package:icanbefitter/core/services/subscription_service.dart';
 import 'package:icanbefitter/features/profile/providers/profile_provider.dart';
 import 'package:icanbefitter/features/train/providers/workout_surface_invalidation.dart';
@@ -64,7 +67,6 @@ part 'quick_prompts.dart';
 part 'input_bar.dart';
 part 'attach_button.dart';
 part 'media_picker.dart';
-part 'recording_body.dart';
 
 class AiCoachScreen extends ConsumerStatefulWidget {
   const AiCoachScreen({super.key});
@@ -119,7 +121,11 @@ class _AiCoachScreenState extends ConsumerState<AiCoachScreen> {
   final _messageController = TextEditingController();
   final _scrollController = ScrollController();
   final _inputFocusNode = FocusNode();
-  bool _isRecording = false;
+
+  /// True while the composer's speech session is starting or listening. The
+  /// field is not mounted then, so the measurement chip (which hides while the
+  /// field has focus) would pop in at every mic tap; it hides through this.
+  bool _composerListening = false;
   bool _localSending = false; // Synchronous debounce flag to prevent double-tap
 
   // Unit 1 (coach-completion-tap-card) — the date-string of the completion
@@ -127,12 +133,6 @@ class _AiCoachScreenState extends ConsumerState<AiCoachScreen> {
   // to disable both buttons + show a spinner while markCompleted runs so a
   // double-tap can't fire two completions.
   String? _completingPromptDate;
-
-  // F12 · Push-to-talk recording UX state (Test #9 batch)
-  Duration _recordingElapsed = Duration.zero;
-  Timer? _recordingTicker;
-  Offset? _recordingStartOffset;
-  bool _slideToCancel = false;
 
   // Media attachment state
   final _imagePicker = ImagePicker();
@@ -145,11 +145,6 @@ class _AiCoachScreenState extends ConsumerState<AiCoachScreen> {
   // lib/features/ai_coach/CLAUDE.md's common-pitfalls table (AI breakdown
   // card save action).
   final Set<String> _savingCoachMediaKeys = {};
-
-  // Speech-to-text — null on web (plugin not supported)
-  SpeechToText? _speech;
-  bool _speechAvailable = false;
-  String _recognizedText = '';
 
   // APK Test #15 / Bug E — gates the one-time initial-scroll-to-bottom on
   // first paint of the AI coach screen. Without this gate, opening the
@@ -164,14 +159,6 @@ class _AiCoachScreenState extends ConsumerState<AiCoachScreen> {
   @override
   void initState() {
     super.initState();
-    if (!kIsWeb) {
-      _speech = SpeechToText();
-      _initSpeech();
-    }
-    // F12 · rebuild on text change so mic↔send morph fires
-    _messageController.addListener(() {
-      if (mounted) setState(() {});
-    });
     // A4 (2026-09-21) — AI Coach deliberately does NOT use
     // HiveTabScaffoldMixin (fundamentally different mount shape — see that
     // file's own header + the check_tab_screen_uses_hive_scaffold.dart
@@ -206,78 +193,6 @@ class _AiCoachScreenState extends ConsumerState<AiCoachScreen> {
     ref.invalidate(chatHistoryProvider);
   }
 
-  Future<void> _initSpeech() async {
-    try {
-      _speechAvailable = await _speech!.initialize(
-        onError: (error) {
-          debugPrint('[STT] error: ${error.errorMsg}');
-          setState(() => _isRecording = false);
-        },
-        onStatus: (status) {
-          if (status == 'done' || status == 'notListening') {
-            setState(() => _isRecording = false);
-            if (_recognizedText.isNotEmpty) {
-              _messageController.text = _recognizedText;
-              _messageController.selection = TextSelection.fromPosition(
-                TextPosition(offset: _recognizedText.length),
-              );
-              _inputFocusNode.requestFocus();
-              _recognizedText = '';
-            }
-          }
-        },
-      );
-    } catch (e) {
-      debugPrint('[STT] initialize() failed: $e');
-      _speechAvailable = false;
-    }
-    setState(() {});
-  }
-
-  void _startListening() {
-    if (_speech == null) return;
-    if (!_speechAvailable) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            'Microphone not available. Check app permissions in Settings.',
-            style: AppTypography.body.copyWith(color: AppColors.bad),
-          ),
-          backgroundColor: AppColors.card,
-        ),
-      );
-      return;
-    }
-    setState(() {
-      _isRecording = true;
-      _recognizedText = '';
-    });
-    _speech!.listen(
-      onResult: (result) {
-        setState(() => _recognizedText = result.recognizedWords);
-      },
-      listenFor: const Duration(seconds: 60),
-      pauseFor: const Duration(seconds: 5),
-      localeId: 'en_IN',
-      listenOptions: SpeechListenOptions(
-        listenMode: ListenMode.dictation,
-        partialResults: true,
-      ),
-    );
-  }
-
-  void _stopListening() {
-    _speech?.stop();
-    setState(() => _isRecording = false);
-    if (_recognizedText.isNotEmpty) {
-      _messageController.text = _recognizedText;
-      _messageController.selection = TextSelection.fromPosition(
-        TextPosition(offset: _recognizedText.length),
-      );
-      _inputFocusNode.requestFocus();
-    }
-  }
-
   @override
   void dispose() {
     try {
@@ -287,8 +202,6 @@ class _AiCoachScreenState extends ConsumerState<AiCoachScreen> {
       // Symmetric with the guarded add in initState(): if the listener was
       // never registered there, there is nothing to remove.
     }
-    _speech?.stop();
-    _recordingTicker?.cancel();
     _messageController.dispose();
     _scrollController.dispose();
     _inputFocusNode.dispose();
@@ -457,13 +370,26 @@ class _AiCoachScreenState extends ConsumerState<AiCoachScreen> {
                 // ── Body-measurements chip (L2b Landing C, E4; flag-gated, owns its checks) ──
                 MeasurementChipSlot(
                   inputFocusNode: _inputFocusNode,
-                  isSending: isSending,
+                  isSending: isSending || _composerListening,
                   onShown: (height) =>
                       keepBottomAfterChip(_scrollController, height),
                 ),
 
-                // ── Input Bar with inline message counter ──
-                _buildInputBar(isSending, messageCount, isPro),
+                // ── Composer: field, mic / send morph, inline message counter ──
+                CoachComposer(
+                  controller: _messageController,
+                  focusNode: _inputFocusNode,
+                  isSending: isSending,
+                  messageCount: messageCount,
+                  isPro: isPro,
+                  onSend: _sendMessage,
+                  onAttach: () => _onTapAttach(isPro),
+                  onListeningChanged: (listening) {
+                    if (mounted && listening != _composerListening) {
+                      setState(() => _composerListening = listening);
+                    }
+                  },
+                ),
               ],
             ),
           ),

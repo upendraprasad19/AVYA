@@ -4,8 +4,8 @@ import 'package:icanbefitter/core/services/subscription_service.dart';
 /// F13 · Test #9 — Voice MUST stay FREE.
 ///
 /// Locks down the decision that voice (mic) input is not PRO-gated.
-/// Reason: on-device speech_to_text has zero infra cost. Gating it
-/// added zero margin while reducing engagement.
+/// Reason: speech recognition runs in the phone's or the browser's own service
+/// and costs us nothing. Gating it added zero margin while reducing engagement.
 ///
 /// audit-2026-05-16 E.8 — `AppConstants.featureVoiceNotes` constant DELETED
 /// entirely (had 0 callsites since Test #9 made it free; founder approved

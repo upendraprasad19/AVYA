@@ -29,13 +29,24 @@ void main() {
         reason: 'F12 send icon must be arrow_upward (matches WhatsApp)');
   });
 
-  test('long-press handlers wired for recording UX', () {
-    expect(src.contains('onLongPressStart:'), isTrue);
-    expect(src.contains('onLongPressMoveUpdate:'), isTrue);
-    expect(src.contains('onLongPressEnd:'), isTrue);
+  test('hold-to-talk is gone: the mic is tap to start, tap to stop', () {
+    expect(src.contains('onLongPressStart:'), isFalse,
+        reason: 'the mic is tap to start / tap to stop on both hosts');
+    expect(src.contains('onLongPressMoveUpdate:'), isFalse);
+    expect(src.contains('onLongPressEnd:'), isFalse);
   });
 
-  test('recording state has slide-to-cancel hint', () {
-    expect(src.contains('slide to cancel'), isTrue);
+  test('slide-to-cancel and the hold tooltip are gone', () {
+    expect(src.contains('slide to cancel'), isFalse);
+    expect(src.contains('Hold to record'), isFalse);
+  });
+
+  test('the listening bar has Cancel, Stop and Send', () {
+    expect(src.contains('Icons.close'), isTrue, reason: 'Cancel (X)');
+    expect(src.contains('Icons.stop'), isTrue, reason: 'Stop (keeps the words)');
+    expect(src.contains('SpeechInputCopy.semanticsSend'), isTrue);
+    expect(src.contains('_speech.stop'), isTrue);
+    expect(src.contains('_speech.send'), isTrue);
+    expect(src.contains('_speech.cancel'), isTrue);
   });
 }
