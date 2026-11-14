@@ -32,12 +32,12 @@ writers:
   - { file: lib/shared/repositories/plan_engine/split_resolver.dart, method_or_widget: "selectV4 (sessionMinutes:, balancedWeek:) -> _get3DayV4 / _get4DayV4 / _get5DayV4 balanced lists", line: 429 }
   - { file: lib/shared/repositories/plan_engine/models.dart, method_or_widget: "EarlierDayAvoid, MuscleSlotDay.avoidEarlier", line: 308 }
   - { file: lib/shared/repositories/plan_engine/plan_generator.dart, method_or_widget: "generateV4: selectV4 sessionMinutes (line 169, waiver d40) and the credit (line 288, waiver d36)", line: 169 }
-  - { file: lib/shared/repositories/plan_engine/plan_engine_flags.dart, method_or_widget: "balancedWeekEnabled (disable_balanced_week, default ON)", line: 86 }
+  - { file: lib/shared/repositories/plan_engine/plan_engine_flags.dart, method_or_widget: "balancedWeekEnabled (disable_balanced_week, default ON)", line: 88 }
 readers:
   - { file: lib/shared/repositories/plan_engine/volume_filter.dart, method_or_widget: "filterDays carries avoidEarlier onto the rebuilt day", line: 44 }
   - { file: lib/shared/repositories/plan_engine/exercise_selector.dart, method_or_widget: "_pickCoreList: earlier(byType) into avoidA / avoidB; earlierByTypeA / B filled after each day", line: 144 }
   - { file: lib/shared/repositories/plan_engine/session_set_allocator.dart, method_or_widget: "_groupsOf reads ctx.quadPrimaryCreditsGlutes (unchanged)", line: 396 }
-  - { file: lib/core/services/workout_schedule_read_service.dart, method_or_widget: "foreignDayNamesFor; repeatPinsFrom row checks; _buildRepeatPins passes the new phase's minutes", line: 787 }
+  - { file: lib/core/services/workout_schedule_read_service.dart, method_or_widget: "foreignDayNamesFor; repeatPinsFrom row checks; _buildRepeatPins passes the new phase's minutes", line: 789 }
 hive_key_prefix: "configBox['disable_balanced_week']; userBox last_phase_profile (read, unchanged shape); plan_json.workouts[] (the plan blob)"
 hive_key_formula: "MuscleSlotDay lists -> PopulatedDay -> WorkoutDay.toMap; schedule_<date> rows read by getWeek(1/2)"
 sync_methods:
@@ -214,3 +214,24 @@ was added ("sameType, variant B on its own"). Re-run against the behavioral file
 
 Against the gate (`balanced_week_gate_test.dart`, 2 tests): M01, M09, M12, M05 and M18 are red (1 each). M06 stays
 green there: an arm-slot swap changes no Quads count or repeat. The behavioral list pins catch it.
+
+## B-pass (docs/reviews/generator-step2c-bpass.md)
+
+Two fresh Sonnet seats ran on dbbda4cf (CI green): seat 1 on the engine (it mutated the selector once, red), seat 2 on
+the repeat pins and the tests (read only). No P0 or P1. Fixed in the review commit:
+- S1-1 (P2): the registry range for `isRestDayConsideringLogged` was off by 2. The flags file was edited after the
+  shift was computed. Re-derived from a HEAD-to-tree line map. Two of the map's results were checked against the
+  file, because one range had already been hand-corrected.
+- S2-1 (P2): the auto path's minutes pass-through had no test. `repeat_content_scheduling_test` gains "a 45-minute
+  phase advanced at 45 / 60 minutes" through the facade. The mutant (the `sessionDuration:` argument dropped at the
+  `_buildRepeatPins` call) turns the 45-minute case red.
+- S2-2 (P2): a template or coach day NAMED like a foreign day (`Push`, `Chest`) refuses the pins. The comment said only
+  the generator writes those names, which is false (`schedule_template_planner.dart` writes free-text day names).
+  Accepted as over-refusal only (the advance fresh-fills; a wrong frame is never pinned). The comment, plan, glossary,
+  nested CLAUDE.md and registry now say so.
+- S1-2 / S2-3 (P2 / P3): the day-index refusal is a defect fix outside the switch, so for repeat pins "OFF = main" held
+  except that refusal. The plan, nested CLAUDE.md, registry and OI-509 now say so.
+- S1-3 (P3): the injured thin-day top-up gets no earlier-day avoid, as it gets no OI-458 feeder names. Stated here:
+  the top-up fills a thin day with the safe moves that exist, and variety is the picker's job.
+- S2-4 (P3): `foreignDayNamesFor`'s comment now states the 5-day `Legs` overlap. A double blank line in
+  `plan_engine_flags.dart` was removed.

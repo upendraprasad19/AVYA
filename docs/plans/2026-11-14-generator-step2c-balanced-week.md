@@ -146,14 +146,16 @@ reads the rows themselves:
   (`selectV4` with `balancedWeek` true / false); empty for every other plan, so nothing else changes. The families'
   names are disjoint per day count (3-day Push + Core / Pull + Core / Legs vs Upper / Lower / Full Body; 4-day Push /
   Pull / Legs / Upper vs Upper A / Lower A / Upper B / Lower B; 5-day body-part days vs Push / Pull / Legs / Upper /
-  Lower + Core; a beginner's Full Body A-D are the same in both, so empty). A renamed row (a log title from
-  `completed_title_healer`, a template) matches neither family and is ignored, as today.
+  Lower + Core; a beginner's Full Body A-D are the same in both, so empty). A log title from
+  `completed_title_healer` matches neither family and is ignored, as today. A template or coach day named like a
+  foreign day (`Push`, `Chest`) does refuse the pins: over-refusal only, the advance fresh-fills (B-pass, accepted).
 - The minutes are resolved as `generateV4` resolves them: `_buildRepeatPins` and `buildRepeatPinsForAdvance` gain an
   optional `int? sessionDuration`; the auto path (`autoGenerateNextPhaseIfNeeded`) passes its own; the graduation path
   (`pro_phase_advance.dart:858`) passes nothing, as its generate does, so both read the profile.
 - **OFF:** `foreignDayNames` is then the balanced names. Rows written while ON refuse the pins (correct, the frames
-  differ); a user who was never ON has no such rows, so OFF behaves as main. Nothing new is written to Hive.
-- **The days case (a pre-existing bug, fixed here with its own diagnose doc):** 4 -> 5 days rescheduled, then 5 -> 4
+  differ); a user who was never ON has no such rows. The day-index refusal below is a defect fix and is NOT behind the
+  switch, so for repeat pins OFF equals main except that refusal (B-pass). Nothing new is written to Hive.
+- **The days case (a pre-existing bug, fixed here; diagnose `c7e5a1` covers it):** 4 -> 5 days rescheduled, then 5 -> 4
   with the reschedule declined: the stale stored 4 matches, and the 5-day rows' first four days were pinned into the
   4-day frames. `repeatPinsFrom` now also refuses when a workout row's `workout_day_index` is past the new plan's days.
   The opposite direction (fewer rows than frames) already fails G5 (stored days differ) or leaves gap days that

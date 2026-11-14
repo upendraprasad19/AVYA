@@ -781,8 +781,10 @@ class WorkoutScheduleReadService {
   /// use. build_muscle 3 / 4 / 5-day plans have two families (today's lists below 60 minutes, the balanced lists at
   /// 60+, `SplitResolver.balancedWeekApplies`); a minutes change, a reschedule or a switch flip between phases can
   /// leave the just-finished rows in the other family. A row named for one of these days cannot be pinned into the
-  /// new frames ([repeatPinsFrom] refuses). Empty when the two families are the same (every other plan), so nothing
-  /// else changes. Names only the generator writes: a renamed row (a log title, a template) matches neither family.
+  /// new frames ([repeatPinsFrom] refuses). Empty for every other plan (one family), so nothing else changes; for
+  /// the 5-day split it holds the old days but not `Legs`, which both families use (an old week also holds `Chest`).
+  /// A log title (`completed_title_healer`) matches neither family and is ignored. A template or coach day that is
+  /// NAMED like a foreign day (`Push`, `Chest`, ...) does refuse: over-refusal only, the advance then fresh-fills.
   @visibleForTesting
   static Set<String> foreignDayNamesFor({
     required String planGoal,

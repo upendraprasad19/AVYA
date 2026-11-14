@@ -5340,7 +5340,7 @@ concepts:
         method: phaseStartAfterGap
         notes: the ONE start-date rule; pure.
       - file: lib/core/services/workout_schedule_read_service.dart
-        line_range: 2128-2139
+        line_range: 2130-2141
         method: nextPhaseStartDate
         notes: delegates to phaseStartAfterGap (gapStart false = the original rule, used by the graduation unlock).
       - file: lib/shared/services/pro_phase_advance.dart
@@ -9491,7 +9491,7 @@ concepts:
       getCurrentPlanMap, hasPlan, getCurrentCalendarWeek.
     writers:
       - file: lib/core/services/workout_schedule_read_service.dart
-        line_range: 135-2078
+        line_range: 135-2080
         method: WorkoutScheduleReadService
     reader_manifest_complete: false  # progressive caller migration; @Deprecated lint surfaces remaining
     readers:
@@ -9567,7 +9567,7 @@ concepts:
       strings. Asserted directly, not assumed.
     writers:
       - file: lib/core/services/workout_schedule_read_service.dart
-        line_range: 982-1007
+        line_range: 984-1009
         method: activeHoldWeeks / activeHoldOrdinalFor / weekIdentity — the seam + the single flag gate
       - file: lib/core/services/workout_schedule_write_service.dart
         line_range: 235-353
@@ -9652,7 +9652,7 @@ concepts:
         method: holdWeek → stamps is_hold (bool) + hold_ordinal (int, gap-proof max+1)
     readers:
       - file: lib/core/services/workout_schedule_read_service.dart
-        line_range: 1105-1316
+        line_range: 1107-1318
         method: isDeloadHold / _holdDatesByOrdinal / holdOrdinalForDate / holdWeeks / holdWeekSessionProgress
         semantic: latest
         fields_read: [schedule_<date>.is_hold, schedule_<date>.hold_ordinal, schedule_<date>.status, schedule_<date>.type]
@@ -10562,7 +10562,7 @@ concepts:
       that says LESS the more the user has logged, while still looking present.
     writers:
       - file: lib/core/services/workout_schedule_read_service.dart
-        line_range: 1218-1253
+        line_range: 1220-1255
         method: holdSnapshotBlock
         notes: |
           Returns null off a hold day. Reads activeHoldOrdinalFor/activeHoldWeeks
@@ -11480,7 +11480,8 @@ concepts:
       family (WorkoutScheduleReadService.foreignDayNamesFor), because the stored last_phase_profile can be stale.
       Kill-switch disable_balanced_week (PlanEngineFlags.balancedWeekEnabled, default ON), read by selectV4,
       quadPrimaryCreditsGlutes and foreignDayNamesFor; OFF equals main c6b1ee48 (1,010 golden personas,
-      generator_golden_hashes_balanced_week_off.json, and the gate's 288-plan digest at 60 / 90 minutes). Rule-14
+      generator_golden_hashes_balanced_week_off.json, and the gate's 288-plan digest at 60 / 90 minutes); the
+      repeat-pin day-index refusal is a defect fix outside the switch. Rule-14
       waiver (d36, d40): plan_generator.dart lines 169 and 288 only.
     writers:
       - file: lib/shared/repositories/plan_engine/split_resolver.dart
@@ -12698,7 +12699,7 @@ concepts:
           "don't touch" via the RPC's own COALESCE), same value + same
           projection helper, only the transport changed.
       - file: lib/core/services/workout_schedule_read_service.dart
-        line_range: 1648-1655
+        line_range: 1650-1657
         method: currentWeekColumnProjection
         notes: pure helper deciding frozen-passthrough (disabled) vs program week (enabled); behaviorally tested.
       - file: lib/features/onboarding/providers/onboarding_provider.dart
@@ -13140,15 +13141,15 @@ concepts:
       That shared walk is the drift guard.
     writers:
       - file: lib/core/services/workout_schedule_read_service.dart
-        line_range: 1874-1891
+        line_range: 1876-1893
         method: _scheduleRowsBefore
         semantic: shared-row-walk
       - file: lib/core/services/workout_schedule_read_service.dart
-        line_range: 1867-1873
+        line_range: 1869-1875
         method: pastPhaseBlocks
         semantic: strict-set
       - file: lib/core/services/workout_schedule_read_service.dart
-        line_range: 1900-1925
+        line_range: 1902-1927
         method: pastPhaseBlocksForDisplay
         semantic: display-recovery
         notes: |
@@ -15321,7 +15322,7 @@ concepts:
         fields_read: [type]
         notes: whitelist shape, widened to include 'logged' by this batch
       - file: lib/shared/repositories/plan_engine/plan_engine_flags.dart
-        line_range: 528-533
+        line_range: 529-534
         method: isRestDayConsideringLogged
         semantic: flag-check
         fields_read: [type]
@@ -15332,7 +15333,7 @@ concepts:
         semantic: flag-check
         fields_read: [type]
       - file: lib/core/services/workout_schedule_read_service.dart
-        line_range: 1418-1442
+        line_range: 1420-1444
         method: currentPhaseCompletionRate
         semantic: flag-check
         fields_read: [type]

@@ -4,8 +4,8 @@
 # Part 2C-b (the weekly minimum, the under-60 allowance) ships from its own branch with its own ledger.
 
 batch: generator-step2c
-total_findings: 15
-closed_count: 15
+total_findings: 20
+closed_count: 20
 
 _commit: &wip "generator-step2c (uncommitted at authoring)"
 
@@ -98,3 +98,31 @@ findings:
     terminal_state: closed_in_commit
     commit: *wip
     verification: "behavioral group 'the pin builder passes the new phase's minutes' (argument 45 / 60, profile 45 / 90 / empty, switch); mutants M22 / M23"
+
+  - id: C2C-16
+    title: "B-pass S1-1: a registry line_range in plan_engine_flags.dart went stale (the file was edited after the shift was computed)"
+    terminal_state: closed_in_commit
+    commit: *wip
+    verification: "re-derived from a HEAD-to-tree line map after the last edit; the hand-corrected range re-checked against the file (isRestDayConsideringLogged at 529)"
+
+  - id: C2C-17
+    title: "B-pass S1-2 / S2-3: the repeat-pin day-index refusal is outside the switch, so 'OFF equals main' was too wide for pins"
+    terminal_state: closed_in_commit
+    commit: *wip
+    verification: "plan, nested CLAUDE.md, registry and OI-509 state the refusal is a defect fix outside the switch"
+
+  - id: C2C-18
+    title: "B-pass S2-1: the auto-advance path's minutes pass-through to the pin builder had no test"
+    terminal_state: closed_in_commit
+    commit: *wip
+    verification: "repeat_content_scheduling_test 'a 45-minute phase advanced at 45 / 60 minutes'; mutant (argument dropped) reddens the 45-minute case"
+
+  - id: C2C-19
+    title: "B-pass S2-2: a template or coach day named like a foreign day refuses the pins (the comment said only the generator writes those names)"
+    terminal_state: verified_clean
+    evidence: "over-refusal only: the advance fresh-fills and never pins a wrong frame; comment, plan, glossary, nested CLAUDE.md and registry describe it"
+
+  - id: C2C-20
+    title: "B-pass S1-3: the injured thin-day top-up gets no earlier-day avoid"
+    terminal_state: verified_clean
+    evidence: "same as OI-458's feeder names, which the top-up never received; stated in diagnose c7e5a1"

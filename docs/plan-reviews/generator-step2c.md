@@ -4,7 +4,7 @@ blast_radius: platform
 review_rounds: 4
 ground_truth_verified: true
 verdict: converged
-bpass: pending
+bpass: accepted
 bpass_review: docs/reviews/generator-step2c-bpass.md
 ---
 
