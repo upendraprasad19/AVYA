@@ -514,3 +514,237 @@ Deno.test("Unit 2b: seed scan of the bundled asset's is_veg = false rows (kept r
   }
   assert(nonVeg.filter((n) => animalRowAllowed(n, "pescatarian")).includes("Rohu Fish Curry"));
 });
+
+// ── Diet plan Unit 3b-2 (2026-11-14, docs/plans/diet-strategy-3b.md §5): a
+// PRO caller's stored diet strategy caps carbs per standard serving ──────────
+import {
+  carbsStdCapFor,
+  KETO_CARBS_STD_CAP,
+  LOW_CARB_CARBS_STD_CAP,
+} from "../nutrition/suggestMeal.ts";
+
+function carbFood(name: string, carbs: number, isVeg = true, isVegan = true, category = "x", protein = 15) {
+  return { ...food(name, isVeg, isVegan, 300, protein), carbs_std: carbs, category };
+}
+// Rows AT each cap and just over it (B-pass seat C finding 1), and a
+// protein powder under the keto cap that would out-rank every food
+// (seat B finding 2).
+const CARB_FOODS = [
+  carbFood("Paneer Tikka", 4, true, false),
+  carbFood("Tofu Scramble", 5),
+  carbFood("Cheese Cubes", 6, true, false),
+  carbFood("Masala Peanuts", 6.1),
+  carbFood("Chana Salad", 18),
+  carbFood("Rajma", 24),
+  carbFood("Sprouts Chaat", 25),
+  carbFood("Moong Dal Khichdi", 26),
+  carbFood("Veg Pulao", 45),
+  carbFood("Egg Bhurji", 2, false, false),
+  carbFood("Egg Fried Rice", 40, false, false),
+  carbFood("Chicken Tikka", 3, false, false),
+  carbFood("Fish Curry", 4, false, false),
+  carbFood("Soy Protein Isolate", 3, true, true, "supplements", 80),
+];
+const carbsOf = (name: string) => CARB_FOODS.find((f) => f.name === name)!.carbs_std;
+
+// deno-lint-ignore no-explicit-any
+async function strategyRun(profile: Record<string, unknown>, opts: { isPro?: boolean; args?: Record<string, unknown> } = {}): Promise<{ res: any; calls: any[] }> {
+  const { sb, calls } = fakeSb({
+    user_profile: [{ user_id: "u1", ...profile }],
+    food_database: CARB_FOODS,
+  });
+  // deno-lint-ignore no-explicit-any
+  const res: any = await suggestMealTool.handler!(
+    { userId: "u1", isPro: opts.isPro ?? true, sb, requestId: "r" } as any,
+    { remainingKcal: 800, ...(opts.args ?? {}) } as any,
+  );
+  return { res, calls };
+}
+const names = (res: { top_picks: { name: string }[] }) => res.top_picks.map((p) => p.name);
+const pickedCarbs = (res: { top_picks: { name: string }[] }) => names(res).map(carbsOf);
+const foodCalls = (calls: { table: string; filters: unknown[][] }[]) => calls.filter((c) => c.table === "food_database");
+const hasFilter = (c: { filters: unknown[][] }, op: string, col: string, val?: unknown) =>
+  c.filters.some((f) => f[0] === op && f[1] === col && (val === undefined || f[2] === val));
+const KETO_NOTE = "Filtered for diet strategy: Keto (at most 6 g carbs per serving; protein powders left out).";
+const LOW_CARB_NOTE = "Filtered for diet strategy: Low carb (at most 25 g carbs per serving; protein powders left out).";
+
+Deno.test("Unit 3b-2: the cap per strategy and food type", () => {
+  assertEquals(carbsStdCapFor("balanced", "non_veg"), null);
+  for (const t of ["non_veg", "veg", "eggetarian", "pescatarian"] as const) {
+    assertEquals(carbsStdCapFor("keto", t), KETO_CARBS_STD_CAP, t);
+    assertEquals(carbsStdCapFor("low_carb", t), LOW_CARB_CARBS_STD_CAP, t);
+    assertEquals(carbsStdCapFor("balanced", t), null, t);
+  }
+  assertEquals(carbsStdCapFor("keto", "vegan"), LOW_CARB_CARBS_STD_CAP);
+  assertEquals(carbsStdCapFor("low_carb", "vegan"), LOW_CARB_CARBS_STD_CAP);
+  assertEquals([KETO_CARBS_STD_CAP, LOW_CARB_CARBS_STD_CAP], [6, 25]);
+});
+
+Deno.test("Unit 3b-2: PRO keto caps at 6 g on the query (a row AT 6 g kept, 6.1 g not), no powders, with a note", async () => {
+  const { res, calls } = await strategyRun({ diet_preference: "veg", diet_strategy: "keto" });
+  assert(names(res).includes("Cheese Cubes"), "precondition: the row at exactly 6 g is kept");
+  assert(!names(res).includes("Masala Peanuts"), "6.1 g is over the cap");
+  for (const c of pickedCarbs(res)) assert(c <= 6, String(c));
+  assert(!names(res).includes("Soy Protein Isolate"), "protein powders are left out under a cap");
+  assertEquals(foodCalls(calls).length, 1);
+  for (const c of foodCalls(calls)) {
+    assert(hasFilter(c, "lte", "carbs_std", 6));
+    assert(hasFilter(c, "neq", "category", "supplements"));
+  }
+  assert(res.notes.includes(KETO_NOTE));
+});
+
+Deno.test("Unit 3b-2: PRO low carb caps at 25 g (a row AT 25 g kept, 26 g not); vegan keto gets the low carb cap and is told so", async () => {
+  {
+    const { res, calls } = await strategyRun({ diet_preference: "veg", diet_strategy: "low_carb" }, {
+      args: { remainingProteinG: 0 },
+    });
+    for (const c of foodCalls(calls)) assert(hasFilter(c, "lte", "carbs_std", 25));
+    const rows = (await strategyRun({ diet_preference: "veg", diet_strategy: "low_carb" })).calls;
+    assert(foodCalls(rows).length === 1);
+    for (const c of pickedCarbs(res)) assert(c <= 25, String(c));
+    assert(res.notes.includes(LOW_CARB_NOTE));
+  }
+  {
+    // The boundary on the rows the query returns, not only the picks: the
+    // fake applies the filters, so read what reached the ranking.
+    const { res } = await strategyRun({ diet_preference: "veg", diet_strategy: "low_carb" });
+    assertEquals(res.total_candidates_searched, CARB_FOODS.filter((f) => f.is_veg && f.carbs_std <= 25 && f.category !== "supplements").length);
+  }
+  {
+    const { res, calls } = await strategyRun({ diet_preference: "vegan", diet_strategy: "keto" });
+    for (const c of foodCalls(calls)) assert(hasFilter(c, "lte", "carbs_std", 25));
+    for (const c of pickedCarbs(res)) assert(c <= 25, String(c));
+    assert(pickedCarbs(res).some((c) => c > 6), "the low carb cap, not keto's");
+    assert(res.notes.includes(LOW_CARB_NOTE));
+  }
+});
+
+Deno.test("Unit 3b-2: eggetarian and pescatarian keto cap BOTH queries (veg rows and the is_veg = false rows)", async () => {
+  {
+    const { res, calls } = await strategyRun({ diet_preference: "eggetarian", diet_strategy: "keto" });
+    assertEquals(foodCalls(calls).length, 2);
+    for (const c of foodCalls(calls)) {
+      assert(hasFilter(c, "lte", "carbs_std", 6));
+      assert(hasFilter(c, "neq", "category", "supplements"));
+    }
+    assert(names(res).includes("Egg Bhurji"));
+    assert(!names(res).includes("Egg Fried Rice"));
+  }
+  {
+    const { res, calls } = await strategyRun({ diet_preference: "pescatarian", diet_strategy: "keto" });
+    assertEquals(foodCalls(calls).length, 2);
+    for (const c of foodCalls(calls)) assert(hasFilter(c, "lte", "carbs_std", 6));
+    assert(names(res).includes("Fish Curry"));
+    assert(!names(res).includes("Chicken Tikka"), "pescatarian: no meat");
+  }
+});
+
+Deno.test("Unit 3b-2: the cap composes with cuisine indian", async () => {
+  const { res, calls } = await strategyRun({ diet_preference: "veg", diet_strategy: "keto" }, { args: { cuisine: "indian" } });
+  assert(res.top_picks.length > 0, "precondition");
+  for (const c of foodCalls(calls)) {
+    assert(hasFilter(c, "lte", "carbs_std", 6));
+    assert(hasFilter(c, "eq", "is_indian", true));
+  }
+});
+
+Deno.test("Unit 3b-2: an empty capped answer still names the cap (B-pass seat A finding 1)", async () => {
+  const { res } = await strategyRun({ diet_preference: "veg", diet_strategy: "keto" }, { args: { remainingKcal: 1 } });
+  assertEquals(res.top_picks.length, 0, "precondition: nothing under 1 kcal");
+  assert(res.notes.includes(KETO_NOTE));
+});
+
+Deno.test("Unit 3b-2: no cap for a free caller, Balanced, an unknown value, or the kill switch", async () => {
+  const uncapped = async (profile: Record<string, unknown>, isPro = true) => {
+    const { res, calls } = await strategyRun(profile, { isPro });
+    assert(foodCalls(calls).length > 0, "precondition: the food query ran");
+    for (const c of foodCalls(calls)) {
+      assert(!c.filters.some((f) => f[1] === "carbs_std"), JSON.stringify(profile));
+      assert(!c.filters.some((f) => f[1] === "category"), JSON.stringify(profile));
+    }
+    assert(!res.notes.some((n: string) => n.startsWith("Filtered for diet strategy")));
+    assert(pickedCarbs(res).some((c) => c > 25) || names(res).includes("Soy Protein Isolate"));
+  };
+  await uncapped({ diet_preference: "non_veg", diet_strategy: "keto" }, false);
+  await uncapped({ diet_preference: "non_veg", diet_strategy: "balanced" });
+  await uncapped({ diet_preference: "non_veg", diet_strategy: "paleo" });
+  await uncapped({ diet_preference: "non_veg" });
+  Deno.env.set("DISABLE_SUGGESTMEAL_DIET_STRATEGY", "true");
+  try {
+    await uncapped({ diet_preference: "non_veg", diet_strategy: "keto" });
+  } finally {
+    Deno.env.delete("DISABLE_SUGGESTMEAL_DIET_STRATEGY");
+  }
+  // "TRUE" is not the switch.
+  Deno.env.set("DISABLE_SUGGESTMEAL_DIET_STRATEGY", "TRUE");
+  try {
+    const { calls } = await strategyRun({ diet_preference: "non_veg", diet_strategy: "keto" });
+    assert(foodCalls(calls).length > 0, "precondition");
+    for (const c of foodCalls(calls)) assert(hasFilter(c, "lte", "carbs_std", 6));
+  } finally {
+    Deno.env.delete("DISABLE_SUGGESTMEAL_DIET_STRATEGY");
+  }
+});
+
+Deno.test("Unit 3b-2: the food-type switch runs the verbatim pre-2b handler, which applies no strategy (accepted, B-pass finding 1)", async () => {
+  Deno.env.set("DISABLE_SUGGESTMEAL_STORED_FOOD_TYPE", "true");
+  try {
+    const { res, calls } = await strategyRun({ diet_preference: "veg", diet_strategy: "keto" });
+    assertEquals(calls.filter((c: { table: string }) => c.table === "user_profile").length, 0, "no profile read");
+    for (const c of foodCalls(calls)) assert(!c.filters.some((f) => f[1] === "carbs_std"));
+    assert(!res.notes.some((n: string) => n.startsWith("Filtered for diet strategy")));
+  } finally {
+    Deno.env.delete("DISABLE_SUGGESTMEAL_STORED_FOOD_TYPE");
+  }
+});
+
+Deno.test("Unit 3b-2: a profile read error keeps the vegan fail-safe and applies no strategy", async () => {
+  const foods = fakeSb({ food_database: CARB_FOODS });
+  // deno-lint-ignore no-explicit-any
+  const sb: any = {
+    from(t: string) {
+      if (t === "user_profile") {
+        // deno-lint-ignore no-explicit-any
+        const b: any = { select: () => b, eq: () => b, limit: () => Promise.resolve({ data: null, error: { message: "boom" } }) };
+        return b;
+      }
+      return foods.sb.from(t);
+    },
+  };
+  // deno-lint-ignore no-explicit-any
+  const res: any = await suggestMealTool.handler!({ userId: "u1", isPro: true, sb, requestId: "r" } as any, { remainingKcal: 800 } as any);
+  assert(res.top_picks.length > 0, "precondition: an answer");
+  assert(foodCalls(foods.calls).length > 0, "precondition: the food query ran");
+  for (const c of foodCalls(foods.calls)) assert(!c.filters.some((f) => f[1] === "carbs_std" || f[1] === "category"));
+  assert(!res.notes.some((n: string) => n.startsWith("Filtered for diet strategy")));
+  assert(res.notes.includes("Could not read the user's food type; showing vegan options, which suit every food type."));
+});
+
+Deno.test("Unit 3b-2: the profile read selects diet_strategy only when the strategy can apply (B-pass seat B finding 3)", async () => {
+  const selectsFor = async (isPro: boolean) => {
+    const selects: string[] = [];
+    const base = fakeSb({ user_profile: [{ user_id: "u1", diet_preference: "veg" }], food_database: CARB_FOODS }).sb;
+    // deno-lint-ignore no-explicit-any
+    const sb: any = {
+      from(t: string) {
+        const b = base.from(t);
+        const orig = b.select;
+        // deno-lint-ignore no-explicit-any
+        b.select = (c?: string, o?: any) => { if (t === "user_profile") selects.push(c ?? ""); return orig(c, o); };
+        return b;
+      },
+    };
+    // deno-lint-ignore no-explicit-any
+    await suggestMealTool.handler!({ userId: "u1", isPro, sb, requestId: "r" } as any, { remainingKcal: 800 } as any);
+    return selects;
+  };
+  assertEquals(await selectsFor(true), ["diet_preference, diet_strategy"]);
+  assertEquals(await selectsFor(false), ["diet_preference"]);
+  Deno.env.set("DISABLE_SUGGESTMEAL_DIET_STRATEGY", "true");
+  try {
+    assertEquals(await selectsFor(true), ["diet_preference"], "the switch restores the pre-3b-2 read");
+  } finally {
+    Deno.env.delete("DISABLE_SUGGESTMEAL_DIET_STRATEGY");
+  }
+});

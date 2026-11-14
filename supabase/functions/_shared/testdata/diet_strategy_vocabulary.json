@@ -1,0 +1,65 @@
+{
+  "_comment": "Diet-strategy vocabulary (diet plan Unit 3b-2, docs/plans/diet-strategy-3b.md section 5): the tolerant read of user_profile.diet_strategy, Dart dietStrategyOf (lib/core/constants/diet_strategies.dart) and TS normalizeDietStrategy (supabase/functions/_shared/diet_strategies.ts). Anything unreadable is balanced. Non-string inputs (null, a number, an object) are balanced on both sides; they are asserted in each test, since JSON cannot carry every one. Read by test/core/diet_strategy_vocabulary_test.dart and supabase/functions/_shared/diet_strategies_test.ts.",
+  "rows": [
+    {
+      "input": "keto",
+      "expected": "keto"
+    },
+    {
+      "input": "low_carb",
+      "expected": "low_carb"
+    },
+    {
+      "input": "balanced",
+      "expected": "balanced"
+    },
+    {
+      "input": " Keto",
+      "expected": "keto"
+    },
+    {
+      "input": "keto ",
+      "expected": "keto"
+    },
+    {
+      "input": "KETO",
+      "expected": "keto"
+    },
+    {
+      "input": "LOW-CARB",
+      "expected": "low_carb"
+    },
+    {
+      "input": "low carb",
+      "expected": "low_carb"
+    },
+    {
+      "input": "Low  Carb",
+      "expected": "low_carb"
+    },
+    {
+      "input": "low--carb",
+      "expected": "low_carb"
+    },
+    {
+      "input": "lowcarb",
+      "expected": "balanced"
+    },
+    {
+      "input": "paleo",
+      "expected": "balanced"
+    },
+    {
+      "input": "zone",
+      "expected": "balanced"
+    },
+    {
+      "input": "",
+      "expected": "balanced"
+    },
+    {
+      "input": "ketogenic",
+      "expected": "balanced"
+    }
+  ]
+}
