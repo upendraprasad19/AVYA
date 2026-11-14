@@ -2,7 +2,8 @@ import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
 import { geminiChat, labelForModel, MODEL_PRO } from "../_shared/gemini.ts";
 import { reportGeminiExhaustion } from "../_shared/gemini_failure_alert.ts";
-import { CAPTAIN_MANUAL } from "../_shared/captain_manual.ts";
+import { captainManual, foodTypeManualRulesOff } from "../_shared/captain_manual.ts";
+import { dietPreferenceLine } from "../_shared/food_types.ts";
 import { istDateStr } from "../_shared/ist_date.ts";
 import { buildDayMap, istDatesEnding } from "../_shared/exercise_day.ts";
 import type { SummaryRow } from "../_shared/live_exercise_rows.ts";
@@ -454,7 +455,7 @@ serve(async (req: Request) => {
       month: "long",
     });
 
-    const systemPrompt = `${CAPTAIN_MANUAL}
+    const systemPrompt = `${captainManual()}
 
 You are delivering the SUNDAY STRATEGIC BRIEF — the weekly briefing the user
 receives on Sunday at 21:00 IST. This is a mission debrief and forward order,
@@ -510,14 +511,18 @@ HARD RULES:
       })
     }
 - Diet preference: ${
-      // OI-47: `diet_preference` is one of the fields daily-snapshot's AI
-      // extraction WRITES from conversation text, so this is the second hop of
-      // the same loop -- text a user types can reach the weekly report through
-      // their stored profile. The four here are the free-text ones in this
-      // block; every other line interpolates a computed number.
-      sanitizeIdentifier(userProfile?.diet_preference as string | null, {
-        fallback: "no preference",
-      })
+      // Diet plan Unit 2b: a closed label set (Veg, Non-veg, Eggetarian,
+      // Pescatarian, Vegan) from _shared/food_types.ts, never the raw stored
+      // string; null reads as the default, Non-veg. With
+      // DISABLE_FOOD_TYPE_MANUAL_RULES exactly "true" the pre-2b line returns.
+      // OI-47 (that path): `diet_preference` was one of the fields
+      // daily-snapshot's AI extraction WROTE from conversation text, so text
+      // a user typed could reach the report through the stored profile.
+      foodTypeManualRulesOff()
+        ? sanitizeIdentifier(userProfile?.diet_preference as string | null, {
+          fallback: "no preference",
+        })
+        : dietPreferenceLine(userProfile?.diet_preference)
     }
 - TDEE: ${tdee} kcal
 - Daily calorie target: ${calorieTarget} kcal

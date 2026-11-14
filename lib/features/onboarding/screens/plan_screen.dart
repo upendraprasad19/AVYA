@@ -465,7 +465,9 @@ class _PlanScreenState extends ConsumerState<PlanScreen> {
       //
       // Two fields stay as onboarding defaults by explicit product
       // decision during PR AI planning:
-      //   diet_preference → 'veg'  (Indian-first target audience)
+      //   diet_preference → 'non_veg'  (founder default, 2026-11-14; the
+      //                     food type is chosen on the Diet Plan screen or in
+      //                     Edit Profile, docs/plans/diet-food-type.md)
       //   injuries        → ['none']  (matches edit_profile's convention)
       // Users override both via Profile → Edit Profile, which has both
       // fields wired.
@@ -575,9 +577,9 @@ class _PlanScreenState extends ConsumerState<PlanScreen> {
       notifier.setAnswer('lifestyle_activity', lifestyleActivity);
       notifier.setAnswer('pace_preference', pacePreference);
       // AI.3 — defaults updated per user decision:
-      //   diet_preference: 'balanced' → 'veg' (Indian-first default)
+      //   diet_preference: 'non_veg' (founder default, 2026-11-14; was 'veg')
       //   injuries: []  → ['none']  (matches edit_profile convention)
-      notifier.setAnswer('diet_preference', 'veg');
+      notifier.setAnswer('diet_preference', 'non_veg');
       // Unit 4 (d-bf): no fabricated default (was `?? 18.0`) — the root source
       // is stats_screen; this is defense-in-depth. Skip → null → Mifflin.
       notifier.setAnswer(

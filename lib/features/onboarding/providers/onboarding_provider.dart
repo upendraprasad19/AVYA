@@ -23,6 +23,7 @@ import 'package:icanbefitter/shared/repositories/user_repository.dart';
 import 'package:icanbefitter/shared/repositories/plan_generator.dart';
 import 'package:icanbefitter/core/services/water_target_service.dart';
 import 'package:icanbefitter/core/constants/equipment_defaults.dart';
+import 'package:icanbefitter/core/constants/food_types.dart';
 
 // ── Onboarding Step Definitions ──────────────────────────────────
 
@@ -503,8 +504,7 @@ class OnboardingNotifier extends Notifier<OnboardingState> {
       // Fixed 2026-04-24: carry the answers through to the saved profile.
       final injuries = (a['injuries'] as List<dynamic>?)?.cast<String>() ??
           <String>['none'];
-      final dietPreference =
-          (a['diet_preference'] as String?) ?? 'veg';
+      final dietPreference = resolveOnboardingDietPreference(a);
       // `bodyFatPercent` is parsed earlier now (Unit 4 d-bf — fed into the calc).
       // String field (`this_monday` / `next_monday` / etc.) distinct
       // from the local DateTime-typed `startDate` used below for
@@ -990,3 +990,11 @@ Format (use • not JSON):
 final onboardingProvider =
     NotifierProvider<OnboardingNotifier, OnboardingState>(
         OnboardingNotifier.new);
+
+/// The food type an onboarding completion stores (diet plan Unit 2a): the
+/// answer's canonical key, or the founder's default `non_veg` when the user
+/// was never asked (onboarding does not ask; the Diet Plan screen and Edit
+/// Profile do). Pure, so the default is testable without driving the whole
+/// completion.
+String resolveOnboardingDietPreference(Map<String, dynamic> answers) =>
+    foodTypeOf(answers['diet_preference']).storageKey;

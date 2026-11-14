@@ -2156,7 +2156,16 @@ added, false of the flip being performed.
 - **Test shape:** run the generator on the REAL bundled asset across archetypes x seeds and assert membership in the allowlist, family caps, template shape and macro floors; pin every catalog id against the asset; mutate each guard.
 - **Regression test:** `test/nutrition/curated_diet_plan_test.dart` (T1-T9; diagnoses d3c7a9 -> 83ac8a).
 
-### 2.157 A pipeline stage that rebuilds a model object drops a field added after it was written (NEW 2026-11-14)
+### 2.157 A preference filter whose "anything else" branch allows everything turns every new or misspelled value into the most permissive choice (NEW 2026-11-14)
+
+- **Telltale:** a user with a restrictive preference (pescatarian, an AI-extracted "vegetarian_eggs", a value with a stray space) gets food the preference forbids, while the named values (`veg`, `vegan`) behave; the column holds more spellings than any reader lists.
+- **Root-cause shape:** three writers stored `diet_preference` in three vocabularies (`veg` from onboarding; `vegetarian`/`keto`/`pescatarian` from Edit Profile; the coach extraction's own list), and `passesDiet` matched only `vegan` and `veg`/`vegetarian` and returned true for everything else. The safe default sat on the wrong side: an unknown restrictive value was read as "eats anything".
+- **Why it survives review:** each reader looks correct for the values its author had in mind; the drift only shows when a value from ANOTHER writer reaches it, and no test enumerates every writer's output.
+- **Fix pattern:** one closed enum and one tolerant normaliser every reader goes through (`foodTypeOf`): absent (null, '') = the product default; known spellings = their type; an unknown NON-EMPTY value = the most restrictive safe reading (Veg), never "anything". One write door that stores only canonical keys. Pin the table in a fixture both client and server tests read.
+- **Test shape:** a fixture row per spelling every writer can produce (incl. AI variants and whitespace); a truth table of the filter with the unchanged rows and the stricter-by-design rows each pinned; an INDEPENDENT oracle (not the helper under test) over generated plans; mutate "unknown -> default".
+- **Regression test:** `test/core/food_types_test.dart`, `test/nutrition/passes_diet_food_type_test.dart`, `test/contracts/diet_preference_vocabulary_writer_to_reader_test.dart` (diagnoses a2b2f1 -> 6f5aaa).
+
+### 2.158 A pipeline stage that rebuilds a model object drops a field added after it was written (NEW 2026-11-14)
 
 - **Telltale:** a new per-day field (`MuscleSlotDay.avoidEarlier`) is set by the writer and read by the consumer, the
   unit tests of both pass, and the end-to-end measure does not move. In the v2 prototype the 4-day repeats went 86 -> 464

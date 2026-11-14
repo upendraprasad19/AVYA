@@ -267,12 +267,10 @@ serve(async (req: Request) => {
       }
 
       // Personalize: preferred_name from coach_memory (private_mode aware),
-      // diet_preference from user_profile. Real vocabulary (corrected
-      // 2026-09-27, a2b-2): 'non_veg' / 'vegetarian' / 'vegan' /
-      // 'pescatarian' / 'keto' (Edit Profile chips) PLUS 'veg' (onboarding's
-      // default for anyone who hasn't visited Edit Profile yet) — see
-      // message.ts's header for the full rationale. 'eggetarian' is not a
-      // real value anywhere in this app.
+      // diet_preference from user_profile, in any stored spelling: message.ts
+      // reads it through _shared/food_types.ts normalizeFoodType (the five
+      // food types veg / non_veg / eggetarian / pescatarian / vegan; diet
+      // plan Unit 2b).
       const memory = await fetchCoachMemory(supabase, userId);
       const usableMemory = memory?.private_mode ? null : memory;
       const preferredName = usableMemory?.preferred_name as string | null;

@@ -236,7 +236,10 @@ class CuratedDietPlanGenerator {
       final e = _catalog[i];
       final row = _repo.getById(e.foodId);
       if (row == null || row.isEmpty) continue; // stale box: skip, never throw
-      if (!DietPlanGenerator.passesDiet(row, dietPreference)) continue;
+      if (!DietPlanGenerator.passesDiet(row, dietPreference,
+          family: e.family)) {
+        continue;
+      }
       out.add(CuratedCandidate(e, row, i));
     }
     return out;
@@ -346,7 +349,12 @@ class CuratedDietPlanGenerator {
     // white-rice day measured 17 g against 30 g before this term.
     final f = max(1, inputs.fiberTarget).toDouble();
     final fib = day.fold(0.0, (a, s) => a + s.fiber);
-    return 3 * (k - t).abs() / t +
+    // Calorie band (Unit 2a): beyond +/-8 % of target a day pays a steep
+    // extra cost, so protein can never buy a day outside the tests' band
+    // (a 1500 kcal pescatarian day measured 1.11 x target without it).
+    final kErr = (k - t).abs() / t;
+    return 3 * kErr +
+        20 * max(0.0, kErr - 0.08) +
         2 * max(0.0, 0.95 * p - pr) / p +
         max(0.0, pr - 1.15 * p) / p +
         3 * max(0.0, 0.8 * f - fib) / f;

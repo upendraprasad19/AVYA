@@ -279,7 +279,7 @@ Skip and call out as scams:
 - Most "mass gainer" products (overpriced sugar)
 
 Always:
-- Personalize to user's diet (snapshot.profile.diet_preference) and protein delivery (snapshot.nutrition_trend_7d.protein_avg vs target)
+- Personalize to the user's food type (snapshot.profile.diet_preference; the rules are in SECTION 7, DIET) and protein delivery (snapshot.nutrition_trend_7d.protein_avg vs target)
 - Defer medical to doctor before starting if cardiac/kidney/liver condition
 - Offer to inspect any specific label user mentions
 
@@ -338,9 +338,11 @@ REFUSAL STYLE:
 ## SECTION 7 — INDIAN CULTURAL CONTEXT
 
 DIET:
-- Vegetarian-first. ~40% of users vegetarian. Default planning around dal, paneer, chickpeas, legumes, eggs (where eggetarian).
+- Respect snapshot.profile.diet_preference: veg (no meat, fish or eggs), non_veg (anything), eggetarian (veg plus eggs), pescatarian (veg plus eggs, fish and seafood), vegan (no animal products: no dairy, eggs, meat, fish, honey or whey; plant protein instead). Never suggest a food outside it.
+- Older values: vegetarian = veg; keto or low_carb = non_veg with a low-carb emphasis; empty or missing = non_veg.
+- Many Indian users are vegetarian. For them, plan around dal, paneer, chickpeas and legumes.
 - Jain restrictions: no root vegetables (potato, onion, garlic). Verify before suggesting.
-- Lacto-vegetarian common. Check diet_preference before whey vs plant.
+- Check diet_preference before whey vs plant protein.
 - Festival eating: do not lecture against sweets/biryani at weddings or Diwali. Plan around them ("protein-forward, log as 'wedding-est'").
 
 LIFESTYLE:
@@ -453,10 +455,38 @@ the \`getNutritionHistory\` tool — that data is NOT in your snapshot.
 
 `;
 
+// Diet plan Unit 2b (2026-11-14, plan diet-food-type-server §2.5): the food
+// rules above (SECTION 5 "Personalize" line, SECTION 7 DIET) name the five
+// food types. The pre-2b text is kept as CAPTAIN_MANUAL_LEGACY_FOOD and is
+// served when DISABLE_FOOD_TYPE_MANUAL_RULES is exactly "true" (read per
+// call by captainManual(); every prompt builder calls captainManual(), never
+// the constant). Removal of the switch: tracked on the OI board.
+export const FOOD_TYPE_MANUAL_RULES_NEW = [
+  "- Personalize to the user's food type (snapshot.profile.diet_preference; the rules are in SECTION 7, DIET) and protein delivery (snapshot.nutrition_trend_7d.protein_avg vs target)\n",
+  "- Respect snapshot.profile.diet_preference: veg (no meat, fish or eggs), non_veg (anything), eggetarian (veg plus eggs), pescatarian (veg plus eggs, fish and seafood), vegan (no animal products: no dairy, eggs, meat, fish, honey or whey; plant protein instead). Never suggest a food outside it.\n- Older values: vegetarian = veg; keto or low_carb = non_veg with a low-carb emphasis; empty or missing = non_veg.\n- Many Indian users are vegetarian. For them, plan around dal, paneer, chickpeas and legumes.\n- Jain restrictions: no root vegetables (potato, onion, garlic). Verify before suggesting.\n- Check diet_preference before whey vs plant protein.\n",
+] as const;
+export const FOOD_TYPE_MANUAL_RULES_LEGACY = [
+  "- Personalize to user's diet (snapshot.profile.diet_preference) and protein delivery (snapshot.nutrition_trend_7d.protein_avg vs target)\n",
+  "- Vegetarian-first. ~40% of users vegetarian. Default planning around dal, paneer, chickpeas, legumes, eggs (where eggetarian).\n- Jain restrictions: no root vegetables (potato, onion, garlic). Verify before suggesting.\n- Lacto-vegetarian common. Check diet_preference before whey vs plant.\n",
+] as const;
+
+export const CAPTAIN_MANUAL_LEGACY_FOOD = CAPTAIN_MANUAL
+  .replace(FOOD_TYPE_MANUAL_RULES_NEW[0], FOOD_TYPE_MANUAL_RULES_LEGACY[0])
+  .replace(FOOD_TYPE_MANUAL_RULES_NEW[1], FOOD_TYPE_MANUAL_RULES_LEGACY[1]);
+
+export function foodTypeManualRulesOff(): boolean {
+  return Deno.env.get("DISABLE_FOOD_TYPE_MANUAL_RULES") === "true";
+}
+
+/** The Captain's Manual to serve now (switch read per call). */
+export function captainManual(): string {
+  return foodTypeManualRulesOff() ? CAPTAIN_MANUAL_LEGACY_FOOD : CAPTAIN_MANUAL;
+}
+
 export type CoachChannel = "chat" | "morning" | "weekly" | "proactive";
 
 /**
- * Returns the CAPTAIN_MANUAL system prompt with a channel-specific suffix.
+ * Returns the Captain's Manual (captainManual()) with a channel-specific suffix.
  *
  * - chat: no suffix (full persona, conversational)
  * - morning: 80-word morning briefing with one concrete data point
@@ -494,5 +524,5 @@ export function captainPrompt(channel: CoachChannel): string {
       "Lead with the observation, follow with one specific next action. No greetings, " +
       "no signoffs, no emoji.",
   };
-  return CAPTAIN_MANUAL + suffix[channel];
+  return captainManual() + suffix[channel];
 }
