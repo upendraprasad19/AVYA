@@ -39,19 +39,20 @@ import 'package:icanbefitter/shared/widgets/wardroom/ward_button.dart';
 
 import '../helpers/hive_test_setup.dart';
 
+// Energy-consistent: 4 x 150 + 4 x 270 + 9 x 80 = 2400 kcal.
 const _pack = <String, dynamic>{
   'full_name': 'T',
   'daily_calories': 2400,
   'protein_grams': 150,
-  'carb_grams': 280,
-  'carbs_grams': 280,
+  'carb_grams': 270,
+  'carbs_grams': 270,
   'fat_grams': 80,
 };
 
 final _keto = BmrCalculator.macroSplit(
     dailyCalories: 2400,
     proteinGrams: 150,
-    balancedCarbs: 280,
+    balancedCarbs: 270,
     strategy: DietStrategy.keto);
 
 Future<void> _settle(WidgetTester tester) async {
@@ -105,7 +106,7 @@ void main() {
   test('preview: the OLD side uses the current PRO state, the NEW side '
       'assumes PRO (the gate just passed; a user mid-verification still sees '
       'the real change)', () {
-    const base = (calories: 2400.0, protein: 150.0, carbs: 280.0, fat: 80.0);
+    const base = (calories: 2400.0, protein: 150.0, carbs: 270.0, fat: 80.0);
     final p = previewDietStrategyChange(
       beforeBase: base,
       afterBase: base,
@@ -114,11 +115,46 @@ void main() {
       currentPro: false,
     )!;
     expect(p.before.strategy, DietStrategy.balanced);
-    expect(p.before.carbs, 280);
+    expect(p.before.carbs, 270);
     expect(p.after.strategy, DietStrategy.lowCarb);
     expect(p.after.carbs, 120);
     expect(p.sameShown, isFalse);
     expect(p.caloriesOrProteinMove, isFalse);
+  });
+
+  test('result copy: "updated" only when a shown number moved', () {
+    const base = (calories: 2400.0, protein: 150.0, carbs: 270.0, fat: 80.0);
+    final moved = previewDietStrategyChange(
+        beforeBase: base,
+        afterBase: base,
+        storedStrategy: null,
+        next: DietStrategy.keto,
+        currentPro: true)!;
+    expect(dietStrategyResultMessage(DietStrategy.keto, moved),
+        'Targets updated for Keto');
+    const low = (calories: 1500.0, protein: 150.0, carbs: 60.0, fat: 73.0);
+    final same = previewDietStrategyChange(
+        beforeBase: low,
+        afterBase: low,
+        storedStrategy: 'low_carb',
+        next: DietStrategy.balanced,
+        currentPro: true)!;
+    expect(same.sameShown, isTrue);
+    expect(dietStrategyResultMessage(DietStrategy.balanced, same),
+        'Balanced is set. Your targets stay the same.');
+    expect(dietStrategyResultMessage(DietStrategy.keto, null),
+        'Diet strategy set to Keto.');
+  });
+
+  test('Edit Profile saved copy names a strategy dropped for lapsed PRO '
+      '(B-pass seat B finding 2)', () {
+    expect(editProfileSavedMessage(rescheduled: false), 'Profile saved');
+    expect(editProfileSavedMessage(rescheduled: true),
+        'Profile saved & workouts rescheduled');
+    expect(
+        editProfileSavedMessage(
+            rescheduled: false, strategyNotSaved: DietStrategy.keto),
+        'Profile saved. Keto needs PRO, so your diet strategy did not change.');
   });
 
   group('with Hive', () {
@@ -205,7 +241,7 @@ void main() {
       // The PRO gate (isPro, the DECISION path) may write Hive.
       await _tapReal(tester, chip(DietStrategy.keto));
       expect(find.text('Switch to Keto?'), findsOneWidget);
-      expect(find.text('Carbs 280 g \u2192 ${_keto.carbGrams} g'),
+      expect(find.text('Carbs 270 g \u2192 ${_keto.carbGrams} g'),
           findsOneWidget);
       expect(find.text('Fat 80 g \u2192 ${_keto.fatGrams} g'), findsOneWidget);
       expect(find.text('Calories and protein stay the same.'), findsOneWidget);
@@ -248,7 +284,9 @@ void main() {
       expect(find.byKey(const ValueKey('diet_strategy_confirm_dialog')),
           findsNothing);
       expect(_stored(), 'low_carb');
-      expect(find.text('Your targets are already low in carbs.'),
+      expect(
+          find.text('Low carb is set. Your targets stay the same: your carbs '
+              'are already this low.'),
           findsOneWidget);
     });
 
@@ -266,6 +304,32 @@ void main() {
       expect(find.byKey(const ValueKey('diet_strategy_confirm_dialog')),
           findsNothing);
       expect(_stored(), 'keto');
+      // B-pass seat B finding 3: no shown number moved, so no "updated".
+      expect(find.text('Diet strategy set to Keto.'), findsOneWidget);
+      expect(find.text('Targets updated for Keto'), findsNothing);
+    });
+
+    testWidgets('a write that throws says so and stores nothing (B-pass seat '
+        'B finding 1)', (tester) async {
+      await seed(tester, pro: true);
+      var reads = 0;
+      UserProfileNotifier.debugFoodTypeEffects = FoodTypeWriteEffects(
+        currentUserId: () {
+          // The call's capture succeeds; the queued link's read throws, as a
+          // failed Hive read or write would.
+          if (++reads > 1) throw StateError('hive down');
+          return 'user-a';
+        },
+        pushSnapshot: () => pushes++,
+        lockFields: (_) async {},
+      );
+      await pumpSection(tester);
+      await _tapReal(tester, chip(DietStrategy.keto));
+      await _tapReal(
+          tester, find.byKey(const ValueKey('diet_strategy_confirm_switch')));
+      expect(find.text(kDietStrategyChangeFailedMessage), findsOneWidget);
+      expect(_stored(), isNull);
+      expect(pushes, 0);
     });
 
     testWidgets('paused: a free user holding keto sees Balanced selected and '
@@ -392,11 +456,17 @@ void main() {
         'for a changed chip, and seeds from the EFFECTIVE strategy', () {
       final src = File('lib/features/profile/screens/edit_profile_screen.dart')
           .readAsStringSync();
-      expect(src,
-          contains('_dietStrategy = dietStrategyOfTargets(ref.read(macroTargetsProvider));'));
+      expect(
+          RegExp(r'_dietStrategy = DietStrategyFlags\.enabled\s*\?\s*dietStrategyOfTargets\(ref\.read\(macroTargetsProvider\)\)\s*:\s*kDefaultDietStrategy;')
+              .hasMatch(src),
+          isTrue,
+          reason: 'seeded from the EFFECTIVE strategy, and no provider read '
+              'with the flag off (B-pass seat A finding 2)');
       expect(src,
           contains('if (DietStrategyFlags.enabled && _dietStrategy != _originalDietStrategy) {'));
-      expect(src, contains("if (writeIt) updates['diet_strategy'] = _dietStrategy.storageKey;"));
+      expect(src, contains("updates['diet_strategy'] = _dietStrategy.storageKey;"));
+      expect(src, contains('strategyNotSaved = _dietStrategy;'));
+      expect(src, contains('strategyNotSaved: strategyNotSaved,'));
       expect("'diet_strategy'".allMatches(src).length, 1,
           reason: 'one write site, inside the gated block');
       expect(src, contains('if (DietStrategyFlags.enabled) ...['));

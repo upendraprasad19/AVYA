@@ -73,6 +73,7 @@ Round 2 found two P1s and five P2s, all in the write-time machinery (no "server-
 - Consequences, each by construction: a lapse shows Balanced targets immediately and a renewal brings the strategy back (the stored choice is kept); the kill switch reverts every screen at once; a restore needs nothing (the field restores like any profile key); Edit Profile's full recompute never interacts with the strategy; no calorie or protein value ever changes because of the strategy.
 - A pin test (source scan of `lib/`) asserts that `carb_grams`, `carbs_grams` and `fat_grams` are read from the profile map only inside `_resolveNutritionTargets`, `NutritionSummaryNotifier`, `ai_snapshot_builder` and the existing writers/sync/restore files (allow-list by file), so a new raw reader fails CI.
 - Accepted limit: an uncertain PRO state (a fresh-install restore before the first refresh, offline with a passed local `expires_at`) SHOWS Balanced targets until the state is known. Nothing is written, so it heals the moment the state is known.
+- Stated limit (B-pass seat A finding 1): Home and the snapshot apply the strategy only to a COMPLETE stored four-pack, while `_resolveNutritionTargets` also applies it to its recompute fallback. A profile with recompute inputs but no stored pack (not seen after onboarding, which writes all four keys) already disagrees on `main` between Home's 250/65 defaults, the snapshot's zeros and Nutrition's recompute. The strategy keeps that split; it does not add one.
 
 ### 3.4 Write door
 

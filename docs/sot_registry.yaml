@@ -1601,7 +1601,7 @@ concepts:
       concept; merged into one entry at 2a's sync with main.)
     writers:
       - file: lib/features/profile/providers/profile_provider.dart
-        line_range: 109-148
+        line_range: 93-148
         method: setFoodType + _applyFoodType (UserProfileNotifier; the Diet Plan screen's door)
         notes: |
           Serialised through a chained future (a failed link does not block
@@ -1611,7 +1611,7 @@ concepts:
           fires syncProfileNow); signed in: pushSnapshot, and the
           coach-extraction lock ONLY when the food type itself changed.
       - file: lib/features/profile/screens/edit_profile_screen.dart
-        line_range: 1788-2215
+        line_range: 1794-2230
         method: _save (writes _foodType.storageKey; lock compare on canonical keys)
       - file: lib/features/onboarding/providers/onboarding_provider.dart
         line_range: 999-1000
@@ -1647,7 +1647,7 @@ concepts:
         semantic: pass-through
         fields_read: [diet_preference]
       - file: lib/features/profile/screens/edit_profile_screen.dart
-        line_range: 1284-1335
+        line_range: 1287-1341
         method: _buildDietPreferenceChips (FoodTypeChips; no Keto)
         semantic: pass-through
         fields_read: [diet_preference]
@@ -1720,6 +1720,13 @@ concepts:
       map, DailyNutritionData.strategy, the snapshot's own call), so a label
       never sits over numbers made for another strategy. Never read by
       workout generation; never set by the coach extraction.
+      Stated limit (plan §3.3, B-pass seat A finding 1): Home and the
+      snapshot apply the strategy only to a COMPLETE stored four-pack, while
+      _resolveNutritionTargets also applies it to its recompute fallback. A
+      profile with recompute inputs but no stored pack (never seen after
+      onboarding, which writes all four) already disagrees between Home's
+      250/65 defaults, the snapshot's zeros and Nutrition's recompute before
+      3a; the strategy keeps that pre-existing split, it does not add one.
     writers:
       - file: lib/features/profile/providers/profile_provider.dart
         line_range: 150-188
@@ -1732,8 +1739,18 @@ concepts:
           dailyNutritionProvider, nutritionSummaryProvider, dietPlanProvider;
           signed in: pushSnapshot (no extraction lock).
       - file: lib/features/profile/screens/edit_profile_screen.dart
-        line_range: 1788-1920
+        line_range: 1794-1934
         method: _save (adds diet_strategy only with the flag on, for a chip different from the EFFECTIVE strategy, after confirmEditProfileDietStrategy; PRO re-checked at Save)
+        notes: |
+          PRESENCE ONLY for the screen wiring (B-pass seat C finding 3): the
+          chip's PRO gate (_onDietStrategyChip), the flag-gated seed and the
+          single `updates['diet_strategy']` site are pinned by source grep in
+          test/nutrition/diet_strategy_selector_test.dart. Reason: the screen
+          is a 2,300-line form whose Save also reschedules workouts and
+          recomputes targets; a widget test of it would mostly exercise that.
+          The decision the wiring calls (confirmEditProfileDietStrategy:
+          null / true / false) and the saved-message helper
+          (editProfileSavedMessage) are tested behaviourally in the same file.
       - file: lib/core/services/sync/sync_profile.dart
         line_range: 160-240
         method: _syncUserProfile (push via dietStrategyPushEntry; flag-gated, canonical key)
@@ -6016,7 +6033,7 @@ concepts:
         method: completeOnboarding
         notes: writes to userBox['profile']['full_name'] + syncs to users table
       - file: lib/features/profile/screens/edit_profile_screen.dart
-        line_range: 1788-2215
+        line_range: 1794-2230
         method: _save
         notes: calls syncProfileNow after updating userBox
       - file: lib/features/profile/services/profile_write_service.dart
@@ -10512,7 +10529,7 @@ concepts:
         method: InjuryVocab.normalize / canonicalTokens / chipTokens / toggleChip
         notes: canonical 9-token set + read-side alias (back to lower_back, free-text to token); Ship 3 added chipTokens (single chip-UI source == none ∪ canonicalTokens) + chipLabel + pure toggleChip shared by both chip screens
       - file: lib/features/profile/screens/edit_profile_screen.dart
-        line_range: 1336-1401
+        line_range: 1342-1407
         method: _buildInjuriesChips + profile reader
         notes: chips emit canonical tokens (via InjuryVocab.chipTokens/toggleChip Ship 3); reader normalizes legacy stored values
       - file: lib/features/onboarding/screens/details_screen.dart
@@ -16775,7 +16792,7 @@ concepts:
           once, a much smaller harm than blocking the profile save this
           runs alongside.
       - file: lib/features/profile/screens/edit_profile_screen.dart
-        line_range: 1931-1960
+        line_range: 1944-1973
         method: "_save (via the pure computeCoachExtractionFieldsToLock helper)"
         notes: |
           Locks only fields that ACTUALLY changed this save (diet_preference /

@@ -249,7 +249,10 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
     // Theme C · Test #8 — Indian-first default; matches onboarding's
     // implicit default which already writes 'veg' for new users.
     _foodType = foodTypeOfProfile(profile);
-    _dietStrategy = dietStrategyOfTargets(ref.read(macroTargetsProvider));
+    // B-pass seat A finding 2: no new provider read with the flag off.
+    _dietStrategy = DietStrategyFlags.enabled
+        ? dietStrategyOfTargets(ref.read(macroTargetsProvider))
+        : kDefaultDietStrategy;
     _pacePreference = (profile['pace_preference'] as String?) ?? 'balanced'; // Bug #24
     // A legacy/restored profile missing the field lands on the engine's own
     // default (60, B2 Ruling 7; it was 90 under Theme C · Test #8). The saved
@@ -1326,8 +1329,11 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
       onPro: () {
         if (mounted) setState(() => _dietStrategy = next);
       },
-      onFree: () =>
-          showPaywallSheet(context, feature: kDietStrategyPaywallLabel),
+      onFree: () {
+        if (mounted) {
+          showPaywallSheet(context, feature: kDietStrategyPaywallLabel);
+        }
+      },
     );
   }
 
@@ -1899,6 +1905,7 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
       // with the flag on and only when the user tapped a chip different from
       // the effective strategy; Save confirms the change first (Cancel saves
       // nothing), and a non-Balanced choice needs PRO still true at Save.
+      DietStrategy? strategyNotSaved;
       if (DietStrategyFlags.enabled && _dietStrategy != _originalDietStrategy) {
         final stored = UserRepository.instance.getProfile() ?? const {};
         final edited = <String, dynamic>{...stored, ...updates};
@@ -1917,7 +1924,13 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
           pro: SubscriptionService.instance.proStateSnapshot(),
         );
         if (writeIt == null || !mounted) return;
-        if (writeIt) updates['diet_strategy'] = _dietStrategy.storageKey;
+        if (writeIt) {
+          updates['diet_strategy'] = _dietStrategy.storageKey;
+        } else {
+          // B-pass seat B finding 2: PRO lapsed between the tap and Save; the
+          // rest of the form saves and the user is told the strategy did not.
+          strategyNotSaved = _dietStrategy;
+        }
       }
 
       await ref.read(userProfileProvider.notifier).updateProfile(updates);
@@ -2183,9 +2196,11 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
-              planChanged && WorkoutScheduleService.instance.hasPlan()
-                  ? 'Profile saved & workouts rescheduled'
-                  : 'Profile saved',
+              editProfileSavedMessage(
+                rescheduled:
+                    planChanged && WorkoutScheduleService.instance.hasPlan(),
+                strategyNotSaved: strategyNotSaved,
+              ),
               style: AppTypography.bodySm.copyWith(color: Colors.white),
             ),
             backgroundColor: AppColors.ok,

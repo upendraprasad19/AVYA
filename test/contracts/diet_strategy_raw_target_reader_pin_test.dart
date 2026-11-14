@@ -6,7 +6,8 @@
 // macroTargetsProvider / DailyNutritionData (or effectiveMacroTargets).
 //
 // PRESENCE class (a source scan, stated): an index read `['carb_grams']`,
-// `['carbs_grams']` or `['fat_grams']` anywhere under lib/. Map-literal keys
+// `['carbs_grams']` or `['fat_grams']` (either quote) or a `.get('...')` of
+// one anywhere under lib/. Map-literal keys
 // (`'carb_grams': x`, the writers) are not index reads. Positive controls
 // prove the pattern sees the spellings a real reader would use.
 library;
@@ -15,7 +16,11 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 
-final _rawRead = RegExp(r"\[\s*'(carb_grams|carbs_grams|fat_grams)'\s*\]");
+// Index reads in either quote style, and `.get('...')` / `["..."]` (B-pass
+// seat C finding 4). Still a PRESENCE scan: a key built from a variable is
+// not seen, which the stated limit in docs/sot_registry.yaml names.
+final _rawRead = RegExp(
+    r'''(\[\s*|\.get\(\s*)['"](carb_grams|carbs_grams|fat_grams)['"]\s*[\]\),]''');
 
 /// Files allowed to index the raw keys, and why.
 const _allowed = <String, String>{
@@ -71,11 +76,19 @@ void main() {
       'lib/features/x/b.dart': "final c = (p?['carbs_grams'] as num?);",
       'lib/features/x/c.dart': "final f = profile[ 'fat_grams' ];",
       'lib/features/x/d.dart': "final ok = {'carb_grams': 1, 'fat_grams': 2};",
+      'lib/features/x/e.dart': 'final c = profile["carb_grams"];',
+      'lib/features/x/f.dart': "final c = box.get('fat_grams');",
+      'lib/features/x/g.dart': 'final c = box.get("carbs_grams", '
+          'defaultValue: 0);',
+      'lib/features/x/h.dart': "final s = 'carb_grams';",
     };
     expect(_offenders(fake), [
       'lib/features/x/a.dart:1',
       'lib/features/x/b.dart:1',
       'lib/features/x/c.dart:1',
+      'lib/features/x/e.dart:1',
+      'lib/features/x/f.dart:1',
+      'lib/features/x/g.dart:1',
     ]);
   });
 }

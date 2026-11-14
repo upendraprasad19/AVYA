@@ -52,7 +52,7 @@ DietStrategy dietStrategyOf(Object? raw) {
 /// numbers, never a separately read profile value.
 DietStrategy dietStrategyOfTargets(Map<String, dynamic>? targets) {
   final raw = targets?['strategy_index'];
-  if (raw is! num) return kDefaultDietStrategy;
+  if (raw is! num || !raw.isFinite) return kDefaultDietStrategy;
   final i = raw.toInt();
   if (i < 0 || i >= DietStrategy.values.length) return kDefaultDietStrategy;
   return DietStrategy.values[i];

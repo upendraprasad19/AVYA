@@ -10,10 +10,13 @@
 // (the gate has just passed, so a user mid-verification still sees the real
 // change). When the two sides round to the same four integers, there is no
 // dialog: the field is written and the snackbar says so.
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:icanbefitter/core/constants/app_constants.dart';
 import 'package:icanbefitter/core/constants/diet_strategies.dart';
+import 'package:icanbefitter/core/services/error_telemetry.dart';
 import 'package:icanbefitter/core/services/subscription_service.dart';
 import 'package:icanbefitter/core/theme/colors.dart';
 import 'package:icanbefitter/core/theme/typography.dart';
@@ -66,11 +69,25 @@ DietStrategyChangePreview? previewDietStrategyChange({
   return DietStrategyChangePreview(before: before, after: after);
 }
 
-/// The snackbar after a change that did not move any shown number.
-String dietStrategyUnchangedMessage(DietStrategy next) =>
-    next == DietStrategy.balanced
-        ? 'Targets updated for ${next.label}'
-        : 'Your targets are already low in carbs.';
+/// The snackbar after a written change (B-pass seat C finding 5, seat B
+/// finding 3): it says "updated" only when a shown number moved.
+/// - no preview (only the hard-coded defaults are shown; the strategy never
+///   applies to those): the choice is stored, nothing moves;
+/// - the same rounded targets: the choice is stored, the targets stay;
+/// - otherwise: the targets were updated.
+String dietStrategyResultMessage(
+  DietStrategy next,
+  DietStrategyChangePreview? preview,
+) {
+  if (preview == null) return 'Diet strategy set to ${next.label}.';
+  if (preview.sameShown) {
+    return next == DietStrategy.balanced
+        ? 'Balanced is set. Your targets stay the same.'
+        : '${next.label} is set. Your targets stay the same: '
+            'your carbs are already this low.';
+  }
+  return 'Targets updated for ${next.label}';
+}
 
 void _snack(BuildContext context, String text) {
   ScaffoldMessenger.of(context).showSnackBar(
@@ -97,7 +114,14 @@ Future<void> handleDietStrategyTap(
     await SubscriptionService.instance.gateAndVerify(
       AppConstants.featureDietStrategy,
       onPro: () => allowed = true,
-      onFree: () => showPaywallSheet(context, feature: kDietStrategyPaywallLabel),
+      onFree: () {
+        // Synchronous today (a local-only feature); the check keeps a later
+        // move to server verification, whose callback runs after an await,
+        // from using a dead context (B-pass seat B finding 4).
+        if (context.mounted) {
+          showPaywallSheet(context, feature: kDietStrategyPaywallLabel);
+        }
+      },
     );
     if (!allowed || !context.mounted) return;
   }
@@ -122,19 +146,27 @@ Future<void> handleDietStrategyTap(
     if (!confirmed || !context.mounted) return;
   }
 
-  final applied = await notifier.setDietStrategy(next);
+  // A throwing write (a failed Hive put) says so like a dropped one
+  // (B-pass seat B finding 1); the error is recorded, not swallowed.
+  bool applied;
+  try {
+    applied = await notifier.setDietStrategy(next);
+  } catch (e, st) {
+    unawaited(ErrorTelemetry.recordNonFatal(e, st,
+        reason: 'diet_strategy_change_failed'));
+    applied = false;
+  }
   if (!context.mounted) return;
   if (!applied) {
-    _snack(context, "Couldn't change the diet strategy. Try again.");
+    _snack(context, kDietStrategyChangeFailedMessage);
     return;
   }
-  _snack(
-    context,
-    preview != null && preview.sameShown
-        ? dietStrategyUnchangedMessage(next)
-        : 'Targets updated for ${next.label}',
-  );
+  _snack(context, dietStrategyResultMessage(next, preview));
 }
+
+/// The snackbar when a change could not be written.
+const String kDietStrategyChangeFailedMessage =
+    "Couldn't change the diet strategy. Try again.";
 
 /// Edit Profile's Save step for a changed strategy (plan §3.4/§3.6). Returns
 /// null when the user cancelled (nothing is saved), true when `diet_strategy`
@@ -165,4 +197,18 @@ Future<bool?> confirmEditProfileDietStrategy(
   final confirmed =
       await showDietStrategyConfirmDialog(context, next: next, preview: preview);
   return confirmed ? true : null;
+}
+
+/// Edit Profile's saved snackbar. [strategyNotSaved] is a non-Balanced
+/// strategy dropped at Save because PRO lapsed after the chip tap (B-pass
+/// seat B finding 2): the rest of the profile saved, the strategy did not.
+String editProfileSavedMessage({
+  required bool rescheduled,
+  DietStrategy? strategyNotSaved,
+}) {
+  final base =
+      rescheduled ? 'Profile saved & workouts rescheduled' : 'Profile saved';
+  if (strategyNotSaved == null) return base;
+  return '$base. ${strategyNotSaved.label} needs PRO, so your diet strategy '
+      'did not change.';
 }

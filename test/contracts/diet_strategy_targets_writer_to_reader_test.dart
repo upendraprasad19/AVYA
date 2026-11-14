@@ -22,6 +22,8 @@ library;
 import 'dart:io';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'dart:convert';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:icanbefitter/core/constants/diet_strategies.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
@@ -82,12 +84,14 @@ typedef _Reads = ({
   Map<String, dynamic> snapshot,
 });
 
+// Energy-consistent, as calculateTargets writes it (carbs are the
+// remainder): 4 x 150 + 4 x 270 + 9 x 80 = 2400 kcal (B-pass seat C finding 6).
 const _stored = <String, dynamic>{
   'full_name': 'T',
   'daily_calories': 2400,
   'protein_grams': 150,
-  'carb_grams': 280,
-  'carbs_grams': 280,
+  'carb_grams': 270,
+  'carbs_grams': 270,
   'fat_grams': 80,
 };
 
@@ -141,7 +145,7 @@ void main() {
   final keto = BmrCalculator.macroSplit(
       dailyCalories: 2400,
       proteinGrams: 150,
-      balancedCarbs: 280,
+      balancedCarbs: 270,
       strategy: DietStrategy.keto);
 
   /// Every reader's carb/fat/strategy, read fresh.
@@ -165,16 +169,16 @@ void main() {
   }
 
   void expectBalanced(_Reads r) {
-    expect(r.macroCarbs, 280.0);
+    expect(r.macroCarbs, 270.0);
     expect(r.macroFat, 80.0);
     expect(r.macroStrategy, DietStrategy.balanced);
-    expect(r.dailyCarbs, 280.0);
+    expect(r.dailyCarbs, 270.0);
     expect(r.dailyFat, 80.0);
     expect(r.dailyStrategy, DietStrategy.balanced);
-    expect(r.homeCarbs, 280.0);
+    expect(r.homeCarbs, 270.0);
     expect(r.homeFat, 80.0);
     final dt = r.snapshot['daily_targets'] as Map;
-    expect(dt['carbs'], 280.0);
+    expect(dt['carbs'], 270.0);
     expect(dt['fat'], 80.0);
   }
 
@@ -222,6 +226,27 @@ void main() {
             isFalse);
       });
     }
+
+    test('the whole snapshot is identical with or without a stored strategy '
+        '(B-pass seat C finding 2)', () async {
+      await _setPro(true);
+      await seed();
+      final without = jsonEncode(AiSnapshotBuilder.instance.buildAiContext());
+      await seed(const {'diet_strategy': 'keto'});
+      final withKeto = jsonEncode(AiSnapshotBuilder.instance.buildAiContext());
+      expect(withKeto, without);
+      // The flag-off key sets, hard-coded: a strategy key leaking into either
+      // map with the flag off fails here, not only in a reviewer's read.
+      final snap = AiSnapshotBuilder.instance.buildAiContext();
+      expect((snap['profile'] as Map).keys.toSet(), {
+        'activity_level', 'age', 'bmr', 'current_weight_kg',
+        'diet_preference', 'diet_preference_label', 'equipment_access',
+        'equipment_effective', 'fitness_experience', 'gender', 'height_cm',
+        'injuries', 'name', 'primary_goal', 'target_weight_kg', 'tdee',
+      });
+      expect((snap['daily_targets'] as Map).keys.toSet(),
+          {'calories', 'carbs', 'fat', 'protein'});
+    });
 
     test('a fractional stored pack is passed through exactly', () async {
       await _setPro(true);

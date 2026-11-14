@@ -1403,5 +1403,14 @@
     "diagnose": "d4a7c9",
     "slug": "coach_client_key",
     "note": "OI-503 (plan docs/plans/2026-11-13-coach-chat-time-dup.md section 4 C1): adds ai_coach_interactions.client_key text NULL with CONSTRAINT ai_coach_interactions_client_key_format CHECK (client_key IS NULL OR client_key ~ '^coach_[0-9]{10,16}$') and the partial index idx_ai_coach_interactions_user_client_key (user_id, client_key) WHERE client_key IS NOT NULL; SET lock_timeout 5s / RESET. No row rewritten. Applied to project dedsavbjuwgarrhphgnl only, after the founder go (2026-11-13, 'Ok'), via MCP apply_migration on the exact file text; registered as version 20261113030538. Rehearsed first in local docker (supabase/postgres 17.6.1.084, test/sql/coach_client_key_local.sh, 14 cases, 4 mutants red). Pre-apply live: 12 columns, no client_key, last migration 177. Post-apply live: client_key text / nullable as the 13th column; the CHECK and the index definitions equal the file; 0 keyed rows. Rollback: the inline DROP INDEX + DROP COLUMN at the end of the file, only after the Edge Functions that write the column are redeployed to their previous versions."
+  },
+  {
+    "migration": "179",
+    "applied_at": "2026-11-14T20:45:15+05:30",
+    "hash": "sha256:8c6421b1f06eeb68d701916ddf7ad7cef45422df61ee4a190d0e04f721ce548f",
+    "applier": "claude-via-mcp",
+    "diagnose": "n/a",
+    "slug": "diet_strategy",
+    "note": "Diet plan Unit 3a (plan docs/plans/diet-strategy.md section 3.10): adds user_profile.diet_strategy text NULL, no default, with CONSTRAINT user_profile_diet_strategy_check CHECK (diet_strategy IS NULL OR diet_strategy IN ('balanced','low_carb','keto')) (DO-block, idempotent) and a column comment; SET lock_timeout 5s / RESET. No row rewritten. Applied to project dedsavbjuwgarrhphgnl only, after the founder go (2026-11-14, 'Both approved', conditional on the B-pass, which was accepted first), via MCP apply_migration on the exact file text; registered as version 20261114151515. Rehearsed first in local docker (idempotent re-run, CHECK accepts the three keys and NULL and rejects others, inline rollback clean). Pre-apply live: 40 columns, no diet_strategy, no constraint, last migration 178. Post-apply live: 41 columns, diet_strategy text / nullable / no default, the CHECK definition equals the file, 0 non-null rows. Rollback: the inline DROP CONSTRAINT + DROP COLUMN at the end of the file, only after the client is reverted (3a is shipped dark; nothing writes the column until Unit 3b flips DietStrategyFlags)."
   }
 ]

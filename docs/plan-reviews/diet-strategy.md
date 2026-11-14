@@ -5,7 +5,7 @@ blast_radius: platform
 review_rounds: 7
 ground_truth_verified: true
 verdict: converged
-bpass: pending
+bpass: accepted
 bpass_review: docs/reviews/diet-strategy-bpass.md
 ---
 
@@ -15,7 +15,7 @@ Plan: `docs/plans/diet-strategy.md` (revision 7; round dispositions in its §6 t
 
 **Ship-dark:** 3a lands behind `DietStrategyFlags.enabled`, `kDietStrategyDefaultOn = false`, with a behavioural identity test (plan §4 test 2b). It is logged in `docs/ship_dark_pending_review.yaml`. The flip happens in Unit 3b with its own full ×2 review and B-pass. This build nevertheless had the full review (7 rounds), not the 1-round ship-dark tier.
 
-**Migration:** `user_profile.diet_strategy` needs its own founder go before this PR merges.
+**Migration:** `user_profile.diet_strategy` (179) needed its own founder go before this PR merges. The founder approved it in chat on 2026-11-14 ("Both approved": the migration apply and the merge), conditional on the B-pass.
 
 Founder decisions (chat 2026-11-14): strategies Balanced (default), Low carb, Keto; PRO; Option A — carb and fat targets change everywhere, calories and protein do not; a confirm dialog before a change; no AI; unlimited changes; the calorie card label shows food type and strategy.
 
@@ -35,4 +35,4 @@ Ground truth: every reviewer read the cited files at `aeb46334` (Unit 2a's head,
 
 ## B-pass
 
-Pending: `docs/reviews/diet-strategy-bpass.md` after review CI is green.
+Accepted: `docs/reviews/diet-strategy-bpass.md`. Three context-blind seats on `9ab96794` (CI green): no P0/P1, 14 findings (5 P2, 9 P3). Thirteen were fixed in the follow-up commit, with 8 new mutants, each red. One (seat A finding 1, a pre-existing reader split) is recorded as a stated limit in plan §3.3 and the registry.

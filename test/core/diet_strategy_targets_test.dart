@@ -22,7 +22,7 @@ void main() {
       (1200, 120, 60), // protein at its 40 % cap, Balanced carbs at 60 g
       (1500, 150, 50), // Balanced at its own floor of 50 g
       (5000, 250, 600),
-      (2000, 400, 100), // an inconsistent stored pair: fat would go negative
+      (2000, 400, 100), // inconsistent pair: low carb fat lands exactly at 0
     ];
 
     for (final s in [DietStrategy.lowCarb, DietStrategy.keto]) {
@@ -81,6 +81,28 @@ void main() {
           balancedCarbs: 60,
           strategy: DietStrategy.lowCarb);
       expect(r.carbGrams, 60, reason: 'capped at Balanced, not the 75 floor');
+    });
+
+    // B-pass seat C finding 1: no row above drove the remainder below zero,
+    // so the clamp was never exercised. Literal values, not the ternary.
+    test('fat never goes negative: an inconsistent pack clamps to 0', () {
+      // Low carb: carbs clamp(60, 75, 150) = 75 (<= Balanced 300);
+      // 1200 - 4 x 300 - 4 x 75 = -300 kcal -> fat 0.
+      final lc = BmrCalculator.macroSplit(
+          dailyCalories: 1200,
+          proteinGrams: 300,
+          balancedCarbs: 300,
+          strategy: DietStrategy.lowCarb);
+      expect(lc.carbGrams, 75);
+      expect(lc.fatGrams, 0);
+      // Keto: carbs clamp(15, 20, 50) = 20; 1200 - 1200 - 80 = -80 -> 0.
+      final kt = BmrCalculator.macroSplit(
+          dailyCalories: 1200,
+          proteinGrams: 300,
+          balancedCarbs: 300,
+          strategy: DietStrategy.keto);
+      expect(kt.carbGrams, 20);
+      expect(kt.fatGrams, 0);
     });
 
     test('Balanced throws', () {
@@ -181,6 +203,11 @@ void main() {
           DietStrategy.balanced);
       expect(dietStrategyOfTargets({'strategy_index': -1.0}),
           DietStrategy.balanced);
+      // B-pass seat A finding 4: toInt() throws on these.
+      for (final v in [double.nan, double.infinity, double.negativeInfinity]) {
+        expect(dietStrategyOfTargets({'strategy_index': v}),
+            DietStrategy.balanced, reason: '$v');
+      }
     });
 
     test('label: Balanced adds nothing', () {

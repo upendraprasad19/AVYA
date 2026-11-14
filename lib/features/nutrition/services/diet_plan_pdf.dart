@@ -28,6 +28,17 @@ const _months = [
   'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
 ];
 
+/// The PDF's sub-header line. Diet plan Unit 3a: a non-Balanced strategy
+/// adds `  |  Strategy: <label>`; null (Balanced, or the flag off) adds
+/// nothing, so the line is the pre-3a one.
+String dietPlanPdfSubheader({
+  required String date,
+  required String foodTypeLabel,
+  String? strategyLabel,
+}) =>
+    'Generated on $date  |  Food type: $foodTypeLabel'
+    '${strategyLabel == null ? '' : '  |  Strategy: $strategyLabel'}';
+
 Future<Uint8List> buildDietPlanPdf({
   required List<DietPlanPdfMeal> meals,
   required String foodTypeLabel,
@@ -61,8 +72,10 @@ Future<Uint8List> buildDietPlanPdf({
           pw.Text('ICANBEFITTER Diet Plan', style: headerStyle),
           pw.SizedBox(height: 4),
           pw.Text(
-              'Generated on $dateStr  |  Food type: $foodTypeLabel'
-              '${strategyLabel == null ? '' : '  |  Strategy: $strategyLabel'}',
+              dietPlanPdfSubheader(
+                  date: dateStr,
+                  foodTypeLabel: foodTypeLabel,
+                  strategyLabel: strategyLabel),
               style: subHeaderStyle),
           pw.SizedBox(height: 4),
           pw.Text(
