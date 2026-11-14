@@ -27,6 +27,7 @@ import 'package:icanbefitter/core/utils/injury_vocab.dart';
 import 'package:icanbefitter/core/utils/name_format.dart';
 import 'package:icanbefitter/shared/repositories/user_repository.dart';
 import 'package:icanbefitter/shared/widgets/diet_strategy_chips.dart';
+import 'package:icanbefitter/shared/widgets/diet_strategy_notes.dart';
 import 'package:icanbefitter/shared/widgets/food_type_chips.dart';
 import 'package:icanbefitter/shared/widgets/paywall_sheet.dart';
 import 'package:icanbefitter/shared/widgets/responsive_picker_builder.dart';
@@ -1309,8 +1310,12 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
           DietStrategyChips(
             value: _dietStrategy,
             isPro: ref.watch(subscriptionInfoProvider.select((s) => s.isPro)),
+            // Unit 3b §3.5: Keto is not offered for the FORM's Vegan type;
+            // a stored pair stays selected (legal data).
+            disabled: dietStrategiesDisabledFor(_foodType),
             onChanged: _onDietStrategyChip,
           ),
+          DietStrategyNotes(foodType: _foodType, selected: _dietStrategy),
         ],
       ],
     );

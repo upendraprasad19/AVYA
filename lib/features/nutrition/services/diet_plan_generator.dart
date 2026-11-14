@@ -20,6 +20,8 @@
 // Reads from FoodRepository.instance (Hive foodBox). Zero network.
 
 import 'dart:math';
+
+import 'package:icanbefitter/core/constants/diet_strategies.dart';
 import 'package:icanbefitter/core/constants/food_types.dart';
 import 'package:icanbefitter/shared/repositories/food_repository.dart';
 
@@ -92,12 +94,21 @@ class DietPlanInputs {
   final int fiberTarget; // from profile['fiber_grams'] ?? 30 (nutrition_provider.dart)
   final int? seed; // optional override for deterministic test runs
 
+  /// Unit 3b: the strategy the plan is made for, and its carb target (the
+  /// EFFECTIVE one from effectiveMacroTargets). Balanced (the default) leaves
+  /// the curated generator on its unchanged path; carbTarget is read only
+  /// for Low carb / Keto.
+  final DietStrategy strategy;
+  final double? carbTarget;
+
   const DietPlanInputs({
     required this.calorieTarget,
     required this.proteinTarget,
     required this.dietPreference,
     this.fiberTarget = 30,
     this.seed,
+    this.strategy = DietStrategy.balanced,
+    this.carbTarget,
   });
 }
 

@@ -6,8 +6,12 @@
 // _test.dart does for exercises (those tests pin food_library_version to 9999,
 // so they are untouched by this bump).
 //
-// Mutations: put _foodLibraryVersion back to 3 (the upgrade test reddens);
-// drop the version source pin.
+// Mutations: put _foodLibraryVersion back to 3 or 4 (the upgrade tests
+// redden); drop the version source pin.
+//
+// Diet plan Unit 3b (2026-11-14, docs/plans/diet-strategy-3b.md §3.7): v5
+// flips is_everyday to true for the 14 Low carb / Keto catalog foods, so a
+// v4 box re-seeds too (the v3 -> v5 path keeps Unit 1's assertions).
 //
 // A plain test(), not testWidgets: real file I/O inside testWidgets hangs
 // (CLAUDE.md section 4.9).
@@ -19,6 +23,7 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
 import 'package:icanbefitter/core/services/seed_service.dart';
+import 'package:icanbefitter/features/nutrition/services/diet_plan_catalog.dart';
 
 import '../helpers/hive_test_setup.dart';
 
@@ -41,6 +46,21 @@ List<Map<String, dynamic>> _v3Rows() {
   ];
 }
 
+/// The Unit 3b Low carb / Keto ids (false in v4, true in v5).
+const _v5Everyday = {
+  'F0402', 'F0403', 'F0483', 'F0383', 'F0371', 'F0790', 'F0023', 'F0398',
+  'F0394', 'F0348', 'F1022', 'F1024', 'F0040', 'F0264',
+};
+
+/// The v4 rows: the v5 asset with the 14 ids still `is_everyday: false`.
+List<Map<String, dynamic>> _v4Rows() => [
+      for (final r in _bundled())
+        {
+          ...r,
+          if (_v5Everyday.contains(r['id'])) 'is_everyday': false,
+        },
+    ];
+
 Future<void> _markSeeded(HiveService hive, int foodVersion) async {
   await hive.configBox.put('seeded', true);
   await hive.configBox.put('seeded_exercises', true);
@@ -57,13 +77,44 @@ void main() {
   setUp(() async => tempDir = await setUpHiveForTests());
   tearDown(() async => tearDownHiveForTests(tempDir));
 
-  test('the version constant is 4', () {
+  test('the version constant is 5', () {
     final src = File('lib/core/services/seed_service.dart').readAsStringSync();
-    expect(RegExp(r'static const int _foodLibraryVersion = 4;').hasMatch(src),
+    expect(RegExp(r'static const int _foodLibraryVersion = 5;').hasMatch(src),
         isTrue);
   });
 
-  test('a v3 food box ends at v4 with the new rows and tags', () async {
+  test('the 14 ids are exactly the catalog\'s Low carb / Keto only entries '
+      '(B-pass seat C finding 6)', () {
+    expect(_v5Everyday,
+        {for (final e in kDietPlanCatalog) if (e.lowCarbOnly) e.foodId});
+  });
+
+  test('precondition: the 14 ids are everyday in the asset', () {
+    final byId = {for (final r in _bundled()) r['id']: r};
+    for (final id in _v5Everyday) {
+      expect(byId[id]?['is_everyday'], isTrue, reason: id);
+    }
+  });
+
+  test('a v4 food box ends at v5 with the 14 ids everyday', () async {
+    final hive = HiveService.instance;
+    for (final r in _v4Rows()) {
+      await hive.foodBox.put(r['id'], r);
+    }
+    await _markSeeded(hive, 4);
+    expect(_asJson(hive.foodBox.get('F0402'))['is_everyday'], isFalse,
+        reason: 'precondition');
+
+    await SeedService.instance.seedIfNeeded();
+
+    for (final id in _v5Everyday) {
+      expect(_asJson(hive.foodBox.get(id))['is_everyday'], isTrue, reason: id);
+    }
+    expect(_asJson(hive.foodBox.get('F0007'))['is_everyday'], isFalse);
+    expect(hive.configBox.get('food_library_version') as int, 5);
+  });
+
+  test('a v3 food box ends at v5 with the new rows and tags', () async {
     final hive = HiveService.instance;
     for (final r in _v3Rows()) {
       await hive.foodBox.put(r['id'], r);
@@ -77,15 +128,15 @@ void main() {
     expect(_asJson(hive.foodBox.get('F0522'))['is_ultra_processed'], isTrue);
     expect(_asJson(hive.foodBox.get('F0001'))['is_everyday'], isTrue);
     expect(_asJson(hive.foodBox.get('F0007'))['is_everyday'], isFalse);
-    expect(hive.configBox.get('food_library_version') as int, 4);
+    expect(hive.configBox.get('food_library_version') as int, 5);
   });
 
-  test('MIRROR: a box already at v4 is not re-seeded', () async {
+  test('MIRROR: a box already at v5 is not re-seeded', () async {
     final hive = HiveService.instance;
     for (final r in _v3Rows()) {
       await hive.foodBox.put(r['id'], r);
     }
-    await _markSeeded(hive, 4);
+    await _markSeeded(hive, 5);
     await SeedService.instance.seedIfNeeded();
     expect(hive.foodBox.get('F1442'), isNull);
   });
