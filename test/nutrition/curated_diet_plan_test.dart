@@ -391,6 +391,18 @@ void main() {
       expect(distinct.length, greaterThanOrEqualTo(10));
     });
 
+    // B-pass finding 1: a stored daily_calories of 0 reaches the generator
+    // as calorieTarget 0; the slot sizer divided by it and threw.
+    test('a zero or negative calorie target never throws', () {
+      final g3 = CuratedDietPlanGenerator.forTest(repo);
+      for (final kcal in [0, -5]) {
+        final plan = g3.generate(DietPlanInputs(
+            calorieTarget: kcal, proteinTarget: 0,
+            dietPreference: 'non-veg', seed: 3));
+        expect(plan, isNotEmpty, reason: 'kcal $kcal');
+      }
+    });
+
     test('dietPlanSeed: stable within a day, moves per regenerate', () {
       final morning = DateTime(2026, 11, 14, 8);
       final night = DateTime(2026, 11, 14, 22);

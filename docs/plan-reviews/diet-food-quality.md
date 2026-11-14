@@ -5,6 +5,8 @@ blast_radius: account
 review_rounds: 3
 ground_truth_verified: true
 verdict: converged
+bpass: accepted
+bpass_review: docs/reviews/diet-food-quality-bpass.md
 ---
 
 # Plan-review record — diet plan Unit 1: curated everyday-food generator (`diet-food-quality`)
@@ -23,8 +25,12 @@ Founder decisions this plan builds on (chat 2026-11-14): filter with BOTH an eve
 
 Ground truth: every reviewer read the cited files at `94a021a0` and the bundled food asset row by row for the ids in question; round 1's catalog-count and round 3's duplicate-macro findings were each confirmed by re-deriving from the asset before applying them.
 
+## B-pass
+
+`docs/reviews/diet-food-quality-bpass.md`: one fresh reviewer at `3da92d26` (CI green), 8 lenses, 4 findings (2 P2, 2 P3), 0 false alarms, all fixed in the follow-up commit with a mutation each (M17, M18 in the diagnose table).
+
 ## Build evidence
 
 - `flutter test test/nutrition/` and the three new/extended `test/contracts/` files: green on the patched v4 asset.
-- 16 mutations (diagnose `83ac8a` table M1-M16), each applied (`grep -c` confirmed) and each reddening at least one test.
+- 18 mutations (diagnose `83ac8a` table M1-M18), each applied (`grep -c` confirmed) and each reddening at least one test.
 - Measured over 12 archetypes x 50 seeds: calories within [0.96, 1.09] of target at >=1500 kcal; fiber minimum >=23 g; non-veg cuts reach 0.95-0.97 of the protein target, veg/vegan cuts 0.79-0.83 (accepted trade-off, reported to the founder; Unit 4 whey closes it).

@@ -60,4 +60,21 @@ void main() {
     expect(body.contains('HiveService'), isFalse,
         reason: 'the screen must not read Hive directly (CLAUDE.md §4.4 r4)');
   });
+
+  // B-pass finding 2 (PRESENCE): Regenerate must advance the seed BEFORE it
+  // regenerates; swapped, the first tap shows the same plan again (the bug
+  // Unit 1 fixed). dietPlanSeed itself is behavioural in T6.
+  test('PRESENCE: Regenerate increments the seed counter before regenerating', () {
+    final src = File('lib/features/nutrition/screens/diet_plan_screen.dart')
+        .readAsStringSync();
+    expect(
+        RegExp(r'onPressed:\s*\(\)\s*\{\s*_regenerations\+\+;\s*_generateFreshPlan\(\);')
+            .hasMatch(src),
+        isTrue);
+    expect(RegExp(r'_regenerations\+\+').allMatches(src).length, 1);
+    expect(
+        RegExp(r'dietPlanSeed\(DateTime\.now\(\),\s*_regenerations\)')
+            .hasMatch(src),
+        isTrue);
+  });
 }

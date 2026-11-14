@@ -294,7 +294,9 @@ class CuratedDietPlanGenerator {
     List<_Pick> picks,
     DietPlanInputs inputs,
   ) {
-    final slotKcal = inputs.calorieTarget * t.share;
+    // max(1.0, …): a stored daily_calories of 0 reaches here as 0 and every
+    // score would be NaN, leaving bestMults null (B-pass finding 1).
+    final slotKcal = max(1.0, inputs.calorieTarget * t.share);
     final slotProt = max(1.0, inputs.proteinTarget * t.share);
     final options = [
       for (final p in picks)

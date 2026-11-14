@@ -184,10 +184,12 @@ rewritten so it does, then re-run).
 | M14 | fiber term removed from the day score | curated T5 | 1 |
 | M15 | `_foodLibraryVersion` back to 3 | v4 upgrade test | 2 |
 | M16 | swap UPF filter removed | repointed source pin | 1 |
+| M17 | B-pass F1: `max(1.0, …)` removed from the slot calorie divisor | curated T6 zero-target test | 1 |
+| M18 | B-pass F2: Regenerate's `_regenerations++` moved after `_generateFreshPlan()` | switch test order pin | 1 |
 
 Declared limits: the best-of-K objective weights are covered by the T5 bands
-only; the screen's kill-switch routing is a presence pin (the screen is not
-pumped).
+only; the screen's kill-switch routing and the Regenerate order are presence
+pins (the screen is not pumped).
 
 ## Not done here (owned by later units on the founder's task board)
 
