@@ -1,7 +1,20 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'package:icanbefitter/core/constants/food_types.dart';
 import 'package:icanbefitter/features/auth/providers/auth_invalidation_provider.dart';
+import 'package:icanbefitter/features/profile/providers/profile_provider.dart';
 import 'package:icanbefitter/shared/repositories/user_repository.dart';
+
+/// Whether a saved diet plan may be shown for [current] (diet plan Unit 2a,
+/// docs/plans/diet-food-type.md §2.4). A plan saved with a `food_type` of
+/// another type is not shown: its foods would be off-diet (a saved chicken
+/// plan after the user picked Veg). A plan saved before Unit 2a has no
+/// `food_type` and is shown as before (test accounts only, pre-launch).
+bool savedPlanMatchesFoodType(Map<dynamic, dynamic> plan, FoodType current) {
+  final saved = plan['food_type'];
+  if (saved == null) return true;
+  return foodTypeOf(saved) == current;
+}
 
 /// One planned meal slot derived from the saved diet plan
 /// (`userBox['saved_diet_plan']`, written by `DietPlanScreen._savePlan` —
@@ -53,8 +66,14 @@ class DietPlanNotifier extends Notifier<Map<String, PlannedSlot>> {
   @override
   Map<String, PlannedSlot> build() {
     ref.watch(authUserIdTokenProvider); // c4055a — rebuild on auth change
+    // Unit 2a: rebuild on a food-type change from ANY writer (the Diet Plan
+    // selector or Edit Profile). An enum, so a profile write that keeps the
+    // food type does not rebuild.
+    final foodType =
+        ref.watch(userProfileProvider.select((p) => foodTypeOfProfile(p)));
     final raw = UserRepository.instance.getSavedDietPlan();
     if (raw == null) return const {};
+    if (!savedPlanMatchesFoodType(raw, foodType)) return const {};
 
     final meals = raw['meals'];
     if (meals is! List || meals.isEmpty) return const {};

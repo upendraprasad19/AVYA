@@ -136,7 +136,7 @@ Home          (/home)                   (/coach/muster and /coach/induction
   leaves the default isn't later nagged by the completeness nudge.
 - **Fields still defaulted by the stepped flow** (user can edit via Profile → Edit Profile):
   - `lifestyle_activity` — inferred from `activity_level` (1:1 mapping).
-  - `diet_preference` — defaults to `'veg'` (Indian-first default).
+  - `diet_preference` — defaults to `'non_veg'` (founder default, 2026-11-14; written as `FoodType.storageKey` via `resolveOnboardingDietPreference`). The food type is chosen on the Diet Plan screen or in Edit Profile, not in onboarding (`lib/core/constants/food_types.dart`).
   - `start_date` — hardcoded to `'this_monday'`.
   - `city` — optional, not collected during onboarding.
   These **are persisted** to Hive by `completeOnboarding` (pre-2026-04-24 bug: they

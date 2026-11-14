@@ -2,24 +2,34 @@ import 'dart:async';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
-import 'package:pdf/pdf.dart';
-import 'package:pdf/widgets.dart' as pw;
 import 'package:share_plus/share_plus.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:icanbefitter/core/constants/food_types.dart';
 import 'package:icanbefitter/core/services/error_telemetry.dart';
 import 'package:icanbefitter/core/services/sync_service.dart';
 import 'package:icanbefitter/core/theme/colors.dart';
 import 'package:icanbefitter/core/theme/spacing.dart';
 import 'package:icanbefitter/core/theme/typography.dart';
 import 'package:icanbefitter/shared/repositories/food_repository.dart';
+import 'package:icanbefitter/features/profile/providers/profile_provider.dart';
 import 'package:icanbefitter/shared/repositories/user_repository.dart';
+import 'package:icanbefitter/shared/widgets/food_type_chips.dart';
 import '../providers/nutrition_provider.dart';
 import '../providers/diet_plan_provider.dart';
 import '../services/curated_diet_plan_generator.dart';
 import '../services/diet_plan_flags.dart';
 import '../services/diet_plan_generator.dart';
+import '../services/diet_plan_pdf.dart';
 import '../services/diet_plan_swap.dart';
+
+// Diet plan Unit 2a: the "your saved plan was for X" notice shows once per
+// (saved plan id, food type) per app session.
+final Set<String> _mismatchNoticeShown = <String>{};
+
+/// Test seam: clears the once-per-session mismatch notice record.
+@visibleForTesting
+void debugResetDietPlanMismatchNotices() => _mismatchNoticeShown.clear();
 
 /// Diet plan generator — FREE for everyone.
 /// Generated from food database (zero API cost).
@@ -35,9 +45,12 @@ class _DietPlanScreenState extends ConsumerState<DietPlanScreen> {
   late List<_MealPlan> _mealPlans;
   bool _saved = false;
   bool _checkedSaved = false;
-  // Cached so _swapItem applies the SAME diet-preference rule as generation
+  // Cached so _swapItem applies the SAME food-type rule as generation
   // (plan-review round 2, finding 5: a veg user could be offered chicken).
-  String _dietPref = 'veg';
+  // Read through the one normaliser (diet plan Unit 2a).
+  FoodType _foodType = kDefaultFoodType;
+  // True while a food-type change is being saved; chip taps are ignored.
+  bool _changingFoodType = false;
   // Regenerate taps this session; folded into the generator seed.
   int _regenerations = 0;
 
@@ -55,9 +68,7 @@ class _DietPlanScreenState extends ConsumerState<DietPlanScreen> {
     // Cache diet preference for the swap filter on BOTH paths (fresh +
     // saved-plan load) — B-pass finding 3: a vegan user loading a saved
     // plan otherwise got veg-filtered (dairy-allowed) swap alternatives.
-    final profile = UserRepository.instance.getProfile() ?? const {};
-    _dietPref =
-        (profile['diet_preference'] as String?)?.toLowerCase() ?? 'veg';
+    _foodType = foodTypeOfProfile(UserRepository.instance.getProfile());
 
     // Check for saved plan on first entry only. Obs 8 fix: load it
     // immediately instead of gating behind a dialog — the AppBar's
@@ -67,7 +78,13 @@ class _DietPlanScreenState extends ConsumerState<DietPlanScreen> {
       _checkedSaved = true;
       final savedPlan = UserRepository.instance.getSavedDietPlan();
       if (savedPlan != null) {
-        _loadSavedPlan(savedPlan);
+        if (savedPlanMatchesFoodType(savedPlan, _foodType)) {
+          _loadSavedPlan(savedPlan);
+          return;
+        }
+        // Unit 2a: a plan saved for another food type is not shown.
+        _generateFreshPlan();
+        _noticeSavedPlanMismatch(savedPlan);
         return;
       }
     }
@@ -75,17 +92,70 @@ class _DietPlanScreenState extends ConsumerState<DietPlanScreen> {
     _generateFreshPlan();
   }
 
+  void _noticeSavedPlanMismatch(Map<String, dynamic> savedPlan) {
+    final key = '${savedPlan['id']}|${_foodType.storageKey}';
+    if (!_mismatchNoticeShown.add(key) || !mounted) return;
+    final was = foodTypeOf(savedPlan['food_type']).label;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          'Your saved plan was for $was. Here is a ${_foodType.label} plan; '
+          'save to keep it.',
+          style: AppTypography.body.copyWith(fontSize: 13),
+        ),
+        backgroundColor: AppColors.card,
+      ),
+    );
+  }
+
+  /// The Diet Plan screen's food-type selector: one write door
+  /// (UserProfileNotifier.setFoodType), then a fresh, unsaved plan.
+  Future<void> _changeFoodType(FoodType next) async {
+    if (_changingFoodType || next == _foodType) return;
+    setState(() => _changingFoodType = true);
+    try {
+      await ref.read(userProfileProvider.notifier).setFoodType(next);
+      if (!mounted) return;
+      setState(() => _foodType = next);
+      _generateFreshPlan();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Plan rebuilt for ${next.label}. Save to keep it.',
+            style: AppTypography.body.copyWith(fontSize: 13),
+          ),
+          backgroundColor: AppColors.card,
+        ),
+      );
+    } catch (e, st) {
+      unawaited(ErrorTelemetry.recordNonFatal(e, st,
+          reason: 'diet_plan_food_type_change'));
+      // The chips still show the old type (nothing changed); say so.
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              "Couldn't change the food type. Try again.",
+              style: AppTypography.body.copyWith(fontSize: 13),
+            ),
+            backgroundColor: AppColors.card,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _changingFoodType = false);
+    }
+  }
+
   void _generateFreshPlan() {
     final targets = ref.read(macroTargetsProvider);
     final calorieTarget = targets['calories']?.round() ?? 2400;
     final proteinTarget = targets['protein']?.round() ?? 184;
 
-    // Read diet_preference from Hive profile so the generator filters
-    // anchor proteins correctly. Fallback to 'veg' (matches onboarding default).
+    // The food type from the Hive profile, through the one normaliser
+    // (diet plan Unit 2a; default Non-veg).
     final profile = UserRepository.instance.getProfile() ?? const {};
-    final dietPref =
-        (profile['diet_preference'] as String?)?.toLowerCase() ?? 'veg';
-    _dietPref = dietPref;
+    _foodType = foodTypeOfProfile(profile);
 
     // Same plan all day on open; each Regenerate tap moves to the next seed
     // (before Unit 1 the tap reused the day's seed and showed the same plan).
@@ -96,7 +166,7 @@ class _DietPlanScreenState extends ConsumerState<DietPlanScreen> {
     final inputs = DietPlanInputs(
       calorieTarget: calorieTarget,
       proteinTarget: proteinTarget,
-      dietPreference: dietPref,
+      dietPreference: _foodType.storageKey,
       // Same source as DailyNutritionData.fiberTarget
       // (nutrition_provider.dart:362) — no second default.
       fiberTarget: (profile['fiber_grams'] as num?)?.toInt() ?? 30,
@@ -145,7 +215,7 @@ class _DietPlanScreenState extends ConsumerState<DietPlanScreen> {
       calories: item.calories,
       role: item.role,
       slotKey: meal.slotKey ?? kDietMealNameToSlotKey[meal.name] ?? '',
-      dietPreference: _dietPref,
+      dietPreference: _foodType.storageKey,
       planFoodIds: [
         for (final m in _mealPlans)
           for (final i in m.items) i.foodId,
@@ -256,6 +326,9 @@ class _DietPlanScreenState extends ConsumerState<DietPlanScreen> {
     final planData = {
       'id': 'diet_plan_${now.millisecondsSinceEpoch}',
       'created_at': now.toIso8601String(),
+      // Unit 2a: the food type the plan was built for (a plan of another
+      // type is not loaded or used for hints, savedPlanMatchesFoodType).
+      'food_type': _foodType.storageKey,
       'meals': _mealPlans
           .map((m) => {
                 'name': m.name,
@@ -348,76 +421,32 @@ class _DietPlanScreenState extends ConsumerState<DietPlanScreen> {
     final fatTarget = targets['fat']?.round() ?? 0;
     final fiberTarget = (UserRepository.instance.getProfile()?['fiber_grams'] as num?)?.toInt() ?? 30;
 
-    final now = DateTime.now();
-    const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-    final dateStr = '${now.day} ${months[now.month - 1]} ${now.year}';
-
-    final pdf = pw.Document();
-
-    final headerStyle = pw.TextStyle(fontSize: 18, fontWeight: pw.FontWeight.bold);
-    final subHeaderStyle = pw.TextStyle(fontSize: 12, color: PdfColors.grey700);
-    final mealTitleStyle = pw.TextStyle(fontSize: 14, fontWeight: pw.FontWeight.bold);
-    final cellStyle = const pw.TextStyle(fontSize: 10);
-    final cellBoldStyle = pw.TextStyle(fontSize: 10, fontWeight: pw.FontWeight.bold);
-
-    pdf.addPage(
-      pw.MultiPage(
-        pageFormat: PdfPageFormat.a4,
-        margin: const pw.EdgeInsets.all(32),
-        header: (context) => pw.Column(
-          crossAxisAlignment: pw.CrossAxisAlignment.start,
-          children: [
-            pw.Text('ICANBEFITTER Diet Plan', style: headerStyle),
-            pw.SizedBox(height: 4),
-            pw.Text('Generated on $dateStr', style: subHeaderStyle),
-            pw.SizedBox(height: 4),
-            pw.Text(
-              'Target: $calorieTarget kcal  |  Protein: ${proteinTarget}g  |  Carbs: ${carbTarget}g  |  Fat: ${fatTarget}g  |  Fiber: ${fiberTarget}g',
-              style: subHeaderStyle,
-            ),
-            pw.Divider(),
-          ],
-        ),
-        footer: (context) => pw.Container(
-          alignment: pw.Alignment.centerRight,
-          child: pw.Text(
-            'Generated by ICANBEFITTER  \u00B7  www.icanbefitter.com',
-            style: pw.TextStyle(fontSize: 8, color: PdfColors.grey500),
-          ),
-        ),
-        build: (context) => _mealPlans.map((meal) {
-          final totalCals = meal.items.fold<int>(0, (s, i) => s + i.calories);
-          final totalProtein = meal.items.fold<int>(0, (s, i) => s + i.protein);
-
-          return pw.Column(
-            crossAxisAlignment: pw.CrossAxisAlignment.start,
-            children: [
-              pw.SizedBox(height: 10),
-              pw.Text('${meal.name}  ($totalCals kcal, ${totalProtein}g protein)', style: mealTitleStyle),
-              pw.SizedBox(height: 6),
-              pw.TableHelper.fromTextArray(
-                headerStyle: cellBoldStyle,
-                cellStyle: cellStyle,
-                headerDecoration: const pw.BoxDecoration(color: PdfColors.grey200),
-                cellPadding: const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 4),
-                headers: ['Food', 'Serving', 'Kcal', 'Protein', 'Carbs', 'Fat'],
-                data: meal.items.map((item) => [
-                  item.name,
-                  item.servingDesc,
-                  '${item.calories}',
-                  '${item.protein}g',
-                  '${item.carbs}g',
-                  '${item.fat}g',
-                ]).toList(),
-              ),
-              pw.SizedBox(height: 8),
+    final Uint8List bytes = await buildDietPlanPdf(
+      meals: [
+        for (final meal in _mealPlans)
+          (
+            name: meal.name,
+            items: [
+              for (final item in meal.items)
+                (
+                  name: item.name,
+                  servingDesc: item.servingDesc,
+                  calories: item.calories,
+                  protein: item.protein,
+                  carbs: item.carbs,
+                  fat: item.fat,
+                ),
             ],
-          );
-        }).toList(),
-      ),
+          ),
+      ],
+      foodTypeLabel: _foodType.label,
+      calorieTarget: calorieTarget,
+      proteinTarget: proteinTarget,
+      carbTarget: carbTarget,
+      fatTarget: fatTarget,
+      fiberTarget: fiberTarget,
+      now: DateTime.now(),
     );
-
-    final Uint8List bytes = await pdf.save();
     await Share.shareXFiles(
       [XFile.fromData(bytes, name: 'icanbefitter_diet_plan.pdf', mimeType: 'application/pdf')],
       subject: 'ICANBEFITTER Diet Plan',
@@ -451,9 +480,24 @@ class _DietPlanScreenState extends ConsumerState<DietPlanScreen> {
           icon: const Icon(Icons.arrow_back, color: AppColors.textPrimary),
           onPressed: () => context.go('/nutrition'),
         ),
-        title: Text(
-          'Diet Plan',
-          style: AppTypography.body.copyWith(fontSize: 18, fontWeight: FontWeight.w800, color: AppColors.textPrimary),
+        title: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              'Diet Plan',
+              style: AppTypography.body.copyWith(fontSize: 18, fontWeight: FontWeight.w800, color: AppColors.textPrimary),
+            ),
+            Text(
+              _foodType.shortLabel,
+              key: const ValueKey('diet_plan_food_type_tag'),
+              style: AppTypography.body.copyWith(
+                  fontSize: 10,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: 1.2,
+                  color: AppColors.accent),
+            ),
+          ],
         ),
         actions: [
           IconButton(
@@ -492,6 +536,18 @@ class _DietPlanScreenState extends ConsumerState<DietPlanScreen> {
                 padding: const EdgeInsets.all(AppSpacing.screenPadding),
                 children: [
                   _buildTdeeCard(targets),
+                  const SizedBox(height: AppSpacing.sectionGap),
+                  Text(
+                    'Food type',
+                    style: AppTypography.body.copyWith(
+                        fontSize: 13, color: AppColors.textDim),
+                  ),
+                  const SizedBox(height: 8),
+                  FoodTypeChips(
+                    value: _foodType,
+                    enabled: !_changingFoodType,
+                    onChanged: _changeFoodType,
+                  ),
                   const SizedBox(height: AppSpacing.sectionGap),
                   _buildMacroTargets(targets),
                   const SizedBox(height: AppSpacing.sectionGap),

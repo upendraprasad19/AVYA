@@ -22,6 +22,7 @@ import 'package:icanbefitter/shared/widgets/error_state.dart';
 import '../providers/nutrition_provider.dart';
 import '../providers/diet_plan_provider.dart';
 import '../services/meal_slot_inference.dart';
+import '../widgets/food_type_tag.dart';
 import '../widgets/todays_meals_card.dart';
 import '../widgets/weekly_chart_card.dart';
 import '../widgets/hydration_sheet.dart';
@@ -406,14 +407,25 @@ class _NutritionScreenState extends ConsumerState<NutritionScreen>
           Expanded(
             child: Column(
               children: [
-                // Info icon row (compact)
-                Align(
-                  alignment: Alignment.centerRight,
-                  child: GestureDetector(
-                    onTap: () => _showBmrTdeeInfo(targets),
-                    child: Icon(Icons.info_outline,
-                        color: AppColors.textDim, size: 13),
-                  ),
+                // Food-type tag + info icon row (compact). Diet plan Unit 2a:
+                // the user sees which food type the targets and the diet
+                // plan follow; Unit 3 appends the strategy (" · KETO").
+                // Tapping the tag opens the Diet Plan screen.
+                Row(
+                  children: [
+                    Flexible(
+                      child: FoodTypeTag(
+                        profile: profile,
+                        onTap: () => context.go('/nutrition/diet-plan'),
+                      ),
+                    ),
+                    const Spacer(),
+                    GestureDetector(
+                      onTap: () => _showBmrTdeeInfo(targets),
+                      child: Icon(Icons.info_outline,
+                          color: AppColors.textDim, size: 13),
+                    ),
+                  ],
                 ),
                 const SizedBox(height: 2),
                 _macroRow(

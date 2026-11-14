@@ -4532,16 +4532,6 @@ this entry needs would cover it.
   underlying whole-object-overwrite pattern is `sync_profile.dart`'s existing,
   pre-AI design, not something a2b-2 introduced.
 
-## OI-257 — Onboarding diet_preference default 'veg' doesn't match Edit Profile's chip vocabulary (non_veg/vegetarian/vegan/pescatarian/keto)
-
-- **Status**: OPEN
-- **Blocked on**: a product decision — change onboarding's default, or leave it and keep isVeg accepting both 'veg' and 'vegetarian' forever
-- **Verified**: `lib/features/onboarding/screens/plan_screen.dart:520` writes the literal `'veg'` (documented product decision, `lib/features/onboarding/CLAUDE.md`: "diet_preference defaults to 'veg' (Indian-first default)"); `lib/features/profile/screens/edit_profile_screen.dart:1253-1259`'s `_buildDietPreferenceChips` options map is `{non_veg, vegetarian, vegan, pescatarian, keto}` — 'veg' matches NONE of them. A user who never visits Edit Profile carries `diet_preference: 'veg'` forever; the first time they DO open Edit Profile, `_dietPreference` loads as `'veg'` (line 225) and every chip renders unselected (`isSelected` false for all 5), which reads as a UI bug even though the underlying value is fine.
-- **Discovered**: 2026-09-27, single-owner a2b-2 batch, while fixing the protein-gap-alert `isVeg` vocabulary bug (which checked only `"veg"`/`"vegan"`, never the REAL `"vegetarian"` value Edit Profile writes). Out of scope for that fix (isVeg now correctly accepts BOTH `'veg'` and `'vegetarian'`, so this is no longer a live correctness bug for that alert) — filed because the underlying vocabulary mismatch is real and independent of it.
-- **Impact**: cosmetic (no chip highlighted) for any user who hasn't yet visited Edit Profile since onboarding, plus latent risk that a FUTURE reader of `diet_preference` assumes the 5-value Edit Profile vocabulary and mishandles `'veg'` the way `isVeg` used to. Not a data-loss or crash bug.
-- **Reopen when**: a founder product decision is made — either change `plan_screen.dart:520`'s default to `'vegetarian'` (closing the vocabulary gap at the source) or explicitly accept `'veg'` as a permanent third vegetarian-family value everywhere `diet_preference` is read.
-- **Identified**: 2026-09-27 · filed via mint_oi.sh from branch `single-owner-a2b`
-
 ## OI-259 — check_plan_review_record_exists.dart cannot parse hand-authored reconciliation-merge subjects
 
 - **Status**: OPEN

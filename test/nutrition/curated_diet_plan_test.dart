@@ -86,6 +86,14 @@ const _archetypes = [
   _Archetype('build veg', 3000, 150, 'veg', 0.90, 0.93),
   _Archetype('1200 floor veg', 1200, 100, 'veg', 0.50, 0.62),
   _Archetype('1200 floor non-veg', 1200, 100, 'non-veg', 0.58, 0.78),
+  // Unit 2a (docs/plans/diet-food-type.md T3): floors started at the
+  // matching veg archetype's and were raised to just under the measured
+  // min / mean (2026-11-14: cut eggetarian 0.76 / 0.84, cut pescatarian
+  // 0.81 / 0.90, maintain both >= 0.94 / 1.00).
+  _Archetype('cut male eggetarian', 2000, 144, 'eggetarian', 0.72, 0.80),
+  _Archetype('cut female pescatarian', 1500, 110, 'pescatarian', 0.76, 0.86),
+  _Archetype('maintain eggetarian', 2400, 128, 'eggetarian', 0.90, 0.93),
+  _Archetype('maintain pescatarian', 2400, 128, 'pescatarian', 0.90, 0.93),
 ];
 
 const _seeds = 50;
@@ -316,7 +324,100 @@ void main() {
     });
   });
 
+  // Unit 2a: an INDEPENDENT diet oracle (catalog family + the row's tags),
+  // never passesDiet, so a wrong rule in the helper cannot also be the
+  // expectation (round 1 finding 7).
+  final catalogFamily = {for (final e in kDietPlanCatalog) e.foodId: e.family};
+  bool allowedFor(String pref, String foodId) {
+    final r = byId[foodId]!;
+    final fam = catalogFamily[foodId];
+    switch (pref) {
+      case 'veg':
+        return r['is_veg'] == true;
+      case 'vegan':
+        return r['is_vegan'] == true;
+      case 'eggetarian':
+        return r['is_veg'] == true || fam == DietFamily.egg;
+      case 'pescatarian':
+        return r['is_veg'] == true ||
+            fam == DietFamily.egg ||
+            fam == DietFamily.fish;
+      default:
+        return true;
+    }
+  }
+
   group('T4 diet purity', () {
+    final familyOf = catalogFamily;
+
+    test('eggetarian: no chicken/fish/mutton; pescatarian: no chicken/mutton',
+        () {
+      var eggSeen = 0, fishSeen = 0, items = 0;
+      for (final entry in plans.entries) {
+        final pref = entry.key.pref;
+        if (pref != 'eggetarian' && pref != 'pescatarian') continue;
+        for (final plan in entry.value) {
+          for (final m in plan) {
+            for (final i in m.items) {
+              items++;
+              expect(allowedFor(pref, i.foodId), isTrue,
+                  reason: '${entry.key.label}: ${i.name}');
+              final fam = familyOf[i.foodId];
+              expect(fam, isNot(anyOf(DietFamily.chicken, DietFamily.mutton)),
+                  reason: '${entry.key.label}: ${i.name}');
+              if (pref == 'eggetarian') {
+                expect(fam, isNot(DietFamily.fish), reason: i.name);
+                if (fam == DietFamily.egg) eggSeen++;
+              } else if (fam == DietFamily.fish) {
+                fishSeen++;
+              }
+            }
+          }
+        }
+      }
+      expect(items, greaterThan(0), reason: 'precondition');
+      // Positive controls: the exception must actually let egg / fish in.
+      expect(eggSeen, greaterThan(0), reason: 'no egg item in any eggetarian plan');
+      expect(fishSeen, greaterThan(0), reason: 'no fish item in any pescatarian plan');
+    });
+
+    test('forced legacy fallback: an eggetarian or pescatarian plan has no '
+        'is_veg == false row at all (no family on that path = the veg rule)',
+        () {
+      // An empty catalog leaves no candidate, so every generate() falls back
+      // to the legacy generator (plan §2.3.2).
+      final fb = CuratedDietPlanGenerator.forTest(repo, catalog: const []);
+      for (final pref in ['eggetarian', 'pescatarian']) {
+        for (var s = 1; s <= 5; s++) {
+          final plan = fb.generate(DietPlanInputs(
+            calorieTarget: 2000,
+            proteinTarget: 144,
+            dietPreference: pref,
+            seed: s,
+          ));
+          final items = [for (final m in plan) ...m.items];
+          expect(items, isNotEmpty, reason: 'precondition: $pref seed $s');
+          for (final i in items) {
+            expect(byId[i.foodId]?['is_veg'], isNot(false),
+                reason: '$pref seed $s: ${i.name}');
+          }
+        }
+      }
+      expect(fb.lastFallbackCount, 10, reason: 'every call must fall back');
+    });
+
+    test('catalog pin: every is_veg == false entry is egg/chicken/fish/mutton',
+        () {
+      for (final e in kDietPlanCatalog) {
+        if (byId[e.foodId]!['is_veg'] == false) {
+          expect(e.family,
+              anyOf(DietFamily.egg, DietFamily.chicken, DietFamily.fish,
+                  DietFamily.mutton),
+              reason: e.foodId);
+        }
+      }
+    });
+
     test('veg plans are all is_veg; vegan plans all is_vegan', () {
       for (final entry in plans.entries) {
         for (final plan in entry.value) {
@@ -602,8 +703,8 @@ void main() {
                 expect(ids, isNot(contains(alt.foodId)));
                 expect(coherenceTokensOf(alt.name).intersection(otherTokens),
                     isEmpty);
-                expect(DietPlanGenerator.passesDiet(byId[alt.foodId]!, a.pref),
-                    isTrue);
+                expect(allowedFor(a.pref, alt.foodId), isTrue,
+                    reason: '${a.label}: ${alt.name}');
                 final f = familyOf[alt.foodId]!;
                 final cap = dietFamilyDailyCap[f];
                 if (cap != null) {
