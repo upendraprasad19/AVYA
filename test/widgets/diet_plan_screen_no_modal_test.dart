@@ -351,6 +351,12 @@ void main() {
     }
     expect(stored(), 'eggetarian');
     expect(locks, 1);
+    // B-pass seat C finding 5: the loop stops at the first lock, so wait
+    // once more and re-check: still exactly one (no late second call).
+    await tester.runAsync(
+        () => Future<void>.delayed(const Duration(milliseconds: 200)));
+    await tester.pump();
+    expect(locks, 1);
     expect(find.textContaining('Plan rebuilt for Eggetarian'), findsOneWidget);
     expect(find.text('EGGETARIAN'), findsOneWidget,
         reason: 'the header tag follows the new food type');

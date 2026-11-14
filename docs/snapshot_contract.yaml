@@ -90,6 +90,12 @@ keys:
       No Edge Function reads `snapshot.profile.*` keys directly today.
       morning-alert and streak-guardian read top-level `current_weight_kg`
       / `target_weight_kg` (orphan readers — see bottom).
+      profile.diet_strategy / diet_strategy_label (diet plan 3b-3) travel in
+      the chat snapshot AND the daily snapshot push (compileDailySnapshot
+      spreads buildAiContext into user_daily_snapshots.snapshot_json); the
+      captain manual reads them only from the live chat snapshot (ai-proxy),
+      and no prompt builder reads a stored snapshot (3b-3 B-pass seat A
+      finding 1).
 
   - key: progress
     type: map

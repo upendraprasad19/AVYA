@@ -1,6 +1,6 @@
 # Diet plan Unit 3b-3: turn the diet strategy on
 
-Revision 3, 2026-11-15 (round 1 dispositions in §7, round 2 in §8). Parent plans: `docs/plans/diet-strategy.md` (Unit 3a, the targets, the selector, the column) and `docs/plans/diet-strategy-3b.md` (Units 3b-1a, 3b-1b, 3b-2). Founder decisions (2026-11-14): Balanced (default), Low carb, Keto; PRO; Option A (carbs and fat change everywhere, calories and protein never); a confirm dialog; no AI; the label "NON-VEG · KETO"; everyday keto foods for veg users; the Keto medical note.
+Revision 4, 2026-11-15 (round 1 dispositions in §7, round 2 in §8, the B-pass in §9). Parent plans: `docs/plans/diet-strategy.md` (Unit 3a, the targets, the selector, the column) and `docs/plans/diet-strategy-3b.md` (Units 3b-1a, 3b-1b, 3b-2). Founder decisions (2026-11-14): Balanced (default), Low carb, Keto; PRO; Option A (carbs and fat change everywhere, calories and protein never); a confirm dialog; no AI; the label "NON-VEG · KETO"; everyday keto foods for veg users; the Keto medical note.
 
 ## 1. What changes
 
@@ -82,4 +82,26 @@ Order of #275 / #277 / #276 among themselves does not matter for the code (each 
 | 5 | P3 | what the switch is pinned for | §4 |
 | 6 | P3 | `clearAllData` clearing configBox unverified | verified and cited (§5) |
 | 7 | P3 | §4.6 step 4 framing | §5: founder-scheduled, OI-511 |
+
+## 9. B-pass dispositions
+
+Three context-blind seats on `248fe49e` (`docs/reviews/diet-strategy-3b3-bpass.md`). No P0 or P1.
+
+| Seat / # | Sev | Finding | Disposition |
+|---|---|---|---|
+| A2 | P2 | `weekly-report` shows the week's average carbs with no target and no strategy: the model may tell a Keto user to eat more carbs | fixed on #276 (`3321a9f3`, merged here): `weeklyReportDietStrategyLine` under the protein target for a PRO Low carb / Keto user, off with `DISABLE_DIET_STRATEGY_MANUAL_RULES`; ships with the step-2 deploy (§3), so before this flip; mutants M1–M8 red |
+| A3 | P2 | the client applies the strategy only on a complete stored pack; `suggestMeal` caps carbs for any PRO user holding Low carb / Keto | accepted: an incomplete pack is the 3a stated limit (§2, onboarding writes all four targets), and the server cap follows the user's own choice (fewer carbs for someone who picked Keto), the safe direction; the cloud value lags the local one only until the profile push lands |
+| A1 | P3 | "only the chat snapshot carries `profile.diet_strategy`" was false (the daily push carries it) | reworded in the manual comment, `supabase/functions/CLAUDE.md`, the registry (on #276) and `docs/snapshot_contract.yaml`; no prompt builder reads a stored snapshot |
+| A4 | P3 | a restore merges every non-null cloud key, so an unpushed local change can be reverted by an older cloud value | accepted: the same merge rule as every profile field (`_restoreUserProfile`); the window is a choice not yet pushed when a restore runs; pre-launch, test accounts only |
+| A5 | P3 | an older build ignores the stamps and loads a Keto plan as a normal plan | accepted: pre-launch, test accounts only; the Android app gets the flip and the stamp check in the same build |
+| B1 | P2 | the kill switch is client-only; the server cap still applies | the flag header names the server switches (`DISABLE_SUGGESTMEAL_DIET_STRATEGY`, `DISABLE_DIET_STRATEGY_MANUAL_RULES`); OI-510 holds them |
+| B2 | P3 | an unreadable box reads as ON | accepted with the reason in the header: configBox opens before `runApp` and is cleared, never closed, at sign-out, so only Hive-less tests reach the catch (pinned) |
+| B3 | P3 | the flag-on sweep | CI run 43636703531 ran the full suite on the flip: two failures, both in `diet_plan_screen_no_modal_test.dart`, fixed in `248fe49e` |
+| B4 | P3 | no in-app lever | stated in the header and §5 |
+| C1 | P2 | the push pin matched a commented-out call and any call outside the pushed map | comments stripped; the call must sit inside the `payload` map that `_syncUserProfile` upserts, once in the file; plus the call-site expression run against the real switch (no seam). Mutants N1 (commented), N2 (`enabled: true`) red |
+| C2 | P2 | the build-constant guard cannot run while the constant is true | a pin on the order in `enabled`: seam, then the constant, then the box. Mutants N3 (guard deleted), N4 (guard before the seam) red |
+| C3 | P2 | no screen test through the real switch | a screen test with no seam and the real key: no strategy section, a stamped Keto plan loads with no generation, nothing stamped on save. Mutants N5 (key ignored, 9 red), N6–N9 (each screen gate forced) red |
+| C4 | P3 | the unstamped-plan test relied on the default food type | the seed names `non_veg` |
+| C5 | P3 | the lock loop stopped at the first call | a second wait and a re-check that it is still exactly one |
+| C6 | P3 | the no-Hive test did not assert its precondition | it asserts `configBox` throws first |
 

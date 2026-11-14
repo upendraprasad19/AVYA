@@ -675,7 +675,10 @@ void main() {
               }
             ],
           };
-      await seed(tester, extra: const {'diet_strategy': 'keto'});
+      // B-pass seat C finding 4: the food type matches the plan's, so the
+      // only reason to reject it is the strategy.
+      await seed(tester,
+          extra: const {'diet_strategy': 'keto', 'diet_preference': 'non_veg'});
       await tester.runAsync(
           () => UserRepository.instance.saveDietPlan(legacy()));
       final c = await pumpScreen(tester);
@@ -719,6 +722,41 @@ void main() {
       await _tapReal(tester, find.byIcon(Icons.refresh));
       await save(tester);
       expect(_savedPlan()!.containsKey('diet_strategy'), isFalse);
+    });
+
+    // B-pass seat C finding 3: the screen through the REAL kill switch (no
+    // seam), the off path after the 3b-3 flip.
+    testWidgets('the real kill switch (no seam): no strategy section, a '
+        'stamped Keto plan loads, nothing stamped on save', (tester) async {
+      DietStrategyFlags.debugEnabledOverride = null;
+      await tester.runAsync(() => HiveService.instance.configBox
+          .put(DietStrategyFlags.disableKey, true));
+      expect(DietStrategyFlags.enabled, isFalse);
+      await seed(tester, extra: const {'diet_strategy': 'keto'});
+      await tester.runAsync(() => UserRepository.instance.saveDietPlan({
+            'id': 'p3',
+            'food_type': 'non_veg',
+            'diet_strategy': 'keto',
+            'diet_strategy_requested': 'keto',
+            'meals': [
+              {
+                'name': 'Lunch',
+                'items': [
+                  {'food_id': 'F0371', 'name': 'Old keto egg', 'calories': 90}
+                ],
+              }
+            ],
+          }));
+      final c = await pumpScreen(tester);
+      expect(find.byType(DietStrategySection), findsNothing);
+      expect(find.text('Old keto egg'), findsOneWidget);
+      expect(c.read(dietPlanProvider), isNotEmpty);
+      expect(debugDietPlanGenerations, 0, reason: 'the saved plan loaded');
+      await _tapReal(tester, find.byIcon(Icons.refresh));
+      await save(tester);
+      final saved = _savedPlan()!;
+      expect(saved.containsKey('diet_strategy'), isFalse);
+      expect(saved.containsKey('diet_strategy_requested'), isFalse);
     });
 
     testWidgets('flag OFF: a plan saved as Keto with the flag on loads as '

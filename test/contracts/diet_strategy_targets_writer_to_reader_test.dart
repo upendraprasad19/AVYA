@@ -40,6 +40,7 @@ import 'package:icanbefitter/features/profile/providers/profile_provider.dart';
 import 'package:icanbefitter/features/profile/services/profile_target_recompute.dart';
 import 'package:icanbefitter/shared/repositories/user_repository.dart';
 
+import '../helpers/dart_source_scan.dart';
 import '../helpers/hive_test_setup.dart';
 
 class _Fx {
@@ -205,14 +206,44 @@ void main() {
 
   // Unit 3b-3 round 1 finding 2: the profile push is the only writer of the
   // live user_profile.diet_strategy column; its call site passes the flag.
+  // B-pass seat C finding 1: comments are stripped (a commented-out call
+  // stayed green) and the call must sit inside the map _syncUserProfile
+  // upserts, not anywhere in the file.
   test('PRESENCE: the profile push gates the diet_strategy entry on the flag',
       () {
-    final src = File('lib/core/services/sync/sync_profile.dart').readAsStringSync();
+    final src = stripDartComments(
+        File('lib/core/services/sync/sync_profile.dart').readAsStringSync());
+    final start = src.indexOf('Future<void> _syncUserProfile(');
+    expect(start, greaterThanOrEqualTo(0));
+    final open = src.indexOf('final payload = <String, dynamic>{', start);
+    final close = src.indexOf('\n    };\n', open);
+    final upsert = src.indexOf('.upsert(payload, onConflict: \'user_id\')', close);
+    final nextMethod = src.indexOf('\n  Future<', start + 1);
+    expect(open, greaterThan(start));
+    expect(close, greaterThan(open));
+    expect(upsert, greaterThan(close), reason: 'the map is what is upserted');
+    expect(upsert, lessThan(nextMethod), reason: 'in the same method');
+    final payloadMap = src.substring(open, close);
     expect(
         RegExp(r'\.\.\.dietStrategyPushEntry\(p, enabled: DietStrategyFlags\.enabled\),')
-            .allMatches(src)
+            .allMatches(payloadMap)
             .length,
         1);
+    expect(RegExp(r'dietStrategyPushEntry\(').allMatches(src).length, 1,
+        reason: 'one call site in the file');
+  });
+
+  // B-pass seat C finding 1: the call site's own expression, run against the
+  // real kill switch (no seam): the switch keeps diet_strategy out of the push.
+  test('the push entry with the real kill switch: nothing; without it: the key',
+      () async {
+    final profile = <String, dynamic>{'diet_strategy': 'keto'};
+    expect(DietStrategyFlags.debugEnabledOverride, isNull);
+    expect(dietStrategyPushEntry(profile, enabled: DietStrategyFlags.enabled),
+        {'diet_strategy': 'keto'});
+    await HiveService.instance.configBox.put(DietStrategyFlags.disableKey, true);
+    expect(dietStrategyPushEntry(profile, enabled: DietStrategyFlags.enabled),
+        isEmpty);
   });
 
   // Unit 3b-3 flipped the constant on: the OFF path is now the local kill
