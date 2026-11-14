@@ -5,7 +5,7 @@ blast_radius: platform
 review_rounds: 2
 ground_truth_verified: true
 verdict: converged
-bpass: pending
+bpass: accepted
 bpass_review: docs/reviews/diet-strategy-3b3-bpass.md
 ---
 
@@ -22,4 +22,4 @@ Plan: `docs/plans/diet-strategy-3b3.md`. Execution mode (§4.12.7): inline, one 
 
 ## B-pass
 
-Pending.
+`docs/reviews/diet-strategy-3b3-bpass.md`, verdict accepted: four context-blind seats (A writer/reader drift, B guards and mirrors, C tests passing for the wrong reason, D the fix delta), 21 findings, no P0 or P1. One gap reached the server (the weekly report had no strategy), fixed on #276 so it deploys before this flip. Mutants: client 13 of 13 red, server 10 of 10 red. The full suite with the flag on: CI run 43639385573 (`248fe49e`) green. Dispositions: plan §9.

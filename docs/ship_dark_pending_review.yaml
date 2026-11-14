@@ -287,7 +287,7 @@ resolved:
     branch: diet-strategy
     build_commit: 37122c4c  # the 3a build commit (merged 21db03c7, PR #274)
     build_date: 2026-11-14
-    flip_reviewed: false  # true in the commit that sets the record converged + bpass accepted
+    flip_reviewed: true  # set in the commit that set the record converged + bpass accepted
     flip_commit: null  # the 3b-3 merge commit; stamped by the landing session, in the OI-511 commit at the latest
     flip_review_record: docs/plan-reviews/diet-strategy-3b3.md
     note: >

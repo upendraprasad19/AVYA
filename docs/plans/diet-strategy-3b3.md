@@ -85,7 +85,7 @@ Order of #275 / #277 / #276 among themselves does not matter for the code (each 
 
 ## 9. B-pass dispositions
 
-Three context-blind seats on `248fe49e` (`docs/reviews/diet-strategy-3b3-bpass.md`). No P0 or P1.
+Three context-blind seats on `248fe49e` and a fourth (D) on the fix delta (`docs/reviews/diet-strategy-3b3-bpass.md`). No P0 or P1.
 
 | Seat / # | Sev | Finding | Disposition |
 |---|---|---|---|
@@ -96,7 +96,7 @@ Three context-blind seats on `248fe49e` (`docs/reviews/diet-strategy-3b3-bpass.m
 | A5 | P3 | an older build ignores the stamps and loads a Keto plan as a normal plan | accepted: pre-launch, test accounts only; the Android app gets the flip and the stamp check in the same build |
 | B1 | P2 | the kill switch is client-only; the server cap still applies | the flag header names the server switches (`DISABLE_SUGGESTMEAL_DIET_STRATEGY`, `DISABLE_DIET_STRATEGY_MANUAL_RULES`); OI-510 holds them |
 | B2 | P3 | an unreadable box reads as ON | accepted with the reason in the header: configBox opens before `runApp` and is cleared, never closed, at sign-out, so only Hive-less tests reach the catch (pinned) |
-| B3 | P3 | the flag-on sweep | CI run 43636703531 ran the full suite on the flip: two failures, both in `diet_plan_screen_no_modal_test.dart`, fixed in `248fe49e` |
+| B3 | P3 | the flag-on sweep | CI run 43636703531 ran the full suite on the flip: two failures, both in `diet_plan_screen_no_modal_test.dart`, fixed in `248fe49e` (run 43639385573 green) |
 | B4 | P3 | no in-app lever | stated in the header and §5 |
 | C1 | P2 | the push pin matched a commented-out call and any call outside the pushed map | comments stripped; the call must sit inside the `payload` map that `_syncUserProfile` upserts, once in the file; plus the call-site expression run against the real switch (no seam). Mutants N1 (commented), N2 (`enabled: true`) red |
 | C2 | P2 | the build-constant guard cannot run while the constant is true | a pin on the order in `enabled`: seam, then the constant, then the box. Mutants N3 (guard deleted), N4 (guard before the seam) red |
@@ -104,4 +104,9 @@ Three context-blind seats on `248fe49e` (`docs/reviews/diet-strategy-3b3-bpass.m
 | C4 | P3 | the unstamped-plan test relied on the default food type | the seed names `non_veg` |
 | C5 | P3 | the lock loop stopped at the first call | a second wait and a re-check that it is still exactly one |
 | C6 | P3 | the no-Hive test did not assert its precondition | it asserts `configBox` throws first |
-
+| D1 | P2 | the weekly-report pins missed a deleted import (`--no-check`) | both imports pinned on #276 (`306c89d5`); 2 of 2 red |
+| D2 | P2 | the push pin missed a later change to `payload`, the queued send and a second unflagged key | all three pinned; N10–N13 red |
+| D3 | P3 | "a debug build sets it" was wrong | "set by hand"; the catch claim stated as today's observation |
+| D4 | P3 | the header described #276's line as present | it says both functions deploy before this flip |
+| D5 | P3 | the late-lock re-check uses real time | accepted, bounded |
+| D6 | P3 | a registry range stopped mid-statement | 206-218 on #276 |

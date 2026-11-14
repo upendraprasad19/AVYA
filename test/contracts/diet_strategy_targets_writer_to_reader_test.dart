@@ -218,17 +218,28 @@ void main() {
     final open = src.indexOf('final payload = <String, dynamic>{', start);
     final close = src.indexOf('\n    };\n', open);
     final upsert = src.indexOf('.upsert(payload, onConflict: \'user_id\')', close);
+    final queued = src.indexOf('_executeUserProfileUpsert(payload)', close);
     final nextMethod = src.indexOf('\n  Future<', start + 1);
     expect(open, greaterThan(start));
     expect(close, greaterThan(open));
     expect(upsert, greaterThan(close), reason: 'the map is what is upserted');
     expect(upsert, lessThan(nextMethod), reason: 'in the same method');
+    // Seat D finding 2: the queued path sends the same map, and nothing
+    // between the map and the sends changes it.
+    expect(queued, inExclusiveRange(close, nextMethod));
+    final afterMap = src.substring(close, nextMethod);
+    expect(RegExp(r'\bpayload\s*(\[|\.\.|\.(remove|add|addAll|putIfAbsent|update|clear)\b|=[^=])')
+            .hasMatch(afterMap),
+        isFalse,
+        reason: 'payload is not mutated or reassigned after it is built');
     final payloadMap = src.substring(open, close);
     expect(
         RegExp(r'\.\.\.dietStrategyPushEntry\(p, enabled: DietStrategyFlags\.enabled\),')
             .allMatches(payloadMap)
             .length,
         1);
+    // No second, unflagged way into the map.
+    expect(payloadMap.contains("'diet_strategy'"), isFalse);
     expect(RegExp(r'dietStrategyPushEntry\(').allMatches(src).length, 1,
         reason: 'one call site in the file');
   });

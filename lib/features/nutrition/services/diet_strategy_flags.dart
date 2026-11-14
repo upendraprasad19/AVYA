@@ -22,12 +22,14 @@
 // pushing the strategy, but a value already in user_profile.diet_strategy
 // still drives the server: suggestMeal's carb cap (off with the Edge Function
 // secret DISABLE_SUGGESTMEAL_DIET_STRATEGY) and the weekly report's strategy
-// line (off with DISABLE_DIET_STRATEGY_MANUAL_RULES). No screen sets it: a
-// debug build or the Hive inspector does.
+// line (off with DISABLE_DIET_STRATEGY_MANUAL_RULES); both Edge Functions are
+// deployed before this flip (docs/plans/diet-strategy-3b3.md §3). Nothing in
+// the app writes the key: it is set by hand (the Hive inspector).
 //
 // A box that cannot be read means ON (the build default): configBox is
-// opened before runApp and only cleared, never closed, at sign-out, so the
-// catch is reached only by tests with no Hive (pinned in
+// opened by HiveService.init() before runApp and only cleared, never closed,
+// at sign-out, and the app has no background isolate, so today only tests
+// with no Hive reach the catch (pinned in
 // test/core/diet_strategy_targets_test.dart).
 import 'package:flutter/foundation.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
