@@ -347,6 +347,15 @@ class AuthNotifier extends Notifier<AuthState2> {
       message != null &&
       message.toLowerCase().contains('email not confirmed');
 
+  /// `_ensureLocalUser`'s cross-account decision, extracted so it can be
+  /// table-tested (onboarding-fuse-commit, 2026-11-14; behaviour unchanged).
+  /// A profile with NO `id` is treated as another account's and cleared.
+  /// That is why `completeOnboarding` now writes `id`: a freshly onboarded
+  /// profile used to have none until the bootstrapper stamped it, so a
+  /// sign-in in between cleared it.
+  static bool shouldClearForProfileId(String? existingId, String userId) =>
+      existingId == null || existingId != userId;
+
   /// Re-issues the signup confirmation email for [email] — the self-service
   /// recovery path for [isEmailNotConfirmedMessage]. Distinct from
   /// [signUpWithEmail]: this does NOT create a new account, set a new
@@ -1156,7 +1165,7 @@ class AuthNotifier extends Notifier<AuthState2> {
 
     if (existing != null) {
       final existingId = (existing as Map<dynamic, dynamic>?)?['id'] as String?;
-      if (existingId == null || existingId != user.id) {
+      if (shouldClearForProfileId(existingId, user.id)) {
         needsClear = true;
         clearReason = 'profile id mismatch (had=$existingId, now=${user.id})';
       }

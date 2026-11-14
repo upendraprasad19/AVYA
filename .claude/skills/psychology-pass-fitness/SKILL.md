@@ -95,13 +95,13 @@ Each is **name — mechanism → how to apply + the real surface/file.**
 
 - **Identity-based habits** (Clear; self-signaling) — *every logged workout is a vote for the person you're becoming.* The 11-rung rank ladder IS this engine. Copy should reinforce *identity* ("Petty Officers don't skip leg day") over *task* ("log your workout"). Surfaces: `rank_ladder_screen.dart`, `promotion_celebration_screen.dart`, push copy.
 - **Loss aversion** (Kahneman–Tversky) — losing a streak hurts ~2× the joy of earning it; the streak's *value to the user is the fear of losing it.* Frame the at-risk nudge around what's *protected*, not a generic "work out". Surface: `streak_warning_banner.dart`, `streak-guardian-daily`. Keep it factual, never shaming (ethics).
-- **Endowed progress** (Nunes–Drèze) — people accelerate when they feel *already started.* SD2 earned *at induction* (an empty gate that's already filled) is textbook-correct; preserve it. Don't reset a returning user to zero — show retained progress. Surface: induction, rank pill.
+- **Endowed progress** (Nunes–Drèze) — people accelerate when they feel *already started.* SD2 earned *on the commitment* (an empty gate that's already filled; the induction screen was retired 2026-11-14, the pledge now lives on the Plan screen) is textbook-correct; preserve it. Don't reset a returning user to zero — show retained progress. Surface: Plan-screen commitment, rank pill.
 - **Goal-gradient** (Hull; Kivetz) — effort rises as the goal nears. *Always show how close the next thing is* — "1 workout from your next freeze", "2 weeks to Petty Officer". Surfaces: `streak_explainer_sheet.dart`, rank ladder gate text, `WardBar`/`WardPhaseDots`.
 - **Variable reward** (operant; Hooked) — an *unpredictable* reward beats a fixed one. PR detection + the surprise promotion celebration are this; protect the surprise (don't pre-announce every PR). Surfaces: `pr-detection`, `promotion_celebration_screen.dart`, workout receipt.
 - **Peak-end (session level)** — overall judgment of a *workout* is set by its peak and its **end**. The post-workout **receipt card** IS the session's ending — design it as a peak (a win to share), not an afterthought. Surface: `workout_receipt_card.dart`.
 - **Fresh-start effect** (Dai–Milkman) — temporal landmarks (Monday, a new phase, month start) reset motivation. Time re-engagement + new-phase copy to landmarks. Surfaces: `graduation_screen.dart`, `re-engagement`, Phase unlock.
 - **Implementation intentions** (Gollwitzer) — "I'll train at TIME in PLACE" beats "I'll train." Anchor the workout-window nudge to the user's *median* workout hour (the banner already clamps 18–23h off median). Surface: `workout-window-closing`, `streak_warning_banner.shouldShow`.
-- **Commitment & consistency** (Cialdini) — an *active, public-feeling* commitment increases follow-through. The "REPORT FOR DUTY" enlistment tap and muster are commitment devices — keep them effortful-but-quick, not skippable noise. Surfaces: `plan_screen.dart`, `muster_screen.dart`.
+- **Commitment & consistency** (Cialdini) — an *active, public-feeling* commitment increases follow-through. The "I COMMIT" tap on the Plan screen's pledge card is the commitment device (the muster screen was retired 2026-11-14, the pledge now lives on the Plan screen) — keep it effortful-but-quick, not skippable noise. Surface: `plan_screen.dart`.
 - **B = MAP** (Fogg: Behavior = Motivation × Ability × Prompt) — when motivation dips, **shrink the action** and keep the **prompt** timely. The plan-expired card's "Re-do Week 4" door and the AI coach's "log just one set" are correct low-ability paths. Don't demand a full workout from a wavering user — ask for one set. Surfaces: `plan_expired_card.dart`, AI-coach quick prompts.
 
 ---
@@ -112,7 +112,7 @@ The universal skill says "don't let it drift into a generic template if the bran
 something more." Here that soul is concrete and **load-bearing**:
 
 - **The Wardroom/Navy lexicon is not decoration.** "Recruit · Bridge · dispatch · orders ·
-  enlistment · muster · deployment · REPORT FOR DUTY · stand by" is the semantic frame that
+  enlistment · muster · deployment · I COMMIT (was REPORT FOR DUTY) · stand by" is the semantic frame that
   makes the rank ladder believable and aspirational. **Drift to generic wellness SaaS is a
   FAILURE**, even if it'd "convert": "Hey there! 👋 Ready to crush your goals?" ✗ →
   "Bridge here, Recruit. Standing by for orders." ✓ (see `coach_replies.dart`).
@@ -151,7 +151,7 @@ If a proposed nudge needs a dark pattern to work, the underlying offer is too we
 | Surface | File | Stage | Primary levers |
 |---|---|---|---|
 | Mission Brief | `lib/features/onboarding/screens/mission_brief_screen.dart` | Acq | transportation, halo, Hero/Guide, self-efficacy, peak-end |
-| Enlistment / plan | `lib/features/onboarding/screens/plan_screen.dart` | Acq→Ret | commitment/consistency ("REPORT FOR DUTY") |
+| Enlistment / plan | `lib/features/onboarding/screens/plan_screen.dart` | Acq→Ret | commitment/consistency ("I COMMIT") |
 | PaywallSheet | `lib/shared/widgets/paywall_sheet.dart` | Acq | Hick's Law (1 CTA ✓), peak-end subtitle, social proof gap, honest scarcity |
 | Phase-2 paywall variant | `lib/shared/widgets/paywall_sheet_phase_variant.dart` | Acq | fresh-start, endowed progress ("you crushed Phase 1") |
 | Plan-expired card | `lib/features/train/widgets/plan_expired_card.dart` | Ret | B=MAP (low-ability "Re-do Week 4" door), Hick's (3 doors — watch overload) |
