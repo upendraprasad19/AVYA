@@ -13,6 +13,9 @@
 // items. Each is offered at the portion closest to the replaced item's
 // calories; ordered by that closeness, ties by catalog order.
 
+import 'dart:math';
+
+import 'package:icanbefitter/core/constants/diet_strategies.dart';
 import 'package:icanbefitter/shared/repositories/food_repository.dart';
 
 import 'curated_diet_plan_generator.dart';
@@ -40,6 +43,20 @@ const Map<String, List<DietRole>> _categoryRoles = {
   'nuts_seeds': [DietRole.snack],
 };
 
+/// Diet plan Unit 3b (docs/plans/diet-strategy-3b.md §3.4): a Balanced swap
+/// never sees a Low carb / Keto only entry, not even in its role scan or its
+/// family counts, so a saved or legacy Balanced plan that holds one of those
+/// ids (paneer F0023, a fried egg F0371...) resolves and counts exactly as
+/// before Unit 3b. The filter keeps the order, so tie-break indexes of the
+/// shared entries are unchanged (the Low carb / Keto entries are appended).
+List<CatalogEntry> swapCatalogFor(
+  List<CatalogEntry> catalog,
+  DietStrategy strategy,
+) =>
+    strategy == DietStrategy.balanced
+        ? [for (final e in catalog) if (!e.lowCarbOnly) e]
+        : catalog;
+
 /// The role a plan item fills, or null when no role fits its slot.
 ///
 /// Order of evidence: the item's own role (a fresh or swapped item) → the
@@ -52,13 +69,17 @@ DietRole? resolveSwapRole({
   required String? role,
   required String slotKey,
   List<CatalogEntry> catalog = kDietPlanCatalog,
+  DietStrategy strategy = DietStrategy.balanced,
 }) {
+  catalog = swapCatalogFor(catalog, strategy);
   if (role != null) {
     for (final r in DietRole.values) {
       if (r.name == role) return r;
     }
   }
-  final template = curatedTemplateForSlot(slotKey);
+  // The strategy's templates: a Keto slot holds `fat`, which the Balanced
+  // templates do not (round 1 finding 4).
+  final template = curatedTemplateForSlot(slotKey, strategy: strategy);
   if (template == null) return null;
   final allowed = template.roles.toSet();
   for (final e in catalog) {
@@ -87,13 +108,16 @@ List<DietPlanFoodItem> swapAlternatives({
   required FoodRepository repo,
   List<CatalogEntry> catalog = kDietPlanCatalog,
   int limit = 6,
+  DietStrategy strategy = DietStrategy.balanced,
 }) {
+  catalog = swapCatalogFor(catalog, strategy);
   final resolved = resolveSwapRole(
     foodId: foodId,
     category: category,
     role: role,
     slotKey: slotKey,
     catalog: catalog,
+    strategy: strategy,
   );
   if (resolved == null) return const [];
 
@@ -125,11 +149,18 @@ List<DietPlanFoodItem> swapAlternatives({
     if (!DietPlanGenerator.passesDiet(row, dietPreference, family: e.family)) {
       continue;
     }
-    final cap = dietFamilyDailyCap[e.family];
+    final cap = (strategy == DietStrategy.balanced
+            ? null
+            : dietFamilyLowCarbCapOverride[e.family]) ??
+        dietFamilyDailyCap[e.family];
     if (cap != null && (familyCount[e.family] ?? 0) >= cap) {
       continue;
     }
     final cand = CuratedCandidate(e, row, i);
+    if (strategy == DietStrategy.keto &&
+        cand.carbs * e.portions.reduce(min) > kKetoItemCarbCap) {
+      continue;
+    }
     if (cand.tokens.intersection(mealTokens).isNotEmpty) continue;
 
     var bestM = e.portions.first;

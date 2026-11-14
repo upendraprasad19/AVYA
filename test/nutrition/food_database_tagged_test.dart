@@ -114,10 +114,14 @@ void main() {
           reason: '$id ${byId[id]!['name']} is plain roasted, not UPF');
     }
     expect(byId['F0011']!['is_everyday'], isTrue, reason: 'Toor Dal');
-    for (final id in ['F1115', 'F1063', 'F0402', 'F0690']) {
+    for (final id in ['F1115', 'F1063', 'F0690']) {
       expect(byId[id]!['is_everyday'], isFalse,
           reason: '$id ${byId[id]!['name']} is not everyday');
     }
+    // Diet plan Unit 3b (docs/plans/diet-strategy-3b.md §3.2, §4): Ghee is
+    // everyday as a Low carb / Keto ONLY item (keto needs added fat); it is
+    // never in the Balanced pool (curated_diet_plan_test.dart T1 "no fats").
+    expect(byId['F0402']!['is_everyday'], isTrue, reason: 'Ghee (keto fat)');
   });
 
   test('v4 new rows F1442-F1448: present, derived fields consistent', () {
