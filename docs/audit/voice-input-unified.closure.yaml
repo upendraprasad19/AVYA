@@ -37,7 +37,7 @@ findings:
     verification: "test/contracts/android_speech_queries_test.dart (1 mutant) + speech_privacy_copy_test.dart (mutant: an on-device claim reddened it)"
 
   - id: U5-DOCS-REGISTRY
-    title: "Nested CLAUDE.md x3, COACH-15/XC-15, business rules, SoT concept speech_input_session_owner, bug-class 2.158, OI-348 A19+S6, GO_LIVE 3.6, context budget"
+    title: "Nested CLAUDE.md x3, COACH-15/XC-15, business rules, SoT concept speech_input_session_owner, bug-class 2.159, OI-348 A19+S6, GO_LIVE 3.6, context budget"
     terminal_state: closed_in_commit
     commit: "a7ab6e1c and f3c9fc41"
     verification: "check_sot_registry_parity / completeness / behavioral_test_paths / writeservice_contracts, check_bug_class_numbers_unique, check_context_artifact_budget all exit 0"

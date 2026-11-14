@@ -49,10 +49,13 @@ void main() {
     HiveService.instance.markInitializedForTests();
     await HiveUserSession.openForUser(testUser);
     await HiveService.instance.configBox.put('disable_loaded_wins', true);
+    // Unit 2C-a: the fixture predates the balanced week, so its switch is set too.
+    await HiveService.instance.configBox.put('disable_balanced_week', true);
   });
 
   tearDownAll(() async {
     await HiveService.instance.configBox.delete('disable_loaded_wins');
+    await HiveService.instance.configBox.delete('disable_balanced_week');
     await HiveUserSession.closeAll();
     GuardedBox.testBypassOwnership = false;
     await Hive.close();

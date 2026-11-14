@@ -657,21 +657,27 @@ void main() {
       expect(legsB.exercises.length, greaterThanOrEqualTo(3), reason: legsB.exercises.map((e) => e.exerciseName).join(', '));
     });
 
-    test('the allocator credits what the rule says: 6-day build_muscle drops the quad-first Glutes credit, '
-        'every other plan keeps it', () {
-      // [goal, days]: the policy plan first, then controls that must keep full credit.
-      for (final (goal, days, policy) in const [
-        ('build_muscle', 6, true),
-        ('recompose', 6, true),
-        ('build_muscle', 5, false),
-        ('build_muscle', 4, false),
-        ('build_muscle', 3, false),
-        ('strength', 6, false),
-        ('lose_fat', 6, false),
-        ('general_fitness', 6, false),
+    test('the allocator credits what the rule says: 6-day build_muscle, and 3 / 4 / 5-day build_muscle at 60+ minutes '
+        '(Unit 2C-a), drop the quad-first Glutes credit; every other plan keeps it', () {
+      // [goal, days, minutes]: the policy plans first, then controls that must keep full credit.
+      for (final (goal, days, minutes, policy) in const [
+        ('build_muscle', 6, 90, true),
+        ('recompose', 6, 90, true),
+        // Unit 2C-a (S2, founder d35): the balanced week's credit.
+        ('build_muscle', 5, 90, true),
+        ('build_muscle', 4, 90, true),
+        ('build_muscle', 3, 90, true),
+        ('build_muscle', 4, 60, true),
+        // Below 60 minutes the 3 / 4 / 5-day plans keep today's lists and credit.
+        ('build_muscle', 5, 45, false),
+        ('build_muscle', 4, 45, false),
+        ('build_muscle', 3, 45, false),
+        ('strength', 6, 90, false),
+        ('lose_fat', 6, 90, false),
+        ('general_fitness', 6, 90, false),
       ]) {
         SessionSetAllocator.debugLastStats = null;
-        final plan = gen(goal, 'full_gym', days, 'intermediate', 90);
+        final plan = gen(goal, 'full_gym', days, 'intermediate', minutes);
         final ledger = SessionSetAllocator.debugLastStats!['A']!.weekly['Glutes'] ?? 0;
         final full = fullCredit(plan, 0, 'glute');
         final ruled = glutesWithoutQuadFirst(plan, 0);
@@ -682,10 +688,10 @@ void main() {
             }));
         expect(hasQuadFirstWithGlutes, isTrue, reason: '$goal ${days}d: the control needs a squat or lunge in the plan');
         if (policy) {
-          expect(ledger, ruled, reason: '$goal ${days}d: the ledger credits Glutes under the rule');
+          expect(ledger, ruled, reason: '$goal ${days}d ${minutes}m: the ledger credits Glutes under the rule');
           expect(full, greaterThan(ruled), reason: '$goal ${days}d: squats carry glute work the rule does not count');
         } else {
-          expect(ledger, full, reason: '$goal ${days}d: the ledger credits every listed muscle');
+          expect(ledger, full, reason: '$goal ${days}d ${minutes}m: the ledger credits every listed muscle');
           expect(full, greaterThan(ruled), reason: '$goal ${days}d: the rule WOULD have changed this plan');
         }
       }

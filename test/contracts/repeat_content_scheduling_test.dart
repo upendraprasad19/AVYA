@@ -322,5 +322,44 @@ void main() {
           reason: 'new rows stamped phase = currentPhase + 1');
       await setFlag(false);
     });
+
+    // Unit 2C-a (B-pass): the auto path hands its own minutes to the pin builder, which resolves the split family the
+    // generate after it will use. A prior phase at 45 minutes holds today's 4-day days (Push / Pull / Legs / Upper);
+    // advancing at 45 repeats them, advancing at 60 (the balanced week, Upper A / Lower A / ...) refuses the pins and
+    // fresh-fills. Dropping the argument at the `_buildRepeatPins` call would resolve the profile's (empty: 60) and
+    // refuse the 45-minute repeat.
+    for (final (minutes, repeats) in [(45, true), (60, false)]) {
+      test('Unit 2C-a: a 45-minute phase advanced at $minutes minutes ${repeats ? 'repeats' : 'refuses the pins'}',
+          () async {
+        await setFlag(true);
+        // The earlier tests leave future rows behind (a phase 3), which would keep the plan unexpired.
+        await HiveService.instance.workoutBox.clear();
+        final read = WorkoutScheduleReadService.instance;
+        await read.generateAndSchedule(
+          goal: 'build_muscle',
+          equipment: 'full_gym',
+          daysPerWeek: 4,
+          startDate: DateTime.now().subtract(const Duration(days: 40)),
+          experienceLevel: 'intermediate',
+          phase: 2,
+          sessionDuration: 45,
+        );
+        expect(read.getWeek(1).where((r) => r['type'] == 'workout').map((r) => r['workout_name']).toSet(),
+            {'Push', 'Pull', 'Legs', 'Upper'},
+            reason: 'precondition: the prior phase holds today\'s 4-day family');
+        final advanced = await WorkoutScheduleService.instance.autoGenerateNextPhaseIfNeeded(
+          goal: 'build_muscle',
+          equipment: 'full_gym',
+          daysPerWeek: 4,
+          experienceLevel: 'intermediate',
+          currentPhase: 2,
+          repeatContent: true,
+          sessionDuration: minutes,
+        );
+        expect(advanced.generated, isTrue);
+        expect(advanced.repeated, repeats);
+        await setFlag(false);
+      });
+    }
   });
 }

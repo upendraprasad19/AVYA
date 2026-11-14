@@ -77,6 +77,22 @@ class PlanEngineFlags {
     }
   }
 
+  /// Unit 2C kill-switch (OI-475 L2 / L3, founder d35-d46, plan `docs/plans/2026-11-14-generator-step2c-balanced-week.md`):
+  /// the balanced week. Part 2C-a: build_muscle 3 / 4 / 5-day plans at 60+ minutes get the balanced splits (Upper /
+  /// Lower / Full Body, Upper / Lower x2, Push / Pull / Legs / Upper / Lower + Core) and the credit rule (a quad-first
+  /// row credits Quads, not Glutes); repeat pins refuse rows of the other split family. Default ON. Set
+  /// `configBox['disable_balanced_week'] = true` to restore today's lists and credit verbatim, for plans generated from
+  /// then on. Read by each callee (`SplitResolver.balancedWeekApplies`, so `selectV4`, `quadPrimaryCreditsGlutes` and
+  /// `WorkoutScheduleReadService.foreignDayNamesFor`), overridable by their `balancedWeek` argument; `generateV4` has
+  /// no `await`, so one generation never mixes the two.
+  static bool get balancedWeekEnabled {
+    try {
+      return HiveService.instance.configBox.get('disable_balanced_week') != true;
+    } catch (_) {
+      return true; // no Hive (pure unit test) → safe default: the balanced week
+    }
+  }
+
   /// U3 warmup/cooldown injury filter (Ship 2). Default ON (contraindicated
   /// warmup/cooldown/cardio moves are dropped for an injured user). Set
   /// `configBox['disable_warmup_injury_filter'] = true` to revert to the

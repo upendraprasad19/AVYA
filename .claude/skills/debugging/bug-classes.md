@@ -2165,7 +2165,26 @@ added, false of the flip being performed.
 - **Test shape:** a fixture row per spelling every writer can produce (incl. AI variants and whitespace); a truth table of the filter with the unchanged rows and the stricter-by-design rows each pinned; an INDEPENDENT oracle (not the helper under test) over generated plans; mutate "unknown -> default".
 - **Regression test:** `test/core/food_types_test.dart`, `test/nutrition/passes_diet_food_type_test.dart`, `test/contracts/diet_preference_vocabulary_writer_to_reader_test.dart` (diagnoses a2b2f1 -> 6f5aaa).
 
-### 2.158 A shared plugin singleton has one result listener and no session ids, so a late result reaches whichever session listens now (NEW 2026-11-14)
+### 2.158 A pipeline stage that rebuilds a model object drops a field added after it was written (NEW 2026-11-14)
+
+- **Telltale:** a new per-day field (`MuscleSlotDay.avoidEarlier`) is set by the writer and read by the consumer, the
+  unit tests of both pass, and the end-to-end measure does not move. In the v2 prototype the 4-day repeats went 86 -> 464
+  where the avoid should have lowered them.
+- **Root-cause shape:** a stage between writer and reader (`VolumeFilter.filterDays`) builds a NEW object field by field
+  from the old one, so any field added later is silently reset to its default. It is the writer/reader drift class with
+  the drift inside a copy, not a key name.
+- **Why it survives review:** the writer and reader are both in the diff; the copy stage is not, and nothing fails to
+  compile because the field has a default.
+- **Fix pattern:** carry the field in every rebuilding stage (grep each `ClassName(` construction in the pipeline when
+  adding a field with a default); prefer a `copyWith` so the next field is carried by construction.
+- **Test shape:** a direct test of the rebuilding stage for every value of the field, plus a test through the real
+  pipeline (rebuild stage, then consumer) with a crafted pool. A mutant that resets the field in the copy must go red.
+- **Masking found by mutation (same batch):** a cross-day avoid for variant B looked covered because B's within-day
+  avoid of its own A pushed it off the same row. Give each avoid source a fixture where it alone can move the pick.
+- **Regression test:** `test/contracts/balanced_week_behavioral_test.dart` ("the filter carry", "sameType, variant B on
+  its own"); diagnose c7e5a1.
+
+### 2.159 A shared plugin singleton has one result listener and no session ids, so a late result reaches whichever session listens now (NEW 2026-11-14)
 
 - **Telltale:** after a fast tap-stop-tap, a tab switch or a second host starting its mic, words from the PREVIOUS utterance appear in the NEW field (or in the other screen's field), or a session ends with no words although the user spoke, or an error from the old recognizer ends the new session. Only reproduces on a device or browser, never against a fake that replays one session at a time.
 - **Root-cause shape:** `SpeechToText()` (`speech_to_text` 7.4.0) is a process-wide singleton with ONE result listener and no session id. On Android a user stop emits `notListening` / `done` BEFORE the final result, errors arrive after `done` via `handler.post`, `listening` is emitted before the recognizer starts so `error_busy` / `error_client` follow it, and `cancelListening` on SDK 29 destroys the recognizer 50 ms later. On web `_onResult` never produces a final and errors are raw browser strings. Any host that treats "an event arrived" as "my session's event" (the old coach screen's own `_initSpeech`, a naive nutrition mic) consumes another session's tail.

@@ -4371,7 +4371,7 @@ concepts:
     restore_methods: [_restoreWorkoutPlan, _restoreScheduledWorkouts, _restoreScheduleCompletions]
     provider_invalidation_set: [currentPlanProvider, calendarWeekProvider, todayWorkoutProvider, streakProvider]
     ist_sites:
-      - { file: lib/core/services/workout_schedule_read_service.dart, line: 368, fn: generateAndScheduleFromDate }
+      - { file: lib/core/services/workout_schedule_read_service.dart, line: 371, fn: generateAndScheduleFromDate }
     forbidden_legacy_patterns:
       - { pattern: "workoutBox\\.put.*schedule.*status.*planned", reason: "Never overwrite status=completed; check guard first" }
     class_constraints: |
@@ -5519,7 +5519,7 @@ concepts:
         method: phaseStartAfterGap
         notes: the ONE start-date rule; pure.
       - file: lib/core/services/workout_schedule_read_service.dart
-        line_range: 2076-2087
+        line_range: 2130-2141
         method: nextPhaseStartDate
         notes: delegates to phaseStartAfterGap (gapStart false = the original rule, used by the graduation unlock).
       - file: lib/shared/services/pro_phase_advance.dart
@@ -9671,7 +9671,7 @@ concepts:
       getCurrentPlanMap, hasPlan, getCurrentCalendarWeek.
     writers:
       - file: lib/core/services/workout_schedule_read_service.dart
-        line_range: 132-2026
+        line_range: 135-2080
         method: WorkoutScheduleReadService
     reader_manifest_complete: false  # progressive caller migration; @Deprecated lint surfaces remaining
     readers:
@@ -9747,7 +9747,7 @@ concepts:
       strings. Asserted directly, not assumed.
     writers:
       - file: lib/core/services/workout_schedule_read_service.dart
-        line_range: 930-955
+        line_range: 984-1009
         method: activeHoldWeeks / activeHoldOrdinalFor / weekIdentity — the seam + the single flag gate
       - file: lib/core/services/workout_schedule_write_service.dart
         line_range: 235-353
@@ -9832,7 +9832,7 @@ concepts:
         method: holdWeek → stamps is_hold (bool) + hold_ordinal (int, gap-proof max+1)
     readers:
       - file: lib/core/services/workout_schedule_read_service.dart
-        line_range: 802-887
+        line_range: 1107-1318
         method: isDeloadHold / _holdDatesByOrdinal / holdOrdinalForDate / holdWeeks / holdWeekSessionProgress
         semantic: latest
         fields_read: [schedule_<date>.is_hold, schedule_<date>.hold_ordinal, schedule_<date>.status, schedule_<date>.type]
@@ -10461,7 +10461,7 @@ concepts:
         method: generateV4
         notes: CENTRAL normalize - canonicalizes injuries once for every generation caller
       - file: lib/shared/repositories/plan_engine/exercise_selector.dart
-        line_range: 836-848
+        line_range: 850-862
         method: _isContraindicated (passed to CoreListSelector.rankedPool by _pickCoreList; buildPinnedDays.resolve)
         notes: U2 introduced it for the universal pool (deleted with the pool and its kill switch by Unit 1B-F, 2026-11-11); ungated; a slot with no safe row is omitted, then the thin-day top-up
       - file: lib/shared/repositories/plan_engine/warmup_cooldown.dart
@@ -10477,7 +10477,7 @@ concepts:
         fields_read: [injury_contraindications]
         notes: exact lowercase equality (attempts 1-4) - unchanged, already correct
       - file: lib/shared/repositories/plan_engine/exercise_selector.dart
-        line_range: 836-848
+        line_range: 850-862
         method: _isContraindicated (the core-list pick's hard filter and the repeat pins)
         semantic: flag-check
         fields_read: [injury_contraindications]
@@ -10742,7 +10742,7 @@ concepts:
       that says LESS the more the user has logged, while still looking present.
     writers:
       - file: lib/core/services/workout_schedule_read_service.dart
-        line_range: 1166-1201
+        line_range: 1220-1255
         method: holdSnapshotBlock
         notes: |
           Returns null off a hold day. Reads activeHoldOrdinalFor/activeHoldWeeks
@@ -11079,7 +11079,7 @@ concepts:
           it only READS this stamped field.
       - file: lib/core/services/workout_schedule_read_service.dart
         method: "generateAndScheduleFromDate — current_plan blob splice (OI-166 Unit 2)"
-        line: 449
+        line: 452
         notes: >
           Replaces the pre-existing unconditional current_plan write. Splices
           contentFlavorIndex-cycled content into week_plans starting at
@@ -11487,10 +11487,12 @@ concepts:
     domain: workout
     behavioral_test_path: test/contracts/quads_floor_6day_behavioral_test.dart
     description: >
-      OI-454 — in the 6-day build_muscle split (and only there) an exercise whose FIRST listed muscle is Quads credits
+      OI-454 — in the 6-day build_muscle split (and, since Unit 2C-a S2, the balanced week: build_muscle 3 / 4 / 5 days
+      at 60+ resolved minutes, concept balanced_week) an exercise whose FIRST listed muscle is Quads credits
       Quads but not Glutes to the session set budget, so the Glutes weekly top and session cap never refuse a squat,
-      lunge or leg press. `SessionBudgetContext.quadPrimaryCreditsGlutes` (default true) is set false by
-      `PlanGenerator.generateV4` for planGoal build_muscle and 6 days; `BudgetMuscleGroups.creditedOf` is the one
+      lunge or leg press. `SessionBudgetContext.quadPrimaryCreditsGlutes` (default true) is set by
+      `PlanGenerator.generateV4` to `SplitResolver.quadPrimaryCreditsGlutes(planGoal, days, minutes, quadLegsB:)`
+      (false for those plans; the balanced half reads disable_balanced_week); `BudgetMuscleGroups.creditedOf` is the one
       function that applies it, called by `SessionSetAllocator._groupsOf`, `PeriodizationEngine.apply` and
       `VolumeTitration._titrateWeekBudgeted`, so the three ledgers agree. `BudgetMuscleGroups.of` (focus groups) is
       unchanged. Paired with the Legs B slot swap (`SplitResolver._get6DayV4`, Quads / knee_dominant / compound,
@@ -11503,6 +11505,8 @@ concepts:
         method: creditedOf
       - file: lib/shared/repositories/plan_engine/split_resolver.dart
         method: _get6DayV4 build_muscle Legs B slots
+      - file: lib/shared/repositories/plan_engine/split_resolver.dart
+        method: quadPrimaryCreditsGlutes (the one predicate; balancedWeekApplies or the 6-day Legs B)
     readers:
       - file: lib/shared/repositories/plan_engine/session_set_allocator.dart
         method_or_widget: _groupsOf (ledger credit for every budgeted slot)
@@ -11637,6 +11641,51 @@ concepts:
         method_or_widget: DayFloorGate (day_floor_gate_pairs_p1_test / _pairs_p4_test / _rep30_test, floor on vs off, weeks 1-4, the floor-off digests)
         semantic: behavioral
     contract_test_path: test/contracts/day_floor_behavioral_test.dart
+
+  - concept: balanced_week
+    domain: workout
+    behavioral_test_path: test/contracts/balanced_week_behavioral_test.dart
+    description: >
+      Generator Unit 2C-a (OI-475 L2 / L3, founder d35-d46, 2026-11-14, diagnose c7e5a1, plan
+      docs/plans/2026-11-14-generator-step2c-balanced-week.md v6): the balanced build_muscle week. One predicate,
+      SplitResolver.balancedWeekApplies(planGoal, days, minutes): build_muscle, 3 / 4 / 5 days, resolved minutes >= 60
+      (null false), disable_balanced_week not set. It decides (S1) the lists selectV4 returns (3-day Upper / Lower / Full
+      Body, 4-day Upper A / Lower A / Upper B / Lower B, 5-day Push / Pull / Legs / Upper / Lower + Core, every day with
+      a B list), (S2) the quad-first credit (quad_primary_glute_credit) and the repeat-pin row check. Each day carries
+      MuscleSlotDay.avoidEarlier (EarlierDayAvoid none / sameType / all): ExerciseSelector._pickCoreList soft-avoids
+      the earlier same-dayType day's picks (sameType) or every earlier day's (all, the 3-day Full Body, d46), per
+      variant, through _preferNovel only. VolumeFilter.filterDays rebuilds every day and must carry the field. A
+      beginner's 3 / 4-day Full Body keeps its list until effectiveLevel lifts it. Repeat pins: repeatPinsFrom refuses
+      when a workout row's workout_day_index is past the new day count or its workout_name is a day of the other split
+      family (WorkoutScheduleReadService.foreignDayNamesFor), because the stored last_phase_profile can be stale.
+      Kill-switch disable_balanced_week (PlanEngineFlags.balancedWeekEnabled, default ON), read by selectV4,
+      quadPrimaryCreditsGlutes and foreignDayNamesFor; OFF equals main c6b1ee48 (1,010 golden personas,
+      generator_golden_hashes_balanced_week_off.json, and the gate's 288-plan digest at 60 / 90 minutes); the
+      repeat-pin day-index refusal is a defect fix outside the switch. Rule-14
+      waiver (d36, d40): plan_generator.dart lines 169 and 288 only.
+    writers:
+      - file: lib/shared/repositories/plan_engine/split_resolver.dart
+        method: balancedWeekApplies / selectV4 (sessionMinutes:, balancedWeek:) / _get3DayV4, _get4DayV4, _get5DayV4 balanced lists
+      - file: lib/shared/repositories/plan_engine/models.dart
+        method: MuscleSlotDay.avoidEarlier (EarlierDayAvoid)
+      - file: lib/shared/repositories/plan_engine/plan_engine_flags.dart
+        method: balancedWeekEnabled (the kill-switch read)
+      - file: lib/shared/repositories/plan_engine/plan_generator.dart
+        method: generateV4 (selectV4 sessionMinutes:, the resolved minutes)
+    readers:
+      - file: lib/shared/repositories/plan_engine/volume_filter.dart
+        method_or_widget: filterDays (carries avoidEarlier onto the rebuilt day)
+        semantic: carry
+      - file: lib/shared/repositories/plan_engine/exercise_selector.dart
+        method_or_widget: _pickCoreList (earlier(byType) union into avoidA / avoidB; earlierByTypeA / B filled after each day)
+        semantic: soft avoid
+      - file: lib/core/services/workout_schedule_read_service.dart
+        method_or_widget: foreignDayNamesFor / repeatPinsFrom (the row checks) / _buildRepeatPins (minutes)
+        semantic: repeat pins
+      - file: test/plan_generator/balanced_week_gate_test.dart
+        method_or_widget: 288 build_muscle plans at 60 / 90 minutes; the Quads residue per (days, level), week 2 never week 1, repeats bounded, OFF digest
+        semantic: behavioral
+    contract_test_path: test/contracts/balanced_week_behavioral_test.dart
 
   - concept: volume_titration
     domain: workout
@@ -11870,13 +11919,16 @@ concepts:
           param forwarded to PlanGenerator.generate (null every existing caller →
           byte-identical); last_phase_profile = {plan_goal: FitnessGoals.of(goal).planGoal,
           equipment, days_per_week, effective_exp: PlanGenerator.effectiveLevel(exp,phase)}
-          written to configBox iff adherenceGateEnabled.
+          written through MigratedKey (the per-user userBox; configBox only before a session
+          opens) iff adherenceGateEnabled.
       - file: lib/core/services/workout_schedule_read_service.dart
         method: autoGenerateNextPhaseIfNeeded (repeatContent) + _buildRepeatPins / repeatPinsFrom
         notes: >
-          repeatContent flag; _buildRepeatPins reads configBox last_phase_profile + getWeek(1/2)
-          BEFORE the plan_start overwrite → delegates to the PURE repeatPinsFrom (G5 gate +
-          extraction, @visibleForTesting); pins passed to generateAndSchedule. phase=newPhase.
+          repeatContent flag; _buildRepeatPins reads last_phase_profile (MigratedKey: userBox
+          first) + getWeek(1/2) BEFORE the plan_start overwrite → delegates to the PURE
+          repeatPinsFrom (G5 gate, then the Unit 2C-a row checks: a workout row past the new
+          day count, or named for a day of the other split family (foreignDayNamesFor), refuses;
+          then extraction, @visibleForTesting); pins passed to generateAndSchedule. phase=newPhase.
       - file: lib/core/services/workout_schedule_service.dart
         method: autoGenerateNextPhaseIfNeeded facade (repeatContent forward; ⑧ 3-a2 record return)
         notes: >
@@ -12827,7 +12879,7 @@ concepts:
           "don't touch" via the RPC's own COALESCE), same value + same
           projection helper, only the transport changed.
       - file: lib/core/services/workout_schedule_read_service.dart
-        line_range: 1596-1603
+        line_range: 1650-1657
         method: currentWeekColumnProjection
         notes: pure helper deciding frozen-passthrough (disabled) vs program week (enabled); behaviorally tested.
       - file: lib/features/onboarding/providers/onboarding_provider.dart
@@ -13269,15 +13321,15 @@ concepts:
       That shared walk is the drift guard.
     writers:
       - file: lib/core/services/workout_schedule_read_service.dart
-        line_range: 1822-1839
+        line_range: 1876-1893
         method: _scheduleRowsBefore
         semantic: shared-row-walk
       - file: lib/core/services/workout_schedule_read_service.dart
-        line_range: 1815-1821
+        line_range: 1869-1875
         method: pastPhaseBlocks
         semantic: strict-set
       - file: lib/core/services/workout_schedule_read_service.dart
-        line_range: 1848-1873
+        line_range: 1902-1927
         method: pastPhaseBlocksForDisplay
         semantic: display-recovery
         notes: |
@@ -15450,7 +15502,7 @@ concepts:
         fields_read: [type]
         notes: whitelist shape, widened to include 'logged' by this batch
       - file: lib/shared/repositories/plan_engine/plan_engine_flags.dart
-        line_range: 513-518
+        line_range: 529-534
         method: isRestDayConsideringLogged
         semantic: flag-check
         fields_read: [type]
@@ -15461,7 +15513,7 @@ concepts:
         semantic: flag-check
         fields_read: [type]
       - file: lib/core/services/workout_schedule_read_service.dart
-        line_range: 1366-1390
+        line_range: 1420-1444
         method: currentPhaseCompletionRate
         semantic: flag-check
         fields_read: [type]
@@ -18305,6 +18357,12 @@ concepts:
       - file: lib/shared/repositories/plan_engine/training_history_analyzer.dart
         method: sessionMinutesFromProfile
         semantic: raw stored value for SessionBudget.resolveMinutes, read on every generation
+      - file: lib/shared/repositories/plan_engine/plan_generator.dart
+        method: generateV4 (selectV4 sessionMinutes:, quadPrimaryCreditsGlutes minutes)
+        semantic: Unit 2C-a, the resolved minutes choose the split family and the credit (balanced week at 60+)
+      - file: lib/core/services/workout_schedule_read_service.dart
+        method: _buildRepeatPins (foreignDayNamesFor minutes:)
+        semantic: Unit 2C-a, the resolved minutes of the NEW phase decide which split family's day names refuse the pins
       - file: lib/shared/services/pro_phase_advance.dart
         method: _runAdvanceWith
         semantic: passes the stored minutes to generateV4 as sessionDuration
