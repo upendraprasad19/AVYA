@@ -201,7 +201,7 @@ right before the dairy word; a failed profile read shows vegan options; the
 kill switch restores the old `isVeg` description; alias food-type keys are
 dropped from the extraction and from inherited notes; the veg queries keep
 the most protein-rich rows past the limit. Measured on the bundled asset:
-eggetarian 35 and pescatarian 91 rows kept (unchanged), vegan 632 of 637
+eggetarian 35 and pescatarian 91 rows kept (unchanged), vegan 632 of 637 (638 of 643 on the asset after Unit 1; the test compares old-rule and new-rule sets)
 (unchanged; the dropped five are the old five). Live (read-only): only
 `diet_preference` exists as a food-type key, in 18 embeddings and 3
 `coaching_notes` rows; the cleanup SQL now strips all 21 (all 10 JSON

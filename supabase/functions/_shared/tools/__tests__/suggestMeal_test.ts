@@ -351,18 +351,24 @@ Deno.test("Unit 2b B-pass 2: vegan deny words are absolute; the plant rescue nee
   for (const n of keep) assert(veganRowAllowed(n), `vegan dropped ${n}`);
 });
 
-Deno.test("Unit 2b B-pass 2: the bundled asset's is_vegan rows keep every plant row (measured 632 of 637)", async () => {
+Deno.test("Unit 2b B-pass 2: on the bundled asset the stricter vegan rule keeps every row the old rule kept", async () => {
   const asset = JSON.parse(
     await Deno.readTextFile(new URL("../../../../../assets/data/food_database.json", import.meta.url)),
   ) as Array<{ name: string; is_vegan?: boolean }>;
   const vegan = asset.filter((r) => r.is_vegan === true).map((r) => r.name);
+  // The pre-B-pass rule, frozen here as the oracle: a deny word dropped the
+  // row unless a plant word appeared anywhere in the name.
+  const oldDeny = /\b(honey|ghee|paneer|curd|dahi|whey|cheese|malai|butter|milk|cold coffee|pav)\b/i;
+  const oldPlant = /\b(soy|almond|oat|coconut|peanut|cashew|rice|hemp|nut|cocoa)\b/i;
+  const oldKept = vegan.filter((n) => !oldDeny.test(n) || oldPlant.test(n));
   const kept = vegan.filter(veganRowAllowed);
   const dropped = vegan.filter((n) => !veganRowAllowed(n));
   console.log(`[vegan scan] ${kept.length} of ${vegan.length} kept; dropped: ${dropped.join(" | ")}`);
-  // Measured 2026-11-14 on the bundled asset (the old rule kept the same
-  // 632): the stricter rule loses no real plant row.
-  assertEquals(kept.length, 632);
-  assert(kept.includes("Soy Milk") || kept.some((n) => /soy milk/i.test(n)), "positive control");
+  // Measured 2026-11-14 (643 is_vegan rows after Unit 1's asset, 637 before):
+  // both rules keep the same rows, so the stricter rule loses no real plant row.
+  assert(vegan.length >= 600, `precondition: the asset's vegan rows (${vegan.length})`);
+  assertEquals(kept, oldKept);
+  assert(dropped.includes("Honey") && dropped.includes("Pav Bhaji"), "positive control: the tagged dairy/honey rows drop");
 });
 
 Deno.test("Unit 2b B-pass 3: a profile read error shows vegan options (they suit every food type)", async () => {
