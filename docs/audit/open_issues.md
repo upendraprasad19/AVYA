@@ -2945,7 +2945,7 @@ This gets MORE visible once OI-166 Unit 2 caps `regeneratePlanBlock` at the 4-we
 - `seed_service.dart:185-192` — *"writes every exercise into exerciseBox keyed by its `id`"*. So the Hive key IS `E001`; a NAME does not resolve on the library branch (only on the custom branch)
 - `ai_snapshot_builder.dart` — `grep -c "exercise_library"` → **0**. No library key in the snapshot at all
 - its `custom_exercises` key reads `_hive.customBox` (`_readCustomExercises`) — **user-created only**, not the built-in 292
-- `getFormCues` (the only library-touching read tool) resolves a NAME → cues/mistakes/muscles/difficulty/logging_type and **returns no `id`** (`getFormCues.ts:74-86`, `:101-113`). So there is no name→id recovery hop either
+- `getFormCues` (the only library-touching read tool) resolves a NAME → cues/mistakes/muscles/difficulty/logging_type and **returns no `id`** (the exact and the partial return blocks of `getFormCues.ts`). So there is no name→id recovery hop either
 
 ⇒ The tool descriptions are honest about the cage: `createCustomTemplate.ts:5-6` *"Use the exact `exercise_id` from `snapshot.today_workout.exercises[]` OR `snapshot.custom_exercises[]`. **Never invent IDs.**"*; `swapExercise.ts:8-10` identical for `newExerciseId`.
 
@@ -6687,17 +6687,6 @@ Filed by the sync-storm-first-sweep batch (A1 = W1 migrator fix, W2 save progres
 
 **Done when.** Each class is released or kept on a stated reason, and the 529 unchecked shipped rows have been compared with their picture by the founder or by a first-hand image read in a session that can actually see images (a read that returns "media removed" is not a viewing). Blast radius: `feature` for each release (a data change behind the seed bump).
 
-## OI-438 — getFormCues reads exercise_library with no is_active filter, so a deactivated row (the Batch C1 rollback, the C2 removals) still serves its cues
-
-- **Status**: OPEN
-- **Blocked on**: the Edge Function deploy go (CLAUDE.md 4.3: a live deploy needs its own explicit go; the change itself is agent work). `reopen_when`: the founder wants Batch C1's rollback or Batch C2's removals to be invisible to the AI coach, or before either deactivates a row.
-- **Verified**: 2026-10-26 - by reading `supabase/functions/_shared/tools/exercise/getFormCues.ts:65-67` and `:92-94`: both stages select from `exercise_library` with `.ilike("name", ...)` and no `is_active` condition (the tool is bundled into the AI coach through `_shared/tools/registry.ts`, listed in `ALL_TOOLS`). Not observed live.
-- **Identified**: 2026-10-26 · filed via mint_oi.sh from branch `library-batch-c`
-
-**What.** `getFormCues` answers the AI coach's form-cue question from the cloud `exercise_library` table. It never filters `is_active`. Batch C1's migration rollback (`UPDATE exercise_library SET is_active = false WHERE source = 'exercise-gif-set'`) and Batch C2's removals both deactivate rows rather than delete them, so after either, the coach can still quote a row the app no longer shows. A same-name pair (C2's four name-collision rows) makes it ambiguous which row `.limit(1).maybeSingle()` returns.
-
-**Done when.** Both queries add `.eq("is_active", true)`, a test with an inactive row and an active row of the same name shows only the active row is returned, the Edge Function is checked with `deno check --node-modules-dir=none`, and the deploy follows the `edge-function-deploy-rollback` skill with the founder's go. Blast radius: `platform` (Edge Function).
-
 ## OI-439 — A browser tab frozen during the restore (iPhone Safari app switch) fires the 45 s restore ceilings on wake: Sync paused appears and an owed retry sweep re-sends the non-workout domains
 
 - **Status**: OPEN
@@ -6903,17 +6892,6 @@ Found by the M2b Part B Chrome check (360 dp, real fonts, the real card and exer
 **Do:** after the founder installs the new build and cold-starts it, read the Realtime and PostgREST logs for that minute (24 h retention, so within a day): expect NO Realtime tenant-init line. Run a positive control in the same window (an older build, or a deliberate channel attach) so an empty result means something. Record the lines read and the time window here.
 
 **Acceptance:** log evidence for the new-build cold start plus the positive control is recorded; any init line found reopens the removal. reopen_when: the new build is on a device.
-
-## OI-469 — getFormCues matches exercise_library by name with no is_active filter: a deactivated row can answer for a live name
-
-- **Status**: OPEN
-- **Blocked on**: none
-- **Verified**: never
-- **Identified**: 2026-11-05 · filed via mint_oi.sh from branch `library-batch-c2`
-
-**What happens.** `supabase/functions/_shared/tools/exercise/getFormCues.ts` (lines 63-69, stage 1 exact `ilike`, and 90-96, stage 2 partial `ilike`) selects from `exercise_library` by name with no `is_active` filter and `limit(1)`. Since Batch C2a (migration 167) 57 cloud rows are `is_active = false`; a name that a deactivated row shares with, or contains, a live name can answer from the deactivated row. C2a handled the same-name case in the seed (a removed row that shares its name with a kept row takes that row's cues, `scripts/seed_exercise_library.js`), but not the partial stage, nor any later deactivation.
-
-**Done when.** Both stages filter `is_active = true` (a regression test that fails without the filter), deployed through the Edge Function protocol; or the filter is shown to be unnecessary by a query that finds no live name matched by a deactivated row.
 
 ## OI-477 — 6-day build_muscle personas still under the Quads floor after OI-454: intermediate basic gym (cap), advanced bodyweight (co-group rows that keep crediting Glutes), advanced and 60-minute days (time)
 
@@ -7239,6 +7217,22 @@ Residual of OI-199 and OI-471 after migration 172. Migration 172 makes `cleanup_
 **What it is.** Unit 2B (diagnose `b3f1d8`, plan `docs/plans/2026-11-13-generator-step2b-day-floor.md`) ships the 3-exercise day floor (OI-452, founder d30-d33) default ON behind the kill switch `disable_day_floor` (`PlanEngineFlags.dayFloorEnabled`, read by `SessionSetAllocator.allocate` unless its `dayFloor` argument is given, in both Unit 2A paths). Its OFF world is pinned by `test/fixtures/day_floor_off_hashes.json` (injured personas, main 8a2e1c5a's hashes, plus the four `disable_lead_first` x `disable_day_floor` combinations on a sample) through `test/plan_generator/day_floor_kill_switch_test.dart`.
 
 **Done when.** The founder's device check passes (an injured plan, e.g. a 6-day beginner with two injuries, shows no day under 3 exercises; a floored day stays usable in the gym), then one commit deletes the flag getter, the `dayFloor` parameter and the floor-off branches (`_allocateLeadFirst`'s floor-off tail and the 6-day re-run's guard; the world choice stays floor-off), the fixture, the kill-switch test, the `dayFloor: false` cases in `day_floor_behavioral_test.dart` (F5 and the floor-off controls) and the three `day_floor_gate_*_test.dart` files and `test/helpers/day_floor_gate_lib.dart` (their OFF leg and its `digest|...` keys; the floor-on checks stay), and the `naming_conventions.md` row. Blast radius `platform` (plan engine).
+
+## OI-507 — getFormCues follow-ups: stage 2 has no tie-break, ilike wildcards are not escaped, the tool never reads name_aliases, and 10 logged sets name a retired-only exercise
+
+- **Status**: OPEN
+- **Blocked on**: none
+- **Verified**: 2026-11-14: live read-only on `dedsavbjuwgarrhphgnl` (870 active rows, 0 unique indexes on `exercise_library.name`, 0 active same-name pairs, `%squat%` matches 68 active rows, `ilike '%%%'` matches all 870, 848 `workout_log_sets` rows of which 10 name a retired-only exercise) and the code at `getFormCues.ts:69-71, 97-99` and `promote-community-item/index.ts:191-204` on `main` 0121960d.
+- **Identified**: 2026-11-14 · filed via mint_oi.sh from branch `oi-formcues-followups`
+
+**What it is.** Four defects in the coach tool `getFormCues` (`supabase/functions/_shared/tools/exercise/getFormCues.ts`), found while fixing OI-438 and OI-469 (diagnose `9c4b1e`, PR #265, `ai-proxy` v104) and left out of that unit because none of them is the retired-row filter. They are one family: the lookup resolves a name to a row and has three open ends.
+
+1. **Stage 2 has no tie-break.** `.ilike("name", `%${name}%`).eq("is_active", true).limit(1)` has no ORDER BY, so a query that matches several live rows returns an arbitrary one: "squat" matches 68 of the 870 active rows, "Quad Stretch" matches two (Standing and Banded). `exercise_library` has no unique index on `name`, and `promote-community-item/index.ts:191-204` inserts `is_active: true` rows with no name check, so an active same-name pair can appear (none today).
+2. **`ilike` wildcards are not escaped.** Stage 1 passes the name as the pattern and stage 2 wraps it in `%`; a name of `%` matches all 870 active rows and answers `found: true` (stage 1 labels it `exact`), and `_` matches any one character. The argument is model-supplied, so the reach is small, but the answer is silently wrong rather than `found: false`.
+3. **The tool never reads `name_aliases`.** The column exists live and 14 rows of `assets/data/exercise_library.json` carry it; nothing under `supabase/functions` reads it. A retired name that the Hive client resolves through an alias (about 14 of the 56 retired-only names, per diagnose `9c4b1e`) answers `found: false` on the server, the accepted cost of the strict filter.
+4. **The history names retired exercises.** `workout_log_sets.exercise_id` is text holding the exercise NAME (no foreign key; none of the 848 rows matches a library id). 10 sets name an exercise that exists only as a retired row. Diagnose `9c4b1e` says "0 rows point at an inactive row", which is true for the id-keyed tables (`template_exercises`, `workout_logs`, `workout_log_exercises`) and was never measured for this name-keyed one. The app is not live, so these are tester rows; it is the same `found: false` cost as item 3, on exercises a tester really logged.
+
+**Done when.** One L-tier unit with its own plan (an Edge Function in the `ai-proxy` bundle, so a deploy with its own founder go): stage 2 orders deterministically (for example shortest name, then name) and a test lists the candidates in the wrong order; both stages escape `\`, `%` and `_` before the call and a test sends `%` and `_`; the tool resolves a name through `name_aliases` before it answers `found: false`, and the plan states which of the 10 history names an alias covers and records the rest as an intended `found: false`. Each new protection is mutated (CLAUDE.md section 4.4 rule 21), and the diagnose says what was mutated.
 
 ## OI-509 — Delete the disable_balanced_week kill switch and its fixture after the 2C device check
 

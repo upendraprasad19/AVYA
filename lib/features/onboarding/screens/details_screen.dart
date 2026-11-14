@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../onboarding_step_telemetry.dart';
 import 'package:go_router/go_router.dart';
 
 import 'package:icanbefitter/core/theme/colors.dart';
@@ -118,6 +119,7 @@ class _DetailsScreenState extends State<DetailsScreen> {
   @override
   void initState() {
     super.initState();
+    logOnboardingStep('details');
     _experience  = (widget.data['fitness_experience'] as String?) ?? 'intermediate';
     _pace        = (widget.data['pace_preference']    as String?) ?? 'balanced';
     _daysPerWeek = (widget.data['days_per_week']      as int?)    ?? 4;

@@ -264,6 +264,28 @@ void main() {
               'have landed in real Hive. Swallowed telemetry: $telemetry');
       expect(saved!['full_name'], 'Recruit Behavioral',
           reason: 'and it must be THIS run\'s profile');
+
+      // onboarding-fuse-commit (2026-11-14): the saved profile carries the
+      // owner's uid (InductionService's sync and _ensureLocalUser's
+      // cross-account check both read it) and the neutral physique focus that
+      // replaced the retired Muster question.
+      expect(saved['id'], testUser,
+          reason: 'completeOnboarding must write the session owner as the '
+              'profile id; a profile with no id reads as another account\'s '
+              '(AuthNotifier.shouldClearForProfileId)');
+      expect(saved['physique_focus'], 'balanced');
+
+      // This harness fails at plan generation (no exercise box), BEFORE the
+      // commitment tail. So: no stamp may have landed early, and the
+      // onboarded flag must still be false (that is all C1 can show; the
+      // ORDER of the tail is pinned in onboarding_single_commit_test.dart).
+      expect(HiveService.instance.coachBox.get('committed_at'), isNull,
+          reason: 'the commitment must not be stamped before the plan exists');
+      expect(HiveService.instance.coachBox.get('induction_completed_at'),
+          isNull);
+      expect(UserRepository.instance.isOnboarded, isFalse,
+          reason: 'a failed commit must leave the onboarded flag false so the '
+              'next I COMMIT tap re-runs the whole commit');
     });
 
     test(

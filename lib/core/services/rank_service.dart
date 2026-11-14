@@ -336,7 +336,7 @@ class RankService {
   /// Officer-track calendar weeks (≥104) are rendered in years for
   /// readability — `104 → 2 years`, `130 → 2.5 years`, etc.
   String _humanGateText(RankLadderEntry entry) {
-    if (entry.code == 'SD2') return 'Earned at induction';
+    if (entry.code == 'SD2') return 'Earned on your commitment';
 
     final gate = kRankGates[entry.code]!;
     final parts = <String>[];

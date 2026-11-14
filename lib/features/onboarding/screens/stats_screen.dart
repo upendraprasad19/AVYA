@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../onboarding_step_telemetry.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 
@@ -15,7 +16,7 @@ import 'package:icanbefitter/features/onboarding/target_weight_check.dart';
 /// Collects sex, weight, height, age, body-fat estimate, and activity
 /// level outside lifting. Writes via the route extra to PR AB's
 /// PlanScreen, which triggers the actual UserRepository.updateProfile
-/// + PlanGenerator.generatePhase1 call on "REPORT FOR DUTY".
+/// + PlanGenerator.generatePhase1 call on "I COMMIT".
 class StatsScreen extends StatefulWidget {
   const StatsScreen({super.key, required this.goal, this.initial});
 
@@ -38,6 +39,7 @@ class _StatsScreenState extends State<StatsScreen> {
   @override
   void initState() {
     super.initState();
+    logOnboardingStep('stats');
     final init = widget.initial ?? const <String, dynamic>{};
     _weight = TextEditingController(
       text: (init['weight_kg'] as num?)?.toStringAsFixed(1) ?? '75.0',
@@ -378,7 +380,7 @@ class _StatsScreenState extends State<StatsScreen> {
               child: Text(
                 // Renamed from "CALIBRATE PLAN" — misleading because the
                 // actual plan calibration happens on step 05 (Plan screen)
-                // via "REPORT FOR DUTY". This step just continues to
+                // via "I COMMIT". This step just continues to
                 // Details (step 04).
                 'CONTINUE \u2192',
                 style: AppTypography.mono.copyWith(

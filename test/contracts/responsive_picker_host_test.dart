@@ -361,16 +361,12 @@ void main() {
     // outright) makes the retirement itself a pinned, checkable fact: a
     // future re-add of a muster time picker should have to consciously
     // remove this assertion, not silently slip past an untouched file.
-    final muster = _strip(
-        File('lib/features/ai_coach/screens/muster_screen.dart')
-            .readAsStringSync());
-    expect(muster.contains('showTimePicker'), isFalse,
-        reason:
-            'muster_screen.dart must not call showTimePicker — the '
-            'wake/workout-time question is retired (diagnose e2b8a4)');
-    expect(muster.contains('responsivePickerBuilder'), isFalse,
-        reason:
-            'muster_screen.dart has no picker call left to need the '
-            'responsive host');
+    // onboarding-fuse-commit (2026-11-14): the Muster screen itself is
+    // retired, so the strongest form of "no muster time picker" is that the
+    // file is gone. A re-add has to delete this assertion consciously.
+    expect(File('lib/features/ai_coach/screens/muster_screen.dart').existsSync(),
+        isFalse,
+        reason: 'the Muster screen was retired with its last question; '
+            'no muster time picker can come back silently');
   });
 }

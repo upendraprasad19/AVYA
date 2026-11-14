@@ -40,12 +40,12 @@ APK test batch. Tester fills in pass/fail per flow, then signs off.
 1. Sign up with a fresh email never used before.
 2. Tap CONTINUE through Mission Brief.
 3. Walk through Identity → Goal → Stats → Details → Plan.
-4. Tap REPORT FOR DUTY.
+4. Tap I COMMIT on the Plan screen (the single final step; there is no Muster or Induction screen after it).
 
 **Expected:**
 - Mission Brief screen appears (with founder photo).
 - Plan preview numbers match what gets saved to the profile.
-- Lands on `/home` after REPORT FOR DUTY.
+- Lands on `/home` after I COMMIT.
 - Today card shows a real workout (not "no workout scheduled").
 
 **Pass/Fail:** [ ]

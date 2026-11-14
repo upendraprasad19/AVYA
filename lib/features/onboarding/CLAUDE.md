@@ -15,9 +15,12 @@ status: active
 
 `lib/features/onboarding/` owns the stepped onboarding funnel (6 screens) +
 the legacy chat fallback (`/onboarding/chat`, retained for rollback). The
-final tap on Plan screen calls `OnboardingNotifier.completeOnboarding()` which
-writes the consolidated profile map to `userBox['profile']`, stamps
-`onboarding_completed_at`, and fires the initial sync fan-out.
+final tap on Plan screen ("I COMMIT →") calls
+`OnboardingNotifier.completeOnboarding()` which writes the consolidated
+profile map to `userBox['profile']`, stamps `onboarding_completed_at`,
+generates the plan, records the commitment and fires the initial sync fan-out.
+There is no screen after it: the Muster question and the separate Induction
+screen were retired on 2026-11-14 (onboarding-fuse-commit).
 
 Screens: `welcome_screen.dart`, `mission_brief_screen.dart`, `identity_screen.dart`,
 `goal_screen.dart`, `stats_screen.dart`, `details_screen.dart`, `plan_screen.dart`,
@@ -34,7 +37,8 @@ its outgoing extras so every field captured upstream survives to Plan.
 |---|---|---|
 | `onboarding_completed_at` | `OnboardingNotifier.completeOnboarding` stamps both Hive `userBox['profile']['onboarding_completed_at']` AND fires sync to `user_profile.onboarding_completed_at` cloud column | `restoring_screen.dart` post-auth classification via `AuthSessionBootstrapper.resolveDestination`. NULL + populated Hive profile → Plan A self-heal. |
 | `user_full_name` | `identity_screen.dart` input → `OnboardingNotifier.completeOnboarding` → `users.full_name` cloud column (NOT user_profile) + `userBox['profile']['full_name']` | profile header, every screen that greets the user by name. |
-| `muster_to_profile_bridge` | **Corrected 2026-09-19 (diagnose d6f1b8) — was a stale description of the PRE-restructure bridge.** `InductionService.recordMusterAnswer`'s `_allowedMusterKeys` now allows only `body_part_priorities`; `known_injuries`/`typical_wake_time`/`preferred_workout_time`/`why_now`/`definition_of_winning` are REJECTED outright (`ArgumentError`) — injuries stays Details screen's job, wake/workout-time stays Edit Profile's job, closing a live clobber bug where muster's answer silently overwrote Details' injuries answer on every completion. Migration 063 + one-shot `backfillMusterToProfileIfNeeded` unchanged (still migrate any pre-restructure user's stored answers for the 5 retired keys once). | profile screen (`physique_focus` only, live); `ai_snapshot_builder.dart` reads all 4 non-injuries fields straight off the profile now, not a muster-only coachBox mirror — see `lib/features/ai_coach/CLAUDE.md`. |
+| `onboarding_single_commit` (2026-11-14) | `completeOnboarding` ends with `finalizeLocalCommit()`: `InductionService.recordCommitment` (only when `!hasCommitted`, so a retry never overwrites a pledge) + `completeInduction`, THEN `setOnboarded()`. The session is opened at the TOP of the method (before the cloud guard), and `state.answers` is captured BEFORE that open, because opening the session re-emits `authUserIdTokenProvider` and rebuilds this notifier with empty answers. The profile map carries `id` (the session owner) and `physique_focus: 'balanced'`. | `postSessionRedirect` (`isOnboarded` now means profile + plan + commitment are durable); `ai_snapshot_builder.dart` (`committed_to_lt_cdr`); `AuthNotifier.shouldClearForProfileId` (a profile with no `id` reads as another account's). The `already_onboarded` early return stamps nothing. Tests `onboarding_single_commit_test.dart`, `onboarding_hive_session_open_before_write_test.dart` C1. |
+| `muster_to_profile_bridge` | **Live writer retired 2026-11-14** (Muster screen, `recordMusterAnswer`, `_bridgeToProfile` deleted). New users get `physique_focus: 'balanced'` from `completeOnboarding`; `backfillMusterToProfileIfNeeded` still migrates old accounts' stored muster answers once. | profile screen / Edit Profile (`physique_focus`); `ai_snapshot_builder.dart` reads the profile fields directly — see `lib/features/ai_coach/CLAUDE.md`. |
 | `referral_redemption` (new users) | The code comes from the Welcome-screen stash OR the email sign-up field, which `AuthNotifier.signUpWithEmail` stores in auth user metadata `referral_code` (diagnose `c7b4d2`). | `completeOnboarding` → `resolveReferralCode(stash, userMetadata)` (stash wins) → `redeem-referral` in `_syncOnboardingAndPostActions`, AFTER the users upsert. The sign-in screen does NOT redeem. |
 | Plan-screen preview targets | `plan_screen._computeTargets` calls canonical `BmrCalculator.calculateTargets` with every real input (weight, height, DOB-derived age, sex, activity_level, goal, pace_preference, target_weight_kg, body_fat_pct). Returns `targets.dailyCalories` + `targets.proteinGrams` verbatim. | What `completeOnboarding` writes to the profile — **no drift** between preview and saved profile (APK Test #1 fix). |
 | Body-fat calc input (Unit 4, c3f2d8) | BOTH `_computeTargets` (preview) AND `completeOnboarding` (commit) route body-fat through the SINGLE shared `BmrCalculator.bodyFatForCalc(bf, disabled:)` selector → Katch-McArdle when provided, Mifflin when null/disabled. Parity by construction (no per-site ternary). Kill-switch `disable_bodyfat_calc`. A skip SAVES null (never a fabricated 18.0/0.0). | `profile_provider.recalculateTargets` consumes `body_fat_percent` via Katch on every profile edit; `body_stats.dart` displays it (null → "—"). SoT concept `onboarding_bodyfat_calc_input`; heal in `lib/core/services/CLAUDE.md` (BodyFatDefaultHealer). |
@@ -77,9 +81,13 @@ Details       (/onboarding/details)    → fitness_experience, pace_preference,
                                          days_per_week, equipment_access,
                                          injuries                          (04 · 05)
    ↓
-Plan          (/onboarding/plan)       → "REPORT FOR DUTY" — commits via
+Plan          (/onboarding/plan)       → pledge card + "I COMMIT →" — commits via
                                          OnboardingNotifier.completeOnboarding()
-                                                                            (05 · 05)
+                                         (profile, plan, commitment)       (05 · 05)
+   ↓
+Home          (/home)                   (/coach/muster and /coach/induction
+                                         are redirects to /home since
+                                         2026-11-14)
 ```
 
 **Flow for RETURNING users (post-logout sign-in):**
@@ -169,7 +177,7 @@ Plan          (/onboarding/plan)       → "REPORT FOR DUTY" — commits via
   (heal).
 - **Details step CTA is `CONTINUE →`, not `CALIBRATE PLAN →`** (APK-test-1-batch). Pre-2026-
   04-24 the Stats → Details navigation button was labelled "CALIBRATE PLAN", misleading since
-  plan calibration doesn't happen until REPORT FOR DUTY on step 05. Renamed to `CONTINUE →`;
+  plan calibration doesn't happen until the commit tap on step 05 (now "I COMMIT"). Renamed to `CONTINUE →`;
   behavior unchanged.
 - **Details screen is now ALL chip rows** (APK-test-2-batch / Q8, supersedes APK-test-1-batch
   fade-row layout; Ship 3 / U5 added the 5th row). Sections render as horizontal chip rows:
@@ -206,10 +214,12 @@ Plan          (/onboarding/plan)       → "REPORT FOR DUTY" — commits via
 
 - `test/contracts/onboarding_completed_at_writer_to_reader_test.dart`
 - `test/contracts/auth_session_bootstrapper_test.dart` — pure-logic destination table.
-- `test/contracts/muster_to_profile_bridge_behavioral_test.dart` (corrected
-  2026-08-03 — this line cited `muster_to_profile_bridge_test.dart`, which
-  does not exist; same phantom-citation class as the `check_writer_reader_drift.dart`
-  entry `lib/CLAUDE.md` corrected in Unit 6, caught while verifying diagnose d4e8a2)
+- `test/contracts/onboarding_single_commit_test.dart` — the commitment tail's
+  order (stamps before the onboarded flag), retry keeps a pledge, the sync uid,
+  the profile-id clear decision, the captured answers, the retired routes.
+- `test/contracts/muster_bridge_backfill_test.dart` (the muster bridge's
+  behavioural test was deleted with `recordMusterAnswer` on 2026-11-14; the
+  backfill for old accounts is what remains)
 - `test/contracts/full_name_backfill_test.dart`
 - `test/contracts/plan_screen_targets_match_completeOnboarding_test.dart`
 - `test/contracts/onboarding_injuries_chip_wiring_test.dart` — Ship 3: plan_screen reads the

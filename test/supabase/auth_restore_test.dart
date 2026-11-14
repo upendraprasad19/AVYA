@@ -1,4 +1,7 @@
 @TestOn('vm')
+// Backstop only: SupabaseTestHelper.cleanup() bounds each request itself
+// (diagnose 5c8e2f); this covers the live-network tests' own body.
+@Timeout(Duration(seconds: 90))
 library;
 
 import 'package:flutter_test/flutter_test.dart';

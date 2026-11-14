@@ -444,8 +444,9 @@ keys:
     readers: []
     prompt_passthrough: true
     notes: |
-      Muster Q1 answer. May be null (question dropped in Test #15.4 / B2
-      — old data round-trips).
+      Legacy key: no live flow writes it (the muster screen is deleted,
+      onboarding-fuse-commit 2026-11-14). May be null (question dropped
+      in Test #15.4 / B2 — old data round-trips).
 
   - key: definition_of_winning
     type: scalar
@@ -453,7 +454,8 @@ keys:
     readers: []
     prompt_passthrough: true
     notes: |
-      Muster Q2 answer. Same status as why_now — may be null.
+      Legacy key: no live flow writes it. Same status as why_now — may
+      be null.
 
   - key: known_injuries
     type: list
@@ -461,8 +463,9 @@ keys:
     readers: []
     prompt_passthrough: true
     notes: |
-      RETIRED as a muster question (diagnose e2b8a4, 2026-09-19) — it
-      duplicated Details screen's own onboarding collection and, worse,
+      Legacy key (no live flow writes the muster answer; the screen is
+      deleted, 2026-11-14). RETIRED as a muster question (diagnose
+      e2b8a4, 2026-09-19) — it duplicated Details screen's own onboarding collection and, worse,
       muster's answer silently overwrote it (no clobber guard). Now reads
       profile.injuries DIRECTLY (the field onboarding's Details screen
       writes), not a muster-only coachBox mirror. Old muster answers
@@ -497,11 +500,12 @@ keys:
     readers: []
     prompt_passthrough: true
     notes: |
-      Muster's one remaining question (physique focus), moved to run
-      BEFORE the induction narrative + I COMMIT (diagnose e2b8a4,
-      2026-09-19). Now reads profile.physique_focus DIRECTLY instead of
-      the muster-only coachBox mirror, so an Edit Profile change made
-      after muster no longer leaves this permanently stale.
+      Legacy key: no live flow writes it (the muster screen was deleted,
+      onboarding-fuse-commit 2026-11-14; new users get
+      profile.physique_focus = 'balanced' at commit). physique_focus
+      comes from the profile: reads profile.physique_focus DIRECTLY
+      instead of the muster-only coachBox mirror (diagnose e2b8a4,
+      2026-09-19), so an Edit Profile change is never stale.
 
   - key: pr_timeline_summary
     type: map

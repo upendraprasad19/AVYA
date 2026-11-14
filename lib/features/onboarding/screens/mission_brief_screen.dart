@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../onboarding_step_telemetry.dart';
 import 'package:go_router/go_router.dart';
 import 'package:icanbefitter/core/theme/colors.dart';
 import 'package:icanbefitter/core/theme/typography.dart';
@@ -21,6 +22,7 @@ class MissionBriefScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    logOnboardingStep('mission_brief');
     // Gold-italic emphasis for the power phrases (matches the Wardroom voice).
     TextSpan accent(String text) => TextSpan(
           text: text,

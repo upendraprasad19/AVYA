@@ -250,8 +250,9 @@ const insertStatements = split
 // Library v12 (Batch A): a row retired into its twin leaves the bundled JSON, and
 // the kept row lists it in merged_ids. Nothing deletes in cloud (promotions and
 // logs may point at the row), so the retired row is deactivated instead, and it
-// takes the kept row's cues because getFormCues matches by exact name with no
-// is_active filter. One statement per pair, never starting with "(", so the
+// takes the kept row's cues (historical: getFormCues matched by exact name with no
+// is_active filter until OI-438/OI-469; it now skips retired rows and the copy stays as
+// defence in depth). One statement per pair, never starting with "(", so the
 // VALUES-tuple count in exercise_library_cloud_seeded_test stays exact. A pair an
 // EARLIER batch retired is already inactive in live cloud, so its statement changes
 // nothing; a pair THIS batch merged (BATCH.mergesFile, merged_in = batchTag) is
@@ -264,8 +265,9 @@ const retireStatements = data
   .join('\n');
 
 // Batch C2a: the `decision: remove` ids. Cloud never deletes (promotions and logs may point at a row), so each is
-// deactivated. A removed row that shares its name with a KEPT row also takes that row's cues (getFormCues matches by name
-// with no is_active filter); a removed row whose name differs keeps its own cues, which are right for its own name.
+// deactivated. A removed row that shares its name with a KEPT row also takes that row's cues (historical: getFormCues matched by name
+// with no is_active filter until OI-438/OI-469; it now skips retired rows); a removed row whose name differs keeps its own cues,
+// which getFormCues no longer serves (it answers only from active rows).
 // A missing removals file is a hard stop, never an empty list: a run that quietly emits no deactivations looks like success.
 if (!fs.existsSync(BATCH.removalsFile)) fail(`removals file not found: ${path.relative(ROOT, BATCH.removalsFile)}`);
 const removedEntries = JSON.parse(fs.readFileSync(BATCH.removalsFile, 'utf8')).entries.filter((e) => e.decision === 'remove').sort((a, b) => a.id.localeCompare(b.id));

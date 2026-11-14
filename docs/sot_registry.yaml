@@ -1410,7 +1410,7 @@ concepts:
           value; reads the provider for the live progress bar. Calls
           setUserOverride + ref.invalidate(waterTargetProvider) on save.
       - file: lib/features/onboarding/providers/onboarding_provider.dart
-        line_range: 335-345
+        line_range: 342-352
         method: completeOnboarding (seed water_target_ml on profile)
         semantic: pass-through
         fields_read: [via WaterTargetService.computeFromProfile(profile-like map)]
@@ -2349,7 +2349,7 @@ concepts:
       defect this concept exists to fix.
     writers:
       - file: lib/features/auth/providers/auth_provider.dart
-        line_range: 1306-1311
+        line_range: 1315-1320
         method: terms-write block inside _ensureLocalUser (not itself a named method)
         semantic: hive-write
         notes: |
@@ -3751,7 +3751,7 @@ concepts:
         semantic: flag-check
         fields_read: [onboarding_completed]
       - file: lib/features/auth/providers/auth_provider.dart
-        line_range: 361-481
+        line_range: 370-490
         method: _ensureLocalUser / signOut hooks
         semantic: flag-check
         fields_read: [onboarding_completed]
@@ -5766,7 +5766,7 @@ concepts:
       APK Test #12.8 / Bug #2 root cause.
     writers:
       - file: lib/features/onboarding/providers/onboarding_provider.dart
-        line_range: 263-700
+        line_range: 271-766
         method: completeOnboarding
         notes: writes to userBox['profile']['full_name'] + syncs to users table
       - file: lib/features/profile/screens/edit_profile_screen.dart
@@ -5905,9 +5905,8 @@ concepts:
       - { file: lib/core/services/sync_service.dart, reason: "reads profile fields for upward projection to user_profile cloud row" }
       - { file: lib/core/services/water_target_service.dart, reason: "reads weight/training-days/activity for daily water target" }
       - { file: lib/core/services/workout_schedule_service.dart, reason: "reads goal/equipment/days_per_week for plan generation" }
-      - { file: lib/features/ai_coach/screens/induction_screen.dart, reason: "reads goal/experience for induction copy customization" }
       - { file: lib/features/ai_coach/services/hotel_workout_planner.dart, reason: "reads equipment_access for fallback bodyweight plan" }
-      - { file: lib/features/ai_coach/services/induction_service.dart, reason: "reads profile.id for muster-answer bridge" }
+      - { file: lib/features/ai_coach/services/induction_service.dart, reason: "reads profile.id as the fallback coach-memory sync uid (after HiveUserSession.currentOwnerFullId)" }
       - { file: lib/features/ai_coach/services/regenerate_plan_planner.dart, reason: "reads goal/days/equipment for regenerated phase plan" }
       - { file: lib/features/ai_coach/services/tool_dispatcher.dart, reason: "reads profile.id + goal for tool intent confirmation" }
       - { file: lib/features/ai_coach/widgets/diff_preview/switch_goal_diff.dart, reason: "reads current goal for switch-goal diff preview" }
@@ -6011,7 +6010,7 @@ concepts:
       completeOnboarding() stamps both Hive and cloud.
     writers:
       - file: lib/features/onboarding/providers/onboarding_provider.dart
-        line_range: 338-660
+        line_range: 345-726
         method: completeOnboarding
         notes: |
           Stamps onboarding_completed_at in the Hive profile map (durable BEFORE
@@ -6034,7 +6033,7 @@ concepts:
           screen, a false positive would block every genuine new signup.
           Kill-switch disable_onboarding_overwrite_guard.
       - file: lib/features/onboarding/providers/onboarding_provider.dart
-        line_range: 683-750
+        line_range: 749-816
         method: _syncOnboardingAndPostActions
         notes: |
           Background cloud catch-up (a1f9c4) — syncs the profile (incl.
@@ -6225,7 +6224,7 @@ concepts:
           midnight is wrong east of IST; the streak moves over in Batch B
           (OI-397).
       - file: lib/features/auth/providers/auth_provider.dart
-        line_range: 361-481
+        line_range: 370-490
         method: _ensureLocalUser (mid-onboarding resume)
         semantic: flag-check
         fields_read: [onboarding_completed]
@@ -6237,7 +6236,7 @@ concepts:
           where Hive flag got cleared but cloud carries truth) is now
           inside AuthSessionBootstrapper.hydrateFromCloud.
       - file: lib/features/onboarding/providers/onboarding_provider.dart
-        line_range: 178-200
+        line_range: 179-201
         method: OnboardingNotifier.completeOnboarding
         semantic: flag-check
         fields_read: [onboarding_completed, onboarding_completed_at]
@@ -6515,7 +6514,7 @@ concepts:
           failure -> upsert_coach_chat_cleared_at (a swept push), except
           fromSignOut, which only logs coach_chat_cleared_at_push_failed.
       - file: lib/features/auth/providers/auth_provider.dart
-        line_range: 1010-1043
+        line_range: 1019-1052
         method: _teardown
         notes: |
           2 s best-effort push (fromSignOut) BEFORE clearAllData wipes userBox.
@@ -7108,7 +7107,7 @@ concepts:
           cloud column 'coach_notes' (different word). Before this
           projection the column was 100% NULL across all users.
       - file: lib/core/services/sync/sync_coach.dart
-        line_range: 828-884
+        line_range: 830-886
         method: _restoreCoachMemory downward sync
         semantic: pass-through
         fields_read: [coach_notes]
@@ -7275,7 +7274,7 @@ concepts:
           + subscription_refresh_* + subscription_verify_non_200 +
           subscription_refresh_grace_skip events.
       - file: lib/features/auth/providers/auth_provider.dart
-        line_range: 106-551
+        line_range: 106-560
         method: auth lifecycle events
         semantic: pass-through
         fields_read: []
@@ -7428,7 +7427,7 @@ concepts:
           UI entry to deleteAllFilesForCurrentUser. After Edge Function
           succeeds, wipes Hive, signs out, and routes to /sign-in.
       - file: lib/features/auth/providers/auth_provider.dart
-        line_range: 106-551
+        line_range: 106-560
         method: signOut + _ensureLocalUser lifecycle
         semantic: pass-through
         fields_read: []
@@ -7480,8 +7479,18 @@ concepts:
 
   - concept: muster_to_profile_bridge
     domain: ai_coach
-    behavioral_test_path: test/contracts/muster_to_profile_bridge_behavioral_test.dart
+    behavioral_test_path: test/contracts/muster_bridge_backfill_test.dart
     description: |
+      **RETIRED LIVE WRITER 2026-11-14 (onboarding-fuse-commit).** The Muster
+      screen, `InductionService.recordMusterAnswer`, `_allowedMusterKeys` and
+      `_bridgeToProfile` are deleted: no flow writes coachBox muster keys any
+      more. New users get `physique_focus: 'balanced'` from
+      `OnboardingNotifier.completeOnboarding`'s profile map (the neutral value,
+      no bring-up) and change it in Edit Profile. What remains of this concept
+      is the one-shot `backfillMusterToProfileIfNeeded` for old accounts that
+      still hold muster answers. The history below describes the retired
+      writer and is kept for the record.
+
       **NARROWED 2026-09-19 (diagnose d6f1b8) — corrects a B-pass round-2
       finding: this entry previously described the PRE-restructure 4-key
       bridge and was never updated in the same commit as the writer/reader
@@ -7525,23 +7534,12 @@ concepts:
       defaults, never clobbers user-edited values, skips legacy
       multi-select.
     writers:
-      - file: lib/features/ai_coach/services/induction_service.dart
-        method: InductionService.recordMusterAnswer
+      - file: lib/features/onboarding/providers/onboarding_provider.dart
+        method: OnboardingNotifier.completeOnboarding (profile map 'physique_focus')
         notes: |
-          Writer for exactly ONE coachBox muster key now
-          (`body_part_priorities` — see `_allowedMusterKeys`). Every
-          other legacy key throws ArgumentError before any Hive write.
-          After the coachBox put, calls _bridgeToProfile.
-      - file: lib/features/ai_coach/services/induction_service.dart
-        method: InductionService._bridgeToProfile
-        notes: |
-          Private method. Its switch now has exactly one live case
-          (`body_part_priorities` -> `physique_focus`); the default
-          branch is unreachable dead code documented as such (the
-          `_allowedMusterKeys` guard in `recordMusterAnswer` is the only
-          caller and never passes anything else). Bridge failures are
-          logged via ErrorTelemetry but do NOT throw (coachBox write
-          already succeeded; bridge retries on next muster turn).
+          Writes `physique_focus: 'balanced'` into userBox['profile'] at
+          commit (onboarding-fuse-commit, 2026-11-14), replacing the retired
+          Muster question. Not a coachBox writer.
       - file: lib/features/ai_coach/services/induction_service.dart
         method: InductionService.backfillMusterToProfileIfNeeded
         notes: |
@@ -7608,17 +7606,79 @@ concepts:
     provider_invalidation_set:
       - userProfileProvider
       - profileCompletenessProvider
-    regression_test: test/contracts/muster_profile_bridge_test.dart
+    regression_test: test/contracts/muster_bridge_backfill_test.dart
     additional_tests:
-      - test/contracts/muster_question_count_test.dart
-      - test/contracts/muster_bridge_backfill_test.dart
+      - test/contracts/onboarding_single_commit_test.dart
     class_constraints: |
-      Adding a new muster question that maps to a profile field requires
-      updating BOTH _bridgeToProfile AND backfillMusterToProfileIfNeeded.
-      Never write coachBox['known_injuries' / 'typical_wake_time' /
-      'preferred_workout_time' / 'body_part_priorities'] from anywhere
-      else — InductionService.recordMusterAnswer is the sole writer.
-      Source-grep contract test will fail if a new writer appears.
+      No live flow writes coachBox['known_injuries' / 'typical_wake_time' /
+      'preferred_workout_time' / 'body_part_priorities'] any more (Muster
+      retired 2026-11-14); backfillMusterToProfileIfNeeded only READS them
+      for old accounts. A new onboarding question that maps to a profile
+      field writes the profile directly (completeOnboarding's map), never a
+      coachBox mirror.
+
+  - concept: onboarding_single_commit
+    domain: auth_profile
+    behavioral_test_path: test/contracts/onboarding_single_commit_test.dart
+    description: |
+      onboarding-fuse-commit (2026-11-14, diagnose d86bad). The Plan screen's
+      single "I COMMIT ->" tap runs OnboardingNotifier.completeOnboarding,
+      which ends with finalizeLocalCommit: InductionService.recordCommitment
+      (only when !hasCommitted) + completeInduction, THEN setOnboarded. So
+      `onboarding_completed == true` means profile + plan + progress +
+      commitment are durable; a throw before it leaves the flag false and the
+      next tap re-runs the whole commit. The Hive session is opened at the
+      top of completeOnboarding and `state.answers` is captured BEFORE the
+      open (the owner edge rebuilds the notifier with empty answers). The
+      profile map carries `id` (the session owner) and
+      `physique_focus: 'balanced'`. The already_onboarded early return stamps
+      nothing. Muster and Induction screens are retired; /coach/muster and
+      /coach/induction redirect to /home.
+    writers:
+      - file: lib/features/onboarding/providers/onboarding_provider.dart
+        method: OnboardingNotifier.finalizeLocalCommit + completeOnboarding
+        notes: |
+          Stamps coachBox committed_at / committed_to_lt_cdr /
+          induction_completed_at, then MigratedKey onboarding_completed.
+      - file: lib/features/ai_coach/services/induction_service.dart
+        method: InductionService.recordCommitment + completeInduction (_syncUid)
+        notes: |
+          Hive puts, then an unawaited coach-memory sync keyed on the session
+          owner (fallback profile id).
+    reader_manifest_complete: true
+    readers:
+      - file: lib/core/router/app_router.dart
+        line_range: 1-9999
+        method: postSessionRedirect (isOnboarded)
+        semantic: flag-check
+        fields_read: [onboarding_completed]
+        notes: onboarded users on /onboarding* go to /home
+      - file: lib/features/ai_coach/services/ai_snapshot_builder.dart
+        line_range: 1-9999
+        method: snapshot committed_to_lt_cdr
+        semantic: pass-through
+        fields_read: [committed_to_lt_cdr]
+        notes: the coach's contract line (captain_manual.ts) reads it
+      - file: lib/features/auth/providers/auth_provider.dart
+        line_range: 1-9999
+        method: _ensureLocalUser -> AuthNotifier.shouldClearForProfileId
+        semantic: flag-check
+        fields_read: [id]
+        notes: a profile with no id is cleared as another account's
+    cloud_table: coach_memory
+    cloud_columns:
+      - committed_at
+      - committed_to_lt_cdr
+      - induction_completed_at
+    sync_methods:
+      - syncCoachMemoryNow
+      - pushSnapshot
+    regression_test: test/contracts/onboarding_single_commit_test.dart
+    additional_tests:
+      - test/contracts/onboarding_hive_session_open_before_write_test.dart
+    class_constraints: |
+      Nothing may set onboarding_completed before the commitment stamps.
+      A widget never sequences the commit itself (repository pattern).
 
   - concept: auth_hive_owner_agreement
     domain: cross_domain
@@ -7864,7 +7924,7 @@ concepts:
           Server-side reader. Pulls coach_memory.coach_notes for the
           nightly summary prompt context.
       - file: lib/core/services/sync/sync_coach.dart
-        line_range: 828-884
+        line_range: 830-886
         method: _restoreCoachMemory (downward pull)
         semantic: pass-through
         fields_read: [coach_notes]
@@ -8068,7 +8128,7 @@ concepts:
           weight_logs, body_measurements, water_logs, daily_steps).
           Restore writes back with IST-anchored keys.
       - file: lib/features/onboarding/providers/onboarding_provider.dart
-        line_range: 405-415
+        line_range: 460-470
         method: OnboardingNotifier weight seed
         semantic: pass-through
         fields_read: []
@@ -8510,7 +8570,7 @@ concepts:
           ErrorTelemetry.recordNonFatal. Wraps response into typed
           RedemptionResult (success / errorMessage / alreadyRedeemed).
       - file: lib/features/auth/providers/auth_provider.dart
-        line_range: 397-421
+        line_range: 406-430
         method: AuthNotifier.signUpWithEmail(referralCode:)
         notes: |
           c7b4d2 (2026-09-26): the sign-up field's code is stored in auth
@@ -8518,7 +8578,7 @@ concepts:
           at sign-in, which ran before the users row existed and never ran
           when email confirmation returned no session.
       - file: lib/features/onboarding/providers/onboarding_provider.dart
-        line_range: 683-750
+        line_range: 749-816
         method: _syncOnboardingAndPostActions
         notes: |
           The one client redeem point for new users, AFTER the users upsert.
@@ -10209,17 +10269,13 @@ concepts:
         method: _buildInjuriesChips + profile reader
         notes: chips emit canonical tokens (via InjuryVocab.chipTokens/toggleChip Ship 3); reader normalizes legacy stored values
       - file: lib/features/onboarding/screens/details_screen.dart
-        line_range: 52-652
+        line_range: 53-654
         method: _InjuriesSection chip + _toggleInjury + initState seed + _onContinue extras
         notes: Ship 3 (U5) - onboarding Details collects injuries via the shared InjuryVocab.chipTokens/toggleChip chip (pre-selected 'No injuries' default); initState seeds _injuries from widget.data so the plan→details ADJUST-PLAN round-trip preserves the selection; writes 'injuries' into the plan route extras
       - file: lib/features/onboarding/screens/plan_screen.dart
-        line_range: 520-535
+        line_range: 580-595
         method: _onReportForDuty setAnswer('injuries', ...)
         notes: Ship 3 (U5) - reads the collected injuries from widget.data['injuries'] (was hard-coded ['none']); preserves the ['none'] sentinel; generateV4 normalizes centrally
-      - file: lib/features/ai_coach/services/induction_service.dart
-        line_range: 89-100
-        method: _bridgeToProfile known_injuries case
-        notes: normalizes muster free-text before writing profile injuries
       - file: lib/shared/repositories/plan_engine/plan_generator.dart
         line_range: 62-120
         method: generateV4
@@ -11896,11 +11952,10 @@ concepts:
       founder-deferred future advancement (2026-07-13) — the trade-not-add slot
       mechanic was proven infeasible (VolumeFilter is POSITIONAL take(N), not
       priority-sorted; focus muscle already kept on its theme day). Upstream
-      physique_focus writers: edit_profile_screen.dart:1616 +
-      induction_service.dart:102-110 (`_bridgeToProfile`, the live muster
-      bridge — citation corrected 2026-09-19, was stale at :209 pre-dating
-      the d6f1b8 muster restructure that also narrowed this bridge to
-      ONLY body_part_priorities; see docs/architecture/sync.md).
+      physique_focus writers: edit_profile_screen.dart (form save) +
+      onboarding_provider.dart completeOnboarding ('balanced' at commit,
+      onboarding-fuse-commit 2026-11-14; the muster bridge
+      `_bridgeToProfile` was deleted with the Muster screen).
       B2 (session set budget, always on since 2026-11-02, concept session_set_budget): the same effectiveBodyFocus
       also feeds the budget's focus groups (BudgetMuscleGroups.of), where a focus group may reach
       25 weekly sets (cap 12 per session) and the base +1 set is no longer added (the allocation
@@ -12072,6 +12127,7 @@ concepts:
   - concept: exercise_library_schema
     domain: workout
     behavioral_test_path: test/contracts/exercise_library_schema_contract_test.dart
+    behavioral_test_path_form_cues: supabase/functions/_shared/tools/__tests__/getFormCues_test.ts  # OI-438/OI-469: fake client applies eq/ilike/limit; retired row listed first; both stages
     behavioral_test_path_prune: test/contracts/library_seed_prune_behavioral_test.dart  # Batch A 46fc99: real Hive box, retired id deleted, kept + community keys survive, a shipped id is never pruned
     behavioral_test_path_alias: test/contracts/exercise_alias_lookup_behavioral_test.dart  # Batch A 46fc99: retired names resolve via name_aliases, exact name wins (mirror), queryV4 serves the kept twin
     behavioral_test_path_panel: test/contracts/coaching_panel_numeric_breathing_behavioral_test.dart  # Batch A b7d3e1: rendered panel suppresses a numeric breathing_cue, Surya Namaskar mirror renders it
@@ -12174,7 +12230,7 @@ concepts:
         semantic: a retired name resolves to its kept twin; an exact name always wins over an alias
       - file: supabase/functions/_shared/tools/exercise/getFormCues.ts
         method: reads primary_muscles/secondary_muscles/difficulty_level (:60-61)
-        semantic: AI-coach form cues; was NULL for the 9 stubs pre-batch; exact-name match with no is_active filter (why 162 copies the kept cues onto the retired rows)
+        semantic: AI-coach form cues; was NULL for the 9 stubs pre-batch; both queries filter is_active = true in code (OI-438/OI-469; live after the ai-proxy deploy: a retired row never answers; the seed's cue copy onto retired rows, from migration 162, is now defence in depth)
       - file: lib/features/train/providers/train_provider.dart
         line_range: 103-111
         method: last-weight suggestion reads the LOGGED row's logging_type (weight_reps or weighted_bodyweight) before it suggests a load
@@ -12646,13 +12702,14 @@ concepts:
         method: currentWeekColumnProjection
         notes: pure helper deciding frozen-passthrough (disabled) vs program week (enabled); behaviorally tested.
       - file: lib/features/onboarding/providers/onboarding_provider.dart
-        line_range: 473-473
+        line_range: 650-650
         method: onboarding completion (initial + step)
         notes: |
           Writes current_week:1 at onboarding — correct-BY-CONSTRUCTION (a new
           user is always at program week 1) and equal to what the projection
           would compute, so it never disagrees with the canonical writer. Also
-          at :786. NOT routed through the projection (no need).
+          at :969 (the cloud progress row; both cites re-derived 2026-11-14 from
+          the 'current_week': 1 literal, the old 473 / 786 had drifted). NOT routed through the projection (no need).
       - file: lib/core/services/sync_service.dart
         line_range: 1088-1092
         method: _replayPendingOnboardingSync (NO LONGER writes current_week)
@@ -13165,11 +13222,11 @@ concepts:
       .timeout() frees the AWAITER and does NOT cancel the request.
     writers:
       - file: lib/features/auth/providers/auth_provider.dart
-        line_range: 914
+        line_range: 923
         method: signOutInProgress
         semantic: teardown-window-flag
       - file: lib/features/auth/providers/auth_provider.dart
-        line_range: 960-997
+        line_range: 969-1006
         method: signOut
         semantic: set-in-try-clear-in-finally
         notes: >-
@@ -13215,12 +13272,12 @@ concepts:
         notes: same shift as applyRestoreCeiling directly above, both times; all three re-derived +3 by the Hermes sync_epoch_seen doc comment (2026-09-28), then +1 (with _safeRestoreOp) by the plan_engine_flags import the merge-review F4 fix added (a3e7d9).
     readers:
       - file: lib/core/router/app_router.dart
-        line_range: 808-819
+        line_range: 791-802
         method: postSessionRedirect
         semantic: branch-order-is-the-fix
         notes: signOutInProgress MUST be tested BEFORE the onboarding read. Shifted +8 by profile-share-grow-order (the `photos` GoRoute inserted above, in the Profile branch) — repointed per the parity gate's minimum-fix convention.
       - file: lib/core/router/app_router.dart
-        line_range: 610-719
+        line_range: 610-702
         method: _authRedirect
         semantic: delegates-to-pure-fn
       - file: lib/core/services/sync_service.dart
@@ -13481,15 +13538,15 @@ concepts:
       path and never to the OAuth ENTRY path.
     writers:
       - file: lib/features/auth/providers/auth_provider.dart
-        line_range: 419
+        line_range: 428
         method: OAuth completion watch
         semantic: subscribes-to-onAuthStateChange-after-launch
       - file: lib/features/auth/providers/auth_provider.dart
-        line_range: 448
+        line_range: 457
         method: cancelOAuthWatch
         semantic: teardown-also-wired-to-ref-onDispose
       - file: lib/features/auth/providers/auth_provider.dart
-        line_range: 534
+        line_range: 543
         method: signInWithGoogle
         semantic: launches-the-redirect-then-arms-the-watch
     readers:
@@ -13715,7 +13772,7 @@ concepts:
         semantic: captures-Uri.base-before-GoRouter-boots
     readers:
       - file: lib/core/router/app_router.dart
-        line_range: 140-160
+        line_range: 137-157
         method: "/confirm GoRoute pageBuilder"
         semantic: falls-back-to-pendingConfirmTokenHash-when-query-params-empty
     hive:
