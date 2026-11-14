@@ -269,6 +269,8 @@ void main() {
     test(
       'a repeat phase that fresh-fills the Upper day (no pins for it) also avoids',
       () async {
+        // Unit 2C-a: build_muscle 4-day at 60+ minutes is Upper / Lower x2 (no Push / Pull feeders); today's Push / Pull /
+        // Legs / Upper list, which OI-458 guards, serves 30 / 45 minutes.
         var pairs = 0;
         for (final tier in ['full_gym', 'basic_gym']) {
           for (final level in ['intermediate', 'advanced']) {
@@ -277,7 +279,7 @@ void main() {
               tier: tier,
               days: 4,
               level: level,
-              minutes: 60,
+              minutes: 45,
             );
             final wk = first.weekPlans;
             // Pin Push, Pull and Legs from the first phase; leave the Upper day (index 3) unpinned.
@@ -299,7 +301,7 @@ void main() {
               tier: tier,
               days: 4,
               level: level,
-              minutes: 60,
+              minutes: 45,
               phase: 2,
               pins: pins,
             );

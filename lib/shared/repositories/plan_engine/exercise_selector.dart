@@ -127,6 +127,11 @@ class ExerciseSelector {
     // OI-458: an `upper` day soft-avoids the names the earlier push / pull days hold, per variant (lowercased).
     final earlierPushPullA = <String>{...earlierFeederNamesA};
     final earlierPushPullB = <String>{...earlierFeederNamesB};
+    // Unit 2C-a (d35, d46): the names every earlier day of this plan holds, per variant and `dayType` (lowercased), for a
+    // day whose `avoidEarlier` asks to soft-avoid them (`sameType`: the earlier days of its own type; `all`: every
+    // earlier day). Soft only: `_preferNovel` sorts them last, never `excludeNames`.
+    final earlierByTypeA = <String, Set<String>>{};
+    final earlierByTypeB = <String, Set<String>>{};
     // Library Batch S1b-2: a loaded version and its original never share a day. The day / variant soft-avoid names
     // (previous phase, upper-day feeders) carry their same-movement partners; the plateau names are a per-exercise
     // preference and do not (plan Decision 2's table).
@@ -136,10 +141,16 @@ class ExerciseSelector {
       final day = slotDays[i];
       final hasB = day.slotsB != null;
       final isUpper = day.dayType == 'upper';
+      Iterable<String> earlier(Map<String, Set<String>> byType) => switch (day.avoidEarlier) {
+            EarlierDayAvoid.none => const <String>[],
+            EarlierDayAvoid.sameType => byType[day.dayType] ?? const <String>{},
+            EarlierDayAvoid.all => byType.values.expand((names) => names),
+          };
       final avoidA = {
         ...sameMovement.expandLower({
           ...(previousPhaseByDay?[i]?.a ?? const <String>[]),
           if (isUpper) ...earlierPushPullA,
+          ...earlier(earlierByTypeA),
         }),
         ...plateauAvoidNames,
       };
@@ -147,6 +158,7 @@ class ExerciseSelector {
         ...sameMovement.expandLower({
           ...(previousPhaseByDay?[i]?.b ?? const <String>[]),
           if (isUpper) ...earlierPushPullB,
+          ...earlier(earlierByTypeB),
         }),
         ...plateauAvoidNames,
       };
@@ -255,6 +267,8 @@ class ExerciseSelector {
         }
         copyIfOneEmpty();
       }
+      (earlierByTypeA[day.dayType] ??= <String>{}).addAll(a.map((e) => e.exerciseName.toLowerCase()));
+      (earlierByTypeB[day.dayType] ??= <String>{}).addAll(b.map((e) => e.exerciseName.toLowerCase()));
       if (_feedsUpperAvoid(day.dayType)) {
         earlierPushPullA.addAll(a.map((e) => e.exerciseName.toLowerCase()));
         earlierPushPullB.addAll(b.map((e) => e.exerciseName.toLowerCase()));

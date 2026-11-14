@@ -2164,3 +2164,22 @@ added, false of the flip being performed.
 - **Fix pattern:** one closed enum and one tolerant normaliser every reader goes through (`foodTypeOf`): absent (null, '') = the product default; known spellings = their type; an unknown NON-EMPTY value = the most restrictive safe reading (Veg), never "anything". One write door that stores only canonical keys. Pin the table in a fixture both client and server tests read.
 - **Test shape:** a fixture row per spelling every writer can produce (incl. AI variants and whitespace); a truth table of the filter with the unchanged rows and the stricter-by-design rows each pinned; an INDEPENDENT oracle (not the helper under test) over generated plans; mutate "unknown -> default".
 - **Regression test:** `test/core/food_types_test.dart`, `test/nutrition/passes_diet_food_type_test.dart`, `test/contracts/diet_preference_vocabulary_writer_to_reader_test.dart` (diagnoses a2b2f1 -> 6f5aaa).
+
+### 2.158 A pipeline stage that rebuilds a model object drops a field added after it was written (NEW 2026-11-14)
+
+- **Telltale:** a new per-day field (`MuscleSlotDay.avoidEarlier`) is set by the writer and read by the consumer, the
+  unit tests of both pass, and the end-to-end measure does not move. In the v2 prototype the 4-day repeats went 86 -> 464
+  where the avoid should have lowered them.
+- **Root-cause shape:** a stage between writer and reader (`VolumeFilter.filterDays`) builds a NEW object field by field
+  from the old one, so any field added later is silently reset to its default. It is the writer/reader drift class with
+  the drift inside a copy, not a key name.
+- **Why it survives review:** the writer and reader are both in the diff; the copy stage is not, and nothing fails to
+  compile because the field has a default.
+- **Fix pattern:** carry the field in every rebuilding stage (grep each `ClassName(` construction in the pipeline when
+  adding a field with a default); prefer a `copyWith` so the next field is carried by construction.
+- **Test shape:** a direct test of the rebuilding stage for every value of the field, plus a test through the real
+  pipeline (rebuild stage, then consumer) with a crafted pool. A mutant that resets the field in the copy must go red.
+- **Masking found by mutation (same batch):** a cross-day avoid for variant B looked covered because B's within-day
+  avoid of its own A pushed it off the same row. Give each avoid source a fixture where it alone can move the pick.
+- **Regression test:** `test/contracts/balanced_week_behavioral_test.dart` ("the filter carry", "sameType, variant B on
+  its own"); diagnose c7e5a1.

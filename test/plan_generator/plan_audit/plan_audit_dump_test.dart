@@ -105,8 +105,9 @@ void main() {
     );
     final planGoal = FitnessGoals.of(goal).planGoal;
     final effLevel = PlanGenerator.effectiveLevel(level, phase);
-    final quadGlutes = !(PlanEngineFlags.quadLegsBEnabled &&
-        SplitResolver.hasQuadLegsBSplit(planGoal, days));
+    // The audit's credit is the generator's own (Unit 2C-a, plan round 3 A-2: one rule for both sides of a comparison).
+    final quadGlutes = SplitResolver.quadPrimaryCreditsGlutes(planGoal, days, minutes,
+        quadLegsB: PlanEngineFlags.quadLegsBEnabled);
     final band = SessionBudget.weeklyBand(planGoal, effLevel);
     final weeks = <Map<String, dynamic>>[];
     for (final w in plan.weekPlans) {

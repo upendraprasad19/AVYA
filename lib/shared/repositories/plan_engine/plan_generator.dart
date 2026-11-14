@@ -166,7 +166,7 @@ class PlanGenerator {
     // rule below (one change) flip together.
     final quadLegsB = PlanEngineFlags.quadLegsBEnabled;
     final splitDays = SplitResolver.selectV4(planGoal, daysPerWeek,
-        experienceLevel: effectiveExp, quadLegsB: quadLegsB);
+        experienceLevel: effectiveExp, quadLegsB: quadLegsB, sessionMinutes: SessionBudget.resolveMinutes(param: sessionDuration, profileValue: TrainingHistoryAnalyzer.sessionMinutesFromProfile()));
 
     // Stage 1.5: Volume Filter — the deload rule only. Every split slot is kept: the
     // session set budget (Stage 3.5 below, B2 flipped ON 2026-11-02), not a fixed
@@ -285,7 +285,7 @@ class PlanGenerator {
       focusGroups: BudgetMuscleGroups.of(effectiveBodyFocus),
       // OI-454: in the 6-day build_muscle split a squat or lunge does not spend the
       // Glutes top (its Legs B quad slot would otherwise be refused for it).
-      quadPrimaryCreditsGlutes: !(quadLegsB && SplitResolver.hasQuadLegsBSplit(planGoal, daysPerWeek)),
+      quadPrimaryCreditsGlutes: SplitResolver.quadPrimaryCreditsGlutes(planGoal, daysPerWeek, SessionBudget.resolveMinutes(param: sessionDuration, profileValue: TrainingHistoryAnalyzer.sessionMinutesFromProfile()), quadLegsB: quadLegsB),
       archetypeByName: {
         for (final e in rowsByName.entries) e.key: SessionBudget.archetypeOfRow(e.value),
       },

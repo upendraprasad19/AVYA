@@ -434,7 +434,9 @@ void main() {
       expect(measured['full_gym|3|intermediate|60'], [6, 6, 6]);
       // Unit 2A (2026-11-13): day 2 holds 5 (the lead seated at 3 leaves time for one row fewer; 5 is the count
       // floor at 60 minutes; founder d26, the accepted cost). Before 2A: [6, 6, 6, 6, 6].
-      expect(measured['full_gym|5|intermediate|60'], [6, 5, 6, 6, 6]);
+      // Unit 2C-a (2026-11-14): build_muscle 5-day at 60+ minutes is Push / Pull / Legs / Upper / Lower + Core, and every
+      // day holds 6 again (the Upper day is led by a chest press, not the costlier overhead press).
+      expect(measured['full_gym|5|intermediate|60'], [6, 6, 6, 6, 6]);
       expect(measured['full_gym|6|intermediate|60'], [6, 6, 6, 6, 6, 6]);
       // Before OI-456 the same persona measured 4 / 6 / 4 / 9 (a spread of 5).
       expect(spread, 0, reason: 'tester counts: $tester');
