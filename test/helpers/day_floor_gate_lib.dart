@@ -83,6 +83,7 @@ class DayFloorGate {
     required List<String> injuries,
     Map<int, ({List<String> a, List<String> b})>? pins,
     int? minutes,
+    bool balancedWeekOff = false,
   }) {
     final box = HiveService.instance.configBox;
     try {
@@ -91,24 +92,34 @@ class DayFloorGate {
       } else {
         box.put('disable_day_floor', true);
       }
+      // Unit 2C-a: the OFF digest is main 8a2e1c5a's (before 2C), so the plans 2C changes are hashed with its switch set.
+      if (balancedWeekOff) box.put('disable_balanced_week', true);
       SessionSetAllocator.debugLastStats = null;
       final plan = h.gen(
           tier: tier, goal: goal, level: level, days: days, phase: phase, injuries: injuries, pins: pins, minutes: minutes);
       return (plan: plan, stats: SessionSetAllocator.debugLastStats!);
     } finally {
       box.delete('disable_day_floor');
+      box.delete('disable_balanced_week');
     }
   }
 
-  void _compare(DayFloorTally t, String label, String goal, String level, int days, int phase, _Gen on, _Gen off) {
+  /// Unit 2C-a, restated (not imported): build_muscle 3 / 4 / 5-day plans at 60+ resolved minutes get the balanced week
+  /// (its lists and its credit). A persona with no minutes resolves to 60.
+  static bool _balancedWeek(String goal, int days, int? minutes) =>
+      goal == 'build_muscle' && days >= 3 && days <= 5 && (minutes ?? 60) >= 60;
+
+  void _compare(DayFloorTally t, String label, String goal, String level, int days, int phase, int? minutes, _Gen on,
+      _Gen off, String offHash) {
     t.runs++;
-    t.offHashes.add(dayFloorPlanHash(off.plan));
+    t.offHashes.add(offHash);
     final eff = PlanGenerator.effectiveLevel(level, phase);
     final lighter = PeriodizationEngine.archetypeForPhase(phase) == 'deload';
     final band = SessionBudget.weeklyBand(goal, eff);
     final top = lighter ? band.bottom : band.top;
     final cap = SessionBudget.sessionCap(goal, eff);
-    final quadOwnsGlutes = goal == 'build_muscle' && days == 6;
+    // OI-454 (6-day) and Unit 2C-a (the balanced week): a quad-first row does not credit Glutes.
+    final quadOwnsGlutes = (goal == 'build_muscle' && days == 6) || _balancedWeek(goal, days, minutes);
     for (var w = 0; w < on.plan.weekPlans.length; w++) {
       final variant = (w == 1 || w == 3) && days != 6 ? 'B' : 'A';
       final stats = on.stats[variant];
@@ -203,7 +214,7 @@ class DayFloorGate {
           return on;
         });
       }
-      _Gen g(bool floor) => _gen(
+      _Gen g(bool floor, {bool balancedWeekOff = false}) => _gen(
           floor: floor,
           tier: p.tier,
           goal: p.goal,
@@ -212,10 +223,14 @@ class DayFloorGate {
           phase: p.phase,
           injuries: p.injuries,
           pins: pins,
-          minutes: p.minutes);
+          minutes: p.minutes,
+          balancedWeekOff: balancedWeekOff);
       final on = g(true);
       final off = g(false);
-      _compare(t, p.label, p.goal, p.level, p.days, p.phase, on, off);
+      final offHash = _balancedWeek(p.goal, p.days, p.minutes)
+          ? dayFloorPlanHash(g(false, balancedWeekOff: true).plan)
+          : dayFloorPlanHash(off.plan);
+      _compare(t, p.label, p.goal, p.level, p.days, p.phase, p.minutes, on, off, offHash);
     }
     return t;
   }

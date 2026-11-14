@@ -120,9 +120,9 @@ Set<String> _groups(Iterable<Object?> muscles) {
   return out;
 }
 
-/// OI-454, restated here (not imported): in the 6-day build_muscle split an exercise whose FIRST
-/// listed muscle is Quads credits Quads but not Glutes, so the Glutes top and cap never count a
-/// squat's or a lunge's glute work. Every other plan credits every listed muscle.
+/// OI-454, restated here (not imported): in the 6-day build_muscle split, and (Unit 2C-a) in build_muscle 3 / 4 / 5-day
+/// plans at 60+ minutes, an exercise whose FIRST listed muscle is Quads credits Quads but not Glutes, so the Glutes top
+/// and cap never count a squat's or a lunge's glute work. Every other plan credits every listed muscle.
 Set<String> _credited(List<Object?> muscles, {required bool quadOwnsGlutes}) {
   final all = _groups(muscles);
   if (!quadOwnsGlutes || muscles.isEmpty || all.contains('Hamstrings')) return all;
@@ -375,7 +375,11 @@ void main() {
             fail('time', 'week ${w + 1} ${d.name} ${mins.toStringAsFixed(1)} min > $limitMin');
           }
         }
-        final per = sessionGroups(d, quadOwnsGlutes: p.planGoal == 'build_muscle' && p.days == 6);
+        // OI-454 (6-day) and Unit 2C-a (build_muscle 3 / 4 / 5-day at 60+ minutes), restated: a quad-first row does
+        // not credit Glutes.
+        final per = sessionGroups(d,
+            quadOwnsGlutes: p.planGoal == 'build_muscle' &&
+                (p.days == 6 || (p.days >= 3 && p.days <= 5 && p.effMinutes >= 60)));
         per.forEach((g, n) {
           weekGroups[g] = (weekGroups[g] ?? 0) + n;
           if (n > p.cap(g)) fail('caps', 'week ${w + 1} ${d.name} $g $n > session cap ${p.cap(g)}');

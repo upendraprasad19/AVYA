@@ -138,17 +138,19 @@ void main() {
     return per;
   }
 
-  /// The most hard sets any one budget group gets in a single week-1 session.
-  int maxGroupSession(Phase p) {
+  /// The most hard sets any one budget group gets in a single week-1 session, credited as the generator's ledger credits
+  /// them ([quadPrimaryCreditsGlutes], restated: Unit 2C-a's balanced week and the 6-day
+  /// build_muscle split do not count a squat's glute work against the Glutes cap).
+  int maxGroupSession(Phase p, {bool quadPrimaryCreditsGlutes = true}) {
     var best = 0;
     for (final d in p.weekPlans.first.workoutDays) {
       final per = <String, int>{};
       for (final e in d.exercises) {
         final row = byName[e.exerciseName.toLowerCase()];
         if (row == null) continue;
-        for (final g in BudgetMuscleGroups.of([
+        for (final g in BudgetMuscleGroups.creditedOf([
           for (final m in (row['primary_muscles'] as List)) '$m',
-        ])) {
+        ], quadPrimaryCreditsGlutes: quadPrimaryCreditsGlutes)) {
           per[g] = (per[g] ?? 0) + e.sets;
         }
       }
@@ -223,8 +225,11 @@ void main() {
     });
 
     test('a body focus is the focus group: Chest goes past the ordinary top of 16', () async {
-      final plain = gen(days: 5, sessionDuration: 90);
-      final focused = gen(days: 5, sessionDuration: 90, bodyFocus: const ['chest']);
+      // Unit 2C-a: on the 6-day split (unchanged). The 5-day balanced week (Push / Pull / Legs / Upper / Lower + Core,
+      // two chest days) holds 13 chest sets with a chest focus at 90 minutes; today's 5-day body-part split had a
+      // Chest day. A measured cost, reported with 2C-a.
+      final plain = gen(days: 6, sessionDuration: 90);
+      final focused = gen(days: 6, sessionDuration: 90, bodyFocus: const ['chest']);
       expect(weeklyTotals(plain, 0)['Chest'] ?? 0, lessThanOrEqualTo(16));
       expect(weeklyTotals(focused, 0)['Chest']!, greaterThan(16));
       expect(weeklyTotals(focused, 0)['Chest']!, lessThanOrEqualTo(25));
@@ -253,9 +258,12 @@ void main() {
       // Session caps by level (build_muscle): beginner 6, advanced 10.
       final first = gen(days: 3, level: 'beginner', phase: 1, sessionDuration: 90);
       final later = gen(days: 3, level: 'beginner', phase: 5, sessionDuration: 90);
-      expect(maxGroupSession(first), lessThanOrEqualTo(6));
-      expect(maxGroupSession(later), greaterThan(6));
-      expect(maxGroupSession(later), lessThanOrEqualTo(10));
+      // build_muscle 3-day at 90 minutes is a balanced week (Unit 2C-a S2), restated: a quad-first row credits Quads,
+      // not Glutes.
+      const credit = false;
+      expect(maxGroupSession(first, quadPrimaryCreditsGlutes: credit), lessThanOrEqualTo(6));
+      expect(maxGroupSession(later, quadPrimaryCreditsGlutes: credit), greaterThan(6));
+      expect(maxGroupSession(later, quadPrimaryCreditsGlutes: credit), lessThanOrEqualTo(10));
     });
 
     test('repeat pins: library pins are budgeted, a custom pin keeps its sets', () async {

@@ -302,6 +302,11 @@ class MuscleSlot {
       '$movementPattern, $exerciseType, P$priority, x$count)';
 }
 
+/// Unit 2C-a: which earlier days of the same plan a day soft-avoids (their picks sort last in `_preferNovel`, per
+/// variant; never excluded). [sameType]: the earlier days with the same `dayType` (4-day Lower B avoids Lower A).
+/// [all]: every earlier day (the 3-day Full Body day avoids the Upper and Lower days' picks, founder d46).
+enum EarlierDayAvoid { none, sameType, all }
+
 /// V4: A workout day defined by MuscleSlots instead of CSpecs.
 class MuscleSlotDay {
   final String name;
@@ -310,6 +315,7 @@ class MuscleSlotDay {
   final String intensity;   // strength, hypertrophy, endurance
   final List<MuscleSlot> slotsA;
   final List<MuscleSlot>? slotsB; // null = same as A
+  final EarlierDayAvoid avoidEarlier;
 
   const MuscleSlotDay({
     required this.name,
@@ -318,6 +324,7 @@ class MuscleSlotDay {
     required this.intensity,
     required this.slotsA,
     this.slotsB,
+    this.avoidEarlier = EarlierDayAvoid.none,
   });
 }
 
