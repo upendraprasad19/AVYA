@@ -1,3 +1,4 @@
+import 'package:icanbefitter/core/constants/diet_strategies.dart';
 import 'package:icanbefitter/core/constants/fitness_goals.dart';
 
 /// Hybrid BMR calculator: Katch-McArdle when body fat % is available,
@@ -245,6 +246,47 @@ class BmrCalculator {
       carbGrams: carbGrams.clamp(50, 800),
       fatGrams: fatGrams,
     );
+  }
+
+  /// Diet plan Unit 3a (docs/plans/diet-strategy.md §3.2): the carb and fat
+  /// split for a non-Balanced diet strategy. Calories and protein are inputs
+  /// and never change; fat is the remainder after protein and the capped
+  /// carbs.
+  ///
+  /// - Low carb: carbs `clamp(round(0.20 * kcal / 4), 75, 150)`.
+  /// - Keto: carbs `clamp(round(0.05 * kcal / 4), 20, 50)`.
+  /// - Both: carbs never exceed [balancedCarbs] (Low carb's floor of 75 g sits
+  ///   above Balanced's own floor of 50 g); fat
+  ///   `max(0, round((kcal - 4P - 4C) / 9))`.
+  ///
+  /// Balanced is NOT computed here: the stored targets already are Balanced
+  /// and are shown unchanged, so a Balanced call is a programming error.
+  static ({int carbGrams, int fatGrams}) macroSplit({
+    required double dailyCalories,
+    required double proteinGrams,
+    required double balancedCarbs,
+    required DietStrategy strategy,
+  }) {
+    final int strategyCarbs;
+    switch (strategy) {
+      case DietStrategy.balanced:
+        throw ArgumentError.value(
+          strategy,
+          'strategy',
+          'Balanced targets are the stored targets; macroSplit is for '
+              'low_carb and keto only',
+        );
+      case DietStrategy.lowCarb:
+        strategyCarbs = (0.20 * dailyCalories / 4).round().clamp(75, 150);
+      case DietStrategy.keto:
+        strategyCarbs = (0.05 * dailyCalories / 4).round().clamp(20, 50);
+    }
+    final balancedCap = balancedCarbs.round();
+    final carbGrams =
+        strategyCarbs < balancedCap ? strategyCarbs : balancedCap;
+    final fatRaw =
+        ((dailyCalories - 4 * proteinGrams - 4 * carbGrams) / 9).round();
+    return (carbGrams: carbGrams, fatGrams: fatRaw < 0 ? 0 : fatRaw);
   }
 
   /// Bug #24 — Project when the user will reach `targetKg` at their current

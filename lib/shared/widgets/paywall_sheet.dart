@@ -162,6 +162,8 @@ class _PaywallSheetState extends ConsumerState<PaywallSheet> {
         return 'Get a nudge when your protein is falling short, while the day can still be saved.';
       case 'Plateau Check':
         return 'Get told the moment your progress stalls, with the change that breaks it.';
+      case 'Diet Strategy':
+        return 'Low carb and keto targets, set for your goal.';
       case 'Day Swaps':
         return 'Life happens. Move a workout to another day this week without losing your plan.';
       default:

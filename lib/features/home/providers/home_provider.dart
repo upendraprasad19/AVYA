@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart' show ValueNotifier;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:icanbefitter/core/constants/diet_strategies.dart';
 import 'package:icanbefitter/core/services/error_telemetry.dart';
 import 'package:icanbefitter/core/services/health_write_service.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
@@ -15,12 +16,14 @@ import 'package:icanbefitter/core/services/write_result.dart';
 // and is now invoked from DayRolloverObserver / splash, not from
 // StreakFreezeNotifier.build().
 import 'package:icanbefitter/core/services/workout_schedule_service.dart';
+import 'package:icanbefitter/core/utils/effective_macro_targets.dart';
 import 'package:icanbefitter/core/utils/ist_date.dart';
 import 'package:icanbefitter/core/services/badge_service.dart';
 import 'package:icanbefitter/shared/repositories/user_repository.dart';
 import 'package:icanbefitter/core/services/service_providers.dart';
 import 'package:icanbefitter/features/auth/providers/auth_invalidation_provider.dart';
 import 'package:icanbefitter/features/nutrition/repositories/nutrition_repository.dart';
+import 'package:icanbefitter/features/nutrition/services/diet_strategy_flags.dart';
 import 'package:icanbefitter/features/profile/providers/profile_provider.dart';
 import 'package:icanbefitter/features/profile/services/profile_write_service.dart';
 import 'package:icanbefitter/features/train/repositories/workout_repository.dart';
@@ -603,11 +606,43 @@ class NutritionSummaryNotifier extends Notifier<NutritionSummaryData> {
     // OBS-11 — dual-name read; a restored profile carries the plural
     // `carbs_grams` (cloud/restore name), not `carb_grams`. Without this Home's
     // carb target silently fell to the 250 default. (See nutrition_provider.)
-    final carbTarget =
-        ((profile?['carb_grams'] ?? profile?['carbs_grams']) as num?)
-                ?.toDouble() ??
-            250;
-    final fatTarget = (profile?['fat_grams'] as num?)?.toDouble() ?? 65;
+    final storedCarbs =
+        (profile?['carb_grams'] ?? profile?['carbs_grams']) as num?;
+    var carbTarget = storedCarbs?.toDouble() ?? 250;
+    final storedFat = profile?['fat_grams'] as num?;
+    var fatTarget = storedFat?.toDouble() ?? 65;
+
+    // Diet plan Unit 3a (docs/plans/diet-strategy.md §3.3): a PRO user's
+    // non-Balanced strategy changes the carb/fat targets, applied to the
+    // stored pack only when it is complete (the defaults are Balanced). The
+    // watches exist ONLY with the flag on, so a flag-off build keeps this
+    // provider's pre-3a dependency set.
+    if (DietStrategyFlags.enabled) {
+      final pro = ref.watch(subscriptionInfoProvider.select((s) => s.isPro));
+      ref.watch(restoreCompletedTickProvider);
+      final storedCalories = profile?['daily_calories'] as num?;
+      final storedProtein = profile?['protein_grams'] as num?;
+      if (storedCalories != null &&
+          storedProtein != null &&
+          storedCarbs != null &&
+          storedFat != null) {
+        final effective = effectiveMacroTargets(
+          (
+            calories: storedCalories.toDouble(),
+            protein: storedProtein.toDouble(),
+            carbs: storedCarbs.toDouble(),
+            fat: storedFat.toDouble(),
+          ),
+          profile?['diet_strategy'],
+          pro: pro,
+          enabled: true,
+        )!;
+        if (effective.strategy != DietStrategy.balanced) {
+          carbTarget = effective.carbs;
+          fatTarget = effective.fat;
+        }
+      }
+    }
 
     // Apply AI-coach calorie target override for today (clamped 800..6000).
     // Macros are not scaled — overrides ship a kcal delta only.

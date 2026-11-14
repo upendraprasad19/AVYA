@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:icanbefitter/core/constants/diet_strategies.dart';
 import 'package:icanbefitter/core/constants/food_types.dart';
 import 'package:icanbefitter/core/services/error_telemetry.dart';
 import 'package:icanbefitter/core/services/sync_service.dart';
@@ -22,6 +23,8 @@ import '../services/diet_plan_flags.dart';
 import '../services/diet_plan_generator.dart';
 import '../services/diet_plan_pdf.dart';
 import '../services/diet_plan_swap.dart';
+import '../services/diet_strategy_flags.dart';
+import '../widgets/diet_strategy_section.dart';
 
 part 'diet_plan_screen_models.dart';
 
@@ -343,6 +346,10 @@ class _DietPlanScreenState extends ConsumerState<DietPlanScreen> {
       // Unit 2a: the food type the plan was built for (a plan of another
       // type is not loaded or used for hints, savedPlanMatchesFoodType).
       'food_type': _foodType.storageKey,
+      // Unit 3a: stamped only with the flag on (no reader until Unit 3b).
+      if (DietStrategyFlags.enabled)
+        'diet_strategy':
+            dietStrategyOfTargets(ref.read(macroTargetsProvider)).storageKey,
       'meals': _mealPlans
           .map((m) => {
                 'name': m.name,
@@ -424,6 +431,11 @@ class _DietPlanScreenState extends ConsumerState<DietPlanScreen> {
     if (mounted) setState(() => _saved = true);
   }
 
+  String? _pdfStrategyLabel(Map<String, double> targets) {
+    final s = dietStrategyOfTargets(targets);
+    return s == DietStrategy.balanced ? null : s.label;
+  }
+
   Future<void> _sharePlanAsPdf() async {
     if (_mealPlans.isEmpty) return;
 
@@ -454,6 +466,7 @@ class _DietPlanScreenState extends ConsumerState<DietPlanScreen> {
           ),
       ],
       foodTypeLabel: _foodType.label,
+      strategyLabel: _pdfStrategyLabel(targets),
       calorieTarget: calorieTarget,
       proteinTarget: proteinTarget,
       carbTarget: carbTarget,
@@ -503,7 +516,8 @@ class _DietPlanScreenState extends ConsumerState<DietPlanScreen> {
               style: AppTypography.body.copyWith(fontSize: 18, fontWeight: FontWeight.w800, color: AppColors.textPrimary),
             ),
             Text(
-              _foodType.shortLabel,
+              withDietStrategyTag(
+                  _foodType.shortLabel, dietStrategyOfTargets(targets)),
               key: const ValueKey('diet_plan_food_type_tag'),
               style: AppTypography.body.copyWith(
                   fontSize: 10,
@@ -562,6 +576,10 @@ class _DietPlanScreenState extends ConsumerState<DietPlanScreen> {
                     enabled: !_changingFoodType,
                     onChanged: _changeFoodType,
                   ),
+                  if (DietStrategyFlags.enabled) ...[
+                    const SizedBox(height: AppSpacing.sectionGap),
+                    const DietStrategySection(),
+                  ],
                   const SizedBox(height: AppSpacing.sectionGap),
                   _buildMacroTargets(targets),
                   const SizedBox(height: AppSpacing.sectionGap),

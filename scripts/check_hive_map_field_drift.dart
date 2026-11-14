@@ -354,6 +354,11 @@ const _alwaysOk = <String>{
   // wlog rows. The prefix heuristic mis-attributes them because ai_snapshot_builder
   // also reads those prefixes for PRs / meals / logs.
   'daily_calories', 'protein_grams', 'carb_grams', 'carbs_grams', 'fat_grams',
+  // Diet plan Unit 3a — `diet_strategy` is a canonical userBox['profile'] field
+  // read by the AI snapshot (_dietStrategyTargets) to apply the strategy to
+  // daily_targets. NOT an exlog_/nlog_/wlog_ field; same mis-attribution as the
+  // target fields above.
+  'diet_strategy',
   // Profile injuries field (U4 a1f6c3) — read via InjuryVocab.fromProfile(
   // profile['injuries']) / merged['injuries'] in the generation entry points to
   // thread contraindications into the plan engine. NOT a schedule_*/exlog_*

@@ -8,10 +8,13 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:icanbefitter/core/services/error_telemetry.dart';
+import 'package:icanbefitter/core/services/hive_service.dart';
 import 'package:icanbefitter/core/services/migrated_key.dart';
 import 'package:icanbefitter/core/services/supabase_service.dart';
 import 'package:icanbefitter/core/services/subscription_service.dart';
+import 'package:icanbefitter/core/constants/diet_strategies.dart';
 import 'package:icanbefitter/core/constants/food_types.dart';
+import 'package:icanbefitter/core/constants/app_constants.dart';
 import 'package:icanbefitter/core/services/sync_service.dart';
 import 'package:icanbefitter/core/services/prediction_service.dart';
 import 'package:icanbefitter/core/theme/colors.dart';
@@ -23,11 +26,15 @@ import 'package:icanbefitter/core/utils/equipment_vocab.dart';
 import 'package:icanbefitter/core/utils/injury_vocab.dart';
 import 'package:icanbefitter/core/utils/name_format.dart';
 import 'package:icanbefitter/shared/repositories/user_repository.dart';
+import 'package:icanbefitter/shared/widgets/diet_strategy_chips.dart';
 import 'package:icanbefitter/shared/widgets/food_type_chips.dart';
 import 'package:icanbefitter/shared/widgets/paywall_sheet.dart';
 import 'package:icanbefitter/shared/widgets/responsive_picker_builder.dart';
 import 'package:icanbefitter/features/home/providers/home_provider.dart';
 import 'package:icanbefitter/features/nutrition/providers/nutrition_provider.dart';
+import 'package:icanbefitter/features/nutrition/services/diet_strategy_actions.dart';
+import 'package:icanbefitter/features/nutrition/services/diet_strategy_flags.dart';
+import 'package:icanbefitter/features/profile/services/profile_target_recompute.dart';
 import 'package:icanbefitter/features/train/providers/train_provider.dart';
 import 'package:icanbefitter/features/ai_coach/providers/ai_coach_provider.dart';
 import 'package:icanbefitter/core/services/workout_schedule_service.dart';
@@ -63,6 +70,11 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
   // Diet plan Unit 2a: the food type, read through the one normaliser so a
   // stored legacy spelling (`vegetarian`, `keto`) highlights the right chip.
   FoodType _foodType = kDefaultFoodType;
+  // Diet plan Unit 3a: seeded from the EFFECTIVE strategy (the one the shown
+  // targets were made for), so an unrelated save by a lapsed user never
+  // compares Balanced against a stored, paused choice (plan §3.4).
+  DietStrategy _dietStrategy = kDefaultDietStrategy;
+  DietStrategy _originalDietStrategy = kDefaultDietStrategy;
   String _pacePreference = 'balanced'; // Bug #24
   int? _sessionDuration; // 30, 45, 60, 90
   String _physiqueFocus = 'balanced'; // balanced, glutes_legs, chest_shoulders_arms, strength
@@ -237,6 +249,7 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
     // Theme C · Test #8 — Indian-first default; matches onboarding's
     // implicit default which already writes 'veg' for new users.
     _foodType = foodTypeOfProfile(profile);
+    _dietStrategy = dietStrategyOfTargets(ref.read(macroTargetsProvider));
     _pacePreference = (profile['pace_preference'] as String?) ?? 'balanced'; // Bug #24
     // A legacy/restored profile missing the field lands on the engine's own
     // default (60, B2 Ruling 7; it was 90 under Theme C · Test #8). The saved
@@ -309,6 +322,7 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
     _originalPhysiqueFocus = _physiqueFocus;
     _originalInjuries = List<String>.of(_injuries);
     _originalFoodType = _foodType;
+    _originalDietStrategy = _dietStrategy;
     _originalLifestyleActivity = _lifestyleActivity;
     _originalTargetWeight = targetKgRaw ?? 0.0;
   }
@@ -1282,7 +1296,38 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
           value: _foodType,
           onChanged: (t) => setState(() => _foodType = t),
         ),
+        if (DietStrategyFlags.enabled) ...[
+          const SizedBox(height: 16),
+          Text(
+            'Diet strategy',
+            style: AppTypography.body.copyWith(fontSize: 13, color: AppColors.textDim),
+          ),
+          const SizedBox(height: 8),
+          DietStrategyChips(
+            value: _dietStrategy,
+            isPro: ref.watch(subscriptionInfoProvider.select((s) => s.isPro)),
+            onChanged: _onDietStrategyChip,
+          ),
+        ],
       ],
+    );
+  }
+
+  /// Diet plan Unit 3a: Balanced is always selectable; Low carb and Keto go
+  /// through the PRO gate (a free user sees the paywall, nothing changes).
+  Future<void> _onDietStrategyChip(DietStrategy next) async {
+    if (next == _dietStrategy) return;
+    if (next == DietStrategy.balanced) {
+      setState(() => _dietStrategy = next);
+      return;
+    }
+    await SubscriptionService.instance.gateAndVerify(
+      AppConstants.featureDietStrategy,
+      onPro: () {
+        if (mounted) setState(() => _dietStrategy = next);
+      },
+      onFree: () =>
+          showPaywallSheet(context, feature: kDietStrategyPaywallLabel),
     );
   }
 
@@ -1849,6 +1894,31 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
         'physique_focus': _physiqueFocus,
         'fitness_experience': _fitnessExperience,
       };
+
+      // Diet plan Unit 3a (plan §3.4/§3.6): `diet_strategy` is saved only
+      // with the flag on and only when the user tapped a chip different from
+      // the effective strategy; Save confirms the change first (Cancel saves
+      // nothing), and a non-Balanced choice needs PRO still true at Save.
+      if (DietStrategyFlags.enabled && _dietStrategy != _originalDietStrategy) {
+        final stored = UserRepository.instance.getProfile() ?? const {};
+        final edited = <String, dynamic>{...stored, ...updates};
+        final writeIt = await confirmEditProfileDietStrategy(
+          context,
+          profile: stored,
+          edited: edited,
+          recomputeAfter: recomputeDerivedTargets(
+            edited,
+            now: DateTime.now(),
+            bodyFatCalcDisabled:
+                HiveService.instance.configBox.get('disable_bodyfat_calc') ==
+                    true,
+          ),
+          next: _dietStrategy,
+          pro: SubscriptionService.instance.proStateSnapshot(),
+        );
+        if (writeIt == null || !mounted) return;
+        if (writeIt) updates['diet_strategy'] = _dietStrategy.storageKey;
+      }
 
       await ref.read(userProfileProvider.notifier).updateProfile(updates);
       await ref.read(userProfileProvider.notifier).recalculateTargets();

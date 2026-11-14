@@ -66,6 +66,9 @@ class AppConstants {
   // audit-2026-05-16 E.8 — `featureDietPlanPdf` constant deleted.
   // docs/architecture/business-rules.md confirms diet-plan PDF export is FREE. 0 `gate()` callsites.
   static const String featurePhotoAnalysis = 'photo_analysis';     // Photo in chat (PRO)
+  // Diet plan Unit 3a: Low carb / Keto targets. LOCAL PRO check only
+  // (gateAndVerify); deliberately NOT a rule-19 server-verified feature.
+  static const String featureDietStrategy = 'diet_strategy';
 
   // ── Free Tier Limits ──────────────────────────────────────
 
