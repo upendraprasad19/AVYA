@@ -658,6 +658,44 @@ void main() {
           reason: 'no hints from a plan built for another strategy');
     });
 
+    testWidgets('an unstamped plan (saved before the 3b-3 flip) with Keto '
+        'effective: no hints, a fresh plan, no notice; with Balanced it '
+        'still loads (3b-3 round 2 finding 2)', (tester) async {
+      Map<String, dynamic> legacy() => {
+            'id': 'p0',
+            'created_at': '2026-11-01T10:00:00',
+            'food_type': 'non_veg',
+            'meals': [
+              {
+                'name': 'Lunch',
+                'items': [
+                  {'food_id': 'F0019', 'name': 'Old balanced dal',
+                    'calories': 165}
+                ],
+              }
+            ],
+          };
+      await seed(tester, extra: const {'diet_strategy': 'keto'});
+      await tester.runAsync(
+          () => UserRepository.instance.saveDietPlan(legacy()));
+      final c = await pumpScreen(tester);
+      expect(find.text('Old balanced dal'), findsNothing);
+      expect(debugDietPlanGenerations, 1);
+      expect(find.byType(SnackBar), findsNothing);
+      expect(c.read(dietPlanProvider), isEmpty);
+      expect(_savedPlan()?['id'], 'p0', reason: 'kept until the user saves');
+
+      await tester.runAsync(() async {
+        await c.read(userProfileProvider.notifier)
+            .setDietStrategy(DietStrategy.balanced);
+        await Future<void>.delayed(const Duration(milliseconds: 100));
+      });
+      await _settle(tester);
+      expect(find.text('Old balanced dal'), findsOneWidget,
+          reason: 'unstamped = Balanced: it loads again');
+      expect(c.read(dietPlanProvider), isNotEmpty);
+    });
+
     testWidgets('flag OFF: a stamped Keto plan still loads and no stamp is '
         'written', (tester) async {
       DietStrategyFlags.debugEnabledOverride = false;

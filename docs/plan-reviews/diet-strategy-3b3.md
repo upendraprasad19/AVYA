@@ -2,9 +2,9 @@
 branch: diet-strategy-3b3
 date: 2026-11-15
 blast_radius: platform
-review_rounds: 1
-ground_truth_verified: false
-verdict: pending
+review_rounds: 2
+ground_truth_verified: true
+verdict: converged
 bpass: pending
 bpass_review: docs/reviews/diet-strategy-3b3-bpass.md
 ---
@@ -18,6 +18,7 @@ Plan: `docs/plans/diet-strategy-3b3.md`. Execution mode (§4.12.7): inline, one 
 | Round | Reviewer | Verdict | Material findings | Disposition |
 |---|---|---|---|---|
 | 1 | context-blind Sonnet on rev 1 + the draft diff `e22b6dd1` (ground truth read in `lib/`, migrations, the deployed-manual text at `21db03c7`) | changes required | 0 P1; 5 P2 + 4 P3 (kill switch not watched, push call site untested, tier, ledger ordering, the deploy gate) | plan §7; rev 2; mutants H1–H5 red |
+| 2 | context-blind Sonnet on rev 2 (post-round-1) + the diff at `ce1c0d0f` | converged (no P0/P1) | 2 P2 + 5 P3 (snapshot contract and daily push, the unstamped pre-flip plan, merge-before-deploy, wording) | plan §8; rev 3; the unstamped-plan screen test (mutant: unstamped matches every strategy: 2 red) |
 
 ## B-pass
 

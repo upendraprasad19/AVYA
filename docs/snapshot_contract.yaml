@@ -76,6 +76,10 @@ keys:
         OI-89 decision 7 — the coach must constrain on THIS, not the tier label)
       - activity_level: string
       - diet_preference: string
+      - diet_strategy: string (balanced | low_carb | keto; the strategy the
+        shown targets were made for, effectiveMacroTargets; only with
+        DietStrategyFlags on, which it is since diet plan Unit 3b-3)
+      - diet_strategy_label: string (Balanced | Low carb | Keto)
       - injuries: string|list
       - bmr: num
       - tdee: num
@@ -807,7 +811,10 @@ orphan_readers:
   - key: daily_targets.protein
     expected_shape: num (nested map)
     actual_writer_path: buildAiContext daily_targets.protein — canonical
-      profile.protein_grams (calories/carbs/fat also added alongside)
+      profile.protein_grams (calories/carbs/fat also added alongside; since
+      diet plan Unit 3a/3b-3 carbs and fat are the strategy's when
+      profile.diet_strategy is low_carb or keto, calories and protein never
+      change)
     readers:
       - { fn: protein-gap-alert, file: supabase/functions/protein-gap-alert/index.ts, line: 174 }
     drift_class: resolved
