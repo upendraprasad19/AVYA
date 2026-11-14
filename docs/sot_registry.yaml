@@ -1446,7 +1446,7 @@ concepts:
           Wrappers over MigratedKey.write/read for the
           'saved_diet_plan' key (userBox per Test #11.1 migration).
       - file: lib/features/nutrition/screens/diet_plan_screen.dart
-        line_range: 203-260
+        line_range: 254-306
         method: _savePlan (UI save handler)
         notes: |
           Builds planData map → calls saveDietPlan → fires
@@ -1480,7 +1480,7 @@ concepts:
           Passes plannedSlots into TodaysMealsCard which renders the
           "FROM YOUR DIET PLAN" hint on every empty slot.
       - file: lib/features/nutrition/screens/diet_plan_screen.dart
-        line_range: 46-58
+        line_range: 54-76
         method: _generatePlan (entry-point check for existing saved plan)
         semantic: pass-through
         fields_read: [via UserRepository.instance.getSavedDietPlan() — Map<String, dynamic>?]
@@ -1506,61 +1506,97 @@ concepts:
 
   - concept: diet_plan_generation_quality
     domain: nutrition
-    behavioral_test_path: test/nutrition/diet_plan_quality_constraints_test.dart
+    behavioral_test_path: test/nutrition/curated_diet_plan_test.dart
     description: |
-      Generation-time meal-quality constraints on the local Dart diet plan
-      generator (2026-09 batch, diagnose d3c7a9). The generator composes
-      plans from the Hive foodBox (seeded from assets/data/
-      food_database.json, schema v3: every row carries meal_fit
-      (List<String> of breakfast/lunch/dinner/snack; EMPTY = never
-      generated, e.g. alcohol; ABSENT = matches-all, untagged v2 boxes)
-      and is_ultra_processed (bool)). Constraints: Pass 0 group quotas
-      (vegetables in lunch/dinner, dairy-or-fruit breakfast; isQuotaLocked
-      items protected from Pass 3/4 swaps); per-category filler caps
-      (staples<=1 with >20%-under-calorie 2nd, pulses<=1 with
-      >20%-under-protein 2nd, vegetables<=2); day-level food uniqueness
-      (hard in Pass 1 anchors/Pass 0/2 — optional snack anchors skip
-      rather than repeat; soft prefer-unused in Pass 3/4); UPF exclusion
-      (never generated, never swap candidate); nuts_seeds per-serving
-      <=300 kcal cap surviving fit-relaxation; recovery anchor-upgrade
-      (<60% slot target) + gradual gap-aware sizing with 1.5x slot
-      headroom; Pass 4 three-tier trim floor (105% soft, 95% daily,
-      smallest-cut) with day-level fallback; Pass 5 fiber floor vs
-      profile fiber target. Seed version _foodLibraryVersion=3 ships the
-      tags to existing installs.
+      What goes into a generated diet plan. Since 2026-11-14 (diet plan
+      Unit 1, diagnose 83ac8a, closes OI-214; recurrence of d3c7a9) the
+      Diet Plan screen uses CuratedDietPlanGenerator: ONLY foods from the
+      hand-curated catalog (kDietPlanCatalog, 151 everyday Indian foods;
+      roles, day-capped families, allowed portions; no macros — numbers
+      come from the foodBox row), a fixed template per slot (breakfast =
+      main + protein (+fruit); lunch = protein + one grain + sabzi + side;
+      dinner = protein + one grain + sabzi (+side); snacks = fruit/snack),
+      family caps per day (soy/paneer/egg/chicken/fish/mutton/nut 1,
+      dal/dairy 2), a key-ingredient coherence rule inside a meal, and best
+      of 40 sampled days scored on calories, a protein band and a fiber
+      floor. The catalog replaces meal_fit for this path; the runtime never
+      filters on is_ultra_processed / is_everyday (a v3 box must still
+      generate). The legacy anchor-protein generator (d3c7a9 constraint
+      layer) remains reachable through the local kill switch
+      configBox['disable_curated_diet_plan'] (DietPlanFlags) until the
+      founder's device check; its deletion is on the OI board. Food
+      library seed version 4 (_foodLibraryVersion) ships the v4 asset.
     writers:
+      - file: lib/features/nutrition/services/curated_diet_plan_generator.dart
+        method: CuratedDietPlanGenerator.generate (template sampling, portion sizing, best of 40) + scaleServingDesc + dietPlanSeed
+      - file: lib/features/nutrition/services/diet_plan_catalog.dart
+        method: kDietPlanCatalog / dietFamilyDailyCap / dietCoherenceTokens
+        notes: |
+          Imports nothing (scripts/patch_food_database_v4.dart imports it
+          under `dart run`). Editing it requires re-running that script so
+          is_everyday mirrors the catalog (T1).
       - file: lib/features/nutrition/services/diet_plan_generator.dart
-        method: generate (Pass 0/1/2/3/4/5) + passesDiet (shared with swap UI)
+        method: generate (LEGACY, kill-switch path only) + passesDiet (shared by both generators and the swap)
         notes: |
-          Single writer of generated plans. Vegan preference reads the
-          DB's is_vegan field AUTHORITATIVELY (name blocklists are the
-          fallback for untagged rows only — real-DB leak diagnose d3c7a9).
+          Vegan/veg preferences read the DB's is_vegan / is_veg fields
+          AUTHORITATIVELY (diagnose d3c7a9).
       - file: lib/core/services/seed_service.dart
-        method: _foodLibraryVersion (v3 = meal_fit + is_ultra_processed)
+        method: _foodLibraryVersion (v4 = is_everyday + v4 UPF tags + F1442-F1448)
       - file: lib/features/nutrition/screens/diet_plan_screen.dart
-        method: _generateFreshPlan (fiberTarget from profile['fiber_grams'])
+        method: _generateFreshPlan (DietPlanFlags routing, dietPlanSeed, fiberTarget from profile['fiber_grams'])
     readers:
-      - file: lib/features/nutrition/screens/diet_plan_screen.dart
-        method: _swapItem
+      - file: lib/features/nutrition/services/diet_plan_swap.dart
+        method: swapAlternatives / resolveSwapRole (called by diet_plan_screen._swapItem)
         semantic: filtered
-        fields_read: [is_ultra_processed, category]
+        fields_read: [is_everyday, is_ultra_processed, is_veg, is_vegan, category, calories_std, protein_std, standard_serving_desc]
         notes: |
-          Manual swap alternatives filter by !is_ultra_processed +
-          passesDiet(dietPref). meal_fit deliberately NOT enforced on
-          manual swaps (user tap IS the meal intent).
+          Catalog-only alternatives of the replaced item's role (own role,
+          else derived from the catalog by (foodId, slot), else from its
+          category). Never in the plan already, never over a family cap,
+          never a coherence clash, never UPF, never retired
+          (is_everyday == false).
       - file: test/nutrition/food_database_tagged_test.dart
-        method: real-DB schema/spot-check/archetype gates
+        method: real-DB schema/spot-check/archetype gates (legacy path + v4 tags)
         semantic: pinning
-        fields_read: [is_ultra_processed, meal_fit, is_vegan, id, name]
+        fields_read: [is_ultra_processed, meal_fit, is_vegan, is_everyday, id, name]
     cloud_table: none
     sync_methods: []
     restore_methods: []
     provider_invalidation_set: []
     class_constraints: |
-      The saved-plan JSON schema (diet_plan_saved_loaded) is UNCHANGED by
-      generation constraints. Seed version bump is REQUIRED whenever the
-      asset schema extends — without it existing installs keep untagged
-      rows and every filter silently no-ops (missing field semantics).
+      The saved-plan JSON schema (diet_plan_saved_loaded) is UNCHANGED: the
+      curated item's role is never written (exact key-set test). Seed
+      version bump is REQUIRED whenever the asset changes. The T5 macro
+      floors in curated_diet_plan_test.dart are a contract: an
+      implementation change may raise them, never lower them.
+
+  - concept: food_is_everyday
+    domain: nutrition
+    behavioral_test_path: test/nutrition/curated_diet_plan_test.dart
+    description: |
+      `is_everyday` (bool, every food_database.json row, seed v4): true
+      EXACTLY for the ids of the curated diet-plan catalog, false for every
+      other row (diet plan Unit 1, 2026-11-14). It is the database-side
+      mirror of the catalog: an asset update can retire a catalog food
+      (false) without a code release. Custom / community foodBox rows carry
+      no field and are never offered by the swap sheet.
+    writers:
+      - file: scripts/patch_food_database_v4.dart
+        method: main (imports kDietPlanCatalog; one-shot, idempotent)
+      - file: lib/core/services/seed_service.dart
+        method: _seedFoods (putAll at food_library_version 4)
+    readers:
+      - file: lib/features/nutrition/services/diet_plan_swap.dart
+        method: swapAlternatives
+        semantic: filtered
+        fields_read: [is_everyday]
+        notes: |
+          `is_everyday == false` ⇒ never offered; an ABSENT key (a v3 box)
+          passes. The generator deliberately does NOT read it.
+    cloud_table: none
+    sync_methods: []
+    restore_methods: []
+    provider_invalidation_set: []
 
   - concept: weekly_report_data
     domain: ai_coach

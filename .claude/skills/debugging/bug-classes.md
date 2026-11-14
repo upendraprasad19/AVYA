@@ -2147,7 +2147,16 @@ added, false of the flip being performed.
 - **Test shape:** run the real method with the session closed and the uid resolver seam set (`onboarding_hive_session_open_before_write_test.dart` C1), assert the SAVED values equal the inputs; mutant: move the capture below the open (compiling form) and watch C1 redden.
 - **Regression test:** `test/contracts/onboarding_hive_session_open_before_write_test.dart` C1 + `test/contracts/onboarding_single_commit_test.dart` (resolveStartDate) (diagnose d86bad).
 
-### 2.156 A pipeline stage that rebuilds a model object drops a field added after it was written (NEW 2026-11-14)
+### 2.156 A generator that picks from an open-ended data library inherits every defect in that library's tags (NEW 2026-11-14)
+
+- **Telltale:** a generated plan shows an item no person would choose (Thums Up as an evening snack, Brie, a branded imported yogurt, three soy items in one day) although every filter "works"; a second fix round that tightens one filter is followed by the next odd item.
+- **Root-cause shape:** the generator scored the WHOLE 1,437-row food library and relied on per-row tags (`is_ultra_processed`, `meal_fit`, category) to exclude what it should not pick; those tags were incomplete (Thums Up tagged non-UPF, a second "Thumbs Up" spelling), so every tag gap became a reachable pick. The tests used a curated fixture, which cannot contain the real library's gaps (diagnose d3c7a9's lesson, recurred).
+- **Why it survives review:** each defect looks like a one-row data fix, and the fixture-based tests stay green; the class only shows on the real asset across many seeds.
+- **Fix pattern:** invert the selection: an explicit allowlist (catalog of ~150 entries with roles, families and allowed portions) is the ONLY pool; the library supplies numbers, not eligibility. Mirror the allowlist into a row tag (`is_everyday`) only for readers outside the generator, never as a deny-list. Re-tag the library too, but do not rely on it.
+- **Test shape:** run the generator on the REAL bundled asset across archetypes x seeds and assert membership in the allowlist, family caps, template shape and macro floors; pin every catalog id against the asset; mutate each guard.
+- **Regression test:** `test/nutrition/curated_diet_plan_test.dart` (T1-T9; diagnoses d3c7a9 -> 83ac8a).
+
+### 2.157 A pipeline stage that rebuilds a model object drops a field added after it was written (NEW 2026-11-14)
 
 - **Telltale:** a new per-day field (`MuscleSlotDay.avoidEarlier`) is set by the writer and read by the consumer, the
   unit tests of both pass, and the end-to-end measure does not move. In the v2 prototype the 4-day repeats went 86 -> 464

@@ -3509,13 +3509,6 @@ design (billing brainstorm "not yet designed" item). The
 also lands with this work, not before.
 
 
-## OI-214 — Diet plan Option A: curated Indian meal-template layer (recipe-first selection + portion scaling)
-
-- **Status**: OPEN
-- **Blocked on**: none
-- **Verified**: never
-- **Identified**: 2026-09-17 · filed via mint_oi.sh from branch `diet-plan-quality`
-
 ## OI-215 — Device verification expansion: Patrol flows for the UI-bug cluster, screenshot tests, canary APK
 
 - **Status**: OPEN
@@ -7233,6 +7226,27 @@ Residual of OI-199 and OI-471 after migration 172. Migration 172 makes `cleanup_
 4. **The history names retired exercises.** `workout_log_sets.exercise_id` is text holding the exercise NAME (no foreign key; none of the 848 rows matches a library id). 10 sets name an exercise that exists only as a retired row. Diagnose `9c4b1e` says "0 rows point at an inactive row", which is true for the id-keyed tables (`template_exercises`, `workout_logs`, `workout_log_exercises`) and was never measured for this name-keyed one. The app is not live, so these are tester rows; it is the same `found: false` cost as item 3, on exercises a tester really logged.
 
 **Done when.** One L-tier unit with its own plan (an Edge Function in the `ai-proxy` bundle, so a deploy with its own founder go): stage 2 orders deterministically (for example shortest name, then name) and a test lists the candidates in the wrong order; both stages escape `\`, `%` and `_` before the call and a test sends `%` and `_`; the tool resolves a name through `name_aliases` before it answers `found: false`, and the plan states which of the 10 history names an alias covers and records the rest as an intended `found: false`. Each new protection is mutated (CLAUDE.md section 4.4 rule 21), and the diagnose says what was mutated.
+
+## OI-508 — Delete the legacy diet plan generator + disable_curated_diet_plan kill switch after the founder device-checks the curated plan
+
+- **Status**: OPEN
+- **Blocked on**: the founder's device check of the curated diet plan (diet plan Unit 1, diagnose `83ac8a`)
+- **Verified**: never
+- **Identified**: 2026-11-14 · filed via mint_oi.sh from branch `diet-food-quality`
+
+CLAUDE.md §4.6 step 4: the curated generator ships ON with the legacy path
+kept behind the local kill switch `configBox['disable_curated_diet_plan']`
+(`DietPlanFlags`). Once the founder has generated, swapped, saved and
+regenerated plans on a device and accepted them, delete in ONE batch:
+`DietPlanFlags` + its test, the legacy branch in
+`diet_plan_screen._generateFreshPlan`, the legacy `generate` path and its
+passes in `diet_plan_generator.dart` (keep `passesDiet`, `DietMealPlan`,
+`DietPlanFoodItem`, `DietPlanInputs`, used by the curated path), the
+curated generator's legacy fallback (replace with an empty-plan error
+state), the legacy-only tests (`diet_plan_generator_test.dart`,
+`diet_plan_quality_constraints_test.dart` minus the repointed swap pin,
+the legacy archetype parts of `food_database_tagged_test.dart`), and the
+d3c7a9 pitfall row in `lib/features/nutrition/CLAUDE.md`.
 
 ## OI-509 — Delete the disable_balanced_week kill switch and its fixture after the 2C device check
 
