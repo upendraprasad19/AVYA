@@ -40,6 +40,8 @@ class VolumeFilter {
         intensity: day.intensity,
         slotsA: filteredA,
         slotsB: filteredB,
+        // Unit 2C-a (plan round 2, A-1): every rebuilt day keeps its earlier-day avoid, or the picker never sees it.
+        avoidEarlier: day.avoidEarlier,
       );
     }).toList();
   }

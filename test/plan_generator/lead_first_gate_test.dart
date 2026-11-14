@@ -33,8 +33,11 @@ import 'package:icanbefitter/shared/repositories/plan_engine/session_set_allocat
 import '../helpers/generator_golden_personas.dart';
 
 /// The worlds kept over the 1,010 golden personas (measured on the 2A tree, 2026-11-13): no variant falls back to main
-/// (A: 1,010 plans; B: the 770 that are not 6-day).
-const _worldCounts = <String, int>{'A:lead': 944, 'A:capped': 66, 'B:lead': 768, 'B:capped': 2};
+/// (A: 1,010 plans; B: the 770 that are not 6-day). Re-measured on the Unit 2C-a tree (2026-11-14): A:lead 944 -> 959,
+/// A:capped 66 -> 51. The 15 personas that move (traced, capped -> lead) are build_muscle 4 / 5-day at the default 60
+/// minutes; 7 of them are 4-day beginner Full Body plans, whose lists 2C-a does not change, so the credit rule (a
+/// quad-first row no longer spends the Glutes cap) is what lets their uncapped lead world hold. B is unchanged.
+const _worldCounts = <String, int>{'A:lead': 959, 'A:capped': 51, 'B:lead': 768, 'B:capped': 2};
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();

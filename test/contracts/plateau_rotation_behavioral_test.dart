@@ -241,7 +241,10 @@ void main() {
       // opens with Dumbbell Standing Alternate Overhead Press at 3 and holds 7 rows against 8 (its count floor is 5;
       // the accepted cost, founder d26). Before 2A the bound was [0, 1] per day (+1 on 4 of the 16 days). The
       // selector-stage equality above is the swap claim and is unchanged.
-      expect(deltas, {'w2d1': -1, 'w4d1': -1});
+      // Unit 2C-a (2026-11-14): re-recorded EXACT. This persona (build_muscle 4-day, default 60 minutes) now gets the
+      // balanced Upper / Lower x2 lists; the rotated-in openers there cost what the replaced ones did, so no day changes
+      // its row count (was {'w2d1': -1, 'w4d1': -1} on the Push / Pull / Legs / Upper list).
+      expect(deltas, <String, int>{});
     });
 
     test('bounded: heavy rotation seeding never empties a slot / crashes', () async {

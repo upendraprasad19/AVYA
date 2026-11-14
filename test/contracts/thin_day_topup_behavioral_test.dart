@@ -255,6 +255,9 @@ void main() {
           equipmentExclusions: exclusions,
           previousWeights: const {},
           pinnedExercisesByDay: pins,
+          // Unit 2C-a: these personas were found on today's build_muscle 4 / 5-day lists (the focus strings below name
+          // their days), which since 2C-a serve 30 / 45 minutes; at 60+ the balanced week replaces them.
+          sessionDuration: 45,
         );
 
     WorkoutDay dayOf(Phase p, int week, String focus) =>

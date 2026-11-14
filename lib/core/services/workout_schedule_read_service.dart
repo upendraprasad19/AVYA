@@ -38,6 +38,9 @@ import '../utils/week_mode_label.dart';
 import '../../features/profile/services/profile_write_service.dart';
 import '../../shared/repositories/plan_generator.dart';
 import '../../shared/repositories/plan_engine/plan_engine_flags.dart';
+import '../../shared/repositories/plan_engine/session_budget.dart';
+import '../../shared/repositories/plan_engine/split_resolver.dart';
+import '../../shared/repositories/plan_engine/training_history_analyzer.dart';
 import '../constants/fitness_goals.dart';
 import '../../shared/repositories/user_repository.dart';
 
@@ -676,6 +679,8 @@ class WorkoutScheduleReadService {
             daysPerWeek: daysPerWeek,
             experienceLevel: experienceLevel,
             newPhase: newPhase,
+            // Unit 2C-a: the same minutes the generate below resolves (its frames depend on them).
+            sessionDuration: sessionDuration,
           )
         : null;
     // W3.4 (Batch 11-B): on a FRESH advance (pins == null), feed the just-finished
@@ -747,6 +752,7 @@ class WorkoutScheduleReadService {
     required int daysPerWeek,
     required String experienceLevel,
     required int newPhase,
+    int? sessionDuration,
   }) {
     if (!PlanEngineFlags.adherenceGateEnabled) return null;
     final stored = MigratedKey.read<Map>('last_phase_profile');
@@ -760,7 +766,38 @@ class WorkoutScheduleReadService {
       daysPerWeek: daysPerWeek,
       newPhaseEffectiveExp:
           PlanGenerator.effectiveLevel(experienceLevel, newPhase),
+      foreignDayNames: foreignDayNamesFor(
+        planGoal: FitnessGoals.of(goal).planGoal,
+        daysPerWeek: daysPerWeek,
+        effectiveExp: PlanGenerator.effectiveLevel(experienceLevel, newPhase),
+        minutes: SessionBudget.resolveMinutes(
+            param: sessionDuration,
+            profileValue: TrainingHistoryAnalyzer.sessionMinutesFromProfile()),
+      ),
     );
+  }
+
+  /// Unit 2C-a (plan S1, "Repeat-phase pins"): the day names of the OTHER split family that the new phase does not
+  /// use. build_muscle 3 / 4 / 5-day plans have two families (today's lists below 60 minutes, the balanced lists at
+  /// 60+, `SplitResolver.balancedWeekApplies`); a minutes change, a reschedule or a switch flip between phases can
+  /// leave the just-finished rows in the other family. A row named for one of these days cannot be pinned into the
+  /// new frames ([repeatPinsFrom] refuses). Empty when the two families are the same (every other plan), so nothing
+  /// else changes. Names only the generator writes: a renamed row (a log title, a template) matches neither family.
+  @visibleForTesting
+  static Set<String> foreignDayNamesFor({
+    required String planGoal,
+    required int daysPerWeek,
+    required String effectiveExp,
+    required int minutes,
+    bool? balancedWeek,
+  }) {
+    final balanced = SplitResolver.balancedWeekApplies(planGoal, daysPerWeek, minutes, balancedWeek: balancedWeek);
+    Set<String> names(bool b) => {
+          for (final d in SplitResolver.selectV4(planGoal, daysPerWeek,
+              experienceLevel: effectiveExp, sessionMinutes: b ? 60 : null, balancedWeek: b))
+            d.name,
+        };
+    return names(!balanced).difference(names(balanced));
   }
 
   /// Test seam: replaces the custom-name read in [_withoutAutoAppendedCustoms]
@@ -816,6 +853,8 @@ class WorkoutScheduleReadService {
     required int daysPerWeek,
     required String experienceLevel,
     required int newPhase,
+    // Unit 2C-a: the graduation path passes none, as its generate does, so both resolve the profile's minutes.
+    int? sessionDuration,
   }) =>
       _buildRepeatPins(
         goal: goal,
@@ -823,6 +862,7 @@ class WorkoutScheduleReadService {
         daysPerWeek: daysPerWeek,
         experienceLevel: experienceLevel,
         newPhase: newPhase,
+        sessionDuration: sessionDuration,
       );
 
   /// PURE decision behind [_buildRepeatPins] (visible for testing — no Hive/clock).
@@ -835,6 +875,11 @@ class WorkoutScheduleReadService {
   /// A gap day-index (a missing/displaced workout row) yields an empty-name entry
   /// → buildPinnedDays fresh-fills that frame; the union of A+B keys is spanned so
   /// a B-only index isn't dropped.
+  ///
+  /// The stored profile can be stale: Edit Profile's reschedule rewrites the rows and never `last_phase_profile`.
+  /// So the rows themselves are checked too: a workout row whose `workout_day_index` is past the new split's days
+  /// (the rows hold more days than the new plan: they were rescheduled to another day count), or whose
+  /// `workout_name` is in [foreignDayNames] (the other split family, Unit 2C-a), refuses the pins.
   @visibleForTesting
   static Map<int, ({List<String> a, List<String> b})>? repeatPinsFrom({
     required Map? stored,
@@ -844,6 +889,7 @@ class WorkoutScheduleReadService {
     required String equipment,
     required int daysPerWeek,
     required String newPhaseEffectiveExp,
+    Set<String> foreignDayNames = const {},
   }) {
     if (stored == null) return null;
     final matches = stored['plan_goal'] == currentPlanGoal &&
@@ -851,6 +897,12 @@ class WorkoutScheduleReadService {
         stored['days_per_week'] == daysPerWeek &&
         stored['effective_exp'] == newPhaseEffectiveExp;
     if (!matches) return null;
+    for (final row in [...week1, ...week2]) {
+      if (row['type'] != 'workout') continue;
+      final idx = row['workout_day_index'];
+      if (idx is int && idx >= daysPerWeek) return null;
+      if (foreignDayNames.contains(row['workout_name'])) return null;
+    }
 
     final aByIdx = _namesByDayIndex(week1);
     final bByIdx = _namesByDayIndex(week2);

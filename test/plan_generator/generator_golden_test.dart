@@ -8,7 +8,10 @@
 // when 629 rows join the pool, plan R6).
 //
 // Re-record only in a commit whose diagnose doc or plan names each changed key
-// (B2, Batch C and OI-53 flips will):
+// (B2, Batch C and OI-53 flips will). Unit 2C-a (diagnose c7e5a1) changed 230 of the 1,010 keys: every build_muscle
+// 3 / 4 / 5-day persona and nothing else. Reverting one piece alone moves S1 (the lists) 206, S2 (the credit) 198, the
+// VolumeFilter carry 206, d46 (the Full Body avoid) 52; the 24 beginner 3 / 4-day Full Body personas move by S2 only.
+//
 //   RECORD_GENERATOR_GOLDEN=1 TZ=Asia/Kolkata flutter test test/plan_generator/generator_golden_test.dart
 //
 // Batch C1 (R6) adds three assertions inside the same persona loop, scoped to the NEW ids (G####, N##):
@@ -84,7 +87,7 @@ void main() {
           actual.entries.toList()..sort((a, b) => a.key.compareTo(b.key)));
       File(_fixturePath).writeAsStringSync(
           '${const JsonEncoder.withIndent('  ').convert({
-                '_meta': {'recorded_on': 'Unit 2A (lead-first allocator, disable_lead_first default ON; seed v27)', 'personas': actual.length},
+                '_meta': {'recorded_on': 'Unit 2C-a (the balanced week, disable_balanced_week default ON; seed v27)', 'personas': actual.length},
                 ...sorted,
               })}\n');
     }

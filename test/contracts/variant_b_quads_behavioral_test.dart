@@ -219,7 +219,9 @@ void main() {
       expect(PlanEngineFlags.variantBQuadEnabled, isFalse);
       final legs = SplitResolver.selectV4('build_muscle', 4).firstWhere((d) => d.dayType == 'legs');
       expect(_shape(legs.slotsB!), _old4, reason: 'selectV4 reads the flag when no override is passed');
-      String legsB() => jsonEncode(gen('build_muscle', 'full_gym', 4, 60)
+      // Unit 2C-a: 45 minutes, where today's 4-day list (and the B leg day this switch governs) still serves; at 60+ the
+      // balanced week has no `Legs` day.
+      String legsB() => jsonEncode(gen('build_muscle', 'full_gym', 4, 45)
           .weekPlans[1]
           .workoutDays
           .firstWhere((d) => d.name == 'Legs')
@@ -237,16 +239,20 @@ void main() {
 
     for (final days in [3, 4, 5]) {
       for (final tier in ['bodyweight', 'full_gym']) {
-        for (final minutes in [30, 60]) {
+        // Unit 2C-a: 30 and 45 minutes run today's lists (the 1B-Q B leg day); 60 runs the balanced week, which must
+        // keep quad and hamstring work in weeks 2 and 4 too (it has no `Legs` day at 3 and 4 days).
+        for (final minutes in [30, 45, 60]) {
           test('build_muscle ${days}d $tier $minutes min: week 2 (variant B) holds quad sets', () {
             final p = gen('build_muscle', tier, days, minutes);
             expect(quadSets(p, 1), greaterThan(0), reason: 'week 2 lost all quad work');
             expect(p.weekPlans[3].weekCharacter, 'deload');
             expect(quadSets(p, 3), greaterThan(0), reason: 'week 4 (deload, variant B) lost all quad work');
             expect(hamSets(p, 1), greaterThan(0), reason: 'week 2 lost all hamstring work');
-            final legs2 = p.weekPlans[1].workoutDays.firstWhere((d) => d.name == 'Legs');
-            expect(legs2.exercises.any((e) => primary(e.exerciseName).firstOrNull == 'Hamstrings'), isTrue,
-                reason: 'B keeps a hamstring-first row (the posterior mirror)');
+            if (minutes < 60) {
+              final legs2 = p.weekPlans[1].workoutDays.firstWhere((d) => d.name == 'Legs');
+              expect(legs2.exercises.any((e) => primary(e.exerciseName).firstOrNull == 'Hamstrings'), isTrue,
+                  reason: 'B keeps a hamstring-first row (the posterior mirror)');
+            }
           });
         }
       }

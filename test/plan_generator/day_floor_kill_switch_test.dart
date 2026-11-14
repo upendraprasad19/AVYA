@@ -47,9 +47,14 @@ void main() {
     } else {
       box.put('disable_lead_first', true);
     }
+    // Unit 2C-a: the four combinations are pinned to main 8a2e1c5a (before 2C); the 2C switch is set for all of them.
+    box.put('disable_balanced_week', true);
   }
 
-  void clearFlags() => setFlags(floor: true, leadFirst: true);
+  void clearFlags() {
+    setFlags(floor: true, leadFirst: true);
+    HiveService.instance.configBox.delete('disable_balanced_week');
+  }
 
   /// key -> (floor on?, lead-first on?, persona)
   Map<String, (bool, bool, DayFloorPersona)> combos() => {
