@@ -9,8 +9,11 @@
 // and the suggestMeal carb cap exist (Units 3b-1a, 3b-1b, 3b-2).
 //
 // `configBox['disable_diet_strategy'] == true` is the local kill switch:
-// every screen reverts to Balanced at once (nothing strategy-specific is
-// stored as targets). clearAllData() clears configBox at sign-out, so the
+// nothing strategy-specific is stored as targets, so every reader shows
+// Balanced once it reads [enabled] again. It is read, not watched: the coach
+// snapshot and the profile push follow it at once (both rebuild per call);
+// the targets providers and an open Diet Plan screen on their next rebuild,
+// in practice the next app start. clearAllData() clears configBox at sign-out, so the
 // switch lasts until sign-out; a fleet-wide off is a build with the constant
 // false. Deleting the switch and its OFF paths after the founder's device
 // check is on the OI board.

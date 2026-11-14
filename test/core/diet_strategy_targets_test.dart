@@ -8,6 +8,7 @@
 library;
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:icanbefitter/features/nutrition/services/diet_strategy_flags.dart';
 import 'package:icanbefitter/core/constants/diet_strategies.dart';
 import 'package:icanbefitter/core/utils/bmr_calculator.dart';
 import 'package:icanbefitter/core/utils/effective_macro_targets.dart';
@@ -179,6 +180,15 @@ void main() {
       expect(r.carbs, 30);
       expect(r.fat, ((2400 - 600 - 120) / 9).round().toDouble());
     });
+  });
+
+  // Unit 3b-3 round 1 finding 8: with no Hive box (a pure unit test, or a
+  // read that throws) the flag is the build default, which is ON since the
+  // flip; no seam is set here.
+  test('enabled with no Hive and no seam is the build default (on)', () {
+    expect(DietStrategyFlags.debugEnabledOverride, isNull);
+    expect(kDietStrategyDefaultOn, isTrue);
+    expect(DietStrategyFlags.enabled, isTrue);
   });
 
   group('vocabulary', () {

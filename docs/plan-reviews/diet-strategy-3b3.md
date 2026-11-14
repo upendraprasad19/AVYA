@@ -1,8 +1,8 @@
 ---
 branch: diet-strategy-3b3
 date: 2026-11-15
-blast_radius: account
-review_rounds: 0
+blast_radius: platform
+review_rounds: 1
 ground_truth_verified: false
 verdict: pending
 bpass: pending
@@ -15,7 +15,9 @@ Plan: `docs/plans/diet-strategy-3b3.md`. Execution mode (§4.12.7): inline, one 
 
 ## Rounds
 
-Pending: CI's full suite on the draft diff first (§4.12.8), then two context-blind rounds.
+| Round | Reviewer | Verdict | Material findings | Disposition |
+|---|---|---|---|---|
+| 1 | context-blind Sonnet on rev 1 + the draft diff `e22b6dd1` (ground truth read in `lib/`, migrations, the deployed-manual text at `21db03c7`) | changes required | 0 P1; 5 P2 + 4 P3 (kill switch not watched, push call site untested, tier, ledger ordering, the deploy gate) | plan §7; rev 2; mutants H1–H5 red |
 
 ## B-pass
 

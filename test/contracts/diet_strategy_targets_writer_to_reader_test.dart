@@ -203,6 +203,18 @@ void main() {
     expect((snap['profile'] as Map)['diet_strategy_label'], 'Keto');
   }
 
+  // Unit 3b-3 round 1 finding 2: the profile push is the only writer of the
+  // live user_profile.diet_strategy column; its call site passes the flag.
+  test('PRESENCE: the profile push gates the diet_strategy entry on the flag',
+      () {
+    final src = File('lib/core/services/sync/sync_profile.dart').readAsStringSync();
+    expect(
+        RegExp(r'\.\.\.dietStrategyPushEntry\(p, enabled: DietStrategyFlags\.enabled\),')
+            .allMatches(src)
+            .length,
+        1);
+  });
+
   // Unit 3b-3 flipped the constant on: the OFF path is now the local kill
   // switch configBox['disable_diet_strategy'], so this group runs through it
   // (the real Hive key, no test seam) and must still show 3a's identity.
@@ -362,11 +374,20 @@ void main() {
       expectKeto(readAll());
     });
 
-    test('4: the kill switch reverts every reader at once', () async {
+    test('4: the kill switch (the real key) reverts every reader on its next '
+        'build', () async {
       await _setPro(true);
       await seed(const {'diet_strategy': 'keto'});
       expectKeto(readAll());
-      DietStrategyFlags.debugEnabledOverride = false;
+      // Unit 3b-3 round 1 finding 1: the real configBox key, no seam. The
+      // providers read the switch when they build, so they are rebuilt here
+      // the way an app start rebuilds them; the snapshot needs nothing.
+      DietStrategyFlags.debugEnabledOverride = null;
+      await HiveService.instance.configBox
+          .put(DietStrategyFlags.disableKey, true);
+      expect((AiSnapshotBuilder.instance.buildAiContext()['profile']
+              as Map).containsKey('diet_strategy'), isFalse,
+          reason: 'the snapshot follows the switch at once');
       c.invalidate(macroTargetsProvider);
       c.invalidate(dailyNutritionProvider);
       c.invalidate(nutritionSummaryProvider);
