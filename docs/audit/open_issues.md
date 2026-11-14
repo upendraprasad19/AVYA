@@ -6687,18 +6687,6 @@ Filed by the sync-storm-first-sweep batch (A1 = W1 migrator fix, W2 save progres
 
 **Done when.** Each class is released or kept on a stated reason, and the 529 unchecked shipped rows have been compared with their picture by the founder or by a first-hand image read in a session that can actually see images (a read that returns "media removed" is not a viewing). Blast radius: `feature` for each release (a data change behind the seed bump).
 
-## OI-438 — getFormCues reads exercise_library with no is_active filter, so a deactivated row (the Batch C1 rollback, the C2 removals) still serves its cues
-
-- **Status**: OPEN
-- **Blocked on**: the Edge Function deploy go (CLAUDE.md 4.3: a live deploy needs its own explicit go; the change itself is agent work). `reopen_when`: the founder wants Batch C1's rollback or Batch C2's removals to be invisible to the AI coach, or before either deactivates a row.
-- **Update 2026-11-13**: the same defect as OI-469 (`getFormCues` with no `is_active` filter); both are fixed by one change on branch `oi469-formcues-active` (diagnose `9c4b1e`), and both close after the `ai-proxy` deploy. The founder chose the strict `.eq("is_active", true)` filter, so a row deactivated by a rollback stops being served at once.
-- **Verified**: 2026-10-26 - by reading `supabase/functions/_shared/tools/exercise/getFormCues.ts:65-67` and `:92-94`: both stages select from `exercise_library` with `.ilike("name", ...)` and no `is_active` condition (the tool is bundled into the AI coach through `_shared/tools/registry.ts`, listed in `ALL_TOOLS`). Not observed live.
-- **Identified**: 2026-10-26 · filed via mint_oi.sh from branch `library-batch-c`
-
-**What.** `getFormCues` answers the AI coach's form-cue question from the cloud `exercise_library` table. It never filters `is_active`. Batch C1's migration rollback (`UPDATE exercise_library SET is_active = false WHERE source = 'exercise-gif-set'`) and Batch C2's removals both deactivate rows rather than delete them, so after either, the coach can still quote a row the app no longer shows. A same-name pair (C2's four name-collision rows) makes it ambiguous which row `.limit(1).maybeSingle()` returns.
-
-**Done when.** Both queries add `.eq("is_active", true)`, a test with an inactive row and an active row of the same name shows only the active row is returned, the Edge Function is checked with `deno check --node-modules-dir=none`, and the deploy follows the `edge-function-deploy-rollback` skill with the founder's go. Blast radius: `platform` (Edge Function).
-
 ## OI-439 — A browser tab frozen during the restore (iPhone Safari app switch) fires the 45 s restore ceilings on wake: Sync paused appears and an owed retry sweep re-sends the non-workout domains
 
 - **Status**: OPEN
@@ -6904,17 +6892,6 @@ Found by the M2b Part B Chrome check (360 dp, real fonts, the real card and exer
 **Do:** after the founder installs the new build and cold-starts it, read the Realtime and PostgREST logs for that minute (24 h retention, so within a day): expect NO Realtime tenant-init line. Run a positive control in the same window (an older build, or a deliberate channel attach) so an empty result means something. Record the lines read and the time window here.
 
 **Acceptance:** log evidence for the new-build cold start plus the positive control is recorded; any init line found reopens the removal. reopen_when: the new build is on a device.
-
-## OI-469 — getFormCues matches exercise_library by name with no is_active filter: a deactivated row can answer for a live name
-
-- **Status**: OPEN
-- **Blocked on**: the founder's go for the `ai-proxy` deploy (CLAUDE.md 4.3). The fix is written on branch `oi469-formcues-active` (`.eq("is_active", true)` on both queries, `getFormCues_test.ts`, diagnose `9c4b1e`); this is the SAME defect as OI-438, and the two close together after the deploy.
-- **Verified**: 2026-11-13, live read-only on `dedsavbjuwgarrhphgnl`: 934 rows = 870 active + 64 inactive (0 NULL `is_active`); 4 names exist as both an active and an inactive row (Ankle Circles, Seated Piriformis Stretch, Sissy Squat, Toes to Bar), so the exact stage could return the retired copy; 56 of the 64 retired rows have no live equal-or-containing name and would answer `found: false` after the fix (founder chose the strict filter over prefer-active, 2026-11-13). The reader itself was read at `getFormCues.ts:65-69` and `:92-96` on `c6b1ee48`.
-- **Identified**: 2026-11-05 · filed via mint_oi.sh from branch `library-batch-c2`
-
-**What happens.** `supabase/functions/_shared/tools/exercise/getFormCues.ts` (lines 63-69, stage 1 exact `ilike`, and 90-96, stage 2 partial `ilike`) selects from `exercise_library` by name with no `is_active` filter and `limit(1)`. Since Batch C2a (migration 167) 57 cloud rows are `is_active = false`; a name that a deactivated row shares with, or contains, a live name can answer from the deactivated row. C2a handled the same-name case in the seed (a removed row that shares its name with a kept row takes that row's cues, `scripts/seed_exercise_library.js`), but not the partial stage, nor any later deactivation.
-
-**Done when.** Both stages filter `is_active = true` (a regression test that fails without the filter), deployed through the Edge Function protocol; or the filter is shown to be unnecessary by a query that finds no live name matched by a deactivated row.
 
 ## OI-477 — 6-day build_muscle personas still under the Quads floor after OI-454: intermediate basic gym (cap), advanced bodyweight (co-group rows that keep crediting Glutes), advanced and 60-minute days (time)
 
