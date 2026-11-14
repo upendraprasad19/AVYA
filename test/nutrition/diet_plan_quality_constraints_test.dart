@@ -419,15 +419,25 @@ void main() {
   });
 
   test('manual swap sheet applies the same UPF + diet-preference filters', () {
-    final src = File('lib/features/nutrition/screens/diet_plan_screen.dart')
+    // Repointed by diet plan Unit 1 (2026-11-14): the alternatives moved out
+    // of _swapItem into the pure swapAlternatives (diet_plan_swap.dart), so
+    // the pin now reads THAT body and asserts _swapItem delegates to it
+    // (§4.9: moving code breaks source pins; repoint, never loosen). The
+    // behavioral proof is test/nutrition/curated_diet_plan_test.dart T9.
+    final screen = File('lib/features/nutrition/screens/diet_plan_screen.dart')
         .readAsStringSync();
-    final swapBody = src.substring(src.indexOf('void _swapItem'),
-        src.indexOf('void _savePlan'));
+    final swapItem = screen.substring(screen.indexOf('void _swapItem'),
+        screen.indexOf('void _savePlan'));
+    expect(swapItem.contains('swapAlternatives('), isTrue,
+        reason: '_swapItem must take its alternatives from swapAlternatives');
+    final src = File('lib/features/nutrition/services/diet_plan_swap.dart')
+        .readAsStringSync();
+    final swapBody = src.substring(src.indexOf('List<DietPlanFoodItem> swapAlternatives('));
     expect(swapBody.contains('is_ultra_processed'), isTrue,
-        reason: '_swapItem must exclude UPF alternatives — a manual tap can '
-            'otherwise re-introduce the Pringles-class defect');
+        reason: 'swapAlternatives must exclude UPF alternatives — a manual tap '
+            'can otherwise re-introduce the Pringles-class defect');
     expect(swapBody.contains('passesDiet'), isTrue,
-        reason: '_swapItem must apply the diet-preference rule — a veg user '
-            'must never be offered chicken (round 2, finding 5)');
+        reason: 'swapAlternatives must apply the diet-preference rule — a veg '
+            'user must never be offered chicken (round 2, finding 5)');
   });
 }
