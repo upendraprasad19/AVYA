@@ -89,6 +89,15 @@ SpeechEndAction decideSpeechEnd(SpeechSessionEnd end, {required int minChars}) {
   }
 }
 
+/// Whether a host should put the keyboard focus on its field after a COMMIT.
+/// Stop, an automatic end and an error that kept words happen on a screen the
+/// user is looking at; a hidden tab or a preemption do not, and a focus
+/// request there would raise the keyboard over another tab (B-pass
+/// 2026-11-14: offstage children can still take focus).
+bool speechEndWantsFocus(SpeechSessionEnd end) =>
+    end.reason != SpeechEndReason.hidden &&
+    end.reason != SpeechEndReason.preempted;
+
 class SpeechInputController extends ChangeNotifier
     implements SpeechSessionSink {
   SpeechInputController({
@@ -215,41 +224,81 @@ class SpeechInputController extends ChangeNotifier
     _elapsed.value = Duration.zero;
     _retried = false;
     _listenIssued = false;
-    _inRetryWindow = true;
+    _inRetryWindow = false;
     _retryWindow?.cancel();
-    _retryWindow = Timer(SpeechInputTiming.retryWindow, () {
-      _inRetryWindow = false;
-    });
-    _armStartTimeout();
-    _onBusyChanged?.call(true);
+    _retryWindow = null;
+    _armStartTimeout(_prelistenBudget());
+    _notifyBusy(true);
     notifyListeners();
     await _runBegin(_epoch);
   }
 
-  void _armStartTimeout() {
+  /// How long the session may wait BEFORE the listen is issued. On a device that
+  /// has never been initialised the first `initialize` is where Android shows
+  /// the microphone dialog, so the budget is long; once the permission is
+  /// settled it is the short listen budget (B-pass 2026-11-14).
+  Duration _prelistenBudget() {
+    if (_service.isWeb) return SpeechInputTiming.startTimeoutWeb;
+    return _service.isInitialized
+        ? SpeechInputTiming.startTimeoutNative
+        : SpeechInputTiming.startTimeoutFirstUse;
+  }
+
+  Duration _listenBudget() => _service.isWeb
+      ? SpeechInputTiming.startTimeoutWeb
+      : SpeechInputTiming.startTimeoutNative;
+
+  void _armStartTimeout(Duration budget) {
     _startTimeout?.cancel();
-    // Armed BEFORE the listen is issued: Android emits `listening` before
-    // `listen()` returns, web after.
-    _startTimeout = Timer(
-      _service.isWeb
-          ? SpeechInputTiming.startTimeoutWeb
-          : SpeechInputTiming.startTimeoutNative,
-      () {
-        if (_state != SpeechInputState.starting) return;
-        _finish(
-          SpeechEndReason.error,
-          '',
-          failure: SpeechFailure.engine,
-          code: 'start_timeout',
-        );
-      },
-    );
+    _startTimeout = Timer(budget, () {
+      if (_state != SpeechInputState.starting) return;
+      _finish(
+        SpeechEndReason.error,
+        '',
+        failure: SpeechFailure.engine,
+        code: 'start_timeout',
+      );
+    });
+  }
+
+  /// Called by the service synchronously BEFORE it issues `engine.listen`:
+  /// Android emits `listening` before `listen()` returns, web after, so the
+  /// listen budget and the one-restart window must be live by then and not a
+  /// moment earlier (the permission dialog and the quiesce are not part of
+  /// either).
+  void _onListenIssuing() {
+    _armStartTimeout(_listenBudget());
+    if (!_retried) {
+      _inRetryWindow = true;
+      _retryWindow?.cancel();
+      _retryWindow = Timer(SpeechInputTiming.retryWindow, () {
+        _inRetryWindow = false;
+      });
+    }
+  }
+
+  /// The host's busy callback must never break the session: a throw here would
+  /// skip `notifyListeners` or leave a session in `starting` (B-pass
+  /// 2026-11-14). Report the TYPE only.
+  void _notifyBusy(bool busy) {
+    try {
+      _onBusyChanged?.call(busy);
+    } catch (e, s) {
+      unawaited(
+        ErrorTelemetry.recordNonFatal(
+          e.runtimeType.toString(),
+          s,
+          reason: 'speech_input_on_busy',
+        ),
+      );
+    }
   }
 
   Future<void> _runBegin(int epoch) async {
     final result = await _service.begin(
       this,
       stillWanted: () => !_disposed && _epoch == epoch,
+      onListenIssuing: _onListenIssuing,
     );
     // Re-checked after EVERY await: the session may have ended (Cancel, hidden,
     // dispose, timeout) while the service was waiting, and a continuation must
@@ -306,11 +355,17 @@ class SpeechInputController extends ChangeNotifier
   void _retry(int epoch) {
     _retried = true;
     _listenIssued = false;
+    // Null them too: `engineNotListening` / `engineDone` arm with `??=`, and a
+    // cancelled Timer is still non-null, so the retried session would never
+    // arm its own grace and a native end with no final would hang (B-pass
+    // 2026-11-14).
     _endGrace?.cancel();
+    _endGrace = null;
     _errorGrace?.cancel();
+    _errorGrace = null;
     _stopTicker();
     _state = SpeechInputState.starting;
-    _armStartTimeout();
+    _armStartTimeout(_prelistenBudget());
     _service.release(this);
     notifyListeners();
     unawaited(_runBegin(epoch));
@@ -468,7 +523,7 @@ class SpeechInputController extends ChangeNotifier
       empty: reason == SpeechEndReason.auto && words.trim().isEmpty,
     );
     _deliver(end);
-    _onBusyChanged?.call(false);
+    _notifyBusy(false);
     if (!_disposed) notifyListeners();
   }
 

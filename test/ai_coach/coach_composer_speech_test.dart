@@ -15,10 +15,26 @@ import 'package:icanbefitter/features/ai_coach/screens/ai_coach/screen.dart';
 
 import '../helpers/fake_speech_engine.dart';
 
+/// Logs every focus REQUEST into the rig's shared order list, next to the
+/// screen's `onListeningChanged` calls: the order between the two is what keeps
+/// the measurement chip from flashing for a frame after Stop.
+class _SpyFocusNode extends FocusNode {
+  _SpyFocusNode(this.order);
+
+  final List<String> order;
+
+  @override
+  void requestFocus([FocusNode? node]) {
+    order.add('focus');
+    super.requestFocus(node);
+  }
+}
+
 class _Rig {
   final FakeSpeechEngine engine = FakeSpeechEngine();
   final TextEditingController controller = TextEditingController();
-  final FocusNode focusNode = FocusNode();
+  final List<String> order = <String>[];
+  late final FocusNode focusNode = _SpyFocusNode(order);
   final List<String> sent = <String>[];
   final List<bool> listening = <bool>[];
   late SpeechInputService service;
@@ -45,7 +61,10 @@ class _Rig {
                 isPro: isPro,
                 onSend: sent.add,
                 onAttach: () {},
-                onListeningChanged: listening.add,
+                onListeningChanged: (busy) {
+                  listening.add(busy);
+                  order.add('busy:$busy');
+                },
               ),
             ),
           ),
@@ -247,6 +266,55 @@ void main() {
       },
     );
 
+    testWidgets(
+      'Send keeps the typed text: typed "dal", dictated "and rice", Send sends both',
+      (tester) async {
+        final rig = _Rig();
+        await rig.pump(tester);
+        await tester.enterText(find.byType(TextField), 'dal');
+        await _settleMorph(tester);
+        await rig.tapMic(tester); // the small mic beside the send arrow
+        rig.engine.emitResult('and rice');
+        await tester.pump();
+        await tester.tap(find.byIcon(Icons.arrow_upward));
+        await tester.pump(const Duration(milliseconds: 10));
+        expect(rig.sent, <String>['dal and rice']);
+        expect(rig.controller.text, 'dal and rice');
+      },
+    );
+
+    testWidgets(
+      'a Stop commit asks for the keyboard BEFORE the screen is told the mic is off',
+      (tester) async {
+        final rig = _Rig();
+        await rig.pump(tester);
+        await rig.tapMic(tester);
+        rig.engine.emitResult('two idlis');
+        await tester.pump();
+        await tester.tap(find.byIcon(Icons.stop));
+        await tester.pump(const Duration(milliseconds: 10));
+        await tester.pump(const Duration(milliseconds: 10));
+        expect(
+          rig.order,
+          <String>['busy:true', 'focus', 'busy:false'],
+          reason: 'busy:false first would show the chip for one frame',
+        );
+        expect(rig.focusNode.hasFocus, isTrue);
+      },
+    );
+
+    testWidgets('at the daily cap the field is inert for the mic', (tester) async {
+      final rig = _Rig()
+        ..isPro = false
+        ..messageCount = AppConstants.freeAiMessagesPerDay;
+      await rig.pump(tester);
+      expect(find.text('Daily limit reached — Go PRO'), findsOneWidget);
+      await tester.tap(find.byIcon(Icons.mic).last, warnIfMissed: false);
+      await tester.pump(const Duration(milliseconds: 10));
+      expect(rig.listening, isEmpty, reason: 'no session at the cap');
+      expect(rig.engine.listenCalls, 0);
+    });
+
     testWidgets('Send is dimmed and inert before any words', (tester) async {
       final rig = _Rig();
       await rig.pump(tester);
@@ -361,6 +429,10 @@ void main() {
       expect(rig.controller.text, 'stay with me');
       expect(rig.sent, isEmpty);
       expect(rig.listening, <bool>[true, false]);
+      // A hidden tab must not raise the keyboard over another tab (offstage
+      // children can still take focus).
+      expect(rig.order, isNot(contains('focus')));
+      expect(rig.focusNode.hasFocus, isFalse);
     });
 
     testWidgets(

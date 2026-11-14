@@ -63,11 +63,25 @@ class SpeechInputTiming {
   /// Bounds every engine call that holds the serial slot.
   static const Duration engineCallTimeout = Duration(seconds: 5);
 
-  /// `starting` -> `listening` must happen within this long (native).
+  /// `starting` -> `listening` must happen within this long (native), counted
+  /// from the moment the listen is ISSUED, not from the tap (B-pass 2026-11-14).
   static const Duration startTimeoutNative = Duration(seconds: 4);
 
   /// Same, on web: the browser's permission prompt can take a while.
   static const Duration startTimeoutWeb = Duration(seconds: 15);
+
+  /// Native, FIRST use only: before the listen is issued the session waits for
+  /// the plugin's `initialize`, which is where Android shows the system
+  /// microphone dialog (no other code asks for it). A user may take longer than
+  /// [startTimeoutNative] to answer it, so until the engine is initialised the
+  /// pre-listen budget is this long. Must be shorter than [initializeTimeout].
+  static const Duration startTimeoutFirstUse = Duration(seconds: 45);
+
+  /// Bounds the plugin's `initialize` while it holds the serial slot, so a
+  /// permission result that never arrives (an activity recreated under the
+  /// dialog) cannot queue every later tap forever. The memoised initialize
+  /// itself is NOT cancelled: a late answer still completes it.
+  static const Duration initializeTimeout = Duration(seconds: 60);
 
   /// Today's values (the "mic stops after 2-3 seconds" fix): do not change.
   static const Duration listenFor = Duration(seconds: 60);
@@ -124,6 +138,9 @@ enum SpeechErrorKind {
 
 SpeechErrorKind classifySpeechError(String code, {required bool web}) {
   final c = code.trim().toLowerCase();
+  // `recognizerNotAvailable` is a PlatformException thrown by `initialize` in
+  // speech_to_text 7.4.0, handled by the service's catch; it never arrives as
+  // an error string. The match stays as a defensive net (B-pass 2026-11-14).
   if (c == 'not supported' ||
       c.contains('speech_not_supported') ||
       c.contains('recognizernotavailable')) {
@@ -277,7 +294,8 @@ enum SpeechBeginStatus {
   /// `initialize` returned false on a device: the microphone was refused.
   permissionDenied,
 
-  /// The listen call threw or timed out.
+  /// The listen call threw or timed out, or `initialize` did not answer within
+  /// [SpeechInputTiming.initializeTimeout].
   engineFailure,
 }
 
@@ -337,6 +355,15 @@ class SpeechInputService {
 
   Future<bool>? _ready;
 
+  /// True once the plugin's `initialize` answered ok (the permission is
+  /// granted). The controller picks its pre-listen budget from this.
+  bool _initializedOk = false;
+
+  /// The sink whose `begin` is inside the serial slot and has not finished
+  /// binding yet. A SECOND host that starts while the first one is still
+  /// waiting for the permission dialog must end it too (B-pass 2026-11-14).
+  SpeechSessionSink? _inFlight;
+
   /// Web: null until the probe answered. Native: stays null.
   bool? _webSupported;
 
@@ -357,6 +384,10 @@ class SpeechInputService {
 
   /// True while the engine may still be running (observability for tests).
   bool get isEngineActive => _engineActive;
+
+  /// True once `initialize` answered ok: the first-use permission dialog is
+  /// behind us, so the controller's pre-listen budget is the short one.
+  bool get isInitialized => _initializedOk;
 
   /// Web only: takes the support probe (no permission prompt, plan G4).
   Future<bool> probeSupport() async {
@@ -391,6 +422,7 @@ class SpeechInputService {
         ErrorTelemetry.recordNonFatal(e, s, reason: 'speech_input_initialize'),
       );
     }
+    if (ok) _initializedOk = true;
     if (isWeb) {
       _webSupported = ok;
       if (!ok) _unsupported = true;
@@ -402,26 +434,45 @@ class SpeechInputService {
   }
 
   /// Starts one listen for [sink]. Order: end a foreign session, take the
-  /// slot, initialise (memoised), wait for the previous run to go inactive and
-  /// settle, bind, issue the listen. [stillWanted] lets the session say it was
-  /// ended (Cancel, dispose, timeout) while this call was waiting.
+  /// slot, initialise (memoised, bounded), wait for the previous run to go
+  /// inactive and settle, bind, issue the listen. [stillWanted] lets the
+  /// session say it was ended (Cancel, dispose, timeout) while this call was
+  /// waiting. [onListenIssuing] runs synchronously right before `engine.listen`
+  /// (the controller re-arms its start timeout there, so the first-use
+  /// permission dialog is not counted against the listen budget).
   Future<SpeechBeginResult> begin(
     SpeechSessionSink sink, {
     required bool Function() stillWanted,
+    void Function()? onListenIssuing,
   }) async {
-    // A foreign active session is ended through the normal end path BEFORE we
-    // enter the slot, so its cancel is queued ahead of us (no screen shows two
-    // live mics; this is a safety net).
-    final other = _bound;
+    // A foreign session, bound OR still waiting inside the slot (for example on
+    // the permission dialog), is ended through the normal end path BEFORE we
+    // enter the slot, so its cancel is queued ahead of us and its `begin`
+    // abandons when it resumes (no screen shows two live mics; safety net).
+    final other = _bound ?? _inFlight;
     if (other != null && !identical(other, sink)) other.endForPreempt();
 
+    // Marked BEFORE the slot wait: a second host that taps in the same turn
+    // must already see this one, or both would listen and the later bind would
+    // silently overwrite the earlier one.
+    _inFlight = sink;
     final ticket = _slot.enter();
-    await ticket.turn;
     try {
+      await ticket.turn;
       if (!stillWanted()) {
         return const SpeechBeginResult(SpeechBeginStatus.abandoned);
       }
-      final ready = await _ensureReady();
+      final bool ready;
+      try {
+        ready = await _ensureReady().timeout(SpeechInputTiming.initializeTimeout);
+      } on TimeoutException {
+        // The memo stays: a late answer to the dialog completes it, and the
+        // next tap finds the engine ready.
+        return const SpeechBeginResult(
+          SpeechBeginStatus.engineFailure,
+          code: 'initialize_timeout',
+        );
+      }
       if (!stillWanted()) {
         return const SpeechBeginResult(SpeechBeginStatus.abandoned);
       }
@@ -446,6 +497,7 @@ class SpeechInputService {
 
       _bound = sink;
       _engineActive = true;
+      onListenIssuing?.call();
       try {
         await _engine
             .listen(
@@ -466,6 +518,7 @@ class SpeechInputService {
       }
       return const SpeechBeginResult(SpeechBeginStatus.started);
     } finally {
+      if (identical(_inFlight, sink)) _inFlight = null;
       ticket.release();
     }
   }
@@ -542,6 +595,9 @@ class SpeechInputService {
         _markInactive();
         _bound?.engineNotListening();
       case 'done':
+      // Defensive: speech_to_text 7.4.0 rewrites `doneNoResult` to `done`
+      // before the status listener runs (B-pass 2026-11-14, verified in the
+      // plugin source); a platform interface that forwarded it raw is covered.
       case 'doneNoResult':
         _markInactive();
         _bound?.engineDone();

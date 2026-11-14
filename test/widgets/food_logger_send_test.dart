@@ -108,7 +108,9 @@ void main() {
   });
 
   testWidgets(
-    'Send writes the final words to the field, THEN calls analyse ONCE',
+    // The live mirror already wrote the words into the field, so a write-then-
+    // analyse ORDER is not separately observable here: what the call receives is.
+    'Send analyses exactly the words on screen, ONCE',
     (tester) async {
       final rig = _Rig();
       await rig.pump(tester);

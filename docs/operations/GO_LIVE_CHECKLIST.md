@@ -132,8 +132,8 @@ ships.
 > 2026-10-16 ("Last updated: October 2026"); the terms page was not re-read, and the repo cannot
 > prove either stays published: open them in a browser.
 >
-> The in-app privacy dialog also lists only 3 permission categories while the merged manifest
-> ships 34. Whatever is published at 3.1 must cover what is actually requested.
+> The in-app privacy dialog also lists only 4 permission categories (Camera, Microphone, Health
+> Connect, Storage) while the merged manifest ships 34. Whatever is published at 3.1 must cover what is actually requested.
 
 > **3.5 — Narrowed 2026-10-16 (OI-305); the founder decision covered the EMAIL path only.** Email: the tap on CREATE
 > ACCOUNT under the notice. Google / phone: unchanged by this batch (plan section 6): no notice on the Google button

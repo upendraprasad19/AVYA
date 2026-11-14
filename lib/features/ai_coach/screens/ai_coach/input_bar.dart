@@ -67,7 +67,7 @@ class _CoachComposerState extends ConsumerState<CoachComposer> {
     _speech = SpeechInputController(
       service: service,
       onEnd: _onSpeechEnd,
-      onBusyChanged: (busy) => widget.onListeningChanged(busy),
+      onBusyChanged: _onBusyChanged,
     );
     widget.controller.addListener(_onTextChanged);
     // Web: ask the browser whether a recognizer exists (no permission prompt).
@@ -106,6 +106,21 @@ class _CoachComposerState extends ConsumerState<CoachComposer> {
 
   void _onTextChanged() {
     if (mounted) setState(() {});
+  }
+
+  /// `true` reaches the screen at once. `false` is deferred past the frame in
+  /// which a Stop commit asks for the keyboard: the screen hides the
+  /// measurement chip while the field has focus, and telling it earlier showed
+  /// the chip for one frame between the field mounting and the focus landing
+  /// (B-pass 2026-11-14). The callback is captured now: this State may be gone
+  /// by then, and the screen guards its own `mounted`.
+  void _onBusyChanged(bool busy) {
+    final notify = widget.onListeningChanged;
+    if (busy) {
+      notify(true);
+      return;
+    }
+    WidgetsBinding.instance.addPostFrameCallback((_) => notify(false));
   }
 
   // -- speech ---------------------------------------------------------------
@@ -149,9 +164,11 @@ class _CoachComposerState extends ConsumerState<CoachComposer> {
       case SpeechEndAction.commit:
         // Stop: the words stay in the field to edit or rephrase. Nothing sent.
         _writeField(combined);
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (mounted) widget.focusNode.requestFocus();
-        });
+        if (speechEndWantsFocus(end)) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (mounted) widget.focusNode.requestFocus();
+          });
+        }
       case SpeechEndAction.send:
         // Write first, then send, exactly as typing; the screen's gate clears
         // the field on a real send and shows the paywall at the limit.

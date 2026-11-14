@@ -36,8 +36,11 @@ class _Rig {
     return UncontrolledProviderScope(
       container: container,
       child: MaterialApp(
-        home: Scaffold(
-          body: TickerMode(
+        // NO Scaffold, like the real Log sheet (a modal bottom sheet has none):
+        // a SnackBar would be drawn on the page behind it and never seen, so
+        // every message must be found inline.
+        home: Material(
+          child: TickerMode(
             enabled: tickersEnabled,
             child: const SingleChildScrollView(child: FoodLoggerSection()),
           ),
@@ -246,8 +249,56 @@ void main() {
       await tester.tap(find.byIcon(Icons.mic));
       await tester.pump(const Duration(milliseconds: 10));
       expect(find.textContaining('Microphone access is off'), findsOneWidget);
+      expect(find.byKey(const ValueKey('speech_notice')), findsOneWidget);
       expect(find.byIcon(Icons.mic), findsOneWidget);
       expect(_field(tester).readOnly, isFalse);
+    });
+
+    testWidgets('the notice goes away when the user taps the mic again', (
+      tester,
+    ) async {
+      final rig = _Rig();
+      rig.engine.initializeResult = false;
+      await rig.pump(tester);
+      await tester.tap(find.byIcon(Icons.mic));
+      await tester.pump(const Duration(milliseconds: 10));
+      expect(find.byKey(const ValueKey('speech_notice')), findsOneWidget);
+      rig.engine.initializeResult = true; // allowed in settings meanwhile
+      await tester.pump(const Duration(milliseconds: 400)); // past the toggle guard
+      await _startListening(tester);
+      // The previous (failed) session's cancel is still inside the 150 ms
+      // settle on the real clock: let the service's wait elapse.
+      await tester.pump(const Duration(milliseconds: 200));
+      expect(find.byKey(const ValueKey('speech_notice')), findsNothing);
+      expect(find.byIcon(Icons.stop), findsOneWidget);
+    });
+
+    testWidgets('the notice goes away when the user types', (tester) async {
+      final rig = _Rig();
+      rig.engine.initializeResult = false;
+      await rig.pump(tester);
+      await tester.tap(find.byIcon(Icons.mic));
+      await tester.pump(const Duration(milliseconds: 10));
+      expect(find.byKey(const ValueKey('speech_notice')), findsOneWidget);
+      await tester.enterText(find.byType(TextField), 'dal');
+      await tester.pump();
+      expect(find.byKey(const ValueKey('speech_notice')), findsNothing);
+    });
+
+    testWidgets('Stop keeps the words and puts the cursor back in the field', (
+      tester,
+    ) async {
+      final rig = _Rig();
+      await rig.pump(tester);
+      await _startListening(tester);
+      rig.engine.emitResult('two rotis');
+      await tester.pump();
+      await tester.tap(find.byIcon(Icons.stop));
+      await tester.pump(const Duration(milliseconds: 10));
+      await tester.pump(const Duration(milliseconds: 10));
+      expect(_text(tester), 'two rotis');
+      expect(rig.breakdown.calls, isEmpty);
+      expect(_field(tester).focusNode!.hasFocus, isTrue);
     });
   });
 
@@ -271,6 +322,9 @@ void main() {
           reason: 'hidden commits, never sends',
         );
         expect(rig.engine.cancelCalls, greaterThanOrEqualTo(1));
+        // A hidden tab must not raise the keyboard over another tab (offstage
+        // children can still take focus).
+        expect(_field(tester).focusNode!.hasFocus, isFalse);
       },
     );
 

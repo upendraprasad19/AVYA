@@ -1274,7 +1274,7 @@ concepts:
         semantic: display-only
         fields_read: [isPro]
       - file: lib/features/nutrition/widgets/food_logger_section.dart
-        line_range: 148-249
+        line_range: 151-246
         method: FoodLoggerSection _passesUsageGate + build (gate + reactive watch)
         semantic: display-only
         fields_read: [isPro]
@@ -14721,7 +14721,7 @@ concepts:
         method: _limit — returns 999999 for PRO, the client constant for free
         semantic: client-read
       - file: lib/features/nutrition/widgets/food_logger_section.dart
-        line_range: 246-250
+        line_range: 243-247
         method: build — meter shown on the Log Food tab
         semantic: client-read
       - file: lib/features/profile/screens/profile/subscription_section.dart
@@ -18689,18 +18689,22 @@ concepts:
       Each SpeechInputController (one per host: the coach composer, the nutrition Log
       sheet) is a three-state machine (idle, starting, listening) with ONE end path
       `_finish` and a latch, so exactly one SpeechSessionEnd reaches the host (none
-      for `disposed`). A session drops engine events until its own `listening`.
+      for `disposed`). A session drops results, notListening and done until its
+      own `listening`; errors are classified and acted on in `starting` too.
+      The first `initialize` is where Android asks for the microphone, so until the
+      engine is initialised the pre-listen budget is the long first-use one, and
+      the listen budget and the one-restart window start at the listen itself.
       Stop / Send / Cancel act on the words already on screen and never await the
       plugin's final. SpeechInputLifecycle ends a session when its tab goes out of
       sight or the app is hidden / paused. Nothing is persisted: the words live in
       the host's text field until the host sends them.
     writers:
       - file: lib/core/services/speech_input_service.dart
-        line_range: 295-568
+        line_range: 314-634
         method: SpeechInputService (begin / release / _onStatus / _cancelOwnerless)
         semantic: per-session
       - file: lib/core/services/speech_input_controller.dart
-        line_range: 95-511
+        line_range: 101-595
         method: SpeechInputController (_finish latch, start / stop / send / cancel)
         semantic: per-session
       - file: lib/core/services/speech_input_lifecycle.dart
@@ -18710,17 +18714,17 @@ concepts:
     reader_manifest_complete: true
     readers:
       - file: lib/features/ai_coach/screens/ai_coach/input_bar.dart
-        line_range: 121-178
+        line_range: 136-195
         method: CoachComposer (_onSpeechEnd - commit / send / tooShort / discard)
         semantic: per-session
         fields_read: [transcript, reason, failure, empty]
       - file: lib/features/nutrition/widgets/food_logger_section.dart
-        line_range: 77-142
+        line_range: 83-145
         method: FoodLoggerSection (_speech, _onSpeechEnd, _joinSpeech)
         semantic: per-session
         fields_read: [transcript, reason, failure, empty]
     hive:
-      box: ""  # session-only, nothing persisted
+      box: in_memory_only  # session-only, nothing persisted
       key_prefix: ""
     cloud:
       table: ""

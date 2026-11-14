@@ -311,25 +311,57 @@ void main() {
       expect(rig.host.last.empty, isFalse);
     });
 
-    _rigTest('done with words ends at once', (async, rig) {
+    _rigTest(
+      'the plugin swallows done while the result is partial: only the final ends the session',
+      (async, rig) {
+        _tap(async, rig.c);
+        rig.engine.emitResult('three idlis');
+        rig.engine.emitStatus('done'); // swallowed by the plugin's own filter
+        expect(rig.c.state, SpeechInputState.listening);
+        expect(rig.ends, isEmpty);
+        rig.engine.emitResult('three idlis and sambar', isFinal: true);
+        expect(rig.ends, hasLength(1));
+        expect(rig.host.last.reason, SpeechEndReason.auto);
+        expect(rig.host.last.transcript, 'three idlis and sambar');
+      },
+    );
+
+    // DEFENSIVE: speech_to_text 7.4.0 never delivers these (the fake's
+    // `emitRawStatus` bypasses the plugin's `done` filter), but a platform
+    // interface that forwarded `done` raw must still end the session cleanly.
+    _rigTest('a raw done with words ends at once', (async, rig) {
       _tap(async, rig.c);
       rig.engine.emitResult('three idlis');
-      rig.engine.emitStatus('done');
+      rig.engine.emitRawStatus('done');
       expect(rig.host.last.reason, SpeechEndReason.auto);
       expect(rig.host.last.transcript, 'three idlis');
     });
 
-    _rigTest('done with no words waits errorGrace, then ends empty', (
+    _rigTest('a raw done with no words waits errorGrace, then ends empty', (
       async,
       rig,
     ) {
       _tap(async, rig.c);
-      rig.engine.emitStatus('done');
+      rig.engine.emitRawStatus('done');
       expect(rig.c.state, SpeechInputState.listening);
       async.elapse(SpeechInputTiming.errorGrace);
       expect(rig.host.last.reason, SpeechEndReason.auto);
       expect(rig.host.last.empty, isTrue);
     });
+
+    _rigTest(
+      'a recognizer end with no words and no final ends empty after endGrace (done is swallowed on device)',
+      (async, rig) {
+        _tap(async, rig.c);
+        rig.engine.emitStatus('notListening');
+        rig.engine.emitStatus('done'); // swallowed: no result was ever final
+        expect(rig.c.state, SpeechInputState.listening);
+        async.elapse(SpeechInputTiming.endGrace);
+        expect(rig.ends, hasLength(1));
+        expect(rig.host.last.reason, SpeechEndReason.auto);
+        expect(rig.host.last.empty, isTrue);
+      },
+    );
 
     _rigTest('a trailing no-match error after done ends empty (benign)', (
       async,
@@ -389,7 +421,7 @@ void main() {
       rig.engine.emitStatus('listening');
       rig.engine.emitStatus('listening');
       rig.engine.emitResult('chole');
-      rig.engine.emitStatus('done');
+      rig.engine.emitRawStatus('done'); // the web branch ignores a raw done
       expect(rig.c.state, SpeechInputState.listening);
       expect(rig.ends, isEmpty);
     }, web: true);
@@ -625,6 +657,139 @@ void main() {
     });
   });
 
+
+  group('first use: the permission dialog is not part of the listen budget', () {
+    _rigTest(
+      'a slow Allow (longer than the listen budget) still reaches listening',
+      (async, rig) {
+        rig.engine.initializeGate = Completer<bool>();
+        _tap(async, rig.c);
+        expect(rig.c.state, SpeechInputState.starting);
+        async.elapse(SpeechInputTiming.startTimeoutNative * 3);
+        expect(rig.c.state, SpeechInputState.starting);
+        expect(rig.ends, isEmpty);
+        rig.engine.initializeGate!.complete(true);
+        async.flushMicrotasks();
+        expect(rig.c.state, SpeechInputState.listening);
+        expect(rig.engine.listenCalls, 1);
+        expect(rig.service.isInitialized, isTrue);
+        expect(rig.ends, isEmpty);
+      },
+    );
+
+    _rigTest(
+      'a dialog left unanswered ends at the first-use budget, and a late Allow opens no mic',
+      (async, rig) {
+        rig.engine.initializeGate = Completer<bool>();
+        _tap(async, rig.c);
+        async.elapse(
+          SpeechInputTiming.startTimeoutFirstUse - const Duration(seconds: 1),
+        );
+        expect(rig.c.state, SpeechInputState.starting);
+        async.elapse(const Duration(seconds: 2));
+        expect(rig.ends, hasLength(1));
+        expect(rig.host.last.failure, SpeechFailure.engine);
+        rig.engine.initializeGate!.complete(true);
+        async.elapse(const Duration(seconds: 1));
+        expect(rig.engine.listenCalls, 0);
+        expect(rig.service.isInitialized, isTrue);
+        expect(rig.ends, hasLength(1));
+      },
+    );
+
+    _rigTest('the listen budget counts from the listen, not from the tap', (
+      async,
+      rig,
+    ) {
+      rig.engine.initializeGate = Completer<bool>();
+      rig.engine.emitListeningInsideListen = false;
+      _tap(async, rig.c);
+      async.elapse(const Duration(seconds: 3));
+      rig.engine.initializeGate!.complete(true);
+      async.flushMicrotasks();
+      expect(rig.engine.listenCalls, 1);
+      // 3 s of dialog + 3.9 s after the listen is far past the 4 s a timer
+      // armed at the tap would allow.
+      async.elapse(
+        SpeechInputTiming.startTimeoutNative - const Duration(milliseconds: 100),
+      );
+      expect(rig.c.state, SpeechInputState.starting);
+      async.elapse(const Duration(milliseconds: 200));
+      expect(rig.ends, hasLength(1));
+      expect(rig.host.last.failure, SpeechFailure.engine);
+    });
+
+    _rigTest('an initialised engine keeps the SHORT pre-listen budget', (
+      async,
+      rig,
+    ) {
+      _tap(async, rig.c); // first session: initialises the engine
+      expect(rig.service.isInitialized, isTrue);
+      rig.engine.cancelGate = Completer<void>(); // the next cancel hangs
+      rig.c.stop();
+      async.elapse(SpeechInputTiming.toggleGuard);
+      // The hung cancel holds the slot, so the second begin waits behind it.
+      _tap(async, rig.c);
+      expect(rig.c.state, SpeechInputState.starting);
+      async.elapse(SpeechInputTiming.startTimeoutNative);
+      expect(rig.ends, hasLength(2));
+      expect(rig.host.last.failure, SpeechFailure.engine);
+      rig.engine.cancelGate!.complete();
+    });
+
+    _rigTest(
+      'the one-restart window opens at the listen too: a busy after a slow Allow is retried',
+      (async, rig) {
+        rig.engine.initializeGate = Completer<bool>();
+        _tap(async, rig.c);
+        async.elapse(SpeechInputTiming.retryWindow * 2);
+        rig.engine.initializeGate!.complete(true);
+        async.flushMicrotasks();
+        expect(rig.c.state, SpeechInputState.listening);
+        rig.engine.emitError('error_busy');
+        async.elapse(SpeechInputTiming.settle * 2);
+        expect(rig.engine.listenCalls, 2);
+        expect(rig.ends, isEmpty);
+      },
+    );
+
+    _rigTest(
+      'an initialize that never answers frees the slot at its own bound',
+      (async, rig) {
+        rig.engine.initializeGate = Completer<bool>();
+        _tap(async, rig.c);
+        async.elapse(SpeechInputTiming.startTimeoutFirstUse);
+        expect(rig.ends, hasLength(1));
+        // The end queued its cancel behind the begin that still holds the slot.
+        expect(rig.engine.cancelCalls, 0);
+        async.elapse(
+          SpeechInputTiming.initializeTimeout -
+              SpeechInputTiming.startTimeoutFirstUse +
+              const Duration(seconds: 1),
+        );
+        expect(rig.engine.cancelCalls, 1);
+      },
+    );
+
+    _rigTest(
+      'a second host that taps while the first waits for the dialog preempts it: ONE listen',
+      (async, rig) {
+        rig.engine.initializeGate = Completer<bool>();
+        final other = rig.addHost();
+        unawaited(rig.c.toggle());
+        unawaited(other.controller.toggle());
+        async.flushMicrotasks();
+        expect(rig.ends, hasLength(1));
+        expect(rig.host.last.reason, SpeechEndReason.preempted);
+        rig.engine.initializeGate!.complete(true);
+        async.elapse(const Duration(seconds: 1));
+        expect(rig.engine.listenCalls, 1);
+        expect(other.controller.state, SpeechInputState.listening);
+        expect(rig.c.state, SpeechInputState.idle);
+      },
+    );
+  });
+
   group('retry (time based, once)', () {
     _rigTest(
       'error_busy right after listening restarts once, then ends with the engine message',
@@ -640,6 +805,42 @@ void main() {
         expect(rig.host.last.failure, SpeechFailure.engine);
       },
     );
+
+    _rigTest(
+      'after a retry the native end still arms its own grace (Android order: notListening, done, error)',
+      (async, rig) {
+        _tap(async, rig.c);
+        rig.engine.emitStatus('notListening'); // arms endGrace in session 1
+        rig.engine.emitStatus('done'); // swallowed by the plugin
+        rig.engine.emitError('error_busy'); // the retry cancels the grace
+        async.elapse(SpeechInputTiming.settle * 2);
+        expect(rig.engine.listenCalls, 2);
+        expect(rig.c.state, SpeechInputState.listening);
+        // Session 2 ends natively with no final: its OWN grace must run.
+        rig.engine.emitStatus('notListening');
+        expect(rig.c.state, SpeechInputState.listening);
+        async.elapse(SpeechInputTiming.endGrace);
+        expect(rig.ends, hasLength(1));
+        expect(rig.host.last.reason, SpeechEndReason.auto);
+        expect(rig.host.last.empty, isTrue);
+      },
+    );
+
+    _rigTest('after a retry a raw done with no words arms errorGrace again', (
+      async,
+      rig,
+    ) {
+      _tap(async, rig.c);
+      rig.engine.emitRawStatus('done'); // arms errorGrace in session 1
+      rig.engine.emitError('error_client');
+      async.elapse(SpeechInputTiming.settle * 2);
+      expect(rig.engine.listenCalls, 2);
+      rig.engine.emitRawStatus('done');
+      expect(rig.c.state, SpeechInputState.listening);
+      async.elapse(SpeechInputTiming.errorGrace);
+      expect(rig.ends, hasLength(1));
+      expect(rig.host.last.empty, isTrue);
+    });
 
     _rigTest('busy after the retry window is not retried', (async, rig) {
       _tap(async, rig.c);
@@ -958,6 +1159,30 @@ void main() {
     );
 
     _rigTest(
+      'a busy callback that throws is reported by type and never breaks the session',
+      (async, rig) {
+        final throwing = SpeechInputController(
+          service: rig.service,
+          onEnd: rig.host.ends.add,
+          onBusyChanged: (_) => throw StateError('host bug'),
+        );
+        _tap(async, throwing);
+        expect(throwing.state, SpeechInputState.listening);
+        rig.engine.emitResult('two rotis');
+        throwing.stop();
+        expect(throwing.state, SpeechInputState.idle);
+        expect(rig.host.ends, hasLength(1));
+        expect(rig.host.last.transcript, 'two rotis');
+        expect(recorded.map((r) => r.reason), contains('speech_input_on_busy'));
+        expect(
+          recorded.map((r) => r.error.toString()),
+          contains('StateError'),
+        );
+        throwing.dispose();
+      },
+    );
+
+    _rigTest(
       'a host disposed inside its own onEnd does not crash the controller',
       (async, rig) {
         late SpeechInputController self;
@@ -984,6 +1209,19 @@ void main() {
         expect(rig.c.elapsed.value, const Duration(seconds: 3));
       },
     );
+  });
+
+  group('speechEndWantsFocus (pure)', () {
+    SpeechSessionEnd end(SpeechEndReason r) =>
+        SpeechSessionEnd(transcript: 'x', reason: r);
+
+    test('only a hidden tab or a preemption must NOT take the keyboard', () {
+      for (final r in SpeechEndReason.values) {
+        final expected =
+            r != SpeechEndReason.hidden && r != SpeechEndReason.preempted;
+        expect(speechEndWantsFocus(end(r)), expected, reason: '$r');
+      }
+    });
   });
 
   group('decideSpeechEnd', () {

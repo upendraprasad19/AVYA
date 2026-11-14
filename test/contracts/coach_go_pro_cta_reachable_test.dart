@@ -13,12 +13,13 @@
 // composer is wrapped in a GestureDetector -> showPaywallSheet, so the gold hint
 // the user actually taps opens the paywall.
 //
-// input_bar.dart is a `part of screen.dart` PRIVATE extension on the screen
-// state — it cannot be pumped in isolation, and a full-screen pump needs the
-// whole provider graph. So this is a SOURCE-anchored regression (comment-
-// stripped per feedback_source_grep_strip_comments_first) that FAILS if the
-// predicate is re-narrowed OR the limit-state tap target is removed; the
-// behavioral confirmation is the on-device tap at end-of-batch APK verify.
+// input_bar.dart now holds the public `CoachComposer` (voice-input-unified,
+// 2026-11-14), which `test/ai_coach/coach_composer_speech_test.dart` pumps in
+// isolation for the mic. The paywall tap itself still needs the whole paywall
+// graph, so THIS file stays a SOURCE-anchored regression (comment-stripped per
+// feedback_source_grep_strip_comments_first) that FAILS if the predicate is
+// re-narrowed OR the limit-state tap target is removed; the behavioral
+// confirmation is the on-device tap at end-of-batch APK verify.
 
 import 'dart:io';
 

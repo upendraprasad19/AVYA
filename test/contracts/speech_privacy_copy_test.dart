@@ -42,6 +42,10 @@ void main() {
       'lib/core/copy/speech_input_copy.dart',
       'lib/features/profile/screens/profile/privacy_dialog.dart',
       'lib/shared/widgets/paywall_sheet.dart',
+      // Comments that justify "voice is free" once said on-device (B-pass 2026-11-14).
+      'lib/core/constants/app_constants.dart',
+      'test/subscription/voice_is_free_test.dart',
+      '.claude/memory/feature_decisions.md',
     ];
     final banned = RegExp(
       r'on[- ]device|stays on your (phone|device)|never leaves|offline (speech|recogni)',

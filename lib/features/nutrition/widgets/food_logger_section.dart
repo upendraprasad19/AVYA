@@ -52,6 +52,12 @@ class _FoodLoggerSectionState extends ConsumerState<FoodLoggerSection> {
   /// What was typed before the mic was tapped; the spoken words follow it.
   String _speechPrefix = '';
 
+  /// The last thing to tell the user (a refused microphone, no words heard, a
+  /// message too short, the daily cap). Shown INLINE: this widget lives in a
+  /// modal bottom sheet with no Scaffold of its own, so a snackbar would be
+  /// drawn on the page behind the sheet and never seen (B-pass 2026-11-14).
+  String? _notice;
+
   @override
   void initState() {
     super.initState();
@@ -113,9 +119,11 @@ class _FoodLoggerSectionState extends ConsumerState<FoodLoggerSection> {
       case SpeechEndAction.commit:
         _setFieldText(combined);
         // Stop keeps the words so they can be edited or rephrased.
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (mounted) _focusNode.requestFocus();
-        });
+        if (speechEndWantsFocus(end)) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (mounted) _focusNode.requestFocus();
+          });
+        }
       case SpeechEndAction.send:
         _setFieldText(combined);
         unawaited(_analyse());
@@ -133,12 +141,7 @@ class _FoodLoggerSectionState extends ConsumerState<FoodLoggerSection> {
 
   void _showMessage(String text) {
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(text, style: AppTypography.body),
-        backgroundColor: AppColors.card,
-      ),
-    );
+    setState(() => _notice = text);
   }
 
   /// True when the daily AI text-log limit leaves room for one more call. At the
@@ -154,15 +157,7 @@ class _FoodLoggerSectionState extends ConsumerState<FoodLoggerSection> {
       AppConstants.featureAiTextLogPro,
       onPro: () {
         // PRO user exhausted daily limit -> inform them
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              'Daily AI text log limit reached. Try again tomorrow.',
-              style: AppTypography.body,
-            ),
-            backgroundColor: AppColors.card,
-          ),
-        );
+        _showMessage('Daily AI text log limit reached. Try again tomorrow.');
       },
       onFree: () => showPaywallSheet(context, feature: 'AI Food Analysis'),
     );
@@ -175,6 +170,7 @@ class _FoodLoggerSectionState extends ConsumerState<FoodLoggerSection> {
       await _speech.toggle(); // listening: Stop (words kept); starting: ignored
       return;
     }
+    if (_notice != null) setState(() => _notice = null);
     final isPro = SubscriptionService.instance.isPro();
     if (!await _passesUsageGate(isPro)) return;
     if (!mounted || _speech.isBusy) return;
@@ -188,6 +184,7 @@ class _FoodLoggerSectionState extends ConsumerState<FoodLoggerSection> {
     if (_speech.isBusy) return;
     final text = _controller.text.trim();
     if (text.length < kFoodTextMinChars) return;
+    if (_notice != null) setState(() => _notice = null);
 
     final isPro = SubscriptionService.instance.isPro();
     if (!await _passesUsageGate(isPro)) return;
@@ -299,7 +296,7 @@ class _FoodLoggerSectionState extends ConsumerState<FoodLoggerSection> {
                       focusNode: _focusNode,
                       // The words form in the field while the mic is on.
                       readOnly: speechBusy,
-                      onChanged: (_) => setState(() {}),
+                      onChanged: (_) => setState(() => _notice = null),
                       onSubmitted: (_) => _analyse(),
                       style: AppTypography.body,
                       decoration: InputDecoration(
@@ -327,6 +324,18 @@ class _FoodLoggerSectionState extends ConsumerState<FoodLoggerSection> {
             ),
           ),
           if (speechBusy) _ListeningLine(controller: _speech),
+          if (_notice != null)
+            Padding(
+              padding: const EdgeInsets.only(top: 8),
+              child: Semantics(
+                liveRegion: true,
+                child: Text(
+                  _notice!,
+                  key: const ValueKey('speech_notice'),
+                  style: AppTypography.body.copyWith(color: AppColors.textDim),
+                ),
+              ),
+            ),
           const SizedBox(height: AppSpacing.stackS),
 
           // Analyse button + usage counter
