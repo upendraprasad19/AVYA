@@ -60,11 +60,14 @@ async function handler(
   const COLUMNS =
     "name, coaching_cues, common_mistakes, instructions, primary_muscles, secondary_muscles, difficulty_level, logging_type";
 
+  // Retired rows (is_active = false) are hidden, never deleted (workout_logs /
+  // template_exercises reference them by FK). Both stages skip them (OI-438, OI-469).
   // Stage 1: exact case-insensitive match
   const { data: exact, error: exactErr } = await sb
     .from("exercise_library")
     .select(COLUMNS)
     .ilike("name", name)
+    .eq("is_active", true)
     .limit(1)
     .maybeSingle();
 
@@ -92,6 +95,7 @@ async function handler(
     .from("exercise_library")
     .select(COLUMNS)
     .ilike("name", `%${name}%`)
+    .eq("is_active", true)
     .limit(1)
     .maybeSingle();
 

@@ -25,7 +25,7 @@
 // See:
 //   - docs/diagnoses/2026-05-27-exercise-library-cloud-empty-ada3fb.md
 //   - scripts/seed_exercise_library.js (regenerator)
-//   - supabase/functions/_shared/tools/exercise/getFormCues.ts:65,92 (the cloud reader)
+//   - supabase/functions/_shared/tools/exercise/getFormCues.ts:67,95 (the cloud reader)
 @Timeout(Duration(minutes: 3))
 library;
 
@@ -473,8 +473,9 @@ void main() {
     // Batch A (library v12): 7 rows were retired into a kept twin (merged_ids); Library Batch S1b-3 merged an 8th
     // (E053 into G1373) through the importer's merge stage, with the same cloud statement.
     // Cloud keeps the retired row (is_active = false) because nothing deletes
-    // there, and it takes the kept row's cues: getFormCues matches by exact
-    // name with no is_active filter, and three retired rows (E165/E167/E168)
+    // there, and it takes the kept row's cues (historical: getFormCues matched
+    // by exact name with no is_active filter until OI-438/OI-469, and it now
+    // skips retired rows), and three retired rows (E165/E167/E168)
     // are shifted rows whose own cue text is wrong.
     group('library v12 merges reach the cloud seed', () {
       final rows = (jsonDecode(bundledSeed.readAsStringSync()) as List)
@@ -576,6 +577,15 @@ void main() {
       final reads = RegExp(r'\.from\("exercise_library"\)')
           .allMatches(stripComments(tool.readAsStringSync()))
           .length;
+      // PRESENCE pin only (OI-438/OI-469): both reads skip retired rows. The
+      // behavioural protection is getFormCues_test.ts (Deno), which applies the
+      // filters to a fake table with the retired row listed first.
+      final activeFilters = RegExp(r'\.eq\("is_active", true\)')
+          .allMatches(stripComments(tool.readAsStringSync()))
+          .length;
+      expect(activeFilters, greaterThanOrEqualTo(2),
+          reason: 'both getFormCues reads (exact + partial) must filter '
+              'is_active = true; found $activeFilters (OI-438/OI-469).');
       expect(reads, greaterThanOrEqualTo(2),
           reason:
               'getFormCues is the canonical cloud reader for exercise_library '
