@@ -1,0 +1,29 @@
+# Client-error spike alert config
+# Tech-debt audit 2026-05-20 finding I4
+# Gate: scripts/check_client_errors_alert.dart
+#
+# Declares the threshold + notification routing for spikes in the
+# `client_errors` table. The actual alerting is a pg_cron job (added in
+# Batch 3 of the remediation plan) that polls every 15 min and pushes a
+# OneSignal admin notification when the threshold trips.
+#
+# History: `feedback_observability_silent_drop.md` codified one prior burn
+# (Test #16.1 D — log-client-error rate-limiter ate 100/24h overage as 200s
+# for 8h before founder noticed via manual SQL).
+
+source: client_errors
+threshold:
+  # Trip when last-hour count exceeds the rolling-24h average by 3×.
+  comparison: rolling_avg
+  window_hours: 24
+  multiplier: 3
+  min_count_in_window: 10
+notify:
+  channel: onesignal_admin_push
+  recipient_external_id: founder
+  message_template: |
+    Client error spike: {{ last_hour_count }} errors in last hour
+    (3× rolling-24h avg of {{ rolling_avg }}). Check Supabase Studio →
+    client_errors table for details.
+dashboard_url: "https://supabase.com/dashboard/project/dedsavbjuwgarrhphgnl/database/tables"
+runbook: docs/runbooks/client-error-spike.md

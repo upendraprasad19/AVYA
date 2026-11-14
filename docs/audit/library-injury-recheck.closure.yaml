@@ -1,0 +1,142 @@
+# Closure ledger — library-injury-recheck (exercise library programme, T1 of the founder order)
+# Gate 40 (validate_audit_closure.dart). One terminal_state per item; no
+# `deferred:` key. Plan docs/plans/2026-10-23-library-injury-recheck.md, executed
+# inline on branch library-injury-recheck; `library-injury-recheck@branch` is the
+# in-branch commit form for commits after the first.
+
+batch: library-injury-recheck
+plan_review_record: docs/plan-reviews/library-injury-recheck.md
+diagnose_docs:
+  - docs/diagnoses/2026-10-23-library-injury-recheck-d30de7.md
+
+findings:
+  # ── Tasks ────────────────────────────────────────────────────────
+  - id: T1
+    title: "Failing tests first: data contract, real-generator personas, substitute safety"
+    terminal_state: closed_in_commit
+    commit: 220808e9
+    verification: "test/contracts/injury_recheck_v14_contract_test.dart ran RED (23 fail, 2 pass) before any library byte changed, then 25/25 green."
+
+  - id: T2
+    title: "104 rows gain 148 injury tags from the committed table; seed v14"
+    terminal_state: closed_in_commit
+    commit: 220808e9
+    verification: "scripts/add_library_injury_tags_v14.js (idempotent, --check round-trips, refuses removal and non-canonical tokens): 0 tags removed, 0 other keys changed, 285 rows, 33 untagged (the first cut was 102 rows and 146 tags; B-pass F1 added Diamond and Incline Push Up). library_seed_v14_upgrade_behavioral_test (v13 box to v14 through seedIfNeeded); seed constant back to 13 reddens it."
+
+  - id: T3
+    title: "Warm-up table mirror: Push Up gains shoulder; all 27 _moveInjuries keys pinned against the library"
+    terminal_state: closed_in_commit
+    commit: 220808e9
+    verification: "warmup_library_injury_mirror_test (new all-27-keys test) and warmup_injury_filter_behavioral_test (Push Up dropped for shoulder, uninjured positive control); reverting Push Up in _moveInjuries reddens 4 tests and the repeat sweep (unsafe-warm/cool 160)."
+
+  - id: T4
+    title: "Curated substitutes re-verified against the new tags"
+    terminal_state: closed_in_commit
+    commit: 220808e9
+    verification: "Shoulder list takes Floor Press, Chest Squeeze Press, Machine High Row (founder yes 2026-10-23); knee list drops Leg Press; elbow key removed. Measured: 224 of 864 personas change with the re-rank on (shoulder 60, lower_back 72, wrist 68, knee 22, hip 2, elbow 0). Re-adding Push Up to the shoulder list reddens 2 tests."
+
+  - id: T5
+    title: "Sweep on the real generator: singles, pairs, repeat phase"
+    terminal_state: closed_in_commit
+    commit: 220808e9
+    verification: "test/plan_generator/injury_floor_sweep_test.dart, five blocks over 3, 4, 5 and 6 day plans (7,200 runs): 0 unsafe main, 0 unsafe warm/cool, 0 unresolved names in every block; empty days singles 3/5 0, singles 4/6 1 (ceiling 1), pairs 3/5 4 (ceiling 4, founder 'Ship, allow 4'), pairs 4/6 6 (ceiling 6), repeat 0. Non-vacuity guard in every block. Before and after tables in the diagnose doc."
+
+  - id: T6
+    title: "Generator golden re-recorded"
+    terminal_state: closed_in_commit
+    commit: 220808e9
+    verification: "RECORD_GENERATOR_GOLDEN=1: 18 of the 24 injury| keys changed against the v13 golden on origin/main (knee x full_gym; lower_back and shoulder x 4 tiers; p1 and p2); 0 of the 975 non-injury keys."
+
+  - id: T7
+    title: "Scorecard baseline refreshed (and the stale one it replaced)"
+    terminal_state: closed_in_commit
+    commit: 220808e9
+    verification: "generate_baseline.dart: fresh v13 vs fresh v14 moves 12 of 606 personas, all injured, 0 of 576 uninjured; overall 86.2 to 86.1, fallback picks 2862 to 2864; ceilings untouched. The committed baseline (2026-08-28) already differed from a fresh run in 165 personas, attributed to ad896b42 and filed as OI-404 (BPASS-F4)."
+
+  - id: T8
+    title: "B1 gate report regenerated"
+    terminal_state: closed_in_commit
+    commit: 220808e9
+    verification: "WRITE_CORE_LIST_REPORT=1 core_list_pool_gate_test.dart 6/6; hard counts stay 0; only injured-persona cells moved."
+
+  - id: T9
+    title: "Six mutations, each applied, run, restored"
+    terminal_state: closed_in_commit
+    commit: 220808e9
+    verification: "Push Up loses shoulder (7 tests red), _moveInjuries Push Up reverted (4 red plus the repeat sweep), seed 14 to 13 (1 red), Push Up re-added to shoulder subs (2 red), Diamond Push Up loses shoulder (5 red), library rule removed from blast_radius.yaml (3 red); every file restored to its pre-mutation sha1."
+
+  - id: T10
+    title: "Registry, nested docs and stale wording"
+    terminal_state: closed_in_commit
+    commit: library-injury-recheck@branch
+    verification: "sot_registry exercise_injury_tags updated and its seed_service line range moved 110 to 116 (check_sot_registry_parity PASS); the 13-B carve-out sentences marked superseded; plan-engine-detail and injury_vocab counts updated; stale-wording grep over docs, lib, test, scripts and skills leaves only dated historical plans, reviews and ledgers."
+
+  # ── Decisions and carried items ──────────────────────────────────
+  - id: CARVEOUT-E173-E127
+    title: "Decline Sit Up (E173) and Reverse Hyper (E127) keep lower_back"
+    terminal_state: closed_in_commit
+    commit: 220808e9
+    verification: "Founder 2026-10-23: keep both. The v14 table carries them and the contract test pins both; the B1 ledger entry of the same id is closed with this one."
+
+  - id: PICKER-UNFILTERED
+    title: "Exercise picker, swap and add sheets stay unfiltered"
+    terminal_state: verified_clean
+    evidence: "Founder 2026-10-23: 'user should be able select, add, swap all the exercises'. grep over lib/: injury_contraindications is read only by exercise_repository.queryV4 and plan_engine (exercise_selector, core_list_selector, warmup_cooldown, injury_substitutes); no lib/features file reads it, so no UI list is filtered."
+
+  - id: PAIRS-EMPTY-DAYS
+    title: "Empty days: 4 (pairs 3/5 days), 6 (pairs 4/6 days), 1 (single injury 4/6 days); 2, 2 and 0 before"
+    terminal_state: closed_in_commit
+    commit: thin-day-topup@branch
+    verification: "OI-401 (thin-day top-up, founder option b) merged: the sweep now gates empty days at 0 and one-exercise days at 0 in all five blocks (7,200 runs; measured BEFORE with the kill-switch set, empty singles 3/5 0, singles 4/6 1, pairs 3/5 4, pairs 4/6 6, repeat 0; AFTER 0 everywhere). kPairsEmptyBaseline, kPairs46EmptyBaseline and kSingles46EmptyBaseline are deleted. No tag was removed."
+
+  - id: THIN-DAYS
+    title: "Thin and one-exercise days for injured users (singles 3/5 days 28 to 74 thin, 0 to 19 one-exercise; 51 of the 74 are shoulder)"
+    terminal_state: closed_in_commit
+    commit: thin-day-topup@branch
+    verification: "OI-401 merged (its own plan, two review rounds, B-pass). Thin / one-exercise days, BEFORE to AFTER: singles 3/5 74/19 to 0/0, singles 4/6 75/13 to 0/0, pairs 3/5 531/197 to 2/0, pairs 4/6 647/241 to 6/0, repeat 768/310 to 0/0. The residual 2 and 6 are one persona (shoulder+lower_back, bodyweight beginner 5/6 days: VolumeFilter trims to 4 exercises before the selector, founder stop rule), gated by key and filed as OI-408."
+
+  - id: FINISHER-INJURIES
+    title: "The cardio finisher takes no injuries and no screen shows it"
+    terminal_state: upstream_blocked
+    blocker: "OI-396 needs a separate rule-14 OK to touch plan_generator.dart."
+    reopen_when: "OI-396 is scheduled."
+
+  # ── B-pass (docs/reviews/library-injury-recheck-bpass.md) ───────
+  - id: BPASS-F1
+    title: "Diamond Push Up and Incline Push Up left shoulder-free (plan Ruling 2, mine)"
+    terminal_state: closed_in_commit
+    commit: library-injury-recheck@branch
+    verification: "Both tagged shoulder (table, library, frozen reference: exactly 2 hash lines). New test: all 11 push-up-named rows carry shoulder; queryV4 drops both for shoulder with positive controls; mutation (Diamond loses shoulder) reddens 5. Class check over the pressing, pulling and shoulder patterns found no other shoulder-free row outside the founder's calls and the 33-row safe pool. Cost measured: thin days singles 44 to 74, pairs 399 to 531."
+
+  - id: BPASS-F2
+    title: "The sweep never asserted it scanned anything; repeat had no empty-day gate"
+    terminal_state: closed_in_commit
+    commit: library-injury-recheck@branch
+    verification: "expectSafe asserts days >= runs x 6 and picks > 0 in every block; the repeat block asserts 0 empty days. Verified green on the final library."
+
+  - id: BPASS-F3
+    title: "Only 3 and 5 day plans were swept (4 and 6 never; repeat only 4)"
+    terminal_state: closed_in_commit
+    commit: library-injury-recheck@branch
+    verification: "Five blocks now cover 3, 4, 5 and 6 days (7,200 runs); BEFORE measured on the v13 library for each; the 4/6-day empty days got their own ratchets (kSingles46EmptyBaseline 1, kPairs46EmptyBaseline 6) with OI-401 as the owner (PAIRS-EMPTY-DAYS); those ratchets were deleted by thin-day-topup@branch when OI-401 took the empty days to 0."
+
+  - id: BPASS-F4
+    title: "The baseline refresh absorbed an older uninjured decline (164 personas, volume 69.6 to 69.2)"
+    terminal_state: closed_in_commit
+    commit: library-injury-recheck@branch
+    verification: "Attributed by regenerating with only the library file swapped: 8ef89153 and 4514cf0c reproduce the committed baseline (0 moved), ad896b42 moves 165. Filed as OI-404 with the measured per-dimension effect and a done-when."
+
+  - id: BPASS-F5
+    title: "The coach injury-swap planner (modify_workout_for_injury) never reads injury_contraindications"
+    terminal_state: closed_in_commit
+    commit: library-injury-recheck@branch
+    verification: "Confirmed by reading InjurySwapPlanner._findSubstitute (:211-233) and a grep over lib/ (it is not among the readers). Pre-existing and outside this diff; filed as OI-403 with a behavioural done-when. The reviewer's Front Squat / Surya Namaskar replay is recorded there as unverified."
+
+  - id: BPASS-F6
+    title: "The library JSON classifies feature under assets/** and scripts/**"
+    terminal_state: closed_in_commit
+    commit: library-injury-recheck@branch
+    verification: "docs/blast_radius.yaml: assets/data/exercise_library.json and scripts/data/library_injury_additions_*.json are account; test/contracts/blast_radius_library_data_account_test.dart (classification by the classifier and by the review gate, order, mirrors); removing the library rule reddens 3 of its 4 tests."
+
+total_findings: 21
+closed_count: 21

@@ -1,0 +1,395 @@
+# Plan Engine - moved-out detail
+
+On-demand detail for `lib/shared/repositories/plan_engine/CLAUDE.md`. Everything here was moved VERBATIM out of the nested file (dated incident narratives, `CORRECTED <date>` histories, per-batch provenance, long pitfall bodies) to keep the auto-loaded file lean. The nested file keeps the current rule for each item and points here.
+
+**Unit 1B-F (2026-11-11, plan `docs/plans/2026-11-10-generator-1bf-flip.md`).** The core-list pool is the only picker. Deleted: the 5-attempt cascade (`_fillSlots`, `_cascadeFill`, `_applyHistoryAdjustments`), the universal pool and its injury filter (`disable_injury_universal_filter`), the V3 `pick`, `enable_core_list_pool`, the R6 refill (`CoreListTrace.refilled`), the v12 guard (`hasCoreFields`), `topUpDays`'s `coreListOnly` (core-first always) and the mirrors (`cascade_tracer.dart`, `query_v4_mirror.dart`, `generator_matrix.dart`, the scorecard). Passages below that describe them are history; the current rule is in the nested CLAUDE.md. The allocator gained Ruling 5 (a library hold ranked after a time-starved slot may give way to it, OI-489) and Ruling 5c (the empty-day guard's forced lead runs the same scan); see "Not budgeted" below.
+
+## Pipeline stage 0 - Progression (detraining decay + graded double progression)
+
+_Moved verbatim from `lib/shared/repositories/plan_engine/CLAUDE.md` (original lines 55-55, context-lean batch 2026-09-29)._
+
+0. **Progression (pre-pipeline, phase≥2)** → `ProgressionResolver.resolve()` scans `exlog_*` for each exercise's most-recent top set → suggested starting weight (3-band reps-rule + Epley 1RM ceiling), fed to Periodization via `previousWeights`. **⑦(a) (Batch 3b-i): detraining WEIGHT decay** — a user resuming after a training gap restarts lighter: the baseline is decayed by the IST day-gap since their last logged session (≤7d none · 8–21d −7.5% · 22–35d −17.5% · >35d −50%) BEFORE the reps-rule; the decayed `base` replaces the original weight in ALL FOUR reps-rule branches incl. the `<=0` floor (reduce-ONLY), Epley cap stays on the pre-decay 1RM, gap is a zone-canceling date-only diff (never re-zones the already-IST exlog date — Test #11.1 class). Kill-switch `disable_detraining_decay` (default ON; the reduce-only band table is extracted to shared `lib/core/utils/detrainingFactorForGap` — `_detrainingFactor` keeps its IST-string→gap conversion then delegates, and ⑦(b)'s session-time resume cut reuses it from an int gap). SoT `detraining_decay`; behavioral test `progression_resolver_decay_test.dart` (the Batch-0 scorecard CANNOT measure resolve() — it never invokes it + seeds no logs). **W2.1 (Batch 3b-ii): graded double progression** — the fixed 10/5 reps-rule becomes REP-RANGE-aware (from the ⑦a base): reps ≥ hi → progress, within → hold, below lo → back off ONLY on the top-2 most-recent DISTINCT calendar days BOTH below lo (2-consecutive; de-duped by (y,m,d)). Beginner auto-linear window (RAW `fitness_experience=='beginner'` AND training-age from `onboarding_completed_at` < 120d → always progress). Rep-ranges threaded via a `repRanges` param from `populated`; shared `parseRepRange` (`models.dart`) used by BOTH resolve() AND `_applyWave` (one parser, #1-bug-class; inertness pinned by `periodization_wave_reps_invariant_test.dart`). **LIVE since 2026-09-16 (OI-53 batch 2); kill-switch `disable_graded_progression`** → verbatim fixed-10/5 (byte-identical; ⑦a decay independent, base/est1rm on the single-most-recent `lastSession` UNCHANGED; top-2 is ADDITIVE). SoT `graded_progression`; behavioral test `progression_resolver_graded_test.dart`.
+
+## Pipeline stage 5 - Periodization (physique-focus bring-up)
+
+_Moved verbatim from `lib/shared/repositories/plan_engine/CLAUDE.md` (original lines 60-60, context-lean batch 2026-09-29)._
+
+5. **Periodization Engine** → Uses exercise-specific `rep_range` + archetype-based wave. **⑤ (Batch 4): physique-focus bring-up.** The user's `physique_focus` (profile) is translated to muscle-substring tokens (`TrainingHistoryAnalyzer.physiqueFocusToBodyFocus`; read via the try/catch `physiqueFocusMuscles()` helper) at the `effectiveBodyFocus` seam — the flag-gate + precedence GLUE lives in the behavior-tested `TrainingHistoryAnalyzer.resolveBodyFocus` (`plan_generator.dart:148-155`), which periodization turns into **+1 set per matching exercise** (the EXISTING bodyFocus mechanism — no periodization change). Explicit focus PRECEDES auto `weakMuscles()` and applies at ALL phases; balanced/strength/absent → [] → falls back to weakMuscles (phase≥2). LIVE since 2026-09-16 (OI-53 batch 2); kill-switch `disable_physique_focus_bringup` → seam byte-identical. **The dedicated isolation SLOT is founder-deferred** (2026-07-13) — trade-not-add proven infeasible (`VolumeFilter` is POSITIONAL `take(N)`, NOT priority-sorted; focus muscle already kept on its theme day). SoT `physique_focus_bringup`; behavioral test `physique_focus_bringup_test.dart`.
+
+## Pipeline stage 7 - Cardio Finisher (goal-aware default)
+
+_Moved verbatim from `lib/shared/repositories/plan_engine/CLAUDE.md` (original lines 62-62, context-lean batch 2026-09-29)._
+
+7. **Cardio Finisher** → **④ (Batch 3a): goal-aware default.** With no stored `cardioPreference` (always, today — no preference UI), the finisher SHAPE now defaults to the goal instead of the blanket mildest mini-HIIT: `lose_fat→hiit`, `general_fitness→cycling`, `recompose→jump_rope` (only the 3 `FitnessGoals.cardio==true` goals attach a finisher). `CardioFinisher._defaultForGoal`; kill-switch `disable_cardio_goal_default` (default ON) reverts to verbatim `hate_cardio`. SoT `cardio_goal_default`; behavioral test `cardio_goal_default_test.dart`. The Batch-0 scorecard doesn't measure the finisher (post-selection stage) — the behavioral test is the proof.
+
+## Pipeline stage 8 - Warmup/Cooldown (injury filter, WU-2 gym-cardio gate)
+
+_Moved verbatim from `lib/shared/repositories/plan_engine/CLAUDE.md` (original lines 63-63, context-lean batch 2026-09-29)._
+
+8. **Warmup/Cooldown** → Now also auto-injects for custom templates. **Injury-filtered (U3, d3f8a1):** `WarmupCooldownSelector.attach(injuries:)` DROPS a hardcoded warmup/cooldown/cardio move whose `_moveInjuries` tag intersects the user's injuries (drop-not-substitute), with a guaranteed non-empty FLOOR (safe Slow Walking cardio fallback + Deep Breathing anchor). Main-cascade-selectable moves (Push Up/Band Pull Apart/Baithak) use their LIBRARY `injury_contraindications` so main+warmup agree; warmup-only moves use conservative tags (the library under-tags them). Threaded from `generateV4` + `template_service`; kill-switch `disable_warmup_injury_filter`. ⚠ The Batch-0 scorecard CANNOT prove this (warmup isn't in `plan.allExercises`) — `warmup_injury_filter_behavioral_test.dart` is the sole proof. The library's MAIN-move injury under-tagging was CLOSED by Batch 13-B (f4c1e8): 26 empty-`[]` strength rows (hinges/rows/overhead/loaded-core) tagged + 2 deepened (GHD Sit Up, Good Morning), clinically-nuanced at the time (13-B kept Push Up wrist-only and a controlled/machine/rehab pool untagged for variety). **SUPERSEDED by the v14 injury re-check (2026-10-23, d30de7):** the founder rejected that variety carve-out, so 104 rows gained 148 tags (every push-up variant is shoulder-tagged, Push Up is wrist + shoulder; Chin Up elbow only; Goblet Press, Lat Pulldown, the hip machines, the crunch/sit-up family, every curl and triceps row now tagged) and only a 33-row low-load / rehab pool stays untagged (`test/helpers/injury_safe_pool.dart`). SoT `exercise_injury_tags`; ALL 27 `_moveInjuries` keys == their library tags, pinned by `warmup_library_injury_mirror_test.dart`. **⑥ C2 (WU-2 gym-cardio gate, b7a4e2):** the gym-cardio warmup/finisher (`hasGymEquipment`) was ALWAYS-FALSE on the generated path — writer/reader drift: the reader (`WarmupCooldownSelector.attach:146` + `CardioFinisher.attach`) computed `equipmentList.any(contains('gym')||('full'))` but generateV4 passes `_getEquipmentList(tier)` = ITEM tokens (never those substrings). Fix: `cardio machine` added to the gym `tierItems`; generateV4 computes a flag-gated `hasGymEquipmentOverride` from the effective (exclusion-subtracted) equipment + passes it to BOTH attach methods (null → old predicate → `template_service` + `shared_contracts_test:826` byte-identical). Rides the SAME equipment-exclusions flag (now `disable_equipment_exclusions`, default ON) → the 2026-08-05 flip ALSO activated WU-2, so it is no longer a *pure* no-op (B1/C1's whole-Phase byte-identical NO-OP tests were narrowed to exempt `warmup`+`finisher`; coverage of the gym-cardio behavior moves to `wu2_gym_cardio_gate_behavioral_test.dart` — the sole proof, warmup/finisher not in `plan.allExercises`). ⚠ TESTING FOOTGUN: `Phase.toMap` serializes the days TWICE (`workouts` compat list + `week_plans[].workout_days[]`) — any plan-diff/byte-identical test must strip/handle BOTH. Kill-switch = the shared `disable_equipment_exclusions` (DEFAULT ON since 2026-08-05, e2d6b8 — so this WU-2 gate is now LIVE for every gym-tier user, no longer inert).
+
+## Triggered deload (W2.4)
+
+_Moved verbatim from `lib/shared/repositories/plan_engine/CLAUDE.md` (original lines 65-76, context-lean batch 2026-09-29)._
+
+**Triggered deload (W2.4 — the deload WAVE is conditional, runtime).** The week-4 deload the
+periodization wave generates (`_waveNames[3]`, `weekIdx 3`) can be UN-DELOADED to a working week at
+runtime — the generator still always emits the deload; a rollover-time evaluator decides whether to
+lift it. Two ship-dark pieces (`enable_triggered_deload`; the eval ALSO needs `enable_readiness`):
+**7-B-1 GENERATION-STASH** (here, `periodization_engine.apply(stashWorkingBase:)`) — the deload week
+stashes each exercise's PEAK-equivalent `working_sets`/`working_reps` (SoT `deload_working_base_stash`);
+**7-B-2 EVAL** (`lib/core/services/deload_evaluator.dart` from `day_rollover_service`, NOT plan_engine)
+— SAFE-polarity `shouldLift = notBackstop && notDeloadPhase && readinessGood && e1rmNoFatigue` (all
+POSITIVE-evidence; else KEEP), then a per-exercise full-row un-deload of the wk4 `schedule_*` rows +
+the `current_plan` blob week_plans[3] (`week_character` 'deload'→'working'). Local-only user-scoped
+state (`last_actual_deload_phase` backstop + `deload_evaluated_for_phase_N`), NO migration. SoT
+`triggered_deload_eval`; behavioral `deload_eval_behavioral_test.dart`.
+
+## Deload why (W3.1)
+
+_Moved verbatim from `lib/shared/repositories/plan_engine/CLAUDE.md` (original lines 78-108, context-lean batch 2026-09-29)._
+
+**Deload "why" (W3.1) — REMOVED 2026-11-02 (train-header-b2).** The reason line rendered only in the
+removed phase-arc strip, so the evaluator no longer stamps `deload_reason_phase_<P>`; the reader
+(`currentDeloadReason`, `validatedDeloadReason`), the text builder (`deload_reason.dart`), the kill switch
+`disable_deload_reason_line` and the SoT concept `deload_decision_reason` went with it. An old stamp left on a
+tester device is inert (never read, never synced). The decision, the `week_character` rewrite and the idempotency
+flag are unchanged. History (Unit B stale-reason defect, diagnose `c5a8f3`; backstop copy, `d9e1b4`) is in git.
+
+The adherence-gate "why" (W3.1's other half) is a copy-only non-shaming lead-in in
+`advance_choice_sheet.dart` (no completion %, per the codified non-shaming brand soul).
+
+## Repeat-content generation (W2.5)
+
+_Moved verbatim from `lib/shared/repositories/plan_engine/CLAUDE.md` (original lines 110-138, context-lean batch 2026-09-29)._
+
+**Repeat-content generation (W2.5 — pin the prior phase's selection).** ⑧ 8-A/2-cap adds a
+SHIP-DARK capability: `generateV4`/`generate` accept
+`Map<int,({List<String> a, List<String> b})>? pinnedExercisesByDay` (per day: variant-A names for
+weeks 1/3, variant-B names for weeks 2/4 — a single-list `B=A` would DUPLICATE weeks 1/3 because
+periodization reads `exercisesB` for the B-weeks; B-absent derives a fresh B-variant, never a
+collapse); when non-null, Stage 2 calls `ExerciseSelector.buildPinnedDays(frames: filteredDays, …)`
+instead of `pickV4` — slotting the prior phase's exercise NAMES into the CURRENT split frames, then the tail
+(Stage 0 decay + periodization, `:142+`) runs UNCHANGED (so the ACTUAL last-logged weight re-decays
+BY NAME; a plan-blob copy would double-decay an already-cooked `suggested_weight` + bypass the
+in-cascade filters). A pin resolves via `getByExactName` else the user's `custom_exercise_*` rows
+(else drop). It re-applies ONLY the HARD constraints the cascade bypassed — equipment-EXCLUSION +
+UNGATED injury `_isContraindicated` (att1-4 semantics, NOT att-5's kill-switched skip: a newly-injured
+user never gets the old contraindicated lift repeated) — but NOT the SOFT equipment-tier (att4
+relaxes it; re-filtering would drop a same-tier att4 pick — the CALLER gates same-tier). An
+all-dropped variant FRESH-FILLS via `pickV4([frame])` (MF-1: degrades to at worst a fresh
+generation's safe slot-omission, never a bespoke `(none)`). `null` → verbatim `pickV4` →
+byte-identical. The production caller (`generateAndSchedule` repeatContent) lands in UNIT 2-int.
+**LIVE since 2026-09-16 (OI-53 batch 2); kill-switch `disable_adherence_gate`** — see
+`plan_engine_flags.dart`'s `adherenceGateEnabled` doc comment for the full call-site picture: two
+independent trigger computations that are NOT symmetric (the automatic path redundantly re-checks
+the flag before `_buildRepeatPins`; the choice-sheet path did not, until a B-pass finding moved the
+check into `_buildRepeatPins` itself so both callers are now protected by the one method they share)
+and the coverage that closes the gap that shape left.
+SoT `repeat_phase_pinned_selection`; behavioral
+`repeat_phase_pinned_selection_behavioral_test.dart` (the pinning MECHANISM — UNIT 2-cap —
+drives `PlanGenerator.generateV4(pinnedExercisesByDay:)` directly and does not exercise the flag
+itself; that gap is closed by `repeat_content_scheduling_test.dart` (UNIT 2-int, the
+`last_phase_profile` write) and `pro_phase_advance_behavioral_test.dart`'s "repeatContent gated on
+flag AND completion" group (the actual gating decision, end-to-end, mutation-proven)).
+
+## Volume titration (W2.7)
+
+_Moved verbatim from `lib/shared/repositories/plan_engine/CLAUDE.md` (original lines 140-163, context-lean batch 2026-09-29)._
+
+**Volume titration (W2.7 — Batch 9, phase-boundary per-group set nudge).** At a genuine FRESH
+phase advance, `VolumeTitration.applyToWeeks` (a PURE post-pass on the `PeriodizationEngine.apply`
+output in `plan_generator.dart`, right after Stage 4 + before Sequencing) nudges each MAJOR MUSCLE
+GROUP's weekly direct sets by ±1, clamped [MEV=8, MRV=20], from `VolumeTitration.resolveDeltas(phase)`:
+per-group e1RM trend (trailing-35-IST-day `exlog_*`, the shared `lib/core/utils/e1rm.dart`
+`sessionMaxE1rm` — ONE Epley loop for both W2.4 deload + this, byte-identical, pinned by
+`deload_eval_behavioral_test`) aggregated exercise→group via the shared `muscle_groups.dart`
+`muscleGroupOf` (the scorecard's `_muscleToGroup`, now DELEGATED here — content byte-identical so
+the frozen D3 baseline is unmoved) + a GLOBAL readiness soreness damper (soreness is a single daily
+axis, NOT per-muscle). SAFE polarity: −1 on demonstrated e1RM DECLINE alone; +1 ONLY with POSITIVE
+readiness recovery (≥3 rows, <40% beat-up). ⚠ **CORRECTED 2026-09-01:** this used to read "with readiness ship-dark (0 rows) it only ever TRIMS" — readiness went LIVE 2026-09-01, so rows DO accumulate; titration is inert only because enable_volume_titration is still OFF and short-circuits at volume_titration.dart:60 BEFORE _recovered() runs -- _recovered() itself has NO readiness gate.
+TWO inert seams: kill-switch `enable_volume_titration` (DEFAULT OFF → `resolveDeltas` `{}`) AND opt-in
+`applyVolumeTitration` — the orchestrator applies it ONLY when the caller passes true, and the two
+advance callers (`autoGenerateNextPhaseIfNeeded` `:483` + `graduation_screen._onPro` `:644`) pass
+`pins == null` so a low-adherence REPEAT never gains volume; every other caller (coach-regen /
+edit-profile / previews / hotel / onboarding) defaults false → untouched. `applyToWeeks({})` returns
+the SAME list reference → byte-identical. Per-group ±1 clamps on the weekly aggregate, one exercise
+bumped once/week (dedup), groups processed in sorted order (determinism). Composes with 7-B-1: the
+deload week's stashed `workingSets` is titrated symmetrically (self-gated on `workingSets != null`)
+so a triggered un-deload restores the TITRATED peak (F1). ⚠ ~17 qualifier-tagged isolation lifts +
+8 empty-`primary_muscles` rows map to null → never titrated (conservative; small groups below MEV).
+The Batch-0 scorecard CANNOT measure this (it scores a `default_sets` SELECTION proxy, not periodized
+sets) — the behavioral test is the sole proof. SoT `volume_titration`; behavioral
+`volume_titration_behavioral_test.dart` + `e1rm_test.dart`.
+
+## ID-keyed history (W3.3)
+
+_Moved verbatim from `lib/shared/repositories/plan_engine/CLAUDE.md` (original lines 165-187, context-lean batch 2026-09-29)._
+
+**ID-keyed history (W3.3 — Batch 11-A, forward-only, Hive-local).** New `exlog_*`
+rows carry the library `exercise_id` (`WorkoutWriteService.logExercise` optional
+`exerciseId`, STICKY — a null-id re-log keeps a prior id; threaded from
+`ExerciseData.exerciseId` on the active-workout path + the manual swap/add/
+create picker paths (`swap_sheets.dart` reads the picked row's `id`;
+`SwapExerciseData` gained an `id` field), and from the coach `_executeLogSet`
+ONLY when the id resolves to a real library exercise). **LIVE since 2026-09-16
+(OI-53)** — `ProgressionResolver.resolve` matches a plan exercise to logged
+history by id — **INCLUSIVE** with name (id-matched ∪ name-matched, the
+MORE-RECENT wins; graded session-lists unioned) via a parallel
+`lastSessionById`/`allById` index keyed on non-empty ids only — so a rename/swap no
+longer SPLITS an exercise's weight history. `plan_generator` threads each plan
+exercise's `exerciseId` (parallel to `repRanges`). Kill-switch
+`disable_exercise_id_history` (`PlanEngineFlags.exerciseIdHistoryEnabled`) → indices
+null → name-only, byte-identical. Forward-only: legacy/restored/no-id rows fall to
+the name index
+(restore does NOT reconstruct the Hive `exercise_id`). ⚠ The Hive library id is
+**Hive-LOCAL** — the cloud `workout_log_exercises.exercise_id` is a SEPARATE
+name-derived onConflict identity; the library id MUST NOT be projected upward
+(would shift the natural key → duplicate rows). SoT `exercise_id_history` (+ the
+`hive_field_name_exlog` collision note); behavioral
+`exlog_exercise_id_behavioral_test.dart` + absence gate
+`sync_exlog_no_library_id_test.dart`.
+
+## Injury-substitute preference (11-C)
+
+_Moved verbatim from `lib/shared/repositories/plan_engine/CLAUDE.md` (original lines 189-209, context-lean batch 2026-09-29)._
+
+**Injury-substitute preference (①.1d — Batch 11-C).** **LIVE since 2026-09-16
+(OI-53)** — `_cascadeFill` re-ranks the already-safe (POST-injury-filter),
+same-`movement_pattern` `queryV4` candidate list to PREFER a curated
+`InjurySubstitutes` sub (map/joint-friendlier order, EXACT lowercased name
+match) over queryV4's compound/priority sort — at all 4 attempt-return sites via the
+pure `_selectCandidate`. It runs on the post-filter list → can NEVER surface a
+contraindicated exercise; a PREFERENCE (falls through to `candidates.first` when no
+curated sub is a candidate). The flag is resolved ONCE in `generateV4` →
+`applyInjurySubstitutePreference` threaded pickV4/buildPinnedDays → `_fillSlots` →
+`_cascadeFill` (mirrors `applyInjuryUniversalFilter`). Kill-switch
+`disable_injury_substitute_pref` → verbatim `candidates.first` (byte-identical).
+The pure-Dart `cascade_tracer.dart` mirrors it
+(`_selectCandidateName`); `query_v4_mirror.dart` UNCHANGED; `generator_matrix.dart`'s
+trace call is NOT wired (param defaults false → frozen D3 baseline unmoved). Curated
+map covers 5 of 9 `InjuryVocab` tokens (ankle/elbow/hamstring/neck → no subs → fallthrough; v14 tagged every elbow-pattern row, so elbow has no safe curated sub left),
+each verified same-pattern-safe vs `exercise_library.json` (RDL dropped from lower_back
+— under-tagging gap). ⚠ L6 `_applyHistoryAdjustments` (phase≥2) may re-swap a curated
+pick that's in the user's `demoted` set (still injury-filtered → safe). SoT
+`injury_safe_substitute_preference`; behavioral
+`injury_substitute_preference_behavioral_test.dart`. **11-B (W3.4 cross-phase variety)
+extends the SAME `_selectCandidate` with an `avoidNames` tiebreak (below).**
+
+## Cross-phase variety (W3.4)
+
+_Moved verbatim from `lib/shared/repositories/plan_engine/CLAUDE.md` (original lines 211-228, context-lean batch 2026-09-29)._
+
+**Cross-phase variety (W3.4 — Batch 11-B).** **LIVE since 2026-09-16 (OI-53)** — on
+a genuine FRESH phase advance (pins==null),
+`WorkoutScheduleReadService.previousPhaseNamesByDay()` reads the
+just-finished phase's per-day A/B picks (getWeek(1)/getWeek(2), LOWERCASED — the SAME
+rows repeatPinsFrom reads, via the shared `_exerciseNamesOfRow`/`_namesByDayIndex`
+parsers, but WITHOUT the G5 gate) and threads them as `previousPhaseByDay` → generateV4
+→ pickV4 (indexed per-day avoidA/avoidB) → `_fillSlots` → `_cascadeFill` →
+`_selectCandidate._preferNovel`, which PREFERS a same-`movement_pattern` sibling NOT
+used last phase. **SOFT** bias — feeds `_selectCandidate` ONLY, NEVER
+queryV4/pickedNames/excludeNames → can never hard-empty a slot (BOUNDED: falls to
+`pool.first` when only last-phase picks remain). Composes with ①.1d (injury-sub selects
+the pool, variety breaks ties within it). Kill-switch `disable_cross_phase_variety` —
+the service-layer gate is inside `previousPhaseNamesByDay` (kill-switch ON → `{}` → no
+getWeek reads → avoidNames empty → byte-identical). The pure-Dart `cascade_tracer.dart` mirrors it
+(`_preferNovelName`); `generator_matrix.dart` NOT wired → frozen D3 baseline unmoved.
+attempt-5 pool is NOT variety-eligible; buildPinnedDays UNCHANGED (variety ⟂ pins). No
+migration (reads existing schedule_* rows). SoT `cross_phase_variety`; behavioral
+`cross_phase_variety_behavioral_test.dart`.
+
+## Plateau escalation (W3.5, 12-A)
+
+_Moved verbatim from `lib/shared/repositories/plan_engine/CLAUDE.md` (original lines 230-260, context-lean batch 2026-09-29)._
+
+**Plateau escalation (W3.5 — Batch 12-A, PRO, ship-dark).** rung-2 (+sets): at a
+genuine FRESH phase advance a plateaued MAJOR GROUP earns +1 weekly direct set,
+MERGED into the W2.7 titration delta map so ONE clamped `applyToWeeks` pass applies
+both. A "plateau" = a COMPOUND lift whose MAX-Epley e1RM is FLAT ((max−min)/max ≤ 5%)
+across ≥3 dated sessions spanning ≥28d in a trailing 63-IST-day window
+(`PlateauScan.plateauedGroups`, reusing the SHARED `e1rm_history.buildE1rmByDate` +
+`ExerciseRepository.isCompoundByExactName` + `muscleGroupOf`). `mergePlateauSetDeltas`
+`putIfAbsent`s +1 ONLY where titration left a group ABSENT → a declining group's −1
+ALWAYS wins (no double-bump; never +sets a fatiguing/declining group), and the
+[MEV,MRV] clamp caps it. **rung-1 (deload when plateaued+fatigued) needs NO code — it
+is ALREADY delivered by W2.4's `readiness.good` keep in `deload_evaluator`: a plateau
+keep-term wired into `shouldLift` would be PROVABLY DEAD (it can only engage when
+`readiness.good` is already false, since `_fatiguePresent` is that predicate's strict
+complement), so 12-A does NOT touch `deload_evaluator.dart`.** rung-3 (exercise
+rotation) is Batch 12-B. THREE inert seams: `enable_plateau_escalation` DEFAULT OFF
+(merge returns the input map unchanged → applyToWeeks identity → byte-identical); ALSO
+gated on `enable_readiness` (the fatigue gate needs readiness rows — mirrors
+DeloadEvaluator's guard); OPT-IN `applyPlateauEscalation` threaded generate/generateV4
+→ generateAndSchedule → the two `pins == null` advance callers (autoGenerate +
+graduation._onPro). Fatigue = persistent readiness red/yellow (≥3 rows in 14d, strict
+majority `level != green`) — the SAME data/window/predicate as `_readinessGood`.
+`phase >= 2` self-gate (PRO — free is phase 1; advance callers are PRO-gated →
+inherits the server-verified `phases_2_to_12`). ⚠ Drift hygiene (#1 class): the exlog→
+e1RM map-build loop is now the SHARED `e1rm_history.buildE1rmByDate` (extracted
+byte-identical from `DeloadE1rmScan` + `VolumeTitration`; the file now holding the
+literal `exlog_` scan) and the compound predicate is `ExerciseRepository
+.isCompoundByExactName` (from `DeloadE1rmScan._isCompound`) — both refactors pinned by
+the existing deload/titration behavioral tests. NO migration/restore (Hive-read-only;
+exlog+readiness already sync+restore); `generator_matrix`/`cascade_tracer` NOT wired →
+frozen D3 baseline unmoved. SoT `plateau_escalation`; behavioral
+`plateau_escalation_behavioral_test.dart` + pure `plateau_scan_test.dart`.
+
+## Plateau rotation (W3.5, 12-B)
+
+_Moved verbatim from `lib/shared/repositories/plan_engine/CLAUDE.md` (original lines 262-287, context-lean batch 2026-09-29)._
+
+**Plateau rotation (W3.5 — Batch 12-B, PRO, ship-dark).** rung-3: at a genuine FRESH
+phase advance the plateaued COMPOUND lifts (SAME detector as rung-2 —
+`PlateauScan.plateauedExerciseNames`, the per-exercise sibling of `plateauedGroups`,
+LOWERCASED, SAME gates) are SOFT-avoided in the cascade so each ROTATES to a
+same-`movement_pattern` sibling next phase. Computed in `generateV4` (guarded
+`applyPlateauEscalation && pinnedExercisesByDay == null` → statement before the pins
+ternary) → threaded as `pickV4`'s new `plateauAvoidNames` → UNIONED GLOBALLY into every
+day's `avoidA`/`avoidB` (alongside 11-B's `previousPhaseByDay` names) → the SAME
+`_fillSlots`/`_cascadeFill`/`_selectCandidate._preferNovel` seam. **SOFT + BOUNDED** —
+feeds `_selectCandidate` ONLY (never queryV4/excludeNames) on a guaranteed-non-empty
+pool → never empties a slot / wrong pattern / disturbs the attempt-5 injury floor; on a
+shallow pool `_preferNovel` falls to `pool.first` (the stuck lift RETAINED, no crash).
+**Reuses `enable_plateau_escalation` (NO new flag), INDEPENDENT of
+`crossPhaseVarietyEnabled`** (rotation fires under the plateau flag alone). DEFAULT OFF
+/ opt-in false → `plateauAvoid {}` → the union `{...listA, ...{}}` ≡ `listA.toSet()` →
+byte-identical. Rotation is a SWAP (slot-count-neutral; a rotated-in sibling may carry ±1
+base `default_sets`, bounded — pre-existing 11-B behavior). **rung-2 (+sets) and rung-3
+(rotation) BOTH fire (no cross-gate)** — the +1 lands on the fresh sibling's group,
+MRV-clamped; safe. **rung-1 explainability NOT built** (terminal won't-do: out-of-scope
+for a rotation batch, causally imprecise — deload is fatigue-driven — and re-coupling
+`deload_evaluator→plateau_scan` or a generation-time stash would break pure-compute).
+`cascade_tracer._preferNovelName` + `generator_matrix` UNCHANGED → frozen D3 baseline
+unmoved. ⚠ L6 `_applyHistoryAdjustments` (phase≥2, demoted) may re-add a rotated
+lift — consistent with rung-3 being SOFT (the behavioral test seeds no swap/custom
+history → L6 skipped → deterministic). No migration/restore (Hive-read-only). SoT
+`plateau_rotation`; behavioral `plateau_rotation_behavioral_test.dart`.
+
+## Cascade attempt 5 - universalPool injury filter (U2) (history: deleted by Unit 1B-F)
+
+_Moved verbatim from `lib/shared/repositories/plan_engine/CLAUDE.md` (original lines 306-306, context-lean batch 2026-09-29)._
+
+5. `universalPool` — hardcoded bodyweight fallback (`exercise_selector.dart:493-505`, mirrored in `cascade_tracer.dart`). **Injury-filtered (U2, a1f6c3):** unlike attempts 1-4 (which exclude contraindications via `queryV4 injuryExclusions`), attempt-5 bypassed the injury filter until Ship 1 — it now skips a contraindicated pool pick, resolves each pool name to its EXACT-name library record (`repo.search` is substring, so "Push Up" also matches "Pike Push Up"), and — if the whole pool is contraindicated — SAFELY OMITS the slot (returns null → fewer-but-safe). Kill-switch `configBox['disable_injury_universal_filter']` (default ON).
+
+## Injury vocabulary (U1/U4)
+
+_Moved verbatim from `lib/shared/repositories/plan_engine/CLAUDE.md` (original lines 308-308, context-lean batch 2026-09-29)._
+
+**Injury vocabulary (U1/U4, a1f6c3):** injuries must be the canonical library tokens (`InjuryVocab.canonicalTokens` in `lib/core/utils/injury_vocab.dart` — ankle/elbow/hamstring/hip/knee/lower_back/neck/shoulder/wrist), NOT the legacy UI vocab (`back` never matched `lower_back`). Every writer (Edit-Profile chips, muster) normalizes via `InjuryVocab.normalize`; `generateV4` normalizes CENTRALLY so every generation caller is covered by one seam; each entry point reads via crash-safe `InjuryVocab.fromProfile`. SoT concept `injury_vocabulary_contract`.
+
+## Equipment exclusion filter (B1)
+
+_Moved verbatim from `lib/shared/repositories/plan_engine/CLAUDE.md` (original lines 310-310, context-lean batch 2026-09-29)._
+
+**Equipment exclusion filter (⑥ B1):** an item-level PURE-EXCLUSION filter — a user subtracts canonical equipment they lack (from slice C's `equipment_exclusions` profile field). Derived ONCE in `generateV4` (mirroring the injury seam `plan_generator.dart:92`): flag-gated (`PlanEngineFlags.equipmentExclusionsEnabled` — **FLIPPED ON 2026-08-05, diagnose `e2d6b8`**; kill-switch is now `disable_equipment_exclusions`, DEFAULT ON. It was ship-dark DEFAULT OFF from 2026-07-16 until then, during which the Customize UI collected + synced exclusions the generator ignored. ⚠ Flipping it ALSO activated ⑥ C2's WU-2 gym-cardio gate — see stage 8 — so gym-cardio warmup/finisher now reaches EVERY gym-tier user, not only exclusion-setters) + `EquipmentVocab.floorSanitizedExclusions` (normalize→canonical + STRIP none/bodyweight so the bodyweight floor is never excludable). Threaded as a `Set<String>` to EVERY pick path: `queryV4` att1-4 (the drop ~`:282` is placed BEFORE the `:288` tier block + **KEPT at att4** — an excluded item is a HARD constraint, unlike the soft tier heuristic att4 relaxes), the **att5 pool skip** (mirrors U2's injury skip; the per-pattern bodyweight floor keeps the slot non-empty — fewer-but-safe, never a `(none)`), and the L6 demote-swap (the L2 custom-append was removed 2026-10-21, diagnose d4b8e1). Reads every `equipment_needed` crash-safe + normalizing via `EquipmentVocab.fromProfile` (so it's correct for un-normalized community rows before B2). The `queryV4 exclusions` param is REQUIRED (compile-time thread enforcement). PURE exclusion (drop iff `equipment_needed` intersects exclusions; `equipment_tier` filter UNTOUCHED) — the intersection design regressed 41 tier-selectable exercises at empty; no-op at empty → byte-identical. Cardio finisher + warmup gym-cardio are now gym-gated + exclusion-aware via ⑥ C2 (WU-2 — see stage 8; diagnose b7a4e2); the gym-cardio gate itself does not extend to cooldown (cooldown has no gym-cardio picks to gate — it stays static stretches). This does NOT mean cooldown is unfiltered: cooldown exercise selection still goes through the same injury (U2) + equipment-exclusion pool logic as every other slot. SoT `equipment_exclusion_filter`; behavioral `equipment_exclusion_filter_behavioral_test.dart`; scorecard exclusion personas in `generator_matrix.dart` (mirror + cascade_tracer carry the same drop). Kill-switch `disable_equipment_exclusions` (DEFAULT ON since 2026-08-05, diagnose e2d6b8 — the `enable_` key is retired).
+
+## Core-list pool (Batch B1; the only picker since Unit 1B-F)
+
+Plan `docs/plans/2026-10-22-library-core-list-pool.md`; spec `docs/superpowers/specs/2026-10-21-exercise-library-comprehensive-design.md` §4.
+
+**Why.** The 5-attempt cascade picks from every row whose tags fit, so retired, skill and improvised rows reach plans by accident (OI-385..388). The core list is an explicit per-level choice: 73 beginner / 91 intermediate / 67 advanced rows on library v13, 66 rows on no list.
+
+**Data (library v13).** Every row carries `core_levels`, `discipline`, `gym_availability`, `requires_coaching`, `high_impact`; kept rows carry `variant_family`. `slot_focus` (19 rows) and `slot_pattern` (12 rows) were ON-only overlays: queryV4 (OFF) and the exercise display kept reading `target_focus` / `movement_pattern`. **Unit 1B-F2 (seed v27, 2026-11-12, OI-495)** copied them into the rows' own fields (27 rows: 13 `movement_pattern`, 19 `target_focus`, N20 included) and removed both keys; `CoreListSelector` reads `movement_pattern` / `target_focus` directly. Measured: golden and plan dump byte-identical; the only plan change is the injured thin-day top-up (queryV4 now sees the copied labels: sweep `f_repeat_pairs30 full_gym` 27 -> 21 thin days); the muscle label changes on 19 rows; the cloud `movement_pattern` (TEXT, first element) changes on 12 rows (migration 176). Record `scripts/data/library_overlay_copy_v27.json`, importer overlay-copy stage, proof `library_overlay_copy_test.dart`.
+
+**Path.** `pickV4` runs `_pickCoreList` over `getAll()`, then `topUpDays` (until Unit 1B-F it delegated only when `enable_core_list_pool` was ON and `CoreListSelector.hasCoreFields`; a library without `core_levels` now picks nothing). Per day, variant A then B; per slot, `rankedPool`:
+
+1. Hard filter: pattern, a `core_levels` key, discipline not `calisthenics_skill` / `olympic`, `canPerform` (or queryV4's tier rule when the floor is off), exclusions, `_isContraindicated`, not already picked.
+2. Core rows at the effective level; else family fill (rows of a family that is core at this level, core only at a HIGHER level, `suitable_for` the level); else drop. A lower level's core row never fills (D6).
+3. Implement preference (OI-387/388): when the capability set holds anything beyond the improvised tokens, arm/shoulder/pull slots drop improvised rows if an implement row remains. Keyed on capability, so a bodyweight user who owns dumbbells gets it too.
+4. Order: demoted (L6) last, then B's soft avoid of A's picks, then foundational first in phase 1 (a preference, Ruling 7), sub-focus match, exercise type, `priority_tier`, foundational, id.
+
+The pick goes through `_selectCandidate` with previous-phase, plateau, soft-avoid and demoted names as avoid names, because its curated injury-substitute narrowing re-sorts the pool. `typeFor` types a `["calisthenics","compound"]` row as compound (OI-385).
+
+**Empty variants (Ruling 12).** An emptied variant copies the other. If both are empty, the day re-runs with core rows of an EASIER or equal level, nearest first (never a harder-only row, never a `core_levels: []` row; B-pass F2), copies again, and only then falls back to the OFF cascade. On shipped data only the 2 shoulder-injured bodyweight intermediate personas reach the any-level step; the flip needs 0 after Batch C.
+
+**Evidence.** OFF identity while the flag existed: `test/plan_generator/generator_golden_test.dart` (998 personas; since Unit 1B-F the golden holds the one core-list world, re-recorded once at the flip, 1,010 personas). Behaviour: `test/contracts/core_list_pool_behavioral_test.dart` (56 tests; B1's 18 mutations and step 1A's 19, each reddening its named test). ON world: `test/plan_generator/core_list_pool_gate_test.dart`, hard zeros over the 998 personas (1,036 since Unit 1B-F), report `test/plan_generator/core_list_pool_report.md`. Known cost, accepted by D6 and a flip criterion: promoted bodyweight users get thin ON sessions (intermediate min 1 exercise/day vs 3 OFF; advanced mean 4.67 vs 8.56) until Batch C adds 84 core rows.
+
+### Generator step 1A (2026-11-08, still OFF)
+
+Plan `docs/plans/2026-11-08-generator-step1-core-list.md` (v6, six context-blind review rounds); board OI-484 (equipment fit), OI-485 (core-list blockers). Source: the 2,304-plan audit (now `test/plan_generator/plan_audit/`, run with `PLAN_AUDIT_OUT=<dir>`), which found the ON world handing advanced home users E193 Jump Squat as the main squat (1,273 jump rows in week 1, 573 as the lead), Pike Push Up on 56 of 56 Strength gym OHP Days (E010 and E011 tie on every key and E010 wins on id), and household rows where a loaded row fits.
+
+**The lesson that shaped it.** In `rankedPool` an ORDERING key cannot keep a row out of a pick: `_pickCoreList` hands the ordered pool to `_selectCandidate`, whose `_preferNovel` returns the first row NOT in the avoid set (previous phase, plateau, upper-day feeders, B's soft avoid of A, demoted). So once the top row is avoided the next one wins, whatever its key. Only a pool partition keeps a row out; a key only decides ties among rows that may all be picked.
+
+1. **R2, jump partition.** After the core / fill step and BEFORE the improvised filter: when the pool holds a row that is neither `high_impact` nor `discipline: plyometric`, the jump rows leave. A jump-only pool is kept (a slot is never emptied). Before the improvised filter so a lone implement jump row (E066 Box Jump, plyo box) cannot be the survivor of that filter.
+2. **R3 (a), like-for-like reduction.** For an implement user, in an isolation slot whose pattern is neither an implement pattern (the five of OI-387/388 plus `vertical_push`, see R3 (b)) nor `core`: when the pool holds an implement row typed `isolation` whose FIRST `primary_muscles` entry names the slot's muscle (lower-cased equality, or `<muscle> (<head>)` with the head in `{calves: {gastrocnemius, soleus}}`), the pool is REDUCED to those rows. Removing only the household rows left compounds behind (Goblet Squat behind Leg Extension), which variant B or phase 2 then picked. "Glutes (medius)" deliberately does not name Glutes. A one-row pool makes B and phase 2 repeat it, which is reported. Data contract: `test/contracts/core_list_like_for_like_data_test.dart`.
+3. **R3 (b), fit key.** In non-core compound slots, a row needing an item the user has that is not a household item sorts before one that does not, placed directly before `priority_tier` (after the phase-1 foundational key). A bodyweight-only capability scores every row the same. The key alone did not keep Pike Push Up out of a dumbbell user's second press (variant B walked past the avoided press to the foundational Pike in phase 1), so `vertical_push` also joined the implement patterns (plan v7). **Amended by Unit 1B-R (2026-11-12, OI-497, founder d25, diagnose `e4b7a2`).** (i) The key applies in every non-core slot (an isolation-typed slot too); its position is unchanged, so it orders rows of equal sub-focus and type match only. The isolation-typed Legs quad slot (no loaded quad isolation row at home, so R3 (a) found nothing) had let the foundational E042 Walking Lunge win on `is_foundational` (373 equipped plans). (ii) In phase 1, key d (foundational first) came before this key, so foundational bodyweight rows beat the non-foundational S1b-2 loaded versions (Single Leg Glute Bridge 122 plans, Bodyweight Good Morning 58). A new key before key d sorts a non-fitting row behind `topFit` (the loaded row the walk will actually reach: the first fitting row by the rest keys, skipping demoted, soft-avoided and `walkedNames` rows) when `topFit` matches the slot at least as well (`slotMatch = 2 * subMiss + typeMiss`). Rejected prototypes (2,304-plan audit): every fitting row first (crossed the slot's type, Wall Sit -> Step Up in 64 plans); key d moved after the fit key (gym loaded-for-loaded reshuffles); the best match among all fitting rows (pushed a bodyweight row behind a row the walk skips). Kill switch `disable_loaded_wins`. 443 plans change, 0 bodyweight; 116 home_dumbbells plans keep an unloaded pick where the library has no loaded row left for the slot (leg curl, hip, calf; plan section 4).
+4. **R5, glute-first.** In Glutes `hip_dominant` slots only, the LAST key before the id tie prefers a row whose first primary muscle contains "glute": gym intermediate and advanced Glutes hinge E021 Deadlift becomes E047 Hip Thrust (they tied and E021 won on id). Hamstrings slots keep E021, so Strength's Deadlift Day keeps it.
+5. **R4, the top-up.** Since Unit 1B-F the top-up is always core-first (the `coreListOnly` parameter, REQUIRED at 1A because a defaulted parameter is how `buildPinnedDays` once stayed unfloored, was deleted with the cascade exit that passed false). Pass 1 runs the whole ladder keeping only rows core at the user's level or an easier one (`CoreListSelector.isCoreAtOrEasier`); pass 2 runs today's ladder with a fresh memo, so the floor of 3 holds.
+
+R1 (core-list data for advanced home and bodyweight squats, bodyweight hinges, curls and calves) and R7 (bodyweight arm and delt gaps) are founder-signed data and ship with the R9 gate zeros (i) and (iv); the flip and the old-path deletion are Unit 1B.
+
+**Library Batch S1a (2026-11-08, seed v21; plan `docs/plans/2026-11-08-library-batch-s1-core-data.md`, diagnose `e9a4b6`).** The R1 / R7 data shipped as `core_levels` on 34 rows (no cloud change: `core_levels` is not a cloud column). Kept rows change through `scripts/data/library_s1_core_levels.json` and an importer stage; source rows in the Batch C source. Two rows were added to keep a loaded row for equipped users: G0339 (hamstring curl, basic gym) and G0355 (a second lateral raise). The second one exposed a third way a household row reaches an equipped user's implement-pattern slot: `pickedNames` runs in `passes()` BEFORE the improvised filter, so once a day's first slot takes the only loaded row, the second slot's pool holds only household rows and the filter (which never empties a pool) cannot fire. Gate R9 (i) also fails an uninjured persona that meets a jump-only pool (the pre-S1a Jump Squat leads came from jump-only pools, which the plain wording exempted). Named exceptions to `core_levels` ⊆ `suitable_for`: E010 and E045 (`library_s1_core_levels_test.dart`).
+
+**Library Batch S1b-1 (2026-11-09, seed v22; plan `docs/plans/2026-11-09-library-batch-s1b1-gym-hip-goblet.md`, diagnose `f3b8d1`).** Founder decisions on the S1a items: the R3 (a) like-for-like rule could not fire in the Hip slot because its target `Hip` is a region no row lists first, so `CoreListSelector._slotRegionMuscles` maps Abductors / Adductors to it; E107 Hip Abduction Machine and G0168 Cable Hip Adduction are core at every level (basic_gym has cables, no machines) and E109 Glute Kickback (Cable) gains beginner, so a gym user's Hip and Glutes isolation slots never take a bodyweight row (new gate zero; without E109 the machine took the beginner Glutes slot on the id tie); E038 Goblet Squat is back to beginner / intermediate. Towel Row, Sliding Leg Curl and the Front Delts gap stay as shipped; E010 / E045 `suitable_for` widening is a cloud column and goes to S1b-2.
+
+**Library Batch S1b-2 (2026-11-09, seed v23; plan `docs/plans/2026-11-09-library-batch-s1b2-loaded-versions.md`, diagnose `b7e2c4`).** Nine loaded versions N14 to N22 (OI-148) copy their original's movement fields and injury tags and carry `same_movement_as`; the founder's condition (a version and its original never share a day) is `SameMovement` (`same_movement.dart`), which adds a picked name's partner wherever generation checks a picked name: queryV4 `excludeNames` (so OFF same day, OFF variant B against A for a non-strength goal, the top-up and L6), the universal-pool skip, the core-list picked set and B soft set, the previous-phase and upper-day avoid sets. Plateau names stay per exercise. Demoted names: the OFF post-pass kept a demoted original from being replaced by its own loaded version; since Unit 1B-F the core path widens the demoted set by the loaded versions of each demoted original (`_demotedWithLoadedVersions`, one direction, read by `_pickCoreList` and `topUpDays`), so that holds on the only path (tests 4, 6, 6b, 6c, 7 of `same_movement_behavioral_test.dart`). The scorecard mirrors that carried the rule were deleted. E010 / E045 `suitable_for` widened to every level (founder, board d12), so the step-1A level-agreement exceptions are gone and the core-list gate fails any picked row whose `core_levels` lie outside `suitable_for`. E053 Donkey Calf Raise retirement split to S1b-3. OFF, today's queryV4 order (compound, priority tier, foundational, then key order) puts an E original ahead of its N version on every tie, so the loaded versions mostly reach users through the core-list pool (measured in the plan's Results).
+
+## Thin-day top-up (OI-401, live, kill-switch `disable_thin_day_topup`)
+
+Plan `docs/plans/2026-10-24-thin-day-topup.md` (r3, two converged review rounds); diagnose `docs/diagnoses/2026-10-24-thin-day-topup-2d04d7.md`; founder decision 2026-10-23, option (b).
+
+**Why.** The cascade drops a slot when no safe candidate exists (the safe-omission rule), and nothing refills the day. After the v14 injury tags an injured user could get one or two exercises, or none (see the diagnose for the before and after tables). A repeat phase also dropped now-contraindicated pins and refilled a variant only when it was EMPTY.
+
+**Where.** `ExerciseSelector.topUpDays` runs on the finished `List<PopulatedDay>` at two exits since Unit 1B-F: the `_pickCoreList` return (`pickV4`) and the end of `buildPinnedDays` (the cascade's exit was deleted). `plan_generator.dart` is not edited (rule 14). The pure rules live in `thin_day_topup.dart` (`ThinDayTopUp.floor` 3, `neighbours`, `applies`, `anchors`); the orchestration stays in the selector because it needs the private `_selectCandidate` and `_buildExercise`.
+
+**What.** Injured users only (`injuries.isEmpty` returns the same list instance). Per variant under the floor: for each of the day's own (muscle, pattern) anchors in slot-priority order, try the anchor's OWN pattern first (B was built with A's names hard-excluded, and a repeat phase drops pins without touching the slot), then its neighbouring patterns, closest first; one move per anchor per round, rounds until the floor or no progress; then `core` with no muscle anchor; then stop. Every candidate is a `queryV4` row with the cascade's own injury, capability, exclusion and experience filters, so the stage cannot hand an injured user a tagged move or one the equipment forbids. Phase 1 asks for `is_foundational` rows first, then relaxes; the `core` stage does so in EVERY phase (without it `queryV4`'s compound-first sort handed an advanced user Dragon Flag from phase 2, plan R13), and a `calisthenics_skill` or `olympic` row is never added at any stage. A `(pattern, muscle)` query that returns nothing is never repeated for that variant. There is ONE new `queryV4` call site (the exercise-seam allowlist moved 16 to 17).
+
+**Avoid sets (soft, lower-cased).** A avoids the previous phase's picks, the plateau names and B's names (not for an alias day, not for `strength`). B avoids the same plus A's names after A's own top-up. Unlike the OFF cascade, which hard-EXCLUDES A's names from B, this is a re-order inside `_selectCandidate`, so a B emptied only by that exclusion can repeat A's moves instead of falling to a neighbour or core. With the curated-substitute preference on, the pool narrows to the curated subs first, so a repeat of a curated sub is possible. The L6 demoted names (phase 2+) are stronger than a soft avoid: they leave the candidate pool unless they are all that is left, because the cascade's L6 post-pass (`_applyHistoryAdjustments`) has already run and a soft avoid loses to the substitute narrowing (found by the full suite, `core_list_pool_behavioral_test.dart`; regression `thin_day_topup_behavioral_test.dart`, "demoted + the injury-substitute preference").
+
+**Aliasing.** `alias = identical(input A, input B)`, computed before anything is rebuilt; an alias day is topped up once and B is that list, so `PeriodizationEngine` (which reads `exercisesB` on weeks 2 and 4) sees the same names. A pinned B that merely equals A in content is not an alias and is topped up on its own.
+
+**Residual (OI-408), closed 2026-10-26 by Batch C1.** A bodyweight beginner with shoulder + lower_back injuries on a 5- or 6-day upper-body day kept `Plank, Dead Bug`: `VolumeFilter.targetCount('beginner', 5|6)` is 4, so the day is trimmed before the selector runs, and the founder's "then stop" ends the stages. The third option, Batch C rows, is what happened: on the 914-row library the five-file injury sweep (7,200 runs) has 0 thin days, and deleting the 629 rows brings back exactly 2 and 6 thin scan days. The trim itself is unchanged; the sweep's hard zero is the guard (the `kPairsThinBaseline` ratchets are gone).
+
+**Scorecard.** `CascadeTracer`, `QueryV4Mirror` and `generator_matrix.dart` mirror per-slot cascade attempts and never call the selector, and a top-up has no slot, so the scorecard cannot see this feature; the injury sweep and the behavioural file are the proof.
+
+**B1 ON.** The top-up is path-independent and uses the OFF-path candidate rules, also when the core-list pool is ON. Whether a top-up under B1 should be core-list-only belonged to B1's flip review; generator step 1A answered it (R4, below the core-list section): on the ON paths the top-up prefers core rows and keeps the floor.
+
+**Evidence.** `test/contracts/thin_day_topup_behavioral_test.dart` (real `generateV4` personas whose thin day is asserted first with the kill-switch set, plus direct `topUpDays` calls on a seeded library), `test/plan_engine_v4/thin_day_topup_test.dart` (pure rules), `thin_day_topup_flag_test.dart`, the five-block sweep (since Batch C1 five files, one test per equipment tier: `test/plan_generator/injury_floor_sweep_test.dart` is block 1, `injury_floor_sweep_singles46_test.dart`, `injury_floor_sweep_pairs_test.dart`, `injury_floor_sweep_pairs46_test.dart` and `injury_floor_sweep_repeat_test.dart` the rest, harness `test/helpers/injury_floor_sweep_lib.dart`), and the generator golden (2 keys moved).
+
+## Session set budget (Batch B2, ON for every generation since 2026-11-02; flag and OFF paths deleted)
+
+Plan `docs/plans/2026-10-22-session-set-budget.md` (r6). Founder decisions F1 (rule 14 waived for the `generateV4` wiring only), F2 (empty `session_duration_minutes` = 60), F3 (a focus group may reach 25 weekly sets), F4 (user-added exercises are never trimmed or counted; library repeat pins are budgeted), F5 (focus session cap 12).
+
+**Why.** Before the flip nothing read the user's minutes: `VolumeFilter.targetCount` fixed the exercise count and `PeriodizationEngine` forced a 4-set minimum and a phase multiplier (all three deleted 2026-11-02; the last OFF table, build_muscle full_gym, phase 1, week 1, ran from 41 to 116 minutes: advanced 4-day 116.2, advanced 6-day 104.9, intermediate 4-day 93.3). Flip record: `docs/plans/2026-11-02-session-set-budget-flip.md`, `docs/plan-reviews/set-budget-flip.md`.
+
+**Time model.** `exerciseSeconds = 1.20 x (overhead + sets x work + (sets - 1) x rest)`; archetypes H / M / I / B (work 23 / 35 / 47 / 40 s, overhead 120 / 90 / 45 / 30 s). Rest by EXERCISE archetype (OI-456 piece A, 2026-11-04; it used to be by day intensity, strength 150, hypertrophy 75, endurance 38, which fitted 4 exercises into a 60-minute strength day and 9 into an endurance day): H 150, M 120, I 75, B 60, unknown 60 (`SessionBudget.restForArchetype`); every exercise starts at `baseSets` 3 on every day. The day's budget is `(minutes - warmCoolMinutes(minutes)) x 60 - finisherSeconds`, with `warmCoolMinutes` = 6 to 14 minutes; the stored lead-in and cool-down items scale with the minutes (`warmCoolItemSeconds`: 60 s at 30, 180 s at 60, 300 s at 90).
+
+**Bands and caps.** Per budget group (`BudgetMuscleGroups`, ten groups): a weekly (bottom, top) band and a session cap by goal and level (build_muscle intermediate 12 to 16, cap 8). Focus group: top 25, cap 12. A lighter (deload-archetype) phase pins every group's top to the band bottom. Max 5 sets per exercise. The level is the EFFECTIVE level (a beginner at phase 5 is budgeted as advanced).
+
+**Allocator.** `SessionSetAllocator.allocate` runs in `generateV4` before `PeriodizationEngine.apply`, ahead of `SequencingEngine.sequence`, so its rank is the split's slot-priority order. Pass A admits by priority rank across the whole week (every day's lead lift first, with a reservation so one group cannot starve another day's lead lift); the empty-day guard puts a day's first exercise on when nothing else fits (`timeForcedFirst` when the time was already spent, `capForcedFirst` when a weekly room was gone: the gate requires 0 of the second); pass C raises groups to their bottom; pass D takes focus groups toward 25. Five reasons a group stays below its bottom: `not_trained_by_split`, `time_limited`, `co_group_limited`, `cap_limited`, and `copy_day_limited` (a copied B day that equals its A day is frozen). A day whose B list equals A's is allocated once; 6-day plans allocate A only. **Lead-lift policy:** the lead lift is protected from the week (the reservation) and from an empty day (the guard), NOT from the clock: a lead lift the time cannot afford reads `sets: 0` and is dropped (measured: 0 of 9,966 allocated days in the grid).
+
+**Consumers.** Each takes the same `SessionBudgetContext` and builds its own `BudgetLedger` over it: `PeriodizationEngine.apply` (base sets = the allocation, week 2 +1 where the ledger allows, week 4 `min(sets, max(2, floor(0.6 x own allocated)))` (OI-456: 1 stays 1, 2 stays 2, 3 and 4 become 2, 5 becomes 3; a 2-set day gets no week-4 set cut, the rep and load cut carries the deload), deload stash = the exercise's own allocation), `VolumeTitration.applyToWeeks` (band bottom as MEV, ledger as MRV; a zero delta is skipped), and `WarmupCooldownSelector.attach`, which reads the context for its minutes only. The coach's `SwapService.shortenDay` prices a day through `budgetedDaySeconds` when the flag is ON (OFF keeps the old sets x (60 + rest) sum).
+
+**Not budgeted (Ruling 8).** A row is budgeted only if `SessionBudget.isBudgeted` says so: not custom, not timed / cardio / distance, and its name in `ctx.archetypeByName`. Others keep their sets and only spend time, at their own rest (Unit 1B-F, OI-489: a LIBRARY timed row may give way to a slot ranked ahead of it that the clock alone refuses and that brings the week a first credit, Ruling 5, and to the empty-day guard's forced lead, Ruling 5c; never the day's only credit for a group, never below the count floor) (a rep-based custom at its archetype's rest, the same value the allocator, the week-2 gains and the `_applyWave` stamp use). A cardio / distance / timed row whose `reps` names minutes works that long per set (`longEffortWorkSeconds`, capped at 7200 s); seconds, metres and rep prescriptions keep the table (B = 40 s a set).
+
+**Display (Ruling 13).** `SessionBudget.estimateDaySecondsFromPlanDay` prices a stored plan day (id lookup, then an exact-name lookup that rejects alias matches; a corrupt number is clamped); `budgetedDayMinutes` / `budgetedDaySeconds` / `homeCardMinutes` (`session_estimate.dart`) are what Train (`WorkoutDayData.budgetMinutes`), Home and the coach read; a pricing failure reports `session_estimate_day_minutes` and returns null. OFF keeps `totalSets x 2.5`.
+
+**Lead-first allocator (Unit 2A, OI-486, 2026-11-13; plan `docs/plans/2026-11-12-generator-step2-allocator.md`, seven review rounds, founder d26-d29; diagnose `d4a7e2`).** Seating every slot at 2 first (OI-456 piece B) let an accessory take a group's weekly top before the lead grew, and the protection read rank 0, which is often not the row the sequencer opens the day with: 1,084 of the 2,304 audit plans held a compound lead 2+ sets under an isolation. 2A keys everything on the opener (`SequencingEngine.openerOf`, the same sort as `_reorderDay`): R1 seats it at 3 in pass A when that fits, R2 holds the other budgeted rows at its sets + 1 in pass C (pass D, focus, exempt: d27), R3 tries the lead, capped and main worlds per variant and keeps the first not worse than main, R5 caps week 2 the same way. Rejected on the way (plan section 2): the strict cap (lead, not lead + 1: Calves -2,954 and 34 fewer suitable plans for 6 fewer starved), a sequencer change that put the first-ranked compound first (R4: 8,704 days changed their first exercise, unilateral openers 374 -> 5,498; removed), a priority-1 opener clause (d29), a weekly-floor term in the fallback (u1935, starved plans back to 1,008), and the cap alone (c6665: 132 starved plans, 548 suitable, planned minutes -2.65%). Result on the grid: starved 1,084 -> 47 plans (the residue all holds), suitable 513 -> 789; costs 12,090 days lose an exercise (7,224 swaps), some 30-minute days reach the count floor's 300 s bound, Calves -3,374 and Glutes -1,768 sets, and a pinned repeat can be a day thinner because its pins come from a 2A phase 1 (`kThinCeilings`, unit 2B). Kill switch `disable_lead_first`.
+
+**3-exercise day floor (Unit 2B, OI-452, 2026-11-13; plan `docs/plans/2026-11-13-generator-step2b-day-floor.md`, four review rounds, founder d30-d33; diagnose `b3f1d8`).** A day could end with 1 or 2 exercises: on main 8a2e1c5a the probe's two injury-sweep blocks held 369 thin day-weeks of 34,560 and the whole injured grid 2,292 of 418,608 (94 with one exercise). The labels hid the cause (363 read `selectorThin`); a trace of every left-out slot showed each refused by a WEEKLY top earlier days had filled (Back 219, Glutes 69, Quads 61), with the session cap and 700-850 s of clock to spare, and pass A2's `canForce` never passes a top. The floor runs after A2: a day under min(3, its reach) rows seats remaining slots at 2 sets past the top, one per day per round, never past a session cap or a reservation-blocked slot, in the order `floorPrefers` (fewest groups over, least excess, cheapest). Founder decisions: no limit on the excess (d30; the probe's worst is +8, 42 group-weeks at +6 / +8, bodyweight shoulder + lower_back and legs-only lists; a +4 cap would leave 241 thin day-weeks in the grid, +2 128 of the probe's 369), every phase including the deloads (d31; phase-4 pairs 89 -> 0, +2 to +4 sets), a day handed 2 slots floored to 2 (d32), and no clock bound (d33; a seat that did not fit the remaining seconds is `overClock` and its seconds are excused by the restated invariant). Rejected on the way: the floor inside every 2A world (it changed R3's choice on 330 day-weeks that were never thin, lifting a lead world one row short back over the top; the worlds are chosen floor-off, then re-run), a floor bound by A2's 300 s clock (d33), and the reverted B2 guard that restored removed slots over the top with no restated invariant. Measured on the probe: thin 369 -> 0, no row lost, 10 day-weeks keep their exercises with a set less (a pass-B knock-on); the injured grid 2,292 / 94 -> 0 / 0, run time unchanged; uninjured golden (1,010) unchanged. The restated invariant (`test/helpers/budget_invariant_oracle.dart`, read by every test of the weekly top or the day's time): week <= top + the floor's exact over-top sets (`FloorSeat.overBy`), the session cap holds, time <= budget + the day's `countForced` seconds (at most 300) + the `overClock` seats' overrun (`overSeconds`). The final tree's gate (6,720 injured personas, weeks 1-4) holds no day under 3, loses no exercise against the floor-off plan, counts 7 knock-on day-weeks (the probe's 10 was the prototype's, weeks 1-2), and its floor-off plans equal main 8a2e1c5a byte for byte; exact counts in the diagnose doc. Kill switch `disable_day_floor` (OI-506).
+
+**What the ON gate measured (2026-10-25, 1,847 runs, `session_set_budget_report.md`).**
+(a) Time: 3,965 of 33,204 plan days (12%) run longer than the user's minutes by some amount, median 0.70 minutes over, 911 over by more than a minute, worst 5.5. The gate's limit is minutes + 2: the model reserves `warmCoolMinutes` while the stored warm-up and cool-down items vary by day type (Ruling 3). Seven days exceed the limit, and all seven are the forced lead lift (below). Display equals the oracle to 1e-6 s on all 33,204 days.
+(b) The one allowed overage is the forced lead lift: on a 30-minute 3-day home_dumbbells day, library timed / distance rows alone can spend the whole budget (Ruling 8), the guard still puts one budgeted exercise on, and the day runs up to 5.5 minutes over (`timeForcedFirst`: 14 days).
+(c) Unused minutes: the median is 0.5 at 30 minutes, 3.3 at 60 and 27.2 at 90. The report does not attribute the 90-minute leftover to one constraint; the places it can come from are the 5-set exercise max (the fixed exercise count is deleted), the session caps and the weekly tops (F3: leftover time stays unused).
+(d) The founder case (intermediate build_muscle full_gym 6 days 90 minutes) trains Quads 8 weekly sets against a band of 12 to 16 while Glutes sits at its top (`co_group_limited`). Measured at the flip (week 1): Legs A holds Barbell Back Squat 4, Deadlift 4, Hanging Leg Raise 4, Leg Extension 4, Standing Calf 4, Seated Calf 2 (88.1 of 90 minutes); Legs B has no quad exercise (Deadlift, Romanian Deadlift, Hanging Leg Raise, Glute Bridge, Leg Curl, Standing Calf, Russian Twist); Glutes 4+4+3+3+2 = 16 = the top, so the squat cannot grow and Legs A is out of time. Two levers existed at the flip: a quad slot on Legs B in the 6-day split, or an allocator policy that serves below-floor groups first (the founder chose the slot plus a co-group credit policy, below). **Resolved by OI-454 (2026-11-06), the founder chose option (a) plus a co-group policy.** Legs B swaps its Glutes / hip_isolation slot for a Quads / knee_dominant / compound slot (priority 2), and `SessionBudgetContext.quadPrimaryCreditsGlutes` is false for 6-day build_muscle only (`generateV4`): an exercise whose FIRST listed muscle is Quads credits Quads but not Glutes (`BudgetMuscleGroups.creditedOf`), so the Glutes top and session cap no longer refuse a squat, lunge or leg press. The allocator, `PeriodizationEngine.apply` week 2 and `VolumeTitration` all read the one flag. Measured, week 1, 90 minutes (Quads / Glutes / Hamstrings): founder case 8 / 16 / 11 -> 12 / 13 / 12; Quads at 90 minutes by level and tier (bodyweight, dumbbells, basic gym, full gym): beginner 2 / 2 / 2 / 6 -> 10 / 10 / 10 / 10, intermediate 5 / 5 / 3 / 8 -> 12 / 12 / 10 / 12, advanced 5 / 5 / 3 / 8 -> 12 / 13 / 9 / 12 (floors 10 / 12 / 14). Not reached (OI-477): intermediate basic gym 10 against 12 (`cap_limited`), advanced bodyweight 12 against 14 (`co_group_limited`: Lateral Lunge, Sumo Squat and Curtsey Squat list another muscle first and keep crediting Glutes), advanced dumbbells / basic gym / full gym (`time_limited`: the 90-minute day is full, no minutes were added), and 9 of 12 personas at the 60-minute default. Widened by Batch C2c (OI-474): the bodyweight E230 takes the Hamstrings slot in bodyweight and home plans, so at 90 minutes intermediate reads 10 / 10 / 10 / 12 and advanced 10 / 10 / 9 / 12 (advanced bodyweight and home are now `cap_limited`, not `co_group_limited` and `time_limited`), 7 of 12 personas are short at 90 minutes and 11 of 12 at the 60-minute default, and Hamstrings rise 2 to 5 sets in 11 cells; see OI-477 and the override tables in `quads_floor_6day_behavioral_test.dart`. Stated cost: the glute work a squat does no longer counts against the Glutes band in this split, so the founder case's squat-inclusive glute volume (counting every listed muscle in full) reads 22 against a credited 13 and a top of 16, and a beginner's about 21 against 12; the credited figure stays inside the band. A hip hinge that lists Quads first (Trap Bar Deadlift) keeps its Glutes credit. A global rule was prototyped and rejected: it changed 745 of 999 golden keys. The 3 / 4 / 5-day splits have their own Quads shortfalls and keep full credit. Plan `docs/plans/2026-11-06-oi454-quads-floor.md`, proof `quads_floor_6day_behavioral_test.dart`, `quads_credit_flag_consumers_test.dart`, SoT `quad_primary_glute_credit`.
+(e) Floors by label (group-runs): `time_limited` 13,022, `cap_limited` 3,702, `co_group_limited` 3,538, `not_trained_by_split` 85.
+(f) A repeat phase (`pinnedExercisesByDay`) takes the previous phase's exercise names, which came out of an allocation that dropped what did not fit the minutes then, and the allocator never adds exercises. A user who moves from 30 to 90 minutes between phases and repeats keeps the short list; a fresh pick would not (the repeat gate, `pro_phase_advance.dart`, tests adherence only).
+All are flip-review questions, terminal in `docs/audit/session-set-budget.closure.yaml`.
+
+**Evidence.** `session_set_allocator_behavioral_test.dart`, `session_set_budget_consumers_test.dart`, `keep_all_slots_selection_test.dart`, `session_set_budget_wiring_test.dart`, `session_estimate_display_test.dart`, `test/plan_engine_v4/session_budget_test.dart`, `budget_muscle_groups_test.dart`, the ON-world gate `test/plan_generator/session_set_budget_gate_test.dart` (its oracle restates the constants, the archetype rule, the muscle mapper and the band tables; zeros for time, caps, tops, lighter phase, lost lead lifts, empty days and display; report `session_set_budget_report.md`), and the whole-output golden `test/plan_generator/generator_golden_test.dart` (998 personas, re-recorded wholesale at the flip: every persona changed).
+
+## Common pitfalls - full rows
+
+_Moved verbatim from `lib/shared/repositories/plan_engine/CLAUDE.md` (original lines 324-332, context-lean batch 2026-09-29)._
+
+| Pitfall | How to avoid | Source |
+|---|---|---|
+| Plan generator picks wrong-target exercise | Cascade attempt3 drops `target_focus` + `exercise_type`, keeping only `movement_pattern` — results in a push instead of a chest-specific push. Root causes: (a) exercise library pool too shallow for the slot's triple, or (b) for Phase 1 beginners, `suitable_for` too restrictive (needs "Beginner" + `is_foundational: true`). Fix: either expand library `suitable_for` on the missing exercise OR adjust `split_resolver.dart` slot ordering so beginners don't hit the shallow pool at P1/P2. Verify with `dart run test/plan_generator/sample_plans_report.dart` (target: 0 attempt3/universalPool/none). | (relocated 2026-05-18 — see docs/diagnoses/INDEX.md, a local build: CLAUDE.md §4.1.5) |
+| Plan generator returns wrong number of exercises | The count is the session set budget's (minutes, weekly band, session cap), over the slots `split_resolver` emits in priority order; `VolumeFilter` no longer trims (`targetCount` was deleted 2026-11-02). The allocator admits slots in order and skips one that does not fit. When adding/reordering a split, read `session_set_allocator.dart`. | (relocated 2026-05-18 — see docs/diagnoses/INDEX.md, a local build: CLAUDE.md §4.1.5) |
+| Pike Push Up assigned to rear delt slot | TWO distinct causes: (a) a WRONG-PATTERN pool ENTRY — Pike Push Up (a vertical push) was mis-filed under `shoulder_isolation`, Dead Bug/Side Plank (core) under pull/hip — fixed by CORRECTING `universalPoolV4` itself (Batch 13-A `c3f9b2`, pinned by `universal_pool_mirror_test`, mirror lockstep with `cascade_tracer.dart`); (b) FREQUENCY of falling to attempt-5 — too many slots of one muscle/pattern/type vs pool depth — cap rear delt 3/week, lateral delt 3/week, front delt 1/week in `split_resolver.dart`, NOT the pool. Contradiction resolved: the pool is the right fix for a wrong PATTERN entry; split_resolver is the right fix for over-ALLOCATION frequency. | (relocated 2026-05-18 — see docs/diagnoses/INDEX.md, a local build: CLAUDE.md §4.1.5) + Batch 13-A c3f9b2 |
+| **A bodyweight user is prescribed something needing equipment** | ⑦ **OI-89, 2026-08-28.** `equipment_tier` is a CURATION hint and was OVER-TAGGED — Chin Up sat in the bodyweight tier needing a pull-up bar. Never key a safety check on it. The check is `EquipmentCapability.canPerform(equipment_needed, effective)` where `effective = tierItems[tier] ∪ equipment_owned − equipment_exclusions` (`EquipmentVocab.effectiveItems`). `capability` is a **required, non-defaulted** parameter on `pickV4` / `_fillSlots` / `_cascadeFill` / `buildPinnedDays` / `_applyHistoryAdjustments` so the compiler enumerates every call site — do not give it a default. `null` means DO NOT ENFORCE — flag off, or Hive unreadable. It does NOT mean "an empty set", which would delete everything because `canPerform` fails CLOSED. ⚠ **Corrected 2026-08-28 (⑧ OI-144):** `null` used to ALSO mean "a tier above bodyweight", and that second meaning is gone. The floor applies at EVERY tier and capability **subsumes** queryV4's tier block (`exercise_repository.dart:334` — `else if`, never both, or the tier block stays binding and owning something can never widen the pool). Safe only because OI-89 flipped the tier invariant to EQUALITY, so `equipment_tier` carries no information `equipment_needed` lacks; if that is ever relaxed, revisit. An UNRECOGNISED tier resolves to `bodyweight` in both producers — `effectiveItems` fails OPEN there, a branch only reachable once the bodyweight gate was removed. | OI-89 + OI-144, diagnoses `f7b2c4` / `c9a7e2` / `b6f4d1` / `d3a8f5` |
+| **A capability filter empties a slot instead of substituting** | Filtering shrinks pools, and a pool that empties falls to `universalPoolV4`, which picks by NAME and bypasses `queryV4` — so it must apply the capability drop ITSELF, exactly as it already does for exclusions. Its per-pattern **pure-bodyweight tails** are what guarantee a survivor; `equipment_exclusion_filter_behavioral_test` pins that invariant and reddened on `horizontal_pull`/`vertical_pull`/`elbow_flexion` the moment OI-89 retagged Pull Up / Chin Up / Inverted Row off the floor. | OI-89 |
+| **A pattern satisfies the floor invariant and STILL leaves slots empty** | Measured, not hypothetical: taking six patterns to exactly **3** baseline rows passed the "≥3 baseline, ≥1 core" test and left **331 empty slots**. The invariant describes the LIBRARY; the empty slots are a property of the GENERATOR running over it — `pickedNames` dedups across a whole plan, so a 3-row pool is exhausted inside one week, and `suitableFor` narrows it further for advanced users. **6–7 per pattern is the working number**, calibrated on the two that already worked (`horizontal_push` 6 rows / zero missing, `hip_isolation` 5 / zero). Assert on the generator's OUTPUT, not on row counts. | OI-89, wave 2 (E274–E294) |
+| **The scorecard is green in every world** | `test/plan_generator/` runs through `CascadeTracer` + `QueryV4Mirror`, which are MIRRORS. Before 2026-08-28 they did not model the capability flag, so the harness reported **byte-identical numbers with it ON and OFF**. `universal_pool_mirror_test` pins the pool DATA equal; nothing pins the mirrors' BEHAVIOUR. **When you add a filter to production, add it to both mirrors in the same commit**, and sanity-check by toggling the new input — if nothing moves, the harness cannot see it. | OI-89 |
