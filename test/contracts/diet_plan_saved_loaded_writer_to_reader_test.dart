@@ -88,6 +88,32 @@ void main() {
               'so saved plan survives reinstall for paying users');
     });
 
+    test('saved item key set is EXACTLY the pre-Unit-1 set (no role key)', () {
+      // Diet plan Unit 1 (2026-11-14): the curated generator adds a role to
+      // plan items; it must never reach the saved JSON, or every reader
+      // (TodaysMealsCard, restore, the cloud blob) sees a new shape.
+      final body = dietPlanScreenSrc.substring(
+          dietPlanScreenSrc.indexOf('void _savePlan'),
+          dietPlanScreenSrc.indexOf('void _loadSavedPlan'));
+      final itemMap = body.substring(body.indexOf("'items': m.items"));
+      final keys = RegExp(r"'([a-z_]+)':")
+          .allMatches(itemMap.substring(0, itemMap.indexOf('.toList()')))
+          .map((m) => m.group(1))
+          .toList();
+      expect(keys, [
+        'items',
+        'food_id',
+        'name',
+        'serving_desc',
+        'serving_g',
+        'calories',
+        'protein',
+        'carbs',
+        'fat',
+        'category',
+      ]);
+    });
+
     test('cloud table saved_diet_plans referenced in sync_service', () {
       final sf = loadSyncServiceSource();
       if (!sf.existsSync()) return;

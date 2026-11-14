@@ -57,6 +57,10 @@ class DietPlanFoodItem {
   final String category;
   final bool isAnchor; // true = the slot's anchor protein
   final bool isQuotaLocked; // true = Pass 0 group-quota item; Pass 3/4 must not swap it out
+  /// The curated catalog role (`DietRole.name`) this item fills, e.g.
+  /// `mainProtein`. Set by CuratedDietPlanGenerator; null from this legacy
+  /// generator. Not persisted in the saved plan JSON (diet plan Unit 1).
+  final String? role;
 
   DietPlanFoodItem({
     required this.foodId,
@@ -71,6 +75,7 @@ class DietPlanFoodItem {
     required this.category,
     this.isAnchor = false,
     this.isQuotaLocked = false,
+    this.role,
   });
 }
 

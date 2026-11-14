@@ -16,7 +16,10 @@ import 'package:icanbefitter/shared/repositories/food_repository.dart';
 import 'package:icanbefitter/shared/repositories/user_repository.dart';
 import '../providers/nutrition_provider.dart';
 import '../providers/diet_plan_provider.dart';
+import '../services/curated_diet_plan_generator.dart';
+import '../services/diet_plan_flags.dart';
 import '../services/diet_plan_generator.dart';
+import '../services/diet_plan_swap.dart';
 
 /// Diet plan generator — FREE for everyone.
 /// Generated from food database (zero API cost).
@@ -35,6 +38,8 @@ class _DietPlanScreenState extends ConsumerState<DietPlanScreen> {
   // Cached so _swapItem applies the SAME diet-preference rule as generation
   // (plan-review round 2, finding 5: a veg user could be offered chicken).
   String _dietPref = 'veg';
+  // Regenerate taps this session; folded into the generator seed.
+  int _regenerations = 0;
 
   @override
   void initState() {
@@ -82,20 +87,24 @@ class _DietPlanScreenState extends ConsumerState<DietPlanScreen> {
         (profile['diet_preference'] as String?)?.toLowerCase() ?? 'veg';
     _dietPref = dietPref;
 
-    final now = DateTime.now();
-    final seed = DateTime(now.year, now.month, now.day).hashCode;
+    // Same plan all day on open; each Regenerate tap moves to the next seed
+    // (before Unit 1 the tap reused the day's seed and showed the same plan).
+    final seed = dietPlanSeed(DateTime.now(), _regenerations);
 
-    final servicePlans = DietPlanGenerator.instance.generate(
-      DietPlanInputs(
-        calorieTarget: calorieTarget,
-        proteinTarget: proteinTarget,
-        dietPreference: dietPref,
-        // Same source as DailyNutritionData.fiberTarget
-        // (nutrition_provider.dart:362) — no second default.
-        fiberTarget: (profile['fiber_grams'] as num?)?.toInt() ?? 30,
-        seed: seed,
-      ),
+    // Diet plan Unit 1: the curated, catalog-only generator, unless the
+    // local kill switch routes back to the legacy one (DietPlanFlags).
+    final inputs = DietPlanInputs(
+      calorieTarget: calorieTarget,
+      proteinTarget: proteinTarget,
+      dietPreference: dietPref,
+      // Same source as DailyNutritionData.fiberTarget
+      // (nutrition_provider.dart:362) — no second default.
+      fiberTarget: (profile['fiber_grams'] as num?)?.toInt() ?? 30,
+      seed: seed,
     );
+    final servicePlans = DietPlanFlags.curatedEnabled
+        ? CuratedDietPlanGenerator.instance.generate(inputs)
+        : DietPlanGenerator.instance.generate(inputs);
 
     _mealPlans = servicePlans.map(_servicePlanToScreenPlan).toList();
     if (mounted) setState(() => _saved = false);
@@ -105,6 +114,7 @@ class _DietPlanScreenState extends ConsumerState<DietPlanScreen> {
   /// the rest of the screen (swap UI, save UI, PDF export) keeps working.
   _MealPlan _servicePlanToScreenPlan(DietMealPlan svc) => _MealPlan(
         name: svc.name,
+        slotKey: svc.slotKey,
         items: svc.items
             .map((i) => _PlanFoodItem(
                   foodId: i.foodId,
@@ -116,6 +126,7 @@ class _DietPlanScreenState extends ConsumerState<DietPlanScreen> {
                   carbs: i.carbs,
                   fat: i.fat,
                   category: i.category,
+                  role: i.role,
                 ))
             .toList(),
         targetCalories: svc.targetCalories,
@@ -123,20 +134,28 @@ class _DietPlanScreenState extends ConsumerState<DietPlanScreen> {
       );
 
   void _swapItem(int mealIndex, int itemIndex) {
-    final item = _mealPlans[mealIndex].items[itemIndex];
-    // Same quality rules as generation (2026-09 meal-quality batch):
-    // ultra-processed rows and diet-incompatible rows are never offered,
-    // so a manual swap cannot re-introduce the Pringles-class defect.
-    // meal_fit is deliberately NOT enforced here — the user's tap IS the
-    // meal intent (plan-review round 2, finding 12a).
-    final alternatives = FoodRepository.instance
-        .getByCategory(item.category)
-        .where((f) =>
-            (f['id'] as String?) != item.foodId &&
-            !((f['is_ultra_processed'] as bool?) ?? false) &&
-            DietPlanGenerator.passesDiet(f, _dietPref))
-        .take(5)
-        .toList();
+    final meal = _mealPlans[mealIndex];
+    final item = meal.items[itemIndex];
+    // Diet plan Unit 1: catalog-only alternatives (diet_plan_swap.dart). The
+    // same diet-preference rule as generation applies, UPF rows are never
+    // offered, and nothing already in the plan or over its family cap is.
+    final alternatives = swapAlternatives(
+      foodId: item.foodId,
+      category: item.category,
+      calories: item.calories,
+      role: item.role,
+      slotKey: meal.slotKey ?? kDietMealNameToSlotKey[meal.name] ?? '',
+      dietPreference: _dietPref,
+      planFoodIds: [
+        for (final m in _mealPlans)
+          for (final i in m.items) i.foodId,
+      ],
+      slotOtherNames: [
+        for (var j = 0; j < meal.items.length; j++)
+          if (j != itemIndex) meal.items[j].name,
+      ],
+      repo: FoodRepository.instance,
+    );
 
     if (alternatives.isEmpty) {
       // B-pass finding 6: silent no-op gave the tap zero feedback; the UPF +
@@ -191,48 +210,34 @@ class _DietPlanScreenState extends ConsumerState<DietPlanScreen> {
                 style: AppTypography.body.copyWith(fontSize: 15, fontWeight: FontWeight.w800, color: AppColors.textPrimary),
               ),
               const SizedBox(height: 12),
-              ...alternatives.map((food) {
-                final foodName = food['name'] as String? ?? 'Unknown';
-                final cals =
-                    (food['calories_per_100g'] as num?)?.toDouble() ?? 0;
-                final servingG =
-                    (food['standard_serving_g'] as num?)?.toDouble() ?? 100;
-                final servingDesc =
-                    food['standard_serving_desc'] as String? ?? '100g';
-                final servingCals = (cals * servingG / 100).round();
-
+              ...alternatives.map((alt) {
                 return ListTile(
                   contentPadding: EdgeInsets.zero,
                   title: Text(
-                    foodName,
+                    alt.name,
                     style: AppTypography.body.copyWith(fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.textPrimary),
                   ),
                   subtitle: Text(
-                    '$servingDesc \u00B7 $servingCals kcal',
+                    '${alt.servingDesc} \u00B7 ${alt.calories} kcal',
                     style: AppTypography.bodySm.copyWith(fontSize: 11, color: AppColors.textDim),
                   ),
                   trailing: const Icon(Icons.swap_horiz,
                       color: AppColors.accent, size: 20),
                   onTap: () {
-                    final protein =
-                        (food['protein_per_100g'] as num?)?.toDouble() ?? 0;
-                    final carbs =
-                        (food['carbs_per_100g'] as num?)?.toDouble() ?? 0;
-                    final fat =
-                        (food['fat_per_100g'] as num?)?.toDouble() ?? 0;
-                    final factor = servingG / 100.0;
-
                     setState(() {
                       _mealPlans[mealIndex].items[itemIndex] = _PlanFoodItem(
-                        foodId: food['id'] as String? ?? '',
-                        name: foodName,
-                        servingDesc: servingDesc,
-                        servingG: servingG,
-                        calories: servingCals,
-                        protein: (protein * factor).round(),
-                        carbs: (carbs * factor).round(),
-                        fat: (fat * factor).round(),
-                        category: item.category,
+                        foodId: alt.foodId,
+                        name: alt.name,
+                        servingDesc: alt.servingDesc,
+                        servingG: alt.servingG,
+                        calories: alt.calories,
+                        protein: alt.protein,
+                        carbs: alt.carbs,
+                        fat: alt.fat,
+                        // the NEW row's category; the role is inherited
+                        // (alt.role is the resolved role of the replaced item)
+                        category: alt.category,
+                        role: alt.role,
                       );
                     });
                     Navigator.of(ctx).pop();
@@ -318,8 +323,12 @@ class _DietPlanScreenState extends ConsumerState<DietPlanScreen> {
           category: item['category'] as String? ?? '',
         );
       }).toList();
+      final name = mealMap['name'] as String? ?? '';
       return _MealPlan(
-        name: mealMap['name'] as String? ?? '',
+        name: name,
+        // The saved JSON stores only the meal name; the swap sheet needs the
+        // slot (diet plan Unit 1).
+        slotKey: kDietMealNameToSlotKey[name],
         items: items,
         targetCalories: 0,
         targetProtein: 0,
@@ -451,6 +460,7 @@ class _DietPlanScreenState extends ConsumerState<DietPlanScreen> {
             icon: const Icon(Icons.refresh,
                 color: AppColors.textSecondary, size: 22),
             onPressed: () {
+              _regenerations++;
               _generateFreshPlan();
               ScaffoldMessenger.of(context).showSnackBar(
                 SnackBar(
@@ -684,12 +694,14 @@ class _DietPlanScreenState extends ConsumerState<DietPlanScreen> {
 
 class _MealPlan {
   final String name;
+  final String? slotKey; // generator slot key; derived from name on load
   final List<_PlanFoodItem> items;
   final int targetCalories;
   final int targetProtein;
 
   _MealPlan({
     required this.name,
+    this.slotKey,
     required this.items,
     required this.targetCalories,
     required this.targetProtein,
@@ -706,6 +718,9 @@ class _PlanFoodItem {
   final int carbs;
   final int fat;
   final String category;
+  /// Curated catalog role (`DietRole.name`); null for a loaded saved plan
+  /// (re-derived by the swap sheet). Never written to the saved JSON.
+  final String? role;
 
   _PlanFoodItem({
     required this.foodId,
@@ -717,5 +732,6 @@ class _PlanFoodItem {
     required this.carbs,
     required this.fat,
     required this.category,
+    this.role,
   });
 }
