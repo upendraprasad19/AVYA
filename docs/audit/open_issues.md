@@ -7247,7 +7247,7 @@ d3c7a9 pitfall row in `lib/features/nutrition/CLAUDE.md`.
 - **Verified**: 2026-11-14, the three switches exist in `supabase/functions/daily-snapshot/index.ts` (`foodTypeExtractionRulesOff`), `supabase/functions/_shared/tools/nutrition/suggestMeal.ts` (`suggestMealStoredFoodTypeOff`, `legacyHandler`, `NON_VEG_KEYWORDS`) and `supabase/functions/_shared/captain_manual.ts` (`foodTypeManualRulesOff`, `CAPTAIN_MANUAL_LEGACY_FOOD`; weekly-report's legacy diet line)
 - **Identified**: 2026-11-14 · filed via mint_oi.sh from branch `diet-food-type-server`
 
-Diet plan Unit 2b (diagnose `c9bc6a`, plan `docs/plans/diet-food-type-server.md`). Removing a switch deletes its old path in the same commit and needs a full x2 plan review again (CLAUDE.md §4.12.4). Also remove the `LEGACY_DIET_PREFERENCE_SCHEMA_LINE` constant, the legacy fixtures in the Deno tests, the `captainManual(` safe marker's legacy note, and the naming-conventions rows.
+Diet plan Unit 2b (diagnose `c9bc6a`, plan `docs/plans/diet-food-type-server.md`). Removing a switch deletes its old path in the same commit and needs a full x2 plan review again (CLAUDE.md §4.12.4). Also remove the `LEGACY_DIET_PREFERENCE_SCHEMA_LINE` constant, the legacy fixtures in the Deno tests, the `captainManual(` safe marker's legacy note, and the naming-conventions rows. Unit 3b-2 (diet strategy, `docs/plans/diet-strategy-3b.md` §5) added two more switches on the same check: `DISABLE_SUGGESTMEAL_DIET_STRATEGY` (`suggestMealDietStrategyOff`) and `DISABLE_DIET_STRATEGY_MANUAL_RULES` (`dietStrategyManualRulesOff`); delete them too, after the founder's Keto coach check once the strategy flag is on (Unit 3b-3).
 
 ## OI-509 — Delete the disable_balanced_week kill switch and its fixture after the 2C device check
 
