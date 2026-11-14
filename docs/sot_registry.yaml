@@ -1745,9 +1745,10 @@ concepts:
     domain: nutrition
     behavioral_test_path: test/contracts/diet_strategy_targets_writer_to_reader_test.dart
     description: |
-      Diet plan Unit 3a (2026-11-14, docs/plans/diet-strategy.md), SHIPPED
-      DARK behind DietStrategyFlags.enabled (constant kDietStrategyDefaultOn
-      = false; Unit 3b flips it). The user's diet strategy, stored as the
+      Diet plan Unit 3a (2026-11-14, docs/plans/diet-strategy.md), shipped
+      dark behind DietStrategyFlags.enabled; ON since Unit 3b-3
+      (kDietStrategyDefaultOn = true, docs/plans/diet-strategy-3b3.md; the
+      local kill switch configBox['disable_diet_strategy'] until OI-511). The user's diet strategy, stored as the
       profile key `diet_strategy` (userBox profile map; cloud
       user_profile.diet_strategy, migration 179, CHECK balanced|low_carb|keto,
       NULL = balanced). PRO (local gateAndVerify). The CHOICE only: the

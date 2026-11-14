@@ -37,30 +37,6 @@
 # exist. `flip_review_record:` exists so the claim carries its evidence.
 
 pending:
-  - flag: kDietStrategyDefaultOn
-    branch: diet-strategy
-    build_commit: null  # stamped after the 3a build commit lands
-    build_date: 2026-11-14
-    flip_reviewed: false
-    flip_commit: null
-    flip_review_record: null
-    note: >
-      Diet plan Unit 3a (docs/plans/diet-strategy.md): the diet strategy
-      (Balanced / Low carb / Keto, PRO) ships dark behind
-      DietStrategyFlags.enabled (lib/features/nutrition/services/
-      diet_strategy_flags.dart; a build constant kDietStrategyDefaultOn =
-      false plus the local kill switch configBox['disable_diet_strategy'],
-      read only once the constant is true). NOT the lighter 1-round tier:
-      the build plan got 7 context-blind review rounds
-      (docs/plan-reviews/diet-strategy.md, verdict converged). OFF-path
-      evidence: the "2b ship-dark identity" group in
-      test/contracts/diet_strategy_targets_writer_to_reader_test.dart (every
-      reader and the coach snapshot unchanged for a profile holding keto; no
-      new provider watches) and dietStrategyPushEntry's flag-off case in
-      test/core/diet_strategy_targets_test.dart. The flip is Unit 3b's last
-      commit (keto / low-carb meal templates, the saved-plan strategy check,
-      the coach manual passage and the suggestMeal carb filter first), with
-      its own full x2 review and B-pass.
   - flag: enable_hold_weeks
     branch: hold-mechanic
     build_commit: df5e38b0
@@ -307,6 +283,34 @@ pending:
 # and by the Sunday push.
 
 resolved:
+  - flag: kDietStrategyDefaultOn
+    branch: diet-strategy
+    build_commit: 37122c4c  # the 3a build commit (merged 21db03c7, PR #274)
+    build_date: 2026-11-14
+    flip_reviewed: true
+    flip_commit: null  # stamped after the 3b-3 merge (branch diet-strategy-3b3)
+    flip_review_record: docs/plan-reviews/diet-strategy-3b3.md
+    note: >
+      Diet plan Unit 3a (docs/plans/diet-strategy.md): the diet strategy
+      (Balanced / Low carb / Keto, PRO) ships dark behind
+      DietStrategyFlags.enabled (lib/features/nutrition/services/
+      diet_strategy_flags.dart; a build constant kDietStrategyDefaultOn =
+      false plus the local kill switch configBox['disable_diet_strategy'],
+      read only once the constant is true). NOT the lighter 1-round tier:
+      the build plan got 7 context-blind review rounds
+      (docs/plan-reviews/diet-strategy.md, verdict converged). OFF-path
+      evidence: the "2b ship-dark identity" group in
+      test/contracts/diet_strategy_targets_writer_to_reader_test.dart (every
+      reader and the coach snapshot unchanged for a profile holding keto; no
+      new provider watches) and dietStrategyPushEntry's flag-off case in
+      test/core/diet_strategy_targets_test.dart. The flip is Unit 3b's last
+      commit (keto / low-carb meal templates, the saved-plan strategy check,
+      the coach manual passage and the suggestMeal carb filter first), with
+      its own full x2 review and B-pass.
+      FLIPPED ON in Unit 3b-3 (docs/plans/diet-strategy-3b3.md); the local
+      kill switch configBox['disable_diet_strategy'] stays the rollback lever
+      until the founder's device check, then OI-511 deletes it and the OFF
+      paths.
   - flag: enable_core_list_pool
     branch: library-batch-b
     build_commit: 06c02bed  # the commit that adds PlanEngineFlags.coreListPoolEnabled

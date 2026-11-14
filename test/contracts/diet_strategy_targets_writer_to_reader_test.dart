@@ -203,10 +203,25 @@ void main() {
     expect((snap['profile'] as Map)['diet_strategy_label'], 'Keto');
   }
 
-  group('2b ship-dark identity (flag at its 3a default)', () {
-    test('kDietStrategyDefaultOn is false and enabled reads false', () {
-      expect(kDietStrategyDefaultOn, isFalse);
+  // Unit 3b-3 flipped the constant on: the OFF path is now the local kill
+  // switch configBox['disable_diet_strategy'], so this group runs through it
+  // (the real Hive key, no test seam) and must still show 3a's identity.
+  group('2b ship-dark identity (the kill switch after the 3b-3 flip)', () {
+    setUp(() async {
+      await HiveService.instance.configBox
+          .put(DietStrategyFlags.disableKey, true);
+    });
+
+    test('kDietStrategyDefaultOn is true; the kill switch turns enabled off',
+        () async {
+      expect(kDietStrategyDefaultOn, isTrue);
       expect(DietStrategyFlags.enabled, isFalse);
+      await HiveService.instance.configBox.delete(DietStrategyFlags.disableKey);
+      expect(DietStrategyFlags.enabled, isTrue);
+      // Only exactly true is the switch.
+      await HiveService.instance.configBox
+          .put(DietStrategyFlags.disableKey, 'true');
+      expect(DietStrategyFlags.enabled, isTrue);
     });
 
     for (final extra in <Map<String, dynamic>>[
