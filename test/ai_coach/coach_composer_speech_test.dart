@@ -303,7 +303,9 @@ void main() {
       },
     );
 
-    testWidgets('at the daily cap the field is inert for the mic', (tester) async {
+    // A presence pin: THREE guards keep the mic dead at the cap (`_onMicTap`,
+    // `canMic`, the morph button), so no single-token regression reddens it.
+    testWidgets('at the daily cap no listen starts', (tester) async {
       final rig = _Rig()
         ..isPro = false
         ..messageCount = AppConstants.freeAiMessagesPerDay;

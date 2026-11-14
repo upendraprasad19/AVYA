@@ -1,0 +1,186 @@
+# Closure ledger - voice-input-unified (one speech input for the AI Coach, the nutrition Log sheet and the web app, PR 273).
+# Gate 40. One terminal_state per finding; no `deferred:` key. The B-pass was TWO rounds: three reviewers on b55bc328,
+# then one delta reviewer on the fix commit f3c9fc41. `voice-input-unified@branch` is the in-branch commit form
+# (the delta fixes land in the commit that carries this file).
+
+batch: voice-input-unified
+plan_review_record: docs/plan-reviews/voice-input-unified.md
+bpass_review: docs/reviews/voice-input-unified-bpass.md
+diagnose_docs:
+  - docs/diagnoses/2026-11-14-speech-first-use-permission-vs-start-timeout-abe150.md
+total_findings: 30
+closed_count: 30
+
+findings:
+  - id: U1-ENGINE
+    title: "SpeechInputService + SpeechInputController + SpeechInputLifecycle + SpeechInputCopy + the fake engine (nothing mounted yet)"
+    terminal_state: closed_in_commit
+    commit: "a7ab6e1c"
+    verification: "test/core/speech_input_controller_behavioral_test.dart, speech_input_options_test.dart, speech_input_lifecycle_test.dart green; 42 mutants (the survivors C2, C10, S1 closed by tests, S19 found a real bug: the ownerless listening cancel queued behind begin)"
+
+  - id: U2-NUTRITION
+    title: "Nutrition Log sheet mic on the existing food_text_analysis call; ref-after-dispose fix in _analyse; failed call keeps the text and does not tick the counter"
+    terminal_state: closed_in_commit
+    commit: "a7ab6e1c"
+    verification: "test/widgets/food_logger_speech_test.dart + food_logger_send_test.dart green; 21 mutants"
+
+  - id: U3-COACH
+    title: "CoachComposer replaces the hold-to-talk bar; VoiceNotesButton and RecordingBody deleted; four source-grep pins repointed, not loosened"
+    terminal_state: closed_in_commit
+    commit: "a7ab6e1c"
+    verification: "test/ai_coach/coach_composer_speech_test.dart + input_bar_test.dart + initial_scroll_to_bottom_test.dart + measurement_flag_off_identity_test.dart + coach_chat_restore_invalidation_test.dart green; 21 mutants; grep for every deleted symbol returns only historical docs"
+
+  - id: U4-WEB-MANIFEST-COPY
+    title: "Web guard removed (en-IN, web init options); RecognitionService intent in <queries>; privacy dialog Microphone line; paywall copy"
+    terminal_state: closed_in_commit
+    commit: "a7ab6e1c"
+    verification: "test/contracts/android_speech_queries_test.dart (1 mutant) + speech_privacy_copy_test.dart (mutant: an on-device claim reddened it)"
+
+  - id: U5-DOCS-REGISTRY
+    title: "Nested CLAUDE.md x3, COACH-15/XC-15, business rules, SoT concept speech_input_session_owner, bug-class 2.158, OI-348 A19+S6, GO_LIVE 3.6, context budget"
+    terminal_state: closed_in_commit
+    commit: "a7ab6e1c and f3c9fc41"
+    verification: "check_sot_registry_parity / completeness / behavioral_test_paths / writeservice_contracts, check_bug_class_numbers_unique, check_context_artifact_budget all exit 0"
+
+  - id: B1-P1-FIRST-USE-DIALOG
+    title: "P1, found by all three round-1 reviewers: the 4 s native start timeout and the one-restart window were armed at the tap while the first initialize shows the Android microphone dialog (slow Allow gave 'Could not hear you', session abandoned)"
+    terminal_state: closed_in_commit
+    commit: "f3c9fc41"
+    verification: "diagnose abe150 (validates); first-use test group in speech_input_controller_behavioral_test.dart; mutants M1 M2 M3b reddened 2, 2 and 6 tests (M3 equivalent: the listen hook re-opens the window)"
+
+  - id: B2-P2-RETRY-GRACE-TIMERS
+    title: "P2: _retry cancelled _endGrace/_errorGrace without nulling, so ??= never re-armed and a native end with no final hung after a retry"
+    terminal_state: closed_in_commit
+    commit: "f3c9fc41"
+    verification: "two retry-grace tests; mutants M4a (2 reddened), M4b (1), M4c (1)"
+
+  - id: B3-P2-FOCUS-ON-HIDDEN
+    title: "P2: a Stop commit asked for keyboard focus for every reason, including a hidden tab or a preemption"
+    terminal_state: closed_in_commit
+    commit: "f3c9fc41"
+    verification: "speechEndWantsFocus table test + the coach and nutrition hidden-tab no-focus tests; mutants H2 H3 H7 H8"
+
+  - id: B4-P2-SNACKBAR-BEHIND-SHEET
+    title: "P2: the Log sheet has no Scaffold, so its snackbars drew behind the modal sheet; messages are now inline (speech_notice)"
+    terminal_state: closed_in_commit
+    commit: "f3c9fc41"
+    verification: "nutrition harness now Scaffold-free; 3 tests redden when the message goes back to a snackbar (mutant H4), 2 more for the clearing rules (H5a, H5b)"
+
+  - id: B5-P2-COACH-SEND-PREFIX
+    title: "P2: coach Send with typed text had no test (a one-token regression sent only the spoken words)"
+    terminal_state: closed_in_commit
+    commit: "f3c9fc41"
+    verification: "'Send keeps the typed text' test; mutant H6 reddened it"
+
+  - id: B6-P2-FAKE-DONE-RULE
+    title: "P2 (delta reviewer): the first version of the fake swallowed the silent-session done, which the plugin delivers as doneNoResult; five comments and docs claimed the device never produces it"
+    terminal_state: closed_in_commit
+    commit: "voice-input-unified@branch"
+    verification: "fake_speech_engine.dart now has _resultSent; 'a silent session: done with no words' + the retry done test; mutant D1 reddened 2; plugin source SpeechToTextPlugin.kt:418-427 and speech_to_text.dart:734-737 read"
+
+  - id: B7-P3-PREEMPT-AT-BIND
+    title: "P3: a second host tapping while the first waits in the slot was not preempted (both listened)"
+    terminal_state: closed_in_commit
+    commit: "f3c9fc41"
+    verification: "two-host test; mutants M5 (begin ignores _inFlight) and M6 (marker set after the slot wait) reddened it"
+
+  - id: B8-P3-INITIALIZE-UNBOUNDED
+    title: "P3: await _ensureReady() inside the serial slot had no bound"
+    terminal_state: closed_in_commit
+    commit: "f3c9fc41"
+    verification: "'an initialize that never answers frees the slot' test; mutant M7 reddened it; the memo is kept on purpose (a second plugin initialize answers multipleRequests)"
+
+  - id: B9-P3-BUSY-CALLBACK
+    title: "P3 (two reviewers): the host busy callback was unguarded where onEnd is guarded"
+    terminal_state: closed_in_commit
+    commit: "f3c9fc41"
+    verification: "'a busy callback that throws' test; mutant M8"
+
+  - id: B10-P3-DEAD-STRINGS
+    title: "P3: doneNoResult and recognizerNotAvailable comparisons never reach the service on 7.4.0"
+    terminal_state: closed_in_commit
+    commit: "f3c9fc41"
+    verification: "kept as defensive and commented in speech_input_service.dart (verified in the plugin source); no behaviour change"
+
+  - id: B11-P3-FAKE-FIDELITY
+    title: "P3: the fake delivered done while partial (a state the device never reaches)"
+    terminal_state: closed_in_commit
+    commit: "f3c9fc41 then voice-input-unified@branch"
+    verification: "fake models the plugin rule (see B6 for the correction); mutants M9 and D1"
+
+  - id: B12-P3-CHIP-FLASH
+    title: "P3: busy:false reached the screen a frame before the focus (one frame of the measurement chip)"
+    terminal_state: closed_in_commit
+    commit: "f3c9fc41"
+    verification: "'a Stop commit asks for the keyboard BEFORE the screen is told the mic is off' (order list busy:true, focus, busy:false); mutant H1"
+
+  - id: B13-P3-SEND-ORDER-UNOBSERVABLE
+    title: "P3: 'written THEN analyse' order cannot be observed (the live mirror already wrote the words)"
+    terminal_state: closed_in_commit
+    commit: "f3c9fc41"
+    verification: "test renamed 'Send analyses exactly the words on screen, ONCE'; plan section 4 statement corrected"
+
+  - id: B14-P3-STALE-DOCS
+    title: "P3 x8: stale test header, VoiceNotesButton misattribution and an undefined mutant id in bug-class text, 'drops every engine event' over-claim, 'newController' and typo in the services CLAUDE.md row, registry box convention, 'not a plugin limit' and en_IN in the flow doc, 3 vs 4 permission categories, stale on-device comments, a PRO row for free voice"
+    terminal_state: closed_in_commit
+    commit: "f3c9fc41"
+    verification: "each edited in place; speech_privacy_copy_test now also scans app_constants.dart, voice_is_free_test.dart and feature_decisions.md (mutant: an on-device claim reddened it)"
+
+  - id: B15-P3-INFLIGHT-SAME-SINK
+    title: "P3 (delta): an older begin of the SAME controller clearing the newer begin's in-flight marker"
+    terminal_state: closed_in_commit
+    commit: "voice-input-unified@branch"
+    verification: "per-call token _inFlightSeq; 'an older begin of the SAME controller finishing does not clear...' test; mutant D2 reddened it"
+
+  - id: B16-P3-COMMENT-AND-CAP-TEST
+    title: "P3 (delta): a misplaced comment in the options test; the at-the-cap test is a presence pin (three guards)"
+    terminal_state: closed_in_commit
+    commit: "voice-input-unified@branch"
+    verification: "comment moved above the right expect; test renamed and commented as a presence pin"
+
+  - id: B17-P3-INIT-MEMO-LIMIT
+    title: "P3 (delta): an initialize that genuinely never answers leaves the microphone unavailable until restart"
+    terminal_state: closed_in_commit
+    commit: "voice-input-unified@branch"
+    verification: "documented as a KNOWN LIMIT in SpeechInputTiming.initializeTimeout and the diagnose doc; a hypothesis, not observed"
+
+  - id: B18-P3-WEB-SLOW-ALLOW
+    title: "P3 (delta): web gets a 15 s budget for the browser prompt (raised by the listen)"
+    terminal_state: closed_in_commit
+    commit: "voice-input-unified@branch"
+    verification: "stated as the intended allowance in startTimeoutWeb's doc; browser behaviour after the abort is device-only: OI-348 S6 step 6 (T9-WEB)"
+
+  - id: T8-DEVICE
+    title: "Android device check (OI-348 A19): tap to start and stop on both hosts, Stop keeps the words, Send sends, ~10 spoken Hindi/English food phrases, the 429 text at the cap, the merged release manifest INTERNET + RECORD_AUDIO, mic stops on tab switch, microphone refusal message, a slow first Allow (10 s or more), a long dictated phrase scrolling to the newest words"
+    terminal_state: blocked_on_user
+    reason: "only the founder can run a phone build (nothing in this session can; the build is /build-apk from a CI-green main)"
+
+  - id: T9-WEB
+    title: "Browser check (OI-348 S6): Chrome desktop and Android, Safari, Firefox shows no mic, a slow (about 20 s) browser prompt, three quick tap-stop-tap cycles in Chrome (web start exception retried once, no stuck state), tab switch mid-dictation"
+    terminal_state: blocked_on_user
+    reason: "only the founder can walk the live web app in real browsers"
+
+  - id: WEBSITE-POLICY
+    title: "icanbefitter.com/privacy needs the microphone line (GO_LIVE row 3.6); the in-app privacy dialog already has it"
+    terminal_state: blocked_on_user
+    reason: "the website is not served from this repo"
+
+  - id: MERGE-GO
+    title: "Merge to main of PR 273"
+    terminal_state: blocked_on_user
+    reason: "CLAUDE.md 4.3: a merge needs the founder's explicit go; merge only via scripts/safe_pr_merge.sh after review CI is green on the final head"
+
+  - id: V1-NO-LOCAL-PARSER
+    title: "No local food parser exists anywhere (founder decision)"
+    terminal_state: verified_clean
+    evidence: "git diff origin/main...HEAD --stat lists no parser file; nutrition text goes through aiBreakdownProvider.analyse (food_logger_send_test pins the call)"
+
+  - id: V2-NO-SERVER-CHANGE
+    title: "No Edge Function, migration, prompt or cap changed"
+    terminal_state: verified_clean
+    evidence: "git diff origin/main...HEAD --name-only has no path under supabase/ or backups/applied_migrations.json"
+
+  - id: V3-COACH-MEAL-PATH
+    title: "The coach's own text-to-meal tool path (CoachMealLog) is untouched"
+    terminal_state: verified_clean
+    evidence: "no changed file under lib/features/ai_coach/ names CoachMealLog; diff scoped to input_bar.dart, screen.dart, media_picker.dart, chat_area.dart, coach_media_repository.dart"

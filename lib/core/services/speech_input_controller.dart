@@ -418,7 +418,8 @@ class SpeechInputController extends ChangeNotifier
   @override
   void engineDone() {
     if (_state != SpeechInputState.listening) return;
-    if (_service.isWeb) return; // swallowed by the plugin while partial
+    // Web: results precede `onend`, so `engineNotListening` already ended it.
+    if (_service.isWeb) return;
     if (_liveText.trim().isNotEmpty) {
       _finish(SpeechEndReason.auto, _liveText);
       return;

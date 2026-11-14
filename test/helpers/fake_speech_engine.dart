@@ -13,11 +13,14 @@
 ///   the order it wants to prove (native: final before `notListening`; user
 ///   stop: `notListening`, `done`, error; web: `listening` after the permission
 ///   prompt, never a final).
-/// - `done` follows the plugin's own filter (speech_to_text 7.4.0
-///   `_onNotifyStatus`): while the latest result is still a partial (and that is
-///   the starting state of every listen) a `done` never reaches the status
-///   listener; the FINAL result then sends it. [emitRawStatus] bypasses the
-///   filter for the controller's defensive branches (B-pass 2026-11-14).
+/// - `done` follows the plugin's own rule (speech_to_text 7.4.0): Android sends
+///   `done` when a result was sent and `doneNoResult` when none was, and Dart
+///   rewrites `doneNoResult` to `done` and DELIVERS it; a `done` after only
+///   PARTIAL results is swallowed until the FINAL result releases it.
+///   So a silent session delivers `notListening`, `done`, then the posted error.
+///   [emitRawStatus] bypasses the rule for the controller's defensive branches
+///   (a partial result followed by a delivered `done`, which 7.4.0 never sends)
+///   (B-pass 2026-11-14).
 library;
 
 import 'dart:async';
@@ -68,7 +71,8 @@ class FakeSpeechEngine implements SpeechEngine {
   /// True from a `listen` until a `cancel` (or a test-driven `notListening`).
   bool running = false;
 
-  // The plugin's `done` filter state, reset by every `listen`.
+  // The plugin's `done` rule state, reset by every `listen`.
+  bool _resultSent = false;
   bool _latestResultFinal = false;
   bool _notifiedDone = false;
 
@@ -109,6 +113,7 @@ class FakeSpeechEngine implements SpeechEngine {
     lastListenOptions = options;
     // The single result slot: the LAST listen wins, whoever it was for.
     _resultListener = onResult;
+    _resultSent = false;
     _latestResultFinal = false;
     _notifiedDone = false;
     final thrown = listenThrows;
@@ -142,20 +147,21 @@ class FakeSpeechEngine implements SpeechEngine {
 
   // -- driving events -------------------------------------------------------------
 
-  /// A status the plugin would deliver. `done` is filtered like the plugin's
-  /// own `_onNotifyStatus`: swallowed while the latest result is not final.
+  /// A status the plugin would deliver. `done` follows the plugin's rule: with
+  /// NO result sent it is Android's `doneNoResult` (rewritten to `done`,
+  /// delivered); after only partial results it is swallowed until the final.
   void emitStatus(String status) {
     if (status == 'notListening' || status == 'done') running = false;
     if (status == 'done') {
       _notifiedDone = true;
-      if (!_latestResultFinal) return;
+      if (_resultSent && !_latestResultFinal) return;
     }
     _onStatus?.call(status);
   }
 
-  /// A status delivered as-is, past the plugin's `done` filter: for the
-  /// controller's DEFENSIVE branches (a platform interface that forwards `done`
-  /// raw). The device never produces these on 7.4.0.
+  /// A status delivered as-is, past the plugin's `done` rule: for the
+  /// controller's DEFENSIVE branches (`done` delivered after only partial
+  /// results, which 7.4.0 never produces).
   void emitRawStatus(String status) {
     if (status == 'notListening' || status == 'done') running = false;
     _onStatus?.call(status);
@@ -165,6 +171,7 @@ class FakeSpeechEngine implements SpeechEngine {
   /// A FINAL result after a swallowed `done` releases it (plugin: the final
   /// status check right after the result).
   void emitResult(String words, {bool isFinal = false}) {
+    _resultSent = true;
     _resultListener?.call(SpeechEngineResult(words, isFinal: isFinal));
     if (isFinal) {
       _latestResultFinal = true;

@@ -18852,11 +18852,11 @@ concepts:
       the host's text field until the host sends them.
     writers:
       - file: lib/core/services/speech_input_service.dart
-        line_range: 314-634
+        line_range: 324-651
         method: SpeechInputService (begin / release / _onStatus / _cancelOwnerless)
         semantic: per-session
       - file: lib/core/services/speech_input_controller.dart
-        line_range: 101-595
+        line_range: 101-596
         method: SpeechInputController (_finish latch, start / stop / send / cancel)
         semantic: per-session
       - file: lib/core/services/speech_input_lifecycle.dart

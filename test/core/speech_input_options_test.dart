@@ -93,11 +93,11 @@ void main() {
           SpeechInputTiming.startTimeoutFirstUse,
           greaterThan(SpeechInputTiming.startTimeoutNative),
         );
+        // The controller's session ends BEFORE the service's bound frees the slot.
         expect(
           SpeechInputTiming.startTimeoutFirstUse,
           lessThan(SpeechInputTiming.initializeTimeout),
         );
-        // The controller's session ends BEFORE the service's bound frees the slot.
         expect(
           SpeechInputTiming.initializeTimeout,
           greaterThan(SpeechInputTiming.engineCallTimeout),

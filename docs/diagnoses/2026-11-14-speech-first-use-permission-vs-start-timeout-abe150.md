@@ -66,7 +66,7 @@ proposed_fix: >-
   session, a Stop commit asks for the keyboard before the screen is told the
   mic is off, a hidden tab or a preemption never takes the keyboard, the Log
   sheet shows its messages inline (a snackbar is drawn behind a modal sheet),
-  and the fake engine now follows the plugin's own done filter.
+  and the fake engine now follows the plugin's own done rule (a delivered `done` for a silent session, a swallowed one after partial results only).
 
 touched_layers_checked:
   - { tier: 1_client_code, status: fixed_in_this_batch, evidence: "flutter analyze (whole project) 0 warnings, 0 errors; 209 targeted tests green; engine mutants M1 M2 M3b M4a M4b M4c M5 M6 M7 M8 M9 and host mutants H1 H2 H3 H4 H5a H5b H6 H7 H8 each reddened a named test (M3 was an equivalent mutant: the listen hook re-opens the window anyway)" }
@@ -79,7 +79,7 @@ touched_layers_checked:
   - { tier: 8_rls_policies, status: not_applicable, evidence: "no RLS path" }
   - { tier: 9_storage, status: not_applicable, evidence: "no Storage object" }
   - { tier: 10_secrets, status: not_applicable, evidence: "no secret read or written" }
-  - { tier: 11_external_services, status: verified, evidence: "speech_to_text 7.4.0 Android Kotlin read: initializeIfPermitted requests RECORD_AUDIO and completeInitialize runs only from onRequestPermissionsResult (SpeechToTextPlugin.kt:503-520, 711-720); the Dart plugin swallows done while the latest result is partial (speech_to_text.dart:722-745). Device check T8 step 7 (slow Allow on a fresh install) is the founder's, OI-348 A19" }
+  - { tier: 11_external_services, status: verified, evidence: "speech_to_text 7.4.0 Android Kotlin read: initializeIfPermitted requests RECORD_AUDIO and completeInitialize runs only from onRequestPermissionsResult (SpeechToTextPlugin.kt:503-520, 711-720); the Dart plugin swallows `done` while the latest result is partial but delivers Android's `doneNoResult` as `done` when no result was sent (speech_to_text.dart:722-745, SpeechToTextPlugin.kt:418-427, the plugin's own test 'done sent with no results on doneNoResult'). Device check T8 step 7 (slow Allow on a fresh install) is the founder's, OI-348 A19" }
   - { tier: 12_client_server_contract, status: verified, evidence: "no server contract changed; the nutrition Send path still calls the existing food_text_analysis through aiBreakdownProvider (food_logger_send_test)" }
 impact_analysis: >-
   Account tier: the microphone input of the AI Coach composer and the nutrition
@@ -124,6 +124,6 @@ seen the new ordering fail.
 See `proposed_fix`. Regression: the first-use group in
 `test/core/speech_input_controller_behavioral_test.dart`. Mutation proof (rule
 21): each fix's mutant reddened a named test (list in `touched_layers_checked`
-tier 1). Honest limits: nothing was run on a device; whether the Android
+tier 1). Honest limits: nothing was run on a device; the delta reviewer found that the first version of the fake over-applied the done rule (it swallowed the no-result `done` too, so the silent-session path was not exercised), fixed in the same batch (mutant D1); if the activity is recreated under the dialog and the answer never arrives, the memoised initialize stays pending and the microphone stays unavailable until the app restarts (a second plugin initialize would answer multipleRequests and be cached as unsupported), a hypothesis the code bounds but does not cure; whether the Android
 activity is recreated under the dialog (the case `initializeTimeout` bounds) is
 a hypothesis the code defends against, not an observation.

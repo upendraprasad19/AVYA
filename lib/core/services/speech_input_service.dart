@@ -67,7 +67,12 @@ class SpeechInputTiming {
   /// from the moment the listen is ISSUED, not from the tap (B-pass 2026-11-14).
   static const Duration startTimeoutNative = Duration(seconds: 4);
 
-  /// Same, on web: the browser's permission prompt can take a while.
+  /// Same, on web: the browser's permission prompt is raised by the LISTEN
+  /// itself (initialize prompts nothing there), so it falls inside this budget.
+  /// 15 s is the intended allowance for answering it; a slower answer ends the
+  /// session with the engine message and the late `listening` is cancelled by
+  /// the ownerless path. What a browser does after that abort is NOT
+  /// established: OI-348 S6 walks a slow Allow (B-pass 2026-11-14).
   static const Duration startTimeoutWeb = Duration(seconds: 15);
 
   /// Native, FIRST use only: before the listen is issued the session waits for
@@ -80,7 +85,12 @@ class SpeechInputTiming {
   /// Bounds the plugin's `initialize` while it holds the serial slot, so a
   /// permission result that never arrives (an activity recreated under the
   /// dialog) cannot queue every later tap forever. The memoised initialize
-  /// itself is NOT cancelled: a late answer still completes it.
+  /// itself is NOT cancelled and NOT repeated (a second plugin `initialize`
+  /// while one is pending answers `multipleRequests`, which would be cached as
+  /// "unsupported"): a late answer still completes it. KNOWN LIMIT: if the
+  /// answer genuinely never arrives, the mic stays unavailable until the app
+  /// restarts (each tap ends at [startTimeoutFirstUse]). This is a hypothesis
+  /// about a recreated activity, not an observed failure.
   static const Duration initializeTimeout = Duration(seconds: 60);
 
   /// Today's values (the "mic stops after 2-3 seconds" fix): do not change.
@@ -364,6 +374,12 @@ class SpeechInputService {
   /// waiting for the permission dialog must end it too (B-pass 2026-11-14).
   SpeechSessionSink? _inFlight;
 
+  /// Which `begin` call set [_inFlight]. A per-call token, NOT the sink: the
+  /// SAME controller can have an older `begin` still waiting in the slot when a
+  /// newer one starts (a tap after a start timeout), and the older one's
+  /// `finally` must not clear the newer one's marker (B-pass delta 2026-11-14).
+  int _inFlightSeq = 0;
+
   /// Web: null until the probe answered. Native: stays null.
   bool? _webSupported;
 
@@ -456,6 +472,7 @@ class SpeechInputService {
     // must already see this one, or both would listen and the later bind would
     // silently overwrite the earlier one.
     _inFlight = sink;
+    final mySeq = ++_inFlightSeq;
     final ticket = _slot.enter();
     try {
       await ticket.turn;
@@ -518,7 +535,7 @@ class SpeechInputService {
       }
       return const SpeechBeginResult(SpeechBeginStatus.started);
     } finally {
-      if (identical(_inFlight, sink)) _inFlight = null;
+      if (_inFlightSeq == mySeq) _inFlight = null;
       ticket.release();
     }
   }

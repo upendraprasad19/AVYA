@@ -5,6 +5,8 @@ blast_radius: account
 review_rounds: 3
 ground_truth_verified: true
 verdict: converged
+bpass: accepted
+bpass_review: docs/reviews/voice-input-unified-bpass.md
 ---
 
 # Plan-review record — one speech input for the AI Coach, the nutrition Log sheet and the web app (`voice-input-unified`)
@@ -38,3 +40,7 @@ Reviewers were told the allowed commands exhaustively and to run nothing else. R
 - Whether spoken Hindi food phrases are parsed well by the existing generic prompt (T8, about ten phrases).
 - Mutation outcomes: each new test file is mutated once after it is written and the reddened counts go into the B-pass file (rule 21).
 - The website privacy-policy wording (the founder's).
+
+## B-pass (2026-11-14)
+
+Two rounds on the built branch, recorded in `docs/reviews/voice-input-unified-bpass.md` (verdict accepted) and `docs/audit/voice-input-unified.closure.yaml`: three reviewers on b55bc328 (one P1 found by all three: the 4 s start timeout ran while the first-use Android microphone dialog was up; diagnose `abe150`), then one delta reviewer on the fix commit f3c9fc41 (one P2: the coordinator's own fake over-applied the plugin's `done` rule). 22 unique findings, none deferred; four items are founder-only (T8-DEVICE, T9-WEB, WEBSITE-POLICY, MERGE-GO).
