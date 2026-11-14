@@ -2,16 +2,14 @@ import { z } from "npm:zod@3.25.76";
 import type { ToolContext, ToolDefinition } from "../types.ts";
 import { foodTypeLabel, type FoodTypeKey, normalizeFoodType } from "../../food_types.ts";
 
-const schema = z.object({
+const schemaFor = (isVegDescription: string) => z.object({
   remainingKcal: z.number().int().min(50).max(3000).describe(
     "Calorie budget for this meal (50-3000 kcal). Get this from the user's snapshot.today_nutrition.remaining_calories or similar.",
   ),
   remainingProteinG: z.number().int().min(0).max(150).optional().describe(
     "Optional protein target for this meal in grams. The tool prioritizes options that hit this minimum.",
   ),
-  isVeg: z.boolean().optional().describe(
-    "Set to true to restrict this request to vegetarian options. Omit otherwise: the tool already applies the user's stored food type (veg, non_veg, eggetarian, pescatarian, vegan) from their profile.",
-  ),
+  isVeg: z.boolean().optional().describe(isVegDescription),
   cuisine: z.enum([
     "indian",
     "asian",
@@ -29,6 +27,14 @@ const schema = z.object({
   ),
 });
 
+// B-pass finding 4: the model reads this description, so the kill switch
+// selects the pre-2b text verbatim (the legacy handler ignores the stored type).
+const IS_VEG_DESCRIPTION =
+  "Set to true to restrict this request to vegetarian options. Omit otherwise: the tool already applies the user's stored food type (veg, non_veg, eggetarian, pescatarian, vegan) from their profile.";
+export const LEGACY_IS_VEG_DESCRIPTION =
+  "Set to true to restrict to vegetarian options. Omit if no preference. (Approximated by excluding common non-veg keywords from the food name — the food_database has no explicit is_veg flag.)";
+const schema = schemaFor(IS_VEG_DESCRIPTION);
+const legacySchema = schemaFor(LEGACY_IS_VEG_DESCRIPTION);
 type Args = z.infer<typeof schema>;
 
 interface SuggestionItem {
@@ -106,26 +112,40 @@ export function suggestMealStoredFoodTypeOff(): boolean {
 // meat", so Quail Egg, Duck Egg and Crab Meat stay allowed.
 export const EGG_RE = /\begg(s)?\b|\banda\b|\bomelet(te)?\b/i;
 export const FISH_RE =
-  /\b(fish|macher|prawns?|shrimps?|crabs?|lobsters?|pomfret|surmai|rohu|bangda|tuna|salmon|sardines?|mackerel|hilsa|basa|tilapia|squid|seafood|cod|scallops?|mussels?|oysters?|anchov(y|ies)|bass|halibut|trout|swordfish|snapper|catfish|mahi)\b/i;
+  /\b(fish|macher|prawns?|shrimps?|crabs?|lobsters?|pomfret|surmai|rohu|bangda|tuna|salmon|sardines?|mackerel|hilsa|basa|tilapia|squid|seafood|cod|scallops?|mussels?|oysters?|anchov(y|ies)|bass|halibut|trout|swordfish|snapper|catfish|mahi|sushi|sashimi)\b/i;
 export const MEAT_RE =
-  /(chicken|murgh|mutton|gosht|lamb|goat|keema|kheema|kabab|kebab|seekh|tangdi|nihari|haleem|rogan|beef|pork|bacon|\bham\b|sausage|salami|pepperoni|turkey|duck|quail|veal|goose|ribs|lard|meat)/i;
+  /(chicken|murgh|mutton|gosht|lamb|goat|keema|kheema|kabab|kebab|seekh|tangdi|nihari|haleem|rogan|beef|pork|bacon|\bham\b|sausage|salami|pepperoni|turkey|duck|quail|veal|goose|ribs|lard|meat|hot ?dogs?|frankfurters?|mcmuffins?|jerky)/i;
 const CAPSULE_RE = /\bcapsule\b/i;
 const MEAT_EXEMPT_RE = /\b(quail|duck|goose)\s+eggs?\b|\bcrab\s+meat\b/gi;
 
 /** Is this is_veg = false row allowed for [type]? (egg / fish rules only) */
+// B-pass finding 1: an egg word no longer admits a fish dish for an
+// eggetarian ("Tuna Egg Salad"), and a capsule is never a meal for either.
 export function animalRowAllowed(name: string, type: "eggetarian" | "pescatarian"): boolean {
+  if (CAPSULE_RE.test(name)) return false;
   if (MEAT_RE.test(name.replace(MEAT_EXEMPT_RE, " "))) return false;
+  if (type === "eggetarian" && FISH_RE.test(name)) return false;
   if (EGG_RE.test(name)) return true;
-  return type === "pescatarian" && FISH_RE.test(name) && !CAPSULE_RE.test(name);
+  return type === "pescatarian" && FISH_RE.test(name);
 }
 
-// The table tags some dairy / honey dishes is_vegan; drop them unless the
-// name says it is a plant version (soy milk, almond butter, ...).
-const VEGAN_DENY_RE =
-  /\b(honey|ghee|paneer|curd|dahi|whey|cheese|malai|butter|milk|cold coffee|pav)\b/i;
-const VEGAN_PLANT_RE = /\b(soy|almond|oat|coconut|peanut|cashew|rice|hemp|nut|cocoa)\b/i;
+// The table tags some dairy / honey dishes is_vegan; drop them. B-pass
+// finding 2: a plant word ANYWHERE used to rescue every deny word ("Curd
+// Rice", "Ghee Rice", "Peanut Butter with Honey" passed). Now these words
+// always drop the row, and the plant rescue applies only to milk, butter,
+// cheese, curd, dahi and yogurt, and only when the plant word comes right
+// before it (Almond Milk, Peanut Butter, Soy Curd, Coconut Yogurt).
+export const VEGAN_ABSOLUTE_RE =
+  /\b(honey|ghee|paneer|whey|malai|cream|lassi|buttermilk|chaas|chhaas|raita|kheer|rasmalai|shrikhand|kulfi|ice ?cream|mayo|mayonnaise|eggs?(?!\s*plant)|casein|gelatine?|khoa|khoya|rabri|rabdi|cold coffee|pav)\b/i;
+const VEGAN_RESCUABLE_RE = /\b(milk|butter|cheese|curd|dahi|yogh?urt)\b/gi;
+const VEGAN_PLANT_BEFORE_RE =
+  /\b(soy|soya|almond|oat|coconut|peanut|cashew|rice|hemp|nut|cocoa|vegan|plant|pea)\s*$/i;
 export function veganRowAllowed(name: string): boolean {
-  return !VEGAN_DENY_RE.test(name) || VEGAN_PLANT_RE.test(name);
+  if (VEGAN_ABSOLUTE_RE.test(name)) return false;
+  for (const m of name.matchAll(VEGAN_RESCUABLE_RE)) {
+    if (!VEGAN_PLANT_BEFORE_RE.test(name.slice(0, m.index))) return false;
+  }
+  return true;
 }
 
 type FoodRow = {
@@ -169,19 +189,24 @@ async function handler(ctx: ToolContext, args: Args): Promise<SuggestMealRespons
   // the table (the unbounded-read gate, L1b B8); filters chain after it.
   // 500 for the main query, 250 for the is_veg = false rows (196 live).
   const foodQuery = (main: boolean) => {
+    // B-pass finding 6: the veg tables hold more rows than the limit (1,241
+    // veg, 637 vegan in the asset), so the rows kept are the most
+    // protein-rich, not an arbitrary slice.
     const q = main
-      ? sb.from("food_database").select(cols).limit(500)
-      : sb.from("food_database").select(cols).limit(250);
+      ? sb.from("food_database").select(cols).order("protein_std", { ascending: false }).limit(500)
+      : sb.from("food_database").select(cols).order("protein_std", { ascending: false }).limit(250);
     return args.cuisine === "indian" ? q.eq("is_indian", true) : q;
   };
 
   const notes: string[] = [];
   const stored = await readStoredFoodType(ctx);
+  // B-pass finding 3: a failed read is not a choice; vegan options suit
+  // every food type, so nobody is offered food outside theirs.
   if (stored === null) {
-    notes.push("Could not read the user's food type; filtered by the request only.");
+    notes.push("Could not read the user's food type; showing vegan options, which suit every food type.");
   }
   // The model's isVeg narrows (a vegan stays vegan).
-  const userType: FoodTypeKey = stored ?? "non_veg";
+  const userType: FoodTypeKey = stored ?? "vegan";
   const type: FoodTypeKey = args.isVeg === true && userType !== "vegan" ? "veg" : userType;
 
   let rows: FoodRow[];
@@ -210,8 +235,7 @@ async function handler(ctx: ToolContext, args: Args): Promise<SuggestMealRespons
     if (type === "vegan") rows = rows.filter((r) => veganRowAllowed(r.name));
   }
 
-  // A failed read with no isVeg names no food type (none was applied).
-  const summary = buildSummary(args, minProtein, stored === null && type === "non_veg" ? null : type);
+  const summary = buildSummary(args, minProtein, type);
   if (rows.length === 0) {
     return {
       query_summary: summary,
@@ -458,7 +482,9 @@ export const suggestMealTool: ToolDefinition<Args, SuggestMealResponse> = {
   tier: "pro",
   description:
     "Suggest meals from the food database that fit the user's remaining calorie/protein budget. Use when the user asks for a meal suggestion ('what should I eat for dinner?', 'I have 600 cal left, ideas?', 'high-protein lunch please'). Returns up to 5 ranked options with per-serving macros and protein density. Pure read — does NOT log anything; if the user picks one, follow up with logMealByText to log it.",
-  schema,
+  get schema() {
+    return suggestMealStoredFoodTypeOff() ? legacySchema : schema;
+  },
   maxLatencyMs: 4000,
   handler,
 };

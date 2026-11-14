@@ -169,6 +169,18 @@ runs; every mutant is valid TS).
 | B17 | `fake_sb` numeric compare reverted | suggestMeal | 3 |
 | B18 | pescatarian capsule exclusion off | suggestMeal | 2 |
 | B19 | a corrupt non-string reads as the default again (Unit 2a B-pass F1 mirror) | food_types_test | 1 (the whole non-string test; the shared fixture rows also fail) |
+| B20 | eggetarian fish check dropped (B-pass 1) | suggestMeal | 1 |
+| B21 | hot dog / mcmuffin / jerky not meat (B-pass 1) | suggestMeal | 1 |
+| B22 | capsule checked only on the fish branch (B-pass 1) | suggestMeal | 3 |
+| B23 | a plant word anywhere rescues every deny word (B-pass 2, the old rule) | suggestMeal | 1 |
+| B24 | the plant rescue no longer needs the word right before (B-pass 2) | suggestMeal | 1 |
+| B25 | "egg plant" exemption dropped (B-pass 2) | suggestMeal | 2 |
+| B26 | a failed read falls back to non_veg (B-pass 3) | suggestMeal | 2 |
+| B27 | schema getter ignores the switch (B-pass 4) | suggestMeal | 1 |
+| B28 | no protein order before the limit (B-pass 6) | suggestMeal | 1 |
+| B29 | alias key `diet` not dropped (B-pass 5) | daily-snapshot | 1 |
+| B30 | an inherited alias key kept (B-pass 5) | daily-snapshot | 1 |
+| B31 | key case not folded (B-pass 5; survived until a mixed-case reply key was added) | daily-snapshot | 1 |
 
 Declared limits: weekly-report's prompt line and the two `captainManual()`
 call sites are presence pins (the handlers build the prompt inline under a
@@ -179,6 +191,21 @@ passed, 2 failed with `AddrInUse` on :8000 (`future-prediction`,
 port; known VPS quirk, CI has no conflict); both import nothing this unit
 changed except `future-prediction`'s use of `fake_sb.ts`, whose filters
 there compare ISO date strings (unchanged semantics).
+
+## B-pass fixes (2026-11-14, `docs/reviews/diet-food-type-server-bpass.md`)
+
+Three P2 and three P3 findings on b76694b1, all fixed here (plan §8 lists
+each): the eggetarian egg rule no longer admits fish, a capsule or a hot
+dog; vegan deny words are absolute and the plant rescue needs the plant word
+right before the dairy word; a failed profile read shows vegan options; the
+kill switch restores the old `isVeg` description; alias food-type keys are
+dropped from the extraction and from inherited notes; the veg queries keep
+the most protein-rich rows past the limit. Measured on the bundled asset:
+eggetarian 35 and pescatarian 91 rows kept (unchanged), vegan 632 of 637
+(unchanged; the dropped five are the old five). Live (read-only): only
+`diet_preference` exists as a food-type key, in 18 embeddings and 3
+`coaching_notes` rows; the cleanup SQL now strips all 21 (all 10 JSON
+notes rows parse). Mutations B20 to B31.
 
 ## Deploys and cleanup (filled in at deploy time)
 

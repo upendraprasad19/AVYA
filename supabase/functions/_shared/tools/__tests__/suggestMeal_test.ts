@@ -147,7 +147,13 @@ Deno.test("suggestMeal — handler is defined (read tool)", () => {
 // the handler against a table-backed fake (fake_sb.ts) ─────────────────────
 import { assert } from "https://deno.land/std@0.224.0/assert/mod.ts";
 import { fakeSb } from "./fake_sb.ts";
-import { animalRowAllowed, EGG_RE, MEAT_RE } from "../nutrition/suggestMeal.ts";
+import {
+  animalRowAllowed,
+  EGG_RE,
+  LEGACY_IS_VEG_DESCRIPTION,
+  MEAT_RE,
+  veganRowAllowed,
+} from "../nutrition/suggestMeal.ts";
 
 let nextId = 0;
 function food(name: string, isVeg: boolean, isVegan = false, kcal = 300, protein = 15) {
@@ -310,7 +316,117 @@ Deno.test("Unit 2b: the calorie cap compares numbers (fake_sb lte is numeric now
   assert(!res.top_picks.some((p: { name: string }) => p.name === "Huge Thali"));
 });
 
-Deno.test("Unit 2b: a profile read error falls back to the request only, with a note", async () => {
+Deno.test("Unit 2b B-pass 1: an egg word no longer admits fish, a hot dog or a McMuffin for an eggetarian", () => {
+  // Each name has an egg word, so before the fix the egg rule admitted it.
+  for (const n of ["Tuna Egg Salad", "Egg and Prawn Fried Rice", "Egg Roll (Fish)", "Egg Sushi Roll"]) {
+    assert(!animalRowAllowed(n, "eggetarian"), `eggetarian kept fish: ${n}`);
+    assert(animalRowAllowed(n, "pescatarian"), `pescatarian dropped: ${n}`);
+  }
+  for (const n of ["Egg Hot Dog", "Egg Hotdog", "Egg McMuffin", "Egg and Frankfurter", "Egg Jerky Bowl"]) {
+    assert(!animalRowAllowed(n, "eggetarian"), `eggetarian kept meat: ${n}`);
+    assert(!animalRowAllowed(n, "pescatarian"), `pescatarian kept meat: ${n}`);
+  }
+  // A capsule is never a meal, even with an egg word.
+  assert(!animalRowAllowed("Egg Yolk Lecithin Capsule", "eggetarian"));
+  assert(!animalRowAllowed("Egg Yolk Lecithin Capsule", "pescatarian"));
+  // Sushi with fish stays for a pescatarian.
+  assert(animalRowAllowed("Sushi Roll (Salmon)", "pescatarian"));
+});
+
+Deno.test("Unit 2b B-pass 2: vegan deny words are absolute; the plant rescue needs the plant word right before", () => {
+  const drop = [
+    "Curd Rice", "Ghee Rice", "Rice with Ghee", "Honey Oat Bar", "Peanut Butter with Honey",
+    "Cheese Nut Sandwich", "Rice Kheer", "Lassi", "Buttermilk", "Rasmalai", "Masala Chaas",
+    "Boondi Raita", "Kulfi", "Vanilla Ice Cream", "Veg Mayo Sandwich", "Egg Fried Rice",
+    "Coconut Malai Curry", "Oats with Milk", "Butter Naan", "Paneer Tikka", "Whey Shake",
+    "Cream of Mushroom Soup", "Gelatin Dessert", "Khoya Barfi", "Rabri", "Shrikhand",
+    "Greek Yogurt", "Dahi Vada", "Almond Cheese Milk Cake",
+  ];
+  const keep = [
+    "Almond Milk", "Soy Milk", "Oat Milk Latte", "Peanut Butter", "Cashew Cheese", "Soy Curd",
+    "Coconut Yogurt", "Rice Milk", "Moong Dal", "Rajma", "Banana", "Cocoa Butter",
+    "Egg Plant Curry", // eggplant written as two words is not an egg
+  ];
+  for (const n of drop) assert(!veganRowAllowed(n), `vegan kept ${n}`);
+  for (const n of keep) assert(veganRowAllowed(n), `vegan dropped ${n}`);
+});
+
+Deno.test("Unit 2b B-pass 2: the bundled asset's is_vegan rows keep every plant row (measured 632 of 637)", async () => {
+  const asset = JSON.parse(
+    await Deno.readTextFile(new URL("../../../../../assets/data/food_database.json", import.meta.url)),
+  ) as Array<{ name: string; is_vegan?: boolean }>;
+  const vegan = asset.filter((r) => r.is_vegan === true).map((r) => r.name);
+  const kept = vegan.filter(veganRowAllowed);
+  const dropped = vegan.filter((n) => !veganRowAllowed(n));
+  console.log(`[vegan scan] ${kept.length} of ${vegan.length} kept; dropped: ${dropped.join(" | ")}`);
+  // Measured 2026-11-14 on the bundled asset (the old rule kept the same
+  // 632): the stricter rule loses no real plant row.
+  assertEquals(kept.length, 632);
+  assert(kept.includes("Soy Milk") || kept.some((n) => /soy milk/i.test(n)), "positive control");
+});
+
+Deno.test("Unit 2b B-pass 3: a profile read error shows vegan options (they suit every food type)", async () => {
+  // deno-lint-ignore no-explicit-any
+  const sb: any = {
+    from(t: string) {
+      if (t === "user_profile") {
+        const b: any = { select: () => b, eq: () => b, limit: () => Promise.resolve({ data: null, error: { message: "boom" } }) };
+        return b;
+      }
+      return fakeSb({ food_database: FOODS }).sb.from(t);
+    },
+  };
+  for (const extra of [{}, { isVeg: true }]) {
+    // deno-lint-ignore no-explicit-any
+    const res: any = await suggestMealTool.handler!({ userId: "u1", isPro: true, sb, requestId: "r" } as any, { remainingKcal: 800, ...extra } as any);
+    assert(res.notes.includes("Could not read the user's food type; showing vegan options, which suit every food type."));
+    assert(res.top_picks.length > 0, "precondition: vegan picks exist");
+    for (const p of res.top_picks) {
+      assert(FOODS.find((f) => f.name === p.name)!.is_vegan, p.name);
+      assert(veganRowAllowed(p.name), p.name);
+    }
+    assertEquals(res.query_summary, "800 kcal budget, vegan");
+  }
+});
+
+Deno.test("Unit 2b B-pass 4: the kill switch restores the pre-2b isVeg description the model reads", () => {
+  // deno-lint-ignore no-explicit-any
+  const desc = () => (suggestMealTool.schema as any).shape.isVeg.description as string;
+  assert(desc().includes("the tool already applies the user's stored food type"));
+  Deno.env.set("DISABLE_SUGGESTMEAL_STORED_FOOD_TYPE", "true");
+  try {
+    assertEquals(desc(), LEGACY_IS_VEG_DESCRIPTION);
+    assertEquals(
+      LEGACY_IS_VEG_DESCRIPTION,
+      "Set to true to restrict to vegetarian options. Omit if no preference. (Approximated by excluding common non-veg keywords from the food name — the food_database has no explicit is_veg flag.)",
+    );
+  } finally {
+    Deno.env.delete("DISABLE_SUGGESTMEAL_STORED_FOOD_TYPE");
+  }
+});
+
+Deno.test("Unit 2b B-pass 6: past the 500-row limit, the most protein-rich veg rows are kept", async () => {
+  // 520 low-protein veg rows first, then 5 high-protein ones: an unordered
+  // limit(500) would never see the last five.
+  const rows = [
+    ...Array.from({ length: 520 }, (_, i) => ({
+      id: `L${i}`, name: `Plain Veg ${i}`, category: "x", calories_std: 200, protein_std: 1,
+      carbs_std: 40, fat_std: 2, standard_serving_desc: null, standard_serving_g: 100,
+      is_indian: true, is_veg: true, is_vegan: true,
+    })),
+    ...Array.from({ length: 5 }, (_, i) => ({
+      id: `H${i}`, name: `Dal Power ${i}`, category: "x", calories_std: 200, protein_std: 20 + i,
+      carbs_std: 20, fat_std: 2, standard_serving_desc: null, standard_serving_g: 100,
+      is_indian: true, is_veg: true, is_vegan: true,
+    })),
+  ];
+  const { sb } = fakeSb({ user_profile: [{ user_id: "u1", diet_preference: "veg" }], food_database: rows });
+  // deno-lint-ignore no-explicit-any
+  const res: any = await suggestMealTool.handler!({ userId: "u1", isPro: true, sb, requestId: "r" } as any, { remainingKcal: 800, remainingProteinG: 15 } as any);
+  assert(res.top_picks.some((p: { name: string }) => p.name.startsWith("Dal Power")), JSON.stringify(res.top_picks.map((p: { name: string }) => p.name)));
+});
+
+Deno.test("Unit 2b: a profile read error falls back to the request only, with a note [superseded by B-pass 3]", async () => {
   // deno-lint-ignore no-explicit-any
   const sb: any = {
     from(t: string) {
@@ -323,9 +439,9 @@ Deno.test("Unit 2b: a profile read error falls back to the request only, with a 
   };
   // deno-lint-ignore no-explicit-any
   const res: any = await suggestMealTool.handler!({ userId: "u1", isPro: true, sb, requestId: "r" } as any, { remainingKcal: 800, isVeg: true } as any);
-  assert(res.notes.includes("Could not read the user's food type; filtered by the request only."));
-  for (const p of res.top_picks) assert(FOODS.find((f) => f.name === p.name)!.is_veg, p.name);
-  assert(res.query_summary.includes("veg"));
+  assert(res.notes.includes("Could not read the user's food type; showing vegan options, which suit every food type."));
+  for (const p of res.top_picks) assert(FOODS.find((f) => f.name === p.name)!.is_vegan, p.name);
+  assert(res.query_summary.includes("vegan"));
 });
 
 Deno.test("Unit 2b: an absent profile row is the default (non_veg)", async () => {

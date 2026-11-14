@@ -1244,6 +1244,34 @@ Deno.test("Unit 2b: an inherited diet_preference in the existing notes is remove
   assertEquals(notes.supplement_use, "creatine");
 });
 
+Deno.test("Unit 2b B-pass 5: a food type under another key is dropped from the reply AND from inherited notes", async () => {
+  const upserts: Array<{ table: string; payload: Record<string, unknown> }> = [];
+  const supabase = fakeSupabase({
+    userPreferencesRow: {
+      coaching_notes: JSON.stringify({ Diet: "veg", food_type: "vegan", food_preferences: "likes dal" }),
+    },
+    userProfileRow: { coach_extraction_locked_fields: [] },
+    onUpsert: (table, payload) => upserts.push({ table, payload }),
+  });
+
+  // Model-invented keys, one each (the merge copies every key it gets).
+  await mergeCoachingNotes(supabase, "u1", {
+    diet: "vegetarian",
+    dietary_preference: "vegan",
+    diet_type: "keto",
+    is_vegetarian: true,
+    Food_Type: "pescatarian",
+    supplement_use: "creatine",
+  } as unknown as Parameters<typeof mergeCoachingNotes>[2]);
+
+  const notes = notesOf(upserts);
+  for (const k of ["diet", "Diet", "dietary_preference", "diet_type", "is_vegetarian", "food_type", "Food_Type"]) {
+    assert(!(k in notes), `notes kept ${k}`);
+  }
+  assertEquals(notes.food_preferences, "likes dal", "likes and dislikes are not a food type");
+  assertEquals(notes.supplement_use, "creatine");
+});
+
 Deno.test("Unit 2b: a reply holding ONLY a food type merges nothing and still advances the watermark", async () => {
   const newRow = row({ created_at: pgTs(-1_000), user_message: "I'm vegetarian" });
   let watermarkAdvanced = false;

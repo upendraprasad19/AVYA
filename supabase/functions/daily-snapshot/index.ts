@@ -86,10 +86,30 @@ export function foodTypeExtractionRulesOff(): boolean {
 export const LEGACY_DIET_PREFERENCE_SCHEMA_LINE =
   '  "diet_preference": "vegetarian|vegan|non_veg|keto|pescatarian",\n';
 
-/** A copy of [facts] without `diet_preference`. Pure. */
+// B-pass finding 5: the model can name the food type under another key
+// (`diet`, `dietary_preference`, `food_type`, ...); the merge copies every
+// key it gets, so those are dropped too. `food_preferences` (likes,
+// dislikes, allergies) is NOT a food type and is kept.
+export const FOOD_TYPE_FACT_KEYS: ReadonlySet<string> = new Set([
+  "diet_preference",
+  "diet_preferences",
+  "diet",
+  "diet_type",
+  "dietary_preference",
+  "dietary_preferences",
+  "dietary_type",
+  "food_type",
+  "eating_type",
+  "vegetarian",
+  "is_vegetarian",
+  "is_vegan",
+]);
+
+/** A copy of [facts] without any food-type key. Pure. */
 export function dropFoodType(facts: ExtractedFacts): ExtractedFacts {
-  const { diet_preference: _dropped, ...rest } = facts;
-  return rest;
+  return Object.fromEntries(
+    Object.entries(facts).filter(([k]) => !FOOD_TYPE_FACT_KEYS.has(k.toLowerCase())),
+  ) as ExtractedFacts;
 }
 
 // a2a (single-owner batch, 2026-09-27): exported + geminiChatFn injectable so
@@ -414,7 +434,11 @@ export async function mergeCoachingNotes(
   const merged = { ...existing };
   // Unit 2b: an inherited copy is removed too, so old notes heal on the
   // user's next extraction (and the embedding text below no longer has it).
-  if (!foodTypeRulesOff) delete merged["diet_preference"];
+  if (!foodTypeRulesOff) {
+    for (const k of Object.keys(merged)) {
+      if (FOOD_TYPE_FACT_KEYS.has(k.toLowerCase())) delete merged[k];
+    }
+  }
   for (const [key, value] of Object.entries(extracted)) {
     if (value !== undefined && value !== null && value !== "") {
       merged[key] = value;

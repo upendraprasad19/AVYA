@@ -5,7 +5,7 @@ blast_radius: platform
 review_rounds: 2
 ground_truth_verified: true
 verdict: converged
-bpass: pending
+bpass: accepted
 bpass_review: docs/reviews/diet-food-type-server-bpass.md
 ---
 
@@ -28,7 +28,7 @@ Ground truth: both reviewers read the cited files at `3da92d26`; round 1 counted
 
 ## B-pass
 
-Pending: `docs/reviews/diet-food-type-server-bpass.md` after review CI is green.
+Accepted: `docs/reviews/diet-food-type-server-bpass.md` (fresh Sonnet seat on b76694b1, review CI green). No P0/P1; three P2 (eggetarian egg rule admitted fish; vegan plant rescue cancelled every deny word; a failed profile read fell back to non_veg) and three P3 (kill switch left the new tool description; alias food-type keys; unordered limit), all fixed with mutations B20 to B31 (diagnose `c9bc6a`). The cleanup SQL now also strips 3 `coaching_notes` copies.
 
 ## Build evidence
 
