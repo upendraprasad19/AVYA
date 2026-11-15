@@ -303,10 +303,15 @@ void main() {
     void fail(String zero, String why) => (bad[zero] ??= []).add('${p.label}: $why');
     // Reset, so a stat read below is THIS run's or absent, never a previous run's.
     SessionSetAllocator.debugLastStats = null;
+    SessionSetAllocator.debugLastAllowance = null;
     final plan = gen(p);
     final stats = SessionSetAllocator.debugLastStats;
     _agg.runs++;
-    final limitMin = p.effMinutes + 2;
+    // Unit 2C-b (S4, the shared oracle's allowance excuse): a plan the allocator sized with the under-60 allowance may
+    // run `SessionBudget.allowanceSeconds` past the user's minutes; its ledger forces nothing past that (d42).
+    final allowanceMin =
+        SessionSetAllocator.debugLastAllowance == true ? SessionBudget.allowanceSeconds / 60 : 0.0;
+    final limitMin = p.effMinutes + 2 + allowanceMin;
     final wantVariants = p.days == 6 ? const ['A'] : const ['A', 'B'];
     for (final v in wantVariants) {
       if (stats == null || !stats.containsKey(v)) fail('allocator ran', 'no stats for variant $v');
@@ -353,7 +358,9 @@ void main() {
           // the allocator) is over by at most those slots' own seconds, and never by
           // more than the forcing bound plus the display slack over the user's minutes.
           // When the guard also filled the day, its lead lift is subtracted too.
-          final forcedSeconds = BudgetInvariantOracle.countForcedSeconds(stats?[variant], di, d.exercises, exSeconds);
+          // Unit 2C-b: the weekly minimum's seats share the forcing bound (`BudgetInvariantOracle.minimumSeatSeconds`).
+          final forcedSeconds = BudgetInvariantOracle.countForcedSeconds(stats?[variant], di, d.exercises, exSeconds) +
+              BudgetInvariantOracle.minimumSeatSeconds(stats?[variant], di, d.exercises, exSeconds);
           // Unit 2B (d33, the shared oracle `budget_invariant_oracle.dart`): the day may also run over by the overrun
           // of its `overClock` floor seats (`overSeconds`), with no bound.
           final floorClockSeconds =
@@ -362,11 +369,16 @@ void main() {
           // The overrun over the user's minutes is bounded by the FORCING itself (at most
           // maxForcedOverSeconds of it, B-pass P2-1 / P2-2), so a forced slot cannot mask an
           // unrelated overrun; the display slack is the 2 minutes of `limitMin`.
-          final forcedPart =
-              forcedSeconds > SessionBudget.maxForcedOverSeconds ? SessionBudget.maxForcedOverSeconds.toDouble() : forcedSeconds;
+          // Unit 2C-b: a stamped plan's ledger forces nothing past budget + the allowance (`forcingBound` 0, never
+          // stacked, d42 / d47), so its excuse is the allowance alone (B-pass seat 2, 5d).
+          final forcedPart = allowanceMin > 0
+              ? 0.0
+              : forcedSeconds > SessionBudget.maxForcedOverSeconds
+                  ? SessionBudget.maxForcedOverSeconds.toDouble()
+                  : forcedSeconds;
           final countExplained = forcedSeconds + floorClockSeconds > 0 &&
               mins - (forcedSeconds + floorClockSeconds + guardSeconds) / 60 <= limitMin &&
-              mins - p.effMinutes <= (forcedPart + floorClockSeconds + guardSeconds) / 60 + 2;
+              mins - p.effMinutes <= (forcedPart + floorClockSeconds + guardSeconds) / 60 + 2 + allowanceMin;
           final explained = guardExplained || countExplained;
           if (explained) {
             _agg.timeForcedOver.add(mins - p.effMinutes); // minutes over the user's own minutes
