@@ -122,7 +122,8 @@ Set<String> _groups(Iterable<Object?> muscles) {
 
 /// OI-454, restated here (not imported): in the 6-day build_muscle split, and (Unit 2C-a) in build_muscle 3 / 4 / 5-day
 /// plans at 60+ minutes, an exercise whose FIRST listed muscle is Quads credits Quads but not Glutes, so the Glutes top
-/// and cap never count a squat's or a lunge's glute work. Every other plan credits every listed muscle.
+/// and cap never count a squat's or a lunge's glute work; likewise (Unit 3A) 4-day general_fitness plans. Every other
+/// plan credits every listed muscle.
 Set<String> _credited(List<Object?> muscles, {required bool quadOwnsGlutes}) {
   final all = _groups(muscles);
   if (!quadOwnsGlutes || muscles.isEmpty || all.contains('Hamstrings')) return all;
@@ -142,15 +143,16 @@ const _table = {
     'intermediate': (10, 14, 8),
     'advanced': (12, 16, 10),
   },
+  // Unit 3A (OI-487, d3 / d62): Cut's beginner band is below Build's; Maintain is two-thirds of Build.
   'lose_fat': {
-    'beginner': (10, 12, 6),
+    'beginner': (9, 11, 6),
     'intermediate': (10, 14, 8),
     'advanced': (12, 16, 8),
   },
   'general_fitness': {
-    'beginner': (10, 10, 6),
-    'intermediate': (10, 12, 8),
-    'advanced': (12, 14, 8),
+    'beginner': (7, 8, 6),
+    'intermediate': (8, 11, 8),
+    'advanced': (9, 13, 8),
   },
 };
 
@@ -387,11 +389,12 @@ void main() {
             fail('time', 'week ${w + 1} ${d.name} ${mins.toStringAsFixed(1)} min > $limitMin');
           }
         }
-        // OI-454 (6-day) and Unit 2C-a (build_muscle 3 / 4 / 5-day at 60+ minutes), restated: a quad-first row does
-        // not credit Glutes.
+        // OI-454 (6-day), Unit 2C-a (build_muscle 3 / 4 / 5-day at 60+ minutes) and Unit 3A (4-day general_fitness),
+        // restated: a quad-first row does not credit Glutes.
         final per = sessionGroups(d,
-            quadOwnsGlutes: p.planGoal == 'build_muscle' &&
-                (p.days == 6 || (p.days >= 3 && p.days <= 5 && p.effMinutes >= 60)));
+            quadOwnsGlutes: (p.planGoal == 'build_muscle' &&
+                    (p.days == 6 || (p.days >= 3 && p.days <= 5 && p.effMinutes >= 60))) ||
+                (p.planGoal == 'general_fitness' && p.days == 4));
         per.forEach((g, n) {
           weekGroups[g] = (weekGroups[g] ?? 0) + n;
           if (n > p.cap(g)) fail('caps', 'week ${w + 1} ${d.name} $g $n > session cap ${p.cap(g)}');

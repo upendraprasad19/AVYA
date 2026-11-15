@@ -217,7 +217,7 @@ void main() {
       // general_fitness intermediate: Chest top 12. Baseline 3 + 3 + 4 = 10 leaves
       // room for exactly two sets. Rank-major gives them to the two rank-0 lifts
       // (day 0's c1, day 1's c3); a day-major order would give both to day 0.
-      final f = Fx();
+      final f = Fx(goalTraining: GoalTraining.off);
       for (final n in ['c1', 'c2', 'c3']) {
         f.row(n, ['Chest']);
       }
@@ -375,7 +375,9 @@ void main() {
         expect(over, <String, double>{
           '16/0/0': 90.0, '16/1/0': 90.0, '16/2/0': 90.0, //
           '54/0/1': 66.0, '54/0/2': 75.6, '54/1/1': 66.0, '54/1/2': 75.6, '54/2/1': 66.0, '54/2/2': 75.6, //
-          '55/0/4': 54.0, '55/1/1': 10.8, '55/2/4': 54.0, //
+          // Unit 3A (2026-11-15): plan 55's week-2 day 1 no longer needs the excuse under the goal's band (attributed by
+          // re-running with the goal training off: '55/1/1': 10.8 returns).
+          '55/0/4': 54.0, '55/2/4': 54.0, //
           '57/0/1': 10.8, '57/1/1': 10.8, '57/2/1': 10.8,
         });
       });

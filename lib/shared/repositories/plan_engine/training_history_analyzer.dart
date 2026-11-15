@@ -7,6 +7,7 @@ import 'package:icanbefitter/core/utils/equipment_vocab.dart';
 
 import '../exercise_repository.dart';
 import 'plan_engine_flags.dart';
+import 'session_budget.dart' show GoalTraining;
 import 'package:icanbefitter/core/constants/equipment_defaults.dart';
 
 /// Stage 0 (companion to [ProgressionResolver]) — reads Hive to produce
@@ -116,6 +117,26 @@ class TrainingHistoryAnalyzer {
       return const [];
     }
   }
+
+  /// Unit 3A (OI-487, d61): what the goal changes this generation: the `disable_goal_training` switch and the
+  /// Strength focus (`physique_focus == 'strength'`). try/catch → the switch's own value with no focus, like
+  /// [physiqueFocusMuscles], so a null / corrupt profile never throws into the generator.
+  static GoalTraining goalTrainingFromProfile() {
+    final enabled = PlanEngineFlags.goalTrainingEnabled;
+    if (!enabled) return GoalTraining.off;
+    try {
+      final profile = HiveService.instance.userBox.get('profile');
+      if (profile is! Map) return const GoalTraining();
+      return GoalTraining(strengthFocus: isStrengthFocus(profile['physique_focus']));
+    } catch (e, st) {
+      debugPrint('[TrainingHistoryAnalyzer.goalTrainingFromProfile] $e');
+      unawaited(ErrorTelemetry.recordNonFatal(e, st, reason: 'training_history_analyzer_goal_training'));
+      return const GoalTraining();
+    }
+  }
+
+  /// Pure: whether a stored `physique_focus` value is the Strength focus.
+  static bool isStrengthFocus(Object? token) => token is String && token.trim() == 'strength';
 
   /// Pure translation (Hive-free, testable in isolation): a `physique_focus`
   /// token → the lowercased muscle-substring tokens PeriodizationEngine matches

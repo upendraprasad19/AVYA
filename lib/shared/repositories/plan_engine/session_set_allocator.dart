@@ -54,6 +54,10 @@ class AllocationStats {
   /// [countForced]. Variant B inherits A's entries for the days it copies.
   final Map<int, List<FloorSeat>> floorSeats = {};
 
+  /// d65 (2026-11-15): per day, each admitted row the floor took sets from so a thin day's third exercise fits a
+  /// session cap (`from` -> `to`, never below 2). Variant B inherits A's entries for the days it copies.
+  final Map<int, List<({String name, int from, int to})>> floorTrims = {};
+
   /// Hard sets per budget group across the week, after the allocation.
   final Map<String, int> weekly = {};
 
@@ -722,7 +726,7 @@ class SessionSetAllocator {
   /// row at its own rest.
   static double _repeatCost(PlannedExercise ex, int sets, SessionBudgetContext ctx) {
     final rest = SessionBudget.isBudgeted(ex, ctx) || SessionBudget.isRepBased(ex.loggingType)
-        ? SessionBudget.restForArchetype(SessionBudget.archetypeOfPlanned(ex, ctx))
+        ? SessionBudget.restFor(SessionBudget.archetypeOfPlanned(ex, ctx), ctx)
         : ex.restSeconds;
     return SessionBudget.plannedExerciseSeconds(ex, ctx, sets: sets, restSeconds: rest);
   }
@@ -903,7 +907,7 @@ class SessionSetAllocator {
           // Ruling 8: a timed row at its OWN rest, a rep-based custom at its archetype's
           // (OI-456: the rest follows the exercise, not the day).
           final rest = SessionBudget.isRepBased(ex.loggingType)
-              ? SessionBudget.restForArchetype(arch)
+              ? SessionBudget.restFor(arch, ctx)
               : ex.restSeconds;
           final cost = SessionBudget.plannedExerciseSeconds(ex, ctx, sets: ex.sets, restSeconds: rest);
           if (ex.customOrigin == null &&
@@ -932,7 +936,7 @@ class SessionSetAllocator {
             ex,
             _groupsOf(ex, rows[ex.exerciseName.toLowerCase()], ctx),
             arch,
-            SessionBudget.restForArchetype(arch),
+            SessionBudget.restFor(arch, ctx),
             SessionBudget.baseSets,
           );
           byDay[d].add(slot);
@@ -981,6 +985,8 @@ class SessionSetAllocator {
         stats.leadSeats.addAll(copyFrom.leadSeats.where((e) => e.day == d));
         final fo = copyFrom.floorSeats[d];
         if (fo != null) stats.floorSeats[d] = List.of(fo);
+        final ft = copyFrom.floorTrims[d];
+        if (ft != null) stats.floorTrims[d] = List.of(ft);
         final mo = copyFrom.minimumSeats[d];
         if (mo != null) stats.minimumSeats[d] = List.of(mo);
         final wo = copyFrom.walkedTargets[d];
@@ -1300,9 +1306,13 @@ class SessionSetAllocator {
 
     // 4b'. Unit 2B (OI-452, founder d30-d33): the 3-exercise day floor. A day whose rows (budgeted and not) are under
     // min(3, its reach) seats a remaining slot at 2 sets past a group's weekly top, with no limit on the excess (d30), in
-    // every phase (d31), up to its reach (d32), and not bound by the clock (d33); never past a session cap, never a
-    // slot the rank-0 reservation blocked. One slot per day per round. Choice: the fewest groups over their top, then
-    // the least excess, then the cheapest; no lead preference; ties to the lowest rank.
+    // every phase (d31), up to its reach (d32), and not bound by the clock (d33); never past a session cap. One slot per
+    // day per round. Choice: the fewest groups over their top, then the least excess, then the cheapest; no lead
+    // preference; ties to the lowest rank. d65 (found by Unit 3A's lower Cut / Maintain tops): (a) a slot the rank-0
+    // reservation blocked may be seated (every later day's lead is seated by now, so the reservation guards nothing);
+    // (b) when only a group's session cap refuses every remaining slot, the floor takes sets off that group's admitted
+    // rows above 2 (most sets first, ties to the latest rank) so the day holds 3 exercises inside the cap: 3 + 2 -> 2 +
+    // 2 + 2. A slot that needs no trim is always preferred.
     if (dayFloor) {
       const floorRows = 3;
       int excessAfter(_Slot s, String g) => ledger.week(g) + 2 - ledger.weeklyTop(g);
@@ -1311,12 +1321,33 @@ class SessionSetAllocator {
       // No count-target guard is needed: a slot is target-removed only once `seated[d] >= target[d]`, i.e. the day holds
       // the level's count max (5 or more) in rows, and the floor acts only below 3 rows (pinned in
       // day_floor_behavioral_test, 'the count target').
-      bool canFloor(int d, _Slot s) {
-        if (s.admitted || s.reserveBlocked) return false;
-        for (final g in s.groups) {
-          if (ledger.session(d, g) + 2 > ledger.cap(g)) return false;
+      // The sets to take off admitted rows of day [d] so [s] fits every session cap at 2 sets (d65 b): empty when it
+      // fits as it is, null when no row above 2 sets can make room.
+      List<({_Slot slot, int to})>? capTrims(int d, _Slot s) {
+        final cut = <_Slot, int>{};
+        int left(_Slot o) => o.sets - (cut[o] ?? 0);
+        int sessionAfter(String g) {
+          var n = ledger.session(d, g);
+          for (final e in cut.entries) {
+            if (e.key.groups.contains(g)) n -= e.value;
+          }
+          return n;
         }
-        return true;
+
+        for (final g in s.groups) {
+          while (sessionAfter(g) + 2 > ledger.cap(g)) {
+            _Slot? donor;
+            for (final o in byDay[d]) {
+              if (!o.admitted || identical(o, s) || !o.groups.contains(g) || left(o) <= 2) continue;
+              if (donor == null || left(o) > left(donor) || (left(o) == left(donor) && o.rank > donor.rank)) {
+                donor = o;
+              }
+            }
+            if (donor == null) return null;
+            cut[donor] = (cut[donor] ?? 0) + 1;
+          }
+        }
+        return [for (final e in cut.entries) (slot: e.key, to: e.key.sets - e.value)];
       }
 
       var seatedAny = true;
@@ -1326,18 +1357,28 @@ class SessionSetAllocator {
           final want = reachRows[d] < floorRows ? reachRows[d] : floorRows;
           if (byDay[d].isEmpty || rowsOf(d) >= want) continue;
           _Slot? best;
-          for (final s in byDay[d]) {
-            if (!canFloor(d, s)) continue;
-            if (best == null) {
-              best = s;
-              continue;
+          List<({_Slot slot, int to})>? bestTrims;
+          // A slot that needs no trim first; only when none fits, one that does (d65 b).
+          for (final trimming in const [false, true]) {
+            for (final s in byDay[d]) {
+              if (s.admitted) continue;
+              final trims = capTrims(d, s);
+              if (trims == null || trims.isNotEmpty != trimming) continue;
+              if (best == null ||
+                  floorPrefers((over: overCount(s), excess: overSum(s), seconds: seconds(s, 2)),
+                      (over: overCount(best), excess: overSum(best), seconds: seconds(best, 2)))) {
+                best = s;
+                bestTrims = trims;
+              }
             }
-            if (floorPrefers((over: overCount(s), excess: overSum(s), seconds: seconds(s, 2)),
-                (over: overCount(best), excess: overSum(best), seconds: seconds(best, 2)))) {
-              best = s;
-            }
+            if (best != null) break;
           }
           if (best == null) continue;
+          for (final t in bestTrims!) {
+            (stats.floorTrims[d] ??= []).add((name: t.slot.exercise.exerciseName, from: t.slot.sets, to: t.to));
+            ledger.add(d, t.slot.groups, t.to - t.slot.sets, seconds(t.slot, t.to) - seconds(t.slot, t.slot.sets));
+            t.slot.sets = t.to;
+          }
           final overBy = {
             for (final g in best.groups)
               if (excessAfter(best, g) > 0) g: excessAfter(best, g) > 2 ? 2 : excessAfter(best, g),
@@ -1477,7 +1518,7 @@ class SessionSetAllocator {
       }
     }
 
-    final bottom = SessionBudget.weeklyBand(ctx.planGoal, ctx.level).bottom;
+    final bottom = SessionBudget.weeklyBand(ctx.planGoal, ctx.level, goalTraining: ctx.goalTraining.enabled).bottom;
     grow({for (final g in BudgetMuscleGroups.groups) g: bottom});
     // In a lighter phase the ledger's weekly top IS the band bottom for every group,
     // focus included, so this pass cannot add a set there.

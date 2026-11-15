@@ -305,7 +305,9 @@ void main() {
       final digest = sha256Hex(utf8.encode(digestLines.join('\n')));
       // ignore: avoid_print
       print('2C-b sweep digest: $digest');
-      expect(digest, '464c08de643fcec46fe173bebb6d0a1696f3347ac2a255085b60f9307fc5d6a0');
+      // Unit 3A (2026-11-15) re-recorded: the goal's Cut / Maintain bands move plans (with the goal training off the
+      // 2C-b digest 464c08de... returns exactly; the day floor's d65 amendment alone moves nothing here).
+      expect(digest, 'db1c56ef97da4b76ef263c589bdf438434e84b8328c1a3971ab3eaac8c1aafa9');
       expect(equal60, greaterThan(30), reason: 'the sweep must reach 60+ plans');
     });
   });

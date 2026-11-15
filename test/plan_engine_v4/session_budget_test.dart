@@ -247,8 +247,13 @@ void main() {
       expect(SessionBudget.weeklyBand('build_muscle', 'advanced'), (bottom: 14, top: 20));
       expect(SessionBudget.weeklyBand('strength', 'intermediate'), (bottom: 10, top: 14));
       expect(SessionBudget.weeklyBand('lose_fat', 'advanced'), (bottom: 12, top: 16));
-      expect(SessionBudget.weeklyBand('general_fitness', 'beginner'), (bottom: 10, top: 10));
-      expect(SessionBudget.weeklyBand('general_fitness', 'advanced'), (bottom: 12, top: 14));
+      // Unit 3A (OI-487, d3): Maintain is two-thirds of Build; Cut's beginner band is below Build's. The switch-off
+      // table is pinned beside it (goal_reps_behavioral_test.dart pins both whole tables).
+      expect(SessionBudget.weeklyBand('general_fitness', 'beginner'), (bottom: 7, top: 8));
+      expect(SessionBudget.weeklyBand('general_fitness', 'advanced'), (bottom: 9, top: 13));
+      expect(SessionBudget.weeklyBand('lose_fat', 'beginner'), (bottom: 9, top: 11));
+      expect(SessionBudget.weeklyBand('general_fitness', 'beginner', goalTraining: false), (bottom: 10, top: 10));
+      expect(SessionBudget.weeklyBand('general_fitness', 'advanced', goalTraining: false), (bottom: 12, top: 14));
     });
 
     test('session caps', () {
@@ -417,7 +422,7 @@ void main() {
 
     test('the band follows the goal and the level', () {
       final l = BudgetLedger(ctx(planGoal: 'general_fitness', level: 'beginner'), 3);
-      expect(l.weeklyTop('Chest'), 10);
+      expect(l.weeklyTop('Chest'), 8, reason: 'Unit 3A (d3): Maintain beginner 7-8');
       expect(l.cap('Chest'), 6);
     });
   });

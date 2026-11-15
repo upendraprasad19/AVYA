@@ -26,8 +26,8 @@ import 'package:icanbefitter/shared/repositories/plan_engine/session_set_allocat
 import '../helpers/session_budget_fixtures.dart';
 
 /// The crafted library: lifts, and timed holds.
-Fx lib() {
-  final f = Fx(balancedWeek: false);
+Fx lib({GoalTraining goalTraining = const GoalTraining()}) {
+  final f = Fx(balancedWeek: false, goalTraining: goalTraining);
   f.row('chest', ['Chest']);
   f.row('chest2', ['Chest']);
   f.row('back', ['Lats']);
@@ -516,7 +516,7 @@ void main() {
       // general_fitness beginner: Quads weekly top 10. Days 1-5 each seat quad at 2 sets in pass A (week 10), so day
       // 6's quad has no room and the guard takes it as the cap-forced lead. Holds 4 x 324 (144 left): birddog (Core,
       // still on the others) gives way and quad lands inside the clock.
-      final f = lib();
+      final f = lib(goalTraining: GoalTraining.off); // the pre-3A Maintain band (top 10)
       final out = f.run([
         for (var i = 0; i < 5; i++) f.day('hypertrophy', [f.ex('quad')]),
         f.day('hypertrophy', [f.ex('quad'), hold(f, 'plank'), hold(f, 'hollow'), hold(f, 'deadbug'), hold(f, 'birddog')]),

@@ -389,6 +389,30 @@ class SessionBudget {
         _ => 60,
       };
 
+  /// Unit 3A (founder d60 / d64): the rest a generation prices and stamps for [archetype]: [restForArchetype], plus 30 s
+  /// on a main lift (H or M, every compound, d58) under the Strength focus in a session of [strengthFocusRestMinMinutes]
+  /// or more (d64: at 30 / 45 minutes the extra rest pushed whole groups out of 110 of 2,304 plans). With the
+  /// `disable_goal_training` switch set it is [restForArchetype] verbatim.
+  static int restFor(String archetype, SessionBudgetContext ctx) =>
+      restForGoal(archetype, ctx.goalTraining, minutes: ctx.minutes);
+
+  /// [restFor] without a context: a plan-day swap (`swap_service.dart`) prices the incoming row with the same rule, at
+  /// the profile's resolved minutes.
+  static int restForGoal(String archetype, GoalTraining gt, {required int minutes}) =>
+      restForArchetype(archetype) +
+      (gt.enabled &&
+              gt.strengthFocus &&
+              minutes >= strengthFocusRestMinMinutes &&
+              (archetype == 'H' || archetype == 'M')
+          ? strengthFocusExtraRest
+          : 0);
+
+  /// Unit 3A (d60): the Strength focus's extra rest on a main lift.
+  static const int strengthFocusExtraRest = 30;
+
+  /// Unit 3A (d64): the shortest session in which the Strength focus's extra rest applies.
+  static const int strengthFocusRestMinMinutes = 60;
+
   /// The sets the allocator tries first for every budgeted exercise, on every day.
   static const int baseSets = 3;
 
@@ -461,6 +485,32 @@ class SessionBudget {
     'general_fitness': {'beginner': 6, 'intermediate': 8, 'advanced': 8},
   };
 
+  /// Unit 3A (OI-487, founder d3): Maintain (general_fitness) is two-thirds of Build's weekly sets, rounded; Cut
+  /// (lose_fat) is slightly fewer than Build at every level (the beginner band was equal). Build and the legacy
+  /// strength token are unchanged. [_bands] is the table with the `disable_goal_training` switch set.
+  static const Map<String, Map<String, ({int bottom, int top})>> _goalBands = {
+    'build_muscle': {
+      'beginner': (bottom: 10, top: 12),
+      'intermediate': (bottom: 12, top: 16),
+      'advanced': (bottom: 14, top: 20),
+    },
+    'strength': {
+      'beginner': (bottom: 10, top: 12),
+      'intermediate': (bottom: 10, top: 14),
+      'advanced': (bottom: 12, top: 16),
+    },
+    'lose_fat': {
+      'beginner': (bottom: 9, top: 11),
+      'intermediate': (bottom: 10, top: 14),
+      'advanced': (bottom: 12, top: 16),
+    },
+    'general_fitness': {
+      'beginner': (bottom: 7, top: 8),
+      'intermediate': (bottom: 8, top: 11),
+      'advanced': (bottom: 9, top: 13),
+    },
+  };
+
   static String _goalKey(String planGoal) =>
       _bands.containsKey(planGoal) ? planGoal : 'build_muscle';
 
@@ -469,8 +519,8 @@ class SessionBudget {
 
   /// Weekly hard sets per muscle group for [planGoal] and [level]. An unknown
   /// goal uses build_muscle; an unknown level uses intermediate.
-  static ({int bottom, int top}) weeklyBand(String planGoal, String level) =>
-      _bands[_goalKey(planGoal)]![_levelKey(level)]!;
+  static ({int bottom, int top}) weeklyBand(String planGoal, String level, {bool goalTraining = true}) =>
+      (goalTraining ? _goalBands : _bands)[_goalKey(planGoal)]![_levelKey(level)]!;
 
   /// The most hard sets one muscle group may get in ONE session (non-focus).
   static int sessionCap(String planGoal, String level) =>
@@ -488,6 +538,7 @@ class SessionBudgetContext {
     required Set<String> focusGroups,
     this.finisherSeconds = 0,
     this.quadPrimaryCreditsGlutes = true,
+    this.goalTraining = const GoalTraining(),
     required Map<String, String> archetypeByName,
   })  : focusGroups = Set.unmodifiable(focusGroups),
         archetypeByName = Map.unmodifiable(archetypeByName);
@@ -518,6 +569,23 @@ class SessionBudgetContext {
 
   /// Lowercased exercise name -> archetype, computed once from the library rows.
   final Map<String, String> archetypeByName;
+
+  /// Unit 3A (OI-487): the goal's reps and bands and the Strength focus. `generateV4` passes
+  /// `TrainingHistoryAnalyzer.goalTrainingFromProfile()` (d61); the default is the switch ON with no focus.
+  final GoalTraining goalTraining;
+}
+
+/// Unit 3A (OI-487, founder d3 / d4 / d58-d61): what a generation's goal changes beyond the split. [enabled] is the
+/// `disable_goal_training` kill switch read once per generation (true = the goal table, the Cut / Maintain bands and
+/// the Strength focus); [strengthFocus] is the profile's `physique_focus == 'strength'`.
+class GoalTraining {
+  const GoalTraining({this.enabled = true, this.strengthFocus = false});
+
+  final bool enabled;
+  final bool strengthFocus;
+
+  /// The switch set: today's reps, bands and rests verbatim.
+  static const off = GoalTraining(enabled: false);
 }
 
 /// The one headroom predicate shared by the allocator, `PeriodizationEngine.apply`
@@ -551,7 +619,7 @@ class BudgetLedger {
   /// The weekly ceiling for [group]: the band's top, 25 for a focus group, and
   /// the band's BOTTOM for every group in a lighter phase.
   int weeklyTop(String group) {
-    final band = SessionBudget.weeklyBand(ctx.planGoal, ctx.level);
+    final band = SessionBudget.weeklyBand(ctx.planGoal, ctx.level, goalTraining: ctx.goalTraining.enabled);
     if (ctx.lighterPhase) return band.bottom;
     if (ctx.focusGroups.contains(group)) return SessionBudget.focusWeeklyTop;
     return band.top;

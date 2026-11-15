@@ -295,6 +295,9 @@ class PlanGenerator {
       archetypeByName: {
         for (final e in rowsByName.entries) e.key: SessionBudget.archetypeOfRow(e.value),
       },
+      // Unit 3A (OI-487, founder d61, the rule-14 argument): the goal's reps and bands, the Strength focus, and the
+      // disable_goal_training switch, read once.
+      goalTraining: TrainingHistoryAnalyzer.goalTrainingFromProfile(),
     );
     populated = SessionSetAllocator.allocate(
       days: populated,

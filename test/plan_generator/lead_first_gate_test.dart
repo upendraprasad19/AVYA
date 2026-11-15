@@ -8,7 +8,9 @@
 //     row is exempt). A restated budgeted test, independent of the allocator: a library row, not a custom, not logged
 //     timed / cardio / distance (`SessionBudget.isBudgeted`'s rule);
 //  2. the day's first exercise equals the OFF plan's whenever the OFF plan's first exercise is still in the ON day
-//     (the sequencer is unchanged, so 2A never reorders a day's opener);
+//     and the ON day's first exercise is in the OFF day too (the sequencer is unchanged, so 2A never reorders two rows
+//     both worlds hold). Unit 3A: an ON opener the OFF day does not hold is the 2A lead seated where the OFF world's
+//     top refused it (R1); those day-weeks are counted and pinned (`_newOpeners`);
 //  3. the worlds the allocator kept (`AllocationStats.leadWorld`, variants A and B) are pinned EXACTLY, so a wrong
 //     world choice reddens here even where the plan output happens to agree.
 //
@@ -37,7 +39,16 @@ import '../helpers/generator_golden_personas.dart';
 /// A:capped 66 -> 51. The 15 personas that move (traced, capped -> lead) are build_muscle 4 / 5-day at the default 60
 /// minutes; 7 of them are 4-day beginner Full Body plans, whose lists 2C-a does not change, so the credit rule (a
 /// quad-first row no longer spends the Glutes cap) is what lets their uncapped lead world hold. B is unchanged.
-const _worldCounts = <String, int>{'A:lead': 959, 'A:capped': 51, 'B:lead': 768, 'B:capped': 2};
+/// Day-weeks whose ON opener is a row the OFF day does not hold (the 2A lead seated where the OFF world's weekly top
+/// refused it). 0 on main 2C-b; Unit 3A (2026-11-15): 24, all general_fitness 5-day home_dumbbells Lower + Core
+/// (Dumbbell Sumo Deadlift, the 2A lead, over Romanian Deadlift), where Maintain's two-thirds band refuses the sumo
+/// deadlift in the lead-first-OFF world; main keeps it in both worlds.
+const _newOpeners = 24;
+
+/// Unit 3A (2026-11-15): A:lead 959 -> 922, A:capped 51 -> 88, B unchanged; the Cut / Maintain plans' lower tops make
+/// the uncapped lead world worse than main more often. With `disable_goal_training` set the personas are main's
+/// (goal_training_kill_switch_golden_test), so the 2C-a counts above are theirs.
+const _worldCounts = <String, int>{'A:lead': 922, 'A:capped': 88, 'B:lead': 768, 'B:capped': 2};
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -95,6 +106,7 @@ void main() {
 
     final overLead = <String>[];
     final openerMoved = <String>[];
+    final newOpener = <String>[];
     final worlds = <String, int>{};
     var daysChecked = 0;
     var holdOpened = 0;
@@ -112,7 +124,8 @@ void main() {
           final names = [for (final e in d.exercises) e.exerciseName];
           final offNames = off[i++];
           if (offNames.isNotEmpty && names.contains(offNames.first) && names.first != offNames.first) {
-            openerMoved.add('${p.key} week ${w + 1} ${d.name}: ${offNames.first} -> ${names.first}');
+            (offNames.contains(names.first) ? openerMoved : newOpener)
+                .add('${p.key} week ${w + 1} ${d.name}: ${offNames.first} -> ${names.first}');
           }
           final rows = d.exercises.where(budgeted).toList();
           if (rows.isEmpty) continue;
@@ -135,6 +148,9 @@ void main() {
     expect(holdOpened, greaterThan(0), reason: 'hold-opened days are in the set the gate reads');
     expect(overLead, isEmpty, reason: '${overLead.length} rows at the lead + 2; first: ${overLead.take(5)}');
     expect(openerMoved, isEmpty, reason: '${openerMoved.length} openers moved; first: ${openerMoved.take(5)}');
+    // ignore: avoid_print
+    print('lead-first gate: ${newOpener.length} day-weeks opened by a row the OFF day lacks; first ${newOpener.take(3)}');
+    expect(newOpener.length, _newOpeners, reason: 'first: ${newOpener.take(5)}');
     expect(worlds, _worldCounts);
   });
 }

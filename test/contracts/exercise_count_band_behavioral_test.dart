@@ -242,7 +242,7 @@ void main() {
       // general_fitness beginner: Chest top 10, session cap 6. Days 0 and 1 spend the week (6 + 4); day 2 keeps
       // its lead lift only and its 4 other Chest slots could be forced past the top (session cap 6 allows 2
       // more seats): they must not be.
-      final f = Fx(balancedWeek: false);
+      final f = Fx(balancedWeek: false, goalTraining: GoalTraining.off);
       final days = <PopulatedDay>[];
       for (var d = 0; d < 3; d++) {
         for (var i = 0; i < 5; i++) {

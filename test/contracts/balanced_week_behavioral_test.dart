@@ -519,7 +519,9 @@ void main() {
                 final want = _creditRule(goal, days, minutes, quadLegsB, on);
                 if (!want) falses++;
                 expect(
-                  SplitResolver.quadPrimaryCreditsGlutes(goal, days, minutes, quadLegsB: quadLegsB, balancedWeek: on),
+                  // Unit 3A's 4-day general_fitness credit is held off here (goal_reps_behavioral_test pins it).
+                  SplitResolver.quadPrimaryCreditsGlutes(goal, days, minutes,
+                      quadLegsB: quadLegsB, balancedWeek: on, goalTraining: false),
                   want,
                   reason: '$goal ${days}d $minutes min quadLegsB $quadLegsB switch ${on ? 'on' : 'off'}',
                 );

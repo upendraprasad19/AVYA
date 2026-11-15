@@ -117,6 +117,8 @@ const List<String> childEnvStrippedNames = <String>[
   'PLAN_AUDIT_OUT',
   // t108: the plan audit's physique focus (a child would audit focus plans under a no-focus label).
   'PLAN_AUDIT_FOCUS',
+  // Unit 3A: the plan audit's kill-switch keys (a child would audit a switch-off world under an ON label).
+  'PLAN_AUDIT_DISABLE',
   // Unit 1B-F: the injured and focus grid dumps' output directories (hours of plan generation in a child).
   'INJURED_GRID_OUT',
   'FOCUS_GRID_OUT',
