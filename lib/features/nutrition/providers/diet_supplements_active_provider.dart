@@ -10,6 +10,7 @@
 // not see a birthday pass until a watched input changes; that only delays an
 // adult (fail safe).
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:icanbefitter/features/auth/providers/auth_invalidation_provider.dart';
 import 'package:icanbefitter/core/utils/diet_supplements_rule.dart';
 import 'package:icanbefitter/features/home/providers/home_provider.dart'
     show restoreCompletedTickProvider;
@@ -26,6 +27,7 @@ typedef SupplementInputs = ({Object? switchValue, Object? dob});
 /// the restore tick rebuilds it and the value is read from Hive, never from
 /// the provider's possibly stale state. Watched only with the kill switch on.
 final dietSupplementsInputsProvider = Provider<SupplementInputs>((ref) {
+  ref.watch(authUserIdTokenProvider); // c4055a: reads the user's stored profile
   ref.watch(restoreCompletedTickProvider);
   ref.watch(userProfileProvider.select<SupplementInputs>(
       (p) => (switchValue: p['diet_supplements'], dob: p['date_of_birth'])));
