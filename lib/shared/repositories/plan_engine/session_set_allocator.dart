@@ -1463,17 +1463,18 @@ class SessionSetAllocator {
           final op = opener[d] != null && opener[d]!.admitted
               ? opener[d]
               : openerAmong([for (final o in byDay[d]) if (o.admitted) o]);
-          // d48: the swap never changes the day's opener, neither by removing it nor by seating an arm row that
-          // `openerOf` would rank above it.
-          bool keepsOpener(_Slot? victim) =>
-              op == null ||
-              identical(
-                  openerAmong([
-                    for (final o in byDay[d])
-                      if (o.admitted && !identical(o, victim)) o,
-                    s,
-                  ]),
-                  op);
+          // d48: after the swap the day opens with its lead `op` or with its 2A opener `opener[d]` (an arm slot that IS
+          // the 2A opener pass A refused: seating it restores the designed lead, CI's seeded sweep); never with any
+          // other row, neither by removing the lead nor by seating an arm row `openerOf` ranks above it.
+          bool keepsOpener(_Slot? victim) {
+            if (op == null) return true;
+            final after = openerAmong([
+              for (final o in byDay[d])
+                if (o.admitted && !identical(o, victim)) o,
+              s,
+            ]);
+            return identical(after, op) || (opener[d] != null && identical(after, opener[d]));
+          }
           final leftBefore = ledger.secondsLeft(d);
           final spentBefore = ledger.spentSeconds(d);
           bool creditedElsewhere(String x, Object self) {

@@ -14,9 +14,13 @@
 // rows (d44), so the minimum pass refuses the curl, and only the swap seats it. The real-engine reach (21 of the 2,304
 // audit plans; the 1,152 at 30 / 45 minutes hold all of them) is pinned by the 2E block of
 // test/plan_generator/weekly_minimum_gate_test.dart.
+import 'dart:convert';
+import 'dart:io';
+
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:icanbefitter/shared/repositories/plan_engine/models.dart';
+import 'package:icanbefitter/shared/repositories/plan_engine/sequencing_engine.dart';
 import 'package:icanbefitter/shared/repositories/plan_engine/session_budget.dart';
 import 'package:icanbefitter/shared/repositories/plan_engine/session_set_allocator.dart';
 
@@ -46,6 +50,32 @@ List<PopulatedDay> week(Fx f, {int custom = 3, int hold0Sets = 3, int hold1Sets 
     f.day('hypertrophy', dA, b: dB),
     f.day('hypertrophy', [f.ex('bench'), f.ex('row')], b: [f.ex('bench'), f.ex('row')]),
   ];
+}
+
+// The opener fixtures (found by a 4,158-case probe sweep, round 1): day 0's A list in [order]; heavy is a heavy
+// compound (Back, Hamstrings, 3-5 reps), so the 2A opener over the whole list, refused by the clock at 30 minutes.
+(Fx, List<PopulatedDay>) openerDays(List<String> order, String arm, int custom) {
+  final f = Fx();
+  f.row('row', ['Back']);
+  f.row('heavy', ['Back', 'Hamstrings'], reps: '3-5');
+  f.row('bench', ['Chest']);
+  f.row('fly', ['Back'], type: 'isolation');
+  f.row('pullover', ['Back'], type: 'isolation');
+  f.row('curl', ['Biceps'], type: 'isolation');
+  f.row('chin', ['Biceps', 'Back'], reps: '3-6');
+  f.row('curlB', ['Biceps'], type: 'isolation');
+  final dA = [
+    for (final n in order)
+      if (n == 'mine') ...[if (custom > 0) f.ex('mine', sets: custom, rest: 100, customOrigin: 'user')]
+      else f.ex(n == 'ARM' ? arm : n),
+  ];
+  return (
+    f,
+    [
+      f.day('hypertrophy', dA, b: [f.ex('bench'), f.ex('curlB'), f.ex('row')]),
+      f.day('hypertrophy', [f.ex('bench'), f.ex('row')], b: [f.ex('bench'), f.ex('row')]),
+    ]
+  );
 }
 
 List<String> names(List<PlannedExercise> xs) => [for (final e in xs) e.exerciseName];
@@ -269,32 +299,6 @@ void main() {
     });
   });
 
-  // The opener fixtures (found by a 4,158-case probe sweep, round 1): day 0's A list in [order]; heavy is a heavy
-  // compound (Back, Hamstrings, 3-5 reps), so the 2A opener over the whole list, refused by the clock at 30 minutes.
-  (Fx, List<PopulatedDay>) openerDays(List<String> order, String arm, int custom) {
-    final f = Fx();
-    f.row('row', ['Back']);
-    f.row('heavy', ['Back', 'Hamstrings'], reps: '3-5');
-    f.row('bench', ['Chest']);
-    f.row('fly', ['Back'], type: 'isolation');
-    f.row('pullover', ['Back'], type: 'isolation');
-    f.row('curl', ['Biceps'], type: 'isolation');
-    f.row('chin', ['Biceps', 'Back'], reps: '3-6');
-    f.row('curlB', ['Biceps'], type: 'isolation');
-    final dA = [
-      for (final n in order)
-        if (n == 'mine') ...[if (custom > 0) f.ex('mine', sets: custom, rest: 100, customOrigin: 'user')]
-        else f.ex(n == 'ARM' ? arm : n),
-    ];
-    return (
-      f,
-      [
-        f.day('hypertrophy', dA, b: [f.ex('bench'), f.ex('curlB'), f.ex('row')]),
-        f.day('hypertrophy', [f.ex('bench'), f.ex('row')], b: [f.ex('bench'), f.ex('row')]),
-      ]
-    );
-  }
-
   group('the re-run (S8)', () {
     test('a re-run that is not kept leaves the plan, the stamp and the stats of the first run', () {
       // Found by the round-1 probe (an always-keep mutant changes it): at 45 minutes with a 9-set custom the first
@@ -334,6 +338,59 @@ void main() {
         expect(shape(on), shape(off), reason: 'custom $k');
         expect(names(on[0].exercisesA), isNot(contains('chin')), reason: 'custom $k');
       }
+    });
+
+    test('the shipped library: the swap seats an arm row that IS the day\'s refused 2A opener (seeded sweep plan 122)', () {
+      // session_allowance_behavioral_test.dart's seeded sweep, plan 122 (30 minutes, strength, beginner). Kettlebell Two
+      // Arm Military Press (Triceps) is day 0's 2A opener over the whole list and pass A refused it; the swap seats it
+      // for Handstand Push Up, and the day opens with it. Round 1's first opener rule refused this (CI, ddc06521).
+      final rows = (jsonDecode(File('assets/data/exercise_library.json').readAsStringSync()) as List)
+          .cast<Map<String, dynamic>>();
+      final byName = {for (final r in rows) (r['name'] as String).toLowerCase(): r};
+      PlannedExercise ex(String n) => PlannedExercise(
+          exerciseId: n.toLowerCase(),
+          exerciseName: n,
+          loggingType: byName[n.toLowerCase()]!['logging_type'] as String,
+          sets: 3,
+          reps: '10',
+          restSeconds: 75,
+          primaryMuscles: [for (final m in (byName[n.toLowerCase()]!['primary_muscles'] as List)) '$m']);
+      PopulatedDay day(String i, List<String> a, List<String> b) => PopulatedDay(
+          name: 'D', focus: 'F', dayType: 'push', intensity: i,
+          exercisesA: [for (final n in a) ex(n)], exercisesB: [for (final n in b) ex(n)]);
+      const d1 = ['Barbell Standing Wide Grip Curl', 'Dumbbell Alternate Preacher Curl', 'Barbell Curl', 'Lever Squat',
+          'Oblique Crunches Floor', 'Band Concentration Curl', 'Smith Deadlift', 'Dumbbell Rear Delt Raise'];
+      final days = [
+        day('strength', [
+          'Band Front Raise', 'Backpack Bent-Over Row', 'Handstand Push Up', 'Dumbbell Alternate Seated Hammer Curl',
+          'EZ Bar Seated Close Grip Concentration Curl', 'Kettlebell Two Arm Military Press', 'Band Pull Through',
+        ], const ['Barbell Reverse Preacher Curl', 'Band Standing Twisting Crunch', 'Machine Lateral Raise', 'Standing Single Leg Curl']),
+        day('endurance', d1, d1),
+        day('hypertrophy', const [
+          'Plate-Loaded Shoulder Press', 'Smith Seated Shoulder Press', 'Bodyweight Rear Delt Raise', 'Cable Upright Row',
+          'Kettlebell Bent Press',
+        ], const ['Spider Crawl Push Up', 'Calf Press on Leg Press', 'Towel Triceps Extension', 'Cable Reverse Crunch',
+          'Smith Full Squat', 'Hindu Pushup', 'Barbell Lunge', 'Leg Press']),
+      ];
+      final ctx = SessionBudgetContext(minutes: 30, planGoal: 'strength', level: 'beginner', lighterPhase: false,
+          focusGroups: const {}, archetypeByName: {for (final e in byName.entries) e.key: SessionBudget.archetypeOfRow(e.value)});
+      List<PopulatedDay> alloc(bool on) {
+        SessionSetAllocator.debugArmSwap = on;
+        try {
+          return SessionSetAllocator.allocate(days: days, ctx: ctx, rowsByName: byName, is6Day: false, balancedWeek: true);
+        } finally {
+          SessionSetAllocator.debugArmSwap = true;
+        }
+      }
+      final off = alloc(false), on = alloc(true);
+      expect(setsOf(off[0]), [('Band Front Raise', 3), ('Backpack Bent-Over Row', 3), ('Handstand Push Up', 3),
+          ('Dumbbell Alternate Seated Hammer Curl', 2)]);
+      expect(setsOf(on[0]), [('Band Front Raise', 3), ('Backpack Bent-Over Row', 3),
+          ('Dumbbell Alternate Seated Hammer Curl', 3), ('Kettlebell Two Arm Military Press', 2)]);
+      expect(SequencingEngine.openerOf(days[0].exercisesA)?.exerciseName, 'Kettlebell Two Arm Military Press');
+      expect(SequencingEngine.openerOf(on[0].exercisesA)?.exerciseName, 'Kettlebell Two Arm Military Press');
+      expect(SessionSetAllocator.debugLastStats!['A']!.minimumSeats[0],
+          [(name: 'Kettlebell Two Arm Military Press', group: 'Triceps')]);
     });
 
     test('a swapped-out row leaves floorSeats and countForced (the oracle excuses only rows the plan holds)', () {

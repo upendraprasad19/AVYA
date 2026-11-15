@@ -67,8 +67,9 @@ other week trains them:
     - every group's session cap;
     - every other group's weekly top;
     - the day's time within the forcing bound, or no longer than before the swap (d51: same time);
-    - the day's opener is unchanged (d48): the swap neither removes it nor seats an arm row that `openerOf` ranks
-      above it (round 1 A1).
+    - after the swap the day opens with its lead or with its 2A opener (d48): never another row, neither by removing
+      the lead nor by seating an arm row `openerOf` ranks above it (round 1 A1). The arm row may BE the 2A opener pass A
+      refused (seeded-sweep plan 122, Kettlebell Two Arm Military Press): seating it restores the designed lead.
   - Otherwise restore the victim (its sets exactly, its seconds by an exact reset of the day's spent seconds, round 1
     A7) and try the next one.
   - A taken victim leaves `floorSeats` / `countForced` and gets a `why` (round 1 A5 / B6).
@@ -166,3 +167,8 @@ other week trains them:
     the tie order, a failed victim restored before the next, the empty-group victim, and the opener guards;
   - A3 / B2 / B3 / B4 / A4 / A6 / B7: the test header, the diagnose count, the §3 prototype bullets, the day-floor gate
     sentence, the empty-group rule, and the 34 newly-trained plan-weeks now pinned in the gate.
+- **Round 1, CI on ddc06521:** `session_allowance_behavioral_test`'s seeded sweep went from 1 plan changed by 2E to 0.
+  Its plan 122 seats Kettlebell Two Arm Military Press, the day's 2A opener that pass A refused; round 1's first
+  `keepsOpener` (the opener must stay the admitted lead) refused it. The rule now also allows the 2A opener itself, and a
+  real-library test pins plan 122. The neighbouring gates (2C-b, 2D, 2B, 2A, 2C-a, B2) were run locally before the
+  push this time (bug class 2.162's last point, missed in the first round-1 push).

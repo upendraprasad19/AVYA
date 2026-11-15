@@ -189,6 +189,7 @@ under every mutant; then `arm_swap_behavioral_test.dart` under every mutant. Fil
 | A1 | the old `opener[d] ?? ...` | 120 plans | 1 (refused opener) |
 | KO | `keepsOpener` always true | 54 plans | 1 (compound chin-up) |
 | A1+KO | the round-0 code | 54 plans | 1 |
+| KO2 | `keepsOpener` without the 2A-opener clause (round 1's first rule) | 0 | 1 (plan 122, real library); CI's seeded sweep red |
 | A5 | the budgeted victim's `_dropSeat` removed | 162 orphan seats | 1 (orphan sweep) |
 | FT / TIE / COST | first candidate only / day order reversed / cost order reversed | 0 | 1 / 1 / 1 |
 | RSTH | a failed hold trial not restored | 0 | 3 |
@@ -208,3 +209,8 @@ under every mutant; then `arm_swap_behavioral_test.dart` under every mutant. Fil
 - The reviewer's evict-the-real-lead case (A1's stated risk) was not reached in the probes: when B credits the arm
   group, 2C-b's walk seats the arm slot early. The fixed rule is the one `lead[]` uses, pinned by the refused-opener
   test.
+- **CI on ddc06521 (round 1's first push):** the seeded sweep in `session_allowance_behavioral_test.dart` pinned 1 plan
+  changed by 2E and read 0. Plan 122's arm row is the day's 2A opener pass A refused, and the first `keepsOpener`
+  required the admitted lead to stay the opener. The rule now allows the 2A opener too (the KO2 row above); the
+  4,158-case probe never reached this shape, so the real-library plan is the test. The neighbouring gates were not
+  run locally before that push: the second instance of bug class 2.162's last point.
