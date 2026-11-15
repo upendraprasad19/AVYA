@@ -165,7 +165,8 @@ class PeriodizationEngine {
   static Set<(int, int)> _weekTwoGains(
       List<PopulatedDay> populated, bool useB, SessionBudgetContext budget, {required bool capToLead}) {
     final n = populated.length;
-    final ledger = BudgetLedger(budget, n);
+    // Unit 2C-b (S4): week 2's +1 sees the allocation's own day budget: the allowance when the allocator used it.
+    final ledger = BudgetLedger(budget, n, allowance: populated.isNotEmpty && populated.first.allowance);
     final ranked = List.generate(n, (_) => <int>[]);
     final unranked = <(int, int)>[];
     final groups = <(int, int), Set<String>>{};

@@ -204,12 +204,21 @@ void main() {
     expect((press.ohpDays, press.ohpPikeDays), (1, 0));
   });
 
-  test('over_time: +6..10 min moderate, more than +10 major', () {
-    final mod = auditor.audit(_plan([
-      [['Goblet Squat', 3]],
-    ], minutes: 67));
-    expect(mod.issues.where((i) => i.code == 'over_time').map((i) => i.severity).toSet(),
-        {'moderate'});
+  test('over_time: at 60+ +6..10 min moderate; under 60 +6 is within the 2C-b allowance (d47); more than +10 major', () {
+    Set<String> over(int shown, {int session = 60}) => auditor
+        .audit(_plan([
+          [['Goblet Squat', 3]],
+        ], minutes: shown, key: 'build_muscle|4|intermediate|home_dumbbells|$session|1'))
+        .issues
+        .where((i) => i.code == 'over_time')
+        .map((i) => i.severity)
+        .toSet();
+    expect(over(65), isEmpty);
+    expect(over(66), {'moderate'}, reason: 'no allowance at 60');
+    expect(over(36, session: 30), isEmpty, reason: 'the allowance at 30');
+    expect(over(37, session: 30), {'moderate'});
+    expect(over(51, session: 45), isEmpty);
+    expect(over(52, session: 45), {'moderate'});
     final maj = auditor.audit(_plan([
       [['Goblet Squat', 3]],
     ], minutes: 71));

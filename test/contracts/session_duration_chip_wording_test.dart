@@ -1,7 +1,9 @@
 // Batch 3 (docs/plans/2026-11-02-session-set-budget-flip.md, D4): the session
 // budget fits a day INSIDE the user's minutes and a day can run shorter (a median
 // 26 minutes a day stay unused at 90), so the Edit Profile picker must not promise
-// the minutes: its chips read `Up to N min`.
+// the minutes: its chips read `Up to N min`. Unit 2C-b (docs/plans/2026-11-14-generator-step2c-b-weekly-minimum.md,
+// S4, founder d42 / d47): a 30 / 45-minute day may now run about 5 minutes over, so "Up to" is no longer true and the
+// chips read `About N min`.
 //
 // PRESENCE ONLY (the picker is a private widget method of a 2,000-line screen; no
 // widget harness builds it): the behavioural proof of the minutes themselves is
@@ -12,7 +14,7 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  test('the session-duration chips read "Up to N min"; the summary line is unchanged', () {
+  test('the session-duration chips read "About N min"; the summary line is unchanged', () {
     final lines = File('lib/features/profile/screens/edit_profile_screen.dart')
         .readAsLinesSync()
         .map((l) => l.replaceFirst(RegExp(r'//.*'), ''))
@@ -28,8 +30,10 @@ void main() {
     final picker = src.substring(start, end);
     expect(picker.length, lessThan(6000), reason: 'the slice is the picker, not the rest of the file');
 
-    expect(picker.contains(r"'Up to $min min'"), isTrue,
-        reason: 'the chip label promises a ceiling, not the minutes');
+    expect(picker.contains(r"'About $min min'"), isTrue,
+        reason: 'the chip label is an estimate: a short day may run about 5 minutes over (2C-b)');
+    expect(picker.contains(r"'Up to $min min'"), isFalse,
+        reason: 'a ceiling is false once the under-60 allowance exists');
     expect(picker.contains(r"'$min min'"), isFalse,
         reason: 'the plain label reads as a promise of N minutes');
     expect(picker.contains('const options = [30, 45, 60, 90];'), isTrue);

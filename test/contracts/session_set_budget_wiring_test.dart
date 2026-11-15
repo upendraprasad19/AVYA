@@ -173,6 +173,10 @@ void main() {
       SessionSetAllocator.debugLastStats = null;
       final on = gen();
       final stats = SessionSetAllocator.debugLastStats!;
+      // Unit 2C-b (S4, plan §5): this 30-minute plan is sized with the allowance, which replaces the forcing bound
+      // (the shared oracle's `allowanceSeconds` excuse); the `over` map pins each day's seconds past the plain budget.
+      final allowance = SessionSetAllocator.debugLastAllowance!;
+      expect(allowance, isTrue, reason: 'fixture: 2C-b ran with the allowance');
       // Unit 2A (2026-11-13): a day the count floor force-seated (pass A2, `countForced` of the variant the week reads:
       // B in weeks 2 and 4 of this 4-day plan) may be up to `maxForcedOverSeconds` over (founder d26 / d28): eight
       // day-weeks here, 10.8 to 75.6 s over since R1 seats the lead at 3 (pinned below). Every other day fits 30
@@ -184,7 +188,9 @@ void main() {
           final forced = vs.countForced.containsKey(i);
           // Unit 2B (the shared oracle): plus the overrun of the day's `overClock` floor seats (d33, no bound).
           final bound = budgetSeconds(30) +
-              (forced ? SessionBudget.maxForcedOverSeconds : 0) +
+              (allowance
+                  ? SessionBudget.allowanceSeconds
+                  : (forced ? SessionBudget.maxForcedOverSeconds : 0)) +
               BudgetInvariantOracle.floorOverClockSeconds(vs, i) +
               1e-6;
           final secs = mainSeconds(w.workoutDays[i]);
@@ -192,9 +198,12 @@ void main() {
           if (secs > budgetSeconds(30) + 1e-6) over['${w.weekInPhase}/$i'] = ((secs - budgetSeconds(30)) * 10).roundToDouble() / 10;
         }
       }
-      // The excuse is used by exactly these days, by exactly these seconds (B review, seat 2 finding 3).
+      // The excuse is used by exactly these days, by exactly these seconds (B review, seat 2 finding 3). Unit 2C-b: every
+      // day of weeks 1-3 now uses the allowance, 186 to 264 s of its 285 (pre-2C-b: eight day-weeks, 10.8 to 75.6 s,
+      // from the count-forced bound).
       expect(over, <String, double>{
-        '1/0': 39.6, '1/1': 10.8, '1/2': 39.6, '2/2': 75.6, '2/3': 39.6, '3/0': 39.6, '3/1': 10.8, '3/2': 39.6,
+        '1/0': 247.2, '1/1': 196.8, '1/2': 247.2, '1/3': 264.0, '2/0': 264.0, '2/1': 264.0, '2/2': 261.6, '2/3': 186.0,
+        '3/0': 247.2, '3/1': 196.8, '3/2': 247.2, '3/3': 264.0,
       });
     });
 
@@ -324,9 +333,11 @@ void main() {
           sessionDuration: 30);
       expect(day0(filled).length, 3);
       expect(day0(filled).toSet().containsAll(day0(thin)), isTrue);
-      // The add is budgeted like any generated exercise: the day still fits 30 minutes.
+      // The add is budgeted like any generated exercise: the day still fits 30 minutes, plus the Unit 2C-b allowance
+      // when the allocator sized the plan with it (S4).
+      final allowance = SessionSetAllocator.debugLastAllowance! ? SessionBudget.allowanceSeconds : 0;
       for (final w in filled.weekPlans) {
-        expect(mainSeconds(w.workoutDays[0]), lessThanOrEqualTo(budgetSeconds(30) + 1e-6));
+        expect(mainSeconds(w.workoutDays[0]), lessThanOrEqualTo(budgetSeconds(30) + allowance + 1e-6));
       }
     });
   });

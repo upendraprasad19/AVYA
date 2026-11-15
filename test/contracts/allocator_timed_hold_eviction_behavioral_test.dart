@@ -11,6 +11,10 @@
 // budget 1440 s, count floor 4; a compound lift ('M') at 2 sets costs 336 s, an isolation ('I') 256.8 s, a hold
 // ('B') at 3 sets and 60 s rest 324 s, at 4 sets 444 s. Each test states the time arithmetic it rests on, and the
 // costs are asserted once below so a change to the budget model reddens that test, not every fixture silently.
+// Unit 2C-b (docs/plans/2026-11-14-generator-step2c-b-weekly-minimum.md §5, the policy for existing tests): these
+// fixtures pin the pre-2C-b mechanics, so their allocations run with `balancedWeek: false`; 2C-b's own behaviour
+// is pinned in weekly_minimum_behavioral_test.dart and session_allowance_behavioral_test.dart.
+
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
@@ -23,7 +27,7 @@ import '../helpers/session_budget_fixtures.dart';
 
 /// The crafted library: lifts, and timed holds.
 Fx lib() {
-  final f = Fx();
+  final f = Fx(balancedWeek: false);
   f.row('chest', ['Chest']);
   f.row('chest2', ['Chest']);
   f.row('back', ['Lats']);
