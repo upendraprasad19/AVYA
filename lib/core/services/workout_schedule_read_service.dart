@@ -878,6 +878,14 @@ class WorkoutScheduleReadService {
         sessionDuration: sessionDuration,
       );
 
+  /// Unit 2D (OI-453, plan S2): true only when [stored] (the previous generation's `last_phase_profile`) holds an
+  /// `int` `session_minutes` and [nowMinutes] is above it. Absent, null or a non-int value reads as "not raised", so a
+  /// profile written before 2D never appends accessories. Pure.
+  static bool repeatMinutesRose(Map? stored, int nowMinutes) {
+    final then = stored?['session_minutes'];
+    return then is int && nowMinutes > then;
+  }
+
   /// PURE decision behind [_buildRepeatPins] (visible for testing — no Hive/clock).
   /// [stored] = the prior generation's `last_phase_profile`; [week1]/[week2] = the
   /// just-finished phase's variant-A/B workout rows (keyed by `workout_day_index`).
@@ -893,14 +901,6 @@ class WorkoutScheduleReadService {
   /// So the rows themselves are checked too: a workout row whose `workout_day_index` is past the new split's days
   /// (the rows hold more days than the new plan: they were rescheduled to another day count), or whose
   /// `workout_name` is in [foreignDayNames] (the other split family, Unit 2C-a), refuses the pins.
-  /// Unit 2D (OI-453, plan S2): true only when [stored] (the previous generation's `last_phase_profile`) holds an
-  /// `int` `session_minutes` and [nowMinutes] is above it. Absent, null or a non-int value reads as "not raised", so a
-  /// profile written before 2D never appends accessories. Pure.
-  static bool repeatMinutesRose(Map? stored, int nowMinutes) {
-    final then = stored?['session_minutes'];
-    return then is int && nowMinutes > then;
-  }
-
   @visibleForTesting
   static Map<int, ({List<String> a, List<String> b})>? repeatPinsFrom({
     required Map? stored,

@@ -705,6 +705,41 @@ class SessionSetAllocator {
   }) =>
       _seatRepeatVariant(rows, candidates, ctx, rowsByName, reserve: reserve, leadFirst: leadFirst);
 
+  /// Unit 2D (plan S5.1): a row's seconds at [sets], priced as the allocator prices it in `_variant` and as
+  /// `PeriodizationEngine._weekTwoGains` does: a budgeted row and a rep-based custom at their archetype's rest, a timed
+  /// row at its own rest.
+  static double _repeatCost(PlannedExercise ex, int sets, SessionBudgetContext ctx) {
+    final rest = SessionBudget.isBudgeted(ex, ctx) || SessionBudget.isRepBased(ex.loggingType)
+        ? SessionBudget.restForArchetype(SessionBudget.archetypeOfPlanned(ex, ctx))
+        : ex.restSeconds;
+    return SessionBudget.plannedExerciseSeconds(ex, ctx, sets: sets, restSeconds: rest);
+  }
+
+  /// The allocator's groups of a budgeted row ([_groupsOf]); a row that is not budgeted spends time only.
+  static Set<String> _repeatGroups(
+          PlannedExercise ex, SessionBudgetContext ctx, Map<String, Map<String, dynamic>> rowsByName) =>
+      SessionBudget.isBudgeted(ex, ctx)
+          ? _groupsOf(ex, rowsByName[ex.exerciseName.toLowerCase()], ctx)
+          : const <String>{};
+
+  /// Unit 2D (plan S5.1): the PLAIN ledger (no allowance, d44) rebuilt from an allocated variant's rows. Rows the
+  /// allocator evicted are absent from its output, so they cost nothing.
+  static BudgetLedger _plainLedger(
+      List<List<PlannedExercise>> rows, SessionBudgetContext ctx, Map<String, Map<String, dynamic>> rowsByName) {
+    final ledger = BudgetLedger(ctx, rows.length);
+    for (var d = 0; d < rows.length; d++) {
+      for (final ex in rows[d]) {
+        ledger.add(d, _repeatGroups(ex, ctx, rowsByName), ex.sets, _repeatCost(ex, ex.sets, ctx));
+      }
+    }
+    return ledger;
+  }
+
+  @visibleForTesting
+  static BudgetLedger plainLedgerForTest(
+          List<List<PlannedExercise>> rows, SessionBudgetContext ctx, Map<String, Map<String, dynamic>> rowsByName) =>
+      _plainLedger(rows, ctx, rowsByName);
+
   static List<List<PlannedExercise>> _seatRepeatVariant(
     List<List<PlannedExercise>> rows,
     List<List<PlannedExercise>> candidates,
@@ -714,22 +749,14 @@ class SessionSetAllocator {
     required bool leadFirst,
   }) {
     final n = rows.length;
-    final ledger = BudgetLedger(ctx, n);
-    int restOf(PlannedExercise ex) =>
-        SessionBudget.isBudgeted(ex, ctx) || SessionBudget.isRepBased(ex.loggingType)
-            ? SessionBudget.restForArchetype(SessionBudget.archetypeOfPlanned(ex, ctx))
-            : ex.restSeconds;
-    double cost(PlannedExercise ex, int sets) =>
-        SessionBudget.plannedExerciseSeconds(ex, ctx, sets: sets, restSeconds: restOf(ex));
-    Set<String> groupsOf(PlannedExercise ex) => SessionBudget.isBudgeted(ex, ctx)
-        ? _groupsOf(ex, rowsByName[ex.exerciseName.toLowerCase()], ctx)
-        : const <String>{};
+    final ledger = _plainLedger(rows, ctx, rowsByName);
+    double cost(PlannedExercise ex, int sets) => _repeatCost(ex, sets, ctx);
+    Set<String> groupsOf(PlannedExercise ex) => _repeatGroups(ex, ctx, rowsByName);
 
     final held = <String>{};
     final lead = List<PlannedExercise?>.filled(n, null);
     for (var d = 0; d < n && d < candidates.length; d++) {
       for (final ex in rows[d]) {
-        ledger.add(d, groupsOf(ex), ex.sets, cost(ex, ex.sets));
         held.add(ex.exerciseName.trim().toLowerCase());
       }
       if (leadFirst) lead[d] = SequencingEngine.openerOf([for (final ex in rows[d]) if (SessionBudget.isBudgeted(ex, ctx)) ex]);

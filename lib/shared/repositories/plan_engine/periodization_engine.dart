@@ -149,6 +149,12 @@ class PeriodizationEngine {
     });
   }
 
+  /// Unit 2D (OI-453, plan S5.2): [_weekTwoGains], for `SessionSetAllocator`'s repeat-accessory step, which reserves
+  /// these gains before it appends a row.
+  static Set<(int, int)> weekTwoGains(
+          List<PopulatedDay> populated, bool useB, SessionBudgetContext budget, {required bool capToLead}) =>
+      _weekTwoGains(populated, useB, budget, capToLead: capToLead);
+
   /// Which exercises get week 2's extra set, as (day, index in that day's list).
   ///
   /// A fresh ledger is seeded with the week's baseline: every exercise's sets (a
@@ -162,12 +168,7 @@ class PeriodizationEngine {
   /// [capToLead] (Unit 2A, R5): a row that is not its day's lead (`SequencingEngine.openerOf` over the day's budgeted
   /// rows, the allocator's definition) and credits no focus group, a not-budgeted row included, gains only while its
   /// week-2 sets stay at most the lead's week-2 sets + 1 (founder d26, d27).
-  /// Unit 2D (OI-453, plan S5.2): the same gains, for `SessionSetAllocator`'s repeat-accessory step, which reserves them
-  /// before it appends a row.
-  static Set<(int, int)> weekTwoGains(
-          List<PopulatedDay> populated, bool useB, SessionBudgetContext budget, {required bool capToLead}) =>
-      _weekTwoGains(populated, useB, budget, capToLead: capToLead);
-
+  ///
   /// Unit 2D (plan S5.6): a day's trailing `appendedA` / `appendedB` rows (the repeat accessories the allocator
   /// appended) are budgeted like any row, but they are kept out of the rank order and out of the day's lead, and are
   /// visited after every other row, so a pinned row's gain is the same with or without them.

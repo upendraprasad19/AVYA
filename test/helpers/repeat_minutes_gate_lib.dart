@@ -12,7 +12,11 @@
 
 import 'package:icanbefitter/core/constants/fitness_goals.dart';
 import 'package:icanbefitter/core/services/workout_schedule_read_service.dart';
+import 'package:icanbefitter/shared/repositories/exercise_repository.dart';
+import 'package:icanbefitter/shared/repositories/plan_engine/budget_muscle_groups.dart';
+import 'package:icanbefitter/shared/repositories/plan_engine/same_movement.dart';
 import 'package:icanbefitter/shared/repositories/plan_engine/session_budget.dart';
+import 'package:icanbefitter/shared/repositories/plan_engine/split_resolver.dart';
 import 'package:icanbefitter/shared/repositories/plan_generator.dart';
 
 import 'injury_floor_sweep_lib.dart';
@@ -57,8 +61,28 @@ double _mainSeconds(WorkoutDay d) => SessionBudget.estimateDaySecondsFromPlanDay
       ],
     }, const {}, rowsByName: const {});
 
+/// The groups a row credits in the allocator's ledger: a budgeted row only (a library row, not a custom, not timed /
+/// cardio / distance; `SessionBudget.isBudgeted`). A hold or a custom spends time and credits nothing. [qg] is the
+/// plan's quad credit rule (`SplitResolver.quadPrimaryCreditsGlutes`), as the allocator's context holds it.
+Set<String> groupsOf(PlannedExercise e, {bool qg = true}) => e.customOrigin != null ||
+        const {'timed', 'cardio', 'distance'}.contains(e.loggingType) ||
+        ExerciseRepository.instance.getByExactName(e.exerciseName) == null
+    ? const {}
+    : BudgetMuscleGroups.creditedOf(e.primaryMuscles ?? const [], quadPrimaryCreditsGlutes: qg);
+
+int sessionSets(WorkoutDay d, String g, bool qg) => [
+      for (final e in d.exercises)
+        if (groupsOf(e, qg: qg).contains(g)) e.sets,
+    ].fold(0, (a, b) => a + b);
+
+int weekSets(WeekPlan w, String g, bool qg) =>
+    [for (final d in w.workoutDays) sessionSets(d, g, qg)].fold(0, (a, b) => a + b);
+
+SameMovement? _sm;
+
 RepeatMinutesTally runRepeatMinutes(SweepHarness h, (int, int) pair, String tier) {
   final (m1, m2) = pair;
+  final sameMovement = _sm ??= SameMovement.fromRows(ExerciseRepository.instance.getAll());
   final t = RepeatMinutesTally();
   for (final goal in kSweepGoals) {
     for (final level in kSweepLevels) {
@@ -106,6 +130,16 @@ RepeatMinutesTally runRepeatMinutes(SweepHarness h, (int, int) pair, String tier
             ? SessionBudget.countMax(exp2)
             : SessionBudget.hardMax;
         final budget = (m2 - SessionBudget.warmCoolMinutes(m2)) * 60.0;
+        final qg = SplitResolver.quadPrimaryCreditsGlutes(planGoal, days, m2, quadLegsB: true);
+        final ledger = BudgetLedger(
+            SessionBudgetContext(
+                minutes: m2,
+                planGoal: planGoal,
+                level: exp2,
+                lighterPhase: false,
+                focusGroups: const {},
+                archetypeByName: const {}),
+            1);
         var any = false;
         final extrasByWeek = <int, List<List<String>>>{};
         for (var w = 0; w < off.weekPlans.length; w++) {
@@ -143,16 +177,50 @@ RepeatMinutesTally runRepeatMinutes(SweepHarness h, (int, int) pair, String tier
                 t.sets += e.sets;
               }
             }
-            if (w == 0) {
+            if (w <= 1) {
+              // Week 1 (variant A) and week 2 (B; A on 6-day). Week 2's +1 sets follow the allowance on a stamped day,
+              // like every row's (2C-b S4), so its bound adds the allowance under 60 minutes.
               if (dOn[d].exercises.length > levelMax) {
-                t.failures.add('$label d$d: ${dOn[d].exercises.length} rows > $levelMax');
+                t.failures.add('$label w$w d$d: ${dOn[d].exercises.length} rows > $levelMax');
               }
               final sOff = _mainSeconds(dOff[d]);
               final sOn = _mainSeconds(dOn[d]);
-              t.seconds += (sOn - sOff).round();
-              if (sOff <= budget + 1e-6 && sOn > budget + 1e-6) {
-                t.failures.add('$label d$d: ${sOn.round()} s > plain budget ${budget.round()} s');
+              if (w == 0) t.seconds += (sOn - sOff).round();
+              final bound = budget + (w == 1 && m2 < 60 ? SessionBudget.allowanceSeconds : 0);
+              if (sOff <= bound + 1e-6 && sOn > bound + 1e-6) {
+                t.failures.add('$label w$w d$d: ${sOn.round()} s > budget ${bound.round()} s');
               }
+              // The session cap of every group an extra credits.
+              for (final g in {for (final e in extras) ...groupsOf(e, qg: qg)}) {
+                final on = sessionSets(dOn[d], g, qg), off = sessionSets(dOff[d], g, qg);
+                if (on > off && on > ledger.cap(g)) t.failures.add('$label w$w d$d: $g $on sets > cap ${ledger.cap(g)}');
+              }
+            }
+            // No extra repeats another row of its week, nor a same-movement partner of one.
+            final others = <String>{
+              for (var dd = 0; dd < dOn.length; dd++)
+                for (final e in dOn[dd].exercises)
+                  if (!(dd == d && extras.contains(e))) e.exerciseName.toLowerCase(),
+            };
+            final held = sameMovement.expandLower(others);
+            for (final e in extras) {
+              if (held.contains(e.exerciseName.toLowerCase())) {
+                t.failures.add('$label w$w d$d: extra ${e.exerciseName} repeats a row of the week');
+              }
+            }
+          }
+        }
+        // The weekly top of every group an extra credits, weeks 1 and 2.
+        for (var w = 0; w < 2 && w < on.weekPlans.length; w++) {
+          final gs = <String>{
+            for (final day in on.weekPlans[w].workoutDays)
+              for (final e in day.exercises)
+                if (!off.weekPlans[w].workoutDays.any((x) => x.exercises.any((y) => _k(y) == _k(e)))) ...groupsOf(e, qg: qg),
+          };
+          for (final g in gs) {
+            final wOn = weekSets(on.weekPlans[w], g, qg), wOff = weekSets(off.weekPlans[w], g, qg);
+            if (wOn > wOff && wOn > ledger.weeklyTop(g)) {
+              t.failures.add('$label w$w: $g $wOn sets > weekly top ${ledger.weeklyTop(g)}');
             }
           }
         }

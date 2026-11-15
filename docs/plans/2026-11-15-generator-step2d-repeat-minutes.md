@@ -199,7 +199,7 @@ turns repeats off.
 
 As built (v4). The fast files run in seconds; the gate runs 768 personas x 3 generations.
 
-- **`test/contracts/repeat_minutes_behavioral_test.dart`** (15 tests, crafted `Fx` fixtures):
+- **`test/contracts/repeat_minutes_behavioral_test.dart`** (16 tests, crafted `Fx` fixtures):
   - time left: seated at 2 then grown to 3 after the pins, pins' sets unchanged, the stats record;
   - no candidates: same result on both 2A paths; the step runs on the lead-first-off path;
   - no time left: nothing;
@@ -207,16 +207,20 @@ As built (v4). The fast files run in seconds; the gate runs 768 personas x 3 gen
   - rank-major order;
   - the lead cap, the focus exemption (d27), lead-first off;
   - a custom or timed candidate is never seated;
+  - the rebuilt plain ledger prices a timed hold at its own rest and a rep-based custom at its archetype rest
+    (round 4, F4);
   - the plain budget: a candidate the allowance would fit is refused, and seated once the time is back (d44);
   - 6-day alias; non-6-day B from its own candidates; every field kept, the allowance stamp included;
   - week 2 through `PeriodizationEngine.apply` at 45 / 60 / 90 minutes: pinned week-2 sets unchanged with five
     candidates (the reserve);
   - an appended row is never the week-2 lead (a custom-only day keeps its gain).
-- **`test/contracts/repeat_accessory_candidates_test.dart`** (6 tests, the real library):
+- **`test/contracts/repeat_accessory_candidates_test.dart`** (9 tests, the real library):
   - `repeatCandidatesFor`: compound, (pattern, first muscle), pinned name, timed and custom refusals; the
     same-movement partner (Dumbbell Glute Bridge vs Glute Bridge, different patterns); `taken`; one per day;
   - `buildPinnedDays`: flag off leaves the fields empty; flag on leaves the days identical, holds candidates, and no
     candidate is a row of its variant on any day;
+  - the final screen, directly (A and B held sets kept apart) and at its call site (pins on day 0 only, so days 1-2
+    fresh-fill);
   - `topUpDays` carries the fields on a rebuilt (thin, injured) day.
 - **`test/core/repeat_minutes_profile_test.dart`** (7 tests):
   - `repeatMinutesRose`: absent, null, equal, lower, higher, 0, a double, a String;
@@ -231,8 +235,11 @@ As built (v4). The fast files run in seconds; the gate runs 768 personas x 3 gen
     - every flag-off row is in the flag-on plan with the same sets and reps;
     - extras are library isolations, no duplicate in a day;
     - weeks 1 / 3 and 2 / 4 hold the same extras;
-    - no week-1 day above the count max;
-    - main work within the plain budget whenever the flag-off day was.
+    - weeks 1 and 2 (round 4, F3): no day above the count max; main work within the plain budget (week 2 adds the
+      allowance under 60, since week 2's +1 sets follow it like every row's) whenever the flag-off day was;
+    - no group an extra credits past its session cap or weekly top where the flag-off plan was not (budgeted rows
+      only, as the ledger counts);
+    - no extra repeats another row of its week, nor a same-movement partner of one.
   - Zero failures on the first run. Measured and pinned exactly (personas, fresh, measured, gained, extra rows and sets
     in weeks 1-2, extra week-1 seconds):
 

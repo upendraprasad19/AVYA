@@ -162,6 +162,8 @@ Every mutant reddened at least one test. None reddened by a compile error.
 | M28 | break the 6-day alias | 1 |
 | M29 | `appendedA` / `appendedB` swapped | 1 (after the test fix below) |
 | M23 | `fresh()` after the feeder update | 0: equivalent on the 30 -> 45 gate block (below) |
+| M30 | an alias day's candidates not taken in B | the gate run after commit 2 (recorded with the B-pass) |
+| M31 | the final screen reads A's rows for B | 1 |
 
 **The first run had 6 survivors, each a test that could not see its case. All were fixed in the tests:**
 - M12: the custom fixture shared a library name, so its row screen hid the check. Now a same-name custom alone, and
@@ -182,6 +184,19 @@ Every mutant reddened at least one test. None reddened by a compile error.
   those names anyway.
 - So the order is kept for its stated reason (one pick per frame, the one a fill would use), and its effect is not
   observable on the measured grid.
+
+## Review round 4 (the built diff)
+
+No P0 or P1. Fixed in the branch's second commit:
+- two doc blocks attached to the wrong function;
+- the gate now checks weeks 1-2, each extra's session cap and weekly top, and duplicates across the week (partners
+  included);
+- the ledger-pricing test;
+- mutants M30 and M31.
+
+The first run of the extended gate reported cap and top failures in bodyweight and home_dumbbells. They were the
+gate's own: it counted timed holds and customs toward a group, which the ledger never credits. With budgeted rows
+only (the ledger's rule) every block passes.
 
 ## Not covered by a crafted fixture (stated)
 

@@ -156,6 +156,26 @@ void main() {
       expect(off[0].single.sets, 3, reason: 'lead-first off: no cap');
     });
 
+    test('the rebuilt plain ledger prices each row as the allocator does (timed: own rest; rep-based custom: archetype rest)',
+        () {
+      final f = lib();
+      final ctx = f.ctx(const [], minutes: 60);
+      final hold = f.ex('plank', logging: 'timed', sets: 3, rest: 30);
+      final custom = f.ex('mine', sets: 3, customOrigin: 'user', rest: 200);
+      final bench = f.ex('bench');
+      final ledger = SessionSetAllocator.plainLedgerForTest([
+        [bench, hold, custom],
+      ], ctx, f.rows);
+      double at(PlannedExercise e, int rest) =>
+          SessionBudget.plannedExerciseSeconds(e, ctx, sets: e.sets, restSeconds: rest);
+      int archRest(PlannedExercise e) => SessionBudget.restForArchetype(SessionBudget.archetypeOfPlanned(e, ctx));
+      expect(archRest(hold), isNot(30), reason: 'the fixture must tell the two rests apart');
+      expect(archRest(custom), isNot(200));
+      final spent = at(bench, archRest(bench)) + at(hold, 30) + at(custom, archRest(custom));
+      expect(ledger.secondsLeft(0), closeTo(BudgetLedger(ctx, 1).secondsLeft(0) - spent, 1e-9));
+      expect(ledger.week('Chest'), 3, reason: 'only the budgeted bench credits a group');
+    });
+
     test('a candidate that is not budgeted (a custom, a timed row) is never seated', () {
       final f = lib();
       final ctx = f.ctx(const [], minutes: 90);
