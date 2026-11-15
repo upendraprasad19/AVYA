@@ -100,6 +100,17 @@ void main() {
       }
     });
 
+    test('diet plan Unit 4a: Diet Supplements has its own subtitle and its '
+        'call site passes the display label', () {
+      expect(File(_paywall).readAsStringSync(),
+          contains("case 'Diet Supplements':"));
+      const f = 'lib/features/nutrition/services/diet_supplements_actions.dart';
+      final src = File(f).readAsStringSync();
+      expect(src,
+          contains("const String kDietSupplementsPaywallLabel = 'Diet Supplements';"));
+      expect(src, contains('feature: kDietSupplementsPaywallLabel'));
+    });
+
     test('the locked rows are the labels the screen actually sends', () {
       final notifSrc = File(_notifSettings).readAsStringSync();
 

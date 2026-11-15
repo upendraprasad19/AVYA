@@ -164,6 +164,8 @@ class _PaywallSheetState extends ConsumerState<PaywallSheet> {
         return 'Get told the moment your progress stalls, with the change that breaks it.';
       case 'Diet Strategy':
         return 'Low carb and keto targets, set for your goal.';
+      case 'Diet Supplements':
+        return 'A daily supplement card and a protein shake in your plan.';
       case 'Day Swaps':
         return 'Life happens. Move a workout to another day this week without losing your plan.';
       default:

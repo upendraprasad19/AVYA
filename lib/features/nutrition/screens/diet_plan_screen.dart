@@ -6,6 +6,7 @@ import 'package:share_plus/share_plus.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:icanbefitter/core/constants/diet_strategies.dart';
+import 'package:icanbefitter/core/constants/diet_supplement_doses.dart';
 import 'package:icanbefitter/core/constants/food_types.dart';
 import 'package:icanbefitter/core/services/error_telemetry.dart';
 import 'package:icanbefitter/core/services/sync_service.dart';
@@ -18,16 +19,21 @@ import 'package:icanbefitter/shared/repositories/user_repository.dart';
 import 'package:icanbefitter/shared/widgets/food_type_chips.dart';
 import '../providers/nutrition_provider.dart';
 import '../providers/diet_plan_provider.dart';
+import '../providers/diet_supplements_active_provider.dart';
 import '../services/curated_diet_plan_generator.dart';
 import '../services/diet_plan_flags.dart';
 import '../services/diet_plan_generator.dart';
 import '../services/diet_plan_pdf.dart';
+import '../services/diet_plan_shake.dart';
+import '../services/diet_plan_supplements_state.dart';
 import '../services/diet_plan_swap.dart';
 import '../services/diet_strategy_flags.dart';
+import '../services/diet_supplements_flags.dart';
 import '../services/diet_plan_strategy_state.dart';
 import '../widgets/diet_plan_macro_cards.dart';
 import '../widgets/diet_plan_swap_sheet.dart';
 import '../widgets/diet_strategy_section.dart';
+import '../widgets/diet_supplements_section.dart';
 
 part 'diet_plan_screen_models.dart';
 
@@ -71,6 +77,8 @@ class _DietPlanScreenState extends ConsumerState<DietPlanScreen> {
   DietStrategy _requestedStrategy = DietStrategy.balanced;
   DietStrategy _planStrategy = DietStrategy.balanced;
   int _planEpoch = 0;
+  // Unit 4a: whether the shown plan was built with Supplements active.
+  bool _planSupplements = false;
 
   @override
   void initState() {
@@ -84,6 +92,10 @@ class _DietPlanScreenState extends ConsumerState<DietPlanScreen> {
           dietStrategyOfTargets(ref.read(macroTargetsProvider)), _foodType);
       ref.listenManual(macroTargetsProvider.select(dietStrategyOfTargets),
           (_, next) => _onEffectiveStrategy(next));
+    }
+    if (DietSupplementsFlags.enabled) {
+      ref.listenManual(dietSupplementsActiveProvider,
+          (_, next) => _onSupplementsActive(next));
     }
     // Defer plan generation to after build so ref.read is available.
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -101,6 +113,23 @@ class _DietPlanScreenState extends ConsumerState<DietPlanScreen> {
     _generatePlan();
   }
 
+  /// A change of the Supplements state (the switch, a PRO lapse or renewal,
+  /// a date of birth edit): re-run the saved-plan check and generate, once.
+  void _onSupplementsActive(bool active) {
+    if (!dietPlanNeedsRegenerationForSupplements(
+        planEpoch: _planEpoch, planActive: _planSupplements, active: active)) {
+      return;
+    }
+    _checkedSaved = false;
+    _regenerations = 0;
+    _generatePlan();
+  }
+
+  /// The Supplements state this build of the plan must follow (false with
+  /// the kill switch off).
+  bool _supplementsActive() =>
+      DietSupplementsFlags.enabled && ref.read(dietSupplementsActiveProvider);
+
   void _generatePlan() {
     // Cache diet preference for the swap filter on BOTH paths (fresh +
     // saved-plan load) — B-pass finding 3: a vegan user loading a saved
@@ -117,7 +146,9 @@ class _DietPlanScreenState extends ConsumerState<DietPlanScreen> {
       if (savedPlan != null) {
         if (savedPlanMatchesFoodType(savedPlan, _foodType) &&
             (!DietStrategyFlags.enabled ||
-                savedPlanMatchesStrategy(savedPlan, _currentPlanStrategy()))) {
+                savedPlanMatchesStrategy(savedPlan, _currentPlanStrategy())) &&
+            (!DietSupplementsFlags.enabled ||
+                savedPlanMatchesSupplements(savedPlan, _supplementsActive()))) {
           _loadSavedPlan(savedPlan);
           return;
         }
@@ -240,8 +271,20 @@ class _DietPlanScreenState extends ConsumerState<DietPlanScreen> {
         : (meals: DietPlanGenerator.instance.generate(inputs),
             builtFor: DietStrategy.balanced);
 
+    // Unit 4a: one scoop of the shake in the evening slot when Supplements
+    // are active and the day falls short (diet_plan_shake.dart).
+    final withSupplements = _supplementsActive();
+    final meals = withSupplements
+        ? addProteinShake(
+            meals: built.meals,
+            proteinTarget: proteinTarget,
+            calorieTarget: calorieTarget,
+            row: FoodRepository.instance.getById(shakeFoodIdFor(_foodType)))
+        : built.meals;
+
     debugDietPlanGenerations++;
-    _mealPlans = built.meals.map(_servicePlanToScreenPlan).toList();
+    _mealPlans = meals.map(_servicePlanToScreenPlan).toList();
+    _planSupplements = withSupplements;
     _requestedStrategy = request.strategy;
     _planStrategy = built.builtFor;
     _planEpoch++;
@@ -274,6 +317,7 @@ class _DietPlanScreenState extends ConsumerState<DietPlanScreen> {
   void _swapItem(int mealIndex, int itemIndex) {
     final meal = _mealPlans[mealIndex];
     final item = meal.items[itemIndex];
+    if (isSupplementShake(item.foodId)) return;
     // Diet plan Unit 1: catalog-only alternatives (diet_plan_swap.dart). The
     // same diet-preference rule as generation applies, UPF rows are never
     // offered, and nothing already in the plan or over its family cap is.
@@ -337,6 +381,9 @@ class _DietPlanScreenState extends ConsumerState<DietPlanScreen> {
       // Unit 2a: the food type the plan was built for (a plan of another
       // type is not loaded or used for hints, savedPlanMatchesFoodType).
       'food_type': _foodType.storageKey,
+      // Unit 4a: stamped only when the plan was built with Supplements
+      // active (savedPlanMatchesSupplements reads it).
+      if (_planSupplements) 'diet_supplements': true,
       // Stamped only with the flag on: the strategy the plan was BUILT for
       // (Unit 3b §3.6; savedPlanMatchesStrategy reads it).
       if (DietStrategyFlags.enabled) 'diet_strategy': _planStrategy.storageKey,
@@ -427,6 +474,8 @@ class _DietPlanScreenState extends ConsumerState<DietPlanScreen> {
         ? dietStrategyOf(planData['diet_strategy'])
         : DietStrategy.balanced;
     _requestedStrategy = _currentPlanStrategy();
+    _planSupplements =
+        DietSupplementsFlags.enabled && planData['diet_supplements'] == true;
     _planEpoch++;
     if (mounted) setState(() => _saved = true);
   }
@@ -480,6 +529,7 @@ class _DietPlanScreenState extends ConsumerState<DietPlanScreen> {
       fatTarget: fatTarget,
       fiberTarget: fiberTarget,
       now: DateTime.now(),
+      supplements: _planSupplements ? supplementCardFor(_foodType) : null,
     );
     await Share.shareXFiles(
       [XFile.fromData(bytes, name: 'icanbefitter_diet_plan.pdf', mimeType: 'application/pdf')],
@@ -587,6 +637,10 @@ class _DietPlanScreenState extends ConsumerState<DietPlanScreen> {
                     const SizedBox(height: AppSpacing.sectionGap),
                     const DietStrategySection(),
                   ],
+                  if (DietSupplementsFlags.enabled) ...[
+                    const SizedBox(height: AppSpacing.sectionGap),
+                    const DietSupplementsSection(),
+                  ],
                   const SizedBox(height: AppSpacing.sectionGap),
                   DietPlanMacroTargetsCard(targets: targets),
                   if (_planNote(targets) case final note?) ...[
@@ -672,24 +726,28 @@ class _DietPlanScreenState extends ConsumerState<DietPlanScreen> {
                       '${item.calories} kcal',
                       style: AppTypography.bodySm.copyWith(fontSize: 11, fontWeight: FontWeight.w700, color: AppColors.warn),
                     ),
-                    const SizedBox(width: 6),
-                    GestureDetector(
-                      onTap: () => _swapItem(mealIndex, entry.key),
-                      child: Container(
-                        width: 24,
-                        height: 24,
-                        decoration: BoxDecoration(
-                          color: AppColors.input,
-                          borderRadius: BorderRadius.circular(6),
-                          border: Border.all(color: AppColors.border),
-                        ),
-                        child: const Icon(
-                          Icons.swap_horiz,
-                          size: 12,
-                          color: AppColors.accent,
+                    // Unit 4a: the protein shake has no alternatives (it is
+                    // not a catalog food), so it has no swap icon.
+                    if (!isSupplementShake(item.foodId)) ...[
+                      const SizedBox(width: 6),
+                      GestureDetector(
+                        onTap: () => _swapItem(mealIndex, entry.key),
+                        child: Container(
+                          width: 24,
+                          height: 24,
+                          decoration: BoxDecoration(
+                            color: AppColors.input,
+                            borderRadius: BorderRadius.circular(6),
+                            border: Border.all(color: AppColors.border),
+                          ),
+                          child: const Icon(
+                            Icons.swap_horiz,
+                            size: 12,
+                            color: AppColors.accent,
+                          ),
                         ),
                       ),
-                    ),
+                    ],
                   ],
                 ),
               );
