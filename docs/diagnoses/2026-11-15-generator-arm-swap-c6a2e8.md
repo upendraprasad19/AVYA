@@ -114,6 +114,20 @@ bodyweight 30-minute plans with no arm pair at all, the trajectory changed and C
 - The 2C-b gate's "Calves newly at 0 at 30" count caught it (143 -> 147).
 - The per-plan-week "newly at 0" check is now in the 2E gate.
 
+## Neighbouring pins re-recorded (found by the PR's first CI run, attributed with the test seam off)
+
+- `test/contracts/session_allowance_behavioral_test.dart`, the 220-plan seeded sweep. Its digest changed because one
+  plan changed, and that plan had an arm pair with the seam off. The test now allocates each plan with the seam off
+  too, requires an arm pair for every changed plan, pins that count (1), and re-records the digest. Every invariant in
+  the sweep (time, rows equal to R) still holds.
+- `test/plan_generator/repeat_minutes_gate_test.dart` (Unit 2D's gate). Three blocks lost reach:
+  - 30->45 bodyweight: 41 -> 39 gained, 128 -> 126 rows;
+  - 30->60 bodyweight: 350 -> 348 rows;
+  - 30->60 home_dumbbells: 305 -> 304 rows.
+  Phase 1 at 30 minutes now holds the arm row, so the repeat pins it and has one fewer isolation left to append. With
+  the seam off the three blocks measured exactly the 2D values. There were 0 invariant failures either way.
+- I had run 14 neighbouring gates locally, but not these two (bug class 2.162's last point).
+
 ## Mutations
 
 Each mutant was applied once (the runner refuses a pattern that does not occur exactly once). It was run against
