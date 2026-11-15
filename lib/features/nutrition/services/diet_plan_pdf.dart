@@ -7,6 +7,7 @@
 // error snackbar stay on the screen.
 import 'dart:typed_data';
 
+import 'package:icanbefitter/core/constants/diet_strategies.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 
@@ -39,12 +40,44 @@ String dietPlanPdfSubheader({
     'Generated on $date  |  Food type: $foodTypeLabel'
     '${strategyLabel == null ? '' : '  |  Strategy: $strategyLabel'}';
 
+/// The PDF's header lines under the title, in order (Unit 3b round 3
+/// finding 1): the sub-header, the targets line and, when the plan was built
+/// for another strategy than the targets (a legacy fallback, a vegan Keto
+/// user's Low carb plan), the screen's note line.
+List<String> dietPlanPdfHeaderLines({
+  required String date,
+  required String foodTypeLabel,
+  String? strategyLabel,
+  String? planNote,
+  required int calorieTarget,
+  required int proteinTarget,
+  required int carbTarget,
+  required int fatTarget,
+  required int fiberTarget,
+}) =>
+    [
+      dietPlanPdfSubheader(
+          date: date,
+          foodTypeLabel: foodTypeLabel,
+          strategyLabel: strategyLabel),
+      'Target: $calorieTarget kcal  |  Protein: ${proteinTarget}g  |  Carbs: ${carbTarget}g  |  Fat: ${fatTarget}g  |  Fiber: ${fiberTarget}g',
+      if (planNote != null) planNote,
+    ];
+
+/// The PDF's strategy label: the strategy the PLAN was built for (Unit 3b
+/// round 3 finding 1), null for Balanced.
+String? dietPlanPdfStrategyLabel(DietStrategy planStrategy) =>
+    planStrategy == DietStrategy.balanced ? null : planStrategy.label;
+
 Future<Uint8List> buildDietPlanPdf({
   required List<DietPlanPdfMeal> meals,
   required String foodTypeLabel,
-  // Diet plan Unit 3a: the strategy the targets below were made for; null
-  // (Balanced, or the flag off) adds nothing to the header.
+  // The strategy the PLAN was built for (Unit 3b; 3a used the targets');
+  // null (Balanced, or the flag off) adds nothing to the header.
   String? strategyLabel,
+  // Unit 3b: the screen's note when the plan differs from the targets'
+  // strategy; null adds no line.
+  String? planNote,
   required int calorieTarget,
   required int proteinTarget,
   required int carbTarget,
@@ -70,18 +103,19 @@ Future<Uint8List> buildDietPlanPdf({
         crossAxisAlignment: pw.CrossAxisAlignment.start,
         children: [
           pw.Text('ICANBEFITTER Diet Plan', style: headerStyle),
-          pw.SizedBox(height: 4),
-          pw.Text(
-              dietPlanPdfSubheader(
-                  date: dateStr,
-                  foodTypeLabel: foodTypeLabel,
-                  strategyLabel: strategyLabel),
-              style: subHeaderStyle),
-          pw.SizedBox(height: 4),
-          pw.Text(
-            'Target: $calorieTarget kcal  |  Protein: ${proteinTarget}g  |  Carbs: ${carbTarget}g  |  Fat: ${fatTarget}g  |  Fiber: ${fiberTarget}g',
-            style: subHeaderStyle,
-          ),
+          for (final line in dietPlanPdfHeaderLines(
+              date: dateStr,
+              foodTypeLabel: foodTypeLabel,
+              strategyLabel: strategyLabel,
+              planNote: planNote,
+              calorieTarget: calorieTarget,
+              proteinTarget: proteinTarget,
+              carbTarget: carbTarget,
+              fatTarget: fatTarget,
+              fiberTarget: fiberTarget)) ...[
+            pw.SizedBox(height: 4),
+            pw.Text(line, style: subHeaderStyle),
+          ],
           pw.Divider(),
         ],
       ),

@@ -2,7 +2,10 @@ import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
 import { geminiChat, labelForModel, MODEL_PRO } from "../_shared/gemini.ts";
 import { reportGeminiExhaustion } from "../_shared/gemini_failure_alert.ts";
-import { captainManual, foodTypeManualRulesOff } from "../_shared/captain_manual.ts";
+import {
+  captainManual, dietStrategyManualRulesOff, foodTypeManualRulesOff,
+} from "../_shared/captain_manual.ts";
+import { weeklyReportDietStrategyLine } from "../_shared/diet_strategies.ts";
 import { dietPreferenceLine } from "../_shared/food_types.ts";
 import { istDateStr } from "../_shared/ist_date.ts";
 import { buildDayMap, istDatesEnding } from "../_shared/exercise_day.ts";
@@ -200,10 +203,16 @@ serve(async (req: Request) => {
     // fat_grams are the canonical stored macro targets (the SoT the Nutrition /
     // Profile / Diet-Plan screens show) — fix 2026-06-02 macro-mismatch: read
     // these instead of recomputing a divergent target server-side.
+    // Diet plan Unit 3b-3 B-pass (seat A finding 2): the prompt carries the
+    // strategy line only while DISABLE_DIET_STRATEGY_MANUAL_RULES is not
+    // exactly "true" (read once here); switched off, the prompt is the
+    // pre-3b-3 one. diet_strategy is selected either way (migration 179 is
+    // live; a conditional select string defeats supabase-js row typing).
+    const dietStrategyOn = !dietStrategyManualRulesOff();
     const { data: userProfile, error: profileError } = await supabase
       .from("user_profile")
       .select(
-        "current_weight_kg, target_weight_kg, primary_goal, fitness_experience, days_per_week, activity_level, diet_preference, bmr, tdee, daily_calories, protein_grams, carbs_grams, fat_grams",
+        "current_weight_kg, target_weight_kg, primary_goal, fitness_experience, days_per_week, activity_level, diet_preference, bmr, tdee, daily_calories, protein_grams, carbs_grams, fat_grams, diet_strategy",
       )
       .eq("user_id", targetUserId)
       .single();
@@ -492,6 +501,11 @@ HARD RULES:
     // (top_wins / areas_to_improve / recommendations) are empty arrays.
     // Client renders summary as a full multi-line text block (C4 follow-up done).
 
+    // Empty for Balanced, for a caller without PRO, and with the switch off.
+    const dietStrategyLine = dietStrategyOn
+      ? weeklyReportDietStrategyLine(userProfile?.diet_strategy, Boolean(hasPro))
+      : "";
+
     const userMessage = `Generate my weekly nutrition and fitness report based on this data:
 
 **USER PROFILE:**
@@ -526,7 +540,7 @@ HARD RULES:
     }
 - TDEE: ${tdee} kcal
 - Daily calorie target: ${calorieTarget} kcal
-- Daily protein target: ${proteinTarget}g
+- Daily protein target: ${proteinTarget}g${dietStrategyLine ? `\n${dietStrategyLine}` : ""}
 
 **THIS WEEK'S NUTRITION (last 7 days):**
 - Days logged: ${daysLogged}/7

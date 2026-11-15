@@ -208,7 +208,14 @@ class SeedService {
   /// F0709 roasted makhana, F0710 plain makhana; 69 changes in all), and
   /// seven everyday rows are appended (F1442-F1448). Without the bump the
   /// catalog's new ids are skipped and the swap sheet's retire flag is absent.
-  static const int _foodLibraryVersion = 4;
+  ///
+  /// v5 (2026-11-14 diet plan Unit 3b, docs/plans/diet-strategy-3b.md §3.2):
+  /// 14 rows join the catalog as Low carb / Keto only foods (ghee, butter,
+  /// coconut, coconut milk, fried egg, cheese omelette, paneer, cheddar,
+  /// full-fat paneer, chicken thigh, cauliflower, spinach, bhindi,
+  /// capsicum), so their `is_everyday` flips false -> true.
+  /// Without the bump the swap sheet would treat them as retired.
+  static const int _foodLibraryVersion = 5;
   static const String _foodVersionKey = 'food_library_version';
 
   final HiveService _hive = HiveService.instance;

@@ -54,7 +54,9 @@ void main() {
     final body = src.substring(src.indexOf('void _generateFreshPlan'),
         src.indexOf('_MealPlan _servicePlanToScreenPlan'));
     expect(
-        RegExp(r'DietPlanFlags\.curatedEnabled\s*\?\s*CuratedDietPlanGenerator\.instance\.generate\(inputs\)\s*:\s*DietPlanGenerator\.instance\.generate\(inputs\)')
+        // Unit 3b: the curated arm returns the plan and what it was built
+        // for; the legacy arm is always Balanced.
+        RegExp(r'DietPlanFlags\.curatedEnabled\s*\?\s*CuratedDietPlanGenerator\.instance\.generatePlan\(inputs\)\s*:\s*\(meals:\s*DietPlanGenerator\.instance\.generate\(inputs\),\s*builtFor:\s*DietStrategy\.balanced\)')
             .hasMatch(body),
         isTrue);
     expect(body.contains('HiveService'), isFalse,
