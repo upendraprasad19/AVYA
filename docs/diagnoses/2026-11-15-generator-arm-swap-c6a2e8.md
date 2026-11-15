@@ -24,9 +24,9 @@ recurrence: |
   - d4a7e2 (the lead-first allocator: the opener a swap never evicts).
   None of them seats a target past R's row cap.
 writers:
-  - { file: lib/shared/repositories/plan_engine/session_set_allocator.dart, method_or_widget: "_allocateCore: the 2C-b allocation first; the arm re-run only on an arm pair, kept only with fewer pairs and no group lost (S8)", line: 287 }
-  - { file: lib/shared/repositories/plan_engine/session_set_allocator.dart, method_or_widget: "_allocateLeadFirst fixpoint: an arm group B credits and A does not joins A's targets (S6)", line: 529 }
-  - { file: lib/shared/repositories/plan_engine/session_set_allocator.dart, method_or_widget: "_variant: the arm swap after the minimum pass (S2-S5)", line: 1431 }
+  - { file: lib/shared/repositories/plan_engine/session_set_allocator.dart, method_or_widget: "_allocateCore: the 2C-b allocation first; the arm re-run only on an arm pair, kept only in the same world with fewer pairs and no group lost (S8)", line: 284 }
+  - { file: lib/shared/repositories/plan_engine/session_set_allocator.dart, method_or_widget: "_allocateLeadFirst fixpoint: an arm group B credits and A does not joins A's targets (S6)", line: 543 }
+  - { file: lib/shared/repositories/plan_engine/session_set_allocator.dart, method_or_widget: "_variant: the arm swap after the minimum pass (S2-S5)", line: 1445 }
 readers:
   - { file: lib/shared/repositories/plan_engine/session_set_allocator.dart, method_or_widget: "AllocationStats.credited / minimumSeats (the swap's seat is a minimum seat)", line: 68 }
   - { file: test/helpers/day_floor_gate_lib.dart, method_or_widget: "the day-floor gate's swap excuse (same rows, the new row a minimumSeats entry, the dropped row's groups still trained)", line: 150 }
@@ -175,7 +175,7 @@ Each mutant was applied once (the runner refuses a pattern that does not occur e
 
 Fixes (plan review log, round 1): the victim guard's opener uses `lead[]`'s rule (A1); a swap that would change the
 day's opener is refused (`keepsOpener`, d48's mirror); S8 keeps the re-run only with the first run's allowance stamp
-(B5); a taken budgeted victim leaves `floorSeats` / `countForced` and gets a `why` (A5 / B6); a failed trial resets
+(B5); a taken budgeted victim gets a `why` (B6; round 2 replaced A5's `_dropSeat`, below); a failed trial resets
 the day's spent seconds exactly (A7). The 2E gate block is unchanged on the fixed tree (21 changed, pairs 21 -> 0,
 0 newly at 0, 34 newly trained, +6), and the 2C-b ON digest is unchanged (794121ba...).
 
@@ -190,7 +190,7 @@ under every mutant; then `arm_swap_behavioral_test.dart` under every mutant. Fil
 | KO | `keepsOpener` always true | 54 plans | 1 (compound chin-up) |
 | A1+KO | the round-0 code | 54 plans | 1 |
 | KO2 | `keepsOpener` without the 2A-opener clause (round 1's first rule) | 0 | 1 (plan 122, real library); CI's seeded sweep red |
-| A5 | the budgeted victim's `_dropSeat` removed | 162 orphan seats | 1 (orphan sweep) |
+| A5 | (round 1) the budgeted victim's `_dropSeat` removed; round 2 deleted `_dropSeat` (below) | 162 orphan seats | 1 (orphan sweep) |
 | FT / TIE / COST | first candidate only / day order reversed / cost order reversed | 0 | 1 / 1 / 1 |
 | RSTH | a failed hold trial not restored | 0 | 3 |
 | KEEP / RESTORE | S8 always keeps the re-run / the stats not restored on a reject | 3 plans | 1 / 1 |
@@ -205,7 +205,8 @@ under every mutant; then `arm_swap_behavioral_test.dart` under every mutant. Fil
 - **WHY** (the victim's `why` not set): no `belowFloor` label changed in either probe.
 - **RSTB** (a failed budgeted trial not restored): not reached in 5,184 probe cases (E14 above).
 - **S6**: not reached by a crafted case in the probes; the gate keeps it red (E15: 19 changed, 2 pairs left).
-- The hold `_dropSeat` call was removed as dead code: holds are never in `floorSeats` or `countForced`.
+- The hold `_dropSeat` call was removed as dead code: holds are never in `floorSeats` or `countForced`. (Round 2 then
+  removed `_dropSeat` entirely, below.)
 - The reviewer's evict-the-real-lead case (A1's stated risk) was not reached in the probes: when B credits the arm
   group, 2C-b's walk seats the arm slot early. The fixed rule is the one `lead[]` uses, pinned by the refused-opener
   test.
@@ -214,3 +215,39 @@ under every mutant; then `arm_swap_behavioral_test.dart` under every mutant. Fil
   required the admitted lead to stay the opener. The rule now allows the 2A opener too (the KO2 row above); the
   4,158-case probe never reached this shape, so the real-library plan is the test. The neighbouring gates were not
   run locally before that push: the second instance of bug class 2.162's last point.
+
+## Round 2 fixes and their mutations (2026-11-15)
+
+Round 2 (two Sonnet seats on 481b6711, CI green) found no P0 / P1; its P2s sat inside round 1's own fixes, so the
+mechanism was removed rather than patched:
+- **A2 / A3:** `_dropSeat` deleted a floor seat's over-clock excuse while `armFits`' bound (`leftBefore`) could leave the
+  day past the clock, and it removed by name. Now a minimum seat, a day-floor seat or a count-forced row is never a
+  victim (each was seated past a bound the oracle excuses by its entry), and `_dropSeat` is gone. The 2E gate is
+  unchanged (21 changed, pairs 21 -> 0, 0 newly at 0, 34 newly trained, +6).
+- **A1:** `keepsOpener` builds its list in the day's own order with the arm slot at its place (`openerOf` keeps the
+  first of tied rows, as the final rows will); appending the slot last read a tie as the old opener kept.
+- **A4:** in the 2A-opener case the day's lead becomes the arm row at 2 sets, so R2 caps the day's other rows at 3 in
+  passes C and D (stated, plan S5).
+- **B5:** the seeded sweep's seam toggle is in try / finally.
+
+| id | mutation | probe | red |
+|---|---|---|---|
+| A1 | the old `opener[d] ?? ...` (new fixture: fly / pullover / heavy / row / custom 6 / curl) | 24 plans | 1 |
+| FLOORV | a day-floor seat may be a victim again | 162 plans / orphans | 2 |
+| FORCEDV | a count-forced row may be a victim | 0 | 0 |
+| TIEO | the arm slot appended last in `keepsOpener` | 0 | 0 |
+| KO / KO2 | `keepsOpener` always true / without the 2A-opener clause | - | 1 / 1 |
+
+**Survivors, stated (round 2):**
+- **FORCEDV:** no count-forced victim in either probe or the grid; under the allowance the forcing bound is 0, so a
+  count-forced row is rare where the swap runs. Guarded, not reached.
+- **TIEO:** no tie between the arm slot and the lead in the probes; guarded by construction, not reached.
+- **LOST alone** (round 2 B1): the loss clause is the only guard for a plan WITH an arm pair whose re-run trades a
+  group; no probe, grid plan or seeded-sweep plan reaches that shape, so it is unproven where it alone binds. Not
+  "covered by another clause" in that case: the earlier wording is corrected here.
+- **E7** (round 2 B3): a minimum seat that also credits a group a later arm swap seats is reachable in principle;
+  only the `minNames` guard stops it. Guarded, not reached by a test.
+- **KOh** (round 2 A5): the hold branch's `keepsOpener(null)` replaced by `true`; no hold-victim fixture has an arm
+  row that outranks the lead. The budgeted branch pins the predicate (KO / KO2 red).
+- **WHY:** unobservable in both probes; the victim's `why` reads `count_limited` in `_label` where a group lost every
+  crediting row, which neither label describes exactly.

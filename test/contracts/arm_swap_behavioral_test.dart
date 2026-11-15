@@ -323,11 +323,21 @@ void main() {
   group('the opener (d48)', () {
     test('a 2A opener that pass A refused protects nothing: the lead is the opener of the admitted rows', () {
       // heavy is the precomputed opener and is not admitted; the day's lead is fly (rank 0), so pullover is a victim.
+      final (f, days) = openerDays(const ['fly', 'pullover', 'heavy', 'row', 'mine', 'ARM'], 'curl', 6);
+      final off = runArm(f, days, on: false);
+      final on = runArm(f, days, on: true);
+      expect(setsOf(off[0]), [('fly', 2), ('pullover', 2), ('mine', 6)]);
+      expect(setsOf(on[0]), [('fly', 2), ('mine', 6), ('curl', 2)]);
+    });
+
+    test('a day-floor seat is never a victim: it was seated past a bound the oracle excuses by its entry (round 2)', () {
+      // pullover is a 2B floor seat here; taking it out would leave the day past its bound with the excuse gone.
       final (f, days) = openerDays(const ['fly', 'heavy', 'row', 'pullover', 'mine', 'ARM'], 'curl', 7);
       final off = runArm(f, days, on: false);
       final on = runArm(f, days, on: true);
-      expect(setsOf(off[0]), [('fly', 2), ('pullover', 2), ('mine', 7)]);
-      expect(setsOf(on[0]), [('fly', 2), ('mine', 7), ('curl', 2)]);
+      expect(SessionSetAllocator.debugLastStats!['A']!.floorSeats[0]?.map((x) => x.name), contains('pullover'));
+      expect(shape(on), shape(off));
+      expect(setsOf(on[0]), [('fly', 2), ('pullover', 2), ('mine', 7)]);
     });
 
     test('an arm row that would open the day (a compound chin-up over an isolation lead) is not swapped in', () {
@@ -393,7 +403,7 @@ void main() {
           [(name: 'Kettlebell Two Arm Military Press', group: 'Triceps')]);
     });
 
-    test('a swapped-out row leaves floorSeats and countForced (the oracle excuses only rows the plan holds)', () {
+    test('every floorSeats / countForced name is a row the plan holds (no seat is ever swapped out)', () {
       var checked = 0;
       for (final order in const [
         ['fly', 'heavy', 'row', 'pullover', 'mine', 'ARM'],

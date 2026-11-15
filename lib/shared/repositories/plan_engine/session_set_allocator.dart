@@ -1457,7 +1457,14 @@ class SessionSetAllocator {
         var done = false;
         for (final s in cands) {
           final d = s.day;
-          final minNames = {for (final m in stats.minimumSeats[d] ?? const <({String name, String group})>[]) m.name};
+          // Never a victim: a minimum seat, a day-floor seat or a count-forced row. Each was seated past a bound (a
+          // group's floor, the 3-row floor, the count floor) that the oracle excuses by its stats entry; taking one out
+          // would leave the day past that bound with its excuse gone (round 2 A2).
+          final minNames = {
+            for (final m in stats.minimumSeats[d] ?? const <({String name, String group})>[]) m.name,
+            for (final f in stats.floorSeats[d] ?? const <FloorSeat>[]) f.name,
+            for (final c in stats.countForced[d] ?? const <({String name, int sets})>[]) c.name,
+          };
           // The day's lead as `lead[]` computes it below: the opener when admitted, else the opener of the admitted
           // slots (round 1 A1: a precomputed opener that pass A refused protects nothing).
           final op = opener[d] != null && opener[d]!.admitted
@@ -1468,10 +1475,11 @@ class SessionSetAllocator {
           // other row, neither by removing the lead nor by seating an arm row `openerOf` ranks above it.
           bool keepsOpener(_Slot? victim) {
             if (op == null) return true;
+            // In the day's own order, the arm slot at its place: `openerOf` keeps the first of tied rows, as the final
+            // rows will (round 2 A1: appending it last read a tie as the old opener kept).
             final after = openerAmong([
               for (final o in byDay[d])
-                if (o.admitted && !identical(o, victim)) o,
-              s,
+                if ((o.admitted && !identical(o, victim)) || identical(o, s)) o,
             ]);
             return identical(after, op) || (opener[d] != null && identical(after, opener[d]));
           }
@@ -1504,7 +1512,6 @@ class SessionSetAllocator {
                   ..removed = true
                   ..sets = 0
                   ..why = {for (final x in slot.groups) x: _Why.target};
-                _dropSeat(stats, d, slot.exercise.exerciseName);
                 done = true;
               } else {
                 ledger.add(d, slot.groups, vSets, vSec);
@@ -1703,13 +1710,6 @@ class SessionSetAllocator {
 
   /// Unit 2E (d51): the groups the arm swap serves.
   static const _armGroups = {'Biceps', 'Triceps'};
-
-  /// Unit 2E (round 1 A5 / B6): a row the arm swap takes out of [day] leaves `floorSeats` and `countForced`, so the
-  /// budget oracle's excuses (read by stats) describe only rows the plan still holds.
-  static void _dropSeat(AllocationStats stats, int day, String name) {
-    stats.floorSeats[day]?.removeWhere((f) => f.name == name);
-    stats.countForced[day]?.removeWhere((f) => f.name == name);
-  }
 
   /// Unit 2E: whether an arm slot crediting [groups] fits [day] at 2 sets ([sec] seconds) for target [g]: every
   /// group's session cap, every other group's weekly top, and the day's time within the ledger's forcing bound or not

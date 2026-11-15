@@ -63,7 +63,7 @@ other week trains them:
 - **S5. The swap.**
   - Free the victim: a budgeted row is un-admitted and its sets and seconds come off the ledger; a hold goes to
     `evicted` and its seconds come off.
-  - Then seat the arm slot at 2 sets when all of these hold:
+  - Then seat the arm slot at 2 sets (pass B may grow it to 3, like every seat) when all of these hold:
     - every group's session cap;
     - every other group's weekly top;
     - the day's time within the forcing bound, or no longer than before the swap (d51: same time);
@@ -72,7 +72,9 @@ other week trains them:
       refused (seeded-sweep plan 122, Kettlebell Two Arm Military Press): seating it restores the designed lead.
   - Otherwise restore the victim (its sets exactly, its seconds by an exact reset of the day's spent seconds, round 1
     A7) and try the next one.
-  - A taken victim leaves `floorSeats` / `countForced` and gets a `why` (round 1 A5 / B6).
+  - Never a victim: a minimum seat, a day-floor seat or a count-forced row (round 2 A2). A taken victim gets a `why`.
+  - In the 2A-opener case the day's lead becomes the arm row at 2 sets, so R2 caps the day's other rows at 3 in passes
+    C and D (round 2 A4).
   - The row count is unchanged.
   - The seat is recorded in `AllocationStats.minimumSeats` with `g`.
 - **S6. The fixpoint (the second cause).** Under 60, after each round, an arm group that B now credits and A does not
@@ -172,3 +174,8 @@ other week trains them:
   `keepsOpener` (the opener must stay the admitted lead) refused it. The rule now also allows the 2A opener itself, and a
   real-library test pins plan 122. The neighbouring gates (2C-b, 2D, 2B, 2A, 2C-a, B2) were run locally before the
   push this time (bug class 2.162's last point, missed in the first round-1 push).
+- **Round 2 (2026-11-15, two Sonnet seats on 481b6711, CI green):** no P0 / P1. Its P2s were inside round 1's fixes, so
+  the mechanism was removed: floor seats and count-forced rows are never victims and `_dropSeat` is deleted (A2 / A3);
+  `keepsOpener` keeps the day's order (A1); the lead change in the 2A-opener case is stated (A4); the seam toggle is in
+  try / finally (B5); survivors restated honestly (LOST alone unproven, E7, FORCEDV, TIEO, KOh) and stale line numbers
+  re-cited. The 2E gate is unchanged.

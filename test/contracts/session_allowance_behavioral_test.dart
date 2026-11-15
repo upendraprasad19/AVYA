@@ -267,10 +267,15 @@ void main() {
         // Unit 2E (d51): the same plan with the arm swap's test seam off. A plan the swap changes must have had an
         // arm pair there (one variant at 0 Biceps or Triceps while the other credits it).
         SessionSetAllocator.debugArmSwap = false;
-        final noArm = SessionSetAllocator.allocate(
-            days: days, ctx: ctx, rowsByName: byName, is6Day: is6, balancedWeek: true);
-        final noArmStats = SessionSetAllocator.debugLastStats!;
-        SessionSetAllocator.debugArmSwap = true;
+        final List<PopulatedDay> noArm;
+        final Map<String, AllocationStats> noArmStats;
+        try {
+          noArm = SessionSetAllocator.allocate(
+              days: days, ctx: ctx, rowsByName: byName, is6Day: is6, balancedWeek: true);
+          noArmStats = SessionSetAllocator.debugLastStats!;
+        } finally {
+          SessionSetAllocator.debugArmSwap = true;
+        }
         final on = SessionSetAllocator.allocate(
             days: days, ctx: ctx, rowsByName: byName, is6Day: is6, balancedWeek: true);
         final stats = SessionSetAllocator.debugLastStats!;
