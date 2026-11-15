@@ -10628,7 +10628,7 @@ concepts:
         method: generateV4
         notes: CENTRAL normalize - canonicalizes injuries once for every generation caller
       - file: lib/shared/repositories/plan_engine/exercise_selector.dart
-        line_range: 1003-1015
+        line_range: 1027-1039
         method: _isContraindicated (passed to CoreListSelector.rankedPool by _pickCoreList; buildPinnedDays.resolve)
         notes: U2 introduced it for the universal pool (deleted with the pool and its kill switch by Unit 1B-F, 2026-11-11); ungated; a slot with no safe row is omitted, then the thin-day top-up
       - file: lib/shared/repositories/plan_engine/warmup_cooldown.dart
@@ -10644,7 +10644,7 @@ concepts:
         fields_read: [injury_contraindications]
         notes: exact lowercase equality (attempts 1-4) - unchanged, already correct
       - file: lib/shared/repositories/plan_engine/exercise_selector.dart
-        line_range: 1003-1015
+        line_range: 1027-1039
         method: _isContraindicated (the core-list pick's hard filter and the repeat pins)
         semantic: flag-check
         fields_read: [injury_contraindications]

@@ -3,10 +3,10 @@
 # Gate 40 (validate_audit_closure.dart). One terminal_state per item; no `deferred:` key.
 
 batch: generator-step2d
-total_findings: 9
-closed_count: 9
+total_findings: 10
+closed_count: 10
 
-_commit: &feat "generator-step2d feature commit"
+_commit: &feat "2c26fbf2 (with cf8c9ede, round 4)"
 
 findings:
   - id: C2D-1
@@ -61,3 +61,9 @@ findings:
     title: "d52: 'sets first' as the allocator's own targets, not sets to the 5-set maximum (founder decision 2026-11-15)"
     terminal_state: verified_clean
     evidence: "founder answer 2026-11-15 ('Keep as built'); plan §0 states it; the gate asserts pinned sets equal the flag-off repeat"
+
+  - id: C2D-10
+    title: "B-pass (docs/reviews/generator-step2d-bpass.md): 8 findings, 0 P0/P1 (shared-day candidate screen, reserve test days, core-equality test, gate pricing, the 1e-6 margin, citations, drift-gate comment)"
+    terminal_state: closed_in_commit
+    commit: "the generator-step2d B-pass commit, the child of c01d6af0"
+    verification: "mutants M32-M37 and M34b red on repeat_minutes_behavioral_test / repeat_accessory_candidates_test; repeat_minutes_gate_test re-run on the fixed tree"

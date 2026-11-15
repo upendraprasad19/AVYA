@@ -109,6 +109,20 @@ void main() {
       expect(identical(ExerciseSelector.dropHeldCandidatesForTest(clean, sm), clean), isTrue);
     });
 
+    test('a day whose B is A screens against both variants (pinned and taken) and extends both taken sets', () {
+      final pick = [lib('Dumbbell Curl'), lib('Tricep Pushdown (Cable)')];
+      List<PlannedExercise> shared({Set<String> pinnedB = const {}, Set<String>? takenB, Set<String>? takenA}) =>
+          ExerciseSelector.sharedDayCandidatesFor(pick, const [], const {}, pinnedB, takenA ?? <String>{},
+              takenB ?? <String>{}, sm, ExerciseRepository.instance);
+      expect(names(shared()), ['Dumbbell Curl', 'Tricep Pushdown (Cable)']);
+      expect(names(shared(takenB: {'dumbbell curl'})), ['Tricep Pushdown (Cable)'], reason: 'B week candidate');
+      expect(names(shared(pinnedB: {'tricep pushdown (cable)'})), ['Dumbbell Curl'], reason: 'B pinned name');
+      final ta = <String>{}, tb = <String>{};
+      shared(takenA: ta, takenB: tb);
+      expect(ta.containsAll({'dumbbell curl', 'tricep pushdown (cable)'}), isTrue);
+      expect(tb.containsAll({'dumbbell curl', 'tricep pushdown (cable)'}), isTrue);
+    });
+
     test('a candidate is not repeated within one day', () {
       expect(names(call([lib('Dumbbell Curl'), lib('Dumbbell Curl')], const [])), ['Dumbbell Curl']);
     });
@@ -179,6 +193,46 @@ void main() {
               reason: tier);
         }
       }
+    });
+
+    test('no candidate repeats another candidate of its variant week, a partner included (mixed A-only / B days)', () {
+      // B-pass seat A, finding 1: the 5-day balanced week mixes days with a B list (Legs) and days without one
+      // (Upper + Core, whose B is A). An A-only day's candidates sit in B's weeks too, so they are screened against
+      // B's earlier candidates as well.
+      final sm = SameMovement.fromRows(ExerciseRepository.instance.getAll());
+      var checked = 0;
+      for (final tier in kSweepTiers) {
+        for (final level in kSweepLevels) {
+          for (final m in [60, 90]) {
+            final p1 = h.gen(
+                tier: tier, goal: 'build_muscle', level: level, days: 5, phase: 1, injuries: const [], minutes: m);
+            final out = ExerciseSelector.buildPinnedDays(
+              frames: SplitResolver.selectV4('build_muscle', 5, experienceLevel: level, sessionMinutes: m),
+              pinnedByDay: namesByDay(p1),
+              exerciseRepo: ExerciseRepository.instance,
+              equipmentTier: tier,
+              effectiveExp: level,
+              phase: 2,
+              goal: 'build_muscle',
+              capability: null,
+              appendAccessories: true,
+            );
+            for (final variantB in [false, true]) {
+              final seen = <String>{};
+              for (final d in out) {
+                for (final c in variantB ? d.repeatAccessoriesB : d.repeatAccessoriesA) {
+                  final lower = c.exerciseName.trim().toLowerCase();
+                  expect(seen.contains(lower), isFalse,
+                      reason: '$tier $level $m variant ${variantB ? 'B' : 'A'}: ${c.exerciseName} twice in the week');
+                  seen.addAll(sm.expandLower({lower}));
+                  checked++;
+                }
+              }
+            }
+          }
+        }
+      }
+      expect(checked, greaterThan(0));
     });
 
     test('topUpDays carries the candidates on a day it rebuilds, and keeps the A/B alias', () {

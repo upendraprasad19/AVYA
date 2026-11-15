@@ -59,7 +59,13 @@ double _mainSeconds(WorkoutDay d) => SessionBudget.estimateDaySecondsFromPlanDay
             'rest_seconds': e.restSeconds,
           },
       ],
-    }, const {}, rowsByName: const {});
+    }, const {}, rowsByName: _rowsByName ??= {
+      for (final r in ExerciseRepository.instance.getAll()) '${r['name']}'.toLowerCase(): r,
+    });
+
+/// The library rows by lowercase name, so the gate prices a row by its library archetype as the allocator does
+/// (B-pass seat B, finding 4), not by the plan row's own first type.
+Map<String, Map<String, dynamic>>? _rowsByName;
 
 /// The groups a row credits in the allocator's ledger: a budgeted row only (a library row, not a custom, not timed /
 /// cardio / distance; `SessionBudget.isBudgeted`). A hold or a custom spends time and credits nothing. [qg] is the
