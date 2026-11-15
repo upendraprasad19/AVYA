@@ -58,6 +58,7 @@ class PlanGenerator {
     Map<int, ({List<String> a, List<String> b})>?
         previousPhaseByDay, // W3.4 Batch 11-B (cross-phase variety forward)
     bool applyPlateauEscalation = false, // W3.5 Batch 12-A (opt-in; fresh advance only)
+    bool repeatMinutesRose = false, // Unit 2D (OI-453, d50) forward
   }) {
     return generateV4(
       goal: goal,
@@ -76,6 +77,7 @@ class PlanGenerator {
       applyVolumeTitration: applyVolumeTitration,
       previousPhaseByDay: previousPhaseByDay,
       applyPlateauEscalation: applyPlateauEscalation,
+      repeatMinutesRose: repeatMinutesRose,
     );
   }
 
@@ -114,6 +116,9 @@ class PlanGenerator {
     // phase advance (the two advance callers pass `pins == null`). Default false →
     // every other caller untouched regardless of `enable_plateau_escalation`.
     bool applyPlateauEscalation = false,
+    // Unit 2D (OI-453, founder d50: the one rule-14 argument): a repeat at more minutes than the phase it pins; read
+    // only by the pinned branch, which appends accessories into the leftover time. Default false: byte-identical.
+    bool repeatMinutesRose = false,
   }) {
     final equipmentList = _getEquipmentList(equipment);
     final effectiveExp = effectiveLevel(experienceLevel, phase);
@@ -202,6 +207,7 @@ class PlanGenerator {
                 PlanEngineFlags.injurySubstitutePreferenceEnabled,
             exclusions: equipmentExclusionSet,
             capability: capabilitySet,
+            appendAccessories: repeatMinutesRose,
           )
         : ExerciseSelector.pickV4(
             slotDays: filteredDays,

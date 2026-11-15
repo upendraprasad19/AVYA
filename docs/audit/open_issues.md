@@ -6817,6 +6817,8 @@ Found by the sync-storm-first-sweep batch while measuring its Day-0 web check (l
 
 **Done when.** Plan reviewed twice; a repeat phase with more minutes fills the extra time as above and a repeat with the same minutes stays byte-identical to today; pins of compounds survive; the repeat gate still tests adherence; mutants prove both branches. Blast radius: `platform` (plan_engine), tier L.
 
+**Unit 2D (2026-11-15, branch `generator-step2d`, diagnose `a7d2f4`, plan `docs/plans/2026-11-15-generator-step2d-repeat-minutes.md` v4; founder d50, d52).** Built: `last_phase_profile` stores the resolved minutes; a repeat whose minutes rose appends budgeted library isolations from the normal pick into the plain leftover time after the allocator's own set growth (d52: sets first means the allocator's targets, not the 5-set maximum) and after week 2's +1 sets are reserved. Gate over 768 personas: 0 failures (pins keep their sets and reps in all four weeks); reach per tier of 48: 30 -> 45 25-41 plans, 30 -> 60 all 41 measured, 45 -> 60 2-8, 60 -> 90 1-6. Same minutes and every fresh phase: byte-identical. Closes on the merge of that branch.
+
 ## OI-457 — Level is self-reported at onboarding: a 55 kg lifter who picks Intermediate gets heavy barbell squat, deadlift and bench 4x7 (parked: onboarding change)
 
 - **Status**: OPEN
