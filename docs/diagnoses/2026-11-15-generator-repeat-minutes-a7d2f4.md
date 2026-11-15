@@ -31,17 +31,17 @@ writers:
   - { file: lib/core/services/workout_schedule_read_service.dart, method_or_widget: "generateAndSchedule: last_phase_profile['session_minutes'] = resolved minutes", line: 274 }
   - { file: lib/core/services/workout_schedule_read_service.dart, method_or_widget: "generateAndSchedule: minutesRose read from the OLD profile before generate()", line: 228 }
   - { file: lib/shared/repositories/plan_engine/plan_generator.dart, method_or_widget: "generate() and generateV4 forward repeatMinutesRose (d50) to buildPinnedDays(appendAccessories:)", line: 210 }
-  - { file: lib/shared/repositories/plan_engine/exercise_selector.dart, method_or_widget: "buildPinnedDays: candidates from the memoized fresh pick (_repeatCandidates)", line: 507 }
-  - { file: lib/shared/repositories/plan_engine/exercise_selector.dart, method_or_widget: "_dropHeldCandidates after the thin-day top-up", line: 562 }
-  - { file: lib/shared/repositories/plan_engine/exercise_selector.dart, method_or_widget: "topUpDays carries repeatAccessoriesA/B", line: 787 }
-  - { file: lib/shared/repositories/plan_engine/session_set_allocator.dart, method_or_widget: "allocate wraps _allocateCore, then _appendRepeatAccessories", line: 260 }
-  - { file: lib/shared/repositories/plan_engine/session_set_allocator.dart, method_or_widget: "_seatRepeatVariant: plain ledger, week-2 reserve, rank-major seats", line: 708 }
+  - { file: lib/shared/repositories/plan_engine/exercise_selector.dart, method_or_widget: "buildPinnedDays: candidates from the memoized fresh pick (_repeatCandidates; a day whose B is A uses sharedDayCandidatesFor)", line: 509 }
+  - { file: lib/shared/repositories/plan_engine/exercise_selector.dart, method_or_widget: "_dropHeldCandidates after the thin-day top-up", line: 563 }
+  - { file: lib/shared/repositories/plan_engine/exercise_selector.dart, method_or_widget: "topUpDays carries repeatAccessoriesA/B", line: 809 }
+  - { file: lib/shared/repositories/plan_engine/session_set_allocator.dart, method_or_widget: "allocate wraps _allocateCore, then _appendRepeatAccessories", line: 247 }
+  - { file: lib/shared/repositories/plan_engine/session_set_allocator.dart, method_or_widget: "_seatRepeatVariant: plain ledger, week-2 reserve, rank-major seats", line: 755 }
   - { file: lib/shared/repositories/plan_engine/models.dart, method_or_widget: "PopulatedDay.repeatAccessoriesA/B and appendedA/B", line: 368 }
 readers:
-  - { file: lib/core/services/workout_schedule_read_service.dart, method_or_widget: "repeatMinutesRose(stored, now): an int stored value and now > it", line: 899 }
-  - { file: lib/shared/repositories/plan_engine/periodization_engine.dart, method_or_widget: "_weekTwoGains: trailing appended rows kept out of rank and lead, visited last", line: 187 }
-  - { file: lib/shared/repositories/plan_engine/periodization_engine.dart, method_or_widget: "weekTwoGains: the reserve's source", line: 167 }
-  - { file: lib/core/services/workout_schedule_read_service.dart, method_or_widget: "_buildRepeatPins reads last_phase_profile (its four keys; session_minutes is ignored there)", line: 776 }
+  - { file: lib/core/services/workout_schedule_read_service.dart, method_or_widget: "repeatMinutesRose(stored, now): an int stored value and now > it", line: 884 }
+  - { file: lib/shared/repositories/plan_engine/periodization_engine.dart, method_or_widget: "_weekTwoGains: trailing appended rows kept out of rank and lead, visited last", line: 175 }
+  - { file: lib/shared/repositories/plan_engine/periodization_engine.dart, method_or_widget: "weekTwoGains: the reserve's source", line: 154 }
+  - { file: lib/core/services/workout_schedule_read_service.dart, method_or_widget: "_buildRepeatPins reads last_phase_profile (its four keys; session_minutes is ignored there)", line: 769 }
 hive_key_prefix: "userBox['last_phase_profile'] (MigratedKey; user-scoped, UserConfigMigrator.userScopedKeys)"
 hive_key_formula: "MigratedKey.write('last_phase_profile', {plan_goal, equipment, days_per_week, effective_exp, session_minutes})"
 sync_methods:
@@ -162,7 +162,7 @@ Every mutant reddened at least one test. None reddened by a compile error.
 | M28 | break the 6-day alias | 1 |
 | M29 | `appendedA` / `appendedB` swapped | 1 (after the test fix below) |
 | M23 | `fresh()` after the feeder update | 0: equivalent on the 30 -> 45 gate block (below) |
-| M30 | an alias day's candidates not taken in B | the gate run after commit 2 (recorded with the B-pass) |
+| M30 | an alias day's candidates not taken in B | superseded: the B-pass moved that code into `sharedDayCandidatesFor` (M36 / M37 below) |
 | M31 | the final screen reads A's rows for B | 1 |
 
 **The first run had 6 survivors, each a test that could not see its case. All were fixed in the tests:**
@@ -197,6 +197,32 @@ No P0 or P1. Fixed in the branch's second commit:
 The first run of the extended gate reported cap and top failures in bodyweight and home_dumbbells. They were the
 gate's own: it counted timed holds and customs toward a group, which the ledger never credits. With budgeted rows
 only (the ledger's rule) every block passes.
+
+## B-pass (docs/reviews/generator-step2d-bpass.md)
+
+Two fresh seats read the CI-green head cf8c9ede and found no P0 or P1. They found 3 P2 and 5 P3, all fixed in the
+review commit.
+
+The one code change: a day whose B list is its A list now screens its candidates against both variants
+(`ExerciseSelector.sharedDayCandidatesFor`).
+
+New mutants, all applied once and run on the behavioral and candidate files:
+
+| id | mutation | red |
+|---|---|---|
+| M32 | the week-2 reserve computed for the wrong variant | 1 |
+| M33 | the reserve booked on day 0 | 1 (0 before the two-day test gained a day-1 time filler) |
+| M34 | no 1e-6 margin on the 2-set seat | 1 |
+| M34b | no 1e-6 margin on the grow pass | 1 |
+| M35 | a shared day screened against A's pinned names and candidates only | 1 |
+| M36 | a shared day's candidates not taken in B | 1 |
+| M37 | a shared day's candidates not taken in A | 1 |
+
+**The gate after the review commit.** The gate now prices a row by its library archetype, as the allocator does.
+Only the seconds column of the bodyweight blocks moved, with no invariant failure:
+- 30 -> 45: 25024 -> 25223;
+- 30 -> 60: 68402 -> 68916.
+Rows, sets, reach and every other block are unchanged.
 
 ## Not covered by a crafted fixture (stated)
 

@@ -502,12 +502,15 @@ class ExerciseSelector {
       var candidatesB = const <PlannedExercise>[];
       if (appendAccessories) {
         final sm = sameMovement ??= _sameMovementOf(exerciseRepo);
-        candidatesA = _repeatCandidates(fresh().exercisesA, exercisesA, pinnedLowerA, takenA, sm, exerciseRepo);
         if (identical(exercisesB, exercisesA)) {
-          // B is A on this day: its candidates are A's, and they are taken in B's week too.
+          // B is A on this day: its candidates are A's and sit in B's weeks too, so they are screened against both
+          // variants' pinned names and earlier candidates (B-pass seat A, finding 1: a 5-day balanced week mixes
+          // B-list days with A-only days), and taken in both.
+          candidatesA = sharedDayCandidatesFor(
+              fresh().exercisesA, exercisesA, pinnedLowerA, pinnedLowerB, takenA, takenB, sm, exerciseRepo);
           candidatesB = candidatesA;
-          takenB.addAll(sm.expandLower({for (final c in candidatesA) c.exerciseName.trim().toLowerCase()}));
         } else {
+          candidatesA = _repeatCandidates(fresh().exercisesA, exercisesA, pinnedLowerA, takenA, sm, exerciseRepo);
           candidatesB = _repeatCandidates(fresh().exercisesB, exercisesB, pinnedLowerB, takenB, sm, exerciseRepo);
         }
       }
@@ -617,6 +620,27 @@ class ExerciseSelector {
     ExerciseRepository repo,
   ) =>
       _repeatCandidates(pick, dayRows, pinnedLower, taken, sameMovement, repo);
+
+  /// Unit 2D (B-pass seat A, finding 1): the candidates of a day whose B list is its A list. They sit in both
+  /// variants' weeks, so they are screened against both variants' pinned names ([pinnedA], [pinnedB]) and earlier
+  /// candidates ([takenA], [takenB]), and both taken sets are extended. Pure apart from the two taken sets.
+  @visibleForTesting
+  static List<PlannedExercise> sharedDayCandidatesFor(
+    List<PlannedExercise> pick,
+    List<PlannedExercise> dayRows,
+    Set<String> pinnedA,
+    Set<String> pinnedB,
+    Set<String> takenA,
+    Set<String> takenB,
+    SameMovement sameMovement,
+    ExerciseRepository repo,
+  ) {
+    final out = _repeatCandidates(pick, dayRows, {...pinnedA, ...pinnedB}, {...takenA, ...takenB}, sameMovement, repo);
+    final mine = sameMovement.expandLower({for (final c in out) c.exerciseName.trim().toLowerCase()});
+    takenA.addAll(mine);
+    takenB.addAll(mine);
+    return out;
+  }
 
   static List<PlannedExercise> _repeatCandidates(
     List<PlannedExercise> pick,

@@ -13,11 +13,11 @@ import '../helpers/repeat_minutes_gate_lib.dart';
 /// (personas, fresh, measured, gained, extra rows, extra sets, extra seconds) per 'm1->m2|tier', measured on the 2D
 /// tree (2026-11-15). Pinned exactly: a change in reach is a change to review.
 const _expected = <String, (int, int, int, int, int, int, int)>{
-  '30->45|bodyweight': (48, 0, 48, 41, 128, 358, 25024),
+  '30->45|bodyweight': (48, 0, 48, 41, 128, 358, 25223),
   '30->45|home_dumbbells': (48, 0, 48, 33, 119, 336, 20168),
   '30->45|basic_gym': (48, 0, 48, 25, 75, 220, 13381),
   '30->45|full_gym': (48, 0, 48, 30, 84, 250, 14701),
-  '30->60|bodyweight': (48, 7, 41, 41, 350, 997, 68402),
+  '30->60|bodyweight': (48, 7, 41, 41, 350, 997, 68916),
   '30->60|home_dumbbells': (48, 7, 41, 41, 305, 920, 57902),
   '30->60|basic_gym': (48, 7, 41, 41, 263, 711, 44286),
   '30->60|full_gym': (48, 7, 41, 41, 254, 716, 44138),

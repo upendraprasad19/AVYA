@@ -269,6 +269,18 @@ class SessionSetAllocator {
     return _appendRepeatAccessories(days, out, ctx, rowsByName, is6Day: is6Day, leadFirst: lf);
   }
 
+  /// Unit 2D (B-pass seat B, finding 2): the core allocation alone, without the repeat step, so a test can compare
+  /// [allocate] against it.
+  @visibleForTesting
+  static List<PopulatedDay> allocateCoreForTest({
+    required List<PopulatedDay> days,
+    required SessionBudgetContext ctx,
+    required Map<String, Map<String, dynamic>> rowsByName,
+    required bool is6Day,
+    required bool leadFirst,
+  }) =>
+      _allocateCore(days: days, ctx: ctx, rowsByName: rowsByName, is6Day: is6Day, leadFirst: leadFirst);
+
   static List<PopulatedDay> _allocateCore({
     required List<PopulatedDay> days,
     required SessionBudgetContext ctx,
