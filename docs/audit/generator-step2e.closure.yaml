@@ -3,8 +3,8 @@
 # Gate 40 (validate_audit_closure.dart). One terminal_state per item; no `deferred:` key.
 
 batch: generator-step2e
-total_findings: 5
-closed_count: 5
+total_findings: 8
+closed_count: 8
 
 _commit: &feat "generator-step2e feature commit"
 
@@ -36,3 +36,18 @@ findings:
     title: "Supersets: should the allocator count superset time (board, step 2, undecided)"
     terminal_state: verified_clean
     evidence: "founder d53 (2026-11-15, 'No, keep full rest'): the allocator keeps pricing full rest; the board card closes as decided"
+
+  - id: C2E-6
+    title: "OI-453 archived: Unit 2D merged (PR #280, main 708f9049, main CI green)"
+    terminal_state: verified_clean
+    evidence: "PR #280 state MERGED; main CI run on 708f9049 success; every Done-when leg recorded in closed_issues.md"
+
+  - id: C2E-7
+    title: "OI-477 (6-day build_muscle Quads below the floor) closed as a stated residue"
+    terminal_state: verified_clean
+    evidence: "founder d54 (2026-11-15, 'Accept as is, close'); 48 cells measured on 708f9049 plus 2E: below 90 minutes time_limited, beginners cap_limited by 2A's lead rule, every week has quad work"
+
+  - id: C2E-8
+    title: "OI-475 (3 / 4 / 5-day build_muscle Quads below the floor) closed as a stated residue"
+    terminal_state: verified_clean
+    evidence: "founder d55 (2026-11-15, 'Same as d54'); 33 of 72 cells short at 60 / 90 minutes: 31 time_limited, 2 cap_limited (2A's lead rule)"
