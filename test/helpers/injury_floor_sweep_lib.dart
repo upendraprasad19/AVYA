@@ -150,6 +150,8 @@ class SweepHarness {
     // Unit 1B-F (d23): null keeps generateV4's default length, so every 60-minute block and ceiling is unchanged.
     int? minutes,
     List<String> exclusions = const [],
+    // Unit 2D (OI-453): a repeat at more minutes than the phase its pins came from.
+    bool repeatMinutesRose = false,
   }) =>
       PlanGenerator.instance.generateV4(
         goal: goal,
@@ -162,6 +164,7 @@ class SweepHarness {
         equipmentExclusions: exclusions,
         previousWeights: const {},
         pinnedExercisesByDay: pins,
+        repeatMinutesRose: repeatMinutesRose,
       );
 
   /// [dayCount] is the training days a week the run asked for: a plan week that has more or fewer days than that is

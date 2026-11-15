@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart' show visibleForTesting;
 
 import 'budget_muscle_groups.dart';
 import 'models.dart';
+import 'periodization_engine.dart';
 import 'plan_engine_flags.dart';
 import 'sequencing_engine.dart';
 import 'session_budget.dart';
@@ -95,6 +96,11 @@ class AllocationStats {
   /// `clock` when only the day's time does, or `unexplained` when nothing refuses it at the end. Filled in every world.
   /// A day variant B copies from A carries A's entry for it, so B's list covers B's whole week; in day order.
   final List<LeadSeat> leadSeats = [];
+
+  /// Unit 2D (OI-453, plan S5.5): per day, each repeat accessory the post-allocation step appended, at its sets. The
+  /// other fields describe the allocation BEFORE that step, so a reader of a repeat that appended rows recomputes
+  /// weekly sets from the plan.
+  final Map<int, List<({String name, int sets})>> repeatAccessorySeats = {};
 }
 
 typedef LeadSeat = ({int day, int rank, String name, int sets, String? boundBy});
@@ -247,8 +253,33 @@ class SessionSetAllocator {
     bool? dayFloor,
     bool? balancedWeek,
   }) {
+    // Unit 2D (OI-453, plan S5): the allocation itself is unchanged; a repeat at more minutes then appends accessories
+    // into the time it left. The lead-first switch is read once here, so the step and its week-2 reserve see the same
+    // value the core did.
+    final lf = leadFirst ?? PlanEngineFlags.leadFirstEnabled;
+    final out = _allocateCore(
+        days: days,
+        ctx: ctx,
+        rowsByName: rowsByName,
+        is6Day: is6Day,
+        leadFirst: lf,
+        dayFloor: dayFloor,
+        balancedWeek: balancedWeek);
+    if (!days.any((d) => d.repeatAccessoriesA.isNotEmpty || d.repeatAccessoriesB.isNotEmpty)) return out;
+    return _appendRepeatAccessories(days, out, ctx, rowsByName, is6Day: is6Day, leadFirst: lf);
+  }
+
+  static List<PopulatedDay> _allocateCore({
+    required List<PopulatedDay> days,
+    required SessionBudgetContext ctx,
+    required Map<String, Map<String, dynamic>> rowsByName,
+    required bool is6Day,
+    required bool leadFirst,
+    bool? dayFloor,
+    bool? balancedWeek,
+  }) {
     final floorOn = dayFloor ?? PlanEngineFlags.dayFloorEnabled;
-    if (leadFirst ?? PlanEngineFlags.leadFirstEnabled) {
+    if (leadFirst) {
       return _allocateLeadFirst(
           days: days,
           ctx: ctx,
@@ -582,6 +613,178 @@ class SessionSetAllocator {
           allowance: allowanceUsed,
         ),
     ];
+  }
+
+  // ── Unit 2D: the repeat accessories (OI-453, plan S5) ────────────────────
+
+  /// Unit 2D (plan S5): append [input]'s repeat accessories to the allocated [out] where the day's PLAIN budget (no
+  /// under-60 allowance, d44), the session cap, the weekly top and the level's exercise count allow, at 2 sets, then
+  /// grow them to the base sets. Week 2's variant (B; A on the 6-day path) first reserves the +1 sets
+  /// `PeriodizationEngine.weekTwoGains` grants [out], so every pinned row keeps its week-2 set. Each variant is seated
+  /// on its own ledger, rank-major across days. Every other field of [out]'s days is kept, the 6-day alias included.
+  static List<PopulatedDay> _appendRepeatAccessories(
+    List<PopulatedDay> input,
+    List<PopulatedDay> out,
+    SessionBudgetContext ctx,
+    Map<String, Map<String, dynamic>> rowsByName, {
+    required bool is6Day,
+    required bool leadFirst,
+  }) {
+    final n = out.length;
+    final stats = debugLastStats;
+    final reserve = PeriodizationEngine.weekTwoGains(out, !is6Day, ctx, capToLead: leadFirst);
+    final seatsA = _seatRepeatVariant(
+      [for (final d in out) d.exercisesA],
+      [for (final d in input) d.repeatAccessoriesA],
+      ctx,
+      rowsByName,
+      reserve: is6Day ? reserve : const {},
+      leadFirst: leadFirst,
+    );
+    final seatsB = is6Day
+        ? seatsA
+        : _seatRepeatVariant(
+            [for (final d in out) d.exercisesB],
+            [for (final d in input) d.repeatAccessoriesB],
+            ctx,
+            rowsByName,
+            reserve: reserve,
+            leadFirst: leadFirst,
+          );
+    if (seatsA.every((s) => s.isEmpty) && seatsB.every((s) => s.isEmpty)) return out;
+    void record(String v, List<List<PlannedExercise>> seats) {
+      final st = stats?[v];
+      if (st == null) return;
+      for (var d = 0; d < n; d++) {
+        if (seats[d].isNotEmpty) {
+          st.repeatAccessorySeats[d] = [for (final e in seats[d]) (name: e.exerciseName, sets: e.sets)];
+        }
+      }
+    }
+
+    record('A', seatsA);
+    if (!is6Day) record('B', seatsB);
+    return [
+      for (var d = 0; d < n; d++)
+        () {
+          final o = out[d];
+          final a = seatsA[d].isEmpty ? o.exercisesA : [...o.exercisesA, ...seatsA[d]];
+          final alias = identical(o.exercisesA, o.exercisesB);
+          final b = alias && is6Day
+              ? a
+              : (seatsB[d].isEmpty ? o.exercisesB : [...o.exercisesB, ...seatsB[d]]);
+          return PopulatedDay(
+            name: o.name,
+            focus: o.focus,
+            dayType: o.dayType,
+            intensity: o.intensity,
+            exercisesA: a,
+            exercisesB: b,
+            allowance: o.allowance,
+            appendedA: seatsA[d].length,
+            appendedB: identical(a, b) ? seatsA[d].length : seatsB[d].length,
+          );
+        }(),
+    ];
+  }
+
+  /// Unit 2D (plan S5.1-S5.3): one variant's seats. The ledger is rebuilt from [rows] (the allocated output) exactly as
+  /// `PeriodizationEngine.weekTwoGains` prices a row, with the allocator's groups ([_groupsOf]); [reserve] adds week 2's
+  /// +1 sets. A candidate is seated at 2 sets when it is budgeted, no row of this variant holds its name, the day is
+  /// under the level's exercise count, it fits the ledger (1e-6 margin: the week-2 pass sums in another order) and,
+  /// with [leadFirst] and no focus group, 2 sets stay within the day's lead + 1; then seated rows grow to the base sets
+  /// by the same checks. Candidates are walked rank-major across days. Pure.
+  @visibleForTesting
+  static List<List<PlannedExercise>> seatRepeatVariantForTest(
+    List<List<PlannedExercise>> rows,
+    List<List<PlannedExercise>> candidates,
+    SessionBudgetContext ctx,
+    Map<String, Map<String, dynamic>> rowsByName, {
+    Set<(int, int)> reserve = const {},
+    bool leadFirst = true,
+  }) =>
+      _seatRepeatVariant(rows, candidates, ctx, rowsByName, reserve: reserve, leadFirst: leadFirst);
+
+  static List<List<PlannedExercise>> _seatRepeatVariant(
+    List<List<PlannedExercise>> rows,
+    List<List<PlannedExercise>> candidates,
+    SessionBudgetContext ctx,
+    Map<String, Map<String, dynamic>> rowsByName, {
+    required Set<(int, int)> reserve,
+    required bool leadFirst,
+  }) {
+    final n = rows.length;
+    final ledger = BudgetLedger(ctx, n);
+    int restOf(PlannedExercise ex) =>
+        SessionBudget.isBudgeted(ex, ctx) || SessionBudget.isRepBased(ex.loggingType)
+            ? SessionBudget.restForArchetype(SessionBudget.archetypeOfPlanned(ex, ctx))
+            : ex.restSeconds;
+    double cost(PlannedExercise ex, int sets) =>
+        SessionBudget.plannedExerciseSeconds(ex, ctx, sets: sets, restSeconds: restOf(ex));
+    Set<String> groupsOf(PlannedExercise ex) => SessionBudget.isBudgeted(ex, ctx)
+        ? _groupsOf(ex, rowsByName[ex.exerciseName.toLowerCase()], ctx)
+        : const <String>{};
+
+    final held = <String>{};
+    final lead = List<PlannedExercise?>.filled(n, null);
+    for (var d = 0; d < n && d < candidates.length; d++) {
+      for (final ex in rows[d]) {
+        ledger.add(d, groupsOf(ex), ex.sets, cost(ex, ex.sets));
+        held.add(ex.exerciseName.trim().toLowerCase());
+      }
+      if (leadFirst) lead[d] = SequencingEngine.openerOf([for (final ex in rows[d]) if (SessionBudget.isBudgeted(ex, ctx)) ex]);
+    }
+    for (final (d, i) in reserve) {
+      if (d >= n || i >= rows[d].length) continue;
+      final ex = rows[d][i];
+      ledger.add(d, groupsOf(ex), 1, cost(ex, ex.sets + 1) - cost(ex, ex.sets));
+    }
+
+    final levelMax = SessionBudget.countMax(ctx.level) < SessionBudget.hardMax
+        ? SessionBudget.countMax(ctx.level)
+        : SessionBudget.hardMax;
+    bool underLead(int d, PlannedExercise c, int sets) {
+      final l = lead[d];
+      if (!leadFirst || l == null) return true;
+      if (groupsOf(c).any(ctx.focusGroups.contains)) return true;
+      return sets <= l.sets + 1;
+    }
+
+    final seats = List.generate(n, (_) => <PlannedExercise>[]);
+    var maxRank = 0;
+    for (var d = 0; d < n && d < candidates.length; d++) {
+      if (candidates[d].length > maxRank) maxRank = candidates[d].length;
+    }
+    for (var r = 0; r < maxRank; r++) {
+      for (var d = 0; d < n && d < candidates.length; d++) {
+        if (r >= candidates[d].length) continue;
+        final c = candidates[d][r];
+        final lower = c.exerciseName.trim().toLowerCase();
+        if (!SessionBudget.isBudgeted(c, ctx) || held.contains(lower)) continue;
+        if (rows[d].length + seats[d].length >= levelMax) continue;
+        final g = groupsOf(c);
+        final secs = cost(c, 2);
+        if (!underLead(d, c, 2) || !ledger.fits(d, g, 2, secs + 1e-6)) continue;
+        ledger.add(d, g, 2, secs);
+        seats[d].add(c.copyWith(sets: 2));
+        held.add(lower);
+      }
+    }
+    final base = SessionBudget.baseSets;
+    for (var r = 0; r < maxRank; r++) {
+      for (var d = 0; d < n; d++) {
+        if (r >= seats[d].length) continue;
+        final c = seats[d][r];
+        final g = groupsOf(c);
+        for (var s = c.sets; s < base; s++) {
+          final dt = cost(c, s + 1) - cost(c, s);
+          if (!underLead(d, c, s + 1) || !ledger.fits(d, g, 1, dt + 1e-6)) break;
+          ledger.add(d, g, 1, dt);
+          seats[d][r] = seats[d][r].copyWith(sets: s + 1);
+        }
+      }
+    }
+    return seats;
   }
 
   /// Whether two lists name the same exercises in the same order (the same list

@@ -220,6 +220,14 @@ class WorkoutScheduleReadService {
       await SeedService.instance.seedIfNeeded();
     }
 
+    // Unit 2D (OI-453, plan S1 / S2): the minutes this generation budgets with (generateV4's own resolution), and
+    // whether a REPEAT runs at more minutes than the phase it pins. Read from the OLD last_phase_profile, before this
+    // call rewrites it below. Pins exist only under adherenceGateEnabled, the gate on that write.
+    final minutes = SessionBudget.resolveMinutes(
+        param: sessionDuration, profileValue: TrainingHistoryAnalyzer.sessionMinutesFromProfile());
+    final minutesRose =
+        pinnedExercisesByDay != null && repeatMinutesRose(MigratedKey.read<Map>('last_phase_profile'), minutes);
+
     final plan = PlanGenerator.instance.generate(
       goal: goal,
       equipment: equipment,
@@ -235,6 +243,7 @@ class WorkoutScheduleReadService {
       applyVolumeTitration: applyVolumeTitration,
       previousPhaseByDay: previousPhaseByDay,
       applyPlateauEscalation: applyPlateauEscalation,
+      repeatMinutesRose: minutesRose,
     );
 
     final dayPattern = preferredDays ?? _getDayPattern(daysPerWeek);
@@ -261,6 +270,8 @@ class WorkoutScheduleReadService {
         'equipment': equipment,
         'days_per_week': daysPerWeek,
         'effective_exp': PlanGenerator.effectiveLevel(experienceLevel, phase),
+        // Unit 2D (OI-453): the minutes these rows were built at; the next repeat compares against it.
+        'session_minutes': minutes,
       });
     }
     unawaited(SyncService.instance.syncWorkoutData());
@@ -882,6 +893,14 @@ class WorkoutScheduleReadService {
   /// So the rows themselves are checked too: a workout row whose `workout_day_index` is past the new split's days
   /// (the rows hold more days than the new plan: they were rescheduled to another day count), or whose
   /// `workout_name` is in [foreignDayNames] (the other split family, Unit 2C-a), refuses the pins.
+  /// Unit 2D (OI-453, plan S2): true only when [stored] (the previous generation's `last_phase_profile`) holds an
+  /// `int` `session_minutes` and [nowMinutes] is above it. Absent, null or a non-int value reads as "not raised", so a
+  /// profile written before 2D never appends accessories. Pure.
+  static bool repeatMinutesRose(Map? stored, int nowMinutes) {
+    final then = stored?['session_minutes'];
+    return then is int && nowMinutes > then;
+  }
+
   @visibleForTesting
   static Map<int, ({List<String> a, List<String> b})>? repeatPinsFrom({
     required Map? stored,

@@ -409,6 +409,11 @@ const _alwaysOk = <String>{
   // mis-attributes it because the same file also reads `schedule_*` keys
   // (B-pass b7c8040 / diagnose a4f7e1).
   'goal',
+  // Unit 2D (OI-453, diagnose a7d2f4) — `session_minutes` is a field of the user-scoped
+  // `last_phase_profile` map (written and read by generateAndSchedule / repeatMinutesRose in
+  // workout_schedule_read_service.dart), NOT of a `schedule_*` entry. The prefix heuristic
+  // mis-attributes it because the same file reads `schedule_*` keys.
+  'session_minutes',
   // Exercise-library / template-exercise canonical prescription DEFAULTS —
   // read on the `ex` exercise sub-object in _syncWorkoutTemplates (F17,
   // audit-fixwave) as a fallback when the builder's saved map omits sets/reps,

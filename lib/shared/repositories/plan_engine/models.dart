@@ -361,6 +361,19 @@ class PopulatedDay {
   /// `PeriodizationEngine._weekTwoGains`; never persisted.
   final bool allowance;
 
+  /// Unit 2D (OI-453, plan S4): a repeat at more minutes than the phase it pins carries, per variant, the
+  /// accessories `ExerciseSelector.buildPinnedDays` found in this frame's fresh pick. They ride BESIDE the day, never
+  /// in [exercisesA] / [exercisesB], so no allocator pass sees them; `SessionSetAllocator.allocate` appends the ones
+  /// that fit after its whole allocation and does not carry these fields out. Empty everywhere else.
+  final List<PlannedExercise> repeatAccessoriesA;
+  final List<PlannedExercise> repeatAccessoriesB;
+
+  /// Unit 2D (plan S5.5): how many TRAILING rows of [exercisesA] / [exercisesB] the allocator appended from
+  /// [repeatAccessoriesA] / [repeatAccessoriesB]. `PeriodizationEngine._weekTwoGains` visits them after every other
+  /// row, so week 2's +1 on a pinned row is the same with or without them. 0 everywhere else.
+  final int appendedA;
+  final int appendedB;
+
   const PopulatedDay({
     required this.name,
     required this.focus,
@@ -369,6 +382,10 @@ class PopulatedDay {
     required this.exercisesA,
     required this.exercisesB,
     this.allowance = false,
+    this.repeatAccessoriesA = const [],
+    this.repeatAccessoriesB = const [],
+    this.appendedA = 0,
+    this.appendedB = 0,
   });
 }
 
