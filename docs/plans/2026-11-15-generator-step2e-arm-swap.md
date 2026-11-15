@@ -53,18 +53,25 @@ other week trains them:
   is the victim:
   - a budgeted admitted row or a kept library hold;
   - not rank 0;
-  - not the day's opener (the 2A lead; on the main path, the opener of the admitted rows);
+  - not the day's opener, computed as `lead[]` computes it: the 2A opener when admitted, else the opener of the
+    admitted rows (round 1 A1: a precomputed opener that pass A refused protects nothing);
   - not a minimum seat;
   - crediting no focus group (d38);
   - every one of its groups credited by another admitted row or kept hold of the same day (the "over-served" rule).
+    A row with no budget group (its muscles map to none, e.g. Forearms) passes this rule vacuously: it serves no
+    group, so it is a victim like an over-served row (round 1 A6, pinned by a test).
 - **S5. The swap.**
   - Free the victim: a budgeted row is un-admitted and its sets and seconds come off the ledger; a hold goes to
     `evicted` and its seconds come off.
   - Then seat the arm slot at 2 sets when all of these hold:
     - every group's session cap;
     - every other group's weekly top;
-    - the day's time within the forcing bound, or no longer than before the swap (d51: same time).
-  - Otherwise restore the victim and try the next one.
+    - the day's time within the forcing bound, or no longer than before the swap (d51: same time);
+    - the day's opener is unchanged (d48): the swap neither removes it nor seats an arm row that `openerOf` ranks
+      above it (round 1 A1).
+  - Otherwise restore the victim (its sets exactly, its seconds by an exact reset of the day's spent seconds, round 1
+    A7) and try the next one.
+  - A taken victim leaves `floorSeats` / `countForced` and gets a `why` (round 1 A5 / B6).
   - The row count is unchanged.
   - The seat is recorded in `AllocationStats.minimumSeats` with `g`.
 - **S6. The fixpoint (the second cause).** Under 60, after each round, an arm group that B now credits and A does not
@@ -76,6 +83,8 @@ other week trains them:
 - **S8. Reach: only plans with an arm zero-week, and never at a group's cost.** `_allocateCore` runs the 2C-b
   allocation first, with no swap and no S6. It allocates again with them only when that result has an arm pair (one
   variant at 0 Biceps or 0 Triceps while the other credits it; `armPairsOf`). It keeps the re-run only when:
+  - the re-run stays in the first run's world (the same allowance stamp; a re-run that falls back to R, or leaves R,
+    is a different plan, round 1 B5);
   - the re-run has fewer arm pairs;
   - and no group either variant credited is at 0 in it (`lostAny`, Calves included).
   Otherwise the plan is the 2C-b allocation byte for byte. The 6-day path (B = A, so no pair) and 60+ minutes never
@@ -103,11 +112,11 @@ other week trains them:
   own walk (d48) moves the curl slot ahead and pass A admits it within R's row cap. Deadlift Day A: Dumbbell Rear
   Lateral Raise -> Dumbbell Alternate Bicep Curl. Shoulders stays trained on OHP Day; the protective rule would
   otherwise send the plan to R.
-- Every changed day is a one-for-one swap. Examples:
-  - bodyweight Pull + Core: Doorway Isometric Row (hold, Back) -> Self-Resisted Bicep Curl;
-  - gym Push + Core: Cable / Machine Lateral Raise (a second Shoulders row) -> Tricep Pushdown (Cable).
-- Calves 49 -> 47: a side effect of re-seating. The arm row frees time elsewhere in a fixpoint round. No new
-  zero-week group appears in any plan.
+- Changed days, examples: a one-for-one swap (bodyweight Pull + Core: Doorway Isometric Row (hold, Back) ->
+  Self-Resisted Bicep Curl; gym Push + Core: Cable / Machine Lateral Raise (a second Shoulders row) -> Tricep Pushdown
+  (Cable)), or 2C-b's own walk for the two S6 plans (above).
+- Prototype history (S1-S6 only, superseded by S8): Calves 49 -> 47 read as a side effect of re-seating; the
+  per-plan-week check later showed part of it was Calves leaving plans entirely.
 
 ## 4. Tests and gates
 
@@ -123,7 +132,8 @@ other week trains them:
   - `disable_balanced_week`: byte-identical.
 - **Neighbouring gates on the built tree (bug class 2.160):**
   - `weekly_minimum_gate_test`;
-  - `day_floor_gate_rep30_test` and `day_floor_gate_pairs_p1/p4`, whose pinned swap counts change and are attributed;
+  - `day_floor_gate_rep30_test` and `day_floor_gate_pairs_p1/p4`: unchanged (CI green on ffb12fa7 with no edit to
+    their pins; the 21 changed plans add `minimumSeats` entries, which their swap excuse accepts);
   - `lead_first_gate_test`, `session_set_budget_gate_test`, `balanced_week_gate_test`, `core_list_pool_gate_test`;
   - the golden: 30-minute keys only are expected to move, and are attributed;
   - the four kill-switch goldens;
@@ -145,3 +155,14 @@ other week trains them:
 - **Self-review, prototype (before round 1):** S8 added after the weekly-minimum gate's Calves count moved. A
   per-plan-week "newly at 0" check (any group, weeks 1-3, against main) joins the audit comparison
   (`scratchpad/oi496/newzero.py`).
+- **Round 1 (2026-11-15, two Sonnet seats, on ffb12fa7, CI green):** no P0 / P1 confirmed. Fixed:
+  - A1: the victim guard read `opener[d] ?? ...`, which protects a precomputed opener pass A refused and leaves the
+    real lead open; it now uses `lead[]`'s rule, and a new `keepsOpener` check refuses a swap that would change the
+    day's opener (the mirror: a compound arm row ranking above it);
+  - B5: S8 keeps the re-run only with the same allowance stamp;
+  - A5 / B6: a taken victim leaves `floorSeats` / `countForced` and carries a `why`;
+  - A7: a failed trial restores the day's spent seconds exactly;
+  - A2 / B1: tests for S6, the S8 reject path and its restore, `armPairsOf` / `lostAny`, the candidate fall-through,
+    the tie order, a failed victim restored before the next, the empty-group victim, and the opener guards;
+  - A3 / B2 / B3 / B4 / A4 / A6 / B7: the test header, the diagnose count, the §3 prototype bullets, the day-floor gate
+    sentence, the empty-group rule, and the 34 newly-trained plan-weeks now pinned in the gate.

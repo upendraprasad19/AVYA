@@ -63,8 +63,9 @@ proposed_fix: |
   - S8: the 2C-b allocation runs first. The arm re-run happens only on an arm pair and is kept only with fewer pairs
     and no group lost.
 regression_test_planned: |
-  test/contracts/arm_swap_behavioral_test.dart (8 tests, crafted); test/plan_generator/weekly_minimum_gate_test.dart
-  (the 2E block: 1,152 plans, seam on against off; the 2C-b pins updated for the closed pairs).
+  test/contracts/arm_swap_behavioral_test.dart (crafted; round 1 added the opener, S8-reject, arm-slot order, restore
+  and empty-group cases); test/plan_generator/weekly_minimum_gate_test.dart (the 2E block: 1,152 plans, seam on
+  against off, the 34 newly-trained plan-weeks pinned; the 2C-b pins updated for the closed pairs).
 impact_analysis: |
   Platform tier (plan engine). 21 of 2,304 audit plans change, all at 30 / 45 minutes, each by one row per affected day
   (a second row of an over-served group gives way to the arm row). Calves stays at main's 49 pairs (d45 / d49). No
@@ -169,3 +170,41 @@ Each mutant was applied once (the runner refuses a pattern that does not occur e
 - **E20** (`nonBudgeted` not decremented after a hold eviction). It is read only by the count verdict (`rowsOf`), which
   would read one row high on a day already below the count floor. Not reached.
 - **E22** (a reservation-blocked slot as the arm slot). Not reached on the grid or the fixtures.
+
+## Round 1 fixes and their mutations (2026-11-15)
+
+Fixes (plan review log, round 1): the victim guard's opener uses `lead[]`'s rule (A1); a swap that would change the
+day's opener is refused (`keepsOpener`, d48's mirror); S8 keeps the re-run only with the first run's allowance stamp
+(B5); a taken budgeted victim leaves `floorSeats` / `countForced` and gets a `why` (A5 / B6); a failed trial resets
+the day's spent seconds exactly (A7). The 2E gate block is unchanged on the fixed tree (21 changed, pairs 21 -> 0,
+0 newly at 0, 34 newly trained, +6), and the 2C-b ON digest is unchanged (794121ba...).
+
+Method: a 4,158-case probe sweep (day orders x arm row x B list x minutes x level x custom) and a second 1,026-case
+sweep (custom fillers; budgeted victims cheaper than the arm row), each run on the fixed tree, with the seam off, and
+under every mutant; then `arm_swap_behavioral_test.dart` under every mutant. Files restored and cmp-checked
+(`scratchpad/step2e/r1mut/`).
+
+| id | mutation | probe | red in the test file |
+|---|---|---|---|
+| A1 | the old `opener[d] ?? ...` | 120 plans | 1 (refused opener) |
+| KO | `keepsOpener` always true | 54 plans | 1 (compound chin-up) |
+| A1+KO | the round-0 code | 54 plans | 1 |
+| A5 | the budgeted victim's `_dropSeat` removed | 162 orphan seats | 1 (orphan sweep) |
+| FT / TIE / COST | first candidate only / day order reversed / cost order reversed | 0 | 1 / 1 / 1 |
+| RSTH | a failed hold trial not restored | 0 | 3 |
+| KEEP / RESTORE | S8 always keeps the re-run / the stats not restored on a reject | 3 plans | 1 / 1 |
+| EMPTY / EMPTYh | an empty-group row skipped (budgeted / hold) | 0 / 6 plans | 1 / 1 |
+
+**Survivors, stated:**
+- **B5 and LOST** (the stamp clause, the loss clause, each alone): every reject the probes reach is also refused by
+  another clause (the KEEP mutant reddens; each single clause does not), like E2-E4 above. Defence in depth.
+- **A7** (no exact reset): equivalent in every case measured; the residue it removes is about 1e-13 s.
+- **KOv** (the victim not excluded from `keepsOpener`'s list): equivalent by construction, since the victim is never
+  the opener (it is skipped before) and `openerOf` keeps the first of tied rows.
+- **WHY** (the victim's `why` not set): no `belowFloor` label changed in either probe.
+- **RSTB** (a failed budgeted trial not restored): not reached in 5,184 probe cases (E14 above).
+- **S6**: not reached by a crafted case in the probes; the gate keeps it red (E15: 19 changed, 2 pairs left).
+- The hold `_dropSeat` call was removed as dead code: holds are never in `floorSeats` or `countForced`.
+- The reviewer's evict-the-real-lead case (A1's stated risk) was not reached in the probes: when B credits the arm
+  group, 2C-b's walk seats the arm slot early. The fixed rule is the one `lead[]` uses, pinned by the refused-opener
+  test.

@@ -328,7 +328,7 @@ void main() {
 
     final changed = [for (final k in on.keys) if (jsonEncode(on[k]) != jsonEncode(off[k])) k];
     final newlyZero = <String>[], rowDiff = <String>[], newMajor = <String>[];
-    var maxOver = 0;
+    var maxOver = 0, newlyTrained = 0;
     for (final k in on.keys) {
       final minutes = int.parse(k.split('|')[4]);
       final wOn = on[k]!['w'] as List, wOff = off[k]!['w'] as List;
@@ -337,6 +337,7 @@ void main() {
         if (w < 3) {
           for (final g in _groups) {
             if ((vOff[g] ?? 0) > 0 && (vOn[g] ?? 0) == 0) newlyZero.add('$k week ${w + 1} $g');
+            if ((vOff[g] ?? 0) == 0 && (vOn[g] ?? 0) > 0) newlyTrained++;
           }
         }
         final dOn = (wOn[w] as Map)['d'] as List, dOff = (wOff[w] as Map)['d'] as List;
@@ -354,13 +355,16 @@ void main() {
     }
     // ignore: avoid_print
     print('arm swap gate: changed ${changed.length}; arm pairs off ${off.values.where(armPair).length} '
-        'on ${on.values.where(armPair).length}; newly zero ${newlyZero.length}; max over $maxOver');
+        'on ${on.values.where(armPair).length}; newly zero ${newlyZero.length}; newly trained $newlyTrained; '
+        'max over $maxOver');
 
     expect(changed.length, 21);
     expect([for (final k in changed) if (!armPair(off[k]!)) k], isEmpty, reason: 'a changed plan had an arm pair');
     expect(off.values.where(armPair).length, 21);
     expect(on.values.where(armPair), isEmpty);
     expect(newlyZero, isEmpty, reason: 'S8: never at a group\'s cost');
+    // Plan-weeks (weeks 1-3, any group) at 0 with the seam off and trained with it on (round 1 B7: the doc's figure).
+    expect(newlyTrained, 34);
     expect(rowDiff, isEmpty, reason: 'd51: same exercise count');
     expect(newMajor, isEmpty);
     expect(maxOver, lessThanOrEqualTo(6), reason: 'd47');

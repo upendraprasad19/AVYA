@@ -11,8 +11,9 @@
 // - day 0's A list is a row (Back, rank 0), a 3-set custom (it spends the day's time), two library holds and a curl;
 // - B trains Biceps (curlB).
 // R (the floor re-run) admits the row and both holds and the clock refuses the curl. The allowance re-run keeps R's 4
-// rows (d44), so the minimum pass refuses the curl, and only the swap seats it. The real-engine reach (the 23 audit
-// plans) is pinned by test/plan_generator/arm_swap_gate_test.dart.
+// rows (d44), so the minimum pass refuses the curl, and only the swap seats it. The real-engine reach (21 of the 2,304
+// audit plans; the 1,152 at 30 / 45 minutes hold all of them) is pinned by the 2E block of
+// test/plan_generator/weekly_minimum_gate_test.dart.
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:icanbefitter/shared/repositories/plan_engine/models.dart';
@@ -32,12 +33,12 @@ Fx lib({List<String> hold0 = const ['Back'], List<String> hold1 = const ['Back']
   return f;
 }
 
-List<PopulatedDay> week(Fx f, {int custom = 3}) {
+List<PopulatedDay> week(Fx f, {int custom = 3, int hold0Sets = 3, int hold1Sets = 3}) {
   final dA = [
     f.ex('row'),
     if (custom > 0) f.ex('mine', sets: custom, rest: 100, customOrigin: 'user'),
-    f.ex('hold0', logging: 'timed', sets: 3, rest: 30),
-    f.ex('hold1', logging: 'timed', sets: 3, rest: 30),
+    f.ex('hold0', logging: 'timed', sets: hold0Sets, rest: 30),
+    f.ex('hold1', logging: 'timed', sets: hold1Sets, rest: 30),
     f.ex('curlA'),
   ];
   final dB = [f.ex('bench'), f.ex('curlB'), f.ex('row')];
@@ -188,6 +189,214 @@ void main() {
     });
   });
 
+  group('armPairsOf / lostAny (the re-run keep rule, pure)', () {
+    test('armPairsOf counts an arm group at 0 in exactly one variant, either way round', () {
+      expect(SessionSetAllocator.armPairsOf({'Biceps': 3}, {}), 1);
+      expect(SessionSetAllocator.armPairsOf({}, {'Biceps': 3}), 1, reason: 'symmetric');
+      expect(SessionSetAllocator.armPairsOf({'Biceps': 3, 'Triceps': 2}, {}), 2);
+      expect(SessionSetAllocator.armPairsOf({'Biceps': 2}, {'Triceps': 2}), 2);
+      expect(SessionSetAllocator.armPairsOf({}, {}), 0, reason: 'at 0 in both: not a pair');
+      expect(SessionSetAllocator.armPairsOf({'Biceps': 0}, {'Biceps': 2}), 1, reason: 'an explicit 0 is 0');
+      expect(SessionSetAllocator.armPairsOf({'Biceps': 2}, {'Biceps': 1}), 0);
+      expect(SessionSetAllocator.armPairsOf({'Calves': 2, 'Core': 3}, {}), 0, reason: 'arm groups only');
+    });
+
+    test('lostAny: a group the first run credited is at 0 in the re-run, Calves included', () {
+      expect(SessionSetAllocator.lostAny({'Calves': 2}, {}), isTrue);
+      expect(SessionSetAllocator.lostAny({'Calves': 2}, {'Calves': 0}), isTrue);
+      expect(SessionSetAllocator.lostAny({'Calves': 2, 'Back': 3}, {'Calves': 1, 'Back': 3}), isFalse);
+      expect(SessionSetAllocator.lostAny({'Calves': 0}, {}), isFalse, reason: 'credited at 0 is not credited');
+      expect(SessionSetAllocator.lostAny({}, {'Biceps': 2}), isFalse, reason: 'a gain is not a loss');
+    });
+  });
+
+  // Two days, each with an arm slot the clock refuses in R. [victims0] / [victims1] are the muscle lists of each day's
+  // two holds: ['Back'] holds are over-served (the row credits Back); ['Glutes'] / ['Core'] holds are not.
+  (Fx, List<PopulatedDay>) twoDays({
+    List<List<String>> holds0 = const [['Glutes'], ['Core']],
+    List<List<String>> holds1 = const [['Back'], ['Back']],
+    bool compoundArm0 = false,
+  }) {
+    final f = Fx();
+    f.row('row', ['Back']);
+    f.row('bench', ['Chest']);
+    for (var d = 0; d < 2; d++) {
+      final hs = d == 0 ? holds0 : holds1;
+      f.row('h${d}a', hs[0], type: 'isolation', logging: 'timed');
+      f.row('h${d}b', hs[1], type: 'isolation', logging: 'timed');
+    }
+    f.row('curl0', ['Biceps'], type: compoundArm0 ? 'compound' : 'isolation');
+    f.row('curl1', ['Biceps'], type: 'isolation');
+    f.row('curlB', ['Biceps'], type: 'isolation');
+    List<PlannedExercise> dayA(int d) => [
+          f.ex('row'),
+          f.ex('mine', sets: 3, rest: 100, customOrigin: 'user'),
+          f.ex('h${d}a', logging: 'timed', sets: 3, rest: 30),
+          f.ex('h${d}b', logging: 'timed', sets: 3, rest: 30),
+          f.ex('curl$d'),
+        ];
+    return (
+      f,
+      [
+        f.day('hypertrophy', dayA(0), b: [f.ex('bench'), f.ex('curlB'), f.ex('row')]),
+        f.day('hypertrophy', dayA(1), b: [f.ex('bench'), f.ex('row')]),
+      ]
+    );
+  }
+
+  group('which arm slot', () {
+    test('the cheapest candidate whose day has no victim is passed for the next one (fall-through)', () {
+      final (f, days) = twoDays();
+      final on = runArm(f, days, on: true);
+      expect(names(on[0].exercisesA), isNot(contains('curl0')), reason: 'day 0 has no over-served row');
+      expect(names(on[1].exercisesA), contains('curl1'));
+      expect(SessionSetAllocator.debugLastStats!['A']!.minimumSeats[1], [(name: 'curl1', group: 'Biceps')]);
+    });
+
+    test('equal cost: the earlier day takes the swap', () {
+      final (f, days) = twoDays(holds0: const [['Back'], ['Back']]);
+      final on = runArm(f, days, on: true);
+      expect(names(on[0].exercisesA), contains('curl0'));
+      expect(names(on[1].exercisesA), isNot(contains('curl1')));
+    });
+
+    test('the cheaper arm slot goes first, whatever its day', () {
+      // Day 0's arm row is a compound (120 s rest against 75), so day 1's curl is cheaper.
+      final (f, days) = twoDays(holds0: const [['Back'], ['Back']], compoundArm0: true);
+      final on = runArm(f, days, on: true);
+      expect(names(on[1].exercisesA), contains('curl1'));
+      expect(names(on[0].exercisesA), isNot(contains('curl0')));
+    });
+  });
+
+  // The opener fixtures (found by a 4,158-case probe sweep, round 1): day 0's A list in [order]; heavy is a heavy
+  // compound (Back, Hamstrings, 3-5 reps), so the 2A opener over the whole list, refused by the clock at 30 minutes.
+  (Fx, List<PopulatedDay>) openerDays(List<String> order, String arm, int custom) {
+    final f = Fx();
+    f.row('row', ['Back']);
+    f.row('heavy', ['Back', 'Hamstrings'], reps: '3-5');
+    f.row('bench', ['Chest']);
+    f.row('fly', ['Back'], type: 'isolation');
+    f.row('pullover', ['Back'], type: 'isolation');
+    f.row('curl', ['Biceps'], type: 'isolation');
+    f.row('chin', ['Biceps', 'Back'], reps: '3-6');
+    f.row('curlB', ['Biceps'], type: 'isolation');
+    final dA = [
+      for (final n in order)
+        if (n == 'mine') ...[if (custom > 0) f.ex('mine', sets: custom, rest: 100, customOrigin: 'user')]
+        else f.ex(n == 'ARM' ? arm : n),
+    ];
+    return (
+      f,
+      [
+        f.day('hypertrophy', dA, b: [f.ex('bench'), f.ex('curlB'), f.ex('row')]),
+        f.day('hypertrophy', [f.ex('bench'), f.ex('row')], b: [f.ex('bench'), f.ex('row')]),
+      ]
+    );
+  }
+
+  group('the re-run (S8)', () {
+    test('a re-run that is not kept leaves the plan, the stamp and the stats of the first run', () {
+      // Found by the round-1 probe (an always-keep mutant changes it): at 45 minutes with a 9-set custom the first
+      // run falls back to R; the re-run leaves R (allowance world) and keeps the pair (B's chin-up is never seated).
+      final (f, base) = openerDays(const ['fly', 'pullover', 'row', 'mine', 'ARM'], 'curl', 9);
+      final days = [
+        f.day('hypertrophy', base[0].exercisesA,
+            b: [f.ex('bench'), f.ex('pullover'), f.ex('mine', sets: 9, rest: 100, customOrigin: 'user'), f.ex('chin')]),
+        base[1],
+      ];
+      final off = runArm(f, days, on: false, minutes: 45, level: 'beginner');
+      final offSeats = SessionSetAllocator.debugLastStats!['A']!.minimumSeats;
+      expect(SessionSetAllocator.debugLastAllowance, isFalse, reason: 'the first run is R');
+      final on = runArm(f, days, on: true, minutes: 45, level: 'beginner');
+      expect(shape(on), shape(off));
+      expect([for (final d in on) d.allowance], [false, false]);
+      expect(SessionSetAllocator.debugLastAllowance, isFalse, reason: 'restored from the first run');
+      expect(SessionSetAllocator.debugLastStats!['A']!.minimumSeats, offSeats, reason: 'restored from the first run');
+    });
+  });
+
+  group('the opener (d48)', () {
+    test('a 2A opener that pass A refused protects nothing: the lead is the opener of the admitted rows', () {
+      // heavy is the precomputed opener and is not admitted; the day's lead is fly (rank 0), so pullover is a victim.
+      final (f, days) = openerDays(const ['fly', 'heavy', 'row', 'pullover', 'mine', 'ARM'], 'curl', 7);
+      final off = runArm(f, days, on: false);
+      final on = runArm(f, days, on: true);
+      expect(setsOf(off[0]), [('fly', 2), ('pullover', 2), ('mine', 7)]);
+      expect(setsOf(on[0]), [('fly', 2), ('mine', 7), ('curl', 2)]);
+    });
+
+    test('an arm row that would open the day (a compound chin-up over an isolation lead) is not swapped in', () {
+      for (final k in [5, 6]) {
+        final (f, days) = openerDays(const ['fly', 'pullover', 'heavy', 'row', 'mine', 'ARM'], 'chin', k);
+        final off = runArm(f, days, on: false);
+        final on = runArm(f, days, on: true);
+        expect(shape(on), shape(off), reason: 'custom $k');
+        expect(names(on[0].exercisesA), isNot(contains('chin')), reason: 'custom $k');
+      }
+    });
+
+    test('a swapped-out row leaves floorSeats and countForced (the oracle excuses only rows the plan holds)', () {
+      var checked = 0;
+      for (final order in const [
+        ['fly', 'heavy', 'row', 'pullover', 'mine', 'ARM'],
+        ['fly', 'row', 'heavy', 'mine', 'ARM'],
+        ['fly', 'pullover', 'heavy', 'row', 'mine', 'ARM'],
+        ['row', 'fly', 'pullover', 'mine', 'ARM'],
+        ['fly', 'pullover', 'row', 'mine', 'ARM'],
+      ]) {
+        for (final minutes in [30, 45]) {
+          for (final level in ['beginner', 'intermediate', 'advanced']) {
+            for (var k = 0; k <= 10; k++) {
+              final (f, days) = openerDays(order, 'curl', k);
+              final on = runArm(f, days, on: true, minutes: minutes, level: level);
+              final st = SessionSetAllocator.debugLastStats!['A']!;
+              for (var d = 0; d < on.length; d++) {
+                final present = names(on[d].exercisesA).toSet();
+                final why = '$order $minutes $level custom $k day $d';
+                for (final x in st.floorSeats[d] ?? const <FloorSeat>[]) {
+                  expect(present, contains(x.name), reason: '$why floor');
+                }
+                for (final x in st.countForced[d] ?? const <({String name, int sets})>[]) {
+                  expect(present, contains(x.name), reason: '$why forced');
+                }
+              }
+              checked++;
+            }
+          }
+        }
+      }
+      expect(checked, 330);
+    });
+  });
+
+  group('victims, round 1', () {
+    test('a victim that frees too little is restored and the walk takes the next one', () {
+      // hold1 (last, 1 set) is tried first and frees too little time; hold0 (8 sets) is then taken.
+      for (final (k, h0, h1, sets) in const [
+        (3, 8, 1, [('row', 4), ('mine', 3), ('hold1', 1), ('curlA', 3)]),
+        (4, 6, 1, [('row', 3), ('mine', 4), ('hold1', 1), ('curlA', 3)]),
+        (5, 3, 1, [('row', 2), ('mine', 5), ('hold1', 1), ('curlA', 3)]),
+      ]) {
+        final f = lib();
+        final on = runArm(f, week(f, custom: k, hold0Sets: h0, hold1Sets: h1), on: true);
+        expect(setsOf(on[0]), sets, reason: 'custom $k, holds $h0 / $h1');
+      }
+    });
+
+    test('a budgeted row with no budget group (Forearms) is a victim too', () {
+      final f = libB(pullover: const ['Forearms']);
+      final on = runArm(f, weekB(f), on: true);
+      expect(names(on[0].exercisesA), ['fly', 'row', 'mine', 'curlA']);
+    });
+
+    test('a row with no budget group (Forearms) is a victim like an over-served row: it serves no group', () {
+      final f = lib(hold1: const ['Forearms']);
+      final on = runArm(f, week(f), on: true);
+      expect(names(on[0].exercisesA), ['row', 'mine', 'hold0', 'curlA']);
+    });
+  });
+
   group('armFits (the seat check, pure)', () {
     final f = lib();
     // The swap runs only in the allowance world, whose forcing bound is 0.
@@ -320,9 +529,8 @@ void main() {
           for (var d = 0; d < on.length; d++) {
             expect(on[d].exercisesA.length, off[d].exercisesA.length, reason: '$minutes min, custom $k, day $d');
             expect(on[d].exercisesB.length, off[d].exercisesB.length, reason: '$minutes min, custom $k, day $d B');
-            // When the run without the swap fell back to R (the terminal guard) and the run with it did not, the two
-            // are different worlds (measured: 45 minutes, custom 8): only the row count is compared.
-            if (on[0].allowance != off[0].allowance) continue;
+            // S8 keeps a re-run only in the first run's world (round 1 B5), so the two never differ in the stamp.
+            expect(on[d].allowance, off[d].allowance, reason: '$minutes min, custom $k, day $d stamp');
             final added = names(on[d].exercisesA).toSet().difference(names(off[d].exercisesA).toSet());
             for (final n in added) {
               expect(seats[d]?.map((m) => m.name), contains(n), reason: '$minutes min, custom $k, day $d: $n');

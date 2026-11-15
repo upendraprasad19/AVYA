@@ -298,8 +298,9 @@ class SessionSetAllocator {
           armSwap: armSwap);
       final first = run(false);
       // Unit 2E (OI-496, d51): only a plan whose 2C-b allocation leaves an arm group at 0 in one variant while the
-      // other trains it is allocated again with the arm swap; the re-run is kept only when it has fewer such groups
-      // and every group either variant trained is still trained. Otherwise the plan is the 2C-b allocation.
+      // other trains it is allocated again with the arm swap; the re-run is kept only when it stays in the same world
+      // (the allowance stamp: a re-run that falls back to R, or leaves it, is a different plan, round 1 B5), has fewer
+      // such groups and every group either variant trained is still trained. Otherwise the plan is the 2C-b allocation.
       if (!bw || is6Day || ctx.minutes >= 60 || !debugArmSwap) return first;
       final s0 = debugLastStats!;
       final allowance0 = debugLastAllowance;
@@ -307,7 +308,8 @@ class SessionSetAllocator {
       if (pairs0 == 0) return first;
       final second = run(true);
       final s1 = debugLastStats!;
-      if (armPairsOf(s1['A']!.credited, s1['B']!.credited) < pairs0 &&
+      if (debugLastAllowance == allowance0 &&
+          armPairsOf(s1['A']!.credited, s1['B']!.credited) < pairs0 &&
           !lostAny(s0['A']!.credited, s1['A']!.credited) &&
           !lostAny(s0['B']!.credited, s1['B']!.credited)) {
         return second;
@@ -1456,8 +1458,24 @@ class SessionSetAllocator {
         for (final s in cands) {
           final d = s.day;
           final minNames = {for (final m in stats.minimumSeats[d] ?? const <({String name, String group})>[]) m.name};
-          final op = opener[d] ?? openerAmong([for (final o in byDay[d]) if (o.admitted) o]);
+          // The day's lead as `lead[]` computes it below: the opener when admitted, else the opener of the admitted
+          // slots (round 1 A1: a precomputed opener that pass A refused protects nothing).
+          final op = opener[d] != null && opener[d]!.admitted
+              ? opener[d]
+              : openerAmong([for (final o in byDay[d]) if (o.admitted) o]);
+          // d48: the swap never changes the day's opener, neither by removing it nor by seating an arm row that
+          // `openerOf` would rank above it.
+          bool keepsOpener(_Slot? victim) =>
+              op == null ||
+              identical(
+                  openerAmong([
+                    for (final o in byDay[d])
+                      if (o.admitted && !identical(o, victim)) o,
+                    s,
+                  ]),
+                  op);
           final leftBefore = ledger.secondsLeft(d);
+          final spentBefore = ledger.spentSeconds(d);
           bool creditedElsewhere(String x, Object self) {
             for (final o in byDay[d]) {
               if (!identical(o, self) && o.admitted && o.sets > 0 && o.groups.contains(x)) return true;
@@ -1479,14 +1497,17 @@ class SessionSetAllocator {
               final vSets = slot.sets;
               final vSec = seconds(slot, vSets);
               ledger.add(d, slot.groups, -vSets, -vSec);
-              if (armFits(ledger, d, s.groups, g, seconds(s, 2), leftBefore)) {
+              if (keepsOpener(slot) && armFits(ledger, d, s.groups, g, seconds(s, 2), leftBefore)) {
                 slot
                   ..admitted = false
                   ..removed = true
-                  ..sets = 0;
+                  ..sets = 0
+                  ..why = {for (final x in slot.groups) x: _Why.target};
+                _dropSeat(stats, d, slot.exercise.exerciseName);
                 done = true;
               } else {
                 ledger.add(d, slot.groups, vSets, vSec);
+                ledger.resetSpentSeconds(d, spentBefore);
               }
             } else {
               final t = timed[d].where((t) => identical(t.ex, ex)).firstOrNull;
@@ -1494,12 +1515,13 @@ class SessionSetAllocator {
               if (t.groups.any(ctx.focusGroups.contains)) continue;
               if (!t.groups.every((x) => creditedElsewhere(x, ex))) continue;
               ledger.add(d, const {}, 0, -t.cost);
-              if (armFits(ledger, d, s.groups, g, seconds(s, 2), leftBefore)) {
+              if (keepsOpener(null) && armFits(ledger, d, s.groups, g, seconds(s, 2), leftBefore)) {
                 evicted.add(ex);
                 nonBudgeted[d]--;
                 done = true;
               } else {
                 ledger.add(d, const {}, 0, t.cost);
+                ledger.resetSpentSeconds(d, spentBefore);
               }
             }
           }
@@ -1680,6 +1702,13 @@ class SessionSetAllocator {
 
   /// Unit 2E (d51): the groups the arm swap serves.
   static const _armGroups = {'Biceps', 'Triceps'};
+
+  /// Unit 2E (round 1 A5 / B6): a row the arm swap takes out of [day] leaves `floorSeats` and `countForced`, so the
+  /// budget oracle's excuses (read by stats) describe only rows the plan still holds.
+  static void _dropSeat(AllocationStats stats, int day, String name) {
+    stats.floorSeats[day]?.removeWhere((f) => f.name == name);
+    stats.countForced[day]?.removeWhere((f) => f.name == name);
+  }
 
   /// Unit 2E: whether an arm slot crediting [groups] fits [day] at 2 sets ([sec] seconds) for target [g]: every
   /// group's session cap, every other group's weekly top, and the day's time within the ledger's forcing bound or not
