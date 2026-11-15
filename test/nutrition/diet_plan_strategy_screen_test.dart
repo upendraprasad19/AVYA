@@ -532,7 +532,11 @@ void main() {
       await tester.runAsync(() => HiveService.instance.configBox
           .put(DietPlanFlags.disableCuratedKey, true));
       await pumpScreen(tester);
-      expect(lowCarbNames(), hasLength(14), reason: 'precondition');
+      // 19 = the Low carb / Keto only catalog entries (14 + the five Low carb
+      // plan-only foods), every name distinct.
+      expect(lowCarbNames(),
+          hasLength(kDietPlanCatalog.where((e) => e.lowCarbOnly).length),
+          reason: 'precondition');
       final offered = await offeredSwapNames(tester);
       expect(offered, isNotEmpty, reason: 'precondition: some alternatives');
       expect(offered.toSet().intersection(lowCarbNames()), isEmpty);

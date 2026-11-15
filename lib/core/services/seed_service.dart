@@ -215,7 +215,12 @@ class SeedService {
   /// full-fat paneer, chicken thigh, cauliflower, spinach, bhindi,
   /// capsicum), so their `is_everyday` flips false -> true.
   /// Without the bump the swap sheet would treat them as retired.
-  static const int _foodLibraryVersion = 5;
+  ///
+  /// v6 (2026-11-15 diet plan observations, vegan Low carb): 5 rows join the
+  /// catalog as Low carb PLAN only foods (tempeh F1017, edamame F1018,
+  /// avocado F0455, almond butter F0480, chia seeds F0082), so their
+  /// `is_everyday` flips false -> true (same reason as v5).
+  static const int _foodLibraryVersion = 6;
   static const String _foodVersionKey = 'food_library_version';
 
   final HiveService _hive = HiveService.instance;

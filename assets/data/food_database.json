@@ -2120,7 +2120,7 @@
     "meal_fit": [
       "snack"
     ],
-    "is_everyday": false
+    "is_everyday": true
   },
   {
     "id": "F0083",
@@ -11816,7 +11816,7 @@
       "breakfast",
       "snack"
     ],
-    "is_everyday": false
+    "is_everyday": true
   },
   {
     "id": "F0456",
@@ -12443,7 +12443,7 @@
     "meal_fit": [
       "snack"
     ],
-    "is_everyday": false
+    "is_everyday": true
   },
   {
     "id": "F0481",
@@ -26167,7 +26167,7 @@
       "lunch",
       "dinner"
     ],
-    "is_everyday": false
+    "is_everyday": true
   },
   {
     "id": "F1018",
@@ -26193,7 +26193,7 @@
       "lunch",
       "dinner"
     ],
-    "is_everyday": false
+    "is_everyday": true
   },
   {
     "id": "F1019",
