@@ -8,8 +8,9 @@
 //   - under 18, or no date of birth the app can read: no switch (a hint says
 //     where to add the date when it is merely unreadable);
 //   - adult, free: the switch is shown and a tap opens the paywall;
-//   - adult, PRO: the switch writes `diet_supplements`; the card shows below
-//     it only while Supplements are ACTIVE (the one rule);
+//   - adult, PRO: the switch writes `diet_supplements`; the card
+//     ([DietSupplementCardSection], under the meals, collapsed to one line)
+//     shows only while Supplements are ACTIVE (the one rule);
 //   - a stored "on" that PRO lapsed shows the switch ON (the stored choice)
 //     plus a paused hint; turning it off is always allowed, turning it on
 //     again is a PRO action.
@@ -83,9 +84,6 @@ class _DietSupplementsSectionState
     final isPro = ref.watch(subscriptionInfoProvider.select((s) => s.isPro));
     final stored = ref.watch(dietSupplementsInputsProvider
         .select((i) => i.switchValue == true));
-    final active = ref.watch(dietSupplementsActiveProvider);
-    final foodType =
-        ref.watch(userProfileProvider.select((p) => foodTypeOfProfile(p)));
     final paused = stored && !isPro;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -136,11 +134,94 @@ class _DietSupplementsSectionState
           Text(kDietSupplementsPausedHint,
               key: const ValueKey('diet_supplements_paused_hint'), style: dim),
         ],
-        if (active) ...[
-          const SizedBox(height: 12),
-          DietSupplementCard(foodType: foodType),
-        ],
       ],
+    );
+  }
+}
+
+/// The supplement card under the meals: one line (the title and the
+/// supplements' names) that opens the full card on tap. Nothing at all unless
+/// Supplements are active (the same `dietSupplementsActiveProvider` as the
+/// shake), so a minor, a free user or a lapsed one never sees it.
+class DietSupplementCardSection extends ConsumerStatefulWidget {
+  const DietSupplementCardSection({super.key});
+
+  @override
+  ConsumerState<DietSupplementCardSection> createState() =>
+      _DietSupplementCardSectionState();
+}
+
+class _DietSupplementCardSectionState
+    extends ConsumerState<DietSupplementCardSection> {
+  bool _open = false;
+
+  @override
+  Widget build(BuildContext context) {
+    if (!ref.watch(dietSupplementsActiveProvider)) {
+      return const SizedBox.shrink();
+    }
+    final foodType =
+        ref.watch(userProfileProvider.select((p) => foodTypeOfProfile(p)));
+    final dim =
+        AppTypography.body.copyWith(fontSize: 12, color: AppColors.textDim);
+    final names = [for (final r in supplementCardFor(foodType)) r.name];
+    return Padding(
+      padding: const EdgeInsets.only(top: 4),
+      child: _open
+          ? Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _header(names, dim),
+                const SizedBox(height: 8),
+                DietSupplementCard(foodType: foodType),
+              ],
+            )
+          : WardCard(
+              key: const ValueKey('diet_supplement_card_collapsed'),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              child: _header(names, dim),
+            ),
+    );
+  }
+
+  Widget _header(List<String> names, TextStyle dim) {
+    return Semantics(
+      button: true,
+      expanded: _open,
+      label: 'Your supplements',
+      excludeSemantics: true,
+      onTap: () => setState(() => _open = !_open),
+      child: InkWell(
+        key: const ValueKey('diet_supplement_card_toggle'),
+        onTap: () => setState(() => _open = !_open),
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(minHeight: 44),
+          child: Row(
+            children: [
+              Expanded(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('Your supplements',
+                        style: AppTypography.body.copyWith(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w700,
+                            color: AppColors.textPrimary)),
+                    if (!_open)
+                      Text(names.join(' · '),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: dim),
+                  ],
+                ),
+              ),
+              Icon(_open ? Icons.expand_less : Icons.expand_more,
+                  size: 22, color: AppColors.textDim),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }

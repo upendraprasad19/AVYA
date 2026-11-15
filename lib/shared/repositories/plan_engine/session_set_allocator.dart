@@ -64,7 +64,8 @@ class AllocationStats {
   Map<String, int> get credited => {...weekly, for (final g in holdGroups) if (!weekly.containsKey(g)) g: 1};
 
   /// Unit 2C-b (S3, founder d35 / d38): per day, each slot the weekly minimum seated at 2 sets and the group it was
-  /// seated for. Never in [countForced]. Variant B inherits A's entries for the days it copies.
+  /// seated for; Unit 2E: also the arm swap's seat (its victim removed from the day). Never in [countForced]. Variant B
+  /// inherits A's entries for the days it copies.
   final Map<int, List<({String name, String group})>> minimumSeats = {};
 
   /// Unit 2C-b (the walk, d35 / d48): per day, each target slot the walk moved ahead of its selector rank and the group
@@ -292,13 +293,31 @@ class SessionSetAllocator {
   }) {
     final floorOn = dayFloor ?? PlanEngineFlags.dayFloorEnabled;
     if (leadFirst) {
-      return _allocateLeadFirst(
-          days: days,
-          ctx: ctx,
-          rowsByName: rowsByName,
-          is6Day: is6Day,
-          dayFloor: floorOn,
-          balancedWeek: floorOn && (balancedWeek ?? PlanEngineFlags.balancedWeekEnabled));
+      final bw = floorOn && (balancedWeek ?? PlanEngineFlags.balancedWeekEnabled);
+      List<PopulatedDay> run(bool armSwap) => _allocateLeadFirst(
+          days: days, ctx: ctx, rowsByName: rowsByName, is6Day: is6Day, dayFloor: floorOn, balancedWeek: bw,
+          armSwap: armSwap);
+      final first = run(false);
+      // Unit 2E (OI-496, d51): only a plan whose 2C-b allocation leaves an arm group at 0 in one variant while the
+      // other trains it is allocated again with the arm swap; the re-run is kept only when it stays in the same world
+      // (the allowance stamp: a re-run that falls back to R, or leaves it, is a different plan, round 1 B5), has fewer
+      // such groups and every group either variant trained is still trained. Otherwise the plan is the 2C-b allocation.
+      if (!bw || is6Day || ctx.minutes >= 60 || !debugArmSwap) return first;
+      final s0 = debugLastStats!;
+      final allowance0 = debugLastAllowance;
+      final pairs0 = armPairsOf(s0['A']!.credited, s0['B']!.credited);
+      if (pairs0 == 0) return first;
+      final second = run(true);
+      final s1 = debugLastStats!;
+      if (debugLastAllowance == allowance0 &&
+          armPairsOf(s1['A']!.credited, s1['B']!.credited) < pairs0 &&
+          !lostAny(s0['A']!.credited, s1['A']!.credited) &&
+          !lostAny(s0['B']!.credited, s1['B']!.credited)) {
+        return second;
+      }
+      debugLastStats = s0;
+      debugLastAllowance = allowance0;
+      return first;
     }
     final stats = <String, AllocationStats>{};
     final lists = [for (final d in days) d.exercisesA];
@@ -366,6 +385,7 @@ class SessionSetAllocator {
     required bool is6Day,
     required bool dayFloor,
     required bool balancedWeek,
+    bool armSwap = false,
   }) {
     // Unit 2C-b (S4): true when the returned days were sized with the under-60 allowance; read by `_weekTwoGains`.
     var allowanceUsed = false;
@@ -446,7 +466,13 @@ class SessionSetAllocator {
           final refA = under60 ? aR.evicted : null;
           final refB = under60 ? bR.evicted : null;
           _Alloc runA(AllocationStats st, Set<String> minGroups) => _variant(listsA, days, ctx, rowsByName, null, st,
-              world: wA, dayFloor: true, allowance: under60, minGroups: minGroups, rowCap: capA, refEvicted: refA);
+              world: wA,
+              dayFloor: true,
+              allowance: under60,
+              minGroups: minGroups,
+              rowCap: capA,
+              refEvicted: refA,
+              armSwap: armSwap);
           _Alloc runB(_Alloc aNow, AllocationStats sANow, AllocationStats st, Set<String> minGroups) =>
               _variant(listsB, days, ctx, rowsByName, copyOf(aNow.byDay), st,
                   copyFrom: sANow,
@@ -456,7 +482,8 @@ class SessionSetAllocator {
                   allowance: under60,
                   minGroups: minGroups,
                   rowCap: capB,
-                  refEvicted: refB);
+                  refEvicted: refB,
+                  armSwap: armSwap);
 
           // Step 1: the allowance re-run, A then B copying the new A.
           final sA1 = AllocationStats()..leadWorld = wA.name;
@@ -512,8 +539,16 @@ class SessionSetAllocator {
             }
             final lA = lost(preA, stats['A']!.credited, tA);
             final lB = lost(preB, stats['B']!.credited, tB);
-            if (lA.isEmpty && lB.isEmpty) break;
-            tA = {...tA, ...lA};
+            // Unit 2E (d51): under 60 minutes, an arm group B now trains and A does not is a target of A too (A's d35
+            // targets were read against step 1's B, before B's own targets ran).
+            final armA = under60 && armSwap
+                ? {
+                    for (final g in need(stats['A']!.credited, stats['B']!.credited))
+                      if (_armGroups.contains(g) && !tA.contains(g)) g,
+                  }
+                : const <String>{};
+            if (lA.isEmpty && lB.isEmpty && armA.isEmpty) break;
+            tA = {...tA, ...lA, ...armA};
             tB = {...tB, ...lB};
           }
 
@@ -874,6 +909,7 @@ class SessionSetAllocator {
     bool allowance = false,
     List<int>? rowCap,
     Map<int, Set<int>>? refEvicted,
+    bool armSwap = false,
   }) {
     final n = days.length;
     final ledger = BudgetLedger(ctx, n, allowance: allowance);
@@ -1405,6 +1441,113 @@ class SessionSetAllocator {
       (stats.minimumSeats[bd] ??= []).add((name: best.exercise.exerciseName, group: g));
     }
 
+    // Unit 2E (OI-496, founder d51): under 60 minutes, an arm target (Biceps / Triceps) still at 0 takes a slot by
+    // swapping out the day's last over-served row: same row count, the arm row at 2 sets.
+    if (allowance && armSwap) {
+      for (final g in targets) {
+        if (!_armGroups.contains(g)) continue;
+        if (ledger.week(g) > 0 || keptHoldGroups.contains(g)) continue;
+        final cands = <_Slot>[
+          for (final d in allocateDays)
+            for (final s in byDay[d])
+              if (!s.admitted && !s.reserveBlocked && s.groups.contains(g)) s,
+        ]..sort((x, y) {
+            final c = seconds(x, 2).compareTo(seconds(y, 2));
+            return c != 0 ? c : x.day.compareTo(y.day);
+          });
+        var done = false;
+        for (final s in cands) {
+          final d = s.day;
+          // Never a victim: a minimum seat, a day-floor seat or a count-forced row. Each was seated past a bound (a
+          // group's floor, the 3-row floor, the count floor) that the oracle excuses by its stats entry; taking one out
+          // would leave the day past that bound with its excuse gone (round 2 A2).
+          final minNames = {
+            for (final m in stats.minimumSeats[d] ?? const <({String name, String group})>[]) m.name,
+            for (final f in stats.floorSeats[d] ?? const <FloorSeat>[]) f.name,
+            for (final c in stats.countForced[d] ?? const <({String name, int sets})>[]) c.name,
+          };
+          // The day's lead as `lead[]` computes it below: the opener when admitted, else the opener of the admitted
+          // slots (round 1 A1: a precomputed opener that pass A refused protects nothing).
+          final op = opener[d] != null && opener[d]!.admitted
+              ? opener[d]
+              : openerAmong([for (final o in byDay[d]) if (o.admitted) o]);
+          // d48: after the swap the day opens with its lead `op` or with its 2A opener `opener[d]` (an arm slot that IS
+          // the 2A opener pass A refused: seating it restores the designed lead, CI's seeded sweep); never with any
+          // other row, neither by removing the lead nor by seating an arm row `openerOf` ranks above it.
+          bool keepsOpener(_Slot? victim) {
+            if (op == null) return true;
+            // In the day's own order, the arm slot at its place: `openerOf` keeps the first of tied rows, as the final
+            // rows will (round 2 A1: appending it last read a tie as the old opener kept).
+            final after = openerAmong([
+              for (final o in byDay[d])
+                if ((o.admitted && !identical(o, victim)) || identical(o, s)) o,
+            ]);
+            return identical(after, op) || (opener[d] != null && identical(after, opener[d]));
+          }
+          final leftBefore = ledger.secondsLeft(d);
+          final spentBefore = ledger.spentSeconds(d);
+          bool creditedElsewhere(String x, Object self) {
+            for (final o in byDay[d]) {
+              if (!identical(o, self) && o.admitted && o.sets > 0 && o.groups.contains(x)) return true;
+            }
+            for (final t in timed[d]) {
+              if (!identical(t.ex, self) && !evicted.contains(t.ex) && t.groups.contains(x)) return true;
+            }
+            return false;
+          }
+
+          // Victims, back to front in the day's list.
+          for (var i = entries[d].length - 1; i >= 0 && !done; i--) {
+            final (ex, slot) = entries[d][i];
+            if (slot != null) {
+              if (!slot.admitted || slot.rank == 0 || identical(slot, op)) continue;
+              if (minNames.contains(slot.exercise.exerciseName)) continue;
+              if (slot.groups.any(ctx.focusGroups.contains)) continue;
+              if (!slot.groups.every((x) => creditedElsewhere(x, slot))) continue;
+              final vSets = slot.sets;
+              final vSec = seconds(slot, vSets);
+              ledger.add(d, slot.groups, -vSets, -vSec);
+              if (keepsOpener(slot) && armFits(ledger, d, s.groups, g, seconds(s, 2), leftBefore)) {
+                slot
+                  ..admitted = false
+                  ..removed = true
+                  ..sets = 0
+                  ..why = {for (final x in slot.groups) x: _Why.target};
+                done = true;
+              } else {
+                ledger.add(d, slot.groups, vSets, vSec);
+                ledger.resetSpentSeconds(d, spentBefore);
+              }
+            } else {
+              final t = timed[d].where((t) => identical(t.ex, ex)).firstOrNull;
+              if (t == null || evicted.contains(ex)) continue;
+              if (t.groups.any(ctx.focusGroups.contains)) continue;
+              if (!t.groups.every((x) => creditedElsewhere(x, ex))) continue;
+              ledger.add(d, const {}, 0, -t.cost);
+              if (keepsOpener(null) && armFits(ledger, d, s.groups, g, seconds(s, 2), leftBefore)) {
+                evicted.add(ex);
+                nonBudgeted[d]--;
+                done = true;
+              } else {
+                ledger.add(d, const {}, 0, t.cost);
+                ledger.resetSpentSeconds(d, spentBefore);
+              }
+            }
+          }
+          if (done) {
+            s
+              ..sets = 2
+              ..admitted = true
+              ..removed = false
+              ..why = const {};
+            ledger.add(d, s.groups, 2, seconds(s, 2));
+            (stats.minimumSeats[d] ??= []).add((name: s.exercise.exerciseName, group: g));
+            break;
+          }
+        }
+      }
+    }
+
     // The count verdict is final here (passes B, C and D add no row), and it is read BEFORE the grow
     // passes spend weekly top, so a day short only because of the forcing bound still says `clock`
     // (B-pass P3-1).
@@ -1548,6 +1691,38 @@ class SessionSetAllocator {
     return (out: out, byDay: byDay, evicted: ev);
   }
 
+
+  /// Unit 2E (d51): a TEST seam, not a kill switch (d37: 2E rides `disable_balanced_week`). False skips the arm
+  /// re-run, so a test can compare a plan with and without it. Never set in lib/.
+  @visibleForTesting
+  static bool debugArmSwap = true;
+
+  /// Unit 2E (d51): how many arm groups one variant leaves at 0 while the other credits them.
+  @visibleForTesting
+  static int armPairsOf(Map<String, int> a, Map<String, int> b) => [
+        for (final g in _armGroups)
+          if (((a[g] ?? 0) == 0) != ((b[g] ?? 0) == 0)) g,
+      ].length;
+
+  /// Unit 2E: whether a group [before] credits is at 0 in [after].
+  @visibleForTesting
+  static bool lostAny(Map<String, int> before, Map<String, int> after) =>
+      before.entries.any((e) => e.value > 0 && (after[e.key] ?? 0) == 0);
+
+  /// Unit 2E (d51): the groups the arm swap serves.
+  static const _armGroups = {'Biceps', 'Triceps'};
+
+  /// Unit 2E: whether an arm slot crediting [groups] fits [day] at 2 sets ([sec] seconds) for target [g]: every
+  /// group's session cap, every other group's weekly top, and the day's time within the ledger's forcing bound or not
+  /// past [leftBefore] (the seconds left before the swap began). Pure.
+  @visibleForTesting
+  static bool armFits(BudgetLedger ledger, int day, Set<String> groups, String g, double sec, double leftBefore) {
+    if (groups.any((x) => ledger.session(day, x) + 2 > ledger.cap(x))) return false;
+    if (groups.any((x) => x != g && ledger.week(x) + 2 > ledger.weeklyTop(x))) return false;
+    // Within the forcing bound, or no longer than the day was before the swap (d51: same count, same time).
+    final bound = -ledger.forcingBound < leftBefore ? -ledger.forcingBound : leftBefore;
+    return ledger.secondsLeft(day) - sec >= bound - 1e-6;
+  }
 
   // ── Why a grant was refused ──────────────────────────────────────────────
 
