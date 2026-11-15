@@ -28,6 +28,7 @@ import 'package:icanbefitter/core/services/nutrition_read_service.dart';
 import 'package:icanbefitter/core/services/subscription_service.dart';
 import 'package:icanbefitter/core/services/rank_ladder_data.dart';
 import 'package:icanbefitter/core/services/rank_service.dart';
+import 'package:icanbefitter/core/utils/diet_supplements_rule.dart';
 import 'package:icanbefitter/core/services/workout_schedule_read_service.dart';
 import 'package:icanbefitter/core/services/workout_read_service.dart';
 import 'package:icanbefitter/core/services/workout_schedule_service.dart';
@@ -52,6 +53,7 @@ import 'package:icanbefitter/core/constants/diet_strategies.dart';
 import 'package:icanbefitter/core/constants/food_types.dart';
 import 'package:icanbefitter/core/utils/effective_macro_targets.dart';
 import 'package:icanbefitter/features/nutrition/services/diet_strategy_flags.dart';
+import 'package:icanbefitter/features/nutrition/services/diet_supplements_flags.dart';
 import 'package:icanbefitter/shared/repositories/plan_engine/training_history_analyzer.dart';
 
 /// Builder for the AI Coach user_daily_snapshot context map.
@@ -160,6 +162,17 @@ class AiSnapshotBuilder {
           'diet_strategy': dietStrategyTargets.strategy.storageKey,
           'diet_strategy_label': dietStrategyTargets.strategy.label,
         },
+        // Diet plan Unit 4a: present (true) only while Supplements are ACTIVE
+        // (flag, PRO, switch on, adult), so the coach manual's SECTION 5
+        // passage applies only then. Absent otherwise: no new key for anyone
+        // who did not opt in.
+        if (dietSupplementsActive(
+          profile: profile,
+          pro: SubscriptionService.instance.proStateSnapshot(),
+          enabled: DietSupplementsFlags.enabled,
+          now: DateTime.now(),
+        ))
+          'diet_supplements': true,
         'injuries': profile['injuries'] ?? '',
         'bmr': profile['bmr'] ?? 0,
         'tdee': profile['tdee'] ?? 0,

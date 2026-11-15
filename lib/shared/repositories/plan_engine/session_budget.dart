@@ -643,6 +643,11 @@ class BudgetLedger {
   /// Seconds left on [day] after everything [add]ed so far.
   double secondsLeft(int day) => _dayBudgetSeconds - _spentSeconds[day];
 
+  /// The seconds spent on [day] so far, and an exact reset to a value read from it: a trial that subtracts and re-adds
+  /// a fractional cost can leave a 1e-13 residue that flips a later strict [fits] (Unit 2E, round 1 A7).
+  double spentSeconds(int day) => _spentSeconds[day];
+  void resetSpentSeconds(int day, double spent) => _spentSeconds[day] = spent;
+
   /// Whether [addSets] more sets (costing [addSeconds]) fit on [day] for every
   /// one of [groups]: under each group's session cap and weekly top, and within
   /// the day's remaining time. An empty [groups] is checked against time only.

@@ -6,6 +6,7 @@ import 'package:share_plus/share_plus.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:icanbefitter/core/constants/diet_strategies.dart';
+import 'package:icanbefitter/core/constants/diet_supplement_doses.dart';
 import 'package:icanbefitter/core/constants/food_types.dart';
 import 'package:icanbefitter/core/services/error_telemetry.dart';
 import 'package:icanbefitter/core/services/sync_service.dart';
@@ -18,15 +19,21 @@ import 'package:icanbefitter/shared/repositories/user_repository.dart';
 import 'package:icanbefitter/shared/widgets/food_type_chips.dart';
 import '../providers/nutrition_provider.dart';
 import '../providers/diet_plan_provider.dart';
+import '../providers/diet_supplements_active_provider.dart';
 import '../services/curated_diet_plan_generator.dart';
 import '../services/diet_plan_flags.dart';
 import '../services/diet_plan_generator.dart';
 import '../services/diet_plan_pdf.dart';
+import '../services/diet_plan_shake.dart';
+import '../services/diet_plan_supplements_state.dart';
 import '../services/diet_plan_swap.dart';
 import '../services/diet_strategy_flags.dart';
+import '../services/diet_supplements_flags.dart';
 import '../services/diet_plan_strategy_state.dart';
+import '../widgets/diet_plan_macro_cards.dart';
 import '../widgets/diet_plan_swap_sheet.dart';
 import '../widgets/diet_strategy_section.dart';
+import '../widgets/diet_supplements_section.dart';
 
 part 'diet_plan_screen_models.dart';
 
@@ -70,6 +77,8 @@ class _DietPlanScreenState extends ConsumerState<DietPlanScreen> {
   DietStrategy _requestedStrategy = DietStrategy.balanced;
   DietStrategy _planStrategy = DietStrategy.balanced;
   int _planEpoch = 0;
+  // Unit 4a: whether the shown plan was built with Supplements active.
+  bool _planSupplements = false;
 
   @override
   void initState() {
@@ -83,6 +92,10 @@ class _DietPlanScreenState extends ConsumerState<DietPlanScreen> {
           dietStrategyOfTargets(ref.read(macroTargetsProvider)), _foodType);
       ref.listenManual(macroTargetsProvider.select(dietStrategyOfTargets),
           (_, next) => _onEffectiveStrategy(next));
+    }
+    if (DietSupplementsFlags.enabled) {
+      ref.listenManual(dietSupplementsActiveProvider,
+          (_, next) => _onSupplementsActive(next));
     }
     // Defer plan generation to after build so ref.read is available.
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -100,6 +113,50 @@ class _DietPlanScreenState extends ConsumerState<DietPlanScreen> {
     _generatePlan();
   }
 
+  /// A change of the Supplements state (the switch, a PRO lapse or renewal,
+  /// a date of birth edit): re-run the saved-plan check and generate, once.
+  void _onSupplementsActive(bool active) {
+    if (!dietPlanNeedsRegenerationForSupplements(
+        planEpoch: _planEpoch, planActive: _planSupplements, active: active)) {
+      return;
+    }
+    _checkedSaved = false;
+    _regenerations = 0;
+    _generatePlan();
+  }
+
+  /// Set while a heal for this state is pending, so one stale build asks for
+  /// one regeneration, never a loop.
+  bool? _healedFor;
+
+  /// The plan on screen must be the one built under the Supplements state the
+  /// switch and the card show. The listener in initState normally
+  /// regenerates on a change; this catches a change it did not deliver
+  /// (founder, 2026-11-15: the card showed but the plan had no shake until
+  /// Regenerate; the cause was not reproduced). The event says how often it
+  /// happens. Idempotent: `dietPlanNeedsRegenerationForSupplements` decides.
+  void _healSupplementsState() {
+    if (!DietSupplementsFlags.enabled) return;
+    final active = ref.watch(dietSupplementsActiveProvider);
+    if (_planEpoch == 0 || _planSupplements == active) {
+      _healedFor = null;
+      return;
+    }
+    if (_healedFor == active) return;
+    _healedFor = active;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      unawaited(ErrorTelemetry.logEvent('diet_supplements_plan_healed',
+          message: 'active=$active planBuiltActive=$_planSupplements'));
+      _onSupplementsActive(ref.read(dietSupplementsActiveProvider));
+    });
+  }
+
+  /// The Supplements state this build of the plan must follow (false with
+  /// the kill switch off).
+  bool _supplementsActive() =>
+      DietSupplementsFlags.enabled && ref.read(dietSupplementsActiveProvider);
+
   void _generatePlan() {
     // Cache diet preference for the swap filter on BOTH paths (fresh +
     // saved-plan load) — B-pass finding 3: a vegan user loading a saved
@@ -116,7 +173,8 @@ class _DietPlanScreenState extends ConsumerState<DietPlanScreen> {
       if (savedPlan != null) {
         if (savedPlanMatchesFoodType(savedPlan, _foodType) &&
             (!DietStrategyFlags.enabled ||
-                savedPlanMatchesStrategy(savedPlan, _currentPlanStrategy()))) {
+                savedPlanMatchesStrategy(savedPlan, _currentPlanStrategy())) &&
+            savedPlanMatchesSupplements(savedPlan, _supplementsActive())) {
           _loadSavedPlan(savedPlan);
           return;
         }
@@ -239,8 +297,20 @@ class _DietPlanScreenState extends ConsumerState<DietPlanScreen> {
         : (meals: DietPlanGenerator.instance.generate(inputs),
             builtFor: DietStrategy.balanced);
 
+    // Unit 4a: one scoop of the shake in the evening slot when Supplements
+    // are active and the day falls short (diet_plan_shake.dart).
+    final withSupplements = _supplementsActive();
+    final meals = withSupplements
+        ? addProteinShake(
+            meals: built.meals,
+            proteinTarget: proteinTarget,
+            calorieTarget: calorieTarget,
+            row: FoodRepository.instance.getById(shakeFoodIdFor(_foodType)))
+        : built.meals;
+
     debugDietPlanGenerations++;
-    _mealPlans = built.meals.map(_servicePlanToScreenPlan).toList();
+    _mealPlans = meals.map(_servicePlanToScreenPlan).toList();
+    _planSupplements = withSupplements;
     _requestedStrategy = request.strategy;
     _planStrategy = built.builtFor;
     _planEpoch++;
@@ -273,6 +343,7 @@ class _DietPlanScreenState extends ConsumerState<DietPlanScreen> {
   void _swapItem(int mealIndex, int itemIndex) {
     final meal = _mealPlans[mealIndex];
     final item = meal.items[itemIndex];
+    if (isSupplementShake(item.foodId)) return;
     // Diet plan Unit 1: catalog-only alternatives (diet_plan_swap.dart). The
     // same diet-preference rule as generation applies, UPF rows are never
     // offered, and nothing already in the plan or over its family cap is.
@@ -336,6 +407,9 @@ class _DietPlanScreenState extends ConsumerState<DietPlanScreen> {
       // Unit 2a: the food type the plan was built for (a plan of another
       // type is not loaded or used for hints, savedPlanMatchesFoodType).
       'food_type': _foodType.storageKey,
+      // Unit 4a: stamped only when the plan was built with Supplements
+      // active (savedPlanMatchesSupplements reads it).
+      if (_planSupplements) 'diet_supplements': true,
       // Stamped only with the flag on: the strategy the plan was BUILT for
       // (Unit 3b §3.6; savedPlanMatchesStrategy reads it).
       if (DietStrategyFlags.enabled) 'diet_strategy': _planStrategy.storageKey,
@@ -426,6 +500,8 @@ class _DietPlanScreenState extends ConsumerState<DietPlanScreen> {
         ? dietStrategyOf(planData['diet_strategy'])
         : DietStrategy.balanced;
     _requestedStrategy = _currentPlanStrategy();
+    _planSupplements =
+        DietSupplementsFlags.enabled && planData['diet_supplements'] == true;
     _planEpoch++;
     if (mounted) setState(() => _saved = true);
   }
@@ -479,6 +555,7 @@ class _DietPlanScreenState extends ConsumerState<DietPlanScreen> {
       fatTarget: fatTarget,
       fiberTarget: fiberTarget,
       now: DateTime.now(),
+      supplements: _planSupplements ? supplementCardFor(_foodType) : null,
     );
     await Share.shareXFiles(
       [XFile.fromData(bytes, name: 'icanbefitter_diet_plan.pdf', mimeType: 'application/pdf')],
@@ -504,6 +581,7 @@ class _DietPlanScreenState extends ConsumerState<DietPlanScreen> {
   @override
   Widget build(BuildContext context) {
     final targets = ref.watch(macroTargetsProvider);
+    _healSupplementsState();
 
     return Scaffold(
       backgroundColor: AppColors.bg,
@@ -569,7 +647,7 @@ class _DietPlanScreenState extends ConsumerState<DietPlanScreen> {
               child: ListView(
                 padding: const EdgeInsets.all(AppSpacing.screenPadding),
                 children: [
-                  _buildTdeeCard(targets),
+                  DietPlanTdeeCard(targets: targets),
                   const SizedBox(height: AppSpacing.sectionGap),
                   Text(
                     'Food type',
@@ -578,6 +656,7 @@ class _DietPlanScreenState extends ConsumerState<DietPlanScreen> {
                   ),
                   const SizedBox(height: 8),
                   FoodTypeChips(
+                    scrollable: true,
                     value: _foodType,
                     enabled: !_changingFoodType,
                     onChanged: _changeFoodType,
@@ -586,8 +665,12 @@ class _DietPlanScreenState extends ConsumerState<DietPlanScreen> {
                     const SizedBox(height: AppSpacing.sectionGap),
                     const DietStrategySection(),
                   ],
+                  if (DietSupplementsFlags.enabled) ...[
+                    const SizedBox(height: AppSpacing.sectionGap),
+                    const DietSupplementsSection(),
+                  ],
                   const SizedBox(height: AppSpacing.sectionGap),
-                  _buildMacroTargets(targets),
+                  DietPlanMacroTargetsCard(targets: targets),
                   if (_planNote(targets) case final note?) ...[
                     const SizedBox(height: 8),
                     Text(note,
@@ -603,102 +686,13 @@ class _DietPlanScreenState extends ConsumerState<DietPlanScreen> {
                       child: _buildMealCard(entry.key, entry.value),
                     );
                   }),
+                  // The daily supplement card sits under the meals, collapsed
+                  // to one line (the switch stays with the other settings).
+                  if (DietSupplementsFlags.enabled) const DietSupplementCardSection(),
                   const SizedBox(height: 24),
                 ],
               ),
             ),
-    );
-  }
-
-  Widget _buildTdeeCard(Map<String, double> targets) {
-    return Container(
-      padding: const EdgeInsets.all(AppSpacing.cardPadding),
-      decoration: BoxDecoration(
-        color: AppColors.card,
-        borderRadius: BorderRadius.circular(AppRadius.cardM),
-        border:
-            Border.all(color: AppColors.accent.withValues(alpha: 0.2)),
-      ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceAround,
-        children: [
-          _statColumn('BMR', '${targets['bmr']?.round() ?? 0}', 'kcal'),
-          Container(width: 1, height: 40, color: AppColors.border),
-          _statColumn('TDEE', '${targets['tdee']?.round() ?? 0}', 'kcal'),
-          Container(width: 1, height: 40, color: AppColors.border),
-          _statColumn(
-              'TARGET', '${targets['calories']?.round() ?? 0}', 'kcal'),
-        ],
-      ),
-    );
-  }
-
-  Widget _statColumn(String label, String value, String unit) {
-    return Column(
-      children: [
-        Text(
-          label,
-          style: AppTypography.monoXs.copyWith(fontSize: 10, fontWeight: FontWeight.w700, color: AppColors.textDim, letterSpacing: 1.2),
-        ),
-        const SizedBox(height: 4),
-        Text(
-          value,
-          style: AppTypography.body.copyWith(fontSize: 22, fontWeight: FontWeight.w900, color: AppColors.textPrimary),
-        ),
-        Text(
-          unit,
-          style: AppTypography.monoXs.copyWith(fontSize: 10, fontWeight: FontWeight.w400, color: AppColors.textDim),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildMacroTargets(Map<String, double> targets) {
-    return Container(
-      padding: const EdgeInsets.all(AppSpacing.cardPadding),
-      decoration: BoxDecoration(
-        color: AppColors.card,
-        borderRadius: BorderRadius.circular(AppRadius.cardM),
-        border: Border.all(color: AppColors.border),
-      ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceAround,
-        children: [
-          _macroCircle(
-              'Protein', '${targets['protein']?.round() ?? 0}g', AppColors.accent),
-          _macroCircle(
-              'Carbs', '${targets['carbs']?.round() ?? 0}g', AppColors.green),
-          _macroCircle(
-              'Fat', '${targets['fat']?.round() ?? 0}g', AppColors.purple),
-        ],
-      ),
-    );
-  }
-
-  Widget _macroCircle(String label, String value, Color color) {
-    return Column(
-      children: [
-        Container(
-          width: 60,
-          height: 60,
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            color: color.withValues(alpha: 0.08),
-            border: Border.all(color: color.withValues(alpha: 0.3)),
-          ),
-          child: Center(
-            child: Text(
-              value,
-              style: AppTypography.body.copyWith(fontWeight: FontWeight.w900, color: color),
-            ),
-          ),
-        ),
-        const SizedBox(height: 6),
-        Text(
-          label,
-          style: AppTypography.bodySm.copyWith(fontSize: 11, fontWeight: FontWeight.w700, color: AppColors.textDim),
-        ),
-      ],
     );
   }
 
@@ -763,24 +757,28 @@ class _DietPlanScreenState extends ConsumerState<DietPlanScreen> {
                       '${item.calories} kcal',
                       style: AppTypography.bodySm.copyWith(fontSize: 11, fontWeight: FontWeight.w700, color: AppColors.warn),
                     ),
-                    const SizedBox(width: 6),
-                    GestureDetector(
-                      onTap: () => _swapItem(mealIndex, entry.key),
-                      child: Container(
-                        width: 24,
-                        height: 24,
-                        decoration: BoxDecoration(
-                          color: AppColors.input,
-                          borderRadius: BorderRadius.circular(6),
-                          border: Border.all(color: AppColors.border),
-                        ),
-                        child: const Icon(
-                          Icons.swap_horiz,
-                          size: 12,
-                          color: AppColors.accent,
+                    // Unit 4a: the protein shake has no alternatives (it is
+                    // not a catalog food), so it has no swap icon.
+                    if (!isSupplementShake(item.foodId)) ...[
+                      const SizedBox(width: 6),
+                      GestureDetector(
+                        onTap: () => _swapItem(mealIndex, entry.key),
+                        child: Container(
+                          width: 24,
+                          height: 24,
+                          decoration: BoxDecoration(
+                            color: AppColors.input,
+                            borderRadius: BorderRadius.circular(6),
+                            border: Border.all(color: AppColors.border),
+                          ),
+                          child: const Icon(
+                            Icons.swap_horiz,
+                            size: 12,
+                            color: AppColors.accent,
+                          ),
                         ),
                       ),
-                    ),
+                    ],
                   ],
                 ),
               );

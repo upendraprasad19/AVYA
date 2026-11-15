@@ -9,7 +9,10 @@ import 'package:icanbefitter/shared/repositories/user_repository.dart';
 
 import '../services/diet_plan_catalog.dart';
 import '../services/diet_plan_generator.dart';
+import '../services/diet_plan_supplements_state.dart';
 import '../services/diet_strategy_flags.dart';
+import '../services/diet_supplements_flags.dart';
+import 'diet_supplements_active_provider.dart';
 import 'nutrition_provider.dart';
 
 /// Whether a saved diet plan was built for [current], the strategy the Diet
@@ -130,9 +133,22 @@ class DietPlanNotifier extends Notifier<Map<String, PlannedSlot>> {
     final DietStrategy? effective = DietStrategyFlags.enabled
         ? ref.watch(macroTargetsProvider.select(dietStrategyOfTargets))
         : null;
+    // Unit 4a: the same rule for Supplements. With the kill switch off there
+    // is no watch (flag-off dependency rule) and the state is "not active";
+    // with it on, the state is the active provider. A plan built under the
+    // other state gives no hints (the Diet Plan screen regenerates it).
+    final bool? supplements = DietSupplementsFlags.enabled
+        ? ref.watch(dietSupplementsActiveProvider)
+        : null;
     final raw = UserRepository.instance.getSavedDietPlan();
     if (raw == null) return const {};
     if (!savedPlanMatchesFoodType(raw, foodType)) return const {};
+    // Kill switch off: nothing is active, so a plan stamped as built with
+    // Supplements (a shake in it) gives no hints either; an unstamped plan,
+    // every plan of a user who never opted in, is unchanged.
+    if (!savedPlanMatchesSupplements(raw, supplements ?? false)) {
+      return const {};
+    }
     if (effective != null &&
         !savedPlanMatchesStrategy(raw, planStrategyFor(effective, foodType))) {
       return const {};

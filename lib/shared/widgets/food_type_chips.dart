@@ -15,6 +15,7 @@ import 'package:icanbefitter/core/constants/food_types.dart';
 import 'package:icanbefitter/core/theme/colors.dart';
 import 'package:icanbefitter/core/theme/spacing.dart';
 import 'package:icanbefitter/core/theme/typography.dart';
+import 'package:icanbefitter/shared/widgets/chip_scroll_row.dart';
 
 class FoodTypeChips extends StatelessWidget {
   const FoodTypeChips({
@@ -22,6 +23,7 @@ class FoodTypeChips extends StatelessWidget {
     required this.value,
     required this.onChanged,
     this.enabled = true,
+    this.scrollable = false,
   });
 
   final FoodType value;
@@ -30,11 +32,21 @@ class FoodTypeChips extends StatelessWidget {
   /// False while a change is being saved; taps are ignored.
   final bool enabled;
 
+  /// One horizontally scrolling row instead of wrapped lines (the Diet Plan
+  /// screen; Edit Profile keeps the wrap).
+  final bool scrollable;
+
   /// Minimum touch-target height (accessibility).
   static const double minChipHeight = 44;
 
   @override
   Widget build(BuildContext context) {
+    if (scrollable) {
+      return ChipScrollRow(
+        selectedIndex: FoodType.values.indexOf(value),
+        chips: [for (final type in FoodType.values) _chip(type)],
+      );
+    }
     return Wrap(
       spacing: 8,
       runSpacing: 8,

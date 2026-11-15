@@ -205,7 +205,7 @@ void main() {
       const intensities = ['strength', 'hypertrophy', 'endurance'];
       const goals = ['build_muscle', 'strength', 'lose_fat', 'general_fitness'];
       const levels = ['beginner', 'intermediate', 'advanced'];
-      var stamped = 0, minimum60 = 0, equal60 = 0;
+      var stamped = 0, minimum60 = 0, equal60 = 0, armChanged = 0;
       final digestLines = <String>[];
       for (var plan = 0; plan < 220; plan++) {
         final nDays = 3 + rnd.nextInt(4);
@@ -264,9 +264,29 @@ void main() {
         final credA = cred('A'), credB = is6 ? credA : cred('B');
         final hasTarget = {...credA.difference(credB), ...credB.difference(credA)}.any((g) => !exempt(g)) ||
             focus.any((g) => !exempt(g) && (!credA.contains(g) || !credB.contains(g)));
+        // Unit 2E (d51): the same plan with the arm swap's test seam off. A plan the swap changes must have had an
+        // arm pair there (one variant at 0 Biceps or Triceps while the other credits it).
+        SessionSetAllocator.debugArmSwap = false;
+        final List<PopulatedDay> noArm;
+        final Map<String, AllocationStats> noArmStats;
+        try {
+          noArm = SessionSetAllocator.allocate(
+              days: days, ctx: ctx, rowsByName: byName, is6Day: is6, balancedWeek: true);
+          noArmStats = SessionSetAllocator.debugLastStats!;
+        } finally {
+          SessionSetAllocator.debugArmSwap = true;
+        }
         final on = SessionSetAllocator.allocate(
             days: days, ctx: ctx, rowsByName: byName, is6Day: is6, balancedWeek: true);
         final stats = SessionSetAllocator.debugLastStats!;
+        if ('${_names(on)}${_sets(on)}' != '${_names(noArm)}${_sets(noArm)}') {
+          armChanged++;
+          expect(
+              SessionSetAllocator.armPairsOf(
+                  noArmStats['A']!.credited, (noArmStats['B'] ?? noArmStats['A']!).credited),
+              greaterThan(0),
+              reason: 'plan $plan: 2E changed a plan without an arm pair');
+        }
         digestLines.add('$plan:${on.first.allowance}:${_names(on)}:${_sets(on)}:'
             '${[for (final v in stats.keys.toList()..sort()) '$v${stats[v]!.minimumSeats}']}');
         if (stats.values.any((s) => s.timeForcedFirst + s.capForcedFirst > 0)) continue;
@@ -298,16 +318,18 @@ void main() {
       }
       // ignore: avoid_print
       print('2C-b sweep: stamped $stamped, 60+ plans with a target $minimum60, '
-          '60+ plans with none (equal to R) $equal60');
+          '60+ plans with none (equal to R) $equal60; changed by 2E $armChanged');
       expect(stamped, greaterThan(30), reason: 'the sweep must reach the allowance');
       // Every ON allocation of the sweep, byte for byte, as recorded on the built tree (2026-11-14): a change to any
       // 2C-b mechanism the sweep reaches turns this red (the mutation run in diagnose e9b3d7 says which).
       final digest = sha256Hex(utf8.encode(digestLines.join('\n')));
       // ignore: avoid_print
       print('2C-b sweep digest: $digest');
-      // Unit 3A (2026-11-15) re-recorded: the goal's Cut / Maintain bands move plans (with the goal training off the
-      // 2C-b digest 464c08de... returns exactly; the day floor's d65 amendment alone moves nothing here).
-      expect(digest, 'db1c56ef97da4b76ef263c589bdf438434e84b8328c1a3971ab3eaac8c1aafa9');
+      // Re-recorded 2026-11-15 for Unit 2E: exactly one plan of the 220 changes, and it had an arm pair (above).
+      expect(armChanged, 1, reason: 'Unit 2E: one plan of the sweep has an arm pair it closes');
+      // Unit 3A (2026-11-15) re-recorded on the 2E tree: the goal's Cut / Maintain bands move plans (with the goal
+      // training off, 2E's digest e64306ba... returns exactly; the day floor's d65 amendment alone moves nothing here).
+      expect(digest, 'a0ab74fc72b33be2b0076424c5671bbbfe6f43bcf7512c3933aac93f5cac6e7a');
       expect(equal60, greaterThan(30), reason: 'the sweep must reach 60+ plans');
     });
   });

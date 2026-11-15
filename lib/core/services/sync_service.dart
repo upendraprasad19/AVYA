@@ -58,6 +58,8 @@ import 'package:icanbefitter/core/utils/ist_date.dart';
 import 'package:icanbefitter/features/profile/services/notification_prefs_repository.dart';
 import 'package:icanbefitter/features/profile/services/profile_target_recompute.dart';
 import 'package:icanbefitter/features/nutrition/services/diet_strategy_flags.dart';
+import 'package:icanbefitter/features/nutrition/services/diet_supplements_flags.dart';
+import 'package:icanbefitter/core/utils/diet_supplements_rule.dart';
 import 'package:icanbefitter/features/ai_coach/models/coach_memory.dart';
 import 'package:icanbefitter/features/ai_coach/repositories/ai_coach_repository.dart';
 import 'package:icanbefitter/features/ai_coach/repositories/coach_interaction_repository.dart';
