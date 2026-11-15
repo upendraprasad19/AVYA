@@ -18,6 +18,7 @@ import 'package:icanbefitter/core/services/migrated_key.dart';
 import 'package:icanbefitter/core/theme/typography.dart';
 import 'package:icanbefitter/features/auth/providers/auth_invalidation_provider.dart';
 import 'package:icanbefitter/core/constants/food_types.dart';
+import 'package:icanbefitter/features/nutrition/providers/diet_supplements_active_provider.dart';
 import 'package:icanbefitter/features/nutrition/providers/nutrition_provider.dart';
 import 'package:icanbefitter/features/nutrition/screens/diet_plan_screen.dart';
 import 'package:icanbefitter/features/nutrition/services/curated_diet_plan_generator.dart';
@@ -170,6 +171,10 @@ void main() {
     Future<void> save(WidgetTester tester) =>
         _tapReal(tester, find.byIcon(Icons.save_outlined));
 
+    Finder cardAnywhere() => find.byWidgetPredicate((w) =>
+        w.key == const ValueKey('diet_supplement_card') ||
+        w.key == const ValueKey('diet_supplement_card_collapsed'));
+
     Finder switchFinder() => find.byKey(const ValueKey('diet_supplements_switch'));
 
     /// The food ids the curated generator gives for the SAME request the
@@ -236,9 +241,24 @@ void main() {
       await pumpScreen(tester);
       expect(debugDietPlanGenerations, 1);
       expect(find.text(_wheyName), findsOneWidget);
-      expect(find.byKey(const ValueKey('diet_supplement_card')),
+      // The card sits under the meals, collapsed to one line.
+      expect(find.byKey(const ValueKey('diet_supplement_card_collapsed')),
           findsOneWidget);
+      expect(find.byKey(const ValueKey('diet_supplement_card')), findsNothing);
       expect(find.text('Your supplements'), findsOneWidget);
+      expect(find.text('Strong evidence base.'), findsNothing,
+          reason: 'collapsed: names only, no doses or notes');
+      expect(
+          tester.getTopLeft(find.text('Your supplements')).dy,
+          greaterThan(tester.getTopLeft(find.text(_wheyName)).dy),
+          reason: 'under the meals, not between the switch and the plan');
+      await _tapReal(
+          tester, find.byKey(const ValueKey('diet_supplement_card_toggle')));
+      expect(find.byKey(const ValueKey('diet_supplement_card')), findsOneWidget);
+      expect(find.text('Strong evidence base.'), findsOneWidget);
+      await _tapReal(
+          tester, find.byKey(const ValueKey('diet_supplement_card_toggle')));
+      expect(find.byKey(const ValueKey('diet_supplement_card')), findsNothing);
       expect(swapIconIn(_wheyName), findsNothing,
           reason: 'the shake has no alternatives');
       // Every other item keeps its swap icon.
@@ -264,7 +284,7 @@ void main() {
       await seed(tester);
       await pumpScreen(tester);
       expect(find.text(_wheyName), findsNothing);
-      expect(find.byKey(const ValueKey('diet_supplement_card')), findsNothing);
+      expect(cardAnywhere(), findsNothing);
       expect(tester.widget<Switch>(switchFinder()).value, isFalse);
       await save(tester);
       expect(_savedPlan()!.containsKey('diet_supplements'), isFalse);
@@ -282,7 +302,7 @@ void main() {
       expect(switchFinder(), findsNothing);
       expect(find.text('Supplements'), findsNothing);
       expect(find.text(_wheyName), findsNothing);
-      expect(find.byKey(const ValueKey('diet_supplement_card')), findsNothing);
+      expect(cardAnywhere(), findsNothing);
     });
 
     testWidgets('an unreadable date of birth: the hint, no switch, no shake',
@@ -304,7 +324,7 @@ void main() {
       expect(tester.widget<Switch>(switchFinder()).value, isTrue);
       expect(find.byIcon(Icons.lock_outline), findsOneWidget);
       expect(find.text(_wheyName), findsNothing);
-      expect(find.byKey(const ValueKey('diet_supplement_card')), findsNothing);
+      expect(cardAnywhere(), findsNothing);
       // Turning it off needs no PRO: the stored choice is cleared.
       await _tapReal(tester, switchFinder());
       expect(UserRepository.instance.getProfile()!['diet_supplements'], isFalse);
@@ -342,12 +362,83 @@ void main() {
       expect(UserRepository.instance.getProfile()!['diet_supplements'], isTrue);
       expect(debugDietPlanGenerations, 2, reason: 'one regeneration, not two');
       expect(find.text(_wheyName), findsOneWidget);
-      expect(find.byKey(const ValueKey('diet_supplement_card')), findsOneWidget);
+      expect(find.byKey(const ValueKey('diet_supplement_card_collapsed')),
+          findsOneWidget);
       await _tapReal(tester, switchFinder());
       expect(UserRepository.instance.getProfile()!['diet_supplements'], isFalse);
       expect(debugDietPlanGenerations, 3);
       expect(find.text(_wheyName), findsNothing);
-      expect(find.byKey(const ValueKey('diet_supplement_card')), findsNothing);
+      expect(cardAnywhere(), findsNothing);
+    });
+
+    testWidgets('layout: the food type and strategy chips are one scrolling '
+        'row each, and the plan starts above the supplement card',
+        (tester) async {
+      await seed(tester, extra: const {'diet_supplements': true});
+      // The wide test surface (the test font is wider than DM Sans, so a
+      // phone width overflows the meal rows); the scrolling itself is pinned
+      // at 360 dp in test/shared/chip_scroll_row_test.dart.
+      tester.view.physicalSize = const Size(1080, 7000);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.reset);
+      await tester.pumpWidget(ProviderScope(
+        overrides: [authUserIdTokenProvider.overrideWithValue(kTestUserId)],
+        child: const MaterialApp(home: DietPlanScreen()),
+      ));
+      await _settle(tester);
+      expect(find.byKey(const ValueKey('chip_scroll_row')), findsNWidgets(2));
+      final food = find.byKey(const ValueKey('food_type_chip_veg'));
+      final vegan = find.byKey(const ValueKey('food_type_chip_vegan'));
+      expect(tester.getTopLeft(food).dy, tester.getTopLeft(vegan).dy,
+          reason: 'one line');
+      // The switch stays with the settings; the card is below the last meal.
+      expect(tester.getTopLeft(switchFinder()).dy,
+          lessThan(tester.getTopLeft(find.text('Breakfast')).dy));
+      expect(
+          tester.getTopLeft(find.byKey(
+              const ValueKey('diet_supplement_card_collapsed'))).dy,
+          greaterThan(tester.getBottomLeft(find.text('Dinner')).dy));
+    });
+
+    testWidgets('the plan follows the switch with no stale-state heal in the '
+        'normal path', (tester) async {
+      final events = <String>[];
+      ErrorTelemetry.debugOnLogEventForTests =
+          (op, {message}) => events.add(op);
+      await seed(tester);
+      await pumpScreen(tester);
+      await _tapReal(tester, switchFinder());
+      expect(find.text(_wheyName), findsOneWidget);
+      await _tapReal(tester, switchFinder());
+      expect(find.text(_wheyName), findsNothing);
+      expect(events, isNot(contains('diet_supplements_plan_healed')),
+          reason: 'the listener delivered both changes; the heal stays quiet');
+    });
+
+    testWidgets('HEAL: a plan built under another Supplements state than the '
+        'one now shown is rebuilt once, and the event says so', (tester) async {
+      final events = <String>[];
+      ErrorTelemetry.debugOnLogEventForTests =
+          (op, {message}) => events.add(op);
+      // Mounted with the kill switch off: no listener is registered, so the
+      // heal in build is the ONLY path that can notice the change.
+      DietSupplementsFlags.debugEnabledOverride = false;
+      await seed(tester, extra: const {'diet_supplements': true});
+      final c = await pumpScreen(tester);
+      expect(find.text(_wheyName), findsNothing);
+      expect(debugDietPlanGenerations, 1);
+      DietSupplementsFlags.debugEnabledOverride = true;
+      c.invalidate(dietSupplementsActiveProvider);
+      // The screen did not watch the provider while the switch was off; any
+      // rebuild now reads the new state.
+      tester.element(find.byType(DietPlanScreen)).markNeedsBuild();
+      await _settle(tester);
+      expect(find.text(_wheyName), findsOneWidget,
+          reason: 'the shake came without a Regenerate tap');
+      expect(debugDietPlanGenerations, 2, reason: 'one rebuild, no loop');
+      expect(events.where((e) => e == 'diet_supplements_plan_healed').length, 1);
+      await _settle(tester);
+      expect(debugDietPlanGenerations, 2);
     });
 
     testWidgets('a saved plan built with Supplements loads when active; the '
