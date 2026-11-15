@@ -25,6 +25,7 @@ import '../services/diet_plan_pdf.dart';
 import '../services/diet_plan_swap.dart';
 import '../services/diet_strategy_flags.dart';
 import '../services/diet_plan_strategy_state.dart';
+import '../widgets/diet_plan_macro_cards.dart';
 import '../widgets/diet_plan_swap_sheet.dart';
 import '../widgets/diet_strategy_section.dart';
 
@@ -569,7 +570,7 @@ class _DietPlanScreenState extends ConsumerState<DietPlanScreen> {
               child: ListView(
                 padding: const EdgeInsets.all(AppSpacing.screenPadding),
                 children: [
-                  _buildTdeeCard(targets),
+                  DietPlanTdeeCard(targets: targets),
                   const SizedBox(height: AppSpacing.sectionGap),
                   Text(
                     'Food type',
@@ -587,7 +588,7 @@ class _DietPlanScreenState extends ConsumerState<DietPlanScreen> {
                     const DietStrategySection(),
                   ],
                   const SizedBox(height: AppSpacing.sectionGap),
-                  _buildMacroTargets(targets),
+                  DietPlanMacroTargetsCard(targets: targets),
                   if (_planNote(targets) case final note?) ...[
                     const SizedBox(height: 8),
                     Text(note,
@@ -607,98 +608,6 @@ class _DietPlanScreenState extends ConsumerState<DietPlanScreen> {
                 ],
               ),
             ),
-    );
-  }
-
-  Widget _buildTdeeCard(Map<String, double> targets) {
-    return Container(
-      padding: const EdgeInsets.all(AppSpacing.cardPadding),
-      decoration: BoxDecoration(
-        color: AppColors.card,
-        borderRadius: BorderRadius.circular(AppRadius.cardM),
-        border:
-            Border.all(color: AppColors.accent.withValues(alpha: 0.2)),
-      ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceAround,
-        children: [
-          _statColumn('BMR', '${targets['bmr']?.round() ?? 0}', 'kcal'),
-          Container(width: 1, height: 40, color: AppColors.border),
-          _statColumn('TDEE', '${targets['tdee']?.round() ?? 0}', 'kcal'),
-          Container(width: 1, height: 40, color: AppColors.border),
-          _statColumn(
-              'TARGET', '${targets['calories']?.round() ?? 0}', 'kcal'),
-        ],
-      ),
-    );
-  }
-
-  Widget _statColumn(String label, String value, String unit) {
-    return Column(
-      children: [
-        Text(
-          label,
-          style: AppTypography.monoXs.copyWith(fontSize: 10, fontWeight: FontWeight.w700, color: AppColors.textDim, letterSpacing: 1.2),
-        ),
-        const SizedBox(height: 4),
-        Text(
-          value,
-          style: AppTypography.body.copyWith(fontSize: 22, fontWeight: FontWeight.w900, color: AppColors.textPrimary),
-        ),
-        Text(
-          unit,
-          style: AppTypography.monoXs.copyWith(fontSize: 10, fontWeight: FontWeight.w400, color: AppColors.textDim),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildMacroTargets(Map<String, double> targets) {
-    return Container(
-      padding: const EdgeInsets.all(AppSpacing.cardPadding),
-      decoration: BoxDecoration(
-        color: AppColors.card,
-        borderRadius: BorderRadius.circular(AppRadius.cardM),
-        border: Border.all(color: AppColors.border),
-      ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceAround,
-        children: [
-          _macroCircle(
-              'Protein', '${targets['protein']?.round() ?? 0}g', AppColors.accent),
-          _macroCircle(
-              'Carbs', '${targets['carbs']?.round() ?? 0}g', AppColors.green),
-          _macroCircle(
-              'Fat', '${targets['fat']?.round() ?? 0}g', AppColors.purple),
-        ],
-      ),
-    );
-  }
-
-  Widget _macroCircle(String label, String value, Color color) {
-    return Column(
-      children: [
-        Container(
-          width: 60,
-          height: 60,
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            color: color.withValues(alpha: 0.08),
-            border: Border.all(color: color.withValues(alpha: 0.3)),
-          ),
-          child: Center(
-            child: Text(
-              value,
-              style: AppTypography.body.copyWith(fontWeight: FontWeight.w900, color: color),
-            ),
-          ),
-        ),
-        const SizedBox(height: 6),
-        Text(
-          label,
-          style: AppTypography.bodySm.copyWith(fontSize: 11, fontWeight: FontWeight.w700, color: AppColors.textDim),
-        ),
-      ],
     );
   }
 
