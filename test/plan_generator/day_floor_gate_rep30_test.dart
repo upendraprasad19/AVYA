@@ -10,14 +10,18 @@ import 'package:flutter_test/flutter_test.dart';
 import '../helpers/day_floor_gate_lib.dart';
 import '../helpers/injury_floor_sweep_lib.dart';
 
-/// (runs, day-weeks, thin OFF, gained, knock-on, lead + 2 OFF) per tier, measured on the 2B tree (2026-11-13). Every
-/// thin OFF day-week gains rows and reaches 3; the knock-on days keep their exercises with fewer sets (pass B grows less
-/// after a floor seat spent a group); lead + 2 OFF is a Unit 2A residue, identical with the floor on.
-const _expected = <String, (int, int, int, int, int, int)>{
-  'bodyweight': (240, 4320, 120, 120, 4, 0),
-  'home_dumbbells': (240, 4320, 242, 242, 3, 0),
-  'basic_gym': (240, 4320, 192, 192, 0, 0),
-  'full_gym': (240, 4320, 44, 44, 0, 0),
+/// (runs, day-weeks, thin OFF, gained, knock-on, lead + 2 OFF, 2C-b swaps) per tier, measured on the 2B tree
+/// (2026-11-13) and re-measured on the 2C-b tree (2026-11-15). Every thin OFF day-week gains rows and reaches 3; the
+/// knock-on days keep their exercises with fewer sets (pass B grows less after a floor seat spent a group); lead + 2 OFF
+/// is a Unit 2A residue, identical with the floor on. Unit 2C-b moved knock-on 4 / 3 / 0 / 0 -> 40 / 30 / 48 / 21: the
+/// ON run takes the under-60 allowance, whose 285 s replaces the count floor's 300 s forcing bound (never stacked,
+/// founder d47), so a day the floor-off world forced past its budget can hold fewer sets (diagnose e9b3d7, CI round 1).
+/// No 2C-b swap at 30 minutes: the row cap holds R's rows.
+const _expected = <String, (int, int, int, int, int, int, int)>{
+  'bodyweight': (240, 4320, 120, 120, 40, 0, 0),
+  'home_dumbbells': (240, 4320, 242, 242, 30, 0, 0),
+  'basic_gym': (240, 4320, 192, 192, 48, 0, 0),
+  'full_gym': (240, 4320, 44, 44, 21, 0, 0),
 };
 
 void main() {

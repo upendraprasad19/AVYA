@@ -8,6 +8,10 @@
 //   `SessionBudget.maxForcedOverSeconds` in total), plus the overrun of the day's `overClock` floor seats
 //   (`FloorSeat.overSeconds`: the part of the seat that did not fit the seconds left, no bound, d33). A floor seat is
 //   never in `countForced`.
+// - Unit 2C-b (docs/plans/2026-11-14-generator-step2c-b-weekly-minimum.md §5): a plan the allocator sized with the
+//   under-60 allowance (`PopulatedDay.allowance`) may run `SessionBudget.allowanceSeconds` past the budget INSTEAD of
+//   the forcing bound (its ledger forces nothing further, d42: never stacked); otherwise the weekly minimum's seats
+//   (`minimumSeats`) share the count-forced bound.
 //
 // Pure Dart; it reads `AllocationStats` only, so a reader passes the stats of the variant whose week it is checking.
 import 'package:icanbefitter/shared/repositories/plan_engine/models.dart';
@@ -58,17 +62,41 @@ class BudgetInvariantOracle {
     return t;
   }
 
-  /// The seconds [day] may run past its budget: the count-forced part (bounded by [maxForcedOverSeconds]) plus every
-  /// `overClock` floor seat's seconds (unbounded, d33).
+  /// Seconds of the rows the Unit 2C-b weekly minimum seated on [day] (`minimumSeats`), priced by [secondsOf].
+  static double minimumSeatSeconds(
+    AllocationStats? stats,
+    int day,
+    Iterable<PlannedExercise> exercises,
+    double Function(PlannedExercise) secondsOf,
+  ) {
+    final seats = stats?.minimumSeats[day];
+    if (seats == null) return 0;
+    var t = 0.0;
+    for (final m in seats) {
+      for (final e in exercises) {
+        if (e.exerciseName == m.name) t += secondsOf(e);
+      }
+    }
+    return t;
+  }
+
+  /// The seconds [day] may run past its budget: every `overClock` floor seat's seconds (unbounded, d33), plus either
+  /// [allowanceSeconds] (a plan sized with the Unit 2C-b allowance, whose forcing bound is 0) or, when it is 0, the
+  /// count-forced and minimum-seat part, bounded together by [maxForcedOverSeconds].
   static double excusedSeconds(
     AllocationStats? stats,
     int day,
     Iterable<PlannedExercise> exercises,
     double Function(PlannedExercise) secondsOf, {
     required double maxForcedOverSeconds,
+    double allowanceSeconds = 0,
   }) {
-    final forced = countForcedSeconds(stats, day, exercises, secondsOf);
-    return (forced > maxForcedOverSeconds ? maxForcedOverSeconds : forced) + floorOverClockSeconds(stats, day);
+    final forced = countForcedSeconds(stats, day, exercises, secondsOf) +
+        minimumSeatSeconds(stats, day, exercises, secondsOf);
+    final bounded = allowanceSeconds > 0
+        ? allowanceSeconds
+        : (forced > maxForcedOverSeconds ? maxForcedOverSeconds : forced);
+    return bounded + floorOverClockSeconds(stats, day);
   }
 
   /// True when no floor seat on any day of [stats] is also named in `countForced` on that day (v5, round 3 P1).
