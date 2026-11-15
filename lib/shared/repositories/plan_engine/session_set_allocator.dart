@@ -824,8 +824,8 @@ class SessionSetAllocator {
     ];
 
     // Unit 2C-b, the walk: pass A walks [walk], a copy of [byDay] in which each target group's cheapest slot follows the
-    // rank-0 slot, the day's 2A opener (when it sits later) and earlier moved targets (a target already inside that
-    // segment counts as moved). byDay (ranks, copies, passes B / C / D, every other reader) keeps the selector order.
+    // rank-0 slot, the day's 2A opener (when it sits later) and earlier moved targets (a target sitting at the segment's end counts as moved; one already inside it was
+    // counted when it was moved, so a slot that is the cheapest for two targets counts once: B-pass seat 1, P1). byDay (ranks, copies, passes B / C / D, every other reader) keeps the selector order.
     final walk = [for (final l in byDay) [...l]];
     final moved = List<int>.filled(n, 0);
     for (final g in ([...minGroups]..sort())) {
@@ -852,7 +852,7 @@ class SessionSetAllocator {
           walk[bd].insert(base + moved[bd], best);
           (stats.walkedTargets[bd] ??= []).add((name: best.exercise.exerciseName, group: g));
         }
-        if (at >= base) moved[bd]++;
+        if (at >= base + moved[bd]) moved[bd]++;
       }
     }
 

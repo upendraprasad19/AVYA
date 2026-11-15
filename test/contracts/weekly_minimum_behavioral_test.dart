@@ -173,6 +173,38 @@ void main() {
     });
   });
 
+  group('the walk', () {
+    test('two targets on one slot count it once, so a third target is walked in right behind it (B-pass seat 1, P1)', () {
+      // One day on the 6-day path, 60 minutes, beginner (at most 5 rows: the bench, two customs, then two more seats). The focus targets
+      // Biceps and Shoulders share their cheapest slot (dual); Triceps' is tri. Counting dual twice put tri one place
+      // too late, behind fly, so the count refused it and Triceps (a d38 focus group) stayed at 0.
+      final f = Fx();
+      f.row('bench', ['Chest']);
+      f.row('fly', ['Chest'], type: 'isolation');
+      f.row('dip', ['Chest'], reps: '6-10');
+      f.row('dual', ['Shoulders', 'Biceps'], type: 'isolation');
+      f.row('tri', ['Triceps'], type: 'isolation');
+      List<PlannedExercise> dayA(String p) => [
+            f.ex('bench'),
+            f.ex('${p}0', sets: 2, rest: 100, customOrigin: 'user'),
+            f.ex('${p}1', sets: 2, rest: 100, customOrigin: 'user'),
+            f.ex('fly'),
+            f.ex('dip'),
+            f.ex('dual'),
+            f.ex('tri'),
+          ];
+      final days = [f.day('hypertrophy', dayA('cu'))];
+      final on = f.run(days, minutes: 60, level: 'beginner', focus: const {'Biceps', 'Shoulders', 'Triceps'},
+          is6Day: true, balancedWeek: true);
+      expect(setsOf(on[0]), [('bench', 5), ('cu0', 2), ('cu1', 2), ('dual', 5), ('tri', 5)]);
+      expect(statsA().credited['Triceps'], greaterThan(0), reason: 'the focus group Triceps is seated');
+      expect(on[0].exercisesA.map((e) => e.exerciseName), containsAll(['dual', 'tri']));
+      expect(on[0].exercisesA.map((e) => e.exerciseName), isNot(contains('fly')),
+          reason: 'a non-target row does not hold the seat ahead of a target');
+      expect(statsA().walkedTargets[0]?.map((m) => m.name).toSet(), {'dual', 'tri'});
+    });
+  });
+
   group('where it runs', () {
     test('2A off and 2B off are the pre-2C-b allocation whatever the switch; the switch off is R', () {
       final f = base();

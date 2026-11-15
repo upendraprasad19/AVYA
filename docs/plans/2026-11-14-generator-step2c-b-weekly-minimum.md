@@ -73,14 +73,15 @@ to b6's, so the plan specifies the R-only form. **v2's design is `audit_b10`** (
 ### S4. The allowance (d42, d44)
 
 **The budget.** `BudgetLedger(ctx, n, {bool allowance = false})`: under 60 minutes, with the switch ON and `allowance`
-true, the day budget gains 300 s and `forcingBound` is 0; otherwise `forcingBound` is today's
+true, the day budget gains `SessionBudget.allowanceSeconds` (285 s as built, d47) and `forcingBound` is 0; otherwise `forcingBound` is today's
 `SessionBudget.maxForcedOverSeconds` (300 s). Pass A2's forcing and S3's seats read `ledger.forcingBound`, so the
 allowance and the forcing never stack. The default keeps every direct-ledger test on today's budget
 (`session_budget_test.dart:320-349`, `session_set_allocator_behavioral_test.dart:370, 399, 738`,
 `day_floor_behavioral_test.dart:55, 216`, `session_set_budget_consumers_test.dart:329`).
 
-**The size** is `SessionBudget.allowanceSeconds`, 300 s (d42's "5 minutes") unless the founder picks 240 s (§4.6,
-§7 Q2): one constant, one test.
+**The size** is `SessionBudget.allowanceSeconds`: **285 s as built** (founder d47, §7: the swap design needs at least
+285 s to fix the 28 not_suitable plans, and 285 keeps the display inside +6). v1-v4 of this section said 300 s (d42's
+"5 minutes") with 240 s as the alternative (§4.6, §7 Q2). One constant, one test.
 
 **Who passes `allowance: true`:** the allocator's 2C-b re-runs (below), and `PeriodizationEngine._weekTwoGains`
 (`periodization_engine.dart:168`), which builds its own ledger over the same ctx: week 2's +1 sees the same day budget

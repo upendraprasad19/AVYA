@@ -11790,7 +11790,7 @@ concepts:
       (true only when it used the allowance and did not fall back); PeriodizationEngine._weekTwoGains follows it;
       VolumeTitration never takes the allowance (it titrates WeekPlans). Kill switch: 2C's disable_balanced_week
       (d37), as allocate(balancedWeek:); OFF returns R. The Edit Profile chip reads `About N min`; the plan audit's
-      over-time bound is +6 (d47). No rule-14 edit: generateV4 passes the allocator's PopulatedDay list unchanged to
+      over-time bound is +6 under 60 (d47). No rule-14 edit: generateV4 passes the allocator's PopulatedDay list unchanged to
       PeriodizationEngine.apply.
     writers:
       - file: lib/shared/repositories/plan_engine/session_set_allocator.dart

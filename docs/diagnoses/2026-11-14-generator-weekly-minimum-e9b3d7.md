@@ -90,7 +90,7 @@ proposed_fix: |
   - **The steps**: a fixpoint of at most 4 rounds; protect-first; the fallback to R verbatim is the terminal guard.
   - **The kill switch** reaches the allocator as `allocate(balancedWeek:)`. The allocator stamps
     `PopulatedDay.allowance`, which `_weekTwoGains` follows; titration never takes the allowance (R4-1).
-  - **The chip** reads "About N min". The audit's over-time bound moves to +6 (d47).
+  - **The chip** reads "About N min". The audit's over-time bound moves to +6 under 60 minutes (d47); at 60+ it stays +5.
 regression_test_planned: |
   test/contracts/weekly_minimum_behavioral_test.dart (target 1 and the minimum pass, each guard, copy-day seats, target
   2 on the 6-day path, hold credit, where it runs, Calves under 45); test/contracts/session_allowance_behavioral_test.dart
@@ -101,7 +101,7 @@ impact_analysis: |
   Platform tier (plan engine). Every 30 / 45-minute plan of every goal on the lead-first, floor-ON path changes.
   - Sets grow (about 5-6 a week).
   - 279 plans' exercise sets change at the same row count (the swap design, d47).
-  - 860 short day-weeks display +6 minutes.
+  - 861 short day-weeks display +6 minutes (467 + 394).
   - At 60 / 90 one strength plan per length changes (a minimum seat); one golden persona of 1,010 changes, the same
     class.
   - Costs the founder accepted (plan §7): Calves at 0 at 30 minutes in 143 plan-weeks (d45), the `glutes_legs` focus
@@ -182,28 +182,35 @@ as tests).
   - wiring: 186 to 264 s;
   - oi489: up to 35.3 minutes, with the Ruling 5c day at 34.5 and never count-forced.
 - **`generator_golden_test`.** Re-recorded (above).
-- **`plan_audit_lib_test`, `session_duration_chip_wording_test`.** The over-time bound moved to +6 (d47), and the chip
+- **`plan_audit_lib_test`, `session_duration_chip_wording_test`.** The over-time bound moved to +6 under 60 (d47), and the chip
   reads "About N min". Both changed with their production line.
 
 ## Mutations
 
 Each mutant was applied to the production tree by an exact-text replacement with its count asserted, so a mutant that
-did not apply aborts the run. It had to pass `dart analyze` with no `error -` line: a compile error is not a red. Then
-the three new test files ran against it, and the tree was restored and sha-checked after every mutant. Columns:
-`weekly_minimum_behavioral_test` (W, 10 tests), `session_allowance_behavioral_test` (S, 6 tests; its seeded sweep
-pins every ON allocation by digest) and `weekly_minimum_gate_test` (G, 1,152 real plans ON vs OFF, ON digest pinned).
+did not apply aborts the run. It had to pass `dart analyze` with no `error -` line: a compile error is not a red. The
+tree was restored and sha-checked after every mutant. Columns:
+- W: `weekly_minimum_behavioral_test` (11 tests).
+- S: `session_allowance_behavioral_test` (6 tests; its seeded sweep pins every ON allocation by digest and asserts
+  rows = R under 60).
+- G: `weekly_minimum_gate_test` (1,152 real plans ON vs OFF, ON digest pinned).
+
+W and S were re-measured on the B-pass review tree, after the sweep digest, the rows = R assertion, the strict "adds
+sets" assertion and the two-targets walk test existed (B-pass seat 2, finding 2: the first run's S column predated the
+digest). G is from the 3e6bcc77 run. For M31 to M33, G is green by digest equality: the 1,152-plan ON digest is
+unchanged with and without each of those guards, so removing one changes no gate plan.
 
 | Mutant | What it changes | W | S | G |
 |---|---|---|---|---|
-| M01 | the allowance re-run runs without the allowance | green | green | RED |
-| M02 | the stamp stays true on the fallback | green | green | RED |
+| M01 | the allowance re-run runs without the allowance | RED | RED | RED |
+| M02 | the stamp stays true on the fallback | green | RED | RED |
 | M03 | the stamp is true whenever under 60 | green | RED | RED |
 | M04 | titration builds its ledger with the allowance | green | RED | green |
 | M05 | `_weekTwoGains` ignores the stamp | green | green | RED |
 | M06 | no row cap on the re-run | RED | RED | RED |
 | M07 | the re-run forgets R's hold evictions | green | green | RED |
-| M08 | no walk | green | green | RED |
-| M09 | the walk puts targets at rank 1 | green | green | RED |
+| M08 | no walk | RED | RED | RED |
+| M09 | the walk puts targets at rank 1 | green | RED | RED |
 | M10 | `evictFor` takes the loop index, not the slot's rank | green | green | green |
 | M11 | the count reads pass A's `seated`, not admitted rows | green | green | green |
 | M12 | no admitted-row count guard in the minimum pass | green | green | green |
@@ -216,22 +223,22 @@ pins every ON allocation by digest) and `weekly_minimum_gate_test` (G, 1,152 rea
 | M19 | Calves exempt below 30, not below 45 | RED | green | RED |
 | M20 | a focus Calves group is not exempt (5-day branch) | RED | green | green |
 | M21 | no protect-first step | green | RED | green |
-| M22 | no fallback to R | green | green | RED |
-| M23 | the fixpoint runs one round | green | green | RED |
+| M22 | no protective fallback (the row guard kept) | green | RED | RED |
+| M23 | the fixpoint runs one round | green | RED | RED |
 | M24 | the 6-day branch runs no 2C-b | RED | RED | RED |
 | M25 | the switch is ignored (2C-b always on) | RED | RED | RED |
-| M26 | worlds are chosen with the allowance on | green | green | RED |
+| M26 | worlds are chosen with the allowance on | green | RED | RED |
 | M27 | the forcing bound stacks on the allowance | green | RED | green |
 | M28 | the allowance is 300 s | green | RED | RED |
 | M29 | a copied day does not inherit minimum seats | RED | green | green |
-| M30 | target 1 (d35) is not computed | RED | green | RED |
+| M30 | target 1 (d35) is not computed | RED | RED | RED |
 | M31 | the row guard off on the 5-day path (CI round 1) | green | RED | green |
 | M32 | the row guard off on the 6-day path (CI round 1) | green | RED | green |
+| M33 | the walk counts a slot already inside the moved segment (B-pass seat 1's P1, reverted) | RED | green | green |
 
-M20 survived the first run (the 6-day test covers only the 6-day branch). The 5-day Calves test was added, and M20
-then turned W red (1 test). M21 survived the first run too. The sweep digest was added after that run, and M21 then
-turned S red. M03 first failed to compile, because it read `under60` before its declaration. It was re-anchored after
-the declaration, and that version is the one in the table.
+27 of 33 turn at least one column red. M03 first failed to compile, because it read `under60` before its
+declaration. It was re-anchored after the declaration, and that version is the one in the table. M22 was re-anchored
+after CI round 1 changed the fallback's condition.
 
 **Six survivors, each a guard no input reaches.** None changes a single allocation on the 2,304-plan grid, the
 1,152-plan gate, the 220-plan random sweep (random libraries, focus groups, 6-day plans) or 22 crafted two-target
@@ -289,6 +296,19 @@ CI's unit shards failed in the three 2B day-floor gate files (`day_floor_gate_{r
 row guard), 36 / 30 / 48 / 21 day-weeks hold fewer sets and 1,907 to 2,620 per tier hold more. This is d47's trade: the 285 s allowance
 replaces the count floor's 300 s forcing bound and never stacks with it, so a day R forced past its budget can hold
 fewer sets. It is a cost, stated here and in the plan; it is not a defect.
+
+## B-pass (two fresh Sonnet seats on 1553cd3b)
+
+Review file: `docs/reviews/generator-step2c-b-bpass.md`. 9 findings were raised and 8 fixed; the chip wording at 60 /
+90 is kept, with its reason.
+- **One P1 in production.** Seat 1 found the walk's `moved` counter counting one slot twice when it is the cheapest
+  for two target groups, which left a d38 focus group at 0 on a count-bound day. Fixed with
+  `if (at >= base + moved[bd])`. The test is "the walk: two targets on one slot" (mutant M33). The 2,304-plan grid is
+  byte-identical with the fix.
+- **Also fixed:**
+  - the day-floor gate's swap excuse now also checks the dropped rows' groups;
+  - the +6 audit bound applies only under 60;
+  - tests tightened and the mutation table re-measured (above).
 
 ## Not covered by a crafted fixture (stated)
 

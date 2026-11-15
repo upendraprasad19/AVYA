@@ -118,7 +118,8 @@ void main() {
           final stats = SessionSetAllocator.debugLastStats!;
           expect(rowsOf(on), rowsOf(off), reason: '$m min, 6-day $is6, A');
           if (!is6) expect(rowsOf(on, b: true), rowsOf(off, b: true), reason: '$m min, B');
-          expect(_aSets(on), greaterThanOrEqualTo(_aSets(off)), reason: '$m min, 6-day $is6');
+          // Strictly more: a re-run that ignored the allowance (mutant M01) would hold R's sets (B-pass seat 2, 5a).
+          expect(_aSets(on), greaterThan(_aSets(off)), reason: '$m min, 6-day $is6');
           final ctx = f.ctx(days, minutes: m);
           for (final v in is6 ? const ['A'] : const ['A', 'B']) {
             _expectTime(on, stats[v]!, ctx, b: v == 'B', allowance: true);
@@ -132,7 +133,8 @@ void main() {
     // The week-2 +1 never binds on the clock in a crafted week (12 shapes probed at 30 / 45 minutes: it binds on the lead
     // + 1 hold and the weekly band first), so the reader's proof that it follows the stamp is the gate's exact verdict
     // counts on the real grid (weekly_minimum_gate_test.dart; without the stamp 2 more plans are suitable, plan §4.5).
-    test('_weekTwoGains with the stamp keeps every week-2 day inside budget + the allowance; weeks 1 and 3 unchanged', () {
+    test('_weekTwoGains: every week-2 day inside budget + the allowance, weeks 1 and 3 unchanged (that it FOLLOWS the '
+        'stamp is the gate\'s proof, mutant M05)', () {
       final (f, days) = shortWeek();
       final ctx = f.ctx(days, minutes: 30);
       final on = f.run(days, minutes: 30, is6Day: false, balancedWeek: true);
@@ -203,7 +205,7 @@ void main() {
       const intensities = ['strength', 'hypertrophy', 'endurance'];
       const goals = ['build_muscle', 'strength', 'lose_fat', 'general_fitness'];
       const levels = ['beginner', 'intermediate', 'advanced'];
-      var stamped = 0, fewerRows = 0, minimum60 = 0, equal60 = 0;
+      var stamped = 0, minimum60 = 0, equal60 = 0;
       final digestLines = <String>[];
       for (var plan = 0; plan < 220; plan++) {
         final nDays = 3 + rnd.nextInt(4);
@@ -280,7 +282,6 @@ void main() {
               // R's rows cap the day (d44), and a day never ends shorter than R's: a re-run that dropped a row falls
               // back to R (the step-5 row guard; before it, 4 of these 220 plans held a shorter day).
               expect(r1[d], r0[d], reason: 'plan $plan $v day $d: R\'s rows exactly (d44, the row guard)');
-              if (r1[d] < r0[d]) fewerRows++;
             }
           }
         }
@@ -296,7 +297,7 @@ void main() {
         }
       }
       // ignore: avoid_print
-      print('2C-b sweep: stamped $stamped, fewer-row variant-days $fewerRows, 60+ plans with a target $minimum60, '
+      print('2C-b sweep: stamped $stamped, 60+ plans with a target $minimum60, '
           '60+ plans with none (equal to R) $equal60');
       expect(stamped, greaterThan(30), reason: 'the sweep must reach the allowance');
       // Every ON allocation of the sweep, byte for byte, as recorded on the built tree (2026-11-14): a change to any

@@ -369,8 +369,13 @@ void main() {
           // The overrun over the user's minutes is bounded by the FORCING itself (at most
           // maxForcedOverSeconds of it, B-pass P2-1 / P2-2), so a forced slot cannot mask an
           // unrelated overrun; the display slack is the 2 minutes of `limitMin`.
-          final forcedPart =
-              forcedSeconds > SessionBudget.maxForcedOverSeconds ? SessionBudget.maxForcedOverSeconds.toDouble() : forcedSeconds;
+          // Unit 2C-b: a stamped plan's ledger forces nothing past budget + the allowance (`forcingBound` 0, never
+          // stacked, d42 / d47), so its excuse is the allowance alone (B-pass seat 2, 5d).
+          final forcedPart = allowanceMin > 0
+              ? 0.0
+              : forcedSeconds > SessionBudget.maxForcedOverSeconds
+                  ? SessionBudget.maxForcedOverSeconds.toDouble()
+                  : forcedSeconds;
           final countExplained = forcedSeconds + floorClockSeconds > 0 &&
               mins - (forcedSeconds + floorClockSeconds + guardSeconds) / 60 <= limitMin &&
               mins - p.effMinutes <= (forcedPart + floorClockSeconds + guardSeconds) / 60 + 2 + allowanceMin;

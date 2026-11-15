@@ -6,7 +6,7 @@
 // (the chosen prototype run b25 against merged main de30a0a7, both 30 / 45 restricted; plan §4.1, §7 option (a)), and
 // the built allocator reproduces b25's 2,304-plan dump byte for byte.
 //
-//  1. Verdicts (the audit lib, its over-time bound at +6, d47): ON 657 suitable / 495 needs_work / 0 not_suitable;
+//  1. Verdicts (the audit lib, its over-time bound at +6 under 60, d47): ON 657 suitable / 495 needs_work / 0 not_suitable;
 //     OFF 578 / 546 / 28 (the 28 Shoulders-zero lose_fat / general_fitness plans, fixed by the swap design).
 //  2. No plan gains a major issue code against OFF.
 //  3. A group OFF trains in a plan-week (1-3) is never at 0 ON, except Calves at 30 minutes (d45): exactly 143.

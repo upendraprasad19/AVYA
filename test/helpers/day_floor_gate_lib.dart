@@ -46,10 +46,11 @@ class DayFloorTally {
   int gained = 0;
   int knockOn = 0;
   int pinsDiffer = 0;
-  /// Unit 2C-b: day-weeks where a weekly-minimum target took an OFF row's place: the same row count, and every row new
-  /// on the day is that week's variant's walked target or minimum seat on that day (`AllocationStats.walkedTargets`,
-  /// `minimumSeats`). The swap of plan docs/plans/2026-11-14-generator-step2c-b-weekly-minimum.md (d35 / d48), not a
-  /// loss; a day with fewer rows than OFF, or any other new row, is still `lost`.
+  /// Unit 2C-b: day-weeks where a weekly-minimum target took an OFF row's place: the same row count, one new row per
+  /// dropped row, every new row that week's variant's walked target or minimum seat on that day
+  /// (`AllocationStats.walkedTargets`, `minimumSeats`), and every group of a dropped row still trained that week (a
+  /// budgeted ON row or a kept hold). The swap of plan docs/plans/2026-11-14-generator-step2c-b-weekly-minimum.md
+  /// (d35 / d48), not a loss; anything else is still `lost` (B-pass seat 2, finding 2).
   int swapped = 0;
   /// Day-weeks with a budgeted row at the day's lead + 2 or more, the floor OFF: a Unit 2A residue (the whole-plan
   /// fallback to the `main` world, where R2 does not apply), not the floor's; pinned, and the floor may add none.
@@ -129,6 +130,8 @@ class DayFloorGate {
       final variant = (w == 1 || w == 3) && days != 6 ? 'B' : 'A';
       final stats = on.stats[variant];
       final week = <String, int>{};
+      // A swap's dropped rows: each of their groups must still be trained this week (checked after the week's days).
+      final swapDropped = <({String where, String name, Set<String> groups})>[];
       final dOn = on.plan.weekPlans[w].workoutDays;
       final dOff = off.plan.weekPlans[w].workoutDays;
       for (var d = 0; d < dOn.length; d++) {
@@ -150,12 +153,25 @@ class DayFloorGate {
           for (final n in namesOn)
             if (!namesOff.contains(n)) n,
         ];
-        final swap = a.length == b.length && added.isNotEmpty && added.every(targetRows.contains);
+        final dropped = [
+          for (final n in namesOff)
+            if (!namesOn.contains(n)) n,
+        ];
+        final swap = a.length == b.length &&
+            added.isNotEmpty &&
+            added.length == dropped.length &&
+            added.every(targetRows.contains);
         var dayLost = false;
-        for (final n in namesOff) {
-          if (namesOn.contains(n)) continue;
+        for (final n in dropped) {
           if (swap) {
             dayLost = true;
+            final row = _rows[n.toLowerCase()];
+            final muscles = row == null ? const <String>[] : [for (final m in row['primary_muscles'] as List) '$m'];
+            swapDropped.add((
+              where: where,
+              name: n,
+              groups: BudgetMuscleGroups.creditedOf(muscles, quadPrimaryCreditsGlutes: !quadOwnsGlutes).toSet(),
+            ));
           } else {
             t.fail('lost', '$where: $n ($namesOff -> $namesOn)');
           }
@@ -189,6 +205,13 @@ class DayFloorGate {
         if (offPlus2 != null) t.leadPlus2Off++;
         final onPlus2 = _leadPlus2(a);
         if (onPlus2 != null && offPlus2 == null) t.fail('lead + 2 added by the floor', '$where: $onPlus2');
+      }
+      for (final x in swapDropped) {
+        for (final g in x.groups) {
+          if ((week[g] ?? 0) == 0 && !(stats?.holdGroups.contains(g) ?? false)) {
+            t.fail('lost', '${x.where}: ${x.name} swapped out and $g is at 0 this week');
+          }
+        }
       }
       week.forEach((g, n) {
         final ceiling = BudgetInvariantOracle.weekCeiling(top, stats, g);
