@@ -80,6 +80,11 @@ keys:
         shown targets were made for, effectiveMacroTargets; only with
         DietStrategyFlags on, which it is since diet plan Unit 3b-3)
       - diet_strategy_label: string (Balanced | Low carb | Keto)
+      - diet_supplements: true (diet plan Unit 4; an app build sends it ONLY when
+        the Diet Plan Supplements switch is on AND the user is PRO and 18 or
+        older, absent otherwise; the server does not verify that, and the
+        captain manual's DIET_SUPPLEMENTS_MANUAL_PASSAGE repeats the age
+        condition. Sent by app builds from Unit 4a on)
       - injuries: string|list
       - bmr: num
       - tdee: num

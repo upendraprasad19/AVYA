@@ -6817,6 +6817,8 @@ Found by the sync-storm-first-sweep batch while measuring its Day-0 web check (l
 
 **Done when.** Plan reviewed twice; a repeat phase with more minutes fills the extra time as above and a repeat with the same minutes stays byte-identical to today; pins of compounds survive; the repeat gate still tests adherence; mutants prove both branches. Blast radius: `platform` (plan_engine), tier L.
 
+**Unit 2D (2026-11-15, branch `generator-step2d`, diagnose `a7d2f4`, plan `docs/plans/2026-11-15-generator-step2d-repeat-minutes.md` v4; founder d50, d52).** Built: `last_phase_profile` stores the resolved minutes; a repeat whose minutes rose appends budgeted library isolations from the normal pick into the plain leftover time after the allocator's own set growth (d52: sets first means the allocator's targets, not the 5-set maximum) and after week 2's +1 sets are reserved. Gate over 768 personas: 0 failures (pins keep their sets and reps in all four weeks); reach per tier of 48: 30 -> 45 25-41 plans, 30 -> 60 all 41 measured, 45 -> 60 2-8, 60 -> 90 1-6. Same minutes and every fresh phase: byte-identical. Closes on the merge of that branch.
+
 ## OI-457 — Level is self-reported at onboarding: a 55 kg lifter who picks Intermediate gets heavy barbell squat, deadlift and bench 4x7 (parked: onboarding change)
 
 - **Status**: OPEN
@@ -7246,14 +7248,14 @@ state), the legacy-only tests (`diet_plan_generator_test.dart`,
 the legacy archetype parts of `food_database_tagged_test.dart`), and the
 d3c7a9 pitfall row in `lib/features/nutrition/CLAUDE.md`.
 
-## OI-510 — Delete the three food-type kill switches (DISABLE_FOOD_TYPE_EXTRACTION_RULES, DISABLE_SUGGESTMEAL_STORED_FOOD_TYPE, DISABLE_FOOD_TYPE_MANUAL_RULES) and their old paths after the founder's coach check
+## OI-510 — Delete the three food-type kill switches (DISABLE_FOOD_TYPE_EXTRACTION_RULES, DISABLE_SUGGESTMEAL_STORED_FOOD_TYPE, DISABLE_FOOD_TYPE_MANUAL_RULES), the diet strategy and diet supplements manual switches, and their old paths after the founder's coach check
 
 - **Status**: OPEN
 - **Blocked on**: the founder's coach check after Unit 2b's Edge Functions are live and Unit 2a has merged (the switches are the rollback lever until then)
 - **Verified**: 2026-11-14, the three switches exist in `supabase/functions/daily-snapshot/index.ts` (`foodTypeExtractionRulesOff`), `supabase/functions/_shared/tools/nutrition/suggestMeal.ts` (`suggestMealStoredFoodTypeOff`, `legacyHandler`, `NON_VEG_KEYWORDS`) and `supabase/functions/_shared/captain_manual.ts` (`foodTypeManualRulesOff`, `CAPTAIN_MANUAL_LEGACY_FOOD`; weekly-report's legacy diet line)
 - **Identified**: 2026-11-14 · filed via mint_oi.sh from branch `diet-food-type-server`
 
-Diet plan Unit 2b (diagnose `c9bc6a`, plan `docs/plans/diet-food-type-server.md`). Removing a switch deletes its old path in the same commit and needs a full x2 plan review again (CLAUDE.md §4.12.4). Also remove the `LEGACY_DIET_PREFERENCE_SCHEMA_LINE` constant, the legacy fixtures in the Deno tests, the `captainManual(` safe marker's legacy note, and the naming-conventions rows. Unit 3b-2 (diet strategy, `docs/plans/diet-strategy-3b.md` §5) added two more switches on the same check: `DISABLE_SUGGESTMEAL_DIET_STRATEGY` (`suggestMealDietStrategyOff`) and `DISABLE_DIET_STRATEGY_MANUAL_RULES` (`dietStrategyManualRulesOff`); delete them too, after the founder's Keto coach check once the strategy flag is on (Unit 3b-3).
+Diet plan Unit 2b (diagnose `c9bc6a`, plan `docs/plans/diet-food-type-server.md`). Removing a switch deletes its old path in the same commit and needs a full x2 plan review again (CLAUDE.md §4.12.4). Also remove the `LEGACY_DIET_PREFERENCE_SCHEMA_LINE` constant, the legacy fixtures in the Deno tests, the `captainManual(` safe marker's legacy note, and the naming-conventions rows. Unit 3b-2 (diet strategy, `docs/plans/diet-strategy-3b.md` §5) added two more switches on the same check: `DISABLE_SUGGESTMEAL_DIET_STRATEGY` (`suggestMealDietStrategyOff`) and `DISABLE_DIET_STRATEGY_MANUAL_RULES` (`dietStrategyManualRulesOff`); delete them too, after the founder's Keto coach check once the strategy flag is on (Unit 3b-3). Unit 4 (docs/plans/diet-supplements.md §6) adds `DISABLE_DIET_SUPPLEMENTS_MANUAL_RULES`: delete the switch, `dietSupplementsManualRulesOff()` and the `.replace(DIET_SUPPLEMENTS_MANUAL_PASSAGE, "")` branch in `captainManual()`, and the switch-composition cases of `supabase/functions/_shared/captain_manual_diet_supplements_test.ts`. KEEP the passage text and the rest of that test: they are the feature, not the switch. Blocked on, for this switch: Unit 4a merged and the founder's supplements coach check.
 
 ## OI-509 — Delete the disable_balanced_week kill switch and its fixture after the 2C device check
 

@@ -378,8 +378,26 @@ class ExerciseSelector {
     // missed call site fails to COMPILE — a defaulted parameter is exactly
     // how buildPinnedDays stayed unfloored through three earlier drafts.
     required Set<String>? capability,
+    // Unit 2D (OI-453, plan S4): the repeat runs at more minutes than the phase it pins (founder d50's one argument,
+    // forwarded from generateV4). True: each frame also carries the accessories of its fresh pick that may be appended
+    // into the leftover time (`PopulatedDay.repeatAccessoriesA/B`). False (every other repeat): byte-identical.
+    bool appendAccessories = false,
   }) {
     final result = <PopulatedDay>[];
+    // Unit 2D: every pinned name per variant, on any day (lowercased), and the candidates taken so far.
+    final pinnedLowerA = <String>{
+      if (appendAccessories)
+        for (final p in pinnedByDay.values)
+          for (final n in p.a) n.trim().toLowerCase(),
+    };
+    final pinnedLowerB = <String>{
+      if (appendAccessories)
+        for (final p in pinnedByDay.values)
+          for (final n in p.b) n.trim().toLowerCase(),
+    };
+    final takenA = <String>{};
+    final takenB = <String>{};
+    SameMovement? sameMovement;
     // Custom exercises are scanned at most ONCE (lazily, on the first library miss).
     List<Map<String, dynamic>>? customsCache;
     List<Map<String, dynamic>> customs() =>
@@ -478,6 +496,25 @@ class ExerciseSelector {
         exercisesB = fresh().exercisesB;
       }
 
+      // Unit 2D (plan S4): the accessory candidates, read from the memoized fresh pick BEFORE this frame's rows feed
+      // the upper-day avoid below, so the pick is the one an empty-variant fill above would use (round 2, A-9).
+      var candidatesA = const <PlannedExercise>[];
+      var candidatesB = const <PlannedExercise>[];
+      if (appendAccessories) {
+        final sm = sameMovement ??= _sameMovementOf(exerciseRepo);
+        if (identical(exercisesB, exercisesA)) {
+          // B is A on this day: its candidates are A's and sit in B's weeks too, so they are screened against both
+          // variants' pinned names and earlier candidates (B-pass seat A, finding 1: a 5-day balanced week mixes
+          // B-list days with A-only days), and taken in both.
+          candidatesA = sharedDayCandidatesFor(
+              fresh().exercisesA, exercisesA, pinnedLowerA, pinnedLowerB, takenA, takenB, sm, exerciseRepo);
+          candidatesB = candidatesA;
+        } else {
+          candidatesA = _repeatCandidates(fresh().exercisesA, exercisesA, pinnedLowerA, takenA, sm, exerciseRepo);
+          candidatesB = _repeatCandidates(fresh().exercisesB, exercisesB, pinnedLowerB, takenB, sm, exerciseRepo);
+        }
+      }
+
       if (_feedsUpperAvoid(frame.dayType)) {
         feederNamesA.addAll(exercisesA.map((e) => e.exerciseName.toLowerCase()));
         feederNamesB.addAll(exercisesB.map((e) => e.exerciseName.toLowerCase()));
@@ -490,6 +527,8 @@ class ExerciseSelector {
         intensity: frame.intensity,
         exercisesA: exercisesA,
         exercisesB: exercisesB,
+        repeatAccessoriesA: candidatesA,
+        repeatAccessoriesB: candidatesB,
       ));
     }
 
@@ -497,7 +536,7 @@ class ExerciseSelector {
     // (only an EMPTY variant is), so the top-up covers it here. With the core-list
     // pool ON the repeat phase is core-list world too (generator step 1A, R4);
     // OFF short-circuits to false (byte-identical).
-    return topUpDays(
+    final days = topUpDays(
       result,
       slotDays: frames,
       exerciseRepo: exerciseRepo,
@@ -510,6 +549,141 @@ class ExerciseSelector {
       exclusions: exclusions,
       capability: capability,
     );
+    if (!appendAccessories) return days;
+    return _dropHeldCandidates(days, sameMovement ??= _sameMovementOf(exerciseRepo));
+  }
+
+  /// Unit 2D (plan S5.3, round 2 A-4): the final screen, after the thin-day top-up. A candidate whose name, or a
+  /// same-movement partner of it, is a row of its variant on ANY day (a fresh-filled or topped-up row the per-frame
+  /// screen could not see yet) is dropped. Returns [days] itself when nothing is dropped.
+  @visibleForTesting
+  static List<PopulatedDay> dropHeldCandidatesForTest(List<PopulatedDay> days, SameMovement sameMovement) =>
+      _dropHeldCandidates(days, sameMovement);
+
+  static List<PopulatedDay> _dropHeldCandidates(List<PopulatedDay> days, SameMovement sameMovement) {
+    Set<String> heldOf(List<PlannedExercise> Function(PopulatedDay) rowsOf) => sameMovement
+        .expandLower({for (final d in days) for (final e in rowsOf(d)) e.exerciseName.trim().toLowerCase()});
+    final heldA = heldOf((d) => d.exercisesA);
+    final heldB = heldOf((d) => d.exercisesB);
+    List<PlannedExercise> keep(List<PlannedExercise> cs, Set<String> held) {
+      if (!cs.any((c) => held.contains(c.exerciseName.trim().toLowerCase()))) return cs;
+      return [for (final c in cs) if (!held.contains(c.exerciseName.trim().toLowerCase())) c];
+    }
+
+    var changed = false;
+    final out = <PopulatedDay>[];
+    for (final d in days) {
+      final a = keep(d.repeatAccessoriesA, heldA);
+      final b = keep(d.repeatAccessoriesB, heldB);
+      if (identical(a, d.repeatAccessoriesA) && identical(b, d.repeatAccessoriesB)) {
+        out.add(d);
+        continue;
+      }
+      changed = true;
+      out.add(PopulatedDay(
+        name: d.name,
+        focus: d.focus,
+        dayType: d.dayType,
+        intensity: d.intensity,
+        exercisesA: d.exercisesA,
+        exercisesB: d.exercisesB,
+        repeatAccessoriesA: a,
+        repeatAccessoriesB: b,
+      ));
+    }
+    return changed ? out : days;
+  }
+
+  /// One [SameMovement] over the whole library: the one `getAll()` site the selector's repeat candidates and the
+  /// thin-day top-up share (`scripts/exercise_seam_lib.dart` counts the sites).
+  static SameMovement _sameMovementOf(ExerciseRepository repo) => SameMovement.fromRows(repo.getAll());
+
+  static List<String> _strs(Object? v) {
+    if (v is List) return [for (final e in v) e.toString()];
+    if (v is String) return [v];
+    return const [];
+  }
+
+  /// Unit 2D (OI-453, plan S4): the rows of a frame's fresh [pick] that may be appended to a repeat day holding
+  /// [dayRows], in the pick's (slot) order. A row qualifies when it is a library row the allocator budgets (not a
+  /// custom; not timed, cardio or distance), an isolation, and none of these holds its name or a same-movement partner
+  /// of it: a pinned row of this variant on any day ([pinnedLower]), a row of this day, an earlier candidate of this
+  /// variant ([taken], which this call extends). It is also refused when a row of this day holds one of its
+  /// (movement pattern, first primary muscle) pairs. Pure over [repo] reads.
+  @visibleForTesting
+  static List<PlannedExercise> repeatCandidatesFor(
+    List<PlannedExercise> pick,
+    List<PlannedExercise> dayRows,
+    Set<String> pinnedLower,
+    Set<String> taken,
+    SameMovement sameMovement,
+    ExerciseRepository repo,
+  ) =>
+      _repeatCandidates(pick, dayRows, pinnedLower, taken, sameMovement, repo);
+
+  /// Unit 2D (B-pass seat A, finding 1): the candidates of a day whose B list is its A list. They sit in both
+  /// variants' weeks, so they are screened against both variants' pinned names ([pinnedA], [pinnedB]) and earlier
+  /// candidates ([takenA], [takenB]), and both taken sets are extended. Pure apart from the two taken sets.
+  @visibleForTesting
+  static List<PlannedExercise> sharedDayCandidatesFor(
+    List<PlannedExercise> pick,
+    List<PlannedExercise> dayRows,
+    Set<String> pinnedA,
+    Set<String> pinnedB,
+    Set<String> takenA,
+    Set<String> takenB,
+    SameMovement sameMovement,
+    ExerciseRepository repo,
+  ) {
+    final out = _repeatCandidates(pick, dayRows, {...pinnedA, ...pinnedB}, {...takenA, ...takenB}, sameMovement, repo);
+    final mine = sameMovement.expandLower({for (final c in out) c.exerciseName.trim().toLowerCase()});
+    takenA.addAll(mine);
+    takenB.addAll(mine);
+    return out;
+  }
+
+  static List<PlannedExercise> _repeatCandidates(
+    List<PlannedExercise> pick,
+    List<PlannedExercise> dayRows,
+    Set<String> pinnedLower,
+    Set<String> taken,
+    SameMovement sameMovement,
+    ExerciseRepository repo,
+  ) {
+    final held = <String>{
+      ...sameMovement.expandLower({
+        ...pinnedLower,
+        for (final e in dayRows) e.exerciseName.trim().toLowerCase(),
+        ...taken,
+      }),
+    };
+    String key(String pattern, String muscle) => '${pattern.toLowerCase()}|${muscle.toLowerCase()}';
+    final pairs = <String>{};
+    for (final e in dayRows) {
+      final m = e.primaryMuscles;
+      if (e.customOrigin != null || m == null || m.isEmpty) continue;
+      for (final p in _strs(repo.getByExactName(e.exerciseName)?['movement_pattern'])) {
+        pairs.add(key(p, m.first));
+      }
+    }
+    final out = <PlannedExercise>[];
+    for (final c in pick) {
+      final lower = c.exerciseName.trim().toLowerCase();
+      if (c.customOrigin != null || const {'timed', 'cardio', 'distance'}.contains(c.loggingType)) continue;
+      if (c.exerciseType != 'isolation') continue;
+      if (held.contains(lower)) continue;
+      final row = repo.getByExactName(c.exerciseName);
+      if (row == null) continue;
+      final m = c.primaryMuscles;
+      if (m != null && m.isNotEmpty && _strs(row['movement_pattern']).any((p) => pairs.contains(key(p, m.first)))) {
+        continue;
+      }
+      out.add(c);
+      final mine = sameMovement.expandLower({lower});
+      held.addAll(mine);
+      taken.addAll(mine);
+    }
+    return out;
   }
 
   // ── OI-401 thin-day top-up ─────────────────────────────────────────
@@ -564,7 +738,7 @@ class ExerciseSelector {
     // when a day is thin); plateau and demoted names do not (plan Decision 2's table).
     SameMovement? sameMovementCache;
     Set<String> withPartners(Set<String> xs) =>
-        (sameMovementCache ??= SameMovement.fromRows(exerciseRepo.getAll())).expandLower(xs);
+        (sameMovementCache ??= _sameMovementOf(exerciseRepo)).expandLower(xs);
     Set<String>? demoted;
     var anyThin = false;
     final out = <PopulatedDay>[];
@@ -631,6 +805,9 @@ class ExerciseSelector {
         intensity: d.intensity,
         exercisesA: a,
         exercisesB: b,
+        // Unit 2D (plan S4, bug class 2.158): the repeat's accessory candidates ride with the day.
+        repeatAccessoriesA: d.repeatAccessoriesA,
+        repeatAccessoriesB: d.repeatAccessoriesB,
       ));
     }
     return anyThin ? out : days;
