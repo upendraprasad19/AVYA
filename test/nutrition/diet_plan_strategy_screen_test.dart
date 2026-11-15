@@ -658,6 +658,47 @@ void main() {
           reason: 'no hints from a plan built for another strategy');
     });
 
+    testWidgets('an unstamped plan (saved before the 3b-3 flip) with Keto '
+        'effective: no hints, a fresh plan, no notice; with Balanced it '
+        'still loads (3b-3 round 2 finding 2)', (tester) async {
+      Map<String, dynamic> legacy() => {
+            'id': 'p0',
+            'created_at': '2026-11-01T10:00:00',
+            'food_type': 'non_veg',
+            'meals': [
+              {
+                'name': 'Lunch',
+                'items': [
+                  {'food_id': 'F0019', 'name': 'Old balanced dal',
+                    'calories': 165}
+                ],
+              }
+            ],
+          };
+      // B-pass seat C finding 4: the food type matches the plan's, so the
+      // only reason to reject it is the strategy.
+      await seed(tester,
+          extra: const {'diet_strategy': 'keto', 'diet_preference': 'non_veg'});
+      await tester.runAsync(
+          () => UserRepository.instance.saveDietPlan(legacy()));
+      final c = await pumpScreen(tester);
+      expect(find.text('Old balanced dal'), findsNothing);
+      expect(debugDietPlanGenerations, 1);
+      expect(find.byType(SnackBar), findsNothing);
+      expect(c.read(dietPlanProvider), isEmpty);
+      expect(_savedPlan()?['id'], 'p0', reason: 'kept until the user saves');
+
+      await tester.runAsync(() async {
+        await c.read(userProfileProvider.notifier)
+            .setDietStrategy(DietStrategy.balanced);
+        await Future<void>.delayed(const Duration(milliseconds: 100));
+      });
+      await _settle(tester);
+      expect(find.text('Old balanced dal'), findsOneWidget,
+          reason: 'unstamped = Balanced: it loads again');
+      expect(c.read(dietPlanProvider), isNotEmpty);
+    });
+
     testWidgets('flag OFF: a stamped Keto plan still loads and no stamp is '
         'written', (tester) async {
       DietStrategyFlags.debugEnabledOverride = false;
@@ -681,6 +722,41 @@ void main() {
       await _tapReal(tester, find.byIcon(Icons.refresh));
       await save(tester);
       expect(_savedPlan()!.containsKey('diet_strategy'), isFalse);
+    });
+
+    // B-pass seat C finding 3: the screen through the REAL kill switch (no
+    // seam), the off path after the 3b-3 flip.
+    testWidgets('the real kill switch (no seam): no strategy section, a '
+        'stamped Keto plan loads, nothing stamped on save', (tester) async {
+      DietStrategyFlags.debugEnabledOverride = null;
+      await tester.runAsync(() => HiveService.instance.configBox
+          .put(DietStrategyFlags.disableKey, true));
+      expect(DietStrategyFlags.enabled, isFalse);
+      await seed(tester, extra: const {'diet_strategy': 'keto'});
+      await tester.runAsync(() => UserRepository.instance.saveDietPlan({
+            'id': 'p3',
+            'food_type': 'non_veg',
+            'diet_strategy': 'keto',
+            'diet_strategy_requested': 'keto',
+            'meals': [
+              {
+                'name': 'Lunch',
+                'items': [
+                  {'food_id': 'F0371', 'name': 'Old keto egg', 'calories': 90}
+                ],
+              }
+            ],
+          }));
+      final c = await pumpScreen(tester);
+      expect(find.byType(DietStrategySection), findsNothing);
+      expect(find.text('Old keto egg'), findsOneWidget);
+      expect(c.read(dietPlanProvider), isNotEmpty);
+      expect(debugDietPlanGenerations, 0, reason: 'the saved plan loaded');
+      await _tapReal(tester, find.byIcon(Icons.refresh));
+      await save(tester);
+      final saved = _savedPlan()!;
+      expect(saved.containsKey('diet_strategy'), isFalse);
+      expect(saved.containsKey('diet_strategy_requested'), isFalse);
     });
 
     testWidgets('flag OFF: a plan saved as Keto with the flag on loads as '

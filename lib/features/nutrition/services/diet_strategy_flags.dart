@@ -3,22 +3,39 @@
 // Ship-dark switch for the diet strategy (diet plan Unit 3a, 2026-11-14,
 // docs/plans/diet-strategy.md §3.3 and §3.12; CLAUDE.md §4.6 / §4.12.4).
 //
-// [enabled] is FALSE in Unit 3a ([kDietStrategyDefaultOn]): the chips are
-// hidden on the Diet Plan and Edit Profile screens, `effectiveMacroTargets`
-// returns the stored targets, nothing writes `diet_strategy`, and no reader
-// watches anything new, so 3a is byte-identical for every user. Unit 3b flips
-// the constant after keto / low-carb meal templates exist (full ×2 review).
+// Unit 3a shipped this dark; Unit 3b-3 (docs/plans/diet-strategy-3b3.md)
+// turns it ON ([kDietStrategyDefaultOn] true) once the keto / low-carb meal
+// templates, the strategy-aware Diet Plan screen, the coach manual passage
+// and the suggestMeal carb cap exist (Units 3b-1a, 3b-1b, 3b-2).
 //
-// After the flip, `configBox['disable_diet_strategy'] == true` is the local
-// kill switch: every screen reverts to Balanced at once (nothing
-// strategy-specific is stored). clearAllData() clears configBox at sign-out,
-// so the switch lasts until sign-out; a fleet-wide off is a build with the
-// constant false. Logged in docs/ship_dark_pending_review.yaml.
+// `configBox['disable_diet_strategy'] == true` is the local kill switch:
+// nothing strategy-specific is stored as targets, so every reader shows
+// Balanced once it reads [enabled] again. It is read, not watched: the coach
+// snapshot and the profile push follow it at once (both rebuild per call);
+// the targets providers and an open Diet Plan screen on their next rebuild,
+// in practice the next app start. clearAllData() clears configBox at sign-out, so the
+// switch lasts until sign-out; a fleet-wide off is a build with the constant
+// false. Deleting the switch and its OFF paths after the founder's device
+// check is on the OI board.
+//
+// The switch is CLIENT-ONLY (B-pass, Unit 3b-3): it stops this device
+// pushing the strategy, but a value already in user_profile.diet_strategy
+// still drives the server: suggestMeal's carb cap (off with the Edge Function
+// secret DISABLE_SUGGESTMEAL_DIET_STRATEGY) and the weekly report's strategy
+// line (off with DISABLE_DIET_STRATEGY_MANUAL_RULES); both Edge Functions are
+// deployed before this flip (docs/plans/diet-strategy-3b3.md §3). Nothing in
+// the app writes the key: it is set by hand (the Hive inspector).
+//
+// A box that cannot be read means ON (the build default): configBox is
+// opened by HiveService.init() before runApp and only cleared, never closed,
+// at sign-out, and the app has no background isolate, so today only tests
+// with no Hive reach the catch (pinned in
+// test/core/diet_strategy_targets_test.dart).
 import 'package:flutter/foundation.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
 
-/// Unit 3a ships dark; Unit 3b flips this.
-const bool kDietStrategyDefaultOn = false;
+/// On since Unit 3b-3 (Unit 3a shipped it off).
+const bool kDietStrategyDefaultOn = true;
 
 class DietStrategyFlags {
   DietStrategyFlags._();

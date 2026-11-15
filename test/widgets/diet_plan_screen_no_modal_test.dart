@@ -163,7 +163,12 @@ void main() {
       await UserRepository.instance.saveDietPlan(savedPlan);
     });
 
-    // Render the DietPlanScreen
+    // Render the DietPlanScreen. A tall surface: the list builds lazily and,
+    // since the diet strategy is on (Unit 3b-3), the strategy chips and notes
+    // sit above the meals.
+    tester.view.physicalSize = const Size(1080, 6000);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
     await tester.pumpWidget(
       ProviderScope(child: MaterialApp(home: DietPlanScreen())),
     );
@@ -335,7 +340,22 @@ void main() {
       await Future<void>.delayed(const Duration(milliseconds: 300));
     });
     await tester.pumpAndSettle();
+    // The lock is fire-and-forget after the Hive write; since the diet
+    // strategy is on (Unit 3b-3) more providers rebuild on that write and the
+    // door's continuation needs both real time (Hive I/O) and a frame, so
+    // wait for it (bounded) instead of one fixed delay.
+    for (var i = 0; i < 40 && locks == 0; i++) {
+      await tester.runAsync(
+          () => Future<void>.delayed(const Duration(milliseconds: 50)));
+      await tester.pump();
+    }
     expect(stored(), 'eggetarian');
+    expect(locks, 1);
+    // B-pass seat C finding 5: the loop stops at the first lock, so wait
+    // once more and re-check: still exactly one (no late second call).
+    await tester.runAsync(
+        () => Future<void>.delayed(const Duration(milliseconds: 200)));
+    await tester.pump();
     expect(locks, 1);
     expect(find.textContaining('Plan rebuilt for Eggetarian'), findsOneWidget);
     expect(find.text('EGGETARIAN'), findsOneWidget,
