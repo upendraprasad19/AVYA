@@ -50,8 +50,8 @@ A user who NEVER set the key (absent): every output is byte-identical to today: 
 | Row | Who | Card dose | Manual token |
 |---|---|---|---|
 | Creatine monohydrate | everyone | 5 g daily, any time | `5g daily` |
-| Vitamin D3 | everyone | 1000-2000 IU a day; get a 25(OH)D serum test before taking a high dose | `1000-2000 IU` |
-| B12 | veg, eggetarian, vegan | 500-1000 mcg a week, under the tongue | `500-1000 mcg` |
+| Vitamin D3 | everyone | 1000-2000 IU a day; get a 25(OH)D serum test before taking a high dose | `1000-2000 IU/day` |
+| B12 | veg, eggetarian, vegan | 500-1000 mcg a week, under the tongue | `500-1000 mcg/wk` |
 | Omega-3 EPA+DHA | everyone | 2-3 g a day; algal source for veg, eggetarian, vegan, fish oil or oily fish for non-veg and pescatarian | `2-3g/day` |
 | Multivitamin | everyone, optional | one a day as its label says; not a substitute for food (no number) | (added to the manual in 4b-server) |
 
@@ -68,7 +68,7 @@ Footer lines (constants, ASCII only because the PDF uses its default font): "Opt
 Server-only, merged and deployed BEFORE the client (Unit 3's order), inert until an app sends the key:
 
 - `captain_manual.ts` SECTION 5 gains ONE passage `DIET_SUPPLEMENTS_MANUAL_PASSAGE`, outside the food-type and strategy strings, removed by the kill switch with the same `base.replace(PASSAGE, "")` mechanism as `DIET_STRATEGY_MANUAL_PASSAGE`. Every line in it is conditional on `snapshot.profile.diet_supplements` being true, so nothing is standing text for a free user or a 13-17 year old: "If snapshot.profile.diet_supplements is true the user turned on Supplements: their plan MAY have a protein shake in the evening snack (a post-workout scoop works too) and the app shows a supplement card with the same doses; refer to them, never change a dose in chat. B12 and an algal omega-3 are for vegetarians, eggetarians and vegans; non-veg and pescatarian users take fish oil or oily fish. Multivitamin: optional, one a day as its label says, not a substitute for food. Black coffee, no sugar, 30-45 min before training is fine; still no pre-workout product. Anyone with a heart, kidney or liver condition, or who is pregnant or breastfeeding, checks with their doctor first." Kill switch `DISABLE_DIET_SUPPLEMENTS_MANUAL_RULES` (exactly `"true"`, read per call), composed in `captainManual()` after the strategy switch, added to OI-510's list; a test shows the switch removes the passage byte-exactly (like `captain_manual_diet_strategy_test.ts`). `ai-proxy` and `weekly-report` bundle the manual (weekly-report never receives the snapshot key, so the passage is inert there): deploy one founder go each, rollback dry-run first, versions read back.
-- `supabase/functions/_shared/testdata/supplement_stack.json`: food type -> row keys and manual tokens. A Deno test reads it and asserts every token is a substring of the manual's SECTION 5 text (token-level, not the card's sentences: the card says "5 g daily", the manual "5g daily, any time"), and that the food-type rows for B12 and the algal omega-3 equal the mapping the new passage states (vegetarian, eggetarian, vegan), so the test has something to assert.
+- `supabase/functions/_shared/testdata/supplement_card.json`: food type -> row keys and manual tokens. A Deno test reads it and asserts every token is a substring of the manual's SECTION 5 text (token-level, not the card's sentences: the card says "5 g daily", the manual "5g daily, any time"), and that the food-type rows for B12 and the algal omega-3 equal the mapping the new passage states (vegetarian, eggetarian, vegan), so the test has something to assert.
 - `docs/snapshot_contract.yaml` lists `profile.diet_supplements`: present as `true` ONLY when `dietSupplementsActive` holds (the builder reads `SubscriptionService.instance.proStateSnapshot()` like `_dietStrategyTargets`), absent otherwise, so the coach never talks about a card a lapsed-PRO user or a minor does not see. The chat snapshot and the daily snapshot push both carry it; no prompt builder reads a stored snapshot. The builder lands with 4a (it needs the rule); the contract entry lands with 4b-server with the note that the key is sent by app builds from 4a on.
 
 ## 7. Landing 4a (client + migration) and its tests
@@ -79,7 +79,7 @@ Order of work: (1) extraction commit (§5); (2) the migration file written and k
 - Identity (flag on, toggle off / absent): (a) the screen's generated plan item list (food ids, servings) for a fixed seed equals a fixture recorded from the BASE commit before any change (the fixture lands in commit 1); (b) the saved plan JSON key set has no `diet_supplements`; (c) the snapshot map key set and the profile push map are equal to the base for a profile that never set the key; a separate pin: stored `false` IS pushed (`diet_supplements: false`), stored `true` pushed, flag off pushes neither (mutant: `false` not pushed); (d) the PDF: `buildDietPlanPdf` is called with `stack: null` and the header lines (`dietPlanPdfHeaderLines`) and the item list passed to it are equal (the table is built inline and bytes are compressed, so text equality is not available; a source pin shows the stack section sits behind `if (stack != null)`); (e) a flag-off provider's dependency set is unchanged: a rebuild probe counts the provider's rebuilds while PRO state flips with the flag off (zero).
 - Screen (with Hive; runAsync traps as in 3b): the switch is locked for a free user; on for PRO regenerates once, adds the shake and the card; off regenerates and removes both; under 18 shows no section; a PRO lapse hides both; the stamp round trip (stamped true loads while active; a plan built before Unit 4 loads while inactive and regenerates while active); a SAVED plan holding F0823 shows no swap icon; the real kill switch (no seam) hides the section and a stamped plan still loads.
 - Snapshot builder: a table test over flag x PRO x age x toggle: the key is `true` exactly when `dietSupplementsActive` holds, absent otherwise (mutant: the raw stored bool emitted).
-- Dart <-> Deno vector: a Dart test reads `supplement_stack.json` and compares `supplementCardFor` per food type.
+- Dart <-> Deno vector: a Dart test reads `supplement_card.json` and compares `supplementCardFor` per food type.
 - Source pins (comment-stripped): the push call site gates on the flag and sits in the upserted map (the 3b-3 seat C lesson, with the queued send and no later change of the map); no reader of `diet_supplements` in the new files other than through `dietSupplementsActive` (presence-only, with that reason: `date_of_birth` is read in 20+ files, so a whole-tree grep cannot hold); the migration adds exactly one nullable column.
 - Mutants (each applied once, count-checked): age `>= 18` to `> 18` and to `>= 13`; blank date of birth read as adult; leap-day compare off by one; `pro` ignored; toggle ignored; the 15 g threshold and the 1.08 ceiling; vegan row swapped to whey; the stamp ignored on load; the stamp written when inactive; the push key written when absent; a dose token changed (the vector test reddens); the flag read inverted; the swap-icon condition removed; the replacement order reversed; the net-gain guard removed; the push of `false` dropped; the snapshot key emitted from the raw bool.
 - Whole-project `flutter analyze --no-fatal-infos`, the pre-commit gate loop, the full suite from CI, then the 4a plan-review record and B-pass. Tier: the default-ON flag with a per-user opt-in is NOT the CLAUDE.md §4.12.4 ship-dark tier, so the full x2 review and `bpass: accepted` apply and no `ship_dark_pending_review.yaml` entry is needed.
@@ -149,3 +149,25 @@ Days with a protein gap of 15 g or more, and what the two rules do:
 | the other six (non-veg cut male, maintain x4, build x2) | 0/50 | n/a | n/a | n/a | unchanged | unchanged |
 
 Average items removed per shake: 0.16 (cut male veg), 0.77 (cut female veg), 0.49 (cut vegan), 1.02 (1200 floor veg). The 1200 kcal veg archetype stays at 0.86 of its protein target even with the shake (a 100 g protein target on 1200 kcal for a vegetarian): the card and the shake help, they do not make that target reachable, and the plan does not claim to.
+
+## 13. Landing 4b-server B-pass dispositions (docs/reviews/diet-supplements-bpass.md)
+
+Three context-blind seats on `d5e1c9ca`; no P0 or P1. 24 findings: 5 P2, 19 P3. All fixed except three accepted.
+
+| Seat / # | Sev | Finding | Disposition |
+|---|---|---|---|
+| B1 | P2 | the header "none of the lines below apply" had no end | bounded to the next `---`; pinned |
+| B2 | P2 | "a post-workout scoop works too" reads as a second scoop | "one scoop a day in total ... not both"; pinned |
+| B3 | P2 | multivitamin vs the Never rule; doctor line without an object and after the coffee; no caffeine bound | rewritten; doctor line first; one cup; order pinned |
+| A1 | P2 | the OI-510 edit told the editor to delete the passage; stale title and Blocked-on; duplicate | rewritten |
+| C1 | P2 | the card-rows mapping test was circular | keys tied to `FOOD_TYPE_KEYS`, split parsed from the passage; the Dart reader is a named step of 4a (section 7) |
+| B4 / A2 | P3 | the age / PRO guarantee is client-only | the header repeats the age condition; comments say the server does not verify the key |
+| B5, B6, A3, A5 | P3 | wording: powder type and keto, "Their plan", vocabulary keys, "same doses as above" | fixed |
+| A4 | P3 | legacy food-type text does not define eggetarian / pescatarian | accepted: the 2b rollback case, harmless, said in the comment |
+| A6 | P3 | no PRO / paywall line for the coach | accepted: the diet strategy has the same shape; noted for the coach check |
+| A7, A8 | P3 | "stack" in file names; CLAUDE.md size | `supplement_card.json`; row shortened |
+| B7/C7, C2, C3, C4, C5, C6, C8 | P3 | captainPrompt path, a vacuous assertion, an unguarded slice, tokens without units, digits only, weekly-report inertness unpinned, ambient env | each fixed and pinned; mutants S12-S21 red |
+
+Accepted-with-reasons count: three (A4, A6, and the 4b mapping test's Dart reader, which lands with 4a by name).
+
+One plan change from 4a work: the identity pin (a) in section 7 compares the screen's saved plan against `generatePlan` for the same seed at runtime (`dietPlanSeed(DateTime.now(), 0)`), instead of a fixture recorded at the base commit, because the screen's seed is date-derived and a recorded fixture would go stale; G1/G2 already pin the generator itself.

@@ -288,12 +288,12 @@ Never:
 - Recommend doses outside the bands above
 - Endorse herbal/ayurvedic supplements without specific evidence
 
-If snapshot.profile.diet_supplements is true (the user turned on Supplements in the app; absent = off, and then none of the lines below apply):
-- Their plan MAY have a protein shake in the evening snack (a post-workout scoop works too) and the app shows a supplement card with the same doses as above. Refer to them; never change a dose or the Supplements switch in chat.
-- B12 and an algal omega-3 are for vegetarians, eggetarians and vegans; non-veg and pescatarian users take fish oil or oily fish.
-- Multivitamin: optional, one a day as its label says, not a substitute for food.
-- Black coffee, no sugar, 30-45 min before training is fine; still no pre-workout product.
-- Anyone with a heart, kidney or liver condition, or who is pregnant or breastfeeding, checks with their doctor first.
+If snapshot.profile.diet_supplements is true AND snapshot.profile.age is 18 or more (the user turned on Supplements in the app; absent = off, and then none of the bullets directly below, up to the next --- line, apply):
+- The user's plan MAY have a protein shake in the evening snack (whey; plant protein for a vegan; fine on keto), and the app shows a supplement card with the doses above for creatine, vitamin D3, B12 and omega-3. That is one scoop a day in total: the plan's shake or a post-workout scoop, not both. Refer to them; never change a dose or the Supplements switch in chat.
+- B12 and an algal omega-3 are for veg, eggetarian and vegan users; non_veg and pescatarian users take fish oil or oily fish.
+- Multivitamin: the one item with no band above; one standard multivitamin a day as its label says, not a substitute for food.
+- Before starting any of this, including the coffee below, anyone with a heart, kidney or liver condition, or who is pregnant or breastfeeding, checks with their doctor.
+- Black coffee, no sugar, one cup 30-45 min before training is fine; still no pre-workout product.
 
 ---
 
@@ -510,20 +510,24 @@ export const DIET_STRATEGY_MANUAL_PASSAGE =
 
 // Diet plan Unit 4 (2026-11-15, docs/plans/diet-supplements.md §6): the
 // SUPPLEMENTS passage of SECTION 5. Every line is conditional on
-// snapshot.profile.diet_supplements, which only an app build with the
-// Supplements switch ON sends (and only for a PRO adult), so it is standing
-// text for nobody else and inert in weekly-report (no snapshot). It sits
+// snapshot.profile.diet_supplements, which an app build sends only with the
+// Supplements switch ON, for a PRO adult (the server does not verify that:
+// the key is client-supplied, the header repeats the age condition, and the
+// passage grants nothing beyond SECTION 5's own bands), so it is standing
+// text for nobody else and inert in weekly-report (no snapshot). With the
+// food-type switch ON the legacy SECTION 7 rules do not define eggetarian or
+// pescatarian while this passage names them: harmless, the rollback case. It sits
 // outside every food-type and strategy string. Removed when
 // DISABLE_DIET_SUPPLEMENTS_MANUAL_RULES is exactly "true" (read per call).
 // The leading newline makes the removal restore the pre-Unit-4 text exactly.
 export const DIET_SUPPLEMENTS_MANUAL_PASSAGE =
   "\n" +
-  "If snapshot.profile.diet_supplements is true (the user turned on Supplements in the app; absent = off, and then none of the lines below apply):\n" +
-  "- Their plan MAY have a protein shake in the evening snack (a post-workout scoop works too) and the app shows a supplement card with the same doses as above. Refer to them; never change a dose or the Supplements switch in chat.\n" +
-  "- B12 and an algal omega-3 are for vegetarians, eggetarians and vegans; non-veg and pescatarian users take fish oil or oily fish.\n" +
-  "- Multivitamin: optional, one a day as its label says, not a substitute for food.\n" +
-  "- Black coffee, no sugar, 30-45 min before training is fine; still no pre-workout product.\n" +
-  "- Anyone with a heart, kidney or liver condition, or who is pregnant or breastfeeding, checks with their doctor first.\n";
+  "If snapshot.profile.diet_supplements is true AND snapshot.profile.age is 18 or more (the user turned on Supplements in the app; absent = off, and then none of the bullets directly below, up to the next --- line, apply):\n" +
+  "- The user's plan MAY have a protein shake in the evening snack (whey; plant protein for a vegan; fine on keto), and the app shows a supplement card with the doses above for creatine, vitamin D3, B12 and omega-3. That is one scoop a day in total: the plan's shake or a post-workout scoop, not both. Refer to them; never change a dose or the Supplements switch in chat.\n" +
+  "- B12 and an algal omega-3 are for veg, eggetarian and vegan users; non_veg and pescatarian users take fish oil or oily fish.\n" +
+  "- Multivitamin: the one item with no band above; one standard multivitamin a day as its label says, not a substitute for food.\n" +
+  "- Before starting any of this, including the coffee below, anyone with a heart, kidney or liver condition, or who is pregnant or breastfeeding, checks with their doctor.\n" +
+  "- Black coffee, no sugar, one cup 30-45 min before training is fine; still no pre-workout product.\n";
 
 export function dietSupplementsManualRulesOff(): boolean {
   return Deno.env.get("DISABLE_DIET_SUPPLEMENTS_MANUAL_RULES") === "true";
