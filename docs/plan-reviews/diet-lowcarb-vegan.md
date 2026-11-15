@@ -5,6 +5,8 @@ blast_radius: account
 review_rounds: 2
 ground_truth_verified: true
 verdict: converged
+bpass: accepted
+bpass_review: docs/reviews/diet-lowcarb-vegan-bpass.md
 ---
 
 # Plan-review record — vegan Low carb plans (`diet-lowcarb-vegan`)
@@ -32,4 +34,4 @@ Fourteen mutants in all, every one red (plan section 5): G1-G9 over the generato
 
 ## B-pass
 
-Run on the CI-green head before the merge (CLAUDE.md §4.3); its file and verdict are added to this record when it closes.
+Three context-blind seats (generator and swap logic, tests and mutants, asset/seed/docs) on the CI-green head cfefb6f8; no P0 or P1. Findings, dispositions and the measured trade-off for A2 are in `docs/reviews/diet-lowcarb-vegan-bpass.md`. Fixed in this batch: B1 (cap function literal table), B2 (Keto soy clause), B3 (five entries pinned, per-food vegan reach), B7, C-2, C-3, C-5; four new mutants red. Accepted with reasons: A1, A2 (measured), A3, A5, B5, B6, B9.

@@ -74,6 +74,12 @@ carb sources of a vegan day (legumes, millets) cannot be cut without starving ca
   strings, the cap pin (+ `dietFamilyCapFor`), the T10 plan-level cap check (uses `dietFamilyCapFor`).
 - New: the five foods are offered to Low carb only (plans and swap catalog, Keto never holds one, vegan
   Low carb plans do); `food_library_v4_upgrade_behavioral_test` gains the v5 -> v6 path and the v6 mirror.
+- B-pass additions (seat B): the cap function is pinned by a literal table (seven families x three strategies); the
+  five new entries are pinned by literal (roles, family, portions); the vegan Low carb plans must use EACH of the five
+  (not any one); the Keto soy clause is tightened to at most one (Keto's carb cap leaves tofu as its only soy food, so
+  the clause cannot see a Keto cap mutant, the swap-site test is the real pin); the screen test derives its 19 from
+  the catalog. Mutations over the new pins: cap function drops the older Low carb layer for non-soy families; avocado
+  loses its snack role; chia moves from `nut` to `fat`; edamame loses `side` (results in the review file).
 - T10 floors rebaselined from the built code (minimum over 50 seeds minus 0.02). 14 of 16 Low carb rows
   rise (kcal floor +0.00 to +0.08, three rows unchanged; protein floor up to +0.15); TWO worst seeds move
   down by 0.03 because every Low carb plan's random stream changed (an optional role draws once more):
@@ -145,4 +151,19 @@ to `fix` commits) and this plan, with its measurements, is the record of the obs
   there), so it would pin only the new behaviour.
 - Soy 3 applies to every diet preference in Low carb (non-veg users included), as the plan's "every Low
   carb plan changes" says.
-- Rollback: revert the PR; the version constant staying 6 is harmless (a re-seed with the old flags).
+- B-pass A1, accepted: the Low carb soy cap of 3 applies to every diet preference. Measured over 16 archetypes x 50
+  seeds, 21 of 700 non-vegan plans held three soy items (46 of 800 overall); gating it on vegan would add a
+  preference parameter to the cap function, the generator and the swap sheet for a 3 % case, and the founder asked
+  for a plan that meets its macros.
+- B-pass A2, accepted with a measurement: the optional `fat` role in the Low carb evening snack lets ghee, butter or
+  coconut milk in (213 of 800 plans; 336 at lunch, where a cooking fat is normal). Tried: a guard that keeps a snack
+  slot's optional fat to foods that also carry the `snack` role (coconut, avocado, almond butter, chia). It removed
+  the evening cooking fat (0 of 800) but, at 200 plans per cell, lowered vegan protein by 2 to 3 points (75 vs 77,
+  71 vs 74, 69 vs 71 percent; with the shake 91 vs 92, 90 vs 92, 83 vs 85), re-rolled every Low carb floor (six
+  protein floors and four kcal floors would drop, one by 0.09) and moved no non-vegan macro. This PR exists to raise
+  vegan macros, so the guard was reverted. It is a presentation blemish only (macro-neutral). Reopen when a device
+  check shows the founder dislikes it: the fix is that guard plus a T10 re-baseline.
+- B-pass A5 / C-6, accepted: chia seeds sit in the `nut` family (daily cap 1, no Low carb override), so a day holding
+  almonds or another nut item cannot also hold chia or almond butter. Consistent with the existing caps.
+- Rollback: revert the PR. A device already at seed version 6 keeps the five extra `is_everyday: true` rows after a
+  revert (the constant is back at 5, so it is not re-seeded); nothing reads them (the swap sheet is catalog-driven).

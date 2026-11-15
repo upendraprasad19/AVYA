@@ -117,7 +117,7 @@ const List<CuratedSlotTemplate> kKetoSlotTemplates = [
 ];
 
 /// Unit 3b: Low carb keeps one grain at lunch, none at dinner; breakfast is a
-/// protein with an optional breakfast main.
+/// protein with an optional breakfast main; an optional fat at all but mid-morning.
 const List<CuratedSlotTemplate> kLowCarbSlotTemplates = [
   CuratedSlotTemplate('Breakfast', 'breakfast', 0.25,
       [DietRole.breakfastProtein], [DietRole.breakfastMain, DietRole.fat]),
