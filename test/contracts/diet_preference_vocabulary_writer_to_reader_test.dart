@@ -369,4 +369,40 @@ void main() {
     expect(savedPlanMatchesFoodType(legacy('F0021'), FoodType.veg,
         rowOf: nonVegRow), isFalse);
   });
+
+  // Diet plan Unit 3b-1a (round 4 finding 1, seats A3 / B5): the Low carb /
+  // Keto only egg dishes carry the egg family too, so a legacy plan holding
+  // them now loads for an eggetarian or a pescatarian (on main they had no
+  // family and failed the veg rule). Every other new id answers as before.
+  test('a legacy plan with fried egg or cheese omelette loads for egg eaters',
+      () {
+    Map<String, dynamic> legacy(String id) => {
+          'id': 'diet_plan_legacy',
+          'meals': [
+            {
+              'name': 'Breakfast',
+              'items': [
+                {'food_id': id, 'name': id},
+              ],
+            },
+          ],
+        };
+    Map<String, dynamic>? nonVegRow(String id) =>
+        {'id': id, 'name': id, 'is_veg': false, 'is_vegan': false};
+    for (final id in ['F0371', 'F0790']) {
+      expect(dietCatalogFamily(id), DietFamily.egg, reason: id);
+      for (final t in [FoodType.eggetarian, FoodType.pescatarian]) {
+        expect(savedPlanMatchesFoodType(legacy(id), t, rowOf: nonVegRow),
+            isTrue, reason: '$id $t');
+      }
+      for (final t in [FoodType.veg, FoodType.vegan]) {
+        expect(savedPlanMatchesFoodType(legacy(id), t, rowOf: nonVegRow),
+            isFalse, reason: '$id $t');
+      }
+    }
+    // Chicken thigh stays out for a pescatarian.
+    expect(dietCatalogFamily('F0348'), DietFamily.chicken);
+    expect(savedPlanMatchesFoodType(legacy('F0348'), FoodType.pescatarian,
+        rowOf: nonVegRow), isFalse);
+  });
 }

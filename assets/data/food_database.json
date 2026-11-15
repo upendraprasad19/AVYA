@@ -601,7 +601,7 @@
       "lunch",
       "dinner"
     ],
-    "is_everyday": false
+    "is_everyday": true
   },
   {
     "id": "F0024",
@@ -1042,7 +1042,7 @@
       "lunch",
       "dinner"
     ],
-    "is_everyday": false
+    "is_everyday": true
   },
   {
     "id": "F0041",
@@ -6863,7 +6863,7 @@
       "lunch",
       "dinner"
     ],
-    "is_everyday": false
+    "is_everyday": true
   },
   {
     "id": "F0265",
@@ -9043,7 +9043,7 @@
       "lunch",
       "dinner"
     ],
-    "is_everyday": false
+    "is_everyday": true
   },
   {
     "id": "F0349",
@@ -9639,7 +9639,7 @@
     "meal_fit": [
       "breakfast"
     ],
-    "is_everyday": false
+    "is_everyday": true
   },
   {
     "id": "F0372",
@@ -9950,7 +9950,7 @@
       "breakfast",
       "snack"
     ],
-    "is_everyday": false
+    "is_everyday": true
   },
   {
     "id": "F0384",
@@ -10233,7 +10233,7 @@
       "lunch",
       "dinner"
     ],
-    "is_everyday": false
+    "is_everyday": true
   },
   {
     "id": "F0395",
@@ -10333,7 +10333,7 @@
     "meal_fit": [
       "snack"
     ],
-    "is_everyday": false
+    "is_everyday": true
   },
   {
     "id": "F0399",
@@ -10435,7 +10435,7 @@
       "lunch",
       "dinner"
     ],
-    "is_everyday": false
+    "is_everyday": true
   },
   {
     "id": "F0403",
@@ -10462,7 +10462,7 @@
       "lunch",
       "dinner"
     ],
-    "is_everyday": false
+    "is_everyday": true
   },
   {
     "id": "F0404",
@@ -12518,7 +12518,7 @@
     "meal_fit": [
       "snack"
     ],
-    "is_everyday": false
+    "is_everyday": true
   },
   {
     "id": "F0484",
@@ -20323,7 +20323,7 @@
       "lunch",
       "dinner"
     ],
-    "is_everyday": false
+    "is_everyday": true
   },
   {
     "id": "F0791",
@@ -26297,7 +26297,7 @@
       "lunch",
       "dinner"
     ],
-    "is_everyday": false
+    "is_everyday": true
   },
   {
     "id": "F1023",
@@ -26349,7 +26349,7 @@
       "lunch",
       "dinner"
     ],
-    "is_everyday": false
+    "is_everyday": true
   },
   {
     "id": "F1025",
