@@ -128,3 +128,13 @@ Deno.test("weekly-report puts the strategy line under the protein target", () =>
   assert(at >= 0, "the line sits right after the protein target, nothing when empty");
   assert(code.indexOf("const dietStrategyLine =") < at, "computed before the message");
 });
+
+// Diet plan Unit 4 (B-pass seat C finding 6): the weekly report bundles the
+// captain manual, whose SUPPLEMENTS passage is conditional on
+// snapshot.profile.diet_supplements. The report sends no snapshot, so the
+// passage is inert here ONLY while nothing in this function mentions the key.
+// Presence-only pin: a later edit that adds the key to the weekly message
+// must also decide the gate on purpose.
+Deno.test("weekly-report never sends diet_supplements (the manual passage stays inert here)", () => {
+  assert(!stripComments(source).includes("diet_supplements"));
+});
