@@ -10,7 +10,9 @@
 //   - adult, free: the switch is shown and a tap opens the paywall;
 //   - adult, PRO: the switch writes `diet_supplements`; the card shows below
 //     it only while Supplements are ACTIVE (the one rule);
-//   - a stored "on" that PRO lapsed shows the switch off plus a paused hint.
+//   - a stored "on" that PRO lapsed shows the switch ON (the stored choice)
+//     plus a paused hint; turning it off is always allowed, turning it on
+//     again is a PRO action.
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:icanbefitter/core/constants/diet_supplement_doses.dart';
@@ -55,15 +57,17 @@ class _DietSupplementsSectionState
 
   @override
   Widget build(BuildContext context) {
-    final dob = ref.watch(userProfileProvider.select((p) => p['date_of_birth']));
-    final age = ageYearsOn(dob, DateTime.now());
-    // A minor sees nothing at all.
-    if (age != null && age < kSupplementsMinAgeYears) {
-      return const SizedBox.shrink();
-    }
+    // The age rule has ONE door: dietSupplementsEligibleProvider (flag on,
+    // adult). Not eligible: a minor sees nothing at all; an unreadable date
+    // of birth gets a hint that says where to add it.
+    final eligible = ref.watch(dietSupplementsEligibleProvider);
     final dim =
         AppTypography.body.copyWith(fontSize: 13, color: AppColors.textDim);
-    if (age == null) {
+    if (!eligible) {
+      final dob = ref.watch(dietSupplementsInputsProvider.select((i) => i.dob));
+      if (ageYearsOn(dob, DateTime.now()) != null) {
+        return const SizedBox.shrink();
+      }
       return Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -77,8 +81,8 @@ class _DietSupplementsSectionState
     }
 
     final isPro = ref.watch(subscriptionInfoProvider.select((s) => s.isPro));
-    final stored = ref.watch(userProfileProvider
-        .select((p) => p['diet_supplements'] == true));
+    final stored = ref.watch(dietSupplementsInputsProvider
+        .select((i) => i.switchValue == true));
     final active = ref.watch(dietSupplementsActiveProvider);
     final foodType =
         ref.watch(userProfileProvider.select((p) => foodTypeOfProfile(p)));
@@ -90,7 +94,8 @@ class _DietSupplementsSectionState
         const SizedBox(height: 8),
         WardCard(
           padding: const EdgeInsets.fromLTRB(16, 10, 8, 10),
-          child: Row(
+          child: MergeSemantics(
+            child: Row(
             children: [
               Expanded(
                 child: Column(
@@ -111,16 +116,19 @@ class _DietSupplementsSectionState
                 const Padding(
                   padding: EdgeInsets.only(right: 4),
                   child: Icon(Icons.lock_outline,
-                      size: 16, color: AppColors.textMute),
+                      size: 16,
+                      color: AppColors.textMute,
+                      semanticLabel: 'PRO feature'),
                 ),
               Switch(
                 key: const ValueKey('diet_supplements_switch'),
-                value: active,
-                onChanged: _busy ? null : (v) => _onToggle(v, active),
+                value: stored,
+                onChanged: _busy ? null : (v) => _onToggle(v, stored),
                 activeThumbColor: AppColors.accent,
                 activeTrackColor: AppColors.accent.withValues(alpha: 0.3),
               ),
             ],
+          ),
           ),
         ),
         if (paused) ...[
@@ -154,7 +162,7 @@ class DietSupplementCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('Daily supplements',
+          Text('Your supplements',
               style: AppTypography.body.copyWith(
                   fontSize: 14,
                   fontWeight: FontWeight.w700,

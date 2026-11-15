@@ -29,7 +29,7 @@ const SupplementRow kCreatineRow = SupplementRow(
   'creatine',
   'Creatine monohydrate',
   '5 g daily, any time',
-  'The best-evidenced one.',
+  'Strong evidence base.',
 );
 
 const SupplementRow kVitaminD3Row = SupplementRow(
@@ -43,7 +43,7 @@ const SupplementRow kB12Row = SupplementRow(
   'b12',
   'Vitamin B12',
   '500-1000 mcg a week, under the tongue',
-  'Needed on a plant-based diet.',
+  'For veg, eggetarian and vegan diets.',
 );
 
 const SupplementRow kOmega3AlgalRow = SupplementRow(
@@ -68,11 +68,23 @@ const SupplementRow kMultivitaminRow = SupplementRow(
 );
 
 /// The footer lines of the card, in order.
+///
+/// The doctor line comes first and is meant to cover the coffee line after it
+/// (SECTION 5: "Before starting any of this, including the coffee below").
+/// The coffee line is the founder's wording (2026-11-14), not the manual's.
 const List<String> kSupplementCardFooter = [
-  'Optional: black coffee 30-45 min before training. No pre-workout product is needed.',
   'Talk to your doctor first if you have a heart, kidney or liver condition, or if you are pregnant or breastfeeding.',
+  'Optional: black coffee 30-45 min before training. No pre-workout product is needed.',
+  'One scoop of protein powder a day in total: the plan\'s shake or one after training, not both.',
   'The plan, the protein and sleep do most of the work.',
 ];
+
+/// The header of the card's table (the PDF) and its rows, one per supplement:
+/// the one place the table's text is made, so a test reads what the PDF gets.
+const List<String> kSupplementTableHeaders = ['Supplement', 'Dose', 'Note'];
+
+List<List<String>> supplementTableData(List<SupplementRow> rows) =>
+    [for (final r in rows) [r.name, r.dose, r.note]];
 
 /// The rows for [type], in display order. B12 and the algal omega-3 are for
 /// veg, eggetarian and vegan; non-veg and pescatarian take fish oil.

@@ -134,16 +134,19 @@ class DietPlanNotifier extends Notifier<Map<String, PlannedSlot>> {
         ? ref.watch(macroTargetsProvider.select(dietStrategyOfTargets))
         : null;
     // Unit 4a: the same rule for Supplements. With the kill switch off there
-    // is no watch and no check (flag-off dependency rule); with it on, a
-    // plan built under the other state gives no hints (the Diet Plan screen
-    // regenerates it, nothing to show until then).
+    // is no watch (flag-off dependency rule) and the state is "not active";
+    // with it on, the state is the active provider. A plan built under the
+    // other state gives no hints (the Diet Plan screen regenerates it).
     final bool? supplements = DietSupplementsFlags.enabled
         ? ref.watch(dietSupplementsActiveProvider)
         : null;
     final raw = UserRepository.instance.getSavedDietPlan();
     if (raw == null) return const {};
     if (!savedPlanMatchesFoodType(raw, foodType)) return const {};
-    if (supplements != null && !savedPlanMatchesSupplements(raw, supplements)) {
+    // Kill switch off: nothing is active, so a plan stamped as built with
+    // Supplements (a shake in it) gives no hints either; an unstamped plan,
+    // every plan of a user who never opted in, is unchanged.
+    if (!savedPlanMatchesSupplements(raw, supplements ?? false)) {
       return const {};
     }
     if (effective != null &&

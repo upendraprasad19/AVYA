@@ -8,13 +8,17 @@
 //            AND  an adult (18 or more) with a readable date of birth.
 //
 // Every reader (the Diet Plan screen, the plan provider, the snapshot
-// builder) calls [dietSupplementsActive]; none reads the key or the age
-// itself. Pure: no Hive, no Riverpod.
+// builder) calls [dietSupplementsActive] or [dietSupplementsEligible]; the
+// only raw reads of the key and the date are the inputs provider (it reads
+// Hive) and the section's hint choice (unreadable date vs a minor). Pure: no
+// Hive, no Riverpod.
 //
 // The age gate is SELF-ATTESTED: onboarding stores whatever date the user
-// picked, and the conversational step seeds an unanswered date at
-// 1 Jan 1998, so a minor who taps Next reads as an adult (an existing hole
-// in every age reader; parked on the OI board for the store launch).
+// picked. The live stepped flow (identity_screen.dart) seeds its picker at
+// 25 years ago and the legacy chat flow at 1 Jan 1998, so a minor who
+// accepts the shown date reads as an adult (an existing hole in every age
+// reader, OI-513; parked on the OI board for the store launch). The age is
+// counted on the device's calendar day, not IST's: a one-day edge.
 library;
 
 /// The age from which Supplements are offered.

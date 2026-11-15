@@ -1492,7 +1492,7 @@ concepts:
           Passes plannedSlots into TodaysMealsCard which renders the
           "FROM YOUR DIET PLAN" hint on every empty slot.
       - file: lib/features/nutrition/screens/diet_plan_screen.dart
-        line_range: 115-162
+        line_range: 133-162
         method: _generatePlan (entry-point check for existing saved plan)
         semantic: pass-through
         fields_read: [via UserRepository.instance.getSavedDietPlan() — Map<String, dynamic>?]
@@ -1679,7 +1679,7 @@ concepts:
         semantic: filtered
         fields_read: [diet_preference, saved plan food_type]
       - file: lib/features/nutrition/screens/diet_plan_screen.dart
-        line_range: 115-223
+        line_range: 133-223
         method: _generatePlan + _changeFoodType (selector; mismatch notice once per session)
         semantic: pass-through
         fields_read: [diet_preference, saved plan food_type]
@@ -1772,7 +1772,7 @@ concepts:
       3a; the strategy keeps that pre-existing split, it does not add one.
     writers:
       - file: lib/features/profile/providers/profile_provider.dart
-        line_range: 147-188
+        line_range: 150-190
         method: setDietStrategy + _applyDietStrategy (UserProfileNotifier; the Diet Plan screen's door)
         notes: |
           Serialised; captures the user id at call time and writes nothing
@@ -1812,7 +1812,7 @@ concepts:
         semantic: transformed
         fields_read: [diet_strategy, daily_calories, protein_grams, carb_grams, carbs_grams, fat_grams]
       - file: lib/features/ai_coach/services/ai_snapshot_builder.dart
-        line_range: 70-224
+        line_range: 72-237
         method: _dietStrategyTargets + buildAiContext (daily_targets carbs/fat, profile.diet_strategy / diet_strategy_label; no new key with the flag off)
         semantic: transformed
         fields_read: [diet_strategy, daily_calories, protein_grams, carb_grams, carbs_grams, fat_grams]
@@ -1827,7 +1827,7 @@ concepts:
         semantic: transformed
         fields_read: [strategy_index, carbs, diet_strategy (via resolveBaseMacroPack for the vegan pair)]
       - file: lib/features/nutrition/screens/diet_plan_screen.dart
-        line_range: 74-101
+        line_range: 83-115
         method: initState listener + _onEffectiveStrategy (Unit 3b-1b; regenerates once per change of planStrategyFor(effective, foodType))
         semantic: pass-through
         fields_read: [strategy_index]
@@ -1912,14 +1912,26 @@ concepts:
         line_range: 1-89
         method: dietSupplementsActive + dietSupplementsEligible + ageYearsOn + dietSupplementsPushEntry (the one rule)
       - file: lib/features/nutrition/providers/diet_supplements_active_provider.dart
-        line_range: 1-50
-        method: dietSupplementsActiveProvider + dietSupplementsEligibleProvider (reactive rule; false before any watch with the kill switch off)
+        line_range: 1-62
+        method: dietSupplementsInputsProvider + dietSupplementsActiveProvider + dietSupplementsEligibleProvider (reactive rule; the inputs are read from Hive and rebuilt on the restore tick, a restore never touches the profile provider's state; false before any watch with the kill switch off)
+      - file: lib/features/nutrition/widgets/diet_supplements_section.dart
+        line_range: 1-189
+        method: DietSupplementsSection + DietSupplementCard (the switch shows the STORED choice; reads the inputs and eligibility providers, not the raw key; the paused hint for a stored on without PRO)
       - file: lib/features/nutrition/screens/diet_plan_screen.dart
         line_range: 118-131
         method: _onSupplementsActive + _supplementsActive (regenerates once per change of the state)
+      - file: lib/features/nutrition/screens/diet_plan_screen.dart
+        line_range: 133-162
+        method: _generatePlan (the saved-plan load check: savedPlanMatchesSupplements against the active state, kill switch included, so a stamped plan is not loaded with the switch off)
+      - file: lib/features/nutrition/screens/diet_plan_screen.dart
+        line_range: 375-438
+        method: _savePlan (the WRITER of the plan stamp `diet_supplements: true`, only when the plan was built active)
+      - file: lib/features/nutrition/services/diet_plan_supplements_state.dart
+        line_range: 1-25
+        method: savedPlanMatchesSupplements + dietPlanNeedsRegenerationForSupplements (the stamp's pure readers)
       - file: lib/features/nutrition/providers/diet_plan_provider.dart
-        line_range: 121-150
-        method: DietPlanNotifier.build (Nutrition-tab hints follow the state; no watch with the kill switch off)
+        line_range: 121-155
+        method: DietPlanNotifier.build (Nutrition-tab hints follow the state; no watch with the kill switch off, and then a stamped plan gives no hints)
       - file: lib/features/ai_coach/services/ai_snapshot_builder.dart
         line_range: 165-176
         method: buildAiContext (profile.diet_supplements: true only while active; no key otherwise)
@@ -13342,7 +13354,7 @@ concepts:
       enforced at merge.
     writers:
       - file: docs/blast_radius.yaml
-        line_range: 39-663
+        line_range: 39-669
         method: paths list (declaration order, first match wins)
         notes: |
           THE canonical writer. Exact-path rules must be declared ABOVE the

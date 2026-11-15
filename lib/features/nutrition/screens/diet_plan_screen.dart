@@ -147,8 +147,7 @@ class _DietPlanScreenState extends ConsumerState<DietPlanScreen> {
         if (savedPlanMatchesFoodType(savedPlan, _foodType) &&
             (!DietStrategyFlags.enabled ||
                 savedPlanMatchesStrategy(savedPlan, _currentPlanStrategy())) &&
-            (!DietSupplementsFlags.enabled ||
-                savedPlanMatchesSupplements(savedPlan, _supplementsActive()))) {
+            savedPlanMatchesSupplements(savedPlan, _supplementsActive())) {
           _loadSavedPlan(savedPlan);
           return;
         }

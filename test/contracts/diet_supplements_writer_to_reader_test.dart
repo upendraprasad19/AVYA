@@ -25,7 +25,12 @@ import 'dart:io';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:icanbefitter/core/services/hive_service.dart';
+import 'package:icanbefitter/core/services/hive_user_session.dart';
 import 'package:icanbefitter/core/services/migrated_key.dart';
+import 'package:icanbefitter/core/services/sync_service.dart';
+import 'package:icanbefitter/features/home/providers/home_provider.dart'
+    show restoreCompletedTickProvider;
 import 'package:icanbefitter/features/ai_coach/services/ai_snapshot_builder.dart';
 import 'package:icanbefitter/features/auth/providers/auth_invalidation_provider.dart';
 import 'package:icanbefitter/features/nutrition/providers/diet_plan_provider.dart';
@@ -35,6 +40,16 @@ import 'package:icanbefitter/features/profile/providers/profile_provider.dart';
 import 'package:icanbefitter/shared/repositories/user_repository.dart';
 
 import '../helpers/hive_test_setup.dart';
+
+/// A test restore tick: the real provider listens to SyncService, which unit
+/// tests do not start.
+class _Tick extends Notifier<int> {
+  @override
+  int build() => 0;
+  void bump() => state++;
+}
+
+final _tickProvider = NotifierProvider<_Tick, int>(_Tick.new);
 
 class _Fx {
   String? uid = 'user-a';
@@ -73,6 +88,8 @@ void main() {
     DietSupplementsFlags.debugEnabledOverride = true;
     c = ProviderContainer(overrides: [
       authUserIdTokenProvider.overrideWithValue(kTestUserId),
+      restoreCompletedTickProvider
+          .overrideWith((ref) => ref.watch(_tickProvider)),
     ]);
   });
 
@@ -175,6 +192,35 @@ void main() {
       sub.close();
     });
 
+    test('a PRO lapse and a renewal flip it mid-session', () async {
+      await seed(sw: true);
+      c.read(subscriptionInfoProvider);
+      final sub = c.listen(dietSupplementsActiveProvider, (_, _) {});
+      expect(c.read(dietSupplementsActiveProvider), isTrue);
+      await MigratedKey.write('isPro', false);
+      c.invalidate(subscriptionInfoProvider);
+      expect(c.read(dietSupplementsActiveProvider), isFalse, reason: 'lapsed');
+      await MigratedKey.write('isPro', true);
+      c.invalidate(subscriptionInfoProvider);
+      expect(c.read(dietSupplementsActiveProvider), isTrue, reason: 'renewed');
+      sub.close();
+    });
+
+    test('a restore tick that brings a new value flips it', () async {
+      await seed(sw: false);
+      final sub = c.listen(dietSupplementsActiveProvider, (_, _) {});
+      expect(c.read(dietSupplementsActiveProvider), isFalse);
+      // A restore writes Hive without touching Riverpod (see the strategy
+      // writer-to-reader test); the tick is what tells the readers.
+      final p = Map<String, dynamic>.from(
+          HiveService.instance.userBox.get('profile') as Map);
+      p['diet_supplements'] = true;
+      await HiveService.instance.userBox.put('profile', p);
+      c.read(_tickProvider.notifier).bump();
+      expect(c.read(dietSupplementsActiveProvider), isTrue);
+      sub.close();
+    });
+
     test('the kill switch off: false whatever the profile holds', () async {
       DietSupplementsFlags.debugEnabledOverride = false;
       await seed(sw: true);
@@ -254,15 +300,55 @@ void main() {
       sub.close();
     });
 
-    test('the kill switch off: the stamp is ignored, hints as before',
-        () async {
+    test('the kill switch off: a stamped plan gives no hints, an unstamped '
+        'one is unchanged', () async {
       DietSupplementsFlags.debugEnabledOverride = false;
       await seedVeg(sw: true);
       await UserRepository.instance.saveDietPlan(plan(stamp: true));
-      expect(c.read(dietPlanProvider).keys, contains('lunch'));
+      expect(c.read(dietPlanProvider), isEmpty,
+          reason: 'nothing is active: the shake would outlive the switch');
       await UserRepository.instance.saveDietPlan(plan());
       c.invalidate(dietPlanProvider);
       expect(c.read(dietPlanProvider).keys, contains('lunch'));
+    });
+  });
+
+  group('restore and Edit Profile keep the key', () {
+    Future<void> restore(Map<String, dynamic> cloud) async {
+      SyncService.pausedForSimulation = true;
+      HiveUserSession.debugCurrentUidResolverForTests = () => kTestUserId;
+      try {
+        await SyncService.instance.restoreUserProfileForTest(kTestUserId,
+            preFetched: [
+              {'full_name': 'T', 'user_id': kTestUserId, ...cloud}
+            ],
+            preFetchedUsers: null);
+      } finally {
+        HiveUserSession.debugCurrentUidResolverForTests = null;
+        SyncService.pausedForSimulation = false;
+      }
+    }
+
+    test('a cloud true and a cloud false both land over the local value',
+        () async {
+      await seed(sw: false);
+      await restore({'diet_supplements': true});
+      expect(stored(), isTrue);
+      await restore({'diet_supplements': false});
+      expect(stored(), isFalse, reason: 'false is a value, not "absent"');
+    });
+
+    test('a cloud NULL leaves the local choice alone', () async {
+      await seed(sw: true);
+      await restore({'diet_supplements': null});
+      expect(stored(), isTrue);
+    });
+
+    test('an Edit Profile-shaped patch (other fields only) keeps the key',
+        () async {
+      await seed(sw: true);
+      await notifier().updateProfile({'full_name': 'T2', 'city': 'Pune'});
+      expect(stored(), isTrue);
     });
   });
 

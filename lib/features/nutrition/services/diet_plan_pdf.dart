@@ -183,15 +183,15 @@ List<pw.Widget> _supplementCardWidgets(
 ) =>
     [
       pw.SizedBox(height: 14),
-      pw.Text('Daily supplements', style: titleStyle),
+      pw.Text('Your supplements', style: titleStyle),
       pw.SizedBox(height: 6),
       pw.TableHelper.fromTextArray(
         headerStyle: cellBoldStyle,
         cellStyle: cellStyle,
         headerDecoration: const pw.BoxDecoration(color: PdfColors.grey200),
         cellPadding: const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 4),
-        headers: ['Supplement', 'Dose', 'Note'],
-        data: [for (final r in rows) [r.name, r.dose, r.note]],
+        headers: kSupplementTableHeaders,
+        data: supplementTableData(rows),
       ),
       pw.SizedBox(height: 6),
       for (final line in kSupplementCardFooter) ...[

@@ -219,6 +219,14 @@ void main() {
           ['F0823']);
     });
 
+    test('an item with no calories frees nothing and is never taken out', () {
+      final meals = _day([_item('ZERO', 0, 0), _item('LOW', 400, 4)],
+          lunchCal: 600, lunchProt: 60);
+      final out = addProteinShake(
+          meals: meals, proteinTarget: 150, calorieTarget: 1000, row: whey);
+      expect(out.last.items.map((i) => i.foodId), ['ZERO', 'F0823']);
+    });
+
     test('a slot that cannot make room even when emptied is unchanged', () {
       final meals = [
         _meal('lunch', [_item('L', 1100, 40)]),

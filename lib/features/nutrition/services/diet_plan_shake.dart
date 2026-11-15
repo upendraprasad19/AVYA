@@ -102,6 +102,8 @@ List<DietMealPlan> addProteinShake({
     final removed = <int>{};
     for (final i in order) {
       if (cal + shake.calories <= ceiling) break;
+      // An item with no calories frees nothing: never take it out.
+      if (keep[i].calories <= 0) continue;
       removed.add(i);
       cal -= keep[i].calories;
       prot -= keep[i].protein;

@@ -5,10 +5,14 @@
 // in most seeds; a well-fed one gets none; and whenever a shake is added the
 // day gains protein and stays inside the calorie ceiling.
 //
-// The numbers are the measured ones (16 archetypes x 50 seeds, 2026-11-14,
-// scratchpad measure2.txt: cut veg 47 of 50 shaken, cut non-veg male 0 of 50).
-// The floors here are looser than the measurement on purpose: they say the
-// feature does something for the people it is for and nothing for the rest.
+// The numbers are measured. 2026-11-14 (16 archetypes x 50 seeds): cut veg 47
+// of 50 shaken, cut non-veg male 0 of 50. 2026-11-15, after the replacement
+// rule, 400 seeds each: veg and vegan at 1500 kcal / 130 g protein were shaken
+// on 400 of 400, so the screen tests, whose seed is the calendar day, never
+// see a day without a shake for that profile (B-pass seat C finding 2).
+// The floors for the other archetypes are looser than the measurement on
+// purpose: they say the feature does something for the people it is for and
+// nothing for the rest.
 import 'dart:convert';
 import 'dart:io';
 
@@ -25,7 +29,7 @@ import '../helpers/hive_test_setup.dart';
 
 typedef _Arch = ({String name, String pref, int cal, int prot});
 
-const _seeds = 30;
+const _seeds = 200;
 
 void main() {
   late Directory dir;
@@ -90,6 +94,8 @@ void main() {
   test('a short-on-protein vegetarian gets a shake on most plans', () {
     final r = run((name: 'cut veg', pref: 'veg', cal: 1500, prot: 130));
     expect(r.bad, isEmpty);
+    expect(r.shaken, _seeds,
+        reason: 'the screen tests rely on this profile shaking on EVERY day');
     expect(r.gapDays, greaterThan(_seeds * 0.6));
     expect(r.shaken, greaterThanOrEqualTo((r.gapDays * 0.8).floor()),
         reason: 'where the day falls short the shake fits (measured 47 of 47)');
@@ -98,7 +104,8 @@ void main() {
   test('a vegan gets the pea row', () {
     final r = run((name: 'cut vegan', pref: 'vegan', cal: 1500, prot: 130));
     expect(r.bad, isEmpty);
-    expect(r.shaken, greaterThan(0));
+    expect(r.shaken, _seeds,
+        reason: 'the screen tests rely on this profile shaking on EVERY day');
   });
 
   test('a well-fed non-veg day gets (almost) none, and never breaks a rule',

@@ -44,6 +44,53 @@ void main() {
     expect(kVitaminD3Row.dose, contains('IU'));
     expect(kB12Row.dose, contains('mcg'));
     expect(kCreatineRow.dose, contains(' g '));
+    expect(kOmega3AlgalRow.dose, contains(' g '));
+    expect(kOmega3FishRow.dose, contains(' g '));
+  });
+
+  test('each dose carries the period of its manual token (B12 is WEEKLY)', () {
+    final tokens = (v['manualTokens'] as Map).cast<String, String>();
+    // The manual spells the period as a suffix: /wk, /day, or "daily".
+    String period(String token) =>
+        token.contains('/wk') ? 'week' : 'day'; // daily and /day
+    for (final e in {
+      'creatine': kCreatineRow,
+      'vitamin_d3': kVitaminD3Row,
+      'b12': kB12Row,
+      'omega3': kOmega3AlgalRow,
+    }.entries) {
+      final p = period(tokens[e.key]!);
+      expect(
+          p == 'week'
+              ? e.value.dose.contains('week')
+              : (e.value.dose.contains('day') || e.value.dose.contains('daily')),
+          isTrue,
+          reason: '${e.key}: the manual says per $p');
+      if (p == 'day') {
+        expect(e.value.dose, isNot(contains('week')), reason: e.key);
+      }
+    }
+    expect(kOmega3FishRow.dose, kOmega3AlgalRow.dose,
+        reason: 'one omega-3 dose, two sources');
+  });
+
+  test('the footer: the doctor line first (it covers the coffee after it), '
+      'the founder\'s coffee line, the one-scoop rule', () {
+    expect(kSupplementCardFooter.first, startsWith('Talk to your doctor first'));
+    expect(kSupplementCardFooter[1],
+        'Optional: black coffee 30-45 min before training. '
+        'No pre-workout product is needed.');
+    expect(kSupplementCardFooter.join(' '), contains('One scoop of protein powder a day in total'));
+  });
+
+  test('the table the PDF prints is the rows, then nothing else', () {
+    final rows = supplementCardFor(FoodType.veg);
+    final data = supplementTableData(rows);
+    expect(kSupplementTableHeaders, ['Supplement', 'Dose', 'Note']);
+    expect(data.length, rows.length);
+    for (var i = 0; i < rows.length; i++) {
+      expect(data[i], [rows[i].name, rows[i].dose, rows[i].note]);
+    }
   });
 
   test('no brand and no pre-workout product anywhere on the card', () {

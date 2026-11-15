@@ -126,18 +126,30 @@ void main() {
       expect(withNull.length, without.length);
     });
 
-    test('a card makes the document larger and still a PDF', () async {
+    test('a card makes the document larger and still a PDF; more rows, more '
+        'document', () async {
       final without = await build(omit: true);
-      final withCard = await build(supplements: supplementCardFor(FoodType.veg));
-      expect(String.fromCharCodes(withCard.take(5)), '%PDF-');
-      expect(withCard.length, greaterThan(without.length));
+      final empty = await build(supplements: const []);
+      final one = await build(supplements: [kCreatineRow]);
+      final full = await build(supplements: supplementCardFor(FoodType.veg));
+      expect(String.fromCharCodes(full.take(5)), '%PDF-');
+      // An empty list still prints the title and the footer lines.
+      expect(empty.length, greaterThan(without.length));
+      expect(one.length, greaterThan(empty.length));
+      expect(full.length, greaterThan(one.length));
     });
 
-    test('PRESENCE: the card is appended only behind a null check', () {
+    test('PRESENCE: the card is appended only behind a null check, and the '
+        'text comes from the shared helpers (comments stripped)', () {
       final src = File('lib/features/nutrition/services/diet_plan_pdf.dart')
-          .readAsStringSync();
+          .readAsStringSync()
+          .replaceAll(RegExp(r'/\*[\s\S]*?\*/'), '')
+          .replaceAll(RegExp(r'//[^\n]*'), '');
       expect(src, contains('if (supplements != null)'));
       expect(src, contains('..._supplementCardWidgets('));
+      expect(src, contains('data: supplementTableData(rows)'));
+      expect(src, contains('headers: kSupplementTableHeaders'));
+      expect(src, contains('for (final line in kSupplementCardFooter)'));
     });
   });
 }

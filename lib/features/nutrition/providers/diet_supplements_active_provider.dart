@@ -14,18 +14,30 @@ import 'package:icanbefitter/core/utils/diet_supplements_rule.dart';
 import 'package:icanbefitter/features/home/providers/home_provider.dart'
     show restoreCompletedTickProvider;
 import 'package:icanbefitter/features/profile/providers/profile_provider.dart';
+import 'package:icanbefitter/shared/repositories/user_repository.dart';
 import '../services/diet_supplements_flags.dart';
 
 /// The two profile inputs of the rule.
-typedef _SupplementInputs = ({Object? switchValue, Object? dob});
+typedef SupplementInputs = ({Object? switchValue, Object? dob});
+
+/// The two inputs, read from the stored profile. A profile write rebuilds it
+/// through [userProfileProvider] (a trigger only); a RESTORE writes Hive
+/// without touching that provider's state (sign-in on a second device), so
+/// the restore tick rebuilds it and the value is read from Hive, never from
+/// the provider's possibly stale state. Watched only with the kill switch on.
+final dietSupplementsInputsProvider = Provider<SupplementInputs>((ref) {
+  ref.watch(restoreCompletedTickProvider);
+  ref.watch(userProfileProvider.select<SupplementInputs>(
+      (p) => (switchValue: p['diet_supplements'], dob: p['date_of_birth'])));
+  final p = UserRepository.instance.getProfile() ?? const <String, dynamic>{};
+  return (switchValue: p['diet_supplements'], dob: p['date_of_birth']);
+});
 
 /// True when Supplements are on and effective for the signed-in user.
 final dietSupplementsActiveProvider = Provider<bool>((ref) {
   if (!DietSupplementsFlags.enabled) return false;
   final pro = ref.watch(subscriptionInfoProvider.select((s) => s.isPro));
-  ref.watch(restoreCompletedTickProvider);
-  final inputs = ref.watch(userProfileProvider.select<_SupplementInputs>(
-      (p) => (switchValue: p['diet_supplements'], dob: p['date_of_birth'])));
+  final inputs = ref.watch(dietSupplementsInputsProvider);
   return dietSupplementsActive(
     profile: {
       'diet_supplements': inputs.switchValue,
@@ -41,7 +53,7 @@ final dietSupplementsActiveProvider = Provider<bool>((ref) {
 /// no switch. Free users see the section locked.
 final dietSupplementsEligibleProvider = Provider<bool>((ref) {
   if (!DietSupplementsFlags.enabled) return false;
-  final dob = ref.watch(userProfileProvider.select((p) => p['date_of_birth']));
+  final dob = ref.watch(dietSupplementsInputsProvider.select((i) => i.dob));
   return dietSupplementsEligible(
     profile: {'date_of_birth': dob},
     enabled: true,

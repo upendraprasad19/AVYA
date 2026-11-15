@@ -238,7 +238,7 @@ void main() {
       expect(find.text(_wheyName), findsOneWidget);
       expect(find.byKey(const ValueKey('diet_supplement_card')),
           findsOneWidget);
-      expect(find.text('Daily supplements'), findsOneWidget);
+      expect(find.text('Your supplements'), findsOneWidget);
       expect(swapIconIn(_wheyName), findsNothing,
           reason: 'the shake has no alternatives');
       // Every other item keeps its swap icon.
@@ -295,20 +295,29 @@ void main() {
       expect(find.text(_wheyName), findsNothing);
     });
 
-    testWidgets('a stored "on" with PRO lapsed: paused hint, switch off, no '
-        'shake, no card', (tester) async {
+    testWidgets('a stored "on" with PRO lapsed: paused hint, the switch shows '
+        'the stored choice, no shake, no card, and OFF is allowed',
+        (tester) async {
       await seed(tester, pro: false, extra: const {'diet_supplements': true});
       await pumpScreen(tester);
       expect(find.text(kDietSupplementsPausedHint), findsOneWidget);
-      expect(tester.widget<Switch>(switchFinder()).value, isFalse);
+      expect(tester.widget<Switch>(switchFinder()).value, isTrue);
+      expect(find.byIcon(Icons.lock_outline), findsOneWidget);
       expect(find.text(_wheyName), findsNothing);
       expect(find.byKey(const ValueKey('diet_supplement_card')), findsNothing);
+      // Turning it off needs no PRO: the stored choice is cleared.
+      await _tapReal(tester, switchFinder());
+      expect(UserRepository.instance.getProfile()!['diet_supplements'], isFalse);
+      expect(find.text(kDietSupplementsPausedHint), findsNothing);
+      expect(tester.widget<Switch>(switchFinder()).value, isFalse);
     });
 
     testWidgets('a free user tapping the switch gets the paywall and nothing '
         'is written', (tester) async {
       await seed(tester, pro: false);
       await pumpScreen(tester);
+      expect(find.byIcon(Icons.lock_outline), findsOneWidget,
+          reason: 'a free adult sees the lock');
       await tester.tap(switchFinder());
       await tester.pumpAndSettle();
       expect(find.text('Diet Supplements is a PRO feature'), findsOneWidget);
@@ -327,6 +336,8 @@ void main() {
       await pumpScreen(tester);
       expect(debugDietPlanGenerations, 1);
       expect(find.text(_wheyName), findsNothing);
+      expect(find.byIcon(Icons.lock_outline), findsNothing,
+          reason: 'PRO: no lock');
       await _tapReal(tester, switchFinder());
       expect(UserRepository.instance.getProfile()!['diet_supplements'], isTrue);
       expect(debugDietPlanGenerations, 2, reason: 'one regeneration, not two');
@@ -365,6 +376,35 @@ void main() {
       expect(debugDietPlanGenerations, 0, reason: 'the saved plan loaded');
       expect(find.text(_wheyName), findsOneWidget);
       expect(swapIconIn(_wheyName), findsNothing);
+    });
+
+    testWidgets('the kill switch off: a plan stamped with Supplements is not '
+        'loaded (its shake would outlive the switch)', (tester) async {
+      DietSupplementsFlags.debugEnabledOverride = false;
+      await seed(tester, extra: const {'diet_supplements': true});
+      await tester.runAsync(() => UserRepository.instance.saveDietPlan({
+            'id': 'p1',
+            'food_type': 'veg',
+            'diet_supplements': true,
+            'meals': [
+              {
+                'name': 'Evening Snack',
+                'items': [
+                  {
+                    'food_id': 'F0823',
+                    'name': _wheyName,
+                    'serving_desc': '1 scoop',
+                    'calories': 108,
+                    'protein': 27,
+                  }
+                ],
+              }
+            ],
+          }));
+      await pumpScreen(tester);
+      expect(debugDietPlanGenerations, 1, reason: 'generated fresh, not loaded');
+      expect(find.text(_wheyName), findsNothing);
+      expect(find.byType(DietSupplementsSection), findsNothing);
     });
 
     testWidgets('a loaded stamped plan is regenerated once when the switch '
