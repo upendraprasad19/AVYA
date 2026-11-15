@@ -118,6 +118,9 @@ const _engine = <String>[
   // Diet plan Unit 3a: the diet_strategy push rule and its ship-dark flag.
   'lib/core/constants/diet_strategies.dart',
   'lib/features/nutrition/services/diet_strategy_flags.dart',
+  // Diet plan Unit 4a: the diet_supplements push rule and its kill switch.
+  'lib/core/utils/diet_supplements_rule.dart',
+  'lib/features/nutrition/services/diet_supplements_flags.dart',
 ];
 
 /// lib/ files an engine file reaches that stay BELOW platform — the engine only

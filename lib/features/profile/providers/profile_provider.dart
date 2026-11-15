@@ -76,6 +76,8 @@ class UserProfileNotifier extends Notifier<Map<String, dynamic>> {
 
   // Serialises setDietStrategy calls (diet plan Unit 3a).
   Future<bool> _dietStrategyChain = Future<bool>.value(true);
+  // Serialises setDietSupplements calls (diet plan Unit 4a).
+  Future<bool> _dietSupplementsChain = Future<bool>.value(true);
 
   @override
   Map<String, dynamic> build() {
@@ -182,6 +184,41 @@ class UserProfileNotifier extends Notifier<Map<String, dynamic>> {
     // and it watches THIS provider (the food type), so invalidating it from
     // here is a CircularDependencyError in debug builds once anything keeps
     // it alive (TodaysMealsCard does).
+    final signedIn = uidAtCall != null && uidAtCall.isNotEmpty;
+    if (signedIn) fx.pushSnapshot();
+    return true;
+  }
+
+  /// THE write door for the Supplements switch (`diet_supplements`, diet plan
+  /// Unit 4a, docs/plans/diet-supplements.md section 2), used by the Diet Plan
+  /// screen only. Same shape as [setDietStrategy]: serialised, dropped (false)
+  /// when the account changed while queued, a no-op (true) when the value is
+  /// already stored. ONE field write; no target changes. The profile sync
+  /// fires from the patch and the snapshot push is not awaited. PRO and the
+  /// age are the caller's gates (`gateAndVerify`, `dietSupplementsEligible`),
+  /// not checked here. Returns true when [next] is the stored value afterwards.
+  /// Nothing invalidates the Diet Plan provider from here: it watches the
+  /// active provider, and invalidating it from this notifier is a
+  /// CircularDependencyError (see [setDietStrategy]).
+  Future<bool> setDietSupplements(bool next) {
+    final fx = debugFoodTypeEffects ?? FoodTypeWriteEffects.real;
+    final uidAtCall = fx.currentUserId();
+    final run = _dietSupplementsChain
+        .catchError((Object _) => false)
+        .then((_) => _applyDietSupplements(next, uidAtCall, fx));
+    _dietSupplementsChain = run;
+    return run;
+  }
+
+  Future<bool> _applyDietSupplements(
+    bool next,
+    String? uidAtCall,
+    FoodTypeWriteEffects fx,
+  ) async {
+    if (fx.currentUserId() != uidAtCall) return false; // account changed while queued
+    final stored = UserRepository.instance.getProfile()?['diet_supplements'];
+    if (stored is bool && stored == next) return true;
+    await updateProfile({'diet_supplements': next});
     final signedIn = uidAtCall != null && uidAtCall.isNotEmpty;
     if (signedIn) fx.pushSnapshot();
     return true;

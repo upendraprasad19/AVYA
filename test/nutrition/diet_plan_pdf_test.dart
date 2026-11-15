@@ -3,6 +3,8 @@
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:icanbefitter/core/constants/diet_supplement_doses.dart';
+import 'package:icanbefitter/core/constants/food_types.dart';
 import 'package:icanbefitter/features/nutrition/services/diet_plan_pdf.dart';
 
 void main() {
@@ -75,5 +77,79 @@ void main() {
         RegExp(r'withDietStrategyTag\(\s*_foodType\.shortLabel,\s*dietStrategyOfTargets\(targets\)\)')
             .hasMatch(src),
         isTrue);
+  });
+
+  // Diet plan Unit 4a: the supplement card in the PDF.
+  group('supplement card', () {
+    Future<List<int>> build({List<SupplementRow>? supplements, bool omit = false}) {
+      const meals = [
+        (
+          name: 'Lunch',
+          items: [
+            (
+              name: 'Moong Dal',
+              servingDesc: '1 katori',
+              calories: 180,
+              protein: 12,
+              carbs: 28,
+              fat: 2,
+            ),
+          ],
+        ),
+      ];
+      return omit
+          ? buildDietPlanPdf(
+              meals: meals,
+              foodTypeLabel: 'Veg',
+              calorieTarget: 2000,
+              proteinTarget: 144,
+              carbTarget: 200,
+              fatTarget: 60,
+              fiberTarget: 30,
+              now: DateTime(2026, 11, 15))
+          : buildDietPlanPdf(
+              meals: meals,
+              foodTypeLabel: 'Veg',
+              calorieTarget: 2000,
+              proteinTarget: 144,
+              carbTarget: 200,
+              fatTarget: 60,
+              fiberTarget: 30,
+              now: DateTime(2026, 11, 15),
+              supplements: supplements);
+    }
+
+    test('null adds nothing: the document is the one without the parameter',
+        () async {
+      final without = await build(omit: true);
+      final withNull = await build(supplements: null);
+      expect(withNull.length, without.length);
+    });
+
+    test('a card makes the document larger and still a PDF; more rows, more '
+        'document', () async {
+      final without = await build(omit: true);
+      final empty = await build(supplements: const []);
+      final one = await build(supplements: [kCreatineRow]);
+      final full = await build(supplements: supplementCardFor(FoodType.veg));
+      expect(String.fromCharCodes(full.take(5)), '%PDF-');
+      // An empty list still prints the title and the footer lines.
+      expect(empty.length, greaterThan(without.length));
+      expect(one.length, greaterThan(empty.length));
+      expect(full.length, greaterThan(one.length));
+    });
+
+    test('PRESENCE: the card is appended only behind a null check, and the '
+        'text comes from the shared helpers (comments stripped)', () {
+      final src = File('lib/features/nutrition/services/diet_plan_pdf.dart')
+          .readAsStringSync()
+          .replaceAll(RegExp(r'/\*[\s\S]*?\*/'), '')
+          .replaceAll(RegExp(r'//[^\n]*'), '');
+      expect(src, contains('if (supplements != null)'));
+      expect(src, contains('..._supplementCardWidgets('));
+      expect(src, contains('data: supplementTableData(rows)'));
+      expect(src, contains('headers: kSupplementTableHeaders'));
+      expect(src, contains('for (final line in kSupplementCardFooter)'));
+    });
   });
 }

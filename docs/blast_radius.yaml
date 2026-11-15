@@ -528,6 +528,12 @@ paths:
   - { glob: "lib/core/constants/diet_strategies.dart", tier: platform }   # dietStrategyPushEntry: the diet_strategy push rule
   - { glob: "lib/features/nutrition/services/diet_strategy_flags.dart", tier: platform }   # DietStrategyFlags (ship-dark, gates the push key)
 
+  # Diet plan Unit 4a (2026-11-15): the same shape for the Supplements column. sync_profile.dart calls
+  # dietSupplementsPushEntry (whether the `diet_supplements` key is sent, a stored bool incl. false), and
+  # DietSupplementsFlags gates it. Declared ABOVE the lib/features/nutrition/** feature rule (first match wins).
+  - { glob: "lib/core/utils/diet_supplements_rule.dart", tier: platform }   # dietSupplementsPushEntry: the diet_supplements push rule (and the one active rule)
+  - { glob: "lib/features/nutrition/services/diet_supplements_flags.dart", tier: platform }   # DietSupplementsFlags (kill switch, gates the push key)
+
   # ----- feature (explicit overrides over default) -----
   - { glob: "lib/features/profile/**", tier: feature }
   - { glob: "lib/features/train/**", tier: feature }
