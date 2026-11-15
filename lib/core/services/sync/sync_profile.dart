@@ -238,6 +238,11 @@ extension SyncServiceProfile on SyncService {
       // `user_profile.diet_strategy` (migration 179). Flag-gated and canonical
       // (dietStrategyPushEntry).
       ...dietStrategyPushEntry(p, enabled: DietStrategyFlags.enabled),
+      // Diet plan Unit 4a (docs/plans/diet-supplements.md section 2): column
+      // `user_profile.diet_supplements` (nullable bool). A stored bool is
+      // pushed, `false` included (a restore merge ignores a cloud NULL);
+      // absent stays absent (dietSupplementsPushEntry).
+      ...dietSupplementsPushEntry(p, enabled: DietSupplementsFlags.enabled),
       if (SyncService._hasValue(p['injuries'])) 'injuries': p['injuries'] is List ? p['injuries'] : <String>[],
       if (SyncService._hasValue(p['city'])) 'city': p['city'],
       if (SyncService._hasNumber(p['bmr'])) 'bmr': (p['bmr'] as num).round(),

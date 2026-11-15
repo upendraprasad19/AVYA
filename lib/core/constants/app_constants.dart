@@ -70,6 +70,9 @@ class AppConstants {
   // Diet plan Unit 3a: Low carb / Keto targets. LOCAL PRO check only
   // (gateAndVerify); deliberately NOT a rule-19 server-verified feature.
   static const String featureDietStrategy = 'diet_strategy';
+  // Diet plan Unit 4a: the Supplements switch. LOCAL PRO check only
+  // (gateAndVerify), like the strategy; NOT a rule-19 server-verified feature.
+  static const String featureDietSupplements = 'diet_supplements';
 
   // ── Free Tier Limits ──────────────────────────────────────
 

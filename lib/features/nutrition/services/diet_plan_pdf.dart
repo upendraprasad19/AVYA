@@ -8,6 +8,7 @@
 import 'dart:typed_data';
 
 import 'package:icanbefitter/core/constants/diet_strategies.dart';
+import 'package:icanbefitter/core/constants/diet_supplement_doses.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 
@@ -84,6 +85,9 @@ Future<Uint8List> buildDietPlanPdf({
   required int fatTarget,
   required int fiberTarget,
   required DateTime now,
+  // Unit 4a: the supplement card rows; null (Supplements off, or the flag
+  // off) adds nothing, so the document is the pre-Unit-4 one.
+  List<SupplementRow>? supplements,
 }) {
   final dateStr = '${now.day} ${_months[now.month - 1]} ${now.year}';
 
@@ -126,7 +130,8 @@ Future<Uint8List> buildDietPlanPdf({
           style: pw.TextStyle(fontSize: 8, color: PdfColors.grey500),
         ),
       ),
-      build: (context) => meals.map((meal) {
+      build: (context) => [
+        ...meals.map((meal) {
         final totalCals = meal.items.fold<int>(0, (s, i) => s + i.calories);
         final totalProtein = meal.items.fold<int>(0, (s, i) => s + i.protein);
 
@@ -157,9 +162,40 @@ Future<Uint8List> buildDietPlanPdf({
             pw.SizedBox(height: 8),
           ],
         );
-      }).toList(),
+        }),
+        if (supplements != null)
+          ..._supplementCardWidgets(
+              supplements, mealTitleStyle, cellStyle, cellBoldStyle),
+      ],
     ),
   );
 
   return pdf.save();
 }
+
+/// The supplement card as PDF widgets: a title, a table of the rows and the
+/// footer lines. ASCII only (the PDF uses its default font).
+List<pw.Widget> _supplementCardWidgets(
+  List<SupplementRow> rows,
+  pw.TextStyle titleStyle,
+  pw.TextStyle cellStyle,
+  pw.TextStyle cellBoldStyle,
+) =>
+    [
+      pw.SizedBox(height: 14),
+      pw.Text('Your supplements', style: titleStyle),
+      pw.SizedBox(height: 6),
+      pw.TableHelper.fromTextArray(
+        headerStyle: cellBoldStyle,
+        cellStyle: cellStyle,
+        headerDecoration: const pw.BoxDecoration(color: PdfColors.grey200),
+        cellPadding: const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+        headers: kSupplementTableHeaders,
+        data: supplementTableData(rows),
+      ),
+      pw.SizedBox(height: 6),
+      for (final line in kSupplementCardFooter) ...[
+        pw.Text(line, style: cellStyle),
+        pw.SizedBox(height: 3),
+      ],
+    ];
