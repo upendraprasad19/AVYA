@@ -61,7 +61,8 @@ enum DietFamily {
 
 /// Unit 3b: Low carb / Keto days lean on paneer, dairy and added fat, so
 /// those caps are higher there (every other cap is the Balanced one in
-/// [dietFamilyDailyCap]).
+/// [dietFamilyDailyCap]). A Low carb PLAN's soy cap is higher still, see
+/// [dietFamilyLowCarbPlanCapOverride] (applied first by `dietFamilyCapFor`).
 const Map<DietFamily, int> dietFamilyLowCarbCapOverride = {
   DietFamily.paneer: 2,
   DietFamily.dairy: 3,
@@ -75,7 +76,6 @@ const Map<DietFamily, int> dietFamilyLowCarbCapOverride = {
 const Map<DietFamily, int> dietFamilyLowCarbPlanCapOverride = {
   DietFamily.soy: 3,
 };
-
 
 /// Max items of a family in one day. A family absent from this map is
 /// uncapped (only per-day id uniqueness applies).
@@ -139,7 +139,6 @@ class CatalogEntry {
       {this.lowCarbOnly = false, this.lowCarbPlansOnly = false})
       : assert(!lowCarbPlansOnly || lowCarbOnly);
 }
-
 
 /// The catalog. Order matters only as the swap sheet's tie-break.
 const List<CatalogEntry> kDietPlanCatalog = [

@@ -336,6 +336,48 @@ void main() {
           _lowCarbPlanIds.length);
     });
 
+    // Plan review round 1 finding R1-4: the daily soy cap has TWO call sites,
+    // the generator and the swap sheet. This pins the swap site (the T10 cap
+    // check uses dietFamilyCapFor itself as its oracle and cannot see a
+    // call site that stops calling it).
+    test('the swap sheet applies the strategy soy cap: Low carb 3, Keto 2, '
+        'Balanced 1', () {
+      const soy = {'F1014', 'F0373', 'F0018', 'F1017'};
+      Set<String> soyOffered(DietStrategy st, List<String> plan) {
+        final row = repo.getById('F0011')!; // a dal, the item being replaced
+        return {
+          for (final x in swapAlternatives(
+              foodId: 'F0011',
+              category: row['category'] as String,
+              calories: 300,
+              role: DietRole.mainProtein.name,
+              slotKey: 'lunch',
+              dietPreference: 'vegan',
+              planFoodIds: plan,
+              slotOtherNames: const [],
+              repo: repo,
+              limit: 100,
+              strategy: st))
+            if (soy.contains(x.foodId)) x.foodId,
+        };
+      }
+
+      // Low carb: two soy items in the plan (cap 3), another is offered; three
+      // (cap reached), none is.
+      expect(soyOffered(DietStrategy.lowCarb, ['F0011', 'F1014', 'F0373']),
+          isNotEmpty);
+      expect(
+          soyOffered(
+              DietStrategy.lowCarb, ['F0011', 'F1014', 'F0373', 'F0018']),
+          isEmpty);
+      // Keto: one soy item (cap 2), tofu is offered; two, none is.
+      expect(soyOffered(DietStrategy.keto, ['F0011', 'F0373']), {'F1014'});
+      expect(soyOffered(DietStrategy.keto, ['F0011', 'F0373', 'F0018']),
+          isEmpty);
+      // Balanced: one soy item (cap 1), none is offered.
+      expect(soyOffered(DietStrategy.balanced, ['F0011', 'F0373']), isEmpty);
+    });
+
     // Round 4 finding 2 / seat C finding 4: the override and the Keto cap,
     // pinned by literals, and the override is actually USED.
     test('the override caps and the Keto item cap are the planned values, '
@@ -461,11 +503,15 @@ void main() {
     // 2026-11-15 (diet plan observations, vegan Low carb): the Low carb rows
     // were re-measured after the vegan Low carb foods, the optional fat at
     // lunch and in the evening snack, and one more soy item a day. 14 of 16
-    // rows rose (kcal min +0.02..+0.08, protein min up to +0.15); two worst
-    // seeds moved down by 0.03 because every Low carb plan's random stream
-    // changed (an optional role draws once more): 'maintain vegan' protein
-    // 0.71 -> 0.68 (its kcal min rose 0.69 -> 0.77) and '1200 floor veg' kcal
-    // 0.90 -> 0.87. Keto rows are untouched (byte-identical plans).
+    // rows rose (kcal min +0.00..+0.08, three rows unchanged; protein min up
+    // to +0.15); two worst seeds moved down by 0.03 because every Low carb
+    // plan's random stream changed (an optional role draws once more):
+    // 'maintain vegan' protein 0.71 -> 0.68 (its kcal min rose 0.69 -> 0.77)
+    // and '1200 floor veg' kcal 0.90 -> 0.87. Keto rows are untouched
+    // (byte-identical plans). This is the ONE recorded exception to "raise
+    // only" (docs/sot_registry.yaml diet_plan_curated.class_constraints): a
+    // change to a strategy's random stream may re-baseline that strategy's
+    // rows, and every lowered row is listed here.
     // The CONTRACT floors (measured on the built code 2026-11-14; minimum
     // over 50 seeds minus 0.02, raise only). Carbs: mean <= 1.25 x target.
     // Per archetype: measured minimum over 50 seeds on the built code

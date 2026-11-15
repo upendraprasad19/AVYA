@@ -73,13 +73,28 @@ carb sources of a vegan day (legumes, millets) cannot be cut without starving ca
 - New: the five foods are offered to Low carb only (plans and swap catalog, Keto never holds one, vegan
   Low carb plans do); `food_library_v4_upgrade_behavioral_test` gains the v5 -> v6 path and the v6 mirror.
 - T10 floors rebaselined from the built code (minimum over 50 seeds minus 0.02). 14 of 16 Low carb rows
-  rise; TWO worst seeds move down by 0.03 because every Low carb plan's random stream changed (an optional
-  role draws once more): `maintain vegan` protein 0.71 -> 0.68 (its kcal floor rises 0.69 -> 0.77) and
-  `1200 floor veg` kcal 0.90 -> 0.87. This is the one place the "raise only" contract bends; it is stated
-  in the test.
-- Mutations (§4.4 rule 21): drop `lowCarbPlansOnly` on one entry (Keto sees it), restore the soy cap to 2,
-  drop the lunch fat role, drop the evening fat role, make `catalogEntryOffered` ignore the strategy,
-  revert the version constant.
+  rise (kcal floor +0.00 to +0.08, three rows unchanged; protein floor up to +0.15); TWO worst seeds move
+  down by 0.03 because every Low carb plan's random stream changed (an optional role draws once more):
+  `maintain vegan` protein 0.71 -> 0.68 (its kcal floor rises 0.69 -> 0.77) and `1200 floor veg` kcal
+  0.90 -> 0.87. This is the one place the "raise only" contract bends. The contract text now says so in
+  the registry (`diet_plan_curated.class_constraints`), the nested CLAUDE.md and the test, and names the
+  rule: a change to a strategy's random stream may re-baseline that strategy's T10 rows, and every lowered
+  row is written above `floors`. Keto rows are not re-baselined (byte-identical).
+- The other four Low carb limits of that test were re-measured too (review R1-2). Worst row of the 16,
+  before -> after, against the asserted limit: calories max 1.10 -> 1.08 (limit 1.12); carbs per-plan max
+  1.47 -> 1.41 (limit 1.50), worst row `cut vegan`; carbs mean max 1.21 -> 1.20 (limit 1.25), same row;
+  fiber min 0.33 -> 0.33 (limit 0.31, `cut female veg`). None moved toward its limit, so none is edited.
+- Swap-site cap (review R1-4): `swapAlternatives` applies `dietFamilyCapFor` too. A test drives it for
+  Low carb (two soy items in the plan: another is offered; three: none), Keto (one: tofu offered; two:
+  none) and Balanced (one: none).
+- Mutations (§4.4 rule 21; each confirmed applied with `grep -c` or a pattern-found check, then restored):
+  G1 drop `lowCarbPlansOnly` on avocado (red, 1 test); G2 Low carb soy override removed (red, 2); G3 lunch
+  fat dropped (red, 2); G4 evening fat dropped (red, 2); G5 `catalogEntryOffered` Keto ignores the flag
+  (red, 2); G5b Balanced sees `lowCarbOnly` (red, 5); G6 version constant back to 5 (red, 4); G7 cap
+  function ignores the Low carb override (red, 2); G8 swap catalog unfiltered for Keto (red, 1); G9 cap
+  function gives Keto the Low carb override (red, 1); G10 swap cap reverts to the daily cap (red, 1, the
+  new swap-site test). Ten of the eleven ran in one batch over the three generator test files; G10 ran
+  alone over the swap-site test.
 
 ## 6. Risks and mirror cases
 
@@ -90,4 +105,10 @@ carb sources of a vegan day (legumes, millets) cannot be cut without starving ca
 - Every Low carb plan of every diet changes for a given seed (the stream moved). Veg, eggetarian,
   pescatarian and non-veg Low carb plans improve on average (measured), Keto and Balanced do not change.
 - The Unit 4 shake is untouched.
+- Role derivation (review R1-6, accepted): a saved plan stores no role, so swapping an avocado, almond
+  butter or chia item picked as the evening or lunch FAT derives the first matching role in enum order
+  (`snack`, which precedes `fat`) and offers snack alternatives, not fats. Keto's coconut has the same
+  behaviour today; it is not a regression.
+- Soy 3 applies to every diet preference in Low carb (non-veg users included), as the plan's "every Low
+  carb plan changes" says.
 - Rollback: revert the PR; the version constant staying 6 is harmless (a re-seed with the old flags).
