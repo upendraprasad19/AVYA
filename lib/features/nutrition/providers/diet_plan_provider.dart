@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'package:icanbefitter/core/constants/diet_strategies.dart';
 import 'package:icanbefitter/core/constants/food_types.dart';
 import 'package:icanbefitter/features/auth/providers/auth_invalidation_provider.dart';
 import 'package:icanbefitter/features/profile/providers/profile_provider.dart';
@@ -8,6 +9,26 @@ import 'package:icanbefitter/shared/repositories/user_repository.dart';
 
 import '../services/diet_plan_catalog.dart';
 import '../services/diet_plan_generator.dart';
+import '../services/diet_strategy_flags.dart';
+import 'nutrition_provider.dart';
+
+/// Whether a saved diet plan was built for [current], the strategy the Diet
+/// Plan screen would request now (`planStrategyFor(effective, foodType)`;
+/// Unit 3b, docs/plans/diet-strategy-3b.md §3.7). A plan stamped with
+/// `diet_strategy` matches only that strategy; an unstamped plan (saved with
+/// the flag off, or before Unit 3a) matches Balanced only. Callers consult it
+/// ONLY with [DietStrategyFlags.enabled]: with the flag off a stamped plan
+/// still loads (today's behaviour).
+bool savedPlanMatchesStrategy(Map<dynamic, dynamic> plan, DietStrategy current) {
+  // The strategy the plan was REQUESTED for, when stamped (3b-1b B-pass
+  // seats A and B, P1): a plan built Balanced after a fallback (the legacy
+  // generator, a missing carb target) still belongs to its Keto / Low carb
+  // request, or it could never load again. `diet_strategy` stays the BUILT
+  // strategy (the swap, the PDF label and the plan note read it).
+  final stamp = plan['diet_strategy_requested'] ?? plan['diet_strategy'];
+  if (stamp == null) return current == DietStrategy.balanced;
+  return dietStrategyOf(stamp) == current;
+}
 
 /// Whether a saved diet plan may be shown for [current] (diet plan Unit 2a,
 /// docs/plans/diet-food-type.md §2.4). A plan saved with a `food_type` of
@@ -103,9 +124,19 @@ class DietPlanNotifier extends Notifier<Map<String, PlannedSlot>> {
     // food type does not rebuild.
     final foodType =
         ref.watch(userProfileProvider.select((p) => foodTypeOfProfile(p)));
+    // Unit 3b §3.7: with the flag on, rebuild on a change of the EFFECTIVE
+    // strategy and give no hints for a plan built for another one. No new
+    // watch with the flag off (the 3a flag-off dependency rule).
+    final DietStrategy? effective = DietStrategyFlags.enabled
+        ? ref.watch(macroTargetsProvider.select(dietStrategyOfTargets))
+        : null;
     final raw = UserRepository.instance.getSavedDietPlan();
     if (raw == null) return const {};
     if (!savedPlanMatchesFoodType(raw, foodType)) return const {};
+    if (effective != null &&
+        !savedPlanMatchesStrategy(raw, planStrategyFor(effective, foodType))) {
+      return const {};
+    }
 
     final meals = raw['meals'];
     if (meals is! List || meals.isEmpty) return const {};
