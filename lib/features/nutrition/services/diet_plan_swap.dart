@@ -20,6 +20,7 @@ import 'package:icanbefitter/shared/repositories/food_repository.dart';
 
 import 'curated_diet_plan_generator.dart';
 import 'diet_plan_catalog.dart';
+import 'diet_plan_catalog_rules.dart';
 import 'diet_plan_generator.dart';
 
 /// Meal name (as saved) → generator slot key. The saved plan JSON stores only
@@ -53,9 +54,7 @@ List<CatalogEntry> swapCatalogFor(
   List<CatalogEntry> catalog,
   DietStrategy strategy,
 ) =>
-    strategy == DietStrategy.balanced
-        ? [for (final e in catalog) if (!e.lowCarbOnly) e]
-        : catalog;
+    [for (final e in catalog) if (catalogEntryOffered(e, strategy)) e];
 
 /// The role a plan item fills, or null when no role fits its slot.
 ///
@@ -158,10 +157,7 @@ List<DietPlanFoodItem> swapAlternatives({
     if (!DietPlanGenerator.passesDiet(row, dietPreference, family: e.family)) {
       continue;
     }
-    final cap = (strategy == DietStrategy.balanced
-            ? null
-            : dietFamilyLowCarbCapOverride[e.family]) ??
-        dietFamilyDailyCap[e.family];
+    final cap = dietFamilyCapFor(e.family, strategy);
     if (cap != null && (familyCount[e.family] ?? 0) >= cap) {
       continue;
     }

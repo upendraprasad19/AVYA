@@ -39,6 +39,7 @@ import 'package:icanbefitter/core/constants/food_types.dart';
 import 'package:icanbefitter/shared/repositories/food_repository.dart';
 
 import 'diet_plan_catalog.dart';
+import 'diet_plan_catalog_rules.dart';
 import 'diet_plan_generator.dart';
 
 /// Template of one meal slot.
@@ -126,8 +127,8 @@ const List<CuratedSlotTemplate> kLowCarbSlotTemplates = [
     DietRole.mainProtein,
     DietRole.grain,
     DietRole.sabzi,
-  ], [DietRole.side]),
-  CuratedSlotTemplate('Evening Snack', 'evening', 0.10, [DietRole.snack], []),
+  ], [DietRole.side, DietRole.fat]),
+  CuratedSlotTemplate('Evening Snack', 'evening', 0.10, [DietRole.snack], [DietRole.fat]),
   CuratedSlotTemplate('Dinner', 'dinner', 0.25,
       [DietRole.mainProtein, DietRole.sabzi], [DietRole.side, DietRole.fat]),
 ];
@@ -337,7 +338,7 @@ class CuratedDietPlanGenerator {
       if (row == null || row.isEmpty) continue; // stale box: skip, never throw
       // Unit 3b: Balanced never sees a low-carb-only food, so its pool (and
       // every Balanced plan) is unchanged.
-      if (strategy == DietStrategy.balanced && e.lowCarbOnly) continue;
+      if (!catalogEntryOffered(e, strategy)) continue;
       if (!DietPlanGenerator.passesDiet(row, dietPreference,
           family: e.family)) {
         continue;
@@ -366,10 +367,7 @@ class CuratedDietPlanGenerator {
     bool fits(CuratedCandidate c, DietRole role, Set<String> mealTokens) {
       if (!c.entry.roles.contains(role)) return false;
       if (used.contains(c.id)) return false;
-      final cap = (inputs.strategy == DietStrategy.balanced
-              ? null
-              : dietFamilyLowCarbCapOverride[c.entry.family]) ??
-          dietFamilyDailyCap[c.entry.family];
+      final cap = dietFamilyCapFor(c.entry.family, inputs.strategy);
       if (cap != null && (familyCount[c.entry.family] ?? 0) >= cap) {
         return false;
       }

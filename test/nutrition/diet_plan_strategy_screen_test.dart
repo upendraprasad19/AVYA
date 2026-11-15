@@ -532,7 +532,7 @@ void main() {
       await tester.runAsync(() => HiveService.instance.configBox
           .put(DietPlanFlags.disableCuratedKey, true));
       await pumpScreen(tester);
-      expect(lowCarbNames(), hasLength(14), reason: 'precondition');
+      expect(lowCarbNames(), hasLength(19), reason: 'precondition');
       final offered = await offeredSwapNames(tester);
       expect(offered, isNotEmpty, reason: 'precondition: some alternatives');
       expect(offered.toSet().intersection(lowCarbNames()), isEmpty);

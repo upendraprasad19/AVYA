@@ -69,6 +69,14 @@ const Map<DietFamily, int> dietFamilyLowCarbCapOverride = {
   DietFamily.soy: 2,
 };
 
+/// Low carb plans only (not Keto): a vegan Low carb day leans on soy foods
+/// for protein, so one more soy item a day (founder observation 2026-11-15).
+/// Applied before [dietFamilyLowCarbCapOverride].
+const Map<DietFamily, int> dietFamilyLowCarbPlanCapOverride = {
+  DietFamily.soy: 3,
+};
+
+
 /// Max items of a family in one day. A family absent from this map is
 /// uncapped (only per-day id uniqueness applies).
 const Map<DietFamily, int> dietFamilyDailyCap = {
@@ -122,9 +130,16 @@ class CatalogEntry {
   /// vegetables, ghee, full-fat paneer...). Balanced plans never see it, so
   /// their candidate pool, and with it every Balanced plan, is unchanged.
   final bool lowCarbOnly;
+
+  /// True for a food offered ONLY in Low carb plans: not Keto (its carb cap
+  /// and goldens stay as measured) and not Balanced. Always with
+  /// [lowCarbOnly].
+  final bool lowCarbPlansOnly;
   const CatalogEntry(this.foodId, this.roles, this.family, this.portions,
-      {this.lowCarbOnly = false});
+      {this.lowCarbOnly = false, this.lowCarbPlansOnly = false})
+      : assert(!lowCarbPlansOnly || lowCarbOnly);
 }
+
 
 /// The catalog. Order matters only as the swap sheet's tie-break.
 const List<CatalogEntry> kDietPlanCatalog = [
@@ -1049,6 +1064,19 @@ const List<CatalogEntry> kDietPlanCatalog = [
       lowCarbOnly: true), // Bhindi (Okra)
   CatalogEntry('F0264', [DietRole.sabzi], DietFamily.veg, [1.0],
       lowCarbOnly: true), // Capsicum (Green)
+  // Vegan-friendly Low carb / Keto foods (2026-11-15, founder observation: a
+  // vegan Low carb day reached 78 % of calories and 65 % of protein because
+  // the Low carb entries above are ghee, butter, paneer, egg and chicken).
+  CatalogEntry('F1017', [DietRole.breakfastProtein, DietRole.mainProtein],
+      DietFamily.soy, [1.0, 1.5, 2.0], lowCarbOnly: true, lowCarbPlansOnly: true), // Tempeh (Plain), 100 g
+  CatalogEntry('F1018', [DietRole.snack, DietRole.side], DietFamily.soy,
+      [0.5, 1.0], lowCarbOnly: true, lowCarbPlansOnly: true), // Edamame (cooked), 1 cup
+  CatalogEntry('F0455', [DietRole.fat, DietRole.snack], DietFamily.fat,
+      [1.0, 2.0], lowCarbOnly: true, lowCarbPlansOnly: true), // Avocado, 1/2 medium
+  CatalogEntry('F0480', [DietRole.fat, DietRole.snack], DietFamily.fat,
+      [0.5, 1.0, 1.5], lowCarbOnly: true, lowCarbPlansOnly: true), // Almond Butter, 2 tbsp
+  CatalogEntry('F0082', [DietRole.fat, DietRole.snack], DietFamily.nut,
+      [1.0, 2.0, 3.0], lowCarbOnly: true, lowCarbPlansOnly: true), // Chia Seeds, 1 tbsp
 ];
 
 final Map<String, DietFamily> _familyById = {
