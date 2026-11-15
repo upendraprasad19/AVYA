@@ -24,6 +24,8 @@ import '../services/diet_plan_generator.dart';
 import '../services/diet_plan_pdf.dart';
 import '../services/diet_plan_swap.dart';
 import '../services/diet_strategy_flags.dart';
+import '../services/diet_plan_strategy_state.dart';
+import '../widgets/diet_plan_swap_sheet.dart';
 import '../widgets/diet_strategy_section.dart';
 
 part 'diet_plan_screen_models.dart';
@@ -35,6 +37,10 @@ final Set<String> _mismatchNoticeShown = <String>{};
 /// Test seam: clears the once-per-session mismatch notice record.
 @visibleForTesting
 void debugResetDietPlanMismatchNotices() => _mismatchNoticeShown.clear();
+
+/// Test seam (Unit 3b §4): fresh generations since the last reset.
+@visibleForTesting
+int debugDietPlanGenerations = 0;
 
 /// Diet plan generator — FREE for everyone.
 /// Generated from food database (zero API cost).
@@ -58,15 +64,40 @@ class _DietPlanScreenState extends ConsumerState<DietPlanScreen> {
   bool _changingFoodType = false;
   // Regenerate taps this session; folded into the generator seed.
   int _regenerations = 0;
+  // Unit 3b §3.6: the strategy the last generation or load ASKED for
+  // (planStrategyFor), what the shown plan was BUILT for, and a counter that
+  // moves on every generation or load (an open swap sheet checks it).
+  DietStrategy _requestedStrategy = DietStrategy.balanced;
+  DietStrategy _planStrategy = DietStrategy.balanced;
+  int _planEpoch = 0;
 
   @override
   void initState() {
     super.initState();
     _mealPlans = [];
+    if (DietStrategyFlags.enabled) {
+      // Set now, so a change before the first generation is compared with
+      // the strategy that generation will ask for (round 3 finding 4).
+      _foodType = foodTypeOfProfile(UserRepository.instance.getProfile());
+      _requestedStrategy = planStrategyFor(
+          dietStrategyOfTargets(ref.read(macroTargetsProvider)), _foodType);
+      ref.listenManual(macroTargetsProvider.select(dietStrategyOfTargets),
+          (_, next) => _onEffectiveStrategy(next));
+    }
     // Defer plan generation to after build so ref.read is available.
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _generatePlan();
     });
+  }
+
+  /// A change of the EFFECTIVE strategy (a tap, Edit Profile, a PRO lapse
+  /// or renewal): re-run the saved-plan check and generate, once.
+  void _onEffectiveStrategy(DietStrategy effective) {
+    if (!dietPlanNeedsRegeneration(planEpoch: _planEpoch, effective: effective,
+        foodType: _foodType, requested: _requestedStrategy)) return;
+    _checkedSaved = false;
+    _regenerations = 0;
+    _generatePlan();
   }
 
   void _generatePlan() {
@@ -83,7 +114,9 @@ class _DietPlanScreenState extends ConsumerState<DietPlanScreen> {
       _checkedSaved = true;
       final savedPlan = UserRepository.instance.getSavedDietPlan();
       if (savedPlan != null) {
-        if (savedPlanMatchesFoodType(savedPlan, _foodType)) {
+        if (savedPlanMatchesFoodType(savedPlan, _foodType) &&
+            (!DietStrategyFlags.enabled ||
+                savedPlanMatchesStrategy(savedPlan, _currentPlanStrategy()))) {
           _loadSavedPlan(savedPlan);
           return;
         }
@@ -97,7 +130,13 @@ class _DietPlanScreenState extends ConsumerState<DietPlanScreen> {
     _generateFreshPlan();
   }
 
+  DietStrategy _currentPlanStrategy() => planStrategyFor(
+      dietStrategyOfTargets(ref.read(macroTargetsProvider)), _foodType);
+
   void _noticeSavedPlanMismatch(Map<String, dynamic> savedPlan) {
+    // Unit 3b §3.7: a plan of the same food type but another strategy gets
+    // no notice (the PRO state may not be known yet at the first frame).
+    if (savedPlanMatchesFoodType(savedPlan, _foodType)) return;
     final key = '${savedPlan['id']}|${_foodType.storageKey}';
     if (!_mismatchNoticeShown.add(key) || !mounted) return;
     final now = _foodType.label;
@@ -180,6 +219,10 @@ class _DietPlanScreenState extends ConsumerState<DietPlanScreen> {
 
     // Diet plan Unit 1: the curated, catalog-only generator, unless the
     // local kill switch routes back to the legacy one (DietPlanFlags).
+    // Unit 3b §3.6: the strategy and carb target to build for (Balanced and
+    // none with the flag off).
+    final request = dietPlanRequestFor(targets: targets, foodType: _foodType,
+        profile: profile, enabled: DietStrategyFlags.enabled);
     final inputs = DietPlanInputs(
       calorieTarget: calorieTarget,
       proteinTarget: proteinTarget,
@@ -188,12 +231,19 @@ class _DietPlanScreenState extends ConsumerState<DietPlanScreen> {
       // (nutrition_provider.dart:362) — no second default.
       fiberTarget: (profile['fiber_grams'] as num?)?.toInt() ?? 30,
       seed: seed,
+      strategy: request.strategy,
+      carbTarget: request.carbTarget,
     );
-    final servicePlans = DietPlanFlags.curatedEnabled
-        ? CuratedDietPlanGenerator.instance.generate(inputs)
-        : DietPlanGenerator.instance.generate(inputs);
+    final built = DietPlanFlags.curatedEnabled
+        ? CuratedDietPlanGenerator.instance.generatePlan(inputs)
+        : (meals: DietPlanGenerator.instance.generate(inputs),
+            builtFor: DietStrategy.balanced);
 
-    _mealPlans = servicePlans.map(_servicePlanToScreenPlan).toList();
+    debugDietPlanGenerations++;
+    _mealPlans = built.meals.map(_servicePlanToScreenPlan).toList();
+    _requestedStrategy = request.strategy;
+    _planStrategy = built.builtFor;
+    _planEpoch++;
     if (mounted) setState(() => _saved = false);
   }
 
@@ -233,6 +283,7 @@ class _DietPlanScreenState extends ConsumerState<DietPlanScreen> {
       role: item.role,
       slotKey: meal.slotKey ?? kDietMealNameToSlotKey[meal.name] ?? '',
       dietPreference: _foodType.storageKey,
+      strategy: _planStrategy,
       planFoodIds: [
         for (final m in _mealPlans)
           for (final i in m.items) i.foodId,
@@ -245,96 +296,35 @@ class _DietPlanScreenState extends ConsumerState<DietPlanScreen> {
     );
 
     if (alternatives.isEmpty) {
-      // B-pass finding 6: silent no-op gave the tap zero feedback; the UPF +
-      // diet filters narrow pools, so this is now reachable (all-UPF
-      // categories).
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            'No alternatives available for this item',
-            style: AppTypography.body.copyWith(
-                fontSize: 13,
-                fontWeight: FontWeight.w700,
-                color: AppColors.textPrimary),
-          ),
-          backgroundColor: AppColors.card,
-          behavior: SnackBarBehavior.floating,
-          shape:
-              RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-          duration: const Duration(seconds: 3),
-        ),
-      );
+      showNoDietPlanSwapSnack(context);
       return;
     }
 
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: AppColors.card,
-      shape: const RoundedRectangleBorder(
-        borderRadius:
-            BorderRadius.vertical(top: Radius.circular(AppRadius.cardL)),
-      ),
-      builder: (ctx) => SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.all(AppSpacing.screenPadding),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Center(
-                child: Container(
-                  width: 40,
-                  height: 4,
-                  decoration: BoxDecoration(
-                    color: AppColors.textDisabled,
-                    borderRadius: BorderRadius.circular(2),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 16),
-              Text(
-                'Swap "${item.name}" with...',
-                style: AppTypography.body.copyWith(fontSize: 15, fontWeight: FontWeight.w800, color: AppColors.textPrimary),
-              ),
-              const SizedBox(height: 12),
-              ...alternatives.map((alt) {
-                return ListTile(
-                  contentPadding: EdgeInsets.zero,
-                  title: Text(
-                    alt.name,
-                    style: AppTypography.body.copyWith(fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.textPrimary),
-                  ),
-                  subtitle: Text(
-                    '${alt.servingDesc} \u00B7 ${alt.calories} kcal',
-                    style: AppTypography.bodySm.copyWith(fontSize: 11, color: AppColors.textDim),
-                  ),
-                  trailing: const Icon(Icons.swap_horiz,
-                      color: AppColors.accent, size: 20),
-                  onTap: () {
-                    setState(() {
-                      _mealPlans[mealIndex].items[itemIndex] = _PlanFoodItem(
-                        foodId: alt.foodId,
-                        name: alt.name,
-                        servingDesc: alt.servingDesc,
-                        servingG: alt.servingG,
-                        calories: alt.calories,
-                        protein: alt.protein,
-                        carbs: alt.carbs,
-                        fat: alt.fat,
-                        // the NEW row's category; the role is inherited
-                        // (alt.role is the resolved role of the replaced item)
-                        category: alt.category,
-                        role: alt.role,
-                      );
-                    });
-                    Navigator.of(ctx).pop();
-                  },
-                );
-              }),
-            ],
-          ),
-        ),
-      ),
+    final epoch = _planEpoch;
+    showDietPlanSwapSheet(
+      context,
+      itemName: item.name,
+      alternatives: alternatives,
+      onPick: (alt) {
+        // Unit 3b §3.6: a sheet opened before a regeneration changes nothing.
+        if (epoch != _planEpoch || !mounted) return;
+        setState(() {
+          _mealPlans[mealIndex].items[itemIndex] = _PlanFoodItem(
+            foodId: alt.foodId,
+            name: alt.name,
+            servingDesc: alt.servingDesc,
+            servingG: alt.servingG,
+            calories: alt.calories,
+            protein: alt.protein,
+            carbs: alt.carbs,
+            fat: alt.fat,
+            // the NEW row's category; the role is inherited
+            // (alt.role is the resolved role of the replaced item)
+            category: alt.category,
+            role: alt.role,
+          );
+        });
+      },
     );
   }
 
@@ -346,10 +336,11 @@ class _DietPlanScreenState extends ConsumerState<DietPlanScreen> {
       // Unit 2a: the food type the plan was built for (a plan of another
       // type is not loaded or used for hints, savedPlanMatchesFoodType).
       'food_type': _foodType.storageKey,
-      // Unit 3a: stamped only with the flag on (no reader until Unit 3b).
+      // Stamped only with the flag on: the strategy the plan was BUILT for
+      // (Unit 3b §3.6; savedPlanMatchesStrategy reads it).
+      if (DietStrategyFlags.enabled) 'diet_strategy': _planStrategy.storageKey,
       if (DietStrategyFlags.enabled)
-        'diet_strategy':
-            dietStrategyOfTargets(ref.read(macroTargetsProvider)).storageKey,
+        'diet_strategy_requested': _requestedStrategy.storageKey,
       'meals': _mealPlans
           .map((m) => {
                 'name': m.name,
@@ -428,13 +419,25 @@ class _DietPlanScreenState extends ConsumerState<DietPlanScreen> {
         targetProtein: 0,
       );
     }).toList();
+    // Unit 3b §3.6: the stamp (absent = Balanced) is what this plan was
+    // built for; only a matching plan is loaded with the flag on.
+    // Flag off: Balanced, as before 3b (round 4 finding 1).
+    _planStrategy = DietStrategyFlags.enabled
+        ? dietStrategyOf(planData['diet_strategy'])
+        : DietStrategy.balanced;
+    _requestedStrategy = _currentPlanStrategy();
+    _planEpoch++;
     if (mounted) setState(() => _saved = true);
   }
 
-  String? _pdfStrategyLabel(Map<String, double> targets) {
-    final s = dietStrategyOfTargets(targets);
-    return s == DietStrategy.balanced ? null : s.label;
-  }
+  /// The note under the header when the plan differs from the strategy in
+  /// effect (Unit 3b §3.6); null with the flag off or when they agree.
+  String? _planNote(Map<String, double> targets) => DietStrategyFlags.enabled
+      ? dietPlanStrategyNote(
+          planStrategy: _planStrategy,
+          effective: dietStrategyOfTargets(targets),
+          foodType: _foodType)
+      : null;
 
   Future<void> _sharePlanAsPdf() async {
     if (_mealPlans.isEmpty) return;
@@ -466,7 +469,10 @@ class _DietPlanScreenState extends ConsumerState<DietPlanScreen> {
           ),
       ],
       foodTypeLabel: _foodType.label,
-      strategyLabel: _pdfStrategyLabel(targets),
+      // Round 3 finding 1: the strategy the PLAN was built for, plus the
+      // note when it differs from the targets' strategy.
+      strategyLabel: dietPlanPdfStrategyLabel(_planStrategy),
+      planNote: _planNote(targets),
       calorieTarget: calorieTarget,
       proteinTarget: proteinTarget,
       carbTarget: carbTarget,
@@ -582,6 +588,13 @@ class _DietPlanScreenState extends ConsumerState<DietPlanScreen> {
                   ],
                   const SizedBox(height: AppSpacing.sectionGap),
                   _buildMacroTargets(targets),
+                  if (_planNote(targets) case final note?) ...[
+                    const SizedBox(height: 8),
+                    Text(note,
+                        key: const ValueKey('diet_plan_strategy_note'),
+                        style: AppTypography.body.copyWith(
+                            fontSize: 13, color: AppColors.textDim)),
+                  ],
                   const SizedBox(height: AppSpacing.sectionGap),
                   ..._mealPlans.asMap().entries.map((entry) {
                     return Padding(

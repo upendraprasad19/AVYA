@@ -16,8 +16,6 @@ import 'package:icanbefitter/core/services/hive_service.dart';
 import 'package:icanbefitter/features/train/providers/train_provider.dart';
 import 'package:icanbefitter/features/home/providers/home_provider.dart'
     show nutritionSummaryProvider;
-import 'package:icanbefitter/features/nutrition/providers/diet_plan_provider.dart'
-    show dietPlanProvider;
 import 'package:icanbefitter/features/nutrition/providers/nutrition_provider.dart'
     show dailyNutritionProvider, macroTargetsProvider;
 import 'package:icanbefitter/core/services/migrated_key.dart';
@@ -179,7 +177,11 @@ class UserProfileNotifier extends Notifier<Map<String, dynamic>> {
     ref.invalidate(macroTargetsProvider);
     ref.invalidate(dailyNutritionProvider);
     ref.invalidate(nutritionSummaryProvider);
-    ref.invalidate(dietPlanProvider);
+    // Unit 3b: no invalidate of dietPlanProvider. It watches the effective
+    // strategy (macroTargetsProvider) with the flag on and rebuilds from it;
+    // and it watches THIS provider (the food type), so invalidating it from
+    // here is a CircularDependencyError in debug builds once anything keeps
+    // it alive (TodaysMealsCard does).
     final signedIn = uidAtCall != null && uidAtCall.isNotEmpty;
     if (signedIn) fx.pushSnapshot();
     return true;
