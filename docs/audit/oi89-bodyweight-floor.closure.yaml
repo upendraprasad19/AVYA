@@ -1,0 +1,214 @@
+# Closure ledger — OI-89: the bodyweight equipment capability floor.
+# Gate 40 (validate_audit_closure.dart). One terminal_state per item; no
+# `deferred:` key. Branch: oi89-bodyweight-floor. ×2 context-blind plan review
+# converged; B-pass accepted (3 findings, 2 fixed, 1 recorded residual).
+#
+# The unit of a "finding" here is a PLAN TASK, because this batch is an
+# implementation of a converged plan rather than an audit of existing code. The
+# three B-pass findings are listed separately at the end so they carry their own
+# terminal states rather than hiding inside T12.
+
+batch: oi89-bodyweight-floor
+diagnose: docs/diagnoses/2026-08-28-equipment-library-restore-f7b2c4.md
+plan_review_record: docs/plan-reviews/oi89-bodyweight-floor.md
+bpass_review: docs/reviews/oi89-bodyweight-floor-bpass.md
+total_findings: 17
+closed_count: 17
+
+_seams: &seams test/contracts/bodyweight_capability_leak_test.dart
+_library: &library test/contracts/equipment_tier_consistency_test.dart
+
+findings:
+  - id: T1
+    title: "The four vocabulary constants in lockstep — canonicalTokens 12 → 24"
+    terminal_state: closed_in_commit
+    commit: "1ad34b7d"
+    verification: test/scripts/equipment_vocab_lockstep_lib_test.dart
+    notes: >
+      _precedence, _chipLabels and _aliases all move with canonicalTokens or a
+      token is silently DROPPED from an OR-compound, yielding [] = "no
+      requirement" — the most permissive result possible. 8 aliases deleted (not
+      7: the design listed `yoga mat`, which is never promoted, and deleting its
+      alias would open a fail-closed hole at the two live normalize seams).
+
+  - id: T2
+    title: "Two lists — what a tier GRANTS vs what we ASK about"
+    terminal_state: closed_in_commit
+    commit: "749da549"
+    verification: test/contracts/equipment_tier_grants_vs_asks_test.dart
+    notes: >
+      Founder decision 7: every tier GRANTS the household baseline (a gym has
+      walls and benches, and effectiveItems feeds the AI coach at every tier),
+      but a gym user is never ASKED "do you have a chair?".
+
+  - id: T3
+    title: "effectiveItems + the canPerform predicate"
+    terminal_state: closed_in_commit
+    commit: "7b54deac"
+    verification: test/contracts/equipment_capability_test.dart
+    notes: >
+      Keyed on equipment_needed, NEVER equipment_tier. Fails CLOSED on an
+      unreadable requirement — which is why warm-up and finisher moves had to be
+      POPULATED before any filter could be applied to them.
+
+  - id: T4
+    title: "Two enumeration gates (A: vocab lockstep, B: prose-vs-equipment audit)"
+    terminal_state: closed_in_commit
+    commit: "7be155b8 + 8b405056"
+    verification: test/scripts/equipment_audit_lib_test.dart
+    notes: >
+      Replaced hand-enumeration after the seam count went 5 → 7 → 10 → 11 across
+      four review rounds — a method failure, not a counting one. Both
+      mutation-proven per rule 24.
+
+  - id: T5
+    title: "The capability producer, threaded through the generator"
+    terminal_state: closed_in_commit
+    commit: "69f99b2c"
+    verification: *seams
+    notes: >
+      `required Set<String>? capability` on five signatures — required and NOT
+      defaulted, so the compiler enumerates call sites. It found 13. null means
+      DO NOT ENFORCE, never "an empty set".
+
+  - id: T6
+    title: "The five non-generator seams the compiler cannot reach"
+    terminal_state: closed_in_commit
+    commit: "0e6329bf + 1954c5f3"
+    verification: test/contracts/ui_seam_capability_test.dart
+    notes: >
+      Swap sheet, picker, template builder, SwapService, plus warm-up/finisher.
+      SwapService REFUSES rather than substituting — the AI coach drives it with
+      no sheet involved, and quietly giving a caller a different exercise than
+      they asked for is worse than saying no.
+
+  - id: T7
+    title: "One equipment_access fallback (14 sites, four different values)"
+    terminal_state: closed_in_commit
+    commit: "6253e237"
+    verification: test/contracts/equipment_access_default_test.dart
+    notes: >
+      Not cosmetic: the hard floor is scoped to the bodyweight tier, so eleven
+      sites defaulting UPWARD meant the floor did not run at all for a profile
+      that had lost the key. The AI snapshot's `?? ''` was the worst — not a
+      wrong tier but NO tier.
+
+  - id: T8
+    title: "Library restore + audit + 33 new rows + equipment_tier re-derive"
+    terminal_state: closed_in_commit
+    commit: "a7c2d194"
+    verification: *library
+    notes: >
+      31 rows restored from 632a10b8^, 9 corrected by name evidence, 259 → 292
+      rows in two waves (correctness then DEPTH — wave 1 alone left 331 empty
+      slots), equipment_tier re-derived and its invariant flipped SUBSET →
+      EQUALITY. Seed version 9 → 10 or the whole correction is inert for existing
+      installs.
+
+  - id: T9
+    title: "Flip enable_equipment_capability_floor ON"
+    terminal_state: closed_in_commit
+    commit: "a7c2d194"
+    verification: *seams
+    notes: >
+      Same commit as T8 by necessity: measured with the flag OFF against the
+      CORRECTED library, the bodyweight tier still carried 468 violations,
+      because attempt-5 bypasses queryV4 and picks by NAME. Kill switch is now
+      `disable_equipment_capability_floor`.
+
+  - id: T10
+    title: "Persistence — migrations 124 + 125, Gate 19, schema snapshot"
+    terminal_state: closed_in_commit
+    commit: "a7c2d194"
+    verification: test/contracts/applied_migrations_parity_test.dart
+    notes: >
+      Both APPLIED to prod and ledger-paired in the same commit, with post-apply
+      values recorded. 125 is a NEW number rather than an edit to 074, which is
+      applied and therefore immutable.
+
+  - id: T11
+    title: "Profile UI — Customize points at tierAskableItems, plus 'I also have'"
+    terminal_state: closed_in_commit
+    commit: "1f817e2f"
+    verification: test/contracts/equipment_tier_grants_vs_asks_test.dart
+    notes: >
+      The ADD half. A hard floor with no ceiling is a trap: a user who owns one
+      pull-up bar had no way to say so. Joins the existing eight fields on the
+      Reschedule prompt — no new regeneration behaviour.
+
+  - id: T12
+    title: "Records — plan-review record, closure YAML, board correction, §5 rows"
+    terminal_state: closed_in_commit
+    commit: "this commit"
+    verification: docs/plan-reviews/oi89-bodyweight-floor.md
+    notes: >
+      Includes the two new debugging bug-classes (§2.53 mirror-green-in-every-world,
+      §2.54 invariant-green-while-broken), two feedback memory instances, the
+      root CLAUDE.md safe_commit `-F` pitfall row, and four plan_engine/CLAUDE.md
+      pitfalls.
+
+  - id: T13
+    title: "Correct the design document's known-wrong statements"
+    terminal_state: closed_in_commit
+    commit: "a7c2d194"
+    verification: docs/superpowers/specs/2026-08-28-equipment-capability-design.md
+    notes: >
+      migration 122 → 124 (122 was minted by OI-98 and applied two days after the
+      design named it); `_restoreUserProfile` line citations re-derived; the
+      "7 shadowed aliases" list corrected to 8 with `yoga mat` removed from it.
+
+  - id: B1
+    title: "B-pass P1 — universalPoolV4 reorder regressed home_dumbbells users"
+    terminal_state: closed_in_commit
+    commit: "this commit"
+    verification: test/contracts/universal_pool_mirror_test.dart
+    notes: >
+      attempt-5 does not check equipment_tier and capability is null above
+      bodyweight, so pool POSITION is the prescription for gym-tier users.
+      Promoting `Dip (Parallel Bars)` to the head of elbow_extension would have
+      handed a home user a dip station. Restored to append-only and pinned by a
+      new invariant test.
+
+  - id: B2
+    title: "B-pass P1 — Gate B's scope excluded the defect class it exists to catch"
+    terminal_state: closed_in_commit
+    commit: "this commit"
+    verification: test/scripts/equipment_audit_lib_test.dart
+    notes: >
+      Bodyweight-tier-only scan cannot see a row over-tagged in equipment_needed,
+      because such a row is not bodyweight-tier. Widened to all tiers (now the
+      DEFAULT), found E260 Incline Dumbbell Press, fixed in data + migration 126,
+      17 comparison-prose mentions recorded with per-mention reasons.
+
+  - id: B3
+    title: "B-pass P2 — the behavioural oracle is not independent of the predicate"
+    terminal_state: verified_clean
+    commit: "this commit"
+    verification: docs/reviews/oi89-bodyweight-floor-bpass.md
+    notes: >
+      The oracle reads equipmentNeeded off the built PlannedExercise; the
+      predicate reads equipment_needed off the row it was copied from — the same
+      datum one step apart, so a WRONG row value passes both. Terminal as
+      verified_clean rather than fixed: the genuine independence comes from Gate
+      B's prose evidence, which B2 just widened from 117 rows to all 292. A third
+      independent source of truth does not exist short of human review, which is
+      what Gate B automates. Recorded so no future reader mistakes the oracle for
+      independent verification.
+
+  - id: B4
+    title: "OI-144 — the ADD half collected equipment the generator ignored above bodyweight"
+    terminal_state: closed_in_commit
+    commit: "this commit"
+    verification: test/contracts/equipment_owned_widens_test.dart
+    notes: >
+      Surfaced while explaining T8's home_dumbbells residual, and introduced by
+      T11 rather than pre-existing. The picker offered 13 chips at
+      home_dumbbells and ticking one produced a byte-identical plan. TWO
+      independent causes, either alone a no-op fix: resolveCapability returned
+      null above bodyweight, and queryV4's tier block dropped rows regardless of
+      capability. Both removed; capability now SUBSUMES the tier block. A
+      fail-OPEN path (effectiveItems on an unknown tier) became reachable in the
+      process and was closed in the same change. Mutation-proven on both legs
+      (consumer revert 1 red, producer revert 3 red); scorecard UNCHANGED, which
+      is the evidence the no-owned path is byte-identical. Diagnose a9e3c7,
+      spec + plan under docs/superpowers/.

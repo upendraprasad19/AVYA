@@ -1,0 +1,98 @@
+{
+  "checked_on": "2026-10-28",
+  "how": "Each picked animation's 192 px still was looked at on a contact sheet against our row's name and equipment_needed; the five unsure ones were looked at again at 380 px (middle frame).",
+  "pairs_checked": 159,
+  "left_out": {
+    "E225": "retired row (Batch A merge)",
+    "E240": "retired row (Batch A merge)",
+    "E241": "retired row (Batch A merge)",
+    "E264": "pick is the founder's own file table-row-clean.gif (gif id N001), not a Wardroom animation"
+  },
+  "match": 141,
+  "minor": {
+    "meaning": "equipment differs only by support kit (bench, step) or EZ-bar vs straight barbell; fine to apply",
+    "rows": {
+      "E018": "Skull Crusher: ours ez-bar+bench, picture is a straight barbell on a bench",
+      "E053": "Donkey Calf Raise: ours bodyweight, picture bends over a bench with feet on a block",
+      "E098": "Reverse Fly: ours dumbbells, picture is chest-supported on an incline bench",
+      "E111": "Sissy Squat: ours bodyweight, picture holds a bench for support",
+      "E162": "Piriformis Stretch: ours bodyweight, picture sits on a bench",
+      "E250": "Flutter Kicks: ours bodyweight, picture lies prone on a bench"
+    }
+  },
+  "equipment_mismatch": {
+    "meaning": "the picture shows different kit from our equipment_needed; hold until the founder decides",
+    "rows": {
+      "E027": "T-Bar Row: ours barbell, picture is a plate-loaded T-bar row station with a platform (anim 0606)",
+      "E051": "Standing Calf Raise: ours barbell, picture is a standing calf-raise machine (anim 0605)",
+      "E095": "Preacher Curl: ours ez-bar+bench, picture is a preacher curl machine (anim 0592)",
+      "E120": "Svend Press: ours barbell, picture holds a weight plate (anim 0856); no plate token yet",
+      "E121": "Renegade Row: ours dumbbells, picture uses kettlebells (anim 0521)",
+      "E124": "Inverted Row: ours suspension trainer, picture is a barbell in a Smith rack (anim 0499)",
+      "E132": "Pallof Press: ours cables, picture is a band (anim 0979)",
+      "E214": "Slow Walking: ours bodyweight, picture is a treadmill (anim 3666)",
+      "E230": "Standing Single Leg Curl: library still says cables; the founder's export decided bodyweight on 2026-10-17 and the picture shows no cable (anim 0795); the retag was never applied DECIDED by the founder, applied with the data step."
+    }
+  },
+  "movement_mismatch": {
+    "meaning": "equipment is fine but the picture shows a different exercise from our name; hold until the founder decides",
+    "rows": {
+      "E146": "Curtsy Lunge: picture is anim 1688 'Lunge with Twist', the same file as E198 Lunge with Twist",
+      "E152": "Squat to Stand: picture is anim 0514 'Jump Squat', the same file as E193 Jump Squat",
+      "E166": "Hamstring Stretch (Standing): picture is anim 1511, a lying hamstring stretch"
+    }
+  },
+  "resolved_on_second_look": {
+    "E008": "Chest Dip: a normal dip station, match",
+    "E203": "High Knees: a knee-drive march, match",
+    "E222": "Kas Glute Bridge: a floor glute bridge, match"
+  },
+  "shared_files": {
+    "1368": [
+      "E084",
+      "E211"
+    ],
+    "1688": [
+      "E146",
+      "E198"
+    ],
+    "2567": [
+      "E162",
+      "E169"
+    ],
+    "0652": [
+      "E022",
+      "E101",
+      "E256"
+    ],
+    "0868": [
+      "E035",
+      "E243"
+    ],
+    "0514": [
+      "E152",
+      "E193"
+    ]
+  },
+  "names_vs_pictures": "E102 Incline Push Up and E103 Decline Push Up use files named the other way round (3785 'Box Decline Pushup', 0279 'Incline Pushup'); the pictures match OUR names, so the pairs are correct and only the file names are swapped.",
+  "applied_after_this_check": {
+    "note": "141 match + 6 minor + E230 (founder decided bodyweight on 2026-10-17; retag applied by the data step) = 148",
+    "count": 148
+  },
+  "held": {
+    "note": "11 pairs held for the founder (OI-443)",
+    "rows": [
+      "E027",
+      "E051",
+      "E095",
+      "E120",
+      "E121",
+      "E124",
+      "E132",
+      "E214",
+      "E146",
+      "E152",
+      "E166"
+    ]
+  }
+}

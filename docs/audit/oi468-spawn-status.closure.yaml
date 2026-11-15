@@ -1,0 +1,71 @@
+# Closure ledger — oi468-spawn-status (OI-468, OI-311)
+# Gate 40 (validate_audit_closure.dart). One terminal_state per finding; no `deferred:` key. closed_count == total_findings.
+#
+# WHAT PRODUCED THESE: the founder's go "Oi 468 now." (2026-11-06), four plan-review rounds (seven context-blind Sonnet passes;
+# docs/plan-reviews/oi468-spawn-status.md), the measurements recorded in docs/diagnoses/2026-11-06-spawn-status-native-assets-race-b7e2d9.md
+# (strace, a truncating process, natural and real-gate stress runs, the marker-before-main run, both cwd/script directions), and
+# the mutation run of the new helper code (the diagnose doc lists it).
+#
+# `commit:` on a closed_in_commit row names the batch's single commit: the commit that ADDS this file. A commit cannot name its own SHA; find it with
+#   git log --diff-filter=A --format=%h -- docs/audit/oi468-spawn-status.closure.yaml
+# (the merge to main is a merge commit; the code commit is its second parent's tip).
+#
+# NOT A ROW HERE, ON PURPOSE: the same race in the git hooks (the parallel pre-commit gate loop and the other hook `dart run` sites) is
+# OI-482, a platform-tier unit of its own (CLAUDE.md 4.12.1 unit size; the tier gates require a feature flag, a B-pass and a plan-review
+# record); the OI on the board is its tracker and it starts next in this session.
+
+batch: oi468-spawn-status
+plan_review_record: docs/plan-reviews/oi468-spawn-status.md
+diagnose_docs:
+  - docs/diagnoses/2026-11-06-spawn-status-native-assets-race-b7e2d9.md
+total_findings: 8
+closed_count: 8
+
+findings:
+  - id: C1
+    title: "group A, the exit-254 family (OI-311 sightings 2026-10-13, 10-17, 10-19 and two on 11-06; OI-468 sighting 1 by prediction): cause measured and contained in the test spawn helper"
+    terminal_state: closed_in_commit
+    commit: oi468-spawn-status batch commit (see header)
+    verification: "test/contracts/spawn_retry_test.dart: spawnRetryDecision and isDartExecutable tables, both loops against the same scripted children, real dart children per entry point (a child that fails with the signature on its first run is retried and passes; an always-failing one stops after 3 attempts; a plain 254, the text with exit 1, the text on stdout only and an `sh` wrapper run exactly once); test/contracts/sot_registry_citations_test.dart reads its reports through finalAttempts (unit-tested). Mutation: see the diagnose doc."
+
+  - id: C2
+    title: "OI-468 Done-when branch 2 for the three result-returning helpers: an impossible exit status (outside -255..255, never on Windows) is retried once with a printed [spawn-retry] note carrying the failed attempt's exit, time, stdout and stderr; every attempt is reported whole"
+    terminal_state: closed_in_commit
+    commit: oi468-spawn-status batch commit (see header)
+    verification: "spawn_retry_test.dart: the decision bounds for any exe (256, -256 retried; 255, -255, 0, -9 not), Windows suppression that does not leak into the race, the note table (exact shape, hex of the unsigned 32-bit value, 300-character cut after escaping at 299/300/301, raw bytes), the default note path captured by a zone, the event order once-report-note, per-attempt clock. Cures an idempotent child (git push); a non-idempotent child that ran (git worktree add) fails a second time with its own message: diagnosable, not necessarily green (stated in the OI-468 archive entry)."
+
+  - id: R1
+    title: "children the helper does not retry: startSpawn callers (discipline_hook_main_sync_e2e_test.dart:241 runs `dart run` on a repo script and is an exposed reader), sh -c wrapper children, nested spawns"
+    terminal_state: upstream_blocked
+    blocker: "a retry cannot be made safely on a streaming Process (the caller drives the streams) or on a wrapper that does work before its nested `dart run` (the measurement that the child never reaches `main` holds for the dart process itself)"
+    reopen_when: "a [spawn-retry]-free failure with the signature text (`File not formatted as yaml`) from a startSpawn, wrapper or nested child appears in a CI log"
+
+  - id: R2
+    title: "two limits of the covered path, stated in the spawn.dart header: (a) a Dart SCRIPT that spawns a nested `dart run` and forwards its status and stderr (scripts/check_two_user_cross_account.dart:39 is that shape) matches the race signature after doing work and would be run again; (b) a stdin payload above the pipe buffer written to a child that already died on the race throws out of the stdin write before any status is read, so that attempt is not retried (unchanged from before the retry existed)"
+    terminal_state: upstream_blocked
+    blocker: "neither shape is spawned through the three result-returning helpers today (found by the voluntary diff review, which read every call site), so there is no live case to measure or test, and a status-only check cannot tell a forwarded nested 254 from the child's own"
+    reopen_when: "a test is added that spawns a Dart script forwarding a nested dart's status through runSpawn/runSpawnAsync/runSpawnWithInput, or that passes a stdin payload over 64 KB to a dart child"
+
+  - id: U1
+    title: "group U, the July 2026 a7f3d1: a plain `dart <script>` of a script copied into a throwaway repo exited 254 (no package, relative imports only, so it reads nothing of the repo's native_assets.yaml): NOT explained by this mechanism"
+    terminal_state: upstream_blocked
+    blocker: "no occurrence since July 2026 and no mechanism; the helper now prints every attempt's stdout and stderr for any failing spawn, so the next occurrence will carry its text"
+    reopen_when: "a 254 WITHOUT the signature text `File not formatted as yaml` appears on any spawned child"
+
+  - id: B1
+    title: "group B, OI-468 sightings 2 and 3: a quiet `git` spawn (git push -q, git worktree add -q) returned an exit status no process can return (1668163832, 1752491432), stdout and stderr empty: cause NOT established"
+    terminal_state: upstream_blocked
+    blocker: "the VM's Process.runSync wait path returned a number the child did not produce; the native source is not available here and nothing reproduces it; both values are multiples of 8 (a hypothesis only)"
+    reopen_when: "a [spawn-retry] lost-status line appears in two different CI runs (job logs are kept about 90 days), or an impossible status that the retry did not cure"
+
+  - id: A1
+    title: "board: OI-468 archived to docs/audit/closed_issues.md with the claim stated per Done-when branch, the carve-outs, the cause-not-established statement for sightings 2 and 3, and the reopen triggers"
+    terminal_state: closed_in_commit
+    commit: oi468-spawn-status batch commit (see header)
+    verification: "docs/audit/closed_issues.md carries the entry (Status: CLOSED); docs/audit/open_issues.md has no OI-468; check_closes_oi_performed reads it at the merge"
+
+  - id: A2
+    title: "board: OI-311 archived to docs/audit/closed_issues.md with group A explained, a7f3d1 stated as NOT explained, its 'do not add a retry first' caution superseded, and the hook sites named as OI-482"
+    terminal_state: closed_in_commit
+    commit: oi468-spawn-status batch commit (see header)
+    verification: "docs/audit/closed_issues.md carries the entry (Status: CLOSED); docs/audit/open_issues.md has no OI-311 and carries OI-482 (minted with scripts/mint_oi.sh, reservation ref oi/482)"

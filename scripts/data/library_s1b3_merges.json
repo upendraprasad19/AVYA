@@ -1,0 +1,10 @@
+{
+  "_meta": {
+    "batch": "Library Batch S1b-3 (OI-147)",
+    "plan": "docs/plans/2026-11-10-library-batch-s1b3-retire-donkey-calf-raise.md (D9)",
+    "note": "Rows retired INTO a kept row. The importer's merge stage drops `id`, appends it to `into`'s merged_ids and `name` to `into`'s name_aliases (the seed then prunes the id from every install). The cloud seed generator reads `merged_in` to find the rows its own rollback reactivates."
+  },
+  "rows": [
+    { "id": "E053", "name": "Donkey Calf Raise", "into": "G1373", "merged_in": "s1b3" }
+  ]
+}

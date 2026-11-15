@@ -1,0 +1,82 @@
+# Closure ledger — oi482-hook-dart-run-race (OI-482, OI-117; OI-483 filed)
+# Gate 40 (validate_audit_closure.dart). One terminal_state per finding; no `deferred:` key. closed_count == total_findings.
+#
+# WHAT PRODUCED THESE: the OI-468 plan (D7) filing OI-482 as "starts next", three plan-review rounds (docs/plan-reviews/oi482-hook-dart-run-race.md), the
+# measurements in docs/diagnoses/2026-11-06-hook-dart-run-native-assets-race-c4e2a8.md (the empty-yaml canary, a real 254 retried to a real success, a real
+# SIGKILLed `dart run` returning 137), and the mutation run of the new shell code (the diagnose doc lists it).
+#
+# `commit:` on a closed_in_commit row names the batch's single commit: the commit that ADDS this file. A commit cannot name its own SHA; find it with
+#   git log --diff-filter=A --format=%h -- docs/audit/oi482-hook-dart-run-race.closure.yaml
+# (the merge to main is a merge commit; the code commit is its second parent's tip).
+
+batch: oi482-hook-dart-run-race
+plan_review_record: docs/plan-reviews/oi482-hook-dart-run-race.md
+diagnose_docs:
+  - docs/diagnoses/2026-11-06-hook-dart-run-native-assets-race-c4e2a8.md
+total_findings: 11
+closed_count: 11
+
+findings:
+  - id: C1
+    title: "the 22 `\"$DART_BIN\" run` sites of the five git hooks retry the native-assets race (a `run` that exits 254 with `File not formatted as yaml` on stderr, at most twice, one note per retry), via the shell function `_dart_run_retrying` that `use_dart_race_retry` sets as DART_BIN; the call sites do not change"
+    terminal_state: closed_in_commit
+    commit: oi482-hook-dart-run-race batch commit (see header)
+    verification: "test/scripts/dart_run_retry_test.dart (function table against a stub, the REAL SDK: control, canary, a real 254 retried to a real success with a real stdin payload, the kill-switch twin) and test/scripts/hooks_dart_run_retry_e2e_test.dart (the five real hooks against a stub that loses the race once per script, each with a switch-off twin). Mutation proof: see the diagnose doc. The retry is SILENT at the four sites that discard stderr (the `TIER_LINE=` assignment of prepare-commit-msg.sh, the `REMINDER_TIER=` assignment of pre-commit.sh, the `blast_radius_from_diff.dart - 2>/dev/null` stage of pre-push.sh, the quiet `validate_diagnose_doc.dart` pre-check of commit-msg.sh): declared, pinned as a closed inventory."
+
+  - id: C2
+    title: "the pre-commit gate loop keeps each gate's output and exit status and prints them (retry notes, a failing gate's output head and tail, its status, a distinct sentence for a gate killed by a signal 129..192 and for 254; only the first 8 failing gates print their output), through a fail-safe `_gate_diag || true`; closes OI-117"
+    terminal_state: closed_in_commit
+    commit: oi482-hook-dart-run-race batch commit (see header)
+    verification: "hooks_dart_run_retry_e2e_test.dart: attribution of two failing gates, head 20 + tail 30 of an 80-line output, exit statuses 127/128/129/137/192/193/254/255 at the boundaries, every note of a gate that lost the race twice, order (diagnostics before GATE FAIL), both temp dirs empty on the pass and the fail path, an unreadable output that must not change the verdict."
+    notes: "OI-117's text asked that only the second sentence block; that part is NOT adopted (a gate that could not run is not a pass: a killed gate still blocks). The deviation is written on OI-117 itself and in the archive. The killed range is 129..192, not >= 128: 254 and 255 are Dart's own statuses (measured: a real SIGKILLed dart run returns 137)."
+
+  - id: C3
+    title: "the kill switch AVYA_DART_RUN_RETRY=0 restores today's call at all 22 sites; the control-variable plumbing (exact-name strip, _stripped, _localShell for DART_BIN / DART_BIN_REAL, the recursion-capable set) and the naming glossary are updated"
+    terminal_state: closed_in_commit
+    commit: oi482-hook-dart-run-race batch commit (see header)
+    verification: "the switch-off twins of every hook case; dart_run_retry_test.dart (`0` disables, `false`/`off`/empty do not); spawn_env_manifest_test.dart and spawn_sites_guard_test.dart green."
+
+  - id: A1
+    title: "board: OI-482 archived to docs/audit/closed_issues.md with the claim stated per Done-when branch (its amended text), the four silent sites, the unmeasured platforms and the post-merge reinstall as an operational step"
+    terminal_state: closed_in_commit
+    commit: oi482-hook-dart-run-race batch commit (see header)
+    verification: "docs/audit/closed_issues.md carries the entry (Status: CLOSED); docs/audit/open_issues.md has no OI-482; check_closes_oi_performed reads it at the merge"
+
+  - id: A2
+    title: "board: OI-117 archived with its deviation visible (killed gates still block; range 129..192)"
+    terminal_state: closed_in_commit
+    commit: oi482-hook-dart-run-race batch commit (see header)
+    verification: "docs/audit/closed_issues.md carries the entry (Status: CLOSED); docs/audit/open_issues.md has no OI-117"
+
+  - id: R1
+    title: "the harness hooks in .claude/settings.json (9 commands), the dart launchers (land_pr.sh, sync_with_main.sh, safe_pr_merge.sh, safe_merge.sh) and the Dart scripts that spawn dart in the plain form (batch_close_hook.dart:159, land_pr.dart:521, sync_with_main.dart:665) keep the race uncontained: split to OI-483 on shape-fit grounds (exit 2 blocks a tool call; backgrounded PIDs with signal forwarding; exec of a function fails; the plain form needs a .dart-argument rule)"
+    terminal_state: upstream_blocked
+    blocker: "OI-483 reuses `_dart_run_retrying`, which exists on main only after this batch merges, and needs its own design for the exit-2, background-PID and exec shapes (CLAUDE.md 4.12.1: a unit whose plan reviews keep widening is split)"
+    reopen_when: "this batch is merged to main; OI-483 is the tracker and starts then"
+
+  - id: R2
+    title: "the installed hook COPIES (.git/hooks/*, read-only, dated 2026-10-25) still hold the old text: re-install from the primary on a tree equal to origin/main"
+    terminal_state: upstream_blocked
+    blocker: "a post-merge local operation: setup-hooks.sh refuses a tree behind origin/main, so it cannot run before the merge; until then an old copy runs the real dart exactly as today (tested: the old-copy-on-new-tree cell)"
+    reopen_when: "this batch is merged to main and the primary is fast-forwarded; the session performs it and records it in the retrospective and in reference_vps_quirks.md item 5"
+
+  - id: R3
+    title: "NOT established: that the pre-commit loop's historical 'different gate each run, green alone, six at once' failures (2026-09-29, 2026-11-05, 2026-11-06) were this race; their output was discarded and they were never reproduced"
+    terminal_state: upstream_blocked
+    blocker: "the evidence does not exist; the loop now keeps and prints a failing gate's output, so the next occurrence will carry its text"
+    reopen_when: "a gate fails in the loop with retained output that lacks the signature (then it is another cause), or a [dart-run-retry] note is followed by a failure (the budget of 2 is too small); tracker: item 5 of reference_vps_quirks.md"
+
+  - id: V1
+    title: "CI: .github/workflows/test.yml has 6 live `dart run` lines (154, 331, 373, 401, 408, 446); they run one at a time"
+    terminal_state: verified_clean
+    evidence: "grep -n 'dart run' .github/workflows/*.yml: only test.yml, 6 live lines (167 is a comment); line 373 is a sequential `for` loop; no `&`, `xargs -P` or `nohup` in the file (two plan-review readers)"
+
+  - id: V2
+    title: "a Dart script forwarding a nested dart's status would be re-run by the retry; none of the scripts the hooks run does"
+    terminal_state: verified_clean
+    evidence: "the only scripts under scripts/ that `exit` with a child's status are check_onconflict_live_arbiter.dart:277 and check_two_user_cross_account.dart:39; both are on the pre-commit loop's case-skip list (plan ground truth 7, re-checked by review round 1)"
+
+  - id: B1
+    title: "Windows (Git Bash forks are slow; the function adds one fork per call) and macOS behaviour of the capture idiom are not measured here; the founder's clone gets a check item"
+    terminal_state: blocked_on_user
+    reason: "needs the founder's Windows clone: time one commit with and without AVYA_DART_RUN_RETRY=0 and run one hook; dash and bash on Linux are covered"

@@ -1,0 +1,400 @@
+import 'dart:async';
+import 'package:flutter/foundation.dart';
+import 'package:flutter_image_compress/flutter_image_compress.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_svg/flutter_svg.dart';
+import 'package:image_picker/image_picker.dart';
+import 'package:icanbefitter/core/theme/colors.dart';
+import 'package:icanbefitter/features/train/services/coach_day_completion.dart';
+import 'package:icanbefitter/core/theme/spacing.dart';
+import 'package:icanbefitter/core/theme/typography.dart';
+import 'package:icanbefitter/core/utils/date_utils.dart' show chatClockLabel;
+import 'package:icanbefitter/core/constants/app_constants.dart';
+import 'package:icanbefitter/core/copy/speech_input_copy.dart';
+import 'package:icanbefitter/core/services/error_telemetry.dart';
+import 'package:icanbefitter/core/services/speech_input_controller.dart';
+import 'package:icanbefitter/core/services/speech_input_lifecycle.dart';
+import 'package:icanbefitter/core/services/speech_input_service.dart';
+import 'package:icanbefitter/core/services/subscription_service.dart';
+import 'package:icanbefitter/features/profile/providers/profile_provider.dart';
+import 'package:icanbefitter/features/train/providers/workout_surface_invalidation.dart';
+import 'package:supabase_flutter/supabase_flutter.dart' show FileOptions;
+import 'package:icanbefitter/core/services/supabase_service.dart';
+import 'package:icanbefitter/core/services/coach_chat_clear.dart';
+import 'package:icanbefitter/core/services/hive_service.dart';
+import 'package:icanbefitter/core/services/sync_service.dart';
+import 'package:icanbefitter/shared/widgets/paywall_sheet.dart';
+import 'package:icanbefitter/shared/widgets/wardroom/wardroom.dart';
+import '../../providers/ai_coach_provider.dart';
+import '../../repositories/ai_coach_repository.dart';
+import '../../repositories/coach_media_repository.dart';
+import '../../widgets/chat_bubble.dart';
+import '../../widgets/completion_prompt_card.dart';
+import '../../widgets/prompt_chip.dart';
+import '../../widgets/log_confirm_card.dart';
+import '../../widgets/measurement_chip_slot.dart';
+import '../../widgets/workout_draft_slot.dart';
+import '../../widgets/coach_insight_section.dart';
+import '../../widgets/coach_suggested_actions.dart';
+import '../../widgets/coach_patterns_card.dart';
+import '../../widgets/coach_deep_analysis_card.dart';
+import '../../providers/pending_tool_intents_provider.dart';
+import '../../models/tool_intent.dart';
+import '../../widgets/tool_confirm_card.dart';
+import '../../widgets/tool_confirm_sheet.dart';
+import '../../widgets/diff_preview/swap_exercise_diff.dart';
+import '../../widgets/compass_tools_sheet.dart';
+import '../../widgets/log_workout_sheet.dart';
+import '../../widgets/swap_exercise_coach_sheet.dart';
+import '../../widgets/compass_form_sheet.dart';
+import '../../widgets/diff_preview/injury_modify_diff.dart';
+import '../../widgets/diff_preview/hotel_workout_diff.dart';
+import '../../widgets/diff_preview/pause_plan_diff.dart';
+import '../../widgets/diff_preview/regenerate_plan_diff.dart';
+import '../../widgets/diff_preview/reschedule_week_diff.dart';
+import '../../widgets/diff_preview/custom_template_diff.dart';
+import '../../widgets/diff_preview/schedule_template_diff.dart';
+import '../../widgets/diff_preview/switch_goal_diff.dart';
+
+
+part 'compact_header.dart';
+part 'status_pill.dart';
+part 'chat_area.dart';
+part 'destructive_intent.dart';
+part 'welcome_view.dart';
+part 'quick_prompts.dart';
+part 'input_bar.dart';
+part 'attach_button.dart';
+part 'media_picker.dart';
+
+class AiCoachScreen extends ConsumerStatefulWidget {
+  const AiCoachScreen({super.key});
+
+  @override
+  ConsumerState<AiCoachScreen> createState() => _AiCoachScreenState();
+
+  /// B-4 / B-5: filter the pending-intents list down to those that should
+  /// render in the chat thread. Drops intents whose Hive
+  /// `intent_<id>_dispatched_at` marker is set (the dispatcher already ran)
+  /// and intents that have been dismissed or rejected. Pure / static so
+  /// `dispatched_card_filter_test.dart` can pin the contract without
+  /// spinning up the screen widget tree.
+  static List<ToolIntent> filterVisibleIntents(List<ToolIntent> intents) {
+    final coachBox = HiveService.instance.coachBox;
+    return intents.where((i) {
+      // Coach workout parity S3: an auto-run intent (the "I'm done" tile) is
+      // never a card, even if one reached state some other way.
+      if (kAutoRunIntentTypes.contains(i.type)) return false;
+      if (i.status == ToolIntentStatus.pending ||
+          i.status == ToolIntentStatus.executing ||
+          i.status == ToolIntentStatus.failed) {
+        // Defensive: drop if Hive marker says we already dispatched.
+        if (coachBox.get('intent_${i.id}_dispatched_at') != null) return false;
+        // Drop dismissals — terminal pill renders elsewhere if needed.
+        if (coachBox.get('intent_${i.id}_dismissed_at') != null) return false;
+        return true;
+      }
+      // audit-fixwave 2026-07-02 / F2 (+ B-pass fix) — a lingering green
+      // "✓ Logged" pill must not sit beside a fresh attempt and read as a false
+      // success. Key the EXECUTED pill's staleness on the SETTLE time (the
+      // `intent_<id>_dispatched_at` marker written when the dispatcher ran), NOT
+      // createdAt (the AI-reply time). Pre-B-pass this used createdAt, which hid
+      // the ✓ for any user who confirmed >2 min after reading the reply — a
+      // legitimate log then showed NO success feedback. If the marker is
+      // missing/unparseable, keep the pill (never hide a real success). rejected
+      // / expired are explicit terminal pills (never false success) and always
+      // render until prune() drops them from STATE (5 min).
+      if (i.status == ToolIntentStatus.executed) {
+        final raw = coachBox.get('intent_${i.id}_dispatched_at');
+        final settledAt = raw is String ? DateTime.tryParse(raw) : null;
+        if (settledAt == null) return true;
+        return DateTime.now().difference(settledAt) < const Duration(minutes: 2);
+      }
+      return i.status == ToolIntentStatus.rejected ||
+          i.status == ToolIntentStatus.expired;
+    }).toList();
+  }
+}
+
+class _AiCoachScreenState extends ConsumerState<AiCoachScreen> {
+  final _messageController = TextEditingController();
+  final _scrollController = ScrollController();
+  final _inputFocusNode = FocusNode();
+
+  /// True while the composer's speech session is starting or listening. The
+  /// field is not mounted then, so the measurement chip (which hides while the
+  /// field has focus) would pop in at every mic tap; it hides through this.
+  bool _composerListening = false;
+  bool _localSending = false; // Synchronous debounce flag to prevent double-tap
+
+  // Unit 1 (coach-completion-tap-card) — the date-string of the completion
+  // prompt whose [Complete workout] tap is currently in flight, or null. Used
+  // to disable both buttons + show a spinner while markCompleted runs so a
+  // double-tap can't fire two completions.
+  String? _completingPromptDate;
+
+  // Media attachment state
+  final _imagePicker = ImagePicker();
+  bool _isUploadingMedia = false;
+  double _uploadProgress = 0.0;
+
+  // Unit 8 (coach-media-consent, OI-25) — in-flight guard against a rapid
+  // double-tap firing two concurrent Storage.copy calls for the same
+  // coachKey. Mirrors the `_saving` double-tap guard pattern documented in
+  // lib/features/ai_coach/CLAUDE.md's common-pitfalls table (AI breakdown
+  // card save action).
+  final Set<String> _savingCoachMediaKeys = {};
+
+  // APK Test #15 / Bug E — gates the one-time initial-scroll-to-bottom on
+  // first paint of the AI coach screen. Without this gate, opening the
+  // screen leaves the scroll position at 0 (top), forcing the user to
+  // scroll down through history just to see the latest exchange and the
+  // input row. Set true after the first non-empty message frame triggers
+  // a `jumpTo(maxScrollExtent)` so subsequent rebuilds (which already
+  // call `_scrollToBottom` via ref.listen) don't re-fire it on every
+  // build.
+  bool _initialScrollDone = false;
+
+  @override
+  void initState() {
+    super.initState();
+    // A4 (2026-09-21) — AI Coach deliberately does NOT use
+    // HiveTabScaffoldMixin (fundamentally different mount shape — see that
+    // file's own header + the check_tab_screen_uses_hive_scaffold.dart
+    // allow-list), so it never got that mixin's background-restore-
+    // invalidation wiring either. ChatHistoryNotifier.build() reads coachBox
+    // synchronously once at build time with no reactive link to
+    // _restoreCoachInteractions completing, so a restore landing after this
+    // screen already built showed stale history until the NEXT unrelated
+    // rebuild. Wired directly to the same underlying signal the mixin uses
+    // internally, without adopting the mixin itself.
+    try {
+      SyncService.instance.restoreCompletedTick
+          .addListener(_onRestoreCompleted);
+    } catch (e, s) {
+      // A screen must never fail to mount because sync isn't initialised
+      // (widget tests pump this screen without SyncService) — mirrors
+      // HiveTabScaffoldMixin's own guard for the identical listener.
+      debugPrint('[AiCoachScreen] restore tick listen failed: $e');
+      unawaited(ErrorTelemetry.recordNonFatal(e, s,
+          reason: 'ai_coach_screen_restore_tick_listen'));
+    }
+  }
+
+  /// A4 — a completed background restore rewrote coachBox underneath a
+  /// screen that already built chatHistoryProvider. Invalidate it so the
+  /// next build re-reads Hive; the existing ref.listen(chatHistoryProvider,
+  /// ...) below already scrolls to bottom on any value change, so a fresh
+  /// history re-triggers that too, with no separate scroll-specific fix
+  /// needed.
+  void _onRestoreCompleted() {
+    if (!mounted) return;
+    ref.invalidate(chatHistoryProvider);
+  }
+
+  @override
+  void dispose() {
+    try {
+      SyncService.instance.restoreCompletedTick
+          .removeListener(_onRestoreCompleted);
+    } catch (_) {
+      // Symmetric with the guarded add in initState(): if the listener was
+      // never registered there, there is nothing to remove.
+    }
+    _messageController.dispose();
+    _scrollController.dispose();
+    _inputFocusNode.dispose();
+    super.dispose();
+  }
+
+  void _scrollToBottom() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (_scrollController.hasClients) {
+        _scrollController.animateTo(
+          _scrollController.position.maxScrollExtent,
+          duration: const Duration(milliseconds: 300),
+          curve: Curves.easeOut,
+        );
+      }
+    });
+  }
+
+  /// APK Test #15 / Bug E — instant (no animation) jump to the bottom.
+  /// `_scrollToBottom`'s 300 ms animation is fine for "new message
+  /// arrived, ease into view" but wrong here — nothing is on screen yet
+  /// to ease from, because this is the first paint. `jumpTo` removes the
+  /// visible scroll-from-top animation that would otherwise flash.
+  /// One call site: the one-shot first-paint gate in build() below.
+  void _jumpToBottom() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (_scrollController.hasClients) {
+        _scrollController.jumpTo(_scrollController.position.maxScrollExtent);
+      }
+    });
+  }
+
+  void _sendMessage(String text) {
+    if (text.trim().isEmpty) return;
+
+    // 2026-04-18 · Chat/Reasoning toggle removed. Single coach experience.
+    // PRO users bypass limits; free users hit the paywall when the daily
+    // message cap is reached. Server (ai-proxy) enforces the same gate.
+    final isPro = SubscriptionService.instance.isPro();
+    final messageCount = ref.read(messageLimitProvider);
+
+    if (isPro) {
+      _doSend(text);
+      return;
+    }
+
+    if (messageCount >= AppConstants.freeAiMessagesPerDay) {
+      showPaywallSheet(context, feature: 'Higher daily AI coach limit');
+      return;
+    }
+
+    _doSend(text);
+  }
+
+  void _doSend(String text) {
+    if (_localSending) return; // Block rapid double-taps synchronously
+    setState(() => _localSending = true);
+    _messageController.clear();
+    ref.read(sendMessageProvider.notifier).send(text).whenComplete(() {
+      if (mounted) setState(() => _localSending = false);
+    });
+    _scrollToBottom();
+  }
+
+  // ── Unit 1 (coach-completion-tap-card) — completion-prompt handlers ──
+
+  /// [Complete workout] — the shared tap path
+  /// (`CoachDayCompletion.completeOnTap`, `completed_via:'tap'`): today only,
+  /// never a rest / moved / no-plan day or a day with no log. On success it
+  /// invalidates the workout + home readers so the calendar / today's-workout
+  /// / streak / plan UI reflect the completion immediately.
+  Future<void> _onCompleteWorkoutFromPrompt(String date) async {
+    if (_completingPromptDate != null) return; // one in-flight completion
+    setState(() => _completingPromptDate = date);
+    try {
+      final result = await ref
+          .read(chatHistoryProvider.notifier)
+          .completeWorkoutFromPrompt(date);
+      if (!mounted) return;
+      // Coach workout parity 1b: one line per result (a refusal is not a
+      // "try again" case), shared with Train's COMPLETE WORKOUT button.
+      if (result.isSuccess) {
+        // Refresh every reader of schedule_<date>.status.
+        invalidateWorkoutSurfaces(ref.invalidate, source: 'completion_prompt');
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            result.message,
+            style: AppTypography.body.copyWith(
+                color: result.isSuccess ? AppColors.ok : AppColors.bad),
+          ),
+          backgroundColor: AppColors.card,
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _completingPromptDate = null);
+    }
+  }
+
+  /// [Log more] — resolves the prompt row (stops rendering the card) and
+  /// returns focus to the composer so the user can keep logging.
+  Future<void> _onLogMoreFromPrompt(String date) async {
+    await ref.read(chatHistoryProvider.notifier).resolveCompletionPrompt(date);
+    if (!mounted) return;
+    _inputFocusNode.requestFocus();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final messages = ref.watch(chatHistoryProvider);
+    final isSending = ref.watch(sendMessageProvider);
+    final messageCount = ref.watch(messageLimitProvider);
+    // Watch the provider so this screen rebuilds the instant a Razorpay
+    // success invalidates subscriptionInfoProvider. The direct
+    // SubscriptionService.instance.isPro() read Hive fresh but didn't
+    // trigger a Riverpod rebuild, so the "PRO" pill + trial counter
+    // stayed stale until a full app restart. Observed 2026-04-18 on
+    // icanbefitter@gmail.com post-PRO-purchase.
+    final isPro = ref.watch(subscriptionInfoProvider).isPro;
+
+    // Scroll when messages change or log actions appear
+    ref.listen(chatHistoryProvider, (_, _) => _scrollToBottom());
+    ref.listen(pendingLogActionsProvider, (_, _) => _scrollToBottom());
+    ref.listen(pendingToolIntentsProvider, (_, _) => _scrollToBottom());
+    ref.listen(workoutDraftProvider, (prev, next) {
+      if (workoutDraftChangeScrolls(prev, next)) _scrollToBottom();
+    });
+    // APK Test #15 / Bug E — first-paint scroll-to-bottom. Fires once,
+    // when chatHistoryProvider has loaded its first non-empty value. The
+    // ref.listen calls above only fire on VALUE CHANGES, never on the
+    // initial mount — so without this guard a user opening the AI coach
+    // screen lands at scroll position 0 (oldest message at top) and has
+    // to manually scroll down past history to see the latest reply and
+    // reach the input row. closes-diagnose: 2026-05-10-coach-scroll-init
+    if (!_initialScrollDone && messages.isNotEmpty) {
+      _initialScrollDone = true;
+      _jumpToBottom();
+    }
+
+    return Scaffold(
+      backgroundColor: AppColors.bg,
+      body: SafeArea(
+        child: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 430),
+            child: Column(
+              children: [
+                // Plan D D-8 — AI Coach uses _buildCompactHeader as its
+                // letterhead (THE BRIDGE · 24/7 eyebrow + Aye Captain
+                // Fraunces title). No unified WardTabHeader.
+                _buildCompactHeader(isPro),
+
+                // F11 · Test #9 — status strip + message count + trial
+                // countdown all consolidated INTO _buildCompactHeader. The
+                // header now owns its own meta (counter glued under UPGRADE).
+
+                // ── Chat Area ──
+                Expanded(
+                  child: _buildChatArea(messages, isSending),
+                ),
+
+                // ── Quick Prompts (only when chat is empty/welcome only) ──
+                if (!isSending && messages.length <= 1) _buildQuickPrompts(),
+
+                // ── Body-measurements chip (L2b Landing C, E4; flag-gated, owns its checks) ──
+                MeasurementChipSlot(
+                  inputFocusNode: _inputFocusNode,
+                  isSending: isSending || _composerListening,
+                  onShown: (height) =>
+                      keepBottomAfterChip(_scrollController, height),
+                ),
+
+                // ── Composer: field, mic / send morph, inline message counter ──
+                CoachComposer(
+                  controller: _messageController,
+                  focusNode: _inputFocusNode,
+                  isSending: isSending,
+                  messageCount: messageCount,
+                  isPro: isPro,
+                  onSend: _sendMessage,
+                  onAttach: () => _onTapAttach(isPro),
+                  onListeningChanged: (listening) {
+                    if (mounted && listening != _composerListening) {
+                      setState(() => _composerListening = listening);
+                    }
+                  },
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}

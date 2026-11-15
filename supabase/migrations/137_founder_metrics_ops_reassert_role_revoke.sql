@@ -1,0 +1,41 @@
+-- Intent: re-assert `revoke execute on function public.founder_metrics_ops()
+--   from anon, authenticated;` after migrations 135 and 136, which each did
+--   `CREATE OR REPLACE FUNCTION public.founder_metrics_ops()` without
+--   carrying their own explicit role-revoke line. This is the a9d3f1 replay-
+--   guard class (migration 103's original fix; recurred 2026-08-26 as
+--   e4a1b7 on migration 123; this is the third occurrence, caught by
+--   test/contracts/admin_metrics_functions_role_revoke_test.dart's
+--   post-103 scan rather than review, since neither review round nor the
+--   Hermes pass ran `flutter test` locally on this branch before merge).
+--
+--   Live verification (has_function_privilege, run before this migration)
+--   confirms `anon`/`authenticated` are CURRENTLY false and `service_role`
+--   is true — migration 103's revoke survived 135's and 136's
+--   signature-unchanged CREATE OR REPLACE, per ordinary Postgres ACL
+--   semantics (CREATE OR REPLACE preserves grants unless the function's
+--   signature changes; see supabase/migrations/CLAUDE.md's own pitfall row
+--   on this). So this migration is NOT closing a live leak — it is
+--   defense-in-depth: a full replay of the migration set from an empty
+--   database should not have to rely on that implicit preservation holding,
+--   and the project's own contract test requires an explicit re-assertion
+--   after every migration that touches a founder_metrics_* function.
+-- Destructive?: no   -- revoke of an already-absent grant; no data touched
+-- Rollback strategy: inline   -- reverse DDL (re-grant to anon+authenticated -- NOT recommended, reopens a9d3f1) is commented at file end
+-- Linked diagnose-doc: 2026-09-14-founder-metrics-ops-revoke-replay-guard-f7c3a1 (telegram-admin-bot)
+--
+-- Applied live 2026-09-14 after explicit founder authorization via
+-- AskUserQuestion, per CLAUDE.md §4.3 (plan approval != deploy approval).
+-- See backups/applied_migrations.json for the paired record.
+
+revoke execute on function public.founder_metrics_ops() from anon, authenticated;
+
+-- Post-apply verification (run in the SQL editor):
+--   select has_function_privilege('anon',          'public.founder_metrics_ops()', 'execute');  -- expect false
+--   select has_function_privilege('authenticated', 'public.founder_metrics_ops()', 'execute');  -- expect false
+--   select has_function_privilege('service_role',  'public.founder_metrics_ops()', 'execute');   -- expect true
+
+-- =============================================================================
+-- Rollback (inline) -- NOT recommended, reopens the a9d3f1 anon-exec leak:
+--
+-- grant execute on function public.founder_metrics_ops() to anon, authenticated;
+-- =============================================================================

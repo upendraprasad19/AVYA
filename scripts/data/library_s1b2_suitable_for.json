@@ -1,0 +1,29 @@
+{
+  "_note": "Library Batch S1b-2 (plan docs/plans/2026-11-09-library-batch-s1b2-loaded-versions.md, Decision 3; founder 2026-11-09, board d12): suitable_for of the KEPT rows E010 Pike Push Up (gains Advanced) and E045 Romanian Deadlift (gains Beginner), so every core_levels value lies inside suitable_for with no exception. Applied by the suitable_for stage of scripts/add_library_batch_c_v15.js: a row at before takes after, a row at after is a no-op, anything else stops the run. suitable_for is a cloud column: the S1b-2 seed migration carries it. Generated with node, never typed.",
+  "rows": [
+    {
+      "id": "E010",
+      "before": [
+        "Beginner",
+        "Intermediate"
+      ],
+      "after": [
+        "Beginner",
+        "Intermediate",
+        "Advanced"
+      ]
+    },
+    {
+      "id": "E045",
+      "before": [
+        "Intermediate",
+        "Advanced"
+      ],
+      "after": [
+        "Beginner",
+        "Intermediate",
+        "Advanced"
+      ]
+    }
+  ]
+}
