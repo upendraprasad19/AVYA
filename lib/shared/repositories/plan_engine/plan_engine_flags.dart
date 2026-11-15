@@ -55,24 +55,25 @@ class PlanEngineFlags {
   /// `configBox['disable_lead_first'] = true` to restore the pre-2A allocation and week-2 gains verbatim, for plans
   /// generated from then on (a plan already stored is not rewritten). Read once by `SessionSetAllocator.allocate` and
   /// once by `PeriodizationEngine.apply` per generation, each overridable by its `leadFirst` argument.
-  /// Unit 3A kill-switch (OI-487, founder d3 / d4 / d58-d61): the goal's reps (Cut and Maintain main lifts by the
-  /// founder's table, their accessories 10-15), the Cut / Maintain weekly bands, and the Strength focus (a main lift at
-  /// its range's low end with +30 s rest). Default ON. Set `configBox['disable_goal_training'] = true` to restore
-  /// today's reps, bands and rests verbatim, for plans generated from then on. Read once per generation by
-  /// `TrainingHistoryAnalyzer.goalTrainingFromProfile`.
-  static bool get goalTrainingEnabled {
-    try {
-      return HiveService.instance.configBox.get('disable_goal_training') != true;
-    } catch (_) {
-      return true; // no Hive (pure unit test) → the goal table
-    }
-  }
-
   static bool get leadFirstEnabled {
     try {
       return HiveService.instance.configBox.get('disable_lead_first') != true;
     } catch (_) {
       return true; // no Hive (pure unit test) → safe default: the lead-first allocator
+    }
+  }
+
+  /// Unit 3A kill-switch (OI-487, founder d3 / d4 / d58-d61): the goal's reps (Cut and Maintain main lifts by the
+  /// founder's table, their accessories 10-15), the Cut / Maintain weekly bands, and the Strength focus (a main lift at
+  /// its range's low end with +30 s rest). Default ON. Set `configBox['disable_goal_training'] = true` to restore
+  /// today's reps, bands, rests and the 4-day Maintain Glutes credit verbatim, for plans generated from then on. Read by
+  /// `TrainingHistoryAnalyzer.goalTrainingFromProfile` (once per generation, and once per plan-day swap) and by
+  /// `SplitResolver.quadPrimaryCreditsGlutes` when its `goalTraining` argument is not given.
+  static bool get goalTrainingEnabled {
+    try {
+      return HiveService.instance.configBox.get('disable_goal_training') != true;
+    } catch (_) {
+      return true; // no Hive (pure unit test) → the goal table
     }
   }
 

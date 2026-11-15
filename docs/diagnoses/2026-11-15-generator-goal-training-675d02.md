@@ -6,7 +6,7 @@ status: fixed
 blast_radius: platform
 tier: l_fix
 symptom: |
-  Generator step 3, Unit 3A (OI-487, generator half; founder d3 / d4 2026-11-08, d58-d65 2026-11-15).
+  Generator step 3, Unit 3A (OI-487, generator half; founder d3 / d4 2026-11-08, d58-d68 2026-11-15).
   - Cut (lose_fat) and Maintain (general_fitness) trained like Build: the same reps (the phase's archetype lean on the
     library range), weekly bands within 2-4 sets of Build's (Cut beginner equal to Build).
   - Cut and Maintain plans were identical in 92 of 576 profiles (same days, level, tier, minutes, phase).
@@ -27,7 +27,7 @@ recurrence: |
 writers:
   - { file: lib/shared/repositories/plan_engine/training_history_analyzer.dart, method_or_widget: "goalTrainingFromProfile (the switch and physique_focus == 'strength')", line: 124 }
   - { file: lib/shared/repositories/plan_engine/plan_generator.dart, method_or_widget: "generateV4: SessionBudgetContext(goalTraining:), d61", line: 300 }
-  - { file: lib/shared/repositories/plan_engine/goal_reps.dart, method_or_widget: "GoalReps.base / mainBase (the week-1 table, d58 / d59)", line: 46 }
+  - { file: lib/shared/repositories/plan_engine/goal_reps.dart, method_or_widget: "GoalReps.base / mainBase (the week-1 table, d58 / d59)", line: 48 }
   - { file: lib/shared/repositories/plan_engine/session_budget.dart, method_or_widget: "restFor / restForGoal (+30 s on H / M at 60+ minutes, d64)", line: 396 }
   - { file: lib/shared/repositories/plan_engine/session_budget.dart, method_or_widget: "_goalBands / weeklyBand(goalTraining:)", line: 491 }
   - { file: lib/shared/repositories/plan_engine/split_resolver.dart, method_or_widget: "quadPrimaryCreditsGlutes: 4-day general_fitness", line: 428 }
@@ -58,7 +58,7 @@ telemetry_op_types:
 cross_account_guard: "unchanged: the profile read goes through the user-scoped userBox, as physiqueFocusMuscles does."
 forbidden_patterns_checked:
   - { pattern: "a Build or legacy-strength plan changed without the focus (the gate: 0 of 1,152)", absent: true }
-  - { pattern: "a group trained OFF at 0 ON in any plan-week 1-3, with or without the focus (the gate: 0)", absent: true }
+  - { pattern: "a group trained OFF at 0 ON in any plan-week 1-3 of the uninjured grid, with or without the focus (the gate: 0; injured plans: d66, accepted)", absent: true }
   - { pattern: "a change with the switch set (goal_training_kill_switch_golden_test: 1,010 personas = main)", absent: true }
   - { pattern: "plan_generator.dart changed beyond d61's argument", absent: true }
   - { pattern: "a day under 3 exercises or a lost row against the floor off (the three day-floor gates)", absent: true }
@@ -107,13 +107,39 @@ The gate (`goal_training_gate_test.dart`, 2,304 plans ON vs OFF):
 - Cut and Maintain identical: OFF 92 of 576, ON exactly the two d63 profiles.
 - Week-1 main lifts (archetype H / M): 14,547, every one at the table or its range bound (3,601 at a bound).
 - Week-1 accessories: 12,360, every one in 10-15 (or its own range clamped there).
-- Plan-weeks newly at 0: 0. Days over the session: no worse than OFF (+6).
+- Plan-weeks newly at 0: 0 (the uninjured grid; injured plans below, d66). Days over the session: no worse than OFF (+6).
 - The Strength focus: 29,010 main lifts (on the 2E tree; 29,012 before it) at their range floor; rest +30 s at 60+ minutes only; 0 newly at 0; the switch
   overrides the focus.
 
 S8 / d65 (found by the neighbouring day-floor gate, bug class 2.162): 8 of 17,280 `rep30` day-weeks at 2 exercises
 (6 by the session cap, 2 by the rank-0 reservation, the latter also a `lost` Goblet Squat). After d65: 0 thin, 0
 lost, every floor-off digest equal to main's.
+
+## Accepted consequences (review round 1)
+
+- d66 (founder, re-confirmed with the two-injury numbers): an injured Cut / Maintain plan can lose a group the
+  switch-off plan trains, when the group's only row also works a group whose lower top is spent (Face Pull for
+  Shoulders under a shoulder injury; a hamstring curl or walkout under lower_back; Dand for Triceps under elbow).
+  Goal training ON vs OFF, plan-weeks 1-3: 36 of 3,072 single-injury plans (8 injury states x 2 goals x 3-6 days x 3
+  levels x 4 tiers x 30 / 60 minutes x phases 1 and 4; 8 more are d67's), and with two injuries (the day-floor
+  personas, these include d67's) 35 of 1,440 phase-1 plans, 60 of 1,440 phase-4 plans and 11 of 480 pinned 30-minute
+  repeats. Nearly all Maintain. No code change.
+- d67: with a lower_back injury, 4-day Maintain beginner plans hold today's exercises, but the quad-first credit books
+  Walking Lunge to Quads only, so Glutes reads 0 in the set count.
+- d68: the rep table follows the EFFECTIVE level (a beginner trains as intermediate from phase 3, as the bands do), so
+  a Cut beginner's phase-3 and deload main lifts take 8; d59's deload is phase 1's entry at that level.
+- d65 is not behind `disable_goal_training`. With goal training off everywhere and d65 kept, the three day-floor gates
+  pass on main's old pins (review round 1), and with the switch set 2,592 plans hash the same with the pre-d65 floor
+  (seat B), so the switch-off world still equals main where measured.
+
+- The 10-15 accessory clamp (d3: "accessories 10-15 for all") can prescribe outside a row's own range: a rep-based
+  accessory whose range starts above 15 is prescribed 15, under its range (3 library rows, all bodyweight and 20-30:
+  Box Jump, Mountain Climber, Alternate Heel Touchers; Burpee, also 20-30, is a compound and stops at its bound), so
+  `ProgressionResolver._gradedSuggestion` can read logged sets as "below range"; an accessory whose range tops at 10
+  or below (22 rep-based rows) is prescribed 10, its top. Counted from `assets/data/exercise_library.json`. Founder's
+  rule, stated here.
+- A plan-day swap reads the profile's CURRENT minutes and focus (`swap_service.dart`): after a minutes or focus change
+  without a regeneration, a swapped-in main lift takes the new rest while its neighbours keep the generated stamp.
 
 ## Mutations
 

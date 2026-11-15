@@ -1,6 +1,6 @@
 # Generator Unit 3A: training follows the goal (OI-487, generator half)
 
-Board step 3 (t301-t308). Founder decisions d3 / d4 (2026-11-08) and d56-d65 (2026-11-15). Tier L (plan engine, a
+Board step 3 (t301-t308). Founder decisions d3 / d4 (2026-11-08) and d56-d68 (2026-11-15). Tier L (plan engine, a
 rule-14 argument); blast radius `platform`. Execution mode: inline (one worktree, `generator-step3a`).
 
 ## 0. Step 3 is four units (§4.12.1)
@@ -50,8 +50,9 @@ one after another, each with its own x2 review, B-pass, CI and merge:
 
 ## 2. The rules (d3, d58-d60, d64)
 
-A row is a **main lift** when its archetype (`SessionBudget.archetypeOfPlanned`) is H or M, i.e. every compound
-(d58). Every other row is an **accessory**. Level = the budget's EFFECTIVE level. Phase archetypes cycle (phase 5 =
+A row is a **main lift** when its archetype (`SessionBudget.archetypeOfPlanned`) is H or M (d58): every compound, plus a
+calisthenics row whose range starts at 10 or less (`SessionBudget.archetypeOf`; a compound with a high range, e.g.
+Burpee 20-30, is M and stops at its range bound). Every other row is an **accessory**. Level = the budget's EFFECTIVE level. Phase archetypes cycle (phase 5 =
 phase 1).
 
 Week-1 base reps by phase (hypertrophy / strength / metabolic / deload):
@@ -96,7 +97,10 @@ Week-1 base reps by phase (hypertrophy / strength / metabolic / deload):
 - **S2.** `SessionBudget.restFor(archetype, ctx)` / `restForGoal(archetype, gt, minutes:)` = `restForArchetype` + 30 s
   for H / M under the focus at 60+ minutes (switch ON; `ctx.minutes` in a generation, the profile's resolved minutes
   in a swap). Every writer and pricer in §1 calls it. `swap_service` reads
-  `goalTrainingFromProfile()`, so a swap keeps the generated rest.
+  `goalTrainingFromProfile()`, so a swap keeps the generated rest while the profile's minutes and focus are the ones
+  the plan was generated with (a swap reads the profile at swap time; after a minutes or focus change without a
+  regeneration, a swapped-in main lift takes the new rule while its neighbours keep the old stamp; accepted, as for
+  every other rest stamp).
 - **S3.** `GoalReps` (`plan_engine/goal_reps.dart`, pure) gives the week-1 base. `_applyWave` uses it in place of the
   archetype switch, keeps the wave and the range clamp, then clamps a Cut / Maintain accessory into [10, 15].
 - **S4.** `_goalBands` (switch ON) beside `_bands` (switch OFF). `weeklyBand(..., goalTraining:)` defaults to the ON
@@ -146,6 +150,10 @@ Week-1 base reps by phase (hypertrophy / strength / metabolic / deload):
 The 8 main lifts not at their floor are Bodyweight Squat (12-20): its archetype is calisthenics (B), not a main lift,
 though the dump's displayed type reads compound.
 
+The counts in §4 and §4b are the prototype's, classified by the dump's displayed type. The gate classifies by
+archetype (`archetypeOfPlanned`), so the built tree reads 14,547 main lifts and 12,360 accessories (the same 26,907
+rows), and 29,010 main lifts at their range floor under the focus with none left over (§5; the diagnose).
+
 ## 5. Tests
 
 - `test/contracts/goal_reps_behavioral_test.dart`: the table for every goal x level x phase, main / accessory, the
@@ -175,3 +183,25 @@ though the dump's displayed type reads compound.
 - A mutation pass on every new branch.
 
 ## Review log
+
+### Round 1 (2026-11-15, two fresh seats on 91bbaf68, CI green)
+
+- **Seat B P1 (accepted by the founder, d66).** "No group OFF trains is at 0 ON" held on the uninjured grid only. With
+  an injury, a group whose only row also credits a group at its lower Cut / Maintain top can reach 0 (Face Pull for
+  Shoulders under a shoulder injury, a hamstring curl or walkout under lower_back, Dand for Triceps under elbow).
+  Measured with goal training ON vs OFF: 36 of 3,072 single-injury Cut / Maintain plans lose a group (8 injury
+  states, phases 1 and 4; 8 more are d67's bookkeeping); with two injuries (these counts include d67's cases) (the day-floor personas) 35 of 1,440 phase-1 plans, 60 of 1,440 phase-4 plans, 11 of 480
+  pinned 30-minute repeats. Offered: seat the group's cheapest row past the lower top up to the old top. The founder
+  chose to accept as is and re-confirmed with the two-injury numbers. The gate's property is worded for the uninjured
+  grid.
+- **d67.** 8 further plans (4-day Maintain beginner, lower_back) hold today's exercises; Glutes reads 0 only because
+  the quad-first credit books Walking Lunge to Quads. Accepted.
+- **d68 (seat B P2).** The rep table follows the effective level (a beginner trains as intermediate from phase 3), so a
+  Cut beginner's phase-3 and deload main lifts take 8; d59's "phase 1's reps" is phase 1's entry at that level. Docs.
+- **Seat A F2 (d65 attribution).** With goal training off everywhere and d65 kept, the three day-floor gates pass on
+  main's old pins: d65 alone moves none of them. Seat B: with the switch set, 2,592 plans hash the same with the
+  pre-d65 floor.
+- Doc fixes: the main-lift definition (archetype H / M, calisthenics included), the swap's profile-time read, stale
+  "never a reservation-blocked slot" text (naming conventions, SoT `day_floor`, detail doc, test header), the flags doc
+  comment order, the audit harness's band under `PLAN_AUDIT_DISABLE`, the prototype counts in §4, the p1 / p4 gate
+  comments, the accessory-clamp consequence (3 rows above 15, 22 topping at 10 or below).

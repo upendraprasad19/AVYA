@@ -302,7 +302,7 @@ class PeriodizationEngine {
     int reps;
     if (parsed != null) {
       final (minReps, maxReps) = parsed;
-      // Unit 3A (OI-487): the goal's table for a main lift (every compound, d58), the Strength focus, else today's
+      // Unit 3A (OI-487): the goal's table for a main lift (archetype H / M, d58), the Strength focus, else today's
       // archetype lean (GoalReps.todayBase: strength min, metabolic max, hypertrophy / deload mid).
       final gt = budget.goalTraining;
       final arch = SessionBudget.archetypeOfPlanned(ex, budget);

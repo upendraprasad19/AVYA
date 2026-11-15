@@ -11,7 +11,9 @@
 //     range (d58: a range that cannot reach the table stops at its bound); deload is not in the grid (phases 1-3).
 //  4. Accessories (any other rep-based row with a range), Cut and Maintain, week 1: reps in 10-15 or the row's own
 //     range clamped there.
-//  5. No group OFF trains in a plan-week (weeks 1-3) is at 0 ON.
+//  5. No group OFF trains in a plan-week (weeks 1-3) is at 0 ON. The grid is uninjured: with an injury a group can
+//     reach 0 (founder d66, accepted; measured in diagnose 675d02), and the 4-day Maintain credit books a lunge to
+//     Quads only (d67).
 //  6. The displayed minutes run no further past the session than OFF's.
 //  7. The Strength focus (profile `physique_focus = strength`): no group OFF trains in a plan-week is at 0; every main
 //     lift's week-1 reps are its range's low end; its rest is +30 s at 60+ minutes only (d64), every other row's rest

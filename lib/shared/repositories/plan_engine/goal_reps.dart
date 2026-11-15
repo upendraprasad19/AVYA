@@ -1,8 +1,10 @@
 /// Unit 3A (OI-487, founder d3 / d4 / d58-d60): the goal's rep rule for a rep-based row with a library rep range.
 /// Pure: no Hive, no flag read ([SessionBudgetContext.goalTraining] carries both inputs).
 ///
-/// A MAIN lift is every compound (archetype H or M, d58); every other row is an accessory. The phase archetype cycles
-/// hypertrophy / strength / metabolic / deload (phases 1-4, then again). The returned base is week 1's; the caller
+/// A MAIN lift is archetype H or M (d58: every compound, plus calisthenics whose range starts at 10 or less); every
+/// other row is an accessory. The phase archetype cycles hypertrophy / strength / metabolic / deload (phases 1-4, then
+/// again). The level is the EFFECTIVE level (d68: a beginner trains as intermediate from phase 3, as the bands do), so
+/// "deload = phase 1's reps" (d59) is phase 1's entry at that level. The returned base is week 1's; the caller
 /// applies the week wave and clamps into the row's range (a lift whose range cannot reach the table stops at its
 /// bound, d58).
 class GoalReps {

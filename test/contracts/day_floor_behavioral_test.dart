@@ -1,7 +1,8 @@
 // Unit 2B (OI-452, docs/plans/2026-11-13-generator-step2b-day-floor.md, founder d30-d33): the 3-exercise day floor.
 // After pass A2, a day whose rows (budgeted and not) are under min(3, its reach) seats a remaining slot at 2 sets past
 // a group's weekly top: no limit on the excess (d30), in every phase (d31), up to its reach (d32), not bound by the
-// clock (d33); never past a session cap, never a slot the rank-0 reservation blocked. Choice (F2): the fewest groups
+// clock (d33); never past a session cap (d65, Unit 3A: a slot the rank-0 reservation blocked may be seated, and a cap
+// refusal of the third exercise trims the group's rows above 2, `floorTrims`). Choice (F2): the fewest groups
 // over their top, then the least excess, then the cheapest; ties to the lowest rank. F3: the Unit 2A worlds are chosen
 // with the floor off, then the chosen A and B are re-run with it on (B copying the floored A). F4: each seat is
 // recorded in `AllocationStats.floorSeats` with `overTop` and `overClock`; a floor seat is never in `countForced`; a

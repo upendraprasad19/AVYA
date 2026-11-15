@@ -390,7 +390,7 @@ class SessionBudget {
       };
 
   /// Unit 3A (founder d60 / d64): the rest a generation prices and stamps for [archetype]: [restForArchetype], plus 30 s
-  /// on a main lift (H or M, every compound, d58) under the Strength focus in a session of [strengthFocusRestMinMinutes]
+  /// on a main lift (H or M, d58) under the Strength focus in a session of [strengthFocusRestMinMinutes]
   /// or more (d64: at 30 / 45 minutes the extra rest pushed whole groups out of 110 of 2,304 plans). With the
   /// `disable_goal_training` switch set it is [restForArchetype] verbatim.
   static int restFor(String archetype, SessionBudgetContext ctx) =>

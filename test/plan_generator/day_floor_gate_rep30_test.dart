@@ -21,7 +21,8 @@ import '../helpers/injury_floor_sweep_lib.dart';
 /// under 3 (thin OFF up), and every one gains rows and reaches 3 (gained = thin OFF, 0 thin ON, 0 lost, every OFF digest
 /// still main's); knock-on rises with them. Founder d65 (the floor may seat a reservation-blocked slot and trims a
 /// 3-set row to 2 when only a session cap refuses) closed the 8 rep30 home_dumbbells day-weeks the floor had left at 2.
-/// With the goal training off and d65 reverted, the pre-3A counts measured back exactly.
+/// Attribution (review round 1): with the goal training off and d65 KEPT, this file's pre-3A counts pass unchanged, so
+/// d65 alone moves nothing here and every moved count is the goal training's (and with d65 reverted too, likewise).
 const _expected = <String, (int, int, int, int, int, int, int)>{
   'bodyweight': (240, 4320, 240, 240, 55, 0, 0),
   'home_dumbbells': (240, 4320, 428, 428, 66, 0, 0),

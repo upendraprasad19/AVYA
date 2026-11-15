@@ -11874,8 +11874,10 @@ concepts:
       Generator Unit 2B (OI-452, founder d30-d33, 2026-11-13, diagnose b3f1d8, plan
       docs/plans/2026-11-13-generator-step2b-day-floor.md): the 3-exercise day floor. After pass A2 a day whose rows
       (budgeted and not) are under min(3, its reach) seats remaining slots at 2 sets past a group's weekly top: no excess
-      limit, every phase, up to its reach, not bound by the clock; never past a session cap, never a reservation-blocked
-      slot; choice SessionSetAllocator.floorPrefers (fewest groups over the top, least excess, cheapest; ties to the
+      limit, every phase, up to its reach, not bound by the clock; never past a session cap; since d65 (Unit 3A,
+      2026-11-15) a reservation-blocked slot may take a floor seat, and when only a session cap refuses a thin day's
+      third exercise the floor takes sets off that group's admitted rows above 2 (most sets first, ties to the latest
+      rank; AllocationStats.floorTrims, copied to B like floorSeats), a no-trim slot preferred; choice SessionSetAllocator.floorPrefers (fewest groups over the top, least excess, cheapest; ties to the
       lowest rank). AllocationStats.floorSeats names each seat (FloorSeat: name, sets, overTop, overBy, overClock,
       overSeconds); a floor seat
       is never in countForced; belowCount keeps the label pass A2 left. With Unit 2A the worlds are chosen with the floor
@@ -12316,7 +12318,9 @@ concepts:
       (SplitResolver.quadPrimaryCreditsGlutes). The switch set: GoalTraining.off, today's reps, bands, rests and credit
       (generator_golden_hashes_goal_training_off.json = main over 1,010 personas). d65 amends the 2B day floor (a
       reservation-blocked slot may be floored; a session-cap refusal takes sets off the group's rows above 2,
-      AllocationStats.floorTrims).
+      AllocationStats.floorTrims). Accepted (founder): d63 (2 of 576 Cut / Maintain profiles
+      identical), d66 (an injured Cut / Maintain plan can lose a group the switch-off plan trains), d67 (the 4-day
+      Maintain credit books a lunge to Quads only); reps follow the effective level (d68).
     writers:
       - file: lib/shared/repositories/plan_engine/training_history_analyzer.dart
         method: goalTrainingFromProfile / isStrengthFocus (reads profile.physique_focus and the switch)
