@@ -11875,9 +11875,17 @@ concepts:
       (d37), as allocate(balancedWeek:); OFF returns R. The Edit Profile chip reads `About N min`; the plan audit's
       over-time bound is +6 under 60 (d47). No rule-14 edit: generateV4 passes the allocator's PopulatedDay list unchanged to
       PeriodizationEngine.apply.
+      Unit 2E (OI-496, founder d51, 2026-11-15, diagnose c6a2e8, plan docs/plans/2026-11-15-generator-step2e-arm-swap.md):
+      _allocateCore runs this allocation first and re-runs it with the arm swap only when one variant leaves Biceps or
+      Triceps at 0 while the other credits it (armPairsOf); the re-run is kept only with fewer arm pairs and no group
+      either variant credited at 0 (lostAny). In the re-run an arm group B credits joins A's fixpoint targets, and after
+      the minimum pass (allowance world) an arm target at 0 evicts the day's last over-served row (never rank 0, the
+      opener, a minimum seat or a focus row) for its cheapest slot at 2 sets, a minimumSeats entry; same row count.
     writers:
       - file: lib/shared/repositories/plan_engine/session_set_allocator.dart
         method: _allocateLeadFirst (the 2C-b steps, both paths; the allowance stamp) / _variant (walk, minimum pass, rowCap, refEvicted)
+      - file: lib/shared/repositories/plan_engine/session_set_allocator.dart
+        method: _allocateCore (Unit 2E: the arm re-run, armPairsOf / lostAny) / _variant(armSwap:) (the arm swap) / _allocateLeadFirst(armSwap:) (A's arm targets)
       - file: lib/shared/repositories/plan_engine/session_budget.dart
         method: SessionBudget.allowanceSeconds / BudgetLedger(allowance:) / BudgetLedger.forcingBound
       - file: lib/shared/repositories/plan_engine/models.dart
@@ -11893,7 +11901,10 @@ concepts:
         method_or_widget: _buildSessionDurationSelector (the `About N min` chip)
         semantic: copy
       - file: test/plan_generator/weekly_minimum_gate_test.dart
-        method_or_widget: 1,152 real plans at 30 / 45 minutes ON vs OFF (verdicts, majors, groups newly at 0, rows, zero weeks, minutes, the stamp, the fallback); 2A / 2B off digests
+        method_or_widget: 1,152 real plans at 30 / 45 minutes ON vs OFF (verdicts, majors, groups newly at 0, rows, zero weeks, minutes, the stamp, the fallback); 2A / 2B off digests; Unit 2E's block (the arm swap against its seam off)
+        semantic: behavioral
+      - file: test/contracts/arm_swap_behavioral_test.dart
+        method_or_widget: Unit 2E's swap, its victim rules, where it runs (60 / 90, non-arm groups, the kill switch) and a custom-filler sweep
         semantic: behavioral
       - file: test/contracts/session_allowance_behavioral_test.dart
         method_or_widget: the ledger, the stamp per path, the row cap and time, the readers, a 220-plan seeded sweep through the shared oracle

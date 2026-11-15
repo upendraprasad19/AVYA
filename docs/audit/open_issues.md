@@ -7057,19 +7057,6 @@ Residual of OI-199 and OI-471 after migration 172. Migration 172 makes `cleanup_
 
 **Done when.** No library row carries `slot_focus` / `slot_pattern`; the 13 / 19 rows carry the copied values; `CoreListSelector` reads `movement_pattern` / `target_focus` directly; seed v27 and the cloud migration applied and ledgered; the founder's device check after the build. Blast radius `account` (library data) plus the cloud migration; its own plan, x2 review and B-pass.
 
-## OI-496 — Minor-muscle zero weeks on the core-list pool (Triceps / Core / Biceps / Calves), owned by step 2's weekly floor (d14)
-
-- **Status**: OPEN
-- **Blocked on**: none
-- **Verified**: never
-- **Identified**: 2026-11-11 · filed via mint_oi.sh from branch `generator-step1-1bf`
-
-**What happens.** On the core-list pool (the only picker since Unit 1B-F, 2026-11-11) some plans hold a MINOR muscle at 0 sets in a week where the deleted cascade's twin held sets. Measured over the 2,304-plan audit (prototype H, the shipped allocator): Triceps 308 cells / 86 plans, Core 132 / 52, Biceps 116 / 36, Calves 18 / 9. The pool-ON world had them before the flip too (main ON: Biceps 124 / 38); Unit 1B-F creates none (0 zero cells newly against main's ON world) and heals few. Founder d14 (2026-11-10): ship the flip with this residue, fix in step 2.
-
-**Mechanism (measured with a temporary allocator print, `docs/plans/2026-11-10-generator-1bf-flip.md` section 4).** Writer: `SessionSetAllocator._variant` pass A (`session_set_allocator.dart`, `// 3. Pass A`): the count band, the clock refusal and Ruling 5's guards. Reader: the week's per-muscle sets of the periodized plan. Per cause (Triceps / Core / Biceps / Calves cells): the clock alone 128 / 60 / 0 / 18; a hold ranked ahead of the slot 160 / 64 / 20 / 0; guard (a) only-credit 20 / 8 / 18 / 0; the count band 0 / 0 / 78 / 0. None is OI-489's defect. It needs a weekly minimum per muscle that outranks a day's rank order: step 2's weekly floor.
-
-**Done when.** Step 2's weekly floor lands and the 2,304-plan audit shows 0 minor-muscle zero weeks the live twin (as recorded at the flip) did not have, or the founder accepts a stated residue. Owner: step 2 (d14). Blast radius `platform` (plan engine).
-
 ## OI-498 — Laptop clone: sync main with GitHub and reinstall the git hooks (suite lock, PR #246)
 
 - **Status**: OPEN

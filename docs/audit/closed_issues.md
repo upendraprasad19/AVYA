@@ -6958,3 +6958,18 @@ The flip equals prototype H3 and main's pre-flip ON world on every count above (
 - **Identified**: 2026-09-27 · filed via mint_oi.sh from branch `single-owner-a2b`
 
 **Closed (2026-11-14).** Diet plan Unit 2a (`diet-food-type`, diagnose `6f5aaa`, plan `docs/plans/diet-food-type.md`, 4 review rounds, converged). One vocabulary in `lib/core/constants/food_types.dart`: `veg`, `non_veg`, `eggetarian`, `pescatarian`, `vegan`, default `non_veg`; every reader goes through `foodTypeOf`, which maps `veg`/`vegetarian` to Veg, null to Non-veg and `keto` to Non-veg. Onboarding writes `non_veg`; Edit Profile and the Diet Plan screen share `FoodTypeChips` (no Keto chip), so a stored `veg` or `vegetarian` highlights Veg. The server readers (protein-gap-alert, daily-snapshot, weekly-report, captain manual, suggestMeal) move to the same table in Unit 2b, deployed before this PR merges.
+
+## OI-496 — Minor-muscle zero weeks on the core-list pool (Triceps / Core / Biceps / Calves), owned by step 2's weekly floor (d14)
+
+- **Status**: CLOSED
+- **Blocked on**: none
+- **Verified**: 2026-11-15, the 2,304-plan audit on the generator-step2e tree: Biceps / Triceps / Core zero-week pairs 0, Calves 49 (accepted, d45 / d49); the 2E block of `test/plan_generator/weekly_minimum_gate_test.dart`
+- **Identified**: 2026-11-11 · filed via mint_oi.sh from branch `generator-step1-1bf`
+
+**What happens.** On the core-list pool (the only picker since Unit 1B-F, 2026-11-11) some plans hold a MINOR muscle at 0 sets in a week where the deleted cascade's twin held sets. Measured over the 2,304-plan audit (prototype H, the shipped allocator): Triceps 308 cells / 86 plans, Core 132 / 52, Biceps 116 / 36, Calves 18 / 9. The pool-ON world had them before the flip too (main ON: Biceps 124 / 38); Unit 1B-F creates none (0 zero cells newly against main's ON world) and heals few. Founder d14 (2026-11-10): ship the flip with this residue, fix in step 2.
+
+**Mechanism (measured with a temporary allocator print, `docs/plans/2026-11-10-generator-1bf-flip.md` section 4).** Writer: `SessionSetAllocator._variant` pass A (`session_set_allocator.dart`, `// 3. Pass A`): the count band, the clock refusal and Ruling 5's guards. Reader: the week's per-muscle sets of the periodized plan. Per cause (Triceps / Core / Biceps / Calves cells): the clock alone 128 / 60 / 0 / 18; a hold ranked ahead of the slot 160 / 64 / 20 / 0; guard (a) only-credit 20 / 8 / 18 / 0; the count band 0 / 0 / 78 / 0. None is OI-489's defect. It needs a weekly minimum per muscle that outranks a day's rank order: step 2's weekly floor.
+
+**Done when.** Step 2's weekly floor lands and the 2,304-plan audit shows 0 minor-muscle zero weeks the live twin (as recorded at the flip) did not have, or the founder accepts a stated residue. Owner: step 2 (d14). Blast radius `platform` (plan engine).
+
+**Closed (2026-11-15).** Generator Unit 2E (`generator-step2e`, diagnose `c6a2e8`, plan `docs/plans/2026-11-15-generator-step2e-arm-swap.md`, founder d51). Unit 2C-b's weekly minimum (e9b3d7) had already taken Core to 0 and Triceps / Biceps to 9 / 13 pairs (main 0c383703). 2E's arm swap closes those 22 pairs in 21 plans. The 49 Calves pairs at 30 minutes are the founder's stated residue (d45 / d49: Calves under 45 minutes is never a target). This meets the "Done when" clause: 0 minor-muscle zero weeks except the founder-accepted residue.
