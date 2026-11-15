@@ -77,7 +77,7 @@ void main() {
   });
 
   for (final goal in const ['lose_fat', 'general_fitness']) {
-    test('Ruling 5c: $goal|4|advanced|bodyweight|30|1 keeps every day of weeks 1-4 inside 30 + 2 minutes (a count-forced day: + 5)', () {
+    test('Ruling 5c: $goal|4|advanced|bodyweight|30|1 keeps every day of weeks 1-4 inside 30 + 2 minutes (a count-forced day: + 5; 2C-b: + the 285 s allowance instead)', () {
       final rowsById = {
         for (final r in (jsonDecode(File('assets/data/exercise_library.json').readAsStringSync()) as List)
             .cast<Map<String, dynamic>>())
@@ -86,6 +86,10 @@ void main() {
       SessionSetAllocator.debugLastStats = null;
       final p = gen(goal, 1, days: 4);
       final stats = SessionSetAllocator.debugLastStats!;
+      // Unit 2C-b (S4, the shared oracle's allowance excuse): sized with the under-60 allowance, a day may run
+      // `SessionBudget.allowanceSeconds` past 30 + 2 INSTEAD of the forcing bound (d42: never stacked).
+      final allowanceMin =
+          SessionSetAllocator.debugLastAllowance! ? SessionBudget.allowanceSeconds / 60 : 0.0;
       final forced = <String>[];
       final over = <String, double>{};
       for (final w in p.weekPlans) {
@@ -102,14 +106,26 @@ void main() {
           if (minutes > 32) over['week ${w.weekInPhase} ${d.name}'] = (minutes * 10).roundToDouble() / 10;
           // Unit 2B (the shared oracle): plus the overrun of the day's `overClock` floor seats (d33, no bound).
           final floorClock = BudgetInvariantOracle.floorOverClockSeconds(stats[variant], i);
-          final limit = 32 + (isForced ? SessionBudget.maxForcedOverSeconds / 60 : 0) + floorClock / 60;
+          final limit = 32 +
+              (allowanceMin > 0 ? allowanceMin : (isForced ? SessionBudget.maxForcedOverSeconds / 60 : 0)) +
+              floorClock / 60;
           expect(minutes, lessThanOrEqualTo(limit), reason: 'week ${w.weekNumber} ${d.name}: ${minutes.toStringAsFixed(1)}');
         }
       }
       // The Ruling 5c day itself (Upper Pull) is never excused.
       expect(forced.where((f) => f.contains('Pull')), isEmpty, reason: 'forced: $forced');
-      // The excuse is used by exactly these days, at exactly these minutes (B review, seat 2 finding 3).
-      expect(over, <String, double>{'week 1 Lower Body': 32.9, 'week 2 Lower Body': 32.9, 'week 3 Lower Body': 32.9},
+      // The excuse is used by exactly these days, at exactly these minutes (B review, seat 2 finding 3). Unit 2C-b: the
+      // plan is sized with the 285 s allowance, so every day of weeks 1-3 runs past 32 minutes, by at most 35.3 (the
+      // Ruling 5c day, Upper Pull, at 34.5: inside 30 + 2 + the allowance, never count-forced). Pre-2C-b: Lower Body
+      // 32.9 in weeks 1-3.
+      expect(
+          over,
+          <String, double>{
+            'week 1 Upper Push': 32.4, 'week 1 Lower Body': 35.3, 'week 1 Upper Pull': 34.5,
+            'week 1 Full Body + Core': 33.0, 'week 2 Upper Push': 34.1, 'week 2 Lower Body': 35.3,
+            'week 2 Upper Pull': 34.5, 'week 2 Full Body + Core': 34.7, 'week 3 Upper Push': 32.4,
+            'week 3 Lower Body': 35.3, 'week 3 Upper Pull': 34.5, 'week 3 Full Body + Core': 33.0,
+          },
           reason: goal);
     });
   }
