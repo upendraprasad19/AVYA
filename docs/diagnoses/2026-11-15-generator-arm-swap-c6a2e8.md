@@ -57,8 +57,8 @@ forbidden_patterns_checked:
 proposed_fix: |
   Plan docs/plans/2026-11-15-generator-step2e-arm-swap.md.
   - S2-S5: after the minimum pass, in the allowance world only, an arm target still at 0 takes its cheapest slot by
-    swapping out the day's last over-served row (budgeted or a kept hold; never rank 0, the opener, a minimum seat or
-    a focus row), at 2 sets, within caps and tops, and no longer than the day was.
+    swapping out the day's last over-served row (budgeted or a kept hold; never rank 0, the opener, a minimum seat, a
+    day-floor seat, a count-forced row or a focus row), at 2 sets, within caps and tops, and no longer than the day was.
   - S6: an arm group B gains late in the fixpoint becomes a target of A.
   - S8: the 2C-b allocation runs first. The arm re-run happens only on an arm pair and is kept only with fewer pairs
     and no group lost.
@@ -247,7 +247,20 @@ mechanism was removed rather than patched:
   "covered by another clause" in that case: the earlier wording is corrected here.
 - **E7** (round 2 B3): a minimum seat that also credits a group a later arm swap seats is reachable in principle;
   only the `minNames` guard stops it. Guarded, not reached by a test.
-- **KOh** (round 2 A5): the hold branch's `keepsOpener(null)` replaced by `true`; no hold-victim fixture has an arm
-  row that outranks the lead. The budgeted branch pins the predicate (KO / KO2 red).
+- **KOh** (round 2 A5): the hold branch's `keepsOpener(null)` replaced by `true`. Pinned by the B-pass (below).
 - **WHY:** unobservable in both probes; the victim's `why` reads `count_limited` in `_label` where a group lost every
   crediting row, which neither label describes exactly.
+
+## B-pass (2026-11-15, two fresh Sonnet seats on 06bd06ef, CI green)
+
+No P0 / P1. Seat B's two lens-6 findings were missed tests on the hold branch, each now pinned by a crafted fixture
+found by a probe sweep (base against the mutant, outputs diffed):
+
+| id | mutation | probe | red |
+|---|---|---|---|
+| EVm | the hold walk's `evicted.contains(ex)` skip removed | 84 cases: 10 differ (custom 6, both holds evicted: the curl seated with no row leaving, 3 rows -> 4) | 1 |
+| KOh | the hold branch's `keepsOpener(null)` removed | 72 cases: 3 differ (custom 6, hold0 1 set, hold1 8: the chin-up would open the day over fly) | 1 |
+
+Seat A's findings were doc drift (the victim list in the registry, plan, diagnose and test header now names the
+day-floor seat and the count-forced row; the registry names `spentSeconds` / `resetSpentSeconds`; the arm pair is
+one group per plan; the minimum-seat glossary and field doc name the swap's seat) and the merge-seam records.

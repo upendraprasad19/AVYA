@@ -6,7 +6,7 @@ batch: generator-step2e
 total_findings: 8
 closed_count: 8
 
-_commit: &feat "generator-step2e feature commit"
+_commit: &feat "e39505a3 (with ddc06521, 53a8ed88, 06bd06ef and the B-pass commit)"
 
 findings:
   - id: C2E-1

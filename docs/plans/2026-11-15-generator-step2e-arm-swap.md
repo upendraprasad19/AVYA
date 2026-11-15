@@ -125,7 +125,7 @@ other week trains them:
 
 - **Behavioral (crafted, `session_budget_fixtures.dart`), `test/contracts/arm_swap_behavioral_test.dart`:**
   - the swap seats the arm row and drops the last over-served row, with the count unchanged;
-  - never rank 0, the opener, a minimum seat or a focus row;
+  - never rank 0, the opener, a minimum seat, a day-floor seat, a count-forced row or a focus row;
   - a hold victim and a budgeted victim;
   - a victim whose group no other row of the day credits is skipped;
   - refusals restore the victim (cap, top, time);
@@ -179,3 +179,7 @@ other week trains them:
   `keepsOpener` keeps the day's order (A1); the lead change in the 2A-opener case is stated (A4); the seam toggle is in
   try / finally (B5); survivors restated honestly (LOST alone unproven, E7, FORCEDV, TIEO, KOh) and stale line numbers
   re-cited. The 2E gate is unchanged.
+- **B-pass (2026-11-15, two Sonnet seats on 06bd06ef, CI green):** no P0 / P1. Seat B: the hold branch's evicted
+  skip and its `keepsOpener` had no test (both mutants green); two crafted fixtures now redden them (EVm, KOh). Seat
+  A: victim-list and registry doc drift, the arm-pair definition, the minimum-seat docs; all fixed. Review file
+  `docs/reviews/generator-step2e-bpass.md`.

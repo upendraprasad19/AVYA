@@ -3,7 +3,7 @@
 // over-served row for the arm row, at 2 sets. The row count is unchanged, and the day is no longer than before. The
 // seat is a `minimumSeats` entry. The swap's victim may be:
 // - a budgeted admitted row or a kept library hold;
-// - never rank 0, the day's opener, a minimum seat or a focus row;
+// - never rank 0, the day's opener, a minimum seat, a day-floor seat, a count-forced row or a focus row;
 // - only a row each of whose groups another row of the day also credits.
 // S6: an arm group that B gains late in the 2C-b fixpoint becomes a target of A too.
 //
@@ -607,6 +607,65 @@ void main() {
         }
       }
       expect(swapped, 2, reason: 'measured: 30 min custom 3, 45 min custom 9');
+    });
+  });
+
+  group('B-pass (the hold branch)', () {
+    test('a hold that is already out of the day (evicted) is never a victim: no phantom row, no phantom seconds', () {
+      // Day 0: row, a 6-set custom, calf (Calves, a first credit), two holds, the curl. Pass A evicts both holds so calf
+      // fits its first credit, and the clock refuses the curl. The walk passes the evicted holds; nothing else may go,
+      // so no swap. Without the `evicted` skip a gone hold "gives way": its seconds are credited back though they were
+      // never spent, and the curl is seated with no row leaving (3 rows -> 4; found by the B-pass, seat B).
+      for (final (h0, h1) in const [(3, 5), (5, 5), (8, 3)]) {
+        final f = lib();
+        f.row('calf', ['Calves'], type: 'isolation');
+        final dA = [
+          f.ex('row'),
+          f.ex('mine', sets: 6, rest: 100, customOrigin: 'user'),
+          f.ex('calf'),
+          f.ex('hold0', logging: 'timed', sets: h0, rest: 30),
+          f.ex('hold1', logging: 'timed', sets: h1, rest: 30),
+          f.ex('curlA'),
+        ];
+        final days = [
+          f.day('hypertrophy', dA, b: [f.ex('bench'), f.ex('curlB'), f.ex('row')]),
+          f.day('hypertrophy', [f.ex('bench'), f.ex('row')], b: [f.ex('bench'), f.ex('row')]),
+        ];
+        final off = runArm(f, days, on: false);
+        final on = runArm(f, days, on: true);
+        expect(names(off[0].exercisesA), ['row', 'mine', 'calf'], reason: 'holds $h0 / $h1: both evicted, curl refused');
+        expect(shape(on), shape(off), reason: 'holds $h0 / $h1');
+      }
+    });
+
+    test('a hold victim is refused when the arm row would open the day (keepsOpener, the hold branch)', () {
+      // Day 0: fly (isolation, the admitted lead), heavy (the refused 2A opener), row, a 6-set custom, hold0 (1 set),
+      // hold1 (8 sets), chin (compound Biceps + Back). The clock refuses heavy, row and chin, and pass A evicts hold1.
+      // hold0 is over-served (fly credits Back) and freeing it fits the chin-up, but the chin-up would open the day over
+      // fly and it is not the day's 2A opener (heavy is), so the swap is refused (d48). Without the hold branch's
+      // keepsOpener the day becomes [fly, mine, chin] and opens with the chin-up (KOh, a stated survivor until this
+      // test; found by the B-pass, seat B).
+      final (f, _) = openerDays(const ['fly'], 'chin', 0);
+      f.row('hold0', ['Back'], type: 'isolation', logging: 'timed');
+      f.row('hold1', ['Back'], type: 'isolation', logging: 'timed');
+      final dA = [
+        f.ex('fly'),
+        f.ex('heavy'),
+        f.ex('row'),
+        f.ex('mine', sets: 6, rest: 100, customOrigin: 'user'),
+        f.ex('hold0', logging: 'timed', sets: 1, rest: 30),
+        f.ex('hold1', logging: 'timed', sets: 8, rest: 30),
+        f.ex('chin'),
+      ];
+      final days = [
+        f.day('hypertrophy', dA, b: [f.ex('bench'), f.ex('curlB'), f.ex('row')]),
+        f.day('hypertrophy', [f.ex('bench'), f.ex('row')], b: [f.ex('bench'), f.ex('row')]),
+      ];
+      final off = runArm(f, days, on: false);
+      final on = runArm(f, days, on: true);
+      expect(setsOf(off[0]), [('fly', 4), ('mine', 6), ('hold0', 1)]);
+      expect(shape(on), shape(off));
+      expect(names(on[0].exercisesA), isNot(contains('chin')));
     });
   });
 }

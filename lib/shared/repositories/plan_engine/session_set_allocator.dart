@@ -64,7 +64,8 @@ class AllocationStats {
   Map<String, int> get credited => {...weekly, for (final g in holdGroups) if (!weekly.containsKey(g)) g: 1};
 
   /// Unit 2C-b (S3, founder d35 / d38): per day, each slot the weekly minimum seated at 2 sets and the group it was
-  /// seated for. Never in [countForced]. Variant B inherits A's entries for the days it copies.
+  /// seated for; Unit 2E: also the arm swap's seat (its victim removed from the day). Never in [countForced]. Variant B
+  /// inherits A's entries for the days it copies.
   final Map<int, List<({String name, String group})>> minimumSeats = {};
 
   /// Unit 2C-b (the walk, d35 / d48): per day, each target slot the walk moved ahead of its selector rank and the group

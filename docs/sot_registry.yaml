@@ -11952,14 +11952,15 @@ concepts:
       Triceps at 0 while the other credits it (armPairsOf); the re-run is kept only with fewer arm pairs and no group
       either variant credited at 0 (lostAny). In the re-run an arm group B credits joins A's fixpoint targets, and after
       the minimum pass (allowance world) an arm target at 0 evicts the day's last over-served row (never rank 0, the
-      opener, a minimum seat or a focus row) for its cheapest slot at 2 sets, a minimumSeats entry; same row count.
+      opener, a minimum seat, a day-floor seat, a count-forced row or a focus row) for its cheapest slot at 2 sets, a
+      minimumSeats entry; same row count. The re-run is kept only in the same allowance world (the stamp unchanged).
     writers:
       - file: lib/shared/repositories/plan_engine/session_set_allocator.dart
         method: _allocateLeadFirst (the 2C-b steps, both paths; the allowance stamp) / _variant (walk, minimum pass, rowCap, refEvicted)
       - file: lib/shared/repositories/plan_engine/session_set_allocator.dart
         method: _allocateCore (Unit 2E: the arm re-run, armPairsOf / lostAny) / _variant(armSwap:) (the arm swap) / _allocateLeadFirst(armSwap:) (A's arm targets)
       - file: lib/shared/repositories/plan_engine/session_budget.dart
-        method: SessionBudget.allowanceSeconds / BudgetLedger(allowance:) / BudgetLedger.forcingBound
+        method: SessionBudget.allowanceSeconds / BudgetLedger(allowance:) / BudgetLedger.forcingBound / BudgetLedger.spentSeconds / resetSpentSeconds (the arm swap's exact restore of a failed trial)
       - file: lib/shared/repositories/plan_engine/models.dart
         method: PopulatedDay.allowance
     readers:
