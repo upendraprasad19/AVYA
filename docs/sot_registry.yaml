@@ -1538,7 +1538,8 @@ concepts:
       Unit 1, diagnose 83ac8a, closes OI-214; recurrence of d3c7a9) the
       Diet Plan screen uses CuratedDietPlanGenerator: ONLY foods from the
       hand-curated catalog (kDietPlanCatalog, 151 everyday Indian foods,
-      plus 14 Low carb / Keto only entries since Unit 3b-1a;
+      plus 14 Low carb / Keto only entries since Unit 3b-1a and 5 Low carb
+      plan only entries since 2026-11-15;
       roles, day-capped families, allowed portions; no macros — numbers
       come from the foodBox row), a fixed template per slot (breakfast =
       main + protein (+fruit); lunch = protein + one grain + sabzi + side;
@@ -1553,7 +1554,7 @@ concepts:
       configBox['disable_curated_diet_plan'] (DietPlanFlags) until the
       founder's device check; its deletion is on the OI board. Food
       library seed version 4 (_foodLibraryVersion) shipped the v4 asset;
-      version 5 (Unit 3b-1a, below) is current.
+      version 6 (2026-11-15, below) is current.
       Diet plan Unit 3b-1a (2026-11-14, docs/plans/diet-strategy-3b.md):
       DietPlanInputs carries the strategy and the EFFECTIVE carb target;
       Low carb / Keto use their own templates (curatedTemplatesFor: Keto
@@ -1569,11 +1570,21 @@ concepts:
       byte-identical to main 21db03c7 (golden SHAs G1/G2 in
       test/nutrition/curated_diet_plan_strategy_test.dart). Seed version
       5 ships the 14 is_everyday flips.
+      Vegan Low carb (2026-11-15, docs/plans/diet-lowcarb-vegan.md): five
+      more catalog entries (tempeh F1017, edamame F1018, avocado F0455,
+      almond butter F0480, chia seeds F0082) are lowCarbOnly AND
+      lowCarbPlansOnly, offered to Low carb plans only (never Keto, never
+      Balanced; catalogEntryOffered), the Low carb lunch and evening snack
+      gain an optional fat role, a Low carb day may hold 3 soy items
+      (dietFamilyLowCarbPlanCapOverride; dietFamilyCapFor is the ONE cap
+      function for the generator and the swap sheet) and seed version 6
+      ships the five is_everyday flips. Balanced and Keto plans are
+      byte-identical to before.
     writers:
       - file: lib/features/nutrition/services/curated_diet_plan_generator.dart
         method: CuratedDietPlanGenerator.generate / generatePlan (template sampling per strategy, portion sizing, best of 40, builtFor) + curatedTemplatesFor + scaleServingDesc + dietPlanSeed
       - file: lib/features/nutrition/services/diet_plan_catalog.dart
-        method: kDietPlanCatalog / dietFamilyDailyCap / dietFamilyLowCarbCapOverride / dietCoherenceTokens (CatalogEntry.lowCarbOnly)
+        method: kDietPlanCatalog / dietFamilyDailyCap / dietFamilyLowCarbCapOverride / dietFamilyLowCarbPlanCapOverride / dietCoherenceTokens (CatalogEntry.lowCarbOnly, lowCarbPlansOnly)
         notes: |
           Imports nothing (scripts/patch_food_database_v4.dart imports it
           under `dart run`). Editing it requires re-running that script so
@@ -1584,12 +1595,20 @@ concepts:
           Vegan/veg preferences read the DB's is_vegan / is_veg fields
           AUTHORITATIVELY (diagnose d3c7a9).
       - file: lib/core/services/seed_service.dart
-        method: _foodLibraryVersion (v4 = is_everyday + v4 UPF tags + F1442-F1448; v5 = 14 Low carb / Keto ids is_everyday true)
+        method: _foodLibraryVersion (v4 = is_everyday + v4 UPF tags + F1442-F1448; v5 = 14 Low carb / Keto ids is_everyday true; v6 = 5 Low carb plan ids is_everyday true)
       - file: lib/features/nutrition/screens/diet_plan_screen.dart
         method: _generateFreshPlan (DietPlanFlags routing, dietPlanSeed, fiberTarget from profile['fiber_grams'])
     readers:
+      - file: lib/features/nutrition/services/diet_plan_catalog_rules.dart
+        method: dietFamilyCapFor / catalogEntryOffered (the strategy-aware cap and visibility, read by the generator's pool and day sampler and by the swap sheet)
+        semantic: filtered
+        notes: |
+          Imports the catalog (the catalog imports nothing). Balanced:
+          !lowCarbOnly; Keto: !lowCarbPlansOnly; Low carb: all. Cap:
+          Low carb plan override, then the Low carb / Keto override, then
+          the daily cap.
       - file: lib/features/nutrition/services/diet_plan_swap.dart
-        method: swapAlternatives / resolveSwapRole / swapCatalogFor (called by diet_plan_screen._swapItem; strategy-aware since Unit 3b-1a, Balanced filters lowCarbOnly before every scan)
+        method: swapAlternatives / resolveSwapRole / swapCatalogFor (called by diet_plan_screen._swapItem; strategy-aware since Unit 3b-1a, catalogEntryOffered filters every scan)
         semantic: filtered
         fields_read: [is_everyday, is_ultra_processed, is_veg, is_vegan, category, calories_std, protein_std, standard_serving_desc]
         notes: |
@@ -1614,9 +1633,16 @@ concepts:
       version bump is REQUIRED whenever the asset changes. The T5 macro
       floors in curated_diet_plan_test.dart and the T10 per-archetype
       floors in curated_diet_plan_strategy_test.dart are a contract: an
-      implementation change may raise them, never lower them. A
-      lowCarbOnly entry must never reach a Balanced plan or swap (G1/G2
-      goldens); added fat appears as an item only in Low carb / Keto.
+      implementation change may raise them, never lower them. ONE
+      recorded exception (2026-11-15, vegan Low carb): a change to a
+      strategy's random stream (an optional role draws once more) may
+      re-baseline that strategy's T10 rows from the built code; each
+      lowered row, the amount and the reason are written in the test
+      above `floors`, at most 0.05 per row (two rows by 0.03 that
+      day). A lowCarbOnly entry
+      must never reach a Balanced plan or swap (G1/G2 goldens); a
+      lowCarbPlansOnly entry must never reach Keto either; added fat
+      appears as an item only in Low carb / Keto.
 
   - concept: diet_preference_vocabulary
     domain: auth_profile
@@ -1966,7 +1992,7 @@ concepts:
       - file: scripts/patch_food_database_v4.dart
         method: main (imports kDietPlanCatalog; one-shot, idempotent)
       - file: lib/core/services/seed_service.dart
-        method: _seedFoods (putAll at food_library_version 5; v5 flips the 14 Unit 3b Low carb / Keto ids to true)
+        method: _seedFoods (putAll at food_library_version 6; v5 flips the 14 Unit 3b Low carb / Keto ids to true, v6 the 5 Low carb plan ids)
     readers:
       - file: lib/features/nutrition/services/diet_plan_swap.dart
         method: swapAlternatives
@@ -12782,7 +12808,7 @@ concepts:
         method: scripts/repair_exercise_library_v12.js (repairText, mergeDuplicates, relabel, dropPlates)
         notes: v12 (Batch A) — 136 un-shifted text rows, cues one per item, 7 duplicates retired (name_aliases + merged_ids on the kept row), E172/E163 labels, E207/E179 plate keys dropped
       - file: lib/core/services/seed_service.dart
-        line_range: 289-334
+        line_range: 294-339
         method: _exerciseLibraryVersion (11→12) + retiredLibraryIds + pruneRetired after putAll in _seedExercises
         notes: putAll never deletes, so the prune is what removes a retired row from an existing install
       - file: supabase/migrations/162_reseed_exercise_library.sql

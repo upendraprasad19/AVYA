@@ -13,6 +13,10 @@
 // flips is_everyday to true for the 14 Low carb / Keto catalog foods, so a
 // v4 box re-seeds too (the v3 -> v5 path keeps Unit 1's assertions).
 //
+// Diet plan observations batch (2026-11-15): v6 flips is_everyday to true for
+// the 5 vegan-friendly Low carb foods (tempeh, edamame, avocado, almond
+// butter, chia seeds), so a v5 box re-seeds too; a v4 and a v3 box end at v6.
+//
 // A plain test(), not testWidgets: real file I/O inside testWidgets hangs
 // (CLAUDE.md section 4.9).
 library;
@@ -52,12 +56,25 @@ const _v5Everyday = {
   'F0394', 'F0348', 'F1022', 'F1024', 'F0040', 'F0264',
 };
 
-/// The v4 rows: the v5 asset with the 14 ids still `is_everyday: false`.
+/// The v6 ids (2026-11-15): Low carb plans only, vegan friendly.
+const _v6Everyday = {'F1017', 'F1018', 'F0455', 'F0480', 'F0082'};
+
+/// The v5 rows: the v6 asset with the 5 v6 ids still `is_everyday: false`.
+List<Map<String, dynamic>> _v5Rows() => [
+      for (final r in _bundled())
+        {
+          ...r,
+          if (_v6Everyday.contains(r['id'])) 'is_everyday': false,
+        },
+    ];
+
+/// The v4 rows: the v6 asset with the 14 + 5 ids still `is_everyday: false`.
 List<Map<String, dynamic>> _v4Rows() => [
       for (final r in _bundled())
         {
           ...r,
-          if (_v5Everyday.contains(r['id'])) 'is_everyday': false,
+          if (_v5Everyday.contains(r['id']) || _v6Everyday.contains(r['id']))
+            'is_everyday': false,
         },
     ];
 
@@ -77,26 +94,44 @@ void main() {
   setUp(() async => tempDir = await setUpHiveForTests());
   tearDown(() async => tearDownHiveForTests(tempDir));
 
-  test('the version constant is 5', () {
+  test('the version constant is 6', () {
     final src = File('lib/core/services/seed_service.dart').readAsStringSync();
-    expect(RegExp(r'static const int _foodLibraryVersion = 5;').hasMatch(src),
+    expect(RegExp(r'static const int _foodLibraryVersion = 6;').hasMatch(src),
         isTrue);
   });
 
-  test('the 14 ids are exactly the catalog\'s Low carb / Keto only entries '
+  test('the v5 + v6 ids are exactly the catalog\'s Low carb / Keto only entries '
       '(B-pass seat C finding 6)', () {
-    expect(_v5Everyday,
+    expect({..._v5Everyday, ..._v6Everyday},
         {for (final e in kDietPlanCatalog) if (e.lowCarbOnly) e.foodId});
   });
 
-  test('precondition: the 14 ids are everyday in the asset', () {
+  test('precondition: the 14 + 5 ids are everyday in the asset', () {
     final byId = {for (final r in _bundled()) r['id']: r};
-    for (final id in _v5Everyday) {
+    for (final id in {..._v5Everyday, ..._v6Everyday}) {
       expect(byId[id]?['is_everyday'], isTrue, reason: id);
     }
   });
 
-  test('a v4 food box ends at v5 with the 14 ids everyday', () async {
+  test('a v5 food box ends at v6 with the 5 vegan Low carb ids everyday',
+      () async {
+    final hive = HiveService.instance;
+    for (final r in _v5Rows()) {
+      await hive.foodBox.put(r['id'], r);
+    }
+    await _markSeeded(hive, 5);
+    expect(_asJson(hive.foodBox.get('F1017'))['is_everyday'], isFalse,
+        reason: 'precondition');
+
+    await SeedService.instance.seedIfNeeded();
+
+    for (final id in _v6Everyday) {
+      expect(_asJson(hive.foodBox.get(id))['is_everyday'], isTrue, reason: id);
+    }
+    expect(hive.configBox.get('food_library_version') as int, 6);
+  });
+
+  test('a v4 food box ends at v6 with the 14 + 5 ids everyday', () async {
     final hive = HiveService.instance;
     for (final r in _v4Rows()) {
       await hive.foodBox.put(r['id'], r);
@@ -107,14 +142,14 @@ void main() {
 
     await SeedService.instance.seedIfNeeded();
 
-    for (final id in _v5Everyday) {
+    for (final id in {..._v5Everyday, ..._v6Everyday}) {
       expect(_asJson(hive.foodBox.get(id))['is_everyday'], isTrue, reason: id);
     }
     expect(_asJson(hive.foodBox.get('F0007'))['is_everyday'], isFalse);
-    expect(hive.configBox.get('food_library_version') as int, 5);
+    expect(hive.configBox.get('food_library_version') as int, 6);
   });
 
-  test('a v3 food box ends at v5 with the new rows and tags', () async {
+  test('a v3 food box ends at v6 with the new rows and tags', () async {
     final hive = HiveService.instance;
     for (final r in _v3Rows()) {
       await hive.foodBox.put(r['id'], r);
@@ -128,15 +163,15 @@ void main() {
     expect(_asJson(hive.foodBox.get('F0522'))['is_ultra_processed'], isTrue);
     expect(_asJson(hive.foodBox.get('F0001'))['is_everyday'], isTrue);
     expect(_asJson(hive.foodBox.get('F0007'))['is_everyday'], isFalse);
-    expect(hive.configBox.get('food_library_version') as int, 5);
+    expect(hive.configBox.get('food_library_version') as int, 6);
   });
 
-  test('MIRROR: a box already at v5 is not re-seeded', () async {
+  test('MIRROR: a box already at v6 is not re-seeded', () async {
     final hive = HiveService.instance;
     for (final r in _v3Rows()) {
       await hive.foodBox.put(r['id'], r);
     }
-    await _markSeeded(hive, 5);
+    await _markSeeded(hive, 6);
     await SeedService.instance.seedIfNeeded();
     expect(hive.foodBox.get('F1442'), isNull);
   });
