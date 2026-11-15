@@ -4538,7 +4538,7 @@ concepts:
     restore_methods: [_restoreWorkoutPlan, _restoreScheduledWorkouts, _restoreScheduleCompletions]
     provider_invalidation_set: [currentPlanProvider, calendarWeekProvider, todayWorkoutProvider, streakProvider]
     ist_sites:
-      - { file: lib/core/services/workout_schedule_read_service.dart, line: 371, fn: generateAndScheduleFromDate }
+      - { file: lib/core/services/workout_schedule_read_service.dart, line: 382, fn: generateAndScheduleFromDate }
     forbidden_legacy_patterns:
       - { pattern: "workoutBox\\.put.*schedule.*status.*planned", reason: "Never overwrite status=completed; check guard first" }
     class_constraints: |
@@ -5686,7 +5686,7 @@ concepts:
         method: phaseStartAfterGap
         notes: the ONE start-date rule; pure.
       - file: lib/core/services/workout_schedule_read_service.dart
-        line_range: 2130-2141
+        line_range: 2149-2160
         method: nextPhaseStartDate
         notes: delegates to phaseStartAfterGap (gapStart false = the original rule, used by the graduation unlock).
       - file: lib/shared/services/pro_phase_advance.dart
@@ -9838,7 +9838,7 @@ concepts:
       getCurrentPlanMap, hasPlan, getCurrentCalendarWeek.
     writers:
       - file: lib/core/services/workout_schedule_read_service.dart
-        line_range: 135-2080
+        line_range: 135-2099
         method: WorkoutScheduleReadService
     reader_manifest_complete: false  # progressive caller migration; @Deprecated lint surfaces remaining
     readers:
@@ -9914,7 +9914,7 @@ concepts:
       strings. Asserted directly, not assumed.
     writers:
       - file: lib/core/services/workout_schedule_read_service.dart
-        line_range: 984-1009
+        line_range: 1003-1028
         method: activeHoldWeeks / activeHoldOrdinalFor / weekIdentity — the seam + the single flag gate
       - file: lib/core/services/workout_schedule_write_service.dart
         line_range: 235-353
@@ -9999,7 +9999,7 @@ concepts:
         method: holdWeek → stamps is_hold (bool) + hold_ordinal (int, gap-proof max+1)
     readers:
       - file: lib/core/services/workout_schedule_read_service.dart
-        line_range: 1107-1318
+        line_range: 1126-1337
         method: isDeloadHold / _holdDatesByOrdinal / holdOrdinalForDate / holdWeeks / holdWeekSessionProgress
         semantic: latest
         fields_read: [schedule_<date>.is_hold, schedule_<date>.hold_ordinal, schedule_<date>.status, schedule_<date>.type]
@@ -10624,11 +10624,11 @@ concepts:
         method: _onReportForDuty setAnswer('injuries', ...)
         notes: Ship 3 (U5) - reads the collected injuries from widget.data['injuries'] (was hard-coded ['none']); preserves the ['none'] sentinel; generateV4 normalizes centrally
       - file: lib/shared/repositories/plan_engine/plan_generator.dart
-        line_range: 62-120
+        line_range: 63-125
         method: generateV4
         notes: CENTRAL normalize - canonicalizes injuries once for every generation caller
       - file: lib/shared/repositories/plan_engine/exercise_selector.dart
-        line_range: 850-862
+        line_range: 1027-1039
         method: _isContraindicated (passed to CoreListSelector.rankedPool by _pickCoreList; buildPinnedDays.resolve)
         notes: U2 introduced it for the universal pool (deleted with the pool and its kill switch by Unit 1B-F, 2026-11-11); ungated; a slot with no safe row is omitted, then the thin-day top-up
       - file: lib/shared/repositories/plan_engine/warmup_cooldown.dart
@@ -10644,7 +10644,7 @@ concepts:
         fields_read: [injury_contraindications]
         notes: exact lowercase equality (attempts 1-4) - unchanged, already correct
       - file: lib/shared/repositories/plan_engine/exercise_selector.dart
-        line_range: 850-862
+        line_range: 1027-1039
         method: _isContraindicated (the core-list pick's hard filter and the repeat pins)
         semantic: flag-check
         fields_read: [injury_contraindications]
@@ -10909,7 +10909,7 @@ concepts:
       that says LESS the more the user has logged, while still looking present.
     writers:
       - file: lib/core/services/workout_schedule_read_service.dart
-        line_range: 1220-1255
+        line_range: 1239-1274
         method: holdSnapshotBlock
         notes: |
           Returns null off a hold day. Reads activeHoldOrdinalFor/activeHoldWeeks
@@ -11246,7 +11246,7 @@ concepts:
           it only READS this stamped field.
       - file: lib/core/services/workout_schedule_read_service.dart
         method: "generateAndScheduleFromDate — current_plan blob splice (OI-166 Unit 2)"
-        line: 452
+        line: 463
         notes: >
           Replaces the pre-existing unconditional current_plan write. Splices
           contentFlavorIndex-cycled content into week_plans starting at
@@ -12131,7 +12131,8 @@ concepts:
         notes: >
           param forwarded to PlanGenerator.generate (null every existing caller →
           byte-identical); last_phase_profile = {plan_goal: FitnessGoals.of(goal).planGoal,
-          equipment, days_per_week, effective_exp: PlanGenerator.effectiveLevel(exp,phase)}
+          equipment, days_per_week, effective_exp: PlanGenerator.effectiveLevel(exp,phase),
+          session_minutes (Unit 2D, the resolved minutes; concept repeat_minutes_accessories)}
           written through MigratedKey (the per-user userBox; configBox only before a session
           opens) iff adherenceGateEnabled.
       - file: lib/core/services/workout_schedule_read_service.dart
@@ -12185,6 +12186,56 @@ concepts:
           Mutation-proven: reverting _buildRepeatPins' new guard reddens exactly the kill-switch
           test, the positive control and all 24 other tests in the file stay green.
     contract_test_path: test/contracts/repeat_content_scheduling_test.dart
+
+  - concept: repeat_minutes_accessories
+    domain: workout
+    behavioral_test_path: test/contracts/repeat_minutes_behavioral_test.dart
+    description: >
+      Unit 2D (OI-453, diagnose a7d2f4, plan docs/plans/2026-11-15-generator-step2d-repeat-minutes.md; founder d50,
+      d52). generateAndSchedule stores the RESOLVED session minutes in last_phase_profile['session_minutes'] and, before
+      it rewrites the profile, decides whether a REPEAT (pins non-null) runs at more minutes than the stored value
+      (repeatMinutesRose: an int stored value and now > it; absent / non-int = not raised). The flag rides the one
+      d50 pass-through argument generate() -> generateV4 -> buildPinnedDays(appendAccessories:). buildPinnedDays puts
+      accessory candidates (budgeted library isolations from the frame's fresh pick, screened by name, same-movement
+      partner and (pattern, first muscle), then by every row of the variant after the thin-day top-up) on
+      PopulatedDay.repeatAccessoriesA/B, never in the exercise lists; topUpDays carries them. SessionSetAllocator.allocate
+      runs the allocation unchanged (_allocateCore), then appends the candidates that fit the day's PLAIN budget (no
+      allowance, d44), the session cap, the weekly top, the level count and the lead cap, after reserving the week-2
+      +1 sets of the week-2 variant (PeriodizationEngine.weekTwoGains); PopulatedDay.appendedA/B counts the trailing
+      appended rows, which _weekTwoGains keeps out of the rank order and the lead and visits last. No kill switch
+      (d37): a repeat is reached only under disable_adherence_gate unset.
+    writers:
+      - file: lib/core/services/workout_schedule_read_service.dart
+        method: generateAndSchedule (session_minutes in last_phase_profile; minutesRose read from the old profile)
+        notes: >
+          minutes = SessionBudget.resolveMinutes(param: sessionDuration, profileValue: sessionMinutesFromProfile()), the
+          same resolution generateV4 budgets with; minutesRose = pins != null && repeatMinutesRose(old profile, minutes),
+          computed before generate() and before the profile write.
+      - file: lib/shared/repositories/plan_engine/plan_generator.dart
+        method: generate / generateV4 (repeatMinutesRose forward, d50)
+        notes: the only plan_generator.dart change; read only by the pinned branch.
+      - file: lib/shared/repositories/plan_engine/exercise_selector.dart
+        method: buildPinnedDays (_repeatCandidates, _dropHeldCandidates) / topUpDays (carry)
+        notes: >
+          candidates come from the memoized fresh() pick before this frame's rows feed the upper-day avoid; one
+          SameMovement per call through _sameMovementOf (the seam count stays 8).
+      - file: lib/shared/repositories/plan_engine/session_set_allocator.dart
+        method: allocate (wrapper) / _appendRepeatAccessories / _seatRepeatVariant
+        notes: >
+          returns _allocateCore's object when no input day holds candidates; each variant seated on its own ledger,
+          rank-major; the 6-day alias and every field of the core's day (allowance included) are kept;
+          AllocationStats.repeatAccessorySeats records the seats.
+    readers:
+      - file: lib/core/services/workout_schedule_read_service.dart
+        method_or_widget: repeatMinutesRose (pure)
+        semantic: true only for an int stored session_minutes below the new minutes
+      - file: lib/shared/repositories/plan_engine/periodization_engine.dart
+        method_or_widget: _weekTwoGains (appendedA/B) / weekTwoGains
+        semantic: trailing appended rows are budgeted but kept out of rank and lead, visited last; the reserve's source
+      - file: test/plan_generator/repeat_minutes_gate_test.dart
+        method_or_widget: the 768-persona gate
+        semantic: pins and their sets survive in all four weeks; extras fit; reach pinned per (pair, tier)
+    contract_test_path: test/contracts/repeat_minutes_behavioral_test.dart
 
   - concept: phase_repeat_nudge
     domain: workout
@@ -13092,7 +13143,7 @@ concepts:
           "don't touch" via the RPC's own COALESCE), same value + same
           projection helper, only the transport changed.
       - file: lib/core/services/workout_schedule_read_service.dart
-        line_range: 1650-1657
+        line_range: 1669-1676
         method: currentWeekColumnProjection
         notes: pure helper deciding frozen-passthrough (disabled) vs program week (enabled); behaviorally tested.
       - file: lib/features/onboarding/providers/onboarding_provider.dart
@@ -13534,15 +13585,15 @@ concepts:
       That shared walk is the drift guard.
     writers:
       - file: lib/core/services/workout_schedule_read_service.dart
-        line_range: 1876-1893
+        line_range: 1895-1912
         method: _scheduleRowsBefore
         semantic: shared-row-walk
       - file: lib/core/services/workout_schedule_read_service.dart
-        line_range: 1869-1875
+        line_range: 1888-1894
         method: pastPhaseBlocks
         semantic: strict-set
       - file: lib/core/services/workout_schedule_read_service.dart
-        line_range: 1902-1927
+        line_range: 1921-1946
         method: pastPhaseBlocksForDisplay
         semantic: display-recovery
         notes: |
@@ -15726,7 +15777,7 @@ concepts:
         semantic: flag-check
         fields_read: [type]
       - file: lib/core/services/workout_schedule_read_service.dart
-        line_range: 1420-1444
+        line_range: 1439-1463
         method: currentPhaseCompletionRate
         semantic: flag-check
         fields_read: [type]
