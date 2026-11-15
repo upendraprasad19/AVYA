@@ -10,7 +10,7 @@ import 'package:flutter_test/flutter_test.dart';
 import '../helpers/day_floor_gate_lib.dart';
 import '../helpers/injury_floor_sweep_lib.dart';
 
-/// (runs, day-weeks, thin OFF, gained, knock-on, lead + 2 OFF) per tier, measured on the 2B tree (2026-11-13). Every
+/// (runs, day-weeks, thin OFF, gained, knock-on, lead + 2 OFF, 2C-b swaps) per tier, measured on the 2B tree (2026-11-13). Every
 /// thin OFF day-week gains rows and reaches 3; the knock-on days keep their exercises with fewer sets (pass B grows less
 /// after a floor seat spent a group); lead + 2 OFF is a Unit 2A residue, identical with the floor on.
 /// Unit 2C-a (2026-11-14), traced per persona: every moved count is a shoulder + elbow build_muscle plan. The
@@ -18,11 +18,15 @@ import '../helpers/injury_floor_sweep_lib.dart';
 /// floor off for that injury; before, the body-part split's Shoulders + Arms day was (and, at phase 4, a 4-day Pull day
 /// that the balanced 4-day no longer has). Gained = thin in every tier: the floor seats each one, no day ends under 3.
 /// Thin OFF: bodyweight 0 -> 2, home_dumbbells 40 -> 48, basic_gym 60 -> 68 (12 new, 4 gone), full_gym 40 -> 44.
-const _expected = <String, (int, int, int, int, int, int)>{
-  'bodyweight': (720, 12960, 2, 2, 0, 0),
-  'home_dumbbells': (720, 12960, 48, 48, 0, 9),
-  'basic_gym': (720, 12960, 68, 68, 0, 0),
-  'full_gym': (720, 12960, 44, 44, 0, 0),
+/// Unit 2C-b (2026-11-15): 2C-b swaps bodyweight 10, home_dumbbells 6: a weekly-minimum target the walk
+/// moved ahead takes the row of a group the week still trains, with the same row count (diagnose e9b3d7). For example,
+/// knee + lower_back strength 3-day: Bench Dips (Triceps) for Pike Push Up, Dumbbell Alternate Bicep Curl (Biceps) for
+/// Dumbbell Rear Lateral Raise (Shoulders stay credited elsewhere that week).
+const _expected = <String, (int, int, int, int, int, int, int)>{
+  'bodyweight': (720, 12960, 2, 2, 0, 0, 10),
+  'home_dumbbells': (720, 12960, 48, 48, 0, 9, 6),
+  'basic_gym': (720, 12960, 68, 68, 0, 0, 0),
+  'full_gym': (720, 12960, 44, 44, 0, 0, 0),
 };
 
 void main() {

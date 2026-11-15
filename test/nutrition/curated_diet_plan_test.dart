@@ -157,7 +157,25 @@ void main() {
         'F0255', // drumstick sambar (dal + sambar meals)
         'F0921', 'F1300', 'F1420', // packaged bread
       };
-      expect(catalogIds.intersection(banned), isEmpty);
+      // Diet plan Unit 3b (docs/plans/diet-strategy-3b.md §3.2): the ban
+      // holds for the BALANCED pool. Low carb / Keto only entries may carry
+      // added fat, and exactly these four do (ghee, butter, coconut,
+      // coconut milk); nothing else on the banned list may enter at all.
+      final balancedIds = {
+        for (final e in kDietPlanCatalog)
+          if (!e.lowCarbOnly) e.foodId,
+      };
+      expect(balancedIds.intersection(banned), isEmpty);
+      expect(catalogIds.intersection(banned), {'F0402', 'F0403'});
+      expect({
+        for (final e in kDietPlanCatalog)
+          if (e.roles.contains(DietRole.fat)) e.foodId,
+      }, {'F0402', 'F0403', 'F0483', 'F0383'});
+      for (final e in kDietPlanCatalog) {
+        if (e.roles.contains(DietRole.fat)) {
+          expect(e.lowCarbOnly, isTrue, reason: '${e.foodId} fat in Balanced');
+        }
+      }
     });
 
     test('no two entries share identical std macros within a category', () {

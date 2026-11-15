@@ -268,7 +268,10 @@ class PlanAuditor {
         final mins = (d['min'] as num?)?.toInt();
         if (mins != null && mins > minutes + 10) {
           add('major', 'over_time', 'Week ${wi + 1} ${d['n']}: about $mins min for a $minutes-min session.');
-        } else if (mins != null && mins > minutes + 5) {
+        } else if (mins != null && mins > minutes + (minutes < 60 ? 6 : 5)) {
+          // Unit 2C-b (founder d47): a day under 60 may display +6 (the 285 s allowance plus the estimator's rounding
+          // above the ledger), so its moderate bound is +7; at 60+ there is no allowance and the bound stays +6
+          // (B-pass seat 1, finding 3).
           add('moderate', 'over_time', 'Week ${wi + 1} ${d['n']}: about $mins min for a $minutes-min session.');
         }
       }

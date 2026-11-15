@@ -34,6 +34,8 @@
 import 'dart:math';
 
 import 'package:flutter/foundation.dart';
+import 'package:icanbefitter/core/constants/diet_strategies.dart';
+import 'package:icanbefitter/core/constants/food_types.dart';
 import 'package:icanbefitter/shared/repositories/food_repository.dart';
 
 import 'diet_plan_catalog.dart';
@@ -98,9 +100,55 @@ const List<CuratedSlotTemplate> kCuratedSlotTemplates = [
   ),
 ];
 
+/// Unit 3b (docs/plans/diet-strategy-3b.md): Keto has no grain, no fruit and
+/// no breakfast grain; a fat (ghee, butter, coconut) is optional at the three
+/// main meals. Same names, keys and shares as Balanced.
+const List<CuratedSlotTemplate> kKetoSlotTemplates = [
+  CuratedSlotTemplate('Breakfast', 'breakfast', 0.25,
+      [DietRole.breakfastProtein], [DietRole.snack, DietRole.fat]),
+  CuratedSlotTemplate('Mid-Morning Snack', 'mid_morning', 0.10,
+      [DietRole.snack], []),
+  CuratedSlotTemplate('Lunch', 'lunch', 0.30,
+      [DietRole.mainProtein, DietRole.sabzi], [DietRole.side, DietRole.fat]),
+  CuratedSlotTemplate('Evening Snack', 'evening', 0.10, [DietRole.snack], []),
+  CuratedSlotTemplate('Dinner', 'dinner', 0.25,
+      [DietRole.mainProtein, DietRole.sabzi], [DietRole.side, DietRole.fat]),
+];
+
+/// Unit 3b: Low carb keeps one grain at lunch, none at dinner; breakfast is a
+/// protein with an optional breakfast main.
+const List<CuratedSlotTemplate> kLowCarbSlotTemplates = [
+  CuratedSlotTemplate('Breakfast', 'breakfast', 0.25,
+      [DietRole.breakfastProtein], [DietRole.breakfastMain, DietRole.fat]),
+  CuratedSlotTemplate('Mid-Morning Snack', 'mid_morning', 0.10,
+      [DietRole.snack], [DietRole.fruit]),
+  CuratedSlotTemplate('Lunch', 'lunch', 0.30, [
+    DietRole.mainProtein,
+    DietRole.grain,
+    DietRole.sabzi,
+  ], [DietRole.side]),
+  CuratedSlotTemplate('Evening Snack', 'evening', 0.10, [DietRole.snack], []),
+  CuratedSlotTemplate('Dinner', 'dinner', 0.25,
+      [DietRole.mainProtein, DietRole.sabzi], [DietRole.side, DietRole.fat]),
+];
+
+/// The slot templates for [strategy].
+List<CuratedSlotTemplate> curatedTemplatesFor(DietStrategy strategy) =>
+    switch (strategy) {
+      DietStrategy.balanced => kCuratedSlotTemplates,
+      DietStrategy.lowCarb => kLowCarbSlotTemplates,
+      DietStrategy.keto => kKetoSlotTemplates,
+    };
+
+/// Keto: the most carbs (g) one item may carry at its smallest portion.
+const double kKetoItemCarbCap = 6;
+
 /// Template for a slot key, or null.
-CuratedSlotTemplate? curatedTemplateForSlot(String slotKey) {
-  for (final t in kCuratedSlotTemplates) {
+CuratedSlotTemplate? curatedTemplateForSlot(
+  String slotKey, {
+  DietStrategy strategy = DietStrategy.balanced,
+}) {
+  for (final t in curatedTemplatesFor(strategy)) {
     if (t.slotKey == slotKey) return t;
   }
   return null;
@@ -172,8 +220,9 @@ class _SizedSlot {
   final double kcal;
   final double protein;
   final double fiber;
+  final double carbs;
   _SizedSlot(this.template, this.picks, this.mults, this.kcal, this.protein,
-      this.fiber);
+      this.fiber, this.carbs);
 }
 
 class CuratedDietPlanGenerator {
@@ -206,9 +255,53 @@ class CuratedDietPlanGenerator {
   /// the archetype matrix asserts it stays 0).
   int lastFallbackCount = 0;
 
-  List<DietMealPlan> generate(DietPlanInputs inputs) {
+  List<DietMealPlan> generate(DietPlanInputs inputs) =>
+      generatePlan(inputs).meals;
+
+  /// Diet plan Unit 3b (docs/plans/diet-strategy-3b.md §3.3): the plan and
+  /// the strategy it was actually built for. That is Balanced after the
+  /// legacy fallback, when a Low carb / Keto request has no carb target, and
+  /// for a Keto request with a vegan preference: no vegan keto day exists in
+  /// the catalog and this request carries only the Keto carb target, so the
+  /// honest answer is a Balanced plan (the screen shows its fallback line;
+  /// the screen itself asks for Low carb with the Low carb target, plan
+  /// §3.5, round 3 finding 3).
+  ({List<DietMealPlan> meals, DietStrategy builtFor}) generatePlan(
+    DietPlanInputs request,
+  ) {
+    final inputs = _normalised(request);
+    final meals = _generate(inputs);
+    return (
+      meals: meals.plans,
+      builtFor: meals.fellBack ? DietStrategy.balanced : inputs.strategy,
+    );
+  }
+
+  static DietPlanInputs _normalised(DietPlanInputs i) {
+    var strategy = i.strategy;
+    if (strategy != DietStrategy.balanced &&
+        !((i.carbTarget ?? 0) > 0)) {
+      strategy = DietStrategy.balanced;
+    }
+    if (strategy == DietStrategy.keto &&
+        foodTypeOf(i.dietPreference) == FoodType.vegan) {
+      strategy = DietStrategy.balanced;
+    }
+    if (strategy == i.strategy) return i;
+    return DietPlanInputs(
+      calorieTarget: i.calorieTarget,
+      proteinTarget: i.proteinTarget,
+      dietPreference: i.dietPreference,
+      fiberTarget: i.fiberTarget,
+      seed: i.seed,
+      strategy: strategy,
+      carbTarget: i.carbTarget,
+    );
+  }
+
+  ({List<DietMealPlan> plans, bool fellBack}) _generate(DietPlanInputs inputs) {
     final rng = Random(inputs.seed ?? DateTime.now().day);
-    final pool = _candidates(inputs.dietPreference);
+    final pool = _candidates(inputs.dietPreference, inputs.strategy);
 
     List<_SizedSlot>? best;
     var bestScore = double.infinity;
@@ -224,23 +317,39 @@ class CuratedDietPlanGenerator {
     if (best == null) {
       lastFallbackCount++;
       debugPrint('[CuratedDietPlanGenerator] no valid sample, legacy fallback');
-      return _legacy.generate(inputs);
+      return (plans: _legacy.generate(inputs), fellBack: true);
     }
-    return best.map((s) => _toPlan(s, inputs)).toList();
+    return (
+      plans: best.map((s) => _toPlan(s, inputs)).toList(),
+      fellBack: false,
+    );
   }
 
   /// Catalog entries whose row exists and passes the diet preference.
-  List<CuratedCandidate> _candidates(String dietPreference) {
+  List<CuratedCandidate> _candidates(
+    String dietPreference,
+    DietStrategy strategy,
+  ) {
     final out = <CuratedCandidate>[];
     for (var i = 0; i < _catalog.length; i++) {
       final e = _catalog[i];
       final row = _repo.getById(e.foodId);
       if (row == null || row.isEmpty) continue; // stale box: skip, never throw
+      // Unit 3b: Balanced never sees a low-carb-only food, so its pool (and
+      // every Balanced plan) is unchanged.
+      if (strategy == DietStrategy.balanced && e.lowCarbOnly) continue;
       if (!DietPlanGenerator.passesDiet(row, dietPreference,
           family: e.family)) {
         continue;
       }
-      out.add(CuratedCandidate(e, row, i));
+      final c = CuratedCandidate(e, row, i);
+      // Keto: no item over the cap at its smallest portion (added fats too:
+      // none is over it today, so an exemption would protect nothing).
+      if (strategy == DietStrategy.keto &&
+          c.carbs * e.portions.reduce(min) > kKetoItemCarbCap) {
+        continue;
+      }
+      out.add(c);
     }
     return out;
   }
@@ -257,7 +366,10 @@ class CuratedDietPlanGenerator {
     bool fits(CuratedCandidate c, DietRole role, Set<String> mealTokens) {
       if (!c.entry.roles.contains(role)) return false;
       if (used.contains(c.id)) return false;
-      final cap = dietFamilyDailyCap[c.entry.family];
+      final cap = (inputs.strategy == DietStrategy.balanced
+              ? null
+              : dietFamilyLowCarbCapOverride[c.entry.family]) ??
+          dietFamilyDailyCap[c.entry.family];
       if (cap != null && (familyCount[c.entry.family] ?? 0) >= cap) {
         return false;
       }
@@ -270,7 +382,7 @@ class CuratedDietPlanGenerator {
       mealTokens.addAll(c.tokens);
     }
 
-    for (final t in kCuratedSlotTemplates) {
+    for (final t in curatedTemplatesFor(inputs.strategy)) {
       final picks = <_Pick>[];
       final mealTokens = <String>{};
       for (final role in t.required) {
@@ -301,6 +413,11 @@ class CuratedDietPlanGenerator {
     // score would be NaN, leaving bestMults null (B-pass finding 1).
     final slotKcal = max(1.0, inputs.calorieTarget * t.share);
     final slotProt = max(1.0, inputs.proteinTarget * t.share);
+    // Unit 3b: a carb ceiling per slot for Low carb / Keto (null = Balanced,
+    // whose score is unchanged).
+    final carbCap = inputs.strategy == DietStrategy.balanced
+        ? null
+        : max(1.0, (inputs.carbTarget ?? 0) * t.share);
     final options = [
       for (final p in picks)
         p.optional ? [0.0, ...p.cand.entry.portions] : p.cand.entry.portions,
@@ -308,35 +425,38 @@ class CuratedDietPlanGenerator {
 
     List<double>? bestMults;
     var bestScore = double.infinity;
-    var bestK = 0.0, bestP = 0.0;
+    var bestK = 0.0, bestP = 0.0, bestC = 0.0;
     final current = List<double>.filled(picks.length, 0);
 
-    void walk(int i, double k, double p) {
+    void walk(int i, double k, double p, double c) {
       if (i == picks.length) {
-        final s =
+        var s =
             3 * (k - slotKcal).abs() / slotKcal +
             max(0.0, slotProt - p) / slotProt +
             0.3 * max(0.0, p - 1.3 * slotProt) / slotProt;
+        if (carbCap != null) s += 5 * max(0.0, c - carbCap) / carbCap;
         if (s < bestScore) {
           bestScore = s;
           bestMults = List.of(current);
           bestK = k;
           bestP = p;
+          bestC = c;
         }
         return;
       }
       for (final m in options[i]) {
         current[i] = m;
-        walk(i + 1, k + picks[i].cand.kcal * m, p + picks[i].cand.protein * m);
+        walk(i + 1, k + picks[i].cand.kcal * m, p + picks[i].cand.protein * m,
+            c + picks[i].cand.carbs * m);
       }
     }
 
-    walk(0, 0, 0);
+    walk(0, 0, 0, 0);
     var fiber = 0.0;
     for (var i = 0; i < picks.length; i++) {
       fiber += picks[i].cand.fiber * bestMults![i];
     }
-    return _SizedSlot(t, picks, bestMults!, bestK, bestP, fiber);
+    return _SizedSlot(t, picks, bestMults!, bestK, bestP, fiber, bestC);
   }
 
   double _dayScore(List<_SizedSlot> day, DietPlanInputs inputs) {
@@ -353,11 +473,25 @@ class CuratedDietPlanGenerator {
     // extra cost, so protein can never buy a day outside the tests' band
     // (a 1500 kcal pescatarian day measured 1.11 x target without it).
     final kErr = (k - t).abs() / t;
+    if (inputs.strategy == DietStrategy.balanced) {
+      return 3 * kErr +
+          20 * max(0.0, kErr - 0.08) +
+          2 * max(0.0, 0.95 * p - pr) / p +
+          max(0.0, pr - 1.15 * p) / p +
+          3 * max(0.0, 0.8 * f - fib) / f;
+    }
+    // Unit 3b: a carb ceiling (10 % over the target) and a lower fiber aim
+    // (keto 50 %, low carb 70 % of the profile target: grains and fruit are
+    // the main fiber sources these strategies drop).
+    final ct = max(1.0, inputs.carbTarget ?? 0);
+    final cs = day.fold(0.0, (a, s) => a + s.carbs);
+    final fiberAim = inputs.strategy == DietStrategy.keto ? 0.5 : 0.7;
     return 3 * kErr +
         20 * max(0.0, kErr - 0.08) +
         2 * max(0.0, 0.95 * p - pr) / p +
         max(0.0, pr - 1.15 * p) / p +
-        3 * max(0.0, 0.8 * f - fib) / f;
+        3 * max(0.0, fiberAim * f - fib) / f +
+        10 * max(0.0, cs - 1.1 * ct) / ct;
   }
 
   DietMealPlan _toPlan(_SizedSlot s, DietPlanInputs inputs) {
