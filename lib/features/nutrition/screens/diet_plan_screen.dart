@@ -125,6 +125,33 @@ class _DietPlanScreenState extends ConsumerState<DietPlanScreen> {
     _generatePlan();
   }
 
+  /// Set while a heal for this state is pending, so one stale build asks for
+  /// one regeneration, never a loop.
+  bool? _healedFor;
+
+  /// The plan on screen must be the one built under the Supplements state the
+  /// switch and the card show. The listener in initState normally
+  /// regenerates on a change; this catches a change it did not deliver
+  /// (founder, 2026-11-15: the card showed but the plan had no shake until
+  /// Regenerate; the cause was not reproduced). The event says how often it
+  /// happens. Idempotent: `dietPlanNeedsRegenerationForSupplements` decides.
+  void _healSupplementsState() {
+    if (!DietSupplementsFlags.enabled) return;
+    final active = ref.watch(dietSupplementsActiveProvider);
+    if (_planEpoch == 0 || _planSupplements == active) {
+      _healedFor = null;
+      return;
+    }
+    if (_healedFor == active) return;
+    _healedFor = active;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      unawaited(ErrorTelemetry.logEvent('diet_supplements_plan_healed',
+          message: 'active=$active planBuiltActive=$_planSupplements'));
+      _onSupplementsActive(ref.read(dietSupplementsActiveProvider));
+    });
+  }
+
   /// The Supplements state this build of the plan must follow (false with
   /// the kill switch off).
   bool _supplementsActive() =>
@@ -554,6 +581,7 @@ class _DietPlanScreenState extends ConsumerState<DietPlanScreen> {
   @override
   Widget build(BuildContext context) {
     final targets = ref.watch(macroTargetsProvider);
+    _healSupplementsState();
 
     return Scaffold(
       backgroundColor: AppColors.bg,
@@ -628,6 +656,7 @@ class _DietPlanScreenState extends ConsumerState<DietPlanScreen> {
                   ),
                   const SizedBox(height: 8),
                   FoodTypeChips(
+                    scrollable: true,
                     value: _foodType,
                     enabled: !_changingFoodType,
                     onChanged: _changeFoodType,
@@ -657,6 +686,9 @@ class _DietPlanScreenState extends ConsumerState<DietPlanScreen> {
                       child: _buildMealCard(entry.key, entry.value),
                     );
                   }),
+                  // The daily supplement card sits under the meals, collapsed
+                  // to one line (the switch stays with the other settings).
+                  if (DietSupplementsFlags.enabled) const DietSupplementCardSection(),
                   const SizedBox(height: 24),
                 ],
               ),

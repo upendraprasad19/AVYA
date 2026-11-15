@@ -67,6 +67,7 @@ class _DietStrategySectionState extends ConsumerState<DietStrategySection> {
         Text('Diet strategy', style: dim),
         const SizedBox(height: 8),
         DietStrategyChips(
+          scrollable: true,
           value: effective,
           isPro: isPro,
           enabled: !_busy,
