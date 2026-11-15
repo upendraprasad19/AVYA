@@ -12307,7 +12307,7 @@ concepts:
         method_or_widget: _applyWave (GoalReps.base, the accessory clamp) and the rest stamp / _weekTwoGains (restFor)
         semantic: reps and rest
       - file: lib/shared/repositories/plan_engine/session_set_allocator.dart
-        method_or_widget: _repeatCost / _variant pricing (restFor), the floor label (weeklyBand goalTraining), the day floor (d65)
+        method_or_widget: _repeatCost / _variant pricing (restFor), pass C's band bottom (weeklyBand goalTraining), the day floor (d65)
         semantic: pricing
       - file: lib/shared/repositories/plan_engine/volume_titration.dart
         method_or_widget: _titrateWeekBudgeted (weeklyBand goalTraining)

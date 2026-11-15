@@ -100,12 +100,12 @@ Week-1 base reps by phase (hypertrophy / strength / metabolic / deload):
 - **S3.** `GoalReps` (`plan_engine/goal_reps.dart`, pure) gives the week-1 base. `_applyWave` uses it in place of the
   archetype switch, keeps the wave and the range clamp, then clamps a Cut / Maintain accessory into [10, 15].
 - **S4.** `_goalBands` (switch ON) beside `_bands` (switch OFF). `weeklyBand(..., goalTraining:)` defaults to the ON
-  table. The ledger, the allocator's floor label and titration pass `ctx.goalTraining.enabled`.
+  table. The ledger, the allocator's band bottom (pass C) and titration pass `ctx.goalTraining.enabled`.
 - **S5.** Quad-first credit for 4-day Maintain (§2), in `quadPrimaryCreditsGlutes` (it reads the switch, like
   `balancedWeekApplies`).
 - **S6.** Kill switch `disable_goal_training` (`PlanEngineFlags.goalTrainingEnabled`, default ON, §4.6). OFF:
   `GoalTraining.off`, today's reps, bands, rests and credit. A golden test proves OFF is byte-identical to main.
-  Its deletion is filed with `mint_oi.sh` (after the device check), like OI-509.
+  Its deletion is OI-514 (after the device check), like OI-509.
 - **S7.** Audit harness knobs: `PLAN_AUDIT_DISABLE` (config keys set true) and `PLAN_AUDIT_FOCUS=strength` (the
   profile's focus).
 - **S8 (d65, the day floor, found by the neighbouring day-floor gate).** 3A's lower Cut / Maintain tops left 8 of
@@ -159,7 +159,7 @@ though the dump's displayed type reads compound.
 - Gate `test/plan_generator/goal_training_gate_test.dart` (the 2,304-plan grid, ON vs OFF, and the Strength focus):
   Build unchanged byte for byte; Cut / Maintain identical OFF 92, ON exactly the two d63 profiles; week-1 reps of
   every main lift (archetype H / M: 14,547, 3,601 at a range bound) equal the table, every accessory (12,360) in
-  10-15; 0 plan-weeks newly at 0; days over the session no worse than OFF; under the focus every main lift (29,012)
+  10-15; 0 plan-weeks newly at 0; days over the session no worse than OFF; under the focus every main lift (29,010 on the 2E tree)
   at its range floor, rest +30 s at 60+ minutes only, 0 newly at 0, and the switch overrides the focus; digests of
   both worlds pinned. (The plan's 14,238 counted the dump's displayed type; the gate classifies by archetype.)
 - Neighbouring gate oracles restate the band and the credit in their own words, so they gain 3A's rules: the

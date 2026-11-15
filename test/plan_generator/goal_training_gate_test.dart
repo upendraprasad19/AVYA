@@ -54,9 +54,10 @@ const _groups = ['Chest', 'Back', 'Shoulders', 'Biceps', 'Triceps', 'Quads', 'Ha
 /// floor is 8).
 const _identicalAccepted = {'3|intermediate|bodyweight|30|2', '3|advanced|bodyweight|30|2'};
 
-/// Item 8, recorded on the built tree (2026-11-15).
-const _onDigest = '8c1d7cd594c0f1c59f8f1f75218e103a437d8158e2a9be0ab08df99d791df97a';
-const _focusDigest = 'f05ae715ee5a60129d4e1212755050a34767d2da232c4ef28e319b1406c7b2f9';
+/// Item 8, recorded on the built tree (2026-11-15), re-recorded after the step-2E merge (its arm swap changes Cut /
+/// Maintain rows at 30 / 45 minutes; every count above is unchanged except the focus block's main lifts, 29,012 -> 29,010).
+const _onDigest = '5fd58773b40e32dcec603cf18d0b71f170878a8ce299d85b7a6c9e57d72d5248';
+const _focusDigest = 'fd31107f0e14fc7f2ba51935f1db0559a5418d038c8bf1ba0218915908b0edf9';
 
 /// The goal's week-1 main-lift table, restated from the plan (§2) in the oracle's own words: Cut intermediate /
 /// advanced 8 (hypertrophy), 6 (strength), 8 (metabolic); Cut beginner and Maintain 10 / 8 / 10.
@@ -314,7 +315,7 @@ void main() {
     print('goal training gate, focus: mains $mains, misses ${miss.length} ${miss.take(5).toList()}; newly at 0 '
         '${zeros.length} ${zeros.take(5).toList()}; max over ${maxOver(focus)}; digest $focusDigest');
     expect(miss, isEmpty);
-    expect(mains, 29012, reason: 'week-1 main lifts with a range, every goal (measured 2026-11-15)');
+    expect(mains, 29010, reason: 'week-1 main lifts with a range, every goal (measured 2026-11-15, on the 2E tree)');
     expect(zeros, isEmpty, reason: 'd64: +30 s only at 60+ minutes, where it costs no group');
     expect(maxOver(focus), lessThanOrEqualTo(maxOver(off)));
     expect(focusDigest, _focusDigest);

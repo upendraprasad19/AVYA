@@ -51,8 +51,9 @@ const _levels = ['beginner', 'intermediate', 'advanced'];
 const _tiers = ['bodyweight', 'home_dumbbells', 'basic_gym', 'full_gym'];
 const _groups = ['Chest', 'Back', 'Shoulders', 'Biceps', 'Triceps', 'Quads', 'Hamstrings', 'Glutes', 'Calves', 'Core'];
 /// Item 9: the ON grid's digest on the built tree (2026-11-14), re-recorded 2026-11-15 for Unit 2E (its block below
-/// says what changed: exactly the 21 arm-residue plans).
-const _onDigest = '794121ba38ccb7084b6757df0e377c231e959d64493744b43e072b5b27ec9d1e';
+/// says what changed: exactly the 21 arm-residue plans), and for Unit 3A (the goal's Cut / Maintain reps and bands;
+/// with the goal training off everywhere 2E's 794121ba... measured back exactly).
+const _onDigest = '1c37a806d719674bd23e44de450d51a80ca81b9fc9686430f95e3e2ae8ee42bc';
 
 const _fallback = {'build_muscle|3|advanced|bodyweight|30|2', 'build_muscle|3|advanced|bodyweight|30|3'};
 
@@ -260,7 +261,9 @@ void main() {
         'stamp false $stampFalse');
 
     expect(verdicts(rOn), {'suitable': 657, 'needs_work': 495});
-    expect(verdicts(rOff), {'suitable': 578, 'needs_work': 546, 'not_suitable': 28});
+    // Unit 3A (2026-11-15): OFF (2C-b off) 578 / 546 / 28 -> 587 / 537 / 28 under the goal's Cut / Maintain bands; ON
+    // and every count below unchanged. With the goal training off everywhere the 2C-b value measured back exactly.
+    expect(verdicts(rOff), {'suitable': 587, 'needs_work': 537, 'not_suitable': 28});
     expect(newMajor, isEmpty);
     expect(newlyOther, isEmpty, reason: 'only Calves at 30 may go to 0 (d45)');
     expect(newlyCalves30, 143);

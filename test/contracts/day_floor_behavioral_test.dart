@@ -44,7 +44,7 @@ List<int> rows(List<PopulatedDay> out, {bool b = false}) =>
 /// A row's seconds as the allocator and week 2 price it (`PeriodizationEngine._weekTwoGains`' rule).
 double priced(PlannedExercise e, SessionBudgetContext ctx) {
   final rest = SessionBudget.isBudgeted(e, ctx) || SessionBudget.isRepBased(e.loggingType)
-      ? SessionBudget.restForArchetype(SessionBudget.archetypeOfPlanned(e, ctx))
+      ? SessionBudget.restFor(SessionBudget.archetypeOfPlanned(e, ctx), ctx)
       : e.restSeconds;
   return SessionBudget.plannedExerciseSeconds(e, ctx, sets: e.sets, restSeconds: rest);
 }
@@ -186,6 +186,32 @@ void main() {
       expect(statsA().floorTrims, {
         0: [(name: 'Row', from: 3, to: 2)],
       });
+      expectOracle(f, out, statsA(), f.ctx(days, level: 'beginner'));
+    });
+
+    test('d65: a slot that needs no trim is preferred to one that does (beginner, cap 6)', () {
+      // Day 0: Row (Back, the lead), PullA and PullB (Back + Biceps), Dip (Chest + Triceps); days 1-6: Press (Chest +
+      // Triceps, 2 sets each: Chest / Triceps 12 = the top) and Curl (Biceps). Lead world: Row at 4 and PullA at 2 (Back
+      // 6 = the cap); Dip is refused by the Chest / Triceps top, PullB by the Biceps top. The floor (2 rows < 3) has PullB,
+      // which fits Back only by taking Row's sets (a trim), and Dip, which fits every cap as it is (two groups over their
+      // top): the no-trim slot wins, so Row keeps 4. Trying the trim tier first would seat PullB and cut Row (ORDER).
+      final f = Fx()
+        ..row('Row', ['Lats'])
+        ..row('PullA', ['Lats', 'Biceps'])
+        ..row('PullB', ['Lats', 'Biceps'])
+        ..row('Press', ['Chest', 'Triceps'])
+        ..row('Dip', ['Chest', 'Triceps'])
+        ..row('Curl', ['Biceps'], type: 'isolation', reps: '10-15');
+      final days = [
+        f.day('hypertrophy', [f.ex('Row'), f.ex('PullA'), f.ex('PullB'), f.ex('Dip')]),
+        for (var i = 0; i < 6; i++) f.day('hypertrophy', [f.ex('Press'), f.ex('Curl')]),
+      ];
+      final out = f.run(days, level: 'beginner', leadFirst: true, dayFloor: true);
+      expect(statsA().leadWorld, 'lead');
+      expect(setsOf(out[0]), [('Row', 4), ('PullA', 2), ('Dip', 2)]);
+      expect(seats(statsA())[0], ['Dip:2:Chest+Triceps:false']);
+      expect(statsA().floorTrims, isEmpty);
+      expect(statsA().weekly['Back'], 6);
       expectOracle(f, out, statsA(), f.ctx(days, level: 'beginner'));
     });
 

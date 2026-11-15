@@ -25,18 +25,18 @@ recurrence: |
   A (rest follows the exercise; every writer and pricer moved together here), the 2B day floor (d65 amends two of its
   rules). Bug class 2.162 (run the neighbouring gates before every push) found S8 / d65.
 writers:
-  - { file: lib/shared/repositories/plan_engine/training_history_analyzer.dart, method_or_widget: "goalTrainingFromProfile: the switch and physique_focus == 'strength'", line: 124 }
+  - { file: lib/shared/repositories/plan_engine/training_history_analyzer.dart, method_or_widget: "goalTrainingFromProfile (the switch and physique_focus == 'strength')", line: 124 }
   - { file: lib/shared/repositories/plan_engine/plan_generator.dart, method_or_widget: "generateV4: SessionBudgetContext(goalTraining:), d61", line: 300 }
   - { file: lib/shared/repositories/plan_engine/goal_reps.dart, method_or_widget: "GoalReps.base / mainBase (the week-1 table, d58 / d59)", line: 46 }
   - { file: lib/shared/repositories/plan_engine/session_budget.dart, method_or_widget: "restFor / restForGoal (+30 s on H / M at 60+ minutes, d64)", line: 396 }
   - { file: lib/shared/repositories/plan_engine/session_budget.dart, method_or_widget: "_goalBands / weeklyBand(goalTraining:)", line: 491 }
   - { file: lib/shared/repositories/plan_engine/split_resolver.dart, method_or_widget: "quadPrimaryCreditsGlutes: 4-day general_fitness", line: 428 }
-  - { file: lib/shared/repositories/plan_engine/session_set_allocator.dart, method_or_widget: "the day floor (pass 4b'): capTrims, a reservation-blocked slot may be floored (d65)", line: 1314 }
+  - { file: lib/shared/repositories/plan_engine/session_set_allocator.dart, method_or_widget: "the day floor (pass 4b'): capTrims, a reservation-blocked slot may be floored (d65)", line: 1362 }
 readers:
   - { file: lib/shared/repositories/plan_engine/periodization_engine.dart, method_or_widget: "_applyWave: GoalReps.base, then the wave, the range clamp and the 10-15 accessory clamp", line: 307 }
   - { file: lib/shared/repositories/plan_engine/periodization_engine.dart, method_or_widget: "the rest stamp and _weekTwoGains (restFor)", line: 104 }
-  - { file: lib/shared/repositories/plan_engine/session_set_allocator.dart, method_or_widget: "_repeatCost / _variant pricing (restFor)", line: 729 }
-  - { file: lib/shared/repositories/plan_engine/session_set_allocator.dart, method_or_widget: "the floor label's band (weeklyBand goalTraining)", line: 1521 }
+  - { file: lib/shared/repositories/plan_engine/session_set_allocator.dart, method_or_widget: "_repeatCost / _variant pricing (restFor)", line: 762 }
+  - { file: lib/shared/repositories/plan_engine/session_set_allocator.dart, method_or_widget: "pass C grows every group to the band bottom (weeklyBand goalTraining)", line: 1664 }
   - { file: lib/shared/repositories/plan_engine/volume_titration.dart, method_or_widget: "_titrateWeekBudgeted (weeklyBand goalTraining)", line: 182 }
   - { file: lib/core/services/swap_service.dart, method_or_widget: "swapExerciseInDay: restForGoal with the profile's focus and resolved minutes", line: 549 }
 hive_key_prefix: "userBox['profile']['physique_focus'] (read only) and configBox['disable_goal_training'] (the switch)"
@@ -108,7 +108,7 @@ The gate (`goal_training_gate_test.dart`, 2,304 plans ON vs OFF):
 - Week-1 main lifts (archetype H / M): 14,547, every one at the table or its range bound (3,601 at a bound).
 - Week-1 accessories: 12,360, every one in 10-15 (or its own range clamped there).
 - Plan-weeks newly at 0: 0. Days over the session: no worse than OFF (+6).
-- The Strength focus: 29,012 main lifts at their range floor; rest +30 s at 60+ minutes only; 0 newly at 0; the switch
+- The Strength focus: 29,010 main lifts (on the 2E tree; 29,012 before it) at their range floor; rest +30 s at 60+ minutes only; 0 newly at 0; the switch
   overrides the focus.
 
 S8 / d65 (found by the neighbouring day-floor gate, bug class 2.162): 8 of 17,280 `rep30` day-weeks at 2 exercises
@@ -117,4 +117,47 @@ lost, every floor-off digest equal to main's.
 
 ## Mutations
 
-(below)
+Each mutant was applied to the committed file (`grep -c` confirmed the edit), run, and restored; `git diff --stat lib/`
+was empty after every pass. "Fast" = `goal_reps_behavioral_test` + `swap_exercise_rest_follows_incoming_archetype_test`
+(25 tests, 26 after G13's test); "golden" = `goal_training_kill_switch_golden_test`; "gate" = `goal_training_gate_test`.
+
+| ID | Mutation | Result |
+|---|---|---|
+| G1 | Cut int / adv strength-phase main reps 6 -> 7 (`goal_reps.dart`) | fast red (2) |
+| G2 | the 10-15 accessory clamp skipped (`_applyWave`) | fast red (1) |
+| G3 | "main" = archetype H only (M dropped, d58) | fast red (2) |
+| G4 | the focus takes the range floor in the deload too (d59) | fast red (2) |
+| G4b | the focus's range floor removed | fast red (2) |
+| G5 | `minutes >= 60` -> `> 60` (d64) | fast red (5) |
+| G6 | `gt.enabled` dropped from the focus rest (the switch no longer overrides it) | fast red (2); golden green (the switch already returns `GoalTraining.off`) |
+| G7 | Maintain beginner top 8 -> 10 | fast red (1) |
+| G8 | the floor-label band read without `goalTraining:` (defaults ON) | fast green; golden red (the OFF world takes the goal bands) |
+| G9 | the 4-day Maintain Glutes credit removed | fast red (1) |
+| G10 | `goalTrainingFromProfile` ignores the switch | fast red (1); golden red |
+| G11 | the swap prices the rest at 0 minutes | fast red (1) |
+| G11b | the swap prices the rest at 60 minutes whatever the profile | fast red (1) |
+| G12 | `plan_generator.dart` drops d61's argument (the default context: enabled, no focus) | fast green; gate red (2) |
+| G13 | the allocator prices a not-budgeted rep-based row at `restForArchetype` | **survived** fast and gate (no plan in the grid has a custom row); new test "a custom main lift is priced at the focus rest in the allocator" (`goal_reps_behavioral_test.dart`): red under G13 (18 passed, 1 failed), green restored |
+| G14 | the accessory clamp for every goal (Build too) | fast red (3) |
+| G15 | Cut beginner band 9-11 -> 10-12 | fast red (1) |
+| G16 | `isStrengthFocus` always false | fast red (1); gate red (1) |
+
+d65 (`session_set_allocator.dart` pass 4b', `day_floor_behavioral_test.dart`; the grid is `day_floor_gate_rep30_test`):
+
+| ID | Mutation | Result |
+|---|---|---|
+| RB | a reservation-blocked slot skipped again (d65 a) | contract red (1) |
+| NOTRIM | `capTrims` never finds a donor (d65 b off) | contract red (2) |
+| LEDGER | the trim's ledger update removed (the day's sessions keep the cut sets) | contract red (1) |
+| ORDER | the trim tier tried first (`[true, false]`) | **survived** the contract test and the rep30 grid (4 tests green, 7 min 43 s); new test "a slot that needs no trim is preferred to one that does": red under ORDER (24 passed, 1 failed), green restored |
+| BELOW2 | a donor may go down to 1 set | equivalent: contract and rep30 grid green. A thin day holds at most 2 admitted rows, and a trim is needed only when the group's session is at least cap - 1 >= 5 (every cap is 6 or more), so one donor always has 3+ sets and the most-sets-first pick never reaches a row at 2 |
+| TIE | ties to the earliest rank instead of the latest | equivalent: contract and rep30 grid green. Two tied donors (x, x) on a 2-row day give an even overflow (2x + 2 - cap with 2x <= cap), so both are cut by one whichever is first |
+
+The day-floor oracle's `priced()` (`day_floor_behavioral_test.dart`) now reads `SessionBudget.restFor` instead of
+`restForArchetype` (bug class 2.164: a restating oracle carries the rule it restates).
+
+Attribution (the moved pins are 3A's, not a regression): with goal training off everywhere (the flag getter, the
+`GoalTraining` default and `weeklyBand`'s default) and d65 reverted, `weekly_minimum_gate_test`,
+`repeat_minutes_gate_test`, the three day-floor gates and the generator golden all pass on their pre-3A pins; with
+goal training off and d65 kept, the seeded sweep pins and every golden persona are unchanged (d65 moves none of
+them). The pins were then re-recorded from the ON run.

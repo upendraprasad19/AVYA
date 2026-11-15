@@ -31,7 +31,7 @@ findings:
     title: "S2 / d4 / d60 / d64: the Strength focus is real (range floor; +30 s on H / M at 60+ minutes only), in a swap too"
     terminal_state: closed_in_commit
     commit: *feat
-    verification: "goal_reps_behavioral_test rest and pricing; swap_exercise_rest_follows_incoming_archetype_test (3A case); the gate's focus block: 29,012 main lifts at their floor, rest per d64, 0 newly at 0"
+    verification: "goal_reps_behavioral_test rest and pricing; swap_exercise_rest_follows_incoming_archetype_test (3A case); the gate's focus block: 29,010 main lifts (on the 2E tree; 29,012 before it) at their floor, rest per d64, 0 newly at 0"
 
   - id: C3A-5
     title: "S5: quad-first Glutes credit for 4-day Maintain (Hamstrings at 0 in 30 beginner plans otherwise)"
@@ -43,7 +43,7 @@ findings:
     title: "S6: kill switch disable_goal_training; OFF equals main; the switch overrides the focus"
     terminal_state: closed_in_commit
     commit: *feat
-    verification: "goal_training_kill_switch_golden_test (1,010 personas = main); the gate's 48-plan switch-over-focus check; deletion tracked by an OI minted with mint_oi.sh"
+    verification: "goal_training_kill_switch_golden_test (1,010 personas = main); the gate's 48-plan switch-over-focus check; deletion tracked by OI-514"
 
   - id: C3A-7
     title: "S8 / d65: the day floor left 8 rep30 day-weeks at 2 exercises under 3A's lower tops (session cap; rank-0 reservation)"

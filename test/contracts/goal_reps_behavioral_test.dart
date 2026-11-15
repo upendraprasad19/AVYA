@@ -91,6 +91,29 @@ void main() {
       expect([for (final m in [30, 45, 59, 60]) SessionBudget.restForGoal('H', focus, minutes: m)], [150, 150, 150, 180]);
       expect(SessionBudget.strengthFocusRestMinMinutes, 60);
     });
+
+    // The allocator prices a NOT-budgeted rep-based row (a user's custom compound, archetype M) at restFor too, so its
+    // 6 sets cost 6 x 30 s more under the focus and the budgeted isolation rows (archetype I, no extra rest) get fewer
+    // sets. Priced at restForArchetype, the two worlds would be equal (mutation G13).
+    test('a custom main lift is priced at the focus rest in the allocator (not-budgeted rows)', () {
+      List<(String, int)> run(GoalTraining gt) {
+        final f = Fx(goalTraining: gt);
+        const names = ['IsoA', 'IsoB', 'IsoC', 'IsoD'];
+        const muscles = ['Chest', 'Lats', 'Shoulders', 'Biceps'];
+        for (var i = 0; i < names.length; i++) {
+          f.row(names[i], [muscles[i]], type: 'isolation', reps: '10-15');
+        }
+        final days = [
+          f.day('moderate', [f.ex('mine', sets: 6, rest: 100, customOrigin: 'user'), for (final n in names) f.ex(n)]),
+        ];
+        return setsOf(f.run(days, minutes: 60, is6Day: false)[0]);
+      }
+
+      expect(run(const GoalTraining()), [('mine', 6), ('IsoA', 4), ('IsoB', 4), ('IsoC', 3), ('IsoD', 3)]);
+      expect(run(const GoalTraining(strengthFocus: true)),
+          [('mine', 6), ('IsoA', 3), ('IsoB', 3), ('IsoC', 3), ('IsoD', 3)]);
+      expect(run(const GoalTraining(enabled: false, strengthFocus: true)), run(const GoalTraining()));
+    });
   });
 
   group('bands (d3)', () {
