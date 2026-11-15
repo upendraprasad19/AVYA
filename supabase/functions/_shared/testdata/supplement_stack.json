@@ -1,0 +1,16 @@
+{
+  "note": "Diet plan Unit 4 (docs/plans/diet-supplements.md section 6). Read by supabase/functions/_shared/captain_manual_diet_supplements_test.ts (the manual tokens are substrings of SECTION 5; the B12 / algal omega-3 food types equal the mapping the manual passage states) and, with the app landing, by test/core/diet_supplement_card_test.dart (supplementCardFor per food type).",
+  "manualTokens": {
+    "creatine": "5g daily",
+    "vitamin_d3": "1000-2000 IU",
+    "b12": "500-1000 mcg",
+    "omega3": "2-3g/day"
+  },
+  "cardRows": {
+    "non_veg": ["creatine", "vitamin_d3", "omega3_fish", "multivitamin"],
+    "pescatarian": ["creatine", "vitamin_d3", "omega3_fish", "multivitamin"],
+    "veg": ["creatine", "vitamin_d3", "b12", "omega3_algal", "multivitamin"],
+    "eggetarian": ["creatine", "vitamin_d3", "b12", "omega3_algal", "multivitamin"],
+    "vegan": ["creatine", "vitamin_d3", "b12", "omega3_algal", "multivitamin"]
+  }
+}

@@ -288,6 +288,13 @@ Never:
 - Recommend doses outside the bands above
 - Endorse herbal/ayurvedic supplements without specific evidence
 
+If snapshot.profile.diet_supplements is true (the user turned on Supplements in the app; absent = off, and then none of the lines below apply):
+- Their plan MAY have a protein shake in the evening snack (a post-workout scoop works too) and the app shows a supplement card with the same doses as above. Refer to them; never change a dose or the Supplements switch in chat.
+- B12 and an algal omega-3 are for vegetarians, eggetarians and vegans; non-veg and pescatarian users take fish oil or oily fish.
+- Multivitamin: optional, one a day as its label says, not a substitute for food.
+- Black coffee, no sugar, 30-45 min before training is fine; still no pre-workout product.
+- Anyone with a heart, kidney or liver condition, or who is pregnant or breastfeeding, checks with their doctor first.
+
 ---
 
 ## SECTION 6 — SCOPE OF ROLE & REFUSAL PROTOCOLS
@@ -501,6 +508,27 @@ export const DIET_STRATEGY_MANUAL_PASSAGE =
   "- Never change the diet strategy or the food type in chat; the user changes them on the Diet Plan screen.\n" +
   "- Keto is not for everyone: anyone who takes diabetes medicine, is pregnant or breastfeeding, or has kidney disease should check with their doctor first.\n";
 
+// Diet plan Unit 4 (2026-11-15, docs/plans/diet-supplements.md §6): the
+// SUPPLEMENTS passage of SECTION 5. Every line is conditional on
+// snapshot.profile.diet_supplements, which only an app build with the
+// Supplements switch ON sends (and only for a PRO adult), so it is standing
+// text for nobody else and inert in weekly-report (no snapshot). It sits
+// outside every food-type and strategy string. Removed when
+// DISABLE_DIET_SUPPLEMENTS_MANUAL_RULES is exactly "true" (read per call).
+// The leading newline makes the removal restore the pre-Unit-4 text exactly.
+export const DIET_SUPPLEMENTS_MANUAL_PASSAGE =
+  "\n" +
+  "If snapshot.profile.diet_supplements is true (the user turned on Supplements in the app; absent = off, and then none of the lines below apply):\n" +
+  "- Their plan MAY have a protein shake in the evening snack (a post-workout scoop works too) and the app shows a supplement card with the same doses as above. Refer to them; never change a dose or the Supplements switch in chat.\n" +
+  "- B12 and an algal omega-3 are for vegetarians, eggetarians and vegans; non-veg and pescatarian users take fish oil or oily fish.\n" +
+  "- Multivitamin: optional, one a day as its label says, not a substitute for food.\n" +
+  "- Black coffee, no sugar, 30-45 min before training is fine; still no pre-workout product.\n" +
+  "- Anyone with a heart, kidney or liver condition, or who is pregnant or breastfeeding, checks with their doctor first.\n";
+
+export function dietSupplementsManualRulesOff(): boolean {
+  return Deno.env.get("DISABLE_DIET_SUPPLEMENTS_MANUAL_RULES") === "true";
+}
+
 export function dietStrategyManualRulesOff(): boolean {
   return Deno.env.get("DISABLE_DIET_STRATEGY_MANUAL_RULES") === "true";
 }
@@ -508,7 +536,10 @@ export function dietStrategyManualRulesOff(): boolean {
 /** The Captain's Manual to serve now (both switches read per call). */
 export function captainManual(): string {
   const base = foodTypeManualRulesOff() ? CAPTAIN_MANUAL_LEGACY_FOOD : CAPTAIN_MANUAL;
-  return dietStrategyManualRulesOff() ? base.replace(DIET_STRATEGY_MANUAL_PASSAGE, "") : base;
+  const noStrategy = dietStrategyManualRulesOff() ? base.replace(DIET_STRATEGY_MANUAL_PASSAGE, "") : base;
+  return dietSupplementsManualRulesOff()
+    ? noStrategy.replace(DIET_SUPPLEMENTS_MANUAL_PASSAGE, "")
+    : noStrategy;
 }
 
 export type CoachChannel = "chat" | "morning" | "weekly" | "proactive";
