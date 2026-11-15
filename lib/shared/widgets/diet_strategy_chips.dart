@@ -11,6 +11,7 @@ import 'package:icanbefitter/core/constants/diet_strategies.dart';
 import 'package:icanbefitter/core/theme/colors.dart';
 import 'package:icanbefitter/core/theme/spacing.dart';
 import 'package:icanbefitter/core/theme/typography.dart';
+import 'package:icanbefitter/shared/widgets/chip_scroll_row.dart';
 
 class DietStrategyChips extends StatelessWidget {
   const DietStrategyChips({
@@ -20,6 +21,7 @@ class DietStrategyChips extends StatelessWidget {
     required this.isPro,
     this.enabled = true,
     this.disabled = const {},
+    this.scrollable = false,
   });
 
   /// The EFFECTIVE strategy (the one the shown targets were made for).
@@ -38,10 +40,20 @@ class DietStrategyChips extends StatelessWidget {
   /// legal data). The caller shows the reason line.
   final Set<DietStrategy> disabled;
 
+  /// One horizontally scrolling row instead of wrapped lines (the Diet Plan
+  /// screen; Edit Profile keeps the wrap).
+  final bool scrollable;
+
   static const double minChipHeight = 44;
 
   @override
   Widget build(BuildContext context) {
+    if (scrollable) {
+      return ChipScrollRow(
+        selectedIndex: DietStrategy.values.indexOf(value),
+        chips: [for (final s in DietStrategy.values) _chip(s)],
+      );
+    }
     return Wrap(
       spacing: 8,
       runSpacing: 8,
