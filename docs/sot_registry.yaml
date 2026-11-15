@@ -1538,7 +1538,8 @@ concepts:
       Unit 1, diagnose 83ac8a, closes OI-214; recurrence of d3c7a9) the
       Diet Plan screen uses CuratedDietPlanGenerator: ONLY foods from the
       hand-curated catalog (kDietPlanCatalog, 151 everyday Indian foods,
-      plus 14 Low carb / Keto only entries since Unit 3b-1a;
+      plus 14 Low carb / Keto only entries since Unit 3b-1a and 5 Low carb
+      plan only entries since 2026-11-15;
       roles, day-capped families, allowed portions; no macros — numbers
       come from the foodBox row), a fixed template per slot (breakfast =
       main + protein (+fruit); lunch = protein + one grain + sabzi + side;
@@ -1637,7 +1638,8 @@ concepts:
       strategy's random stream (an optional role draws once more) may
       re-baseline that strategy's T10 rows from the built code; each
       lowered row, the amount and the reason are written in the test
-      above `floors` (two rows by 0.03 that day). A lowCarbOnly entry
+      above `floors`, at most 0.05 per row (two rows by 0.03 that
+      day). A lowCarbOnly entry
       must never reach a Balanced plan or swap (G1/G2 goldens); a
       lowCarbPlansOnly entry must never reach Keto either; added fat
       appears as an item only in Low carb / Keto.

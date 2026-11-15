@@ -159,10 +159,11 @@ void main() {
       };
       // Diet plan Unit 3b (docs/plans/diet-strategy-3b.md §3.2): the ban
       // holds for the BALANCED pool. Low carb / Keto only entries may carry
-      // added fat, and exactly these four do (ghee, butter, coconut,
-      // coconut milk); nothing else on the banned list may enter at all.
-      // 2026-11-15: avocado, almond butter and chia seeds join as fat-role
-      // Low carb PLAN only foods (vegan Low carb).
+      // added fat; the four ADDED-FAT foods are ghee, butter, coconut and
+      // coconut milk, and nothing else on the banned list may enter at all.
+      // 2026-11-15: avocado, almond butter and chia seeds join as fat-ROLE
+      // Low carb PLAN only foods (vegan Low carb); they are whole foods, not
+      // added fat, and are not on the banned list.
       final balancedIds = {
         for (final e in kDietPlanCatalog)
           if (!e.lowCarbOnly) e.foodId,

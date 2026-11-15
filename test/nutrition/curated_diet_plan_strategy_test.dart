@@ -105,6 +105,35 @@ void main() {
   final byId = {for (final r in rows) r['id'] as String: r};
   final entryOf = {for (final e in kDietPlanCatalog) e.foodId: e};
 
+  // Plan review round 2 finding R2-2: Keto has its own golden. The value was
+  // captured on origin/main 8ecfc8fd (BEFORE the vegan Low carb change) and
+  // the branch produced the identical hash, so the claim "Keto plans are
+  // byte-identical" is a permanent pin, not a one-time measurement.
+  group('G3 Keto byte-identity with main 8ecfc8fd', () {
+    test('G3 the 800 Keto plans (16 archetypes x 50 seeds, vegan Keto built '
+        'as Balanced) hash to the main golden', () {
+      final gen = CuratedDietPlanGenerator.forTest(repo);
+      final out = StringBuffer();
+      for (final a in _archetypes) {
+        for (var s = 1; s <= 50; s++) {
+          final r = gen.generatePlan(DietPlanInputs(
+              calorieTarget: a.kcal,
+              proteinTarget: a.protein,
+              dietPreference: a.pref,
+              seed: s,
+              strategy: DietStrategy.keto,
+              carbTarget: _carbTarget(a, DietStrategy.keto)));
+          out.writeln('K ${a.label} $s ${r.builtFor.name}');
+          for (final m in r.meals) {
+            out.writeln('  ${m.slotKey}: ${m.items.map((i) => '${i.foodId}/${i.servingG}/${i.calories}').join(',')}');
+          }
+        }
+      }
+      expect(_sha(out.toString()),
+          'a47758f5c73c154e21e652fd3d043e8891348d5fa8618527611685323be1885d');
+    });
+  });
+
   group('G1/G2 Balanced byte-identity with main 21db03c7', () {
     test('G1 the 800 Balanced plans hash to the main golden', () {
       final gen = CuratedDietPlanGenerator.forTest(repo);
@@ -336,6 +365,35 @@ void main() {
           _lowCarbPlanIds.length);
     });
 
+    // Plan review round 2 finding R2-1: the generator's own call site of the
+    // soy cap (`fits`) is pinned by a plan that REACHES 3 soy items in Low
+    // carb, while no Keto plan goes past 2. dietFamilyCapFor is not the
+    // oracle here: the counts come from the plans' food ids.
+    test('the generator reaches the Low carb soy cap of 3; Keto never passes 2',
+        () {
+      final soyIds = {
+        for (final e in kDietPlanCatalog)
+          if (e.family == DietFamily.soy) e.foodId,
+      };
+      int maxSoy(DietStrategy st) {
+        var best = 0;
+        for (final en in plans[st]!.entries) {
+          for (final plan in en.value) {
+            final n = [
+              for (final m in plan)
+                for (final i in m.items)
+                  if (soyIds.contains(i.foodId)) i.foodId,
+            ].length;
+            if (n > best) best = n;
+          }
+        }
+        return best;
+      }
+
+      expect(maxSoy(DietStrategy.lowCarb), 3);
+      expect(maxSoy(DietStrategy.keto), lessThanOrEqualTo(2));
+    });
+
     // Plan review round 1 finding R1-4: the daily soy cap has TWO call sites,
     // the generator and the swap sheet. This pins the swap site (the T10 cap
     // check uses dietFamilyCapFor itself as its oracle and cannot see a
@@ -508,10 +566,11 @@ void main() {
     // plan's random stream changed (an optional role draws once more):
     // 'maintain vegan' protein 0.71 -> 0.68 (its kcal min rose 0.69 -> 0.77)
     // and '1200 floor veg' kcal 0.90 -> 0.87. Keto rows are untouched
-    // (byte-identical plans). This is the ONE recorded exception to "raise
-    // only" (docs/sot_registry.yaml diet_plan_curated.class_constraints): a
-    // change to a strategy's random stream may re-baseline that strategy's
-    // rows, and every lowered row is listed here.
+    // (byte-identical plans, pinned by G3). This is the ONE recorded exception
+    // to "raise only" (docs/sot_registry.yaml
+    // diet_plan_curated.class_constraints): a change to a strategy's random
+    // stream may re-baseline that strategy's rows, each lowered row at most
+    // 0.05 and listed here.
     // The CONTRACT floors (measured on the built code 2026-11-14; minimum
     // over 50 seeds minus 0.02, raise only). Carbs: mean <= 1.25 x target.
     // Per archetype: measured minimum over 50 seeds on the built code
@@ -552,7 +611,10 @@ void main() {
     // measured on the built code (2026-11-14: kcal max 1.10, carbs per-plan
     // max Low carb 1.47 / Keto 1.30, fiber min Low carb 0.33 / Keto 0.13 of
     // a 30 g target), with a 0.02-0.03 margin. Ceilings lower only, floors
-    // raise only.
+    // raise only. Re-measured 2026-11-15 after the vegan Low carb change
+    // (worst of the 16 Low carb rows): kcal max 1.08, carbs per-plan max 1.41
+    // and mean 1.20 (both 'cut vegan'), fiber min 0.33; none moved toward its
+    // limit, so none is edited (docs/plans/diet-lowcarb-vegan.md section 5).
     const bounds = <DietStrategy, ({double kMax, double cMax, double fMin})>{
       DietStrategy.lowCarb: (kMax: 1.12, cMax: 1.50, fMin: 0.31),
       DietStrategy.keto: (kMax: 1.12, cMax: 1.33, fMin: 0.11),

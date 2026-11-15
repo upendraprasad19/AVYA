@@ -1,6 +1,8 @@
 # Diet plan: vegan Low carb plans fall short (founder observation, 2026-11-15)
 
-Branch `diet-lowcarb-vegan`. Blast radius `account` (the food asset and `seed_service.dart`).
+Branch `diet-lowcarb-vegan`. Blast radius `account`: `lib/core/services/seed_service.dart` sits under
+`lib/core/services/**` (account in `docs/blast_radius.yaml`); the food asset, `lib/features/nutrition/**`,
+tests and docs are feature tier.
 Execution mode (§4.12.7): inline, one worktree.
 
 ## 1. Observation and measurement
@@ -87,6 +89,12 @@ carb sources of a vegan day (legumes, millets) cannot be cut without starving ca
 - Swap-site cap (review R1-4): `swapAlternatives` applies `dietFamilyCapFor` too. A test drives it for
   Low carb (two soy items in the plan: another is offered; three: none), Keto (one: tofu offered; two:
   none) and Balanced (one: none).
+- Generator-site cap (review R2-1): a test counts soy-family foods by food id (not through `dietFamilyCapFor`)
+  and asserts that a Low carb plan reaches exactly 3 while no Keto plan passes 2. It reaches 3, so the
+  override is used and not dead weight.
+- Keto golden (review R2-2): `G3` hashes all 800 Keto plans (16 archetypes x 50 seeds, vegan Keto built as
+  Balanced). The value was captured on origin/main 8ecfc8fd, before this change, and this branch produced the
+  identical hash `a47758f5...1885d`, so "Keto is byte-identical" is a permanent pin next to Balanced's G1/G2.
 - Mutations (§4.4 rule 21; each confirmed applied with `grep -c` or a pattern-found check, then restored):
   G1 drop `lowCarbPlansOnly` on avocado (red, 1 test); G2 Low carb soy override removed (red, 2); G3 lunch
   fat dropped (red, 2); G4 evening fat dropped (red, 2); G5 `catalogEntryOffered` Keto ignores the flag
@@ -94,7 +102,19 @@ carb sources of a vegan day (legumes, millets) cannot be cut without starving ca
   function ignores the Low carb override (red, 2); G8 swap catalog unfiltered for Keto (red, 1); G9 cap
   function gives Keto the Low carb override (red, 1); G10 swap cap reverts to the daily cap (red, 1, the
   new swap-site test). Ten of the eleven ran in one batch over the three generator test files; G10 ran
-  alone over the swap-site test.
+  alone over the swap-site test. Round 2 adds: G11 the generator's `fits` takes the Keto cap (red, 6, the
+  generator-site soy test); G12 Keto offered the plan-only foods (red, 3, G3 and the Low-carb-plans-only
+  test); G13 the Keto cap function gets the Low carb plan override (red, 2). Each ran over the strategy test
+  file with the pattern confirmed present before the run and the file restored after.
+
+## 5b. Landing (review R2-3)
+
+Plan review round 1 and round 2 (one context-blind Sonnet seat each, no P0 or P1) are recorded in
+`docs/plan-reviews/diet-lowcarb-vegan.md`, written once round 2's findings are closed. The B-pass
+(`/code-review`, three context-blind seats) runs on the CI-green head before the merge, `bpass: accepted`
+joins the record, and the merge goes through `sh scripts/land_pr.sh 285` (the founder's go for #285 was given
+in chat on 2026-11-15). No APK is built. No diagnose-doc: the commits are `feat` / `chore` (rule 22 applies
+to `fix` commits) and this plan, with its measurements, is the record of the observation.
 
 ## 6. Risks and mirror cases
 
@@ -105,10 +125,24 @@ carb sources of a vegan day (legumes, millets) cannot be cut without starving ca
 - Every Low carb plan of every diet changes for a given seed (the stream moved). Veg, eggetarian,
   pescatarian and non-veg Low carb plans improve on average (measured), Keto and Balanced do not change.
 - The Unit 4 shake is untouched.
-- Role derivation (review R1-6, accepted): a saved plan stores no role, so swapping an avocado, almond
-  butter or chia item picked as the evening or lunch FAT derives the first matching role in enum order
-  (`snack`, which precedes `fat`) and offers snack alternatives, not fats. Keto's coconut has the same
-  behaviour today; it is not a regression.
+- Role derivation (review R1-6, corrected by R2-4, accepted): a saved plan stores no role, and the swap
+  derives it from the roles the slot allows. Only the Low carb EVENING snack allows both `snack` and `fat`
+  (snack required, fat optional), so an avocado, almond butter or chia item picked there derives `snack`
+  and the sheet offers snack alternatives, not fats. Lunch, breakfast and dinner have no `snack` role and
+  resolve to `fat`. Keto's coconut has the same quirk; not a regression.
+- Soy in one meal (review R2-7, accepted): tempeh and edamame carry no coherence token, so one Low carb
+  lunch can hold both (tempeh main, edamame side), and with the cap at 3 up to three of five meals can hold
+  soy. Adding the tokens would change every Low carb plan again and restart the floor re-baselining; the
+  cap bounds the day, and the earlier "soy at every meal" diagnose (83ac8a) concerned a cap of 1 to 2 that
+  Balanced keeps.
+- Failed re-seed (review R2-8, accepted as v5 was): `_seedFoods` swallows an error and leaves the version
+  key unset, so the next launch retries; meanwhile the five rows stay `is_everyday: false`, the generator
+  (which never reads it) still uses them and the swap sheet does not offer them.
+- Balanced swap holding a Low carb plan food (review R2-5, accepted): the G2 legacy list holds the 14 older
+  ids; the five new ids go through the same `swapCatalogFor` filter before the role scan and the family
+  counts, and `diet_plan_strategy_screen_test` pins that Balanced and Keto swaps never offer any Low carb
+  only name (19 now). A legacy-list entry cannot be captured from main (the ids are not catalog entries
+  there), so it would pin only the new behaviour.
 - Soy 3 applies to every diet preference in Low carb (non-veg users included), as the plan's "every Low
   carb plan changes" says.
 - Rollback: revert the PR; the version constant staying 6 is harmless (a re-seed with the old flags).
