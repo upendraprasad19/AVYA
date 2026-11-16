@@ -23,11 +23,15 @@ import '../helpers/injury_floor_sweep_lib.dart';
 /// 3-set row to 2 when only a session cap refuses) closed the 8 rep30 home_dumbbells day-weeks the floor had left at 2.
 /// Attribution (review round 1): with the goal training off and d65 KEPT, this file's pre-3A counts pass unchanged, so
 /// d65 alone moves nothing here and every moved count is the goal training's (and with d65 reverted too, likewise).
+/// Unit 3C (diagnose f3c9a6, 2026-11-16): knock-on basic_gym 52 -> 41, full_gym 35 -> 31, nothing else. Only the gym
+/// tiers carry a finisher for these injured personas (the bike, 4 rounds under 60, d74 / d76), and its reserved 240 s
+/// leaves fewer sets for a floor seat to knock on; thin ON 0, gained = thin OFF and the OFF digest (taken with the
+/// finisher switch set) are unchanged.
 const _expected = <String, (int, int, int, int, int, int, int)>{
   'bodyweight': (240, 4320, 240, 240, 55, 0, 0),
   'home_dumbbells': (240, 4320, 428, 428, 66, 0, 0),
-  'basic_gym': (240, 4320, 304, 304, 52, 0, 0),
-  'full_gym': (240, 4320, 128, 128, 35, 0, 0),
+  'basic_gym': (240, 4320, 304, 304, 41, 0, 0),
+  'full_gym': (240, 4320, 128, 128, 31, 0, 0),
 };
 
 void main() {

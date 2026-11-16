@@ -101,8 +101,12 @@ class DayFloorGate {
       }
       // Unit 2C-a: the OFF digest is main 8a2e1c5a's (before 2C), so the plans 2C changes are hashed with its switch set.
       if (balancedWeekOff) box.put('disable_balanced_week', true);
-      // Unit 3A: likewise main's Cut / Maintain plans are hashed with `disable_goal_training` set.
-      if (goalTrainingOff) box.put('disable_goal_training', true);
+      // Unit 3A: likewise main's Cut / Maintain plans are hashed with `disable_goal_training` set. Unit 3C (f3c9a6): and
+      // with `disable_cardio_finisher_shown` set (the finisher's time reserved on its days changes those plans too).
+      if (goalTrainingOff) {
+        box.put('disable_goal_training', true);
+        box.put('disable_cardio_finisher_shown', true);
+      }
       SessionSetAllocator.debugLastStats = null;
       final plan = h.gen(
           tier: tier, goal: goal, level: level, days: days, phase: phase, injuries: injuries, pins: pins, minutes: minutes);
@@ -111,6 +115,7 @@ class DayFloorGate {
       box.delete('disable_day_floor');
       box.delete('disable_balanced_week');
       box.delete('disable_goal_training');
+      box.delete('disable_cardio_finisher_shown');
     }
   }
 
@@ -254,6 +259,8 @@ class DayFloorGate {
   /// minimum and the allowance change the uninjured 30-minute plan the floor alone does not; the ON repeat still runs
   /// the floor and 2C-b over them. Unit 3A: the pins are main's for the same reason (`disable_goal_training` set too),
   /// and the OFF digest of a Cut / Maintain persona is taken with that switch set, so it still equals main 8a2e1c5a.
+  /// Unit 3C: the same for the cardio finisher (`disable_cardio_finisher_shown`, pins and the Cut / Maintain OFF digest);
+  /// the ON / OFF floor comparison itself runs in the live finisher world.
   DayFloorTally run(String block, String tier) {
     final t = DayFloorTally();
     final pinCache = <String, Map<int, ({List<String> a, List<String> b})>>{};
@@ -264,6 +271,7 @@ class DayFloorGate {
         pins = pinCache.putIfAbsent('${p.goal}|${p.level}|${p.days}', () {
           box.put('disable_balanced_week', true);
           box.put('disable_goal_training', true);
+          box.put('disable_cardio_finisher_shown', true);
           try {
             final on = dayFloorPins(h, p);
             box.put('disable_day_floor', true);
@@ -273,6 +281,7 @@ class DayFloorGate {
             box.delete('disable_day_floor');
             box.delete('disable_balanced_week');
             box.delete('disable_goal_training');
+            box.delete('disable_cardio_finisher_shown');
           }
         });
       }

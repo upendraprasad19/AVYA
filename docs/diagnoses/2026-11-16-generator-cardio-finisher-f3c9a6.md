@@ -161,6 +161,20 @@ world); a fixture that names an older main sets the switch on its OFF side; a di
 - **`oi489_timed_hold_real_engine_test`, Ruling 5c**: with the 240 s mini HIIT on days 0 and 2 of the 4-day 30-minute
   Cut / Maintain plan, the count floor force-seats the Upper Pull day (never below the floor; d76's cost). The test pins
   Ruling 5c (OI-489) at exact minutes, so those two tests set the switch.
+- **CI on PR #288 (run 43835237167), 32 tests in two gates**, both missed by the local run because neither was in
+  it:
+  - `day_floor_gate_pairs_p1` / `pairs_p4` / `rep30` (12 tests, every tier): the OFF digest, which must equal main
+    8a2e1c5a, moved. The plan's section 3 table named `day_floor_gate_lib.dart` and only the kill-switch test had been
+    given the switch. The lib now sets it wherever it already set `disable_goal_training` (the Cut / Maintain OFF
+    hash and the repeat pins); the floor ON / OFF comparison runs in the live finisher world, so the day floor stays a
+    hard invariant of the finisher plans. Re-run locally: p1 and p4 green; rep30 green on its invariants (thin ON 0,
+    gained = thin OFF, OFF digest = main) with knock-on basic_gym 52 -> 41, full_gym 35 -> 31, re-pinned with the
+    cause: only the gym tiers carry a finisher for these injured personas (the bike, 240 s under 60), and the reserved
+    time leaves fewer sets for a floor seat to knock on (bodyweight and home_dumbbells, which get none, unchanged).
+  - `repeat_minutes_gate_test` (16 tests, every pair and tier): 0 invariant failures; the pinned reach tuples moved
+    (30->45 bodyweight `(48, 0, 48, 40, 131, 361, 25551)` -> `(48, 0, 48, 35, 94, 257, 17483)`) because the reserved
+    time leaves fewer accessories to append. It measures Unit 2D, so both phases run with the switch set
+    (`repeat_minutes_gate_lib.dart`).
 - **`session_estimate_display_test`**: its two source pins were repointed to the new call shapes
   (`homeCardMinutes(schedule, finisher: ...)`, `budgetedDayMinutes(row, finisher: shownFinisher)`), never loosened.
 - **The main golden**: re-recorded (above).
