@@ -3,6 +3,8 @@
 // per CLAUDE.md §4.4 rule 24 for the legacy-reachable-only allowlist added when
 // the Recompose / Perform cards left the onboarding picker (2026-11-01).
 
+import 'dart:io';
+
 import 'package:flutter_test/flutter_test.dart';
 import '../../scripts/goal_token_exhaustiveness_lib.dart';
 
@@ -105,5 +107,75 @@ void main() {
       ),
       isEmpty,
     );
+  });
+
+  // Unit 3B (founder d69): Check 4 compares a server goal enum with the SELECTABLE
+  // goals, tokens minus the legacy set.
+  group('serverGoalEnumProblems (Check 4)', () {
+    List<String> run(Set<String> enumTokens) => serverGoalEnumProblems(
+          path: 'x.ts',
+          tokens: _tokens,
+          enumTokens: enumTokens,
+          legacyReachableOnly: kLegacyReachableOnlyGoalTokens,
+        );
+
+    test('exactly the selectable goals passes', () {
+      expect(run({'build_muscle', 'lose_fat', 'general_fitness'}), isEmpty);
+    });
+
+    test('a missing selectable goal fails', () {
+      final p = run({'build_muscle', 'lose_fat'});
+      expect(p, hasLength(1));
+      expect(p.single, contains('missing selectable FitnessGoals token "general_fitness"'));
+    });
+
+    test('a legacy goal in the enum fails', () {
+      for (final legacy in ['strength', 'recompose']) {
+        final p = run({'build_muscle', 'lose_fat', 'general_fitness', legacy});
+        expect(p, hasLength(1), reason: legacy);
+        expect(p.single, contains('legacy goal "$legacy"'));
+      }
+    });
+
+    test('a phantom goal fails', () {
+      final p = run({'build_muscle', 'lose_fat', 'general_fitness', 'powerlifting'});
+      expect(p, hasLength(1));
+      expect(p.single, contains('"powerlifting", which is not a FitnessGoals token'));
+    });
+
+    test('with no legacy set every token is required (the pre-3B rule)', () {
+      final p = serverGoalEnumProblems(
+          path: 'x.ts', tokens: _tokens, enumTokens: {'build_muscle', 'lose_fat', 'general_fitness'});
+      expect(p.where((e) => e.contains('missing')), hasLength(2));
+    });
+  });
+
+  // Unit 3B B-pass: the client's selectableTokens list agrees with the gate's selectable set.
+  group('selectableListProblems', () {
+    List<String> run(String src) => selectableListProblems(
+        selectableSource: src, tokens: _tokens, legacyReachableOnly: kLegacyReachableOnlyGoalTokens);
+
+    test('the real fitness_goals.dart passes', () {
+      expect(run(File('lib/core/constants/fitness_goals.dart').readAsStringSync()), isEmpty);
+    });
+
+    test('a token in neither list fails', () {
+      final p = selectableListProblems(
+          selectableSource: "selectableTokens = ['build_muscle', 'lose_fat', 'general_fitness'];",
+          tokens: {..._tokens, 'powerlifting'},
+          legacyReachableOnly: kLegacyReachableOnlyGoalTokens);
+      expect(p, hasLength(1));
+      expect(p.single, contains('"powerlifting" is neither'));
+    });
+
+    test('a legacy goal in the selectable list fails', () {
+      final p = run("selectableTokens = ['build_muscle', 'lose_fat', 'general_fitness', 'strength'];");
+      expect(p, hasLength(1));
+      expect(p.single, contains('lists "strength"'));
+    });
+
+    test('an unparseable list fails closed', () {
+      expect(run('nothing here'), hasLength(1));
+    });
   });
 }

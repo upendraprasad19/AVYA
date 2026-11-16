@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
 import 'package:flutter/services.dart';
+import 'package:icanbefitter/core/constants/fitness_goals.dart';
 import 'package:icanbefitter/core/theme/colors.dart';
 import 'package:icanbefitter/core/theme/typography.dart';
 import 'package:icanbefitter/core/theme/spacing.dart';
@@ -868,17 +869,9 @@ class _OnboardingChatScreenState extends ConsumerState<OnboardingChatScreen>
   }
 
   String _formatOptionLabel(String option) {
+    // Unit 3B (d73): goal names come from the one label table (Build / Cut / Maintain; a legacy token keeps its own).
+    if (FitnessGoals.isKnown(option)) return FitnessGoals.label(option);
     switch (option) {
-      case 'build_muscle':
-        return 'Build Muscle';
-      case 'lose_fat':
-        return 'Lose Fat';
-      case 'general_fitness':
-        return 'General Fitness';
-      case 'strength':
-        return 'Strength';
-      case 'recompose':
-        return 'Recomposition';
       case 'beginner':
         return 'Beginner';
       case 'intermediate':

@@ -18,7 +18,7 @@ status: active
 **Do NOT modify `plan_generator.dart` without explicit instruction (root CLAUDE.md §4.4 rule 14).**
 
 ## Inputs
-- `goal`: build_muscle | lose_fat | general_fitness | strength
+- `goal`: build_muscle | lose_fat | general_fitness (selectable since Unit 3B); `strength` and `recompose` are legacy stored values the engine still serves (recompose plans as build_muscle) until `LegacyGoalHealer` moves them
 - `equipment`: bodyweight | home_dumbbells | basic_gym | full_gym
 - `daysPerWeek`: 3 | 4 | 5 | 6
 

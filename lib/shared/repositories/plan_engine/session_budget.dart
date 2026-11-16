@@ -24,7 +24,7 @@ class SessionBudget {
   static const int defaultMinutes = 60;
 
   /// The range of minutes a caller or a saved profile may ask for. The Edit
-  /// Profile screen offers 30 / 45 / 60 / 90; the wider range tolerates a value
+  /// Profile screen offers 30 / 45 / 60, and 90 to an advanced user (OI-488, Unit 3B); the wider range tolerates a value
   /// restored from an older client without ever feeding the model nonsense.
   static const int minMinutes = 15;
   static const int maxMinutes = 180;
@@ -56,8 +56,33 @@ class SessionBudget {
   /// map (Ruling 7: 60, no longer 90, when the field is missing). Reads the same
   /// field the generator reads, through the same resolution, so the screen and
   /// the plan can never disagree about what an empty value means.
-  static int initialSessionDuration(Map<dynamic, dynamic> profile) =>
-      resolveMinutes(profileValue: profile['session_duration_minutes']);
+  static int initialSessionDuration(Map<dynamic, dynamic> profile) => resolveMinutes(
+      profileValue: minutesForLevel(profile['session_duration_minutes'], profile['fitness_experience']));
+
+  /// The longest session a user below advanced is planned at (OI-488, founder d70): 90 minutes adds about 4 minutes
+  /// of work for a beginner and an intermediate under their 5 / 6 exercise limit, so it is offered to advanced users
+  /// only.
+  static const int maxMinutesBelowAdvanced = 60;
+
+  /// OI-488 (Unit 3B, founder d70): a STORED session length read for a user whose PROFILE level ([level], the stored
+  /// `fitness_experience` token, not the generator's effective level) is not exactly `'advanced'` (null, absent or any
+  /// other string included) is held to [maxMinutesBelowAdvanced] when it resolves above it; every other input is
+  /// returned UNCHANGED, so [resolveMinutes] judges it exactly as before (null -> 60, garbage -> 60). Every reader of
+  /// the stored value goes through this: `TrainingHistoryAnalyzer.sessionMinutesFromProfile`, [profileParamMinutes]
+  /// and [initialSessionDuration].
+  static Object? minutesForLevel(Object? stored, Object? level) {
+    if (level == 'advanced') return stored;
+    return resolveMinutes(profileValue: stored) > maxMinutesBelowAdvanced ? maxMinutesBelowAdvanced : stored;
+  }
+
+  /// The stored session length as a `param` for `generateV4` / `autoGenerateNextPhaseIfNeeded` (a param wins over the
+  /// profile value, so a caller that forwards the stored value must cap it itself): [minutesForLevel], then the
+  /// number as an int; a non-number (the old `as num?` cast threw on a stored string) is null, which falls back to
+  /// the profile value's own resolution.
+  static int? profileParamMinutes(Map<dynamic, dynamic> profile) {
+    final v = minutesForLevel(profile['session_duration_minutes'], profile['fitness_experience']);
+    return v is num && v.isFinite ? v.toInt() : null;
+  }
 
   // ── Time model (Ruling 2) ────────────────────────────────────────────────
 

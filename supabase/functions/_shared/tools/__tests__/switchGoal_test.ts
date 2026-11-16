@@ -20,18 +20,17 @@ Deno.test("switchGoal — schema accepts full args", () => {
   assertEquals(result.success, true);
 });
 
-Deno.test("switchGoal — schema accepts all 5 valid goals", () => {
-  for (
-    const g of [
-      "build_muscle",
-      "lose_fat",
-      "general_fitness",
-      "strength",
-      "recompose",
-    ]
-  ) {
+Deno.test("switchGoal — schema accepts the 3 selectable goals (Unit 3B, d69)", () => {
+  for (const g of ["build_muscle", "lose_fat", "general_fitness"]) {
     const result = switchGoalTool.schema.safeParse({ newGoal: g });
     assertEquals(result.success, true);
+  }
+});
+
+Deno.test("switchGoal — schema rejects the legacy goals strength and recompose (Unit 3B)", () => {
+  for (const g of ["strength", "recompose"]) {
+    const result = switchGoalTool.schema.safeParse({ newGoal: g });
+    assertEquals(result.success, false);
   }
 });
 
@@ -86,7 +85,7 @@ Deno.test("switchGoal — intentBuilder defaults weeks to 4 and startDate to nul
   assertEquals(intent.confirmationClass, "destructive");
   assertEquals(
     intent.previewSummary,
-    "Switch goal \u2192 build_muscle + regenerate 4 weeks",
+    "Switch goal \u2192 Build + regenerate 4 weeks",
   );
 });
 
@@ -100,7 +99,7 @@ Deno.test("switchGoal — intentBuilder uses supplied weeks", async () => {
   assertEquals(intent.payload.start_date, "2026-04-20");
   assertEquals(
     intent.previewSummary,
-    "Switch goal \u2192 lose_fat + regenerate 8 weeks",
+    "Switch goal \u2192 Cut + regenerate 8 weeks",
   );
 });
 

@@ -64,6 +64,7 @@ import 'package:icanbefitter/features/ai_coach/models/coach_memory.dart';
 import 'package:icanbefitter/features/ai_coach/repositories/ai_coach_repository.dart';
 import 'package:icanbefitter/features/ai_coach/repositories/coach_interaction_repository.dart';
 import 'package:icanbefitter/features/profile/services/profile_write_service.dart';
+import 'package:icanbefitter/core/services/legacy_goal_healer.dart';
 import 'package:icanbefitter/shared/repositories/plan_engine/plan_engine_flags.dart';
 import 'package:icanbefitter/shared/repositories/user_repository.dart';
 import 'package:icanbefitter/shared/services/pro_phase_advance.dart'
@@ -1624,6 +1625,10 @@ class SyncService {
       // (small, indexed by user_id) and inexpensive to merge.
       await restoreLightweightAlways(userId);
     }
+    // Unit 3B (OI-487, B-pass): both branches merge the cloud profile over the local one, so a legacy goal the cloud
+    // still holds (a failed push, an old build on another device) comes back on every launch with local data, which
+    // never passes through /restoring. Heal it here too (same owner check as the restore wrapper).
+    await LegacyGoalHealer.run(userId, liveUid: () => _liveUserId);
   }
 
   /// day-swapper + sync-load Task 20 kill switch: `true` reverts
@@ -2020,6 +2025,14 @@ class SyncService {
         failures, () => _restoreFromCloudForUserCore());
     if (shouldHealAfterRestore(result)) {
       await healCompletedTitlesAfterRestore();
+    }
+    // Unit 3B (OI-487, d4 / d71 / d72): move a stored legacy goal (strength /
+    // recompose) after every SUCCEEDED restore, i.e. after the profile merge and
+    // before the background heal bumps restoreCompletedTick. Its own kill switch
+    // (`disable_legacy_goal_heal`), NOT behind the title heal's. The owner check is
+    // the marker's (`uid` captured before the await, `_liveUserId` read live).
+    if (result.succeeded) {
+      await LegacyGoalHealer.run(uid, liveUid: () => _liveUserId);
     }
     _settleRestoreMarker(uid, result, failures);
     return result;

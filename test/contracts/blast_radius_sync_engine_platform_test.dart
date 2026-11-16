@@ -110,6 +110,13 @@ const _engine = <String>[
   '${_services}streak_progress_service.dart',
   '${_services}day_swap/day_swap_rules.dart',
   '${_services}coach_chat_clear.dart',
+  // Unit 3B (diagnose 21da5f): the restore wrapper calls it on every succeeded
+  // restore and it rewrites what the profile push sends (unlike the title
+  // healer, which is declined: it touches local Hive only and pushes nothing).
+  '${_services}legacy_goal_healer.dart',
+  // ... and its decision table: FitnessGoals.legacyTargets names the goal the
+  // heal writes and the push sends.
+  'lib/core/constants/fitness_goals.dart',
   '${_services}template_identity.dart',
   '${_services}template_identity_migrator.dart',
   '${_services}singleton_lifecycle_registry.dart',

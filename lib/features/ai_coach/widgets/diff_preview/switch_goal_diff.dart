@@ -34,6 +34,9 @@ class _SwitchGoalDiffState extends State<SwitchGoalDiff> {
   RegeneratePlanResult? _plan;
   String? _error;
   String? _currentGoal;
+  // Unit 3B (d69): a goal the user cannot choose is refused before the planner runs, so no plan diff is shown that
+  // the confirm would then refuse (FitnessGoals.isSelectable is the dispatcher's guard too).
+  bool _refused = false;
 
   @override
   void initState() {
@@ -42,6 +45,12 @@ class _SwitchGoalDiffState extends State<SwitchGoalDiff> {
   }
 
   Future<void> _compute() async {
+    // Unit 3B: refused before anything is read or planned. Synchronous inside
+    // initState (before the first build), so a plain assignment, not setState.
+    if (!FitnessGoals.isSelectable(widget.intent.payload['new_goal'] as String?)) {
+      _refused = true;
+      return;
+    }
     try {
       // Read current goal from profile (label only — actual write happens
       // in the dispatcher on Confirm).
@@ -81,6 +90,15 @@ class _SwitchGoalDiffState extends State<SwitchGoalDiff> {
 
   @override
   Widget build(BuildContext context) {
+    if (_refused) {
+      return Padding(
+        padding: const EdgeInsets.all(16),
+        child: Text(
+          FitnessGoals.notOfferedMessage,
+          style: AppTypography.bodyM.copyWith(color: AppColors.textSecondary),
+        ),
+      );
+    }
     if (_error != null) {
       return Padding(
         padding: const EdgeInsets.all(16),
@@ -283,19 +301,11 @@ class _SwitchGoalDiffState extends State<SwitchGoalDiff> {
 
   String _humanGoal(String raw) {
     switch (raw) {
-      case 'build_muscle':
-        return 'Build muscle';
-      case 'lose_fat':
-        return 'Lose fat';
-      case 'general_fitness':
-        return 'General fitness';
-      case 'strength':
-        return 'Strength';
       case 'unknown':
         return 'Not set';
       default:
-        // Any goal token not explicitly cased (e.g. 'recompose') resolves via
-        // the canonical FitnessGoals label instead of rendering the raw token.
+        // Unit 3B (d73): one name table, FitnessGoals (Build / Cut / Maintain;
+        // a legacy token keeps its own label), never the raw token.
         return FitnessGoals.isKnown(raw) ? FitnessGoals.label(raw) : raw;
     }
   }

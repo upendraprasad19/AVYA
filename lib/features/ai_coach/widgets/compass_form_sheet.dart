@@ -8,7 +8,7 @@
 //   injuryForm  — canonical InjuryVocab token picker (the tokens the injury
 //                 tools actually normalize against, NOT free text)
 //   scheduleForm— day picker + target date → a complete reschedule ask
-//   switchForm  — FitnessGoals token picker (enum parity with switchGoal)
+//   switchForm  — FitnessGoals.selectableTokens picker (enum parity with switchGoal)
 //   historyForm — exercise-name field
 import 'package:flutter/material.dart';
 
@@ -58,6 +58,10 @@ DateTime? utcDateFromIstDateStr(String dateStr) {
   if (y == null || m == null || d == null) return null;
   return DateTime.utc(y, m, d);
 }
+
+/// The chat message the compass Switch-goal form sends (Unit 3B, d73: named as the chip shows it, Build / Cut /
+/// Maintain; the server tool's description maps the names to the tokens).
+String compassSwitchGoalMessage(String goalToken) => 'Switch my goal to ${FitnessGoals.label(goalToken)}';
 
 class CompassFormSheet extends StatefulWidget {
   final CompassAction action;
@@ -114,7 +118,7 @@ class _CompassFormSheetState extends State<CompassFormSheet> {
             '${istDateStr(_targetDate!)}';
         break;
       case CompassAction.switchForm:
-        message = 'Switch my goal to ${_choice!.replaceAll('_', ' ')}';
+        message = compassSwitchGoalMessage(_choice!);
         break;
       case CompassAction.historyForm:
         message = 'Show my ${_textCtrl.text.trim()} history';
@@ -246,8 +250,10 @@ class _CompassFormSheetState extends State<CompassFormSheet> {
           ],
         );
       case CompassAction.switchForm:
-        return _wrapChips(FitnessGoals.tokens
-            .map((t) => (value: t, label: t.replaceAll('_', ' ')))
+        // Unit 3B (d69 / d73): the goals a user can choose, named from FitnessGoals
+        // (the legacy strength / recompose are stored values only).
+        return _wrapChips(FitnessGoals.selectableTokens
+            .map((t) => (value: t, label: FitnessGoals.label(t)))
             .toList(growable: false));
       case CompassAction.historyForm:
         return TextField(

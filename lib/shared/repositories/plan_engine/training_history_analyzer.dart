@@ -7,7 +7,7 @@ import 'package:icanbefitter/core/utils/equipment_vocab.dart';
 
 import '../exercise_repository.dart';
 import 'plan_engine_flags.dart';
-import 'session_budget.dart' show GoalTraining;
+import 'session_budget.dart' show GoalTraining, SessionBudget;
 import 'package:icanbefitter/core/constants/equipment_defaults.dart';
 
 /// Stage 0 (companion to [ProgressionResolver]) — reads Hive to produce
@@ -217,9 +217,11 @@ class TrainingHistoryAnalyzer {
   @visibleForTesting
   static int debugReadCount = 0;
 
-  /// B2 (session set budget): the stored `session_duration_minutes`, returned
-  /// UNTOUCHED (an int, a JSON double, a string, or null) for
-  /// `SessionBudget.resolveMinutes` to judge. `generateV4`'s own callers rarely
+  /// B2 (session set budget): the stored `session_duration_minutes` (an int, a
+  /// JSON double, a string, or null) for `SessionBudget.resolveMinutes` to judge,
+  /// through `SessionBudget.minutesForLevel` (OI-488, Unit 3B: a value above 60
+  /// is 60 unless the profile's `fitness_experience` is `'advanced'`; every other
+  /// value is returned untouched). `generateV4`'s own callers rarely
   /// pass minutes (only `pro_phase_advance.dart` and `simulation_service.dart`
   /// forward the profile value), so the generator resolves them
   /// centrally from here. try/catch → null like [physiqueFocusMuscles]: a null /
@@ -230,7 +232,8 @@ class TrainingHistoryAnalyzer {
     try {
       final profile = HiveService.instance.userBox.get('profile');
       if (profile is! Map) return null;
-      return profile['session_duration_minutes'];
+      // OI-488 (Unit 3B, d70): held to 60 below the advanced PROFILE level.
+      return SessionBudget.minutesForLevel(profile['session_duration_minutes'], profile['fitness_experience']);
     } catch (e, st) {
       debugPrint('[TrainingHistoryAnalyzer.sessionMinutesFromProfile] $e');
       unawaited(ErrorTelemetry.recordNonFatal(e, st,
