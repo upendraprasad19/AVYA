@@ -175,7 +175,7 @@ class _WorkoutPreviewBody extends StatelessWidget {
                 if (warmupCount > 0) '$warmupCount warm-up',
                 if (finisherCount > 0) '$finisherCount finisher',
                 if (cooldownCount > 0) '$cooldownCount cool-down',
-              ].join(' · ')} exercises included',
+              ].join(' · ')} ${warmupCount + finisherCount + cooldownCount == 1 ? 'exercise' : 'exercises'} included',
               style: AppTypography.monoXs.copyWith(
                 fontSize: 9,
                 color: AppColors.textMute,

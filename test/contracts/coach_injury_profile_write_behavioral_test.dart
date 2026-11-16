@@ -168,6 +168,26 @@ void main() {
         .saveCoachInjuryToProfileForTest('knee', owner: HiveUserSession.currentOwnerFullId), 'knee');
   });
 
+  test('an account switch after the swap loop: the owner captured at handler start refuses the write (seat B F2)',
+      () async {
+    await _profile(const ['none']);
+    final first = HiveUserSession.currentOwnerFullId;
+    const second = 'dddddddd-0000-0000-0000-000000000000';
+    // The switch lands where a real one would: after the swaps, before the profile write. The second account has a
+    // `none` profile, so a write that read the owner at write time instead would land there.
+    ToolDispatcher.debugAfterInjurySwapLoop = () async {
+      await HiveUserSession.openForUser(second);
+      await _profile(const ['none']);
+    };
+    addTearDown(() => ToolDispatcher.debugAfterInjurySwapLoop = null);
+    final res = await run(_injury('knee'));
+    expect((res.data! as Map).containsKey('profile_injury_added'), isFalse);
+    expect(_injuries(), ['none'], reason: 'the second account was not written');
+    expect(calls, isEmpty, reason: 'no lock');
+    await HiveUserSession.openForUser(first!);
+    expect(_injuries(), ['none'], reason: 'nor the first');
+  });
+
   test('after a snapshot mirror replaces coach memory, the profile still hides a jumping finisher', () async {
     await _profile(const ['none']);
     await run(_injury('calf'));

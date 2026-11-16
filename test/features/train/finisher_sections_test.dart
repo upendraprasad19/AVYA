@@ -12,6 +12,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
+import 'package:icanbefitter/core/theme/typography.dart';
 import 'package:icanbefitter/core/utils/ist_date.dart';
 import 'package:icanbefitter/features/auth/providers/auth_invalidation_provider.dart';
 import 'package:icanbefitter/features/train/providers/preview_plan_provider.dart';
@@ -44,7 +45,27 @@ final _storedHiit = [
 ];
 
 void main() {
-  testWidgets('fonts degrade before any Hive mock', renderFontsFirst);
+  // The Train screen (the preview-sheet group) renders more styles than the card harness warms up, so
+  // this file renders every AppTypography style before Hive's path_provider mock exists.
+  testWidgets('fonts degrade before any Hive mock', (tester) async {
+    await renderFontsFirst(tester);
+    await tester.pumpWidget(MaterialApp(
+      home: Column(children: [
+        for (final s in [
+          AppTypography.display,
+          AppTypography.titleM,
+          AppTypography.titleS,
+          AppTypography.bodyL,
+          AppTypography.bodyM,
+          AppTypography.buttonLabel,
+          AppTypography.displayItalicAccent,
+          AppTypography.dmSansFamily(),
+          AppTypography.frauncesFamily(),
+        ])
+          Text('x', style: s),
+      ]),
+    ));
+  });
   tearDownAll(closeHive);
 
   group('active workout', () {
@@ -144,6 +165,69 @@ void main() {
     });
   });
 
+  group('Train preview sheet (another day of the week; B-pass seat B F3)', () {
+    testWidgets('a planned day\'s stored finisher shows as a FINISHER section above the COOL-DOWN, with its minutes and rows',
+        (tester) async {
+      await ensureHive(tester);
+      final now = DateTime.now();
+      final today = DateTime(now.year, now.month, now.day, 12);
+      final monday = today.subtract(Duration(days: today.weekday - 1));
+      // Any day of this week but today (today's row expands inline instead of opening the sheet).
+      final other = today.weekday == DateTime.wednesday ? monday : monday.add(const Duration(days: 2));
+      await tester.runAsync(() async {
+        final wb = HiveService.instance.workoutBox;
+        await wb.clear();
+        await HiveService.instance.userBox.put('plan_start_date', istDateStr(monday));
+        await HiveService.instance.userBox.put('profile', {'primary_goal': 'lose_fat', 'injuries': ['none']});
+        await wb.put('current_plan', {'focus': 'Test focus', 'name': 'Foundation'});
+        for (var i = 0; i < 7; i++) {
+          final d = monday.add(Duration(days: i));
+          final isOther = istDateStr(d) == istDateStr(other);
+          await wb.put('schedule_${istDateStr(d)}', {
+            'date': istDateStr(d),
+            'week': 1,
+            'day_of_week': i,
+            'type': isOther ? 'workout' : 'rest',
+            'workout_name': isOther ? 'Finisher Day' : 'Rest Day',
+            'workout_focus': 'Push',
+            'status': 'planned',
+            'exercises': isOther
+                ? [
+                    {'exercise_name': 'Bench Press', 'sets': 3, 'reps': '8'},
+                  ]
+                : <Map<String, dynamic>>[],
+            if (isOther) 'finisher': _storedHiit,
+            if (isOther) 'cooldown': [
+              {'exercise_name': 'Slow Walking', 'logging_type': 'timed', 'sets': 1, 'reps': '180', 'duration_seconds': 180},
+            ],
+          });
+        }
+      });
+      tester.view.devicePixelRatio = 1.0;
+      tester.view.physicalSize = const Size(1024, 2400);
+      addTearDown(tester.view.reset);
+      final c = ProviderContainer(overrides: [authUserIdTokenProvider.overrideWithValue('u')]);
+      addTearDown(c.dispose);
+      await tester.pumpWidget(UncontrolledProviderScope(container: c, child: const MaterialApp(home: TrainScreen())));
+      await tester.pump();
+      await tester.pump();
+      // The week row shows the day's name in capitals.
+      await tester.tap(find.text('FINISHER DAY'));
+      await tester.pumpAndSettle();
+      final section = find.byKey(const ValueKey('finisher_section'));
+      expect(section, findsOneWidget);
+      expect(find.descendant(of: section, matching: find.text('FINISHER')), findsOneWidget);
+      expect(find.descendant(of: section, matching: find.text('9 MIN')), findsOneWidget);
+      final finisherY = tester.getTopLeft(section).dy;
+      final cooldownY = tester.getTopLeft(find.text('COOL-DOWN').last).dy;
+      expect(finisherY, lessThan(cooldownY), reason: 'after the lifts, before the cool-down');
+      await tester.tap(find.descendant(of: section, matching: find.text('FINISHER')));
+      await tester.pumpAndSettle();
+      expect(find.descendant(of: section, matching: find.textContaining('3 rounds · 10')), findsNWidgets(2));
+      await tester.pumpWidget(const SizedBox());
+    });
+  });
+
   group('the locked-week preview line', () {
     Future<void> pumpPreview(WidgetTester tester, Map<String, dynamic> workout) async {
       await tester.pumpWidget(ProviderScope(
@@ -177,7 +261,7 @@ void main() {
         'finisher_count': 1,
         'cooldown_count': 0,
       });
-      expect(find.text('1 finisher exercises included'), findsOneWidget);
+      expect(find.text('1 finisher exercise included'), findsOneWidget, reason: 'one exercise in all: singular');
     });
   });
 }

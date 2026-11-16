@@ -161,6 +161,13 @@ void main() {
       expect(p.reserved, isFalse);
       expect(p.secondsByDay, isEmpty);
     });
+    test('the finisher days per day count (B-pass seat A F2): the reserved days are the attached days', () {
+      for (final (days, want) in const [(2, {0, 1}), (3, {0, 2}), (4, {0, 2}), (5, {0, 3}), (6, {0, 3})]) {
+        final p = _plan(days: days, minutes: 60);
+        expect(p.days, want, reason: '$days days');
+        expect(p.secondsByDay.keys.toSet(), want, reason: '$days days');
+      }
+    });
     test('no cardio goal or fewer than 2 days: none', () {
       expect(_plan(goal: 'build_muscle'), same(FinisherPlan.none));
       expect(_plan(days: 1), same(FinisherPlan.none));

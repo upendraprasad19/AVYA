@@ -216,6 +216,18 @@ void main() {
       expect(FinisherSafety.shownFinisherMaps(_hiit, enabled: ctx.enabled, injured: ctx.injured), isEmpty);
       await HiveUserSession.openForUser(_user);
     });
+
+    test('no profile yet (before a restore lands) is read as injured: a stored HIIT stays hidden (seat A F1)', () async {
+      await _putRow(_row(finisher: _hiit));
+      expect(HiveService.instance.userBox.get('profile'), isNull, reason: 'precondition: no profile');
+      final ctx = FinisherShowContextReader.read();
+      expect(ctx.injured, isTrue);
+      expect(workoutDayForDate(DateTime.parse(_date))!.finisher, isEmpty);
+      // Mirror: a profile with no injuries key is a profile, so its HIIT shows.
+      await _profile(injuries: null);
+      expect(FinisherShowContextReader.read().injured, isFalse);
+      expect(workoutDayForDate(DateTime.parse(_date))!.finisher, hasLength(3));
+    });
   });
 
   group('shortenDay drops the finisher first (d79)', () {

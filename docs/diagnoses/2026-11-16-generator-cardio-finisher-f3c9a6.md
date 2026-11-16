@@ -31,8 +31,9 @@ writers:
   - { file: lib/shared/repositories/plan_engine/plan_generator.dart, method_or_widget: "generateV4: the plan call, SessionBudgetContext.finisherSecondsByDay, attach(plan:) (rule-14 waivers d56 / d61 / d75 / d76)", line: 305 }
   - { file: lib/core/services/workout_schedule_read_service.dart, method_or_widget: "generateAndSchedule and generateAndScheduleFromDate write the `finisher` key (the second was the drift)", line: 595 }
   - { file: lib/features/ai_coach/services/hotel_workout_planner.dart, method_or_widget: "plan copies workout.finisher", line: 211 }
+  - { file: lib/features/ai_coach/services/regenerate_plan_planner.dart, method_or_widget: "the coach regenerate plan writes workoutDay.finisher (a fourth schedule writer, unchanged by 3C; B-pass seat A F5)", line: 373 }
   - { file: lib/core/services/swap_service.dart, method_or_widget: "shortenDay removes the key when it writes the row (d79)", line: 719 }
-  - { file: lib/features/ai_coach/services/tool_dispatcher.dart, method_or_widget: "_saveCoachInjuryToProfile writes a coach injury into profile['injuries'] (d77 / d78)", line: 701 }
+  - { file: lib/features/ai_coach/services/tool_dispatcher.dart, method_or_widget: "_saveCoachInjuryToProfile writes a coach injury into profile['injuries'] (d77 / d78)", line: 705 }
 readers:
   - { file: lib/shared/repositories/plan_engine/finisher_safety.dart, method_or_widget: "FinisherSafety.shownFinisherMaps / shownOfRow / isInjured (the one read rule)", line: 20 }
   - { file: lib/shared/repositories/plan_engine/finisher_show_context.dart, method_or_widget: "FinisherShowContextReader.read (switch + profile; fails closed)", line: 1 }
@@ -53,7 +54,7 @@ cloud_columns:
   - user_profile.injuries
   - user_profile.coach_extraction_locked_fields
 ist_handling:
-  - { file: lib/features/train/screens/active_workout/warmup_cooldown_section.dart, method_or_widget: "the FINISHER tick key warmup_checks_<IST today>_finisher, istDateStr like the warm-up", line: 38 }
+  - { file: lib/features/train/screens/active_workout/warmup_cooldown_section.dart, method_or_widget: "_hiveKey: the FINISHER tick key warmup_checks_<IST today>_finisher, istDateStr like the warm-up", line: 39 }
 provider_invalidations:
   - "ToolDispatcher.execute: a coach injury saved to the profile invalidates the profile providers (and the workout providers on the all-swaps-failed outcome) BEFORE the failure early return"
 telemetry_op_types:
@@ -74,18 +75,19 @@ proposed_fix: |
   round rest), and SessionBudgetContext.finisherSecondsByDay takes its time from those days only. Display: one pure
   read rule (FinisherSafety) behind every screen and every minutes reader (a required `finisher:` argument), the
   FINISHER section on the active workout, Train's expansion and the preview sheet; shortenDay drops the finisher first.
-  Writers: the reschedule writer and the hotel planner write the key. Coach: a confirmed modifyWorkoutForInjury adds
+  Writers: the reschedule writer and the hotel planner write the key (the regenerate planner already did). Coach: a confirmed modifyWorkoutForInjury adds
   its canonical token to profile['injuries'] (the read rule's only signal) and locks the field; the diff preview and
-  the confirm card say so. Kill switch disable_cardio_finisher_shown (default ON).
+  the confirm sheet (the intent is destructive) say so. Kill switch disable_cardio_finisher_shown (default ON).
 regression_test_planned: |
-  test/contracts/cardio_finisher_shown_pure_test.dart (30: isInjured, the read rule table, detail / minutes label, the
+  test/contracts/cardio_finisher_shown_pure_test.dart (31: isInjured, the finisher days per day count, the read rule table, detail / minutes label, the
   plan's shapes, pricing parity, the coach mapping and patch, the confirm card's executed line);
+  test/ai_coach/tool_confirm_sheet_injury_line_test.dart (3, the confirm sheet's injury line);
   test/contracts/cardio_finisher_reservation_behavioral_test.dart (12, the real generateV4: shapes, d74 / d76, the
   reservation, the positive control, Build unchanged, phases 1 / 4 / 5);
-  test/contracts/finisher_display_behavioral_test.dart (14: Train == Home, the profile rule, the switch, the reader
-  failing closed, shortenDay d79, the two writers, a day swap carries it, the session never logs it);
-  test/contracts/coach_injury_profile_write_behavioral_test.dart (11, the real ToolDispatcher.execute);
-  test/features/train/finisher_sections_test.dart (6), test/ai_coach/injury_modify_diff_adds_line_test.dart (5);
+  test/contracts/finisher_display_behavioral_test.dart (15: Train == Home, the profile rule, the switch, the reader
+  failing closed (also with no profile), shortenDay d79, the two writers, a day swap carries it, the session never logs it);
+  test/contracts/coach_injury_profile_write_behavioral_test.dart (12, the real ToolDispatcher.execute, an account switch after the swap loop);
+  test/features/train/finisher_sections_test.dart (7, with the Train preview sheet), test/ai_coach/injury_modify_diff_adds_line_test.dart (5);
   test/plan_generator/finisher_kill_switch_golden_test.dart, finisher_attribution_golden_test.dart; the injury sweep's
   finisher scan (test/helpers/injury_floor_sweep_lib.dart).
 impact_analysis: |
@@ -204,9 +206,16 @@ script compares a sha256 of the file before and after. Red counts per test file:
 | M12 the profile invalidation only on success | coach 0, then 1 (see below) |
 | M13 the switch dropped from the OFF golden | `finisher_kill_switch_golden_test` 1 |
 | M15 `startWorkout` copies the finisher into the session | display 1 ("the session never logs the finisher") |
+| M16 the confirm sheet says nothing about the saved injury (B-pass) | sheet 1 |
+| M17 the owner read at write time instead of captured at the handler start (B-pass) | coach 1 ("an account switch after the swap loop") |
+| M18 no profile read as uninjured (B-pass) | display 1 |
+| M19 a 2-day plan's finisher days {0, 2} (B-pass) | pure 1 |
+| M20 a 5-day plan's finisher days {0, 2} (B-pass) | pure 1 |
+| M21 the preview sheet drops the FINISHER section (B-pass) | sections 1 |
 
 (pure = `cardio_finisher_shown_pure_test`, reservation = `cardio_finisher_reservation_behavioral_test`, display =
-`finisher_display_behavioral_test`, coach = `coach_injury_profile_write_behavioral_test`.)
+`finisher_display_behavioral_test`, coach = `coach_injury_profile_write_behavioral_test`, sheet =
+`test/ai_coach/tool_confirm_sheet_injury_line_test.dart`, sections = `test/features/train/finisher_sections_test.dart`.)
 
 **M4 survived the first run** in the behavioral file: the only test of "a non-finisher day keeps its budget" used Build
 plans, which carry no finisher. A first replacement (a per-day line) stayed green too, because the count floor's
@@ -216,4 +225,20 @@ all-swaps-failed test checked Hive, not the provider; it now reads `userProfileP
 
 ## B-pass
 
-The B-pass runs on the CI-green PR head (`docs/reviews/generator-step3c-bpass.md`); its findings and fixes are recorded there and in the review commit.
+Two fresh Sonnet seats on the CI-green PR head (7dabae87); record `docs/reviews/generator-step3c-bpass.md`. No P0 / P1.
+Fixed in the review commit:
+
+- A F1 (P2): `FinisherShowContextReader.read()` read a device with NO profile yet (before its restore) as uninjured.
+  It now reads it as injured, the same safe side as a read failure (M18).
+- A F2 (P2): `_pickFinisherDays` for 2 and 5 days had no test; "the finisher days per day count" pins all five (M19,
+  M20).
+- B F1 (P2): `modifyWorkoutForInjury` is destructive, so the user confirms it on `ToolConfirmSheet`, and the injury
+  line lived only on `ToolConfirmCard`. The sheet now shows it after a confirm that saved the injury (M16).
+- B F2 (P2): the owner captured at the handler start had no test. A seam after the swap loop switches the account; the
+  test sees no write and no lock on either account (M17).
+- B F3 (P2): the preview sheet's FINISHER section had no test; a test opens it from the Train week row (M21).
+- A F3, A F5, A F6, B F6 (P3): doc and text fixes (home and train CLAUDE.md, the attach comment, the preview line's
+  `1 exercise`, the naming rows, this doc's IST line and writer list).
+- B F4, B F5 (P3): telemetry for a lock that did not finish and for a failed profile read (preview and context).
+- A F4 (P3, kept): `shortenDay` removes the `finisher` key also with the switch set. Intended: the user asked for a
+  shorter day, and with the switch deleted (OI-516) the finisher would come back over that target.

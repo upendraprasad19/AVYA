@@ -103,7 +103,7 @@ class CardioFinisher {
     );
   }
 
-  /// Attach cardio finishers to 2 non-consecutive days per week. With [plan] (Unit 3C, `generateV4`) the plan decided
+  /// Attach cardio finishers to 2 days per week (`_pickFinisherDays`: {0, 1} for 2 days, {0, 2} for 3-4, {0, 3} for 5-6). With [plan] (Unit 3C, `generateV4`) the plan decided
   /// before sizing is attached as it is; without it (direct callers) the plan is built here per week, as before.
   static List<WeekPlan> attach({
     required List<WeekPlan> weeks,

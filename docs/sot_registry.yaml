@@ -10734,7 +10734,7 @@ concepts:
         method: attach (_moveInjuries + _moveIsContra)
         notes: U3 (d3f8a1) drop-not-substitute warmup/cooldown injury filter + non-empty floor; main-selectable moves defer to library tags; kill-switch warmupInjuryFilterEnabled. Threaded from plan_generator generateV4 + template_service. Behavioral test warmup_injury_filter_behavioral_test.dart.
       - file: lib/features/ai_coach/services/tool_dispatcher.dart
-        line_range: 701-722
+        line_range: 705-729
         method: _saveCoachInjuryToProfile (via InjuryVocab.coachPartToken + coachInjuryProfilePatch)
         notes: Unit 3C (d77 / d78, diagnose f3c9a6) - a confirmed coach modifyWorkoutForInjury adds its canonical token to profile['injuries'] (quad -> knee, calf -> ankle, chest / upper_back -> shoulder), drops 'none', never twice, under ProfileWriteService.patchProfileWith with an owner re-check; then locks 'injuries'. Behavioral test coach_injury_profile_write_behavioral_test.dart.
     reader_manifest_complete: true
@@ -11434,7 +11434,7 @@ concepts:
           test/contracts/oi166_unit2_regen_content_cycling_behavioral_test.dart.
       - file: lib/features/ai_coach/services/tool_dispatcher.dart
         method: "_executeRegeneratePlanBlock / _executeSwitchGoal — current_plan splice (OI-166 Unit 2, NEW writer)"
-        line: 1031
+        line: 1043
         notes: >
           The AI-coach regen path (RegeneratePlanPlanner.plan()) never wrote
           current_plan before this — the exact gap this concept's own
@@ -17222,7 +17222,7 @@ concepts:
           Locks only fields that ACTUALLY changed this save (diet_preference /
           lifestyle_activity / injuries), never a field re-saved unchanged.
       - file: lib/features/ai_coach/services/tool_dispatcher.dart
-        line_range: 701-722
+        line_range: 705-729
         method: _saveCoachInjuryToProfile (ToolDispatcher.lockFields(['injuries']), 4 s timeout)
         notes: |
           Unit 3C (d77, diagnose f3c9a6): after a confirmed coach injury

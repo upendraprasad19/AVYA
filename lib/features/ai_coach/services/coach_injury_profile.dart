@@ -1,4 +1,7 @@
+import 'dart:async';
+
 import '../../../core/utils/injury_vocab.dart';
+import '../../../core/services/error_telemetry.dart';
 import '../../../shared/repositories/user_repository.dart';
 
 /// Unit 3C (OI-396, d77): the profile patch that adds a coach-reported injury [token] (a canonical token), or null
@@ -27,7 +30,8 @@ String? coachInjuryTokenToAdd(String? bodyPart) {
     final profile = UserRepository.instance.getProfile();
     if (profile == null) return null;
     return coachInjuryProfilePatch(profile, token) == null ? null : token;
-  } catch (_) {
+  } catch (e, st) {
+    unawaited(ErrorTelemetry.recordNonFatal(e, st, reason: 'coach_injury_preview_profile_read_failed'));
     return null;
   }
 }

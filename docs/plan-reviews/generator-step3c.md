@@ -4,7 +4,7 @@ blast_radius: platform
 review_rounds: 6
 ground_truth_verified: true
 verdict: converged
-bpass: pending
+bpass: accepted
 bpass_review: docs/reviews/generator-step3c-bpass.md
 ---
 
@@ -37,3 +37,8 @@ Fresh, context-blind Sonnet seats (two per round), each verifying claims against
 Ground truth: the cost table re-run on the built tree (equal to the prototype the founder chose from), the OFF golden
 equal to main 862f0bc2 over 1,010 personas, the attribution test (410 keys, all Cut / Maintain), the mutation table in
 diagnose `f3c9a6`, `deno check` of the two tool files and ai-proxy plus the 290 `_shared/tools` Deno tests.
+
+## B-pass
+
+`docs/reviews/generator-step3c-bpass.md`: two fresh seats on the CI-green head 7dabae87, 0 P0 / P1, 5 P2 and 8 P3;
+12 fixed in the B-pass commit (mutants M16-M21 red), A F4 kept as intended. Verdict accepted.

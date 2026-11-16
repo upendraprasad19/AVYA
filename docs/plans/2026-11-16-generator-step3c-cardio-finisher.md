@@ -288,7 +288,8 @@ regeneration reserves the time. Pre-launch (every account is a test account): ac
   `coach_unique_exercise_names_test.dart:118` seeds no profile, so `quad` writes nothing (unchanged);
   `tool_dispatcher_telemetry_gaps_test.dart:138` (method order kept).
 - Widget: the confirm card's executed line (`Workout shortened · finisher removed`, `Workouts updated · Knee added
-  to your injuries`, the plain lines without data); the injury diff preview shows `Adds Knee to your injuries (change it in Edit Profile)` in the normal and the
+  to your injuries`, the plain lines without data); `modifyWorkoutForInjury` is destructive, so its line shows on
+  `ToolConfirmSheet` after the confirm (B-pass seat B F1); the injury diff preview shows `Adds Knee to your injuries (change it in Edit Profile)` in the normal and the
   empty-swaps branch, `Adds Knee` for `quad`, and no line when the token is already present.
 - Display, both
   constructors; minutes include the shown finisher and not a hidden one; Train == Home; `shortenDay` on a finisher

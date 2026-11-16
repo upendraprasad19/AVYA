@@ -694,6 +694,10 @@ class ToolDispatcher {
   /// token ([InjuryVocab.coachPartToken]) under the profile lock, then locks `injuries` against chat extraction (the
   /// user confirmed it, like an Edit Profile chip). Best effort: returns the token written, or null (no profile, no
   /// token, already present, a changed owner, or any failure; never throws, so applied swaps stay applied).
+  /// Test seam (B-pass seat B F2): awaited after `modifyWorkoutForInjury`'s swap loop, before the profile write.
+  @visibleForTesting
+  static Future<void> Function()? debugAfterInjurySwapLoop;
+
   @visibleForTesting
   Future<String?> saveCoachInjuryToProfileForTest(String? bodyPart, {required String? owner}) =>
       _saveCoachInjuryToProfile(bodyPart, owner: owner);
@@ -710,8 +714,11 @@ class ToolDispatcher {
       try {
         await lockFields(const ['injuries']).timeout(lockFieldsTimeout);
       } catch (e) {
-        // Accepted residue: after a timeout an extraction may run before the lock lands.
+        // Accepted residue: after a timeout an extraction may run before the lock lands. Recorded, so a lock that
+        // keeps failing is visible (B-pass seat B F4).
         debugPrint('[ToolDispatcher] injuries lock did not finish: $e');
+        unawaited(ErrorTelemetry.logEvent('tool_dispatch_coach_injury_lock_unfinished',
+            message: e is TimeoutException ? 'timeout' : e.runtimeType.toString()));
       }
       return token;
     } catch (e, st) {
@@ -754,6 +761,11 @@ class ToolDispatcher {
         errors.add('${swap.date}: $e');
       }
     }
+
+    // Test seam (B-pass seat B F2): runs after the swap loop, so a test can change the Hive owner where a real
+    // account switch would land, and see that the owner captured above refuses the profile write.
+    final afterSwaps = debugAfterInjurySwapLoop;
+    if (afterSwaps != null) await afterSwaps();
 
     // Update coach_memory.injuries (best-effort; never fails the op).
     try {

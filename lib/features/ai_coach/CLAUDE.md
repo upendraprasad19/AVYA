@@ -64,7 +64,7 @@ When the agent emits a `tool_call`, the dispatcher MUST:
    canonical token to `profile['injuries']` (Unit 3C, d77 / d78, f3c9a6: `InjuryVocab.coachPartToken`, nearest joint for
    quad / calf / chest / upper_back; `ProfileWriteService.patchProfileWith` with the owner captured at handler start, then
    the `injuries` lock with a 4 s timeout; also when every swap failed), so the cardio finisher rule and later plans see
-   it; the diff preview says so first (`injury_adds_profile_line`) and the result carries `profile_injury_added`. The 4 derive-violating tools
+   it; the diff preview says so first (`injury_adds_profile_line`) and the result carries `profile_injury_added`, which `ToolConfirmSheet` (the intent is destructive) announces after the confirm. The 4 derive-violating tools
    (`logPR`, `markWorkoutComplete`, `adjustCaloricTarget`, `prelog`) were
    **removed 2026-05-31** — the dispatcher has no case for them (defense-in-depth
    against a stale/replayed intent). See ADR-0012. `switchGoal` / `regeneratePlanBlock` never
