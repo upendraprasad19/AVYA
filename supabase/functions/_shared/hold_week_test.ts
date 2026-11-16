@@ -8,8 +8,10 @@ import {
   holdOrdinalFromWeekNumbers,
   istWeekBounds,
   phaseOneUserIds,
+  recapHoldsForBatch,
   recapMessage,
   reportWeekLine,
+  reportWeekLineFor,
 } from "./hold_week.ts";
 
 Deno.test("holdOrdinalFromWeekNumbers: max(week - 4) over integers above 4", () => {
@@ -31,6 +33,11 @@ Deno.test("istWeekBounds: the Sunday 20:00 IST cron (14:30 UTC) reads this IST w
 
 Deno.test("istWeekBounds: Sunday 18:40 UTC is Monday 00:10 IST, the NEXT IST week", () => {
   assertEquals(istWeekBounds(new Date("2026-11-15T18:40:00Z")), { monday: "2026-11-16", sunday: "2026-11-22" });
+});
+
+Deno.test("istWeekBounds: a year end (Thursday 2026-12-31 and Friday 2027-01-01 IST)", () => {
+  assertEquals(istWeekBounds(new Date("2026-12-31T06:00:00Z")), { monday: "2026-12-28", sunday: "2027-01-03" });
+  assertEquals(istWeekBounds(new Date("2026-12-31T19:00:00Z")), { monday: "2026-12-28", sunday: "2027-01-03" });
 });
 
 Deno.test("istWeekBounds: a Monday across a month end", () => {
@@ -82,7 +89,7 @@ interface Call {
   ranges: [number, number][];
 }
 
-type Row = { id: string; user_id: string; week_number: unknown };
+type Row = { id: string; user_id: string; week_number: unknown; scheduled_date?: string };
 
 /** A client whose `scheduled_workouts` holds [rows]; it applies the recorded filters itself, so a dropped filter
  *  changes the answer (not only the recorded call). `failOn` makes a page return an error or the range throw. */
@@ -126,9 +133,14 @@ function stubClient(rows: Row[], failOn?: "error" | "throw") {
           // chunk answers for its own users.
           if (from > 0) return Promise.resolve({ data: [], error: null });
           const ids = new Set(call.inIds ?? []);
+          // A row with a date honours the recorded window (a row without one is in every window), so a window
+          // passed in the wrong order (Sunday first) matches nothing.
           const out = rows.filter((r) =>
             ids.has(r.user_id) &&
-            (call.gt == null || (typeof r.week_number === "number" && r.week_number > (call.gt[1] as number)))
+            (call.gt == null || (typeof r.week_number === "number" && r.week_number > (call.gt[1] as number))) &&
+            (r.scheduled_date == null ||
+              ((call.gte == null || r.scheduled_date >= (call.gte[1] as string)) &&
+                (call.lte == null || r.scheduled_date <= (call.lte[1] as string))))
           );
           return Promise.resolve({ data: out, error: null });
         },
@@ -216,4 +228,61 @@ Deno.test("fetchHoldOrdinals: a client that throws on from() never throws", asyn
   };
   const res = await fetchHoldOrdinals(client, ["a"], "2026-11-09", "2026-11-15");
   assertEquals(res.failed, true);
+});
+
+Deno.test("fetchHoldOrdinals: exactly 100 ids is one chunk", async () => {
+  const ids = Array.from({ length: 100 }, (_, i) => `u${i}`);
+  const { client, calls } = stubClient([{ id: "x", user_id: "u99", week_number: 5 }]);
+  const res = await fetchHoldOrdinals(client, ids, "2026-11-09", "2026-11-15");
+  assertEquals([...res.map], [["u99", 1]]);
+  assertEquals(calls.filter((x) => x.ranges[0][0] === 0).length, 1);
+});
+
+// ── The two call-site helpers, end to end (B-pass F1 / F2) ───────────────────
+
+Deno.test("recapHoldsForBatch: this IST week's holds for the Phase-I users only, window Monday first", async () => {
+  const { client, calls } = stubClient([
+    { id: "1", user_id: "a", week_number: 6, scheduled_date: "2026-11-12" }, // in the week
+    { id: "2", user_id: "a", week_number: 9, scheduled_date: "2026-11-20" }, // next week: not read
+    { id: "3", user_id: "b", week_number: 5, scheduled_date: "2026-11-10" }, // phase 2: never asked
+  ]);
+  const rows = [
+    { user_id: "a", current_phase: 1 },
+    { user_id: "b", current_phase: 2 },
+  ];
+  const res = await recapHoldsForBatch(client, rows, istWeekBounds(new Date("2026-11-15T14:30:00Z")));
+  assertEquals(res.failed, false);
+  assertEquals([...res.map], [["a", 2]]);
+  assertEquals(calls[0].inIds, ["a"]);
+  assertEquals(calls[0].gte, ["scheduled_date", "2026-11-09"]);
+  assertEquals(calls[0].lte, ["scheduled_date", "2026-11-15"]);
+  // The holder's text, built from the helper's map as processUser builds it.
+  assertEquals(recapMessage("Asha", 4, res.map.get("a") ?? null), "Asha — Hold H2 debrief ready. Stand to.");
+  assertEquals(recapMessage("Ravi", 4, res.map.get("b") ?? null), "Ravi — Week 4 debrief ready. Stand to.");
+});
+
+Deno.test("reportWeekLineFor: today's hold for a Phase-I user; every fail-closed case keeps today's line", async () => {
+  const rows = [
+    { id: "1", user_id: "u", week_number: 7, scheduled_date: "2026-11-16" },
+    { id: "2", user_id: "u", week_number: 8, scheduled_date: "2026-11-23" }, // not today
+  ];
+  const hold = await reportWeekLineFor(stubClient(rows).client, "u", { current_phase: 1, current_week: 4 }, "2026-11-16");
+  assertEquals(
+    hold,
+    "Current week: hold week H3 (the user chose to keep training Phase I; a repeat of a Phase I week)",
+  );
+  assertEquals(
+    await reportWeekLineFor(stubClient(rows).client, "u", { current_phase: 2, current_week: 3 }, "2026-11-16"),
+    "Current week: 3",
+  );
+  assertEquals(await reportWeekLineFor(stubClient(rows).client, "u", null, "2026-11-16"), "Current week: 1");
+  assertEquals(
+    await reportWeekLineFor(stubClient(rows, "error").client, "u", { current_phase: 1, current_week: 4 }, "2026-11-16"),
+    "Current week: 4",
+  );
+  assertEquals(
+    await reportWeekLineFor(stubClient(rows).client, "u", { current_phase: 1, current_week: 4 }, "2026-11-17"),
+    "Current week: 4",
+    "no hold row today: today's line, as the app shows",
+  );
 });

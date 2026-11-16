@@ -144,29 +144,20 @@ Deno.test("weekly-report never sends diet_supplements (the manual passage stays 
 // never-throwing read against a stub client). These pins (presence only) prove this file calls them the way the
 // plan says: today's IST date as both bounds, the phase filter on the progress row, and the built line in the prompt.
 
-Deno.test("weekly-report reads the hold for today only, through the fail-closed phase filter", () => {
+Deno.test("weekly-report builds the week line with reportWeekLineFor for today (B-pass F2: end to end)", () => {
   const code = stripComments(source);
   assert(
-    code.includes('import { fetchHoldOrdinals, phaseOneUserIds, reportWeekLine } from "../_shared/hold_week.ts";'),
-    "index.ts must import the hold helpers",
+    code.includes('import { reportWeekLineFor } from "../_shared/hold_week.ts";'),
+    "index.ts must import the hold helper",
   );
   assert(
-    code.includes("phaseOneUserIds([{ user_id: targetUserId, current_phase: userProgress.current_phase }])"),
-    "the hold read must be gated by phaseOneUserIds on the progress row",
-  );
-  assert(
-    code.includes("? phaseOneUserIds(") && code.includes(": [];"),
-    "no progress row must ask for no holds (fail closed)",
-  );
-  assert(
-    code.includes("fetchHoldOrdinals(supabase, holdUserIds, todayStr, todayStr)"),
-    "the hold read must use today's IST date as both bounds (where the user is now, as the app shows)",
+    code.includes("const weekLine = await reportWeekLineFor(supabase, targetUserId, userProgress, todayStr);"),
+    "the week line must come from reportWeekLineFor with the user's progress row and today's IST date",
   );
 });
 
 Deno.test("weekly-report's prompt prints the built week line, not the raw current_week", () => {
   const code = stripComments(source);
-  assert(code.includes("reportWeekLine("), "the week line must be built by reportWeekLine");
   assert(code.includes("- ${weekLine}"), "the prompt must print the built week line");
   assert(
     !code.includes("- Current week: ${userProgress?.current_week ?? 1}"),

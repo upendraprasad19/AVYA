@@ -4,7 +4,7 @@ blast_radius: platform
 review_rounds: 5
 ground_truth_verified: true
 verdict: converged
-bpass: pending
+bpass: accepted
 bpass_review: docs/reviews/generator-step3d-a-bpass.md
 ---
 
@@ -43,4 +43,11 @@ Fresh, context-blind Sonnet seats, each verifying claims against the code and li
 
 ## B-pass
 
-Pending.
+`docs/reviews/generator-step3d-a-bpass.md`: one fresh Sonnet seat on fa793157 (CI green, PR #289). 0 P0/P1, 2 P2 and
+3 P3, all fixed in the B-pass commit:
+- the recap's window order and both map hand-offs to the texts were unpinned. They moved into two helpers
+  (`recapHoldsForBatch`, `reportWeekLineFor`) tested end to end, and the stub client now applies its date window;
+- a failed hold read now also reaches `cron_call_log.error_summary`;
+- year-end and exactly-100-ids tests were added.
+
+Six mutants went red after the fixes (diagnose `c4e8b1`).

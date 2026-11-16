@@ -13438,17 +13438,17 @@ concepts:
     reader_manifest_complete: true
     readers:
       - file: supabase/functions/weekly-recap-ready/index.ts
-        line_range: 55-90
+        line_range: 49-97
         method: processUser progressMap
         semantic: pass-through
         fields_read: [current_week, current_phase]
         notes: "push copy via recapMessage (_shared/hold_week.ts): 'Week ${currentWeek} debrief ready', or 'Hold H${n} debrief ready' for a Phase-I user in a hold week (Unit 3D-a, FOB-4; concept hold_week_server_signal). Re-derived 2026-11-16 from the progressMap anchor (the old 172-190 had drifted). The old note 'Pure interpolation, no EF redeploy needed' was the framing FOB-4 called false: a hold week needs the hold branch and a redeploy."
       - file: supabase/functions/weekly-report/index.ts
-        line_range: 224-245
+        line_range: 224-236
         method: weekly brief userMessage (progress read + week line)
         semantic: pass-through
         fields_read: [current_week, current_phase]
-        notes: "'Current week: ${current_week}' via reportWeekLine (_shared/hold_week.ts), or the hold line for a Phase-I user with a hold row TODAY (Unit 3D-a, FOB-4). The line is printed at the prompt's PROGRESS block (`- ${weekLine}`)."
+        notes: "'Current week: ${current_week}' via reportWeekLineFor -> reportWeekLine (_shared/hold_week.ts), or the hold line for a Phase-I user with a hold row TODAY (Unit 3D-a, FOB-4). The line is printed at the prompt's PROGRESS block (`- ${weekLine}`)."
       - file: supabase/functions/_shared/captain_manual.ts
         line_range: 1-9999
         method: temporal routing instruction
@@ -13472,9 +13472,9 @@ concepts:
       - { file: lib/core/services/sync/sync_workout.dart, line: 2350, method: "_syncScheduledWorkouts payload", notes: "week_number <- entry['week']; holdWeek() stamps week: 4 + n on hold rows (workout_schedule_write_service.dart)." }
     reader_manifest_complete: true
     readers:
-      - { file: supabase/functions/_shared/hold_week.ts, line_range: 1-121, method_or_widget: "fetchHoldOrdinals / holdOrdinalFromWeekNumbers / phaseOneUserIds / istWeekBounds", semantic: latest, notes: "Never throws ({map, failed}); paged and chunked through fetchAllByIds (orderBy id)." }
-      - { file: supabase/functions/weekly-recap-ready/index.ts, line_range: 263-300, method_or_widget: "batch loop: Phase-I holds over the IST Monday-Sunday of the run", semantic: latest, notes: "Skipped when the progress read failed; hold_read_failed in the response and summary. Call site pinned by source only (weekly-recap-ready/index_test.ts); the behaviour is the pure layer." }
-      - { file: supabase/functions/weekly-report/index.ts, line_range: 232-245, method_or_widget: "the hold for TODAY's IST date (as the app shows it)", semantic: latest, notes: "Gated on a present progress row with current_phase 1. Call site pinned by source only (weekly-report/index_test.ts)." }
+      - { file: supabase/functions/_shared/hold_week.ts, line_range: 1-151, method_or_widget: "fetchHoldOrdinals / holdOrdinalFromWeekNumbers / phaseOneUserIds / istWeekBounds / recapHoldsForBatch / reportWeekLineFor", semantic: latest, notes: "Never throws ({map, failed}); paged and chunked through fetchAllByIds (orderBy id). The two call-site helpers (B-pass F1/F2) are tested end to end against the stub client." }
+      - { file: supabase/functions/weekly-recap-ready/index.ts, line_range: 262-290, method_or_widget: "batch loop: recapHoldsForBatch (Phase-I holds over the IST Monday-Sunday of the run) -> holdMap -> processUser", semantic: latest, notes: "Skipped when the progress read failed; hold_read_failed in the response, the summary line and cron_call_log.error_summary. The call and the map hand-off are pinned by source (weekly-recap-ready/index_test.ts); the helper is behavioural." }
+      - { file: supabase/functions/weekly-report/index.ts, line_range: 228-235, method_or_widget: "reportWeekLineFor: the hold for TODAY's IST date (as the app shows it)", semantic: latest, notes: "Gated on a present progress row with current_phase 1 (inside the helper, tested end to end). The call is pinned by source (weekly-report/index_test.ts)." }
     cloud:
       table: scheduled_workouts
       columns: [user_id, scheduled_date, week_number]

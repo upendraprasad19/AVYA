@@ -145,3 +145,28 @@ expected).
 - No client code, no schema, no cron schedule.
 - The deploys need the founder's go, one per function. The live version and SHA are recorded first, and the
   rollback is the previous payload.
+
+## B-pass (docs/reviews/generator-step3d-a-bpass.md)
+
+One fresh seat on fa793157 found 2 P2 and 3 P3, all fixed in the B-pass commit:
+- the recap's window order and the two map hand-offs (recap and report) were unpinned: three seat mutants stayed
+  green;
+- `hold_read_failed` was not in `cron_call_log`;
+- the year-end and exactly-100-ids cases were not tested.
+
+The fix moves both call-site steps into `_shared/hold_week.ts` helpers tested end to end:
+- `recapHoldsForBatch` takes the `istWeekBounds` object whole;
+- `reportWeekLineFor` runs the phase gate, the one-day read and the builder.
+
+The stub client now applies its recorded `gte` / `lte` window to dated rows.
+
+Mutants run after the fixes, each applied (the file differed) and restored from a backup:
+
+| # | Mutant | Result |
+|---|---|---|
+| B1 | the helper's window swapped (Sunday first) | red, 1 of 32 |
+| B2 | the recap's `holdMap = holds.map` became `new Map()` | red, 1 of 32 |
+| B3 | `reportWeekLineFor`'s lookup became `null` | red, 1 of 32 |
+| B4 | the report's call site bypassed (the raw `current_week` line) | red, 1 of 32 |
+| B5 | the `cron_call_log` error summary dropped | red, 1 of 32 |
+| B6 | the helper's phase gate bypassed (every user asked) | red, 1 of 32 |

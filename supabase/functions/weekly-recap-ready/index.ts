@@ -23,12 +23,7 @@ import {
   type PrefsByUser,
 } from "../_shared/notification_prefs.ts";
 import { fetchProUserIds } from "../_shared/subscription.ts";
-import {
-  fetchHoldOrdinals,
-  istWeekBounds,
-  phaseOneUserIds,
-  recapMessage,
-} from "../_shared/hold_week.ts";
+import { istWeekBounds, recapHoldsForBatch, recapMessage } from "../_shared/hold_week.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -155,7 +150,7 @@ serve(async (req: Request) => {
     let batchNum = 0;
     // Unit 3D-a (FOB-4): the IST week the Sunday Brief describes, and whether any batch's hold read failed (the run
     // still succeeds; holders then read "Week 4", so the failure is reported in the response and the summary line).
-    const { monday: weekMonday, sunday: weekSunday } = istWeekBounds(new Date());
+    const week = istWeekBounds(new Date());
     let holdReadFailed = false;
 
     while (hasMore) {
@@ -275,12 +270,7 @@ serve(async (req: Request) => {
             phase: typeof row.current_phase === "number" ? row.current_phase : null,
           });
         }
-        const holds = await fetchHoldOrdinals(
-          supabase,
-          phaseOneUserIds(progressResult.value),
-          weekMonday,
-          weekSunday,
-        );
+        const holds = await recapHoldsForBatch(supabase, progressResult.value, week);
         holdMap = holds.map;
         if (holds.failed) holdReadFailed = true;
       } else {
@@ -320,7 +310,11 @@ serve(async (req: Request) => {
         `hold_read_failed=${holdReadFailed}`,
     );
 
-    await logCronEnd(logId, "success", { httpStatus: 200 });
+    // B-pass F3: a failed hold read is written to cron_call_log too (the run still succeeded; holders read "Week N").
+    await logCronEnd(logId, "success", {
+      httpStatus: 200,
+      ...(holdReadFailed ? { errorSummary: "hold_read_failed" } : {}),
+    });
     return new Response(
       JSON.stringify({
         status: "success",

@@ -119,3 +119,33 @@ export async function fetchHoldOrdinals(
     return { map: new Map(), failed: true };
   }
 }
+
+/**
+ * The recap's batch step (B-pass F1): this IST week's holds for the Phase-I users among [progressRows]. One
+ * function, so the window's order (Monday first) and the phase gate are tested end to end, not only pinned.
+ */
+export function recapHoldsForBatch(
+  // deno-lint-ignore no-explicit-any
+  supabase: any,
+  progressRows: readonly Record<string, unknown>[],
+  week: { monday: string; sunday: string },
+): Promise<HoldOrdinals> {
+  return fetchHoldOrdinals(supabase, phaseOneUserIds(progressRows), week.monday, week.sunday);
+}
+
+/**
+ * The weekly report's week line for [userId] TODAY (B-pass F2): the phase gate on the user's progress row, the
+ * one-day read and the builder, end to end. A null [progress] (no row) or a failed read gives today's line.
+ */
+export async function reportWeekLineFor(
+  // deno-lint-ignore no-explicit-any
+  supabase: any,
+  userId: string,
+  progress: Record<string, unknown> | null | undefined,
+  todayStr: string,
+): Promise<string> {
+  const ids = progress ? phaseOneUserIds([{ user_id: userId, current_phase: progress.current_phase }]) : [];
+  const holds = await fetchHoldOrdinals(supabase, ids, todayStr, todayStr);
+  const week = typeof progress?.current_week === "number" ? progress.current_week : 1;
+  return reportWeekLine(week, holds.map.get(userId) ?? null);
+}

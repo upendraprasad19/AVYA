@@ -31,10 +31,14 @@ Deno.test("weekly-recap-ready asks for holds only for Phase-I users, only when t
   const rejected = code.indexOf("} else {", fulfilled);
   assert(fulfilled > 0 && rejected > fulfilled, "the fulfilled branch must exist");
   const branch = code.slice(fulfilled, rejected);
-  assert(branch.includes("fetchHoldOrdinals("), "the hold read must sit inside the fulfilled branch");
-  assert(branch.includes("phaseOneUserIds(progressResult.value)"), "the hold read must be gated by phaseOneUserIds");
-  assert(branch.includes("weekMonday,") && branch.includes("weekSunday,"), "the read must use the IST week bounds");
-  assert(code.includes("istWeekBounds(new Date())"), "the bounds must come from istWeekBounds");
+  // B-pass F1: the batch step is one tested helper (recapHoldsForBatch: the phase gate and the window order are
+  // proven end to end in _shared/hold_week_test.ts); this pins the call and that its map reaches the texts.
+  assert(
+    branch.includes("const holds = await recapHoldsForBatch(supabase, progressResult.value, week);"),
+    "the hold read must be the batch helper inside the fulfilled branch",
+  );
+  assert(branch.includes("holdMap = holds.map;"), "the read's map must reach processUser (B-pass F2)");
+  assert(code.includes("const week = istWeekBounds(new Date());"), "the bounds must come from istWeekBounds");
 });
 
 Deno.test("weekly-recap-ready builds the push text with recapMessage and the hold map", () => {
@@ -53,4 +57,8 @@ Deno.test("weekly-recap-ready reports a failed hold read in its response and sum
   assert(code.includes("if (holds.failed) holdReadFailed = true;"), "a failed read must be recorded");
   assert(code.includes("hold_read_failed: holdReadFailed,"), "the response JSON must carry hold_read_failed");
   assert(code.includes("hold_read_failed=${holdReadFailed}"), "the summary line must carry hold_read_failed");
+  assert(
+    code.includes('...(holdReadFailed ? { errorSummary: "hold_read_failed" } : {}),'),
+    "cron_call_log must carry the failed hold read (B-pass F3)",
+  );
 });

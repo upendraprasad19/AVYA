@@ -12,7 +12,7 @@ import { buildDayMap, istDatesEnding } from "../_shared/exercise_day.ts";
 import type { SummaryRow } from "../_shared/live_exercise_rows.ts";
 import { fetchWleWindow } from "../_shared/wle_window_read.ts";
 import { weekWorkoutRows } from "./week_rows.ts";
-import { fetchHoldOrdinals, phaseOneUserIds, reportWeekLine } from "../_shared/hold_week.ts";
+import { reportWeekLineFor } from "../_shared/hold_week.ts";
 import {
   asAuthoredPrompt, sanitizeIdentifier
 } from "../_shared/sanitize_for_prompt.ts";
@@ -232,14 +232,7 @@ serve(async (req: Request) => {
     // 3b. Unit 3D-a (FOB-4): a Phase-I user in a hold week TODAY (as the app shows it, `holdOrdinalForDate(today)`)
     // reads the hold, not the clamped "Current week: 4". Fails closed: no progress row, a phase other than exactly 1
     // or a failed read keeps today's line (`fetchHoldOrdinals` never throws).
-    const holdUserIds = userProgress
-      ? phaseOneUserIds([{ user_id: targetUserId, current_phase: userProgress.current_phase }])
-      : [];
-    const todayHold = await fetchHoldOrdinals(supabase, holdUserIds, todayStr, todayStr);
-    const weekLine = reportWeekLine(
-      (userProgress?.current_week as number | undefined) ?? 1,
-      todayHold.map.get(targetUserId) ?? null,
-    );
+    const weekLine = await reportWeekLineFor(supabase, targetUserId, userProgress, todayStr);
 
     // 4a. Exercise-level data from workout_log_exercises (per-set granular data)
     // workout_logs now stores summary rows; exercise details are in workout_log_exercises.
