@@ -65,6 +65,8 @@ const _stripped = <String>{
   // Unit 1B-F: the injured grid (46,512 runs) and focus grid (5,760 plans) dumps' output directories
   'INJURED_GRID_OUT',
   'FOCUS_GRID_OUT',
+  // generator step 4 (OI-53): the history simulation dump's output directory and its scenario filter
+  'HISTORY_SIM_OUT', 'HISTORY_SIM_SCENARIOS',
 };
 
 /// Read by an EXTERNAL tool only (git's author-identity fallback; d9e4b1): stripped,
