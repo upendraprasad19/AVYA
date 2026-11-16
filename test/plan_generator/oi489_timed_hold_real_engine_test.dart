@@ -18,6 +18,8 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:icanbefitter/core/services/hive_service.dart';
+
 import 'package:icanbefitter/shared/repositories/plan_engine/budget_muscle_groups.dart';
 import 'package:icanbefitter/shared/repositories/plan_engine/models.dart';
 import 'package:icanbefitter/shared/repositories/plan_engine/plan_generator.dart';
@@ -77,12 +79,17 @@ void main() {
   });
 
   for (final goal in const ['lose_fat', 'general_fitness']) {
-    test('Ruling 5c: $goal|4|advanced|bodyweight|30|1 keeps every day of weeks 1-4 inside 30 + 2 minutes (a count-forced day: + 5; 2C-b: + the 285 s allowance instead)', () {
+    test('Ruling 5c: $goal|4|advanced|bodyweight|30|1 keeps every day of weeks 1-4 inside 30 + 2 minutes (a count-forced day: + 5; 2C-b: + the 285 s allowance instead)', () async {
       final rowsById = {
         for (final r in (jsonDecode(File('assets/data/exercise_library.json').readAsStringSync()) as List)
             .cast<Map<String, dynamic>>())
           r['id'] as String: r,
       };
+      // Unit 3C (diagnose f3c9a6): this pins Ruling 5c (OI-489) at exact minutes, so it runs with the cardio finisher
+      // switch set (no finisher time reserved, none shown). With the finisher, days 0 and 2 give 240 s to the mini HIIT
+      // (d76) and the count floor seats the Upper Pull day (cardio_finisher_reservation_behavioral_test owns that).
+      await HiveService.instance.configBox.put('disable_cardio_finisher_shown', true);
+      addTearDown(() => HiveService.instance.configBox.delete('disable_cardio_finisher_shown'));
       SessionSetAllocator.debugLastStats = null;
       final p = gen(goal, 1, days: 4);
       final stats = SessionSetAllocator.debugLastStats!;
@@ -95,7 +102,9 @@ void main() {
       for (final w in p.weekPlans) {
         for (var i = 0; i < w.workoutDays.length; i++) {
           final d = w.workoutDays[i];
-          final minutes = SessionBudget.estimateDaySecondsFromPlanDay(d.toMap(), rowsById) / 60;
+          final minutes = SessionBudget.estimateDaySecondsFromPlanDay(d.toMap(), rowsById,
+                  finisher: const [] /* the finisher switch is set: no screen shows one */) /
+              60;
           // Unit 2A (2026-11-13): a day the count floor force-seated (pass A2, `countForced` of the variant the week
           // reads: B in weeks 2 and 4) may be up to `maxForcedOverSeconds` over, the accepted overrun (founder d26 /
           // d28): Lower Body is 32.9 minutes in weeks 1-3 (both goals) since its lead is seated at 3 (pinned below).

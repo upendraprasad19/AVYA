@@ -123,40 +123,40 @@ void main() {
 
   group('the shared estimate (pure)', () {
     test('a bench + lateral raise day with a 180 s lead-in and walk is 1557.6 s, 26 min', () {
-      expect(SessionBudget.estimateDaySecondsFromPlanDay(day(), rowsById),
+      expect(SessionBudget.estimateDaySecondsFromPlanDay(day(), rowsById, finisher: const []),
           closeTo(1557.6, 1e-9));
-      expect(SessionBudget.estimateDayMinutesFromPlanDay(day(), rowsById), 26);
+      expect(SessionBudget.estimateDayMinutesFromPlanDay(day(), rowsById, finisher: const []), 26);
     });
 
     test('the rest term counts: bench at 90 s rest is 3 x 60 x 1.2 = 216 s shorter', () {
-      final a = SessionBudget.estimateDaySecondsFromPlanDay(day(), rowsById);
+      final a = SessionBudget.estimateDaySecondsFromPlanDay(day(), rowsById, finisher: const []);
       final b = SessionBudget.estimateDaySecondsFromPlanDay(
-          day(exercises: [bench(rest: 90), lateral()]), rowsById);
+          day(exercises: [bench(rest: 90), lateral()]), rowsById, finisher: const []);
       expect(a - b, closeTo(216.0, 1e-9));
     });
 
     test('the warm-up and cool-down items count at their own seconds', () {
-      final base = SessionBudget.estimateDaySecondsFromPlanDay(day(), rowsById);
-      final longerLead = SessionBudget.estimateDaySecondsFromPlanDay(day(lead: 300), rowsById);
+      final base = SessionBudget.estimateDaySecondsFromPlanDay(day(), rowsById, finisher: const []);
+      final longerLead = SessionBudget.estimateDaySecondsFromPlanDay(day(lead: 300), rowsById, finisher: const []);
       expect(longerLead - base, closeTo(120.0, 1e-9));
-      final shorterWalk = SessionBudget.estimateDaySecondsFromPlanDay(day(walk: 60), rowsById);
+      final shorterWalk = SessionBudget.estimateDaySecondsFromPlanDay(day(walk: 60), rowsById, finisher: const []);
       expect(base - shorterWalk, closeTo(120.0, 1e-9));
       final noItems = {...day(), 'warmup': <dynamic>[], 'cooldown': <dynamic>[]};
-      expect(SessionBudget.estimateDaySecondsFromPlanDay(noItems, rowsById),
+      expect(SessionBudget.estimateDaySecondsFromPlanDay(noItems, rowsById, finisher: const []),
           closeTo(1197.6, 1e-9));
     });
 
     test('adding one exercise raises the estimate by exactly its own exerciseSeconds', () {
       final plank = _ex('E054', 'Plank', 'timed', 3, 30); // timed -> B: 1.2 x (30 + 120 + 60)
-      final before = SessionBudget.estimateDaySecondsFromPlanDay(day(), rowsById);
+      final before = SessionBudget.estimateDaySecondsFromPlanDay(day(), rowsById, finisher: const []);
       final after = SessionBudget.estimateDaySecondsFromPlanDay(
-          day(exercises: [bench(), lateral(), plank]), rowsById);
+          day(exercises: [bench(), lateral(), plank]), rowsById, finisher: const []);
       expect(after - before, closeTo(252.0, 1e-9));
     });
 
     test('a user-added exercise with no library row is priced from its own type, rep range and logging type', () {
       double only(Map<String, dynamic> e) => SessionBudget.estimateDaySecondsFromPlanDay(
-          {'exercises': [e], 'warmup': <dynamic>[], 'cooldown': <dynamic>[]}, rowsById);
+          {'exercises': [e], 'warmup': <dynamic>[], 'cooldown': <dynamic>[]}, rowsById, finisher: const []);
       // isolation -> I: 1.2 x (45 + 3 x 47 + 2 x 60)
       expect(only(_ex('c1', 'My Curl', 'weight_reps', 3, 60, type: ['isolation'], repRange: '10-12')),
           closeTo(367.2, 1e-9));
@@ -169,7 +169,7 @@ void main() {
 
     test('rest and sets parse tolerantly: absent rest 60, absent sets 3, junk rest 75, "90s" 90', () {
       double only(Map<String, dynamic> e) => SessionBudget.estimateDaySecondsFromPlanDay(
-          {'exercises': [e], 'warmup': <dynamic>[], 'cooldown': <dynamic>[]}, rowsById);
+          {'exercises': [e], 'warmup': <dynamic>[], 'cooldown': <dynamic>[]}, rowsById, finisher: const []);
       Map<String, dynamic> raw(Object? rest, {Object? sets = 3}) => {
             'exercise_id': 'c9',
             'exercise_name': 'X',
@@ -187,15 +187,15 @@ void main() {
     });
 
     test('a malformed day never throws: non-map entries are skipped, no lists means 0', () {
-      expect(SessionBudget.estimateDaySecondsFromPlanDay(const {}, rowsById), 0.0);
+      expect(SessionBudget.estimateDaySecondsFromPlanDay(const {}, rowsById, finisher: const []), 0.0);
       expect(
           SessionBudget.estimateDaySecondsFromPlanDay({
             'exercises': ['x', null, 3, bench()],
             'warmup': 'nope',
             'cooldown': null,
-          }, rowsById),
+          }, rowsById, finisher: const []),
           closeTo(794.4, 1e-9));
-      expect(SessionBudget.estimateDayMinutesFromPlanDay(const {}, rowsById), 0);
+      expect(SessionBudget.estimateDayMinutesFromPlanDay(const {}, rowsById, finisher: const []), 0);
     });
 
     test('a rep-based warm-up item (sets x B) is priced, not dropped', () {
@@ -214,7 +214,7 @@ void main() {
         'cooldown': <dynamic>[],
       };
       // B, one set, no rest: 1.2 x (30 + 40)
-      expect(SessionBudget.estimateDaySecondsFromPlanDay(d, rowsById), closeTo(84.0, 1e-9));
+      expect(SessionBudget.estimateDaySecondsFromPlanDay(d, rowsById, finisher: const []), closeTo(84.0, 1e-9));
     });
   });
 
@@ -222,7 +222,7 @@ void main() {
     double only(Map<String, dynamic> e, {Map<String, Map<String, dynamic>>? byName}) =>
         SessionBudget.estimateDaySecondsFromPlanDay(
             {'exercises': [e], 'warmup': <dynamic>[], 'cooldown': <dynamic>[]}, rowsById,
-            rowsByName: byName ?? const {});
+            rowsByName: byName ?? const {}, finisher: const []);
 
     test('P2-1: a cardio or timed row prescribed in MINUTES works that long per set', () {
       // Running (Treadmill): cardio -> B, one set of 20-40 min = 30 min = 1800 s, no rest.
@@ -285,7 +285,7 @@ void main() {
       };
       // 794.4 s -> 13 min (H); an unresolved name would be 816 s -> 14 min (M).
       expect(
-          budgetedDayMinutes({'exercises': [entry], 'warmup': <dynamic>[], 'cooldown': <dynamic>[]}),
+          budgetedDayMinutes({'exercises': [entry], 'warmup': <dynamic>[], 'cooldown': <dynamic>[]}, finisher: const []),
           13);
     });
 
@@ -303,7 +303,7 @@ void main() {
       // Found through the alias it would be bench's H row (794.4 s -> 13 min). It is
       // not bench: it is priced on its own fields as M (816 s -> 14 min).
       expect(
-          budgetedDayMinutes({'exercises': [entry], 'warmup': <dynamic>[], 'cooldown': <dynamic>[]}),
+          budgetedDayMinutes({'exercises': [entry], 'warmup': <dynamic>[], 'cooldown': <dynamic>[]}, finisher: const []),
           14);
     });
 
@@ -332,7 +332,7 @@ void main() {
         ],
         'cooldown': <dynamic>[],
       };
-      expect(SessionBudget.estimateDaySecondsFromPlanDay(d, rowsById), 30.0);
+      expect(SessionBudget.estimateDaySecondsFromPlanDay(d, rowsById, finisher: const []), 30.0);
     });
 
     test('P3-1: a day whose exercise name is not text is still priced, not thrown on', () async {
@@ -341,7 +341,7 @@ void main() {
             'exercises': [
               {'exercise_name': 42, 'sets': 3},
             ],
-          }),
+          }, finisher: const []),
           isA<int>());
     });
 
@@ -355,10 +355,10 @@ void main() {
         'warmup': _Unreadable(),
         'cooldown': <dynamic>[],
       };
-      expect(budgetedDayMinutes(unreadable), isNull);
+      expect(budgetedDayMinutes(unreadable, finisher: const []), isNull);
       expect(reasons, ['session_estimate_day_minutes']);
       // A day that reads fine reports nothing.
-      expect(budgetedDayMinutes(day()), isNotNull);
+      expect(budgetedDayMinutes(day(), finisher: const []), isNotNull);
       expect(reasons, hasLength(1));
     });
 
@@ -449,7 +449,7 @@ void main() {
 
     test('the same 26 min Train and Home show for that day', () async {
       expect((await shorten()).estimatedOriginalMinutes, 26);
-      expect(budgetedDayMinutes(day()), 26);
+      expect(budgetedDayMinutes(day(), finisher: const []), 26);
     });
   });
 
@@ -462,9 +462,9 @@ void main() {
     test('Train and Home both read 26 min for the same stored day', () async {
       final d = day();
       await putToday(d);
-      expect(budgetedDayMinutes(d), 26);
+      expect(budgetedDayMinutes(d, finisher: const []), 26);
       expect(workoutDayForDate(DateTime.now())!.estimatedDuration, '26 min');
-      expect(homeCardMinutes(d), 26);
+      expect(homeCardMinutes(d, finisher: const []), 26);
     });
 
     /// A week whose Monday is the plan start, today's row being [d]: the shape
@@ -505,8 +505,8 @@ void main() {
     });
 
     test('a day with no exercises falls back to the old numbers (Home 45)', () async {
-      expect(budgetedDayMinutes({'exercises': <dynamic>[]}), isNull);
-      expect(homeCardMinutes({'exercises': <dynamic>[]}), 45);
+      expect(budgetedDayMinutes({'exercises': <dynamic>[]}, finisher: const []), isNull);
+      expect(homeCardMinutes({'exercises': <dynamic>[]}, finisher: const []), 45);
     });
 
     test('PRESENCE ONLY: the Home Today card takes its minutes from the shared function', () {
@@ -521,11 +521,23 @@ void main() {
       // The value reaches the card: assigned from the shared call, then handed to
       // the card as its minutes (a constant in its place stays red here). The two
       // other `durationMin:` sites are the completed and the rest-day cards.
-      expect(RegExp(r'final estDuration = homeCardMinutes\(schedule\);').allMatches(src), hasLength(1));
+      // Unit 3C (OI-396): with the finisher the user may see (one context read), the same rule as Train.
+      expect(
+          RegExp(r'final estDuration = homeCardMinutes\(schedule,\s+finisher: '
+                  r'FinisherSafety\.shownOfRow\(schedule, FinisherShowContextReader\.read\(\)\)\);')
+              .allMatches(src),
+          hasLength(1));
       expect(RegExp(r'durationMin: estDuration,').allMatches(src), hasLength(1));
       expect(RegExp(r'durationMin:').allMatches(src), hasLength(3));
       final train = code('lib/features/train/providers/train_provider.dart');
-      expect(RegExp(r'budgetMinutes: budgetedDayMinutes\(row\)').hasMatch(train), isTrue);
+      // Unit 3C: both constructors price the SHOWN finisher, read once per build.
+      expect(RegExp(r'budgetMinutes: budgetedDayMinutes\(row, finisher: shownFinisher\)').hasMatch(train), isTrue);
+      expect(
+          RegExp(r'final shownFinisher = FinisherSafety\.shownOfRow\(row, FinisherShowContextReader\.read\(\)\);')
+              .hasMatch(train),
+          isTrue);
+      expect(RegExp(r'budgetedDayMinutes\(dayMap, finisher: shownFinisher\)').hasMatch(train), isTrue);
+      expect(RegExp(r'FinisherSafety\.shownOfRow\(dayMap, finisherContext\)').hasMatch(train), isTrue);
     });
 
     // The flip (2026-11-02) turned the three old estimators into ONE unreadable-day
@@ -545,9 +557,9 @@ void main() {
     });
 
     test('a day the model cannot read (no exercise maps, or null) still gets a Home number', () {
-      expect(budgetedDayMinutes({'exercises': <dynamic>['not a map']}), isNull);
-      expect(homeCardMinutes({'exercises': <dynamic>['not a map']}), 45);
-      expect(homeCardMinutes(null), 45);
+      expect(budgetedDayMinutes({'exercises': <dynamic>['not a map']}, finisher: const []), isNull);
+      expect(homeCardMinutes({'exercises': <dynamic>['not a map']}, finisher: const []), 45);
+      expect(homeCardMinutes(null, finisher: const []), 45);
     });
 
     test('PRESENCE ONLY: Train and the coach call the shared fallback (no private copy)', () {

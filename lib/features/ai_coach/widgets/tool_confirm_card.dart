@@ -4,6 +4,8 @@ import '../../../core/services/day_swap/day_swap_copy.dart';
 import '../../../core/services/day_swap/day_swap_result.dart';
 import '../../../core/services/day_swap/day_swap_rules.dart';
 import '../../../core/services/hive_service.dart';
+import '../../../core/services/swap_service.dart' show ShortenDayResult;
+import '../../../core/utils/injury_vocab.dart';
 import '../../../core/theme/colors.dart';
 import '../models/tool_intent.dart';
 import '../providers/pending_tool_intents_provider.dart';
@@ -35,6 +37,10 @@ class _ToolConfirmCardState extends ConsumerState<ToolConfirmCard> {
   // demand a deliberate APPLY tap.
   bool _executing = false;
 
+  /// Unit 3C (OI-396): the last execution's result data (a shortened day's `finisherDropped`, a coach injury's
+  /// profile token), so the executed line can say it. Lost on a restart (the plain line shows then).
+  Object? _resultData;
+
   @override
   void initState() {
     super.initState();
@@ -47,7 +53,10 @@ class _ToolConfirmCardState extends ConsumerState<ToolConfirmCard> {
         .read(pendingToolIntentsProvider.notifier)
         .confirm(widget.intent.id);
     if (!mounted) return;
-    setState(() => _executing = false);
+    setState(() {
+      _executing = false;
+      _resultData = result.data;
+    });
     if (!result.success) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(result.errorMessage ?? 'Failed')),
@@ -74,7 +83,10 @@ class _ToolConfirmCardState extends ConsumerState<ToolConfirmCard> {
         .read(pendingToolIntentsProvider.notifier)
         .retry(widget.intent.id);
     if (!mounted) return;
-    setState(() => _executing = false);
+    setState(() {
+      _executing = false;
+      _resultData = result.data;
+    });
     if (!result.success) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(result.errorMessage ?? 'Failed')),
@@ -193,7 +205,7 @@ class _ToolConfirmCardState extends ConsumerState<ToolConfirmCard> {
           const SizedBox(width: 8),
           Expanded(
             child: Text(
-              _executedMessage(widget.intent),
+              executedMessageFor(widget.intent, _resultData),
               style: AppTypography.bodyM.copyWith(fontWeight: FontWeight.w600, color: AppColors.textPrimary),
             ),
           ),
@@ -437,39 +449,55 @@ class _ToolConfirmCardState extends ConsumerState<ToolConfirmCard> {
         return Icons.bolt;
     }
   }
+}
 
-  String _executedMessage(ToolIntent intent) {
-    switch (intent.type) {
-      case 'swap_exercise':
-        return 'Swapped';
-      case 'log_set':
-        return 'Logged';
-      case 'shorten_workout':
-        return 'Workout shortened';
-      case 'create_custom_exercise':
-        return 'Created';
-      case 'modify_workout_for_injury':
-        return 'Workouts updated';
-      case 'reschedule_week':
-        return 'Week reshuffled';
-      case 'swap_workout_days':
-        return 'Days swapped';
-      case 'generate_hotel_workout':
-        return 'Hotel plan generated';
-      case 'regenerate_plan_block':
-        return 'Plan regenerated';
-      case 'pause_plan':
-        return 'Plan paused';
-      case 'switch_goal':
-        return 'Goal switched';
-      case 'create_custom_template':
-        return 'Template saved';
-      case 'schedule_template':
-        return 'Template scheduled';
-      case 'log_meal_by_text':
-        return 'Logged';
-      default:
-        return 'Done';
+/// The confirm card's executed line for [intent], with what its execution reported in [resultData] (Unit 3C, OI-396:
+/// d79 `Workout shortened · finisher removed`, d77 `Workouts updated · Knee added to your injuries`).
+String executedMessageFor(ToolIntent intent, Object? resultData) {
+  final base = _executedMessage(intent);
+  if (intent.type == 'shorten_workout' && resultData is ShortenDayResult && resultData.finisherDropped) {
+    return '$base · finisher removed';
+  }
+  if (intent.type == 'modify_workout_for_injury' && resultData is Map) {
+    final token = resultData['profile_injury_added'];
+    if (token is String && token.isNotEmpty) {
+      return '$base · ${InjuryVocab.chipLabel(token)} added to your injuries';
     }
+  }
+  return base;
+}
+
+String _executedMessage(ToolIntent intent) {
+  switch (intent.type) {
+    case 'swap_exercise':
+      return 'Swapped';
+    case 'log_set':
+      return 'Logged';
+    case 'shorten_workout':
+      return 'Workout shortened';
+    case 'create_custom_exercise':
+      return 'Created';
+    case 'modify_workout_for_injury':
+      return 'Workouts updated';
+    case 'reschedule_week':
+      return 'Week reshuffled';
+    case 'swap_workout_days':
+      return 'Days swapped';
+    case 'generate_hotel_workout':
+      return 'Hotel plan generated';
+    case 'regenerate_plan_block':
+      return 'Plan regenerated';
+    case 'pause_plan':
+      return 'Plan paused';
+    case 'switch_goal':
+      return 'Goal switched';
+    case 'create_custom_template':
+      return 'Template saved';
+    case 'schedule_template':
+      return 'Template scheduled';
+    case 'log_meal_by_text':
+      return 'Logged';
+    default:
+      return 'Done';
   }
 }

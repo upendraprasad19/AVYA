@@ -150,7 +150,7 @@ void main() {
         int? mins;
         try {
           mins = SessionBudget.estimateDayMinutesFromPlanDay(d.toMap(), byId,
-              rowsByName: byName);
+              rowsByName: byName, finisher: [for (final f in d.finisher) f.toMap()]);
         } catch (_) {}
         dayList.add({'n': d.name, 'f': d.focus, 'x': exList, 'min': mins});
       }

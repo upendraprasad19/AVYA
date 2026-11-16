@@ -264,10 +264,16 @@ void main() {
     return _exSecs('B', e.sets, e.restSeconds);
   }
 
+  // Unit 3C (OI-396): the finisher's time, restated (each item's whole work time plus sets x its round rest), the
+  // part of the day the reservation set aside.
+  double finisherSeconds(WorkoutDay d) =>
+      d.finisher.fold(0.0, (a, e) => a + (e.durationSeconds ?? 0) + e.sets * e.restSeconds);
+
   double daySeconds(WorkoutDay d) =>
       d.exercises.fold(0.0, (a, e) => a + exSeconds(e)) +
       d.warmup.fold(0.0, (a, e) => a + itemSeconds(e)) +
-      d.cooldown.fold(0.0, (a, e) => a + itemSeconds(e));
+      d.cooldown.fold(0.0, (a, e) => a + itemSeconds(e)) +
+      finisherSeconds(d);
 
   Map<String, int> sessionGroups(WorkoutDay d, {bool quadOwnsGlutes = false}) {
     final per = <String, int>{};
@@ -340,7 +346,8 @@ void main() {
           if (mins - p.effMinutes > _agg.worstOverMinutes) _agg.worstOverMinutes = mins - p.effMinutes;
         }
         // The display prices the STORED day (`toMap()`), and must say what the oracle did.
-        final shown = SessionBudget.estimateDaySecondsFromPlanDay(d.toMap(), rowsById);
+        final shown = SessionBudget.estimateDaySecondsFromPlanDay(d.toMap(), rowsById,
+            finisher: [for (final f in d.finisher) f.toMap()]);
         _agg.displayChecked++;
         if ((shown - daySeconds(d)).abs() > 1e-6) {
           fail('display', 'week ${w + 1} ${d.name} display ${shown.toStringAsFixed(1)} s, oracle '

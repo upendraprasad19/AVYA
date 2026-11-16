@@ -49,10 +49,13 @@ void main() {
     HiveService.instance.markInitializedForTests();
     await HiveUserSession.openForUser(testUser);
     await HiveService.instance.configBox.put('disable_goal_training', true);
+    // Unit 3C (OI-396): the fixture predates the shown / timed finisher.
+    await HiveService.instance.configBox.put('disable_cardio_finisher_shown', true);
   });
 
   tearDownAll(() async {
     await HiveService.instance.configBox.delete('disable_goal_training');
+    await HiveService.instance.configBox.delete('disable_cardio_finisher_shown');
     await HiveUserSession.closeAll();
     GuardedBox.testBypassOwnership = false;
     await Hive.close();

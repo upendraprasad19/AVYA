@@ -11,12 +11,18 @@ class _WarmupCooldownSection extends StatefulWidget {
   final List<ExerciseData> exercises;
   final bool initiallyExpanded;
 
+  /// Unit 3C (OI-396): an optional label after the title (the finisher's `9 MIN`). Kept out of [title] because the
+  /// check key's slug is the title's letters ([_hiveKey]), so the finisher's key stays `..._finisher`.
+  final String? trailingLabel;
+
   const _WarmupCooldownSection({
+    super.key,
     required this.title,
     required this.icon,
     required this.color,
     required this.exercises,
     this.initiallyExpanded = true,
+    this.trailingLabel,
   });
 
   @override
@@ -109,6 +115,16 @@ class _WarmupCooldownSectionState extends State<_WarmupCooldownSection> {
                         letterSpacing: 2.5,
                       ),
                     ),
+                    if (widget.trailingLabel != null) ...[
+                      const SizedBox(width: 8),
+                      Text(
+                        widget.trailingLabel!,
+                        style: AppTypography.monoXs.copyWith(
+                          color: widget.color.withValues(alpha: 0.6),
+                          letterSpacing: 1.2,
+                        ),
+                      ),
+                    ],
                     const SizedBox(width: 8),
                     if (_checkedCount > 0)
                       Text(
@@ -145,7 +161,10 @@ class _WarmupCooldownSectionState extends State<_WarmupCooldownSection> {
                 // numeric string for timed exercises (Bug #16 fix). Defensive
                 // fallback to 30s if parsing somehow fails.
                 String detail;
-                if (ex.loggingType == 'timed') {
+                if (ex.detailText != null) {
+                  // Unit 3C: a finisher row's own line (`8 rounds · 30s fast / 30s slow`).
+                  detail = ex.detailText!;
+                } else if (ex.loggingType == 'timed') {
                   final raw = ex.reps.replaceAll(RegExp(r'[^0-9]'), '');
                   final parsedSecs = int.tryParse(raw) ?? 0;
                   final secs = parsedSecs > 0 ? parsedSecs : 30;

@@ -3,6 +3,8 @@ import 'package:icanbefitter/core/services/hive_service.dart';
 import 'package:icanbefitter/features/auth/providers/auth_invalidation_provider.dart';
 import 'package:icanbefitter/shared/repositories/plan_generator.dart';
 import 'package:icanbefitter/core/constants/equipment_defaults.dart';
+import 'package:icanbefitter/shared/repositories/plan_engine/finisher_safety.dart';
+import 'package:icanbefitter/shared/repositories/plan_engine/finisher_show_context.dart';
 
 /// Identifies a specific phase/week/day combination to preview.
 class PreviewKey {
@@ -136,6 +138,8 @@ final previewPlanProvider =
     };
   }
 
+  final finisherContext = FinisherShowContextReader.read();
+
   // Serialize main exercises (exclude warmup / cooldown / finisher — shown
   // separately in the preview so the list isn't cluttered).
   final exercises = workoutDay.exercises.map((e) {
@@ -164,6 +168,13 @@ final previewPlanProvider =
     'focus_text': focusText,
     'exercises': exercises,
     'warmup_count': workoutDay.warmup.length,
+    // Unit 3C (OI-396): the finisher items the user may see (the same reader rule as Train: switch off -> 0, an
+    // injured user counts only the bike finisher).
+    'finisher_count': FinisherSafety.shownFinisherMaps(
+      workoutDay.finisher.map((e) => e.toMap()).toList(),
+      enabled: finisherContext.enabled,
+      injured: finisherContext.injured,
+    ).length,
     'cooldown_count': workoutDay.cooldown.length,
   };
 });

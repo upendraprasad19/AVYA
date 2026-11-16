@@ -3,6 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/theme/colors.dart';
 import '../models/tool_intent.dart';
 import '../providers/pending_tool_intents_provider.dart';
+import '../services/tool_dispatcher.dart' show profileInjuryAdded;
+import 'tool_confirm_card.dart' show executedMessageFor;
 import 'package:icanbefitter/core/theme/typography.dart';
 
 /// Bottom sheet modal for `destructive` confirmation class tool intents.
@@ -49,10 +51,17 @@ class _ToolConfirmSheetState extends ConsumerState<ToolConfirmSheet> {
         .read(pendingToolIntentsProvider.notifier)
         .confirm(widget.intent.id);
     if (!mounted) return;
+    final messenger = ScaffoldMessenger.of(context);
     Navigator.of(context).pop();
     if (!result.success) {
-      ScaffoldMessenger.of(context).showSnackBar(
+      messenger.showSnackBar(
         SnackBar(content: Text(result.errorMessage ?? 'Failed')),
+      );
+    } else if (profileInjuryAdded(result) != null) {
+      // Unit 3C (d77, B-pass seat B F1): a destructive intent is confirmed here, not on the chat card, so the
+      // injury the coach saved to the profile is announced here: `Workouts updated · Knee added to your injuries`.
+      messenger.showSnackBar(
+        SnackBar(content: Text(executedMessageFor(widget.intent, result.data))),
       );
     }
   }

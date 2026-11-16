@@ -317,6 +317,10 @@ const _alwaysOk = <String>{
   // FILE-WIDE (sync_workout.dart contains readers for every prefix) rather
   // than scoped to the specific map instance being read.
   'deleted_at',
+  // Unit 3C (f3c9a6): `profile_injury_added` is a key of a coach TOOL RESULT's `data` map (ToolExecutionResult.data,
+  // read by `profileInjuryAdded` and the confirm card), never a schedule_ / exlog_ / wlog_ Hive field. tool_dispatcher.dart
+  // also reads schedule_ rows, so the file-wide heuristic flags it.
+  'profile_injury_added',
   // L1a-2 U4 (c6a9d3): `deleted_at_ms` / `empty_pass` are fields of a `PendingExlogDeletes`
   // QUEUE ENTRY (userBox['pending_exlog_deletes'], read off `entry[...]` in
   // `_drainPendingExlogDeletes`), never an exlog_/schedule_/wlog_ Hive map

@@ -45,6 +45,7 @@ import 'exercise_last_try_lines.dart';
 // this library, so their capability imports must live here.
 import 'package:icanbefitter/shared/repositories/plan_engine/training_history_analyzer.dart';
 import 'package:icanbefitter/shared/repositories/plan_engine/equipment_capability.dart';
+import 'package:icanbefitter/shared/repositories/plan_engine/finisher_safety.dart';
 
 part 'coaching_content_panel.dart';
 part 'completion_sheet.dart';
@@ -792,9 +793,24 @@ class _ActiveWorkoutScreenState extends ConsumerState<ActiveWorkoutScreen> {
                       );
                     }),
 
+                    // Unit 3C (OI-396): the cardio finisher, after the main lifts and before the cool-down. A
+                    // checklist like the warm-up (never logged). Both sections are keyed so the cool-down keeps its
+                    // state when the finisher appears or goes.
+                    if (data.workoutDay?.finisher.isNotEmpty == true)
+                      _WarmupCooldownSection(
+                        key: const ValueKey('finisher_section'),
+                        title: 'FINISHER',
+                        icon: Icons.bolt_rounded,
+                        color: AppColors.accentHi,
+                        exercises: data.workoutDay!.finisher,
+                        initiallyExpanded: !data.isComplete,
+                        trailingLabel: FinisherSafety.minutesLabel(data.workoutDay!.finisherSeconds),
+                      ),
+
                     // Cool-down section (collapsible)
                     if (data.workoutDay?.cooldown.isNotEmpty == true)
                       _WarmupCooldownSection(
+                        key: const ValueKey('cooldown_section'),
                         title: 'COOL-DOWN',
                         icon: Icons.air_rounded,
                         color: AppColors.info,

@@ -19,7 +19,7 @@ export const shortenWorkoutTool: ToolDefinition<Args> = {
   confirmationClass: "trivial",
   tier: "free",
   description:
-    "Trim today's workout to fit a shorter time budget. Use when the user says 'I only have 20 minutes', 'shorten this session', etc. The system keeps compound movements (squat, bench, deadlift, row, OHP variants) and drops accessory/isolation work to fit the target. Cap is 10-120 minutes.",
+    "Trim today's workout to fit a shorter time budget. Use when the user says 'I only have 20 minutes', 'shorten this session', etc. The system first drops the day's cardio finisher (if it has one), then keeps compound movements (squat, bench, deadlift, row, OHP variants) and drops accessory/isolation work to fit the target. Cap is 10-120 minutes.",
   schema,
   intentBuilder: (args) => ({
     type: "shorten_workout",

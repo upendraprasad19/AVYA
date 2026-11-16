@@ -28,7 +28,10 @@ import 'package:icanbefitter/core/utils/ist_date.dart';
 import 'package:icanbefitter/core/utils/detraining.dart';
 import 'package:icanbefitter/core/utils/readiness.dart';
 import 'package:icanbefitter/core/services/health_read_service.dart';
+import 'package:icanbefitter/shared/repositories/plan_engine/finisher_safety.dart';
+import 'package:icanbefitter/shared/repositories/plan_engine/finisher_show_context.dart';
 import 'package:icanbefitter/shared/repositories/plan_engine/plan_engine_flags.dart';
+import 'package:icanbefitter/shared/repositories/plan_engine/session_budget.dart';
 import 'package:icanbefitter/shared/repositories/plan_engine/session_estimate.dart';
 import '../repositories/workout_repository.dart';
 import '../services/workout_completion_bookkeeping.dart';
@@ -161,6 +164,10 @@ class ExerciseData {
   final String? muscleLabel; // experience-appropriate muscle label (e.g. "Back", "Lats", "Lats (Width)")
   final String? exerciseId; // W3.3 (Batch 11-A): library exercise id — forward-only, null on legacy/custom.
 
+  /// Unit 3C (OI-396): a row's ready-made detail line (`FinisherSafety.detail`, e.g. `8 rounds · 30s fast / 30s
+  /// slow`). Set only on finisher rows; a renderer shows it before its timed / reps branch. Null everywhere else.
+  final String? detailText;
+
   const ExerciseData({
     required this.name,
     this.sets = '3',
@@ -174,6 +181,7 @@ class ExerciseData {
     this.supersetGroup,
     this.muscleLabel,
     this.exerciseId,
+    this.detailText,
   });
 
   /// Shape-tolerant parse of a raw library `equipment_needed` value. It is a List
@@ -200,6 +208,7 @@ class ExerciseData {
     int? Function()? supersetGroup,
     String? Function()? muscleLabel,
     String? exerciseId,
+    String? Function()? detailText,
   }) {
     return ExerciseData(
       name: name ?? this.name,
@@ -216,6 +225,7 @@ class ExerciseData {
       // W3.3 (Batch 11-A): PRESERVE the id — no copyWith changes `name`, so keeping
       // the id is always correct; dropping it would ship the WRITE largely inert.
       exerciseId: exerciseId ?? this.exerciseId,
+      detailText: detailText != null ? detailText() : this.detailText,
     );
   }
 
@@ -246,6 +256,14 @@ class WorkoutDayData {
   final List<ExerciseData> warmup;
   final List<ExerciseData> cooldown;
 
+  /// Unit 3C (OI-396): the cardio finisher the user may see (`FinisherSafety.shownOfRow`, one
+  /// `FinisherShowContextReader.read()` per build), shown between the main exercises and the cool-down. A checklist
+  /// like the warm-up: never logged, never in sets, PRs, `finishGuard` or completion.
+  final List<ExerciseData> finisher;
+
+  /// [finisher]'s seconds (`SessionBudget.finisherSecondsOfPlanDay` of the same shown maps): the section's label.
+  final int finisherSeconds;
+
   /// B2 Task 6b: the budget model's minutes for this day (`budgetedDayMinutes`, the
   /// function Home uses too). null (an unreadable day) uses the shared
   /// `fallbackDayMinutes` estimate, about 2.5 minutes a set.
@@ -266,6 +284,8 @@ class WorkoutDayData {
     this.exercises = const [],
     this.warmup = const [],
     this.cooldown = const [],
+    this.finisher = const [],
+    this.finisherSeconds = 0,
     this.budgetMinutes,
     this.weekMode,
   });
@@ -458,6 +478,24 @@ List<ExerciseData> _parseExerciseMaps(List? raw) {
     );
   }).toList();
 }
+
+/// Unit 3C (OI-396, round 2 B-F1 / round 3 B-F2): the SHOWN finisher's maps as display rows. Not
+/// [_parseExerciseMaps]: its timed path turns `reps` into seconds by [parseTimedDurationSecs], which ignores
+/// `duration_seconds` (8 bike rounds would read "30s"), and its library lookups would label a burpee with whatever
+/// row `search` finds. A finisher row carries its own [ExerciseData.detailText] and no muscle label.
+List<ExerciseData> _parseFinisherMaps(List<Map<String, dynamic>> shown) => [
+      for (final m in shown)
+        ExerciseData(
+          name: m['exercise_name'] as String? ?? m['name'] as String? ?? 'Unknown',
+          sets: '${m['sets'] ?? 1}',
+          reps: '${m['reps'] ?? ''}',
+          rest: '${m['rest_seconds'] ?? 0}s',
+          loggingType: m['logging_type'] as String? ?? 'timed',
+          category: 'finisher',
+          exerciseId: m['exercise_id'] as String?,
+          detailText: FinisherSafety.detail(m['sets'], m['reps']),
+        ),
+    ];
 
 // ── Current Plan ─────────────────────────────────────────────────
 
@@ -727,6 +765,8 @@ WorkoutDayData? workoutDayForDate(DateTime date) {
 
   final week = (row['week'] as int?) ?? 1;
   final dayOfWeek = (row['day_of_week'] as int?) ?? 0;
+  // Unit 3C (OI-396): the finisher the user may see, one context read for this build.
+  final shownFinisher = FinisherSafety.shownOfRow(row, FinisherShowContextReader.read());
 
   return WorkoutDayData(
     dayNumber: (week - 1) * 7 + dayOfWeek + 1,
@@ -738,7 +778,9 @@ WorkoutDayData? workoutDayForDate(DateTime date) {
     exercises: exercises,
     warmup: _parseExerciseMaps(row['warmup'] as List?),
     cooldown: _parseExerciseMaps(row['cooldown'] as List?),
-    budgetMinutes: budgetedDayMinutes(row),
+    finisher: _parseFinisherMaps(shownFinisher),
+    finisherSeconds: SessionBudget.finisherSecondsOfPlanDay(shownFinisher),
+    budgetMinutes: budgetedDayMinutes(row, finisher: shownFinisher),
     weekMode: WorkoutScheduleService.instance.weekModeForRow(row, date),
   );
 }
@@ -908,6 +950,8 @@ class CurrentPlanNotifier extends Notifier<CurrentPlanData> {
     }
 
     // Build weeks from Hive schedule data.
+    // Unit 3C (OI-396): the finisher display rule's inputs, read ONCE for this build.
+    final finisherContext = FinisherShowContextReader.read();
     final weeks = <List<WorkoutDayData>>[];
     for (int w = 1; w <= totalWeeks; w++) {
       final weekDays = repo.getWeek(w);
@@ -920,6 +964,8 @@ class CurrentPlanNotifier extends Notifier<CurrentPlanData> {
         final exercises = _parseExerciseMaps(dayMap['exercises'] as List?);
         final warmup = _parseExerciseMaps(dayMap['warmup'] as List?);
         final cooldown = _parseExerciseMaps(dayMap['cooldown'] as List?);
+        final shownFinisher =
+            isRest ? const <Map<String, dynamic>>[] : FinisherSafety.shownOfRow(dayMap, finisherContext);
 
         // Parse date for label and actual DateTime.
         final dateStr = dayMap['date'] as String?;
@@ -955,7 +1001,9 @@ class CurrentPlanNotifier extends Notifier<CurrentPlanData> {
           exercises: exercises,
           warmup: warmup,
           cooldown: cooldown,
-          budgetMinutes: isRest ? null : budgetedDayMinutes(dayMap),
+          finisher: _parseFinisherMaps(shownFinisher),
+          finisherSeconds: SessionBudget.finisherSecondsOfPlanDay(shownFinisher),
+          budgetMinutes: isRest ? null : budgetedDayMinutes(dayMap, finisher: shownFinisher),
           weekMode: isRest
               ? null
               : WorkoutScheduleService.instance

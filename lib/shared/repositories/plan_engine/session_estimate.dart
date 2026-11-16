@@ -19,8 +19,11 @@ import 'session_budget.dart';
 /// by its EXACT name, as the engine keys archetypes. No full-library read happens
 /// per screen build. A corrupt stored day degrades to null (the old numbers) after a
 /// non-fatal report, never to a thrown error in a screen build.
-int? budgetedDayMinutes(Map<dynamic, dynamic>? planDay) {
-  final seconds = budgetedDaySeconds(planDay);
+///
+/// Unit 3C (OI-396): [finisher] is the SHOWN finisher's maps (`FinisherSafety.shownOfRow`, one
+/// `FinisherShowContextReader.read()` per build); required so no caller forgets it (`const []` = none).
+int? budgetedDayMinutes(Map<dynamic, dynamic>? planDay, {required List<Map<dynamic, dynamic>> finisher}) {
+  final seconds = budgetedDaySeconds(planDay, finisher: finisher);
   return seconds == null ? null : (seconds / 60).round();
 }
 
@@ -28,7 +31,7 @@ int? budgetedDayMinutes(Map<dynamic, dynamic>? planDay) {
 /// (no exercise maps, or a stored day that could not be read). Also the
 /// coach's `shortenDay` estimate, so a day it shortens to N minutes
 /// shows about N minutes on Train and Home (B-pass R3 P2-2).
-double? budgetedDaySeconds(Map<dynamic, dynamic>? planDay) {
+double? budgetedDaySeconds(Map<dynamic, dynamic>? planDay, {required List<Map<dynamic, dynamic>> finisher}) {
   if (planDay == null) return null;
   final raw = planDay['exercises'];
   if (raw is! List || !raw.any((e) => e is Map)) return null;
@@ -57,7 +60,8 @@ double? budgetedDaySeconds(Map<dynamic, dynamic>? planDay) {
         rowsByName[key] = byName;
       }
     }
-    return SessionBudget.estimateDaySecondsFromPlanDay(planDay, rowsById, rowsByName: rowsByName);
+    return SessionBudget.estimateDaySecondsFromPlanDay(planDay, rowsById,
+        rowsByName: rowsByName, finisher: finisher);
   } catch (e, st) {
     unawaited(ErrorTelemetry.recordNonFatal(e, st, reason: 'session_estimate_day_minutes'));
     return null;
@@ -96,9 +100,10 @@ int fallbackExerciseListSeconds(List<Map<String, dynamic>> exercises) {
 }
 
 /// The minutes on Home's Today card for [schedule] (today's stored plan day):
-/// [budgetedDayMinutes], else [fallbackDayMinutes] over the stored sets.
-int homeCardMinutes(Map<dynamic, dynamic>? schedule) {
-  final budgeted = budgetedDayMinutes(schedule);
+/// [budgetedDayMinutes] (with the shown [finisher]), else [fallbackDayMinutes] over the stored sets (the
+/// unreadable-day fallback ignores the finisher, Unit 3C, accepted).
+int homeCardMinutes(Map<dynamic, dynamic>? schedule, {required List<Map<dynamic, dynamic>> finisher}) {
+  final budgeted = budgetedDayMinutes(schedule, finisher: finisher);
   if (budgeted != null) return budgeted;
   final exercises = schedule?['exercises'] as List? ?? [];
   int totalSets = 0;

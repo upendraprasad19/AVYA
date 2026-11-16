@@ -373,7 +373,8 @@ void main() {
         session.forEach((grp, n) {
           if (n > cap(grp)) bad.add('$key p$phase w${w + 1} ${d.name}: $grp $n > session cap ${cap(grp)}');
         });
-        final secs = SessionBudget.estimateDaySecondsFromPlanDay(d.toMap(), rowsById);
+        final secs = SessionBudget.estimateDaySecondsFromPlanDay(d.toMap(), rowsById,
+            finisher: [for (final f in d.finisher) f.toMap()]);
         final floorClock = BudgetInvariantOracle.floorOverClockSeconds(vStats, di);
         if (secs > (minutes + 2) * 60 + floorClock) {
           bad.add('$key p$phase w${w + 1} ${d.name}: ${(secs / 60).toStringAsFixed(1)} min > ${minutes + 2}');

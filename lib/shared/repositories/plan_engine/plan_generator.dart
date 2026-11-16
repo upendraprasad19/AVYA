@@ -280,6 +280,43 @@ class PlanGenerator {
       final name = r['name'];
       if (name is String) rowsByName.putIfAbsent(name.toLowerCase(), () => r);
     }
+    // ⑥ C2 (WU-2 gym-cardio gate) — fix the always-false hasGymEquipment on the
+    // GENERATED path (equipmentList is item tokens, not the tier string). When
+    // exclusions are enabled, resolve the gym-cardio signal from the EFFECTIVE
+    // (exclusion-subtracted) equipment: `cardio machine` (in the gym tiers as of
+    // ⑥ C2) gates the gym-cardio pools (Treadmill/Bike). Flag OFF → null → attach
+    // uses the old predicate → byte-identical (template_service + tier-string tests
+    // pass the tier string, where the old predicate is TRUE, untouched).
+    final bool? hasGymOverride;
+    if (PlanEngineFlags.equipmentExclusionsEnabled) {
+      final effectiveEquip = equipmentExclusionSet.isEmpty
+          ? equipmentList
+          : equipmentList
+              .where((e) => !equipmentExclusionSet.contains(e))
+              .toList();
+      hasGymOverride = effectiveEquip.contains('cardio machine');
+    } else {
+      hasGymOverride = null;
+    }
+
+    // Unit 3C (OI-396, founder d61 / d75, rule-14 waiver): the gym-cardio block above moved here word for word, and
+    // the finisher is decided ONCE before sets are sized, so its 2 days keep its time and Stage 6 attaches the same
+    // plan. d56: the user's canonical injuries reach it.
+    final finisherPlan = goalSpec.cardio
+        ? CardioFinisher.plan(
+            goal: goal,
+            cardioPreference: cardioPreference,
+            equipmentList: equipmentList,
+            hasGymEquipmentOverride: hasGymOverride,
+            capability: capabilitySet,
+            injuries: normalizedInjuries,
+            dayCount: populated.length,
+            minutes: SessionBudget.resolveMinutes(
+              param: sessionDuration,
+              profileValue: TrainingHistoryAnalyzer.sessionMinutesFromProfile(),
+            ), // d76: the short finisher under 60 minutes
+          )
+        : FinisherPlan.none;
     final budget = SessionBudgetContext(
       minutes: SessionBudget.resolveMinutes(
         param: sessionDuration,
@@ -298,6 +335,7 @@ class PlanGenerator {
       // Unit 3A (OI-487, founder d61, the rule-14 argument): the goal's reps and bands, the Strength focus, and the
       // disable_goal_training switch (read here; the Glutes credit above reads the same switch through its default).
       goalTraining: TrainingHistoryAnalyzer.goalTrainingFromProfile(),
+      finisherSecondsByDay: finisherPlan.secondsByDay,
     );
     populated = SessionSetAllocator.allocate(
       days: populated,
@@ -347,25 +385,6 @@ class PlanGenerator {
     // Stage 5: Superset pairing
     weekPlans = SupersetPairer.pair(weekPlans);
 
-    // ⑥ C2 (WU-2 gym-cardio gate) — fix the always-false hasGymEquipment on the
-    // GENERATED path (equipmentList is item tokens, not the tier string). When
-    // exclusions are enabled, resolve the gym-cardio signal from the EFFECTIVE
-    // (exclusion-subtracted) equipment: `cardio machine` (in the gym tiers as of
-    // ⑥ C2) gates the gym-cardio pools (Treadmill/Bike). Flag OFF → null → attach
-    // uses the old predicate → byte-identical (template_service + tier-string tests
-    // pass the tier string, where the old predicate is TRUE, untouched).
-    final bool? hasGymOverride;
-    if (PlanEngineFlags.equipmentExclusionsEnabled) {
-      final effectiveEquip = equipmentExclusionSet.isEmpty
-          ? equipmentList
-          : equipmentList
-              .where((e) => !equipmentExclusionSet.contains(e))
-              .toList();
-      hasGymOverride = effectiveEquip.contains('cardio machine');
-    } else {
-      hasGymOverride = null;
-    }
-
     // Stage 6: Cardio finisher — attach per the goal's FitnessGoals spec
     // (recompose now gets a light finisher; was excluded by the old hardcoded
     // lose_fat/general_fitness check).
@@ -377,6 +396,8 @@ class PlanGenerator {
         equipmentList: equipmentList,
         hasGymEquipmentOverride: hasGymOverride,
         capability: capabilitySet, // ⑦ OI-89 seam 10
+        injuries: normalizedInjuries, // Unit 3C (d56)
+        plan: finisherPlan, // Unit 3C (d61): the plan the budget reserved
       );
     }
 

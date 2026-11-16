@@ -86,7 +86,12 @@ class _CollapsibleExerciseSection extends StatefulWidget {
     required this.color,
     required this.exercises,
     required this.buildRow,
+    this.trailing,
+    super.key,
   });
+
+  /// Unit 3C (OI-396): an optional label after the count (the finisher's `9 MIN`).
+  final String? trailing;
 
   final String label;
   final Color color;
@@ -132,6 +137,16 @@ class _CollapsibleExerciseSectionState
                     color: widget.color.withValues(alpha: 0.4),
                   ),
                 ),
+                if (widget.trailing != null) ...[
+                  const SizedBox(width: 8),
+                  Text(
+                    widget.trailing!,
+                    style: AppTypography.monoXs.copyWith(
+                      color: widget.color.withValues(alpha: 0.4),
+                      letterSpacing: 1.2,
+                    ),
+                  ),
+                ],
                 const Spacer(),
                 AnimatedRotation(
                   duration: const Duration(milliseconds: 200),
