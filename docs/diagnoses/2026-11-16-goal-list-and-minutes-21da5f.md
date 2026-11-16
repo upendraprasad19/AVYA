@@ -114,6 +114,14 @@ touched_layers_checked:
 
 See `proposed_fix` and the plan. Execution mode: inline. `plan_generator.dart` is not touched.
 
+## Found by CI
+
+The first PR run failed `test/contracts/blast_radius_sync_engine_platform_test.dart`: the sync engine reaches the new
+healer (called from `restoreFromCloudForUser`) and, through it, `fitness_goals.dart`, both below platform. Both now
+take exact platform rules in `docs/blast_radius.yaml` and join the test's `_engine` list (the heal decides what the
+profile push sends; `FitnessGoals.legacyTargets` is its table). The plan's round 4 had said the services catch-all
+covered the healer.
+
 ## Accepted consequences
 
 - d71 / d72: a healed account's calories become Build's (full surplus) or Cut's (full deficit), at the heal, in the

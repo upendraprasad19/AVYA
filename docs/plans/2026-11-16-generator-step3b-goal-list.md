@@ -270,7 +270,7 @@ its readers), new `legacy_goal_heal` (writer the healer, readers every `primary_
 cites if shifted; `docs/naming_conventions.md` (the kill switch `disable_legacy_goal_heal`, `legacy_goal_healed`
 event, `patchProfileWith`); nested CLAUDE.md: profile (session minutes row, goal list), core/services (healer in the
 migrators list), ai_coach (the goal-enum pitfall row: the selectable set), onboarding (`:120`: legacy tokens no longer
-in the coach switch-goal) (`docs/blast_radius.yaml` already covers the healer: `lib/core/services/**` at `account`, `:664`; no new row), plan_engine (Inputs line: strength is a
+in the coach switch-goal) (`docs/blast_radius.yaml`: the healer and `fitness_goals.dart` take exact platform rules, because the sync engine reaches them; round 4's "`lib/core/services/**` covers it" was wrong, found by CI's `blast_radius_sync_engine_platform_test.dart`), plan_engine (Inputs line: strength is a
 legacy value). OI-487 / OI-488 close after the device check (t308); a new OI (minted) tracks deleting the legacy rows
 and the engine's `strength` paths once no build that offers Strength remains in use (`upstream_blocked`, reopen when
 every tester runs a 3B build: the founder confirms).
@@ -309,3 +309,7 @@ every tester runs a 3B build: the founder confirms).
   point and the dispatcher's guard-before-cache order; the raw `_originalSessionDuration`); no new import cycle
   (`sync_service.dart` already imports both profile services); blast radius covered. P2: `patchProfileWith`'s final
   signature and its mismatch behaviour; the two test resolvers. P3: no blast-radius row needed. Folded in above.
+- CI on the first push (2026-11-16): `blast_radius_sync_engine_platform_test.dart` failed: the sync engine now reaches
+  `legacy_goal_healer.dart` and, through it, `fitness_goals.dart`, both below platform. Both take exact platform rules
+  (the heal runs inside the restore wrapper and decides what the profile push sends; `legacyTargets` is its table) and
+  join the test's `_engine` list.
