@@ -111,7 +111,7 @@ Deno.test("regeneratePlanBlock — intentBuilder includes goal in summary when s
     goal: "lose_fat",
   }, ctx());
   assertEquals(intent.payload.goal, "lose_fat");
-  assertEquals(intent.previewSummary, "Regenerate next 4 weeks for lose_fat");
+  assertEquals(intent.previewSummary, "Regenerate next 4 weeks for Cut");
 });
 
 Deno.test("regeneratePlanBlock — intentBuilder includes daysPerWeek in summary", async () => {
@@ -122,7 +122,7 @@ Deno.test("regeneratePlanBlock — intentBuilder includes daysPerWeek in summary
   }, ctx());
   assertEquals(
     intent.previewSummary,
-    "Regenerate next 6 weeks for build_muscle (5 days/week)",
+    "Regenerate next 6 weeks for Build (5 days/week)",
   );
 });
 

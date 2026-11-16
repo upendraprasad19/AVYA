@@ -27,6 +27,7 @@ import 'package:icanbefitter/core/services/hive_service.dart';
 import 'package:icanbefitter/features/ai_coach/models/tool_intent.dart';
 import 'package:icanbefitter/features/ai_coach/services/regenerate_plan_planner.dart';
 import 'package:icanbefitter/features/ai_coach/services/tool_dispatcher.dart';
+import 'package:icanbefitter/features/ai_coach/widgets/compass_form_sheet.dart' show compassSwitchGoalMessage;
 import 'package:icanbefitter/features/ai_coach/widgets/diff_preview/regenerate_plan_diff.dart';
 import 'package:icanbefitter/features/ai_coach/widgets/diff_preview/switch_goal_diff.dart';
 import 'package:icanbefitter/features/auth/providers/auth_invalidation_provider.dart';
@@ -173,5 +174,19 @@ void main() {
     expect(compass.contains('FitnessGoals.tokens'), isFalse);
     final chat = _noComments(File('lib/features/onboarding/providers/onboarding_provider.dart').readAsStringSync());
     expect(chat.contains("options: ['build_muscle', 'lose_fat', 'general_fitness'],"), isTrue);
+    // B-pass (d73): the legacy chat onboarding names its goal chips from the same table.
+    final chatScreen =
+        _noComments(File('lib/features/onboarding/screens/onboarding_chat_screen.dart').readAsStringSync());
+    expect(chatScreen.contains('if (FitnessGoals.isKnown(option)) return FitnessGoals.label(option);'), isTrue);
+    for (final old in ["'Build Muscle'", "'Lose Fat'", "'General Fitness'", "'Recomposition'"]) {
+      expect(chatScreen.contains(old), isFalse, reason: old);
+    }
+    expect(compass.contains('message = compassSwitchGoalMessage(_choice!);'), isTrue);
+  });
+
+  test('the compass Switch-goal message names the goal as its chip does (d73, B-pass)', () {
+    expect(compassSwitchGoalMessage('build_muscle'), 'Switch my goal to Build');
+    expect(compassSwitchGoalMessage('lose_fat'), 'Switch my goal to Cut');
+    expect(compassSwitchGoalMessage('general_fitness'), 'Switch my goal to Maintain');
   });
 }

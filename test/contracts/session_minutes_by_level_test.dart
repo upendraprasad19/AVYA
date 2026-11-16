@@ -102,6 +102,15 @@ void main() {
         }
       }
     });
+
+    test('the reset only caps down: back to Advanced keeps 60 until the user taps 90 again (B-pass, by design)', () {
+      // An advanced user with 90 picks Intermediate (90 -> 60), then Advanced again: the form keeps 60; the 90 chip
+      // is offered again and the user can tap it. Nothing restores the stored value behind their back.
+      var selected = sessionDurationForExperience(90, 'intermediate');
+      selected = sessionDurationForExperience(selected, 'advanced');
+      expect(selected, 60);
+      expect(sessionDurationOptions('advanced'), contains(90));
+    });
   });
 
   test('PRESENCE: the two param passers cap through profileParamMinutes', () {
@@ -110,6 +119,9 @@ void main() {
       expect(src.contains('SessionBudget.profileParamMinutes(profile)'), isTrue, reason: path);
       expect(RegExp(r"\(profile\['session_duration_minutes'\] as num\?\)").hasMatch(src), isFalse,
           reason: '$path: a raw cast bypasses the cap (the param wins over the profile value)');
+      // B-pass: ANY other read of the key in these files (as int?, .toInt(), a helper of their own) bypasses it too.
+      expect(RegExp("'session_duration_minutes'").allMatches(src).length, 0,
+          reason: '$path: the stored minutes are read only through SessionBudget.profileParamMinutes');
     }
     final screen = _noComments(File('lib/features/profile/screens/edit_profile_screen.dart').readAsStringSync());
     expect(screen.contains('final options = sessionDurationOptions(_fitnessExperience);'), isTrue);

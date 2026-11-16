@@ -1410,7 +1410,7 @@ concepts:
           value; reads the provider for the live progress bar. Calls
           setUserOverride + ref.invalidate(waterTargetProvider) on save.
       - file: lib/features/onboarding/providers/onboarding_provider.dart
-        line_range: 343-353
+        line_range: 344-354
         method: completeOnboarding (seed water_target_ml on profile)
         semantic: pass-through
         fields_read: [via WaterTargetService.computeFromProfile(profile-like map)]
@@ -1679,10 +1679,10 @@ concepts:
           fires syncProfileNow); signed in: pushSnapshot, and the
           coach-extraction lock ONLY when the food type itself changed.
       - file: lib/features/profile/screens/edit_profile_screen.dart
-        line_range: 1801-2237
+        line_range: 1856-2294
         method: _save (writes _foodType.storageKey; lock compare on canonical keys)
       - file: lib/features/onboarding/providers/onboarding_provider.dart
-        line_range: 999-1000
+        line_range: 1000-1001
         method: resolveOnboardingDietPreference (non_veg when absent)
       - file: lib/features/onboarding/screens/plan_screen.dart
         line_range: 582-597
@@ -1715,7 +1715,7 @@ concepts:
         semantic: pass-through
         fields_read: [diet_preference]
       - file: lib/features/profile/screens/edit_profile_screen.dart
-        line_range: 1290-1348
+        line_range: 1345-1403
         method: _buildDietPreferenceChips (FoodTypeChips; no Keto)
         semantic: pass-through
         fields_read: [diet_preference]
@@ -1735,7 +1735,7 @@ concepts:
         semantic: pass-through
         fields_read: [diet_preference]
       - file: lib/features/onboarding/providers/onboarding_provider.dart
-        line_range: 914-960
+        line_range: 915-961
         method: _syncOnboardingToSupabase (value passed through)
         semantic: pass-through
         fields_read: [diet_preference]
@@ -1811,7 +1811,7 @@ concepts:
           itself; invalidating a provider that watches userProfileProvider
           from inside it is a CircularDependencyError in debug builds).
       - file: lib/features/profile/screens/edit_profile_screen.dart
-        line_range: 1801-1941
+        line_range: 1856-1996
         method: _save (adds diet_strategy only with the flag on, for a chip different from the EFFECTIVE strategy, after confirmEditProfileDietStrategy; PRO re-checked at Save)
         notes: |
           PRESENCE ONLY for the screen wiring (B-pass seat C finding 3): the
@@ -3466,7 +3466,7 @@ concepts:
     reader_manifest_complete: false
     readers:
       - file: lib/core/services/sync_service.dart
-        line_range: 2232-2437
+        line_range: 2236-2441
         method: _attemptSingleCallRestore
         semantic: aggregated
         fields_read: [schema_version, tables]
@@ -3526,7 +3526,7 @@ concepts:
       assumption (it cannot detect a lowered production cap).
     writers:
       - file: lib/core/services/sync_service.dart
-        line_range: 3114-3185
+        line_range: 3118-3189
         method: _fetchAllRows
         notes: |
           The ONE paging loop: owner-scoped (.eq user_id) first, optional since filter,
@@ -3845,7 +3845,7 @@ concepts:
           step. Uses _safeRestoreOp wrapper to keep one surface's
           failure from aborting the rest.
       - file: lib/core/services/sync_service.dart
-        line_range: 1891-2106
+        line_range: 1895-2110
         method: _restoreFromCloudForUserCore
         semantic: aggregated
         fields_read: [<the body of restoreFromCloudForUser, moved verbatim by OI-284>]
@@ -5653,14 +5653,14 @@ concepts:
       before the legacy fan-out re-runs the ops.
     writers:
       - file: lib/core/services/sync_service.dart
-        line_range: 1986-2004
+        line_range: 1990-2008
         method: _settleRestoreMarker
         notes: |
           The ONE marker writer; the decision is the pure
           `shouldSettleRestoreMarker` (result.succeeded, no streak-critical
           failure, uid non-null, live uid == uid, Hive owner == uid).
       - file: lib/core/services/sync_service.dart
-        line_range: 2017-2035
+        line_range: 2021-2039
         method: restoreFromCloudForUser
         notes: |
           Wrapper shape pinned by completed_title_follows_log_test.dart: runs the
@@ -5684,7 +5684,7 @@ concepts:
           a stale failure from the aborted attempt cannot hold the marker closed
           (B-pass reviewer B F4).
       - file: lib/core/services/sync_service.dart
-        line_range: 2943-3016
+        line_range: 2947-3020
         method: _reportSyncFailure
         notes: first statement calls `RestoreFailureCollector.note(opType)`; the single failure funnel.
       - file: lib/core/services/day_rollover_service.dart
@@ -6210,16 +6210,16 @@ concepts:
       APK Test #12.8 / Bug #2 root cause.
     writers:
       - file: lib/features/onboarding/providers/onboarding_provider.dart
-        line_range: 272-766
+        line_range: 273-767
         method: completeOnboarding
         notes: writes to userBox['profile']['full_name'] + syncs to users table
       - file: lib/features/profile/screens/edit_profile_screen.dart
-        line_range: 1801-2237
+        line_range: 1856-2294
         method: _save
         notes: calls syncProfileNow after updating userBox
       - file: lib/features/profile/services/profile_write_service.dart
-        line_range: 1-140
-        method: "updateProfile / patchProfile / updateField"
+        line_range: 1-177
+        method: "updateProfile / patchProfile / patchProfileWith / updateField"
         notes: |
           Canonical writer scaffolded in audit 2026-05-20 / A4. All 7
           legacy direct-userBox-put-profile sites now route through this
@@ -6454,7 +6454,7 @@ concepts:
       completeOnboarding() stamps both Hive and cloud.
     writers:
       - file: lib/features/onboarding/providers/onboarding_provider.dart
-        line_range: 346-726
+        line_range: 347-727
         method: completeOnboarding
         notes: |
           Stamps onboarding_completed_at in the Hive profile map (durable BEFORE
@@ -6477,7 +6477,7 @@ concepts:
           screen, a false positive would block every genuine new signup.
           Kill-switch disable_onboarding_overwrite_guard.
       - file: lib/features/onboarding/providers/onboarding_provider.dart
-        line_range: 749-816
+        line_range: 750-817
         method: _syncOnboardingAndPostActions
         notes: |
           Background cloud catch-up (a1f9c4) — syncs the profile (incl.
@@ -6680,7 +6680,7 @@ concepts:
           where Hive flag got cleared but cloud carries truth) is now
           inside AuthSessionBootstrapper.hydrateFromCloud.
       - file: lib/features/onboarding/providers/onboarding_provider.dart
-        line_range: 180-202
+        line_range: 181-203
         method: OnboardingNotifier.completeOnboarding
         semantic: flag-check
         fields_read: [onboarding_completed, onboarding_completed_at]
@@ -7693,7 +7693,7 @@ concepts:
     reader_manifest_complete: true
     readers:
       - file: lib/core/services/sync_service.dart
-        line_range: 2596-2661
+        line_range: 2600-2665
         method: _reportSyncFailure (funnel — all sync failures route through here)
         semantic: pass-through
         fields_read: []
@@ -8573,7 +8573,7 @@ concepts:
           weight_logs, body_measurements, water_logs, daily_steps).
           Restore writes back with IST-anchored keys.
       - file: lib/features/onboarding/providers/onboarding_provider.dart
-        line_range: 461-471
+        line_range: 462-472
         method: OnboardingNotifier weight seed
         semantic: pass-through
         fields_read: []
@@ -9023,7 +9023,7 @@ concepts:
           at sign-in, which ran before the users row existed and never ran
           when email confirmation returned no session.
       - file: lib/features/onboarding/providers/onboarding_provider.dart
-        line_range: 749-816
+        line_range: 750-817
         method: _syncOnboardingAndPostActions
         notes: |
           The one client redeem point for new users, AFTER the users upsert.
@@ -10710,7 +10710,7 @@ concepts:
         method: InjuryVocab.normalize / canonicalTokens / chipTokens / toggleChip
         notes: canonical 9-token set + read-side alias (back to lower_back, free-text to token); Ship 3 added chipTokens (single chip-UI source == none ∪ canonicalTokens) + chipLabel + pure toggleChip shared by both chip screens
       - file: lib/features/profile/screens/edit_profile_screen.dart
-        line_range: 1349-1414
+        line_range: 1404-1469
         method: _buildInjuriesChips + profile reader
         notes: chips emit canonical tokens (via InjuryVocab.chipTokens/toggleChip Ship 3); reader normalizes legacy stored values
       - file: lib/features/onboarding/screens/details_screen.dart
@@ -13316,7 +13316,7 @@ concepts:
         method: currentWeekColumnProjection
         notes: pure helper deciding frozen-passthrough (disabled) vs program week (enabled); behaviorally tested.
       - file: lib/features/onboarding/providers/onboarding_provider.dart
-        line_range: 650-650
+        line_range: 651-651
         method: onboarding completion (initial + step)
         notes: |
           Writes current_week:1 at onboarding — correct-BY-CONSTRUCTION (a new
@@ -13859,7 +13859,7 @@ concepts:
           (→913) despite the gate not flagging it, found by grepping the
           symbol directly rather than trusting the gate's silence on it.
       - file: lib/core/services/sync_service.dart
-        line_range: 2801-2801
+        line_range: 2805-2805
         method: restoreOpTimeout
         semantic: per-op-ceiling
         notes: day-swapper + sync-load Task 20 fix1 (diagnose a9d3f6) shifted
@@ -13870,7 +13870,7 @@ concepts:
           an N-M line_range — but left stale it would misdirect a future
           reader by the same +14).
       - file: lib/core/services/sync_service.dart
-        line_range: 2824-2828
+        line_range: 2828-2832
         method: applyRestoreCeiling
         semantic: apply-ceiling
         notes: day-swapper + sync-load Task 20 shifted this range (+148 lines,
@@ -13880,7 +13880,7 @@ concepts:
           blocks on a citation you shifted). Shifted again by task-20-fix1
           (diagnose a9d3f6, +14 lines, same method) for the same reason.
       - file: lib/core/services/sync_service.dart
-        line_range: 2840-2842
+        line_range: 2844-2846
         method: restoreFailureReason
         semantic: telemetry-reason-split
         notes: same shift as applyRestoreCeiling directly above, both times; all three re-derived +3 by the Hermes sync_epoch_seen doc comment (2026-09-28), then +1 (with _safeRestoreOp) by the plan_engine_flags import the merge-review F4 fix added (a3e7d9).
@@ -13895,7 +13895,7 @@ concepts:
         method: _authRedirect
         semantic: delegates-to-pure-fn
       - file: lib/core/services/sync_service.dart
-        line_range: 2823-2865
+        line_range: 2827-2869
         method: _safeRestoreOp
         semantic: bounded-await
     hive:
@@ -17141,7 +17141,7 @@ concepts:
           once, a much smaller harm than blocking the profile save this
           runs alongside.
       - file: lib/features/profile/screens/edit_profile_screen.dart
-        line_range: 1951-1980
+        line_range: 2006-2035
         method: "_save (via the pure computeCoachExtractionFieldsToLock helper)"
         notes: |
           Locks only fields that ACTUALLY changed this save (diet_preference /
@@ -18841,8 +18841,9 @@ concepts:
       The write is ProfileWriteService.patchProfileWith: under the profile lock the owner is re-checked first (the
       wrapper's uid and _liveUserId against HiveUserSession.currentOwnerFullId), then the profile is re-read and the
       patch decided, so a save landing first is never overwritten. No awaited network: the normal profile push carries
-      the heal to the cloud; a failed push lets the next /restoring restore merge the legacy value back, and the heal
-      moves it again. Edit Profile opens an unhealed profile on the healed goal and focus (goalFormSeed) with the RAW
+      the heal to the cloud; a failed push lets the next restore merge the legacy value back, and the heal moves it
+      again. B-pass: the launch-path restore (SyncService._restoreIfNeeded, both the lightweight and the empty-device
+      branch, run by checkAndSync without /restoring) heals the same way after its merge. Edit Profile opens an unhealed profile on the healed goal and focus (goalFormSeed) with the RAW
       originals, so a save heals it too. Telemetry event legacy_goal_healed; non-fatal reason legacy_goal_heal.
     writers:
       - file: lib/core/services/legacy_goal_healer.dart
@@ -18854,6 +18855,9 @@ concepts:
       - file: lib/core/services/sync_service.dart
         method: restoreFromCloudForUser
         semantic: calls the heal on result.succeeded with the captured uid and _liveUserId
+      - file: lib/core/services/sync_service.dart
+        method: _restoreIfNeeded
+        semantic: calls the heal after either branch (restoreLightweightAlways / restoreFromCloud) merged the profile
       - file: lib/features/profile/screens/edit_profile_screen.dart
         method: goalFormSeed / _save
         semantic: the form opens healed; a save writes the healed goal and focus

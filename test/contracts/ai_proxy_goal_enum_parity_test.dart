@@ -141,4 +141,23 @@ void main() {
               'switchGoal; defense-in-depth against an unknown-goal intent).');
     });
   });
+
+  // Unit 3B B-pass (d73): the app shows the tools' previewSummary verbatim, so the server names the goal with the
+  // same labels as the client. goalLabels.ts must map exactly the selectable goals to FitnessGoals.label, and both
+  // tools must name the goal through goalLabel(), never the raw token.
+  test('goalLabels.ts == FitnessGoals.label for every selectable goal; both previews use goalLabel()', () {
+    final labels = stripComments(
+        File('supabase/functions/_shared/tools/plan/goalLabels.ts').readAsStringSync());
+    final body = RegExp(r'GOAL_LABELS[^{]*\{([^}]*)\}').firstMatch(labels)!.group(1)!;
+    final parsed = {
+      for (final m in RegExp(r'(\w+):\s*"([^"]*)"').allMatches(body)) m.group(1)!: m.group(2)!,
+    };
+    expect(parsed, {for (final t in FitnessGoals.selectableTokens) t: FitnessGoals.label(t)});
+    final sw = stripComments(File('supabase/functions/_shared/tools/plan/switchGoal.ts').readAsStringSync());
+    final rg = stripComments(File('supabase/functions/_shared/tools/plan/regeneratePlanBlock.ts').readAsStringSync());
+    expect(sw.contains(r'${goalLabel(args.newGoal)}'), isTrue);
+    expect(sw.contains(r'${args.newGoal}'), isFalse, reason: 'the raw token must not reach the preview');
+    expect(rg.contains(r'${goalLabel(args.goal)}'), isTrue);
+    expect(rg.contains(r'${args.goal}'), isFalse, reason: 'the raw token must not reach the preview');
+  });
 }

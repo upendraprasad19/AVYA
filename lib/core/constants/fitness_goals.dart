@@ -128,7 +128,7 @@ class FitnessGoals {
 
   /// Where a legacy goal goes (Unit 3B: d4 Strength -> Build, with the Strength focus applied by
   /// `legacyGoalPatch`; d72 Recomposition -> Cut). Its keys are exactly [tokens] minus [selectableTokens], and equal
-  /// the goal gate's `kLegacyReachableOnlyGoalTokens` (pinned by `fitness_goals_selectable_test.dart`).
+  /// the goal gate's `kLegacyReachableOnlyGoalTokens` (pinned by `goal_list_selectable_test.dart`).
   static const Map<String, String> legacyTargets = {'strength': 'build_muscle', 'recompose': 'lose_fat'};
 
   /// What the coach's goal previews and the dispatcher say when a proposed goal is not selectable (a live coach

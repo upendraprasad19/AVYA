@@ -59,6 +59,10 @@ DateTime? utcDateFromIstDateStr(String dateStr) {
   return DateTime.utc(y, m, d);
 }
 
+/// The chat message the compass Switch-goal form sends (Unit 3B, d73: named as the chip shows it, Build / Cut /
+/// Maintain; the server tool's description maps the names to the tokens).
+String compassSwitchGoalMessage(String goalToken) => 'Switch my goal to ${FitnessGoals.label(goalToken)}';
+
 class CompassFormSheet extends StatefulWidget {
   final CompassAction action;
   final ValueChanged<String> onCompose;
@@ -114,7 +118,7 @@ class _CompassFormSheetState extends State<CompassFormSheet> {
             '${istDateStr(_targetDate!)}';
         break;
       case CompassAction.switchForm:
-        message = 'Switch my goal to ${_choice!.replaceAll('_', ' ')}';
+        message = compassSwitchGoalMessage(_choice!);
         break;
       case CompassAction.historyForm:
         message = 'Show my ${_textCtrl.text.trim()} history';

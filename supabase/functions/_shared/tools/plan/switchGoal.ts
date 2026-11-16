@@ -1,5 +1,6 @@
 import { z } from "npm:zod@3.25.76";
 import type { ToolDefinition } from "../types.ts";
+import { goalLabel } from "./goalLabels.ts";
 
 const schema = z.object({
   newGoal: z.enum([
@@ -36,7 +37,7 @@ export const switchGoalTool: ToolDefinition<Args> = {
       start_date: args.startDate ?? null,
     },
     confirmationClass: "destructive",
-    previewSummary: `Switch goal \u2192 ${args.newGoal} + regenerate ${
+    previewSummary: `Switch goal \u2192 ${goalLabel(args.newGoal)} + regenerate ${
       args.weeks ?? 4
     } weeks`,
   }),

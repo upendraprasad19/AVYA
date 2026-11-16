@@ -48,6 +48,11 @@ void main(List<String> args) {
       .map((m) => m.group(1)!)
       .toSet();
   if (tokens.isEmpty) problems.add('No FitnessGoals tokens parsed from fitness_goals.dart');
+  // Unit 3B B-pass: the client's selectable list must be exactly tokens minus the legacy set.
+  if (tokens.isNotEmpty) {
+    problems.addAll(selectableListProblems(
+        selectableSource: sot, tokens: tokens, legacyReachableOnly: kLegacyReachableOnlyGoalTokens));
+  }
 
   // Onboarding card keys.
   final cardKeys = (goalScreen == null)

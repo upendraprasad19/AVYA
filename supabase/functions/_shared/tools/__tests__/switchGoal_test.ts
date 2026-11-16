@@ -85,7 +85,7 @@ Deno.test("switchGoal — intentBuilder defaults weeks to 4 and startDate to nul
   assertEquals(intent.confirmationClass, "destructive");
   assertEquals(
     intent.previewSummary,
-    "Switch goal \u2192 build_muscle + regenerate 4 weeks",
+    "Switch goal \u2192 Build + regenerate 4 weeks",
   );
 });
 
@@ -99,7 +99,7 @@ Deno.test("switchGoal — intentBuilder uses supplied weeks", async () => {
   assertEquals(intent.payload.start_date, "2026-04-20");
   assertEquals(
     intent.previewSummary,
-    "Switch goal \u2192 lose_fat + regenerate 8 weeks",
+    "Switch goal \u2192 Cut + regenerate 8 weeks",
   );
 });
 

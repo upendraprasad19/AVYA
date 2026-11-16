@@ -1625,6 +1625,10 @@ class SyncService {
       // (small, indexed by user_id) and inexpensive to merge.
       await restoreLightweightAlways(userId);
     }
+    // Unit 3B (OI-487, B-pass): both branches merge the cloud profile over the local one, so a legacy goal the cloud
+    // still holds (a failed push, an old build on another device) comes back on every launch with local data, which
+    // never passes through /restoring. Heal it here too (same owner check as the restore wrapper).
+    await LegacyGoalHealer.run(userId, liveUid: () => _liveUserId);
   }
 
   /// day-swapper + sync-load Task 20 kill switch: `true` reverts

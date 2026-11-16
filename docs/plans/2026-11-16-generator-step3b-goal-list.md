@@ -228,7 +228,7 @@ Untouched. A `strength` / `recompose` value an old build writes is served exactl
   between the call and the lock writes nothing (`patchProfileWith` re-check), a goal saved selectable before the lock
   is left alone; the wrapper runs it only on a succeeded restore, with the captured uid, and with the title-heal switch
   closed.
-- `test/contracts/fitness_goals_selectable_test.dart`: `selectableTokens` literally `[build_muscle, lose_fat,
+- `test/contracts/goal_list_selectable_test.dart` (planned as `fitness_goals_selectable_test.dart`): `selectableTokens` literally `[build_muscle, lose_fat,
   general_fitness]`, `legacyTargets.keys == tokens - selectableTokens == kLegacyReachableOnlyGoalTokens`, targets
   selectable, labels Build / Cut / Maintain.
 - `test/contracts/session_minutes_by_level_test.dart`: `minutesForLevel` table (90 x beginner / intermediate /
@@ -312,4 +312,6 @@ every tester runs a 3B build: the founder confirms).
 - CI on the first push (2026-11-16): `blast_radius_sync_engine_platform_test.dart` failed: the sync engine now reaches
   `legacy_goal_healer.dart` and, through it, `fitness_goals.dart`, both below platform. Both take exact platform rules
   (the heal runs inside the restore wrapper and decides what the profile push sends; `legacyTargets` is its table) and
-  join the test's `_engine` list.
+  join the test's `_engine` list. The same run failed `session_duration_chip_wording_test.dart`, a source pin on the
+  old literal chip list `[30, 45, 60, 90]`; it now pins `sessionDurationOptions(_fitnessExperience)` and the
+  advanced-only list.

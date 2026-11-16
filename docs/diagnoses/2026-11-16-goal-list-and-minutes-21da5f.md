@@ -122,13 +122,24 @@ take exact platform rules in `docs/blast_radius.yaml` and join the test's `_engi
 profile push sends; `FitnessGoals.legacyTargets` is its table). The plan's round 4 had said the services catch-all
 covered the healer.
 
+The same run failed `test/contracts/session_duration_chip_wording_test.dart`: it pinned the Edit Profile picker's
+literal `const options = [30, 45, 60, 90];`, which this unit replaced with
+`sessionDurationOptions(_fitnessExperience)` (OI-488). The pin now follows the helper call and the advanced-only list;
+the behaviour is pinned in `session_minutes_by_level_test.dart`. The plan's source-pin sweep (`grep` of `test/` for
+moved literals) had searched for the `profileParamMinutes` callers, not for the old chip list.
+
 ## Accepted consequences
 
 - d71 / d72: a healed account's calories become Build's (full surplus) or Cut's (full deficit), at the heal, in the
   same write as the goal.
 - The heal does not regenerate the plan: the schedule keeps its rows until the next regeneration.
-- A failed profile push leaves the cloud on the legacy value; the next `/restoring` restore merges it back (and
-  recomputes the legacy targets) and the heal moves it again. Lightweight restores merge without healing.
+- A failed profile push leaves the cloud on the legacy value; the next restore merges it back (and recomputes the
+  legacy targets) and the heal moves it again. That is either restore: the `/restoring` wrapper, or (since the B-pass)
+  the launch-path `_restoreIfNeeded` that `checkAndSync` runs. Sign-in's `hydrateFromCloud` merges without healing,
+  and `/restoring` follows it (the post-auth gate). The `*ForSyncDomain` restore is flag-gated off.
+- With the restore's own `disable_profile_target_recompute` switch set, the heal moves the goal and leaves the old
+  goal's targets, exactly as the restore merge does with that switch (a manual, device-level switch; the push sends
+  that pair).
 - A stored 90 below advanced stays stored until the user's next Edit Profile save (no silent write); every generation
   plans it as 60 meanwhile.
 - The legacy rows, the engine's strength paths and the dead `_mapGoal` arms stay until no older build is in use
@@ -161,4 +172,36 @@ lib test, P = the enum parity test.
 | M14 | the experience-change reset removed | M | 1 |
 | M15 | the heal decides on a snapshot read BEFORE the lock | H | 1 (0 on the first race test: Hive updates its in-memory value synchronously, so a save that already held the lock was visible to the early read; the test now queues the save behind a first writer, the only real window) |
 | M16 | `sessionMinutesFromProfile` back to the raw value | M, R | 2 |
+
+## B-pass (2026-11-16, two Sonnet seats on head 794ded90)
+
+No P0 or P1. Every finding was fixed in this batch (`docs/reviews/generator-step3b-bpass.md`):
+
+- Stale `docs/sot_registry.yaml` line ranges for `edit_profile_screen.dart` (+55), `onboarding_provider.dart` (+1)
+  and `profile_write_service.dart` (`1-140` no longer held `updateField`): re-derived from the diff, anchors checked.
+- The heal's cloud leg (`patchProfileWith`'s `_fireSync`) had no test: `ProfileWriteService.debugOnFireSync` seam;
+  the heal pushes once on a write and never on a null patch or a failed owner check.
+- The `disable_bodyfat_calc` pass-through had no test: a body-fat fixture, Katch-McArdle vs Mifflin.
+- A legacy value the cloud still holds came back on every launch with local data (`checkAndSync` ->
+  `_restoreIfNeeded` -> `restoreLightweightAlways`, or `restoreFromCloud` on an empty device), which never passes
+  through `/restoring`: `_restoreIfNeeded` now heals after either branch (writer `sync_service.dart`
+  `_restoreIfNeeded`; reader every `primary_goal` reader).
+- d73 gaps: the legacy chat onboarding's labels (`_formatOptionLabel`), the compass message
+  (`compassSwitchGoalMessage`) and the server previews (`previewSummary` printed `lose_fat`; now
+  `_shared/tools/plan/goalLabels.ts`, pinned against `FitnessGoals.label`). The preview change ships with the ai-proxy
+  deploy (t306, founder go).
+- The minutes presence pin now refuses any other read of `session_duration_minutes` in the two param passers; the
+  Edit Profile down-then-up behaviour is pinned (60 stays until the user taps 90 again, by design).
+- The goal gate now also checks `FitnessGoals.selectableTokens` itself (`selectableListProblems`), so a new token in
+  neither list fails the gate.
+
+| # | Mutation | Tests run | Red |
+|---|---|---|---|
+| M17 | `patchProfileWith` stops firing the push (`if (wrote) {}`) | H | 1 |
+| M18 | the healer ignores `disable_bodyfat_calc` | H | 1 |
+| M19 | the launch-path heal removed | H | 2 |
+| M20 | the launch-path heal only in the lightweight branch | H | 1 |
+| M21 | `GOAL_LABELS` lose_fat -> "Lose fat" | P + Deno regeneratePlanBlock | 1 + 1 |
+| M22 | the compass message back to the raw token | G | 1 |
+| M23 | the real `FitnessGoals.selectableTokens` gains `strength` | L + the gate run | 1 + gate FAIL |
 

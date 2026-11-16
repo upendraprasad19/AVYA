@@ -1,5 +1,6 @@
 import { z } from "npm:zod@3.25.76";
 import type { ToolDefinition } from "../types.ts";
+import { goalLabel } from "./goalLabels.ts";
 
 const schema = z.object({
   weeks: z.number().int().min(1).max(12).describe(
@@ -50,7 +51,7 @@ export const regeneratePlanBlockTool: ToolDefinition<Args> = {
     },
     confirmationClass: "destructive",
     previewSummary: `Regenerate next ${args.weeks} weeks${
-      args.goal ? ` for ${args.goal}` : ""
+      args.goal ? ` for ${goalLabel(args.goal)}` : ""
     }${args.daysPerWeek ? ` (${args.daysPerWeek} days/week)` : ""}`,
   }),
 };

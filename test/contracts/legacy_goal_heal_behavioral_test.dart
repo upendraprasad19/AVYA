@@ -221,6 +221,41 @@ void main() {
       expect(stored()['daily_calories'], recomputeDerivedTargets(_profile('build_muscle'), now: _now)!['daily_calories']);
     });
 
+    test('the heal fires the profile push exactly once when it writes, never when it writes nothing', () async {
+      // The plan's "the normal profile push carries it to the cloud" (ProfileWriteService.patchProfileWith ->
+      // _fireSync). No Supabase user in tests, so the seam counts the push decision itself.
+      var pushes = 0;
+      ProfileWriteService.debugOnFireSync = () => pushes++;
+      addTearDown(() => ProfileWriteService.debugOnFireSync = null);
+      await put(_profile('strength'));
+      expect(await run(), isTrue);
+      expect(pushes, 1, reason: 'one write, one push');
+      expect(await run(), isFalse);
+      expect(pushes, 1, reason: 'a null patch (already healed) pushes nothing');
+      await put(_profile('recompose'));
+      expect(await run(live: () => 'someone-else'), isFalse);
+      var calls = 0;
+      expect(await run(live: () => ++calls == 1 ? kTestUserId : 'someone-else'), isFalse);
+      expect(pushes, 1, reason: 'a failed owner check (before or under the lock) pushes nothing');
+    });
+
+    test('the body-fat switch reaches the target recompute', () async {
+      // With a body fat on file the targets come from Katch-McArdle; disable_bodyfat_calc makes them Mifflin's.
+      final withFat = {..._profile('strength'), 'body_fat_percent': 12.0};
+      final healedFat = {...withFat, 'primary_goal': 'build_muscle', 'physique_focus': 'strength'};
+      final katch = recomputeDerivedTargets(healedFat, now: _now)!['daily_calories'];
+      final mifflin = recomputeDerivedTargets(healedFat, now: _now, bodyFatCalcDisabled: true)!['daily_calories'];
+      expect(katch, isNot(mifflin), reason: 'fixture precondition: the switch changes the calories');
+      await put(withFat);
+      expect(await run(), isTrue);
+      expect(stored()['daily_calories'], katch);
+      await put(withFat);
+      await HiveService.instance.configBox.put('disable_bodyfat_calc', true);
+      addTearDown(() => HiveService.instance.configBox.delete('disable_bodyfat_calc'));
+      expect(await run(), isTrue);
+      expect(stored()['daily_calories'], mifflin);
+    });
+
     test('the recompute kill switch (the restore\'s) moves the goal without the targets', () async {
       expect(LegacyGoalHealer.recomputeKillSwitch,
           SyncService.kDisableProfileTargetRecomputeKey); // ignore: invalid_use_of_visible_for_testing_member
@@ -244,6 +279,20 @@ void main() {
     expect(titleBlock.group(0)!.contains('LegacyGoalHealer'), isFalse, reason: 'not behind the title heal switch');
     expect(body.indexOf('LegacyGoalHealer.run'), lessThan(body.indexOf('_settleRestoreMarker(')));
     expect(body.indexOf('LegacyGoalHealer.run'), greaterThan(body.indexOf('_restoreFromCloudForUserCore()')));
-    expect(RegExp(r'LegacyGoalHealer\.run\(').allMatches(src).length, 1);
+    // Two call sites: this wrapper and the launch path (_restoreIfNeeded, the next test).
+    expect(RegExp(r'LegacyGoalHealer\.run\(').allMatches(src).length, 2);
+  });
+
+  test('PRESENCE (B-pass): the launch-path restore (both branches of _restoreIfNeeded) heals too', () {
+    // checkAndSync merges the cloud profile on every launch with local data (restoreLightweightAlways) or on an empty
+    // device (restoreFromCloud), neither of which passes through /restoring; a legacy value the cloud still holds
+    // comes back there. The heal follows BOTH branches (after the if / else, not inside one of them).
+    final src = _noComments(File('lib/core/services/sync_service.dart').readAsStringSync());
+    final start = src.indexOf('Future<void> _restoreIfNeeded(String userId)');
+    expect(start, greaterThanOrEqualTo(0));
+    final body = src.substring(start, src.indexOf('\n  }\n', start) + 4);
+    final tail = RegExp(r'await restoreLightweightAlways\(userId\);\s*\}\s*'
+        r'await LegacyGoalHealer\.run\(userId, liveUid: \(\) => _liveUserId\);\s*\}$');
+    expect(tail.hasMatch(body.trimRight()), isTrue, reason: body);
   });
 }

@@ -152,11 +152,17 @@ class ProfileWriteService {
   //  Internals
   // ─────────────────────────────────────────────────────────────
 
+  /// Test seam (Unit 3B B-pass): called once each time a write fires the profile push, before the signed-in check
+  /// (tests have no Supabase user, so the push itself is a no-op there).
+  @visibleForTesting
+  static void Function()? debugOnFireSync;
+
   /// Fire SyncService.syncProfileNow if we have a logged-in user.
   /// Fire-and-forget per docs/architecture/sync.md — Hive write already succeeded
   /// so a cloud push failure must not flip the local mutation's
   /// success bit.
   void _fireSync() {
+    debugOnFireSync?.call();
     final userId = SupabaseService.instance.currentUser?.id;
     if (userId == null || userId.isEmpty) return;
     unawaited(SyncService.instance.syncProfileNow(userId));
