@@ -36,6 +36,8 @@ import '../utils/date_utils.dart';
 import '../utils/exercise_name_identity.dart';
 import '../utils/ist_date.dart';
 import '../../shared/repositories/plan_engine/equipment_capability.dart';
+import '../../shared/repositories/plan_engine/finisher_safety.dart';
+import '../../shared/repositories/plan_engine/finisher_show_context.dart';
 import '../../shared/repositories/plan_engine/session_budget.dart' show SessionBudget;
 import '../../shared/repositories/plan_engine/session_estimate.dart' show budgetedDaySeconds, fallbackExerciseListSeconds;
 import '../../shared/repositories/plan_engine/training_history_analyzer.dart';
@@ -77,6 +79,10 @@ class ShortenDayResult {
   final int estimatedTrimmedMinutes;
   final List<String> droppedExerciseNames;
 
+  /// Unit 3C (OI-396, d79): the day's SHOWN cardio finisher was removed to fit the target (it goes first, before
+  /// any exercise).
+  final bool finisherDropped;
+
   const ShortenDayResult({
     required this.date,
     required this.originalExerciseCount,
@@ -84,6 +90,7 @@ class ShortenDayResult {
     required this.estimatedOriginalMinutes,
     required this.estimatedTrimmedMinutes,
     required this.droppedExerciseNames,
+    this.finisherDropped = false,
   });
 }
 
@@ -646,7 +653,9 @@ class SwapService {
         : <Map<String, dynamic>>[];
 
     final originalCount = exercises.length;
-    final originalEstimateSec = _estimateSeconds(scheduleMap, exercises);
+    // Unit 3C (OI-396, d79): the finisher the user sees counts in the day's time, and it is the first thing to go.
+    final shownFinisher = FinisherSafety.shownOfRow(scheduleMap, FinisherShowContextReader.read());
+    final originalEstimateSec = _estimateSeconds(scheduleMap, exercises, finisher: shownFinisher);
     final originalMinutes = (originalEstimateSec / 60).ceil();
 
     if (originalMinutes <= targetMinutes) {
@@ -675,10 +684,14 @@ class SwapService {
       return a.originalIndex.compareTo(b.originalIndex);
     });
 
+    // d79: from here on the finisher is gone (shown or hidden, its key is removed when the row is written: a hidden one
+    // brought back later by clearing the injury would put the day over the target the user set).
+    final finisherDropped = shownFinisher.isNotEmpty;
     final droppedNames = <String>[];
     while (indexed.length > 2) {
       final estimateSec = _estimateSeconds(
-          scheduleMap, indexed.map((e) => e.entry).toList(growable: false));
+          scheduleMap, indexed.map((e) => e.entry).toList(growable: false),
+          finisher: const []);
       if ((estimateSec / 60).ceil() <= targetMinutes) break;
       final dropped = indexed.removeLast();
       final name = (dropped.entry['exercise_name'] as String?) ??
@@ -688,7 +701,7 @@ class SwapService {
     }
 
     final keptEntries = indexed.map((e) => e.entry).toList(growable: false);
-    final keptEstimateSec = _estimateSeconds(scheduleMap, keptEntries);
+    final keptEstimateSec = _estimateSeconds(scheduleMap, keptEntries, finisher: const []);
     final keptMinutes = (keptEstimateSec / 60).ceil();
     if (keptMinutes > targetMinutes) {
       throw ShortenDayException(
@@ -703,6 +716,7 @@ class SwapService {
         indexed.map((e) => e.entry).toList(growable: false);
 
     scheduleMap['exercises'] = trimmedExercises;
+    scheduleMap.remove('finisher');
     scheduleMap['shortened_via'] = 'ai_coach';
     scheduleMap['shortened_at'] = DateTime.now().toIso8601String();
     await WorkoutWriteService.instance.upsertScheduled(
@@ -718,6 +732,7 @@ class SwapService {
       estimatedOriginalMinutes: originalMinutes,
       estimatedTrimmedMinutes: keptMinutes,
       droppedExerciseNames: droppedNames,
+      finisherDropped: finisherDropped,
     );
   }
 
@@ -763,9 +778,12 @@ class SwapService {
   /// cool-down items), so "shorten to 45 minutes" lands on about 45 minutes where
   /// the user reads it (B-pass R3 P2-2). An unreadable or empty list uses the shared
   /// `fallbackExerciseListSeconds` (the old sets x (60 + rest) sum).
-  int _estimateSeconds(
-      Map<String, dynamic> scheduleMap, List<Map<String, dynamic>> exercises) {
-    final budgeted = budgetedDaySeconds({...scheduleMap, 'exercises': exercises});
+  ///
+  /// Unit 3C (OI-396): [finisher] is the SHOWN finisher still on the day (none once d79 removed it); the
+  /// unreadable-day fallback ignores it (accepted, like `homeCardMinutes`).
+  int _estimateSeconds(Map<String, dynamic> scheduleMap, List<Map<String, dynamic>> exercises,
+      {required List<Map<dynamic, dynamic>> finisher}) {
+    final budgeted = budgetedDaySeconds({...scheduleMap, 'exercises': exercises}, finisher: finisher);
     return budgeted?.round() ?? fallbackExerciseListSeconds(exercises);
   }
 

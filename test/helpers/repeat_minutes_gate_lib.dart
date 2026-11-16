@@ -61,7 +61,7 @@ double _mainSeconds(WorkoutDay d) => SessionBudget.estimateDaySecondsFromPlanDay
       ],
     }, const {}, rowsByName: _rowsByName ??= {
       for (final r in ExerciseRepository.instance.getAll()) '${r['name']}'.toLowerCase(): r,
-    });
+    }, finisher: const []); // main seconds only (Unit 3C: the finisher is priced apart)
 
 /// The library rows by lowercase name, so the gate prices a row by its library archetype as the allocator does
 /// (B-pass seat B, finding 4), not by the plan row's own first type.

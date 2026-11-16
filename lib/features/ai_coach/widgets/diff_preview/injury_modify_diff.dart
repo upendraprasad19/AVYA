@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import '../../../../core/services/error_telemetry.dart';
 import '../../../../core/theme/colors.dart';
 import '../../models/tool_intent.dart';
+import '../../services/coach_injury_profile.dart';
 import '../../services/injury_swap_planner.dart';
 import 'package:icanbefitter/core/theme/typography.dart';
 
@@ -24,6 +25,9 @@ class _InjuryModifyDiffState extends State<InjuryModifyDiff> {
   List<InjurySwap>? _swaps;
   String? _error;
 
+  /// Unit 3C (d77 / d78): the token confirming will add to the profile, or null (no line).
+  String? _addsToken;
+
   @override
   void initState() {
     super.initState();
@@ -38,7 +42,13 @@ class _InjuryModifyDiffState extends State<InjuryModifyDiff> {
         daysAhead: (widget.intent.payload['daysAhead'] as num?)?.toInt() ?? 7,
       );
       InjurySwapPlanner.instance.cacheSwaps(widget.intent.id, swaps);
-      if (mounted) setState(() => _swaps = swaps);
+      final adds = coachInjuryTokenToAdd(widget.intent.payload['bodyPart'] as String?);
+      if (mounted) {
+        setState(() {
+          _swaps = swaps;
+          _addsToken = adds;
+        });
+      }
     } catch (e) {
       final errStr = e.toString();
       final clipped = errStr.length > 500 ? errStr.substring(0, 500) : errStr;
@@ -68,12 +78,30 @@ class _InjuryModifyDiffState extends State<InjuryModifyDiff> {
     }
     final daysAhead =
         (widget.intent.payload['daysAhead'] as num?)?.toInt() ?? 7;
+    final addsLine = _addsToken == null
+        ? null
+        : Padding(
+            key: const ValueKey('injury_adds_profile_line'),
+            padding: const EdgeInsets.only(bottom: 8),
+            child: Text(
+              coachInjuryAddsLine(_addsToken!),
+              style: AppTypography.bodySm.copyWith(fontWeight: FontWeight.w600, color: AppColors.accent),
+            ),
+          );
     if (_swaps!.isEmpty) {
       return Padding(
         padding: const EdgeInsets.all(16),
-        child: Text(
-          'No exercises in the next $daysAhead days hit this body part — no changes needed. Confirm to record the injury anyway.',
-          style: AppTypography.bodyM.copyWith(color: AppColors.textSecondary),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            ?addsLine,
+            Text(
+              _addsToken == null
+                  ? 'No exercises in the next $daysAhead days hit this body part — no changes needed. Confirm to record the injury anyway.'
+                  : 'No exercises in the next $daysAhead days hit this body part — no changes needed. Confirm to save the injury to your profile.',
+              style: AppTypography.bodyM.copyWith(color: AppColors.textSecondary),
+            ),
+          ],
         ),
       );
     }
@@ -87,6 +115,7 @@ class _InjuryModifyDiffState extends State<InjuryModifyDiff> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        ?addsLine,
         Padding(
           padding: const EdgeInsets.only(bottom: 8),
           child: Text(

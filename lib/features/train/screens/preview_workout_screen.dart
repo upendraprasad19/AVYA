@@ -131,6 +131,7 @@ class _WorkoutPreviewBody extends StatelessWidget {
         const <Map>[];
     final warmupCount = (workout['warmup_count'] as int?) ?? 0;
     final cooldownCount = (workout['cooldown_count'] as int?) ?? 0;
+    final finisherCount = (workout['finisher_count'] as int?) ?? 0;
 
     return SingleChildScrollView(
       padding: const EdgeInsets.fromLTRB(18, 8, 18, 32),
@@ -167,11 +168,12 @@ class _WorkoutPreviewBody extends StatelessWidget {
           ),
 
           // ── Warmup/cooldown mini-note ──────────────────────────────
-          if (warmupCount > 0 || cooldownCount > 0) ...[
+          if (warmupCount > 0 || finisherCount > 0 || cooldownCount > 0) ...[
             const SizedBox(height: 4),
             Text(
               '${[
                 if (warmupCount > 0) '$warmupCount warm-up',
+                if (finisherCount > 0) '$finisherCount finisher',
                 if (cooldownCount > 0) '$cooldownCount cool-down',
               ].join(' · ')} exercises included',
               style: AppTypography.monoXs.copyWith(

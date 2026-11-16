@@ -591,6 +591,10 @@ class WorkoutScheduleReadService {
               if (workoutDay.cooldown.isNotEmpty)
                 'cooldown':
                     workoutDay.cooldown.map((e) => e.toMap()).toList(),
+              // Unit 3C (OI-396): the finisher, like generateAndSchedule (this writer dropped it: writer drift).
+              if (workoutDay.finisher.isNotEmpty)
+                'finisher':
+                    workoutDay.finisher.map((e) => e.toMap()).toList(),
               'week_character': weekPlan.weekCharacter,
               'status': 'planned',
               'completed_at': null,

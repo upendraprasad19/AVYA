@@ -85,11 +85,14 @@ void main() {
     byId = {for (final r in rows) (r['id'] ?? r['name']).toString(): r};
     HiveService.instance.markInitializedForTests();
     await HiveUserSession.openForUser(testUser);
+    // Unit 3C (diagnose f3c9a6, plan §2.2): this gate measures the weekly minimum (2C-b), so every world runs with the
+    // cardio finisher switch set (today's finisher, nothing reserved, none shown).
+    await HiveService.instance.configBox.put('disable_cardio_finisher_shown', true);
   });
 
   tearDownAll(() async {
     final config = HiveService.instance.configBox;
-    for (final k in const ['disable_balanced_week', 'disable_lead_first', 'disable_day_floor']) {
+    for (final k in const ['disable_balanced_week', 'disable_lead_first', 'disable_day_floor', 'disable_cardio_finisher_shown']) {
       await config.delete(k);
     }
     await HiveUserSession.closeAll();
@@ -151,7 +154,8 @@ void main() {
                   ],
                   'min': () {
                     try {
-                      return SessionBudget.estimateDayMinutesFromPlanDay(d.toMap(), byId, rowsByName: byName);
+                      return SessionBudget.estimateDayMinutesFromPlanDay(d.toMap(), byId,
+                          rowsByName: byName, finisher: const [] /* the finisher switch is set: no screen shows one */);
                     } catch (_) {
                       return null;
                     }

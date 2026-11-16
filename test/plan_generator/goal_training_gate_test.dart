@@ -100,10 +100,15 @@ void main() {
     byName = {for (final r in rows) (r['name'] as String).toLowerCase(): r};
     HiveService.instance.markInitializedForTests();
     await HiveUserSession.openForUser(testUser);
+    // Unit 3C (diagnose f3c9a6, plan §2.2): this gate measures the goal training (3A), so both of its worlds run with the
+    // cardio finisher switch set (today's finisher, nothing reserved). The finisher's own cost is measured by
+    // cardio_finisher_reservation_behavioral_test and the diagnose doc.
+    await HiveService.instance.configBox.put('disable_cardio_finisher_shown', true);
   });
 
   tearDownAll(() async {
     await HiveService.instance.configBox.delete('disable_goal_training');
+    await HiveService.instance.configBox.delete('disable_cardio_finisher_shown');
     await HiveUserSession.closeAll();
     GuardedBox.testBypassOwnership = false;
     await Hive.close();
@@ -144,7 +149,8 @@ void main() {
         }
         mins.add(() {
           try {
-            return SessionBudget.estimateDayMinutesFromPlanDay(d.toMap(), const {}, rowsByName: byName);
+            return SessionBudget.estimateDayMinutesFromPlanDay(d.toMap(), const {},
+                rowsByName: byName, finisher: const [] /* the finisher switch is set: no screen shows one */);
           } catch (_) {
             return null;
           }

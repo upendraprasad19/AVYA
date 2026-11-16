@@ -325,10 +325,16 @@ class SessionBudget {
   ///
   /// Never throws: a non-map entry is skipped, a missing list counts as none and a
   /// corrupt number lands on a default.
+  ///
+  /// Unit 3C (OI-396): [finisher] is the SHOWN finisher's maps (`FinisherSafety.shownOfRow`), priced by
+  /// [finisherSecondsOfPlanDay]; the stored row's own `finisher` key is never read here, because a finisher the
+  /// reader rule hides (an injury, the switch) is not part of the day the user sees. Required, so every caller says
+  /// which finisher it means (`const []` = none).
   static double estimateDaySecondsFromPlanDay(
     Map<dynamic, dynamic> planDay,
     Map<String, Map<String, dynamic>> rowsById, {
     Map<String, Map<String, dynamic>> rowsByName = const {},
+    required List<Map<dynamic, dynamic>> finisher,
   }) {
     var total = 0.0;
     for (final e in _mapsOf(planDay['exercises'])) {
@@ -350,7 +356,7 @@ class SessionBudget {
         total += _itemSeconds(item);
       }
     }
-    return total;
+    return total + finisherSecondsOfPlanDay(finisher);
   }
 
   /// [estimateDaySecondsFromPlanDay] rounded to whole minutes.
@@ -358,8 +364,25 @@ class SessionBudget {
     Map<dynamic, dynamic> planDay,
     Map<String, Map<String, dynamic>> rowsById, {
     Map<String, Map<String, dynamic>> rowsByName = const {},
+    required List<Map<dynamic, dynamic>> finisher,
   }) =>
-      (estimateDaySecondsFromPlanDay(planDay, rowsById, rowsByName: rowsByName) / 60).round();
+      (estimateDaySecondsFromPlanDay(planDay, rowsById, rowsByName: rowsByName, finisher: finisher) / 60)
+          .round();
+
+  /// Unit 3C (OI-396): a stored finisher's time, the rule `CardioFinisher.secondsOf` prices a generated one with
+  /// (`duration_seconds` + `sets` x `rest_seconds` per item), so the reserved time and the shown minutes agree.
+  /// Total: a non-map entry is skipped, an absent or unreadable `duration_seconds` is 0, `sets` absent 1,
+  /// `rest_seconds` absent 0, numeric strings are parsed; never throws.
+  static int finisherSecondsOfPlanDay(Iterable<Object?> finisher) {
+    var total = 0;
+    for (final item in finisher.whereType<Map<dynamic, dynamic>>()) {
+      final work = (_intOf(item['duration_seconds']) ?? 0).clamp(0, 36000);
+      final sets = (_intOf(item['sets']) ?? 1).clamp(0, 100);
+      final rest = (_intOf(item['rest_seconds']) ?? 0).clamp(0, 3600);
+      total += work + sets * rest;
+    }
+    return total;
+  }
 
   static Iterable<Map<dynamic, dynamic>> _mapsOf(Object? raw) =>
       raw is List ? raw.whereType<Map<dynamic, dynamic>>() : const [];
@@ -562,10 +585,12 @@ class SessionBudgetContext {
     required this.lighterPhase,
     required Set<String> focusGroups,
     this.finisherSeconds = 0,
+    Map<int, int> finisherSecondsByDay = const {},
     this.quadPrimaryCreditsGlutes = true,
     this.goalTraining = const GoalTraining(),
     required Map<String, String> archetypeByName,
-  })  : focusGroups = Set.unmodifiable(focusGroups),
+  })  : finisherSecondsByDay = Map.unmodifiable(finisherSecondsByDay),
+        focusGroups = Set.unmodifiable(focusGroups),
         archetypeByName = Map.unmodifiable(archetypeByName);
 
   /// The session length, already resolved ([SessionBudget.resolveMinutes]).
@@ -582,8 +607,16 @@ class SessionBudgetContext {
   /// Budget muscle groups the user wants more of (`BudgetMuscleGroups.of`).
   final Set<String> focusGroups;
 
-  /// Always 0 while no screen shows the finisher (Ruling 6).
+  /// Seconds taken from EVERY day's budget (Ruling 6's original hook; 0 in production).
   final int finisherSeconds;
+
+  /// Unit 3C (OI-396, d61): the cardio finisher's seconds on the days that carry it (day index in the week, the same
+  /// index every ledger uses), taken from those days' budgets only. Empty = no finisher time reserved (the switch
+  /// `disable_cardio_finisher_shown`, a goal without cardio, a plan before 3C).
+  final Map<int, int> finisherSecondsByDay;
+
+  /// The finisher seconds reserved on [day].
+  int finisherSecondsOn(int day) => finisherSeconds + (finisherSecondsByDay[day] ?? 0);
 
   /// OI-454 co-group policy. True (the default) credits Glutes for every exercise
   /// that lists them. False: an exercise whose first listed muscle is Quads credits
@@ -625,9 +658,12 @@ class BudgetLedger {
   BudgetLedger(this.ctx, int dayCount, {bool allowance = false})
       : _spentSeconds = List<double>.filled(dayCount, 0.0),
         _session = List<Map<String, int>>.generate(dayCount, (_) => <String, int>{}),
-        _dayBudgetSeconds = (ctx.minutes - SessionBudget.warmCoolMinutes(ctx.minutes)) * 60.0 -
-            ctx.finisherSeconds +
-            (allowance && ctx.minutes < 60 ? SessionBudget.allowanceSeconds.toDouble() : 0.0),
+        _dayBudgetSeconds = List<double>.generate(
+            dayCount,
+            (d) =>
+                (ctx.minutes - SessionBudget.warmCoolMinutes(ctx.minutes)) * 60.0 -
+                ctx.finisherSecondsOn(d) +
+                (allowance && ctx.minutes < 60 ? SessionBudget.allowanceSeconds.toDouble() : 0.0)),
         forcingBound =
             allowance && ctx.minutes < 60 ? 0.0 : SessionBudget.maxForcedOverSeconds.toDouble();
 
@@ -636,7 +672,7 @@ class BudgetLedger {
   final double forcingBound;
 
   final SessionBudgetContext ctx;
-  final double _dayBudgetSeconds;
+  final List<double> _dayBudgetSeconds;
   final List<double> _spentSeconds;
   final List<Map<String, int>> _session;
   final Map<String, int> _week = <String, int>{};
@@ -666,7 +702,7 @@ class BudgetLedger {
   int session(int day, String group) => _session[day][group] ?? 0;
 
   /// Seconds left on [day] after everything [add]ed so far.
-  double secondsLeft(int day) => _dayBudgetSeconds - _spentSeconds[day];
+  double secondsLeft(int day) => _dayBudgetSeconds[day] - _spentSeconds[day];
 
   /// The seconds spent on [day] so far, and an exact reset to a value read from it: a trial that subtracts and re-adds
   /// a fractional cost can leave a 1e-13 residue that flips a later strict [fits] (Unit 2E, round 1 A7).

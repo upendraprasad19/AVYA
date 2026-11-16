@@ -51,12 +51,15 @@ void main() {
     box.put('disable_balanced_week', true);
     // Unit 3A: the fixture predates the goal table, so its switch is set too.
     box.put('disable_goal_training', true);
+    // Unit 3C (OI-396): the fixture predates the shown / timed finisher.
+    box.put('disable_cardio_finisher_shown', true);
   }
 
   void clearFlags() {
     setFlags(floor: true, leadFirst: true);
     HiveService.instance.configBox.delete('disable_balanced_week');
     HiveService.instance.configBox.delete('disable_goal_training');
+    HiveService.instance.configBox.delete('disable_cardio_finisher_shown');
   }
 
   /// key -> (floor on?, lead-first on?, persona)

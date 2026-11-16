@@ -72,7 +72,7 @@ void main() {
   }
 
   double seconds(Map<String, dynamic> e) =>
-      SessionBudget.estimateDaySecondsFromPlanDay({'exercises': [e]}, const {});
+      SessionBudget.estimateDaySecondsFromPlanDay({'exercises': [e]}, const {}, finisher: const []);
 
   test('a heavy compound swapped for an isolation takes the isolation rest, and back', () async {
     final toIso = await swap('heavy', 'iso', [planned('heavy', 150)]);

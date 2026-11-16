@@ -16,6 +16,11 @@
 // (d63's class). No build_muscle, strength, injury or owned key moves. With the goal training off everywhere and the
 // d65 floor change reverted, the old fixture measured back exactly; `disable_goal_training` set equals main
 // (goal_training_kill_switch_golden_test).
+// Unit 3C (diagnose f3c9a6, 2026-11-16) changed 410 keys: lose_fat 240, general_fitness 170, nothing else
+// (finisher_attribution_golden_test). (1) With the finisher's time not reserved, ON and OFF differ only in each day's
+// `finisher` maps; (2) with it, every build_muscle and strength persona equals OFF, and of the 3,123 changed days 2,610
+// carry the finisher (the other 513 move through the shared weekly ledger). `disable_cardio_finisher_shown` set equals
+// main 862f0bc2 (finisher_kill_switch_golden_test).
 //
 //   RECORD_GENERATOR_GOLDEN=1 TZ=Asia/Kolkata flutter test test/plan_generator/generator_golden_test.dart
 //
@@ -92,7 +97,7 @@ void main() {
           actual.entries.toList()..sort((a, b) => a.key.compareTo(b.key)));
       File(_fixturePath).writeAsStringSync(
           '${const JsonEncoder.withIndent('  ').convert({
-                '_meta': {'recorded_on': 'Unit 2C-a (the balanced week, disable_balanced_week default ON; seed v27)', 'personas': actual.length},
+                '_meta': {'recorded_on': 'Unit 3C (the cardio finisher shown and reserved, disable_cardio_finisher_shown default ON; seed v27)', 'personas': actual.length},
                 ...sorted,
               })}\n');
     }

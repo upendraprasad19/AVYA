@@ -11,6 +11,7 @@ import '../../../core/services/error_telemetry.dart';
 import '../../../core/services/hive_service.dart';
 import '../../../core/services/completion_prompt_store.dart';
 import '../../../core/services/hive_user_session.dart';
+import '../../../core/utils/injury_vocab.dart';
 import '../../../core/utils/ist_date.dart';
 import '../../../core/services/subscription_service.dart';
 import '../../../core/services/swap_service.dart';
@@ -28,6 +29,7 @@ import '../../nutrition/providers/nutrition_provider.dart'
         macroTargetsProvider,
         weeklyNutritionProvider;
 import '../../profile/services/profile_write_service.dart';
+import '../../../shared/repositories/user_repository.dart';
 import '../../profile/providers/profile_provider.dart'
     show userProfileProvider, userStatsProvider;
 import '../../train/providers/train_provider.dart'
@@ -42,6 +44,7 @@ import '../providers/ai_coach_provider.dart' show chatHistoryProvider;
 import '../providers/pending_tool_intents_provider.dart'
     show pendingToolIntentsProvider;
 import '../models/tool_intent.dart';
+import 'coach_injury_profile.dart';
 import 'coach_meal_log.dart';
 import 'hotel_workout_planner.dart';
 import 'injury_swap_planner.dart';
@@ -74,6 +77,14 @@ class ConcurrentEditException implements Exception {
   const ConcurrentEditException(this.reason);
   @override
   String toString() => 'ConcurrentEditException: $reason';
+}
+
+/// The token a `modify_workout_for_injury` result saved to the profile (`profile_injury_added`), or null.
+String? profileInjuryAdded(ToolExecutionResult result) {
+  final data = result.data;
+  if (data is! Map) return null;
+  final token = data['profile_injury_added'];
+  return token is String && token.isNotEmpty ? token : null;
 }
 
 /// Central dispatcher for AI coach tool intents.
@@ -197,6 +208,13 @@ class ToolDispatcher {
           unawaited(ErrorTelemetry.recordNonFatal(e, st,
               reason: 'tool_dispatcher_day_swap_invalidate'));
         }
+      }
+
+      // Unit 3C (OI-396, d77): a coach injury saved to the profile refreshes the profile and plan readers on EVERY
+      // outcome (the all-swaps-failed failure still wrote the token), before the failure early return.
+      if (intent.type == 'modify_workout_for_injury' && profileInjuryAdded(result) != null) {
+        _invalidateProfileProviders(ref);
+        if (!result.success) _invalidateWorkoutProviders(ref);
       }
 
       if (!result.success) return result;
@@ -663,8 +681,51 @@ class ToolDispatcher {
     }
   }
 
+  /// Unit 3C (OI-396, d77): the extraction-lock call, a seam so a test can observe it and its order. Default: the
+  /// real RPC wrapper (2 attempts, non-fatal).
+  @visibleForTesting
+  static Future<void> Function(List<String> fields) lockFields = UserRepository.lockCoachExtractionFields;
+
+  /// Unit 3C (OI-396, d77): how long the tool waits for [lockFields] before carrying on.
+  @visibleForTesting
+  static Duration lockFieldsTimeout = const Duration(seconds: 4);
+
+  /// Unit 3C (OI-396, founder d77 / d78): saves the coach-reported injury to `profile['injuries']` as its canonical
+  /// token ([InjuryVocab.coachPartToken]) under the profile lock, then locks `injuries` against chat extraction (the
+  /// user confirmed it, like an Edit Profile chip). Best effort: returns the token written, or null (no profile, no
+  /// token, already present, a changed owner, or any failure; never throws, so applied swaps stay applied).
+  @visibleForTesting
+  Future<String?> saveCoachInjuryToProfileForTest(String? bodyPart, {required String? owner}) =>
+      _saveCoachInjuryToProfile(bodyPart, owner: owner);
+
+  Future<String?> _saveCoachInjuryToProfile(String? bodyPart, {required String? owner}) async {
+    final token = InjuryVocab.coachPartToken(bodyPart);
+    if (token == null || owner == null) return null;
+    try {
+      final wrote = await ProfileWriteService.instance.patchProfileWith(
+        (current) => coachInjuryProfilePatch(current, token),
+        stillOwner: () => HiveUserSession.currentOwnerFullId == owner,
+      );
+      if (!wrote) return null;
+      try {
+        await lockFields(const ['injuries']).timeout(lockFieldsTimeout);
+      } catch (e) {
+        // Accepted residue: after a timeout an extraction may run before the lock lands.
+        debugPrint('[ToolDispatcher] injuries lock did not finish: $e');
+      }
+      return token;
+    } catch (e, st) {
+      debugPrint('[ToolDispatcher] coach injury profile write failed: $e');
+      unawaited(ErrorTelemetry.recordNonFatal(e, st, reason: 'tool_dispatch_coach_injury_profile_write'));
+      return null;
+    }
+  }
+
   Future<ToolExecutionResult> _executeModifyWorkoutForInjury(
       ToolIntent intent) async {
+    // Unit 3C (d77): the Hive owner, captured before the first await (the swap loop); the profile write refuses if
+    // it changed.
+    final owner = HiveUserSession.currentOwnerFullId;
     final swaps = InjurySwapPlanner.instance.getCachedSwaps(intent.id);
     if (swaps == null) {
       return const ToolExecutionResult.failure(
@@ -704,10 +765,16 @@ class ToolDispatcher {
       debugPrint('[ToolDispatcher] coach_memory injury update failed: $e');
     }
 
+    // Unit 3C (d77 / d78): the injury goes to the profile too (also when every swap failed: the injury is real).
+    final added = await _saveCoachInjuryToProfile(intent.payload['bodyPart'] as String?, owner: owner);
+
     InjurySwapPlanner.instance.clearCache(intent.id);
 
     if (errors.isEmpty) {
-      return ToolExecutionResult.success(data: {'swaps': results});
+      return ToolExecutionResult.success(data: {
+        'swaps': results,
+        'profile_injury_added': ?added,
+      });
     } else if (results.isEmpty) {
       final aggregated = errors.join('; ');
       final clipped = aggregated.length > 500
@@ -716,6 +783,12 @@ class ToolDispatcher {
       unawaited(ErrorTelemetry.logEvent(
           'tool_dispatch_modify_workout_for_injury_failed',
           message: clipped));
+      if (added != null) {
+        return ToolExecutionResult.failure(
+          "Couldn't change your workouts. ${InjuryVocab.chipLabel(added)} was added to your injuries.",
+          data: {'profile_injury_added': added},
+        );
+      }
       return ToolExecutionResult.failure(
         'Could not modify any workouts: ${errors.join("; ")}',
       );
@@ -723,6 +796,7 @@ class ToolDispatcher {
       return ToolExecutionResult.success(data: {
         'swaps': results,
         'partial_errors': errors,
+        'profile_injury_added': ?added,
       });
     }
   }

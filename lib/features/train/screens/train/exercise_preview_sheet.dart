@@ -311,10 +311,25 @@ extension _ExercisePreviewSheet on _TrainScreenState {
                                   AppColors.accent,
                                 );
                               }),
+                              // Unit 3C (OI-396): the cardio finisher, after the main lifts.
+                              if (day.finisher.isNotEmpty) ...[
+                                const SizedBox(height: 8),
+                                _CollapsibleExerciseSection(
+                                  key: const ValueKey('finisher_section'),
+                                  label: 'FINISHER',
+                                  color: AppColors.accentHi,
+                                  exercises: day.finisher,
+                                  trailing: FinisherSafety.minutesLabel(day.finisherSeconds),
+                                  buildRow: (ex) => _buildPreviewExerciseRow(
+                                    ex, null, AppColors.accentHi,
+                                  ),
+                                ),
+                              ],
                               // Cool-down section (Bug #15a: collapsed by default)
                               if (day.cooldown.isNotEmpty) ...[
                                 const SizedBox(height: 8),
                                 _CollapsibleExerciseSection(
+                                  key: const ValueKey('cooldown_section'),
                                   label: 'COOL-DOWN',
                                   color: AppColors.info,
                                   exercises: day.cooldown,
@@ -353,7 +368,10 @@ extension _ExercisePreviewSheet on _TrainScreenState {
   Widget _buildPreviewExerciseRow(ExerciseData ex, int? number, Color color) {
     // Format detail based on logging type
     String detail;
-    if (ex.loggingType == 'timed') {
+    if (ex.detailText != null) {
+      // Unit 3C: a finisher row's own line (`8 rounds · 30s fast / 30s slow`).
+      detail = ex.detailText!;
+    } else if (ex.loggingType == 'timed') {
       // ExerciseData.reps is now a clean numeric string for timed exercises
       // (set by _parseTimedDurationSecs in train_provider.dart). Defensive
       // fallback to 30s if upstream parsing somehow failed (Bug #16 guard).

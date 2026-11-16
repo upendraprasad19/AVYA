@@ -6119,7 +6119,7 @@ To plan (full diagnose template, recurrence class): keep `durationSec` for `card
 ## OI-396 — Cardio finisher is generated but no screen shows it
 
 - **Status**: OPEN
-- **Blocked on**: Batch B1 and B2 landing first (founder 2026-10-22), then the founder's rule-14 OK to edit `plan_generator.dart` (CLAUDE.md §4.4 rule 14).
+- **Blocked on**: the founder's device check (generator board t308): the FINISHER section on Train and the active workout, an injured profile (bike in a gym, none at home), Home minutes == Train minutes. The code shipped with Unit 3C (generator-step3c, diagnose `f3c9a6`); the two model-facing tool descriptions go live with the ai-proxy deploy (founder go).
 - **Verified**: 2026-10-23 — `CardioFinisher.attach` (`lib/shared/repositories/plan_engine/cardio_finisher.dart:17`, called from `plan_generator.dart:324`) writes `WorkoutDay.finisher`; `workout_schedule_read_service.dart:301-303` carries it, and no screen renders it (found in the B2 plan review).
 - **Identified**: 2026-10-23 · filed via mint_oi.sh from branch `library-batch-b`
 
@@ -6128,6 +6128,8 @@ To plan (full diagnose template, recurrence class): keep `durationSec` for `card
 **Founder decision (2026-10-22).** Show it after the main lifts, injury-safe: an injured user gets Stationary Bike Sprints in a gym and no finisher at home.
 
 **Done when.** The finisher renders after the main lifts; `CardioFinisher.attach` receives the user's injuries through a `plan_generator.dart` pass-through (needs the rule-14 OK) and applies the rule above; B2's `SessionBudgetContext.finisherSeconds` is set from the finisher it attaches (B2 reserves 0 today, Ruling 6); a behavioural test covers an injured gym user, an injured home user and an uninjured user.
+
+**Unit 3C (2026-11-16, diagnose `f3c9a6`).** Built: `CardioFinisher.plan` decides the finisher before sizing (any injury -> the bike in a gym, none at home, d74; under 60 minutes the 4-minute mini HIIT, d76) and `SessionBudgetContext.finisherSecondsByDay` reserves its time on those days (d61); one read rule `FinisherSafety` behind every screen and minutes reader; a coach injury goes to the profile (d77 / d78); `shortenDay` drops the finisher first (d79). Kill switch `disable_cardio_finisher_shown`. Tests: `cardio_finisher_reservation_behavioral_test.dart`, `finisher_display_behavioral_test.dart`, `cardio_finisher_shown_pure_test.dart`. Closes after the device check above.
 
 ## OI-391 — Cardio duration cap: workout_log_sets duration_secs CHECK widened from 3600 to 21600 and the push clamp aligned (OI-389 Batch 2; needs founder go for the live migration apply)
 
@@ -7254,3 +7256,14 @@ Diet plan Unit 4a hides Supplements from anyone under 18 (`kSupplementsMinAgeYea
 **What it is.** Unit 3B (diagnose `21da5f`, plan `docs/plans/2026-11-16-generator-step3b-goal-list.md`, founder d4 / d69 / d71 / d72) makes Build, Cut and Maintain the only goals a user or the coach can choose (`FitnessGoals.selectableTokens`) and moves a stored `strength` / `recompose` goal after every successful restore (`LegacyGoalHealer`). The two rows stay in `FitnessGoals._byToken` (and `kLegacyReachableOnlyGoalTokens`) because a STORED value can still hold them while an older build is in use; the engine still serves them: the `strength` plan goal (`split_resolver.dart` the V3 / V4 Squat / Bench / Deadlift splits, `exercise_selector.dart` the `softFor` arm and `:763`, `session_budget.dart` the `strength` rows of `_bands` / `_caps` / `_goalBands`, `goal_reps.dart` comments), `cardio_finisher.dart`'s `recompose` arm, the dead `plan_screen._mapGoal` / `target_weight_check.dart` arms, the label arms in `onboarding_chat_screen.dart`, and the server copy branches (`morning-alert/message.ts`, `future-prediction/index.ts`).
 
 **Done when.** With no older build in use: the two rows, the allowlist entries, the engine paths and the arms above are deleted; the golden persona grid drops `strength` (`test/helpers/generator_golden_personas.dart`, 1,010 -> 770; the audit 2,304 -> 1,728) with every remaining key byte-identical; `LegacyGoalHealer` stays (or is deleted with a stated reason). Round 1 of the 3B plan review measured the test and fixture churn at about 70 files. Blast radius `platform`, its own plan and x2 review.
+
+## OI-516 — Delete the disable_cardio_finisher_shown kill switch and its OFF fixture after the 3C device check
+
+- **Status**: OPEN
+- **Blocked on**: the founder's 3C device check (OI-396, generator board t308)
+- **Verified**: never
+- **Identified**: 2026-11-16 · filed via mint_oi.sh from branch `generator-step3c`
+
+**What it is.** Unit 3C (diagnose `f3c9a6`, plan `docs/plans/2026-11-16-generator-step3c-cardio-finisher.md`, founder d56, d61, d74-d79) ships the shown, injury-safe, timed cardio finisher behind `disable_cardio_finisher_shown` (`PlanEngineFlags.cardioFinisherShownEnabled`, default ON). Set, the engine builds today's finisher (no round rest, injuries ignored, nothing reserved) and no screen shows one.
+
+**Done when.** After the device check: the switch, its OFF branches (`CardioFinisher.plan`'s `!enabled` path, `FinisherShowContext.enabled`), `test/fixtures/generator_golden_hashes_finisher_off.json`, `finisher_kill_switch_golden_test.dart` and the switch lines the gates set for their OFF worlds are removed in one batch (CLAUDE.md §4.6 step 4); `CardioFinisher.debugReserve` stays (a test seam). Gates that measure another unit and set the switch (`goal_training_gate_test`, `weekly_minimum_gate_test`, `oi489_timed_hold_real_engine_test` Ruling 5c) re-record their digests in the finisher world in that batch.
