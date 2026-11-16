@@ -12,6 +12,7 @@ import { buildDayMap, istDatesEnding } from "../_shared/exercise_day.ts";
 import type { SummaryRow } from "../_shared/live_exercise_rows.ts";
 import { fetchWleWindow } from "../_shared/wle_window_read.ts";
 import { weekWorkoutRows } from "./week_rows.ts";
+import { reportWeekLineFor } from "../_shared/hold_week.ts";
 import {
   asAuthoredPrompt, sanitizeIdentifier
 } from "../_shared/sanitize_for_prompt.ts";
@@ -227,6 +228,11 @@ serve(async (req: Request) => {
       .select("current_phase, current_week, current_streak_weeks, total_workouts_done")
       .eq("user_id", targetUserId)
       .single();
+
+    // 3b. Unit 3D-a (FOB-4): a Phase-I user in a hold week TODAY (as the app shows it, `holdOrdinalForDate(today)`)
+    // reads the hold, not the clamped "Current week: 4". Fails closed: no progress row, a phase other than exactly 1
+    // or a failed read keeps today's line (`fetchHoldOrdinals` never throws).
+    const weekLine = await reportWeekLineFor(supabase, targetUserId, userProgress, todayStr);
 
     // 4a. Exercise-level data from workout_log_exercises (per-set granular data)
     // workout_logs now stores summary rows; exercise details are in workout_log_exercises.
@@ -570,7 +576,7 @@ ${Object.entries(dailyTotals)
 
 **PROGRESS:**
 - Current phase: ${userProgress?.current_phase ?? 1}
-- Current week: ${userProgress?.current_week ?? 1}
+- ${weekLine}
 - Streak: ${userProgress?.current_streak_weeks ?? 0} weeks
 - Total workouts all time: ${userProgress?.total_workouts_done ?? 0}`;
 
