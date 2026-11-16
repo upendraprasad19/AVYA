@@ -11337,7 +11337,7 @@ concepts:
     writers:
       - file: lib/shared/repositories/plan_engine/periodization_engine.dart
         method: apply (stamps weekCharacter per week — EXISTING)
-        line: 146
+        line: 149
         notes: >
           `weekCharacter: _waveNames[weekIdx]` — serialized as snake_case
           `week_character` via WeekPlan.toMap (models.dart:79). 7-A adds NO writer;

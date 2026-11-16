@@ -6,7 +6,7 @@ batch: generator-step3a
 total_findings: 9
 closed_count: 9
 
-_commit: &feat "PENDING"
+_commit: &feat "ab100469 (with d99dce41, f85e4af6, 912aeacd and the B-pass commit)"
 
 findings:
   - id: C3A-1

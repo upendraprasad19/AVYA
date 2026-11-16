@@ -1,6 +1,6 @@
 {
   "_meta": {
-    "recorded_on": "main 708f9049, the tree before Unit 3A (disable_goal_training set reproduces it; copied from generator_golden_hashes.json)",
+    "recorded_on": "main 708f9049, the tree before Unit 3A, equal on every key to main 2fe0ae52 (the merge base after 2E) (disable_goal_training set reproduces it; copied from generator_golden_hashes.json)",
     "personas": 1010
   },
   "cross|full_gym|build_muscle|4d|beginner|p2": "9317061cbc294ca98f0d5e43cf1011c50dd58c7d2be96a4ee7ee9cbd5100338c",

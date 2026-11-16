@@ -167,6 +167,30 @@ void main() {
       expect(statsA().floorTrims, isEmpty, reason: 'a slot that fits as it is needs no trim');
     });
 
+    test('d65: the trim gives the cut set\'s seconds back to the day (24 minutes: PullB then fits the clock)', () {
+      // The cap-trim fixture above at 24 minutes, without Unit 2C-b (no under-60 allowance, so the oracle's plain budget
+      // applies). The trim takes Row's third set and returns its seconds, so PullB's 2 sets fit what is left (overClock
+      // false). Credited with the sets but not the seconds, the day would read PullB 114 s over its clock (B-pass seat B).
+      final f = Fx(balancedWeek: false)
+        ..row('Row', ['Lats'])
+        ..row('PullA', ['Lats', 'Biceps'])
+        ..row('PullB', ['Lats', 'Biceps'])
+        ..row('Curl', ['Biceps'], type: 'isolation', reps: '10-15');
+      final days = [
+        f.day('hypertrophy', [f.ex('Row'), f.ex('PullA'), f.ex('PullB')]),
+        for (var i = 0; i < 6; i++) f.day('hypertrophy', [f.ex('Curl')]),
+      ];
+      final out = f.run(days, minutes: 24, level: 'beginner', leadFirst: true, dayFloor: true);
+      expect(out[0].allowance, isFalse);
+      expect(setsOf(out[0]), [('Row', 2), ('PullA', 2), ('PullB', 2)]);
+      expect(statsA().floorTrims, {
+        0: [(name: 'Row', from: 3, to: 2)],
+      });
+      expect(seats(statsA())[0], ['PullA:2:Biceps:false', 'PullB:2:Biceps:false']);
+      expect([for (final x in statsA().floorSeats[0]!) x.overSeconds], [0.0, 0.0]);
+      expectOracle(f, out, statsA(), f.ctx(days, minutes: 24, level: 'beginner'));
+    });
+
     test('d65: the trim takes only the one set the cap needs, never below 2, and the floor stops at 3 rows', () {
       // The day above with a fourth slot, PullC. The floor seats PullA, then PullB with Row's third set taken (Back 6 =
       // the cap); the day then holds 3 rows, so PullC is never tried. With the real caps (6 / 8 / 10) a thin day whose

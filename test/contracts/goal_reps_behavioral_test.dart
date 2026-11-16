@@ -3,6 +3,7 @@
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:icanbefitter/shared/repositories/plan_engine/goal_reps.dart';
+import 'package:icanbefitter/shared/repositories/plan_engine/models.dart';
 import 'package:icanbefitter/shared/repositories/plan_engine/periodization_engine.dart';
 import 'package:icanbefitter/shared/repositories/plan_engine/session_budget.dart';
 import 'package:icanbefitter/shared/repositories/plan_engine/session_set_allocator.dart';
@@ -213,6 +214,69 @@ void main() {
         ['6', '10', '20'],
         ['9', '13', '14'],
       ]);
+    });
+
+    // B-pass seat B: weeks 2-4 and the deload stash. The wave runs after the goal's base (weeks 1 / 2 the base, week 3
+    // base - 2, week 4 round(0.8 x base)), then the row's range clamp, then (Cut / Maintain accessories) 10-15; the
+    // stash `workingReps` is week 3's. A 10-15 clamp skipped after week 1 would leave the phase-2 raise at 8 in weeks 3-4.
+    List<List<String>> fourWeeks(String goal, int phase, String name) {
+      final f = lib()..row('norange', ['Back'], reps: '');
+      final day = f.day('hypertrophy', [f.ex('press'), f.ex('lunge'), f.ex('raise'), f.ex('norange')]);
+      final weeks = PeriodizationEngine.apply(
+          populated: [day],
+          phase: phase,
+          is6Day: true,
+          budget: ctx(f, goal, 'intermediate'),
+          leadFirst: false,
+          stashWorkingBase: true);
+      String of(List<PlannedExercise> xs, {bool stash = false}) {
+        final e = xs.firstWhere((x) => x.exerciseName == name);
+        return (stash ? e.workingReps : e.reps) ?? '-';
+      }
+
+      return [
+        [for (final w in weeks) of(w.workoutDays.first.exercises)],
+        [of(weeks[3].workoutDays.first.exercises, stash: true)],
+      ];
+    }
+
+    test('weeks 1-4 and the stash: wave after the goal base, then the range clamp, then 10-15', () {
+      expect(fourWeeks('lose_fat', 1, 'press'), [
+        ['8', '8', '6', '6'],
+        ['6'],
+      ]);
+      expect(fourWeeks('lose_fat', 2, 'press'), [
+        ['6', '6', '6', '6'],
+        ['6'],
+      ]);
+      expect(fourWeeks('lose_fat', 1, 'raise'), [
+        ['14', '14', '12', '11'],
+        ['12'],
+      ]);
+      expect(fourWeeks('lose_fat', 2, 'raise'), [
+        ['10', '10', '10', '10'],
+        ['10'],
+      ]);
+      expect(fourWeeks('general_fitness', 1, 'press'), [
+        ['10', '10', '8', '8'],
+        ['8'],
+      ]);
+      for (final goal in ['lose_fat', 'general_fitness']) {
+        for (final ph in [1, 2, 3, 4]) {
+          for (final r in fourWeeks(goal, ph, 'raise')[0]) {
+            expect(int.parse(r), inInclusiveRange(10, 15), reason: '$goal phase $ph raise');
+          }
+        }
+      }
+    });
+
+    test('a row with no rep range takes the legacy path for every goal (outside the table and the clamp)', () {
+      for (final goal in ['lose_fat', 'general_fitness', 'build_muscle']) {
+        expect(fourWeeks(goal, 1, 'norange'), [
+          ['10', '10', '8', '8'],
+          ['8'],
+        ], reason: goal);
+      }
     });
 
     test('the switch off equals today for Cut', () {

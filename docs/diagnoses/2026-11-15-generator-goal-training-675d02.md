@@ -23,7 +23,7 @@ recurrence: |
   (applied here to 4-day Maintain, the same class: a shared squat spends a tight Glutes top and a hinge is refused,
   feedback_measure_a_shared_rules_golden_footprint: the rule's reach was measured before it was scoped), OI-456 piece
   A (rest follows the exercise; every writer and pricer moved together here), the 2B day floor (d65 amends two of its
-  rules). Bug class 2.162 (run the neighbouring gates before every push) found S8 / d65.
+  rules). Running the neighbouring gates before the push (bug class 2.162's last point) found S8 / d65.
 writers:
   - { file: lib/shared/repositories/plan_engine/training_history_analyzer.dart, method_or_widget: "goalTrainingFromProfile (the switch and physique_focus == 'strength')", line: 124 }
   - { file: lib/shared/repositories/plan_engine/plan_generator.dart, method_or_widget: "generateV4: SessionBudgetContext(goalTraining:), d61", line: 300 }
@@ -111,7 +111,7 @@ The gate (`goal_training_gate_test.dart`, 2,304 plans ON vs OFF):
 - The Strength focus: 29,010 main lifts (on the 2E tree; 29,012 before it) at their range floor; rest +30 s at 60+ minutes only; 0 newly at 0; the switch
   overrides the focus.
 
-S8 / d65 (found by the neighbouring day-floor gate, bug class 2.162): 8 of 17,280 `rep30` day-weeks at 2 exercises
+S8 / d65 (found by the neighbouring day-floor gate, run before the push: bug class 2.162's last point): 8 of 17,280 `rep30` day-weeks at 2 exercises
 (6 by the session cap, 2 by the rank-0 reservation, the latter also a `lost` Goblet Squat). After d65: 0 thin, 0
 lost, every floor-off digest equal to main's.
 
@@ -128,6 +128,11 @@ lost, every floor-off digest equal to main's.
   Walking Lunge to Quads only, so Glutes reads 0 in the set count.
 - d68: the rep table follows the EFFECTIVE level (a beginner trains as intermediate from phase 3, as the bands do), so
   a Cut beginner's phase-3 and deload main lifts take 8; d59's deload is phase 1's entry at that level.
+- d65 (b) on a thin day: the trimmed lead stays at 2 sets and its capped group cannot regrow, so pass B may bring
+  another row to 3 and then R2 / R5 refuse every pass C / D and week-2 +1 on that day (no stated property fails; the
+  lead keeps 2 and no row passes lead + 1; B-pass seat B).
+- A row with no parseable rep range keeps the legacy `baseReps` path under every goal (outside the table and the
+  10-15 clamp; pinned in `goal_reps_behavioral_test.dart`).
 - d65 is not behind `disable_goal_training`. With goal training off everywhere and d65 kept, the three day-floor gates
   pass on main's old pins (review round 1), and with the switch set 2,592 plans hash the same with the pre-d65 floor
   (seat B), so the switch-off world still equals main where measured.
@@ -138,6 +143,9 @@ lost, every floor-off digest equal to main's.
   `ProgressionResolver._gradedSuggestion` can read logged sets as "below range"; an accessory whose range tops at 10
   or below (22 rep-based rows) is prescribed 10, its top. Counted from `assets/data/exercise_library.json`. Founder's
   rule, stated here.
+- A plan-day swap keeps the outgoing row's reps (as before 3A) while its rest follows the incoming row and the goal
+  rule: under Cut / Maintain a main lift swapped into an accessory slot keeps the accessory's 10-15 reps, and the
+  reverse (B-pass seat A).
 - A plan-day swap reads the profile's CURRENT minutes and focus (`swap_service.dart`): after a minutes or focus change
   without a regeneration, a swapped-in main lift takes the new rest while its neighbours keep the generated stamp.
 
@@ -145,7 +153,7 @@ lost, every floor-off digest equal to main's.
 
 Each mutant was applied to the committed file (`grep -c` confirmed the edit), run, and restored; `git diff --stat lib/`
 was empty after every pass. "Fast" = `goal_reps_behavioral_test` + `swap_exercise_rest_follows_incoming_archetype_test`
-(25 tests, 26 after G13's test, 27 with round 2's week-2 test); "golden" = `goal_training_kill_switch_golden_test`; "gate" = `goal_training_gate_test`.
+(25 tests, 26 after G13's test, 27 with round 2's week-2 test, 29 with the B-pass's weeks 1-4 and no-range tests); "golden" = `goal_training_kill_switch_golden_test`; "gate" = `goal_training_gate_test`.
 
 | ID | Mutation | Result |
 |---|---|---|
@@ -167,6 +175,7 @@ was empty after every pass. "Fast" = `goal_reps_behavioral_test` + `swap_exercis
 | G14 | the accessory clamp for every goal (Build too) | fast red (3) |
 | G15 | Cut beginner band 9-11 -> 10-12 | fast red (1) |
 | G16 | `isStrengthFocus` always false | fast red (1); gate red (1) |
+| WK (B-pass, seat B) | the Cut / Maintain 10-15 clamp in week 1 only (`weekIdx == 0 &&`) | **survived** fast; new test "weeks 1-4 and the stash" (`goal_reps_behavioral_test.dart`): red under WK (21 passed, 1 failed), green restored |
 | W2 (round 2, seat B) | `_weekTwoGains` prices the +1 set at `restForArchetype` | **survived** fast; new test "week 2 prices the +1 set at the focus rest" (`goal_reps_behavioral_test.dart`): red under W2 (19 passed, 1 failed), green restored |
 
 d65 (`session_set_allocator.dart` pass 4b', `day_floor_behavioral_test.dart`; the grid is `day_floor_gate_rep30_test`):
@@ -176,6 +185,7 @@ d65 (`session_set_allocator.dart` pass 4b', `day_floor_behavioral_test.dart`; th
 | RB | a reservation-blocked slot skipped again (d65 a) | contract red (1) |
 | NOTRIM | `capTrims` never finds a donor (d65 b off) | contract red (2) |
 | LEDGER | the trim's ledger update removed (the day's sessions keep the cut sets) | contract red (1) |
+| CREDIT (B-pass, seat B) | the trim's ledger update credits the sets but 0 seconds | **survived** (LEDGER removed the whole call); new test "the trim gives the cut set's seconds back to the day" (24 minutes, 2C-b off): red under CREDIT (26 passed, 1 failed), green restored |
 | COPY (round 2, seat B) | B's copy of `floorTrims` on a copied day disabled | **survived** (nothing read B's `floorTrims`); new test "B copies A's floorTrims with the floored day": red under COPY (25 passed, 1 failed), green restored |
 | MOST (round 2, seat B) | the donor with the FEWEST sets first | equivalent, like BELOW2 and TIE, by a stronger argument: the floor (pass 4b') runs before pass B and the grow passes, so every slot then holds 2 sets except the day's lead, which pass A may seat at 3 (R1). The only possible donor is the lead, so the donor order, the tie rule and the floor of 2 cannot change a choice |
 | ORDER | the trim tier tried first (`[true, false]`) | **survived** the contract test and the rep30 grid (4 tests green, 7 min 43 s); new test "a slot that needs no trim is preferred to one that does": red under ORDER (24 passed, 1 failed), green restored |

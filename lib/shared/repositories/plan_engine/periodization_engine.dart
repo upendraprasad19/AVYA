@@ -289,7 +289,8 @@ class PeriodizationEngine {
     }
 
     // V4: Use exercise-specific rep range when available.
-    // Archetype determines which side of the range to lean toward:
+    // Archetype determines which side of the range to lean toward (Build, the legacy strength token and the
+    // disable_goal_training world; a Cut / Maintain main lift and the Strength focus take GoalReps.base instead):
     //   strength   → lower end (min reps, heavier weight)
     //   hypertrophy → midpoint
     //   metabolic  → upper end (more reps, lighter weight)

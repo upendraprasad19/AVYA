@@ -2,8 +2,8 @@
 // true` the generator reproduces today's reps, bands, rests and Glutes credit verbatim. Each of the 1,010 golden
 // personas runs the REAL PlanGenerator.instance.generateV4 with the switch set; the sha256 of jsonEncode(phase.toMap())
 // must equal test/fixtures/generator_golden_hashes_goal_training_off.json, which is main 708f9049's
-// generator_golden_hashes.json (the tree before 3A). The fixture and this test are deleted in the commit that deletes the
-// switch (tracked on the OI board).
+// generator_golden_hashes.json (the tree before 3A; equal on every key to main 2fe0ae52, the merge base after 2E). The
+// fixture and this test are deleted in the commit that deletes the switch (OI-514).
 //
 // Mutation: ignore the switch in `TrainingHistoryAnalyzer.goalTrainingFromProfile` (always `const GoalTraining()`) and
 // the lose_fat / general_fitness personas go red here.

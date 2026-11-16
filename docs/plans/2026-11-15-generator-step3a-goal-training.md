@@ -190,7 +190,7 @@ rows), and 29,010 main lifts at their range floor under the focus with none left
   their arithmetic is a pre-3A band. The lead-first gate's opener rule now names a reorder of two rows both worlds hold;
   an ON opener the OFF day lacks (the 2A lead seated where the OFF world's lower top refused it, R1) is counted and
   pinned.
-- Neighbouring gates run locally before every push (bug class 2.162): golden, the kill-switch goldens, 2C-b, 2D, 2B,
+- Neighbouring gates run locally before every push (bug class 2.162's last point): golden, the kill-switch goldens, 2C-b, 2D, 2B,
   2A, 2C-a, B2, the seeded allowance sweep, core-list.
 - Golden re-record with per-class attribution.
 - A mutation pass on every new branch.
