@@ -338,6 +338,48 @@ void main() {
       expect(_sets(out.first), [[3, 5], [3, 3], [3]]);
     });
 
+    test('T2: a row exactly at the lead\'s new sets + 1 does not block the lead\'s -1 (R2 holds at equality)', () {
+      // Curl at 4 = (Bench 4 - 1) + 1: R2 still holds after the trim, so Bench (the most sets) takes it.
+      final out = VolumeTitration.applyToWeeks(leadTrim(4), const {'Chest': -1}, budget: b(leadTrimNames));
+      expect(_sets(out.first), [[3, 4], [3, 3], [3]]);
+    });
+
+    test('T2: an UNBUDGETED row past the lead\'s new sets + 1 blocks the lead\'s -1 too (R5 caps it in week 2)', () {
+      // Plank is not budgeted (no archetype in this context) but R5 holds it to the lead + 1, so the guard counts it.
+      final weeks = [
+        _week('baseline', [
+          [_ex('Bench', 4, ['Chest'], type: 'compound'), _ex('Plank', 5, ['Core'], type: 'isolation')],
+          [_ex('Press', 3, ['Chest'], type: 'compound'), _ex('Fly', 3, ['Chest'], type: 'isolation')],
+          [_ex('Incline', 3, ['Chest'], type: 'compound')],
+        ])
+      ];
+      final out = VolumeTitration.applyToWeeks(weeks, const {'Chest': -1},
+          budget: b(const ['Bench', 'Press', 'Fly', 'Incline']));
+      expect(_sets(out.first), [[4, 5], [3, 3], [2]]);
+    });
+
+    test('the quad-first credit: with quadPrimaryCreditsGlutes false a squat earns no Glutes +1 (creditedOf, not of)', () {
+      final ctx = SessionBudgetContext(
+        minutes: 60,
+        planGoal: 'build_muscle',
+        level: 'intermediate',
+        lighterPhase: false,
+        focusGroups: const {},
+        quadPrimaryCreditsGlutes: false,
+        archetypeByName: const {'squat': 'B', 'thrust': 'B'},
+      );
+      final weeks = [
+        _week('baseline', [
+          [_ex('Squat', 3, ['Quads', 'Glutes'], type: 'compound')],
+          [_ex('Thrust', 3, ['Glutes'], type: 'compound')],
+        ])
+      ];
+      final out = VolumeTitration.applyToWeeks(weeks, const {'Glutes': 1}, budget: ctx);
+      // The squat credits Quads only, so the Glutes +1 goes to the thrust (with the full credit it would go to the
+      // squat, the first match).
+      expect(_sets(out.first), [[3], [4]]);
+    });
+
     test('T3: on the deload week a row with no stash is skipped, and a stash-less lead turns the lead check off', () {
       final weeks = [
         _week('deload', [
@@ -503,6 +545,33 @@ void main() {
       // The -1 direction needs no readiness and still applies.
       await seedTrend(titName, olderW: 95, newerW: 90);
       expect(VolumeTitration.resolveDeltas(phase: 2)[titGroup], -1);
+    });
+
+    test('a FLAT e1RM is held, not declining: +1 with recovery (B-pass seat B F2)', () async {
+      await seedTrend(titName, olderW: 90, newerW: 90);
+      await seedReadiness(3, 0);
+      expect(VolumeTitration.resolveDeltas(phase: 2)[titGroup], 1);
+    });
+
+    test('the 40 % rule: 2 of 6 sore check-ins still recovered (+1), 3 of 6 not (hold) (B-pass seat B F3)', () async {
+      Future<void> seedMixed(int sore) async {
+        for (int i = 1; i <= 6; i++) {
+          final d = fixedToday.subtract(Duration(days: i));
+          await hb.put('readiness_${dk(d)}', {
+            'date': dk(d),
+            'sleep': 0,
+            'soreness': i <= sore ? 2 : 0,
+            'energy': 0,
+            'level': i <= sore ? 'yellow' : 'green',
+          });
+        }
+      }
+
+      await seedTrend(titName, olderW: 90, newerW: 95);
+      await seedMixed(2);
+      expect(VolumeTitration.resolveDeltas(phase: 2)[titGroup], 1);
+      await seedMixed(3);
+      expect(VolumeTitration.resolveDeltas(phase: 2).containsKey(titGroup), isFalse);
     });
 
     test('held/gained + NO readiness → hold (no +1; the SAFE default)', () async {

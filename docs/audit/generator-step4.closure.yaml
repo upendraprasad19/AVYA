@@ -6,8 +6,8 @@ batch: generator-step4
 plan_review_record: docs/plan-reviews/generator-step4.md
 diagnose_docs:
   - docs/diagnoses/2026-11-16-generator-titration-plateau-7c4e2a.md
-total_findings: 12
-closed_count: 12
+total_findings: 13
+closed_count: 13
 
 findings:
   - id: S4-T1
@@ -69,3 +69,8 @@ findings:
     title: "Cost: with T1 the progress scenario's +1s no longer lift a group over its band bottom (8,942 both worlds)"
     terminal_state: verified_clean
     evidence: "measured and pinned by the gate; the +1 that lifted 124 group-weeks before T1 went to rows past the lead + 1, which 2A's rule (founder d26-d29) refuses; reported to the founder with the step"
+  - id: S4-BPASS
+    title: "B-pass (2 seats, 11 findings, 0 P0/P1): the lead guard's input set, four unpinned boundaries, gate strength, docs"
+    terminal_state: closed_in_commit
+    commit: "generator-step4 B-pass fix commit (SHA stamped by the post-merge records landing)"
+    verification: "docs/reviews/generator-step4-bpass.md; five B-pass mutants each red (diagnose 7c4e2a B-pass section); gate re-run on the fixed tree"

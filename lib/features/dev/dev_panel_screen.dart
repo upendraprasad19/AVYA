@@ -361,7 +361,8 @@ class _DevPanelScreenState extends ConsumerState<DevPanelScreen> {
   }
 
   /// Generator step 4 (OI-53) kill switches: volume titration and plateau escalation
-  /// went live with no other off switch on a device (CLAUDE.md 4.6 step 3). Deleting
+  /// went live with no other off switch on a debug build (CLAUDE.md 4.6 step 3; a release build has none,
+  /// OI-95). Deleting
   /// the key returns to the default (ON); the change applies at the next fresh PRO
   /// phase advance, the only generation that opts in.
   Future<void> _toggleKillSwitch(String key, {required bool enabledNow, required String label}) async {

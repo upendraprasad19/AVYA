@@ -12145,7 +12145,8 @@ concepts:
       "with readiness ship-dark (0 rows) titration only ever TRIMS" — readiness went LIVE 2026-09-01, so rows DO accumulate; titration is inert only because enable_volume_titration is still OFF and short-circuits at volume_titration.dart:60 BEFORE _recovered() runs -- _recovered() itself has NO readiness gate. Deltas key + clamp on the MAJOR GROUP (shared
       muscleGroupOf, extracted from the scorecard's _muscleToGroup) so [8,20] is a
       science-valid per-group band, not a per-fragmented-sub-token one. TWO inert seams:
-      (1) enable_volume_titration DEFAULT OFF → resolveDeltas {}; (2) OPT-IN — the
+      (1) enable_volume_titration DEFAULT OFF → resolveDeltas {} (retired by step 4: now the kill switch
+      disable_volume_titration, default ON); (2) OPT-IN — the
       orchestrator applies it only when the caller passes applyVolumeTitration:true, and
       the two advance callers pass `pins == null` so a REPEAT (low-adherence) advance
       never gains volume; every other caller (coach-regen / edit-profile / previews /
@@ -12162,7 +12163,7 @@ concepts:
       toggle). applyToWeeks keeps 2A's lead-first rule: the day's lead is SequencingEngine.openerOf over its budgeted
       rows; T1 a +1 on a non-lead row crediting no focus group needs current(row) <= current(lead); T2 a -1 takes rows
       at 3+ sets, most sets first, ties to the latest day then slot (d65), never below 2, the lead only when R2 still
-      holds; T3 a stash-less deload row is skipped; T4 _recovered() needs readinessEnabled. applyToWeeks(leadFirst:)
+      holds (every other non-focus row of the day, budgeted or not, R5's set); T3 a stash-less deload row is skipped; T4 _recovered() needs readinessEnabled. applyToWeeks(leadFirst:)
       (null reads disable_lead_first). Gate titration_plateau_gate_test.dart over a simulated history.
     writers:
       - file: lib/shared/repositories/plan_engine/volume_titration.dart
@@ -12228,7 +12229,8 @@ concepts:
       is ALREADY delivered by W2.4's `readiness.good` keep in `deload_evaluator` (a
       plateau keep-term there would be provably dead: it can only engage when
       `readiness.good` is already false). rung-3 (rotation) is Batch 12-B. THREE inert
-      seams: (1) `enable_plateau_escalation` DEFAULT OFF → merge returns the input map
+      seams: (1) `enable_plateau_escalation` DEFAULT OFF (retired by step 4: now `disable_plateau_escalation`,
+      default ON) → merge returns the input map
       unchanged (same ref) → applyToWeeks identity → byte-identical; (2) ALSO gated on
       `enable_readiness` (mirrors DeloadEvaluator — the fatigue gate needs readiness
       rows); (3) OPT-IN `applyPlateauEscalation` — the two fresh-advance callers pass
@@ -12291,8 +12293,8 @@ concepts:
       MAX-Epley e1RM ≥3 sessions ≥28d, 63-day window) are SOFT-avoided in the pick so
       each rotates to a same-`movement_pattern` sibling next phase.
       `PlateauScan.plateauedExerciseNames({phase})` (per-exercise sibling of
-      plateauedGroups, LOWERCASED, SAME gates: enable_plateau_escalation +
-      enable_readiness + phase>=2 + !fatigue) → computed in `generateV4` (guarded
+      plateauedGroups, LOWERCASED, SAME gates: enable_plateau_escalation (retired by step 4; now the
+      kill switch disable_plateau_escalation, default ON) + enable_readiness + phase>=2 + !fatigue) → computed in `generateV4` (guarded
       `applyPlateauEscalation && pins == null`) → `pickV4 plateauAvoidNames` → UNIONED
       GLOBALLY into every day's avoidA/avoidB → `_pickCoreList` (the cascade until Unit 1B-F) →
       `_selectCandidate._preferNovel` (the SAME 11-B seam). SOFT + BOUNDED: feeds

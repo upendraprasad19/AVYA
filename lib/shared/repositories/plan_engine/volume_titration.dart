@@ -174,7 +174,8 @@ class VolumeTitration {
   /// moment (R5's rule). T2: a -1 takes, among rows at 3 sets or more whose credited
   /// groups stay above the band bottom, the most sets first, ties to the latest day then
   /// the latest slot (d65's order), never below 2; the lead only when, after its -1,
-  /// every other budgeted non-focus row of its day is at most the lead's new sets + 1.
+  /// every other non-focus row of its day (budgeted or not, R5's set) is at most the
+  /// lead's new sets + 1.
   /// T3: on the deload week a row with no stash is skipped, and a lead with no stash
   /// switches the lead checks off for its day. [leadFirst] null reads
   /// `PlanEngineFlags.leadFirstEnabled`; false switches T1 and T2's lead guard off.
@@ -282,13 +283,15 @@ class VolumeTitration {
           // band bottom (the mirror of the +1's top check).
           if (cur < 3) continue;
           if (gs.any((x) => ledger.week(x) <= bottom)) continue;
-          // The lead only when R2 still holds after its -1: every other budgeted row of the
-          // day that credits no focus group at most the lead's new sets + 1 (= cur).
+          // The lead only when R2 still holds after its -1: every other row of the day that
+          // credits no focus group at most the lead's new sets + 1 (= cur). R5's own set: a row
+          // titration never moves (a custom, a timed hold) is still held to the lead + 1 in week 2
+          // (`_weekTwoGains` caps its unranked rows too), so it counts here (B-pass seat A F1).
           if (l == xi) {
             var keepsR2 = true;
             for (var oi = 0; oi < dayExercises[di].length; oi++) {
               final o = dayExercises[di][oi];
-              if (oi == xi || !SessionBudget.isBudgeted(o, budget) || isFocusRow(o) || !hasSets(o)) continue;
+              if (oi == xi || isFocusRow(o) || !hasSets(o)) continue;
               if (current(o) > cur) {
                 keepsR2 = false;
                 break;

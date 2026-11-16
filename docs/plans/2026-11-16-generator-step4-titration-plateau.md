@@ -106,7 +106,8 @@ Why (file:line):
   below 2) whose credited groups all stay above the band bottom (today's guard, kept). Order: the most sets first; ties
   to the latest day, then the latest slot in that day (d65's "latest rank", extended across days; plan v1 left the
   cross-day tie open; the lead is not always slot 0, so on a tie it can be the latest). The lead is a candidate only if,
-  after its -1, every OTHER budgeted row of its day that credits no focus group has `current <= lead's new sets + 1`
+  after its -1, every OTHER row of its day that credits no focus group, budgeted or not (R5 caps unbudgeted rows too;
+  B-pass seat A F1), has `current <= lead's new sets + 1`
   (the T1 / R5 predicate; a focus row legally above it, d27, never blocks the trim; on the deload week every `current`
   is the stash); a skipped candidate passes to the next. No candidate: the group keeps its sets that week (as a refused
   +1 is today). With `leadFirst` false, the lead is an ordinary candidate. A non-lead trim never lowers a row below 2,

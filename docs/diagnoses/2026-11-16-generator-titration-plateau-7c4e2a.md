@@ -149,3 +149,22 @@ test that reddened, and the gate's positive pins are exact counts that any stric
 
 d81 (Cut == Maintain 5 of 576 live accepted; the goal-training gate gains the live-world test), d82 (plateau ships
 whole), d83 (rule-14 waiver: comments only in `plan_generator.dart`).
+
+## B-pass (2026-11-17, `docs/reviews/generator-step4-bpass.md`)
+
+Two fresh seats on 5c260f1b (CI green): 11 findings, 0 P0 / P1. Fixed in the B-pass commit: T2's lead guard counts
+unbudgeted rows (R5 caps them too, A-F1); four tests for boundaries the flip makes live (the R2 equality, a flat e1RM
+held not declining, the 40 % rule's 2 / 3 of 6, the quad-first credit), each proven by its mutant:
+
+| Mutant | Red tests |
+|---|---|
+| R2 guard `>=` at equality | 1 |
+| guard skips unbudgeted rows | 1 |
+| flat e1RM read as a decline (`<=`) | 1 |
+| 40 % rule `.floor()` | 1 |
+| `creditedOf` -> `of` in `groupsOf` | 1 |
+
+The gate's R2 check now also fails on a break that only got deeper (B-F5), and the history helper reads the library's
+list-valued `exercise_type` (B-F6); the gate was re-run on the fixed tree (15 min 35 s): every hard zero holds and every pin is unchanged (no simulated plan puts an
+unbudgeted row past the lead, so A-F1 is pinned by its behavioral test). Docs: the dev-panel comment says
+debug build (OI-95), stale `enable_*` lines and the resolved ship-dark note corrected.

@@ -193,6 +193,8 @@ resolved:
     flip_commit: pending — stamped in the post-merge records landing (generator step 4, branch generator-step4)
     flip_review_record: docs/plan-reviews/generator-step4.md
     note: >
+      CLOSED by generator step 4 (T4: _recovered() now returns false when readinessEnabled is false); the
+      warning below is history and its line citations predate step 4.
       WARNING added 2026-09-01: this flag's readiness dependency is now LIVE
       (enable_readiness flipped that day), and unlike triggered_deload's and
       plateau_escalation's it is NOT enforced in code. _recovered()
@@ -789,7 +791,8 @@ resolved:
     flip_commit: 9e4c5681
     flip_review_record: docs/plan-reviews/readiness-flip.md
     note: >
-      FLIP THIS ONE FIRST. Both enable_plateau_escalation and the
+      FLIP THIS ONE FIRST. Both enable_plateau_escalation (retired by generator step 4; now
+      disable_plateau_escalation, default ON) and the
       enable_triggered_deload evaluator self-gate on readinessEnabled, so
       flipping either of those while this is OFF leaves them inert at best and
       biased at worst. Its build also carried migration 105, so unlike the

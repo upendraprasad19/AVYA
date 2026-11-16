@@ -93,9 +93,13 @@ class HistorySim {
 
   bool isLoaded(PlannedExercise e) => e.loggingType == 'weight_reps' || e.loggingType == 'weighted_bodyweight';
 
-  bool isCompound(PlannedExercise e) =>
-      (e.exerciseType ?? byName[e.exerciseName.toLowerCase()]?['exercise_type'])?.toString().toLowerCase() ==
-      'compound';
+  bool isCompound(PlannedExercise e) {
+    if (e.exerciseType != null) return e.exerciseType!.toLowerCase() == 'compound';
+    // The library's `exercise_type` is a LIST (['compound']); a toString() of it never equals 'compound' (B-pass F6).
+    final t = byName[e.exerciseName.toLowerCase()]?['exercise_type'];
+    final first = t is List ? (t.isEmpty ? null : t.first) : t;
+    return first?.toString().toLowerCase() == 'compound';
+  }
 
   /// Logs [plan]'s LOADED lifts as sessions over [weeks] weeks ending yesterday; returns the rows written.
   /// [factor] gives a session's load multiplier from the exercise name, its index (0-based) and the session count.
@@ -248,8 +252,9 @@ class HistorySim {
   /// The day's lead: SequencingEngine.openerOf over its budgeted rows (2A's, R5's and T1's definition).
   PlannedExercise? leadOf(WorkoutDay d) => SequencingEngine.openerOf([for (final e in d.exercises) if (isBudgeted(e)) e]);
 
-  /// Names of the day's non-lead budgeted rows crediting no focus group that sit past the lead + 1 (R2 / R5).
-  Set<String> r2Breaks(WorkoutDay d, Set<String> focus, bool quadGlutes) {
+  /// The day's non-lead budgeted rows crediting no focus group that sit past the lead + 1 (R2 / R5), each with how far
+  /// past the lead it sits (sets - lead sets), so a gate can catch a break that only got DEEPER (B-pass F5).
+  Map<String, int> r2Breaks(WorkoutDay d, Set<String> focus, bool quadGlutes) {
     final lead = leadOf(d);
     if (lead == null) return const {};
     return {
@@ -258,7 +263,7 @@ class HistorySim {
             isBudgeted(e) &&
             !credited(e, quadGlutes).any(focus.contains) &&
             e.sets > lead.sets + 1)
-          e.exerciseName,
+          e.exerciseName: e.sets - lead.sets,
     };
   }
 

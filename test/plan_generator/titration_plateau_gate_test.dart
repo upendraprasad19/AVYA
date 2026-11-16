@@ -193,8 +193,13 @@ void main() {
                   }
                   for (var di = 0; di < won.workoutDays.length; di++) {
                     final dOn = won.workoutDays[di], dOff = woff.workoutDays[di];
-                    final newBreaks = sim.r2Breaks(dOn, focus, quadGlutes).difference(sim.r2Breaks(dOff, focus, quadGlutes));
-                    if (newBreaks.isNotEmpty) fail('R2', '$key w$wi d$di $newBreaks');
+                    // A NEW break, or a break OFF already had that ON makes deeper (B-pass F5).
+                    final bOn = sim.r2Breaks(dOn, focus, quadGlutes), bOff = sim.r2Breaks(dOff, focus, quadGlutes);
+                    final worse = {
+                      for (final e in bOn.entries)
+                        if (!bOff.containsKey(e.key) || e.value > bOff[e.key]!) e.key: e.value,
+                    };
+                    if (worse.isNotEmpty) fail('R2', '$key w$wi d$di $worse (OFF $bOff)');
                     int ones(WorkoutDay d) => d.exercises.where((e) => sim.isBudgeted(e) && e.sets == 1).length;
                     if (ones(dOn) > ones(dOff)) fail('1-set', '$key w$wi d$di');
                     final lOn = sim.leadOf(dOn), lOff = sim.leadOf(dOff);
