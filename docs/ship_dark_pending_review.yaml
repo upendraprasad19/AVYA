@@ -190,7 +190,7 @@ resolved:
     build_date: 2026-07-18
     merge_commit: 38706bae
     flip_reviewed: true
-    flip_commit: pending — stamped in the post-merge records landing (generator step 4, branch generator-step4)
+    flip_commit: 6abfe1a5
     flip_review_record: docs/plan-reviews/generator-step4.md
     note: >
       CLOSED by generator step 4 (T4: _recovered() now returns false when readinessEnabled is false); the
@@ -210,7 +210,7 @@ resolved:
     build_date: 2026-07-19
     merge_commit: dc8f4880
     flip_reviewed: true
-    flip_commit: pending — stamped in the post-merge records landing (generator step 4, branch generator-step4)
+    flip_commit: 6abfe1a5
     flip_review_record: docs/plan-reviews/generator-step4.md
     note: >
       Depends on enable_readiness (see above).
