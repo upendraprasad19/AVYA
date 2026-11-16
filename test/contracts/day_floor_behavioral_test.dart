@@ -216,6 +216,29 @@ void main() {
       expectOracle(f, out, statsA(), f.ctx(days, level: 'beginner'));
     });
 
+    test('d65: B copies A\'s floorTrims with the floored day (a copied day)', () {
+      // The cap-trim fixture above, with B differing on day 6 only, so B is allocated and copies A's floored day 0:
+      // the trim travels with it (`floorTrims`, like `floorSeats`).
+      final f = Fx()
+        ..row('Row', ['Lats'])
+        ..row('PullA', ['Lats', 'Biceps'])
+        ..row('PullB', ['Lats', 'Biceps'])
+        ..row('Curl', ['Biceps'], type: 'isolation', reps: '10-15')
+        ..row('CurlB', ['Biceps'], type: 'isolation', reps: '10-15');
+      final days = [
+        f.day('hypertrophy', [f.ex('Row'), f.ex('PullA'), f.ex('PullB')]),
+        for (var i = 0; i < 6; i++) f.day('hypertrophy', [f.ex('Curl')], b: i == 5 ? [f.ex('CurlB')] : null),
+      ];
+      final out = f.run(days, level: 'beginner', is6Day: false, leadFirst: true, dayFloor: true);
+      expect(setsOf(out[0], b: true), [('Row', 2), ('PullA', 2), ('PullB', 2)]);
+      expect(statsA().floorTrims, {
+        0: [(name: 'Row', from: 3, to: 2)],
+      });
+      expect(statsB().floorTrims, statsA().floorTrims);
+      expect(seats(statsB())[0], seats(statsA())[0]);
+      expectOracle(f, out, statsB(), f.ctx(days, level: 'beginner'), b: true);
+    });
+
     test('d65: a slot the rank-0 reservation blocked may take a floor seat', () {
       // general_fitness beginner, pre-3A band (Chest top 10). Day 0: Bench (Chest), Row (Back), Fly (Chest); days 1-5:
       // Bench. Rank 0 on day 0: Bench fits but 10 - 2 < 2 x 5 later Chest leads, so the reservation blocks it. Days 1-5

@@ -153,7 +153,7 @@ void main() {
     });
 
     test('boundBy is null when only TIME held the lead lift below its desired sets (B-pass R1 P2-1)', () {
-      // general_fitness beginner (Chest cap 6, top 10), one day (every exercise desires 3,
+      // general_fitness beginner (Chest cap 6, top 8 with Unit 3A on; the top does not bind here), one day (every exercise desires 3,
       // OI-456) on 30 minutes = 1440 s. A 6-set timed row at 110 s rest costs 984 s,
       // leaving 456 s: two sets of the Chest lift (archetype M, 120 s rest) fit (336 s),
       // three do not (522 s). The ledger already holds the 2 granted sets when the

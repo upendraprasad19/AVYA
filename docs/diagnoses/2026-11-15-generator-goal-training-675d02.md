@@ -145,7 +145,7 @@ lost, every floor-off digest equal to main's.
 
 Each mutant was applied to the committed file (`grep -c` confirmed the edit), run, and restored; `git diff --stat lib/`
 was empty after every pass. "Fast" = `goal_reps_behavioral_test` + `swap_exercise_rest_follows_incoming_archetype_test`
-(25 tests, 26 after G13's test); "golden" = `goal_training_kill_switch_golden_test`; "gate" = `goal_training_gate_test`.
+(25 tests, 26 after G13's test, 27 with round 2's week-2 test); "golden" = `goal_training_kill_switch_golden_test`; "gate" = `goal_training_gate_test`.
 
 | ID | Mutation | Result |
 |---|---|---|
@@ -167,6 +167,7 @@ was empty after every pass. "Fast" = `goal_reps_behavioral_test` + `swap_exercis
 | G14 | the accessory clamp for every goal (Build too) | fast red (3) |
 | G15 | Cut beginner band 9-11 -> 10-12 | fast red (1) |
 | G16 | `isStrengthFocus` always false | fast red (1); gate red (1) |
+| W2 (round 2, seat B) | `_weekTwoGains` prices the +1 set at `restForArchetype` | **survived** fast; new test "week 2 prices the +1 set at the focus rest" (`goal_reps_behavioral_test.dart`): red under W2 (19 passed, 1 failed), green restored |
 
 d65 (`session_set_allocator.dart` pass 4b', `day_floor_behavioral_test.dart`; the grid is `day_floor_gate_rep30_test`):
 
@@ -175,6 +176,8 @@ d65 (`session_set_allocator.dart` pass 4b', `day_floor_behavioral_test.dart`; th
 | RB | a reservation-blocked slot skipped again (d65 a) | contract red (1) |
 | NOTRIM | `capTrims` never finds a donor (d65 b off) | contract red (2) |
 | LEDGER | the trim's ledger update removed (the day's sessions keep the cut sets) | contract red (1) |
+| COPY (round 2, seat B) | B's copy of `floorTrims` on a copied day disabled | **survived** (nothing read B's `floorTrims`); new test "B copies A's floorTrims with the floored day": red under COPY (25 passed, 1 failed), green restored |
+| MOST (round 2, seat B) | the donor with the FEWEST sets first | equivalent, like BELOW2 and TIE, by a stronger argument: the floor (pass 4b') runs before pass B and the grow passes, so every slot then holds 2 sets except the day's lead, which pass A may seat at 3 (R1). The only possible donor is the lead, so the donor order, the tie rule and the floor of 2 cannot change a choice |
 | ORDER | the trim tier tried first (`[true, false]`) | **survived** the contract test and the rep30 grid (4 tests green, 7 min 43 s); new test "a slot that needs no trim is preferred to one that does": red under ORDER (24 passed, 1 failed), green restored |
 | BELOW2 | a donor may go down to 1 set | equivalent: contract and rep30 grid green. A thin day holds at most 2 admitted rows, and a trim is needed only when the group's session is at least cap - 1 >= 5 (every cap is 6 or more), so one donor always has 3+ sets and the most-sets-first pick never reaches a row at 2 |
 | TIE | ties to the earliest rank instead of the latest | equivalent: contract and rep30 grid green. Two tied donors (x, x) on a 2-row day give an even overflow (2x + 2 - cap with 2x <= cap), so both are cut by one whichever is first |

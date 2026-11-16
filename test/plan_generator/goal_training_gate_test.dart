@@ -215,6 +215,8 @@ void main() {
       sha256Hex(utf8.encode([for (final k in world.keys) '$k:${sha256Hex(utf8.encode(world[k]!.$2.map))}']
           .join('\n')));
 
+  // Set by the first test and read by the second: run the file whole (a `--plain-name` run of the focus test alone
+  // throws LateInitializationError).
   late Map<String, _Plan> off;
 
   test('the 2,304-plan grid, ON against OFF', () async {

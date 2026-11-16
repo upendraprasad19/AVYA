@@ -12557,7 +12557,7 @@ concepts:
       per matching exercise (primaryMuscles.any(contains); break → max +1/ex).
       Explicit focus takes PRECEDENCE over the auto weakMuscles() laggard signal
       and applies at ALL phases; balanced/strength/absent → [] → falls back to
-      weakMuscles() (phase≥2) exactly as before. Read via a try/catch
+      weakMuscles() (phase≥2) exactly as before (for the muscle bring-up; since Unit 3A the strength token also turns on the Strength focus, concept goal_training). Read via a try/catch
       TrainingHistoryAnalyzer.physiqueFocusMuscles() helper (degrades to [] on
       null/corrupt/unopened profile, mirroring weakMuscles) so NO Hive coupling
       enters plan_generator. LIVE since 2026-09-16 (OI-53 batch 2); kill-switch
@@ -15935,7 +15935,7 @@ concepts:
         fields_read: [type]
         notes: whitelist shape, widened to include 'logged' by this batch
       - file: lib/shared/repositories/plan_engine/plan_engine_flags.dart
-        line_range: 542-547
+        line_range: 543-548
         method: isRestDayConsideringLogged
         semantic: flag-check
         fields_read: [type]

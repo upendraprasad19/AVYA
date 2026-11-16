@@ -70,7 +70,7 @@ Week-1 base reps by phase (hypertrophy / strength / metabolic / deload):
   ("accessories 10-15 for all").
 - **Strength focus** (d4, d60, d64), any goal: a main lift's base is the range's MIN in every non-deload phase (the
   deload keeps the goal's rule). In a session of 60+ resolved minutes its rest is +30 s (H 180, M 150); at 30 / 45
-  minutes the rest is normal (d64: +30 s there pushed whole groups out of 110 of 2,304 plans, 102 of them in all three
+  minutes the rest is normal (d64: +30 s there pushed whole groups out of 110 of 2,304 plans; 102 group-plans at 0 in all three
   weeks; heavy compounds only still cost 56). Accessories are unchanged.
 - **No range.** A row with no parsable range keeps the legacy `baseReps` path verbatim.
 - **Weekly sets (d3, d62).**
@@ -78,7 +78,7 @@ Week-1 base reps by phase (hypertrophy / strength / metabolic / deload):
   - Cut = slightly fewer than Build: intermediate 10-14 and advanced 12-16 already are; beginner 10-12 -> 9-11.
   - Session caps are unchanged.
   - The chosen minutes still fill the session (d62), so Maintain's sets as a share of Build are 98% at 30 min, 92% at
-    45, 88% at 60, 76% at 90 (measured, §4).
+    45, 88% at 60, 76% at 90 (measured, §4, the share table).
 - **Quad-first credit for 4-day Maintain.** Measured: Maintain's beginner top of 8 is spent on Glutes by the 4-day
   full body's four Goblet Squats, which refuses every hinge (Hamstrings at 0 in 90 plan-weeks / 30 plans; the OI-454
   class). `SplitResolver.quadPrimaryCreditsGlutes` returns false for `general_fitness` at 4 days (switch ON), so a
@@ -138,6 +138,19 @@ Week-1 base reps by phase (hypertrophy / strength / metabolic / deload):
 | plan-weeks newly at 0 (weeks 1-3, any group) | - | 0 (192 newly trained) |
 | days over the session (max) | +6 | +6 |
 | Maintain week-1 hard sets, mean | 82.0 | 77.3 (Build 89.1) |
+
+Week-1 hard sets as a share of Build's, by minutes (re-measured on the built tree f85e4af6, review round 2: the audit
+dump with and without `PLAN_AUDIT_DISABLE=disable_goal_training`, 144 plans per goal and length):
+
+| minutes | Maintain OFF | Maintain ON | Cut OFF | Cut ON |
+|---|---|---|---|---|
+| 30 | 102 % | 98 % | 102 % | 102 % |
+| 45 | 98 % | 92 % | 101 % | 100 % |
+| 60 | 94 % | 88 % | 99 % | 98 % |
+| 90 | 81 % | 76 % | 86 % | 85 % |
+
+The clock binds below 60 minutes (d62), so Cut, whose bands sit at or below Build's, can fill a short session as
+fully as Build; 3A lowers Cut's share at every length, it does not raise it.
 
 ### 4b. The Strength focus (`PLAN_AUDIT_FOCUS=strength`, ON vs OFF, 2,304 plans)
 
@@ -205,3 +218,17 @@ rows), and 29,010 main lifts at their range floor under the focus with none left
   "never a reservation-blocked slot" text (naming conventions, SoT `day_floor`, detail doc, test header), the flags doc
   comment order, the audit harness's band under `PLAN_AUDIT_DISABLE`, the prototype counts in §4, the p1 / p4 gate
   comments, the accessory-clamp consequence (3 rows above 15, 22 topping at 10 or below).
+
+### Round 2 (2026-11-16, two fresh seats on f85e4af6, CI green)
+
+No P0 / P1; every round-1 fix verified landed. Converged.
+- **Seat B P2 (fixed).** `_weekTwoGains`'s focus price had no fast test (a `restForArchetype` mutant passed): new
+  test "week 2 prices the +1 set at the focus rest" (`goal_reps_behavioral_test.dart`), red under the mutant. B's copy
+  of `floorTrims` was unread by any test: new test "B copies A's floorTrims with the floored day"
+  (`day_floor_behavioral_test.dart`), red under the mutant. The donor-order mutants are equivalent: the floor runs
+  before pass B, so only the day's lead (seated at 3 by pass A) can give a set (diagnose, Mutations).
+- **Seat A P3 (fixed).** The SoT `isRestDayConsideringLogged` range (543-548); the d66 rate range (2.3-4.2 %); the
+  Maintain share claim now has its table (§4, re-measured); "102 group-plans"; the `physique_focus_bringup` entry and
+  the detail doc point to `goal_training` for the strength token; a stale "top 10" test comment; OI-514's full
+  inventory; the gate's test-order note. Seat B P3s (the swap's profile-time minutes, the accessory-clamp count) were
+  already stated in the diagnose's accepted consequences.

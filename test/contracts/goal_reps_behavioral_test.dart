@@ -114,6 +114,26 @@ void main() {
           [('mine', 6), ('IsoA', 3), ('IsoB', 3), ('IsoC', 3), ('IsoD', 3)]);
       expect(run(const GoalTraining(enabled: false, strengthFocus: true)), run(const GoalTraining()));
     });
+
+    // `_weekTwoGains` prices week 2's +1 set at restFor too (round 2, seat B): four M rows at 3 sets in a 60-minute day
+    // gain 4 sets without the focus and 2 with it (each set costs 30 s more). Priced at restForArchetype, the focus
+    // world would gain 4 as well.
+    test('week 2 prices the +1 set at the focus rest (PeriodizationEngine.weekTwoGains)', () {
+      Set<(int, int)> gains(GoalTraining gt) {
+        final f = Fx(goalTraining: gt);
+        const names = ['PressA', 'PressB', 'PressC', 'PressD'];
+        const muscles = ['Chest', 'Lats', 'Quads', 'Hamstrings'];
+        for (var i = 0; i < names.length; i++) {
+          f.row(names[i], [muscles[i]]);
+        }
+        final days = [f.day('hypertrophy', [for (final n in names) f.ex(n, sets: 3)])];
+        return PeriodizationEngine.weekTwoGains(days, false, f.ctx(days, minutes: 60), capToLead: false);
+      }
+
+      expect(gains(const GoalTraining()), {(0, 0), (0, 1), (0, 2), (0, 3)});
+      expect(gains(const GoalTraining(strengthFocus: true)), {(0, 0), (0, 1)});
+      expect(gains(const GoalTraining(enabled: false, strengthFocus: true)), gains(const GoalTraining()));
+    });
   });
 
   group('bands (d3)', () {
