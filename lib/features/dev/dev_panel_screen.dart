@@ -261,17 +261,6 @@ class _DevPanelScreenState extends ConsumerState<DevPanelScreen> {
     _toast('Providers refreshed');
   }
 
-  Future<void> _toggleHoldWeeks() async {
-    final next = !PlanEngineFlags.holdWeeksEnabled;
-    // configBox is the SHARED, UNSYNCED Hive box — this never reaches the cloud
-    // and never leaves this browser profile / device.
-    await HiveService.instance.configBox.put('enable_hold_weeks', next);
-    await DayRolloverObserver.instance.runRolloverNow(ref);
-    if (!mounted) return;
-    setState(() {});
-    _toast('enable_hold_weeks = ${next ? 'ON' : 'OFF'}');
-  }
-
   /// One LOG per exercise (default ON since the flip batch; this toggle stores
   /// `false` as the debug-build kill switch). The Active Workout screen reads
   /// the flag on every build, so the next timer tick picks it up.
@@ -302,7 +291,7 @@ class _DevPanelScreenState extends ConsumerState<DevPanelScreen> {
   }
 
   /// The equipment-exclusions KILL-SWITCH (diagnose e2d6b8, flipped ON
-  /// 2026-08-05). Unlike `enable_hold_weeks` this flag is DEFAULT ON, so the
+  /// 2026-08-05). This flag is DEFAULT ON, so the
   /// switch writes `disable_equipment_exclusions = true` to turn the feature
   /// OFF and DELETES the key to return to the default.
   ///
@@ -446,8 +435,6 @@ class _DevPanelScreenState extends ConsumerState<DevPanelScreen> {
           _card(
             title: 'Ship-dark flags',
             children: [
-              _kv('enable_hold_weeks',
-                  PlanEngineFlags.holdWeeksEnabled ? 'ON' : 'off'),
               // DEFAULT ON since the flip batch: a stored `false` means killed.
               _kv(LogExerciseFlags.key,
                   LogExerciseFlags.logExerciseButtonEnabled ? 'ON' : 'KILLED'),
@@ -467,12 +454,6 @@ class _DevPanelScreenState extends ConsumerState<DevPanelScreen> {
                 spacing: 8,
                 runSpacing: 8,
                 children: [
-                  _btn(
-                    PlanEngineFlags.holdWeeksEnabled
-                        ? 'Turn hold weeks OFF'
-                        : 'Turn hold weeks ON',
-                    () => _toggleHoldWeeks(),
-                  ),
                   _btn(
                     LogExerciseFlags.logExerciseButtonEnabled
                         ? 'Turn one-LOG-per-exercise OFF'

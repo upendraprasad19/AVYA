@@ -13,10 +13,8 @@
 // display reads — the recurring writer/reader-drift class. A hand-built fixture
 // would keep passing through exactly that drift.
 //
-// Ship-dark evidence (§4.12.4): the final group proves that with
-// `enable_hold_weeks` OFF the legacy redoWeek4 path writes NO hold rows, so
-// every hold display surface reads empty and the Train screen renders exactly
-// as it did before this batch.
+// Holds are always on (Unit 3D-b removed the ship-dark flag and the legacy
+// redoWeek4 path with it); the display reads whatever holdWeek() materialized.
 
 import 'dart:io';
 
@@ -35,7 +33,6 @@ import 'package:icanbefitter/core/utils/date_utils.dart' show formatDateKey;
 import 'package:icanbefitter/core/utils/ist_date.dart';
 import 'package:icanbefitter/features/train/providers/train_provider.dart'
     show HoldStatusData, holdStatusProvider;
-import 'package:icanbefitter/shared/repositories/plan_engine/plan_engine_flags.dart';
 import 'package:path_provider_platform_interface/path_provider_platform_interface.dart';
 import 'package:plugin_platform_interface/plugin_platform_interface.dart';
 
@@ -86,7 +83,6 @@ void main() {
 
   setUp(() async {
     await HiveUserSession.openForUser(fakeUserId);
-    await HiveService.instance.configBox.delete('enable_hold_weeks');
     await MigratedKey.write('plan_start_date', planStart.toIso8601String());
     await MigratedKey.write('plan_end_date', planEnd.toIso8601String());
     for (int week = 1; week <= 4; week++) {
@@ -113,7 +109,6 @@ void main() {
 
   tearDown(() async {
     resetTestClock();
-    await HiveService.instance.configBox.delete('enable_hold_weeks');
     final box = HiveService.instance.workoutBox;
     for (final k in box.keys
         .where((k) => k.toString().startsWith('schedule_'))
@@ -255,50 +250,7 @@ void main() {
     });
   });
 
-  group('ship-dark: enable_hold_weeks OFF', () {
-    test('the flag defaults to OFF with no config key written', () {
-      expect(HiveService.instance.configBox.get('enable_hold_weeks'), isNull);
-      expect(PlanEngineFlags.holdWeeksEnabled, isFalse);
-    });
-
-    test(
-        'the legacy redoWeek4 path writes NO hold rows, so every hold surface '
-        'reads empty', () async {
-      expect(PlanEngineFlags.holdWeeksEnabled, isFalse,
-          reason: 'this test pins the OFF branch');
-
-      // What the free-tier triggers call while the flag is OFF.
-      // NOTE: redoWeek4 reads raw `DateTime.now()`, NOT the `nowWall()` seam
-      // (legacy — see the clock-seam note in free-tier-hold-findings.md), so
-      // its roll TARGET is not deterministic under a test clock. Nothing below
-      // depends on that date: the property under test is "no hold rows, from
-      // any writer, anywhere in the box".
-      await WorkoutScheduleWriteService.instance.redoWeek4();
-
-      // The repeat DID happen — plan_end advanced past the original phase.
-      final newEnd = DateTime.parse(MigratedKey.read<String>('plan_end_date')!);
-      expect(newEnd.isAfter(planEnd), isTrue,
-          reason: 'redoWeek4 still rolls the week forward when the flag is OFF');
-
-      // … but NOTHING the hold display reads exists, so every surface keyed on
-      // `HoldStatusData.isHolding` / `holds.isNotEmpty` renders nothing:
-      // the HOLDING · Hn pill, the SESSIONS readout, HoldChipGroup,
-      // HoldRoadmapStrip and the today-card hold branch all no-op.
-      final holdRows = HiveService.instance.workoutBox
-          .toMap()
-          .entries
-          .where((e) =>
-              e.key.toString().startsWith('schedule_') &&
-              e.value is Map &&
-              (e.value as Map)['is_hold'] == true)
-          .toList();
-      expect(holdRows, isEmpty,
-          reason: 'the OFF branch must never stamp is_hold on any row');
-      expect(read.holdWeeks(), isEmpty);
-      expect(read.holdOrdinalForDate(hold1Start), isNull);
-      expect(read.holdWeekSessionProgress(1), (completed: 0, total: 0));
-    });
-
+  group('hold status data', () {
     test('HoldStatusData.empty is the inert display contract', () {
       const empty = HoldStatusData.empty;
       expect(empty.isHolding, isFalse);
@@ -309,34 +261,8 @@ void main() {
           reason: 'no divide-by-zero on an empty/all-rest week');
     });
 
-    test(
-        'holdStatusProvider returns empty EVEN WITH hold rows present when the '
-        'flag is OFF (the rollback case)', () async {
-      // The realistic ship-dark rollback: the flag was ON, holds were
-      // materialized, then it was switched back OFF. Nothing may render.
-      await HiveService.instance.configBox.put('enable_hold_weeks', true);
-      await takeHolds(2);
-      expect(read.holdWeeks(), hasLength(2),
-          reason: 'precondition: the rows really are on disk');
-
-      await HiveService.instance.configBox.put('enable_hold_weeks', false);
-      expect(PlanEngineFlags.holdWeeksEnabled, isFalse);
-
-      final container = ProviderContainer();
-      addTearDown(container.dispose);
-      final status = container.read(holdStatusProvider);
-
-      expect(status.isHolding, isFalse);
-      expect(status.holds, isEmpty,
-          reason: 'the flag-OFF early return must fire BEFORE holdWeeks() is '
-              'consulted — stale hold rows must not reach any UI surface');
-      expect(status.todayHoldOrdinal, isNull);
-      expect(status.sessionsTotal, 0);
-    });
-
-    test('holdStatusProvider surfaces the live hold when the flag is ON',
+    test('holdStatusProvider surfaces the live hold',
         () async {
-      await HiveService.instance.configBox.put('enable_hold_weeks', true);
       await takeHolds(1);
       // takeHolds leaves the test clock inside hold 1, so today IS a hold day.
 

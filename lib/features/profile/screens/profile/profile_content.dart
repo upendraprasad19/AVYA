@@ -27,8 +27,8 @@ extension _ProfileContent on _ProfileScreenState {
         : '';
     // FOB-1 (OI-60): "Week 4" was printed to a holder at every ordinal —
     // `currentWeek` is clamped to [1,4] and a hold starts at plan_start+28.
-    // Hn is the identity for a hold week. `isHolding` is false for every user
-    // while `enable_hold_weeks` is OFF, so this is the pre-fix string.
+    // Hn is the identity for a hold week. For a non-holder this is the
+    // pre-fix string.
     final weekSegment = profileWeekSegment(
       holdOrdinal: stats.holdOrdinal,
       weekInPhase: stats.currentWeek,

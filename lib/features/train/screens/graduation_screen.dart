@@ -124,7 +124,7 @@ class GraduationScreen extends ConsumerWidget {
                 _buildCta(context, ref),
                 const SizedBox(height: 12),
 
-                // Stay on Phase 1 link — runs redoWeek4() first so the
+                // Stay on Phase 1 link — runs holdWeek() first so the
                 // user actually HAS workouts to land on. Before the
                 // 2026-04-18 fix (audit M22) this button routed to
                 // /train on an exhausted Phase 1 schedule → empty page

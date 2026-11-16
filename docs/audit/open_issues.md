@@ -538,92 +538,6 @@ cloud sessions; **this file is the cross-session backlog.**
   `github.event.before..after` (used nowhere in the repo today). Materially different design — own
   reviewed unit.
 
-## OI-60 — Flip `enable_hold_weeks`
-
-- **Status**: OPEN
-- **Verified**: 2026-09-26 — blocker list re-derived: FOB-7(a)/(b) are CLOSED (`d8b90e86`, merged `280fd810`, `docs/audit/oi60-client-blockers.closure.yaml`); FOB-8 is open and was missing from this list (`train_provider.dart:959` `phaseArcProvider` still reads `getCurrentWeekNumber()` directly).
-  PRIOR (kept verbatim): 2026-08-20 — the blocker list re-derived from the AUTHORITATIVE ledger
-  (`docs/ship_dark_pending_review.yaml:251-382` + `docs/audit/oi60-streak-identity.closure.yaml`),
-  not carried from this entry's own text, which was wrong. The three `enable_hold_weeks` rows were
-  read directly and all still carry `flip_reviewed: false`. FOB-1's six surfaces were each read in
-  source before being fixed — one (`phase_roadmap_screen.dart`) reaches the clamp through
-  `getProgramWeek`, so the FOB's own file list understated it rather than overstating it, and one
-  (`profile_content.dart`) is a consumer the FOB named only via its provider.
-- **Identified**: 2026-07-26
-- ⚠ **Corrected 2026-08-20.** This entry read *"7 unstarted flip-on-blocker items (FOB-1…FOB-7)"*
-  and `OPEN_INDEX.md` repeated it. That was stale on three counts as of 2026-08-13, and the index
-  is generated from this line, so the whole board carried the wrong number: **FOB-2 CLOSED**
-  (`docs/audit/oi60-streak-identity.closure.yaml`, diagnose `a3f8d1`), **FOB-7(c) verified clean**
-  (the report was stale — ai-media-proxy already carries both the 10K cap and the FC7 nonce fence),
-  **FOB-7(d) CLOSED**, and **FOB-6 SPLIT OUT to OI-125** by founder decision as a FEATURE that is
-  explicitly *not* a flip blocker. "Unstarted" was also wrong for the two that had already shipped.
-- **Blocked on**: **3 remaining flip-on blockers** in `docs/ship_dark_pending_review.yaml` —
-  **FOB-3, FOB-4, FOB-7(a)/(b)**. The coach snapshot and the Sunday push / weekly report still tell
-  every holder a false week-4 story; `currentPhaseCompletionRate` still folds hold days into the
-  PRO-advance gate input and `PlanIntegrityReconciler` still scans weeks 1-4 only. FOB-3/FOB-4
-  require ai-proxy + weekly-recap-ready + weekly-report EF redeploys — each its own explicit
-  authorization (§4.3), plan approval ≠ deploy approval.
-- ✅ **FOB-3 CODE LANDED 2026-08-21** — branch `claude/oi-pending-hold-weeks-1od97o`, diagnose
-  `b6e1f4`, closure `docs/audit/fob3-coach-hold-block.closure.yaml`, behavioral test
-  `test/contracts/hold_snapshot_block_behavioral_test.dart` (7 cases, mutation-proven on five legs,
-  each reddening exactly one test). The snapshot gains a facts-only `hold` block through a new
-  `holdSnapshotBlock()` seam, emitted with a null-aware element so a non-holder's snapshot gains no
-  key at all, and `hold` joins `trimSnapshotToBudget`'s keep set. The INSTRUCTION half — a HOLD
-  WEEKS section in `captain_manual.ts` telling the coach to read `snapshot.hold`, quote
-  `hold.label`, IGNORE both projected week fields BY NAME and NEVER say final-week-of-Phase-I —
-  is **INERT until ai-proxy is redeployed** (credentials, not permission; see
-  `docs/operations/FOUNDER_LAPTOP_HANDOFF.md` §2-4).
-  ⚠ Two things nearly shipped broken and are worth carrying forward: 20 **unescaped backticks**
-  inside the `CAPTAIN_MANUAL` template literal would have terminated it and boot-failed ai-proxy
-  on the next deploy without failing loudly (deploy-skill 6.5); and the first **keep-set test
-  proved nothing** — dropping `'hold'` from the keep set left every test green, because the
-  trimmer shrinks the LARGEST non-kept field and two giant bloat fields absorbed the whole overage
-  before the ~110-char block was ever reached.
-  Deliberately NOT done: suppressing the two week fields. They are read by non-hold logic, and
-  OI-60's own `do_not` forbids the obvious replacement.
-
-  ⚠ **FOB-4 needs MORE than a redeploy, and the ledger's `why:` does not say so.** Measured
-  2026-08-20 against the live schema: `information_schema.columns` in schema `public` contains
-  **zero** columns matching `%hold%`, and `user_progress` carries no hold field of any spelling
-  (23 columns, listed live). `is_hold` is written by `holdWeek()` onto local schedule rows and
-  **never reaches the cloud** — there is no `workout_schedule` table in `public` at all. So
-  `weekly-recap-ready` and `weekly-report` cannot branch on a hold no matter what is deployed:
-  the signal does not exist on their side of the wire. Whoever takes FOB-4 must decide how hold
-  state crosses that boundary FIRST (a `user_progress` column, or a derived RPC), which means a
-  MIGRATION and its own live-apply authorization on top of the two redeploys. Do not schedule
-  FOB-4 as a redeploy-only unit.
-- ✅ **FOB-5 CLOSED 2026-08-20** — diagnose `c7a3b9`, closure `docs/audit/fob5-hold-telemetry.closure.yaml`,
-  migration **120 applied live** (founder-authorized). `holdWeek()` now emits `hold_week_started`,
-  consumed by three new `hold_*` columns on `founder_metrics_engagement()` that reach the founder
-  dashboard with no EF redeploy. ⚠ FOB-5's own prescribed fix (`where channel = 'app'`) was
-  **wrong and was not applied** — it matches 7 of 116 rows. The metric now reads **22 instead of
-  116**. One self-inflicted regression was caught and closed inside the batch: the required
-  `DROP`+`CREATE` reset the function's ACL and briefly made it anon-executable (finding FOB-5-E).
-  ⚠ Read `oi60-streak-identity.closure.yaml` before attempting FOB-7(b): widening the 1..4 scan is
-  already REFUTED (the scan IS the re-anchor trigger, so widening buys no healing and only makes
-  the re-anchor fire more often — the P0-11 concern `d7f3a9` rejected). The shape is *split the
-  trigger from the write.* OI-127 is routed to whichever batch takes FOB-7(a)/(b), so one batch
-  holds the reconciler context.
-- ✅ **FOB-1 CLOSED 2026-08-20** — branch `claude/oi-pending-hold-weeks-1od97o`, diagnose `f4c8e1`,
-  behavioral test `test/contracts/hold_week_identity_behavioral_test.dart` (16 cases, mutation-proven
-  on both protective legs: neutering the hold arm reddens 3, removing the flag gate reddens 5 across
-  this file and `hold_display_read_path_test.dart`). Adopted "a hold suppresses the week number; Hn
-  is the identity" on all **six** in-repo surfaces that printed the clamped week 4 to a holder
-  (home eyebrow, profile subtitle, journey timeline ×2, phase-roadmap header, share-as-video stamp
-  + its Remotion composition), behind a new single-gate seam
-  `WorkoutScheduleReadService.weekIdentity()`. Two named residuals, neither deferred:
-  `ai_snapshot_builder.dart` is **FOB-3's** by the board's own division (it rewrites the same lines
-  to add the `hold` block and needs the ai-proxy redeploy — touching it twice would ship a
-  half-changed snapshot contract), and `telegram-bot/bot.py` is **upstream_blocked**, the OpenClaw VPS
-  deployment (§2; the tracked copy is `telegram-bot/`, dormant, OI-476).
-- **What's missing**: Own full ×2 per §4.12.4 (flip-on is where real user risk starts) — the four
-  remaining FOB items closed first. The flip-on commit must clear **all four** `enable_hold_weeks`
-  rows in the ledger (`hold-mechanic`, `hold-display`, `hold-display-fixes`, and
-  `claude/oi-pending-hold-weeks-1od97o`) in one commit — corrected from "three" on 2026-08-21 when
-  FOB-1+FOB-3 added the fourth.
-
-**UPDATE 2026-09-26 (backlog triage + `ci-green-batch-a`):** The `Blocked on` line below predates this and still lists FOB-7(a)/(b) — they are CLOSED (`d8b90e86`, merged `280fd810`, diagnoses `b9d4c2` / `e7c4a2`). What really remains: **FOB-4** (how the Sunday push + weekly report learn a user is on hold — founder design choice: (a) a `user_progress` hold column/RPC + 2 EF redeploys, or (b) drop the week number from those two EFs' copy for everyone, no migration) and **FOB-8** (`train_provider.dart:959`, `phaseArcProvider` reads `getCurrentWeekNumber()` directly — NOT previously on this list). FOB-3's code is on main; archived ai-proxy payload `backups/edge_function_payloads/ai-proxy/v3_57b0b07.json` (2026-09-24) contains 'HOLD WEEKS', so it is probably deployed — confirm with `get_edge_function` before relying on it.
-
 ## OI-61 — Coach-UX: live-verify test7, v74 hardening, temp-PRO cleanup
 
 - **Status**: OPEN
@@ -1167,7 +1081,7 @@ cloud sessions; **this file is the cross-session backlog.**
 - **Surfaced by, but NOT specific to, e2d6b8**: the equipment-exclusions flip wired a dev-panel
   toggle (`_toggleEquipmentExclusions`) and its closure entry initially claimed that made the
   kill-switch operable. Round 2 showed that is true only in debug. The same is true of
-  `enable_hold_weeks` and every one of the twelve OI-53 flags — this is architectural.
+  `enable_hold_weeks` (deleted 2026-11-16 by OI-175's flip) and every one of the twelve OI-53 flags — this is architectural.
 - **Fix shape (needs the product call first)**: the honest options are (a) an `/admin`-gated
   operator screen — `/admin` IS registered unconditionally (`app_router.dart:344+`) and is
   founder-gated by `ADMIN_USER_IDS`, so a flag panel there would be release-reachable without
@@ -2636,7 +2550,7 @@ Do NOT re-propose v1. Verified clean by round 2: sending `''` to `user_profile.c
 ## OI-166 — regeneration RESTARTS the periodization wave instead of continuing it, so the wave index and the week counter disagree (P2)
 
 - **Status**: OPEN
-- **Blocked on**: OI-175 (the window-alignment half — `redoWeek4`/`holdWeek` + the strip's `isCurrent` clamp). Unit 1 (`7f6cf74b`) and Unit 2 (`de52f1e8`) have both SHIPPED; what is left of this issue lives in OI-175 and OI-190 (OI-189 CLOSED 2026-09-13, `b9e4d1`). Stays OPEN until OI-175 lands, because the filed symptom's "now" highlight still points at `week_plans[3]` past real week 4.
+- **Blocked on**: OI-190 only. OI-175 (the window-alignment half — `redoWeek4`/`holdWeek` + the strip's `isCurrent` clamp) CLOSED 2026-11-16 by generator step 3D (`redoWeek4` deleted, the Monday-aligned `holdWeek` always on, the marker follows the hold; diagnose `d3b7e5`). Unit 1 (`7f6cf74b`) and Unit 2 (`de52f1e8`) have both SHIPPED; what is left of this issue lives in OI-190 (OI-189 CLOSED 2026-09-13, `b9e4d1`). The filed symptom's "now" highlight past real week 4 is fixed by OI-175's marker (`weekChipLit`: during a hold only today's H chip is lit), so this stays OPEN for OI-190 only.
 - ⚠ **Blast radius is `account`, NOT `≥platform`** — corrected 2026-09-07 by running the classifier over the actual de-duplication file set (`lib/core/services/**` → `docs/blast_radius.yaml:326`; `lib/features/ai_coach/**` → `:235`; positive control `sync_workout.dart` → `platform`, so the classifier discriminates). `bpass: accepted` is still required and still planned — `account` mandates the ×2 review and a self-initiated B-pass (§4.3). This line previously asserted `≥platform` on no measurement
 - ⚠ **SPLIT 2026-09-07 after FIVE non-converging review rounds** (§4.12.1: *"successive reviews keep surfacing new material issues ⇒ the unit is too large"*). Round 5 found 7 P1s, **four of them inside round 4's own remediations**, and independently recommended the same split point. **Unit 1 (converged, ships)**: the `check_single_schedule_row_builder.dart` gate scoped to `lib/` and defaulting to warn · `rawWeekNumber()` extracted from `getCurrentWeekNumber()` · implementation D's (`hotel_workout_planner.dart`) three wrong stamps corrected per-row-date. **Unit 2 (re-planned from scratch)**: the pure `buildScheduleRows`, callers A/B/C, the deload dual write, the coach's `current_plan` write, and the preview-cache staleness rule. Plan + all five rounds' findings of record: `docs/audit/oi166-regen-wave-alignment-plan.md`
 - ⚠ **OPEN DESIGN QUESTION owned by the Unit 2 re-plan — Q7, the `switch_goal` refresh regression** (raised round 3, unclosed through rounds 4 and 5): bounding a regen's writes at `plan_end` means a `switch_goal` no longer refreshes orphan rows past it, so those keep **old-goal** workouts where today they are rewritten. Options: (a) accept until OI-174's prune, leaving stale forward workouts after an explicit goal change; (b) extend the regen's delete range past `plan_end` to cover existing forward rows — OI-174's prune scoped to a single regen. Lean is (b): a regeneration leaving stale forward workouts contradicts what the user asked for, and "rows this regen is replacing" is a smaller claim than a global prune. **Recorded here rather than in the plan doc because that doc is being rewritten and an open question inside a document under rewrite has no owner**
@@ -2722,23 +2636,7 @@ Do NOT re-propose v1. Verified clean by round 2: sending `''` to `user_profile.c
   `_scheduledWorkoutDays()` (or `isPhaseExpiredFrom` itself) needs a "not completed" filter to
   match the sweep's own rule, symmetric with how the sweep already treats completed rows as
   history that should not block anything.
-
-## OI-175 — a regeneration past the phase's 4th week (`rawWeek > 4`) has no well-defined behaviour (P2)
-
-- **Status**: OPEN
-- **Blocked on**: FOUNDER — what a regeneration should DO for a user in the extended "keep training Phase 1" state. AND sequenced after **OI-174**: round 2 of the OI-166 plan review proved the two are not separable
-- **Verified**: 2026-09-06 — `getCurrentWeekNumber()` clamps to 1..4 (`workout_schedule_read_service.dart:1263`); `redoWeek4()` extends `plan_end` without moving `plan_start` (`workout_schedule_write_service.dart:178-215`, esp. `:213-214`) and is the live free-tier write while `enable_hold_weeks` is OFF (`keep_training_phase1_action.dart:29-36`, `plan_engine_flags.dart:63-69`); `isPhaseExpired()` gates the Home expired card (`home_screen.dart:771`), the Train surface (`train/screen.dart:169`) and both PRO advance paths (`pro_phase_advance.dart:144`, `workout_schedule_read_service.dart:546`)
-- **Identified**: 2026-09-06 · split out of OI-166 under §4.12.1 (successive reviews surfacing new material issues ⇒ split and ship the smallest converged piece). Round 1 produced 11 findings; round 2 produced 5 NEW P1s **inside round 1's own corrections**, and three of them (P1-A, P2-F, P2-H) were all this one branch
-- **The state**: two routes put a user past their 4th plan week without `plan_start` moving. (1) `redoWeek4()` — the free-tier "keep training Phase 1" tap — extends `plan_end` by 7 days. (2) A mid-phase regen writes 4 fresh weeks from the current Monday, so rows reach `plan_start+34` (week-2 regen) or `+41` (week-3) while `plan_end` stays `+27`
-- **Why OI-166 does not fix it**: OI-166 makes a regen lay `weekPlans[rawWeek-1 .. 3]` on plan weeks `rawWeek..4`. That is well-defined only for `1 ≤ rawWeek ≤ 4`. **For `rawWeek > 4` OI-166 deliberately falls back to today's behaviour verbatim** — no data loss, no regression, and no new claim about a state that is not well-defined until OI-174 prunes. This issue owns the improvement
-- ⚠ **Three candidate behaviours, none yet chosen — this is the founder question**:
-  1. Regenerate the current extended window (`today..plan_end`) carrying week 4's character, since `redoWeek4` is by construction a week-4 repeat. ⚠ Round 2 found this is NOT week-aligned in the normal case: `rollStart = todayMidnight` when today is past `plan_end` (`workout_schedule_write_service.dart:186-188`), which is the gated-on case, so the window starts on an arbitrary weekday and `dayPattern.contains(dayOfWeek)` would place sessions on the wrong days
-  2. Refuse outright. ⚠ Round 2 (P1-A) showed a plain refusal REGRESSES route (2): `plan_end (+27) < today (+30)` makes the window empty, so the goal change is silently discarded, and the orphan rows keep `isPhaseExpired()` false so no recovery surface is reachable for 7 days. Today's code at least honours the goal change
-  3. Treat it as a phase boundary — hand off to phase advance / the paywall
-- ⚠ **Whatever is chosen must not stamp `'week': 5`**: `hold_week_labels.dart:133` renders `row['week']` straight to the Home card, and that file's own header (`:93`) calls `copy['week'] = 4 + n` "the dishonest number, persisted" — it exists to suppress exactly that string
-- **Invariant that holds regardless**: a regeneration never deletes a row it does not replace. ⚠ Note this is already violated in a narrow way — `workout_schedule_read_service.dart:373-376` deletes `displaced_*` keys unconditionally with no `completed` check and no replacement (pre-existing, round 2 P3-N)
-- **PARTIALLY RESOLVED 2026-09-11 — a FOURTH candidate behaviour was chosen and shipped, none of the three above**: OI-166 Unit 2 (`docs/audit/oi166-unit2-plan-v10.md`, diagnose `d7f3b2`) implements CYCLING — `contentFlavorIndex((w-1)%4)` repeats the baseline→overreach→peak→deload wave past week 4 rather than freezing on week 4's character (candidate 1), refusing (candidate 2), or handing off to phase advance (candidate 3). This closes the "no well-defined behaviour" complaint for the CONTENT/LABELING half: `rawWeek > 4` now stamps its real week number and picks well-defined content, verbatim, for any `rawWeek`. It does NOT close the WINDOW-ALIGNMENT half this entry also raises — whether `redoWeek4`'s own extension window is week-grid-aligned is untouched (`redoWeek4`/`holdWeek` themselves were explicit out-of-scope for Unit 2). Leaving this OPEN rather than closing it: the founder-blocked question above was "what should a regen DO", and cycling answers it for content but the sequencing-after-OI-174 note and the `redoWeek4` non-alignment concern (candidate 1's own rejection reason) still stand.
-- ⚠ **A THIRD residual surfaced the same day by the Unit 2 B-pass (Finding 2, P1), distinct from window-alignment: the phase-arc strip's "NOW" highlight does not cycle even though content now does.** `getCurrentWeekNumber()` (`workout_schedule_read_service.dart:1334`, unchanged by Unit 2) clamps to `[1,4]`, so past real week 4 the strip permanently highlights index 3 — "deload" per Unit 2's own splice — regardless of which of baseline/overreach/peak/deload the real current week actually cycles to. Reachable TODAY via the live `redoWeek4`, no flag required. Not strictly a NEW regression (pre-fix, `current_plan` was also unconditionally rewritten to the same canonical order every regen, so the clamp already existed against different, frozen content) — but Unit 2 makes the mismatch visible and variable for the first time. A real fix means routing the highlight through a cycle-aware index or otherwise making `hold_week_identity`'s clamp itself past-week-4-aware, which is a redesign of a DIFFERENT SoT concept (`hold_week_identity`, own tests, own explicit "do NOT branch inputs where the clamped 4 is HONEST" warning for its other consumers) — correctly out of scope for the already-9-round-converged Unit 2, tracked here instead of left implied-fixed.
+- ⚠ **A NEW cloud reader of rows past `plan_end`, 2026-11-16 (generator step 3D, B-pass seat A F2/F4):** Unit 3D-a's server hold rule (`supabase/functions/_shared/hold_week.ts`, deployed in weekly-recap-ready v29 / weekly-report v41) reads `scheduled_workouts.week_number > 4` for the current IST week and does not read `plan_end`. Every local delete of a `schedule_*` row stays local (`_syncScheduledWorkouts` is upsert-only; `index.commit(liveKeys:)` prunes the skip index only), so a cloud copy of a deleted hold row can still make the Sunday push say "Hold week" for that week. Two new local deletes join the existing sweep: `holdWeek`'s orphan clean-up (rows dated before this week's Monday, so never the current week) and its rollback after a failed row write (`_rollBackHoldRows`: a target date that had no row is deleted; a date that had a row is rewritten, and that push corrects the cloud). The rollback case needs a failed Hive write after an earlier row's push went out. The cloud prune this entry owns closes it.
 
 ## OI-169 — a local run of `test/edge_functions/` reports "All tests passed" having executed nothing (P2)
 
@@ -2995,6 +2893,7 @@ The evidence-backed risk on return is **injury, not lost gains** — CSCCa/NSCA 
    - **LIVE:** `holdWeeksEnabled` defaults **false** (`plan_engine_flags.dart:63-69`), so a returning free user gets **`redoWeek4`**, which sources `week4Start = planEnd - 6d` (`workout_schedule_write_service.dart:183`) — the TRAILING week of the window, i.e. the deload week on a clean 28-day phase. Coleman et al. 2024: an *unnecessary* deload in trained lifters *"appears to negatively influence measures of lower body muscle strength."* They have already had a forced deload; we give them another.
    - **ALREADY BUILT, ship-dark:** `holdWeek` (`:266-270`) sources `planStart + 14..20` = **week 3 (PEAK)**, dropping to `+21..27` (deload) only on **every 4th hold** — so a long-term holder keeps the wave rhythm peak/peak/peak/deload instead of deloading forever. Its own comment names the live behaviour as the defect: *"NEVER plan_end-derived (redoWeek4's bug was copying the trailing deload week every time)"*.
    - ⇒ **This defect's remedy is OI-60's flag flip, NOT new engineering.** Scope this OI to the three defects below, and treat item 1 as one more argument for OI-60. Anyone planning work here should read `holdWeek` before designing anything — the smarter rule already exists.
+   - ✅ **DEFECT 1 FIXED 2026-11-16 by generator step 3D (OI-175, founder d57; Unit 3D-b, PR #290):** `enable_hold_weeks` and `redoWeek4` are deleted, so a returning free user's "Keep training Phase 1" is always `holdWeek` (Peak, Peak, Peak, Deload). This entry stays OPEN for defects 2-4.
 2. **The decay cuts the quality they RETAINED — and for a FREE user it never fires at all.** `lib/core/utils/detraining.dart` scales **weight** (≤7d 1.0 · 8-21d 0.925 · 22-35d 0.825 · >35d **0.50**). But Bosquet 2013 (103 studies) puts work capacity worst (SMD −0.62) and peak power best-retained (−0.20); Bjørnsen 2019 finds ~60% of strength gain retained at 20 weeks. **What they lost is volume tolerance, not load.** Points at cutting sets/frequency rather than weight.
    - ⚠️ **Scope, corrected 2026-09-10 (round 3):** `detrainingDecayEnabled` is default ON, but **both** call sites are closed to a free user. ⑦(a) lives inside `ProgressionResolver.resolve()`, which returns `{}` for `phase <= 1` (`progression_resolver.dart:55`); ⑦(b) (`train_provider.dart:1312`) is behind `sessionDetrainingCutEnabled`, default OFF. A free user is on phase 1 by definition (rule 6 / rule 19 gate `phases_2_to_12`).
    - ⇒ **The returning FREE user is prescribed their exact pre-absence load, undecayed** — on top of the deload-week copy `redoWeek4` hands them (defect 1). Two independently wrong things in the one path most returning users are on. The decay debate above is a **PRO-only** question until ⑦(b) flips.

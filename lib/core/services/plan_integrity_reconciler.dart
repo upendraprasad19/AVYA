@@ -421,9 +421,9 @@ class PlanIntegrityReconciler {
   /// `hold_week_streak_identity_behavioral_test.dart`. Round 2 caught this
   /// batch reintroducing it here — the same class, one file over.
   ///
-  /// Returns `const []` when `enable_hold_weeks` is OFF, because
-  /// [WorkoutScheduleReadService.activeHoldWeeks] does; that is what keeps the
-  /// whole FOB-7(b) path byte-identical with the flag off.
+  /// Returns `const []` for a user with no covered hold, because
+  /// [WorkoutScheduleReadService.activeHoldWeeks] does; the FOB-7(b) path is
+  /// then a no-op.
   @visibleForTesting
   static List<Map<String, dynamic>> gatherHoldRows(
       WorkoutScheduleReadService scheduleService) {
@@ -495,9 +495,9 @@ class PlanIntegrityReconciler {
       // plan_start_date / plan_end_date). The two key sets are disjoint, so the
       // merge cannot move the plan window by any path.
       //
-      // Gated seam on purpose: activeHoldWeeks() returns const [] when
-      // `enable_hold_weeks` is OFF, so with the flag off this whole block is a
-      // no-op and the function behaves byte-identically to before FOB-7(b).
+      // activeHoldWeeks() returns const [] for a user with no covered hold, so
+      // for them this whole block is a no-op and the function behaves
+      // byte-identically to before FOB-7(b).
       //
       // ⚠ ANCHOR ON THE NORMALIZED MONDAY, never on `weekStart` directly.
       // `HoldWeekInfo.weekStart` is `byOrdinal[ordinal]!.first` — the first

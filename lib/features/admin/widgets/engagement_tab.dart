@@ -62,8 +62,8 @@ class EngagementTab extends StatelessWidget {
                     value: '${current.activeLast7d}',
                     unit: '7d users',
                   ),
-                  // Hold-week telemetry (FOB-5). Reads 0 until
-                  // enable_hold_weeks flips — that is correct, not a bug.
+                  // Hold-week telemetry (FOB-5). Holds are on for every
+                  // free user since Unit 3D-b; 0 means nobody held.
                   //
                   // "min" is load-bearing on the holders tile: the rows these
                   // count are pruned nightly by rolling-context, and an offline

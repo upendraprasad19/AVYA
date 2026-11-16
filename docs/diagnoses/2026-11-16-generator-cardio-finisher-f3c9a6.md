@@ -95,7 +95,9 @@ impact_analysis: |
   time to it (240 / 540 / 480 / 240 s), so those days hold fewer sets, and some muscle-weeks go to 0 under 60 minutes
   (d76's accepted cost, table below). Build and strength plans are byte-identical. Every user who has a stored plan sees
   its finisher (uninjured) or the bike / nothing (injured) after the update; the day's minutes now include it. The app
-  is not live; testers regenerate. The model-facing tool descriptions change only after the ai-proxy deploy (founder go).
+  is not live; testers regenerate. The model-facing tool descriptions change only after the ai-proxy deploy (founder go). Deployed 2026-11-16 on that go:
+  ai-proxy v108 -> v109, 66 of 67 decoded live files equal main 63af8c63 (the type-only `_shared/tools/types.ts` is
+  served empty); rollback source 862f0bc2 (docs/audit/generator-step3d.closure.yaml FOB-4-DEPLOY).
 touched_layers_checked:
   - { layer: client_code, status: fixed_in_this_batch, evidence: "cardio_finisher, plan_generator (waived lines), session_budget, session_estimate, finisher_safety, finisher_show_context, train_provider, home_screen, swap_service, workout_schedule_read_service, hotel_workout_planner, tool_dispatcher, injury_vocab, coach_injury_profile, the diff preview and confirm card, the active workout and Train sections; flutter analyze --no-fatal-infos clean; mutations below" }
   - { layer: hive_local_state, status: verified, evidence: "schedule_<date>['finisher'] written by both schedule writers and read through FinisherSafety on real Hive rows (finisher_display_behavioral_test); profile['injuries'] written by the coach through patchProfileWith on real Hive (coach_injury_profile_write_behavioral_test); the switch read through PlanEngineFlags" }

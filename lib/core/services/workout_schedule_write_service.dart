@@ -5,7 +5,7 @@
 // Owns scheduled-workout mutations that aren't swap/template specific:
 //   - markCompleted, markSkipped
 //   - pauseRange
-//   - redoWeek4
+//   - holdWeek (free-tier "Keep training Phase 1")
 //   - copyWeek
 //
 // Note: the canonical `upsertScheduled` writer lives on
@@ -19,6 +19,8 @@
 
 import 'dart:async';
 
+import 'package:flutter/foundation.dart' show visibleForTesting;
+
 import 'app_events_service.dart';
 import 'error_telemetry.dart';
 import 'hive_service.dart';
@@ -30,6 +32,25 @@ import 'workout_write_service.dart';
 import 'write_result.dart';
 import '../utils/date_utils.dart';
 import '../utils/ist_date.dart';
+
+/// What [WorkoutScheduleWriteService.holdWeek] did (Unit 3D-b, OI-175; round 1
+/// A-F4, round 2 A-F3). Only [written] committed a hold.
+enum HoldWeekOutcome {
+  /// The hold week was written, `plan_end` moved, the event logged, the plan pushed.
+  written,
+
+  /// A covered hold is already dated this week or later (the double tap): no write.
+  alreadyHolding,
+
+  /// Another `holdWeek` call is running (the mutex): no write.
+  inFlight,
+
+  /// No `plan_start` / `plan_end`: no write.
+  noPlan,
+
+  /// A row write did not succeed: the loop stopped and `plan_end` did not move.
+  failed,
+}
 
 /// Typed failure modes for [WorkoutScheduleWriteService.pauseRange].
 class PausePlanException implements Exception {
@@ -185,64 +206,7 @@ class WorkoutScheduleWriteService {
     return pausedDates;
   }
 
-  // ── Free-tier Re-do Week 4 (audit H9 / B1) ──────────────────────
-
-  /// Copies the last week of the current Phase forward by 7 days.
-  Future<void> redoWeek4() async {
-    final readSvc = WorkoutScheduleReadService.instance;
-    final planEnd = readSvc.getPlanEndDate();
-    if (planEnd == null) return;
-
-    final workoutBox = _hive.workoutBox;
-    final week4Start = planEnd.subtract(const Duration(days: 6));
-    final now = DateTime.now();
-    final todayMidnight = DateTime(now.year, now.month, now.day);
-    final rollStart = todayMidnight.isAfter(planEnd)
-        ? todayMidnight
-        : planEnd.add(const Duration(days: 1));
-
-    for (int offset = 0; offset < 7; offset++) {
-      final sourceDate = week4Start.add(Duration(days: offset));
-      final targetDate = rollStart.add(Duration(days: offset));
-      final sourceKey = '$_schedulePrefix${formatDateKey(sourceDate)}';
-
-      final raw = workoutBox.get(sourceKey);
-      if (raw is! Map) continue;
-
-      final copy = Map<String, dynamic>.from(raw);
-      copy['date'] = formatDateKey(targetDate);
-      copy['status'] = copy['type'] == 'rest' ? 'rest' : 'planned';
-      copy['completed_at'] = null;
-      copy['is_swapped'] = false;
-      copy['original_date'] = null;
-
-      await WorkoutWriteService.instance.upsertScheduled(
-        date: targetDate,
-        entry: copy,
-        source: WriteSource.schedSwap,
-      );
-    }
-
-    final newEnd = rollStart.add(const Duration(days: 6));
-    await MigratedKey.write(_planEndKey, newEnd.toIso8601String());
-
-    // OI-189 durability: this is the LIVE free-tier repeat path
-    // (runFreeTierRepeatWrite → redoWeek4 while enable_hold_weeks is OFF) and
-    // it MOVES plan_end (line above) — the same shape holdWeek carries its own
-    // push for (below). Without it a reinstall in the ≤24h gap before
-    // weeklyFullSync takes the stale cloud window verbatim (PlanWindowReanchor
-    // fresh-install branch), the restore brings the redo rows back PAST it,
-    // and the next regen's sweep deletes the week. Awaited; self-catching
-    // inside; the try/catch guards the _ensureSessionOpen await.
-    try {
-      await SyncService.instance.pushWorkoutPlanForSyncDomain();
-    } catch (e, st) {
-      unawaited(ErrorTelemetry.recordNonFatal(e, st,
-          reason: 'redo_week4_durability_push'));
-    }
-  }
-
-  // ── Free-tier "Hold the Line" (holdWeek — ship-dark replacement for redoWeek4) ──
+  // ── Free-tier "Hold the Line" (holdWeek; Unit 3D-b deleted redoWeek4, d57) ──
 
   /// Re-entrancy guard mirroring `pro_phase_advance._advanceInFlight`. NOTE: it
   /// does NOT cover holdWeek-vs-PRO-advance (that path guards a SEPARATE bool) —
@@ -257,121 +221,23 @@ class WorkoutScheduleWriteService {
   /// longer expired, and durably pushes the fresh `plan_json` so the hold
   /// survives a reinstall.
   ///
-  /// Ship-dark behind `enable_hold_weeks` (default OFF) — the plan-expired
-  /// triggers call [redoWeek4] when the flag is OFF. Design contract +
-  /// ×2-review record: `docs/plan-reviews/hold-mechanic.md`; diagnose
-  /// `docs/diagnoses/2026-07-21-free-tier-hold-mechanic-<id>.md`.
-  Future<void> holdWeek() async {
-    if (_holdInFlight) return; // check+set with no await between (mutex)
+  /// Unit 3D-b (OI-175, d57): the ONLY free-tier repeat write; `redoWeek4` and
+  /// the `enable_hold_weeks` flag are deleted. Design contract: plan
+  /// `docs/plans/2026-11-16-generator-step3d-hold-weeks.md` section 2.1 (and the
+  /// July record `docs/plan-reviews/hold-mechanic.md`).
+  ///
+  /// Returns a [HoldWeekOutcome]; only [HoldWeekOutcome.written] committed a
+  /// hold, logged `hold_week_started` and pushed the plan.
+  Future<HoldWeekOutcome> holdWeek() async {
+    if (_holdInFlight) return HoldWeekOutcome.inFlight; // check+set, no await between (mutex)
     _holdInFlight = true;
+    HoldWeekOutcome outcome;
     try {
-      final readSvc = WorkoutScheduleReadService.instance;
-      final planStart = readSvc.getPlanStartDate();
-      final planEnd = readSvc.getPlanEndDate();
-      if (planStart == null || planEnd == null) return;
-
-      // "Backdate to Monday always": the hold occupies THIS week (Mon-Sun),
-      // using the SAME raw-weekday normalizer `plan_start` was set with (NOT
-      // `mondayOfIst`) so `(rollStart - plan_start)` stays a whole number of
-      // weeks. `nowWall()` is seam-aware (dev time-travel / year-sim).
-      var start = readSvc.normalizeToMonday(nowWall());
-      // Defensive: never overwrite the live phase window. The expired-only
-      // button gate already guarantees today > plan_end, but a stray caller
-      // must still not clobber weeks 1-4. plan_end is a Sunday by construction,
-      // so (plan_end + 1) normalizes to the next Monday.
-      if (!start.isAfter(planEnd)) {
-        start = readSvc.normalizeToMonday(planEnd.add(const Duration(days: 1)));
-      }
-      final rollStart = start;
-
-      // Ordinal N = (max hold_ordinal among rows dated < rollStart) + 1, else 1.
-      // Excluding rows AT rollStart makes a crash-partial retry idempotent
-      // (rows stamped but plan_end not yet extended recompute to the same N and
-      // overwrite cleanly — no deload-cadence drift).
-      final n = _nextHoldOrdinal(rollStart);
-
-      // Every 4th hold sources the deload week (plan_start + 21..27); else the
-      // Peak week (plan_start + 14..20). NEVER plan_end-derived (redoWeek4's bug
-      // was copying the trailing deload week every time).
-      final deload = n % 4 == 0;
-      final sourceWeekStart =
-          planStart.add(Duration(days: deload ? 21 : 14));
-
-      for (int offset = 0; offset < 7; offset++) {
-        final sourceDate = sourceWeekStart.add(Duration(days: offset));
-        final targetDate = rollStart.add(Duration(days: offset));
-        final sourceKey = '$_schedulePrefix${formatDateKey(sourceDate)}';
-
-        final raw = _hive.workoutBox.get(sourceKey);
-        if (raw is! Map) continue;
-
-        final copy = Map<String, dynamic>.from(raw);
-        copy['date'] = formatDateKey(targetDate);
-        // The push maps cloud `week_number` <- entry['week'] (sync_workout.dart),
-        // so stamp 'week' (NOT 'week_number') — else the copied Peak 'week':3
-        // would push 3. Schema-safe (>4, nullable int, no CHECK, no EF reader).
-        copy['week'] = 4 + n;
-        // Hive-map + plan_json ONLY (no cloud column — kept out of the push
-        // field-set so it can't 400). Drives the deload cadence + the H-chip.
-        copy['is_hold'] = true;
-        copy['hold_ordinal'] = n;
-        copy['status'] = copy['type'] == 'rest' ? 'rest' : 'planned';
-        copy['completed_at'] = null;
-        copy['is_swapped'] = false;
-        copy['original_date'] = null;
-        // 'phase' is deliberately NOT re-stamped — the verbatim copy already
-        // carries the source week's phase (= current); an explicit stamp would
-        // trip legacy `bucketPastRows` carry-forward and collapse a legacy
-        // multi-phase user's real history (free-tier-hold-findings P1).
-
-        await WorkoutWriteService.instance.upsertScheduled(
-          date: targetDate,
-          entry: copy,
-          source: WriteSource.schedSwap,
-        );
-      }
-
-      final newEnd = rollStart.add(const Duration(days: 6));
-      await MigratedKey.write(_planEndKey, newEnd.toIso8601String());
-
-      // FOB-5 (OI-60): holds were UNOBSERVABLE. The five phase_1_day_29_*
-      // events have zero consumers repo-wide, so holds-taken / hold->convert /
-      // hold->churn were all unmeasurable — and the free-tier retention thesis
-      // rests on this mechanic.
-      //
-      // Its consumer is REAL, not aspirational: migration 120 adds
-      // holds_started_today / holds_started_7d / holders_total to
-      // founder_metrics_engagement(), and admin-dashboard-data/index.ts:255
-      // spreads that row wholesale, so these reach the founder dashboard with
-      // NO Edge Function redeploy. An event with no consumer is what FOB-5
-      // filed in the first place.
-      //
-      // Placed HERE, at the last statement of the successful path, rather than
-      // after the durability push below: every earlier exit (the no-plan early
-      // return, any throw) skips it, so the event cannot claim a hold that was
-      // not materialized. A later push failure does not falsify it either —
-      // the hold IS committed locally (offline-first) at this point.
-      //
-      // Fire-and-forget by construction: AppEventsService.log never awaits and
-      // drops a failed insert, so telemetry adds no await inside the mutex.
-      //
-      // The try/catch is NOT redundant belt-and-braces. `log` not throwing is a
-      // property of a DIFFERENT file (app_events_service.dart) that nothing
-      // pins, and this call sits inside the try whose `finally` only clears the
-      // mutex — a sync throw here would propagate out of holdWeek AFTER the
-      // hold is committed to Hive, skipping the durability push below and
-      // surfacing a materialized hold to the caller as a failure. Three lines
-      // make that impossible locally instead of assuming it remotely.
-      try {
-        AppEventsService.instance.log('hold_week_started', metadata: {
-          'ordinal': n,
-        });
-      } catch (_) {
-        // Telemetry must never be able to fail a committed hold.
-      }
+      outcome = await _holdWeekLocked();
     } finally {
       _holdInFlight = false;
     }
+    if (outcome != HoldWeekOutcome.written) return outcome;
 
     // Durability (AFTER releasing the mutex — H4 idempotency covers a
     // concurrent-after-release call): the coalesced `syncWorkoutData` fan-out
@@ -382,8 +248,8 @@ class WorkoutScheduleWriteService {
     // self-catching (offline → no-op, retried next full sync); the extra
     // try/catch guards the `_ensureSessionOpen` await OUTSIDE that catch so a
     // push hiccup can never surface a locally-committed hold as a failure.
-    // Reached ONLY on a successful materialization — an early return (no plan)
-    // or a throw exits via the `finally` above without reaching here.
+    // Reached ONLY on [HoldWeekOutcome.written]: every other outcome returns
+    // above, and a throw exits via the `finally` without reaching here.
     try {
       await SyncService.instance.pushWorkoutPlanForSyncDomain();
     } catch (e, st) {
@@ -393,29 +259,253 @@ class WorkoutScheduleWriteService {
       unawaited(ErrorTelemetry.recordNonFatal(e, st,
           reason: 'hold_week_durability_push'));
     }
+    return HoldWeekOutcome.written;
   }
 
-  /// Next hold ordinal: `max(hold_ordinal among rows dated < [rollStart]) + 1`,
-  /// else 1. Scans the Hive `schedule_*` rows for `is_hold == true`; excluding
-  /// rows AT/after `rollStart` keeps a crash-partial retry idempotent.
-  int _nextHoldOrdinal(DateTime rollStart) {
-    var maxOrdinal = 0;
+  /// The body of [holdWeek], run inside its mutex. Returns the outcome; the
+  /// durability push stays in [holdWeek], after the mutex (ONE push, only on
+  /// [HoldWeekOutcome.written]).
+  Future<HoldWeekOutcome> _holdWeekLocked() async {
+    final readSvc = WorkoutScheduleReadService.instance;
+    final planStart = readSvc.getPlanStartDate();
+    final planEnd = readSvc.getPlanEndDate();
+    if (planStart == null || planEnd == null) return HoldWeekOutcome.noPlan;
+
+    final thisMonday = readSvc.normalizeToMonday(nowWall());
+    // Defect A, the double tap (Unit 3D-b, round 1 A-F1 / A-F2): a COVERED hold
+    // dated this week or later means a hold is already in place (before expiry
+    // from the graduation screen the first tap wrote next week's hold). No
+    // write, no event, no push. Covered = inside plan_start..plan_end, so a
+    // crash-partial hold (plan_end not moved) does not count and a retry runs.
+    final latestHold = readSvc.latestCoveredHoldDate();
+    if (latestHold != null && !latestHold.isBefore(thisMonday)) {
+      return HoldWeekOutcome.alreadyHolding;
+    }
+
+    // "Backdate to Monday always": the hold occupies THIS week (Mon-Sun),
+    // using the SAME raw-weekday normalizer `plan_start` was set with (NOT
+    // `mondayOfIst`) so `(rollStart - plan_start)` stays a whole number of
+    // weeks. `nowWall()` is seam-aware (dev time-travel / year-sim).
+    var start = thisMonday;
+    // Never overwrite the live phase window: before expiry (the graduation
+    // screen's tap) the hold starts the Monday after plan_end. plan_end is a
+    // Sunday by construction, so (plan_end + 1) normalizes to the next Monday.
+    if (!start.isAfter(planEnd)) {
+      start = readSvc.normalizeToMonday(planEnd.add(const Duration(days: 1)));
+    }
+    final rollStart = start;
+
+    // Orphans of an earlier crash-partial hold (rows written, plan_end never
+    // moved) dated in the gap after plan_end and before this hold's Monday
+    // (found while building Unit 3D-b: once this hold moves plan_end past
+    // them they would become COVERED and join this hold's dates). A
+    // non-completed orphan is deleted, as sweepNonCompletedRowsPastPlanEnd
+    // deletes any non-completed row past plan_end; a completed one is the
+    // user's training and stays, without the hold stamps.
+    final orphansOk = await _clearOrphanHoldRows(after: planEnd, before: rollStart);
+    if (!orphansOk) return HoldWeekOutcome.failed;
+
+    // Ordinal N = (max COVERED hold_ordinal among rows dated < rollStart) + 1,
+    // else 1. Excluding rows AT rollStart makes a crash-partial retry in the
+    // same week idempotent; "covered" keeps a crash-partial week's orphan rows
+    // (retried a week later) and an earlier phase's holds out (round 2 A-F1).
+    final n = _nextHoldOrdinal(rollStart);
+
+    // Every 4th hold sources the deload week (plan_start + 21..27); else the
+    // Peak week (plan_start + 14..20). NEVER plan_end-derived (the deleted
+    // redoWeek4 copied the trailing deload week every time).
+    final deload = n % 4 == 0;
+    final sourceWeekStart = planStart.add(Duration(days: deload ? 21 : 14));
+
+    // Every target this call touches, with the row it held before (null = no
+    // row), so a failed write can put the week back (B-pass seat A F2).
+    final touched = <(DateTime, Map<String, dynamic>?)>[];
+
+    for (int offset = 0; offset < 7; offset++) {
+      final sourceDate = sourceWeekStart.add(Duration(days: offset));
+      final targetDate = rollStart.add(Duration(days: offset));
+      final targetKey = '$_schedulePrefix${formatDateKey(targetDate)}';
+
+      // A completed day on a target date (round 1 A-F3 .. round 3 A-F4): the
+      // user trained there after expiry (a template day, a coach log). Keep its
+      // content, status, completed_at and keys; add only the three hold stamps
+      // so the hold week stays 7 contiguous hold days. Every other target (no
+      // row, planned, rest, a scheduled template day) takes the source copy.
+      // The write re-stamps the row's write source / updated_at_ms as every
+      // upsertScheduled does.
+      final existing = _hive.workoutBox.get(targetKey);
+      final Map<String, dynamic> entry;
+      if (existing is Map && existing['status'] == 'completed') {
+        entry = Map<String, dynamic>.from(existing);
+      } else {
+        final sourceKey = '$_schedulePrefix${formatDateKey(sourceDate)}';
+        final raw = _hive.workoutBox.get(sourceKey);
+        if (raw is! Map) continue;
+        entry = Map<String, dynamic>.from(raw);
+        entry['date'] = formatDateKey(targetDate);
+        entry['status'] = entry['type'] == 'rest' ? 'rest' : 'planned';
+        entry['completed_at'] = null;
+        entry['is_swapped'] = false;
+        entry['original_date'] = null;
+        // 'phase' is deliberately NOT re-stamped — the verbatim copy already
+        // carries the source week's phase (= current); an explicit stamp would
+        // trip legacy `bucketPastRows` carry-forward and collapse a legacy
+        // multi-phase user's real history (free-tier-hold-findings P1).
+      }
+      // The push maps cloud `week_number` <- entry['week'] (sync_workout.dart),
+      // so stamp 'week' (NOT 'week_number') — else the copied Peak 'week':3
+      // would push 3. Schema-safe (>4, nullable int, no CHECK). Read by the
+      // server's hold rule (_shared/hold_week.ts, Unit 3D-a).
+      entry['week'] = 4 + n;
+      // Hive-map + plan_json ONLY (no cloud column — kept out of the push
+      // field-set so it can't 400). Drives the deload cadence + the H-chip.
+      entry['is_hold'] = true;
+      entry['hold_ordinal'] = n;
+
+      touched.add((
+        targetDate,
+        existing is Map ? Map<String, dynamic>.from(existing) : null,
+      ));
+      final result = await _upsertHoldRow(targetDate, entry);
+      // A failed row write stops the hold (round 1 A-F4): plan_end does not
+      // move and a retry writes the whole week again. The rows already
+      // written are put back first (B-pass seat A F2): uncovered is not
+      // enough, because raw `is_hold` readers (completedWeekNumbers,
+      // _withoutHoldRows, weekModeForRow, rowIsHold on Home's card) do not
+      // apply the covered rule, and a completed day must not stay stamped.
+      if (!result.success) {
+        await _rollBackHoldRows(touched);
+        return HoldWeekOutcome.failed;
+      }
+    }
+
+    final newEnd = rollStart.add(const Duration(days: 6));
+    await MigratedKey.write(_planEndKey, newEnd.toIso8601String());
+
+    // FOB-5 (OI-60): holds were UNOBSERVABLE. The five phase_1_day_29_*
+    // events have zero consumers repo-wide, so holds-taken / hold->convert /
+    // hold->churn were all unmeasurable — and the free-tier retention thesis
+    // rests on this mechanic.
+    //
+    // Its consumer is REAL, not aspirational: migration 120 adds
+    // holds_started_today / holds_started_7d / holders_total to
+    // founder_metrics_engagement(), and admin-dashboard-data/index.ts:255
+    // spreads that row wholesale, so these reach the founder dashboard with
+    // NO Edge Function redeploy. An event with no consumer is what FOB-5
+    // filed in the first place.
+    //
+    // Placed HERE, at the last statement of the successful path, rather than
+    // after the durability push in [holdWeek]: every earlier exit (every
+    // non-`written` outcome, any throw) skips it, so the event cannot claim a hold that was
+    // not materialized. A later push failure does not falsify it either —
+    // the hold IS committed locally (offline-first) at this point.
+    //
+    // Fire-and-forget by construction: AppEventsService.log never awaits and
+    // drops a failed insert, so telemetry adds no await inside the mutex.
+    //
+    // The try/catch is NOT redundant belt-and-braces. `log` not throwing is a
+    // property of a DIFFERENT file (app_events_service.dart) that nothing
+    // pins, and this call runs inside the mutex — a sync throw here would
+    // propagate out of holdWeek AFTER the
+    // hold is committed to Hive, skipping the durability push and
+    // surfacing a materialized hold to the caller as a failure. Three lines
+    // make that impossible locally instead of assuming it remotely.
+    try {
+      AppEventsService.instance.log('hold_week_started', metadata: {
+        'ordinal': n,
+      });
+    } catch (_) {
+      // Telemetry must never be able to fail a committed hold.
+    }
+    return HoldWeekOutcome.written;
+  }
+
+  /// Deletes (non-completed) or un-stamps (completed) every `is_hold` row dated
+  /// strictly after [after]'s date and strictly before [before]. Returns false
+  /// when an un-stamp write fails (the hold then stops as [HoldWeekOutcome.failed]).
+  Future<bool> _clearOrphanHoldRows({
+    required DateTime after,
+    required DateTime before,
+  }) async {
+    final afterDay = DateTime(after.year, after.month, after.day);
+    final beforeDay = DateTime(before.year, before.month, before.day);
     final box = _hive.workoutBox;
+    final orphans = <String>[];
     for (final key in box.keys) {
       if (key is! String || !key.startsWith(_schedulePrefix)) continue;
-      final raw = box.get(key);
-      if (raw is! Map) continue;
-      if (raw['is_hold'] != true) continue;
-      final dateStr = raw['date'];
-      if (dateStr is! String) continue;
-      final d = DateTime.tryParse(dateStr);
-      if (d == null || !d.isBefore(rollStart)) continue;
-      final ord = raw['hold_ordinal'];
-      final ordInt = ord is int ? ord : (ord is num ? ord.toInt() : 0);
-      if (ordInt > maxOrdinal) maxOrdinal = ordInt;
+      final d = DateTime.tryParse(key.substring(_schedulePrefix.length));
+      if (d == null) continue;
+      final day = DateTime(d.year, d.month, d.day);
+      if (!day.isAfter(afterDay) || !day.isBefore(beforeDay)) continue;
+      final v = box.get(key);
+      if (v is Map && v['is_hold'] == true) orphans.add(key);
     }
-    return maxOrdinal + 1;
+    for (final key in orphans) {
+      final v = box.get(key);
+      if (v is! Map) continue;
+      if (v['status'] == 'completed') {
+        final kept = Map<String, dynamic>.from(v)
+          ..remove('is_hold')
+          ..remove('hold_ordinal');
+        final d = DateTime.parse(key.substring(_schedulePrefix.length));
+        final result = await _upsertHoldRow(d, kept);
+        if (!result.success) return false;
+      } else {
+        await box.delete(key);
+      }
+    }
+    return true;
   }
+
+  /// Puts every target of a failed hold back as it was, newest first: a prior
+  /// row is rewritten through the same write path (its push corrects the cloud
+  /// copy), a date that had no row is deleted locally. Best effort: a restore
+  /// that fails is reported and left; the next hold's orphan clean-up or a
+  /// same-week retry covers it. A local delete never reaches the cloud
+  /// `scheduled_workouts` row (upsert-only push), the OI-174 class.
+  Future<void> _rollBackHoldRows(
+      List<(DateTime, Map<String, dynamic>?)> touched) async {
+    final box = _hive.workoutBox;
+    for (final (date, prior) in touched.reversed) {
+      try {
+        if (prior == null) {
+          await box.delete('$_schedulePrefix${formatDateKey(date)}');
+          continue;
+        }
+        final result = await _upsertHoldRow(date, prior);
+        if (!result.success) {
+          unawaited(ErrorTelemetry.recordNonFatal(
+              StateError('hold rollback write failed: ${result.errorMessage}'),
+              StackTrace.current,
+              reason: 'hold_week_rollback'));
+        }
+      } catch (e, st) {
+        unawaited(ErrorTelemetry.recordNonFatal(e, st, reason: 'hold_week_rollback'));
+      }
+    }
+  }
+
+  /// Test seam (Unit 3D-b): replaces the hold's row write so a test can fail
+  /// one row. Null in production. Tests reset it in `tearDown`.
+  @visibleForTesting
+  static Future<WriteResult> Function(DateTime date, Map<String, dynamic> entry)?
+      debugHoldRowWrite;
+
+  Future<WriteResult> _upsertHoldRow(DateTime date, Map<String, dynamic> entry) {
+    final override = debugHoldRowWrite;
+    if (override != null) return override(date, entry);
+    return WorkoutWriteService.instance.upsertScheduled(
+      date: date,
+      entry: entry,
+      source: WriteSource.schedSwap,
+    );
+  }
+
+  /// Next hold ordinal: `max(hold_ordinal among COVERED rows dated <
+  /// [rollStart]) + 1`, else 1. One rule with every hold reader
+  /// ([WorkoutScheduleReadService.maxCoveredHoldOrdinalBefore]).
+  int _nextHoldOrdinal(DateTime rollStart) =>
+      WorkoutScheduleReadService.instance.maxCoveredHoldOrdinalBefore(rollStart) + 1;
 
   // ── Week-Copy ────────────────────────────────────────────────────
 

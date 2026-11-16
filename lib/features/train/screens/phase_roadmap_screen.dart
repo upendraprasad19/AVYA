@@ -60,7 +60,7 @@ class PhaseRoadmapScreen extends ConsumerWidget {
     // phase-1 holder read "WK 4 / 12" at every ordinal, forever. The PERCENT
     // and the bar stay derived from currentWeek (four of twelve program weeks
     // really are done); only the week COUNTER is dishonest for a holder, so
-    // only it is suppressed. Null while `enable_hold_weeks` is OFF.
+    // only it is suppressed. Null for a non-holder.
     final holdOrdinal = ref.watch(weekIdentityProvider).holdOrdinal;
     // Header phase name from current_phase (was hardcoded "FOUNDATION" — wrong
     // for any non-phase-1 user; review P2 2026-06-06).

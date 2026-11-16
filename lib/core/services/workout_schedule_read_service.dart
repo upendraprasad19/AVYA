@@ -5,7 +5,7 @@
 // Split out of `workout_schedule_service.dart` (was ~1970 lines). This file
 // owns:
 //   - Plan generation orchestration (generateAndSchedule,
-//     generateAndScheduleFromDate, autoGenerateNextPhaseIfNeeded, redoWeek4
+//     generateAndScheduleFromDate, autoGenerateNextPhaseIfNeeded; holdWeek
 //     stays in WriteService).
 //   - Calendar / week queries (getScheduleForDate, getWeek,
 //     getCurrentWeekNumber, getCurrentDayInPhase, isPhaseExpired,
@@ -69,7 +69,7 @@ class PastPhaseBlock {
 
 /// One materialized **hold week** — a free-tier "Hold the Line" repeat of the
 /// phase's canonical Peak (or every-4th deload) week, written by
-/// `WorkoutScheduleWriteService.holdWeek()` behind `enable_hold_weeks`.
+/// `WorkoutScheduleWriteService.holdWeek()`.
 ///
 /// Display-side view of the row-stamped `is_hold` / `hold_ordinal` fields. Note
 /// the hold rows also carry `week = 4 + ordinal`, but that week number is NOT
@@ -468,7 +468,7 @@ class WorkoutScheduleReadService {
     final lastWeek = rawWeekNumberFor(effectivePlanEnd, planStart);
     // Literal date comparison, matching the delete loop's own `!d.isAfter(planEnd)` above —
     // NOT `regenStartWeek <= lastWeek`, which is a WEEK-BUCKET comparison and diverges from
-    // the date comparison whenever planEnd is mid-week-misaligned (redoWeek4 on a non-Monday):
+    // the date comparison whenever planEnd is mid-week-misaligned (the deleted redoWeek4 on a non-Monday):
     // `today` can be genuinely past `planEnd` while still landing in the same raw-week bucket.
     final writeRangeIsNotEmpty = !today.isAfter(effectivePlanEnd);
 
@@ -1144,9 +1144,14 @@ class WorkoutScheduleReadService {
   /// explicit stamp trips legacy `bucketPastRows` carry-forward), so the date
   /// window, not a phase field, is what scopes them.
   ///
-  /// No UPPER bound: free users may hold indefinitely (founder decision:
-  /// unlimited holds), so this must never inherit the 12-week caps other readers
-  /// apply.
+  /// Unit 3D-b (OI-175, round 2 A-F1 / A-F2): the UPPER bound is `plan_end`. A
+  /// hold row counts only while the current phase window covers it
+  /// (`plan_start <= date <= plan_end`, dates only, inclusive). `holdWeek()`
+  /// moves `plan_end` to the hold's Sunday as its LAST write, so a crash-partial
+  /// hold (rows written, `plan_end` not moved) is not a hold: it never raises the
+  /// next ordinal and never trips the double-tap guard. Free users may still hold
+  /// indefinitely (founder decision: unlimited holds): each hold extends
+  /// `plan_end`, so the window grows with them.
   /// Midnight of `plan_start`, or null when no plan exists. The lower bound
   /// every hold reader shares (see [_holdDatesByOrdinal]).
   DateTime? _holdWindowStart() {
@@ -1155,26 +1160,65 @@ class WorkoutScheduleReadService {
     return DateTime(planStart.year, planStart.month, planStart.day);
   }
 
+  /// Midnight of `plan_end` (its DATE only: some writers store a time of day,
+  /// round 3 A-F2), or null when no plan exists. The upper bound, inclusive.
+  DateTime? _holdWindowEnd() {
+    final planEnd = getPlanEndDate();
+    if (planEnd == null) return null;
+    return DateTime(planEnd.year, planEnd.month, planEnd.day);
+  }
+
+  /// Hold dates by ordinal, covered rows only. Walks `box.keys` (prefix first,
+  /// then one `get`) instead of copying the box with `toMap()`: this runs for
+  /// every user on every hold-reader rebuild now that no flag short-circuits it
+  /// (round 1 A-F7).
   Map<int, List<DateTime>> _holdDatesByOrdinal() {
     final windowStart = _holdWindowStart();
-    if (windowStart == null) return const {};
+    final windowEnd = _holdWindowEnd();
+    if (windowStart == null || windowEnd == null) return const {};
     final box = _hive.workoutBox;
     final out = <int, List<DateTime>>{};
-    for (final entry in box.toMap().entries) {
-      final key = entry.key.toString();
-      if (!key.startsWith(_schedulePrefix)) continue;
-      final value = entry.value;
+    for (final rawKey in box.keys) {
+      if (rawKey is! String || !rawKey.startsWith(_schedulePrefix)) continue;
+      final value = box.get(rawKey);
       if (value is! Map || value['is_hold'] != true) continue;
       final ordinal = value['hold_ordinal'];
       if (ordinal is! int || ordinal < 1) continue;
-      final date = DateTime.tryParse(key.substring(_schedulePrefix.length));
-      if (date == null || date.isBefore(windowStart)) continue;
+      final date = DateTime.tryParse(rawKey.substring(_schedulePrefix.length));
+      if (date == null || date.isBefore(windowStart) || date.isAfter(windowEnd)) {
+        continue;
+      }
       (out[ordinal] ??= <DateTime>[]).add(date);
     }
     for (final dates in out.values) {
       dates.sort();
     }
     return out;
+  }
+
+  /// The latest date of a COVERED hold row, or null when there is none. Read by
+  /// `holdWeek()`'s double-tap guard (defect A): a covered hold dated this week
+  /// or later means the user is already holding.
+  DateTime? latestCoveredHoldDate() {
+    DateTime? latest;
+    for (final dates in _holdDatesByOrdinal().values) {
+      final last = dates.last; // sorted ascending
+      if (latest == null || last.isAfter(latest)) latest = last;
+    }
+    return latest;
+  }
+
+  /// The highest hold ordinal among COVERED hold rows dated strictly before
+  /// [day], else 0. `holdWeek()` takes `this + 1` as the next hold number:
+  /// strictly before keeps a same-week crash retry on the same number, and
+  /// "covered" keeps orphan rows and an earlier phase's holds out.
+  int maxCoveredHoldOrdinalBefore(DateTime day) {
+    final cutoff = DateTime(day.year, day.month, day.day);
+    var best = 0;
+    _holdDatesByOrdinal().forEach((ordinal, dates) {
+      if (ordinal > best && dates.first.isBefore(cutoff)) best = ordinal;
+    });
+    return best;
   }
 
   /// The hold number covering [date], or null when that date is not a hold day
@@ -1186,8 +1230,10 @@ class WorkoutScheduleReadService {
   int? holdOrdinalForDate(DateTime date) {
     final windowStart = _holdWindowStart();
     if (windowStart == null) return null;
+    final windowEnd = _holdWindowEnd();
+    if (windowEnd == null) return null;
     final day = DateTime(date.year, date.month, date.day);
-    if (day.isBefore(windowStart)) return null;
+    if (day.isBefore(windowStart) || day.isAfter(windowEnd)) return null;
     final raw = _hive.workoutBox.get('$_schedulePrefix${_dateKey(date)}');
     if (raw is! Map || raw['is_hold'] != true) return null;
     final ordinal = raw['hold_ordinal'];
@@ -1196,8 +1242,7 @@ class WorkoutScheduleReadService {
 
   /// Every materialized hold week, ordinal-ascending (H1, H2, H3…).
   ///
-  /// Empty when the user has never held — which is every user while
-  /// `enable_hold_weeks` is OFF, since only `holdWeek()` writes `is_hold`.
+  /// Empty when the user has never held: only `holdWeek()` writes `is_hold`.
   List<HoldWeekInfo> holdWeeks() {
     final byOrdinal = _holdDatesByOrdinal();
     final ordinals = byOrdinal.keys.toList()..sort();
@@ -1216,32 +1261,22 @@ class WorkoutScheduleReadService {
     ];
   }
 
-  /// [holdWeeks] **gated on `enable_hold_weeks`** — the ONE place the hold READ
-  /// path consults the flag.
-  ///
-  /// [holdWeeks] and [holdOrdinalForDate] stay raw row readers so tests can
-  /// exercise the row contract directly, but every PRODUCTION consumer goes
-  /// through this pair instead, so the flag empties the whole read surface from
-  /// a single point. `holdStatusProvider` and [weekIdentity] both delegate here
-  /// rather than each restating the check — two independently-maintained copies
-  /// of one gate is the writer/reader drift class CLAUDE.md §4.1 names as the
-  /// default suspect.
-  List<HoldWeekInfo> activeHoldWeeks() =>
-      PlanEngineFlags.holdWeeksEnabled ? holdWeeks() : const [];
+  /// The production entry point for [holdWeeks]. There is no gate: the
+  /// `enable_hold_weeks` ship-dark flag was removed by Unit 3D-b (OI-175, d57),
+  /// and holds are always on. Every production consumer (`holdStatusProvider`,
+  /// [weekIdentity], the coach snapshot, the reconciler, the streak) still goes
+  /// through this pair, so one point decides what the hold read surface is.
+  List<HoldWeekInfo> activeHoldWeeks() => holdWeeks();
 
-  /// [holdOrdinalForDate] gated on `enable_hold_weeks`. Null whenever the flag
-  /// is OFF, whatever `is_hold` rows exist on disk.
-  int? activeHoldOrdinalFor(DateTime date) =>
-      PlanEngineFlags.holdWeeksEnabled ? holdOrdinalForDate(date) : null;
+  /// The production entry point for [holdOrdinalForDate] (no gate, see
+  /// [activeHoldWeeks]).
+  int? activeHoldOrdinalFor(DateTime date) => holdOrdinalForDate(date);
 
   /// The honest week identity for TODAY — see [WeekIdentity].
   ///
-  /// Returns [WeekIdentity.hold] only when today is a live hold day AND the
-  /// flag is ON; otherwise the clamped week-in-phase, byte-identical to what
-  /// every caller printed before hold weeks existed. That flag-OFF equality is
-  /// the ship-dark property the §4.12.4 review tier rests on, and it is pinned
-  /// by the flag-OFF group in
-  /// `test/contracts/hold_week_identity_behavioral_test.dart`.
+  /// Returns [WeekIdentity.hold] when today is a covered hold day; otherwise
+  /// the clamped week-in-phase, byte-identical to what every caller printed
+  /// before hold weeks existed.
   ///
   /// Reads `nowWall()` (not `DateTime.now()`) so the dev time-travel / year-sim
   /// seam `holdWeek()` writes against also drives what "today" means here.
@@ -1256,11 +1291,10 @@ class WorkoutScheduleReadService {
   /// user is not on a hold day today.
   ///
   /// NULL IS THE CONTRACT, not an oversight. The caller must OMIT the key
-  /// entirely rather than emit `"hold": null`: with `enable_hold_weeks` OFF
-  /// [activeHoldOrdinalFor] is always null, so omission is what makes the
-  /// flag-OFF snapshot BYTE-IDENTICAL to the pre-FOB-3 one — the ship-dark
-  /// property §4.12.4's lighter review tier rests on. A literal null key would
-  /// change every snapshot in the fleet and forfeit it.
+  /// entirely rather than emit `"hold": null`: for a non-holder
+  /// [activeHoldOrdinalFor] is null, so omission keeps their snapshot
+  /// BYTE-IDENTICAL to the pre-FOB-3 one. A literal null key would change every
+  /// snapshot in the fleet.
   ///
   /// Carries FACTS ONLY. The instruction for what the coach should DO with them
   /// lives in `supabase/functions/_shared/captain_manual.ts` (the system
@@ -1447,15 +1481,15 @@ class WorkoutScheduleReadService {
   /// function drops `is_hold` rows; the card does NOT. That asymmetry is correct
   /// and must not be "repaired" by filtering the card: what the Train screen
   /// renders during a hold is FOB-6, which founder split out to **OI-125** as a
-  /// FEATURE explicitly not gating the `enable_hold_weeks` flip. Filtering the
+  /// FEATURE explicitly not gating the hold flip (Unit 3D-b). Filtering the
   /// card here would ship half of OI-125 by accident.
   ///
   /// Ⓐ No longer INERT-by-two-flags in the sense the old note implied: this
   /// function still runs only when `adherenceGateEnabled` is ON (LIVE default
   /// since 2026-09-16 — OI-53 batch 2; kill-switch `disable_adherence_gate`;
   /// both callers `&&`-short-circuit their own call to this function), but the
-  /// hold rows it now excludes are produced by a SEPARATE flag
-  /// (`enable_hold_weeks`), and the defect needed both.
+  /// hold rows it now excludes came from a SEPARATE flag (`enable_hold_weeks`,
+  /// deleted by Unit 3D-b: holds are always on), and the defect needed both.
   double currentPhaseCompletionRate() {
     final progress = UserRepository.instance.getProgress();
     final phase = (progress?['current_phase'] as int?) ?? 1;
@@ -1499,13 +1533,10 @@ class WorkoutScheduleReadService {
   /// two-thirds, which `shouldOfferAdvanceChoice` would then read as low
   /// adherence and offer the "detrained / repeat the phase" path to.
   ///
-  /// UNGATED on `enable_hold_weeks`, and that is deliberate. It matches the
+  /// UNGATED (it never read the deleted `enable_hold_weeks`). It matches the
   /// established precedent one screen over — [completedWeekNumbers] excludes
   /// `row['is_hold'] == true` with no flag check either, and these two are the
   /// non-hold day-sources for closely-related ratios, so they must not drift.
-  /// Gating it would leave the rate wrong for exactly the population that can
-  /// have hold rows while the flag reads OFF (held once, flag later turned off)
-  /// — a byte-identical flag-OFF path bought by keeping a known-wrong number.
   /// Rows can only carry `is_hold` if `holdWeek()` ever ran, so for every user
   /// who never held, this filter is a no-op and behaviour IS byte-identical.
   static Iterable<Map<String, dynamic>> _withoutHoldRows(
@@ -1524,8 +1555,8 @@ class WorkoutScheduleReadService {
   ///
   /// Callers that need a DISPLAYABLE week clamp to 1..4 themselves — see
   /// [getCurrentWeekNumber]. Callers reasoning about plan LAYOUT want the raw
-  /// value, because ">4" is a real state (`redoWeek4` extends `plan_end`
-  /// without moving `plan_start`) that clamping silently hides.
+  /// value, because ">4" is a real state (a hold extends `plan_end` without
+  /// moving `plan_start`) that clamping silently hides.
   static int rawWeekNumberFor(DateTime date, DateTime planStart) =>
       date.difference(planStart).inDays ~/ 7 + 1;
 

@@ -1,0 +1,127 @@
+# Closure ledger - generator-step3d (Unit 3D-b, OI-175; founder d57 and d80): "Keep training Phase 1" is the
+# Monday-aligned hold week, always on; the enable_hold_weeks flag and redoWeek4 are deleted; the marker follows the
+# hold. Plan docs/plans/2026-11-16-generator-step3d-hold-weeks.md section 2.4. The server half (FOB-4's code) landed
+# first as Unit 3D-a (PR #289). Rows carry the landing commit in the validator's labelled form; the post-merge records
+# landing stamps the SHA (a commit cannot name its own SHA).
+batch: generator-step3d
+plan_review_record: docs/plan-reviews/generator-step3d.md
+diagnose_docs:
+  - docs/diagnoses/2026-11-16-hold-week-d57-flip-d3b7e5.md
+  - docs/diagnoses/2026-11-16-hold-week-server-copy-c4e8b1.md
+total_findings: 25
+closed_count: 25
+
+findings:
+  # ── The flip-on blockers (docs/ship_dark_pending_review.yaml flip_on_blockers) ──
+  - id: FOB-1
+    title: "Week-identity coherence (a hold suppresses the week number; Hn is the identity)"
+    terminal_state: verified_clean
+    evidence: "closed 2026-08-20, docs/audit/fob1-week-identity.closure.yaml (diagnose f4c8e1); the rewritten test/contracts/hold_week_identity_behavioral_test.dart (ON world only) green on this branch"
+  - id: FOB-2
+    title: "Weekly streak + streaks row dead during a hold"
+    terminal_state: verified_clean
+    evidence: "closed 2026-08-13, docs/audit/oi60-streak-identity.closure.yaml (diagnose a3f8d1); hold_week_streak_identity_behavioral_test.dart green (the legacy rolled-week arm renamed, still reachable)"
+  - id: FOB-3
+    title: "The AI coach asserts week 4 to every holder (the snapshot hold block + captain_manual HOLD WEEKS)"
+    terminal_state: verified_clean
+    evidence: "client half closed by docs/audit/fob3-coach-hold-block.closure.yaml (diagnose b6e1f4). LIVE check run in this batch 2026-11-16: Management API GET /functions/ai-proxy on dedsavbjuwgarrhphgnl -> version 108 (updated 2026-11-16 04:27 IST), and the deployed bundle (GET .../ai-proxy/body, 5,329,874 bytes) contains 'HOLD WEEKS' 3 times. The live read is the proof, not the payload."
+  - id: FOB3-F
+    title: "FOB-3's deploy leg (captain_manual reaches the model only after an ai-proxy deploy)"
+    terminal_state: verified_clean
+    evidence: "same live check as FOB-3: ai-proxy v108 serves the HOLD WEEKS section"
+  - id: FOB3-H
+    title: "How hold state crosses to the server"
+    terminal_state: verified_clean
+    evidence: "settled by Unit 3D-a: scheduled_workouts.week_number > 4 for a Phase-I user (_shared/hold_week.ts), no column, no RPC; diagnose c4e8b1"
+  - id: FOB-4-CODE
+    title: "Sunday push and weekly report name the hold (the server code)"
+    terminal_state: closed_in_commit
+    commit: "generator-step3d-a (Unit 3D-a, PR #289; commits fa793157 and 33ae210c)"
+    verification: "supabase/functions/_shared/hold_week_test.ts (behavioural), weekly-recap-ready/index_test.ts, weekly-report/index_test.ts; diagnose c4e8b1 mutants A1-A10 and B1-B6"
+  - id: FOB-4-DEPLOY
+    title: "Deploy weekly-recap-ready and weekly-report"
+    terminal_state: verified_clean
+    evidence: "deployed 2026-11-16 on the founder's go ('Deploy all three'), from a clone of origin/main 63af8c63, one function at a time: weekly-recap-ready v28 -> v29 (verify_jwt false), weekly-report v40 -> v41 (verify_jwt true); ai-proxy v108 -> v109 in the same go (Unit 3C's tool descriptions). Before: each live bundle's decoded files (GET /functions/<fn>/body, Accept multipart/form-data) hashed equal to git 1040800f (recap, 10 files), c760037e (report, 16), 862f0bc2 (ai-proxy, 66 of 67; the type-only _shared/tools/types.ts is served as an empty part): those are the rollback sources, payloads rebuilt with --rollback --dry-run and kept. After: recap 12 of 12 and report 17 of 17 files equal 63af8c63 (hold_week.ts included), ai-proxy 66 of 67; boot answers are the modules' own 401s (recap 'Unauthorized', report 'Invalid or expired token' to an anon Bearer, ai-proxy 'Missing authorization header')."
+  - id: FOB-5
+    title: "Hold telemetry"
+    terminal_state: verified_clean
+    evidence: "closed 2026-08-20, docs/audit/fob5-hold-telemetry.closure.yaml (diagnose c7a3b9); hold_week_started still fires once, only on written (hold_week_d57_behavioral_test)"
+  - id: FOB-6
+    title: "Selectable hold weeks"
+    terminal_state: verified_clean
+    evidence: "split out by the founder to OI-125 (a separate feature). Its first sentence (two gold chips) is fixed here by the marker (HW-MARKER)."
+  - id: FOB-7a
+    title: "currentPhaseCompletionRate folds hold days"
+    terminal_state: verified_clean
+    evidence: "diagnose b9d4c2 (status: fixed); phase_completion_excludes_holds_behavioral_test.dart green"
+  - id: FOB-7b
+    title: "PlanIntegrityReconciler never heals hold weeks"
+    terminal_state: verified_clean
+    evidence: "diagnose e7c4a2 (status: fixed); reconciler_gather_hold_rows / reconciler_hold_heal_split behavioral tests green"
+  - id: FOB-7c
+    title: "ai-media-proxy snapshot cap and fence"
+    terminal_state: verified_clean
+    evidence: "docs/audit/oi60-streak-identity.closure.yaml (verified clean: both present)"
+  - id: FOB-7d
+    title: "stale line citations in ai-proxy's size comment"
+    terminal_state: verified_clean
+    evidence: "docs/audit/oi60-streak-identity.closure.yaml (both de-numbered)"
+  - id: FOB-8
+    title: "PhaseArcStrip as a seventh week-4 surface"
+    terminal_state: verified_clean
+    evidence: "the strip was deleted 2026-11-02 (train-header-b2); no reader remains (grep phase_arc in lib: none)"
+  - id: DEFECT-B
+    title: "A tester's redoWeek4-made window (non-Sunday plan_end) puts the first hold inside it; tester devices with is_hold rows from dev toggling see them"
+    terminal_state: verified_clean
+    evidence: "not reachable for a real user: redoWeek4 is deleted before any store launch and every account is a testing account (CLAUDE.md section 1); plan section 2.1, round 2 A-F7"
+  # ── Unit 3D-b's own items (plan section 2.1 / 2.2) ──
+  - id: HW-FLIP
+    title: "Delete enable_hold_weeks, the dev toggle and redoWeek4; runFreeTierRepeatWrite always calls holdWeek"
+    terminal_state: closed_in_commit
+    commit: "generator-step3d (Unit 3D-b, uncommitted at ledger time; SHA stamped by the post-merge records landing)"
+    verification: "test/features/train/hold_week_callers_test.dart (no flag set, written); grep of lib for the flag and redoWeek4: history comments only; mutant M1 red"
+  - id: HW-COVERED
+    title: "The covered rule (plan_start <= date <= plan_end, dates only) for every hold reader"
+    terminal_state: closed_in_commit
+    commit: "generator-step3d (Unit 3D-b, uncommitted at ledger time; SHA stamped by the post-merge records landing)"
+    verification: "hold_week_d57_behavioral_test.dart covered-rule group (time of day, both Z strings, bounds); mutants M11-M13 red"
+  - id: HW-GUARD
+    title: "Defect A, the double tap (after and before expiry)"
+    terminal_state: closed_in_commit
+    commit: "generator-step3d (Unit 3D-b, uncommitted at ledger time; SHA stamped by the post-merge records landing)"
+    verification: "hold_week_d57_behavioral_test.dart (after expiry, before expiry, H1's Sunday, week 4's Sunday, the clock set back); mutants M2 / M3 red"
+  - id: HW-OUTCOME
+    title: "HoldWeekOutcome {written, alreadyHolding, inFlight, noPlan, failed} and both callers' UX"
+    terminal_state: closed_in_commit
+    commit: "generator-step3d (Unit 3D-b, uncommitted at ledger time; SHA stamped by the post-merge records landing)"
+    verification: "hold_week_d57_behavioral_test.dart (noPlan, inFlight, failed) and hold_week_callers_test.dart (snackbars, the repeat event only on written); mutants M5 / M6 red"
+  - id: HW-FAILED
+    title: "A failed row write stops the loop before plan_end moves; a retry writes the whole week"
+    terminal_state: closed_in_commit
+    commit: "generator-step3d (Unit 3D-b, uncommitted at ledger time; SHA stamped by the post-merge records landing)"
+    verification: "hold_week_d57_behavioral_test.dart (the third of seven fails); mutant M8 red"
+  - id: HW-KEEP
+    title: "A completed target row keeps its content and gains the three hold stamps (no ifUnchangedFrom)"
+    terminal_state: closed_in_commit
+    commit: "generator-step3d (Unit 3D-b, uncommitted at ledger time; SHA stamped by the post-merge records landing)"
+    verification: "hold_week_d57_behavioral_test.dart (target Monday and today; a planned target takes the copy); mutants M4 / M9 red"
+  - id: HW-ORPHAN
+    title: "Build finding: a crash-partial week's orphan rows joined the next hold once plan_end passed them"
+    terminal_state: closed_in_commit
+    commit: "generator-step3d (Unit 3D-b, uncommitted at ledger time; SHA stamped by the post-merge records landing)"
+    verification: "hold_week_d57_behavioral_test.dart (a week later: n = 1, H1 starts on the new Monday; planned orphan deleted, completed orphan un-stamped); mutant M10 red"
+  - id: HW-REFRESH
+    title: "Graduation refresh after the write (round 3 B-F2; round 4 F1 container, F2 todayWorkoutProvider); read cost recorded"
+    terminal_state: closed_in_commit
+    commit: "generator-step3d (Unit 3D-b, uncommitted at ledger time; SHA stamped by the post-merge records landing)"
+    verification: "hold_week_callers_test.dart (providers built before the tap read the hold after it; the screen popped mid-write); read cost 1.09 ms per holdWeeks() on 3,007 keys, under 5 ms (no memo); mutants M19-M21 red"
+  - id: HW-MARKER
+    title: "The marker (d80): SelectedWeek {week, picked}, weekChipLit, isLit drives the sub-label; card words from the copied stamps"
+    terminal_state: closed_in_commit
+    commit: "generator-step3d (Unit 3D-b, uncommitted at ledger time; SHA stamped by the post-merge records landing)"
+    verification: "test/features/train/week_selector_hold_marker_test.dart (table, the real strip during a hold, a tap lights a pick, an invalidation clears it, PRO groups, H1 Peak / H4 Deload / lifted Baseline); mutants M16 / M17 red"
+  - id: HW-ROLLBACK
+    title: "B-pass seat A F2: a failed hold put back every row it wrote (raw is_hold readers skip the covered rule)"
+    terminal_state: closed_in_commit
+    commit: "generator-step3d (Unit 3D-b B-pass fix commit; SHA stamped by the post-merge records landing)"
+    verification: "hold_week_d57_behavioral_test.dart (the failed-write test asserts the rollback; a completed and a planned target restored as they were); mutants MR1-MR3 red; the cloud half of a local delete recorded on OI-174 (docs/reviews/generator-step3d-bpass.md A-F2)"

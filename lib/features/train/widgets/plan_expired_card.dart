@@ -6,22 +6,24 @@ import 'package:icanbefitter/core/services/app_events_service.dart';
 import 'package:icanbefitter/core/theme/colors.dart';
 import 'package:icanbefitter/core/theme/spacing.dart';
 import 'package:icanbefitter/core/theme/typography.dart';
-import 'package:icanbefitter/shared/repositories/plan_engine/plan_engine_flags.dart';
+import 'package:icanbefitter/core/services/workout_schedule_write_service.dart';
 import 'package:icanbefitter/shared/repositories/user_repository.dart';
 import 'package:icanbefitter/shared/widgets/paywall_sheet.dart';
 import 'keep_training_phase1_action.dart';
 
 /// Day-29+ free-tier UI shown on Home + Train when Phase 1 has
-/// elapsed. Three doors:
+/// elapsed. Two doors and a hint:
 ///
-///   1. Primary · Upgrade to PRO   → opens paywall sheet ('Phases 2-12')
-///   2. Secondary · Build your own → navigates to template builder
-///   3. Tertiary · Re-do Week 4   → copies last week's schedule forward
+///   1. Primary · Upgrade to PRO        → opens paywall sheet ('Phases 2-12')
+///   2. Hold the line — another week    → `holdWeek()` (Unit 3D-b, d57)
+///   3. Hint · MY TEMPLATES             → navigates to template builder
 ///
 /// Analytics:
 ///   - `phase_1_day_29_expired_seen` fires once per day the card renders.
-///   - CTA taps fire `phase_1_day_29_{upgrade,template_builder,redo_week_4}_tapped`.
-///   - `phase_1_cycle_repeat_started` after redoWeek4() writes the new schedule.
+///   - CTA taps fire `phase_1_day_29_{upgrade,template_builder,redo_week_4}_tapped`
+///     (the hold tap keeps the `redo_week_4` name: a stored telemetry key,
+///     renaming it would split its history).
+///   - `phase_1_cycle_repeat_started` only when `holdWeek()` returns `written`.
 ///
 /// Used by:
 ///   - `home_screen.dart` when today has no scheduled workout AND phase expired.
@@ -54,49 +56,51 @@ class _PlanExpiredCardState extends ConsumerState<PlanExpiredCard> {
     });
   }
 
-  Future<void> _handleRedoWeek4() async {
+  Future<void> _handleHoldWeek() async {
     if (_redoing) return;
     setState(() => _redoing = true);
     AppEventsService.instance.log('phase_1_day_29_redo_week_4_tapped');
     try {
-      // Ship-dark: enable_hold_weeks flips the free-tier mechanic from the
-      // verbatim redoWeek4 (trailing-week copy) to the correct holdWeek
-      // (Peak/deload-by-date, Monday-aligned, plan_json-durable). Default OFF.
-      // The branch itself lives in ONE place — see runFreeTierRepeatWrite.
-      await runFreeTierRepeatWrite(ref);
-      AppEventsService.instance.log('phase_1_cycle_repeat_started');
+      final outcome = await runFreeTierRepeatWrite(ref);
+      if (outcome == HoldWeekOutcome.written) {
+        AppEventsService.instance.log('phase_1_cycle_repeat_started');
+      }
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            // A hold is NOT "week 4 again" — it materializes the phase's Peak
-            // week (or a deload every 4th) dated to THIS week.
-            PlanEngineFlags.holdWeeksEnabled
-                ? 'Line held. Another week on the board.'
-                : 'Week 4 back on the board. Carry on.',
-            style: AppTypography.body.copyWith(fontSize: 13),
-          ),
-          backgroundColor: AppColors.card,
-          behavior: SnackBarBehavior.floating,
-          duration: const Duration(seconds: 3),
-        ),
-      );
-      widget.onRedoComplete?.call();
+      switch (outcome) {
+        case HoldWeekOutcome.written:
+          // A hold is NOT "week 4 again" — it materializes the phase's Peak
+          // week (or a deload every 4th) dated to THIS week.
+          _snack('Line held. Another week on the board.', AppColors.card);
+          widget.onRedoComplete?.call();
+        case HoldWeekOutcome.alreadyHolding:
+          // The double tap (defect A): nothing was written, nothing to refresh.
+          _snack('Already holding this week.', AppColors.card);
+        case HoldWeekOutcome.inFlight:
+          break; // the first tap is still writing; it reports its own outcome
+        case HoldWeekOutcome.noPlan:
+        case HoldWeekOutcome.failed:
+          _snack("Couldn't schedule again. Please try again.", AppColors.red);
+      }
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            "Couldn't schedule again. Please try again.",
-            style: AppTypography.body.copyWith(fontSize: 13),
-          ),
-          backgroundColor: AppColors.red,
-          behavior: SnackBarBehavior.floating,
-        ),
-      );
+      _snack("Couldn't schedule again. Please try again.", AppColors.red);
     } finally {
       if (mounted) setState(() => _redoing = false);
     }
+  }
+
+  void _snack(String text, Color background) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          text,
+          style: AppTypography.body.copyWith(fontSize: 13),
+        ),
+        backgroundColor: background,
+        behavior: SnackBarBehavior.floating,
+        duration: const Duration(seconds: 3),
+      ),
+    );
   }
 
   void _handleUpgrade() {
@@ -150,51 +154,15 @@ class _PlanExpiredCardState extends ConsumerState<PlanExpiredCard> {
           _primaryCta(nextPhase),
           const SizedBox(height: 12),
 
-          // Ship-dark: with `enable_hold_weeks` ON, holding is a REAL second
-          // door (an indefinite, correctly-periodized free path) rather than a
-          // one-shot "run it again", so it is promoted from a tertiary link to
-          // an accented pill beside the upgrade CTA — the locked mockup's
-          // two-door wall. Flag OFF renders the original three-link layout
-          // verbatim.
-          if (PlanEngineFlags.holdWeeksEnabled) ...[
-            _holdTheLineCta(),
-            const SizedBox(height: 14),
-            const Divider(height: 1, color: AppColors.border),
-            const SizedBox(height: 12),
-            _templateHint(),
-          ] else ...[
-            // Secondary / tertiary section header
-            Text(
-              'OR HOLD THE LINE — FREE',
-              style: AppTypography.monoXs.copyWith(fontWeight: FontWeight.w700, color: AppColors.textDim, letterSpacing: 1.2),
-            ),
-            const SizedBox(height: 10),
-
-            // Secondary — Build your own plan
-            _secondaryLink(
-              icon: Icons.build_outlined,
-              label: 'Draw up your own drills',
-              onTap: _handleTemplateBuilder,
-            ),
-            const SizedBox(height: 8),
-
-            // Tertiary — Re-do Week 4
-            _secondaryLink(
-              icon: Icons.replay_outlined,
-              label: 'Run Week 4 again',
-              onTap: _redoing ? null : _handleRedoWeek4,
-              trailing: _redoing
-                  ? const SizedBox(
-                      width: 14,
-                      height: 14,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                        color: AppColors.textSecondary,
-                      ),
-                    )
-                  : null,
-            ),
-          ],
+          // Holding is a REAL second door (an indefinite, correctly-periodized
+          // free path), an accented pill beside the upgrade CTA: the locked
+          // mockup's two-door wall. Unit 3D-b deleted the old three-link
+          // "Run Week 4 again" layout with the `enable_hold_weeks` flag.
+          _holdTheLineCta(),
+          const SizedBox(height: 14),
+          const Divider(height: 1, color: AppColors.border),
+          const SizedBox(height: 12),
+          _templateHint(),
         ],
       ),
     );
@@ -204,7 +172,7 @@ class _PlanExpiredCardState extends ConsumerState<PlanExpiredCard> {
   /// next to the gold-filled upgrade CTA rather than a consolation link.
   Widget _holdTheLineCta() {
     return GestureDetector(
-      onTap: _redoing ? null : _handleRedoWeek4,
+      onTap: _redoing ? null : _handleHoldWeek,
       child: Container(
         width: double.infinity,
         padding: const EdgeInsets.symmetric(vertical: 13),
@@ -296,48 +264,6 @@ class _PlanExpiredCardState extends ConsumerState<PlanExpiredCard> {
             'Deploy to Phase $nextPhase — go PRO →',
             style: AppTypography.body.copyWith(fontWeight: FontWeight.w900, color: Colors.black),
           ),
-        ),
-      ),
-    );
-  }
-
-  Widget _secondaryLink({
-    required IconData icon,
-    required String label,
-    required VoidCallback? onTap,
-    Widget? trailing,
-  }) {
-    final enabled = onTap != null;
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(AppRadius.row),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 4),
-        child: Row(
-          children: [
-            Icon(
-              icon,
-              size: 18,
-              color: enabled
-                  ? AppColors.textPrimary
-                  : AppColors.textSecondary,
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Text(
-                label,
-                style: AppTypography.body.copyWith(fontSize: 13, fontWeight: FontWeight.w600, color: enabled
-                      ? AppColors.textPrimary
-                      : AppColors.textDim),
-              ),
-            ),
-            trailing ??
-                Icon(
-                  Icons.chevron_right,
-                  size: 18,
-                  color: AppColors.textSecondary.withValues(alpha: 0.7),
-                ),
-          ],
         ),
       ),
     );

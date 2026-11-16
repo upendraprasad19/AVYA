@@ -43,7 +43,7 @@ void main() {
       expect(src.contains('markCompleted'), isTrue);
       expect(src.contains('markSkipped'), isTrue);
       expect(src.contains('pauseRange'), isTrue);
-      expect(src.contains('redoWeek4'), isTrue);
+      expect(src.contains('holdWeek'), isTrue);
       expect(src.contains('copyWeek'), isTrue);
     });
 
