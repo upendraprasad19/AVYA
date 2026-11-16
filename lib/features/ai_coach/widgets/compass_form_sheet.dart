@@ -8,7 +8,7 @@
 //   injuryForm  — canonical InjuryVocab token picker (the tokens the injury
 //                 tools actually normalize against, NOT free text)
 //   scheduleForm— day picker + target date → a complete reschedule ask
-//   switchForm  — FitnessGoals token picker (enum parity with switchGoal)
+//   switchForm  — FitnessGoals.selectableTokens picker (enum parity with switchGoal)
 //   historyForm — exercise-name field
 import 'package:flutter/material.dart';
 
@@ -246,8 +246,10 @@ class _CompassFormSheetState extends State<CompassFormSheet> {
           ],
         );
       case CompassAction.switchForm:
-        return _wrapChips(FitnessGoals.tokens
-            .map((t) => (value: t, label: t.replaceAll('_', ' ')))
+        // Unit 3B (d69 / d73): the goals a user can choose, named from FitnessGoals
+        // (the legacy strength / recompose are stored values only).
+        return _wrapChips(FitnessGoals.selectableTokens
+            .map((t) => (value: t, label: FitnessGoals.label(t)))
             .toList(growable: false));
       case CompassAction.historyForm:
         return TextField(

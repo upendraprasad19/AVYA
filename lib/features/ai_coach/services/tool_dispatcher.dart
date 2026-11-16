@@ -1034,9 +1034,12 @@ class ToolDispatcher {
     // plan and report success (the F19 fallthrough class). The server enum can't
     // emit an unknown goal — check_goal_token_exhaustiveness Check 4 pins it — but
     // switchGoal guards here too and this sibling must stay symmetric.
+    // Unit 3B (d69): only a goal the user can choose; a legacy token (strength /
+    // recompose, still proposed by a coach without the three-goal enum, or replayed)
+    // is refused with the same sentence the diff preview shows, BEFORE the cache check.
     final requestedGoal = intent.payload['goal'] as String?;
-    if (requestedGoal != null && !FitnessGoals.isKnown(requestedGoal)) {
-      return ToolExecutionResult.failure('Unsupported goal: $requestedGoal.');
+    if (requestedGoal != null && !FitnessGoals.isSelectable(requestedGoal)) {
+      return const ToolExecutionResult.failure(FitnessGoals.notOfferedMessage);
     }
     final rawSchedules =
         RegeneratePlanPlanner.instance.getCachedRawSchedules(intent.id);
@@ -1285,8 +1288,10 @@ class ToolDispatcher {
     // the write, so a non-onboarding entry point (a future tool, a replayed
     // intent, a server-enum regression) can't persist an unknown goal that
     // silently falls back to maintenance calories (the F19 class).
-    if (!FitnessGoals.isKnown(newGoal)) {
-      return ToolExecutionResult.failure('Unsupported goal: $newGoal.');
+    // Unit 3B (d69): only a goal the user can choose (a legacy token is refused
+    // with the diff preview's sentence, before the cache check).
+    if (!FitnessGoals.isSelectable(newGoal)) {
+      return const ToolExecutionResult.failure(FitnessGoals.notOfferedMessage);
     }
 
     // The diff widget caches the regenerated raw schedules under intent.id

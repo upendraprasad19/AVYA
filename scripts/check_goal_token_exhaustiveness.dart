@@ -107,8 +107,9 @@ void main(List<String> args) {
   }
 
   // Check 4: the SERVER AI-coach plan tools expose a goal enum to the model.
-  // Every FitnessGoals token MUST appear in each tool's enum, and neither may
-  // list a goal that isn't a token. Otherwise the model can be unable to emit a
+  // Every SELECTABLE FitnessGoals token (Unit 3B: tokens minus the legacy set)
+  // MUST appear in each tool's enum, and neither may list a legacy goal or a
+  // goal that isn't a token. Otherwise the model can be unable to emit a
   // valid goal (zod rejects it) or can emit one the client rejects — the F19
   // fallthrough class, one tool over (recompose was added to switchGoal.ts but
   // not regeneratePlanBlock.ts). The original gate only scanned client Dart;
@@ -133,18 +134,13 @@ void main(List<String> args) {
       }
       final enumTokens =
           RegExp(r'"(\w+)"').allMatches(body).map((m) => m.group(1)!).toSet();
-      for (final t in tokens) {
-        if (!enumTokens.contains(t)) {
-          problems.add('$path goal enum is missing FitnessGoals token "$t" — '
-              'the AI cannot act on this goal (F19 class).');
-        }
-      }
-      for (final e in enumTokens) {
-        if (!tokens.contains(e)) {
-          problems.add('$path goal enum lists "$e", which is not a FitnessGoals '
-              'token (${tokens.join(", ")}).');
-        }
-      }
+      // Unit 3B: the enum lists the SELECTABLE goals (tokens minus the legacy set).
+      problems.addAll(serverGoalEnumProblems(
+        path: path,
+        tokens: tokens,
+        enumTokens: enumTokens,
+        legacyReachableOnly: kLegacyReachableOnlyGoalTokens,
+      ));
     });
   }
 

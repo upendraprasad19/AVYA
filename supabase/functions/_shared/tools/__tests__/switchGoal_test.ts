@@ -20,18 +20,17 @@ Deno.test("switchGoal — schema accepts full args", () => {
   assertEquals(result.success, true);
 });
 
-Deno.test("switchGoal — schema accepts all 5 valid goals", () => {
-  for (
-    const g of [
-      "build_muscle",
-      "lose_fat",
-      "general_fitness",
-      "strength",
-      "recompose",
-    ]
-  ) {
+Deno.test("switchGoal — schema accepts the 3 selectable goals (Unit 3B, d69)", () => {
+  for (const g of ["build_muscle", "lose_fat", "general_fitness"]) {
     const result = switchGoalTool.schema.safeParse({ newGoal: g });
     assertEquals(result.success, true);
+  }
+});
+
+Deno.test("switchGoal — schema rejects the legacy goals strength and recompose (Unit 3B)", () => {
+  for (const g of ["strength", "recompose"]) {
+    const result = switchGoalTool.schema.safeParse({ newGoal: g });
+    assertEquals(result.success, false);
   }
 });
 

@@ -64,7 +64,7 @@ class FitnessGoals {
   static const Map<String, FitnessGoalSpec> _byToken = {
     'build_muscle': FitnessGoalSpec(
       token: 'build_muscle',
-      label: 'Build Muscle',
+      label: 'Build',
       deltaMult: 1.0, // full pace-scaled surplus
       proteinPerKg: 1.8,
       fatPercentage: 0.25,
@@ -73,7 +73,7 @@ class FitnessGoals {
     ),
     'lose_fat': FitnessGoalSpec(
       token: 'lose_fat',
-      label: 'Lose Fat',
+      label: 'Cut',
       deltaMult: -1.0, // full pace-scaled deficit
       proteinPerKg: 2.0, // higher protein during a cut
       fatPercentage: 0.25,
@@ -91,7 +91,7 @@ class FitnessGoals {
     ),
     'general_fitness': FitnessGoalSpec(
       token: 'general_fitness',
-      label: 'General Fitness',
+      label: 'Maintain',
       deltaMult: 0.0, // maintenance — pace has no effect
       proteinPerKg: 1.6,
       fatPercentage: 0.25,
@@ -113,8 +113,27 @@ class FitnessGoals {
     ),
   };
 
-  /// Every canonical goal token.
+  /// Every canonical goal token, legacy ones included: a stored value may still hold `strength` or `recompose`
+  /// (older builds write them; restore brings them back), and every reader keeps serving them until
+  /// `LegacyGoalHealer` moves the stored value (Unit 3B, d69).
   static List<String> get tokens => _byToken.keys.toList(growable: false);
+
+  /// The goals a user can choose (Unit 3B, founder d69: "We only have build, cut and maintain"), in the onboarding
+  /// cards' order. Every goal picker (onboarding cards, Edit Profile, the coach compass form) and every goal check
+  /// on a write the user or the coach starts (the coach dispatcher, the server tool enums) uses this list.
+  static const List<String> selectableTokens = ['build_muscle', 'lose_fat', 'general_fitness'];
+
+  /// Whether [token] is a goal a user can choose ([selectableTokens]).
+  static bool isSelectable(String? token) => token != null && selectableTokens.contains(token);
+
+  /// Where a legacy goal goes (Unit 3B: d4 Strength -> Build, with the Strength focus applied by
+  /// `legacyGoalPatch`; d72 Recomposition -> Cut). Its keys are exactly [tokens] minus [selectableTokens], and equal
+  /// the goal gate's `kLegacyReachableOnlyGoalTokens` (pinned by `fitness_goals_selectable_test.dart`).
+  static const Map<String, String> legacyTargets = {'strength': 'build_muscle', 'recompose': 'lose_fat'};
+
+  /// What the coach's goal previews and the dispatcher say when a proposed goal is not selectable (a live coach
+  /// can still propose `strength` / `recompose` until ai-proxy carries the three-goal enums, or a replayed intent).
+  static const String notOfferedMessage = "That goal isn't offered any more. Choose Build, Cut or Maintain.";
 
   static bool isKnown(String token) => _byToken.containsKey(token);
 

@@ -31,6 +31,9 @@ class RegeneratePlanDiff extends StatefulWidget {
 class _RegeneratePlanDiffState extends State<RegeneratePlanDiff> {
   RegeneratePlanResult? _plan;
   String? _error;
+  // Unit 3B (d69): an optional goal the user cannot choose is refused before the planner runs (the dispatcher refuses
+  // it too), so no plan diff is shown that the confirm would then refuse.
+  bool _refused = false;
 
   @override
   void initState() {
@@ -41,9 +44,15 @@ class _RegeneratePlanDiffState extends State<RegeneratePlanDiff> {
   Future<void> _compute() async {
     try {
       final p = widget.intent.payload;
+      final goal = p['goal'] as String?;
+      if (goal != null && !FitnessGoals.isSelectable(goal)) {
+        // Synchronous inside initState (before the first build): a plain assignment.
+        _refused = true;
+        return;
+      }
       final result = await RegeneratePlanPlanner.instance.plan(
         weeks: (p['weeks'] as num).toInt(),
-        goal: p['goal'] as String?,
+        goal: goal,
         daysPerWeek: (p['days_per_week'] as num?)?.toInt(),
         equipment: p['equipment'] as String?,
         startDate: p['start_date'] as String?,
@@ -70,6 +79,15 @@ class _RegeneratePlanDiffState extends State<RegeneratePlanDiff> {
 
   @override
   Widget build(BuildContext context) {
+    if (_refused) {
+      return Padding(
+        padding: const EdgeInsets.all(16),
+        child: Text(
+          FitnessGoals.notOfferedMessage,
+          style: AppTypography.bodyM.copyWith(color: AppColors.textSecondary),
+        ),
+      );
+    }
     if (_error != null) {
       return Padding(
         padding: const EdgeInsets.all(16),
@@ -258,21 +276,8 @@ class _RegeneratePlanDiffState extends State<RegeneratePlanDiff> {
 
   String _dayLabel(String date) => phaseDayLabel(date);
 
-  String _humanGoal(String raw) {
-    switch (raw) {
-      case 'build_muscle':
-        return 'Build muscle';
-      case 'lose_fat':
-        return 'Lose fat';
-      case 'general_fitness':
-        return 'General fitness';
-      case 'strength':
-        return 'Strength';
-      default:
-        // 'recompose' + any future goal token resolves via FitnessGoals.
-        return FitnessGoals.isKnown(raw) ? FitnessGoals.label(raw) : raw;
-    }
-  }
+  // Unit 3B (d73): one name table, FitnessGoals (Build / Cut / Maintain; a legacy token keeps its own label).
+  String _humanGoal(String raw) => FitnessGoals.isKnown(raw) ? FitnessGoals.label(raw) : raw;
 
   String _humanEquipment(String raw) {
     switch (raw) {

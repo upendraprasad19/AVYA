@@ -104,6 +104,43 @@ class ProfileWriteService {
     });
   }
 
+  /// Decide-and-write under the profile lock (Unit 3B, `LegacyGoalHealer`).
+  ///
+  /// Inside [_withLock]: [stillOwner] runs FIRST (before the box is touched: `HiveService.userBox` throws a
+  /// `StateError` on an auth / Hive owner disagreement); false returns false and writes nothing. Then the current
+  /// profile is re-read and handed to [build] (synchronous); a null patch returns false and writes nothing; otherwise
+  /// the patch is merged exactly as [patchProfile] merges it (`updated_at` stamped) and the normal fire-and-forget
+  /// profile push follows, outside the lock. Returns true when it wrote. A caller whose decision depends on the stored
+  /// value uses this rather than read-then-[patchProfile], so a write that lands in between cannot be overwritten
+  /// with a decision made on the old value.
+  Future<bool> patchProfileWith(
+    Map<String, dynamic>? Function(Map<String, dynamic> current) build, {
+    required bool Function() stillOwner,
+  }) async {
+    var wrote = false;
+    await _withLock(() async {
+      try {
+        if (!stillOwner()) return;
+        final box = HiveService.instance.userBox;
+        final existing = box.get('profile');
+        final base = existing is Map ? Map<String, dynamic>.from(existing) : <String, dynamic>{};
+        final patch = build(Map<String, dynamic>.unmodifiable(base));
+        if (patch == null) return;
+        final merged = <String, dynamic>{...base, ...patch};
+        merged['updated_at'] = nowWall().toUtc().toIso8601String();
+        await box.put('profile', merged);
+        wrote = true;
+      } catch (e, st) {
+        debugPrint('[ProfileWriteService.patchProfileWith] $e\n$st');
+        unawaited(ErrorTelemetry.recordNonFatal(e, st,
+            reason: 'profile_write_service_patch_profile_with'));
+        rethrow;
+      }
+    });
+    if (wrote) _fireSync();
+    return wrote;
+  }
+
   /// Single-field convenience. Equivalent to
   /// `patchProfile({field: value})` but communicates intent at
   /// call-site for the common case of one goal / one weight change.

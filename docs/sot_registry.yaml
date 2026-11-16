@@ -1046,7 +1046,7 @@ concepts:
           Rebuilds the context via buildAiContext() between retry
           rounds so the snapshot reflects post-mutation Hive state.
       - file: lib/core/services/sync_service.dart
-        line_range: 809-854
+        line_range: 810-855
         method: pushSnapshot (coalesced) -> pushSnapshotNow (body)
         semantic: pass-through
         fields_read: [<full context map>]
@@ -1730,7 +1730,7 @@ concepts:
         semantic: pass-through
         fields_read: [diet_preference]
       - file: lib/core/services/sync_service.dart
-        line_range: 1401-1464
+        line_range: 1402-1465
         method: _replayPendingOnboardingSync (value passed through)
         semantic: pass-through
         fields_read: [diet_preference]
@@ -2999,7 +2999,7 @@ concepts:
         line_range: 1-9999
         method: _syncScheduledWorkouts (confirmed :1778; constructs a SyncSkipIndex(domain: SyncSkipDomain.sched) and drives the FK-resilient upsert through its pushIfChanged closure -- the helper stores index[scheduled_date]=fp ON CONFIRMED ONLY; commit(liveKeys:) prunes to live schedule_ dates + persists after the loop)
       - file: lib/core/services/sync_service.dart
-        line_range: 297-330
+        line_range: 298-331
         method: schedPayloadFingerprint (pure static, byte-identical) + _schedHashSkipDisabled kill-switch getter
       - file: lib/features/dev/simulation_service.dart
         line_range: 103-183
@@ -3223,7 +3223,7 @@ concepts:
         line_range: 201-432
         method: _syncNutritionLogs (constructs a SyncSkipIndex(domain: SyncSkipDomain.nlog) and drives the parent + item + vacuum writes through its pushIfChanged closure -- stores index[slotId]=nlogFp ON CONFIRMED FULL-BUNDLE SUCCESS ONLY; commit(liveKeys:) prunes to live slots + persists after the loop, or CLEARS the index entirely when disabled)
       - file: lib/core/services/sync_service.dart
-        line_range: 367-427
+        line_range: 368-428
         method: nlogPayloadFingerprint / nlogHashSkipDisabledFor (pure statics, byte-identical -- plan D4) + _hashSkipKillSwitchOn(SyncSkipDomain) (generic kill-switch reader shared with exlog, replaces the deleted _nlogHashSkipDisabled getter)
       - file: lib/features/dev/simulation_service.dart
         line_range: 103-183
@@ -3466,7 +3466,7 @@ concepts:
     reader_manifest_complete: false
     readers:
       - file: lib/core/services/sync_service.dart
-        line_range: 2223-2428
+        line_range: 2232-2437
         method: _attemptSingleCallRestore
         semantic: aggregated
         fields_read: [schema_version, tables]
@@ -3526,7 +3526,7 @@ concepts:
       assumption (it cannot detect a lowered production cap).
     writers:
       - file: lib/core/services/sync_service.dart
-        line_range: 3105-3176
+        line_range: 3114-3185
         method: _fetchAllRows
         notes: |
           The ONE paging loop: owner-scoped (.eq user_id) first, optional since filter,
@@ -3845,7 +3845,7 @@ concepts:
           step. Uses _safeRestoreOp wrapper to keep one surface's
           failure from aborting the rest.
       - file: lib/core/services/sync_service.dart
-        line_range: 1890-2097
+        line_range: 1891-2106
         method: _restoreFromCloudForUserCore
         semantic: aggregated
         fields_read: [<the body of restoreFromCloudForUser, moved verbatim by OI-284>]
@@ -3864,7 +3864,7 @@ concepts:
           routing to /home (15s timeout safety). Cancels in-flight
           restore when user_profile is null (brand-new user).
       - file: lib/core/services/sync_service.dart
-        line_range: 690-699
+        line_range: 691-700
         method: restoreFromCloud (legacy entry point)
         semantic: pass-through
         fields_read: []
@@ -5653,20 +5653,20 @@ concepts:
       before the legacy fan-out re-runs the ops.
     writers:
       - file: lib/core/services/sync_service.dart
-        line_range: 1985-2003
+        line_range: 1986-2004
         method: _settleRestoreMarker
         notes: |
           The ONE marker writer; the decision is the pure
           `shouldSettleRestoreMarker` (result.succeeded, no streak-critical
           failure, uid non-null, live uid == uid, Hive owner == uid).
       - file: lib/core/services/sync_service.dart
-        line_range: 2011-2021
+        line_range: 2017-2035
         method: restoreFromCloudForUser
         notes: |
           Wrapper shape pinned by completed_title_follows_log_test.dart: runs the
           core inside `RestoreFailureCollector.run`, heals titles, THEN settles.
       - file: lib/core/services/sync_service.dart
-        line_range: 194-259
+        line_range: 195-260
         method: _onUserChanged
         notes: clears `_restoreSettledUserId` and the withheld reason on an account swap, as its FIRST statement (every later step can throw; B-pass F3).
       - file: lib/core/services/sync/sync_restore_failure_collector.dart
@@ -5684,7 +5684,7 @@ concepts:
           a stale failure from the aborted attempt cannot hold the marker closed
           (B-pass reviewer B F4).
       - file: lib/core/services/sync_service.dart
-        line_range: 2934-3007
+        line_range: 2943-3016
         method: _reportSyncFailure
         notes: first statement calls `RestoreFailureCollector.note(opType)`; the single failure funnel.
       - file: lib/core/services/day_rollover_service.dart
@@ -7693,7 +7693,7 @@ concepts:
     reader_manifest_complete: true
     readers:
       - file: lib/core/services/sync_service.dart
-        line_range: 2587-2652
+        line_range: 2596-2661
         method: _reportSyncFailure (funnel — all sync failures route through here)
         semantic: pass-through
         fields_read: []
@@ -13325,7 +13325,7 @@ concepts:
           at :969 (the cloud progress row; both cites re-derived 2026-11-14 from
           the 'current_week': 1 literal, the old 473 / 786 had drifted). NOT routed through the projection (no need).
       - file: lib/core/services/sync_service.dart
-        line_range: 1092-1096
+        line_range: 1093-1097
         method: _replayPendingOnboardingSync (NO LONGER writes current_week)
         notes: |
           B-pass F1: this boot-replay used to pass the frozen Hive current_week
@@ -13560,7 +13560,7 @@ concepts:
           Never throws: an escape here would kill the user's ENTIRE daily
           snapshot via compileDailySnapshot -> pushSnapshotNow, not just prefs.
       - file: lib/core/services/sync_service.dart
-        line_range: 1119-1176
+        line_range: 1120-1177
         method: compileDailySnapshot
         semantic: pass-through
         notes: >
@@ -13859,7 +13859,7 @@ concepts:
           (→913) despite the gate not flagging it, found by grepping the
           symbol directly rather than trusting the gate's silence on it.
       - file: lib/core/services/sync_service.dart
-        line_range: 2792-2792
+        line_range: 2801-2801
         method: restoreOpTimeout
         semantic: per-op-ceiling
         notes: day-swapper + sync-load Task 20 fix1 (diagnose a9d3f6) shifted
@@ -13870,7 +13870,7 @@ concepts:
           an N-M line_range — but left stale it would misdirect a future
           reader by the same +14).
       - file: lib/core/services/sync_service.dart
-        line_range: 2815-2819
+        line_range: 2824-2828
         method: applyRestoreCeiling
         semantic: apply-ceiling
         notes: day-swapper + sync-load Task 20 shifted this range (+148 lines,
@@ -13880,7 +13880,7 @@ concepts:
           blocks on a citation you shifted). Shifted again by task-20-fix1
           (diagnose a9d3f6, +14 lines, same method) for the same reason.
       - file: lib/core/services/sync_service.dart
-        line_range: 2831-2833
+        line_range: 2840-2842
         method: restoreFailureReason
         semantic: telemetry-reason-split
         notes: same shift as applyRestoreCeiling directly above, both times; all three re-derived +3 by the Hermes sync_epoch_seen doc comment (2026-09-28), then +1 (with _safeRestoreOp) by the plan_engine_flags import the merge-review F4 fix added (a3e7d9).
@@ -13895,7 +13895,7 @@ concepts:
         method: _authRedirect
         semantic: delegates-to-pure-fn
       - file: lib/core/services/sync_service.dart
-        line_range: 2814-2856
+        line_range: 2823-2865
         method: _safeRestoreOp
         semantic: bounded-await
     hive:
@@ -18770,10 +18770,17 @@ concepts:
       finite stored number that rounds into the range, then 60. The profile is read on every generation. The field is carried to the cloud and back by the onboarding sync,
       the profile sync and the pending-onboarding replay, comes back on a restore through the generic user_profile
       select merge in hydrateFromCloud, and survives the user_repository integer-only column allow-list.
+      OI-488 (Unit 3B, founder d70, 2026-11-16, diagnose 21da5f): 90 minutes is for an ADVANCED profile only. Every
+      reader of the stored value goes through SessionBudget.minutesForLevel(stored, profile.fitness_experience): a value
+      that resolves above 60 is 60 unless the stored level is exactly 'advanced' (the profile level, not the
+      generator's effective level; null / absent is not advanced); anything else is returned unchanged. The two param
+      passers use SessionBudget.profileParamMinutes (the param wins over the profile value). Edit Profile offers
+      30 / 45 / 60, plus 90 to an advanced in-form level, and moves a 90 selection to 60 when the level drops; a stored
+      90 below advanced is rewritten only by the user's next save (no silent write).
     writers:
       - file: lib/features/profile/screens/edit_profile_screen.dart
         method: _save
-        semantic: writes session_duration_minutes from the picker (initial value SessionBudget.initialSessionDuration)
+        semantic: writes session_duration_minutes from the picker (initial value SessionBudget.initialSessionDuration, level-capped; options sessionDurationOptions, reset sessionDurationForExperience)
       - file: lib/features/onboarding/providers/onboarding_provider.dart
         method: _syncOnboardingToSupabase
         semantic: carries the field in the onboarding payload
@@ -18789,7 +18796,7 @@ concepts:
     readers:
       - file: lib/shared/repositories/plan_engine/training_history_analyzer.dart
         method: sessionMinutesFromProfile
-        semantic: raw stored value for SessionBudget.resolveMinutes, read on every generation
+        semantic: the stored value through SessionBudget.minutesForLevel (OI-488) for SessionBudget.resolveMinutes, read on every generation
       - file: lib/shared/repositories/plan_engine/plan_generator.dart
         method: generateV4 (selectV4 sessionMinutes:, quadPrimaryCreditsGlutes minutes)
         semantic: Unit 2C-a, the resolved minutes choose the split family and the credit (balanced week at 60+)
@@ -18801,10 +18808,10 @@ concepts:
         semantic: Unit 2C-b, under 60 resolved minutes the allocator's re-runs add the 285 s allowance (concept weekly_minimum)
       - file: lib/shared/services/pro_phase_advance.dart
         method: _runAdvanceWith
-        semantic: passes the stored minutes to generateV4 as sessionDuration
+        semantic: passes the stored minutes to generateV4 as sessionDuration, through SessionBudget.profileParamMinutes (OI-488)
       - file: lib/features/dev/simulation_service.dart
         method: autoGenerateNextPhaseIfNeeded call
-        semantic: passes the stored minutes to generateV4 as sessionDuration
+        semantic: passes the stored minutes to generateV4 as sessionDuration, through SessionBudget.profileParamMinutes (OI-488)
       - file: lib/shared/repositories/user_repository.dart
         method: _integerOnlyColumns
         semantic: the column allow-list that keeps the value an integer
@@ -18813,8 +18820,57 @@ concepts:
         semantic: the field counts toward profile completeness (a key presence check)
       - file: lib/features/profile/screens/edit_profile_screen.dart
         method: initState (SessionBudget.initialSessionDuration)
-        semantic: the picker's initial value, through the same resolution the generator uses
+        semantic: the picker's initial value, through the same resolution the generator uses (level-capped, OI-488); _originalSessionDuration is the RAW resolved value
     contract_test_path: test/plan_engine_v4/session_minutes_resolution_test.dart
+    additional_tests:
+      - test/contracts/session_minutes_by_level_test.dart  # OI-488 (Unit 3B): minutesForLevel table, every reader, the Edit Profile chips
+
+  # Generator Unit 3B (OI-487, founder d4 / d69 / d71 / d72, 2026-11-16, diagnose 21da5f): a stored legacy goal is
+  # moved to the goal that replaced it.
+  - concept: legacy_goal_heal
+    domain: auth_profile
+    behavioral_test_path: test/contracts/legacy_goal_heal_behavioral_test.dart
+    description: |
+      Build, Cut and Maintain (FitnessGoals.selectableTokens) are the only goals a user or the coach can choose;
+      strength and recompose stay FitnessGoals rows for STORED values only (older builds write them, restore brings
+      them back; the engine serves them as before). After every SUCCEEDED SyncService.restoreFromCloudForUser (own
+      kill switch configBox['disable_legacy_goal_heal'], not the title heal's), LegacyGoalHealer.run moves a stored
+      legacy goal: strength -> build_muscle, plus physique_focus 'strength' when the focus is null / empty / balanced
+      (d71: a chosen focus is kept); recompose -> lose_fat (FitnessGoals.legacyTargets). The new goal's derived targets
+      (recomputeDerivedTargets, unless the restore's disable_profile_target_recompute is set) travel in the SAME write.
+      The write is ProfileWriteService.patchProfileWith: under the profile lock the owner is re-checked first (the
+      wrapper's uid and _liveUserId against HiveUserSession.currentOwnerFullId), then the profile is re-read and the
+      patch decided, so a save landing first is never overwritten. No awaited network: the normal profile push carries
+      the heal to the cloud; a failed push lets the next /restoring restore merge the legacy value back, and the heal
+      moves it again. Edit Profile opens an unhealed profile on the healed goal and focus (goalFormSeed) with the RAW
+      originals, so a save heals it too. Telemetry event legacy_goal_healed; non-fatal reason legacy_goal_heal.
+    writers:
+      - file: lib/core/services/legacy_goal_healer.dart
+        method: LegacyGoalHealer.run / legacyGoalHealPatch / legacyGoalPatch
+        semantic: the heal decision and its one write (goal, focus, targets)
+      - file: lib/features/profile/services/profile_write_service.dart
+        method: patchProfileWith
+        semantic: owner re-check, re-read, decide and write under the profile lock; then the profile push
+      - file: lib/core/services/sync_service.dart
+        method: restoreFromCloudForUser
+        semantic: calls the heal on result.succeeded with the captured uid and _liveUserId
+      - file: lib/features/profile/screens/edit_profile_screen.dart
+        method: goalFormSeed / _save
+        semantic: the form opens healed; a save writes the healed goal and focus
+    readers:
+      - file: lib/core/constants/fitness_goals.dart
+        method: FitnessGoals.of / label / isSelectable / legacyTargets
+        semantic: every primary_goal reader; the legacy rows keep serving a not-yet-healed value
+      - file: lib/features/ai_coach/services/tool_dispatcher.dart
+        method: _executeSwitchGoal / _executeRegeneratePlanBlock
+        semantic: refuse a non-selectable goal with FitnessGoals.notOfferedMessage before the cached-plan check
+      - file: lib/features/ai_coach/widgets/diff_preview/switch_goal_diff.dart
+        method: _compute
+        semantic: refuses a non-selectable new_goal before reading or planning
+      - file: lib/features/ai_coach/widgets/diff_preview/regenerate_plan_diff.dart
+        method: _compute
+        semantic: refuses a non-selectable goal before planning
+    contract_test_path: test/contracts/goal_list_selectable_test.dart
 
   # payment-hardening U1 (OI-350 / OI-359, diagnose b5e8d2, 2026-10-24) — verify-payment proves the caller
   # owns the payment BEFORE it captures it or tells the caller anything about it.

@@ -86,7 +86,8 @@ const List<OnboardingStep> onboardingSteps = [
     key: 'primary_goal',
     question: "What's your primary fitness goal?",
     inputType: OnboardingInputType.chips,
-    options: ['build_muscle', 'lose_fat', 'general_fitness', 'strength'],
+    // Unit 3B (d69): the three choosable goals (FitnessGoals.selectableTokens).
+    options: ['build_muscle', 'lose_fat', 'general_fitness'],
   ),
   // Bug #24 — pace picker immediately after primary_goal so "what + how fast"
   // are grouped as one decision. Default 'balanced' if user skips forward.

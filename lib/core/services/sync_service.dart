@@ -64,6 +64,7 @@ import 'package:icanbefitter/features/ai_coach/models/coach_memory.dart';
 import 'package:icanbefitter/features/ai_coach/repositories/ai_coach_repository.dart';
 import 'package:icanbefitter/features/ai_coach/repositories/coach_interaction_repository.dart';
 import 'package:icanbefitter/features/profile/services/profile_write_service.dart';
+import 'package:icanbefitter/core/services/legacy_goal_healer.dart';
 import 'package:icanbefitter/shared/repositories/plan_engine/plan_engine_flags.dart';
 import 'package:icanbefitter/shared/repositories/user_repository.dart';
 import 'package:icanbefitter/shared/services/pro_phase_advance.dart'
@@ -2020,6 +2021,14 @@ class SyncService {
         failures, () => _restoreFromCloudForUserCore());
     if (shouldHealAfterRestore(result)) {
       await healCompletedTitlesAfterRestore();
+    }
+    // Unit 3B (OI-487, d4 / d71 / d72): move a stored legacy goal (strength /
+    // recompose) after every SUCCEEDED restore, i.e. after the profile merge and
+    // before the background heal bumps restoreCompletedTick. Its own kill switch
+    // (`disable_legacy_goal_heal`), NOT behind the title heal's. The owner check is
+    // the marker's (`uid` captured before the await, `_liveUserId` read live).
+    if (result.succeeded) {
+      await LegacyGoalHealer.run(uid, liveUid: () => _liveUserId);
     }
     _settleRestoreMarker(uid, result, failures);
     return result;

@@ -106,4 +106,45 @@ void main() {
       isEmpty,
     );
   });
+
+  // Unit 3B (founder d69): Check 4 compares a server goal enum with the SELECTABLE
+  // goals, tokens minus the legacy set.
+  group('serverGoalEnumProblems (Check 4)', () {
+    List<String> run(Set<String> enumTokens) => serverGoalEnumProblems(
+          path: 'x.ts',
+          tokens: _tokens,
+          enumTokens: enumTokens,
+          legacyReachableOnly: kLegacyReachableOnlyGoalTokens,
+        );
+
+    test('exactly the selectable goals passes', () {
+      expect(run({'build_muscle', 'lose_fat', 'general_fitness'}), isEmpty);
+    });
+
+    test('a missing selectable goal fails', () {
+      final p = run({'build_muscle', 'lose_fat'});
+      expect(p, hasLength(1));
+      expect(p.single, contains('missing selectable FitnessGoals token "general_fitness"'));
+    });
+
+    test('a legacy goal in the enum fails', () {
+      for (final legacy in ['strength', 'recompose']) {
+        final p = run({'build_muscle', 'lose_fat', 'general_fitness', legacy});
+        expect(p, hasLength(1), reason: legacy);
+        expect(p.single, contains('legacy goal "$legacy"'));
+      }
+    });
+
+    test('a phantom goal fails', () {
+      final p = run({'build_muscle', 'lose_fat', 'general_fitness', 'powerlifting'});
+      expect(p, hasLength(1));
+      expect(p.single, contains('"powerlifting", which is not a FitnessGoals token'));
+    });
+
+    test('with no legacy set every token is required (the pre-3B rule)', () {
+      final p = serverGoalEnumProblems(
+          path: 'x.ts', tokens: _tokens, enumTokens: {'build_muscle', 'lose_fat', 'general_fitness'});
+      expect(p.where((e) => e.contains('missing')), hasLength(2));
+    });
+  });
 }
