@@ -108,6 +108,7 @@ per-group e1RM trend (trailing-35-IST-day `exlog_*`, the shared `lib/core/utils/
 the frozen D3 baseline is unmoved) + a GLOBAL readiness soreness damper (soreness is a single daily
 axis, NOT per-muscle). SAFE polarity: −1 on demonstrated e1RM DECLINE alone; +1 ONLY with POSITIVE
 readiness recovery (≥3 rows, <40% beat-up). ⚠ **CORRECTED 2026-09-01:** this used to read "with readiness ship-dark (0 rows) it only ever TRIMS" — readiness went LIVE 2026-09-01, so rows DO accumulate; titration is inert only because enable_volume_titration is still OFF and short-circuits at volume_titration.dart:60 BEFORE _recovered() runs -- _recovered() itself has NO readiness gate.
+⚠ **Generator step 4 (OI-53, 2026-11-16, diagnose 7c4e2a): LIVE.** The `enable_volume_titration` key is retired; the kill switch is `disable_volume_titration` (default ON), `_recovered()` now checks `readinessEnabled` (T4), and `applyToWeeks` keeps 2A's lead-first rule (T1 / T2, plan engine CLAUDE.md). The text below is the ship-dark history.
 TWO inert seams: kill-switch `enable_volume_titration` (DEFAULT OFF → `resolveDeltas` `{}`) AND opt-in
 `applyVolumeTitration` — the orchestrator applies it ONLY when the caller passes true, and the two
 advance callers (`autoGenerateNextPhaseIfNeeded` `:483` + `graduation_screen._onPro` `:644`) pass
@@ -217,7 +218,8 @@ is ALREADY delivered by W2.4's `readiness.good` keep in `deload_evaluator`: a pl
 keep-term wired into `shouldLift` would be PROVABLY DEAD (it can only engage when
 `readiness.good` is already false, since `_fatiguePresent` is that predicate's strict
 complement), so 12-A does NOT touch `deload_evaluator.dart`.** rung-3 (exercise
-rotation) is Batch 12-B. THREE inert seams: `enable_plateau_escalation` DEFAULT OFF
+rotation) is Batch 12-B. (⚠ Generator step 4, 2026-11-16, founder d82: LIVE, both rungs; kill switch
+`disable_plateau_escalation`, default ON; the history below describes the ship-dark seams.) THREE inert seams: `enable_plateau_escalation` DEFAULT OFF
 (merge returns the input map unchanged → applyToWeeks identity → byte-identical); ALSO
 gated on `enable_readiness` (the fatigue gate needs readiness rows — mirrors
 DeloadEvaluator's guard); OPT-IN `applyPlateauEscalation` threaded generate/generateV4
@@ -251,7 +253,7 @@ day's `avoidA`/`avoidB` (alongside 11-B's `previousPhaseByDay` names) → the SA
 feeds `_selectCandidate` ONLY (never queryV4/excludeNames) on a guaranteed-non-empty
 pool → never empties a slot / wrong pattern / disturbs the attempt-5 injury floor; on a
 shallow pool `_preferNovel` falls to `pool.first` (the stuck lift RETAINED, no crash).
-**Reuses `enable_plateau_escalation` (NO new flag), INDEPENDENT of
+**Reuses `enable_plateau_escalation` (NO new flag; since step 4 the kill switch `disable_plateau_escalation`), INDEPENDENT of
 `crossPhaseVarietyEnabled`** (rotation fires under the plateau flag alone). DEFAULT OFF
 / opt-in false → `plateauAvoid {}` → the union `{...listA, ...{}}` ≡ `listA.toSet()` →
 byte-identical. Rotation is a SWAP (slot-count-neutral; a rotated-in sibling may carry ±1

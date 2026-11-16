@@ -64,36 +64,6 @@ pending:
   #     biases toward LIFTING)"
   # So enable_readiness flips FIRST or those two are inert-to-wrong.
 
-  - flag: enable_volume_titration
-    branch: workout-titration-9
-    build_commit: 05f66c9b
-    build_date: 2026-07-18
-    merge_commit: 38706bae
-    flip_reviewed: false
-    flip_commit: null
-    note: >
-      WARNING added 2026-09-01: this flag's readiness dependency is now LIVE
-      (enable_readiness flipped that day), and unlike triggered_deload's and
-      plateau_escalation's it is NOT enforced in code. _recovered()
-      (volume_titration.dart:116-136) has no readiness gate at all; titration is
-      inert ONLY because THIS flag short-circuits at :60 before it runs. Whoever
-      flips this will immediately consume every readiness row accumulated since.
-      EXCLUDED from OI-53 batch 2 (2026-09-16) for exactly this reason — see
-      docs/audit/open_issues.md's OI-53 entry for the founder's scoping decision.
-
-  - flag: enable_plateau_escalation
-    branch: workout-plateau-12
-    build_commit: 83180fe6
-    build_date: 2026-07-19
-    merge_commit: dc8f4880
-    flip_reviewed: false
-    flip_commit: null
-    note: >
-      Depends on enable_readiness (see above).
-      EXCLUDED from OI-53 batch 2 (2026-09-16) alongside enable_volume_titration —
-      see docs/audit/open_issues.md's OI-53 entry for the founder's scoping
-      decision.
-
   - flag: enable_body_measurements
     branch: coach-measurement-sheet-ui
     build_commit: dcde6ac6
@@ -210,6 +180,43 @@ pending:
 # one (FOB-4's deploy is blocked_on_user; it does not block the flip).
 
 resolved:
+  # ── enable_volume_titration + enable_plateau_escalation: FLIPPED (generator step 4, OI-53, founder d82, 2026-11-16) ──
+  # Both keys retired for kill switches (disable_volume_titration, disable_plateau_escalation, default ON, dev-panel
+  # toggles). The readiness gap the titration row warned about is closed in code (step 4 T4: _recovered() checks
+  # readinessEnabled). Record: docs/plan-reviews/generator-step4.md (review_rounds 3, bpass before the merge).
+  - flag: enable_volume_titration
+    branch: workout-titration-9
+    build_commit: 05f66c9b
+    build_date: 2026-07-18
+    merge_commit: 38706bae
+    flip_reviewed: true
+    flip_commit: pending — stamped in the post-merge records landing (generator step 4, branch generator-step4)
+    flip_review_record: docs/plan-reviews/generator-step4.md
+    note: >
+      WARNING added 2026-09-01: this flag's readiness dependency is now LIVE
+      (enable_readiness flipped that day), and unlike triggered_deload's and
+      plateau_escalation's it is NOT enforced in code. _recovered()
+      (volume_titration.dart:116-136) has no readiness gate at all; titration is
+      inert ONLY because THIS flag short-circuits at :60 before it runs. Whoever
+      flips this will immediately consume every readiness row accumulated since.
+      EXCLUDED from OI-53 batch 2 (2026-09-16) for exactly this reason — see
+      docs/audit/open_issues.md's OI-53 entry for the founder's scoping decision.
+
+  - flag: enable_plateau_escalation
+    branch: workout-plateau-12
+    build_commit: 83180fe6
+    build_date: 2026-07-19
+    merge_commit: dc8f4880
+    flip_reviewed: true
+    flip_commit: pending — stamped in the post-merge records landing (generator step 4, branch generator-step4)
+    flip_review_record: docs/plan-reviews/generator-step4.md
+    note: >
+      Depends on enable_readiness (see above).
+      EXCLUDED from OI-53 batch 2 (2026-09-16) alongside enable_volume_titration —
+      see docs/audit/open_issues.md's OI-53 entry for the founder's scoping
+      decision.
+
+
   # ── enable_hold_weeks: FLIPPED by deletion (Unit 3D-b, OI-175, founder d57, 2026-11-16) ─────────────────
   # The flag, the dev toggle and redoWeek4 were deleted: holds are always on. All four rows below move here in the
   # one flip commit, per the rule those rows set ("flipping it on must clear all four in a single commit, with the
@@ -221,7 +228,7 @@ resolved:
     build_commit: df5e38b0
     build_date: 2026-07-21
     flip_reviewed: true
-    flip_commit: pending — stamped in the post-merge records landing (generator Unit 3D-b, branch generator-step3d)
+    flip_commit: 7554fc8f  # the 3D-b flip (holds always on); B-pass fixes 7ed5da70; merged to main 85bdcbbe (PR #290)
     flip_review_record: docs/plan-reviews/generator-step3d.md
     note: >
       Slice 1 (the holdWeek WRITER). NOT the lighter 1-round tier — the
@@ -236,7 +243,7 @@ resolved:
     build_commit: 4f4e9518
     build_date: 2026-07-25
     flip_reviewed: true
-    flip_commit: pending — stamped in the post-merge records landing (generator Unit 3D-b, branch generator-step3d)
+    flip_commit: 7554fc8f  # the 3D-b flip (holds always on); B-pass fixes 7ed5da70; merged to main 85bdcbbe (PR #290)
     flip_review_record: docs/plan-reviews/generator-step3d.md
     note: >
       Slice 2-6 (the DISPLAY for the same flag) — this one IS the §4.12.4
@@ -254,7 +261,7 @@ resolved:
     merge_commit: 342820b3
     build_date: 2026-07-25
     flip_reviewed: true
-    flip_commit: pending — stamped in the post-merge records landing (generator Unit 3D-b, branch generator-step3d)
+    flip_commit: 7554fc8f  # the 3D-b flip (holds always on); B-pass fixes 7ed5da70; merged to main 85bdcbbe (PR #290)
     flip_review_record: docs/plan-reviews/generator-step3d.md
     note: >
       Two converged fixes found by the 2026-07-25 LIVE walkthrough on test7 +
@@ -272,7 +279,7 @@ resolved:
     build_commit: null
     build_date: 2026-08-21
     flip_reviewed: true
-    flip_commit: pending — stamped in the post-merge records landing (generator Unit 3D-b, branch generator-step3d)
+    flip_commit: 7554fc8f  # the 3D-b flip (holds always on); B-pass fixes 7ed5da70; merged to main 85bdcbbe (PR #290)
     flip_review_record: docs/plan-reviews/generator-step3d.md
     note: >
       FOB-1 (week identity, 2026-08-20) and FOB-3 (the coach snapshot's `hold`

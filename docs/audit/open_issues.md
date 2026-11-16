@@ -253,135 +253,6 @@ Everything currently owed, from any source — not only audit findings. `MEMORY.
 durable *why* (scars, retrospectives) but lives in the harness dir outside git and is invisible to
 cloud sessions; **this file is the cross-session backlog.**
 
-## OI-53 — Flip the remaining 2 workout-generator ship-dark flags (was 13; equipment-exclusions flipped 2026-08-05; readiness + triggered-deload flipped 2026-09-01; phase-arc flipped 2026-09-05; deload-reason-line flipped 2026-09-06; exercise_id_history + injury_substitute_pref + cross_phase_variety flipped 2026-09-16 batch 1; graded_progression + session_detraining_cut + physique_focus_bringup + adherence_gate flipped 2026-09-16 batch 2)
-
-- **Status**: OPEN
-- **Verified**: 2026-08-05 — flag inventory, dependency order and the data lag all re-derived from
-  source this session (`plan_engine_flags.dart`, `deload_evaluator.dart:170,173`,
-  `ship_dark_pending_review.yaml:76-101`), not carried from the entry's original text.
-- **Identified**: 2026-07-26 · workout-generator overhaul complete `7bb766fa`
-- **Blocked on**: FOUNDER — but read the shape below before treating this as one decision.
-  ⚠ **DATED FOUNDER DECISION 2026-09-01: readiness + triggered deload were approved and
-  flipped together** (branch `readiness-flip`, record `docs/plan-reviews/readiness-flip.md`).
-  Recorded here because a repo-only reader cannot otherwise reconcile `Blocked on: FOUNDER`
-  with those two flips existing. ⚠ **DATED FOUNDER DECISION 2026-09-05: `enable_phase_arc`
-  approved and flipped** (branch `phase-arc-flip`, record `docs/plan-reviews/phase-arc-flip.md`).
-  ⚠ **DATED FOUNDER DECISION 2026-09-06: `enable_deload_reason_line` approved and flipped** as Unit B (branch
-  `unitb-deload-reason`, record `docs/plan-reviews/unitb-deload-reason.md`) — the piece split
-  out of the phase-arc flip the day before, once its stale-reason defect was fixed (diagnose
-  `c5a8f3`).
-  ⚠ **DATED FOUNDER DECISION 2026-09-16: `exerciseIdHistoryEnabled` + `injurySubstitutePreferenceEnabled`
-  + `crossPhaseVarietyEnabled` approved and flipped together** as Batch 1 of a founder-directed
-  release-blocker triage (branch `oi53-batch1-flip`, record `docs/plan-reviews/oi53-batch1-flip.md`)
-  — the three lowest-risk of the remaining flags (bounded/preference-only re-ranks with no ability
-  to widen a slot's candidate pool beyond what queryV4's injury/equipment filters already permit).
-  ⚠ **DATED FOUNDER DECISION 2026-09-16: `gradedProgressionEnabled` + `sessionDetrainingCutEnabled`
-  + `physiqueFocusBringupEnabled` + `adherenceGateEnabled` approved and flipped together** as
-  Batch 2 of the same triage (branch `oi53-batch2-flip`) — the founder's own scoping question
-  ("all 6 remaining, or the 4 clean ones") surfaced that `volumeTitrationEnabled`'s readiness
-  dependency is, unlike its siblings `triggeredDeloadEnabled`/`plateauEscalationEnabled`, NOT
-  enforced in code (`volume_titration.dart:116-136`'s `_recovered()` has no readiness gate at
-  all — it is inert today only because the flag itself short-circuits first); that flag and
-  `plateauEscalationEnabled` (which depends on it) were deliberately excluded from this batch.
-  **2 remain.**
-- **What this actually is — 13 product decisions, not one toggle.** The ledger is explicit:
-  *"there is no batch discount, and flipping thirteen flags in one commit would be one review
-  pretending to be thirteen."* Each flip-on commit needs its own **full ×2 + `bpass: accepted`**
-  (§4.12.4 — the lighter `ship_dark_build` tier does NOT apply to a flip). Nothing is broken by
-  leaving them OFF: every shipped APK to date has run with all 13 dark, so OFF *is* the current
-  product. What is owed is a decision per flag, not a flip.
-- ✅ **`enable_readiness` + `enable_triggered_deload` — FLIPPED 2026-09-01.** Together, and the
-  coupling was mechanical: `plan_generator.dart` gates `stashWorkingBase` on the deload flag at
-  GENERATION time, so a plan generated with it OFF can never be lifted — flipping deload later
-  would have helped no existing plan. Sleep is now MEASURED from Health Connect
-  (`SLEEP_SESSION`) rather than self-reported, so the check-in is 2 taps when sleep is known.
-  Readiness trends are FREE for all (the Reports paywall branch was removed, not gated).
-  ⚠ Three Android-side defects were caught in review, each invisible to `flutter test`:
-  the wrong data type (`SLEEP_ASLEEP` matches STAGES, not the session), `READ_SLEEP` declared
-  in no manifest, and a permission-request function with no caller.
-- ✅ **`enable_phase_arc` — FLIPPED 2026-09-05.** Display-only, no engine coupling. Taken
-  first deliberately: it changes nothing about prescribed training, so it was the cheapest
-  ×2 and it put `week_character` on screen before anything that alters load.
-  ⚠ **It did NOT ship alone — the batch was SPLIT.** The week-4 deload-"why" line lives
-  INSIDE the same widget, so the flip would have lit it too. Plan-review round 2 found the
-  stamped `deload_reason_phase_<P>` is never deleted anywhere in `lib/` while a mid-phase
-  regen re-stamps week 4 as `deload`, so the strip would render DELOAD above "Working week
-  — you've recovered", permanently. That line now sits behind its own ship-dark
-  `enable_deload_reason_line` and is Unit B, with its own ×2.
-  ⚠ Three defects were fixed in the flip itself, none of them the flag: the fifth wave token
-  `working` was unmapped; the label lookup trimmed while its fallback did not; and the
-  `length < 2` guard let a 2-3 week blob render a strip whose clamped-to-4 highlight could
-  mark no node at all. Also raised FOB-8 against OI-60 — the strip reads
-  `getCurrentWeekNumber()` directly, so it is a seventh week-identity surface.
-
-- **The order is forced by code, not preference.** `enable_readiness` had to flip FIRST:
-  - `enable_triggered_deload`'s evaluator **early-returns** on readiness
-    (`deload_evaluator.dart:56` — `if (!PlanEngineFlags.readinessEnabled) return;`; the
-    ledger's `&& readinessEnabled` phrasing describes the effect, not the code shape) —
-    so it does literally nothing until readiness is ON.
-  - `enable_plateau_escalation` self-gates (`plateauedGroups` checks `readinessEnabled`).
-  - `enable_volume_titration`'s **+1** direction needs positive readiness recovery evidence, so
-    with readiness OFF it can only ever TRIM. Flipping it alone gives users a one-way volume cut.
-- ⚠ **A data lag no review can shortcut.** Even with readiness flipped, `deload_evaluator.dart:173`
-  requires **≥3 readiness rows inside a 14-day IST window** (`:170`) before the dependent flags can
-  act; below that it returns `good: false` and keeps the deload (safe, but inert). So three of the
-  thirteen sit dead for **at least two weeks** after any flip, waiting on check-in data only real
-  users generate. "Flip all 13 at once" is therefore not merely risky — it is ineffective, and it
-  destroys attribution: 13 simultaneous changes to prescribed load/volume/selection with one
-  bug report and no way to isolate the cause. Attribution is the entire point of ship-dark.
-- ✅ **`enable_equipment_exclusions` — FLIPPED 2026-08-05 (diagnose `e2d6b8`), so this issue is
-  now TWELVE flags, not thirteen.** It was the exception: its *collection* UI shipped lit while
-  its *consumption* stayed dark, so the app saved an equipment preference it then ignored — a
-  live broken promise rather than a dormant feature. That promise is now kept. The counts and
-  quotes above ("13", "thirteen") describe the pre-flip state and are left as the ledger's own
-  wording; the live number is **12**. Related: OI-89 (its condition (a) closed with this flip),
-  and OI-95 (the flip's kill-switch is reachable only in debug builds).
-- ✅ **`exerciseIdHistoryEnabled` + `injurySubstitutePreferenceEnabled` + `crossPhaseVarietyEnabled`
-  — FLIPPED 2026-09-16 (branch `oi53-batch1-flip`, record `docs/plan-reviews/oi53-batch1-flip.md`,
-  ×2 review converged).** All three are bounded re-ranks of an already-safe candidate list (the
-  injury/equipment filters run first and are unaffected by any of these three) — none can widen
-  what a user is prescribed beyond what the pre-flip cascade could already produce, only change
-  which already-eligible pick wins. `exerciseIdHistoryEnabled` is forward-only (new `exlog_*` rows
-  start carrying a matchable `exercise_id`; a later kill-switch reverts the CODE path verbatim but
-  does not retro-strip already-stamped ids — harmless, since an OFF resolver never reads them).
-  Review found zero code-correctness issues across two independent rounds; both rounds' documentation
-  findings (a stale flag-name cross-reference in `plan_engine/CLAUDE.md`, three untouched
-  `docs/sot_registry.yaml` concept entries, and this board entry itself) are fixed in the same
-  branch. `ship_dark_pending_review.yaml`'s three `pending:` entries move to `resolved:` in this
-  branch's follow-up records commit, per this repo's established split-commit convention for that
-  file. **6 remained at the time this bullet was written; superseded by Batch 2 below — 2 remain now.**
-- ✅ **`gradedProgressionEnabled` + `sessionDetrainingCutEnabled` + `physiqueFocusBringupEnabled` +
-  `adherenceGateEnabled` — FLIPPED 2026-09-16 (branch `oi53-batch2-flip`, ×2 review converged).**
-  All four INCREASE prescribed load/volume or change the interactive UI (unlike Batch 1's bounded
-  re-ranks), matching the founder's original "not the safe direction" ship-dark framing for each.
-  `adherenceGateEnabled` is the most architecturally involved: it gates a `last_phase_profile`
-  Hive write, a G5 faithfulness re-ranking gate, AND the actual `repeatContent`/`repeat` trigger
-  computation at TWO independent call sites (`pro_phase_advance.dart`'s automatic low-adherence
-  repeat, `graduation_screen.dart`'s explicit choice sheet). The automatic path re-checks the flag
-  a SECOND, redundant time immediately before `_buildRepeatPins` (confirmed by mutation — neutering
-  either check alone left the relevant test green; only neutering both reddened it). That trigger
-  computation had NO behavioral test coverage before this batch — the pre-existing
-  `repeat_phase_pinned_selection_behavioral_test.dart` tests the pinning MECHANISM directly
-  (`pinnedExercisesByDay`) and never touches the flag; `repeat_content_scheduling_test.dart`
-  covers the `last_phase_profile` write half only. Closed by a new
-  `pro_phase_advance_behavioral_test.dart` group driving the actual gating decision end-to-end
-  (real expired phase, real completion rate, real G5-matching baseline), mutation-proven. A
-  second, unrelated stale comment was found and fixed in the same investigation:
-  `workout_schedule_read_service.dart`'s `autoGenerateNextPhaseIfNeeded` doc called the
-  `repeatContent` trigger "not yet wired" — it had been wired by Units 3-a2/3-b for weeks; the
-  prose was never updated when they landed.
-  **B-pass finding (2026-09-16), fixed same batch:** unlike the automatic path, the choice-sheet
-  path had NO re-check at all — `runGraduationPhaseAdvance` took the user's already-made
-  `repeat: true` choice and called through to `_buildRepeatPins` unconditionally, so a kill-switch
-  flip during the human-time gap between the choice sheet opening and the tap was silently not
-  honored, contradicting the flag's own "byte-identical when killed" guarantee. Fixed by moving the
-  check into `_buildRepeatPins` itself — the ONE method both callers funnel through — so it is now
-  genuinely universal rather than caller-dependent; mutation-confirmed (reverting the check reddened
-  exactly the new graduation-path kill-switch test, nothing else). `ship_dark_pending_review.yaml`'s
-  four `pending:` entries move to `resolved:` in this branch's follow-up records commit. **2 remain**
-  (`volumeTitrationEnabled`, `plateauEscalationEnabled` — see the DATED FOUNDER DECISION above for
-  why they were excluded).
-
 ## OI-54 — Confirm `/admin` access
 
 - **Status**: OPEN
@@ -1081,7 +952,7 @@ cloud sessions; **this file is the cross-session backlog.**
 - **Surfaced by, but NOT specific to, e2d6b8**: the equipment-exclusions flip wired a dev-panel
   toggle (`_toggleEquipmentExclusions`) and its closure entry initially claimed that made the
   kill-switch operable. Round 2 showed that is true only in debug. The same is true of
-  `enable_hold_weeks` (deleted 2026-11-16 by OI-175's flip) and every one of the twelve OI-53 flags — this is architectural.
+  `enable_hold_weeks` (deleted 2026-11-16 by OI-175's flip) and every one of the thirteen OI-53 flags (all flipped; OI-53 closed 2026-11-16 by generator step 4, whose `disable_volume_titration` / `disable_plateau_escalation` toggles are debug-only too) — this is architectural.
 - **Fix shape (needs the product call first)**: the honest options are (a) an `/admin`-gated
   operator screen — `/admin` IS registered unconditionally (`app_router.dart:344+`) and is
   founder-gated by `ADMIN_USER_IDS`, so a flag panel there would be release-reachable without
@@ -2929,7 +2800,7 @@ Unit 2's blocked question — what a regeneration does when the plan window is E
 
 - **Blast radius**: `lib/shared/repositories/plan_engine/**` is `platform` (`docs/blast_radius.yaml:67`); touching `progression_resolver.dart` or the decay bands lands there ⇒ `feature_flag` + `bpass: accepted`
 - **Full research record**: `docs/research/returning-user-reentry.md` — 21-app table with per-row evidence grading, detraining timelines, UX patterns with verbatim copy, and an explicit list of what the evidence does NOT settle
-- **Related**: OI-166 (regen scope), OI-60 (hold-weeks flip — hold weeks are the *other* answer to the same moment and are still OFF), OI-53 (ship-dark flag flips, incl. `sessionDetrainingCutEnabled`)
+- **Related**: OI-166 (regen scope), OI-60 (hold-weeks flip — hold weeks are the *other* answer to the same moment; closed 2026-11-16, holds always on), OI-53 (ship-dark flag flips, incl. `sessionDetrainingCutEnabled`; closed 2026-11-16, all 13 flipped)
 ## OI-190 — Unit 1's §4.11 gate `check_single_schedule_row_builder.dart` is WARN-only past its window because the shared builder it guards was never built: the 2026-09-07 "one implementation" decision has no owner (P2, process/gate)
 
 - **Status**: OPEN

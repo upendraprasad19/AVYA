@@ -142,7 +142,7 @@ void main() {
     await hb.clear();
     await cb.clear();
     // Both gate flags ON by default (variety stays OFF unless a test enables it).
-    await cb.put('enable_plateau_escalation', true);
+    // step 4: ON by default (setUp clears the config box; the `enable_plateau_escalation` key is retired).
   });
 
   group('rung-3 rotation (Hive-seeded, baseline-derived targets)', () {
@@ -198,7 +198,7 @@ void main() {
     });
 
     test('ship-dark: flag OFF → identical exercise set (byte-identical)', () async {
-      await cb.put('enable_plateau_escalation', false);
+      await cb.put('disable_plateau_escalation', true); // step 4: the kill switch
       final off = gen(false);
       await seedPlateausFor(compoundNames(off));
       await seedReadiness(3, flagged: false);
@@ -295,7 +295,7 @@ void main() {
       // is well-formed. (The per-GROUP MRV clamp itself is pinned by 12-A's titration /
       // plateau-escalation tests — a per-EXERCISE `sets<=20` check here would be
       // trivially true and prove nothing, per B-pass P2.)
-      await cb.put('enable_volume_titration', true);
+      // step 4: ON by default (setUp clears the config box; the `enable_volume_titration` key is retired).
       final off = gen(false);
       final targets = compoundNames(off);
       await seedPlateausFor(targets);
@@ -338,7 +338,7 @@ void main() {
     });
 
     test('flag OFF → {}', () async {
-      await cb.put('enable_plateau_escalation', false);
+      await cb.put('disable_plateau_escalation', true); // step 4: the kill switch
       await seedReadiness(3, flagged: false);
       expect(await seedOneFlatCompoundThenScan(2), isEmpty);
     });

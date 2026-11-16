@@ -360,6 +360,22 @@ class _DevPanelScreenState extends ConsumerState<DevPanelScreen> {
         '-- generate a new plan for the stash to apply');
   }
 
+  /// Generator step 4 (OI-53) kill switches: volume titration and plateau escalation
+  /// went live with no other off switch on a device (CLAUDE.md 4.6 step 3). Deleting
+  /// the key returns to the default (ON); the change applies at the next fresh PRO
+  /// phase advance, the only generation that opts in.
+  Future<void> _toggleKillSwitch(String key, {required bool enabledNow, required String label}) async {
+    final cfg = HiveService.instance.configBox;
+    if (enabledNow) {
+      await cfg.put(key, true);
+    } else {
+      await cfg.delete(key);
+    }
+    if (!mounted) return;
+    setState(() {});
+    _toast('$label = ${enabledNow ? 'OFF (killed)' : 'ON'} -- applies at the next phase advance');
+  }
+
   void _toast(String msg) {
     ScaffoldMessenger.of(context)
         .showSnackBar(SnackBar(content: Text(msg)));
@@ -449,6 +465,10 @@ class _DevPanelScreenState extends ConsumerState<DevPanelScreen> {
                   PlanEngineFlags.readinessEnabled ? 'ON' : 'KILLED'),
               _kv('triggered deload',
                   PlanEngineFlags.triggeredDeloadEnabled ? 'ON' : 'KILLED'),
+              _kv('volume titration',
+                  PlanEngineFlags.volumeTitrationEnabled ? 'ON' : 'KILLED'),
+              _kv('plateau escalation',
+                  PlanEngineFlags.plateauEscalationEnabled ? 'ON' : 'KILLED'),
               const SizedBox(height: 8),
               Wrap(
                 spacing: 8,
@@ -490,6 +510,22 @@ class _DevPanelScreenState extends ConsumerState<DevPanelScreen> {
                         ? 'KILL triggered deload'
                         : 'Restore triggered deload',
                     () => _toggleTriggeredDeload(),
+                  ),
+                  _btn(
+                    PlanEngineFlags.volumeTitrationEnabled
+                        ? 'KILL volume titration'
+                        : 'Restore volume titration',
+                    () => _toggleKillSwitch('disable_volume_titration',
+                        enabledNow: PlanEngineFlags.volumeTitrationEnabled,
+                        label: 'volume titration'),
+                  ),
+                  _btn(
+                    PlanEngineFlags.plateauEscalationEnabled
+                        ? 'KILL plateau escalation'
+                        : 'Restore plateau escalation',
+                    () => _toggleKillSwitch('disable_plateau_escalation',
+                        enabledNow: PlanEngineFlags.plateauEscalationEnabled,
+                        label: 'plateau escalation'),
                   ),
                   // Use after every time-travel jump — the clock buttons above
                   // do NOT invalidate providers on their own.

@@ -12157,6 +12157,13 @@ concepts:
       B2 (session set budget, always on since 2026-11-02, concept session_set_budget): applyToWeeks(budget:) swaps the
       [8,20] clamp for the budget's band bottom (MEV) and the BudgetLedger (MRV), counts in
       BudgetMuscleGroups, and touches only budgeted rows; the evidence side (resolveDeltas) is unchanged.
+      Generator step 4 (OI-53, 2026-11-16, founder d82, diagnose 7c4e2a): LIVE. The enable_volume_titration key is
+      retired; kill switch disable_volume_titration (PlanEngineFlags.volumeTitrationEnabled, default ON, dev-panel
+      toggle). applyToWeeks keeps 2A's lead-first rule: the day's lead is SequencingEngine.openerOf over its budgeted
+      rows; T1 a +1 on a non-lead row crediting no focus group needs current(row) <= current(lead); T2 a -1 takes rows
+      at 3+ sets, most sets first, ties to the latest day then slot (d65), never below 2, the lead only when R2 still
+      holds; T3 a stash-less deload row is skipped; T4 _recovered() needs readinessEnabled. applyToWeeks(leadFirst:)
+      (null reads disable_lead_first). Gate titration_plateau_gate_test.dart over a simulated history.
     writers:
       - file: lib/shared/repositories/plan_engine/volume_titration.dart
         method: VolumeTitration.resolveDeltas / applyToWeeks
@@ -12193,6 +12200,14 @@ concepts:
           dedup, deload workingSets symmetry; resolveDeltas — flag/phase gates, −1 on
           decline, +1 only with recovery evidence (0/sparse/systemic-sore readiness → hold),
           deterministic. e1rm_test.dart pins the shared Epley helper.
+      - file: test/plan_generator/titration_plateau_gate_test.dart
+        method_or_widget: the step 4 gate (OFF / IDENTITY / KILLED / ON over a simulated history, plan_audit/history_sim_lib.dart)
+        semantic: >
+          hard zeros on the ON plan's final rows (R2 / R5, 1-set rows, time, the oracle ceiling, raw top in same-pick
+          weeks), the opt-in and kill-switch identities, mixed's merge, sore / readiness-off ON == OFF, the d82 net.
+      - file: lib/features/dev/dev_panel_screen.dart
+        method_or_widget: _toggleKillSwitch (disable_volume_titration / disable_plateau_escalation)
+        semantic: dev-only kill-switch toggle (CLAUDE.md 4.6 step 3)
     contract_test_path: test/contracts/volume_titration_behavioral_test.dart
 
   - concept: plateau_escalation
@@ -12227,6 +12242,10 @@ concepts:
       deleted by Unit 1B-F, 2026-11-11).
       B2 (session set budget, always on since 2026-11-02, concept session_set_budget): a plateau +1 is refused inside
       applyToWeeks when the BudgetLedger has no room; mergePlateauSetDeltas is unchanged.
+      Generator step 4 (OI-53, 2026-11-16, founder d82): LIVE (rung 2 and rung 3 together). The
+      enable_plateau_escalation key is retired; kill switch disable_plateau_escalation
+      (PlanEngineFlags.plateauEscalationEnabled, default ON, dev-panel toggle). The +1 passes titration's T1 (lead + 1)
+      and the ledger; the mixed scenario of the step 4 gate pins that a declining group's -1 wins the merge.
     writers:
       - file: lib/shared/repositories/plan_engine/plateau_scan.dart
         method: PlateauScan.plateauedGroups / mergePlateauSetDeltas / isFlat
@@ -12291,6 +12310,8 @@ concepts:
       L6 post-pass `_applyHistoryAdjustments` and the mirrors; a demoted row now sorts last
       in rankedPool, which may still leave a rotated lift as the slot's pick — consistent
       with rung-3 being SOFT.
+      Generator step 4 (2026-11-16, founder d82): LIVE under the kill switch disable_plateau_escalation (default ON);
+      the step 4 gate's flat scenario measures it (under-bottom group-weeks ON <= OFF, no major newly at 0).
     writers:
       - file: lib/shared/repositories/plan_engine/plateau_scan.dart
         method: PlateauScan.plateauedExerciseNames
