@@ -90,6 +90,7 @@ class DayFloorGate {
     Map<int, ({List<String> a, List<String> b})>? pins,
     int? minutes,
     bool balancedWeekOff = false,
+    bool goalTrainingOff = false,
   }) {
     final box = HiveService.instance.configBox;
     try {
@@ -100,6 +101,8 @@ class DayFloorGate {
       }
       // Unit 2C-a: the OFF digest is main 8a2e1c5a's (before 2C), so the plans 2C changes are hashed with its switch set.
       if (balancedWeekOff) box.put('disable_balanced_week', true);
+      // Unit 3A: likewise main's Cut / Maintain plans are hashed with `disable_goal_training` set.
+      if (goalTrainingOff) box.put('disable_goal_training', true);
       SessionSetAllocator.debugLastStats = null;
       final plan = h.gen(
           tier: tier, goal: goal, level: level, days: days, phase: phase, injuries: injuries, pins: pins, minutes: minutes);
@@ -107,8 +110,13 @@ class DayFloorGate {
     } finally {
       box.delete('disable_day_floor');
       box.delete('disable_balanced_week');
+      box.delete('disable_goal_training');
     }
   }
+
+  /// Unit 3A (OI-487), restated: goal training changes Cut and Maintain plans only (no persona here has the Strength
+  /// focus); with the switch set they are main's.
+  static bool _goalTrainingChanges(String goal) => goal == 'lose_fat' || goal == 'general_fitness';
 
   /// Unit 2C-a, restated (not imported): build_muscle 3 / 4 / 5-day plans at 60+ resolved minutes get the balanced week
   /// (its lists and its credit). A persona with no minutes resolves to 60.
@@ -124,8 +132,11 @@ class DayFloorGate {
     final band = SessionBudget.weeklyBand(goal, eff);
     final top = lighter ? band.bottom : band.top;
     final cap = SessionBudget.sessionCap(goal, eff);
-    // OI-454 (6-day) and Unit 2C-a (the balanced week): a quad-first row does not credit Glutes.
-    final quadOwnsGlutes = (goal == 'build_muscle' && days == 6) || _balancedWeek(goal, days, minutes);
+    // OI-454 (6-day), Unit 2C-a (the balanced week) and Unit 3A (4-day Maintain): a quad-first row does not credit
+    // Glutes.
+    final quadOwnsGlutes = (goal == 'build_muscle' && days == 6) ||
+        _balancedWeek(goal, days, minutes) ||
+        (goal == 'general_fitness' && days == 4);
     for (var w = 0; w < on.plan.weekPlans.length; w++) {
       final variant = (w == 1 || w == 3) && days != 6 ? 'B' : 'A';
       final stats = on.stats[variant];
@@ -241,7 +252,8 @@ class DayFloorGate {
   /// worlds disagree on (0: an uninjured 30-minute plan is not floored, so the OFF repeat is exactly main's). Unit 2C-b:
   /// the pins are generated with 2C switched off (`disable_balanced_week`), i.e. main's pins, because the weekly
   /// minimum and the allowance change the uninjured 30-minute plan the floor alone does not; the ON repeat still runs
-  /// the floor and 2C-b over them.
+  /// the floor and 2C-b over them. Unit 3A: the pins are main's for the same reason (`disable_goal_training` set too),
+  /// and the OFF digest of a Cut / Maintain persona is taken with that switch set, so it still equals main 8a2e1c5a.
   DayFloorTally run(String block, String tier) {
     final t = DayFloorTally();
     final pinCache = <String, Map<int, ({List<String> a, List<String> b})>>{};
@@ -251,6 +263,7 @@ class DayFloorGate {
       if (p.pinned) {
         pins = pinCache.putIfAbsent('${p.goal}|${p.level}|${p.days}', () {
           box.put('disable_balanced_week', true);
+          box.put('disable_goal_training', true);
           try {
             final on = dayFloorPins(h, p);
             box.put('disable_day_floor', true);
@@ -259,10 +272,11 @@ class DayFloorGate {
           } finally {
             box.delete('disable_day_floor');
             box.delete('disable_balanced_week');
+            box.delete('disable_goal_training');
           }
         });
       }
-      _Gen g(bool floor, {bool balancedWeekOff = false}) => _gen(
+      _Gen g(bool floor, {bool balancedWeekOff = false, bool goalTrainingOff = false}) => _gen(
           floor: floor,
           tier: p.tier,
           goal: p.goal,
@@ -272,12 +286,15 @@ class DayFloorGate {
           injuries: p.injuries,
           pins: pins,
           minutes: p.minutes,
-          balancedWeekOff: balancedWeekOff);
+          balancedWeekOff: balancedWeekOff,
+          goalTrainingOff: goalTrainingOff);
       final on = g(true);
       final off = g(false);
       final offHash = _balancedWeek(p.goal, p.days, p.minutes)
           ? dayFloorPlanHash(g(false, balancedWeekOff: true).plan)
-          : dayFloorPlanHash(off.plan);
+          : _goalTrainingChanges(p.goal)
+              ? dayFloorPlanHash(g(false, goalTrainingOff: true).plan)
+              : dayFloorPlanHash(off.plan);
       _compare(t, p.label, p.goal, p.level, p.days, p.phase, p.minutes, on, off, offHash);
     }
     return t;

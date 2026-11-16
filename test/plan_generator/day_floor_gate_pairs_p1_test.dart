@@ -22,11 +22,16 @@ import '../helpers/injury_floor_sweep_lib.dart';
 /// moved ahead takes the row of a group the week still trains, with the same row count (diagnose e9b3d7). For example,
 /// knee + lower_back strength 3-day: Bench Dips (Triceps) for Pike Push Up, Dumbbell Alternate Bicep Curl (Biceps) for
 /// Dumbbell Rear Lateral Raise (Shoulders stay credited elsewhere that week).
+/// Unit 3A (2026-11-15), re-measured on the 2E tree: the goal's lower Cut / Maintain tops leave more floor-off days
+/// under 3 (thin OFF up), and every one gains rows and reaches 3 (gained = thin OFF, 0 thin ON, 0 lost, every OFF digest
+/// still main's); knock-on rises with them.
+/// Attribution (review round 1): with the goal training off and d65 KEPT, this file's pre-3A counts pass unchanged, so
+/// d65 alone moves nothing here and every moved count is the goal training's (and with d65 reverted too, likewise).
 const _expected = <String, (int, int, int, int, int, int, int)>{
-  'bodyweight': (720, 12960, 2, 2, 0, 0, 10),
-  'home_dumbbells': (720, 12960, 48, 48, 0, 9, 6),
-  'basic_gym': (720, 12960, 68, 68, 0, 0, 0),
-  'full_gym': (720, 12960, 44, 44, 0, 0, 0),
+  'bodyweight': (720, 12960, 14, 14, 0, 0, 10),
+  'home_dumbbells': (720, 12960, 76, 76, 6, 9, 6),
+  'basic_gym': (720, 12960, 104, 104, 0, 0, 0),
+  'full_gym': (720, 12960, 80, 80, 6, 0, 0),
 };
 
 void main() {

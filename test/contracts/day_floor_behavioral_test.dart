@@ -1,7 +1,8 @@
 // Unit 2B (OI-452, docs/plans/2026-11-13-generator-step2b-day-floor.md, founder d30-d33): the 3-exercise day floor.
 // After pass A2, a day whose rows (budgeted and not) are under min(3, its reach) seats a remaining slot at 2 sets past
 // a group's weekly top: no limit on the excess (d30), in every phase (d31), up to its reach (d32), not bound by the
-// clock (d33); never past a session cap, never a slot the rank-0 reservation blocked. Choice (F2): the fewest groups
+// clock (d33); never past a session cap (d65, Unit 3A: a slot the rank-0 reservation blocked may be seated, and a cap
+// refusal of the third exercise trims the group's rows above 2, `floorTrims`). Choice (F2): the fewest groups
 // over their top, then the least excess, then the cheapest; ties to the lowest rank. F3: the Unit 2A worlds are chosen
 // with the floor off, then the chosen A and B are re-run with it on (B copying the floored A). F4: each seat is
 // recorded in `AllocationStats.floorSeats` with `overTop` and `overClock`; a floor seat is never in `countForced`; a
@@ -44,7 +45,7 @@ List<int> rows(List<PopulatedDay> out, {bool b = false}) =>
 /// A row's seconds as the allocator and week 2 price it (`PeriodizationEngine._weekTwoGains`' rule).
 double priced(PlannedExercise e, SessionBudgetContext ctx) {
   final rest = SessionBudget.isBudgeted(e, ctx) || SessionBudget.isRepBased(e.loggingType)
-      ? SessionBudget.restForArchetype(SessionBudget.archetypeOfPlanned(e, ctx))
+      ? SessionBudget.restFor(SessionBudget.archetypeOfPlanned(e, ctx), ctx)
       : e.restSeconds;
   return SessionBudget.plannedExerciseSeconds(e, ctx, sets: e.sets, restSeconds: rest);
 }
@@ -131,12 +132,12 @@ void main() {
       }
     });
 
-    test('never past a session cap: a lead seated at 3 leaves room for one more Back slot, not two (beginner, cap 6)', () {
+    test('never past a session cap; d65: the third exercise takes the 3-set row\'s third set (beginner, cap 6)', () {
       // Day 0: Row (Back, the lead), PullA and PullB (Back + Biceps); days 1-6: one Curl each, Biceps 12 = the top.
       // Lead world (kept: same rows as main): Row at 3; PullA and PullB refused by the Biceps top. The floor seats PullA
-      // (Back 3 + 2 = 5 <= 6), then PullB would make Back 7 > 6: refused, the day ends at 2 rows. In the main world (the
-      // rule off) Row sits at 2, so both seat (Back 6): the cap is the only thing that stopped PullB. (Row ends at 4:
-      // pass C grows the lead after the floor, Back 4 + 2 = 6 = the cap.)
+      // (Back 3 + 2 = 5 <= 6); PullB at 2 would make Back 7 > 6, so (d65 b) the floor takes Row's third set: Row 2,
+      // PullA 2, PullB 2, Back 6 = the cap, and the day holds 3 exercises. Before d65 the day ended at 2 rows (Row grew to
+      // 4 in pass C). In the main world Row sits at 2, so both seat with no trim (Back 6).
       final f = Fx()
         ..row('Row', ['Lats'])
         ..row('PullA', ['Lats', 'Biceps'])
@@ -148,10 +149,14 @@ void main() {
       ];
       final out = f.run(days, level: 'beginner', leadFirst: true, dayFloor: true);
       expect(statsA().leadWorld, 'lead');
-      expect(setsOf(out[0]), [('Row', 4), ('PullA', 2)]);
+      expect(setsOf(out[0]), [('Row', 2), ('PullA', 2), ('PullB', 2)]);
       expect(seats(statsA()), {
-        0: ['PullA:2:Biceps:false'],
+        0: ['PullA:2:Biceps:false', 'PullB:2:Biceps:false'],
       });
+      expect(statsA().floorTrims, {
+        0: [(name: 'Row', from: 3, to: 2)],
+      });
+      expect(statsA().weekly['Back'], 6);
       expectOracle(f, out, statsA(), f.ctx(days, level: 'beginner'));
 
       final main = f.run(days, level: 'beginner', leadFirst: false, dayFloor: true);
@@ -159,14 +164,112 @@ void main() {
       expect(seats(statsA()), {
         0: ['PullA:2:Biceps:false', 'PullB:2:Biceps:false'],
       });
+      expect(statsA().floorTrims, isEmpty, reason: 'a slot that fits as it is needs no trim');
     });
 
-    test('never a slot the rank-0 reservation blocked', () {
-      // general_fitness beginner (Chest top 10). Day 0: Bench (Chest), Row (Back), Fly (Chest); days 1-5: Bench. Rank 0
-      // on day 0: Bench fits but 10 - 2 < 2 x 5 later Chest leads, so the reservation blocks it. Days 1-5 seat Bench
-      // (Chest 10); Row seats; Fly is refused by the top. The floor may seat Fly (past the top) but never Bench: the day
-      // ends [Row, Fly]. Seating Bench as well would be the cheaper-tie order's second pick.
+    test('d65: the trim gives the cut set\'s seconds back to the day (24 minutes: PullB then fits the clock)', () {
+      // The cap-trim fixture above at 24 minutes, without Unit 2C-b (no under-60 allowance, so the oracle's plain budget
+      // applies). The trim takes Row's third set and returns its seconds, so PullB's 2 sets fit what is left (overClock
+      // false). Credited with the sets but not the seconds, the day would read PullB 114 s over its clock (B-pass seat B).
+      final f = Fx(balancedWeek: false)
+        ..row('Row', ['Lats'])
+        ..row('PullA', ['Lats', 'Biceps'])
+        ..row('PullB', ['Lats', 'Biceps'])
+        ..row('Curl', ['Biceps'], type: 'isolation', reps: '10-15');
+      final days = [
+        f.day('hypertrophy', [f.ex('Row'), f.ex('PullA'), f.ex('PullB')]),
+        for (var i = 0; i < 6; i++) f.day('hypertrophy', [f.ex('Curl')]),
+      ];
+      final out = f.run(days, minutes: 24, level: 'beginner', leadFirst: true, dayFloor: true);
+      expect(out[0].allowance, isFalse);
+      expect(setsOf(out[0]), [('Row', 2), ('PullA', 2), ('PullB', 2)]);
+      expect(statsA().floorTrims, {
+        0: [(name: 'Row', from: 3, to: 2)],
+      });
+      expect(seats(statsA())[0], ['PullA:2:Biceps:false', 'PullB:2:Biceps:false']);
+      expect([for (final x in statsA().floorSeats[0]!) x.overSeconds], [0.0, 0.0]);
+      expectOracle(f, out, statsA(), f.ctx(days, minutes: 24, level: 'beginner'));
+    });
+
+    test('d65: the trim takes only the one set the cap needs, never below 2, and the floor stops at 3 rows', () {
+      // The day above with a fourth slot, PullC. The floor seats PullA, then PullB with Row's third set taken (Back 6 =
+      // the cap); the day then holds 3 rows, so PullC is never tried. With the real caps (6 / 8 / 10) a thin day whose
+      // rows all sit at 2 always fits a third slot at 2, so a trim always has a row above 2 to take from.
       final f = Fx()
+        ..row('Row', ['Lats'])
+        ..row('PullA', ['Lats', 'Biceps'])
+        ..row('PullB', ['Lats', 'Biceps'])
+        ..row('PullC', ['Lats', 'Biceps'])
+        ..row('Curl', ['Biceps'], type: 'isolation', reps: '10-15');
+      final days = [
+        f.day('hypertrophy', [f.ex('Row'), f.ex('PullA'), f.ex('PullB'), f.ex('PullC')]),
+        for (var i = 0; i < 6; i++) f.day('hypertrophy', [f.ex('Curl')]),
+      ];
+      final out = f.run(days, level: 'beginner', leadFirst: true, dayFloor: true);
+      expect(setsOf(out[0]), [('Row', 2), ('PullA', 2), ('PullB', 2)]);
+      expect([for (final e in out[0].exercisesA) if (e.sets < 2) e.exerciseName], isEmpty);
+      expect(statsA().floorTrims, {
+        0: [(name: 'Row', from: 3, to: 2)],
+      });
+      expectOracle(f, out, statsA(), f.ctx(days, level: 'beginner'));
+    });
+
+    test('d65: a slot that needs no trim is preferred to one that does (beginner, cap 6)', () {
+      // Day 0: Row (Back, the lead), PullA and PullB (Back + Biceps), Dip (Chest + Triceps); days 1-6: Press (Chest +
+      // Triceps, 2 sets each: Chest / Triceps 12 = the top) and Curl (Biceps). Lead world: Row at 4 and PullA at 2 (Back
+      // 6 = the cap); Dip is refused by the Chest / Triceps top, PullB by the Biceps top. The floor (2 rows < 3) has PullB,
+      // which fits Back only by taking Row's sets (a trim), and Dip, which fits every cap as it is (two groups over their
+      // top): the no-trim slot wins, so Row keeps 4. Trying the trim tier first would seat PullB and cut Row (ORDER).
+      final f = Fx()
+        ..row('Row', ['Lats'])
+        ..row('PullA', ['Lats', 'Biceps'])
+        ..row('PullB', ['Lats', 'Biceps'])
+        ..row('Press', ['Chest', 'Triceps'])
+        ..row('Dip', ['Chest', 'Triceps'])
+        ..row('Curl', ['Biceps'], type: 'isolation', reps: '10-15');
+      final days = [
+        f.day('hypertrophy', [f.ex('Row'), f.ex('PullA'), f.ex('PullB'), f.ex('Dip')]),
+        for (var i = 0; i < 6; i++) f.day('hypertrophy', [f.ex('Press'), f.ex('Curl')]),
+      ];
+      final out = f.run(days, level: 'beginner', leadFirst: true, dayFloor: true);
+      expect(statsA().leadWorld, 'lead');
+      expect(setsOf(out[0]), [('Row', 4), ('PullA', 2), ('Dip', 2)]);
+      expect(seats(statsA())[0], ['Dip:2:Chest+Triceps:false']);
+      expect(statsA().floorTrims, isEmpty);
+      expect(statsA().weekly['Back'], 6);
+      expectOracle(f, out, statsA(), f.ctx(days, level: 'beginner'));
+    });
+
+    test('d65: B copies A\'s floorTrims with the floored day (a copied day)', () {
+      // The cap-trim fixture above, with B differing on day 6 only, so B is allocated and copies A's floored day 0:
+      // the trim travels with it (`floorTrims`, like `floorSeats`).
+      final f = Fx()
+        ..row('Row', ['Lats'])
+        ..row('PullA', ['Lats', 'Biceps'])
+        ..row('PullB', ['Lats', 'Biceps'])
+        ..row('Curl', ['Biceps'], type: 'isolation', reps: '10-15')
+        ..row('CurlB', ['Biceps'], type: 'isolation', reps: '10-15');
+      final days = [
+        f.day('hypertrophy', [f.ex('Row'), f.ex('PullA'), f.ex('PullB')]),
+        for (var i = 0; i < 6; i++) f.day('hypertrophy', [f.ex('Curl')], b: i == 5 ? [f.ex('CurlB')] : null),
+      ];
+      final out = f.run(days, level: 'beginner', is6Day: false, leadFirst: true, dayFloor: true);
+      expect(setsOf(out[0], b: true), [('Row', 2), ('PullA', 2), ('PullB', 2)]);
+      expect(statsA().floorTrims, {
+        0: [(name: 'Row', from: 3, to: 2)],
+      });
+      expect(statsB().floorTrims, statsA().floorTrims);
+      expect(seats(statsB())[0], seats(statsA())[0]);
+      expectOracle(f, out, statsB(), f.ctx(days, level: 'beginner'), b: true);
+    });
+
+    test('d65: a slot the rank-0 reservation blocked may take a floor seat', () {
+      // general_fitness beginner, pre-3A band (Chest top 10). Day 0: Bench (Chest), Row (Back), Fly (Chest); days 1-5:
+      // Bench. Rank 0 on day 0: Bench fits but 10 - 2 < 2 x 5 later Chest leads, so the reservation blocks it. Days 1-5
+      // seat Bench (Chest 10); Row seats; Fly is refused by the top. The floor seats Fly (cheaper), then, the day still
+      // under 3, Bench: by then every later day's lead is seated, so the reservation guards nothing. Before d65 the day
+      // ended [Row, Fly].
+      final f = Fx(goalTraining: GoalTraining.off)
         ..row('Bench', ['Chest'])
         ..row('Row', ['Lats'])
         ..row('Fly', ['Chest'], type: 'isolation', reps: '10-15');
@@ -175,11 +278,12 @@ void main() {
         for (var i = 0; i < 5; i++) f.day('hypertrophy', [f.ex('Bench')]),
       ];
       final out = f.run(days, goal: 'general_fitness', level: 'beginner', leadFirst: false, dayFloor: true);
-      expect([for (final e in out[0].exercisesA) e.exerciseName], ['Row', 'Fly']);
+      expect([for (final e in out[0].exercisesA) e.exerciseName], ['Bench', 'Row', 'Fly']);
       expect(seats(statsA()), {
-        0: ['Fly:2:Chest:false'],
+        0: ['Fly:2:Chest:false', 'Bench:2:Chest:false'],
       });
-      expect(statsA().weekly['Chest'], 12);
+      expect(statsA().weekly['Chest'], 14);
+      expect(statsA().floorTrims, isEmpty);
       expectOracle(f, out, statsA(), f.ctx(days, goal: 'general_fitness', level: 'beginner'));
     });
 
@@ -190,7 +294,8 @@ void main() {
       // floor (rows 2 < 3) prefers ChestB (no group over its top) to BackX and seats it past the clock (`overClock`).
       // The day still has 3 < 4 rows, so it keeps the label A2 left: `clock`. Read after the floor it would be
       // `cap_top` (the only slot left, BackX, is blocked by the top).
-      final f = Fx()
+      // general_fitness beginner's pre-3A band (10-10): the fixture's arithmetic below is built on it.
+      final f = Fx(goalTraining: GoalTraining.off)
         ..row('ChestA', ['Chest'])
         ..row('ChestB', ['Chest'])
         ..row('BackX', ['Lats'])
@@ -256,7 +361,8 @@ void main() {
       // 20 minutes: 840 s. Day 0: ChestA, ChestB (672 s), BackX refused by the top (Back 10 from days 1-5). Floored past
       // the top and past the clock (336 > 168 s left); 3 rows = the count floor, so no `belowCount`, and reach 3 is not
       // `selectorThin`. Floor off: 2 rows, `cap_top`.
-      final f = Fx()
+      // general_fitness beginner's pre-3A band (10-10): the fixture's arithmetic below is built on it.
+      final f = Fx(goalTraining: GoalTraining.off)
         ..row('ChestA', ['Chest'])
         ..row('ChestB', ['Chest'])
         ..row('BackX', ['Lats'])

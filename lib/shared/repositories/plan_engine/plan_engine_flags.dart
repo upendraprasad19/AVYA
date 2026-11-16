@@ -63,6 +63,20 @@ class PlanEngineFlags {
     }
   }
 
+  /// Unit 3A kill-switch (OI-487, founder d3 / d4 / d58-d61): the goal's reps (Cut and Maintain main lifts by the
+  /// founder's table, their accessories 10-15), the Cut / Maintain weekly bands, and the Strength focus (a main lift at
+  /// its range's low end with +30 s rest). Default ON. Set `configBox['disable_goal_training'] = true` to restore
+  /// today's reps, bands, rests and the 4-day Maintain Glutes credit verbatim, for plans generated from then on. Read by
+  /// `TrainingHistoryAnalyzer.goalTrainingFromProfile` (once per generation, and once per plan-day swap) and by
+  /// `SplitResolver.quadPrimaryCreditsGlutes` when its `goalTraining` argument is not given.
+  static bool get goalTrainingEnabled {
+    try {
+      return HiveService.instance.configBox.get('disable_goal_training') != true;
+    } catch (_) {
+      return true; // no Hive (pure unit test) → the goal table
+    }
+  }
+
   /// Unit 2B kill-switch (OI-452, founder d30-d33): the 3-exercise day floor. A day left under min(3, its reach) after
   /// pass A2 seats remaining slots at 2 sets past a group's weekly top (no excess limit, every phase, not bound by the
   /// clock; never past a session cap), named in `AllocationStats.floorSeats`. Default ON. Set

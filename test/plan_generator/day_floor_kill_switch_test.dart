@@ -49,11 +49,14 @@ void main() {
     }
     // Unit 2C-a: the four combinations are pinned to main 8a2e1c5a (before 2C); the 2C switch is set for all of them.
     box.put('disable_balanced_week', true);
+    // Unit 3A: the fixture predates the goal table, so its switch is set too.
+    box.put('disable_goal_training', true);
   }
 
   void clearFlags() {
     setFlags(floor: true, leadFirst: true);
     HiveService.instance.configBox.delete('disable_balanced_week');
+    HiveService.instance.configBox.delete('disable_goal_training');
   }
 
   /// key -> (floor on?, lead-first on?, persona)

@@ -11337,7 +11337,7 @@ concepts:
     writers:
       - file: lib/shared/repositories/plan_engine/periodization_engine.dart
         method: apply (stamps weekCharacter per week — EXISTING)
-        line: 146
+        line: 149
         notes: >
           `weekCharacter: _waveNames[weekIdx]` — serialized as snake_case
           `week_character` via WeekPlan.toMap (models.dart:79). 7-A adds NO writer;
@@ -11874,8 +11874,10 @@ concepts:
       Generator Unit 2B (OI-452, founder d30-d33, 2026-11-13, diagnose b3f1d8, plan
       docs/plans/2026-11-13-generator-step2b-day-floor.md): the 3-exercise day floor. After pass A2 a day whose rows
       (budgeted and not) are under min(3, its reach) seats remaining slots at 2 sets past a group's weekly top: no excess
-      limit, every phase, up to its reach, not bound by the clock; never past a session cap, never a reservation-blocked
-      slot; choice SessionSetAllocator.floorPrefers (fewest groups over the top, least excess, cheapest; ties to the
+      limit, every phase, up to its reach, not bound by the clock; never past a session cap; since d65 (Unit 3A,
+      2026-11-15) a reservation-blocked slot may take a floor seat, and when only a session cap refuses a thin day's
+      third exercise the floor takes sets off that group's admitted rows above 2 (most sets first, ties to the latest
+      rank; AllocationStats.floorTrims, copied to B like floorSeats), a no-trim slot preferred; choice SessionSetAllocator.floorPrefers (fewest groups over the top, least excess, cheapest; ties to the
       lowest rank). AllocationStats.floorSeats names each seat (FloorSeat: name, sets, overTop, overBy, overClock,
       overSeconds); a floor seat
       is never in countForced; belowCount keeps the label pass A2 left. With Unit 2A the worlds are chosen with the floor
@@ -12297,6 +12299,63 @@ concepts:
           test, the positive control and all 24 other tests in the file stay green.
     contract_test_path: test/contracts/repeat_content_scheduling_test.dart
 
+  - concept: goal_training
+    domain: workout
+    behavioral_test_path: test/contracts/goal_reps_behavioral_test.dart
+    description: >
+      Generator Unit 3A (OI-487 generator half, founder d3 / d4 / d58-d65, 2026-11-15, diagnose 675d02, plan
+      docs/plans/2026-11-15-generator-step3a-goal-training.md): training follows the goal. GoalTraining{enabled,
+      strengthFocus} rides on SessionBudgetContext.goalTraining, built once per generation by
+      TrainingHistoryAnalyzer.goalTrainingFromProfile (the disable_goal_training switch and
+      userBox['profile']['physique_focus'] == 'strength') and passed by generateV4 (d61, rule-14 waiver). Week-1 reps
+      (PeriodizationEngine._applyWave through GoalReps.base): a main lift (archetype H / M) takes Cut 8 / 6 / 8
+      (intermediate, advanced) or 10 / 8 / 10 (Cut beginner, Maintain), deload = phase 1, Build keeps today's lean; the
+      wave and the range clamp follow; Cut / Maintain accessories clamp into 10-15. The Strength focus puts a main lift
+      at its range floor outside the deload and adds 30 s rest on H / M at 60+ resolved minutes only (d64), in every
+      rest writer and pricer (SessionBudget.restFor / restForGoal) and in a swap. Weekly bands: _goalBands (Maintain
+      7-8 / 8-11 / 9-13, Cut beginner 9-11) through weeklyBand(goalTraining:), read by BudgetLedger.weeklyTop, the
+      allocator's floor label and titration. 4-day Maintain takes the quad-first Glutes credit
+      (SplitResolver.quadPrimaryCreditsGlutes). The switch set: GoalTraining.off, today's reps, bands, rests and credit
+      (generator_golden_hashes_goal_training_off.json = main over 1,010 personas). d65 amends the 2B day floor (a
+      reservation-blocked slot may be floored; a session-cap refusal takes sets off the group's rows above 2,
+      AllocationStats.floorTrims). Accepted (founder): d63 (2 of 576 Cut / Maintain profiles
+      identical), d66 (an injured Cut / Maintain plan can lose a group the switch-off plan trains), d67 (the 4-day
+      Maintain credit books a lunge to Quads only); reps follow the effective level (d68).
+    writers:
+      - file: lib/shared/repositories/plan_engine/training_history_analyzer.dart
+        method: goalTrainingFromProfile / isStrengthFocus (reads profile.physique_focus and the switch)
+      - file: lib/shared/repositories/plan_engine/plan_generator.dart
+        method: generateV4 (SessionBudgetContext goalTraining:, d61)
+      - file: lib/shared/repositories/plan_engine/plan_engine_flags.dart
+        method: goalTrainingEnabled (disable_goal_training)
+      - file: lib/shared/repositories/plan_engine/session_budget.dart
+        method: GoalTraining / restFor / restForGoal / _goalBands / weeklyBand(goalTraining:)
+      - file: lib/shared/repositories/plan_engine/goal_reps.dart
+        method: GoalReps.base / mainBase / todayBase / clampsAccessories
+    readers:
+      - file: lib/shared/repositories/plan_engine/periodization_engine.dart
+        method_or_widget: _applyWave (GoalReps.base, the accessory clamp) and the rest stamp / _weekTwoGains (restFor)
+        semantic: reps and rest
+      - file: lib/shared/repositories/plan_engine/session_set_allocator.dart
+        method_or_widget: _repeatCost / _variant pricing (restFor), pass C's band bottom (weeklyBand goalTraining), the day floor (d65)
+        semantic: pricing
+      - file: lib/shared/repositories/plan_engine/volume_titration.dart
+        method_or_widget: _titrateWeekBudgeted (weeklyBand goalTraining)
+        semantic: band
+      - file: lib/shared/repositories/plan_engine/split_resolver.dart
+        method_or_widget: quadPrimaryCreditsGlutes (4-day general_fitness, goalTraining:)
+        semantic: credit
+      - file: lib/core/services/swap_service.dart
+        method_or_widget: swapExerciseInDay (restForGoal with the profile's focus and resolved minutes)
+        semantic: swap rest
+      - file: test/plan_generator/goal_training_gate_test.dart
+        method_or_widget: 2,304 plans ON vs OFF and under the focus (Build byte-identical, Cut / Maintain distinct but d63, the rep table, 10-15 accessories, no group newly at 0, focus floor and rest, digests)
+        semantic: behavioral
+      - file: test/contracts/swap_exercise_rest_follows_incoming_archetype_test.dart
+        method_or_widget: the focus rest through a real swap (60 / 45 minutes, no focus, the switch)
+        semantic: behavioral
+    contract_test_path: test/contracts/goal_reps_behavioral_test.dart
+
   - concept: repeat_minutes_accessories
     domain: workout
     behavioral_test_path: test/contracts/repeat_minutes_behavioral_test.dart
@@ -12498,7 +12557,7 @@ concepts:
       per matching exercise (primaryMuscles.any(contains); break → max +1/ex).
       Explicit focus takes PRECEDENCE over the auto weakMuscles() laggard signal
       and applies at ALL phases; balanced/strength/absent → [] → falls back to
-      weakMuscles() (phase≥2) exactly as before. Read via a try/catch
+      weakMuscles() (phase≥2) exactly as before (for the muscle bring-up; since Unit 3A the strength token also turns on the Strength focus, concept goal_training). Read via a try/catch
       TrainingHistoryAnalyzer.physiqueFocusMuscles() helper (degrades to [] on
       null/corrupt/unopened profile, mirroring weakMuscles) so NO Hive coupling
       enters plan_generator. LIVE since 2026-09-16 (OI-53 batch 2); kill-switch
@@ -15876,7 +15935,7 @@ concepts:
         fields_read: [type]
         notes: whitelist shape, widened to include 'logged' by this batch
       - file: lib/shared/repositories/plan_engine/plan_engine_flags.dart
-        line_range: 529-534
+        line_range: 543-548
         method: isRestDayConsideringLogged
         semantic: flag-check
         fields_read: [type]

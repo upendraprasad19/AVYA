@@ -11,6 +11,11 @@
 // (B2, Batch C and OI-53 flips will). Unit 2C-a (diagnose c7e5a1) changed 230 of the 1,010 keys: every build_muscle
 // 3 / 4 / 5-day persona and nothing else. Reverting one piece alone moves S1 (the lists) 206, S2 (the credit) 198, the
 // VolumeFilter carry 206, d46 (the Full Body avoid) 52; the 24 beginner 3 / 4-day Full Body personas move by S2 only.
+// Unit 3A (diagnose 675d02, 2026-11-15) changed 479 keys: every lose_fat and general_fitness grid persona (the goal's
+// week-1 reps alone change each one) except grid|bodyweight|lose_fat|3d|intermediate|p2, whose every lift's floor is 8
+// (d63's class). No build_muscle, strength, injury or owned key moves. With the goal training off everywhere and the
+// d65 floor change reverted, the old fixture measured back exactly; `disable_goal_training` set equals main
+// (goal_training_kill_switch_golden_test).
 //
 //   RECORD_GENERATOR_GOLDEN=1 TZ=Asia/Kolkata flutter test test/plan_generator/generator_golden_test.dart
 //

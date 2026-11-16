@@ -18,20 +18,24 @@ const _expected = <String, (int, int, int, int, int, int, int)>{
   // (`SessionSetAllocator.debugArmSwap`) the three blocks measured exactly the 2D values: 30->45 bodyweight
   // (48, 0, 48, 41, 128, 358, 25223), 30->60 bodyweight (48, 7, 41, 41, 350, 997, 68916), 30->60 home_dumbbells
   // (48, 7, 41, 41, 305, 920, 57902). 0 invariant failures either way.
-  '30->45|bodyweight': (48, 0, 48, 39, 126, 352, 24417),
-  '30->45|home_dumbbells': (48, 0, 48, 33, 119, 336, 20168),
-  '30->45|basic_gym': (48, 0, 48, 25, 75, 220, 13381),
-  '30->45|full_gym': (48, 0, 48, 30, 84, 250, 14701),
-  '30->60|bodyweight': (48, 7, 41, 41, 348, 991, 68109),
-  '30->60|home_dumbbells': (48, 7, 41, 41, 304, 918, 57645),
-  '30->60|basic_gym': (48, 7, 41, 41, 263, 711, 44286),
-  '30->60|full_gym': (48, 7, 41, 41, 254, 716, 44138),
-  '45->60|bodyweight': (48, 7, 41, 8, 22, 44, 3084),
-  '45->60|home_dumbbells': (48, 7, 41, 7, 14, 36, 2640),
-  '45->60|basic_gym': (48, 7, 41, 2, 4, 8, 514),
-  '45->60|full_gym': (48, 7, 41, 3, 6, 12, 771),
-  '60->90|bodyweight': (48, 0, 48, 4, 8, 28, 1612),
-  '60->90|home_dumbbells': (48, 0, 48, 6, 10, 33, 2272),
+  // Unit 3A (2026-11-15): 14 blocks re-pinned on the 2E tree (60->90 basic_gym / full_gym unchanged). The goal's Cut /
+  // Maintain bands (and the d65 day floor) change both phases' plans, so the reach moves both ways. With the goal
+  // training switched off everywhere and d65 reverted, the 2E table (before this re-pin) measured back exactly. 0
+  // invariant failures.
+  '30->45|bodyweight': (48, 0, 48, 40, 131, 361, 25551),
+  '30->45|home_dumbbells': (48, 0, 48, 33, 121, 341, 20974),
+  '30->45|basic_gym': (48, 0, 48, 24, 68, 202, 12867),
+  '30->45|full_gym': (48, 0, 48, 29, 74, 220, 13638),
+  '30->60|bodyweight': (48, 7, 41, 41, 343, 977, 67594),
+  '30->60|home_dumbbells': (48, 7, 41, 41, 295, 881, 55741),
+  '30->60|basic_gym': (48, 7, 41, 41, 249, 679, 42780),
+  '30->60|full_gym': (48, 7, 41, 41, 240, 682, 42339),
+  '45->60|bodyweight': (48, 7, 41, 7, 17, 35, 2716),
+  '45->60|home_dumbbells': (48, 7, 41, 7, 18, 47, 3446),
+  '45->60|basic_gym': (48, 7, 41, 1, 2, 4, 257),
+  '45->60|full_gym': (48, 7, 41, 2, 3, 7, 660),
+  '60->90|bodyweight': (48, 0, 48, 4, 8, 27, 1612),
+  '60->90|home_dumbbells': (48, 0, 48, 7, 12, 37, 2675),
   '60->90|basic_gym': (48, 0, 48, 1, 1, 2, 0),
   '60->90|full_gym': (48, 0, 48, 2, 2, 5, 403),
 };

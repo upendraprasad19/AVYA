@@ -545,10 +545,14 @@ class SwapService {
     // slot's (every slot of a day used to share one rest; they no longer do). A
     // timed / cardio / distance row keeps the inherited value.
     final restSeconds = SessionBudget.isRepBased(resolvedLoggingType)
-        ? SessionBudget.restForArchetype(SessionBudget.archetypeOfRow({
-            ...newLib,
-            'logging_type': resolvedLoggingType,
-          }))
+        // Unit 3A (d60): the Strength focus's +30 s on a main lift, as the generator stamped it.
+        ? SessionBudget.restForGoal(
+            SessionBudget.archetypeOfRow({
+              ...newLib,
+              'logging_type': resolvedLoggingType,
+            }),
+            TrainingHistoryAnalyzer.goalTrainingFromProfile(),
+            minutes: SessionBudget.resolveMinutes(profileValue: TrainingHistoryAnalyzer.sessionMinutesFromProfile()))
         : (SessionBudget.isRepBased('${original['logging_type'] ?? 'weight_reps'}')
             // A timed / cardio / distance row replacing a REP-BASED slot must not inherit that
             // slot's 150 / 120 / 75 s (B-pass OI-456, P2): its own default, else the B rest.
