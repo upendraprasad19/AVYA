@@ -138,3 +138,38 @@ Deno.test("weekly-report puts the strategy line under the protein target", () =>
 Deno.test("weekly-report never sends diet_supplements (the manual passage stays inert here)", () => {
   assert(!stripComments(source).includes("diet_supplements"));
 });
+
+// ── Unit 3D-a (OI-175 / FOB-4): the hold week line ─────────────────────────────
+// The behavioural proof is `_shared/hold_week_test.ts` (the pure builders, the fail-closed phase filter and the
+// never-throwing read against a stub client). These pins (presence only) prove this file calls them the way the
+// plan says: today's IST date as both bounds, the phase filter on the progress row, and the built line in the prompt.
+
+Deno.test("weekly-report reads the hold for today only, through the fail-closed phase filter", () => {
+  const code = stripComments(source);
+  assert(
+    code.includes('import { fetchHoldOrdinals, phaseOneUserIds, reportWeekLine } from "../_shared/hold_week.ts";'),
+    "index.ts must import the hold helpers",
+  );
+  assert(
+    code.includes("phaseOneUserIds([{ user_id: targetUserId, current_phase: userProgress.current_phase }])"),
+    "the hold read must be gated by phaseOneUserIds on the progress row",
+  );
+  assert(
+    code.includes("? phaseOneUserIds(") && code.includes(": [];"),
+    "no progress row must ask for no holds (fail closed)",
+  );
+  assert(
+    code.includes("fetchHoldOrdinals(supabase, holdUserIds, todayStr, todayStr)"),
+    "the hold read must use today's IST date as both bounds (where the user is now, as the app shows)",
+  );
+});
+
+Deno.test("weekly-report's prompt prints the built week line, not the raw current_week", () => {
+  const code = stripComments(source);
+  assert(code.includes("reportWeekLine("), "the week line must be built by reportWeekLine");
+  assert(code.includes("- ${weekLine}"), "the prompt must print the built week line");
+  assert(
+    !code.includes("- Current week: ${userProgress?.current_week ?? 1}"),
+    "the raw current_week line must be gone from the prompt",
+  );
+});
