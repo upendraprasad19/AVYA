@@ -342,18 +342,19 @@ class PlanEngineFlags {
 
   /// W2.7 (Batch 9 volume titration): phase-boundary per-major-group ±1 weekly-set
   /// adjustment from the phase-N e1RM trend (+ readiness recovery evidence for the
-  /// +1 direction), clamped [MEV,MRV]. Ship-dark DEFAULT OFF (§4.6 — changes
-  /// prescribed volume). Applied ONLY when the caller opts in
-  /// (`applyVolumeTitration`, passed `pins == null` by the two fresh-advance
-  /// callers) AND phase>=2. Flag OFF / intent false / phase<2 → resolveDeltas {}
-  /// → applyToWeeks identity → byte-identical. Set
-  /// `configBox['enable_volume_titration'] = true` to enable.
+  /// +1 direction), inside the session set budget (band, session cap, time) and, since
+  /// generator step 4 (OI-53, 2026-11-16), the lead-first rule (a +1 never takes a row
+  /// past its day's lead + 1; a -1 follows d65's trim order, never below 2 sets).
+  /// **LIVE since step 4** (founder d82; the `enable_volume_titration` key is retired).
+  /// Applied ONLY when the caller opts in (`applyVolumeTitration`, passed `pins == null`
+  /// by the two fresh-advance callers) AND phase>=2; every other generation is
+  /// untouched. Kill switch `configBox['disable_volume_titration'] = true` restores
+  /// the pre-flip path: resolveDeltas {} → applyToWeeks identity → byte-identical.
   static bool get volumeTitrationEnabled {
     try {
-      return HiveService.instance.configBox.get('enable_volume_titration') ==
-          true;
+      return HiveService.instance.configBox.get('disable_volume_titration') != true;
     } catch (_) {
-      return false;
+      return true; // no Hive (pure unit test) → default: ON
     }
   }
 
@@ -464,24 +465,23 @@ class PlanEngineFlags {
     }
   }
 
-  /// W3.5 (Batch 12-A) plateau escalation rung-2 (+sets), PRO. When ON, at a
-  /// genuine FRESH phase advance a plateaued major group (a COMPOUND lift with flat
-  /// e1RM across ≥3 sessions spanning ≥28d) that is NOT already titration-bumped and
-  /// NOT under persistent readiness fatigue gains +1 weekly set — merged into the
-  /// W2.7 titration deltas so ONE clamped applyToWeeks pass applies both
-  /// (`PlateauScan.mergePlateauSetDeltas`, `putIfAbsent` → no double-bump / an
-  /// existing −1 wins). Ship-dark DEFAULT OFF (§4.6 — changes prescribed volume) →
-  /// merge returns the input map unchanged → applyToWeeks identity → byte-identical.
-  /// Presupposes `enable_readiness` ON (the fatigue gate needs data; `plateauedGroups`
-  /// self-gates on `readinessEnabled`, mirroring DeloadEvaluator). Set
-  /// `configBox['enable_plateau_escalation'] = true` to enable.
+  /// W3.5 (Batch 12-A) plateau escalation rung-2 (+sets), PRO. At a genuine FRESH
+  /// phase advance a plateaued major group (a COMPOUND lift with flat e1RM across ≥3
+  /// sessions spanning ≥28d) that is NOT already titration-bumped and NOT under
+  /// persistent readiness fatigue gains +1 weekly set — merged into the W2.7 titration
+  /// deltas so ONE clamped applyToWeeks pass applies both
+  /// (`PlateauScan.mergePlateauSetDeltas`, `putIfAbsent` → no double-bump / an existing
+  /// −1 wins); rung 3 (12-B) soft-avoids the plateaued lifts (`plateauAvoidNames`).
+  /// **LIVE since generator step 4** (OI-53, founder d82: the +1 set and the rotation,
+  /// one switch; the `enable_plateau_escalation` key is retired). Self-gates on
+  /// `readinessEnabled` (`plateauedGroups`). Kill switch
+  /// `configBox['disable_plateau_escalation'] = true` restores the pre-flip path: the
+  /// merge returns its input and the avoid set is empty → byte-identical.
   static bool get plateauEscalationEnabled {
     try {
-      return HiveService.instance.configBox
-              .get('enable_plateau_escalation') ==
-          true;
+      return HiveService.instance.configBox.get('disable_plateau_escalation') != true;
     } catch (_) {
-      return false;
+      return true; // no Hive (pure unit test) → default: ON
     }
   }
 

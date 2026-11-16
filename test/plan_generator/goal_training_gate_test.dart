@@ -56,6 +56,17 @@ const _groups = ['Chest', 'Back', 'Shoulders', 'Biceps', 'Triceps', 'Quads', 'Ha
 /// floor is 8).
 const _identicalAccepted = {'3|intermediate|bodyweight|30|2', '3|advanced|bodyweight|30|2'};
 
+/// d81 (generator step 4, 2026-11-16): with the cardio finisher SHOWN (the live world: its switch unset), Cut and
+/// Maintain stay identical in these 5 of 576 pairs: d63's two plus three where both get the same finisher. Accepted
+/// (t304); measured with the comparison in the live-world test below (plan section 4 item 0).
+const _identicalLive = {
+  '3|beginner|home_dumbbells|30|1',
+  '3|beginner|home_dumbbells|30|2',
+  '3|intermediate|bodyweight|30|2',
+  '3|advanced|bodyweight|30|2',
+  '5|advanced|bodyweight|30|2',
+};
+
 /// Item 8, recorded on the built tree (2026-11-15), re-recorded after the step-2E merge (its arm swap changes Cut /
 /// Maintain rows at 30 / 45 minutes; every count above is unchanged except the focus block's main lifts, 29,012 -> 29,010).
 const _onDigest = '5fd58773b40e32dcec603cf18d0b71f170878a8ce299d85b7a6c9e57d72d5248';
@@ -348,6 +359,48 @@ void main() {
     } finally {
       await config.delete('disable_goal_training');
       await HiveService.instance.userBox.delete('profile');
+    }
+  });
+
+  test('d81: the live world (finisher shown): Cut and Maintain identical in exactly the accepted 5 pairs', () async {
+    final config = HiveService.instance.configBox;
+    await config.delete('disable_cardio_finisher_shown');
+    try {
+      // t304's comparison: every day of every week, each exercise's name, sets, reps, rest, duration, superset group
+      // and type, plus the day's finisher names.
+      String live(Phase p) => jsonEncode([
+            for (final w in p.weekPlans)
+              [
+                for (final d in w.workoutDays)
+                  [
+                    [
+                      for (final e in d.exercises)
+                        [e.exerciseName, e.sets, e.reps, e.restSeconds, e.durationSeconds, e.supersetGroup, e.exerciseType]
+                    ],
+                    [for (final f in d.finisher) f.exerciseName],
+                  ]
+              ]
+          ]);
+      final same = <String>{};
+      var pairs = 0;
+      for (final days in const [3, 4, 5, 6]) {
+        for (final level in _levels) {
+          for (final tier in _tiers) {
+            for (final minutes in _minutes) {
+              for (final phase in const [1, 2, 3]) {
+                pairs++;
+                final cut = live(gen('lose_fat', days, level, tier, minutes, phase));
+                final maintain = live(gen('general_fitness', days, level, tier, minutes, phase));
+                if (cut == maintain) same.add('$days|$level|$tier|$minutes|$phase');
+              }
+            }
+          }
+        }
+      }
+      expect(pairs, 576);
+      expect(same, _identicalLive, reason: 'd81');
+    } finally {
+      await config.put('disable_cardio_finisher_shown', true);
     }
   });
 }

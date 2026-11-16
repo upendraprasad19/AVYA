@@ -182,7 +182,7 @@ void main() {
     await cb.clear();
     // Default: BOTH gate flags ON so a case only has to seed data. Individual
     // tests override to pin the flag gates.
-    await cb.put('enable_plateau_escalation', true);
+    // step 4: ON by default (setUp clears the config box; the `enable_plateau_escalation` key is retired).
   });
 
   group('plateauedGroups (Hive-seeded detector)', () {
@@ -206,7 +206,7 @@ void main() {
     });
 
     test('plateau flag OFF → {}', () async {
-      await cb.put('enable_plateau_escalation', false);
+      await cb.put('disable_plateau_escalation', true); // step 4: the kill switch
       await seedFlatPlateau();
       expect(PlateauScan.plateauedGroups(phase: 2), isEmpty);
     });
@@ -285,7 +285,7 @@ void main() {
 
     test('flag OFF → returns existing UNCHANGED (same ref → byte-identical)',
         () async {
-      await cb.put('enable_plateau_escalation', false);
+      await cb.put('disable_plateau_escalation', true); // step 4: the kill switch
       await seedFlatPlateau();
       const existing = <String, int>{'Chest': 1};
       final merged = PlateauScan.mergePlateauSetDeltas(existing, phase: 2);
@@ -309,7 +309,7 @@ void main() {
 
     test('SAFETY: declining∧flat (titration −1 + plateau flat) → net −1, never +1',
         () async {
-      await cb.put('enable_volume_titration', true);
+      // step 4: ON by default (setUp clears the config box; the `enable_volume_titration` key is retired).
       // [100,100,100,98] over 31d: titration sees latest 98 < prior 100 → −1;
       // plateau sees 2% range → flat. Merge must keep −1 (putIfAbsent no-op).
       await seedSessions(
@@ -423,7 +423,7 @@ void main() {
 
     test('kill-switch OFF → the applyPlateauEscalation param is inert end-to-end',
         () async {
-      await cb.put('enable_plateau_escalation', false);
+      await cb.put('disable_plateau_escalation', true); // step 4: the kill switch
       await seedManyCompoundPlateaus();
       await seedReadiness(3, flagged: false);
       expect(totalSets(gen(true)), totalSets(gen(false)));

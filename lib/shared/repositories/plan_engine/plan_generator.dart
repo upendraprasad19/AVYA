@@ -105,7 +105,7 @@ class PlanGenerator {
     // W2.7 (Batch 9 volume titration): opt-in intent — applied ONLY on a genuine
     // FRESH phase advance (the two advance callers pass `pins == null`). Default
     // false → every other caller (coach-regen / edit-profile / previews / hotel /
-    // onboarding) is untouched regardless of `enable_volume_titration`.
+    // onboarding) is untouched regardless of the kill switch `disable_volume_titration` (LIVE since step 4, d83).
     bool applyVolumeTitration = false,
     // W3.4 (Batch 11-B cross-phase variety): day-INDEX → prior-phase A/B picks
     // (LOWERCASED) → the picker avoids repeating them when a same-pattern sibling
@@ -114,7 +114,7 @@ class PlanGenerator {
     Map<int, ({List<String> a, List<String> b})>? previousPhaseByDay,
     // W3.5 (Batch 12-A plateau escalation): opt-in intent — applied ONLY on a fresh
     // phase advance (the two advance callers pass `pins == null`). Default false →
-    // every other caller untouched regardless of `enable_plateau_escalation`.
+    // every other caller untouched regardless of the kill switch `disable_plateau_escalation` (LIVE since step 4).
     bool applyPlateauEscalation = false,
     // Unit 2D (OI-453, founder d50: the one rule-14 argument): a repeat at more minutes than the phase it pins; read
     // only by the pinned branch, which appends accessories into the leftover time. Default false: byte-identical.
@@ -358,10 +358,10 @@ class PlanGenerator {
     );
 
     // Stage 4.5: W2.7 volume titration (Batch 9) — phase-boundary per-major-group
-    // ±1 set adjustment from phase-N evidence. Opt-in + ship-dark: only a genuine
+    // ±1 set adjustment from phase-N evidence. Opt-in (LIVE since generator step 4): only a genuine
     // fresh advance passes `applyVolumeTitration:true` (via `pins == null`);
-    // resolveDeltas additionally returns {} unless `enable_volume_titration` is ON
-    // AND phase>=2. Any of those false → applyToWeeks is identity → byte-identical.
+    // resolveDeltas additionally returns {} when `disable_volume_titration` is set
+    // or phase<2. Any of those false → applyToWeeks is identity → byte-identical.
     // Placed BEFORE sequencing/superset (neither reads `sets`) so it sees the
     // allocator's set counts and its result flows through unchanged.
     if (applyVolumeTitration || applyPlateauEscalation) {

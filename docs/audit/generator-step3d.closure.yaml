@@ -78,50 +78,50 @@ findings:
   - id: HW-FLIP
     title: "Delete enable_hold_weeks, the dev toggle and redoWeek4; runFreeTierRepeatWrite always calls holdWeek"
     terminal_state: closed_in_commit
-    commit: "generator-step3d (Unit 3D-b, uncommitted at ledger time; SHA stamped by the post-merge records landing)"
+    commit: "7554fc8f (Unit 3D-b; B-pass fixes 7ed5da70; merged to main 85bdcbbe, PR #290)"
     verification: "test/features/train/hold_week_callers_test.dart (no flag set, written); grep of lib for the flag and redoWeek4: history comments only; mutant M1 red"
   - id: HW-COVERED
     title: "The covered rule (plan_start <= date <= plan_end, dates only) for every hold reader"
     terminal_state: closed_in_commit
-    commit: "generator-step3d (Unit 3D-b, uncommitted at ledger time; SHA stamped by the post-merge records landing)"
+    commit: "7554fc8f (Unit 3D-b; B-pass fixes 7ed5da70; merged to main 85bdcbbe, PR #290)"
     verification: "hold_week_d57_behavioral_test.dart covered-rule group (time of day, both Z strings, bounds); mutants M11-M13 red"
   - id: HW-GUARD
     title: "Defect A, the double tap (after and before expiry)"
     terminal_state: closed_in_commit
-    commit: "generator-step3d (Unit 3D-b, uncommitted at ledger time; SHA stamped by the post-merge records landing)"
+    commit: "7554fc8f (Unit 3D-b; B-pass fixes 7ed5da70; merged to main 85bdcbbe, PR #290)"
     verification: "hold_week_d57_behavioral_test.dart (after expiry, before expiry, H1's Sunday, week 4's Sunday, the clock set back); mutants M2 / M3 red"
   - id: HW-OUTCOME
     title: "HoldWeekOutcome {written, alreadyHolding, inFlight, noPlan, failed} and both callers' UX"
     terminal_state: closed_in_commit
-    commit: "generator-step3d (Unit 3D-b, uncommitted at ledger time; SHA stamped by the post-merge records landing)"
+    commit: "7554fc8f (Unit 3D-b; B-pass fixes 7ed5da70; merged to main 85bdcbbe, PR #290)"
     verification: "hold_week_d57_behavioral_test.dart (noPlan, inFlight, failed) and hold_week_callers_test.dart (snackbars, the repeat event only on written); mutants M5 / M6 red"
   - id: HW-FAILED
     title: "A failed row write stops the loop before plan_end moves; a retry writes the whole week"
     terminal_state: closed_in_commit
-    commit: "generator-step3d (Unit 3D-b, uncommitted at ledger time; SHA stamped by the post-merge records landing)"
+    commit: "7554fc8f (Unit 3D-b; B-pass fixes 7ed5da70; merged to main 85bdcbbe, PR #290)"
     verification: "hold_week_d57_behavioral_test.dart (the third of seven fails); mutant M8 red"
   - id: HW-KEEP
     title: "A completed target row keeps its content and gains the three hold stamps (no ifUnchangedFrom)"
     terminal_state: closed_in_commit
-    commit: "generator-step3d (Unit 3D-b, uncommitted at ledger time; SHA stamped by the post-merge records landing)"
+    commit: "7554fc8f (Unit 3D-b; B-pass fixes 7ed5da70; merged to main 85bdcbbe, PR #290)"
     verification: "hold_week_d57_behavioral_test.dart (target Monday and today; a planned target takes the copy); mutants M4 / M9 red"
   - id: HW-ORPHAN
     title: "Build finding: a crash-partial week's orphan rows joined the next hold once plan_end passed them"
     terminal_state: closed_in_commit
-    commit: "generator-step3d (Unit 3D-b, uncommitted at ledger time; SHA stamped by the post-merge records landing)"
+    commit: "7554fc8f (Unit 3D-b; B-pass fixes 7ed5da70; merged to main 85bdcbbe, PR #290)"
     verification: "hold_week_d57_behavioral_test.dart (a week later: n = 1, H1 starts on the new Monday; planned orphan deleted, completed orphan un-stamped); mutant M10 red"
   - id: HW-REFRESH
     title: "Graduation refresh after the write (round 3 B-F2; round 4 F1 container, F2 todayWorkoutProvider); read cost recorded"
     terminal_state: closed_in_commit
-    commit: "generator-step3d (Unit 3D-b, uncommitted at ledger time; SHA stamped by the post-merge records landing)"
+    commit: "7554fc8f (Unit 3D-b; B-pass fixes 7ed5da70; merged to main 85bdcbbe, PR #290)"
     verification: "hold_week_callers_test.dart (providers built before the tap read the hold after it; the screen popped mid-write); read cost 1.09 ms per holdWeeks() on 3,007 keys, under 5 ms (no memo); mutants M19-M21 red"
   - id: HW-MARKER
     title: "The marker (d80): SelectedWeek {week, picked}, weekChipLit, isLit drives the sub-label; card words from the copied stamps"
     terminal_state: closed_in_commit
-    commit: "generator-step3d (Unit 3D-b, uncommitted at ledger time; SHA stamped by the post-merge records landing)"
+    commit: "7554fc8f (Unit 3D-b; B-pass fixes 7ed5da70; merged to main 85bdcbbe, PR #290)"
     verification: "test/features/train/week_selector_hold_marker_test.dart (table, the real strip during a hold, a tap lights a pick, an invalidation clears it, PRO groups, H1 Peak / H4 Deload / lifted Baseline); mutants M16 / M17 red"
   - id: HW-ROLLBACK
     title: "B-pass seat A F2: a failed hold put back every row it wrote (raw is_hold readers skip the covered rule)"
     terminal_state: closed_in_commit
-    commit: "generator-step3d (Unit 3D-b B-pass fix commit; SHA stamped by the post-merge records landing)"
+    commit: "7ed5da70 (Unit 3D-b B-pass fix; merged to main 85bdcbbe, PR #290)"
     verification: "hold_week_d57_behavioral_test.dart (the failed-write test asserts the rollback; a completed and a planned target restored as they were); mutants MR1-MR3 red; the cloud half of a local delete recorded on OI-174 (docs/reviews/generator-step3d-bpass.md A-F2)"

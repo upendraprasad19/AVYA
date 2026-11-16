@@ -439,8 +439,9 @@ void main() {
       expect(grid(VolumeTitration.applyToWeeks([atBottom], {'Chest': -1}, budget: ctx).single),
           [[4, 4], [4]]);
       final (above, ctx2) = setup(f, lists(5)); // 13
+      // Generator step 4 (T2, d65's order): the trim takes the row with the most sets (c3 at 5), not the first.
       expect(grid(VolumeTitration.applyToWeeks([above], {'Chest': -1}, budget: ctx2).single),
-          [[3, 4], [5]]);
+          [[4, 4], [4]]);
     });
 
     test('a trim may not take a co-group the exercise also credits below its band bottom', () {
@@ -486,14 +487,15 @@ void main() {
           [[5, 3]]);
     });
 
-    test('a trim skips an exercise already at 1 set and rolls to the next', () {
+    test('a trim skips an exercise below 3 sets (never below 2, step 4 T2) and takes the most sets, ties to the latest', () {
       final f = chestRows();
       final (week, ctx) = setup(f, [
         [f.ex('c1', sets: 1), f.ex('c2', sets: 5)],
         [f.ex('c3', sets: 5), f.ex('c4', sets: 5)], // 16 in all, 4 above the bottom
       ]);
+      // c1 (1 set) is never a candidate; c2, c3, c4 tie at 5, so the latest day, then the latest slot: c4.
       expect(grid(VolumeTitration.applyToWeeks([week], {'Chest': -1}, budget: ctx).single),
-          [[1, 4], [5, 5]]);
+          [[1, 5], [5, 4]]);
     });
 
     test('one exercise is adjusted at most once a week, even when two groups ask', () {
@@ -651,7 +653,7 @@ void main() {
         character: 'deload',
       );
       final trimmed = VolumeTitration.applyToWeeks([above], {'Chest': -1}, budget: ctx).single;
-      expect(workingGrid(trimmed), [[3, 4], [5]]);
+      expect(workingGrid(trimmed), [[4, 4], [4]]); // step 4 T2: the most stashed sets (c3 at 5)
       expect(grid(trimmed), [[2, 2], [2]]); // the visible deload sets do not move
       final (atBottom, ctx2) = setup(
         f,
@@ -713,7 +715,7 @@ void main() {
         [f.ex('c3', sets: 5)],
       ]); // 13: one set above the bottom
       expect(grid(VolumeTitration.applyToWeeks([down], {'Chest': -3}, budget: ctxDown).single),
-          [[3, 4], [5]]);
+          [[4, 4], [4]]); // step 4 T2: one set off the row with the most
     });
   });
 

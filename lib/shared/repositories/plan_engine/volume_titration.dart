@@ -13,17 +13,19 @@
 // SAFE polarity: −1 (pull volume back) fires on demonstrated e1RM DECLINE alone;
 // +1 (add volume) requires POSITIVE recovery evidence (enough readiness rows AND
 // not systemically sore).
-// ⚠ CORRECTED 2026-09-01: this used to say "with readiness ship-dark (0 rows)
-// titration therefore only ever TRIMS". readiness went LIVE 2026-09-01, so rows DO accumulate; titration is inert only because enable_volume_titration is still OFF and short-circuits at volume_titration.dart:60 BEFORE _recovered() runs -- _recovered() itself has NO readiness gate.
-// So the safety here is the SIBLING FLAG, not an absence of data. When
-// enable_volume_titration is flipped, _recovered() will immediately consume
-// whatever readiness rows have accumulated since.
+// The +1 also needs readiness to be ON: with `disable_readiness` set (collection
+// stopped) old rows no longer count (`_recovered`, generator step 4 T4, the mirror of
+// `PlateauScan`'s own readiness gate).
 //
-// Two seams keep it inert:
-//   • `enable_volume_titration` (default OFF) → `resolveDeltas` returns `{}`.
+// Generator step 4 (OI-53, 2026-11-16, plan
+// docs/plans/2026-11-16-generator-step4-titration-plateau.md): LIVE. Two seams:
+//   • the kill switch `disable_volume_titration` → `resolveDeltas` returns `{}`.
 //   • the ORCHESTRATOR only calls this when the caller opts in (a fresh advance,
 //     `pins == null`) — coach-regen / edit-profile / previews / hotel / onboarding
-//     never do → untouched regardless of the flag.
+//     never do → untouched.
+// `applyToWeeks` keeps 2A's lead-first rule (T1: a +1 never takes a non-focus row past
+// its day's lead + 1) and d65's trim order (T2: a -1 takes the most sets first, never
+// below 2, the lead only when R2 still holds).
 // Empty deltas → `applyToWeeks` returns the SAME list reference → byte-identical.
 
 import 'package:icanbefitter/core/services/hive_service.dart';
@@ -36,6 +38,7 @@ import 'e1rm_history.dart';
 import 'models.dart';
 import 'muscle_groups.dart';
 import 'plan_engine_flags.dart';
+import 'sequencing_engine.dart';
 import 'session_budget.dart';
 
 class VolumeTitration {
@@ -111,6 +114,9 @@ class VolumeTitration {
   /// insufficient sample → false (→ no +1; the SAFE default).
   static bool _recovered(String cutoff) {
     try {
+      // Step 4 T4: readiness switched off (`disable_readiness`) → old rows are no
+      // recovery evidence (the mirror of PlateauScan's gate).
+      if (!PlanEngineFlags.readinessEnabled) return false;
       final hbox = HiveService.instance.healthBox;
       var n = 0, beatUp = 0;
       for (final entry in hbox.toMap().entries) {
@@ -160,13 +166,27 @@ class VolumeTitration {
   /// key that is no budget group (`Forearms`) finds no candidate, so it is skipped.
   /// This is the one place a plateau +1 (merged into [deltas] by the caller) is
   /// refused too.
+  ///
+  /// Generator step 4 (OI-53): a day's LEAD is `SequencingEngine.openerOf` over its
+  /// budgeted rows in that week (2A's and `_weekTwoGains`' definition; titration runs
+  /// before sequencing, and `openerOf` never reads sets). T1: a +1 on a row that is not
+  /// the lead and credits no focus group needs `current(row) <= current(lead)` at that
+  /// moment (R5's rule). T2: a -1 takes, among rows at 3 sets or more whose credited
+  /// groups stay above the band bottom, the most sets first, ties to the latest day then
+  /// the latest slot (d65's order), never below 2; the lead only when, after its -1,
+  /// every other non-focus row of its day (budgeted or not, R5's set) is at most the
+  /// lead's new sets + 1.
+  /// T3: on the deload week a row with no stash is skipped, and a lead with no stash
+  /// switches the lead checks off for its day. [leadFirst] null reads
+  /// `PlanEngineFlags.leadFirstEnabled`; false switches T1 and T2's lead guard off.
   static List<WeekPlan> applyToWeeks(
       List<WeekPlan> weeks, Map<String, int> deltas,
-      {required SessionBudgetContext budget}) {
+      {required SessionBudgetContext budget, bool? leadFirst}) {
     if (deltas.isEmpty) return weeks;
+    final capToLead = leadFirst ?? PlanEngineFlags.leadFirstEnabled;
     final sortedGroups = deltas.keys.toList()..sort();
     return [
-      for (final week in weeks) _titrateWeekBudgeted(week, deltas, sortedGroups, budget),
+      for (final week in weeks) _titrateWeekBudgeted(week, deltas, sortedGroups, budget, capToLead),
     ];
   }
 
@@ -175,6 +195,7 @@ class VolumeTitration {
     Map<String, int> deltas,
     List<String> groups,
     SessionBudgetContext budget,
+    bool capToLead,
   ) {
     final isDeload = week.weekCharacter == 'deload';
     final dayExercises = [for (final d in week.workoutDays) [...d.exercises]];
@@ -200,6 +221,25 @@ class VolumeTitration {
       }
     }
 
+    bool isFocusRow(PlannedExercise e) => groupsOf(e).any(budget.focusGroups.contains);
+    // T3: on the deload week the sets are the stash; a row without one is skipped.
+    bool hasSets(PlannedExercise e) => !isDeload || e.workingSets != null;
+
+    // Each day's lead (an index into the day's list, -1: none, or the rule is off). The
+    // list positions never move here, and `openerOf` reads type / laterality / demand,
+    // never sets, so a ±1 cannot change it.
+    final lead = List<int>.filled(dayExercises.length, -1);
+    if (capToLead) {
+      for (var di = 0; di < dayExercises.length; di++) {
+        final opener = SequencingEngine.openerOf(
+            [for (final e in dayExercises[di]) if (SessionBudget.isBudgeted(e, budget)) e]);
+        if (opener == null) continue;
+        final li = dayExercises[di].indexWhere((e) => identical(e, opener));
+        // T3: a lead with no stash cannot be compared; its day has no lead checks.
+        if (li >= 0 && hasSets(dayExercises[di][li])) lead[di] = li;
+      }
+    }
+
     final bumped = <String>{}; // "di:xi" already adjusted this week
     for (final g in groups) {
       final delta = deltas[g]!;
@@ -213,19 +253,52 @@ class VolumeTitration {
       }
       if (matches.isEmpty || ledger.week(g) == 0) continue;
 
-      for (final (di, xi) in matches) {
+      // T2: the -1's candidates in d65's order (most sets first, ties to the latest day,
+      // then the latest slot); the +1 keeps slot order, first that fits.
+      final ordered = delta > 0
+          ? matches
+          : (matches.where((m) => hasSets(dayExercises[m.$1][m.$2])).toList()
+            ..sort((a, b) {
+              final bySets = current(dayExercises[b.$1][b.$2]).compareTo(current(dayExercises[a.$1][a.$2]));
+              if (bySets != 0) return bySets;
+              if (a.$1 != b.$1) return b.$1.compareTo(a.$1);
+              return b.$2.compareTo(a.$2);
+            }));
+
+      for (final (di, xi) in ordered) {
         if (bumped.contains('$di:$xi')) continue;
         final e = dayExercises[di][xi];
+        if (!hasSets(e)) continue;
         final cur = current(e);
         final gs = groupsOf(e);
+        final l = lead[di];
         if (delta > 0) {
           if (cur >= SessionBudget.maxSetsPerExercise) continue;
+          // T1 (R5): a row that is not its day's lead and credits no focus group stays
+          // at most the lead's sets + 1, read now (the lead may hold an earlier +1).
+          if (l >= 0 && l != xi && !isFocusRow(e) && cur > current(dayExercises[di][l])) continue;
           if (!ledger.fits(di, gs, 1, seconds(e, cur + 1) - seconds(e, cur))) continue;
         } else {
-          // The mirror of the +1 check: a trim may not take ANY group the exercise
-          // credits below the band bottom, nor an exercise below 1 set.
-          if (cur - 1 < 1) continue;
+          // T2: never below 2 sets (d65), and no group the exercise credits may go below the
+          // band bottom (the mirror of the +1's top check).
+          if (cur < 3) continue;
           if (gs.any((x) => ledger.week(x) <= bottom)) continue;
+          // The lead only when R2 still holds after its -1: every other row of the day that
+          // credits no focus group at most the lead's new sets + 1 (= cur). R5's own set: a row
+          // titration never moves (a custom, a timed hold) is still held to the lead + 1 in week 2
+          // (`_weekTwoGains` caps its unranked rows too), so it counts here (B-pass seat A F1).
+          if (l == xi) {
+            var keepsR2 = true;
+            for (var oi = 0; oi < dayExercises[di].length; oi++) {
+              final o = dayExercises[di][oi];
+              if (oi == xi || isFocusRow(o) || !hasSets(o)) continue;
+              if (current(o) > cur) {
+                keepsR2 = false;
+                break;
+              }
+            }
+            if (!keepsR2) continue;
+          }
         }
         final next = cur + delta.sign;
         dayExercises[di][xi] =
