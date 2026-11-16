@@ -50,12 +50,14 @@ Future<void> keepTrainingPhase1(BuildContext context, WidgetRef ref) async {
     case HoldWeekOutcome.alreadyHolding:
       // The double tap (defect A): the hold is already in place; say so and
       // go to it.
+      if (!context.mounted) return;
       _snack(context, 'Already holding this week.', AppColors.card);
-      if (context.mounted) context.go('/train');
+      context.go('/train');
     case HoldWeekOutcome.inFlight:
       break; // the first tap is still writing and will navigate
     case HoldWeekOutcome.noPlan:
     case HoldWeekOutcome.failed:
+      if (!context.mounted) return;
       _snack(context, "Couldn't schedule again. Please try again.", AppColors.red);
   }
 }

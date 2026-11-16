@@ -1165,9 +1165,9 @@ final weekIdentityProvider = Provider<WeekIdentity>((ref) {
 /// The Train tab's selected week (Unit 3D-b, d80; round 1 B-F1): the week the
 /// list below the chips shows, and whether the USER picked it ([picked]) or it
 /// is the default. During a hold the default week is not lit (only the H chip
-/// is "you are here"); a week the user tapped is. No `==` override on purpose:
-/// Riverpod filters notifications with `==`, and a new object must always
-/// notify (selecting the week already shown still lights it).
+/// is "you are here"); a week the user tapped is. No `==` override; nothing
+/// depends on that: tapping the week already shown changes [picked] from false
+/// to true, so a value `==` would notify too (B-pass seat B F4).
 class SelectedWeek {
   const SelectedWeek(this.week, {this.picked = false});
 

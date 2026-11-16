@@ -868,7 +868,7 @@ flip_on_blockers:
     #   UPDATE 2026-11-16 (Unit 3D-b, OI-175): every item is terminal and the
     #   flag is deleted (the flip). FOB-3 verified LIVE (ai-proxy v108 carries
     #   HOLD WEEKS); FOB-4 code closed by Unit 3D-a (63af8c63), its two deploys
-    #   wait on the founder's go; FOB-7(a) b9d4c2 and FOB-7(b) e7c4a2 are fixed;
+    #   live 2026-11-16 (recap v29, report v41); FOB-7(a) b9d4c2 and FOB-7(b) e7c4a2 are fixed;
     #   FOB-8's strip was deleted 2026-11-02. Ledger:
     #   docs/audit/generator-step3d.closure.yaml.
     - id: FOB-2
@@ -905,7 +905,7 @@ flip_on_blockers:
         what a hold is. Requires an ai-proxy deploy (own authorization, §4.3).
     - id: FOB-4
       code_closed: "2026-11-16 — generator Unit 3D-a (branch generator-step3d-a, PR #289, merge 63af8c63; diagnose c4e8b1; plan docs/plans/2026-11-16-generator-step3d-hold-weeks.md section 2.3): _shared/hold_week.ts; weekly-recap-ready says 'Hold H<n> debrief ready', weekly-report prints 'Current week: hold week H<n> (...)' for a Phase-I user in a hold week; fails closed to today's text. Behavioural proof _shared/hold_week_test.ts."
-      deploy_pending: "founder go for the weekly-recap-ready and weekly-report deploys (live versions and SHAs recorded before the deploy; rollback = the previous payloads in backups/edge_function_payloads/). Not a flip blocker: until the deploy both texts say 'Week 4', as today."
+      deployed: "2026-11-16 on the founder's go: weekly-recap-ready v28 -> v29, weekly-report v40 -> v41, both verified file-for-file against 63af8c63 on the decoded live bundle; rollback sources (live-equal before): recap 1040800f, report c760037e. docs/audit/generator-step3d.closure.yaml FOB-4-DEPLOY."
       title: "Sunday push and weekly report need hold copy, not a number"
       why: >
         weekly-recap-ready/index.ts interpolates current_week verbatim

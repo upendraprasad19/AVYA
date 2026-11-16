@@ -4,7 +4,7 @@ blast_radius: platform
 review_rounds: 4
 ground_truth_verified: true
 verdict: converged
-bpass: pending
+bpass: accepted
 bpass_review: docs/reviews/generator-step3d-bpass.md
 ---
 
@@ -61,4 +61,15 @@ Fresh, context-blind Sonnet seats (two per round), each verifying claims against
 
 ## B-pass
 
-Pending.
+Accepted: `docs/reviews/generator-step3d-bpass.md`. Two fresh Sonnet seats ran on the committed head 543fa294 (CI
+green). Seat A covered the services and ran tests and mutants; seat B covered the UI, the callers and the records,
+and was read-only.
+
+There were 10 findings: 0 P0/P1, 5 P2, 5 P3. All were accepted; the material ones:
+- **A failed hold now puts its rows back (A-F2).** Four raw `is_hold` readers skip the covered rule; the cloud half
+  of the local delete is OI-174's.
+- **Five untested caller arms now have tests (B-F1).**
+- **The orphan gap's lower bound is pinned (A-F1).**
+- **The records match the code:** OI-60 is archived, and OI-188 and OI-166 are corrected.
+
+Ten mutants were run on the fixes; all are red. See diagnose `d3b7e5`, B-pass section.

@@ -7074,3 +7074,90 @@ The founder chose to keep the plans as they are, over a unit that would give qua
 - **Invariant that holds regardless**: a regeneration never deletes a row it does not replace. ⚠ Note this is already violated in a narrow way — `workout_schedule_read_service.dart:373-376` deletes `displaced_*` keys unconditionally with no `completed` check and no replacement (pre-existing, round 2 P3-N)
 - **PARTIALLY RESOLVED 2026-09-11 — a FOURTH candidate behaviour was chosen and shipped, none of the three above**: OI-166 Unit 2 (`docs/audit/oi166-unit2-plan-v10.md`, diagnose `d7f3b2`) implements CYCLING — `contentFlavorIndex((w-1)%4)` repeats the baseline→overreach→peak→deload wave past week 4 rather than freezing on week 4's character (candidate 1), refusing (candidate 2), or handing off to phase advance (candidate 3). This closes the "no well-defined behaviour" complaint for the CONTENT/LABELING half: `rawWeek > 4` now stamps its real week number and picks well-defined content, verbatim, for any `rawWeek`. It does NOT close the WINDOW-ALIGNMENT half this entry also raises — whether `redoWeek4`'s own extension window is week-grid-aligned is untouched (`redoWeek4`/`holdWeek` themselves were explicit out-of-scope for Unit 2). Leaving this OPEN rather than closing it: the founder-blocked question above was "what should a regen DO", and cycling answers it for content but the sequencing-after-OI-174 note and the `redoWeek4` non-alignment concern (candidate 1's own rejection reason) still stand.
 - ⚠ **A THIRD residual surfaced the same day by the Unit 2 B-pass (Finding 2, P1), distinct from window-alignment: the phase-arc strip's "NOW" highlight does not cycle even though content now does.** `getCurrentWeekNumber()` (`workout_schedule_read_service.dart:1334`, unchanged by Unit 2) clamps to `[1,4]`, so past real week 4 the strip permanently highlights index 3 — "deload" per Unit 2's own splice — regardless of which of baseline/overreach/peak/deload the real current week actually cycles to. Reachable TODAY via the live `redoWeek4`, no flag required. Not strictly a NEW regression (pre-fix, `current_plan` was also unconditionally rewritten to the same canonical order every regen, so the clamp already existed against different, frozen content) — but Unit 2 makes the mismatch visible and variable for the first time. A real fix means routing the highlight through a cycle-aware index or otherwise making `hold_week_identity`'s clamp itself past-week-4-aware, which is a redesign of a DIFFERENT SoT concept (`hold_week_identity`, own tests, own explicit "do NOT branch inputs where the clamped 4 is HONEST" warning for its other consumers) — correctly out of scope for the already-9-round-converged Unit 2, tracked here instead of left implied-fixed.
+
+## OI-60 — Flip `enable_hold_weeks`
+
+- **Status**: CLOSED
+- **Closed**: 2026-11-16 — the flag is gone and every flip-on blocker is terminal. Generator step 3D (OI-175, founder d57) deleted `enable_hold_weeks`, its dev toggle and `redoWeek4`: Unit 3D-a (PR #289, 63af8c63) and Unit 3D-b (PR #290, branch `generator-step3d`). The blockers this entry named: FOB-3 verified live (ai-proxy serves HOLD WEEKS), FOB-4 code in 3D-a and deployed 2026-11-16 (founder go: weekly-recap-ready v29, weekly-report v41, ai-proxy v109), FOB-7(a)/(b) closed 2026-09-26, FOB-8 gone with the strip. Ledger `docs/audit/generator-step3d.closure.yaml`; `docs/ship_dark_pending_review.yaml` rows resolved. FOB-6 stays a separate feature, OI-125. Archived in the 3D-b B-pass (seat B F2).
+- **Verified**: 2026-09-26 — blocker list re-derived: FOB-7(a)/(b) are CLOSED (`d8b90e86`, merged `280fd810`, `docs/audit/oi60-client-blockers.closure.yaml`); FOB-8 is open and was missing from this list (`train_provider.dart:959` `phaseArcProvider` still reads `getCurrentWeekNumber()` directly).
+  PRIOR (kept verbatim): 2026-08-20 — the blocker list re-derived from the AUTHORITATIVE ledger
+  (`docs/ship_dark_pending_review.yaml:251-382` + `docs/audit/oi60-streak-identity.closure.yaml`),
+  not carried from this entry's own text, which was wrong. The three `enable_hold_weeks` rows were
+  read directly and all still carry `flip_reviewed: false`. FOB-1's six surfaces were each read in
+  source before being fixed — one (`phase_roadmap_screen.dart`) reaches the clamp through
+  `getProgramWeek`, so the FOB's own file list understated it rather than overstating it, and one
+  (`profile_content.dart`) is a consumer the FOB named only via its provider.
+- **Identified**: 2026-07-26
+- ⚠ **Corrected 2026-08-20.** This entry read *"7 unstarted flip-on-blocker items (FOB-1…FOB-7)"*
+  and `OPEN_INDEX.md` repeated it. That was stale on three counts as of 2026-08-13, and the index
+  is generated from this line, so the whole board carried the wrong number: **FOB-2 CLOSED**
+  (`docs/audit/oi60-streak-identity.closure.yaml`, diagnose `a3f8d1`), **FOB-7(c) verified clean**
+  (the report was stale — ai-media-proxy already carries both the 10K cap and the FC7 nonce fence),
+  **FOB-7(d) CLOSED**, and **FOB-6 SPLIT OUT to OI-125** by founder decision as a FEATURE that is
+  explicitly *not* a flip blocker. "Unstarted" was also wrong for the two that had already shipped.
+- **Blocked on**: **3 remaining flip-on blockers** in `docs/ship_dark_pending_review.yaml` —
+  **FOB-3, FOB-4, FOB-7(a)/(b)**. The coach snapshot and the Sunday push / weekly report still tell
+  every holder a false week-4 story; `currentPhaseCompletionRate` still folds hold days into the
+  PRO-advance gate input and `PlanIntegrityReconciler` still scans weeks 1-4 only. FOB-3/FOB-4
+  require ai-proxy + weekly-recap-ready + weekly-report EF redeploys — each its own explicit
+  authorization (§4.3), plan approval ≠ deploy approval.
+- ✅ **FOB-3 CODE LANDED 2026-08-21** — branch `claude/oi-pending-hold-weeks-1od97o`, diagnose
+  `b6e1f4`, closure `docs/audit/fob3-coach-hold-block.closure.yaml`, behavioral test
+  `test/contracts/hold_snapshot_block_behavioral_test.dart` (7 cases, mutation-proven on five legs,
+  each reddening exactly one test). The snapshot gains a facts-only `hold` block through a new
+  `holdSnapshotBlock()` seam, emitted with a null-aware element so a non-holder's snapshot gains no
+  key at all, and `hold` joins `trimSnapshotToBudget`'s keep set. The INSTRUCTION half — a HOLD
+  WEEKS section in `captain_manual.ts` telling the coach to read `snapshot.hold`, quote
+  `hold.label`, IGNORE both projected week fields BY NAME and NEVER say final-week-of-Phase-I —
+  is **INERT until ai-proxy is redeployed** (credentials, not permission; see
+  `docs/operations/FOUNDER_LAPTOP_HANDOFF.md` §2-4).
+  ⚠ Two things nearly shipped broken and are worth carrying forward: 20 **unescaped backticks**
+  inside the `CAPTAIN_MANUAL` template literal would have terminated it and boot-failed ai-proxy
+  on the next deploy without failing loudly (deploy-skill 6.5); and the first **keep-set test
+  proved nothing** — dropping `'hold'` from the keep set left every test green, because the
+  trimmer shrinks the LARGEST non-kept field and two giant bloat fields absorbed the whole overage
+  before the ~110-char block was ever reached.
+  Deliberately NOT done: suppressing the two week fields. They are read by non-hold logic, and
+  OI-60's own `do_not` forbids the obvious replacement.
+
+  ⚠ **FOB-4 needs MORE than a redeploy, and the ledger's `why:` does not say so.** Measured
+  2026-08-20 against the live schema: `information_schema.columns` in schema `public` contains
+  **zero** columns matching `%hold%`, and `user_progress` carries no hold field of any spelling
+  (23 columns, listed live). `is_hold` is written by `holdWeek()` onto local schedule rows and
+  **never reaches the cloud** — there is no `workout_schedule` table in `public` at all. So
+  `weekly-recap-ready` and `weekly-report` cannot branch on a hold no matter what is deployed:
+  the signal does not exist on their side of the wire. Whoever takes FOB-4 must decide how hold
+  state crosses that boundary FIRST (a `user_progress` column, or a derived RPC), which means a
+  MIGRATION and its own live-apply authorization on top of the two redeploys. Do not schedule
+  FOB-4 as a redeploy-only unit.
+- ✅ **FOB-5 CLOSED 2026-08-20** — diagnose `c7a3b9`, closure `docs/audit/fob5-hold-telemetry.closure.yaml`,
+  migration **120 applied live** (founder-authorized). `holdWeek()` now emits `hold_week_started`,
+  consumed by three new `hold_*` columns on `founder_metrics_engagement()` that reach the founder
+  dashboard with no EF redeploy. ⚠ FOB-5's own prescribed fix (`where channel = 'app'`) was
+  **wrong and was not applied** — it matches 7 of 116 rows. The metric now reads **22 instead of
+  116**. One self-inflicted regression was caught and closed inside the batch: the required
+  `DROP`+`CREATE` reset the function's ACL and briefly made it anon-executable (finding FOB-5-E).
+  ⚠ Read `oi60-streak-identity.closure.yaml` before attempting FOB-7(b): widening the 1..4 scan is
+  already REFUTED (the scan IS the re-anchor trigger, so widening buys no healing and only makes
+  the re-anchor fire more often — the P0-11 concern `d7f3a9` rejected). The shape is *split the
+  trigger from the write.* OI-127 is routed to whichever batch takes FOB-7(a)/(b), so one batch
+  holds the reconciler context.
+- ✅ **FOB-1 CLOSED 2026-08-20** — branch `claude/oi-pending-hold-weeks-1od97o`, diagnose `f4c8e1`,
+  behavioral test `test/contracts/hold_week_identity_behavioral_test.dart` (16 cases, mutation-proven
+  on both protective legs: neutering the hold arm reddens 3, removing the flag gate reddens 5 across
+  this file and `hold_display_read_path_test.dart`). Adopted "a hold suppresses the week number; Hn
+  is the identity" on all **six** in-repo surfaces that printed the clamped week 4 to a holder
+  (home eyebrow, profile subtitle, journey timeline ×2, phase-roadmap header, share-as-video stamp
+  + its Remotion composition), behind a new single-gate seam
+  `WorkoutScheduleReadService.weekIdentity()`. Two named residuals, neither deferred:
+  `ai_snapshot_builder.dart` is **FOB-3's** by the board's own division (it rewrites the same lines
+  to add the `hold` block and needs the ai-proxy redeploy — touching it twice would ship a
+  half-changed snapshot contract), and `telegram-bot/bot.py` is **upstream_blocked**, the OpenClaw VPS
+  deployment (§2; the tracked copy is `telegram-bot/`, dormant, OI-476).
+- **What's missing**: Own full ×2 per §4.12.4 (flip-on is where real user risk starts) — the four
+  remaining FOB items closed first. The flip-on commit must clear **all four** `enable_hold_weeks`
+  rows in the ledger (`hold-mechanic`, `hold-display`, `hold-display-fixes`, and
+  `claude/oi-pending-hold-weeks-1od97o`) in one commit — corrected from "three" on 2026-08-21 when
+  FOB-1+FOB-3 added the fourth.
+
+**UPDATE 2026-09-26 (backlog triage + `ci-green-batch-a`):** The `Blocked on` line below predates this and still lists FOB-7(a)/(b) — they are CLOSED (`d8b90e86`, merged `280fd810`, diagnoses `b9d4c2` / `e7c4a2`). What really remains: **FOB-4** (how the Sunday push + weekly report learn a user is on hold — founder design choice: (a) a `user_progress` hold column/RPC + 2 EF redeploys, or (b) drop the week number from those two EFs' copy for everyone, no migration) and **FOB-8** (`train_provider.dart:959`, `phaseArcProvider` reads `getCurrentWeekNumber()` directly — NOT previously on this list). FOB-3's code is on main; archived ai-proxy payload `backups/edge_function_payloads/ai-proxy/v3_57b0b07.json` (2026-09-24) contains 'HOLD WEEKS', so it is probably deployed — confirm with `get_edge_function` before relying on it.

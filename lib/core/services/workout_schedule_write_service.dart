@@ -317,6 +317,10 @@ class WorkoutScheduleWriteService {
     final deload = n % 4 == 0;
     final sourceWeekStart = planStart.add(Duration(days: deload ? 21 : 14));
 
+    // Every target this call touches, with the row it held before (null = no
+    // row), so a failed write can put the week back (B-pass seat A F2).
+    final touched = <(DateTime, Map<String, dynamic>?)>[];
+
     for (int offset = 0; offset < 7; offset++) {
       final sourceDate = sourceWeekStart.add(Duration(days: offset));
       final targetDate = rollStart.add(Duration(days: offset));
@@ -358,11 +362,21 @@ class WorkoutScheduleWriteService {
       entry['is_hold'] = true;
       entry['hold_ordinal'] = n;
 
+      touched.add((
+        targetDate,
+        existing is Map ? Map<String, dynamic>.from(existing) : null,
+      ));
       final result = await _upsertHoldRow(targetDate, entry);
       // A failed row write stops the hold (round 1 A-F4): plan_end does not
-      // move, so the rows already written are uncovered (no reader counts
-      // them) and a retry writes the whole week again.
-      if (!result.success) return HoldWeekOutcome.failed;
+      // move and a retry writes the whole week again. The rows already
+      // written are put back first (B-pass seat A F2): uncovered is not
+      // enough, because raw `is_hold` readers (completedWeekNumbers,
+      // _withoutHoldRows, weekModeForRow, rowIsHold on Home's card) do not
+      // apply the covered rule, and a completed day must not stay stamped.
+      if (!result.success) {
+        await _rollBackHoldRows(touched);
+        return HoldWeekOutcome.failed;
+      }
     }
 
     final newEnd = rollStart.add(const Duration(days: 6));
@@ -441,6 +455,34 @@ class WorkoutScheduleWriteService {
       }
     }
     return true;
+  }
+
+  /// Puts every target of a failed hold back as it was, newest first: a prior
+  /// row is rewritten through the same write path (its push corrects the cloud
+  /// copy), a date that had no row is deleted locally. Best effort: a restore
+  /// that fails is reported and left; the next hold's orphan clean-up or a
+  /// same-week retry covers it. A local delete never reaches the cloud
+  /// `scheduled_workouts` row (upsert-only push), the OI-174 class.
+  Future<void> _rollBackHoldRows(
+      List<(DateTime, Map<String, dynamic>?)> touched) async {
+    final box = _hive.workoutBox;
+    for (final (date, prior) in touched.reversed) {
+      try {
+        if (prior == null) {
+          await box.delete('$_schedulePrefix${formatDateKey(date)}');
+          continue;
+        }
+        final result = await _upsertHoldRow(date, prior);
+        if (!result.success) {
+          unawaited(ErrorTelemetry.recordNonFatal(
+              StateError('hold rollback write failed: ${result.errorMessage}'),
+              StackTrace.current,
+              reason: 'hold_week_rollback'));
+        }
+      } catch (e, st) {
+        unawaited(ErrorTelemetry.recordNonFatal(e, st, reason: 'hold_week_rollback'));
+      }
+    }
   }
 
   /// Test seam (Unit 3D-b): replaces the hold's row write so a test can fail

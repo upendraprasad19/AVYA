@@ -5785,7 +5785,7 @@ concepts:
         method: phaseStartAfterGap
         notes: the ONE start-date rule; pure.
       - file: lib/core/services/workout_schedule_read_service.dart
-        line_range: 2184-2195
+        line_range: 2164-2203
         method: nextPhaseStartDate
         notes: delegates to phaseStartAfterGap (gapStart false = the original rule, used by the graduation unlock).
       - file: lib/shared/services/pro_phase_advance.dart
@@ -9937,7 +9937,7 @@ concepts:
       getCurrentPlanMap, hasPlan, getCurrentCalendarWeek.
     writers:
       - file: lib/core/services/workout_schedule_read_service.dart
-        line_range: 135-2134
+        line_range: 135-2289
         method: WorkoutScheduleReadService
     reader_manifest_complete: false  # progressive caller migration; @Deprecated lint surfaces remaining
     readers:
@@ -9985,7 +9985,7 @@ concepts:
       Every Hive write routes through WorkoutWriteService.upsertScheduled.
     writers:
       - file: lib/core/services/workout_schedule_write_service.dart
-        line_range: 36-506
+        line_range: 36-548
         method: WorkoutScheduleWriteService
     reader_manifest_complete: false
 
@@ -10018,10 +10018,10 @@ concepts:
       surfaces render their pre-batch strings.
     writers:
       - file: lib/core/services/workout_schedule_read_service.dart
-        line_range: 1007-1032
+        line_range: 1264-1288
         method: activeHoldWeeks / activeHoldOrdinalFor / weekIdentity — the seam (no gate since Unit 3D-b; the covered rule lives in _holdDatesByOrdinal / holdOrdinalForDate)
       - file: lib/core/services/workout_schedule_write_service.dart
-        line_range: 211-466
+        line_range: 211-508
         method: holdWeek → stamps is_hold + hold_ordinal (unchanged; the identity is derived from these stamps, so a field rename silently empties every surface below)
     readers:
       - file: lib/features/train/providers/train_provider.dart
@@ -10137,7 +10137,7 @@ concepts:
       docs/plan-reviews/free-tier-hold-findings.md.
     writers:
       - file: lib/core/services/workout_schedule_write_service.dart
-        line_range: 211-466
+        line_range: 211-508
         method: holdWeek → stamps is_hold (bool) + hold_ordinal (int, gap-proof max+1)
     readers:
       - file: lib/core/services/workout_schedule_read_service.dart
@@ -10621,7 +10621,7 @@ concepts:
         semantic: latest
         fields_read: [schedule_<date>.* (via the holdWeek copy loop)]
       - file: lib/features/train/widgets/keep_training_phase1_action.dart
-        line_range: 29-75
+        line_range: 29-77
         method: keepTrainingPhase1 → runFreeTierRepeatWrite (H5 — surfaces failure, no blind /train nav; on written it invalidates currentPlanProvider / selectedWeekProvider / todayWorkoutProvider through the container captured before the await, round 4 F1/F2); wired from graduation_screen KEEP TRAINING PHASE 1
         semantic: latest
         fields_read: [schedule_<date>.* via holdWeek]
@@ -11222,7 +11222,7 @@ concepts:
       gates nothing and moves no money (Hermes L1-F5 / L23-F4).
     writers:
       - file: lib/core/services/workout_schedule_write_service.dart
-        line_range: 211-466
+        line_range: 211-508
         method: holdWeek
         notes: |
           Emitted at the LAST statement of the successful path, so every earlier
@@ -13430,7 +13430,7 @@ concepts:
           "don't touch" via the RPC's own COALESCE), same value + same
           projection helper, only the transport changed.
       - file: lib/core/services/workout_schedule_read_service.dart
-        line_range: 1704-1711
+        line_range: 1703-1715
         method: currentWeekColumnProjection
         notes: pure helper deciding frozen-passthrough (disabled) vs program week (enabled); behaviorally tested.
       - file: lib/features/onboarding/providers/onboarding_provider.dart
@@ -13894,15 +13894,15 @@ concepts:
       That shared walk is the drift guard.
     writers:
       - file: lib/core/services/workout_schedule_read_service.dart
-        line_range: 1930-1947
+        line_range: 1932-1953
         method: _scheduleRowsBefore
         semantic: shared-row-walk
       - file: lib/core/services/workout_schedule_read_service.dart
-        line_range: 1923-1929
+        line_range: 1922-1930
         method: pastPhaseBlocks
         semantic: strict-set
       - file: lib/core/services/workout_schedule_read_service.dart
-        line_range: 1956-1981
+        line_range: 1955-2006
         method: pastPhaseBlocksForDisplay
         semantic: display-recovery
         notes: |
@@ -16086,7 +16086,7 @@ concepts:
         semantic: flag-check
         fields_read: [type]
       - file: lib/core/services/workout_schedule_read_service.dart
-        line_range: 1477-1501
+        line_range: 1463-1523
         method: currentPhaseCompletionRate
         semantic: flag-check
         fields_read: [type]

@@ -81,14 +81,14 @@ impact_analysis: |
   window sees a different text. Phases 2-12 write weeks 1-4 (measured live 2026-11-16: phases 2 / 3 / 5 hold
   week_number 1-4 only); one Phase-I tester has weeks 5-7 from dev toggling and would read "Hold H3". Each run adds one
   paged read of scheduled_workouts per batch (recap) or per report. Holds reach real users only after
-  `enable_hold_weeks` flips (3D-b); until both deploys get the founder's go, the live texts stay as they are. The app
+  `enable_hold_weeks` flips (3D-b); both deploys went live 2026-11-16 on the founder's go (weekly-recap-ready v29, weekly-report v41). The app
   is not live.
 touched_layers_checked:
   - { layer: client_code, status: not_applicable, evidence: "no Dart file changes in 3D-a; the writer (holdWeek) and the push are read, not changed" }
   - { layer: postgres_schema, status: verified, evidence: "scheduled_workouts.week_number (integer) and scheduled_date (date), user_progress.current_phase exist (backups/live_schema_columns.json); no column added" }
   - { layer: postgres_data, status: verified, evidence: "read-only GROUP BY 2026-11-16: phases 2 / 3 / 5 have week_number 1-4 only; one phase-1 tester has 5-7" }
   - { layer: edge_function_code, status: fixed_in_this_batch, evidence: "_shared/hold_week.ts, weekly-recap-ready, weekly-report; deno check of both functions clean; deno test of the three test files green; ten mutants all red (below)" }
-  - { layer: edge_function_deploy, status: verified, evidence: "not deployed by this commit; founder go needed for each function, live versions and SHAs recorded first (ship_dark_pending_review.yaml FOB-4 deploy_pending)" }
+  - { layer: edge_function_deploy, status: verified, evidence: "not deployed by this commit; deployed 2026-11-16 after the merge on the founder's go: recap v28 -> v29 and report v40 -> v41, each live bundle verified file-for-file against 63af8c63, rollback sources 1040800f / c760037e recorded first (generator-step3d.closure.yaml FOB-4-DEPLOY)" }
   - { layer: cron_jobs, status: verified, evidence: "CRON_REGISTRY row 061 (weekly-recap-ready, Sunday 20:00 IST = 14:30 UTC) updated with the new reads; the schedule is unchanged" }
   - { layer: client_server_contract, status: verified, evidence: "the app's holdWeek writes week: 4 + n and sync_workout.dart:2350 pushes it as week_number; the server rule reads exactly that" }
 ---
@@ -143,8 +143,8 @@ expected).
 ## Not changed
 
 - No client code, no schema, no cron schedule.
-- The deploys need the founder's go, one per function. The live version and SHA are recorded first, and the
-  rollback is the previous payload.
+- The deploys needed the founder's go, one per function; given 2026-11-16 and done the same day (recap v29,
+  report v41). The live versions and their git sources were recorded first; the rollback is that source's payload.
 
 ## B-pass (docs/reviews/generator-step3d-a-bpass.md)
 

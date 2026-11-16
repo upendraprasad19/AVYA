@@ -225,9 +225,15 @@ void main() {
       expect(await _write.holdWeek(), HoldWeekOutcome.written);
       expect(_row(h2Monday)!['hold_ordinal'], 2);
       expect(_row(h2Monday)!['week'], 6);
+      // B-pass seat A F1: the orphan clean-up's gap starts AFTER plan_end, so
+      // H1's own Sunday (= the old plan_end, a rest row) survives H2.
+      expect(_row(h1Sunday)?['is_hold'], true, reason: 'H1\'s Sunday is not an orphan');
+      expect(_row(h1Sunday)?['hold_ordinal'], 1);
       setTestClockTo(DateTime(2026, 7, 13, 9));
       expect(await _write.holdWeek(), HoldWeekOutcome.written);
       expect(_row(DateTime(2026, 7, 13))!['hold_ordinal'], 3);
+      expect(_row(DateTime(2026, 7, 12))?['hold_ordinal'], 2, reason: 'H2\'s Sunday survives H3');
+      expect(_read.holdWeeks().map((h) => h.ordinal), [1, 2, 3]);
       expect(_read.maxCoveredHoldOrdinalBefore(DateTime(2026, 7, 20)), 3);
     });
 
@@ -323,13 +329,65 @@ void main() {
       expect(calls, 3, reason: 'the loop stops at the failure');
       expect(_planEnd(), DateTime(2026, 6, 28));
       expect(_events('hold_week_started'), 0);
-      expect(_read.holdWeeks(), isEmpty, reason: 'the two written rows are uncovered');
+      expect(_read.holdWeeks(), isEmpty);
+      // B-pass seat A F2: the two rows written before the failure are put
+      // back (here: no row before), so no raw is_hold reader sees them.
+      expect(_holdRowCount(), 0, reason: 'rolled back, not left stamped and uncovered');
+      expect(_row(h1Monday), isNull);
+      expect(_row(DateTime(2026, 6, 30)), isNull);
 
       WorkoutScheduleWriteService.debugHoldRowWrite = null;
       expect(await _write.holdWeek(), HoldWeekOutcome.written);
       expect(_holdRowCount(), 7);
       expect(_row(h1Monday)!['hold_ordinal'], 1);
       expect(_planEnd(), h1Sunday);
+    });
+
+    test('a failed write after a completed target day: the completed row and a planned '
+        'row are restored as they were (B-pass seat A F2)', () async {
+      final completed = {
+        'type': 'workout',
+        'date': formatDateKey(h1Monday),
+        'workout_name': 'My Template Day',
+        'week': 6,
+        'status': 'completed',
+        'completed_at': '2026-06-29T08:00:00.000',
+        'exercises': [
+          {'name': 'Deadlift', 'sets': 5, 'reps': 3},
+        ],
+      };
+      final tuesday = DateTime(2026, 6, 30);
+      final planned = {
+        'type': 'workout',
+        'date': formatDateKey(tuesday),
+        'workout_name': 'Scheduled template',
+        'status': 'planned',
+        'exercises': const <Map<String, dynamic>>[],
+      };
+      await HiveService.instance.workoutBox.put('schedule_${formatDateKey(h1Monday)}', completed);
+      await HiveService.instance.workoutBox.put('schedule_${formatDateKey(tuesday)}', planned);
+      var calls = 0;
+      WorkoutScheduleWriteService.debugHoldRowWrite = (date, entry) async {
+        calls++;
+        if (calls == 3) return WriteResult.fail('disk full');
+        return WorkoutWriteService.instance.upsertScheduled(
+            date: date, entry: entry, source: WriteSource.schedSwap);
+      };
+      setTestClockTo(DateTime(2026, 7, 1, 9));
+      expect(await _write.holdWeek(), HoldWeekOutcome.failed);
+      final mon = _row(h1Monday)!;
+      expect(mon['status'], 'completed');
+      expect(mon['workout_name'], 'My Template Day');
+      expect(mon['week'], 6, reason: 'the week it had, not 4 + n');
+      expect(mon.containsKey('is_hold'), isFalse);
+      expect(mon.containsKey('hold_ordinal'), isFalse);
+      final tue = _row(tuesday)!;
+      expect(tue['workout_name'], 'Scheduled template');
+      expect(tue.containsKey('is_hold'), isFalse);
+      expect(tue['src_week'], isNull, reason: 'not the Peak copy');
+      expect(_row(DateTime(2026, 7, 1)), isNull, reason: 'the failed date had no row');
+      expect(_holdRowCount(), 0);
+      expect(_planEnd(), DateTime(2026, 6, 28));
     });
 
     test('a completed day on the target Monday keeps its content and gains the hold stamps',

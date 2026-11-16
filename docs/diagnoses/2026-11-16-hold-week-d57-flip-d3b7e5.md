@@ -98,8 +98,8 @@ impact_analysis: |
   - A tester device with is_hold rows from earlier dev toggling sees them now (pre-launch data).
   - A tester whose window redoWeek4 made ends on a non-Sunday gets the first hold inside that window (defect B,
     verified_clean, pre-launch).
-  - The coach's HOLD WEEKS block is live (FOB-3). The Sunday push and weekly report name the hold once the 3D-a
-    deploys get the founder's go; until then they say "Week 4", as today.
+  - The coach's HOLD WEEKS block is live (FOB-3). The Sunday push and weekly report name the hold: the 3D-a
+    deploys went live 2026-11-16 (weekly-recap-ready v29, weekly-report v41).
   - The app is not live in any store.
 touched_layers_checked:
   - { layer: client_code, status: fixed_in_this_batch, evidence: "write / read services, the action, the expired card, the marker; flutter analyze --no-fatal-infos clean; mutations below" }
@@ -167,3 +167,51 @@ The two green mutants are equivalent, measured rather than assumed:
 - **M18.** A PRO group's chips are W5-W12. The default selection is the clamped program week (1-4), so a PRO chip can
   only be lit by a tap (`picked` true), and the rule's hold arm (`holdingToday && !picked`) can never fire there.
   The `false` is kept for clarity, as the plan asks.
+
+## B-pass (docs/reviews/generator-step3d-bpass.md)
+
+Two fresh Sonnet seats on the committed diff of 543fa294 (CI green). Seat A (the services, 9 mutants of its own),
+seat B (the UI, the callers, the records). Ten findings, all accepted; every fix below, with its regression test.
+
+- **A-F2 (P2), the class widened in the fix.** A failed row write left every row written before it stamped
+  `is_hold` / `hold_ordinal` / `week: 4 + n` with `plan_end` unmoved. The covered rule hides them from the hold
+  family, but four raw readers do not apply it (writer `workout_schedule_write_service.dart` `_holdWeekLocked`;
+  readers `workout_schedule_read_service.dart` `completedWeekNumbers` / `_withoutHoldRows` / `weekModeForRow` and
+  `hold_week_labels.dart` `rowIsHold` on Home's card). Seat A named the completed-row case; a copied planned row is
+  the same class. **Fix:** `_rollBackHoldRows` puts every touched target back, newest first (a prior row rewritten
+  through the same write path, so its push corrects the cloud copy; a date with no prior row deleted). The cloud
+  half of that delete is OI-174's (upsert-only push), recorded there with the new server reader (3D-a's hold rule).
+- **A-F1 (P2).** The orphan gap's exclusive lower bound (it protects H(n-1)'s Sunday, the old `plan_end`) had no
+  test: seat A's mutant M3 survived. The H1 -> H2 -> H3 test now pins both Sundays.
+- **A-F3 (P3).** Stale SoT `line_range`s: the seam entry (1007-1032 -> 1264-1288) and six read-service ranges whose
+  bodies outran them, plus the write service (+42 lines) and `keepTrainingPhase1`. Recomputed from anchors.
+- **A-F4.** An un-stamped completed orphan keeps `week: 4 + n`: no change, its date is before this week's Monday, so
+  no current-week reader (today's card, the server's current-IST-week rule) sees it. Its local delete: OI-174.
+- **B-F1 (P2).** Five caller arms had no test (graduation alreadyHolding / inFlight / noPlan / a throw; the card's
+  failed / inFlight). Six new tests in `hold_week_callers_test.dart`.
+- **B-F2 (P2).** OI-60 (the flag flip) was OPEN for a flag this batch deletes: archived (append-only) with the
+  deploys; OI-188's defect 1 and OI-95's flag mention marked; OI-166's tail fixed (B-F3).
+- **B-F4 / B-F6 (P3).** The `SelectedWeek` "no `==` on purpose" claim was not load-bearing (a tap on the default
+  week changes `picked`): reworded. Two `use_build_context_synchronously` infos: an explicit `mounted` guard.
+- **B-F5 (P3).** The graduation test could not see the `selectedWeekProvider` invalidation: it now picks W2 first.
+
+Build trap: a `Completer` made in the `testWidgets` (fake-async) zone completes on a pump, so
+`await tester.runAsync(() => future)` on work gated by it never returns (the first run of the new inFlight tests hung);
+poll with the file's `waitFor`, which pumps.
+
+| # | Mutant | Test | Result |
+|---|---|---|---|
+| MR1 | no `_rollBackHoldRows` call | d57 | red, 2 |
+| MR2 | a no-prior date is not deleted | d57 | red, 1 |
+| MR3 | a prior row is not rewritten (`WriteResult.fail`) | d57 | red, 1 |
+| MR4 | the orphan gap includes `plan_end` (seat A's M3) | d57 | red, 1 |
+| MC1 | graduation alreadyHolding stays put | callers | red, 1 |
+| MC2 | graduation inFlight shows a snackbar | callers | red, 3 |
+| MC3 | no `selectedWeekProvider` invalidation | callers | red, 1 |
+| MC4 | a thrown write maps to inFlight | callers | red, 1 |
+| MC5 | the card's inFlight shows a snackbar | callers | red, 1 |
+| MC6 | the card's failed is silent | callers | red, 1 |
+
+Each mutant was confirmed applied (`grep -c` = 1), reddened through a test failure (no compile error), and the file
+was restored from a backup with its sha256 checked. Seat A's M1 / M2 (the double-tap comparison against the Monday vs
+today, `isBefore` vs `isAfter`) stay green and are equivalent: a covered hold's last date is its Sunday, never a Monday.

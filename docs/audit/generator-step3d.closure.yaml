@@ -8,8 +8,8 @@ plan_review_record: docs/plan-reviews/generator-step3d.md
 diagnose_docs:
   - docs/diagnoses/2026-11-16-hold-week-d57-flip-d3b7e5.md
   - docs/diagnoses/2026-11-16-hold-week-server-copy-c4e8b1.md
-total_findings: 24
-closed_count: 24
+total_findings: 25
+closed_count: 25
 
 findings:
   # ── The flip-on blockers (docs/ship_dark_pending_review.yaml flip_on_blockers) ──
@@ -40,8 +40,8 @@ findings:
     verification: "supabase/functions/_shared/hold_week_test.ts (behavioural), weekly-recap-ready/index_test.ts, weekly-report/index_test.ts; diagnose c4e8b1 mutants A1-A10 and B1-B6"
   - id: FOB-4-DEPLOY
     title: "Deploy weekly-recap-ready and weekly-report"
-    terminal_state: blocked_on_user
-    reason: "each Edge Function deploy needs the founder's explicit go (CLAUDE.md §4.3); live version + SHA recorded first. Until then both texts say 'Week 4', as today for every user (not a flip blocker)."
+    terminal_state: verified_clean
+    evidence: "deployed 2026-11-16 on the founder's go ('Deploy all three'), from a clone of origin/main 63af8c63, one function at a time: weekly-recap-ready v28 -> v29 (verify_jwt false), weekly-report v40 -> v41 (verify_jwt true); ai-proxy v108 -> v109 in the same go (Unit 3C's tool descriptions). Before: each live bundle's decoded files (GET /functions/<fn>/body, Accept multipart/form-data) hashed equal to git 1040800f (recap, 10 files), c760037e (report, 16), 862f0bc2 (ai-proxy, 66 of 67; the type-only _shared/tools/types.ts is served as an empty part): those are the rollback sources, payloads rebuilt with --rollback --dry-run and kept. After: recap 12 of 12 and report 17 of 17 files equal 63af8c63 (hold_week.ts included), ai-proxy 66 of 67; boot answers are the modules' own 401s (recap 'Unauthorized', report 'Invalid or expired token' to an anon Bearer, ai-proxy 'Missing authorization header')."
   - id: FOB-5
     title: "Hold telemetry"
     terminal_state: verified_clean
@@ -120,3 +120,8 @@ findings:
     terminal_state: closed_in_commit
     commit: "generator-step3d (Unit 3D-b, uncommitted at ledger time; SHA stamped by the post-merge records landing)"
     verification: "test/features/train/week_selector_hold_marker_test.dart (table, the real strip during a hold, a tap lights a pick, an invalidation clears it, PRO groups, H1 Peak / H4 Deload / lifted Baseline); mutants M16 / M17 red"
+  - id: HW-ROLLBACK
+    title: "B-pass seat A F2: a failed hold put back every row it wrote (raw is_hold readers skip the covered rule)"
+    terminal_state: closed_in_commit
+    commit: "generator-step3d (Unit 3D-b B-pass fix commit; SHA stamped by the post-merge records landing)"
+    verification: "hold_week_d57_behavioral_test.dart (the failed-write test asserts the rollback; a completed and a planned target restored as they were); mutants MR1-MR3 red; the cloud half of a local delete recorded on OI-174 (docs/reviews/generator-step3d-bpass.md A-F2)"

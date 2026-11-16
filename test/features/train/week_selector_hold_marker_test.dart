@@ -3,7 +3,7 @@
 //
 // - `weekChipLit`: the selected week is lit, except during a hold when the user has not picked a week.
 // - On the real WeekSelector: during a hold W4 is not lit; a tap on W2 lights W2; a tap on W4 lights W4
-//   (selecting the week already shown still notifies); an invalidation clears the pick; the PRO groups are
+//   (tapping the week already shown sets picked); an invalidation clears the pick; the PRO groups are
 //   unaffected; the date sub-label shows only on a lit chip.
 // - The card word: H1 says Peak and H4 says Deload from the copied stamps; a lifted deload source says Baseline.
 @Timeout(Duration(minutes: 3))
@@ -194,13 +194,13 @@ void main() {
     expect(_lit(tester, 4), isFalse);
     expect(find.text('JUN 8–14'), findsOneWidget, reason: 'the lit chip carries its date label');
 
-    // Selecting the week the default already shows still notifies: W4 lights.
     container.invalidate(selectedWeekProvider);
     await tester.pump();
     expect(container.read(selectedWeekProvider).picked, isFalse);
     for (var w = 1; w <= 4; w++) {
       expect(_lit(tester, w), isFalse, reason: 'the invalidation cleared the pick');
     }
+    // Tapping the default week picks it (picked false -> true): W4 lights.
     await tester.tap(find.byKey(const ValueKey('week-4')));
     await tester.pump();
     expect(container.read(selectedWeekProvider).picked, isTrue);

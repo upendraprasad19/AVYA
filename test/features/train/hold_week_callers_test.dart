@@ -212,6 +212,10 @@ void main() {
     expect(container.read(holdStatusProvider).isHolding, isFalse);
     expect(container.read(todayWorkoutProvider), isNull);
     expect(container.read(selectedWeekProvider).week, 4);
+    // B-pass seat B F5: a pick made before the tap, so the selected-week
+    // invalidation is observable (it resets the pick to the default week).
+    container.read(selectedWeekProvider.notifier).select(2);
+    expect(container.read(selectedWeekProvider).picked, isTrue);
 
     await tapWithRealIo(tester, find.text('KEEP TRAINING PHASE 1'));
     await waitFor(tester, () => find.text('train tab').evaluate().isNotEmpty, 'navigation to /train');
@@ -219,6 +223,9 @@ void main() {
     expect(container.read(holdStatusProvider).todayHoldOrdinal, 1);
     expect(container.read(todayWorkoutProvider)?['is_hold'], isTrue,
         reason: 'Home\'s today card watches only the auth token: it must be invalidated');
+    expect(container.read(selectedWeekProvider).picked, isFalse,
+        reason: 'the hold\'s H chip is "you are here": the old pick is cleared');
+    expect(container.read(selectedWeekProvider).week, 4);
     await tester.pumpWidget(const SizedBox());
     await cleanUp(tester);
   });
@@ -266,6 +273,130 @@ void main() {
     await waitFor(tester, () => find.text("Couldn't schedule again. Please try again.").evaluate().isNotEmpty,
         'the error snackbar');
     expect(find.text('train tab'), findsNothing);
+    await tester.pumpWidget(const SizedBox());
+    await cleanUp(tester);
+  });
+
+  // ── B-pass seat B F1: every outcome arm of both callers ──
+
+  const errorText = "Couldn't schedule again. Please try again.";
+
+  testWidgets('graduation: alreadyHolding -> the snackbar and /train, nothing written', (tester) async {
+    await seedRealToday(tester);
+    await tester.runAsync(() => WorkoutScheduleWriteService.instance.holdWeek());
+    expect(_row(thisMonday)!['hold_ordinal'], 1);
+    await tester.pumpWidget(ProviderScope(child: graduationHost((_) {})));
+    await tester.pump();
+    await tapWithRealIo(tester, find.text('KEEP TRAINING PHASE 1'));
+    await waitFor(tester, () => find.text('train tab').evaluate().isNotEmpty, 'navigation to /train');
+    expect(find.text('Already holding this week.'), findsOneWidget);
+    expect(_row(thisMonday.add(const Duration(days: 7))), isNull, reason: 'no second hold');
+    await tester.pumpWidget(const SizedBox());
+    await cleanUp(tester);
+  });
+
+  testWidgets('graduation: noPlan -> the error snackbar, stays put', (tester) async {
+    await seedRealToday(tester);
+    await tester.runAsync(() => MigratedKey.delete('plan_start_date'));
+    await tester.pumpWidget(ProviderScope(child: graduationHost((_) {})));
+    await tester.pump();
+    await tapWithRealIo(tester, find.text('KEEP TRAINING PHASE 1'));
+    await waitFor(tester, () => find.text(errorText).evaluate().isNotEmpty, 'the error snackbar');
+    expect(find.text('train tab'), findsNothing);
+    await tester.pumpWidget(const SizedBox());
+    await cleanUp(tester);
+  });
+
+  testWidgets('graduation: a write that THROWS -> failed: the error snackbar, stays put', (tester) async {
+    await seedRealToday(tester);
+    WorkoutScheduleWriteService.debugHoldRowWrite = (date, entry) async => throw StateError('io');
+    await tester.pumpWidget(ProviderScope(child: graduationHost((_) {})));
+    await tester.pump();
+    await tapWithRealIo(tester, find.text('KEEP TRAINING PHASE 1'));
+    await waitFor(tester, () => find.text(errorText).evaluate().isNotEmpty, 'the error snackbar');
+    expect(find.text('train tab'), findsNothing);
+    expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox());
+    await cleanUp(tester);
+  });
+
+  /// Starts a hold whose row writes wait on [gate], so the next call is inFlight.
+  Future<Future<HoldWeekOutcome>> startGatedHold(WidgetTester tester, Completer<void> gate) async {
+    WorkoutScheduleWriteService.debugHoldRowWrite = (date, entry) async {
+      await gate.future;
+      return WorkoutWriteService.instance.upsertScheduled(
+          date: date, entry: entry, source: WriteSource.schedSwap);
+    };
+    late Future<HoldWeekOutcome> first;
+    await tester.runAsync(() async {
+      first = WorkoutScheduleWriteService.instance.holdWeek();
+    });
+    return first;
+  }
+
+  testWidgets('graduation: inFlight -> nothing (no snackbar, no navigation)', (tester) async {
+    await seedRealToday(tester);
+    final gate = Completer<void>();
+    final first = await startGatedHold(tester, gate);
+    await tester.pumpWidget(ProviderScope(child: graduationHost((_) {})));
+    await tester.pump();
+    await tapWithRealIo(tester, find.text('KEEP TRAINING PHASE 1'));
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(find.byType(SnackBar), findsNothing);
+    expect(find.text('train tab'), findsNothing);
+    expect(find.text('KEEP TRAINING PHASE 1'), findsOneWidget);
+    // The gate was made in the fake-async zone: its completion runs on a pump,
+    // so poll with waitFor (which pumps), never `runAsync(() => first)`.
+    HoldWeekOutcome? firstOutcome;
+    unawaited(first.then((o) => firstOutcome = o));
+    gate.complete();
+    await waitFor(tester, () => firstOutcome != null, 'the first hold to finish');
+    expect(firstOutcome, HoldWeekOutcome.written);
+    await tester.pumpWidget(const SizedBox());
+    await cleanUp(tester);
+  });
+
+  testWidgets('PlanExpiredCard: failed -> the error snackbar, no refresh, no repeat event', (tester) async {
+    await seedRealToday(tester);
+    WorkoutScheduleWriteService.debugHoldRowWrite = (date, entry) async => WriteResult.fail('disk full');
+    var refreshed = 0;
+    await tester.pumpWidget(ProviderScope(
+      child: MaterialApp(
+        home: Scaffold(body: SingleChildScrollView(child: PlanExpiredCard(onRedoComplete: () => refreshed++))),
+      ),
+    ));
+    await tester.pump();
+    await tapWithRealIo(tester, find.text('Hold the line — another week'));
+    await waitFor(tester, () => find.text(errorText).evaluate().isNotEmpty, 'the error snackbar');
+    expect(refreshed, 0);
+    expect(_events('phase_1_cycle_repeat_started'), 0);
+    await tester.pumpWidget(const SizedBox());
+    await cleanUp(tester);
+  });
+
+  testWidgets('PlanExpiredCard: inFlight -> nothing (no snackbar, no refresh, no event)', (tester) async {
+    await seedRealToday(tester);
+    final gate = Completer<void>();
+    final first = await startGatedHold(tester, gate);
+    var refreshed = 0;
+    await tester.pumpWidget(ProviderScope(
+      child: MaterialApp(
+        home: Scaffold(body: SingleChildScrollView(child: PlanExpiredCard(onRedoComplete: () => refreshed++))),
+      ),
+    ));
+    await tester.pump();
+    await tapWithRealIo(tester, find.text('Hold the line — another week'));
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(find.byType(SnackBar), findsNothing);
+    expect(refreshed, 0);
+    expect(_events('phase_1_cycle_repeat_started'), 0);
+    // The gate was made in the fake-async zone: its completion runs on a pump,
+    // so poll with waitFor (which pumps), never `runAsync(() => first)`.
+    HoldWeekOutcome? firstOutcome;
+    unawaited(first.then((o) => firstOutcome = o));
+    gate.complete();
+    await waitFor(tester, () => firstOutcome != null, 'the first hold to finish');
+    expect(firstOutcome, HoldWeekOutcome.written);
     await tester.pumpWidget(const SizedBox());
     await cleanUp(tester);
   });
