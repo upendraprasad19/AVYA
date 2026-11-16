@@ -79,8 +79,8 @@ From PowerShell the working form is:
 
 Landed and green on `main`: FOB-1 (week identity), FOB-5 (hold telemetry), OI-132 (the fileless
 migration reconstructed + Gate 31 given a live-snapshot input), and FOB-3 (the coach's `hold`
-block). `enable_hold_weeks` is still **OFF** — none of it is live for users yet, and the flip is
-its own commit needing the full ×2 review and clearing all FOUR ledger rows at once.
+block). (Update 2026-11-16: Unit 3D-b, OI-175, deleted the `enable_hold_weeks` flag; holds are
+always on, and its four ledger rows moved to `resolved:`.)
 
 Waiting on this machine: **nothing but the APK build.** `rolling-context` v19 and `ai-proxy` v80
 both deployed and verified 2026-08-24. FOB-4 is still not deployable — it needs a migration
@@ -140,8 +140,8 @@ If `main` is already green and pushed, `/build-apk --from-green` skips the redun
   tolerates 401 for `ai-proxy`. Corrected and pinned by
   `test/contracts/runbook_deploy_verify_jwt_test.dart`; see diagnose `b2d8e4`
   (`docs/diagnoses/2026-08-24-runbook-verify-jwt-b2d8e4.md`).
-- **`enable_hold_weeks` is still OFF** and this batch does not flip it. The flip is its own commit
-  needing the full ×2 review, and it must clear all **four** pending `enable_hold_weeks` rows in
+- **`enable_hold_weeks` was OFF** when this was written; Unit 3D-b (OI-175, 2026-11-16) deleted the
+  flag (holds are always on). The flip cleared all **four** pending `enable_hold_weeks` rows in
   `docs/ship_dark_pending_review.yaml` at once (hold-mechanic, hold-display, hold-display-fixes,
   claude/oi-pending-hold-weeks-1od97o). This line said "three" until 2026-08-24; a fourth row had
   been added and the count was never updated.

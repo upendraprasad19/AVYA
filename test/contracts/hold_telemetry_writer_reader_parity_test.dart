@@ -16,7 +16,7 @@
 // assert whatever name the writer now emits), the SQL is still valid, the
 // migration still applies, and `holds_started_today` silently returns 0
 // forever. A metric that reads 0 is indistinguishable from "no user has taken a
-// hold yet" — which is the expected reading while enable_hold_weeks is OFF, so
+// hold yet" — which is the expected reading before any user has held, so
 // the failure is invisible precisely during the window it would be introduced.
 //
 // This test is the only thing that connects the two halves.
@@ -61,8 +61,8 @@ void main() {
             'predicate cannot satisfy this).\n'
             'Rename one side without the other and holds_started_today / '
             '_7d / holders_total silently return 0 forever — which looks '
-            'exactly like "nobody has held yet", the CORRECT reading while '
-            'enable_hold_weeks is OFF. Nothing else in the repo would notice.');
+            'exactly like "nobody has held yet", the CORRECT reading before any '
+            'user has held. Nothing else in the repo would notice.');
   });
 
   test('all three hold_* metric columns key off that same event name', () {

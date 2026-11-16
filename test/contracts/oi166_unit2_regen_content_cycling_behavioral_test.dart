@@ -4,17 +4,17 @@
 // last week or crashing, AND the schedule-row write range must stay bound to
 // the STORED plan_end_date via a LITERAL DATE comparison — never a
 // week-bucket comparison, which diverges from the date comparison whenever
-// plan_end is mid-week-misaligned (the exact state a redoWeek4 tap on a
+// plan_end is mid-week-misaligned (the exact state a legacy (now deleted) redoWeek4 tap on a
 // non-Monday can produce).
 //
 // Regression-tests three prior review-round findings on this same document:
-//   - round 4: an extended (redoWeek4) plan regenerated mid-extension must
+//   - round 4: an extended (legacy, deleted redoWeek4) plan regenerated mid-extension must
 //     write real rows through EXACTLY the stored plan_end, no more/fewer.
 //   - round 5 P0: a genuinely EXPIRED plan (today > plan_end, no extension)
 //     must write ZERO rows AND leave current_plan byte-identical — a blob
 //     rewrite backed by zero rows is the defect this closes.
-//   - round 7 P0: a MISALIGNED plan_end (not week-grid-aligned, reachable via
-//     redoWeek4 on a non-Monday) must never let a row land past plan_end even
+//   - round 7 P0: a MISALIGNED plan_end (not week-grid-aligned, reachable via the deleted
+//     the deleted redoWeek4 on a non-Monday) must never let a row land past plan_end even
 //     when the week-bucket containing plan_end still contains today.
 //
 // Also covers C (RegeneratePlanPlanner + the ToolDispatcher commit sites):
@@ -136,7 +136,7 @@ void main() {
       expect(WorkoutScheduleReadService.contentFlavorIndex(4), 3);
     });
 
-    test('weeks 5-8 (one redoWeek4 extension — round 4 scenario) cycle back',
+    test('weeks 5-8 (one legacy extension — round 4 scenario) cycle back',
         () {
       expect(WorkoutScheduleReadService.contentFlavorIndex(5), 0);
       expect(WorkoutScheduleReadService.contentFlavorIndex(6), 1);
@@ -164,12 +164,12 @@ void main() {
     }
 
     test(
-        'extended: regen mid-redoWeek4-window writes exactly the stored '
+        'extended: regen mid-extension-window writes exactly the stored '
         'days, real week stamp, and cycled current_plan content',
         () async {
       final planStart = DateTime(2026, 6, 1); // a Monday
       await seedFirstGeneration(planStart);
-      // Simulate a redoWeek4 extension: stored plan_end pushed to day 34
+      // Simulate a legacy (deleted redoWeek4) extension: stored plan_end pushed to day 34
       // (still week-grid-aligned: 34 % 7 == 6).
       final extendedEnd = planStart.add(const Duration(days: 34));
       await MigratedKey.write('plan_end_date', extendedEnd.toIso8601String());
@@ -263,7 +263,7 @@ void main() {
       final planStart = DateTime(2026, 6, 1); // a Monday
       await seedFirstGeneration(planStart);
       // Mid-week-misaligned plan_end (30 % 7 == 2, not 6) — the shape a
-      // redoWeek4 tap on a non-Monday produces.
+      // legacy redoWeek4 tap on a non-Monday produced.
       final misalignedEnd = planStart.add(const Duration(days: 30));
       await MigratedKey.write(
           'plan_end_date', misalignedEnd.toIso8601String());

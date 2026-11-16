@@ -19,11 +19,9 @@
 // repeats weekly, aimed at the user who just chose to stay. Nothing under
 // supabase/functions/ read is_hold or hold_ordinal at all.
 //
-// SHIP-DARK EVIDENCE (§4.12.4). The `flag OFF` group proves that with
-// `enable_hold_weeks` OFF and REAL hold rows on disk, the seam returns null and
-// the snapshot gains NO `hold` key — so the snapshot is byte-identical to the
-// pre-FOB-3 one for every user in the fleet. `'hold': null` would NOT satisfy
-// this; the null-aware element that omits the key is the load-bearing detail.
+// Holds are always on (Unit 3D-b removed the ship-dark flag and its `flag OFF`
+// group). Off a hold day the snapshot still gains NO `hold` key (`'hold': null`
+// would not satisfy that; the null-aware element is the load-bearing detail).
 //
 // The holds are materialized by the REAL holdWeek() writer, so these assertions
 // fail if the writer's field names or cadence drift from what the seam reads.
@@ -82,7 +80,6 @@ void main() {
     GuardedBox.testBypassOwnership = true;
     HiveService.debugMarkInitializedForTests();
 
-    await HiveService.instance.configBox.delete('enable_hold_weeks');
     await MigratedKey.write('plan_start_date', planStart.toIso8601String());
     await MigratedKey.write('plan_end_date', planEnd.toIso8601String());
     await HiveService.instance.userBox.put('progress', {
@@ -129,34 +126,8 @@ void main() {
     }
   }
 
-  group('flag OFF — the ship-dark property', () {
-    test('REAL hold rows on disk produce NO hold block and NO hold key',
-        () async {
-      // Materialize with the flag ON so holdWeek() actually writes, then turn
-      // it OFF: this is the exact state a fleet rollback would leave behind,
-      // and the state a flag check that lives in the wrong place would miss.
-      await HiveService.instance.configBox.put('enable_hold_weeks', true);
-      await takeHolds(2);
-      await HiveService.instance.configBox.put('enable_hold_weeks', false);
-      setTestClockTo(hold1Start.add(const Duration(days: 7, hours: 10)));
-
-      expect(read.holdSnapshotBlock(), isNull,
-          reason: 'the seam must consult the SAME gated accessor every other '
-              'production consumer uses; hold rows on disk are not a hold');
-
-      final snapshot = AiCoachRepository.instance.buildAiContext();
-      expect(snapshot.containsKey('hold'), isFalse,
-          reason: "THE ship-dark assertion. `'hold': null` would satisfy a "
-              'naive isNull check and still change every snapshot in the '
-              'fleet. The key must be ABSENT.');
-      expect(jsonEncode(snapshot), isNot(contains('"hold"')),
-          reason: 'belt and braces: no hold key at any nesting depth');
-    });
-  });
-
-  group('flag ON — the coach is told the truth', () {
+  group('the coach is told the truth', () {
     test('inside H1 the block carries the ordinal and the H label', () async {
-      await HiveService.instance.configBox.put('enable_hold_weeks', true);
       await takeHolds(1);
 
       final block = read.holdSnapshotBlock();
@@ -176,7 +147,6 @@ void main() {
 
     test('the label tracks the ordinal — H2 at the second hold, not H1',
         () async {
-      await HiveService.instance.configBox.put('enable_hold_weeks', true);
       await takeHolds(2);
       setTestClockTo(hold1Start.add(const Duration(days: 7, hours: 10)));
 
@@ -190,7 +160,6 @@ void main() {
     });
 
     test('a NON-hold day inside the plan window emits no hold key', () async {
-      await HiveService.instance.configBox.put('enable_hold_weeks', true);
       await takeHolds(1);
       // Week 3 of the plan — hold rows exist, but today is not one of them.
       setTestClockTo(planStart.add(const Duration(days: 15, hours: 10)));
@@ -203,7 +172,6 @@ void main() {
 
     test('sessions_completed reflects real logged days, not a constant',
         () async {
-      await HiveService.instance.configBox.put('enable_hold_weeks', true);
       await takeHolds(1);
       setTestClockTo(hold1Start.add(const Duration(hours: 10)));
 

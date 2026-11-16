@@ -593,11 +593,12 @@ DateTime resolveSessionDate({
 ///     no cloud row. Both sides now share [isTrainingDayType].
 ///
 /// ⚠️ The two arms use DIFFERENT week numbers, and conflating them is a live
-/// regression. The NON-HOLD arm must stay CLAMPED: `redoWeek4` extends only
-/// `plan_end` (it never writes `plan_start`), so a user who has rolled week 4
+/// regression. The NON-HOLD arm must stay CLAMPED: a plan window can extend
+/// `plan_end` without moving `plan_start` (a hold; the deleted `redoWeek4` did
+/// too), so a user who has rolled week 4
 /// sits at a true date-index ≥ 5 while `getCurrentWeekNumber()` reports 4.
 /// Feeding an unclamped index to `getWeek()` would hand them a different week's
-/// rows and a different row key — with the flag OFF. The unclamped index exists
+/// rows and a different row key. The unclamped index exists
 /// ONLY in the hold arm and must never reach `getWeek()`.
 ///
 /// ⚠️ [planStart] MUST equal the Hive `plan_start_date`. Both arms re-read it
@@ -606,10 +607,8 @@ DateTime resolveSessionDate({
 /// `getPlanStartDate()`; tests must seed both consistently.
 ///
 /// [holdOrdinal] is `null` when not holding — the caller sources it from
-/// `holdStatusProvider`, which returns `HoldStatusData.empty` whenever
-/// `enable_hold_weeks` is OFF. That keeps the flag check in ONE place per the
-/// `hold_display_read_path` contract; this function never reads
-/// `PlanEngineFlags`.
+/// `holdStatusProvider`, the ONE hold branch point per the
+/// `hold_display_read_path` contract.
 ///
 /// Extracted (both arms, not just the hold math) so every assertion is testable
 /// without driving `completeWorkout`, which needs full `startWorkout` state and
@@ -628,9 +627,8 @@ DateTime resolveSessionDate({
   required int? holdOrdinal,
   required DateTime workoutDate,
 }) {
-  // The INJECTED ordinal is the FLAG GATE only — it is null whenever
-  // enable_hold_weeks is OFF, because holdStatusProvider returns
-  // HoldStatusData.empty in that case. The ordinal that actually drives the
+  // The INJECTED ordinal only says "holding or not" (null for a non-holder,
+  // from holdStatusProvider). The ordinal that actually drives the
   // COUNTS is re-derived from workoutDate, because the two can disagree:
   // holdStatusProvider computes todayHoldOrdinal from nowWall() at provider-
   // BUILD time and is cached until currentPlanProvider invalidates, which
@@ -656,7 +654,7 @@ DateTime resolveSessionDate({
       streakWeekId: weekNum,
       weekKey: calendarWeekKey(workoutDate),
       // The counts come from the CLAMPED plan week. Once the plan window has
-      // rolled on (redoWeek4, an expired phase) that week is a PREVIOUS calendar
+      // rolled on (a hold, an expired phase) that week is a PREVIOUS calendar
       // week whose rows still read "completed", so it must not count again.
       weekIsCurrent: planStart != null &&
           calendarWeekKey(planStart.add(Duration(days: (weekNum - 1) * 7))) ==
@@ -1070,8 +1068,8 @@ final currentPlanProvider =
 
 // ── Free-tier "Hold the Line" display state ──────────────────────
 
-/// Read-only display state for the free-tier hold mechanic (ship-dark behind
-/// `enable_hold_weeks`).
+/// Read-only display state for the free-tier hold mechanic (always on since
+/// Unit 3D-b, OI-175).
 ///
 /// This is the **single branch point** every hold-aware UI surface reads —
 /// widgets never touch `PlanEngineFlags` or Hive directly. When the flag is OFF
@@ -1123,10 +1121,9 @@ final holdStatusProvider = Provider<HoldStatusData>((ref) {
   ref.watch(currentPlanProvider); // rebuild on (re)materialize / hold write
 
   final readService = ref.read(workoutScheduleReadServiceProvider);
-  // `activeHoldWeeks()` / `activeHoldOrdinalFor()` ARE the `enable_hold_weeks`
-  // gate (FOB-1): they return empty/null whenever the flag is OFF, so this
-  // provider no longer restates the check itself. One gate, in the service,
-  // shared with `weekIdentity()` — see WorkoutScheduleReadService.
+  // `activeHoldWeeks()` / `activeHoldOrdinalFor()` are the production entry
+  // points (FOB-1), shared with `weekIdentity()`, so the hold read surface is
+  // decided in ONE place — see WorkoutScheduleReadService.
   final holds = readService.activeHoldWeeks();
   if (holds.isEmpty) return HoldStatusData.empty;
 
@@ -1165,26 +1162,43 @@ final weekIdentityProvider = Provider<WeekIdentity>((ref) {
 
 // ── Selected Week ────────────────────────────────────────────────
 
-class SelectedWeekNotifier extends Notifier<int> {
+/// The Train tab's selected week (Unit 3D-b, d80; round 1 B-F1): the week the
+/// list below the chips shows, and whether the USER picked it ([picked]) or it
+/// is the default. During a hold the default week is not lit (only the H chip
+/// is "you are here"); a week the user tapped is. No `==` override on purpose:
+/// Riverpod filters notifications with `==`, and a new object must always
+/// notify (selecting the week already shown still lights it).
+class SelectedWeek {
+  const SelectedWeek(this.week, {this.picked = false});
+
+  /// 1-indexed week in the phase (clamped program week by default).
+  final int week;
+
+  /// True only after a chip tap ([SelectedWeekNotifier.select]); every
+  /// invalidation and the auth rebuild reset it to false.
+  final bool picked;
+}
+
+class SelectedWeekNotifier extends Notifier<SelectedWeek> {
   @override
-  int build() {
+  SelectedWeek build() {
     ref.watch(authUserIdTokenProvider); // c4055a — rebuild on auth change
     // Default to the calendar week that contains today so the chip for
     // the current date range is highlighted when the Train tab opens.
     // Falls back to the stored progress week if no plan is scheduled yet.
     final calendarWeek = WorkoutScheduleService.instance.getCurrentWeekNumber();
-    if (calendarWeek > 0) return calendarWeek;
+    if (calendarWeek > 0) return SelectedWeek(calendarWeek);
     final progress = UserRepository.instance.getProgress();
-    return (progress?['current_week'] as int?) ?? 1;
+    return SelectedWeek((progress?['current_week'] as int?) ?? 1);
   }
 
   void select(int week) {
-    state = week;
+    state = SelectedWeek(week, picked: true);
   }
 }
 
-final selectedWeekProvider =
-    NotifierProvider<SelectedWeekNotifier, int>(SelectedWeekNotifier.new);
+final selectedWeekProvider = NotifierProvider<SelectedWeekNotifier, SelectedWeek>(
+    SelectedWeekNotifier.new);
 
 // ── Workout Stats (PRs) ────────────────────────────────────────
 

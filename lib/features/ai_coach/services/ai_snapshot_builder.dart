@@ -283,11 +283,9 @@ class AiSnapshotBuilder {
 
       // FOB-3 / OI-60 — the ONE thing in this snapshot that tells the coach a
       // holder is holding. The null-aware element omits the KEY ENTIRELY when
-      // the seam returns null, which is every snapshot while
-      // `enable_hold_weeks` is OFF: that omission is what makes the flag-OFF
-      // output BYTE-IDENTICAL to the pre-FOB-3 one, and it is the ship-dark
-      // property the lighter §4.12.4 review tier rests on. `'hold': null` would
-      // change every snapshot in the fleet and forfeit it.
+      // the seam returns null (every non-holder): that omission keeps a
+      // non-holder's snapshot BYTE-IDENTICAL to the pre-FOB-3 one.
+      // `'hold': null` would change every snapshot in the fleet.
       // Without this block the coach reads current_week: 4 for every hold day
       // at every ordinal (holds start at plan_start+28, so the clamp always
       // yields 4), and with `free locks at Phase I after 4 weeks` in the manual

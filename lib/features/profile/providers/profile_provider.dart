@@ -426,9 +426,8 @@ class UserStatsData {
   /// holder; read [holdOrdinal] first for that (FOB-1 / OI-60).
   final int currentWeek;
 
-  /// 1-based hold number when today is a live hold day, else null. Null for
-  /// every user while `enable_hold_weeks` is OFF, so every consumer branching
-  /// on it is inert until the flip.
+  /// 1-based hold number when today is a live hold day, else null (every
+  /// non-holder).
   final int? holdOrdinal;
   final String primaryGoal;
   final bool isPro;

@@ -65,7 +65,6 @@ void main() {
     GuardedBox.testBypassOwnership = true;
     HiveService.debugMarkInitializedForTests();
 
-    await HiveService.instance.configBox.put('enable_hold_weeks', true);
     await MigratedKey.write('plan_start_date', planStart.toIso8601String());
     await MigratedKey.write('plan_end_date', planEnd.toIso8601String());
     setTestClockTo(holdStart.add(const Duration(hours: 10)));
@@ -87,6 +86,10 @@ void main() {
     String holdFlagField = 'is_hold',
     bool includeOrdinal = true,
   }) async {
+    // A hold row counts only inside [plan_start, plan_end]; the real writer
+    // moves plan_end to the hold's Sunday, so the hand-seeded fixture must too.
+    await MigratedKey.write('plan_end_date',
+        holdStart.add(const Duration(days: 6)).toIso8601String());
     final box = HiveService.instance.workoutBox;
     for (var d = 0; d < 7; d++) {
       final date = holdStart.add(Duration(days: d));

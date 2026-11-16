@@ -94,7 +94,6 @@ void main() {
 
   setUp(() async {
     await HiveUserSession.openForUser(fakeUserId);
-    await HiveService.instance.configBox.delete('enable_hold_weeks');
     await MigratedKey.write('plan_start_date', planStart.toIso8601String());
     await MigratedKey.write('plan_end_date', planEnd.toIso8601String());
     // 4 weeks of phase-1 rows, ALL COMPLETED, so the regular window scores 1.0
@@ -123,7 +122,6 @@ void main() {
 
   tearDown(() async {
     resetTestClock();
-    await HiveService.instance.configBox.delete('enable_hold_weeks');
     final box = HiveService.instance.workoutBox;
     for (final k in box.keys
         .where((k) => k.toString().startsWith('schedule_'))
@@ -134,7 +132,6 @@ void main() {
   });
 
   Future<void> takeHolds(int count) async {
-    await HiveService.instance.configBox.put('enable_hold_weeks', true);
     for (var i = 0; i < count; i++) {
       setTestClockTo(hold1Start.add(Duration(days: 7 * i, hours: 10)));
       await WorkoutScheduleWriteService.instance.holdWeek();

@@ -7,7 +7,7 @@
 //
 //   - WorkoutScheduleReadService — plan generation orchestration + reads.
 //   - WorkoutScheduleWriteService — markCompleted / markSkipped / pause /
-//     redoWeek4 / copyWeek.
+//     holdWeek / copyWeek.
 //   - SwapService — swap days, swap exercises, shorten, travel mode.
 //   - TemplateService — assign / unschedule / cleanSync templates.
 //
@@ -237,9 +237,6 @@ class WorkoutScheduleService {
         days: days,
         reason: reason,
       );
-
-  Future<void> redoWeek4() =>
-      write.WorkoutScheduleWriteService.instance.redoWeek4();
 
   Future<void> copyWeek({
     required int sourceWeek,

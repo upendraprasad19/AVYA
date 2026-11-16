@@ -361,9 +361,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
           // a holder at every ordinal, forever. Unlike the Train header (which
           // can simply DROP the segment because its HOLDING · Hn pill states
           // the identity ~40px away, diagnose c8b3f2 D1), Home carries no pill
-          // — so the eyebrow itself takes the Hn identity. Always the week arm
-          // while `enable_hold_weeks` is OFF, byte-identical to the pre-fix
-          // string.
+          // — so the eyebrow itself takes the Hn identity. The week arm is the
+          // pre-fix string for every non-holder.
           final weekId = ref.watch(weekIdentityProvider);
           final progress = UserRepository.instance.getProgress() ?? {};
           final currentPhase = (progress['current_phase'] as int?) ?? 1;

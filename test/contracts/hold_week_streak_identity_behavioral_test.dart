@@ -123,7 +123,6 @@ void main() {
 
   setUp(() async {
     await HiveUserSession.openForUser(fakeUserId);
-    await HiveService.instance.configBox.delete('enable_hold_weeks');
     await MigratedKey.write('plan_start_date', planStart.toIso8601String());
     await MigratedKey.write('plan_end_date', planEnd.toIso8601String());
     for (int week = 1; week <= 4; week++) {
@@ -136,7 +135,6 @@ void main() {
 
   tearDown(() async {
     resetTestClock();
-    await HiveService.instance.configBox.delete('enable_hold_weeks');
     final box = HiveService.instance.workoutBox;
     for (final k in box.keys
         .where((k) => k.toString().startsWith('schedule_'))
@@ -148,7 +146,6 @@ void main() {
 
   /// Materializes [count] consecutive holds via the REAL writer, one per week.
   Future<void> takeHolds(int count) async {
-    await HiveService.instance.configBox.put('enable_hold_weeks', true);
     for (var i = 0; i < count; i++) {
       setTestClockTo(hold1Start.add(Duration(days: 7 * i, hours: 10)));
       await WorkoutScheduleWriteService.instance.holdWeek();
@@ -200,7 +197,6 @@ void main() {
     test('LATE RETURN: ordinal 1 at date-week 8 → id 8, not 5', () async {
       // The user returns three weeks late, so holdWeek() backdates into THIS
       // calendar week — leaving a genuine date gap. hold_ordinal is still 1.
-      await HiveService.instance.configBox.put('enable_hold_weeks', true);
       final lateStart = DateTime(2026, 7, 20); // plan_start + 49 → week 8
       setTestClockTo(lateStart.add(const Duration(hours: 10)));
       await WorkoutScheduleWriteService.instance.holdWeek();
@@ -409,29 +405,28 @@ void main() {
     });
   });
 
-  group('flag OFF / non-hold arm stays CLAMPED', () {
+  group('non-hold arm stays CLAMPED', () {
     test('hold rows on disk but holdOrdinal null → non-hold arm, id <= 4',
         () async {
-      // Materialize holds, then simulate the flag being OFF: holdStatusProvider
-      // returns HoldStatusData.empty, so the caller passes holdOrdinal: null.
+      // Materialize holds, then call with the injected ordinal null (a caller
+      // that is not holding today passes null).
       await takeHolds(2);
-      await HiveService.instance.configBox.put('enable_hold_weeks', false);
 
       final r = resolve(hold1Start.add(const Duration(hours: 10)));
 
-      // Reddens if the function branches on PlanEngineFlags or
-      // holdOrdinalForDate() instead of the injected ordinal — it would take
-      // the hold arm and report 5 despite the flag being off.
+      // Reddens if the function branches on holdOrdinalForDate() instead of
+      // the injected ordinal — it would take the hold arm and report 5 with
+      // no hold ordinal passed in.
       expect(r.streakWeekId, lessThanOrEqualTo(4),
-          reason: 'flag OFF must reach the clamped arm');
+          reason: 'a null injected ordinal must reach the clamped arm');
       // Slice D: same key in the non-hold arm, and NOT the clamped plan id.
       expect(r.weekKey, calendarWeekKey(hold1Start));
       expect(r.weekKey, isNot(r.streakWeekId));
     });
 
-    test('REGRESSION: plan_end rolled +1 week (redoWeek4) keeps id 4', () async {
-      // redoWeek4 extends ONLY plan_end — it never writes plan_start — so a
-      // user who rolled week 4 sits at a true date-index of 5 while
+    test('REGRESSION: plan_end rolled +1 week on a legacy row keeps id 4', () async {
+      // The deleted redoWeek4 extended ONLY plan_end — it never wrote
+      // plan_start — so a legacy user who rolled week 4 sits at a true date-index of 5 while
       // getCurrentWeekNumber() reports 4. Materialize that state directly.
       await MigratedKey.write('plan_end_date',
           planEnd.add(const Duration(days: 7)).toIso8601String());
@@ -448,7 +443,7 @@ void main() {
 
       // Reddens if the non-hold arm uses the UNCLAMPED index: it would report
       // 5 and key the row on 2026-06-29 instead of 2026-06-22 — a live
-      // regression for a flag-OFF user.
+      // regression for a legacy rolled-week user.
       expect(r.streakWeekId, 4,
           reason: 'the non-hold arm must stay clamped to [1,4]');
       expect(formatDateKey(r.weekStartDate!), '2026-06-22',
@@ -474,12 +469,11 @@ void main() {
   });
 
   group('wiring (PRESENCE-ONLY — cannot catch a behavioural revert)', () {
-    test('the streak block takes the flag-gated hold ordinal, not the flag', () {
+    test('the streak block takes the hold ordinal, not a flag', () {
       // Coach workout parity 1a (OI-379, contract amended on purpose): the
       // streak block lives in the ref-free shared completion step, which reads
-      // the SAME flag-gated value holdStatusProvider exposes
-      // (`isHolding ? todayHoldOrdinal : null` == activeHoldOrdinalFor(nowWall()),
-      // the one flag-OFF gate both call). The helper's own body is still in
+      // the SAME value holdStatusProvider exposes
+      // (`isHolding ? todayHoldOrdinal : null` == activeHoldOrdinalFor(nowWall())). The helper's own body is still in
       // train_provider.dart.
       final step = File(
               'lib/features/train/services/workout_completion_bookkeeping.dart')
@@ -503,8 +497,8 @@ void main() {
 
       expect(stripped.contains('resolveStreakWeekState('), isTrue);
 
-      // The single flag-OFF guarantee point is holdStatusProvider; the streak
-      // path must not re-derive hold state from the flag or from Hive.
+      // holdStatusProvider is the single source of hold state; the streak
+      // path must not re-derive it from a flag or from Hive.
       // ⚠️ Extract from the end of the PARAMETER LIST, not from the signature.
       // The obvious spelling — indexOf('\n}', fnStart) — stops at `}) {` (the
       // named-parameter list's closing brace, which sits at column 0), so
@@ -526,16 +520,16 @@ void main() {
       expect(body.contains('holdWeekSessionProgress('), isTrue,
           reason: 'sanity: the window really does span the hold arm');
       expect(body.contains('PlanEngineFlags'), isFalse,
-          reason: 'the helper must never read the flag directly — the flag-OFF '
-              'guarantee lives solely in holdStatusProvider');
+          reason: 'the helper must never read a plan-engine flag directly; hold '
+              'state comes from holdStatusProvider');
 
       // NOTE: this deliberately does NOT forbid holdOrdinalForDate(. An earlier
       // draft asserted its ABSENCE, on the theory that the ordinal should be
       // purely injected. B-pass finding 1 showed that was wrong: the injected
       // ordinal can be stale relative to workoutDate across a midnight
       // rollover, so the counts MUST be driven by a re-derived ordinal. The
-      // real invariant — flag OFF never reaches the hold arm — is pinned
-      // behaviourally by the 'flag OFF / non-hold arm stays CLAMPED' group,
+      // real invariant — a null injected ordinal never reaches the hold arm — is
+      // pinned behaviourally by the 'non-hold arm stays CLAMPED' group,
       // which is stronger than any source grep. Kept as a comment because
       // silently dropping an assertion is how a guard gets lost.
       expect(body.contains('effectiveOrdinal'), isTrue,

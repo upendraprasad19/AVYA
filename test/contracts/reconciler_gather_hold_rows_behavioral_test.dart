@@ -89,7 +89,6 @@ void main() {
 
   setUp(() async {
     await HiveUserSession.openForUser(fakeUserId);
-    await HiveService.instance.configBox.put('enable_hold_weeks', true);
     await MigratedKey.write('plan_start_date', planStart.toIso8601String());
     await MigratedKey.write('plan_end_date', planEnd.toIso8601String());
     for (int week = 1; week <= 4; week++) {
@@ -116,7 +115,6 @@ void main() {
 
   tearDown(() async {
     resetTestClock();
-    await HiveService.instance.configBox.delete('enable_hold_weeks');
     final box = HiveService.instance.workoutBox;
     for (final k in box.keys
         .where((k) => k.toString().startsWith('schedule_'))
@@ -179,16 +177,6 @@ void main() {
       expect(rows, hasLength(7),
           reason: 'the normalization must not COST days in the ordinary case — '
               'a fix that under-reads is not a fix');
-    });
-
-    test('flag OFF: empty even with hold rows on disk (ship-dark property)',
-        () async {
-      await takeHolds(1);
-      expect(read.activeHoldWeeks(), isNotEmpty);
-      await HiveService.instance.configBox.put('enable_hold_weeks', false);
-      expect(PlanIntegrityReconciler.gatherHoldRows(read), isEmpty,
-          reason: 'this is what keeps the whole FOB-7(b) path byte-identical '
-              'with the flag off');
     });
   });
 }

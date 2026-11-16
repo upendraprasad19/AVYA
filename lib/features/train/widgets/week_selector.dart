@@ -147,11 +147,17 @@ class _WeekSelectorState extends ConsumerState<WeekSelector> {
       widget.currentPhase,
     );
 
-    // Free-tier hold weeks (ship-dark `enable_hold_weeks`). Always
-    // HoldStatusData.empty while the flag is OFF, so everything below this line
-    // is inert — the strip renders exactly as it did pre-hold-display.
+    // Free-tier hold weeks. HoldStatusData.empty for a user who never held,
+    // so the strip renders exactly as it did pre-hold-display for them.
     final holdStatus = ref.watch(holdStatusProvider);
     final isHolding = holdStatus.holds.isNotEmpty;
+    // Unit 3D-b (d80): the "you are here" marker. During a hold only the
+    // current H chip is gold; a W chip lights only when the user picked it.
+    // `holdingToday` comes from the same provider the hold chip reads (round 2
+    // B-F4), so the two never disagree.
+    final selected = SelectedWeek(widget.selectedWeek,
+        picked: ref.watch(selectedWeekProvider).picked);
+    final holdingToday = holdStatus.todayHoldOrdinal != null;
     // Two groups would otherwise both read "PHASE I"; the phase NAME
     // disambiguates the training block from the holding block (locked mockup).
     // Suffix only — the label itself is built at the _PhaseGroup call site so
@@ -187,7 +193,8 @@ class _WeekSelectorState extends ConsumerState<WeekSelector> {
             isPaywalled: false,
             weekStart: 1,
             weekEnd: 4,
-            selectedWeek: widget.selectedWeek,
+            selected: selected,
+            holdingToday: holdingToday,
             planStart: planStart,
             completedWeeks: completedWeeks,
             onTap: widget.onSelect,
@@ -211,7 +218,8 @@ class _WeekSelectorState extends ConsumerState<WeekSelector> {
             isPaywalled: !isPro,
             weekStart: 5,
             weekEnd: 8,
-            selectedWeek: widget.selectedWeek,
+            selected: selected,
+            holdingToday: false,
             planStart: planStart,
             completedWeeks: completedWeeks,
             onTap: widget.onSelect,
@@ -222,7 +230,8 @@ class _WeekSelectorState extends ConsumerState<WeekSelector> {
             isPaywalled: !isPro,
             weekStart: 9,
             weekEnd: 12,
-            selectedWeek: widget.selectedWeek,
+            selected: selected,
+            holdingToday: false,
             planStart: planStart,
             completedWeeks: completedWeeks,
             onTap: widget.onSelect,
@@ -931,7 +940,8 @@ class _PhaseGroup extends StatelessWidget {
     required this.isPaywalled,
     required this.weekStart,
     required this.weekEnd,
-    required this.selectedWeek,
+    required this.selected,
+    required this.holdingToday,
     required this.planStart,
     required this.completedWeeks,
     required this.onTap,
@@ -941,7 +951,10 @@ class _PhaseGroup extends StatelessWidget {
   final bool isPaywalled;
   final int weekStart;
   final int weekEnd;
-  final int selectedWeek;
+  final SelectedWeek selected;
+
+  /// True only for the CURRENT phase's group while today is a hold day.
+  final bool holdingToday;
   final DateTime? planStart;
   final Set<int> completedWeeks;
   final ValueChanged<int> onTap;
@@ -988,7 +1001,11 @@ class _PhaseGroup extends StatelessWidget {
                 child: _WeekChip(
                   key: ValueKey('week-$w'),
                   week: w,
-                  isSelected: w == selectedWeek,
+                  isLit: weekChipLit(
+                    week: w,
+                    selected: selected,
+                    holdingToday: holdingToday,
+                  ),
                   isLocked: isPaywalled,
                   hasCompletedDay: completedWeeks.contains(w),
                   planStart: planStart,
@@ -1002,13 +1019,23 @@ class _PhaseGroup extends StatelessWidget {
   }
 }
 
+/// Whether the W chip for [week] is lit (gold) — Unit 3D-b, d80; round 1 B-F6.
+/// The selected week is lit, except during a hold when the user has not picked
+/// a week: then today's H chip is the only "you are here".
+bool weekChipLit({
+  required int week,
+  required SelectedWeek selected,
+  required bool holdingToday,
+}) =>
+    week == selected.week && !(holdingToday && !selected.picked);
+
 // ── Single week chip ─────────────────────────────────────────────────────────
 
 class _WeekChip extends StatelessWidget {
   const _WeekChip({
     super.key,
     required this.week,
-    required this.isSelected,
+    required this.isLit,
     required this.isLocked,
     this.hasCompletedDay = false,
     required this.planStart,
@@ -1016,7 +1043,7 @@ class _WeekChip extends StatelessWidget {
   });
 
   final int week;
-  final bool isSelected;
+  final bool isLit;
   final bool isLocked;
   final bool hasCompletedDay;
   final DateTime? planStart;
@@ -1042,12 +1069,14 @@ class _WeekChip extends StatelessWidget {
   Widget build(BuildContext context) {
     final fg = isLocked
         ? AppColors.textGhost
-        : (isSelected ? AppColors.bgDeep : AppColors.textDim);
+        : (isLit ? AppColors.bgDeep : AppColors.textDim);
     final bg = isLocked
         ? AppColors.input
-        : (isSelected ? AppColors.accent : AppColors.card);
+        : (isLit ? AppColors.accent : AppColors.card);
 
-    final sub = isSelected ? _dateRange() : null;
+    // The date sub-label follows the gold (round 1 B-F6): an unlit W4 during a
+    // hold no longer prints its month-old range.
+    final sub = isLit ? _dateRange() : null;
     final chipHeight = sub != null ? 58.0 : 48.0;
 
     return GestureDetector(
@@ -1058,7 +1087,7 @@ class _WeekChip extends StatelessWidget {
         decoration: BoxDecoration(
           color: bg,
           borderRadius: BorderRadius.circular(AppRadius.sharp),
-          border: isSelected
+          border: isLit
               ? Border.all(color: AppColors.accent, width: 1.5)
               : Border.all(color: AppColors.line2),
         ),

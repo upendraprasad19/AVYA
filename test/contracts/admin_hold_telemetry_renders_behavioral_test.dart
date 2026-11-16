@@ -94,7 +94,7 @@ void main() {
       await tester.binding.setSurfaceSize(const Size(1200, 2400));
       addTearDown(() => tester.binding.setSurfaceSize(null));
 
-      // The expected state while enable_hold_weeks is OFF. The tiles must be
+      // The expected state before any user has held. The tiles must be
       // PRESENT and read 0 — an absent tile is indistinguishable from a
       // regression that dropped the wiring again.
       await tester.pumpWidget(MaterialApp(
