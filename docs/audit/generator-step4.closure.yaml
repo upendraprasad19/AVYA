@@ -1,7 +1,6 @@
 # Closure ledger - generator-step4 (OI-53; founder d81, d82, d83): volume titration and plateau escalation switched
 # on with 2A's lead-first rule and d65's trim order kept. Plan docs/plans/2026-11-16-generator-step4-titration-plateau.md
-# (v3.1). Rows carry the landing commit in the validator's labelled form; the post-merge records landing stamps the SHA
-# (a commit cannot name its own SHA).
+# (v3.1). Rows carry the landing commit; SHAs stamped by the post-merge records landing (generator step 5 branch).
 batch: generator-step4
 plan_review_record: docs/plan-reviews/generator-step4.md
 diagnose_docs:
@@ -13,57 +12,57 @@ findings:
   - id: S4-T1
     title: "A titration / plateau +1 passed its day's lead + 1 (R2 / R5) on 451 / 149 / 325 days"
     terminal_state: closed_in_commit
-    commit: "generator-step4 (uncommitted at ledger time; SHA stamped by the post-merge records landing)"
+    commit: "6abfe1a5 (generator step 4; env classification 5c260f1b; B-pass fixes 18aeea82; merged to main f7d55205, PR #291)"
     verification: "volume_titration_behavioral_test.dart step 4 group (T1 x4); titration_plateau_gate_test.dart R2 zero over 3,072 profile-scenarios; mutants T1 x4 red (diagnose 7c4e2a)"
   - id: S4-T2
     title: "A -1 lowered the lead on 831 decline days and made 1,538 one-set rows"
     terminal_state: closed_in_commit
-    commit: "generator-step4 (uncommitted at ledger time; SHA stamped by the post-merge records landing)"
+    commit: "6abfe1a5 (generator step 4; env classification 5c260f1b; B-pass fixes 18aeea82; merged to main f7d55205, PR #291)"
     verification: "T2 (d65's order, never below 2, the lead under the R2 guard): behavioral T2 x5, the re-derived consumers trims; gate 1-set zero, 685 guarded lead trims pinned; mutants T2 x6 red"
   - id: S4-T3
     title: "A stash-less deload row read as 0 and a +1 wrote workingSets 1"
     terminal_state: closed_in_commit
-    commit: "generator-step4 (uncommitted at ledger time; SHA stamped by the post-merge records landing)"
+    commit: "6abfe1a5 (generator step 4; env classification 5c260f1b; B-pass fixes 18aeea82; merged to main f7d55205, PR #291)"
     verification: "behavioral T3 test; mutant 'null stash counted' red"
   - id: S4-T4
     title: "Old readiness rows allowed a +1 with disable_readiness set (_recovered had no gate)"
     terminal_state: closed_in_commit
-    commit: "generator-step4 (uncommitted at ledger time; SHA stamped by the post-merge records landing)"
+    commit: "6abfe1a5 (generator step 4; env classification 5c260f1b; B-pass fixes 18aeea82; merged to main f7d55205, PR #291)"
     verification: "behavioral T4 test; gate readiness-off ON == OFF (192 profiles); mutant 'T4 removed' red"
   - id: S4-T5
     title: "Flip both flags to kill switches (default ON), retire the enable_ keys, dev-panel toggles"
     terminal_state: closed_in_commit
-    commit: "generator-step4 (uncommitted at ledger time; SHA stamped by the post-merge records landing)"
+    commit: "6abfe1a5 (generator step 4; env classification 5c260f1b; B-pass fixes 18aeea82; merged to main f7d55205, PR #291)"
     verification: "default-ON and kill-switch tests (a stale enable_ key ignored); gate IDENTITY and KILLED == OFF everywhere; mutants 'default OFF' x2 red; ship_dark_pending_review.yaml rows resolved"
   - id: S4-D81
     title: "d81: Cut == Maintain in the live world (finisher shown) exactly the accepted 5 of 576"
     terminal_state: closed_in_commit
-    commit: "generator-step4 (uncommitted at ledger time; SHA stamped by the post-merge records landing)"
+    commit: "6abfe1a5 (generator step 4; env classification 5c260f1b; B-pass fixes 18aeea82; merged to main f7d55205, PR #291)"
     verification: "goal_training_gate_test.dart 'd81: the live world' (_identicalLive)"
   - id: S4-D82
     title: "d82: plateau ships whole; the flat net (rotation + plateau +1) stays no worse at the band bottom"
     terminal_state: closed_in_commit
-    commit: "generator-step4 (uncommitted at ledger time; SHA stamped by the post-merge records landing)"
+    commit: "6abfe1a5 (generator step 4; env classification 5c260f1b; B-pass fixes 18aeea82; merged to main f7d55205, PR #291)"
     verification: "gate flat: under-bottom 9,956 OFF -> 9,830 ON, no major newly at 0; mixed keeps every -1 (1,612 groups)"
   - id: S4-D83
     title: "d83: plan_generator.dart comments named the retired keys"
     terminal_state: closed_in_commit
-    commit: "generator-step4 (uncommitted at ledger time; SHA stamped by the post-merge records landing)"
+    commit: "6abfe1a5 (generator step 4; env classification 5c260f1b; B-pass fixes 18aeea82; merged to main f7d55205, PR #291)"
     verification: "git diff of plan_generator.dart: comment lines only; golden tests unchanged on the build"
   - id: S4-GATE
     title: "No gate measured titration / plateau over a history (the plan audit has none)"
     terminal_state: closed_in_commit
-    commit: "generator-step4 (uncommitted at ledger time; SHA stamped by the post-merge records landing)"
+    commit: "6abfe1a5 (generator step 4; env classification 5c260f1b; B-pass fixes 18aeea82; merged to main f7d55205, PR #291)"
     verification: "test/plan_generator/titration_plateau_gate_test.dart on plan_audit/history_sim_lib.dart (15 min 41 s locally, 40 min timeout); history_sim_dump_test.dart (t404) on the same lib"
   - id: S4-DOCS
     title: "Every record still described both flags as DEFAULT OFF / ship-dark"
     terminal_state: closed_in_commit
-    commit: "generator-step4 (uncommitted at ledger time; SHA stamped by the post-merge records landing)"
+    commit: "6abfe1a5 (generator step 4; env classification 5c260f1b; B-pass fixes 18aeea82; merged to main f7d55205, PR #291)"
     verification: "plan engine CLAUDE.md, plan-engine-detail.md, sot_registry (3 concepts), naming_conventions (2 keys + titration row), ship_dark_pending_review.yaml, code comments; OI-53 archived to closed_issues.md (append only)"
   - id: S4-STAMP-3D
     title: "Unit 3D-b post-merge stamps (closure HW-* rows, ship_dark flip_commit)"
     terminal_state: closed_in_commit
-    commit: "generator-step4 (uncommitted at ledger time; SHA stamped by the post-merge records landing)"
+    commit: "6abfe1a5 (generator step 4; env classification 5c260f1b; B-pass fixes 18aeea82; merged to main f7d55205, PR #291)"
     verification: "docs/audit/generator-step3d.closure.yaml rows name 7554fc8f / 7ed5da70 / 85bdcbbe; ship_dark hold rows flip_commit 7554fc8f"
   - id: S4-PROGRESS-COST
     title: "Cost: with T1 the progress scenario's +1s no longer lift a group over its band bottom (8,942 both worlds)"
@@ -72,5 +71,5 @@ findings:
   - id: S4-BPASS
     title: "B-pass (2 seats, 11 findings, 0 P0/P1): the lead guard's input set, four unpinned boundaries, gate strength, docs"
     terminal_state: closed_in_commit
-    commit: "generator-step4 B-pass fix commit (SHA stamped by the post-merge records landing)"
+    commit: "18aeea82 (generator step 4 B-pass fixes; merged to main f7d55205, PR #291)"
     verification: "docs/reviews/generator-step4-bpass.md; five B-pass mutants each red (diagnose 7c4e2a B-pass section); gate re-run on the fixed tree"
