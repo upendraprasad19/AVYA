@@ -12,6 +12,8 @@ import 'package:icanbefitter/core/constants/diet_supplement_doses.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 
+import 'diet_plan_totals.dart';
+
 /// One food row of an exported meal.
 typedef DietPlanPdfItem = ({
   String name,
@@ -70,6 +72,22 @@ List<String> dietPlanPdfHeaderLines({
 String? dietPlanPdfStrategyLabel(DietStrategy planStrategy) =>
     planStrategy == DietStrategy.balanced ? null : planStrategy.label;
 
+/// The line under the meals (diet chart v3, docs/plan §4.1): what the plan
+/// provides, with the SAME targets the screen's totals row compares with
+/// ([caption] names their strategy when it is not the header's).
+String dietPlanPdfTotalLine({
+  required DietPlanTotals totals,
+  required int calorieTarget,
+  required int proteinTarget,
+  required int carbTarget,
+  required int fatTarget,
+  String? caption,
+}) =>
+    'Plan total: ${totals.calories} kcal  |  Protein: ${totals.protein}g  |  '
+    'Carbs: ${totals.carbs}g  |  Fat: ${totals.fat}g   '
+    '(target${caption == null ? '' : ' $caption'}: $calorieTarget kcal  |  '
+    '${proteinTarget}g  |  ${carbTarget}g  |  ${fatTarget}g)';
+
 Future<Uint8List> buildDietPlanPdf({
   required List<DietPlanPdfMeal> meals,
   required String foodTypeLabel,
@@ -88,6 +106,8 @@ Future<Uint8List> buildDietPlanPdf({
   // Unit 4a: the supplement card rows; null (Supplements off, or the flag
   // off) adds nothing, so the document is the pre-Unit-4 one.
   List<SupplementRow>? supplements,
+  // Diet chart v3: the plan-total line under the meals; null adds nothing.
+  String? planTotalLine,
 }) {
   final dateStr = '${now.day} ${_months[now.month - 1]} ${now.year}';
 
@@ -163,6 +183,10 @@ Future<Uint8List> buildDietPlanPdf({
           ],
         );
         }),
+        if (planTotalLine != null) ...[
+          pw.SizedBox(height: 6),
+          pw.Text(planTotalLine, style: cellBoldStyle),
+        ],
         if (supplements != null)
           ..._supplementCardWidgets(
               supplements, mealTitleStyle, cellStyle, cellBoldStyle),

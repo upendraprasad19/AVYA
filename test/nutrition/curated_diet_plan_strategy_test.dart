@@ -161,6 +161,14 @@ void main() {
           '96f7e27cb0486b18896a1758f0072af7bf99149edf05eb8c907ca59b32630810');
     });
 
+    // Diet chart v3 (2026-11-17): the swap now also offers the SWAP-ONLY
+    // entries. G2 keeps proving byte-identity with main on the catalog WITHOUT
+    // them; the test after it pins that the new entries do reach a swap.
+    final mainCatalog = [
+      for (final e in kDietPlanCatalog)
+        if (!e.swapOnly) e,
+    ];
+
     test('G2 Balanced swaps (plan items + legacy plans holding the new ids) '
         'hash to the main golden', () {
       final gen = CuratedDietPlanGenerator.forTest(repo);
@@ -189,7 +197,8 @@ void main() {
                       for (var j = 0; j < m.items.length; j++)
                         if (j != k) m.items[j].name,
                     ],
-                    repo: repo);
+                    repo: repo,
+                catalog: mainCatalog);
                 out.writeln('${it.foodId}/$role:'
                     '${alts.map((x) => '${x.foodId}/${x.servingG}/${x.role}').join(',')}');
               }
@@ -226,7 +235,8 @@ void main() {
                 dietPreference: pref,
                 planFoodIds: ids,
                 slotOtherNames: [for (final i in m.items) i.name],
-                repo: repo);
+                repo: repo,
+                catalog: mainCatalog);
             out.writeln('L $id/${m.slotKey}/$pref:'
                 '${alts.map((x) => '${x.foodId}/${x.servingG}/${x.role}').join(',')}');
           }
@@ -241,7 +251,8 @@ void main() {
                 dietPreference: 'non-veg',
                 planFoodIds: ids,
                 slotOtherNames: [for (final i in m.items.skip(1)) i.name],
-                repo: repo);
+                repo: repo,
+                catalog: mainCatalog);
             out.writeln('C $id/${m.slotKey}/${it.foodId}:'
                 '${alts.map((x) => '${x.foodId}/${x.servingG}/${x.role}').join(',')}');
           }

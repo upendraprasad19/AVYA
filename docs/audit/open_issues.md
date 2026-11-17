@@ -7037,3 +7037,16 @@ Diet plan Unit 4a hides Supplements from anyone under 18 (`kSupplementsMinAgeYea
 **What it is.** Unit 3C (diagnose `f3c9a6`, plan `docs/plans/2026-11-16-generator-step3c-cardio-finisher.md`, founder d56, d61, d74-d79) ships the shown, injury-safe, timed cardio finisher behind `disable_cardio_finisher_shown` (`PlanEngineFlags.cardioFinisherShownEnabled`, default ON). Set, the engine builds today's finisher (no round rest, injuries ignored, nothing reserved) and no screen shows one.
 
 **Done when.** After the device check: the switch, its OFF branches (`CardioFinisher.plan`'s `!enabled` path, `FinisherShowContext.enabled`), `test/fixtures/generator_golden_hashes_finisher_off.json`, `finisher_kill_switch_golden_test.dart` and the switch lines the gates set for their OFF worlds are removed in one batch (CLAUDE.md §4.6 step 4); `CardioFinisher.debugReserve` stays (a test seam). Gates that measure another unit and set the switch (`goal_training_gate_test`, `weekly_minimum_gate_test`, `oi489_timed_hold_real_engine_test` Ruling 5c, `repeat_minutes_gate_lib.dart`, and `day_floor_gate_lib.dart` for its main-equal OFF digest and pins) re-record their digests in the finisher world in that batch.
+
+## OI-517 — Diet chart: Portions / Grams display toggle (4th control) and a per-food weight and unit audit
+
+- **Status**: OPEN
+- **Blocked on**: none
+- **Verified**: never
+- **Identified**: 2026-11-17 · filed via mint_oi.sh from branch `diet-chart-v3`
+
+**What it is.** Founder idea 2026-11-17 (Diet chart v3 brainstorm). The Diet chart shows portions only ("1 cup", "2 idli", "1 roti"); the founder wants a user choice between a **Portions** view and a **Grams** view (raw weight), as a 4th control in the settings row under the title (food type, strategy, supplements, + this one). Counted foods stay counted ("2 eggs"), and macros are always taken from the food row.
+
+**Measured at filing (assets/data/food_database.json, 1444 rows).** Every row already has `standard_serving_g` (0 missing) and per-100 g macros, so a gram figure for a plan item is `servingG` x portion with no new data. What is NOT settled: 462 rows have a countable serving ("1 samosa"), 773 a volume or vague one ("1 cup", "1 serving"), 209 a gram/ml one; the catalog (170 rows) splits 59 countable / 102 volume / 9 gram. 126 row names say "cooked" and 48 "raw", so "raw weight" is ambiguous (uncooked vs just grams): the founder's wording needs a ruling, rice 100 g cooked is not 100 g dry.
+
+**Done when.** (1) The founder rules cooked vs raw, and which foods are counted (egg, roti, idli, samosa) vs weighed (chicken, paneer, rice). (2) Each catalog row (and every row the Diet chart "Search any food" picker can return) carries an explicit weight basis and a unit kind, audited row by row, not inferred from the description text. (3) The Grams / Portions toggle (stored per user, Hive profile key) switches every plan row, the swap sheet, the portion picker and the PDF, with a test that the macros are identical in both views. (4) The portion picker built in Diet chart v3 already takes grams as input, so this issue only adds the display and the audit. Related: Diet chart v3 plan `docs/plans/diet-chart-v3.md`.

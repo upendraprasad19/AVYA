@@ -1120,7 +1120,7 @@
       "lunch",
       "dinner"
     ],
-    "is_everyday": false
+    "is_everyday": true
   },
   {
     "id": "F0044",
@@ -6993,7 +6993,7 @@
       "lunch",
       "dinner"
     ],
-    "is_everyday": false
+    "is_everyday": true
   },
   {
     "id": "F0270",
@@ -7669,7 +7669,7 @@
       "lunch",
       "dinner"
     ],
-    "is_everyday": false
+    "is_everyday": true
   },
   {
     "id": "F0296",
@@ -12218,7 +12218,7 @@
     "meal_fit": [
       "snack"
     ],
-    "is_everyday": false
+    "is_everyday": true
   },
   {
     "id": "F0472",
@@ -12368,7 +12368,7 @@
     "meal_fit": [
       "snack"
     ],
-    "is_everyday": false
+    "is_everyday": true
   },
   {
     "id": "F0478",
@@ -26115,7 +26115,7 @@
       "lunch",
       "dinner"
     ],
-    "is_everyday": false
+    "is_everyday": true
   },
   {
     "id": "F1016",
@@ -26219,7 +26219,7 @@
       "breakfast",
       "snack"
     ],
-    "is_everyday": false
+    "is_everyday": true
   },
   {
     "id": "F1020",
@@ -26453,7 +26453,7 @@
       "lunch",
       "dinner"
     ],
-    "is_everyday": false
+    "is_everyday": true
   },
   {
     "id": "F1029",
@@ -27311,7 +27311,7 @@
       "lunch",
       "dinner"
     ],
-    "is_everyday": false
+    "is_everyday": true
   },
   {
     "id": "F1062",
@@ -36818,7 +36818,7 @@
       "dinner"
     ],
     "source": "icanbefitter_seed_v3",
-    "is_everyday": false
+    "is_everyday": true
   },
   {
     "id": "F1434",

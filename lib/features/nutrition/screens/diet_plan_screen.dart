@@ -10,6 +10,9 @@ import 'package:icanbefitter/core/constants/diet_supplement_doses.dart';
 import 'package:icanbefitter/core/constants/food_types.dart';
 import 'package:icanbefitter/core/services/error_telemetry.dart';
 import 'package:icanbefitter/core/services/sync_service.dart';
+import 'package:icanbefitter/core/utils/diet_supplements_rule.dart';
+import 'package:icanbefitter/core/utils/effective_macro_targets.dart';
+import 'package:icanbefitter/shared/widgets/diet_strategy_notes.dart';
 import 'package:icanbefitter/core/theme/colors.dart';
 import 'package:icanbefitter/core/theme/spacing.dart';
 import 'package:icanbefitter/core/theme/typography.dart';
@@ -21,6 +24,10 @@ import '../providers/diet_plan_provider.dart';
 import '../providers/diet_supplements_active_provider.dart';
 import '../services/curated_diet_plan_generator.dart';
 import '../services/diet_plan_flags.dart';
+import '../services/diet_plan_food_search.dart';
+import '../services/diet_plan_strategy_fit.dart';
+import '../services/diet_plan_totals.dart';
+import '../services/diet_strategy_actions.dart';
 import '../services/diet_plan_generator.dart';
 import '../services/diet_plan_pdf.dart';
 import '../services/diet_plan_shake.dart';
@@ -30,11 +37,14 @@ import '../services/diet_strategy_flags.dart';
 import '../services/diet_supplements_flags.dart';
 import '../services/diet_plan_strategy_state.dart';
 import '../widgets/diet_plan_macro_cards.dart';
+import '../widgets/diet_plan_food_search_sheet.dart';
 import '../widgets/diet_plan_swap_sheet.dart';
+import '../widgets/diet_plan_totals_row.dart';
 import '../widgets/diet_plan_settings_row.dart';
 import '../widgets/diet_supplements_section.dart';
 
 part 'diet_plan_screen_models.dart';
+part 'diet_plan_screen_swap.dart';
 
 // Diet plan Unit 2a: the "your saved plan was for X" notice shows once per
 // (saved plan id, food type) per app session.
@@ -78,6 +88,10 @@ class _DietPlanScreenState extends ConsumerState<DietPlanScreen> {
   int _planEpoch = 0;
   // Unit 4a: whether the shown plan was built with Supplements active.
   bool _planSupplements = false;
+  // Diet chart v3: the strategy a swap dropped the plan from (offers "Back
+  // to"), and a guard so one pick, its PRO gate and its dialog run at a time.
+  DietStrategy? _droppedFrom;
+  bool _pickBusy = false;
 
   @override
   void initState() {
@@ -312,6 +326,7 @@ class _DietPlanScreenState extends ConsumerState<DietPlanScreen> {
     _planSupplements = withSupplements;
     _requestedStrategy = request.strategy;
     _planStrategy = built.builtFor;
+    _droppedFrom = null;
     _planEpoch++;
     if (mounted) setState(() => _saved = false);
   }
@@ -338,65 +353,6 @@ class _DietPlanScreenState extends ConsumerState<DietPlanScreen> {
         targetCalories: svc.targetCalories,
         targetProtein: svc.targetProtein,
       );
-
-  void _swapItem(int mealIndex, int itemIndex) {
-    final meal = _mealPlans[mealIndex];
-    final item = meal.items[itemIndex];
-    if (isSupplementShake(item.foodId)) return;
-    // Diet plan Unit 1: catalog-only alternatives (diet_plan_swap.dart). The
-    // same diet-preference rule as generation applies, UPF rows are never
-    // offered, and nothing already in the plan or over its family cap is.
-    final alternatives = swapAlternatives(
-      foodId: item.foodId,
-      category: item.category,
-      calories: item.calories,
-      role: item.role,
-      slotKey: meal.slotKey ?? kDietMealNameToSlotKey[meal.name] ?? '',
-      dietPreference: _foodType.storageKey,
-      strategy: _planStrategy,
-      planFoodIds: [
-        for (final m in _mealPlans)
-          for (final i in m.items) i.foodId,
-      ],
-      slotOtherNames: [
-        for (var j = 0; j < meal.items.length; j++)
-          if (j != itemIndex) meal.items[j].name,
-      ],
-      repo: FoodRepository.instance,
-    );
-
-    if (alternatives.isEmpty) {
-      showNoDietPlanSwapSnack(context);
-      return;
-    }
-
-    final epoch = _planEpoch;
-    showDietPlanSwapSheet(
-      context,
-      itemName: item.name,
-      alternatives: alternatives,
-      onPick: (alt) {
-        // Unit 3b §3.6: a sheet opened before a regeneration changes nothing.
-        if (epoch != _planEpoch || !mounted) return;
-        setState(() {
-          _mealPlans[mealIndex].items[itemIndex] = _PlanFoodItem(
-            foodId: alt.foodId,
-            name: alt.name,
-            servingDesc: alt.servingDesc,
-            servingG: alt.servingG,
-            calories: alt.calories,
-            protein: alt.protein,
-            carbs: alt.carbs,
-            fat: alt.fat,
-            // the NEW row's category; the role is inherited
-            // (alt.role is the resolved role of the replaced item)
-            category: alt.category,
-            role: alt.role,
-          );
-        });
-      },
-    );
-  }
 
   void _savePlan() {
     final now = DateTime.now();
@@ -499,6 +455,7 @@ class _DietPlanScreenState extends ConsumerState<DietPlanScreen> {
         ? dietStrategyOf(planData['diet_strategy'])
         : DietStrategy.balanced;
     _requestedStrategy = _currentPlanStrategy();
+    _droppedFrom = null;
     _planSupplements =
         DietSupplementsFlags.enabled && planData['diet_supplements'] == true;
     _planEpoch++;
@@ -555,6 +512,7 @@ class _DietPlanScreenState extends ConsumerState<DietPlanScreen> {
       fiberTarget: fiberTarget,
       now: DateTime.now(),
       supplements: _planSupplements ? supplementCardFor(_foodType) : null,
+      planTotalLine: _planTotalLine(targets),
     );
     await Share.shareXFiles(
       [XFile.fromData(bytes, name: 'icanbefitter_diet_plan.pdf', mimeType: 'application/pdf')],
@@ -670,6 +628,8 @@ class _DietPlanScreenState extends ConsumerState<DietPlanScreen> {
                       child: _buildMealCard(entry.key, entry.value),
                     );
                   }),
+                  _buildTotalsRow(targets),
+                  const SizedBox(height: AppSpacing.gridGap),
                   // The daily supplement card sits under the meals, collapsed
                   // to one line (the switch stays with the other settings).
                   if (DietSupplementsFlags.enabled) const DietSupplementCardSection(),

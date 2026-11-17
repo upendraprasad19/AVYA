@@ -95,6 +95,10 @@ const seamAllowlist = <String, SeamEntry>{
   'lib/features/nutrition/services/diet_plan_generator.dart': SeamEntry(2,
       'NOT an exercise seam - nutrition. Listed rather than excluded by a '
       'narrower regex, because a narrower regex is a blind spot nobody reviews.'),
+  'lib/features/nutrition/screens/diet_plan_screen_swap.dart': SeamEntry(1,
+      'NOT an exercise seam - nutrition. FoodRepository.getAll() feeds the diet '
+      'plan "Search any food" sheet (diet chart v3); listed, like '
+      'diet_plan_generator.dart, rather than hidden by a narrower regex.'),
   'lib/shared/repositories/plan_engine/warmup_cooldown.dart': SeamEntry(2,
       'Seam 11. Prescribes into EVERY day via plan_generator and '
       'template_service. equipmentNeeded must be POPULATED on these '
