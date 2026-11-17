@@ -19,6 +19,29 @@ class FoodRepository {
         .toList();
   }
 
+  /// The user's OWN foods (`custom_food_*` keys of the customBox), for the Diet
+  /// chart's swap search (diet chart v3).
+  ///
+  /// Selected by the key PREFIX alone: a row restored from the cloud
+  /// (`sync_community.dart`) carries no `type` and no `is_custom`, and
+  /// requiring either hid every restored food (APK Test #15.4, the same bug in
+  /// `exercise_repository.dart`). Custom exercises use `custom_exercise_`. The
+  /// key's suffix is injected as `id` when a row has none.
+  List<Map<String, dynamic>> getCustomFoods() {
+    final box = _hive.customBox;
+    final out = <Map<String, dynamic>>[];
+    for (final key in box.keys) {
+      if (key is! String || !key.startsWith('custom_food_')) continue;
+      final raw = box.get(key);
+      if (raw is! Map) continue;
+      final row = Map<String, dynamic>.from(raw);
+      row['id'] ??= key.substring('custom_food_'.length);
+      if ((row['name'] as String?)?.trim().isNotEmpty != true) continue;
+      out.add(row);
+    }
+    return out;
+  }
+
   /// Returns a single food item by its [id], or null.
   ///
   /// gate16-exempt: seed-data read. The food JSON already carries its

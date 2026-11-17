@@ -8,6 +8,8 @@ status: scaffold
 
 **1431 Indian-first foods** bundled in `assets/data/food_database.json`. Same rows are mirrored to Postgres `food_database` table (migration 030 seeded 93; migration 041 expanded to 1431) so server-side tools like AI coach `suggestMeal` can query them.
 
+**Swap-only entries (2026-11-17, diet chart v3, library v7):** 10 rows are catalog entries with `swapOnly: true` (sattu, hemp seeds, peanut, tofu, soy yogurt, garden salad, carrot, cherry tomato, tomato, green beans): the Diet Plan swap sheet offers them, the generator never does, so generated plans are unchanged. Their `is_everyday` flipped to true (the food count is 1444 rows; the 1431 below is the V2 figure).
+
 **V2 expansion (2026-04-26, APK Test #3 batch):** Database expanded from 93 → 1431 items via `assets/data/food_database.json`. Sources: 93 original seed (preserved as F0001-F0093) + 699 manual Indian staples + 228 Western staples + 225 OpenFoodFacts India + 186 fitness supplements. New schema fields: `is_veg`, `is_vegan` (booleans). Build script: `.claude/build_food_db_v2.js`. Re-seeding triggered on app launch via `SeedService._foodLibraryVersion = 2`.
 
 Categories cover staples, street food, restaurant dishes, dairy, pulses, protein, fruits/veg, beverages, sweets, supplements.

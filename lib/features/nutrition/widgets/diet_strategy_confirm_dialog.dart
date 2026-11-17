@@ -23,11 +23,12 @@ Future<bool> showDietStrategyConfirmDialog(
   BuildContext context, {
   required DietStrategy next,
   required DietStrategyChangePreview? preview,
+  String? reason,
 }) async {
   final result = await showDialog<bool>(
     context: context,
-    builder: (ctx) =>
-        DietStrategyConfirmDialog(next: next, preview: preview),
+    builder: (ctx) => DietStrategyConfirmDialog(
+        next: next, preview: preview, reason: reason),
   );
   return result == true;
 }
@@ -37,10 +38,15 @@ class DietStrategyConfirmDialog extends StatelessWidget {
     super.key,
     required this.next,
     required this.preview,
+    this.reason,
   });
 
   final DietStrategy next;
   final DietStrategyChangePreview? preview;
+
+  /// Diet chart v3: why the app asks (a swap broke the plan's strategy),
+  /// shown first. Null for a plain strategy change.
+  final String? reason;
 
   @override
   Widget build(BuildContext context) {
@@ -78,6 +84,12 @@ class DietStrategyConfirmDialog extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          if (reason != null) ...[
+            Text(reason!,
+                key: const ValueKey('diet_strategy_confirm_reason'),
+                style: body),
+            const SizedBox(height: 12),
+          ],
           if (showRows) ...[
             Text('Your daily targets change:', style: body),
             const SizedBox(height: 8),

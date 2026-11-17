@@ -101,14 +101,28 @@ void _snack(BuildContext context, String text) {
 /// The Diet Plan screen's chip tap. [current] is the EFFECTIVE strategy
 /// (the selected chip): a tap on it does nothing, so a lapsed user's paused
 /// choice is never erased by tapping the Balanced chip shown as selected.
-/// Returns once the change is written, refused or cancelled.
-Future<void> handleDietStrategyTap(
+/// Returns true once the change is WRITTEN; false when it was refused,
+/// cancelled, stale or failed.
+///
+/// Diet chart v3 (docs/plans/diet-chart-v3.md §4.2), the swap that breaks the
+/// plan's strategy calls this too: [reason] is a line shown first in the
+/// dialog, [alwaysAsk] asks even when the shown targets would not move,
+/// [isStale] is checked after the PRO gate, after the dialog and immediately
+/// before the write (a plan regenerated meanwhile writes NOTHING), and
+/// [silent] suppresses the SUCCESS snackbar only (the caller says one thing);
+/// the failure snackbar stays. Left out, the behaviour is the chip tap's.
+Future<bool> handleDietStrategyTap(
   BuildContext context,
   WidgetRef ref,
   DietStrategy next, {
   required DietStrategy current,
+  String? reason,
+  bool alwaysAsk = false,
+  bool Function()? isStale,
+  bool silent = false,
 }) async {
-  if (next == current) return;
+  if (next == current) return false;
+  bool stale() => isStale != null && isStale();
   if (next != DietStrategy.balanced) {
     var allowed = false;
     await SubscriptionService.instance.gateAndVerify(
@@ -123,7 +137,7 @@ Future<void> handleDietStrategyTap(
         }
       },
     );
-    if (!allowed || !context.mounted) return;
+    if (!allowed || !context.mounted || stale()) return false;
   }
 
   final profile = UserRepository.instance.getProfile();
@@ -139,13 +153,16 @@ Future<void> handleDietStrategyTap(
 
   // Unit 3b §3.8: a change to Keto always asks (the medical note), even
   // when the targets would not move or are unknown.
-  if (next == DietStrategy.keto || (preview != null && !preview.sameShown)) {
+  if (alwaysAsk ||
+      next == DietStrategy.keto ||
+      (preview != null && !preview.sameShown)) {
     final confirmed = await showDietStrategyConfirmDialog(
       context,
       next: next,
       preview: preview,
+      reason: reason,
     );
-    if (!confirmed || !context.mounted) return;
+    if (!confirmed || !context.mounted || stale()) return false;
   }
 
   // A throwing write (a failed Hive put) says so like a dropped one
@@ -158,12 +175,14 @@ Future<void> handleDietStrategyTap(
         reason: 'diet_strategy_change_failed'));
     applied = false;
   }
-  if (!context.mounted) return;
+  // A written profile is reported as written even when the screen is gone.
+  if (!context.mounted) return applied;
   if (!applied) {
     _snack(context, kDietStrategyChangeFailedMessage);
-    return;
+    return false;
   }
-  _snack(context, dietStrategyResultMessage(next, preview));
+  if (!silent) _snack(context, dietStrategyResultMessage(next, preview));
+  return true;
 }
 
 /// The snackbar when a change could not be written.
