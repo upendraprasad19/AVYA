@@ -1446,7 +1446,7 @@ concepts:
           Wrappers over MigratedKey.write/read for the
           'saved_diet_plan' key (userBox per Test #11.1 migration).
       - file: lib/features/nutrition/screens/diet_plan_screen.dart
-        line_range: 401-464
+        line_range: 357-420
         method: _savePlan (UI save handler)
         notes: |
           Builds planData map → calls saveDietPlan → fires
@@ -1492,7 +1492,7 @@ concepts:
           Passes plannedSlots into TodaysMealsCard which renders the
           "FROM YOUR DIET PLAN" hint on every empty slot.
       - file: lib/features/nutrition/screens/diet_plan_screen.dart
-        line_range: 159-188
+        line_range: 173-202
         method: _generatePlan (entry-point check for existing saved plan)
         semantic: pass-through
         fields_read: [via UserRepository.instance.getSavedDietPlan() — Map<String, dynamic>?]
@@ -1509,8 +1509,8 @@ concepts:
           this check (ref.listenManual, idempotent on _requestedStrategy,
           never before the first plan: dietPlanNeedsRegeneration).
       - file: lib/features/nutrition/screens/diet_plan_screen.dart
-        line_range: 342-578
-        method: _loadSavedPlan + _swapItem + _sharePlanAsPdf (Unit 3b-1b; the diet_strategy stamp becomes _planStrategy only with DietStrategyFlags on, Balanced otherwise; the swap gets it as the BUILT strategy and the PDF names it via dietPlanPdfStrategyLabel)
+        line_range: 422-536
+        method: _loadSavedPlan + _sharePlanAsPdf (_swapItem moved to diet_plan_screen_swap.dart, diet chart v3) (Unit 3b-1b; the diet_strategy stamp becomes _planStrategy only with DietStrategyFlags on, Balanced otherwise; the swap gets it as the BUILT strategy and the PDF names it via dietPlanPdfStrategyLabel)
         semantic: transformed
         fields_read: [diet_strategy]
     regression_test: test/contracts/restore_completeness_writes_test.dart
@@ -1595,7 +1595,7 @@ concepts:
           Vegan/veg preferences read the DB's is_vegan / is_veg fields
           AUTHORITATIVELY (diagnose d3c7a9).
       - file: lib/core/services/seed_service.dart
-        method: _foodLibraryVersion (v4 = is_everyday + v4 UPF tags + F1442-F1448; v5 = 14 Low carb / Keto ids is_everyday true; v6 = 5 Low carb plan ids is_everyday true)
+        method: _foodLibraryVersion (v4 = is_everyday + v4 UPF tags + F1442-F1448; v5 = 14 Low carb / Keto ids is_everyday true; v6 = 5 Low carb plan ids is_everyday true; v7 = 10 swap-only ids is_everyday true)
       - file: lib/features/nutrition/screens/diet_plan_screen.dart
         method: _generateFreshPlan (DietPlanFlags routing, dietPlanSeed, fiberTarget from profile['fiber_grams'])
     readers:
@@ -1705,7 +1705,7 @@ concepts:
         semantic: filtered
         fields_read: [diet_preference, saved plan food_type]
       - file: lib/features/nutrition/screens/diet_plan_screen.dart
-        line_range: 159-249
+        line_range: 173-263
         method: _generatePlan + _changeFoodType (selector; mismatch notice once per session)
         semantic: pass-through
         fields_read: [diet_preference, saved plan food_type]
@@ -1853,7 +1853,7 @@ concepts:
         semantic: transformed
         fields_read: [strategy_index, carbs, diet_strategy (via resolveBaseMacroPack for the vegan pair)]
       - file: lib/features/nutrition/screens/diet_plan_screen.dart
-        line_range: 82-114
+        line_range: 96-127
         method: initState listener + _onEffectiveStrategy (Unit 3b-1b; regenerates once per change of planStrategyFor(effective, foodType))
         semantic: pass-through
         fields_read: [strategy_index]
@@ -1944,13 +1944,13 @@ concepts:
         line_range: 1-336
         method: DietSupplementsField + DietSupplementsFootnotes (layout v2: the third column of the settings row and the hints under it) + DietSupplementCardSection (the collapsed card under the meals) + DietSupplementCard (the switch shows the STORED choice; reads the inputs and eligibility providers, not the raw key; the paused hint for a stored on without PRO)
       - file: lib/features/nutrition/screens/diet_plan_screen.dart
-        line_range: 117-157
+        line_range: 129-172
         method: _onSupplementsActive + _healSupplementsState + _supplementsActive (regenerates once per change of the state; the heal catches a change the listener did not deliver)
       - file: lib/features/nutrition/screens/diet_plan_screen.dart
-        line_range: 159-188
+        line_range: 173-202
         method: _generatePlan (the saved-plan load check: savedPlanMatchesSupplements against the active state, kill switch included, so a stamped plan is not loaded with the switch off)
       - file: lib/features/nutrition/screens/diet_plan_screen.dart
-        line_range: 401-464
+        line_range: 357-420
         method: _savePlan (the WRITER of the plan stamp `diet_supplements: true`, only when the plan was built active)
       - file: lib/features/nutrition/services/diet_plan_supplements_state.dart
         line_range: 1-25
@@ -1992,7 +1992,7 @@ concepts:
       - file: scripts/patch_food_database_v4.dart
         method: main (imports kDietPlanCatalog; one-shot, idempotent)
       - file: lib/core/services/seed_service.dart
-        method: _seedFoods (putAll at food_library_version 6; v5 flips the 14 Unit 3b Low carb / Keto ids to true, v6 the 5 Low carb plan ids)
+        method: _seedFoods (putAll at food_library_version 7; v5 flips the 14 Unit 3b Low carb / Keto ids to true, v6 the 5 Low carb plan ids, v7 the 10 swap-only ids)
     readers:
       - file: lib/features/nutrition/services/diet_plan_swap.dart
         method: swapAlternatives
@@ -2681,6 +2681,14 @@ concepts:
         semantic: hive-read
         notes: |
           Custom foods surface via customFoodProvider + the food-search merge.
+      - file: lib/shared/repositories/food_repository.dart
+        line_range: 20-45
+        method: getCustomFoods
+        semantic: hive-read (diet chart v3)
+        notes: |
+          The Diet chart swap search reads customBox by the `custom_food_` key
+          prefix ALONE (a cloud-restored row has no `type` / `is_custom`).
+          Test test/nutrition/diet_plan_food_search_restored_custom_test.dart.
     hive:
       box: customBox
       key_prefix: "custom_food_"
@@ -2689,6 +2697,79 @@ concepts:
       table: user_custom_foods
       columns: [id, user_id, name, calories_per_100g, protein_per_100g, carbs_per_100g, fat_per_100g, fiber_per_100g, serving_size_g, submitted_to_db, approved]
     sync_methods: [syncCustomItemsNow]
+
+  # Diet chart v3 (2026-11-17, docs/plans/diet-chart-v3.md). The plan on screen
+  # provides a day's numbers (totals row) and the day's carbs decide which diet
+  # strategy the plan still fits; a pick that breaks it can write the PROFILE
+  # strategy and keep the edited plan.
+  - concept: diet_plan_totals_and_fit
+    domain: nutrition
+    behavioral_test_path: test/nutrition/diet_plan_chart_v3_screen_test.dart
+    description: |
+      The "your plan vs target" row under the meals (kcal, protein, carbs, fat:
+      plan, target, difference) is the sum of the rounded item values the meal
+      cards show (diet_plan_totals.dart). The day's carbs are judged against
+      each strategy's carb ceiling = macroSplit carbs x 1.5
+      (diet_plan_strategy_fit.dart, kStrategyFitFactor, measured: every
+      generated plan fits its own strategy). A pick that ADDS carbs and leaves
+      the day fitting only a LESS strict strategy than the plan's asks first;
+      accepting writes the profile strategy (handleDietStrategyTap, the one
+      door) and keeps the edited plan WITHOUT regenerating (`_requestedStrategy`
+      is set before the write); cancelling applies nothing. The plan is never
+      saved by a pick. "Back to <strategy>" is offered while the plan fits the
+      strategy it dropped from.
+    writers:
+      - file: lib/features/nutrition/screens/diet_plan_screen_swap.dart
+        line_range: 138-277
+        method: _applyPick (the one pick door; the shift, the stamps, _droppedFrom) + _backUpStrategy
+      - file: lib/features/nutrition/services/diet_strategy_actions.dart
+        line_range: 101-186
+        method: handleDietStrategyTap (reason / alwaysAsk / isStale / silent; returns whether the profile was written)
+    readers:
+      - file: lib/features/nutrition/services/diet_plan_totals.dart
+        line_range: 1-58
+        method: sumDietPlanTotals + dietPlanTotalOffTarget
+      - file: lib/features/nutrition/services/diet_plan_strategy_fit.dart
+        line_range: 1-134
+        method: strictestFit + shiftTargetFor + backUpTargetFor + dietPlanFitLine
+      - file: lib/features/nutrition/screens/diet_plan_screen_swap.dart
+        line_range: 279-353
+        method: _planTargets + _planTotalLine + _buildTotalsRow
+      - file: lib/features/nutrition/widgets/diet_plan_totals_row.dart
+        line_range: 1-253
+        method: DietPlanTotalsRow
+
+  - concept: diet_plan_free_pick
+    domain: nutrition
+    behavioral_test_path: test/nutrition/diet_plan_chart_v3_screen_test.dart
+    description: |
+      "Search any food" in the Diet chart swap sheet. The search
+      (diet_plan_food_search.dart) takes the foodBox rows and the user's own
+      foods (FoodRepository.getCustomFoods: customBox keys with the
+      `custom_food_` prefix ALONE, because a cloud-restored row has no `type`
+      and no `is_custom`; the foodBox copy `is_custom` is skipped, ids
+      de-duplicated newest first), applies passesDiet with an inferred
+      egg / fish family for free rows, hides editorial never-offered rows
+      (meal_fit == []), lists protein powders only for an adult (the shake ids
+      F0823 / F0831 never), tags processed rows. A pick fills the REPLACED
+      item's role (diet_plan_free_item.dart freePickItem); the plan JSON never
+      stores a role.
+    writers:
+      - file: lib/features/nutrition/screens/diet_plan_screen_swap.dart
+        line_range: 40-123
+        method: _swapItem + _planItemOf (opens the sheet, builds the search closure, hands the pick to _applyPick)
+    readers:
+      - file: lib/features/nutrition/services/diet_plan_food_search.dart
+        line_range: 1-212
+        method: searchDietPlanFoods + searchFamilyOf + isProteinPowderRow
+      - file: lib/shared/repositories/food_repository.dart
+        line_range: 20-45
+        method: getCustomFoods
+      - file: lib/features/nutrition/services/diet_plan_free_item.dart
+        line_range: 1-150
+        method: freePickItem + dietPortionStep
+    notes: |
+      Reader of the custom_food_mutations concept (the customBox rows).
 
   # audit-fixwave 2026-07-02 / F7 — notifications_inbox had a real WriteService-
   # shaped write path but no standalone concept (only referenced inside
@@ -12953,7 +13034,7 @@ concepts:
         method: scripts/repair_exercise_library_v12.js (repairText, mergeDuplicates, relabel, dropPlates)
         notes: v12 (Batch A) — 136 un-shifted text rows, cues one per item, 7 duplicates retired (name_aliases + merged_ids on the kept row), E172/E163 labels, E207/E179 plate keys dropped
       - file: lib/core/services/seed_service.dart
-        line_range: 294-339
+        line_range: 299-344
         method: _exerciseLibraryVersion (11→12) + retiredLibraryIds + pruneRetired after putAll in _seedExercises
         notes: putAll never deletes, so the prune is what removes a retired row from an existing install
       - file: supabase/migrations/162_reseed_exercise_library.sql

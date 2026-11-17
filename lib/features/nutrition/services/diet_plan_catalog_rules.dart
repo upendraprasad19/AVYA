@@ -24,3 +24,8 @@ bool catalogEntryOffered(CatalogEntry e, DietStrategy strategy) =>
       DietStrategy.keto => !e.lowCarbPlansOnly,
       DietStrategy.lowCarb => true,
     };
+
+/// Whether the GENERATOR may pick [e] for a [strategy] plan: offered, and not a
+/// swap-only entry (Diet chart v3). The swap sheet keeps [catalogEntryOffered].
+bool generatorOffered(CatalogEntry e, DietStrategy strategy) =>
+    !e.swapOnly && catalogEntryOffered(e, strategy);

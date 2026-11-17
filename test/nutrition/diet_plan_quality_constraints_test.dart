@@ -424,10 +424,13 @@ void main() {
     // the pin now reads THAT body and asserts _swapItem delegates to it
     // (§4.9: moving code breaks source pins; repoint, never loosen). The
     // behavioral proof is test/nutrition/curated_diet_plan_test.dart T9.
-    final screen = File('lib/features/nutrition/screens/diet_plan_screen.dart')
-        .readAsStringSync();
+    // Diet chart v3 (2026-11-17): _swapItem moved to the screen's part file
+    // diet_plan_screen_swap.dart (the screen sits near its 800-line ceiling).
+    final screen =
+        File('lib/features/nutrition/screens/diet_plan_screen_swap.dart')
+            .readAsStringSync();
     final swapItem = screen.substring(screen.indexOf('void _swapItem'),
-        screen.indexOf('void _savePlan'));
+        screen.indexOf('_PlanFoodItem _planItemOf'));
     expect(swapItem.contains('swapAlternatives('), isTrue,
         reason: '_swapItem must take its alternatives from swapAlternatives');
     final src = File('lib/features/nutrition/services/diet_plan_swap.dart')

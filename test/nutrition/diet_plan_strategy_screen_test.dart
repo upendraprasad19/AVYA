@@ -841,9 +841,11 @@ void main() {
         (tester) async {
       await seed(tester);
       final c = await pumpScreen(tester);
+      // The screen's own texts: the open swap sheet (a route above it, with
+      // its own ListView since diet chart v3) is not part of the plan.
       List<String> shown() => [
             for (final t in tester.widgetList<Text>(find.descendant(
-                of: find.byType(ListView), matching: find.byType(Text))))
+                of: find.byType(DietPlanScreen), matching: find.byType(Text))))
               t.data ?? '',
           ];
       await tester.tap(find.byIcon(Icons.swap_horiz).first);

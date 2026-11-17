@@ -220,7 +220,12 @@ class SeedService {
   /// catalog as Low carb PLAN only foods (tempeh F1017, edamame F1018,
   /// avocado F0455, almond butter F0480, chia seeds F0082), so their
   /// `is_everyday` flips false -> true (same reason as v5).
-  static const int _foodLibraryVersion = 6;
+  ///
+  /// v7 (2026-11-17 diet chart v3, docs/plans/diet-chart-v3.md §4.4): 10 rows
+  /// join the catalog as SWAP-ONLY foods (5 vegan-friendly breakfast proteins,
+  /// 5 sides: F1433 F0477 F0471 F1015 F1019 F1061 F0269 F0295 F0043 F1028), so
+  /// their `is_everyday` flips false -> true (same reason as v5).
+  static const int _foodLibraryVersion = 7;
   static const String _foodVersionKey = 'food_library_version';
 
   final HiveService _hive = HiveService.instance;

@@ -135,9 +135,18 @@ class CatalogEntry {
   /// and goldens stay as measured) and not Balanced. Always with
   /// [lowCarbOnly].
   final bool lowCarbPlansOnly;
+
+  /// Diet chart v3 (2026-11-17, docs/plans/diet-chart-v3.md §4.4): true for a
+  /// food the SWAP sheet offers but the GENERATOR never picks, so a generated
+  /// plan stays byte-identical (goldens G1/G2, T5/T10 floors). Never with
+  /// [lowCarbOnly]: a Balanced swap must see it.
+  final bool swapOnly;
   const CatalogEntry(this.foodId, this.roles, this.family, this.portions,
-      {this.lowCarbOnly = false, this.lowCarbPlansOnly = false})
-      : assert(!lowCarbPlansOnly || lowCarbOnly);
+      {this.lowCarbOnly = false,
+      this.lowCarbPlansOnly = false,
+      this.swapOnly = false})
+      : assert(!lowCarbPlansOnly || lowCarbOnly),
+        assert(!swapOnly || !lowCarbOnly);
 }
 
 /// The catalog. Order matters only as the swap sheet's tie-break.
@@ -1076,6 +1085,30 @@ const List<CatalogEntry> kDietPlanCatalog = [
       [0.5, 1.0, 1.5], lowCarbOnly: true, lowCarbPlansOnly: true), // Almond Butter, 2 tbsp
   CatalogEntry('F0082', [DietRole.fat, DietRole.snack], DietFamily.nut,
       [1.0, 2.0, 3.0], lowCarbOnly: true, lowCarbPlansOnly: true), // Chia Seeds, 1 tbsp
+  // Diet chart v3 (2026-11-17, founder: a vegan sees 3-4 swap options, 0 for
+  // most sides): SWAP-ONLY vegan-friendly breakfast proteins and sides. The
+  // generator never picks them (`generatorOffered`), so every generated plan
+  // is unchanged. APPENDED: the index is the swap's tie-break.
+  CatalogEntry('F1433', [DietRole.breakfastProtein], DietFamily.dal,
+      [1.0, 1.5], swapOnly: true), // Sattu (roasted chana flour), 40 g
+  CatalogEntry('F0477', [DietRole.breakfastProtein], DietFamily.nut,
+      [0.5, 1.0], swapOnly: true), // Hemp Seeds, 3 tbsp
+  CatalogEntry('F0471', [DietRole.breakfastProtein], DietFamily.nut,
+      [0.5, 1.0], swapOnly: true), // Peanut (Raw), 1/4 cup
+  CatalogEntry('F1015', [DietRole.breakfastProtein], DietFamily.soy,
+      [1.0, 1.5, 2.0], swapOnly: true), // Tofu (Silken), 1/2 cup
+  CatalogEntry('F1019', [DietRole.breakfastProtein], DietFamily.soy,
+      [0.5, 1.0], swapOnly: true), // Soy Yogurt, 1 cup
+  CatalogEntry('F1061', [DietRole.side], DietFamily.side, [1.0, 1.5, 2.0],
+      swapOnly: true), // Garden Salad (no dressing), 1 cup
+  CatalogEntry('F0269', [DietRole.side], DietFamily.side, [0.5, 1.0],
+      swapOnly: true), // Carrot (raw), 1 cup
+  CatalogEntry('F0295', [DietRole.side], DietFamily.side, [0.5, 1.0, 1.5],
+      swapOnly: true), // Cherry Tomato, 1 cup
+  CatalogEntry('F0043', [DietRole.side], DietFamily.side, [1.0, 2.0],
+      swapOnly: true), // Tomato, 1 medium
+  CatalogEntry('F1028', [DietRole.side], DietFamily.side, [1.0, 1.5],
+      swapOnly: true), // Green Beans (cooked), 1 cup
 ];
 
 final Map<String, DietFamily> _familyById = {

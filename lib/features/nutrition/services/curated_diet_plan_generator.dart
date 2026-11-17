@@ -338,7 +338,7 @@ class CuratedDietPlanGenerator {
       if (row == null || row.isEmpty) continue; // stale box: skip, never throw
       // Unit 3b: Balanced never sees a low-carb-only food, so its pool (and
       // every Balanced plan) is unchanged.
-      if (!catalogEntryOffered(e, strategy)) continue;
+      if (!generatorOffered(e, strategy)) continue;
       if (!DietPlanGenerator.passesDiet(row, dietPreference,
           family: e.family)) {
         continue;
