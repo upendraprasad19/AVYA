@@ -159,7 +159,7 @@ void main() {
                   'min': () {
                     try {
                       return SessionBudget.estimateDayMinutesFromPlanDay(d.toMap(), byId,
-                          rowsByName: byName, finisher: const [] /* the finisher switch is set: no screen shows one */);
+                          rowsByName: byName, finisher: const [] /* the finisher is priced apart (reserved: false): no screen shows one here */);
                     } catch (_) {
                       return null;
                     }

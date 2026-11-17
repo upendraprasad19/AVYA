@@ -15,6 +15,7 @@ findings:
     title: "56 plans (174 cells: Shoulders 108, Hamstrings 60, Glutes 6) hold a major at 0 in a week: all Cut / Maintain 30 min"
     terminal_state: verified_clean
     evidence: "the same audit with disable_cardio_finisher_shown set has 0 such cells: the short finisher's reserved time, d76's accepted cost (3C plan line 153)"
+    notes: "2026-11-17: the 0-cell comparison was measured before generator-killswitch-3a3c deleted the 3C key; it is now reproduced with CardioFinisher.debugReserve = false, which builds the finisher without reserving its time."
   - id: S5-MARKS-2
     title: "Step 2 pass marks: over lead + 1 only on timed holds (160 rows), days under 3 = 0, no week without a quad compound"
     terminal_state: verified_clean

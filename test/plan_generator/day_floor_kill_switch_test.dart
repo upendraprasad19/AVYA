@@ -48,7 +48,7 @@ void main() {
     } else {
       box.put('disable_lead_first', true);
     }
-    // Unit 2C-a: the four combinations are pinned to main 8a2e1c5a (before 2C); the 2C switch is set for all of them.
+    // Unit 2C-a: the four combinations are pinned to the world recorded on 421cd2d2; the 2C switch is set for all of them.
     box.put('disable_balanced_week', true);
     // The 3A / 3C switches are deleted (generator-killswitch-3a3c): the combinations run with goal training, and with
     // the finisher built but its time not reserved (`CardioFinisher.debugReserve`), the world the 3C key gave.

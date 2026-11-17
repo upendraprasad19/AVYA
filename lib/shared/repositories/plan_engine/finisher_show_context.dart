@@ -7,7 +7,7 @@ import 'finisher_safety.dart';
 
 /// Unit 3C (OI-396, d78): the ONE I/O reader of the finisher display rule's input. Every screen and service that
 /// shows or prices a stored finisher (both Train constructors, Home, the locked-week preview, `shortenDay`) calls
-/// [read] ONCE per build and passes the result to `FinisherSafety.shownOfRow`; none reads the profile or the switch
+/// [read] ONCE per build and passes the result to `FinisherSafety.shownOfRow`; none reads the profile
 /// for this itself. Kept apart from the pure `finisher_safety.dart` so the predicate tests need no Hive.
 class FinisherShowContextReader {
   const FinisherShowContextReader._();

@@ -14,10 +14,10 @@
 //    <= the weekly top + the floor's over-top sets of that week's variant; no group over its session cap;
 //  - the floor adds no budgeted row at its day's lead + 2 or more (Unit 2A's rule); the floor-off plans' own lead + 2
 //    day-weeks (a 2A residue: the whole-plan fallback to the `main` world, where R2 does not apply) are pinned;
-//  - the kill-switch proof (F5): the digest of every OFF plan's sha256 equals main 8a2e1c5a's, recorded in
+//  - the kill-switch proof (F5): the digest of every OFF plan's sha256 equals the one recorded on 421cd2d2, in
 //    `test/fixtures/day_floor_off_hashes.json` under `digest|<block>|<tier>`.
 //
-// The digests are recorded on main 8a2e1c5a by `day_floor_kill_switch_test.dart` (RECORD_DAY_FLOOR_HASHES=main), which
+// The digests are recorded on 421cd2d2 by `day_floor_kill_switch_test.dart` (RECORD_DAY_FLOOR_HASHES=main), which
 // imports only `day_floor_personas.dart` and so compiles there; this gate compares its OFF plans against them.
 import 'dart:convert';
 import 'dart:io';
@@ -100,7 +100,7 @@ class DayFloorGate {
       } else {
         box.put('disable_day_floor', true);
       }
-      // Unit 2C-a: the OFF digest is main 8a2e1c5a's (before 2C), so the plans 2C changes are hashed with its switch set.
+      // Unit 2C-a: the OFF digest is the 421cd2d2 recording (before 2C's switch is deleted), so the plans 2C changes are hashed with its switch set.
       if (balancedWeekOff) box.put('disable_balanced_week', true);
       // Unit 3C (f3c9a6): a Cut / Maintain OFF plan is hashed with the finisher built but its time not reserved
       // (`CardioFinisher.debugReserve`; the 3C key did this until generator-killswitch-3a3c deleted it).

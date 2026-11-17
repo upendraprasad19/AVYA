@@ -83,7 +83,7 @@ rewrites the rows. Stated, not built. Outside plan_engine, no reader names the k
 ### 2.3 `plan_generator.dart` (rule 14)
 
 `:335-336` is a comment naming `disable_goal_training`; the call is unchanged. The comment-only edit needs the founder's
-waiver, as in d83 (asked 2026-11-17). Without it, the comment stays and the plan-engine CLAUDE.md says it is stale.
+waiver, as in d83. Granted by the founder on 2026-11-17 ("1. Ok"). Without it, the comment stays and the plan-engine CLAUDE.md says it is stale.
 
 ### 2.4 Docs
 
@@ -364,8 +364,9 @@ Maintain plans with goal training) and one set of counts, which is explained.
 ## 8. Results (commit 2)
 
 - **Two-tree oracle:** every touched test passes with no fixture, tuple or digest edited since commit 1 (c16ce1ea): the
-  24 files of §3 (day-floor kill switch, rep30 / p1 / p4, the three OFF goldens, goal-training gate, weekly-minimum
-  gate, oi489, repeat-minutes, `generator_golden_test` unchanged, and the contract tests that lost switch cases).
+  24 test files run by name: the 23 `_test.dart` files commit 2 modifies (`git diff --name-status c16ce1ea acc64f6a -- test`
+  also shows 2 helpers modified and 5 files deleted) plus `generator_golden_test`, which it leaves unchanged. The modified ones are the day-floor kill switch, rep30 / p1 / p4, the three OFF goldens,
+  the goal-training gate, the weekly-minimum gate, oi489, repeat-minutes, and the contract tests that lost switch cases.
 - **Audit identity (§5.5):** the 2,304-plan audit with no focus, with the Strength focus, and the history simulation
   equal step 5's dumps byte for byte (`plan_dump.jsonl`, `audit.json`, `history_sim.jsonl`).
 - **Mutations, each confirmed applied (`grep -c`) and each red in a named test:**
@@ -381,4 +382,5 @@ Maintain plans with goal training) and one set of counts, which is explained.
     the empty-day guard's room check (2), the floor candidate filters (1 / 3 / 21), pass A2's weekly-top check (2).
 - **A fixture that a fallback can reproduce needs a pin on which path ran** (the reservation case above).
 - **Absence grep (§5.3):** `plan_generator.dart:335-336` (a comment) was reworded under the founder's comment-only
-  waiver of 2026-11-17 (rule 14; the code is unchanged); the deleted names remain only in retired-name docs.
+  waiver of 2026-11-17 (rule 14; the code is unchanged); the deleted names remain only in retired-name docs and in the `_meta` text of two fixtures
+  (`generator_golden_hashes.json` `recorded_on`, byte-pinned; `goal_training_gate_baseline.json`, which names them on purpose).

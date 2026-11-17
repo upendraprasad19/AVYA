@@ -1,6 +1,6 @@
 // Unit 2B (OI-452): the personas of the day-floor gate and of its kill-switch fixture, in one fixed order, and the
 // plan hash. Deliberately free of any Unit 2B symbol (no `floorSeats`, no oracle), so the SAME file compiles against
-// main 8a2e1c5a and records the floor-off digests there (`day_floor_gate_lib.dart`, `day_floor_kill_switch_test.dart`).
+// the base tree 421cd2d2 and records the floor-off digests there (`day_floor_gate_lib.dart`, `day_floor_kill_switch_test.dart`).
 import 'dart:convert';
 import 'dart:io';
 

@@ -1,8 +1,8 @@
 // Unit 2C-a (docs/plans/2026-11-14-generator-step2c-balanced-week.md S5, OI-475): with
 // `configBox['disable_balanced_week'] = true` the generator reproduces today's splits and credit verbatim. Each of the
 // 1,010 golden personas runs the REAL PlanGenerator.instance.generateV4 with the switch set; the sha256 of
-// jsonEncode(phase.toMap()) must equal test/fixtures/generator_golden_hashes_balanced_week_off.json, which is main
-// c6b1ee48's generator_golden_hashes.json (the tree before 2C). The fixture and this test are deleted in the commit that
+// jsonEncode(phase.toMap()) must equal test/fixtures/generator_golden_hashes_balanced_week_off.json, recorded on the
+// base tree 421cd2d2 with `disable_balanced_week` set and the 3A / 3C keys unset (generator-killswitch-3a3c, plan §1). The fixture and this test are deleted in the commit that
 // deletes the switch (tracked on the OI board).
 //
 // Mutation: ignore the flag in `SplitResolver.balancedWeekApplies` and every 60+-minute build_muscle 3 / 4 / 5-day
@@ -59,7 +59,7 @@ void main() {
     if (tempDir.existsSync()) tempDir.deleteSync(recursive: true);
   });
 
-  test('the switch set: every golden persona equals the pre-2C world (main c6b1ee48)', () {
+  test('the switch set: every golden persona equals the OFF world recorded on 421cd2d2', () {
     final fixture = jsonDecode(File(_fixturePath).readAsStringSync()) as Map<String, dynamic>;
     final personas = generatorGoldenPersonas();
     expect(fixture.keys.where((k) => k != '_meta').toSet(), {for (final p in personas) p.key});

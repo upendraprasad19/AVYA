@@ -103,7 +103,7 @@ void main() {
         for (var i = 0; i < w.workoutDays.length; i++) {
           final d = w.workoutDays[i];
           final minutes = SessionBudget.estimateDaySecondsFromPlanDay(d.toMap(), rowsById,
-                  finisher: const [] /* the finisher switch is set: no screen shows one */) /
+                  finisher: const [] /* the finisher is priced apart (reserved: false): no screen shows one here */) /
               60;
           // Unit 2A (2026-11-13): a day the count floor force-seated (pass A2, `countForced` of the variant the week
           // reads: B in weeks 2 and 4) may be up to `maxForcedOverSeconds` over, the accepted overrun (founder d26 /

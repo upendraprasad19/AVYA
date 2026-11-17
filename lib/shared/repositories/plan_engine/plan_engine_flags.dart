@@ -63,7 +63,6 @@ class PlanEngineFlags {
     }
   }
 
-
   /// Unit 2B kill-switch (OI-452, founder d30-d33): the 3-exercise day floor. A day left under min(3, its reach) after
   /// pass A2 seats remaining slots at 2 sets past a group's weekly top (no excess limit, every phase, not bound by the
   /// clock; never past a session cap), named in `AllocationStats.floorSeats`. Default ON. Set

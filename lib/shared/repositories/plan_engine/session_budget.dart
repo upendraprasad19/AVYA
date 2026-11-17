@@ -328,7 +328,7 @@ class SessionBudget {
   ///
   /// Unit 3C (OI-396): [finisher] is the SHOWN finisher's maps (`FinisherSafety.shownOfRow`), priced by
   /// [finisherSecondsOfPlanDay]; the stored row's own `finisher` key is never read here, because a finisher the
-  /// reader rule hides (an injury, the switch) is not part of the day the user sees. Required, so every caller says
+  /// reader rule hides (an injury) is not part of the day the user sees. Required, so every caller says
   /// which finisher it means (`const []` = none).
   static double estimateDaySecondsFromPlanDay(
     Map<dynamic, dynamic> planDay,

@@ -1,8 +1,8 @@
 // Unit 2A (docs/plans/2026-11-12-generator-step2-allocator.md, OI-486): with `configBox['disable_lead_first'] = true`
 // the generator reproduces the pre-2A allocation and week-2 gains verbatim. Each of the 1,010 golden personas runs the
 // REAL PlanGenerator.instance.generateV4 with the switch set; the sha256 of jsonEncode(phase.toMap()) must equal
-// test/fixtures/generator_golden_hashes_lead_first_off.json, which is main 9fc3b043's generator_golden_hashes.json (the
-// tree before 2A). The fixture and this test are deleted in the commit that deletes the switch (tracked on the OI board).
+// test/fixtures/generator_golden_hashes_lead_first_off.json, recorded on the base tree 421cd2d2 with `disable_lead_first`
+// set and the 3A / 3C keys unset (generator-killswitch-3a3c, plan §1: the world the deletion must reproduce). The fixture and this test are deleted in the commit that deletes the switch (tracked on the OI board).
 //
 // Mutation: ignore the flag in `SessionSetAllocator.allocate` (`if (leadFirst ?? true)`) and the personas whose plan
 // 2A changes go red here; the same in `PeriodizationEngine.apply` reddens the personas whose week 2 R5 changes.
@@ -61,7 +61,7 @@ void main() {
     if (tempDir.existsSync()) tempDir.deleteSync(recursive: true);
   });
 
-  test('the switch set: every golden persona equals the pre-2A world (main 9fc3b043)', () {
+  test('the switch set: every golden persona equals the OFF world recorded on 421cd2d2', () {
     final fixture = jsonDecode(File(_fixturePath).readAsStringSync()) as Map<String, dynamic>;
     final personas = generatorGoldenPersonas();
     expect(fixture.keys.where((k) => k != '_meta').toSet(), {for (final p in personas) p.key});
