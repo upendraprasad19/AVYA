@@ -46,8 +46,8 @@ import '../helpers/generator_golden_personas.dart';
 const _newOpeners = 24;
 
 /// Unit 3A (2026-11-15): A:lead 959 -> 922, A:capped 51 -> 88, B unchanged; the Cut / Maintain plans' lower tops make
-/// the uncapped lead world worse than main more often. With `disable_goal_training` set the personas are main's
-/// (goal_training_kill_switch_golden_test), so the 2C-a counts above are theirs.
+/// the uncapped lead world worse than main more often. Before 3A the personas were main's, so the 2C-a counts above are
+/// theirs (the 3A kill switch was deleted by generator-killswitch-3a3c, OI-514).
 const _worldCounts = <String, int>{'A:lead': 922, 'A:capped': 88, 'B:lead': 768, 'B:capped': 2};
 
 void main() {

@@ -1,6 +1,6 @@
 // Unit 2B (OI-452): the personas of the day-floor gate and of its kill-switch fixture, in one fixed order, and the
 // plan hash. Deliberately free of any Unit 2B symbol (no `floorSeats`, no oracle), so the SAME file compiles against
-// main 8a2e1c5a and records the floor-off digests there (`day_floor_gate_lib.dart`, `day_floor_kill_switch_test.dart`).
+// the base tree 421cd2d2 and records the floor-off digests there (`day_floor_gate_lib.dart`, `day_floor_kill_switch_test.dart`).
 import 'dart:convert';
 import 'dart:io';
 
@@ -90,8 +90,8 @@ String dayFloorDigest(List<String> hashes) => sha256Hex(utf8.encode(hashes.join(
 void _write(File file, Map<String, dynamic> m) {
   m['_meta'] = 'Unit 2B kill-switch fixture (plan docs/plans/2026-11-13-generator-step2b-day-floor.md §2 F5): '
       'digest|<block>|<tier> = sha256 over the newline-joined sha256 of every floor-OFF plan of the day-floor gate '
-      '(recorded on main 8a2e1c5a); combo|... = one combination of disable_lead_first x disable_day_floor on a sample '
-      '(floor-off keys recorded on main 8a2e1c5a, floor-on keys on the 2B tree). See day_floor_gate_lib.dart and '
+      '(recorded on 421cd2d2 with goal training and the unreserved finisher, generator-killswitch-3a3c); combo|... = '
+      'one combination of disable_lead_first x disable_day_floor on a sample (both recorded on 421cd2d2). See day_floor_gate_lib.dart and '
       'day_floor_kill_switch_test.dart.';
   final sorted = {for (final k in m.keys.toList()..sort()) k: m[k]};
   file.writeAsStringSync('${const JsonEncoder.withIndent('  ').convert(sorted)}\n');

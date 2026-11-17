@@ -162,7 +162,6 @@ void main() {
   test('Unit 3A (d60, d64): under the Strength focus a swapped-in main lift keeps the +30 s at 60+ minutes only',
       () async {
     final user = HiveService.instance.userBox;
-    final config = HiveService.instance.configBox;
     // A profile turns on the swap's equipment check (OI-89), so the rows name their equipment.
     final ex = HiveService.instance.exerciseBox;
     for (final (id, type, reps) in const [
@@ -183,12 +182,7 @@ void main() {
 
       await user.put('profile', {'equipment_access': 'full_gym', 'physique_focus': 'balanced', 'session_duration_minutes': 90});
       expect((await swap('iso', 'heavy', [planned('iso', 75)]))['rest_seconds'], 150, reason: 'no focus, no +30');
-
-      await user.put('profile', {'equipment_access': 'full_gym', 'physique_focus': 'strength', 'session_duration_minutes': 90});
-      await config.put('disable_goal_training', true);
-      expect((await swap('iso', 'heavy', [planned('iso', 75)]))['rest_seconds'], 150, reason: 'the switch set: today');
     } finally {
-      await config.delete('disable_goal_training');
       await user.delete('profile');
     }
   });

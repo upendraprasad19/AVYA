@@ -5,20 +5,21 @@ library;
 // restores the pre-2B allocation verbatim, in both Unit 2A paths. The uninjured golden (1,010 personas) is unchanged by
 // the floor, so the proofs use INJURED personas, where the floor acts:
 //  - the floor-off plans of the day-floor gate (`day_floor_gate_*_test.dart`, every persona of `pairs_p1`, `pairs_p4`
-//    and `rep30`) equal main 8a2e1c5a: the gate checks their digest against `digest|<block>|<tier>`, recorded on main
-//    by this file (RECORD_DAY_FLOOR_HASHES=main);
+//    and `rep30`): the gate checks their digest against `digest|<block>|<tier>`. They equalled main 8a2e1c5a until the
+//    3A / 3C switches were deleted (generator-killswitch-3a3c); since then they are the floor-off world recorded on
+//    421cd2d2 with goal training and the unreserved finisher (plan §1, the two-tree oracle);
 //  - this test: a sample where the floor acts (basic_gym pairs at 5 days, the 6-day 30-minute repeat) in all four
-//    combinations of `disable_lead_first` and `disable_day_floor`. The two with the floor off are recorded on main 8a2e1c5a (lead-first
-//    ON = main; OFF = main's 2A-off world); the two with it on pin this tree (RECORD_DAY_FLOOR_HASHES=on).
+//    combinations of `disable_lead_first` and `disable_day_floor`, recorded on 421cd2d2 (RECORD_DAY_FLOOR_HASHES=main
+//    for the floor-off keys, =on for the floor-on keys).
 // The fixture and this test are deleted in the commit that deletes the switch (OI-506).
 //
-// This file imports only the 2B-free helpers (`day_floor_personas.dart`), so it compiles against main 8a2e1c5a.
 import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:icanbefitter/core/services/hive_service.dart';
+import 'package:icanbefitter/shared/repositories/plan_engine/cardio_finisher.dart';
 
 import '../helpers/day_floor_personas.dart';
 import '../helpers/injury_floor_sweep_lib.dart';
@@ -47,19 +48,17 @@ void main() {
     } else {
       box.put('disable_lead_first', true);
     }
-    // Unit 2C-a: the four combinations are pinned to main 8a2e1c5a (before 2C); the 2C switch is set for all of them.
+    // Unit 2C-a: the four combinations are pinned to the world recorded on 421cd2d2; the 2C switch is set for all of them.
     box.put('disable_balanced_week', true);
-    // Unit 3A: the fixture predates the goal table, so its switch is set too.
-    box.put('disable_goal_training', true);
-    // Unit 3C (OI-396): the fixture predates the shown / timed finisher.
-    box.put('disable_cardio_finisher_shown', true);
+    // The 3A / 3C switches are deleted (generator-killswitch-3a3c): the combinations run with goal training, and with
+    // the finisher built but its time not reserved (`CardioFinisher.debugReserve`), the world the 3C key gave.
+    CardioFinisher.debugReserve = false;
   }
 
   void clearFlags() {
     setFlags(floor: true, leadFirst: true);
     HiveService.instance.configBox.delete('disable_balanced_week');
-    HiveService.instance.configBox.delete('disable_goal_training');
-    HiveService.instance.configBox.delete('disable_cardio_finisher_shown');
+    CardioFinisher.debugReserve = true;
   }
 
   /// key -> (floor on?, lead-first on?, persona)
@@ -92,33 +91,13 @@ void main() {
     final all = combos();
     final record = Platform.environment['RECORD_DAY_FLOOR_HASHES'];
     if (record == 'main' || record == 'on') {
-      // main: every floor-off combination key and the gate's floor-off digests (run on main 8a2e1c5a, where the floor
-      // does not exist); on: the floor-on combination keys (run on the 2B tree).
+      // main: every floor-off combination key; on: the floor-on combination keys. Both were re-recorded on 421cd2d2
+      // (generator-killswitch-3a3c, plan §1); the gate's floor-off digests were recorded there too, by a temporary
+      // path in `day_floor_gate_lib.dart` (commit c16ce1ea).
       final entries = <String, Object>{
         for (final e in all.entries)
           if (e.value.$1 == (record == 'on')) e.key: comboHash(e.value),
       };
-      if (record == 'main') {
-        for (final block in dayFloorBlocks) {
-          for (final tier in kSweepTiers) {
-            final pinCache = <String, Map<int, ({List<String> a, List<String> b})>>{};
-            final hashes = <String>[];
-            for (final p in dayFloorPersonas(block, tier)) {
-              final pins = p.pinned ? pinCache.putIfAbsent('${p.goal}|${p.level}|${p.days}', () => dayFloorPins(h, p)) : null;
-              hashes.add(dayFloorPlanHash(h.gen(
-                  tier: p.tier,
-                  goal: p.goal,
-                  level: p.level,
-                  days: p.days,
-                  phase: p.phase,
-                  injuries: p.injuries,
-                  pins: pins,
-                  minutes: p.minutes)));
-            }
-            entries['digest|$block|$tier'] = {'runs': hashes.length, 'sha256': dayFloorDigest(hashes)};
-          }
-        }
-      }
       writeDayFloorFixtureEntries(entries);
       // ignore: avoid_print
       print('recorded ${entries.length} entries ($record)');
@@ -141,7 +120,9 @@ void main() {
     // ignore: avoid_print
     print('combination keys the floor changes: $changed of ${all.length ~/ 2}');
     // Measured 2026-11-13: 18 (9 with lead-first on, 9 off; 2 of them 6-day). The first sample (3 pairs, 3 and 6 days)
-    // changed 0, which is why the sample sits where the floor acts.
-    expect(changed, 18);
+    // changed 0, which is why the sample sits where the floor acts. Re-measured on 421cd2d2 with goal training and the
+    // unreserved finisher (generator-killswitch-3a3c): 28 (14 with lead-first on, 14 off; 12 of them 6-day). The
+    // growth is in the 6-day 30-minute repeat (2 -> 12); the cause was not isolated.
+    expect(changed, 28);
   });
 }

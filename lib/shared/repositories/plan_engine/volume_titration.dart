@@ -200,7 +200,7 @@ class VolumeTitration {
     final isDeload = week.weekCharacter == 'deload';
     final dayExercises = [for (final d in week.workoutDays) [...d.exercises]];
     final ledger = BudgetLedger(budget, dayExercises.length);
-    final bottom = SessionBudget.weeklyBand(budget.planGoal, budget.level, goalTraining: budget.goalTraining.enabled).bottom;
+    final bottom = SessionBudget.weeklyBand(budget.planGoal, budget.level).bottom;
 
     // The sets this titration reads and writes: the visible sets, or on the deload
     // week the stashed peak-equivalent `workingSets` (a missing stash counts as 0,

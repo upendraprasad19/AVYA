@@ -332,8 +332,8 @@ class PlanGenerator {
       archetypeByName: {
         for (final e in rowsByName.entries) e.key: SessionBudget.archetypeOfRow(e.value),
       },
-      // Unit 3A (OI-487, founder d61, the rule-14 argument): the goal's reps and bands, the Strength focus, and the
-      // disable_goal_training switch (read here; the Glutes credit above reads the same switch through its default).
+      // Unit 3A (OI-487, founder d61, the rule-14 argument): the goal's reps and bands and the Strength focus. The kill
+      // switch that used to gate this was deleted (generator-killswitch-3a3c, OI-514; comment-only waiver 2026-11-17).
       goalTraining: TrainingHistoryAnalyzer.goalTrainingFromProfile(),
       finisherSecondsByDay: finisherPlan.secondsByDay,
     );

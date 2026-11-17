@@ -28,7 +28,7 @@ class FinisherPlan {
   /// The finisher's items (the same list on every finisher day of every week).
   final List<PlannedExercise> exercises;
 
-  /// Whether its time is taken from those days' budgets (`disable_cardio_finisher_shown` not set).
+  /// Whether its time is taken from those days' budgets (false only under the [CardioFinisher.debugReserve] test seam).
   final bool reserved;
 
   /// The finisher's time ([CardioFinisher.secondsOf]).
@@ -59,8 +59,7 @@ class CardioFinisher {
       items.fold(0, (sum, e) => sum + (e.durationSeconds ?? 0) + e.sets * e.restSeconds);
 
   /// Unit 3C (OI-396, founder 2026-10-22 / d56 / d61 / d74): the finisher for one generation, decided before sizing.
-  /// Empty when the goal has no cardio or the week has under 2 days. With `disable_cardio_finisher_shown` set
-  /// ([shown] false) it is today's finisher, unreserved, and [injuries] are ignored. Otherwise: no injury -> today's
+  /// Empty when the goal has no cardio or the week has under 2 days. No injury -> today's
   /// shape with each circuit's round rest stored; any injury ([injuries] are canonical tokens, `generateV4`'s
   /// `normalizedInjuries`) -> [injuredGymFinisherName] with gym cardio, none without. d76: under 60 resolved
   /// [minutes] the finisher is the short one ([shortFinisherSeconds]): the mini HIIT, or 4 rounds of the bike for an
@@ -73,20 +72,15 @@ class CardioFinisher {
     Set<String>? capability,
     List<String> injuries = const [],
     required int dayCount,
-    bool? shown,
     int? minutes,
   }) {
     if (!FitnessGoals.of(goal).cardio || dayCount < 2) return FinisherPlan.none;
-    final enabled = shown ?? PlanEngineFlags.cardioFinisherShownEnabled;
     final preference = cardioPreference ?? _defaultForGoal(goal);
     final hasGymEquipment = hasGymEquipmentOverride ??
         equipmentList.any(
           (e) => e.toLowerCase().contains('gym') || e.toLowerCase().contains('full'),
         );
     final days = _pickFinisherDays(dayCount);
-    if (!enabled) {
-      return FinisherPlan(days: days, exercises: _buildFinisher(preference, hasGymEquipment, capability: capability));
-    }
     final short = minutes != null && minutes < 60;
     if (injuries.isNotEmpty) {
       if (!hasGymEquipment) return FinisherPlan.none;
@@ -94,11 +88,11 @@ class CardioFinisher {
           days: days, exercises: _cyclingFinisher(true, rounds: short ? 4 : 8), reserved: debugReserve);
     }
     if (short) {
-      return FinisherPlan(days: days, exercises: _miniHiitFinisher(roundRests: true), reserved: debugReserve);
+      return FinisherPlan(days: days, exercises: _miniHiitFinisher(), reserved: debugReserve);
     }
     return FinisherPlan(
       days: days,
-      exercises: _buildFinisher(preference, hasGymEquipment, capability: capability, roundRests: true),
+      exercises: _buildFinisher(preference, hasGymEquipment, capability: capability),
       reserved: debugReserve,
     );
   }
@@ -213,8 +207,6 @@ class CardioFinisher {
     bool hasGymEquipment, {
     // ⑦ OI-89: null = do not enforce (see TrainingHistoryAnalyzer.resolveCapability).
     required Set<String>? capability,
-    // Unit 3C: store a circuit's round rest on its last item (priced by [secondsOf]); false = today's items.
-    bool roundRests = false,
   }) {
     switch (preference) {
       case 'running':
@@ -222,19 +214,19 @@ class CardioFinisher {
       case 'cycling':
         return _cyclingFinisher(hasGymEquipment);
       case 'hiit':
-        return _hiitFinisher(roundRests: roundRests);
+        return _hiitFinisher();
       case 'jump_rope':
         // ⑦ OI-89: degrade like every sibling. Previously this was the only
         // case that ignored the equipment signal entirely.
         if (capability != null &&
             !EquipmentCapability.canPerform(
                 equipmentForFinisher('jump_rope'), capability)) {
-          return _miniHiitFinisher(roundRests: roundRests);
+          return _miniHiitFinisher();
         }
         return _jumpRopeFinisher();
       case 'hate_cardio':
       default:
-        return _miniHiitFinisher(roundRests: roundRests);
+        return _miniHiitFinisher();
     }
   }
 
@@ -269,7 +261,7 @@ class CardioFinisher {
   }
 
   /// Bodyweight Circuit: burpees, mountain climbers, jump squats (3 rounds, ~10 min)
-  static List<PlannedExercise> _hiitFinisher({bool roundRests = false}) {
+  static List<PlannedExercise> _hiitFinisher() {
     return [
       _finisherExercise(
         name: 'Burpees',
@@ -291,7 +283,7 @@ class CardioFinisher {
         reps: '10',
         durationSeconds: 120,
         notes: 'Part 3 of HIIT circuit — 60s rest after each full round',
-        restSeconds: roundRests ? 60 : 0,
+        restSeconds: 60,
       ),
     ];
   }
@@ -311,7 +303,7 @@ class CardioFinisher {
 
   /// Mini HIIT: high knees 30s + burpees 30s + mountain climbers 30s × 2 rounds (~5 min)
   /// Default for "hate_cardio" — shortest finisher.
-  static List<PlannedExercise> _miniHiitFinisher({bool roundRests = false}) {
+  static List<PlannedExercise> _miniHiitFinisher() {
     return [
       _finisherExercise(
         name: 'High Knees',
@@ -333,7 +325,7 @@ class CardioFinisher {
         reps: '30s',
         durationSeconds: 60,
         notes: 'Mini HIIT round 3/3 — 30s rest after each full round',
-        restSeconds: roundRests ? 30 : 0,
+        restSeconds: 30,
       ),
     ];
   }

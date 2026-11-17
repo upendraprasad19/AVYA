@@ -364,10 +364,12 @@ List<String> _names(List<MuscleSlotDay> days) => [for (final d in days) d.name];
 bool _balancedRule(String goal, int days, int? minutes, bool switchOn) =>
     goal == 'build_muscle' && days >= 3 && days <= 5 && minutes != null && minutes >= 60 && switchOn;
 
-/// The credit, restated: a quad-first row credits Glutes except in a balanced week and in the 6-day build_muscle split
-/// while its Legs B quad slot is on.
+/// The credit, restated: a quad-first row credits Glutes except in a balanced week, in the 6-day build_muscle split
+/// while its Legs B quad slot is on, and in 4-day general_fitness (Unit 3A, any minutes, either switch).
 bool _creditRule(String goal, int days, int? minutes, bool quadLegsB, bool switchOn) =>
-    !(_balancedRule(goal, days, minutes, switchOn) || (goal == 'build_muscle' && days == 6 && quadLegsB));
+    !(_balancedRule(goal, days, minutes, switchOn) ||
+        (goal == 'build_muscle' && days == 6 && quadLegsB) ||
+        (goal == 'general_fitness' && days == 4));
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -519,9 +521,7 @@ void main() {
                 final want = _creditRule(goal, days, minutes, quadLegsB, on);
                 if (!want) falses++;
                 expect(
-                  // Unit 3A's 4-day general_fitness credit is held off here (goal_reps_behavioral_test pins it).
-                  SplitResolver.quadPrimaryCreditsGlutes(goal, days, minutes,
-                      quadLegsB: quadLegsB, balancedWeek: on, goalTraining: false),
+                  SplitResolver.quadPrimaryCreditsGlutes(goal, days, minutes, quadLegsB: quadLegsB, balancedWeek: on),
                   want,
                   reason: '$goal ${days}d $minutes min quadLegsB $quadLegsB switch ${on ? 'on' : 'off'}',
                 );
@@ -530,8 +530,9 @@ void main() {
           }
         }
       }
-      // build_muscle 3 / 4 / 5-day at 60 and 90 with the switch on (12) plus 6-day with Legs B (6 minutes x 2 switch).
-      expect(falses, 3 * 2 * 2 + 6 * 2);
+      // build_muscle 3 / 4 / 5-day at 60 and 90 with the switch on (12), 6-day with Legs B (6 minutes x 2 switch), and
+      // 4-day general_fitness (6 minutes x 2 quadLegsB x 2 switch).
+      expect(falses, 3 * 2 * 2 + 6 * 2 + 6 * 2 * 2);
     });
   });
 

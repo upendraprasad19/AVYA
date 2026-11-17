@@ -78,7 +78,7 @@ void main() {
     byId = {for (final r in rows) (r['id'] ?? r['name']).toString(): r};
     HiveService.instance.markInitializedForTests();
     await HiveUserSession.openForUser(testUser);
-    // PLAN_AUDIT_DISABLE: comma-separated config keys set true (a kill switch's OFF world, e.g. disable_goal_training).
+    // PLAN_AUDIT_DISABLE: comma-separated config keys set true (a kill switch's OFF world, e.g. disable_balanced_week).
     for (final key in (Platform.environment['PLAN_AUDIT_DISABLE'] ?? '').split(',')) {
       if (key.trim().isNotEmpty) await Hive.box(HiveService.configBoxName).put(key.trim(), true);
     }
@@ -116,7 +116,7 @@ void main() {
     // The audit's credit is the generator's own (Unit 2C-a, plan round 3 A-2: one rule for both sides of a comparison).
     final quadGlutes = SplitResolver.quadPrimaryCreditsGlutes(planGoal, days, minutes,
         quadLegsB: PlanEngineFlags.quadLegsBEnabled);
-    final band = SessionBudget.weeklyBand(planGoal, effLevel, goalTraining: PlanEngineFlags.goalTrainingEnabled);
+    final band = SessionBudget.weeklyBand(planGoal, effLevel);
     final weeks = <Map<String, dynamic>>[];
     for (final w in plan.weekPlans) {
       final dayList = <Map<String, dynamic>>[];

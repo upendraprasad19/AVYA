@@ -38,7 +38,7 @@ void main() {
   final h = SweepHarness.install();
   final gate = DayFloorGate(h);
   for (final tier in kSweepTiers) {
-    test('pairs_p4 [$tier]: no day under 3, nothing lost vs the floor off, the invariant holds, OFF = main', () {
+    test('pairs_p4 [$tier]: no day under 3, nothing lost vs the floor off, the invariant holds, OFF = the 421cd2d2 recording', () {
       gate.finish('pairs_p4', tier, gate.run('pairs_p4', tier), _expected[tier]!);
     });
   }

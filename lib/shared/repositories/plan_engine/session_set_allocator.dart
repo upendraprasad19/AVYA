@@ -1661,7 +1661,7 @@ class SessionSetAllocator {
       }
     }
 
-    final bottom = SessionBudget.weeklyBand(ctx.planGoal, ctx.level, goalTraining: ctx.goalTraining.enabled).bottom;
+    final bottom = SessionBudget.weeklyBand(ctx.planGoal, ctx.level).bottom;
     grow({for (final g in BudgetMuscleGroups.groups) g: bottom});
     // In a lighter phase the ledger's weekly top IS the band bottom for every group,
     // focus included, so this pass cannot add a set there.

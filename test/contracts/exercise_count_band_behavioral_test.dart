@@ -239,10 +239,11 @@ void main() {
     });
 
     test('(m) the force never passes the WEEKLY top: a day left short by a spent top stays short', () {
-      // general_fitness beginner: Chest top 10, session cap 6. Days 0 and 1 spend the week (6 + 4); day 2 keeps
-      // its lead lift only and its 4 other Chest slots could be forced past the top (session cap 6 allows 2
-      // more seats): they must not be.
-      final f = Fx(balancedWeek: false, goalTraining: GoalTraining.off);
+      // general_fitness beginner (Unit 3A's goal band): Chest top 8, session cap 6. Measured seats: every day's lead
+      // at 2 (the rank-0 reservation keeps 2 for each later lead) and day 0's second lift: rows [2, 1, 1], 8 = the
+      // top. Days 1 and 2 keep their lead only, and their 4 other Chest slots could be forced past the top (session
+      // cap 6 allows 2 more seats each): they must not be.
+      final f = Fx(balancedWeek: false);
       final days = <PopulatedDay>[];
       for (var d = 0; d < 3; d++) {
         for (var i = 0; i < 5; i++) {
@@ -251,17 +252,17 @@ void main() {
         days.add(f.day('strength', [for (var i = 0; i < 5; i++) f.ex('c$d$i')]));
       }
       f.run(days, minutes: 90, goal: 'general_fitness', level: 'beginner', dayFloor: false);
-      expect(statsA().weekly['Chest'], 10);
+      expect(statsA().weekly['Chest'], 8);
       expect(statsA().countForced, isEmpty);
-      expect(statsA().belowCount[2], 'cap_top');
+      expect(statsA().belowCount, {0: 'cap_top', 1: 'cap_top', 2: 'cap_top'});
       // Unit 2B (d30): pass A2 still never passes the top; the 3-exercise day floor does, by founder decision, and
-      // names each such seat. Rows [2, 2, 1] -> [3, 3, 3]: 10 + 4 x 2 = 18. The count label is still A2's.
+      // names each such seat. Rows [2, 1, 1] -> [3, 3, 3]: 8 + 5 x 2 = 18. The count label is still A2's.
       final floored = f.run(days, minutes: 90, goal: 'general_fitness', level: 'beginner');
       expect([for (final d in floored) d.exercisesA.length], [3, 3, 3]);
       expect(statsA().weekly['Chest'], 18);
       expect(statsA().countForced, isEmpty);
       expect([for (final v in statsA().floorSeats.values) for (final x in v) x.overTop], [
-        for (var i = 0; i < 4; i++) ['Chest'],
+        for (var i = 0; i < 5; i++) ['Chest'],
       ]);
       expect(statsA().belowCount[2], 'cap_top');
     });

@@ -1,8 +1,8 @@
 // Unit 1B-R, Ruling 4 (docs/plans/2026-11-12-generator-1br-loaded-wins.md): with `configBox['disable_loaded_wins']
 // = true` the generator reproduces the pre-1B-R ranking verbatim. Each of the 1,010 golden personas runs the REAL
 // PlanGenerator.instance.generateV4 with the switch set; the sha256 of jsonEncode(phase.toMap()) must equal
-// test/fixtures/generator_golden_hashes_loaded_wins_off.json, recorded by generator_golden_test.dart on run r0's tree
-// (main 4e0637ae's picker code with this unit's seed v26 data). The fixture and this test are deleted in the commit
+// test/fixtures/generator_golden_hashes_loaded_wins_off.json, recorded on the base tree 421cd2d2 with
+// `disable_loaded_wins` set and the 3A / 3C keys unset (generator-killswitch-3a3c, plan §1). The fixture and this test are deleted in the commit
 // that deletes the switch (tracked on the OI board).
 //
 // Mutation: ignore the flag (`final loadedWins = true;` in `_pickCoreList`) and the personas whose plan 1B-R changes
@@ -51,24 +51,18 @@ void main() {
     await HiveService.instance.configBox.put('disable_loaded_wins', true);
     // Unit 2C-a: the fixture predates the balanced week, so its switch is set too.
     await HiveService.instance.configBox.put('disable_balanced_week', true);
-    // Unit 3A: the fixture predates the goal table, so its switch is set too.
-    await HiveService.instance.configBox.put('disable_goal_training', true);
-    // Unit 3C (OI-396): the fixture predates the shown / timed finisher.
-    await HiveService.instance.configBox.put('disable_cardio_finisher_shown', true);
   });
 
   tearDownAll(() async {
     await HiveService.instance.configBox.delete('disable_loaded_wins');
     await HiveService.instance.configBox.delete('disable_balanced_week');
-    await HiveService.instance.configBox.delete('disable_goal_training');
-    await HiveService.instance.configBox.delete('disable_cardio_finisher_shown');
     await HiveUserSession.closeAll();
     GuardedBox.testBypassOwnership = false;
     await Hive.close();
     if (tempDir.existsSync()) tempDir.deleteSync(recursive: true);
   });
 
-  test('the switch set: every golden persona equals the pre-1B-R world (run r0)', () {
+  test('the switch set: every golden persona equals the OFF world recorded on 421cd2d2', () {
     final fixture = jsonDecode(File(_fixturePath).readAsStringSync()) as Map<String, dynamic>;
     final personas = generatorGoldenPersonas();
     expect(fixture.keys.where((k) => k != '_meta').toSet(), {for (final p in personas) p.key});

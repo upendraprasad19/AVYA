@@ -13,16 +13,15 @@ class FinisherSafety {
   static bool isInjured(Object? profileInjuries) =>
       InjuryVocab.normalize(InjuryVocab.fromProfile(profileInjuries)).isNotEmpty;
 
-  /// The finisher maps a screen shows for a stored [raw] finisher. Switch off -> none. No injury -> every map entry
+  /// The finisher maps a screen shows for a stored [raw] finisher. No injury -> every map entry
   /// (non-map entries dropped). Injured -> [raw]'s maps only when there is at least one and EVERY item is
   /// [CardioFinisher.injuredGymFinisherName] (by `exercise_name ?? name`, trimmed, case-insensitive), else none: a
   /// plan made before the injury never shows a jumping finisher.
   static List<Map<String, dynamic>> shownFinisherMaps(
     Object? raw, {
-    required bool enabled,
     required bool injured,
   }) {
-    if (!enabled || raw is! List) return const [];
+    if (raw is! List) return const [];
     final maps = [
       for (final e in raw)
         if (e is Map) Map<String, dynamic>.from(e),
@@ -39,7 +38,7 @@ class FinisherSafety {
 
   /// [shownFinisherMaps] of a stored `schedule_*` row (or a plan-blob day map).
   static List<Map<String, dynamic>> shownOfRow(Map<dynamic, dynamic>? row, FinisherShowContext ctx) =>
-      shownFinisherMaps(row?['finisher'], enabled: ctx.enabled, injured: ctx.injured);
+      shownFinisherMaps(row?['finisher'], injured: ctx.injured);
 
   /// A finisher row's detail line (round 2 B-F1): `'<sets> rounds · <reps>'`, e.g. `8 rounds · 30s fast / 30s slow`.
   /// The timed renderers would otherwise strip the digits of the reps text ("30s fast / 30s slow" -> 3030 s).
@@ -55,12 +54,9 @@ class FinisherSafety {
   static String minutesLabel(int seconds) => '${(seconds / 60).round()} MIN';
 }
 
-/// The two inputs of [FinisherSafety.shownFinisherMaps], read together (`FinisherShowContextReader.read()`).
+/// The input of [FinisherSafety.shownFinisherMaps] (`FinisherShowContextReader.read()`).
 class FinisherShowContext {
-  const FinisherShowContext({required this.enabled, required this.injured});
-
-  /// `disable_cardio_finisher_shown` not set.
-  final bool enabled;
+  const FinisherShowContext({required this.injured});
 
   /// [FinisherSafety.isInjured] of the profile.
   final bool injured;

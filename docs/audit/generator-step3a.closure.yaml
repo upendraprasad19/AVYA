@@ -44,6 +44,7 @@ findings:
     terminal_state: closed_in_commit
     commit: *feat
     verification: "goal_training_kill_switch_golden_test (1,010 personas = main); the gate's 48-plan switch-over-focus check; deletion tracked by OI-514"
+    notes: "2026-11-17: the switch, goal_training_kill_switch_golden_test, its fixture and the 48-plan check were deleted with OI-514 (generator-killswitch-3a3c); the gate now compares against the frozen pre-3A baseline test/fixtures/goal_training_gate_baseline.json"
 
   - id: C3A-7
     title: "S8 / d65: the day floor left 8 rep30 day-weeks at 2 exercises under 3A's lower tops (session cap; rank-0 reservation)"

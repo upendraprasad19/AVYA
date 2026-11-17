@@ -214,16 +214,16 @@ void main() {
     });
 
     test('week 2 visits the exercises rank-major across the days, not day by day', () {
-      // general_fitness intermediate: Chest top 12. Baseline 3 + 3 + 4 = 10 leaves
+      // general_fitness intermediate (Unit 3A's goal band): Chest top 11. Baseline 3 + 3 + 3 = 9 leaves
       // room for exactly two sets. Rank-major gives them to the two rank-0 lifts
       // (day 0's c1, day 1's c3); a day-major order would give both to day 0.
-      final f = Fx(goalTraining: GoalTraining.off);
+      final f = Fx();
       for (final n in ['c1', 'c2', 'c3']) {
         f.row(n, ['Chest']);
       }
       final days = [
         f.day('hypertrophy', [f.ex('c1', sets: 3), f.ex('c2', sets: 3)]),
-        f.day('hypertrophy', [f.ex('c3', sets: 4)]),
+        f.day('hypertrophy', [f.ex('c3', sets: 3)]),
       ];
       final weeks = PeriodizationEngine.apply(
         populated: days,
@@ -232,7 +232,7 @@ void main() {
         budget: f.ctx(days, minutes: 90, goal: 'general_fitness'),
       );
       expect(setsIn(weeks, 1, 0), [4, 3]);
-      expect(setsIn(weeks, 1, 1), [5]);
+      expect(setsIn(weeks, 1, 1), [4]);
     });
 
     group('seeded property: the allocator\'s output through apply stays inside the budget', () {

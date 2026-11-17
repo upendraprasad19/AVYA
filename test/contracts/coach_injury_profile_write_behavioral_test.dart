@@ -198,6 +198,6 @@ void main() {
     ];
     final ctx = FinisherShowContextReader.read();
     expect(ctx.injured, isTrue);
-    expect(FinisherSafety.shownFinisherMaps(hiit, enabled: ctx.enabled, injured: ctx.injured), isEmpty);
+    expect(FinisherSafety.shownFinisherMaps(hiit, injured: ctx.injured), isEmpty);
   });
 }
