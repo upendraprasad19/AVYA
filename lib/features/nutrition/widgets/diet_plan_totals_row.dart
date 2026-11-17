@@ -121,47 +121,54 @@ class DietPlanTotalsRow extends StatelessWidget {
             Row(children: [for (final c in cells) cellOf(c)]),
           if (fitLine != null || backLabel != null) ...[
             const SizedBox(height: 2),
-            Row(
-              children: [
-                if (fitLine != null)
-                  Expanded(
-                    child: Text(
-                      fitLine!,
-                      key: const ValueKey('diet_plan_fit_line'),
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: AppTypography.body.copyWith(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w700,
-                        color: fitOk ? AppColors.ok : AppColors.warn,
-                      ),
-                    ),
-                  )
-                else
-                  const Spacer(),
-                if (backLabel != null)
-                  Flexible(
-                    child: TextButton(
-                      key: const ValueKey('diet_plan_back_up'),
-                      onPressed: onBack,
-                      style: TextButton.styleFrom(
-                        minimumSize: const Size(0, 44),
-                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                        padding: const EdgeInsets.symmetric(horizontal: 8),
-                      ),
+            LayoutBuilder(
+              builder: (context, box) => Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  if (fitLine != null)
+                    Expanded(
                       child: Text(
-                        backLabel!,
-                        maxLines: 1,
+                        fitLine!,
+                        key: const ValueKey('diet_plan_fit_line'),
+                        maxLines: 2,
                         overflow: TextOverflow.ellipsis,
                         style: AppTypography.body.copyWith(
                           fontSize: 12,
-                          fontWeight: FontWeight.w800,
-                          color: AppColors.accent,
+                          fontWeight: FontWeight.w700,
+                          color: fitOk ? AppColors.ok : AppColors.warn,
                         ),
                       ),
                     ),
-                  ),
-              ],
+                  if (backLabel != null)
+                    // The button takes its own width, at most 60% of the row
+                    // (its label may wrap to two lines), and the fit line gets
+                    // the rest: a long limit text keeps its numbers (B-pass
+                    // delta seat finding 2).
+                    ConstrainedBox(
+                      constraints: BoxConstraints(maxWidth: box.maxWidth * 0.6),
+                      child: TextButton(
+                        key: const ValueKey('diet_plan_back_up'),
+                        onPressed: onBack,
+                        style: TextButton.styleFrom(
+                          minimumSize: const Size(0, 44),
+                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                          padding: const EdgeInsets.symmetric(horizontal: 8),
+                        ),
+                        child: Text(
+                          backLabel!,
+                          maxLines: 2,
+                          textAlign: TextAlign.center,
+                          overflow: TextOverflow.ellipsis,
+                          style: AppTypography.body.copyWith(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w800,
+                            color: AppColors.accent,
+                          ),
+                        ),
+                      ),
+                    ),
+                ],
+              ),
             ),
           ],
         ],

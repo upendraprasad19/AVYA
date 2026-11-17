@@ -435,6 +435,44 @@ void main() {
       expect(gotFish, fish);
     });
 
+    test('B-pass delta 6: a vegan also needs `is_vegan`; a veg user does not',
+        () {
+      final half = {
+        'id': 'half-1',
+        'name': 'Paneer Tikka Plate',
+        'is_veg': true, // no is_vegan
+        'calories_per_100g': 200,
+        'protein_per_100g': 10,
+        'carbs_per_100g': 5,
+        'fat_per_100g': 14,
+        'standard_serving_desc': '1 plate',
+        'standard_serving_g': 150,
+      };
+      expect(_ids(_search('paneer tikka plate', pref: 'vegan', foods: [half])),
+          isEmpty);
+      expect(_ids(_search('paneer tikka plate', pref: 'veg', foods: [half])),
+          {'half-1'});
+    });
+
+    test('B-pass delta 5: free picks pluralise the extra countable words', () {
+      Map<String, dynamic> r(String desc, num g) => {
+            'id': 'x',
+            'name': 'X',
+            'standard_serving_desc': desc,
+            'standard_serving_g': g,
+            'calories_per_100g': 100,
+            'protein_per_100g': 5,
+            'carbs_per_100g': 10,
+            'fat_per_100g': 2,
+          };
+      expect(freePickItem(row: r('1 bar', 50), multiple: 2, role: null).servingDesc,
+          '2 bars');
+      expect(freePickItem(row: r('1 samosa', 60), multiple: 3, role: null).servingDesc,
+          '3 samosas');
+      expect(freePickItem(row: r('1 bar', 50), multiple: 1, role: null).servingDesc,
+          '1 bar');
+    });
+
     test('B3: free rows step by whole counts for naan, chapati, slices, pcs', () {
       for (final desc in ['1 naan', '2 slices', '1 chapati', '2 pcs', '1 samosa']) {
         expect(dietServingIsCountable(desc), isTrue, reason: desc);

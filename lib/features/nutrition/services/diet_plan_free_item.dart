@@ -56,6 +56,35 @@ const Set<String> _extraCountableUnits = {
   'bar', 'bars',
 };
 
+/// Plurals of the extra countable words: `scaleServingDesc` only knows the
+/// generator's `_plurals` map, which is NOT widened here (the goldens depend on
+/// the generator's text), so a free pick writes "2 bars", "3 samosas" itself
+/// (B-pass delta seat finding 5).
+const Map<String, String> _extraPlurals = {
+  'bar': 'bars',
+  'pc': 'pcs',
+  'samosa': 'samosas',
+  'vada': 'vadas',
+  'puri': 'puris',
+  'kachori': 'kachoris',
+  'momo': 'momos',
+  'biscuit': 'biscuits',
+  'kulcha': 'kulchas',
+  'ladoo': 'ladoos',
+  'chapati': 'chapatis',
+};
+
+String _pluralizeExtra(String original, double multiple, String scaled) {
+  final q = _leadingQty(original);
+  if (q == null || !(q <= 1 && q * multiple > 1)) return scaled;
+  final head = scaled.split('(').first;
+  for (final e in _extraPlurals.entries) {
+    final re = RegExp('\\b${e.key}\\b', caseSensitive: false);
+    if (re.hasMatch(head)) return scaled.replaceFirst(re, e.value);
+  }
+  return scaled;
+}
+
 /// False when the row carries NO calorie number at all (a custom food restored
 /// from the cloud with both columns null): the portion sheet then refuses to
 /// add it instead of adding a silent 0 kcal item (B-pass seat B finding 6).
@@ -102,7 +131,7 @@ DietPlanFoodItem freePickItem({
   final step = dietPortionStep(desc);
   final onStep = ((multiple / step) - (multiple / step).round()).abs() < 1e-9;
   final text = onStep && servingDescParses(desc)
-      ? scaleServingDesc(desc, multiple)
+      ? _pluralizeExtra(desc, multiple, scaleServingDesc(desc, multiple))
       : '${grams.round()} g';
   final id = row['id'] as String? ?? '';
   return DietPlanFoodItem(

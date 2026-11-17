@@ -18,6 +18,9 @@ Future<DietPlanFoodItem?> showDietPlanFoodSearchSheet(
   required List<DietPlanSearchHit> Function(String query) search,
   required String? role,
 }) {
+  // The route's own builder context has the top padding removed, so read it
+  // from the caller's context.
+  final topInset = MediaQuery.of(context).padding.top;
   return showModalBottomSheet<DietPlanFoodItem>(
     context: context,
     isScrollControlled: true,
@@ -30,8 +33,12 @@ Future<DietPlanFoodItem?> showDietPlanFoodSearchSheet(
       // 80% of the screen, but never taller than what the keyboard leaves
       // (B-pass seat B finding 5: the fixed 0.8H put the list's lower fifth
       // behind the keyboard).
-      final room = mq.size.height - mq.viewInsets.bottom - 24;
-      final height = mq.size.height * 0.8 < room ? mq.size.height * 0.8 : room;
+      // minus the status bar / notch (B-pass delta seat finding 3), and never
+      // negative (a small window under a tall keyboard)
+      final room =
+          mq.size.height - mq.viewInsets.bottom - topInset - 8;
+      final raw = mq.size.height * 0.8 < room ? mq.size.height * 0.8 : room;
+      final height = raw < 0 ? 0.0 : raw;
       return Padding(
         padding: EdgeInsets.only(bottom: mq.viewInsets.bottom),
         child: SizedBox(

@@ -140,7 +140,53 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('open')));
     await tester.pumpAndSettle();
     expect(tester.getSize(find.byType(DietPlanFoodSearchSheet)).height,
-        lessThanOrEqualTo(size.height - 300 - 24 + 0.5));
+        lessThanOrEqualTo(size.height - 300 - 8 + 0.5));
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('B-pass delta 3: the notch is taken off the room, and a window '
+      'smaller than the keyboard gives a zero height, not a negative one',
+      (tester) async {
+    const size = Size(360, 640);
+    tester.view.physicalSize = size;
+    tester.view.devicePixelRatio = 1.0;
+    tester.view.viewInsets = const FakeViewPadding(bottom: 300);
+    tester.view.padding = const FakeViewPadding(top: 47);
+    addTearDown(tester.view.reset);
+    await tester.pumpWidget(MaterialApp(
+      home: Builder(
+        builder: (context) => Scaffold(
+          body: TextButton(
+            key: const ValueKey('open'),
+            onPressed: () => showDietPlanFoodSearchSheet(context,
+                role: null, search: (q) => const []),
+            child: const Text('open'),
+          ),
+        ),
+      ),
+    ));
+    await tester.tap(find.byKey(const ValueKey('open')));
+    await tester.pumpAndSettle();
+    expect(tester.getSize(find.byType(DietPlanFoodSearchSheet)).height,
+        lessThanOrEqualTo(size.height - 300 - 47 - 8 + 0.5));
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('B-pass delta 4: an amount typed above ten servings stays put '
+      'when + is pressed (no jump down to the cap)', (tester) async {
+    await _pump(tester, _row(stdG: 5, desc: '1 pinch'));
+    await tester.enterText(
+        find.byKey(const ValueKey('diet_portion_grams')), '1500');
+    await tester.pump();
+    final grams = tester
+        .widget<TextField>(find.byKey(const ValueKey('diet_portion_grams')))
+        .controller!;
+    await tester.tap(find.byKey(const ValueKey('diet_portion_plus')));
+    await tester.pump();
+    expect(int.parse(grams.text), greaterThanOrEqualTo(1500));
+    await tester.tap(find.byKey(const ValueKey('diet_portion_minus')));
+    await tester.pump();
+    expect(int.parse(grams.text), lessThan(1500));
     expect(tester.takeException(), isNull);
   });
 }

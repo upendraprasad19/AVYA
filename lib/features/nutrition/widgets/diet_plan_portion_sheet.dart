@@ -84,8 +84,12 @@ class _DietPlanPortionSheetState extends State<DietPlanPortionSheet> {
     // `clamp` throws when the lower limit is above the upper one (a serving
     // over 4000 g makes `_maxM` less than a half step).
     final lo = rawLo < _maxM ? rawLo : _maxM;
+    // A typed amount may sit above the 10-serving cap (a 5 g serving, 1500 g
+    // typed): `+` then stays where it is instead of jumping down to the cap
+    // (B-pass delta seat finding 4).
+    final hi = _m > _maxM ? _m : _maxM;
     setState(() {
-      _m = m.clamp(lo, _maxM).toDouble();
+      _m = m.clamp(lo, hi).toDouble();
       _grams.text = _fmtG(_stdG * _m);
     });
   }

@@ -172,8 +172,11 @@ List<DietPlanSearchHit> searchDietPlanFoods({
     // offer a "Chicken Biryani" to a vegan (B-pass seat B finding 1, latent).
     // The bundled asset is fully tagged (1444 of 1444), so an untagged row is
     // hidden from everyone who is not a non-vegetarian.
-    if (r['is_veg'] == null && foodTypeOf(dietPreference) != FoodType.nonVeg) {
-      continue;
+    final dietType = foodTypeOf(dietPreference);
+    if (dietType != FoodType.nonVeg &&
+        (r['is_veg'] == null ||
+            (dietType == FoodType.vegan && r['is_vegan'] == null))) {
+      continue; // the tag this user's diet depends on is missing (B-pass delta 6)
     }
     if (!DietPlanGenerator.passesDiet(r, dietPreference,
         family: searchFamilyOf(r))) {

@@ -14,6 +14,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:icanbefitter/core/constants/diet_strategies.dart';
@@ -215,6 +216,64 @@ void main() {
     handle.dispose();
   });
 
+  testWidgets('B-pass delta 2: "Back to Low carb" is never cut, with or '
+      'without a fit line, at text scale 1.5 and 360 dp', (tester) async {
+    tester.view.physicalSize = const Size(360, 800);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+    for (final fit in [null, 'Fits Balanced']) {
+      await tester.pumpWidget(MaterialApp(
+        home: MediaQuery(
+          data: MediaQueryData(
+              size: const Size(360, 800), textScaler: TextScaler.linear(1.5)),
+          child: Scaffold(
+            body: DietPlanTotalsRow(
+              totals: const DietPlanTotals(
+                  calories: 2315, protein: 142, carbs: 118, fat: 96),
+              targets: (calories: 2400, protein: 150, carbs: 120, fat: 80),
+              fitLine: fit,
+              backLabel: 'Back to Low carb',
+            ),
+          ),
+        ),
+      ));
+      await tester.pump();
+      final label = tester.renderObject<RenderParagraph>(find.descendant(
+          of: _key('diet_plan_back_up'), matching: find.byType(RichText)));
+      expect(label.didExceedMaxLines, isFalse, reason: 'fit line: $fit');
+      expect(tester.takeException(), isNull);
+    }
+    // the long fit line keeps room next to the button (the numbers at its end,
+    // the limit, are what a cut would hide), at scale 1.0
+    await tester.pumpWidget(MaterialApp(
+      home: MediaQuery(
+        data: MediaQueryData(
+            size: const Size(360, 800), textScaler: TextScaler.linear(1.0)),
+        child: Scaffold(
+          body: DietPlanTotalsRow(
+            totals: const DietPlanTotals(
+                calories: 2315, protein: 142, carbs: 118, fat: 96),
+            targets: (calories: 2400, protein: 150, carbs: 120, fat: 80),
+            fitLine: 'Over the Keto limit (118 g, up to 38 g)',
+            fitOk: false,
+            backLabel: 'Back to Keto',
+          ),
+        ),
+      ),
+    ));
+    await tester.pump();
+    // (the test font is wider than DM Sans, so a line count is not asserted:
+    // the button HUGS its label and the fit line takes the rest, instead of
+    // the two splitting the row in half)
+    final btn = tester.getSize(_key('diet_plan_back_up')).width;
+    final labelW = tester
+        .getSize(find.descendant(
+            of: _key('diet_plan_back_up'), matching: find.byType(RichText)))
+        .width;
+    expect(btn, lessThanOrEqualTo(labelW + 16 + 1),
+        reason: 'the button is $btn dp for a $labelW dp label');
+  });
+
   group('with Hive', () {
     late Directory dir;
     late List<Map<String, dynamic>> rows;
@@ -375,6 +434,11 @@ void main() {
       expect(find.text('Plan updated for Low carb. Save to keep it.'),
           findsOneWidget);
       expect(_key('diet_plan_back_up'), findsNothing);
+      // a COMMITTED pick keeps its request: the `finally` hands nothing back,
+      // so the plan saved now is stamped for Low carb (not the old Keto)
+      await _tapReal(tester, find.byIcon(Icons.save_outlined));
+      expect(_savedPlan()!['diet_strategy'], 'low_carb');
+      expect(_savedPlan()!['diet_strategy_requested'], 'low_carb');
     });
 
     testWidgets('cancel: nothing is written, the item is not swapped',
@@ -614,6 +678,10 @@ void main() {
           reason: 'the stale accept wrote nothing');
       expect(find.text('Rolled Oats'), findsNothing);
       expect(find.text('The plan changed. Pick again.'), findsOneWidget);
+      // the new generation owns `_requestedStrategy`: the `finally` of the
+      // dropped pick must NOT hand its old (Keto) request back over it
+      await _tapReal(tester, find.byIcon(Icons.save_outlined));
+      expect(_savedPlan()!['diet_strategy_requested'], 'balanced');
     });
 
     testWidgets('B-pass C4: an adult finds a whey powder, a minor never does',

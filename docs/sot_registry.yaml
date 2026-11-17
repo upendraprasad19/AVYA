@@ -2736,7 +2736,7 @@ concepts:
         line_range: 279-353
         method: _planTargets + _planTotalLine + _buildTotalsRow
       - file: lib/features/nutrition/widgets/diet_plan_totals_row.dart
-        line_range: 1-246
+        line_range: 1-253
         method: DietPlanTotalsRow
 
   - concept: diet_plan_free_pick
@@ -2760,13 +2760,13 @@ concepts:
         method: _swapItem + _planItemOf (opens the sheet, builds the search closure, hands the pick to _applyPick)
     readers:
       - file: lib/features/nutrition/services/diet_plan_food_search.dart
-        line_range: 1-209
+        line_range: 1-212
         method: searchDietPlanFoods + searchFamilyOf + isProteinPowderRow
       - file: lib/shared/repositories/food_repository.dart
         line_range: 20-45
         method: getCustomFoods
       - file: lib/features/nutrition/services/diet_plan_free_item.dart
-        line_range: 1-121
+        line_range: 1-150
         method: freePickItem + dietPortionStep
     notes: |
       Reader of the custom_food_mutations concept (the customBox rows).

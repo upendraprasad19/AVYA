@@ -388,3 +388,18 @@ No P0 or P1. Findings and what was done, all in this batch:
 | C10 | P3 | `diet_plan_free_pick` pointed at the reader-half test | points at the screen test |
 
 Not changed, stated: the "Back to ..." offer after the user's own first drop never goes above the level the plan started from (a recorded decision: back-up is manual and capped); the second review reads this table.
+
+### 11.1 Delta seat (one fresh seat on the fix diff 6a0f5645..4442b7ee) and dispositions
+
+No P0 or P1. Two P2 and four P3, all fixed in this batch:
+
+| # | Sev | Finding | Disposition |
+|---|---|---|---|
+| 1 | P2 | the A1 test also passed on the old code (a cancel was already restored); the new `finally` guards were presence-pinned only | the stamps are now observed on both mirror exits: an ACCEPTED shift saves a plan stamped Low carb (mutant MC1, `committed` never set: red) and a regeneration under the popup saves a plan stamped Balanced (MC2, no epoch check: red). The throw exit shares the same `finally` condition as a cancel; no seam to throw there exists, stated |
+| 2 | P2 | the fit line (flex 1) and the Back button (loose flex 1) each took half the row, so the button was cut at large text and the fit line at 360 dp | the button takes its own width capped at 60% of the row (two lines allowed), the fit line takes the rest; test: the button hugs its label (mutated to Expanded: red); a no-fit-line case at scale 1.5 is not cut |
+| 3 | P3 | the search sheet ignored the notch and could go negative | the caller's top inset is taken off, the height is never below zero; two widget tests |
+| 4 | P3 | a typed amount over ten servings jumped down to the cap on `+` | `+` stays where it is (MC6 red) |
+| 5 | P3 | "2 bar", "3 samosa" | a free-pick-only plural step (the generator's map and goldens untouched) |
+| 6 | P3 | a vegan still got a row with `is_veg` but no `is_vegan` | the vegan filter also needs `is_vegan` (MC4 red) |
+
+Mutants MC1-MC7 and the layout mutant are red; the totals-row test file edits and the registry ranges were recomputed. Total mutants: 47, 46 red, 1 residue (M25), plus the `_pickBusy` presence pin.

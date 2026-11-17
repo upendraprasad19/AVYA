@@ -43,3 +43,13 @@ generated-plan carb ratios (worst 1.42, factor 1.5), and, after the build, the v
 
 Gate loop (analyze, the pre-commit gates), CI full suite through `land_pr --ci-only` on an open PR, B-pass (three context-blind seats, account tier),
 then the merge only on the founder's own go. No APK is built by this batch.
+
+## B-pass (account tier, self-initiated before the merge; CLAUDE.md 4.3)
+
+CI-green head reviewed first (`6a0f5645`, PR 295): three context-blind Sonnet seats, read-only, with the recorded decisions and the known residue quoted:
+seat A (strategy shift, async races, totals row), seat B (search, own foods, catalog, seed, portion math), seat C (tests, docs, registry, layout).
+No P0, no P1; six P2 and a run of P3, all fixed in the batch (plan section 11). A fourth, fresh DELTA seat then read the fix diff (`6a0f5645..4442b7ee`):
+no P0, no P1, two P2 and four P3, all fixed (plan section 11.1). Mutation record: plan section 10 (47 mutants, 46 red, one self-attested residue:
+the post-write epoch re-check, plus the `_pickBusy` presence pin).
+Review file: none written (account tier; the gate asks for one only at catastrophic). `bpass:` front-matter is not set: the record's `bpass: accepted` is required from
+`platform` up, and the founder's merge go is the acceptance for this tier.
