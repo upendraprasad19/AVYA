@@ -7295,7 +7295,7 @@ The founder chose to keep the plans as they are, over a unit that would give qua
 ## OI-514 — Delete the disable_goal_training kill switch and its OFF fixtures after the 3A device check
 
 - **Status**: CLOSED · 2026-11-17 · branch `generator-killswitch-3a3c` · the commit carrying `closes-oi:` for this entry
-- **Blocked on**: — (resolved: the founder's partial device check of 2026-11-17 covered 3A's reps; the merge waited for the remaining t308 items)
+- **Blocked on**: — (resolved: the founder's partial device check of 2026-11-17 covered 3A's reps; the founder moved the remaining t308 checks to OI-348 row A20 on 2026-11-17 and told the merge to proceed)
 - **Verified**: 2026-11-17 — the switch and its OFF paths deleted (plan `docs/plans/2026-11-17-generator-killswitch-3a3c.md`); the two-tree oracle: every re-recorded OFF fixture of the other units recorded on 421cd2d2 (commit c16ce1ea) and reproduced byte for byte after the deletion; `generator_golden_test` unchanged; the goal-training gate compares against the frozen pre-3A baseline; the 8 crafted fixtures re-derived on the goal bands, each with a mutation
 - **Identified**: 2026-11-15 · filed via mint_oi.sh from branch `generator-step3a`
 
@@ -7306,7 +7306,7 @@ The founder chose to keep the plans as they are, over a unit that would give qua
 ## OI-516 — Delete the disable_cardio_finisher_shown kill switch and its OFF fixture after the 3C device check
 
 - **Status**: CLOSED · 2026-11-17 · branch `generator-killswitch-3a3c` · the commit carrying `closes-oi:` for this entry
-- **Blocked on**: — (resolved: the founder's partial device check of 2026-11-17 covered 3C's finisher days; the merge waited for the remaining t308 items)
+- **Blocked on**: — (resolved: the founder's partial device check of 2026-11-17 covered 3C's finisher days; the founder moved the remaining t308 checks to OI-348 row A20 on 2026-11-17 and told the merge to proceed)
 - **Verified**: 2026-11-17 — the switch and its OFF branches deleted in the same commit as OI-514 (same plan); gates that measured another unit use `CardioFinisher.debugReserve = false` and reproduce their base-tree digests
 - **Identified**: 2026-11-16 · filed via mint_oi.sh from branch `generator-step3c`
 

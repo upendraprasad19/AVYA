@@ -19,6 +19,8 @@ Version 3.1, 2026-11-17 (v1 + review rounds 1-3, all folded in; round 3 converge
     finisher's injury rule; hold weeks.
 - **Rule:** build, reviews and CI run now. The MERGE waits until the founder reports the open 3A / 3C items. Hold
   weeks (3D) have no switch here.
+- **Decision, 2026-11-17 (founder):** the open items (Strength focus, the injury finisher on Cut / Maintain, hold weeks)
+  go to OI-348 row A20 and the merge proceeds; a failed check files a new OI against the unit.
 - **Also in this commit:** `docs/audit/generator-step5.closure.yaml` S5-A / S5-B go `blocked_on_user` ->
   `verified_clean` (founder d84 / d85, 2026-11-17).
 
