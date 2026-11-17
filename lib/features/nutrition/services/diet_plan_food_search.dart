@@ -20,6 +20,7 @@
 //     fish rows, so eggetarian and pescatarian users can find boiled eggs and
 //     fish;
 //   * a processed row stays, tagged.
+import 'package:icanbefitter/core/constants/food_types.dart';
 import 'package:icanbefitter/features/nutrition/services/diet_plan_catalog.dart';
 
 import 'diet_plan_generator.dart';
@@ -166,6 +167,14 @@ List<DietPlanSearchHit> searchDietPlanFoods({
     }
     if (tokens.isNotEmpty && !nameMatches(name)) continue;
     if (tokens.isEmpty && !powder) continue; // an empty query lists only powders
+    // An approved COMMUNITY row (sync_community.dart) carries no `is_veg` /
+    // `is_vegan` tag, and `passesDiet` lets an untagged row through: it would
+    // offer a "Chicken Biryani" to a vegan (B-pass seat B finding 1, latent).
+    // The bundled asset is fully tagged (1444 of 1444), so an untagged row is
+    // hidden from everyone who is not a non-vegetarian.
+    if (r['is_veg'] == null && foodTypeOf(dietPreference) != FoodType.nonVeg) {
+      continue;
+    }
     if (!DietPlanGenerator.passesDiet(r, dietPreference,
         family: searchFamilyOf(r))) {
       continue;

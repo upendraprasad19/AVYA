@@ -40,10 +40,27 @@ double? _leadingQty(String desc) {
 /// "1 cup (3 eggs)" is not read: a stated limit.
 bool dietServingIsCountable(String desc) {
   final head = desc.toLowerCase().split('(').first;
-  return head
-      .split(RegExp(r'[^a-z]+'))
-      .any((w) => w.isNotEmpty && kCountableServingUnits.contains(w));
+  return head.split(RegExp(r'[^a-z]+')).any((w) =>
+      w.isNotEmpty &&
+      (kCountableServingUnits.contains(w) || _extraCountableUnits.contains(w)));
 }
+
+/// Countable words a FREE row can carry that the generator's T7 set does not
+/// list (B-pass seat B finding 3: "1 naan", "2 slices", "1 chapati", "2 pcs"
+/// stepped by halves). Free picks only: the generator's own set is untouched
+/// because T7 and the goldens depend on it.
+const Set<String> _extraCountableUnits = {
+  'slices', 'chapati', 'chapatis', 'naan', 'naans', 'samosa', 'samosas',
+  'vada', 'vadas', 'puri', 'puris', 'kachori', 'kachoris', 'momo', 'momos',
+  'biscuit', 'biscuits', 'pc', 'pcs', 'kulcha', 'kulchas', 'ladoo', 'ladoos',
+  'bar', 'bars',
+};
+
+/// False when the row carries NO calorie number at all (a custom food restored
+/// from the cloud with both columns null): the portion sheet then refuses to
+/// add it instead of adding a silent 0 kcal item (B-pass seat B finding 6).
+bool dietRowHasCalories(Map<String, dynamic> row) =>
+    row['calories_per_100g'] is num || row['calories_std'] is num;
 
 /// The step of the portion stepper: whole counts for a countable serving
 /// (`qty x m` a whole number), half servings otherwise.

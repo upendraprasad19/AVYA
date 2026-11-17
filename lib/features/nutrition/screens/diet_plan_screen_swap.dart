@@ -11,9 +11,12 @@
 // when it ADDS carbs and the day then fits only a less strict strategy than the
 // plan's (Keto -> Low carb -> Balanced), the app asks and, on a yes, writes the
 // PROFILE strategy and keeps the edited plan WITHOUT regenerating it:
-// `_requestedStrategy` is set BEFORE the write, so the regeneration listener
-// (`_onEffectiveStrategy`) finds the plan already asked for what the new
-// effective strategy implies. Nothing here ever saves the plan.
+// `_requestedStrategy` is set BEFORE the write, so when the write moves the
+// effective strategy to `next` the regeneration listener
+// (`_onEffectiveStrategy`) finds the plan already asked for it. That is
+// ORDERING, not an invariant: both fields are set again after the await, and
+// a provisional request that did not commit (cancel, failed write, a throw)
+// is handed back in the `finally`. Nothing here ever saves the plan.
 part of 'diet_plan_screen.dart';
 
 extension _DietPlanSwapFlow on _DietPlanScreenState {
@@ -147,6 +150,11 @@ extension _DietPlanSwapFlow on _DietPlanScreenState {
       return;
     }
     _pickBusy = true;
+    // The provisional request (set before the write) is handed back on EVERY
+    // exit that did not commit the pick: a cancel, a failed write, or a throw.
+    var provisional = false;
+    var committed = false;
+    final previousRequested = _requestedStrategy;
     try {
       final newItem = _planItemOf(alt);
       final before = _planTotals();
@@ -172,7 +180,7 @@ extension _DietPlanSwapFlow on _DietPlanScreenState {
       final from = _planStrategy;
       var written = true;
       if (effective != next) {
-        final previousRequested = _requestedStrategy;
+        provisional = true;
         _requestedStrategy = planStrategyFor(next, _foodType);
         written = await handleDietStrategyTap(
           context,
@@ -192,10 +200,7 @@ extension _DietPlanSwapFlow on _DietPlanScreenState {
               : 'The plan changed. Pick again.');
           return;
         }
-        if (!written) {
-          _requestedStrategy = previousRequested;
-          return;
-        }
+        if (!written) return;
       }
       setState(() {
         _mealPlans[mealIndex].items[itemIndex] = newItem;
@@ -204,8 +209,13 @@ extension _DietPlanSwapFlow on _DietPlanScreenState {
         _planStrategy = next;
         _requestedStrategy = planStrategyFor(next, _foodType);
       });
+      committed = true;
       _note('Plan updated for ${next.label}. Save to keep it.');
     } finally {
+      // A newer generation (epoch) owns `_requestedStrategy`: leave it alone.
+      if (provisional && !committed && mounted && epoch == _planEpoch) {
+        _requestedStrategy = previousRequested;
+      }
       _pickBusy = false;
     }
   }
@@ -227,11 +237,14 @@ extension _DietPlanSwapFlow on _DietPlanScreenState {
     if (_pickBusy || !mounted) return;
     final epoch = _planEpoch;
     _pickBusy = true;
+    var provisional = false;
+    var committed = false;
+    final previousRequested = _requestedStrategy;
     try {
       final effective = dietStrategyOfTargets(ref.read(macroTargetsProvider));
       var written = true;
       if (effective != target) {
-        final previousRequested = _requestedStrategy;
+        provisional = true;
         _requestedStrategy = planStrategyFor(target, _foodType);
         written = await handleDietStrategyTap(
           context,
@@ -245,10 +258,7 @@ extension _DietPlanSwapFlow on _DietPlanScreenState {
           silent: true,
         );
         if (epoch != _planEpoch || !mounted) return;
-        if (!written) {
-          _requestedStrategy = previousRequested;
-          return;
-        }
+        if (!written) return;
       }
       setState(() {
         _planStrategy = target;
@@ -256,8 +266,12 @@ extension _DietPlanSwapFlow on _DietPlanScreenState {
         _saved = false;
         if (_droppedFrom == target) _droppedFrom = null;
       });
+      committed = true;
       _note('Plan is back on ${target.label}. Save to keep it.');
     } finally {
+      if (provisional && !committed && mounted && epoch == _planEpoch) {
+        _requestedStrategy = previousRequested;
+      }
       _pickBusy = false;
     }
   }

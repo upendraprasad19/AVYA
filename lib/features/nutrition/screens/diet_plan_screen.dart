@@ -58,6 +58,11 @@ void debugResetDietPlanMismatchNotices() => _mismatchNoticeShown.clear();
 @visibleForTesting
 int debugDietPlanGenerations = 0;
 
+/// Test seam: a fixed plan seed instead of the day's (null in the app), so a
+/// screen test does not depend on the day it runs (B-pass seat C finding 9).
+@visibleForTesting
+int? debugDietPlanSeedOverride;
+
 /// Diet plan generator — FREE for everyone.
 /// Generated from food database (zero API cost).
 /// User can preview the plan, swap food items, save, and download as PDF (FREE).
@@ -286,7 +291,9 @@ class _DietPlanScreenState extends ConsumerState<DietPlanScreen> {
 
     // Same plan all day on open; each Regenerate tap moves to the next seed
     // (before Unit 1 the tap reused the day's seed and showed the same plan).
-    final seed = dietPlanSeed(DateTime.now(), _regenerations);
+    final seed = debugDietPlanSeedOverride == null
+        ? dietPlanSeed(DateTime.now(), _regenerations)
+        : debugDietPlanSeedOverride! + 7919 * _regenerations;
 
     // Diet plan Unit 1: the curated, catalog-only generator, unless the
     // local kill switch routes back to the legacy one (DietPlanFlags).

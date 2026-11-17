@@ -87,7 +87,7 @@ method reads what it needs into locals first) and in the Unit 3 plan (the regene
 ### 4.2 Strategy fit and the shift (the cascade)
 
 - `services/diet_plan_strategy_fit.dart` (pure). `strategyCarbCeiling(strategy, base)` = `BmrCalculator.macroSplit(...)`
-  carbs x `kStrategyFitFactor` (**1.5 provisional**: the largest generated ratio measured is 1.42; the build re-measures
+  carbs x `kStrategyFitFactor` (**1.5 provisional**: the largest generated ratio measured is 1.42, and 1.48 once the Supplements shake (pea, the most carbs) is added on top (B-pass seat A finding 4: the test now runs both legs, 3800 plans); the build re-measures
   200 seeds x 10 archetypes including 1200 kcal and 3500 kcal (the 20 g Keto floor and the 150 g Low carb cap, `bmr_calculator.dart:280-281`) and the factor is the smallest value above the largest ratio, rounded to a quarter; a test
   pins that EVERY generated plan fits its own strategy, so a fresh plan can never read as broken).
   `strictestFit({dayCarbs, base, allowKeto})`: Keto if carbs <= keto ceiling and `allowKeto`, else Low carb if <= low
@@ -352,8 +352,39 @@ every fix after round 3 is a deletion or a wording change, with no new mechanism
 
 ## 10. Mutation record (CLAUDE.md 4.4 rule 21, self-attested)
 
-31 distinct mutants applied one at a time to the built code (each confirmed applied by an exact single-match replace; a restore from a backup after each; the tree compared after the run).
-- 29 reddened a test: 24 failed cleanly, 5 (M21, M15b, M26, M-dropped, M-mount) failed their first screen test and then hung the next one (the known "a failed testWidgets hangs the next one" class); the runner read the partial output and counted each only because an `[E]` line was present.
-- M10 (own foods diet-filtered) SURVIVED first: the fixture was an untagged custom food, which passes the vegan filter anyway. Fixed the fixture (`is_vegan: false`, `is_veg: false`); M10 now reddens.
-- M19 (the sheet pops AFTER the pick on the search door) SURVIVED: no test handed the sheet a pick handler that opens a dialog synchronously. New `test/nutrition/diet_plan_swap_sheet_test.dart`; both doors mutated by hand, both red.
-- M25 (the post-write epoch re-check removed) SURVIVES: a regeneration that lands inside the profile write cannot be driven from a widget test (the modal dialog blocks the screen, the listener is ordered not to regenerate). Self-attested residue: a PRESENCE pin only (the check precedes `_droppedFrom ??= from`). Same for `_pickBusy` (M22, not mutated). The second review reads both.
+First pass: 31 distinct mutants (M1-M27 and the screen wiring ones), each applied one at a time (an exact single-match replace, a restore from a backup after each, the tree compared after the run).
+- 29 reddened a test on the first pass: 24 failed cleanly, 5 (M21, M15b, M26, M-dropped, M-mount) failed their first screen test and then hung the next one (the known "a failed testWidgets hangs the next one" class); each is counted only because an `[E]` line was in the partial output.
+- M10 (own foods diet-filtered) SURVIVED: the fixture was an untagged custom food, which passes the vegan filter anyway. Fixed the fixture (`is_vegan: false`, `is_veg: false`); M10 now reddens.
+- M19 (the sheet pops AFTER the pick) SURVIVED: no test gave the sheet a pick handler that opens a dialog synchronously. New `test/nutrition/diet_plan_swap_sheet_test.dart`; both doors mutated by hand, both red.
+- M25 (the post-write epoch re-check removed) SURVIVES: a regeneration that lands inside the profile write cannot be driven from a widget test (the profile write is the dialog's own `await`; the test can only change the strategy while the dialog is OPEN, which the isStale check before the write already covers). Self-attested residue: a PRESENCE pin only. Same for `_pickBusy` (not mutated).
+Second pass (after the B-pass fixes, section 11): 8 more mutants MB1-MB8 (the provisional request not handed back, untagged community rows offered, back-up ignoring the partial level, the extra countable words dropped, the totals grid never, `isStale` not wired in the pick, `adult` always true, the replaced item not excluded from the search), all red. MB5 SURVIVED once (the test compared two tops that a centred Row already makes differ by a few dp): the assertion now needs a whole cell (30 dp) between the rows and reddens. Five portion-sheet mutants (stepper clamp, initial multiple, Add enabled with no calories, scroll view removed, search sheet height) are red in `diet_plan_portion_sheet_test.dart`.
+Total: 39 mutants, 38 red, 1 residue (M25), plus the `_pickBusy` presence pin.
+
+## 11. B-pass (three context-blind seats on 6a0f5645) and dispositions
+
+No P0 or P1. Findings and what was done, all in this batch:
+
+| # | Sev | Finding | Disposition |
+|---|---|---|---|
+| A1 | P2 | `_requestedStrategy` set before the write was handed back only on `!written`, not on a throw or any other uncommitted exit | restored in the `finally` unless the pick committed and no newer generation owns the field (both flows); screen test: a cancelled shift saves a plan still stamped Keto |
+| A2 | P3 | Keto -> Balanced, then a day that fits only Low carb offered nothing | back-up offers the strictest level the day fits, capped at where the plan dropped from; vegan Keto profile: the plan's own level is Low carb, so Back returns to Low carb (the stored Keto choice is the dropdown's, not the swap's) |
+| A3, C7 | P3 | totals cells never grew with the text scale; the fit line cut the numbers; a 28 dp button; one spoken line per cell missing | above scale 1.3 the cells go 2 x 2; the fit line has two lines; the button is 44 dp (height ceiling 128 -> 144); each cell is one Semantics label with units; test at 1.0, 1.3, 1.5, 2.0 |
+| A4 | P3 | the 1.5 fit factor was measured without the Supplements shake | the matrix runs both legs: worst ratio 1.42 -> 1.48 with the pea shake over 3800 plans; 1.5 stays (a ceiling of 1.5 x the 20 g floor is 30 g, and 1.5 x the Keto cap 50 g is 75 g, the Low carb floor) |
+| A5 | P3 | the "set before the write" comment overstated an invariant | reworded: ordering, not an invariant |
+| B1 | P2 | untagged community rows passed the veg and vegan filter | rows without `is_veg` are hidden from everyone but a non-veg user; test |
+| B2 | P2 | the stepper threw for a serving over 4000 g and started above the 2000 g cap | lower limit capped at the upper, start at min(1, max); widget test |
+| B3 | P3 | naan, chapati, slices, pcs stepped by halves | a free-pick-only extra set of countable words (the generator's T7 set untouched) |
+| B4 | P3 | a vacuous F0851 assertion | replaced by "whey protein bar" positive and minor cases |
+| B5 | P3 | the search sheet's lower fifth sat behind the keyboard | height = min(0.8 H, room left by the keyboard); widget test |
+| B6 | P3 | a restored row with no calories added 0 kcal silently | note and a disabled Add; widget test |
+| C1 | P2 | nine registry ranges for `diet_plan_screen.dart`, `seed_service.dart` and the new files were stale | recomputed from anchors |
+| C2 | P2 | the shift test had no "carbs rose, fits a STRICTER level" case | cases added (the `!=` form of the strictness test now reddens) |
+| C3 | P2 | the screen "carb-cutting pick" test could not fail on its guard | retitled to what it proves; the guard stays pinned by the pure case |
+| C4 | P2 | screen wiring unobserved: isStale, the failed-write restore, the age wiring, the already-in-plan exclusion | four screen tests (a regeneration under the open popup; cancel then Save; adult and minor whey; already in the plan) |
+| C5 | P2 | the plan said the egg, fish and minor id sets were pinned; they were spot checks | the three sets are pinned from a real run (35 egg, 57 fish, 25 minor-hidden) |
+| C6 | P2 | the portion sheet was a bare Column | scrolls; 360 x 640, keyboard up, scale 1.0 / 1.3 / 2.0 |
+| C8 | P3 | stale v6 text, a test comment, a missing food-database note, the section 10 arithmetic | fixed |
+| C9 | P3 | the screen tests depended on the day's plan seed | `debugDietPlanSeedOverride`; passes for seeds 4242, 17, 90001, 31337 |
+| C10 | P3 | `diet_plan_free_pick` pointed at the reader-half test | points at the screen test |
+
+Not changed, stated: the "Back to ..." offer after the user's own first drop never goes above the level the plan started from (a recorded decision: back-up is manual and capped); the second review reads this table.

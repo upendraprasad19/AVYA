@@ -163,7 +163,7 @@ void main() {
 
     // Diet chart v3 (2026-11-17): the swap now also offers the SWAP-ONLY
     // entries. G2 keeps proving byte-identity with main on the catalog WITHOUT
-    // them; the test after it pins that the new entries do reach a swap.
+    // them; diet_plan_swap_only_test.dart pins that the new entries do reach a swap.
     final mainCatalog = [
       for (final e in kDietPlanCatalog)
         if (!e.swapOnly) e,

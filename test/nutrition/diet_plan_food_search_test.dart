@@ -10,6 +10,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:icanbefitter/features/nutrition/services/diet_plan_catalog.dart';
 import 'package:icanbefitter/features/nutrition/services/diet_plan_food_search.dart';
 import 'package:icanbefitter/features/nutrition/services/diet_plan_free_item.dart';
 import 'package:icanbefitter/features/nutrition/services/diet_plan_shake.dart';
@@ -235,7 +236,7 @@ void main() {
     test('no mass gainer, pre-workout, creatine, bar or fish oil is a powder', () {
       final ids = _ids(_search(''));
       for (final id in ['F0838', 'F0839', 'F0840', 'F0841', 'F0818', 'F0842',
-          'F0843', 'F0844', 'F0845', 'F0846', 'F0851']) {
+          'F0843', 'F0844', 'F0845', 'F0846']) {
         expect(ids, isNot(contains(id)), reason: id);
       }
     });
@@ -267,6 +268,41 @@ void main() {
             isNot(contains(id)),
             reason: '$id ${row['name']} reachable by a minor');
       }
+    });
+
+    test('B-pass B4: a whey BAR is a processed row, never a powder; a minor '
+        'does not find it', () {
+      final adult = _search('whey protein bar');
+      final bar = adult.firstWhere((h) => h.id == 'F0851');
+      expect(bar.powder, isFalse);
+      expect(bar.processed, isTrue);
+      expect(_ids(_search('whey protein bar', adult: false, powders: false)),
+          isNot(contains('F0851')));
+    });
+
+    test('B-pass C5: the rows a MINOR cannot find are exactly these 25 '
+        '(a real run over the asset), found by every adult', () {
+      const hidden = {
+        'F0067', 'F0087', 'F0847', 'F0848', 'F0849', 'F0850', 'F0851',
+        'F0852', 'F0853', 'F0854', 'F0855', 'F0856', 'F0858', 'F0859',
+        'F0860', 'F0861', 'F0950', 'F0951', 'F0956', 'F0959', 'F0960',
+        'F0961', 'F0962', 'F1386', 'F1400',
+      };
+      final found = <String>{};
+      for (final r in _rows) {
+        if (r['category'] == 'supplements') continue;
+        final fit = r['meal_fit'];
+        if (fit is List && fit.isEmpty) continue;
+        final name = r['name'] as String;
+        final id = r['id'] as String;
+        final forAdult = _ids(_search(name, limit: 5000));
+        if (!forAdult.contains(id)) continue;
+        if (!_ids(_search(name, adult: false, powders: false, limit: 5000))
+            .contains(id)) {
+          found.add(id);
+        }
+      }
+      expect(found, hidden);
     });
 
     test('a vegan gets plant powders only', () {
@@ -340,6 +376,81 @@ void main() {
       expect(item.calories, (123.4 * 2.5).round());
       expect(item.protein, (7.5 * 2.5).round());
       expect(item.category, '');
+    });
+  });
+  group('B-pass findings', () {
+    test('B1: an untagged community row is hidden from veg / vegan / egg / '
+        'fish users and shown to a non-veg one', () {
+      final community = {
+        'id': 'community-1',
+        'name': 'Chicken Biryani Homestyle',
+        'source': 'community',
+        'calories_per_100g': 180,
+        'protein_per_100g': 9,
+        'carbs_per_100g': 20,
+        'fat_per_100g': 6,
+        'standard_serving_desc': '1 plate',
+        'standard_serving_g': 300,
+      };
+      for (final pref in ['vegan', 'veg', 'eggetarian', 'pescatarian']) {
+        expect(
+            _ids(_search('chicken biryani homestyle',
+                pref: pref, foods: [community])),
+            isEmpty,
+            reason: pref);
+      }
+      expect(
+          _ids(_search('chicken biryani homestyle', foods: [community])),
+          {'community-1'});
+    });
+
+    test('C5: the non-veg rows read as an EGG dish (35) or a FISH dish (57) '
+        'are exactly these (a real run over the asset)', () {
+      const egg = {
+        'F0021', 'F0022', 'F0117', 'F0340', 'F0341', 'F0342', 'F0343',
+        'F0344', 'F0345', 'F0346', 'F0347', 'F0370', 'F0371', 'F0372',
+        'F0556', 'F0580', 'F0733', 'F0782', 'F0783', 'F0784', 'F0785',
+        'F0786', 'F0787', 'F0788', 'F0789', 'F0790', 'F0791', 'F0792',
+        'F0828', 'F0876', 'F0877', 'F0878', 'F0879', 'F0880', 'F1197',
+      };
+      const fish = {
+        'F0024', 'F0118', 'F0327', 'F0328', 'F0329', 'F0330', 'F0331',
+        'F0332', 'F0333', 'F0334', 'F0335', 'F0336', 'F0337', 'F0338',
+        'F0339', 'F0357', 'F0358', 'F0359', 'F0360', 'F0361', 'F0362',
+        'F0363', 'F0364', 'F0365', 'F0366', 'F0367', 'F0368', 'F0369',
+        'F0776', 'F0846', 'F0905', 'F0906', 'F0907', 'F0908', 'F0909',
+        'F0910', 'F0992', 'F0993', 'F0994', 'F0995', 'F0996', 'F0997',
+        'F0998', 'F0999', 'F1000', 'F1001', 'F1002', 'F1003', 'F1004',
+        'F1005', 'F1006', 'F1007', 'F1195', 'F1203', 'F1204', 'F1205',
+        'F1206',
+      };
+      final gotEgg = <String>{}, gotFish = <String>{};
+      for (final r in _rows) {
+        if (r['is_veg'] != false) continue;
+        final f = searchFamilyOf(r);
+        if (f == DietFamily.egg) gotEgg.add(r['id'] as String);
+        if (f == DietFamily.fish) gotFish.add(r['id'] as String);
+      }
+      expect(gotEgg, egg);
+      expect(gotFish, fish);
+    });
+
+    test('B3: free rows step by whole counts for naan, chapati, slices, pcs', () {
+      for (final desc in ['1 naan', '2 slices', '1 chapati', '2 pcs', '1 samosa']) {
+        expect(dietServingIsCountable(desc), isTrue, reason: desc);
+      }
+      expect(dietPortionStep('1 naan'), 1);
+      expect(dietPortionStep('2 slices'), 0.5); // 2 x 0.5 = a whole 1
+      expect(dietServingIsCountable('1 cup'), isFalse);
+      expect(dietPortionStep('1 cup'), 0.5);
+    });
+
+    test('B6: a row with no calorie number at all has none to add', () {
+      expect(dietRowHasCalories({'calories_per_100g': null, 'calories_std': null}),
+          isFalse);
+      expect(dietRowHasCalories({'calories_std': 120}), isTrue);
+      expect(dietRowHasCalories({'calories_per_100g': 0}), isTrue,
+          reason: 'zero is a number (water)');
     });
   });
 }

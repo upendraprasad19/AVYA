@@ -7,7 +7,8 @@
 // same call `effectiveMacroTargets` makes) times [kStrategyFitFactor]. The
 // factor is above 1 because a freshly GENERATED Keto or Low carb plan often
 // exceeds its own strict target (measured 2026-11-17: up to 1.42 times the
-// target, vegan Low carb 2200/110), and a fresh plan must never read as broken.
+// target without the Supplements shake, 1.48 with the pea shake added on top,
+// over 3800 plans in the fit test), and a fresh plan must never read as broken.
 import 'package:icanbefitter/core/constants/diet_strategies.dart';
 import 'package:icanbefitter/core/utils/bmr_calculator.dart';
 import 'package:icanbefitter/core/utils/effective_macro_targets.dart';
@@ -90,8 +91,11 @@ DietStrategy? shiftTargetFor({
       : null;
 }
 
-/// The strategy the totals row may offer to go back to: [droppedFrom] while it
-/// is stricter than [planStrategy] and the day's carbs fit it again.
+/// The strategy the totals row may offer to go back to: the strictest level
+/// the day's carbs fit, capped at [droppedFrom], and only while it is stricter
+/// than [planStrategy]. After Keto -> Balanced a day that fits only Low carb
+/// again offers "Back to Low carb" (B-pass seat A, finding 2); the cap keeps
+/// the offer from ever going above where the plan came from.
 DietStrategy? backUpTargetFor({
   required DietStrategy? droppedFrom,
   required DietStrategy planStrategy,
@@ -106,8 +110,11 @@ DietStrategy? backUpTargetFor({
   }
   final fit = strictestFit(dayCarbs: dayCarbs, base: base, allowKeto: allowKeto);
   if (fit == null) return null;
-  return dietStrategyStrictness(fit) >= dietStrategyStrictness(droppedFrom)
+  final target = dietStrategyStrictness(fit) >= dietStrategyStrictness(droppedFrom)
       ? droppedFrom
+      : fit;
+  return dietStrategyStrictness(target) > dietStrategyStrictness(planStrategy)
+      ? target
       : null;
 }
 

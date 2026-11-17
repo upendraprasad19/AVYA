@@ -18,6 +18,7 @@ import 'package:icanbefitter/core/utils/effective_macro_targets.dart';
 import 'package:icanbefitter/features/nutrition/services/curated_diet_plan_generator.dart';
 import 'package:icanbefitter/features/nutrition/services/diet_plan_generator.dart';
 import 'package:icanbefitter/features/nutrition/services/diet_plan_pdf.dart';
+import 'package:icanbefitter/features/nutrition/services/diet_plan_shake.dart';
 import 'package:icanbefitter/features/nutrition/services/diet_plan_strategy_fit.dart';
 import 'package:icanbefitter/features/nutrition/services/diet_plan_totals.dart';
 import 'package:icanbefitter/shared/repositories/food_repository.dart';
@@ -120,6 +121,11 @@ void main() {
       // a Balanced plan never shifts, nothing moves up
       expect(shift(DietStrategy.balanced, 200, 300), isNull);
       expect(shift(DietStrategy.lowCarb, 200, 20), isNull);
+      // B-pass seat C finding 2: carbs ROSE and the day fits a STRICTER level
+      // than the plan (Low carb plan, 20 -> 30 g still fits Keto): never up,
+      // with Keto allowed or not
+      expect(shift(DietStrategy.lowCarb, 20, 30), isNull);
+      expect(shift(DietStrategy.lowCarb, 20, 30, keto: false), isNull);
     });
 
     test('back up: only to the strategy dropped from, only while it fits', () {
@@ -135,8 +141,17 @@ void main() {
       expect(back(DietStrategy.keto, DietStrategy.lowCarb, 60), isNull);
       expect(back(null, DietStrategy.lowCarb, 30), isNull);
       expect(back(DietStrategy.lowCarb, DietStrategy.lowCarb, 30), isNull);
-      expect(back(DietStrategy.keto, DietStrategy.balanced, 100), isNull,
-          reason: 'it fits Low carb only, not the Keto it dropped from');
+      // B-pass seat A finding 2: after Keto -> Balanced a day that fits only
+      // Low carb again offers Low carb (the strictest level it fits)...
+      expect(back(DietStrategy.keto, DietStrategy.balanced, 100),
+          DietStrategy.lowCarb);
+      // ...and never above where the plan came from, nor a level it still misses
+      expect(back(DietStrategy.lowCarb, DietStrategy.balanced, 20),
+          DietStrategy.lowCarb);
+      expect(back(DietStrategy.keto, DietStrategy.balanced, 200), isNull);
+      expect(back(DietStrategy.keto, DietStrategy.lowCarb, 20, keto: false),
+          isNull,
+          reason: 'Keto is off for this user: Low carb is where the plan is');
     });
 
     test('the fit line', () {
@@ -179,6 +194,7 @@ void main() {
             File('assets/data/food_database.json').readAsStringSync()) as List)
         .cast<Map<String, dynamic>>();
     final repo = _Repo(rows);
+    final pea = rows.firstWhere((r) => r['id'] == 'F0831');
     const archetypes = [
       (1200, 100, 'non-veg'),
       (1500, 110, 'non-veg'),
@@ -210,25 +226,35 @@ void main() {
               carbTarget: target.toDouble(),
             ));
             if (r.builtFor == DietStrategy.balanced) continue;
-            final carbs = sumDietPlanTotals([
-              for (final m in r.meals)
-                for (final i in m.items)
-                  (calories: i.calories, protein: i.protein, carbs: i.carbs, fat: i.fat),
-            ]).carbs;
             final own = dietStrategyCarbTarget(r.builtFor, base)!;
-            final ratio = carbs / own;
-            if (ratio > worst) worst = ratio;
-            checked++;
-            expect(
-                strictestFit(dayCarbs: carbs, base: base, allowKeto: true)!
-                    .index,
-                greaterThanOrEqualTo(r.builtFor.index),
-                reason: '$kcal/$protein $pref ${r.builtFor} seed $seed: '
-                    '$carbs g vs target $own g (ratio ${ratio.toStringAsFixed(2)})');
+            // the plan as generated, and the plan with the Supplements shake
+            // the screen adds on top (the pea powder carries the most carbs:
+            // B-pass seat A finding 4)
+            final withShake = addProteinShake(
+                meals: r.meals,
+                proteinTarget: protein,
+                calorieTarget: kcal,
+                row: pea);
+            for (final meals in [r.meals, withShake]) {
+              final carbs = sumDietPlanTotals([
+                for (final m in meals)
+                  for (final i in m.items)
+                    (calories: i.calories, protein: i.protein, carbs: i.carbs, fat: i.fat),
+              ]).carbs;
+              final ratio = carbs / own;
+              if (ratio > worst) worst = ratio;
+              checked++;
+              expect(
+                  strictestFit(dayCarbs: carbs, base: base, allowKeto: true)!
+                      .index,
+                  greaterThanOrEqualTo(r.builtFor.index),
+                  reason: '$kcal/$protein $pref ${r.builtFor} seed $seed: '
+                      '$carbs g vs target $own g (ratio ${ratio.toStringAsFixed(2)})');
+            }
           }
         }
       }
-      expect(checked, greaterThan(1500));
+      expect(checked, greaterThan(3000)); // plans x (as generated, with shake)
       // ignore: avoid_print
       print('fit factor: worst generated ratio ${worst.toStringAsFixed(2)} '
           'over $checked plans; factor $kStrategyFitFactor');

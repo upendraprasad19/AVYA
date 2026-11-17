@@ -64,7 +64,9 @@ class _DietPlanPortionSheetState extends State<DietPlanPortionSheet> {
     _stdG = dietServingGramsOf(widget.row);
     _step = dietPortionStep(dietServingDescOf(widget.row));
     _maxM = dietPortionMaxMultiple(widget.row);
-    _m = 1; // one standard serving to start
+    // one standard serving to start (less when the serving alone is over the
+    // 2000 g cap: a custom food may state up to 10000 g)
+    _m = _maxM < 1 ? _maxM : 1;
     _grams = TextEditingController(text: _fmtG(_stdG * _m));
   }
 
@@ -77,7 +79,11 @@ class _DietPlanPortionSheetState extends State<DietPlanPortionSheet> {
   String _fmtG(double g) => g.round().toString();
 
   void _setM(double m) {
-    final lo = _step > kDietPortionMinGrams / _stdG ? _step : kDietPortionMinGrams / _stdG;
+    final rawLo =
+        _step > kDietPortionMinGrams / _stdG ? _step : kDietPortionMinGrams / _stdG;
+    // `clamp` throws when the lower limit is above the upper one (a serving
+    // over 4000 g makes `_maxM` less than a half step).
+    final lo = rawLo < _maxM ? rawLo : _maxM;
     setState(() {
       _m = m.clamp(lo, _maxM).toDouble();
       _grams.text = _fmtG(_stdG * _m);
@@ -101,8 +107,9 @@ class _DietPlanPortionSheetState extends State<DietPlanPortionSheet> {
     final item = freePickItem(row: widget.row, multiple: _m, role: widget.role);
     final dim = AppTypography.bodySm
         .copyWith(fontSize: 12, color: AppColors.textDim);
+    final hasCalories = dietRowHasCalories(widget.row);
     return SafeArea(
-      child: Padding(
+      child: SingleChildScrollView(
         padding: const EdgeInsets.all(AppSpacing.screenPadding),
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -174,12 +181,20 @@ class _DietPlanPortionSheetState extends State<DietPlanPortionSheet> {
                   fontWeight: FontWeight.w700,
                   color: AppColors.accent),
             ),
+            if (!hasCalories) ...[
+              const SizedBox(height: 8),
+              Text('No calories are saved for this food. Add them in '
+                  'My foods first.',
+                  key: const ValueKey('diet_portion_no_calories'),
+                  style: dim.copyWith(color: AppColors.warn)),
+            ],
             const SizedBox(height: 16),
             SizedBox(
               width: double.infinity,
               child: FilledButton(
                 key: const ValueKey('diet_portion_add'),
-                onPressed: () => Navigator.of(context).pop(item),
+                onPressed:
+                    hasCalories ? () => Navigator.of(context).pop(item) : null,
                 child: const Text('Add to plan'),
               ),
             ),

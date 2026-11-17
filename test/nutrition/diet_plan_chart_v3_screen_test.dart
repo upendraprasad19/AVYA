@@ -45,6 +45,10 @@ const _pack = <String, dynamic>{
   'fat_grams': 80,
 };
 
+/// A fixed plan seed (not the day's): the tests do not depend on the day they
+/// run. `--dart-define=DIET_TEST_SEED=<n>` tries another one.
+const int _kPlanSeed = int.fromEnvironment('DIET_TEST_SEED', defaultValue: 4242);
+
 Future<void> _settle(WidgetTester tester) async {
   for (var i = 0; i < 6; i++) {
     await tester
@@ -123,10 +127,10 @@ void main() {
     expect(find.text('a'), findsOneWidget);
   });
 
-  testWidgets('the totals row alone: 360 dp, text scale 1.3, no overflow, '
+  testWidgets('the totals row alone: 360 dp, text scale 1.0-2.0, no overflow, '
       'within its height ceiling with the fit line and the Back button',
       (tester) async {
-    for (final scale in [1.0, 1.3]) {
+    for (final scale in [1.0, 1.3, 1.5, 2.0]) {
       tester.view.physicalSize = const Size(360, 800);
       tester.view.devicePixelRatio = 1.0;
       await tester.pumpWidget(MaterialApp(
@@ -162,6 +166,55 @@ void main() {
     addTearDown(tester.view.reset);
   });
 
+  testWidgets('B-pass C7: each cell reads as ONE spoken line with units, the '
+      'Back button is a 44 dp target, and above scale 1.3 the cells are 2 x 2',
+      (tester) async {
+    final handle = tester.ensureSemantics();
+    tester.view.physicalSize = const Size(360, 800);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+    Future<void> pump(double scale) async {
+      await tester.pumpWidget(MaterialApp(
+        home: MediaQuery(
+          data: MediaQueryData(
+              size: const Size(360, 800), textScaler: TextScaler.linear(scale)),
+          child: const Scaffold(
+            body: DietPlanTotalsRow(
+              totals: DietPlanTotals(
+                  calories: 2315, protein: 142, carbs: 118, fat: 96),
+              targets: (calories: 2400, protein: 150, carbs: 120, fat: 80),
+              fitLine: 'Fits Low carb (up to 150 g)',
+              backLabel: 'Back to Keto',
+            ),
+          ),
+        ),
+      ));
+      await tester.pump();
+    }
+
+    await pump(1.0);
+    expect(find.bySemanticsLabel('Carbs: 118 grams of 120 grams, 2 grams under'),
+        findsOneWidget);
+    expect(find.bySemanticsLabel('Calories: 2315 kilocalories of 2400 kilocalories, 85 kilocalories under'),
+        findsOneWidget);
+    expect(find.bySemanticsLabel('Fat: 96 grams of 80 grams, 16 grams over'),
+        findsOneWidget);
+    expect(tester.getSize(_key('diet_plan_back_up')).height,
+        greaterThanOrEqualTo(44));
+    final calY = tester.getTopLeft(_key('diet_plan_totals_calories')).dy;
+    expect(tester.getTopLeft(_key('diet_plan_totals_protein')).dy,
+        closeTo(calY, 6),
+        reason: 'one row of four at scale 1.0');
+    await pump(1.5);
+    // a second row sits a whole cell (>= 30 dp) lower, not a few dp (the cells
+    // of one Row are centred, so their tops differ slightly)
+    expect(tester.getTopLeft(_key('diet_plan_totals_carbs')).dy,
+        greaterThan(tester.getTopLeft(_key('diet_plan_totals_calories')).dy + 30),
+        reason: 'two rows of two above scale 1.3');
+    expect(tester.takeException(), isNull);
+    handle.dispose();
+  });
+
   group('with Hive', () {
     late Directory dir;
     late List<Map<String, dynamic>> rows;
@@ -178,6 +231,7 @@ void main() {
       dir = await setUpHiveForTests();
       DietStrategyFlags.debugEnabledOverride = true;
       debugDietPlanGenerations = 0;
+      debugDietPlanSeedOverride = _kPlanSeed;
       debugResetDietPlanMismatchNotices();
       ErrorTelemetry.debugOnLogEventForTests = (op, {message}) {};
       ErrorTelemetry.debugOnRecordNonFatalForTests =
@@ -193,6 +247,7 @@ void main() {
 
     tearDown(() async {
       DietStrategyFlags.debugEnabledOverride = null;
+      debugDietPlanSeedOverride = null;
       ErrorTelemetry.debugOnLogEventForTests = null;
       ErrorTelemetry.debugOnRecordNonFatalForTests = null;
       UserProfileNotifier.debugFoodTypeEffects = null;
@@ -426,18 +481,168 @@ void main() {
       expect(find.text('Rolled Oats'), findsOneWidget);
     });
 
-    testWidgets('a carb-CUTTING pick on a plan already over its ceiling '
-        'never asks (round 1 F1)', (tester) async {
+    // The pure rule (a carb-cutting pick on a plan over its ceiling never asks,
+    // round 1 F1) is pinned by `shift(keto, 60, 55)` in
+    // diet_plan_totals_and_fit_test.dart; this is the screen-level sequel.
+    testWidgets('after an accepted shift, a carb-cutting pick does not ask '
+        'again', (tester) async {
       await seed(tester, extra: const {'diet_strategy': 'keto'});
       await pumpScreen(tester);
-      // the plan is pushed over the Keto ceiling by an accepted shift to Low
-      // carb, then Keto is chosen from the dropdown-equivalent write: the plan
-      // (Low carb) sits well over the Keto ceiling and stays asked-for Low carb
       await pickFree(tester, 'rolled oats', 'F0695');
       await _tapReal(tester, _key('diet_strategy_confirm_switch'));
       // a smaller carb source in place of the oats cuts carbs: no popup
       await pickFree(tester, 'cucumber', cucumberId);
       expect(dialog(), findsNothing);
+    });
+  });
+
+  group('with Hive: the B-pass wiring tests', () {
+    late Directory dir;
+    late List<Map<String, dynamic>> rows;
+    late String cucumberId;
+
+    setUpAll(() {
+      rows = (jsonDecode(File('assets/data/food_database.json')
+              .readAsStringSync()) as List)
+          .cast<Map<String, dynamic>>();
+      cucumberId =
+          rows.firstWhere((r) => r['name'] == 'Cucumber (raw)')['id'] as String;
+    });
+
+    setUp(() async {
+      dir = await setUpHiveForTests();
+      DietStrategyFlags.debugEnabledOverride = true;
+      debugDietPlanGenerations = 0;
+      debugDietPlanSeedOverride = _kPlanSeed;
+      debugResetDietPlanMismatchNotices();
+      ErrorTelemetry.debugOnLogEventForTests = (op, {message}) {};
+      ErrorTelemetry.debugOnRecordNonFatalForTests =
+          (e, st, {required reason, extra}) {};
+      UserProfileNotifier.debugFoodTypeEffects = FoodTypeWriteEffects(
+        currentUserId: () => kTestUserId,
+        pushSnapshot: () {},
+        lockFields: (_) async {},
+      );
+      await HiveService.instance.foodBox
+          .putAll({for (final r in rows) r['id'] as String: r});
+    });
+
+    tearDown(() async {
+      DietStrategyFlags.debugEnabledOverride = null;
+      debugDietPlanSeedOverride = null;
+      ErrorTelemetry.debugOnLogEventForTests = null;
+      ErrorTelemetry.debugOnRecordNonFatalForTests = null;
+      UserProfileNotifier.debugFoodTypeEffects = null;
+      await tearDownHiveForTests(dir);
+    });
+
+    Future<void> seed(WidgetTester tester,
+        {Map<String, dynamic> extra = const {}}) async {
+      await tester.runAsync(() async {
+        await UserRepository.instance.updateProfileFields({..._pack, ...extra});
+        await MigratedKey.write('isPro', true);
+        await MigratedKey.write('expiresAt',
+            DateTime.now().add(const Duration(days: 30)).toIso8601String());
+      });
+    }
+
+    Future<void> pumpScreen(WidgetTester tester) async {
+      tester.view.physicalSize = const Size(1080, 6000);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.reset);
+      final old = FlutterError.onError;
+      FlutterError.onError = (d) {};
+      addTearDown(() => FlutterError.onError = old);
+      await tester.pumpWidget(ProviderScope(
+        overrides: [authUserIdTokenProvider.overrideWithValue(kTestUserId)],
+        child: const MaterialApp(home: DietPlanScreen()),
+      ));
+      await _settle(tester);
+    }
+
+    Future<void> openSearch(WidgetTester tester, String query,
+        {int item = 0}) async {
+      await tester.tap(find.byIcon(Icons.swap_horiz).at(item));
+      await _settle(tester);
+      await _tapReal(tester, _key('diet_swap_search_row'));
+      await tester.enterText(_key('diet_search_field'), query);
+      await _settle(tester);
+    }
+
+    Finder anyHit() => find.byWidgetPredicate((w) =>
+        w.key is ValueKey &&
+        (w.key as ValueKey).value.toString().startsWith('diet_search_hit_'));
+
+    testWidgets('B-pass A1: a CANCELLED shift hands the provisional request '
+        'back: the plan saved afterwards is still stamped Keto', (tester) async {
+      await seed(tester, extra: const {'diet_strategy': 'keto'});
+      await pumpScreen(tester);
+      await openSearch(tester, 'rolled oats');
+      await _tapReal(tester, _key('diet_search_hit_F0695'));
+      await _tapReal(tester, _key('diet_portion_add'));
+      expect(_key('diet_strategy_confirm_dialog'), findsOneWidget);
+      await _tapReal(tester, _key('diet_strategy_confirm_cancel'));
+      await _tapReal(tester, find.byIcon(Icons.save_outlined));
+      final saved = _savedPlan()!;
+      expect(saved['diet_strategy'], 'keto');
+      expect(saved['diet_strategy_requested'], 'keto',
+          reason: 'the provisional Low carb request must not leak into the stamp');
+    });
+
+    testWidgets('B-pass C4: a regeneration while the popup is open drops the '
+        'pick and writes NOTHING (the screen wires isStale)', (tester) async {
+      await seed(tester, extra: const {'diet_strategy': 'keto'});
+      await pumpScreen(tester);
+      await openSearch(tester, 'rolled oats');
+      await _tapReal(tester, _key('diet_search_hit_F0695'));
+      await _tapReal(tester, _key('diet_portion_add'));
+      expect(_key('diet_strategy_confirm_dialog'), findsOneWidget);
+      expect(debugDietPlanGenerations, 1);
+      // the effective strategy moves under the open dialog (a restore, a PRO
+      // flip): the listener regenerates the plan for it
+      final container =
+          ProviderScope.containerOf(tester.element(find.byType(DietPlanScreen)));
+      await tester.runAsync(() => container
+          .read(userProfileProvider.notifier)
+          .setDietStrategy(DietStrategy.balanced));
+      await _settle(tester);
+      expect(debugDietPlanGenerations, 2, reason: 'the plan was rebuilt');
+      await _tapReal(tester, _key('diet_strategy_confirm_switch'));
+      expect(_profileStrategy(), 'balanced',
+          reason: 'the stale accept wrote nothing');
+      expect(find.text('Rolled Oats'), findsNothing);
+      expect(find.text('The plan changed. Pick again.'), findsOneWidget);
+    });
+
+    testWidgets('B-pass C4: an adult finds a whey powder, a minor never does',
+        (tester) async {
+      final y = DateTime.now().year;
+      await seed(tester, extra: {'date_of_birth': '${y - 30}-05-05'});
+      await pumpScreen(tester);
+      await openSearch(tester, 'whey');
+      expect(anyHit(), findsWidgets, reason: 'an adult: powders are listed');
+    });
+
+    testWidgets('B-pass C4: a minor never sees a protein powder',
+        (tester) async {
+      final y = DateTime.now().year;
+      await seed(tester, extra: {'date_of_birth': '${y - 15}-05-05'});
+      await pumpScreen(tester);
+      await openSearch(tester, 'whey');
+      expect(anyHit(), findsNothing);
+    });
+
+    testWidgets('B-pass C4: a food already in the plan is not offered again',
+        (tester) async {
+      await seed(tester);
+      await pumpScreen(tester);
+      await openSearch(tester, 'cucumber');
+      await _tapReal(tester, _key('diet_search_hit_$cucumberId'));
+      await _tapReal(tester, _key('diet_portion_add'));
+      expect(find.text('Cucumber (raw)'), findsOneWidget);
+      await openSearch(tester, 'cucumber', item: 1);
+      expect(_key('diet_search_hit_$cucumberId'), findsNothing,
+          reason: 'it is already in the plan');
     });
   });
 
@@ -598,8 +803,11 @@ void main() {
     final afterWrite = swap.substring(swap.indexOf('written = await handleDietStrategyTap'));
     expect(afterWrite.indexOf('epoch != _planEpoch || !mounted'),
         lessThan(afterWrite.indexOf('_droppedFrom ??= from')));
-    expect(swap, contains('_pickBusy = true'));
-    expect(swap, contains('} finally {\n      _pickBusy = false;'));
+    // both flows (a pick and Back to ...) hold the busy flag and let go of it
+    // in a finally, after handing back an uncommitted provisional request
+    expect('_pickBusy = true'.allMatches(swap).length, 2);
+    expect('      _pickBusy = false;\n    }'.allMatches(swap).length, 2);
+    expect('_requestedStrategy = previousRequested;'.allMatches(swap).length, 2);
     // a pick never saves the plan (round 3 D1)
     expect(swap, isNot(contains('_savePlan')));
     expect(swap, isNot(contains('saveDietPlan')));

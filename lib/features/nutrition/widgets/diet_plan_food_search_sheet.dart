@@ -25,13 +25,21 @@ Future<DietPlanFoodItem?> showDietPlanFoodSearchSheet(
     shape: const RoundedRectangleBorder(
       borderRadius: BorderRadius.vertical(top: Radius.circular(AppRadius.cardL)),
     ),
-    builder: (ctx) => Padding(
-      padding: EdgeInsets.only(bottom: MediaQuery.of(ctx).viewInsets.bottom),
-      child: SizedBox(
-        height: MediaQuery.of(ctx).size.height * 0.8,
-        child: DietPlanFoodSearchSheet(search: search, role: role),
-      ),
-    ),
+    builder: (ctx) {
+      final mq = MediaQuery.of(ctx);
+      // 80% of the screen, but never taller than what the keyboard leaves
+      // (B-pass seat B finding 5: the fixed 0.8H put the list's lower fifth
+      // behind the keyboard).
+      final room = mq.size.height - mq.viewInsets.bottom - 24;
+      final height = mq.size.height * 0.8 < room ? mq.size.height * 0.8 : room;
+      return Padding(
+        padding: EdgeInsets.only(bottom: mq.viewInsets.bottom),
+        child: SizedBox(
+          height: height,
+          child: DietPlanFoodSearchSheet(search: search, role: role),
+        ),
+      );
+    },
   );
 }
 

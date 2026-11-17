@@ -13,9 +13,14 @@ import '../services/diet_plan_totals.dart';
 
 /// The row's height ceiling at text scale 1.0, the fit line and the inline
 /// button included (the 60 dp ceiling belongs to the calorie cards). Measured
-/// 122.8 dp in the widget test (diet_plan_chart_v3_screen_test.dart); a larger
-/// system font grows the row, it does not overflow (every line scales down).
-const double kDietPlanTotalsRowMaxHeight = 128;
+/// in the widget test (diet_plan_chart_v3_screen_test.dart); the 44 dp button
+/// (B-pass seat C finding 7) raised it from 128. At a text scale above 1.3 the
+/// four cells go to a 2 x 2 grid so a larger font keeps its room (each line
+/// still scales DOWN inside its cell rather than overflow).
+const double kDietPlanTotalsRowMaxHeight = 144;
+
+/// Text scale above which the four cells go to two rows of two.
+const double kDietPlanTotalsGridScale = 1.3;
 
 /// The four targets the row compares with.
 typedef DietTotalsTargets = ({
@@ -52,13 +57,38 @@ class DietPlanTotalsRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cells = <({String label, int plan, double target, String unit})>[
-      (label: 'Calories', plan: totals.calories, target: targets.calories, unit: ''),
-      (label: 'Protein', plan: totals.protein, target: targets.protein, unit: 'g'),
+      (
+        label: 'Calories',
+        plan: totals.calories,
+        target: targets.calories,
+        unit: '',
+      ),
+      (
+        label: 'Protein',
+        plan: totals.protein,
+        target: targets.protein,
+        unit: 'g',
+      ),
       (label: 'Carbs', plan: totals.carbs, target: targets.carbs, unit: 'g'),
       (label: 'Fat', plan: totals.fat, target: targets.fat, unit: 'g'),
     ];
-    final dim =
-        AppTypography.bodySm.copyWith(fontSize: 10, color: AppColors.textDim);
+    final dim = AppTypography.bodySm.copyWith(
+      fontSize: 10,
+      color: AppColors.textDim,
+    );
+    final grid =
+        MediaQuery.textScalerOf(context).scale(1) > kDietPlanTotalsGridScale;
+    Widget cellOf(({String label, int plan, double target, String unit}) c) =>
+        Expanded(
+          child: _Cell(
+            key: ValueKey('diet_plan_totals_${c.label.toLowerCase()}'),
+            label: c.label,
+            plan: c.plan,
+            target: c.target,
+            unit: c.unit,
+            dim: dim,
+          ),
+        );
     return Container(
       key: const ValueKey('diet_plan_totals_row'),
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
@@ -76,25 +106,19 @@ class DietPlanTotalsRow extends StatelessWidget {
                 ? 'YOUR PLAN VS TARGET'
                 : 'YOUR PLAN VS TARGET · $targetCaption',
             key: const ValueKey('diet_plan_totals_title'),
-            style: AppTypography.mono
-                .copyWith(fontSize: 9, color: AppColors.textMute, letterSpacing: 1.2),
+            style: AppTypography.mono.copyWith(
+              fontSize: 9,
+              color: AppColors.textMute,
+              letterSpacing: 1.2,
+            ),
           ),
           const SizedBox(height: 4),
-          Row(
-            children: [
-              for (final c in cells)
-                Expanded(
-                  child: _Cell(
-                    key: ValueKey('diet_plan_totals_${c.label.toLowerCase()}'),
-                    label: c.label,
-                    plan: c.plan,
-                    target: c.target,
-                    unit: c.unit,
-                    dim: dim,
-                  ),
-                ),
-            ],
-          ),
+          if (grid) ...[
+            Row(children: [for (final c in cells.take(2)) cellOf(c)]),
+            const SizedBox(height: 4),
+            Row(children: [for (final c in cells.skip(2)) cellOf(c)]),
+          ] else
+            Row(children: [for (final c in cells) cellOf(c)]),
           if (fitLine != null || backLabel != null) ...[
             const SizedBox(height: 2),
             Row(
@@ -104,29 +128,38 @@ class DietPlanTotalsRow extends StatelessWidget {
                     child: Text(
                       fitLine!,
                       key: const ValueKey('diet_plan_fit_line'),
-                      maxLines: 1,
+                      maxLines: 2,
                       overflow: TextOverflow.ellipsis,
                       style: AppTypography.body.copyWith(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w700,
-                          color: fitOk ? AppColors.ok : AppColors.warn),
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                        color: fitOk ? AppColors.ok : AppColors.warn,
+                      ),
                     ),
                   )
                 else
                   const Spacer(),
                 if (backLabel != null)
-                  TextButton(
-                    key: const ValueKey('diet_plan_back_up'),
-                    onPressed: onBack,
-                    style: TextButton.styleFrom(
-                        minimumSize: const Size(0, 28),
+                  Flexible(
+                    child: TextButton(
+                      key: const ValueKey('diet_plan_back_up'),
+                      onPressed: onBack,
+                      style: TextButton.styleFrom(
+                        minimumSize: const Size(0, 44),
                         tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                        padding: const EdgeInsets.symmetric(horizontal: 8)),
-                    child: Text(backLabel!,
+                        padding: const EdgeInsets.symmetric(horizontal: 8),
+                      ),
+                      child: Text(
+                        backLabel!,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                         style: AppTypography.body.copyWith(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w800,
-                            color: AppColors.accent)),
+                          fontSize: 12,
+                          fontWeight: FontWeight.w800,
+                          color: AppColors.accent,
+                        ),
+                      ),
+                    ),
                   ),
               ],
             ),
@@ -162,29 +195,52 @@ class _Cell extends StatelessWidget {
     // Every line scales DOWN inside its cell instead of overflowing (a cell is
     // about 73 dp at 360 dp, and a larger system font must not break the row).
     Widget fit(Widget child) => FittedBox(
-        fit: BoxFit.scaleDown, alignment: Alignment.centerLeft, child: child);
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        fit(Text(label, style: dim)),
-        fit(Text('$plan$unit',
-            style: AppTypography.body.copyWith(
+      fit: BoxFit.scaleDown,
+      alignment: Alignment.centerLeft,
+      child: child,
+    );
+    final unitWord = unit == 'g' ? ' grams' : ' kilocalories';
+    final diffWord = diff == 0
+        ? 'on target'
+        : '${diff.abs()}${unit == 'g' ? ' grams' : ' kilocalories'} '
+              '${diff > 0 ? 'over' : 'under'}';
+    return Semantics(
+      container: true,
+      excludeSemantics: true,
+      label: '$label: $plan$unitWord of $t$unitWord, $diffWord',
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          fit(Text(label, style: dim)),
+          fit(
+            Text(
+              '$plan$unit',
+              style: AppTypography.body.copyWith(
                 fontSize: 15,
                 fontWeight: FontWeight.w800,
-                color: AppColors.textPrimary))),
-        fit(Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text('of $t$unit', style: dim),
-            const SizedBox(width: 4),
-            Text('$sign$diff$unit',
-                key: ValueKey('diet_plan_totals_diff_${label.toLowerCase()}'),
-                style: dim.copyWith(
+                color: AppColors.textPrimary,
+              ),
+            ),
+          ),
+          fit(
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text('of $t$unit', style: dim),
+                const SizedBox(width: 4),
+                Text(
+                  '$sign$diff$unit',
+                  key: ValueKey('diet_plan_totals_diff_${label.toLowerCase()}'),
+                  style: dim.copyWith(
                     fontWeight: FontWeight.w700,
-                    color: off ? AppColors.warn : AppColors.textDim)),
-          ],
-        )),
-      ],
+                    color: off ? AppColors.warn : AppColors.textDim,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
