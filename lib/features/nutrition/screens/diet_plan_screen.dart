@@ -16,7 +16,6 @@ import 'package:icanbefitter/core/theme/typography.dart';
 import 'package:icanbefitter/shared/repositories/food_repository.dart';
 import 'package:icanbefitter/features/profile/providers/profile_provider.dart';
 import 'package:icanbefitter/shared/repositories/user_repository.dart';
-import 'package:icanbefitter/shared/widgets/food_type_chips.dart';
 import '../providers/nutrition_provider.dart';
 import '../providers/diet_plan_provider.dart';
 import '../providers/diet_supplements_active_provider.dart';
@@ -32,7 +31,7 @@ import '../services/diet_supplements_flags.dart';
 import '../services/diet_plan_strategy_state.dart';
 import '../widgets/diet_plan_macro_cards.dart';
 import '../widgets/diet_plan_swap_sheet.dart';
-import '../widgets/diet_strategy_section.dart';
+import '../widgets/diet_plan_settings_row.dart';
 import '../widgets/diet_supplements_section.dart';
 
 part 'diet_plan_screen_models.dart';
@@ -596,7 +595,7 @@ class _DietPlanScreenState extends ConsumerState<DietPlanScreen> {
           mainAxisSize: MainAxisSize.min,
           children: [
             Text(
-              'Diet Plan',
+              'Diet chart',
               style: AppTypography.body.copyWith(fontSize: 18, fontWeight: FontWeight.w800, color: AppColors.textPrimary),
             ),
             Text(
@@ -647,29 +646,14 @@ class _DietPlanScreenState extends ConsumerState<DietPlanScreen> {
               child: ListView(
                 padding: const EdgeInsets.all(AppSpacing.screenPadding),
                 children: [
+                  DietPlanSettingsRow(
+                    foodType: _foodType,
+                    foodTypeEnabled: !_changingFoodType,
+                    onFoodType: _changeFoodType,
+                  ),
+                  const SizedBox(height: 12),
                   DietPlanTdeeCard(targets: targets),
-                  const SizedBox(height: AppSpacing.sectionGap),
-                  Text(
-                    'Food type',
-                    style: AppTypography.body.copyWith(
-                        fontSize: 13, color: AppColors.textDim),
-                  ),
                   const SizedBox(height: 8),
-                  FoodTypeChips(
-                    scrollable: true,
-                    value: _foodType,
-                    enabled: !_changingFoodType,
-                    onChanged: _changeFoodType,
-                  ),
-                  if (DietStrategyFlags.enabled) ...[
-                    const SizedBox(height: AppSpacing.sectionGap),
-                    const DietStrategySection(),
-                  ],
-                  if (DietSupplementsFlags.enabled) ...[
-                    const SizedBox(height: AppSpacing.sectionGap),
-                    const DietSupplementsSection(),
-                  ],
-                  const SizedBox(height: AppSpacing.sectionGap),
                   DietPlanMacroTargetsCard(targets: targets),
                   if (_planNote(targets) case final note?) ...[
                     const SizedBox(height: 8),
@@ -678,7 +662,7 @@ class _DietPlanScreenState extends ConsumerState<DietPlanScreen> {
                         style: AppTypography.body.copyWith(
                             fontSize: 13, color: AppColors.textDim)),
                   ],
-                  const SizedBox(height: AppSpacing.sectionGap),
+                  const SizedBox(height: 12),
                   ..._mealPlans.asMap().entries.map((entry) {
                     return Padding(
                       padding:

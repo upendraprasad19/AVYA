@@ -1,5 +1,5 @@
 // Diet plan Unit 3a (2026-11-14, docs/plans/diet-strategy.md §4 tests 7, 9,
-// 9b): the Diet Plan screen's strategy block (DietStrategySection, the flag
+// 9b): the Diet Plan screen's strategy block (DietStrategyField, the flag
 // forced on through the seam) and Edit Profile's Save step
 // (confirmEditProfileDietStrategy), on real Hive.
 //
@@ -19,7 +19,6 @@
 library;
 
 import 'dart:io';
-import 'dart:ui' show Tristate;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -72,6 +71,18 @@ Future<void> _tapReal(WidgetTester tester, Finder finder) async {
     await Future<void>.delayed(const Duration(milliseconds: 200));
   });
   await _settle(tester);
+}
+
+/// Opens the strategy dropdown (a real tap, like [_tapReal]) and leaves its
+/// menu open, so the items (`diet_strategy_chip_<key>`) can be found.
+Future<void> _openStrategyMenu(WidgetTester tester) =>
+    _tapReal(tester, find.byKey(const ValueKey('diet_plan_strategy_dropdown')));
+
+/// Picks [s] in the strategy dropdown: open the menu, tap the item.
+Future<void> _pickStrategy(WidgetTester tester, DietStrategy s) async {
+  await _openStrategyMenu(tester);
+  await _tapReal(tester,
+      find.byKey(ValueKey('diet_strategy_chip_${s.storageKey}')).last);
 }
 
 String? _stored() =>
@@ -197,27 +208,29 @@ void main() {
       await tester.pumpWidget(ProviderScope(
         overrides: [authUserIdTokenProvider.overrideWithValue(kTestUserId)],
         child: const MaterialApp(
-          home: Scaffold(body: SingleChildScrollView(child: DietStrategySection())),
+          home: Scaffold(body: SingleChildScrollView(
+                  child: Column(children: [
+            DietStrategyField(),
+            DietStrategyFootnotes(),
+          ]))),
         ),
       ));
       await tester.pump();
     }
 
-    Finder chip(DietStrategy s) =>
-        find.byKey(ValueKey('diet_strategy_chip_${s.storageKey}'));
-
     testWidgets('free: PRO badges; a Keto tap opens the Diet Strategy paywall '
         'and writes nothing', (tester) async {
       await seed(tester, pro: false);
       await pumpSection(tester);
+      await _openStrategyMenu(tester);
       expect(find.byKey(const ValueKey('diet_strategy_pro_badge_keto')),
           findsOneWidget);
       expect(find.byKey(const ValueKey('diet_strategy_pro_badge_low_carb')),
           findsOneWidget);
       expect(find.byKey(const ValueKey('diet_strategy_pro_badge_balanced')),
           findsNothing);
-      await tester.tap(chip(DietStrategy.keto));
-      await tester.pumpAndSettle();
+      await _tapReal(
+          tester, find.byKey(const ValueKey('diet_strategy_chip_keto')).last);
       expect(find.text('Diet Strategy is a PRO feature'), findsOneWidget);
       expect(find.text('Low carb and keto targets, set for your goal.'),
           findsOneWidget);
@@ -236,11 +249,14 @@ void main() {
         (tester) async {
       await seed(tester, pro: true);
       await pumpSection(tester);
+      await _openStrategyMenu(tester);
       expect(find.byKey(const ValueKey('diet_strategy_pro_badge_keto')),
           findsNothing);
+      await tester.tapAt(const Offset(1, 1));
+      await _settle(tester);
 
       // The PRO gate (isPro, the DECISION path) may write Hive.
-      await _tapReal(tester, chip(DietStrategy.keto));
+      await _pickStrategy(tester, DietStrategy.keto);
       expect(find.text('Switch to Keto?'), findsOneWidget);
       expect(find.text('Carbs 270 g \u2192 ${_keto.carbGrams} g'),
           findsOneWidget);
@@ -254,7 +270,7 @@ void main() {
       expect(pushes, 0);
 
       // The PRO gate (isPro, the DECISION path) may write Hive.
-      await _tapReal(tester, chip(DietStrategy.keto));
+      await _pickStrategy(tester, DietStrategy.keto);
       await _tapReal(
           tester, find.byKey(const ValueKey('diet_strategy_confirm_switch')));
       expect(_stored(), 'keto');
@@ -264,8 +280,12 @@ void main() {
       expect(find.textContaining('come in the next update'), findsNothing);
       expect(find.byKey(const ValueKey('diet_strategy_keto_medical_note')),
           findsOneWidget);
-      expect(tester.getSemantics(chip(DietStrategy.keto)).flagsCollection
-          .isSelected, Tristate.isTrue);
+      expect(
+          find.descendant(
+              of: find.byKey(const ValueKey('diet_plan_strategy_dropdown')),
+              matching: find.text(DietStrategy.keto.label)),
+          findsOneWidget,
+          reason: 'the closed field shows the selected strategy');
     });
 
     testWidgets('equal shown targets: no dialog, written, "already low"',
@@ -282,7 +302,7 @@ void main() {
         'fat_grams': 73,
       });
       await pumpSection(tester);
-      await _tapReal(tester, chip(DietStrategy.lowCarb));
+      await _pickStrategy(tester, DietStrategy.lowCarb);
       expect(find.byKey(const ValueKey('diet_strategy_confirm_dialog')),
           findsNothing);
       expect(_stored(), 'low_carb');
@@ -303,7 +323,7 @@ void main() {
             DateTime.now().add(const Duration(days: 30)).toIso8601String());
       });
       await pumpSection(tester);
-      await _tapReal(tester, chip(DietStrategy.lowCarb));
+      await _pickStrategy(tester, DietStrategy.lowCarb);
       expect(find.byKey(const ValueKey('diet_strategy_confirm_dialog')),
           findsNothing);
       expect(_stored(), 'low_carb');
@@ -311,7 +331,7 @@ void main() {
       expect(find.text('Diet strategy set to Low carb.'), findsOneWidget);
       expect(find.text('Targets updated for Low carb'), findsNothing);
 
-      await _tapReal(tester, chip(DietStrategy.keto));
+      await _pickStrategy(tester, DietStrategy.keto);
       expect(find.byKey(const ValueKey('diet_strategy_confirm_dialog')),
           findsOneWidget);
       expect(find.byKey(const ValueKey('diet_strategy_confirm_keto_note')),
@@ -338,7 +358,7 @@ void main() {
         lockFields: (_) async {},
       );
       await pumpSection(tester);
-      await _tapReal(tester, chip(DietStrategy.keto));
+      await _pickStrategy(tester, DietStrategy.keto);
       await _tapReal(
           tester, find.byKey(const ValueKey('diet_strategy_confirm_switch')));
       expect(find.text(kDietStrategyChangeFailedMessage), findsOneWidget);
@@ -350,11 +370,15 @@ void main() {
         'the hint; tapping Balanced keeps keto', (tester) async {
       await seed(tester, pro: false, extra: const {'diet_strategy': 'keto'});
       await pumpSection(tester);
-      expect(tester.getSemantics(chip(DietStrategy.balanced)).flagsCollection
-          .isSelected, Tristate.isTrue);
+      expect(
+          find.descendant(
+              of: find.byKey(const ValueKey('diet_plan_strategy_dropdown')),
+              matching: find.text(DietStrategy.balanced.label)),
+          findsOneWidget,
+          reason: 'the closed field shows the selected strategy');
       expect(find.text('Keto is paused. It comes back with PRO.'),
           findsOneWidget);
-      await _tapReal(tester, chip(DietStrategy.balanced));
+      await _pickStrategy(tester, DietStrategy.balanced);
       expect(_stored(), 'keto');
       expect(pushes, 0);
     });
@@ -490,10 +514,14 @@ void main() {
         'on and stamps a saved plan only with the flag on', () {
       final src = File('lib/features/nutrition/screens/diet_plan_screen.dart')
           .readAsStringSync();
-      expect(
-          RegExp(r'if \(DietStrategyFlags\.enabled\) \.\.\.\[\s*const SizedBox\(height: AppSpacing\.sectionGap\),\s*const DietStrategySection\(\),')
-              .hasMatch(src),
-          isTrue);
+      // Layout v2: the screen mounts the settings row, and the ROW mounts
+      // the strategy field and its footnotes only with the flag on.
+      expect(src, contains('DietPlanSettingsRow('));
+      final row = File('lib/features/nutrition/widgets/diet_plan_settings_row.dart')
+          .readAsStringSync();
+      expect(row, contains('final strategy = DietStrategyFlags.enabled;'));
+      expect(row, contains('if (strategy) const DietStrategyField(),'));
+      expect(row, contains('if (strategy) const DietStrategyFootnotes(),'));
       expect(
           RegExp(r"if \(DietStrategyFlags\.enabled\)\s*'diet_strategy':")
               .hasMatch(src),

@@ -1,9 +1,12 @@
 // lib/features/nutrition/widgets/diet_supplements_section.dart
 //
 // Diet plan Unit 4a (docs/plans/diet-supplements.md section 3): the Diet Plan
-// screen's Supplements block under the strategy block. The screen mounts it
-// only when DietSupplementsFlags.enabled (the section reads the providers
-// itself, so a flag-off screen never builds it).
+// screen's Supplements control. Since layout v2 (docs/plans/diet-layout-v2.md
+// section 3.3) it is the third column of the settings row
+// ([DietSupplementsField]) plus the hints under the row
+// ([DietSupplementsFootnotes]). The screen mounts them only when
+// DietSupplementsFlags.enabled (they read the providers themselves, so a
+// flag-off screen never builds them).
 //
 //   - under 18, or no date of birth the app can read: no switch (a hint says
 //     where to add the date when it is merely unreadable);
@@ -19,12 +22,14 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:icanbefitter/core/constants/diet_supplement_doses.dart';
 import 'package:icanbefitter/core/constants/food_types.dart';
 import 'package:icanbefitter/core/theme/colors.dart';
+import 'package:icanbefitter/core/theme/spacing.dart';
 import 'package:icanbefitter/core/theme/typography.dart';
 import 'package:icanbefitter/core/utils/diet_supplements_rule.dart';
 import 'package:icanbefitter/features/profile/providers/profile_provider.dart';
 import 'package:icanbefitter/shared/widgets/wardroom/ward_card.dart';
 import '../providers/diet_supplements_active_provider.dart';
 import '../services/diet_supplements_actions.dart';
+import 'diet_plan_dropdown.dart';
 
 /// The hint for a stored "on" that is not applied because PRO lapsed.
 const String kDietSupplementsPausedHint =
@@ -34,16 +39,27 @@ const String kDietSupplementsPausedHint =
 const String kDietSupplementsNeedsDobHint =
     'Add your date of birth in Edit Profile to unlock Supplements.';
 
-class DietSupplementsSection extends ConsumerStatefulWidget {
-  const DietSupplementsSection({super.key});
-
-  @override
-  ConsumerState<DietSupplementsSection> createState() =>
-      _DietSupplementsSectionState();
+/// True when the settings row shows a Supplements column: an adult (eligible)
+/// or a date of birth the app cannot read (the column then holds the hint's
+/// target, no switch). A minor gets no column at all.
+bool dietSupplementsColumnShown(WidgetRef ref) {
+  if (ref.watch(dietSupplementsEligibleProvider)) return true;
+  final dob = ref.watch(dietSupplementsInputsProvider.select((i) => i.dob));
+  return ageYearsOn(dob, DateTime.now()) == null;
 }
 
-class _DietSupplementsSectionState
-    extends ConsumerState<DietSupplementsSection> {
+/// The Supplements column of the settings row (layout v2): the caption, then
+/// a field with On/Off and the switch (a PRO lock for a free user). The
+/// `Switch` keeps its key; the hints live in [DietSupplementsFootnotes].
+class DietSupplementsField extends ConsumerStatefulWidget {
+  const DietSupplementsField({super.key});
+
+  @override
+  ConsumerState<DietSupplementsField> createState() =>
+      _DietSupplementsFieldState();
+}
+
+class _DietSupplementsFieldState extends ConsumerState<DietSupplementsField> {
   bool _busy = false;
 
   Future<void> _onToggle(bool next, bool current) async {
@@ -58,9 +74,110 @@ class _DietSupplementsSectionState
 
   @override
   Widget build(BuildContext context) {
-    // The age rule has ONE door: dietSupplementsEligibleProvider (flag on,
-    // adult). Not eligible: a minor sees nothing at all; an unreadable date
-    // of birth gets a hint that says where to add it.
+    final eligible = ref.watch(dietSupplementsEligibleProvider);
+    final dim =
+        AppTypography.body.copyWith(fontSize: 12, color: AppColors.textDim);
+    final isPro = ref.watch(subscriptionInfoProvider.select((s) => s.isPro));
+    final stored = ref.watch(dietSupplementsInputsProvider
+        .select((i) => i.switchValue == true));
+    final text = AppTypography.body.copyWith(
+        fontSize: 13,
+        fontWeight: FontWeight.w700,
+        color: eligible ? AppColors.textPrimary : AppColors.textDisabled);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        // The PRO lock sits with the caption (the field is only ~100 dp wide
+        // at 360 dp: the lock and the switch would leave no room for On/Off).
+        Row(
+          children: [
+            Flexible(
+              child: ExcludeSemantics(
+                child: Text('Supplements',
+                    maxLines: 1, overflow: TextOverflow.ellipsis, style: dim),
+              ),
+            ),
+            if (eligible && !isPro) ...[
+              const SizedBox(width: 4),
+              const Icon(Icons.lock_outline,
+                  size: 12,
+                  color: AppColors.textMute,
+                  semanticLabel: 'PRO feature'),
+            ],
+          ],
+        ),
+        const SizedBox(height: 6),
+        // The whole field is the tap target (44 dp), not only the switch.
+        GestureDetector(
+          key: const ValueKey('diet_plan_supplements_field'),
+          behavior: HitTestBehavior.opaque,
+          // The tap action lives on the labelled node below, once.
+          excludeFromSemantics: true,
+          onTap: eligible && !_busy ? () => _onToggle(!stored, stored) : null,
+          child: Semantics(
+            container: true,
+            label: 'Supplements',
+            onTap: eligible && !_busy ? () => _onToggle(!stored, stored) : null,
+            child: Container(
+              constraints:
+                  const BoxConstraints(minHeight: DietPlanDropdown.fieldHeight),
+              padding: const EdgeInsets.only(left: 10, right: 4),
+              decoration: BoxDecoration(
+                color: AppColors.input,
+                borderRadius: BorderRadius.circular(AppRadius.soft),
+                border: Border.all(color: AppColors.border),
+              ),
+              child: MergeSemantics(
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                          eligible ? (stored ? 'On' : 'Off') : 'Needs DOB',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: text),
+                    ),
+                    if (eligible)
+                      // A Material 3 Switch lays out 60 dp wide; in a ~100 dp
+                      // column that leaves ~20 dp for On/Off. Scaled to a 48 dp
+                      // box (the whole field is the tap target, not the
+                      // switch), the word keeps ~34 dp.
+                      SizedBox(
+                        width: 48,
+                        height: 32,
+                        child: FittedBox(
+                          child: Switch(
+                            key: const ValueKey('diet_supplements_switch'),
+                            materialTapTargetSize:
+                                MaterialTapTargetSize.shrinkWrap,
+                            value: stored,
+                            onChanged:
+                                _busy ? null : (v) => _onToggle(v, stored),
+                            activeThumbColor: AppColors.accent,
+                            activeTrackColor:
+                                AppColors.accent.withValues(alpha: 0.3),
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+/// The lines under the settings row for Supplements: the PRO-lapsed hint and
+/// the where-to-add-your-birth-date hint.
+class DietSupplementsFootnotes extends ConsumerWidget {
+  const DietSupplementsFootnotes({super.key});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
     final eligible = ref.watch(dietSupplementsEligibleProvider);
     final dim =
         AppTypography.body.copyWith(fontSize: 13, color: AppColors.textDim);
@@ -69,72 +186,21 @@ class _DietSupplementsSectionState
       if (ageYearsOn(dob, DateTime.now()) != null) {
         return const SizedBox.shrink();
       }
-      return Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text('Supplements', style: dim),
-          const SizedBox(height: 8),
-          Text(kDietSupplementsNeedsDobHint,
-              key: const ValueKey('diet_supplements_needs_dob_hint'),
-              style: dim),
-        ],
+      return Padding(
+        padding: const EdgeInsets.only(top: 8),
+        child: Text(kDietSupplementsNeedsDobHint,
+            key: const ValueKey('diet_supplements_needs_dob_hint'),
+            style: dim),
       );
     }
-
     final isPro = ref.watch(subscriptionInfoProvider.select((s) => s.isPro));
     final stored = ref.watch(dietSupplementsInputsProvider
         .select((i) => i.switchValue == true));
-    final paused = stored && !isPro;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text('Supplements', style: dim),
-        const SizedBox(height: 8),
-        WardCard(
-          padding: const EdgeInsets.fromLTRB(16, 10, 8, 10),
-          child: MergeSemantics(
-            child: Row(
-            children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text('Add supplements to my plan',
-                        style: AppTypography.body.copyWith(
-                            fontSize: 14, color: AppColors.textPrimary)),
-                    const SizedBox(height: 2),
-                    Text(
-                        'A daily supplement card, and a protein shake when '
-                        'your food falls short.',
-                        style: dim),
-                  ],
-                ),
-              ),
-              if (!isPro)
-                const Padding(
-                  padding: EdgeInsets.only(right: 4),
-                  child: Icon(Icons.lock_outline,
-                      size: 16,
-                      color: AppColors.textMute,
-                      semanticLabel: 'PRO feature'),
-                ),
-              Switch(
-                key: const ValueKey('diet_supplements_switch'),
-                value: stored,
-                onChanged: _busy ? null : (v) => _onToggle(v, stored),
-                activeThumbColor: AppColors.accent,
-                activeTrackColor: AppColors.accent.withValues(alpha: 0.3),
-              ),
-            ],
-          ),
-          ),
-        ),
-        if (paused) ...[
-          const SizedBox(height: 8),
-          Text(kDietSupplementsPausedHint,
-              key: const ValueKey('diet_supplements_paused_hint'), style: dim),
-        ],
-      ],
+    if (!(stored && !isPro)) return const SizedBox.shrink();
+    return Padding(
+      padding: const EdgeInsets.only(top: 8),
+      child: Text(kDietSupplementsPausedHint,
+          key: const ValueKey('diet_supplements_paused_hint'), style: dim),
     );
   }
 }
