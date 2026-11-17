@@ -569,9 +569,11 @@ void main() {
       await _settle(tester);
     }
 
-    Finder anyHit() => find.byWidgetPredicate((w) =>
-        w.key is ValueKey &&
-        (w.key as ValueKey).value.toString().startsWith('diet_search_hit_'));
+    Finder anyHit() => find.byWidgetPredicate((w) {
+          final k = w.key;
+          return k is ValueKey &&
+              k.value.toString().startsWith('diet_search_hit_');
+        });
 
     testWidgets('B-pass A1: a CANCELLED shift hands the provisional request '
         'back: the plan saved afterwards is still stamped Keto', (tester) async {
