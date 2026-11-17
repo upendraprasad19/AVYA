@@ -8,9 +8,12 @@
 library;
 
 /// Tokens that are deliberately NOT reachable from any onboarding goal card any
-/// more, but stay live in `FitnessGoals` because other writers still emit them:
-/// the legacy chat onboarding (`/onboarding/chat`), cloud restore of an existing
-/// profile, and the AI coach switch-goal tool (server enum parity, Check 4).
+/// more, but stay live in `FitnessGoals` because a STORED value can still hold
+/// them: older app builds write them, cloud restore brings them back, and
+/// `LegacyGoalHealer` moves them (Unit 3B, founder d69 / d72; it equals
+/// `FitnessGoals.legacyTargets.keys`, pinned by `goal_list_selectable_test.dart`).
+/// Since Unit 3B no picker and no coach tool offers them: Check 4 requires the
+/// server goal enums to list `tokens` MINUS this set ([serverGoalEnumProblems]).
 /// Keep this NARROW: a token added here stops being checked for card reachability.
 const Set<String> kLegacyReachableOnlyGoalTokens = {'recompose', 'strength'};
 
@@ -60,6 +63,62 @@ List<String> goalCardReachabilityProblems({
             'reachable from an onboarding goal card — remove the stale entry.');
       }
     }
+  }
+  return problems;
+}
+
+/// Problems for Check 4 (Unit 3B): a server AI-coach goal enum ([enumTokens], parsed from [path]) must list exactly
+/// the SELECTABLE goals, i.e. [tokens] minus [legacyReachableOnly]. A selectable goal missing from the enum means the
+/// model cannot emit it (the F19 class, one tool over); a legacy or unknown goal in the enum means the model can
+/// propose a goal the client refuses.
+List<String> serverGoalEnumProblems({
+  required String path,
+  required Set<String> tokens,
+  required Set<String> enumTokens,
+  Set<String> legacyReachableOnly = const {},
+}) {
+  final problems = <String>[];
+  final selectable = tokens.difference(legacyReachableOnly);
+  for (final t in selectable) {
+    if (!enumTokens.contains(t)) {
+      problems.add('$path goal enum is missing selectable FitnessGoals token "$t" — '
+          'the AI cannot act on this goal (F19 class).');
+    }
+  }
+  for (final e in enumTokens) {
+    if (legacyReachableOnly.contains(e)) {
+      problems.add('$path goal enum lists legacy goal "$e" — a stored value only, never '
+          'offered (Unit 3B); the client refuses it.');
+    } else if (!tokens.contains(e)) {
+      problems.add('$path goal enum lists "$e", which is not a FitnessGoals token '
+          '(${tokens.join(", ")}).');
+    }
+  }
+  return problems;
+}
+
+/// Unit 3B B-pass: the app's own selectable list (`FitnessGoals.selectableTokens`, [selectableSource] = the text of
+/// fitness_goals.dart) must equal [tokens] minus [legacyReachableOnly], the set Check 4 requires in the server enums.
+/// Without this a token added to `FitnessGoals` and to neither list would be required in the enums but refused by
+/// the client's `isSelectable` checks. An unparseable list is a problem too (fail closed).
+List<String> selectableListProblems({
+  required String selectableSource,
+  required Set<String> tokens,
+  required Set<String> legacyReachableOnly,
+}) {
+  final body = RegExp(r'selectableTokens\s*=\s*\[([^\]]*)\]').firstMatch(selectableSource)?.group(1);
+  if (body == null) {
+    return ['Could not locate FitnessGoals.selectableTokens in fitness_goals.dart.'];
+  }
+  final listed = RegExp(r"'(\w+)'").allMatches(body).map((m) => m.group(1)!).toSet();
+  final expected = tokens.difference(legacyReachableOnly);
+  final problems = <String>[];
+  for (final t in expected.difference(listed)) {
+    problems.add('FitnessGoals token "$t" is neither in selectableTokens nor in the legacy set — '
+        'add it to one of them.');
+  }
+  for (final t in listed.difference(expected)) {
+    problems.add('selectableTokens lists "$t", which is a legacy or unknown goal token.');
   }
   return problems;
 }

@@ -13,8 +13,9 @@
 // add volume to a fatiguing/declining group (no double-bump).
 //
 // SAFE polarity + inert seams:
-//   • `enable_plateau_escalation` DEFAULT OFF → mergePlateauSetDeltas returns the
-//     input map unchanged (same ref) → applyToWeeks identity → byte-identical.
+//   • LIVE since generator step 4 (OI-53, founder d82: the +1 set and the rotation);
+//     the kill switch `disable_plateau_escalation` → mergePlateauSetDeltas returns the
+//     input map unchanged (same ref) and the avoid set is empty → byte-identical.
 //   • ALSO gated on readiness (`disable_readiness` kill-switch; mirrors DeloadEvaluator) — the
 //     fatigue gate needs readiness rows; without them +sets would fire blind.
 //   • `phase >= 2` self-gate (PRO — free is phase 1; the two fresh-advance callers

@@ -15,6 +15,8 @@ import 'package:icanbefitter/core/services/subscription_service.dart';
 import 'package:icanbefitter/core/constants/diet_strategies.dart';
 import 'package:icanbefitter/core/constants/food_types.dart';
 import 'package:icanbefitter/core/constants/app_constants.dart';
+import 'package:icanbefitter/core/constants/fitness_goals.dart';
+import 'package:icanbefitter/core/services/legacy_goal_healer.dart';
 import 'package:icanbefitter/core/services/sync_service.dart';
 import 'package:icanbefitter/core/services/prediction_service.dart';
 import 'package:icanbefitter/core/theme/colors.dart';
@@ -43,6 +45,45 @@ import '../providers/profile_provider.dart';
 import '../providers/profile_completeness_provider.dart';
 import 'package:icanbefitter/core/constants/equipment_defaults.dart';
 import 'package:icanbefitter/shared/repositories/plan_engine/session_budget.dart';
+
+/// Unit 3B (d4 / d69 / d71 / d72): Edit Profile's goal and physique-focus seed. The form opens on the HEALED values
+/// (`legacyGoalPatch`: a stored strength opens on Build, with the Strength focus when the focus was Balanced or empty;
+/// recompose on Cut), and a goal still not selectable (junk, null) on Maintain, so a save never writes a legacy or
+/// junk goal back. The originals are the RAW stored values, so `computePlanChanged` sees the change and the
+/// reschedule is offered.
+@visibleForTesting
+({String goal, String focus, String originalGoal, String originalFocus}) goalFormSeed(Map<dynamic, dynamic> profile) {
+  final rawGoal = (profile['primary_goal'] as String?) ?? 'general_fitness';
+  final rawFocus = (profile['physique_focus'] as String?) ?? 'balanced';
+  final patch = legacyGoalPatch(profile);
+  final healed = (patch?['primary_goal'] as String?) ?? rawGoal;
+  return (
+    goal: FitnessGoals.isSelectable(healed) ? healed : 'general_fitness',
+    focus: (patch?['physique_focus'] as String?) ?? rawFocus,
+    originalGoal: rawGoal,
+    originalFocus: rawFocus,
+  );
+}
+
+/// Unit 3B: a goal named in the reschedule prompt's change list: the FitnessGoals label (a legacy original keeps its
+/// own, e.g. Strength), else the raw token (never `null`).
+@visibleForTesting
+String goalChangeLabel(String token) => FitnessGoals.isKnown(token) ? FitnessGoals.label(token) : token;
+
+/// OI-488 (Unit 3B, founder d70): the session lengths Edit Profile offers for the in-form experience level: 30 / 45 /
+/// 60, and 90 for `advanced` only (the PROFILE level, as `SessionBudget.minutesForLevel` reads it).
+@visibleForTesting
+List<int> sessionDurationOptions(String experience) =>
+    experience == 'advanced' ? const [30, 45, 60, 90] : const [30, 45, 60];
+
+/// OI-488 (Unit 3B): the selected session length after the experience chip changes to [experience]: above 60 below
+/// advanced becomes [SessionBudget.maxMinutesBelowAdvanced] (the rule `SessionBudget.minutesForLevel` applies to the
+/// stored value); anything else is kept.
+@visibleForTesting
+int? sessionDurationForExperience(int? selected, String experience) =>
+    experience != 'advanced' && selected != null && selected > SessionBudget.maxMinutesBelowAdvanced
+        ? SessionBudget.maxMinutesBelowAdvanced
+        : selected;
 
 class EditProfileScreen extends ConsumerStatefulWidget {
   const EditProfileScreen({super.key});
@@ -140,11 +181,11 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
   // Track original target weight for prediction invalidation (Bug #12)
   late double _originalTargetWeight;
 
-  static const _goals = {
-    'build_muscle': 'Build Muscle',
-    'lose_fat': 'Lose Fat',
-    'general_fitness': 'General Fitness',
-    'strength': 'Build Strength',
+  // Unit 3B (founder d69 / d73): the goals a user can choose, named from the one
+  // FitnessGoals table (Build / Cut / Maintain). Strength and Recomposition are
+  // stored legacy values only (LegacyGoalHealer moves them).
+  static final Map<String, String> _goals = {
+    for (final t in FitnessGoals.selectableTokens) t: FitnessGoals.label(t),
   };
 
   static const _equipmentOptions = {
@@ -235,7 +276,14 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
         TextEditingController(text: profile['phone'] as String? ?? '');
 
     _gender = (profile['gender'] as String?) ?? 'male';
-    _goal = (profile['primary_goal'] as String?) ?? 'general_fitness';
+    // Unit 3B (d4 / d71 / d72): the form opens on the HEALED goal and focus (a
+    // stored strength opens on Build, with the Strength focus when the focus was
+    // Balanced or empty; recompose on Cut), and anything still not selectable on
+    // Maintain, so a save never writes a legacy or junk goal back. The `_original*`
+    // values below stay the RAW stored ones, so the change is seen and the
+    // reschedule offered.
+    final goalSeed = goalFormSeed(profile);
+    _goal = goalSeed.goal;
     _equipment = equipmentAccessOf(profile);
     // ⑥ C1 — crash-safe seed (fromProfile handles List / bare-String / null →
     // canonical List; never `as List`). The tier-change onChanged prunes stale.
@@ -261,7 +309,7 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
     // double such as 90.0 is a number here and not a cast error. The nine live
     // rows already stamped 90 keep 90.
     _sessionDuration = SessionBudget.initialSessionDuration(profile);
-    _physiqueFocus = (profile['physique_focus'] as String?) ?? 'balanced';
+    _physiqueFocus = goalSeed.focus;
     _fitnessExperience = (profile['fitness_experience'] as String?) ?? 'intermediate';
     final rawInjuries = profile['injuries'];
     if (rawInjuries is List && rawInjuries.isNotEmpty) {
@@ -317,13 +365,16 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
     // row don't mutate the original snapshot (List references are aliased
     // in Dart; without List.of we'd compare a list to itself).
     _originalDaysPerWeek = _daysPerWeek;
-    _originalGoal = _goal;
+    _originalGoal = goalSeed.originalGoal; // Unit 3B: RAW (see goalFormSeed)
     _originalEquipment = _equipment;
     _originalEquipmentExclusions = List<String>.of(_equipmentExclusions); // ⑥ C1
     _originalEquipmentOwned = List<String>.of(_equipmentOwned); // ⑦ OI-89
     _originalFitnessExperience = _fitnessExperience;
-    _originalSessionDuration = _sessionDuration;
-    _originalPhysiqueFocus = _physiqueFocus;
+    // OI-488 (Unit 3B): the RAW resolved minutes, not the level-capped seed, so a
+    // stored 90 shown as 60 below advanced is a change the first save writes.
+    _originalSessionDuration =
+        SessionBudget.resolveMinutes(profileValue: profile['session_duration_minutes']);
+    _originalPhysiqueFocus = goalSeed.originalFocus; // Unit 3B: RAW
     _originalInjuries = List<String>.of(_injuries);
     _originalFoodType = _foodType;
     _originalDietStrategy = _dietStrategy;
@@ -1133,7 +1184,7 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
   // ── Session Duration ─────────────────────────────────────────────
 
   Widget _buildSessionDurationSelector() {
-    const options = [30, 45, 60, 90];
+    final options = sessionDurationOptions(_fitnessExperience);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -1255,7 +1306,11 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
           children: options.map((opt) {
             final selected = _fitnessExperience == opt.$1;
             return GestureDetector(
-              onTap: () => setState(() => _fitnessExperience = opt.$1),
+              onTap: () => setState(() {
+                _fitnessExperience = opt.$1;
+                // OI-488 (d70): 90 minutes is offered to an advanced profile only.
+                _sessionDuration = sessionDurationForExperience(_sessionDuration, opt.$1);
+              }),
               child: AnimatedContainer(
                 duration: const Duration(milliseconds: 200),
                 padding:
@@ -2032,7 +2087,9 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
           changes.add('$_originalDaysPerWeek → $_daysPerWeek days/week');
         }
         if (_goal != _originalGoal) {
-          changes.add('Goal: ${_goals[_originalGoal]} → ${_goals[_goal]}');
+          // Unit 3B: label both sides from FitnessGoals (a legacy original is not in
+          // the selectable _goals map and would print `null`).
+          changes.add('Goal: ${goalChangeLabel(_originalGoal)} → ${goalChangeLabel(_goal)}');
         }
         if (_equipment != _originalEquipment) {
           changes.add('Equipment: ${_equipmentOptions[_originalEquipment]} → ${_equipmentOptions[_equipment]}');

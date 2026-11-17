@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:icanbefitter/core/constants/fitness_goals.dart';
 
 /// F19 sibling (audit 2026-06-07 follow-up, 2026-06-08): the canonical
 /// `FitnessGoals` tokens are the source of truth for which fitness goals exist.
@@ -18,6 +19,11 @@ import 'package:flutter_test/flutter_test.dart';
 /// client Dart — this test (+ that gate's new Check 4) closes the server blind
 /// spot that let the drift exist. Comment-stripped to match the parity pattern
 /// in `ai_message_limit_parity_test.dart`.
+///
+/// Unit 3B (founder d69, 2026-11-16): the enums list the goals a user can CHOOSE
+/// (`FitnessGoals.selectableTokens`: Build, Cut, Maintain). The legacy tokens
+/// (`strength`, `recompose`) stay in `FitnessGoals` for stored values only and
+/// must not be offered to the model.
 void main() {
   String stripComments(String s) {
     final noBlock = s.replaceAll(RegExp(r'/\*[\s\S]*?\*/'), '');
@@ -59,9 +65,16 @@ void main() {
         reason: 'recompose is a canonical goal (F19) — must be in the SoT');
   });
 
-  test('switchGoal.ts newGoal enum == FitnessGoals tokens (no missing, no phantom)',
-      () {
+  test('the selectable goals are FitnessGoals tokens, and the legacy ones are not selectable', () {
     final tokens = fitnessGoalTokens();
+    expect(tokens.containsAll(FitnessGoals.selectableTokens), isTrue);
+    expect(tokens.difference(FitnessGoals.selectableTokens.toSet()),
+        {'strength', 'recompose'});
+  });
+
+  test('switchGoal.ts newGoal enum == FitnessGoals.selectableTokens (no missing, no phantom)',
+      () {
+    final tokens = FitnessGoals.selectableTokens.toSet();
     final enumTokens = serverGoalEnum(
       switchGoalPath,
       RegExp(r'newGoal:\s*z\.enum\(\[([\s\S]*?)\]\)'),
@@ -75,9 +88,9 @@ void main() {
             '${enumTokens.difference(tokens)} — the client would reject it.');
   });
 
-  test('regeneratePlanBlock.ts goal enum == FitnessGoals tokens (no missing, no phantom)',
+  test('regeneratePlanBlock.ts goal enum == FitnessGoals.selectableTokens (no missing, no phantom)',
       () {
-    final tokens = fitnessGoalTokens();
+    final tokens = FitnessGoals.selectableTokens.toSet();
     final enumTokens = serverGoalEnum(
       regenPath,
       RegExp(r'goal:\s*z\.enum\(\[([\s\S]*?)\]\)'),
@@ -93,8 +106,9 @@ void main() {
 
   // Defense-in-depth symmetry (B-pass b7c8040 / Finding 2): both destructive plan
   // tools that can carry a goal — switch_goal (persists primary_goal) and
-  // regenerate_plan_block — must reject a goal FitnessGoals doesn't know via a
-  // `FitnessGoals.isKnown(...)` guard before acting, so a replayed/crafted intent
+  // regenerate_plan_block — must reject a goal the user cannot choose via a
+  // `FitnessGoals.isSelectable(...)` guard before acting (Unit 3B; it was
+  // `isKnown` before the legacy tokens left the choosable list), so a replayed/crafted intent
   // can't silently produce a general_fitness plan and report success (F19 class).
   // The enum gate (Check 4) closes the server vector; this pins the client guards
   // so the two stay symmetric. Presence pin — the recompose end-to-end BEHAVIOUR
@@ -109,7 +123,7 @@ void main() {
       return src.substring(i, end);
     }
 
-    test('switch_goal and regenerate_plan_block both guard unknown goals', () {
+    test('switch_goal and regenerate_plan_block both guard non-selectable goals', () {
       final src = stripComments(
           File('lib/features/ai_coach/services/tool_dispatcher.dart')
               .readAsStringSync());
@@ -117,14 +131,33 @@ void main() {
           methodWindow(src, 'Future<ToolExecutionResult> _executeSwitchGoal(');
       final regenWin = methodWindow(
           src, 'Future<ToolExecutionResult> _executeRegeneratePlanBlock(');
-      expect(switchWin.contains('FitnessGoals.isKnown('), isTrue,
+      expect(switchWin.contains('FitnessGoals.isSelectable('), isTrue,
           reason:
-              '_executeSwitchGoal must guard newGoal via FitnessGoals.isKnown');
-      expect(regenWin.contains('FitnessGoals.isKnown('), isTrue,
+              '_executeSwitchGoal must guard newGoal via FitnessGoals.isSelectable');
+      expect(regenWin.contains('FitnessGoals.isSelectable('), isTrue,
           reason:
               '_executeRegeneratePlanBlock must guard the requested goal via '
-              'FitnessGoals.isKnown (B-pass b7c8040 Finding 2 — symmetric with '
+              'FitnessGoals.isSelectable (B-pass b7c8040 Finding 2 — symmetric with '
               'switchGoal; defense-in-depth against an unknown-goal intent).');
     });
+  });
+
+  // Unit 3B B-pass (d73): the app shows the tools' previewSummary verbatim, so the server names the goal with the
+  // same labels as the client. goalLabels.ts must map exactly the selectable goals to FitnessGoals.label, and both
+  // tools must name the goal through goalLabel(), never the raw token.
+  test('goalLabels.ts == FitnessGoals.label for every selectable goal; both previews use goalLabel()', () {
+    final labels = stripComments(
+        File('supabase/functions/_shared/tools/plan/goalLabels.ts').readAsStringSync());
+    final body = RegExp(r'GOAL_LABELS[^{]*\{([^}]*)\}').firstMatch(labels)!.group(1)!;
+    final parsed = {
+      for (final m in RegExp(r'(\w+):\s*"([^"]*)"').allMatches(body)) m.group(1)!: m.group(2)!,
+    };
+    expect(parsed, {for (final t in FitnessGoals.selectableTokens) t: FitnessGoals.label(t)});
+    final sw = stripComments(File('supabase/functions/_shared/tools/plan/switchGoal.ts').readAsStringSync());
+    final rg = stripComments(File('supabase/functions/_shared/tools/plan/regeneratePlanBlock.ts').readAsStringSync());
+    expect(sw.contains(r'${goalLabel(args.newGoal)}'), isTrue);
+    expect(sw.contains(r'${args.newGoal}'), isFalse, reason: 'the raw token must not reach the preview');
+    expect(rg.contains(r'${goalLabel(args.goal)}'), isTrue);
+    expect(rg.contains(r'${args.goal}'), isFalse, reason: 'the raw token must not reach the preview');
   });
 }

@@ -36,7 +36,9 @@ void main() {
         reason: 'a ceiling is false once the under-60 allowance exists');
     expect(picker.contains(r"'$min min'"), isFalse,
         reason: 'the plain label reads as a promise of N minutes');
-    expect(picker.contains('const options = [30, 45, 60, 90];'), isTrue);
+    // OI-488 (Unit 3B, d70): the options follow the in-form level; 90 for advanced only.
+    expect(picker.contains('final options = sessionDurationOptions(_fitnessExperience);'), isTrue);
+    expect(src.contains("experience == 'advanced' ? const [30, 45, 60, 90] : const [30, 45, 60];"), isTrue);
 
     // The change-summary line the reschedule dialog shows is unchanged.
     expect(src.contains(r"d == null ? '—' : '$d min'"), isTrue);

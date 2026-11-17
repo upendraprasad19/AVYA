@@ -5,7 +5,7 @@
 // Reader:   Hive schedule_* rows + MigratedKey('plan_end_date' / 'plan_start_date')
 //
 // Pins the mechanic the ×2 review converged on. Each assertion FAILS if the
-// mechanic regresses to redoWeek4's behavior:
+// mechanic regresses to the deleted redoWeek4's behavior:
 //   1. First hold sources the PEAK week (plan_start+14), FLAT loads, stamps
 //      'week'=4+N / is_hold / hold_ordinal, extends plan_end.  (not the
 //      trailing/deload week; not 'week_number'; no decay)
@@ -223,7 +223,6 @@ void main() {
 
     test('a materialized hold emits hold_week_started carrying its ordinal',
         () async {
-      await HiveService.instance.configBox.put('enable_hold_weeks', true);
       await WorkoutScheduleWriteService.instance.holdWeek();
 
       final events = AppEventsService.debugCapture!
@@ -238,7 +237,6 @@ void main() {
     });
 
     test('each successive hold emits its own ascending ordinal', () async {
-      await HiveService.instance.configBox.put('enable_hold_weeks', true);
       await WorkoutScheduleWriteService.instance.holdWeek();
       setTestClockTo(nowWall().add(const Duration(days: 7)));
       await WorkoutScheduleWriteService.instance.holdWeek();
@@ -254,7 +252,6 @@ void main() {
       // Two overlapping calls yield exactly ONE hold (pinned elsewhere in this
       // file); the telemetry must agree, or holds_started_* over-counts every
       // double-tap on the Keep Training button.
-      await HiveService.instance.configBox.put('enable_hold_weeks', true);
       final f1 = WorkoutScheduleWriteService.instance.holdWeek();
       final f2 = WorkoutScheduleWriteService.instance.holdWeek();
       await Future.wait([f1, f2]);
@@ -281,7 +278,6 @@ void main() {
       AppEventsService.debugCapture =
           List<({String event, Map<String, dynamic>? metadata})>.unmodifiable(
               const []);
-      await HiveService.instance.configBox.put('enable_hold_weeks', true);
 
       // rollStart is normalizeToMonday(nowWall()), NOT plan_end-derived, so the
       // clock has to be pinned for the row assertions below to name a date.
@@ -296,26 +292,6 @@ void main() {
       expect(MigratedKey.read<String>('plan_end_date'),
           rollStart.add(const Duration(days: 6)).toIso8601String(),
           reason: 'and plan_end was still extended');
-    });
-
-    test('the legacy redoWeek4 write emits NOTHING', () async {
-      // The ship-dark guarantee reaches telemetry too: with enable_hold_weeks
-      // OFF the free-tier button performs redoWeek4, and that path must not
-      // populate a founder metric.
-      //
-      // ⚠ Asserted on redoWeek4 DIRECTLY, not on "holdWeek with the flag off".
-      // holdWeek() is NOT self-gated — the branch lives once, at
-      // runFreeTierRepeatWrite (keep_training_phase1_action.dart), which picks
-      // between the two writes. A direct holdWeek() call materializes a hold
-      // whatever the flag says, and SHOULD emit; the first draft of this test
-      // asserted otherwise and correctly failed.
-      await HiveService.instance.configBox.delete('enable_hold_weeks');
-      await WorkoutScheduleWriteService.instance.redoWeek4();
-
-      expect(
-          AppEventsService.debugCapture!
-              .where((e) => e.event == 'hold_week_started'),
-          isEmpty);
     });
   });
 

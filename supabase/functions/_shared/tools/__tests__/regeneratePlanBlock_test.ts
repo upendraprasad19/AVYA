@@ -22,15 +22,20 @@ Deno.test("regeneratePlanBlock — schema accepts full args", () => {
   assertEquals(result.success, true);
 });
 
-Deno.test("regeneratePlanBlock — schema accepts recompose goal (F19 sibling)", () => {
-  // recompose is a canonical FitnessGoals token; the goal enum must accept it
-  // so the AI can regenerate a recomposition block. Was missing while switchGoal
-  // already had it — the same F19 fallthrough class, one tool over.
-  const result = regeneratePlanBlockTool.schema.safeParse({
-    weeks: 4,
-    goal: "recompose",
-  });
-  assertEquals(result.success, true);
+Deno.test("regeneratePlanBlock — schema accepts each selectable goal (Unit 3B, d69)", () => {
+  for (const goal of ["build_muscle", "lose_fat", "general_fitness"]) {
+    const result = regeneratePlanBlockTool.schema.safeParse({ weeks: 4, goal });
+    assertEquals(result.success, true);
+  }
+});
+
+Deno.test("regeneratePlanBlock — schema rejects the legacy goals strength and recompose (Unit 3B)", () => {
+  // Both enums list FitnessGoals.selectableTokens (ai_proxy_goal_enum_parity_test.dart); a legacy token is a
+  // stored value only and is never offered to the model.
+  for (const goal of ["strength", "recompose"]) {
+    const result = regeneratePlanBlockTool.schema.safeParse({ weeks: 4, goal });
+    assertEquals(result.success, false);
+  }
 });
 
 Deno.test("regeneratePlanBlock — schema rejects weeks < 1", () => {
@@ -106,7 +111,7 @@ Deno.test("regeneratePlanBlock — intentBuilder includes goal in summary when s
     goal: "lose_fat",
   }, ctx());
   assertEquals(intent.payload.goal, "lose_fat");
-  assertEquals(intent.previewSummary, "Regenerate next 4 weeks for lose_fat");
+  assertEquals(intent.previewSummary, "Regenerate next 4 weeks for Cut");
 });
 
 Deno.test("regeneratePlanBlock — intentBuilder includes daysPerWeek in summary", async () => {
@@ -117,7 +122,7 @@ Deno.test("regeneratePlanBlock — intentBuilder includes daysPerWeek in summary
   }, ctx());
   assertEquals(
     intent.previewSummary,
-    "Regenerate next 6 weeks for build_muscle (5 days/week)",
+    "Regenerate next 6 weeks for Build (5 days/week)",
   );
 });
 

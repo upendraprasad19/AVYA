@@ -124,7 +124,7 @@ void main() {
     });
 
     test('past the 4th week it does NOT clamp — >4 is a real state', () {
-      // `redoWeek4` extends plan_end without moving plan_start, so day 28+ is
+      // the deleted `redoWeek4` extended plan_end without moving plan_start, so day 28+ is
       // reachable in production. Clamping here would hide it from any caller
       // reasoning about layout.
       expect(

@@ -64,11 +64,24 @@ void main() {
       expect(SessionBudget.defaultMinutes, 60);
     });
 
-    test('a saved 90.0 (a JSON double) -> 90, not a cast error', () {
+    test('a saved 90.0 (a JSON double) -> 90 for an advanced profile, not a cast error', () {
       expect(
-        SessionBudget.initialSessionDuration({'session_duration_minutes': 90.0}),
+        SessionBudget.initialSessionDuration(
+            {'session_duration_minutes': 90.0, 'fitness_experience': 'advanced'}),
         90,
       );
+    });
+
+    test('OI-488 (Unit 3B): a saved 90.0 below advanced (or with no level) -> 60', () {
+      for (final level in ['beginner', 'intermediate', null]) {
+        expect(
+          SessionBudget.initialSessionDuration(
+              {'session_duration_minutes': 90.0, 'fitness_experience': level}),
+          60,
+          reason: '$level',
+        );
+      }
+      expect(SessionBudget.initialSessionDuration({'session_duration_minutes': 90.0}), 60);
     });
 
     test('a saved 45 -> 45; a saved null -> 60', () {
@@ -155,11 +168,18 @@ void main() {
       expect(TrainingHistoryAnalyzer.sessionMinutesFromProfile(), isNull);
     });
 
-    test('sessionMinutesFromProfile: returns the stored value untouched',
+    test('sessionMinutesFromProfile: returns the stored value untouched (advanced, or 60 or less)',
         () async {
+      await HiveService.instance.userBox.put(
+          'profile', {'session_duration_minutes': 75, 'fitness_experience': 'advanced'});
+      expect(TrainingHistoryAnalyzer.sessionMinutesFromProfile(), 75);
+      await HiveService.instance.userBox
+          .put('profile', {'session_duration_minutes': 45});
+      expect(TrainingHistoryAnalyzer.sessionMinutesFromProfile(), 45);
+      // OI-488 (Unit 3B): above 60 with no level (not advanced) is held to 60.
       await HiveService.instance.userBox
           .put('profile', {'session_duration_minutes': 75});
-      expect(TrainingHistoryAnalyzer.sessionMinutesFromProfile(), 75);
+      expect(TrainingHistoryAnalyzer.sessionMinutesFromProfile(), 60);
       await HiveService.instance.userBox
           .put('profile', {'session_duration_minutes': 'abc'});
       expect(TrainingHistoryAnalyzer.sessionMinutesFromProfile(), 'abc');

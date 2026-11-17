@@ -1,6 +1,7 @@
 import 'dart:math';
 
 import 'budget_muscle_groups.dart';
+import 'goal_reps.dart';
 import 'models.dart';
 import 'plan_engine_flags.dart';
 import 'sequencing_engine.dart';
@@ -100,10 +101,11 @@ class PeriodizationEngine {
           final ex = baseExercises[i];
           // OI-456: the rest follows the exercise, the same value the allocator priced.
           final restSeconds =
-              SessionBudget.restForArchetype(SessionBudget.archetypeOfPlanned(ex, budget));
+              SessionBudget.restFor(SessionBudget.archetypeOfPlanned(ex, budget), budget);
           var exercise = _applyWave(
             ex, weekIdx, baseReps, restSeconds, day.intensity,
             archetype: archetype,
+            budget: budget,
           );
           final gained = gains.contains((d, i));
           final sets = switch (weekIdx) {
@@ -125,6 +127,7 @@ class PeriodizationEngine {
             final peak = _applyWave(
               ex, 2, baseReps, restSeconds, day.intensity,
               archetype: archetype,
+              budget: budget,
             );
             exercise = exercise.copyWith(workingSets: ex.sets, workingReps: peak.reps);
           }
@@ -193,7 +196,7 @@ class PeriodizationEngine {
         // exactly as the allocator priced them (`ex.restSeconds` is still the selector default
         // here: rests are stamped by `apply` AFTER this runs); a timed row keeps its own.
         final rest = budgeted || SessionBudget.isRepBased(ex.loggingType)
-            ? SessionBudget.restForArchetype(SessionBudget.archetypeOfPlanned(ex, budget))
+            ? SessionBudget.restFor(SessionBudget.archetypeOfPlanned(ex, budget), budget)
             : ex.restSeconds;
         restOf[(d, i)] = rest;
         final g = budgeted
@@ -273,6 +276,7 @@ class PeriodizationEngine {
     PlannedExercise ex, int weekIdx,
     int baseReps, int baseRest, String intensity, {
     required String archetype,
+    required SessionBudgetContext budget,
   }) {
     final isRepBased = SessionBudget.isRepBased(ex.loggingType);
 
@@ -285,7 +289,8 @@ class PeriodizationEngine {
     }
 
     // V4: Use exercise-specific rep range when available.
-    // Archetype determines which side of the range to lean toward:
+    // Archetype determines which side of the range to lean toward (Build, the legacy strength token and the
+    // disable_goal_training world; a Cut / Maintain main lift and the Strength focus take GoalReps.base instead):
     //   strength   → lower end (min reps, heavier weight)
     //   hypertrophy → midpoint
     //   metabolic  → upper end (more reps, lighter weight)
@@ -298,19 +303,30 @@ class PeriodizationEngine {
     int reps;
     if (parsed != null) {
       final (minReps, maxReps) = parsed;
-      final midReps = ((minReps + maxReps) / 2).round();
-
-      reps = switch (archetype) {
-        'strength'    => minReps,
-        'metabolic'   => maxReps,
-        'deload'      => midReps,
-        _             => midReps, // 'hypertrophy' and any unknown
-      };
+      // Unit 3A (OI-487): the goal's table for a main lift (archetype H / M, d58), the Strength focus, else today's
+      // archetype lean (GoalReps.todayBase: strength min, metabolic max, hypertrophy / deload mid).
+      final gt = budget.goalTraining;
+      final arch = SessionBudget.archetypeOfPlanned(ex, budget);
+      final isMain = arch == 'H' || arch == 'M';
+      reps = GoalReps.base(
+        enabled: gt.enabled,
+        strengthFocus: gt.strengthFocus,
+        isMain: isMain,
+        planGoal: budget.planGoal,
+        level: budget.level,
+        archetype: archetype,
+        minReps: minReps,
+        maxReps: maxReps,
+      );
 
       // Apply wave modifier on top of archetype selection
       reps = _waveReps(reps, weekIdx, intensity);
       // Clamp to keep within library-defined bounds (wave can nudge but not escape)
       reps = reps.clamp(minReps, maxReps);
+      // Cut and Maintain accessories sit in 10-15 (founder d3).
+      if (gt.enabled && !isMain && GoalReps.clampsAccessories(budget.planGoal)) {
+        reps = reps.clamp(GoalReps.accessoryMin, GoalReps.accessoryMax);
+      }
     } else {
       // Fallback: legacy DUP baseReps path (no/invalid rep_range in library)
       reps = _waveReps(baseReps, weekIdx, intensity);

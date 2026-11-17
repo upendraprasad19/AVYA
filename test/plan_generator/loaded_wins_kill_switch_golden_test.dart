@@ -51,11 +51,17 @@ void main() {
     await HiveService.instance.configBox.put('disable_loaded_wins', true);
     // Unit 2C-a: the fixture predates the balanced week, so its switch is set too.
     await HiveService.instance.configBox.put('disable_balanced_week', true);
+    // Unit 3A: the fixture predates the goal table, so its switch is set too.
+    await HiveService.instance.configBox.put('disable_goal_training', true);
+    // Unit 3C (OI-396): the fixture predates the shown / timed finisher.
+    await HiveService.instance.configBox.put('disable_cardio_finisher_shown', true);
   });
 
   tearDownAll(() async {
     await HiveService.instance.configBox.delete('disable_loaded_wins');
     await HiveService.instance.configBox.delete('disable_balanced_week');
+    await HiveService.instance.configBox.delete('disable_goal_training');
+    await HiveService.instance.configBox.delete('disable_cardio_finisher_shown');
     await HiveUserSession.closeAll();
     GuardedBox.testBypassOwnership = false;
     await Hive.close();

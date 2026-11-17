@@ -327,7 +327,9 @@ void main() {
       print('2C-b sweep digest: $digest');
       // Re-recorded 2026-11-15 for Unit 2E: exactly one plan of the 220 changes, and it had an arm pair (above).
       expect(armChanged, 1, reason: 'Unit 2E: one plan of the sweep has an arm pair it closes');
-      expect(digest, 'e64306ba41e807c838465e43e1398e6a552570deb17fc9d4721e48f99ca85dd0');
+      // Unit 3A (2026-11-15) re-recorded on the 2E tree: the goal's Cut / Maintain bands move plans (with the goal
+      // training off, 2E's digest e64306ba... returns exactly; the day floor's d65 amendment alone moves nothing here).
+      expect(digest, 'a0ab74fc72b33be2b0076424c5671bbbfe6f43bcf7512c3933aac93f5cac6e7a');
       expect(equal60, greaterThan(30), reason: 'the sweep must reach 60+ plans');
     });
   });

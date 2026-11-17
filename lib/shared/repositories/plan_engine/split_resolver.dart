@@ -420,9 +420,12 @@ class SplitResolver {
   /// slot is on ([quadLegsB], `disable_quad_legs_b`, so the slot and the credit still flip together); true otherwise.
   /// Test oracles restate this rule in their own words; they do not call it.
   static bool quadPrimaryCreditsGlutes(String planGoal, int daysPerWeek, int? minutes,
-          {required bool quadLegsB, bool? balancedWeek}) =>
+          {required bool quadLegsB, bool? balancedWeek, bool? goalTraining}) =>
       !(balancedWeekApplies(planGoal, daysPerWeek, minutes, balancedWeek: balancedWeek) ||
-          (quadLegsB && hasQuadLegsBSplit(planGoal, daysPerWeek)));
+          (quadLegsB && hasQuadLegsBSplit(planGoal, daysPerWeek)) ||
+          // Unit 3A (OI-487): Maintain's two-thirds band (beginner top 8) is spent on Glutes by the squats alone, which
+          // then refuses every hinge (Hamstrings 0 in 30 four-day beginner plans, measured); quad-first credit keeps it.
+          (planGoal == 'general_fitness' && daysPerWeek == 4 && (goalTraining ?? PlanEngineFlags.goalTrainingEnabled)));
 
   /// V4: Returns MuscleSlotDay list with granular muscle slots. [sessionMinutes] is the resolved session length:
   /// build_muscle 3 / 4 / 5-day at 60+ minutes get the balanced lists ([balancedWeekApplies]); null keeps today's.

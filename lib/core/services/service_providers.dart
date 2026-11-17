@@ -118,7 +118,7 @@ final workoutScheduleReadServiceProvider =
 });
 
 /// Provider for [WorkoutScheduleWriteService] — markCompleted /
-/// markSkipped / pauseRange / redoWeek4 / copyWeek.
+/// markSkipped / pauseRange / holdWeek / copyWeek.
 final workoutScheduleWriteServiceProvider =
     Provider<WorkoutScheduleWriteService>((ref) {
   _wireResetHook(ref, 'WorkoutScheduleWriteService');

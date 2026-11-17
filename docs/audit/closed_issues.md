@@ -7056,3 +7056,238 @@ The founder chose to keep the plans as they are, over two alternatives:
 - **30 / 45 minutes:** Quads never newly reach 0 (the 2C-b gate).
 - **Every week holds real quad work,** which is step 2's pass mark.
 The founder chose to keep the plans as they are, over a unit that would give quad compounds priority over accessories on 60+ minute balanced weeks.
+
+## OI-175 — a regeneration past the phase's 4th week (`rawWeek > 4`) has no well-defined behaviour (P2)
+
+- **Status**: CLOSED
+- **Closed**: 2026-11-16 — generator step 3D (Unit 3D-a, PR #289, 63af8c63; Unit 3D-b, branch `generator-step3d`). Founder d57: "switch 'Keep training Phase 1' to the Monday-aligned holdWeek, delete the old redoWeek4 in the same batch, and make the NOW marker follow the 4-week cycle past week 4"; d80: holds keep Peak, Peak, Peak, Deload, and only the "you are here" marker changes. The WINDOW-ALIGNMENT half is closed: `redoWeek4` is deleted and every free-tier repeat is the Monday-aligned `holdWeek` (plan_end always a Sunday). The NOW-marker half is closed by `weekChipLit` (during a hold only today's H chip is gold; the phase-arc strip itself was deleted 2026-11-02). The content half was closed by OI-166 Unit 2 (cycling). Diagnoses `d3b7e5` (client) and `c4e8b1` (server copy); ledger `docs/audit/generator-step3d.closure.yaml`. Founder device check: board t308.
+- **Blocked on** (historical): FOUNDER — what a regeneration should DO for a user in the extended "keep training Phase 1" state. AND sequenced after **OI-174**: round 2 of the OI-166 plan review proved the two are not separable
+- **Verified**: 2026-09-06 — `getCurrentWeekNumber()` clamps to 1..4 (`workout_schedule_read_service.dart:1263`); `redoWeek4()` extends `plan_end` without moving `plan_start` (`workout_schedule_write_service.dart:178-215`, esp. `:213-214`) and is the live free-tier write while `enable_hold_weeks` is OFF (`keep_training_phase1_action.dart:29-36`, `plan_engine_flags.dart:63-69`); `isPhaseExpired()` gates the Home expired card (`home_screen.dart:771`), the Train surface (`train/screen.dart:169`) and both PRO advance paths (`pro_phase_advance.dart:144`, `workout_schedule_read_service.dart:546`)
+- **Identified**: 2026-09-06 · split out of OI-166 under §4.12.1 (successive reviews surfacing new material issues ⇒ split and ship the smallest converged piece). Round 1 produced 11 findings; round 2 produced 5 NEW P1s **inside round 1's own corrections**, and three of them (P1-A, P2-F, P2-H) were all this one branch
+- **The state**: two routes put a user past their 4th plan week without `plan_start` moving. (1) `redoWeek4()` — the free-tier "keep training Phase 1" tap — extends `plan_end` by 7 days. (2) A mid-phase regen writes 4 fresh weeks from the current Monday, so rows reach `plan_start+34` (week-2 regen) or `+41` (week-3) while `plan_end` stays `+27`
+- **Why OI-166 does not fix it**: OI-166 makes a regen lay `weekPlans[rawWeek-1 .. 3]` on plan weeks `rawWeek..4`. That is well-defined only for `1 ≤ rawWeek ≤ 4`. **For `rawWeek > 4` OI-166 deliberately falls back to today's behaviour verbatim** — no data loss, no regression, and no new claim about a state that is not well-defined until OI-174 prunes. This issue owns the improvement
+- ⚠ **Three candidate behaviours, none yet chosen — this is the founder question**:
+  1. Regenerate the current extended window (`today..plan_end`) carrying week 4's character, since `redoWeek4` is by construction a week-4 repeat. ⚠ Round 2 found this is NOT week-aligned in the normal case: `rollStart = todayMidnight` when today is past `plan_end` (`workout_schedule_write_service.dart:186-188`), which is the gated-on case, so the window starts on an arbitrary weekday and `dayPattern.contains(dayOfWeek)` would place sessions on the wrong days
+  2. Refuse outright. ⚠ Round 2 (P1-A) showed a plain refusal REGRESSES route (2): `plan_end (+27) < today (+30)` makes the window empty, so the goal change is silently discarded, and the orphan rows keep `isPhaseExpired()` false so no recovery surface is reachable for 7 days. Today's code at least honours the goal change
+  3. Treat it as a phase boundary — hand off to phase advance / the paywall
+- ⚠ **Whatever is chosen must not stamp `'week': 5`**: `hold_week_labels.dart:133` renders `row['week']` straight to the Home card, and that file's own header (`:93`) calls `copy['week'] = 4 + n` "the dishonest number, persisted" — it exists to suppress exactly that string
+- **Invariant that holds regardless**: a regeneration never deletes a row it does not replace. ⚠ Note this is already violated in a narrow way — `workout_schedule_read_service.dart:373-376` deletes `displaced_*` keys unconditionally with no `completed` check and no replacement (pre-existing, round 2 P3-N)
+- **PARTIALLY RESOLVED 2026-09-11 — a FOURTH candidate behaviour was chosen and shipped, none of the three above**: OI-166 Unit 2 (`docs/audit/oi166-unit2-plan-v10.md`, diagnose `d7f3b2`) implements CYCLING — `contentFlavorIndex((w-1)%4)` repeats the baseline→overreach→peak→deload wave past week 4 rather than freezing on week 4's character (candidate 1), refusing (candidate 2), or handing off to phase advance (candidate 3). This closes the "no well-defined behaviour" complaint for the CONTENT/LABELING half: `rawWeek > 4` now stamps its real week number and picks well-defined content, verbatim, for any `rawWeek`. It does NOT close the WINDOW-ALIGNMENT half this entry also raises — whether `redoWeek4`'s own extension window is week-grid-aligned is untouched (`redoWeek4`/`holdWeek` themselves were explicit out-of-scope for Unit 2). Leaving this OPEN rather than closing it: the founder-blocked question above was "what should a regen DO", and cycling answers it for content but the sequencing-after-OI-174 note and the `redoWeek4` non-alignment concern (candidate 1's own rejection reason) still stand.
+- ⚠ **A THIRD residual surfaced the same day by the Unit 2 B-pass (Finding 2, P1), distinct from window-alignment: the phase-arc strip's "NOW" highlight does not cycle even though content now does.** `getCurrentWeekNumber()` (`workout_schedule_read_service.dart:1334`, unchanged by Unit 2) clamps to `[1,4]`, so past real week 4 the strip permanently highlights index 3 — "deload" per Unit 2's own splice — regardless of which of baseline/overreach/peak/deload the real current week actually cycles to. Reachable TODAY via the live `redoWeek4`, no flag required. Not strictly a NEW regression (pre-fix, `current_plan` was also unconditionally rewritten to the same canonical order every regen, so the clamp already existed against different, frozen content) — but Unit 2 makes the mismatch visible and variable for the first time. A real fix means routing the highlight through a cycle-aware index or otherwise making `hold_week_identity`'s clamp itself past-week-4-aware, which is a redesign of a DIFFERENT SoT concept (`hold_week_identity`, own tests, own explicit "do NOT branch inputs where the clamped 4 is HONEST" warning for its other consumers) — correctly out of scope for the already-9-round-converged Unit 2, tracked here instead of left implied-fixed.
+
+## OI-60 — Flip `enable_hold_weeks`
+
+- **Status**: CLOSED
+- **Closed**: 2026-11-16 — the flag is gone and every flip-on blocker is terminal. Generator step 3D (OI-175, founder d57) deleted `enable_hold_weeks`, its dev toggle and `redoWeek4`: Unit 3D-a (PR #289, 63af8c63) and Unit 3D-b (PR #290, branch `generator-step3d`). The blockers this entry named: FOB-3 verified live (ai-proxy serves HOLD WEEKS), FOB-4 code in 3D-a and deployed 2026-11-16 (founder go: weekly-recap-ready v29, weekly-report v41, ai-proxy v109), FOB-7(a)/(b) closed 2026-09-26, FOB-8 gone with the strip. Ledger `docs/audit/generator-step3d.closure.yaml`; `docs/ship_dark_pending_review.yaml` rows resolved. FOB-6 stays a separate feature, OI-125. Archived in the 3D-b B-pass (seat B F2).
+- **Verified**: 2026-09-26 — blocker list re-derived: FOB-7(a)/(b) are CLOSED (`d8b90e86`, merged `280fd810`, `docs/audit/oi60-client-blockers.closure.yaml`); FOB-8 is open and was missing from this list (`train_provider.dart:959` `phaseArcProvider` still reads `getCurrentWeekNumber()` directly).
+  PRIOR (kept verbatim): 2026-08-20 — the blocker list re-derived from the AUTHORITATIVE ledger
+  (`docs/ship_dark_pending_review.yaml:251-382` + `docs/audit/oi60-streak-identity.closure.yaml`),
+  not carried from this entry's own text, which was wrong. The three `enable_hold_weeks` rows were
+  read directly and all still carry `flip_reviewed: false`. FOB-1's six surfaces were each read in
+  source before being fixed — one (`phase_roadmap_screen.dart`) reaches the clamp through
+  `getProgramWeek`, so the FOB's own file list understated it rather than overstating it, and one
+  (`profile_content.dart`) is a consumer the FOB named only via its provider.
+- **Identified**: 2026-07-26
+- ⚠ **Corrected 2026-08-20.** This entry read *"7 unstarted flip-on-blocker items (FOB-1…FOB-7)"*
+  and `OPEN_INDEX.md` repeated it. That was stale on three counts as of 2026-08-13, and the index
+  is generated from this line, so the whole board carried the wrong number: **FOB-2 CLOSED**
+  (`docs/audit/oi60-streak-identity.closure.yaml`, diagnose `a3f8d1`), **FOB-7(c) verified clean**
+  (the report was stale — ai-media-proxy already carries both the 10K cap and the FC7 nonce fence),
+  **FOB-7(d) CLOSED**, and **FOB-6 SPLIT OUT to OI-125** by founder decision as a FEATURE that is
+  explicitly *not* a flip blocker. "Unstarted" was also wrong for the two that had already shipped.
+- **Blocked on**: **3 remaining flip-on blockers** in `docs/ship_dark_pending_review.yaml` —
+  **FOB-3, FOB-4, FOB-7(a)/(b)**. The coach snapshot and the Sunday push / weekly report still tell
+  every holder a false week-4 story; `currentPhaseCompletionRate` still folds hold days into the
+  PRO-advance gate input and `PlanIntegrityReconciler` still scans weeks 1-4 only. FOB-3/FOB-4
+  require ai-proxy + weekly-recap-ready + weekly-report EF redeploys — each its own explicit
+  authorization (§4.3), plan approval ≠ deploy approval.
+- ✅ **FOB-3 CODE LANDED 2026-08-21** — branch `claude/oi-pending-hold-weeks-1od97o`, diagnose
+  `b6e1f4`, closure `docs/audit/fob3-coach-hold-block.closure.yaml`, behavioral test
+  `test/contracts/hold_snapshot_block_behavioral_test.dart` (7 cases, mutation-proven on five legs,
+  each reddening exactly one test). The snapshot gains a facts-only `hold` block through a new
+  `holdSnapshotBlock()` seam, emitted with a null-aware element so a non-holder's snapshot gains no
+  key at all, and `hold` joins `trimSnapshotToBudget`'s keep set. The INSTRUCTION half — a HOLD
+  WEEKS section in `captain_manual.ts` telling the coach to read `snapshot.hold`, quote
+  `hold.label`, IGNORE both projected week fields BY NAME and NEVER say final-week-of-Phase-I —
+  is **INERT until ai-proxy is redeployed** (credentials, not permission; see
+  `docs/operations/FOUNDER_LAPTOP_HANDOFF.md` §2-4).
+  ⚠ Two things nearly shipped broken and are worth carrying forward: 20 **unescaped backticks**
+  inside the `CAPTAIN_MANUAL` template literal would have terminated it and boot-failed ai-proxy
+  on the next deploy without failing loudly (deploy-skill 6.5); and the first **keep-set test
+  proved nothing** — dropping `'hold'` from the keep set left every test green, because the
+  trimmer shrinks the LARGEST non-kept field and two giant bloat fields absorbed the whole overage
+  before the ~110-char block was ever reached.
+  Deliberately NOT done: suppressing the two week fields. They are read by non-hold logic, and
+  OI-60's own `do_not` forbids the obvious replacement.
+
+  ⚠ **FOB-4 needs MORE than a redeploy, and the ledger's `why:` does not say so.** Measured
+  2026-08-20 against the live schema: `information_schema.columns` in schema `public` contains
+  **zero** columns matching `%hold%`, and `user_progress` carries no hold field of any spelling
+  (23 columns, listed live). `is_hold` is written by `holdWeek()` onto local schedule rows and
+  **never reaches the cloud** — there is no `workout_schedule` table in `public` at all. So
+  `weekly-recap-ready` and `weekly-report` cannot branch on a hold no matter what is deployed:
+  the signal does not exist on their side of the wire. Whoever takes FOB-4 must decide how hold
+  state crosses that boundary FIRST (a `user_progress` column, or a derived RPC), which means a
+  MIGRATION and its own live-apply authorization on top of the two redeploys. Do not schedule
+  FOB-4 as a redeploy-only unit.
+- ✅ **FOB-5 CLOSED 2026-08-20** — diagnose `c7a3b9`, closure `docs/audit/fob5-hold-telemetry.closure.yaml`,
+  migration **120 applied live** (founder-authorized). `holdWeek()` now emits `hold_week_started`,
+  consumed by three new `hold_*` columns on `founder_metrics_engagement()` that reach the founder
+  dashboard with no EF redeploy. ⚠ FOB-5's own prescribed fix (`where channel = 'app'`) was
+  **wrong and was not applied** — it matches 7 of 116 rows. The metric now reads **22 instead of
+  116**. One self-inflicted regression was caught and closed inside the batch: the required
+  `DROP`+`CREATE` reset the function's ACL and briefly made it anon-executable (finding FOB-5-E).
+  ⚠ Read `oi60-streak-identity.closure.yaml` before attempting FOB-7(b): widening the 1..4 scan is
+  already REFUTED (the scan IS the re-anchor trigger, so widening buys no healing and only makes
+  the re-anchor fire more often — the P0-11 concern `d7f3a9` rejected). The shape is *split the
+  trigger from the write.* OI-127 is routed to whichever batch takes FOB-7(a)/(b), so one batch
+  holds the reconciler context.
+- ✅ **FOB-1 CLOSED 2026-08-20** — branch `claude/oi-pending-hold-weeks-1od97o`, diagnose `f4c8e1`,
+  behavioral test `test/contracts/hold_week_identity_behavioral_test.dart` (16 cases, mutation-proven
+  on both protective legs: neutering the hold arm reddens 3, removing the flag gate reddens 5 across
+  this file and `hold_display_read_path_test.dart`). Adopted "a hold suppresses the week number; Hn
+  is the identity" on all **six** in-repo surfaces that printed the clamped week 4 to a holder
+  (home eyebrow, profile subtitle, journey timeline ×2, phase-roadmap header, share-as-video stamp
+  + its Remotion composition), behind a new single-gate seam
+  `WorkoutScheduleReadService.weekIdentity()`. Two named residuals, neither deferred:
+  `ai_snapshot_builder.dart` is **FOB-3's** by the board's own division (it rewrites the same lines
+  to add the `hold` block and needs the ai-proxy redeploy — touching it twice would ship a
+  half-changed snapshot contract), and `telegram-bot/bot.py` is **upstream_blocked**, the OpenClaw VPS
+  deployment (§2; the tracked copy is `telegram-bot/`, dormant, OI-476).
+- **What's missing**: Own full ×2 per §4.12.4 (flip-on is where real user risk starts) — the four
+  remaining FOB items closed first. The flip-on commit must clear **all four** `enable_hold_weeks`
+  rows in the ledger (`hold-mechanic`, `hold-display`, `hold-display-fixes`, and
+  `claude/oi-pending-hold-weeks-1od97o`) in one commit — corrected from "three" on 2026-08-21 when
+  FOB-1+FOB-3 added the fourth.
+
+**UPDATE 2026-09-26 (backlog triage + `ci-green-batch-a`):** The `Blocked on` line below predates this and still lists FOB-7(a)/(b) — they are CLOSED (`d8b90e86`, merged `280fd810`, diagnoses `b9d4c2` / `e7c4a2`). What really remains: **FOB-4** (how the Sunday push + weekly report learn a user is on hold — founder design choice: (a) a `user_progress` hold column/RPC + 2 EF redeploys, or (b) drop the week number from those two EFs' copy for everyone, no migration) and **FOB-8** (`train_provider.dart:959`, `phaseArcProvider` reads `getCurrentWeekNumber()` directly — NOT previously on this list). FOB-3's code is on main; archived ai-proxy payload `backups/edge_function_payloads/ai-proxy/v3_57b0b07.json` (2026-09-24) contains 'HOLD WEEKS', so it is probably deployed — confirm with `get_edge_function` before relying on it.
+
+## OI-53 — Flip the remaining 2 workout-generator ship-dark flags (was 13; equipment-exclusions flipped 2026-08-05; readiness + triggered-deload flipped 2026-09-01; phase-arc flipped 2026-09-05; deload-reason-line flipped 2026-09-06; exercise_id_history + injury_substitute_pref + cross_phase_variety flipped 2026-09-16 batch 1; graded_progression + session_detraining_cut + physique_focus_bringup + adherence_gate flipped 2026-09-16 batch 2)
+
+- **Status**: CLOSED
+- **Closed**: 2026-11-16 — the last two flags flipped by generator step 4 (founder d82: plateau escalation ships whole, the +1 set and the rotation): `enable_volume_titration` and `enable_plateau_escalation` are retired for kill switches `disable_volume_titration` / `disable_plateau_escalation` (default ON, dev-panel toggles). The readiness gap this entry recorded (`_recovered()` had no readiness gate) is closed in code (step 4 T4). Titration and the plateau +1 now keep 2A's lead-first rule and d65's trim order (T1 / T2), measured over a simulated history (`titration_plateau_gate_test.dart`). Plan `docs/plans/2026-11-16-generator-step4-titration-plateau.md`, record `docs/plan-reviews/generator-step4.md`, diagnose `7c4e2a`, branch `generator-step4`. All 13 flags are now flipped.
+- **Verified**: 2026-08-05 — flag inventory, dependency order and the data lag all re-derived from
+  source this session (`plan_engine_flags.dart`, `deload_evaluator.dart:170,173`,
+  `ship_dark_pending_review.yaml:76-101`), not carried from the entry's original text.
+- **Identified**: 2026-07-26 · workout-generator overhaul complete `7bb766fa`
+- **Blocked on**: FOUNDER — but read the shape below before treating this as one decision.
+  ⚠ **DATED FOUNDER DECISION 2026-09-01: readiness + triggered deload were approved and
+  flipped together** (branch `readiness-flip`, record `docs/plan-reviews/readiness-flip.md`).
+  Recorded here because a repo-only reader cannot otherwise reconcile `Blocked on: FOUNDER`
+  with those two flips existing. ⚠ **DATED FOUNDER DECISION 2026-09-05: `enable_phase_arc`
+  approved and flipped** (branch `phase-arc-flip`, record `docs/plan-reviews/phase-arc-flip.md`).
+  ⚠ **DATED FOUNDER DECISION 2026-09-06: `enable_deload_reason_line` approved and flipped** as Unit B (branch
+  `unitb-deload-reason`, record `docs/plan-reviews/unitb-deload-reason.md`) — the piece split
+  out of the phase-arc flip the day before, once its stale-reason defect was fixed (diagnose
+  `c5a8f3`).
+  ⚠ **DATED FOUNDER DECISION 2026-09-16: `exerciseIdHistoryEnabled` + `injurySubstitutePreferenceEnabled`
+  + `crossPhaseVarietyEnabled` approved and flipped together** as Batch 1 of a founder-directed
+  release-blocker triage (branch `oi53-batch1-flip`, record `docs/plan-reviews/oi53-batch1-flip.md`)
+  — the three lowest-risk of the remaining flags (bounded/preference-only re-ranks with no ability
+  to widen a slot's candidate pool beyond what queryV4's injury/equipment filters already permit).
+  ⚠ **DATED FOUNDER DECISION 2026-09-16: `gradedProgressionEnabled` + `sessionDetrainingCutEnabled`
+  + `physiqueFocusBringupEnabled` + `adherenceGateEnabled` approved and flipped together** as
+  Batch 2 of the same triage (branch `oi53-batch2-flip`) — the founder's own scoping question
+  ("all 6 remaining, or the 4 clean ones") surfaced that `volumeTitrationEnabled`'s readiness
+  dependency is, unlike its siblings `triggeredDeloadEnabled`/`plateauEscalationEnabled`, NOT
+  enforced in code (`volume_titration.dart:116-136`'s `_recovered()` has no readiness gate at
+  all — it is inert today only because the flag itself short-circuits first); that flag and
+  `plateauEscalationEnabled` (which depends on it) were deliberately excluded from this batch.
+  **2 remain.**
+- **What this actually is — 13 product decisions, not one toggle.** The ledger is explicit:
+  *"there is no batch discount, and flipping thirteen flags in one commit would be one review
+  pretending to be thirteen."* Each flip-on commit needs its own **full ×2 + `bpass: accepted`**
+  (§4.12.4 — the lighter `ship_dark_build` tier does NOT apply to a flip). Nothing is broken by
+  leaving them OFF: every shipped APK to date has run with all 13 dark, so OFF *is* the current
+  product. What is owed is a decision per flag, not a flip.
+- ✅ **`enable_readiness` + `enable_triggered_deload` — FLIPPED 2026-09-01.** Together, and the
+  coupling was mechanical: `plan_generator.dart` gates `stashWorkingBase` on the deload flag at
+  GENERATION time, so a plan generated with it OFF can never be lifted — flipping deload later
+  would have helped no existing plan. Sleep is now MEASURED from Health Connect
+  (`SLEEP_SESSION`) rather than self-reported, so the check-in is 2 taps when sleep is known.
+  Readiness trends are FREE for all (the Reports paywall branch was removed, not gated).
+  ⚠ Three Android-side defects were caught in review, each invisible to `flutter test`:
+  the wrong data type (`SLEEP_ASLEEP` matches STAGES, not the session), `READ_SLEEP` declared
+  in no manifest, and a permission-request function with no caller.
+- ✅ **`enable_phase_arc` — FLIPPED 2026-09-05.** Display-only, no engine coupling. Taken
+  first deliberately: it changes nothing about prescribed training, so it was the cheapest
+  ×2 and it put `week_character` on screen before anything that alters load.
+  ⚠ **It did NOT ship alone — the batch was SPLIT.** The week-4 deload-"why" line lives
+  INSIDE the same widget, so the flip would have lit it too. Plan-review round 2 found the
+  stamped `deload_reason_phase_<P>` is never deleted anywhere in `lib/` while a mid-phase
+  regen re-stamps week 4 as `deload`, so the strip would render DELOAD above "Working week
+  — you've recovered", permanently. That line now sits behind its own ship-dark
+  `enable_deload_reason_line` and is Unit B, with its own ×2.
+  ⚠ Three defects were fixed in the flip itself, none of them the flag: the fifth wave token
+  `working` was unmapped; the label lookup trimmed while its fallback did not; and the
+  `length < 2` guard let a 2-3 week blob render a strip whose clamped-to-4 highlight could
+  mark no node at all. Also raised FOB-8 against OI-60 — the strip reads
+  `getCurrentWeekNumber()` directly, so it is a seventh week-identity surface.
+
+- **The order is forced by code, not preference.** `enable_readiness` had to flip FIRST:
+  - `enable_triggered_deload`'s evaluator **early-returns** on readiness
+    (`deload_evaluator.dart:56` — `if (!PlanEngineFlags.readinessEnabled) return;`; the
+    ledger's `&& readinessEnabled` phrasing describes the effect, not the code shape) —
+    so it does literally nothing until readiness is ON.
+  - `enable_plateau_escalation` self-gates (`plateauedGroups` checks `readinessEnabled`).
+  - `enable_volume_titration`'s **+1** direction needs positive readiness recovery evidence, so
+    with readiness OFF it can only ever TRIM. Flipping it alone gives users a one-way volume cut.
+- ⚠ **A data lag no review can shortcut.** Even with readiness flipped, `deload_evaluator.dart:173`
+  requires **≥3 readiness rows inside a 14-day IST window** (`:170`) before the dependent flags can
+  act; below that it returns `good: false` and keeps the deload (safe, but inert). So three of the
+  thirteen sit dead for **at least two weeks** after any flip, waiting on check-in data only real
+  users generate. "Flip all 13 at once" is therefore not merely risky — it is ineffective, and it
+  destroys attribution: 13 simultaneous changes to prescribed load/volume/selection with one
+  bug report and no way to isolate the cause. Attribution is the entire point of ship-dark.
+- ✅ **`enable_equipment_exclusions` — FLIPPED 2026-08-05 (diagnose `e2d6b8`), so this issue is
+  now TWELVE flags, not thirteen.** It was the exception: its *collection* UI shipped lit while
+  its *consumption* stayed dark, so the app saved an equipment preference it then ignored — a
+  live broken promise rather than a dormant feature. That promise is now kept. The counts and
+  quotes above ("13", "thirteen") describe the pre-flip state and are left as the ledger's own
+  wording; the live number is **12**. Related: OI-89 (its condition (a) closed with this flip),
+  and OI-95 (the flip's kill-switch is reachable only in debug builds).
+- ✅ **`exerciseIdHistoryEnabled` + `injurySubstitutePreferenceEnabled` + `crossPhaseVarietyEnabled`
+  — FLIPPED 2026-09-16 (branch `oi53-batch1-flip`, record `docs/plan-reviews/oi53-batch1-flip.md`,
+  ×2 review converged).** All three are bounded re-ranks of an already-safe candidate list (the
+  injury/equipment filters run first and are unaffected by any of these three) — none can widen
+  what a user is prescribed beyond what the pre-flip cascade could already produce, only change
+  which already-eligible pick wins. `exerciseIdHistoryEnabled` is forward-only (new `exlog_*` rows
+  start carrying a matchable `exercise_id`; a later kill-switch reverts the CODE path verbatim but
+  does not retro-strip already-stamped ids — harmless, since an OFF resolver never reads them).
+  Review found zero code-correctness issues across two independent rounds; both rounds' documentation
+  findings (a stale flag-name cross-reference in `plan_engine/CLAUDE.md`, three untouched
+  `docs/sot_registry.yaml` concept entries, and this board entry itself) are fixed in the same
+  branch. `ship_dark_pending_review.yaml`'s three `pending:` entries move to `resolved:` in this
+  branch's follow-up records commit, per this repo's established split-commit convention for that
+  file. **6 remained at the time this bullet was written; superseded by Batch 2 below — 2 remain now.**
+- ✅ **`gradedProgressionEnabled` + `sessionDetrainingCutEnabled` + `physiqueFocusBringupEnabled` +
+  `adherenceGateEnabled` — FLIPPED 2026-09-16 (branch `oi53-batch2-flip`, ×2 review converged).**
+  All four INCREASE prescribed load/volume or change the interactive UI (unlike Batch 1's bounded
+  re-ranks), matching the founder's original "not the safe direction" ship-dark framing for each.
+  `adherenceGateEnabled` is the most architecturally involved: it gates a `last_phase_profile`
+  Hive write, a G5 faithfulness re-ranking gate, AND the actual `repeatContent`/`repeat` trigger
+  computation at TWO independent call sites (`pro_phase_advance.dart`'s automatic low-adherence
+  repeat, `graduation_screen.dart`'s explicit choice sheet). The automatic path re-checks the flag
+  a SECOND, redundant time immediately before `_buildRepeatPins` (confirmed by mutation — neutering
+  either check alone left the relevant test green; only neutering both reddened it). That trigger
+  computation had NO behavioral test coverage before this batch — the pre-existing
+  `repeat_phase_pinned_selection_behavioral_test.dart` tests the pinning MECHANISM directly
+  (`pinnedExercisesByDay`) and never touches the flag; `repeat_content_scheduling_test.dart`
+  covers the `last_phase_profile` write half only. Closed by a new
+  `pro_phase_advance_behavioral_test.dart` group driving the actual gating decision end-to-end
+  (real expired phase, real completion rate, real G5-matching baseline), mutation-proven. A
+  second, unrelated stale comment was found and fixed in the same investigation:
+  `workout_schedule_read_service.dart`'s `autoGenerateNextPhaseIfNeeded` doc called the
+  `repeatContent` trigger "not yet wired" — it had been wired by Units 3-a2/3-b for weeks; the
+  prose was never updated when they landed.
+  **B-pass finding (2026-09-16), fixed same batch:** unlike the automatic path, the choice-sheet
+  path had NO re-check at all — `runGraduationPhaseAdvance` took the user's already-made
+  `repeat: true` choice and called through to `_buildRepeatPins` unconditionally, so a kill-switch
+  flip during the human-time gap between the choice sheet opening and the tap was silently not
+  honored, contradicting the flag's own "byte-identical when killed" guarantee. Fixed by moving the
+  check into `_buildRepeatPins` itself — the ONE method both callers funnel through — so it is now
+  genuinely universal rather than caller-dependent; mutation-confirmed (reverting the check reddened
+  exactly the new graduation-path kill-switch test, nothing else). `ship_dark_pending_review.yaml`'s
+  four `pending:` entries move to `resolved:` in this branch's follow-up records commit. **2 remain**
+  (`volumeTitrationEnabled`, `plateauEscalationEnabled` — see the DATED FOUNDER DECISION above for
+  why they were excluded).

@@ -55,7 +55,7 @@ class PlanWindowReanchor {
   /// NOTE (behavioral): within a phase this preserves a spuriously-high local
   /// `plan_end` rather than healing it down to cloud (the old unconditional
   /// re-anchor healed any local value). No current writer produces a
-  /// spurious-high `plan_end` — redoWeek4 / holdWeek / generateAndSchedule all
+  /// spurious-high `plan_end` — holdWeek / generateAndSchedule all
   /// write legitimate ends — so this is a theoretical residual; the behavioral
   /// test pins the intended monotonic-up semantics so a future writer bug can't
   /// hide behind it.

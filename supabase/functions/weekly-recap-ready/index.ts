@@ -23,6 +23,7 @@ import {
   type PrefsByUser,
 } from "../_shared/notification_prefs.ts";
 import { fetchProUserIds } from "../_shared/subscription.ts";
+import { istWeekBounds, recapHoldsForBatch, recapMessage } from "../_shared/hold_week.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -48,7 +49,8 @@ interface ActiveUser {
 async function processUser(
   user: ActiveUser,
   notifPrefs: PrefsByUser,
-  progressMap: Map<string, number>,
+  progressMap: Map<string, { week: number; phase: number | null }>,
+  holdMap: Map<string, number>,
   supabase: SupabaseClient,
 ): Promise<"sent" | "skipped" | "error"> {
   try {
@@ -72,12 +74,14 @@ async function processUser(
       return "skipped";
     }
 
-    const currentWeek = progressMap.get(userId) ?? 1;
+    const currentWeek = progressMap.get(userId)?.week ?? 1;
 
+    // Unit 3D-a (FOB-4): a Phase-I user in a hold week reads the hold's name, not the clamped "Week 4"
+    // (`_shared/hold_week.ts`; no hold or a failed read keeps today's text).
     const ok = await sendPushNotification({
       userId,
       title: "Sunday Brief",
-      message: `${firstName} — Week ${currentWeek} debrief ready. Stand to.`,
+      message: recapMessage(firstName, currentWeek, holdMap.get(userId) ?? null),
       screen: "/profile/reports",
     });
 
@@ -144,6 +148,10 @@ serve(async (req: Request) => {
     let offset = 0;
     let hasMore = true;
     let batchNum = 0;
+    // Unit 3D-a (FOB-4): the IST week the Sunday Brief describes, and whether any batch's hold read failed (the run
+    // still succeeds; holders then read "Week 4", so the failure is reported in the response and the summary line).
+    const week = istWeekBounds(new Date());
+    let holdReadFailed = false;
 
     while (hasMore) {
       // ── Paginated user fetch ──────────────────────────
@@ -224,7 +232,7 @@ serve(async (req: Request) => {
         fetchNotificationPrefs(supabase, userIds),
         fetchAllByIds<Record<string, unknown>>(
           (chunk) =>
-            supabase.from("user_progress").select("user_id, current_week").in(
+            supabase.from("user_progress").select("user_id, current_week, current_phase").in(
               "user_id",
               chunk,
             ),
@@ -251,11 +259,20 @@ serve(async (req: Request) => {
         );
       }
 
-      const progressMap = new Map<string, number>();
+      const progressMap = new Map<string, { week: number; phase: number | null }>();
+      // Unit 3D-a (FOB-4): holds are read only for users whose progress row says Phase I, and not at all when the
+      // progress read failed (fail closed: no hold, today's text). `fetchHoldOrdinals` never throws.
+      let holdMap = new Map<string, number>();
       if (progressResult.status === "fulfilled") {
         for (const row of progressResult.value) {
-          progressMap.set(row.user_id as string, (row.current_week as number) ?? 1);
+          progressMap.set(row.user_id as string, {
+            week: (row.current_week as number) ?? 1,
+            phase: typeof row.current_phase === "number" ? row.current_phase : null,
+          });
         }
+        const holds = await recapHoldsForBatch(supabase, progressResult.value, week);
+        holdMap = holds.map;
+        if (holds.failed) holdReadFailed = true;
       } else {
         console.error(
           "weekly-recap-ready: progress batch failed:",
@@ -268,7 +285,7 @@ serve(async (req: Request) => {
         const chunk = proUsers.slice(i, i + CONCURRENCY);
         const results = await Promise.allSettled(
           chunk.map((user: ActiveUser) =>
-            processUser(user, notifPrefs, progressMap, supabase)
+            processUser(user, notifPrefs, progressMap, holdMap, supabase)
           ),
         );
 
@@ -289,10 +306,15 @@ serve(async (req: Request) => {
     const elapsed = Date.now() - startTime;
     console.log(
       `weekly-recap-ready: completed in ${elapsed}ms, ` +
-        `${totalUsers} users, ${sent} sent, ${skipped} skipped-by-pref, ${skippedNotPro} not-pro, ${errors} errors`,
+        `${totalUsers} users, ${sent} sent, ${skipped} skipped-by-pref, ${skippedNotPro} not-pro, ${errors} errors, ` +
+        `hold_read_failed=${holdReadFailed}`,
     );
 
-    await logCronEnd(logId, "success", { httpStatus: 200 });
+    // B-pass F3: a failed hold read is written to cron_call_log too (the run still succeeded; holders read "Week N").
+    await logCronEnd(logId, "success", {
+      httpStatus: 200,
+      ...(holdReadFailed ? { errorSummary: "hold_read_failed" } : {}),
+    });
     return new Response(
       JSON.stringify({
         status: "success",
@@ -302,6 +324,7 @@ serve(async (req: Request) => {
         skipped_not_pro: skippedNotPro,
         errors,
         batches: batchNum,
+        hold_read_failed: holdReadFailed,
         elapsed_ms: elapsed,
       }),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },

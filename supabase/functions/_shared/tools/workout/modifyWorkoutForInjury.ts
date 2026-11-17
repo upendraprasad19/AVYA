@@ -36,7 +36,7 @@ export const modifyWorkoutForInjuryTool: ToolDefinition<Args> = {
   confirmationClass: "destructive",
   tier: "pro",
   description:
-    "Modify upcoming scheduled workouts to work around an injury. Use when the user mentions an injury, pain, or limitation (e.g. 'tweaked my shoulder', 'knee acting up', 'pulled my hamstring'). The system swaps exercises that load the affected body part for safe substitutes across the next 7 days (default), then records the injury in the user's coach_memory so future plan generations consider it. Always destructive — review the full diff before confirming.",
+    "Modify upcoming scheduled workouts to work around an injury. Use when the user mentions an injury, pain, or limitation (e.g. 'tweaked my shoulder', 'knee acting up', 'pulled my hamstring'). The system swaps exercises that load the affected body part for safe substitutes across the next 7 days (default), then saves the injury to the user's profile injuries (quad as knee, calf as ankle, chest and upper back as shoulder; the user can remove it in Edit Profile) so future plans avoid it. Always destructive — review the full diff before confirming.",
   schema,
   intentBuilder: (args) => ({
     type: "modify_workout_for_injury",

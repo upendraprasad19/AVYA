@@ -261,17 +261,6 @@ class _DevPanelScreenState extends ConsumerState<DevPanelScreen> {
     _toast('Providers refreshed');
   }
 
-  Future<void> _toggleHoldWeeks() async {
-    final next = !PlanEngineFlags.holdWeeksEnabled;
-    // configBox is the SHARED, UNSYNCED Hive box — this never reaches the cloud
-    // and never leaves this browser profile / device.
-    await HiveService.instance.configBox.put('enable_hold_weeks', next);
-    await DayRolloverObserver.instance.runRolloverNow(ref);
-    if (!mounted) return;
-    setState(() {});
-    _toast('enable_hold_weeks = ${next ? 'ON' : 'OFF'}');
-  }
-
   /// One LOG per exercise (default ON since the flip batch; this toggle stores
   /// `false` as the debug-build kill switch). The Active Workout screen reads
   /// the flag on every build, so the next timer tick picks it up.
@@ -302,7 +291,7 @@ class _DevPanelScreenState extends ConsumerState<DevPanelScreen> {
   }
 
   /// The equipment-exclusions KILL-SWITCH (diagnose e2d6b8, flipped ON
-  /// 2026-08-05). Unlike `enable_hold_weeks` this flag is DEFAULT ON, so the
+  /// 2026-08-05). This flag is DEFAULT ON, so the
   /// switch writes `disable_equipment_exclusions = true` to turn the feature
   /// OFF and DELETES the key to return to the default.
   ///
@@ -369,6 +358,23 @@ class _DevPanelScreenState extends ConsumerState<DevPanelScreen> {
     setState(() {});
     _toast('triggered deload = ${nextEnabled ? 'ON' : 'OFF (killed)'} '
         '-- generate a new plan for the stash to apply');
+  }
+
+  /// Generator step 4 (OI-53) kill switches: volume titration and plateau escalation
+  /// went live with no other off switch on a debug build (CLAUDE.md 4.6 step 3; a release build has none,
+  /// OI-95). Deleting
+  /// the key returns to the default (ON); the change applies at the next fresh PRO
+  /// phase advance, the only generation that opts in.
+  Future<void> _toggleKillSwitch(String key, {required bool enabledNow, required String label}) async {
+    final cfg = HiveService.instance.configBox;
+    if (enabledNow) {
+      await cfg.put(key, true);
+    } else {
+      await cfg.delete(key);
+    }
+    if (!mounted) return;
+    setState(() {});
+    _toast('$label = ${enabledNow ? 'OFF (killed)' : 'ON'} -- applies at the next phase advance');
   }
 
   void _toast(String msg) {
@@ -446,8 +452,6 @@ class _DevPanelScreenState extends ConsumerState<DevPanelScreen> {
           _card(
             title: 'Ship-dark flags',
             children: [
-              _kv('enable_hold_weeks',
-                  PlanEngineFlags.holdWeeksEnabled ? 'ON' : 'off'),
               // DEFAULT ON since the flip batch: a stored `false` means killed.
               _kv(LogExerciseFlags.key,
                   LogExerciseFlags.logExerciseButtonEnabled ? 'ON' : 'KILLED'),
@@ -462,17 +466,15 @@ class _DevPanelScreenState extends ConsumerState<DevPanelScreen> {
                   PlanEngineFlags.readinessEnabled ? 'ON' : 'KILLED'),
               _kv('triggered deload',
                   PlanEngineFlags.triggeredDeloadEnabled ? 'ON' : 'KILLED'),
+              _kv('volume titration',
+                  PlanEngineFlags.volumeTitrationEnabled ? 'ON' : 'KILLED'),
+              _kv('plateau escalation',
+                  PlanEngineFlags.plateauEscalationEnabled ? 'ON' : 'KILLED'),
               const SizedBox(height: 8),
               Wrap(
                 spacing: 8,
                 runSpacing: 8,
                 children: [
-                  _btn(
-                    PlanEngineFlags.holdWeeksEnabled
-                        ? 'Turn hold weeks OFF'
-                        : 'Turn hold weeks ON',
-                    () => _toggleHoldWeeks(),
-                  ),
                   _btn(
                     LogExerciseFlags.logExerciseButtonEnabled
                         ? 'Turn one-LOG-per-exercise OFF'
@@ -509,6 +511,22 @@ class _DevPanelScreenState extends ConsumerState<DevPanelScreen> {
                         ? 'KILL triggered deload'
                         : 'Restore triggered deload',
                     () => _toggleTriggeredDeload(),
+                  ),
+                  _btn(
+                    PlanEngineFlags.volumeTitrationEnabled
+                        ? 'KILL volume titration'
+                        : 'Restore volume titration',
+                    () => _toggleKillSwitch('disable_volume_titration',
+                        enabledNow: PlanEngineFlags.volumeTitrationEnabled,
+                        label: 'volume titration'),
+                  ),
+                  _btn(
+                    PlanEngineFlags.plateauEscalationEnabled
+                        ? 'KILL plateau escalation'
+                        : 'Restore plateau escalation',
+                    () => _toggleKillSwitch('disable_plateau_escalation',
+                        enabledNow: PlanEngineFlags.plateauEscalationEnabled,
+                        label: 'plateau escalation'),
                   ),
                   // Use after every time-travel jump — the clock buttons above
                   // do NOT invalidate providers on their own.

@@ -10,7 +10,7 @@
 //
 //   - WorkoutScheduleReadService — plan generation + reads.
 //   - WorkoutScheduleWriteService — markCompleted / markSkipped / pause /
-//     redoWeek4 / copyWeek.
+//     holdWeek / copyWeek.
 //   - SwapService — swap days / swap exercise / shorten / travel mode.
 //   - TemplateService — assignTemplateToDate / unschedule / cleanSync.
 //

@@ -22,6 +22,7 @@ import 'package:icanbefitter/core/services/service_providers.dart';
 import 'package:icanbefitter/core/utils/gap_policy.dart';
 import 'package:icanbefitter/core/utils/injury_vocab.dart';
 import 'package:icanbefitter/shared/repositories/plan_engine/plan_engine_flags.dart';
+import 'package:icanbefitter/shared/repositories/plan_engine/session_budget.dart';
 import 'package:icanbefitter/shared/repositories/user_repository.dart';
 import 'package:icanbefitter/core/constants/equipment_defaults.dart';
 
@@ -211,8 +212,8 @@ Future<({bool generated, bool committed})> _runAdvanceWith({
   final injuries = rawInjuries is List
       ? rawInjuries.map((e) => e.toString()).toList()
       : const <String>[];
-  final sessionDuration =
-      (profile['session_duration_minutes'] as num?)?.toInt();
+  // OI-488 (Unit 3B, d70): the param wins over the profile value, so it is capped here too.
+  final sessionDuration = SessionBudget.profileParamMinutes(profile);
 
   // ⑧ 3-a2 (W2.5): when the adherence gate is ON (LIVE default since
   // 2026-09-16, OI-53 batch 2; kill-switch `disable_adherence_gate`) AND the

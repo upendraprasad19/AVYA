@@ -45,21 +45,12 @@ extension _PerformSignOut on _ProfileScreenState {
 // Hard-delete replaced with 2-step confirm screen at /profile/delete-account.
 // The old soft-flag helper in UserRepository is now @Deprecated (no callers here).
 
+  // Unit 3B (d73): the goal is named from the one FitnessGoals table (Build / Cut / Maintain; a legacy token keeps
+  // its own label until LegacyGoalHealer moves it).
   String _formatGoal(String goal) {
-    switch (goal) {
-      case 'build_muscle':
-        return 'Building Muscle';
-      case 'lose_fat':
-        return 'Losing Fat';
-      case 'general_fitness':
-        return 'General Fitness';
-      case 'strength':
-        return 'Building Strength';
-      default:
-        return goal.isNotEmpty
-            ? goal[0].toUpperCase() +
-                goal.substring(1).replaceAll('_', ' ')
-            : 'Building Foundation';
-    }
+    if (FitnessGoals.isKnown(goal)) return FitnessGoals.label(goal);
+    return goal.isNotEmpty
+        ? goal[0].toUpperCase() + goal.substring(1).replaceAll('_', ' ')
+        : 'Building Foundation';
   }
 }

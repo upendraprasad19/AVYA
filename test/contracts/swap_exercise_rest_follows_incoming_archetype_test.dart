@@ -72,7 +72,7 @@ void main() {
   }
 
   double seconds(Map<String, dynamic> e) =>
-      SessionBudget.estimateDaySecondsFromPlanDay({'exercises': [e]}, const {});
+      SessionBudget.estimateDaySecondsFromPlanDay({'exercises': [e]}, const {}, finisher: const []);
 
   test('a heavy compound swapped for an isolation takes the isolation rest, and back', () async {
     final toIso = await swap('heavy', 'iso', [planned('heavy', 150)]);
@@ -157,5 +157,39 @@ void main() {
     final overReps = await swap('heavy', 'bare', [planned('heavy', 150)]);
     expect(SessionBudget.isRepBased('${overReps['logging_type']}'), isTrue);
     expect(overReps['rest_seconds'], 120);
+  });
+
+  test('Unit 3A (d60, d64): under the Strength focus a swapped-in main lift keeps the +30 s at 60+ minutes only',
+      () async {
+    final user = HiveService.instance.userBox;
+    final config = HiveService.instance.configBox;
+    // A profile turns on the swap's equipment check (OI-89), so the rows name their equipment.
+    final ex = HiveService.instance.exerciseBox;
+    for (final (id, type, reps) in const [
+      ('heavy', 'compound', '5-8'),
+      ('mid', 'compound', '8-12'),
+      ('iso', 'isolation', '10-15'),
+    ]) {
+      await ex.put(id, {...lib(id, type, reps), 'equipment_needed': ['bodyweight']});
+    }
+    try {
+      await user.put('profile', {'equipment_access': 'full_gym', 'physique_focus': 'strength', 'session_duration_minutes': 60});
+      expect((await swap('iso', 'heavy', [planned('iso', 75)]))['rest_seconds'], 180, reason: 'H 150 + 30 at 60');
+      expect((await swap('iso', 'mid', [planned('iso', 75)]))['rest_seconds'], 150, reason: 'M 120 + 30 at 60');
+      expect((await swap('heavy', 'iso', [planned('heavy', 180)]))['rest_seconds'], 75, reason: 'an isolation: no +30');
+
+      await user.put('profile', {'equipment_access': 'full_gym', 'physique_focus': 'strength', 'session_duration_minutes': 45});
+      expect((await swap('iso', 'heavy', [planned('iso', 75)]))['rest_seconds'], 150, reason: 'd64: none below 60');
+
+      await user.put('profile', {'equipment_access': 'full_gym', 'physique_focus': 'balanced', 'session_duration_minutes': 90});
+      expect((await swap('iso', 'heavy', [planned('iso', 75)]))['rest_seconds'], 150, reason: 'no focus, no +30');
+
+      await user.put('profile', {'equipment_access': 'full_gym', 'physique_focus': 'strength', 'session_duration_minutes': 90});
+      await config.put('disable_goal_training', true);
+      expect((await swap('iso', 'heavy', [planned('iso', 75)]))['rest_seconds'], 150, reason: 'the switch set: today');
+    } finally {
+      await config.delete('disable_goal_training');
+      await user.delete('profile');
+    }
   });
 }

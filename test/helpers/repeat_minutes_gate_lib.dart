@@ -11,6 +11,7 @@
 // within the plain day budget (the session minus warm-up and cool-down) whenever the flag-off day was within it.
 
 import 'package:icanbefitter/core/constants/fitness_goals.dart';
+import 'package:icanbefitter/core/services/hive_service.dart';
 import 'package:icanbefitter/core/services/workout_schedule_read_service.dart';
 import 'package:icanbefitter/shared/repositories/exercise_repository.dart';
 import 'package:icanbefitter/shared/repositories/plan_engine/budget_muscle_groups.dart';
@@ -61,7 +62,7 @@ double _mainSeconds(WorkoutDay d) => SessionBudget.estimateDaySecondsFromPlanDay
       ],
     }, const {}, rowsByName: _rowsByName ??= {
       for (final r in ExerciseRepository.instance.getAll()) '${r['name']}'.toLowerCase(): r,
-    });
+    }, finisher: const []); // main seconds only (Unit 3C: the finisher is priced apart)
 
 /// The library rows by lowercase name, so the gate prices a row by its library archetype as the allocator does
 /// (B-pass seat B, finding 4), not by the plan row's own first type.
@@ -87,6 +88,17 @@ int weekSets(WeekPlan w, String g, bool qg) =>
 SameMovement? _sm;
 
 RepeatMinutesTally runRepeatMinutes(SweepHarness h, (int, int) pair, String tier) {
+  // Unit 3C (diagnose f3c9a6): this gate measures Unit 2D's reach, so both phases run with the cardio finisher switch
+  // set (no finisher time reserved, none shown); the finisher's own cost is measured by its reservation test.
+  HiveService.instance.configBox.put('disable_cardio_finisher_shown', true);
+  try {
+    return _runRepeatMinutes(h, pair, tier);
+  } finally {
+    HiveService.instance.configBox.delete('disable_cardio_finisher_shown');
+  }
+}
+
+RepeatMinutesTally _runRepeatMinutes(SweepHarness h, (int, int) pair, String tier) {
   final (m1, m2) = pair;
   final sameMovement = _sm ??= SameMovement.fromRows(ExerciseRepository.instance.getAll());
   final t = RepeatMinutesTally();

@@ -64,7 +64,7 @@ void main() {
 
     test('rank-0 reservation: every lead lift keeps >= 2 sets when the group top binds', () {
       // general_fitness beginner: Chest top 10, cap 6. Every day desires 3 (OI-456), whatever its intensity.
-      final f = Fx(balancedWeek: false);
+      final f = Fx(balancedWeek: false, goalTraining: GoalTraining.off);
       f.row('bench', ['Chest']);
       f.row('press', ['Triceps'], type: 'isolation', reps: '10-15');
       final days = [
@@ -108,7 +108,7 @@ void main() {
       // (Chest, top 10) are protected. Those four are then refused for time (a 270 s
       // gap fits a 2-set Biceps curl, 257 s, but not a 2-set Chest lift, 282 s), so
       // the reservation was never needed and the floor pass grows day 0's lift to 5.
-      final f = Fx(balancedWeek: false);
+      final f = Fx(balancedWeek: false, goalTraining: GoalTraining.off);
       f.row('cl', ['Chest']);
       f.row('bi', ['Biceps'], type: 'isolation', reps: '10-15');
       f.row('plank', ['Core'], type: 'isolation', reps: '30-60', logging: 'timed');
@@ -153,7 +153,7 @@ void main() {
     });
 
     test('boundBy is null when only TIME held the lead lift below its desired sets (B-pass R1 P2-1)', () {
-      // general_fitness beginner (Chest cap 6, top 10), one day (every exercise desires 3,
+      // general_fitness beginner (Chest cap 6, top 8 with Unit 3A on; the top does not bind here), one day (every exercise desires 3,
       // OI-456) on 30 minutes = 1440 s. A 6-set timed row at 110 s rest costs 984 s,
       // leaving 456 s: two sets of the Chest lift (archetype M, 120 s rest) fit (336 s),
       // three do not (522 s). The ledger already holds the 2 granted sets when the
@@ -801,8 +801,11 @@ void main() {
         }
       }
       // The count-forced excuse is used by exactly these days, by exactly these seconds (B review, seat 2 finding 3).
+      // Unit 3A (2026-11-15): plan 95 (a Cut / Maintain plan under the goal's lower band) joins, 57.6 s on day 4 of
+      // both variants; attributed by re-running with the goal training off (the old map back exactly).
       expect(over, <String, double>{
-        '15/A/1': 90.0, '37/A/0': 10.8, '37/B/0': 118.8, '68/A/1': 10.8, '100/A/1': 10.8, '100/A/3': 198.0,
+        '15/A/1': 90.0, '37/A/0': 10.8, '37/B/0': 118.8, '68/A/1': 10.8, '95/A/4': 57.6, '95/B/4': 57.6,
+        '100/A/1': 10.8, '100/A/3': 198.0,
         '100/B/1': 10.8, '100/B/3': 198.0, '101/B/0': 90.0, '106/A/1': 54.0, '106/A/2': 10.8, '106/B/2': 10.8,
         '131/A/3': 54.0, '131/A/4': 10.8, '142/A/3': 54.0, '149/A/0': 75.6, '149/A/2': 10.8, '149/B/0': 75.6,
         '149/B/2': 10.8, '151/A/2': 10.8, '151/B/2': 10.8, '182/A/0': 154.8, '182/A/2': 10.8, '182/B/2': 10.8,
@@ -811,8 +814,9 @@ void main() {
       // ignore: avoid_print
       print('seeded sweep: floor seats $floorSeats, past a top $floorOverTop, past the clock $floorOverClock');
       // Measured 2026-11-13: 12 seats, every one past a top (the reason the week check reads the oracle), none past
-      // the clock (so the pinned `over` map above is unchanged by the floor).
-      expect((floorSeats, floorOverTop, floorOverClock), (12, 12, 0));
+      // the clock (so the pinned `over` map above is unchanged by the floor). Unit 3A (2026-11-15): 21 / 21 / 0, the
+      // Cut / Maintain plans' lower tops leave more days thin (12 again with the goal training off).
+      expect((floorSeats, floorOverTop, floorOverClock), (21, 21, 0));
       // `guarded` is reported, not asserted: random picks seldom empty a whole day,
       // and the guard itself is pinned by the crafted 'guard' test above.
       // ignore: avoid_print

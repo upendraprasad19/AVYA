@@ -640,7 +640,7 @@ concepts:
         semantic: pass-through
         fields_read: [via service.getScheduleForDate(day)]
       - file: lib/core/services/swap_service.dart
-        line_range: 152-155
+        line_range: 159-162
         method: SwapService._row(date) (weekStates / preview / swapDays)
         semantic: pass-through
         fields_read: [raw workoutBox schedule_<date> row]
@@ -1046,7 +1046,7 @@ concepts:
           Rebuilds the context via buildAiContext() between retry
           rounds so the snapshot reflects post-mutation Hive state.
       - file: lib/core/services/sync_service.dart
-        line_range: 809-854
+        line_range: 810-855
         method: pushSnapshot (coalesced) -> pushSnapshotNow (body)
         semantic: pass-through
         fields_read: [<full context map>]
@@ -1212,7 +1212,7 @@ concepts:
           (phases_2_to_12, ai_coach_unlimited, progress_photos) through
           verifyFromServer() with a 5-min cache TTL.
       - file: lib/features/profile/providers/profile_provider.dart
-        line_range: 546-604
+        line_range: 545-603
         method: SubscriptionInfoNotifier / subscriptionInfoProvider
         semantic: pass-through
         fields_read: [isPro, expiresAt, plan, isVerifying]
@@ -1410,7 +1410,7 @@ concepts:
           value; reads the provider for the live progress bar. Calls
           setUserOverride + ref.invalidate(waterTargetProvider) on save.
       - file: lib/features/onboarding/providers/onboarding_provider.dart
-        line_range: 343-353
+        line_range: 344-354
         method: completeOnboarding (seed water_target_ml on profile)
         semantic: pass-through
         fields_read: [via WaterTargetService.computeFromProfile(profile-like map)]
@@ -1679,10 +1679,10 @@ concepts:
           fires syncProfileNow); signed in: pushSnapshot, and the
           coach-extraction lock ONLY when the food type itself changed.
       - file: lib/features/profile/screens/edit_profile_screen.dart
-        line_range: 1801-2237
+        line_range: 1856-2294
         method: _save (writes _foodType.storageKey; lock compare on canonical keys)
       - file: lib/features/onboarding/providers/onboarding_provider.dart
-        line_range: 999-1000
+        line_range: 1000-1001
         method: resolveOnboardingDietPreference (non_veg when absent)
       - file: lib/features/onboarding/screens/plan_screen.dart
         line_range: 582-597
@@ -1715,12 +1715,12 @@ concepts:
         semantic: pass-through
         fields_read: [diet_preference]
       - file: lib/features/profile/screens/edit_profile_screen.dart
-        line_range: 1290-1348
+        line_range: 1345-1403
         method: _buildDietPreferenceChips (FoodTypeChips; no Keto)
         semantic: pass-through
         fields_read: [diet_preference]
       - file: lib/features/ai_coach/services/ai_snapshot_builder.dart
-        line_range: 110-316
+        line_range: 110-314
         method: buildAiContext (profile.diet_preference canonical + diet_preference_label)
         semantic: pass-through
         fields_read: [diet_preference]
@@ -1730,12 +1730,12 @@ concepts:
         semantic: pass-through
         fields_read: [diet_preference]
       - file: lib/core/services/sync_service.dart
-        line_range: 1401-1464
+        line_range: 1402-1465
         method: _replayPendingOnboardingSync (value passed through)
         semantic: pass-through
         fields_read: [diet_preference]
       - file: lib/features/onboarding/providers/onboarding_provider.dart
-        line_range: 914-960
+        line_range: 915-961
         method: _syncOnboardingToSupabase (value passed through)
         semantic: pass-through
         fields_read: [diet_preference]
@@ -1811,7 +1811,7 @@ concepts:
           itself; invalidating a provider that watches userProfileProvider
           from inside it is a CircularDependencyError in debug builds).
       - file: lib/features/profile/screens/edit_profile_screen.dart
-        line_range: 1801-1941
+        line_range: 1856-1996
         method: _save (adds diet_strategy only with the flag on, for a chip different from the EFFECTIVE strategy, after confirmEditProfileDietStrategy; PRO re-checked at Save)
         notes: |
           PRESENCE ONLY for the screen wiring (B-pass seat C finding 3): the
@@ -2539,7 +2539,7 @@ concepts:
           Acts on the row's own id / log_key, which every writer stamps
           with the chosen occurrence key; never recomputes a key.
       - file: lib/features/ai_coach/services/ai_snapshot_builder.dart
-        line_range: 914-962
+        line_range: 912-960
         method: _getMealsToday
         semantic: aggregated
         fields_read: [meal_type, items[], total_calories]
@@ -2999,7 +2999,7 @@ concepts:
         line_range: 1-9999
         method: _syncScheduledWorkouts (confirmed :1778; constructs a SyncSkipIndex(domain: SyncSkipDomain.sched) and drives the FK-resilient upsert through its pushIfChanged closure -- the helper stores index[scheduled_date]=fp ON CONFIRMED ONLY; commit(liveKeys:) prunes to live schedule_ dates + persists after the loop)
       - file: lib/core/services/sync_service.dart
-        line_range: 297-330
+        line_range: 298-331
         method: schedPayloadFingerprint (pure static, byte-identical) + _schedHashSkipDisabled kill-switch getter
       - file: lib/features/dev/simulation_service.dart
         line_range: 103-183
@@ -3223,7 +3223,7 @@ concepts:
         line_range: 201-432
         method: _syncNutritionLogs (constructs a SyncSkipIndex(domain: SyncSkipDomain.nlog) and drives the parent + item + vacuum writes through its pushIfChanged closure -- stores index[slotId]=nlogFp ON CONFIRMED FULL-BUNDLE SUCCESS ONLY; commit(liveKeys:) prunes to live slots + persists after the loop, or CLEARS the index entirely when disabled)
       - file: lib/core/services/sync_service.dart
-        line_range: 367-427
+        line_range: 368-428
         method: nlogPayloadFingerprint / nlogHashSkipDisabledFor (pure statics, byte-identical -- plan D4) + _hashSkipKillSwitchOn(SyncSkipDomain) (generic kill-switch reader shared with exlog, replaces the deleted _nlogHashSkipDisabled getter)
       - file: lib/features/dev/simulation_service.dart
         line_range: 103-183
@@ -3466,7 +3466,7 @@ concepts:
     reader_manifest_complete: false
     readers:
       - file: lib/core/services/sync_service.dart
-        line_range: 2223-2428
+        line_range: 2236-2441
         method: _attemptSingleCallRestore
         semantic: aggregated
         fields_read: [schema_version, tables]
@@ -3526,7 +3526,7 @@ concepts:
       assumption (it cannot detect a lowered production cap).
     writers:
       - file: lib/core/services/sync_service.dart
-        line_range: 3105-3176
+        line_range: 3118-3189
         method: _fetchAllRows
         notes: |
           The ONE paging loop: owner-scoped (.eq user_id) first, optional since filter,
@@ -3845,7 +3845,7 @@ concepts:
           step. Uses _safeRestoreOp wrapper to keep one surface's
           failure from aborting the rest.
       - file: lib/core/services/sync_service.dart
-        line_range: 1890-2097
+        line_range: 1895-2110
         method: _restoreFromCloudForUserCore
         semantic: aggregated
         fields_read: [<the body of restoreFromCloudForUser, moved verbatim by OI-284>]
@@ -3864,7 +3864,7 @@ concepts:
           routing to /home (15s timeout safety). Cancels in-flight
           restore when user_profile is null (brand-new user).
       - file: lib/core/services/sync_service.dart
-        line_range: 690-699
+        line_range: 691-700
         method: restoreFromCloud (legacy entry point)
         semantic: pass-through
         fields_read: []
@@ -4343,7 +4343,7 @@ concepts:
           splash-time verify doesn't downgrade an optimistic isPro=true
           before the webhook lands.
       - file: lib/features/profile/providers/profile_provider.dart
-        line_range: 521-604
+        line_range: 520-603
         method: subscriptionInfoProvider (isVerifying field)
         semantic: flag-check
         fields_read: [isPaymentInFlight]
@@ -4527,7 +4527,7 @@ concepts:
         semantic: flag-check
         fields_read: [status, completed_at, exercises]
       - file: lib/features/train/providers/train_provider.dart
-        line_range: 603-638
+        line_range: 639-674
         method: currentPlanProvider (weekDays status check)
         semantic: flag-check
         fields_read: [status]
@@ -4724,7 +4724,7 @@ concepts:
       so partial-failure recovery is row-level instead of template-level.
     writers:
       - file: lib/features/train/providers/train_provider.dart
-        line_range: 2684-2697
+        line_range: 2746-2759
         method: TemplatesNotifier.saveTemplate (single-day; multi-day templates
           land via tool_dispatcher.createCustomTemplate entry below)
       - file: lib/features/train/screens/template_builder_screen.dart
@@ -4773,7 +4773,7 @@ concepts:
     reader_manifest_complete: true
     readers:
       - file: lib/features/train/providers/train_provider.dart
-        line_range: 2666-2682
+        line_range: 2728-2744
         method: TemplatesNotifier.build
         semantic: pass-through
         fields_read: [type, name, exercises, assigned_days, exercise_count, group_id, group_day_index, group_total_days, last_used_at, created_at, updated_at]
@@ -5347,14 +5347,15 @@ concepts:
       DATE, so a new Monday is a new row and keying by date needs no migration.
       Freeze state also mirrors to user_progress columns.
       ⚠️ The weekly-streak WEEK IDENTITY is not simply getCurrentWeekNumber():
-      that clamps to [1,4], and a hold week (enable_hold_weeks) starts at
-      plan_start+28. The hold arm derives an UNCLAMPED date-week index; the
-      non-hold arm stays clamped. The two must never be conflated — redoWeek4
-      extends only plan_end, so a rolled-week user sits at a true index >= 5
+      that clamps to [1,4], and a hold week starts at plan_start+28. The hold
+      arm derives an UNCLAMPED date-week index; the non-hold arm stays clamped.
+      The two must never be conflated — a window can extend plan_end without
+      moving plan_start (a hold; the deleted redoWeek4 did it too), so a
+      rolled-week user sits at a true index >= 5
       while the clamp reports 4. See a3f8d1.
     writers:
       - file: lib/features/train/providers/train_provider.dart
-        line_range: 501-608
+        line_range: 539-644
         method: resolveStreakWeekState (pure extraction — week identity + row key + day counts, both arms; a3f8d1)
       - file: lib/features/train/services/workout_completion_bookkeeping.dart
         method: WorkoutCompletionBookkeeping.afterCompletion (step 5, the streak row upsert; calls resolveStreakWeekState in step 3. Moved out of Active Workout's completeWorkout by coach workout parity 1a, diagnose 0ebfcb, so every completion door writes it)
@@ -5653,20 +5654,20 @@ concepts:
       before the legacy fan-out re-runs the ops.
     writers:
       - file: lib/core/services/sync_service.dart
-        line_range: 1985-2003
+        line_range: 1990-2008
         method: _settleRestoreMarker
         notes: |
           The ONE marker writer; the decision is the pure
           `shouldSettleRestoreMarker` (result.succeeded, no streak-critical
           failure, uid non-null, live uid == uid, Hive owner == uid).
       - file: lib/core/services/sync_service.dart
-        line_range: 2011-2021
+        line_range: 2021-2039
         method: restoreFromCloudForUser
         notes: |
           Wrapper shape pinned by completed_title_follows_log_test.dart: runs the
           core inside `RestoreFailureCollector.run`, heals titles, THEN settles.
       - file: lib/core/services/sync_service.dart
-        line_range: 194-259
+        line_range: 195-260
         method: _onUserChanged
         notes: clears `_restoreSettledUserId` and the withheld reason on an account swap, as its FIRST statement (every later step can throw; B-pass F3).
       - file: lib/core/services/sync/sync_restore_failure_collector.dart
@@ -5684,7 +5685,7 @@ concepts:
           a stale failure from the aborted attempt cannot hold the marker closed
           (B-pass reviewer B F4).
       - file: lib/core/services/sync_service.dart
-        line_range: 2934-3007
+        line_range: 2947-3020
         method: _reportSyncFailure
         notes: first statement calls `RestoreFailureCollector.note(opType)`; the single failure funnel.
       - file: lib/core/services/day_rollover_service.dart
@@ -5728,7 +5729,7 @@ concepts:
           The ONE persist gate: marker == live uid == Hive owner AND a non-empty
           schedule. Gated off => a read-only count.
       - file: lib/features/home/screens/home_screen.dart
-        line_range: 198-203
+        line_range: 200-205
         method: invalidateOnBackgroundRestore
         semantic: pass-through
         notes: |
@@ -5784,7 +5785,7 @@ concepts:
         method: phaseStartAfterGap
         notes: the ONE start-date rule; pure.
       - file: lib/core/services/workout_schedule_read_service.dart
-        line_range: 2149-2160
+        line_range: 2164-2203
         method: nextPhaseStartDate
         notes: delegates to phaseStartAfterGap (gapStart false = the original rule, used by the graduation unlock).
       - file: lib/shared/services/pro_phase_advance.dart
@@ -5810,7 +5811,7 @@ concepts:
         fields_read: [schedule_<date> presence]
         notes: feeds RankService._qualifies (MCPO, officer track).
       - file: lib/features/ai_coach/services/ai_snapshot_builder.dart
-        line_range: 1441-1484
+        line_range: 1439-1482
         method: _getPlanStatus
         semantic: pass-through
         notes: the coach prompt rule is a separate Edge Function change.
@@ -6014,7 +6015,7 @@ concepts:
         method: WorkoutCompletionBookkeeping.afterCompletion
         notes: the ONLY production writer of both keys (coach workout parity 1a, diagnose 0ebfcb; was Active Workout's completeWorkout alone, so a coach completion never counted a week). Every completion door calls it after a successful markCompleted; step 3 calls weeklyStreakAfterCompletion and step 4 writes weekly.weeks / weekly.marker (last_counted_week_key), only once this user's restore has settled.
       - file: lib/features/train/providers/train_provider.dart
-        line_range: 688-695
+        line_range: 724-731
         method: weeklyStreakAfterCompletion
         notes: the pure rule; counts when planned > 0, completedCount >= ceil(0.8 * planned) and the calendar-week key differs from the marker. calendarWeekKey (645) is the key; weekIsCurrent (from resolveStreakWeekState) must be true or nothing counts.
     reader_manifest_complete: false
@@ -6032,7 +6033,7 @@ concepts:
         fields_read: [current_streak_weeks]
         notes: fires the streak-risk insight when weeks > 2.
       - file: lib/features/ai_coach/services/ai_snapshot_builder.dart
-        line_range: 110-316
+        line_range: 110-314
         method: buildAiContext
         semantic: pass-through
         fields_read: [current_streak_weeks]
@@ -6090,7 +6091,7 @@ concepts:
           entry always wins (the block no-ops when a row already exists).
           Consumed by the readiness sheet's SLEEP axis via sleepAxisFromHours.
       - file: lib/features/profile/providers/profile_provider.dart
-        line_range: 722-730
+        line_range: 721-729
         method: logSleep
         # Was `BiometricNotifier.logSleep`. check_sot_registry_parity's
         # _extractSymbol takes the FIRST identifier of a dotted value, so the
@@ -6105,7 +6106,7 @@ concepts:
     reader_manifest_complete: true
     readers:
       - file: lib/features/profile/providers/profile_provider.dart
-        line_range: 600-657
+        line_range: 599-656
         method: BiometricNotifier.build (biometricProvider)
         semantic: latest
         fields_read: [type, sleep_hours, date]
@@ -6210,16 +6211,16 @@ concepts:
       APK Test #12.8 / Bug #2 root cause.
     writers:
       - file: lib/features/onboarding/providers/onboarding_provider.dart
-        line_range: 272-766
+        line_range: 273-767
         method: completeOnboarding
         notes: writes to userBox['profile']['full_name'] + syncs to users table
       - file: lib/features/profile/screens/edit_profile_screen.dart
-        line_range: 1801-2237
+        line_range: 1856-2294
         method: _save
         notes: calls syncProfileNow after updating userBox
       - file: lib/features/profile/services/profile_write_service.dart
-        line_range: 1-140
-        method: "updateProfile / patchProfile / updateField"
+        line_range: 1-177
+        method: "updateProfile / patchProfile / patchProfileWith / updateField"
         notes: |
           Canonical writer scaffolded in audit 2026-05-20 / A4. All 7
           legacy direct-userBox-put-profile sites now route through this
@@ -6454,7 +6455,7 @@ concepts:
       completeOnboarding() stamps both Hive and cloud.
     writers:
       - file: lib/features/onboarding/providers/onboarding_provider.dart
-        line_range: 346-726
+        line_range: 347-727
         method: completeOnboarding
         notes: |
           Stamps onboarding_completed_at in the Hive profile map (durable BEFORE
@@ -6477,7 +6478,7 @@ concepts:
           screen, a false positive would block every genuine new signup.
           Kill-switch disable_onboarding_overwrite_guard.
       - file: lib/features/onboarding/providers/onboarding_provider.dart
-        line_range: 749-816
+        line_range: 750-817
         method: _syncOnboardingAndPostActions
         notes: |
           Background cloud catch-up (a1f9c4) — syncs the profile (incl.
@@ -6680,7 +6681,7 @@ concepts:
           where Hive flag got cleared but cloud carries truth) is now
           inside AuthSessionBootstrapper.hydrateFromCloud.
       - file: lib/features/onboarding/providers/onboarding_provider.dart
-        line_range: 180-202
+        line_range: 181-203
         method: OnboardingNotifier.completeOnboarding
         semantic: flag-check
         fields_read: [onboarding_completed, onboarding_completed_at]
@@ -7460,7 +7461,7 @@ concepts:
         method: offerTileIfPartial
         notes: The decision and the reshow write (owner captured first, re-checked before the write); every non-shown outcome logs completion_tile_not_shown and writes nothing.
       - file: lib/features/ai_coach/services/tool_dispatcher.dart
-        line_range: 575-600
+        line_range: 593-618
         method: _executeRequestCompletionTile
         notes: Computes hasPendingLogSet from pendingIntents (else the provider) and returns success for every CompletionTileOutcome. The post-step early branch skips invalidation, sync and pushSnapshot, refreshes the chat and stamps the marker.
       - file: lib/features/ai_coach/providers/pending_tool_intents_provider.dart
@@ -7693,7 +7694,7 @@ concepts:
     reader_manifest_complete: true
     readers:
       - file: lib/core/services/sync_service.dart
-        line_range: 2587-2652
+        line_range: 2600-2665
         method: _reportSyncFailure (funnel — all sync failures route through here)
         semantic: pass-through
         fields_read: []
@@ -8420,7 +8421,7 @@ concepts:
           audit 2026-05-20 / A2 split the 1970-LOC workout_schedule_service.dart
           into a ~270-line @Deprecated shim + four services. The real routing
           callsites now live in workout_schedule_write_service.dart
-          (markCompleted/markSkipped/redoWeek4/copyWeek — and pauseRange as of
+          (markCompleted/markSkipped/holdWeek/copyWeek — and pauseRange as of
           audit-fixwave F3), swap_service.dart (swapExerciseInDay/shortenDay),
           and template_service.dart (assignTemplateToDate/unschedule). The 4
           bounded direct puts (2 _planKey in read_service + displacedKey +
@@ -8540,7 +8541,7 @@ concepts:
           WeightLogNotifier.logWeight (line 779) calls HealthWriteService.logWeight
           + invalidates the canonical provider set.
       - file: lib/features/profile/providers/profile_provider.dart
-        line_range: 600-692
+        line_range: 599-691
         method: BiometricNotifier (sleep) + logSleep
         semantic: latest
         fields_read: [type, sleep_hours, date]
@@ -8573,7 +8574,7 @@ concepts:
           weight_logs, body_measurements, water_logs, daily_steps).
           Restore writes back with IST-anchored keys.
       - file: lib/features/onboarding/providers/onboarding_provider.dart
-        line_range: 461-471
+        line_range: 462-472
         method: OnboardingNotifier weight seed
         semantic: pass-through
         fields_read: []
@@ -9023,7 +9024,7 @@ concepts:
           at sign-in, which ran before the users row existed and never ran
           when email confirmation returned no session.
       - file: lib/features/onboarding/providers/onboarding_provider.dart
-        line_range: 749-816
+        line_range: 750-817
         method: _syncOnboardingAndPostActions
         notes: |
           The one client redeem point for new users, AFTER the users upsert.
@@ -9936,7 +9937,7 @@ concepts:
       getCurrentPlanMap, hasPlan, getCurrentCalendarWeek.
     writers:
       - file: lib/core/services/workout_schedule_read_service.dart
-        line_range: 135-2099
+        line_range: 135-2289
         method: WorkoutScheduleReadService
     reader_manifest_complete: false  # progressive caller migration; @Deprecated lint surfaces remaining
     readers:
@@ -9970,15 +9971,21 @@ concepts:
     behavioral_test_path: test/contracts/workout_schedule_write_path_behavioral_test.dart
     description: |
       Schedule mutations not tied to swap or template:
-      markCompleted, markSkipped, pauseRange, redoWeek4, holdWeek, copyWeek.
-      holdWeek (ship-dark enable_hold_weeks, default OFF) is the free-tier "Hold
-      the Line" replacement for redoWeek4 — sources the Peak/deload week BY DATE,
-      Monday-backdated, FLAT loads, stamps is_hold/hold_ordinal, extends plan_end,
-      and awaits pushWorkoutPlanForSyncDomain for reinstall durability.
+      markCompleted, markSkipped, pauseRange, holdWeek, copyWeek.
+      holdWeek is the free-tier "Hold the Line" write (Unit 3D-b, OI-175, d57:
+      always on; redoWeek4 and the enable_hold_weeks flag are deleted) — sources
+      the Peak/deload week BY DATE, Monday-backdated, FLAT loads, stamps
+      is_hold/hold_ordinal, extends plan_end, and awaits
+      pushWorkoutPlanForSyncDomain for reinstall durability (once, only on a
+      written hold). It returns HoldWeekOutcome {written, alreadyHolding,
+      inFlight, noPlan, failed}: a covered hold dated this week or later is the
+      double tap (alreadyHolding, no write); a failed row write stops the loop
+      and plan_end does not move; a completed target row keeps its content and
+      gains only the hold stamps.
       Every Hive write routes through WorkoutWriteService.upsertScheduled.
     writers:
       - file: lib/core/services/workout_schedule_write_service.dart
-        line_range: 36-234
+        line_range: 36-548
         method: WorkoutScheduleWriteService
     reader_manifest_complete: false
 
@@ -10001,25 +10008,24 @@ concepts:
       dishonest and demotes a phase-2 holder from program week 8 to 5 (c9f4a2).
       A caller needing a program week for a NON-hold day uses programWeekFor().
 
-      ONE GATE. activeHoldWeeks() / activeHoldOrdinalFor() are the only place
-      the read side consults enable_hold_weeks; holdWeeks() / holdOrdinalForDate()
-      stay raw row readers so tests can exercise the row contract directly.
-      holdStatusProvider DELEGATES to the active* pair rather than keeping its
-      own flag check — two copies of one gate is the drift class §4.1 names.
-
-      Ship-dark: with the flag OFF, weekIdentity() == getCurrentWeekNumber()
-      even with is_hold rows on disk, so all six surfaces render their pre-batch
-      strings. Asserted directly, not assumed.
+      ONE ENTRY POINT. activeHoldWeeks() / activeHoldOrdinalFor() are the
+      production entry points (no gate since Unit 3D-b deleted enable_hold_weeks);
+      holdStatusProvider and weekIdentity() delegate to them, so the hold read
+      surface is decided in ONE place. THE COVERED RULE (Unit 3D-b): a hold row
+      counts only while plan_start <= date <= plan_end (dates only, inclusive);
+      a crash-partial hold (rows written, plan_end not moved) is not a hold.
+      For a non-holder weekIdentity() == getCurrentWeekNumber(), so all six
+      surfaces render their pre-batch strings.
     writers:
       - file: lib/core/services/workout_schedule_read_service.dart
-        line_range: 1003-1028
-        method: activeHoldWeeks / activeHoldOrdinalFor / weekIdentity — the seam + the single flag gate
+        line_range: 1264-1288
+        method: activeHoldWeeks / activeHoldOrdinalFor / weekIdentity — the seam (no gate since Unit 3D-b; the covered rule lives in _holdDatesByOrdinal / holdOrdinalForDate)
       - file: lib/core/services/workout_schedule_write_service.dart
-        line_range: 235-353
+        line_range: 211-508
         method: holdWeek → stamps is_hold + hold_ordinal (unchanged; the identity is derived from these stamps, so a field rename silently empties every surface below)
     readers:
       - file: lib/features/train/providers/train_provider.dart
-        line_range: 1114-1117
+        line_range: 1159-1162
         method: weekIdentityProvider — widget-side seam, watches currentPlanProvider
         semantic: latest
         fields_read: [WeekIdentity.weekInPhase, WeekIdentity.holdOrdinal]
@@ -10065,6 +10071,44 @@ concepts:
       timeline's /4 progress bar and the roadmap's percentage. During a hold the
       phase's four weeks really are elapsed. Only the COUNTER lies.
 
+  - concept: hold_week_marker
+    domain: workout
+    behavioral_test_path: test/features/train/week_selector_hold_marker_test.dart
+    description: |
+      The Train week strip's "you are here" marker during a hold (Unit 3D-b,
+      OI-175, founder decision d80). SelectedWeek {week, picked}: the default
+      (clamped program week, picked false) is NOT lit while today is a hold day,
+      so only today's H chip is gold; a week the user tapped (picked true) is
+      lit. weekChipLit(week, selected, holdingToday) =
+      week == selected.week && !(holdingToday && !selected.picked). holdingToday
+      comes from holdStatusProvider (the same read the H chip uses), only for
+      the CURRENT phase's group; the PRO groups pass false. SelectedWeek has no
+      == override, so select() of the week already shown still notifies. Every
+      ref.invalidate(selectedWeekProvider) and the auth rebuild reset the pick.
+      The date sub-label follows the lit state. Hold chips never drive the
+      selection (hold_display_read_path).
+    writers:
+      - file: lib/features/train/providers/train_provider.dart
+        line_range: 1171-1201
+        method: SelectedWeek / SelectedWeekNotifier.build (default, picked false) / select (picked true)
+    readers:
+      - file: lib/features/train/widgets/week_selector.dart
+        line_range: 1025-1032
+        method: weekChipLit (pure)
+        semantic: latest
+        fields_read: [SelectedWeek.week, SelectedWeek.picked, HoldStatusData.todayHoldOrdinal]
+      - file: lib/features/train/widgets/week_selector.dart
+        line_range: 150-160
+        method: _WeekSelectorState.build — selected + holdingToday for the current group
+        semantic: latest
+        fields_read: [selectedWeekProvider.picked, holdStatusProvider.todayHoldOrdinal]
+      - file: lib/features/train/screens/train/screen.dart
+        line_range: 124-125
+        method: _buildContent — the week list reads selectedWeekProvider.week
+        semantic: latest
+        fields_read: [SelectedWeek.week]
+    reader_manifest_complete: true
+
   - concept: hold_display_read_path
     domain: workout
     behavioral_test_path: test/contracts/hold_display_read_path_test.dart
@@ -10084,25 +10128,25 @@ concepts:
       to pick a source week. isDeloadHold(n) is the display-side half of that
       contract and MUST mirror it.
 
-      Ship-dark: holdStatusProvider is the SINGLE branch point every hold
-      surface reads, and returns HoldStatusData.empty whenever
-      enable_hold_weeks is OFF — so all of it is inert until the flag flips.
+      holdStatusProvider is the SINGLE branch point every hold surface reads,
+      and returns HoldStatusData.empty for a user with no covered hold (always
+      on since Unit 3D-b, OI-175).
       Deliberately does NOT touch getCurrentWeekNumber / getProgramWeek /
       currentPhaseCompletionRate (which as of 2026-08-25 / FOB-7(a) DOES exclude is_hold
       rows from its accumulator via _withoutHoldRows, though its week counter is still clamped) — see
       docs/plan-reviews/free-tier-hold-findings.md.
     writers:
       - file: lib/core/services/workout_schedule_write_service.dart
-        line_range: 235-353
+        line_range: 211-508
         method: holdWeek → stamps is_hold (bool) + hold_ordinal (int, gap-proof max+1)
     readers:
       - file: lib/core/services/workout_schedule_read_service.dart
-        line_range: 1126-1337
+        line_range: 1130-1375
         method: isDeloadHold / _holdDatesByOrdinal / holdOrdinalForDate / holdWeeks / holdWeekSessionProgress
         semantic: latest
         fields_read: [schedule_<date>.is_hold, schedule_<date>.hold_ordinal, schedule_<date>.status, schedule_<date>.type]
       - file: lib/features/train/providers/train_provider.dart
-        line_range: 1042-1103
+        line_range: 1088-1148
         method: HoldStatusData / holdStatusProvider — the single flag branch point for every hold UI surface
         semantic: latest
         fields_read: [holdWeeks(), holdOrdinalForDate(), holdWeekSessionProgress()]
@@ -10572,22 +10616,22 @@ concepts:
     contract_test_path: test/contracts/weight_trend_chart_gap_connect_test.dart
     readers:
       - file: lib/features/train/widgets/keep_training_phase1_action.dart
-        line_range: 29-36
-        method: runFreeTierRepeatWrite → PlanEngineFlags.holdWeeksEnabled ? holdWeek() : redoWeek4() — the SINGLE place the free-tier flag branch lives (hold-display batch de-duplicated it from two independently-edited call sites)
+        line_range: 12-27
+        method: runFreeTierRepeatWrite → holdWeek() (Unit 3D-b, d57: no flag, no redoWeek4) — the ONE free-tier repeat write both callers share; returns HoldWeekOutcome
         semantic: latest
-        fields_read: [schedule_<date>.* (via holdWeek/redoWeek4 copy loop)]
+        fields_read: [schedule_<date>.* (via the holdWeek copy loop)]
       - file: lib/features/train/widgets/keep_training_phase1_action.dart
-        line_range: 38-57
-        method: keepTrainingPhase1 → runFreeTierRepeatWrite (H5 — surfaces failure, no blind /train nav); wired from graduation_screen KEEP TRAINING PHASE 1
+        line_range: 29-77
+        method: keepTrainingPhase1 → runFreeTierRepeatWrite (H5 — surfaces failure, no blind /train nav; on written it invalidates currentPlanProvider / selectedWeekProvider / todayWorkoutProvider through the container captured before the await, round 4 F1/F2); wired from graduation_screen KEEP TRAINING PHASE 1
         semantic: latest
-        fields_read: [schedule_<date>.* via holdWeek/redoWeek4]
+        fields_read: [schedule_<date>.* via holdWeek]
       - file: lib/features/train/widgets/plan_expired_card.dart
-        line_range: 56-99
-        method: _handleRedoWeek4 → runFreeTierRepeatWrite; flag-aware snackbar copy ("week 4 again" is false for a hold)
+        line_range: 59-104
+        method: _handleHoldWeek → runFreeTierRepeatWrite; one snackbar per HoldWeekOutcome (written / "Already holding this week." / error); phase_1_cycle_repeat_started only on written
         semantic: latest
-        fields_read: [schedule_<date>.* (via holdWeek/redoWeek4 copy loop)]
+        fields_read: [schedule_<date>.* (via the holdWeek copy loop)]
     forbidden_legacy_patterns:
-      - { pattern: "WorkoutScheduleService\\.instance\\.(markCompleted|markSkipped|pauseRange|redoWeek4|copyWeek)", reason: "Use workoutScheduleWriteServiceProvider after A2 split." }
+      - { pattern: "WorkoutScheduleService\\.instance\\.(markCompleted|markSkipped|pauseRange|holdWeek|copyWeek)", reason: "Use workoutScheduleWriteServiceProvider after A2 split." }
     class_constraints: |
       All Hive writes MUST route through WorkoutWriteService.upsertScheduled
       with WriteSource.schedSwap. The service does NOT own swap counters
@@ -10706,11 +10750,11 @@ concepts:
       a1f6c3.
     writers:
       - file: lib/core/utils/injury_vocab.dart
-        line_range: 1-187
+        line_range: 1-204
         method: InjuryVocab.normalize / canonicalTokens / chipTokens / toggleChip
         notes: canonical 9-token set + read-side alias (back to lower_back, free-text to token); Ship 3 added chipTokens (single chip-UI source == none ∪ canonicalTokens) + chipLabel + pure toggleChip shared by both chip screens
       - file: lib/features/profile/screens/edit_profile_screen.dart
-        line_range: 1349-1414
+        line_range: 1404-1469
         method: _buildInjuriesChips + profile reader
         notes: chips emit canonical tokens (via InjuryVocab.chipTokens/toggleChip Ship 3); reader normalizes legacy stored values
       - file: lib/features/onboarding/screens/details_screen.dart
@@ -10733,6 +10777,10 @@ concepts:
         line_range: 90-200
         method: attach (_moveInjuries + _moveIsContra)
         notes: U3 (d3f8a1) drop-not-substitute warmup/cooldown injury filter + non-empty floor; main-selectable moves defer to library tags; kill-switch warmupInjuryFilterEnabled. Threaded from plan_generator generateV4 + template_service. Behavioral test warmup_injury_filter_behavioral_test.dart.
+      - file: lib/features/ai_coach/services/tool_dispatcher.dart
+        line_range: 705-729
+        method: _saveCoachInjuryToProfile (via InjuryVocab.coachPartToken + coachInjuryProfilePatch)
+        notes: Unit 3C (d77 / d78, diagnose f3c9a6) - a confirmed coach modifyWorkoutForInjury adds its canonical token to profile['injuries'] (quad -> knee, calf -> ankle, chest / upper_back -> shoulder), drops 'none', never twice, under ProfileWriteService.patchProfileWith with an owner re-check; then locks 'injuries'. Behavioral test coach_injury_profile_write_behavioral_test.dart.
     reader_manifest_complete: true
     readers:
       - file: lib/shared/repositories/exercise_repository.dart
@@ -10814,6 +10862,77 @@ concepts:
   # meaningful per-device copy of cross-user aggregate business data, so
   # this is the one provider that talks directly to a Supabase Edge
   # Function instead of Hive.
+
+  - concept: cardio_finisher_shown
+    domain: workout
+    behavioral_test_path: test/contracts/finisher_display_behavioral_test.dart
+    description: >
+      Generator Unit 3C (OI-396, founder 2026-10-22 and d56, d61, d74-d79, 2026-11-16, diagnose f3c9a6, plan
+      docs/plans/2026-11-16-generator-step3c-cardio-finisher.md rev 7): the cardio finisher is shown after the main lifts,
+      is injury-safe and is timed inside the session. CardioFinisher.plan decides it BEFORE sizing (pure): the goal's shape
+      on plan.days (Cut / Maintain, 2+ days), the HIIT with its 60 s round rest stored (540 s), under 60 resolved minutes
+      the mini HIIT (240 s, d76); any injury (d74, InjuryVocab.normalize, `none` / free text that maps to no token is not
+      an injury) gives only Stationary Bike Sprints with gym cardio (8 rounds, 4 under 60) and nothing without it.
+      FinisherPlan.secondsByDay reaches the allocator through SessionBudgetContext.finisherSecondsByDay, which takes the
+      finisher's time from those days only (d61). Stored as `finisher` on each `schedule_<date>` row by all three schedule
+      writers (generateAndSchedule, Edit Profile's generateAndScheduleFromDate, regenerate and the hotel planner).
+      READ rule (FinisherSafety.shownFinisherMaps, pure): switch off -> nothing; injured (the PROFILE only, d78) -> the
+      stored finisher only when it is the bike alone, else nothing; otherwise every map entry.
+      FinisherShowContextReader.read() fails closed to injured (display only). Every minutes reader passes the shown
+      finisher (`finisher:` is a required argument of estimateDaySecondsFromPlanDay / budgetedDayMinutes /
+      homeCardMinutes), so Train == Home. The finisher is never a session exercise (no set, PR, finishGuard line or
+      completion). shortenDay drops the shown finisher first (d79) and removes a hidden one's key on any write. A coach
+      modifyWorkoutForInjury writes the canonical token to profile['injuries'] (d77, InjuryVocab.coachPartToken,
+      nearest joint for quad / calf / chest / upper_back) so the rule sees it. Kill switch disable_cardio_finisher_shown
+      (PlanEngineFlags.cardioFinisherShownEnabled, default ON): set, the engine builds today's finisher unreserved and
+      ignoring injuries (1,010 golden personas equal main 862f0bc2, generator_golden_hashes_finisher_off.json) and no
+      screen shows one. Rule-14 waiver (d56, d61, d75, d76): the plan call, the context field, the hasGymOverride block
+      moved before sizing, the minutes argument.
+    writers:
+      - file: lib/shared/repositories/plan_engine/cardio_finisher.dart
+        method: CardioFinisher.plan (FinisherPlan days / exercises / reserved / secondsByDay) / attach (copies plan.exercises)
+      - file: lib/shared/repositories/plan_engine/plan_generator.dart
+        method: generateV4 (plan before sizing, SessionBudgetContext.finisherSecondsByDay, attach)
+      - file: lib/core/services/workout_schedule_read_service.dart
+        method: generateAndSchedule / generateAndScheduleFromDate (the `finisher` key of schedule_<date>)
+      - file: lib/features/ai_coach/services/regenerate_plan_planner.dart
+        method: regenerate rows (`finisher` key)
+      - file: lib/features/ai_coach/services/hotel_workout_planner.dart
+        method: plan (`finisher` key)
+      - file: lib/core/services/swap_service.dart
+        method: shortenDay (removes `finisher` when the row is written, d79)
+      - file: lib/features/ai_coach/services/tool_dispatcher.dart
+        method: _saveCoachInjuryToProfile (profile['injuries'], the rule's injury signal, d77)
+    reader_manifest_complete: true
+    readers:
+      - file: lib/shared/repositories/plan_engine/finisher_safety.dart
+        method_or_widget: FinisherSafety.shownFinisherMaps / shownOfRow / isInjured
+        semantic: flag-check
+      - file: lib/shared/repositories/plan_engine/finisher_show_context.dart
+        method_or_widget: FinisherShowContextReader.read (switch + profile, fails closed)
+        semantic: flag-check
+      - file: lib/features/train/providers/train_provider.dart
+        method_or_widget: workoutDayForDate / CurrentPlanNotifier build (WorkoutDayData.finisher, finisherSeconds, budgetMinutes)
+        semantic: render
+      - file: lib/features/home/screens/home_screen.dart
+        method_or_widget: homeCardMinutes(schedule, finisher:)
+        semantic: render
+      - file: lib/features/train/screens/active_workout/screen.dart
+        method_or_widget: FINISHER section (finisher_section)
+        semantic: render
+      - file: lib/features/train/screens/train/planned_expansion.dart
+        method_or_widget: FINISHER section
+        semantic: render
+      - file: lib/features/train/screens/train/exercise_preview_sheet.dart
+        method_or_widget: FINISHER section
+        semantic: render
+      - file: lib/features/train/providers/preview_plan_provider.dart
+        method_or_widget: finisher_count
+        semantic: render
+      - file: lib/core/services/swap_service.dart
+        method_or_widget: shortenDay (the shown finisher in the original estimate, finisherDropped)
+        semantic: flag-check
+    contract_test_path: test/contracts/cardio_finisher_shown_pure_test.dart
 
   - concept: admin_dashboard_metrics_snapshot
     domain: cross_domain
@@ -10975,15 +11094,14 @@ concepts:
     behavioral_test_path: test/contracts/hold_snapshot_block_behavioral_test.dart
     description: |
       FOB-3 of OI-60. The coach snapshot's `hold` block — the ONE field that
-      tells the AI coach a holder is holding. Present only on a live hold day
-      with `enable_hold_weeks` ON; the key is OMITTED entirely otherwise.
+      tells the AI coach a holder is holding. Present only on a live (covered)
+      hold day; the key is OMITTED entirely otherwise.
 
       WHY THE KEY IS OMITTED RATHER THAN NULLED, because it looks like a style
-      choice and is not: with the flag OFF the seam returns null for every user,
-      so omission is what makes the snapshot BYTE-IDENTICAL to the pre-FOB-3
-      one across the whole fleet. `'hold': null` would satisfy a naive isNull
-      check and still change every snapshot ever sent, forfeiting the ship-dark
-      property §4.12.4's lighter review tier rests on.
+      choice and is not: the seam returns null for every non-holder, so
+      omission keeps their snapshot BYTE-IDENTICAL to the pre-FOB-3 one.
+      `'hold': null` would satisfy a naive isNull check and still change every
+      snapshot ever sent.
 
       THE SPLIT BETWEEN FACTS AND INSTRUCTION is deliberate and is why FOB-3
       needs an ai-proxy redeploy for only half of itself. The block carries
@@ -11007,7 +11125,7 @@ concepts:
       that says LESS the more the user has logged, while still looking present.
     writers:
       - file: lib/core/services/workout_schedule_read_service.dart
-        line_range: 1239-1274
+        line_range: 1290-1346
         method: holdSnapshotBlock
         notes: |
           Returns null off a hold day. Reads activeHoldOrdinalFor/activeHoldWeeks
@@ -11104,7 +11222,7 @@ concepts:
       gates nothing and moves no money (Hermes L1-F5 / L23-F4).
     writers:
       - file: lib/core/services/workout_schedule_write_service.dart
-        line_range: 236-368
+        line_range: 211-508
         method: holdWeek
         notes: |
           Emitted at the LAST statement of the successful path, so every earlier
@@ -11337,7 +11455,7 @@ concepts:
     writers:
       - file: lib/shared/repositories/plan_engine/periodization_engine.dart
         method: apply (stamps weekCharacter per week — EXISTING)
-        line: 146
+        line: 149
         notes: >
           `weekCharacter: _waveNames[weekIdx]` — serialized as snake_case
           `week_character` via WeekPlan.toMap (models.dart:79). 7-A adds NO writer;
@@ -11359,7 +11477,7 @@ concepts:
           test/contracts/oi166_unit2_regen_content_cycling_behavioral_test.dart.
       - file: lib/features/ai_coach/services/tool_dispatcher.dart
         method: "_executeRegeneratePlanBlock / _executeSwitchGoal — current_plan splice (OI-166 Unit 2, NEW writer)"
-        line: 957
+        line: 1043
         notes: >
           The AI-coach regen path (RegeneratePlanPlanner.plan()) never wrote
           current_plan before this — the exact gap this concept's own
@@ -11508,7 +11626,7 @@ concepts:
           The ACCUMULATOR drops `is_hold` rows via _withoutHoldRows; the card
           (train_provider.dart:767-777) does NOT. Asymmetry is intentional — what the Train screen
           renders during a hold is FOB-6 → OI-125, a feature that explicitly does not gate the
-          enable_hold_weeks flip, so filtering the card here would ship half of OI-125 by accident.
+          hold flip (Unit 3D-b), so filtering the card here would ship half of OI-125 by accident.
           The SCAN loop deliberately keeps walking the RAW week: filtering it too made a fully-hold
           week read empty, break the scan, and drop real phase-2 weeks beyond it from both numerator
           and denominator (caught by review round 2). Holds EXTEND the schedule; they must not COUNT.
@@ -11874,8 +11992,10 @@ concepts:
       Generator Unit 2B (OI-452, founder d30-d33, 2026-11-13, diagnose b3f1d8, plan
       docs/plans/2026-11-13-generator-step2b-day-floor.md): the 3-exercise day floor. After pass A2 a day whose rows
       (budgeted and not) are under min(3, its reach) seats remaining slots at 2 sets past a group's weekly top: no excess
-      limit, every phase, up to its reach, not bound by the clock; never past a session cap, never a reservation-blocked
-      slot; choice SessionSetAllocator.floorPrefers (fewest groups over the top, least excess, cheapest; ties to the
+      limit, every phase, up to its reach, not bound by the clock; never past a session cap; since d65 (Unit 3A,
+      2026-11-15) a reservation-blocked slot may take a floor seat, and when only a session cap refuses a thin day's
+      third exercise the floor takes sets off that group's admitted rows above 2 (most sets first, ties to the latest
+      rank; AllocationStats.floorTrims, copied to B like floorSeats), a no-trim slot preferred; choice SessionSetAllocator.floorPrefers (fewest groups over the top, least excess, cheapest; ties to the
       lowest rank). AllocationStats.floorSeats names each seat (FloorSeat: name, sets, overTop, overBy, overClock,
       overSeconds); a floor seat
       is never in countForced; belowCount keeps the label pass A2 left. With Unit 2A the worlds are chosen with the floor
@@ -12025,7 +12145,8 @@ concepts:
       "with readiness ship-dark (0 rows) titration only ever TRIMS" — readiness went LIVE 2026-09-01, so rows DO accumulate; titration is inert only because enable_volume_titration is still OFF and short-circuits at volume_titration.dart:60 BEFORE _recovered() runs -- _recovered() itself has NO readiness gate. Deltas key + clamp on the MAJOR GROUP (shared
       muscleGroupOf, extracted from the scorecard's _muscleToGroup) so [8,20] is a
       science-valid per-group band, not a per-fragmented-sub-token one. TWO inert seams:
-      (1) enable_volume_titration DEFAULT OFF → resolveDeltas {}; (2) OPT-IN — the
+      (1) enable_volume_titration DEFAULT OFF → resolveDeltas {} (retired by step 4: now the kill switch
+      disable_volume_titration, default ON); (2) OPT-IN — the
       orchestrator applies it only when the caller passes applyVolumeTitration:true, and
       the two advance callers pass `pins == null` so a REPEAT (low-adherence) advance
       never gains volume; every other caller (coach-regen / edit-profile / previews /
@@ -12037,6 +12158,13 @@ concepts:
       B2 (session set budget, always on since 2026-11-02, concept session_set_budget): applyToWeeks(budget:) swaps the
       [8,20] clamp for the budget's band bottom (MEV) and the BudgetLedger (MRV), counts in
       BudgetMuscleGroups, and touches only budgeted rows; the evidence side (resolveDeltas) is unchanged.
+      Generator step 4 (OI-53, 2026-11-16, founder d82, diagnose 7c4e2a): LIVE. The enable_volume_titration key is
+      retired; kill switch disable_volume_titration (PlanEngineFlags.volumeTitrationEnabled, default ON, dev-panel
+      toggle). applyToWeeks keeps 2A's lead-first rule: the day's lead is SequencingEngine.openerOf over its budgeted
+      rows; T1 a +1 on a non-lead row crediting no focus group needs current(row) <= current(lead); T2 a -1 takes rows
+      at 3+ sets, most sets first, ties to the latest day then slot (d65), never below 2, the lead only when R2 still
+      holds (every other non-focus row of the day, budgeted or not, R5's set); T3 a stash-less deload row is skipped; T4 _recovered() needs readinessEnabled. applyToWeeks(leadFirst:)
+      (null reads disable_lead_first). Gate titration_plateau_gate_test.dart over a simulated history.
     writers:
       - file: lib/shared/repositories/plan_engine/volume_titration.dart
         method: VolumeTitration.resolveDeltas / applyToWeeks
@@ -12073,6 +12201,14 @@ concepts:
           dedup, deload workingSets symmetry; resolveDeltas — flag/phase gates, −1 on
           decline, +1 only with recovery evidence (0/sparse/systemic-sore readiness → hold),
           deterministic. e1rm_test.dart pins the shared Epley helper.
+      - file: test/plan_generator/titration_plateau_gate_test.dart
+        method_or_widget: the step 4 gate (OFF / IDENTITY / KILLED / ON over a simulated history, plan_audit/history_sim_lib.dart)
+        semantic: >
+          hard zeros on the ON plan's final rows (R2 / R5, 1-set rows, time, the oracle ceiling, raw top in same-pick
+          weeks), the opt-in and kill-switch identities, mixed's merge, sore / readiness-off ON == OFF, the d82 net.
+      - file: lib/features/dev/dev_panel_screen.dart
+        method_or_widget: _toggleKillSwitch (disable_volume_titration / disable_plateau_escalation)
+        semantic: dev-only kill-switch toggle (CLAUDE.md 4.6 step 3)
     contract_test_path: test/contracts/volume_titration_behavioral_test.dart
 
   - concept: plateau_escalation
@@ -12093,7 +12229,8 @@ concepts:
       is ALREADY delivered by W2.4's `readiness.good` keep in `deload_evaluator` (a
       plateau keep-term there would be provably dead: it can only engage when
       `readiness.good` is already false). rung-3 (rotation) is Batch 12-B. THREE inert
-      seams: (1) `enable_plateau_escalation` DEFAULT OFF → merge returns the input map
+      seams: (1) `enable_plateau_escalation` DEFAULT OFF (retired by step 4: now `disable_plateau_escalation`,
+      default ON) → merge returns the input map
       unchanged (same ref) → applyToWeeks identity → byte-identical; (2) ALSO gated on
       `enable_readiness` (mirrors DeloadEvaluator — the fatigue gate needs readiness
       rows); (3) OPT-IN `applyPlateauEscalation` — the two fresh-advance callers pass
@@ -12107,6 +12244,10 @@ concepts:
       deleted by Unit 1B-F, 2026-11-11).
       B2 (session set budget, always on since 2026-11-02, concept session_set_budget): a plateau +1 is refused inside
       applyToWeeks when the BudgetLedger has no room; mergePlateauSetDeltas is unchanged.
+      Generator step 4 (OI-53, 2026-11-16, founder d82): LIVE (rung 2 and rung 3 together). The
+      enable_plateau_escalation key is retired; kill switch disable_plateau_escalation
+      (PlanEngineFlags.plateauEscalationEnabled, default ON, dev-panel toggle). The +1 passes titration's T1 (lead + 1)
+      and the ledger; the mixed scenario of the step 4 gate pins that a declining group's -1 wins the merge.
     writers:
       - file: lib/shared/repositories/plan_engine/plateau_scan.dart
         method: PlateauScan.plateauedGroups / mergePlateauSetDeltas / isFlat
@@ -12152,8 +12293,8 @@ concepts:
       MAX-Epley e1RM ≥3 sessions ≥28d, 63-day window) are SOFT-avoided in the pick so
       each rotates to a same-`movement_pattern` sibling next phase.
       `PlateauScan.plateauedExerciseNames({phase})` (per-exercise sibling of
-      plateauedGroups, LOWERCASED, SAME gates: enable_plateau_escalation +
-      enable_readiness + phase>=2 + !fatigue) → computed in `generateV4` (guarded
+      plateauedGroups, LOWERCASED, SAME gates: enable_plateau_escalation (retired by step 4; now the
+      kill switch disable_plateau_escalation, default ON) + enable_readiness + phase>=2 + !fatigue) → computed in `generateV4` (guarded
       `applyPlateauEscalation && pins == null`) → `pickV4 plateauAvoidNames` → UNIONED
       GLOBALLY into every day's avoidA/avoidB → `_pickCoreList` (the cascade until Unit 1B-F) →
       `_selectCandidate._preferNovel` (the SAME 11-B seam). SOFT + BOUNDED: feeds
@@ -12171,6 +12312,8 @@ concepts:
       L6 post-pass `_applyHistoryAdjustments` and the mirrors; a demoted row now sorts last
       in rankedPool, which may still leave a rotated lift as the slot's pick — consistent
       with rung-3 being SOFT.
+      Generator step 4 (2026-11-16, founder d82): LIVE under the kill switch disable_plateau_escalation (default ON);
+      the step 4 gate's flat scenario measures it (under-bottom group-weeks ON <= OFF, no major newly at 0).
     writers:
       - file: lib/shared/repositories/plan_engine/plateau_scan.dart
         method: PlateauScan.plateauedExerciseNames
@@ -12296,6 +12439,63 @@ concepts:
           Mutation-proven: reverting _buildRepeatPins' new guard reddens exactly the kill-switch
           test, the positive control and all 24 other tests in the file stay green.
     contract_test_path: test/contracts/repeat_content_scheduling_test.dart
+
+  - concept: goal_training
+    domain: workout
+    behavioral_test_path: test/contracts/goal_reps_behavioral_test.dart
+    description: >
+      Generator Unit 3A (OI-487 generator half, founder d3 / d4 / d58-d65, 2026-11-15, diagnose 675d02, plan
+      docs/plans/2026-11-15-generator-step3a-goal-training.md): training follows the goal. GoalTraining{enabled,
+      strengthFocus} rides on SessionBudgetContext.goalTraining, built once per generation by
+      TrainingHistoryAnalyzer.goalTrainingFromProfile (the disable_goal_training switch and
+      userBox['profile']['physique_focus'] == 'strength') and passed by generateV4 (d61, rule-14 waiver). Week-1 reps
+      (PeriodizationEngine._applyWave through GoalReps.base): a main lift (archetype H / M) takes Cut 8 / 6 / 8
+      (intermediate, advanced) or 10 / 8 / 10 (Cut beginner, Maintain), deload = phase 1, Build keeps today's lean; the
+      wave and the range clamp follow; Cut / Maintain accessories clamp into 10-15. The Strength focus puts a main lift
+      at its range floor outside the deload and adds 30 s rest on H / M at 60+ resolved minutes only (d64), in every
+      rest writer and pricer (SessionBudget.restFor / restForGoal) and in a swap. Weekly bands: _goalBands (Maintain
+      7-8 / 8-11 / 9-13, Cut beginner 9-11) through weeklyBand(goalTraining:), read by BudgetLedger.weeklyTop, the
+      allocator's floor label and titration. 4-day Maintain takes the quad-first Glutes credit
+      (SplitResolver.quadPrimaryCreditsGlutes). The switch set: GoalTraining.off, today's reps, bands, rests and credit
+      (generator_golden_hashes_goal_training_off.json = main over 1,010 personas). d65 amends the 2B day floor (a
+      reservation-blocked slot may be floored; a session-cap refusal takes sets off the group's rows above 2,
+      AllocationStats.floorTrims). Accepted (founder): d63 (2 of 576 Cut / Maintain profiles
+      identical), d66 (an injured Cut / Maintain plan can lose a group the switch-off plan trains), d67 (the 4-day
+      Maintain credit books a lunge to Quads only); reps follow the effective level (d68).
+    writers:
+      - file: lib/shared/repositories/plan_engine/training_history_analyzer.dart
+        method: goalTrainingFromProfile / isStrengthFocus (reads profile.physique_focus and the switch)
+      - file: lib/shared/repositories/plan_engine/plan_generator.dart
+        method: generateV4 (SessionBudgetContext goalTraining:, d61)
+      - file: lib/shared/repositories/plan_engine/plan_engine_flags.dart
+        method: goalTrainingEnabled (disable_goal_training)
+      - file: lib/shared/repositories/plan_engine/session_budget.dart
+        method: GoalTraining / restFor / restForGoal / _goalBands / weeklyBand(goalTraining:)
+      - file: lib/shared/repositories/plan_engine/goal_reps.dart
+        method: GoalReps.base / mainBase / todayBase / clampsAccessories
+    readers:
+      - file: lib/shared/repositories/plan_engine/periodization_engine.dart
+        method_or_widget: _applyWave (GoalReps.base, the accessory clamp) and the rest stamp / _weekTwoGains (restFor)
+        semantic: reps and rest
+      - file: lib/shared/repositories/plan_engine/session_set_allocator.dart
+        method_or_widget: _repeatCost / _variant pricing (restFor), pass C's band bottom (weeklyBand goalTraining), the day floor (d65)
+        semantic: pricing
+      - file: lib/shared/repositories/plan_engine/volume_titration.dart
+        method_or_widget: _titrateWeekBudgeted (weeklyBand goalTraining)
+        semantic: band
+      - file: lib/shared/repositories/plan_engine/split_resolver.dart
+        method_or_widget: quadPrimaryCreditsGlutes (4-day general_fitness, goalTraining:)
+        semantic: credit
+      - file: lib/core/services/swap_service.dart
+        method_or_widget: swapExerciseInDay (restForGoal with the profile's focus and resolved minutes)
+        semantic: swap rest
+      - file: test/plan_generator/goal_training_gate_test.dart
+        method_or_widget: 2,304 plans ON vs OFF and under the focus (Build byte-identical, Cut / Maintain distinct but d63, the rep table, 10-15 accessories, no group newly at 0, focus floor and rest, digests)
+        semantic: behavioral
+      - file: test/contracts/swap_exercise_rest_follows_incoming_archetype_test.dart
+        method_or_widget: the focus rest through a real swap (60 / 45 minutes, no focus, the switch)
+        semantic: behavioral
+    contract_test_path: test/contracts/goal_reps_behavioral_test.dart
 
   - concept: repeat_minutes_accessories
     domain: workout
@@ -12498,7 +12698,7 @@ concepts:
       per matching exercise (primaryMuscles.any(contains); break → max +1/ex).
       Explicit focus takes PRECEDENCE over the auto weakMuscles() laggard signal
       and applies at ALL phases; balanced/strength/absent → [] → falls back to
-      weakMuscles() (phase≥2) exactly as before. Read via a try/catch
+      weakMuscles() (phase≥2) exactly as before (for the muscle bring-up; since Unit 3A the strength token also turns on the Strength focus, concept goal_training). Read via a try/catch
       TrainingHistoryAnalyzer.physiqueFocusMuscles() helper (degrades to [] on
       null/corrupt/unopened profile, mirroring weakMuscles) so NO Hive coupling
       enters plan_generator. LIVE since 2026-09-16 (OI-53 batch 2); kill-switch
@@ -12787,7 +12987,7 @@ concepts:
         method: reads primary_muscles/secondary_muscles/difficulty_level (:60-61)
         semantic: AI-coach form cues; was NULL for the 9 stubs pre-batch; both queries filter is_active = true in code (OI-438/OI-469; live after the ai-proxy deploy: a retired row never answers; the seed's cue copy onto retired rows, from migration 162, is now defence in depth)
       - file: lib/features/train/providers/train_provider.dart
-        line_range: 103-111
+        line_range: 106-114
         method: last-weight suggestion reads the LOGGED row's logging_type (weight_reps or weighted_bodyweight) before it suggests a load
         semantic: C2c — an E230 history row logged as weight_reps (cable era) still reads as a loaded row; new logs are bodyweight_reps, so no load is suggested for them
       - file: lib/shared/repositories/plan_engine/progression_resolver.dart
@@ -13253,11 +13453,11 @@ concepts:
           "don't touch" via the RPC's own COALESCE), same value + same
           projection helper, only the transport changed.
       - file: lib/core/services/workout_schedule_read_service.dart
-        line_range: 1669-1676
+        line_range: 1703-1715
         method: currentWeekColumnProjection
         notes: pure helper deciding frozen-passthrough (disabled) vs program week (enabled); behaviorally tested.
       - file: lib/features/onboarding/providers/onboarding_provider.dart
-        line_range: 650-650
+        line_range: 651-651
         method: onboarding completion (initial + step)
         notes: |
           Writes current_week:1 at onboarding — correct-BY-CONSTRUCTION (a new
@@ -13266,7 +13466,7 @@ concepts:
           at :969 (the cloud progress row; both cites re-derived 2026-11-14 from
           the 'current_week': 1 literal, the old 473 / 786 had drifted). NOT routed through the projection (no need).
       - file: lib/core/services/sync_service.dart
-        line_range: 1092-1096
+        line_range: 1093-1097
         method: _replayPendingOnboardingSync (NO LONGER writes current_week)
         notes: |
           B-pass F1: this boot-replay used to pass the frozen Hive current_week
@@ -13304,17 +13504,17 @@ concepts:
     reader_manifest_complete: true
     readers:
       - file: supabase/functions/weekly-recap-ready/index.ts
-        line_range: 172-190
+        line_range: 49-97
         method: processUser progressMap
         semantic: pass-through
-        fields_read: [current_week]
-        notes: push copy 'Week ${currentWeek} debrief ready' (:76). Pure interpolation — no EF redeploy needed; fixing the column fixes the push.
+        fields_read: [current_week, current_phase]
+        notes: "push copy via recapMessage (_shared/hold_week.ts): 'Week ${currentWeek} debrief ready', or 'Hold H${n} debrief ready' for a Phase-I user in a hold week (Unit 3D-a, FOB-4; concept hold_week_server_signal). Re-derived 2026-11-16 from the progressMap anchor (the old 172-190 had drifted). The old note 'Pure interpolation, no EF redeploy needed' was the framing FOB-4 called false: a hold week needs the hold branch and a redeploy."
       - file: supabase/functions/weekly-report/index.ts
-        line_range: 150-470
-        method: weekly brief userMessage
+        line_range: 224-236
+        method: weekly brief userMessage (progress read + week line)
         semantic: pass-through
-        fields_read: [current_week]
-        notes: "'Current week: ${current_week}' into the Gemini weekly-report prompt."
+        fields_read: [current_week, current_phase]
+        notes: "'Current week: ${current_week}' via reportWeekLineFor -> reportWeekLine (_shared/hold_week.ts), or the hold line for a Phase-I user with a hold row TODAY (Unit 3D-a, FOB-4). The line is printed at the prompt's PROGRESS block (`- ${weekLine}`)."
       - file: supabase/functions/_shared/captain_manual.ts
         line_range: 1-9999
         method: temporal routing instruction
@@ -13322,6 +13522,28 @@ concepts:
         fields_read: [via snapshot.current_plan_summary]
         notes: points the coach at current_plan_summary (now the program week); targets the object not .week, so no change needed.
     contract_test_path: test/contracts/program_week_projection_behavioral_test.dart
+
+  - concept: hold_week_server_signal
+    domain: workout
+    behavioral_test_path: supabase/functions/_shared/hold_week_test.ts
+    description: |
+      Generator Unit 3D-a (OI-175 / FOB-4, plan docs/plans/2026-11-16-generator-step3d-hold-weeks.md section 2.3). The
+      cloud has no is_hold column; a hold day's schedule row is pushed with week_number = 4 + n
+      (sync_workout.dart 'week_number': entry['week']), so a scheduled_workouts row with week_number > 4 in a
+      Phase-I user's schedule is the server's only mark of a hold. Phases 2-12 write their own weeks 1-4 (measured live
+      2026-11-16). Every read FAILS CLOSED: a missing progress row, current_phase other than exactly 1, or a failed
+      read gives no hold and today's text. Stated limits: a stale current_phase is read as it is; rows of a failed or
+      crash-partial hold that already synced can name a hold the app does not show until the next generation's sweep.
+    writers:
+      - { file: lib/core/services/sync/sync_workout.dart, line: 2350, method: "_syncScheduledWorkouts payload", notes: "week_number <- entry['week']; holdWeek() stamps week: 4 + n on hold rows (workout_schedule_write_service.dart)." }
+    reader_manifest_complete: true
+    readers:
+      - { file: supabase/functions/_shared/hold_week.ts, line_range: 1-151, method_or_widget: "fetchHoldOrdinals / holdOrdinalFromWeekNumbers / phaseOneUserIds / istWeekBounds / recapHoldsForBatch / reportWeekLineFor", semantic: latest, notes: "Never throws ({map, failed}); paged and chunked through fetchAllByIds (orderBy id). The two call-site helpers (B-pass F1/F2) are tested end to end against the stub client." }
+      - { file: supabase/functions/weekly-recap-ready/index.ts, line_range: 262-290, method_or_widget: "batch loop: recapHoldsForBatch (Phase-I holds over the IST Monday-Sunday of the run) -> holdMap -> processUser", semantic: latest, notes: "Skipped when the progress read failed; hold_read_failed in the response, the summary line and cron_call_log.error_summary. The call and the map hand-off are pinned by source (weekly-recap-ready/index_test.ts); the helper is behavioural." }
+      - { file: supabase/functions/weekly-report/index.ts, line_range: 228-235, method_or_widget: "reportWeekLineFor: the hold for TODAY's IST date (as the app shows it)", semantic: latest, notes: "Gated on a present progress row with current_phase 1 (inside the helper, tested end to end). The call is pinned by source (weekly-report/index_test.ts)." }
+    cloud:
+      table: scheduled_workouts
+      columns: [user_id, scheduled_date, week_number]
 
   - concept: blast_radius_registry_coverage
     domain: cross_domain
@@ -13501,7 +13723,7 @@ concepts:
           Never throws: an escape here would kill the user's ENTIRE daily
           snapshot via compileDailySnapshot -> pushSnapshotNow, not just prefs.
       - file: lib/core/services/sync_service.dart
-        line_range: 1119-1176
+        line_range: 1120-1177
         method: compileDailySnapshot
         semantic: pass-through
         notes: >
@@ -13695,15 +13917,15 @@ concepts:
       That shared walk is the drift guard.
     writers:
       - file: lib/core/services/workout_schedule_read_service.dart
-        line_range: 1895-1912
+        line_range: 1932-1953
         method: _scheduleRowsBefore
         semantic: shared-row-walk
       - file: lib/core/services/workout_schedule_read_service.dart
-        line_range: 1888-1894
+        line_range: 1922-1930
         method: pastPhaseBlocks
         semantic: strict-set
       - file: lib/core/services/workout_schedule_read_service.dart
-        line_range: 1921-1946
+        line_range: 1955-2006
         method: pastPhaseBlocksForDisplay
         semantic: display-recovery
         notes: |
@@ -13800,7 +14022,7 @@ concepts:
           (→913) despite the gate not flagging it, found by grepping the
           symbol directly rather than trusting the gate's silence on it.
       - file: lib/core/services/sync_service.dart
-        line_range: 2792-2792
+        line_range: 2805-2805
         method: restoreOpTimeout
         semantic: per-op-ceiling
         notes: day-swapper + sync-load Task 20 fix1 (diagnose a9d3f6) shifted
@@ -13811,7 +14033,7 @@ concepts:
           an N-M line_range — but left stale it would misdirect a future
           reader by the same +14).
       - file: lib/core/services/sync_service.dart
-        line_range: 2815-2819
+        line_range: 2828-2832
         method: applyRestoreCeiling
         semantic: apply-ceiling
         notes: day-swapper + sync-load Task 20 shifted this range (+148 lines,
@@ -13821,7 +14043,7 @@ concepts:
           blocks on a citation you shifted). Shifted again by task-20-fix1
           (diagnose a9d3f6, +14 lines, same method) for the same reason.
       - file: lib/core/services/sync_service.dart
-        line_range: 2831-2833
+        line_range: 2844-2846
         method: restoreFailureReason
         semantic: telemetry-reason-split
         notes: same shift as applyRestoreCeiling directly above, both times; all three re-derived +3 by the Hermes sync_epoch_seen doc comment (2026-09-28), then +1 (with _safeRestoreOp) by the plan_engine_flags import the merge-review F4 fix added (a3e7d9).
@@ -13836,7 +14058,7 @@ concepts:
         method: _authRedirect
         semantic: delegates-to-pure-fn
       - file: lib/core/services/sync_service.dart
-        line_range: 2814-2856
+        line_range: 2827-2869
         method: _safeRestoreOp
         semantic: bounded-await
     hive:
@@ -14647,19 +14869,19 @@ concepts:
         method: validateSetInputs / cardioMinutesToSeconds / exerciseSetFromInput
         notes: OI-389 / OI-382 — cardio MIN takes decimal minutes (founder D2, 2026-10-22), converted to seconds once at capture (exercise_card._valuesOf); bounds 360 MIN / 21600 SEC / 300 KM block LOG; exerciseSetFromInput applies fieldsClearedFor and is what completeWorkout, liveVolumeKg and the receipt save through. Behavioral test/contracts/cardio_duration_distance_writer_to_reader_test.dart (T18, T29, T32), test/features/train/log_exercise/log_exercise_card_test.dart (T32b), test/contracts/cardio_complete_workout_behavioral_test.dart (T5, T28).
       - file: lib/features/train/providers/train_provider.dart
-        line_range: 1674-1685
+        line_range: 1736-1747
         method: toggleSet
       - file: lib/features/train/providers/train_provider.dart
-        line_range: 1692-1711
+        line_range: 1754-1773
         method: logSets
       - file: lib/features/train/providers/train_provider.dart
-        line_range: 1722-1744
+        line_range: 1784-1806
         method: unlogSets
       - file: lib/features/train/providers/train_provider.dart
-        line_range: 1810-1815
+        line_range: 1872-1877
         method: recordSetValues
       - file: lib/features/train/providers/train_provider.dart
-        line_range: 1822-1827
+        line_range: 1884-1889
         method: recordCardEdit
       - file: lib/features/train/services/log_exercise_logic.dart
         line_range: 470-564
@@ -14675,13 +14897,13 @@ concepts:
         method: _onLogPressed
     readers:
       - file: lib/features/train/providers/train_provider.dart
-        line_range: 1340-1342
+        line_range: 1402-1404
         method: completedSets
       - file: lib/features/train/providers/train_provider.dart
-        line_range: 1425-1433
+        line_range: 1487-1495
         method: isExerciseDone
       - file: lib/features/train/providers/train_provider.dart
-        line_range: 1451-1465
+        line_range: 1513-1527
         method: liveVolumeKg
       - file: lib/features/train/services/log_exercise_logic.dart
         line_range: 470-564
@@ -14699,7 +14921,7 @@ concepts:
         line_range: 690-696
         method: allExercisesLogged
       - file: lib/features/train/providers/train_provider.dart
-        line_range: 1353-1384
+        line_range: 1415-1446
         method: wouldSaveSet + saveableSetIndexes + hasSaveableSet
       - file: lib/features/train/services/log_exercise_logic.dart
         line_range: 314-325
@@ -14748,16 +14970,16 @@ concepts:
       on the wrong exercise.
     writers:
       - file: lib/features/train/providers/train_provider.dart
-        line_range: 2105-2119
+        line_range: 2167-2181
         method: applyExerciseMove
       - file: lib/features/train/services/exercise_move_logic.dart
         line_range: 51-98
         method: moveExerciseInSession
       - file: lib/features/train/providers/train_provider.dart
-        line_range: 2236-2267
+        line_range: 2298-2329
         method: _persistSupersetGroups
       - file: lib/features/train/providers/train_provider.dart
-        line_range: 1882-1985
+        line_range: 1944-2047
         method: swapExercise
     readers:
       - file: lib/features/train/services/exercise_move_logic.dart
@@ -15876,18 +16098,18 @@ concepts:
         fields_read: [type]
         notes: whitelist shape, widened to include 'logged' by this batch
       - file: lib/shared/repositories/plan_engine/plan_engine_flags.dart
-        line_range: 529-534
+        line_range: 542-547
         method: isRestDayConsideringLogged
         semantic: flag-check
         fields_read: [type]
         notes: the single wrapper every whitelist-shaped call site below delegates to
       - file: lib/features/train/providers/train_provider.dart
-        line_range: 642-824
+        line_range: 678-864
         method: "workoutDayForDate / week builder"
         semantic: flag-check
         fields_read: [type]
       - file: lib/core/services/workout_schedule_read_service.dart
-        line_range: 1439-1463
+        line_range: 1463-1523
         method: currentPhaseCompletionRate
         semantic: flag-check
         fields_read: [type]
@@ -17082,11 +17304,20 @@ concepts:
           once, a much smaller harm than blocking the profile save this
           runs alongside.
       - file: lib/features/profile/screens/edit_profile_screen.dart
-        line_range: 1951-1980
+        line_range: 2006-2035
         method: "_save (via the pure computeCoachExtractionFieldsToLock helper)"
         notes: |
           Locks only fields that ACTUALLY changed this save (diet_preference /
           lifestyle_activity / injuries), never a field re-saved unchanged.
+      - file: lib/features/ai_coach/services/tool_dispatcher.dart
+        line_range: 705-729
+        method: _saveCoachInjuryToProfile (ToolDispatcher.lockFields(['injuries']), 4 s timeout)
+        notes: |
+          Unit 3C (d77, diagnose f3c9a6): after a confirmed coach injury
+          was written to the profile, the field is locked so the next
+          extraction pass cannot rewrite it. Only when a token was
+          actually added; a lock that throws or times out is non-fatal
+          (accepted residue: an extraction may run before it lands).
       - file: lib/shared/repositories/user_repository.dart
         line_range: 887-926
         method: "syncOnboardingToSupabase (onboarding injuries trigger) + shouldLockOnboardingInjuries (pure decision, line 941)"
@@ -17121,7 +17352,7 @@ concepts:
         fields_read: [coach_extraction_locked_fields]
         notes: the only reader of the lock list itself
       - file: lib/features/ai_coach/services/ai_snapshot_builder.dart
-        line_range: 1101-1110
+        line_range: 1099-1108
         method: _getCoachMemoryForContext
         semantic: pass-through
         fields_read: [locked_field_conflicts]
@@ -17358,7 +17589,7 @@ concepts:
     reader_manifest_complete: true
     readers:
       - file: lib/features/home/screens/home_screen.dart
-        line_range: 230-254
+        line_range: 232-256
         method: _checkStreakFreezeUsed
         semantic: display-only
         fields_read: []
@@ -18010,11 +18241,11 @@ concepts:
       measurements surfaces and what each is allowed to do.
     writers:
       - file: lib/features/home/screens/home_screen.dart
-        line_range: 146-181
+        line_range: 148-183
         method: invalidateOnRetry
         notes: Invalidates bodyMeasurementsProvider exactly once; never reads, watches or refreshes a measurements provider (that would build it with the flag OFF).
       - file: lib/features/home/screens/home_screen.dart
-        line_range: 486-494
+        line_range: 487-495
         method: MeasurementDueSlot (the mount line in _buildContent)
         notes: One const line after the repeat nudge; the slot owns its own flag and prompt checks.
       - file: lib/features/home/widgets/weight_log_sheet.dart
@@ -18711,10 +18942,17 @@ concepts:
       finite stored number that rounds into the range, then 60. The profile is read on every generation. The field is carried to the cloud and back by the onboarding sync,
       the profile sync and the pending-onboarding replay, comes back on a restore through the generic user_profile
       select merge in hydrateFromCloud, and survives the user_repository integer-only column allow-list.
+      OI-488 (Unit 3B, founder d70, 2026-11-16, diagnose 21da5f): 90 minutes is for an ADVANCED profile only. Every
+      reader of the stored value goes through SessionBudget.minutesForLevel(stored, profile.fitness_experience): a value
+      that resolves above 60 is 60 unless the stored level is exactly 'advanced' (the profile level, not the
+      generator's effective level; null / absent is not advanced); anything else is returned unchanged. The two param
+      passers use SessionBudget.profileParamMinutes (the param wins over the profile value). Edit Profile offers
+      30 / 45 / 60, plus 90 to an advanced in-form level, and moves a 90 selection to 60 when the level drops; a stored
+      90 below advanced is rewritten only by the user's next save (no silent write).
     writers:
       - file: lib/features/profile/screens/edit_profile_screen.dart
         method: _save
-        semantic: writes session_duration_minutes from the picker (initial value SessionBudget.initialSessionDuration)
+        semantic: writes session_duration_minutes from the picker (initial value SessionBudget.initialSessionDuration, level-capped; options sessionDurationOptions, reset sessionDurationForExperience)
       - file: lib/features/onboarding/providers/onboarding_provider.dart
         method: _syncOnboardingToSupabase
         semantic: carries the field in the onboarding payload
@@ -18730,7 +18968,7 @@ concepts:
     readers:
       - file: lib/shared/repositories/plan_engine/training_history_analyzer.dart
         method: sessionMinutesFromProfile
-        semantic: raw stored value for SessionBudget.resolveMinutes, read on every generation
+        semantic: the stored value through SessionBudget.minutesForLevel (OI-488) for SessionBudget.resolveMinutes, read on every generation
       - file: lib/shared/repositories/plan_engine/plan_generator.dart
         method: generateV4 (selectV4 sessionMinutes:, quadPrimaryCreditsGlutes minutes)
         semantic: Unit 2C-a, the resolved minutes choose the split family and the credit (balanced week at 60+)
@@ -18742,10 +18980,10 @@ concepts:
         semantic: Unit 2C-b, under 60 resolved minutes the allocator's re-runs add the 285 s allowance (concept weekly_minimum)
       - file: lib/shared/services/pro_phase_advance.dart
         method: _runAdvanceWith
-        semantic: passes the stored minutes to generateV4 as sessionDuration
+        semantic: passes the stored minutes to generateV4 as sessionDuration, through SessionBudget.profileParamMinutes (OI-488)
       - file: lib/features/dev/simulation_service.dart
         method: autoGenerateNextPhaseIfNeeded call
-        semantic: passes the stored minutes to generateV4 as sessionDuration
+        semantic: passes the stored minutes to generateV4 as sessionDuration, through SessionBudget.profileParamMinutes (OI-488)
       - file: lib/shared/repositories/user_repository.dart
         method: _integerOnlyColumns
         semantic: the column allow-list that keeps the value an integer
@@ -18754,8 +18992,61 @@ concepts:
         semantic: the field counts toward profile completeness (a key presence check)
       - file: lib/features/profile/screens/edit_profile_screen.dart
         method: initState (SessionBudget.initialSessionDuration)
-        semantic: the picker's initial value, through the same resolution the generator uses
+        semantic: the picker's initial value, through the same resolution the generator uses (level-capped, OI-488); _originalSessionDuration is the RAW resolved value
     contract_test_path: test/plan_engine_v4/session_minutes_resolution_test.dart
+    additional_tests:
+      - test/contracts/session_minutes_by_level_test.dart  # OI-488 (Unit 3B): minutesForLevel table, every reader, the Edit Profile chips
+
+  # Generator Unit 3B (OI-487, founder d4 / d69 / d71 / d72, 2026-11-16, diagnose 21da5f): a stored legacy goal is
+  # moved to the goal that replaced it.
+  - concept: legacy_goal_heal
+    domain: auth_profile
+    behavioral_test_path: test/contracts/legacy_goal_heal_behavioral_test.dart
+    description: |
+      Build, Cut and Maintain (FitnessGoals.selectableTokens) are the only goals a user or the coach can choose;
+      strength and recompose stay FitnessGoals rows for STORED values only (older builds write them, restore brings
+      them back; the engine serves them as before). After every SUCCEEDED SyncService.restoreFromCloudForUser (own
+      kill switch configBox['disable_legacy_goal_heal'], not the title heal's), LegacyGoalHealer.run moves a stored
+      legacy goal: strength -> build_muscle, plus physique_focus 'strength' when the focus is null / empty / balanced
+      (d71: a chosen focus is kept); recompose -> lose_fat (FitnessGoals.legacyTargets). The new goal's derived targets
+      (recomputeDerivedTargets, unless the restore's disable_profile_target_recompute is set) travel in the SAME write.
+      The write is ProfileWriteService.patchProfileWith: under the profile lock the owner is re-checked first (the
+      wrapper's uid and _liveUserId against HiveUserSession.currentOwnerFullId), then the profile is re-read and the
+      patch decided, so a save landing first is never overwritten. No awaited network: the normal profile push carries
+      the heal to the cloud; a failed push lets the next restore merge the legacy value back, and the heal moves it
+      again. B-pass: the launch-path restore (SyncService._restoreIfNeeded, both the lightweight and the empty-device
+      branch, run by checkAndSync without /restoring) heals the same way after its merge. Edit Profile opens an unhealed profile on the healed goal and focus (goalFormSeed) with the RAW
+      originals, so a save heals it too. Telemetry event legacy_goal_healed; non-fatal reason legacy_goal_heal.
+    writers:
+      - file: lib/core/services/legacy_goal_healer.dart
+        method: LegacyGoalHealer.run / legacyGoalHealPatch / legacyGoalPatch
+        semantic: the heal decision and its one write (goal, focus, targets)
+      - file: lib/features/profile/services/profile_write_service.dart
+        method: patchProfileWith
+        semantic: owner re-check, re-read, decide and write under the profile lock; then the profile push
+      - file: lib/core/services/sync_service.dart
+        method: restoreFromCloudForUser
+        semantic: calls the heal on result.succeeded with the captured uid and _liveUserId
+      - file: lib/core/services/sync_service.dart
+        method: _restoreIfNeeded
+        semantic: calls the heal after either branch (restoreLightweightAlways / restoreFromCloud) merged the profile
+      - file: lib/features/profile/screens/edit_profile_screen.dart
+        method: goalFormSeed / _save
+        semantic: the form opens healed; a save writes the healed goal and focus
+    readers:
+      - file: lib/core/constants/fitness_goals.dart
+        method: FitnessGoals.of / label / isSelectable / legacyTargets
+        semantic: every primary_goal reader; the legacy rows keep serving a not-yet-healed value
+      - file: lib/features/ai_coach/services/tool_dispatcher.dart
+        method: _executeSwitchGoal / _executeRegeneratePlanBlock
+        semantic: refuse a non-selectable goal with FitnessGoals.notOfferedMessage before the cached-plan check
+      - file: lib/features/ai_coach/widgets/diff_preview/switch_goal_diff.dart
+        method: _compute
+        semantic: refuses a non-selectable new_goal before reading or planning
+      - file: lib/features/ai_coach/widgets/diff_preview/regenerate_plan_diff.dart
+        method: _compute
+        semantic: refuses a non-selectable goal before planning
+    contract_test_path: test/contracts/goal_list_selectable_test.dart
 
   # payment-hardening U1 (OI-350 / OI-359, diagnose b5e8d2, 2026-10-24) — verify-payment proves the caller
   # owns the payment BEFORE it captures it or tells the caller anything about it.
@@ -19157,7 +19448,7 @@ concepts:
         semantic: per-row
         fields_read: [key prefix exlog_]
       - file: lib/features/train/providers/train_provider.dart
-        line_range: 2319-2357
+        line_range: 2381-2419
         method: ActiveWorkoutNotifier FINISH PR scan
         semantic: max
         fields_read: [exercise_name, sets, weight_kg, reps_completed, date]
@@ -19200,15 +19491,15 @@ concepts:
       docs/plans/coach-workout-parity-1c.md (Part 1c).
     writers:
       - file: lib/features/train/providers/train_provider.dart
-        line_range: 1591-1650
+        line_range: 1653-1712
         method: _chatLoggedSnapshot (startWorkout)
         semantic: per-row
       - file: lib/features/train/providers/train_provider.dart
-        line_range: 1758-1813
+        line_range: 1820-1875
         method: reopenChatLogged / keepChatLogged
         semantic: per-row
       - file: lib/features/train/providers/train_provider.dart
-        line_range: 1887-2040
+        line_range: 1949-2102
         method: swapExercise / addExercise / _introducedChatEntry
         semantic: per-row
       - file: lib/features/train/services/chat_logged_exercises.dart
@@ -19234,7 +19525,7 @@ concepts:
     reader_manifest_complete: false
     readers:
       - file: lib/features/train/providers/train_provider.dart
-        line_range: 1410-1432
+        line_range: 1472-1494
         method: chatEntry / isChatLogged / isChatLoggedDone / isExerciseDone
         semantic: per-row
         fields_read: [loggedInChat, reopenedExercises]

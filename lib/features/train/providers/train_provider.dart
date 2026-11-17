@@ -28,7 +28,10 @@ import 'package:icanbefitter/core/utils/ist_date.dart';
 import 'package:icanbefitter/core/utils/detraining.dart';
 import 'package:icanbefitter/core/utils/readiness.dart';
 import 'package:icanbefitter/core/services/health_read_service.dart';
+import 'package:icanbefitter/shared/repositories/plan_engine/finisher_safety.dart';
+import 'package:icanbefitter/shared/repositories/plan_engine/finisher_show_context.dart';
 import 'package:icanbefitter/shared/repositories/plan_engine/plan_engine_flags.dart';
+import 'package:icanbefitter/shared/repositories/plan_engine/session_budget.dart';
 import 'package:icanbefitter/shared/repositories/plan_engine/session_estimate.dart';
 import '../repositories/workout_repository.dart';
 import '../services/workout_completion_bookkeeping.dart';
@@ -161,6 +164,10 @@ class ExerciseData {
   final String? muscleLabel; // experience-appropriate muscle label (e.g. "Back", "Lats", "Lats (Width)")
   final String? exerciseId; // W3.3 (Batch 11-A): library exercise id — forward-only, null on legacy/custom.
 
+  /// Unit 3C (OI-396): a row's ready-made detail line (`FinisherSafety.detail`, e.g. `8 rounds · 30s fast / 30s
+  /// slow`). Set only on finisher rows; a renderer shows it before its timed / reps branch. Null everywhere else.
+  final String? detailText;
+
   const ExerciseData({
     required this.name,
     this.sets = '3',
@@ -174,6 +181,7 @@ class ExerciseData {
     this.supersetGroup,
     this.muscleLabel,
     this.exerciseId,
+    this.detailText,
   });
 
   /// Shape-tolerant parse of a raw library `equipment_needed` value. It is a List
@@ -200,6 +208,7 @@ class ExerciseData {
     int? Function()? supersetGroup,
     String? Function()? muscleLabel,
     String? exerciseId,
+    String? Function()? detailText,
   }) {
     return ExerciseData(
       name: name ?? this.name,
@@ -216,6 +225,7 @@ class ExerciseData {
       // W3.3 (Batch 11-A): PRESERVE the id — no copyWith changes `name`, so keeping
       // the id is always correct; dropping it would ship the WRITE largely inert.
       exerciseId: exerciseId ?? this.exerciseId,
+      detailText: detailText != null ? detailText() : this.detailText,
     );
   }
 
@@ -246,6 +256,14 @@ class WorkoutDayData {
   final List<ExerciseData> warmup;
   final List<ExerciseData> cooldown;
 
+  /// Unit 3C (OI-396): the cardio finisher the user may see (`FinisherSafety.shownOfRow`, one
+  /// `FinisherShowContextReader.read()` per build), shown between the main exercises and the cool-down. A checklist
+  /// like the warm-up: never logged, never in sets, PRs, `finishGuard` or completion.
+  final List<ExerciseData> finisher;
+
+  /// [finisher]'s seconds (`SessionBudget.finisherSecondsOfPlanDay` of the same shown maps): the section's label.
+  final int finisherSeconds;
+
   /// B2 Task 6b: the budget model's minutes for this day (`budgetedDayMinutes`, the
   /// function Home uses too). null (an unreadable day) uses the shared
   /// `fallbackDayMinutes` estimate, about 2.5 minutes a set.
@@ -266,6 +284,8 @@ class WorkoutDayData {
     this.exercises = const [],
     this.warmup = const [],
     this.cooldown = const [],
+    this.finisher = const [],
+    this.finisherSeconds = 0,
     this.budgetMinutes,
     this.weekMode,
   });
@@ -459,6 +479,24 @@ List<ExerciseData> _parseExerciseMaps(List? raw) {
   }).toList();
 }
 
+/// Unit 3C (OI-396, round 2 B-F1 / round 3 B-F2): the SHOWN finisher's maps as display rows. Not
+/// [_parseExerciseMaps]: its timed path turns `reps` into seconds by [parseTimedDurationSecs], which ignores
+/// `duration_seconds` (8 bike rounds would read "30s"), and its library lookups would label a burpee with whatever
+/// row `search` finds. A finisher row carries its own [ExerciseData.detailText] and no muscle label.
+List<ExerciseData> _parseFinisherMaps(List<Map<String, dynamic>> shown) => [
+      for (final m in shown)
+        ExerciseData(
+          name: m['exercise_name'] as String? ?? m['name'] as String? ?? 'Unknown',
+          sets: '${m['sets'] ?? 1}',
+          reps: '${m['reps'] ?? ''}',
+          rest: '${m['rest_seconds'] ?? 0}s',
+          loggingType: m['logging_type'] as String? ?? 'timed',
+          category: 'finisher',
+          exerciseId: m['exercise_id'] as String?,
+          detailText: FinisherSafety.detail(m['sets'], m['reps']),
+        ),
+    ];
+
 // ── Current Plan ─────────────────────────────────────────────────
 
 class CurrentPlanData {
@@ -555,11 +593,12 @@ DateTime resolveSessionDate({
 ///     no cloud row. Both sides now share [isTrainingDayType].
 ///
 /// ⚠️ The two arms use DIFFERENT week numbers, and conflating them is a live
-/// regression. The NON-HOLD arm must stay CLAMPED: `redoWeek4` extends only
-/// `plan_end` (it never writes `plan_start`), so a user who has rolled week 4
+/// regression. The NON-HOLD arm must stay CLAMPED: a plan window can extend
+/// `plan_end` without moving `plan_start` (a hold; the deleted `redoWeek4` did
+/// too), so a user who has rolled week 4
 /// sits at a true date-index ≥ 5 while `getCurrentWeekNumber()` reports 4.
 /// Feeding an unclamped index to `getWeek()` would hand them a different week's
-/// rows and a different row key — with the flag OFF. The unclamped index exists
+/// rows and a different row key. The unclamped index exists
 /// ONLY in the hold arm and must never reach `getWeek()`.
 ///
 /// ⚠️ [planStart] MUST equal the Hive `plan_start_date`. Both arms re-read it
@@ -568,10 +607,8 @@ DateTime resolveSessionDate({
 /// `getPlanStartDate()`; tests must seed both consistently.
 ///
 /// [holdOrdinal] is `null` when not holding — the caller sources it from
-/// `holdStatusProvider`, which returns `HoldStatusData.empty` whenever
-/// `enable_hold_weeks` is OFF. That keeps the flag check in ONE place per the
-/// `hold_display_read_path` contract; this function never reads
-/// `PlanEngineFlags`.
+/// `holdStatusProvider`, the ONE hold branch point per the
+/// `hold_display_read_path` contract.
 ///
 /// Extracted (both arms, not just the hold math) so every assertion is testable
 /// without driving `completeWorkout`, which needs full `startWorkout` state and
@@ -590,9 +627,8 @@ DateTime resolveSessionDate({
   required int? holdOrdinal,
   required DateTime workoutDate,
 }) {
-  // The INJECTED ordinal is the FLAG GATE only — it is null whenever
-  // enable_hold_weeks is OFF, because holdStatusProvider returns
-  // HoldStatusData.empty in that case. The ordinal that actually drives the
+  // The INJECTED ordinal only says "holding or not" (null for a non-holder,
+  // from holdStatusProvider). The ordinal that actually drives the
   // COUNTS is re-derived from workoutDate, because the two can disagree:
   // holdStatusProvider computes todayHoldOrdinal from nowWall() at provider-
   // BUILD time and is cached until currentPlanProvider invalidates, which
@@ -618,7 +654,7 @@ DateTime resolveSessionDate({
       streakWeekId: weekNum,
       weekKey: calendarWeekKey(workoutDate),
       // The counts come from the CLAMPED plan week. Once the plan window has
-      // rolled on (redoWeek4, an expired phase) that week is a PREVIOUS calendar
+      // rolled on (a hold, an expired phase) that week is a PREVIOUS calendar
       // week whose rows still read "completed", so it must not count again.
       weekIsCurrent: planStart != null &&
           calendarWeekKey(planStart.add(Duration(days: (weekNum - 1) * 7))) ==
@@ -727,6 +763,8 @@ WorkoutDayData? workoutDayForDate(DateTime date) {
 
   final week = (row['week'] as int?) ?? 1;
   final dayOfWeek = (row['day_of_week'] as int?) ?? 0;
+  // Unit 3C (OI-396): the finisher the user may see, one context read for this build.
+  final shownFinisher = FinisherSafety.shownOfRow(row, FinisherShowContextReader.read());
 
   return WorkoutDayData(
     dayNumber: (week - 1) * 7 + dayOfWeek + 1,
@@ -738,7 +776,9 @@ WorkoutDayData? workoutDayForDate(DateTime date) {
     exercises: exercises,
     warmup: _parseExerciseMaps(row['warmup'] as List?),
     cooldown: _parseExerciseMaps(row['cooldown'] as List?),
-    budgetMinutes: budgetedDayMinutes(row),
+    finisher: _parseFinisherMaps(shownFinisher),
+    finisherSeconds: SessionBudget.finisherSecondsOfPlanDay(shownFinisher),
+    budgetMinutes: budgetedDayMinutes(row, finisher: shownFinisher),
     weekMode: WorkoutScheduleService.instance.weekModeForRow(row, date),
   );
 }
@@ -908,6 +948,8 @@ class CurrentPlanNotifier extends Notifier<CurrentPlanData> {
     }
 
     // Build weeks from Hive schedule data.
+    // Unit 3C (OI-396): the finisher display rule's inputs, read ONCE for this build.
+    final finisherContext = FinisherShowContextReader.read();
     final weeks = <List<WorkoutDayData>>[];
     for (int w = 1; w <= totalWeeks; w++) {
       final weekDays = repo.getWeek(w);
@@ -920,6 +962,8 @@ class CurrentPlanNotifier extends Notifier<CurrentPlanData> {
         final exercises = _parseExerciseMaps(dayMap['exercises'] as List?);
         final warmup = _parseExerciseMaps(dayMap['warmup'] as List?);
         final cooldown = _parseExerciseMaps(dayMap['cooldown'] as List?);
+        final shownFinisher =
+            isRest ? const <Map<String, dynamic>>[] : FinisherSafety.shownOfRow(dayMap, finisherContext);
 
         // Parse date for label and actual DateTime.
         final dateStr = dayMap['date'] as String?;
@@ -955,7 +999,9 @@ class CurrentPlanNotifier extends Notifier<CurrentPlanData> {
           exercises: exercises,
           warmup: warmup,
           cooldown: cooldown,
-          budgetMinutes: isRest ? null : budgetedDayMinutes(dayMap),
+          finisher: _parseFinisherMaps(shownFinisher),
+          finisherSeconds: SessionBudget.finisherSecondsOfPlanDay(shownFinisher),
+          budgetMinutes: isRest ? null : budgetedDayMinutes(dayMap, finisher: shownFinisher),
           weekMode: isRest
               ? null
               : WorkoutScheduleService.instance
@@ -1022,8 +1068,8 @@ final currentPlanProvider =
 
 // ── Free-tier "Hold the Line" display state ──────────────────────
 
-/// Read-only display state for the free-tier hold mechanic (ship-dark behind
-/// `enable_hold_weeks`).
+/// Read-only display state for the free-tier hold mechanic (always on since
+/// Unit 3D-b, OI-175).
 ///
 /// This is the **single branch point** every hold-aware UI surface reads —
 /// widgets never touch `PlanEngineFlags` or Hive directly. When the flag is OFF
@@ -1075,10 +1121,9 @@ final holdStatusProvider = Provider<HoldStatusData>((ref) {
   ref.watch(currentPlanProvider); // rebuild on (re)materialize / hold write
 
   final readService = ref.read(workoutScheduleReadServiceProvider);
-  // `activeHoldWeeks()` / `activeHoldOrdinalFor()` ARE the `enable_hold_weeks`
-  // gate (FOB-1): they return empty/null whenever the flag is OFF, so this
-  // provider no longer restates the check itself. One gate, in the service,
-  // shared with `weekIdentity()` — see WorkoutScheduleReadService.
+  // `activeHoldWeeks()` / `activeHoldOrdinalFor()` are the production entry
+  // points (FOB-1), shared with `weekIdentity()`, so the hold read surface is
+  // decided in ONE place — see WorkoutScheduleReadService.
   final holds = readService.activeHoldWeeks();
   if (holds.isEmpty) return HoldStatusData.empty;
 
@@ -1117,26 +1162,43 @@ final weekIdentityProvider = Provider<WeekIdentity>((ref) {
 
 // ── Selected Week ────────────────────────────────────────────────
 
-class SelectedWeekNotifier extends Notifier<int> {
+/// The Train tab's selected week (Unit 3D-b, d80; round 1 B-F1): the week the
+/// list below the chips shows, and whether the USER picked it ([picked]) or it
+/// is the default. During a hold the default week is not lit (only the H chip
+/// is "you are here"); a week the user tapped is. No `==` override; nothing
+/// depends on that: tapping the week already shown changes [picked] from false
+/// to true, so a value `==` would notify too (B-pass seat B F4).
+class SelectedWeek {
+  const SelectedWeek(this.week, {this.picked = false});
+
+  /// 1-indexed week in the phase (clamped program week by default).
+  final int week;
+
+  /// True only after a chip tap ([SelectedWeekNotifier.select]); every
+  /// invalidation and the auth rebuild reset it to false.
+  final bool picked;
+}
+
+class SelectedWeekNotifier extends Notifier<SelectedWeek> {
   @override
-  int build() {
+  SelectedWeek build() {
     ref.watch(authUserIdTokenProvider); // c4055a — rebuild on auth change
     // Default to the calendar week that contains today so the chip for
     // the current date range is highlighted when the Train tab opens.
     // Falls back to the stored progress week if no plan is scheduled yet.
     final calendarWeek = WorkoutScheduleService.instance.getCurrentWeekNumber();
-    if (calendarWeek > 0) return calendarWeek;
+    if (calendarWeek > 0) return SelectedWeek(calendarWeek);
     final progress = UserRepository.instance.getProgress();
-    return (progress?['current_week'] as int?) ?? 1;
+    return SelectedWeek((progress?['current_week'] as int?) ?? 1);
   }
 
   void select(int week) {
-    state = week;
+    state = SelectedWeek(week, picked: true);
   }
 }
 
-final selectedWeekProvider =
-    NotifierProvider<SelectedWeekNotifier, int>(SelectedWeekNotifier.new);
+final selectedWeekProvider = NotifierProvider<SelectedWeekNotifier, SelectedWeek>(
+    SelectedWeekNotifier.new);
 
 // ── Workout Stats (PRs) ────────────────────────────────────────
 

@@ -1,5 +1,6 @@
 import { z } from "npm:zod@3.25.76";
 import type { ToolDefinition } from "../types.ts";
+import { goalLabel } from "./goalLabels.ts";
 
 const schema = z.object({
   weeks: z.number().int().min(1).max(12).describe(
@@ -9,8 +10,6 @@ const schema = z.object({
     "build_muscle",
     "lose_fat",
     "general_fitness",
-    "strength",
-    "recompose",
   ]).optional().describe(
     "Optional new goal. Defaults to user's current profile goal. Use when the user explicitly mentions changing focus.",
   ),
@@ -52,7 +51,7 @@ export const regeneratePlanBlockTool: ToolDefinition<Args> = {
     },
     confirmationClass: "destructive",
     previewSummary: `Regenerate next ${args.weeks} weeks${
-      args.goal ? ` for ${args.goal}` : ""
+      args.goal ? ` for ${goalLabel(args.goal)}` : ""
     }${args.daysPerWeek ? ` (${args.daysPerWeek} days/week)` : ""}`,
   }),
 };

@@ -87,8 +87,7 @@ extension _JourneyTimeline on _ProfileScreenState {
                 // FOB-1 (OI-60): a holder has no honest "WEEK n OF 4" — the
                 // phase's four weeks are elapsed and the hold sits outside
                 // them, so the clamp printed "WEEK 4 OF 4" forever. Hn is the
-                // identity. `isHolding` is false for every user while
-                // `enable_hold_weeks` is OFF, so this is the pre-fix string.
+                // identity. For a non-holder this is the pre-fix string.
                 journeyWeekLabel(
                   holdOrdinal: stats.holdOrdinal,
                   weekInPhase: stats.currentWeek,
@@ -181,8 +180,8 @@ extension _JourneyTimeline on _ProfileScreenState {
               // A holder has already completed the four weeks, so the countdown
               // resolved to a flat "0 weeks to complete Phase 1" — technically
               // true, and useless, on the one surface a holder sees most. State
-              // where they actually are instead (FOB-1 / OI-60). Inert while
-              // `enable_hold_weeks` is OFF.
+              // where they actually are instead (FOB-1 / OI-60). Unchanged for
+              // a non-holder.
               text: journeyPhaseOneMilestone(
                 holdOrdinal: stats.holdOrdinal,
                 weekInPhase: stats.currentWeek,

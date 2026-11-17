@@ -63,6 +63,34 @@ class PlanEngineFlags {
     }
   }
 
+  /// Unit 3C kill-switch (OI-396, founder 2026-10-22, d56 / d61 / d74 / d75): the cardio finisher is injury-safe
+  /// (any injury: Stationary Bike Sprints in a gym, no finisher at home), its time is reserved on its 2 days before
+  /// sets are sized, and Train / Active Workout / Home show it. Default ON. Set
+  /// `configBox['disable_cardio_finisher_shown'] = true` to restore today's finisher, sizing and screens verbatim, for
+  /// plans generated from then on (a stored finisher is then simply not shown). Read once per generation by
+  /// `generateV4` and once per build by each screen.
+  static bool get cardioFinisherShownEnabled {
+    try {
+      return HiveService.instance.configBox.get('disable_cardio_finisher_shown') != true;
+    } catch (_) {
+      return true; // no Hive (pure unit test) → the shown, injury-safe, timed finisher
+    }
+  }
+
+  /// Unit 3A kill-switch (OI-487, founder d3 / d4 / d58-d61): the goal's reps (Cut and Maintain main lifts by the
+  /// founder's table, their accessories 10-15), the Cut / Maintain weekly bands, and the Strength focus (a main lift at
+  /// its range's low end with +30 s rest). Default ON. Set `configBox['disable_goal_training'] = true` to restore
+  /// today's reps, bands, rests and the 4-day Maintain Glutes credit verbatim, for plans generated from then on. Read by
+  /// `TrainingHistoryAnalyzer.goalTrainingFromProfile` (once per generation, and once per plan-day swap) and by
+  /// `SplitResolver.quadPrimaryCreditsGlutes` when its `goalTraining` argument is not given.
+  static bool get goalTrainingEnabled {
+    try {
+      return HiveService.instance.configBox.get('disable_goal_training') != true;
+    } catch (_) {
+      return true; // no Hive (pure unit test) → the goal table
+    }
+  }
+
   /// Unit 2B kill-switch (OI-452, founder d30-d33): the 3-exercise day floor. A day left under min(3, its reach) after
   /// pass A2 seats remaining slots at 2 sets past a group's weekly top (no excess limit, every phase, not bound by the
   /// clock; never past a session cap), named in `AllocationStats.floorSeats`. Default ON. Set
@@ -122,21 +150,6 @@ class PlanEngineFlags {
           true;
     } catch (_) {
       return true; // no Hive (pure unit test) → default: ON
-    }
-  }
-
-  /// Free-tier "Hold the Line" week materialization (`holdWeek` replaces
-  /// `redoWeek4`). **Default OFF (ship dark, §4.6)** — it materializes NEW
-  /// week-5+ schedule rows + extends `plan_end`, so it is NOT the safe
-  /// direction: it ships inert and is flipped ON only after the display slices
-  /// (un-clamp / chip strip / header / roadmap / entry card) land + APK
-  /// verification. When OFF, the plan-expired triggers run the verbatim
-  /// `redoWeek4`. Set `configBox['enable_hold_weeks'] = true` to enable.
-  static bool get holdWeeksEnabled {
-    try {
-      return HiveService.instance.configBox.get('enable_hold_weeks') == true;
-    } catch (_) {
-      return false; // no Hive (pure unit test) → safe default: OFF (redoWeek4)
     }
   }
 
@@ -329,18 +342,19 @@ class PlanEngineFlags {
 
   /// W2.7 (Batch 9 volume titration): phase-boundary per-major-group ±1 weekly-set
   /// adjustment from the phase-N e1RM trend (+ readiness recovery evidence for the
-  /// +1 direction), clamped [MEV,MRV]. Ship-dark DEFAULT OFF (§4.6 — changes
-  /// prescribed volume). Applied ONLY when the caller opts in
-  /// (`applyVolumeTitration`, passed `pins == null` by the two fresh-advance
-  /// callers) AND phase>=2. Flag OFF / intent false / phase<2 → resolveDeltas {}
-  /// → applyToWeeks identity → byte-identical. Set
-  /// `configBox['enable_volume_titration'] = true` to enable.
+  /// +1 direction), inside the session set budget (band, session cap, time) and, since
+  /// generator step 4 (OI-53, 2026-11-16), the lead-first rule (a +1 never takes a row
+  /// past its day's lead + 1; a -1 follows d65's trim order, never below 2 sets).
+  /// **LIVE since step 4** (founder d82; the `enable_volume_titration` key is retired).
+  /// Applied ONLY when the caller opts in (`applyVolumeTitration`, passed `pins == null`
+  /// by the two fresh-advance callers) AND phase>=2; every other generation is
+  /// untouched. Kill switch `configBox['disable_volume_titration'] = true` restores
+  /// the pre-flip path: resolveDeltas {} → applyToWeeks identity → byte-identical.
   static bool get volumeTitrationEnabled {
     try {
-      return HiveService.instance.configBox.get('enable_volume_titration') ==
-          true;
+      return HiveService.instance.configBox.get('disable_volume_titration') != true;
     } catch (_) {
-      return false;
+      return true; // no Hive (pure unit test) → default: ON
     }
   }
 
@@ -451,24 +465,23 @@ class PlanEngineFlags {
     }
   }
 
-  /// W3.5 (Batch 12-A) plateau escalation rung-2 (+sets), PRO. When ON, at a
-  /// genuine FRESH phase advance a plateaued major group (a COMPOUND lift with flat
-  /// e1RM across ≥3 sessions spanning ≥28d) that is NOT already titration-bumped and
-  /// NOT under persistent readiness fatigue gains +1 weekly set — merged into the
-  /// W2.7 titration deltas so ONE clamped applyToWeeks pass applies both
-  /// (`PlateauScan.mergePlateauSetDeltas`, `putIfAbsent` → no double-bump / an
-  /// existing −1 wins). Ship-dark DEFAULT OFF (§4.6 — changes prescribed volume) →
-  /// merge returns the input map unchanged → applyToWeeks identity → byte-identical.
-  /// Presupposes `enable_readiness` ON (the fatigue gate needs data; `plateauedGroups`
-  /// self-gates on `readinessEnabled`, mirroring DeloadEvaluator). Set
-  /// `configBox['enable_plateau_escalation'] = true` to enable.
+  /// W3.5 (Batch 12-A) plateau escalation rung-2 (+sets), PRO. At a genuine FRESH
+  /// phase advance a plateaued major group (a COMPOUND lift with flat e1RM across ≥3
+  /// sessions spanning ≥28d) that is NOT already titration-bumped and NOT under
+  /// persistent readiness fatigue gains +1 weekly set — merged into the W2.7 titration
+  /// deltas so ONE clamped applyToWeeks pass applies both
+  /// (`PlateauScan.mergePlateauSetDeltas`, `putIfAbsent` → no double-bump / an existing
+  /// −1 wins); rung 3 (12-B) soft-avoids the plateaued lifts (`plateauAvoidNames`).
+  /// **LIVE since generator step 4** (OI-53, founder d82: the +1 set and the rotation,
+  /// one switch; the `enable_plateau_escalation` key is retired). Self-gates on
+  /// `readinessEnabled` (`plateauedGroups`). Kill switch
+  /// `configBox['disable_plateau_escalation'] = true` restores the pre-flip path: the
+  /// merge returns its input and the avoid set is empty → byte-identical.
   static bool get plateauEscalationEnabled {
     try {
-      return HiveService.instance.configBox
-              .get('enable_plateau_escalation') ==
-          true;
+      return HiveService.instance.configBox.get('disable_plateau_escalation') != true;
     } catch (_) {
-      return false;
+      return true; // no Hive (pure unit test) → default: ON
     }
   }
 

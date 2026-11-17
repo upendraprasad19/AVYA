@@ -98,24 +98,23 @@ void main() {
       expect(t.mayReanchor, isFalse);
     });
 
-    test('flag OFF is byte-identical: activeHoldWeeks() yields no hold rows', () {
-      // With `enable_hold_weeks` OFF the production caller passes an EMPTY
-      // holdRows (activeHoldWeeks() returns const []). Pinning that here means
-      // the ship-dark property is asserted at the decision layer, not just
-      // assumed from the seam's documentation.
-      final off = PlanIntegrityReconciler.computeTriggers(
+    test('no hold rows at all: the window alone drives the decision', () {
+      // A user who never held (or whose holds are not covered by plan_end)
+      // reaches the decision layer with an EMPTY holdRows; the window rows
+      // alone must decide.
+      final noHolds = PlanIntegrityReconciler.computeTriggers(
         windowRows: [healthy('2026-06-01')],
         holdRows: const [],
       );
-      expect(off.shouldFetch, isFalse);
-      expect(off.mayReanchor, isFalse);
+      expect(noHolds.shouldFetch, isFalse);
+      expect(noHolds.mayReanchor, isFalse);
 
-      final offBroken = PlanIntegrityReconciler.computeTriggers(
+      final noHoldsBroken = PlanIntegrityReconciler.computeTriggers(
         windowRows: [stripped('2026-06-01')],
         holdRows: const [],
       );
-      expect(offBroken.shouldFetch, isTrue);
-      expect(offBroken.mayReanchor, isTrue);
+      expect(noHoldsBroken.shouldFetch, isTrue);
+      expect(noHoldsBroken.mayReanchor, isTrue);
     });
 
     test('a COMPLETED hold day is not a symptom', () {

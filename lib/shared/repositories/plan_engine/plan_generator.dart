@@ -105,7 +105,7 @@ class PlanGenerator {
     // W2.7 (Batch 9 volume titration): opt-in intent — applied ONLY on a genuine
     // FRESH phase advance (the two advance callers pass `pins == null`). Default
     // false → every other caller (coach-regen / edit-profile / previews / hotel /
-    // onboarding) is untouched regardless of `enable_volume_titration`.
+    // onboarding) is untouched regardless of the kill switch `disable_volume_titration` (LIVE since step 4, d83).
     bool applyVolumeTitration = false,
     // W3.4 (Batch 11-B cross-phase variety): day-INDEX → prior-phase A/B picks
     // (LOWERCASED) → the picker avoids repeating them when a same-pattern sibling
@@ -114,7 +114,7 @@ class PlanGenerator {
     Map<int, ({List<String> a, List<String> b})>? previousPhaseByDay,
     // W3.5 (Batch 12-A plateau escalation): opt-in intent — applied ONLY on a fresh
     // phase advance (the two advance callers pass `pins == null`). Default false →
-    // every other caller untouched regardless of `enable_plateau_escalation`.
+    // every other caller untouched regardless of the kill switch `disable_plateau_escalation` (LIVE since step 4).
     bool applyPlateauEscalation = false,
     // Unit 2D (OI-453, founder d50: the one rule-14 argument): a repeat at more minutes than the phase it pins; read
     // only by the pinned branch, which appends accessories into the leftover time. Default false: byte-identical.
@@ -280,6 +280,43 @@ class PlanGenerator {
       final name = r['name'];
       if (name is String) rowsByName.putIfAbsent(name.toLowerCase(), () => r);
     }
+    // ⑥ C2 (WU-2 gym-cardio gate) — fix the always-false hasGymEquipment on the
+    // GENERATED path (equipmentList is item tokens, not the tier string). When
+    // exclusions are enabled, resolve the gym-cardio signal from the EFFECTIVE
+    // (exclusion-subtracted) equipment: `cardio machine` (in the gym tiers as of
+    // ⑥ C2) gates the gym-cardio pools (Treadmill/Bike). Flag OFF → null → attach
+    // uses the old predicate → byte-identical (template_service + tier-string tests
+    // pass the tier string, where the old predicate is TRUE, untouched).
+    final bool? hasGymOverride;
+    if (PlanEngineFlags.equipmentExclusionsEnabled) {
+      final effectiveEquip = equipmentExclusionSet.isEmpty
+          ? equipmentList
+          : equipmentList
+              .where((e) => !equipmentExclusionSet.contains(e))
+              .toList();
+      hasGymOverride = effectiveEquip.contains('cardio machine');
+    } else {
+      hasGymOverride = null;
+    }
+
+    // Unit 3C (OI-396, founder d61 / d75, rule-14 waiver): the gym-cardio block above moved here word for word, and
+    // the finisher is decided ONCE before sets are sized, so its 2 days keep its time and Stage 6 attaches the same
+    // plan. d56: the user's canonical injuries reach it.
+    final finisherPlan = goalSpec.cardio
+        ? CardioFinisher.plan(
+            goal: goal,
+            cardioPreference: cardioPreference,
+            equipmentList: equipmentList,
+            hasGymEquipmentOverride: hasGymOverride,
+            capability: capabilitySet,
+            injuries: normalizedInjuries,
+            dayCount: populated.length,
+            minutes: SessionBudget.resolveMinutes(
+              param: sessionDuration,
+              profileValue: TrainingHistoryAnalyzer.sessionMinutesFromProfile(),
+            ), // d76: the short finisher under 60 minutes
+          )
+        : FinisherPlan.none;
     final budget = SessionBudgetContext(
       minutes: SessionBudget.resolveMinutes(
         param: sessionDuration,
@@ -295,6 +332,10 @@ class PlanGenerator {
       archetypeByName: {
         for (final e in rowsByName.entries) e.key: SessionBudget.archetypeOfRow(e.value),
       },
+      // Unit 3A (OI-487, founder d61, the rule-14 argument): the goal's reps and bands, the Strength focus, and the
+      // disable_goal_training switch (read here; the Glutes credit above reads the same switch through its default).
+      goalTraining: TrainingHistoryAnalyzer.goalTrainingFromProfile(),
+      finisherSecondsByDay: finisherPlan.secondsByDay,
     );
     populated = SessionSetAllocator.allocate(
       days: populated,
@@ -317,10 +358,10 @@ class PlanGenerator {
     );
 
     // Stage 4.5: W2.7 volume titration (Batch 9) — phase-boundary per-major-group
-    // ±1 set adjustment from phase-N evidence. Opt-in + ship-dark: only a genuine
+    // ±1 set adjustment from phase-N evidence. Opt-in (LIVE since generator step 4): only a genuine
     // fresh advance passes `applyVolumeTitration:true` (via `pins == null`);
-    // resolveDeltas additionally returns {} unless `enable_volume_titration` is ON
-    // AND phase>=2. Any of those false → applyToWeeks is identity → byte-identical.
+    // resolveDeltas additionally returns {} when `disable_volume_titration` is set
+    // or phase<2. Any of those false → applyToWeeks is identity → byte-identical.
     // Placed BEFORE sequencing/superset (neither reads `sets`) so it sees the
     // allocator's set counts and its result flows through unchanged.
     if (applyVolumeTitration || applyPlateauEscalation) {
@@ -344,25 +385,6 @@ class PlanGenerator {
     // Stage 5: Superset pairing
     weekPlans = SupersetPairer.pair(weekPlans);
 
-    // ⑥ C2 (WU-2 gym-cardio gate) — fix the always-false hasGymEquipment on the
-    // GENERATED path (equipmentList is item tokens, not the tier string). When
-    // exclusions are enabled, resolve the gym-cardio signal from the EFFECTIVE
-    // (exclusion-subtracted) equipment: `cardio machine` (in the gym tiers as of
-    // ⑥ C2) gates the gym-cardio pools (Treadmill/Bike). Flag OFF → null → attach
-    // uses the old predicate → byte-identical (template_service + tier-string tests
-    // pass the tier string, where the old predicate is TRUE, untouched).
-    final bool? hasGymOverride;
-    if (PlanEngineFlags.equipmentExclusionsEnabled) {
-      final effectiveEquip = equipmentExclusionSet.isEmpty
-          ? equipmentList
-          : equipmentList
-              .where((e) => !equipmentExclusionSet.contains(e))
-              .toList();
-      hasGymOverride = effectiveEquip.contains('cardio machine');
-    } else {
-      hasGymOverride = null;
-    }
-
     // Stage 6: Cardio finisher — attach per the goal's FitnessGoals spec
     // (recompose now gets a light finisher; was excluded by the old hardcoded
     // lose_fat/general_fitness check).
@@ -374,6 +396,8 @@ class PlanGenerator {
         equipmentList: equipmentList,
         hasGymEquipmentOverride: hasGymOverride,
         capability: capabilitySet, // ⑦ OI-89 seam 10
+        injuries: normalizedInjuries, // Unit 3C (d56)
+        plan: finisherPlan, // Unit 3C (d61): the plan the budget reserved
       );
     }
 

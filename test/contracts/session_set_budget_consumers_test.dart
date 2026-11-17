@@ -217,7 +217,7 @@ void main() {
       // general_fitness intermediate: Chest top 12. Baseline 3 + 3 + 4 = 10 leaves
       // room for exactly two sets. Rank-major gives them to the two rank-0 lifts
       // (day 0's c1, day 1's c3); a day-major order would give both to day 0.
-      final f = Fx();
+      final f = Fx(goalTraining: GoalTraining.off);
       for (final n in ['c1', 'c2', 'c3']) {
         f.row(n, ['Chest']);
       }
@@ -375,7 +375,9 @@ void main() {
         expect(over, <String, double>{
           '16/0/0': 90.0, '16/1/0': 90.0, '16/2/0': 90.0, //
           '54/0/1': 66.0, '54/0/2': 75.6, '54/1/1': 66.0, '54/1/2': 75.6, '54/2/1': 66.0, '54/2/2': 75.6, //
-          '55/0/4': 54.0, '55/1/1': 10.8, '55/2/4': 54.0, //
+          // Unit 3A (2026-11-15): plan 55's week-2 day 1 no longer needs the excuse under the goal's band (attributed by
+          // re-running with the goal training off: '55/1/1': 10.8 returns).
+          '55/0/4': 54.0, '55/2/4': 54.0, //
           '57/0/1': 10.8, '57/1/1': 10.8, '57/2/1': 10.8,
         });
       });
@@ -437,8 +439,9 @@ void main() {
       expect(grid(VolumeTitration.applyToWeeks([atBottom], {'Chest': -1}, budget: ctx).single),
           [[4, 4], [4]]);
       final (above, ctx2) = setup(f, lists(5)); // 13
+      // Generator step 4 (T2, d65's order): the trim takes the row with the most sets (c3 at 5), not the first.
       expect(grid(VolumeTitration.applyToWeeks([above], {'Chest': -1}, budget: ctx2).single),
-          [[3, 4], [5]]);
+          [[4, 4], [4]]);
     });
 
     test('a trim may not take a co-group the exercise also credits below its band bottom', () {
@@ -484,14 +487,15 @@ void main() {
           [[5, 3]]);
     });
 
-    test('a trim skips an exercise already at 1 set and rolls to the next', () {
+    test('a trim skips an exercise below 3 sets (never below 2, step 4 T2) and takes the most sets, ties to the latest', () {
       final f = chestRows();
       final (week, ctx) = setup(f, [
         [f.ex('c1', sets: 1), f.ex('c2', sets: 5)],
         [f.ex('c3', sets: 5), f.ex('c4', sets: 5)], // 16 in all, 4 above the bottom
       ]);
+      // c1 (1 set) is never a candidate; c2, c3, c4 tie at 5, so the latest day, then the latest slot: c4.
       expect(grid(VolumeTitration.applyToWeeks([week], {'Chest': -1}, budget: ctx).single),
-          [[1, 4], [5, 5]]);
+          [[1, 5], [5, 4]]);
     });
 
     test('one exercise is adjusted at most once a week, even when two groups ask', () {
@@ -649,7 +653,7 @@ void main() {
         character: 'deload',
       );
       final trimmed = VolumeTitration.applyToWeeks([above], {'Chest': -1}, budget: ctx).single;
-      expect(workingGrid(trimmed), [[3, 4], [5]]);
+      expect(workingGrid(trimmed), [[4, 4], [4]]); // step 4 T2: the most stashed sets (c3 at 5)
       expect(grid(trimmed), [[2, 2], [2]]); // the visible deload sets do not move
       final (atBottom, ctx2) = setup(
         f,
@@ -711,7 +715,7 @@ void main() {
         [f.ex('c3', sets: 5)],
       ]); // 13: one set above the bottom
       expect(grid(VolumeTitration.applyToWeeks([down], {'Chest': -3}, budget: ctxDown).single),
-          [[3, 4], [5]]);
+          [[4, 4], [4]]); // step 4 T2: one set off the row with the most
     });
   });
 

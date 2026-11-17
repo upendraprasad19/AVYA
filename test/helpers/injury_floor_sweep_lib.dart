@@ -22,7 +22,9 @@
 // dropped tag still fails); no empty day; every scanned plan week has the day count the run asked
 // for (a day that never appears is neither empty nor thin); and the scan saw days and picks at all. GATED in singles
 // (both), pairs (both) and repeat: no day under 3 exercises ("thin"; the thin-day top-up, OI-401, takes it to 0, and the 629
-// rows of Batch C1 took the last two pairs personas, OI-408, to 0 as well). Out of scope: the cardio finisher (WorkoutDay.finisher). It takes no injuries and no screen shows it (OI-396).
+// rows of Batch C1 took the last two pairs personas, OI-408, to 0 as well). GATED in every block since Unit 3C (OI-396,
+// founder d74): the cardio finisher (WorkoutDay.finisher) of an injured run is only the bike (Stationary Bike Sprints) in a gym
+// and nothing at home (`unsafeFinisher`); every scanned run carries an injury.
 
 import 'dart:convert';
 import 'dart:io';
@@ -35,6 +37,7 @@ import 'package:icanbefitter/core/services/guarded_box.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
 import 'package:icanbefitter/core/services/hive_user_session.dart';
 import 'package:icanbefitter/core/utils/equipment_vocab.dart';
+import 'package:icanbefitter/shared/repositories/plan_engine/cardio_finisher.dart';
 import 'package:icanbefitter/shared/repositories/plan_engine/equipment_capability.dart';
 import 'package:icanbefitter/shared/repositories/plan_engine/models.dart';
 import 'package:icanbefitter/shared/repositories/plan_engine/plan_generator.dart';
@@ -60,6 +63,10 @@ class SweepTally {
   int runs = 0, days = 0, picks = 0, empty = 0, thin = 0, unsafeMain = 0, unsafeWarm = 0;
   int unresolvedMain = 0, unresolvedWarm = 0, unperformable = 0, duplicates = 0, wrongDayCount = 0;
   int flagged = 0, hipJump = 0;
+  /// Unit 3C (d74): finisher days seen, and finisher picks an injured run must not get (anything but the bike in a gym,
+  /// anything at all at home).
+  int finisherDays = 0, unsafeFinisher = 0;
+  final unsafeFinisherPicks = <String>{};
   final flaggedPicks = <String>{};
   final hipJumpPicks = <String>{};
   final sizes = <int, int>{};
@@ -223,6 +230,16 @@ class SweepHarness {
             t.hipJumpPicks.add('$label: ${e.exerciseName}');
           }
         }
+        if (day.finisher.isNotEmpty) t.finisherDays++;
+        if (injuries.isNotEmpty) {
+          final home = !const {'basic_gym', 'full_gym'}.contains(label.split('|')[1]);
+          for (final f in day.finisher) {
+            if (home || f.exerciseName != CardioFinisher.injuredGymFinisherName) {
+              t.unsafeFinisher++;
+              t.unsafeFinisherPicks.add('${injuries.join('+')}|${label.split('|')[1]}: ${f.exerciseName}');
+            }
+          }
+        }
         void check(Iterable<PlannedExercise> list, bool main) {
           for (final e in list) {
             t.picks++;
@@ -260,7 +277,8 @@ class SweepHarness {
         'unsafe-main ${t.unsafeMain} unsafe-warm/cool ${t.unsafeWarm} '
         'unresolved-main ${t.unresolvedMain} unresolved-warm/cool ${t.unresolvedWarm} '
         'unperformable ${t.unperformable} duplicates ${t.duplicates} '
-        'retired/skill/olympic ${t.flagged} hip-jump ${t.hipJump}\n'
+        'retired/skill/olympic ${t.flagged} hip-jump ${t.hipJump} '
+        'finisher-days ${t.finisherDays} unsafe-finisher ${t.unsafeFinisher}\n'
         '[$block] sizes $sizes\n'
         '[$block] thin by ${t.thinBy}\n'
         '[$block] unsafe ${(t.unsafe.toList()..sort())}\n'
@@ -287,6 +305,9 @@ class SweepHarness {
     expect(t.duplicates, 0, reason: 'a name twice in one day: ${t.duplicated}');
     expect(t.empty, 0, reason: 'a day with no exercise at all: ${t.emptyDays}');
     expect(t.flagged, 0, reason: 'a retired, skill or olympic main pick: ${(t.flaggedPicks.toList()..sort()).take(10).toList()}');
+    expect(t.unsafeFinisher, 0,
+        reason: 'an injured run\'s finisher is the bike in a gym, none at home (d74): '
+            '${(t.unsafeFinisherPicks.toList()..sort()).take(10).toList()}');
     expect(t.hipJump, 0, reason: 'a Ruling 12 jump row for a hip-injured run: ${(t.hipJumpPicks.toList()..sort()).take(10).toList()}');
   }
 

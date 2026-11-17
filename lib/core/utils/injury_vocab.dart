@@ -112,6 +112,23 @@ class InjuryVocab {
     'necks': 'neck',
   };
 
+  /// Unit 3C (OI-396, founder d77 / d78): the profile token a coach `modifyWorkoutForInjury` body part is saved as.
+  /// The tool's 13 parts (`supabase/functions/_shared/tools/workout/modifyWorkoutForInjury.ts`): the 9 canonical
+  /// tokens map to themselves; the 4 with no token map to the nearest joint (`quad` -> `knee`, `calf` -> `ankle`,
+  /// `chest` -> `shoulder`, `upper_back` -> `shoulder`). Anything else -> null (nothing is saved).
+  static String? coachPartToken(String? part) {
+    final p = (part ?? '').trim().toLowerCase();
+    if (canonicalTokens.contains(p)) return p;
+    return _coachPartNearestJoint[p];
+  }
+
+  static const _coachPartNearestJoint = <String, String>{
+    'quad': 'knee',
+    'calf': 'ankle',
+    'chest': 'shoulder',
+    'upper_back': 'shoulder',
+  };
+
   /// Normalize a raw injury list to the canonical library vocabulary.
   ///
   /// - Lowercases + trims each entry.

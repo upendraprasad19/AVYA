@@ -22,10 +22,8 @@
 // fail if the writer's field names or cadence drift from what the identity
 // reads — the recurring writer/reader-drift class.
 //
-// Ship-dark evidence (§4.12.4): the `flag OFF` group proves that with
-// `enable_hold_weeks` OFF the identity is byte-identical to the pre-fix
-// getCurrentWeekNumber() value EVEN WITH hold rows on disk, so every surface
-// renders exactly as it did before this batch.
+// Holds are always on (Unit 3D-b removed the ship-dark flag), so the former
+// flag-OFF byte-identical groups were deleted with it.
 
 import 'dart:io';
 
@@ -45,7 +43,7 @@ import 'package:icanbefitter/core/utils/hold_week_labels.dart';
 import 'package:icanbefitter/core/utils/ist_date.dart';
 import 'package:icanbefitter/features/profile/providers/profile_provider.dart';
 import 'package:icanbefitter/features/train/providers/train_provider.dart'
-    show holdStatusProvider, weekIdentityProvider;
+    show weekIdentityProvider;
 import 'package:path_provider_platform_interface/path_provider_platform_interface.dart';
 import 'package:plugin_platform_interface/plugin_platform_interface.dart';
 
@@ -95,7 +93,6 @@ void main() {
 
   setUp(() async {
     await HiveUserSession.openForUser(fakeUserId);
-    await HiveService.instance.configBox.delete('enable_hold_weeks');
     await MigratedKey.write('plan_start_date', planStart.toIso8601String());
     await MigratedKey.write('plan_end_date', planEnd.toIso8601String());
     for (int week = 1; week <= 4; week++) {
@@ -122,7 +119,6 @@ void main() {
 
   tearDown(() async {
     resetTestClock();
-    await HiveService.instance.configBox.delete('enable_hold_weeks');
     final box = HiveService.instance.workoutBox;
     for (final k in box.keys
         .where((k) => k.toString().startsWith('schedule_'))
@@ -142,9 +138,8 @@ void main() {
     }
   }
 
-  group('flag ON — a hold suppresses the week number', () {
+  group('a hold suppresses the week number', () {
     test('weekIdentity carries the hold ordinal and NO week number', () async {
-      await HiveService.instance.configBox.put('enable_hold_weeks', true);
       await takeHolds(1);
 
       final id = read.weekIdentity();
@@ -158,7 +153,6 @@ void main() {
     });
 
     test('the identity NEVER projects 4 + ordinal at any ordinal', () async {
-      await HiveService.instance.configBox.put('enable_hold_weeks', true);
       await takeHolds(3);
 
       // Walk each hold week by date, not just today's.
@@ -177,7 +171,6 @@ void main() {
 
     test('a NON-hold day inside the plan window still takes the week arm',
         () async {
-      await HiveService.instance.configBox.put('enable_hold_weeks', true);
       await takeHolds(1);
 
       // Week 3 of the plan — hold rows exist on disk, but today is not one.
@@ -192,7 +185,6 @@ void main() {
 
     test('a day AFTER the hold elapses falls back to the clamped week arm',
         () async {
-      await HiveService.instance.configBox.put('enable_hold_weeks', true);
       await takeHolds(1);
 
       // Two weeks past hold 1 — no hold row covers this date.
@@ -206,47 +198,8 @@ void main() {
     });
   });
 
-  group('flag OFF — the ship-dark byte-identical negative control', () {
-    test('weekIdentity equals the raw clamp EVEN WITH hold rows on disk',
-        () async {
-      // Materialize real holds with the flag ON, then turn it OFF — the exact
-      // shape of a user who held before an operator reverted the kill-switch.
-      await HiveService.instance.configBox.put('enable_hold_weeks', true);
-      await takeHolds(2);
-      await HiveService.instance.configBox.delete('enable_hold_weeks');
-
-      // Clock is still inside hold 2.
-      final id = read.weekIdentity();
-
-      expect(id.isHolding, isFalse,
-          reason: 'the flag gate must fire before any is_hold row is read');
-      expect(id.holdOrdinal, isNull);
-      expect(id.weekInPhase, read.getCurrentWeekNumber(),
-          reason: 'byte-identical to the pre-fix value — this IS the '
-              '§4.12.4 ship-dark evidence for every surface that reads it');
-    });
-
-    test('activeHoldWeeks / activeHoldOrdinalFor are the ONE gate', () async {
-      await HiveService.instance.configBox.put('enable_hold_weeks', true);
-      await takeHolds(2);
-      await HiveService.instance.configBox.delete('enable_hold_weeks');
-
-      expect(read.activeHoldWeeks(), isEmpty);
-      expect(read.activeHoldOrdinalFor(nowWall()), isNull);
-      // The RAW readers still see the rows — proving the gate lives in the
-      // active* pair and not in the row readers, so a test can still exercise
-      // the row contract directly.
-      expect(read.holdWeeks(), hasLength(2),
-          reason: 'holdWeeks() is deliberately ungated; if this ever returns '
-              'empty the gate has been pushed down into the row reader and '
-              'the raw contract is no longer testable');
-      expect(read.holdOrdinalForDate(nowWall()), 2);
-    });
-  });
-
   group('provider seam', () {
     test('weekIdentityProvider mirrors the service while holding', () async {
-      await HiveService.instance.configBox.put('enable_hold_weeks', true);
       await takeHolds(1);
 
       final container = ProviderContainer();
@@ -256,38 +209,6 @@ void main() {
       expect(id.isHolding, isTrue);
       expect(id.holdOrdinal, 1);
       expect(id.weekInPhase, isNull);
-    });
-
-    test('weekIdentityProvider is inert with the flag OFF', () async {
-      await HiveService.instance.configBox.put('enable_hold_weeks', true);
-      await takeHolds(1);
-      await HiveService.instance.configBox.delete('enable_hold_weeks');
-
-      final container = ProviderContainer();
-      addTearDown(container.dispose);
-      final id = container.read(weekIdentityProvider);
-
-      expect(id.isHolding, isFalse);
-      expect(id.weekInPhase, read.getCurrentWeekNumber());
-    });
-
-    test(
-        'holdStatusProvider still gates correctly after delegating to active*',
-        () async {
-      // Guards the refactor that MOVED the flag check out of the provider and
-      // into the service: if activeHoldWeeks() ever stops gating, this is the
-      // test that reddens rather than the provider silently going live.
-      await HiveService.instance.configBox.put('enable_hold_weeks', true);
-      await takeHolds(1);
-      await HiveService.instance.configBox.delete('enable_hold_weeks');
-
-      final container = ProviderContainer();
-      addTearDown(container.dispose);
-      final status = container.read(holdStatusProvider);
-
-      expect(status.isHolding, isFalse);
-      expect(status.holds, isEmpty);
-      expect(status.todayHoldOrdinal, isNull);
     });
   });
 
@@ -307,7 +228,6 @@ void main() {
   group('wiring — identity actually REACHES the consumers', () {
     test('userStatsProvider carries the hold ordinal through a real container',
         () async {
-      await HiveService.instance.configBox.put('enable_hold_weeks', true);
       await takeHolds(2);
 
       final container = ProviderContainer();
@@ -323,27 +243,10 @@ void main() {
       expect(stats.isHolding, isTrue);
     });
 
-    test('userStatsProvider reports NO hold when the flag is off', () async {
-      await HiveService.instance.configBox.put('enable_hold_weeks', true);
-      await takeHolds(1);
-      await HiveService.instance.configBox.delete('enable_hold_weeks');
-
-      final container = ProviderContainer();
-      addTearDown(container.dispose);
-
-      final stats = container.read(userStatsProvider);
-      expect(stats.holdOrdinal, isNull);
-      expect(stats.isHolding, isFalse);
-      expect(stats.currentWeek, read.getCurrentWeekNumber(),
-          reason: 'ship-dark: byte-identical to pre-batch with the flag off, '
-              'even with real hold rows on disk');
-    });
-
     test('the PERSISTED row never renders its 4+ordinal stamp', () async {
       // The row-derived surfaces (Home today-card, day-detail sheet) read
       // `row['week']`, which holdWeek() stamps as 4+n. Drive the REAL writer,
       // then push its real output through the real formatters.
-      await HiveService.instance.configBox.put('enable_hold_weeks', true);
       await takeHolds(3);
 
       final box = HiveService.instance.workoutBox;

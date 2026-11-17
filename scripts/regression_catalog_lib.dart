@@ -117,9 +117,15 @@ const List<String> childEnvStrippedNames = <String>[
   'PLAN_AUDIT_OUT',
   // t108: the plan audit's physique focus (a child would audit focus plans under a no-focus label).
   'PLAN_AUDIT_FOCUS',
+  // Unit 3A: the plan audit's kill-switch keys (a child would audit a switch-off world under an ON label).
+  'PLAN_AUDIT_DISABLE',
   // Unit 1B-F: the injured and focus grid dumps' output directories (hours of plan generation in a child).
   'INJURED_GRID_OUT',
   'FOCUS_GRID_OUT',
+  // Generator step 4 (OI-53): the history simulation dump's output directory (a child would write 1,728 x 2 plans)
+  // and its scenario filter (a child would run a narrowed simulation under the full label).
+  'HISTORY_SIM_OUT',
+  'HISTORY_SIM_SCENARIOS',
 ];
 
 /// Variables read by an EXTERNAL tool (not by any repo script), stripped because a

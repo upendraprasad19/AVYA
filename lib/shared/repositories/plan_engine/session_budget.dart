@@ -24,7 +24,7 @@ class SessionBudget {
   static const int defaultMinutes = 60;
 
   /// The range of minutes a caller or a saved profile may ask for. The Edit
-  /// Profile screen offers 30 / 45 / 60 / 90; the wider range tolerates a value
+  /// Profile screen offers 30 / 45 / 60, and 90 to an advanced user (OI-488, Unit 3B); the wider range tolerates a value
   /// restored from an older client without ever feeding the model nonsense.
   static const int minMinutes = 15;
   static const int maxMinutes = 180;
@@ -56,8 +56,33 @@ class SessionBudget {
   /// map (Ruling 7: 60, no longer 90, when the field is missing). Reads the same
   /// field the generator reads, through the same resolution, so the screen and
   /// the plan can never disagree about what an empty value means.
-  static int initialSessionDuration(Map<dynamic, dynamic> profile) =>
-      resolveMinutes(profileValue: profile['session_duration_minutes']);
+  static int initialSessionDuration(Map<dynamic, dynamic> profile) => resolveMinutes(
+      profileValue: minutesForLevel(profile['session_duration_minutes'], profile['fitness_experience']));
+
+  /// The longest session a user below advanced is planned at (OI-488, founder d70): 90 minutes adds about 4 minutes
+  /// of work for a beginner and an intermediate under their 5 / 6 exercise limit, so it is offered to advanced users
+  /// only.
+  static const int maxMinutesBelowAdvanced = 60;
+
+  /// OI-488 (Unit 3B, founder d70): a STORED session length read for a user whose PROFILE level ([level], the stored
+  /// `fitness_experience` token, not the generator's effective level) is not exactly `'advanced'` (null, absent or any
+  /// other string included) is held to [maxMinutesBelowAdvanced] when it resolves above it; every other input is
+  /// returned UNCHANGED, so [resolveMinutes] judges it exactly as before (null -> 60, garbage -> 60). Every reader of
+  /// the stored value goes through this: `TrainingHistoryAnalyzer.sessionMinutesFromProfile`, [profileParamMinutes]
+  /// and [initialSessionDuration].
+  static Object? minutesForLevel(Object? stored, Object? level) {
+    if (level == 'advanced') return stored;
+    return resolveMinutes(profileValue: stored) > maxMinutesBelowAdvanced ? maxMinutesBelowAdvanced : stored;
+  }
+
+  /// The stored session length as a `param` for `generateV4` / `autoGenerateNextPhaseIfNeeded` (a param wins over the
+  /// profile value, so a caller that forwards the stored value must cap it itself): [minutesForLevel], then the
+  /// number as an int; a non-number (the old `as num?` cast threw on a stored string) is null, which falls back to
+  /// the profile value's own resolution.
+  static int? profileParamMinutes(Map<dynamic, dynamic> profile) {
+    final v = minutesForLevel(profile['session_duration_minutes'], profile['fitness_experience']);
+    return v is num && v.isFinite ? v.toInt() : null;
+  }
 
   // ── Time model (Ruling 2) ────────────────────────────────────────────────
 
@@ -300,10 +325,16 @@ class SessionBudget {
   ///
   /// Never throws: a non-map entry is skipped, a missing list counts as none and a
   /// corrupt number lands on a default.
+  ///
+  /// Unit 3C (OI-396): [finisher] is the SHOWN finisher's maps (`FinisherSafety.shownOfRow`), priced by
+  /// [finisherSecondsOfPlanDay]; the stored row's own `finisher` key is never read here, because a finisher the
+  /// reader rule hides (an injury, the switch) is not part of the day the user sees. Required, so every caller says
+  /// which finisher it means (`const []` = none).
   static double estimateDaySecondsFromPlanDay(
     Map<dynamic, dynamic> planDay,
     Map<String, Map<String, dynamic>> rowsById, {
     Map<String, Map<String, dynamic>> rowsByName = const {},
+    required List<Map<dynamic, dynamic>> finisher,
   }) {
     var total = 0.0;
     for (final e in _mapsOf(planDay['exercises'])) {
@@ -325,7 +356,7 @@ class SessionBudget {
         total += _itemSeconds(item);
       }
     }
-    return total;
+    return total + finisherSecondsOfPlanDay(finisher);
   }
 
   /// [estimateDaySecondsFromPlanDay] rounded to whole minutes.
@@ -333,8 +364,25 @@ class SessionBudget {
     Map<dynamic, dynamic> planDay,
     Map<String, Map<String, dynamic>> rowsById, {
     Map<String, Map<String, dynamic>> rowsByName = const {},
+    required List<Map<dynamic, dynamic>> finisher,
   }) =>
-      (estimateDaySecondsFromPlanDay(planDay, rowsById, rowsByName: rowsByName) / 60).round();
+      (estimateDaySecondsFromPlanDay(planDay, rowsById, rowsByName: rowsByName, finisher: finisher) / 60)
+          .round();
+
+  /// Unit 3C (OI-396): a stored finisher's time, the rule `CardioFinisher.secondsOf` prices a generated one with
+  /// (`duration_seconds` + `sets` x `rest_seconds` per item), so the reserved time and the shown minutes agree.
+  /// Total: a non-map entry is skipped, an absent or unreadable `duration_seconds` is 0, `sets` absent 1,
+  /// `rest_seconds` absent 0, numeric strings are parsed; never throws.
+  static int finisherSecondsOfPlanDay(Iterable<Object?> finisher) {
+    var total = 0;
+    for (final item in finisher.whereType<Map<dynamic, dynamic>>()) {
+      final work = (_intOf(item['duration_seconds']) ?? 0).clamp(0, 36000);
+      final sets = (_intOf(item['sets']) ?? 1).clamp(0, 100);
+      final rest = (_intOf(item['rest_seconds']) ?? 0).clamp(0, 3600);
+      total += work + sets * rest;
+    }
+    return total;
+  }
 
   static Iterable<Map<dynamic, dynamic>> _mapsOf(Object? raw) =>
       raw is List ? raw.whereType<Map<dynamic, dynamic>>() : const [];
@@ -388,6 +436,30 @@ class SessionBudget {
         'I' => 75,
         _ => 60,
       };
+
+  /// Unit 3A (founder d60 / d64): the rest a generation prices and stamps for [archetype]: [restForArchetype], plus 30 s
+  /// on a main lift (H or M, d58) under the Strength focus in a session of [strengthFocusRestMinMinutes]
+  /// or more (d64: at 30 / 45 minutes the extra rest pushed whole groups out of 110 of 2,304 plans). With the
+  /// `disable_goal_training` switch set it is [restForArchetype] verbatim.
+  static int restFor(String archetype, SessionBudgetContext ctx) =>
+      restForGoal(archetype, ctx.goalTraining, minutes: ctx.minutes);
+
+  /// [restFor] without a context: a plan-day swap (`swap_service.dart`) prices the incoming row with the same rule, at
+  /// the profile's resolved minutes.
+  static int restForGoal(String archetype, GoalTraining gt, {required int minutes}) =>
+      restForArchetype(archetype) +
+      (gt.enabled &&
+              gt.strengthFocus &&
+              minutes >= strengthFocusRestMinMinutes &&
+              (archetype == 'H' || archetype == 'M')
+          ? strengthFocusExtraRest
+          : 0);
+
+  /// Unit 3A (d60): the Strength focus's extra rest on a main lift.
+  static const int strengthFocusExtraRest = 30;
+
+  /// Unit 3A (d64): the shortest session in which the Strength focus's extra rest applies.
+  static const int strengthFocusRestMinMinutes = 60;
 
   /// The sets the allocator tries first for every budgeted exercise, on every day.
   static const int baseSets = 3;
@@ -461,6 +533,32 @@ class SessionBudget {
     'general_fitness': {'beginner': 6, 'intermediate': 8, 'advanced': 8},
   };
 
+  /// Unit 3A (OI-487, founder d3): Maintain (general_fitness) is two-thirds of Build's weekly sets, rounded; Cut
+  /// (lose_fat) is slightly fewer than Build at every level (the beginner band was equal). Build and the legacy
+  /// strength token are unchanged. [_bands] is the table with the `disable_goal_training` switch set.
+  static const Map<String, Map<String, ({int bottom, int top})>> _goalBands = {
+    'build_muscle': {
+      'beginner': (bottom: 10, top: 12),
+      'intermediate': (bottom: 12, top: 16),
+      'advanced': (bottom: 14, top: 20),
+    },
+    'strength': {
+      'beginner': (bottom: 10, top: 12),
+      'intermediate': (bottom: 10, top: 14),
+      'advanced': (bottom: 12, top: 16),
+    },
+    'lose_fat': {
+      'beginner': (bottom: 9, top: 11),
+      'intermediate': (bottom: 10, top: 14),
+      'advanced': (bottom: 12, top: 16),
+    },
+    'general_fitness': {
+      'beginner': (bottom: 7, top: 8),
+      'intermediate': (bottom: 8, top: 11),
+      'advanced': (bottom: 9, top: 13),
+    },
+  };
+
   static String _goalKey(String planGoal) =>
       _bands.containsKey(planGoal) ? planGoal : 'build_muscle';
 
@@ -469,8 +567,8 @@ class SessionBudget {
 
   /// Weekly hard sets per muscle group for [planGoal] and [level]. An unknown
   /// goal uses build_muscle; an unknown level uses intermediate.
-  static ({int bottom, int top}) weeklyBand(String planGoal, String level) =>
-      _bands[_goalKey(planGoal)]![_levelKey(level)]!;
+  static ({int bottom, int top}) weeklyBand(String planGoal, String level, {bool goalTraining = true}) =>
+      (goalTraining ? _goalBands : _bands)[_goalKey(planGoal)]![_levelKey(level)]!;
 
   /// The most hard sets one muscle group may get in ONE session (non-focus).
   static int sessionCap(String planGoal, String level) =>
@@ -487,9 +585,12 @@ class SessionBudgetContext {
     required this.lighterPhase,
     required Set<String> focusGroups,
     this.finisherSeconds = 0,
+    Map<int, int> finisherSecondsByDay = const {},
     this.quadPrimaryCreditsGlutes = true,
+    this.goalTraining = const GoalTraining(),
     required Map<String, String> archetypeByName,
-  })  : focusGroups = Set.unmodifiable(focusGroups),
+  })  : finisherSecondsByDay = Map.unmodifiable(finisherSecondsByDay),
+        focusGroups = Set.unmodifiable(focusGroups),
         archetypeByName = Map.unmodifiable(archetypeByName);
 
   /// The session length, already resolved ([SessionBudget.resolveMinutes]).
@@ -506,8 +607,16 @@ class SessionBudgetContext {
   /// Budget muscle groups the user wants more of (`BudgetMuscleGroups.of`).
   final Set<String> focusGroups;
 
-  /// Always 0 while no screen shows the finisher (Ruling 6).
+  /// Seconds taken from EVERY day's budget (Ruling 6's original hook; 0 in production).
   final int finisherSeconds;
+
+  /// Unit 3C (OI-396, d61): the cardio finisher's seconds on the days that carry it (day index in the week, the same
+  /// index every ledger uses), taken from those days' budgets only. Empty = no finisher time reserved (the switch
+  /// `disable_cardio_finisher_shown`, a goal without cardio, a plan before 3C).
+  final Map<int, int> finisherSecondsByDay;
+
+  /// The finisher seconds reserved on [day].
+  int finisherSecondsOn(int day) => finisherSeconds + (finisherSecondsByDay[day] ?? 0);
 
   /// OI-454 co-group policy. True (the default) credits Glutes for every exercise
   /// that lists them. False: an exercise whose first listed muscle is Quads credits
@@ -518,6 +627,23 @@ class SessionBudgetContext {
 
   /// Lowercased exercise name -> archetype, computed once from the library rows.
   final Map<String, String> archetypeByName;
+
+  /// Unit 3A (OI-487): the goal's reps and bands and the Strength focus. `generateV4` passes
+  /// `TrainingHistoryAnalyzer.goalTrainingFromProfile()` (d61); the default is the switch ON with no focus.
+  final GoalTraining goalTraining;
+}
+
+/// Unit 3A (OI-487, founder d3 / d4 / d58-d61): what a generation's goal changes beyond the split. [enabled] is the
+/// `disable_goal_training` kill switch read once per generation (true = the goal table, the Cut / Maintain bands and
+/// the Strength focus); [strengthFocus] is the profile's `physique_focus == 'strength'`.
+class GoalTraining {
+  const GoalTraining({this.enabled = true, this.strengthFocus = false});
+
+  final bool enabled;
+  final bool strengthFocus;
+
+  /// The switch set: today's reps, bands and rests verbatim.
+  static const off = GoalTraining(enabled: false);
 }
 
 /// The one headroom predicate shared by the allocator, `PeriodizationEngine.apply`
@@ -532,9 +658,12 @@ class BudgetLedger {
   BudgetLedger(this.ctx, int dayCount, {bool allowance = false})
       : _spentSeconds = List<double>.filled(dayCount, 0.0),
         _session = List<Map<String, int>>.generate(dayCount, (_) => <String, int>{}),
-        _dayBudgetSeconds = (ctx.minutes - SessionBudget.warmCoolMinutes(ctx.minutes)) * 60.0 -
-            ctx.finisherSeconds +
-            (allowance && ctx.minutes < 60 ? SessionBudget.allowanceSeconds.toDouble() : 0.0),
+        _dayBudgetSeconds = List<double>.generate(
+            dayCount,
+            (d) =>
+                (ctx.minutes - SessionBudget.warmCoolMinutes(ctx.minutes)) * 60.0 -
+                ctx.finisherSecondsOn(d) +
+                (allowance && ctx.minutes < 60 ? SessionBudget.allowanceSeconds.toDouble() : 0.0)),
         forcingBound =
             allowance && ctx.minutes < 60 ? 0.0 : SessionBudget.maxForcedOverSeconds.toDouble();
 
@@ -543,7 +672,7 @@ class BudgetLedger {
   final double forcingBound;
 
   final SessionBudgetContext ctx;
-  final double _dayBudgetSeconds;
+  final List<double> _dayBudgetSeconds;
   final List<double> _spentSeconds;
   final List<Map<String, int>> _session;
   final Map<String, int> _week = <String, int>{};
@@ -551,7 +680,7 @@ class BudgetLedger {
   /// The weekly ceiling for [group]: the band's top, 25 for a focus group, and
   /// the band's BOTTOM for every group in a lighter phase.
   int weeklyTop(String group) {
-    final band = SessionBudget.weeklyBand(ctx.planGoal, ctx.level);
+    final band = SessionBudget.weeklyBand(ctx.planGoal, ctx.level, goalTraining: ctx.goalTraining.enabled);
     if (ctx.lighterPhase) return band.bottom;
     if (ctx.focusGroups.contains(group)) return SessionBudget.focusWeeklyTop;
     return band.top;
@@ -573,7 +702,7 @@ class BudgetLedger {
   int session(int day, String group) => _session[day][group] ?? 0;
 
   /// Seconds left on [day] after everything [add]ed so far.
-  double secondsLeft(int day) => _dayBudgetSeconds - _spentSeconds[day];
+  double secondsLeft(int day) => _dayBudgetSeconds[day] - _spentSeconds[day];
 
   /// The seconds spent on [day] so far, and an exact reset to a value read from it: a trial that subtracts and re-adds
   /// a fractional cost can leave a 1e-13 residue that flips a later strict [fits] (Unit 2E, round 1 A7).

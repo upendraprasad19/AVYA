@@ -207,6 +207,9 @@ class HotelWorkoutPlanner {
             'warmup': workout.warmup.map((e) => e.toMap()).toList(),
           if (workout.cooldown.isNotEmpty)
             'cooldown': workout.cooldown.map((e) => e.toMap()).toList(),
+          // Unit 3C (OI-396): the engine reserved the finisher's time on its days; keep what it reserved for.
+          if (workout.finisher.isNotEmpty)
+            'finisher': workout.finisher.map((e) => e.toMap()).toList(),
           // Falls back to 'baseline' only when there is genuinely nothing to
           // read — no plan start, no `current_plan` blob, or a short/malformed
           // one. That preserves the pre-fix value for a standalone hotel plan

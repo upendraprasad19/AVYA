@@ -59,11 +59,14 @@ const _stripped = <String>{
   'WRITE_SESSION_BUDGET_REPORT', 'WRITE_REST_BY_TYPE_REPORT',
   // Unit 2B: the day-floor kill-switch fixture's recorder (day_floor_kill_switch_test.dart)
   'RECORD_DAY_FLOOR_HASHES',
-  // generator step 1A: the 2,304-plan audit's output directory (plan_audit_dump_test.dart); t108: its physique focus
-  'PLAN_AUDIT_OUT', 'PLAN_AUDIT_FOCUS',
+  // generator step 1A: the 2,304-plan audit's output directory (plan_audit_dump_test.dart); t108: its physique focus;
+  // Unit 3A: the config keys it sets true (a kill switch's OFF world)
+  'PLAN_AUDIT_OUT', 'PLAN_AUDIT_FOCUS', 'PLAN_AUDIT_DISABLE',
   // Unit 1B-F: the injured grid (46,512 runs) and focus grid (5,760 plans) dumps' output directories
   'INJURED_GRID_OUT',
   'FOCUS_GRID_OUT',
+  // generator step 4 (OI-53): the history simulation dump's output directory and its scenario filter
+  'HISTORY_SIM_OUT', 'HISTORY_SIM_SCENARIOS',
 };
 
 /// Read by an EXTERNAL tool only (git's author-identity fallback; d9e4b1): stripped,

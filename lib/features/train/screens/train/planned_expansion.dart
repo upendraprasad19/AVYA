@@ -81,10 +81,25 @@ extension _PlannedExpansion on _TrainScreenState {
               return _buildPreviewExerciseRow(
                   ex, index + 1, AppColors.accent);
             }),
+            // Unit 3C (OI-396): the cardio finisher, after the main lifts.
+            if (day.finisher.isNotEmpty) ...[
+              const SizedBox(height: 8),
+              _CollapsibleExerciseSection(
+                key: const ValueKey('finisher_section'),
+                label: 'FINISHER',
+                color: AppColors.accentHi,
+                exercises: day.finisher,
+                trailing: FinisherSafety.minutesLabel(day.finisherSeconds),
+                buildRow: (ex) => _buildPreviewExerciseRow(
+                  ex, null, AppColors.accentHi,
+                ),
+              ),
+            ],
             // Cool-down section (collapsed by default)
             if (day.cooldown.isNotEmpty) ...[
               const SizedBox(height: 8),
               _CollapsibleExerciseSection(
+                key: const ValueKey('cooldown_section'),
                 label: 'COOL-DOWN',
                 color: AppColors.info,
                 exercises: day.cooldown,

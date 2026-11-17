@@ -56,6 +56,7 @@ import '../../widgets/day_swap_allowance_line.dart';
 import '../../providers/workout_surface_invalidation.dart';
 import '../../services/coach_day_completion.dart';
 import '../../services/workout_completion_bookkeeping.dart' show CompletionDoor;
+import 'package:icanbefitter/shared/repositories/plan_engine/finisher_safety.dart';
 
 part 'plan_header.dart';
 part 'hero_cards.dart';
@@ -120,12 +121,11 @@ class _TrainScreenState extends ConsumerState<TrainScreen>
 
   Widget _buildContent(BuildContext context) {
     final plan = ref.watch(currentPlanProvider);
-    final selectedWeek = ref.watch(selectedWeekProvider);
+    final selectedWeek = ref.watch(selectedWeekProvider).week;
     final weekDays = plan.getWeek(selectedWeek);
     final todayWorkout = plan.todayWorkout;
-    // Free-tier hold weeks (ship-dark `enable_hold_weeks`) — always
-    // HoldStatusData.empty while the flag is OFF, so every branch keyed on
-    // `isHolding` below is inert and this screen renders exactly as before.
+    // Free-tier hold weeks — HoldStatusData.empty for a user who never held,
+    // so every branch keyed on `isHolding` below is inert for them.
     final holdStatus = ref.watch(holdStatusProvider);
     // Date-keyed today row: the ONLY way to reach a hold week's workout, since
     // hold rows sit at week 5+ and `plan.weeks` stops at the phase's 4.

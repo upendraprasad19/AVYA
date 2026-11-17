@@ -37,80 +37,6 @@
 # exist. `flip_review_record:` exists so the claim carries its evidence.
 
 pending:
-  - flag: enable_hold_weeks
-    branch: hold-mechanic
-    build_commit: df5e38b0
-    build_date: 2026-07-21
-    flip_reviewed: false
-    flip_commit: null
-    note: >
-      Slice 1 (the holdWeek WRITER). NOT the lighter 1-round tier — the
-      durability fixes (#1 re-anchor, #4 pagination) are LIVE for all users, so
-      the build got the FULL ×2 review (docs/plan-reviews/hold-mechanic.md,
-      review_rounds: 2). Merged to main as 7ca850d9. Tracked here so the
-      default-OFF flag can't be flipped later without its own flip-on ×2
-      (§4.12.4). Placeholder sha resolved by the hold-display batch.
-
-  - flag: enable_hold_weeks
-    branch: hold-display
-    build_commit: 4f4e9518
-    build_date: 2026-07-25
-    flip_reviewed: false
-    flip_commit: null
-    note: >
-      Slice 2-6 (the DISPLAY for the same flag) — this one IS the §4.12.4
-      lighter build tier (review_rounds: 1, tier: ship_dark_build). Every new
-      surface reads one branch point, holdStatusProvider, which returns
-      HoldStatusData.empty whenever the flag is OFF; the flag-OFF group in
-      test/contracts/hold_display_read_path_test.dart is the byte-identical
-      evidence. Blast-radius verified `account` via scripts/blast_radius_from_diff.dart.
-      SAME flag as the row above — flipping it on must clear BOTH entries in
-      the one flip-on commit, which needs the full ×2 + bpass: accepted.
-
-  - flag: enable_hold_weeks
-    branch: hold-display-fixes
-    build_commit: ff13623e
-    merge_commit: 342820b3
-    build_date: 2026-07-25
-    flip_reviewed: false
-    flip_commit: null
-    note: >
-      Two converged fixes found by the 2026-07-25 LIVE walkthrough on test7 +
-      two independent context-blind plan reviews: D1 (the deployment banner
-      printed "WK 4 OF 4" ~40px under the HOLDING·Hn pill) and L1 (a completed
-      hold day credited a ✓ to a padlocked PHASE II/III chip — masked only by
-      the !isLocked guard, which evaporates the instant a holder upgrades).
-      Both key on hold state, so both are inert while the flag is OFF.
-      The SAME reviews returned NOT CONVERGED on four other proposed fixes;
-      per §4.12.1 the unit was split and those became the flip_on_blockers
-      below.
-
-  - flag: enable_hold_weeks
-    branch: claude/oi-pending-hold-weeks-1od97o
-    build_commit: null
-    build_date: 2026-08-21
-    flip_reviewed: false
-    flip_commit: null
-    note: >
-      FOB-1 (week identity, 2026-08-20) and FOB-3 (the coach snapshot's `hold`
-      block + the captain_manual HOLD WEEKS section, 2026-08-21) on the same
-      branch. §4.12.4 lighter build tier for FOB-3: kill-switch
-      enable_hold_weeks, default OFF, and the byte-identical evidence is the
-      `flag OFF — the ship-dark property` group in
-      test/contracts/hold_snapshot_block_behavioral_test.dart, which
-      materializes REAL holds with the flag ON, turns it OFF, and asserts the
-      snapshot gains NO `hold` key. Omission rather than `'hold': null` is the
-      load-bearing detail and is asserted directly.
-      ⚠ HALF OF FOB-3 IS INERT FOR A SECOND REASON, on top of the flag:
-      captain_manual.ts does nothing until ai-proxy is redeployed, which needs
-      a Management API token this container does not hold (closure
-      docs/audit/fob3-coach-hold-block.closure.yaml, finding FOB3-F).
-      FOURTH entry for this ONE flag — flipping it on must clear all four in a
-      single commit, with the full ×2 + bpass: accepted.
-      build_commit is null because this note is written in the same commit it
-      describes; resolve it the way the hold-mechanic row's placeholder was
-      resolved by the next batch.
-
   # ── The 13 workout-generator-overhaul flags (OI-53) ─────────────────────
   #
   # BACKFILLED 2026-07-27, gate-input-family batch. OI-53 asserted these were
@@ -137,36 +63,6 @@ pending:
   #     (`&& readinessEnabled` at the eval site … running the eval without it
   #     biases toward LIFTING)"
   # So enable_readiness flips FIRST or those two are inert-to-wrong.
-
-  - flag: enable_volume_titration
-    branch: workout-titration-9
-    build_commit: 05f66c9b
-    build_date: 2026-07-18
-    merge_commit: 38706bae
-    flip_reviewed: false
-    flip_commit: null
-    note: >
-      WARNING added 2026-09-01: this flag's readiness dependency is now LIVE
-      (enable_readiness flipped that day), and unlike triggered_deload's and
-      plateau_escalation's it is NOT enforced in code. _recovered()
-      (volume_titration.dart:116-136) has no readiness gate at all; titration is
-      inert ONLY because THIS flag short-circuits at :60 before it runs. Whoever
-      flips this will immediately consume every readiness row accumulated since.
-      EXCLUDED from OI-53 batch 2 (2026-09-16) for exactly this reason — see
-      docs/audit/open_issues.md's OI-53 entry for the founder's scoping decision.
-
-  - flag: enable_plateau_escalation
-    branch: workout-plateau-12
-    build_commit: 83180fe6
-    build_date: 2026-07-19
-    merge_commit: dc8f4880
-    flip_reviewed: false
-    flip_commit: null
-    note: >
-      Depends on enable_readiness (see above).
-      EXCLUDED from OI-53 batch 2 (2026-09-16) alongside enable_volume_titration —
-      see docs/audit/open_issues.md's OI-53 entry for the founder's scoping
-      decision.
 
   - flag: enable_body_measurements
     branch: coach-measurement-sheet-ui
@@ -278,11 +174,135 @@ pending:
 # ── HARD PRECONDITIONS for flipping enable_hold_weeks ─────────────────────
 # Not a wish-list. The flip-on commit already requires the full ×2 + bpass
 # (§4.12.4); this is the checklist that review must show closed. Every item was
-# found by live verification or independent review on 2026-07-25 and every one
-# is currently UNFIXED. A holder today would be told a falsehood by the coach
-# and by the Sunday push.
+# found by live verification or independent review on 2026-07-25.
+# RESOLVED 2026-11-16 by the flip (Unit 3D-b, OI-175): every item below carries
+# its terminal state, and docs/audit/generator-step3d.closure.yaml records each
+# one (FOB-4's deploy is blocked_on_user; it does not block the flip).
 
 resolved:
+  # ── enable_volume_titration + enable_plateau_escalation: FLIPPED (generator step 4, OI-53, founder d82, 2026-11-16) ──
+  # Both keys retired for kill switches (disable_volume_titration, disable_plateau_escalation, default ON, dev-panel
+  # toggles). The readiness gap the titration row warned about is closed in code (step 4 T4: _recovered() checks
+  # readinessEnabled). Record: docs/plan-reviews/generator-step4.md (review_rounds 3, bpass before the merge).
+  - flag: enable_volume_titration
+    branch: workout-titration-9
+    build_commit: 05f66c9b
+    build_date: 2026-07-18
+    merge_commit: 38706bae
+    flip_reviewed: true
+    flip_commit: 6abfe1a5
+    flip_review_record: docs/plan-reviews/generator-step4.md
+    note: >
+      CLOSED by generator step 4 (T4: _recovered() now returns false when readinessEnabled is false); the
+      warning below is history and its line citations predate step 4.
+      WARNING added 2026-09-01: this flag's readiness dependency is now LIVE
+      (enable_readiness flipped that day), and unlike triggered_deload's and
+      plateau_escalation's it is NOT enforced in code. _recovered()
+      (volume_titration.dart:116-136) has no readiness gate at all; titration is
+      inert ONLY because THIS flag short-circuits at :60 before it runs. Whoever
+      flips this will immediately consume every readiness row accumulated since.
+      EXCLUDED from OI-53 batch 2 (2026-09-16) for exactly this reason — see
+      docs/audit/open_issues.md's OI-53 entry for the founder's scoping decision.
+
+  - flag: enable_plateau_escalation
+    branch: workout-plateau-12
+    build_commit: 83180fe6
+    build_date: 2026-07-19
+    merge_commit: dc8f4880
+    flip_reviewed: true
+    flip_commit: 6abfe1a5
+    flip_review_record: docs/plan-reviews/generator-step4.md
+    note: >
+      Depends on enable_readiness (see above).
+      EXCLUDED from OI-53 batch 2 (2026-09-16) alongside enable_volume_titration —
+      see docs/audit/open_issues.md's OI-53 entry for the founder's scoping
+      decision.
+
+
+  # ── enable_hold_weeks: FLIPPED by deletion (Unit 3D-b, OI-175, founder d57, 2026-11-16) ─────────────────
+  # The flag, the dev toggle and redoWeek4 were deleted: holds are always on. All four rows below move here in the
+  # one flip commit, per the rule those rows set ("flipping it on must clear all four in a single commit, with the
+  # full ×2 + bpass: accepted"). Record: docs/plan-reviews/generator-step3d.md (review_rounds 4: 1-3 on the combined
+  # 3D plan, 4 on 3D-b; bpass accepted before the merge). The server half (FOB-4's code) merged first as Unit 3D-a
+  # (PR #289, 63af8c63).
+  - flag: enable_hold_weeks
+    branch: hold-mechanic
+    build_commit: df5e38b0
+    build_date: 2026-07-21
+    flip_reviewed: true
+    flip_commit: 7554fc8f  # the 3D-b flip (holds always on); B-pass fixes 7ed5da70; merged to main 85bdcbbe (PR #290)
+    flip_review_record: docs/plan-reviews/generator-step3d.md
+    note: >
+      Slice 1 (the holdWeek WRITER). NOT the lighter 1-round tier — the
+      durability fixes (#1 re-anchor, #4 pagination) are LIVE for all users, so
+      the build got the FULL ×2 review (docs/plan-reviews/hold-mechanic.md,
+      review_rounds: 2). Merged to main as 7ca850d9. Tracked here so the
+      default-OFF flag can't be flipped later without its own flip-on ×2
+      (§4.12.4). Placeholder sha resolved by the hold-display batch.
+
+  - flag: enable_hold_weeks
+    branch: hold-display
+    build_commit: 4f4e9518
+    build_date: 2026-07-25
+    flip_reviewed: true
+    flip_commit: 7554fc8f  # the 3D-b flip (holds always on); B-pass fixes 7ed5da70; merged to main 85bdcbbe (PR #290)
+    flip_review_record: docs/plan-reviews/generator-step3d.md
+    note: >
+      Slice 2-6 (the DISPLAY for the same flag) — this one IS the §4.12.4
+      lighter build tier (review_rounds: 1, tier: ship_dark_build). Every new
+      surface reads one branch point, holdStatusProvider, which returns
+      HoldStatusData.empty whenever the flag is OFF; the flag-OFF group in
+      test/contracts/hold_display_read_path_test.dart is the byte-identical
+      evidence. Blast-radius verified `account` via scripts/blast_radius_from_diff.dart.
+      SAME flag as the row above — flipping it on must clear BOTH entries in
+      the one flip-on commit, which needs the full ×2 + bpass: accepted.
+
+  - flag: enable_hold_weeks
+    branch: hold-display-fixes
+    build_commit: ff13623e
+    merge_commit: 342820b3
+    build_date: 2026-07-25
+    flip_reviewed: true
+    flip_commit: 7554fc8f  # the 3D-b flip (holds always on); B-pass fixes 7ed5da70; merged to main 85bdcbbe (PR #290)
+    flip_review_record: docs/plan-reviews/generator-step3d.md
+    note: >
+      Two converged fixes found by the 2026-07-25 LIVE walkthrough on test7 +
+      two independent context-blind plan reviews: D1 (the deployment banner
+      printed "WK 4 OF 4" ~40px under the HOLDING·Hn pill) and L1 (a completed
+      hold day credited a ✓ to a padlocked PHASE II/III chip — masked only by
+      the !isLocked guard, which evaporates the instant a holder upgrades).
+      Both key on hold state, so both are inert while the flag is OFF.
+      The SAME reviews returned NOT CONVERGED on four other proposed fixes;
+      per §4.12.1 the unit was split and those became the flip_on_blockers
+      below.
+
+  - flag: enable_hold_weeks
+    branch: claude/oi-pending-hold-weeks-1od97o
+    build_commit: null
+    build_date: 2026-08-21
+    flip_reviewed: true
+    flip_commit: 7554fc8f  # the 3D-b flip (holds always on); B-pass fixes 7ed5da70; merged to main 85bdcbbe (PR #290)
+    flip_review_record: docs/plan-reviews/generator-step3d.md
+    note: >
+      FOB-1 (week identity, 2026-08-20) and FOB-3 (the coach snapshot's `hold`
+      block + the captain_manual HOLD WEEKS section, 2026-08-21) on the same
+      branch. §4.12.4 lighter build tier for FOB-3: kill-switch
+      enable_hold_weeks, default OFF, and the byte-identical evidence is the
+      `flag OFF — the ship-dark property` group in
+      test/contracts/hold_snapshot_block_behavioral_test.dart, which
+      materializes REAL holds with the flag ON, turns it OFF, and asserts the
+      snapshot gains NO `hold` key. Omission rather than `'hold': null` is the
+      load-bearing detail and is asserted directly.
+      ⚠ HALF OF FOB-3 IS INERT FOR A SECOND REASON, on top of the flag:
+      captain_manual.ts does nothing until ai-proxy is redeployed, which needs
+      a Management API token this container does not hold (closure
+      docs/audit/fob3-coach-hold-block.closure.yaml, finding FOB3-F).
+      FOURTH entry for this ONE flag — flipping it on must clear all four in a
+      single commit, with the full ×2 + bpass: accepted.
+      build_commit is null because this note is written in the same commit it
+      describes; resolve it the way the hold-mechanic row's placeholder was
+      resolved by the next batch.
+
   - flag: kDietStrategyDefaultOn
     branch: diet-strategy
     build_commit: 37122c4c  # the 3a build commit (merged 21db03c7, PR #274)
@@ -771,7 +791,8 @@ resolved:
     flip_commit: 9e4c5681
     flip_review_record: docs/plan-reviews/readiness-flip.md
     note: >
-      FLIP THIS ONE FIRST. Both enable_plateau_escalation and the
+      FLIP THIS ONE FIRST. Both enable_plateau_escalation (retired by generator step 4; now
+      disable_plateau_escalation, default ON) and the
       enable_triggered_deload evaluator self-gate on readinessEnabled, so
       flipping either of those while this is OFF leaves them inert at best and
       biased at worst. Its build also carried migration 105, so unlike the
@@ -854,8 +875,12 @@ flip_on_blockers:
     #             hold_week_mechanic_behavioral_test.dart). NOTE its prescribed
     #             `where channel = 'app'` was WRONG and was not applied — see
     #             finding FOB-5-B.
-    #   FOB-3, FOB-4, FOB-7(a), FOB-7(b) — STILL OPEN.
-    # enable_hold_weeks therefore CANNOT flip yet.
+    #   UPDATE 2026-11-16 (Unit 3D-b, OI-175): every item is terminal and the
+    #   flag is deleted (the flip). FOB-3 verified LIVE (ai-proxy v108 carries
+    #   HOLD WEEKS); FOB-4 code closed by Unit 3D-a (63af8c63), its two deploys
+    #   live 2026-11-16 (recap v29, report v41); FOB-7(a) b9d4c2 and FOB-7(b) e7c4a2 are fixed;
+    #   FOB-8's strip was deleted 2026-11-02. Ledger:
+    #   docs/audit/generator-step3d.closure.yaml.
     - id: FOB-2
       closed: "2026-08-13 — docs/audit/oi60-streak-identity.closure.yaml; diagnose a3f8d1; behavioral test test/contracts/hold_week_streak_identity_behavioral_test.dart (14 cases, 6 mutations proven)"
       title: "Weekly streak + streaks row are dead during a hold"
@@ -874,6 +899,7 @@ flip_on_blockers:
         UNIQUE (user_id, week_start) — a DATE — so a new Monday is a new row, no
         migration.
     - id: FOB-3
+      closed: "2026-11-16 — client half docs/audit/fob3-coach-hold-block.closure.yaml (b6e1f4); LIVE check in Unit 3D-b: ai-proxy v108 on dedsavbjuwgarrhphgnl, deployed bundle contains 'HOLD WEEKS' (3 hits). docs/audit/generator-step3d.closure.yaml FOB-3 / FOB3-F."
       title: "The AI coach asserts a falsehood to every holder, every week"
       why: >
         The snapshot sends current_week: 4 for EVERY hold day at EVERY ordinal
@@ -888,6 +914,8 @@ flip_on_blockers:
         would silently drop the meaning-carrying fields. Teach captain_manual.ts
         what a hold is. Requires an ai-proxy deploy (own authorization, §4.3).
     - id: FOB-4
+      code_closed: "2026-11-16 — generator Unit 3D-a (branch generator-step3d-a, PR #289, merge 63af8c63; diagnose c4e8b1; plan docs/plans/2026-11-16-generator-step3d-hold-weeks.md section 2.3): _shared/hold_week.ts; weekly-recap-ready says 'Hold H<n> debrief ready', weekly-report prints 'Current week: hold week H<n> (...)' for a Phase-I user in a hold week; fails closed to today's text. Behavioural proof _shared/hold_week_test.ts."
+      deployed: "2026-11-16 on the founder's go: weekly-recap-ready v28 -> v29, weekly-report v40 -> v41, both verified file-for-file against 63af8c63 on the decoded live bundle; rollback sources (live-equal before): recap 1040800f, report c760037e. docs/audit/generator-step3d.closure.yaml FOB-4-DEPLOY."
       title: "Sunday push and weekly report need hold copy, not a number"
       why: >
         weekly-recap-ready/index.ts interpolates current_week verbatim
@@ -909,6 +937,7 @@ flip_on_blockers:
         Add a hold_week_started event with a real consumer, and add
         `where channel = 'app'` to the metric.
     - id: FOB-6
+      closed: "2026-11-16 — split out to OI-125 by the founder (selectable hold weeks, a separate feature). Its first sentence (W4 and the H chip both gold) is fixed by Unit 3D-b's marker (weekChipLit, d80; test/features/train/week_selector_hold_marker_test.dart)."
       title: "Selectable hold weeks (D2) — 6 lifecycle traps, do not ship naively"
       why: >
         During a hold the THIS WEEK rows show the phase's ORIGINAL week 4 while
@@ -927,6 +956,7 @@ flip_on_blockers:
         over; (f) terminal states (hold elapses, PRO advance empties holds) are
         undefined.
     - id: FOB-7
+      closed: "2026-11-16 — all four parts terminal: (a) b9d4c2 fixed (phase_completion_excludes_holds_behavioral_test.dart), (b) e7c4a2 fixed (reconciler hold tests), (c) verified clean and (d) fixed in docs/audit/oi60-streak-identity.closure.yaml."
       partially_closed: >
         (c) and (d) are CLOSED — docs/audit/oi60-streak-identity.closure.yaml.
         (c) was STALE as filed: ai-media-proxy already carries BOTH the
@@ -953,6 +983,7 @@ flip_on_blockers:
         and ai-proxy's size-envelope comment cites the wrong line for its own
         10K check.
     - id: FOB-8
+      closed: "2026-11-16 — moot: the PhaseArcStrip was deleted 2026-11-02 (train-header-b2); no reader remains."
       raised: 2026-09-05
       title: >
         PhaseArcStrip is a SEVENTH "you are in week 4" surface, and it went live

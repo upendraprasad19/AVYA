@@ -948,28 +948,46 @@ void main() {
       expect(pushAt, lessThan(switchBody.indexOf(clear)));
     });
 
-    test('redoWeek4 (the live free-tier window-mover) pushes AFTER moving '
-        'plan_end — the holdWeek shape', () {
+    test('holdWeek (the free-tier window-mover) pushes ONCE, after the mutex '
+        'and only for a written hold; the window write sits in _holdWeekLocked',
+        () {
       final writeSrc = File(
         'lib/core/services/workout_schedule_write_service.dart',
       ).readAsStringSync();
-      final redoStart = writeSrc.indexOf('Future<void> redoWeek4()');
-      final holdStart = writeSrc.indexOf('Future<void> holdWeek()');
-      final redoBody = writeSrc.substring(redoStart, holdStart);
+      final holdStart = writeSrc.indexOf('Future<HoldWeekOutcome> holdWeek()');
+      final lockedStart =
+          writeSrc.indexOf('Future<HoldWeekOutcome> _holdWeekLocked()');
+      final sliceEnd =
+          writeSrc.indexOf('Future<WriteResult> Function(DateTime date');
+      expect(holdStart, isNonNegative);
+      expect(lockedStart, greaterThan(holdStart));
+      expect(sliceEnd, greaterThan(lockedStart));
+      final holdBody = writeSrc.substring(holdStart, lockedStart);
+      final lockedBody = writeSrc.substring(lockedStart, sliceEnd);
+
       expect(
-        push.allMatches(redoBody).length,
+        push.allMatches(holdBody + lockedBody).length,
         1,
         reason:
-            'round 4 F2: a reinstall in the ≤24h gap takes the stale '
-            'cloud window and the next regen sweeps the redo week',
+            'round 4 F2: a reinstall in the <=24h gap takes the stale '
+            'cloud window and the next regen sweeps the hold week; ONE push',
       );
-      final endWrite = redoBody.indexOf('MigratedKey.write(_planEndKey');
-      expect(endWrite, isNonNegative);
+      expect(push.allMatches(lockedBody).length, 0,
+          reason: 'the push lives in holdWeek(), after the mutex, never in '
+              'the locked body');
+      final guard = holdBody
+          .indexOf('if (outcome != HoldWeekOutcome.written) return outcome;');
+      expect(guard, isNonNegative);
       expect(
-        redoBody.indexOf(push),
-        greaterThan(endWrite),
-        reason: 'a push above the window write carries the OLD plan_end',
+        holdBody.indexOf(push),
+        greaterThan(guard),
+        reason: 'only a written hold may push; every other outcome returns '
+            'before the push',
       );
+      expect(lockedBody.contains('MigratedKey.write(_planEndKey'), isTrue,
+          reason: 'the window write is in the locked body, which completes '
+              'before holdWeek() reaches the push: a push above the window '
+              'write would carry the OLD plan_end');
     });
 
     test('pushWorkoutPlanForSyncDomain is guarded by pausedForSimulation '

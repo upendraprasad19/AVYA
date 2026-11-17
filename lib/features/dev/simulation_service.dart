@@ -43,6 +43,7 @@ import 'package:icanbefitter/core/services/write_result.dart';
 import 'package:icanbefitter/core/utils/ist_date.dart';
 import 'package:icanbefitter/features/train/repositories/workout_repository.dart';
 import 'package:icanbefitter/shared/repositories/user_repository.dart';
+import 'package:icanbefitter/shared/repositories/plan_engine/session_budget.dart';
 import 'package:icanbefitter/shared/services/pro_phase_advance.dart';
 
 /// Aggregated outcome of a simulation run. All fields mutable so the run
@@ -612,7 +613,8 @@ class SimulationService {
           (profile['fitness_experience'] as String?) ?? 'intermediate',
       currentPhase: currentPhase,
       injuries: injuries,
-      sessionDuration: (profile['session_duration_minutes'] as num?)?.toInt(),
+      // OI-488 (Unit 3B, d70): the param wins over the profile value, so it is capped here too.
+      sessionDuration: SessionBudget.profileParamMinutes(profile),
     );
 
     if (result.generated) {

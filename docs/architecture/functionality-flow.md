@@ -123,7 +123,7 @@ Section prefixes: `ONB-`/`AUTH-` onboarding & auth · `HOME-` home dashboard ·
 
 ### Plan expiry & promotion
 
-- **`HOME-21`** — WHEN a FREE user reaches day 29 (`WorkoutScheduleService.isPhaseExpired()` true) AND `todayWorkoutProvider` is null THEN Home renders `PlanExpiredCard` with 3 doors: Upgrade / Build custom / Re-do Week 4. **Verify:** `test/contracts/phase_unlock_end_to_end_test.dart`; needs explicit PlanExpiredCard widget test.
+- **`HOME-21`** — WHEN a FREE user reaches day 29 (`WorkoutScheduleService.isPhaseExpired()` true) AND `todayWorkoutProvider` is null THEN Home renders `PlanExpiredCard`: Upgrade, "Hold the line — another week" (`holdWeek()`, Unit 3D-b) and the MY TEMPLATES hint. **Verify:** `test/contracts/phase_unlock_end_to_end_test.dart`; the card's outcomes: `test/features/train/hold_week_callers_test.dart`.
 - **`HOME-22`** — WHEN a PRO user opens the app after Phase 1 THEN `splash_screen._autoGenerateNextPhaseForPro()` generates the next phase so they never land on `PlanExpiredCard`. **Verify:** needs test (integration).
 - **`HOME-23`** — WHEN a rank promotion was stamped (pending celebration flag in `userBox`) THEN Home reads + clears it on next mount/resume and pushes `PromotionCelebrationScreen`. **Verify:** `test/contracts/promotion_celebration_wiring_test.dart`.
 

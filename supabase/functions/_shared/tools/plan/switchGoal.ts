@@ -1,13 +1,12 @@
 import { z } from "npm:zod@3.25.76";
 import type { ToolDefinition } from "../types.ts";
+import { goalLabel } from "./goalLabels.ts";
 
 const schema = z.object({
   newGoal: z.enum([
     "build_muscle",
     "lose_fat",
     "general_fitness",
-    "strength",
-    "recompose",
   ]).describe(
     "New primary fitness goal. The user's profile is permanently updated to this; their plan is regenerated to match.",
   ),
@@ -28,7 +27,7 @@ export const switchGoalTool: ToolDefinition<Args> = {
   confirmationClass: "destructive",
   tier: "pro",
   description:
-    "Permanently change the user's primary fitness goal AND regenerate their plan to match. Use when the user explicitly says 'switch to [goal]', 'change my goal to [goal]', 'I want to focus on [goal] now'. The supported goals are build_muscle, lose_fat, general_fitness, strength, recompose (slight deficit + high protein + hypertrophy + light cardio). The user's profile is updated and the next 4 weeks (default) of scheduled workouts are regenerated. Always destructive — the diff sheet shows both the goal change AND the new first-week workout structure.",
+    "Permanently change the user's primary fitness goal AND regenerate their plan to match. Use when the user explicitly says 'switch to [goal]', 'change my goal to [goal]', 'I want to focus on [goal] now'. The supported goals are build_muscle (Build), lose_fat (Cut) and general_fitness (Maintain); there is no other goal. A user who wants strength training chooses Build with the Strength focus, which they set in Edit Profile: say so instead of calling this tool with another goal. The user's profile is updated and the next 4 weeks (default) of scheduled workouts are regenerated. Always destructive — the diff sheet shows both the goal change AND the new first-week workout structure.",
   schema,
   intentBuilder: (args) => ({
     type: "switch_goal",
@@ -38,7 +37,7 @@ export const switchGoalTool: ToolDefinition<Args> = {
       start_date: args.startDate ?? null,
     },
     confirmationClass: "destructive",
-    previewSummary: `Switch goal \u2192 ${args.newGoal} + regenerate ${
+    previewSummary: `Switch goal \u2192 ${goalLabel(args.newGoal)} + regenerate ${
       args.weeks ?? 4
     } weeks`,
   }),
