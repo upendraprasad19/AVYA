@@ -88,51 +88,66 @@ class _DietSupplementsFieldState extends ConsumerState<DietSupplementsField> {
       crossAxisAlignment: CrossAxisAlignment.start,
       mainAxisSize: MainAxisSize.min,
       children: [
-        Text('Supplements',
-            maxLines: 1, overflow: TextOverflow.ellipsis, style: dim),
+        // The PRO lock sits with the caption (the field is only ~100 dp wide
+        // at 360 dp: the lock and the switch would leave no room for On/Off).
+        Row(
+          children: [
+            Flexible(
+              child: ExcludeSemantics(
+                child: Text('Supplements',
+                    maxLines: 1, overflow: TextOverflow.ellipsis, style: dim),
+              ),
+            ),
+            if (eligible && !isPro) ...[
+              const SizedBox(width: 4),
+              const Icon(Icons.lock_outline,
+                  size: 12,
+                  color: AppColors.textMute,
+                  semanticLabel: 'PRO feature'),
+            ],
+          ],
+        ),
         const SizedBox(height: 6),
-        Container(
+        // The whole field is the tap target (44 dp), not only the switch.
+        GestureDetector(
           key: const ValueKey('diet_plan_supplements_field'),
-          constraints:
-              const BoxConstraints(minHeight: DietPlanDropdown.fieldHeight),
-          padding: const EdgeInsets.only(left: 12, right: 2),
-          decoration: BoxDecoration(
-            color: AppColors.input,
-            borderRadius: BorderRadius.circular(AppRadius.soft),
-            border: Border.all(color: AppColors.border),
-          ),
-          child: MergeSemantics(
-            child: Row(
-              children: [
-                Expanded(
-                  child: Text(
-                      eligible ? (stored ? 'On' : 'Off') : 'Needs birth date',
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: text),
+          behavior: HitTestBehavior.opaque,
+          onTap: eligible && !_busy ? () => _onToggle(!stored, stored) : null,
+          child: Semantics(
+            container: true,
+            label: 'Supplements',
+            child: Container(
+              constraints:
+                  const BoxConstraints(minHeight: DietPlanDropdown.fieldHeight),
+              padding: const EdgeInsets.only(left: 12, right: 6),
+              decoration: BoxDecoration(
+                color: AppColors.input,
+                borderRadius: BorderRadius.circular(AppRadius.soft),
+                border: Border.all(color: AppColors.border),
+              ),
+              child: MergeSemantics(
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                          eligible ? (stored ? 'On' : 'Off') : 'Needs DOB',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: text),
+                    ),
+                    if (eligible)
+                      Switch(
+                        key: const ValueKey('diet_supplements_switch'),
+                        materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                        value: stored,
+                        onChanged: _busy ? null : (v) => _onToggle(v, stored),
+                        activeThumbColor: AppColors.accent,
+                        activeTrackColor:
+                            AppColors.accent.withValues(alpha: 0.3),
+                      ),
+                  ],
                 ),
-                if (eligible) ...[
-                  if (!isPro)
-                    const Padding(
-                      padding: EdgeInsets.only(right: 2),
-                      child: Icon(Icons.lock_outline,
-                          size: 14,
-                          color: AppColors.textMute,
-                          semanticLabel: 'PRO feature'),
-                    ),
-                  Transform.scale(
-                    scale: 0.8,
-                    child: Switch(
-                      key: const ValueKey('diet_supplements_switch'),
-                      value: stored,
-                      onChanged: _busy ? null : (v) => _onToggle(v, stored),
-                      activeThumbColor: AppColors.accent,
-                      activeTrackColor:
-                          AppColors.accent.withValues(alpha: 0.3),
-                    ),
-                  ),
-                ],
-              ],
+              ),
             ),
           ),
         ),

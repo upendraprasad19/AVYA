@@ -78,13 +78,20 @@ class DietPlanDropdown<T> extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       mainAxisSize: MainAxisSize.min,
       children: [
-        Text(label,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: AppTypography.body
-                .copyWith(fontSize: 12, color: AppColors.textDim)),
+        // The field below carries the name for a screen reader (the caption
+        // would otherwise be a second, unlinked node).
+        ExcludeSemantics(
+          child: Text(label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: AppTypography.body
+                  .copyWith(fontSize: 12, color: AppColors.textDim)),
+        ),
         const SizedBox(height: 6),
-        Container(
+        Semantics(
+          container: true,
+          label: label,
+          child: Container(
           key: fieldKey,
           constraints: const BoxConstraints(minHeight: fieldHeight),
           padding: const EdgeInsets.only(left: 12, right: 4),
@@ -100,6 +107,7 @@ class DietPlanDropdown<T> extends StatelessWidget {
               isDense: true,
               itemHeight: 48,
               dropdownColor: AppColors.card,
+              iconSize: 20,
               iconEnabledColor: AppColors.textDim,
               iconDisabledColor: AppColors.textDisabled,
               style: text,
@@ -110,10 +118,15 @@ class DietPlanDropdown<T> extends StatelessWidget {
                   : null,
               selectedItemBuilder: (_) => [
                 for (final o in options)
+                  // Shrinks a long label (Pescatarian in a 100 dp column) instead
+                  // of cutting it with an ellipsis.
                   Align(
                     alignment: Alignment.centerLeft,
-                    child: Text(o.label,
-                        maxLines: 1, overflow: TextOverflow.ellipsis, style: text),
+                    child: FittedBox(
+                      fit: BoxFit.scaleDown,
+                      alignment: Alignment.centerLeft,
+                      child: Text(o.label, maxLines: 1, style: text),
+                    ),
                   ),
               ],
               items: [
@@ -157,6 +170,7 @@ class DietPlanDropdown<T> extends StatelessWidget {
                   ),
               ],
             ),
+          ),
           ),
         ),
       ],

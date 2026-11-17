@@ -66,3 +66,17 @@ This batch moves only the CONTROLS. Each control still ends in the same write do
 
 Meals per day (3/4/5/6) is a separate founder brainstorm and changes the generator and the saved-plan stamp; it is
 NOT part of this unit. Edit Profile keeps its own chips unchanged.
+
+## 6. Review round 1 (one context-blind Sonnet seat, read-only, on head 71d25b03, CI green)
+
+No P0 or P1. Write doors, busy guards, PRO gate, confirm dialog, flag-off rows, the hint keys and the dangling-reference sweep were checked and are clean. Findings, all fixed in this batch:
+
+| # | Finding | Fix | Pin |
+|---|---|---|---|
+| P2-1 | At 360 dp each column is about 100 dp; a free user's lock (16) + Switch (60) left ~8 dp for On/Off | the lock moves to the caption row, the Switch uses `shrinkWrap` and no scale | `layout v2 (review R1): a free user keeps On/Off room` (mutant R4 red) |
+| P2-2 | Closed food-type field cut Vegetarian/Eggetarian/Pescatarian with an ellipsis | closed label in a `FittedBox(scaleDown)`, arrow 20 dp | `... scales instead of being cut` (mutant R2 red) |
+| P3-1 | The scaled Switch was under 44 dp and the field text was not tappable | the whole field is the tap target (`GestureDetector`), both paths go through `_onToggle` | two tap tests (mutant R1 red) |
+| P3-2 | Accessibility names lost (chips and the switch card had them) | each field is `Semantics(container, label)`, the caption is excluded | `... carry their names for a screen reader` (mutant R3 red) |
+| P3-3 | Field heights 44 vs 48; stale glossary rows; registry ranges off by one | shrinkWrap Switch makes all three 44; `docs/naming_conventions.md` rows renamed; the screen's registry ranges recomputed by a line mapping from 2fe0ae52 | gates |
+
+Numbers the reviewer used were checked: `AppSpacing.gutter` is 22, so (360-44-16)/3 = 100 dp per column.

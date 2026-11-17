@@ -442,6 +442,57 @@ void main() {
       }
     });
 
+    testWidgets('layout v2 (review R1): a free user keeps On/Off room in the '
+        'field (the lock sits with the caption), and a tap on the field text '
+        'asks for PRO', (tester) async {
+      await seed(tester, pro: false);
+      await pumpScreen(tester);
+      final field = find.byKey(const ValueKey('diet_plan_supplements_field'));
+      expect(find.descendant(of: field, matching: find.byIcon(Icons.lock_outline)),
+          findsNothing,
+          reason: 'the lock must not take the field\'s width');
+      expect(find.byIcon(Icons.lock_outline), findsOneWidget);
+      expect(find.descendant(of: field, matching: find.text('Off')),
+          findsOneWidget);
+      // The whole field is the tap target, not only the switch.
+      await tester.tap(find.descendant(of: field, matching: find.text('Off')));
+      await tester.pumpAndSettle();
+      expect(find.text('Diet Supplements is a PRO feature'), findsOneWidget);
+      Navigator.of(tester.element(find.text('Diet Supplements is a PRO feature')))
+          .pop();
+      await tester.pumpAndSettle();
+    });
+
+    testWidgets('layout v2 (review R1): PRO, a tap on the field text turns '
+        'Supplements on', (tester) async {
+      await seed(tester);
+      await pumpScreen(tester);
+      final field = find.byKey(const ValueKey('diet_plan_supplements_field'));
+      await _tapReal(
+          tester, find.descendant(of: field, matching: find.text('Off')));
+      expect(UserRepository.instance.getProfile()!['diet_supplements'], true);
+      expect(find.descendant(of: field, matching: find.text('On')),
+          findsOneWidget);
+    });
+
+    testWidgets('layout v2 (review R1): the fields carry their names for a '
+        'screen reader, and a long food type scales instead of being cut',
+        (tester) async {
+      await seed(tester, extra: const {'diet_preference': 'pescatarian'});
+      final handle = tester.ensureSemantics();
+      await pumpScreen(tester);
+      expect(find.bySemanticsLabel(RegExp('^Food type')), findsOneWidget);
+      expect(find.bySemanticsLabel(RegExp('^Diet strategy')), findsOneWidget);
+      expect(find.bySemanticsLabel(RegExp('^Supplements')), findsWidgets);
+      final food = find.byKey(const ValueKey('diet_plan_food_type_dropdown'));
+      expect(find.descendant(of: food, matching: find.byType(FittedBox)),
+          findsWidgets,
+          reason: 'a closed label shrinks to fit, it is never ellipsized');
+      expect(find.descendant(of: food, matching: find.text('Pescatarian')),
+          findsWidgets);
+      handle.dispose();
+    });
+
     testWidgets('layout v2: a minor gets two columns (no Supplements field)',
         (tester) async {
       await seed(tester, extra: {
