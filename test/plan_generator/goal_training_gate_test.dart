@@ -35,6 +35,7 @@ import 'package:icanbefitter/core/services/guarded_box.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
 import 'package:icanbefitter/core/services/hive_user_session.dart';
 import 'package:icanbefitter/shared/repositories/plan_engine/budget_muscle_groups.dart';
+import 'package:icanbefitter/shared/repositories/plan_engine/cardio_finisher.dart';
 import 'package:icanbefitter/shared/repositories/plan_engine/models.dart';
 import 'package:icanbefitter/shared/repositories/plan_engine/plan_engine_flags.dart';
 import 'package:icanbefitter/shared/repositories/plan_engine/plan_generator.dart';
@@ -68,9 +69,12 @@ const _identicalLive = {
 };
 
 /// Item 8, recorded on the built tree (2026-11-15), re-recorded after the step-2E merge (its arm swap changes Cut /
-/// Maintain rows at 30 / 45 minutes; every count above is unchanged except the focus block's main lifts, 29,012 -> 29,010).
-const _onDigest = '5fd58773b40e32dcec603cf18d0b71f170878a8ce299d85b7a6c9e57d72d5248';
-const _focusDigest = 'fd31107f0e14fc7f2ba51935f1db0559a5418d038c8bf1ba0218915908b0edf9';
+/// Maintain rows at 30 / 45 minutes; every count above is unchanged except the focus block's main lifts, 29,012 -> 29,010),
+/// and on 421cd2d2 for generator-killswitch-3a3c (the finisher built unreserved through `CardioFinisher.debugReserve`
+/// instead of the deleted 3C key: only the `finisher` maps moved, every count above unchanged; plan §6).
+const _onDigest = '07aa902ae3b6a0265f919cab0b3447451bfdb7ed2db8b5d71ed4668b6c12a309';
+const _focusDigest = '56672a99b205ccc1e8d936db7b5116cd96c686f60b04af9620979aec96bd20a8';
+const _baselinePath = 'test/fixtures/goal_training_gate_baseline.json';
 
 /// The goal's week-1 main-lift table, restated from the plan (§2) in the oracle's own words: Cut intermediate /
 /// advanced 8 (hypertrophy), 6 (strength), 8 (metabolic); Cut beginner and Maintain 10 / 8 / 10.
@@ -114,12 +118,12 @@ void main() {
     // Unit 3C (diagnose f3c9a6, plan §2.2): this gate measures the goal training (3A), so both of its worlds run with the
     // cardio finisher switch set (today's finisher, nothing reserved). The finisher's own cost is measured by
     // cardio_finisher_reservation_behavioral_test and the diagnose doc.
-    await HiveService.instance.configBox.put('disable_cardio_finisher_shown', true);
+    CardioFinisher.debugReserve = false;
   });
 
   tearDownAll(() async {
     await HiveService.instance.configBox.delete('disable_goal_training');
-    await HiveService.instance.configBox.delete('disable_cardio_finisher_shown');
+    CardioFinisher.debugReserve = true;
     await HiveUserSession.closeAll();
     GuardedBox.testBypassOwnership = false;
     await Hive.close();
@@ -161,7 +165,7 @@ void main() {
         mins.add(() {
           try {
             return SessionBudget.estimateDayMinutesFromPlanDay(d.toMap(), const {},
-                rowsByName: byName, finisher: const [] /* the finisher switch is set: no screen shows one */);
+                rowsByName: byName, finisher: const [] /* the lifts' minutes: the finisher's own time is not reserved here */);
           } catch (_) {
             return null;
           }
@@ -285,6 +289,34 @@ void main() {
       }
     }
 
+    // TEMPORARY (generator-killswitch-3a3c commit 1, plan §3.4 E): RECORD_GOAL_TRAINING_BASELINE=1 freezes the OFF world
+    // on the base tree 421cd2d2 (the switch set, the finisher unreserved); the deletion commit removes the OFF world and
+    // this path, and the gate compares against the file.
+    if (Platform.environment['RECORD_GOAL_TRAINING_BASELINE'] == '1') {
+      int mask(Map<String, int> v) {
+        var m = 0;
+        for (var i = 0; i < _groups.length; i++) {
+          if ((v[_groups[i]] ?? 0) > 0) m |= 1 << i;
+        }
+        return m;
+      }
+      final out = <String, dynamic>{
+        '_meta': 'generator-killswitch-3a3c (plan §3.4 E): the goal-training gate\'s OFF world (disable_goal_training set, '
+            'the finisher unreserved), recorded on 421cd2d2 before the switch was deleted. build: sha256 of the OFF '
+            'plan map per build_muscle / strength key (item 1); groups: per key, weeks 1-3, a bitmask over _groups of '
+            'the groups OFF trains (OFF credit; items 5 and 7); maxOver: the OFF grid\'s largest minutes past the '
+            'session (items 6 and 7); identicalOff: Cut == Maintain pairs OFF (item 2).',
+        'build': {
+          for (final k in off.keys)
+            if (k.startsWith('build_muscle|') || k.startsWith('strength|')) k: sha256Hex(utf8.encode(off[k]!.$2.map)),
+        },
+        'groups': {for (final k in off.keys) k: [for (var w = 0; w < 3; w++) mask(off[k]!.$2.vol[w])]},
+        'maxOver': maxOver(off),
+        'identicalOff': identical(off).length,
+      };
+      File(_baselinePath).writeAsStringSync('${jsonEncode(out)}\n');
+    }
+
     final zeros = newlyAtZero(off, on);
     final onDigest = digest(on);
     // ignore: avoid_print
@@ -363,8 +395,7 @@ void main() {
   });
 
   test('d81: the live world (finisher shown): Cut and Maintain identical in exactly the accepted 5 pairs', () async {
-    final config = HiveService.instance.configBox;
-    await config.delete('disable_cardio_finisher_shown');
+    CardioFinisher.debugReserve = true;
     try {
       // t304's comparison: every day of every week, each exercise's name, sets, reps, rest, duration, superset group
       // and type, plus the day's finisher names.
@@ -400,7 +431,7 @@ void main() {
       expect(pairs, 576);
       expect(same, _identicalLive, reason: 'd81');
     } finally {
-      await config.put('disable_cardio_finisher_shown', true);
+      CardioFinisher.debugReserve = false;
     }
   });
 }

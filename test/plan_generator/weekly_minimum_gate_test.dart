@@ -36,6 +36,7 @@ import 'package:icanbefitter/core/services/guarded_box.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
 import 'package:icanbefitter/core/services/hive_user_session.dart';
 import 'package:icanbefitter/shared/repositories/plan_engine/budget_muscle_groups.dart';
+import 'package:icanbefitter/shared/repositories/plan_engine/cardio_finisher.dart';
 import 'package:icanbefitter/shared/repositories/plan_engine/models.dart';
 import 'package:icanbefitter/shared/repositories/plan_engine/plan_engine_flags.dart';
 import 'package:icanbefitter/shared/repositories/plan_engine/plan_generator.dart';
@@ -52,8 +53,10 @@ const _tiers = ['bodyweight', 'home_dumbbells', 'basic_gym', 'full_gym'];
 const _groups = ['Chest', 'Back', 'Shoulders', 'Biceps', 'Triceps', 'Quads', 'Hamstrings', 'Glutes', 'Calves', 'Core'];
 /// Item 9: the ON grid's digest on the built tree (2026-11-14), re-recorded 2026-11-15 for Unit 2E (its block below
 /// says what changed: exactly the 21 arm-residue plans), and for Unit 3A (the goal's Cut / Maintain reps and bands;
-/// with the goal training off everywhere 2E's 794121ba... measured back exactly).
-const _onDigest = '1c37a806d719674bd23e44de450d51a80ca81b9fc9686430f95e3e2ae8ee42bc';
+/// with the goal training off everywhere 2E's 794121ba... measured back exactly), and on 421cd2d2 for
+/// generator-killswitch-3a3c (the finisher built unreserved through `CardioFinisher.debugReserve` instead of the deleted
+/// 3C key: only the `finisher` maps moved, every count above unchanged; plan §6).
+const _onDigest = '328f7b13da8163bc94fa4981ece9b8c41d01638d9be6791e57c80566484454b7';
 
 const _fallback = {'build_muscle|3|advanced|bodyweight|30|2', 'build_muscle|3|advanced|bodyweight|30|3'};
 
@@ -86,13 +89,14 @@ void main() {
     HiveService.instance.markInitializedForTests();
     await HiveUserSession.openForUser(testUser);
     // Unit 3C (diagnose f3c9a6, plan §2.2): this gate measures the weekly minimum (2C-b), so every world runs with the
-    // cardio finisher switch set (today's finisher, nothing reserved, none shown).
-    await HiveService.instance.configBox.put('disable_cardio_finisher_shown', true);
+    // finisher built but its time not reserved (`CardioFinisher.debugReserve`; the 3C key did this until it was deleted).
+    CardioFinisher.debugReserve = false;
   });
 
   tearDownAll(() async {
     final config = HiveService.instance.configBox;
-    for (final k in const ['disable_balanced_week', 'disable_lead_first', 'disable_day_floor', 'disable_cardio_finisher_shown']) {
+    CardioFinisher.debugReserve = true;
+    for (final k in const ['disable_balanced_week', 'disable_lead_first', 'disable_day_floor']) {
       await config.delete(k);
     }
     await HiveUserSession.closeAll();

@@ -90,8 +90,8 @@ String dayFloorDigest(List<String> hashes) => sha256Hex(utf8.encode(hashes.join(
 void _write(File file, Map<String, dynamic> m) {
   m['_meta'] = 'Unit 2B kill-switch fixture (plan docs/plans/2026-11-13-generator-step2b-day-floor.md §2 F5): '
       'digest|<block>|<tier> = sha256 over the newline-joined sha256 of every floor-OFF plan of the day-floor gate '
-      '(recorded on main 8a2e1c5a); combo|... = one combination of disable_lead_first x disable_day_floor on a sample '
-      '(floor-off keys recorded on main 8a2e1c5a, floor-on keys on the 2B tree). See day_floor_gate_lib.dart and '
+      '(recorded on 421cd2d2 with goal training and the unreserved finisher, generator-killswitch-3a3c); combo|... = '
+      'one combination of disable_lead_first x disable_day_floor on a sample (both recorded on 421cd2d2). See day_floor_gate_lib.dart and '
       'day_floor_kill_switch_test.dart.';
   final sorted = {for (final k in m.keys.toList()..sort()) k: m[k]};
   file.writeAsStringSync('${const JsonEncoder.withIndent('  ').convert(sorted)}\n');

@@ -27,11 +27,17 @@ import '../helpers/injury_floor_sweep_lib.dart';
 /// tiers carry a finisher for these injured personas (the bike, 4 rounds under 60, d74 / d76), and its reserved 240 s
 /// leaves fewer sets for a floor seat to knock on; thin ON 0, gained = thin OFF and the OFF digest (taken with the
 /// finisher switch set) are unchanged.
+/// generator-killswitch-3a3c (2026-11-17, plan §6): the 3A / 3C switches are deleted, so the pinned repeat's pins (the
+/// uninjured 30-minute phase-1 plan) are generated with goal training (Cut / Maintain pins differ) and the finisher
+/// unreserved (`CardioFinisher.debugReserve`). Fewer pinned days are thin with the floor off and the floor gains exactly
+/// those (thin OFF = gained: 240 / 428 / 304 / 128 -> 148 / 392 / 272 / 88); more days give a set to a floor seat
+/// (knock-on 55 / 66 / 41 / 31 -> 64 / 89 / 57 / 35). Thin ON 0, nothing lost, pins differ 0; the OFF digests are the
+/// world recorded on 421cd2d2 (the two-tree oracle).
 const _expected = <String, (int, int, int, int, int, int, int)>{
-  'bodyweight': (240, 4320, 240, 240, 55, 0, 0),
-  'home_dumbbells': (240, 4320, 428, 428, 66, 0, 0),
-  'basic_gym': (240, 4320, 304, 304, 41, 0, 0),
-  'full_gym': (240, 4320, 128, 128, 31, 0, 0),
+  'bodyweight': (240, 4320, 148, 148, 64, 0, 0),
+  'home_dumbbells': (240, 4320, 392, 392, 89, 0, 0),
+  'basic_gym': (240, 4320, 272, 272, 57, 0, 0),
+  'full_gym': (240, 4320, 88, 88, 35, 0, 0),
 };
 
 void main() {

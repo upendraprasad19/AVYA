@@ -26,6 +26,7 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'package:icanbefitter/core/services/hive_service.dart';
 import 'package:icanbefitter/shared/repositories/plan_engine/budget_muscle_groups.dart';
+import 'package:icanbefitter/shared/repositories/plan_engine/cardio_finisher.dart';
 import 'package:icanbefitter/shared/repositories/plan_engine/models.dart';
 import 'package:icanbefitter/shared/repositories/plan_engine/periodization_engine.dart';
 import 'package:icanbefitter/shared/repositories/plan_engine/plan_generator.dart';
@@ -90,7 +91,7 @@ class DayFloorGate {
     Map<int, ({List<String> a, List<String> b})>? pins,
     int? minutes,
     bool balancedWeekOff = false,
-    bool goalTrainingOff = false,
+    bool unreservedFinisher = false,
   }) {
     final box = HiveService.instance.configBox;
     try {
@@ -101,11 +102,10 @@ class DayFloorGate {
       }
       // Unit 2C-a: the OFF digest is main 8a2e1c5a's (before 2C), so the plans 2C changes are hashed with its switch set.
       if (balancedWeekOff) box.put('disable_balanced_week', true);
-      // Unit 3A: likewise main's Cut / Maintain plans are hashed with `disable_goal_training` set. Unit 3C (f3c9a6): and
-      // with `disable_cardio_finisher_shown` set (the finisher's time reserved on its days changes those plans too).
-      if (goalTrainingOff) {
-        box.put('disable_goal_training', true);
-        box.put('disable_cardio_finisher_shown', true);
+      // Unit 3C (f3c9a6): a Cut / Maintain OFF plan is hashed with the finisher built but its time not reserved
+      // (`CardioFinisher.debugReserve`; the 3C key did this until generator-killswitch-3a3c deleted it).
+      if (unreservedFinisher) {
+        CardioFinisher.debugReserve = false;
       }
       SessionSetAllocator.debugLastStats = null;
       final plan = h.gen(
@@ -114,14 +114,13 @@ class DayFloorGate {
     } finally {
       box.delete('disable_day_floor');
       box.delete('disable_balanced_week');
-      box.delete('disable_goal_training');
-      box.delete('disable_cardio_finisher_shown');
+      CardioFinisher.debugReserve = true;
     }
   }
 
-  /// Unit 3A (OI-487), restated: goal training changes Cut and Maintain plans only (no persona here has the Strength
-  /// focus); with the switch set they are main's.
-  static bool _goalTrainingChanges(String goal) => goal == 'lose_fat' || goal == 'general_fitness';
+  /// Unit 3C (OI-396), restated: the cardio finisher reserves time on Cut and Maintain plans only, so their OFF plan is
+  /// hashed with it unreserved (no persona here has the Strength focus).
+  static bool _cardioGoal(String goal) => goal == 'lose_fat' || goal == 'general_fitness';
 
   /// Unit 2C-a, restated (not imported): build_muscle 3 / 4 / 5-day plans at 60+ resolved minutes get the balanced week
   /// (its lists and its credit). A persona with no minutes resolves to 60.
@@ -257,10 +256,10 @@ class DayFloorGate {
   /// worlds disagree on (0: an uninjured 30-minute plan is not floored, so the OFF repeat is exactly main's). Unit 2C-b:
   /// the pins are generated with 2C switched off (`disable_balanced_week`), i.e. main's pins, because the weekly
   /// minimum and the allowance change the uninjured 30-minute plan the floor alone does not; the ON repeat still runs
-  /// the floor and 2C-b over them. Unit 3A: the pins are main's for the same reason (`disable_goal_training` set too),
-  /// and the OFF digest of a Cut / Maintain persona is taken with that switch set, so it still equals main 8a2e1c5a.
-  /// Unit 3C: the same for the cardio finisher (`disable_cardio_finisher_shown`, pins and the Cut / Maintain OFF digest);
-  /// the ON / OFF floor comparison itself runs in the live finisher world.
+  /// the floor and 2C-b over them. Unit 3C: the pins and the Cut / Maintain OFF digest are taken with the finisher built
+  /// but its time not reserved (`CardioFinisher.debugReserve`); the ON / OFF floor comparison itself runs in the live
+  /// finisher world. Since the 3A / 3C switches were deleted (generator-killswitch-3a3c) the pins carry goal training
+  /// and the OFF digests are the world recorded on 421cd2d2, no longer main 8a2e1c5a.
   DayFloorTally run(String block, String tier) {
     final t = DayFloorTally();
     final pinCache = <String, Map<int, ({List<String> a, List<String> b})>>{};
@@ -270,8 +269,7 @@ class DayFloorGate {
       if (p.pinned) {
         pins = pinCache.putIfAbsent('${p.goal}|${p.level}|${p.days}', () {
           box.put('disable_balanced_week', true);
-          box.put('disable_goal_training', true);
-          box.put('disable_cardio_finisher_shown', true);
+          CardioFinisher.debugReserve = false;
           try {
             final on = dayFloorPins(h, p);
             box.put('disable_day_floor', true);
@@ -280,12 +278,11 @@ class DayFloorGate {
           } finally {
             box.delete('disable_day_floor');
             box.delete('disable_balanced_week');
-            box.delete('disable_goal_training');
-            box.delete('disable_cardio_finisher_shown');
+            CardioFinisher.debugReserve = true;
           }
         });
       }
-      _Gen g(bool floor, {bool balancedWeekOff = false, bool goalTrainingOff = false}) => _gen(
+      _Gen g(bool floor, {bool balancedWeekOff = false, bool unreservedFinisher = false}) => _gen(
           floor: floor,
           tier: p.tier,
           goal: p.goal,
@@ -296,13 +293,13 @@ class DayFloorGate {
           pins: pins,
           minutes: p.minutes,
           balancedWeekOff: balancedWeekOff,
-          goalTrainingOff: goalTrainingOff);
+          unreservedFinisher: unreservedFinisher);
       final on = g(true);
       final off = g(false);
       final offHash = _balancedWeek(p.goal, p.days, p.minutes)
           ? dayFloorPlanHash(g(false, balancedWeekOff: true).plan)
-          : _goalTrainingChanges(p.goal)
-              ? dayFloorPlanHash(g(false, goalTrainingOff: true).plan)
+          : _cardioGoal(p.goal)
+              ? dayFloorPlanHash(g(false, unreservedFinisher: true).plan)
               : dayFloorPlanHash(off.plan);
       _compare(t, p.label, p.goal, p.level, p.days, p.phase, p.minutes, on, off, offHash);
     }
@@ -321,10 +318,16 @@ class DayFloorGate {
       print('  ${e.key}: ${e.value.take(5).toList()}');
     }
     final key = 'digest|$block|$tier';
+    // TEMPORARY (generator-killswitch-3a3c commit 1, plan §3.4 B): RECORD_DAY_FLOOR_GATE=1 records this OFF digest on
+    // the base tree 421cd2d2; the deletion commit removes this path. Run one gate file at a time (the fixture is one
+    // shared read-merge-write file).
+    if (Platform.environment['RECORD_DAY_FLOOR_GATE'] == '1') {
+      writeDayFloorFixtureEntries({key: {'runs': t.runs, 'sha256': digest}});
+    }
     final file = File(dayFloorFixturePath);
     final fixture = jsonDecode(file.readAsStringSync()) as Map<String, dynamic>;
     expect(fixture[key], {'runs': t.runs, 'sha256': digest},
-        reason: '$key: the floor-off plans no longer equal main 8a2e1c5a (the kill switch, plan §2 F5)');
+        reason: '$key: the floor-off plans no longer equal the world recorded on 421cd2d2 (the kill switch, plan §2 F5)');
     expect(t.bad, isEmpty);
     expect(t.thinOn, 0);
     expect(t.pinsDiffer, 0);

@@ -18,9 +18,9 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:icanbefitter/core/services/hive_service.dart';
 
 import 'package:icanbefitter/shared/repositories/plan_engine/budget_muscle_groups.dart';
+import 'package:icanbefitter/shared/repositories/plan_engine/cardio_finisher.dart';
 import 'package:icanbefitter/shared/repositories/plan_engine/models.dart';
 import 'package:icanbefitter/shared/repositories/plan_engine/plan_generator.dart';
 import 'package:icanbefitter/shared/repositories/plan_engine/session_budget.dart';
@@ -85,11 +85,11 @@ void main() {
             .cast<Map<String, dynamic>>())
           r['id'] as String: r,
       };
-      // Unit 3C (diagnose f3c9a6): this pins Ruling 5c (OI-489) at exact minutes, so it runs with the cardio finisher
-      // switch set (no finisher time reserved, none shown). With the finisher, days 0 and 2 give 240 s to the mini HIIT
+      // Unit 3C (diagnose f3c9a6): this pins Ruling 5c (OI-489) at exact minutes, so it runs with the finisher built but
+      // its time not reserved (`CardioFinisher.debugReserve`). With the finisher, days 0 and 2 give 240 s to the mini HIIT
       // (d76) and the count floor seats the Upper Pull day (cardio_finisher_reservation_behavioral_test owns that).
-      await HiveService.instance.configBox.put('disable_cardio_finisher_shown', true);
-      addTearDown(() => HiveService.instance.configBox.delete('disable_cardio_finisher_shown'));
+      CardioFinisher.debugReserve = false;
+      addTearDown(() => CardioFinisher.debugReserve = true);
       SessionSetAllocator.debugLastStats = null;
       final p = gen(goal, 1, days: 4);
       final stats = SessionSetAllocator.debugLastStats!;
