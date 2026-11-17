@@ -80,6 +80,26 @@ Future<void> _tapReal(WidgetTester tester, Finder finder) async {
 Finder _chip(DietStrategy s) =>
     find.byKey(ValueKey('diet_strategy_chip_${s.storageKey}'));
 
+/// Opens the strategy dropdown (a real tap, like [_tapReal]) and leaves its
+/// menu open, so the items (`diet_strategy_chip_<key>`) can be found.
+Future<void> _openStrategyMenu(WidgetTester tester) =>
+    _tapReal(tester, find.byKey(const ValueKey('diet_plan_strategy_dropdown')));
+
+/// Picks [s] in the strategy dropdown: open the menu, tap the item.
+Future<void> _pickStrategy(WidgetTester tester, DietStrategy s) async {
+  await _openStrategyMenu(tester);
+  await _tapReal(tester,
+      find.byKey(ValueKey('diet_strategy_chip_${s.storageKey}')).last);
+}
+
+/// Picks a food type in the food-type dropdown: open it, tap the item.
+Future<void> _pickFoodType(WidgetTester tester, FoodType t) async {
+  await _tapReal(
+      tester, find.byKey(const ValueKey('diet_plan_food_type_dropdown')));
+  await _tapReal(
+      tester, find.byKey(ValueKey('food_type_chip_${t.storageKey}')).last);
+}
+
 Map<String, dynamic>? _savedPlan() => UserRepository.instance.getSavedDietPlan();
 
 /// Every catalog food id of the saved plan.
@@ -492,10 +512,15 @@ void main() {
       await pumpScreen(tester);
       expect(find.text(kVeganKetoPlanNote), findsOneWidget);
       expect(find.text(kVeganKetoChipReason), findsOneWidget);
+      await _openStrategyMenu(tester);
       expect(
-          tester.getSemantics(_chip(DietStrategy.keto)).flagsCollection
-              .isEnabled,
-          Tristate.isFalse);
+          tester
+              .widget<DropdownMenuItem<DietStrategy>>(
+                  _chip(DietStrategy.keto).last)
+              .enabled,
+          isFalse);
+      await tester.tapAt(const Offset(1, 1));
+      await _settle(tester);
       await save(tester);
       expect(_savedPlan()?['diet_strategy'], 'low_carb');
       expect(debugDietPlanGenerations, 1);
@@ -560,7 +585,7 @@ void main() {
 
       // Non-veg -> Veg: the food-type door regenerates once (the plan it
       // asks for stays Keto, so nothing else may generate).
-      await _tapReal(tester, find.text('Veg'));
+      await _pickFoodType(tester, FoodType.veg);
       expect(debugDietPlanGenerations, 3);
     });
 
@@ -752,7 +777,7 @@ void main() {
             ],
           }));
       final c = await pumpScreen(tester);
-      expect(find.byType(DietStrategySection), findsNothing);
+      expect(find.byType(DietStrategyField), findsNothing);
       expect(find.text('Old keto egg'), findsOneWidget);
       expect(c.read(dietPlanProvider), isNotEmpty);
       expect(debugDietPlanGenerations, 0, reason: 'the saved plan loaded');
@@ -789,17 +814,22 @@ void main() {
       await pumpScreen(tester);
       expect(debugDietPlanGenerations, 1);
       expect(find.text(kVeganKetoPlanNote), findsNothing);
-      await _tapReal(tester, find.text('Vegan'));
+      await _pickFoodType(tester, FoodType.vegan);
       expect(debugDietPlanGenerations, 2);
       expect(find.text(kVeganKetoPlanNote), findsOneWidget);
+      await _openStrategyMenu(tester);
       expect(
-          tester.getSemantics(_chip(DietStrategy.keto)).flagsCollection
-              .isEnabled,
-          Tristate.isFalse);
+          tester
+              .widget<DropdownMenuItem<DietStrategy>>(
+                  _chip(DietStrategy.keto).last)
+              .enabled,
+          isFalse);
+      await tester.tapAt(const Offset(1, 1));
+      await _settle(tester);
       await save(tester);
       expect(_savedPlan()?['diet_strategy'], 'low_carb');
       expect(_savedPlan()?['diet_strategy_requested'], 'low_carb');
-      await _tapReal(tester, find.text('Non-veg'));
+      await _pickFoodType(tester, FoodType.nonVeg);
       expect(debugDietPlanGenerations, 3);
       expect(find.text(kVeganKetoPlanNote), findsNothing);
       await save(tester);
@@ -856,11 +886,15 @@ void main() {
         overrides: [authUserIdTokenProvider.overrideWithValue(kTestUserId)],
         child: const MaterialApp(
           home: Scaffold(
-              body: SingleChildScrollView(child: DietStrategySection())),
+              body: SingleChildScrollView(
+                  child: Column(children: [
+            DietStrategyField(),
+            DietStrategyFootnotes(),
+          ]))),
         ),
       ));
       await tester.pump();
-      await _tapReal(tester, _chip(DietStrategy.keto));
+      await _pickStrategy(tester, DietStrategy.keto);
       expect(find.byKey(const ValueKey('diet_strategy_confirm_dialog')),
           findsOneWidget);
       expect(find.byKey(const ValueKey('diet_strategy_confirm_keto_note')),

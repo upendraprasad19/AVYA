@@ -1941,8 +1941,8 @@ concepts:
         line_range: 1-62
         method: dietSupplementsInputsProvider + dietSupplementsActiveProvider + dietSupplementsEligibleProvider (reactive rule; the inputs are read from Hive and rebuilt on the restore tick, a restore never touches the profile provider's state; false before any watch with the kill switch off)
       - file: lib/features/nutrition/widgets/diet_supplements_section.dart
-        line_range: 1-270
-        method: DietSupplementsSection + DietSupplementCardSection (the collapsed card under the meals) + DietSupplementCard (the switch shows the STORED choice; reads the inputs and eligibility providers, not the raw key; the paused hint for a stored on without PRO)
+        line_range: 1-306
+        method: DietSupplementsField + DietSupplementsFootnotes (layout v2: the third column of the settings row and the hints under it) + DietSupplementCardSection (the collapsed card under the meals) + DietSupplementCard (the switch shows the STORED choice; reads the inputs and eligibility providers, not the raw key; the paused hint for a stored on without PRO)
       - file: lib/features/nutrition/screens/diet_plan_screen.dart
         line_range: 118-158
         method: _onSupplementsActive + _healSupplementsState + _supplementsActive (regenerates once per change of the state; the heal catches a change the listener did not deliver)

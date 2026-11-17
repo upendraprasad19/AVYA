@@ -27,7 +27,10 @@ import 'package:icanbefitter/features/nutrition/services/diet_plan_strategy_stat
 import 'package:icanbefitter/features/nutrition/services/diet_plan_catalog.dart';
 import 'package:icanbefitter/features/nutrition/services/diet_strategy_flags.dart';
 import 'package:icanbefitter/features/nutrition/services/diet_supplements_flags.dart';
+import 'package:icanbefitter/features/nutrition/widgets/diet_plan_macro_cards.dart';
 import 'package:icanbefitter/features/nutrition/widgets/diet_supplements_section.dart';
+import 'package:icanbefitter/shared/widgets/diet_strategy_chips.dart';
+import 'package:icanbefitter/shared/widgets/food_type_chips.dart';
 import 'package:icanbefitter/features/profile/providers/profile_provider.dart';
 import 'package:icanbefitter/shared/repositories/user_repository.dart';
 import 'package:icanbefitter/shared/widgets/wardroom/ward_button.dart';
@@ -298,7 +301,7 @@ void main() {
         'date_of_birth': '${DateTime.now().year - 15}-06-01',
       });
       await pumpScreen(tester);
-      expect(find.byType(DietSupplementsSection), findsOneWidget);
+      expect(find.byType(DietSupplementsField), findsNothing);
       expect(switchFinder(), findsNothing);
       expect(find.text('Supplements'), findsNothing);
       expect(find.text(_wheyName), findsNothing);
@@ -371,13 +374,12 @@ void main() {
       expect(cardAnywhere(), findsNothing);
     });
 
-    testWidgets('layout: the food type and strategy chips are one scrolling '
-        'row each, and the plan starts above the supplement card',
-        (tester) async {
+    testWidgets('layout v2: the title, then ONE row of the three controls, '
+        'then the compact calorie and macro blocks, then the plan, and the '
+        'supplement card last', (tester) async {
       await seed(tester, extra: const {'diet_supplements': true});
       // The wide test surface (the test font is wider than DM Sans, so a
-      // phone width overflows the meal rows); the scrolling itself is pinned
-      // at 360 dp in test/shared/chip_scroll_row_test.dart.
+      // phone width overflows the meal rows).
       tester.view.physicalSize = const Size(1080, 7000);
       tester.view.devicePixelRatio = 1.0;
       addTearDown(tester.view.reset);
@@ -386,18 +388,111 @@ void main() {
         child: const MaterialApp(home: DietPlanScreen()),
       ));
       await _settle(tester);
-      expect(find.byKey(const ValueKey('chip_scroll_row')), findsNWidgets(2));
-      final food = find.byKey(const ValueKey('food_type_chip_veg'));
-      final vegan = find.byKey(const ValueKey('food_type_chip_vegan'));
-      expect(tester.getTopLeft(food).dy, tester.getTopLeft(vegan).dy,
-          reason: 'one line');
-      // The switch stays with the settings; the card is below the last meal.
+      expect(find.text('Diet chart'), findsOneWidget);
+      expect(find.text('Diet Plan'), findsNothing);
+      final food =
+          find.byKey(const ValueKey('diet_plan_food_type_dropdown'));
+      final strategy =
+          find.byKey(const ValueKey('diet_plan_strategy_dropdown'));
+      final supp = find.byKey(const ValueKey('diet_plan_supplements_field'));
+      expect(tester.getTopLeft(food).dy, tester.getTopLeft(strategy).dy,
+          reason: 'one row');
+      expect(tester.getTopLeft(strategy).dy, tester.getTopLeft(supp).dy,
+          reason: 'one row');
+      expect(tester.getTopLeft(food).dx,
+          lessThan(tester.getTopLeft(strategy).dx));
+      expect(tester.getTopLeft(strategy).dx,
+          lessThan(tester.getTopLeft(supp).dx));
+      final tdee = find.byKey(const ValueKey('diet_plan_tdee_card'));
+      final macros = find.byKey(const ValueKey('diet_plan_macro_card'));
+      expect(tester.getBottomLeft(supp).dy,
+          lessThan(tester.getTopLeft(tdee).dy));
+      expect(tester.getBottomLeft(tdee).dy,
+          lessThan(tester.getTopLeft(macros).dy));
+      expect(tester.getBottomLeft(macros).dy,
+          lessThan(tester.getTopLeft(find.text('Breakfast')).dy));
+      expect(tester.getSize(tdee).height,
+          lessThanOrEqualTo(kDietPlanCompactCardMaxHeight));
+      expect(tester.getSize(macros).height,
+          lessThanOrEqualTo(kDietPlanCompactCardMaxHeight));
+      // The switch is inside its field; the card is below the last meal.
       expect(tester.getTopLeft(switchFinder()).dy,
           lessThan(tester.getTopLeft(find.text('Breakfast')).dy));
       expect(
           tester.getTopLeft(find.byKey(
               const ValueKey('diet_supplement_card_collapsed'))).dy,
           greaterThan(tester.getBottomLeft(find.text('Dinner')).dy));
+      // The old chip rows are gone from this screen.
+      expect(find.byType(FoodTypeChips), findsNothing);
+      expect(find.byType(DietStrategyChips), findsNothing);
+    });
+
+    testWidgets('layout v2: the food-type menu lists every option and the '
+        'closed field shows the stored one', (tester) async {
+      await seed(tester);
+      await pumpScreen(tester);
+      final field = find.byKey(const ValueKey('diet_plan_food_type_dropdown'));
+      expect(find.descendant(of: field, matching: find.text('Veg')),
+          findsOneWidget);
+      await _tapReal(tester, field);
+      for (final t in FoodType.values) {
+        expect(find.byKey(ValueKey('food_type_chip_${t.storageKey}')),
+            findsWidgets,
+            reason: '${t.label} is listed');
+      }
+    });
+
+    testWidgets('layout v2: a minor gets two columns (no Supplements field)',
+        (tester) async {
+      await seed(tester, extra: {
+        'date_of_birth': '${DateTime.now().year - 15}-06-01',
+      });
+      await pumpScreen(tester);
+      expect(find.byKey(const ValueKey('diet_plan_supplements_field')),
+          findsNothing);
+      expect(find.byKey(const ValueKey('diet_plan_strategy_dropdown')),
+          findsOneWidget);
+      expect(find.byKey(const ValueKey('diet_plan_food_type_dropdown')),
+          findsOneWidget);
+    });
+
+    testWidgets('layout v2: no overflow at 360 dp with every control on',
+        (tester) async {
+      await seed(tester, extra: const {'diet_supplements': true});
+      tester.view.physicalSize = const Size(360, 7000);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.reset);
+      final errors = <FlutterErrorDetails>[];
+      final old = FlutterError.onError;
+      FlutterError.onError = errors.add;
+      addTearDown(() => FlutterError.onError = old);
+      await tester.pumpWidget(ProviderScope(
+        overrides: [authUserIdTokenProvider.overrideWithValue(kTestUserId)],
+        child: const MaterialApp(home: DietPlanScreen()),
+      ));
+      await _settle(tester);
+      final row = [
+        for (final k in const [
+          'diet_plan_food_type_dropdown',
+          'diet_plan_strategy_dropdown',
+          'diet_plan_supplements_field',
+        ])
+          tester.getSize(find.byKey(ValueKey(k)))
+      ];
+      for (final size in row) {
+        expect(size.width, greaterThan(90));
+      }
+      // Only the meal rows may overflow on the narrow test surface (the test
+      // font is wider than DM Sans); the settings row and the two compact
+      // cards must not.
+      final rowErrors = errors.where((e) {
+        final text = e.toString();
+        return text.contains('RenderFlex overflowed') &&
+            (text.contains('DietPlanDropdown') ||
+                text.contains('diet_plan_settings_row') ||
+                text.contains('diet_plan_macro_cards'));
+      });
+      expect(rowErrors, isEmpty);
     });
 
     testWidgets('the plan follows the switch with no stale-state heal in the '
@@ -495,7 +590,7 @@ void main() {
       await pumpScreen(tester);
       expect(debugDietPlanGenerations, 1, reason: 'generated fresh, not loaded');
       expect(find.text(_wheyName), findsNothing);
-      expect(find.byType(DietSupplementsSection), findsNothing);
+      expect(find.byType(DietSupplementsField), findsNothing);
     });
 
     testWidgets('a loaded stamped plan is regenerated once when the switch '
@@ -591,7 +686,7 @@ void main() {
       expect(DietSupplementsFlags.enabled, isFalse);
       await seed(tester, extra: const {'diet_supplements': true});
       await pumpScreen(tester);
-      expect(find.byType(DietSupplementsSection), findsNothing);
+      expect(find.byType(DietSupplementsField), findsNothing);
       expect(find.text(_wheyName), findsNothing);
       await save(tester);
       expect(_savedPlan()!.containsKey('diet_supplements'), isFalse);
