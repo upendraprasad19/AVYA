@@ -28,6 +28,7 @@
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:icanbefitter/core/constants/food_types.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -331,15 +332,22 @@ void main() {
     String? stored() =>
         UserRepository.instance.getProfile()?['diet_preference'] as String?;
 
-    final egg = find.byKey(const ValueKey('food_type_chip_eggetarian'));
-    await tester.ensureVisible(egg);
-    await tester.pumpAndSettle();
-    // The Hive write is real I/O: run the tap's work outside fake async.
-    await tester.runAsync(() async {
-      await tester.tap(egg);
-      await Future<void>.delayed(const Duration(milliseconds: 300));
-    });
-    await tester.pumpAndSettle();
+    // Layout v2: the food type is a dropdown. This test is about the write
+    // door behind the control, so it calls the dropdown's own onChanged (the
+    // menu itself is exercised in diet_plan_supplements_screen_test.dart); the
+    // Hive write is real I/O, so the call runs outside fake async.
+    Future<void> pick(String key) async {
+      final field = find.byType(DropdownButton<FoodType>);
+      await tester.ensureVisible(field);
+      final next = FoodType.values.firstWhere((t) => t.storageKey == key);
+      await tester.runAsync(() async {
+        tester.widget<DropdownButton<FoodType>>(field).onChanged!(next);
+        await Future<void>.delayed(const Duration(milliseconds: 300));
+      });
+      await tester.pumpAndSettle();
+    }
+
+    await pick('eggetarian');
     // The lock is fire-and-forget after the Hive write; since the diet
     // strategy is on (Unit 3b-3) more providers rebuild on that write and the
     // door's continuation needs both real time (Hive I/O) and a frame, so
@@ -366,13 +374,7 @@ void main() {
         .clearSnackBars();
     await tester.pumpAndSettle();
     fail = true;
-    final vegan = find.byKey(const ValueKey('food_type_chip_vegan'));
-    await tester.ensureVisible(vegan);
-    await tester.runAsync(() async {
-      await tester.tap(vegan);
-      await Future<void>.delayed(const Duration(milliseconds: 300));
-    });
-    await tester.pumpAndSettle();
+    await pick('vegan');
     expect(stored(), 'eggetarian', reason: 'a failed change stores nothing');
     expect(find.textContaining("Couldn't change the food type"), findsOneWidget);
     expect(find.text('EGGETARIAN'), findsOneWidget);
@@ -385,13 +387,7 @@ void main() {
     fail = false;
     switchAfterCapture = true;
     uidReads = 0;
-    final pesc = find.byKey(const ValueKey('food_type_chip_pescatarian'));
-    await tester.ensureVisible(pesc);
-    await tester.runAsync(() async {
-      await tester.tap(pesc);
-      await Future<void>.delayed(const Duration(milliseconds: 300));
-    });
-    await tester.pumpAndSettle();
+    await pick('pescatarian');
     expect(stored(), 'eggetarian');
     expect(find.textContaining('Plan rebuilt for Pescatarian'), findsNothing);
     expect(find.textContaining("Couldn't change the food type"), findsOneWidget);
