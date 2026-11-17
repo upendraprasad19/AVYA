@@ -36,10 +36,11 @@ class DietPlanTdeeCard extends StatelessWidget {
       decoration: _compactDecoration(AppColors.accent.withValues(alpha: 0.2)),
       child: Row(
         children: [
-          _dietPlanStat('BMR', '${targets['bmr']?.round() ?? 0}'),
-          _dietPlanStat('TDEE', '${targets['tdee']?.round() ?? 0}'),
-          _dietPlanStat('TARGET kcal', '${targets['calories']?.round() ?? 0}',
-              emphasis: true),
+          _dietPlanStat('BMR', '${targets['bmr']?.round() ?? 0}', unit: 'kcal'),
+          _dietPlanStat('TDEE', '${targets['tdee']?.round() ?? 0}',
+              unit: 'kcal'),
+          _dietPlanStat('TARGET', '${targets['calories']?.round() ?? 0}',
+              unit: 'kcal', emphasis: true),
         ],
       ),
     );
@@ -74,7 +75,9 @@ class DietPlanMacroTargetsCard extends StatelessWidget {
 
 /// One caption-over-figure cell; three share a card equally.
 Widget _dietPlanStat(String label, String value,
-    {Color color = AppColors.textPrimary, bool emphasis = false}) {
+    {Color color = AppColors.textPrimary,
+    bool emphasis = false,
+    String? unit}) {
   return Expanded(
     child: Column(
       mainAxisSize: MainAxisSize.min,
@@ -91,14 +94,28 @@ Widget _dietPlanStat(String label, String value,
           ),
         ),
         const SizedBox(height: 2),
-        Text(
-          value,
-          maxLines: 1,
-          style: AppTypography.body.copyWith(
-            fontSize: 16,
-            fontWeight: emphasis ? FontWeight.w900 : FontWeight.w800,
-            color: emphasis ? AppColors.accent : color,
+        Text.rich(
+          TextSpan(
+            text: value,
+            style: AppTypography.body.copyWith(
+              fontSize: 16,
+              fontWeight: emphasis ? FontWeight.w900 : FontWeight.w800,
+              color: emphasis ? AppColors.accent : color,
+            ),
+            children: [
+              if (unit != null)
+                TextSpan(
+                  text: ' $unit',
+                  style: AppTypography.monoXs.copyWith(
+                    fontSize: 10,
+                    fontWeight: FontWeight.w400,
+                    color: AppColors.textDim,
+                  ),
+                ),
+            ],
           ),
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
         ),
       ],
     ),

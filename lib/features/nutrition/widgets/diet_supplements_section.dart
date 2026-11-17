@@ -112,14 +112,17 @@ class _DietSupplementsFieldState extends ConsumerState<DietSupplementsField> {
         GestureDetector(
           key: const ValueKey('diet_plan_supplements_field'),
           behavior: HitTestBehavior.opaque,
+          // The tap action lives on the labelled node below, once.
+          excludeFromSemantics: true,
           onTap: eligible && !_busy ? () => _onToggle(!stored, stored) : null,
           child: Semantics(
             container: true,
             label: 'Supplements',
+            onTap: eligible && !_busy ? () => _onToggle(!stored, stored) : null,
             child: Container(
               constraints:
                   const BoxConstraints(minHeight: DietPlanDropdown.fieldHeight),
-              padding: const EdgeInsets.only(left: 12, right: 6),
+              padding: const EdgeInsets.only(left: 10, right: 4),
               decoration: BoxDecoration(
                 color: AppColors.input,
                 borderRadius: BorderRadius.circular(AppRadius.soft),
@@ -136,14 +139,26 @@ class _DietSupplementsFieldState extends ConsumerState<DietSupplementsField> {
                           style: text),
                     ),
                     if (eligible)
-                      Switch(
-                        key: const ValueKey('diet_supplements_switch'),
-                        materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                        value: stored,
-                        onChanged: _busy ? null : (v) => _onToggle(v, stored),
-                        activeThumbColor: AppColors.accent,
-                        activeTrackColor:
-                            AppColors.accent.withValues(alpha: 0.3),
+                      // A Material 3 Switch lays out 60 dp wide; in a ~100 dp
+                      // column that leaves ~20 dp for On/Off. Scaled to a 48 dp
+                      // box (the whole field is the tap target, not the
+                      // switch), the word keeps ~34 dp.
+                      SizedBox(
+                        width: 48,
+                        height: 32,
+                        child: FittedBox(
+                          child: Switch(
+                            key: const ValueKey('diet_supplements_switch'),
+                            materialTapTargetSize:
+                                MaterialTapTargetSize.shrinkWrap,
+                            value: stored,
+                            onChanged:
+                                _busy ? null : (v) => _onToggle(v, stored),
+                            activeThumbColor: AppColors.accent,
+                            activeTrackColor:
+                                AppColors.accent.withValues(alpha: 0.3),
+                          ),
+                        ),
                       ),
                   ],
                 ),

@@ -9,6 +9,8 @@
 import 'dart:convert';
 import 'dart:io';
 
+import 'dart:ui' show SemanticsAction;
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -179,6 +181,30 @@ void main() {
         w.key == const ValueKey('diet_supplement_card_collapsed'));
 
     Finder switchFinder() => find.byKey(const ValueKey('diet_supplements_switch'));
+
+    /// Pumps the screen on a 360 dp wide surface and returns every
+    /// FlutterError raised while laying it out. The test font (Ahem) is far
+    /// wider than DM Sans, so the MEAL rows overflow here; callers filter by
+    /// file. The handler is restored before this returns (a test that fails
+    /// later must not leave it overridden).
+    Future<List<FlutterErrorDetails>> pump360(WidgetTester tester) async {
+      tester.view.physicalSize = const Size(360, 7000);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.reset);
+      final errors = <FlutterErrorDetails>[];
+      final old = FlutterError.onError;
+      FlutterError.onError = errors.add;
+      try {
+        await tester.pumpWidget(ProviderScope(
+          overrides: [authUserIdTokenProvider.overrideWithValue(kTestUserId)],
+          child: const MaterialApp(home: DietPlanScreen()),
+        ));
+        await _settle(tester);
+      } finally {
+        FlutterError.onError = old;
+      }
+      return errors;
+    }
 
     /// The food ids the curated generator gives for the SAME request the
     /// screen makes today (seed, targets, strategy), without the shake step.
@@ -411,6 +437,9 @@ void main() {
           lessThan(tester.getTopLeft(macros).dy));
       expect(tester.getBottomLeft(macros).dy,
           lessThan(tester.getTopLeft(find.text('Breakfast')).dy));
+      // The compact card keeps every figure's unit (BMR, TDEE, TARGET).
+      expect(find.descendant(of: tdee, matching: find.textContaining('kcal')),
+          findsNWidgets(3));
       expect(tester.getSize(tdee).height,
           lessThanOrEqualTo(kDietPlanCompactCardMaxHeight));
       expect(tester.getSize(macros).height,
@@ -437,14 +466,13 @@ void main() {
       await _tapReal(tester, field);
       for (final t in FoodType.values) {
         expect(find.byKey(ValueKey('food_type_chip_${t.storageKey}')),
-            findsWidgets,
+            findsOneWidget,
             reason: '${t.label} is listed');
       }
     });
 
-    testWidgets('layout v2 (review R1): a free user keeps On/Off room in the '
-        'field (the lock sits with the caption), and a tap on the field text '
-        'asks for PRO', (tester) async {
+    testWidgets('layout v2 (review R1): a free user keeps the lock out of '
+        'the field, and a tap on the field text asks for PRO', (tester) async {
       await seed(tester, pro: false);
       await pumpScreen(tester);
       final field = find.byKey(const ValueKey('diet_plan_supplements_field'));
@@ -463,6 +491,19 @@ void main() {
       await tester.pumpAndSettle();
     });
 
+    testWidgets('layout v2 (review R2): at 360 dp a free user\'s On/Off slot '
+        'keeps its room (the lock is not in the field)', (tester) async {
+      await seed(tester, pro: false);
+      await pump360(tester);
+      final field = find.byKey(const ValueKey('diet_plan_supplements_field'));
+      final slot = tester.getSize(
+          find.descendant(of: field, matching: find.byType(Expanded)));
+      expect(slot.width, greaterThanOrEqualTo(26),
+          reason: 'a 100 dp column minus border, padding and the Switch box');
+      expect(find.descendant(of: field, matching: find.byIcon(Icons.lock_outline)),
+          findsNothing);
+    });
+
     testWidgets('layout v2 (review R1): PRO, a tap on the field text turns '
         'Supplements on', (tester) async {
       await seed(tester);
@@ -475,21 +516,32 @@ void main() {
           findsOneWidget);
     });
 
-    testWidgets('layout v2 (review R1): the fields carry their names for a '
+    testWidgets('layout v2 (review R1/R2): the fields carry their names for a '
         'screen reader, and a long food type scales instead of being cut',
         (tester) async {
       await seed(tester, extra: const {'diet_preference': 'pescatarian'});
       final handle = tester.ensureSemantics();
-      await pumpScreen(tester);
+      await pump360(tester);
       expect(find.bySemanticsLabel(RegExp('^Food type')), findsOneWidget);
       expect(find.bySemanticsLabel(RegExp('^Diet strategy')), findsOneWidget);
       expect(find.bySemanticsLabel(RegExp('^Supplements')), findsWidgets);
       final food = find.byKey(const ValueKey('diet_plan_food_type_dropdown'));
-      expect(find.descendant(of: food, matching: find.byType(FittedBox)),
-          findsWidgets,
-          reason: 'a closed label shrinks to fit, it is never ellipsized');
-      expect(find.descendant(of: food, matching: find.text('Pescatarian')),
-          findsWidgets);
+      final fitted = find.descendant(
+          of: food,
+          matching: find.ancestor(
+              of: find.text('Pescatarian'), matching: find.byType(FittedBox)));
+      expect(fitted, findsOneWidget,
+          reason: 'the selected label sits in a FittedBox, never an ellipsis');
+      // Laid out at its natural width in a narrower box: drawn scaled, whole.
+      expect(
+          tester
+              .getSize(find.descendant(of: fitted, matching: find.text('Pescatarian')))
+              .width,
+          greaterThan(tester.getSize(fitted).width));
+      // The supplements node carries the tap action itself.
+      final supp = tester.getSemantics(
+          find.bySemanticsLabel(RegExp('^Supplements')).first);
+      expect(supp.getSemanticsData().hasAction(SemanticsAction.tap), isTrue);
       handle.dispose();
     });
 
@@ -510,38 +562,33 @@ void main() {
     testWidgets('layout v2: no overflow at 360 dp with every control on',
         (tester) async {
       await seed(tester, extra: const {'diet_supplements': true});
-      tester.view.physicalSize = const Size(360, 7000);
-      tester.view.devicePixelRatio = 1.0;
-      addTearDown(tester.view.reset);
-      final errors = <FlutterErrorDetails>[];
-      final old = FlutterError.onError;
-      FlutterError.onError = errors.add;
-      addTearDown(() => FlutterError.onError = old);
-      await tester.pumpWidget(ProviderScope(
-        overrides: [authUserIdTokenProvider.overrideWithValue(kTestUserId)],
-        child: const MaterialApp(home: DietPlanScreen()),
-      ));
-      await _settle(tester);
-      final row = [
-        for (final k in const [
-          'diet_plan_food_type_dropdown',
-          'diet_plan_strategy_dropdown',
-          'diet_plan_supplements_field',
-        ])
-          tester.getSize(find.byKey(ValueKey(k)))
-      ];
-      for (final size in row) {
-        expect(size.width, greaterThan(90));
+      final errors = await pump360(tester);
+      for (final k in const [
+        'diet_plan_food_type_dropdown',
+        'diet_plan_strategy_dropdown',
+        'diet_plan_supplements_field',
+      ]) {
+        expect(tester.getSize(find.byKey(ValueKey(k))).width, greaterThan(90));
       }
+      // The On/Off slot (the field minus border, padding and the Switch box)
+      // keeps room for the word at any font: measured as layout, not text.
+      final slot = tester.getSize(find.descendant(
+          of: find.byKey(const ValueKey('diet_plan_supplements_field')),
+          matching: find.byType(Expanded)));
+      expect(slot.width, greaterThanOrEqualTo(26));
       // Only the meal rows may overflow on the narrow test surface (the test
-      // font is wider than DM Sans); the settings row and the two compact
-      // cards must not.
+      // font is wider than DM Sans); every file of the settings row and the
+      // two compact cards must not (the creator chain names the file).
+      const rowFiles = [
+        'diet_plan_dropdown',
+        'diet_plan_settings_row',
+        'diet_plan_macro_cards',
+        'diet_strategy_section',
+        'diet_supplements_section',
+      ];
       final rowErrors = errors.where((e) {
         final text = e.toString();
-        return text.contains('RenderFlex overflowed') &&
-            (text.contains('DietPlanDropdown') ||
-                text.contains('diet_plan_settings_row') ||
-                text.contains('diet_plan_macro_cards'));
+        return text.contains('overflowed') && rowFiles.any(text.contains);
       });
       expect(rowErrors, isEmpty);
     });
