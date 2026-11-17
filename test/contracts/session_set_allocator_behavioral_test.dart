@@ -63,27 +63,32 @@ void main() {
     });
 
     test('rank-0 reservation: every lead lift keeps >= 2 sets when the group top binds', () {
-      // general_fitness beginner: Chest top 10, cap 6. Every day desires 3 (OI-456), whatever its intensity.
-      final f = Fx(balancedWeek: false, goalTraining: GoalTraining.off);
+      // general_fitness intermediate (Unit 3A's goal band): Chest top 11. Every day desires 3 (OI-456), whatever its
+      // intensity. Day 0 takes 3 (11 - 4 x 2 reserved = 3); day 1 (index 1) wants 3 and gets 2 because the reservation
+      // protects the three later days (8 - 3 x 2 = 2); days 2-4 take 2 each: 3 + 4 x 2 = 11. Without the reservation
+      // the lead world seats days 0-2 at 3 and refuses the last day's lead, so 2A keeps the capped world instead (it
+      // seats every day at 2 first and happens to land on the same sets): `leadWorld` is what pins the reservation.
+      // Measured on generator-killswitch-3a3c with the reservation's `2 *` mutated to `0 *`: leadWorld 'capped'.
+      final f = Fx(balancedWeek: false);
       f.row('bench', ['Chest']);
       f.row('press', ['Triceps'], type: 'isolation', reps: '10-15');
       final days = [
-        for (final i in ['strength', 'hypertrophy', 'endurance', 'endurance'])
+        for (final i in ['strength', 'hypertrophy', 'endurance', 'endurance', 'endurance'])
           f.day(i, [f.ex('bench'), f.ex('press')]),
       ];
-      final out = f.run(days, minutes: 90, goal: 'general_fitness', level: 'beginner');
-      expect([for (final d in out) d.exercisesA.first.sets], [3, 3, 2, 2]);
+      final out = f.run(days, minutes: 90, goal: 'general_fitness', level: 'intermediate');
+      expect([for (final d in out) d.exercisesA.first.sets], [3, 2, 2, 2, 2]);
       expect(statsA().capForcedFirst, 0);
-      expect(statsA().weekly['Chest'], 10);
-      // Day 3 (index 2) wanted 3 and got 2 because the reservation protected the last day;
-      // the stats name the group that bound it.
+      expect(statsA().weekly['Chest'], 11);
+      expect(statsA().leadWorld, 'lead');
+      // The stats name the group that bound day 1.
       final lead = statsA().firstLifts.where((l) => l.rank == 0).toList();
-      expect(lead.length, 4);
-      expect(lead[1].sets, 3);
-      expect(lead[1].boundBy, isNull);
-      expect(lead[2].sets, 2);
-      expect(lead[2].desired, 3);
-      expect(lead[2].boundBy, 'Chest');
+      expect(lead.length, 5);
+      expect(lead[0].sets, 3);
+      expect(lead[0].boundBy, isNull);
+      expect(lead[1].sets, 2);
+      expect(lead[1].desired, 3);
+      expect(lead[1].boundBy, 'Chest');
     });
 
     test('rank-0 reservation counts only the later days whose lead lift credits the SAME group', () {
@@ -104,11 +109,11 @@ void main() {
     });
 
     test('boundBy is reported only while the lead lift is still below its desired sets', () {
-      // Day 0's lead lift gets 2 of its desired 3 because four later days' lead lifts
-      // (Chest, top 10) are protected. Those four are then refused for time (a 270 s
-      // gap fits a 2-set Biceps curl, 257 s, but not a 2-set Chest lift, 282 s), so
+      // Day 0's lead lift gets 2 of its desired 3 because three later days' lead lifts
+      // (Chest, general_fitness beginner's goal-band top 8: 8 - 3 x 2 = 2) are protected. Those three are then refused
+      // for time (a 270 s gap fits a 2-set Biceps curl, 257 s, but not a 2-set Chest lift, 282 s), so
       // the reservation was never needed and the floor pass grows day 0's lift to 5.
-      final f = Fx(balancedWeek: false, goalTraining: GoalTraining.off);
+      final f = Fx(balancedWeek: false);
       f.row('cl', ['Chest']);
       f.row('bi', ['Biceps'], type: 'isolation', reps: '10-15');
       f.row('plank', ['Core'], type: 'isolation', reps: '30-60', logging: 'timed');
@@ -119,7 +124,7 @@ void main() {
       expect(SessionBudget.exerciseSeconds(archetype: 'I', sets: 2, restSeconds: 75), lessThan(gap));
       final days = [
         f.day('hypertrophy', [f.ex('cl')]),
-        for (var i = 0; i < 4; i++)
+        for (var i = 0; i < 3; i++)
           f.day('hypertrophy', [
             f.ex('plank', sets: 6, logging: 'timed', rest: 141),
             f.ex('cl'),
@@ -139,15 +144,15 @@ void main() {
       expect(first.desired, 3);
       expect(first.boundBy, isNull);
 
-      // With the floor (d33): days 1-4 hold plank + bi = 2 rows, so the floor seats cl at 2 past the clock on each;
-      // Chest reaches its top (2 + 4 x 2 = 10) and day 0's lead stays at 2, below its desired 3, bound by Chest.
+      // With the floor (d33): days 1-3 hold plank + bi = 2 rows, so the floor seats cl at 2 past the clock on each;
+      // Chest reaches its top (2 + 3 x 2 = 8) and day 0's lead stays at 2, below its desired 3, bound by Chest.
       final floored = f.run(days, minutes: 30, goal: 'general_fitness', level: 'beginner');
       expect(setsOf(floored[0]), [('cl', 2)]);
       for (final d in floored.skip(1)) {
         expect(setsOf(d).where((e) => e.$1 != 'plank'), [('cl', 2), ('bi', 2)]);
       }
-      expect(statsA().weekly['Chest'], 10);
-      expect([for (final d in [1, 2, 3, 4]) statsA().floorSeats[d]!.single.overClock], [true, true, true, true]);
+      expect(statsA().weekly['Chest'], 8);
+      expect([for (final d in [1, 2, 3]) statsA().floorSeats[d]!.single.overClock], [true, true, true]);
       final lead = statsA().firstLifts.firstWhere((l) => l.day == 0);
       expect((lead.sets, lead.desired, lead.boundBy), (2, 3, 'Chest'));
     });

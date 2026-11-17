@@ -2,7 +2,7 @@
 // the REAL readers and writers, over real Hive boxes and the real exercise library.
 //
 // - Train (`workoutDayForDate`) shows the finisher with its own rows, its minutes and the day's minutes; Home's card
-//   minutes equal Train's; an injury in the PROFILE hides a jumping finisher (the bike stays); the switch hides it.
+//   minutes equal Train's; an injury in the PROFILE hides a jumping finisher (the bike stays).
 // - `FinisherShowContextReader.read()` fails closed (a read failure = injured, display only).
 // - `shortenDay` (d79): the finisher goes first; then lifts; `target_too_low` writes nothing; a hidden finisher is not
 //   counted and its key goes whenever the row is written.
@@ -146,7 +146,6 @@ void main() {
     await HiveUserSession.openForUser(_user);
     await HiveService.instance.workoutBox.clear();
     await HiveService.instance.userBox.clear();
-    await HiveService.instance.configBox.delete('disable_cardio_finisher_shown');
     SyncService.pausedForSimulation = true;
     SwapService.debugOnPlanPushForTests = () {};
   });
@@ -154,7 +153,6 @@ void main() {
   tearDown(() async {
     SyncService.pausedForSimulation = false;
     SwapService.debugOnPlanPushForTests = null;
-    await HiveService.instance.configBox.delete('disable_cardio_finisher_shown');
     await HiveUserSession.closeAll();
   });
 
@@ -200,20 +198,11 @@ void main() {
       expect(workoutDayForDate(DateTime.parse(_date))!.finisher, hasLength(3));
     });
 
-    test('the switch hides it everywhere', () async {
-      await _profile();
-      await HiveService.instance.configBox.put('disable_cardio_finisher_shown', true);
-      await _putRow(_row(finisher: _hiit));
-      final day = workoutDayForDate(DateTime.parse(_date))!;
-      expect(day.finisher, isEmpty);
-      expect(day.budgetMinutes, _baseMinutes());
-    });
-
     test('the context reader fails closed: no user session = injured', () async {
       await HiveUserSession.closeAll();
       final ctx = FinisherShowContextReader.read();
       expect(ctx.injured, isTrue);
-      expect(FinisherSafety.shownFinisherMaps(_hiit, enabled: ctx.enabled, injured: ctx.injured), isEmpty);
+      expect(FinisherSafety.shownFinisherMaps(_hiit, injured: ctx.injured), isEmpty);
       await HiveUserSession.openForUser(_user);
     });
 

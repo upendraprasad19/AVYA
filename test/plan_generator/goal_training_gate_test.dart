@@ -1,12 +1,13 @@
 // Unit 3A (docs/plans/2026-11-15-generator-step3a-goal-training.md §4, §4b; founder d3, d4, d58-d64): the whole-engine
 // gate for training that follows the goal. The real PlanGenerator.instance.generateV4 runs the audit grid (4 goals x 3 /
-// 4 / 5 / 6 days x 3 levels x 4 tiers x 30 / 45 / 60 / 90 minutes x phases 1-3: 2,304 plans, no injuries, no history)
-// with the kill switch `disable_goal_training` unset (ON) and set (OFF: today's reps, bands, rests and credit, which
-// the kill-switch golden proves byte-identical to main). Week 1 of each plan is the week the tables name.
+// 4 / 5 / 6 days x 3 levels x 4 tiers x 30 / 45 / 60 / 90 minutes x phases 1-3: 2,304 plans, no injuries, no history).
+// Week 1 of each plan is the week the tables name. OFF (the pre-3A reps, bands, rests and credit) is the frozen baseline
+// `test/fixtures/goal_training_gate_baseline.json`, recorded on 421cd2d2 with the 3A kill switch
+// set before generator-killswitch-3a3c deleted it (OI-514; plan docs/plans/2026-11-17-generator-killswitch-3a3c.md §1).
 //
-//  1. Build (build_muscle) and the legacy strength token: every plan ON equals OFF byte for byte.
+//  1. Build (build_muscle) and the legacy strength token: every plan equals OFF byte for byte (the baseline's sha256).
 //  2. Cut and Maintain (same days / level / tier / minutes / phase) hold different exercises, sets or reps in every
-//     profile but the two d63 accepts; OFF they are identical in 92 of 576.
+//     profile but the two d63 accepts; OFF they were identical in 92 of 576 (baseline data).
 //  3. Main lifts (archetype H / M, d58), Cut and Maintain, week 1: reps = the goal's table clamped into the row's own
 //     range (d58: a range that cannot reach the table stops at its bound); deload is not in the grid (phases 1-3).
 //  4. Accessories (any other rep-based row with a range), Cut and Maintain, week 1: reps in 10-15 or the row's own
@@ -17,7 +18,7 @@
 //  6. The displayed minutes run no further past the session than OFF's.
 //  7. The Strength focus (profile `physique_focus = strength`): no group OFF trains in a plan-week is at 0; every main
 //     lift's week-1 reps are its range's low end; its rest is +30 s at 60+ minutes only (d64), every other row's rest
-//     is OFF's rule. With the switch set the focus changes nothing.
+//     is OFF's rule.
 //  8. ON byte for byte: the digest of every ON plan's map (no focus) and of every focus plan's map; any change to a
 //     real plan turns these red, and the counts above say what kind.
 @Timeout(Duration(minutes: 40))
@@ -115,14 +116,13 @@ void main() {
     byName = {for (final r in rows) (r['name'] as String).toLowerCase(): r};
     HiveService.instance.markInitializedForTests();
     await HiveUserSession.openForUser(testUser);
-    // Unit 3C (diagnose f3c9a6, plan §2.2): this gate measures the goal training (3A), so both of its worlds run with the
-    // cardio finisher switch set (today's finisher, nothing reserved). The finisher's own cost is measured by
+    // Unit 3C (diagnose f3c9a6, plan §2.2): this gate measures the goal training (3A), so it runs with the finisher built
+    // but its time not reserved, the world the baseline was recorded in. The finisher's own cost is measured by
     // cardio_finisher_reservation_behavioral_test and the diagnose doc.
     CardioFinisher.debugReserve = false;
   });
 
   tearDownAll(() async {
-    await HiveService.instance.configBox.delete('disable_goal_training');
     CardioFinisher.debugReserve = true;
     await HiveUserSession.closeAll();
     GuardedBox.testBypassOwnership = false;
@@ -145,11 +145,10 @@ void main() {
       );
 
   /// One plan: its map (for the digest), its weekly credited sets per group (weeks 1-3) and its displayed day minutes.
-  _Shape shape(
-      Phase plan, String goal, int days, int minutes, bool switchOn) {
+  _Shape shape(Phase plan, String goal, int days, int minutes) {
     final planGoal = FitnessGoals.of(goal).planGoal;
-    final quadGlutes = SplitResolver.quadPrimaryCreditsGlutes(planGoal, days, minutes,
-        quadLegsB: PlanEngineFlags.quadLegsBEnabled, goalTraining: switchOn);
+    final quadGlutes =
+        SplitResolver.quadPrimaryCreditsGlutes(planGoal, days, minutes, quadLegsB: PlanEngineFlags.quadLegsBEnabled);
     final vol = <Map<String, int>>[];
     final mins = <int?>[];
     for (final w in plan.weekPlans) {
@@ -177,14 +176,7 @@ void main() {
   }
 
   /// The grid in one world. Keys are `goal|days|level|tier|minutes|phase`.
-  Future<Map<String, _Plan>> grid(
-      {required bool switchOn, required bool focus}) async {
-    final config = HiveService.instance.configBox;
-    if (switchOn) {
-      await config.delete('disable_goal_training');
-    } else {
-      await config.put('disable_goal_training', true);
-    }
+  Future<Map<String, _Plan>> grid({required bool focus}) async {
     await HiveService.instance.userBox.put('profile', {if (focus) 'physique_focus': 'strength'});
     final out = <String, _Plan>{};
     for (final goal in _goals) {
@@ -194,14 +186,13 @@ void main() {
             for (final minutes in _minutes) {
               for (final phase in const [1, 2, 3]) {
                 final plan = gen(goal, days, level, tier, minutes, phase);
-                out['$goal|$days|$level|$tier|$minutes|$phase'] = (plan, shape(plan, goal, days, minutes, switchOn));
+                out['$goal|$days|$level|$tier|$minutes|$phase'] = (plan, shape(plan, goal, days, minutes));
               }
             }
           }
         }
       }
     }
-    await config.delete('disable_goal_training');
     await HiveService.instance.userBox.delete('profile');
     return out;
   }
@@ -213,12 +204,21 @@ void main() {
           ]
       ]);
 
-  /// Plan-weeks (1-3) where a group OFF trains is at 0 in [world].
-  List<String> newlyAtZero(Map<String, _Plan> off, Map<String, _Plan> world) => [
+  /// The frozen OFF world (header).
+  final baseline = jsonDecode(File(_baselinePath).readAsStringSync()) as Map<String, dynamic>;
+  final offBuild = Map<String, String>.from(baseline['build'] as Map);
+  final offGroups = {
+    for (final e in (baseline['groups'] as Map).entries) e.key as String: List<int>.from(e.value as List),
+  };
+  final offMaxOver = baseline['maxOver'] as int;
+
+  /// Plan-weeks (1-3) where a group OFF trains (the baseline's bitmask over [_groups]) is at 0 in [world].
+  List<String> newlyAtZero(Map<String, _Plan> world) => [
         for (final k in world.keys)
           for (var w = 0; w < 3; w++)
-            for (final g in _groups)
-              if ((off[k]!.$2.vol[w][g] ?? 0) > 0 && (world[k]!.$2.vol[w][g] ?? 0) == 0) '$k week ${w + 1} $g',
+            for (var i = 0; i < _groups.length; i++)
+              if (offGroups[k]![w] & (1 << i) != 0 && (world[k]!.$2.vol[w][_groups[i]] ?? 0) == 0)
+                '$k week ${w + 1} ${_groups[i]}',
       ];
 
   int maxOver(Map<String, _Plan> world) {
@@ -236,18 +236,25 @@ void main() {
       sha256Hex(utf8.encode([for (final k in world.keys) '$k:${sha256Hex(utf8.encode(world[k]!.$2.map))}']
           .join('\n')));
 
-  // Set by the first test and read by the second: run the file whole (a `--plain-name` run of the focus test alone
-  // throws LateInitializationError).
-  late Map<String, _Plan> off;
+  test('the baseline covers the grid', () {
+    expect(offGroups.length, 2304);
+    expect(offBuild.length, 1152);
+    expect(offBuild.keys.every((k) => k.startsWith('build_muscle|') || k.startsWith('strength|')), isTrue);
+    expect(offMaxOver, 6);
+    // Item 2's OFF count, kept as data (measured 2026-11-15 and again on 421cd2d2).
+    expect(baseline['identicalOff'], 92);
+  });
 
-  test('the 2,304-plan grid, ON against OFF', () async {
-    off = await grid(switchOn: false, focus: false);
-    final on = await grid(switchOn: true, focus: false);
+  test('the 2,304-plan grid against the OFF baseline', () async {
+    final on = await grid(focus: false);
+    expect(on.keys.toSet(), offGroups.keys.toSet());
 
     // 1. Build and the legacy strength token.
     final buildChanged = [
       for (final k in on.keys)
-        if ((k.startsWith('build_muscle|') || k.startsWith('strength|')) && on[k]!.$2.map != off[k]!.$2.map) k,
+        if ((k.startsWith('build_muscle|') || k.startsWith('strength|')) &&
+            sha256Hex(utf8.encode(on[k]!.$2.map)) != offBuild[k])
+          k,
     ];
 
     // 2. Cut against Maintain.
@@ -289,55 +296,25 @@ void main() {
       }
     }
 
-    // TEMPORARY (generator-killswitch-3a3c commit 1, plan §3.4 E): RECORD_GOAL_TRAINING_BASELINE=1 freezes the OFF world
-    // on the base tree 421cd2d2 (the switch set, the finisher unreserved); the deletion commit removes the OFF world and
-    // this path, and the gate compares against the file.
-    if (Platform.environment['RECORD_GOAL_TRAINING_BASELINE'] == '1') {
-      int mask(Map<String, int> v) {
-        var m = 0;
-        for (var i = 0; i < _groups.length; i++) {
-          if ((v[_groups[i]] ?? 0) > 0) m |= 1 << i;
-        }
-        return m;
-      }
-      final out = <String, dynamic>{
-        '_meta': 'generator-killswitch-3a3c (plan §3.4 E): the goal-training gate\'s OFF world (disable_goal_training set, '
-            'the finisher unreserved), recorded on 421cd2d2 before the switch was deleted. build: sha256 of the OFF '
-            'plan map per build_muscle / strength key (item 1); groups: per key, weeks 1-3, a bitmask over _groups of '
-            'the groups OFF trains (OFF credit; items 5 and 7); maxOver: the OFF grid\'s largest minutes past the '
-            'session (items 6 and 7); identicalOff: Cut == Maintain pairs OFF (item 2).',
-        'build': {
-          for (final k in off.keys)
-            if (k.startsWith('build_muscle|') || k.startsWith('strength|')) k: sha256Hex(utf8.encode(off[k]!.$2.map)),
-        },
-        'groups': {for (final k in off.keys) k: [for (var w = 0; w < 3; w++) mask(off[k]!.$2.vol[w])]},
-        'maxOver': maxOver(off),
-        'identicalOff': identical(off).length,
-      };
-      File(_baselinePath).writeAsStringSync('${jsonEncode(out)}\n');
-    }
-
-    final zeros = newlyAtZero(off, on);
+    final zeros = newlyAtZero(on);
     final onDigest = digest(on);
     // ignore: avoid_print
-    print('goal training gate: build changed ${buildChanged.length}; identical OFF ${identical(off).length} ON '
-        '${identical(on)}; mains $mains (at bound $mainsAtBound), accessories $accessories, misses ${repMiss.length} '
-        '${repMiss.take(5).toList()}; newly at 0 ${zeros.length} ${zeros.take(5).toList()}; max over OFF '
-        '${maxOver(off)} ON ${maxOver(on)}; ON digest $onDigest');
+    print('goal training gate: build changed ${buildChanged.length}; identical ON ${identical(on)}; mains $mains (at '
+        'bound $mainsAtBound), accessories $accessories, misses ${repMiss.length} ${repMiss.take(5).toList()}; newly at '
+        '0 ${zeros.length} ${zeros.take(5).toList()}; max over OFF $offMaxOver ON ${maxOver(on)}; ON digest $onDigest');
 
     expect(buildChanged, isEmpty, reason: 'Build and the legacy strength token keep today\'s plan');
-    expect(identical(off).length, 92);
     expect(identical(on), _identicalAccepted, reason: 'd63');
     expect(repMiss, isEmpty);
     // Measured 2026-11-15: week-1 main lifts, those at a range bound (d58), accessories (Cut and Maintain).
     expect((mains, mainsAtBound, accessories), (14547, 3601, 12360));
-    expect(newlyAtZero(off, on), isEmpty);
-    expect(maxOver(on), lessThanOrEqualTo(maxOver(off)));
+    expect(zeros, isEmpty);
+    expect(maxOver(on), lessThanOrEqualTo(offMaxOver));
     expect(onDigest, _onDigest);
   });
 
   test('the Strength focus (d4, d60, d64)', () async {
-    final focus = await grid(switchOn: true, focus: true);
+    final focus = await grid(focus: true);
 
     var mains = 0;
     final miss = <String>[];
@@ -362,7 +339,7 @@ void main() {
         }
       }
     }
-    final zeros = newlyAtZero(off, focus);
+    final zeros = newlyAtZero(focus);
     final focusDigest = digest(focus);
     // ignore: avoid_print
     print('goal training gate, focus: mains $mains, misses ${miss.length} ${miss.take(5).toList()}; newly at 0 '
@@ -370,28 +347,8 @@ void main() {
     expect(miss, isEmpty);
     expect(mains, 29010, reason: 'week-1 main lifts with a range, every goal (measured 2026-11-15, on the 2E tree)');
     expect(zeros, isEmpty, reason: 'd64: +30 s only at 60+ minutes, where it costs no group');
-    expect(maxOver(focus), lessThanOrEqualTo(maxOver(off)));
+    expect(maxOver(focus), lessThanOrEqualTo(offMaxOver));
     expect(focusDigest, _focusDigest);
-
-    // The switch overrides the focus (a 48-plan subset).
-    final config = HiveService.instance.configBox;
-    await config.put('disable_goal_training', true);
-    await HiveService.instance.userBox.put('profile', {'physique_focus': 'strength'});
-    try {
-      for (final goal in _goals) {
-        for (final days in const [3, 5]) {
-          for (final level in _levels) {
-            for (final tier in const ['bodyweight', 'full_gym']) {
-              final k = '$goal|$days|$level|$tier|60|1';
-              expect(jsonEncode(gen(goal, days, level, tier, 60, 1).toMap()), off[k]!.$2.map, reason: k);
-            }
-          }
-        }
-      }
-    } finally {
-      await config.delete('disable_goal_training');
-      await HiveService.instance.userBox.delete('profile');
-    }
   });
 
   test('d81: the live world (finisher shown): Cut and Maintain identical in exactly the accepted 5 pairs', () async {

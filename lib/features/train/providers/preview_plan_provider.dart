@@ -168,11 +168,10 @@ final previewPlanProvider =
     'focus_text': focusText,
     'exercises': exercises,
     'warmup_count': workoutDay.warmup.length,
-    // Unit 3C (OI-396): the finisher items the user may see (the same reader rule as Train: switch off -> 0, an
-    // injured user counts only the bike finisher).
+    // Unit 3C (OI-396): the finisher items the user may see (the same reader rule as Train: an injured user counts
+    // only the bike finisher).
     'finisher_count': FinisherSafety.shownFinisherMaps(
       workoutDay.finisher.map((e) => e.toMap()).toList(),
-      enabled: finisherContext.enabled,
       injured: finisherContext.injured,
     ).length,
     'cooldown_count': workoutDay.cooldown.length,

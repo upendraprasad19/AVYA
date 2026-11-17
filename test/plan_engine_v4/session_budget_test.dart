@@ -247,13 +247,11 @@ void main() {
       expect(SessionBudget.weeklyBand('build_muscle', 'advanced'), (bottom: 14, top: 20));
       expect(SessionBudget.weeklyBand('strength', 'intermediate'), (bottom: 10, top: 14));
       expect(SessionBudget.weeklyBand('lose_fat', 'advanced'), (bottom: 12, top: 16));
-      // Unit 3A (OI-487, d3): Maintain is two-thirds of Build; Cut's beginner band is below Build's. The switch-off
-      // table is pinned beside it (goal_reps_behavioral_test.dart pins both whole tables).
+      // Unit 3A (OI-487, d3): Maintain is two-thirds of Build; Cut's beginner band is below Build's
+      // (goal_reps_behavioral_test.dart pins the whole table).
       expect(SessionBudget.weeklyBand('general_fitness', 'beginner'), (bottom: 7, top: 8));
       expect(SessionBudget.weeklyBand('general_fitness', 'advanced'), (bottom: 9, top: 13));
       expect(SessionBudget.weeklyBand('lose_fat', 'beginner'), (bottom: 9, top: 11));
-      expect(SessionBudget.weeklyBand('general_fitness', 'beginner', goalTraining: false), (bottom: 10, top: 10));
-      expect(SessionBudget.weeklyBand('general_fitness', 'advanced', goalTraining: false), (bottom: 12, top: 14));
     });
 
     test('session caps', () {

@@ -28,7 +28,7 @@ class FinisherPlan {
   /// The finisher's items (the same list on every finisher day of every week).
   final List<PlannedExercise> exercises;
 
-  /// Whether its time is taken from those days' budgets (`disable_cardio_finisher_shown` not set).
+  /// Whether its time is taken from those days' budgets (false only under the [CardioFinisher.debugReserve] test seam).
   final bool reserved;
 
   /// The finisher's time ([CardioFinisher.secondsOf]).
@@ -59,8 +59,7 @@ class CardioFinisher {
       items.fold(0, (sum, e) => sum + (e.durationSeconds ?? 0) + e.sets * e.restSeconds);
 
   /// Unit 3C (OI-396, founder 2026-10-22 / d56 / d61 / d74): the finisher for one generation, decided before sizing.
-  /// Empty when the goal has no cardio or the week has under 2 days. With `disable_cardio_finisher_shown` set
-  /// ([shown] false) it is today's finisher, unreserved, and [injuries] are ignored. Otherwise: no injury -> today's
+  /// Empty when the goal has no cardio or the week has under 2 days. No injury -> today's
   /// shape with each circuit's round rest stored; any injury ([injuries] are canonical tokens, `generateV4`'s
   /// `normalizedInjuries`) -> [injuredGymFinisherName] with gym cardio, none without. d76: under 60 resolved
   /// [minutes] the finisher is the short one ([shortFinisherSeconds]): the mini HIIT, or 4 rounds of the bike for an
@@ -73,20 +72,15 @@ class CardioFinisher {
     Set<String>? capability,
     List<String> injuries = const [],
     required int dayCount,
-    bool? shown,
     int? minutes,
   }) {
     if (!FitnessGoals.of(goal).cardio || dayCount < 2) return FinisherPlan.none;
-    final enabled = shown ?? PlanEngineFlags.cardioFinisherShownEnabled;
     final preference = cardioPreference ?? _defaultForGoal(goal);
     final hasGymEquipment = hasGymEquipmentOverride ??
         equipmentList.any(
           (e) => e.toLowerCase().contains('gym') || e.toLowerCase().contains('full'),
         );
     final days = _pickFinisherDays(dayCount);
-    if (!enabled) {
-      return FinisherPlan(days: days, exercises: _buildFinisher(preference, hasGymEquipment, capability: capability));
-    }
     final short = minutes != null && minutes < 60;
     if (injuries.isNotEmpty) {
       if (!hasGymEquipment) return FinisherPlan.none;

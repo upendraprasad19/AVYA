@@ -264,38 +264,38 @@ void main() {
     });
 
     test('d65: a slot the rank-0 reservation blocked may take a floor seat', () {
-      // general_fitness beginner, pre-3A band (Chest top 10). Day 0: Bench (Chest), Row (Back), Fly (Chest); days 1-5:
-      // Bench. Rank 0 on day 0: Bench fits but 10 - 2 < 2 x 5 later Chest leads, so the reservation blocks it. Days 1-5
-      // seat Bench (Chest 10); Row seats; Fly is refused by the top. The floor seats Fly (cheaper), then, the day still
-      // under 3, Bench: by then every later day's lead is seated, so the reservation guards nothing. Before d65 the day
-      // ended [Row, Fly].
-      final f = Fx(goalTraining: GoalTraining.off)
+      // general_fitness beginner, Unit 3A's goal band (Chest top 8). Day 0: Bench (Chest), Row (Back), Fly (Chest);
+      // days 1-4: Bench. Rank 0 on day 0: Bench fits but 8 - 2 < 2 x 4 later Chest leads, so the reservation blocks it
+      // (three later days would not: 6 = 2 x 3). Days 1-4 seat Bench (Chest 8); Row seats; Fly is refused by the top.
+      // The floor seats Fly (cheaper), then, the day still under 3, Bench: by then every later day's lead is seated, so
+      // the reservation guards nothing. Before d65 the day ended [Row, Fly].
+      final f = Fx()
         ..row('Bench', ['Chest'])
         ..row('Row', ['Lats'])
         ..row('Fly', ['Chest'], type: 'isolation', reps: '10-15');
       final days = [
         f.day('hypertrophy', [f.ex('Bench'), f.ex('Row'), f.ex('Fly')]),
-        for (var i = 0; i < 5; i++) f.day('hypertrophy', [f.ex('Bench')]),
+        for (var i = 0; i < 4; i++) f.day('hypertrophy', [f.ex('Bench')]),
       ];
       final out = f.run(days, goal: 'general_fitness', level: 'beginner', leadFirst: false, dayFloor: true);
       expect([for (final e in out[0].exercisesA) e.exerciseName], ['Bench', 'Row', 'Fly']);
       expect(seats(statsA()), {
         0: ['Fly:2:Chest:false', 'Bench:2:Chest:false'],
       });
-      expect(statsA().weekly['Chest'], 14);
+      expect(statsA().weekly['Chest'], 12);
       expect(statsA().floorTrims, isEmpty);
       expectOracle(f, out, statsA(), f.ctx(days, goal: 'general_fitness', level: 'beginner'));
     });
 
     test('not bound by the clock (d33); the label is the one pass A2 left (clock), taken before the floor', () {
-      // 30 minutes, general_fitness beginner; days 1-5 Row (Back 10 = the top). Day 0: a not-budgeted Sink (6 sets),
+      // 30 minutes, general_fitness beginner; days 1-4 Row (Back 8 = the top). Day 0: a not-budgeted Sink (6 sets),
       // ChestA, ChestB, BackX; reach 4 = the count floor. ChestA fits; ChestB does not fit the clock, and pass A2 refuses
       // it too (it would end the day more than 300 s over): the label is `clock`. BackX is refused by the top. The
       // floor (rows 2 < 3) prefers ChestB (no group over its top) to BackX and seats it past the clock (`overClock`).
       // The day still has 3 < 4 rows, so it keeps the label A2 left: `clock`. Read after the floor it would be
       // `cap_top` (the only slot left, BackX, is blocked by the top).
-      // general_fitness beginner's pre-3A band (10-10): the fixture's arithmetic below is built on it.
-      final f = Fx(goalTraining: GoalTraining.off)
+      // general_fitness beginner's goal band (7-8, Unit 3A): the fixture's arithmetic below is built on it.
+      final f = Fx()
         ..row('ChestA', ['Chest'])
         ..row('ChestB', ['Chest'])
         ..row('BackX', ['Lats'])
@@ -303,7 +303,7 @@ void main() {
       final days = [
         f.day('hypertrophy',
             [f.ex('Sink', sets: 6, customOrigin: 'repeat_pin'), f.ex('ChestA'), f.ex('ChestB'), f.ex('BackX')]),
-        for (var i = 0; i < 5; i++) f.day('hypertrophy', [f.ex('Row')]),
+        for (var i = 0; i < 4; i++) f.day('hypertrophy', [f.ex('Row')]),
       ];
       final ctx = f.ctx(days, minutes: 30, goal: 'general_fitness', level: 'beginner');
       final out = f.run(days, minutes: 30, goal: 'general_fitness', level: 'beginner', leadFirst: false, dayFloor: true);
@@ -358,18 +358,18 @@ void main() {
     });
 
     test('below 25 minutes (count floor 3) a floored day is in neither verdict list', () {
-      // 20 minutes: 840 s. Day 0: ChestA, ChestB (672 s), BackX refused by the top (Back 10 from days 1-5). Floored past
+      // 20 minutes: 840 s. Day 0: ChestA, ChestB (672 s), BackX refused by the top (Back 8 from days 1-4). Floored past
       // the top and past the clock (336 > 168 s left); 3 rows = the count floor, so no `belowCount`, and reach 3 is not
       // `selectorThin`. Floor off: 2 rows, `cap_top`.
-      // general_fitness beginner's pre-3A band (10-10): the fixture's arithmetic below is built on it.
-      final f = Fx(goalTraining: GoalTraining.off)
+      // general_fitness beginner's goal band (7-8, Unit 3A): the fixture's arithmetic below is built on it.
+      final f = Fx()
         ..row('ChestA', ['Chest'])
         ..row('ChestB', ['Chest'])
         ..row('BackX', ['Lats'])
         ..row('Row', ['Lats']);
       final days = [
         f.day('hypertrophy', [f.ex('ChestA'), f.ex('ChestB'), f.ex('BackX')]),
-        for (var i = 0; i < 5; i++) f.day('hypertrophy', [f.ex('Row')]),
+        for (var i = 0; i < 4; i++) f.day('hypertrophy', [f.ex('Row')]),
       ];
       final out = f.run(days, minutes: 20, goal: 'general_fitness', level: 'beginner', leadFirst: false, dayFloor: true);
       expect(rows(out)[0], 3);

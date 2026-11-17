@@ -65,19 +65,6 @@ void main() {
     final fixture = jsonDecode(File(_fixturePath).readAsStringSync()) as Map<String, dynamic>;
     final personas = generatorGoldenPersonas();
     expect(fixture.keys.where((k) => k != '_meta').toSet(), {for (final p in personas) p.key});
-    // TEMPORARY (generator-killswitch-3a3c commit 1, plan §3.4 A): RECORD_KILL_SWITCH_OFF=1 records this OFF world on
-    // the base tree 421cd2d2 with the 3A / 3C keys unset; the deletion commit removes this path.
-    if (Platform.environment['RECORD_KILL_SWITCH_OFF'] == '1') {
-      final out = <String, dynamic>{
-        '_meta': {
-          'recorded_on': 'generator-killswitch-3a3c: the base tree 421cd2d2 with disable_lead_first set and the 3A / 3C keys unset (the world the deletion must reproduce). Delete with the flag.',
-          'personas': personas.length,
-        },
-        for (final p in personas) p.key: sha256Hex(utf8.encode(jsonEncode(p.run().toMap()))),
-      };
-      File(_fixturePath).writeAsStringSync('${const JsonEncoder.withIndent('  ').convert(out)}\n');
-      return;
-    }
     final diffs = <String>[];
     for (final p in personas) {
       if (fixture[p.key] != sha256Hex(utf8.encode(jsonEncode(p.run().toMap())))) diffs.add(p.key);

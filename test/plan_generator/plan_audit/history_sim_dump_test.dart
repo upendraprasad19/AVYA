@@ -165,7 +165,7 @@ void main() {
                 final plateauNames = PlateauScan.plateauedExerciseNames(phase: phase).toList()..sort();
                 final w = await sim.worlds(goal, days, level, tier, minutes, phase);
                 final eff = PlanGenerator.effectiveLevel(level, phase);
-                final band = SessionBudget.weeklyBand(planGoal, eff, goalTraining: PlanEngineFlags.goalTrainingEnabled);
+                final band = SessionBudget.weeklyBand(planGoal, eff);
                 out.writeStringSync('${jsonEncode({
                   's': scenario.name,
                   'k': '$goal|$days|$level|$tier|$minutes|$phase',

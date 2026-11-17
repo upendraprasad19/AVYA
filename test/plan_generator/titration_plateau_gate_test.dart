@@ -161,7 +161,7 @@ void main() {
                 if ((label == 'sore3' || label == 'readinessOff') && !onEqualsOff) fail(label, '$key ON != OFF');
 
                 final eff = PlanGenerator.effectiveLevel(level, phase);
-                final band = SessionBudget.weeklyBand(planGoal, eff, goalTraining: PlanEngineFlags.goalTrainingEnabled);
+                final band = SessionBudget.weeklyBand(planGoal, eff);
                 final focus = w.focusGroups;
                 final bound = minutes + (minutes < 60 ? 6 : 5);
 

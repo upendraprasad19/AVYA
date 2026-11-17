@@ -6,8 +6,8 @@ import 'package:icanbefitter/shared/repositories/plan_engine/session_set_allocat
 
 /// Crafted library rows, keyed by lowercased name like the production map. [balancedWeek] is the default [run]
 /// passes to `allocate(balancedWeek:)` (null reads the kill switch, ON): a file that pins pre-2C-b mechanics builds
-/// `Fx(balancedWeek: false)` (Unit 2C-b's test policy, plan §5). [goalTraining] goes on every context: a fixture that
-/// pins a Cut / Maintain band from before Unit 3A (OI-487) builds `Fx(goalTraining: GoalTraining.off)`.
+/// `Fx(balancedWeek: false)` (Unit 2C-b's test policy, plan §5). [goalTraining] goes on every context (Unit 3A's goal
+/// bands are the only bands since generator-killswitch-3a3c).
 class Fx {
   Fx({this.balancedWeek, this.goalTraining = const GoalTraining()});
 

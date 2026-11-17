@@ -12,9 +12,8 @@ import 'package:icanbefitter/shared/repositories/plan_engine/split_resolver.dart
 import '../helpers/session_budget_fixtures.dart';
 
 int base(String goal, String level, String archetype,
-        {bool main = true, bool focus = false, bool enabled = true, int min = 6, int max = 12}) =>
+        {bool main = true, bool focus = false, int min = 6, int max = 12}) =>
     GoalReps.base(
-      enabled: enabled,
       strengthFocus: focus,
       isMain: main,
       planGoal: goal,
@@ -69,22 +68,13 @@ void main() {
         reason: 'an accessory is untouched by the focus');
   });
 
-  test('the switch off: today\'s lean for every goal, focus or not', () {
-    for (final goal in ['lose_fat', 'general_fitness', 'build_muscle']) {
-      expect([for (final a in phases) base(goal, 'beginner', a, enabled: false, focus: true, min: 6, max: 12)],
-          [9, 6, 12, 9], reason: goal);
-    }
-  });
-
   group('rest (d60)', () {
-    test('+30 s on H and M under the Strength focus at 60+ minutes; nothing on I or B; nothing with the switch off', () {
+    test('+30 s on H and M under the Strength focus at 60+ minutes; nothing on I or B', () {
       const focus = GoalTraining(strengthFocus: true);
       int r(String a, GoalTraining gt, int m) => SessionBudget.restForGoal(a, gt, minutes: m);
       expect([for (final a in ['H', 'M', 'I', 'B']) r(a, focus, 60)], [180, 150, 75, 60]);
       expect([for (final a in ['H', 'M', 'I', 'B']) r(a, focus, 90)], [180, 150, 75, 60]);
       expect([for (final a in ['H', 'M', 'I', 'B']) r(a, const GoalTraining(), 60)], [150, 120, 75, 60]);
-      expect([for (final a in ['H', 'M']) r(a, const GoalTraining(enabled: false, strengthFocus: true), 60)], [150, 120]);
-      expect(r('H', GoalTraining.off, 90), 150);
     });
 
     test('d64: no extra rest below 60 minutes (30 and 45 keep normal rest; the reps still take the low end)', () {
@@ -113,7 +103,6 @@ void main() {
       expect(run(const GoalTraining()), [('mine', 6), ('IsoA', 4), ('IsoB', 4), ('IsoC', 3), ('IsoD', 3)]);
       expect(run(const GoalTraining(strengthFocus: true)),
           [('mine', 6), ('IsoA', 3), ('IsoB', 3), ('IsoC', 3), ('IsoD', 3)]);
-      expect(run(const GoalTraining(enabled: false, strengthFocus: true)), run(const GoalTraining()));
     });
 
     // `_weekTwoGains` prices week 2's +1 set at restFor too (round 2, seat B): four M rows at 3 sets in a 60-minute day
@@ -133,7 +122,6 @@ void main() {
 
       expect(gains(const GoalTraining()), {(0, 0), (0, 1), (0, 2), (0, 3)});
       expect(gains(const GoalTraining(strengthFocus: true)), {(0, 0), (0, 1)});
-      expect(gains(const GoalTraining(enabled: false, strengthFocus: true)), gains(const GoalTraining()));
     });
   });
 
@@ -145,12 +133,6 @@ void main() {
           [(bottom: 9, top: 11), (bottom: 10, top: 14), (bottom: 12, top: 16)]);
       expect([for (final l in ['beginner', 'intermediate', 'advanced']) SessionBudget.weeklyBand('build_muscle', l)],
           [(bottom: 10, top: 12), (bottom: 12, top: 16), (bottom: 14, top: 20)]);
-    });
-
-    test('the switch off: today\'s bands', () {
-      expect(SessionBudget.weeklyBand('general_fitness', 'beginner', goalTraining: false), (bottom: 10, top: 10));
-      expect(SessionBudget.weeklyBand('lose_fat', 'beginner', goalTraining: false), (bottom: 10, top: 12));
-      expect(SessionBudget.weeklyBand('general_fitness', 'advanced', goalTraining: false), (bottom: 12, top: 14));
     });
   });
 
@@ -279,15 +261,6 @@ void main() {
       }
     });
 
-    test('the switch off equals today for Cut', () {
-      expect([for (final ph in [1, 2, 3, 4]) reps('lose_fat', 'intermediate', ph, gt: GoalTraining.off)], [
-        ['9', '13', '14'],
-        ['6', '10', '8'],
-        ['12', '15', '20'],
-        ['9', '13', '14'],
-      ]);
-    });
-
     test('the stamped rest: 150 + 30 for the press (H) under the focus at 60 minutes, 150 at 45 (d64)', () {
       final f = lib();
       int restAt(int minutes) {
@@ -318,18 +291,16 @@ void main() {
       }
 
       expect(total(const GoalTraining(strengthFocus: true)), lessThan(total(const GoalTraining())));
-      expect(total(const GoalTraining(enabled: false, strengthFocus: true)), total(const GoalTraining()));
     });
   });
 
   group('quad-first credit for 4-day Maintain (S5)', () {
-    test('general_fitness at 4 days with the switch on; nowhere else new', () {
-      bool q(String goal, int days, bool gt) =>
-          SplitResolver.quadPrimaryCreditsGlutes(goal, days, 45, quadLegsB: true, balancedWeek: false, goalTraining: gt);
-      expect(q('general_fitness', 4, true), isFalse, reason: 'a squat does not spend the Glutes top');
-      expect(q('general_fitness', 4, false), isTrue, reason: 'the switch off: today');
-      expect([for (final d in [3, 5]) q('general_fitness', d, true)], [true, true]);
-      expect([for (final g in ['lose_fat', 'strength']) q(g, 4, true)], [true, true]);
+    test('general_fitness at 4 days; nowhere else new', () {
+      bool q(String goal, int days) =>
+          SplitResolver.quadPrimaryCreditsGlutes(goal, days, 45, quadLegsB: true, balancedWeek: false);
+      expect(q('general_fitness', 4), isFalse, reason: 'a squat does not spend the Glutes top');
+      expect([for (final d in [3, 5]) q('general_fitness', d)], [true, true]);
+      expect([for (final g in ['lose_fat', 'strength']) q(g, 4)], [true, true]);
     });
   });
 }

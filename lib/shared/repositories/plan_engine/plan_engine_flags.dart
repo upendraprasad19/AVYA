@@ -63,33 +63,6 @@ class PlanEngineFlags {
     }
   }
 
-  /// Unit 3C kill-switch (OI-396, founder 2026-10-22, d56 / d61 / d74 / d75): the cardio finisher is injury-safe
-  /// (any injury: Stationary Bike Sprints in a gym, no finisher at home), its time is reserved on its 2 days before
-  /// sets are sized, and Train / Active Workout / Home show it. Default ON. Set
-  /// `configBox['disable_cardio_finisher_shown'] = true` to restore today's finisher, sizing and screens verbatim, for
-  /// plans generated from then on (a stored finisher is then simply not shown). Read once per generation by
-  /// `generateV4` and once per build by each screen.
-  static bool get cardioFinisherShownEnabled {
-    try {
-      return HiveService.instance.configBox.get('disable_cardio_finisher_shown') != true;
-    } catch (_) {
-      return true; // no Hive (pure unit test) → the shown, injury-safe, timed finisher
-    }
-  }
-
-  /// Unit 3A kill-switch (OI-487, founder d3 / d4 / d58-d61): the goal's reps (Cut and Maintain main lifts by the
-  /// founder's table, their accessories 10-15), the Cut / Maintain weekly bands, and the Strength focus (a main lift at
-  /// its range's low end with +30 s rest). Default ON. Set `configBox['disable_goal_training'] = true` to restore
-  /// today's reps, bands, rests and the 4-day Maintain Glutes credit verbatim, for plans generated from then on. Read by
-  /// `TrainingHistoryAnalyzer.goalTrainingFromProfile` (once per generation, and once per plan-day swap) and by
-  /// `SplitResolver.quadPrimaryCreditsGlutes` when its `goalTraining` argument is not given.
-  static bool get goalTrainingEnabled {
-    try {
-      return HiveService.instance.configBox.get('disable_goal_training') != true;
-    } catch (_) {
-      return true; // no Hive (pure unit test) → the goal table
-    }
-  }
 
   /// Unit 2B kill-switch (OI-452, founder d30-d33): the 3-exercise day floor. A day left under min(3, its reach) after
   /// pass A2 seats remaining slots at 2 sets past a group's weekly top (no excess limit, every phase, not bound by the

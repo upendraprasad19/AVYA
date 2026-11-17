@@ -10876,17 +10876,16 @@ concepts:
       FinisherPlan.secondsByDay reaches the allocator through SessionBudgetContext.finisherSecondsByDay, which takes the
       finisher's time from those days only (d61). Stored as `finisher` on each `schedule_<date>` row by all three schedule
       writers (generateAndSchedule, Edit Profile's generateAndScheduleFromDate, regenerate and the hotel planner).
-      READ rule (FinisherSafety.shownFinisherMaps, pure): switch off -> nothing; injured (the PROFILE only, d78) -> the
-      stored finisher only when it is the bike alone, else nothing; otherwise every map entry.
+      READ rule (FinisherSafety.shownFinisherMaps, pure): injured (the PROFILE only, d78) -> the stored finisher only when
+      it is the bike alone, else nothing; otherwise every map entry.
       FinisherShowContextReader.read() fails closed to injured (display only). Every minutes reader passes the shown
       finisher (`finisher:` is a required argument of estimateDaySecondsFromPlanDay / budgetedDayMinutes /
       homeCardMinutes), so Train == Home. The finisher is never a session exercise (no set, PR, finishGuard line or
       completion). shortenDay drops the shown finisher first (d79) and removes a hidden one's key on any write. A coach
       modifyWorkoutForInjury writes the canonical token to profile['injuries'] (d77, InjuryVocab.coachPartToken,
-      nearest joint for quad / calf / chest / upper_back) so the rule sees it. Kill switch disable_cardio_finisher_shown
-      (PlanEngineFlags.cardioFinisherShownEnabled, default ON): set, the engine builds today's finisher unreserved and
-      ignoring injuries (1,010 golden personas equal main 862f0bc2, generator_golden_hashes_finisher_off.json) and no
-      screen shows one. Rule-14 waiver (d56, d61, d75, d76): the plan call, the context field, the hasGymOverride block
+      nearest joint for quad / calf / chest / upper_back) so the rule sees it. The kill switch
+      disable_cardio_finisher_shown and its OFF paths were deleted by generator-killswitch-3a3c (OI-516, 2026-11-17);
+      CardioFinisher.debugReserve (a test seam) builds the finisher without reserving its time. Rule-14 waiver (d56, d61, d75, d76): the plan call, the context field, the hasGymOverride block
       moved before sizing, the minutes argument.
     writers:
       - file: lib/shared/repositories/plan_engine/cardio_finisher.dart
@@ -10907,10 +10906,10 @@ concepts:
     readers:
       - file: lib/shared/repositories/plan_engine/finisher_safety.dart
         method_or_widget: FinisherSafety.shownFinisherMaps / shownOfRow / isInjured
-        semantic: flag-check
+        semantic: derived
       - file: lib/shared/repositories/plan_engine/finisher_show_context.dart
-        method_or_widget: FinisherShowContextReader.read (switch + profile, fails closed)
-        semantic: flag-check
+        method_or_widget: FinisherShowContextReader.read (the profile's injuries, fails closed)
+        semantic: derived
       - file: lib/features/train/providers/train_provider.dart
         method_or_widget: workoutDayForDate / CurrentPlanNotifier build (WorkoutDayData.finisher, finisherSeconds, budgetMinutes)
         semantic: render
@@ -10931,7 +10930,7 @@ concepts:
         semantic: render
       - file: lib/core/services/swap_service.dart
         method_or_widget: shortenDay (the shown finisher in the original estimate, finisherDropped)
-        semantic: flag-check
+        semantic: derived
     contract_test_path: test/contracts/cardio_finisher_shown_pure_test.dart
 
   - concept: admin_dashboard_metrics_snapshot
@@ -12445,32 +12444,31 @@ concepts:
     behavioral_test_path: test/contracts/goal_reps_behavioral_test.dart
     description: >
       Generator Unit 3A (OI-487 generator half, founder d3 / d4 / d58-d65, 2026-11-15, diagnose 675d02, plan
-      docs/plans/2026-11-15-generator-step3a-goal-training.md): training follows the goal. GoalTraining{enabled,
-      strengthFocus} rides on SessionBudgetContext.goalTraining, built once per generation by
-      TrainingHistoryAnalyzer.goalTrainingFromProfile (the disable_goal_training switch and
-      userBox['profile']['physique_focus'] == 'strength') and passed by generateV4 (d61, rule-14 waiver). Week-1 reps
+      docs/plans/2026-11-15-generator-step3a-goal-training.md): training follows the goal. GoalTraining{strengthFocus}
+      rides on SessionBudgetContext.goalTraining, built once per generation by
+      TrainingHistoryAnalyzer.goalTrainingFromProfile (userBox['profile']['physique_focus'] == 'strength') and passed by
+      generateV4 (d61, rule-14 waiver). Week-1 reps
       (PeriodizationEngine._applyWave through GoalReps.base): a main lift (archetype H / M) takes Cut 8 / 6 / 8
       (intermediate, advanced) or 10 / 8 / 10 (Cut beginner, Maintain), deload = phase 1, Build keeps today's lean; the
       wave and the range clamp follow; Cut / Maintain accessories clamp into 10-15. The Strength focus puts a main lift
       at its range floor outside the deload and adds 30 s rest on H / M at 60+ resolved minutes only (d64), in every
       rest writer and pricer (SessionBudget.restFor / restForGoal) and in a swap. Weekly bands: _goalBands (Maintain
-      7-8 / 8-11 / 9-13, Cut beginner 9-11) through weeklyBand(goalTraining:), read by BudgetLedger.weeklyTop, the
-      allocator's floor label and titration. 4-day Maintain takes the quad-first Glutes credit
-      (SplitResolver.quadPrimaryCreditsGlutes). The switch set: GoalTraining.off, today's reps, bands, rests and credit
-      (generator_golden_hashes_goal_training_off.json = main over 1,010 personas). d65 amends the 2B day floor (a
+      7-8 / 8-11 / 9-13, Cut beginner 9-11; the only band table) through weeklyBand, read by BudgetLedger.weeklyTop,
+      the allocator's floor label and titration. 4-day Maintain takes the quad-first Glutes credit
+      (SplitResolver.quadPrimaryCreditsGlutes). The kill switch disable_goal_training, GoalTraining.off and the pre-3A
+      band table were deleted by generator-killswitch-3a3c (OI-514, 2026-11-17); the pre-3A world survives only as the
+      goal-training gate's frozen baseline (test/fixtures/goal_training_gate_baseline.json). d65 amends the 2B day floor (a
       reservation-blocked slot may be floored; a session-cap refusal takes sets off the group's rows above 2,
       AllocationStats.floorTrims). Accepted (founder): d63 (2 of 576 Cut / Maintain profiles
-      identical), d66 (an injured Cut / Maintain plan can lose a group the switch-off plan trains), d67 (the 4-day
+      identical), d66 (an injured Cut / Maintain plan can lose a group the pre-3A plan trains), d67 (the 4-day
       Maintain credit books a lunge to Quads only); reps follow the effective level (d68).
     writers:
       - file: lib/shared/repositories/plan_engine/training_history_analyzer.dart
-        method: goalTrainingFromProfile / isStrengthFocus (reads profile.physique_focus and the switch)
+        method: goalTrainingFromProfile / isStrengthFocus (reads profile.physique_focus)
       - file: lib/shared/repositories/plan_engine/plan_generator.dart
         method: generateV4 (SessionBudgetContext goalTraining:, d61)
-      - file: lib/shared/repositories/plan_engine/plan_engine_flags.dart
-        method: goalTrainingEnabled (disable_goal_training)
       - file: lib/shared/repositories/plan_engine/session_budget.dart
-        method: GoalTraining / restFor / restForGoal / _goalBands / weeklyBand(goalTraining:)
+        method: GoalTraining / restFor / restForGoal / _goalBands / weeklyBand
       - file: lib/shared/repositories/plan_engine/goal_reps.dart
         method: GoalReps.base / mainBase / todayBase / clampsAccessories
     readers:
@@ -12478,22 +12476,22 @@ concepts:
         method_or_widget: _applyWave (GoalReps.base, the accessory clamp) and the rest stamp / _weekTwoGains (restFor)
         semantic: reps and rest
       - file: lib/shared/repositories/plan_engine/session_set_allocator.dart
-        method_or_widget: _repeatCost / _variant pricing (restFor), pass C's band bottom (weeklyBand goalTraining), the day floor (d65)
+        method_or_widget: _repeatCost / _variant pricing (restFor), pass C's band bottom (weeklyBand), the day floor (d65)
         semantic: pricing
       - file: lib/shared/repositories/plan_engine/volume_titration.dart
-        method_or_widget: _titrateWeekBudgeted (weeklyBand goalTraining)
+        method_or_widget: _titrateWeekBudgeted (weeklyBand)
         semantic: band
       - file: lib/shared/repositories/plan_engine/split_resolver.dart
-        method_or_widget: quadPrimaryCreditsGlutes (4-day general_fitness, goalTraining:)
+        method_or_widget: quadPrimaryCreditsGlutes (4-day general_fitness)
         semantic: credit
       - file: lib/core/services/swap_service.dart
         method_or_widget: swapExerciseInDay (restForGoal with the profile's focus and resolved minutes)
         semantic: swap rest
       - file: test/plan_generator/goal_training_gate_test.dart
-        method_or_widget: 2,304 plans ON vs OFF and under the focus (Build byte-identical, Cut / Maintain distinct but d63, the rep table, 10-15 accessories, no group newly at 0, focus floor and rest, digests)
+        method_or_widget: 2,304 plans against the recorded pre-3A baseline and under the focus (Build byte-identical, Cut / Maintain distinct but d63, the rep table, 10-15 accessories, no group newly at 0, focus floor and rest, digests)
         semantic: behavioral
       - file: test/contracts/swap_exercise_rest_follows_incoming_archetype_test.dart
-        method_or_widget: the focus rest through a real swap (60 / 45 minutes, no focus, the switch)
+        method_or_widget: the focus rest through a real swap (60 / 45 minutes, no focus)
         semantic: behavioral
     contract_test_path: test/contracts/goal_reps_behavioral_test.dart
 
@@ -16098,7 +16096,7 @@ concepts:
         fields_read: [type]
         notes: whitelist shape, widened to include 'logged' by this batch
       - file: lib/shared/repositories/plan_engine/plan_engine_flags.dart
-        line_range: 542-547
+        line_range: 515-520
         method: isRestDayConsideringLogged
         semantic: flag-check
         fields_read: [type]

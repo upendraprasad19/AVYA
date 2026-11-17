@@ -289,8 +289,8 @@ class PeriodizationEngine {
     }
 
     // V4: Use exercise-specific rep range when available.
-    // Archetype determines which side of the range to lean toward (Build, the legacy strength token and the
-    // disable_goal_training world; a Cut / Maintain main lift and the Strength focus take GoalReps.base instead):
+    // Archetype determines which side of the range to lean toward (Build and the legacy strength token; a Cut /
+    // Maintain main lift and the Strength focus take GoalReps.base instead):
     //   strength   → lower end (min reps, heavier weight)
     //   hypertrophy → midpoint
     //   metabolic  → upper end (more reps, lighter weight)
@@ -309,7 +309,6 @@ class PeriodizationEngine {
       final arch = SessionBudget.archetypeOfPlanned(ex, budget);
       final isMain = arch == 'H' || arch == 'M';
       reps = GoalReps.base(
-        enabled: gt.enabled,
         strengthFocus: gt.strengthFocus,
         isMain: isMain,
         planGoal: budget.planGoal,
@@ -324,7 +323,7 @@ class PeriodizationEngine {
       // Clamp to keep within library-defined bounds (wave can nudge but not escape)
       reps = reps.clamp(minReps, maxReps);
       // Cut and Maintain accessories sit in 10-15 (founder d3).
-      if (gt.enabled && !isMain && GoalReps.clampsAccessories(budget.planGoal)) {
+      if (!isMain && GoalReps.clampsAccessories(budget.planGoal)) {
         reps = reps.clamp(GoalReps.accessoryMin, GoalReps.accessoryMax);
       }
     } else {

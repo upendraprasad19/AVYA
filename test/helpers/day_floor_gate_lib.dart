@@ -318,12 +318,6 @@ class DayFloorGate {
       print('  ${e.key}: ${e.value.take(5).toList()}');
     }
     final key = 'digest|$block|$tier';
-    // TEMPORARY (generator-killswitch-3a3c commit 1, plan §3.4 B): RECORD_DAY_FLOOR_GATE=1 records this OFF digest on
-    // the base tree 421cd2d2; the deletion commit removes this path. Run one gate file at a time (the fixture is one
-    // shared read-merge-write file).
-    if (Platform.environment['RECORD_DAY_FLOOR_GATE'] == '1') {
-      writeDayFloorFixtureEntries({key: {'runs': t.runs, 'sha256': digest}});
-    }
     final file = File(dayFloorFixturePath);
     final fixture = jsonDecode(file.readAsStringSync()) as Map<String, dynamic>;
     expect(fixture[key], {'runs': t.runs, 'sha256': digest},

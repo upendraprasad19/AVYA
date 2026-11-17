@@ -44,9 +44,8 @@ class GoalReps {
   }
 
   /// The week-1 base for a row: [isMain] is H or M. Under the Strength focus (d4) a main lift takes the range's low end
-  /// in every phase but the deload, which keeps the goal's rule. [enabled] false is [todayBase] verbatim.
+  /// in every phase but the deload, which keeps the goal's rule.
   static int base({
-    required bool enabled,
     required bool strengthFocus,
     required bool isMain,
     required String planGoal,
@@ -55,7 +54,7 @@ class GoalReps {
     required int minReps,
     required int maxReps,
   }) {
-    if (!enabled || !isMain) return todayBase(archetype, minReps, maxReps);
+    if (!isMain) return todayBase(archetype, minReps, maxReps);
     if (strengthFocus && archetype != 'deload') return minReps;
     return mainBase(planGoal, level, archetype) ?? todayBase(archetype, minReps, maxReps);
   }

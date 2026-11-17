@@ -1,5 +1,5 @@
 // Unit 3C (OI-396, docs/plans/2026-11-16-generator-step3c-cardio-finisher.md): the pure pieces of the shown, injury-safe
-// and timed cardio finisher. No Hive: the plan is built through the public `CardioFinisher.plan` with `shown` given.
+// and timed cardio finisher. No Hive: the plan is built through the public `CardioFinisher.plan`.
 //
 // - `FinisherSafety.isInjured` is the engine's own `normalizedInjuries` test over the PROFILE only (d78).
 // - `FinisherSafety.shownFinisherMaps` is the reader rule every screen and `shortenDay` use (§2.3).
@@ -25,7 +25,6 @@ FinisherPlan _plan({
   bool gym = true,
   List<String> injuries = const [],
   int? minutes,
-  bool shown = true,
   int days = 4,
 }) =>
     CardioFinisher.plan(
@@ -36,7 +35,6 @@ FinisherPlan _plan({
       capability: null,
       injuries: injuries,
       dayCount: days,
-      shown: shown,
       minutes: minutes,
     );
 
@@ -76,38 +74,34 @@ void main() {
     final bike = [
       {'exercise_name': 'Stationary Bike Sprints', 'sets': 8, 'reps': '30s fast / 30s slow', 'duration_seconds': 480},
     ];
-    test('switch off: nothing, injured or not', () {
-      expect(FinisherSafety.shownFinisherMaps(hiit, enabled: false, injured: false), isEmpty);
-      expect(FinisherSafety.shownFinisherMaps(bike, enabled: false, injured: true), isEmpty);
-    });
     test('uninjured: every map entry, a non-map entry dropped', () {
-      expect(FinisherSafety.shownFinisherMaps(hiit, enabled: true, injured: false), hiit);
-      expect(FinisherSafety.shownFinisherMaps([...hiit, 'junk'], enabled: true, injured: false), hiit);
+      expect(FinisherSafety.shownFinisherMaps(hiit, injured: false), hiit);
+      expect(FinisherSafety.shownFinisherMaps([...hiit, 'junk'], injured: false), hiit);
     });
     test('injured: a jumping finisher is hidden, the bike is shown', () {
-      expect(FinisherSafety.shownFinisherMaps(hiit, enabled: true, injured: true), isEmpty);
-      expect(FinisherSafety.shownFinisherMaps(bike, enabled: true, injured: true), bike);
+      expect(FinisherSafety.shownFinisherMaps(hiit, injured: true), isEmpty);
+      expect(FinisherSafety.shownFinisherMaps(bike, injured: true), bike);
     });
     test('injured: the bike matched by `name` too, case and spaces ignored', () {
       final odd = [
         {'name': '  stationary BIKE sprints '},
       ];
-      expect(FinisherSafety.shownFinisherMaps(odd, enabled: true, injured: true), hasLength(1));
+      expect(FinisherSafety.shownFinisherMaps(odd, injured: true), hasLength(1));
     });
     test('injured: a bike mixed with anything else, a nameless item, a non-map entry, or empty -> hidden', () {
-      expect(FinisherSafety.shownFinisherMaps([...bike, ...hiit], enabled: true, injured: true), isEmpty);
+      expect(FinisherSafety.shownFinisherMaps([...bike, ...hiit], injured: true), isEmpty);
       expect(
           FinisherSafety.shownFinisherMaps([
             ...bike,
             {'sets': 1},
-          ], enabled: true, injured: true),
+          ], injured: true),
           isEmpty);
-      expect(FinisherSafety.shownFinisherMaps([...bike, 'junk'], enabled: true, injured: true), isEmpty);
-      expect(FinisherSafety.shownFinisherMaps(const [], enabled: true, injured: true), isEmpty);
+      expect(FinisherSafety.shownFinisherMaps([...bike, 'junk'], injured: true), isEmpty);
+      expect(FinisherSafety.shownFinisherMaps(const [], injured: true), isEmpty);
     });
     test('a non-list stored value is nothing', () {
-      expect(FinisherSafety.shownFinisherMaps('burpees', enabled: true, injured: false), isEmpty);
-      expect(FinisherSafety.shownFinisherMaps(null, enabled: true, injured: false), isEmpty);
+      expect(FinisherSafety.shownFinisherMaps('burpees', injured: false), isEmpty);
+      expect(FinisherSafety.shownFinisherMaps(null, injured: false), isEmpty);
     });
   });
 
@@ -154,13 +148,6 @@ void main() {
         expect(_plan(injuries: [token], gym: false, minutes: 60), same(FinisherPlan.none), reason: token);
       }
     });
-    test('switch off: today\'s finisher, unreserved, injuries ignored', () {
-      final p = _plan(shown: false, injuries: const ['knee'], minutes: 30);
-      expect(_names(p.exercises), ['Burpees', 'Mountain Climbers', 'Jump Squats']);
-      expect(p.exercises.last.restSeconds, 0);
-      expect(p.reserved, isFalse);
-      expect(p.secondsByDay, isEmpty);
-    });
     test('the finisher days per day count (B-pass seat A F2): the reserved days are the attached days', () {
       for (final (days, want) in const [(2, {0, 1}), (3, {0, 2}), (4, {0, 2}), (5, {0, 3}), (6, {0, 3})]) {
         final p = _plan(days: days, minutes: 60);
@@ -191,7 +178,6 @@ void main() {
           for (final m in [45, 60]) '$pref gym=$gym $m': _plan(pref: pref, gym: gym, minutes: m).exercises,
       'bike 8': _plan(injuries: const ['knee'], minutes: 60).exercises,
       'bike 4': _plan(injuries: const ['knee'], minutes: 30).exercises,
-      'off hiit': _plan(shown: false).exercises,
     };
     final seen = <int>{};
     shapes.forEach((label, items) {
@@ -200,8 +186,9 @@ void main() {
       expect(SessionBudget.finisherSecondsOfPlanDay(stored), CardioFinisher.secondsOf(items), reason: label);
       seen.add(CardioFinisher.secondsOf(items));
     });
-    // The shapes really differ (a pricing that ignored the rest term would still pass on equal shapes).
-    expect(seen, containsAll(<int>[240, 360, 450, 480, 540]));
+    // The shapes really differ (a pricing that ignored the rest term would still pass on equal shapes). The OFF HIIT's
+    // 360 s (no round rest) went with the kill switch (generator-killswitch-3a3c).
+    expect(seen, containsAll(<int>[240, 450, 480, 540]));
   });
 
   test('finisherSecondsOfPlanDay is total over odd stored rows', () {

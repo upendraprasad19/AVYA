@@ -92,8 +92,8 @@ void main() {
     final record = Platform.environment['RECORD_DAY_FLOOR_HASHES'];
     if (record == 'main' || record == 'on') {
       // main: every floor-off combination key; on: the floor-on combination keys. Both were re-recorded on 421cd2d2
-      // (generator-killswitch-3a3c, plan §1); the gate's floor-off digests are recorded by the gate itself
-      // (`RECORD_DAY_FLOOR_GATE`).
+      // (generator-killswitch-3a3c, plan §1); the gate's floor-off digests were recorded there too, by a temporary
+      // path in `day_floor_gate_lib.dart` (commit c16ce1ea).
       final entries = <String, Object>{
         for (final e in all.entries)
           if (e.value.$1 == (record == 'on')) e.key: comboHash(e.value),

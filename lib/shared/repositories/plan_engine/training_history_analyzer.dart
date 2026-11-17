@@ -118,12 +118,10 @@ class TrainingHistoryAnalyzer {
     }
   }
 
-  /// Unit 3A (OI-487, d61): what the goal changes this generation: the `disable_goal_training` switch and the
-  /// Strength focus (`physique_focus == 'strength'`). try/catch → the switch's own value with no focus, like
-  /// [physiqueFocusMuscles], so a null / corrupt profile never throws into the generator.
+  /// Unit 3A (OI-487, d61): what the goal changes this generation: the Strength focus (`physique_focus ==
+  /// 'strength'`). try/catch → no focus, like [physiqueFocusMuscles], so a null / corrupt profile never throws into
+  /// the generator.
   static GoalTraining goalTrainingFromProfile() {
-    final enabled = PlanEngineFlags.goalTrainingEnabled;
-    if (!enabled) return GoalTraining.off;
     try {
       final profile = HiveService.instance.userBox.get('profile');
       if (profile is! Map) return const GoalTraining();

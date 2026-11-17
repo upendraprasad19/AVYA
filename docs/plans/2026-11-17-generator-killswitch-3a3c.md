@@ -360,3 +360,25 @@ Maintain plans with goal training) and one set of counts, which is explained.
     loaded-wins key set.
   - Checked fine: the oracle soundness, the goal-training baseline covering every OFF use, the 8 fixture sites, the
     scratch edits matching §3.4.
+
+## 8. Results (commit 2)
+
+- **Two-tree oracle:** every touched test passes with no fixture, tuple or digest edited since commit 1 (c16ce1ea): the
+  24 files of §3 (day-floor kill switch, rep30 / p1 / p4, the three OFF goldens, goal-training gate, weekly-minimum
+  gate, oi489, repeat-minutes, `generator_golden_test` unchanged, and the contract tests that lost switch cases).
+- **Audit identity (§5.5):** the 2,304-plan audit with no focus, with the Strength focus, and the history simulation
+  equal step 5's dumps byte for byte (`plan_dump.jsonl`, `audit.json`, `history_sim.jsonl`).
+- **Mutations, each confirmed applied (`grep -c`) and each red in a named test:**
+  - (a) Maintain intermediate band 8-11 -> 10-12: `goal_reps_behavioral_test` bands (1). `session_budget_test` pins
+    only the beginner and advanced Maintain bands, so it stays green on this one.
+  - (b) `GoalReps.base` returns `todayBase` for a main lift: 5 tests. (c) accessory clamp off: 2. (d) +30 s Strength-focus
+    rest removed: 6 in `goal_reps` plus the swap test (1). (e) 4-day Maintain Glutes credit off: `goal_reps` (1),
+    `balanced_week` S2 (1). (f) `CardioFinisher.plan` ignores injuries: 1 + 3. (g) `shownFinisherMaps` shows a jumping
+    finisher to an injured user: 2 + 4 (a first version failed to compile and was discarded). (h) the short finisher
+    under 60 removed: 2 + 2.
+  - (i)-(p), one per §3.3 site: the rank-0 reservation `2 *` -> `0 *` (2 tests; the first fixture also pins
+    `leadWorld == 'lead'`, because 2A's capped-world fallback seated the same sets), week 2 rank-major -> day-major (1),
+    the empty-day guard's room check (2), the floor candidate filters (1 / 3 / 21), pass A2's weekly-top check (2).
+- **A fixture that a fallback can reproduce needs a pin on which path ran** (the reservation case above).
+- **Absence grep (§5.3):** `plan_generator.dart:335-336` (a comment) was reworded under the founder's comment-only
+  waiver of 2026-11-17 (rule 14; the code is unchanged); the deleted names remain only in retired-name docs.

@@ -29,12 +29,12 @@ findings:
     evidence: "history_sim_dump_test.dart on f7d55205, the step 4 gate's definitions (576 profiles x progress / decline / flat)"
   - id: S5-A
     title: "With the Strength focus, Cut equals Maintain in 60 of 576 profiles (58 at 30 min), vs d81's 5 without a focus"
-    terminal_state: blocked_on_user
-    reason: "founder call: accept on d81's reasoning (recommended) or split the goals' accessory reps under the focus; on the generator board as step 5's decision"
+    terminal_state: verified_clean
+    evidence: "founder accepted 2026-11-17 (board decision d84): Cut == Maintain under the Strength focus in 60 of 576 profiles stays, on d81's reasoning"
   - id: S5-B
     title: "Cut and Maintain repeat week 1's exercises in week 2 in 576 of 576 plans (Build 208, Strength 352), unchanged since 8 Nov finding 5"
-    terminal_state: blocked_on_user
-    reason: "founder call: keep (recommended: the same lifts carry the progression inside a phase; cross-phase variety changes them) or add a B version for Cut / Maintain"
+    terminal_state: verified_clean
+    evidence: "founder accepted 2026-11-17 (board decision d85): week 2 keeps week 1's exercises for Cut / Maintain (the same lifts carry the progression inside a phase; cross-phase variety changes them)"
   - id: S5-STAMP-4
     title: "Step 4 post-merge stamps: closure rows and ship_dark flip_commit name 6abfe1a5 / 18aeea82 / f7d55205"
     terminal_state: verified_clean

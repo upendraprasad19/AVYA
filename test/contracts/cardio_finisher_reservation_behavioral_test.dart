@@ -3,7 +3,8 @@
 // `PlanGenerator.instance.generateV4` over the real exercise library.
 //
 // - The finisher's time is taken from the days that carry it (d61): with the finisher counted, a finisher day stays
-//   inside the user's minutes (plus the allocator's known bounds); with the switch set, the same days run over.
+//   inside the user's minutes (plus the allocator's known bounds); with nothing reserved (`CardioFinisher.debugReserve`), the
+//   same days run over.
 // - The shape follows the minutes (d76: under 60 the 4-minute one) and the injury (d74: the bike in a gym, none at home).
 // - Build plans never change.
 @Timeout(Duration(minutes: 10))
@@ -80,7 +81,7 @@ void main() {
   });
 
   tearDownAll(() async {
-    await HiveService.instance.configBox.delete('disable_cardio_finisher_shown');
+    CardioFinisher.debugReserve = true;
     await HiveUserSession.closeAll();
     GuardedBox.testBypassOwnership = false;
     await Hive.close();
@@ -88,7 +89,7 @@ void main() {
   });
 
   tearDown(() async {
-    await HiveService.instance.configBox.delete('disable_cardio_finisher_shown');
+    CardioFinisher.debugReserve = true;
     await HiveService.instance.configBox.delete('disable_equipment_exclusions');
   });
 
@@ -160,13 +161,6 @@ void main() {
       final d0 = _gen(injuries: const ['xyz free text']).weekPlans.first.workoutDays.first;
       expect(_finisherNames(d0), ['Burpees', 'Mountain Climbers', 'Jump Squats']);
     });
-
-    test('the switch set: today\'s finisher, injuries ignored', () async {
-      await HiveService.instance.configBox.put('disable_cardio_finisher_shown', true);
-      final d0 = _gen(injuries: const ['knee'], minutes: 30).weekPlans.first.workoutDays.first;
-      expect(_finisherNames(d0), ['Burpees', 'Mountain Climbers', 'Jump Squats']);
-      expect(d0.finisher.last.restSeconds, 0);
-    });
   });
 
   group('the reservation (d61)', () {
@@ -198,16 +192,15 @@ void main() {
       expect(over, isEmpty, reason: over.take(10).join('; '));
     });
 
-    test('positive control: with the switch set (nothing reserved) the same finisher days run over', () async {
-      await HiveService.instance.configBox.put('disable_cardio_finisher_shown', true);
+    test('positive control: with nothing reserved (debugReserve false) the same finisher days run over', () async {
+      // The finisher is built as stored (its round rest included), only its time is not taken from the day.
+      CardioFinisher.debugReserve = false;
       var over = 0;
       for (final m in [45, 60]) {
         final p = _gen(minutes: m);
         for (final w in p.weekPlans) {
           for (final d in w.workoutDays.where((d) => d.finisher.isNotEmpty)) {
-            // Price the finisher the way 3C stores it (round rest on the last item) so the comparison is like for like.
-            final secs = shown(d) + 60.0 * d.finisher.last.sets;
-            if (secs > m * 60 + 120) over++;
+            if (shown(d) > m * 60 + 120) over++;
           }
         }
       }
@@ -216,15 +209,15 @@ void main() {
 
     test('a non-finisher day of the same Cut plan keeps its whole budget (the reservation is per day)', () async {
       // Reserving on every day (the mutant) would cost each non-finisher day the finisher's time too (~240-540 s).
-      // With the per-day reservation those days stay where the switch-set world prices them (the shared weekly
+      // With the per-day reservation those days stay where the unreserved world prices them (the shared weekly
       // ledger moves a little either way).
       var loss = 0.0, n = 0;
       for (final m in [45, 60, 90]) {
         for (final days in [3, 4, 5]) {
           final on = _gen(minutes: m, days: days);
-          await HiveService.instance.configBox.put('disable_cardio_finisher_shown', true);
+          CardioFinisher.debugReserve = false;
           final off = _gen(minutes: m, days: days);
-          await HiveService.instance.configBox.delete('disable_cardio_finisher_shown');
+          CardioFinisher.debugReserve = true;
           for (var w = 0; w < on.weekPlans.length; w++) {
             for (var d = 0; d < on.weekPlans[w].workoutDays.length; d++) {
               final dOn = on.weekPlans[w].workoutDays[d];
@@ -244,9 +237,9 @@ void main() {
     test('a non-finisher day keeps its whole budget: Build plans are unchanged by the unit', () async {
       for (final m in [30, 60]) {
         final on = jsonEncode(_gen(goal: 'build_muscle', minutes: m).toMap());
-        await HiveService.instance.configBox.put('disable_cardio_finisher_shown', true);
+        CardioFinisher.debugReserve = false;
         final off = jsonEncode(_gen(goal: 'build_muscle', minutes: m).toMap());
-        await HiveService.instance.configBox.delete('disable_cardio_finisher_shown');
+        CardioFinisher.debugReserve = true;
         expect(on, off, reason: '$m');
       }
     });
