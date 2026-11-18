@@ -11,11 +11,11 @@ verdict: converged
 
 Keystone record for the §4.12 merge gate (`check_plan_review_record_exists.dart`).
 
-**Tier `account`, COMPUTED:** `dart run scripts/blast_radius_from_diff.dart lib/features/onboarding/providers/onboarding_provider.dart lib/core/services/seed_service.dart assets/data/food_database.json lib/features/nutrition/widgets/diet_serving_view_toggle.dart` -> `account` (the onboarding path drives it; the food asset is `feature`, the seed service `feature`).
+**Tier `account`, COMPUTED:** `dart run scripts/blast_radius_from_diff.dart lib/features/onboarding/providers/onboarding_provider.dart lib/core/services/seed_service.dart assets/data/food_database.json lib/features/nutrition/widgets/diet_serving_view_toggle.dart` -> `account` (the onboarding path drives it; the food asset is `feature`, the seed service `account` (`lib/core/services/**`)).
 
 ## What this branch is
 
-A display-only Portions / Grams view for the Diet chart: a pure label function, one local profile key (`diet_serving_view`, absent = Portions, new users get Grams at onboarding), a switch at the right end of the BMR / TDEE / TARGET card, `weight_unit: "ml"` on 132 audited liquid food rows (seed v8), and the five serving readers (meal rows, swap sheet, portion sheet, search rows, PDF). Plan: `docs/plans/diet-grams-toggle.md` (revision 7, sections 10-15 hold the review log).
+A display-only Portions / Grams view for the Diet chart: a pure label function, one local profile key (`diet_serving_view`, absent = Portions, new users get Grams at onboarding), a switch at the right end of the BMR / TDEE / TARGET card, `weight_unit: "ml"` on 145 audited liquid food rows (drinks, soups, rasam) (seed v8), and the five serving readers (meal rows, swap sheet, portion sheet, search rows, PDF). Plan: `docs/plans/diet-grams-toggle.md` (revision 7, sections 10-15 hold the review log).
 
 ## Review rounds (all context-blind Sonnet seats, read-only, each verified claims against code and data)
 

@@ -7,6 +7,8 @@
 // and ONE Semantics node announces it (button, "Serving view", value).
 // Does not reuse WardUnitToggle: that one is horizontal, ~24 dp segments and
 // 134 dp wide with these labels.
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:icanbefitter/core/theme/colors.dart';
@@ -36,20 +38,32 @@ class DietServingViewToggle extends ConsumerWidget {
           key: const ValueKey('diet_serving_view_toggle'),
           behavior: HitTestBehavior.opaque,
           onTap: () => _flip(ref, next),
-          child: Container(
-            padding: const EdgeInsets.all(2),
-            decoration: BoxDecoration(
-              color: AppColors.bgRaise,
-              border: Border.all(color: AppColors.line2),
-              borderRadius: BorderRadius.circular(AppRadius.sharp),
-            ),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                _line('PORTIONS', !grams,
-                    const ValueKey('diet_serving_view_portions')),
-                _line('GRAMS', grams, const ValueKey('diet_serving_view_grams')),
-              ],
+          // 3 dp of tappable padding above and below the drawn control: the
+          // whole thing is one target as tall as the card's inner height.
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 3),
+            child: Container(
+              padding: const EdgeInsets.all(2),
+              decoration: BoxDecoration(
+                color: AppColors.bgRaise,
+                border: Border.all(color: AppColors.line2),
+                borderRadius: BorderRadius.circular(AppRadius.sharp),
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  _line(
+                    'PORTIONS',
+                    !grams,
+                    const ValueKey('diet_serving_view_portions'),
+                  ),
+                  _line(
+                    'GRAMS',
+                    grams,
+                    const ValueKey('diet_serving_view_grams'),
+                  ),
+                ],
+              ),
             ),
           ),
         ),
@@ -58,23 +72,31 @@ class DietServingViewToggle extends ConsumerWidget {
   }
 
   static void _flip(WidgetRef ref, DietServingView next) {
-    setDietServingView(ref.read(userProfileProvider.notifier), next);
+    // `patchProfile` records the failure to telemetry and rethrows; a tap has
+    // no caller to catch it, so it must not surface as an uncaught zone error
+    // (the switch simply does not move).
+    unawaited(
+      setDietServingView(
+        ref.read(userProfileProvider.notifier),
+        next,
+      ).catchError((Object _) {}),
+    );
   }
 
   static Widget _line(String label, bool selected, Key key) => Container(
-        key: key,
-        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
-        color: selected ? AppColors.accent : Colors.transparent,
-        child: Text(
-          label,
-          maxLines: 1,
-          style: AppTypography.monoXs.copyWith(
-            fontSize: 9,
-            height: 1.0,
-            letterSpacing: 0.5,
-            fontWeight: selected ? FontWeight.w800 : FontWeight.w600,
-            color: selected ? AppColors.bgDeep : AppColors.textDim,
-          ),
-        ),
-      );
+    key: key,
+    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+    color: selected ? AppColors.accent : Colors.transparent,
+    child: Text(
+      label,
+      maxLines: 1,
+      style: AppTypography.monoXs.copyWith(
+        fontSize: 9,
+        height: 1.0,
+        letterSpacing: 0.5,
+        fontWeight: selected ? FontWeight.w800 : FontWeight.w600,
+        color: selected ? AppColors.bgDeep : AppColors.textDim,
+      ),
+    ),
+  );
 }

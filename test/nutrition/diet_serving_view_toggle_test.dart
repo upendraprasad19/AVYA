@@ -36,12 +36,14 @@ final _fakeView = NotifierProvider<_View, DietServingView>(
   () => _View(DietServingView.portions),
 );
 final _writes = <String>[];
+bool _throwOnWrite = false;
 
 class _FakeProfile extends UserProfileNotifier {
   @override
   Map<String, dynamic> build() => <String, dynamic>{};
   @override
   Future<void> updateProfile(Map<String, dynamic> fields) async {
+    if (_throwOnWrite) throw StateError('hive write failed');
     final next = fields['diet_serving_view'] as String;
     _writes.add(next);
     ref.read(_fakeView.notifier).set(DietServingView.fromStorage(next));
@@ -58,6 +60,12 @@ void _expectNoEllipsis(WidgetTester tester) {
     final ro = e.renderObject;
     expect(ro, isA<RenderParagraph>());
     expect((ro! as RenderParagraph).didExceedMaxLines, isFalse);
+  }
+  // The three captions shrink too (B-pass B6): none is truncated.
+  for (final cap in ['BMR', 'TDEE', 'TARGET']) {
+    final ro = find.text(cap).evaluate().single.renderObject;
+    expect(ro, isA<RenderParagraph>());
+    expect((ro! as RenderParagraph).didExceedMaxLines, isFalse, reason: cap);
   }
 }
 
@@ -128,6 +136,7 @@ void main() {
     Future<List<FlutterErrorDetails>> pump(
       WidgetTester tester, {
       double width = 360,
+      double textScale = 1.0,
       Map<String, double>? targets,
     }) async {
       tester.view.physicalSize = Size(width, 800);
@@ -140,6 +149,12 @@ void main() {
         await tester.pumpWidget(
           ProviderScope(
             child: MaterialApp(
+              builder: (context, child) => MediaQuery(
+                data: MediaQuery.of(
+                  context,
+                ).copyWith(textScaler: TextScaler.linear(textScale)),
+                child: child!,
+              ),
               home: Scaffold(
                 body: Padding(
                   padding: const EdgeInsets.all(22),
@@ -178,7 +193,8 @@ void main() {
         final c = tester.getRect(card);
         final t = tester.getRect(toggle);
         expect(c.contains(t.topLeft) && c.contains(t.bottomRight), isTrue);
-        expect(t.height, greaterThanOrEqualTo(30));
+        // The whole switch is one target as tall as the card's inner height.
+        expect(t.height, greaterThanOrEqualTo(40));
         // Every figure keeps its unit (the existing pin counts three).
         expect(
           find.textContaining('kcal', findRichText: true),
@@ -186,6 +202,13 @@ void main() {
         );
       },
     );
+
+    testWidgets('text scale 2.0 at 360 dp: no overflow, no figure ellipsised '
+        '(the captions shrink too)', (tester) async {
+      final errors = await pump(tester, textScale: 2.0);
+      expect(errors.where((e) => e.toString().contains('overflowed')), isEmpty);
+      _expectNoEllipsis(tester);
+    });
 
     testWidgets('a worst-case 4-digit set at 320 dp still has no overflow', (
       tester,
@@ -226,6 +249,30 @@ void main() {
       await tester.tap(toggle);
       await tester.pump();
       expect(_writes, ['grams', 'portions']);
+      expect(_semValue(tester), 'Portions');
+    });
+
+    testWidgets('a failed profile write is swallowed at the tap (B-pass A4): '
+        'no uncaught error, the switch does not move', (tester) async {
+      _writes.clear();
+      _throwOnWrite = true;
+      addTearDown(() => _throwOnWrite = false);
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            userProfileProvider.overrideWith(_FakeProfile.new),
+            dietServingViewProvider.overrideWith((ref) => ref.watch(_fakeView)),
+          ],
+          child: const MaterialApp(
+            home: Scaffold(body: Center(child: DietServingViewToggle())),
+          ),
+        ),
+      );
+      await tester.pump();
+      await tester.tap(find.byKey(const ValueKey('diet_serving_view_toggle')));
+      await tester.pump();
+      await tester.pump();
+      expect(tester.takeException(), isNull);
       expect(_semValue(tester), 'Portions');
     });
 

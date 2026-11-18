@@ -14,11 +14,12 @@
 //   trailing gram / ml bracket               -> bracket stripped: 52 g (1 packet)
 //   non-gram bracket ("1 cup (2 eggs)")      -> moved inside: 200 g (1 cup, 2 eggs)
 //   leading gram + non-gram bracket          -> 13 g (6 biscuits)
-//   bare number / unparseable / "N x desc"   -> grams only
+//   bare number / scaled "N x desc"         -> grams only
+//   free text ("handful"), a weight with words after it ("1 gram scoop"),
+//   a bracket that restates a weight ("1 cup (about 150 g)") -> the text stays
+//   in the bracket, the restated weight is dropped, never doubled or nested
 // A description whose own unit is ml (leading or bracketed) forces `ml`.
 library;
-
-import 'curated_diet_plan_generator.dart' show servingDescParses;
 
 /// The user's choice. Stored as the profile key `diet_serving_view`.
 enum DietServingView {
@@ -36,24 +37,30 @@ enum DietServingView {
 }
 
 // Mixed fractions too: a scaled "13g (6 biscuits)" reads "6 1/2g (3 biscuits)".
+// A weight at the start of a description, with the words after it: "100g",
+// "250 ml", "1 gram scoop", and the scaled "6 1/2g (3 biscuits)". Spellings
+// people type (g, gm, gms, gr, grm, gram, grams, ml). Group 1 = what follows.
 final RegExp _leadingGram = RegExp(
-    r'^\s*\d[\d/. ]*?\s*(g|gm|grams?|ml)\b',
-    caseSensitive: false);
+  r'^\s*\d[\d/. ]*?\s*(?:g|gms?|gr|grm|grams?|ml)\b\s*(.*)$',
+  caseSensitive: false,
+);
 final RegExp _bareNumber = RegExp(r'^\s*\d+(?:\.\d+)?\s*$');
-final RegExp _scaledUnparseable = RegExp(r'^[\d/. ]+ × ');
+final RegExp _scaledUnparseable = RegExp(r'^[\d/. ]+ \u00D7 ');
 final RegExp _trailingParen = RegExp(r'\s*\(([^)]*)\)\s*$');
-// A bracketed weight, including the mixed fractions `scaleServingDesc` writes
-// ("5 1/2 g", "1/2 ml"), so a scaled "1 mini (11 g)" never shows the figure twice.
-final RegExp _gramFigure = RegExp(
-    r'^\s*\d[\d/. ]*\s*(g|gm|grams?|ml)\s*$',
-    caseSensitive: false);
+// A weight anywhere inside a bracket ("150 g", "200 g, 2 eggs", "about 150 g",
+// "5 1/2 g"): that bracket restates the weight and is dropped.
+final RegExp _hasWeight = RegExp(
+  r'\d\s*(?:g|gms?|gr|grm|grams?|ml)\b',
+  caseSensitive: false,
+);
 final RegExp _mlFigure = RegExp(r'\d\s*ml\b', caseSensitive: false);
 
 /// The text to show for one serving.
 ///
 /// [desc] is the item's portion text, [grams] its (scaled) grams, [isLiquid]
 /// the audited `weight_unit == 'ml'` flag. Falls back to [desc] when the view
-/// is Portions or the grams are not a positive number.
+/// is Portions or the grams would print as less than one (zero, negative, not
+/// a number, or a positive value that rounds to 0).
 String servingLabel(
   String desc,
   double grams,
@@ -61,7 +68,7 @@ String servingLabel(
   bool isLiquid = false,
 }) {
   if (view == DietServingView.portions) return desc;
-  if (!grams.isFinite || grams <= 0) return desc;
+  if (!grams.isFinite || grams.round() < 1) return desc;
   final text = desc.trim();
   final unit = (isLiquid || _mlFigure.hasMatch(text)) ? 'ml' : 'g';
   final figure = '${grams.round()} $unit';
@@ -70,22 +77,29 @@ String servingLabel(
       _scaledUnparseable.hasMatch(text)) {
     return figure;
   }
-  final paren = _trailingParen.firstMatch(text);
-  final base = paren == null ? text : text.substring(0, paren.start).trim();
-  final inner = paren?.group(1)?.trim();
-  final innerIsWeight = inner != null && _gramFigure.hasMatch(inner);
-  if (_leadingGram.hasMatch(base)) {
-    // "100g", "250 ml", "13g (6 biscuits)".
-    return (inner == null || innerIsWeight) ? figure : '$figure ($inner)';
+  // Peel trailing brackets from the end. A bracket that restates a weight is
+  // dropped; any other bracket moves inside the one bracket we write.
+  final extras = <String>[];
+  var base = text;
+  for (
+    var m = _trailingParen.firstMatch(base);
+    m != null;
+    m = _trailingParen.firstMatch(base)
+  ) {
+    final inner = (m.group(1) ?? '').trim();
+    base = base.substring(0, m.start).trim();
+    if (inner.isNotEmpty && !_hasWeight.hasMatch(inner))
+      extras.insert(0, inner);
   }
-  if (inner != null && !servingDescParses(text) && !innerIsWeight) {
-    // An unparseable shape with a non-weight bracket: keep it readable.
-    return '$figure ($base, $inner)';
+  final parts = <String>[];
+  final lead = _leadingGram.firstMatch(base);
+  if (lead != null) {
+    // "100g" shows once; words after the weight ("1 gram scoop") stay.
+    final rest = (lead.group(1) ?? '').trim();
+    if (rest.isNotEmpty) parts.add(rest);
+  } else if (base.isNotEmpty) {
+    parts.add(base);
   }
-  if (paren != null) {
-    if (innerIsWeight) return base.isEmpty ? figure : '$figure ($base)';
-    return '$figure ($base, $inner)';
-  }
-  if (!servingDescParses(text)) return figure;
-  return '$figure ($text)';
+  parts.addAll(extras);
+  return parts.isEmpty ? figure : '$figure (${parts.join(', ')})';
 }

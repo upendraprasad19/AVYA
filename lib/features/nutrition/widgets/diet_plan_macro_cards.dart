@@ -79,6 +79,21 @@ class DietPlanMacroTargetsCard extends StatelessWidget {
   }
 }
 
+Widget _caption(String label, bool fit) {
+  final text = Text(
+    label,
+    maxLines: 1,
+    overflow: fit ? TextOverflow.visible : TextOverflow.ellipsis,
+    style: AppTypography.monoXs.copyWith(
+      fontSize: 10,
+      fontWeight: FontWeight.w700,
+      color: AppColors.textDim,
+      letterSpacing: 1.0,
+    ),
+  );
+  return fit ? FittedBox(fit: BoxFit.scaleDown, child: text) : text;
+}
+
 /// One caption-over-figure cell; three share a card equally.
 ///
 /// [fit] (the calorie card only, OI-517): the unit's letter spacing drops to
@@ -118,17 +133,9 @@ Widget _dietPlanStat(String label, String value,
     child: Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Text(
-          label,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: AppTypography.monoXs.copyWith(
-            fontSize: 10,
-            fontWeight: FontWeight.w700,
-            color: AppColors.textDim,
-            letterSpacing: 1.0,
-          ),
-        ),
+        // [fit] (calorie card): the caption shrinks too, so a large text scale
+        // never ellipsises "TARGET" next to the switch.
+        _caption(label, fit),
         const SizedBox(height: 2),
         fit ? FittedBox(fit: BoxFit.scaleDown, child: figure) : figure,
       ],

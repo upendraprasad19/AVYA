@@ -437,7 +437,9 @@ class _DietPlanScreenState extends ConsumerState<DietPlanScreen> {
           foodId: item['food_id'] as String? ?? '',
           name: item['name'] as String? ?? '',
           servingDesc: item['serving_desc'] as String? ?? '',
-          servingG: (item['serving_g'] as num?)?.toDouble() ?? 100,
+          // 0 = unknown (a legacy row without it): the Grams label then falls
+          // back to the Portions text instead of printing a made-up 100 g.
+          servingG: (item['serving_g'] as num?)?.toDouble() ?? 0,
           calories: (item['calories'] as num?)?.toInt() ?? 0,
           protein: (item['protein'] as num?)?.toInt() ?? 0,
           carbs: (item['carbs'] as num?)?.toInt() ?? 0,

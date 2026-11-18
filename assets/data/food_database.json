@@ -4898,7 +4898,8 @@
       "lunch",
       "dinner"
     ],
-    "is_everyday": false
+    "is_everyday": false,
+    "weight_unit": "ml"
   },
   {
     "id": "F0189",
@@ -4924,7 +4925,8 @@
       "lunch",
       "dinner"
     ],
-    "is_everyday": false
+    "is_everyday": false,
+    "weight_unit": "ml"
   },
   {
     "id": "F0190",
@@ -4950,7 +4952,8 @@
       "lunch",
       "dinner"
     ],
-    "is_everyday": false
+    "is_everyday": false,
+    "weight_unit": "ml"
   },
   {
     "id": "F0191",
@@ -4976,7 +4979,8 @@
       "lunch",
       "dinner"
     ],
-    "is_everyday": false
+    "is_everyday": false,
+    "weight_unit": "ml"
   },
   {
     "id": "F0192",
@@ -5002,7 +5006,8 @@
       "lunch",
       "dinner"
     ],
-    "is_everyday": false
+    "is_everyday": false,
+    "weight_unit": "ml"
   },
   {
     "id": "F0193",
@@ -19108,7 +19113,8 @@
       "lunch",
       "dinner"
     ],
-    "is_everyday": false
+    "is_everyday": false,
+    "weight_unit": "ml"
   },
   {
     "id": "F0741",
@@ -19134,7 +19140,8 @@
       "lunch",
       "dinner"
     ],
-    "is_everyday": false
+    "is_everyday": false,
+    "weight_unit": "ml"
   },
   {
     "id": "F0742",
@@ -19160,7 +19167,8 @@
       "lunch",
       "dinner"
     ],
-    "is_everyday": false
+    "is_everyday": false,
+    "weight_unit": "ml"
   },
   {
     "id": "F0743",
@@ -19186,7 +19194,8 @@
       "lunch",
       "dinner"
     ],
-    "is_everyday": false
+    "is_everyday": false,
+    "weight_unit": "ml"
   },
   {
     "id": "F0744",
@@ -19212,7 +19221,8 @@
       "lunch",
       "dinner"
     ],
-    "is_everyday": false
+    "is_everyday": false,
+    "weight_unit": "ml"
   },
   {
     "id": "F0745",
@@ -19238,7 +19248,8 @@
       "lunch",
       "dinner"
     ],
-    "is_everyday": false
+    "is_everyday": false,
+    "weight_unit": "ml"
   },
   {
     "id": "F0746",
@@ -19264,7 +19275,8 @@
       "lunch",
       "dinner"
     ],
-    "is_everyday": false
+    "is_everyday": false,
+    "weight_unit": "ml"
   },
   {
     "id": "F0747",
@@ -35567,7 +35579,8 @@
       "breakfast",
       "snack"
     ],
-    "is_everyday": false
+    "is_everyday": false,
+    "weight_unit": "ml"
   },
   {
     "id": "F1380",

@@ -47,6 +47,25 @@ void main() {
       expect(servingLabel('2 × 1 packet (52g)', 104, g), '104 g');
       expect(servingLabel('', 100, g), '100 g');
     });
+    test('custom free text: never doubled, nested, empty or a tiny 0 g', () {
+      // B-pass seat B (B1-B4): a bracket-only desc, a weight restated in or
+      // beside a bracket, other spellings of grams, a weight with words after it.
+      expect(servingLabel('(2 eggs)', 50, g), '50 g (2 eggs)');
+      expect(servingLabel('1 cup (150g) (2 eggs)', 200, g), '200 g (1 cup, 2 eggs)');
+      expect(servingLabel('1 cup (200 g, 2 eggs)', 200, g), '200 g (1 cup)');
+      expect(servingLabel('1 cup (about 150 g)', 150, g), '150 g (1 cup)');
+      expect(servingLabel('100 gms', 100, g), '100 g');
+      expect(servingLabel('100gms', 100, g), '100 g');
+      expect(servingLabel('100 gr', 100, g), '100 g');
+      expect(servingLabel('1 gram scoop', 30, g), '30 g (scoop)');
+      expect(servingLabel('2 g scoop', 30, g), '30 g (scoop)');
+      expect(servingLabel('handful of nuts', 30, g), '30 g (handful of nuts)');
+      expect(servingLabel('1 glass', 250, g), '250 g (1 glass)');
+      expect(servingLabel('2 gulab jamun', 100, g), '100 g (2 gulab jamun)');
+      expect(servingLabel('1 tsp', 0.3, g), '1 tsp');
+      expect(servingLabel('1 tsp', 0.49, g), '1 tsp');
+      expect(servingLabel('1 tsp', 0.5, g), '1 g (1 tsp)');
+    });
     test('the liquid flag and an ml description force ml', () {
       expect(servingLabel('1 glass', 250, g, isLiquid: true), '250 ml (1 glass)');
       expect(servingLabel('250 g', 250, g, isLiquid: true), '250 ml');

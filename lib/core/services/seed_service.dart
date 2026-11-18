@@ -227,7 +227,7 @@ class SeedService {
   /// their `is_everyday` flips false -> true (same reason as v5).
   ///
   /// v8 (2026-11-18 diet chart Portions / Grams view, docs/plans/
-  /// diet-grams-toggle.md section 3, OI-517): 132 liquid rows gain
+  /// diet-grams-toggle.md section 3, OI-517): 145 liquid rows gain
   /// `weight_unit: "ml"` (absent = grams). Without the bump an installed
   /// food box never gains the field and every liquid shows grams in the
   /// Grams view.
