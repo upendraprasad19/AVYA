@@ -33,7 +33,8 @@ class _Fixture {
   final String? text;
 }
 
-final _now = DateTime(2026, 11, 18);
+// Far from any wall clock the suite could run on: an eta row that ignores `now` goes red today.
+final _now = DateTime(2031, 3, 5);
 
 Future<void> _pump(WidgetTester tester, _Fixture f) async {
   await tester.pumpWidget(MaterialApp(
@@ -75,9 +76,9 @@ void main() {
           const _Fixture('lose_fat', 77, 78, 70, text: 'Adjust your diet to stay on track'),
       ProjectionCalloutKind.reached:
           const _Fixture('lose_fat', 79, 78, 78, text: 'You\'ve reached your goal weight!'),
-      // 2 kg per 2 weeks, 8 kg to go: 8 weeks from 2026-11-18 = 2027-01-13.
+      // 2 kg per 2 weeks, 8 kg to go: 8 weeks from the injected 2031-03-05 = 2031-04-30.
       ProjectionCalloutKind.eta: const _Fixture('lose_fat', 80, 78, 70,
-          text: 'At current rate, you\'ll reach 70kg in ~8 weeks (around Jan 2027)'),
+          text: 'At current rate, you\'ll reach 70kg in ~8 weeks (around Apr 2031)'),
       ProjectionCalloutKind.onTarget: const _Fixture('general_fitness', 76, 74, 75,
           text: 'Holding the line $_dot 1.0 kg from your 75 kg target'),
       ProjectionCalloutKind.offTarget: const _Fixture('general_fitness', 76, 79, 75,
@@ -192,13 +193,19 @@ void main() {
           AppColors.warn);
     });
 
-    testWidgets('a long line wraps instead of overflowing a narrow card',
+    testWidgets('both Maintain lines wrap instead of overflowing a narrow card',
         (tester) async {
       tester.view.physicalSize = const Size(320, 640);
       tester.view.devicePixelRatio = 1.0;
       addTearDown(tester.view.reset);
+      // offTarget (the longer line) and onTarget (its own Expanded).
       await _pump(tester, const _Fixture('general_fitness', 76, 79, 75));
       expect(tester.takeException(), isNull);
+      expect(find.textContaining('adjust your nutrition to hold the line'),
+          findsOneWidget);
+      await _pump(tester, const _Fixture('general_fitness', 76, 74, 75));
+      expect(tester.takeException(), isNull);
+      expect(find.textContaining('Holding the line'), findsOneWidget);
     });
   });
 
@@ -242,6 +249,37 @@ void main() {
       expect(_texts, findsNothing);
     });
 
+    testWidgets('an empty list draws nothing and does not throw', (tester) async {
+      // Without the length guard `entries.first` throws on an empty list.
+      await tester.pumpWidget(const MaterialApp(
+        home: Scaffold(
+          body: WeightProjectionCallout(
+            entries: [],
+            targetWeight: 75,
+            goal: 'general_fitness',
+          ),
+        ),
+      ));
+      expect(tester.takeException(), isNull);
+      expect(_texts, findsNothing);
+    });
+
+    testWidgets('an unreadable LAST date draws nothing', (tester) async {
+      await tester.pumpWidget(MaterialApp(
+        home: Scaffold(
+          body: WeightProjectionCallout(
+            entries: [
+              {'date': '2026-11-04', 'weight_kg': 75.0},
+              {'date': 'not-a-date', 'weight_kg': 75.0},
+            ],
+            targetWeight: 75,
+            goal: 'general_fitness',
+          ),
+        ),
+      ));
+      expect(_texts, findsNothing);
+    });
+
     testWidgets('an unreadable date draws nothing', (tester) async {
       await tester.pumpWidget(MaterialApp(
         home: Scaffold(
@@ -276,27 +314,130 @@ void main() {
     });
   });
 
-  group('the Weekly Report screen hands the goal to the callout (presence only)', () {
+  group('WeightProjectionLine: the profile map to the rendered text', () {
+    Future<void> pumpLine(WidgetTester tester, Map<String, dynamic> profile,
+        List<Map<String, dynamic>> entries) async {
+      await tester.pumpWidget(MaterialApp(
+        home: Scaffold(
+          body: WeightProjectionLine(profile: profile, entries: entries, now: _now),
+        ),
+      ));
+    }
+
+    testWidgets('a Maintain profile reads its goal and target from the map',
+        (tester) async {
+      await pumpLine(tester,
+          {'primary_goal': 'general_fitness', 'target_weight_kg': 75.0}, _entries(76, 74));
+      expect(find.text('Holding the line $_dot 1.0 kg from your 75 kg target'),
+          findsOneWidget);
+    });
+
+    testWidgets('an int target (a num) is read the same', (tester) async {
+      await pumpLine(tester,
+          {'primary_goal': 'general_fitness', 'target_weight_kg': 75}, _entries(74, 79));
+      expect(
+          find.text(
+              '4.0 kg above your 75 kg target $_dot adjust your nutrition to hold the line'),
+          findsOneWidget);
+    });
+
+    testWidgets('a Cut profile keeps its date sentence, from the injected clock',
+        (tester) async {
+      await pumpLine(tester,
+          {'primary_goal': 'lose_fat', 'target_weight_kg': 70.0}, _entries(80, 78));
+      expect(
+          find.text('At current rate, you\'ll reach 70kg in ~8 weeks (around Apr 2031)'),
+          findsOneWidget);
+    });
+
+    testWidgets('the goal comes from primary_goal, not from the target or the entries',
+        (tester) async {
+      // Same weigh-ins and target, two goals: the words differ only by the goal.
+      await pumpLine(tester,
+          {'primary_goal': 'build_muscle', 'target_weight_kg': 75.0}, _entries(76, 74));
+      expect(find.textContaining('Holding the line'), findsNothing);
+      expect(find.text('Adjust your nutrition to stay on track'), findsOneWidget);
+    });
+
+    testWidgets('the LAST entry decides: the entries are read oldest first',
+        (tester) async {
+      await pumpLine(tester,
+          {'primary_goal': 'general_fitness', 'target_weight_kg': 75.0}, _entries(80, 76));
+      expect(find.text('Holding the line $_dot 1.0 kg from your 75 kg target'),
+          findsOneWidget);
+    });
+
+    testWidgets('no target (absent, 0) or fewer than two weigh-ins draws nothing',
+        (tester) async {
+      await pumpLine(tester, {'primary_goal': 'general_fitness'}, _entries(76, 74));
+      expect(find.byType(Text), findsNothing);
+      await pumpLine(tester,
+          {'primary_goal': 'general_fitness', 'target_weight_kg': 0}, _entries(76, 74));
+      expect(find.byType(Text), findsNothing);
+      await pumpLine(tester,
+          {'primary_goal': 'general_fitness', 'target_weight_kg': 75.0},
+          [_entries(76, 74).first]);
+      expect(find.byType(Text), findsNothing);
+    });
+
+    testWidgets('a Cut with no target (absent or 0) draws nothing, not "Adjust your diet"',
+        (tester) async {
+      // Moving the wrong way with remaining = target - last = -77: the old kind WOULD say
+      // `adjust` for a missing target; the line's own target guard is what hides it.
+      await pumpLine(tester, {'primary_goal': 'lose_fat'}, _entries(77, 78));
+      expect(find.byType(Text), findsNothing);
+      await pumpLine(tester,
+          {'primary_goal': 'lose_fat', 'target_weight_kg': 0}, _entries(77, 78));
+      expect(find.byType(Text), findsNothing);
+    });
+
+    testWidgets('the callout sits 10 px under the chart', (tester) async {
+      await pumpLine(tester,
+          {'primary_goal': 'general_fitness', 'target_weight_kg': 75.0}, _entries(76, 74));
+      final pad = tester.widget<Padding>(find
+          .descendant(of: find.byType(WeightProjectionLine), matching: find.byType(Padding))
+          .first);
+      expect(pad.padding, const EdgeInsets.only(top: 10));
+    });
+
+    testWidgets('a profile with NO goal keeps the non-Maintain path (accepted residue)',
+        (tester) async {
+      await pumpLine(tester, {'target_weight_kg': 75.0}, _entries(76, 74));
+      expect(find.textContaining('Holding the line'), findsNothing);
+      expect(find.text('Adjust your nutrition to stay on track'), findsOneWidget);
+    });
+  });
+
+  group('the Weekly Report screen hands the profile to the callout (presence only)', () {
     final screen = _src('lib/features/profile/screens/reports_screen.dart');
 
-    /// The text of the `WeightProjectionCallout(` call: from its open paren to the
-    /// matching close, so tokens elsewhere in the file cannot satisfy the pins.
-    String callExtent() {
-      final at = screen.indexOf('WeightProjectionCallout(');
+    /// The text of the `WeightProjectionLine(` call: from its open paren to the matching
+    /// close, whitespace and a trailing comma removed, so the pin compares the ARGUMENTS
+    /// exactly (a token elsewhere in the file, a comment, or a re-derived expression
+    /// cannot satisfy it).
+    String callArguments() {
+      final at = screen.indexOf('WeightProjectionLine(');
       expect(at, greaterThanOrEqualTo(0), reason: 'the screen no longer builds the callout');
       var depth = 0;
       for (var i = screen.indexOf('(', at); i < screen.length; i++) {
         if (screen[i] == '(') depth++;
         if (screen[i] == ')') depth--;
-        if (depth == 0) return screen.substring(at, i + 1);
+        if (depth == 0) {
+          return screen
+              .substring(at, i + 1)
+              .replaceAll(RegExp(r'\s+'), '')
+              .replaceAll(',)', ')');
+        }
       }
       fail('unbalanced call');
     }
 
-    test('the call passes goal: from primary_goal', () {
-      final call = callExtent();
-      expect(call.contains('goal:'), isTrue);
-      expect(call.contains('primary_goal'), isTrue);
+    test('the call hands over the raw profile and the filtered weigh-ins, nothing else', () {
+      expect(callArguments(), 'WeightProjectionLine(profile:profile,entries:filtered)');
+    });
+
+    test('the screen builds the line exactly once', () {
+      expect('WeightProjectionLine('.allMatches(screen).length, 1);
     });
 
     test('the screen no longer decides the callout itself', () {

@@ -277,6 +277,12 @@ void main() {
       expect(m(76, 74, 2, 80), ProjectionCalloutKind.offTarget);
       expect(m(76, 79, 2, 70), ProjectionCalloutKind.offTarget);
     });
+    test('a big swing in either direction does not hide the distance (no trend gate)', () {
+      expect(m(85, 75, 2, 75), ProjectionCalloutKind.onTarget);
+      expect(m(65, 75, 2, 75), ProjectionCalloutKind.onTarget);
+      expect(m(65, 79, 2, 75), ProjectionCalloutKind.offTarget);
+      expect(m(90, 79, 2, 75), ProjectionCalloutKind.offTarget);
+    });
     test('the history gate sits ABOVE the Maintain branch', () {
       expect(m(75, 75, 0.4, 75), ProjectionCalloutKind.none);
       expect(m(75, 75, 0.5, 75), ProjectionCalloutKind.onTarget);
@@ -323,6 +329,14 @@ void main() {
       expect(
           validateTargetWeight(goal: 'general_fitness', current: 78.3, target: 75.3),
           TargetWeightCheck.ok);
+    });
+  });
+
+  group('canProjectGoalDate: the 0.1 kg gate is inclusive', () {
+    test('a gap of exactly 0.1 kg (0.2 - 0.1 is exactly 0.1 in doubles) is no date', () {
+      expect(0.2 - 0.1 == 0.1, isTrue); // the premise, checked here
+      expect(canProjectGoalDate(goal: 'lose_fat', current: 0.2, target: 0.1), isFalse);
+      expect(canProjectGoalDate(goal: 'lose_fat', current: 80.0, target: 79.8), isTrue);
     });
   });
 

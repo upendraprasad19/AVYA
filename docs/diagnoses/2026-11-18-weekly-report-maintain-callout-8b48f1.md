@@ -25,13 +25,14 @@ recurrence: |
   Journey card is not affected: `journey_timeline.dart` needs `goal.contains('lose')` or `'build'` (or a 0.5 kg clause) before its
   date line, so a Maintain user never reaches it (read directly, not run on a device).
 writers:
-  - { file: lib/features/profile/screens/edit_profile_screen.dart, method_or_widget: "_save: writes primary_goal and target_weight_kg together after OI-191's agreement check", line: 1936 }
-  - { file: lib/features/ai_coach/services/tool_dispatcher.dart, method_or_widget: "_executeSwitchGoal: goal, seeded target and targets in one patch", line: 1395 }
+  - { file: lib/features/profile/screens/edit_profile_screen.dart, method_or_widget: "_save: writes primary_goal and target_weight_kg together after OI-191's agreement check", line: 1941 }
+  - { file: lib/features/ai_coach/services/tool_dispatcher.dart, method_or_widget: "_executeSwitchGoal: goal, seeded target and targets in one patch", line: 1398 }
   - { file: lib/core/services/health_write_service.dart, method_or_widget: "logWeight: the weight_<istDate> entries the callout reads", line: 165 }
   - { file: lib/features/onboarding/target_weight_check.dart, method_or_widget: "weightGapTenths / validateTargetWeight: the one gap expression and the Maintain window", line: 58 }
 readers:
-  - { file: lib/features/profile/screens/reports_screen.dart, method_or_widget: "_buildWeightTrend: reads target_weight_kg and primary_goal, builds WeightProjectionCallout", line: 744 }
-  - { file: lib/features/profile/widgets/weight_projection_callout.dart, method_or_widget: "WeightProjectionCallout.build: draws each ProjectionCalloutKind (exhaustive switch)", line: 58 }
+  - { file: lib/features/profile/screens/reports_screen.dart, method_or_widget: "_buildWeightTrend: hands the raw profile and the filtered weigh-ins to WeightProjectionLine", line: 651 }
+  - { file: lib/features/profile/widgets/weight_projection_callout.dart, method_or_widget: "WeightProjectionLine: reads primary_goal and target_weight_kg from the profile map, then WeightProjectionCallout", line: 38 }
+  - { file: lib/features/profile/widgets/weight_projection_callout.dart, method_or_widget: "WeightProjectionCallout.build: draws each ProjectionCalloutKind (exhaustive switch)", line: 76 }
   - { file: lib/features/onboarding/target_weight_check.dart, method_or_widget: "projectionCalloutKind: Maintain branch by distance (onTarget / offTarget), flat-series guard", line: 136 }
   - { file: lib/core/copy/weight_callout_copy.dart, method_or_widget: "onTargetLine / offTargetLine / targetLabel: the Maintain words, printed from integer tenths", line: 37 }
 hive_key_prefix: "userBox['profile'] keys primary_goal, target_weight_kg; healthBox weight_<istDate> (weight_kg, date)"
@@ -66,7 +67,9 @@ proposed_fix: |
     sentence.
   - U2 `lib/core/copy/weight_callout_copy.dart`: the words, from integer tenths, never a float.
   - U3 `lib/features/profile/widgets/weight_projection_callout.dart`: the callout leaves the Reports screen as a stateless widget
-    with a REQUIRED `goal` and an exhaustive switch statement; the screen passes `primary_goal`.
+    with a REQUIRED `goal` and an exhaustive switch statement. B-pass amendment: `WeightProjectionLine` also owns the profile-to-callout
+    chain (the screen hands over `profile: profile, entries: filtered`, pinned to those exact arguments), because the first version's
+    inline `goal:` argument was protected only by a source grep.
 regression_test_planned:
   - test/contracts/maintain_weight_callout_behavioral_test.dart
   - test/onboarding/target_weight_check_test.dart
@@ -143,12 +146,28 @@ judged by the absolute gap). Pin-only protection (e, k): no test pumps `ReportsS
   `general_fitness`): pre-existing, unreachable through onboarding (the goal step precedes Stats).
 - `recomp` is not healed by `LegacyGoalHealer` (`FitnessGoals.legacyTargets` maps only `strength` and `recompose`) and passes the
   goal rule as an unruled token: its callout behaviour is unchanged.
+- A Maintain user keeps the two trend-era gates the card always had (B-pass finding 1): at least two weigh-ins in the selected window,
+  and at least half a week between the first and the last, or no callout. The distance itself needs neither; the gate is the
+  plan's recorded choice (plan U1) and keeps Cut / Build and Maintain on one history rule.
+- On the "All" filter the callout judges the LAST weigh-in whatever its age, so a Maintain user whose last weigh-in is months old
+  reads the present-tense "Holding the line" line (B-pass finding 5). The old `reached` line had the same staleness; a staleness
+  cutoff is a new product rule the founder has not decided, so none is added here.
 - The Home `WeightTrendChart` prints "You've reached your goal weight!" at a 0.2 kg distance for every goal, Maintain included: a
   separate surface with its own rule, not the OI-518 card.
 - The Weekly Report Edge Function narrative (`weekly-report/index.ts`) is not the card; changing it is an Edge Function deploy and
   needs its own per-action go.
 - The `adjust` row keeps a named duplicate of the pure rule's `goal.contains('lose')` for its "diet" / "nutrition" word (Cut and
   Build only now; the Cut and Build wording rows of the behavioural test pin it).
+
+## B-pass mutation round (CLAUDE.md 4.4 rule 21, lens 6)
+
+A fresh seat ran 82 mutant applications on the post-plan tree (`docs/reviews/bb5a04f8a371-review.md`): 66 killed by a runtime
+assertion, 2 by a source-grep pin only, 8 equivalent, 6 real survivors. The survivors were fixed and re-mutated: the screen's wiring
+(7 mutants: an always-empty goal, a re-derived goal, the callout hidden for Maintain, a wrong or rounded target, reversed or
+truncated entries) now dies on runtime rows over `WeightProjectionLine` plus an exact-arguments pin; an in-window big-swing trend
+gate, an ignored injected clock, the 0.1 kg gate boundary, a removed `targetWeight <= 0` guard (visible only for a Cut with no target)
+and the removed 10 px spacing each redden a test. Pin-only protection that remains: the screen's two call arguments (a mutant that
+changes `filtered` or `profile` elsewhere in the screen is the screen's own, unchanged logic).
 
 ## Device check (founder, after /build-apk)
 

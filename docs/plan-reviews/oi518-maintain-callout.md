@@ -5,7 +5,8 @@ blast_radius: account
 review_rounds: 3
 ground_truth_verified: true
 verdict: converged
-bpass: pending
+bpass: accepted
+bpass_review: docs/reviews/bb5a04f8a371-review.md
 ---
 
 # Plan-review record: OI-518 the Weekly Report weight card treats Maintain as a hold-weight goal (account)
@@ -13,8 +14,9 @@ bpass: pending
 Keystone record for the §4.12 merge gate (`check_plan_review_record_exists.dart`). Plan: `docs/plans/oi518-maintain-callout.md`
 (revision 4). Tier M (§4.12.6: the diff leaves `lib/features/{home,train,nutrition,profile}/**` for the shared rule in
 `lib/features/onboarding/` and `lib/core/copy/`). Blast radius `account`, computed with
-`dart run scripts/blast_radius_from_diff.dart` on the product paths. `bpass` is set to `accepted` (with `bpass_review:`) after the
-self-initiated `/code-review` (B-pass) on the CI-green branch, before the merge (§4.3).
+`dart run scripts/blast_radius_from_diff.dart` on the product paths. `bpass: accepted` (with `bpass_review:`) was set after the
+self-initiated `/code-review` (B-pass, two fresh seats, 10 findings, all fixed or recorded) on the CI-green branch, before the merge (§4.3).
+The B-pass moved the screen-to-callout wiring into `WeightProjectionLine` (a runtime-tested unit); no plan decision changed.
 
 ## Rounds
 

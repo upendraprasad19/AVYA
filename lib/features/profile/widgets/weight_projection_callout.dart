@@ -12,6 +12,44 @@ import 'package:icanbefitter/core/theme/colors.dart';
 import 'package:icanbefitter/core/theme/typography.dart';
 import 'package:icanbefitter/features/onboarding/target_weight_check.dart';
 
+/// The callout as the Weekly Report's weight card places it: reads the goal and the target
+/// from the PROFILE map and shows the callout under the chart only when there is a target
+/// and at least two weigh-ins. The screen hands over the raw profile and the filtered
+/// entries and nothing else, so the profile -> text chain is testable without pumping the
+/// screen (B-pass: seven wiring mutants of the screen's old inline arguments survived).
+class WeightProjectionLine extends StatelessWidget {
+  const WeightProjectionLine({
+    super.key,
+    required this.profile,
+    required this.entries,
+    this.now,
+  });
+
+  /// `UserRepository.instance.getProfile()` (an empty map when there is none).
+  final Map<String, dynamic> profile;
+
+  /// The weigh-ins of the selected window, oldest first.
+  final List<Map<String, dynamic>> entries;
+
+  /// The clock of the date sentence (tests inject it).
+  final DateTime? now;
+
+  @override
+  Widget build(BuildContext context) {
+    final targetWeight = (profile['target_weight_kg'] as num?)?.toDouble() ?? 0;
+    if (targetWeight <= 0 || entries.length < 2) return const SizedBox();
+    return Padding(
+      padding: const EdgeInsets.only(top: 10),
+      child: WeightProjectionCallout(
+        entries: entries,
+        targetWeight: targetWeight,
+        goal: profile['primary_goal'] as String? ?? '',
+        now: now,
+      ),
+    );
+  }
+}
+
 class WeightProjectionCallout extends StatelessWidget {
   const WeightProjectionCallout({
     super.key,

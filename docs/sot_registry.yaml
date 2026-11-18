@@ -19298,7 +19298,10 @@ concepts:
         semantic: canProjectGoalDate gate (the only way into the pace sheet)
       - file: lib/features/profile/screens/reports_screen.dart
         method: _buildWeightTrend
-        semantic: passes primary_goal (required) and target_weight_kg into WeightProjectionCallout
+        semantic: hands the raw profile map and the filtered weigh-ins to WeightProjectionLine (the call's exact arguments are pinned)
+      - file: lib/features/profile/widgets/weight_projection_callout.dart
+        method: WeightProjectionLine
+        semantic: reads primary_goal and target_weight_kg from the profile map (no target or under two weigh-ins draws nothing) and passes goal (required) to WeightProjectionCallout
       - file: lib/features/profile/widgets/weight_projection_callout.dart
         method: WeightProjectionCallout
         semantic: projectionCalloutKind decides, an exhaustive switch draws; Maintain is onTarget / offTarget by distance to the 3.0 kg window on the last weigh-in (OI-518, never a trend verdict or a date); Cut / Build date sentence only when goal and target agree

@@ -736,17 +736,10 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
               child: _buildLineChart(filtered, targetWeight),
             ),
 
-            // Projection callout
-            if (targetWeight > 0 && filtered.length >= 2) ...[
-              const SizedBox(height: 10),
-              // OI-518: the callout is its own widget; `goal` is required (a
-              // forgotten goal would read every goal as "wants to gain" again).
-              WeightProjectionCallout(
-                entries: filtered,
-                targetWeight: targetWeight,
-                goal: profile['primary_goal'] as String? ?? '',
-              ),
-            ],
+            // Projection callout (OI-518: its own widget; it reads the goal and the target
+            // from the profile map itself, so this line hands over the raw profile and the
+            // filtered weigh-ins and nothing else).
+            WeightProjectionLine(profile: profile, entries: filtered),
           ],
         ],
       ),
