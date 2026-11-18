@@ -2,7 +2,7 @@
 //
 // Pins the contract that the weight-log write path is awaitable:
 //
-//   1. WeightLogNotifier.logWeight returns Future<void>.
+//   1. WeightLogNotifier.logWeight returns an awaitable Future (a WeightLogResult since goal-change-targets B2).
 //   2. WeightLogSheet._save awaits the logWeight call before
 //      invalidating the reader providers.
 //   3. ConversationalLogHandler._logWeight awaits the logWeight call

@@ -60,6 +60,21 @@ bool _differs(String key, Object? a, Object? b) {
   return a != b;
 }
 
+/// True when this Save rebuilt the targets on a different weight than the one they were built
+/// from: an in-band weigh-in leaves `current_weight_kg` at the raw reading while the targets still
+/// stand on `targets_basis_weight_kg` (up to 2 kg away), so the next Save of ANY field re-derives
+/// from the raw weight. That is a real change the user is owed a line about, though no form input
+/// differs from the open snapshot.
+bool _targetsRebasedOnWeight(
+  Map<dynamic, dynamic> before,
+  Map<dynamic, dynamic> after,
+) {
+  num? n(Object? v) => v is num && v.isFinite && v > 0 ? v : null;
+  final from = n(before[kTargetsBasisWeightKey]) ?? n(before['current_weight_kg']);
+  final to = n(after[kTargetsBasisWeightKey]);
+  return from != null && to != null && (from - to).abs() > 0.05;
+}
+
 /// The impact of a Save, or null when there is nothing to say: no derivation input really changed,
 /// the targets did not move (either the calories OR the protein number), or the profile has no
 /// calorie target after the Save.
@@ -67,7 +82,10 @@ TargetImpact? targetImpactFor(
   Map<dynamic, dynamic> before,
   Map<dynamic, dynamic> after,
 ) {
-  if (!derivationInputsChangedForDialog(before, after)) return null;
+  if (!derivationInputsChangedForDialog(before, after) &&
+      !_targetsRebasedOnWeight(before, after)) {
+    return null;
+  }
   num? n(Object? v) => v is num ? v : null;
   final cTo = n(after['daily_calories']);
   final pTo = n(after['protein_grams']);

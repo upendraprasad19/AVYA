@@ -2190,6 +2190,7 @@ concepts:
       - { file: lib/features/profile/screens/profile/journey_timeline.dart, reason: "profile journey timeline reads weight_* keys for milestone overlay" }
       - { file: lib/core/services/sync/sync_health.dart, reason: "cloud sync writer scans healthBox weight_* prefix" }
       - { file: lib/core/services/health_read_service.dart, reason: "OI-02 canonical READ service — latestWeightKg scans healthBox weight_* prefix" }
+      - { file: lib/features/home/providers/home_provider.dart, reason: "goal-change-targets B2: WeightLogNotifier.logWeight hands the weight_ rows of the healthBox to recentWeighInKgs (READ-ONLY, inside the profile lock) for the 7-day mean that decides a target recompute" }
       - { file: lib/features/profile/services/weigh_in_target_refresh.dart, reason: "goal-change-targets B2: recentWeighInKgs reads the weight_<IST date> rows of the last 7 days (strict: type weight_log, 0 < kg <= 500) for the 7-day mean that decides a target recompute; READ-ONLY, the box entries are handed in by WeightLogNotifier" }
     regression_test: test/profile/weekly_report_data_provider_test.dart
     hive:
@@ -5125,7 +5126,7 @@ concepts:
           per-set MAX. Pre-fix returned cumulative SUM for bodyweight_reps
           + timed. Closes-diagnose: 2026-05-16-pr-cumulative-bug
       - file: lib/features/home/providers/home_provider.dart
-        line_range: 1027-1038
+        line_range: 1045-1056
         method: AllExercisePRsNotifier.build (wraps loadAllExercisePRs)
         semantic: pass-through
         fields_read: [via loadAllExercisePRs]
@@ -5439,14 +5440,17 @@ concepts:
         method: HealthWriteService.logWeight
         canonical: true
       - file: lib/features/home/providers/home_provider.dart
-        line_range: 908-997
+        line_range: 908-1015
         method: WeightLogNotifier.logWeight
         delegate: true
         notes: |
           Pass-through to HealthWriteService.instance.logWeight (~line 893).
           Not the canonical writer — retained here because it is the Riverpod
           entry point UI callers fire, and it adds the companion
-          ProfileWriteService current_weight_kg update.
+          ProfileWriteService current_weight_kg update: since goal-change-targets B2
+          ONE patchProfileWith carrying the raw weight plus, past the 2 kg band on the
+          7-day mean, the recomputed targets and targets_basis_weight_kg (concept
+          weigh_in_target_refresh).
       - file: lib/core/services/health_sync_service.dart
         line_range: 301-388
         method: _syncToHiveLocked
@@ -8737,7 +8741,7 @@ concepts:
     reader_manifest_complete: true
     readers:
       - file: lib/features/home/providers/home_provider.dart
-        line_range: 681-1024
+        line_range: 681-1042
         method: WeightHistoryNotifier + WeightLogNotifier + todayWeightLoggedProvider
         semantic: historical-series
         fields_read: [type, weight_kg, date]
@@ -19319,6 +19323,8 @@ concepts:
     domain: auth_profile
     behavioral_test_path: test/contracts/weigh_in_target_refresh_behavioral_test.dart
     behavioral_test_path_merge: test/contracts/bootstrapper_profile_merge_recompute_test.dart
+    behavioral_test_path_hydrate: test/contracts/progress_restore_freeze_merge_behavioral_test.dart
+    behavioral_test_path_snackbar: test/home/weight_sheet_target_snackbar_test.dart
     behavioral_test_path_banner: test/nutrition/diet_plan_stale_banner_screen_test.dart
     behavioral_test_path_dialog: test/profile/edit_profile_target_impact_test.dart
     description: |

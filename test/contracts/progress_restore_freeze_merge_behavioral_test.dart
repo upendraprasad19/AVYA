@@ -721,6 +721,33 @@ void main() {
       expect(merged['daily_calories'], isNot(2111),
           reason: 'the targets were recomputed for the cloud weight');
 
+      // The kill switch set: the plain merge, the cloud (stale) targets and no basis.
+      await HiveService.instance.userBox.put('profile', local);
+      await HiveService.instance.configBox.put('disable_profile_target_recompute', true);
+      addTearDown(() => HiveService.instance.configBox.delete('disable_profile_target_recompute'));
+      await hydrate(cloudRow(avail: 1, lastRefill: _o), profileRow: profileCloud);
+      final plain = Map<String, dynamic>.from(
+          HiveService.instance.userBox.get('profile') as Map);
+      expect(plain['current_weight_kg'], 74);
+      expect(plain['daily_calories'], 2111);
+      expect(plain.containsKey('targets_basis_weight_kg'), isFalse);
+      await HiveService.instance.configBox.delete('disable_profile_target_recompute');
+
+      // The body-fat switch reaches the hydrate recompute (Katch-McArdle with it, Mifflin without).
+      Future<num> hydrated(bool fatOff) async {
+        await HiveService.instance.userBox
+            .put('profile', {...local, 'body_fat_percent': 24.0});
+        await HiveService.instance.configBox.put('disable_bodyfat_calc', fatOff);
+        await hydrate(cloudRow(avail: 1, lastRefill: _o),
+            profileRow: {...profileCloud, 'body_fat_percent': 24.0});
+        return (HiveService.instance.userBox.get('profile') as Map)['daily_calories'] as num;
+      }
+
+      final withFat = await hydrated(false);
+      final withoutFat = await hydrated(true);
+      await HiveService.instance.configBox.delete('disable_bodyfat_calc');
+      expect(withFat, isNot(withoutFat));
+
       // A fresh device (no local profile): the cloud targets stay verbatim.
       await HiveService.instance.userBox.delete('profile');
       await hydrate(cloudRow(avail: 1, lastRefill: _o), profileRow: profileCloud);

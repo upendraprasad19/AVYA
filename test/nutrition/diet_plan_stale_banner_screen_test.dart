@@ -211,6 +211,8 @@ void main() {
       await openAndSave(tester);
       await reopen(tester);
       expect(debugDietPlanGenerations, 0);
+      expect(find.byIcon(Icons.check_circle), findsOneWidget,
+          reason: 'the screen built and loaded the saved plan (a build error is swallowed below)');
       expect(banner, findsNothing);
     });
 
@@ -228,6 +230,7 @@ void main() {
           }));
       await reopen(tester);
       expect(debugDietPlanGenerations, 0);
+      expect(find.byIcon(Icons.check_circle), findsOneWidget);
       expect(banner, findsNothing);
       // re-saved, it stays unstamped (no new numbers are invented for an old plan)
       await _tapReal(tester, find.byIcon(Icons.save_outlined));

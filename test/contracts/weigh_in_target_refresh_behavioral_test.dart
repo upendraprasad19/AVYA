@@ -15,6 +15,7 @@ import 'package:icanbefitter/core/services/sync_service.dart';
 import 'package:icanbefitter/features/auth/providers/auth_invalidation_provider.dart';
 import 'package:icanbefitter/features/auth/providers/auth_provider.dart';
 import 'package:icanbefitter/features/home/providers/home_provider.dart';
+import 'package:icanbefitter/features/nutrition/providers/nutrition_provider.dart';
 import 'package:icanbefitter/features/profile/services/profile_target_recompute.dart';
 import 'package:icanbefitter/features/profile/services/profile_write_service.dart';
 import 'package:icanbefitter/features/profile/services/weigh_in_target_refresh.dart';
@@ -67,6 +68,7 @@ void main() {
 
   tearDown(() async {
     WeightLogNotifier.debugBeforeProfileWrite = null;
+    WeightLogNotifier.debugOnPushSnapshot = null;
     ProfileWriteService.debugOnFireSync = null;
     SyncService.pausedForSimulation = false;
     await HiveUserSession.closeAll();
@@ -141,6 +143,41 @@ void main() {
     expect(after['current_weight_kg'], 76);
     expect(after[kTargetsBasisWeightKey], 76.0);
     expect(after['daily_calories'], isNot(p['daily_calories']));
+  });
+
+  test('a drift weigh-in refreshes the derived readers and pushes the snapshot once; an in-band one does neither',
+      () async {
+    final p = baseProfile(weight: 80, basis: 80);
+    await seed(p);
+    var pushes = 0;
+    WeightLogNotifier.debugOnPushSnapshot = () => pushes++;
+    final c = makeContainer();
+    final sub = c.listen(macroTargetsProvider, (_, __) {});
+    addTearDown(sub.close);
+    expect(c.read(macroTargetsProvider)['calories'], (p['daily_calories'] as num).toDouble());
+    await log(c, 80.5); // in band: the plain raw-weight write
+    expect(pushes, 0);
+    expect(c.read(macroTargetsProvider)['calories'], (p['daily_calories'] as num).toDouble());
+    final r = await log(c, 76); // over the band
+    expect(pushes, 1);
+    expect(r.targetsMoved, isTrue);
+    expect(c.read(macroTargetsProvider)['calories'], (stored()['daily_calories'] as num).toDouble(),
+        reason: 'macroTargetsProvider was invalidated and rebuilt from the new targets');
+    expect(stored()['daily_calories'], isNot(p['daily_calories']));
+  });
+
+  test('the body-fat switch reaches the weigh-in recompute', () async {
+    Future<num> calories(bool fatOff) async {
+      final p = baseProfile(weight: 80, basis: 80)..['body_fat_percent'] = 24.0;
+      await seed(p);
+      await HiveService.instance.configBox.put('disable_bodyfat_calc', fatOff);
+      await log(makeContainer(), 76);
+      return stored()['daily_calories'] as num;
+    }
+
+    final withFat = await calories(false);
+    final withoutFat = await calories(true);
+    expect(withFat, isNot(withoutFat));
   });
 
   test('an owner change before the profile write: nothing is written', () async {

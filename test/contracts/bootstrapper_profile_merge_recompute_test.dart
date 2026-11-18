@@ -63,6 +63,27 @@ void main() {
     expect(m['current_weight_kg'], 74);
   });
 
+  test('a local map of stray keys only (id, email, a view setting) is a fresh device', () {
+    final m = _merge({'id': 'u', 'email': 'a@b.c', 'diet_serving_view': 'grams'}, cloud);
+    expect(m['daily_calories'], 2111);
+    expect(m.containsKey(kTargetsBasisWeightKey), isFalse);
+  });
+
+  test('an ISO-timestamp date of birth against the cloud YYYY-MM-DD is no change', () {
+    final isoLocal = {...local, 'date_of_birth': '1995-06-15T00:00:00.000'};
+    final m = _merge(isoLocal, {...local});
+    expect(m['daily_calories'], 2111);
+    expect(m.containsKey(kTargetsBasisWeightKey), isFalse);
+  });
+
+  test('the body-fat switch reaches the merge recompute', () {
+    final withFat = {...local, 'body_fat_percent': 24.0};
+    final cloudFat = {...cloud, 'body_fat_percent': 24.0};
+    final on = _merge(withFat, cloudFat);
+    final off = _merge(withFat, cloudFat, bodyFatOff: true);
+    expect(on['daily_calories'], isNot(off['daily_calories']));
+  });
+
   test('cloud nulls never erase a local value', () {
     final m = _merge(local, {..._inputs(80), 'height_cm': null});
     expect(m['height_cm'], 178.0);

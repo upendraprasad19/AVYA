@@ -14,12 +14,21 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:icanbefitter/core/services/error_telemetry.dart';
 import 'package:icanbefitter/features/profile/services/profile_target_recompute.dart';
+import 'package:icanbefitter/features/profile/services/target_impact.dart'
+    show derivationInputsChangedForDialog;
+
+/// A local profile that holds real answers (a goal or a height), the same test the bootstrapper's
+/// `hiveHasRealData` makes: a map of stray keys (`id`, `email`, a view setting) is a fresh device.
+bool _holdsRealProfile(Map<String, dynamic>? existing) =>
+    existing != null &&
+    (existing['primary_goal'] != null || existing['height_cm'] != null);
 
 /// Cloud non-null fields win over [existing]; local values survive for fields the cloud left null.
-/// Then, ONLY when [existing] is a non-empty map (a fresh device has nothing of its own to
+/// Then, ONLY when [existing] holds real answers (a fresh device has nothing of its own to
 /// disagree with, and with `{}` every cloud input would count as changed and the helper would
 /// override the cloud calories: the "silent backfill" the restore guard exists to prevent) and the
-/// merge changed a derivation input, the derived targets are recomputed over the merged map.
+/// merge changed a derivation input (judged like Edit Profile's dialog, so an ISO-timestamp date of
+/// birth against `YYYY-MM-DD` of the same day is no change), the derived targets are recomputed.
 ///
 /// The recompute is fail-open: a corrupt stored value (a non-numeric `height_cm` makes
 /// `recomputeDerivedTargets` throw at its `as num?` cast) records a non-fatal and returns the plain
@@ -36,9 +45,9 @@ Map<String, dynamic> mergeCloudProfileWithTargets({
     for (final e in cloud.entries)
       if (e.value != null) e.key: e.value,
   };
-  if (recomputeDisabled || existing == null || existing.isEmpty) return merged;
+  if (recomputeDisabled || !_holdsRealProfile(existing)) return merged;
   try {
-    if (!derivedTargetInputsChanged(existing, merged)) return merged;
+    if (!derivationInputsChangedForDialog(existing!, merged)) return merged;
     final overlay = recomputeDerivedTargets(
       merged,
       now: now,

@@ -44,6 +44,16 @@ void main() {
       expect(weighInDriftExceedsBand(77.9, 80.0), isTrue);
     });
 
+    test('the DIFFERENCE is rounded to tenths: a true 2.04 does not fire, a true 2.06 does', () {
+      expect(weighInDriftExceedsBand(82.04, 80.0), isFalse);
+      expect(weighInDriftExceedsBand(82.06, 80.0), isTrue);
+      expect(weighInDriftExceedsBand(77.96, 80.0), isFalse);
+      expect(weighInDriftExceedsBand(77.94, 80.0), isTrue);
+      // rounding EACH side to tenths first would read these the other way round
+      expect(weighInDriftExceedsBand(82.06, 80.04), isFalse); // true 2.02 -> 2.0
+      expect(weighInDriftExceedsBand(82.04, 79.96), isTrue); // true 2.08 -> 2.1
+    });
+
     test('the float trap: 64.4 against 62.4 is exactly 2.0 and does not recompute', () {
       expect(64.4 - 62.4 > 2.0, isTrue, reason: 'the raw double compare would fire');
       expect(weighInDriftExceedsBand(64.4, 62.4), isFalse);
@@ -81,6 +91,28 @@ void main() {
       expect(r.caloriesFrom, p['daily_calories']);
       expect(r.caloriesTo, r.patch!['daily_calories']);
       expect(r.caloriesTo, isNot(r.caloriesFrom));
+    });
+
+    test('a stored basis that is not a usable weight counts as absent and is re-seeded', () {
+      for (final bad in <Object>[double.nan, 0, -3, '80']) {
+        final p = _profile(weight: 80)..[kTargetsBasisWeightKey] = bad;
+        final r = weighInTargetRefresh(p,
+            smoothedKg: 80.5, now: now, bodyFatCalcDisabled: false);
+        expect(r.patch, <String, dynamic>{kTargetsBasisWeightKey: 80.0},
+            reason: 'basis=$bad');
+      }
+    });
+
+    test('the body-fat switch reaches the recompute: Mifflin when disabled, Katch-McArdle when not', () {
+      final p = _profile(weight: 80, basis: 80)..['body_fat_percent'] = 24.0;
+      final on = weighInTargetRefresh(p,
+          smoothedKg: 77.0, now: now, bodyFatCalcDisabled: false);
+      final off = weighInTargetRefresh(p,
+          smoothedKg: 77.0, now: now, bodyFatCalcDisabled: true);
+      expect(on.caloriesTo, isNot(off.caloriesTo));
+      final mifflin = recomputeDerivedTargets(
+          {...p, 'current_weight_kg': 77.0, 'body_fat_percent': null}, now: now)!;
+      expect(off.caloriesTo, mifflin['daily_calories']);
     });
 
     test('an incomplete profile over the band -> nothing', () {

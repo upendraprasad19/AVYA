@@ -1,7 +1,7 @@
 // goal-change-targets B3: Edit Profile tells the user, with exact numbers, when a Save moved the
 // calorie / protein targets (and says nothing when no derivation input really changed).
 //
-// Harness copied from edit_profile_target_impact_test.dart (OI-191, door 2).
+// Harness copied from edit_profile_goal_target_test.dart (OI-191, door 2).
 //
 // The FIRST pump of EditProfileScreen in this repo. Harness recipe (and the
 // font-priming order) from test/widgets/diet_plan_screen_no_modal_test.dart:
@@ -213,8 +213,12 @@ void main() {
     await tapSave(tester);
     expect(dialog, findsOneWidget);
     expect(find.text('Targets updated'), findsOneWidget);
-    expect(find.textContaining('Daily calories 2,000 \u2192'), findsOneWidget);
-    expect(find.textContaining('Protein 150 \u2192'), findsOneWidget);
+    final after = Map<dynamic, dynamic>.from(
+        (await tester.runAsync(() async => HiveService.instance.userBox.get('profile')))! as Map);
+    String n(num v) => v.round().toString().replaceAllMapped(RegExp(r'(\d)(?=(\d{3})+$)'), (m) => '${m[1]},');
+    expect(find.text('Daily calories 2,000 \u2192 ${n(after['daily_calories'] as num)} kcal'), findsOneWidget);
+    expect(find.text('Protein 150 \u2192 ${n(after['protein_grams'] as num)} g'), findsOneWidget);
+    expect(after['daily_calories'], isNot(2000));
     await tapOk(tester);
   });
 
@@ -226,6 +230,7 @@ void main() {
       'height_cm': 177.8,
     });
     await tapSave(tester);
+    expect(find.text('PROFILE'), findsOneWidget, reason: 'the Save completed (context.go)');
     expect(dialog, findsNothing);
   });
 
@@ -233,7 +238,22 @@ void main() {
     await boot(tester, _profile());
     await tester.enterText(field('Full Name'), 'Other Name');
     await tapSave(tester);
+    expect(find.text('PROFILE'), findsOneWidget, reason: 'the Save completed (context.go)');
     expect(dialog, findsNothing);
+  });
+
+  testWidgets('after an in-band weigh-in, an unrelated Save that rebases the targets on the raw weight says so',
+      (tester) async {
+    // 81.5 kg is the raw last weigh-in; the targets still stand on 80 kg (the basis).
+    await boot(tester, {
+      ..._profile(weight: 81.5),
+      'targets_basis_weight_kg': 80.0,
+    });
+    await tester.enterText(field('Full Name'), 'Other Name');
+    await tapSave(tester);
+    expect(dialog, findsOneWidget,
+        reason: 'the Save re-derived the targets from 81.5 kg, not 80 kg');
+    await tapOk(tester);
   });
 
   testWidgets('a body-fat assessment persisted while the form is open is reported by the next Save',

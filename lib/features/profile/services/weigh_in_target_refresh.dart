@@ -104,10 +104,11 @@ double smoothedWeightKg(List<double> kgs, double fallbackKg) {
   return sum / kgs.length;
 }
 
-/// True when [smoothedKg] is more than the band away from [basisKg], compared in integer
-/// tenths (`64.4 - 62.4` is `2.000000000000007` as doubles).
+/// True when [smoothedKg] is more than the band away from [basisKg]: the difference is rounded to
+/// integer tenths (`64.4 - 62.4` is `2.000000000000007` as doubles, which must not fire), so a
+/// true 2.04 kg drift reads as 2.0 and does not, and 2.06 reads as 2.1 and does.
 bool weighInDriftExceedsBand(double smoothedKg, double basisKg) {
-  final drift = (smoothedKg * 10).round() - (basisKg * 10).round();
+  final drift = ((smoothedKg - basisKg) * 10).round();
   return drift.abs() > kWeighInDriftBandTenths;
 }
 
@@ -124,18 +125,21 @@ WeighInRefresh weighInTargetRefresh(
   required DateTime now,
   required bool bodyFatCalcDisabled,
 }) {
-  final storedBasis = profile[kTargetsBasisWeightKey];
-  final basisNum = storedBasis is num
-      ? storedBasis
-      : profile['current_weight_kg'] is num
+  // A stored basis that is not a usable weight (NaN, zero, a String) counts as absent, so the
+  // basis is re-seeded instead of silencing the refresh for good.
+  final rawBasis = profile[kTargetsBasisWeightKey];
+  final storedBasis =
+      rawBasis is num && rawBasis.isFinite && rawBasis > 0 ? rawBasis : null;
+  final basisNum = storedBasis ??
+      (profile['current_weight_kg'] is num
           ? profile['current_weight_kg'] as num
-          : null;
+          : null);
   if (basisNum == null || !basisNum.isFinite || basisNum <= 0) {
     return const WeighInRefresh();
   }
   final basis = basisNum.toDouble();
   if (!weighInDriftExceedsBand(smoothedKg, basis)) {
-    if (storedBasis is num) return const WeighInRefresh();
+    if (storedBasis != null) return const WeighInRefresh();
     return WeighInRefresh(patch: <String, dynamic>{kTargetsBasisWeightKey: basis});
   }
   final overlay = recomputeDerivedTargets(

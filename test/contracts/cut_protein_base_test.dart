@@ -45,18 +45,16 @@ void main() {
           _t('general_fitness', 75).proteinGrams);
     });
 
-    test('a Cut never gets less per current kg than Build, below the cap', () {
+    test('a Cut never gets fewer grams than Build, in the uncapped region', () {
       for (final w in [60.0, 75.0, 90.0, 110.0]) {
         for (final f in [0.4, 0.6, 0.8, 0.9, 1.0]) {
           final cut = _t('lose_fat', w, target: w * f);
           final build = _t('build_muscle', w);
-          final cutCap = (cut.dailyCalories * 0.40 / 4).round();
-          final uncapped = cut.proteinGrams < cutCap;
-          if (uncapped) {
-            expect(cut.proteinGrams / w, greaterThanOrEqualTo(1.8 * 0.9 - 0.02),
-                reason: 'w=$w f=$f');
-          }
-          expect(build.proteinGrams, greaterThan(0));
+          bool capped(NutritionTargets t) =>
+              t.proteinGrams >= (t.dailyCalories * 0.40 / 4).round();
+          if (capped(cut) || capped(build)) continue;
+          expect(cut.proteinGrams, greaterThanOrEqualTo(build.proteinGrams),
+              reason: 'w=$w target=${w * f}');
         }
       }
     });

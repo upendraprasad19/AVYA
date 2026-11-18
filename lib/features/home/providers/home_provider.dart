@@ -914,6 +914,17 @@ class WeightLogNotifier extends Notifier<void> {
   @visibleForTesting
   static Future<void> Function()? debugBeforeProfileWrite;
 
+  /// Test seam (goal-change-targets B-pass): counts the snapshot push that follows a recompute.
+  @visibleForTesting
+  static void Function()? debugOnPushSnapshot;
+
+  // The health write's own snapshot push ran before the profile patch, so the server snapshot
+  // would keep the old calories.
+  void _pushSnapshotAfterRecompute() {
+    debugOnPushSnapshot?.call();
+    unawaited(SyncService.instance.pushSnapshot());
+  }
+
   Future<WeightLogResult> logWeight(double weightKg) async {
     // audit-2026-05-16 task E.7 — routes through HealthWriteService so
     // the `weight_<istDate>` key is IST-anchored and the syncWeightNow
@@ -953,8 +964,13 @@ class WeightLogNotifier extends Notifier<void> {
         final patch = <String, dynamic>{'current_weight_kg': weightKg};
         if (!health.success || killSwitch) return patch;
         try {
+          final health = HiveService.instance.healthBox;
           final kgs = recentWeighInKgs(
-            HiveService.instance.healthBox.toMap().entries,
+            [
+              for (final k in health.keys)
+                if (k is String && k.startsWith('weight_'))
+                  MapEntry<dynamic, dynamic>(k, health.get(k)),
+            ],
             istDateStr(DateTime.now()),
           );
           final r = weighInTargetRefresh(
@@ -976,11 +992,13 @@ class WeightLogNotifier extends Notifier<void> {
     BadgeService.instance.checkAll();
     final r = refresh;
     final moved = wrote && r != null && r.targetsMoved;
-    if (moved) {
+    // Every derived value (carbs, fat, TDEE, water) is rewritten by a recompute even when the
+    // calorie and protein numbers round to the same figures, so the readers and the server
+    // snapshot follow the RECOMPUTE, not only the snackbar's `targetsMoved`.
+    final recomputed = wrote && r?.patch?.containsKey('daily_calories') == true;
+    if (recomputed) {
       invalidateProfileDerivedSurfaces(ref.invalidate, source: 'weigh_in');
-      // The health write's own snapshot push ran before this profile patch, so the server
-      // snapshot would keep the old calories.
-      unawaited(SyncService.instance.pushSnapshot());
+      _pushSnapshotAfterRecompute();
     }
     return WeightLogResult(
       wrote: wrote,

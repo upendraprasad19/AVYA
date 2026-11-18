@@ -26,16 +26,16 @@ recurrence: |
   when an input changed). OI-150 (restore recompute) is the restore-side twin. Recurrence: yes, the weigh-in door and the first-sign-in
   merge were the two doors OI-191 did not reach.
 writers:
-  - { file: lib/features/home/providers/home_provider.dart, method_or_widget: "WeightLogNotifier.logWeight: ONE patchProfileWith (raw weight + refresh), own try/catch, kill switch", line: 917 }
-  - { file: lib/features/profile/services/weigh_in_target_refresh.dart, method_or_widget: "weighInTargetRefresh / recentWeighInKgs (7-day mean, 2 kg band in integer tenths)", line: 121 }
+  - { file: lib/features/home/providers/home_provider.dart, method_or_widget: "WeightLogNotifier.logWeight: ONE patchProfileWith (raw weight + refresh), own try/catch, kill switch", line: 928 }
+  - { file: lib/features/profile/services/weigh_in_target_refresh.dart, method_or_widget: "weighInTargetRefresh / recentWeighInKgs (7-day mean, 2 kg band, difference rounded to tenths)", line: 122 }
   - { file: lib/features/profile/services/profile_target_recompute.dart, method_or_widget: "recomputeDerivedTargets: the overlay carries targets_basis_weight_kg", line: 161 }
-  - { file: lib/features/profile/services/profile_cloud_merge.dart, method_or_widget: "mergeCloudProfileWithTargets (first-sign-in merge, fail-open recompute)", line: 27 }
+  - { file: lib/features/profile/services/profile_cloud_merge.dart, method_or_widget: "mergeCloudProfileWithTargets (first-sign-in merge, real local profile only, fail-open recompute)", line: 36 }
   - { file: lib/core/utils/bmr_calculator.dart, method_or_widget: "calculateTargets protein base; projectGoalDate real pace", line: 226 }
-  - { file: lib/features/nutrition/screens/diet_plan_screen.dart, method_or_widget: "_savePlan / _generateFreshPlan / _loadSavedPlan: the target stamp", line: 376 }
+  - { file: lib/features/nutrition/screens/diet_plan_screen.dart, method_or_widget: "_savePlan / _generateFreshPlan / _loadSavedPlan: the target stamp", line: 377 }
 readers:
-  - { file: lib/features/home/widgets/weight_log_sheet.dart, method_or_widget: "_save: snackbar with the exact numbers when WeightLogResult.targetsMoved", line: 99 }
+  - { file: lib/features/home/widgets/weight_log_sheet.dart, method_or_widget: "_save: snackbar with the exact numbers when WeightLogResult.targetsMoved", line: 100 }
   - { file: lib/features/profile/screens/edit_profile_screen.dart, method_or_widget: "_save: targetImpactFor(open snapshot, after) -> dialog / reschedule dialog section", line: 2132 }
-  - { file: lib/features/nutrition/screens/diet_plan_screen_swap.dart, method_or_widget: "_staleBanner: staleTargetsOf(stamp, targets on screen)", line: 356 }
+  - { file: lib/features/nutrition/screens/diet_plan_screen_swap.dart, method_or_widget: "_staleBanner: staleTargetsOf(stamp, targets on screen)", line: 359 }
   - { file: lib/core/services/auth_session_bootstrapper.dart, method_or_widget: "hydrateFromCloud F2 branch calls mergeCloudProfileWithTargets", line: 888 }
 hive_key_prefix: "userBox['profile'] keys current_weight_kg, targets_basis_weight_kg, daily_calories, protein_grams; configBox['saved_diet_plan'] keys diet_target_calories, diet_target_protein"
 hive_key_formula: "HiveService.instance.userBox.get('profile')[<key>] via ProfileWriteService.patchProfileWith; MigratedKey.write('saved_diet_plan', planData) via UserRepository.saveDietPlan"
@@ -65,15 +65,17 @@ proposed_fix: |
   Plan docs/plans/goal-change-targets.md (revision 4), record docs/plan-reviews/goal-change-targets.md (3 rounds).
   - B1: Cut protein base = max(target, 0.9 x current weight); the projection uses the chosen pace at every distance (floor one week);
     the two fallback derivations pass the target weight.
-  - B2: a weigh-in recomputes only when the 7-day mean drifts more than 2 kg (integer tenths) from targets_basis_weight_kg; ONE patch.
+  - B2: a weigh-in recomputes only when the 7-day mean drifts more than 2 kg (the difference rounded to tenths) from targets_basis_weight_kg; ONE patch;
+    readers and the snapshot follow the recompute.
   - B2b: the first-sign-in merge recomputes on a non-empty local profile when an input changed, fail-open.
-  - B3: Edit Profile reports a moved target with exact numbers (open-time snapshot, normalised input comparison).
+  - B3: Edit Profile reports a moved target with exact numbers (open-time snapshot, normalised input comparison; a rebase of the targets on a
+    different weight counts as a real change).
   - B4: the saved diet chart carries the targets it was built for; a banner offers Regenerate, never regenerates by itself.
 regression_test_planned: |
   test/contracts/cut_protein_base_test.dart, test/bmr_calculator_pace_test.dart, test/contracts/weigh_in_target_refresh_test.dart,
   test/contracts/weigh_in_target_refresh_behavioral_test.dart, test/contracts/bootstrapper_profile_merge_recompute_test.dart,
   test/contracts/progress_restore_freeze_merge_behavioral_test.dart (call site), test/contracts/derivation_inputs_changed_for_dialog_test.dart,
-  test/profile/edit_profile_target_impact_test.dart, test/nutrition/diet_plan_stale_targets_test.dart,
+  test/profile/edit_profile_target_impact_test.dart, test/home/weight_sheet_target_snackbar_test.dart, test/nutrition/diet_plan_stale_targets_test.dart,
   test/nutrition/diet_plan_stale_banner_screen_test.dart; pin repointed in test/contracts/weight_log_invalidation_awaitable_test.dart.
 impact_analysis: |
   Account tier (profile writes, the first-sign-in merge writer, the weigh-in door). The app is pre-launch with testers only (CLAUDE.md
@@ -106,6 +108,10 @@ deficit ignoring the gap, body fat, free vs PRO, legacy goals.
 
 ## Accepted consequences
 
+- **Cross-device restore (B-pass seat A, accepted in plan section 3 B2):** device B's launch restore recomputes from the raw cloud weight
+  (`sync_profile.dart:862-889`, OI-150's contract), so a second device can rebuild the targets from one reading and rewrite its basis. Changing
+  the restore path would move the batch to platform tier (sync engine) and reopen OI-150's contract: that is the founder's call, and it is stated in the final report.
+
 - A single reading is the whole mean when it is the week's only weigh-in (a weekly weigher gets no smoothing); a later reading pulls
   it back. Cross-device: device B's restore recomputes from the RAW weight and its basis becomes the raw weight.
 - An UNSTAMPED saved plan (every plan saved before this change) shows no banner and stays unstamped when re-saved; a stamp appears
@@ -124,7 +130,9 @@ emoji and no exclamation, and gives exact numbers (the targets are already saved
 ## Mutations
 
 Each mutant was applied with an anchor asserted to occur exactly once and a restore from the in-memory copy (`git status` after each
-batch shows no stray file); "red" counts failing tests.
+batch shows no stray file). "red (n)" is the failing-test count printed when the runner's last progress line came out: exact for the
+pure and behavioural files, **at least n** for a widget file (a failing widget test with Hive hangs the runner on the close, so only
+the first failure is counted).
 
 | ID | Mutation | Result |
 |---|---|---|
@@ -147,9 +155,24 @@ batch shows no stray file); "red" counts failing tests.
 | B3-3 | the info dialog never shown | red (1) |
 | B3-4 | `impactShown` not set (second dialog after the reschedule dialog) | red (1) |
 | B3-5 | `&&` for `||` in "moved" | red (2) |
-| B4-1 | `_savePlan` stamps the targets read at save time | red (1) |
+| B4-1 | `_savePlan` stamps the targets read at save time | red (1) | 
 | B4-2 | `_loadSavedPlan` drops the stamp | red (5) |
 | B4-3 | `&&` for `||` in `staleTargetsOf` | red (3) |
 | B4-4 | the fallback guard ignored | red (1) |
 | B4-5 | Regenerate does not generate | red (1) |
 | B4-6 | Regenerate does not count `_regenerations` | survives (equivalent, see accepted consequences) |
+| BP-1 | no `pushSnapshot` after a recompute | red (1) |
+| BP-2 | no `invalidateProfileDerivedSurfaces` after a recompute | red (1) |
+| BP-3 | the body-fat switch hard-coded false at the weigh-in door | red (1) |
+| BP-4 | the body-fat argument dropped inside `weighInTargetRefresh` | red (2) |
+| BP-5 | the band rounds each side before the difference | survived the first run; cases 82.06 vs 80.04 and 82.04 vs 79.96 added, then red (1) |
+| BP-6 | a NaN / zero / String basis not treated as absent | red (1) |
+| BP-7 | stray keys count as a real local profile | red (1) |
+| BP-8 | raw `!=` compare in the merge | red (1) |
+| BP-9 | the body-fat argument dropped in the merge | red (1) |
+| BP-10 | bootstrapper kill switch hard-coded false | red (1) |
+| BP-11 | bootstrapper body-fat switch hard-coded false | red (1) |
+| BP-12 | the dialog's "to" line prints the old number | red (at least 1) |
+| BP-13 | an in-band rebase is not an impact | red (at least 1) |
+| BP-14 | the snackbar's from / to swapped | red (at least 1) |
+| BP-15 | the snackbar's ternary inverted | red (at least 2) |
