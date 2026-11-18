@@ -24,7 +24,10 @@ void main() {
     'lib/features/nutrition/screens/nutrition_screen.dart': 'canProjectGoalDate(',
     'lib/features/profile/screens/profile/nutrition_targets.dart': 'canProjectGoalDate(',
     'lib/features/profile/screens/profile/subscription_section.dart': 'canProjectGoalDate(',
-    'lib/features/profile/screens/reports_screen.dart': 'projectionCalloutKind(',
+    // OI-518: the callout moved out of the Reports screen into its own widget; the
+    // screen's call site (goal: from primary_goal) is pinned in
+    // maintain_weight_callout_behavioral_test.dart.
+    'lib/features/profile/widgets/weight_projection_callout.dart': 'projectionCalloutKind(',
     'lib/features/profile/screens/profile/journey_timeline.dart': 'journeyEtaAllowed(',
   };
 

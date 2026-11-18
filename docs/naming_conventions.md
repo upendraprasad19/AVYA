@@ -683,6 +683,9 @@ Every term that has SPECIFIC meaning in this app. New features that use any of t
 | **protein powder** (search) | A `supplements` row with at most 210 kcal and at least 14 g protein per serving that is not processed (`isProteinPowderRow`); listed in the search for an ADULT whatever the Supplements switch says (no PRO test; the kill switch hides them). The two shake ids `F0823` / `F0831` are never listed. | NOT the generated Supplements shake. |
 
 ---
+| **WeightProjectionCallout** / **onTarget** / **offTarget** | `lib/features/profile/widgets/weight_projection_callout.dart` (OI-518): the Weekly Report weight card's one-line callout, and the two `ProjectionCalloutKind` values of a Maintain goal: inside / beyond the 3.0 kg window around the target, judged on the last weigh-in. | NOT the free-tier **hold** week (`holdWeek()`); NOT `adjust` / `reached` / `eta` (the Cut / Build kinds); never a date. |
+| **weightGapTenths** | `lib/features/onboarding/target_weight_check.dart`: `target - current` in integer tenths of a kg, rounded; the ONE gap expression shared by `validateTargetWeight` and the callout's words. Negative = the current weight is above the target. | NOT a float difference; never printed through `toStringAsFixed`. |
+| **WeightCalloutCopy** / "Holding the line" | `lib/core/copy/weight_callout_copy.dart`: the Maintain lines of the weight callout (`onTargetLine`, `offTargetLine`, `targetLabel`). "Holding the line" is the Maintain goal's own words (goal screen subtitle "Hold the line"). | NOT the free-tier hold week; NOT a streak or phase message. |
 
 ## 9. Rules for new features
 
