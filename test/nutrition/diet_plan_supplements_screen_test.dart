@@ -29,6 +29,7 @@ import 'package:icanbefitter/features/nutrition/services/diet_plan_strategy_stat
 import 'package:icanbefitter/features/nutrition/services/diet_plan_catalog.dart';
 import 'package:icanbefitter/features/nutrition/services/diet_strategy_flags.dart';
 import 'package:icanbefitter/features/nutrition/services/diet_supplements_flags.dart';
+import 'package:icanbefitter/features/nutrition/providers/diet_serving_view_provider.dart';
 import 'package:icanbefitter/features/nutrition/widgets/diet_plan_macro_cards.dart';
 import 'package:icanbefitter/features/nutrition/widgets/diet_supplements_section.dart';
 import 'package:icanbefitter/shared/widgets/diet_strategy_chips.dart';
@@ -559,6 +560,58 @@ void main() {
           findsOneWidget);
     });
 
+    testWidgets(
+        'OI-517: the Grams view labels every meal row with the weight; '
+        'Portions shows no weight prefix', (tester) async {
+      final gramsRow = RegExp(r'^\d+ (g|ml)( \(.+\))? \u00B7 P\d+g C\d+g F\d+g$');
+      List<String> mealRows() => [
+            for (final t in tester.widgetList<Text>(find.byType(Text)))
+              if ((t.data ?? '').contains(' \u00B7 P') &&
+                  (t.data ?? '').contains(' F'))
+                t.data!,
+          ];
+
+      await seed(tester, extra: const {'diet_serving_view': 'grams'});
+      await pumpScreen(tester);
+      final grams = mealRows();
+      expect(grams, isNotEmpty);
+      for (final r in grams) {
+        expect(gramsRow.hasMatch(r), isTrue, reason: r);
+      }
+
+      await seed(tester, extra: const {'diet_serving_view': 'portions'});
+      final c = ProviderScope.containerOf(
+          tester.element(find.byType(DietPlanScreen)));
+      c.invalidate(dietServingViewProvider);
+      await _settle(tester);
+      final portions = mealRows();
+      expect(portions, isNotEmpty);
+      for (final r in portions) {
+        expect(RegExp(r'^\d+ (g|ml) \(').hasMatch(r), isFalse, reason: r);
+      }
+      // The SAME plan in both views: same rows, identical macros (the text after
+      // the serving), and the serving part differs for most rows.
+      expect(portions.length, grams.length);
+      String tail(String r) => r.substring(r.indexOf(' \u00B7 P'));
+      String head(String r) => r.substring(0, r.indexOf(' \u00B7 P'));
+      var differing = 0;
+      for (var i = 0; i < grams.length; i++) {
+        expect(tail(portions[i]), tail(grams[i]), reason: 'macros: ${grams[i]}');
+        if (head(portions[i]) != head(grams[i])) differing++;
+      }
+      expect(differing, greaterThan(grams.length ~/ 2));
+    });
+
+    test('OI-517: the PDF rows are labelled at share time (presence pin)', () {
+      final src = File('lib/features/nutrition/screens/diet_plan_screen.dart')
+          .readAsStringSync();
+      expect(
+          RegExp(r'servingDesc:\s*servingLabelFor\([\s\S]{0,160}'
+                  r'ref\.read\(dietServingViewProvider\)')
+              .hasMatch(src),
+          isTrue);
+    });
+
     testWidgets('layout v2: no overflow at 360 dp with every control on',
         (tester) async {
       await seed(tester, extra: const {'diet_supplements': true});
@@ -583,6 +636,7 @@ void main() {
         'diet_plan_dropdown',
         'diet_plan_settings_row',
         'diet_plan_macro_cards',
+        'diet_serving_view_toggle',
         'diet_strategy_section',
         'diet_supplements_section',
       ];
@@ -660,6 +714,52 @@ void main() {
       expect(debugDietPlanGenerations, 0, reason: 'the saved plan loaded');
       expect(find.text(_wheyName), findsOneWidget);
       expect(swapIconIn(_wheyName), findsNothing);
+    });
+
+    testWidgets(
+        'OI-517 (B-pass B5): a restored saved item with no serving_g never '
+        'shows a made-up 100 g in the Grams view', (tester) async {
+      await seed(tester, extra: const {
+        'diet_supplements': true,
+        'diet_serving_view': 'grams',
+      });
+      await tester.runAsync(() => UserRepository.instance.saveDietPlan({
+            'id': 'p2',
+            'food_type': 'veg',
+            'diet_supplements': true,
+            'meals': [
+              {
+                'name': 'Evening Snack',
+                'items': [
+                  {
+                    'food_id': 'F0823',
+                    'name': _wheyName,
+                    'serving_desc': '1 scoop',
+                    'calories': 108,
+                    'protein': 27,
+                  },
+                  {
+                    'food_id': 'F0831',
+                    'name': _peaName,
+                    'serving_desc': '1 scoop',
+                    'serving_g': 30,
+                    'calories': 100,
+                    'protein': 24,
+                  }
+                ],
+              }
+            ],
+          }));
+      await pumpScreen(tester);
+      expect(debugDietPlanGenerations, 0, reason: 'the saved plan loaded');
+      final rows = [
+        for (final t in tester.widgetList<Text>(find.byType(Text)))
+          if ((t.data ?? '').contains(' \u00B7 P')) t.data!,
+      ];
+      expect(rows.any((r) => r.startsWith('1 scoop \u00B7 P27g')), isTrue,
+          reason: 'no grams stored: the Portions text, never 100 g: $rows');
+      expect(rows.any((r) => r.startsWith('30 g (1 scoop) \u00B7 P24g')), isTrue,
+          reason: '$rows');
     });
 
     testWidgets('the kill switch off: a plan stamped with Supplements is not '

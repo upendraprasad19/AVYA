@@ -9,7 +9,9 @@ import 'package:flutter/material.dart';
 import 'package:icanbefitter/core/theme/colors.dart';
 import 'package:icanbefitter/core/theme/spacing.dart';
 import 'package:icanbefitter/core/theme/typography.dart';
+import '../providers/diet_serving_view_provider.dart';
 import '../services/diet_plan_food_search.dart';
+import '../services/diet_serving_label.dart';
 import '../services/diet_plan_generator.dart';
 import 'diet_plan_portion_sheet.dart';
 
@@ -17,6 +19,7 @@ Future<DietPlanFoodItem?> showDietPlanFoodSearchSheet(
   BuildContext context, {
   required List<DietPlanSearchHit> Function(String query) search,
   required String? role,
+  DietServingView view = DietServingView.portions,
 }) {
   // The route's own builder context has the top padding removed, so read it
   // from the caller's context.
@@ -43,7 +46,7 @@ Future<DietPlanFoodItem?> showDietPlanFoodSearchSheet(
         padding: EdgeInsets.only(bottom: mq.viewInsets.bottom),
         child: SizedBox(
           height: height,
-          child: DietPlanFoodSearchSheet(search: search, role: role),
+          child: DietPlanFoodSearchSheet(search: search, role: role, view: view),
         ),
       );
     },
@@ -52,10 +55,14 @@ Future<DietPlanFoodItem?> showDietPlanFoodSearchSheet(
 
 class DietPlanFoodSearchSheet extends StatefulWidget {
   const DietPlanFoodSearchSheet(
-      {super.key, required this.search, required this.role});
+      {super.key,
+      required this.search,
+      required this.role,
+      this.view = DietServingView.portions});
 
   final List<DietPlanSearchHit> Function(String query) search;
   final String? role;
+  final DietServingView view;
 
   @override
   State<DietPlanFoodSearchSheet> createState() =>
@@ -72,6 +79,7 @@ class _DietPlanFoodSearchSheetState extends State<DietPlanFoodSearchSheet> {
       role: widget.role,
       processed: hit.processed,
       yours: hit.yours,
+      view: widget.view,
     );
     if (item != null && mounted) Navigator.of(context).pop(item);
   }
@@ -134,7 +142,7 @@ class _DietPlanFoodSearchSheetState extends State<DietPlanFoodSearchSheet> {
                                               fontWeight: FontWeight.w700,
                                               color: AppColors.textPrimary)),
                                       Text(
-                                          '${h.row['standard_serving_desc'] ?? '1 serving'}'
+                                          '${servingLabelFor(h.id, '${h.row['standard_serving_desc'] ?? '1 serving'}', (h.row['standard_serving_g'] as num?)?.toDouble() ?? 0, widget.view)}'
                                           ' · ${(h.row['calories_std'] as num?)?.round() ?? 0} kcal',
                                           style: dim),
                                     ],

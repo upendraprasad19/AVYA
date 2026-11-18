@@ -76,9 +76,11 @@ extension _DietPlanSwapFlow on _DietPlanScreenState {
     )?.name;
     final epoch = _planEpoch;
     final others = [...planIds]..remove(item.foodId);
+    final servingView = ref.read(dietServingViewProvider);
     showDietPlanSwapSheet(
       context,
       itemName: item.name,
+      view: servingView,
       alternatives: alternatives,
       onPick: (alt) =>
           _applyPick(epoch, mealIndex, itemIndex, item.foodId, alt),
@@ -93,6 +95,7 @@ extension _DietPlanSwapFlow on _DietPlanScreenState {
         return showDietPlanFoodSearchSheet(
           sheetContext,
           role: role,
+          view: servingView,
           search: (q) => searchDietPlanFoods(
             query: q,
             foods: foods,

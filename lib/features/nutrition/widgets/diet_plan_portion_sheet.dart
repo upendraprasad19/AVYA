@@ -9,7 +9,9 @@ import 'package:icanbefitter/core/theme/colors.dart';
 import 'package:icanbefitter/core/theme/spacing.dart';
 import 'package:icanbefitter/core/theme/typography.dart';
 import '../services/diet_plan_free_item.dart';
+import '../providers/diet_serving_view_provider.dart';
 import '../services/diet_plan_generator.dart';
+import '../services/diet_serving_label.dart';
 
 Future<DietPlanFoodItem?> showDietPlanPortionSheet(
   BuildContext context, {
@@ -17,6 +19,7 @@ Future<DietPlanFoodItem?> showDietPlanPortionSheet(
   required String? role,
   bool processed = false,
   bool yours = false,
+  DietServingView view = DietServingView.portions,
 }) {
   return showModalBottomSheet<DietPlanFoodItem>(
     context: context,
@@ -28,7 +31,11 @@ Future<DietPlanFoodItem?> showDietPlanPortionSheet(
     builder: (ctx) => Padding(
       padding: EdgeInsets.only(bottom: MediaQuery.of(ctx).viewInsets.bottom),
       child: DietPlanPortionSheet(
-          row: row, role: role, processed: processed, yours: yours),
+          row: row,
+          role: role,
+          processed: processed,
+          yours: yours,
+          view: view),
     ),
   );
 }
@@ -40,12 +47,14 @@ class DietPlanPortionSheet extends StatefulWidget {
     required this.role,
     this.processed = false,
     this.yours = false,
+    this.view = DietServingView.portions,
   });
 
   final Map<String, dynamic> row;
   final String? role;
   final bool processed;
   final bool yours;
+  final DietServingView view;
 
   @override
   State<DietPlanPortionSheet> createState() => _DietPlanPortionSheetState();
@@ -140,7 +149,9 @@ class _DietPlanPortionSheetState extends State<DietPlanPortionSheet> {
                       color: AppColors.accent),
                 ),
                 Expanded(
-                  child: Text(item.servingDesc,
+                  child: Text(
+                      servingLabelFor(
+                          item.foodId, item.servingDesc, item.servingG, widget.view),
                       key: const ValueKey('diet_portion_desc'),
                       textAlign: TextAlign.center,
                       style: AppTypography.body.copyWith(
@@ -169,8 +180,12 @@ class _DietPlanPortionSheetState extends State<DietPlanPortionSheet> {
                     onChanged: _onGrams,
                     style: AppTypography.body
                         .copyWith(color: AppColors.textPrimary),
-                    decoration: const InputDecoration(
-                        isDense: true, suffixText: 'g'),
+                    decoration: InputDecoration(
+                        isDense: true,
+                        suffixText: widget.view == DietServingView.grams &&
+                                isLiquidFood(item.foodId)
+                            ? 'ml'
+                            : 'g'),
                   ),
                 ),
               ],

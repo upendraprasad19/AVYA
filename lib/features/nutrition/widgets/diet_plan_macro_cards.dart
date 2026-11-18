@@ -12,6 +12,7 @@ import 'package:flutter/material.dart';
 import 'package:icanbefitter/core/theme/colors.dart';
 import 'package:icanbefitter/core/theme/spacing.dart';
 import 'package:icanbefitter/core/theme/typography.dart';
+import 'diet_serving_view_toggle.dart';
 
 /// Height ceiling of each compact card (the layout test pins it).
 const double kDietPlanCompactCardMaxHeight = 60;
@@ -36,11 +37,16 @@ class DietPlanTdeeCard extends StatelessWidget {
       decoration: _compactDecoration(AppColors.accent.withValues(alpha: 0.2)),
       child: Row(
         children: [
-          _dietPlanStat('BMR', '${targets['bmr']?.round() ?? 0}', unit: 'kcal'),
+          _dietPlanStat('BMR', '${targets['bmr']?.round() ?? 0}',
+              unit: 'kcal', fit: true),
           _dietPlanStat('TDEE', '${targets['tdee']?.round() ?? 0}',
-              unit: 'kcal'),
+              unit: 'kcal', fit: true),
           _dietPlanStat('TARGET', '${targets['calories']?.round() ?? 0}',
-              unit: 'kcal', emphasis: true),
+              unit: 'kcal', emphasis: true, fit: true),
+          // OI-517: the Portions / Grams switch at the right end of the card
+          // (docs/plans/diet-grams-toggle.md section 13).
+          const SizedBox(width: 6),
+          const DietServingViewToggle(),
         ],
       ),
     );
@@ -73,50 +79,65 @@ class DietPlanMacroTargetsCard extends StatelessWidget {
   }
 }
 
+Widget _caption(String label, bool fit) {
+  final text = Text(
+    label,
+    maxLines: 1,
+    overflow: fit ? TextOverflow.visible : TextOverflow.ellipsis,
+    style: AppTypography.monoXs.copyWith(
+      fontSize: 10,
+      fontWeight: FontWeight.w700,
+      color: AppColors.textDim,
+      letterSpacing: 1.0,
+    ),
+  );
+  return fit ? FittedBox(fit: BoxFit.scaleDown, child: text) : text;
+}
+
 /// One caption-over-figure cell; three share a card equally.
+///
+/// [fit] (the calorie card only, OI-517): the unit's letter spacing drops to
+/// 0.5 and the figure sits in a scale-down FittedBox, so a 4-digit figure
+/// shrinks to its cell instead of ellipsising once the switch takes room.
+/// Off (the protein / carbs / fat card) the output is byte-identical to before.
 Widget _dietPlanStat(String label, String value,
     {Color color = AppColors.textPrimary,
     bool emphasis = false,
-    String? unit}) {
+    String? unit,
+    bool fit = false}) {
+  final figure = Text.rich(
+    TextSpan(
+      text: value,
+      style: AppTypography.body.copyWith(
+        fontSize: 16,
+        fontWeight: emphasis ? FontWeight.w900 : FontWeight.w800,
+        color: emphasis ? AppColors.accent : color,
+      ),
+      children: [
+        if (unit != null)
+          TextSpan(
+            text: ' $unit',
+            style: AppTypography.monoXs.copyWith(
+              fontSize: 10,
+              fontWeight: FontWeight.w400,
+              color: AppColors.textDim,
+              letterSpacing: fit ? 0.5 : null,
+            ),
+          ),
+      ],
+    ),
+    maxLines: 1,
+    overflow: TextOverflow.ellipsis,
+  );
   return Expanded(
     child: Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Text(
-          label,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: AppTypography.monoXs.copyWith(
-            fontSize: 10,
-            fontWeight: FontWeight.w700,
-            color: AppColors.textDim,
-            letterSpacing: 1.0,
-          ),
-        ),
+        // [fit] (calorie card): the caption shrinks too, so a large text scale
+        // never ellipsises "TARGET" next to the switch.
+        _caption(label, fit),
         const SizedBox(height: 2),
-        Text.rich(
-          TextSpan(
-            text: value,
-            style: AppTypography.body.copyWith(
-              fontSize: 16,
-              fontWeight: emphasis ? FontWeight.w900 : FontWeight.w800,
-              color: emphasis ? AppColors.accent : color,
-            ),
-            children: [
-              if (unit != null)
-                TextSpan(
-                  text: ' $unit',
-                  style: AppTypography.monoXs.copyWith(
-                    fontSize: 10,
-                    fontWeight: FontWeight.w400,
-                    color: AppColors.textDim,
-                  ),
-                ),
-            ],
-          ),
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-        ),
+        fit ? FittedBox(fit: BoxFit.scaleDown, child: figure) : figure,
       ],
     ),
   );

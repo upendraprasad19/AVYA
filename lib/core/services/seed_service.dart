@@ -231,7 +231,13 @@ class SeedService {
   /// false (the only runtime reader of the flag is the swap sheet, which lists
   /// catalog entries, so nothing visible changes; the bump keeps the asset
   /// and every install in step, as v5, v6 and v7 did for their flips).
-  static const int _foodLibraryVersion = 8;
+  ///
+  /// v9 (2026-11-18 diet chart Portions / Grams view, docs/plans/
+  /// diet-grams-toggle.md section 3, OI-517): 145 liquid rows gain
+  /// `weight_unit: "ml"` (absent = grams). Without the bump an installed
+  /// food box never gains the field and every liquid shows grams in the
+  /// Grams view.
+  static const int _foodLibraryVersion = 9;
   static const String _foodVersionKey = 'food_library_version';
 
   final HiveService _hive = HiveService.instance;
