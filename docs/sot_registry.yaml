@@ -1595,7 +1595,7 @@ concepts:
           Vegan/veg preferences read the DB's is_vegan / is_veg fields
           AUTHORITATIVELY (diagnose d3c7a9).
       - file: lib/core/services/seed_service.dart
-        method: _foodLibraryVersion (v4 = is_everyday + v4 UPF tags + F1442-F1448; v5 = 14 Low carb / Keto ids is_everyday true; v6 = 5 Low carb plan ids is_everyday true; v7 = 10 swap-only ids is_everyday true)
+        method: _foodLibraryVersion (v4 = is_everyday + v4 UPF tags + F1442-F1448; v5 = 14 Low carb / Keto ids is_everyday true; v6 = 5 Low carb plan ids is_everyday true; v7 = 10 swap-only ids is_everyday true; v8 = weight_unit ml on 132 liquid rows)
       - file: lib/features/nutrition/screens/diet_plan_screen.dart
         method: _generateFreshPlan (DietPlanFlags routing, dietPlanSeed, fiberTarget from profile['fiber_grams'])
     readers:
@@ -1978,6 +1978,96 @@ concepts:
       gets the shake, the card or the snapshot key. Doses come only from
       captain_manual.ts SECTION 5; no brand names; no pre-workout product.
 
+  - concept: diet_serving_view
+    domain: nutrition
+    behavioral_test_path: test/contracts/diet_serving_view_writer_to_reader_test.dart
+    description: |
+      Diet chart Portions / Grams view (OI-517, 2026-11-18,
+      docs/plans/diet-grams-toggle.md). ONE local profile key
+      `diet_serving_view` ('portions' | 'grams'; userBox profile map; NEVER
+      pushed, the profile push is a column whitelist, so a reinstall or a
+      second device falls back to the default). Absent = Portions (every
+      account that finished onboarding before this shipped); a NEW user gets
+      'grams' written by completeOnboarding. DISPLAY ONLY: plan items keep
+      their stored servingDesc + servingG, the saved-plan JSON, macros and
+      Portions output are unchanged. The one label function is
+      servingLabel / servingLabelFor.
+    writers:
+      - file: lib/features/nutrition/services/diet_serving_view_actions.dart
+        line_range: 15-21
+        method: setDietServingView (the toggle's door: one updateProfile, no-op on an equal stored value)
+      - file: lib/features/onboarding/providers/onboarding_provider.dart
+        line_range: 555-561
+        method: completeOnboarding profile map (diet_serving_view grams for a new user; saveProfile is a whole-map write, so a re-onboarding resets it)
+    readers:
+      - file: lib/features/nutrition/providers/diet_serving_view_provider.dart
+        line_range: 17-45
+        method: dietServingViewProvider (reads Hive, rebuilt on the restore tick, trigger = userProfileProvider select) + servingLabelFor + isLiquidFood
+      - file: lib/features/nutrition/services/diet_serving_label.dart
+        line_range: 1-91
+        method: DietServingView.fromStorage + servingLabel (the pure label table)
+      - file: lib/features/nutrition/widgets/diet_serving_view_toggle.dart
+        line_range: 1-80
+        method: DietServingViewToggle (the switch at the right end of the BMR / TDEE / TARGET card)
+      - file: lib/features/nutrition/screens/diet_plan_screen.dart
+        line_range: 546-710
+        method: build (watches the view) + meal row text + _sharePlanAsPdf (PDF rows labelled at share time)
+      - file: lib/features/nutrition/widgets/diet_plan_swap_sheet.dart
+        line_range: 20-100
+        method: showDietPlanSwapSheet (alternative row text)
+      - file: lib/features/nutrition/widgets/diet_plan_portion_sheet.dart
+        line_range: 14-200
+        method: DietPlanPortionSheet (label and the Weight field suffix g / ml)
+      - file: lib/features/nutrition/widgets/diet_plan_food_search_sheet.dart
+        line_range: 16-160
+        method: DietPlanFoodSearchSheet (Search any food rows, unscaled row desc with the row's own grams)
+    hive:
+      box: userBox
+      key_prefix: "profile"
+    cloud:
+      table: ""
+      columns: []
+    sync_methods: []
+    restore_methods: [_restoreUserProfile]
+    provider_invalidation_set: [userProfileProvider]
+    class_constraints: |
+      Never read the raw key outside dietServingViewProvider. Never store
+      anything derived from the view (the saved plan keeps the Portions text
+      and the grams). Log Food, the barcode sheet, the coach and Home are NOT
+      covered. A liquid's unit comes from the food row (`weight_unit: ml`,
+      concept food_weight_unit), never from a name match.
+
+  - concept: food_weight_unit
+    domain: nutrition
+    behavioral_test_path: test/contracts/food_library_v4_upgrade_behavioral_test.dart
+    description: |
+      `weight_unit` ("ml", only on audited liquid rows of food_database.json,
+      132 rows; absent = grams; seed v8, OI-517). Decided row by row from
+      scripts/report_serving_weights.dart, never inferred from a name
+      (a name match returns Broccoli (steamed) and Tuna in Water).
+      standard_serving_g is never edited by this audit: it feeds every macro,
+      plan item and golden.
+    writers:
+      - file: assets/data/food_database.json
+        method: weight_unit ml on the audited liquid rows (guarded by test/contracts/food_weight_unit_asset_test.dart)
+      - file: lib/core/services/seed_service.dart
+        method: _foodLibraryVersion 8 (an installed box gains the field only through the bump)
+    readers:
+      - file: lib/features/nutrition/providers/diet_serving_view_provider.dart
+        method: isLiquidFood (total: a missing id, a custom food or the shake read as grams) -> servingLabelFor
+    hive:
+      box: foodBox
+      key_prefix: ""
+    cloud:
+      table: ""
+      columns: []
+    sync_methods: []
+    restore_methods: []
+    provider_invalidation_set: []
+    class_constraints: |
+      Changing the audited set is an edit of BOTH the asset and the expected
+      list in food_weight_unit_asset_test.dart, plus a _foodLibraryVersion bump.
+
   - concept: food_is_everyday
     domain: nutrition
     behavioral_test_path: test/nutrition/curated_diet_plan_test.dart
@@ -1992,7 +2082,7 @@ concepts:
       - file: scripts/patch_food_database_v4.dart
         method: main (imports kDietPlanCatalog; one-shot, idempotent)
       - file: lib/core/services/seed_service.dart
-        method: _seedFoods (putAll at food_library_version 7; v5 flips the 14 Unit 3b Low carb / Keto ids to true, v6 the 5 Low carb plan ids, v7 the 10 swap-only ids)
+        method: _seedFoods (putAll at food_library_version 8; v5 flips the 14 Unit 3b Low carb / Keto ids to true, v6 the 5 Low carb plan ids, v7 the 10 swap-only ids, v8 adds weight_unit ml to 132 liquid rows)
     readers:
       - file: lib/features/nutrition/services/diet_plan_swap.dart
         method: swapAlternatives
