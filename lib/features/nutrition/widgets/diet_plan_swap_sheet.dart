@@ -11,7 +11,9 @@ import 'package:flutter/material.dart';
 import 'package:icanbefitter/core/theme/colors.dart';
 import 'package:icanbefitter/core/theme/spacing.dart';
 import 'package:icanbefitter/core/theme/typography.dart';
+import '../providers/diet_serving_view_provider.dart';
 import '../services/diet_plan_generator.dart';
+import '../services/diet_serving_label.dart';
 
 /// Lists [alternatives] for [itemName] (all of them, scrollable; none is fine:
 /// the search row is always there); a tap pops the sheet and calls [onPick].
@@ -24,6 +26,7 @@ Future<void> showDietPlanSwapSheet(
   required ValueChanged<DietPlanFoodItem> onPick,
   required Future<DietPlanFoodItem?> Function(BuildContext sheetContext)
       onSearch,
+  DietServingView view = DietServingView.portions,
 }) {
   return showModalBottomSheet<void>(
     context: context,
@@ -86,7 +89,7 @@ Future<void> showDietPlanSwapSheet(
                                     color: AppColors.textPrimary),
                               ),
                               subtitle: Text(
-                                '${alt.servingDesc} · ${alt.calories} kcal',
+                                '${servingLabelFor(alt.foodId, alt.servingDesc, alt.servingG, view)} · ${alt.calories} kcal',
                                 style: AppTypography.bodySm.copyWith(
                                     fontSize: 11, color: AppColors.textDim),
                               ),

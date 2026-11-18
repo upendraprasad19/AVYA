@@ -21,6 +21,7 @@ import 'package:icanbefitter/features/profile/providers/profile_provider.dart';
 import 'package:icanbefitter/shared/repositories/user_repository.dart';
 import '../providers/nutrition_provider.dart';
 import '../providers/diet_plan_provider.dart';
+import '../providers/diet_serving_view_provider.dart';
 import '../providers/diet_supplements_active_provider.dart';
 import '../services/curated_diet_plan_generator.dart';
 import '../services/diet_plan_flags.dart';
@@ -453,7 +454,9 @@ class _DietPlanScreenState extends ConsumerState<DietPlanScreen> {
           foodId: item['food_id'] as String? ?? '',
           name: item['name'] as String? ?? '',
           servingDesc: item['serving_desc'] as String? ?? '',
-          servingG: (item['serving_g'] as num?)?.toDouble() ?? 100,
+          // 0 = unknown (a legacy row without it): the Grams label then falls
+          // back to the Portions text instead of printing a made-up 100 g.
+          servingG: (item['serving_g'] as num?)?.toDouble() ?? 0,
           calories: (item['calories'] as num?)?.toInt() ?? 0,
           protein: (item['protein'] as num?)?.toInt() ?? 0,
           carbs: (item['carbs'] as num?)?.toInt() ?? 0,
@@ -516,7 +519,8 @@ class _DietPlanScreenState extends ConsumerState<DietPlanScreen> {
               for (final item in meal.items)
                 (
                   name: item.name,
-                  servingDesc: item.servingDesc,
+                  servingDesc: servingLabelFor(item.foodId, item.servingDesc,
+                      item.servingG, ref.read(dietServingViewProvider)),
                   calories: item.calories,
                   protein: item.protein,
                   carbs: item.carbs,
@@ -564,6 +568,7 @@ class _DietPlanScreenState extends ConsumerState<DietPlanScreen> {
   Widget build(BuildContext context) {
     final targets = ref.watch(macroTargetsProvider);
     _healSupplementsState();
+    ref.watch(dietServingViewProvider); // rows below read it (OI-517)
 
     return Scaffold(
       backgroundColor: AppColors.bg,
@@ -720,7 +725,7 @@ class _DietPlanScreenState extends ConsumerState<DietPlanScreen> {
                             overflow: TextOverflow.ellipsis,
                           ),
                           Text(
-                            '${item.servingDesc} \u00B7 P${item.protein}g C${item.carbs}g F${item.fat}g',
+                            '${servingLabelFor(item.foodId, item.servingDesc, item.servingG, ref.read(dietServingViewProvider))} \u00B7 P${item.protein}g C${item.carbs}g F${item.fat}g',
                             style: AppTypography.monoXs.copyWith(color: AppColors.textDim),
                           ),
                         ],

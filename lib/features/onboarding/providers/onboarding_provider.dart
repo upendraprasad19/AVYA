@@ -553,6 +553,11 @@ class OnboardingNotifier extends Notifier<OnboardingState> {
         'activity_level': activityLevel,
         'injuries': injuries,
         'diet_preference': dietPreference,
+        // OI-517 (docs/plans/diet-grams-toggle.md): a NEW user starts on the
+        // Grams view of the Diet chart; an account that finished onboarding
+        // before this shipped has no key and reads as Portions. Local only
+        // (the profile push is a column whitelist).
+        'diet_serving_view': 'grams',
         'body_fat_percent': bodyFatPercent,
         'start_date': startDateKey,
         if (city != null && city.isNotEmpty) 'city': city,
