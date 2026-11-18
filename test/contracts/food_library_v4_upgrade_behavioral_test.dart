@@ -18,7 +18,18 @@
 // butter, chia seeds), so a v5 box re-seeds too; a v4 and a v3 box end at v6.
 //
 // Diet chart v3 (2026-11-17): v7 flips is_everyday to true for the 10 SWAP-ONLY
-// catalog foods, so a v6 box re-seeds too; every older box ends at v8.
+// catalog foods, so a v6 box re-seeds too; every older box ends at v7.
+//
+// Diet protein rules (2026-11-18, docs/plans/diet-protein-rules.md §A3): v8
+// flips is_everyday to false for F0362 (Surmai leaves the catalog), so a v7 box
+// re-seeds too and every older box ends at v8. The simulated old boxes carry
+// F0362 as everyday (it was), so the true -> false flip is VISIBLE: before this
+// batch they were derived from the new asset and no test could see it.
+//
+// Diet Portions / Grams view (2026-11-18, OI-517): v9 adds `weight_unit: "ml"` to
+// the 145 audited liquid rows, so a v8 box re-seeds too and every older box ends
+// at v9. The old boxes are built from the asset, so the v8 test strips the field
+// first (otherwise the gain would be invisible).
 //
 // A plain test(), not testWidgets: real file I/O inside testWidgets hangs
 // (CLAUDE.md section 4.9).
@@ -68,26 +79,44 @@ const _v7Everyday = {
   'F0043', 'F1028',
 };
 
-/// The v6 rows: the v7 asset with the 10 v7 ids still `is_everyday: false`.
+/// The v8 retirement (2026-11-18): Surmai left the catalog, so its asset flag
+/// went true -> false. Every older box still holds it as everyday.
+const _v8Retired = {'F0362'};
+
+/// The v7 rows: the v8 asset with F0362 still `is_everyday: true`.
+List<Map<String, dynamic>> _v7Rows() => [
+      for (final r in _bundled())
+        {
+          ...r,
+          if (_v8Retired.contains(r['id'])) 'is_everyday': true,
+        },
+    ];
+
+/// The v6 rows: the v8 asset with the 10 v7 ids still `is_everyday: false` and
+/// F0362 still true.
 List<Map<String, dynamic>> _v6Rows() => [
       for (final r in _bundled())
         {
           ...r,
           if (_v7Everyday.contains(r['id'])) 'is_everyday': false,
+          if (_v8Retired.contains(r['id'])) 'is_everyday': true,
         },
     ];
 
-/// The v5 rows: the v7 asset with the v6 and v7 ids still `is_everyday: false`.
+/// The v5 rows: the v8 asset with the v6 and v7 ids still `is_everyday: false`
+/// and F0362 still true.
 List<Map<String, dynamic>> _v5Rows() => [
       for (final r in _bundled())
         {
           ...r,
           if (_v6Everyday.contains(r['id']) || _v7Everyday.contains(r['id']))
             'is_everyday': false,
+          if (_v8Retired.contains(r['id'])) 'is_everyday': true,
         },
     ];
 
-/// The v4 rows: the v7 asset with the 14 + 5 + 10 ids still `is_everyday: false`.
+/// The v4 rows: the v8 asset with the 14 + 5 + 10 ids still `is_everyday: false`
+/// and F0362 still true.
 List<Map<String, dynamic>> _v4Rows() => [
       for (final r in _bundled())
         {
@@ -96,6 +125,7 @@ List<Map<String, dynamic>> _v4Rows() => [
               _v6Everyday.contains(r['id']) ||
               _v7Everyday.contains(r['id']))
             'is_everyday': false,
+          if (_v8Retired.contains(r['id'])) 'is_everyday': true,
         },
     ];
 
@@ -115,9 +145,9 @@ void main() {
   setUp(() async => tempDir = await setUpHiveForTests());
   tearDown(() async => tearDownHiveForTests(tempDir));
 
-  test('the version constant is 8', () {
+  test('the version constant is 9', () {
     final src = File('lib/core/services/seed_service.dart').readAsStringSync();
-    expect(RegExp(r'static const int _foodLibraryVersion = 8;').hasMatch(src),
+    expect(RegExp(r'static const int _foodLibraryVersion = 9;').hasMatch(src),
         isTrue);
   });
 
@@ -139,7 +169,7 @@ void main() {
     }
   });
 
-  test('a v6 food box ends at v8 with the 10 swap-only ids everyday', () async {
+  test('a v6 food box ends at v9 with the 10 swap-only ids everyday', () async {
     final hive = HiveService.instance;
     for (final r in _v6Rows()) {
       await hive.foodBox.put(r['id'], r);
@@ -153,10 +183,12 @@ void main() {
     for (final id in _v7Everyday) {
       expect(_asJson(hive.foodBox.get(id))['is_everyday'], isTrue, reason: id);
     }
-    expect(hive.configBox.get('food_library_version') as int, 8);
+    expect(_asJson(hive.foodBox.get('F0362'))['is_everyday'], isFalse,
+        reason: 'Surmai left the catalog in v8');
+    expect(hive.configBox.get('food_library_version') as int, 9);
   });
 
-  test('a v5 food box ends at v8 with the 5 vegan Low carb ids everyday',
+  test('a v5 food box ends at v9 with the 5 vegan Low carb ids everyday',
       () async {
     final hive = HiveService.instance;
     for (final r in _v5Rows()) {
@@ -171,10 +203,12 @@ void main() {
     for (final id in {..._v6Everyday, ..._v7Everyday}) {
       expect(_asJson(hive.foodBox.get(id))['is_everyday'], isTrue, reason: id);
     }
-    expect(hive.configBox.get('food_library_version') as int, 8);
+    expect(_asJson(hive.foodBox.get('F0362'))['is_everyday'], isFalse,
+        reason: 'Surmai left the catalog in v8');
+    expect(hive.configBox.get('food_library_version') as int, 9);
   });
 
-  test('a v4 food box ends at v8 with the 14 + 5 + 10 ids everyday', () async {
+  test('a v4 food box ends at v9 with the 14 + 5 + 10 ids everyday', () async {
     final hive = HiveService.instance;
     for (final r in _v4Rows()) {
       await hive.foodBox.put(r['id'], r);
@@ -189,10 +223,12 @@ void main() {
       expect(_asJson(hive.foodBox.get(id))['is_everyday'], isTrue, reason: id);
     }
     expect(_asJson(hive.foodBox.get('F0007'))['is_everyday'], isFalse);
-    expect(hive.configBox.get('food_library_version') as int, 8);
+    expect(_asJson(hive.foodBox.get('F0362'))['is_everyday'], isFalse,
+        reason: 'Surmai left the catalog in v8');
+    expect(hive.configBox.get('food_library_version') as int, 9);
   });
 
-  test('a v3 food box ends at v8 with the new rows and tags', () async {
+  test('a v3 food box ends at v9 with the new rows and tags', () async {
     final hive = HiveService.instance;
     for (final r in _v3Rows()) {
       await hive.foodBox.put(r['id'], r);
@@ -206,10 +242,31 @@ void main() {
     expect(_asJson(hive.foodBox.get('F0522'))['is_ultra_processed'], isTrue);
     expect(_asJson(hive.foodBox.get('F0001'))['is_everyday'], isTrue);
     expect(_asJson(hive.foodBox.get('F0007'))['is_everyday'], isFalse);
-    expect(hive.configBox.get('food_library_version') as int, 8);
+    expect(_asJson(hive.foodBox.get('F0362'))['is_everyday'], isFalse,
+        reason: 'Surmai left the catalog in v8');
+    expect(hive.configBox.get('food_library_version') as int, 9);
   });
 
-  test('a v7 food box gains weight_unit ml on the audited liquids at v8 '
+  test('a v7 food box ends at v9 with F0362 (Surmai) no longer everyday',
+      () async {
+    final hive = HiveService.instance;
+    for (final r in _v7Rows()) {
+      await hive.foodBox.put(r['id'], r);
+    }
+    await _markSeeded(hive, 7);
+    expect(_asJson(hive.foodBox.get('F0362'))['is_everyday'], isTrue,
+        reason: 'precondition: a v7 box holds Surmai as everyday');
+    final stillEveryday = kDietPlanCatalog.first.foodId;
+
+    await SeedService.instance.seedIfNeeded();
+
+    expect(_asJson(hive.foodBox.get('F0362'))['is_everyday'], isFalse);
+    expect(_asJson(hive.foodBox.get(stillEveryday))['is_everyday'], isTrue,
+        reason: 'a catalog food keeps its flag');
+    expect(hive.configBox.get('food_library_version') as int, 9);
+  });
+
+  test('a v8 food box gains weight_unit ml on the audited liquids at v9 '
       '(the old rows are built from the asset, so strip the field first)',
       () async {
     final hive = HiveService.instance;
@@ -222,7 +279,7 @@ void main() {
     }
     expect(_asJson(hive.foodBox.get('F0031')).containsKey('weight_unit'),
         isFalse);
-    await _markSeeded(hive, 7);
+    await _markSeeded(hive, 8);
 
     await SeedService.instance.seedIfNeeded();
 
@@ -233,15 +290,27 @@ void main() {
     // A solid stays without the field (absent = grams).
     expect(_asJson(hive.foodBox.get('F0001')).containsKey('weight_unit'),
         isFalse);
-    expect(hive.configBox.get('food_library_version') as int, 8);
+    expect(hive.configBox.get('food_library_version') as int, 9);
   });
 
-  test('MIRROR: a box already at v8 is not re-seeded', () async {
+  test('Surmai is out of the catalog, kept in the asset, retired in the asset '
+      'flag, and its family survives in the retired map', () {
+    final catalogIds = {for (final e in kDietPlanCatalog) e.foodId};
+    expect(catalogIds.contains('F0362'), isFalse);
+    expect(kRetiredCatalogFamilies.keys.toSet().intersection(catalogIds),
+        isEmpty, reason: 'a retired id must not also be a catalog id');
+    final row = {for (final r in _bundled()) r['id']: r}['F0362'];
+    expect(row, isNotNull, reason: 'the food row stays (Search any food)');
+    expect(row!['is_everyday'], isFalse);
+    expect(dietCatalogFamily('F0362'), DietFamily.fish);
+  });
+
+  test('MIRROR: a box already at v9 is not re-seeded', () async {
     final hive = HiveService.instance;
     for (final r in _v3Rows()) {
       await hive.foodBox.put(r['id'], r);
     }
-    await _markSeeded(hive, 8);
+    await _markSeeded(hive, 9);
     await SeedService.instance.seedIfNeeded();
     expect(hive.foodBox.get('F1442'), isNull);
   });

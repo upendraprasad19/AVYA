@@ -22,7 +22,8 @@
 //      meal's other items;
 //   2. size each slot: try every combination of the entries' allowed portions
 //      (an optional item may be 0) and keep the best slot score;
-//   3. keep the best of [_samples] sampled days by the day score (calories,
+//   3. keep the best of [_samples] sampled days (a food type with slot needs
+//      samples [_needSampleFactor] times as many) by the day score (calories,
 //      protein band, and a fiber floor at 70 % of the profile target);
 //   4. if no sample is valid, fall back to the legacy generator.
 //
@@ -41,6 +42,7 @@ import 'package:icanbefitter/shared/repositories/food_repository.dart';
 import 'diet_plan_catalog.dart';
 import 'diet_plan_catalog_rules.dart';
 import 'diet_plan_generator.dart';
+import 'diet_plan_slot_needs.dart';
 
 /// Template of one meal slot.
 class CuratedSlotTemplate {
@@ -252,6 +254,13 @@ class CuratedDietPlanGenerator {
 
   static const int _samples = 40;
 
+  /// Diet protein rules: how many times more days a food type WITH slot needs
+  /// samples. MEASURED (plan addendum 2026-11-18): at 1x five Keto T10 floor
+  /// rows dipped, 3x left one, 5x holds all 30 (with F0371 / F0790 also
+  /// filling `mainProtein`); 10x also held but cost ~190 ms a plan against
+  /// ~60 ms at 3x, and the plan is built on the phone.
+  static const int _needSampleFactor = 5;
+
   /// How many generate() calls fell back to the legacy generator (test seam;
   /// the archetype matrix asserts it stays 0).
   int lastFallbackCount = 0;
@@ -303,11 +312,20 @@ class CuratedDietPlanGenerator {
   ({List<DietMealPlan> plans, bool fellBack}) _generate(DietPlanInputs inputs) {
     final rng = Random(inputs.seed ?? DateTime.now().day);
     final pool = _candidates(inputs.dietPreference, inputs.strategy);
+    // Diet protein rules: the slots whose protein role must come from given
+    // families, drawn ONCE from the plan's own stream before the sampling
+    // loop. Veg and Vegan draw nothing and get an empty map.
+    final needs = slotNeedsFor(foodTypeOf(inputs.dietPreference), rng);
 
     List<_SizedSlot>? best;
     var bestScore = double.infinity;
-    for (var i = 0; i < _samples; i++) {
-      final day = _sampleDay(pool, inputs, rng);
+    // A need discards the sampled days that cannot meet it (an egg taken at a
+    // snack first, a Keto pool of 3 egg dishes), so a type with needs samples
+    // more days to keep the best-of choice as good as before. Veg and Vegan
+    // have no needs and keep exactly _samples (byte-identical).
+    final samples = needs.isEmpty ? _samples : _samples * _needSampleFactor;
+    for (var i = 0; i < samples; i++) {
+      final day = _sampleDay(pool, inputs, rng, needs);
       if (day == null) continue;
       final score = _dayScore(day, inputs);
       if (score < bestScore) {
@@ -359,15 +377,24 @@ class CuratedDietPlanGenerator {
     List<CuratedCandidate> pool,
     DietPlanInputs inputs,
     Random rng,
+    SlotNeeds needs,
   ) {
     final used = <String>{};
     final familyCount = <DietFamily, int>{};
-    final day = <_SizedSlot>[];
+    // Slots are SIZED only after the whole day is picked: sizing is an
+    // exhaustive portion walk with no random draw, so a sample that a need
+    // discards at lunch or dinner (B-pass finding 1) no longer pays for the
+    // slots before it, and the plan is byte-identical either way.
+    final chosen = <(CuratedSlotTemplate, List<_Pick>)>[];
+    // Read once per sample, outside `fits` (eggetarian and pescatarian days
+    // hold 2 egg / fish items, dietFamilyFoodTypeCapOverride).
+    final foodType = foodTypeOf(inputs.dietPreference);
 
     bool fits(CuratedCandidate c, DietRole role, Set<String> mealTokens) {
       if (!c.entry.roles.contains(role)) return false;
       if (used.contains(c.id)) return false;
-      final cap = dietFamilyCapFor(c.entry.family, inputs.strategy);
+      final cap =
+          dietFamilyCapFor(c.entry.family, inputs.strategy, foodType: foodType);
       if (cap != null && (familyCount[c.entry.family] ?? 0) >= cap) {
         return false;
       }
@@ -383,8 +410,20 @@ class CuratedDietPlanGenerator {
     for (final t in curatedTemplatesFor(inputs.strategy)) {
       final picks = <_Pick>[];
       final mealTokens = <String>{};
+      // A need applies to the slot's PROTEIN role only, keyed by role and not
+      // by slot (the Balanced breakfast has two required roles), and only in
+      // the required loop. A slot without a need builds `options` as before
+      // with the same single rng call.
+      final need = needs[t.slotKey];
+      final needRole = t.slotKey == kNeedBreakfast
+          ? DietRole.breakfastProtein
+          : DietRole.mainProtein;
       for (final role in t.required) {
-        final options = pool.where((c) => fits(c, role, mealTokens)).toList();
+        var options = pool.where((c) => fits(c, role, mealTokens)).toList();
+        if (need != null && role == needRole) {
+          options =
+              options.where((c) => need.contains(c.entry.family)).toList();
+        }
         if (options.isEmpty) return null; // a required role is exhausted
         final c = options[rng.nextInt(options.length)];
         take(c, mealTokens);
@@ -397,9 +436,9 @@ class CuratedDietPlanGenerator {
         take(c, mealTokens);
         picks.add(_Pick(c, role, true));
       }
-      day.add(_sizeSlot(t, picks, inputs));
+      chosen.add((t, picks));
     }
-    return day;
+    return [for (final c in chosen) _sizeSlot(c.$1, c.$2, inputs)];
   }
 
   _SizedSlot _sizeSlot(

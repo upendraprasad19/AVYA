@@ -77,7 +77,7 @@ Reviewer verified TRUE: plan-item fields and saved JSON keys, the four reader li
 | # | Sev | Finding | Disposition |
 |---|---|---|---|
 | 1 | P0 | gram edits move macros and goldens | ACCEPTED: audit never edits grams (section 5) |
-| 2 | P0 | `weight_unit` needs a seed bump | ACCEPTED: seed v8 + pin repoint (section 3, 7) |
+| 2 | P0 | `weight_unit` needs a seed bump | ACCEPTED: seed bump (v9 after main took v8) + pin repoint (section 3, 7) |
 | 3 | P1 | label grammar fails on 22 rows, duplicate figures | ACCEPTED: label table (section 3), fixtures (section 6) |
 | 4 | P1 | unit conflicts (g desc on a liquid, oz, portion-sheet suffix) | ACCEPTED: unit from the resolver in Grams view, oz kept, suffix follows |
 | 5 | P1 | reader list incomplete, line budget | ACCEPTED: readers with lines, NOT-covered list, helper outside the 743-line screen |

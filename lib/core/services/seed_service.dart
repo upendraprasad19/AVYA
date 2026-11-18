@@ -226,12 +226,18 @@ class SeedService {
   /// 5 sides: F1433 F0477 F0471 F1015 F1019 F1061 F0269 F0295 F0043 F1028), so
   /// their `is_everyday` flips false -> true (same reason as v5).
   ///
-  /// v8 (2026-11-18 diet chart Portions / Grams view, docs/plans/
+  /// v8 (2026-11-18 diet protein rules, docs/plans/diet-protein-rules.md §A3):
+  /// F0362 (Surmai) leaves the catalog, so its `is_everyday` flips true ->
+  /// false (the only runtime reader of the flag is the swap sheet, which lists
+  /// catalog entries, so nothing visible changes; the bump keeps the asset
+  /// and every install in step, as v5, v6 and v7 did for their flips).
+  ///
+  /// v9 (2026-11-18 diet chart Portions / Grams view, docs/plans/
   /// diet-grams-toggle.md section 3, OI-517): 145 liquid rows gain
   /// `weight_unit: "ml"` (absent = grams). Without the bump an installed
   /// food box never gains the field and every liquid shows grams in the
   /// Grams view.
-  static const int _foodLibraryVersion = 8;
+  static const int _foodLibraryVersion = 9;
   static const String _foodVersionKey = 'food_library_version';
 
   final HiveService _hive = HiveService.instance;
