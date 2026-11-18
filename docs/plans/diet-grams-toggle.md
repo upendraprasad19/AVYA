@@ -1,4 +1,4 @@
-# Diet chart: Portions / Grams view (OI-517) — DRAFT 1, brainstorm output, not yet reviewed
+# Diet chart: Portions / Grams view (OI-517) — REVISION 2 (after review round 1; round 2 pending)
 
 Status: brainstorm done with the founder 2026-11-17/18. NO code until this plan has passed two independent review rounds (CLAUDE.md 4.12).
 
@@ -19,9 +19,20 @@ Status: brainstorm done with the founder 2026-11-17/18. NO code until this plan 
 
 ## 3. Design (display only, nothing stored changes)
 - Plan items already carry `servingDesc` (portion text, scaled by the multiplier) and `servingG` (scaled grams) (`diet_plan_screen_models.dart:27-28`). The saved plan JSON (`serving_desc`, `serving_g`, `diet_plan_screen.dart:387-388`, restore `:438`) therefore needs NO change: no migration, no regeneration, old saved plans work.
-- NEW pure function `servingLabel(desc, grams, view, isLiquid)` in a new service file. Portions: returns `desc` unchanged (byte-identical to today, pinned by a test). Grams: `"{round(grams)} g ({desc})"` / `ml`; gram-shaped desc (the existing `_servingRe` grammar, `curated_diet_plan_generator.dart:577`) collapses to the figure alone.
-- Liquid flag: new asset field `weight_unit: "ml"` on audited liquid rows only (absent = g). Resolved at render by `foodId` through the food repository, so old saved plans get it too. Custom foods: user-entered, treated as g unless the user's own description says ml.
-- Readers to switch to `servingLabel`: meal card `diet_plan_screen.dart:701`, swap sheet `diet_plan_swap_sheet.dart:89`, portion sheet `diet_plan_portion_sheet.dart:143`, search sheet rows, PDF `diet_plan_pdf.dart:174` (the PDF follows the on-screen view at share time).
+- NEW pure function `servingLabel(desc, grams, view, isLiquid)` in a new service file (NOT in `diet_plan_screen.dart`, 743 of 800 lines, Gate 43). Portions: returns `desc` unchanged (byte-identical to today, pinned by a test). Grams: unit = `ml` when the row is a liquid, else `g`; figure = `round(grams)`. Label table, measured on all 1444 rows (`_servingRe`, `curated_diet_plan_generator.dart:578`):
+  | desc shape | rows | Grams label |
+  |---|---|---|
+  | parses, no paren ("1 cup", "2 idli", "1 oz") | most | `158 g (1 cup)`; "oz" is kept: `28 g (1 oz)` |
+  | leading gram/ml figure ("100g", "250 ml", "100 g") | 175 | the figure alone, in the row's unit: `100 g` / `250 ml` |
+  | trailing gram/ml paren, parses ("1 portion (150 g)", "1 can (330 ml)") | 28+ | paren stripped from the bracket: `150 g (1 portion)` |
+  | trailing paren that does NOT parse ("1 packet (52g)", "1 peg (60ml)", "1 scoop (10g)") | 14 | same strip rule: `52 g (1 packet)`, `60 ml (1 peg)` |
+  | bare number or unparseable ("180", "52.3") | 8 | grams only: `100 g` (the number is NOT a weight; `standard_serving_g` is 100 on all 8) |
+  The 22 rows that do not parse and the 43 with a paren are listed as fixtures in the test. A scaled desc that `scaleServingDesc` turned into "1.5 × desc" is treated as unparseable (grams only).
+- Liquid flag: new asset field `weight_unit: "ml"` on audited liquid rows only (absent = g). Liquids are NOT only `beverages` (Milk (Toned) and Lassi are in `dairy`, Falooda in `sweets`), so the audit decides each row. The flag reaches installed devices only through a seed bump: `seed_service.dart:228` `_foodLibraryVersion` 7 -> 8 (without it installed Hive food rows never gain the field and every liquid silently shows g). The pin `test/contracts/food_library_v4_upgrade_behavioral_test.dart:120,156,174,192,209,217` is repointed to 8; `scripts/patch_food_database_v4.dart` and the exact-key tests `food_database_v2_test` / `food_database_tagged_test` are checked and updated.
+- Resolver (`weightUnitFor(foodId)`): a Hive foodBox lookup that tolerates a missing id (retired id in an old saved plan), a custom food (not in the asset) and the protein shake's synthetic id (`diet_plan_shake.dart:48-53`): all fall back to g. No network; works in the PDF path and on saved-plan restore (`diet_plan_screen.dart:438`).
+- Free picks write desc `"N g"` even for a liquid (`diet_plan_free_item.dart:135`): Portions view keeps today's text byte-identical; Grams view takes the unit from the resolver, so a liquid reads `ml`.
+- Readers to switch to `servingLabel` (all verified by round 1): meal card `diet_plan_screen.dart:701`; swap sheet `diet_plan_swap_sheet.dart:89` (reads `alt.servingDesc`, already scaled); portion sheet `diet_plan_portion_sheet.dart:143` (label applied at the widget; its Weight field `suffixText: 'g'` shows `ml` in Grams view for a liquid); Search-any-food row `diet_plan_food_search_sheet.dart:137` (reads the raw row `standard_serving_desc`, UNSCALED, so it passes the row's own `standard_serving_g`); PDF `diet_plan_pdf.dart:20,174` (a string typedef: the caller `diet_plan_screen.dart:~501` passes the already-labelled string at share time; the PDF has no `ref`).
+- NOT covered, stated: Log Food search (`search_mode_body.dart:190-198`), barcode sheet (`barcode_scan_sheet.dart:559`), custom food sheet, coach, home. "One switch for the whole screen" means the Diet chart surfaces only.
 - Placement (founder, 2026-11-18): the 4th column of the first settings row under the title, order Food type, Strategy, Supplements, View. With Supplements hidden (minor / flag off) View takes the 3rd slot. Label "View", options Portions / Grams; shorten text only if the 360 dp measurement demands it, never wrap to a second row without a founder call.
 - Control: `DietPlanSettingsRow` (`diet_plan_settings_row.dart`) gains a 4th column, a small Portions/Grams dropdown in the same `DietPlanDropdown` style (4 columns at 360 dp: measure with the real font, not Ahem).
 - State: Riverpod provider reading the profile key `diet_serving_view` ('portions' | 'grams'). Writer: the control only, plus the one default write at onboarding completion (new users = 'grams'). Reader: the provider. Key ABSENT = 'portions' (so every existing account is unchanged with no write).
@@ -32,9 +43,9 @@ b. New user = anyone who finishes onboarding after this batch ships (gets 'grams
 c. Amounts that look odd in grams ("1 tsp" = 5 g, "10 almonds" = 14 g): shown as computed; the audit flags rows whose gram figure is implausible for the desc.
 
 ## 5. The audit (done-when item 2)
-A script `scripts/audit_serving_weights.dart` (read-only, prints a table, no writes) over all 1444 rows + catalog + the rows Search-any-food can return:
+A script `scripts/audit_serving_weights.dart` (read-only; as a new `check_*` gate it is NOT, it is a report tool, so no rule-24 ledger entry), prints a table, no writes) over all 1444 rows + catalog + the rows Search-any-food can return:
 - desc shape (count / volume / gram), liquid candidate (category + name + per-100 g density hint), grams vs desc plausibility (e.g. "1 cup" outside 100-300 g, "1 roti" outside 20-80 g).
-- Output is reviewed row by row; fixes land as asset edits (gram value or `weight_unit`). A row is never silently inferred.
+- Output is reviewed row by row. The audit may ONLY (a) add `weight_unit: "ml"` and (b) FLAG an implausible gram value to the founder. It never edits `standard_serving_g`: that value feeds `calories_std` and every plan item (`curated_diet_plan_generator.dart:178-196`, `diet_plan_generator.dart:1155-1157,1404-1416`, `diet_plan_free_item.dart:14`), so a change moves macros, portions and the golden-pinned catalog and contradicts decision 8. A flagged gram value is a separate founder decision with its golden footprint measured first (memory: measure a shared rule's golden footprint). A row is never silently inferred.
 
 ## 6. Tests (each must fail without the change; mutate each once)
 - servingLabel: Portions view byte-identical to the input for every catalog row; Grams view for count, volume, gram-shaped and liquid rows; scaled multipliers ("3 rotis" -> "120 g (3 rotis)").
@@ -42,13 +53,31 @@ A script `scripts/audit_serving_weights.dart` (read-only, prints a table, no wri
 - Default: absent key = portions; onboarding completion on a fresh profile = grams; an existing profile untouched.
 - Toggle flips every surface (meal card, swap sheet, portion sheet, search rows, PDF text).
 - Asset audit contract: every row with a liquid `weight_unit` is in the audited list; no row desc/grams mismatch.
-- 4-column settings row at 360 dp with the real font: no overflow.
+- 4-column settings row at 360 dp with the real font: no overflow. Existing pins touched: `test/nutrition/diet_plan_supplements_screen_test.dart:575-596` (Supplements slot width >= 26 on the narrow surface, a 4th column squeezes it: re-measure, repoint, never loosen blindly) and `test/nutrition/diet_strategy_selector_test.dart:519-526` (source-greps `diet_plan_settings_row.dart` lines; keep those lines verbatim).
+- Label table fixtures: the 22 unparseable rows, the 43 paren rows, 17 oz rows, 21 ml-desc rows, the 8 bare-number rows; a liquid free pick; a missing foodId; a custom food; the shake.
+- Reinstall / second device of a new user reads an absent key and shows Portions (accepted phone-only consequence, pinned so it is deliberate). `saveProfile` is a whole-map write, so a re-onboarding resets the key to 'grams'.
 
 ## 7. Files (est.)
-New: `services/diet_serving_label.dart`, `providers/diet_serving_view_provider.dart`, the audit script, tests. Edited: settings row, the five readers, onboarding completion write, `food_database.json`. Line ceilings per the 800-line screen rule.
+New: `services/diet_serving_label.dart`, `providers/diet_serving_view_provider.dart`, the audit script, tests. Edited: settings row, the five readers, `food_database.json` (`weight_unit` only), `seed_service.dart` (v8) + its pin test, `onboarding_provider.dart` (the profile map built ~535-575 and written by `saveProfile` :587: the one door every fresh sign-up, email and Google, runs; the `already_onboarded` early return :436-441 stamps nothing), `docs/sot_registry.yaml` concept `diet_serving_view` (writer: the control via `ProfileWriteService.patchProfile` / `updateProfileFields`, never a `saveProfile` of a stale map, plus `completeOnboarding`; reader: the provider; `behavioral_test_path:` per Gate 42), `docs/naming_conventions.md` row, notes in `lib/features/nutrition/CLAUDE.md` and `lib/features/onboarding/CLAUDE.md`; check `scripts/check_hive_map_field_drift.dart` and the known-profile-keys listings. Verified by round 1: restore merges `{...existingMap, ...cloud non-null}` (`sync_profile.dart:~830-840`) and the profile push is a column whitelist, so a local-only key is neither wiped nor sent. Line ceilings per the 800-line screen rule.
 
 ## 8. Process
-Tier L-adjacent (asset + onboarding write): full 4.12 pipeline: this draft -> review round 1 -> revise -> review round 2 -> record `docs/plans/../plan-reviews/<branch>.md` -> build -> B-pass. Execution mode (inline vs subagent) to be written here at batch start.
+Tier L-adjacent (asset + onboarding write): full 4.12 pipeline: this draft -> review round 1 -> revise -> review round 2 -> record `docs/plan-reviews/<branch>.md` -> build -> B-pass. Execution mode (inline vs subagent) to be written here at batch start.
 
 ## 9. Execution mode (decided at batch start, 4.12.7)
 INLINE in this worktree (one writer, small tightly coupled change). Not switched mid-batch. Reviewers: fresh Sonnet seats, read-only, at most 4 concurrent, briefs prefixed with `docs/agent_brief_preamble.md` and listing allowed commands exhaustively. Founder pre-authorised the merge (2026-11-18, "Ok" to: merge once CI is green and the B-pass has no open findings, via `land_pr.sh`); APK build and the device check stay the founder's.
+
+## 10. Review round 1 (one fresh Sonnet seat, read-only) and dispositions
+Reviewer verified TRUE: plan-item fields and saved JSON keys, the four reader lines, the 3-column `Expanded` row, 1444 rows / 0 missing grams / 175 gram-shaped / 0 mismatches, liquids not findable by name, restore merge and push whitelist. I re-ran the key numbers myself (22 unparseable, 8 bare-number, seed version 7 and its pin, screen 743 lines, the two settings-row tests): all confirmed.
+| # | Sev | Finding | Disposition |
+|---|---|---|---|
+| 1 | P0 | gram edits move macros and goldens | ACCEPTED: audit never edits grams (section 5) |
+| 2 | P0 | `weight_unit` needs a seed bump | ACCEPTED: seed v8 + pin repoint (section 3, 7) |
+| 3 | P1 | label grammar fails on 22 rows, duplicate figures | ACCEPTED: label table (section 3), fixtures (section 6) |
+| 4 | P1 | unit conflicts (g desc on a liquid, oz, portion-sheet suffix) | ACCEPTED: unit from the resolver in Grams view, oz kept, suffix follows |
+| 5 | P1 | reader list incomplete, line budget | ACCEPTED: readers with lines, NOT-covered list, helper outside the 743-line screen |
+| 6 | P1 | two existing tests pin the settings row | ACCEPTED: section 6 |
+| 7 | P1 | resolver under-specified | ACCEPTED: section 3 |
+| 8 | P2 | new-user default not durable across reinstall | ACCEPTED as the founder's phone-only choice, pinned by a test (section 6); the founder decided this knowingly, not re-asked |
+| 9 | P2 | key plumbing, registry, naming, CLAUDE.md notes | ACCEPTED: section 7 |
+| 10 | P2 | hygiene (counts, record path, gate loop) | ACCEPTED: path fixed; gate loop runs before round 2 per 4.12.8 once a diff exists (this plan is prose) |
+Round 2 reviews THIS revision.
