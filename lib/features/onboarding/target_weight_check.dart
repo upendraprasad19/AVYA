@@ -139,12 +139,24 @@ bool journeyEtaAllowed({
 
 String _kg(double v) => v.toStringAsFixed(1);
 
-/// Popup copy for a failed check. [current] is the user's current weight.
+/// Pounds per kilogram, the factor the Edit Profile form has always used.
+const double _lbsPerKg = 2.20462;
+
+/// Popup copy for a failed check. [current] is the user's current weight, in kg.
 /// [editing] swaps only the closing words for Edit Profile ("save" instead of
-/// "continue"); the onboarding strings are unchanged.
+/// "continue"); the onboarding strings are unchanged. [metric] false prints the
+/// weights in whole pounds, the unit the Edit Profile fields show (onboarding is
+/// always metric).
 String targetWeightMessage(TargetWeightCheck check, double current,
-    {bool editing = false}) {
+    {bool editing = false, bool metric = true}) {
   final to = editing ? 'save' : 'continue';
+  String w(double kg) => metric
+      ? '${_kg(kg)} kg'
+      : '${(kg * _lbsPerKg).toStringAsFixed(0)} lbs';
+  final window = metric
+      ? kMaintainWindowKg.toStringAsFixed(0)
+      : (kMaintainWindowKg * _lbsPerKg).toStringAsFixed(0);
+  final windowUnit = metric ? 'kg' : 'lbs';
   switch (check) {
     case TargetWeightCheck.ok:
       return '';
@@ -152,14 +164,19 @@ String targetWeightMessage(TargetWeightCheck check, double current,
       return 'Enter your target weight to $to.';
     case TargetWeightCheck.mustBeBelowCurrent:
       return 'For a Cut your target has to be lower than your current weight '
-          '(${_kg(current)} kg). Adjust it and $to.';
+          '(${w(current)}). Adjust it and $to.';
     case TargetWeightCheck.mustBeAboveCurrent:
       return 'For a Build your target has to be higher than your current '
-          'weight (${_kg(current)} kg). Adjust it and $to.';
+          'weight (${w(current)}). Adjust it and $to.';
     case TargetWeightCheck.outsideMaintainWindow:
-      return 'To maintain, keep your target within ${kMaintainWindowKg.toStringAsFixed(0)} kg '
-          'of your current weight (${_kg(current - kMaintainWindowKg)}–'
-          '${_kg(current + kMaintainWindowKg)} kg). Adjust it and $to.';
+      final low = metric
+          ? _kg(current - kMaintainWindowKg)
+          : (((current - kMaintainWindowKg) * _lbsPerKg)).toStringAsFixed(0);
+      final high = metric
+          ? _kg(current + kMaintainWindowKg)
+          : (((current + kMaintainWindowKg) * _lbsPerKg)).toStringAsFixed(0);
+      return 'To maintain, keep your target within $window $windowUnit '
+          'of your current weight ($low–$high $windowUnit). Adjust it and $to.';
   }
 }
 

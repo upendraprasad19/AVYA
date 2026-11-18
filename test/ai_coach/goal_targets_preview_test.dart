@@ -27,9 +27,12 @@ Map<String, dynamic> _profile({Object? target = 71.0, bool complete = true}) => 
 GoalChange _change(Map<String, dynamic> p, String goal) => goalChange(p,
     newGoal: goal, now: DateTime(2026, 11, 18, 10), bodyFatCalcDisabled: false);
 
-Future<void> _pump(WidgetTester t, GoalChange c, String goal) async {
+Future<void> _pump(WidgetTester t, GoalChange c, String goal,
+    {bool metric = true}) async {
   await t.pumpWidget(MaterialApp(
-    home: Scaffold(body: SingleChildScrollView(child: GoalTargetsPreview(change: c, goal: goal))),
+    home: Scaffold(
+        body: SingleChildScrollView(
+            child: GoalTargetsPreview(change: c, goal: goal, metric: metric))),
   ));
   await t.pump();
 }
@@ -40,8 +43,15 @@ void main() {
     await _pump(t, _change(_profile(), 'build_muscle'), 'build_muscle');
     expect(find.byKey(const ValueKey('goal_targets_preview')), findsOneWidget);
     expect(find.byKey(const ValueKey('goal_preview_target')), findsOneWidget);
-    expect(find.textContaining('Target weight 71.0 → 78.0 kg'), findsOneWidget);
+    expect(find.textContaining('Target weight 71.0 kg → 78.0 kg'), findsOneWidget);
     expect(find.byKey(const ValueKey('goal_preview_calories')), findsOneWidget);
+  });
+
+  testWidgets('an imperial user reads the target in pounds', (t) async {
+    await _pump(t, _change(_profile(), 'build_muscle'), 'build_muscle',
+        metric: false);
+    expect(find.textContaining('Target weight 157 lbs → 172 lbs'), findsOneWidget);
+    expect(find.textContaining('kg'), findsNothing);
   });
 
   testWidgets('a target that already fits shows no target line',
@@ -63,7 +73,7 @@ void main() {
     final src = File('lib/features/ai_coach/widgets/diff_preview/switch_goal_diff.dart')
         .readAsStringSync();
     final refused = src.indexOf('if (_refused) {');
-    final mount = src.indexOf('GoalTargetsPreview(change: _change!');
+    final mount = RegExp(r'GoalTargetsPreview\(\s*change: _change!').firstMatch(src)?.start ?? -1;
     expect(refused, greaterThan(-1));
     expect(mount, greaterThan(refused),
         reason: 'the preview must not show for a goal the coach cannot offer');

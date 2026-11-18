@@ -182,7 +182,8 @@ GoalChange goalChange(
   };
   final goalChanged = stored['primary_goal'] != newGoal;
   final currentKg = _positive(stored['current_weight_kg']);
-  final storedTarget = (stored['target_weight_kg'] as num?)?.toDouble();
+  final rawTarget = stored['target_weight_kg'];
+  final storedTarget = rawTarget is num ? rawTarget.toDouble() : null;
 
   double? seeded;
   if (targetNeedsSeed(
@@ -196,11 +197,21 @@ GoalChange goalChange(
   Map<String, dynamic>? overlay;
   if (goalChanged || seeded != null) {
     final healed = <String, dynamic>{...stored, ...patch};
-    overlay = recomputeDerivedTargets(
-      healed,
-      now: now,
-      bodyFatCalcDisabled: bodyFatCalcDisabled,
-    );
+    try {
+      overlay = recomputeDerivedTargets(
+        healed,
+        now: now,
+        bodyFatCalcDisabled: bodyFatCalcDisabled,
+      );
+    } catch (_) {
+      // A corrupt stored value (NaN weight, a non-numeric height) makes the
+      // calculator throw. The goal change itself must still go through, so the
+      // patch falls back to the goal and the seed only, the same shape an
+      // incomplete profile gets. This runs under the profile lock, after the
+      // plan-window sweep: throwing here would leave the rows swept and the goal
+      // unchanged.
+      overlay = null;
+    }
     if (overlay != null) patch.addAll(overlay);
   }
 

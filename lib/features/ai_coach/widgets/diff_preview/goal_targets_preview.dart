@@ -11,10 +11,18 @@ import 'package:icanbefitter/features/profile/services/goal_change_patch.dart';
 /// nothing when neither moves (a target that already fits, an incomplete profile
 /// with no targets to recompute).
 class GoalTargetsPreview extends StatelessWidget {
-  const GoalTargetsPreview({super.key, required this.change, required this.goal});
+  const GoalTargetsPreview({
+    super.key,
+    required this.change,
+    required this.goal,
+    this.metric = true,
+  });
 
   final GoalChange change;
   final String goal;
+
+  /// The user's unit preference (`units_metric`); weights read in lbs when false.
+  final bool metric;
 
   @override
   Widget build(BuildContext context) {
@@ -24,28 +32,49 @@ class GoalTargetsPreview extends StatelessWidget {
 
     final lines = <Widget>[];
     if (showTarget) {
-      lines.add(_line(
-        GoalChangeCopy.targetLine(
-            from: change.targetFrom, to: change.seededTarget!),
-        key: const ValueKey('goal_preview_target'),
-      ));
-      lines.add(_note(GoalChangeCopy.targetReason(
-          goal: goal, currentKg: change.currentKg)));
+      lines.add(
+        _line(
+          GoalChangeCopy.targetLine(
+            from: change.targetFrom,
+            to: change.seededTarget!,
+            metric: metric,
+          ),
+          key: const ValueKey('goal_preview_target'),
+        ),
+      );
+      lines.add(
+        _note(
+          GoalChangeCopy.targetReason(
+            goal: goal,
+            currentKg: change.currentKg,
+            metric: metric,
+          ),
+        ),
+      );
     }
     if (showTargets) {
-      if (change.caloriesFrom != change.caloriesTo && change.caloriesTo != null) {
-        lines.add(_line(
-          GoalChangeCopy.caloriesLine(
-              from: change.caloriesFrom, to: change.caloriesTo!),
-          key: const ValueKey('goal_preview_calories'),
-        ));
+      if (change.caloriesFrom != change.caloriesTo &&
+          change.caloriesTo != null) {
+        lines.add(
+          _line(
+            GoalChangeCopy.caloriesLine(
+              from: change.caloriesFrom,
+              to: change.caloriesTo!,
+            ),
+            key: const ValueKey('goal_preview_calories'),
+          ),
+        );
       }
       if (change.proteinFrom != change.proteinTo && change.proteinTo != null) {
-        lines.add(_line(
-          GoalChangeCopy.proteinLine(
-              from: change.proteinFrom, to: change.proteinTo!),
-          key: const ValueKey('goal_preview_protein'),
-        ));
+        lines.add(
+          _line(
+            GoalChangeCopy.proteinLine(
+              from: change.proteinFrom,
+              to: change.proteinTo!,
+            ),
+            key: const ValueKey('goal_preview_protein'),
+          ),
+        );
       }
     }
 
@@ -78,25 +107,25 @@ class GoalTargetsPreview extends StatelessWidget {
   }
 
   Widget _line(String text, {Key? key}) => Padding(
-        key: key,
-        padding: const EdgeInsets.only(bottom: 4),
-        child: Text(
-          text,
-          style: AppTypography.bodySm.copyWith(
-            fontWeight: FontWeight.w600,
-            color: AppColors.textPrimary,
-          ),
-        ),
-      );
+    key: key,
+    padding: const EdgeInsets.only(bottom: 4),
+    child: Text(
+      text,
+      style: AppTypography.bodySm.copyWith(
+        fontWeight: FontWeight.w600,
+        color: AppColors.textPrimary,
+      ),
+    ),
+  );
 
   Widget _note(String text) => Padding(
-        padding: const EdgeInsets.only(bottom: 6),
-        child: Text(
-          text,
-          style: AppTypography.bodySm.copyWith(
-            color: AppColors.textSecondary,
-            fontStyle: FontStyle.italic,
-          ),
-        ),
-      );
+    padding: const EdgeInsets.only(bottom: 6),
+    child: Text(
+      text,
+      style: AppTypography.bodySm.copyWith(
+        color: AppColors.textSecondary,
+        fontStyle: FontStyle.italic,
+      ),
+    ),
+  );
 }

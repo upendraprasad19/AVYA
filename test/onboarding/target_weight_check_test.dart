@@ -266,4 +266,36 @@ void main() {
           endsWith('Adjust it and save.'));
     });
   });
+
+  group('targetWeightMessage in pounds (Edit Profile imperial users)', () {
+    test('the weights read in whole pounds, the words stay', () {
+      expect(
+          targetWeightMessage(TargetWeightCheck.mustBeBelowCurrent, 75,
+              editing: true, metric: false),
+          'For a Cut your target has to be lower than your current weight (165 lbs). Adjust it and save.');
+      expect(
+          targetWeightMessage(TargetWeightCheck.mustBeAboveCurrent, 75,
+              editing: true, metric: false),
+          'For a Build your target has to be higher than your current weight (165 lbs). Adjust it and save.');
+    });
+    test('the Maintain window is stated in pounds, both ends and the width', () {
+      // 3 kg = 6.6 lbs -> 7; 72 kg = 159 lbs, 78 kg = 172 lbs.
+      expect(
+          targetWeightMessage(TargetWeightCheck.outsideMaintainWindow, 75,
+              editing: true, metric: false),
+          'To maintain, keep your target within 7 lbs of your current weight (159–172 lbs). Adjust it and save.');
+    });
+    test('metric stays the default and no "kg" leaks into the pound text', () {
+      expect(
+          targetWeightMessage(TargetWeightCheck.outsideMaintainWindow, 75),
+          contains('(72.0–78.0 kg)'));
+      for (final c in [
+        TargetWeightCheck.mustBeBelowCurrent,
+        TargetWeightCheck.mustBeAboveCurrent,
+        TargetWeightCheck.outsideMaintainWindow,
+      ]) {
+        expect(targetWeightMessage(c, 75, metric: false), isNot(contains('kg')));
+      }
+    });
+  });
 }

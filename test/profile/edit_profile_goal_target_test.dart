@@ -28,6 +28,7 @@ import 'package:icanbefitter/features/auth/providers/auth_invalidation_provider.
 import 'package:icanbefitter/features/auth/providers/auth_provider.dart';
 import 'package:icanbefitter/features/nutrition/services/diet_strategy_flags.dart';
 import 'package:icanbefitter/features/profile/screens/edit_profile_screen.dart';
+import 'package:icanbefitter/features/profile/services/profile_target_recompute.dart';
 import 'package:path_provider_platform_interface/path_provider_platform_interface.dart';
 import 'package:plugin_platform_interface/plugin_platform_interface.dart';
 import 'package:supabase_flutter/supabase_flutter.dart'
@@ -280,7 +281,18 @@ void main() {
     final p = await storedProfile(tester);
     expect(p['primary_goal'], 'build_muscle');
     expect(p['target_weight_kg'], 78.0, reason: 'an untouched prefilled target saves exactly the seed');
-    expect(p['daily_calories'], isNot(2000), reason: 'the targets follow the goal');
+    final expected = recomputeDerivedTargets(
+      <String, dynamic>{
+        ..._profile(),
+        'primary_goal': 'build_muscle',
+        'target_weight_kg': 78.0,
+      },
+      now: DateTime.now(),
+      bodyFatCalcDisabled: false,
+    )!;
+    expect(p['daily_calories'], expected['daily_calories'],
+        reason: 'the targets follow the goal (the same recompute Edit Profile has always run)');
+    expect(p['daily_calories'], isNot(2000));
     expect(MigratedKey.read<bool>('prediction_stale'), isTrue,
         reason: 'a goal-only change marks the free prediction stale');
   });
@@ -303,5 +315,114 @@ void main() {
     await boot(tester, _profile(goal: 'strength', target: 80.0));
     await tapSave(tester);
     expect(MigratedKey.read<bool>('prediction_stale'), isNot(true));
+  });
+  testWidgets('imperial: the prefill shows pounds, saves the exact seed kg, and Build -> Cut restores the stored target',
+      (tester) async {
+    await boot(tester, _profile(), metric: false);
+    expect(textOf(tester, 'Target Weight (lbs)'), '157');
+    await chooseGoal(tester, 'Build');
+    expect(textOf(tester, 'Target Weight (lbs)'), '172');
+    await chooseGoal(tester, 'Cut');
+    expect(textOf(tester, 'Target Weight (lbs)'), '157',
+        reason: 'the original 71.0 kg fits Cut again and comes back');
+    await chooseGoal(tester, 'Build');
+    await tapSave(tester);
+    final p = await storedProfile(tester);
+    expect(p['target_weight_kg'], 78.0, reason: 'the seed, not 172 / 2.20462');
+    expect(p['current_weight_kg'], 75.0);
+  });
+
+  testWidgets('a goal change while the weight field is empty prefills nothing, and Save stops at the weight',
+      (tester) async {
+    await boot(tester, _profile());
+    await tester.enterText(field('Weight (kg)'), '');
+    await chooseGoal(tester, 'Build');
+    expect(textOf(tester, 'Target Weight (kg)'), '71.0');
+    await tapSave(tester);
+    expect(find.text('Weight must be between 30 and 300 kg.'), findsOneWidget);
+    expect((await storedProfile(tester))['primary_goal'], 'lose_fat');
+  });
+
+  testWidgets('the weight edited after the goal change: the seed no longer fits and Save refuses',
+      (tester) async {
+    await boot(tester, _profile());
+    await chooseGoal(tester, 'Build');
+    expect(textOf(tester, 'Target Weight (kg)'), '78.0');
+    await tester.enterText(field('Weight (kg)'), '80');
+    await tester.tap(find.text('SAVE'));
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(find.byKey(const ValueKey('target_weight_dialog')), findsOneWidget);
+    expect(find.textContaining('(80.0 kg)'), findsOneWidget);
+    expect((await storedProfile(tester))['primary_goal'], 'lose_fat');
+  });
+
+  testWidgets('a legacy strength profile whose target breaks the healed Build goal opens on the seed',
+      (tester) async {
+    await boot(tester, _profile(goal: 'strength', target: 70.0));
+    expect(textOf(tester, 'Target Weight (kg)'), '78.0');
+  });
+
+  testWidgets('a stored Build profile with a target below the current weight opens on the seed',
+      (tester) async {
+    await boot(tester, _profile(goal: 'build_muscle', target: 71.0));
+    expect(textOf(tester, 'Target Weight (kg)'), '78.0');
+  });
+
+  testWidgets('a Cut user who reached the goal (72 kg target, 71.5 kg weigh-in) is asked for a new target on open',
+      (tester) async {
+    // The daily weigh-in writes current_weight_kg without a check, so a reached
+    // goal breaks the strict Cut rule. The field shows the new seed (visible, never
+    // silent) and a Save with it succeeds.
+    await boot(tester, _profile(weight: 71.5, target: 72.0));
+    expect(textOf(tester, 'Target Weight (kg)'), '66.5');
+    await tapSave(tester);
+    final p = await storedProfile(tester);
+    expect(p['target_weight_kg'], 66.5);
+    expect(p['current_weight_kg'], 71.5);
+  });
+
+  testWidgets('Maintain: exactly 3.0 kg away saves, 3.1 kg is refused (through the form)',
+      (tester) async {
+    await boot(tester, _profile(goal: 'general_fitness', target: 75.0));
+    await tester.enterText(field('Target Weight (kg)'), '78.0');
+    await tapSave(tester);
+    expect(find.byKey(const ValueKey('target_weight_dialog')), findsNothing);
+    expect((await storedProfile(tester))['target_weight_kg'], 78.0);
+  });
+
+  testWidgets('Maintain: 3.1 kg away is refused with the window in the message',
+      (tester) async {
+    await boot(tester, _profile(goal: 'general_fitness', target: 75.0));
+    await tester.enterText(field('Target Weight (kg)'), '78.1');
+    await tester.tap(find.text('SAVE'));
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(find.byKey(const ValueKey('target_weight_dialog')), findsOneWidget);
+    expect(find.textContaining('(72.0–78.0 kg)'), findsOneWidget);
+    expect((await storedProfile(tester))['target_weight_kg'], 75.0);
+  });
+
+  testWidgets('imperial: the refusal speaks pounds', (tester) async {
+    await boot(tester, _profile(goal: 'general_fitness', target: 75.0), metric: false);
+    await tester.enterText(field('Target Weight (lbs)'), '200');
+    await tester.tap(find.text('SAVE'));
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(find.byKey(const ValueKey('target_weight_dialog')), findsOneWidget);
+    expect(find.textContaining('(159–172 lbs)'), findsOneWidget);
+    expect(find.textContaining('kg'), findsNothing);
+  });
+
+  testWidgets('re-selecting the goal already chosen leaves a typed target alone', (tester) async {
+    await boot(tester, _profile());
+    await tester.enterText(field('Target Weight (kg)'), '90');
+    await chooseGoal(tester, 'Cut');
+    expect(textOf(tester, 'Target Weight (kg)'), '90');
+  });
+
+  testWidgets('an untouched stored target below the typing range does not block the Save',
+      (tester) async {
+    await boot(tester, _profile(weight: 50.0, target: 28.0));
+    await tapSave(tester);
+    expect(find.textContaining('Target weight must be between'), findsNothing);
+    expect((await storedProfile(tester))['target_weight_kg'], 28.0);
   });
 }

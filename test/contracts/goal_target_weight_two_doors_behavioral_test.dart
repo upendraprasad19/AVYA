@@ -17,9 +17,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:icanbefitter/core/services/guarded_box.dart';
+import 'package:icanbefitter/core/services/ai_service.dart' show AiChatResponse;
 import 'package:icanbefitter/core/services/hive_service.dart';
 import 'package:icanbefitter/core/services/hive_user_session.dart';
 import 'package:icanbefitter/core/services/migrated_key.dart';
+import 'package:icanbefitter/core/services/prediction_service.dart';
 import 'package:icanbefitter/core/services/sync_service.dart';
 import 'package:icanbefitter/features/ai_coach/models/tool_intent.dart';
 import 'package:icanbefitter/features/ai_coach/services/regenerate_plan_planner.dart';
@@ -178,6 +180,8 @@ void main() {
       );
     }
 
+    Map<dynamic, dynamic> dataOf(ToolExecutionResult r) => r.data! as Map;
+
     Map<dynamic, dynamic> stored() =>
         HiveService.instance.userBox.get('profile') as Map;
 
@@ -266,6 +270,161 @@ void main() {
       expect(stored()['primary_goal'], 'lose_fat', reason: 'nor the first');
       expect(stored()['target_weight_kg'], 71.0);
       expect(stored()['daily_calories'], 2000);
+    });
+
+    test('a failed plan regeneration still refreshes the profile readers (the write already happened)', () async {
+      await seedExpiredWindow();
+      await HiveService.instance.userBox.put('profile', profile());
+      final c = makeContainer();
+      expect(c.read(userProfileProvider)['primary_goal'], 'lose_fat');
+      final id = 'intent_oi191_bad_${idSeq++}';
+      final result = await RegeneratePlanPlanner.instance.plan(
+        weeks: 4,
+        goal: 'build_muscle',
+        equipment: 'full_gym',
+        daysPerWeek: 4,
+      );
+      // One schedule with an unparseable date: the regeneration fails as a whole.
+      RegeneratePlanPlanner.instance.cache(
+        id,
+        result.plan,
+        [
+          {'date': 'not-a-date'}
+        ],
+        result.phase,
+        result.regenStartWeek,
+      );
+      final res = await ToolDispatcher.instance
+          .execute(c.read(_refProvider), intentFor(id, 'build_muscle'));
+      expect(res.success, isFalse);
+      expect(res.errorMessage ?? '', contains('Goal updated but plan regenerate failed'));
+      expect(stored()['primary_goal'], 'build_muscle', reason: 'the profile write is not rolled back');
+      expect(c.read(userProfileProvider)['primary_goal'], 'build_muscle',
+          reason: 'only the new every-outcome invalidation can refresh this on a failed apply');
+    });
+
+    test('the result tells the coach what else was written', () async {
+      await seedExpiredWindow();
+      final before = profile();
+      await HiveService.instance.userBox.put('profile', before);
+      final res = await switchTo('build_muscle');
+      expect(res.success, isTrue);
+      expect(dataOf(res)['target_weight_kg'], 78.0);
+      expect(dataOf(res)['daily_calories'], stored()['daily_calories']);
+      expect(dataOf(res)['protein_grams'], stored()['protein_grams']);
+      expect(dataOf(res)['daily_calories'], isNot(2000));
+    });
+
+    test('a goal change whose target already fits is still a prediction change (no seed)', () async {
+      await seedExpiredWindow();
+      await HiveService.instance.userBox.put('profile', profile(goal: 'lose_fat', target: 73.0));
+      final res = await switchTo('general_fitness');
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+      expect(res.success, isTrue);
+      expect(stored()['target_weight_kg'], 73.0, reason: 'a fitting target is never replaced');
+      expect(MigratedKey.read<bool>('prediction_stale'), isTrue);
+    });
+
+    test('a same-goal switch that repairs a contradictory target is a prediction change (seed, no goal change)', () async {
+      await seedExpiredWindow();
+      await HiveService.instance.userBox.put('profile', profile(goal: 'build_muscle', target: 71.0));
+      final res = await switchTo('build_muscle');
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+      expect(res.success, isTrue);
+      expect(stored()['target_weight_kg'], 78.0);
+      expect(MigratedKey.read<bool>('prediction_stale'), isTrue);
+    });
+
+    test('a same-goal switch on a consistent profile neither marks the prediction stale nor reports targets', () async {
+      await seedExpiredWindow();
+      await HiveService.instance.userBox.put('profile', profile(goal: 'lose_fat', target: 70.0));
+      final res = await switchTo('lose_fat');
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+      expect(res.success, isTrue);
+      expect(MigratedKey.read<bool>('prediction_stale'), isNot(true));
+      expect(dataOf(res).containsKey('daily_calories'), isFalse);
+    });
+  });
+
+  group('PredictionService.refreshAfterProfileChange (the PRO branches)', () {
+    const reply = 'Weight: 75 → 71. Keep going.';
+    AiChatResponse ok() =>
+        const AiChatResponse(reply: reply, modelUsed: 'fake', tokensUsed: 1);
+
+    setUp(() async {
+      await HiveService.instance.userBox.put('profile', {
+        'primary_goal': 'build_muscle',
+        'current_weight_kg': 75.0,
+        'target_weight_kg': 78.0,
+        'full_name': 'Test',
+      });
+      await MigratedKey.write('prediction_stale', true);
+      await MigratedKey.delete('prediction_auto_attempt_day');
+    });
+
+    tearDown(() {
+      PredictionService.debugPredict = null;
+    });
+
+    test('a PRO success regenerates once and clears the stale flag', () async {
+      var calls = 0;
+      PredictionService.debugPredict = (_) async {
+        calls++;
+        return ok();
+      };
+      await PredictionService.instance.refreshAfterProfileChange(isPro: true);
+      expect(calls, 1);
+      expect(MigratedKey.read<String>('prediction_text'), reply);
+      expect(MigratedKey.read<bool>('prediction_stale'), isNot(true));
+    });
+
+    test('a PRO failure leaves the prediction marked stale', () async {
+      await MigratedKey.delete('prediction_stale');
+      PredictionService.debugPredict = (_) async => throw StateError('offline');
+      await PredictionService.instance.refreshAfterProfileChange(isPro: true);
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+      expect(MigratedKey.read<bool>('prediction_stale'), isTrue);
+    });
+
+    test('a second automatic attempt the same day is skipped, spends no request, and marks stale', () async {
+      var calls = 0;
+      PredictionService.debugPredict = (_) async {
+        calls++;
+        return ok();
+      };
+      await PredictionService.instance.refreshAfterProfileChange(isPro: true);
+      await MigratedKey.write('prediction_stale', false);
+      await PredictionService.instance.refreshAfterProfileChange(isPro: true);
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+      expect(calls, 1, reason: 'the once-per-IST-day gate');
+      expect(MigratedKey.read<bool>('prediction_stale'), isTrue);
+    });
+
+    test('a free user is marked stale without a request', () async {
+      await MigratedKey.delete('prediction_stale');
+      var calls = 0;
+      PredictionService.debugPredict = (_) async {
+        calls++;
+        return ok();
+      };
+      await PredictionService.instance.refreshAfterProfileChange(isPro: false);
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+      expect(calls, 0);
+      expect(MigratedKey.read<bool>('prediction_stale'), isTrue);
+    });
+
+    test('an account switch while the request is in flight stamps nothing on the new account', () async {
+      PredictionService.debugPredict = (_) async {
+        await HiveUserSession.openForUser(second);
+        return const AiChatResponse(reply: '', modelUsed: 'fake', tokensUsed: 0);
+      };
+      await MigratedKey.delete('prediction_stale');
+      await PredictionService.instance.refreshAfterProfileChange(isPro: true);
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+      expect(HiveUserSession.currentOwnerFullId, second);
+      expect(MigratedKey.read<bool>('prediction_stale'), isNot(true),
+          reason: 'markStale would write the NEW account\'s box');
+      expect(MigratedKey.read<String>('prediction_text'), isNull);
     });
   });
 

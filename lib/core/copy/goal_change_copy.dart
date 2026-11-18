@@ -12,7 +12,13 @@ class GoalChangeCopy {
 
   static const eyebrow = 'ALSO CHANGES';
 
-  static String _kg(double v) => v.toStringAsFixed(1);
+  static const double _lbsPerKg = 2.20462;
+
+  /// A weight in the unit the user reads: one decimal in kg, whole pounds in lbs
+  /// (the formats the Edit Profile fields use).
+  static String _w(double kg, bool metric) => metric
+      ? '${kg.toStringAsFixed(1)} kg'
+      : '${(kg * _lbsPerKg).toStringAsFixed(0)} lbs';
 
   static String _int(num v) {
     final s = v.round().toString();
@@ -24,21 +30,29 @@ class GoalChangeCopy {
     return b.toString();
   }
 
-  /// "Target weight 71.0 → 78.0 kg" (the old value reads "not set" when there
+  /// "Target weight 71.0 kg → 78.0 kg" (the old value reads "not set" when there
   /// was none).
-  static String targetLine({required double? from, required double to}) =>
-      'Target weight ${from != null && from > 0 ? _kg(from) : 'not set'} → ${_kg(to)} kg';
+  static String targetLine({
+    required double? from,
+    required double to,
+    bool metric = true,
+  }) =>
+      'Target weight ${from != null && from > 0 ? _w(from, metric) : 'not set'} → ${_w(to, metric)}';
 
   /// Why the target moved: the rule of the NEW goal against the current weight.
-  static String targetReason({required String goal, required double? currentKg}) {
-    final cur = currentKg == null ? 'weight' : '${_kg(currentKg)} kg';
+  static String targetReason({
+    required String goal,
+    required double? currentKg,
+    bool metric = true,
+  }) {
+    final cur = currentKg == null ? 'weight' : _w(currentKg, metric);
     switch (goal) {
       case 'build_muscle':
         return '${FitnessGoals.label(goal)} needs a target above your current $cur.';
       case 'lose_fat':
         return '${FitnessGoals.label(goal)} needs a target below your current $cur.';
       default:
-        return '${FitnessGoals.label(goal)} keeps your target within 3 kg of your current $cur.';
+        return '${FitnessGoals.label(goal)} keeps your target within ${metric ? '3 kg' : '7 lbs'} of your current $cur.';
     }
   }
 

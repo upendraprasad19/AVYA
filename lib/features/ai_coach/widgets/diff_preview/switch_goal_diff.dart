@@ -42,6 +42,7 @@ class _SwitchGoalDiffState extends State<SwitchGoalDiff> {
   // OI-191: what else this switch writes (target weight, daily targets); null when
   // it cannot be computed (the preview then simply omits the lines).
   GoalChange? _change;
+  bool _metric = true;
 
   @override
   void initState() {
@@ -71,6 +72,8 @@ class _SwitchGoalDiffState extends State<SwitchGoalDiff> {
       // return above (so the legacy-refusal widget needs no Hive) and guarded, so
       // a failure here never breaks the plan preview.
       try {
+        _metric =
+            HiveService.instance.configBox.get('units_metric') != false;
         if (rawProfile is Map) {
           _change = goalChange(
             rawProfile,
@@ -215,7 +218,11 @@ class _SwitchGoalDiffState extends State<SwitchGoalDiff> {
         ),
 
         // OI-191: what else the switch writes (target weight, daily targets).
-        if (_change != null) GoalTargetsPreview(change: _change!, goal: newGoal),
+        if (_change != null) GoalTargetsPreview(
+            change: _change!,
+            goal: newGoal,
+            metric: _metric,
+          ),
 
         if (_plan!.totalWeeks > 0) ...[
         // First week eyebrow

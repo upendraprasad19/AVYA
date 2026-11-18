@@ -117,7 +117,7 @@ applies target and calories together; ONE shared rule; the Weekly Report's Maint
 ## Wardroom copy review
 
 `lib/shared/widgets/wardroom/CLAUDE.md` holds the palette and primitives and no copy-voice rules, so the preview words
-(`lib/core/copy/goal_change_copy.dart`: "ALSO CHANGES", "Target weight 71.0 → 78.0 kg", "Build needs a target above your
+(`lib/core/copy/goal_change_copy.dart`: "ALSO CHANGES", "Target weight 71.0 kg → 78.0 kg", "Build needs a target above your
 current 75.0 kg.", "Daily calories about 2,000 → 2,600 kcal") use the app's own vocabulary (`FitnessGoals.label`, target
 weight, calories, protein), are plain and factual, carry no exclamation or emoji, and say "about" because the apply
 recomputes under the lock. Popup wording is the onboarding popup's, with "Save" in place of "Continue" (`editing: true`).
@@ -157,3 +157,32 @@ Not mutated: "swap `patchProfileWith` to `patchProfile`": the owner-flip test (M
 a `testWidgets` leaves work behind that waits on the dead fake zone, so `box.close()` of the next boot hangs forever (the
 test closes the session in `addTearDown` while the zone is alive and drains real time between pumps); a test
 `SupabaseClient` needs `autoRefreshToken: false` or its timer fails the next invariants check.
+
+## B-pass round 1 (2 fresh Sonnet seats, HEAD df5bea73, CI green): every finding closed
+
+Seat A (coach door, shared patch, prediction, preview) and seat B (Edit Profile, the rule, the readers). Thirteen
+findings, none P0 / P1, six P2, seven P3. Each is either fixed with a test or stated as a consequence; none is deferred.
+
+| # | Sev | Finding | Disposition |
+|---|---|---|---|
+| A1 | P2 | the every-outcome invalidation had only a source-order pin (the success tail already invalidates `userProfileProvider`, so the success test passed with the call deleted) | fixed: `goal_target_weight_two_doors_behavioral_test.dart` "a failed plan regeneration still refreshes the profile readers" (a bad-date schedule, the tail never runs) and `profile_surface_invalidation_test.dart` (the list, once each, one failure never stops the rest) |
+| A2 | P2 | the PRO prediction branches and the `goalChanged \|\| targetSeeded` gate had regex pins only | fixed: seam `PredictionService.debugPredict`; tests for PRO success, PRO failure, the once-per-IST-day skip, free, an account switch in flight, and the gate in both halves (goal change with a fitting target; seed with no goal change; same goal and consistent = not stale) |
+| A3 | P3 | `markStale` / `clearStale` dropped the Future; the `predictionProvider` invalidate failure was a `debugPrint` only | fixed: both write through `unawaited(...catchError(recordNonFatal))`; the invalidate catch records `switch_goal_prediction_invalidate` |
+| A4 | P3 | a corrupt stored value (non-numeric target, a calculator throw) would throw inside the lock-time build, after the sweep | fixed: `goalChange` reads the target with `is num` and falls back to goal + seed when the overlay throws; three tests in `goal_change_patch_test.dart` |
+| A5 | P3 | the coach result did not carry the new writes | fixed: `target_weight_kg`, `daily_calories`, `protein_grams` in the result data when written (one `resultData` map for success and partial success) |
+| A6 | P3 | the coach preview was always kilograms | fixed: `GoalChangeCopy` and `GoalTargetsPreview` take `metric` (the `units_metric` setting); test in `goal_targets_preview_test.dart` |
+| A7 | P3 | the long line; `disable_profile_target_recompute` does not govern the new writer | fixed (line); stated: that switch governs only `LegacyGoalHealer` (`legacy_goal_healer.dart`), Edit Profile's `recalculateTargets` never read it, and the coach door follows Edit Profile, so both doors agree |
+| B1 | P2 | the refusal popup printed kilograms to an imperial user | fixed: `targetWeightMessage(..., metric:)` (default kg, onboarding bytes unchanged); Edit Profile passes `_isMetric`; unit tests and a widget test |
+| B2 | P2 | the daily weigh-in (`home_provider.dart:932`, `updateField('current_weight_kg')`) writes the pair unchecked, so a Cut user who reached the goal (weigh-in at or below the target) breaks the strict rule through no edit of theirs | stated consequence + test: opening Edit Profile shows the new seed (66.5 for 71.5 kg) in the field, visibly, and a Save with it succeeds; clearing it is refused like any contradiction. Founder rule (2026-11-18): the target must agree with the goal on every Save. A reached goal asking for a new target is the intended product behaviour; the weigh-in is not changed (it is not a goal or target door) |
+| B3 | P3 | re-selecting the goal already chosen re-ran the prefill and overwrote a typed target | fixed: `onChanged` returns when the value is the current goal; widget test |
+| B4 | P3 | the new lower range bound blocked a Save of an untouched stored target below 30 kg | fixed: the typing-range check runs only for an edited target; widget test (stored 28.0) |
+| B5 | P2 | mirror cases with no test (imperial prefill and round trip, empty weight on goal change, weight edited after the goal change, legacy strength with a breaking target, a stored contradictory pair, Maintain 3.0 / 3.1) and two weak assertions | fixed: eleven widget tests added; the calorie assertion now compares to the recompute oracle |
+| B6 | P3 | half-tenth rounding (`round()`) accepts a Cut 0.05 kg below and may refuse a Build 0.05 kg above | stated: the founder's rule is "compare in integer tenths"; the fields allow two decimals, a gap under a tenth is not a goal |
+
+Mutations of this round (same harness; each applied, run, restored; every one red): N1 owner compare dropped (2), N2
+outcome inverted (5), N3 invalidate replaced by a no-op (3), N4 one provider dropped from the list (3), N5a gate `&&`
+(3), N5b gate goal-change only (2), N5c gate seed only (2), N6 message ignores the unit (3), N7 re-select guard removed
+(1), N8 untouched-range guard removed (1), N9a overlay try removed (3), N9b cast restored (2), N10 preview ignores the
+unit (2), N11 result data dropped (2), N12 open-time prefill removed (4), N13 pound text at one decimal (1). Two
+guards the first round missed were found by these: the gate (`||`) had no behavioral test in either half (N5), and the
+failure-path invalidation was unobservable on the success path (N3).

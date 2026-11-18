@@ -722,8 +722,12 @@ class ToolDispatcher {
     }
     try {
       ref.invalidate(predictionProvider);
-    } catch (e) {
+    } catch (e, st) {
       debugPrint('[tool_dispatcher] invalidate predictionProvider failed: $e');
+      // A debugPrint alone is invisible in release (Hermes L34). A disposed Ref
+      // is benign, so this is a non-fatal, not an error.
+      unawaited(ErrorTelemetry.recordNonFatal(e, st,
+          reason: 'switch_goal_prediction_invalidate'));
     }
   }
 
@@ -1457,6 +1461,9 @@ class ToolDispatcher {
     String? oldGoal;
     var goalChanged = false;
     var targetSeeded = false;
+    double? seededKg;
+    num? newCalories;
+    num? newProtein;
     final wrote = await ProfileWriteService.instance.patchProfileWith(
       (current) {
         oldGoal = current['primary_goal']?.toString();
@@ -1470,6 +1477,9 @@ class ToolDispatcher {
         );
         goalChanged = change.goalChanged;
         targetSeeded = change.targetSeeded;
+        seededKg = change.seededTarget;
+        newCalories = change.caloriesTo;
+        newProtein = change.proteinTo;
         return <String, dynamic>{
           ...change.patch,
           'goal_changed_at': DateTime.now().toIso8601String(),
@@ -1491,7 +1501,16 @@ class ToolDispatcher {
     // failed plan regeneration) leaves the profile readers stale unless they are
     // refreshed now; execute()'s success-only tail is not enough.
     invalidateProfileDerivedSurfaces(ref.invalidate, source: 'switch_goal');
-    if (goalChanged || targetSeeded) unawaited(_refreshPredictionAfterGoalChange(ref));
+    if (goalChanged || targetSeeded) {
+      unawaited(_refreshPredictionAfterGoalChange(ref));
+    }
+    // What the apply wrote beyond the goal, so the coach's next reply can say it
+    // (the preview showed the user; this is the model's own copy of the result).
+    final alsoWrote = <String, dynamic>{
+      'target_weight_kg': ?seededKg,
+      'daily_calories': ?newCalories,
+      'protein_grams': ?newProtein,
+    };
 
     // 2. Schedule writes (same shape as regenerate_plan_block).
     final wbox = HiveService.instance.workoutBox;
@@ -1576,14 +1595,16 @@ class ToolDispatcher {
 
     RegeneratePlanPlanner.instance.clearCache(intent.id);
 
+    final resultData = <String, dynamic>{
+      'old_goal': oldGoal,
+      'new_goal': newGoal,
+      'schedules': results,
+      'count': results.length,
+      'cleared': swept.workouts,
+      ...alsoWrote,
+    };
     if (errors.isEmpty) {
-      return ToolExecutionResult.success(data: {
-        'old_goal': oldGoal,
-        'new_goal': newGoal,
-        'schedules': results,
-        'count': results.length,
-        'cleared': swept.workouts,
-      });
+      return ToolExecutionResult.success(data: resultData);
     } else if (results.isEmpty) {
       // Profile already changed but plan regen totally failed — surface the
       // partial state so the user knows. Profile rollback would require a
@@ -1598,14 +1619,8 @@ class ToolDispatcher {
         'Goal updated but plan regenerate failed: ${errors.join("; ")}',
       );
     } else {
-      return ToolExecutionResult.success(data: {
-        'old_goal': oldGoal,
-        'new_goal': newGoal,
-        'schedules': results,
-        'count': results.length,
-        'cleared': swept.workouts,
-        'partial_errors': errors,
-      });
+      return ToolExecutionResult.success(
+          data: {...resultData, 'partial_errors': errors});
     }
   }
 

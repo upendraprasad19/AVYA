@@ -162,7 +162,7 @@ Format (use • not JSON):
 • Key lift projections
 • One motivational line''';
 
-      final response = await AiService.instance.predict(prompt);
+      final response = await (debugPredict ?? AiService.instance.predict)(prompt);
       if (!safeToWriteForTest(ownerAtStart, HiveUserSession.currentOwnerFullId)) {
         unawaited(ErrorTelemetry.recordNonFatal(
             StateError(
@@ -194,6 +194,11 @@ Format (use • not JSON):
       return outcome;
     }
   }
+
+  /// Test seam: replaces the network call of [regeneratePrediction] (OI-191
+  /// tests cover the PRO branches of [refreshAfterProfileChange]).
+  @visibleForTesting
+  static Future<AiChatResponse> Function(String prompt)? debugPredict;
 
   /// Whether it is still safe to write a regeneration's result: the
   /// signed-in account must be the SAME one that was active when the
@@ -264,11 +269,15 @@ Format (use • not JSON):
   /// Mark the current cached prediction as stale (goal changed: a free user,
   /// or a PRO user whose automatic regenerate did not succeed).
   void markStale() {
-    MigratedKey.write('prediction_stale', true);
+    unawaited(MigratedKey.write('prediction_stale', true).catchError(
+        (Object e, StackTrace st) => ErrorTelemetry.recordNonFatal(e, st,
+            reason: 'prediction_service_mark_stale')));
   }
 
   /// Clear the stale flag (after successful regeneration).
   void clearStale() {
-    MigratedKey.delete('prediction_stale');
+    unawaited(MigratedKey.delete('prediction_stale').catchError(
+        (Object e, StackTrace st) => ErrorTelemetry.recordNonFatal(e, st,
+            reason: 'prediction_service_clear_stale')));
   }
 }

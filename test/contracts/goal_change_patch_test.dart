@@ -264,4 +264,26 @@ void main() {
           80.0);
     });
   });
+  group('a corrupt stored value never makes the patch throw (it runs under the profile lock)', () {
+    test('a non-numeric stored target is treated as missing and seeded', () {
+      final c = change(profile(target: 'abc'), 'build_muscle');
+      expect(c.patch['target_weight_kg'], 78.0);
+    });
+    test('a NaN current weight yields the goal only', () {
+      final p = profile();
+      p['current_weight_kg'] = double.nan;
+      final c = change(p, 'build_muscle');
+      expect(c.patch['primary_goal'], 'build_muscle');
+      expect(c.patch.containsKey('target_weight_kg'), isFalse);
+    });
+    test('a calculator failure falls back to the goal and the seed', () {
+      final p = profile();
+      p['height_cm'] = 'tall';
+      final c = change(p, 'build_muscle');
+      expect(c.patch['primary_goal'], 'build_muscle');
+      expect(c.patch['target_weight_kg'], 78.0);
+      expect(c.patch.containsKey('daily_calories'), isFalse);
+      expect(c.hasTargets, isFalse);
+    });
+  });
 }

@@ -621,10 +621,15 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
                 label: 'Goal',
                 value: _goal,
                 options: _goals,
-                onChanged: (v) => setState(() {
-                  _goal = v!;
-                  _prefillTargetForGoal(); // OI-191
-                }),
+                onChanged: (v) {
+                  // Re-tapping the goal already chosen is not a goal change: it
+                  // must not touch a target the user typed (OI-191).
+                  if (v == null || v == _goal) return;
+                  setState(() {
+                    _goal = v;
+                    _prefillTargetForGoal(); // OI-191
+                  });
+                },
               ),
               const SizedBox(height: AppSpacing.gridGap),
               _buildDropdown(
@@ -1986,7 +1991,11 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
     final targetWeightText = _targetWeightController.text.trim();
     final targetWeightRaw =
         targetWeightText.isEmpty ? null : double.tryParse(targetWeightText);
-    if (targetWeightText.isNotEmpty &&
+    // An UNTOUCHED field keeps its stored kg and is judged by the goal rule
+    // alone (a stored value below the typing range must not block every Save).
+    final targetEdited = targetWeightText != _initialTargetText.trim();
+    if (targetEdited &&
+        targetWeightText.isNotEmpty &&
         (targetWeightRaw == null ||
             (_isMetric
                 ? (targetWeightRaw < 30 || targetWeightRaw > 300)
@@ -2014,7 +2023,8 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
     if (targetCheck != TargetWeightCheck.ok) {
       await showTargetWeightDialog(
         context,
-        targetWeightMessage(targetCheck, weight, editing: true),
+        targetWeightMessage(targetCheck, weight,
+            editing: true, metric: _isMetric),
       );
       return;
     }

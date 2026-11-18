@@ -121,13 +121,13 @@ void main() {
     final body = _body(_stripped('lib/core/services/prediction_service.dart'),
         'Future<PredictionRefreshOutcome> _regenerate()');
     final ownerCapturedBeforePredict = RegExp(
-            r'ownerAtStart\s*=\s*HiveUserSession\.currentOwnerFullId[\s\S]*?await\s+AiService\.instance\.predict\(')
+            r'ownerAtStart\s*=\s*HiveUserSession\.currentOwnerFullId[\s\S]*?await\s+\(debugPredict\s*\?\?\s*AiService\.instance\.predict\)\(')
         .hasMatch(body);
     expect(ownerCapturedBeforePredict, isTrue,
         reason: 'the owner must be captured BEFORE the network call, not '
             'after');
     final guardBeforeWrite = RegExp(
-            r"await\s+AiService\.instance\.predict\([\s\S]*?if\s*\(\s*!safeToWriteForTest\(\s*ownerAtStart\s*,\s*HiveUserSession\.currentOwnerFullId\s*\)\s*\)[\s\S]*?return\s+PredictionRefreshOutcome\.failed[\s\S]*?MigratedKey\.write\(\s*'prediction_text'")
+            r"await\s+\(debugPredict\s*\?\?\s*AiService\.instance\.predict\)\([\s\S]*?if\s*\(\s*!safeToWriteForTest\(\s*ownerAtStart\s*,\s*HiveUserSession\.currentOwnerFullId\s*\)\s*\)[\s\S]*?return\s+PredictionRefreshOutcome\.failed[\s\S]*?MigratedKey\.write\(\s*'prediction_text'")
         .hasMatch(body);
     expect(guardBeforeWrite, isTrue,
         reason: 'the guard must run AFTER predict() resolves and BEFORE '
