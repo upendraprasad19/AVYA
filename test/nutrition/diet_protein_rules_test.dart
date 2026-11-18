@@ -2,9 +2,10 @@
 //
 // Diet protein rules (2026-11-18, docs/plans/diet-protein-rules.md): a Non-veg,
 // eggetarian or pescatarian plan must contain its protein. Real asset, real
-// generator, 100 seeds per profile and strategy (the measured baseline in the plan §2: a quarter
-// of Maintain / Build Non-veg plans had a vegetarian lunch AND dinner; a third
-// of eggetarian days had no egg; half the pescatarian Build days no fish).
+// generator, 100 seeds per profile and strategy (the measured baseline is in
+// the plan §2, 300 seeds: 16 % (Maintain) to 28 % (Build) of Non-veg plans had
+// a vegetarian lunch AND dinner; 30-34 % of eggetarian days had no egg; 2-48 %
+// of pescatarian days no fish).
 //
 //   R1 slotNeedsFor, pure: exact sets, combination bands, draw order replay,
 //      exact draw counts (Veg / Vegan / pescatarian draw nothing)

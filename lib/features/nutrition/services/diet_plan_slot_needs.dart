@@ -3,8 +3,8 @@
 // Diet protein rules (2026-11-18, docs/plans/diet-protein-rules.md §A2): a
 // Non-veg, eggetarian or pescatarian plan must actually contain its protein.
 // Before this a "Non-veg" plan drew its main protein at random from the whole
-// vegetarian pool plus the meat entries, so about a quarter of Maintain and
-// Build plans had a vegetarian lunch AND dinner (measured, 300 seeds).
+// vegetarian pool plus the meat entries, so 16 % (Maintain) to 28 % (Build) of
+// plans had a vegetarian lunch AND dinner (measured, 300 seeds).
 //
 // `slotNeedsFor` is PURE and is the whole rule: for a food type it returns,
 // per slot key, the catalog families the slot's protein role must be filled

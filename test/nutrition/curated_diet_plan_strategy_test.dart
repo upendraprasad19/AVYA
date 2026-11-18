@@ -4,7 +4,7 @@
 // §4): Low carb / Keto plans from the curated generator and the swap sheet,
 // against the REAL bundled food database.
 //
-//   G1 Balanced generator golden (byte-identity with main 21db03c7)
+//   G1 Balanced generator golden (Veg / Vegan byte-identity with main 5e6902ce)
 //   G2 Balanced swap golden (plan items + legacy plans holding the new ids)
 //   T10 strategy matrix (16 archetypes x 50 seeds x {Low carb, Keto})
 //   T11 generatePlan builtFor / normalisation
@@ -95,6 +95,15 @@ double _carbTarget(_A a, DietStrategy s) => BmrCalculator.macroSplit(
       strategy: s,
     ).carbGrams.toDouble();
 
+/// Independent cap oracle for a Balanced plan (B-pass finding 4): the raw
+/// per-day table plus the TWO documented food-type overrides, NOT
+/// dietFamilyCapFor, which the generator and the swap call themselves.
+int? _balancedCap(DietFamily f, String pref) {
+  if (pref == 'eggetarian' && f == DietFamily.egg) return 2;
+  if (pref == 'pescatarian' && f == DietFamily.fish) return 2;
+  return dietFamilyDailyCap[f];
+}
+
 String _sha(String s) => sha256.convert(utf8.encode(s)).toString();
 
 /// Diet protein rules (2026-11-18, docs/plans/diet-protein-rules.md §A4): Veg
@@ -115,11 +124,12 @@ void main() {
   final byId = {for (final r in rows) r['id'] as String: r};
   final entryOf = {for (final e in kDietPlanCatalog) e.foodId: e};
 
-  // Plan review round 2 finding R2-2: Keto has its own golden. The value was
-  // captured on origin/main 8ecfc8fd (BEFORE the vegan Low carb change) and
-  // the branch produced the identical hash, so the claim "Keto plans are
-  // byte-identical" is a permanent pin, not a one-time measurement.
-  group('G3 Keto byte-identity with main 8ecfc8fd', () {
+  // Plan review round 2 finding R2-2: Keto has its own golden. Its Veg and
+  // Vegan hash was recaptured on origin/main 5e6902ce before the diet protein
+  // rules (the first capture, 8ecfc8fd, covered all 16 archetypes), so the
+  // claim "Veg / Vegan Keto plans are byte-identical" is a permanent pin, not
+  // a one-time measurement.
+  group('G3 Keto byte-identity with main 5e6902ce (Veg / Vegan)', () {
     String ketoText(bool Function(_A) take) {
       final gen = CuratedDietPlanGenerator.forTest(repo);
       final out = StringBuffer();
@@ -153,7 +163,7 @@ void main() {
     });
   });
 
-  group('G1/G2 Balanced byte-identity with main 21db03c7', () {
+  group('G1/G2 Balanced byte-identity with main 5e6902ce (Veg / Vegan)', () {
     String balancedText(bool Function(_A) take) {
       final gen = CuratedDietPlanGenerator.forTest(repo);
       final out = StringBuffer();
@@ -595,8 +605,7 @@ void main() {
               }
             }
             counts.forEach((f, n) {
-              final cap = dietFamilyCapFor(f, DietStrategy.balanced,
-                  foodType: foodTypeOf(e.key.pref));
+              final cap = _balancedCap(f, e.key.pref);
               if (cap != null && n > cap) over.add(f);
             });
           }
@@ -675,8 +684,7 @@ void main() {
             final asBalanced = st == DietStrategy.keto && e.key.pref == 'vegan';
             counts.forEach((f, n) {
               final cap = asBalanced
-                  ? dietFamilyCapFor(f, DietStrategy.balanced,
-                      foodType: foodTypeOf(e.key.pref))
+                  ? _balancedCap(f, e.key.pref)
                   : dietFamilyCapFor(f, st, foodType: foodTypeOf(e.key.pref));
               if (cap != null) {
                 expect(n, lessThanOrEqualTo(cap),

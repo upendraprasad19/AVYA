@@ -17,11 +17,8 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:icanbefitter/core/constants/diet_strategies.dart';
-import 'package:icanbefitter/core/constants/food_types.dart';
 import 'package:icanbefitter/features/nutrition/services/curated_diet_plan_generator.dart';
 import 'package:icanbefitter/features/nutrition/services/diet_plan_catalog.dart';
-import 'package:icanbefitter/features/nutrition/services/diet_plan_catalog_rules.dart';
 import 'package:icanbefitter/features/nutrition/services/diet_plan_generator.dart';
 import 'package:icanbefitter/features/nutrition/services/diet_plan_swap.dart';
 import 'package:icanbefitter/shared/repositories/food_repository.dart';
@@ -100,6 +97,15 @@ const _archetypes = [
 ];
 
 const _seeds = 50;
+
+/// Independent cap oracle for a Balanced plan (B-pass finding 4): the raw
+/// per-day table plus the TWO documented food-type overrides, NOT
+/// dietFamilyCapFor, which the generator and the swap call themselves.
+int? _balancedCap(DietFamily f, String pref) {
+  if (pref == 'eggetarian' && f == DietFamily.egg) return 2;
+  if (pref == 'pescatarian' && f == DietFamily.fish) return 2;
+  return dietFamilyDailyCap[f];
+}
 
 void main() {
   final rows = _loadAsset();
@@ -300,8 +306,7 @@ void main() {
             counts[familyOf[id]!] = (counts[familyOf[id]!] ?? 0) + 1;
           }
           counts.forEach((f, n) {
-            final cap = dietFamilyCapFor(f, DietStrategy.balanced,
-                foodType: foodTypeOf(entry.key.pref));
+            final cap = _balancedCap(f, entry.key.pref);
             if (cap != null) {
               expect(n, lessThanOrEqualTo(cap),
                   reason: '${entry.key.label}: $f x$n');
@@ -736,8 +741,7 @@ void main() {
                 expect(allowedFor(a.pref, alt.foodId), isTrue,
                     reason: '${a.label}: ${alt.name}');
                 final f = familyOf[alt.foodId]!;
-                final cap = dietFamilyCapFor(f, DietStrategy.balanced,
-                    foodType: foodTypeOf(a.pref));
+                final cap = _balancedCap(f, a.pref);
                 if (cap != null) {
                   final rest = [...ids]..remove(meal.items[idx].foodId);
                   final n = rest.where((id) => familyOf[id] == f).length;

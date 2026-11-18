@@ -22,7 +22,8 @@
 //      meal's other items;
 //   2. size each slot: try every combination of the entries' allowed portions
 //      (an optional item may be 0) and keep the best slot score;
-//   3. keep the best of [_samples] sampled days by the day score (calories,
+//   3. keep the best of [_samples] sampled days (a food type with slot needs
+//      samples [_needSampleFactor] times as many) by the day score (calories,
 //      protein band, and a fiber floor at 70 % of the profile target);
 //   4. if no sample is valid, fall back to the legacy generator.
 //
@@ -380,7 +381,11 @@ class CuratedDietPlanGenerator {
   ) {
     final used = <String>{};
     final familyCount = <DietFamily, int>{};
-    final day = <_SizedSlot>[];
+    // Slots are SIZED only after the whole day is picked: sizing is an
+    // exhaustive portion walk with no random draw, so a sample that a need
+    // discards at lunch or dinner (B-pass finding 1) no longer pays for the
+    // slots before it, and the plan is byte-identical either way.
+    final chosen = <(CuratedSlotTemplate, List<_Pick>)>[];
     // Read once per sample, outside `fits` (eggetarian and pescatarian days
     // hold 2 egg / fish items, dietFamilyFoodTypeCapOverride).
     final foodType = foodTypeOf(inputs.dietPreference);
@@ -431,9 +436,9 @@ class CuratedDietPlanGenerator {
         take(c, mealTokens);
         picks.add(_Pick(c, role, true));
       }
-      day.add(_sizeSlot(t, picks, inputs));
+      chosen.add((t, picks));
     }
-    return day;
+    return [for (final c in chosen) _sizeSlot(c.$1, c.$2, inputs)];
   }
 
   _SizedSlot _sizeSlot(
