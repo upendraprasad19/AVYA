@@ -8,6 +8,7 @@ import 'package:icanbefitter/core/theme/spacing.dart';
 import 'package:icanbefitter/core/theme/typography.dart';
 import 'package:icanbefitter/shared/widgets/wardroom/wardroom.dart';
 import 'package:icanbefitter/features/onboarding/target_weight_check.dart';
+import 'package:icanbefitter/features/onboarding/widgets/target_weight_dialog.dart';
 
 /// Step 2/3 of the handoff onboarding flow — baseline stats capture
 /// (`design_handoff_wardroom/src/screens/onboarding.jsx` StatsScreen,
@@ -398,67 +399,10 @@ class _StatsScreenState extends State<StatsScreen> {
   }
 
   /// Dismissable popup explaining why the target was rejected. Closing it (the
-  /// ADJUST button or a tap outside) returns focus to the TARGET field.
+  /// ADJUST button or a tap outside) returns focus to the TARGET field. The popup
+  /// itself is the shared `showTargetWeightDialog` (also used by Edit Profile).
   Future<void> _showTargetWeightDialog(String message) async {
-    await showDialog<void>(
-      context: context,
-      barrierDismissible: true,
-      builder: (ctx) => Dialog(
-        key: const ValueKey('target_weight_dialog'),
-        backgroundColor: AppColors.card,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(AppRadius.card),
-          side: BorderSide(color: AppColors.accent.withValues(alpha: 0.53)),
-        ),
-        child: Padding(
-          padding: const EdgeInsets.all(20),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Text(
-                'CHECK YOUR TARGET',
-                style: AppTypography.mono.copyWith(
-                  color: AppColors.accent,
-                  letterSpacing: 2,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-              const SizedBox(height: 12),
-              Text(
-                message,
-                style: AppTypography.bodyL.copyWith(
-                  color: AppColors.textPrimary,
-                  height: 1.4,
-                ),
-              ),
-              const SizedBox(height: 18),
-              GestureDetector(
-                key: const ValueKey('target_weight_dialog_close'),
-                onTap: () => Navigator.of(ctx).pop(),
-                child: Container(
-                  padding: const EdgeInsets.symmetric(vertical: 12),
-                  decoration: BoxDecoration(
-                    color: AppColors.accent,
-                    borderRadius: BorderRadius.circular(AppRadius.sharp),
-                  ),
-                  alignment: Alignment.center,
-                  child: Text(
-                    'ADJUST TARGET',
-                    style: AppTypography.mono.copyWith(
-                      fontSize: 12,
-                      color: AppColors.bgDeep,
-                      fontWeight: FontWeight.w700,
-                      letterSpacing: 2,
-                    ),
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
+    await showTargetWeightDialog(context, message);
     if (mounted) _targetFocus.requestFocus();
   }
 
@@ -467,7 +411,7 @@ class _StatsScreenState extends State<StatsScreen> {
     final height = double.tryParse(_height.text);
     final bodyFat = double.tryParse(_bodyFat.text);
     final targetWeight = double.tryParse(_targetWeight.text);
-    if (weight == null || height == null) {
+    if (weight == null || height == null || weight <= 0) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(

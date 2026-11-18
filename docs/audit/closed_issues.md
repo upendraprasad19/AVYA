@@ -7313,3 +7313,63 @@ The founder chose to keep the plans as they are, over a unit that would give qua
 **What it is.** Unit 3C (diagnose `f3c9a6`, plan `docs/plans/2026-11-16-generator-step3c-cardio-finisher.md`, founder d56, d61, d74-d79) ships the shown, injury-safe, timed cardio finisher behind `disable_cardio_finisher_shown` (`PlanEngineFlags.cardioFinisherShownEnabled`, default ON). Set, the engine builds today's finisher (no round rest, injuries ignored, nothing reserved) and no screen shows one.
 
 **Done when.** After the device check: the switch, its OFF branches (`CardioFinisher.plan`'s `!enabled` path, `FinisherShowContext.enabled`), `test/fixtures/generator_golden_hashes_finisher_off.json`, `finisher_kill_switch_golden_test.dart` and the switch lines the gates set for their OFF worlds are removed in one batch (CLAUDE.md §4.6 step 4); `CardioFinisher.debugReserve` stays (a test seam). Gates that measure another unit and set the switch (`goal_training_gate_test`, `weekly_minimum_gate_test`, `oi489_timed_hold_real_engine_test` Ruling 5c, `repeat_minutes_gate_lib.dart`, and `day_floor_gate_lib.dart` for its main-equal OFF digest and pins) re-record their digests in the finisher world in that batch.
+
+## OI-191 — target_weight_kg can contradict the chosen goal's direction, making the reach-your-goal projection false (P2)
+
+- **Status**: CLOSED · 2026-11-18 · branch `oi191-goal-target` · the commit carrying `closes-oi: OI-191`
+- **Blocked on**: — (resolved: plan `docs/plans/oi191-goal-target-weight.md`, diagnose `b5d2e8`; the device check of the Edit Profile and coach doors is on the board row of the batch memory)
+- **Verified**: 2026-09-13 — reproduced live on the newly-created Play Store review account
+  (`googleplay-review@icanbefitter.com`, `public.user_profile`: `current_weight_kg=75`,
+  `target_weight_kg=71`, `primary_goal='build_muscle'`) and confirmed by reading all 4 files
+  below directly, not from a subagent summary.
+- **Identified**: 2026-09-13 · founder noticed the account's own goal/target combo looked
+  backwards while spot-checking the onboarding flow, asked "goal is also to reduce weight
+  right? check."
+- **What**: two writers save `target_weight_kg` with zero cross-field validation against
+  `primary_goal`:
+  - `lib/features/onboarding/screens/stats_screen.dart` `_onCalibrate` (~line 387-424) —
+    seeds the field goal-aware (`build_muscle` → current+3kg, `lose_fat` → current-5kg,
+    `recomp` → current-2kg; the comment at line 42-46 spells this out), but it's a free
+    `TextEditingController` and the submit handler validates only that weight/height parse
+    as numbers. A user can overwrite the sensible seed with anything.
+  - `lib/features/profile/screens/edit_profile_screen.dart` (`target_weight_kg` write at
+    line 1825) — same gap, second door: a user can set a sensible target during onboarding,
+    then contradict it later via Edit Profile with no warning either.
+
+  Three independent render sites then trust the raw, unvalidated pair and produce an actively
+  false projection when goal-direction and target-direction disagree:
+  `lib/features/profile/screens/profile/nutrition_targets.dart:15-31`,
+  `lib/features/nutrition/screens/nutrition_screen.dart:520-548` (`_projectionLine`),
+  `lib/features/profile/screens/profile/pace_detail_sheet.dart:5-13` — all three gate on
+  `goal ∈ {lose_fat, build_muscle}` + both weights present + gap > 0.1kg, then call
+  `BmrCalculator.projectGoalDate` (`lib/core/utils/bmr_calculator.dart:258-288`), which computes
+  `gap = (currentKg - targetKg).abs()` — an **unsigned magnitude**, blind to which direction the
+  diet is actually pushing the user.
+- **What this does NOT affect**: the calorie/macro numbers themselves. Checked
+  `BmrCalculator.calculateTargets` specifically — for `goal == 'build_muscle'`,
+  `target_weight_kg` is never read at all; it's consulted only inside the `goal == 'lose_fat'`
+  branch, to pick the protein baseline. So a contradictory target doesn't corrupt the diet
+  prescription, only the projection text describing it.
+- **Consequence**: a user on a `build_muscle` surplus (weight trending up) with a target below
+  current sees "At this pace, you'll reach 71 kg on \<date\>" — a promise the prescribed diet
+  cannot keep, since the diet is moving them the opposite direction. Symmetric failure exists
+  for `lose_fat` + a target set above current. Not hypothetical to this one test account: any
+  real user who mistypes or misunderstands the target-weight field the same way hits the
+  identical wrong message.
+- **Bug-history check**: grepped `docs/diagnoses/INDEX.md` + `open_issues.md` +
+  `closed_issues.md` for `projectGoalDate` / target-goal direction conflicts — no hits. Not a
+  recurrence of the existing onboarding-calc-drift class (c3f2d8/f1b6d4/f19a7c/c7a1f5), which are
+  all preview-vs-commit or missing-input bugs, not a direction contradiction.
+- **Fix shape (not decided, sketched for whoever picks it up)**: (a) validate at both writers —
+  block or auto-correct a contradictory target before save; needs enforcing at TWO sites, and a
+  third if any other writer of this field is found; or (b) make `projectGoalDate` (or its 3
+  call sites) direction-aware — suppress or reword the projection when direction disagrees with
+  goal, so a bad input degrades gracefully instead of lying. (b) is a single-point fix versus
+  (a)'s multi-writer enforcement, but is a genuine design call, not decided here.
+- **Blast radius**: `feature` — UI/calc-only, no schema/migration/payment/auth/sync path
+  touched (per `docs/blast_radius.yaml`'s account-tier trigger list, none apply).
+- **Related**: none of the existing calorie-drift diagnoses; found while investigating a
+  founder observation on the same test account that also produced
+  [[feedback_mistake_subscription_status_vs_subscriptions_table]] (unrelated mechanism, same
+  investigation session).
+- **Resolution (2026-11-18)**: the pair is now validated and kept consistent at EVERY door that changes the goal. The shared rule lives in `lib/features/onboarding/target_weight_check.dart` (Cut strictly below current, Build strictly above, Maintain within 3 kg; an empty or non-positive target is missing). Edit Profile prefills the onboarding seed when a goal change breaks the target, and Save refuses a contradictory pair with the onboarding popup. The coach `switchGoal` writes goal, seeded target and the recomputed calorie / protein targets in one owner-checked write and previews both. The date projections (Nutrition, Profile targets, pace sheet, Weekly Report callout, Journey ETA) ask the same rule. Correction to the text above: the calorie and macro numbers DO follow the goal only on Edit Profile before this batch; the coach door left them stale (the "What this does NOT affect" paragraph covers the numbers a contradictory target changes, not a goal change). The Weekly Report's Maintain wording is OI-518.
