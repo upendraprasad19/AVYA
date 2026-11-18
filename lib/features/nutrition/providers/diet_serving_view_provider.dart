@@ -25,6 +25,13 @@ final dietServingViewProvider = Provider<DietServingView>((ref) {
   return DietServingView.fromStorage(p['diet_serving_view']);
 });
 
+/// The text a plan row shows for one serving in [view]: Portions returns the
+/// description unchanged; Grams adds the weight (ml for an audited liquid).
+String servingLabelFor(
+        String foodId, String desc, double grams, DietServingView view) =>
+    servingLabel(desc, grams, view,
+        isLiquid: view == DietServingView.grams && isLiquidFood(foodId));
+
 /// True when the food row [foodId] is an audited liquid (`weight_unit: "ml"`).
 /// Total: a missing id (a retired id in an old saved plan), a custom food or
 /// the protein shake's synthetic id all read as grams. Local Hive read only.

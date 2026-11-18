@@ -29,6 +29,7 @@ import 'package:icanbefitter/features/nutrition/services/diet_plan_strategy_stat
 import 'package:icanbefitter/features/nutrition/services/diet_plan_catalog.dart';
 import 'package:icanbefitter/features/nutrition/services/diet_strategy_flags.dart';
 import 'package:icanbefitter/features/nutrition/services/diet_supplements_flags.dart';
+import 'package:icanbefitter/features/nutrition/providers/diet_serving_view_provider.dart';
 import 'package:icanbefitter/features/nutrition/widgets/diet_plan_macro_cards.dart';
 import 'package:icanbefitter/features/nutrition/widgets/diet_supplements_section.dart';
 import 'package:icanbefitter/shared/widgets/diet_strategy_chips.dart';
@@ -557,6 +558,43 @@ void main() {
           findsOneWidget);
       expect(find.byKey(const ValueKey('diet_plan_food_type_dropdown')),
           findsOneWidget);
+    });
+
+    testWidgets(
+        'OI-517: the Grams view labels every meal row with the weight; '
+        'Portions shows no weight prefix', (tester) async {
+      final gramsRow = RegExp(r'^\d+ (g|ml)( \(.+\))? \u00B7 P\d+g C\d+g F\d+g$');
+      List<String> mealRows() => [
+            for (final t in tester.widgetList<Text>(find.byType(Text)))
+              if ((t.data ?? '').contains(' \u00B7 P') &&
+                  (t.data ?? '').contains(' F'))
+                t.data!,
+          ];
+
+      await seed(tester, extra: const {'diet_serving_view': 'grams'});
+      await pumpScreen(tester);
+      final grams = mealRows();
+      expect(grams, isNotEmpty);
+      for (final r in grams) {
+        expect(gramsRow.hasMatch(r), isTrue, reason: r);
+      }
+
+      await seed(tester, extra: const {'diet_serving_view': 'portions'});
+      final c = ProviderScope.containerOf(
+          tester.element(find.byType(DietPlanScreen)));
+      c.invalidate(dietServingViewProvider);
+      await _settle(tester);
+      final portions = mealRows();
+      expect(portions, isNotEmpty);
+      for (final r in portions) {
+        expect(RegExp(r'^\d+ (g|ml) \(').hasMatch(r), isFalse, reason: r);
+      }
+    });
+
+    test('OI-517: the PDF rows are labelled at share time (presence pin)', () {
+      final src = File('lib/features/nutrition/screens/diet_plan_screen.dart')
+          .readAsStringSync();
+      expect(RegExp(r'servingDesc:\s*servingLabelFor\(').hasMatch(src), isTrue);
     });
 
     testWidgets('layout v2: no overflow at 360 dp with every control on',
