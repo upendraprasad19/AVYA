@@ -327,13 +327,13 @@ const List<CatalogEntry> kDietPlanCatalog = [
   ), // Moong Dal Chilla
   CatalogEntry(
     'F0021',
-    [DietRole.breakfastProtein, DietRole.snack],
+    [DietRole.breakfastProtein, DietRole.mainProtein, DietRole.snack],
     DietFamily.egg,
     [2.0, 3.0, 4.0],
   ), // Egg (Whole, boiled)
   CatalogEntry(
     'F0344',
-    [DietRole.breakfastProtein],
+    [DietRole.breakfastProtein, DietRole.mainProtein],
     DietFamily.egg,
     [1.0, 2.0],
   ), // Egg Omelette (Indian)
@@ -345,7 +345,7 @@ const List<CatalogEntry> kDietPlanCatalog = [
   ), // Egg White Omelette
   CatalogEntry(
     'F0341',
-    [DietRole.breakfastProtein],
+    [DietRole.breakfastProtein, DietRole.mainProtein],
     DietFamily.egg,
     [1.0, 2.0],
   ), // Egg Bhurji
@@ -559,12 +559,6 @@ const List<CatalogEntry> kDietPlanCatalog = [
     DietFamily.fish,
     [0.5, 1.0, 1.5, 2.0],
   ), // Rohu (cooked)
-  CatalogEntry(
-    'F0362',
-    [DietRole.mainProtein],
-    DietFamily.fish,
-    [0.5, 1.0, 1.5, 2.0],
-  ), // Surmai (cooked)
   CatalogEntry(
     'F0357',
     [DietRole.mainProtein],
@@ -1051,9 +1045,10 @@ const List<CatalogEntry> kDietPlanCatalog = [
       [0.5, 1.0, 1.5], lowCarbOnly: true), // Coconut (Fresh, Grated)
   CatalogEntry('F0383', [DietRole.fat], DietFamily.fat, [1.0, 2.0],
       lowCarbOnly: true), // Coconut Milk (1/4 cup)
-  CatalogEntry('F0371', [DietRole.breakfastProtein], DietFamily.egg,
-      [1.0, 1.5], lowCarbOnly: true), // Egg (Fried), 2 eggs
-  CatalogEntry('F0790', [DietRole.breakfastProtein], DietFamily.egg, [1.0],
+  CatalogEntry('F0371', [DietRole.breakfastProtein, DietRole.mainProtein],
+      DietFamily.egg, [1.0, 1.5], lowCarbOnly: true), // Egg (Fried), 2 eggs
+  CatalogEntry('F0790', [DietRole.breakfastProtein, DietRole.mainProtein],
+      DietFamily.egg, [1.0],
       lowCarbOnly: true), // Cheese Omelette
   CatalogEntry('F0023',
       [DietRole.breakfastProtein, DietRole.mainProtein, DietRole.snack],
@@ -1115,7 +1110,22 @@ final Map<String, DietFamily> _familyById = {
   for (final e in kDietPlanCatalog) e.foodId: e.family,
 };
 
+/// Foods that LEFT the catalog (2026-11-18, diet protein rules: Surmai, the
+/// founder's call) and the family they had. "Retired" here means "out of the
+/// catalog"; it is related to, but not the same as, the asset flag
+/// `is_everyday == false` that the swap sheet calls retired. Never offered by
+/// the generator or the swap sheet (they read [kDietPlanCatalog] only). Two
+/// readers use it: [dietCatalogFamily], so a saved plan that still holds the
+/// food is judged by its real family (the egg / fish exception of
+/// `passesDiet`), and the swap's family counts, so such an item still counts
+/// toward its family's daily cap. Must not overlap the catalog ids.
+const Map<String, DietFamily> kRetiredCatalogFamilies = {
+  'F0362': DietFamily.fish, // Surmai (cooked)
+};
+
 /// The catalog family of [foodId], or null for a food outside the catalog
 /// (diet plan Unit 2a: the egg / fish exception of `passesDiet` needs it to
-/// judge a saved plan's items).
-DietFamily? dietCatalogFamily(String foodId) => _familyById[foodId];
+/// judge a saved plan's items). A food that left the catalog keeps its
+/// family through [kRetiredCatalogFamilies].
+DietFamily? dietCatalogFamily(String foodId) =>
+    _familyById[foodId] ?? kRetiredCatalogFamilies[foodId];

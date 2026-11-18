@@ -98,6 +98,15 @@ const _archetypes = [
 
 const _seeds = 50;
 
+/// Independent cap oracle for a Balanced plan (B-pass finding 4): the raw
+/// per-day table plus the TWO documented food-type overrides, NOT
+/// dietFamilyCapFor, which the generator and the swap call themselves.
+int? _balancedCap(DietFamily f, String pref) {
+  if (pref == 'eggetarian' && f == DietFamily.egg) return 2;
+  if (pref == 'pescatarian' && f == DietFamily.fish) return 2;
+  return dietFamilyDailyCap[f];
+}
+
 void main() {
   final rows = _loadAsset();
   final byId = {for (final r in rows) r['id'] as String: r};
@@ -297,7 +306,7 @@ void main() {
             counts[familyOf[id]!] = (counts[familyOf[id]!] ?? 0) + 1;
           }
           counts.forEach((f, n) {
-            final cap = dietFamilyDailyCap[f];
+            final cap = _balancedCap(f, entry.key.pref);
             if (cap != null) {
               expect(n, lessThanOrEqualTo(cap),
                   reason: '${entry.key.label}: $f x$n');
@@ -313,7 +322,12 @@ void main() {
           for (final plan in plans[a]!)
             plan[2].items.firstWhere((i) => i.role == 'mainProtein').foodId,
         };
-        expect(lunchProteins.length, greaterThanOrEqualTo(8),
+        // Diet protein rules (2026-11-18): a pescatarian lunch is a fish dish
+        // and only 5 remain after Surmai left the catalog, so the bound is the
+        // measured minimum (5, cut female pescatarian, 50 seeds) minus one.
+        // A variety bound, not a macro floor.
+        final bound = a.pref == 'pescatarian' ? 4 : 8;
+        expect(lunchProteins.length, greaterThanOrEqualTo(bound),
             reason: '${a.label}: $lunchProteins');
       }
     });
@@ -727,7 +741,7 @@ void main() {
                 expect(allowedFor(a.pref, alt.foodId), isTrue,
                     reason: '${a.label}: ${alt.name}');
                 final f = familyOf[alt.foodId]!;
-                final cap = dietFamilyDailyCap[f];
+                final cap = _balancedCap(f, a.pref);
                 if (cap != null) {
                   final rest = [...ids]..remove(meal.items[idx].foodId);
                   final n = rest.where((id) => familyOf[id] == f).length;

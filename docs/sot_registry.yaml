@@ -1533,11 +1533,12 @@ concepts:
   - concept: diet_plan_generation_quality
     domain: nutrition
     behavioral_test_path: test/nutrition/curated_diet_plan_test.dart
+    behavioral_test_path_protein: test/nutrition/diet_protein_rules_test.dart  # 2026-11-18 diet protein rules: every Non-veg / eggetarian / pescatarian plan holds its protein, exact slotNeedsFor sets and draw order, retired-family swap fallback
     description: |
       What goes into a generated diet plan. Since 2026-11-14 (diet plan
       Unit 1, diagnose 83ac8a, closes OI-214; recurrence of d3c7a9) the
       Diet Plan screen uses CuratedDietPlanGenerator: ONLY foods from the
-      hand-curated catalog (kDietPlanCatalog, 151 everyday Indian foods,
+      hand-curated catalog (kDietPlanCatalog, 150 everyday Indian foods,
       plus 14 Low carb / Keto only entries since Unit 3b-1a and 5 Low carb
       plan only entries since 2026-11-15;
       roles, day-capped families, allowed portions; no macros — numbers
@@ -1546,7 +1547,7 @@ concepts:
       dinner = protein + one grain + sabzi (+side); snacks = fruit/snack),
       family caps per day (soy/paneer/egg/chicken/fish/mutton/nut 1,
       dal/dairy 2), a key-ingredient coherence rule inside a meal, and best
-      of 40 sampled days scored on calories, a protein band and a fiber
+      of 40 sampled days (200 for a food type with slot needs) scored on calories, a protein band and a fiber
       floor. The catalog replaces meal_fit for this path; the runtime never
       filters on is_ultra_processed / is_everyday (a v3 box must still
       generate). The legacy anchor-protein generator (d3c7a9 constraint
@@ -1554,7 +1555,7 @@ concepts:
       configBox['disable_curated_diet_plan'] (DietPlanFlags) until the
       founder's device check; its deletion is on the OI board. Food
       library seed version 4 (_foodLibraryVersion) shipped the v4 asset;
-      version 6 (2026-11-15, below) is current.
+      version 8 (2026-11-18, below) is current.
       Diet plan Unit 3b-1a (2026-11-14, docs/plans/diet-strategy-3b.md):
       DietPlanInputs carries the strategy and the EFFECTIVE carb target;
       Low carb / Keto use their own templates (curatedTemplatesFor: Keto
@@ -1566,9 +1567,14 @@ concepts:
       per-item carb cap (kKetoItemCarbCap 6 g at the smallest portion) and carb
       terms in the slot and day scores. generatePlan returns builtFor
       (Balanced after the legacy fallback, a missing carb target, or a
-      vegan Keto request). Balanced plans and Balanced swaps are
+      vegan Keto request). Balanced plans and Balanced swaps were
       byte-identical to main 21db03c7 (golden SHAs G1/G2 in
-      test/nutrition/curated_diet_plan_strategy_test.dart). Seed version
+      test/nutrition/curated_diet_plan_strategy_test.dart; since the diet
+      protein rules below that holds for Veg and Vegan only, on Balanced and
+      Keto plans and Balanced swaps: the Veg / Vegan goldens G1, G2a and G3
+      stay pinned to main 5e6902ce and the other food types are
+      re-baselined as G1b, G2b and G3b; Low carb Veg / Vegan are not
+      pinned, their egg and fish rows are is_veg / is_vegan false). Seed version
       5 ships the 14 is_everyday flips.
       Vegan Low carb (2026-11-15, docs/plans/diet-lowcarb-vegan.md): five
       more catalog entries (tempeh F1017, edamame F1018, avocado F0455,
@@ -1580,11 +1586,33 @@ concepts:
       function for the generator and the swap sheet) and seed version 6
       ships the five is_everyday flips. Balanced and Keto plans are
       byte-identical to before.
+      Diet protein rules (2026-11-18, docs/plans/diet-protein-rules.md): a
+      Non-veg plan holds meat or egg in at least two of breakfast / lunch /
+      dinner (breakfast egg only; chicken, fish, mutton only at lunch and
+      dinner; mutton joins a slot's set by coin, the lower weight), an
+      eggetarian plan egg at breakfast and at one of lunch / dinner (egg cap
+      2), a pescatarian plan fish at lunch AND dinner (fish cap 2, never the
+      same dish twice, egg cap 1). ONE pure function, slotNeedsFor
+      (diet_plan_slot_needs.dart), draws the needs once per plan from the
+      plan's own random stream before the sampling loop; _sampleDay filters
+      the required protein role of a named slot, nothing else. Veg and
+      Vegan draw nothing (byte-identical, pinned goldens). Food types with
+      needs sample _needSampleFactor (5) times as many days (measured:
+      1x dipped five Keto T10 floor rows). Egg bhurji / omelette / boiled
+      egg hold the lunch and dinner role, the Keto-only egg dishes (F0371,
+      F0790) also mainProtein. Per-food-type caps: dietFamilyCapFor takes
+      foodType (eggetarian egg 2, pescatarian fish 2), the swap passes it.
+      Surmai (F0362) left the catalog (row stays, Search any food finds it);
+      kRetiredCatalogFamilies keeps an unstamped saved plan holding it
+      loading and counting toward the fish cap (dietCatalogFamily). Seed
+      version 8 flips F0362 is_everyday false.
     writers:
       - file: lib/features/nutrition/services/curated_diet_plan_generator.dart
         method: CuratedDietPlanGenerator.generate / generatePlan (template sampling per strategy, portion sizing, best of 40, builtFor) + curatedTemplatesFor + scaleServingDesc + dietPlanSeed
+      - file: lib/features/nutrition/services/diet_plan_slot_needs.dart
+        method: slotNeedsFor (pure; per food type the families a slot's protein role must be filled from; the generator's only caller, once per plan)
       - file: lib/features/nutrition/services/diet_plan_catalog.dart
-        method: kDietPlanCatalog / dietFamilyDailyCap / dietFamilyLowCarbCapOverride / dietFamilyLowCarbPlanCapOverride / dietCoherenceTokens (CatalogEntry.lowCarbOnly, lowCarbPlansOnly)
+        method: kDietPlanCatalog / kRetiredCatalogFamilies / dietCatalogFamily / dietFamilyDailyCap / dietFamilyLowCarbCapOverride / dietFamilyLowCarbPlanCapOverride / dietCoherenceTokens (CatalogEntry.lowCarbOnly, lowCarbPlansOnly)
         notes: |
           Imports nothing (scripts/patch_food_database_v4.dart imports it
           under `dart run`). Editing it requires re-running that script so
@@ -1595,16 +1623,17 @@ concepts:
           Vegan/veg preferences read the DB's is_vegan / is_veg fields
           AUTHORITATIVELY (diagnose d3c7a9).
       - file: lib/core/services/seed_service.dart
-        method: _foodLibraryVersion (v4 = is_everyday + v4 UPF tags + F1442-F1448; v5 = 14 Low carb / Keto ids is_everyday true; v6 = 5 Low carb plan ids is_everyday true; v7 = 10 swap-only ids is_everyday true)
+        method: _foodLibraryVersion (v4 = is_everyday + v4 UPF tags + F1442-F1448; v5 = 14 Low carb / Keto ids is_everyday true; v6 = 5 Low carb plan ids is_everyday true; v7 = 10 swap-only ids is_everyday true; v8 = F0362 Surmai is_everyday false)
       - file: lib/features/nutrition/screens/diet_plan_screen.dart
         method: _generateFreshPlan (DietPlanFlags routing, dietPlanSeed, fiberTarget from profile['fiber_grams'])
     readers:
       - file: lib/features/nutrition/services/diet_plan_catalog_rules.dart
-        method: dietFamilyCapFor / catalogEntryOffered (the strategy-aware cap and visibility, read by the generator's pool and day sampler and by the swap sheet)
+        method: dietFamilyCapFor(family, strategy, {foodType}) / dietFamilyFoodTypeCapOverride / catalogEntryOffered (the strategy- and food-type-aware cap and visibility, read by the generator's pool and day sampler and by the swap sheet)
         semantic: filtered
         notes: |
           Imports the catalog (the catalog imports nothing). Balanced:
           !lowCarbOnly; Keto: !lowCarbPlansOnly; Low carb: all. Cap:
+          food-type override (eggetarian egg 2, pescatarian fish 2), then the
           Low carb plan override, then the Low carb / Keto override, then
           the daily cap.
       - file: lib/features/nutrition/services/diet_plan_swap.dart
@@ -1639,7 +1668,10 @@ concepts:
       re-baseline that strategy's T10 rows from the built code; each
       lowered row, the amount and the reason are written in the test
       above `floors`, at most 0.05 per row (two rows by 0.03 that
-      day). A lowCarbOnly entry
+      day). The diet protein rules (2026-11-18) lowered NO floor: every
+      T5 / T10 row holds at _needSampleFactor 5 (the T3 pescatarian
+      lunch-variety bound is 4, a variety bound and not a floor: five fish
+      dishes remain). A lowCarbOnly entry
       must never reach a Balanced plan or swap (G1/G2 goldens); a
       lowCarbPlansOnly entry must never reach Keto either; added fat
       appears as an item only in Low carb / Keto.
@@ -1992,7 +2024,7 @@ concepts:
       - file: scripts/patch_food_database_v4.dart
         method: main (imports kDietPlanCatalog; one-shot, idempotent)
       - file: lib/core/services/seed_service.dart
-        method: _seedFoods (putAll at food_library_version 7; v5 flips the 14 Unit 3b Low carb / Keto ids to true, v6 the 5 Low carb plan ids, v7 the 10 swap-only ids)
+        method: _seedFoods (putAll at food_library_version 8; v5 flips the 14 Unit 3b Low carb / Keto ids to true, v6 the 5 Low carb plan ids, v7 the 10 swap-only ids, v8 sets F0362 Surmai false)
     readers:
       - file: lib/features/nutrition/services/diet_plan_swap.dart
         method: swapAlternatives
