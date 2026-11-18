@@ -12,10 +12,10 @@ extension _NutritionTargets on _ProfileScreenState {
     // Bug #24 — compute projection only when we have a real target delta
     // and a non-maintenance goal. Otherwise hide the subtitle entirely.
     String? projectionLine;
-    if ((goal == 'lose_fat' || goal == 'build_muscle') &&
-        currentKg != null &&
+    // OI-191: the ONE date-projection gate (goal, both weights, gap, direction).
+    if (currentKg != null &&
         targetKg != null &&
-        (currentKg - targetKg).abs() > 0.1) {
+        canProjectGoalDate(goal: goal, current: currentKg, target: targetKg)) {
       final p = BmrCalculator.projectGoalDate(
         currentKg: currentKg,
         targetKg: targetKg,

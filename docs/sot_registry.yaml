@@ -19159,6 +19159,69 @@ concepts:
         semantic: refuses a non-selectable goal before planning
     contract_test_path: test/contracts/goal_list_selectable_test.dart
 
+  # OI-191 (2026-11-18, diagnose b5d2e8): the goal and the target weight agree on EVERY door that changes the goal, and the
+  # calorie / protein targets follow the goal on every door.
+  - concept: goal_target_weight_agreement
+    domain: auth_profile
+    behavioral_test_path: test/contracts/goal_target_weight_two_doors_behavioral_test.dart
+    description: |
+      primary_goal and target_weight_kg are written together or not at all. ONE rule (lib/features/onboarding/
+      target_weight_check.dart validateTargetWeight: Cut strictly below current, Build strictly above, Maintain within
+      3.0 kg; a target or current weight <= 0 is missing) is shared by every door and every projection reader through
+      goalTargetAgree / canProjectGoalDate / projectionCalloutKind / journeyEtaAllowed. ONE function decides what a goal
+      change writes (lib/features/profile/services/goal_change_patch.dart goalChange: the onboarding seed only when the
+      stored target cannot stand beside the new goal, the whole recomputeDerivedTargets overlay only when the goal changed
+      or a target was seeded). Doors: onboarding Stats (validated, popup), Edit Profile (prefill on a goal change and at
+      open; Save validates and shows the SAME popup; an unchanged field saves its stored kg, never the whole-pound text),
+      coach switchGoal (patchProfileWith under the profile lock with the owner captured first: goal, seeded target and
+      targets in one write; the profile readers are invalidated on every outcome after the write). The prediction
+      follows a goal OR target change through PredictionService.refreshAfterProfileChange from both doors. Not covered, by
+      decision: the legacy chat onboarding (retained for rollback; the projection gate hides a false projection from a
+      contradictory pair it stores), LegacyGoalHealer (heals the goal and the targets, not the target weight; Edit Profile
+      seeds the target when it opens), and the Edge Function readers of a legacy stored 0.0 target (no new 0.0 is written).
+    writers:
+      - file: lib/features/profile/screens/edit_profile_screen.dart
+        method: _save / _prefillTargetForGoal / initState
+        semantic: validates the pair at Save (popup, nothing written), prefills the seed, stored-kg rule for untouched fields
+      - file: lib/features/ai_coach/services/tool_dispatcher.dart
+        method: _executeSwitchGoal
+        semantic: patchProfileWith (owner re-checked under the lock) writing goalChange(...).patch plus the audit stamps
+      - file: lib/features/profile/services/goal_change_patch.dart
+        method: goalChange / targetPrefill / resolveFieldKg
+        semantic: the one decision of what a goal change writes
+      - file: lib/features/onboarding/screens/stats_screen.dart
+        method: _onCalibrate
+        semantic: onboarding door; validateTargetWeight + the shared popup
+      - file: lib/core/services/prediction_service.dart
+        method: refreshAfterProfileChange
+        semantic: PRO one automatic regenerate, stale on a miss; free stale; owner-guarded markStale
+    readers:
+      - file: lib/features/nutrition/screens/nutrition_screen.dart
+        method: _projectionLine
+        semantic: canProjectGoalDate gate
+      - file: lib/features/profile/screens/profile/nutrition_targets.dart
+        method: _buildNutritionTargetsInner
+        semantic: canProjectGoalDate gate
+      - file: lib/features/profile/screens/profile/subscription_section.dart
+        method: _nutritionTargetsOnTap
+        semantic: canProjectGoalDate gate (the only way into the pace sheet)
+      - file: lib/features/profile/screens/reports_screen.dart
+        method: _buildProjectionCallout
+        semantic: projectionCalloutKind (the date sentence only when goal and target agree)
+      - file: lib/features/profile/screens/profile/journey_timeline.dart
+        method: _buildJourneyTimelineInner
+        semantic: journeyEtaAllowed gates the ETA line only
+      - file: lib/features/nutrition/providers/nutrition_provider.dart
+        method: _resolveBaseTargets
+        semantic: the stored daily_calories / protein / carbs / fat win over a recompute
+      - file: lib/features/ai_coach/widgets/diff_preview/switch_goal_diff.dart
+        method: _compute / build
+        semantic: GoalTargetsPreview shows the target and daily-target change from the same goalChange
+    contract_test_path: test/contracts/goal_target_weight_two_doors_behavioral_test.dart
+    fields_read: [primary_goal, target_weight_kg, current_weight_kg, daily_calories, protein_grams, carb_grams, carbs_grams, fat_grams]
+
+  # payment-hardening U1
+
   # payment-hardening U1 (OI-350 / OI-359, diagnose b5e8d2, 2026-10-24) — verify-payment proves the caller
   # owns the payment BEFORE it captures it or tells the caller anything about it.
   - concept: verify_payment_owner_before_capture

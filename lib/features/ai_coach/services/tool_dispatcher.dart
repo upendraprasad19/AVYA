@@ -11,6 +11,7 @@ import '../../../core/services/error_telemetry.dart';
 import '../../../core/services/hive_service.dart';
 import '../../../core/services/completion_prompt_store.dart';
 import '../../../core/services/hive_user_session.dart';
+import '../../../core/services/prediction_service.dart';
 import '../../../core/utils/injury_vocab.dart';
 import '../../../core/utils/ist_date.dart';
 import '../../../core/services/subscription_service.dart';
@@ -28,6 +29,8 @@ import '../../nutrition/providers/nutrition_provider.dart'
         dailyNutritionProvider,
         macroTargetsProvider,
         weeklyNutritionProvider;
+import '../../profile/providers/profile_surface_invalidation.dart';
+import '../../profile/services/goal_change_patch.dart';
 import '../../profile/services/profile_write_service.dart';
 import '../../../shared/repositories/user_repository.dart';
 import '../../profile/providers/profile_provider.dart'
@@ -40,7 +43,8 @@ import '../../train/providers/workout_surface_invalidation.dart';
 import '../../train/services/coach_day_completion.dart';
 import '../../train/services/workout_completion_bookkeeping.dart';
 import '../../train/repositories/workout_repository.dart';
-import '../providers/ai_coach_provider.dart' show chatHistoryProvider;
+import '../providers/ai_coach_provider.dart'
+    show chatHistoryProvider, predictionProvider;
 import '../providers/pending_tool_intents_provider.dart'
     show pendingToolIntentsProvider;
 import '../models/tool_intent.dart';
@@ -170,7 +174,7 @@ class ToolDispatcher {
           result = await _executePausePlan(intent);
           break;
         case 'switch_goal':
-          result = await _executeSwitchGoal(intent);
+          result = await _executeSwitchGoal(intent, ref);
           break;
         case 'create_custom_template':
           result = await _executeCreateCustomTemplate(intent);
@@ -697,6 +701,35 @@ class ToolDispatcher {
   /// Test seam (B-pass seat B F2): awaited after `modifyWorkoutForInjury`'s swap loop, before the profile write.
   @visibleForTesting
   static Future<void> Function()? debugAfterInjurySwapLoop;
+
+  /// OI-191 test seam: awaited in `switch_goal` after the plan-window sweep and
+  /// before the profile write, so a test can change the Hive owner where a real
+  /// account switch would land and see that `patchProfileWith(stillOwner:)` refuses.
+  @visibleForTesting
+  static Future<void> Function()? debugBeforeSwitchGoalProfileWrite;
+
+  /// OI-191: the prediction half of a goal or target change, shared with Edit
+  /// Profile through `PredictionService.refreshAfterProfileChange`. Never throws;
+  /// invalidates `predictionProvider` when it settles (the `ref` can be disposed
+  /// by then, so that call is guarded).
+  Future<void> _refreshPredictionAfterGoalChange(Ref ref) async {
+    try {
+      await PredictionService.instance.refreshAfterProfileChange(
+          isPro: SubscriptionService.instance.isPro());
+    } catch (e, st) {
+      unawaited(ErrorTelemetry.recordNonFatal(e, st,
+          reason: 'switch_goal_prediction_refresh'));
+    }
+    try {
+      ref.invalidate(predictionProvider);
+    } catch (e, st) {
+      debugPrint('[tool_dispatcher] invalidate predictionProvider failed: $e');
+      // A debugPrint alone is invisible in release (Hermes L34). A disposed Ref
+      // is benign, so this is a non-fatal, not an error.
+      unawaited(ErrorTelemetry.recordNonFatal(e, st,
+          reason: 'switch_goal_prediction_invalidate'));
+    }
+  }
 
   @visibleForTesting
   Future<String?> saveCoachInjuryToProfileForTest(String? bodyPart, {required String? owner}) =>
@@ -1362,7 +1395,15 @@ class ToolDispatcher {
   ///      shape as [_executeRegeneratePlanBlock] — we cannot reuse that
   ///      method directly because the dispatcher needs the success result
   ///      to carry the goal-change metadata too.
-  Future<ToolExecutionResult> _executeSwitchGoal(ToolIntent intent) async {
+  Future<ToolExecutionResult> _executeSwitchGoal(
+      ToolIntent intent, Ref ref) async {
+    // OI-191: the owner is captured before anything else, and `patchProfileWith`
+    // re-checks it under the profile lock, so a flip anywhere between here and
+    // the write (the sweep's awaits included) writes nothing. Nothing returns
+    // before the guards below, so their message order is unchanged.
+    final owner = HiveUserSession.currentOwnerFullId;
+    bool owned() =>
+        owner != null && HiveUserSession.currentOwnerFullId == owner;
     final p = intent.payload;
     final newGoal = p['new_goal'] as String?;
     if (newGoal == null || newGoal.isEmpty) {
@@ -1410,13 +1451,66 @@ class ToolDispatcher {
     // Hive-failure class as above.
     final swept = await WorkoutScheduleReadService.instance
         .sweepNonCompletedRowsPastPlanEnd();
-    final oldGoal = (rawProfile['primary_goal'])?.toString();
-    await ProfileWriteService.instance.patchProfile({
-      'primary_goal': newGoal,
-      'goal_changed_at': DateTime.now().toIso8601String(),
-      'goal_changed_via': 'ai_coach',
-      'previous_goal': oldGoal,
-    });
+    // Test seam: runs after the sweep and before the profile write, where a real
+    // account switch would land.
+    final beforeWrite = debugBeforeSwitchGoalProfileWrite;
+    if (beforeWrite != null) await beforeWrite();
+    // OI-191: goal, seeded target weight and the recomputed targets are ONE write
+    // (`goalChange`, shared with Edit Profile); `oldGoal` and the change flags are
+    // read from the lock-time profile, not from `rawProfile` above.
+    String? oldGoal;
+    var goalChanged = false;
+    var targetSeeded = false;
+    double? seededKg;
+    num? newCalories;
+    num? newProtein;
+    final wrote = await ProfileWriteService.instance.patchProfileWith(
+      (current) {
+        oldGoal = current['primary_goal']?.toString();
+        final change = goalChange(
+          current,
+          newGoal: newGoal,
+          now: DateTime.now(),
+          bodyFatCalcDisabled:
+              HiveService.instance.configBox.get('disable_bodyfat_calc') ==
+                  true,
+        );
+        goalChanged = change.goalChanged;
+        targetSeeded = change.targetSeeded;
+        seededKg = change.seededTarget;
+        newCalories = change.caloriesTo;
+        newProtein = change.proteinTo;
+        return <String, dynamic>{
+          ...change.patch,
+          'goal_changed_at': DateTime.now().toIso8601String(),
+          'goal_changed_via': 'ai_coach',
+          'previous_goal': oldGoal,
+        };
+      },
+      stillOwner: owned,
+    );
+    if (!wrote) {
+      // The signed-in account changed: nothing was written, so the cached plan
+      // for this intent can no longer be applied.
+      RegeneratePlanPlanner.instance.clearCache(intent.id);
+      return const ToolExecutionResult.failure(
+        'The signed-in account changed, so the goal was not changed.',
+      );
+    }
+    // The profile is written from here on, so every later outcome (including a
+    // failed plan regeneration) leaves the profile readers stale unless they are
+    // refreshed now; execute()'s success-only tail is not enough.
+    invalidateProfileDerivedSurfaces(ref.invalidate, source: 'switch_goal');
+    if (goalChanged || targetSeeded) {
+      unawaited(_refreshPredictionAfterGoalChange(ref));
+    }
+    // What the apply wrote beyond the goal, so the coach's next reply can say it
+    // (the preview showed the user; this is the model's own copy of the result).
+    final alsoWrote = <String, dynamic>{
+      'target_weight_kg': ?seededKg,
+      'daily_calories': ?newCalories,
+      'protein_grams': ?newProtein,
+    };
 
     // 2. Schedule writes (same shape as regenerate_plan_block).
     final wbox = HiveService.instance.workoutBox;
@@ -1501,14 +1595,16 @@ class ToolDispatcher {
 
     RegeneratePlanPlanner.instance.clearCache(intent.id);
 
+    final resultData = <String, dynamic>{
+      'old_goal': oldGoal,
+      'new_goal': newGoal,
+      'schedules': results,
+      'count': results.length,
+      'cleared': swept.workouts,
+      ...alsoWrote,
+    };
     if (errors.isEmpty) {
-      return ToolExecutionResult.success(data: {
-        'old_goal': oldGoal,
-        'new_goal': newGoal,
-        'schedules': results,
-        'count': results.length,
-        'cleared': swept.workouts,
-      });
+      return ToolExecutionResult.success(data: resultData);
     } else if (results.isEmpty) {
       // Profile already changed but plan regen totally failed — surface the
       // partial state so the user knows. Profile rollback would require a
@@ -1523,14 +1619,8 @@ class ToolDispatcher {
         'Goal updated but plan regenerate failed: ${errors.join("; ")}',
       );
     } else {
-      return ToolExecutionResult.success(data: {
-        'old_goal': oldGoal,
-        'new_goal': newGoal,
-        'schedules': results,
-        'count': results.length,
-        'cleared': swept.workouts,
-        'partial_errors': errors,
-      });
+      return ToolExecutionResult.success(
+          data: {...resultData, 'partial_errors': errors});
     }
   }
 

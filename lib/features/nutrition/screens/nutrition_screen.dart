@@ -26,6 +26,7 @@ import '../widgets/food_type_tag.dart';
 import '../widgets/todays_meals_card.dart';
 import '../widgets/weekly_chart_card.dart';
 import '../widgets/hydration_sheet.dart';
+import 'package:icanbefitter/features/onboarding/target_weight_check.dart';
 import '../widgets/log_action_row.dart';
 import '../widgets/your_foods_section.dart';
 import '../widgets/log_food_sheet.dart';
@@ -505,10 +506,10 @@ class _NutritionScreenState extends ConsumerState<NutritionScreen>
         ? profile['pace_preference'] as String
         : 'balanced';
 
-    if ((goal != 'lose_fat' && goal != 'build_muscle') ||
-        currentKg == null ||
+    // OI-191: the ONE date-projection gate (goal, both weights, gap, direction).
+    if (currentKg == null ||
         targetKg == null ||
-        (currentKg - targetKg).abs() <= 0.1) {
+        !canProjectGoalDate(goal: goal, current: currentKg, target: targetKg)) {
       return null;
     }
 
