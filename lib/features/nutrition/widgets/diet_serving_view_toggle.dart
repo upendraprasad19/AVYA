@@ -43,26 +43,33 @@ class DietServingViewToggle extends ConsumerWidget {
           child: Padding(
             padding: const EdgeInsets.symmetric(vertical: 3),
             child: Container(
-              padding: const EdgeInsets.all(2),
+              padding: const EdgeInsets.all(1),
               decoration: BoxDecoration(
                 color: AppColors.bgRaise,
                 border: Border.all(color: AppColors.line2),
                 borderRadius: BorderRadius.circular(AppRadius.sharp),
               ),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  _line(
-                    'PORTIONS',
-                    !grams,
-                    const ValueKey('diet_serving_view_portions'),
-                  ),
-                  _line(
-                    'GRAMS',
-                    grams,
-                    const ValueKey('diet_serving_view_grams'),
-                  ),
-                ],
+              // IntrinsicWidth + stretch: both segments take the width of the
+              // longer label, so the gold fill of the active one always spans
+              // the whole control (polish, 2026-11-18).
+              child: IntrinsicWidth(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    _line(
+                      'PORTIONS',
+                      !grams,
+                      const ValueKey('diet_serving_view_portions'),
+                    ),
+                    const SizedBox(height: 2),
+                    _line(
+                      'GRAMS',
+                      grams,
+                      const ValueKey('diet_serving_view_grams'),
+                    ),
+                  ],
+                ),
               ),
             ),
           ),
@@ -83,10 +90,17 @@ class DietServingViewToggle extends ConsumerWidget {
     );
   }
 
+  // Each option is its own chip: the active one is filled gold, the other a
+  // visible outlined chip (not bare text), so both read as choices.
   static Widget _line(String label, bool selected, Key key) => Container(
     key: key,
-    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
-    color: selected ? AppColors.accent : Colors.transparent,
+    alignment: Alignment.center,
+    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+    decoration: BoxDecoration(
+      color: selected ? AppColors.accent : Colors.transparent,
+      border: Border.all(color: selected ? AppColors.accent : AppColors.line2),
+      borderRadius: BorderRadius.circular(AppRadius.sharp),
+    ),
     child: Text(
       label,
       maxLines: 1,

@@ -276,6 +276,31 @@ void main() {
       expect(_semValue(tester), 'Portions');
     });
 
+    testWidgets('both option chips are the same width in either view, so the '
+        'active fill spans the whole control (polish)', (tester) async {
+      for (final v in DietServingView.values) {
+        await tester.pumpWidget(
+          ProviderScope(
+            overrides: [
+              userProfileProvider.overrideWith(_FakeProfile.new),
+              dietServingViewProvider.overrideWith((ref) => v),
+            ],
+            child: const MaterialApp(
+              home: Scaffold(body: Center(child: DietServingViewToggle())),
+            ),
+          ),
+        );
+        await tester.pump();
+        final p = tester.getSize(
+          find.byKey(const ValueKey('diet_serving_view_portions')),
+        );
+        final g = tester.getSize(
+          find.byKey(const ValueKey('diet_serving_view_grams')),
+        );
+        expect(g.width, p.width, reason: '$v');
+      }
+    });
+
     testWidgets('a Grams view shows Grams at once', (tester) async {
       await tester.pumpWidget(
         ProviderScope(
