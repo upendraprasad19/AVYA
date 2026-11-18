@@ -5,6 +5,8 @@ blast_radius: account
 review_rounds: 3
 ground_truth_verified: true
 verdict: converged
+bpass: accepted
+bpass_review: docs/reviews/df5bea73-review.md
 ---
 
 # Plan-review record: OI-191 target weight and calorie targets agree with the goal (account)
