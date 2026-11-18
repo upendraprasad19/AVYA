@@ -1,6 +1,10 @@
 import 'package:icanbefitter/core/services/water_target_service.dart';
 import 'package:icanbefitter/core/utils/bmr_calculator.dart';
 
+/// The weight (kg) the stored calorie / protein targets were last built from (goal-change-targets
+/// B2). Local only: never pushed (the push whitelist is explicit) and not a derivation input.
+const String kTargetsBasisWeightKey = 'targets_basis_weight_kg';
+
 /// The profile keys the derivation READS. Exposed so callers can ask the one
 /// question that decides whether a recompute is warranted at all: did anything
 /// this calculation depends on actually change?
@@ -153,6 +157,8 @@ Map<String, dynamic>? recomputeDerivedTargets(
   return <String, dynamic>{
     ...targets.toMap(),
     'activity_level': resolvedActivity,
+    // B2: the weight these targets were computed from, in the SAME write as the targets.
+    kTargetsBasisWeightKey: weight,
     // N3 (review round 2): `water_target_ml` is the EIGHTH derived field —
     // computed from weight / days_per_week / lifestyle_activity, all of which
     // are already inputs above — and the per-key merge could leave it beside a

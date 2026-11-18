@@ -1,11 +1,13 @@
 import 'dart:async';
 
-import 'package:flutter/foundation.dart' show ValueNotifier;
+import 'package:flutter/foundation.dart' show ValueNotifier, visibleForTesting;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:icanbefitter/core/constants/diet_strategies.dart';
 import 'package:icanbefitter/core/services/error_telemetry.dart';
 import 'package:icanbefitter/core/services/health_write_service.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
+import 'package:icanbefitter/core/services/hive_user_session.dart';
+import 'package:icanbefitter/core/services/legacy_goal_healer.dart';
 import 'package:icanbefitter/core/services/nutrition_read_service.dart';
 import 'package:icanbefitter/core/services/migrated_key.dart';
 import 'package:icanbefitter/core/services/subscription_service.dart';
@@ -25,7 +27,9 @@ import 'package:icanbefitter/features/auth/providers/auth_invalidation_provider.
 import 'package:icanbefitter/features/nutrition/repositories/nutrition_repository.dart';
 import 'package:icanbefitter/features/nutrition/services/diet_strategy_flags.dart';
 import 'package:icanbefitter/features/profile/providers/profile_provider.dart';
+import 'package:icanbefitter/features/profile/providers/profile_surface_invalidation.dart';
 import 'package:icanbefitter/features/profile/services/profile_write_service.dart';
+import 'package:icanbefitter/features/profile/services/weigh_in_target_refresh.dart';
 import 'package:icanbefitter/features/train/repositories/workout_repository.dart';
 import 'package:icanbefitter/shared/repositories/plan_engine/plan_engine_flags.dart';
 
@@ -905,14 +909,19 @@ class WeightLogNotifier extends Notifier<void> {
   @override
   void build() {}
 
-  Future<void> logWeight(double weightKg) async {
+  /// Test seam (goal-change-targets B2): awaited after the health write and before the profile
+  /// patch, so a test can change the Hive owner where a real account switch would land.
+  @visibleForTesting
+  static Future<void> Function()? debugBeforeProfileWrite;
+
+  Future<WeightLogResult> logWeight(double weightKg) async {
     // audit-2026-05-16 task E.7 — routes through HealthWriteService so
     // the `weight_<istDate>` key is IST-anchored and the syncWeightNow
     // + pushSnapshot fan-out lives in a single canonical place. The
     // companion profile mutation stays here (the service is scoped to
     // healthBox writes).
     //
-    // Bug w7r4c3 (APK Test #16.2) — must be Future<void> + awaitable.
+    // Bug w7r4c3 (APK Test #16.2) — must be Future + awaitable.
     // HealthWriteService.logWeight does `await _acquireLock` BEFORE
     // `box.put`, so the Hive write is strictly async. If the caller
     // (WeightLogSheet._save / ConversationalLogHandler._logWeight)
@@ -920,17 +929,67 @@ class WeightLogNotifier extends Notifier<void> {
     // this method returns, the provider rebuilds reading stale Hive
     // BEFORE the put microtask runs and the entries-count footer shows
     // a stale value. The await below collapses the race.
-    await HealthWriteService.instance.logWeight(
+    final owner = HiveUserSession.currentOwnerFullId;
+    final health = await HealthWriteService.instance.logWeight(
       date: DateTime.now(),
       weightKg: weightKg,
       source: WriteSource.manual,
     );
-    // Also update profile current_weight_kg via canonical write
-    // service (audit 2026-05-20 A4). ProfileWriteService.updateField
-    // handles the merge under mutex, stamps `updated_at`, and fires
-    // syncProfileNow internally — no need to call it explicitly here.
-    await ProfileWriteService.instance.updateField('current_weight_kg', weightKg);
+    final beforeWrite = debugBeforeProfileWrite;
+    if (beforeWrite != null) await beforeWrite();
+
+    // goal-change-targets B2: ONE profile patch under the profile lock. It always writes the RAW
+    // weigh-in as `current_weight_kg` (every reader of it is unchanged); on top of that the
+    // 7-day mean may refresh the targets (see weigh_in_target_refresh.dart). The refresh runs in
+    // its own try / catch: any throw leaves the plain raw-weight write, exactly as before.
+    final killSwitch = HiveService.instance.configBox
+            .get(LegacyGoalHealer.recomputeKillSwitch) ==
+        true;
+    final bodyFatOff =
+        HiveService.instance.configBox.get('disable_bodyfat_calc') == true;
+    WeighInRefresh? refresh;
+    final wrote = await ProfileWriteService.instance.patchProfileWith(
+      (current) {
+        final patch = <String, dynamic>{'current_weight_kg': weightKg};
+        if (!health.success || killSwitch) return patch;
+        try {
+          final kgs = recentWeighInKgs(
+            HiveService.instance.healthBox.toMap().entries,
+            istDateStr(DateTime.now()),
+          );
+          final r = weighInTargetRefresh(
+            Map<String, dynamic>.from(current),
+            smoothedKg: smoothedWeightKg(kgs, weightKg),
+            now: DateTime.now(),
+            bodyFatCalcDisabled: bodyFatOff,
+          );
+          if (r.patch != null) patch.addAll(r.patch!);
+          refresh = r;
+        } catch (e, st) {
+          unawaited(ErrorTelemetry.recordNonFatal(e, st,
+              reason: 'weigh_in_target_refresh'));
+        }
+        return patch;
+      },
+      stillOwner: () => HiveUserSession.currentOwnerFullId == owner,
+    );
     BadgeService.instance.checkAll();
+    final r = refresh;
+    final moved = wrote && r != null && r.targetsMoved;
+    if (moved) {
+      invalidateProfileDerivedSurfaces(ref.invalidate, source: 'weigh_in');
+      // The health write's own snapshot push ran before this profile patch, so the server
+      // snapshot would keep the old calories.
+      unawaited(SyncService.instance.pushSnapshot());
+    }
+    return WeightLogResult(
+      wrote: wrote,
+      targetsMoved: moved,
+      caloriesFrom: moved ? r.caloriesFrom : null,
+      caloriesTo: moved ? r.caloriesTo : null,
+      proteinFrom: moved ? r.proteinFrom : null,
+      proteinTo: moved ? r.proteinTo : null,
+    );
   }
 }
 

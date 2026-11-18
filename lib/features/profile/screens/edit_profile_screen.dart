@@ -23,7 +23,10 @@ import 'package:icanbefitter/features/onboarding/target_weight_check.dart';
 import 'package:icanbefitter/features/onboarding/widgets/target_weight_dialog.dart';
 import 'package:icanbefitter/features/profile/providers/profile_surface_invalidation.dart';
 import 'package:icanbefitter/features/profile/services/goal_change_patch.dart';
+import 'package:icanbefitter/core/copy/target_impact_copy.dart';
 import 'package:icanbefitter/core/theme/colors.dart';
+import 'package:icanbefitter/features/profile/services/target_impact.dart';
+import 'package:icanbefitter/features/profile/widgets/target_impact_dialog.dart';
 import 'package:icanbefitter/core/theme/typography.dart';
 import 'package:icanbefitter/core/theme/spacing.dart';
 import 'package:icanbefitter/core/utils/age_floor.dart';
@@ -137,6 +140,7 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
   String? _bodyFatAssessedAt;
   bool _isAssessingBf = false;
   bool _isSaving = false;
+  Map<String, dynamic> _profileAtOpen = const <String, dynamic>{};
   late bool _isMetric; // true = KG/CM, false = LBS/IN
 
   // Track original plan-affecting values for rescheduling detection.
@@ -223,6 +227,10 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
     super.initState();
     _isMetric = UserRepository.instance.getUnitsMetric();
     final profile = ref.read(userProfileProvider);
+    // goal-change-targets B3: the profile as the form OPENED, so Save's "Targets updated" dialog
+    // also reports a body-fat assessment persisted while the form was open (that door recomputes
+    // nothing and Save applies it).
+    _profileAtOpen = Map<String, dynamic>.from(profile);
 
     final fullNameAtRead = profile['full_name'] as String?;
     // APK Test #12.8 — probe for "edit profile shows blank name even
@@ -2119,6 +2127,11 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
 
       await ref.read(userProfileProvider.notifier).updateProfile(updates);
       await ref.read(userProfileProvider.notifier).recalculateTargets();
+      // goal-change-targets B3: what this Save did to the targets (null = nothing to say).
+      final targetImpact =
+          targetImpactFor(_profileAtOpen, ref.read(userProfileProvider));
+      final savedPlanExists = UserRepository.instance.getSavedDietPlan() != null;
+      var impactShown = false;
 
       // a2b-2 (single-owner batch, 2026-09-27): lock any of the three
       // coach-extraction-shared fields the user ACTUALLY changed this save,
@@ -2246,6 +2259,7 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
           changes.add('Injuries: ${_originalInjuries.length} → ${_injuries.length} listed');
         }
 
+        impactShown = targetImpact != null;
         final shouldReschedule = await showDialog<bool>(
           context: context,
           barrierDismissible: false,
@@ -2286,6 +2300,17 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
                   'Regenerate future workouts from today? Past completed workouts will be kept.',
                   style: AppTypography.bodySm.copyWith(color: AppColors.textDim),
                 ),
+                if (targetImpact != null) ...[
+                  const SizedBox(height: 12),
+                  Text(
+                    TargetImpactCopy.alreadyUpdatedEyebrow,
+                    style: AppTypography.monoXs.copyWith(
+                        color: AppColors.textMute, letterSpacing: 2),
+                  ),
+                  const SizedBox(height: 4),
+                  TargetImpactLines(
+                      impact: targetImpact, savedPlanExists: savedPlanExists),
+                ],
               ],
             ),
             actions: [
@@ -2358,6 +2383,11 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
             .whenComplete(() {
           if (mounted) ref.invalidate(predictionProvider);
         }));
+      }
+
+      if (mounted && targetImpact != null && !impactShown) {
+        await showTargetImpactDialog(context,
+            impact: targetImpact, savedPlanExists: savedPlanExists);
       }
 
       if (mounted) {

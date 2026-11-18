@@ -39,6 +39,8 @@ import '../services/diet_plan_strategy_state.dart';
 import '../widgets/diet_plan_macro_cards.dart';
 import '../widgets/diet_plan_food_search_sheet.dart';
 import '../widgets/diet_plan_swap_sheet.dart';
+import '../services/diet_plan_stale_targets.dart';
+import '../widgets/diet_plan_stale_banner.dart';
 import '../widgets/diet_plan_totals_row.dart';
 import '../widgets/diet_plan_settings_row.dart';
 import '../widgets/diet_supplements_section.dart';
@@ -93,6 +95,13 @@ class _DietPlanScreenState extends ConsumerState<DietPlanScreen> {
   int _planEpoch = 0;
   // Unit 4a: whether the shown plan was built with Supplements active.
   bool _planSupplements = false;
+  // goal-change-targets B4: the calorie / protein targets the shown plan was built for (null for a
+  // plan saved before the stamp existed, and for a profile that cannot produce real targets).
+  // Set by every generation and load; _savePlan writes exactly this, so a Save never launders a
+  // stale plan with the new numbers.
+  TargetStamp? _planStamp;
+  // The (stamp, current) pair whose banner the user dismissed; the banner returns on a new pair.
+  String? _dismissedStale;
   // Diet chart v3: the strategy a swap dropped the plan from (offers "Back
   // to"), and a guard so one pick, its PRO gate and its dialog run at a time.
   DietStrategy? _droppedFrom;
@@ -331,6 +340,9 @@ class _DietPlanScreenState extends ConsumerState<DietPlanScreen> {
     debugDietPlanGenerations++;
     _mealPlans = meals.map(_servicePlanToScreenPlan).toList();
     _planSupplements = withSupplements;
+    _planStamp = resolveBaseMacroPack(UserRepository.instance.getProfile()) == null
+        ? null
+        : (calories: calorieTarget, protein: proteinTarget);
     _requestedStrategy = request.strategy;
     _planStrategy = built.builtFor;
     _droppedFrom = null;
@@ -372,6 +384,11 @@ class _DietPlanScreenState extends ConsumerState<DietPlanScreen> {
       // Unit 4a: stamped only when the plan was built with Supplements
       // active (savedPlanMatchesSupplements reads it).
       if (_planSupplements) 'diet_supplements': true,
+      // goal-change-targets B4: the targets this plan was built for (omitted when unknown).
+      if (_planStamp case final stamp?) ...{
+        kDietTargetCaloriesKey: stamp.calories,
+        kDietTargetProteinKey: stamp.protein,
+      },
       // Stamped only with the flag on: the strategy the plan was BUILT for
       // (Unit 3b §3.6; savedPlanMatchesStrategy reads it).
       if (DietStrategyFlags.enabled) 'diet_strategy': _planStrategy.storageKey,
@@ -465,6 +482,7 @@ class _DietPlanScreenState extends ConsumerState<DietPlanScreen> {
     _droppedFrom = null;
     _planSupplements =
         DietSupplementsFlags.enabled && planData['diet_supplements'] == true;
+    _planStamp = dietTargetStampOfSaved(planData);
     _planEpoch++;
     if (mounted) setState(() => _saved = true);
   }
@@ -626,6 +644,10 @@ class _DietPlanScreenState extends ConsumerState<DietPlanScreen> {
                         key: const ValueKey('diet_plan_strategy_note'),
                         style: AppTypography.body.copyWith(
                             fontSize: 13, color: AppColors.textDim)),
+                  ],
+                  if (_staleBanner(targets) case final banner?) ...[
+                    const SizedBox(height: 8),
+                    banner,
                   ],
                   const SizedBox(height: 12),
                   ..._mealPlans.asMap().entries.map((entry) {

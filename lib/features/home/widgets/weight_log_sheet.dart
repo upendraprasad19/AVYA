@@ -1,3 +1,4 @@
+import 'package:icanbefitter/core/copy/target_impact_copy.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -106,7 +107,8 @@ class _WeightLogSheetState extends ConsumerState<WeightLogSheet> {
     // before invalidating, otherwise the provider rebuilds reading
     // stale Hive and the entries-count footer stays at the prior value
     // while the chart picks up the new dot on a later rebuild.
-    await ref.read(weightLogNotifierProvider.notifier).logWeight(_weight);
+    final result =
+        await ref.read(weightLogNotifierProvider.notifier).logWeight(_weight);
     if (!mounted) return;
     ref.invalidate(weightHistoryProvider);
     ref.invalidate(todayWeightLoggedProvider);
@@ -116,7 +118,14 @@ class _WeightLogSheetState extends ConsumerState<WeightLogSheet> {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(
-          'Weight logged \u2713',
+          result.targetsMoved
+              ? TargetImpactCopy.weighInSnackbar(
+                  caloriesFrom: result.caloriesFrom,
+                  caloriesTo: result.caloriesTo ?? 0,
+                  proteinFrom: result.proteinFrom,
+                  proteinTo: result.proteinTo ?? 0,
+                )
+              : 'Weight logged \u2713',
           style: AppTypography.body.copyWith(
             color: AppColors.textPrimary,
             fontWeight: FontWeight.w700,
@@ -124,7 +133,7 @@ class _WeightLogSheetState extends ConsumerState<WeightLogSheet> {
         ),
         backgroundColor: AppColors.card,
         behavior: SnackBarBehavior.floating,
-        duration: const Duration(seconds: 2),
+        duration: Duration(seconds: result.targetsMoved ? 5 : 2),
       ),
     );
   }

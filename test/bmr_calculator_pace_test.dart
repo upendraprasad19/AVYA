@@ -108,13 +108,22 @@ void main() {
       expect(agg.weeks, lessThan(balanced.weeks));
     });
 
-    test('within 2kg forces slow pace floor of 4 weeks', () {
+    test('within 2kg the chosen pace applies (goal-change-targets B1)', () {
+      final agg = BmrCalculator.projectGoalDate(
+          currentKg: 80, targetKg: 79, pacePreference: 'aggressive');
+      final slow = BmrCalculator.projectGoalDate(
+          currentKg: 80, targetKg: 79, pacePreference: 'slow');
+      // aggressive is 0.75 %/week: 1 / (80 * 0.0075) = 1.67 weeks, not the old
+      // forced-slow four-week floor; slow is 5 weeks.
+      expect(agg.weeks, closeTo(1.667, 0.01));
+      expect(agg.weeks, lessThan(slow.weeks));
+      expect(slow.weeks, closeTo(5.0, 0.01));
+    });
+
+    test('the projection is never under one week', () {
       final p = BmrCalculator.projectGoalDate(
-        currentKg: 80,
-        targetKg: 79,
-        pacePreference: 'aggressive', // should be ignored / clamped
-      );
-      expect(p.weeks, greaterThanOrEqualTo(4.0));
+          currentKg: 80, targetKg: 79.8, pacePreference: 'aggressive');
+      expect(p.weeks, 1.0);
     });
 
     test('current == target yields zero weeks (no projection needed)', () {

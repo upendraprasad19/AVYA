@@ -30,14 +30,14 @@ String _strip(String src) => src
     .join('\n');
 
 void main() {
-  test('w7r4c3 — WeightLogNotifier.logWeight returns Future<void>', () {
+  test('w7r4c3 — WeightLogNotifier.logWeight returns an awaitable Future (WeightLogResult since goal-change-targets B2)', () {
     final src = _strip(
         File('lib/features/home/providers/home_provider.dart')
             .readAsStringSync());
     expect(
-      src.contains(RegExp(r'Future<void>\s+logWeight\s*\(\s*double\s+weightKg\s*\)\s*async')),
+      src.contains(RegExp(r'Future<WeightLogResult>\s+logWeight\s*\(\s*double\s+weightKg\s*\)\s*async')),
       isTrue,
-      reason: 'WeightLogNotifier.logWeight must be Future<void> async '
+      reason: 'WeightLogNotifier.logWeight must be Future<WeightLogResult> async '
           '(not void) so callers can await before invalidating readers.',
     );
   });

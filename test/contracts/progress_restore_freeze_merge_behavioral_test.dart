@@ -664,13 +664,15 @@ void main() {
     // B-pass reviewer A F6: the sign-in hydrate is the one writer of this merge
     // that no restore test reaches, and its push is the only thing that stops a
     // stale cloud row from winning on the NEXT restore. Drive the real method.
-    Future<void> hydrate(Map<String, dynamic> cloudProgress) async {
+    Future<void> hydrate(Map<String, dynamic> cloudProgress,
+        {Map<String, dynamic>? profileRow}) async {
       h.server.getResponders['user_profile'] = (_) => [
-            {
-              'user_id': kTestUserId,
-              'primary_goal': 'build_muscle',
-              'height_cm': 175,
-            }
+            profileRow ??
+                {
+                  'user_id': kTestUserId,
+                  'primary_goal': 'build_muscle',
+                  'height_cm': 175,
+                }
           ];
       h.server.getResponders['user_progress'] = (_) => [cloudProgress];
       addTearDown(h.server.getResponders.clear);
@@ -684,6 +686,49 @@ void main() {
       );
       await AuthSessionBootstrapper.instance.hydrateFromCloud(user);
     }
+
+    test('SIGN-IN HYDRATE (goal-change-targets B2b): a cloud weight over a local profile '
+        'recomputes the targets and writes the basis; a fresh device keeps the cloud targets',
+        () async {
+      Map<String, dynamic> inputs(double kg) => {
+            'current_weight_kg': kg,
+            'height_cm': 178.0,
+            'date_of_birth': '1995-06-15',
+            'gender': 'male',
+            'primary_goal': 'lose_fat',
+            'lifestyle_activity': 'moderately_active',
+            'days_per_week': 4,
+            'pace_preference': 'balanced',
+            'target_weight_kg': 70.0,
+          };
+      final local = {
+        ...inputs(80),
+        'daily_calories': 2111,
+        'protein_grams': 150,
+      };
+      await HiveService.instance.userBox.put('profile', local);
+      final profileCloud = {
+        'user_id': kTestUserId,
+        ...inputs(74),
+        'daily_calories': 2111,
+        'protein_grams': 150,
+      };
+      await hydrate(cloudRow(avail: 1, lastRefill: _o), profileRow: profileCloud);
+      final merged = Map<String, dynamic>.from(
+          HiveService.instance.userBox.get('profile') as Map);
+      expect(merged['current_weight_kg'], 74);
+      expect(merged['targets_basis_weight_kg'], 74.0);
+      expect(merged['daily_calories'], isNot(2111),
+          reason: 'the targets were recomputed for the cloud weight');
+
+      // A fresh device (no local profile): the cloud targets stay verbatim.
+      await HiveService.instance.userBox.delete('profile');
+      await hydrate(cloudRow(avail: 1, lastRefill: _o), profileRow: profileCloud);
+      final fresh = Map<String, dynamic>.from(
+          HiveService.instance.userBox.get('profile') as Map);
+      expect(fresh['daily_calories'], 2111);
+      expect(fresh.containsKey('targets_basis_weight_kg'), isFalse);
+    });
 
     test('SIGN-IN HYDRATE: a stale cloud row leaves local {2,P} and PUSHES it '
         '(behavioral)', () async {

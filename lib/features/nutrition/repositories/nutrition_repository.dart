@@ -578,6 +578,7 @@ class NutritionRepository {
           pacePreference:
               (profile['pace_preference'] as String?) ?? 'balanced',
           bodyFatPercent: bodyFat,
+          targetWeightKg: (profile['target_weight_kg'] as num?)?.toDouble(),
         );
         return targets.dailyCalories.toDouble();
       }
