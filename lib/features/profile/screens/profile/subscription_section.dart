@@ -256,10 +256,10 @@ extension _SubscriptionSection on _ProfileScreenState {
     required String goal,
     required String pacePreference,
   }) {
-    if ((goal != 'lose_fat' && goal != 'build_muscle') ||
-        currentKg == null ||
+    // OI-191: the same single gate as the projection line itself.
+    if (currentKg == null ||
         targetKg == null ||
-        (currentKg - targetKg).abs() <= 0.1) {
+        !canProjectGoalDate(goal: goal, current: currentKg, target: targetKg)) {
       return null;
     }
     return () => _showPaceDetailSheet(

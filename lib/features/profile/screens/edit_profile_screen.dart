@@ -19,6 +19,10 @@ import 'package:icanbefitter/core/constants/fitness_goals.dart';
 import 'package:icanbefitter/core/services/legacy_goal_healer.dart';
 import 'package:icanbefitter/core/services/sync_service.dart';
 import 'package:icanbefitter/core/services/prediction_service.dart';
+import 'package:icanbefitter/features/onboarding/target_weight_check.dart';
+import 'package:icanbefitter/features/onboarding/widgets/target_weight_dialog.dart';
+import 'package:icanbefitter/features/profile/providers/profile_surface_invalidation.dart';
+import 'package:icanbefitter/features/profile/services/goal_change_patch.dart';
 import 'package:icanbefitter/core/theme/colors.dart';
 import 'package:icanbefitter/core/theme/typography.dart';
 import 'package:icanbefitter/core/theme/spacing.dart';
@@ -42,7 +46,6 @@ import 'package:icanbefitter/features/train/providers/train_provider.dart';
 import 'package:icanbefitter/features/ai_coach/providers/ai_coach_provider.dart';
 import 'package:icanbefitter/core/services/workout_schedule_service.dart';
 import '../providers/profile_provider.dart';
-import '../providers/profile_completeness_provider.dart';
 import 'package:icanbefitter/core/constants/equipment_defaults.dart';
 import 'package:icanbefitter/shared/repositories/plan_engine/session_budget.dart';
 
@@ -180,6 +183,26 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
 
   // Track original target weight for prediction invalidation (Bug #12)
   late double _originalTargetWeight;
+
+  // OI-191: what the form itself put in the weight and target fields, and the
+  // exact kg behind that text. `_save` reads a field whose text still equals its
+  // initial text as the stored kg (imperial fields show whole pounds, so
+  // re-converting them drifts). They are captured AFTER any prefill and updated
+  // together with every later prefill, so an untouched prefilled target saves
+  // exactly the seed.
+  late String _initialWeightText;
+  late String _initialTargetText;
+  double? _storedWeightKg;
+  double? _storedTargetKg;
+  /// The target the profile held when the form opened (restored when a goal
+  /// round trip comes back to a goal it fits).
+  double? _originalStoredTargetKg;
+  /// The target field still holds a value the form prefilled, not a typed one.
+  bool _targetIsPriorPrefill = false;
+  /// The goal the form OPENED on (healed from a legacy goal): the baseline for
+  /// "did the user change the goal", so a legacy `strength` profile's untouched
+  /// Save does not look like a goal change.
+  late String _initialHealedGoal;
 
   // Unit 3B (founder d69 / d73): the goals a user can choose, named from the one
   // FitnessGoals table (Build / Cut / Maintain). Strength and Recomposition are
@@ -380,6 +403,60 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
     _originalDietStrategy = _dietStrategy;
     _originalLifestyleActivity = _lifestyleActivity;
     _originalTargetWeight = targetKgRaw ?? 0.0;
+
+    // OI-191: remember what the form shows, then prefill the target when the
+    // stored one cannot stand beside the goal the form opened on (a legacy 0.0, a
+    // legacy-healed goal, a pair an older coach switch left contradictory).
+    // Visible in the field, never silent in what is saved.
+    _initialHealedGoal = _goal;
+    _storedWeightKg = weightKgRaw;
+    _storedTargetKg = targetKgRaw;
+    _originalStoredTargetKg = targetKgRaw;
+    _initialWeightText = _weightController.text;
+    _initialTargetText = _targetWeightController.text;
+    final openSeed = targetPrefill(
+      goal: _goal,
+      currentKg: weightKgRaw,
+      targetKg: targetKgRaw,
+    );
+    if (openSeed != null) _applyTargetPrefill(openSeed);
+  }
+
+  /// Puts [kg] in the target field and records it as what the form put there.
+  void _applyTargetPrefill(double kg) {
+    _targetWeightController.text = weightFieldText(kg, metric: _isMetric);
+    _initialTargetText = _targetWeightController.text;
+    _storedTargetKg = kg;
+    _targetIsPriorPrefill = true;
+  }
+
+  /// A goal change in the form: when the target on screen cannot stand beside
+  /// the new goal, replace it (the seed, or the target the profile opened with
+  /// when that fits). A target that fits is never touched.
+  void _prefillTargetForGoal() {
+    final currentKg = resolveFieldKg(
+      text: _weightController.text,
+      initialText: _initialWeightText,
+      storedKg: _storedWeightKg,
+      parsed: double.tryParse(_weightController.text),
+      metric: _isMetric,
+    );
+    final targetKg = resolveFieldKg(
+      text: _targetWeightController.text,
+      initialText: _initialTargetText,
+      storedKg: _storedTargetKg,
+      parsed: double.tryParse(_targetWeightController.text),
+      metric: _isMetric,
+    );
+    final seed = targetPrefill(
+      goal: _goal,
+      currentKg: currentKg,
+      targetKg: targetKg,
+      originalStoredTargetKg: _originalStoredTargetKg,
+      priorPrefill: _targetIsPriorPrefill &&
+          _targetWeightController.text.trim() == _initialTargetText.trim(),
+    );
+    if (seed != null) _applyTargetPrefill(seed);
   }
 
   @override
@@ -544,7 +621,15 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
                 label: 'Goal',
                 value: _goal,
                 options: _goals,
-                onChanged: (v) => setState(() => _goal = v!),
+                onChanged: (v) {
+                  // Re-tapping the goal already chosen is not a goal change: it
+                  // must not touch a target the user typed (OI-191).
+                  if (v == null || v == _goal) return;
+                  setState(() {
+                    _goal = v;
+                    _prefillTargetForGoal(); // OI-191
+                  });
+                },
               ),
               const SizedBox(height: AppSpacing.gridGap),
               _buildDropdown(
@@ -1891,21 +1976,58 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
         return;
       }
     }
-    // Always store in kg.
-    final weight = _isMetric ? weightRaw : weightRaw / 2.20462;
+    // Always store in kg. A field the user did not touch keeps its stored kg
+    // (OI-191: whole-pound text must not be re-converted).
+    final weight = resolveFieldKg(
+      text: _weightController.text,
+      initialText: _initialWeightText,
+      storedKg: _storedWeightKg,
+      parsed: weightRaw,
+      metric: _isMetric,
+    )!;
 
+    // OI-191: an EMPTY target is "missing" (the validator answers it below), no
+    // longer a stored 0.0; a typed value must be a number inside the weight range.
     final targetWeightText = _targetWeightController.text.trim();
-    final targetWeightRaw = targetWeightText.isEmpty
-        ? 0.0
-        : double.tryParse(targetWeightText);
-    if (targetWeightRaw == null || (_isMetric ? targetWeightRaw > 300 : targetWeightRaw > 661)) {
+    final targetWeightRaw =
+        targetWeightText.isEmpty ? null : double.tryParse(targetWeightText);
+    // An UNTOUCHED field keeps its stored kg and is judged by the goal rule
+    // alone (a stored value below the typing range must not block every Save).
+    final targetEdited = targetWeightText != _initialTargetText.trim();
+    if (targetEdited &&
+        targetWeightText.isNotEmpty &&
+        (targetWeightRaw == null ||
+            (_isMetric
+                ? (targetWeightRaw < 30 || targetWeightRaw > 300)
+                : (targetWeightRaw < 66 || targetWeightRaw > 661)))) {
       _showError(_isMetric
-          ? 'Target weight must be between 0 and 300 kg.'
-          : 'Target weight must be between 0 and 661 lbs.');
+          ? 'Target weight must be between 30 and 300 kg.'
+          : 'Target weight must be between 66 and 661 lbs.');
       return;
     }
-    // Always store in kg.
-    final targetWeight = _isMetric ? targetWeightRaw : targetWeightRaw / 2.20462;
+    final targetWeight = resolveFieldKg(
+      text: _targetWeightController.text,
+      initialText: _initialTargetText,
+      storedKg: _storedTargetKg,
+      parsed: targetWeightRaw,
+      metric: _isMetric,
+    );
+
+    // OI-191: the goal and the target weight must agree (the onboarding rule and
+    // the onboarding popup). Nothing is written when they do not.
+    final targetCheck = validateTargetWeight(
+      goal: _goal,
+      current: weight,
+      target: targetWeight,
+    );
+    if (targetCheck != TargetWeightCheck.ok) {
+      await showTargetWeightDialog(
+        context,
+        targetWeightMessage(targetCheck, weight,
+            editing: true, metric: _isMetric),
+      );
+      return;
+    }
 
     setState(() => _isSaving = true);
 
@@ -1937,7 +2059,7 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
         'gender': _gender,
         'height_cm': height,
         'current_weight_kg': weight,
-        'target_weight_kg': targetWeight,
+        'target_weight_kg': ?targetWeight,
         'primary_goal': _goal,
         'equipment_access': _equipment,
         'equipment_exclusions': _equipmentExclusions, // ⑥ C1
@@ -2033,15 +2155,11 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
       }
 
       // Refresh downstream views that cache profile-derived targets/state.
-      ref.invalidate(userStatsProvider);
-      ref.invalidate(nutritionSummaryProvider);
-      ref.invalidate(dailyNutritionProvider);
-      ref.invalidate(macroTargetsProvider);
-      // Profile completeness nudge caches its tier-1/tier-2 count until
-      // invalidated. Without this, the progress bar stays at the pre-save
-      // value until the app is force-restarted. Observed 2026-04-17 on
-      // icanbefitter@gmail.com — bar stuck at 61% until a kill-and-relaunch.
-      ref.invalidate(profileCompletenessProvider);
+      // OI-191: the one list the coach `switchGoal` also invalidates (user
+      // profile, stats, nutrition summary / daily / macro targets, and the
+      // profile completeness nudge, which caches its tier-1/tier-2 count until
+      // invalidated: observed 2026-04-17, bar stuck at 61% until a relaunch).
+      invalidateProfileDerivedSurfaces(ref.invalidate, source: 'edit_profile');
       // Refresh home screen name/greeting — these are separate providers
       // in home_provider.dart that cache the name independently.
       ref.invalidate(userFirstNameProvider);
@@ -2224,36 +2342,22 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
       }
       unawaited(SyncService.instance.pushSnapshot());
 
-      // Bug #12: Invalidate/regenerate prediction when target weight changes.
-      final targetWeightChanged =
+      // Bug #12 / OI-191: the prediction follows the goal AND the target weight.
+      // The refresh itself (PRO: one automatic regenerate, marked stale when it
+      // does not land; free: marked stale) is shared with the coach
+      // `switchGoal`: `PredictionService.refreshAfterProfileChange`.
+      // `goalChanged` is judged against the goal the form OPENED on (healed), so a
+      // legacy `strength` profile's untouched Save is not a goal change.
+      final targetWeightChanged = targetWeight != null &&
           (targetWeight - _originalTargetWeight).abs() > 0.1;
-      if (targetWeightChanged) {
-        final isPro = SubscriptionService.instance.isPro();
-        if (isPro) {
-          // PRO: auto-regenerate prediction with new goal in background.
-          // Don't await — let user proceed while prediction generates.
-          // automatic: one attempt per IST day, shared with the 30-day
-          // refresh, so repeated goal saves cannot spend the user's 3/day.
-          unawaited(PredictionService.instance
-              .regeneratePrediction(automatic: true)
-              .then((outcome) {
-            // A regenerate that did not land (the 3/day cap, a failure, or
-            // today's automatic attempt already spent) leaves the OLD goal's
-            // prediction on screen: mark it stale, as the FREE branch below
-            // does (B-pass c5d659f52986 Finding 1). Stale enables the PRO
-            // UPDATE button (PredictionService.refreshEnabled).
-            if (outcome != PredictionRefreshOutcome.success) {
-              PredictionService.instance.markStale();
-            }
-            if (mounted) {
-              ref.invalidate(predictionProvider);
-            }
-          }));
-        } else {
-          // FREE: mark cached prediction as stale so UI shows badge.
-          PredictionService.instance.markStale();
-          ref.invalidate(predictionProvider);
-        }
+      final goalChanged = _goal != _initialHealedGoal;
+      if (goalChanged || targetWeightChanged) {
+        unawaited(PredictionService.instance
+            .refreshAfterProfileChange(
+                isPro: SubscriptionService.instance.isPro())
+            .whenComplete(() {
+          if (mounted) ref.invalidate(predictionProvider);
+        }));
       }
 
       if (mounted) {

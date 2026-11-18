@@ -162,7 +162,7 @@ Format (use • not JSON):
 • Key lift projections
 • One motivational line''';
 
-      final response = await AiService.instance.predict(prompt);
+      final response = await (debugPredict ?? AiService.instance.predict)(prompt);
       if (!safeToWriteForTest(ownerAtStart, HiveUserSession.currentOwnerFullId)) {
         unawaited(ErrorTelemetry.recordNonFatal(
             StateError(
@@ -194,6 +194,11 @@ Format (use • not JSON):
       return outcome;
     }
   }
+
+  /// Test seam: replaces the network call of [regeneratePrediction] (OI-191
+  /// tests cover the PRO branches of [refreshAfterProfileChange]).
+  @visibleForTesting
+  static Future<AiChatResponse> Function(String prompt)? debugPredict;
 
   /// Whether it is still safe to write a regeneration's result: the
   /// signed-in account must be the SAME one that was active when the
@@ -235,14 +240,44 @@ Format (use • not JSON):
     return generatedAt != null && now.difference(generatedAt).inDays >= 30;
   }
 
+  /// OI-191: what a goal or target-weight change does to the cached prediction.
+  /// The ONE implementation both writers call (Edit Profile's Save and the coach
+  /// `switchGoal`): a PRO user's prediction is regenerated once (automatic, so
+  /// the once-per-IST-day gate and the 3/day server cap are respected) and marked
+  /// stale when that attempt did not succeed; a free user's is marked stale.
+  ///
+  /// The caller invalidates `predictionProvider` when this completes (this class
+  /// has no `ref`). `markStale` writes through [MigratedKey], which resolves the
+  /// CURRENT account's box, so it is skipped when the signed-in account changed
+  /// while the request was in flight (it would stamp the NEW account's box).
+  Future<void> refreshAfterProfileChange({required bool isPro}) async {
+    final ownerAtStart = HiveUserSession.currentOwnerFullId;
+    if (!isPro) {
+      _markStaleIfSameOwner(ownerAtStart);
+      return;
+    }
+    final outcome = await regeneratePrediction(automatic: true);
+    if (outcome != PredictionRefreshOutcome.success) {
+      _markStaleIfSameOwner(ownerAtStart);
+    }
+  }
+
+  void _markStaleIfSameOwner(String? ownerAtStart) {
+    if (HiveUserSession.currentOwnerFullId == ownerAtStart) markStale();
+  }
+
   /// Mark the current cached prediction as stale (goal changed: a free user,
   /// or a PRO user whose automatic regenerate did not succeed).
   void markStale() {
-    MigratedKey.write('prediction_stale', true);
+    unawaited(MigratedKey.write('prediction_stale', true).catchError(
+        (Object e, StackTrace st) => ErrorTelemetry.recordNonFatal(e, st,
+            reason: 'prediction_service_mark_stale')));
   }
 
   /// Clear the stale flag (after successful regeneration).
   void clearStale() {
-    MigratedKey.delete('prediction_stale');
+    unawaited(MigratedKey.delete('prediction_stale').catchError(
+        (Object e, StackTrace st) => ErrorTelemetry.recordNonFatal(e, st,
+            reason: 'prediction_service_clear_stale')));
   }
 }

@@ -19,8 +19,9 @@
 // PredictionService's callback and that method is pinned in
 // test/contracts/prediction_refresh_outcome_wiring_test.dart. A full
 // end-to-end test through the real network call
-// (AiService.instance.predict) is not attempted here: no injection seam
-// exists for it, and none of PredictionService's siblings' lifecycle
+// (AiService.instance.predict) is not attempted here: the `debugPredict` seam
+// (OI-191) is used by goal_target_weight_two_doors_behavioral_test.dart, which
+// covers an account switch in flight; none of PredictionService's siblings' lifecycle
 // registrations are tested that way either — see
 // singleton_lifecycle_registry_behavioral_test.dart, whose own callbacks
 // are plain counters for the same reason.

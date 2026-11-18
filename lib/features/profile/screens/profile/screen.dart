@@ -18,6 +18,7 @@ import 'package:icanbefitter/core/constants/app_constants.dart';
 import 'package:icanbefitter/core/constants/fitness_goals.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
 import 'package:icanbefitter/core/services/migrated_key.dart';
+import 'package:icanbefitter/features/onboarding/target_weight_check.dart';
 import 'package:icanbefitter/features/profile/services/notification_prefs_repository.dart';
 import 'package:icanbefitter/core/utils/ist_date.dart';
 import 'package:icanbefitter/shared/repositories/user_repository.dart';
