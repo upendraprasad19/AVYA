@@ -5,6 +5,8 @@ blast_radius: account
 review_rounds: 3
 ground_truth_verified: true
 verdict: converged
+bpass: accepted
+bpass_review: docs/reviews/67e77fb19215-review.md
 ---
 
 # Plan-review record: diet protein rules for Non-veg, eggetarian and pescatarian plans
@@ -34,6 +36,15 @@ subset hashes (captured twice on unmodified main, identical), the MIRROR pin at
 `food_library_v4_upgrade_behavioral_test.dart:212-219`, the 181 `CatalogEntry(` lines (180 entries plus the
 constructor), the stale registry lines, the swap call site, and the measured baseline of section 2 (300 seeds per profile,
 real generator and asset).
+
+## Blast radius and B-pass (after the build)
+
+`dart run scripts/blast_radius_from_diff.dart` over the real branch diff (16 paths: the generator, catalog, catalog rules,
+swap, a new service file, `seed_service.dart`, the asset, nested CLAUDE.md, registry, tests) reports `account`, as provisioned.
+The B-pass (`/code-review`, two fresh Sonnet seats: A mechanism, B tests and docs) ran on 852e35e2 after review CI was green:
+no P0, no P1, 9 findings, 7 fixed (one performance fix that left every golden unchanged, an independent cap oracle, doc and
+label corrections), 2 false alarms (one measured clean). The fixes are commit 2500a8bf; the review file is
+`docs/reviews/67e77fb19215-review.md`.
 
 ## Verdict
 
