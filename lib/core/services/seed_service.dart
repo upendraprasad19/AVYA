@@ -225,7 +225,13 @@ class SeedService {
   /// join the catalog as SWAP-ONLY foods (5 vegan-friendly breakfast proteins,
   /// 5 sides: F1433 F0477 F0471 F1015 F1019 F1061 F0269 F0295 F0043 F1028), so
   /// their `is_everyday` flips false -> true (same reason as v5).
-  static const int _foodLibraryVersion = 7;
+  ///
+  /// v8 (2026-11-18 diet chart Portions / Grams view, docs/plans/
+  /// diet-grams-toggle.md section 3, OI-517): 132 liquid rows gain
+  /// `weight_unit: "ml"` (absent = grams). Without the bump an installed
+  /// food box never gains the field and every liquid shows grams in the
+  /// Grams view.
+  static const int _foodLibraryVersion = 8;
   static const String _foodVersionKey = 'food_library_version';
 
   final HiveService _hive = HiveService.instance;

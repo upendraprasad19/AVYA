@@ -18,7 +18,7 @@
 // butter, chia seeds), so a v5 box re-seeds too; a v4 and a v3 box end at v6.
 //
 // Diet chart v3 (2026-11-17): v7 flips is_everyday to true for the 10 SWAP-ONLY
-// catalog foods, so a v6 box re-seeds too; every older box ends at v7.
+// catalog foods, so a v6 box re-seeds too; every older box ends at v8.
 //
 // A plain test(), not testWidgets: real file I/O inside testWidgets hangs
 // (CLAUDE.md section 4.9).
@@ -115,9 +115,9 @@ void main() {
   setUp(() async => tempDir = await setUpHiveForTests());
   tearDown(() async => tearDownHiveForTests(tempDir));
 
-  test('the version constant is 7', () {
+  test('the version constant is 8', () {
     final src = File('lib/core/services/seed_service.dart').readAsStringSync();
-    expect(RegExp(r'static const int _foodLibraryVersion = 7;').hasMatch(src),
+    expect(RegExp(r'static const int _foodLibraryVersion = 8;').hasMatch(src),
         isTrue);
   });
 
@@ -139,7 +139,7 @@ void main() {
     }
   });
 
-  test('a v6 food box ends at v7 with the 10 swap-only ids everyday', () async {
+  test('a v6 food box ends at v8 with the 10 swap-only ids everyday', () async {
     final hive = HiveService.instance;
     for (final r in _v6Rows()) {
       await hive.foodBox.put(r['id'], r);
@@ -153,10 +153,10 @@ void main() {
     for (final id in _v7Everyday) {
       expect(_asJson(hive.foodBox.get(id))['is_everyday'], isTrue, reason: id);
     }
-    expect(hive.configBox.get('food_library_version') as int, 7);
+    expect(hive.configBox.get('food_library_version') as int, 8);
   });
 
-  test('a v5 food box ends at v7 with the 5 vegan Low carb ids everyday',
+  test('a v5 food box ends at v8 with the 5 vegan Low carb ids everyday',
       () async {
     final hive = HiveService.instance;
     for (final r in _v5Rows()) {
@@ -171,10 +171,10 @@ void main() {
     for (final id in {..._v6Everyday, ..._v7Everyday}) {
       expect(_asJson(hive.foodBox.get(id))['is_everyday'], isTrue, reason: id);
     }
-    expect(hive.configBox.get('food_library_version') as int, 7);
+    expect(hive.configBox.get('food_library_version') as int, 8);
   });
 
-  test('a v4 food box ends at v7 with the 14 + 5 + 10 ids everyday', () async {
+  test('a v4 food box ends at v8 with the 14 + 5 + 10 ids everyday', () async {
     final hive = HiveService.instance;
     for (final r in _v4Rows()) {
       await hive.foodBox.put(r['id'], r);
@@ -189,10 +189,10 @@ void main() {
       expect(_asJson(hive.foodBox.get(id))['is_everyday'], isTrue, reason: id);
     }
     expect(_asJson(hive.foodBox.get('F0007'))['is_everyday'], isFalse);
-    expect(hive.configBox.get('food_library_version') as int, 7);
+    expect(hive.configBox.get('food_library_version') as int, 8);
   });
 
-  test('a v3 food box ends at v7 with the new rows and tags', () async {
+  test('a v3 food box ends at v8 with the new rows and tags', () async {
     final hive = HiveService.instance;
     for (final r in _v3Rows()) {
       await hive.foodBox.put(r['id'], r);
@@ -206,15 +206,42 @@ void main() {
     expect(_asJson(hive.foodBox.get('F0522'))['is_ultra_processed'], isTrue);
     expect(_asJson(hive.foodBox.get('F0001'))['is_everyday'], isTrue);
     expect(_asJson(hive.foodBox.get('F0007'))['is_everyday'], isFalse);
-    expect(hive.configBox.get('food_library_version') as int, 7);
+    expect(hive.configBox.get('food_library_version') as int, 8);
   });
 
-  test('MIRROR: a box already at v7 is not re-seeded', () async {
+  test('a v7 food box gains weight_unit ml on the audited liquids at v8 '
+      '(the old rows are built from the asset, so strip the field first)',
+      () async {
+    final hive = HiveService.instance;
+    final stripped = [
+      for (final r in _bundled())
+        {...r}..remove('weight_unit'),
+    ];
+    for (final r in stripped) {
+      await hive.foodBox.put(r['id'], r);
+    }
+    expect(_asJson(hive.foodBox.get('F0031')).containsKey('weight_unit'),
+        isFalse);
+    await _markSeeded(hive, 7);
+
+    await SeedService.instance.seedIfNeeded();
+
+    // Milk (Toned), Lassi (Sweet), Falooda, a 200ml cola row.
+    for (final id in ['F0031', 'F0034', 'F0622', 'F1235']) {
+      expect(_asJson(hive.foodBox.get(id))['weight_unit'], 'ml', reason: id);
+    }
+    // A solid stays without the field (absent = grams).
+    expect(_asJson(hive.foodBox.get('F0001')).containsKey('weight_unit'),
+        isFalse);
+    expect(hive.configBox.get('food_library_version') as int, 8);
+  });
+
+  test('MIRROR: a box already at v8 is not re-seeded', () async {
     final hive = HiveService.instance;
     for (final r in _v3Rows()) {
       await hive.foodBox.put(r['id'], r);
     }
-    await _markSeeded(hive, 7);
+    await _markSeeded(hive, 8);
     await SeedService.instance.seedIfNeeded();
     expect(hive.foodBox.get('F1442'), isNull);
   });
