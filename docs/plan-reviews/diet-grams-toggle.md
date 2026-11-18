@@ -5,6 +5,8 @@ blast_radius: account
 review_rounds: 2
 ground_truth_verified: true
 verdict: converged
+bpass: accepted
+bpass_review: docs/reviews/diet-grams-toggle-bpass.md
 ---
 
 # Plan-review record — Diet chart Portions / Grams view (OI-517, account)
