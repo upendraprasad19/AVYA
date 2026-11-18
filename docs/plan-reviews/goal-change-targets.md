@@ -5,6 +5,8 @@ blast_radius: account
 review_rounds: 3
 ground_truth_verified: true
 verdict: converged
+bpass: accepted
+bpass_review: docs/reviews/3177bbdb8de3-review.md
 ---
 
 # Plan-review record: goal-change targets, branch B (weigh-in rule, impact dialog, stale-plan banner, Cut protein, real-pace projection)
@@ -12,7 +14,7 @@ verdict: converged
 Keystone record for the §4.12 merge gate (`check_plan_review_record_exists.dart`). Plan: `docs/plans/goal-change-targets.md`
 (revision 4). Process tier L (§4.12.6): B2b edits the first-sign-in merge writer. The blast radius `account` is provisional and is
 re-computed with `dart run scripts/blast_radius_from_diff.dart <paths>` against the real diff before the first code commit; the
-B-pass fields are added once the B-pass (`/code-review`) is done, before the merge.
+B-pass ran after review CI was green (see the section below).
 
 ## Rounds
 
@@ -35,3 +37,12 @@ registry entries, and confirmed none of the new symbol names exists yet.
 
 Converged after three rounds: round 3 left no open P1 after its one mechanical edit. B-pass is required by §4.3 at `account` and is
 self-initiated after the build.
+
+## Blast radius and B-pass (after the build)
+
+`dart run scripts/blast_radius_from_diff.dart` over the real branch diff reports `account`, as provisioned. The B-pass
+(`/code-review`, two fresh Sonnet seats: A mechanism in lib/, B tests, registry and docs) ran on 08507462 after review CI was
+green (full suite 2696 tests, contract sweep 237 files): no P0, two P1 (test coverage of the moved-targets side effects and of the
+weigh-in snackbar), 19 findings in all, 17 fixed or accepted, 2 false alarms; one residual recorded as accepted by the plan (the launch
+restore on a second device recomputes from the raw cloud weight). The fixes are commit 5c268dea; the review file is
+`docs/reviews/3177bbdb8de3-review.md`.
