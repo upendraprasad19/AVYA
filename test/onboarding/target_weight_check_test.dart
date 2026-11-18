@@ -141,4 +141,129 @@ void main() {
       }
     });
   });
+
+  // ---- OI-191: the shared goal / target agreement rules ----
+
+  group('a non-positive weight or target is missing (OI-191)', () {
+    test('Cut with a stored 0.0 target is missing, not ok', () {
+      expect(v('lose_fat', 75, 0), TargetWeightCheck.missing);
+    });
+    test('Build and Maintain with 0.0 are missing too', () {
+      expect(v('build_muscle', 75, 0), TargetWeightCheck.missing);
+      expect(v('general_fitness', 75, 0), TargetWeightCheck.missing);
+    });
+    test('a negative target and a zero current weight are missing', () {
+      expect(v('lose_fat', 75, -3), TargetWeightCheck.missing);
+      expect(v('lose_fat', 0, 70), TargetWeightCheck.missing);
+    });
+    test('a goal with no rule stays ok even with a null or 0 target', () {
+      expect(v('recomp', 75, null), TargetWeightCheck.ok);
+      expect(v('strength', 75, 0), TargetWeightCheck.ok);
+      expect(v('whatever', null, null), TargetWeightCheck.ok);
+    });
+  });
+
+  group('goalTargetAgree', () {
+    bool a(String g, double? c, double? t) =>
+        goalTargetAgree(goal: g, current: c, target: t);
+    test('is exactly validateTargetWeight == ok', () {
+      expect(a('lose_fat', 75, 70), isTrue);
+      expect(a('lose_fat', 75, 78), isFalse);
+      expect(a('build_muscle', 75, 71), isFalse);
+      expect(a('general_fitness', 75, 77.9), isTrue);
+      expect(a('general_fitness', 75, 80), isFalse);
+      expect(a('lose_fat', 75, 0), isFalse);
+    });
+    test('a goal with no rule agrees', () => expect(a('recomp', 75, 71), isTrue));
+  });
+
+  group('canProjectGoalDate', () {
+    bool c(String g, double? cur, double? t) =>
+        canProjectGoalDate(goal: g, current: cur, target: t);
+    test('Cut and Build with the target on the right side project', () {
+      expect(c('lose_fat', 75, 70), isTrue);
+      expect(c('build_muscle', 75, 80), isTrue);
+    });
+    test('the contradictory pair does not project (the OI-191 bug)', () {
+      expect(c('build_muscle', 75, 71), isFalse);
+      expect(c('lose_fat', 75, 80), isFalse);
+    });
+    test('a stored 0.0 target does not project', () {
+      expect(c('lose_fat', 75, 0), isFalse);
+    });
+    test('Maintain, legacy and unknown goals never project', () {
+      expect(c('general_fitness', 75, 77), isFalse);
+      expect(c('strength', 75, 70), isFalse);
+    });
+    test('a gap of 0.1 kg or less does not project', () {
+      expect(c('lose_fat', 75, 74.95), isFalse);
+      expect(c('lose_fat', 75, 74.8), isTrue);
+    });
+    test('a missing or non-finite weight does not project', () {
+      expect(c('lose_fat', null, 70), isFalse);
+      expect(c('lose_fat', 75, double.nan), isFalse);
+    });
+  });
+
+  group('projectionCalloutKind: the branch ORDER is part of the contract', () {
+    ProjectionCalloutKind k(String g, double first, double last, double weeks,
+            double target) =>
+        projectionCalloutKind(
+            goal: g, firstW: first, lastW: last, weeksDiff: weeks, target: target);
+    test('too little history is none', () {
+      expect(k('lose_fat', 80, 79, 0.4, 70), ProjectionCalloutKind.none);
+    });
+    test('a Cut already at the target is REACHED, not hidden by the gate', () {
+      // 78 / 78 fails goalTargetAgree (mustBeBelowCurrent); the reached branch
+      // comes first and stays.
+      expect(k('lose_fat', 79, 78, 2, 78), ProjectionCalloutKind.reached);
+    });
+    test('a Cut falling toward a target above the last weigh-in is none', () {
+      // last 77, target 78, rate negative: the old code printed an ETA.
+      expect(k('lose_fat', 79, 77, 2, 78), ProjectionCalloutKind.none);
+    });
+    test('a Build rising past a below-current target is none', () {
+      expect(k('build_muscle', 75, 77, 2, 75), ProjectionCalloutKind.none);
+    });
+    test('a Cut moving the wrong way is adjust', () {
+      expect(k('lose_fat', 77, 78, 2, 70), ProjectionCalloutKind.adjust);
+    });
+    test('a consistent Cut or Build gets the date sentence', () {
+      expect(k('lose_fat', 80, 78, 2, 70), ProjectionCalloutKind.eta);
+      expect(k('build_muscle', 75, 76, 2, 80), ProjectionCalloutKind.eta);
+    });
+    test('Maintain keeps the date sentence inside its window, none beyond', () {
+      expect(k('general_fitness', 74, 75, 2, 77), ProjectionCalloutKind.eta);
+      expect(k('general_fitness', 74, 75, 2, 80), ProjectionCalloutKind.none);
+    });
+  });
+
+  group('journeyEtaAllowed', () {
+    test('false for a contradictory pair, true for an agreeing one', () {
+      expect(journeyEtaAllowed(goal: 'lose_fat', lastValue: 77, target: 78), isFalse);
+      expect(journeyEtaAllowed(goal: 'lose_fat', lastValue: 80, target: 70), isTrue);
+      expect(journeyEtaAllowed(goal: 'build_muscle', lastValue: 75, target: 70), isFalse);
+    });
+  });
+
+  group('targetWeightMessage editing variant', () {
+    test('onboarding words are byte-identical', () {
+      expect(targetWeightMessage(TargetWeightCheck.missing, 75),
+          'Enter your target weight to continue.');
+      expect(targetWeightMessage(TargetWeightCheck.mustBeBelowCurrent, 75),
+          'For a Cut your target has to be lower than your current weight (75.0 kg). Adjust it and continue.');
+    });
+    test('editing swaps only the closing words', () {
+      expect(targetWeightMessage(TargetWeightCheck.missing, 75, editing: true),
+          'Enter your target weight to save.');
+      expect(
+          targetWeightMessage(TargetWeightCheck.mustBeAboveCurrent, 75,
+              editing: true),
+          'For a Build your target has to be higher than your current weight (75.0 kg). Adjust it and save.');
+      expect(
+          targetWeightMessage(TargetWeightCheck.outsideMaintainWindow, 75,
+              editing: true),
+          endsWith('Adjust it and save.'));
+    });
+  });
 }

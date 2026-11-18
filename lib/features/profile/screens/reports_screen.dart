@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart' show FunctionException;
+import 'package:icanbefitter/features/onboarding/target_weight_check.dart';
 import 'package:icanbefitter/core/theme/colors.dart';
 import 'package:icanbefitter/core/theme/spacing.dart';
 import 'package:icanbefitter/core/theme/typography.dart';
@@ -902,12 +903,22 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
     final weeklyRate = (lastW - firstW) / weeksDiff;
     final remaining = targetWeight - lastW;
 
-    // Check if moving in right direction
+    // OI-191: the branch order (adjust, reached, date sentence) and the gate on
+    // the date sentence live in `projectionCalloutKind`, which the unit tests
+    // drive directly. `goal` is the profile's own goal.
     final goal = UserRepository.instance.getProfile()?['primary_goal'] as String? ?? '';
     final wantsLose = goal.contains('lose');
-    final movingRight = (wantsLose && weeklyRate < 0) || (!wantsLose && weeklyRate > 0);
+    final kind = projectionCalloutKind(
+      goal: goal,
+      firstW: firstW,
+      lastW: lastW,
+      weeksDiff: weeksDiff,
+      target: targetWeight,
+    );
 
-    if (!movingRight && remaining.abs() > 0.5) {
+    if (kind == ProjectionCalloutKind.none) return const SizedBox();
+
+    if (kind == ProjectionCalloutKind.adjust) {
       return Row(
         children: [
           Icon(Icons.warning_amber, size: 14, color: AppColors.orange),
@@ -922,7 +933,7 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
       );
     }
 
-    if (remaining.abs() < 0.5) {
+    if (kind == ProjectionCalloutKind.reached) {
       return Row(
         children: [
           Icon(Icons.check_circle, size: 14, color: AppColors.green),

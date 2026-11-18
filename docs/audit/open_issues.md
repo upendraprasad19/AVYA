@@ -2815,65 +2815,6 @@ Unit 2's blocked question — what a regeneration does when the plan window is E
 - **Related**: OI-166 (parent), OI-189 (CLOSED 2026-09-13 — the horizon rule is decided: every writer stops at the stored `plan_end` and every regen sweeps past it; the unified builder must carry the same bound AND the same sweep), OI-174, OI-176 (the other OI-166-batch gate with a known blind spot).
 - **Input added 2026-09-13 by OI-189's review (round 2 F12 + round 4 F7)** — the coach card's copy for the BOUNDED regen case is authored outside the diff preview and is wrong in two places, to be decided ONCE here: (1) the confirm card's summary line is EF-authored — `supabase/functions/_shared/tools/plan/regeneratePlanBlock.ts:54` `previewSummary` says "Regenerate next N weeks" and `:5-6,42` tells the model "1-12 weeks … start a new phase", both contradicting a block the client bounds at `plan_end` (catastrophic-tier deploy; a client-side substitution would not rebuild when the planner cache fills, because `tool_confirm_card.dart:307` renders before the diff widget's async `plan()`); (2) `tool_confirm_card.dart:409-410` `_executedMessage` says "Plan regenerated" for a sweep-only success (`count: 0, cleared: N`) — it keys on the intent TYPE and never sees `data`; carrying the result to the card needs a `ToolIntent` field.
 
-## OI-191 — target_weight_kg can contradict the chosen goal's direction, making the reach-your-goal projection false (P2)
-
-- **Status**: OPEN
-- **Blocked on**: none — bounded, no schema/migration/payment/auth involvement
-- **Verified**: 2026-09-13 — reproduced live on the newly-created Play Store review account
-  (`googleplay-review@icanbefitter.com`, `public.user_profile`: `current_weight_kg=75`,
-  `target_weight_kg=71`, `primary_goal='build_muscle'`) and confirmed by reading all 4 files
-  below directly, not from a subagent summary.
-- **Identified**: 2026-09-13 · founder noticed the account's own goal/target combo looked
-  backwards while spot-checking the onboarding flow, asked "goal is also to reduce weight
-  right? check."
-- **What**: two writers save `target_weight_kg` with zero cross-field validation against
-  `primary_goal`:
-  - `lib/features/onboarding/screens/stats_screen.dart` `_onCalibrate` (~line 387-424) —
-    seeds the field goal-aware (`build_muscle` → current+3kg, `lose_fat` → current-5kg,
-    `recomp` → current-2kg; the comment at line 42-46 spells this out), but it's a free
-    `TextEditingController` and the submit handler validates only that weight/height parse
-    as numbers. A user can overwrite the sensible seed with anything.
-  - `lib/features/profile/screens/edit_profile_screen.dart` (`target_weight_kg` write at
-    line 1825) — same gap, second door: a user can set a sensible target during onboarding,
-    then contradict it later via Edit Profile with no warning either.
-
-  Three independent render sites then trust the raw, unvalidated pair and produce an actively
-  false projection when goal-direction and target-direction disagree:
-  `lib/features/profile/screens/profile/nutrition_targets.dart:15-31`,
-  `lib/features/nutrition/screens/nutrition_screen.dart:520-548` (`_projectionLine`),
-  `lib/features/profile/screens/profile/pace_detail_sheet.dart:5-13` — all three gate on
-  `goal ∈ {lose_fat, build_muscle}` + both weights present + gap > 0.1kg, then call
-  `BmrCalculator.projectGoalDate` (`lib/core/utils/bmr_calculator.dart:258-288`), which computes
-  `gap = (currentKg - targetKg).abs()` — an **unsigned magnitude**, blind to which direction the
-  diet is actually pushing the user.
-- **What this does NOT affect**: the calorie/macro numbers themselves. Checked
-  `BmrCalculator.calculateTargets` specifically — for `goal == 'build_muscle'`,
-  `target_weight_kg` is never read at all; it's consulted only inside the `goal == 'lose_fat'`
-  branch, to pick the protein baseline. So a contradictory target doesn't corrupt the diet
-  prescription, only the projection text describing it.
-- **Consequence**: a user on a `build_muscle` surplus (weight trending up) with a target below
-  current sees "At this pace, you'll reach 71 kg on \<date\>" — a promise the prescribed diet
-  cannot keep, since the diet is moving them the opposite direction. Symmetric failure exists
-  for `lose_fat` + a target set above current. Not hypothetical to this one test account: any
-  real user who mistypes or misunderstands the target-weight field the same way hits the
-  identical wrong message.
-- **Bug-history check**: grepped `docs/diagnoses/INDEX.md` + `open_issues.md` +
-  `closed_issues.md` for `projectGoalDate` / target-goal direction conflicts — no hits. Not a
-  recurrence of the existing onboarding-calc-drift class (c3f2d8/f1b6d4/f19a7c/c7a1f5), which are
-  all preview-vs-commit or missing-input bugs, not a direction contradiction.
-- **Fix shape (not decided, sketched for whoever picks it up)**: (a) validate at both writers —
-  block or auto-correct a contradictory target before save; needs enforcing at TWO sites, and a
-  third if any other writer of this field is found; or (b) make `projectGoalDate` (or its 3
-  call sites) direction-aware — suppress or reword the projection when direction disagrees with
-  goal, so a bad input degrades gracefully instead of lying. (b) is a single-point fix versus
-  (a)'s multi-writer enforcement, but is a genuine design call, not decided here.
-- **Blast radius**: `feature` — UI/calc-only, no schema/migration/payment/auth/sync path
-  touched (per `docs/blast_radius.yaml`'s account-tier trigger list, none apply).
-- **Related**: none of the existing calorie-drift diagnoses; found while investigating a
-  founder observation on the same test account that also produced
-  [[feedback_mistake_subscription_status_vs_subscriptions_table]] (unrelated mechanism, same
-  investigation session).
-
 ## OI-192 — the orphan-sync dedupe can never match a photo turn: client writes `[Photo] …`, server writes `[Photo: image] …`, so every media exchange upserts a phantom `in_app_orphan` duplicate (P2)
 
 - **Status**: OPEN
@@ -7029,3 +6970,15 @@ Diet plan Unit 4a hides Supplements from anyone under 18 (`kSupplementsMinAgeYea
 **Measured at filing (assets/data/food_database.json, 1444 rows).** Every row already has `standard_serving_g` (0 missing) and per-100 g macros, so a gram figure for a plan item is `servingG` x portion with no new data. What is NOT settled: 462 rows have a countable serving ("1 samosa"), 773 a volume or vague one ("1 cup", "1 serving"), 209 a gram/ml one; the catalog (170 rows) splits 59 countable / 102 volume / 9 gram. 126 row names say "cooked" and 48 "raw", so "raw weight" is ambiguous (uncooked vs just grams): the founder's wording needs a ruling, rice 100 g cooked is not 100 g dry.
 
 **Done when.** (1) The founder rules cooked vs raw, and which foods are counted (egg, roti, idli, samosa) vs weighed (chicken, paneer, rice). (2) Each catalog row (and every row the Diet chart "Search any food" picker can return) carries an explicit weight basis and a unit kind, audited row by row, not inferred from the description text. (3) The Grams / Portions toggle (stored per user, Hive profile key) switches every plan row, the swap sheet, the portion picker and the PDF, with a test that the macros are identical in both views. (4) The portion picker built in Diet chart v3 already takes grams as input, so this issue only adds the display and the audit. Related: Diet chart v3 plan `docs/plans/diet-chart-v3.md`.
+
+## OI-518 — Weekly Report weight card treats Maintain as a gain goal: wrong on-track warning and a projection date to a hold-weight target
+
+- **Status**: OPEN
+- **Blocked on**: none
+- **Verified**: 2026-11-18, source only: `lib/features/profile/screens/reports_screen.dart` `_buildProjectionCallout` (~line 886-960) read directly; not run on a device.
+- **Identified**: 2026-11-18 · found while investigating OI-191; founder asked for it as its own OI.
+- **What**: the Weekly Report's weight-trend card decides "moving the right way" with `goal.contains('lose')` (`reports_screen.dart:~906`): every other goal is treated as "wants to gain". For Maintain (`general_fitness`, target within 3 kg of current) a small drift downwards shows "Adjust your nutrition to stay on track" (orange warning), and a drift upwards shows "At current rate, you'll reach <target> kg in ~N weeks (around <month year>)" as if the user were building. A maintainer has no date to reach.
+- **What this does NOT cover**: the contradictory goal / target pair (a Build goal with a target below current weight) is fixed by OI-191 (`canProjectGoalDate` hides the callout for such a pair). This OI is only the Maintain wording and logic.
+- **Fix shape (not decided)**: for Maintain show a hold-weight line ("Holding within X kg of your target") or hide the projection; the on-track test for Maintain is `abs(last - target) <= 3.0` (the onboarding window, `kMaintainWindowKg`), not a trend direction. Wording goes through the Wardroom brand soul (`lib/shared/widgets/wardroom/CLAUDE.md`) and the psychology-pass lens.
+- **Blast radius**: `feature` (profile UI only).
+- **Related**: OI-191 (the same card, other half); `lib/features/profile/CLAUDE.md` weekly report row.

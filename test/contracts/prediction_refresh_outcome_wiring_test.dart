@@ -55,12 +55,26 @@ void main() {
   });
 
   test('PRO goal-change regenerate marks the prediction stale unless it succeeded', () {
-    final src =
-        _stripped('lib/features/profile/screens/edit_profile_screen.dart');
+    // OI-191: the goal / target refresh moved out of Edit Profile into the ONE
+    // shared `PredictionService.refreshAfterProfileChange`, which both Edit
+    // Profile and the coach `switchGoal` call.
+    // (`_body` would stop at the named-parameter brace of the signature, so the
+    // whole stripped source is searched.)
+    final svc = _stripped('lib/core/services/prediction_service.dart');
     expect(
-        RegExp(r'regeneratePrediction\(\s*automatic:\s*true\s*\)\s*\.then\(\(outcome\)\s*\{\s*if\s*\(\s*outcome\s*!=\s*PredictionRefreshOutcome\.success\s*\)\s*\{\s*PredictionService\.instance\.markStale\(\)\s*;')
-            .hasMatch(src),
-        isTrue);
+        RegExp(r'final\s+outcome\s*=\s*await\s+regeneratePrediction\(\s*automatic:\s*true\s*\)\s*;\s*if\s*\(\s*outcome\s*!=\s*PredictionRefreshOutcome\.success\s*\)\s*\{\s*_markStaleIfSameOwner\(')
+            .hasMatch(svc),
+        isTrue,
+        reason: 'a PRO regenerate that did not land marks the old prediction stale');
+    expect(RegExp(r'if\s*\(\s*!isPro\s*\)\s*\{\s*_markStaleIfSameOwner\(').hasMatch(svc),
+        isTrue,
+        reason: 'a free user is marked stale');
+    for (final f in const [
+      'lib/features/profile/screens/edit_profile_screen.dart',
+      'lib/features/ai_coach/services/tool_dispatcher.dart',
+    ]) {
+      expect(_stripped(f).contains('refreshAfterProfileChange('), isTrue, reason: f);
+    }
   });
 
   test('the coach auto-refresh only invalidates on success', () {
@@ -81,7 +95,8 @@ void main() {
         isTrue,
         reason: 'the 30-day auto-refresh fires on every provider rebuild — '
             'unbudgeted it can spend the whole 3/day');
-    // The edit-profile call is pinned by the markStale test above.
+    // The goal-change refresh (Edit Profile and the coach) is pinned by the
+    // shared-helper test above.
   });
 
   test('regeneratePrediction runs through the gate with a persisted IST day', () {

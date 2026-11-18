@@ -942,10 +942,20 @@ void main() {
         greaterThan(switchBody.indexOf("'Profile not found.'")),
         reason: 'after the last early return',
       );
-      expect(sweep, lessThan(switchBody.indexOf('patchProfile(')));
+      // OI-191: the profile write is `patchProfileWith(` (goal, seeded target and
+      // targets in one write under the profile lock); the sweep still runs first,
+      // and the owner is captured before the sweep.
+      final write = switchBody.indexOf('patchProfileWith(');
+      expect(write, isNonNegative);
+      expect(sweep, lessThan(write));
+      expect(switchBody.indexOf('HiveUserSession.currentOwnerFullId'),
+          lessThan(sweep),
+          reason: 'the owner is captured before the sweep');
       final pushAt = switchBody.indexOf(push);
       expect(pushAt, greaterThan(switchBody.indexOf(wSplice)));
-      expect(pushAt, lessThan(switchBody.indexOf(clear)));
+      // OI-191: an early `clearCache` exists on the owner-changed failure path
+      // (before any schedule write, nothing to push); the pin is on the FINAL one.
+      expect(pushAt, lessThan(switchBody.lastIndexOf(clear)));
     });
 
     test('holdWeek (the free-tier window-mover) pushes ONCE, after the mutex '

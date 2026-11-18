@@ -8,7 +8,9 @@ import '../../../../core/theme/colors.dart';
 import '../../models/tool_intent.dart';
 import '../../services/regenerate_plan_planner.dart';
 import 'package:icanbefitter/core/theme/typography.dart';
+import 'goal_targets_preview.dart';
 import 'phase_note.dart';
+import '../../../profile/services/goal_change_patch.dart';
 
 /// Diff preview for a `switch_goal` intent (Phase D.5).
 ///
@@ -37,6 +39,9 @@ class _SwitchGoalDiffState extends State<SwitchGoalDiff> {
   // Unit 3B (d69): a goal the user cannot choose is refused before the planner runs, so no plan diff is shown that
   // the confirm would then refuse (FitnessGoals.isSelectable is the dispatcher's guard too).
   bool _refused = false;
+  // OI-191: what else this switch writes (target weight, daily targets); null when
+  // it cannot be computed (the preview then simply omits the lines).
+  GoalChange? _change;
 
   @override
   void initState() {
@@ -61,6 +66,25 @@ class _SwitchGoalDiffState extends State<SwitchGoalDiff> {
 
       final p = widget.intent.payload;
       final newGoal = p['new_goal'] as String;
+
+      // OI-191: the same `goalChange` the dispatcher applies. After the refusal
+      // return above (so the legacy-refusal widget needs no Hive) and guarded, so
+      // a failure here never breaks the plan preview.
+      try {
+        if (rawProfile is Map) {
+          _change = goalChange(
+            rawProfile,
+            newGoal: newGoal,
+            now: DateTime.now(),
+            bodyFatCalcDisabled:
+                HiveService.instance.configBox.get('disable_bodyfat_calc') ==
+                    true,
+          );
+        }
+      } catch (e, st) {
+        unawaited(ErrorTelemetry.recordNonFatal(e, st,
+            reason: 'switch_goal_diff_goal_change_preview'));
+      }
       final weeks = (p['weeks'] as num?)?.toInt() ?? 4;
       final startDate = p['start_date'] as String?;
 
@@ -189,6 +213,9 @@ class _SwitchGoalDiffState extends State<SwitchGoalDiff> {
             ],
           ),
         ),
+
+        // OI-191: what else the switch writes (target weight, daily targets).
+        if (_change != null) GoalTargetsPreview(change: _change!, goal: newGoal),
 
         if (_plan!.totalWeeks > 0) ...[
         // First week eyebrow

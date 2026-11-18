@@ -58,7 +58,13 @@ extension _JourneyTimeline on _ProfileScreenState {
           final movingRight = (goal.contains('lose') && weeklyRate < 0) ||
               (goal.contains('build') && weeklyRate > 0) ||
               (remaining.abs() < 0.5);
-          if (movingRight && remaining.abs() > 0.5 && weeklyRate != 0) {
+          // OI-191: the date line is allowed only when the goal and the target
+          // agree (judged on the last weigh-in); "Lost / Gained" is not gated.
+          if (movingRight &&
+              remaining.abs() > 0.5 &&
+              weeklyRate != 0 &&
+              journeyEtaAllowed(
+                  goal: goal, lastValue: last.value, target: targetWeight)) {
             final weeksToGo = (remaining / weeklyRate).abs().ceil();
             etaText = 'At this rate: ~$weeksToGo weeks to goal';
           }
