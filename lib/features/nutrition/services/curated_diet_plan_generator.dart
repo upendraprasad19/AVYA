@@ -592,7 +592,8 @@ double _parseQty(String s) {
 String formatServingQty(double v) {
   final quarters = v * 4;
   if ((quarters - quarters.round()).abs() > 1e-9) {
-    return v.toStringAsFixed(2).replaceFirst(RegExp(r'0+$'), '');
+    // `1.0005` rounds to "1.00": strip the zeros AND the dot ("1", never "1.").
+    return v.toStringAsFixed(2).replaceFirst(RegExp(r'\.?0+$'), '');
   }
   final q = quarters.round();
   final whole = q ~/ 4;
@@ -620,7 +621,8 @@ String scaleServingDesc(String desc, double m) {
   final sep = match.group(2)!;
   var unit = match.group(3)!.trim();
   final newQty = qty * m;
-  if (qty <= 1 && newQty > 1) {
+  // 0.005 of slack: `0.667 x 1.5` = 1.0005 shows as "1" and stays singular.
+  if (qty <= 1 && newQty > 1.005) {
     final words = unit.split(' ');
     final last = words.length - 1;
     if (_plurals.containsKey(words[last])) {
