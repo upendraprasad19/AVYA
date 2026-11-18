@@ -21,6 +21,7 @@ import 'dart:math';
 import 'package:crypto/crypto.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:icanbefitter/core/constants/diet_strategies.dart';
+import 'package:icanbefitter/core/constants/food_types.dart';
 import 'package:icanbefitter/core/utils/bmr_calculator.dart';
 import 'package:icanbefitter/features/nutrition/services/curated_diet_plan_generator.dart';
 import 'package:icanbefitter/features/nutrition/services/diet_plan_catalog.dart';
@@ -96,6 +97,15 @@ double _carbTarget(_A a, DietStrategy s) => BmrCalculator.macroSplit(
 
 String _sha(String s) => sha256.convert(utf8.encode(s)).toString();
 
+/// Diet protein rules (2026-11-18, docs/plans/diet-protein-rules.md §A4): Veg
+/// and Vegan draw nothing from the plan's random stream and meet no catalog
+/// change, so their goldens stay PINNED to main 5e6902ce. Non-veg, eggetarian
+/// and pescatarian plans changed on purpose (the protein rule, the egg dishes'
+/// lunch / dinner role, Surmai out of the catalog), so their goldens are
+/// re-baselined (the `b` tests), and only on this plan's say-so.
+bool _vegLike(_A a) => a.pref == 'veg' || a.pref == 'vegan';
+bool _notVegLike(_A a) => !_vegLike(a);
+
 void main() {
   final rows =
       (jsonDecode(File('assets/data/food_database.json').readAsStringSync())
@@ -110,11 +120,10 @@ void main() {
   // the branch produced the identical hash, so the claim "Keto plans are
   // byte-identical" is a permanent pin, not a one-time measurement.
   group('G3 Keto byte-identity with main 8ecfc8fd', () {
-    test('G3 the 800 Keto plans (16 archetypes x 50 seeds, vegan Keto built '
-        'as Balanced) hash to the main golden', () {
+    String ketoText(bool Function(_A) take) {
       final gen = CuratedDietPlanGenerator.forTest(repo);
       final out = StringBuffer();
-      for (final a in _archetypes) {
+      for (final a in _archetypes.where(take)) {
         for (var s = 1; s <= 50; s++) {
           final r = gen.generatePlan(DietPlanInputs(
               calorieTarget: a.kcal,
@@ -129,16 +138,26 @@ void main() {
           }
         }
       }
-      expect(_sha(out.toString()),
-          'a47758f5c73c154e21e652fd3d043e8891348d5fa8618527611685323be1885d');
+      return out.toString();
+    }
+
+    test('G3 the Veg and Vegan Keto plans (vegan Keto built as Balanced) hash '
+        'to the golden captured on main 5e6902ce', () {
+      expect(_sha(ketoText(_vegLike)),
+          'ed3a64d5f5272129792a076a48d97d19a7657125a8aa2c8d153187a84f03df9a');
+    });
+
+    test('G3b the Non-veg, eggetarian and pescatarian Keto plans hash to the '
+        'RE-BASELINED golden (diet protein rules)', () {
+      expect(_sha(ketoText(_notVegLike)), '475ef48a7cee5db6240bc8ec840db4c9c06688433ee28c5ac933c69789dfb992');
     });
   });
 
   group('G1/G2 Balanced byte-identity with main 21db03c7', () {
-    test('G1 the 800 Balanced plans hash to the main golden', () {
+    String balancedText(bool Function(_A) take) {
       final gen = CuratedDietPlanGenerator.forTest(repo);
       final out = StringBuffer();
-      for (final a in _archetypes) {
+      for (final a in _archetypes.where(take)) {
         for (var s = 1; s <= _seeds; s++) {
           final plan = gen.generate(DietPlanInputs(
               calorieTarget: a.kcal,
@@ -155,10 +174,18 @@ void main() {
           out.writeln();
         }
       }
-      // Captured on main 21db03c7 before the Unit 3b catalog append
-      // (plan §3.3); the same text there and here.
-      expect(_sha(out.toString()),
-          '96f7e27cb0486b18896a1758f0072af7bf99149edf05eb8c907ca59b32630810');
+      return out.toString();
+    }
+
+    test('G1 the Veg and Vegan Balanced plans hash to the golden captured on '
+        'main 5e6902ce', () {
+      expect(_sha(balancedText(_vegLike)),
+          '0956dd8eb2667da5cd2bc579e8b66ef010ba4ff28bcce783fa1857178d879b4b');
+    });
+
+    test('G1b the Non-veg, eggetarian and pescatarian Balanced plans hash to '
+        'the RE-BASELINED golden (diet protein rules)', () {
+      expect(_sha(balancedText(_notVegLike)), 'bba0e956d1b9d6af3d5d6b67ee40005b12eca64c32841b35045f68e78cbb1457');
     });
 
     // Diet chart v3 (2026-11-17): the swap now also offers the SWAP-ONLY
@@ -169,11 +196,10 @@ void main() {
         if (!e.swapOnly) e,
     ];
 
-    test('G2 Balanced swaps (plan items + legacy plans holding the new ids) '
-        'hash to the main golden', () {
+    String swapLoopText(bool Function(_A) take) {
       final gen = CuratedDietPlanGenerator.forTest(repo);
       final out = StringBuffer();
-      for (final a in _archetypes) {
+      for (final a in _archetypes.where(take)) {
         for (var s = 1; s <= 5; s++) {
           final plan = gen.generate(DietPlanInputs(
               calorieTarget: a.kcal,
@@ -206,6 +232,12 @@ void main() {
           }
         }
       }
+      return out.toString();
+    }
+
+    String swapLegacyText() {
+      final gen = CuratedDietPlanGenerator.forTest(repo);
+      final out = StringBuffer();
       // A saved / legacy Balanced plan holding each Unit 3b id (round 2
       // finding 3): the role scan and the family counts must not see them.
       const legacy = [
@@ -258,8 +290,18 @@ void main() {
           }
         }
       }
-      expect(_sha(out.toString()),
-          '0acb6a7ddcf6eebcfd5688cd7b1da4cbf791b41a6514c3dacc4ce03fef62c1d6');
+      return out.toString();
+    }
+
+    test('G2a Balanced swaps of the Veg and Vegan plans hash to the golden '
+        'captured on main 5e6902ce', () {
+      expect(_sha(swapLoopText(_vegLike)),
+          '66f10c61c62ab0fdccbde093491c588551458c02a9423b40e20f5625382c2a32');
+    });
+
+    test('G2b Balanced swaps of the other plans + the legacy plans holding '
+        'the new ids hash to the RE-BASELINED golden (diet protein rules)', () {
+      expect(_sha(swapLoopText(_notVegLike) + swapLegacyText()), 'd92127a10700a215188bbe1ff500b8f43f35e19b3eb7eee49479656cbba1306a');
     });
   });
 
@@ -553,7 +595,8 @@ void main() {
               }
             }
             counts.forEach((f, n) {
-              final cap = dietFamilyDailyCap[f];
+              final cap = dietFamilyCapFor(f, DietStrategy.balanced,
+                  foodType: foodTypeOf(e.key.pref));
               if (cap != null && n > cap) over.add(f);
             });
           }
@@ -632,8 +675,9 @@ void main() {
             final asBalanced = st == DietStrategy.keto && e.key.pref == 'vegan';
             counts.forEach((f, n) {
               final cap = asBalanced
-                  ? dietFamilyDailyCap[f]
-                  : dietFamilyCapFor(f, st);
+                  ? dietFamilyCapFor(f, DietStrategy.balanced,
+                      foodType: foodTypeOf(e.key.pref))
+                  : dietFamilyCapFor(f, st, foodType: foodTypeOf(e.key.pref));
               if (cap != null) {
                 expect(n, lessThanOrEqualTo(cap),
                     reason: '$st ${e.key.label}: $f x$n');

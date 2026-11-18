@@ -16,6 +16,7 @@
 import 'dart:math';
 
 import 'package:icanbefitter/core/constants/diet_strategies.dart';
+import 'package:icanbefitter/core/constants/food_types.dart';
 import 'package:icanbefitter/shared/repositories/food_repository.dart';
 
 import 'curated_diet_plan_generator.dart';
@@ -129,6 +130,7 @@ List<DietPlanFoodItem> swapAlternatives({
   );
   if (resolved == null) return const [];
 
+  final foodType = foodTypeOf(dietPreference);
   final familyOf = {for (final e in catalog) e.foodId: e.family};
   final familyCount = <DietFamily, int>{};
   var replacedSeen = false;
@@ -137,7 +139,9 @@ List<DietPlanFoodItem> swapAlternatives({
       replacedSeen = true; // the item being replaced leaves the plan
       continue;
     }
-    final f = familyOf[id];
+    // A saved item whose food left the catalog (Surmai) still counts toward
+    // its family's cap.
+    final f = familyOf[id] ?? kRetiredCatalogFamilies[id];
     if (f != null) familyCount[f] = (familyCount[f] ?? 0) + 1;
   }
   final mealTokens = <String>{
@@ -157,7 +161,7 @@ List<DietPlanFoodItem> swapAlternatives({
     if (!DietPlanGenerator.passesDiet(row, dietPreference, family: e.family)) {
       continue;
     }
-    final cap = dietFamilyCapFor(e.family, strategy);
+    final cap = dietFamilyCapFor(e.family, strategy, foodType: foodType);
     if (cap != null && (familyCount[e.family] ?? 0) >= cap) {
       continue;
     }

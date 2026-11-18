@@ -295,3 +295,25 @@ import cycle (`food_types.dart` has no imports), the role-keyed filter is right 
 (need pool 16 / 17 / 16, eggetarian `mainProtein` 24), 180 to 179 entries and one changed asset line, a `_v7Rows()` test is
 feasible, and every mutant is observable (M3 needed rewording).
 
+
+## 10. Build addendum (2026-11-18, found while building; measured, not reviewed as a new unit)
+
+Two numbers the converged plan left to the build were measured and one catalog line changed; none adds a mechanism.
+
+1. **Sampler factor.** The plan said the 40-sample loop stays. Measured: with it, five Keto T10 floor rows (eggetarian, Non-veg and
+   pescatarian) dipped, because a slot need discards samples and best-of-N then has fewer good days. A food type that HAS needs
+   now samples `_needSampleFactor` times as many days (Veg and Vegan: needs empty, still 40). Measured on the real asset:
+   1x five rows short, 3x one row short (Keto maintain eggetarian protein 0.59 against 0.72), 5x all 30 rows at or above
+   their floors (the tightest at exactly the floor), 10x also all 30 but about 190 ms a Balanced plan against about 60 ms at
+   3x and 25 ms for a Veg plan (the plan is built on the phone). Chosen: 5. NO floor was lowered, so the one recorded
+   T10 exception (raise-only contract) is unused.
+2. **Keto egg main protein.** F0371 (Egg Fried) and F0790 (Cheese Omelette), both `lowCarbOnly`, now also hold `mainProtein`
+   (they already held `breakfastProtein`), so an eggetarian or Non-veg Keto / Low carb lunch or dinner has two more egg
+   dishes to pick from. Balanced plans and swaps never see them (`lowCarbOnly`); Veg and Vegan never pick an egg family
+   (pinned goldens G1, G2a, G3 held byte-identical). R4 pins the five-dish Keto egg pool.
+3. **Test sizes.** R2 runs 100 seeds per profile and strategy (1200 plans a food type, about 1.7 minutes each); at 300 it
+   took over ten minutes for one food type. The 300-seed figure stays the measured BASELINE of section 2.
+4. **Goldens.** G1, G2a, G3 (Veg and Vegan archetypes only) stay pinned to main 5e6902ce; G1b, G2b (its legacy block moves with the
+   generator and the catalog) and G3b (Non-veg, eggetarian, pescatarian) are re-baselined on purpose, hashes captured
+   from the built code.
+5. **T3 variety.** The pescatarian lunch-protein bound is 4 (measured minimum 5, only 5 fish dishes remain); every other row keeps 8.

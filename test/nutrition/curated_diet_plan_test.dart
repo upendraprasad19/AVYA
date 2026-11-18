@@ -17,8 +17,11 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:icanbefitter/core/constants/diet_strategies.dart';
+import 'package:icanbefitter/core/constants/food_types.dart';
 import 'package:icanbefitter/features/nutrition/services/curated_diet_plan_generator.dart';
 import 'package:icanbefitter/features/nutrition/services/diet_plan_catalog.dart';
+import 'package:icanbefitter/features/nutrition/services/diet_plan_catalog_rules.dart';
 import 'package:icanbefitter/features/nutrition/services/diet_plan_generator.dart';
 import 'package:icanbefitter/features/nutrition/services/diet_plan_swap.dart';
 import 'package:icanbefitter/shared/repositories/food_repository.dart';
@@ -297,7 +300,8 @@ void main() {
             counts[familyOf[id]!] = (counts[familyOf[id]!] ?? 0) + 1;
           }
           counts.forEach((f, n) {
-            final cap = dietFamilyDailyCap[f];
+            final cap = dietFamilyCapFor(f, DietStrategy.balanced,
+                foodType: foodTypeOf(entry.key.pref));
             if (cap != null) {
               expect(n, lessThanOrEqualTo(cap),
                   reason: '${entry.key.label}: $f x$n');
@@ -313,7 +317,12 @@ void main() {
           for (final plan in plans[a]!)
             plan[2].items.firstWhere((i) => i.role == 'mainProtein').foodId,
         };
-        expect(lunchProteins.length, greaterThanOrEqualTo(8),
+        // Diet protein rules (2026-11-18): a pescatarian lunch is a fish dish
+        // and only 5 remain after Surmai left the catalog, so the bound is the
+        // measured minimum (5, cut female pescatarian, 50 seeds) minus one.
+        // A variety bound, not a macro floor.
+        final bound = a.pref == 'pescatarian' ? 4 : 8;
+        expect(lunchProteins.length, greaterThanOrEqualTo(bound),
             reason: '${a.label}: $lunchProteins');
       }
     });
@@ -727,7 +736,8 @@ void main() {
                 expect(allowedFor(a.pref, alt.foodId), isTrue,
                     reason: '${a.label}: ${alt.name}');
                 final f = familyOf[alt.foodId]!;
-                final cap = dietFamilyDailyCap[f];
+                final cap = dietFamilyCapFor(f, DietStrategy.balanced,
+                    foodType: foodTypeOf(a.pref));
                 if (cap != null) {
                   final rest = [...ids]..remove(meal.items[idx].foodId);
                   final n = rest.where((id) => familyOf[id] == f).length;
