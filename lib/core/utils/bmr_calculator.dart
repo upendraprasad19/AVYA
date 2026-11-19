@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:icanbefitter/core/constants/diet_strategies.dart';
 import 'package:icanbefitter/core/constants/fitness_goals.dart';
 
@@ -172,9 +174,10 @@ class BmrCalculator {
   /// Returns a full breakdown: BMR, TDEE, and macros based on goal.
   ///
   /// - [goal]: "build_muscle" | "lose_fat" | "general_fitness" | "strength"
-  /// - [targetWeightKg]: When provided and the goal is "lose_fat", protein is
-  ///   calculated from target weight (not current weight) to avoid inflated
-  ///   targets for users who are significantly overweight.
+  /// - [targetWeightKg]: When provided and the goal is "lose_fat" with a target
+  ///   below the current weight, the protein base is the HIGHER of the target
+  ///   weight and 90 % of the current weight (a Cut keeps lean mass, so a far
+  ///   target must not starve it; goal-change-targets B1). Other goals ignore it.
   static NutritionTargets calculateTargets({
     required double weightKg,
     required double heightCm,
@@ -216,13 +219,15 @@ class BmrCalculator {
     final minKcal = gender.toLowerCase() == 'male' ? 1500.0 : 1200.0;
     dailyCalories = dailyCalories.clamp(minKcal, 5000);
 
-    // For lose_fat, use target weight (if provided and lower than current) so
-    // that overweight users don't get inflated protein targets.
+    // For lose_fat with a target below the current weight the base is the
+    // higher of the target and 90 % of the current weight: an overweight user
+    // is not given an inflated figure, and a user far from the target is not
+    // given less than a Cut needs to keep lean mass (goal-change-targets B1).
     final proteinBaseKg = (goal == 'lose_fat' &&
             targetWeightKg != null &&
             targetWeightKg > 0 &&
             targetWeightKg < weightKg)
-        ? targetWeightKg
+        ? math.max(targetWeightKg, weightKg * 0.9)
         : weightKg;
 
     // Cap protein so it never exceeds 40% of daily calories.
@@ -293,8 +298,9 @@ class BmrCalculator {
   /// `pacePreference`. Returns weeks + projected date.
   ///
   /// Edge cases:
-  /// - target within 2 kg → clamped to 4-week floor regardless of pace
-  ///   (no point picking aggressive to lose 1 kg).
+  /// - the chosen pace applies at every distance (goal-change-targets B1: the
+  ///   old forced-slow rule within 2 kg made the projection disagree with the
+  ///   calorie target); the result is never under one week.
   /// - current == target → 0 weeks (caller should hide projection).
   /// - weeks > 104 (2 years) → caller renders as ">2 years".
   static ({double weeks, DateTime date}) projectGoalDate({
@@ -307,22 +313,10 @@ class BmrCalculator {
       return (weeks: 0.0, date: DateTime.now());
     }
 
-    // 2 kg or less → force slow pace with a 4-week floor.
-    if (gap <= 2) {
-      final effRate = _paceRates['slow']!;
-      final weeklyKg = currentKg * effRate;
-      final rawWeeks = gap / weeklyKg;
-      final clampedWeeks = rawWeeks < 4 ? 4.0 : rawWeeks;
-      return (
-        weeks: clampedWeeks,
-        date: DateTime.now().add(Duration(days: (clampedWeeks * 7).round())),
-      );
-    }
-
     final rate = (_paceRates[pacePreference] ?? _paceRates['balanced']!)
         .clamp(0.0, _paceMaxRate);
     final weeklyKg = currentKg * rate;
-    final weeks = gap / weeklyKg;
+    final weeks = math.max(1.0, gap / weeklyKg);
     return (
       weeks: weeks,
       date: DateTime.now().add(Duration(days: (weeks * 7).round())),

@@ -17,6 +17,8 @@ import 'package:icanbefitter/core/utils/injury_vocab.dart';
 import 'package:icanbefitter/core/utils/ist_date.dart';
 import 'package:icanbefitter/core/services/workout_schedule_service.dart';
 import 'package:icanbefitter/core/services/workout_write_service.dart';
+import 'package:icanbefitter/core/services/legacy_goal_healer.dart';
+import 'package:icanbefitter/features/profile/services/profile_cloud_merge.dart';
 import 'package:icanbefitter/features/profile/services/profile_write_service.dart';
 import 'package:icanbefitter/shared/repositories/user_repository.dart';
 import '../constants/equipment_defaults.dart';
@@ -881,11 +883,18 @@ class AuthSessionBootstrapper {
           // Merge cloud → Hive. Cloud wins for non-null fields; Hive
           // values survive for fields the cloud left null (F2).
           final cloud = Map<String, dynamic>.from(profileRows.first);
-          final merged = <String, dynamic>{
-            ...?existingMap,
-            for (final e in cloud.entries)
-              if (e.value != null) e.key: e.value,
-          };
+          // goal-change-targets B2b: the same merge, with the derived targets recomputed when it
+          // changed a derivation input (a non-empty local profile only; fail-open).
+          final merged = mergeCloudProfileWithTargets(
+            existing: existingMap,
+            cloud: cloud,
+            now: DateTime.now(),
+            bodyFatCalcDisabled:
+                HiveService.instance.configBox.get('disable_bodyfat_calc') == true,
+            recomputeDisabled: HiveService.instance.configBox
+                    .get(LegacyGoalHealer.recomputeKillSwitch) ==
+                true,
+          );
           merged['id'] = user.id;
           merged['email'] = user.email;
           // Restore-class hydration → skipSync (audit A4).

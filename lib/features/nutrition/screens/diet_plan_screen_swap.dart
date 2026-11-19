@@ -353,4 +353,42 @@ extension _DietPlanSwapFlow on _DietPlanScreenState {
       onBack: back == null ? null : () => _backUpStrategy(back),
     );
   }
+
+  /// goal-change-targets B4: the stale-targets banner, or null when the plan's stamp still matches
+  /// the targets on screen (or there is no stamp, or the targets are the fallback defaults).
+  Widget? _staleBanner(Map<String, double> targets) {
+    final stale = staleTargetsOf(
+      _planStamp,
+      calories: targets['calories'] ?? 0,
+      protein: targets['protein'] ?? 0,
+      usingFallback:
+          resolveBaseMacroPack(UserRepository.instance.getProfile()) == null,
+    );
+    if (stale == null) return null;
+    final key = '${stale.stamp.calories}/${stale.stamp.protein}->'
+        '${stale.current.calories}/${stale.current.protein}';
+    if (_dismissedStale == key) return null;
+    return DietPlanStaleBanner(
+      stamp: stale.stamp,
+      current: stale.current,
+      onRegenerate: _regenerateFromBanner,
+      onDismiss: () => setState(() => _dismissedStale = key),
+    );
+  }
+
+  /// The banner's Regenerate: same as the app bar refresh, plus the reminder that the new plan is
+  /// not saved until the user taps Save (the old saved chart stays as it is until then).
+  void _regenerateFromBanner() {
+    _regenerations++;
+    _generateFreshPlan();
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          'Plan regenerated for your new targets. Save to keep it.',
+          style: AppTypography.body.copyWith(fontSize: 13),
+        ),
+        backgroundColor: AppColors.card,
+      ),
+    );
+  }
 }

@@ -155,6 +155,7 @@ Map<String, double>? _resolveBaseTargets(Map<String, dynamic>? profile) {
         goal: goal,
         pacePreference: (profile['pace_preference'] as String?) ?? 'balanced',
         bodyFatPercent: bodyFat,
+        targetWeightKg: (profile['target_weight_kg'] as num?)?.toDouble(),
       );
       return {
         'daily_calories': targets.dailyCalories.toDouble(),
