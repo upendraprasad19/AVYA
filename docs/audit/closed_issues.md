@@ -7385,3 +7385,18 @@ The founder chose to keep the plans as they are, over a unit that would give qua
 - **Regression tests**: `test/contracts/maintain_weight_callout_behavioral_test.dart`, `test/onboarding/target_weight_check_test.dart`, `test/contracts/weight_callout_copy_test.dart`, `test/contracts/projection_gate_single_source_test.dart`; 15 mutants, every one reddened at least one test (record in the diagnose doc).
 - **Blast radius**: `account` by path (the shared rule is read by Edit Profile and the coach door); the behaviour change is one display widget.
 - **Related**: OI-191 (the same card, other half; diagnose `b5d2e8`).
+
+## OI-517 — Diet chart: Portions / Grams display toggle (4th control) and a per-food weight and unit audit
+
+- **Status**: CLOSED · 2026-11-19 · PRs #298 (feature) and #300 (switch polish) · the commit carrying `closes-oi: OI-517`
+- **Blocked on**: — (resolved: plan `docs/plans/diet-grams-toggle.md`, record `docs/plan-reviews/diet-grams-toggle.md`, B-pass `docs/reviews/diet-grams-toggle-bpass.md`; the on-device check is row A21 of OI-348)
+- **Verified**: never
+- **Identified**: 2026-11-17 · filed via mint_oi.sh from branch `diet-chart-v3`
+
+**What it is.** Founder idea 2026-11-17 (Diet chart v3 brainstorm). The Diet chart shows portions only ("1 cup", "2 idli", "1 roti"); the founder wants a user choice between a **Portions** view and a **Grams** view (raw weight), as a 4th control in the settings row under the title (food type, strategy, supplements, + this one). Counted foods stay counted ("2 eggs"), and macros are always taken from the food row.
+
+**Measured at filing (assets/data/food_database.json, 1444 rows).** Every row already has `standard_serving_g` (0 missing) and per-100 g macros, so a gram figure for a plan item is `servingG` x portion with no new data. What is NOT settled: 462 rows have a countable serving ("1 samosa"), 773 a volume or vague one ("1 cup", "1 serving"), 209 a gram/ml one; the catalog (170 rows) splits 59 countable / 102 volume / 9 gram. 126 row names say "cooked" and 48 "raw", so "raw weight" is ambiguous (uncooked vs just grams): the founder's wording needs a ruling, rice 100 g cooked is not 100 g dry.
+
+**Done when.** (1) The founder rules cooked vs raw, and which foods are counted (egg, roti, idli, samosa) vs weighed (chicken, paneer, rice). (2) Each catalog row (and every row the Diet chart "Search any food" picker can return) carries an explicit weight basis and a unit kind, audited row by row, not inferred from the description text. (3) The Grams / Portions toggle (stored per user, Hive profile key) switches every plan row, the swap sheet, the portion picker and the PDF, with a test that the macros are identical in both views. (4) The portion picker built in Diet chart v3 already takes grams as input, so this issue only adds the display and the audit. Related: Diet chart v3 plan `docs/plans/diet-chart-v3.md`.
+- **Outcome**: Portions / Grams view shipped: switch in the calorie card, one `diet_serving_view` profile key (existing = Portions, new = Grams), 145 liquid rows marked `weight_unit: "ml"` (seed v9), five readers through `servingLabel`. SoT concepts `diet_serving_view`, `food_weight_unit`.
+
