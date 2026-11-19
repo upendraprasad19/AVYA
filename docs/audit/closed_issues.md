@@ -7400,3 +7400,28 @@ The founder chose to keep the plans as they are, over a unit that would give qua
 **Done when.** (1) The founder rules cooked vs raw, and which foods are counted (egg, roti, idli, samosa) vs weighed (chicken, paneer, rice). (2) Each catalog row (and every row the Diet chart "Search any food" picker can return) carries an explicit weight basis and a unit kind, audited row by row, not inferred from the description text. (3) The Grams / Portions toggle (stored per user, Hive profile key) switches every plan row, the swap sheet, the portion picker and the PDF, with a test that the macros are identical in both views. (4) The portion picker built in Diet chart v3 already takes grams as input, so this issue only adds the display and the audit. Related: Diet chart v3 plan `docs/plans/diet-chart-v3.md`.
 - **Outcome**: Portions / Grams view shipped: switch in the calorie card, one `diet_serving_view` profile key (existing = Portions, new = Grams), 145 liquid rows marked `weight_unit: "ml"` (seed v9), five readers through `servingLabel`. SoT concepts `diet_serving_view`, `food_weight_unit`.
 
+
+## OI-479 — AI Coach 'Clear conversation' menu item does nothing: onSelected only invalidates chatHistoryProvider, whose build re-reads every row from coachBox
+
+- **Status**: CLOSED · 2026-11-19 · PR #257 (merge 0b87f5bb, 2026-11-12) · the commit carrying `closes-oi: OI-479`
+- **Blocked on**: — (resolved: migration 177 applied and ledgered in `backups/applied_migrations.json`, PR merged; the on-device check is row A22 of OI-348, moved there by the founder 2026-11-19)
+- **Verified**: 2026-11-06, by reading (nothing run): `lib/features/ai_coach/screens/ai_coach/compact_header.dart:130-132` (`case 'clear': ref.invalidate(chatHistoryProvider);`, byte-identical at `d27bf032`), `lib/features/ai_coach/providers/ai_coach_provider.dart:167-190` (`ChatHistoryNotifier.build` loops `coachBox.keys` and rebuilds the list from Hive), and `git grep -n -iE "coachBox\.(clear|delete|deleteAll)|clearChat|clearHistory|clearConversation" -- lib` returns only `lib/shared/repositories/user_repository.dart:1212` (the account wipe).
+- **Identified**: 2026-11-06 · filed via mint_oi.sh from branch `telegram-surface-off`; found by the OI-466 B-pass (a fresh Sonnet reviewer; pre-existing, not caused by that batch)
+
+**What.** The AI Coach three-dot menu offers `Clear conversation`. Choosing it only calls `ref.invalidate(chatHistoryProvider)`. Invalidating the provider makes it rebuild, and the rebuild re-reads every chat row from the local `coachBox`, so the conversation comes back exactly as it was and nothing is cleared. Nothing else in `lib/` clears or deletes chat rows except the whole-account wipe. After OI-466 removed the Telegram switch, this is the only menu entry a PRO account has (a free account also has `Upgrade to PRO`), so the menu now consists of one item that does nothing for them. The new `test/contracts/telegram_surface_removed_test.dart` pins that the entry EXISTS and is wired to its `case`; it does not claim it works.
+
+**Why it is not fixed in OI-466.** "Clear" has no single obvious meaning here: deleting local rows alone would be undone by a cloud restore if the chat rows are backed up (not investigated here), and deleting cloud rows is a Destructive call. That is a product decision plus a sync/restore design, not a Telegram removal.
+
+**Options for the founder (pick one):** (a) clear the local `coachBox` chat rows (keep the `coaching_notes` singleton) and make sure a restore does not resurrect them; (b) clear local and cloud; (c) remove the menu entry until (a) or (b) is wanted. The app is not live (testers only), so there is no user-facing urgency.
+
+**Acceptance:** the item either clears what the decision says (behavioral test: write chat rows to a real Hive box, trigger the action, read the box and the provider back, and, for (a) and (b), run a restore and assert the rows stay gone) or is removed and `coachHeaderMenuItems` and its pin in `test/contracts/telegram_surface_removed_test.dart` are updated in the same change.
+
+Added 2026-11-12 (founder decisions, plan `docs/plans/2026-11-12-oi479-clear-conversation.md`, diagnose `5970aa`):
+D1 clear = HIDE, never delete (cloud chat rows feed coach memory, the weekly report and server jobs; a local delete
+comes back on restore); D2 the coach's short-term history starts fresh, long-term memory kept; D3 today's unresolved
+completion tile stays until the day is done; D4 the clear time syncs to the cloud (`user_preferences.coach_chat_cleared_at`,
+migration 177, RPC `raise_coach_chat_cleared_at`); D5 semantic recall of past conversations kept (no Edge Function
+change). Implemented on branch `oi479-clear-conversation` (plan converged after three review rounds). Done when:
+migration 177 applied live and ledgered, the PR merged, and on a device: clear the chat, the thread empties, the coach
+does not refer to the hidden turns, and after a sign-out and sign-in (online) the thread stays empty.
+- **Outcome**: Clear conversation hides the thread (a synced clear time, never a delete); diagnose `5970aa`.
