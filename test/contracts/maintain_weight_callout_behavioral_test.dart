@@ -11,6 +11,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:icanbefitter/core/theme/colors.dart';
 import 'package:icanbefitter/core/theme/typography.dart';
+import 'package:icanbefitter/core/utils/ist_date.dart';
 import 'package:icanbefitter/features/onboarding/target_weight_check.dart';
 import 'package:icanbefitter/features/profile/widgets/weight_projection_callout.dart';
 
@@ -420,6 +421,41 @@ void main() {
       expect(find.text(onLine), findsOneWidget);
       await pumpMaintain(tester, '2026-11-18', at(2026, 11, 25, 18, 31));
       expect(find.text('$onLine $_dot as of 18 Nov'), findsOneWidget);
+      // exactly IST midnight is already the next day
+      await pumpMaintain(tester, '2026-11-18', at(2026, 11, 25, 18, 30));
+      expect(find.text('$onLine $_dot as of 18 Nov'), findsOneWidget);
+    });
+
+    testWidgets('three weigh-ins: the LAST decides the gap, the date and the suffix',
+        (tester) async {
+      // The middle weigh-in sits 1 kg from the last and 8 days before it; only the last
+      // (2026-11-18, 74 kg) may feed the words and the "as of" date.
+      await pumpMaintain(tester, '', at(2026, 11, 26), entries: [
+        {'date': '2026-11-04', 'weight_kg': 76.0},
+        {'date': '2026-11-10', 'weight_kg': 75.0},
+        {'date': '2026-11-18', 'weight_kg': 74.0},
+      ]);
+      expect(find.text('$onLine $_dot as of 18 Nov'), findsOneWidget);
+      await pumpMaintain(tester, '', at(2026, 11, 26), entries: [
+        {'date': '2026-11-04', 'weight_kg': 76.0},
+        {'date': '2026-11-10', 'weight_kg': 75.0},
+        {'date': '2026-11-18', 'weight_kg': 79.0},
+      ]);
+      expect(find.text('$offLine $_dot as of 18 Nov'), findsOneWidget);
+    });
+
+    testWidgets('three weigh-ins: a Cut takes its span from the first and the LAST date',
+        (tester) async {
+      // The middle entry is on the first day: a read of the middle date as "last" would
+      // make the span 0 weeks and draw nothing.
+      await pumpMaintain(tester, '', _now, goal: 'lose_fat', target: 70, entries: [
+        {'date': '2026-11-04', 'weight_kg': 80.0},
+        {'date': '2026-11-04', 'weight_kg': 79.0},
+        {'date': '2026-11-18', 'weight_kg': 78.0},
+      ]);
+      expect(
+          find.text('At current rate, you\'ll reach 70kg in ~8 weeks (around Apr 2031)'),
+          findsOneWidget);
     });
 
     testWidgets('a future-dated last weigh-in never prints a suffix', (tester) async {
@@ -490,6 +526,10 @@ void main() {
         '2026-04-31',
         '2026-02-31',
         '2027-02-29',
+        '2026-1-5',
+        '2026-11-1',
+        '2026-1-05',
+        '026-11-18',
       ]) {
         expect(parseDateKeyUtc(bad), isNull, reason: bad);
       }
@@ -500,6 +540,11 @@ void main() {
       expect(maintainAsOfSuffix(lastDateKey: '2026-11-11', now: _freshNow),
           ' $_dot as of 11 Nov');
       expect(kMaintainStaleAfterDays, 7);
+    });
+
+    test('a very old key still prints, with its year', () {
+      expect(maintainAsOfSuffix(lastDateKey: '2014-03-05', now: _freshNow),
+          ' $_dot as of 5 Mar 2014');
     });
 
     test('an unreadable or future key is empty', () {
@@ -554,6 +599,38 @@ void main() {
       expect(
           find.text(
               '4.0 kg above your 75 kg target $_dot adjust your nutrition to hold the line'),
+          findsOneWidget);
+    });
+
+    testWidgets(
+        'with NO injected clock the line reads the app clock seam (nowWall): '
+        'the production path, which the screen takes', (tester) async {
+      addTearDown(resetTestClock);
+      final profile = {'primary_goal': 'general_fitness', 'target_weight_kg': 75.0};
+      Future<void> pumpApp() => tester.pumpWidget(MaterialApp(
+            home: Scaffold(
+              body: WeightProjectionLine(
+                  profile: profile, entries: _entriesEndingOn('2026-11-18', 76, 74)),
+            ),
+          ));
+      // 14:00 UTC = 19:30 IST on the 25th: 7 days old, no suffix (a double IST shift
+      // would read the 26th and print one).
+      setTestClockTo(DateTime.utc(2026, 11, 25, 14));
+      await pumpApp();
+      expect(find.text('Holding the line $_dot 1.0 kg from your 75 kg target'),
+          findsOneWidget);
+      // The next day: 8 days old, the suffix (a fixed or missing clock cannot print it).
+      setTestClockTo(DateTime.utc(2026, 11, 26, 6));
+      await pumpApp();
+      expect(
+          find.text('Holding the line $_dot 1.0 kg from your 75 kg target $_dot as of 18 Nov'),
+          findsOneWidget);
+      // A clock far in the future: old, with the year.
+      setTestClockTo(DateTime.utc(2031, 3, 5, 6));
+      await pumpApp();
+      expect(
+          find.text(
+              'Holding the line $_dot 1.0 kg from your 75 kg target $_dot as of 18 Nov 2026'),
           findsOneWidget);
     });
 

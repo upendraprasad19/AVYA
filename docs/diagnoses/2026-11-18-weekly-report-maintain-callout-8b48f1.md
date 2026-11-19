@@ -161,6 +161,11 @@ judged by the absolute gap). Pin-only protection (e, k): no test pumps `ReportsS
   separate surface with its own rule, not the OI-518 card.
 - The Weekly Report Edge Function narrative (`weekly-report/index.ts`) is not the card; changing it is an Edge Function deploy and
   needs its own per-action go.
+- The staleness suffix reads the dev/test clock seam (`now ?? nowWall()`), while the Cut / Build date sentence (`DateTime.now()`) and
+  the screen's 1W / 1M window cutoff do not (B-pass seat 1, follow-on). Only the dev panel's time travel can show the difference
+  (`setTestClock` is a no-op in release); changing the Cut / Build sites is outside the founder-approved scope.
+- The Maintain off-target line followed by the suffix reads `... · adjust your nutrition to hold the line · as of 3 Nov` (two
+  separators): the founder-approved shape, wrapped by the row's `Expanded`.
 - The `adjust` row keeps a named duplicate of the pure rule's `goal.contains('lose')` for its "diet" / "nutrition" word (Cut and
   Build only now; the Cut and Build wording rows of the behavioural test pin it).
 
@@ -183,7 +188,8 @@ label and date sentence as before.
 ## Follow-on 2026-11-19: history gate and "as of" suffix (plan `docs/plans/oi518-maintain-followon.md`, revision 4, 3 review rounds)
 
 Tests: `test/onboarding/target_weight_check_test.dart`, `test/contracts/weight_callout_copy_test.dart`,
-`test/contracts/maintain_weight_callout_behavioral_test.dart` (146 tests, green under `TZ` = Asia/Kolkata, UTC, Etc/GMT+12 and
+`test/contracts/maintain_weight_callout_behavioral_test.dart` (146 tests; 153 with the call-site pin
+`test/contracts/projection_gate_single_source_test.dart`, the fourth file of the mutation runs; green under `TZ` = Asia/Kolkata, UTC, Etc/GMT+12 and
 America/New_York). Mutations run against the four test files (each confirmed APPLIED by a changed-file assertion, the tree
 re-hashed after the run; a compile error would not have counted, none occurred). Failing tests per mutant in brackets:
 
@@ -215,3 +221,23 @@ Equivalent mutants, not counted: `lastDay.year < today.year` for `!=` (the calle
 comparison from the round trip, and keeping ONLY the month comparison (every rolled date, whether a day or a month overflow,
 changes the month, so the month comparison alone is a complete guard; the other two comparisons are belt and braces). The plan
 expected month-only to be killed; the run measured it as equivalent.
+
+### Follow-on B-pass mutation seat (100 mutants, 91 applied, 2026-11-19)
+
+The seat applied 91 mutants on head 2d34fa0d; 17 survived, all missing pins (no shipped-code defect). Each now has a test and was
+re-run (confirmed applied, killed, tree restored and re-hashed):
+
+| survivor | mutant | killed by | red |
+|---|---|---|---|
+| M1, M2, M3 | the production clock `now ?? nowWall()` replaced by a 2000 / 2100 constant / `istNow()` | `WeightProjectionLine` with NO injected clock under `setTestClockTo` (14:00Z, next day, 2031) | 1 each |
+| M93, M94, M95 | suffix / last weigh-in read from `entries[1]` | three-weigh-in Maintain rows (on and off target) | 1 / 1 / 2 |
+| M100 | the span's last date read from the middle entry | three-weigh-in Cut row with the middle entry on the first day | 1 |
+| M44, M49 | hidden gap / size condition on the Maintain exemption | pure rows (gap 15 kg at 0.14 weeks; target 120 at 0.4 weeks) | 1 each |
+| M37, M35 | Cut / Build exemption at `lastW == target`; `weeksDiff >= 0` | pure rows (a short or negative span is `none` for Cut and Build) | 1 each |
+| M77 | IST day taken one minute early | the exact 18:30Z row (IST midnight) | 1 in every zone |
+| M67, M68 | key regex `\d{1,2}` month / `\d{3,4}` year | bad keys `2026-1-05`, `026-11-18` (and `2026-1-5`, `2026-11-1`) | 1 each |
+| M75, M76 | no suffix for a key more than 5 years / 3650 days old | a 2014 key prints `as of 5 Mar 2014` | 1 each |
+
+Equivalent (seat's reasoning, accepted): `entries.length < 1` in the line (the callout's own `< 2` guard catches it); `.inHours ~/ 24`
+on UTC dates; `!startsWith('general')` / `!contains('fitness')` (the only such goal); `now ?? DateTime.now()` (identical to `nowWall()`
+in a release build).

@@ -216,6 +216,13 @@ void main() {
       expect(k('recomp', 75, 76, 0.4, 80), ProjectionCalloutKind.none);
       expect(k('', 75, 76, 0.4, 80), ProjectionCalloutKind.none);
     });
+    test('a short span is none for Cut and Build even AT the target or with a negative span', () {
+      for (final g in ['lose_fat', 'build_muscle']) {
+        expect(k(g, 78, 78, 0.14, 78), ProjectionCalloutKind.none);
+        expect(k(g, 80, 79, -1, 70), ProjectionCalloutKind.none);
+        expect(k(g, 70, 71, -1, 80), ProjectionCalloutKind.none);
+      }
+    });
     test('exactly half a week of history passes the gate for Cut and Build', () {
       expect(k('lose_fat', 80, 79, 0.5, 70), ProjectionCalloutKind.eta);
       expect(k('build_muscle', 75, 76, 0.5, 80), ProjectionCalloutKind.eta);
@@ -295,6 +302,11 @@ void main() {
         expect(m(75, 75, weeks, 75), ProjectionCalloutKind.onTarget);
         expect(m(75, 79, weeks, 75), ProjectionCalloutKind.offTarget);
       }
+    });
+    test('Maintain has no gap or size cap at a short span (no hidden condition on the gate)', () {
+      expect(m(75, 90, 0.14, 75), ProjectionCalloutKind.offTarget);
+      expect(m(118, 118, 0.4, 120), ProjectionCalloutKind.onTarget);
+      expect(m(75, 75, -1, 75), ProjectionCalloutKind.onTarget);
     });
     test('Maintain with a missing target is still none at zero weeks', () {
       expect(m(75, 75, 0, 0), ProjectionCalloutKind.none);

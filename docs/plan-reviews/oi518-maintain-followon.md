@@ -5,7 +5,8 @@ blast_radius: account
 review_rounds: 3
 ground_truth_verified: true
 verdict: converged
-bpass: pending
+bpass: accepted
+bpass_review: docs/reviews/d1c2e67887b1-review.md
 ---
 
 # Plan-review record: OI-518 follow-on, three founder decisions on the Maintain callout (account)
