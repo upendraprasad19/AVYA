@@ -6970,15 +6970,3 @@ Diet plan Unit 4a hides Supplements from anyone under 18 (`kSupplementsMinAgeYea
 **Measured at filing (assets/data/food_database.json, 1444 rows).** Every row already has `standard_serving_g` (0 missing) and per-100 g macros, so a gram figure for a plan item is `servingG` x portion with no new data. What is NOT settled: 462 rows have a countable serving ("1 samosa"), 773 a volume or vague one ("1 cup", "1 serving"), 209 a gram/ml one; the catalog (170 rows) splits 59 countable / 102 volume / 9 gram. 126 row names say "cooked" and 48 "raw", so "raw weight" is ambiguous (uncooked vs just grams): the founder's wording needs a ruling, rice 100 g cooked is not 100 g dry.
 
 **Done when.** (1) The founder rules cooked vs raw, and which foods are counted (egg, roti, idli, samosa) vs weighed (chicken, paneer, rice). (2) Each catalog row (and every row the Diet chart "Search any food" picker can return) carries an explicit weight basis and a unit kind, audited row by row, not inferred from the description text. (3) The Grams / Portions toggle (stored per user, Hive profile key) switches every plan row, the swap sheet, the portion picker and the PDF, with a test that the macros are identical in both views. (4) The portion picker built in Diet chart v3 already takes grams as input, so this issue only adds the display and the audit. Related: Diet chart v3 plan `docs/plans/diet-chart-v3.md`.
-
-## OI-518 — Weekly Report weight card treats Maintain as a gain goal: wrong on-track warning and a projection date to a hold-weight target
-
-- **Status**: OPEN
-- **Blocked on**: none
-- **Verified**: 2026-11-18, source only: `lib/features/profile/screens/reports_screen.dart` `_buildProjectionCallout` (~line 886-960) read directly; not run on a device.
-- **Identified**: 2026-11-18 · found while investigating OI-191; founder asked for it as its own OI.
-- **What**: the Weekly Report's weight-trend card decides "moving the right way" with `goal.contains('lose')` (`reports_screen.dart:~906`): every other goal is treated as "wants to gain". For Maintain (`general_fitness`, target within 3 kg of current) a small drift downwards shows "Adjust your nutrition to stay on track" (orange warning), and a drift upwards shows "At current rate, you'll reach <target> kg in ~N weeks (around <month year>)" as if the user were building. A maintainer has no date to reach.
-- **What this does NOT cover**: the contradictory goal / target pair (a Build goal with a target below current weight) is fixed by OI-191 (`canProjectGoalDate` hides the callout for such a pair). This OI is only the Maintain wording and logic.
-- **Fix shape (not decided)**: for Maintain show a hold-weight line ("Holding within X kg of your target") or hide the projection; the on-track test for Maintain is `abs(last - target) <= 3.0` (the onboarding window, `kMaintainWindowKg`), not a trend direction. Wording goes through the Wardroom brand soul (`lib/shared/widgets/wardroom/CLAUDE.md`) and the psychology-pass lens.
-- **Blast radius**: `feature` (profile UI only).
-- **Related**: OI-191 (the same card, other half); `lib/features/profile/CLAUDE.md` weekly report row.

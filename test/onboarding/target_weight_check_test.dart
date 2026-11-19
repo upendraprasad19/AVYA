@@ -232,9 +232,111 @@ void main() {
       expect(k('lose_fat', 80, 78, 2, 70), ProjectionCalloutKind.eta);
       expect(k('build_muscle', 75, 76, 2, 80), ProjectionCalloutKind.eta);
     });
-    test('Maintain keeps the date sentence inside its window, none beyond', () {
-      expect(k('general_fitness', 74, 75, 2, 77), ProjectionCalloutKind.eta);
-      expect(k('general_fitness', 74, 75, 2, 80), ProjectionCalloutKind.none);
+    test('a flat Cut / Build series with the target exactly 0.5 kg away is none, '
+        'not a divide by a zero rate (OI-518, plan round 3)', () {
+      // remaining = -0.5 / +0.5 exactly: skips `adjust` (needs > 0.5) and
+      // `reached` (needs < 0.5); the date sentence used to take Infinity.ceil().
+      expect(k('lose_fat', 80.0, 80.0, 2, 79.5), ProjectionCalloutKind.none);
+      expect(k('build_muscle', 80.0, 80.0, 2, 80.5), ProjectionCalloutKind.none);
+    });
+  });
+
+  // OI-518: a Maintain goal is judged by the DISTANCE of the last weigh-in to the
+  // target (the +-3.0 kg window), never by the trend direction, and never gets a
+  // date or an "Adjust" verdict inside the window.
+  group('projectionCalloutKind: Maintain (general_fitness) is distance, not direction', () {
+    ProjectionCalloutKind m(double first, double last, double weeks, double target) =>
+        projectionCalloutKind(
+            goal: 'general_fitness',
+            firstW: first,
+            lastW: last,
+            weeksDiff: weeks,
+            target: target);
+    test('inside the window the trend does not matter (falling, rising, flat)', () {
+      expect(m(76, 74, 2, 75), ProjectionCalloutKind.onTarget); // the old `adjust`
+      expect(m(74, 76, 2, 75), ProjectionCalloutKind.onTarget);
+      expect(m(75, 75, 2, 75), ProjectionCalloutKind.onTarget);
+      expect(m(74, 75, 2, 77), ProjectionCalloutKind.onTarget); // the old `eta`
+    });
+    test('the old reached zone does not win', () {
+      expect(m(74, 75.2, 2, 75), ProjectionCalloutKind.onTarget);
+      expect(m(76, 74.8, 2, 75), ProjectionCalloutKind.onTarget);
+    });
+    test('the LAST weigh-in decides, not the first', () {
+      expect(m(80, 76, 2, 75), ProjectionCalloutKind.onTarget);
+      expect(m(76, 80, 2, 75), ProjectionCalloutKind.offTarget);
+    });
+    test('the window edge is inclusive, in integer tenths', () {
+      expect(m(76, 78.3, 2, 75.3), ProjectionCalloutKind.onTarget); // 3.0
+      expect(m(76, 78.4, 2, 75.3), ProjectionCalloutKind.offTarget); // 3.1
+      expect(m(76, 72.3, 2, 75.3), ProjectionCalloutKind.onTarget);
+      expect(m(76, 72.2, 2, 75.3), ProjectionCalloutKind.offTarget);
+    });
+    test('beyond the window on either side is offTarget, never a date', () {
+      expect(m(74, 75, 2, 80), ProjectionCalloutKind.offTarget);
+      expect(m(76, 74, 2, 80), ProjectionCalloutKind.offTarget);
+      expect(m(76, 79, 2, 70), ProjectionCalloutKind.offTarget);
+    });
+    test('a big swing in either direction does not hide the distance (no trend gate)', () {
+      expect(m(85, 75, 2, 75), ProjectionCalloutKind.onTarget);
+      expect(m(65, 75, 2, 75), ProjectionCalloutKind.onTarget);
+      expect(m(65, 79, 2, 75), ProjectionCalloutKind.offTarget);
+      expect(m(90, 79, 2, 75), ProjectionCalloutKind.offTarget);
+    });
+    test('the history gate sits ABOVE the Maintain branch', () {
+      expect(m(75, 75, 0.4, 75), ProjectionCalloutKind.none);
+      expect(m(75, 75, 0.5, 75), ProjectionCalloutKind.onTarget);
+    });
+    test('a missing target or weight is none', () {
+      expect(m(75, 75, 2, 0), ProjectionCalloutKind.none);
+      expect(m(75, 75, 2, -3), ProjectionCalloutKind.none);
+      expect(m(75, 75, 2, double.nan), ProjectionCalloutKind.none);
+      expect(m(75, 75, 2, double.infinity), ProjectionCalloutKind.none);
+      expect(m(75, 0, 2, 75), ProjectionCalloutKind.none);
+      expect(m(75, double.nan, 2, 75), ProjectionCalloutKind.none);
+    });
+    test('Cut and Build never return the Maintain kinds', () {
+      for (final g in ['lose_fat', 'build_muscle', 'recomp', '']) {
+        for (final (first, last, target) in [
+          (76.0, 74.0, 75.0),
+          (74.0, 76.0, 75.0),
+          (75.0, 75.0, 75.0),
+          (76.0, 79.0, 70.0),
+        ]) {
+          final kind = projectionCalloutKind(
+              goal: g, firstW: first, lastW: last, weeksDiff: 2, target: target);
+          expect(kind, isNot(ProjectionCalloutKind.onTarget), reason: '$g');
+          expect(kind, isNot(ProjectionCalloutKind.offTarget), reason: '$g');
+        }
+      }
+    });
+  });
+
+  group('weightGapTenths: the one expression of the gap', () {
+    test('signed tenths of target - current, rounded', () {
+      expect(weightGapTenths(73.8, 75), 12);
+      expect(weightGapTenths(78.4, 75), -34);
+      expect(weightGapTenths(75, 75), 0);
+      // 75.3 - 78.3 is not exactly -3.0 in doubles; the tenths are still -30.
+      expect(weightGapTenths(78.3, 75.3), -30);
+      // measured 2026-11-18: (70.0 - 66.9) * 10 = 30.999999999999943 -> 31, not 30.
+      expect(weightGapTenths(66.9, 70.0), 31);
+    });
+    test('validateTargetWeight still agrees with the same window', () {
+      expect(
+          validateTargetWeight(goal: 'general_fitness', current: 66.9, target: 70.0),
+          TargetWeightCheck.outsideMaintainWindow);
+      expect(
+          validateTargetWeight(goal: 'general_fitness', current: 78.3, target: 75.3),
+          TargetWeightCheck.ok);
+    });
+  });
+
+  group('canProjectGoalDate: the 0.1 kg gate is inclusive', () {
+    test('a gap of exactly 0.1 kg (0.2 - 0.1 is exactly 0.1 in doubles) is no date', () {
+      expect(0.2 - 0.1 == 0.1, isTrue); // the premise, checked here
+      expect(canProjectGoalDate(goal: 'lose_fat', current: 0.2, target: 0.1), isFalse);
+      expect(canProjectGoalDate(goal: 'lose_fat', current: 80.0, target: 79.8), isTrue);
     });
   });
 

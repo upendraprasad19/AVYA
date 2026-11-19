@@ -6,7 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart' show FunctionException;
-import 'package:icanbefitter/features/onboarding/target_weight_check.dart';
+import 'package:icanbefitter/features/profile/widgets/weight_projection_callout.dart';
 import 'package:icanbefitter/core/theme/colors.dart';
 import 'package:icanbefitter/core/theme/spacing.dart';
 import 'package:icanbefitter/core/theme/typography.dart';
@@ -736,11 +736,10 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
               child: _buildLineChart(filtered, targetWeight),
             ),
 
-            // Projection callout
-            if (targetWeight > 0 && filtered.length >= 2) ...[
-              const SizedBox(height: 10),
-              _buildProjectionCallout(filtered, targetWeight),
-            ],
+            // Projection callout (OI-518: its own widget; it reads the goal and the target
+            // from the profile map itself, so this line hands over the raw profile and the
+            // filtered weigh-ins and nothing else).
+            WeightProjectionLine(profile: profile, entries: filtered),
           ],
         ],
       ),
@@ -885,83 +884,6 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
           ),
         ],
       ),
-    );
-  }
-
-  Widget _buildProjectionCallout(List<Map<String, dynamic>> entries, double targetWeight) {
-    final first = entries.first;
-    final last = entries.last;
-    final firstDate = DateTime.tryParse(first['date'] as String? ?? '');
-    final lastDate = DateTime.tryParse(last['date'] as String? ?? '');
-    final firstW = (first['weight_kg'] as num).toDouble();
-    final lastW = (last['weight_kg'] as num).toDouble();
-
-    if (firstDate == null || lastDate == null) return const SizedBox();
-    final weeksDiff = lastDate.difference(firstDate).inDays / 7.0;
-    if (weeksDiff < 0.5) return const SizedBox();
-
-    final weeklyRate = (lastW - firstW) / weeksDiff;
-    final remaining = targetWeight - lastW;
-
-    // OI-191: the branch order (adjust, reached, date sentence) and the gate on
-    // the date sentence live in `projectionCalloutKind`, which the unit tests
-    // drive directly. `goal` is the profile's own goal.
-    final goal = UserRepository.instance.getProfile()?['primary_goal'] as String? ?? '';
-    final wantsLose = goal.contains('lose');
-    final kind = projectionCalloutKind(
-      goal: goal,
-      firstW: firstW,
-      lastW: lastW,
-      weeksDiff: weeksDiff,
-      target: targetWeight,
-    );
-
-    if (kind == ProjectionCalloutKind.none) return const SizedBox();
-
-    if (kind == ProjectionCalloutKind.adjust) {
-      return Row(
-        children: [
-          Icon(Icons.warning_amber, size: 14, color: AppColors.orange),
-          const SizedBox(width: 6),
-          Expanded(
-            child: Text(
-              'Adjust your ${wantsLose ? "diet" : "nutrition"} to stay on track',
-              style: AppTypography.bodySm.copyWith(fontWeight: FontWeight.w500, color: AppColors.warn),
-            ),
-          ),
-        ],
-      );
-    }
-
-    if (kind == ProjectionCalloutKind.reached) {
-      return Row(
-        children: [
-          Icon(Icons.check_circle, size: 14, color: AppColors.green),
-          const SizedBox(width: 6),
-          Text(
-            'You\'ve reached your goal weight!',
-            style: AppTypography.bodySm.copyWith(fontWeight: FontWeight.w600, color: AppColors.ok),
-          ),
-        ],
-      );
-    }
-
-    final weeksToGo = (remaining / weeklyRate).abs().ceil();
-    final targetDate = DateTime.now().add(Duration(days: weeksToGo * 7));
-    const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-    final dateLabel = '${monthNames[targetDate.month - 1]} ${targetDate.year}';
-
-    return Row(
-      children: [
-        Icon(Icons.trending_down, size: 14, color: AppColors.green),
-        const SizedBox(width: 6),
-        Expanded(
-          child: Text(
-            'At current rate, you\'ll reach ${targetWeight.toStringAsFixed(0)}kg in ~$weeksToGo weeks (around $dateLabel)',
-            style: AppTypography.bodySm.copyWith(fontWeight: FontWeight.w500, color: AppColors.ok),
-          ),
-        ),
-      ],
     );
   }
 

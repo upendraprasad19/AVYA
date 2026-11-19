@@ -19,6 +19,12 @@
 // readers, extracted so their branch order is testable). A target <= 0 is `missing`
 // (an Edit Profile save used to store an empty field as 0.0, which passed Cut as
 // "0 is below current").
+//
+// OI-518: the Weekly Report callout judges a Maintain goal by its DISTANCE to the
+// target (the same +-3.0 kg window), never by trend direction: [projectionCalloutKind]
+// returns `onTarget` inside the window and `offTarget` beyond it, and never a date.
+// [weightGapTenths] is the ONE expression of the gap in integer tenths, shared by
+// [validateTargetWeight] and by the callout's words.
 library;
 
 /// Result of [validateTargetWeight].
@@ -43,6 +49,15 @@ const double kMaintainWindowKg = 3.0;
 
 bool _finite(double? v) => v != null && v.isFinite;
 
+/// The gap `target - current` in integer TENTHS of a kg, rounded (half away from
+/// zero). Negative = [current] is above [target]. The ONE expression of the gap:
+/// [validateTargetWeight] judges the Maintain window with it and the callout's copy
+/// prints it, so the kind and the printed distance cannot disagree.
+///
+/// Precondition: both weights are finite (`round()` throws on NaN / infinity).
+int weightGapTenths(double current, double target) =>
+    ((target - current) * 10).round();
+
 /// Validates [target] against [current] for [goal]. Uses the RAW parsed values
 /// (never the 40-250 clamp the screen applies afterwards).
 TargetWeightCheck validateTargetWeight({
@@ -57,7 +72,7 @@ TargetWeightCheck validateTargetWeight({
   }
   if (!_finite(current) || !_finite(target)) return TargetWeightCheck.missing;
   if (current! <= 0 || target! <= 0) return TargetWeightCheck.missing;
-  final tenths = ((target - current) * 10).round();
+  final tenths = weightGapTenths(current, target);
   switch (goal) {
     case 'lose_fat':
       return tenths < 0
@@ -99,14 +114,17 @@ bool canProjectGoalDate({
   return goalTargetAgree(goal: goal, current: current, target: target);
 }
 
-/// What the Weekly Report's weight callout shows.
-enum ProjectionCalloutKind { adjust, reached, eta, none }
+/// What the Weekly Report's weight callout shows. `onTarget` / `offTarget` are the
+/// Maintain kinds (OI-518): inside / beyond the +-3.0 kg window around the target.
+enum ProjectionCalloutKind { adjust, reached, eta, onTarget, offTarget, none }
 
 /// The callout's decision, in its original branch order (OI-191 gates only the
-/// date sentence): too little history -> none; not moving the right way and not
-/// there yet -> adjust; within 0.5 kg of the target -> reached; otherwise the date
-/// sentence, but only when the goal and the target agree (judged on the LAST
-/// weigh-in, the callout's own "current").
+/// date sentence): too little history -> none; Maintain -> onTarget / offTarget by
+/// the window around the target, judged on the LAST weigh-in (OI-518); not moving
+/// the right way and not there yet -> adjust; within 0.5 kg of the target ->
+/// reached; a flat series -> none; otherwise the date sentence, but only when the
+/// goal and the target agree (judged on the LAST weigh-in, the callout's own
+/// "current").
 ProjectionCalloutKind projectionCalloutKind({
   required String goal,
   required double firstW,
@@ -115,6 +133,21 @@ ProjectionCalloutKind projectionCalloutKind({
   required double target,
 }) {
   if (weeksDiff < 0.5) return ProjectionCalloutKind.none;
+  if (goal == 'general_fitness') {
+    // OI-518: a maintainer has no date to reach and no direction to move in; the
+    // card says how far the last weigh-in is from the target. No default arm: a new
+    // check value is an analyzer error here.
+    switch (validateTargetWeight(goal: goal, current: lastW, target: target)) {
+      case TargetWeightCheck.ok:
+        return ProjectionCalloutKind.onTarget;
+      case TargetWeightCheck.outsideMaintainWindow:
+        return ProjectionCalloutKind.offTarget;
+      case TargetWeightCheck.missing:
+      case TargetWeightCheck.mustBeBelowCurrent:
+      case TargetWeightCheck.mustBeAboveCurrent:
+        return ProjectionCalloutKind.none;
+    }
+  }
   final weeklyRate = (lastW - firstW) / weeksDiff;
   final remaining = target - lastW;
   final wantsLose = goal.contains('lose');
@@ -122,6 +155,9 @@ ProjectionCalloutKind projectionCalloutKind({
       (wantsLose && weeklyRate < 0) || (!wantsLose && weeklyRate > 0);
   if (!movingRight && remaining.abs() > 0.5) return ProjectionCalloutKind.adjust;
   if (remaining.abs() < 0.5) return ProjectionCalloutKind.reached;
+  // OI-518 (round 3): a flat series with the target exactly 0.5 kg away skips both
+  // lines above and would divide by a zero rate in the date sentence.
+  if (weeklyRate == 0) return ProjectionCalloutKind.none;
   return goalTargetAgree(goal: goal, current: lastW, target: target)
       ? ProjectionCalloutKind.eta
       : ProjectionCalloutKind.none;
