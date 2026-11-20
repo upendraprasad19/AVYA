@@ -1,3 +1,5 @@
+import 'package:icanbefitter/core/copy/purchase_copy.dart';
+import 'package:icanbefitter/core/constants/purchase_mode.dart';
 import 'dart:async';
 import 'dart:convert';
 
@@ -959,7 +961,8 @@ class AiBreakdownNotifier extends Notifier<AiBreakdownData?> {
           ? 'The AI is offline ($httpStatus). Please try again in a minute.'
           : 'The AI is temporarily unavailable. Please try again in a minute.';
       final errorMsg = isRateLimitError
-          ? 'Daily food analysis limit reached. Try again tomorrow or upgrade to PRO.'
+          ? PurchaseCopy.foodAnalysisLimit(
+              purchaseUi: showsUpgradeAffordance())
           : isAuthError
               ? 'Session refreshed. Please tap Analyse again.'
               : isMessageTooLong

@@ -620,17 +620,17 @@ concepts:
           against stale `completed_at` mismatching the requested date
           (Test #13 Bug 5.3 — do NOT call .toLocal() before _dateKey).
       - file: lib/features/home/providers/home_provider.dart
-        line_range: 83-141
+        line_range: 84-142
         method: calendarWeekProvider per-day fetch
         semantic: pass-through
         fields_read: [via WorkoutScheduleService.getScheduleForDate(date)]
       - file: lib/features/home/providers/home_provider.dart
-        line_range: 556-571
+        line_range: 560-575
         method: todayWorkoutProvider
         semantic: pass-through
         fields_read: [via WorkoutScheduleService.getScheduleForDate(DateTime.now())]
       - file: lib/features/home/providers/home_provider.dart
-        line_range: 718-758
+        line_range: 722-762
         method: aiInsightProvider (next-workout consistency hint)
         semantic: pass-through
         fields_read: [via ref.watch(todayWorkoutProvider) — derives from the Today card's row (c7e3a9, test/contracts/ai_insight_follows_today_row_test.dart)]
@@ -766,12 +766,12 @@ concepts:
         semantic: aggregated
         fields_read: [total_calories, date]
       - file: lib/features/nutrition/providers/nutrition_provider.dart
-        line_range: 1774-1833
+        line_range: 1777-1836
         method: WeeklyNutritionNotifier.build
         semantic: historical-series
         fields_read: [total_calories, total_protein, date, is_saved_meal]
       - file: lib/features/nutrition/providers/nutrition_provider.dart
-        line_range: 1212-1236
+        line_range: 1215-1239
         method: FoodLogNotifier.deleteFoodLog (delegates to NutritionWriteService.deleteLog, OI-36)
         semantic: display-only
         fields_read: [total_calories, calories, items[], food_name (legacy flat row), name, meal_type, date]
@@ -779,7 +779,7 @@ concepts:
           Reads pre-delete log entry to stash audit row in
           'recent_deletes' bucket; falls back to legacy 'calories' key.
       - file: lib/features/home/providers/home_provider.dart
-        line_range: 778-824
+        line_range: 782-828
         method: RecentFoodLogsNotifier.build
         semantic: display-only
         fields_read: [total_calories, total_protein, total_carbs, total_fat, items[] (names via deriveMealDisplayName, 8b3d4e), meal_type, date]
@@ -925,7 +925,7 @@ concepts:
     reader_manifest_complete: true
     readers:
       - file: lib/features/nutrition/providers/nutrition_provider.dart
-        line_range: 1212-1249
+        line_range: 1215-1252
         method: FoodLogNotifier.deleteFoodLog + restoreFoodLog
         semantic: pass-through
         fields_read: [via box.get(logId), Hive nlog_* full map]
@@ -935,7 +935,7 @@ concepts:
           to NutritionWriteService.restoreFoodLog. Same provider also
           delegates DeleteNutritionLogNotifier.delete to WriteService.deleteLog.
       - file: lib/features/nutrition/providers/nutrition_provider.dart
-        line_range: 1842-1857
+        line_range: 1845-1860
         method: DeleteNutritionLogNotifier.delete
         semantic: pass-through
         fields_read: [via NutritionWriteService.deleteLog(allowUndo: true)]
@@ -1038,7 +1038,7 @@ concepts:
           _compactContext before serialising. Pre-compaction sites
           would 400 on the 10K server limit for historical queries.
       - file: lib/features/ai_coach/providers/ai_coach_provider.dart
-        line_range: 419-719
+        line_range: 421-721
         method: SendMessageNotifier._sendMessage retry path + media path
         semantic: pass-through
         fields_read: [<full context map>]
@@ -1220,10 +1220,10 @@ concepts:
           Canonical reactive reader; lives in profile_provider.dart (NOT a
           separate file). Build-method callsites must use ref.watch on this
           provider so payment success rebuilds them. Razorpay invalidates it via
-          razorpay_service.dart:733 (_invalidateSubscriptionProviders). Its build() MUST use proStateSnapshot(),
+          razorpay_service.dart:749 (_invalidateSubscriptionProviders). Its build() MUST use proStateSnapshot(),
           never isPro() — pinned by subscription_cqrs_behavioral_test group E.
       - file: lib/features/home/providers/home_provider.dart
-        line_range: 550-553
+        line_range: 554-557
         method: subscriptionExpiryBannerProvider
         semantic: derived
         fields_read: [isPro, daysUntilExpiry, proLapsedAt]
@@ -1239,12 +1239,12 @@ concepts:
         semantic: display-only
         fields_read: [isPro]
       - file: lib/features/train/screens/preview_workout_screen.dart
-        line_range: 39-50
+        line_range: 41-52
         method: PreviewWorkoutScreen build
         semantic: display-only
         fields_read: [isPro]
       - file: lib/features/train/screens/phase_roadmap_screen.dart
-        line_range: 41-50
+        line_range: 43-52
         method: PhaseRoadmapScreen build
         semantic: display-only
         fields_read: [isPro]
@@ -1376,7 +1376,7 @@ concepts:
     reader_manifest_complete: true
     readers:
       - file: lib/features/nutrition/providers/nutrition_provider.dart
-        line_range: 1871-1874
+        line_range: 1874-1877
         method: waterTargetProvider (Provider<int>)
         semantic: pass-through
         fields_read: [via WaterTargetService.instance.currentTargetMl()]
@@ -1860,12 +1860,12 @@ concepts:
         method: _syncUserProfile (push via dietStrategyPushEntry; flag-gated, canonical key)
     readers:
       - file: lib/features/nutrition/providers/nutrition_provider.dart
-        line_range: 44-227
+        line_range: 46-229
         method: _resolveNutritionTargets + resolveBaseMacroPack + _applyDietStrategy + _watchDietStrategyInputs (feeds macroTargetsProvider with strategy_index, DailyNutritionData.strategy)
         semantic: transformed
         fields_read: [diet_strategy, daily_calories, protein_grams, carb_grams, carbs_grams, fat_grams]
       - file: lib/features/home/providers/home_provider.dart
-        line_range: 596-674
+        line_range: 600-678
         method: NutritionSummaryNotifier.build (helper on a complete stored pack only; watches only with the flag on)
         semantic: transformed
         fields_read: [diet_strategy, daily_calories, protein_grams, carb_grams, carbs_grams, fat_grams]
@@ -2156,7 +2156,7 @@ concepts:
           known weigh-in; calories/protein/workouts zero-filled.
           Skips saved-meal templates via is_saved_meal flag.
       - file: lib/features/profile/widgets/weekly_report_card.dart
-        line_range: 38-45
+        line_range: 40-47
         method: WeeklyReportCard build (sole consumer of series)
         semantic: display-only
         fields_read: [weight, calories, protein, workouts]
@@ -2704,17 +2704,17 @@ concepts:
         semantic: aggregated
         fields_read: [total_calories, total_protein, total_carbs, total_fat, total_fiber, date, is_saved_meal]
       - file: lib/features/nutrition/providers/nutrition_provider.dart
-        line_range: 416-478
+        line_range: 418-480
         method: DailyNutritionNotifier.build (per-slot bucketing)
         semantic: aggregated
         fields_read: [date, meal_type, is_saved_meal, items[]]
       - file: lib/features/nutrition/providers/nutrition_provider.dart
-        line_range: 1774-1833
+        line_range: 1777-1836
         method: WeeklyNutritionNotifier.build
         semantic: historical-series
         fields_read: [total_calories, total_protein, date, is_saved_meal]
       - file: lib/features/home/providers/home_provider.dart
-        line_range: 778-824
+        line_range: 782-828
         method: RecentFoodLogsNotifier.build
         semantic: display-only
         fields_read: [total_calories, total_protein, total_carbs, total_fat, items[] (names via deriveMealDisplayName, 8b3d4e), meal_type, date]
@@ -2792,7 +2792,7 @@ concepts:
       food-search (custom foods appear alongside the bundled DB).
     writers:
       - file: lib/features/nutrition/providers/nutrition_provider.dart
-        line_range: 1405-1471
+        line_range: 1408-1474
         method: addCustomFood
         semantic: hive-write + immediate sync
         notes: |
@@ -2800,7 +2800,7 @@ concepts:
           + foodBox[<v5>], then unawaited(SyncService.instance.syncCustomItemsNow()).
     readers:
       - file: lib/features/nutrition/providers/nutrition_provider.dart
-        line_range: 1474-1475
+        line_range: 1477-1478
         method: customFoodProvider
         semantic: hive-read
         notes: |
@@ -4558,7 +4558,7 @@ concepts:
           dossier shows "CONFIRMING ⟳ AWAITING WEBHOOK CONFIRMATION"
           copy.
       - file: lib/core/services/razorpay_service.dart
-        line_range: 508-649
+        line_range: 524-665
         method: RazorpayService.handlePaymentConfirmed
         semantic: pass-through
         fields_read: []
@@ -4570,7 +4570,7 @@ concepts:
           fires. OI-182: the post-checkout session refresh that runs BEFORE
           this is now bounded (SupabaseService.refreshTimeout).
       - file: lib/core/services/razorpay_service.dart
-        line_range: 749-961
+        line_range: 765-977
         method: RazorpayService._pollAndActivate (Phase 1 polls + Phase 2 verify, both bounded; clears the grace on success)
         semantic: pass-through
         fields_read: []
@@ -4581,7 +4581,7 @@ concepts:
           telemetry POST per attempt. The exhausted-phases budget
           (kActivationPhasesBudget) is what kPaymentGraceWindow is derived from.
       - file: lib/core/services/razorpay_service.dart
-        line_range: 963-1053
+        line_range: 979-1069
         method: RazorpayService._scheduleVerificationRetry
         semantic: pass-through
         fields_read: []
@@ -4722,12 +4722,12 @@ concepts:
     reader_manifest_complete: true
     readers:
       - file: lib/features/home/providers/home_provider.dart
-        line_range: 83-141
+        line_range: 84-142
         method: calendarWeekProvider per-day status check
         semantic: flag-check
         fields_read: [status, completed_at]
       - file: lib/features/home/providers/home_provider.dart
-        line_range: 556-571
+        line_range: 560-575
         method: todayWorkoutProvider
         semantic: flag-check
         fields_read: [status, completed_at, exercises]
@@ -5126,7 +5126,7 @@ concepts:
           per-set MAX. Pre-fix returned cumulative SUM for bodyweight_reps
           + timed. Closes-diagnose: 2026-05-16-pr-cumulative-bug
       - file: lib/features/home/providers/home_provider.dart
-        line_range: 1045-1056
+        line_range: 1049-1060
         method: AllExercisePRsNotifier.build (wraps loadAllExercisePRs)
         semantic: pass-through
         fields_read: [via loadAllExercisePRs]
@@ -5208,7 +5208,7 @@ concepts:
       the same key. Synced to water_logs cloud table with UNIQUE(user_id, date).
     writers:
       - file: lib/features/nutrition/providers/nutrition_provider.dart
-        line_range: 527-550
+        line_range: 529-552
         method: WaterIntakeNotifier.addWater + increment + decrement
         notes: Routes through HealthWriteService.setWaterMl (audit-2026-05-16 E.7).
       - file: lib/core/services/health_write_service.dart
@@ -5226,7 +5226,7 @@ concepts:
     reader_manifest_complete: true
     readers:
       - file: lib/features/nutrition/providers/nutrition_provider.dart
-        line_range: 515-554
+        line_range: 517-556
         method: WaterIntakeNotifier.build (waterIntakeProvider)
         semantic: latest
         fields_read: [healthBox['water_ml_<istToday>'] (raw int)]
@@ -5331,7 +5331,7 @@ concepts:
       Hive restore uses same hash key so cross-device restores don't duplicate.
     writers:
       - file: lib/features/nutrition/providers/nutrition_provider.dart
-        line_range: 1321-1391
+        line_range: 1324-1394
         method: SavedMealsNotifier.saveMealPreset + relogSavedMeal + deleteSavedMeal (delegators — relogSavedMeal no longer bumps times_used, a8e3f1)
       - file: lib/core/services/nutrition_write_service.dart
         line_range: 845-989
@@ -5353,7 +5353,7 @@ concepts:
       - { file: lib/features/auth/screens/restoring_screen.dart, reason: "checks SavedMealKeyMigrator flag (config.get('saved_meal_key_migration_v1')) — not a saved_meal_* row reader; diagnose b8d5c2" }
     readers:
       - file: lib/features/nutrition/providers/nutrition_provider.dart
-        line_range: 1287-1318
+        line_range: 1290-1321
         method: SavedMealsNotifier.build (savedMealsProvider)
         semantic: aggregated
         fields_read: [nutritionBox entries with is_saved_meal=true OR meal_*+is_template=true, times_used]
@@ -5366,7 +5366,7 @@ concepts:
         semantic: pass-through
         fields_read: [via savedMealsProvider — name, total_calories, items[], id, times_used]
       - file: lib/features/nutrition/providers/nutrition_provider.dart
-        line_range: 416-478
+        line_range: 418-480
         method: DailyNutritionNotifier.build (skip-filter)
         semantic: flag-check
         fields_read: [is_saved_meal]
@@ -5379,7 +5379,7 @@ concepts:
         semantic: flag-check
         fields_read: [is_saved_meal]
       - file: lib/features/nutrition/providers/nutrition_provider.dart
-        line_range: 1794-1794
+        line_range: 1797-1797
         method: WeeklyNutritionNotifier (skip is_saved_meal)
         semantic: flag-check
         fields_read: [is_saved_meal]
@@ -5440,7 +5440,7 @@ concepts:
         method: HealthWriteService.logWeight
         canonical: true
       - file: lib/features/home/providers/home_provider.dart
-        line_range: 908-1015
+        line_range: 912-1019
         method: WeightLogNotifier.logWeight
         delegate: true
         notes: |
@@ -5469,7 +5469,7 @@ concepts:
     reader_manifest_complete: true
     readers:
       - file: lib/features/home/providers/home_provider.dart
-        line_range: 681-713
+        line_range: 685-717
         method: WeightHistoryNotifier.build (weightHistoryProvider)
         semantic: historical-series
         fields_read: [type, weight_kg, date]
@@ -5578,7 +5578,7 @@ concepts:
         line_range: 1-9999
         method: reckonStreakDecayAndPersist (D2 f9d2e7 — single gated consume site; rollover + every completion door through WorkoutCompletionBookkeeping.afterCompletion + the post-restore reckon; gated on SyncService.restoreSettledForCurrentUser (per-account marker, b4e7a1) + non-empty-schedule)
       - file: lib/features/home/providers/home_provider.dart
-        line_range: 248-275
+        line_range: 249-276
         method: restoreCompletedTickProvider (restore-tick bridge; both chip notifiers watch it)
     reader_manifest_complete: true
     readers:
@@ -5604,14 +5604,14 @@ concepts:
           INTEND to consume a freeze should use it. Never trust a cached
           streak number for rank gates.
       - file: lib/features/home/providers/home_provider.dart
-        line_range: 277-306
+        line_range: 278-307
         method: StreakNotifier.build (streakProvider)
         semantic: pass-through
         fields_read: []
         notes: |
           Pure delegating provider. Returns WorkoutRepository.instance.currentStreak().
       - file: lib/features/home/providers/home_provider.dart
-        line_range: 310-347
+        line_range: 311-348
         method: StreakFreezeNotifier.build (streakFreezeProvider)
         semantic: pass-through
         fields_read: [streak_freezes_available, streak_freezes_last_refill]
@@ -6512,7 +6512,7 @@ concepts:
           independent getProfile() read in no invalidateOnRetry list, so it
           cached the pre-restore map for the whole session.
       - file: lib/features/home/providers/home_provider.dart
-        line_range: 147-174
+        line_range: 148-175
         method: UserGreetingNotifier.build (userGreetingProvider)
         semantic: display-only
         fields_read: [full_name]
@@ -6521,7 +6521,7 @@ concepts:
           first space; fallback "there". b3c9d4 — DERIVED from
           userProfileProvider; does not read Hive itself.
       - file: lib/features/home/providers/home_provider.dart
-        line_range: 198-230
+        line_range: 199-231
         method: UserFirstNameNotifier.build (userFirstNameProvider)
         semantic: display-only
         fields_read: [full_name]
@@ -6533,7 +6533,7 @@ concepts:
           hasProfile field reports profile.isNotEmpty (the source maps an
           absent map to {}, where getProfile() returned null).
       - file: lib/features/home/providers/home_provider.dart
-        line_range: 234-246
+        line_range: 235-247
         method: UserInitialNotifier.build (userInitialProvider)
         semantic: display-only
         fields_read: [full_name]
@@ -7071,7 +7071,7 @@ concepts:
         line_range: 171-176
         method: recentHistoryExchanges (shim forwarder)
       - file: lib/features/ai_coach/providers/ai_coach_provider.dart
-        line_range: 889-1275
+        line_range: 892-1279
         method: |
           SendMessageNotifier.send — assembles history ONCE (kill-switched) and
           threads it into BOTH chat() call sites (primary :948 + auth-retry :1028),
@@ -7180,7 +7180,7 @@ concepts:
     reader_manifest_complete: true
     readers:
       - file: lib/features/ai_coach/providers/ai_coach_provider.dart
-        line_range: 174-363
+        line_range: 176-365
         method: build
         semantic: filter
         fields_read: [created_at, kind]
@@ -7254,7 +7254,7 @@ concepts:
           Forwarder retained for back-compat with existing callers
           in main.dart / ai_coach_provider.dart / sync_service.dart.
       - file: lib/features/ai_coach/providers/ai_coach_provider.dart
-        line_range: 889-1275
+        line_range: 892-1279
         method: "`send` (SendMessageNotifier)"
         notes: |
           R3 (2026-07-07): was mislabeled `_sendMessage` (476-500, a method
@@ -7274,7 +7274,7 @@ concepts:
     reader_manifest_complete: true
     readers:
       - file: lib/features/ai_coach/providers/ai_coach_provider.dart
-        line_range: 174-363
+        line_range: 176-365
         method: ChatHistoryNotifier.build (chat scroll buffer)
         semantic: historical-series
         fields_read: [created_at, user_message, ai_response, model_used, channel, tool_calls, media_url, media_type, media_storage_path, media_save_state]
@@ -7446,7 +7446,7 @@ concepts:
           (returns success WITHOUT rewriting when already 'completed') + stamps
           completed_via on the schedule + wlog rows.
       - file: lib/features/ai_coach/providers/ai_coach_provider.dart
-        line_range: 394-423
+        line_range: 396-425
         method: completeWorkoutFromPrompt
         notes: |
           Since 1b a thin call to CoachDayCompletion.completeOnTap (door
@@ -7465,7 +7465,7 @@ concepts:
     reader_manifest_complete: true
     readers:
       - file: lib/features/ai_coach/providers/ai_coach_provider.dart
-        line_range: 172-363
+        line_range: 174-365
         method: build
         semantic: flag-check
         fields_read: [kind, resolved_at, date, planned_count, logged_count, created_at]
@@ -7501,7 +7501,7 @@ concepts:
           plan-less day (total_planned == 0) — consistent with the dispatcher no
           longer vacuously auto-completing a plan-less day.
       - file: lib/features/home/providers/home_provider.dart
-        line_range: 141-569
+        line_range: 142-573
         method: calendarWeekProvider (~132) + todayWorkoutProvider (~518)
         semantic: flag-check
         fields_read: [status, completed_at_ms]
@@ -7679,13 +7679,13 @@ concepts:
         notes: Partitions auto-run intents out of state (queued cards are added first) and dispatches each once.
     readers:
       - file: lib/features/ai_coach/providers/ai_coach_provider.dart
-        line_range: 172-363
+        line_range: 174-365
         method: build
         semantic: display-only
         fields_read: [kind, resolved_at, date, planned_count, logged_count, created_at]
         notes: ChatHistoryNotifier.build renders the re-shown tile; its fresh UTC created_at sorts it under the reply that asked for it.
       - file: lib/features/ai_coach/screens/ai_coach/screen.dart
-        line_range: 83-117
+        line_range: 85-119
         method: filterVisibleIntents
         semantic: flag-check
         fields_read: [type]
@@ -7970,7 +7970,7 @@ concepts:
         semantic: pass-through
         fields_read: []
       - file: lib/features/nutrition/providers/nutrition_provider.dart
-        line_range: 1097-1111
+        line_range: 1100-1114
         method: "AiBreakdownNotifier.saveMeal catch block"
         semantic: pass-through
         fields_read: []
@@ -8741,7 +8741,7 @@ concepts:
     reader_manifest_complete: true
     readers:
       - file: lib/features/home/providers/home_provider.dart
-        line_range: 681-1042
+        line_range: 685-1046
         method: WeightHistoryNotifier + WeightLogNotifier + todayWeightLoggedProvider
         semantic: historical-series
         fields_read: [type, weight_kg, date]
@@ -8759,7 +8759,7 @@ concepts:
           legacy list — see sleep_logs concept dual-key hazard). Save
           path delegates to HealthWriteService.logSleep at line 502.
       - file: lib/features/nutrition/providers/nutrition_provider.dart
-        line_range: 515-641
+        line_range: 517-643
         method: WaterIntakeNotifier + UrineColorNotifier + HydrationSaveNotifier
         semantic: latest
         fields_read: [water_ml, urine_color, hydration]
@@ -8871,7 +8871,7 @@ concepts:
           within 60s of an existing entry UPDATEs instead of inserting.
           Companion to the server-side placeholder dedup.
       - file: lib/features/ai_coach/providers/ai_coach_provider.dart
-        line_range: 167-329
+        line_range: 169-331
         method: ChatHistoryNotifier (display surface)
         semantic: historical-series
         fields_read: [failed, error_text, pending, ai_response, created_at]
@@ -9963,7 +9963,6 @@ concepts:
       - { file: lib/features/profile/widgets/menu_item.dart, reason: "post-codemod reader" }
       - { file: lib/features/profile/widgets/profile_banner.dart, reason: "post-codemod reader" }
       - { file: lib/features/profile/widgets/stat_card.dart, reason: "post-codemod reader" }
-      - { file: lib/features/profile/widgets/subscription_card.dart, reason: "post-codemod reader" }
       - { file: lib/features/train/widgets/exercise_sparkline.dart, reason: "post-codemod reader" }
       - { file: lib/features/train/widgets/muscle_recovery_map.dart, reason: "post-codemod reader" }
       - { file: lib/features/train/widgets/pr_stats_grid.dart, reason: "post-codemod reader" }
@@ -10161,7 +10160,7 @@ concepts:
         semantic: latest
         fields_read: [schedule_<date>.* via getScheduleForDate]
       - file: lib/features/train/screens/phase_roadmap_screen.dart
-        line_range: 40-50
+        line_range: 42-52
         method: build → getCurrentWeekNumber
         semantic: latest
         fields_read: [computed week-1-to-4 from plan_start_date]
@@ -10835,7 +10834,7 @@ concepts:
         semantic: latest
         fields_read: [schedule_<date>.* via holdWeek]
       - file: lib/features/train/widgets/plan_expired_card.dart
-        line_range: 59-104
+        line_range: 61-106
         method: _handleHoldWeek → runFreeTierRepeatWrite; one snackbar per HoldWeekOutcome (written / "Already holding this week." / error); phase_1_cycle_repeat_started only on written
         semantic: latest
         fields_read: [schedule_<date>.* (via the holdWeek copy loop)]
@@ -14013,7 +14012,7 @@ concepts:
         fields_read: [enabled]
         notes: self-heals via NotificationPrefsRepository.read() when pushed without `extra`.
       - file: lib/features/profile/screens/profile/screen.dart
-        line_range: 192-213
+        line_range: 195-216
         method: _loadNotificationPreferences
         semantic: display-only
         fields_read: [enabled]
@@ -16161,23 +16160,23 @@ concepts:
         notes: the raw Gemini text this concept cleans on the client side.
     readers:
       - file: lib/features/ai_coach/providers/ai_coach_provider.dart
-        line_range: 706
+        line_range: 708
         method: "SendMessageNotifier.sendWithMedia"
         semantic: display-only
       - file: lib/features/ai_coach/providers/ai_coach_provider.dart
-        line_range: 1015
+        line_range: 1018
         method: "SendMessageNotifier.send (primary)"
         semantic: display-only
       - file: lib/features/ai_coach/providers/ai_coach_provider.dart
-        line_range: 1104
+        line_range: 1107
         method: "SendMessageNotifier.send (auth-retry)"
         semantic: display-only
       - file: lib/features/ai_coach/providers/ai_coach_provider.dart
-        line_range: 343
+        line_range: 345
         method: "ChatHistoryNotifier.build (success render)"
         semantic: display-only
       - file: lib/features/ai_coach/providers/ai_coach_provider.dart
-        line_range: 311
+        line_range: 313
         method: "ChatHistoryNotifier.build (isFailed fallback render)"
         semantic: display-only
     forbidden_legacy_patterns:
@@ -16218,7 +16217,7 @@ concepts:
         notes: pulls ALL ai_coach_interactions rows for the user, no channel filter of its own — the filter lives entirely on the render side.
     readers:
       - file: lib/features/ai_coach/providers/ai_coach_provider.dart
-        line_range: 246-261
+        line_range: 248-263
         method: "ChatHistoryNotifier.build"
         semantic: flag-check
     hive:
@@ -16256,7 +16255,7 @@ concepts:
       upendra@icanbefitter.com.
     writers:
       - file: lib/features/profile/screens/profile/screen.dart
-        line_range: 299
+        line_range: 302
         method: build (contact card)
         semantic: display-only
       - file: lib/features/profile/screens/delete_account_screen.dart
@@ -16333,7 +16332,7 @@ concepts:
         fields_read: [type]
         notes: "Task 29 (wave-3 carry item 2) re-derived this as a METHOD-SPANNING range (signature to closing brace, confirmed by direct read) rather than the previous 5-line window -- needsHeal was repointed 3 times this batch (T21, T22, T21-fix1: T22 added an import + the L2 write-only-if-differs block inside mergeScheduleBundleIntoHive; T21-fix1 shortened _mondayOfIsoWeek to delegate to DaySwapRules.mondayOf; all three land ABOVE needsHeal in the same file, so the method body itself is unchanged but every narrow line_range citing it goes stale on each shift). A method-spanning range absorbs future shifts of code ABOVE it without going stale again for this reason; only a change to needsHeal's OWN body would require re-deriving this citation."
       - file: lib/features/home/providers/home_provider.dart
-        line_range: 105-758
+        line_range: 106-762
         method: "calendar week status classifier feeding streak-banner remaining-count / StreakWarningEligibility / AI-insight quick-text (3 sites)"
         semantic: flag-check
         fields_read: [type]
@@ -17958,7 +17957,7 @@ concepts:
         method: logMeasurement + logMeasurements
         notes: Writer tier. Both validate the ROUNDED value and emit tier=writer. logMeasurements (L2b Landing B) is the sheet's batch writer - all-or-nothing, one put, one fan-out, one event per call.
       - file: lib/features/ai_coach/providers/ai_coach_provider.dart
-        line_range: 1758-1790
+        line_range: 1762-1794
         method: PendingLogActionsNotifier._parse (case log_measurement)
         notes: Chat parse tier. Type tests, never casts; checks the RAW value; emits tier=chat (a wrong-typed value of a registered site emits side=wrongtype).
       - file: lib/core/services/sync/sync_health.dart
@@ -18467,7 +18466,7 @@ concepts:
         method: body (MeasurementsCardFrame(child: _buildBody()))
         notes: L2b Landing C, E3. One line; the frame owns the flag and the height cap, so a flag-OFF screen returns its own body instance.
       - file: lib/features/ai_coach/screens/ai_coach/screen.dart
-        line_range: 370-376
+        line_range: 372-378
         method: MeasurementChipSlot (the mount line in build)
         notes: L2b Landing C, E4. Between the quick prompts and the input bar, with no condition of its own; the slot owns its flag, prompt, focus and sending checks and is given no send callback; onShown scrolls a chat that was at its bottom back to its bottom (keepBottomAfterChip).
     readers:
@@ -19407,7 +19406,7 @@ concepts:
         method: handler — the capture POST and the status echo, reachable only past the guards
         semantic: cloud-write
       - file: lib/core/services/razorpay_service.dart
-        line_range: 900-1030
+        line_range: 916-1046
         method: verify fallback — status==200 && verified==true; any non-200 is a soft failure
         semantic: cloud-read
     hive:
@@ -19446,7 +19445,7 @@ concepts:
         semantic: guard
     readers:
       - file: lib/core/services/razorpay_service.dart
-        line_range: 900-1030
+        line_range: 916-1046
         method: verify fallback — status==200 && verified==true writes PRO; anything else is a soft failure
         semantic: cloud-read
       - file: lib/core/services/payment_retry_attempt.dart
@@ -19575,7 +19574,7 @@ concepts:
         method: handler — usedCount === -1 / rateErr refusals
         semantic: guard
       - file: lib/core/services/razorpay_service.dart
-        line_range: 152-279
+        line_range: 168-295
         method: createOrder — non-409 non-2xx -> _extractServerError(details) shown verbatim
         semantic: cloud-read
       - file: supabase/functions/_shared/founder_digest_content.ts
@@ -19616,7 +19615,7 @@ concepts:
         semantic: cloud-write
     readers:
       - file: lib/shared/widgets/paywall_sheet.dart
-        line_range: 204-255
+        line_range: 223-274
         method: _validatePromoCode — valid == true, else shows data['reason']; the call passes spendsQuotaPerCall (OI-414), so a thrown gateway error reaches the catch after one attempt
         semantic: cloud-read
       - file: supabase/functions/_shared/founder_digest_content.ts
@@ -19942,3 +19941,66 @@ concepts:
       columns: []
     sync_methods: []
     regression_test: test/core/speech_input_controller_behavioral_test.dart
+
+  - concept: purchase_mode_surface_decision
+    domain: subscription
+    behavioral_test_path: test/contracts/purchase_surfaces_mode_none_test.dart
+    additional_tests:
+      - test/contracts/purchase_mode_resolver_test.dart
+      - test/contracts/purchase_mode_current_wiring_test.dart
+      - test/contracts/paywall_mode_none_behavioral_test.dart
+      - test/contracts/paywall_phase_variant_mode_none_test.dart
+      - test/contracts/razorpay_open_checkout_mode_guard_test.dart
+      - test/contracts/purchases_package_dormant_test.dart
+      - test/contracts/purchase_literal_inventory_test.dart
+      - test/contracts/profile_subscription_sheet_copy_test.dart
+      - test/contracts/referral_share_play_id_test.dart
+    description: |
+      ADR-0022 / docs/plans/2026-11-20-android-play-billing.md. Whether THIS binary
+      offers a purchase surface is one compile-time decision: PurchaseMode
+      (razorpay | none | playBilling), resolved from `kIsWeb`, `dart.vm.product`
+      and `--dart-define=ANDROID_PURCHASE_MODE` with no platform input. Web is
+      always razorpay; a release build with no valid define is none; debug, profile
+      and tests are razorpay. `showsUpgradeAffordance()` is the ONE predicate every
+      chip, pill, banner, menu item and button asks; the words come from
+      `PurchaseCopy` (const strings, the ORIGINAL sentences in purchase mode).
+      `PaywallSheet.build` is the only place that swaps the whole sheet for the
+      neutral `PaywallUnavailableBody`; `RazorpayService.openCheckout` refuses to
+      start an order when the mode does not sell through Razorpay (defence in
+      depth). `playBilling` behaves as none until the RevenueCat build (plan
+      section 8) exists. Nothing is stored: the mode is a build constant.
+    writers:
+      - file: lib/core/constants/purchase_mode.dart
+        line_range: 15-82
+        method: PurchaseMode.current / resolvePurchaseMode / showsUpgradeAffordance
+        semantic: pass-through
+    reader_manifest_complete: true
+    readers:
+      - file: lib/shared/widgets/paywall_sheet.dart
+        line_range: 414-429
+        method: _PaywallSheetState.build (none-mode branch)
+        semantic: flag-check
+        fields_read: [showsPurchaseUi]
+      - file: lib/core/services/razorpay_service.dart
+        line_range: 118-153
+        method: RazorpayService.openCheckout (mode guard)
+        semantic: flag-check
+        fields_read: [showsRazorpay]
+      - file: lib/features/home/providers/home_provider.dart
+        line_range: 503-520
+        method: SubscriptionExpiryBannerNotifier
+        semantic: flag-check
+        fields_read: [showsPurchaseUi]
+      - file: lib/features/profile/widgets/build_stamp.dart
+        line_range: 13-30
+        method: BuildStamp.label
+        semantic: display-only
+        fields_read: [wireName]
+    hive:
+      box: in_memory_only  # a build constant, nothing persisted
+      key_prefix: ""
+    cloud:
+      table: ""
+      columns: []
+    sync_methods: []
+    regression_test: test/contracts/purchase_surfaces_mode_none_test.dart

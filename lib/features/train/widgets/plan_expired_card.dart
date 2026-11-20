@@ -1,3 +1,5 @@
+import 'package:icanbefitter/core/copy/purchase_copy.dart';
+import 'package:icanbefitter/core/constants/purchase_mode.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -261,7 +263,8 @@ class _PlanExpiredCardState extends ConsumerState<PlanExpiredCard> {
         ),
         child: Center(
           child: Text(
-            'Deploy to Phase $nextPhase — go PRO →',
+            PurchaseCopy.deployToPhase(nextPhase,
+                purchaseUi: showsUpgradeAffordance()),
             style: AppTypography.body.copyWith(fontWeight: FontWeight.w900, color: Colors.black),
           ),
         ),

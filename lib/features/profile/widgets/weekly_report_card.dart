@@ -1,3 +1,5 @@
+import 'package:icanbefitter/core/copy/purchase_copy.dart';
+import 'package:icanbefitter/core/constants/purchase_mode.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:icanbefitter/core/theme/colors.dart';
@@ -65,7 +67,9 @@ class WeeklyReportCard extends ConsumerWidget {
                       usageWeeks < 1
                           ? 'Available after Week 1'
                           : needsPaywall
-                              ? 'Upgrade for weekly reports'
+                              ? (showsUpgradeAffordance()
+                                  ? 'Upgrade for weekly reports'
+                                  : PurchaseCopy.weeklyReportsLocked)
                               : 'Last 7 days at a glance',
                       style: AppTypography.bodySm.copyWith(
                         color: AppColors.textDim,
@@ -103,7 +107,9 @@ class WeeklyReportCard extends ConsumerWidget {
             // Sharp 2-px CTA slab
             WardButton(
               label: needsPaywall
-                  ? 'Upgrade for Reports'
+                  ? (showsUpgradeAffordance()
+                      ? 'Upgrade for Reports'
+                      : PurchaseCopy.seeWhatProIncludes)
                   : 'View Full Report',
               variant: needsPaywall
                   ? WardButtonVariant.primary

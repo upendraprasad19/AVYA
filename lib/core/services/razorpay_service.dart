@@ -7,6 +7,7 @@ import 'package:razorpay_flutter/razorpay_flutter.dart';
 import 'package:supabase_flutter/supabase_flutter.dart' show FunctionException;
 import 'package:icanbefitter/core/constants/app_constants.dart';
 import 'package:icanbefitter/core/constants/payment_timing.dart';
+import 'package:icanbefitter/core/constants/purchase_mode.dart';
 import 'package:icanbefitter/core/theme/typography.dart';
 import 'package:icanbefitter/core/services/error_telemetry.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
@@ -127,6 +128,21 @@ class RazorpayService {
     // early return is defense for any future non-paywall caller.
     if (kIsWeb && webCheckoutDisabled) {
       debugPrint('RazorpayService: web checkout disabled by kill-switch');
+      onFailure?.call();
+      return;
+    }
+
+    // ADR-0022 / plan section 3: a binary whose purchase mode is not
+    // `razorpay` never starts an order, whatever called us. The paywall
+    // already hides the button in those modes; this is the second door.
+    // Web is always `razorpay`, so the web path is untouched.
+    if (!PurchaseMode.current.showsRazorpay) {
+      debugPrint('RazorpayService: purchase mode '
+          '${PurchaseMode.current.wireName} does not sell through Razorpay');
+      // Unreachable from the UI today (the paywall has no buy button in these
+      // modes); if a future caller reaches it, the refusal must not be silent.
+      unawaited(ErrorTelemetry.logEvent('razorpay_checkout_refused_mode',
+          message: PurchaseMode.current.wireName));
       onFailure?.call();
       return;
     }

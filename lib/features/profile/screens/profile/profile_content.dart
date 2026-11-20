@@ -472,6 +472,9 @@ extension _ProfileContent on _ProfileScreenState {
                   showBorder: true,
                   onTap: () => context.push('/avya/promise'),
                 ),
+                // ADR-0022 / plan 5.2: a binary that sells nothing links to no
+                // website (a store reviewer may read any such link as steering).
+                if (showsUpgradeAffordance())
                 ProfileRow(
                   icon: Icons.language_outlined,
                   title: 'icanbefitter.com',
@@ -616,6 +619,8 @@ extension _ProfileContent on _ProfileScreenState {
               // #9 Delete Account — hidden behind expandable danger zone
               const SizedBox(height: 8),
               _buildDangerZone(),
+              const SizedBox(height: 16),
+              const BuildStamp(),
               const SizedBox(height: 30),
             ],
           ),

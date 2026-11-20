@@ -191,6 +191,7 @@ extension _SubscriptionSection on _ProfileScreenState {
                     letterSpacing: 2.0,
                   )),
               const Spacer(),
+              if (showsUpgradeAffordance())
               GestureDetector(
                 onTap: () => showPaywallSheet(context, feature: PaywallSheet.genericUpgrade),
                 child: Container(

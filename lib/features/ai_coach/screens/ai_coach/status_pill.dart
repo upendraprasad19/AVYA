@@ -56,11 +56,13 @@ extension _StatusPill on _AiCoachScreenState {
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Icon(Icons.arrow_upward,
-                size: 12, color: AppColors.accent),
-            const SizedBox(width: 4),
+            // The arrow is an upgrade glyph: a no-purchase build omits it.
+            if (showsUpgradeAffordance()) ...const [
+              Icon(Icons.arrow_upward, size: 12, color: AppColors.accent),
+              SizedBox(width: 4),
+            ],
             Text(
-              'UPGRADE',
+              showsUpgradeAffordance() ? 'UPGRADE' : PurchaseCopy.proInfo,
               style: AppTypography.mono.copyWith(
                 color: AppColors.accent,
                 letterSpacing: 1.6,

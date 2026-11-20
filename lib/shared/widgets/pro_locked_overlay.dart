@@ -1,3 +1,5 @@
+import 'package:icanbefitter/core/copy/purchase_copy.dart';
+import 'package:icanbefitter/core/constants/purchase_mode.dart';
 import 'dart:ui';
 
 import 'package:flutter/material.dart';
@@ -40,8 +42,9 @@ class ProLockedOverlay extends StatelessWidget {
   /// Called when the user taps the upgrade CTA.
   final VoidCallback onUpgradeTap;
 
-  /// Optional CTA button text. Defaults to "Upgrade to PRO".
-  final String ctaText;
+  /// Optional CTA button text. Defaults to "Upgrade to PRO" (or the neutral
+  /// `PurchaseCopy.seeWhatProIncludes` in a binary that sells nothing).
+  final String? ctaText;
 
   /// Minimum height for the overlay area. Defaults to 120.
   final double minHeight;
@@ -52,7 +55,7 @@ class ProLockedOverlay extends StatelessWidget {
     required this.featureLabel,
     this.description,
     required this.onUpgradeTap,
-    this.ctaText = 'Upgrade to PRO',
+    this.ctaText,
     this.minHeight = 120,
   });
 
@@ -166,7 +169,10 @@ class ProLockedOverlay extends StatelessWidget {
                                       child: Center(
                                         widthFactor: 1,
                                         child: Text(
-                                          ctaText,
+                                          ctaText ??
+                                              (showsUpgradeAffordance()
+                                                  ? 'Upgrade to PRO'
+                                                  : PurchaseCopy.seeWhatProIncludes),
                                           style: AppTypography.bodySm.copyWith(fontWeight: FontWeight.w900, color: Colors.black),
                                         ),
                                       ),

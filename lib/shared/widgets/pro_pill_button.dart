@@ -1,3 +1,5 @@
+import 'package:icanbefitter/core/copy/purchase_copy.dart';
+import 'package:icanbefitter/core/constants/purchase_mode.dart';
 import 'package:flutter/material.dart';
 
 import '../../core/theme/typography.dart';
@@ -42,14 +44,15 @@ class ProPillButton extends StatelessWidget {
     final fill = isPro ? goldFill : silverFill;
     final topEdge = isPro ? goldTopEdge : silverTopEdge;
     final bottomEdge = isPro ? goldBottomEdge : silverBottomEdge;
-    final label = isPro ? 'PRO' : 'GO PRO';
+    final label =
+        (isPro || !showsUpgradeAffordance()) ? PurchaseCopy.proInfo : 'GO PRO';
 
     // Double-border technique implemented via two stacked containers:
     // outer Container provides the shadow + top-edge highlight border,
     // inner Container provides the gradient fill + bottom-edge shadow border.
     // Flutter requires uniform border colors when borderRadius is used, so
     // we achieve the two-tone metal edge by nesting two 1-pixel borders.
-    return GestureDetector(
+    final pill = GestureDetector(
       onTap: onTap,
       behavior: HitTestBehavior.opaque,
       child: Container(
@@ -78,5 +81,17 @@ class ProPillButton extends StatelessWidget {
         ),
       ),
     );
+    // A binary that sells nothing draws the same word, PRO, for a free user
+    // and a PRO user (colour is the only other difference), so a screen reader
+    // gets an explicit label for the free one (B-pass 2026-11-20, P3).
+    if (!isPro && !showsUpgradeAffordance()) {
+      return Semantics(
+        button: true,
+        label: PurchaseCopy.proPillFreeLabel,
+        excludeSemantics: true,
+        child: pill,
+      );
+    }
+    return pill;
   }
 }

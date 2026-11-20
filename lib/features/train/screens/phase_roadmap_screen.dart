@@ -1,3 +1,5 @@
+import 'package:icanbefitter/core/copy/purchase_copy.dart';
+import 'package:icanbefitter/core/constants/purchase_mode.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -180,7 +182,9 @@ class PhaseRoadmapScreen extends ConsumerWidget {
                     shape: const StadiumBorder(),
                   ),
                   child: Text(
-                    'UPGRADE TO PRO  →',
+                    showsUpgradeAffordance()
+                        ? 'UPGRADE TO PRO  →'
+                        : PurchaseCopy.seeWhatProIncludesCta,
                     style: AppTypography.mono.copyWith(
                       fontSize: 13,
                       letterSpacing: 1.4,

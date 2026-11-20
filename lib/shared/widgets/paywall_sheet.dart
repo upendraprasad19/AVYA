@@ -4,13 +4,16 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:icanbefitter/core/constants/app_constants.dart';
+import 'package:icanbefitter/core/constants/purchase_mode.dart';
 import 'package:icanbefitter/core/copy/payment_copy.dart';
+import 'package:icanbefitter/core/copy/purchase_copy.dart';
 import 'package:icanbefitter/core/theme/colors.dart';
 import 'package:icanbefitter/core/theme/spacing.dart';
 import 'package:icanbefitter/core/theme/typography.dart';
 import 'package:icanbefitter/core/services/error_telemetry.dart';
 import 'package:icanbefitter/core/services/service_providers.dart';
 import 'package:icanbefitter/core/services/supabase_service.dart';
+import 'package:icanbefitter/shared/widgets/paywall_unavailable_body.dart';
 import 'package:icanbefitter/shared/widgets/wardroom/wardroom.dart';
 import 'package:icanbefitter/features/profile/providers/profile_provider.dart' show subscriptionInfoProvider;
 
@@ -115,6 +118,10 @@ class _PaywallSheetState extends ConsumerState<PaywallSheet> {
   // (paywall_upgrade_tapped already fired in _handleUpgrade)".
   bool _upgradeTapped = false;
 
+  /// The neutral card's inline failure line (CHECK MY PRO STATUS could not
+  /// reach the server). Null = none. Purchase mode keeps its snackbar.
+  String? _statusMessage;
+
   static const List<String> _proBenefits = [
     'Dedicated AI coaching with higher daily limits',
     'AI food analysis & meal scanning (camera)',
@@ -169,7 +176,10 @@ class _PaywallSheetState extends ConsumerState<PaywallSheet> {
       case 'Day Swaps':
         return 'Life happens. Move a workout to another day this week without losing your plan.';
       default:
-        return 'Upgrade to PRO and unlock your full potential.';
+        // A binary that sells nothing never says "upgrade" (ADR-0022).
+        return PurchaseMode.current.showsPurchaseUi
+            ? 'Upgrade to PRO and unlock your full potential.'
+            : PurchaseCopy.defaultSubtitle;
     }
   }
 
@@ -183,6 +193,15 @@ class _PaywallSheetState extends ConsumerState<PaywallSheet> {
       'paywall_shown',
       message: 'feature=${widget.feature}',
     ));
+    // ADR-0022: a sheet that sells nothing is a dead end for the user; count
+    // it separately so the rate is measurable. `paywall_shown` above keeps its
+    // exact message in every mode (the funnel series do not break).
+    if (!PurchaseMode.current.showsPurchaseUi) {
+      unawaited(ErrorTelemetry.logEvent(
+        'paywall_unavailable_shown',
+        message: 'feature=${widget.feature}',
+      ));
+    }
   }
 
   @override
@@ -339,7 +358,10 @@ class _PaywallSheetState extends ConsumerState<PaywallSheet> {
 
   Future<void> _handleRestore() async {
     if (_isProcessing) return;
-    setState(() => _isProcessing = true);
+    setState(() {
+      _isProcessing = true;
+      _statusMessage = null;
+    });
 
     try {
       // A7 / B5 D9-D10 — canonical provider path.
@@ -366,6 +388,15 @@ class _PaywallSheetState extends ConsumerState<PaywallSheet> {
       unawaited(ErrorTelemetry.logEvent('paywall_restore_purchase_failed',
           message: clipped));
       if (!mounted) return;
+      if (!PurchaseMode.current.showsPurchaseUi) {
+        // The neutral card's only action failed: say so inside the card (a
+        // snackbar would sit behind this modal sheet).
+        setState(() {
+          _isProcessing = false;
+          _statusMessage = PurchaseCopy.checkStatusFailed;
+        });
+        return;
+      }
       setState(() => _isProcessing = false);
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -382,6 +413,21 @@ class _PaywallSheetState extends ConsumerState<PaywallSheet> {
 
   @override
   Widget build(BuildContext context) {
+    // ADR-0022 / plan section 4: in a binary with no purchase UI the same sheet
+    // renders the neutral body (no price, no promo, no purchase button). The
+    // purchase build below is untouched.
+    if (!PurchaseMode.current.showsPurchaseUi) {
+      return PaywallUnavailableBody(
+        title: _featureTitle,
+        subtitle: _featureSubtitle,
+        benefits: _proBenefits,
+        isProcessing: _isProcessing,
+        statusMessage: _statusMessage,
+        onCheckStatus: _handleRestore,
+        onClose: () => Navigator.of(context).pop(),
+      );
+    }
+
     // Format prices from AppConstants (never hardcode)
     final monthlyBase = AppConstants.monthlyPriceInr;
     final yearlyBase = AppConstants.yearlyPriceInr;

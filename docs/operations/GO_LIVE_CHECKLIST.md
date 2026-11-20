@@ -63,9 +63,10 @@ Play. Razorpay on web is unaffected, and live Razorpay keys are needed for web r
 
 | # | Item | Owner | Evidence when done |
 |---|---|---|---|
-| 0.1 | Decide the billing architecture | FOUNDER | An ADR superseding or amending ADR-0005 |
+| 0.1 | Decide the billing architecture | FOUNDER | **DONE 2026-11-20:** ADR-0022 (Play Billing via RevenueCat on Android; web stays Razorpay; amends ADR-0005) |
 | 0.2 | If IAP: implement Play Billing + server receipt verification + Real-time Developer Notifications, reconciled with the existing `subscriptions` table | AGENT | Behavioral test + a real sandbox purchase |
 | 0.3 | If IAP: same for Apple | AGENT | Sandbox purchase on a real device |
+| 0.4 | Before `+50` goes to a PRODUCTION track: decide the server-sent upgrade and price copy (the coach prompt `captain_manual.ts`, the canned replies, the expiry push) that still names a price and a way to buy; a no-purchase store build must not carry it (plan `docs/plans/2026-11-20-android-play-billing.md` section 5.4, closure `docs/audit/2026-11-20-android-play-billing.closure.yaml`) | FOUNDER decision, then AGENT | A recorded decision, and an Edge Function change plus deploy with its own explicit go |
 
 ---
 
@@ -104,7 +105,7 @@ ships.
 | 2.1 | Create the Play Console app + developer account + merchant profile | FOUNDER | App entry exists |
 | 2.2 | **Back up `android/app/release.jks` + `android/key.properties` offsite, TWICE — BEFORE first upload** | FOUNDER | Two copies in separate locations |
 | 2.3 | Build an `.aab` | AGENT | `/build-apk --bundle` (added 2026-08-24); artifact at `build/app/outputs/bundle/prodRelease/app-prod-release.aab` |
-| 2.4 | Decide the app name and make manifest + listing + policy pages agree | FOUNDER decides, AGENT applies | `AndroidManifest.xml:18` currently says `android:label="AVYA Fit"` while the package is `com.icanbefitter.icanbefitter` and every legal link points at `icanbefitter.com` |
+| 2.4 | Decide the app name and make manifest + listing + policy pages agree (**founder decided 2026-11-20: "AvyaFit"**; applying it waits for the founder's go, and the Console title must not change while BillDesk reviews) | FOUNDER decides, AGENT applies | `AndroidManifest.xml:18` currently says `android:label="AVYA Fit"` while the package is `com.icanbefitter.icanbefitter` and every legal link points at `icanbefitter.com` |
 | 2.5 | Store listing assets: short + full description, ≥2 screenshots, 512px icon, 1024×500 feature graphic | FOUNDER | Uploaded |
 | 2.6 | Justify or prune the transitive `NFC` + `READ_BASIC_PHONE_STATE` permissions | AGENT | Neither is used by app code; both arrive via a plugin (likely Razorpay). Needs an SDK compatibility check before removal — Play flags unexplained phone-state access |
 
@@ -149,7 +150,7 @@ ships.
 **Permissions the Data Safety form must cover** (from the merged prod-release manifest): health &
 fitness (`READ_STEPS`, `READ_WEIGHT`, `ACTIVITY_RECOGNITION`), camera + photos (`CAMERA`,
 `READ_MEDIA_IMAGES`, `READ_EXTERNAL_STORAGE`≤32), microphone (`RECORD_AUDIO`), notifications
-(`POST_NOTIFICATIONS`), plus the plugin-merged `NFC` and `READ_BASIC_PHONE_STATE`.
+(`POST_NOTIFICATIONS`), plus the plugin-merged `NFC` and `READ_BASIC_PHONE_STATE`, and (from the `+50` build, which carries the dormant `purchases_flutter`) `com.android.vending.BILLING`; read the merged manifest of the real AAB before filling the form.
 
 ---
 

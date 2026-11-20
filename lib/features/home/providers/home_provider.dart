@@ -1,3 +1,4 @@
+import 'package:icanbefitter/core/constants/purchase_mode.dart';
 import 'dart:async';
 
 import 'package:flutter/foundation.dart' show ValueNotifier, visibleForTesting;
@@ -509,6 +510,9 @@ class SubscriptionExpiryBannerNotifier extends Notifier<ExpiryBannerState> {
         true) {
       return const ExpiryBannerState();
     }
+
+    // ADR-0022: a binary that sells nothing has nothing to renew from.
+    if (!showsUpgradeAffordance()) return const ExpiryBannerState();
 
     final sub = SubscriptionService.instance;
     final isProNow = sub.proStateSnapshot(); // OI-44 U6: PURE — build method

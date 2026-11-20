@@ -1,0 +1,158 @@
+# Closure ledger - android-play-billing (ADR-0022: no-purchase Android fallback, dormant purchases_flutter, +50).
+# Gate 40. One terminal_state per finding; no `deferred:` key. `play-billing-fallback@branch` is the in-branch commit form
+# (replaced by the SHA after the branch lands). B-pass findings are appended here when the review runs.
+
+batch: android-play-billing
+plan_review_record: docs/plan-reviews/play-billing-fallback.md
+diagnose_docs:
+  - docs/diagnoses/2026-11-20-manage-subscription-sheet-names-razorpay-e5a9c3.md
+  - docs/diagnoses/2026-11-20-referral-share-link-wrong-play-id-f2d7b8.md
+total_findings: 25
+closed_count: 25
+
+findings:
+  - id: U1-MODE
+    title: "PurchaseMode resolver + current + override, openCheckout guard, dormant purchases_flutter pin, Profile build line, dead SubscriptionCard deleted"
+    terminal_state: closed_in_commit
+    commit: "play-billing-fallback@branch"
+    verification: "test/contracts/purchase_mode_resolver_test.dart, purchase_mode_current_wiring_test.dart, purchases_package_dormant_test.dart, razorpay_open_checkout_mode_guard_test.dart green; mutants M1-M7 and guard removal red"
+
+  - id: U2-PAYWALL
+    title: "PaywallSheet none-mode body (PaywallUnavailableBody), phase-variant delegation, paywall_unavailable_shown event"
+    terminal_state: closed_in_commit
+    commit: "play-billing-fallback@branch"
+    verification: "test/contracts/paywall_mode_none_behavioral_test.dart (16) + paywall_phase_variant_mode_none_test.dart green; none-branch, delegation, event and price-in-body mutants red"
+
+  - id: U3-SURFACES
+    title: "Every plan 5.2 surface: pills, chip, banner, overflow item, status pill, input bar, report card, phase CTAs, plan-expired button, website row, canned error strings"
+    terminal_state: closed_in_commit
+    commit: "play-billing-fallback@branch"
+    verification: "test/contracts/purchase_surfaces_mode_none_test.dart (31) + purchase_expiry_banner_mode_none_test.dart (3, behavioural) green; ten mutants (chip, menu, banner inverted and deleted, overlay default, four inverted/swapped guards, hard-coded purchaseUi) red"
+
+  - id: U4-INVENTORY
+    title: "In-literal upgrade-word inventory over lib/ (47 files, 139 hits measured)"
+    terminal_state: closed_in_commit
+    commit: "play-billing-fallback@branch"
+    verification: "test/contracts/purchase_literal_inventory_test.dart green; a restored literal and an unlisted file both red"
+
+  - id: U4A-SHEET
+    title: "fix(profile): MANAGE SUBSCRIPTION sheet no longer says Razorpay / auto-renews"
+    terminal_state: closed_in_commit
+    commit: "play-billing-fallback@branch"
+    verification: "docs/diagnoses/2026-11-20-manage-subscription-sheet-names-razorpay-e5a9c3.md; test/contracts/profile_subscription_sheet_copy_test.dart; mutant red"
+
+  - id: U4A-PLAYID
+    title: "fix(profile): referral share link Play id com.icanbefitter.avya -> com.icanbefitter.icanbefitter"
+    terminal_state: closed_in_commit
+    commit: "play-billing-fallback@branch"
+    verification: "docs/diagnoses/2026-11-20-referral-share-link-wrong-play-id-f2d7b8.md; test/contracts/referral_share_play_id_test.dart reads android/app/build.gradle.kts; mutant red"
+
+  - id: U5-REGISTRY
+    title: "SoT concept purchase_mode_surface_decision + five shifted ranges recomputed"
+    terminal_state: closed_in_commit
+    commit: "play-billing-fallback@branch"
+    verification: "check_sot_registry_parity / completeness / citations / behavioral_test_paths / reader_manifest all pass"
+
+  - id: U6-DOCS
+    title: "payment.md, subscription.md, GO_LIVE_CHECKLIST 0.1 closed and 0.4 added, naming_conventions, root CLAUDE.md Payments row, build-apk --purchase-mode"
+    terminal_state: closed_in_commit
+    commit: "play-billing-fallback@branch"
+    verification: "files edited in this branch; build-apk refuses play_billing and --bundle without --purchase-mode"
+
+  - id: S8-REVENUECAT
+    title: "RevenueCat live build (+51): webhook, in-place Play row, referral/trial stacking, paid-reader audit"
+    terminal_state: upstream_blocked
+    blocker: "own plan (plan section 8 is design only) and a hermes pass; needs the founder's Play merchant profile and closed-testing status"
+    reopen_when: "the +51 plan is written and plan-reviewed twice"
+
+  - id: RZP-REMOVE
+    title: "razorpay_flutter removal from the Android binary"
+    terminal_state: upstream_blocked
+    blocker: "web still uses the Razorpay WebView path; Android removal waits for Play Billing to be live"
+    reopen_when: "+51 ships"
+
+  - id: STACKING
+    title: "Buying on Android while a trial or referral grant runs (days absorbed, one Play row)"
+    terminal_state: upstream_blocked
+    blocker: "needs the server writer of section 8"
+    reopen_when: "+51 plan is reviewed"
+
+  - id: SERVER-COPY
+    title: "Server-sent upgrade and price copy (coach prompt, canned replies, expiry push) still names a price; +50 must not go to production with it"
+    terminal_state: blocked_on_user
+    reason: "Founder decision before +50 reaches a production track; the fix is an Edge Function change plus deploy with its own go (GO_LIVE_CHECKLIST 0.4)"
+
+  - id: DEEPANALYSIS
+    title: "DeepAnalysisCard has no construction site"
+    terminal_state: verified_clean
+    evidence: "OI-304 owns the dead widget (open_issues.md); left alone, not part of this batch"
+
+  - id: WEB-SCRIPT
+    title: "The dormant purchases_flutter registers a web plugin that loads a ~1 MB RevenueCat script on every web page view once the live web app is rebuilt from main"
+    terminal_state: verified_clean
+    evidence: "Founder accepted the cost until the web launch (2026-11-20). Measured in the pub cache (purchases_flutter-11.0.4 lib/web/purchases_flutter_web.dart registerWith, assets/web 1,014,694 bytes); async, cached, inert until Purchases.configure; recorded in ADR-0022 Consequences with the reopen condition (the web launch) and pinned by purchases_package_dormant_test.dart"
+
+  - id: APPNAME
+    title: "App name decided: AvyaFit. Applying it to the manifest label and the Play Console title"
+    terminal_state: blocked_on_user
+    reason: "Founder decided the name 2026-11-20; changing the manifest label and the Console title waits for the founder's go (the Console title must not change while BillDesk reviews, GO_LIVE 2.4)"
+
+  - id: BP-CONST-DEFINES
+    title: "B-pass P1 (seats B and C independently): PurchaseMode.current read bool/String.fromEnvironment without const; an AOT release build would ignore the define and the release default, resolving every store build to razorpay"
+    terminal_state: closed_in_commit
+    commit: "play-billing-fallback@branch"
+    verification: "Both reads are const (precedent ist_date.dart); purchase_mode_current_wiring_test.dart now anchors each argument and requires const; three mutants (non-const release flag, trailing + 'x', kIsWeb || true) red; the on-device Profile build line stays the proof of the real binary"
+
+  - id: BP-RESTORE-STATUS
+    title: "B-pass P2: CHECK MY PRO STATUS failure showed a snackbar behind the modal sheet, so the neutral card's only action failed silently"
+    terminal_state: closed_in_commit
+    commit: "play-billing-fallback@branch"
+    verification: "Inline status line in PaywallUnavailableBody (neutral copy PurchaseCopy.checkStatusFailed), cleared at the start of the next attempt; purchase mode keeps its snackbar; paywall_mode_none_behavioral_test.dart (offline, retry in flight, retry success) with two mutants red"
+
+  - id: BP-PILL-A11Y
+    title: "B-pass P3: a free user's PRO pill and a PRO user's read the same word; the coach status pill kept an upgrade arrow in none mode"
+    terminal_state: closed_in_commit
+    commit: "play-billing-fallback@branch"
+    verification: "Semantics label PurchaseCopy.proPillFreeLabel for the free pill in a no-purchase build only; the arrow is omitted in none mode; behavioural semantics tests plus an adjacency pin"
+
+  - id: BP-REFUSAL-TELEMETRY
+    title: "B-pass P3: openCheckout refused silently outside razorpay; restore-failure copy said purchase"
+    terminal_state: closed_in_commit
+    commit: "play-billing-fallback@branch"
+    verification: "razorpay_checkout_refused_mode event on the refusal (asserted per mode, mutant red); the neutral failure copy replaces the purchase wording in none mode"
+
+  - id: BP-REGISTRY-RANGES
+    title: "B-pass P2: only the ranges the parity gate flagged had been shifted, by inconsistent offsets; 83 entries across 21 files were stale"
+    terminal_state: closed_in_commit
+    commit: "play-billing-fallback@branch"
+    verification: "Every line_range / line cite for the 21 edited files recomputed from the HEAD hunks by script, sentinels kept at 1-9999, one prose cite fixed, new-concept ranges re-measured; spot-checked by anchor (createOrder, _validatePromoCode, NutritionSummary, RecentFoodLogs, WeightLogNotifier, WeeklyNutrition, DeleteNutritionLog, mediaType, the three build() methods)"
+
+  - id: BP-DOCS
+    title: "B-pass P3 x5: ledger test count, diagnose doc line numbers and evidence, subscription.md named a button no code hides, GO_LIVE permission list lacked BILLING, build-apk contradiction and late refusal"
+    terminal_state: closed_in_commit
+    commit: "play-billing-fallback@branch"
+    verification: "All five fixed; the purchase-mode refusal now sits before every gate and the clean, the .opencode mirror is regenerated; BILLING noted for the +50 build"
+
+  - id: BP-SURFACE-PINS
+    title: "B-pass P2 x2: the source pins accepted an inverted or swapped guard; the purchaseUi argument at five copy call sites was unpinned"
+    terminal_state: closed_in_commit
+    commit: "play-billing-fallback@branch"
+    verification: "Each literal pinned by an adjacency regex in its exact shape; a per-file count of purchaseUi: showsUpgradeAffordance() plus a repo-wide ban on purchaseUi: true; six mutants (swapped ternaries, inverted guards, hard-coded argument) red"
+
+  - id: BP-BANNER-BEHAVIOURAL
+    title: "B-pass P2: the expiry banner was source-pinned only, by offsets an inverted guard also satisfies"
+    terminal_state: closed_in_commit
+    commit: "play-billing-fallback@branch"
+    verification: "purchase_expiry_banner_mode_none_test.dart: razorpay shows the banner for a PRO user three days out (positive pair), none and playBilling do not; inverted and deleted guards red"
+
+  - id: BP-INVENTORY-SCANNER
+    title: "B-pass P2: the inventory scanner missed nested-quote interpolation (a real RENEWS literal), triple quotes, split literals, a block-comment opener inside a line comment, subscription / buy / trial / Rs. / \\u{20B9}, and counted import URIs"
+    terminal_state: closed_in_commit
+    commit: "play-billing-fallback@branch"
+    verification: "Rewritten as a quote-state machine with 25 self-test rows; table re-measured (51 files, 133 hits); three real-shape regressions red"
+
+  - id: BP-TEST-SMALL
+    title: "B-pass P3 x4: resolver near-miss inputs, guard test depended on an empty key, absence checks had no razorpay positive pair, copy list was hand-written"
+    terminal_state: closed_in_commit
+    commit: "play-billing-fallback@branch"
+    verification: "Near misses added (a startsWith matcher mutant red), the key-dependent case skips with a stated reason, positives added, every PurchaseCopy member is in the no-upgrade-wording list"

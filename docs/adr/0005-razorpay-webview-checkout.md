@@ -93,7 +93,11 @@ Bad:
 
 ## Status
 
-Active. Native SDK migration is a deferred option; revisit when:
+Active. **Amended by ADR-0022 (2026-11-20):** the "Play Store requires IAP" trigger below has fired. Android sells
+PRO through Play Billing (RevenueCat); Razorpay stays the web path (ADR-0019). This ADR's WebView-versus-native
+question is now moot for Android purchases.
+
+Native SDK migration is a deferred option; revisit when:
 - Razorpay's native SDK has 18+ months of stable Flutter compat
 - We're at 1000+ paying users (UX friction starts to matter)
 - Play Store requires IAP — at which point we'd evaluate IAP, not
