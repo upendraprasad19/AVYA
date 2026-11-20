@@ -271,18 +271,21 @@ class _CoachComposerState extends ConsumerState<CoachComposer> {
                       // (isLimitReached implies isWarning). Was `isWarning && !isLimitReached`,
                       // which HID the only reachable paywall CTA at the exact upgrade moment.
                       if (isWarning) ...[
-                        const SizedBox(width: 6),
-                        GestureDetector(
-                          onTap: () => showPaywallSheet(context,
-                              feature: 'Higher daily AI coach limit'),
-                          child: Text(
-                            'GO PRO',
-                            style: AppTypography.monoXs.copyWith(
-                              color: AppColors.proGold,
-                              letterSpacing: 1.4,
+                        // ADR-0022: no link in a binary that sells nothing.
+                        if (showsUpgradeAffordance()) ...[
+                          const SizedBox(width: 6),
+                          GestureDetector(
+                            onTap: () => showPaywallSheet(context,
+                                feature: 'Higher daily AI coach limit'),
+                            child: Text(
+                              'GO PRO',
+                              style: AppTypography.monoXs.copyWith(
+                                color: AppColors.proGold,
+                                letterSpacing: 1.4,
+                              ),
                             ),
                           ),
-                        ),
+                        ],
                       ],
                     ],
                   ),
@@ -310,7 +313,9 @@ class _CoachComposerState extends ConsumerState<CoachComposer> {
       decoration: InputDecoration(
         border: InputBorder.none,
         hintText: isLimitReached
-            ? 'Daily limit reached — Go PRO'
+            ? (showsUpgradeAffordance()
+                ? 'Daily limit reached — Go PRO'
+                : PurchaseCopy.dailyLimitReached)
             : 'Ask your coach…',
         hintStyle: AppTypography.body.copyWith(
           fontSize: 14,

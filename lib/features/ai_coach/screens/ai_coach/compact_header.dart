@@ -268,7 +268,7 @@ List<PopupMenuEntry<String>> coachHeaderMenuItems({
         ],
       ),
     ),
-    if (!isPro)
+    if (!isPro && showsUpgradeAffordance())
       PopupMenuItem(
         value: 'upgrade',
         child: Row(

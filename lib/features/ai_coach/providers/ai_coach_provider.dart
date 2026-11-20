@@ -1,3 +1,5 @@
+import 'package:icanbefitter/core/copy/purchase_copy.dart';
+import 'package:icanbefitter/core/constants/purchase_mode.dart';
 import 'dart:async';
 import 'dart:convert';
 
@@ -840,7 +842,8 @@ class SendMessageNotifier extends Notifier<bool> {
       } else if (errStr2.contains('Message too long')) {
         errorMsg = 'Your caption is too long (max 5000 chars). Please shorten it and try again.';
       } else if (errStr2.contains('PRO subscription required') || errStr2.contains('subscription required')) {
-        errorMsg = 'Photo analysis is a PRO feature. Upgrade to unlock it.';
+        errorMsg = PurchaseCopy.photoAnalysisProRequired(
+            purchaseUi: showsUpgradeAffordance());
       } else if (errStr2.contains('502') || errStr2.contains('503') || errStr2.contains('504')) {
         errorMsg = 'The vision model is temporarily unavailable. Please try again in a minute.';
       } else {
@@ -1250,7 +1253,8 @@ class SendMessageNotifier extends Notifier<bool> {
         // but surface clearly if it ever slips past.
         errorMsg = 'Your coaching context is unusually large. Please try a shorter question or contact support.';
       } else if (errStr.contains('PRO subscription required') || errStr.contains('subscription required')) {
-        errorMsg = 'This feature requires PRO. Upgrade to unlock it.';
+        errorMsg = PurchaseCopy.featureProRequired(
+            purchaseUi: showsUpgradeAffordance());
       } else if (errStr.contains('502') || errStr.contains('503') || errStr.contains('504')) {
         errorMsg = 'The AI model is temporarily unavailable. Please try again in a minute.';
       } else if (errStr.contains('FunctionException')) {

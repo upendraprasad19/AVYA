@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:icanbefitter/core/constants/app_constants.dart';
+import 'package:icanbefitter/core/constants/purchase_mode.dart';
 import 'package:icanbefitter/core/theme/colors.dart';
 import 'package:icanbefitter/core/theme/typography.dart';
 import 'package:icanbefitter/shared/widgets/paywall_sheet.dart';
@@ -17,6 +18,12 @@ import 'package:icanbefitter/shared/widgets/paywall_sheet.dart';
 /// users stuck. Now there's exactly one purchase pipeline, but two
 /// surface variants for context-appropriate pitch.
 void showPaywallSheetPhaseVariant(BuildContext context) {
+  // ADR-0022: a binary that sells nothing has no phase pitch with a price line
+  // and an upgrade button; the neutral paywall body answers instead.
+  if (!PurchaseMode.current.showsPurchaseUi) {
+    showPaywallSheet(context, feature: 'Phases 2-12');
+    return;
+  }
   showModalBottomSheet<void>(
     context: context,
     backgroundColor: AppColors.card,

@@ -70,7 +70,7 @@ node .claude/deploy_via_api.js dedsavbjuwgarrhphgnl <fn> .claude/_payload_<fn>.j
 | AI Coach (all tiers) | Edge Function `ai-proxy` → Gemini 3.1 Flash Lite (`gemini-3.1-flash-lite`; fallback `gemini-3.5-flash-lite`). Free: 7 msg/day FOREVER (OQ-1). PRO: 20 msg/day (dedicated coaching, higher limits; NOT unlimited). Server-side gate. Caps: `_shared/ai_limits.ts`. |
 | Food AI / Weekly report | Gemini 3.1 Flash Lite for text, scan meal and cart auditor; the PRO-only weekly report runs the same model with thinking on. One constant per tier in `supabase/functions/_shared/gemini.ts` (revert = one line) |
 | Plan Generator | Dart (local, queries Hive exercise_library, zero API cost) |
-| Payments | Razorpay (WebView checkout → webhook → Supabase → poll → Hive) |
+| Payments | Web: Razorpay (WebView checkout → webhook → Supabase → poll → Hive). Android (ADR-0022): the binary's `PurchaseMode` (`--dart-define=ANDROID_PURCHASE_MODE`; a release build with no define = `none`: no price, no purchase button) decides whether any purchase UI exists; Play Billing via RevenueCat is planned (`play_billing` behaves as `none` until built) |
 | Telegram Bot | Dropped (founder, 2026-11-04). Dormant code in `telegram-bot/` (OI-476); `telegram-admin-bot` is a different, founder-ops bot |
 | Health | Google Fit / Health Connect / Samsung Health |
 

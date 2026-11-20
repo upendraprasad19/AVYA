@@ -34,6 +34,10 @@ static const Set<String> _highValueFeatures = {
 };
 ```
 
+## Purchase mode and the PRO surfaces (ADR-0022)
+
+In a binary whose `PurchaseMode` is not `razorpay`, no surface names a price or offers to buy: `ProPillButton` reads `PRO`, the Profile UPGRADE chip, the expiry banner, the coach overflow item and the website row are hidden, and a locked feature opens `PaywallSheet` as the neutral body ("WHAT PRO INCLUDES", `CHECK MY PRO STATUS`, `CLOSE`). `gate()` and `verifyFromServer()` are unchanged: the `subscriptions` table stays the entitlement source, so an account that is PRO from the web keeps every feature on Android. See `docs/architecture/payment.md` (Purchase mode).
+
 ## Shareable Cards (ALL FREE — growth engine)
 ```
 workout_receipt        → PNG after every completed workout + viewable later via "View Card"

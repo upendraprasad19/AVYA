@@ -35,6 +35,19 @@ Build a production-ready APK with all required pre-flight gates, pre-flight chec
 
 ---
 
+## Purchase mode — resolve FIRST, before any gate or clean (`--purchase-mode <razorpay|none>` in `$ARGUMENTS`, ADR-0022)
+
+A release binary's purchase surface is a compile-time define, `ANDROID_PURCHASE_MODE`
+(`docs/architecture/payment.md`, "Purchase mode"). Resolve it as the very first step so a refusal wastes no gate run and no `flutter clean`:
+
+- `--purchase-mode razorpay` or `--purchase-mode none` → pass `--dart-define=ANDROID_PURCHASE_MODE=<value>` to the build command below.
+- `--purchase-mode play_billing` → **REFUSE and stop.** The RevenueCat build (plan section 8) does not exist yet; the value would silently behave as `none`.
+- `--bundle` WITHOUT `--purchase-mode` → **REFUSE and stop** (a Play upload must name what it sells; no silent default).
+- An APK without `--purchase-mode` → no define is passed, which a release build resolves to `none` (no price, no purchase button). A release APK built to check Razorpay checkout on a phone needs `--purchase-mode razorpay`.
+- After the build, print `purchases: <mode>` and tell the founder the Profile tab's last line must read the same.
+
+---
+
 ## Gates (all must pass before build)
 
 All gates are Dart CLI scripts. Run with `dart run scripts/<name>.dart`. Each exits 0 on pass. Failures are printed to stderr. Gates run in order — first failure stops the build (unless `--emergency-bypass` is active).
@@ -339,10 +352,12 @@ flutter clean
 flutter pub get
 ```
 
+The purchase mode was resolved BEFORE the gates (see "Purchase mode" above the Gates section); pass its define to the command below.
+
 ### Build APK
 
 ```bash
-flutter build apk --dart-define-from-file=.env --flavor prod --release -t lib/main.dart
+flutter build apk --dart-define-from-file=.env --flavor prod --release -t lib/main.dart [--dart-define=ANDROID_PURCHASE_MODE=<mode>]
 ```
 
 Run with 10-minute timeout. Long-running command.
@@ -357,10 +372,10 @@ or gate ever ran it, so the Play upload artifact had never once been built.
 When `--bundle` is present, replace the build command above with:
 
 ```bash
-flutter build appbundle --dart-define-from-file=.env --flavor prod --release -t lib/main.dart
+flutter build appbundle --dart-define-from-file=.env --flavor prod --release -t lib/main.dart --dart-define=ANDROID_PURCHASE_MODE=<mode>
 ```
 
-Everything else about the run is unchanged — **every pre-build gate still
+Everything else about the run is unchanged, except that `--purchase-mode` is REQUIRED (a missing one was refused up front) — **every pre-build gate still
 applies** (clean tree, on-main, versionCode bump, `.env` present, Razorpay key
 flavor, diagnose-doc, all of it). Only the artifact differs:
 

@@ -35,7 +35,8 @@ extension _PredictionCard on _ProfileScreenState {
           : () {
               ScaffoldMessenger.of(context).showSnackBar(SnackBar(
                 content: Text(
-                  'Prediction refresh is a PRO feature. Upgrade in Profile \u2192 Subscription',
+                  PurchaseCopy.predictionLocked(
+                      purchaseUi: showsUpgradeAffordance()),
                   style: AppTypography.bodyM,
                 ),
                 backgroundColor: AppColors.proGold,
