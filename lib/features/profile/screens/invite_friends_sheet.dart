@@ -151,7 +151,7 @@ class _InviteFriendsSheetState extends ConsumerState<InviteFriendsSheet> {
   Future<void> _share() async {
     if (_code == null) return;
     const playStore =
-        'https://play.google.com/store/apps/details?id=com.icanbefitter.avya';
+        'https://play.google.com/store/apps/details?id=com.icanbefitter.icanbefitter';
     final message =
         '🎯 Try AVYA — premium fitness coaching with an AI coach who actually knows you.\n\n'
         'Use my code $_code within 7 days → 7 days of PRO, free.\n\n'
