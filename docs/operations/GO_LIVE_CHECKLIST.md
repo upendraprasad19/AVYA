@@ -105,7 +105,7 @@ ships.
 | 2.1 | Create the Play Console app + developer account + merchant profile | FOUNDER | App entry exists |
 | 2.2 | **Back up `android/app/release.jks` + `android/key.properties` offsite, TWICE — BEFORE first upload** | FOUNDER | Two copies in separate locations |
 | 2.3 | Build an `.aab` | AGENT | `/build-apk --bundle` (added 2026-08-24); artifact at `build/app/outputs/bundle/prodRelease/app-prod-release.aab` |
-| 2.4 | Decide the app name and make manifest + listing + policy pages agree (**founder decided 2026-11-20: "AvyaFit"**; applying it waits for the founder's go, and the Console title must not change while BillDesk reviews) | FOUNDER decides, AGENT applies | `AndroidManifest.xml:18` currently says `android:label="AVYA Fit"` while the package is `com.icanbefitter.icanbefitter` and every legal link points at `icanbefitter.com` |
+| 2.4 | Decide the app name and make manifest + listing + policy pages agree (**founder decided 2026-11-20: the brand is "AVYA"**; the Console title and the manifest label both read "AVYA Fit" and stay so until BillDesk clears, since the BillDesk form must match the Console title exactly) | FOUNDER decides, AGENT applies | `AndroidManifest.xml:18` currently says `android:label="AVYA Fit"` while the package is `com.icanbefitter.icanbefitter` and every legal link points at `icanbefitter.com` |
 | 2.5 | Store listing assets: short + full description, ≥2 screenshots, 512px icon, 1024×500 feature graphic | FOUNDER | Uploaded |
 | 2.6 | Justify or prune the transitive `NFC` + `READ_BASIC_PHONE_STATE` permissions | AGENT | Neither is used by app code; both arrive via a plugin (likely Razorpay). Needs an SDK compatibility check before removal — Play flags unexplained phone-state access |
 

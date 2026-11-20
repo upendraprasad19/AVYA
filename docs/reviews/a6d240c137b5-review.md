@@ -88,7 +88,7 @@ Three context-blind Sonnet seats, read-only on the shared tree, each given the r
 - **Lens 8:** copy strings in the tests match `git show HEAD:` byte for byte; the override seam is reset in every file that sets it; GoogleFonts warm-ups first in each widget file.
 
 ## Founder triage notes
-Finding 4 (`WEB-SCRIPT`): accepted by the founder 2026-11-20. The app name is decided (AvyaFit); applying it and the Play price are open and are not findings of this diff, as is the server-sent upgrade and price copy (GO_LIVE 0.4).
+Finding 4 (`WEB-SCRIPT`): accepted by the founder 2026-11-20. The app name is decided (the brand is AVYA; the Console title and manifest label stay "AVYA Fit" until BillDesk clears; corrected after merge from an earlier "AvyaFit"); the Play price is open and are not findings of this diff, as is the server-sent upgrade and price copy (GO_LIVE 0.4).
 
 ## Tuning entry
 - **2026-11-20** - blast-radius platform - 23 findings (1 P1, 7 P2, 15 P3); 0 false_alarm; tuning: added a build-define sub-check to lens 6 (a non-const `fromEnvironment` reads its default in an AOT build while every JIT test sees the define; found independently by two seats), and the inventory-scanner lesson (a regex over Dart source misses nested quotes, triple quotes and split literals: use a quote-state scanner) is recorded here; two seats ran their own in-memory mutants against the diff's source pins and found polarity holes the diff's tests could not, so keep lens 6's "mutate the way a real regression re-enters" for source pins.
