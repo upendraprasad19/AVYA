@@ -6511,7 +6511,7 @@ Found by the sync-storm-first-sweep batch while measuring its Day-0 web check (l
 ## OI-448 — First-PRO freeze grant fires on every web cold start (local flag unset, cloud flag true); needs a grant-pending marker plus a settle trigger
 
 - **Status**: OPEN
-- **Blocked on**: none
+- **Blocked on**: upstream_blocked, `reopen_when: store launch` (founder, 2026-11-20). Only testers exist, so the effect is cosmetic: the phantom 3 freezes are discarded when the restore succeeds, and it matters only if a restore fails or never settles. It is an L-tier sync + subscription change (plan, two review rounds, B-pass) to build before real users arrive. Open design question for then: a restore that never settles keeps the grant pending until the next boot (recommended) or gives up after N days.
 - **Verified**: never
 - **Identified**: 2026-11-02 · filed via mint_oi.sh from branch `freeze-refill-sync`
 
