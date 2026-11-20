@@ -21,7 +21,7 @@ Decided 2026-11-20 (memory `project_play_billing_decisions_2026_11_20`):
 - The fallback screen design in section 4 (copy is a DRAFT: Wardroom voice and the psychology-pass review come before it ships).
 
 Open, none blocks the no-purchase build:
-- App name (checklist 2.4: "Avya Fit" listing, "AVYA Fit" manifest, ICANBEFITTER package and legal links). **Decided 2026-11-20 (founder): "AvyaFit"**; applying it to the manifest and the Console is a separate step. No code in this plan uses a product name on purpose.
+- App name (checklist 2.4: "Avya Fit" listing, "AVYA Fit" manifest, ICANBEFITTER package and legal links). **Decided 2026-11-20 (founder): the brand is "AVYA"**; the Console title and manifest label both read "AVYA Fit" and stay so until BillDesk clears. No code in this plan uses a product name on purpose.
 - Play price (default: same 349 / 2,999 rupees).
 
 ## 1. Facts (verified in this worktree at `a1849656` on 2026-11-20 unless marked)

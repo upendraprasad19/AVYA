@@ -93,9 +93,9 @@ findings:
     evidence: "Founder accepted the cost until the web launch (2026-11-20). Measured in the pub cache (purchases_flutter-11.0.4 lib/web/purchases_flutter_web.dart registerWith, assets/web 1,014,694 bytes); async, cached, inert until Purchases.configure; recorded in ADR-0022 Consequences with the reopen condition (the web launch) and pinned by purchases_package_dormant_test.dart"
 
   - id: APPNAME
-    title: "App name decided: AvyaFit. Applying it to the manifest label and the Play Console title"
-    terminal_state: blocked_on_user
-    reason: "Founder decided the name 2026-11-20; changing the manifest label and the Console title waits for the founder's go (the Console title must not change while BillDesk reviews, GO_LIVE 2.4)"
+    title: "App name decided: the brand is AVYA; the Console title and manifest label stay AVYA Fit until BillDesk clears"
+    terminal_state: verified_clean
+    evidence: "Founder decision 2026-11-20. The Play Console dashboard (founder screenshot) reads AVYA Fit and the manifest android:label is AVYA Fit, so they already agree; no code or Console change is needed. The BillDesk form must match the Console title exactly, so the title is not changed while it reviews. Recorded in ADR-0022 Decision 7 and GO_LIVE 2.4"
 
   - id: BP-CONST-DEFINES
     title: "B-pass P1 (seats B and C independently): PurchaseMode.current read bool/String.fromEnvironment without const; an AOT release build would ignore the define and the release default, resolving every store build to razorpay"
