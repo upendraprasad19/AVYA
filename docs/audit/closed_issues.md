@@ -7404,7 +7404,7 @@ The founder chose to keep the plans as they are, over a unit that would give qua
 ## OI-479 — AI Coach 'Clear conversation' menu item does nothing: onSelected only invalidates chatHistoryProvider, whose build re-reads every row from coachBox
 
 - **Status**: CLOSED · 2026-11-19 · PR #257 (merge 0b87f5bb, 2026-11-12) · the commit carrying `closes-oi: OI-479`
-- **Blocked on**: — (resolved: migration 177 applied and ledgered in `backups/applied_migrations.json`, PR merged; the on-device check is row A22 of OI-348, moved there by the founder 2026-11-19)
+- **Blocked on**: — (resolved: migration 177 applied and ledgered in `backups/applied_migrations.json`, PR merged; the on-device check is row A23 of OI-348, moved there by the founder 2026-11-19)
 - **Verified**: 2026-11-06, by reading (nothing run): `lib/features/ai_coach/screens/ai_coach/compact_header.dart:130-132` (`case 'clear': ref.invalidate(chatHistoryProvider);`, byte-identical at `d27bf032`), `lib/features/ai_coach/providers/ai_coach_provider.dart:167-190` (`ChatHistoryNotifier.build` loops `coachBox.keys` and rebuilds the list from Hive), and `git grep -n -iE "coachBox\.(clear|delete|deleteAll)|clearChat|clearHistory|clearConversation" -- lib` returns only `lib/shared/repositories/user_repository.dart:1212` (the account wipe).
 - **Identified**: 2026-11-06 · filed via mint_oi.sh from branch `telegram-surface-off`; found by the OI-466 B-pass (a fresh Sonnet reviewer; pre-existing, not caused by that batch)
 

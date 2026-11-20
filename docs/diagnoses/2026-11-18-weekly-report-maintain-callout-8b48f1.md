@@ -31,10 +31,10 @@ writers:
   - { file: lib/features/onboarding/target_weight_check.dart, method_or_widget: "weightGapTenths / validateTargetWeight: the one gap expression and the Maintain window", line: 58 }
 readers:
   - { file: lib/features/profile/screens/reports_screen.dart, method_or_widget: "_buildWeightTrend: hands the raw profile and the filtered weigh-ins to WeightProjectionLine", line: 651 }
-  - { file: lib/features/profile/widgets/weight_projection_callout.dart, method_or_widget: "WeightProjectionLine: reads primary_goal and target_weight_kg from the profile map, then WeightProjectionCallout", line: 38 }
-  - { file: lib/features/profile/widgets/weight_projection_callout.dart, method_or_widget: "WeightProjectionCallout.build: draws each ProjectionCalloutKind (exhaustive switch)", line: 76 }
-  - { file: lib/features/onboarding/target_weight_check.dart, method_or_widget: "projectionCalloutKind: Maintain branch by distance (onTarget / offTarget), flat-series guard", line: 136 }
-  - { file: lib/core/copy/weight_callout_copy.dart, method_or_widget: "onTargetLine / offTargetLine / targetLabel: the Maintain words, printed from integer tenths", line: 37 }
+  - { file: lib/features/profile/widgets/weight_projection_callout.dart, method_or_widget: "WeightProjectionLine: reads primary_goal and target_weight_kg from the profile map, then WeightProjectionCallout", line: 54 }
+  - { file: lib/features/profile/widgets/weight_projection_callout.dart, method_or_widget: "WeightProjectionCallout.build: draws each ProjectionCalloutKind (exhaustive switch); maintainAsOfSuffix / parseDateKeyUtc: the staleness suffix", line: 110 }
+  - { file: lib/features/onboarding/target_weight_check.dart, method_or_widget: "projectionCalloutKind: Maintain branch by distance (onTarget / offTarget), flat-series guard; Maintain skips the history gate", line: 132 }
+  - { file: lib/core/copy/weight_callout_copy.dart, method_or_widget: "onTargetLine / offTargetLine / targetLabel / asOfSuffix: the Maintain words, printed from integer tenths", line: 37 }
 hive_key_prefix: "userBox['profile'] keys primary_goal, target_weight_kg; healthBox weight_<istDate> (weight_kg, date)"
 hive_key_formula: "read only: UserRepository.instance.getProfile()['primary_goal' | 'target_weight_kg']; weigh-ins via the weight_<istDate> entries in healthBox (no write in this batch)"
 sync_methods:
@@ -44,7 +44,7 @@ restore_methods:
 cloud_table: null
 cloud_columns: []
 ist_handling:
-  - { file: lib/core/utils/ist_date.dart, method_or_widget: "no date key is written or compared by this batch; the date sentence keeps DateTime.now() (an injectable clock in the widget, for tests)", line: 1 }
+  - { file: lib/core/utils/ist_date.dart, method_or_widget: "istDateStr: today's IST date for the Maintain 'as of' staleness (follow-on 2026-11-19; one conversion, never istNow(); the weigh-in keys are IST date keys read as UTC calendar dates); the date sentence keeps DateTime.now() (an injectable clock in the widget, for tests)", line: 94 }
 provider_invalidations:
   - "none: the widget is rebuilt by the Reports screen's own setState and reads Hive-backed values passed in by the screen"
 telemetry_op_types:
@@ -64,7 +64,9 @@ proposed_fix: |
   - U1 `target_weight_check.dart`: `weightGapTenths` (the one gap expression, shared with `validateTargetWeight`);
     `ProjectionCalloutKind` gains `onTarget` and `offTarget`; `projectionCalloutKind` decides Maintain right after the history
     gate by `validateTargetWeight` on the LAST weigh-in (five-arm switch, no default); a flat series returns `none` before the date
-    sentence.
+    sentence. FOLLOW-ON (founder 2026-11-19, plan `docs/plans/oi518-maintain-followon.md`): Maintain SKIPS the history gate (the
+    gate is `weeksDiff < 0.5 && goal != 'general_fitness'`, Cut / Build keep it), and a Maintain line carries ` · as of <date>` when
+    the last weigh-in is more than 7 days old.
   - U2 `lib/core/copy/weight_callout_copy.dart`: the words, from integer tenths, never a float.
   - U3 `lib/features/profile/widgets/weight_projection_callout.dart`: the callout leaves the Reports screen as a stateless widget
     with a REQUIRED `goal` and an exhaustive switch statement. B-pass amendment: `WeightProjectionLine` also owns the profile-to-callout
@@ -121,11 +123,11 @@ error, and every non-equivalent mutant reddened at least one test.
 | c | `above` / `below` swapped in the copy | 9 |
 | d | the widget draws `offTarget` as `onTarget` | 5 |
 | e | the screen's call replaced by a `SizedBox` | 1 (PIN-ONLY: the call-site pin) |
-| f | Maintain branch moved above the history gate | 2 |
+| f | Maintain branch moved above the history gate | 2 (this is now the SHIPPED design, follow-on 2026-11-19; the mutant is moot) |
 | g | Maintain branch moved below the `adjust` / `reached` lines | 13 |
 | h | `missing` mapped to `onTarget` | 1 |
 | i | Maintain branch for every goal (`if (true)`) | 11 |
-| j | history gate `<` -> `<=` | 1 |
+| j | history gate `<` -> `<=` | 1 (Cut / Build only after the follow-on; see the follow-on table p1 / p2) |
 | k | the screen passes `goal: ''` | 1 (PIN-ONLY: the call-site pin) |
 | l | the widget passes a truncated raw gap instead of `weightGapTenths` | 1 (the 66.9 / 70.0 float-edge row) |
 | m | the Maintain branch judges `firstW` | 7 |
@@ -142,20 +144,28 @@ judged by the absolute gap). Pin-only protection (e, k): no test pumps `ReportsS
 - A fractional Maintain target (the onboarding seed IS the current weight, e.g. 74.8) prints `74.8 kg` in the new line while the
   chart label above it and the other surfaces print the stored target with `toStringAsFixed(0)` ("Goal: 75kg"). Changing those
   five surfaces would also change fractional Cut / Build targets on screens outside OI-518; not done here (plan round 2).
+  FOUNDER DECISION 2026-11-19: leave as is.
 - A profile with NO `primary_goal` passes `''` and keeps today's non-Maintain path on this card (elsewhere a missing goal reads as
   `general_fitness`): pre-existing, unreachable through onboarding (the goal step precedes Stats).
 - `recomp` is not healed by `LegacyGoalHealer` (`FitnessGoals.legacyTargets` maps only `strength` and `recompose`) and passes the
   goal rule as an unruled token: its callout behaviour is unchanged.
-- A Maintain user keeps the two trend-era gates the card always had (B-pass finding 1): at least two weigh-ins in the selected window,
-  and at least half a week between the first and the last, or no callout. The distance itself needs neither; the gate is the
-  plan's recorded choice (plan U1) and keeps Cut / Build and Maintain on one history rule.
+- A Maintain user keeps ONE of the two trend-era gates (B-pass finding 1): at least two weigh-ins in the selected window.
+  FOUNDER DECISION 2026-11-19: Maintain skips the half-week rule (a distance needs no span), so two weigh-ins a day apart already
+  draw the line; Cut and Build keep it (follow-on, `projectionCalloutKind`).
 - On the "All" filter the callout judges the LAST weigh-in whatever its age, so a Maintain user whose last weigh-in is months old
-  reads the present-tense "Holding the line" line (B-pass finding 5). The old `reached` line had the same staleness; a staleness
-  cutoff is a new product rule the founder has not decided, so none is added here.
+  reads the present-tense "Holding the line" line (B-pass finding 5). FOUNDER DECISION 2026-11-19: a Maintain line gets
+  ` · as of 3 Nov` (` · as of 28 Dec 2026` when the year differs from today's IST year) when the last weigh-in is MORE than 7 days
+  old (`kMaintainStaleAfterDays`, `maintainAsOfSuffix`); Cut and Build lines are unchanged. The 1W filter already drops entries
+  of 7 days or older, so the suffix shows on 1M / 3M / All.
 - The Home `WeightTrendChart` prints "You've reached your goal weight!" at a 0.2 kg distance for every goal, Maintain included: a
   separate surface with its own rule, not the OI-518 card.
 - The Weekly Report Edge Function narrative (`weekly-report/index.ts`) is not the card; changing it is an Edge Function deploy and
   needs its own per-action go.
+- The staleness suffix reads the dev/test clock seam (`now ?? nowWall()`), while the Cut / Build date sentence (`DateTime.now()`) and
+  the screen's 1W / 1M window cutoff do not (B-pass seat 1, follow-on). Only the dev panel's time travel can show the difference
+  (`setTestClock` is a no-op in release); changing the Cut / Build sites is outside the founder-approved scope.
+- The Maintain off-target line followed by the suffix reads `... · adjust your nutrition to hold the line · as of 3 Nov` (two
+  separators): the founder-approved shape, wrapped by the row's `Expanded`.
 - The `adjust` row keeps a named duplicate of the pure rule's `goal.contains('lose')` for its "diet" / "nutrition" word (Cut and
   Build only now; the Cut and Build wording rows of the behavioural test pin it).
 
@@ -174,3 +184,60 @@ changes `filtered` or `profile` elsewhere in the screen is the screen's own, unc
 A Maintain profile with weigh-ins inside the 3 kg band (once falling, once rising) must show the green "Holding the line" line and
 no date or "Adjust"; one beyond the band the orange line with the side; a Cut profile with a whole target must show the same chart
 label and date sentence as before.
+
+## Follow-on 2026-11-19: history gate and "as of" suffix (plan `docs/plans/oi518-maintain-followon.md`, revision 4, 3 review rounds)
+
+Tests: `test/onboarding/target_weight_check_test.dart`, `test/contracts/weight_callout_copy_test.dart`,
+`test/contracts/maintain_weight_callout_behavioral_test.dart` (146 tests; 153 with the call-site pin
+`test/contracts/projection_gate_single_source_test.dart`, the fourth file of the mutation runs; green under `TZ` = Asia/Kolkata, UTC, Etc/GMT+12 and
+America/New_York). Mutations run against the four test files (each confirmed APPLIED by a changed-file assertion, the tree
+re-hashed after the run; a compile error would not have counted, none occurred). Failing tests per mutant in brackets:
+
+| id | mutant | red |
+|---|---|---|
+| a | Maintain exemption removed | 3 |
+| b | exemption applied to every goal | 3 |
+| c | Cut-only / Build-only exemption | 4 / 4 |
+| d, e | staleness `<=` to `<`; `<=` to `<= +1` | 6 / 6 |
+| f1 | today from the UTC components | 4 in every zone |
+| f2 | today from `now.toLocal()` | 4 UTC, 7 Etc/GMT+12, 4 New_York; EQUIVALENT in Asia/Kolkata (local = IST) |
+| f3 | today from `DateTime.now()` | 8 in every zone |
+| f4 | hand-rolled +5:00 / +6:00 offset | 1 / 1 in every zone (the 18:29Z / 18:31Z rows) |
+| f5 | DOUBLE IST shift | 2 in every zone (the 14:00Z row) |
+| f6 | ages as a local-midnight difference | 1 in America/New_York (the DST row); EQUIVALENT in the three fixed-offset zones |
+| g | suffix dropped from `_offTargetRow` / `_onTargetRow` | 2 / 6 |
+| h | suffix on a Cut / Build `eta` / `adjust` / `reached` row | 3 / 5 / 3 |
+| i | year rule on month / inverted / from `DateTime.now()` | 2 / 14 / 5 |
+| j | two month names swapped / list off by one | 2 / 14 |
+| k | `.abs()` on the age (a future date shows the suffix) | 2 |
+| l | `now` ignored by the staleness read / `WeightProjectionLine` drops `now:` | 7 / 2 |
+| m | staleness read from `entries.first` | 22 |
+| n, o | leading zero kept; separator changed | 6 / 14 |
+| p1, p2 | history gate `<` to `<=`; `0.5` to `0.6` (Cut / Build rows at exactly 0.5) | 1 / 1 |
+| q | `lastDay` / `today` swapped | 10 |
+| r | key regex without `^`; without `$`; round trip on the day only | 1 / 2 / 1 |
+
+Equivalent mutants, not counted: `lastDay.year < today.year` for `!=` (the caller never passes a future day); dropping the year
+comparison from the round trip, and keeping ONLY the month comparison (every rolled date, whether a day or a month overflow,
+changes the month, so the month comparison alone is a complete guard; the other two comparisons are belt and braces). The plan
+expected month-only to be killed; the run measured it as equivalent.
+
+### Follow-on B-pass mutation seat (100 mutants, 91 applied, 2026-11-19)
+
+The seat applied 91 mutants on head 2d34fa0d; 17 survived, all missing pins (no shipped-code defect). Each now has a test and was
+re-run (confirmed applied, killed, tree restored and re-hashed):
+
+| survivor | mutant | killed by | red |
+|---|---|---|---|
+| M1, M2, M3 | the production clock `now ?? nowWall()` replaced by a 2000 / 2100 constant / `istNow()` | `WeightProjectionLine` with NO injected clock under `setTestClockTo` (14:00Z, next day, 2031) | 1 each |
+| M93, M94, M95 | suffix / last weigh-in read from `entries[1]` | three-weigh-in Maintain rows (on and off target) | 1 / 1 / 2 |
+| M100 | the span's last date read from the middle entry | three-weigh-in Cut row with the middle entry on the first day | 1 |
+| M44, M49 | hidden gap / size condition on the Maintain exemption | pure rows (gap 15 kg at 0.14 weeks; target 120 at 0.4 weeks) | 1 each |
+| M37, M35 | Cut / Build exemption at `lastW == target`; `weeksDiff >= 0` | pure rows (a short or negative span is `none` for Cut and Build) | 1 each |
+| M77 | IST day taken one minute early | the exact 18:30Z row (IST midnight) | 1 in every zone |
+| M67, M68 | key regex `\d{1,2}` month / `\d{3,4}` year | bad keys `2026-1-05`, `026-11-18` (and `2026-1-5`, `2026-11-1`) | 1 each |
+| M75, M76 | no suffix for a key more than 5 years / 3650 days old | a 2014 key prints `as of 5 Mar 2014` | 1 each |
+
+Equivalent (seat's reasoning, accepted): `entries.length < 1` in the line (the callout's own `< 2` guard catches it); `.inHours ~/ 24`
+on UTC dates; `!startsWith('general')` / `!contains('fitness')` (the only such goal); `now ?? DateTime.now()` (identical to `nowWall()`
+in a release build).

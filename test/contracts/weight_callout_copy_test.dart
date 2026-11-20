@@ -60,6 +60,34 @@ void main() {
     });
   });
 
+  group('asOfSuffix', () {
+    DateTime d(int y, int m, int day) => DateTime.utc(y, m, day);
+    test('same year: day and month, no leading zero, no year', () {
+      expect(WeightCalloutCopy.asOfSuffix(lastDay: d(2026, 11, 3), today: d(2026, 11, 19)),
+          ' $_dot as of 3 Nov');
+      expect(WeightCalloutCopy.asOfSuffix(lastDay: d(2026, 11, 18), today: d(2026, 11, 30)),
+          ' $_dot as of 18 Nov');
+    });
+    test('all twelve month names', () {
+      const names = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+      for (var m = 1; m <= 12; m++) {
+        expect(WeightCalloutCopy.asOfSuffix(lastDay: d(2026, m, 9), today: d(2026, 12, 31)),
+            ' $_dot as of 9 ${names[m - 1]}');
+      }
+    });
+    test('a different year adds the last weigh-in\'s year', () {
+      expect(WeightCalloutCopy.asOfSuffix(lastDay: d(2026, 12, 28), today: d(2027, 1, 10)),
+          ' $_dot as of 28 Dec 2026');
+      // the same month in another year still prints the year
+      expect(WeightCalloutCopy.asOfSuffix(lastDay: d(2025, 11, 3), today: d(2026, 11, 19)),
+          ' $_dot as of 3 Nov 2025');
+    });
+    test('today supplies only the year (far future today)', () {
+      expect(WeightCalloutCopy.asOfSuffix(lastDay: d(2026, 11, 3), today: d(2031, 3, 5)),
+          ' $_dot as of 3 Nov 2026');
+    });
+  });
+
   group('targetLabel', () {
     test('whole to the tenth prints whole, else one decimal', () {
       expect(WeightCalloutCopy.targetLabel(75), '75');

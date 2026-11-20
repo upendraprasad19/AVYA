@@ -10,7 +10,41 @@ import 'package:flutter/material.dart';
 import 'package:icanbefitter/core/copy/weight_callout_copy.dart';
 import 'package:icanbefitter/core/theme/colors.dart';
 import 'package:icanbefitter/core/theme/typography.dart';
+import 'package:icanbefitter/core/utils/ist_date.dart';
 import 'package:icanbefitter/features/onboarding/target_weight_check.dart';
+
+/// A Maintain line says "as of `date`" when the last weigh-in is MORE than this many
+/// days old (founder 2026-11-19): the distance is true of that day, not of today.
+const int kMaintainStaleAfterDays = 7;
+
+/// A `YYYY-MM-DD` date key as a UTC calendar date (no clock, no zone, no DST), or
+/// null for anything else: the pattern is anchored and the parsed date must round
+/// trip, so `2026-02-31`, `20261118`, `2026-11-18T10:00:00` and ` 2026-11-18` are null.
+/// (`DateTime.tryParse` is local and lenient, and rolls `2026-02-31` over to March.)
+DateTime? parseDateKeyUtc(String key) {
+  final m = RegExp(r'^(\d{4})-(\d{2})-(\d{2})$').firstMatch(key);
+  if (m == null) return null;
+  final y = int.parse(m.group(1)!);
+  final mo = int.parse(m.group(2)!);
+  final d = int.parse(m.group(3)!);
+  final date = DateTime.utc(y, mo, d);
+  if (date.year != y || date.month != mo || date.day != d) return null;
+  return date;
+}
+
+/// The Maintain lines' staleness suffix: empty unless the last weigh-in
+/// ([lastDateKey], an IST date key) is more than [kMaintainStaleAfterDays] days
+/// before today's IST date. Today is `istDateStr(now)` (the one IST conversion; never
+/// `istNow()`, which is already shifted), both days are compared as UTC calendar
+/// dates so a DST zone cannot move the count, and a future or unreadable key draws no
+/// suffix.
+String maintainAsOfSuffix({required String lastDateKey, required DateTime now}) {
+  final last = parseDateKeyUtc(lastDateKey);
+  final today = parseDateKeyUtc(istDateStr(now));
+  if (last == null || today == null) return '';
+  if (today.difference(last).inDays <= kMaintainStaleAfterDays) return '';
+  return WeightCalloutCopy.asOfSuffix(lastDay: last, today: today);
+}
 
 /// The callout as the Weekly Report's weight card places it: reads the goal and the target
 /// from the PROFILE map and shows the callout under the chart only when there is a target
@@ -103,11 +137,17 @@ class WeightProjectionCallout extends StatelessWidget {
       case ProjectionCalloutKind.eta:
         return _etaRow(firstW: firstW, lastW: lastW, weeksDiff: weeksDiff);
       case ProjectionCalloutKind.onTarget:
-        return _onTargetRow(lastW);
+        return _onTargetRow(lastW, _asOf(last));
       case ProjectionCalloutKind.offTarget:
-        return _offTargetRow(lastW);
+        return _offTargetRow(lastW, _asOf(last));
     }
   }
+
+  // Maintain kinds only: " \u00B7 as of 3 Nov" when the last weigh-in is old, else ''.
+  String _asOf(Map<String, dynamic> last) => maintainAsOfSuffix(
+        lastDateKey: last['date'] as String? ?? '',
+        now: now ?? nowWall(),
+      );
 
   // Cut / Build only (a Maintain goal never reaches `adjust`). The diet / nutrition
   // word keys off the same `goal.contains('lose')` test the pure rule uses.
@@ -169,7 +209,7 @@ class WeightProjectionCallout extends StatelessWidget {
   }
 
   // Maintain, inside the window: where the last weigh-in sits, no date, no verdict.
-  Widget _onTargetRow(double lastW) {
+  Widget _onTargetRow(double lastW, String asOf) {
     return Row(
       children: [
         Icon(Icons.check_circle, size: 14, color: AppColors.green),
@@ -177,9 +217,10 @@ class WeightProjectionCallout extends StatelessWidget {
         Expanded(
           child: Text(
             WeightCalloutCopy.onTargetLine(
-              gapTenths: weightGapTenths(lastW, targetWeight),
-              target: targetWeight,
-            ),
+                  gapTenths: weightGapTenths(lastW, targetWeight),
+                  target: targetWeight,
+                ) +
+                asOf,
             style: AppTypography.bodySm.copyWith(fontWeight: FontWeight.w500, color: AppColors.ok),
           ),
         ),
@@ -188,7 +229,7 @@ class WeightProjectionCallout extends StatelessWidget {
   }
 
   // Maintain, beyond the window: how far and on which side, no date.
-  Widget _offTargetRow(double lastW) {
+  Widget _offTargetRow(double lastW, String asOf) {
     return Row(
       children: [
         Icon(Icons.warning_amber, size: 14, color: AppColors.orange),
@@ -196,9 +237,10 @@ class WeightProjectionCallout extends StatelessWidget {
         Expanded(
           child: Text(
             WeightCalloutCopy.offTargetLine(
-              gapTenths: weightGapTenths(lastW, targetWeight),
-              target: targetWeight,
-            ),
+                  gapTenths: weightGapTenths(lastW, targetWeight),
+                  target: targetWeight,
+                ) +
+                asOf,
             style: AppTypography.bodySm.copyWith(fontWeight: FontWeight.w500, color: AppColors.warn),
           ),
         ),

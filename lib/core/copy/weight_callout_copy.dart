@@ -40,6 +40,31 @@ class WeightCalloutCopy {
     return 'Holding the line · ${_gap(gapTenths)} kg from your $t kg target';
   }
 
+  static const List<String> _months = [
+    'Jan',
+    'Feb',
+    'Mar',
+    'Apr',
+    'May',
+    'Jun',
+    'Jul',
+    'Aug',
+    'Sep',
+    'Oct',
+    'Nov',
+    'Dec',
+  ];
+
+  /// The suffix the Maintain lines carry when the last weigh-in is old: `as of
+  /// 3 Nov` (`as of 28 Dec 2026` when [lastDay] is in another year than
+  /// [today]). Both arguments are IST CALENDAR dates built by the caller; only their
+  /// year, month and day are read, and [today] supplies only the year. A [lastDay]
+  /// after [today] is never passed (the caller returns no suffix for it).
+  static String asOfSuffix({required DateTime lastDay, required DateTime today}) {
+    final year = lastDay.year != today.year ? ' ${lastDay.year}' : '';
+    return ' \u00B7 as of ${lastDay.day} ${_months[lastDay.month - 1]}$year';
+  }
+
   /// Beyond the Maintain window (`|gapTenths| > 30`): `3.4 kg above your 75 kg
   /// target · adjust your nutrition to hold the line`. `gapTenths < 0` = the last
   /// weigh-in is above the target. Never called for a kind other than `offTarget`.
