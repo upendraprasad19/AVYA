@@ -16255,7 +16255,7 @@ concepts:
       upendra@icanbefitter.com.
     writers:
       - file: lib/features/profile/screens/profile/screen.dart
-        line_range: 302
+        line_range: 299
         method: build (contact card)
         semantic: display-only
       - file: lib/features/profile/screens/delete_account_screen.dart

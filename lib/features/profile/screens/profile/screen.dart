@@ -278,10 +278,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
               ),
               const SizedBox(height: 10),
               Text(
-                'Your PRO subscription is handled by Razorpay and '
-                'auto-renews by default. To cancel, change plans, or '
-                'request a refund, reach out to us and we\'ll sort it '
-                'within 24 hours.',
+                PurchaseCopy.manageSubscription,
                 style: AppTypography.body.copyWith(
                   color: AppColors.textDim,
                   height: 1.5,

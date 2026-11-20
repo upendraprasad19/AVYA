@@ -54,7 +54,7 @@ const Map<String, int> kExpected = {
   'lib/features/profile/screens/delete_account_screen.dart': 2,
   'lib/features/profile/screens/notification_settings_screen.dart': 1,
   'lib/features/profile/screens/profile/profile_content.dart': 2,
-  'lib/features/profile/screens/profile/screen.dart': 3,
+  'lib/features/profile/screens/profile/screen.dart': 1,
   'lib/features/profile/screens/profile/subscription_section.dart': 5,
   'lib/features/profile/screens/progress_photos_screen.dart': 1,
   'lib/features/profile/screens/reports_screen.dart': 1,
