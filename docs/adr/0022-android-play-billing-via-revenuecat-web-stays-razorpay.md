@@ -58,10 +58,13 @@ Amends ADR-0005 (billing architecture; its "Play Store requires IAP" revisit tri
    upload. A compile-time release flag, `ANDROID_PURCHASE_MODE` (`razorpay` | `none` | `play_billing`), selects the
    behaviour; the web build ignores the FLAG (it is always `razorpay`). The dependency itself is NOT inert on web: see the
    last item under Consequences. Design and tests in the plan, sections 3 to 7.
-7. **App name (founder, 2026-11-20): "AvyaFit".** The store listing, the manifest label and the BillDesk form must all
-   agree on it (checklist 2.4; the existing listing reads "Avya Fit", the manifest "AVYA Fit", the package stays
-   `com.icanbefitter.icanbefitter`). Applying it to the manifest and the Console title is a separate step that needs the
-   founder's go (the Console title must not change while BillDesk reviews).
+7. **App name (founder, 2026-11-20): the brand is "AVYA".** The Play Console title and the manifest label both read
+   "AVYA Fit" today (confirmed from the Console dashboard) and stay "AVYA Fit" until BillDesk clears, because the BillDesk
+   form must match the Console title exactly and the title must not change while BillDesk reviews. The package stays
+   `com.icanbefitter.icanbefitter` (permanent, never shown to users). Nothing in the app needs to change for the name.
+   The Play policy allows all capitals in a title only when they are part of the brand name; "AVYA" is the brand, and
+   title case is the fallback if a store review objects. After BillDesk clears, the title may be reconsidered (for
+   example "AVYA: Workout & Diet Coach"); that is optional and the founder's call.
 8. **Not decided here (open):** the exact Play price (founder, 2026-11-20: decided later; default the same 349 / 2,999
    rupees), and Apple (checklist 0.3, a separate decision; RevenueCat would also serve it).
 
