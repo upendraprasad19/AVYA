@@ -5,13 +5,14 @@ blast_radius: platform
 review_rounds: 2
 ground_truth_verified: true
 verdict: converged
-bpass: pending
+bpass: accepted
+bpass_review: docs/reviews/a6d240c137b5-review.md
 ---
 
 # Plan-review record: play-billing-fallback (platform; payment, tier L)
 
 Plan: `docs/plans/2026-11-20-android-play-billing.md` (v3). Decision record: `docs/adr/0022-android-play-billing-via-revenuecat-web-stays-razorpay.md`.
-`bpass: pending` on purpose: no code exists yet. It becomes `accepted` (with a `bpass_review:` path) after the `/code-review` B-pass, before the merge (CLAUDE.md 4.3, 4.12.3). The tier is stated, not yet computed: MEASURED 2026-11-20 on the built diff (positional paths incl. `CLAUDE.md`, `razorpay_service.dart`, `paywall_sheet.dart`, `pubspec.yaml`): `Blast-radius: platform` (board card `p05-blast`).
+`bpass: accepted` since the `/code-review` B-pass ran on the built diff (three fresh seats, 23 findings, all fixed or recorded; `docs/reviews/a6d240c137b5-review.md`, whose hash names the whole reviewed range `a1849656..HEAD` of the three code commits). The verdict in that file is the coordinator's triage, self-attested; this record lands as its own commit after the code so that citing the review does not move the hash it is named for (code-review skill, dispatch step 3). The tier is stated, not yet computed: MEASURED 2026-11-20 on the built diff (positional paths incl. `CLAUDE.md`, `razorpay_service.dart`, `paywall_sheet.dart`, `pubspec.yaml`): `Blast-radius: platform` (board card `p05-blast`).
 
 ## Round 1 (context-blind Sonnet, read-only, on plan v1)
 
