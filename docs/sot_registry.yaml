@@ -19310,7 +19310,7 @@ concepts:
         semantic: reads primary_goal and target_weight_kg from the profile map (no target or under two weigh-ins draws nothing) and passes goal (required) to WeightProjectionCallout
       - file: lib/features/profile/widgets/weight_projection_callout.dart
         method: WeightProjectionCallout
-        semantic: projectionCalloutKind decides, an exhaustive switch draws; Maintain is onTarget / offTarget by distance to the 3.0 kg window on the last weigh-in (OI-518, never a trend verdict or a date); Cut / Build date sentence only when goal and target agree
+        semantic: projectionCalloutKind decides, an exhaustive switch draws; Maintain is onTarget / offTarget by distance to the 3.0 kg window on the last weigh-in (OI-518, never a trend verdict or a date, and no half-week history rule); a Maintain line carries ' · as of <date>' when the last weigh-in is more than 7 days before today's IST date (maintainAsOfSuffix); Cut / Build date sentence only when goal and target agree
       - file: lib/features/profile/screens/profile/journey_timeline.dart
         method: _buildJourneyTimelineInner
         semantic: journeyEtaAllowed gates the ETA line only

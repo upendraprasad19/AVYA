@@ -24,7 +24,9 @@
 // target (the same +-3.0 kg window), never by trend direction: [projectionCalloutKind]
 // returns `onTarget` inside the window and `offTarget` beyond it, and never a date.
 // [weightGapTenths] is the ONE expression of the gap in integer tenths, shared by
-// [validateTargetWeight] and by the callout's words.
+// [validateTargetWeight] and by the callout's words. A Maintain goal also skips the
+// half-week history rule (founder 2026-11-19): a distance needs no span of time, so
+// two weigh-ins a day apart already draw the line; Cut and Build keep the rule.
 library;
 
 /// Result of [validateTargetWeight].
@@ -119,7 +121,9 @@ bool canProjectGoalDate({
 enum ProjectionCalloutKind { adjust, reached, eta, onTarget, offTarget, none }
 
 /// The callout's decision, in its original branch order (OI-191 gates only the
-/// date sentence): too little history -> none; Maintain -> onTarget / offTarget by
+/// date sentence): too little history (under half a week between the first and the
+/// last weigh-in; NOT for Maintain, which has no trend to wait for) -> none;
+/// Maintain -> onTarget / offTarget by
 /// the window around the target, judged on the LAST weigh-in (OI-518); not moving
 /// the right way and not there yet -> adjust; within 0.5 kg of the target ->
 /// reached; a flat series -> none; otherwise the date sentence, but only when the
@@ -132,7 +136,12 @@ ProjectionCalloutKind projectionCalloutKind({
   required double weeksDiff,
   required double target,
 }) {
-  if (weeksDiff < 0.5) return ProjectionCalloutKind.none;
+  // Maintain skips the history rule (founder 2026-11-19): its answer is a distance
+  // on the LAST weigh-in, which exists from the first reading. The span rule stays
+  // for Cut and Build, whose trend and date need time to mean anything.
+  if (weeksDiff < 0.5 && goal != 'general_fitness') {
+    return ProjectionCalloutKind.none;
+  }
   if (goal == 'general_fitness') {
     // OI-518: a maintainer has no date to reach and no direction to move in; the
     // card says how far the last weigh-in is from the target. No default arm: a new
