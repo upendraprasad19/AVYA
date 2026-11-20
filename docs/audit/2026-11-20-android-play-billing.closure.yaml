@@ -78,9 +78,9 @@ findings:
     reopen_when: "+51 plan is reviewed"
 
   - id: SERVER-COPY
-    title: "Server-sent upgrade and price copy (coach prompt, canned replies, expiry push) still names a price; +50 must not go to production with it"
-    terminal_state: blocked_on_user
-    reason: "Founder decision before +50 reaches a production track; the fix is an Edge Function change plus deploy with its own go (GO_LIVE_CHECKLIST 0.4)"
+    title: "Server-sent upgrade and price copy (coach prompt, canned replies, expiry push) still names a price in the store build"
+    terminal_state: verified_clean
+    evidence: "Founder decision 2026-11-20: accepted. The coach prompt (captain_manual.ts), the canned coach replies and the expiry push (expiry-reminder) may still name a price and say Renew in the store build; no Edge Function change is made. Recorded in GO_LIVE_CHECKLIST 0.4 and plan section 5.4; reopen if a store reviewer or a real user objects"
 
   - id: DEEPANALYSIS
     title: "DeepAnalysisCard has no construction site"

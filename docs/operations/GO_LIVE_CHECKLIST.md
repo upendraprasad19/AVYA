@@ -66,7 +66,7 @@ Play. Razorpay on web is unaffected, and live Razorpay keys are needed for web r
 | 0.1 | Decide the billing architecture | FOUNDER | **DONE 2026-11-20:** ADR-0022 (Play Billing via RevenueCat on Android; web stays Razorpay; amends ADR-0005) |
 | 0.2 | If IAP: implement Play Billing + server receipt verification + Real-time Developer Notifications, reconciled with the existing `subscriptions` table | AGENT | Behavioral test + a real sandbox purchase |
 | 0.3 | If IAP: same for Apple | AGENT | Sandbox purchase on a real device |
-| 0.4 | Before `+50` goes to a PRODUCTION track: decide the server-sent upgrade and price copy (the coach prompt `captain_manual.ts`, the canned replies, the expiry push) that still names a price and a way to buy; a no-purchase store build must not carry it (plan `docs/plans/2026-11-20-android-play-billing.md` section 5.4, closure `docs/audit/2026-11-20-android-play-billing.closure.yaml`) | FOUNDER decision, then AGENT | A recorded decision, and an Edge Function change plus deploy with its own explicit go |
+| 0.4 | ~~Before `+50` goes to a PRODUCTION track: decide the server-sent upgrade and price copy (the coach prompt `captain_manual.ts`, the canned replies, the expiry push)~~ **DECIDED 2026-11-20 (founder): accepted.** The coach and the expiry push may still say a price and "Renew" in the store build; no Edge Function change. Reopen if a store reviewer or a real user objects (closure ledger `SERVER-COPY`) | FOUNDER | Recorded decision |
 
 ---
 
