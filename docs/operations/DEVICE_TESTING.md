@@ -56,6 +56,8 @@ Founder's primary device. CI runner provisioning is future work
 
    Ensure `~/.pub-cache/bin` is on `$PATH`.
 
+   The `patrol` package is on 4.x (bumped 2026-11-21), which requires `patrol_cli` 4.x. A CLI still on 3.x refuses to run against it: re-run the `dart pub global activate patrol_cli` line above to upgrade. Always pass `--target integration_test/device/...`; Patrol 4 changed the default test directory to `patrol_test`, which this repo does not use.
+
 ## 3. Test-user prep
 
 The 4 flows assume specific test-user state. Prep before the run;
@@ -134,6 +136,7 @@ patrol test --target integration_test/device/razorpay_payment_patrol_test.dart \
 |---|---|
 | `flutter devices` doesn't list the Pixel | Re-plug USB; toggle USB debugging off/on. On Windows, install the Google USB Driver (Android SDK Manager). |
 | `adb devices` shows `unauthorized` | The "Allow USB debugging" prompt was dismissed; replug, accept. |
+| Patrol CLI / package version mismatch error | `patrol` is 4.x; upgrade the CLI with `dart pub global activate patrol_cli`. |
 | `patrol: command not found` | Run `dart pub global activate patrol_cli` and ensure `~/.pub-cache/bin` is on `$PATH`. |
 | Build hangs at "Running Gradle task ..." | Same as the regular `flutter build apk` hang — `android/gradle.properties` `-Xmx` must be ≤4G. See root CLAUDE.md §0 "Gradle Configuration". |
 | Razorpay WebView never appears | `.env` is stale or missing — confirm `RAZORPAY_KEY_ID=rzp_test_*` and that `--dart-define-from-file=.env` is passed (the runner script does this automatically). |
