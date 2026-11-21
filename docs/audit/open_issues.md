@@ -6328,21 +6328,6 @@ Filed by the sync-storm-first-sweep batch (A1 = W1 migrator fix, W2 save progres
 **Done when.** A widget test that dismisses the sheet while a delayed `validate-promo` answer is pending and sees no exception; mutate the guard and watch it go red.
 
 
-## OI-435 — Scorecard progression dimension is a binary one-set proxy: 75 of 213 families fail it on the 914-row library (each by 1 set at phase 1 to 2), so progression fell 100.0 to 62.9 and overall 86.1 to 81.1 with no user-visible change
-
-- **Status**: OPEN
-- **Blocked on**: none
-- **Verified**: 2026-10-26 - by running the scorecard matrix on the Batch C1 tree and a throwaway probe over the same plans (output kept with the batch's evidence, not committed). `plan_scorecard.dart:287-321` (`computeProgression`) groups the personas into families `goal|equipment|days|experience|injury`, sums the library `default_sets` of every picked exercise per phase (1, 2, 6) and scores the family 100 only if the totals never fall (tolerance 0.001), else 0. On the 285-row library every family scored 100 (0 of 606 personas at 0). On the 914-row library 225 of 606 personas score 0, which is 75 of 213 families, and every failure is the phase 1 to phase 2 step. The sizes: `build_muscle|home_dumbbells|3|intermediate` 82 to 81 sets, `build_muscle|basic_gym|3|intermediate` 87 to 86, `build_muscle|basic_gym|5|beginner` 75 to 74, `build_muscle|basic_gym|5|intermediate` 109 to 108: one set in a hundred, and phase 6 then rises by 22 to 66 sets over phase 2 in those four families.
-- **Identified**: 2026-10-26 · filed via mint_oi.sh from branch `library-batch-c`
-
-**The defect.** The scorecard's `progression` dimension is a binary test on a proxy. The proxy is the sum of each picked row's `default_sets`, which is what the selector picks, not the set count the periodization prescribes (`volume_titration.dart:43-46` says the same of the volume bands: the scorecard scores "a `default_sets` selection proxy"). It moved when the library grew for a reason that has nothing to do with progression: the 629 new rows carry `default_sets` 3 (mean 3.00 over the 2,183 picks the matrix makes of them) while the older rows the matrix picks average 3.57 over 17,363 picks, and in phase 2 (when `foundationalOnly` ends) one 3-set row displaces one 4-set row. The result is `progression` 100.0 to 62.9 and `overall` 86.1 to 81.1, from this dimension alone: over coverage, balance, volume and realism together (personalization and safety stay 100) 416 personas rose and 121 fell (410 and 121 beyond 0.2), `coverage` +0.2, `balance` 0.0, `volume` +1.3, `realism` +5.8, fallback picks 2,864 to 1,679. Batch C1 regenerated `baseline_scorecard.json` and `baseline_plans.md` with these numbers so the gate (`scorecard_gate_test.dart`, `overall >= baseline - 0.05`) passes against an honest baseline; it did not change the scoring.
-
-**Why it matters.** A baseline whose `progression` is 62.9 hides the next real progression regression under a number already low, and `overall` is the figure the gate watches. No user-visible change was found: the matrix cannot see the real periodization, and the real engine's weekly sets come from the wave, not from `default_sets` sums.
-
-**Fix shape.** Score the family on the prescribed sets (the `PlannedExercise.sets` after periodization, which the matrix does not run) or give the test a tolerance that a one-set swap cannot cross (for example, a fall of more than 2 percent of the week's sets), then re-baseline and show `progression` back near 100 on the 914-row library.
-
-**Done when.** The scorer is changed; a test builds a family whose phase 2 total is 10 percent below phase 1 and shows it scores 0, and the 75 one-set families score 100; `baseline_scorecard.json` is regenerated and the diagnose doc of that batch names the before and after. Blast radius: `feature` (test tooling only).
-
 ## OI-437 — Batch C1 held rows: release protocol and owners (13 token, 4 name_collision, 53 low_confidence, 9 picture) and 529 shipped rows that no picture check covers
 
 - **Status**: OPEN
