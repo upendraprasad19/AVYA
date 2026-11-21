@@ -1,0 +1,69 @@
+# Closure ledger — Generator Unit 2D: a repeat phase with more minutes (OI-453).
+# Plan docs/plans/2026-11-15-generator-step2d-repeat-minutes.md (v4), diagnose a7d2f4, founder d50 / d52.
+# Gate 40 (validate_audit_closure.dart). One terminal_state per item; no `deferred:` key.
+
+batch: generator-step2d
+total_findings: 10
+closed_count: 10
+
+_commit: &feat "2c26fbf2 (with cf8c9ede, round 4)"
+
+findings:
+  - id: C2D-1
+    title: "OI-453: a repeat at more minutes never adds an exercise; the raise goes unused"
+    terminal_state: closed_in_commit
+    commit: *feat
+    verification: "repeat_minutes_gate_test: 768 personas, 0 invariant failures, reach pinned per (pair, tier); repeat_minutes_profile_test: 30 -> 60 through the real generateAndSchedule appends accessories"
+
+  - id: C2D-2
+    title: "S1 / S2: the stored minutes (session_minutes) and the decision from the OLD profile, read before the write"
+    terminal_state: closed_in_commit
+    commit: *feat
+    verification: "repeat_minutes_profile_test (resolved minutes stored; same minutes and a pre-2D profile append nothing); mutants M1, M2, M3, M6, M7 red"
+
+  - id: C2D-3
+    title: "S3 (d50): the one pass-through argument in plan_generator.dart, nothing else"
+    terminal_state: closed_in_commit
+    commit: *feat
+    verification: "git diff of plan_generator.dart: two signatures and two forwards; mutants M4, M5 red"
+
+  - id: C2D-4
+    title: "S4: candidates are budgeted library isolations, screened by name, partner and (pattern, first muscle), then against every row of the variant after the top-up; topUpDays carries them"
+    terminal_state: closed_in_commit
+    commit: *feat
+    verification: "repeat_accessory_candidates_test (9 tests, real library); mutants M8-M14 red; the seam count stays 8 (_sameMovementOf)"
+
+  - id: C2D-5
+    title: "S5: the step appends into the PLAIN leftover budget (d44), within the count, cap, top and lead + 1, rank-major, on both 2A paths"
+    terminal_state: closed_in_commit
+    commit: *feat
+    verification: "repeat_minutes_behavioral_test (16 tests); mutants M15-M18, M21, M22, M24, M25, M27 red"
+
+  - id: C2D-6
+    title: "Round 2 B-5 / round 3 F1: week 2's +1 on a pinned row survives (the reserve; appended rows out of the lead, visited last)"
+    terminal_state: closed_in_commit
+    commit: *feat
+    verification: "the week-2 sweep (filler 0-12 sets, 45 / 60 / 90, 6-day and 5-day); the custom-only lead test; the gate's week 1-4 equality; mutants M19, M19b, M20, M29 red"
+
+  - id: C2D-7
+    title: "Round 3 F2 / F4: no unchecked copy of A's seats into B; every field of the core's day (allowance stamp, 6-day alias) kept"
+    terminal_state: closed_in_commit
+    commit: *feat
+    verification: "variants group in repeat_minutes_behavioral_test; mutants M26, M28 red"
+
+  - id: C2D-8
+    title: "Round 2 B-4: gate cells a repeat cannot reach (build_muscle 3-5 days crossing 60 minutes go fresh)"
+    terminal_state: closed_in_commit
+    commit: *feat
+    verification: "the gate derives pins through repeatPinsFrom with foreignDayNamesFor and counts fresh personas (7 per tier at 30 -> 60 and 45 -> 60)"
+
+  - id: C2D-9
+    title: "d52: 'sets first' as the allocator's own targets, not sets to the 5-set maximum (founder decision 2026-11-15)"
+    terminal_state: verified_clean
+    evidence: "founder answer 2026-11-15 ('Keep as built'); plan §0 states it; the gate asserts pinned sets equal the flag-off repeat"
+
+  - id: C2D-10
+    title: "B-pass (docs/reviews/generator-step2d-bpass.md): 8 findings, 0 P0/P1 (shared-day candidate screen, reserve test days, core-equality test, gate pricing, the 1e-6 margin, citations, drift-gate comment)"
+    terminal_state: closed_in_commit
+    commit: "the generator-step2d B-pass commit, the child of c01d6af0"
+    verification: "mutants M32-M37 and M34b red on repeat_minutes_behavioral_test / repeat_accessory_candidates_test; repeat_minutes_gate_test re-run on the fixed tree"

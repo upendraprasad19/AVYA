@@ -1,0 +1,24 @@
+# Closure ledger - freeze-order-d1 (docs/plans/2026-11-02-freeze-order-settle-then-credit.md, diagnose a7d2e6).
+# Rows carry the SHA of the landing commit, written by the stamp commit that follows it (a commit cannot name its own SHA).
+batch: freeze-order-d1
+plan_review_record: docs/plan-reviews/freeze-order-d1.md
+diagnose_docs:
+  - docs/diagnoses/2026-11-02-streak-freeze-settle-then-credit-order-a7d2e6.md
+total_findings: 3
+closed_count: 3
+
+findings:
+  - id: FOD-D1-ORDER
+    title: "The weekly freeze credit ran before the settle of last week's missed days (rollover, post-restore heal, restoring screen) - the reverse of the founder's rule"
+    terminal_state: closed_in_commit
+    commit: 29d20340
+    verification: "walk CUTOFF + refillIfNewWeek settle-then-credit + deferral until the restore settled; test/contracts/freeze_settle_then_credit_behavioral_test.dart (26 tests); 18 mutants all red plus the PRO-cap mutant (3 tests red)"
+  - id: FOD-DURABLE-BREAK
+    title: "The stateless streak walk re-funded an unpaid missed day whenever stock was positive, so a later credit resurrected a broken chain"
+    terminal_state: closed_in_commit
+    commit: 29d20340
+    verification: "walk HORIZON (a miss before the stamped Monday is unfundable); durability + PRO six-misses + next-Monday cases in the same test file; mutants drop-horizon, <=, future-stamp guard all red"
+  - id: FOD-DEVICE-CHECK
+    title: "Founder device check of settle-then-credit on a real Monday (stock 0 + missed Saturday; Tuesday/Wednesday first open) and of the accepted consequences"
+    terminal_state: blocked_on_user
+    reason: "Needs a Monday/Tuesday session on a real account (or a manual new-week simulation on the founder's device); the accepted consequences (lost credit week when a restore never settles, NULL-stamp first credit, credit burned behind a broken chain) are listed in the diagnose-doc."

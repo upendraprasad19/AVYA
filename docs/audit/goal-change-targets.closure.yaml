@@ -1,0 +1,150 @@
+# Closure ledger - goal-change-targets branch B (weigh-in rule, impact dialog, stale-plan banner, Cut protein, real-pace projection, PR 299).
+# Gate 40. One terminal_state per finding; no `deferred:` key. Plan-review: 3 rounds. B-pass: 2 Sonnet seats on 08507462,
+# fixes in the commit that carries this file (`goal-change-targets@branch` is the in-branch commit form).
+
+batch: goal-change-targets
+plan_review_record: docs/plan-reviews/goal-change-targets.md
+bpass_review: docs/reviews/3177bbdb8de3-review.md
+diagnose_docs:
+  - docs/diagnoses/2026-11-18-goal-change-targets-a7d3e9.md
+total_findings: 24
+closed_count: 24
+
+findings:
+  - id: B1-PROTEIN-PROJECTION
+    title: "Cut protein base = max(target, 0.9 x current); projection uses the chosen pace at every distance (1-week floor); the provider fallback passes the target weight"
+    terminal_state: closed_in_commit
+    commit: "goal-change-targets@branch"
+    verification: "test/contracts/cut_protein_base_test.dart, test/bmr_calculator_pace_test.dart; mutants B1-1..B1-3 red"
+
+  - id: B1-REPO-FALLBACK
+    title: "nutrition_repository.dart fallback passes targetWeightKg (calories only: no observable effect)"
+    terminal_state: verified_clean
+    evidence: "plan round-2 A9 and B-pass finding 17: kept for consistency with the provider fallback, not claimed as a behavioural pin"
+
+  - id: B2-WEIGH-IN
+    title: "Weigh-in recomputes only past the 2 kg band on the 7-day mean; one patchProfileWith; own try/catch; kill switch; targets_basis_weight_kg"
+    terminal_state: closed_in_commit
+    commit: "goal-change-targets@branch"
+    verification: "test/contracts/weigh_in_target_refresh_test.dart and weigh_in_target_refresh_behavioral_test.dart; mutants B2-1..B2-7 and BP-1..BP-6 red"
+
+  - id: B2B-FIRST-SIGN-IN-MERGE
+    title: "First-sign-in merge recomputes on a real local profile when an input changed, fail-open"
+    terminal_state: closed_in_commit
+    commit: "goal-change-targets@branch"
+    verification: "test/contracts/bootstrapper_profile_merge_recompute_test.dart + the hydrate cases in progress_restore_freeze_merge_behavioral_test.dart; mutants B2b-1..B2b-4 and BP-7..BP-11 red"
+
+  - id: B3-EDIT-PROFILE-DIALOG
+    title: "Edit Profile reports a moved target with exact numbers (open-time snapshot, normalised comparison, rebase counts as a change)"
+    terminal_state: closed_in_commit
+    commit: "goal-change-targets@branch"
+    verification: "test/contracts/derivation_inputs_changed_for_dialog_test.dart, test/profile/edit_profile_target_impact_test.dart; mutants B3-1..B3-5 and BP-12, BP-13 red"
+
+  - id: B4-STALE-PLAN-BANNER
+    title: "Saved diet plan target stamp, staleTargetsOf, the banner and its Regenerate (never silent)"
+    terminal_state: closed_in_commit
+    commit: "goal-change-targets@branch"
+    verification: "test/nutrition/diet_plan_stale_targets_test.dart, test/nutrition/diet_plan_stale_banner_screen_test.dart; mutants B4-1..B4-5 red, B4-6 equivalent (explained in the diagnose doc)"
+
+  - id: DOCS-REGISTRY
+    title: "SoT concept weigh_in_target_refresh, naming glossary, nested CLAUDE.md rows, functionality-flow ONB-05, diagnose a7d3e9, reader-manifest allow-list"
+    terminal_state: closed_in_commit
+    commit: "goal-change-targets@branch"
+    verification: "check_sot_registry_parity.dart and check_reader_manifest_complete.dart pass; validate_diagnose_doc.dart passes"
+
+  - id: DOOR-BODYFAT-ASSESSMENT
+    title: "Edit Profile body-fat assessment door persists body fat and recomputes nothing"
+    terminal_state: verified_clean
+    evidence: "plan section 2 door table: kept by decision; the form's Save reports the effect (open-time snapshot), test 'a body-fat assessment persisted while the form is open'"
+
+  - id: DOOR-HEALTH-CONNECT-AND-HEALER
+    title: "Health Connect weight import and the body-fat default healer do not recompute"
+    terminal_state: verified_clean
+    evidence: "plan section 2: Health Connect writes weight_ rows that the 7-day mean reads at the next manual weigh-in; the healer is founder-locked (no silent backfill, profile_target_recompute.dart:33-46)"
+
+  - id: PLAN-R1
+    title: "Plan-review round 1: 22 findings (door table, entries reader, stamp laundering, comparison timing, kill switches, process gates)"
+    terminal_state: closed_in_commit
+    commit: "63475fa3"
+    verification: "plan sections 9 and 10 list each disposition"
+
+  - id: PLAN-R2
+    title: "Plan-review round 2: 5 P1, 14 P2"
+    terminal_state: closed_in_commit
+    commit: "63475fa3"
+    verification: "plan section 10"
+
+  - id: PLAN-R3
+    title: "Plan-review round 3: 1 P1, 8 P2"
+    terminal_state: closed_in_commit
+    commit: "63475fa3"
+    verification: "plan section 11; docs/plan-reviews/goal-change-targets.md"
+
+  - id: BP-1-REBASE-IMPACT
+    title: "B-pass A1: an unrelated Save after an in-band weigh-in rebuilds the targets silently"
+    terminal_state: closed_in_commit
+    commit: "goal-change-targets@branch"
+    verification: "review finding 1; test 'after an in-band weigh-in, an unrelated Save that rebases the targets on the raw weight says so'"
+
+  - id: BP-2-RESTORE-CROSS-DEVICE
+    title: "B-pass A2: the launch restore recomputes from one raw cloud weight (another device's weigh-in)"
+    terminal_state: verified_clean
+    notes: "accepted in plan section 3 B2 after three review rounds: the restore contract is OI-150's (sync_profile.dart:862-889) and changing it moves the batch to platform tier; stated in the diagnose doc and reported to the founder"
+
+  - id: BP-3-MERGE-GUARD
+    title: "B-pass A3: stray keys count as a real local profile; raw DOB compare"
+    terminal_state: closed_in_commit
+    commit: "goal-change-targets@branch"
+    verification: "review finding 3; bootstrapper_profile_merge_recompute_test.dart"
+
+  - id: BP-4-INVALIDATE-ON-RECOMPUTE
+    title: "B-pass A4: invalidation tied to calories/protein moving"
+    terminal_state: closed_in_commit
+    commit: "goal-change-targets@branch"
+    verification: "review finding 4; the invalidation and push follow the recompute"
+
+  - id: BP-5-NAN-BASIS
+    title: "B-pass A5: a NaN basis silences the refresh"
+    terminal_state: closed_in_commit
+    commit: "goal-change-targets@branch"
+    verification: "review finding 5; weigh_in_target_refresh_test.dart"
+
+  - id: BP-6-BAND-ROUNDING
+    title: "B-pass A6: each side rounded before the difference"
+    terminal_state: closed_in_commit
+    commit: "goal-change-targets@branch"
+    verification: "review finding 6; mutant BP-5 red after the cases were added"
+
+  - id: BP-7-SHEET-WROTE-FALSE
+    title: "B-pass A7: the sheet says Weight logged when the profile write did not land"
+    terminal_state: verified_clean
+    evidence: "review finding 7: the weigh-in itself was logged (health write separate); the line was unconditional before this change"
+
+  - id: BP-8-HEALTHBOX-COPY
+    title: "B-pass A8: healthBox.toMap() inside the profile lock"
+    terminal_state: closed_in_commit
+    commit: "goal-change-targets@branch"
+    verification: "review finding 8; only weight_ keys are read"
+
+  - id: BP-9-SIDE-EFFECT-TESTS
+    title: "B-pass B1 (P1): invalidate and snapshot push unprotected"
+    terminal_state: closed_in_commit
+    commit: "goal-change-targets@branch"
+    verification: "review finding 9; behavioral test + seam; mutants BP-1, BP-2 red"
+
+  - id: BP-10-SNACKBAR-TESTS
+    title: "B-pass B2 (P1): the weigh-in snackbar and TargetImpactCopy untested"
+    terminal_state: closed_in_commit
+    commit: "goal-change-targets@branch"
+    verification: "review finding 10; test/home/weight_sheet_target_snackbar_test.dart; mutants BP-14, BP-15 red"
+
+  - id: BP-11-TEST-AND-DOC-P2P3
+    title: "B-pass B3..B8, B10..B12: body-fat flag at every door, bootstrapper switch, dialog numbers, positive anchors, diagnose counts, Cut >= Build, registry and header nits, hygiene"
+    terminal_state: closed_in_commit
+    commit: "goal-change-targets@branch"
+    verification: "review findings 11-16, 18, 19; mutants BP-3, BP-4, BP-9..BP-13 red"
+
+  - id: BP-12-REPO-PASSTHROUGH
+    title: "B-pass B9: the nutrition_repository pass-through is dead and untested"
+    terminal_state: verified_clean
+    evidence: "same as B1-REPO-FALLBACK: recorded plan decision A9"

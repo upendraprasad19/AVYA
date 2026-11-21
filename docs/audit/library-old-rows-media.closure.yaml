@@ -1,0 +1,244 @@
+# Closure ledger — library-old-rows-media (OI-443: the 137 checked old-row animations)
+# Gate 40 (validate_audit_closure.dart). One terminal_state per item; no `deferred:` key.
+# Plan docs/plans/2026-11-01-library-old-rows-media.md (r3), executed inline on branch library-old-rows-media.
+# `library-old-rows-media@branch` is the in-branch commit form for commits that cannot cite their own SHA (merge and worktree
+# retirement are pipeline steps recorded in the retrospective memory file).
+# Mutation evidence (rule 21): every mutation was applied to a real file with an applied-check, run, and the file restored byte for
+# byte (sha256 compared) before the next one.
+
+batch: library-old-rows-media
+plan_review_record: docs/plan-reviews/library-old-rows-media.md
+
+findings:
+  - id: U1-INPUT-RECORD
+    title: "The cumulative input file docs/audit/library-old-rows-media-input.json: 137 entries and the four parked buckets"
+    terminal_state: closed_in_commit
+    commit: "library-old-rows-media@branch"
+    verification: "Built by the derivation from the founder's 163 picks of 2026-10-17 and the equipment check; test/helpers/library_old_rows_input_checks.dart rules P1 to P7 run on the real file (library_media_table_test.dart). mutation: seven edits of the real file (held_into_entries, drop_E050, change_gif, edit_without_rebuild, slated_into_entries, E230_into_entries, E050_into_held) each reddened the real-data test, the hash test or both (edit_without_rebuild only the hash test); reddened counts 2, 12, 2, 1, 3, 2, 11 (the counts include the helper's own mutation tests, whose base is the real file). The file was restored byte for byte after each run (sha256 compared)."
+
+  - id: U2-PICKS-RECORD
+    title: "The picks record docs/audit/library-old-rows-picks-2026-10-17.json (163 picks, export sha256, the E230 retag decision)"
+    terminal_state: closed_in_commit
+    commit: "library-old-rows-media@branch"
+    verification: "Rule P3 requires every held / left-out / retag-waits pick to be named by its record; mutation: moving a pick into held, left_out or retag_waits without its record naming it reddens the three P3 cases."
+
+  - id: U3-TABLE
+    title: "scripts/data/library_media_v16.json rebuilt with --old-rows: 754 rows, 753 files, _meta.old_rows {entries 137, omitted 0, sha256}"
+    terminal_state: closed_in_commit
+    commit: "library-old-rows-media@branch"
+    verification: "node scripts/build_library_media_v16.js --old-rows docs/audit/library-old-rows-media-input.json --write; library_media_table_test.dart (R10 legs and the P6 rule: the table E rows equal the entries and each slug starts with its gif). mutation: edit_without_rebuild reddens the hash test."
+
+  - id: U4-LIVE-UPLOAD
+    title: "The 137 new objects uploaded to the private bucket exercise-media (own explicit go of the founder, 2026-11-01)"
+    terminal_state: closed_in_commit
+    commit: "library-old-rows-media@branch"
+    verification: "scripts/upload_exercise_media.js --only <137 slugs> --execute: 137 uploaded, 0 failed, 56,477,126 bytes; --verify --only 137 of 137 match; privacy probes 400 of 400; live-verify SQL verdict=PASS; the bucket then listed 755 objects (753 animations and the two canaries), 310,027,946 bytes of animations. Project storage before the upload was 639 objects, 258,172,324 bytes, under the 900 MB stop."
+
+  - id: U5-LIBRARY-KEYS
+    title: "media_slug / media_version / media_source written on the 137 old E rows (754 rows carry them)"
+    terminal_state: closed_in_commit
+    commit: "library-old-rows-media@branch"
+    verification: "node scripts/add_library_batch_c_v15.js (media stage) then --check byte-identical; the diff of assets/data/exercise_library.json is only the added keys. library_media_table_test.dart R10 (c). mutation: E050's three keys removed from the library reddened the table-against-library test (1 case); restored by bytes."
+
+  - id: U6-STILLS
+    title: "137 stills bundled (753 in assets/exercise_stills, 3,785,288 bytes)"
+    terminal_state: closed_in_commit
+    commit: "library-old-rows-media@branch"
+    verification: "node scripts/bundle_exercise_stills.js --src <primary wardroom folder> then --check; exercise_stills_bundle_test.dart (strict, unedited apart from a comment). mutation: the still of 0025-barbell-bench-press deleted reddened 3 cases (presence, folder-equals-table, mirror); restored by bytes."
+
+  - id: U7-SEED-V17
+    title: "_exerciseLibraryVersion 16 to 17 so installs gain the old-row keys; SoT registry line ranges 128-128 to 133-133 (two entries) and 222-267 to 227-272 (the retiredLibraryIds span, found by the B-pass: the parity gate checks bounds only and cannot see it)"
+    terminal_state: closed_in_commit
+    commit: "library-old-rows-media@branch"
+    verification: "library_seed_v16_upgrade_behavioral_test.dart: new case \"v16 box gains old-row keys\" (fails before the bump), the fast-path case stores 17; scripts/check_sot_registry_parity.dart PASS. mutation: constant back to 16 reddened 3 cases; restored by bytes."
+
+  - id: U8-KNOWN-RED-TESTS
+    title: "Tests that assumed E001 / E050 / E003 / E004 had no animation: repointed to synthetic or unmapped rows, with a mirror for the real row"
+    terminal_state: closed_in_commit
+    commit: "library-old-rows-media@branch"
+    verification: "library_media_importer_test.dart (unmapped old rows chosen from data, premise asserted); exercise_plate_sheet_test.dart (TEST_PLATE_ONLY_PAIR, a copy of the real Barbell Bench Press without media keys; the worst-case candidate set asserted non-empty); exercise_media_fallback_chain_test.dart (a seeded plate-only pair; new mirror case: the REAL Barbell Bench Press shows ONE animation view and no plates). The six changed test files together: 135 passed."
+
+  - id: U9-FLAG-COMMENT
+    title: "plate_flags.dart comment: a row with both an animation and a drawing (106 old rows) goes back to its plate when only disable_exercise_animations is set"
+    terminal_state: closed_in_commit
+    commit: "library-old-rows-media@branch"
+    verification: "Comment-only change; the behaviour is the existing PlateFlags.animationsEnabled / the tile face order of Batch M2a, pinned by exercise_media_fallback_chain_test.dart. After the B-pass the comment counts the animation-and-no-drawing set right (the 617 new rows that have an animation plus 31 old rows = 648; 106 old rows have both) and no longer quotes the stale 127 artwork-less figure (758 of 914 rows have no drawing, pinned by exercise_plate_resolver_test.dart:80)."
+
+  - id: U10-DOCS-AND-BOARD
+    title: "EXERCISE_MEDIA.md (counts, old-rows recipe, Hold recipe seed bump), naming_conventions.md, exercise-library.md, OI-443 and OI-440 text, S6 worst-case hook, C2 draft carried finding 11"
+    terminal_state: closed_in_commit
+    commit: "library-old-rows-media@branch"
+    verification: "Counts recomputed from the table (753 files, 310,027,946 bytes, largest 999,800, 16 Free-plan downloads a month, 806 on Pro); docs scanned by the no-deferral-euphemism check."
+
+  - id: U11-P7-RELEASE-RECORD
+    title: "Rule P7 in test/helpers/library_old_rows_input_checks.dart: a pair the equipment check held (equipment_mismatch, movement_mismatch) or the founder decided to retag (equipment_retag_decided, E230) enters `entries` only with a non-empty released_by; an empty record fails closed; the hash test now says why it is red after any edit of the input file (B-pass seat B finding 2 and 3)"
+    terminal_state: closed_in_commit
+    commit: "library-old-rows-media@branch"
+    verification: "library_media_table_test.dart: six new P7 cases (held pair released with no decision; decided retag released with no decision; mirror: the same release WITH released_by is green; mirror: a blank released_by is no decision; mirror: an ordinary entry needs none; fails closed on a record with no mismatch rows). mutation (applied, run, restored from the index, git diff empty after each): the check skipped (`heldIds.contains(id) &&` to `false &&`) reddened 3 (held pair, decided retag, blank decision); the empty-record guard removed reddened 1 (the fail-closed case); the rule made eager for every entry (`true &&`) reddened 3 (the real-data test and both mirrors). Real data stays green: none of the 12 held ids is an entry today. The builder ignores the key (it reads id, gif and equipment_checked)."
+
+  - id: U12-BPASS-MUTATIONS
+    title: "Five protections the first pass left without a recorded mutation (B-pass seat B finding 5), each mutated once"
+    terminal_state: closed_in_commit
+    commit: "library-old-rows-media@branch"
+    verification: "applied, run, restored from the index, git diff empty after each: stripOldRows made a no-op (`void stripOldRows() { return;`) reddened 3 (f) cases in library_media_table_test.dart; the exercise_plate_sheet_test.dart worst-case pool emptied (`containsKey(zz_never)`) reddened 1 (the sheet scrolls rather than overflowing); a CR byte appended to the input file reddened 1 (the hash and CR test only); an orphan file added to the table (a file no row references) reddened 4 (the real-data leg run, the shape test files.keys == rows.values, and two (h) and (f) green cases); E001 stripped of its three media keys in the library reddened 1 in exercise_media_fallback_chain_test.dart (the REAL Barbell Bench Press shows ONE animation view and no plates)."
+
+  - id: U13-BPASS-FINDINGS-FIXED
+    title: "The B-pass findings closed in this batch (three seats, 0 P0 and 0 P1): docs/reviews/library-old-rows-media-bpass.md lists each with its fix"
+    terminal_state: closed_in_commit
+    commit: "library-old-rows-media@branch"
+    verification: "P2: plate_flags.dart comment counted the animation-and-no-drawing set as 617 (it is 648); the M1 figures (253.55 MB, 616 files, 19 and 985 downloads, 3,102,690 bytes) still stood in GO_LIVE_CHECKLIST 5.5 and 5.8, OI-440 and OI-444; docs/sot_registry.yaml line_range 222-267 for seed_service.dart is now 227-272; the OI-443 heading and What paragraph said the data step applies the E230 retag. P3: the 617 new rows wording (12 new rows have no animation), the v16 and v17 version labels, the S7 largest-file pointer, the null variant_family wording (the key is absent on all 66), the ledger sentence on the seven input-file mutations, the E102 and E103 swapped source file names (recorded in EXERCISE_MEDIA.md section 6 and on OI-443; the hashed input file is left byte-exact on purpose), the registry description of exercise_media_fields (v17 and the cumulative input). Counts re-derived by the author from the staged files before each fix."
+
+  - id: HELD-E027
+    title: "Held pair E027 T-Bar Row with gif 0606"
+    terminal_state: blocked_on_user
+    reason: "The founder decides: keep the drawing or initials, accept the picture and retag our equipment, or choose another animation (OI-443 lists what each picture shows)."
+
+  - id: HELD-E051
+    title: "Held pair E051 Standing Calf Raise with gif 0605"
+    terminal_state: blocked_on_user
+    reason: "The founder decides: keep the drawing or initials, accept the picture and retag our equipment, or choose another animation (OI-443 lists what each picture shows)."
+
+  - id: HELD-E095
+    title: "Held pair E095 Preacher Curl with gif 0592"
+    terminal_state: blocked_on_user
+    reason: "The founder decides: keep the drawing or initials, accept the picture and retag our equipment, or choose another animation (OI-443 lists what each picture shows)."
+
+  - id: HELD-E120
+    title: "Held pair E120 Svend Press with gif 0856"
+    terminal_state: blocked_on_user
+    reason: "The founder decides: keep the drawing or initials, accept the picture and retag our equipment, or choose another animation (OI-443 lists what each picture shows)."
+
+  - id: HELD-E121
+    title: "Held pair E121 Renegade Row with gif 0521"
+    terminal_state: blocked_on_user
+    reason: "The founder decides: keep the drawing or initials, accept the picture and retag our equipment, or choose another animation (OI-443 lists what each picture shows)."
+
+  - id: HELD-E124
+    title: "Held pair E124 Inverted Row with gif 0499"
+    terminal_state: blocked_on_user
+    reason: "The founder decides: keep the drawing or initials, accept the picture and retag our equipment, or choose another animation (OI-443 lists what each picture shows)."
+
+  - id: HELD-E132
+    title: "Held pair E132 Pallof Press with gif 0979"
+    terminal_state: blocked_on_user
+    reason: "The founder decides: keep the drawing or initials, accept the picture and retag our equipment, or choose another animation (OI-443 lists what each picture shows)."
+
+  - id: HELD-E146
+    title: "Held pair E146 Curtsy Lunge with gif 1688"
+    terminal_state: blocked_on_user
+    reason: "The founder decides: keep the drawing or initials, accept the picture and retag our equipment, or choose another animation (OI-443 lists what each picture shows). This row is ALSO removal-slated (empty core_levels, null variant_family); the held bucket wins, so C2 settles the row after the founder settles the pair."
+
+  - id: HELD-E152
+    title: "Held pair E152 Squat to Stand with gif 0514"
+    terminal_state: blocked_on_user
+    reason: "The founder decides: keep the drawing or initials, accept the picture and retag our equipment, or choose another animation (OI-443 lists what each picture shows)."
+
+  - id: HELD-E166
+    title: "Held pair E166 Hamstring Stretch (Standing) with gif 1511"
+    terminal_state: blocked_on_user
+    reason: "The founder decides: keep the drawing or initials, accept the picture and retag our equipment, or choose another animation (OI-443 lists what each picture shows)."
+
+  - id: HELD-E214
+    title: "Held pair E214 Slow Walking with gif 3666"
+    terminal_state: blocked_on_user
+    reason: "The founder decides: keep the drawing or initials, accept the picture and retag our equipment, or choose another animation (OI-443 lists what each picture shows)."
+
+  - id: SLATED-E075
+    title: "Pair on removal-slated row E075 Dip (Parallel Bars) with gif 0814"
+    terminal_state: upstream_blocked
+    blocker: "Batch C2 decides whether the row stays; the pair is not uploaded or written for a row that may be removed."
+    reopen_when: "Batch C2 keeps E075: move its entry from removal_slated to entries of docs/audit/library-old-rows-media-input.json and follow the old-rows recipe (a removed row's pair is recorded as moot on OI-443)."
+
+  - id: SLATED-E084
+    title: "Pair on removal-slated row E084 Ankle Circles with gif 1368"
+    terminal_state: upstream_blocked
+    blocker: "Batch C2 decides whether the row stays; the pair is not uploaded or written for a row that may be removed."
+    reopen_when: "Batch C2 keeps E084: move its entry from removal_slated to entries of docs/audit/library-old-rows-media-input.json and follow the old-rows recipe (a removed row's pair is recorded as moot on OI-443)."
+
+  - id: SLATED-E101
+    title: "Pair on removal-slated row E101 Chest to Bar Pull Up with gif 0652"
+    terminal_state: upstream_blocked
+    blocker: "Batch C2 decides whether the row stays; the pair is not uploaded or written for a row that may be removed."
+    reopen_when: "Batch C2 keeps E101: move its entry from removal_slated to entries of docs/audit/library-old-rows-media-input.json and follow the old-rows recipe (a removed row's pair is recorded as moot on OI-443)."
+
+  - id: SLATED-E111
+    title: "Pair on removal-slated row E111 Sissy Squat with gif 1489"
+    terminal_state: upstream_blocked
+    blocker: "Batch C2 decides whether the row stays; the pair is not uploaded or written for a row that may be removed."
+    reopen_when: "Batch C2 keeps E111: move its entry from removal_slated to entries of docs/audit/library-old-rows-media-input.json and follow the old-rows recipe (a removed row's pair is recorded as moot on OI-443)."
+
+  - id: SLATED-E162
+    title: "Pair on removal-slated row E162 Piriformis Stretch with gif 2567"
+    terminal_state: upstream_blocked
+    blocker: "Batch C2 decides whether the row stays; the pair is not uploaded or written for a row that may be removed."
+    reopen_when: "Batch C2 keeps E162: move its entry from removal_slated to entries of docs/audit/library-old-rows-media-input.json and follow the old-rows recipe (a removed row's pair is recorded as moot on OI-443)."
+
+  - id: SLATED-E169
+    title: "Pair on removal-slated row E169 Seated Piriformis Stretch with gif 2567"
+    terminal_state: upstream_blocked
+    blocker: "Batch C2 decides whether the row stays; the pair is not uploaded or written for a row that may be removed."
+    reopen_when: "Batch C2 keeps E169: move its entry from removal_slated to entries of docs/audit/library-old-rows-media-input.json and follow the old-rows recipe (a removed row's pair is recorded as moot on OI-443)."
+
+  - id: SLATED-E210
+    title: "Pair on removal-slated row E210 Wrist Rotations with gif 1428"
+    terminal_state: upstream_blocked
+    blocker: "Batch C2 decides whether the row stays; the pair is not uploaded or written for a row that may be removed."
+    reopen_when: "Batch C2 keeps E210: move its entry from removal_slated to entries of docs/audit/library-old-rows-media-input.json and follow the old-rows recipe (a removed row's pair is recorded as moot on OI-443)."
+
+  - id: SLATED-E211
+    title: "Pair on removal-slated row E211 Ankle Rotations with gif 1368"
+    terminal_state: upstream_blocked
+    blocker: "Batch C2 decides whether the row stays; the pair is not uploaded or written for a row that may be removed."
+    reopen_when: "Batch C2 keeps E211: move its entry from removal_slated to entries of docs/audit/library-old-rows-media-input.json and follow the old-rows recipe (a removed row's pair is recorded as moot on OI-443)."
+
+  - id: SLATED-E243
+    title: "Pair on removal-slated row E243 High Cable Curl with gif 0868"
+    terminal_state: upstream_blocked
+    blocker: "Batch C2 decides whether the row stays; the pair is not uploaded or written for a row that may be removed."
+    reopen_when: "Batch C2 keeps E243: move its entry from removal_slated to entries of docs/audit/library-old-rows-media-input.json and follow the old-rows recipe (a removed row's pair is recorded as moot on OI-443)."
+
+  - id: SLATED-E256
+    title: "Pair on removal-slated row E256 Negative Pull Up with gif 0652"
+    terminal_state: upstream_blocked
+    blocker: "Batch C2 decides whether the row stays; the pair is not uploaded or written for a row that may be removed."
+    reopen_when: "Batch C2 keeps E256: move its entry from removal_slated to entries of docs/audit/library-old-rows-media-input.json and follow the old-rows recipe (a removed row's pair is recorded as moot on OI-443)."
+
+  - id: E230-RETAG
+    title: "E230 Standing Single Leg Curl, gif 0795: the pick waits on the retag to bodyweight"
+    terminal_state: upstream_blocked
+    blocker: "The retag needs the full 914-row cloud seed migration (exercise_library_cloud_tuples_match_test.dart:106), the cue text still says \"low cable\" so check_equipment_audit fails, and the flag-OFF generator effect is unmeasured."
+    reopen_when: "Batch C2 ships its cloud seed migration: C2 retags E230 to bodyweight (equipment_tier included), rewrites the cue and pro_tip, measures the generator effect and moves the entry into entries (docs/plans/2026-10-25-library-batch-c2-removals.md, carried finding 11)."
+
+  - id: E264-OWN-FILE
+    title: "E264 Table Row: the pick is the founder's own file table-row-clean.gif, not a Wardroom file"
+    terminal_state: upstream_blocked
+    blocker: "The file is not in the Wardroom folder, so the table has nothing to hash and the bucket nothing to hold."
+    reopen_when: "The file is produced in the Wardroom form (OI-442) and added through the old-rows recipe."
+
+  - id: RETIRED-E225-E240-E241
+    title: "Three picks on rows Batch A retired (E225, E240, E241)"
+    terminal_state: verified_clean
+    evidence: "The three ids are not rows of assets/data/exercise_library.json (checked by the derivation, which counts 160 in-library picks of 163); rule P1 covers in-library picks only, so no bucket is owed."
+
+  - id: LABEL-VIEW-PLATE
+    title: "The FORM & CUES door label \"VIEW PLATE\" (coaching_content_panel.dart:141) opens one animated picture, not a plate, for every row that has an animation (754 rows)"
+    terminal_state: blocked_on_user
+    reason: "A product copy call in the Wardroom voice: rename the label or keep it. It was already inexact for the 617 new rows since Batch M2a; this release widens it to 106 old rows that used to open a real plate and 31 that opened NO DRAWING YET. No test pins the label. Listed on OI-443 Blocked on (4)."
+
+  - id: PICTURE-CHECK-529
+    title: "The picture check of the 529 shipped new rows (OI-443 part 2, OI-437)"
+    terminal_state: blocked_on_user
+    reason: "The founder parked it on 2026-10-28, to run after Batch M2; it needs first-hand looks at 529 pictures."
+
+  - id: R6-WEB-CONFIRM-AFTER-MERGE
+    title: "Ruling R6: the founder confirms in a browser that an existing animation actually moves (moved to AFTER the merge, by the founder, 2026-11-01)"
+    terminal_state: blocked_on_user
+    reason: "OI-440's M2a observations were waived and are still owed; this batch puts 106 plated rows behind that delivery path. The plan held the merge for this look; the founder decided on 2026-11-01 to commit now and check the web app after the merge (\"commit it, I'll check the web post merge\"), so the merge no longer waits on it. If the animation does not move, the 106 rows show a frozen bundled still where the drawing was. disable_exercise_animations is a per-device flag, so it is no rollback for users; undoing it for everyone means shipping a data change (the revert path is not worked out and is not part of this batch)."
+
+  - id: POST-MERGE-DEVICE-CHECK
+    title: "Post-merge check on OI-440: web (Face Pull, Barbell Curl, Barbell Bench Press) and a low-end phone (0551 next to 3214)"
+    terminal_state: blocked_on_user
+    reason: "Needs a real account and a phone; tracked on OI-440 (S1, S2, S3, S4, S6 now naming 0551, S8)."
+
+total_findings: 41
+closed_count: 41

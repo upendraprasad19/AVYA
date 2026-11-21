@@ -1,0 +1,185 @@
+# Generator Unit 2E: no week without direct arm work under 60 minutes (OI-496, founder d51)
+
+Status: v1, 2026-11-15. Base: main after Unit 2D (PR #280). Board card t217. Tier L (plan engine), blast radius
+platform. Execution: inline, one worktree (`generator-step2e`).
+
+## 0. Scope and founder basis
+
+**OI-496**, measured on main 0c383703 over the 2,304-plan audit (`plan_audit_dump_test.dart`):
+- 71 (plan, group) zero-week pairs remain: Biceps 13, Triceps 9, Calves 49, Core 0.
+- Calves: the founder accepted these under d45 / d49. Not in scope.
+- Biceps / Triceps: 22 pairs in 21 plans (one plan holds both), all at 30 minutes, except 1 Biceps plan at 45.
+
+**d51 (2026-11-15, "Swap in an arm row").** At 30-45 minutes, when a week would hold 0 Biceps or 0 Triceps but the
+other week trains them:
+- swap that day's last extra row of an over-served group for the arm row, at 2 sets;
+- same exercise count, same time.
+
+**Not changed:**
+- 60+ minutes;
+- Calves;
+- every group but Biceps and Triceps;
+- the selector;
+- `plan_generator.dart`.
+
+## 1. Writers and readers (measured)
+
+**The writer** is `SessionSetAllocator._variant`, the minimum pass of Unit 2C-b, in the allowance world (under 60).
+- The arm row IS in the selector's list on every residue day (`scratchpad/oi496/probe.log`). Examples:
+  - bodyweight Pull + Core: Self-Resisted Bicep Curl;
+  - gym Push + Core: Tricep Pushdown (Cable).
+- The minimum pass never goes past the day's admitted-row target. Under 60 that target is R's row cap (d44).
+- Rank 0, the 2A opener and the kept holds fill the cap, so the pass refuses.
+
+**A second cause, found by the prototype (2 Biceps plans, strength 4-day advanced home_dumbbells 30):**
+- A's d35 targets are read once, against step 1's B (`session_set_allocator.dart`, the 2C-b driver, step 2).
+- B gains Biceps only later in the fixpoint, as a protective target.
+- So A never learns that B trains Biceps.
+
+**The readers:**
+- the week's per-group sets: `AllocationStats.credited`, and the audit's zero-week count;
+- the 2B day-floor gate's swap excuse (`day_floor_gate_lib.dart`). A day with the same row count, whose new row is a
+  `minimumSeats` entry and whose dropped row's groups are still trained that week, is a swap and not a loss.
+
+## 2. Design
+
+- **S1. Where it runs.** Only in the allowance world (`allowance` true: lead-first, floor on, balanced week on, under
+  60 resolved minutes), right after the minimum pass and before the count verdict.
+- **S2. The trigger.** A target `g` in {Biceps, Triceps} that is still at 0 in the ledger and not credited by a kept
+  hold.
+- **S3. The arm slot.** Candidates are the non-admitted, non-reservation-blocked slots of `g` on any allocated day.
+  They are tried cheapest first (2-set seconds), then by day.
+- **S4. The victim, on the arm slot's day.** Walk the day's list back to front. The first row that passes all of these
+  is the victim:
+  - a budgeted admitted row or a kept library hold;
+  - not rank 0;
+  - not the day's opener, computed as `lead[]` computes it: the 2A opener when admitted, else the opener of the
+    admitted rows (round 1 A1: a precomputed opener that pass A refused protects nothing);
+  - not a minimum seat;
+  - crediting no focus group (d38);
+  - every one of its groups credited by another admitted row or kept hold of the same day (the "over-served" rule).
+    A row with no budget group (its muscles map to none, e.g. Forearms) passes this rule vacuously: it serves no
+    group, so it is a victim like an over-served row (round 1 A6, pinned by a test).
+- **S5. The swap.**
+  - Free the victim: a budgeted row is un-admitted and its sets and seconds come off the ledger; a hold goes to
+    `evicted` and its seconds come off.
+  - Then seat the arm slot at 2 sets (pass B may grow it to 3, like every seat) when all of these hold:
+    - every group's session cap;
+    - every other group's weekly top;
+    - the day's time within the forcing bound, or no longer than before the swap (d51: same time);
+    - after the swap the day opens with its lead or with its 2A opener (d48): never another row, neither by removing
+      the lead nor by seating an arm row `openerOf` ranks above it (round 1 A1). The arm row may BE the 2A opener pass A
+      refused (seeded-sweep plan 122, Kettlebell Two Arm Military Press): seating it restores the designed lead.
+  - Otherwise restore the victim (its sets exactly, its seconds by an exact reset of the day's spent seconds, round 1
+    A7) and try the next one.
+  - Never a victim: a minimum seat, a day-floor seat or a count-forced row (round 2 A2). A taken victim gets a `why`.
+  - In the 2A-opener case the day's lead becomes the arm row at 2 sets, so R2 caps the day's other rows at 3 in passes
+    C and D (round 2 A4).
+  - The row count is unchanged.
+  - The seat is recorded in `AllocationStats.minimumSeats` with `g`.
+- **S6. The fixpoint (the second cause).** Under 60, after each round, an arm group that B now credits and A does not
+  joins A's targets, and the loop continues (the same 4-round bound).
+  - The protect-first step and the terminal guard are unchanged. A swap that costs a protective group, or a day's
+    row, still sends the plan to R verbatim.
+- **S7. Kill switch.** None new (d37). It rides 2C's `disable_balanced_week`: off, the allowance world never runs.
+  `SessionSetAllocator.debugArmSwap` is a test seam only (never set in lib/).
+- **S8. Reach: only plans with an arm zero-week, and never at a group's cost.** `_allocateCore` runs the 2C-b
+  allocation first, with no swap and no S6. It allocates again with them only when that result has an arm pair (one
+  variant at 0 Biceps or 0 Triceps while the other credits it; `armPairsOf`). It keeps the re-run only when:
+  - the re-run stays in the first run's world (the same allowance stamp; a re-run that falls back to R, or leaves R,
+    is a different plan, round 1 B5);
+  - the re-run has fewer arm pairs;
+  - and no group either variant credited is at 0 in it (`lostAny`, Calves included).
+  Otherwise the plan is the 2C-b allocation byte for byte. The 6-day path (B = A, so no pair) and 60+ minutes never
+  re-run.
+  - Why (measured on prototype p1 / p3): with the swap inside every fixpoint round, two advanced bodyweight 30-minute
+    plans that had NO arm zero-week on main changed trajectory. Calves left them entirely (2 -> 0 in weeks 1 and 3),
+    and V-Up / Calf Raise became Pike Push Up / Skater Squat.
+  - The audit's pair count hid it, because a group at 0 in every week is not a pair. The 2C-b weekly-minimum gate's
+    "Calves newly at 0 at 30" caught it (143 -> 147).
+
+## 3. Prototype measurement (2,304-plan audit, against main 0c383703)
+
+| run | Biceps pairs | Triceps pairs | Calves pairs | plans changed | rows per day | max minutes over |
+|---|---|---|---|---|---|---|
+| main | 13 | 9 | 49 | - | - | - |
+| S1-S5 | 2 | 0 | 47 | 21 | unchanged | +6 (within the under-60 +6 bound) |
+| S1-S6 | 0 | 0 | 47 | 23 | unchanged | +6 |
+| S1-S8 (built) | 0 | 0 | 49 (= main) | 21 | unchanged | +6 |
+
+- The audit's headline table (suitability, majors at 0, lead starved, openers) is identical to main for every run.
+- **S1-S8 (the built design):** 21 plans change, exactly the arm-residue plans (one plan held both a Biceps and a
+  Triceps pair). Per plan-week, against main, any group, weeks 1-3: 0 newly at 0 and 34 newly trained. Calves stays
+  at main's 49 (the S1-S6 "improvement" to 47 was partly plans losing Calves in every week, which is not a pair).
+- S6 fixes the 2 strength 4-day advanced home_dumbbells plans, without the swap: once Biceps is a target of A, 2C-b's
+  own walk (d48) moves the curl slot ahead and pass A admits it within R's row cap. Deadlift Day A: Dumbbell Rear
+  Lateral Raise -> Dumbbell Alternate Bicep Curl. Shoulders stays trained on OHP Day; the protective rule would
+  otherwise send the plan to R.
+- Changed days, examples: a one-for-one swap (bodyweight Pull + Core: Doorway Isometric Row (hold, Back) ->
+  Self-Resisted Bicep Curl; gym Push + Core: Cable / Machine Lateral Raise (a second Shoulders row) -> Tricep Pushdown
+  (Cable)), or 2C-b's own walk for the two S6 plans (above).
+- Prototype history (S1-S6 only, superseded by S8): Calves 49 -> 47 read as a side effect of re-seating; the
+  per-plan-week check later showed part of it was Calves leaving plans entirely.
+
+## 4. Tests and gates
+
+- **Behavioral (crafted, `session_budget_fixtures.dart`), `test/contracts/arm_swap_behavioral_test.dart`:**
+  - the swap seats the arm row and drops the last over-served row, with the count unchanged;
+  - never rank 0, the opener, a minimum seat, a day-floor seat, a count-forced row or a focus row;
+  - a hold victim and a budgeted victim;
+  - a victim whose group no other row of the day credits is skipped;
+  - refusals restore the victim (cap, top, time);
+  - 60 minutes: no swap;
+  - Calves / Core: no swap;
+  - the S6 fixpoint case (B gains the arm group late);
+  - `disable_balanced_week`: byte-identical.
+- **Neighbouring gates on the built tree (bug class 2.160):**
+  - `weekly_minimum_gate_test`;
+  - `day_floor_gate_rep30_test` and `day_floor_gate_pairs_p1/p4`: unchanged (CI green on ffb12fa7 with no edit to
+    their pins; the 21 changed plans add `minimumSeats` entries, which their swap excuse accepts);
+  - `lead_first_gate_test`, `session_set_budget_gate_test`, `balanced_week_gate_test`, `core_list_pool_gate_test`;
+  - the golden: 30-minute keys only are expected to move, and are attributed;
+  - the four kill-switch goldens;
+  - `repeat_minutes_gate_test` (2D).
+- **Mutation:** each guard in S2-S6 is mutated once and must redden a test.
+
+## 5. Docs
+
+- plan-engine CLAUDE.md bullet;
+- plan-engine-detail.md;
+- the SoT registry (`weekly_minimum` gains the swap; or a new concept `arm_swap`, per `naming_conventions.md`);
+- the diagnose doc;
+- the closure ledger;
+- OI-496 closed (archived);
+- the board card t217.
+
+## Review log
+
+- **Self-review, prototype (before round 1):** S8 added after the weekly-minimum gate's Calves count moved. A
+  per-plan-week "newly at 0" check (any group, weeks 1-3, against main) joins the audit comparison
+  (`scratchpad/oi496/newzero.py`).
+- **Round 1 (2026-11-15, two Sonnet seats, on ffb12fa7, CI green):** no P0 / P1 confirmed. Fixed:
+  - A1: the victim guard read `opener[d] ?? ...`, which protects a precomputed opener pass A refused and leaves the
+    real lead open; it now uses `lead[]`'s rule, and a new `keepsOpener` check refuses a swap that would change the
+    day's opener (the mirror: a compound arm row ranking above it);
+  - B5: S8 keeps the re-run only with the same allowance stamp;
+  - A5 / B6: a taken victim leaves `floorSeats` / `countForced` and carries a `why`;
+  - A7: a failed trial restores the day's spent seconds exactly;
+  - A2 / B1: tests for S6, the S8 reject path and its restore, `armPairsOf` / `lostAny`, the candidate fall-through,
+    the tie order, a failed victim restored before the next, the empty-group victim, and the opener guards;
+  - A3 / B2 / B3 / B4 / A4 / A6 / B7: the test header, the diagnose count, the §3 prototype bullets, the day-floor gate
+    sentence, the empty-group rule, and the 34 newly-trained plan-weeks now pinned in the gate.
+- **Round 1, CI on ddc06521:** `session_allowance_behavioral_test`'s seeded sweep went from 1 plan changed by 2E to 0.
+  Its plan 122 seats Kettlebell Two Arm Military Press, the day's 2A opener that pass A refused; round 1's first
+  `keepsOpener` (the opener must stay the admitted lead) refused it. The rule now also allows the 2A opener itself, and a
+  real-library test pins plan 122. The neighbouring gates (2C-b, 2D, 2B, 2A, 2C-a, B2) were run locally before the
+  push this time (bug class 2.162's last point, missed in the first round-1 push).
+- **Round 2 (2026-11-15, two Sonnet seats on 481b6711, CI green):** no P0 / P1. Its P2s were inside round 1's fixes, so
+  the mechanism was removed: floor seats and count-forced rows are never victims and `_dropSeat` is deleted (A2 / A3);
+  `keepsOpener` keeps the day's order (A1); the lead change in the 2A-opener case is stated (A4); the seam toggle is in
+  try / finally (B5); survivors restated honestly (LOST alone unproven, E7, FORCEDV, TIEO, KOh) and stale line numbers
+  re-cited. The 2E gate is unchanged.
+- **B-pass (2026-11-15, two Sonnet seats on 06bd06ef, CI green):** no P0 / P1. Seat B: the hold branch's evicted
+  skip and its `keepsOpener` had no test (both mutants green); two crafted fixtures now redden them (EVm, KOh). Seat
+  A: victim-list and registry doc drift, the arm-pair definition, the minimum-seat docs; all fixed. Review file
+  `docs/reviews/generator-step2e-bpass.md`.
