@@ -1,0 +1,95 @@
+// THROWAWAY (Batch C2c Task 0/2): per golden key, the golden sha256 plus a sha256 of the plan skeleton
+// (every PlannedExercise map replaced by null) plus one record per exercise [path, id, name, sha256(exercise map)].
+// UNTRACKED; delete before the whole-project analyze. Env: LIB_PATH (library JSON), ATTR_OUT (output file).
+@Timeout(Duration(minutes: 45))
+library;
+
+import 'dart:convert';
+import 'dart:io';
+
+import 'package:flutter/services.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:hive_flutter/hive_flutter.dart';
+
+import 'package:icanbefitter/core/services/guarded_box.dart';
+import 'package:icanbefitter/core/services/hive_service.dart';
+import 'package:icanbefitter/core/services/hive_user_session.dart';
+
+import '../../scripts/migration_ledger_hash_lib.dart' show sha256Hex;
+import '../helpers/generator_golden_personas.dart';
+
+String _sha(Object? o) => sha256Hex(utf8.encode(jsonEncode(o)));
+
+Object? _skeleton(Object? node, String path, List<List<String>> out) {
+  if (node is Map) {
+    if (node.containsKey('exercise_id') && node.containsKey('exercise_name')) {
+      out.add([path, '${node['exercise_id']}', '${node['exercise_name']}', _sha(node)]);
+      return null;
+    }
+    return {for (final e in node.entries) e.key: _skeleton(e.value, '$path.${e.key}', out)};
+  }
+  if (node is List) {
+    return [for (var i = 0; i < node.length; i++) _skeleton(node[i], '$path.$i', out)];
+  }
+  return node;
+}
+
+void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
+  const testUser = 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee';
+  final libPath = Platform.environment['LIB_PATH'];
+  final outPath = Platform.environment['ATTR_OUT'];
+  late Directory tempDir;
+
+  setUpAll(() async {
+    if (libPath == null || outPath == null) {
+      throw StateError('LIB_PATH and ATTR_OUT are required');
+    }
+    tempDir = await Directory.systemTemp.createTemp('c2c_attr');
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(
+      const MethodChannel('plugins.flutter.io/path_provider'),
+      (_) async => tempDir.path,
+    );
+    Hive.init(tempDir.path);
+    GuardedBox.testBypassOwnership = true;
+    await Hive.openBox(HiveService.configBoxName);
+    await Hive.openBox(HiveService.migrationBoxName);
+    final exBox = await Hive.openBox(HiveService.exerciseBoxName);
+    final rows = jsonDecode(File(libPath).readAsStringSync()) as List;
+    for (final r in rows.whereType<Map>()) {
+      final m = Map<String, dynamic>.from(r);
+      await exBox.put((m['id'] ?? m['name']).toString(), m);
+    }
+    HiveService.instance.markInitializedForTests();
+    await HiveUserSession.openForUser(testUser);
+  });
+
+  tearDownAll(() async {
+    await HiveUserSession.closeAll();
+    GuardedBox.testBypassOwnership = false;
+    await Hive.close();
+    if (tempDir.existsSync()) tempDir.deleteSync(recursive: true);
+  });
+
+  test('attribution dump', () {
+    final result = <String, Object>{};
+    final only = Platform.environment['ATTR_KEYS'];
+    final wanted = only == null ? null : (jsonDecode(File(only).readAsStringSync()) as List).cast<String>().toSet();
+    for (final p in generatorGoldenPersonas()) {
+      if (wanted != null && !wanted.contains(p.key)) continue;
+      final map = p.run().toMap();
+      final exs = <List<String>>[];
+      final skel = _skeleton(map, '', exs);
+      result[p.key] = {
+        'h': _sha(map),
+        'sk': _sha(skel),
+        'ex': exs,
+      };
+    }
+    File(outPath!).writeAsStringSync(jsonEncode(result));
+    // ignore: avoid_print
+    print('attribution: wrote ${result.length} keys to $outPath');
+    expect(result.length, wanted?.length ?? 998);
+  });
+}

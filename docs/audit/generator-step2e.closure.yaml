@@ -1,0 +1,53 @@
+# Closure ledger — Generator Unit 2E: no week without direct arm work under 60 minutes (OI-496).
+# Plan docs/plans/2026-11-15-generator-step2e-arm-swap.md, diagnose c6a2e8, founder d51 / d53.
+# Gate 40 (validate_audit_closure.dart). One terminal_state per item; no `deferred:` key.
+
+batch: generator-step2e
+total_findings: 8
+closed_count: 8
+
+_commit: &feat "e39505a3 (with ddc06521, 53a8ed88, 06bd06ef and the B-pass commit)"
+
+findings:
+  - id: C2E-1
+    title: "OI-496: Biceps 13 / Triceps 9 zero-week pairs under 60 minutes; the minimum pass cannot seat an arm row past R's row cap"
+    terminal_state: closed_in_commit
+    commit: *feat
+    verification: "weekly_minimum_gate_test 2E block: 21 of 1,152 plans change, each had an arm pair, 0 remain; arm_swap_behavioral_test: the swap and its victim rules"
+
+  - id: C2E-2
+    title: "S6: A's d35 targets were read against step 1's B, so an arm group B gained later never reached A (2 strength plans)"
+    terminal_state: closed_in_commit
+    commit: *feat
+    verification: "the 2,304-plan audit: strength|4|advanced|home_dumbbells|30|{2,3} hold Biceps in weeks 1 and 3; the 2E gate block counts them among the 21"
+
+  - id: C2E-3
+    title: "S8: the swap inside every fixpoint round changed two plans with no arm pair, and Calves went to 0 (found by the 2C-b gate's Calves count)"
+    terminal_state: closed_in_commit
+    commit: *feat
+    verification: "the 2E gate block: 0 plan-weeks newly at 0 (any group, weeks 1-3), and every changed plan had an arm pair; the 2C-b gate's Calves-newly-0 count stays 143"
+
+  - id: C2E-4
+    title: "Calves 49 zero-week pairs at 30 minutes"
+    terminal_state: verified_clean
+    evidence: "founder d45 / d49 (2026-11-14): Calves under 45 minutes is never a target; the count is unchanged from main (49)"
+
+  - id: C2E-5
+    title: "Supersets: should the allocator count superset time (board, step 2, undecided)"
+    terminal_state: verified_clean
+    evidence: "founder d53 (2026-11-15, 'No, keep full rest'): the allocator keeps pricing full rest; the board card closes as decided"
+
+  - id: C2E-6
+    title: "OI-453 archived: Unit 2D merged (PR #280, main 708f9049, main CI green)"
+    terminal_state: verified_clean
+    evidence: "PR #280 state MERGED; main CI run on 708f9049 success; every Done-when leg recorded in closed_issues.md"
+
+  - id: C2E-7
+    title: "OI-477 (6-day build_muscle Quads below the floor) closed as a stated residue"
+    terminal_state: verified_clean
+    evidence: "founder d54 (2026-11-15, 'Accept as is, close'); 48 cells measured on 708f9049 plus 2E: below 90 minutes time_limited, beginners cap_limited by 2A's lead rule, every week has quad work"
+
+  - id: C2E-8
+    title: "OI-475 (3 / 4 / 5-day build_muscle Quads below the floor) closed as a stated residue"
+    terminal_state: verified_clean
+    evidence: "founder d55 (2026-11-15, 'Same as d54'); 33 of 72 cells short at 60 / 90 minutes: 31 time_limited, 2 cap_limited (2A's lead rule)"

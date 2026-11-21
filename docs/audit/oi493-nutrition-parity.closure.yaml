@@ -1,0 +1,145 @@
+# Closure ledger — OI-493 nutrition logging parity (Landing A + Landing B)
+# Gate 40 (validate_audit_closure.dart). One terminal_state per finding; no
+# `deferred:` key. `<branch>@branch` is the in-branch commit form.
+#
+# The 2026-11-10 survey counted 20 differences; the 2026-11-12 re-run against
+# the code (plan docs/plans/oi493-nutrition-parity.md section 1) merged them into
+# the 14 rows D1-D14 below. Landing A (PR #251, merge e1becc8d) closed the coach-
+# door rows; Landing B (branch oi493b-duplicate-meals) closed the rest, plus the
+# defects its two plan-review rounds and its build surfaced (L1-L6).
+
+batch: oi493-nutrition-parity
+plan_review_record: docs/plan-reviews/oi493b-duplicate-meals.md
+bpass_review: docs/reviews/oi493-nutrition-parity-bpass.md
+diagnose_docs:
+  - docs/diagnoses/2026-11-12-coach-meal-parity-ec6f6c.md
+  - docs/diagnoses/2026-11-12-same-meal-twice-4cb58f.md
+
+findings:
+  - id: D1
+    title: "Two coach doors for one meal; the tag swapped in a database food"
+    terminal_state: closed_in_commit
+    commit: e1becc8d
+    verification: "One coach meal writer CoachMealLog.write for the tool and the tag; parity test P1-P9 (coach_vs_screen_meal_log_parity_test.dart)."
+
+  - id: D2
+    title: "The tool's date parsed at host-local midnight (previous IST day east of IST)"
+    terminal_state: closed_in_commit
+    commit: e1becc8d
+    verification: "The day is the IST day of the reported instant (intent createdAt); tested under Kolkata, UTC and Tokyo."
+
+  - id: D3
+    title: "The coach could log any date, including a future one"
+    terminal_state: closed_in_commit
+    commit: e1becc8d
+    verification: "Server-side refine on logMealByText.date (today only, nullish); Deno logMealByText_test.ts. Live once ai-proxy is deployed (founder go, board 493-10)."
+
+  - id: D4
+    title: "The coach slot defaulted to snacks"
+    terminal_state: closed_in_commit
+    commit: e1becc8d
+    verification: "resolveCoachMealSlot: the named slot, else inferMealSlot(at.toLocal()); per-zone table in the parity test."
+
+  - id: D5
+    title: "The tool wrote one synthetic item, dropping items[] and fibre"
+    terminal_state: closed_in_commit
+    commit: e1becc8d
+    verification: "coachItemsFromParsedMeal writes each parsed item with fibre; food_parser normaliseParsedItems carries fiber_g."
+
+  - id: D6
+    title: "The tag used database macros or fabricated defaults"
+    terminal_state: closed_in_commit
+    commit: e1becc8d
+    verification: "coachItemFromTag writes the coach's own estimate; no calories_estimate means no card (coach_food_tag_dropped_no_calories)."
+
+  - id: D7
+    title: "An override of 0 skipped the Atwater fallback (a meal stored as 0 kcal)"
+    terminal_state: closed_in_commit
+    commit: oi493b-duplicate-meals@branch
+    verification: "logMeal applies overrideTotalCals / overrideTotalProtein only when > 0; R8 in nlog_repeat_adds_entry_behavioral_test.dart (mutants M16, M17 red)."
+
+  - id: D8
+    title: "The same meal logged twice overwrote the first entry (founder decision F4)"
+    terminal_state: closed_in_commit
+    commit: oi493b-duplicate-meals@branch
+    verification: "First free occurrence key in logMeal, moveMealLog, both UNDO paths and the migrator; R1-R5 (mutants M1-M3, M7, M9-M12 red)."
+
+  - id: D9
+    title: "The tool spent the client AI-text allowance the server never charges"
+    terminal_state: closed_in_commit
+    commit: e1becc8d
+    verification: "No counter unit for a coach meal; the source mapping returns null for aiCoachTool."
+
+  - id: D10
+    title: "The tool skipped the badge check"
+    terminal_state: closed_in_commit
+    commit: e1becc8d
+    verification: "CoachMealLog.write runs the badge check after a stored meal (a throw never fails it); parity test P8."
+
+  - id: D11a
+    title: "source not in the cloud row"
+    terminal_state: verified_clean
+    evidence: "information_schema 2026-11-12: nutrition_logs has no source column and no reader needs one (diagnose ec6f6c tier 3)."
+
+  - id: D11b
+    title: "Concurrent double dispatch (one intent or one tag saved twice once a repeat adds)"
+    terminal_state: closed_in_commit
+    commit: oi493b-duplicate-meals@branch
+    verification: "Tag: static in-flight map in ConversationalLogHandler.executeAction + LogConfirmCard marks and clears when unmounted (R6, card widget test; mutants M13, M18, M19 red). Tool: confirm() already refuses a second APPLY or retry while the intent executes (plan-review rounds 1 and 2 traced every caller)."
+
+  - id: D12
+    title: "The coach's meals_today named every meal Unknown"
+    terminal_state: closed_in_commit
+    commit: e1becc8d
+    verification: "shortMealDisplayName from items[]; parity test readers group."
+
+  - id: D13
+    title: "APPLY card vs 5 s auto-save vs tap"
+    terminal_state: verified_clean
+    evidence: "Entry UI only (founder decision 1: only the entry UI differs); the stored and counted result is the same through every door (D1-D12)."
+
+  - id: D14
+    title: "Five more top-level food_name readers"
+    terminal_state: closed_in_commit
+    commit: e1becc8d
+    verification: "All read items[]; nlog_food_name_reader_guard_test.dart pins every food_name token per file."
+
+  # ── Landing B: surfaced by its plan reviews and its build ─────────
+  - id: L1
+    title: "After two deletes the first snackbar's UNDO restored the second row"
+    terminal_state: closed_in_commit
+    commit: oi493b-duplicate-meals@branch
+    verification: "restoreLastDeleted(expectedKey:); R3 (mutant M4 red)."
+
+  - id: L2
+    title: "An UNDO was not bound to the account it was made under"
+    terminal_state: closed_in_commit
+    commit: oi493b-duplicate-meals@branch
+    verification: "deleteLog records the owner hash per key; both UNDO paths refuse across an owner change or a null owner; R3 (mutants M5, M21 red)."
+
+  - id: L3
+    title: "The v7 migrator re-keyed current rows to the UTC day and collapsed repeat servings"
+    terminal_state: closed_in_commit
+    commit: oi493b-duplicate-meals@branch
+    verification: "Current-shape keys skipped; legacy rows keep one entry each; idempotent via migrated_from; R5, R5b (mutants M10-M12 red)."
+
+  - id: L4
+    title: "A double tap on a screen log control now adds twice (search, recent, barcode, AI text, scan)"
+    terminal_state: closed_in_commit
+    commit: oi493b-duplicate-meals@branch
+    verification: "SingleFlight on the write identity (AI text inside the notifier, scan flight before the flag); R7 (mutants M14, M15, M20 red)."
+
+  - id: L5
+    title: "A whenComplete cleanup returned the map's removed value and awaited its own future (found in the build)"
+    terminal_state: closed_in_commit
+    commit: oi493b-duplicate-meals@branch
+    verification: "Block-body cleanup with a comment; R6 hung before the fix, passes after; debugging skill class 2.152."
+
+  - id: L6
+    title: "UNDO could overwrite a newer entry; restoreFoodLog mutated the caller's map"
+    terminal_state: closed_in_commit
+    commit: oi493b-duplicate-meals@branch
+    verification: "Restore to the first free occurrence on a copy; R3 (mutants M7, M8 red)."
+
+total_findings: 21
+closed_count: 21

@@ -1,0 +1,410 @@
+# Closure ledger - oi341-piece-b2-door (OI-341 Piece B2a: the purchase door, the switch-mismatch alarm, the replay
+# window and both flips; server only. Plan docs/plans/oi341-piece-b2-door.md v4.2.)
+# Gate 40. One terminal_state per finding; no `deferred:` key.
+# `commit:` on a closed_in_commit row names the branch state until the batch commit exists.
+
+batch: oi341-piece-b2-door
+plan_review_record: docs/plan-reviews/oi341-piece-b2-door.md
+total_findings: 68
+closed_count: 68
+
+findings:
+  # ── build ──────────────────────────────────────────────────────────────────
+  - id: B2A-SWITCH
+    title: "_shared/subscription_stacking.ts: isEnvExactlyTrue(name, env), the ONE switch rule; isStackingEnabled and the new isTrialPurchaseEnabled (ENABLE_TRIAL_PURCHASE) wrap it (plan 2.1)"
+    terminal_state: closed_in_commit
+    commit: "oi341-piece-b2-door (uncommitted)"
+    verification: "_shared/subscription_stacking_test.ts (+2 tests, 10 values each incl. ' true', 'true ', 'TRUE', '1'; the two names never cross); mutants S1 (trim), S2 (case-fold), S3 (trial reads the stacking name) red"
+
+  - id: B2A-DOOR
+    title: "create-razorpay-order: exported handler + import.meta.main tail, env read in the handler, ONE unlimited guard read, shut = today's 409 from the latest row, open (both switches) = 409 from the latest PAID row else an order with stacks_after in the response and the notes (plan 2.2)"
+    terminal_state: closed_in_commit
+    commit: "oi341-piece-b2-door (uncommitted)"
+    verification: "create-razorpay-order/index_test.ts (25 tests after the B-pass): the shut golden runs 9 scenarios x 6 shut switch states against the unmodified origin/main door (fixtures/create_razorpay_order_origin_main.ts.txt, a byte copy of b8385b6c) and pins status, body, the order body and the guard read's table and filters, not its URL; the open-door cases, the per-request env toggle and the permissionless-import subprocess (the only env read at import is supabase-js's own NODE_OPTIONS, allowed and stated in the test). Mutants D2-D11 red."
+
+  - id: B2A-DOOR-FAILOPEN
+    title: "the guard read's error was ignored, so a failed read created the order (fail open): now 500 subscription_check_unavailable, no order, both switch states (diagnose b95d61)"
+    terminal_state: closed_in_commit
+    commit: "oi341-piece-b2-door (uncommitted)"
+    verification: "docs/diagnoses/2026-10-21-purchase-door-guard-read-fails-open-b95d61.md (validates); the test runs the same scenario on origin/main (200, order created) and on the new door (500, no order); mutant D1 red (2 tests)"
+
+  - id: B2A-LOG
+    title: "both writers log `[<fn>] stacking_switch=on|off payment_id=` once for every payment reaching the insert branch, never on a skip path (plan 2.3)"
+    terminal_state: closed_in_commit
+    commit: "oi341-piece-b2-door (uncommitted)"
+    verification: "one test per writer counts the exact line for OFF, ON, the replay and (webhook) the second pre-SELECT skip path; mutants W4, W4b, V4, V4b red. W4b SURVIVED the first run (the replay case returned before the line); the second-skip-path case was added and W4b then reddened"
+
+  - id: B2A-ALERT-TIMEOUT
+    title: "reportPaymentRecordFailure takes an optional timeoutMs (default 3000); the webhook passes 1000, verify-payment keeps 3000 (plan 2.4)"
+    terminal_state: closed_in_commit
+    commit: "oi341-piece-b2-door (uncommitted)"
+    verification: "webhook: rpc failure + hung alerts table releases the 500 in 1.9-2.6 s; verify-payment: one hung dedup read takes 2.9-3.6 s; unit test of timeoutMs 1000; mutants W5 and V5 red"
+
+  - id: B2A-ALARM
+    title: "OFF-branch switch-mismatch alarm in both writers: only after that request's own successful insert, after the promo; one read for an active referral_trial row of the same user ending after the new start; a hit logs and pages stacking_switch_mismatch; one try/catch, 1 s bound; never changes the row, status or body (plan 2.5)"
+    terminal_state: closed_in_commit
+    commit: "oi341-piece-b2-door (uncommitted)"
+    verification: "per writer: a hit gives the SAME body and the same inserted row as the origin/main writer plus one critical alert and the log line; ended trial / non-trial grant row / no row / another user's trial = no alert; the read's filters pinned; read error and read hang = same 200 with the promo redeemed; hit + hung alerts = 200 within 2.6 s; no check on ON, the skip paths, the 23505 arm or a failed insert; unit tests for a THROWING client and a hung read. Mutants A3, A3b, A3c, A4, A5, A6, A7, A8, W1, W2, W3, W3b, W10, V1, V2, V3 red"
+
+  - id: B2A-ALARM-SOURCE
+    title: "_shared/payment_alert.ts: one dedup-and-insert path with the source as a parameter of BOTH the dedup query and the insert; reportStackingMismatch (source stacking_switch_mismatch, neutral wording naming both causes, suggested correction); checkStackingMismatch"
+    terminal_state: closed_in_commit
+    commit: "oi341-piece-b2-door (uncommitted)"
+    verification: "_shared/payment_alert_test.ts (+10 tests after the B-pass, 21 in all; the 11 B1 tests pass unchanged on the refactor); mutants A1 (dedup source hard-coded) and A2 (insert source hard-coded) red"
+
+  - id: B2A-REPLAY
+    title: "razorpay-webhook replay window per event: payment.captured 24 h + 10 min, payment.authorized 300 s, -120 s future skew for both; comment rewritten (the re-stamp assumption removed) (plan 2.6)"
+    terminal_state: closed_in_commit
+    commit: "oi341-piece-b2-door (uncommitted)"
+    verification: "6 new webhook tests (captured 6 min with and without the row, no promo repeat on a stale idempotent event, boundaries 24 h 5 min accepted / 24 h 15 min and 25 h rejected, authorized 6 min rejected and 2 min accepted, -3 min rejected for both); the old stale-delivery control moved from -1000 s to -25 h; mutants W6, W7, W8, W9 red"
+
+  - id: B2A-GOLDENS
+    title: "the writers' OFF goldens amended deliberately for the ONE added request (the alarm read); everything else in them unchanged"
+    terminal_state: closed_in_commit
+    commit: "oi341-piece-b2-door (uncommitted)"
+    verification: "each OFF golden asserts exactly one mismatch read and compares the remaining requests, the body and the promo calls with origin/main; before the amendment exactly the 15 golden tests and the stale-delivery control were red (15 failed / 63 passed), nothing else"
+
+  - id: B2A-HARNESS
+    title: "payment_writer_harness.ts: isMismatchRead / mismatchReads / mismatchAlerts / withoutMismatchRead / referralTrialRow / withTrialPurchaseSwitch; helperReads excludes the alarm read"
+    terminal_state: closed_in_commit
+    commit: "oi341-piece-b2-door (uncommitted)"
+    verification: "used by the three suites above; the B1 'no helper read' assertions still hold"
+
+  - id: B2A-MUTANTS
+    title: "mutation proof of every B2a protection (CLAUDE.md 4.4 rule 21)"
+    terminal_state: closed_in_commit
+    commit: "oi341-piece-b2-door (uncommitted)"
+    verification: "scratchpad mutate_b2a.py: 57 mutants (the author's 43, 10 proposed by B-pass seat A, and NM1-NM4 for the hermes no-match fix), each an exact-one-match replace computed before any write, restored in a finally and byte-compared after the run; 57 of 57 red on the post-review tree, after two survivors were closed (W4b: the second skip path added to the log-line test; SA1: a timer spy, because Deno's op sanitizer did not flag the leaked timer). Self-attested; the script is a scratchpad file, not in the tree (B-pass seat B finding 6)"
+
+  # ── docs and registry (plan 2.7) ───────────────────────────────────────────
+  - id: B2A-DOC-PAYMENT
+    title: "docs/architecture/payment.md: rule 8 (the friend can buy once the door is open; credit at payment + 7 days), rule 9 (the retry-timestamp hazard closed, B2a/B2b), new rule 10 (door, alarm, log line, timeouts, replay window, flip order)"
+    terminal_state: closed_in_commit
+    commit: "oi341-piece-b2-door (uncommitted)"
+    verification: "read back; the gate loop runs over it"
+
+  - id: B2A-DOC-ADR
+    title: "ADR-0021 amendment: the friend can buy during the trial; reward timing payment + 7 days"
+    terminal_state: closed_in_commit
+    commit: "oi341-piece-b2-door (uncommitted)"
+    verification: "docs/adr/0021-referral-reward-by-reconciler-cron.md, new section 'Amendment 2026-10-21'"
+
+  - id: B2A-DOC-SOT
+    title: "docs/sot_registry.yaml: new concept trial_purchase_door; subscription_end_date_stacking and payment_record_failed_alert updated (second source, line ranges re-cited); referral_reward_on_conversion KNOWN LIMITS text"
+    terminal_state: closed_in_commit
+    commit: "oi341-piece-b2-door (uncommitted)"
+    verification: "line ranges taken from the edited files; the SoT gates run in the pre-commit loop"
+
+  - id: B2A-DOC-FUNCTIONS
+    title: "supabase/functions/CLAUDE.md: the referral row (door shut/open timing), the stacking row (B2a additions), a new trial_purchase_door row"
+    terminal_state: closed_in_commit
+    commit: "oi341-piece-b2-door (uncommitted)"
+    verification: "read back"
+
+  - id: B2A-DOC-BLAST
+    title: "docs/blast_radius.yaml: supabase/functions/create-razorpay-order/** is catastrophic"
+    terminal_state: closed_in_commit
+    commit: "oi341-piece-b2-door (uncommitted)"
+    verification: "blast_radius_from_diff on the door path reports catastrophic (gate loop)"
+
+  - id: B2A-DOC-NAMING
+    title: "docs/naming_conventions.md: ENABLE_TRIAL_PURCHASE, isEnvExactlyTrue, isTrialPurchaseEnabled, trial purchase door, stacks_after, subscription_check_unavailable, stacking_switch, stacking_switch_mismatch"
+    terminal_state: closed_in_commit
+    commit: "oi341-piece-b2-door (uncommitted)"
+    verification: "read back"
+
+  - id: B2A-DOC-COUNTERS
+    title: "admin-dashboard-data bucketActivePlans and telegram-admin-bot cmdRevenue: comments that counts are ROWS per plan, not users (a stacked buyer holds two rows); no logic change"
+    terminal_state: closed_in_commit
+    commit: "oi341-piece-b2-door (uncommitted)"
+    verification: "comment-only diff; both functions' Deno suites pass in the whole-tree run"
+
+  - id: B2A-DOC-SHIPDARK
+    title: "docs/ship_dark_pending_review.yaml: the ENABLE_SUBSCRIPTION_STACKING entry records the B2a flip review; it moves to resolved: with flip_review_record + flip_commit in the later plan-review-record commit"
+    terminal_state: closed_in_commit
+    commit: "oi341-piece-b2-door (uncommitted)"
+    verification: "read back; the move is part of the plan-review-record commit (the hash-fixed-point rule keeps the record in its own later commit)"
+
+  - id: B2A-DOC-SECRETS
+    title: "docs/operations/SECRET_INVENTORY.md: RAZORPAY_KEY_SECRET row adds create-razorpay-order and the webhook-signing role; the server pair is live (founder 2026-10-21)"
+    terminal_state: closed_in_commit
+    commit: "oi341-piece-b2-door (uncommitted)"
+    verification: "read back"
+
+  - id: B2A-DOC-BOARD
+    title: "OI-341 Blocked-on updated (B1 done, B2a built, B2b after the door opens); OI-348 gains the pre-build live-key-ID check and the post-build phone purchase"
+    terminal_state: closed_in_commit
+    commit: "oi341-piece-b2-door (uncommitted)"
+    verification: "docs/audit/open_issues.md; OPEN_INDEX regenerated by the pre-commit loop"
+
+  - id: B2A-CLIENT-COPY-GREP
+    title: "client referral copy stating the old ~14-day reward timing (plan 2.7: grep in B2a, change in B2b)"
+    terminal_state: verified_clean
+    evidence: "lib/core/copy/referral_copy.dart:9-13 says 'you get 7 days too, a week after their first payment', which stays true under B2a; no client string states ~14 days or that a trial user cannot buy. Nothing for B2b to change here."
+
+  - id: B2A-PLAN-LIVE-MODE
+    title: "plan v4.2: step 0 rewritten for live keys (no test secret exists): live mode, one dedicated 90% code, refunds and row clean-up; step 1 proves the web app's checkout key matches; order B2a -> refunds -> B2b -> AAB with the live key ID"
+    terminal_state: closed_in_commit
+    commit: "oi341-piece-b2-door (uncommitted)"
+    verification: "docs/plans/oi341-piece-b2-door.md sections 0, 4, 6, 12; founder answers 2026-10-21 in chat; the B-pass and hermes briefs include section 4"
+
+  # ── plan review rounds (dispositions in the plan) ──────────────────────────
+  - id: B2A-REVIEW-R1
+    title: "plan review round 1 (v1): 0 P0, 5 P1, 6 P2, P3s"
+    terminal_state: closed_in_commit
+    commit: "oi341-piece-b2-door (uncommitted)"
+    verification: "plan section 7: every row dispositioned into v2"
+
+  - id: B2A-REVIEW-R2
+    title: "plan review round 2 (v2): 0 P0, 2 P1 (P1-A: the web client deploys at merge, so the unit was SPLIT into B2a server / B2b client), 4 P2"
+    terminal_state: closed_in_commit
+    commit: "oi341-piece-b2-door (uncommitted)"
+    verification: "plan section 8"
+
+  - id: B2A-REVIEW-R3
+    title: "plan review round 3 (v3, first review of the split plan): 0 P0, 2 P1 (notes-based alarm could never fire; 3(b) tester), 5 P2, 3 P3"
+    terminal_state: closed_in_commit
+    commit: "oi341-piece-b2-door (uncommitted)"
+    verification: "plan section 10: the alarm became a database read"
+
+  - id: B2A-REVIEW-R4
+    title: "plan review round 4 (v4, second review of the split plan): 0 P0, 0 P1, 4 P2, P3s; converged"
+    terminal_state: closed_in_commit
+    commit: "oi341-piece-b2-door (uncommitted)"
+    verification: "plan section 11 (mechanical_only)"
+
+  # ── live sequence (plan section 4; each step its own founder go) ───────────
+  - id: L0C-PROMO
+    title: "create the dedicated 90% promo code (5 uses, short expiry); deactivate it after step 4"
+    terminal_state: blocked_on_user
+    reason: "a live write to promo_codes: the founder creates it in the admin surface, or Claude with its own go"
+
+  - id: L1-DOOR-DEPLOY
+    title: "deploy create-razorpay-order (verify_jwt false), switches unset; probes: no auth 401, a free tester's order opens the web checkout (no payment), a trial tester gets 409"
+    terminal_state: closed_in_commit
+    commit: "live 2026-10-23, deployed v15 from 0c10c584 (the B2b branch head, before its merge; supabase/functions identical to 0b9f86aa, then main) with the founder's go"
+    verification: "no-auth probe 401 'Missing authorization header'; anon-key bearer 401 'Invalid or expired token' (the module's own answer, so it booted). The two TESTER probes (a free tester's checkout opens on the live key; a trial tester's 409) were not run and are folded into L-TESTER-PROBES"
+
+  - id: L2-WRITERS-DEPLOY
+    title: "deploy razorpay-webhook and verify-payment (switches unset); stacking_switch=off in the logs"
+    terminal_state: closed_in_commit
+    commit: "live 2026-10-23, webhook v31 and verify-payment v27 deployed from 0c10c584 (the B2b branch head, before its merge) with the founder's go; verify_jwt unchanged (false / true)"
+    verification: "smoke 400 / 401 from the modules; the stacking_switch=off log line was not read because the switch was flipped minutes later in the same session (no payment ran in between)"
+
+  - id: L2-DRILL
+    title: "alarm drill, once per writer: a free tester opens checkout, the founder redeems a referral code mid-checkout, the tester pays (90% code); expect a stacking_switch_mismatch alert; the verify-payment run with the app's live webhook paused; then each row corrected"
+    terminal_state: blocked_on_user
+    reason: "NOT RUN, and it can no longer run as designed: the drill exercises the OFF-branch alarm and stacking is now ON (2026-10-23, founder go). It would need ENABLE_SUBSCRIPTION_STACKING temporarily unset, two real payments, a referral redeem mid-checkout and a webhook pause. It only matters for a later writer rollback; the founder decides whether to run it"
+
+  - id: L3-STACKING-FLIP
+    title: "set ENABLE_SUBSCRIPTION_STACKING=true, redeploy both writers unchanged; reconcile R1/R2 clean (3(a) and 3(b) purchases: L-TESTER-PROBES)"
+    terminal_state: closed_in_commit
+    commit: "live 2026-10-23: secret set via the Management API (value true, not a secret), webhook v33 and verify-payment v29 redeployed with the founder's go"
+    verification: "secret name present; both redeploys smoke-OK; reconcile R1 = 0 and R2 = 0 read after the door opened"
+
+  - id: L4-DOOR-FLIP
+    title: "set ENABLE_TRIAL_PURCHASE=true, redeploy the door unchanged (the stacked purchase itself: L-TESTER-PROBES); reconcile R1/R2 clean"
+    terminal_state: closed_in_commit
+    commit: "live 2026-10-23: door OPEN (create-razorpay-order v18) with the founder's go, then B2b merged as 87a0d8d1"
+    verification: "secret names ENABLE_SUBSCRIPTION_STACKING and ENABLE_TRIAL_PURCHASE present; anon-key probe 401 from the module; reconcile R1 = 0, R2 = 0"
+
+  - id: L-TESTER-PROBES
+    title: "the proof payments, now against the OPEN door with stacking ON: (1) a free tester's order opens the web checkout on the live key; (2) a trial tester's order returns 200 with stacks_after = the trial end; (3) 3(a) a free tester's purchase shows stacking_switch=on and the end = start + 30 on the webhook; (4) 3(b) with the live webhook paused, a second never-paid tester proves the verify-payment ON path; (5) 4b a trial tester's stacked purchase through the new web client: paid end = trial end + 30, start = the payment instant, trial row unchanged, the paywall line and checkout notice shown"
+    terminal_state: blocked_on_user
+    reason: "real payments with a 90% code (L0C-PROMO), testers who have never paid, a webhook pause and refunds in the Razorpay dashboard: the founder, 'later' (2026-10-23)"
+
+  - id: L-RECON-24H
+    title: "reconcile R1 and R2 again 24 h after step 4 (and after any rollback)"
+    terminal_state: blocked_on_user
+    reason: "runs after step 4, which needs the founder's gos; read-only, run by Claude"
+
+  - id: L-REFUNDS
+    title: "refund every B2a test payment in the Razorpay dashboard; clean up the tester rows (each correction its own go); list any referral credit earned by a drill tester"
+    terminal_state: blocked_on_user
+    reason: "refunds are a dashboard action by the founder; row corrections are live writes needing a go"
+
+  - id: L-PAYMENTS-LIST
+    title: "the founder compares the Razorpay live Payments list for the steps 2-4 window with the subscriptions rows (a captured payment with no row and no alert)"
+    terminal_state: blocked_on_user
+    reason: "a dashboard look by the founder"
+
+  - id: B2B-NEXT
+    title: "Piece B2b (client: paywall line, checkout description, estimatePaidEndDate + the retry closure, trial-409 copy, EST clamp, isReferralTrial) - its own plan, branch and x2 review; built ahead, merged between live steps 4a and 4b"
+    terminal_state: blocked_on_user
+    reason: "built ahead (plan docs/plans/oi341-piece-b2b-client.md v3, branch oi341-piece-b2b-client, founder order 2026-10-21) and merged only in the live session after step 4a opens the door (plan section 4 step 5, amended 2026-10-22); the merge needs the founder's go"
+
+  - id: B2A-KEY-ID-BUILD
+    title: "before the next /build-apk the VPS .env RAZORPAY_KEY_ID must be the live key ID (today rzp_test_ against live server keys)"
+    terminal_state: blocked_on_user
+    reason: "the founder copies the live key ID from the Razorpay dashboard; recorded on OI-348 'Before the build'"
+
+  # ── stated, not built (plan section 5) ─────────────────────────────────────
+  - id: B2A-TWO-ORDERS
+    title: "two orders created before either is paid can each stack (orders set no expiry)"
+    terminal_state: verified_clean
+    evidence: "pre-existing and stated in plan section 5: a paid user still gets 409 at the door; for a trial user the second paid row stacks after the first (both paid for, both delivered). No over- or under-delivery."
+
+  - id: B2A-OI359-360-350-351
+    title: "OI-359, OI-360, OI-350, OI-351: pre-existing writer issues outside the door and the flip"
+    terminal_state: upstream_blocked
+    blocker: "filed on the OI board with their own fix shapes; B2a changes none of those code paths (OI-351's authorized-event window stays 300 s)"
+    reopen_when: "each OI is scheduled by the founder"
+
+  # ── B-pass (docs/reviews/<hash>-review.md; 2 fresh Sonnet seats, read-only) ──
+  - id: BP-A1
+    title: "seat A P2: the door's import test could pass vacuously (a non-assignable trap swallowed; std@0.177 serve() listens through Deno.listen, not Deno.serve)"
+    terminal_state: closed_in_commit
+    commit: "oi341-piece-b2-door (uncommitted)"
+    verification: "every trap is verified installed (identity check, else 'TRAPS NOT INSTALLED' fails the test); Deno.listen and Deno.serve both trapped; a 30 s child timeout; mutants SA6 (key id read at module scope) and SA7 (serve() at import) red"
+
+  - id: BP-A2
+    title: "seat A P3: wall-clock upper bounds with 400-600 ms slack could flake on a loaded runner"
+    terminal_state: closed_in_commit
+    commit: "oi341-piece-b2-door (uncommitted)"
+    verification: "upper bounds widened (1 s cases < 2.5-3.5 s, 2 s cases < 4.5 s, verify 3 s case < 5.5 s); lower bounds unchanged; every timeout mutant (A6 5 s read, A7/W5 6 s alerts, V5 1 s) still lands outside the band and reddens in the post-fix run"
+
+  - id: BP-A3
+    title: "seat A P3: the alarm's worst case is about 3 s (read + dedup + insert), not the 2.2 s the text said"
+    terminal_state: closed_in_commit
+    commit: "oi341-piece-b2-door (uncommitted)"
+    verification: "payment.md rule 10 (c) and plan 2.5 now state about 3 s; correctness unaffected (idempotent writers; Promise.race subscribes to the abandoned builder, so no unhandled rejection)"
+
+  - id: BP-A4
+    title: "seat A P3: a captured event first delivered late records the row from the delivery time (user gets up to that delay in extra days)"
+    terminal_state: closed_in_commit
+    commit: "oi341-piece-b2-door (uncommitted)"
+    verification: "stated as a residual risk in the webhook's replay comment and payment.md rule 10 (e); bounded by the 24 h 10 min window, in the user's favour"
+
+  - id: BP-A-MUTANTS
+    title: "seat A's 12 proposed mutants"
+    terminal_state: closed_in_commit
+    commit: "oi341-piece-b2-door (uncommitted)"
+    verification: "run as SA1-SA3, SA5-SA8, SA10-SA12 (all red; new tests: the timer spy, the verify context plan, the guard-failure log code, an unknown-plan row, mixed +05:30/Z instants). SA9 is the author's A6. SA4 (the alarm's rowStart taken from a fresh new Date() instead of the inserted now) is recorded, not run: it differs from the inserted start_date by 0 or a few ms, so the existing 'end_date = gt.<inserted start>' pin kills it only when the clock ticks between the two reads; a reliable kill needs a clock seam the writers do not have. Its effect, if it ever shipped, is a few ms on the comparison boundary of a read that only detects."
+
+  - id: BP-B1
+    title: "seat B P2: the 90% code's max_uses / valid_until limit nothing (the door and both writers honour expired, exhausted and, in the writers, inactive codes; increment has no ceiling)"
+    terminal_state: closed_in_commit
+    commit: "oi341-piece-b2-door (uncommitted)"
+    verification: "plan step 0 (c) rewritten: an unguessable code string, only is_active limits it, deactivated right after step 4's payment is recorded; deactivating mid-flight is safe for that purchase (verified: razorpay-webhook/index.ts:131-150 and verify-payment honour an inactive code); five tester accounts and one referrer listed; section 6 asks updated"
+
+  - id: BP-B2
+    title: "seat B P2: payment.md rule 5 still said a 5-minute replay window for every event"
+    terminal_state: closed_in_commit
+    commit: "oi341-piece-b2-door (uncommitted)"
+    verification: "rule 5 now reads 'Replay window ... per event since Piece B2a': 300 s authorized, 24 h + 10 min captured, the 'within seconds' rationale removed"
+
+  - id: BP-B3
+    title: "seat B P2: 'NO extra query' on the OFF path stated in payment.md rule 9, supabase/functions/CLAUDE.md and the OI-341 status, while B2a adds one alarm read"
+    terminal_state: closed_in_commit
+    commit: "oi341-piece-b2-door (uncommitted)"
+    verification: "all three (and the SoT stacking description) now say 'no extra query before the insert; one alarm read after it'"
+
+  - id: BP-B4
+    title: "seat B P3: the OI-341 Status paragraph contradicted its Blocked-on line (B1 'built', 'B2 is OPEN')"
+    terminal_state: closed_in_commit
+    commit: "oi341-piece-b2-door (uncommitted)"
+    verification: "Status now says B1 merged and live dark, B2 split into B2a (built) and B2b, the door still shut until the B2a flip"
+
+  - id: BP-B5
+    title: "seat B P3: the trial_purchase_door reader ranges excluded the alarm call they name"
+    terminal_state: closed_in_commit
+    commit: "oi341-piece-b2-door (uncommitted)"
+    verification: "ranges now 605-740 (webhook) and 573-742 (verify-payment), re-derived after the webhook comment grew; the stacking writer range is 605-700"
+
+  - id: BP-B6
+    title: "seat B P3: ledger said '+8 tests' for payment_alert_test.ts (it was +7); mutant counts self-attested"
+    terminal_state: closed_in_commit
+    commit: "oi341-piece-b2-door (uncommitted)"
+    verification: "counts re-derived after the B-pass additions (+10, 21 in all; door 25); the mutation row says the script is a scratchpad file"
+
+  - id: BP-B7
+    title: "seat B P3: SECRET_INVENTORY had no rows for ENABLE_SUBSCRIPTION_STACKING or ENABLE_TRIAL_PURCHASE"
+    terminal_state: closed_in_commit
+    commit: "oi341-piece-b2-door (uncommitted)"
+    verification: "two rows added with their readers and the redeploy-after-change rule"
+
+  - id: BP-B-LIVE-NOTES
+    title: "seat B live-sequence notes: refunds are ignored events (200, row untouched); verify-payment captures an authorized payment, so a webhook pause cannot strand one; R1/R2 are valid SQL against live_schema_columns.json; the 3(b) poll fallback cannot match another plan or user"
+    terminal_state: verified_clean
+    evidence: "confirmations, no change needed; consistent with plan section 4 steps 0 (d), 2, 3 (b) and the reconcile block"
+
+  # ── hermes pass (docs/audit/2026-10-21-hermes-oi341-piece-b2-door.md; 4 Sonnet seats, read-only) ──
+  - id: HM-S4-F4
+    title: "seat 4 P2: a captured payment whose amount matches no plan (promo deleted or edited mid-checkout) or fails the webhook cross-check answered 400 with no row and no alert"
+    terminal_state: closed_in_commit
+    commit: "oi341-piece-b2-door (uncommitted)"
+    verification: "diagnose c3e7a1 (validates); both writers page payment_record_failed with code amount_no_match / amount_cross_check, response unchanged; 6 new tests across both writers; mutants NM1-NM4 red"
+
+  - id: HM-S4-F1
+    title: "seat 4 P2: create-razorpay-order has no rate limit (unlimited live orders per account, an unthrottled promo-code oracle)"
+    terminal_state: upstream_blocked
+    blocker: "filed as OI-366: a new quota key must also enter the founder digest's DIGEST_KEYS, pinned both ways by founder_digest_caps_mirror_test.dart, so the fix touches and redeploys founder-digest; the rate is a founder call. Pre-existing; B2a does not change the limit"
+    reopen_when: "OI-366 is scheduled; before store launch"
+
+  - id: HM-S4-F2
+    title: "seat 4 P2: promo expiry and exhaustion are enforced nowhere at order time (only is_active)"
+    terminal_state: upstream_blocked
+    blocker: "filed as OI-366 with the rate limit: validate-promo also checks is_active only, so a door-only fix would show a discount in the app and then charge full price; the fix spans validate-promo, the door and the client message. B2a's own code is handled by plan step 0 (c)"
+    reopen_when: "OI-366 is scheduled; before store launch"
+
+  - id: HM-S4-F3
+    title: "seat 4 P2: referral farming once the door is open (no minimum paid amount, no clawback after a refund or chargeback)"
+    terminal_state: blocked_on_user
+    reason: "a product call on referral economics (an amount floor, a longer hold, or a clawback), filed as OI-367 with reopen_when store launch; OI-340 is the related dispute-event mechanism"
+
+  - id: HM-S4-F5
+    title: "seat 4 P3: the mismatch alarm pages (critical) for a mid-checkout referral redeem even while the door is shut"
+    terminal_state: verified_clean
+    evidence: "kept on purpose and stated in plan section 13: that payment really did lose the user's trial days and needs a manual end_date correction, which is what a page is for; dedup keeps it to one page per payment id"
+
+  - id: HM-S3-F1
+    title: "seat 3 P2: the plan did not say which tester accounts must be new and missed a third referral redeem"
+    terminal_state: closed_in_commit
+    commit: "oi341-piece-b2-door (uncommitted)"
+    verification: "plan step 0 (c) 'Testers': drill testers and the step 4 tester signed up within 7 days and never paid; the step 4 tester redeems right before step 4; three redeems of one referrer's code; no account reused after paying"
+
+  - id: HM-S3-F2
+    title: "seat 3 P2: the planned clean-up deletes tester rows inside the 24 h replay window, where a redelivered captured event would re-create the row, re-redeem the promo and could reward the referrer"
+    terminal_state: closed_in_commit
+    commit: "oi341-piece-b2-door (uncommitted)"
+    verification: "plan step 0 (d) and step 4, payment.md rule 10 (e) and the webhook comment: clean-up is status = 'cancelled' (a cancelled row still blocks the re-insert; the referral job skips it), never a delete inside 24 h 10 min"
+
+  - id: HM-S3-F3
+    title: "seat 3 P3: the alarm named two causes; a referrer's own credit landing mid-checkout is a third"
+    terminal_state: closed_in_commit
+    commit: "oi341-piece-b2-door (uncommitted)"
+    verification: "plan 2.5, payment.md rule 10 (c) and reportStackingMismatch's suggested_action list all three causes; no logic change"
+
+  - id: HM-S3-F4
+    title: "seat 3 P3: the 90% code must be stored upper-case (the door and validate-promo upper-case the typed code and match exactly)"
+    terminal_state: closed_in_commit
+    commit: "oi341-piece-b2-door (uncommitted)"
+    verification: "plan step 0 (c): stored in UPPERCASE, A-Z and 0-9 only"
+
+  - id: HM-S3-F5
+    title: "seat 3 P3: the door's first _shared import means its deploy must be the host-shell emit_payload path; the rollback payload is the single-file b8385b6c one"
+    terminal_state: closed_in_commit
+    commit: "oi341-piece-b2-door (uncommitted)"
+    verification: "plan section 4 step 1 names the command and the rollback payload"
+
+  - id: HM-S1-F1
+    title: "seats 1 and 2 P3: a captured event for an account deleted since retries for up to the 24 h window (ON path pages once)"
+    terminal_state: closed_in_commit
+    commit: "oi341-piece-b2-door (uncommitted)"
+    verification: "stated in the webhook's replay comment, payment.md rule 10 (e) and plan 2.6 (which already accepted it); no code change: Razorpay holds the money, so a page is correct"
+
+  - id: HM-S1-F2
+    title: "seat 1 P3: checkStackingMismatch's comment implied a 1 s worst case; it is about 3 s"
+    terminal_state: closed_in_commit
+    commit: "oi341-piece-b2-door (uncommitted)"
+    verification: "a comment above checkStackingMismatch states about 3 s; payment.md rule 10 (c) and plan 2.5 say the same (with BP-A3)"
+
+  - id: HM-SEAT2-CLEAN
+    title: "seat 2 (L23 authorization, L40 PII): no user scope gap; no user id or payment id reaches Telegram (alert-critical-notify sends source, summary, suggested_action only) or the founder digest"
+    terminal_state: verified_clean
+    evidence: "seat 2 report, re-read by the coordinator: alert-critical-notify/index.ts:34-37 and founder_digest_content.ts:859 select no context_json"
+
+  - id: HM-SEAT3-SCHEMA-CLEAN
+    title: "seat 3 (L22 schema parity): every column written or read by the diff exists live; no source CHECK on alerts; 90% prices 3490 / 29990 paise match derivePlanFromAmount"
+    terminal_state: verified_clean
+    evidence: "seat 3 report against backups/live_schema_columns.json and migrations 076, 133, 160, 161"

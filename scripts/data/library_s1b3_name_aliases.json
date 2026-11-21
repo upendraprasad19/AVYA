@@ -1,0 +1,10 @@
+{
+  "_meta": {
+    "batch": "Library Batch S1b-3 (OI-147)",
+    "plan": "docs/plans/2026-11-10-library-batch-s1b3-retire-donkey-calf-raise.md (D4)",
+    "note": "Kept-row record for the cloud seed generator: G1373's name_aliases cloud column. `before` is what the previous seed (174) gave it (NULL, checked against its tuple), `after` is the library value the importer's merge stage writes. The generator's inline rollback restores `before`."
+  },
+  "rows": [
+    { "id": "G1373", "before": null, "after": ["Donkey Calf Raise"] }
+  ]
+}

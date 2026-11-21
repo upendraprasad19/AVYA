@@ -1,0 +1,89 @@
+# Closure ledger - dow-skip-rate (OI-390, Batch A). Diagnose 132315.
+# Plan docs/plans/dow-skip-rate.md rev 5; review record docs/plan-reviews/dow-skip-rate.md.
+# Gate 40. One terminal_state per finding; no `deferred:` key.
+# `commit:` on a closed_in_commit row names the branch state until the batch commit exists.
+
+batch: dow-skip-rate
+plan_review_record: docs/plan-reviews/dow-skip-rate.md
+total_findings: 14
+closed_count: 14
+
+findings:
+  - id: PRIMARY-ABSENT-DENOMINATOR
+    title: "getDayOfWeekCompletionRates reported a weekday with nothing scheduled as 0 (read as 0% done)"
+    terminal_state: closed_in_commit
+    commit: "dow-skip-rate (uncommitted)"
+    verification: "getDayOfWeekCompletionStats emits only weekdays with eligible > 0; T1, T2; mutant M1"
+
+  - id: S1-TODAY-COUNTED
+    title: "today counted while undone"
+    terminal_state: closed_in_commit
+    commit: "dow-skip-rate (uncommitted)"
+    verification: "walk i = 1..N (today only if completed, adherence); T4, T14, T14c; mutants M2, M13"
+
+  - id: S2-TRAVEL-PAUSED
+    title: "travel and paused days counted as misses"
+    terminal_state: closed_in_commit
+    commit: "dow-skip-rate (uncommitted)"
+    verification: "classifyScheduleDay excludes travel / paused / moved / dropped / pre_onboarding; T5, T12; mutant M3"
+
+  - id: S3-CUSTOM-TEMPLATE
+    title: "type != 'workout' dropped custom_template rows"
+    terminal_state: closed_in_commit
+    commit: "dow-skip-rate (uncommitted)"
+    verification: "classifyScheduleDay keys on isTrainingDayType; T7, T8, T14; mutant M8"
+
+  - id: S4-S5-IST
+    title: "DateTime.now() and a local weekday"
+    terminal_state: closed_in_commit
+    commit: "dow-skip-rate (uncommitted)"
+    verification: "nowWall() + istDateOf(t).weekday + istWeekMondayOf; T3, T3b, T3c (CI zone + Tokyo + UTC); mutants M5, M6, M18"
+
+  - id: S6-ANCHOR
+    title: "no anchor: days before the user existed counted"
+    terminal_state: closed_in_commit
+    commit: "dow-skip-rate (uncommitted)"
+    verification: "_earliestUserAnchorKey (onboarding IST key, wlog_ date verbatim); T10, T10b; mutants M9 (Tokyo), M15"
+
+  - id: READER-SINGLED-OUT
+    title: "any weekday below 50% fired, so a lapse named the worst weekday"
+    terminal_state: closed_in_commit
+    commit: "dow-skip-rate (uncommitted)"
+    verification: "dayOfWeekInsight conditions 1-4 + tie-break, true counts in the notice; T3, T3d, T3e, T6, T7, T11, T16; mutants M4, M7, M10, M16, M17"
+
+  - id: U4-ADHERENCE
+    title: "getWorkoutAdherence: same defects plus rate_percent 0 with nothing planned"
+    terminal_state: closed_in_commit
+    commit: "dow-skip-rate (uncommitted)"
+    verification: "same walk; rate_percent omitted at planned == 0; T14, T14b, T14c; mutants M12, M13"
+
+  - id: U6-SIM-SEAM
+    title: "on-device seeding: simSkipsDay seam + 'Sim +4 wk, skip Mondays' dev button (debug-only)"
+    terminal_state: closed_in_commit
+    commit: "dow-skip-rate (uncommitted)"
+    verification: "test/features/dev/sim_skips_day_test.dart (T17); mutant M14; RNG draw order unchanged with an empty set"
+
+  - id: D3-STALE-CLAIMS
+    title: "3 ai_coach_interactions + 10 memory_embeddings rows carry the false weekday-skip claim"
+    terminal_state: blocked_on_user
+    reason: "founder approved the deletes 2026-10-23, sequenced (plan §5 D3): the fixed build must be on upendra's device and 8+ coach exchanges must pass before the live deletes, each a live prod write"
+
+  - id: D4A-BATCH-B
+    title: "Batch B: IST-throughout for workout dates (streak anchor, lapseFacts, _getPlanStatus, getDaysSinceLastWorkout, generator keys, DateTime.now() sites)"
+    terminal_state: blocked_on_user
+    reason: "minted OI-397 (2026-10-23); founder order: planned and x2-reviewed on its own right after this batch"
+
+  - id: D4B-ROLLING-CONTEXT
+    title: "rolling-context re-embeds the same interaction on several nights"
+    terminal_state: blocked_on_user
+    reason: "minted OI-398 (2026-10-23); catastrophic-tier EF, needs its own plan and a deploy go"
+
+  - id: D4C-GETPROGRESSSUMMARY
+    title: "server tool getProgressSummary adherence_pct: 0 when nothing planned, today, travel days"
+    terminal_state: blocked_on_user
+    reason: "minted OI-399 (2026-10-23); L-tier EF batch, needs a deploy go"
+
+  - id: WEEKEND-NUTRITION
+    title: "_weekendNutrition checked for the same empty-means-zero shape"
+    terminal_state: verified_clean
+    evidence: "pattern_detector.dart _weekendNutrition guards its denominators (plan §3 U3, verified rounds 1-4)"

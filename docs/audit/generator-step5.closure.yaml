@@ -1,0 +1,42 @@
+# Closure ledger - generator step 5: the full plan review after steps 1-4 on main f7d55205.
+# Results docs/plans/2026-11-17-generator-step5-full-review.md; Plan Explorer https://claude.ai/artifact/QTfsRNn2pALY7tTQnbzfku (v3).
+# Gate 40 (validate_audit_closure.dart). One terminal_state per item; no `deferred:` key.
+
+batch: generator-step5
+total_findings: 8
+closed_count: 8
+
+findings:
+  - id: S5-MARKS-1
+    title: "Step 1 pass marks: household 0, jump leads 0, gym OHP Days 0 of 56 without a press, injured days under 3 = 0 of 418,608"
+    terminal_state: verified_clean
+    evidence: "plan_audit_dump_test.dart (no focus) + injured_grid_dump_test.dart on f7d55205; results doc, Pass marks"
+  - id: S5-ZERO-WEEKS
+    title: "56 plans (174 cells: Shoulders 108, Hamstrings 60, Glutes 6) hold a major at 0 in a week: all Cut / Maintain 30 min"
+    terminal_state: verified_clean
+    evidence: "the same audit with disable_cardio_finisher_shown set has 0 such cells: the short finisher's reserved time, d76's accepted cost (3C plan line 153)"
+    notes: "2026-11-17: the 0-cell comparison was measured before generator-killswitch-3a3c deleted the 3C key; it is now reproduced with CardioFinisher.debugReserve = false, which builds the finisher without reserving its time."
+  - id: S5-MARKS-2
+    title: "Step 2 pass marks: over lead + 1 only on timed holds (160 rows), days under 3 = 0, no week without a quad compound"
+    terminal_state: verified_clean
+    evidence: "no-focus and three focus grids: every non-hold row over lead + 1 credits a focus group (d27 exemption)"
+  - id: S5-MARKS-3
+    title: "Step 3 pass marks: Cut == Maintain in the d81 five, reps 13,949 / 13,949 main and 34 Skater Squat accessories, 2 finisher days a week for Cut / Maintain"
+    terminal_state: verified_clean
+    evidence: "explorer dump (equal to the audit dump on every row) packed and measured; Strength focus 28,013 / 28,021 main lifts at the range minimum (8 Bodyweight Squat, 3A plan section 4b)"
+  - id: S5-MARKS-4
+    title: "Step 4 pass marks over the simulated history: over the ceiling, R2 / R5, one-set rows, majors newly at 0 all 0; flat under-bottom 9,956 -> 9,830"
+    terminal_state: verified_clean
+    evidence: "history_sim_dump_test.dart on f7d55205, the step 4 gate's definitions (576 profiles x progress / decline / flat)"
+  - id: S5-A
+    title: "With the Strength focus, Cut equals Maintain in 60 of 576 profiles (58 at 30 min), vs d81's 5 without a focus"
+    terminal_state: verified_clean
+    evidence: "founder accepted 2026-11-17 (board decision d84): Cut == Maintain under the Strength focus in 60 of 576 profiles stays, on d81's reasoning"
+  - id: S5-B
+    title: "Cut and Maintain repeat week 1's exercises in week 2 in 576 of 576 plans (Build 208, Strength 352), unchanged since 8 Nov finding 5"
+    terminal_state: verified_clean
+    evidence: "founder accepted 2026-11-17 (board decision d85): week 2 keeps week 1's exercises for Cut / Maintain (the same lifts carry the progression inside a phase; cross-phase variety changes them)"
+  - id: S5-STAMP-4
+    title: "Step 4 post-merge stamps: closure rows and ship_dark flip_commit name 6abfe1a5 / 18aeea82 / f7d55205"
+    terminal_state: verified_clean
+    evidence: "docs/audit/generator-step4.closure.yaml rows and docs/ship_dark_pending_review.yaml step 4 rows in this commit; Gate 40 passes"

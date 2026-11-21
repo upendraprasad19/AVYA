@@ -1,0 +1,66 @@
+# Closure ledger: Library Batch C2c (E230 Standing Single Leg Curl retag to bodyweight, animation 0795, seed v20, migration 173)
+# Gate 40 (validate_audit_closure.dart). One terminal_state per finding; no `deferred:` key.
+# Diagnose d8ac69. The batch landed in commit 0577f760; the live steps ran before the PR with the founder's go on each exact artifact.
+
+batch: library-batch-c2c
+diagnose: docs/diagnoses/2026-11-06-library-batch-c2c-e230-d8ac69.md
+plan_review_record: docs/plan-reviews/library-batch-c2c.md
+bpass_review: docs/reviews/library-batch-c2c-bpass.md
+total_findings: 9
+closed_count: 9
+
+findings:
+  - id: C2C-1
+    title: "E230 Standing Single Leg Curl retagged from cables to bodyweight (equipment, tier, logging type, gym availability, cues) through one generated record applied by the importer, never by hand"
+    terminal_state: closed_in_commit
+    commit: 0577f760
+    verification: test/contracts/library_e230_retag_test.dart
+    notes: "the importer accepts the record's `before` or `after` and nothing else; the cloud generator refuses a library row that drifted from the record."
+  - id: C2C-2
+    title: "Animation 0795 added to the media table for E230 (old-rows input moved from retag_waits to entries) and uploaded live"
+    terminal_state: closed_in_commit
+    commit: 0577f760
+    verification: test/contracts/library_media_table_test.dart
+    notes: "live: 252,438-byte file uploaded 1, verified 1, probes 400/400; bucket 759 to 760 objects. The test asserts E230 is not in retag_waits."
+  - id: C2C-3
+    title: "Seed v20 and cloud migration 173 (one E230 UPDATE with an inline rollback), applied live and recorded in the ledger"
+    terminal_state: closed_in_commit
+    commit: 0577f760
+    verification: test/contracts/library_seed_v20_upgrade_behavioral_test.dart
+    notes: "rehearsed in a rolled-back transaction, drift-checked 16 of 16 buckets, applied HTTP 201; live read-back 925 rows, 862 active, 63 inactive; file sha256 d1a41b6d34022f7f61da1847c94ec938f53989b94b8c1c75751f9b9740346c0a in backups/applied_migrations.json (Gates 14 and 39); exercise_library_cloud_tuples_match_test.dart green once the file landed."
+  - id: C2C-4
+    title: "Flag-OFF generator golden and plan-scorecard baseline re-recorded for the E230 pool change, with the effect attributed before it was trusted"
+    terminal_state: closed_in_commit
+    commit: 0577f760
+    verification: test/plan_generator/generator_golden_test.dart
+    notes: "574 of 998 persona keys differ from main's golden (338 new pick, 215 content-only, 21 ripple proven by an E230-removed counterfactual); baseline re-frozen after the committed freeze was found already stale. Re-recorded again on the merged tree in 46121738."
+  - id: C2C-5
+    title: "First B-pass: ten findings (one P1 on the second readers of E230's logged history, nine P2) all handled, none left open"
+    terminal_state: closed_in_commit
+    commit: 0577f760
+    verification: docs/reviews/library-batch-c2c-bpass.md
+    notes: "the P1 is accepted without a lib change (testing accounts only, CLAUDE.md section 1); every reader is listed in the diagnose doc and the SoT registry with its real semantics, and the code-review skill gained a History-reader sub-check (c2f81ea4)."
+  - id: C2C-6
+    title: "Merge of main (77af2d56) broke main's OI-454 Quads test: E230 takes the Hamstrings slot a Quads-crediting lunge filled in 6-day bodyweight and home plans"
+    terminal_state: closed_in_commit
+    commit: 46121738
+    verification: test/contracts/quads_floor_6day_behavioral_test.dart
+    notes: "all 24 cells measured; ten Quads cells re-pinned as overrides (1 to 3 sets lower), four 90-minute labels now cap_limited, Hamstrings rise 2 to 5 sets in 11 cells (measured against main's library with the cable E230, where Quads equal the OI-454 tables in all 24 cells); the OI-454 tables are kept as recorded and a test fails on a dead override; 3 mutants reddened. The remaining Quads shortfall is OI-477, which carries a Widened-by-C2c paragraph."
+  - id: C2C-7
+    title: "Merge of main (12ae6db3, PR 227, migration 172) conflicted in backups/applied_migrations.json"
+    terminal_state: closed_in_commit
+    commit: 30ed28d0
+    verification: scripts/check_applied_migrations_ledger.dart
+    notes: "resolved by record with sync_with_main.sh; 181 records, 172 and 173 each carry the sha256 of their own file; Gates 14 and 39 pass; the diff against main is the 173 append only."
+  - id: C2C-8
+    title: "Delta B-pass of the two merges, the re-pinned test, the golden and baseline re-record and the ledger resolution"
+    terminal_state: closed_in_commit
+    commit: "library-batch-c2c close-out commit (the commit that adds this file)"
+    verification: docs/reviews/library-batch-c2c-bpass.md
+    notes: "second review round on everything after 0577f760: 7 findings (2 P1, 5 P2), all handled in the close-out commit (golden-split wording, Hamstrings figures and floors re-measured on main's library, stale snapshot sentences, architecture-doc and board counts, two test-hygiene additions each mutated once, a skill-bullet count); no merge damage found. Detail: the Delta round section of the review file."
+  - id: C2C-9
+    title: "OI-443 point (3) and OI-474 closed on the board; C2b ledger item C2B-7 flipped from upstream_blocked"
+    terminal_state: closed_in_commit
+    commit: "library-batch-c2c close-out commit (the commit that adds this file)"
+    verification: docs/audit/library-batch-c2b.closure.yaml
+    notes: "OI-474 moved to closed_issues.md; OI-443 states E230 is applied and its retag_waits bucket is empty (checked against docs/audit/library-old-rows-media-input.json: retag_waits [], E230 in entries). The close-out commit carries the closes-oi: 474 trailer."
