@@ -2465,24 +2465,6 @@ Do NOT re-propose v1. Verified clean by round 2: sending `''` to `user_profile.c
 - **One unit closes four things**: this OI · the (previously unfiled) Edit-Profile off-by-N · the week-5/6 orphan rows · and it retires the reason `deload_evaluator` guard 5 exists
 - ✅ **UNIT 2 SHIPPED 2026-09-12** — `cecda187` on `regen-wave-unit2`, merge `de52f1e8`, CI run 34678095394 green (7/7 jobs). Diagnose `d7f3b2`; record `docs/plan-reviews/regen-wave-unit2.md` (9 rounds, converged, `bpass: accepted`); ledger `docs/audit/regen-wave-unit2.closure.yaml`. Closes the CONTENT half: `contentFlavorIndex((w-1)%4)` cycles the wave past week 4 for both writers, B's loop is anchored to the stored `plan_start` and bounded at the stored `plan_end`, and the AI-coach path (writer C) now writes `current_plan` (a spliced 4-node window preserving completed weeks) — so the phase-arc strip no longer renders a stale wave after a coach regen. **What this did NOT close, each now with its own number:** the window-alignment half and the strip's `isCurrent` clamp (OI-175, pre-existing); **Q7 below — dropped by the re-plan, never decided** (OI-189, filed 2026-09-12 when a post-ship audit found zero mentions of it across v4→v10, nine rounds and the B-pass); and the founder's 2026-09-07 "one implementation" de-duplication, which Unit 2 deliberately did not do — B and C were fixed in place — leaving Unit 1's §4.11 gate WARN-only with no flip owner (OI-190).
 
-## OI-173 — no cold-start weight estimate: a brand-new user, every free user, and any newly-introduced exercise get NO weight guidance at all (P2)
-
-- **Status**: OPEN
-- **Blocked on**: none — founder approved 2026-09-06 as free for all tiers. Needs its own small design decision (what seeds the first estimate) before speccing
-- **Verified**: 2026-09-06 — `plan_generator.dart:234` (`if (weights == null && phase >= 2)`); `progression_resolver.dart:169` (`if (top == null) continue;`); `periodization_engine.dart:112-117` (`suggestedWeight`/`weightCue` set ONLY when `previousWeights` holds the key); `exercise_card.dart:91` (the active-workout prefill needs `lastPerf.lastWeight`)
-- **Identified**: 2026-09-06 · split out of OI-166's brainstorm at founder's direction. It is a NEW FEATURE, never shipped — not a bug — so scoping it separately is a product-scope split, **not** a §4.2 deferral. OI-166 must not depend on it
-- **Symptom — three faces, one cause**:
-  1. **A brand-new user** has no `exlog_*` history, so every exercise is skipped by `progression_resolver.dart:169` and the weight field is blank
-  2. **Every free user, forever** — not because his logs are missing but because the whole progression stage is gated `phase >= 2` and a free user is phase 1 only. His logs are never consulted at plan time at all
-  3. **Any newly-introduced exercise, for any tier** — e.g. a PRO user switching goal in week 4 gets new movements with no history, so they are skipped exactly like a new user's
-- **Today's actual behaviour, for the record**: sets/reps come from the periodization wave for everyone; `suggested_weight` is PRO-and-phase≥2 only; the active-workout card prefills `lastWeight × effectiveLoadFactor` for everyone **but only once history exists**. So the gap is precisely the FIRST session of any exercise — where a beginner is least equipped to guess and most at risk
-- **Founder decision**: free for all tiers. Reason: zero infrastructure cost — no AI, no Edge Function, no API; pure local Dart over Hive (coding rule 8). In practice this means lifting the `phase >= 2` gate at `plan_generator.dart:234` so phase 1 gets plan-time weights too
-- **Two candidate designs (founder offered both; not yet chosen)**:
-  1. Recommend from day 1, seeded from onboarding (experience level / bodyweight / goal). Covers all three faces above
-  2. Leave week 1 blank and calibrate from week-1 logs. ⚠ This is roughly today's behaviour already (the prefill does it at training time), and it structurally **cannot** cover face 3 — an exercise introduced in week 4 has no week-1 history to calibrate from
-- **Open before speccing**: what the exercise library actually carries (load metadata? archetype tagging?) versus deriving purely from onboarding fields — **not yet investigated, do not assume**
-- ⚠ **Safety**: recommending a load to someone who has never lifted carries real injury risk. A cold-start estimate must be deliberately conservative and framed as a starting point, not a prescription
-
 ## OI-174 — schedule rows written past `plan_end` are never pruned, and they delay the PRO phase advance (P2)
 
 - **Status**: OPEN
@@ -5500,19 +5482,6 @@ Source: found while planning the one-LOG-per-exercise Active Workout redesign (`
 Impact: the header likely reads "... 0kg ..." for every scheduled weight lift, a meaningless number on the screen used mid-set.
 
 Fix options (to be planned): show the real prescribed or last weight, or drop the weight segment from `_metaText()` for weight lifts. Confirm on device first. Needs a regression test per §4.4 rule 21.
-
-## OI-353 — Plan suggested_weight (ProgressionResolver) is never read by the Active Workout screen
-
-- **Status**: OPEN
-- **Blocked on**: none (pick up after the `active-workout-log-exercise` batch, founder 2026-10-18)
-- **Verified**: 2026-10-18 - by code read: the plan engine stamps `suggested_weight` / `weight_cue` (`lib/shared/repositories/plan_engine/models.dart` ~:168-233, `periodization_engine.dart` ~:111-117; ProgressionResolver, phase 2+). Outside plan_engine the only readers are `lib/features/ai_coach/widgets/log_workout_sheet.dart:139` and dev tools (`simulation_service.dart`, `plan_xls.dart`). `lib/features/train/**` never reads it: the card prefill uses the first set of the last logged session (`train_provider.dart` `_getLastPerformance` ~:63-116) and the TRY hint is last weight + 2.5 kg.
-- **Identified**: 2026-10-18 · filed via mint_oi.sh from branch `active-workout-log-exercise`
-
-Source: found while planning the Active Workout redesign. Possible writer/reader drift (see `docs/sot_registry.yaml`, `lib/features/train/CLAUDE.md`), or intended behaviour (last session's actual as the prefill) that is simply undocumented.
-
-Impact: the graded, Epley-capped progression prescription reaches only the AI coach log sheet; a phase 2+ user never sees it on the workout screen, and the TRY hint can disagree with the plan.
-
-Fix options (to be planned, not decided): (a) document that last-session values are authoritative and retire the unused plan field from the Train contract; (b) feed `suggested_weight` into the prefill / TRY hint for phase 2+. Do not touch `plan_generator.dart` (rule 14). Needs a diagnose-doc and a behavioural test if (b).
 
 ## OI-355 — Active Workout _persistActiveState reads the build-time widget.data, so the coach snapshot completed-set count lags one toggle
 
