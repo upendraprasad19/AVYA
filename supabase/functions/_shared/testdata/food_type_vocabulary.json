@@ -1,0 +1,202 @@
+{
+  "_comment": "Food-type vocabulary (diet plan Unit 2, docs/plans/diet-food-type.md section 2.1). expected = tolerant read (Dart foodTypeOf, TS normalizeFoodType); known = strict read (TS knownFoodType: null for never-chosen, diet strategies and unknown values). Read by test/core/food_types_test.dart and supabase/functions/_shared/food_types_test.ts. Non-string inputs: null = never chosen (non_veg); any other non-string (a corrupt value) = veg, strict null.",
+  "rows": [
+    {
+      "input": "veg",
+      "expected": "veg",
+      "known": "veg"
+    },
+    {
+      "input": "vegetarian",
+      "expected": "veg",
+      "known": "veg"
+    },
+    {
+      "input": " Veg ",
+      "expected": "veg",
+      "known": "veg"
+    },
+    {
+      "input": "VEGETARIAN",
+      "expected": "veg",
+      "known": "veg"
+    },
+    {
+      "input": "lacto vegetarian",
+      "expected": "veg",
+      "known": "veg"
+    },
+    {
+      "input": "jain",
+      "expected": "veg",
+      "known": "veg"
+    },
+    {
+      "input": "sattvic",
+      "expected": "veg",
+      "known": "veg"
+    },
+    {
+      "input": "non_veg",
+      "expected": "non_veg",
+      "known": "non_veg"
+    },
+    {
+      "input": "non-veg",
+      "expected": "non_veg",
+      "known": "non_veg"
+    },
+    {
+      "input": "Non Veg",
+      "expected": "non_veg",
+      "known": "non_veg"
+    },
+    {
+      "input": "nonveg",
+      "expected": "non_veg",
+      "known": "non_veg"
+    },
+    {
+      "input": "non-vegetarian",
+      "expected": "non_veg",
+      "known": "non_veg"
+    },
+    {
+      "input": "omnivore",
+      "expected": "non_veg",
+      "known": "non_veg"
+    },
+    {
+      "input": "anything",
+      "expected": "non_veg",
+      "known": "non_veg"
+    },
+    {
+      "input": "everything",
+      "expected": "non_veg",
+      "known": "non_veg"
+    },
+    {
+      "input": "eggetarian",
+      "expected": "eggetarian",
+      "known": "eggetarian"
+    },
+    {
+      "input": "EGGETARIAN",
+      "expected": "eggetarian",
+      "known": "eggetarian"
+    },
+    {
+      "input": "eggitarian",
+      "expected": "eggetarian",
+      "known": "eggetarian"
+    },
+    {
+      "input": "egg",
+      "expected": "eggetarian",
+      "known": "eggetarian"
+    },
+    {
+      "input": "ovo-vegetarian",
+      "expected": "eggetarian",
+      "known": "eggetarian"
+    },
+    {
+      "input": "lacto-ovo vegetarian",
+      "expected": "eggetarian",
+      "known": "eggetarian"
+    },
+    {
+      "input": "vegetarian_eggs",
+      "expected": "eggetarian",
+      "known": "eggetarian"
+    },
+    {
+      "input": "pescatarian",
+      "expected": "pescatarian",
+      "known": "pescatarian"
+    },
+    {
+      "input": "pescetarian",
+      "expected": "pescatarian",
+      "known": "pescatarian"
+    },
+    {
+      "input": "vegan",
+      "expected": "vegan",
+      "known": "vegan"
+    },
+    {
+      "input": "plant-based",
+      "expected": "vegan",
+      "known": "vegan"
+    },
+    {
+      "input": "Plant Based",
+      "expected": "vegan",
+      "known": "vegan"
+    },
+    {
+      "input": "keto",
+      "expected": "non_veg",
+      "known": null
+    },
+    {
+      "input": "low_carb",
+      "expected": "non_veg",
+      "known": null
+    },
+    {
+      "input": "low carb",
+      "expected": "non_veg",
+      "known": null
+    },
+    {
+      "input": null,
+      "expected": "non_veg",
+      "known": null
+    },
+    {
+      "input": "",
+      "expected": "non_veg",
+      "known": null
+    },
+    {
+      "input": "   ",
+      "expected": "non_veg",
+      "known": null
+    },
+    {
+      "input": "xyz",
+      "expected": "veg",
+      "known": null
+    },
+    {
+      "input": "flexitarian",
+      "expected": "veg",
+      "known": null
+    },
+    {
+      "input": "paleo",
+      "expected": "veg",
+      "known": null
+    },
+    {
+      "input": 42,
+      "expected": "veg",
+      "known": null
+    },
+    {
+      "input": true,
+      "expected": "veg",
+      "known": null
+    },
+    {
+      "input": [
+        "non_veg"
+      ],
+      "expected": "veg",
+      "known": null
+    }
+  ]
+}

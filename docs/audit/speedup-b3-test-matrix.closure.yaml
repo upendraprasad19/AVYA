@@ -1,0 +1,201 @@
+# Closure ledger — speedup-b3-test-matrix (release-cycle speedup, batch B3: parallel whole-file CI test matrix; OI-275)
+# Gate 40 (validate_audit_closure.dart). One terminal_state per finding; no `deferred:` key.
+# `<branch>@branch` is the in-branch commit form (precedent: speedup-b1-prepush.closure.yaml).
+#
+# Sources: the batch's own units (U7-*), the independent B-pass (BP-1..BP-9, docs/reviews/speedup-b3-test-matrix-bpass.md,
+# 0 P0 / 0 P1 / 4 P2 / 5 P3, all fixed here), the measured baseline the abort conditions are judged against (BASE-1), and the doc ripple.
+
+batch: speedup-b3-test-matrix
+plan_review_record: docs/plan-reviews/speedup-b3-test-matrix.md
+bpass_review: docs/reviews/speedup-b3-test-matrix-bpass.md
+diagnose_docs:
+  - docs/diagnoses/2026-10-10-release-cycle-wallclock-c7a3e9.md
+
+total_findings: 22
+
+findings:
+  # ── Batch units (master plan section 4) ──────────────────────────────
+  - id: U7-1
+    title: "scripts/ci_test_partition.dart + ci_test_partition_lib.dart: sorted-path round-robin over WHOLE test files (the 0-based file i of the sorted list goes to shard (i % total) + 1)"
+    terminal_state: closed_in_commit
+    commit: speedup-b3-test-matrix@branch
+    verification: >
+      Pure core + CLI (exit 64 usage / 2 unsafe path / 3 empty shard / 4 no tests dir; nothing on stdout on any non-zero exit). Real tree: 1,057 files,
+      shards 265/264/264/264, disjoint and complete (also diffed against git's own listing by an independent-oracle test). Tests:
+      test/scripts/ci_test_partition_test.dart (106). Mutants L1-L9 and C-a/C-b RED (bpass file, reviewer's and Round B tables).
+
+  - id: U7-2
+    title: "test.yml: `unit-test` becomes a matrix `shard: [1, 2, 3, 4]` named `Unit Tests shard n/N`, fail-fast off, same TZ and Flutter pin, 20-minute headroom"
+    terminal_state: closed_in_commit
+    commit: speedup-b3-test-matrix@branch
+    verification: >
+      The shard step runs `flutter test $FILES --exclude-tags golden --reporter expanded` with FILES from the partition script; N is
+      strategy.job-total, never a second literal. test/contracts/ci_unit_test_matrix_shape_test.dart (18) EXECUTES the step under `sh -e`
+      with dart/flutter stubbed (empty list fails, failing partition fails, red flutter fails, stray line fails, well-formed list passes) and pins
+      the wiring by name (one matrix key, only two expressions, no continue-on-error, no step `if:`, exact last line). Local run of the whole
+      suite as the 4 shards on the final tree (1,057 files): 8,712 passed, 9 skipped, 0 failed (the single-job CI at the base had 8,588 passed; 8,588 + B3's own 124 tests, partition 106 and shape 18, = 8,712).
+
+  - id: U7-3
+    title: "Aggregator job `unit-tests-gate` named exactly `Unit Tests` (needs: unit-test, if: !cancelled(), passes only when every shard is success)"
+    terminal_state: closed_in_commit
+    commit: speedup-b3-test-matrix@branch
+    verification: >
+      Behaviour test runs the gate script with SHARDS_RESULT = success / failure / cancelled / skipped / empty; only success passes. The env line
+      `SHARDS_RESULT: ${{ needs.unit-test.result }}` and the job-level `if: ${{ !cancelled() }}` are pinned exactly (mutants T1, T2, T3, T4, F2b RED).
+      Exactly one job in the workflow is named `Unit Tests` and job names are unique.
+
+  - id: U7-4
+    title: "scripts/safe_pr_merge_lib.dart knows the shard check names (matrixJobNameTemplates) so a red or cancelled shard refuses the merge even if the gate were misread"
+    terminal_state: closed_in_commit
+    commit: speedup-b3-test-matrix@branch
+    verification: >
+      test/scripts/safe_pr_merge_lib_test.dart (65): a failed `Unit Tests shard 3/4`, a cancelled-only shard, a cancelled-then-rerun shard; a MIRROR
+      asserting the template equals the matrix job's `name:` in test.yml. Mutants S1 (templates emptied) and S2 (shards skipped in the other-checks
+      rule) RED. matrixJobNameTemplates is documentation-only at runtime and says so.
+
+  - id: U7-5
+    title: "ci_test_partition{,_lib}.dart pinned `platform` in docs/blast_radius.yaml, before the scripts/** catch-all"
+    terminal_state: closed_in_commit
+    commit: speedup-b3-test-matrix@branch
+    verification: "First-match-wins order checked by the B-pass (lines before the scripts/** rule); the workflow that calls them is already platform."
+
+  - id: U7-6
+    title: "Re-point the tests that read the CI invocation: pre_push_matches_ci_invocation_test, ci_workflow_concurrency_test, check_ci_flutter_version, hook_gate_placement"
+    terminal_state: closed_in_commit
+    commit: speedup-b3-test-matrix@branch
+    verification: >
+      pre_push_matches_ci_invocation_test takes the first non-comment `flutter test` line of test.yml, which is now the shard line, and still matches the
+      hook's flags (TZ + --exclude-tags golden). The test files that read test.yml (found by grep) were run together green (+281, with the partition test);
+      the whole suite is then run again as the four shards on the final tree (entry U7-2). check_ci_flutter_version counts 6 pins, all 3.41.4
+      (the gate job has no Flutter setup).
+
+  - id: U7-7
+    title: "Path filters / docs-only skip were considered and rejected (docs dirs are read by tests)"
+    terminal_state: verified_clean
+    evidence: >
+      Master plan section 4 (round-2 reviewer, recomputed): 7 of the last 40 merges touch no code path, but docs/reviews has about 81 string literals in
+      test/, docs/audit 72, docs/architecture 57, docs/diagnoses 46, so a docs-only skip is unsafe without per-file mapping. Nothing was built.
+
+  - id: U7-8
+    title: "Within-suite sharding (`flutter test --total-shards`) is NOT what this is"
+    terminal_state: verified_clean
+    evidence: >
+      Tried and reverted 2026-08-10 (18.3% under a 25% floor; it also handed a shard an assertion without the earlier test in the same file). A shard
+      here is a list of WHOLE files, so a file is never split and a shard compiles only its own files. The test.yml comment keeps that history and
+      the glossary row says so; the lib header repeats it.
+
+  - id: U7-9
+    title: "Pre-committed abort conditions: measure the first PR run of this branch"
+    terminal_state: closed_in_commit
+    commit: speedup-b3-test-matrix@branch
+    verification: >
+      Measured on the first PR run of this branch (run 38165332016, PR #104, event pull_request, head 1f976876), with the read-only script that applies the
+      arithmetic fixed in advance. (1) End-to-end wall clock (first job start to last job end, the gate job included): 4.32 min against the limit of 9.84
+      (baseline median 13.12 min over 20 runs, BASE-1), i.e. 67% under the baseline; every job started within 2 s of the run being created. PASS. (2) No test red:
+      all four shards green, and they ran 2,422 + 2,109 + 2,113 + 2,232 = 8,876 tests with 4 + 4 + 1 + 0 = 9 skipped, which is exactly the single-job count of main's
+      run on the base of this PR (run 38145687795, 9ffb2018: 8,752 passed, 9 skipped) plus this batch's own 124 tests (106 + 18), so the shard union ran the same tests as
+      the single job. PASS. (3) see U7-10. Skew: the shards took 3.53 / 4.03 / 4.12 / 4.17 min, slowest/fastest 1.18x against the 1.5x trigger, so no re-balance. The
+      wall clock beat the plan's 6-8 minute estimate because the four setups (checkout, Flutter, pub get) run in parallel as well as the tests.
+
+  - id: U7-10
+    title: "Abort condition (3): a PR run and a main run in flight together queue no worse than today"
+    terminal_state: upstream_blocked
+    blocker: >
+      The condition needs a PR run and a main run in flight at the same time, and none overlapped the first PR run (no main run was in flight), so the pair cannot be
+      measured yet. What is known: the first PR run started every runner job within 2 s of its creation. Arithmetic: a PR run now holds up to 8 runners at once
+      (analyze, audit gates, Deno, build check, 4 shards) and a main run up to 10 (those 8 plus the Supabase integration job and the plan-review record job), 18 in
+      all, under the 20 concurrent jobs GitHub allows a free account; before this batch the pair held 5 + 7 = 12.
+    reopen_when: >
+      The first time a PR run and a main run are in flight together after this batch merges: run the measurement script on both and compare each job's started_at
+      minus its run's created_at. Any job queued for more than a minute reverts the batch or lowers the matrix size.
+
+  - id: BASE-1
+    title: "Baseline for abort condition (1): 20 successful PR runs of `Test & Analyze`, 2026-10-06..10, committed so the number can be re-derived"
+    terminal_state: verified_clean
+    evidence: >
+      Wall clock = first job start to last job end of the run's successful jobs, from `gh api repos/upendraprasad19/AVYA/actions/runs/<id>/jobs`
+      (re-read 2026-10-11): median 13.12 min, min 10.9, p25 12.6, p75 13.4, max 13.9; median queue 3 s; median Unit Tests job 13.03 min; every run had 5 jobs.
+      Run ids with wall minutes: 38044160071 13.4 | 37980632311 13.8 | 37958167385 13.0 | 37933969685 13.3 | 37932631368 13.6 | 37928190879 12.5 |
+      37928169076 13.4 | 37902217360 13.9 | 37827133285 13.1 | 37825232713 13.3 | 37785176101 11.2 | 37669241056 10.9 | 37664788494 11.2 |
+      37660142687 13.3 | 37645407849 13.2 | 37615773306 12.9 | 37615328348 12.7 | 37612494077 12.6 | 37438020531 12.5 | 37435292702 13.2.
+      Threshold = 13.12 x 0.75 = 9.84 min.
+
+  - id: DOC-1
+    title: "Doc ripple: every passage describing the single `Unit Tests` job"
+    terminal_state: closed_in_commit
+    commit: speedup-b3-test-matrix@branch
+    verification: >
+      .github/workflows/test.yml (header comment: history, abort conditions, who reads the check name), docs/architecture/hooks.md (new matrix paragraph; the
+      two stale test.yml line citations replaced by job/step names; the push-skip bullet), docs/naming_conventions.md (rows `test shard` and `Unit Tests (gate)`),
+      dart_test.yaml and scripts/pre-push.sh (comments). No test pins the reworded text (grep). check_context_artifact_budget PASS.
+
+  - id: OI275-C
+    title: "OI-275 stays OPEN after this batch"
+    terminal_state: verified_clean
+    evidence: >
+      Resolved 2026-10-12: the founder added the settings allow-rule `Bash(sh scripts/safe_pr_merge.sh:*)` (item D, carried from B1; read back the same day,
+      see speedup-b1-prepush U4-2) and OI-275 was closed in the oi275-closeout batch (closes-oi: OI-275). B4 was not built: the founder closed OI-275 on
+      2026-10-12 without a B4 go. This is a decision record, not a verification. The agent's recommendation on record is not to build it: after B3 the critical
+      path is the APK build check (3.6-4.3 min) and the slowest shard (4.2-4.6 min), so B4 would save runner minutes, not waiting time; the design stays in plan
+      section 5. This batch itself added no `closes-oi:` trailer and did not edit docs/audit/open_issues.md.
+
+  # ── B-pass findings (docs/reviews/speedup-b3-test-matrix-bpass.md) ───
+  - id: BP-1
+    title: "A red `flutter test` did not provably fail the shard step (`| tee`, `|| true`, step if/continue-on-error survived)"
+    terminal_state: closed_in_commit
+    commit: speedup-b3-test-matrix@branch
+    verification: >
+      runStep(flutterRc: 7) under `sh -e` without pipefail must exit non-zero; the step's exact last line is pinned; no continue-on-error anywhere, no `if:`
+      on the shard job or its steps. Mutants T12, T14, T14b, T15, T16 RED.
+
+  - id: BP-2
+    title: "The gate's input (`needs.unit-test.result`) and its job-level condition were unpinned (job.status, continue-on-error, step if: false survived)"
+    terminal_state: closed_in_commit
+    commit: speedup-b3-test-matrix@branch
+    verification: "Exact env line, single assignment, only the two expressions, the single 4-space job-level `if:`. Mutants T1, T2, T3, F2b RED."
+
+  - id: BP-3
+    title: "A second matrix dimension would leave job-total above the shard list: half the files run nowhere under a green gate"
+    terminal_state: closed_in_commit
+    commit: speedup-b3-test-matrix@branch
+    verification: "_matrixKeys must equal ['shard'] (include/exclude/second dimension fail; inline or fromJson matrix throws); only matrix.shard and strategy.job-total expressions. Mutants T6, T6b, F2c RED."
+
+  - id: BP-4
+    title: "Docs claimed /build-apk Gate 3.5 and reconcile_ci.dart read the `Unit Tests` check name; they read the run-level conclusion of `Test & Analyze`"
+    terminal_state: closed_in_commit
+    commit: speedup-b3-test-matrix@branch
+    verification: "Re-verified by git grep (no 'Unit Tests' in build-apk.md, reconcile_ci.dart, gh_run_lib.dart); reworded in test.yml, hooks.md, naming_conventions.md and the shape test header."
+
+  - id: BP-5
+    title: "Discovery mutants followLinks:true and suffix `test.dart` survived; no independent oracle for the real tree"
+    terminal_state: closed_in_commit
+    commit: speedup-b3-test-matrix@branch
+    verification: "contest.dart / mytest.dart fixture, a symlinked-directory fixture, and a real-tree diff against `git ls-files -z --cached --others -- test`. Mutants L6, L7, L9 RED."
+
+  - id: BP-6
+    title: "Dangling references: stale test.yml line numbers in hooks.md, a closure ledger that did not exist, a baseline with no preserved run ids"
+    terminal_state: closed_in_commit
+    commit: speedup-b3-test-matrix@branch
+    verification: "Line numbers replaced by job/step names; this ledger exists; BASE-1 carries the 20 run ids and the test.yml comment points here."
+
+  - id: BP-7
+    title: "Wording `i % N` for 1-based shards (rule is (i % N) + 1)"
+    terminal_state: closed_in_commit
+    commit: speedup-b3-test-matrix@branch
+    verification: "Reworded in test.yml, ci_test_partition.dart, ci_test_partition_lib.dart, hooks.md and naming_conventions.md (git grep 'i % N' shows only the (i % N) + 1 form)."
+
+  - id: BP-8
+    title: "A non-path line on the partition CLI's stdout would reach `flutter test` as a file argument"
+    terminal_state: closed_in_commit
+    commit: speedup-b3-test-matrix@branch
+    verification: "The step rejects any line not matching ^test/[A-Za-z0-9_./+-]+_test\\.dart$ with an ::error:: before flutter runs. Behaviour tests (six stray shapes, one well-formed control); mutants F8a, F8b, F8c RED."
+
+  - id: BP-9
+    title: "Informational: shard-skew proxies near 1.5x; runner-minute cost not in the abort conditions"
+    terminal_state: verified_clean
+    evidence: >
+      Proxies measured by the reviewer (process-spawning files per shard 12/18/15/18; files declaring a >= 3 min @Timeout 13/23/18/19), both weak. The 1.5x
+      slowest/fastest trigger is evaluated on the first PR run (U7-9). Runner-minute cost is not a constraint: the repository is PUBLIC (standard-runner
+      minutes are free) and the three extra setups run in parallel.
+
+closed_count: 22

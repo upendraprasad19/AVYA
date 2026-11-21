@@ -1,0 +1,1116 @@
+// test/nutrition/curated_diet_plan_strategy_test.dart
+//
+// Diet plan Unit 3b-1a (2026-11-14, docs/plans/diet-strategy-3b.md §3.2-§3.4,
+// §4): Low carb / Keto plans from the curated generator and the swap sheet,
+// against the REAL bundled food database.
+//
+//   G1 Balanced generator golden (Veg / Vegan byte-identity with main 5e6902ce)
+//   G2 Balanced swap golden (plan items + legacy plans holding the new ids)
+//   T10 strategy matrix (16 archetypes x 50 seeds x {Low carb, Keto})
+//   T11 generatePlan builtFor / normalisation
+//   T12 strategy swap
+//
+// The T10 floors are the CONTRACT measured on the built code (minimum - 0.02):
+// an implementation change may raise them, never lower them.
+library;
+
+import 'dart:convert';
+import 'dart:io';
+import 'dart:math';
+
+import 'package:crypto/crypto.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:icanbefitter/core/constants/diet_strategies.dart';
+import 'package:icanbefitter/core/constants/food_types.dart';
+import 'package:icanbefitter/core/utils/bmr_calculator.dart';
+import 'package:icanbefitter/features/nutrition/services/curated_diet_plan_generator.dart';
+import 'package:icanbefitter/features/nutrition/services/diet_plan_catalog.dart';
+import 'package:icanbefitter/features/nutrition/services/diet_plan_catalog_rules.dart';
+import 'package:icanbefitter/features/nutrition/services/diet_plan_generator.dart';
+import 'package:icanbefitter/features/nutrition/services/diet_plan_swap.dart';
+import 'package:icanbefitter/shared/repositories/food_repository.dart';
+
+class _Repo implements FoodRepository {
+  _Repo(List<Map<String, dynamic>> rows)
+      : _byId = {for (final r in rows) r['id'] as String: r};
+  final Map<String, Map<String, dynamic>> _byId;
+
+  @override
+  Map<String, dynamic>? getById(String id) => _byId[id];
+
+  @override
+  List<Map<String, dynamic>> getAll() => _byId.values.toList();
+
+  @override
+  noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
+}
+
+class _A {
+  final String label;
+  final int kcal;
+  final int protein;
+  final String pref;
+  const _A(this.label, this.kcal, this.protein, this.pref);
+}
+
+// The same 16 archetypes as curated_diet_plan_test.dart (plan §4 T5 table).
+const _archetypes = [
+  _A('cut male non-veg', 2000, 144, 'non-veg'),
+  _A('cut male veg', 2000, 144, 'veg'),
+  _A('cut female veg', 1500, 110, 'veg'),
+  _A('cut female non-veg', 1500, 110, 'non-veg'),
+  _A('cut vegan', 1800, 130, 'vegan'),
+  _A('recomp non-veg', 2200, 160, 'non-veg'),
+  _A('maintain veg', 2400, 128, 'veg'),
+  _A('maintain vegan', 2200, 110, 'vegan'),
+  _A('build non-veg', 2700, 126, 'non-veg'),
+  _A('build veg', 3000, 150, 'veg'),
+  _A('1200 floor veg', 1200, 100, 'veg'),
+  _A('1200 floor non-veg', 1200, 100, 'non-veg'),
+  _A('cut male eggetarian', 2000, 144, 'eggetarian'),
+  _A('cut female pescatarian', 1500, 110, 'pescatarian'),
+  _A('maintain eggetarian', 2400, 128, 'eggetarian'),
+  _A('maintain pescatarian', 2400, 128, 'pescatarian'),
+];
+
+const _seeds = 50;
+
+/// The Unit 3b Low carb / Keto only ids.
+const _lowCarbIds = {
+  'F0402', 'F0403', 'F0483', 'F0383', 'F0371', 'F0790', 'F0023', 'F0398',
+  'F0394', 'F0348', 'F1022', 'F1024', 'F0040', 'F0264',
+  // 2026-11-15: vegan-friendly, Low carb PLANS only (not Keto).
+  'F1017', 'F1018', 'F0455', 'F0480', 'F0082',
+};
+
+/// The five Low carb PLANS only ids (the vegan Low carb foods).
+const _lowCarbPlanIds = {'F1017', 'F1018', 'F0455', 'F0480', 'F0082'};
+
+/// Carb target for an archetype: macroSplit over a Balanced pack whose fat
+/// is 25 % of calories (the generator only ever sees the effective carbs).
+double _carbTarget(_A a, DietStrategy s) => BmrCalculator.macroSplit(
+      dailyCalories: a.kcal.toDouble(),
+      proteinGrams: a.protein.toDouble(),
+      balancedCarbs: (a.kcal - 4 * a.protein - 0.25 * a.kcal) / 4,
+      strategy: s,
+    ).carbGrams.toDouble();
+
+/// Independent cap oracle for a Balanced plan (B-pass finding 4): the raw
+/// per-day table plus the TWO documented food-type overrides, NOT
+/// dietFamilyCapFor, which the generator and the swap call themselves.
+int? _balancedCap(DietFamily f, String pref) {
+  if (pref == 'eggetarian' && f == DietFamily.egg) return 2;
+  if (pref == 'pescatarian' && f == DietFamily.fish) return 2;
+  return dietFamilyDailyCap[f];
+}
+
+String _sha(String s) => sha256.convert(utf8.encode(s)).toString();
+
+/// Diet protein rules (2026-11-18, docs/plans/diet-protein-rules.md §A4): Veg
+/// and Vegan draw nothing from the plan's random stream and meet no catalog
+/// change, so their goldens stay PINNED to main 5e6902ce. Non-veg, eggetarian
+/// and pescatarian plans changed on purpose (the protein rule, the egg dishes'
+/// lunch / dinner role, Surmai out of the catalog), so their goldens are
+/// re-baselined (the `b` tests), and only on this plan's say-so.
+bool _vegLike(_A a) => a.pref == 'veg' || a.pref == 'vegan';
+bool _notVegLike(_A a) => !_vegLike(a);
+
+void main() {
+  final rows =
+      (jsonDecode(File('assets/data/food_database.json').readAsStringSync())
+              as List)
+          .cast<Map<String, dynamic>>();
+  final repo = _Repo(rows);
+  final byId = {for (final r in rows) r['id'] as String: r};
+  final entryOf = {for (final e in kDietPlanCatalog) e.foodId: e};
+
+  // Plan review round 2 finding R2-2: Keto has its own golden. Its Veg and
+  // Vegan hash was recaptured on origin/main 5e6902ce before the diet protein
+  // rules (the first capture, 8ecfc8fd, covered all 16 archetypes), so the
+  // claim "Veg / Vegan Keto plans are byte-identical" is a permanent pin, not
+  // a one-time measurement.
+  group('G3 Keto byte-identity with main 5e6902ce (Veg / Vegan)', () {
+    String ketoText(bool Function(_A) take) {
+      final gen = CuratedDietPlanGenerator.forTest(repo);
+      final out = StringBuffer();
+      for (final a in _archetypes.where(take)) {
+        for (var s = 1; s <= 50; s++) {
+          final r = gen.generatePlan(DietPlanInputs(
+              calorieTarget: a.kcal,
+              proteinTarget: a.protein,
+              dietPreference: a.pref,
+              seed: s,
+              strategy: DietStrategy.keto,
+              carbTarget: _carbTarget(a, DietStrategy.keto)));
+          out.writeln('K ${a.label} $s ${r.builtFor.name}');
+          for (final m in r.meals) {
+            out.writeln('  ${m.slotKey}: ${m.items.map((i) => '${i.foodId}/${i.servingG}/${i.calories}').join(',')}');
+          }
+        }
+      }
+      return out.toString();
+    }
+
+    test('G3 the Veg and Vegan Keto plans (vegan Keto built as Balanced) hash '
+        'to the golden captured on main 5e6902ce', () {
+      expect(_sha(ketoText(_vegLike)),
+          'ed3a64d5f5272129792a076a48d97d19a7657125a8aa2c8d153187a84f03df9a');
+    });
+
+    test('G3b the Non-veg, eggetarian and pescatarian Keto plans hash to the '
+        'RE-BASELINED golden (diet protein rules)', () {
+      expect(_sha(ketoText(_notVegLike)), '475ef48a7cee5db6240bc8ec840db4c9c06688433ee28c5ac933c69789dfb992');
+    });
+  });
+
+  group('G1/G2 Balanced byte-identity with main 5e6902ce (Veg / Vegan)', () {
+    String balancedText(bool Function(_A) take) {
+      final gen = CuratedDietPlanGenerator.forTest(repo);
+      final out = StringBuffer();
+      for (final a in _archetypes.where(take)) {
+        for (var s = 1; s <= _seeds; s++) {
+          final plan = gen.generate(DietPlanInputs(
+              calorieTarget: a.kcal,
+              proteinTarget: a.protein,
+              dietPreference: a.pref,
+              seed: s));
+          for (final m in plan) {
+            out.write('${m.slotKey}:');
+            for (final i in m.items) {
+              out.write('${i.foodId}/${i.servingG}/${i.servingDesc}/${i.role};');
+            }
+            out.write('|');
+          }
+          out.writeln();
+        }
+      }
+      return out.toString();
+    }
+
+    test('G1 the Veg and Vegan Balanced plans hash to the golden captured on '
+        'main 5e6902ce', () {
+      expect(_sha(balancedText(_vegLike)),
+          '0956dd8eb2667da5cd2bc579e8b66ef010ba4ff28bcce783fa1857178d879b4b');
+    });
+
+    test('G1b the Non-veg, eggetarian and pescatarian Balanced plans hash to '
+        'the RE-BASELINED golden (diet protein rules)', () {
+      expect(_sha(balancedText(_notVegLike)), 'bba0e956d1b9d6af3d5d6b67ee40005b12eca64c32841b35045f68e78cbb1457');
+    });
+
+    // Diet chart v3 (2026-11-17): the swap now also offers the SWAP-ONLY
+    // entries. G2 keeps proving byte-identity with main on the catalog WITHOUT
+    // them; diet_plan_swap_only_test.dart pins that the new entries do reach a swap.
+    final mainCatalog = [
+      for (final e in kDietPlanCatalog)
+        if (!e.swapOnly) e,
+    ];
+
+    String swapLoopText(bool Function(_A) take) {
+      final gen = CuratedDietPlanGenerator.forTest(repo);
+      final out = StringBuffer();
+      for (final a in _archetypes.where(take)) {
+        for (var s = 1; s <= 5; s++) {
+          final plan = gen.generate(DietPlanInputs(
+              calorieTarget: a.kcal,
+              proteinTarget: a.protein,
+              dietPreference: a.pref,
+              seed: s));
+          final ids = [for (final m in plan) for (final i in m.items) i.foodId];
+          for (final m in plan) {
+            for (var k = 0; k < m.items.length; k++) {
+              final it = m.items[k];
+              for (final role in [it.role, null]) {
+                final alts = swapAlternatives(
+                    foodId: it.foodId,
+                    category: it.category,
+                    calories: it.calories,
+                    role: role,
+                    slotKey: m.slotKey,
+                    dietPreference: a.pref,
+                    planFoodIds: ids,
+                    slotOtherNames: [
+                      for (var j = 0; j < m.items.length; j++)
+                        if (j != k) m.items[j].name,
+                    ],
+                    repo: repo,
+                catalog: mainCatalog);
+                out.writeln('${it.foodId}/$role:'
+                    '${alts.map((x) => '${x.foodId}/${x.servingG}/${x.role}').join(',')}');
+              }
+            }
+          }
+        }
+      }
+      return out.toString();
+    }
+
+    String swapLegacyText() {
+      final gen = CuratedDietPlanGenerator.forTest(repo);
+      final out = StringBuffer();
+      // A saved / legacy Balanced plan holding each Unit 3b id (round 2
+      // finding 3): the role scan and the family counts must not see them.
+      const legacy = [
+        'F0402', 'F0403', 'F0483', 'F0383', 'F0371', 'F0790', 'F0023',
+        'F0398', 'F0394', 'F0348', 'F1022', 'F1024', 'F0040', 'F0264',
+        'F0268', 'F0474',
+      ];
+      final base = gen.generate(const DietPlanInputs(
+          calorieTarget: 2000,
+          proteinTarget: 144,
+          dietPreference: 'non-veg',
+          seed: 1));
+      for (final id in legacy) {
+        final row = repo.getById(id)!;
+        for (final m in base) {
+          final ids = [
+            for (final mm in base) for (final i in mm.items) i.foodId,
+            id,
+          ];
+          for (final pref in ['non-veg', 'veg', 'eggetarian']) {
+            final alts = swapAlternatives(
+                foodId: id,
+                category: row['category'] as String,
+                calories: (row['calories_std'] as num).round(),
+                role: null,
+                slotKey: m.slotKey,
+                dietPreference: pref,
+                planFoodIds: ids,
+                slotOtherNames: [for (final i in m.items) i.name],
+                repo: repo,
+                catalog: mainCatalog);
+            out.writeln('L $id/${m.slotKey}/$pref:'
+                '${alts.map((x) => '${x.foodId}/${x.servingG}/${x.role}').join(',')}');
+          }
+          if (m.items.isNotEmpty) {
+            final it = m.items.first;
+            final alts = swapAlternatives(
+                foodId: it.foodId,
+                category: it.category,
+                calories: it.calories,
+                role: it.role,
+                slotKey: m.slotKey,
+                dietPreference: 'non-veg',
+                planFoodIds: ids,
+                slotOtherNames: [for (final i in m.items.skip(1)) i.name],
+                repo: repo,
+                catalog: mainCatalog);
+            out.writeln('C $id/${m.slotKey}/${it.foodId}:'
+                '${alts.map((x) => '${x.foodId}/${x.servingG}/${x.role}').join(',')}');
+          }
+        }
+      }
+      return out.toString();
+    }
+
+    test('G2a Balanced swaps of the Veg and Vegan plans hash to the golden '
+        'captured on main 5e6902ce', () {
+      expect(_sha(swapLoopText(_vegLike)),
+          '66f10c61c62ab0fdccbde093491c588551458c02a9423b40e20f5625382c2a32');
+    });
+
+    test('G2b Balanced swaps of the other plans + the legacy plans holding '
+        'the new ids hash to the RE-BASELINED golden (diet protein rules)', () {
+      expect(_sha(swapLoopText(_notVegLike) + swapLegacyText()), 'd92127a10700a215188bbe1ff500b8f43f35e19b3eb7eee49479656cbba1306a');
+    });
+  });
+
+  test('the Low carb / Keto only id set is the catalog\'s (seat C finding 6)',
+      () {
+    expect(_lowCarbIds,
+        {for (final e in kDietPlanCatalog) if (e.lowCarbOnly) e.foodId});
+  });
+
+  group('T10 strategy matrix', () {
+    final gen = CuratedDietPlanGenerator.forTest(repo);
+    final fallbacksBefore = gen.lastFallbackCount;
+    final plans = <DietStrategy, Map<_A, List<List<DietMealPlan>>>>{};
+    // What each (strategy, archetype) was BUILT for, one entry per plan.
+    final built = <String, List<DietStrategy>>{};
+    for (final st in [DietStrategy.lowCarb, DietStrategy.keto]) {
+      plans[st] = {
+        for (final a in _archetypes)
+          a: [
+            for (var s = 1; s <= _seeds; s++)
+              () {
+                final r = gen.generatePlan(DietPlanInputs(
+                    calorieTarget: a.kcal,
+                    proteinTarget: a.protein,
+                    dietPreference: a.pref,
+                    seed: s,
+                    strategy: st,
+                    carbTarget: _carbTarget(a, st)));
+                (built['$st ${a.label}'] ??= []).add(r.builtFor);
+                return r.meals;
+              }(),
+          ],
+      };
+    }
+    final fallbacks = gen.lastFallbackCount - fallbacksBefore;
+
+    test('zero fallbacks', () => expect(fallbacks, 0));
+
+    test('every plan is built for its strategy (vegan Keto: Balanced)', () {
+      for (final st in plans.keys) {
+        for (final a in _archetypes) {
+          final want = st == DietStrategy.keto && a.pref == 'vegan'
+              ? DietStrategy.balanced
+              : st;
+          expect(built['$st ${a.label}'], List.filled(_seeds, want),
+              reason: '$st ${a.label}');
+        }
+      }
+    });
+
+    // B-pass seat C finding 3: the template CONTENT, pinned by literals (the
+    // shape test below reads the same table it checks).
+    test('the Low carb and Keto templates are the planned ones', () {
+      String fmt(CuratedSlotTemplate t) =>
+          '${t.slotKey} ${t.share} req[${t.required.map((r) => r.name).join(',')}] '
+          'opt[${t.optional.map((r) => r.name).join(',')}]';
+      expect(curatedTemplatesFor(DietStrategy.keto).map(fmt).toList(), [
+        'breakfast 0.25 req[breakfastProtein] opt[snack,fat]',
+        'mid_morning 0.1 req[snack] opt[]',
+        'lunch 0.3 req[mainProtein,sabzi] opt[side,fat]',
+        'evening 0.1 req[snack] opt[]',
+        'dinner 0.25 req[mainProtein,sabzi] opt[side,fat]',
+      ]);
+      expect(curatedTemplatesFor(DietStrategy.lowCarb).map(fmt).toList(), [
+        'breakfast 0.25 req[breakfastProtein] opt[breakfastMain,fat]',
+        'mid_morning 0.1 req[snack] opt[fruit]',
+        'lunch 0.3 req[mainProtein,grain,sabzi] opt[side,fat]',
+        'evening 0.1 req[snack] opt[fat]',
+        'dinner 0.25 req[mainProtein,sabzi] opt[side,fat]',
+      ]);
+      for (final st in DietStrategy.values) {
+        expect(
+            curatedTemplatesFor(st).fold(0.0, (a, t) => a + t.share),
+            closeTo(1.0, 1e-9),
+            reason: '$st');
+      }
+    });
+
+    // Diet plan observations batch (2026-11-15): the five vegan-friendly foods
+    // are offered to Low carb PLANS only. Keto (whose goldens and floors were
+    // measured without them) and Balanced never see them.
+    // B-pass B3: the five entries by literal (roles, family, portions); the
+    // statistical floors cannot see one food's attributes drift.
+    test('the five Low carb PLANS only entries are pinned', () {
+      const expected = <String, (List<DietRole>, DietFamily, List<double>)>{
+        'F1017': (
+          [DietRole.breakfastProtein, DietRole.mainProtein],
+          DietFamily.soy,
+          [1.0, 1.5, 2.0],
+        ),
+        'F1018': ([DietRole.snack, DietRole.side], DietFamily.soy, [0.5, 1.0]),
+        'F0455': ([DietRole.fat, DietRole.snack], DietFamily.fat, [1.0, 2.0]),
+        'F0480': (
+          [DietRole.fat, DietRole.snack],
+          DietFamily.fat,
+          [0.5, 1.0, 1.5],
+        ),
+        'F0082': (
+          [DietRole.fat, DietRole.snack],
+          DietFamily.nut,
+          [1.0, 2.0, 3.0],
+        ),
+      };
+      expect(expected.keys.toSet(), _lowCarbPlanIds);
+      expected.forEach((id, want) {
+        final e = kDietPlanCatalog.firstWhere((x) => x.foodId == id);
+        expect(e.roles, want.$1, reason: id);
+        expect(e.family, want.$2, reason: id);
+        expect(e.portions, want.$3, reason: id);
+        expect(e.lowCarbOnly && e.lowCarbPlansOnly, isTrue, reason: id);
+      });
+    });
+
+    test('the Low carb PLANS only foods: offered to Low carb, never to Keto '
+        'or Balanced, in plans or in the swap catalog', () {
+      for (final id in _lowCarbPlanIds) {
+        final e = kDietPlanCatalog.firstWhere((x) => x.foodId == id);
+        expect(e.lowCarbOnly && e.lowCarbPlansOnly, isTrue, reason: id);
+        expect(catalogEntryOffered(e, DietStrategy.lowCarb), isTrue, reason: id);
+        expect(catalogEntryOffered(e, DietStrategy.keto), isFalse, reason: id);
+        expect(catalogEntryOffered(e, DietStrategy.balanced), isFalse,
+            reason: id);
+      }
+      Set<String> idsOf(DietStrategy st, {bool? vegan}) => {
+            for (final en in plans[st]!.entries)
+              if (vegan == null || (en.key.pref == 'vegan') == vegan)
+                for (final plan in en.value)
+                  for (final m in plan)
+                    for (final i in m.items) i.foodId,
+          };
+      expect(idsOf(DietStrategy.keto).intersection(_lowCarbPlanIds), isEmpty,
+          reason: 'Keto plans never hold one');
+      // B-pass B3: per food, not any-one-of-five (a mutant that changes one
+      // food's roles would otherwise hide behind the other four).
+      final veganLowCarb = idsOf(DietStrategy.lowCarb, vegan: true);
+      for (final id in _lowCarbPlanIds) {
+        expect(veganLowCarb, contains(id),
+            reason: 'vegan Low carb plans use $id');
+      }
+      expect(
+          swapCatalogFor(kDietPlanCatalog, DietStrategy.keto)
+              .where((e) => _lowCarbPlanIds.contains(e.foodId)),
+          isEmpty);
+      expect(
+          swapCatalogFor(kDietPlanCatalog, DietStrategy.lowCarb)
+              .where((e) => _lowCarbPlanIds.contains(e.foodId))
+              .length,
+          _lowCarbPlanIds.length);
+    });
+
+    // Plan review round 2 finding R2-1: the generator's own call site of the
+    // soy cap (`fits`) is pinned by a plan that REACHES 3 soy items in Low
+    // carb, while no Keto plan goes past 2. dietFamilyCapFor is not the
+    // oracle here: the counts come from the plans' food ids.
+    test('the generator reaches the Low carb soy cap of 3; Keto never passes 2',
+        () {
+      final soyIds = {
+        for (final e in kDietPlanCatalog)
+          if (e.family == DietFamily.soy) e.foodId,
+      };
+      int maxSoy(DietStrategy st) {
+        var best = 0;
+        for (final en in plans[st]!.entries) {
+          for (final plan in en.value) {
+            final n = [
+              for (final m in plan)
+                for (final i in m.items)
+                  if (soyIds.contains(i.foodId)) i.foodId,
+            ].length;
+            if (n > best) best = n;
+          }
+        }
+        return best;
+      }
+
+      expect(maxSoy(DietStrategy.lowCarb), 3);
+      // B-pass B2: Keto's 6 g item cap leaves tofu (F1014) as its only soy
+      // food, so a Keto day holds at most ONE whatever the cap says; this
+      // clause cannot see a Keto cap mutant. The swap-site test below is the
+      // real Keto soy-cap pin.
+      expect(maxSoy(DietStrategy.keto), lessThanOrEqualTo(1));
+    });
+
+    // Plan review round 1 finding R1-4: the daily soy cap has TWO call sites,
+    // the generator and the swap sheet. This pins the swap site (the T10 cap
+    // check uses dietFamilyCapFor itself as its oracle and cannot see a
+    // call site that stops calling it).
+    test('the swap sheet applies the strategy soy cap: Low carb 3, Keto 2, '
+        'Balanced 1', () {
+      const soy = {'F1014', 'F0373', 'F0018', 'F1017'};
+      Set<String> soyOffered(DietStrategy st, List<String> plan) {
+        final row = repo.getById('F0011')!; // a dal, the item being replaced
+        return {
+          for (final x in swapAlternatives(
+              foodId: 'F0011',
+              category: row['category'] as String,
+              calories: 300,
+              role: DietRole.mainProtein.name,
+              slotKey: 'lunch',
+              dietPreference: 'vegan',
+              planFoodIds: plan,
+              slotOtherNames: const [],
+              repo: repo,
+              limit: 100,
+              strategy: st))
+            if (soy.contains(x.foodId)) x.foodId,
+        };
+      }
+
+      // Low carb: two soy items in the plan (cap 3), another is offered; three
+      // (cap reached), none is.
+      expect(soyOffered(DietStrategy.lowCarb, ['F0011', 'F1014', 'F0373']),
+          isNotEmpty);
+      expect(
+          soyOffered(
+              DietStrategy.lowCarb, ['F0011', 'F1014', 'F0373', 'F0018']),
+          isEmpty);
+      // Keto: one soy item (cap 2), tofu is offered; two, none is.
+      expect(soyOffered(DietStrategy.keto, ['F0011', 'F0373']), {'F1014'});
+      expect(soyOffered(DietStrategy.keto, ['F0011', 'F0373', 'F0018']),
+          isEmpty);
+      // Balanced: one soy item (cap 1), none is offered.
+      expect(soyOffered(DietStrategy.balanced, ['F0011', 'F0373']), isEmpty);
+    });
+
+    // Round 4 finding 2 / seat C finding 4: the override and the Keto cap,
+    // pinned by literals, and the override is actually USED.
+    test('the override caps and the Keto item cap are the planned values, '
+        'and some plan goes past a Balanced cap', () {
+      expect(dietFamilyLowCarbCapOverride, {
+        DietFamily.paneer: 2,
+        DietFamily.dairy: 3,
+        DietFamily.fat: 4,
+        DietFamily.soy: 2,
+      });
+      // Low carb PLANS only (2026-11-15): one more soy item a day; Keto and
+      // Balanced keep the caps above.
+      expect(dietFamilyLowCarbPlanCapOverride, {DietFamily.soy: 3});
+      expect(dietFamilyCapFor(DietFamily.soy, DietStrategy.lowCarb), 3);
+      expect(dietFamilyCapFor(DietFamily.soy, DietStrategy.keto), 2);
+      expect(dietFamilyCapFor(DietFamily.soy, DietStrategy.balanced), 1);
+      expect(dietFamilyCapFor(DietFamily.fat, DietStrategy.balanced),
+          dietFamilyDailyCap[DietFamily.fat]);
+      // B-pass B1: the whole cap function pinned by literals (the plan-level
+      // cap check below uses the function itself as its oracle, so a change
+      // that dropped the older Low carb layer would pass it).
+      const expectedCaps = <DietStrategy, Map<DietFamily, int>>{
+        DietStrategy.lowCarb: {
+          DietFamily.paneer: 2,
+          DietFamily.dairy: 3,
+          DietFamily.fat: 4,
+          DietFamily.soy: 3,
+          DietFamily.nut: 1,
+          DietFamily.egg: 1,
+          DietFamily.dal: 2,
+        },
+        DietStrategy.keto: {
+          DietFamily.paneer: 2,
+          DietFamily.dairy: 3,
+          DietFamily.fat: 4,
+          DietFamily.soy: 2,
+          DietFamily.nut: 1,
+          DietFamily.egg: 1,
+          DietFamily.dal: 2,
+        },
+        DietStrategy.balanced: {
+          DietFamily.paneer: 1,
+          DietFamily.dairy: 2,
+          DietFamily.fat: 3,
+          DietFamily.soy: 1,
+          DietFamily.nut: 1,
+          DietFamily.egg: 1,
+          DietFamily.dal: 2,
+        },
+      };
+      expectedCaps.forEach((st, caps) {
+        caps.forEach((f, cap) {
+          expect(dietFamilyCapFor(f, st), cap, reason: '$st $f');
+        });
+      });
+      expect(kKetoItemCarbCap, 6);
+      final over = <DietFamily>{};
+      for (final st in plans.keys) {
+        for (final e in plans[st]!.entries) {
+          for (final plan in e.value) {
+            final counts = <DietFamily, int>{};
+            for (final m in plan) {
+              for (final i in m.items) {
+                final f = entryOf[i.foodId]!.family;
+                counts[f] = (counts[f] ?? 0) + 1;
+              }
+            }
+            counts.forEach((f, n) {
+              final cap = _balancedCap(f, e.key.pref);
+              if (cap != null && n > cap) over.add(f);
+            });
+          }
+        }
+      }
+      // ignore: avoid_print
+      print('families past their Balanced cap: $over');
+      expect(over, isNotEmpty);
+    });
+
+    test('every slot holds its strategy template', () {
+      for (final st in plans.keys) {
+        for (final e in plans[st]!.entries) {
+          // Vegan Keto is built as Balanced (plan §3.3).
+          final used = st == DietStrategy.keto && e.key.pref == 'vegan'
+              ? DietStrategy.balanced
+              : st;
+          final templates = {
+            for (final t in curatedTemplatesFor(used)) t.slotKey: t,
+          };
+          for (final plan in e.value) {
+            expect(plan.map((m) => m.slotKey).toList(),
+                ['breakfast', 'mid_morning', 'lunch', 'evening', 'dinner']);
+            for (final m in plan) {
+              final t = templates[m.slotKey]!;
+              final roles = m.items.map((i) => i.role).toList();
+              for (final r in t.required) {
+                expect(roles.where((x) => x == r.name).length, 1,
+                    reason: '$st ${e.key.label} ${m.name}: $roles');
+              }
+              for (final i in m.items) {
+                expect(t.roles.map((r) => r.name), contains(i.role),
+                    reason: '$st ${e.key.label} ${m.name}: ${i.name}');
+              }
+            }
+          }
+        }
+      }
+    });
+
+    test('Keto: no grain, fruit or breakfast main; no item over the carb cap '
+        '(non-vegan)', () {
+      for (final e in plans[DietStrategy.keto]!.entries) {
+        if (e.key.pref == 'vegan') continue;
+        for (final plan in e.value) {
+          for (final m in plan) {
+            for (final i in m.items) {
+              expect(
+                  {DietRole.grain.name, DietRole.fruit.name,
+                      DietRole.breakfastMain.name},
+                  isNot(contains(i.role)),
+                  reason: '${e.key.label} ${m.name}: ${i.name}');
+              final entry = entryOf[i.foodId]!;
+              final minCarbs = (byId[i.foodId]!['carbs_std'] as num) *
+                  entry.portions.reduce(min);
+              expect(minCarbs, lessThanOrEqualTo(kKetoItemCarbCap),
+                  reason: '${e.key.label}: ${i.name}');
+            }
+          }
+        }
+      }
+    });
+
+    test('family caps hold with the Low carb override; no id twice', () {
+      for (final st in plans.keys) {
+        for (final e in plans[st]!.entries) {
+          for (final plan in e.value) {
+            final ids = [for (final m in plan) for (final i in m.items) i.foodId];
+            expect(ids.toSet().length, ids.length);
+            final counts = <DietFamily, int>{};
+            for (final id in ids) {
+              final f = entryOf[id]!.family;
+              counts[f] = (counts[f] ?? 0) + 1;
+            }
+            // A plan BUILT Balanced (vegan Keto) is judged by Balanced caps.
+            final asBalanced = st == DietStrategy.keto && e.key.pref == 'vegan';
+            counts.forEach((f, n) {
+              final cap = asBalanced
+                  ? _balancedCap(f, e.key.pref)
+                  : dietFamilyCapFor(f, st, foodType: foodTypeOf(e.key.pref));
+              if (cap != null) {
+                expect(n, lessThanOrEqualTo(cap),
+                    reason: '$st ${e.key.label}: $f x$n');
+              }
+            });
+          }
+        }
+      }
+    });
+
+    // 2026-11-15 (diet plan observations, vegan Low carb): the Low carb rows
+    // were re-measured after the vegan Low carb foods, the optional fat at
+    // lunch and in the evening snack, and one more soy item a day. 14 of 16
+    // rows rose (kcal min +0.00..+0.08, three rows unchanged; protein min up
+    // to +0.15); two worst seeds moved down by 0.03 because every Low carb
+    // plan's random stream changed (an optional role draws once more):
+    // 'maintain vegan' protein 0.71 -> 0.68 (its kcal min rose 0.69 -> 0.77)
+    // and '1200 floor veg' kcal 0.90 -> 0.87. Keto rows are untouched
+    // (byte-identical plans, pinned by G3). This is the ONE recorded exception
+    // to "raise only" (docs/sot_registry.yaml
+    // diet_plan_curated.class_constraints): a change to a strategy's random
+    // stream may re-baseline that strategy's rows, each lowered row at most
+    // 0.05 and listed here.
+    // The CONTRACT floors (minimum over 50 seeds minus 0.02; Keto measured
+    // 2026-11-14, Low carb re-measured 2026-11-15). Raise only, except the one
+    // recorded exception above. Carbs: mean <= 1.25 x target.
+    const floors = <String, (double, double)>{
+      'DietStrategy.lowCarb cut male non-veg': (0.90, 0.73),
+      'DietStrategy.lowCarb cut male veg': (0.89, 0.52),
+      'DietStrategy.lowCarb cut female veg': (0.89, 0.47),
+      'DietStrategy.lowCarb cut female non-veg': (0.90, 0.73),
+      'DietStrategy.lowCarb cut vegan': (0.77, 0.56),
+      'DietStrategy.lowCarb recomp non-veg': (0.89, 0.70),
+      'DietStrategy.lowCarb maintain veg': (0.86, 0.60),
+      'DietStrategy.lowCarb maintain vegan': (0.77, 0.68),
+      'DietStrategy.lowCarb build non-veg': (0.88, 0.91),
+      'DietStrategy.lowCarb build veg': (0.78, 0.66),
+      'DietStrategy.lowCarb 1200 floor veg': (0.87, 0.45),
+      'DietStrategy.lowCarb 1200 floor non-veg': (0.90, 0.67),
+      'DietStrategy.lowCarb cut male eggetarian': (0.90, 0.54),
+      'DietStrategy.lowCarb cut female pescatarian': (0.90, 0.72),
+      'DietStrategy.lowCarb maintain eggetarian': (0.85, 0.68),
+      'DietStrategy.lowCarb maintain pescatarian': (0.85, 0.79),
+      'DietStrategy.keto cut male non-veg': (0.87, 0.87),
+      'DietStrategy.keto cut male veg': (0.80, 0.51),
+      'DietStrategy.keto cut female veg': (0.82, 0.59),
+      'DietStrategy.keto cut female non-veg': (0.90, 0.89),
+      'DietStrategy.keto recomp non-veg': (0.83, 0.70),
+      'DietStrategy.keto maintain veg': (0.73, 0.63),
+      'DietStrategy.keto build non-veg': (0.72, 0.92),
+      'DietStrategy.keto build veg': (0.66, 0.65),
+      'DietStrategy.keto 1200 floor veg': (0.87, 0.52),
+      'DietStrategy.keto 1200 floor non-veg': (0.91, 0.81),
+      'DietStrategy.keto cut male eggetarian': (0.85, 0.61),
+      'DietStrategy.keto cut female pescatarian': (0.88, 0.79),
+      'DietStrategy.keto maintain eggetarian': (0.76, 0.72),
+      'DietStrategy.keto maintain pescatarian': (0.76, 0.68),
+    };
+    // B-pass seat C findings 1-2: ceilings and a fiber floor per strategy,
+    // measured on the built code (2026-11-14: kcal max 1.10, carbs per-plan
+    // max Low carb 1.47 / Keto 1.30, fiber min Low carb 0.33 / Keto 0.13 of
+    // a 30 g target), with a 0.02-0.03 margin. Ceilings lower only, floors
+    // raise only. Re-measured 2026-11-15 after the vegan Low carb change
+    // (worst of the 16 Low carb rows): kcal max 1.08, carbs per-plan max 1.41
+    // and mean 1.20 (both 'cut vegan'), fiber min 0.33; none moved toward its
+    // limit, so none is edited (docs/plans/diet-lowcarb-vegan.md section 5).
+    const bounds = <DietStrategy, ({double kMax, double cMax, double fMin})>{
+      DietStrategy.lowCarb: (kMax: 1.12, cMax: 1.50, fMin: 0.31),
+      DietStrategy.keto: (kMax: 1.12, cMax: 1.33, fMin: 0.11),
+    };
+    test('calories, protein and carbs per archetype', () {
+      final rows = <({
+        String label,
+        double kMin,
+        double kMax,
+        double pMin,
+        double cMean,
+        double cMax,
+        double fMin,
+      })>[];
+      for (final st in plans.keys) {
+        for (final e in plans[st]!.entries) {
+          final a = e.key;
+          // Vegan Keto: the defensive generator mapping only (the screen
+          // requests Low carb with the Low carb target, plan §3.5, which is
+          // the Low carb row). T11 pins its builtFor.
+          if (st == DietStrategy.keto && a.pref == 'vegan') continue;
+          final ct = _carbTarget(a, st);
+          final kr = <double>[], pr = <double>[], cr = <double>[];
+          final fr = <double>[];
+          for (final plan in e.value) {
+            var k = 0.0, p = 0.0, c = 0.0, f = 0.0;
+            for (final m in plan) {
+              for (final i in m.items) {
+                k += i.calories;
+                p += i.protein;
+                c += i.carbs;
+                f += i.fiber;
+              }
+            }
+            kr.add(k / a.kcal);
+            pr.add(p / a.protein);
+            cr.add(c / ct);
+            fr.add(f / 30); // the default fiber target
+          }
+          rows.add((
+            label: '$st ${a.label}',
+            kMin: kr.reduce(min),
+            kMax: kr.reduce(max),
+            pMin: pr.reduce(min),
+            cMean: cr.reduce((x, y) => x + y) / cr.length,
+            cMax: cr.reduce(max),
+            fMin: fr.reduce(min),
+          ));
+        }
+      }
+      // ignore: avoid_print
+      print([
+        for (final r in rows)
+          '${r.label}: kcal min ${r.kMin.toStringAsFixed(2)} max '
+              '${r.kMax.toStringAsFixed(2)} protein min '
+              '${r.pMin.toStringAsFixed(2)} carbs mean '
+              '${r.cMean.toStringAsFixed(2)} max ${r.cMax.toStringAsFixed(2)} '
+              'fiber min ${r.fMin.toStringAsFixed(2)}',
+      ].join('\n'));
+      expect(rows.map((r) => r.label).toSet(), floors.keys.toSet());
+      for (final r in rows) {
+        final f = floors[r.label]!;
+        expect(r.kMin, greaterThanOrEqualTo(f.$1), reason: r.label);
+        expect(r.pMin, greaterThanOrEqualTo(f.$2), reason: r.label);
+        expect(r.cMean, lessThanOrEqualTo(1.25), reason: r.label);
+        final b = bounds[r.label.startsWith('DietStrategy.keto')
+            ? DietStrategy.keto
+            : DietStrategy.lowCarb]!;
+        expect(r.kMax, lessThanOrEqualTo(b.kMax), reason: r.label);
+        expect(r.cMax, lessThanOrEqualTo(b.cMax), reason: r.label);
+        expect(r.fMin, greaterThanOrEqualTo(b.fMin), reason: r.label);
+      }
+    });
+
+    test('every Low carb / Keto only food is reachable (round 3 finding 2)',
+        () {
+      final seen = <String>{};
+      for (final st in plans.keys) {
+        for (final e in plans[st]!.entries) {
+          for (final plan in e.value) {
+            for (final m in plan) {
+              for (final i in m.items) {
+                seen.add(i.foodId);
+              }
+            }
+          }
+        }
+      }
+      // (all five Low carb PLANS only foods are reached by Low carb plans)
+      expect(_lowCarbIds.difference(seen), isEmpty);
+      // ... and every non-fat one is reachable in Keto itself.
+      final keto = <String>{
+        for (final e in plans[DietStrategy.keto]!.entries)
+          if (e.key.pref != 'vegan')
+            for (final plan in e.value)
+              for (final m in plan)
+                for (final i in m.items) i.foodId,
+      };
+      // (the five Low carb PLANS only foods are not offered to Keto at all)
+      expect(_lowCarbIds.difference(_lowCarbPlanIds).difference(keto), isEmpty);
+    });
+
+    test('no Low carb / Keto only food in a Balanced plan', () {
+      final g = CuratedDietPlanGenerator.forTest(repo);
+      for (final a in _archetypes) {
+        for (var s = 1; s <= _seeds; s++) {
+          for (final m in g.generate(DietPlanInputs(
+              calorieTarget: a.kcal,
+              proteinTarget: a.protein,
+              dietPreference: a.pref,
+              seed: s))) {
+            for (final i in m.items) {
+              expect(_lowCarbIds, isNot(contains(i.foodId)),
+                  reason: '${a.label} ${m.name}');
+            }
+          }
+        }
+      }
+    });
+  });
+
+  group('T11 generatePlan builtFor', () {
+    final gen = CuratedDietPlanGenerator.forTest(repo);
+    DietStrategy builtFor(DietStrategy s, double? carbs, String pref) =>
+        gen.generatePlan(DietPlanInputs(
+                calorieTarget: 2000,
+                proteinTarget: 144,
+                dietPreference: pref,
+                seed: 1,
+                strategy: s,
+                carbTarget: carbs))
+            .builtFor;
+
+    test('the strategy asked for when it can be built', () {
+      expect(builtFor(DietStrategy.balanced, null, 'non-veg'),
+          DietStrategy.balanced);
+      expect(builtFor(DietStrategy.lowCarb, 100, 'non-veg'),
+          DietStrategy.lowCarb);
+      expect(builtFor(DietStrategy.keto, 25, 'veg'), DietStrategy.keto);
+    });
+
+    test('no carb target -> Balanced, and the Balanced plan itself', () {
+      for (final c in [null, 0.0, -5.0]) {
+        expect(builtFor(DietStrategy.keto, c, 'non-veg'),
+            DietStrategy.balanced);
+      }
+      final asked = gen.generate(const DietPlanInputs(
+          calorieTarget: 2000,
+          proteinTarget: 144,
+          dietPreference: 'non-veg',
+          seed: 3,
+          strategy: DietStrategy.keto));
+      final balanced = gen.generate(const DietPlanInputs(
+          calorieTarget: 2000,
+          proteinTarget: 144,
+          dietPreference: 'non-veg',
+          seed: 3));
+      expect(asked.map((m) => m.items.map((i) => i.foodId).toList()).toList(),
+          balanced.map((m) => m.items.map((i) => i.foodId).toList()).toList());
+    });
+
+    test('vegan Keto (with only the Keto carb target) is built as Balanced, '
+        'never a starved plan (round 3 finding 3)', () {
+      final before = gen.lastFallbackCount;
+      expect(builtFor(DietStrategy.keto, 23, 'vegan'), DietStrategy.balanced);
+      expect(gen.lastFallbackCount, before);
+      expect(builtFor(DietStrategy.lowCarb, 90, 'vegan'),
+          DietStrategy.lowCarb);
+    });
+
+    test('a forced fallback reports Balanced', () {
+      // A catalog with no main protein cannot fill lunch.
+      final g = CuratedDietPlanGenerator.forTest(repo, catalog: [
+        for (final e in kDietPlanCatalog)
+          if (!e.roles.contains(DietRole.mainProtein)) e,
+      ]);
+      final r = g.generatePlan(const DietPlanInputs(
+          calorieTarget: 2000,
+          proteinTarget: 144,
+          dietPreference: 'non-veg',
+          seed: 1,
+          strategy: DietStrategy.keto,
+          carbTarget: 25));
+      expect(r.builtFor, DietStrategy.balanced);
+      expect(g.lastFallbackCount, 1);
+    });
+  });
+
+  group('T12 strategy swap', () {
+    final gen = CuratedDietPlanGenerator.forTest(repo);
+    test('Keto alternatives respect the cap and resolve fat without a role',
+        () {
+      final plan = gen.generate(const DietPlanInputs(
+          calorieTarget: 2000,
+          proteinTarget: 144,
+          dietPreference: 'non-veg',
+          seed: 2,
+          strategy: DietStrategy.keto,
+          carbTarget: 25));
+      final ids = [for (final m in plan) for (final i in m.items) i.foodId];
+      var fatSeen = false;
+      var altCount = 0;
+      final overCapRoles = <DietRole>{};
+      for (final m in plan) {
+        for (var k = 0; k < m.items.length; k++) {
+          final it = m.items[k];
+          // A loaded saved plan has no role: resolve through the Keto
+          // templates (round 1 finding 4).
+          final role = resolveSwapRole(
+              foodId: it.foodId,
+              category: it.category,
+              role: null,
+              slotKey: m.slotKey,
+              strategy: DietStrategy.keto);
+          expect(role, isNotNull, reason: '${m.name}: ${it.name}');
+          if (it.role == DietRole.fat.name) {
+            expect(role, DietRole.fat, reason: it.name);
+            fatSeen = true;
+          }
+          final alts = swapAlternatives(
+              foodId: it.foodId,
+              category: it.category,
+              calories: it.calories,
+              role: null,
+              slotKey: m.slotKey,
+              dietPreference: 'non-veg',
+              planFoodIds: ids,
+              slotOtherNames: [
+                for (var j = 0; j < m.items.length; j++)
+                  if (j != k) m.items[j].name,
+              ],
+              repo: repo,
+              strategy: DietStrategy.keto);
+          altCount += alts.length;
+          for (final a in alts) {
+            final e = entryOf[a.foodId]!;
+            expect(
+                (byId[a.foodId]!['carbs_std'] as num) * e.portions.reduce(min),
+                lessThanOrEqualTo(kKetoItemCarbCap),
+                reason: '${m.name}: ${it.name} -> ${a.name}');
+          }
+          // Seat C finding 5: the cap has something to remove. Some entry of
+          // this role passes the diet and is over the cap.
+          if (role != null &&
+              kDietPlanCatalog.any((e) =>
+                  e.roles.contains(role) &&
+                  (byId[e.foodId]!['carbs_std'] as num) *
+                          e.portions.reduce(min) >
+                      kKetoItemCarbCap)) {
+            overCapRoles.add(role);
+          }
+        }
+      }
+      expect(fatSeen, isTrue, reason: 'precondition: the plan has a fat item');
+      expect(altCount, greaterThan(0), reason: 'precondition: alternatives');
+      expect(overCapRoles, isNotEmpty,
+          reason: 'precondition: an over-cap entry exists for a swapped role');
+    });
+
+    test('Low carb alternatives: offered, never a grain at dinner, override '
+        'caps', () {
+      final plan = gen.generate(DietPlanInputs(
+          calorieTarget: 2000,
+          proteinTarget: 144,
+          dietPreference: 'veg',
+          seed: 4,
+          strategy: DietStrategy.lowCarb,
+          carbTarget: _carbTarget(const _A('x', 2000, 144, 'veg'),
+              DietStrategy.lowCarb)));
+      final ids = [for (final m in plan) for (final i in m.items) i.foodId];
+      var count = 0;
+      for (final m in plan) {
+        for (var k = 0; k < m.items.length; k++) {
+          final it = m.items[k];
+          final alts = swapAlternatives(
+              foodId: it.foodId,
+              category: it.category,
+              calories: it.calories,
+              role: it.role,
+              slotKey: m.slotKey,
+              dietPreference: 'veg',
+              planFoodIds: ids,
+              slotOtherNames: [
+                for (var j = 0; j < m.items.length; j++)
+                  if (j != k) m.items[j].name,
+              ],
+              repo: repo,
+              strategy: DietStrategy.lowCarb);
+          count += alts.length;
+          for (final a in alts) {
+            expect(a.role, it.role, reason: '${m.name}: ${it.name}');
+            if (m.slotKey == 'dinner') {
+              expect(a.role, isNot(DietRole.grain.name));
+            }
+          }
+        }
+      }
+      expect(count, greaterThan(0));
+    });
+
+    test('Balanced never resolves fat and never offers a Low carb only food',
+        () {
+      // Seat C finding 5: Balanced resolves a Low carb only id exactly as an
+      // id the catalog does not hold (filtered before the role scan), while
+      // Keto resolves it from the catalog.
+      for (final slot in ['breakfast', 'lunch', 'dinner']) {
+        for (final id in _lowCarbIds) {
+          final cat = byId[id]!['category'] as String? ?? '';
+          expect(
+              resolveSwapRole(
+                  foodId: id, category: cat, role: null, slotKey: slot),
+              resolveSwapRole(
+                  foodId: 'F_NOT_IN_CATALOG',
+                  category: cat,
+                  role: null,
+                  slotKey: slot),
+              reason: '$id $slot');
+          // Mutant F3 survived the comparison above: every Low carb only
+          // id's real category maps to the same role its catalog entry
+          // gives. With no category to fall back on, an id the Balanced
+          // swap cannot see resolves to nothing.
+          expect(
+              resolveSwapRole(
+                  foodId: id, category: '', role: null, slotKey: slot),
+              isNull,
+              reason: '$id $slot (no category)');
+        }
+      }
+      // The same lookup under Low carb does reach the catalog entry.
+      expect(
+          resolveSwapRole(
+              foodId: 'F0371',
+              category: '',
+              role: null,
+              slotKey: 'breakfast',
+              strategy: DietStrategy.lowCarb),
+          DietRole.breakfastProtein);
+      expect(
+          resolveSwapRole(
+              foodId: 'F0402',
+              category: 'dairy',
+              role: null,
+              slotKey: 'lunch',
+              strategy: DietStrategy.keto),
+          DietRole.fat);
+      final alts = swapAlternatives(
+          foodId: 'F0019',
+          category: 'protein',
+          calories: 165,
+          role: DietRole.mainProtein.name,
+          slotKey: 'lunch',
+          dietPreference: 'non-veg',
+          planFoodIds: const ['F0019'],
+          slotOtherNames: const [],
+          repo: repo,
+          limit: 100);
+      expect(alts, isNotEmpty);
+      expect(alts.map((a) => a.foodId).toSet().intersection(_lowCarbIds),
+          isEmpty);
+    });
+  });
+}

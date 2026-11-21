@@ -1,0 +1,49 @@
+# Closure ledger - generator-step1-1bf2 (Unit 1B-F2, OI-495: the core-list overlays copied into the library's own
+# fields, seed v27, cloud re-seed 176). Plan docs/plans/2026-11-12-generator-1bf2-overlay-copy.md, record
+# docs/plan-reviews/generator-step1-1bf2.md, diagnose f2c7a9. Gate 40 (validate_audit_closure.dart).
+batch: generator-step1-1bf2
+plan_review_record: docs/plan-reviews/generator-step1-1bf2.md
+total_findings: 7
+closed_count: 7
+
+findings:
+  - id: 1BF2-DATA-COPY
+    title: "The 27 overlay rows carry the copied movement_pattern / target_focus and no row carries slot_pattern or slot_focus (26 kept rows through the importer's overlay-copy stage, N20 in the Batch C source; N19 stays hip_isolation)"
+    terminal_state: closed_in_commit
+    commit: generator-step1-1bf2@branch
+    verification: "scripts/data/library_overlay_copy_v27.json; add_library_batch_c_v15.js --check OK; test/contracts/library_overlay_copy_test.dart group 1; test/scripts/library_media_importer_test.dart overlay-copy group (a) to (e); exercise_library_core_fields_contract_test.dart, exercise_library_schema_contract_test.dart (13 optional keys); frozen reference re-recorded for exactly the 26 kept ids."
+
+  - id: 1BF2-READER
+    title: "CoreListSelector reads the rows' own movement_pattern / target_focus (three reads), so the picker, queryV4 (the thin-day top-up) and the muscle label read one set of labels"
+    terminal_state: closed_in_commit
+    commit: generator-step1-1bf2@branch
+    verification: "core_list_selector.dart patternOk, target, subFocusMatches; library_overlay_copy_test.dart group 2 (per-row identity with the old reader on the v26 library) and group 3 (a planted overlay moves no core-list pool of any V4 slot, phase 1 and 2, bodyweight and full_gym; the old reader would have moved some); whole-plan identity: golden and the 2,304-plan dump; the three overlay reads restored one at a time each redden group 3."
+
+  - id: 1BF2-SEED-V27
+    title: "Seed v27: a v26 install rewrites the 27 rows by id and changes nothing else"
+    terminal_state: closed_in_commit
+    commit: generator-step1-1bf2@branch
+    verification: "test/contracts/library_seed_v27_upgrade_behavioral_test.dart (v26 bundle sha256 pin, the upgrade, MIRROR); seed tests v16 and v18 to v26 rebuild their older bundles through test/helpers/library_overlay_v26.dart with their sha pins unchanged; the version constant back to 26 reddens the upgrade test."
+
+  - id: 1BF2-CLOUD-176
+    title: "Cloud re-seed migration 176: 12 rows' movement_pattern (TEXT, first element) change; the inline rollback restores the 12 old values as bare strings"
+    terminal_state: closed_in_commit
+    commit: generator-step1-1bf2@branch
+    verification: "scripts/data/library_f2_movement_pattern.json; seed_exercise_library.js BATCH (previous 175); exercise_library_cloud_seeded_test.dart (F2 shape, restores equal 175's values, exactly 12 tuples differ from 175, mutations); exercise_library_cloud_tuples_match_test.dart; local docker rehearsal (175 loaded, 176 changes exactly 12 rows, the inline rollback restores the pre-state, ROLLBACK clean); live read-only before apply 934 / 870 / 64 and the 12 old values."
+
+  - id: 1BF2-ROLLBACK-EMITTER
+    title: "The seed generator's rollback emitter wrote a JSON array as a text[] literal; for the TEXT columns movement_pattern / exercise_type Postgres silently assignment-casts that to the text '{vertical_push}' (measured), so the rollback would have corrupted rows. It now writes firstOrNull"
+    terminal_state: closed_in_commit
+    commit: generator-step1-1bf2@branch
+    verification: "seed_exercise_library.js TEXT_FROM_ARRAY / restoreValue; exercise_library_cloud_seeded_test.dart sandbox mutation (the emitter without firstOrNull is reported by the F2 shape check); the silent cast measured in the local rehearsal."
+
+  - id: 1BF2-TOPUP-RATCHET
+    title: "The one plan change: the injured thin-day top-up finds the copied-label rows; sweep f_repeat_pairs30 full_gym thin days 27 -> 21, no block rose"
+    terminal_state: closed_in_commit
+    commit: generator-step1-1bf2@branch
+    verification: "test/helpers/injury_floor_sweep_lib.dart kThinCeilings (lowered, ratchet exact); the six injured sweeps on the final tree; golden 1,010 personas equal; 2,304-plan dump byte-identical."
+
+  - id: 1BF2-AUDIT-RECOUNT
+    title: "The plan audit's own checks read the target fields, so its flags now judge by the picker's labels: unloaded 116 -> 46, improvised 275 -> 0, verdicts suitable 482 -> 513, needs work 1519 -> 1763, not suitable 303 -> 28 (a measurement correction; no plan changed)"
+    terminal_state: verified_clean
+    evidence: "plan_dump.jsonl byte-identical to main (sha256 5b3da296...); audit.json re-baselined on the final tree; stated in the diagnose doc and on the board."
