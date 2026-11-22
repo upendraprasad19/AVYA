@@ -7425,3 +7425,54 @@ change). Implemented on branch `oi479-clear-conversation` (plan converged after 
 migration 177 applied live and ledgered, the PR merged, and on a device: clear the chat, the thread empties, the coach
 does not refer to the hidden turns, and after a sign-out and sign-in (online) the thread stays empty.
 - **Outcome**: Clear conversation hides the thread (a synced clear time, never a delete); diagnose `5970aa`.
+
+## OI-173 — no cold-start weight estimate: a brand-new user, every free user, and any newly-introduced exercise get NO weight guidance at all (P2)
+
+- **Status**: CLOSED · 2026-11-21 · declined by the founder (no code change) · the commit carrying `closes-oi: OI-173`
+- **Blocked on**: none — founder approved 2026-09-06 as free for all tiers. Needs its own small design decision (what seeds the first estimate) before speccing
+- **Verified**: 2026-09-06 — `plan_generator.dart:234` (`if (weights == null && phase >= 2)`); `progression_resolver.dart:169` (`if (top == null) continue;`); `periodization_engine.dart:112-117` (`suggestedWeight`/`weightCue` set ONLY when `previousWeights` holds the key); `exercise_card.dart:91` (the active-workout prefill needs `lastPerf.lastWeight`)
+- **Identified**: 2026-09-06 · split out of OI-166's brainstorm at founder's direction. It is a NEW FEATURE, never shipped — not a bug — so scoping it separately is a product-scope split, **not** a §4.2 deferral. OI-166 must not depend on it
+- **Symptom — three faces, one cause**:
+  1. **A brand-new user** has no `exlog_*` history, so every exercise is skipped by `progression_resolver.dart:169` and the weight field is blank
+  2. **Every free user, forever** — not because his logs are missing but because the whole progression stage is gated `phase >= 2` and a free user is phase 1 only. His logs are never consulted at plan time at all
+  3. **Any newly-introduced exercise, for any tier** — e.g. a PRO user switching goal in week 4 gets new movements with no history, so they are skipped exactly like a new user's
+- **Today's actual behaviour, for the record**: sets/reps come from the periodization wave for everyone; `suggested_weight` is PRO-and-phase≥2 only; the active-workout card prefills `lastWeight × effectiveLoadFactor` for everyone **but only once history exists**. So the gap is precisely the FIRST session of any exercise — where a beginner is least equipped to guess and most at risk
+- **Founder decision**: free for all tiers. Reason: zero infrastructure cost — no AI, no Edge Function, no API; pure local Dart over Hive (coding rule 8). In practice this means lifting the `phase >= 2` gate at `plan_generator.dart:234` so phase 1 gets plan-time weights too
+- **Two candidate designs (founder offered both; not yet chosen)**:
+  1. Recommend from day 1, seeded from onboarding (experience level / bodyweight / goal). Covers all three faces above
+  2. Leave week 1 blank and calibrate from week-1 logs. ⚠ This is roughly today's behaviour already (the prefill does it at training time), and it structurally **cannot** cover face 3 — an exercise introduced in week 4 has no week-1 history to calibrate from
+- **Open before speccing**: what the exercise library actually carries (load metadata? archetype tagging?) versus deriving purely from onboarding fields — **not yet investigated, do not assume**
+- ⚠ **Safety**: recommending a load to someone who has never lifted carries real injury risk. A cold-start estimate must be deliberately conservative and framed as a starting point, not a prescription
+- **Outcome**: founder decision 2026-11-21: NO cold-start weight estimate. A brand-new user, a free user and any first-time exercise keep the blank weight box and log their own first comfortable weight; from then on the last logged session drives the prefill. Why: a guessed load for someone who has never lifted carries injury risk, and there is no calibration data (live read-only check 2026-11-21: 5 tester accounts, no real beginner, one woman entry, some stored weights look like summary-row aggregates, OI-307). The `phase >= 2` gate in `plan_generator.dart` stays as it is. Nothing was built; the design questions above are moot.
+
+
+## OI-353 — Plan suggested_weight (ProgressionResolver) is never read by the Active Workout screen
+
+- **Status**: CLOSED · 2026-11-21 · resolved as option (a), documentation only · the commit carrying `closes-oi: OI-353`
+- **Blocked on**: none (pick up after the `active-workout-log-exercise` batch, founder 2026-10-18)
+- **Verified**: 2026-10-18 - by code read: the plan engine stamps `suggested_weight` / `weight_cue` (`lib/shared/repositories/plan_engine/models.dart` ~:168-233, `periodization_engine.dart` ~:111-117; ProgressionResolver, phase 2+). Outside plan_engine the only readers are `lib/features/ai_coach/widgets/log_workout_sheet.dart:139` and dev tools (`simulation_service.dart`, `plan_xls.dart`). `lib/features/train/**` never reads it: the card prefill uses the first set of the last logged session (`train_provider.dart` `_getLastPerformance` ~:63-116) and the TRY hint is last weight + 2.5 kg.
+- **Identified**: 2026-10-18 · filed via mint_oi.sh from branch `active-workout-log-exercise`
+
+Source: found while planning the Active Workout redesign. Possible writer/reader drift (see `docs/sot_registry.yaml`, `lib/features/train/CLAUDE.md`), or intended behaviour (last session's actual as the prefill) that is simply undocumented.
+
+Impact: the graded, Epley-capped progression prescription reaches only the AI coach log sheet; a phase 2+ user never sees it on the workout screen, and the TRY hint can disagree with the plan.
+
+Fix options (to be planned, not decided): (a) document that last-session values are authoritative and retire the unused plan field from the Train contract; (b) feed `suggested_weight` into the prefill / TRY hint for phase 2+. Do not touch `plan_generator.dart` (rule 14). Needs a diagnose-doc and a behavioural test if (b).
+- **Outcome**: resolved as option (a), founder 2026-11-21. The Active Workout screen reads only the last logged session (the prefill is that session's first set weight x `effectiveLoadFactor`, the `TRY:` line is that weight + 2.5 kg); `lib/features/train/**` never reads the plan's `suggested_weight`. This is now written down in `lib/features/train/CLAUDE.md` (row `active_workout_weight_prefill`). The plan field is NOT deleted from the engine: `models.dart`, `periodization_engine.dart`, the AI coach `log_workout_sheet.dart` (`:139`) and the dev tools still read it, so removing it would be a plan-engine change with no benefit here. No code changed.
+
+## OI-435 — Scorecard progression dimension is a binary one-set proxy: 75 of 213 families fail it on the 914-row library (each by 1 set at phase 1 to 2), so progression fell 100.0 to 62.9 and overall 86.1 to 81.1 with no user-visible change
+
+- **Status**: CLOSED · 2026-11-21 · obsolete: the scorer was deleted · the commit carrying `closes-oi: OI-435`
+- **Blocked on**: none
+- **Verified**: 2026-10-26 - by running the scorecard matrix on the Batch C1 tree and a throwaway probe over the same plans (output kept with the batch's evidence, not committed). `plan_scorecard.dart:287-321` (`computeProgression`) groups the personas into families `goal|equipment|days|experience|injury`, sums the library `default_sets` of every picked exercise per phase (1, 2, 6) and scores the family 100 only if the totals never fall (tolerance 0.001), else 0. On the 285-row library every family scored 100 (0 of 606 personas at 0). On the 914-row library 225 of 606 personas score 0, which is 75 of 213 families, and every failure is the phase 1 to phase 2 step. The sizes: `build_muscle|home_dumbbells|3|intermediate` 82 to 81 sets, `build_muscle|basic_gym|3|intermediate` 87 to 86, `build_muscle|basic_gym|5|beginner` 75 to 74, `build_muscle|basic_gym|5|intermediate` 109 to 108: one set in a hundred, and phase 6 then rises by 22 to 66 sets over phase 2 in those four families.
+- **Identified**: 2026-10-26 · filed via mint_oi.sh from branch `library-batch-c`
+
+**The defect.** The scorecard's `progression` dimension is a binary test on a proxy. The proxy is the sum of each picked row's `default_sets`, which is what the selector picks, not the set count the periodization prescribes (`volume_titration.dart:43-46` says the same of the volume bands: the scorecard scores "a `default_sets` selection proxy"). It moved when the library grew for a reason that has nothing to do with progression: the 629 new rows carry `default_sets` 3 (mean 3.00 over the 2,183 picks the matrix makes of them) while the older rows the matrix picks average 3.57 over 17,363 picks, and in phase 2 (when `foundationalOnly` ends) one 3-set row displaces one 4-set row. The result is `progression` 100.0 to 62.9 and `overall` 86.1 to 81.1, from this dimension alone: over coverage, balance, volume and realism together (personalization and safety stay 100) 416 personas rose and 121 fell (410 and 121 beyond 0.2), `coverage` +0.2, `balance` 0.0, `volume` +1.3, `realism` +5.8, fallback picks 2,864 to 1,679. Batch C1 regenerated `baseline_scorecard.json` and `baseline_plans.md` with these numbers so the gate (`scorecard_gate_test.dart`, `overall >= baseline - 0.05`) passes against an honest baseline; it did not change the scoring.
+
+**Why it matters.** A baseline whose `progression` is 62.9 hides the next real progression regression under a number already low, and `overall` is the figure the gate watches. No user-visible change was found: the matrix cannot see the real periodization, and the real engine's weekly sets come from the wave, not from `default_sets` sums.
+
+**Fix shape.** Score the family on the prescribed sets (the `PlannedExercise.sets` after periodization, which the matrix does not run) or give the test a tolerance that a one-set swap cannot cross (for example, a fall of more than 2 percent of the week's sets), then re-baseline and show `progression` back near 100 on the 914-row library.
+
+**Done when.** The scorer is changed; a test builds a family whose phase 2 total is 10 percent below phase 1 and shows it scores 0, and the 75 one-set families score 100; `baseline_scorecard.json` is regenerated and the diagnose doc of that batch names the before and after. Blast radius: `feature` (test tooling only).
+- **Outcome**: obsolete, closed with no fix. Unit 1B-F (`e93d7278`, 2026-11-11, OI-489) deleted the scorecard (`test/plan_generator/plan_scorecard.dart`, `scorecard_gate_test.dart`, `generate_baseline.dart`, `baseline/baseline_scorecard.json`, `baseline/baseline_plans.md`), so the `progression` dimension this entry describes no longer exists and there is no score to fix. Verified 2026-11-21 on `origin/main`: `git ls-tree` shows none of those files and `git grep computeProgression` finds nothing. NOT checked: whether the current core-list gates cover a phase-to-phase set-volume drop; if that is wanted it is a new entry, not this one.
+

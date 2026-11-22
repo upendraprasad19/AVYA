@@ -2465,24 +2465,6 @@ Do NOT re-propose v1. Verified clean by round 2: sending `''` to `user_profile.c
 - **One unit closes four things**: this OI · the (previously unfiled) Edit-Profile off-by-N · the week-5/6 orphan rows · and it retires the reason `deload_evaluator` guard 5 exists
 - ✅ **UNIT 2 SHIPPED 2026-09-12** — `cecda187` on `regen-wave-unit2`, merge `de52f1e8`, CI run 34678095394 green (7/7 jobs). Diagnose `d7f3b2`; record `docs/plan-reviews/regen-wave-unit2.md` (9 rounds, converged, `bpass: accepted`); ledger `docs/audit/regen-wave-unit2.closure.yaml`. Closes the CONTENT half: `contentFlavorIndex((w-1)%4)` cycles the wave past week 4 for both writers, B's loop is anchored to the stored `plan_start` and bounded at the stored `plan_end`, and the AI-coach path (writer C) now writes `current_plan` (a spliced 4-node window preserving completed weeks) — so the phase-arc strip no longer renders a stale wave after a coach regen. **What this did NOT close, each now with its own number:** the window-alignment half and the strip's `isCurrent` clamp (OI-175, pre-existing); **Q7 below — dropped by the re-plan, never decided** (OI-189, filed 2026-09-12 when a post-ship audit found zero mentions of it across v4→v10, nine rounds and the B-pass); and the founder's 2026-09-07 "one implementation" de-duplication, which Unit 2 deliberately did not do — B and C were fixed in place — leaving Unit 1's §4.11 gate WARN-only with no flip owner (OI-190).
 
-## OI-173 — no cold-start weight estimate: a brand-new user, every free user, and any newly-introduced exercise get NO weight guidance at all (P2)
-
-- **Status**: OPEN
-- **Blocked on**: none — founder approved 2026-09-06 as free for all tiers. Needs its own small design decision (what seeds the first estimate) before speccing
-- **Verified**: 2026-09-06 — `plan_generator.dart:234` (`if (weights == null && phase >= 2)`); `progression_resolver.dart:169` (`if (top == null) continue;`); `periodization_engine.dart:112-117` (`suggestedWeight`/`weightCue` set ONLY when `previousWeights` holds the key); `exercise_card.dart:91` (the active-workout prefill needs `lastPerf.lastWeight`)
-- **Identified**: 2026-09-06 · split out of OI-166's brainstorm at founder's direction. It is a NEW FEATURE, never shipped — not a bug — so scoping it separately is a product-scope split, **not** a §4.2 deferral. OI-166 must not depend on it
-- **Symptom — three faces, one cause**:
-  1. **A brand-new user** has no `exlog_*` history, so every exercise is skipped by `progression_resolver.dart:169` and the weight field is blank
-  2. **Every free user, forever** — not because his logs are missing but because the whole progression stage is gated `phase >= 2` and a free user is phase 1 only. His logs are never consulted at plan time at all
-  3. **Any newly-introduced exercise, for any tier** — e.g. a PRO user switching goal in week 4 gets new movements with no history, so they are skipped exactly like a new user's
-- **Today's actual behaviour, for the record**: sets/reps come from the periodization wave for everyone; `suggested_weight` is PRO-and-phase≥2 only; the active-workout card prefills `lastWeight × effectiveLoadFactor` for everyone **but only once history exists**. So the gap is precisely the FIRST session of any exercise — where a beginner is least equipped to guess and most at risk
-- **Founder decision**: free for all tiers. Reason: zero infrastructure cost — no AI, no Edge Function, no API; pure local Dart over Hive (coding rule 8). In practice this means lifting the `phase >= 2` gate at `plan_generator.dart:234` so phase 1 gets plan-time weights too
-- **Two candidate designs (founder offered both; not yet chosen)**:
-  1. Recommend from day 1, seeded from onboarding (experience level / bodyweight / goal). Covers all three faces above
-  2. Leave week 1 blank and calibrate from week-1 logs. ⚠ This is roughly today's behaviour already (the prefill does it at training time), and it structurally **cannot** cover face 3 — an exercise introduced in week 4 has no week-1 history to calibrate from
-- **Open before speccing**: what the exercise library actually carries (load metadata? archetype tagging?) versus deriving purely from onboarding fields — **not yet investigated, do not assume**
-- ⚠ **Safety**: recommending a load to someone who has never lifted carries real injury risk. A cold-start estimate must be deliberately conservative and framed as a starting point, not a prescription
-
 ## OI-174 — schedule rows written past `plan_end` are never pruned, and they delay the PRO phase advance (P2)
 
 - **Status**: OPEN
@@ -5501,19 +5483,6 @@ Impact: the header likely reads "... 0kg ..." for every scheduled weight lift, a
 
 Fix options (to be planned): show the real prescribed or last weight, or drop the weight segment from `_metaText()` for weight lifts. Confirm on device first. Needs a regression test per §4.4 rule 21.
 
-## OI-353 — Plan suggested_weight (ProgressionResolver) is never read by the Active Workout screen
-
-- **Status**: OPEN
-- **Blocked on**: none (pick up after the `active-workout-log-exercise` batch, founder 2026-10-18)
-- **Verified**: 2026-10-18 - by code read: the plan engine stamps `suggested_weight` / `weight_cue` (`lib/shared/repositories/plan_engine/models.dart` ~:168-233, `periodization_engine.dart` ~:111-117; ProgressionResolver, phase 2+). Outside plan_engine the only readers are `lib/features/ai_coach/widgets/log_workout_sheet.dart:139` and dev tools (`simulation_service.dart`, `plan_xls.dart`). `lib/features/train/**` never reads it: the card prefill uses the first set of the last logged session (`train_provider.dart` `_getLastPerformance` ~:63-116) and the TRY hint is last weight + 2.5 kg.
-- **Identified**: 2026-10-18 · filed via mint_oi.sh from branch `active-workout-log-exercise`
-
-Source: found while planning the Active Workout redesign. Possible writer/reader drift (see `docs/sot_registry.yaml`, `lib/features/train/CLAUDE.md`), or intended behaviour (last session's actual as the prefill) that is simply undocumented.
-
-Impact: the graded, Epley-capped progression prescription reaches only the AI coach log sheet; a phase 2+ user never sees it on the workout screen, and the TRY hint can disagree with the plan.
-
-Fix options (to be planned, not decided): (a) document that last-session values are authoritative and retire the unused plan field from the Train contract; (b) feed `suggested_weight` into the prefill / TRY hint for phase 2+. Do not touch `plan_generator.dart` (rule 14). Needs a diagnose-doc and a behavioural test if (b).
-
 ## OI-355 — Active Workout _persistActiveState reads the build-time widget.data, so the coach snapshot completed-set count lags one toggle
 
 - **Status**: OPEN
@@ -6359,21 +6328,6 @@ Filed by the sync-storm-first-sweep batch (A1 = W1 migrator fix, W2 save progres
 **Done when.** A widget test that dismisses the sheet while a delayed `validate-promo` answer is pending and sees no exception; mutate the guard and watch it go red.
 
 
-## OI-435 — Scorecard progression dimension is a binary one-set proxy: 75 of 213 families fail it on the 914-row library (each by 1 set at phase 1 to 2), so progression fell 100.0 to 62.9 and overall 86.1 to 81.1 with no user-visible change
-
-- **Status**: OPEN
-- **Blocked on**: none
-- **Verified**: 2026-10-26 - by running the scorecard matrix on the Batch C1 tree and a throwaway probe over the same plans (output kept with the batch's evidence, not committed). `plan_scorecard.dart:287-321` (`computeProgression`) groups the personas into families `goal|equipment|days|experience|injury`, sums the library `default_sets` of every picked exercise per phase (1, 2, 6) and scores the family 100 only if the totals never fall (tolerance 0.001), else 0. On the 285-row library every family scored 100 (0 of 606 personas at 0). On the 914-row library 225 of 606 personas score 0, which is 75 of 213 families, and every failure is the phase 1 to phase 2 step. The sizes: `build_muscle|home_dumbbells|3|intermediate` 82 to 81 sets, `build_muscle|basic_gym|3|intermediate` 87 to 86, `build_muscle|basic_gym|5|beginner` 75 to 74, `build_muscle|basic_gym|5|intermediate` 109 to 108: one set in a hundred, and phase 6 then rises by 22 to 66 sets over phase 2 in those four families.
-- **Identified**: 2026-10-26 · filed via mint_oi.sh from branch `library-batch-c`
-
-**The defect.** The scorecard's `progression` dimension is a binary test on a proxy. The proxy is the sum of each picked row's `default_sets`, which is what the selector picks, not the set count the periodization prescribes (`volume_titration.dart:43-46` says the same of the volume bands: the scorecard scores "a `default_sets` selection proxy"). It moved when the library grew for a reason that has nothing to do with progression: the 629 new rows carry `default_sets` 3 (mean 3.00 over the 2,183 picks the matrix makes of them) while the older rows the matrix picks average 3.57 over 17,363 picks, and in phase 2 (when `foundationalOnly` ends) one 3-set row displaces one 4-set row. The result is `progression` 100.0 to 62.9 and `overall` 86.1 to 81.1, from this dimension alone: over coverage, balance, volume and realism together (personalization and safety stay 100) 416 personas rose and 121 fell (410 and 121 beyond 0.2), `coverage` +0.2, `balance` 0.0, `volume` +1.3, `realism` +5.8, fallback picks 2,864 to 1,679. Batch C1 regenerated `baseline_scorecard.json` and `baseline_plans.md` with these numbers so the gate (`scorecard_gate_test.dart`, `overall >= baseline - 0.05`) passes against an honest baseline; it did not change the scoring.
-
-**Why it matters.** A baseline whose `progression` is 62.9 hides the next real progression regression under a number already low, and `overall` is the figure the gate watches. No user-visible change was found: the matrix cannot see the real periodization, and the real engine's weekly sets come from the wave, not from `default_sets` sums.
-
-**Fix shape.** Score the family on the prescribed sets (the `PlannedExercise.sets` after periodization, which the matrix does not run) or give the test a tolerance that a one-set swap cannot cross (for example, a fall of more than 2 percent of the week's sets), then re-baseline and show `progression` back near 100 on the 914-row library.
-
-**Done when.** The scorer is changed; a test builds a family whose phase 2 total is 10 percent below phase 1 and shows it scores 0, and the 75 one-set families score 100; `baseline_scorecard.json` is regenerated and the diagnose doc of that batch names the before and after. Blast radius: `feature` (test tooling only).
-
 ## OI-437 — Batch C1 held rows: release protocol and owners (13 token, 4 name_collision, 53 low_confidence, 9 picture) and 529 shipped rows that no picture check covers
 
 - **Status**: OPEN
@@ -6936,3 +6890,38 @@ Diet plan Unit 4a hides Supplements from anyone under 18 (`kSupplementsMinAgeYea
 **What it is.** Unit 3B (diagnose `21da5f`, plan `docs/plans/2026-11-16-generator-step3b-goal-list.md`, founder d4 / d69 / d71 / d72) makes Build, Cut and Maintain the only goals a user or the coach can choose (`FitnessGoals.selectableTokens`) and moves a stored `strength` / `recompose` goal after every successful restore (`LegacyGoalHealer`). The two rows stay in `FitnessGoals._byToken` (and `kLegacyReachableOnlyGoalTokens`) because a STORED value can still hold them while an older build is in use; the engine still serves them: the `strength` plan goal (`split_resolver.dart` the V3 / V4 Squat / Bench / Deadlift splits, `exercise_selector.dart` the `softFor` arm and `:763`, `session_budget.dart` the `strength` rows of `_bands` / `_caps` / `_goalBands`, `goal_reps.dart` comments), `cardio_finisher.dart`'s `recompose` arm, the dead `plan_screen._mapGoal` / `target_weight_check.dart` arms, the label arms in `onboarding_chat_screen.dart`, and the server copy branches (`morning-alert/message.ts`, `future-prediction/index.ts`).
 
 **Done when.** With no older build in use: the two rows, the allowlist entries, the engine paths and the arms above are deleted; the golden persona grid drops `strength` (`test/helpers/generator_golden_personas.dart`, 1,010 -> 770; the audit 2,304 -> 1,728) with every remaining key byte-identical; `LegacyGoalHealer` stays (or is deleted with a stated reason). Round 1 of the 3B plan review measured the test and fixture churn at about 70 files. Blast radius `platform`, its own plan and x2 review.
+
+## OI-519 — Android PRO purchase via RevenueCat + Play Billing (+51): own plan, catastrophic class
+
+- **Status**: OPEN
+- **Blocked on**: founder inputs, not code: the Play price (decided later, 2026-11-21), the RevenueCat account and the Console subscription products (Console > Monetize > Subscriptions unlocks once the +50 AAB with the billing permission is uploaded), and whether Google's payments profile needs more than that (unconfirmed). Google's production verdict on +49 does not block the plan, only the release order.
+- **Verified**: 2026-11-21, the groundwork on main (PR #306): `lib/core/constants/purchase_mode.dart` has `PurchaseMode.playBilling`, which behaves as `none` until this build exists; `pubspec.yaml` carries a dormant `purchases_flutter: 11.0.4`; the decision is ADR-0022 and the design sketch is section 8 of `docs/plans/2026-11-20-android-play-billing.md`.
+- **Identified**: 2026-11-21 · filed via mint_oi.sh from branch `oi-revenuecat-51`
+
+**What it is.** versionCode +51 is the build where Android sells PRO through Play Billing via RevenueCat (ADR-0022); web stays on Razorpay. +50 (the no-purchase build) ships first. Section 8 of the plan is design only: the RevenueCat App User ID must be the Supabase user id, and a RevenueCat webhook Edge Function must mirror entitlements into the `subscriptions` table, which stays the single source the gate reads (CLAUDE.md §4.4 rules 5 and 19). Also in scope: auto-renewing subscriptions, our free-days codes (OI-347) plus an optional Play intro offer, an already-PRO user seeing "PRO until <date>" instead of a buy button, and switching `playBilling` from a stub to the real purchase path in `PaywallSheet` (still the only paywall).
+
+**Why its own plan.** It touches payment, an Edge Function and the `subscriptions` schema, so it is catastrophic class: a fresh plan with the §4.12 ×2 review, a `/hermes-pass`, the feature-flag protocol of §4.6 (old path kept until the flag rolls), and a `bpass: accepted` plus `hermes: accepted` plan-review record before merge. It must not be folded into another batch.
+
+**Done when.** A tester on an internal-testing build buys PRO through Play Billing, the `subscriptions` row appears through the webhook, and the gate unlocks PRO on that account and on the web; renewal, cancellation, refund and restore are each shown to update that row; the +51 AAB is built through `/build-apk` with `--purchase-mode play_billing` (the skill refuses that value today, so the skill changes in the same plan).
+
+## OI-520 — A Dependabot pub PR regenerates pubspec.lock under an SDK other than the pinned Flutter 3.41.4 and nothing in CI notices, because CI re-resolves with a plain flutter pub get
+
+- **Status**: OPEN
+- **Blocked on**: `blocked_on_user`: the founder's choice of guard (options a, b, c under "Done when"); no upstream dependency
+- **Verified**: 2026-11-21 against `main` `20c0e40b`: `flutter pub get --enforce-lockfile` exits 0 on the lock `main` held at `2c2b3496` (before the Dependabot PRs) and exits 65 ("Would change 31 dependencies") at `a6c1825d` (the PR #20 merge) and on the committed lock since, and exits 0 on the regenerated lock of branch `lock-resolve-3414`; the committed lock asks for `riverpod` and `flutter_riverpod` 3.4.3, which pub.dev lists with `sdk: ^3.12.0` while Flutter 3.41.4 bundles Dart 3.11.1, so the file was written by a resolver that accepts Dart 3.12 (inferred from the pub.dev API, not recorded in the lock, whose own `sdks.dart` still reads `>=3.11.1 <4.0.0`; Dart 3.12 is not the pinned toolchain); the committed lock also contradicts itself (`sdks.flutter` `>=3.38.4` while it carries `image_picker` 1.2.4 and `onesignal_flutter` 5.8.0, whose pubspecs declare `flutter: ">=3.41.0"`) and carries `analyzer` 14.7.0 although `.github/dependabot.yml:33-34` ignores `analyzer`; it also asks for `meta` 1.19.0 where the SDK's own `packages/flutter/pubspec.yaml:18` pins `meta: 1.17.0`; the commits that changed the lock were authored by `dependabot[bot]` (PRs #20, #21 and #9, all merged 2026-11-21, a Saturday; the lock-changing commits are dated 03:55, 03:57 and 04:47 UTC that day, and the branch names `dependabot/pub/image_picker-1.2.3` and `dependabot/pub/onesignal_flutter-5.6.7` carry older versions than the commits they merged, so a Dependabot rebase also regenerates the lock; when each PR was opened is not established); CI stayed green because every job runs a plain `flutter pub get` (`.github/workflows/test.yml:60,144,321,436,533,618`) and `scripts/vercel_build.sh:41` does the same; `.github/dependabot.yml:13-19` runs the pub ecosystem weekly on Mondays at 06:00 IST, so the next scheduled run is 2026-11-23
+- **Identified**: 2026-11-21 · filed via mint_oi.sh from branch `lock-resolve-3414`
+
+**What it is.** Dependabot rewrites `pubspec.lock` with its own resolver, and the Dependabot exemption of the merge gate checks the branch prefix, the commit authors and that every changed path is a manifest (`scripts/check_plan_review_record_exists.dart:611-621`, `scripts/plan_review_record_lib.dart:189,200-202`), and nothing about whether the lock still satisfies the pinned SDK. A lock that Flutter 3.41.4 cannot honour passes every CI job, because each job re-resolves, so the first symptom is a dirty working tree after `pub get` on a developer machine (a build, a pre-push analyze, a worktree that then fails `retire_worktree.dart`). Branch `lock-resolve-3414` re-commits the lock the pinned SDK resolves; this entry is the recurrence guard that branch does not add.
+
+**Done when.** One of: (a) CI runs `flutter pub get --enforce-lockfile` on the pinned SDK so a lock that would change fails the PR (a new gate, with the mutation proof of CLAUDE.md §4.4 rule 24, and the Dependabot exemption must keep working for a manifest-only PR); (b) the Dependabot pub configuration is changed so it cannot regenerate the lock outside the pinned SDK; (c) the founder states here that the lock is regenerated by hand after each Dependabot pub merge. Close with the commit of the chosen guard.
+
+## OI-521 — package:test is imported by 53 test files but declared in no pubspec section; it reaches the lock only because riverpod 3.2.1 depends on it
+
+- **Status**: OPEN
+- **Blocked on**: `blocked_on_user`: the founder's choice between declaring `test` and moving the imports (options under "Done when"); no upstream dependency
+- **Verified**: 2026-11-21: `pubspec.yaml` has no `test:` entry in any section; 53 files under `test/` import `package:test/` (e.g. `test/edge_functions/ai_proxy_hard_failure_lib_test.dart:1`, which the analyzer already reports as info `depend_on_referenced_packages`); the lock committed on `main` has no `test:` entry (only `test_api`), while the lock Flutter 3.41.4 resolves has one because the pub-cache `riverpod-3.2.1/pubspec.yaml:28` declares `test: ^1.0.0`; `riverpod` 3.4.3 depends on `test_api` and not on `test` (pub.dev API, with `sdk: ^3.12.0`: a network fact, not in the repo or the pub cache); `meta` is likewise imported by `lib/features/ai_coach/repositories/ai_coach_repository.dart:32` and declared nowhere
+- **Identified**: 2026-11-21 · filed via mint_oi.sh from branch `lock-resolve-3414`
+
+**What it is.** The test suite compiles only because a transitive dependency of a state-management package happens to depend on `test`. The riverpod line this repo is held at (3.2.1: `flutter_riverpod` 3.3.1 pins it exactly, and the 3.4 line declares Dart 3.12 per the pub.dev API while Flutter 3.41.4 bundles Dart 3.11.1) depends on `test`; riverpod 3.4.3 (pub.dev API) does not, so the lock loses `test` as soon as a toolchain upgrade lets riverpod move up, and 53 test files can then no longer resolve `package:test`. The same shape holds for `meta`, which `lib/` imports once (`ai_coach_repository.dart:32`) and which the Flutter SDK pins (`packages/flutter/pubspec.yaml:18`).
+
+**Done when.** The dependency is made explicit one way or the other, with the choice recorded here: (a) `test` (and `meta`) declared in `dev_dependencies` / `dependencies` with constraints that hold under the SDK's own pins (Flutter 3.41.4 pins `test_api` 0.7.10, which `test` 1.30.0 satisfies), accepting that a Flutter upgrade then re-resolves them; or (b) the 53 imports move to `package:flutter_test/flutter_test.dart` where it provides the same names, and `meta` is declared. After either, `flutter pub get --enforce-lockfile` exits 0 and `flutter analyze` shows no `depend_on_referenced_packages` for `test` or `meta`.
