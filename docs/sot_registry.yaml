@@ -15093,13 +15093,13 @@ concepts:
         line_range: 521-615
         method: LogExerciseController.reopen
       - file: lib/features/train/screens/active_workout/exercise_card.dart
-        line_range: 683-711
+        line_range: 685-713
         method: _onFieldChanged
       - file: lib/features/train/screens/active_workout/exercise_card.dart
-        line_range: 744-778
+        line_range: 746-780
         method: _mirrorFrom
       - file: lib/features/train/screens/active_workout/exercise_card.dart
-        line_range: 810-841
+        line_range: 812-843
         method: _onLogPressed
     readers:
       - file: lib/features/train/providers/train_provider.dart
@@ -19872,7 +19872,7 @@ concepts:
         semantic: per-row
         fields_read: [loggedInChat, reopenedExercises]
       - file: lib/features/train/screens/active_workout/exercise_card.dart
-        line_range: 1029-1318
+        line_range: 1031-1320
         method: _chatEntryIn / _chatKeptBack / _chatLoggedHeader / _entryRows / _buildLogRow (didUpdateWidget re-inits the controllers on the KEEP transition)
         semantic: per-row
         fields_read: [loggedInChat, reopenedExercises]

@@ -3,7 +3,7 @@ bug_id: 7c3e91
 date: 2026-11-21
 batch: start-prefill-fixes
 status: fixed
-blast_radius: feature
+blast_radius: account
 tier: M
 symptom: |
   Founder, web app, account Upendra, 2026-11-21 (three observations).
@@ -183,3 +183,12 @@ no start path.
 - The 2-times ceiling can hide a legitimate high-rep value (a plan of 8 push-ups
   after a log of 20). The LAST line still shows the real number and the box is
   editable.
+
+## B-pass residuals (2026-11-22, review 584b3fe1e801)
+
+- **Weight half of a stray row (P2).** The ceiling guards the reps only: a last row of 110 kg x 35 still prefills 110
+  kg (and TRY suggests 112.5 kg). The founder approved a reps rule only (2026-11-21), and the stored stray row is
+  already soft-deleted. Distrusting the whole row (weight too) is a separate product call: blocked_on_user in the ledger.
+- **Plan strings the ceiling does not parse (P3).** `planTopReps` takes a bare number or `a-b`; `8-12 reps`, `10-12/side`,
+  an en dash and `30s` get NO ceiling, which is the pre-change behavior (never worse).
+- **expandable_day_card shows raw `lastReps` (P3).** It is the real history, like the LAST line, not a prefill.

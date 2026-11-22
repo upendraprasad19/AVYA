@@ -59,7 +59,7 @@ Future<void> _openSheet(
 void main() {
   testWidgets('fonts degrade first', renderFontsFirst);
 
-  testWidgets("today's START WORKOUT closes the sheet THEN calls onStart once",
+  testWidgets("today's START WORKOUT closes the sheet and calls onStart once",
       (tester) async {
     var called = 0;
     await _openSheet(tester, date: DateTime.now(), onStart: () => called++);
@@ -113,5 +113,13 @@ void main() {
         reason: 'the Today card and the day sheet both call it');
     expect('beginWorkoutWithReadiness('.allMatches(src).length, 1,
         reason: 'the start sequence lives in ONE method');
+    // B-pass F2: the sheet is only startable when the day resolves, so START
+    // is disabled instead of closing the sheet and doing nothing.
+    expect(
+        RegExp(r'onStart:\s*workoutDayForDate\(DateTime\.now\(\)\)\s*==\s*null\s*\?\s*null\s*:\s*\(\)\s*=>\s*_startTodayWorkout')
+            .allMatches(src)
+            .length,
+        1,
+        reason: 'the sheet gets a null onStart when no workout day resolves');
   });
 }

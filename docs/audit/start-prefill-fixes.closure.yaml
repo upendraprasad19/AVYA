@@ -105,3 +105,33 @@ findings:
       Owed by the founder after the web deploy: tap today's calendar day and START; open Active
       Workout on Barbell Back Squat and on Push Up to Side Plank and read the reps boxes. The
       fixes are proven in widget and provider tests only.
+
+  - id: B1
+    title: "B-pass F1: the weight half of a stray last row is still prefilled (reps-only ceiling)"
+    terminal_state: blocked_on_user
+    reason: >
+      The founder approved a reps rule only. Treating the whole latest row as untrusted (no weight
+      prefill, no TRY suggestion from it) is a product call. The stored stray row is already soft-deleted.
+
+  - id: B2
+    title: "B-pass F2: sheet START enabled while the day does not resolve (silent no-op)"
+    terminal_state: closed_in_commit
+    commit: start-prefill-fixes@branch
+    verification: >
+      home_screen passes a null onStart when workoutDayForDate(today) is null, so the sheet disables
+      START. Pinned by a source regex in day_detail_sheet_start_behavioral_test.
+
+  - id: B3
+    title: "B-pass F3, F4, F5: test name overstated order; exercise_card registry ranges; diagnose blast radius"
+    terminal_state: closed_in_commit
+    commit: start-prefill-fixes@branch
+    verification: >
+      Test renamed to what it asserts; four exercise_card.dart line_range entries shifted +2 in
+      docs/sot_registry.yaml; diagnose blast_radius set to account.
+
+  - id: B4
+    title: "B-pass F6: planTopReps ignores 8-12 reps, 10-12/side, en dash, 30s"
+    terminal_state: verified_clean
+    evidence: >
+      Such plans get no ceiling, the pre-change behavior, so the new code is never worse; written into
+      the diagnose-doc residuals. Reviewer verified planTopReps('8–12') and ('10-12/side') return null.

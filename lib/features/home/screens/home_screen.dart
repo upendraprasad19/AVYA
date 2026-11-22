@@ -518,7 +518,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                 // The sheet's START WORKOUT runs the SAME start path as the
                 // Today card (`_startTodayWorkout`); it used to only close
                 // the sheet (diagnose 7c3e91).
-                onStart: () => _startTodayWorkout(context, ref),
+                onStart: workoutDayForDate(DateTime.now()) == null ? null : () => _startTodayWorkout(context, ref),
               );
             },
             onDayLongPress: (date, schedule) {

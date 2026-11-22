@@ -77,7 +77,7 @@ void main() {
   test('the Home screen routes both of its START buttons to one method', () {
     final src = _code('lib/features/home/screens/home_screen.dart');
     expect(src, contains('beginWorkoutWithReadiness'));
-    expect(RegExp(r'onStart: \(\) => _startTodayWorkout\(context, ref\)')
+    expect(RegExp(r'onStart:[^\n]*\(\) => _startTodayWorkout\(context, ref\)')
         .allMatches(src)
         .length, 2,
         reason: 'the Today card and the calendar day sheet');
