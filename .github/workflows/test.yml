@@ -56,17 +56,24 @@ jobs:
           channel: stable
           cache: true
 
-      # OI-520: the committed pubspec.lock must be one THIS SDK can honour. Every other job below runs a
-      # plain `pub get`, which silently RE-RESOLVES a lock the pinned Flutter cannot honour, so a lock
-      # written by a newer Dart (the three Dependabot lock commits of 2026-11-21 were) stayed green in
-      # CI and dirtied every developer tree. This is the required job that enforces it: the flag exits 65
-      # ("Would change N dependencies") and never writes the file. A red step here: on the PR branch run
-      # `flutter pub get` with the pinned Flutter, commit pubspec.lock and push; or move the Flutter pin
-      # everywhere in one batch (scripts/check_ci_flutter_version.dart pins the literals).
-      # test/contracts/ci_lockfile_enforced_test.dart pins this step: the first `run:` of the job, this
-      # exact command, no `if:` / `continue-on-error:`, and `Analyze` still a required merge check.
+      # OI-520: the committed pubspec.lock must be EXACTLY what the pinned Flutter writes. The install
+      # steps of the other jobs re-resolve a drifted lock silently and stay green (the three Dependabot
+      # lock commits of 2026-11-21 did not match what Flutter 3.41.4 writes, and CI passed on all of
+      # them, while every developer tree went dirty after `pub get`). The next two steps are the one
+      # place CI looks, and `safe_pr_merge.sh` requires this job (scripts/safe_pr_merge_lib.dart).
+      # `flutter pub get --enforce-lockfile` is NOT used: measured, it exits 0 on a lock whose only
+      # drift is metadata (an `sdks` floor, a direct/transitive flag) and the next plain `pub get`
+      # still dirties the tree. The failing log shows the diff.
+      # A red verify step: regenerate the lock with the pinned Flutter on a NORMAL branch and commit it
+      # (a human commit on a `dependabot/*` branch loses the merge gate's Dependabot exemption and no
+      # record can restore it: scripts/check_plan_review_record_exists.dart:611-619), or move the Flutter
+      # pin everywhere in one batch (scripts/check_ci_flutter_version.dart pins the literals).
+      # test/contracts/ci_lockfile_enforced_test.dart pins the two steps and the job around them.
       - name: Install dependencies
-        run: flutter pub get --enforce-lockfile
+        run: flutter pub get
+
+      - name: Verify pubspec.lock is what the pinned Flutter writes (OI-520)
+        run: git diff --exit-code -- pubspec.lock
 
       - name: Flutter analyze (zero warnings allowed)
         run: flutter analyze --no-fatal-infos
