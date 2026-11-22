@@ -963,7 +963,15 @@ extension SyncServiceNutrition on SyncService {
   @visibleForTesting
   static bool debugFailPullCopyCleanup = false;
 
+  /// Test seam: makes the delete step throw after it has started (B-pass F3),
+  /// to prove the screens still re-read and the run-once flag stays unset.
+  @visibleForTesting
+  static bool debugFailPullCopyDelete = false;
+
   Future<void> _cleanupNutritionPullCopies(String userId) async {
+    // B-pass F3: once a delete has started, the screens re-read in `finally`,
+    // so a delete that throws part-way never leaves stale totals on screen.
+    var deleteStarted = false;
     try {
       if (debugFailPullCopyCleanup) {
         throw StateError('debugFailPullCopyCleanup');
@@ -986,12 +994,15 @@ extension SyncServiceNutrition on SyncService {
       ];
       if (copies.isNotEmpty) {
         if (ownerChangedSince(userId)) return;
+        deleteStarted = true;
+        if (debugFailPullCopyDelete) {
+          throw StateError('debugFailPullCopyDelete');
+        }
         await box.deleteAll(copies);
       }
       if (ownerChangedSince(userId)) return;
       await _hive.syncBox.put(flagKey, true);
       if (copies.isNotEmpty) {
-        NutritionWriteService.invalidateAfterSync();
         unawaited(ErrorTelemetry.logEvent('nutrition_pull_copies_removed',
             message: 'count=${copies.length}'));
       }
@@ -999,6 +1010,10 @@ extension SyncServiceNutrition on SyncService {
       debugPrint('[SyncService._cleanupNutritionPullCopies] $e');
       unawaited(ErrorTelemetry.recordNonFatal(e, st,
           reason: 'sync_nutrition_pull_copy_cleanup'));
+    } finally {
+      if (deleteStarted && !ownerChangedSince(userId)) {
+        NutritionWriteService.invalidateAfterSync();
+      }
     }
   }
 

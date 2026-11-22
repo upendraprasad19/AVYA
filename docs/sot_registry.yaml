@@ -2612,7 +2612,7 @@ concepts:
         line_range: 941-989
         method: restoreFoodLog (same owner rule and target)
       - file: lib/core/services/nutrition_write_service.dart
-        line_range: 1066-1089
+        line_range: 1073-1095
         method: kNlogKeyShape / baseLogKey / firstFreeLogKey
       - file: lib/core/services/nlog_key_migrator.dart
         line_range: 1-179
@@ -3780,7 +3780,7 @@ concepts:
       assumption (it cannot detect a lowered production cap).
     writers:
       - file: lib/core/services/sync_service.dart
-        line_range: 3118-3189
+        line_range: 3154-3225
         method: _fetchAllRows
         notes: |
           The ONE paging loop: owner-scoped (.eq user_id) first, optional since filter,
@@ -5943,7 +5943,7 @@ concepts:
           a stale failure from the aborted attempt cannot hold the marker closed
           (B-pass reviewer B F4).
       - file: lib/core/services/sync_service.dart
-        line_range: 2947-3020
+        line_range: 2983-3056
         method: _reportSyncFailure
         notes: first statement calls `RestoreFailureCollector.note(opType)`; the single failure funnel.
       - file: lib/core/services/day_rollover_service.dart
@@ -7952,7 +7952,7 @@ concepts:
     reader_manifest_complete: true
     readers:
       - file: lib/core/services/sync_service.dart
-        line_range: 2600-2665
+        line_range: 2983-3056
         method: _reportSyncFailure (funnel — all sync failures route through here)
         semantic: pass-through
         fields_read: []

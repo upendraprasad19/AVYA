@@ -5,7 +5,8 @@ blast_radius: platform
 review_rounds: 4
 ground_truth_verified: true
 verdict: converged
-bpass: pending
+bpass: accepted
+bpass_review: docs/reviews/oi348-device-walk-bpass.md
 ---
 
 # Plan-review record — OI-348 device walk, Landing 1a-i (B1 nutrition doubling hotfix + P4 grey free PRO pill)
@@ -26,4 +27,4 @@ Writer `SyncService._pullNutritionLogs` (`sync_service.dart`, put under the clou
 `flutter analyze lib/`: no errors or warnings. Tests: `test/sync/nutrition_pull_removed_behavioral_test.dart` (10), `test/ai_coach/coach_free_status_pill_test.dart` (2), `test/pro_pill_button_test.dart` (+3), with the pinned contracts green. Mutations recorded in diagnose b1d2a8 and the closure ledger `docs/audit/oi348-landing1a-i.closure.yaml`.
 
 ## B-pass
-Pending (self-initiated before the merge, §4.3).
+Accepted (`docs/reviews/oi348-device-walk-bpass.md`): a fresh Sonnet reviewer on `origin/main...59582d52`, 3 findings (two P2: an owner guard no test reached, stale registry line ranges; one P3: no re-read after a failed delete), all fixed with tests and mutations in the follow-up commit on this branch.

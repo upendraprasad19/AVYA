@@ -98,12 +98,14 @@ void main() {
         events.add('$op ${message ?? ''}');
     NutritionWriteService.onStateChanged = () => invalidations++;
     SyncServiceNutrition.debugFailPullCopyCleanup = false;
+    SyncServiceNutrition.debugFailPullCopyDelete = false;
   });
 
   tearDown(() async {
     ErrorTelemetry.debugOnLogEventForTests = null;
     NutritionWriteService.onStateChanged = null;
     SyncServiceNutrition.debugFailPullCopyCleanup = false;
+    SyncServiceNutrition.debugFailPullCopyDelete = false;
     await HiveService.instance.syncBox
         .delete(nutritionPullCopyCleanFlagKey(kTestUserId));
     await h.tearDown();
@@ -255,6 +257,43 @@ void main() {
       }
       expect(box.containsKey(_cloudId), isTrue);
       expect(flagged(), isFalse);
+    });
+
+    // B-pass F1: the ONLY guard for "the live account is B but the open Hive
+    // boxes still belong to A" is the Hive-owner check; ownerChangedSince
+    // compares with the live account and passes here.
+    test('Hive boxes owned by another account: nothing removed, no flag for the live account', () async {
+      const other = 'bbbbbbbb-0000-0000-0000-000000000000';
+      final box = HiveService.instance.nutritionBox;
+      await box.put(_cloudId, _pullCopy());
+      HiveUserSession.debugCurrentUidResolverForTests = () => other;
+      try {
+        await SyncService.instance
+            .pullRecentCrossChannelLogsForUser(other)
+            .timeout(const Duration(minutes: 2));
+      } finally {
+        HiveUserSession.debugCurrentUidResolverForTests = () => kTestUserId;
+      }
+      expect(HiveService.instance.syncBox.get(nutritionPullCopyCleanFlagKey(other)),
+          isNull,
+          reason: 'the flag of an account whose box was never scanned');
+      expect(box.containsKey(_cloudId), isTrue);
+      expect(invalidations, 0);
+    });
+
+    // B-pass F3: a delete that throws after it started still makes the screens
+    // re-read, and leaves the run-once flag unset so the next launch retries.
+    test('a delete that fails part-way: screens re-read, no flag, retried next launch', () async {
+      final box = HiveService.instance.nutritionBox;
+      await box.put(_cloudId, _pullCopy());
+      SyncServiceNutrition.debugFailPullCopyDelete = true;
+      await pull();
+      expect(invalidations, 1, reason: 'the screens re-read after a started delete');
+      expect(flagged(), isFalse, reason: 'a failed run must not mark itself done');
+      SyncServiceNutrition.debugFailPullCopyDelete = false;
+      await pull();
+      expect(box.containsKey(_cloudId), isFalse, reason: 'the next launch removes it');
+      expect(flagged(), isTrue);
     });
 
     test('the kill switch keeps the copies and writes no flag', () async {

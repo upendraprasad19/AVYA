@@ -7,8 +7,8 @@ batch: oi348-landing1a-i
 plan_review_record: docs/plan-reviews/oi348-device-walk.md
 diagnose_docs:
   - docs/diagnoses/2026-11-22-nutrition-pull-copies-doubled-b1d2a8.md
-total_findings: 14
-closed_count: 14
+total_findings: 17
+closed_count: 17
 
 findings:
   - id: U-B1
@@ -93,3 +93,21 @@ findings:
     title: "Author check: new code placed at the END of sync_nutrition.dart so every existing line number cited by docs and tests is unchanged (CLAUDE.md 4.9 source-grep pitfall)"
     terminal_state: verified_clean
     evidence: "git diff of sync_nutrition.dart has 0 removed lines; _syncNutritionLogs still starts at line 201 as docs/sot_registry.yaml cites"
+
+  - id: BP-F1-OWNER-GUARD-TEST
+    title: "B-pass F1 (P2): the Hive-owner check (live account B, boxes still A's) had no test; every owner guard was masked by another"
+    terminal_state: closed_in_commit
+    commit: "oi348-device-walk@branch"
+    verification: "test 'Hive boxes owned by another account: nothing removed, no flag for the live account' in test/sync/nutrition_pull_removed_behavioral_test.dart; mutation drop `currentOwnerFullId != userId ||` -> 1 RED (was 15/15 green at review)"
+
+  - id: BP-F2-SOT-RANGES
+    title: "B-pass F2 (P2): docs/sot_registry.yaml ranges for _fetchAllRows, _reportSyncFailure (2 entries) and kNlogKeyShape..firstFreeLogKey stale after the +24 / +6 line shifts"
+    terminal_state: closed_in_commit
+    commit: "oi348-device-walk@branch"
+    verification: "re-derived doc comment to closing brace: 3154-3225, 2983-3056 (both), 1073-1095; sweep of every registry cite past the insertion points and of bare file:NNNN cites in lib, test, docs/architecture found no other stale one"
+
+  - id: BP-F3-REREAD-AFTER-FAILED-DELETE
+    title: "B-pass F3 (P3): a delete that threw part-way skipped the provider re-read"
+    terminal_state: closed_in_commit
+    commit: "oi348-device-walk@branch"
+    verification: "invalidateAfterSync in finally once a delete started (owner-checked); test 'a delete that fails part-way: screens re-read, no flag, retried next launch' (seam debugFailPullCopyDelete); mutation never-invalidate -> 2 RED"
