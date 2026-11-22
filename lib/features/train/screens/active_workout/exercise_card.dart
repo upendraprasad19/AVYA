@@ -289,12 +289,14 @@ class _ExerciseCardState extends ConsumerState<_ExerciseCard>
     final lastPerf = ref.read(lastPerformanceProvider(exercise.name));
 
     // Reps: prefer last session's reps, then parse range to midpoint, then default 8
-    final String repsValue;
-    if (lastPerf.lastReps != null && lastPerf.lastReps! > 0) {
-      repsValue = lastPerf.lastReps.toString();
-    } else {
-      repsValue = _parseRepsMidpoint(exercise.reps).toString();
-    }
+    // Diagnose 7c3e91: a last-session value above twice the plan's top reps is
+    // not carried forward (`prefillReps`).
+    final String repsValue = prefillReps(
+      lastReps: lastPerf.lastReps,
+      planReps: exercise.reps,
+      loggingType: exercise.loggingType,
+      fallback: _parseRepsMidpoint(exercise.reps),
+    ).toString();
 
     // Weight: prefer last session's weight for weight-based exercises.
     // ⑦(b) + ⑥ 6-B: scale the LAST-LOGGED weight by the SINGLE effective load
@@ -1627,6 +1629,7 @@ class _ExerciseCardState extends ConsumerState<_ExerciseCard>
                                     .effectiveLoadFactor(widget.exercise) >=
                                 1.0,
                             fallbackReps: widget.exercise.reps,
+                            loggingType: widget.exercise.loggingType,
                           ),
 
                         const SizedBox(height: 8),
@@ -1847,6 +1850,7 @@ class _ExerciseCardState extends ConsumerState<_ExerciseCard>
                             widget.data.effectiveLoadFactor(widget.exercise) >=
                                 1.0,
                         fallbackReps: widget.exercise.reps,
+                        loggingType: widget.exercise.loggingType,
                         lastMaxLines: 2,
                       ),
                     ],

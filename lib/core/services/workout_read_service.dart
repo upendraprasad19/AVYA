@@ -1,5 +1,6 @@
 import 'package:hive/hive.dart';
 
+import '../utils/exercise_name_identity.dart';
 import '../utils/ist_date.dart';
 import 'hive_service.dart';
 
@@ -420,8 +421,15 @@ class WorkoutReadService {
   /// exact case-insensitive first, then fuzzy contains ONLY when BOTH
   /// names are ≥6 chars (prevents "Press" matching "Leg Press").
   ///
+  /// With [exactNameOnly] the fuzzy step is skipped: ONLY a row whose name is
+  /// the same exercise (`exerciseNameKey`) counts. The Active Workout prefill
+  /// and the weight sparkline use it, because a different exercise whose name
+  /// merely CONTAINS this one ("Push Up to Side Plank" vs "Push Up") must not
+  /// lend its reps and weights (diagnose 7c3e91).
+  ///
   /// Each returned map is a defensive copy.
-  List<Map<String, dynamic>> logsForExercise(String exerciseName) {
+  List<Map<String, dynamic>> logsForExercise(String exerciseName,
+      {bool exactNameOnly = false}) {
     final box = HiveService.instance.workoutBox;
     final nameLower = exerciseName.toLowerCase();
     final entries = <MapEntry<DateTime, Map<String, dynamic>>>[];
@@ -441,7 +449,9 @@ class WorkoutReadService {
       if (logName.isEmpty) continue;
       // Exact match first; fuzzy contains only when both names are long
       // enough to avoid false positives.
-      if (logName != nameLower) {
+      if (exactNameOnly) {
+        if (exerciseNameKey(logName) != exerciseNameKey(nameLower)) continue;
+      } else if (logName != nameLower) {
         if (nameLower.length < 6 || logName.length < 6) continue;
         if (!logName.contains(nameLower) && !nameLower.contains(logName)) {
           continue;

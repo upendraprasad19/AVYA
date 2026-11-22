@@ -302,6 +302,57 @@ String? prefilledSubline(double volumeKg) {
       .replaceAll('{kg}', formatKg(volumeKg));
 }
 
+// ── Reps prefill ceiling (diagnose 7c3e91) ─────────────────────────────────
+
+/// Logging types whose reps are a count the plan prescribes (so a ceiling is
+/// meaningful). Timed / cardio / distance rows carry other units in `reps`.
+const Set<String> _repsCeilingTypes = {
+  'weight_reps',
+  'bodyweight_reps',
+  'weighted_bodyweight',
+};
+
+/// The top of a plan reps string (`"8-12"` -> 12, `"8"` -> 8); null when it is
+/// not a number (`"AMRAP"`, `""`).
+int? planTopReps(String planReps) =>
+    int.tryParse(planReps.split('-').last.trim());
+
+/// The reps a set row is prefilled with: last session's FIRST-set reps, unless
+/// that is above twice the plan's top reps, which one stray log (a typo or a
+/// test entry) would otherwise carry into every later session; then the plan's
+/// own value ([fallback], the midpoint the card already uses). The LAST line
+/// on the card still shows the real history. No ceiling for a row whose plan
+/// reps are not a number or whose type does not count reps.
+int prefillReps({
+  required int? lastReps,
+  required String planReps,
+  required String loggingType,
+  required int fallback,
+}) {
+  if (lastReps == null || lastReps <= 0) return fallback;
+  if (!_repsCeilingTypes.contains(loggingType)) return lastReps;
+  final top = planTopReps(planReps);
+  if (top == null || top <= 0) return lastReps;
+  return lastReps > 2 * top ? fallback : lastReps;
+}
+
+/// The reps on the TRY line (`TRY: 52.5KG × 10`): the same rule as [prefillReps],
+/// so the line never suggests a stray stored value back. When the history is
+/// unusable it is the plan's own reps text (`"8-12"`), as with no history.
+String triedRepsText({
+  required int? lastReps,
+  required String planReps,
+  required String loggingType,
+}) {
+  const none = -1;
+  final kept = prefillReps(
+      lastReps: lastReps,
+      planReps: planReps,
+      loggingType: loggingType,
+      fallback: none);
+  return kept == none ? planReps : kept.toString();
+}
+
 // ── Faded prefill (flip batch, docs/plans/log-exercise-flip.md §2) ─────────
 
 /// The `ActiveWorkoutData.suggestedInputs` key of one field. The provider

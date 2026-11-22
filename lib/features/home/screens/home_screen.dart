@@ -515,6 +515,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                 context,
                 date: date,
                 schedule: schedule,
+                // The sheet's START WORKOUT runs the SAME start path as the
+                // Today card (`_startTodayWorkout`); it used to only close
+                // the sheet (diagnose 7c3e91).
+                onStart: () => _startTodayWorkout(context, ref),
               );
             },
             onDayLongPress: (date, schedule) {
@@ -925,12 +929,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
       // (`beginWorkoutWithReadiness` → `startWorkout`, the only two
       // `startWorkout` callsites), and build the day from the SAME schedule
       // row this card rendered from, so what starts is what was displayed.
-      onStart: () async {
-        final day = workoutDayForDate(DateTime.now());
-        if (day == null) return;
-        await beginWorkoutWithReadiness(context, ref, day);
-        if (context.mounted) context.go('/train/active-workout');
-      },
+      onStart: () => _startTodayWorkout(context, ref),
       caloriesCurrent: nutrition.calories,
       caloriesTarget: nutrition.calorieTarget,
       proteinCurrent: nutrition.protein,
@@ -938,6 +937,16 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
       steps: ref.watch(todayStepsProvider),
       stepsGoal: 10000,
     );
+  }
+
+  /// The ONE Home start path: today's day built from the schedule row the card
+  /// renders, then the canonical `beginWorkoutWithReadiness`, then the screen.
+  /// Both the Today card and the calendar day sheet call it (diagnose 7c3e91).
+  Future<void> _startTodayWorkout(BuildContext context, WidgetRef ref) async {
+    final day = workoutDayForDate(DateTime.now());
+    if (day == null) return;
+    await beginWorkoutWithReadiness(context, ref, day);
+    if (context.mounted) context.go('/train/active-workout');
   }
 
   // -- Recent Logs Header ---------------------------------------------

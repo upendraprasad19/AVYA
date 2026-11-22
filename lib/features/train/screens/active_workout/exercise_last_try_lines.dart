@@ -9,6 +9,7 @@ import 'package:icanbefitter/core/theme/colors.dart';
 import 'package:icanbefitter/core/theme/typography.dart';
 
 import '../../providers/train_provider.dart';
+import '../../services/log_exercise_logic.dart';
 
 /// "LAST: 50.0KG × 10 REPS" and "TRY: 52.5KG × 10" for [exerciseName].
 ///
@@ -23,6 +24,7 @@ class ExerciseLastTryLines extends ConsumerWidget {
     required this.exerciseName,
     required this.showTry,
     required this.fallbackReps,
+    this.loggingType = 'weight_reps',
     this.lastMaxLines = 1,
     this.inline = false,
   });
@@ -32,6 +34,11 @@ class ExerciseLastTryLines extends ConsumerWidget {
 
   /// Reps shown on the TRY line when the history carries none.
   final String fallbackReps;
+
+  /// The exercise's logging type: the TRY reps follow the same ceiling as the
+  /// reps prefill (`triedRepsText`, diagnose 7c3e91), so a stray stored value is
+  /// not suggested back. The LAST line stays the real history.
+  final String loggingType;
 
   /// The header column passes 2: "LAST: 60.0KG × 8 REPS" is about 152 dp of the
   /// 166 dp column and would lose "REPS" from about 1.1x text scale.
@@ -91,7 +98,7 @@ class ExerciseLastTryLines extends ConsumerWidget {
             const SizedBox(width: 3),
             Flexible(
               child: Text(
-                'TRY: ${lastPerf.suggestedWeight!.toStringAsFixed(1)}KG × ${lastPerf.lastReps ?? fallbackReps}',
+                'TRY: ${lastPerf.suggestedWeight!.toStringAsFixed(1)}KG × ${triedRepsText(lastReps: lastPerf.lastReps, planReps: fallbackReps, loggingType: loggingType)}',
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: AppTypography.monoXs.copyWith(
