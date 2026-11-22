@@ -56,8 +56,17 @@ jobs:
           channel: stable
           cache: true
 
+      # OI-520: the committed pubspec.lock must be one THIS SDK can honour. Every other job below runs a
+      # plain `pub get`, which silently RE-RESOLVES a lock the pinned Flutter cannot honour, so a lock
+      # written by a newer Dart (the three Dependabot lock commits of 2026-11-21 were) stayed green in
+      # CI and dirtied every developer tree. This is the required job that enforces it: the flag exits 65
+      # ("Would change N dependencies") and never writes the file. A red step here: on the PR branch run
+      # `flutter pub get` with the pinned Flutter, commit pubspec.lock and push; or move the Flutter pin
+      # everywhere in one batch (scripts/check_ci_flutter_version.dart pins the literals).
+      # test/contracts/ci_lockfile_enforced_test.dart pins this step: the first `run:` of the job, this
+      # exact command, no `if:` / `continue-on-error:`, and `Analyze` still a required merge check.
       - name: Install dependencies
-        run: flutter pub get
+        run: flutter pub get --enforce-lockfile
 
       - name: Flutter analyze (zero warnings allowed)
         run: flutter analyze --no-fatal-infos
