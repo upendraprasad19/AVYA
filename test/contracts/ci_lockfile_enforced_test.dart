@@ -572,6 +572,28 @@ void main() {
       wf: (String s) => inJob(s, installBlock, '      -\n        name: Neuter\n        run: echo x\n\n$installBlock'),
       req: null,
     ),
+    'a merge key inside a step': (
+      token: 'unparsed',
+      wf: (String s) => inJob(s, installBlock,
+          '      - name: Install dependencies\n        <<: *step-defaults\n        run: $_resolveCommand\n'),
+      req: null,
+    ),
+    'a step indented by an odd number of spaces': (
+      token: 'unparsed',
+      wf: (String s) => inJob(s, installBlock, '     - name: Odd\n       run: echo x\n\n$installBlock'),
+      req: null,
+    ),
+    'a tab-indented step': (
+      token: 'unparsed',
+      wf: (String s) => inJob(s, installBlock, '\t- name: Tabbed\n\t  run: echo x\n\n$installBlock'),
+      req: null,
+    ),
+    // A PLAIN repeat (no with: key, no env:), so only the "each allowed action once" rule can flag it.
+    'a plain second checkout before the resolving step': (
+      token: 'pre-step',
+      wf: (String s) => inJob(s, installBlock, '$checkoutLine\n$installBlock'),
+      req: null,
+    ),
     'a merge key at job level': (
       token: 'unparsed',
       wf: (String s) => inJob(s, '    runs-on: ubuntu-latest\n', '    runs-on: ubuntu-latest\n    <<: *defaults\n'),
@@ -749,6 +771,8 @@ void main() {
         afterJob(s, '  lint-sibling :\n    name: Lint\n    if: github.event_name == \'push\'\n    runs-on: ubuntu-latest\n    steps: []\n'),
     'a top-level mapping after jobs: is not part of jobs': (String s) =>
         '$s\nextra:\n  analyze-like:\n    name: Analyze\n    runs-on: ubuntu-latest\n',
+    // Ordinary (non-job-looking) keys: only the column-0 stop of `_unparsedJobsSection` keeps them out of the jobs section.
+    'a top-level mapping with ordinary keys after jobs: is not part of jobs': (String s) => '$s\nextra:\n  key: value\n',
     'a comment inside with: that quotes another flutter-version is ignored': (String s) =>
         inJob(s, "          flutter-version: '$pin'\n", "          # flutter-version: 9\n          flutter-version: '$pin'\n"),
     'a job with a different id and a different explicit name is not a twin': (String s) =>
