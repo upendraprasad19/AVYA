@@ -63,7 +63,8 @@ jobs:
       # place CI looks, and `safe_pr_merge.sh` requires this job (scripts/safe_pr_merge_lib.dart).
       # `flutter pub get --enforce-lockfile` is NOT used: measured, it exits 0 on a lock whose only
       # drift is metadata (an `sdks` floor, a direct/transitive flag) and the next plain `pub get`
-      # still dirties the tree. The failing log shows the diff.
+      # still dirties the tree. The failing log shows the diff. The `git ls-files` half fails a PR that
+      # DELETED the lock: `pub get` regenerates it untracked and `git diff` ignores an untracked file.
       # A red verify step: regenerate the lock with the pinned Flutter on a NORMAL branch and commit it
       # (a human commit on a `dependabot/*` branch loses the merge gate's Dependabot exemption and no
       # record can restore it: scripts/check_plan_review_record_exists.dart:611-619), or move the Flutter
@@ -73,7 +74,7 @@ jobs:
         run: flutter pub get
 
       - name: Verify pubspec.lock is what the pinned Flutter writes (OI-520)
-        run: git diff --exit-code -- pubspec.lock
+        run: git ls-files --error-unmatch -- pubspec.lock && git diff --exit-code -- pubspec.lock
 
       - name: Flutter analyze (zero warnings allowed)
         run: flutter analyze --no-fatal-infos

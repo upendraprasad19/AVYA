@@ -4,7 +4,9 @@
 // a plain `flutter pub get`, which re-resolves such a lock and goes green (the three Dependabot lock
 // commits of 2026-11-21 did not match what Flutter 3.41.4 writes, and every job passed on them).
 // The guard is two adjacent steps of ONE job, the `analyze` job (check name `Analyze`, a job that
-// scripts/safe_pr_merge.sh requires): `flutter pub get`, then `git diff --exit-code -- pubspec.lock`.
+// scripts/safe_pr_merge.sh requires): `flutter pub get`, then `git ls-files --error-unmatch -- pubspec.lock &&
+// git diff --exit-code -- pubspec.lock` (the first half catches a PR that DELETES the lock: `pub get`
+// regenerates it untracked and `git diff` says nothing about an untracked file).
 // `flutter pub get --enforce-lockfile` was tried first and rejected: measured, it exits 0 on a lock whose
 // only drift is metadata (an `sdks` floor edited, a dependency added that the lock already holds
 // transitively) and the next plain `pub get` still rewrites the file, which is OI-520's own symptom.
@@ -39,7 +41,7 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 
 const _resolveCommand = 'flutter pub get';
-const _verifyCommand = 'git diff --exit-code -- pubspec.lock';
+const _verifyCommand = 'git ls-files --error-unmatch -- pubspec.lock && git diff --exit-code -- pubspec.lock';
 const _jobId = 'analyze';
 const _checkName = 'Analyze';
 const _allowedJobKeys = {'name', 'runs-on', 'timeout-minutes'};
@@ -270,6 +272,22 @@ void main() {
     'verify checks another file': (
       token: 'verify-step',
       wf: (String s) => inJob(s, 'run: $_verifyCommand', 'run: git diff --exit-code -- pubspec.yaml'),
+      lib: null,
+    ),
+    // The mirror of "the lock differs": a PR that DELETES pubspec.lock. `pub get` regenerates it untracked and
+    // `git diff` says nothing about an untracked file (measured: exit 0), so the diff alone passes it.
+    'verify is the bare diff, so a deleted lock passes': (
+      token: 'verify-step',
+      wf: (String s) => inJob(s, 'run: $_verifyCommand', 'run: git diff --exit-code -- pubspec.lock'),
+      lib: null,
+    ),
+    'tracked check joined with ; so only the last command decides': (
+      token: 'verify-step',
+      wf: (String s) => inJob(
+        s,
+        'run: $_verifyCommand',
+        'run: git ls-files --error-unmatch -- pubspec.lock; git diff --exit-code -- pubspec.lock',
+      ),
       lib: null,
     ),
     'verify step made conditional with if:': (
