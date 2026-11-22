@@ -20,10 +20,17 @@ class DayDetailSheet extends StatelessWidget {
   final DateTime date;
   final Map<String, dynamic>? schedule;
 
+  /// What START WORKOUT does (today's planned day only). The host owns the start
+  /// path (it needs the host's `ref` and a context that outlives this sheet).
+  /// Null = no start path was given: the button is shown DISABLED, never a
+  /// button that only closes the sheet (diagnose 7c3e91).
+  final VoidCallback? onStart;
+
   const DayDetailSheet({
     super.key,
     required this.date,
     this.schedule,
+    this.onStart,
   });
 
   /// Show the day detail bottom sheet.
@@ -31,12 +38,14 @@ class DayDetailSheet extends StatelessWidget {
     BuildContext context, {
     required DateTime date,
     Map<String, dynamic>? schedule,
+    VoidCallback? onStart,
   }) {
     showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (_) => DayDetailSheet(date: date, schedule: schedule),
+      builder: (_) =>
+          DayDetailSheet(date: date, schedule: schedule, onStart: onStart),
     );
   }
 
@@ -318,7 +327,8 @@ class DayDetailSheet extends StatelessWidget {
           : SizedBox(
               width: double.infinity,
               height: 48,
-              child: _buildStartButton(context, enabled: isToday),
+              child: _buildStartButton(context,
+                  enabled: isToday && onStart != null),
             ),
     );
   }
@@ -475,7 +485,14 @@ class DayDetailSheet extends StatelessWidget {
       color: enabled ? AppColors.accent : AppColors.textDisabled,
       borderRadius: BorderRadius.circular(AppRadius.sharp),
       child: InkWell(
-        onTap: enabled ? () => Navigator.of(context).pop() : null,
+        onTap: enabled
+            ? () {
+                // Close the sheet FIRST, then start: the host's own context
+                // (not this sheet's) shows the resume guard / readiness sheet.
+                Navigator.of(context).pop();
+                onStart?.call();
+              }
+            : null,
         borderRadius: BorderRadius.circular(AppRadius.sharp),
         child: Center(
           child: Text(

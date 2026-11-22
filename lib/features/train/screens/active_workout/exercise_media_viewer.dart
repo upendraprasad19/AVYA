@@ -321,6 +321,7 @@ class _ExerciseMediaViewerState extends ConsumerState<ExerciseMediaViewer> {
                   exerciseName: widget.exerciseName,
                   showTry: data.effectiveLoadFactor(exercise) >= 1.0,
                   fallbackReps: exercise.reps,
+                  loggingType: exercise.loggingType,
                   inline: true,
                 ),
                 if (entry != null) ...[

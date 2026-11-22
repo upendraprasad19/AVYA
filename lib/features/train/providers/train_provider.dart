@@ -71,7 +71,10 @@ class LastPerformanceData {
 /// service owns the cross-date scan + name match; this function only
 /// extracts the latest row's per-set values for the pre-fill UI.
 LastPerformanceData _getLastPerformance(String exerciseName) {
-  final logs = WorkoutReadService.instance.logsForExercise(exerciseName);
+  // exactNameOnly (diagnose 7c3e91): "Push Up to Side Plank" must not inherit
+  // "Push Up"'s last reps through the fuzzy contains-match.
+  final logs = WorkoutReadService.instance.logsForExercise(
+      exerciseName, exactNameOnly: true);
   if (logs.isEmpty) {
     return const LastPerformanceData(
       lastWeight: null,
@@ -135,7 +138,8 @@ final lastPerformanceProvider =
 /// inline; now reuses the canonical cross-date scan + name match.
 final exerciseHistoryProvider =
     Provider.family<List<double>, String>((ref, exerciseName) {
-  final logs = WorkoutReadService.instance.logsForExercise(exerciseName);
+  final logs = WorkoutReadService.instance.logsForExercise(
+      exerciseName, exactNameOnly: true);
   final weights = <double>[];
   for (final log in logs) {
     final w = (log['weight_kg'] as num?)?.toDouble();
