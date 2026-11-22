@@ -695,6 +695,8 @@ Every term that has SPECIFIC meaning in this app. New features that use any of t
 | **PurchaseCopy** | `lib/core/copy/purchase_copy.dart`: const strings and small functions for upgrade wording; purchase mode returns the ORIGINAL sentence byte for byte, no-purchase mode a neutral one. | NOT `WardroomCopy` (brand voice) and NOT `PaymentCopy` (payment-flow messages) |
 | **PaywallUnavailableBody** | `lib/shared/widgets/paywall_unavailable_body.dart`: the body `PaywallSheet.build` returns when the binary sells nothing. Not a second paywall (rule 7). | NOT `PaywallSheet` |
 | **BuildStamp** | `lib/features/profile/widgets/build_stamp.dart`: the ghost line at the foot of the Profile tab, `v<version> · purchases: <mode>`. | NOT the Settings build info (Settings is unlinked) |
+| **nutrition pull copy** (`isNutritionPullCopy`, `_cleanupNutritionPullCopies`) | A nutritionBox row the cross-channel pull's nutrition leg wrote before 2026-11-22: the cloud `nutrition_logs.id` as the key, the cloud row's columns, no `items` (diagnose b1d2a8). Removed once per user (syncBox `nutrition_phantom_clean_<userId>`); the leg runs again only under `configBox['restore_nutrition_launch_pull']`; kill switch `disable_nutrition_phantom_clean`. | NOT a meal: a real meal is an `nlog_` row. NOT a legacy restore row (`source: 'cloud_restore'`, kept). "phantom" in the flag key is the same thing. |
+| **CoachFreeStatusPill** | `lib/features/ai_coach/screens/ai_coach/status_pill.dart`: the FREE account's coach-header pill. Gold UPGRADE when the build sells PRO; a dim grey "PRO" outline when it sells nothing (OI-348 walk P4). | NOT the PRO badge (`_buildStatusPill(true)`) and NOT `ProPillButton` (the Profile header pill, which follows the same P4 rule). |
 
 ---
 

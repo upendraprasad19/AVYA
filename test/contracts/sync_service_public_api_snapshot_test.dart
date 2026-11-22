@@ -112,6 +112,11 @@ void main() {
         // gate of pullRecentCrossChannelLogs; delegates to
         // _pullMeasurements, production path unchanged.
         'pullMeasurementsForTest',
+        // OI-348 walk B1 hotfix (diagnose b1d2a8) - @visibleForTesting seam:
+        // the whole cross-channel pull body (cleanup + legs) for a given
+        // user id, without the `currentUser` gate the stub harness cannot
+        // satisfy; the public method delegates to the same body.
+        'pullRecentCrossChannelLogsForUser',
         'restoreNotificationsInboxForSyncDomain',
         'restoreNutritionLogsForSyncDomain',
         'restoreRankPromotionsForSyncDomain',

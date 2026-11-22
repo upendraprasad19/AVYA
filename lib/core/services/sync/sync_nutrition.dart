@@ -950,4 +950,92 @@ extension SyncServiceNutrition on SyncService {
     if (userId == null) return;
     await _restoreSavedMeals(userId);
   }
+
+  /// OI-348 walk B1 hotfix (Landing 1a-i, diagnose b1d2a8) — removes, once per
+  /// user on this device, every row the cross-channel pull's nutrition leg
+  /// wrote ([isNutritionPullCopy]). Those rows were counted next to the real
+  /// `nlog_` row of the same meal. Owner-checked before the scan and before
+  /// each write; the flag is written even when nothing matched, so the scan
+  /// never repeats. NEVER throws: it runs before the weight and measurement
+  /// legs of `pullRecentCrossChannelLogs`, which must still run.
+  /// Test seam: makes the next cleanups throw inside their try, to prove a
+  /// failing cleanup never skips the pull's other legs.
+  @visibleForTesting
+  static bool debugFailPullCopyCleanup = false;
+
+  Future<void> _cleanupNutritionPullCopies(String userId) async {
+    try {
+      if (debugFailPullCopyCleanup) {
+        throw StateError('debugFailPullCopyCleanup');
+      }
+      if (_hive.configBox.get(kDisableNutritionPullCopyCleanKey) == true) {
+        return;
+      }
+      // Layer A: a foreign uid is served EMPTY user boxes; check first.
+      if (HiveUserSession.currentOwnerFullId != userId ||
+          ownerChangedSince(userId)) {
+        return;
+      }
+      final flagKey = nutritionPullCopyCleanFlagKey(userId);
+      if (_hive.syncBox.get(flagKey) == true) return;
+
+      final box = _hive.nutritionBox;
+      final copies = <dynamic>[
+        for (final k in box.keys)
+          if (isNutritionPullCopy(k, box.get(k))) k,
+      ];
+      if (copies.isNotEmpty) {
+        if (ownerChangedSince(userId)) return;
+        await box.deleteAll(copies);
+      }
+      if (ownerChangedSince(userId)) return;
+      await _hive.syncBox.put(flagKey, true);
+      if (copies.isNotEmpty) {
+        NutritionWriteService.invalidateAfterSync();
+        unawaited(ErrorTelemetry.logEvent('nutrition_pull_copies_removed',
+            message: 'count=${copies.length}'));
+      }
+    } catch (e, st) {
+      debugPrint('[SyncService._cleanupNutritionPullCopies] $e');
+      unawaited(ErrorTelemetry.recordNonFatal(e, st,
+          reason: 'sync_nutrition_pull_copy_cleanup'));
+    }
+  }
+
+}
+
+/// OI-348 walk B1 hotfix (Landing 1a-i, diagnose b1d2a8) — `configBox` key that
+/// runs the cross-channel pull's NUTRITION leg again (default absent = off).
+/// The leg is the old path kept reachable (CLAUDE.md §4.6); turning it on also
+/// brings back the doubling it caused.
+const String kRestoreNutritionLaunchPullKey = 'restore_nutrition_launch_pull';
+
+/// `configBox` kill switch for the one-time removal of the pull's copies.
+const String kDisableNutritionPullCopyCleanKey =
+    'disable_nutrition_phantom_clean';
+
+/// Shared `syncBox` flag (per user id, like `fresh_device_<userId>`): the
+/// removal ran for that user on this device.
+String nutritionPullCopyCleanFlagKey(String userId) =>
+    'nutrition_phantom_clean_$userId';
+
+final RegExp _kCloudUuidKey = RegExp(
+    r'^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$');
+
+/// True for the exact shape the cross-channel pull's nutrition leg wrote
+/// (`SyncService._pullNutritionLogs`): the CLOUD row id as the Hive key, the
+/// cloud row's columns (`user_id`, `date`, `meal_type`, totals) and no
+/// `items` (the cloud table has none). Every legitimate meal writer keys
+/// `nlog_` / `saved_meal_` / `meal_`, and a pre-Test-#12.8 restore row (also
+/// UUID-keyed) carries `source: 'cloud_restore'`, so neither matches. Pure,
+/// so the rule is tested without Hive.
+bool isNutritionPullCopy(Object? key, Object? value) {
+  if (key is! String || !_kCloudUuidKey.hasMatch(key)) return false;
+  if (value is! Map) return false;
+  if (value['meal_type'] == null || value['date'] == null) return false;
+  if (value['user_id'] == null) return false;
+  if (value.containsKey('items')) return false;
+  if (value['is_saved_meal'] == true) return false;
+  if (value['source'] == 'cloud_restore') return false;
+  return true;
 }

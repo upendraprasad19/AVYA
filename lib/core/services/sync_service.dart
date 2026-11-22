@@ -2599,18 +2599,42 @@ class SyncService {
   /// Pulls logs from Supabase that were created in the last 24 hours
   /// from other channels (e.g. Telegram bot). Merges into local Hive
   /// without overwriting existing entries.
-  Future<void> pullRecentCrossChannelLogs() async {
+  ///
+  /// OI-348 walk B1 hotfix (Landing 1a-i, diagnose `b1d2a8`): the NUTRITION
+  /// leg is off. It wrote each cloud meal row under its cloud UUID with no
+  /// items, next to this device's own `nlog_` row for the same meal, and every
+  /// whole-box nutrition reader counted both (every meal of the last 24 h
+  /// twice). [kRestoreNutritionLaunchPullKey] runs it again (old path kept
+  /// verbatim, CLAUDE.md §4.6). Before the legs, the copies it already wrote
+  /// are removed once per user ([_cleanupNutritionPullCopies], never throws).
+  Future<void> pullRecentCrossChannelLogs() =>
+      _pullRecentCrossChannelLogsFor(null);
+
+  /// Test seam: the stub harness has no auth session, so the public method
+  /// returns before doing anything; this runs the same body for [userId].
+  @visibleForTesting
+  Future<void> pullRecentCrossChannelLogsForUser(String userId) =>
+      _pullRecentCrossChannelLogsFor(userId);
+
+  Future<void> _pullRecentCrossChannelLogsFor(String? userIdOverride) async {
     try {
-      final userId = _supabase.currentUser?.id;
+      final userId = userIdOverride ?? _supabase.currentUser?.id;
       if (userId == null) return;
+
+      // Awaited BEFORE the legs; it catches everything itself, so a failing
+      // cleanup never skips the weight and measurement legs.
+      await _cleanupNutritionPullCopies(userId);
 
       final since =
           DateTime.now().subtract(const Duration(hours: 24)).toIso8601String();
+      final nutritionLegOn =
+          _hive.configBox.get(kRestoreNutritionLaunchPullKey) == true;
 
       await Future.wait(
         [
           _safeRestoreOp('pull_weight', _pullWeightLogs(userId, since)),
-          _safeRestoreOp('pull_nutrition', _pullNutritionLogs(userId, since)),
+          if (nutritionLegOn)
+            _safeRestoreOp('pull_nutrition', _pullNutritionLogs(userId, since)),
           _safeRestoreOp('pull_measurements', _pullMeasurements(userId, since)),
         ],
         eagerError: false,

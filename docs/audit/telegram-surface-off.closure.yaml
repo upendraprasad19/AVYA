@@ -69,7 +69,7 @@ findings:
   - id: TG-OI467-SOURCE-LABEL
     title: "pullRecentCrossChannelLogs and its source: 'telegram' label (3 non-comment occurrences in sync_service.dart) stay"
     terminal_state: upstream_blocked
-    blocker: "OI-467 is blocked on OI-279 (resume pull replaces the weight leg) and OI-281 (meal deletes need a cloud tombstone); measurements are covered by neither. The source value has no UI reader that this batch found in lib/, and group S pins the occurrence count at exactly 3 so it cannot grow."
+    blocker: "OI-467 is blocked on OI-279 (resume pull replaces the weight leg); the nutrition leg is OFF by default since OI-348 Landing 1a-i (diagnose b1d2a8, 2026-11-22) and kept verbatim behind configBox restore_nutrition_launch_pull, its end state owned by Landing 1a-ii (nutrition slot sync, which also closes OI-281); measurements are covered by none. The source value has no UI reader that this batch found in lib/, and group S pins the occurrence count at exactly 3 so it cannot grow (the 3 lines are unchanged)."
     reopen_when: "OI-279 ships; then each leg of the cross-channel pull gets a named owner and the Telegram label is renamed in the same batch."
 
   - id: TG-CLEAR-NOOP
