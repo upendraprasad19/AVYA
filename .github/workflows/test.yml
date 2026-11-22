@@ -56,11 +56,12 @@ jobs:
           channel: stable
           cache: true
 
-      # OI-520: the committed pubspec.lock must be EXACTLY what the pinned Flutter writes. The install
-      # steps of the other jobs re-resolve a drifted lock silently and stay green (the three Dependabot
-      # lock commits of 2026-11-21 did not match what Flutter 3.41.4 writes, and CI passed on all of
-      # them, while every developer tree went dirty after `pub get`). The next two steps are the one
-      # place CI looks, and `safe_pr_merge.sh` requires this job (scripts/safe_pr_merge_lib.dart).
+      # OI-520: the committed pubspec.lock must be left UNCHANGED by `pub get` under the pinned Flutter,
+      # which is what a developer's tree sees. The install steps of the other jobs re-resolve a drifted
+      # lock silently and stay green (the three Dependabot lock commits of 2026-11-21 did not match what
+      # Flutter 3.41.4 writes, and CI passed on all of them, while every developer tree went dirty after
+      # `pub get`). The next two steps are the one place CI looks, and `safe_pr_merge.sh` requires this
+      # job (scripts/safe_pr_merge_lib.dart).
       # `flutter pub get --enforce-lockfile` is NOT used: measured, it exits 0 on a lock whose only
       # drift is metadata (an `sdks` floor, a direct/transitive flag) and the next plain `pub get`
       # still dirties the tree. The failing log shows the diff. The `git ls-files` half fails a PR that
@@ -73,7 +74,7 @@ jobs:
       - name: Install dependencies
         run: flutter pub get
 
-      - name: Verify pubspec.lock is what the pinned Flutter writes (OI-520)
+      - name: Verify pubspec.lock is unchanged after pub get (OI-520)
         run: git ls-files --error-unmatch -- pubspec.lock && git diff --exit-code -- pubspec.lock
 
       - name: Flutter analyze (zero warnings allowed)

@@ -47,7 +47,10 @@ updates:
   # To land one: write docs/plan-reviews/dependabot-github_actions-<pkg>-<ver>.md
   # (the branch name with `/` mapped to `-`) with a real review, exactly as for
   # human work. Merging without one turns main red — which is the intended
-  # signal, not a malfunction. `pub` bumps above are exempt and merge freely.
+  # signal, not a malfunction. `pub` bumps above are exempt from the record ONLY while their
+  # pubspec.lock is left unchanged by `pub get` under the pinned Flutter: the `Analyze` job's verify
+  # step (OI-520) fails a lock written by another SDK, and that PR then needs a normal-branch fix
+  # (docs/architecture/hooks.md, "CI lockfile guard").
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:

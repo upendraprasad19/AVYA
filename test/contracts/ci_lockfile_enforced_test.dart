@@ -44,20 +44,31 @@ const _resolveCommand = 'flutter pub get';
 const _verifyCommand = 'git ls-files --error-unmatch -- pubspec.lock && git diff --exit-code -- pubspec.lock';
 const _jobId = 'analyze';
 const _checkName = 'Analyze';
-const _allowedJobKeys = {'name', 'runs-on', 'timeout-minutes'};
+const _allowedJobKeys = {'name', 'runs-on', 'timeout-minutes', 'steps'};
 const _allowedActionsBeforeResolve = ['actions/checkout@', 'subosito/flutter-action@'];
 
 /// Full-line YAML comments removed (a `#` inside a `run:` body or a value survives).
 String _strip(String s) =>
     s.replaceAll('\r\n', '\n').split('\n').where((l) => !RegExp(r'^\s*#').hasMatch(l)).join('\n');
 
+/// A scalar as the YAML reader would see it: a trailing ` # comment` and one pair of surrounding quotes removed.
+String _clean(String v) {
+  var s = v.replaceFirst(RegExp(r'\s+#.*$'), '').trim();
+  if (s.length >= 2 && (s.startsWith('"') && s.endsWith('"') || s.startsWith("'") && s.endsWith("'"))) {
+    s = s.substring(1, s.length - 1);
+  }
+  return s;
+}
+
 /// The line range [start, end) of a job block: from `  <id>:` to the next sibling job; null when absent.
+/// A trailing comment, a quoted id and whitespace before the colon are all still the same job line.
 (int, int)? _jobRange(List<String> lines, String id) {
-  final start = lines.indexWhere((l) => RegExp('^  ${RegExp.escape(id)}:\\s*\$').hasMatch(l));
+  final start =
+      lines.indexWhere((l) => RegExp('^  ["\']?${RegExp.escape(id)}["\']?\\s*:\\s*(#.*)?\$').hasMatch(l));
   if (start < 0) return null;
   var end = lines.length;
   for (var i = start + 1; i < lines.length; i++) {
-    if (RegExp(r'^  [A-Za-z0-9_-]+:').hasMatch(lines[i])) {
+    if (RegExp(r'''^  ["']?[A-Za-z0-9_-]+["']?\s*:''').hasMatch(lines[i])) {
       end = i;
       break;
     }
@@ -82,19 +93,20 @@ List<String> _jobIds(String src) {
     }
     if (!inJobs) continue;
     if (RegExp(r'^\S').hasMatch(l)) break;
-    final m = RegExp(r'^  ([A-Za-z0-9_-]+):\s*$').firstMatch(l);
+    final m = RegExp(r'''^  ["']?([A-Za-z0-9_-]+)["']?\s*:\s*(#.*)?$''').firstMatch(l);
     if (m != null) ids.add(m.group(1)!);
   }
   return ids;
 }
 
-/// The job's own keys (four-space indent, before `steps:`), as key -> value text.
+/// EVERY key of the job itself (exactly four-space indent), wherever it is written, including after `steps:`
+/// (a step's own keys sit at six or more spaces, so a four-space line is always a job key), as key -> value.
+/// `key : value` and a quoted key are still that key.
 Map<String, String> _jobKeys(String job) {
   final keys = <String, String>{};
   for (final l in job.split('\n').skip(1)) {
-    if (RegExp(r'^    steps:\s*$').hasMatch(l)) break;
-    final m = RegExp(r'^    ([A-Za-z0-9_-]+):\s*(.*)$').firstMatch(l);
-    if (m != null) keys[m.group(1)!] = m.group(2)!.trim();
+    final m = RegExp(r'''^    ["']?([A-Za-z0-9_-]+)["']?\s*:\s*(.*)$''').firstMatch(l);
+    if (m != null) keys[m.group(1)!] = _clean(m.group(2)!);
   }
   return keys;
 }
@@ -113,8 +125,8 @@ List<Map<String, String>> _steps(String job) {
   }
 
   for (final l in job.split('\n')) {
-    final dash = RegExp(r'^      - ([A-Za-z0-9_-]+):\s*(.*)$').firstMatch(l);
-    final next = RegExp(r'^        ([A-Za-z0-9_-]+):\s*(.*)$').firstMatch(l);
+    final dash = RegExp(r'''^      - ["']?([A-Za-z0-9_-]+)["']?\s*:\s*(.*)$''').firstMatch(l);
+    final next = RegExp(r'''^        ["']?([A-Za-z0-9_-]+)["']?\s*:\s*(.*)$''').firstMatch(l);
     if (dash != null) {
       flush();
       cur = <String, String>{};
@@ -145,10 +157,33 @@ List<String> _requiredJobs(String libSrc) {
 String? _flutterVersionOf(Map<String, String> step) =>
     RegExp(r'flutter-version:\s*(\S+)').firstMatch(step['with'] ?? '')?.group(1);
 
+/// The files of [others] (workflow file name -> text, `test.yml` excluded) that carry a job named
+/// [_checkName]. The merge wrapper judges the newest check-run of a NAME across the whole PR, so a job of that
+/// name in ANOTHER workflow file could mask or replace the guard.
+List<String> _otherWorkflowsNaming(Map<String, String> others) => [
+      for (final e in others.entries)
+        if (_namesTheCheck(e.value)) e.key
+    ];
+
+bool _namesTheCheck(String workflowText) {
+  for (final l in _strip(workflowText).split('\n')) {
+    final m = RegExp(r'''^    ["']?name["']?\s*:\s*(.*)$''').firstMatch(l);
+    if (m != null && _clean(m.group(1)!) == _checkName) return true;
+  }
+  return false;
+}
+
 /// Everything wrong with the lockfile guard; empty means the guard is intact. Every message starts with
-/// a stable `[token]` that the mutants below assert on.
-List<String> lockfileGuardProblems(String workflow, String mergeLibSrc) {
+/// a stable `[token]` that the mutants below assert on. [otherWorkflows] holds every OTHER file of
+/// `.github/workflows/` (name -> text).
+List<String> lockfileGuardProblems(String workflow, String mergeLibSrc,
+    {Map<String, String> otherWorkflows = const {}}) {
   final problems = <String>[];
+  final twins = _otherWorkflowsNaming(otherWorkflows);
+  if (twins.isNotEmpty) {
+    problems.add('[other-workflow] ${twins.join(', ')} define a job named `$_checkName` too: the wrapper judges '
+        'the newest check-run of a NAME, so it could mask the guard');
+  }
   final src = _strip(workflow);
   final job = _job(src, _jobId);
   if (job == null) return ['[job-missing] no job `$_jobId` in test.yml'];
@@ -232,10 +267,16 @@ List<String> lockfileGuardProblems(String workflow, String mergeLibSrc) {
 void main() {
   final workflow = File('.github/workflows/test.yml').readAsStringSync().replaceAll('\r\n', '\n');
   final mergeLib = File('scripts/safe_pr_merge_lib.dart').readAsStringSync().replaceAll('\r\n', '\n');
+  // Every OTHER workflow file (the merge wrapper judges a check NAME across the whole PR).
+  final otherWorkflows = <String, String>{
+    for (final f in Directory('.github/workflows').listSync().whereType<File>())
+      if (RegExp(r'\.ya?ml$').hasMatch(f.path) && f.path.replaceAll('\\', '/').split('/').last != 'test.yml')
+        f.path.replaceAll('\\', '/').split('/').last: f.readAsStringSync().replaceAll('\r\n', '\n'),
+  };
 
   const installBlock = '      - name: Install dependencies\n        run: $_resolveCommand\n';
   const verifyBlock =
-      '      - name: Verify pubspec.lock is what the pinned Flutter writes (OI-520)\n        run: $_verifyCommand\n';
+      '      - name: Verify pubspec.lock is unchanged after pub get (OI-520)\n        run: $_verifyCommand\n';
   const analyzeBlock = '      - name: Flutter analyze (zero warnings allowed)\n        run: flutter analyze --no-fatal-infos\n';
 
   /// Applies [change] to the `analyze` job's lines only, asserting the anchor [from] is inside it.
@@ -248,7 +289,7 @@ void main() {
   }
 
   test('the real workflow keeps the guard intact', () {
-    expect(lockfileGuardProblems(workflow, mergeLib), isEmpty);
+    expect(lockfileGuardProblems(workflow, mergeLib, otherWorkflows: otherWorkflows), isEmpty);
   });
 
   test('the real files contain the anchors the mutants below rely on', () {
@@ -348,6 +389,53 @@ void main() {
           '    runs-on: ubuntu-latest\n    defaults:\n      run:\n        working-directory: ./scripts\n'),
       lib: null,
     ),
+    // Round 2 (R2-1): job keys may be written ANYWHERE in the job block, not only before `steps:`.
+    'job-level continue-on-error written AFTER steps:': (
+      token: 'job-keys',
+      wf: (String s) => inJob(s, analyzeBlock, '$analyzeBlock    continue-on-error: true\n'),
+      lib: null,
+    ),
+    'job-level if: written AFTER steps:': (
+      token: 'job-keys',
+      wf: (String s) => inJob(s, analyzeBlock, "$analyzeBlock    if: github.event_name == 'push'\n"),
+      lib: null,
+    ),
+    'job-level env: written AFTER steps:': (
+      token: 'job-keys',
+      wf: (String s) =>
+          inJob(s, analyzeBlock, '$analyzeBlock    env:\n      PUB_HOSTED_URL: https://pub.example.invalid\n'),
+      lib: null,
+    ),
+    'job key written with a space before the colon': (
+      token: 'job-keys',
+      wf: (String s) =>
+          inJob(s, '    runs-on: ubuntu-latest\n', '    continue-on-error : true\n    runs-on: ubuntu-latest\n'),
+      lib: null,
+    ),
+    'env: on the resolving step': (
+      token: 'resolve-extra-keys',
+      wf: (String s) => inJob(
+          s,
+          installBlock,
+          '      - name: Install dependencies\n        env:\n          PUB_HOSTED_URL: https://pub.example.invalid\n'
+              '        run: $_resolveCommand\n'),
+      lib: null,
+    ),
+    'the job id renamed, so the guarded job vanishes': (
+      token: 'job-missing',
+      wf: (String s) => s.replaceFirst('\n  $_jobId:\n', '\n  analyse:\n'),
+      lib: null,
+    ),
+    'a second job carries the check name in quotes': (
+      token: 'job-name-unique',
+      wf: (String s) => '$s\n  analyze-twin:\n    name: "Analyze"\n    runs-on: ubuntu-latest\n',
+      lib: null,
+    ),
+    'a second job whose id line and name line carry comments': (
+      token: 'job-name-unique',
+      wf: (String s) => '$s\n  analyze-twin:  # sneaky\n    name: Analyze  # twin\n    runs-on: ubuntu-latest\n',
+      lib: null,
+    ),
     'job renamed, so the required check name no longer exists': (
       token: 'job-name',
       wf: (String s) => inJob(s, '    name: Analyze\n', '    name: Static analysis\n'),
@@ -385,6 +473,30 @@ void main() {
           reason: 'the guard must report [${entry.value.token}] for "${entry.key}", got: $problems');
     });
   }
+
+  // R2-5: a job of the same check NAME in ANOTHER workflow file (the wrapper judges the newest check-run of a name).
+  final otherMutants = <String, String>{
+    'another workflow file defines a job named Analyze':
+        'name: Evil\njobs:\n  x:\n    name: Analyze\n    runs-on: ubuntu-latest\n    steps: []\n',
+    'another workflow file quotes the check name and comments the line':
+        'jobs:\n  x:\n    name: "Analyze"  # twin\n    runs-on: ubuntu-latest\n    steps: []\n',
+  };
+  for (final entry in otherMutants.entries) {
+    test('kills the mutant: ${entry.key}', () {
+      final problems =
+          lockfileGuardProblems(workflow, mergeLib, otherWorkflows: {...otherWorkflows, 'evil.yml': entry.value});
+      expect(problems.any((p) => p.startsWith('[other-workflow]')), isTrue,
+          reason: 'the guard must report [other-workflow] for "${entry.key}", got: $problems');
+    });
+  }
+
+  test('another workflow file with a merely similar job name is not a false positive', () {
+    final problems = lockfileGuardProblems(workflow, mergeLib, otherWorkflows: {
+      ...otherWorkflows,
+      'ok.yml': 'jobs:\n  x:\n    name: Analyze data\n    runs-on: ubuntu-latest\n    steps: []\n',
+    });
+    expect(problems, isEmpty);
+  });
 
   test('a comment that quotes the command does not count as the step', () {
     // The explanatory comment in test.yml quotes the commands; only real steps may be judged.
