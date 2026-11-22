@@ -18,6 +18,16 @@
     <!-- Legacy Google Fit permissions (Android 13 and below) -->
     <uses-permission android:name="android.permission.ACTIVITY_RECOGNITION" />
 
+    <!-- The image-crop screen (UCropActivity, below) is locked to portrait.
+         Android turns ANY activity's portrait lock into a REQUIRED
+         android.hardware.screen.portrait feature for the whole app, and Play then
+         hides the app from devices that cannot show a portrait screen (some
+         tablets, desktop, XR). MainActivity itself is not locked and the app runs
+         fine there, so mark the feature optional; the crop lock stays. -->
+    <uses-feature
+        android:name="android.hardware.screen.portrait"
+        android:required="false" />
+
     <application
         android:label="AVYA Fit"
         android:name="${applicationName}"
