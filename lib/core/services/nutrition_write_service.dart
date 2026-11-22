@@ -1024,6 +1024,12 @@ class NutritionWriteService {
   /// `SubscriptionService.onStateChanged`.
   static void Function()? onStateChanged;
 
+  /// OI-348 walk B1 hotfix (Landing 1a-i) — the sync layer's entry to the
+  /// SAME provider invalidation every write here fires, for a sync step that
+  /// changed nutrition rows outside this service (the one-time removal of the
+  /// cross-channel pull's copies, `SyncServiceNutrition._cleanupNutritionPullCopies`).
+  static void invalidateAfterSync() => instance._invalidateNutritionProviders();
+
   void _invalidateNutritionProviders() {
     // Legacy container path — kept for back-compat in tests that wire
     // _container directly via attachContainer. Production code goes

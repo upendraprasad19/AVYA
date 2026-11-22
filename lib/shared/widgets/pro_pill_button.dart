@@ -2,6 +2,7 @@ import 'package:icanbefitter/core/copy/purchase_copy.dart';
 import 'package:icanbefitter/core/constants/purchase_mode.dart';
 import 'package:flutter/material.dart';
 
+import '../../core/theme/colors.dart';
 import '../../core/theme/typography.dart';
 
 /// Bug #22 — Brushed metallic PRO pill. Gold for PRO, silver for free.
@@ -41,6 +42,11 @@ class ProPillButton extends StatelessWidget {
     const silverTopEdge = Color(0xFFF3F4F6);
     const silverBottomEdge = Color(0xFF4B5563);
 
+    // OI-348 walk P4 (founder 2026-11-22): a FREE account in a build that
+    // sells nothing (ADR-0022) gets a dim grey outline with no metal fill, so
+    // the "PRO" word no longer reads as a PRO status badge. A PRO account and
+    // a build that sells PRO keep the metal pills.
+    final dimFree = !isPro && !showsUpgradeAffordance();
     final fill = isPro ? goldFill : silverFill;
     final topEdge = isPro ? goldTopEdge : silverTopEdge;
     final bottomEdge = isPro ? goldBottomEdge : silverBottomEdge;
@@ -58,25 +64,34 @@ class ProPillButton extends StatelessWidget {
       child: Container(
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(100),
-          border: Border.all(color: topEdge, width: 1),
-          boxShadow: const [
-            BoxShadow(
-              color: Color(0x61000000),
-              blurRadius: 8,
-              offset: Offset(0, 2),
-            ),
-          ],
+          border: Border.all(
+              color: dimFree ? AppColors.textMute : topEdge, width: 1),
+          boxShadow: dimFree
+              ? null
+              : const [
+                  BoxShadow(
+                    color: Color(0x61000000),
+                    blurRadius: 8,
+                    offset: Offset(0, 2),
+                  ),
+                ],
         ),
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
           decoration: BoxDecoration(
-            gradient: fill,
+            gradient: dimFree ? null : fill,
             borderRadius: BorderRadius.circular(100),
-            border: Border.all(color: bottomEdge, width: 1),
+            border: dimFree
+                ? null
+                : Border.all(color: bottomEdge, width: 1),
           ),
           child: Text(
             label,
-            style: AppTypography.bodySm.copyWith(fontSize: 11, fontWeight: FontWeight.w900, color: Colors.black, letterSpacing: 0.5),
+            style: AppTypography.bodySm.copyWith(
+                fontSize: 11,
+                fontWeight: FontWeight.w900,
+                color: dimFree ? AppColors.textDim : Colors.black,
+                letterSpacing: 0.5),
           ),
         ),
       ),

@@ -1,0 +1,113 @@
+# Closure ledger - oi348-landing1a-i (OI-348 device walk, AAB +50: B1 nutrition doubling hotfix + P4 grey free PRO pill).
+# Gate 40. One terminal_state per unit or plan-review finding; no `deferred:` key. Plan: docs/plans/oi348-walk-fixes-landing1.md
+# ("v5" + "v5 review amendments" + "P4 v3"). `oi348-device-walk@branch` is the in-branch commit form (the commit that carries this
+# file). The full cross-device meal sync is Landing 1a-ii (docs/plans/nutrition-slot-sync.md), built in this batch on its own branch.
+
+batch: oi348-landing1a-i
+plan_review_record: docs/plan-reviews/oi348-device-walk.md
+diagnose_docs:
+  - docs/diagnoses/2026-11-22-nutrition-pull-copies-doubled-b1d2a8.md
+total_findings: 17
+closed_count: 17
+
+findings:
+  - id: U-B1
+    title: "Every meal of the last 24 h counted twice after a launch: the cross-channel pull's nutrition leg wrote cloud-id-keyed item-less copies; leg off behind restore_nutrition_launch_pull, one-time owner-checked removal of the copies"
+    terminal_state: closed_in_commit
+    commit: "oi348-device-walk@branch"
+    verification: "test/sync/nutrition_pull_removed_behavioral_test.dart 10/10 green; 6 mutations (diagnose b1d2a8 mutation_proof): M1-M4 and M6 redden, the owner checks redden when all three are removed (each single one is masked by the others, stated)"
+
+  - id: U-P4
+    title: "A FREE account's coach pill and Profile pill read as a gold/silver PRO badge in the no-purchase build; both now a dim grey outline with the same label and tap (founder decision P4, 2026-11-22)"
+    terminal_state: closed_in_commit
+    commit: "oi348-device-walk@branch"
+    verification: "test/ai_coach/coach_free_status_pill_test.dart (2) + test/pro_pill_button_test.dart (3 new) green; pins purchase_surfaces_mode_none_test, chat_limit_part_b_client_test, purchase_literal_inventory_test, telegram_surface_removed_test green (91 tests); mutations: coach pill gold ink in none mode -> 1 RED, ProPillButton dimFree forced false -> 1 RED"
+
+  - id: R3-P1-BEHAVIOUR
+    title: "Round 3 (v3 B1): the stated behaviour change was false (a populated device has no other nutrition pull)"
+    terminal_state: closed_in_commit
+    commit: "oi348-device-walk@branch"
+    verification: "plan v5 + v5 amendment P2-1 and the diagnose-doc impact_analysis state it truthfully: a meal from another device reaches a populated device only at its next full restore until Landing 1a-ii"
+
+  - id: R3-P1-ORDER
+    title: "Round 3: the cleanup must run before the legs' Future.wait with the owner check before the scan"
+    terminal_state: closed_in_commit
+    commit: "oi348-device-walk@branch"
+    verification: "_pullRecentCrossChannelLogsFor awaits _cleanupNutritionPullCopies before Future.wait; owner check precedes the scan; test 'another account live' asserts nothing removed and no flag"
+
+  - id: R3-P2-INVALIDATE
+    title: "Round 3: providers must re-read after the copies are deleted"
+    terminal_state: closed_in_commit
+    commit: "oi348-device-walk@branch"
+    verification: "NutritionWriteService.invalidateAfterSync() called when N > 0; tests assert 1 call for N=1 and 0 for N=0; mutation M3 reddens"
+
+  - id: R3-P2-BESIDE
+    title: "Round 3: a copy beside the real nlog_ row of the same slot must be tested"
+    terminal_state: closed_in_commit
+    commit: "oi348-device-walk@branch"
+    verification: "test 'the day total equals the real row alone afterwards' (190 -> 95)"
+
+  - id: R3-P2-PINS
+    title: "Round 3: telegram_surface_removed_test exact-line pins and the closure row text"
+    terminal_state: closed_in_commit
+    commit: "oi348-device-walk@branch"
+    verification: "the three pinned lines in _pullNutritionLogs/_pullWeightLogs are unchanged and no new lib/ line names the channel (test green); telegram-surface-off.closure.yaml TG-OI467-SOURCE-LABEL blocker text and OI-467 Blocked-on/Verified updated"
+
+  - id: R3-P2-P4-PINS
+    title: "Round 3: P4 extraction needs onTap, the paywall label literal stays in status_pill.dart, the mode-none regex pins hold"
+    terminal_state: closed_in_commit
+    commit: "oi348-device-walk@branch"
+    verification: "CoachFreeStatusPill(onTap:) built by _buildStatusPill with feature: 'Higher daily AI coach limit' in status_pill.dart; the UPGRADE/proInfo ternary and the arrow regex unchanged (purchase_surfaces_mode_none_test green)"
+
+  - id: R4-P2-1
+    title: "Round 4 (v5): the cleanup also removes single, correct copies of meals logged on another device"
+    terminal_state: closed_in_commit
+    commit: "oi348-device-walk@branch"
+    verification: "stated in the plan amendment and the diagnose-doc impact_analysis; accepted (testing accounts, CLAUDE.md 1); Landing 1a-ii restores cross-device meals properly"
+
+  - id: R4-P2-2
+    title: "Round 4: a throwing cleanup must not skip the weight and measurement legs"
+    terminal_state: closed_in_commit
+    commit: "oi348-device-walk@branch"
+    verification: "own try/catch, never rethrows; test 'a failing cleanup never skips the weight leg' (debugFailPullCopyCleanup); mutation M6 (rethrow) reddens"
+
+  - id: R4-P2-3
+    title: "Round 4: the stub harness has no auth session, the public pull returns early"
+    terminal_state: closed_in_commit
+    commit: "oi348-device-walk@branch"
+    verification: "@visibleForTesting pullRecentCrossChannelLogsForUser(userId) runs the same body; added to sync_service_public_api_snapshot_test.dart (green)"
+
+  - id: R4-P2-4
+    title: "Round 4: the match rule was looser than the copier's shape (a UUID-keyed cloud_restore row would match)"
+    terminal_state: closed_in_commit
+    commit: "oi348-device-walk@branch"
+    verification: "isNutritionPullCopy requires user_id and source != cloud_restore; pure test row with source cloud_restore kept; mutation M4 reddens"
+
+  - id: R4-P3-ALL
+    title: "Round 4 P3s: invalidation via the singleton, flag written when N == 0, owner-check mutation defined, SoT/naming/OI/ledger, 1a-ii reuses the helper, P4 token choice and literals"
+    terminal_state: closed_in_commit
+    commit: "oi348-device-walk@branch"
+    verification: "invalidateAfterSync = instance._invalidateNutritionProviders(); 'runs once' test asserts the flag after a no-op pass; docs/sot_registry.yaml nutrition_pull_copy_cleanup; docs/naming_conventions.md glossary rows; lib/core/services/CLAUDE.md row; nutrition-slot-sync.md says 1a-ii reuses the helper; dim pill border AppColors.textMute, text AppColors.textDim"
+
+  - id: U-LINE-SHIFT
+    title: "Author check: new code placed at the END of sync_nutrition.dart so every existing line number cited by docs and tests is unchanged (CLAUDE.md 4.9 source-grep pitfall)"
+    terminal_state: verified_clean
+    evidence: "git diff of sync_nutrition.dart has 0 removed lines; _syncNutritionLogs still starts at line 201 as docs/sot_registry.yaml cites"
+
+  - id: BP-F1-OWNER-GUARD-TEST
+    title: "B-pass F1 (P2): the Hive-owner check (live account B, boxes still A's) had no test; every owner guard was masked by another"
+    terminal_state: closed_in_commit
+    commit: "oi348-device-walk@branch"
+    verification: "test 'Hive boxes owned by another account: nothing removed, no flag for the live account' in test/sync/nutrition_pull_removed_behavioral_test.dart; mutation drop `currentOwnerFullId != userId ||` -> 1 RED (was 15/15 green at review)"
+
+  - id: BP-F2-SOT-RANGES
+    title: "B-pass F2 (P2): docs/sot_registry.yaml ranges for _fetchAllRows, _reportSyncFailure (2 entries) and kNlogKeyShape..firstFreeLogKey stale after the +24 / +6 line shifts"
+    terminal_state: closed_in_commit
+    commit: "oi348-device-walk@branch"
+    verification: "re-derived doc comment to closing brace: 3154-3225, 2983-3056 (both), 1073-1095; sweep of every registry cite past the insertion points and of bare file:NNNN cites in lib, test, docs/architecture found no other stale one"
+
+  - id: BP-F3-REREAD-AFTER-FAILED-DELETE
+    title: "B-pass F3 (P3): a delete that threw part-way skipped the provider re-read"
+    terminal_state: closed_in_commit
+    commit: "oi348-device-walk@branch"
+    verification: "invalidateAfterSync in finally once a delete started (owner-checked); test 'a delete that fails part-way: screens re-read, no flag, retried next launch' (seam debugFailPullCopyDelete); mutation never-invalidate -> 2 RED"
