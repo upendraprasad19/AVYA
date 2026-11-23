@@ -22,6 +22,7 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:icanbefitter/core/services/error_telemetry.dart';
 import 'package:icanbefitter/core/services/speech_input_service.dart';
+import 'package:icanbefitter/core/services/speech_segment_accumulator.dart';
 
 enum SpeechInputState { idle, starting, listening }
 
@@ -115,6 +116,17 @@ class SpeechInputController extends ChangeNotifier
   SpeechInputState _state = SpeechInputState.idle;
   String _liveText = '';
   bool _disposed = false;
+
+  /// OI-348 B5: native sessions keep the words of every finished segment.
+  /// Decided once per session in [_start] (web, or the kill switch: off).
+  final SpeechSegmentAccumulator _segments = SpeechSegmentAccumulator();
+  bool _accumulate = false;
+
+  /// One `speech_segments` event per app process (a sample of one session).
+  static bool _segmentTelemetrySent = false;
+
+  @visibleForTesting
+  static void debugResetSegmentTelemetry() => _segmentTelemetrySent = false;
 
   /// Bumps on EVERY `_finish`: a continuation that resumes after an await
   /// compares it to the value it started with.
@@ -221,6 +233,8 @@ class SpeechInputController extends ChangeNotifier
     }
     _state = SpeechInputState.starting;
     _liveText = '';
+    _accumulate = !_service.isWeb && _service.segmentAccumulateEnabled;
+    _segments.reset();
     _elapsed.value = Duration.zero;
     _retried = false;
     _listenIssued = false;
@@ -355,6 +369,8 @@ class SpeechInputController extends ChangeNotifier
   void _retry(int epoch) {
     _retried = true;
     _listenIssued = false;
+    _segments.reset(); // a retry only runs while nothing was heard
+    _liveText = '';
     // Null them too: `engineNotListening` / `engineDone` arm with `??=`, and a
     // cancelled Timer is still non-null, so the retried session would never
     // arm its own grace and a native end with no final would hang (B-pass
@@ -390,8 +406,19 @@ class SpeechInputController extends ChangeNotifier
     if (result.isFinal) {
       if (result.words.trim().isNotEmpty) {
         // The platform's natural end: the final comes BEFORE `notListening`.
-        _finish(SpeechEndReason.auto, result.words);
+        _finish(
+          SpeechEndReason.auto,
+          _accumulate ? _segments.onFinal(result.words) : result.words,
+        );
       }
+      return;
+    }
+    if (_accumulate) {
+      _segments.onResult(result.words, segmentEnd: result.isSegmentEnd);
+      final next = _segments.text;
+      if (next == _liveText) return;
+      _liveText = next;
+      notifyListeners();
       return;
     }
     if (result.words == _liveText) return;
@@ -503,6 +530,7 @@ class SpeechInputController extends ChangeNotifier
     // idempotent cancel: EVERY end releases the engine, because the plugin's
     // timers are cleared only by it (plan G1).
     _service.release(this);
+    _maybeLogSegments();
 
     if (reason == SpeechEndReason.disposed) return;
 
@@ -526,6 +554,21 @@ class SpeechInputController extends ChangeNotifier
     _deliver(end);
     _notifyBusy(false);
     if (!_disposed) notifyListeners();
+  }
+
+  /// OI-348 B5: tells, once per app process, which shape this device's
+  /// recognizer has (counts and the mode only, never words, plan G18). The
+  /// first accumulating session with 10+ results is the sample.
+  void _maybeLogSegments() {
+    if (!_accumulate || _segmentTelemetrySent) return;
+    if (_segments.resultCount < 10) return;
+    _segmentTelemetrySent = true;
+    unawaited(
+      ErrorTelemetry.logEvent(
+        'speech_segments',
+        message: _segments.telemetryMessage(),
+      ),
+    );
   }
 
   /// A tap that started nothing (the platform has no recognizer) still tells

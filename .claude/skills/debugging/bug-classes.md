@@ -2265,3 +2265,17 @@ added, false of the flip being performed.
 - **Root-cause shape:** the fixture date was chosen as "today" when the test was written; the filter's window moves with the clock, the fixture does not.
 - **Fix pattern:** derive every fixture time that meets a now-relative filter from `DateTime.now()` (`_at = now - 1 h`, the date from `_at`); grep a new test for literal dates whenever the code under test reads a `since`, `gte`/`gt` on a time column, or "last N hours/days".
 - **Regression test:** `test/sync/nutrition_pull_removed_behavioral_test.dart` (13 green on 2026-11-23; the fixed-date version is red the same day).
+
+### 2.169 A write-time stamp is trusted over the date sequence (NEW 2026-11-23)
+
+- **Telltale:** a history view groups rows by a field stamped when they were written (here `schedule_*.phase`), and a group shows days from another month, or a week that lists two of its seven days, while the cloud has every row. Instance: OI-348 walk A5 part 1 (diagnose 5c8e2a): four Sunday rest rows inside a Phase 3 month still said `phase: 1`, so "Phase I" week 2 held Sun 27 and Mon 28 only.
+- **Root-cause shape:** the stamp is a snapshot of state at write time; a merge that keeps one kind of row wholesale (the L1 guard keeps a local REST row, stale stamp included) leaves old stamps among fresh ones, and a grouping by stamp NUMBER ignores the dates entirely.
+- **Fix pattern:** group display by the DATE sequence of the stamps (runs, with short runs of the kind the merge keeps treated as noise), and leave the strict number grouping to the monotonic counter that needs it. Never "fix" the merge to adopt the incoming stamp: its mirror (the local stamp is the fresh one) has no answer.
+- **Regression test:** `test/contracts/past_phase_display_runs_behavioral_test.dart` (T1 is the walk account's 140 live rows verbatim).
+
+### 2.170 A platform segment boundary is dropped at a wrapper (NEW 2026-11-23)
+
+- **Telltale:** a long dictated sentence ends with only its last fragment; short phrases work. Instance: OI-348 walk A19 (diagnose 6d9f3b): "or the coming week".
+- **Root-cause shape:** the plugin reports a finished segment as a separate result type (Android `ResultType.intermediate`, `finalResult == false`) and accumulates nothing; the app's wrapper mapped results to `(words, isFinal)` and dropped the type, so the consumer replaced its text with every result.
+- **Fix pattern:** carry the boundary through the wrapper (compare the raw int, never a `fromValue` that throws on an unknown value inside the plugin's chain), and decide in a pure accumulator whether the recognizer is segmented (append) or cumulative (replace); report the shape with a counts-only event, because which one a device has cannot be read from source.
+- **Regression test:** `test/core/speech_segment_accumulator_test.dart`, `test/core/speech_input_controller_behavioral_test.dart` group 'segment accumulation (native)'.
