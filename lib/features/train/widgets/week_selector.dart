@@ -145,6 +145,7 @@ class _WeekSelectorState extends ConsumerState<WeekSelector> {
     final pastPhases = _toPastPhases(
       service.pastPhaseBlocksForDisplay(widget.currentPhase),
       widget.currentPhase,
+      extendWeeks: service.pastPhaseDisplayRunsEnabled,
     );
 
     // Free-tier hold weeks. HoldStatusData.empty for a user who never held,
@@ -332,7 +333,12 @@ class _WeekSelectorState extends ConsumerState<WeekSelector> {
 /// schedule data without deleting anything. Fix 2026-06-02 (two-Phase-1 bug;
 /// previously numbered idx+1, always labelling the oldest block "PHASE I" and
 /// colliding with the hardcoded forward "PHASE I").
-List<_PastPhase> _toPastPhases(List<PastPhaseBlock> blocks, int currentPhase) {
+///
+/// [extendWeeks] (OI-348 B3, the `disable_past_phase_display_runs` switch read
+/// once per build): a group gets one chip per week its rows span (min 4), so a
+/// row past day 28 is on a chip; off → always 4 chips (old behaviour).
+List<_PastPhase> _toPastPhases(List<PastPhaseBlock> blocks, int currentPhase,
+    {bool extendWeeks = false}) {
   final showCount = (currentPhase - 1).clamp(0, blocks.length);
   if (showCount == 0) return const [];
   final shown = blocks.sublist(blocks.length - showCount);
@@ -362,10 +368,42 @@ List<_PastPhase> _toPastPhases(List<PastPhaseBlock> blocks, int currentPhase) {
       startDate: entries.first.date,
       endDate: entries.last.date,
       entries: entries,
+      weekCount: extendWeeks
+          ? pastPhaseWeekCount(entries.first.date, entries.last.date)
+          : 4,
     ));
   }
   return result;
 }
+
+/// Chips a past group needs to put every row on one (min 4): the day
+/// difference of [start]/[end] as UTC calendar dates (DST-proof) / 7 + 1.
+@visibleForTesting
+int pastPhaseWeekCount(DateTime start, DateTime end) {
+  final days = DateTime.utc(end.year, end.month, end.day)
+      .difference(DateTime.utc(start.year, start.month, start.day))
+      .inDays;
+  final weeks = days ~/ 7 + 1;
+  return weeks < 4 ? 4 : weeks;
+}
+
+/// Test view of what the strip renders for past phases (OI-348 B3): number,
+/// chip count and the dates of every row each group lists. Same code path as
+/// the widget ([_toPastPhases]); numbering deliberately NOT shared with
+/// `WorkoutScheduleReadService.phaseForDateDisplay`.
+@visibleForTesting
+List<({int phaseNumber, int weekCount, List<DateTime> dates})>
+    pastPhaseGroupsForTest(List<PastPhaseBlock> blocks, int currentPhase,
+            {required bool extendWeeks}) =>
+        [
+          for (final p
+              in _toPastPhases(blocks, currentPhase, extendWeeks: extendWeeks))
+            (
+              phaseNumber: p.phaseNumber,
+              weekCount: p.weekCount,
+              dates: [for (final e in p.entries) e.date],
+            ),
+        ];
 
 class _ScheduleEntry {
   final String key;
@@ -391,11 +429,15 @@ class _PastPhase {
   final DateTime startDate;
   final DateTime endDate;
   final List<_ScheduleEntry> entries;
+
+  /// Chips in the group (4, or the weeks the rows span; OI-348 B3).
+  final int weekCount;
   const _PastPhase({
     required this.phaseNumber,
     required this.startDate,
     required this.endDate,
     required this.entries,
+    this.weekCount = 4,
   });
 
   bool hasCompletedDayInWeek(int weekInPhase) {
@@ -419,7 +461,7 @@ class _PastPhase {
   }
 }
 
-// ── Past phase group (label + 4 chips, visually muted) ────────────────────
+// ── Past phase group (label + week chips, visually muted) ─────────────────
 
 class _PastPhaseGroup extends StatelessWidget {
   const _PastPhaseGroup({required this.past, required this.onTap});
@@ -458,7 +500,7 @@ class _PastPhaseGroup extends StatelessWidget {
         ),
         Row(
           children: [
-            for (var w = 1; w <= 4; w++)
+            for (var w = 1; w <= past.weekCount; w++)
               Padding(
                 padding: const EdgeInsets.only(right: 6),
                 child: _PastWeekChip(
