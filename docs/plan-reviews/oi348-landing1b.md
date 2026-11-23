@@ -5,7 +5,8 @@ blast_radius: account
 review_rounds: 2
 ground_truth_verified: true
 verdict: converged
-bpass: pending
+bpass: accepted
+bpass_review: docs/reviews/oi348-landing1b-bpass.md
 ---
 
 # Plan-review record — OI-348 Landing 1b (B3/B7 past-phase history, B5 dictation)
@@ -39,4 +40,7 @@ the plugin's Android, Dart and web sources. Live, read-only (project `dedsavbjuw
 Inline, one worktree (`oi348-landing1b`), decided at start (§4.12.7).
 
 ## B-pass
-Pending (self-initiated before the merge, §4.3).
+Accepted: `docs/reviews/oi348-landing1b-bpass.md`. Three context-blind seats (A past phases, B dictation,
+D delta on the fixes), each mutating only its own files. 0 P0/P1; 10 findings: 7 fixed with a mutant
+each, 2 recorded residuals, 1 label. The delta seat changed one fix (a one-time replace instead of
+deciding the mode).

@@ -1240,7 +1240,7 @@ concepts:
           dismiss (per-user IST date key) + configBox kill-switch
           'disable_expiry_banner'. Renders via _buildExpiryBanner in home_screen.
       - file: lib/features/train/widgets/week_selector.dart
-        line_range: 38-45
+        line_range: 123-126
         method: WeekSelector build
         semantic: display-only
         fields_read: [isPro]
@@ -10303,7 +10303,7 @@ concepts:
     reader_manifest_complete: false  # progressive caller migration; @Deprecated lint surfaces remaining
     readers:
       - file: lib/features/train/widgets/week_selector.dart
-        line_range: 35-45
+        line_range: 123-128
         method: build → getPlanStartDate
         semantic: latest
         fields_read: [plan_start_date]
@@ -10454,7 +10454,7 @@ concepts:
         method: SelectedWeek / SelectedWeekNotifier.build (default, picked false) / select (picked true)
     readers:
       - file: lib/features/train/widgets/week_selector.dart
-        line_range: 1067-1074
+        line_range: 1089-1096
         method: weekChipLit (pure)
         semantic: latest
         fields_read: [SelectedWeek.week, SelectedWeek.picked, HoldStatusData.todayHoldOrdinal]
@@ -14302,7 +14302,7 @@ concepts:
           account).
     readers:
       - file: lib/features/train/widgets/week_selector.dart
-        line_range: 137
+        line_range: 144-149
         method: past-phase strip
         semantic: render
         notes: The ONLY permitted caller of the display wrapper.
@@ -14363,8 +14363,8 @@ concepts:
     reader_manifest_complete: true
     readers:
       - file: lib/features/train/widgets/week_selector.dart
-        line_range: 340-406
-        method: _toPastPhases (weekCount) + pastPhaseWeekCount + pastPhaseGroupsForTest
+        line_range: 340-438
+        method: _toPastPhases (weekCount) + pastPhaseWeekCount + pastPhaseWeekOf (the one calendar week rule for count and chip assignment) + pastPhaseGroupsForTest
         semantic: render
         notes: chip loop `for (var w = 1; w <= past.weekCount; w++)`; extendWeeks read once per build.
       - file: lib/core/services/workout_schedule_read_service.dart
@@ -20123,7 +20123,7 @@ concepts:
       the host's text field until the host sends them.
     writers:
       - file: lib/core/services/speech_input_service.dart
-        line_range: 337-687
+        line_range: 342-692
         method: SpeechInputService (begin / release / _onStatus / _cancelOwnerless)
         semantic: per-session
       - file: lib/core/services/speech_input_controller.dart
@@ -20176,15 +20176,15 @@ concepts:
       session in `_start`.
     writers:
       - file: lib/core/services/speech_input_service.dart
-        line_range: 269-275
-        method: PluginSpeechEngine.listen onResult mapping (isSegmentEnd)
+        line_range: 208-218
+        method: engineResultFromPlugin (isSegmentEnd from the raw int; called by PluginSpeechEngine.listen)
         semantic: per-session
       - file: lib/core/services/speech_segment_accumulator.dart
-        line_range: 26-163
+        line_range: 31-189
         method: SpeechSegmentAccumulator (onResult / onFinal)
         semantic: per-session
       - file: lib/core/services/speech_input_service.dart
-        line_range: 352-371
+        line_range: 357-376
         method: segmentAccumulateEnabled (kill switch, unreadable box = on)
         semantic: flag-check
     reader_manifest_complete: true

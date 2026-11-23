@@ -8,12 +8,42 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:hive/hive.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
 import 'package:icanbefitter/core/services/speech_input_service.dart';
+import 'package:speech_to_text/speech_recognition_result.dart';
 
 import '../helpers/fake_speech_engine.dart';
 
 void main() {
   SpeechInputService service() =>
       SpeechInputService(engine: FakeSpeechEngine(), isWeb: false);
+
+  group('engineResultFromPlugin (the one line B5 depends on; B-pass)', () {
+    SpeechRecognitionResult r(String w, int type) => SpeechRecognitionResult(
+        [SpeechRecognitionWords(w, null, 0.9)], type);
+
+    test('intermediate → segment end, not final', () {
+      final e = engineResultFromPlugin(
+          r('I want a plan', ResultType.intermediate.value));
+      expect(e.words, 'I want a plan');
+      expect(e.isSegmentEnd, isTrue);
+      expect(e.isFinal, isFalse);
+    });
+    test('partial → neither', () {
+      final e = engineResultFromPlugin(r('I want', ResultType.partial.value));
+      expect(e.isSegmentEnd, isFalse);
+      expect(e.isFinal, isFalse);
+    });
+    test('finalResult → final, not a segment end', () {
+      final e =
+          engineResultFromPlugin(r('done', ResultType.finalResult.value));
+      expect(e.isFinal, isTrue);
+      expect(e.isSegmentEnd, isFalse);
+    });
+    test('an unknown type int is a plain partial and does not throw', () {
+      final e = engineResultFromPlugin(r('hm', 7));
+      expect(e.isSegmentEnd, isFalse);
+      expect(e.isFinal, isFalse);
+    });
+  });
 
   test('no opened box reads as enabled', () {
     expect(service().segmentAccumulateEnabled, isTrue);

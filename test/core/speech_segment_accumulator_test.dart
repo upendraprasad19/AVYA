@@ -111,7 +111,67 @@ void main() {
     expect(acc.repeats, 1);
   });
 
-  test('S6 a short committed segment never decides the mode', () {
+  test('S14 cumulative device, 2-word first segment, two ends: no duplicate '
+      'in the final (B-pass)', () {
+    end('two rotis');
+    p('two rotis and dal');
+    end('two rotis and dal bhat');
+    // Replaced once, mode still open; the next partial decides cumulative.
+    expect(acc.mode, SpeechSegmentMode.undecided);
+    expect(acc.text, 'two rotis and dal bhat');
+    p('two rotis and dal bhat today');
+    expect(acc.mode, SpeechSegmentMode.cumulative);
+    expect(acc.onFinal('two rotis and dal bhat today and curd'),
+        'two rotis and dal bhat today and curd');
+  });
+
+  test('S14b one-word first segment, cumulative final: the final alone', () {
+    end('yes');
+    p('yes I will');
+    expect(acc.onFinal('yes I will do it'), 'yes I will do it');
+    expect(acc.wholeFinals, 1);
+  });
+
+  test('S14d SEGMENTED device, a re-said short phrase: the session is not '
+      'locked and later segments are kept (delta seat)', () {
+    end('yes');
+    end('yes I will');
+    expect(acc.mode, SpeechSegmentMode.undecided);
+    expect(acc.text, 'yes I will');
+    p('book');
+    expect(acc.mode, SpeechSegmentMode.segmented);
+    end('book it');
+    expect(acc.text, 'yes I will book it');
+    expect(acc.onFinal('for monday'), 'yes I will book it for monday');
+  });
+
+  test('S14c short segments of a SEGMENTED device are still appended', () {
+    end('ok');
+    p('so book');
+    end('so book it');
+    expect(acc.mode, isNot(SpeechSegmentMode.cumulative));
+    expect(acc.text, 'ok so book it');
+    expect(acc.onFinal('for monday'), 'ok so book it for monday');
+  });
+
+  test('S15 a segment end in CUMULATIVE mode replaces, never blanks', () {
+    end('a b c');
+    p('a b c d');
+    expect(acc.mode, SpeechSegmentMode.cumulative);
+    end('a b c d e f');
+    expect(acc.text, 'a b c d e f');
+    expect(acc.onFinal('a b c d e f g'), 'a b c d e f g');
+  });
+
+  test('S16 an EQUAL-length first post-end partial decides SEGMENTED '
+      '(strictly more words for cumulative)', () {
+    end('a b c d');
+    p('a b c x');
+    expect(acc.mode, SpeechSegmentMode.segmented);
+    expect(acc.text, 'a b c d a b c x');
+  });
+
+  test('S6 a short committed segment never decides the mode on a PARTIAL', () {
     end('yes');
     p('yes');
     p('yes I will');

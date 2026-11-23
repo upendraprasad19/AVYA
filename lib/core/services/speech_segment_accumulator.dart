@@ -16,7 +16,12 @@
 ///   committed ones position by position for at least 70% decides CUMULATIVE
 ///   (the committed text is dropped, the result carries it); else, with 3+
 ///   committed words, the mode is SEGMENTED;
-/// - a segment end commits its words; any other result replaces the segment.
+/// - a segment end commits its words, except while undecided when it carries
+///   every committed word in place plus more (STRICTLY more words, 70%
+///   positional match, any committed length): it then REPLACES the committed
+///   text once, without deciding the mode, so a short first segment is not
+///   duplicated and a re-said phrase on a segmented device never locks the
+///   session (B-pass); any other result replaces the segment.
 /// Without any segment end nothing is committed and [text] is exactly the
 /// latest result, as before.
 library;
@@ -91,6 +96,24 @@ class SpeechSegmentAccumulator {
       }
     }
     if (segmentEnd) {
+      // B-pass: while undecided (fewer than 3 committed words), a segment end
+      // that carries every committed word in place plus more REPLACES the
+      // committed text, once: appending would put a cumulative recognizer's
+      // first segment in the transcript twice, past the final. It does NOT
+      // decide the mode (delta seat): a segmented device where the user
+      // re-said a short phrase would then replace every later segment and
+      // lose words; the normal 3-word rule decides on the next result.
+      if (_mode == SpeechSegmentMode.undecided && _committed.trim().isNotEmpty) {
+        final c = normalizedWords(_committed);
+        final r = normalizedWords(words);
+        if (r.length > c.length && prefixMatch(c, r) >= 0.7) {
+          _committed = words;
+          _lastCommitted = words;
+          _segment = '';
+          _afterEnd = true;
+          return;
+        }
+      }
       _committed = _join(_committed, words);
       _lastCommitted = words;
       _segment = '';
@@ -109,7 +132,10 @@ class SpeechSegmentAccumulator {
     }
     final c = normalizedWords(_committed);
     final r = normalizedWords(words);
-    if (c.length >= 2 && r.length >= c.length && prefixMatch(c, r) >= 0.7) {
+    // A one-word committed text needs a STRICTLY longer final (B-pass): an
+    // equal one-word final is the timeout repeat below, not a whole utterance.
+    final longEnough = c.length >= 2 ? r.length >= c.length : r.length > c.length;
+    if (c.isNotEmpty && longEnough && prefixMatch(c, r) >= 0.7) {
       wholeFinals++;
       return words; // the recognizer re-sent (and maybe rescored) everything
     }

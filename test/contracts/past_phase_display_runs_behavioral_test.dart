@@ -23,7 +23,7 @@ import 'package:icanbefitter/core/services/hive_user_session.dart';
 import 'package:icanbefitter/core/services/migrated_key.dart';
 import 'package:icanbefitter/core/services/workout_schedule_read_service.dart';
 import 'package:icanbefitter/features/train/widgets/week_selector.dart'
-    show pastPhaseGroupsForTest, pastPhaseWeekCount;
+    show pastPhaseGroupsForTest, pastPhaseWeekCount, pastPhaseWeekOf;
 import 'package:path_provider_platform_interface/path_provider_platform_interface.dart';
 import 'package:plugin_platform_interface/plugin_platform_interface.dart';
 
@@ -202,6 +202,20 @@ void main() {
       expect(blocks.length, 1);
       expect(pastPhaseWeekCount(blocks.single.startDate, blocks.single.endDate),
           5);
+    });
+
+    test('week of a date is CALENDAR arithmetic, not elapsed hours (DST)', () {
+      // A spring-forward day is 23 h: day 7 of the group is less than 7 x 24 h
+      // after the start. Simulated with a start one hour into its day.
+      final start = DateTime(2026, 3, 1, 1);
+      expect(pastPhaseWeekOf(start, DateTime(2026, 3, 1)), 1);
+      expect(pastPhaseWeekOf(start, DateTime(2026, 3, 7, 23)), 1);
+      expect(pastPhaseWeekOf(start, DateTime(2026, 3, 8)), 2);
+      expect(pastPhaseWeekOf(start, DateTime(2026, 3, 29)), 5);
+      expect(pastPhaseWeekCount(start, DateTime(2026, 3, 29)), 5);
+      expect(pastPhaseWeekOf(start, DateTime(2026, 2, 28)), 0);
+      expect(pastPhaseWeekOf(start, DateTime(2026, 2, 22)), 0);
+      expect(pastPhaseWeekOf(start, DateTime(2026, 2, 21)), -1);
     });
   });
 
@@ -419,6 +433,28 @@ void main() {
       final groups = pastPhaseGroupsForTest(blocks, 5, extendWeeks: true);
       expect([for (final g in groups) g.phaseNumber], [1, 2, 3, 4]);
       expect(groups.first.weekCount, 8, reason: 'Jun 1-Jul 23 spans 8 weeks');
+      // B-pass: every listed row sits on exactly ONE chip, and the last chip of
+      // an extended group is not empty (the chip count and the row-to-chip
+      // assignment use the same calendar arithmetic).
+      for (final g in groups) {
+        final onChips = [for (final c in g.chips) ...c];
+        expect(onChips.map(_d).toList()..sort(),
+            g.dates.map(_d).toList()..sort(),
+            reason: 'PHASE ${g.phaseNumber}: every row on one chip');
+        if (g.weekCount > 4) {
+          expect(g.chips.last, isNotEmpty,
+              reason: 'PHASE ${g.phaseNumber}: W${g.weekCount} lists a row');
+        }
+        // A chip's ✓ is exactly "a row ON THIS CHIP is completed".
+        for (var i = 0; i < g.weekCount; i++) {
+          expect(g.chipTicks[i], g.chipStatuses[i].contains('completed'),
+              reason: 'PHASE ${g.phaseNumber} W${i + 1} tick');
+        }
+      }
+      final ticks = [for (final g in groups) ...g.chipTicks];
+      expect(ticks, contains(true));
+      expect(ticks, contains(false),
+          reason: 'the fixture needs both, or an off-by-one tick passes');
       for (final g in groups) {
         for (final date in g.dates) {
           expect(read.phaseForDate(date), g.phaseNumber,

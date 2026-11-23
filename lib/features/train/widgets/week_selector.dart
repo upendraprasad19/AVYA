@@ -380,11 +380,21 @@ List<_PastPhase> _toPastPhases(List<PastPhaseBlock> blocks, int currentPhase,
 /// difference of [start]/[end] as UTC calendar dates (DST-proof) / 7 + 1.
 @visibleForTesting
 int pastPhaseWeekCount(DateTime start, DateTime end) {
-  final days = DateTime.utc(end.year, end.month, end.day)
+  final weeks = pastPhaseWeekOf(start, end);
+  return weeks < 4 ? 4 : weeks;
+}
+
+/// The 1-based chip of [date] in a past group starting on [start], from the
+/// CALENDAR dates (UTC day difference), never from elapsed time: a 7 x 24 h
+/// window drifts by an hour across a DST change, and the chip count above
+/// uses calendar days, so the two must agree (B-pass, OI-348 B3). A date
+/// before [start] gives 0 or less.
+@visibleForTesting
+int pastPhaseWeekOf(DateTime start, DateTime date) {
+  final days = DateTime.utc(date.year, date.month, date.day)
       .difference(DateTime.utc(start.year, start.month, start.day))
       .inDays;
-  final weeks = days ~/ 7 + 1;
-  return weeks < 4 ? 4 : weeks;
+  return (days / 7).floor() + 1;
 }
 
 /// Test view of what the strip renders for past phases (OI-348 B3): number,
@@ -392,7 +402,15 @@ int pastPhaseWeekCount(DateTime start, DateTime end) {
 /// the widget ([_toPastPhases]); numbering deliberately NOT shared with
 /// `WorkoutScheduleReadService.phaseForDateDisplay`.
 @visibleForTesting
-List<({int phaseNumber, int weekCount, List<DateTime> dates})>
+List<
+        ({
+          int phaseNumber,
+          int weekCount,
+          List<DateTime> dates,
+          List<List<DateTime>> chips,
+          List<List<String>> chipStatuses,
+          List<bool> chipTicks,
+        })>
     pastPhaseGroupsForTest(List<PastPhaseBlock> blocks, int currentPhase,
             {required bool extendWeeks}) =>
         [
@@ -402,6 +420,20 @@ List<({int phaseNumber, int weekCount, List<DateTime> dates})>
               phaseNumber: p.phaseNumber,
               weekCount: p.weekCount,
               dates: [for (final e in p.entries) e.date],
+              // What each chip's sheet lists (entriesForWeek, W1..weekCount).
+              chips: [
+                for (var w = 1; w <= p.weekCount; w++)
+                  [for (final e in p.entriesForWeek(w)) e.date],
+              ],
+              chipStatuses: [
+                for (var w = 1; w <= p.weekCount; w++)
+                  [for (final e in p.entriesForWeek(w)) e.status],
+              ],
+              // The ✓ each chip draws (hasCompletedDayInWeek).
+              chipTicks: [
+                for (var w = 1; w <= p.weekCount; w++)
+                  p.hasCompletedDayInWeek(w),
+              ],
             ),
         ];
 
@@ -440,25 +472,15 @@ class _PastPhase {
     this.weekCount = 4,
   });
 
-  bool hasCompletedDayInWeek(int weekInPhase) {
-    final weekStart =
-        startDate.add(Duration(days: (weekInPhase - 1) * 7));
-    final weekEnd = weekStart.add(const Duration(days: 7));
-    return entries.any((e) =>
-        e.status == 'completed' &&
-        !e.date.isBefore(weekStart) &&
-        e.date.isBefore(weekEnd));
-  }
+  // A row's chip is its CALENDAR week from [startDate] (pastPhaseWeekOf), the
+  // same arithmetic as [weekCount], so the two never disagree across DST.
+  bool hasCompletedDayInWeek(int weekInPhase) => entries.any((e) =>
+      e.status == 'completed' &&
+      pastPhaseWeekOf(startDate, e.date) == weekInPhase);
 
-  List<_ScheduleEntry> entriesForWeek(int weekInPhase) {
-    final weekStart =
-        startDate.add(Duration(days: (weekInPhase - 1) * 7));
-    final weekEnd = weekStart.add(const Duration(days: 7));
-    return entries
-        .where((e) =>
-            !e.date.isBefore(weekStart) && e.date.isBefore(weekEnd))
-        .toList();
-  }
+  List<_ScheduleEntry> entriesForWeek(int weekInPhase) => entries
+      .where((e) => pastPhaseWeekOf(startDate, e.date) == weekInPhase)
+      .toList();
 }
 
 // ── Past phase group (label + week chips, visually muted) ─────────────────

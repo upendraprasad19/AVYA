@@ -205,6 +205,18 @@ class SpeechEngineResult {
   final bool isSegmentEnd;
 }
 
+/// The plugin result mapped to the engine seam (OI-348 B5). Compares the raw
+/// `resultType` int, never `resultTypeValue`: its `fromValue` throws on an
+/// unknown value inside the plugin's result chain, so an unknown type is a
+/// plain partial here. Pure, so it is tested without the plugin channel.
+@visibleForTesting
+SpeechEngineResult engineResultFromPlugin(SpeechRecognitionResult r) =>
+    SpeechEngineResult(
+      r.recognizedWords,
+      isFinal: r.finalResult,
+      isSegmentEnd: r.resultType == ResultType.intermediate.value,
+    );
+
 class SpeechEngineError {
   const SpeechEngineError(this.code, {this.permanent = false});
   final String code;
@@ -265,15 +277,8 @@ class PluginSpeechEngine implements SpeechEngine {
     required SpeechListenOptions options,
   }) async {
     await _speech.listen(
-      onResult: (SpeechRecognitionResult r) => onResult(
-        SpeechEngineResult(
-          r.recognizedWords,
-          isFinal: r.finalResult,
-          // The raw int, never `resultTypeValue`: its `fromValue` throws on an
-          // unknown value inside the plugin's result chain (OI-348 B5).
-          isSegmentEnd: r.resultType == ResultType.intermediate.value,
-        ),
-      ),
+      onResult: (SpeechRecognitionResult r) =>
+          onResult(engineResultFromPlugin(r)),
       listenOptions: options,
     );
   }
