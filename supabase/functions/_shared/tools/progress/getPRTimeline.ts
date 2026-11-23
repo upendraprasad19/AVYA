@@ -11,6 +11,7 @@ import { buildDayMap, resolveDay } from "../../exercise_day.ts";
 import { istDateStr } from "../../ist_date.ts";
 import { liveSummaryRows, type SummaryRow } from "../../live_exercise_rows.ts";
 import { fetchPagesBounded } from "../../paged_fetch_bounded.ts";
+import { escapeLike } from "../../like_escape.ts";
 
 /** PRs returned at most; `pr_count` still counts every live PR in range. */
 const MAX_PRS = 50;
@@ -80,7 +81,7 @@ async function handler(
         withCount ? { count: "exact" } : undefined,
       )
       .eq("user_id", userId)
-      .ilike("exercise_id", name)
+      .ilike("exercise_id", escapeLike(name)) // % _ \ * escaped (OI-507)
       .is("deleted_at", null), { orderBy: [{ column: "id" }], maxPages: 10, label: "getPRTimeline" });
 
   // `from` / `to` are IST dates compared with each row's RESOLVED day (not its

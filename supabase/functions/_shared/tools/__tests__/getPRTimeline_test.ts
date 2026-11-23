@@ -117,3 +117,18 @@ Deno.test("getPRTimeline — `to` defaults to today: a rescheduled-forward PR (f
   assertEquals(r.pr_count, 1);
   assertEquals(r.latest_pr_date, "2026-09-01");
 });
+
+// OI-507: the model-supplied name reaches an `ilike`, so a wildcard must be escaped (own-data scope, but
+// `%` would otherwise list the caller's PRs on EVERY exercise).
+Deno.test("getPRTimeline — % and _ in the exercise name are escaped before the ilike (OI-507)", async () => {
+  const { sb, calls } = fakeSb({
+    workout_log_exercises: [await row("2026-09-01", { exercise_id: "Deadlift" })],
+  });
+  const r = await getPRTimelineTool.handler!(mkCtx(sb), { exerciseId: "%" });
+  assertEquals(r.pr_count, 0);
+  const values = calls
+    .filter((c) => c.table === "workout_log_exercises")
+    .flatMap((c) => c.filters.filter(([op, col]) => op === "ilike" && col === "exercise_id").map(([, , v]) => v));
+  assertEquals(values.length > 0, true, "no ilike on exercise_id was recorded");
+  for (const v of values) assertEquals(v, "\\%");
+});
