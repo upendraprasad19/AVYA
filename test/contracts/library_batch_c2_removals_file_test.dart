@@ -134,7 +134,9 @@ void main() {
 
     test('an alias equal to a row name', () {
       final m = _deep(file);
-      final e = (m['entries'] as List).cast<Map<String, dynamic>>().firstWhere((e) => e['id'] == 'E144');
+      // E211 keeps its alias_to (G1368); E144 has none since OI-523, so renaming it would test nothing.
+      final e = (m['entries'] as List).cast<Map<String, dynamic>>().firstWhere((e) => e['id'] == 'E211');
+      expect(e['alias_to'], isNotNull, reason: 'the mutated entry must still alias, or the check below is vacuous');
       e['name'] = 'Forward Lunge';
       expect(_problems(m, lib, fx).any((p) => p.contains('equals a row name')), isTrue);
     });
