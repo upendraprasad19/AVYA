@@ -187,15 +187,16 @@ only on its own explicit go; `backups/applied_migrations.json` and `backups/live
 
 `supabase/functions/_shared/revenuecat_mirror.ts` (pure mapping + one IO function, Deno-tested):
 
-- `mapCustomerToRows(customer, nowMs)` (pure): for each `subscriptions[productId]` with `store = play_store` and
-  product id starting `avya_pro:` -> one row keyed by that product id: `plan` from the base plan suffix (`monthly` |
-  `yearly`; any other suffix -> no row + alert `revenuecat_unknown_product`). Let `P` = the latest period's
+- `mapCustomerToRows(customer, nowMs)` (pure): for each `subscriptions[productId]` with `store = play_store`: key
+  `avya_pro` -> one row keyed by it, `plan` from `product_plan_identifier` (`monthly` | `yearly`); any other key or plan id,
+  or an entry without `purchase_date` / `expires_date` / boolean `is_sandbox` -> no row + critical alert
+  `revenuecat_unknown_product` (U0/U2). Paused (`auto_resume_date` set) counts as not renewing. Let `P` = the latest period's
   `purchase_date`, `E` = `expires_date`, `G` = `grace_period_expires_date` when a billing issue is open. Rules, first
   match wins (rounds 1 #14, 2 #2, 3 #1, #5):
   1. **Refunded:** `refunded_at IS NOT NULL AND refunded_at >= P` -> `status = 'cancelled'`, `end_date =
      refunded_at`. A refund of an OLD period followed by a rebuy has `refunded_at < P` and falls through, so it never
-     cancels the new purchase. U0 records a real refund-then-rebuy customer as a fixture BEFORE U2 is written; if
-     RevenueCat's shape differs, U2 follows the fixture and the plan record says so.
+     cancels the new purchase. The refund-then-rebuy fixture is doc-derived (U0 could not read a live customer); the
+     real shape is checked at L3 and T-MAP re-run before the switch goes ON (section 18).
   2. **Renewing (the renewal window):** `unsubscribe_detected_at IS NULL AND billing_issues_detected_at IS NULL` ->
      `effective_end = E + PLAY_RENEWAL_WINDOW` (3 hours); `status = active` iff `effective_end > now`; `end_date =
      effective_end`. The window is part of the STATUS test, so a read at `E + 10 min` before the renewal is posted
@@ -733,3 +734,11 @@ secret key lives only in the Edge secret, so no read from this machine is possib
   on the pre-182 AND the 182 database (T-SQL1); cases P1-P13 pass on 182; S1 (a held users row) gives 55P03 in under 2 s
   and leaves the deferral `pending`; mutants M1-M7 (Play branch, direct guard, job paid predicate, redeem sandbox, fall-back
   token, upsert stale guard, start_date chain) each fail a named case.
+
+## 20. U2 record (2026-11-24)
+
+- `supabase/functions/_shared/revenuecat_mirror.ts`: pure `mapCustomerToRows`, `fetchRevenueCatCustomer` (10 s timeout, one
+  retry on 5xx / 429 / network), `mirrorRevenueCatCustomer` (UUID + users-row guard and secret check BEFORE any GET;
+  `read_at` stamped before the GET), `supabaseMirrorDb` adapter (RPC `upsert_play_subscription`, deduped alert).
+- `_shared/revenuecat_mirror_test.ts`: 23 tests (T-MAP table, switch, IO). Mutants: no renewal window, refund rule
+  disabled, billing issue treated as renewing, `read_at` after the GET, user check after the GET: each fails 1-4 tests.
