@@ -341,6 +341,39 @@ DO $$ BEGIN
 END $$;
 ROLLBACK;
 
+-- P14 upsert tie and environment (B-pass of the draft, F1): an EQUAL read_at is 'stale_read' and changes nothing; a newer
+-- SANDBOX read never replaces a running PRODUCTION row ('sandbox_refused', row unchanged); once that PRODUCTION row has ended,
+-- a newer SANDBOX read is written.
+BEGIN;
+INSERT INTO users VALUES ('00000000-0000-4000-8000-0000000000e1');
+DO $$
+DECLARE r text; t0 timestamptz := now();
+BEGIN
+  r := upsert_play_subscription('00000000-0000-4000-8000-0000000000e1', 'avya_pro', 'monthly', 'active',
+         t0 - interval '1 day', t0 + interval '29 days', true, 'PRODUCTION', 'GPA.e1', t0 + interval '29 days', t0);
+  IF r <> 'written' THEN RAISE EXCEPTION 'P14 failed: first write returned %', r; END IF;
+  r := upsert_play_subscription('00000000-0000-4000-8000-0000000000e1', 'avya_pro', 'yearly', 'cancelled',
+         t0 - interval '1 day', t0, false, 'PRODUCTION', 'GPA.e1', t0, t0);
+  IF r <> 'stale_read' THEN RAISE EXCEPTION 'P14 failed: tied read returned %', r; END IF;
+  IF (SELECT plan || '|' || status FROM subscriptions WHERE user_id = '00000000-0000-4000-8000-0000000000e1') <> 'monthly|active' THEN
+    RAISE EXCEPTION 'P14 failed: tied read changed the row'; END IF;
+  r := upsert_play_subscription('00000000-0000-4000-8000-0000000000e1', 'avya_pro', 'yearly', 'active',
+         t0, t0 + interval '365 days', true, 'SANDBOX', 'GPA.e1s', t0 + interval '365 days', t0 + interval '1 minute');
+  IF r <> 'sandbox_refused' THEN RAISE EXCEPTION 'P14 failed: SANDBOX over running PRODUCTION returned %', r; END IF;
+  IF (SELECT store_environment || '|' || plan FROM subscriptions WHERE user_id = '00000000-0000-4000-8000-0000000000e1')
+       <> 'PRODUCTION|monthly' THEN
+    RAISE EXCEPTION 'P14 failed: SANDBOX read replaced a running PRODUCTION row'; END IF;
+  -- the PRODUCTION row ends (a newer PRODUCTION read), then a newer SANDBOX read may land
+  r := upsert_play_subscription('00000000-0000-4000-8000-0000000000e1', 'avya_pro', 'monthly', 'expired',
+         t0 - interval '31 days', t0 - interval '1 day', false, 'PRODUCTION', 'GPA.e1', t0 - interval '1 day', t0 + interval '2 minutes');
+  IF r <> 'written' THEN RAISE EXCEPTION 'P14 failed: PRODUCTION expiry returned %', r; END IF;
+  r := upsert_play_subscription('00000000-0000-4000-8000-0000000000e1', 'avya_pro', 'yearly', 'active',
+         t0, t0 + interval '365 days', true, 'SANDBOX', 'GPA.e1s', t0 + interval '365 days', t0 + interval '3 minutes');
+  IF r <> 'written' OR (SELECT store_environment FROM subscriptions WHERE user_id = '00000000-0000-4000-8000-0000000000e1') <> 'SANDBOX'
+  THEN RAISE EXCEPTION 'P14 failed: SANDBOX after an ended PRODUCTION row returned %', r; END IF;
+END $$;
+ROLLBACK;
+
 -- P12 no client role reaches the new writers or tables; the replaced functions are still SECURITY DEFINER.
 DO $$ BEGIN
   IF has_function_privilege('authenticated', 'public.upsert_play_subscription(uuid, text, text, text, timestamptz, timestamptz, boolean, text, text, timestamptz, timestamptz)', 'EXECUTE')

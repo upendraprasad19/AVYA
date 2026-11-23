@@ -530,10 +530,25 @@ BEGIN
          store_environment             = excluded.store_environment,
          store_expires_at              = excluded.store_expires_at,
          store_read_at                 = excluded.store_read_at
-   WHERE s.store_read_at <= excluded.store_read_at;   -- an older read never overwrites a newer one
+   WHERE s.store_read_at < excluded.store_read_at   -- an older or EQUAL read never overwrites (a tie keeps the first write)
+     -- a SANDBOX (license-tester) read never replaces a PRODUCTION row that is still running: "paid" for referrals keys on
+     -- store_environment, so the flip would un-pay a paying user (B-pass of the draft, F1). Once the PRODUCTION row has ended
+     -- (status not active, or end_date past) a newer SANDBOX read may replace it: only license testers can make SANDBOX
+     -- purchases, so the user who could then redeem a referral trial is a tester (delta review P3, accepted).
+     AND NOT (s.store_environment = 'PRODUCTION' AND excluded.store_environment = 'SANDBOX'
+              AND s.status = 'active' AND s.end_date > now());
 
   GET DIAGNOSTICS v_n = ROW_COUNT;
-  RETURN CASE WHEN v_n = 1 THEN 'written' ELSE 'stale_read' END;
+  IF v_n = 1 THEN
+    RETURN 'written';
+  END IF;
+  -- Nothing written: say why. A stale or tied read is routine; a refused SANDBOX-over-PRODUCTION read is not.
+  RETURN CASE
+    WHEN EXISTS (SELECT 1 FROM subscriptions x
+                  WHERE x.user_id = p_user_id AND x.store_product_id = p_product_id
+                    AND x.store_read_at >= p_read_at) THEN 'stale_read'
+    ELSE 'sandbox_refused'
+  END;
 END;
 $function$;
 

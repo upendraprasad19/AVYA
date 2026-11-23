@@ -83,6 +83,33 @@ STATUS=$(psql_db oi519_new -c "select status from store_reward_deferrals where i
 psql_db oi519_new -c "delete from store_reward_deferrals; delete from users where id = '00000000-0000-4000-8000-0000000000ee'" >/dev/null
 echo "S1 passed (55P03 in ${ELAPSED_MS} ms, row still pending)"
 
+echo "[S2] redeem retry: the re-check after a lock wait uses the PRODUCTION-only paid predicate"
+# The referee's own active web trial row is held by another session, so the direct grant meets 55P03, sleeps and RE-CHECKS
+# "paid" before retrying (the 160 retry loop). The referee also has an EXPIRED SANDBOX Play row: not paid, so the redeem must
+# succeed on a later attempt. A re-check that treats any Play row as paid raises referee_has_paid_plan (mutant M10).
+S2_REF=00000000-0000-4000-8000-0000000000e8; S2_FRIEND=00000000-0000-4000-8000-0000000000e9
+s2_clean() { psql_db oi519_new -c "delete from referral_redemptions where referee_id = '$S2_FRIEND'; delete from subscriptions where user_id in ('$S2_REF', '$S2_FRIEND'); delete from users where id in ('$S2_REF', '$S2_FRIEND')" >/dev/null; }
+s2_run() {  # s2_run <db>: prints the redeem's elapsed ms, or fails
+  db=$1
+  psql_db "$db" -c "delete from referral_redemptions where referee_id = '$S2_FRIEND'; delete from subscriptions where user_id in ('$S2_REF', '$S2_FRIEND'); delete from users where id in ('$S2_REF', '$S2_FRIEND');
+    insert into users values ('$S2_REF'), ('$S2_FRIEND');
+    insert into subscriptions (user_id, plan, status, start_date, end_date) values ('$S2_FRIEND', 'referral_trial', 'active', now(), now() + interval '3 days');
+    select upsert_play_subscription('$S2_FRIEND', 'avya_pro', 'monthly', 'expired', now() - interval '40 days', now() - interval '10 days',
+      false, 'SANDBOX', 'GPA.s2', now() - interval '10 days', now());" >/dev/null
+  psql_db "$db" -c "begin; select 1 from subscriptions where user_id = '$S2_FRIEND' and plan = 'referral_trial' for update; select pg_sleep(0.6); commit;" >/dev/null &
+  holder=$!
+  sleep 0.25
+  out=$(psql_db "$db" -c "select redeem_referral_atomic('CODE', '$S2_REF', '$S2_FRIEND', 7); select (extract(epoch from clock_timestamp() - now()) * 1000)::int" 2>&1) || { wait "$holder"; echo "$out"; return 1; }
+  wait "$holder"
+  echo "$out" | tail -1
+}
+ELAPSED=$(s2_run oi519_new) || { echo "FAIL S2: redeem refused a SANDBOX-only referee after a lock wait: $ELAPSED"; exit 1; }
+[ "$ELAPSED" -ge 200 ] || { echo "FAIL S2: the redeem took ${ELAPSED} ms, so it never met the held row (the case did not reach the retry)"; exit 1; }
+DAYS=$(psql_db oi519_new -c "select count(*) from referral_redemptions where referee_id = '$S2_FRIEND'")
+[ "$DAYS" = "1" ] || { echo "FAIL S2: no audit row after the retried redeem"; exit 1; }
+s2_clean
+echo "S2 passed (redeem retried after ${ELAPSED} ms and succeeded)"
+
 echo "[mutants] each must make cases P fail"
 mutate() {  # mutate <name> <python-literal old> <python-literal new>
   python3 -I -c '
@@ -108,7 +135,23 @@ mutate M4_redeem_sandbox_paid "            OR (store = 'play' AND store_environm
   "            OR (store = 'play'))  -- mutant"
 mutate M5_fallback_no_token "          OR (d.status IN ('in_flight', 'needs_check') AND d.claim_token = p_token))" \
   "          OR (d.status IN ('in_flight', 'needs_check')))"
-mutate M6_upsert_no_stale_guard "   WHERE s.store_read_at <= excluded.store_read_at;" ";"
+mutate M6_upsert_no_stale_guard "   WHERE s.store_read_at < excluded.store_read_at   --" "   WHERE true   --"
+mutate M8_upsert_tie_overwrites "   WHERE s.store_read_at < excluded.store_read_at   --" "   WHERE s.store_read_at <= excluded.store_read_at   --"
+mutate M9_upsert_sandbox_over_production "     AND NOT (s.store_environment = 'PRODUCTION' AND excluded.store_environment = 'SANDBOX'" \
+  "     AND NOT (false AND excluded.store_environment = 'SANDBOX'"
 mutate M7_upsert_start_always_new "CASE WHEN s.status = 'active' THEN s.start_date ELSE excluded.start_date END" "excluded.start_date"
+# M10 is killed by S2 (the retry path needs a second session), not by cases P.
+python3 -I -c '
+import sys
+src, dst, old, new = sys.argv[1:5]
+s = open(src, encoding="utf-8").read()
+assert s.count(old) == 1, ("mutation anchor count", s.count(old), old)
+open(dst, "w", encoding="utf-8").write(s.replace(old, new))
+' "$MIG182" "$WORK/M10.sql" "                OR (store = 'play' AND store_environment = 'PRODUCTION'))  -- 182: same predicate as above" \
+  "                OR (store = 'play'))  -- mutant"
+fresh_db oi519_mut "$WORK/M10.sql"
+if s2_run oi519_mut > "$WORK/M10.out" 2>&1; then echo "MUTANT SURVIVED: M10_retry_recheck_sandbox_paid"; exit 1; fi
+grep -q "referee_has_paid_plan" "$WORK/M10.out" || { echo "M10: failed for another reason"; cat "$WORK/M10.out"; exit 1; }
+echo "killed M10_retry_recheck_sandbox_paid: referee_has_paid_plan after the lock wait"
 psql_db postgres -c "drop database if exists oi519_mut" >/dev/null
 echo "ALL PASSED"

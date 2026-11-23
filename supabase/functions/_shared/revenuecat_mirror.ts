@@ -131,7 +131,8 @@ export function mapCustomerToRows(customer: unknown, nowMs: number): { rows: Pla
 // IO
 // ------------------------------------------------------------------------------------------------------------------
 
-export type UpsertResult = "written" | "stale_read";
+/** `sandbox_refused`: a SANDBOX read was not allowed to replace a running PRODUCTION row (migration 182, B-pass F1). */
+export type UpsertResult = "written" | "stale_read" | "sandbox_refused";
 
 export type MirrorDb = {
   userExists(uid: string): Promise<boolean>;
@@ -218,6 +219,10 @@ export async function mirrorRevenueCatCustomer(uid: string, deps: MirrorDeps): P
   const out: { productId: string; status: PlayStatus; result: UpsertResult }[] = [];
   for (const row of rows) {
     const result = await deps.db.upsertPlayRow(uid, row, readAtIso);
+    if (result === "sandbox_refused") {
+      // A license tester's SANDBOX read met a running PRODUCTION row (migration 182 keeps the PRODUCTION row). Rare: say so.
+      console.warn("[revenuecat-mirror] upsert result=sandbox_refused (a SANDBOX read was not allowed over PRODUCTION)");
+    }
     out.push({ productId: row.productId, status: row.status, result });
   }
   return { outcome: "mirrored", rows: out, mapped: rows };
@@ -238,7 +243,7 @@ export function supabaseMirrorDb(client: ServiceClient): MirrorDb {
       return !!data;
     },
     async upsertPlayRow(uid, row, readAtIso) {
-      // oi79-ok: the function RETURNS text (one scalar, 'written' or 'stale_read'); any other answer throws below.
+      // oi79-ok: the function RETURNS text (one scalar: 'written', 'stale_read' or 'sandbox_refused'); any other answer throws below.
       const { data, error } = await client.rpc("upsert_play_subscription", {
         p_user_id: uid,
         p_product_id: row.productId,
@@ -253,7 +258,9 @@ export function supabaseMirrorDb(client: ServiceClient): MirrorDb {
         p_read_at: readAtIso,
       });
       if (error) throw new Error(`upsert_play_subscription failed: ${(error as { code?: string }).code ?? "unknown"}`);
-      if (data !== "written" && data !== "stale_read") throw new Error("upsert_play_subscription returned an unknown value");
+      if (data !== "written" && data !== "stale_read" && data !== "sandbox_refused") {
+        throw new Error("upsert_play_subscription returned an unknown value");
+      }
       return data;
     },
     async alert(source, severity, summary, context) {

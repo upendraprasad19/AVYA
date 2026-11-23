@@ -11,7 +11,9 @@ import {
   PLAY_RENEWAL_WINDOW_MS,
   type PlayRow,
   RevenueCatReadError,
+  supabaseMirrorDb,
   UNKNOWN_PRODUCT_ALERT_SOURCE,
+  type UpsertResult,
 } from "./revenuecat_mirror.ts";
 
 const FIXTURE = JSON.parse(
@@ -146,7 +148,7 @@ Deno.test("kill switch: only the exact string true", () => {
 });
 
 type Calls = { gets: string[]; upserts: { uid: string; row: PlayRow; readAt: string }[]; alerts: string[] };
-function fakeDb(known: boolean, calls: Calls, result: "written" | "stale_read" = "written"): MirrorDb {
+function fakeDb(known: boolean, calls: Calls, result: UpsertResult = "written"): MirrorDb {
   return {
     userExists: (_uid) => Promise.resolve(known),
     upsertPlayRow: (uid, row, readAt) => {
@@ -203,6 +205,15 @@ Deno.test("mirror: stale_read is reported per row", async () => {
   assertEquals(out.rows[0].result, "stale_read");
 });
 
+Deno.test("mirror: sandbox_refused is reported per row (a SANDBOX read over a running PRODUCTION row)", async () => {
+  const calls: Calls = { gets: [], upserts: [], alerts: [] };
+  const out = await mirrorRevenueCatCustomer(UID, {
+    db: fakeDb(true, calls, "sandbox_refused"), secretKey: "sk_test", fetchFn: fakeFetch(calls, [ok(FIXTURE)]), nowMs: () => T0,
+  });
+  assert(out.outcome === "mirrored");
+  assertEquals(out.rows[0].result, "sandbox_refused");
+});
+
 Deno.test("mirror: an unknown plan raises the critical alert and writes nothing", async () => {
   const calls: Calls = { gets: [], upserts: [], alerts: [] };
   await mirrorRevenueCatCustomer(UID, {
@@ -244,4 +255,19 @@ Deno.test("fetch: a hung GET is aborted after the timeout and retried once", asy
   const err = await assertRejects(() => fetchRevenueCatCustomer(UID, "sk_test", hang, 20), RevenueCatReadError);
   assertEquals(err.code, "timeout");
   assertEquals(n, 2);
+});
+
+Deno.test("adapter: upsertPlayRow passes the three known answers through and throws on anything else", async () => {
+  const row: PlayRow = mapCustomerToRows(FIXTURE, T0).rows[0];
+  const db = (answer: unknown) =>
+    supabaseMirrorDb({
+      from: () => {
+        throw new Error("no table read expected");
+      },
+      rpc: (_fn: string, _args: Record<string, unknown>) => Promise.resolve({ data: answer, error: null }),
+    });
+  for (const a of ["written", "stale_read", "sandbox_refused"]) {
+    assertEquals(await db(a).upsertPlayRow(UID, row, new Date(T0).toISOString()), a);
+  }
+  await assertRejects(() => db("refused").upsertPlayRow(UID, row, new Date(T0).toISOString()), Error, "unknown value");
 });

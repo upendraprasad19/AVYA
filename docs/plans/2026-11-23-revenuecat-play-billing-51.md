@@ -168,13 +168,14 @@ only on its own explicit go; `backups/applied_migrations.json` and `backups/live
     needs a writer) SECURITY DEFINER, `REVOKE ALL FROM public, anon,
     authenticated`, `GRANT EXECUTE TO service_role` (the platform default grants on new `public` functions are revoked
     explicitly from `anon` and `authenticated`, migrations CLAUDE.md). Body: `INSERT … ON CONFLICT (user_id,
-    store_product_id) DO UPDATE SET … WHERE subscriptions.store_read_at <= excluded.store_read_at` (non-partial
+    store_product_id) DO UPDATE SET … WHERE subscriptions.store_read_at < excluded.store_read_at AND NOT (running
+    PRODUCTION row AND SANDBOX read)` (strict `<` and the SANDBOX guard from the pre-apply review, section 22; non-partial
     arbiter, round 1 #2 / round 2 #8). First insert has no conflict; a later refund read has a later `read_at` and
     lowers `end_date` (round 2 check). `start_date` on UPDATE: `CASE WHEN subscriptions.status = 'active' THEN
     subscriptions.start_date ELSE excluded.start_date END`, so a running chain keeps its first period's purchase date
     across renewals (the referral 90-day window and 7-day vest anchor on the chain start, not on each renewal), and a
     resubscribe after expiry starts fresh. `original_purchase_date` is NOT used: it is the first purchase EVER of that
-    product, which would anchor a later chain to an old one (round 3 #4). Returns `'written'` or `'stale_read'` (from `GET DIAGNOSTICS ROW_COUNT` = 0), so the caller can log a skipped
+    product, which would anchor a later chain to an old one (round 3 #4). Returns `'written'`, `'stale_read'` (an older or EQUAL `read_at`) or `'sandbox_refused'` (section 22), so the caller can log a skipped
     stale read (round 1 #6). Owner change cannot happen: `user_id` is part of the key.
   - `record_paid_subscription` (web) is NOT changed: its stacking base can include a Play row's end only if a web
     payment is in flight while a Play row lands (the door 409s a paid Play row first). Noted so nobody "fixes" it
@@ -217,7 +218,7 @@ only on its own explicit go; `backups/applied_migrations.json` and `backups/live
 - `mirrorRevenueCatCustomer(uid, deps)`: refuses a uid that is not a UUID or has no `public.users` row (a forged
   webhook must not create RevenueCat customers, since `GET /subscribers` creates one, F12); stamps `read_at = now()`
   BEFORE issuing the GET; reads the customer; upserts each row through `upsert_play_subscription`; returns `{rows,
-  outcome}` with per-row `written` / `stale_read`. Secret key `REVENUECAT_SECRET_KEY` (Edge secret only). Timeout 10 s,
+  outcome}` with per-row `written` / `stale_read` / `sandbox_refused` (the last one logged). Secret key `REVENUECAT_SECRET_KEY` (Edge secret only). Timeout 10 s,
   one retry on 5xx/429. Never logs a response or request body (payment-log-safety, `_shared/payment_log_safe.ts`).
 - Kill switch `ENABLE_PLAY_BILLING_MIRROR` (exact `"true"`, `isEnvExactlyTrue`). OFF: every entry point answers as
   today would (webhook 200 + event logged with `outcome = 'switch_off'`, sync returns the current row unchanged,
@@ -449,7 +450,8 @@ updated to pin the new rule (both directions mutated).
   `process_referral_conversions` run with a Play fixture present. T-SQL2: a PRODUCTION Play row is "paid" for both
   referral functions, a SANDBOX one is not; `grant_referral_days` with an active Play row inserts one `pending`
   deferral row and leaves every `subscriptions` row byte-identical. T-SQL3: `upsert_play_subscription` runs (the non-partial unique index is the arbiter), returns
-  `stale_read` for an older `read_at` (two calls with inverted finish order), and is not callable by `authenticated`.
+  `stale_read` for an older or equal `read_at` (two calls with inverted finish order), `sandbox_refused` for a SANDBOX read
+  over a running PRODUCTION row (P14), and is not callable by `authenticated`.
 - T-MAP (Deno, table-driven over U0's real fixtures): active monthly, active yearly, cancelled-but-not-expired
   (auto_renew false, still active, `cancelled_at` NULL), billing issue in grace, expired, refunded (and a later read of
   the same refunded chain stays cancelled), refund then a NEW purchase of the same product, resubscribe same product
@@ -742,3 +744,38 @@ secret key lives only in the Edge secret, so no read from this machine is possib
   `read_at` stamped before the GET), `supabaseMirrorDb` adapter (RPC `upsert_play_subscription`, deduped alert).
 - `_shared/revenuecat_mirror_test.ts`: 23 tests (T-MAP table, switch, IO). Mutants: no renewal window, refund rule
   disabled, billing issue treated as renewing, `read_at` after the GET, user check after the GET: each fails 1-4 tests.
+
+## 21. U3 record (2026-11-24)
+
+- `revenuecat-webhook` (logic.ts + index.ts, 13 tests), `revenuecat-sync` (8 tests), `revenuecat-reconcile` (13 tests, incl.
+  the defer drain over an in-memory table with the adapter's compare-and-set rules). Each `deno check` clean.
+- Mutants, each killed: unknown defer outcome re-sent; 429 treated as needs_check; renewal window claims; stall alert after
+  the switch; webhook switch ignored; webhook secret not fail-closed; sync mirror before the quota.
+- `payment_log_safety_writer_to_reader_test.dart` now scans the mirror and the six entry-point files (reconcile `index.ts`
+  has no console call). The scan caught the webhook logging the raw body `type`; it now logs a known type or `other`.
+- The hourly schedule (pg_cron job calling `revenuecat-reconcile`) is a live step after its deploy (L2), as its own
+  minted migration with the `private.cron_get_secret()` pattern of migration 131; not in 182, so no tick hits an
+  undeployed function.
+
+## 22. Pre-apply review of migration 182 (fresh context-blind Sonnet, 2026-11-24; each finding checked by me)
+
+Founder chose to apply 182 before the rest of the branch (option A: independent review of the migration alone first).
+The reviewer ran the local proof green and probed a scratch database in the local container; no P0 or P1.
+
+| # | Sev | Finding | Checked | Disposition |
+|---|---|---|---|---|
+| F1 | P2 | `upsert_play_subscription` guard was `<=`: a tied `read_at` overwrote, and a newer SANDBOX read replaced a running PRODUCTION row (un-pays a paying user for referrals) | reviewer's probe, reproduced by the new case | guard now `<` plus `AND NOT (PRODUCTION row running AND SANDBOX read)`; answer `sandbox_refused` (mirror accepts it, adapter test); case P14; mutants M8 (`<=`), M9 (guard off) killed |
+| F2 | P2 | other readers count a Play row as a web payment or ignore it: digest `computeNewMrr`, `admin-dashboard-data` `derived_mrr_inr`, `telegram-admin-bot` plan counts, `redeem-referral` pre-check (Razorpay-only, RPC still refuses: same 400), `delete-account` (Play not cancelled), `razorpay_service.dart` fallback poll (any active row of the plan in the last 5 min) | read each site | all in U4 / U5 scope; the fallback poll is NEW to the list: U5 filters it to non-Play rows (`store` is null) |
+| F3 | P2 | the redeem retry loop's re-check predicate had no case and no mutant (M4 anchors only the first) | `play_subscriptions_local.sh` mutants | two-session case S2 (the referee's row held, redeem retries and succeeds for an expired SANDBOX Play row) + mutant M10 on the re-check, killed by S2 |
+| F4 | P3 | no `p_start <= p_end` check | — | no change: the only caller is the mirror, whose mapping guarantees end >= purchase; a RAISE would turn bad data into an endless webhook retry |
+| F5 | P3 | an `active` Play row past its end makes a reward go direct (a trial row that runs alongside a later renewal) | P5/P6 | by design (the 3 h window already covers a normal renewal) |
+| F6 | P3 | fall-back while the Play row is active stacks as a separate trial row | P13 | by design (section 4); `needs_check` double days accepted (section 10) |
+| F7 | P3 | SANDBOX rows grant PRO | — | by design (Q2: test purchases unlock PRO; only license testers can make them) |
+
+Local proof after the fixes: cases N on old and new, P (now P1-P14), S1, S2, mutants M1-M10 all killed.
+
+Delta review (fresh Sonnet on the fix diff, 2026-11-24): no P0/P1/P2; local proof and Deno re-run green. P3s: the redeem
+"paid" predicate counts a LAPSED PRODUCTION row while the new guard lets a SANDBOX read replace it (only testers make
+SANDBOX purchases: accepted, comment in the function); stale plan text (fixed above); `sandbox_refused` was silent (the
+mirror now logs it); the guard has no NULL defence (unreachable: the CHECK forces both environment and read time on a Play
+row); S2 is timing-based (a slow box gives a loud false red, never a false green: accepted).
