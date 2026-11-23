@@ -1979,9 +1979,19 @@ class WorkoutScheduleReadService {
   /// notion of "past" there could over-advance a counter that can never be
   /// walked back. The reconciler must never call this method.
   List<PastPhaseBlock> pastPhaseBlocksForDisplay(int currentPhase) {
+    // OI-348 B3: the date-ordered display bucketing; the switch off restores
+    // the stamp-number grouping verbatim.
+    final runs = pastPhaseDisplayRunsEnabled;
     final strict = pastPhaseBlocks();
-    if (strict.isNotEmpty || currentPhase <= 1) return strict;
-    final all = bucketPastRows(_scheduleRowsBefore(null));
+    if (strict.isNotEmpty || currentPhase <= 1) {
+      if (!runs || strict.isEmpty) return strict;
+      return bucketPastRowsForDisplay(
+          _scheduleRowsBefore(getPlanStartDate()));
+    }
+    final allRows = _scheduleRowsBefore(null);
+    final all = runs
+        ? bucketPastRowsForDisplay(allRows)
+        : bucketPastRows(allRows);
     // <2 blocks means every row belongs to the window we are training in now —
     // nothing is genuinely behind us, so show nothing rather than invent a group.
     final recovered = all.length < 2 ? const <PastPhaseBlock>[] : all.sublist(0, all.length - 1);
@@ -2081,19 +2091,145 @@ class WorkoutScheduleReadService {
         .toList();
   }
 
+  /// DISPLAY bucketing of past schedule rows (OI-348 B3/B7, diagnose 5c8e2a).
+  ///
+  /// [bucketPastRows] trusts every row's stamp and groups by stamp NUMBER, so a
+  /// stamp that went stale (a REST row the L1 merge kept wholesale,
+  /// `PlanIntegrityReconciler.mergeScheduleEntry`) pulls days out of their own
+  /// window and blocks interleave by date. Here blocks follow the DATE sequence:
+  /// 1. runs over the STAMPED rows only (an unstamped row never joins or breaks
+  ///    a run);
+  /// 2. a run of at most 2 rows that are all rest rows is noise (the only rows
+  ///    the merge keeps with a stale stamp), unless every run is noise; noise
+  ///    is dropped and runs that became adjacent with an equal stamp merge;
+  /// 3. every row goes to the last segment whose first stamped date is on or
+  ///    before its date (before every segment: the first), except an unstamped
+  ///    or noise row that lies after the previous segment's last stamped date
+  ///    and in the same Mon-Sun week as the next segment's first stamped date,
+  ///    which joins that next segment.
+  /// No stamp at all: the legacy fallback of [bucketPastRows]. DISPLAY ONLY:
+  /// `PhaseProgressReconciler` keeps the strict [pastPhaseBlocks].
+  @visibleForTesting
+  static List<PastPhaseBlock> bucketPastRowsForDisplay(
+      List<(DateTime, Map<String, dynamic>)> rows) {
+    if (rows.isEmpty) return const [];
+    final sorted = [...rows]..sort((a, b) => a.$1.compareTo(b.$1));
+    final stamped = <int>[]; // indexes into [sorted]
+    for (var i = 0; i < sorted.length; i++) {
+      if (sorted[i].$2['phase'] is int) stamped.add(i);
+    }
+    if (stamped.isEmpty) return bucketPastRows(rows);
+
+    // 1. Runs of equal stamp over the stamped rows.
+    final runs = <List<int>>[];
+    for (final i in stamped) {
+      final p = sorted[i].$2['phase'] as int;
+      if (runs.isNotEmpty && sorted[runs.last.first].$2['phase'] == p) {
+        runs.last.add(i);
+      } else {
+        runs.add([i]);
+      }
+    }
+
+    // 2. Noise: ≤ 2 rows, all rest rows. Kept when every run is noise.
+    bool isRestRow(Map<String, dynamic> m) =>
+        m['type'] == 'rest' || m['status'] == 'rest';
+    bool isNoise(List<int> run) =>
+        run.length <= 2 && run.every((i) => isRestRow(sorted[i].$2));
+    final dropNoise = !runs.every(isNoise);
+    final noiseRows = <int>{};
+    final segments = <List<int>>[]; // stamped row indexes of each segment
+    for (final run in runs) {
+      if (dropNoise && isNoise(run)) {
+        noiseRows.addAll(run);
+        continue;
+      }
+      final p = sorted[run.first].$2['phase'];
+      if (segments.isNotEmpty && sorted[segments.last.first].$2['phase'] == p) {
+        segments.last.addAll(run);
+      } else {
+        segments.add([...run]);
+      }
+    }
+
+    // 3. Assign every row by date.
+    final firsts = [for (final s in segments) sorted[s.first].$1];
+    final lasts = [for (final s in segments) sorted[s.last].$1];
+    final segmentRows = <Set<int>>[for (final s in segments) s.toSet()];
+    final members = <int>{for (final s in segments) ...s};
+    final byBlock = List.generate(segments.length, (_) => <int>[]);
+    for (var i = 0; i < sorted.length; i++) {
+      final date = sorted[i].$1;
+      var k = 0;
+      for (var s = 0; s < firsts.length; s++) {
+        if (!firsts[s].isAfter(date)) k = s;
+      }
+      if (members.contains(i)) {
+        // A member of a non-noise run belongs to its own segment.
+        k = segmentRows.indexWhere((set) => set.contains(i));
+      } else if (k + 1 < firsts.length &&
+          date.isAfter(lasts[k]) &&
+          date.isBefore(firsts[k + 1]) &&
+          _sameMonSunWeek(date, firsts[k + 1])) {
+        k = k + 1;
+      }
+      byBlock[k].add(i);
+    }
+    return [
+      for (final idx in byBlock)
+        if (idx.isNotEmpty)
+          PastPhaseBlock(
+            startDate: sorted[idx.first].$1,
+            endDate: sorted[idx.last].$1,
+            rows: [for (final i in idx) sorted[i].$2],
+          ),
+    ];
+  }
+
+  static bool _sameMonSunWeek(DateTime a, DateTime b) {
+    DateTime monday(DateTime d) {
+      final day = DateTime.utc(d.year, d.month, d.day);
+      return day.subtract(Duration(days: day.weekday - DateTime.monday));
+    }
+
+    return monday(a) == monday(b);
+  }
+
+  /// Kill switch for [bucketPastRowsForDisplay] and its readers (OI-348 B3).
+  static const String kDisablePastPhaseDisplayRunsKey =
+      'disable_past_phase_display_runs';
+
+  /// False when `configBox['disable_past_phase_display_runs'] == true`; an
+  /// unreadable box keeps the fix on.
+  bool get pastPhaseDisplayRunsEnabled {
+    try {
+      return _hive.configBox.get(kDisablePastPhaseDisplayRunsKey) != true;
+    } catch (_) {
+      return true;
+    }
+  }
+
   /// The phase number that was active on [date].
   ///
   /// Returns `current_phase` when [date] is in (or after) the active plan
-  /// window, else the 1-based index of the [pastPhaseBlocks] bucket the date
-  /// falls in — so a workout receipt for a past day shows the phase it was
-  /// logged under instead of a hardcoded "PHASE 1" (Obs 1, 2026-06-05). Reuses
-  /// the SAME bucketing as the week selector + reconciler (single SoT, no
-  /// parallel reader). Null-safe: falls back to `current_phase` (or 1).
+  /// window (no block walk), else the number of the Train chip that lists the
+  /// date: [phaseForDateDisplay] over [pastPhaseBlocksForDisplay] (OI-348 B3,
+  /// 5c8e2a; the switch off: the strict [pastPhaseBlocks] index, Obs 1). So a
+  /// past receipt shows the phase the strip shows, never a hardcoded "PHASE 1".
+  /// Null-safe: falls back to `current_phase` (or 1).
   int phaseForDate(DateTime date) {
     try {
       final progress = UserRepository.instance.getProgress();
       final currentPhase = (progress?['current_phase'] as int?) ?? 1;
       final planStart = getPlanStartDate();
+      // In/after the window: no block walk at all (OI-348 B3).
+      if (planStart == null || !date.isBefore(planStart)) return currentPhase;
+      if (pastPhaseDisplayRunsEnabled) {
+        final starts = pastPhaseBlocksForDisplay(currentPhase)
+            .map((b) => b.startDate)
+            .toList();
+        return phaseForDateDisplay(currentPhase, planStart, date, starts);
+      }
       final blockStarts = pastPhaseBlocks().map((b) => b.startDate).toList();
       return phaseForDatePure(currentPhase, planStart, date, blockStarts);
     } catch (e, st) {
@@ -2129,6 +2265,33 @@ class WorkoutScheduleReadService {
       }
     }
     return phase;
+  }
+
+  /// The chip number of the past block that holds [date] (OI-348 B3): the
+  /// week strip shows the last `currentPhase - 1` display blocks numbered up to
+  /// `currentPhase - 1` (`week_selector.dart` `pastPhaseGroups`); a date in a
+  /// hidden older block, or before every block, reads 1. In/after the window:
+  /// [currentPhase]. [blockStarts]: the display blocks' starts, oldest first.
+  @visibleForTesting
+  static int phaseForDateDisplay(int currentPhase, DateTime? planStart,
+      DateTime date, List<DateTime> blockStarts) {
+    if (planStart == null || !date.isBefore(planStart)) return currentPhase;
+    final d = DateTime(date.year, date.month, date.day);
+    var index = -1;
+    for (var i = 0; i < blockStarts.length; i++) {
+      final s = blockStarts[i];
+      if (!d.isBefore(DateTime(s.year, s.month, s.day))) {
+        index = i;
+      } else {
+        break;
+      }
+    }
+    if (index < 0) return 1;
+    final n = blockStarts.length;
+    final showCount = (currentPhase - 1).clamp(0, n);
+    final firstShown = n - showCount;
+    if (index < firstShown) return 1;
+    return currentPhase - showCount + (index - firstShown);
   }
 
   /// All dates in the current calendar week (Mon–Sun).
