@@ -13989,7 +13989,7 @@ concepts:
       enforced at merge.
     writers:
       - file: docs/blast_radius.yaml
-        line_range: 39-669
+        line_range: 39-681
         method: paths list (declaration order, first match wins)
         notes: |
           THE canonical writer. Exact-path rules must be declared ABOVE the

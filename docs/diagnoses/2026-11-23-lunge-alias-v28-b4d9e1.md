@@ -69,7 +69,11 @@ impact_analysis: |
   updated 2026-09-19, 09-28, 10-11, 11-23); the newest has plan_end_date 2026-10-25 and synced_at 2026-10-08, so the 11-23
   update is a stale re-sync, and the engine cannot emit E144 (not in the asset, in kRetiredLibraryIds, pruned by pruneRetired).
   Those 4 testing-account plans lose cues, media, plate and lookups for that slot until they are replaced; accepted (CLAUDE.md
-  section 1: every account is a testing account before the store launch). No other table holds the name (a live scan of every
+  section 1: every account is a testing account before the store launch). The same holds for on-device Hive plan, history and `exlog_*` rows on
+  testing devices that still name "Reverse Lunge" (the cloud scan does not see them): every name reader tolerates a missing row
+  (`plateau_scan.dart:176` returns an empty group set, `volume_titration.dart:79` skips, `session_estimate.dart:57` and
+  `plate_resolver.dart:61` fall through, `exercise_selector.dart:416` falls to the custom-exercise lookup), so the failure is a
+  skipped lookup, never an error; the C2a prune had already deleted E144 by id, so id-keyed history was orphaned before this. No other table holds the name (a live scan of every
   public text/jsonb column found only user_progress.plan_json and exercise_library). Unit A (PR #329) merges and `ai-proxy` is
   deployed only after this migration is applied live.
 touched_layers_checked:

@@ -5,7 +5,8 @@ blast_radius: platform
 review_rounds: 3
 ground_truth_verified: true
 verdict: converged
-bpass: pending
+bpass: accepted
+bpass_review: docs/reviews/oi523-lunge-alias-bpass.md
 ---
 
 # Plan-review record: OI-523 library v28, drop the Forward Lunge -> "Reverse Lunge" alias
@@ -18,3 +19,5 @@ Three context-blind Sonnet rounds, each verifying claims against the code and li
 - Round 3 (rev 3): converged, no P0/P1; eight P2/P3 (the gate loop with an unledgered file on disk, a safer commit-before-apply sequence, no hand-run broad suites, the two records the merge gate demands, wrong line numbers in the cloud-seeded test, a misattributed proof in Risks, the closed-entry shape). Applied in rev 4.
 
 Ground truth checked live (read-only): cloud G3470 active with `{Reverse Lunge}`; 934 / 870 / 64 rows; 14 aliased active rows; the name appears only in `user_progress.plan_json` (4 stale plans, `plan_end_date` past) and `exercise_library` among all public text/jsonb columns.
+
+B-pass (2026-11-23, before the live apply): no P0/P1/P2, two P3 accepted and fixed (`docs/reviews/oi523-lunge-alias-bpass.md`).
