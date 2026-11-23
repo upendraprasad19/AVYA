@@ -1,0 +1,306 @@
+# Closure ledger - oi348-landing1a-ii (OI-348 device walk: nutrition slot sync, decision B; closes OI-281 once migration 181 is live).
+# Gate 40. One terminal_state per unit, plan-review finding class or mutation survivor; no `deferred:` key.
+# Plan: docs/plans/nutrition-slot-sync.md (FINAL v17). `oi348-slot-sync@branch` is the in-branch commit form (the commit that carries this file).
+
+batch: oi348-landing1a-ii
+plan_review_record: docs/plan-reviews/oi348-slot-sync.md
+diagnose_docs:
+  - docs/diagnoses/2026-11-23-nutrition-slot-sync-a6c4e2.md
+total_findings: 49
+closed_count: 49
+
+findings:
+  - id: U1-IDENTITY
+    title: "Every meal carries a stable entry_id (logMeal); editLog cannot change it or the slot keys; pre-build rows are stamped at the first re-baseline"
+    terminal_state: closed_in_commit
+    commit: "oi348-slot-sync@branch"
+    verification: "test/sync/nutrition_slot_store_readers_test.dart (logMeal entry_id, editLog strip); stampLocked covered by the 'gated push stamps nothing' tests (behavioural + engine-level race test)"
+
+  - id: U2-MIGRATION-181
+    title: "Server: rev / updated_at / entries / legacy_rev, entry_key, tombstone table with RLS, INVOKER CAS RPCs, rev + tombstone triggers, grants"
+    terminal_state: closed_in_commit
+    commit: "oi348-slot-sync@branch"
+    verification: "Applied 2026-11-23 on the founder's go ('Yes, apply 181'), cloud version 20261123074819, after one refused attempt (FOUND-APPLY-FUNCTION-SET). supabase/tests/nutrition_slot_rpc_live_verify.sql ran live in BEGIN..ROLLBACK (testing user) and passed A to N incl. J; has_function_privilege anon false on all 7 functions, authenticated true only on the 4 RPCs; 92 existing rows untouched. Ledger entry 181 + live_schema_columns.json in this commit."
+
+  - id: U3-MERGE
+    title: "Pure 3-way merge by entry_id, canonical signature (uuid v5), placement, day pass"
+    terminal_state: closed_in_commit
+    commit: "oi348-slot-sync@branch"
+    verification: "test/sync/nutrition_slot_merge_test.dart 33 green; 9 mutations all red (diagnose a6c4e2 mutation_proof)"
+
+  - id: U4-REMOTE
+    title: "Supabase remote: RPC calls, keyset pages over rows and tombstones, missing-RPC detection (PGRST202 / 42883 / 404)"
+    terminal_state: closed_in_commit
+    commit: "oi348-slot-sync@branch"
+    verification: "FakeNslotServer contract table C1-C10 mirrors it; behavioural 'a missing RPC sends nothing, never legacy mode' green; the live leg is U2's verify SQL"
+
+  - id: U5-PUSH
+    title: "Conditional push per changed slot (put before delete), conflict merge + retry (3 rounds), ledger from the payload sent, SyncSkipIndex domain nslot"
+    terminal_state: closed_in_commit
+    commit: "oi348-slot-sync@branch"
+    verification: "behavioural S1-S10, conflict rounds, nslot index tests; mutations drop_delete_for_emptied_slot, delete_before_put, push_writes_nlog_index red; conflict_no_merge and ledger_from_local_after_ok red after the race tests"
+
+  - id: U6-PULL
+    title: "Keyset pull over rows + tombstones, one winner per slot (largest rev), cursor advanced once after a full read, resume trigger"
+    terminal_state: closed_in_commit
+    commit: "oi348-slot-sync@branch"
+    verification: "behavioural failed-page and generation tests; mutations cursor_advanced_on_failed_page, drop_steady_rev_gate, drop_admission red; first_seen_winner red after the race test"
+
+  - id: U7-REBASELINE
+    title: "FULL re-baseline (S0 snapshot, R / K sets, inflight_sigs, legacy_pass / legacy_seen), crash-safe commit"
+    terminal_state: closed_in_commit
+    commit: "oi348-slot-sync@branch"
+    verification: "test/sync/nutrition_rebaseline_test.dart 13 green; mutations drop_s0_check, delete_rows_of_slot_without_cloud, rebaselined_before_commit, deletekeys_includes_placed red; keep_old_ledger_shards red after the race test"
+
+  - id: U8-RESTORE
+    title: "Restore through the same merge; never moves a cursor; never treats an absent slot as deleted; waits for a running re-baseline"
+    terminal_state: closed_in_commit
+    commit: "oi348-slot-sync@branch"
+    verification: "behavioural S14 and rebaseline restore tests; mutation steady_restore_moves_cursor red; restore_queues_behind_rebaseline red in a compiling form after the race test (run 1 did not compile)"
+
+  - id: U9-SECTION
+    title: "One SerialSlot ticket per (user, generation); busy push / pull owed; owed work only when owner and generation are unchanged"
+    terminal_state: closed_in_commit
+    commit: "oi348-slot-sync@branch"
+    verification: "mutation drop_generation red; drop_pull_owed red after the race test; drop_push_owed red after the owed-push assertion was tightened to before + 1"
+
+  - id: U10-LEGACY-ROUTING
+    title: "Kill switch disable_nutrition_slot_sync runs the old push / restore verbatim and forces a FULL re-baseline; a legacy row (or legacy_rev above the ledger) stops the pass and schedules one pull"
+    terminal_state: closed_in_commit
+    commit: "oi348-slot-sync@branch"
+    verification: "S12, legacy pass tests; mutations legacy_merged_in_steady_state, legacy_test_before_stale_gate, drop_legacy_pass_full, drop_legacy_pass_rebaselined_false, drop_scheduled_pull_after_legacy_seen red; drop_legacy_rev_from_test red after the race test; repointed legacy tests green"
+
+  - id: U11-UNDO
+    title: "Undo of a delete refuses an entry already back or an id-less snapshot after the re-baseline"
+    terminal_state: closed_in_commit
+    commit: "oi348-slot-sync@branch"
+    verification: "test/sync/nutrition_slot_store_readers_test.dart undo refusal test"
+
+  - id: U12-READERS
+    title: "nslot_ store values never counted by a whole-box reader; export only nlog_; simulation reset clears nslot_"
+    terminal_state: closed_in_commit
+    commit: "oi348-slot-sync@branch"
+    verification: "store_readers test runs the readers with and without the store keys (identical answers) and pins the 17 whole-box loops"
+
+  - id: U13-OLD-PATH
+    title: "Remove the legacy bodies and the kill switch once no installed app needs them (CLAUDE.md 4.6 step 4)"
+    terminal_state: upstream_blocked
+    blocker: "Every installed build must be at or past the slot-sync build and migration 181 live; tracked as OI-522."
+    reopen_when: "store launch, all installed builds at or past this build"
+
+  - id: R1-R14-PLAN
+    title: "Plan rounds 1-14: identity, pre-build history and legacy rows after a re-baseline (1-4 P1 per round)"
+    terminal_state: closed_in_commit
+    commit: "oi348-slot-sync@branch"
+    verification: "spec v8 rewrite, legacy-seen => FULL re-baseline, server legacy_rev (round 14); rounds 15 and 16 converged (docs/plan-reviews/oi348-slot-sync.md)"
+
+  - id: R15-R16-P2
+    title: "Rounds 15-16: 7 P2 + 3 P3 (wording, one shared admission predicate)"
+    terminal_state: closed_in_commit
+    commit: "oi348-slot-sync@branch"
+    verification: "applied in spec v16 / v17; nslotAdmitMealType is the one predicate (pull, restore, legacy-seen); test 'a cloud row with a bad meal_type is skipped'"
+
+  - id: MUT-DAY-PASS
+    title: "Survivor drop_apply_day_pass: no test moved one meal to two different slots on two devices"
+    terminal_state: closed_in_commit
+    commit: "oi348-slot-sync@branch"
+    verification: "test/sync/nutrition_slot_race_behavioral_test.dart 'both devices move one meal to DIFFERENT slots'"
+
+  - id: MUT-FIRST-SEEN
+    title: "Survivor first_seen_winner: no test deleted a slot between the rows page and the tombstones page"
+    terminal_state: closed_in_commit
+    commit: "oi348-slot-sync@branch"
+    verification: "race test 'a slot deleted between the rows page and the tombstones page'"
+
+  - id: MUT-LEGACY-REV
+    title: "Survivor drop_legacy_rev_from_test: no test had a legacy write converted by another device before this one pulled"
+    terminal_state: closed_in_commit
+    commit: "oi348-slot-sync@branch"
+    verification: "race test 'an old-client write that another device already converted'"
+
+  - id: MUT-OLD-SHARDS
+    title: "Survivor keep_old_ledger_shards: no test had a server that lost a slot without a tombstone"
+    terminal_state: closed_in_commit
+    commit: "oi348-slot-sync@branch"
+    verification: "race test 'a FULL re-baseline forgets every ledger rev the cloud no longer holds'"
+
+  - id: MUT-ENGINE-GATE
+    title: "Survivor stamp_before_gate: the section's gate masked the engine's own gate"
+    terminal_state: closed_in_commit
+    commit: "oi348-slot-sync@branch"
+    verification: "race test 'the engine push gate stamps nothing before the re-baseline' drives NslotEngine directly"
+
+  - id: MUT-CONFLICT-MERGE
+    title: "Survivor conflict_no_merge: every conflict test pulled before pushing"
+    terminal_state: closed_in_commit
+    commit: "oi348-slot-sync@branch"
+    verification: "race test 'W puts the same slot between P's pull and P's put'"
+
+  - id: MUT-LEDGER-SENT
+    title: "Survivor ledger_from_local_after_ok: no edit landed while its put was in flight"
+    terminal_state: closed_in_commit
+    commit: "oi348-slot-sync@branch"
+    verification: "race test 'an edit that lands while its slot's put is in flight'"
+
+  - id: MUT-PULL-OWED
+    title: "Survivor drop_pull_owed: no test asked for a pull while a push held the section"
+    terminal_state: closed_in_commit
+    commit: "oi348-slot-sync@branch"
+    verification: "race test 'a pull asked for while a push holds the section runs after it'"
+
+  - id: MUT-PUSH-OWED
+    title: "Survivor drop_push_owed: the owed-push test asserted >= 1 and pair() had already scheduled pushes"
+    terminal_state: closed_in_commit
+    commit: "oi348-slot-sync@branch"
+    verification: "behavioural 'a busy section makes the push owed' now asserts before + 1"
+
+  # ---- B-pass (2026-11-23, review fffbe6b1d574, two Sonnet seats) ----
+  - id: BPA-1-RPC-MARKER-LEAK
+    title: "Seat A P2: set_config('app.nutrition_rpc','on',true) stayed on for the rest of the transaction, so a later plain write in it skipped all three triggers"
+    terminal_state: closed_in_commit
+    commit: "oi348-slot-sync@branch"
+    verification: "Each RPC saves the marker, sets it 'on' and restores the saved value on the line before every RETURN (the first fix, a function-level SET, was refused at apply: FOUND-APPLY-FUNCTION-SET); contract pin 'the RPC marker is set once in the body and put back before EVERY return' (two mutants red); live verify C (plain write after RPC calls) and N (marker read after every return path) passed on the applied schema"
+
+  - id: BPA-2-VERIFY-SECOND-USER
+    title: "Seat A P2: the live verify read the second user after SET ROLE authenticated (users RLS is own-row only), so J was vacuous and then aborted"
+    terminal_state: closed_in_commit
+    commit: "oi348-slot-sync@branch"
+    verification: "supabase/tests/nutrition_slot_rpc_live_verify.sql reads v_other before the role switch; J1-J6 assert state, delete noop, own put, no foreign rows or tombstones, my slot unchanged"
+
+  - id: BPA-3-FAKE-IDENTICAL-REPUSH
+    title: "Seat A P2: the fake made an identical old-client re-push a legacy write (SQL suppresses it) and dropped entry_key on an item update"
+    terminal_state: closed_in_commit
+    commit: "oi348-slot-sync@branch"
+    verification: "fake contract C5a; race test 'an identical old-client re-push of an RPC-written slot is invisible' (with the changed-re-push mirror; mutant red); live verify case M"
+
+  - id: BPA-4-VERIFY-TEETH
+    title: "Seat A P2: unasserted RPC statuses (B, G, J), the item trigger's entries=NULL arm never driven on an RPC row, grants on 3 of 4 RPCs and the trigger functions unchecked"
+    terminal_state: closed_in_commit
+    commit: "oi348-slot-sync@branch"
+    verification: "verify SQL: status + rev asserted after every RPC; B6-B8 noop and conflict-with-tombstone; E2a-E2d item UPDATE/DELETE on an RPC row; I4 rejected put writes nothing; K1-K4 every RPC, every trigger function, tombstone table"
+
+  - id: BPA-5-LENGTH-SEMANTICS
+    title: "Seat A P3: client and fake count String.length (UTF-16), SQL counts characters; fake rejects a numeric-string total SQL would cast"
+    terminal_state: closed_in_commit
+    commit: "oi348-slot-sync@branch"
+    notes: "Documented as fake contract row C4a: the client is the stricter side, so nothing it sends is rejected by the server for length; the client never sends a string total (nslotProjectNum returns a double)."
+
+  - id: BPA-6-TIMESTAMP-SHAPES
+    title: "Seat A P3: the fake always wrote 6 fraction digits; PostgREST trims trailing zeros and drops a zero fraction"
+    terminal_state: closed_in_commit
+    commit: "oi348-slot-sync@branch"
+    verification: "fake C6 emits the trimmed shapes and lands on whole ms / whole seconds; the random-schedule test requires all three shapes over 500 seeds and stays green"
+
+  - id: BPA-7-LOCK-TIMEOUT
+    title: "Seat A P3: the ALTER on a live table had no lock timeout"
+    terminal_state: closed_in_commit
+    commit: "oi348-slot-sync@branch"
+    notes: "SET LOCAL lock_timeout = '5s' heads migration 181 (apply_migration runs the file in one transaction)."
+
+  - id: BPA-8-LEDGER-SNAPSHOT
+    title: "Seat A P3: backups/applied_migrations.json and live_schema_columns.json not yet paired; the ledger hash must be taken after the last file edit"
+    terminal_state: closed_in_commit
+    commit: "oi348-slot-sync@branch"
+    verification: "backups/applied_migrations.json entry 181 hash sha256:bfed7850... from scripts/migration_ledger_hash.dart 181, taken after the last file edit (the in-body marker); live_schema_columns.json updated for nutrition_logs, nutrition_log_items and nutrition_slot_tombstones from a live information_schema read after the apply"
+
+  - id: BPA-9-CONTRACT-PINS
+    title: "Seat A P3: the contract test did not pin the REVOKE/GRANT lines, search_path, tombstone policies, advisory lock or FOR UPDATE"
+    terminal_state: closed_in_commit
+    commit: "oi348-slot-sync@branch"
+    verification: "test/contracts/nutrition_slot_sync_writer_to_reader_test.dart: grants test, serialise test, marker test (10 tests green)"
+
+  - id: BPB-1-PUSH-SCAN-COST
+    title: "Seat B P1: the push loop re-read and signed the WHOLE box for every slot before the skip decision: O(slots x rows) SHA-1 on the UI isolate per meal log"
+    terminal_state: closed_in_commit
+    commit: "oi348-slot-sync@branch"
+    verification: "_rowsOfDate filters on the stored date before building a row (push loop, _pushSlot, applyLocked); race test 'O(rows), not O(slots x rows)' measured 810 builds for 120 rows (was ~14,400); mutant red at both sites"
+
+  - id: BPB-2-OWED-PULL-SINK
+    title: "Seat B P2: an owed / follow-up pull was fired as a bare unawaited(pullBody) with no error sink"
+    terminal_state: closed_in_commit
+    commit: "oi348-slot-sync@branch"
+    verification: "NslotSection._owedPull reports pull_nutrition_slots; race test 'an owed pull that throws is reported' (mutant red: the error escaped unreported)"
+
+  - id: BPB-3-OWED-FLAGS-GENERATION
+    title: "Seat B P3: an older generation's release consumed the current generation's owed flags (keyed by user only)"
+    terminal_state: closed_in_commit
+    commit: "oi348-slot-sync@branch"
+    verification: "_release checks owner and generation before touching a flag; race test 'A -> B -> A' (mutant red)"
+
+  - id: BPB-4-RESTORE-NEVER-THROWS
+    title: "Seat B P3: the new-mode _restoreNutritionLogs could throw where the legacy body never did"
+    terminal_state: closed_in_commit
+    commit: "oi348-slot-sync@branch"
+    verification: "try/catch with the H-42 telemetry pair and restore_nutrition_logs; pinned by test/sync/sync_telemetry_test.dart pair count 77 (presence only; restoreNutritionLogsForSyncDomain is flag-gated off)"
+
+  - id: BPB-5-FOOD-NAME-SIGNATURE
+    title: "Seat B P3: the signature read only `name` while the payload falls back to `food_name`"
+    terminal_state: closed_in_commit
+    commit: "oi348-slot-sync@branch"
+    verification: "nslotCanonicalText reads name ?? food_name; merge test 'an item carrying only food_name signs like its cloud copy' with the different-name mirror (mutant red)"
+
+  - id: BPB-6-STUCK-SLOT-LOG
+    title: "Seat B P3: an oversized slot (and a bad meal type) logged on every push pass, forever"
+    terminal_state: closed_in_commit
+    commit: "oi348-slot-sync@branch"
+    verification: "NslotSection._engineLow logs nslot_slot_too_large / nslot_bad_meal_type once per launch per message; oversized-slot test pushes three times and expects one event (mutant red)"
+
+  - id: FOUND-PULL-TEST-TIME-BOMB
+    title: "Found by this batch's run (2026-11-23): 1a-i's nutrition_pull_removed_behavioral_test fixed created_at 2026-11-22 against the pull's now - 24 h filter, so 3 tests went red a day after merge (on main too)"
+    terminal_state: closed_in_commit
+    commit: "oi348-slot-sync@branch"
+    verification: "fixture times derived from DateTime.now(); 13/13 green; the fixed-date version is red the same day; debugging bug-class 2.168"
+
+  # ---- B-pass delta seat (2026-11-23, fresh Sonnet seat on the fixes) ----
+  - id: BPD-1-COST-TEST-PUT-PULL
+    title: "Delta P2: the O(rows) test only measured a pass that sent nothing (_pushSlot and applyLocked unmeasured)"
+    terminal_state: closed_in_commit
+    commit: "oi348-slot-sync@branch"
+    verification: "race test adds a put pass over 40 changed days and a 40-date pull on a second device; mutants at _pushSlot and applyLocked each red"
+
+  - id: BPD-2-ONCE-PER-SESSION
+    title: "Delta P3: _onceThisLaunch survived an account change"
+    terminal_state: closed_in_commit
+    commit: "oi348-slot-sync@branch"
+    verification: "cleared in onUserChanged; oversized-slot test logs again after a change (mutant red)"
+
+  - id: BPD-3-VERIFY-J-SKIP
+    title: "Delta P3: the live verify printed ALL OK with the cross-user check skipped"
+    terminal_state: closed_in_commit
+    commit: "oi348-slot-sync@branch"
+    verification: "v_j_ran; the final NOTICE names a skipped J"
+
+  - id: BPD-4-FAKE-SINCE-INSTANT
+    title: "Delta P3: the fake compared since as text across shapes"
+    terminal_state: closed_in_commit
+    commit: "oi348-slot-sync@branch"
+    verification: "_before compares instants; contract test 'the fake keeps a row whose updated_at equals since, across text shapes' (mutant red)"
+
+  - id: BPD-5-PREFIX-BEFORE-READ
+    title: "Delta P3: the row readers read every value before the nlog_ prefix test"
+    terminal_state: closed_in_commit
+    commit: "oi348-slot-sync@branch"
+    notes: "Prefix check first in _rowsByDate and _rowsOfDate; behaviour unchanged (equivalent refactor), so no mutant can prove it; the full slot suite stays green."
+
+  # ---- Found at apply (2026-11-23) ----
+  - id: FOUND-APPLY-FUNCTION-SET
+    title: "The first apply of 181 failed (42501 permission denied to set parameter app.nutrition_rpc): a non-superuser cannot attach a custom setting to a function, so BPA-1's function-level SET could never be applied"
+    terminal_state: closed_in_commit
+    commit: "oi348-slot-sync@branch"
+    verification: "Fresh seat on the fix: no P0/P1 (DELTA2-1..3 below). The failed apply rolled back whole (live: 0 new columns, no table, 0 functions, 163 migrations). Marker moved into the body with a restore before every return; a rolled-back dry run of the file plus the full verify passed, a mutant dry run (ok-path restore removed) failed at C1 as predicted, then the apply succeeded. Bug-class 2.167 and supabase/migrations/CLAUDE.md now warn against the function-level form."
+
+  - id: DELTA2-1-INLINE-RETURN-PIN
+    title: "Delta seat 2 P2: the marker pin counted only lines starting with RETURN; an inline THEN RETURN or a bare RETURN; with no restore stayed green"
+    terminal_state: closed_in_commit
+    commit: "oi348-slot-sync@branch"
+    verification: "test/contracts/nutrition_slot_sync_writer_to_reader_test.dart requires every \\bRETURN\\b in each RPC body to be one the line scan saw; mutant (inline 'IF ... THEN RETURN NULL; END IF;' in delete) red, file restored by cp and cmp-identical"
+
+  - id: DELTA2-2-UNIQUE-VIOLATION-PATH
+    title: "Delta seat 2 P3: live case N cannot reach put's unique_violation return"
+    terminal_state: verified_clean
+    evidence: "Unreachable from one transaction (it sees its own rows, so the FOR UPDATE read always finds the row first); that RETURN's restore is pinned by the contract test, now including inline RETURN forms; on handler entry the subtransaction abort leaves the outer value 'on' until the restore runs."
+
+  - id: DELTA2-3-PLAIN-WRITE-AFTER-RPC
+    title: "Delta seat 2 P3: case N reads only the setting, not the behaviour of a plain write after an RPC"
+    terminal_state: verified_clean
+    evidence: "Live verify cases C (plain INSERT after RPC calls: rev 5, legacy_rev 5, tombstone consumed), E2b-E2d (item UPDATE and DELETE after a put) and H (plain DELETE after a put writes the tombstone) assert the behaviour and passed on the applied schema 2026-11-23."

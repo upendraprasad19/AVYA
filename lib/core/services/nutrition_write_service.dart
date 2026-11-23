@@ -15,6 +15,8 @@ import 'hive_service.dart';
 import 'hive_user_session.dart';
 import 'nutrition_read_service.dart';
 import 'nutrition_write_source.dart';
+import 'sync/nutrition_slot_engine.dart'
+    show kDisableNutritionSlotSyncKey, nslotUndoRefusal;
 import 'sync_service.dart';
 import 'write_result.dart';
 
@@ -131,6 +133,9 @@ class NutritionWriteService {
       'source': source.name,
       'logged_at': DateTime.now().toUtc().toIso8601String(),
       'created_at': DateTime.now().toUtc().toIso8601String(),
+      // OI-348 Landing 1a-ii (§4.1): the meal's identity across devices.
+      // Every caller (relog, coach, scan, ...) goes through here.
+      'entry_id': _entryIdGen.v4(),
     };
 
     // 4. Hive write (FC6: clamp absurd calorie/macro values first)
@@ -336,8 +341,10 @@ class NutritionWriteService {
     }
     final m = Map<String, dynamic>.from(raw as Map);
 
-    // Apply incoming updates
-    m.addAll(updates);
+    // Apply incoming updates. OI-348 Landing 1a-ii (§4.1): an `updates` map
+    // can never re-identify or re-slot a row (a move is moveMealLog).
+    m.addAll(Map<String, dynamic>.from(updates)
+      ..removeWhere((k, _) => kEditLogProtectedKeys.contains(k)));
 
     // If items[] changed, recompute totals
     if (updates.containsKey('items')) {
@@ -395,15 +402,15 @@ class NutritionWriteService {
   /// first free occurrence (OI-493 Landing B: a slot already holding the same
   /// meal keeps two entries, no merge), delete the old key.
   ///
-  /// LOCAL-ONLY cloud consistency, same accepted residual as
-  /// moveExerciseLogs and as this file's own deleteLog/editLog: this method
-  /// just mutates Hive and fires the general `syncNutritionData()` fan-out,
-  /// which upserts the NEW slot by natural key (user_id, date, meal_type).
-  /// The vacated OLD slot's cloud row is not explicitly tombstoned here —
-  /// neither is it by deleteLog or editLog anywhere else in this file, so
-  /// this does not introduce a new class of gap, only inherits the existing
-  /// one. See sync_nutrition.dart:296-314 for the natural-key upsert this
-  /// depends on (id deliberately omitted per diagnose c9f2a7).
+  /// Cloud consistency (OI-348 1a-ii, diagnose a6c4e2): the row keeps its
+  /// `entry_id`, so the slot sync (`sync/nutrition_slot_engine.dart`) puts
+  /// the NEW slot first and then puts (or deletes, when emptied) the OLD one;
+  /// another device's day pass removes the old copy. A kill between this
+  /// put and delete leaves two same-id rows: `stampLocked` keeps the newer.
+  /// With the kill switch `disable_nutrition_slot_sync` (legacy mode) the
+  /// old residual returns: the legacy push upserts the NEW slot by natural
+  /// key and never tombstones the vacated one (sync_nutrition.dart
+  /// `_syncNutritionLogsLegacy`; id omitted per diagnose c9f2a7).
   Future<WriteResult> moveMealLog({
     required String logKey,
     required String newMealType,
@@ -619,6 +626,15 @@ class NutritionWriteService {
     final String target;
     try {
       final box = HiveService.instance.nutritionBox;
+      // OI-348 Landing 1a-ii (§4.1): a meal a pull brought back, or an id-less
+      // pre-build row after the re-baseline, is never put back a second time.
+      final refusal = nslotUndoRefusal(payload, box, _slotSyncNewMode());
+      if (refusal != null) {
+        _lastDeletedPayload = null;
+        _lastDeletedKey = null;
+        _deletedOwnerByKey.remove(key);
+        return WriteResult.fail('nothing to restore ($refusal)');
+      }
       target = _restoreTargetKey(box.containsKey, key);
       await box.put(target, _withLogKey(payload, target));
     } catch (e, st) {
@@ -962,6 +978,12 @@ class NutritionWriteService {
     final String target;
     try {
       final box = HiveService.instance.nutritionBox;
+      // OI-348 Landing 1a-ii (§4.1): same refusals as restoreLastDeleted.
+      final refusal = nslotUndoRefusal(log, box, _slotSyncNewMode());
+      if (refusal != null) {
+        _deletedOwnerByKey.remove(key);
+        return WriteResult.fail('nothing to restore ($refusal)');
+      }
       target = _restoreTargetKey(box.containsKey, key);
       await box.put(target, _withLogKey(log, target));
     } catch (e, st) {
@@ -1029,6 +1051,36 @@ class NutritionWriteService {
   /// changed nutrition rows outside this service (the one-time removal of the
   /// cross-channel pull's copies, `SyncServiceNutrition._cleanupNutritionPullCopies`).
   static void invalidateAfterSync() => instance._invalidateNutritionProviders();
+
+  /// OI-348 Landing 1a-ii (§4.11 step 3): the re-baseline drops the undo
+  /// stash in the same synchronous run as its writes, so an UNDO can never
+  /// re-add a pre-build row the rebuild already replaced.
+  static void clearUndoStash() {
+    instance._lastDeletedPayload = null;
+    instance._lastDeletedKey = null;
+  }
+
+  /// Keys an `editLog` updates map may never set (§4.1).
+  static const Set<String> kEditLogProtectedKeys = {
+    'entry_id',
+    'id',
+    'log_key',
+    'date',
+    'meal_type',
+  };
+
+  static const Uuid _entryIdGen = Uuid();
+
+  /// New mode of the nutrition slot sync (§4.6: the switch is the only way
+  /// out). Read fresh on every call; a missing box counts as new mode.
+  static bool _slotSyncNewMode() {
+    try {
+      return HiveService.instance.configBox.get(kDisableNutritionSlotSyncKey) !=
+          true;
+    } catch (_) {
+      return true;
+    }
+  }
 
   void _invalidateNutritionProviders() {
     // Legacy container path — kept for back-compat in tests that wire
@@ -1139,6 +1191,31 @@ class NutritionWriteService {
         .v5(_itemsHashNamespace, joined)
         .replaceAll('-', '')
         .substring(0, 8);
+  }
+
+  /// OI-348 Landing 1a-ii: [computeLogKey]'s key for a stored row's IST
+  /// [dateStr] and item MAPS (the sync side holds maps, not FoodItems, and a
+  /// date string, not an instant). Same hash, so a meal restored from the
+  /// cloud lands where its own device would have put it.
+  /// OI-348 Landing 1a-ii: the `nlog_<date>_<meal>_` prefix every key of one
+  /// slot starts with, and the key of an entry whose own key cannot be used
+  /// (8 hex digits taken from its entry id).
+  static String logKeyPrefix(String dateStr, String mealType) =>
+      'nlog_${dateStr}_${mealType}_';
+  static String logKeyForHash(String dateStr, String mealType, String hex8) =>
+      '${logKeyPrefix(dateStr, mealType)}$hex8';
+
+  static String logKeyForMaps(String dateStr, String mealType, List items) {
+    final foods = <FoodItem>[];
+    for (final i in items) {
+      if (i is! Map) continue;
+      try {
+        foods.add(FoodItem.fromMap(Map<String, dynamic>.from(i)));
+      } catch (_) {
+        // A malformed item (wrong type) does not take part in the key.
+      }
+    }
+    return 'nlog_${dateStr}_${mealType}_${_stableItemsHash(foods)}';
   }
 
   static bool isAllowedMealType(String type) =>

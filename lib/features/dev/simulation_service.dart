@@ -175,12 +175,14 @@ class SimulationService {
     await HiveService.instance.healthBox.delete('steps_today');
     await HiveService.instance.healthBox.delete('steps_date');
     await _clearKeysWithPrefixes(
-        HiveService.instance.nutritionBox, const ['nlog_']);
+        HiveService.instance.nutritionBox, const ['nlog_', 'nslot_']);
+    // OI-348 Landing 1a-ii: 'nslot_' = the slot sync's ledger shards, cursor
+    // and meta (a re-drive starts from a re-baseline, like a fresh device).
     // Day-swapper + sync-load Task 20 (coordinator addendum): sched, exlog
     // and nlog's index deletes above (previously a raw literal for sched and
     // symbolic SyncSkipDomain.<x>.indexKey references for exlog/nlog, Tasks
     // 13/15) are replaced by this ONE call, which walks every one of the
-    // (now 17) SyncSkipDomain values and deletes its index wherever it
+    // (now 18) SyncSkipDomain values and deletes its index wherever it
     // lives — a survivor here mis-skips its domain's re-drive push once
     // resetJourney wipes cloud data out-of-band.
     await SyncSkipIndex.clearAll((box) => switch (box) {

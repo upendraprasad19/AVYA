@@ -5,7 +5,8 @@ blast_radius: platform
 review_rounds: 16
 ground_truth_verified: true
 verdict: converged
-bpass: pending
+bpass: accepted
+bpass_review: docs/reviews/fffbe6b1d574-review.md
 ---
 
 # Plan-review record — OI-348 Landing 1a-ii (nutrition slot sync: every device converges on the same meals; closes OI-281)
@@ -28,3 +29,6 @@ Inline, one worktree (`oi348-slot-sync`), decided at start (§4.12.7). The migra
 
 ## B-pass
 Pending (self-initiated before the merge, §4.3).
+
+## B-pass (2026-11-23)
+Two context-blind Sonnet seats on the staged diff (server: migration 181, remote, fake, live verify; client: engine, section, merge, wiring), then a fresh delta seat on the fixes: 20 findings, 1 P1 (the push re-read the whole box per slot), none left open; record `docs/reviews/fffbe6b1d574-review.md`, closure `docs/audit/oi348-landing1a-ii.closure.yaml`.

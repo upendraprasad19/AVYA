@@ -2,6 +2,8 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
+import 'package:icanbefitter/core/services/sync/nutrition_slot_engine.dart'
+    show kDisableNutritionSlotSyncKey;
 import 'package:icanbefitter/core/services/sync/sync_skip_index.dart';
 import 'package:icanbefitter/core/services/sync_service.dart';
 
@@ -100,7 +102,13 @@ void main() {
 
   group('nlog behavioral skip contract (day-swapper + sync-load Task 13)', () {
     final h = SyncHarness();
-    setUp(h.setUp);
+    setUp(() async {
+      await h.setUp();
+      // OI-348 Landing 1a-ii: the nlog index belongs to the LEGACY-mode push
+      // (kill switch); the new mode uses SyncSkipDomain.nslot.
+      await HiveService.instance.configBox
+          .put(kDisableNutritionSlotSyncKey, true);
+    });
     tearDown(h.tearDown);
 
     Map<String, dynamic> row(int calories) => {

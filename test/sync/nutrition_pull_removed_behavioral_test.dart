@@ -17,13 +17,20 @@ import 'package:icanbefitter/core/services/error_telemetry.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
 import 'package:icanbefitter/core/services/hive_user_session.dart';
 import 'package:icanbefitter/core/services/nutrition_write_service.dart';
+import 'package:icanbefitter/core/services/sync/nutrition_slot_engine.dart'
+    show kDisableNutritionSlotSyncKey;
 import 'package:icanbefitter/core/services/sync_service.dart';
 
 import '../helpers/hive_test_setup.dart' show kTestUserId;
 import 'sync_domain_skip_harness.dart';
 
 const _cloudId = '0b6f0a52-1c2d-4e3f-8a9b-0c1d2e3f4a5b';
-const _date = '2026-11-22';
+// Fixture times are relative to NOW: the pull reads rows created in the last
+// 24 h (the stub applies the gte filter), so a fixed date expired one day
+// after it was written (2026-11-22 -> red on 2026-11-23).
+final DateTime _at = DateTime.now().toUtc().subtract(const Duration(hours: 1));
+final String _date = _at.toIso8601String().substring(0, 10);
+String _iso(Duration d) => _at.add(d).toIso8601String();
 
 Map<String, dynamic> _nlogLunch() => {
       'id': 'nlog_${_date}_lunch_0a1b2c3d',
@@ -39,8 +46,8 @@ Map<String, dynamic> _nlogLunch() => {
         {'name': 'Apple', 'quantity_g': 180.0, 'calories': 95.0},
       ],
       'source': 'manual',
-      'created_at': '2026-11-22T07:00:00.000Z',
-      'logged_at': '2026-11-22T07:00:00.000Z',
+      'created_at': _iso(Duration.zero),
+      'logged_at': _iso(Duration.zero),
     };
 
 /// The exact shape the removed leg wrote: the cloud row's columns plus the
@@ -55,7 +62,7 @@ Map<String, dynamic> _pullCopy({String id = _cloudId}) => {
       'total_carbs': 25,
       'total_fat': 0,
       'total_fiber': 4,
-      'created_at': '2026-11-22T07:00:01.000+00:00',
+      'created_at': _iso(const Duration(seconds: 1)),
       'source': 'telegram_label_stand_in',
     };
 
@@ -69,7 +76,7 @@ Map<String, dynamic> _cloudRow() => {
       'total_carbs': 25,
       'total_fat': 0,
       'total_fiber': 4,
-      'created_at': '2026-11-22T07:00:01.000+00:00',
+      'created_at': _iso(const Duration(seconds: 1)),
     };
 
 int _dayCalories() {
@@ -138,6 +145,9 @@ void main() {
 
     test('the switch runs the old leg again (old path reachable)', () async {
       final box = HiveService.instance.nutritionBox;
+      // OI-348 Landing 1a-ii: 1a-i's switch acts in LEGACY mode only (§4.6).
+      await HiveService.instance.configBox
+          .put(kDisableNutritionSlotSyncKey, true);
       await HiveService.instance.configBox
           .put(kRestoreNutritionLaunchPullKey, true);
       try {
@@ -150,6 +160,27 @@ void main() {
         await pull();
         expect(box.containsKey(_cloudId), isTrue);
         expect(_dayCalories(), 190, reason: 'the old doubling, by design');
+      } finally {
+        await HiveService.instance.configBox
+            .delete(kRestoreNutritionLaunchPullKey);
+        await HiveService.instance.configBox
+            .delete(kDisableNutritionSlotSyncKey);
+      }
+    });
+
+    test('MIRROR (OI-348 1a-ii §4.6): in new mode the switch does NOT run the '
+        'old leg', () async {
+      final box = HiveService.instance.nutritionBox;
+      await HiveService.instance.configBox
+          .put(kRestoreNutritionLaunchPullKey, true);
+      try {
+        await HiveService.instance.syncBox
+            .put(nutritionPullCopyCleanFlagKey(kTestUserId), true);
+        await box.put(_nlogLunch()['id'] as String, _nlogLunch());
+        h.server.pagedTables['nutrition_logs'] = [_cloudRow()];
+        await pull();
+        expect(box.containsKey(_cloudId), isFalse);
+        expect(_dayCalories(), 95);
       } finally {
         await HiveService.instance.configBox
             .delete(kRestoreNutritionLaunchPullKey);
@@ -318,7 +349,7 @@ void main() {
           'user_id': kTestUserId,
           'date': _date,
           'weight_kg': 72.5,
-          'created_at': '2026-11-22T06:00:00.000Z',
+          'created_at': _iso(const Duration(hours: -1)),
         };
 
     test('the weight leg still writes weight_<date>', () async {

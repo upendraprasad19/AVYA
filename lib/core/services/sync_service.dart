@@ -34,6 +34,9 @@ import 'package:icanbefitter/core/services/sync_domains/streaks_sync_domain.dart
 import 'package:icanbefitter/core/services/sync_domains/workouts_sync_domain.dart';
 import 'package:icanbefitter/core/services/sync/schedule_completion_time.dart';
 import 'package:icanbefitter/core/services/sync/sync_skip_index.dart';
+import 'package:icanbefitter/core/services/sync/nutrition_slot_engine.dart';
+import 'package:icanbefitter/core/services/sync/nutrition_slot_remote.dart';
+import 'package:icanbefitter/core/services/sync/nutrition_slot_section.dart';
 import 'package:icanbefitter/core/services/sync/exlog_push_rules.dart';
 import 'package:icanbefitter/core/services/sync/exlog_restore_rules.dart';
 import 'package:icanbefitter/core/services/sync/first_sweep_decision.dart';
@@ -153,6 +156,8 @@ class SyncService {
     // H1a (Unit H, 2026-06-27) — flush owed trailing sync passes when the app
     // backgrounds (best-effort; the next login's full sweep is the backstop).
     _hive.onAppPaused = flushPendingSyncs;
+    // OI-348 Landing 1a-ii (§4.9): meals from other devices on resume.
+    _hive.onAppResumed = _onAppResumedPullNutrition;
   }
   static final SyncService _instance = SyncService._();
 
@@ -240,6 +245,74 @@ class SyncService {
     // belongs to the PREVIOUS owner.
     SyncRetryController.instance.reset();
     _weeklyFullSyncSlot.reset();
+    // OI-348 Landing 1a-ii (§4.7): the nutrition section belongs to the
+    // previous owner — new ticket, bumped generation, owed flags dropped.
+    _nslot.onUserChanged();
+    _lastNutritionResumePull = null;
+  }
+
+  /// OI-348 Landing 1a-ii — the nutrition slot sync section (§4.6, §4.7):
+  /// the ONE ticket of the nutrition domain and the three bodies that take
+  /// it. See `sync/nutrition_slot_section.dart`.
+  late final NslotSection _nslot = NslotSection(
+    nutritionBox: () => _hive.nutritionBox,
+    configBox: () => _hive.configBox,
+    remoteFor: (userId) => SupabaseNslotRemote(_supabase.client, userId),
+    ownerChangedSince: ownerChangedSince,
+    reportFailure: (op, e) => unawaited(_reportSyncFailure(opType: op, error: e)),
+    logLow: (event, message) =>
+        unawaited(ErrorTelemetry.logEvent(event, message: message)),
+    invalidate: NutritionWriteService.invalidateAfterSync,
+    clearUndoStash: NutritionWriteService.clearUndoStash,
+    schedulePush: () => unawaited(syncNutritionData()),
+    hashSkipDisabled: () => _hashSkipKillSwitchOn(SyncSkipDomain.nslot),
+  );
+
+  /// §4.9 resume throttle (at most one pull per 2 minutes).
+  DateTime? _lastNutritionResumePull;
+  static const Duration _kNutritionResumePullEvery = Duration(minutes: 2);
+
+  void _onAppResumedPullNutrition() {
+    try {
+      final userId = _liveUserId;
+      if (userId == null || !_nslot.newMode) return;
+      final now = DateTime.now();
+      final last = _lastNutritionResumePull;
+      if (last != null && now.difference(last) < _kNutritionResumePullEvery) {
+        return;
+      }
+      _lastNutritionResumePull = now;
+      unawaited(pullNutritionSlots(userId));
+    } catch (e, st) {
+      unawaited(ErrorTelemetry.recordNonFatal(e, st,
+          reason: 'sync_service_resume_nutrition_pull'));
+    }
+  }
+
+  /// OI-348 Landing 1a-ii — pull meals from other devices (new mode only;
+  /// the first run on a device is its re-baseline). Never throws.
+  Future<void> pullNutritionSlots(String userId) async {
+    try {
+      await _nslot.pullBody(userId);
+    } catch (e, st) {
+      unawaited(ErrorTelemetry.recordNonFatal(e, st,
+          reason: 'sync_service_pull_nutrition_slots', skipServerPost: true));
+      try {
+        await _reportSyncFailure(opType: 'pull_nutrition_slots', error: e);
+      } catch (_) {}
+    }
+  }
+
+  /// §4.11: a restore that will run the re-baseline runs without the 45 s
+  /// ceiling (every await inside has its own timeout; pages survive a retry).
+  bool get _nutritionRestoreCeiling {
+    try {
+      if (!_nslot.newMode) return true;
+      final meta = _hive.nutritionBox.get(kNslotMetaKey);
+      return meta is Map && meta['rebaselined'] == true;
+    } catch (_) {
+      return true;
+    }
   }
 
   final HiveService _hive = HiveService.instance;
@@ -1036,6 +1109,10 @@ class SyncService {
 
       // Pull recent cross-channel logs (Telegram → Hive, last 24h).
       await pullRecentCrossChannelLogs();
+
+      // OI-348 Landing 1a-ii (§4.9): meals from other devices (new mode;
+      // the first run on a device is its re-baseline).
+      await pullNutritionSlots(userId);
 
       // Pull latest fitness_summary from Supabase → Hive (updated nightly by rolling-context).
       await _syncFitnessSummary(userId);
@@ -1867,7 +1944,8 @@ class SyncService {
           _safeRestoreOp('custom_foods', _restoreCustomFoods(userId)),
           _safeRestoreOp('weight_logs', _restoreWeightLogs(userId, since)),
           _safeRestoreOp('steps_logs', _restoreStepsLogs(userId, since)), // F20
-          _safeRestoreOp('nutrition_logs', _restoreNutritionLogs(userId, since)),
+          _safeRestoreOp('nutrition_logs', _restoreNutritionLogs(userId, since),
+              ceiling: _nutritionRestoreCeiling),
           _safeRestoreOp('measurements', _restoreMeasurements(userId, since)),
           _safeRestoreOp('user_profile', _restoreUserProfile(userId)),
           _safeRestoreOp('user_progress', _restoreUserProgress(userId)),
@@ -2188,7 +2266,8 @@ class SyncService {
           _safeRestoreOp('schedule_completions', _restoreScheduleCompletions(userId, since)),
           _safeRestoreOp('weight_logs', _restoreWeightLogs(userId, since)),
           _safeRestoreOp('steps_logs', _restoreStepsLogs(userId, since)),
-          _safeRestoreOp('nutrition_logs', _restoreNutritionLogs(userId, since)),
+          _safeRestoreOp('nutrition_logs', _restoreNutritionLogs(userId, since),
+              ceiling: _nutritionRestoreCeiling),
           _safeRestoreOp('measurements', _restoreMeasurements(userId, since)),
           _safeRestoreOp('water_logs', _restoreWaterLogs(userId, since)),
           _safeRestoreOp('sleep_logs', _restoreSleepLogs(userId, since)),
@@ -2384,7 +2463,8 @@ class SyncService {
       await _safeRestoreOp(
           'nutrition_logs',
           _restoreNutritionLogs(userId, since,
-              preFetched: row('nutrition_logs')));
+              preFetched: row('nutrition_logs')),
+          ceiling: _nutritionRestoreCeiling);
       await _safeRestoreOp(
           'measurements',
           _restoreMeasurements(userId, since,
@@ -2627,8 +2707,11 @@ class SyncService {
 
       final since =
           DateTime.now().subtract(const Duration(hours: 24)).toIso8601String();
+      // OI-348 Landing 1a-ii (§4.6): in new mode the old leg never runs,
+      // whatever the switch says; the slot pull replaces it.
       final nutritionLegOn =
-          _hive.configBox.get(kRestoreNutritionLaunchPullKey) == true;
+          _hive.configBox.get(kRestoreNutritionLaunchPullKey) == true &&
+              !_nslot.newMode;
 
       await Future.wait(
         [
@@ -2886,13 +2969,15 @@ class SyncService {
   /// dual-write fix, diagnose — see docs/diagnoses/): it used to ALSO
   /// double-post to `client_errors`, since `recordNonFatal` posted there by
   /// default too. Now exactly one `client_errors` row lands per failure.
-  Future<void> _safeRestoreOp(String label, Future<void> task) async {
+  Future<void> _safeRestoreOp(String label, Future<void> task,
+      {bool ceiling = true}) async {
     // Bug 2026-05-19 (A1 telemetry) — wrap with Stopwatch so client_errors
     // can answer "which restore op is the long pole." LOW-priority op_type
     // emitted on success; failure path keeps the pre-existing error report.
     final sw = Stopwatch()..start();
     try {
-      await applyRestoreCeiling(task, enabled: _restoreOpTimeoutEnabled);
+      await applyRestoreCeiling(task,
+          enabled: _restoreOpTimeoutEnabled && ceiling);
       sw.stop();
       // closes-diagnose e5b2a9 — only SLOW ops earn a row (kill-switch
       // `disable_restore_op_done_filter` restores log-everything).

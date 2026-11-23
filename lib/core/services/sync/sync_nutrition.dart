@@ -198,7 +198,22 @@ extension SyncServiceNutrition on SyncService {
 
   // ── Push helpers ────────────────────────────────────────────
 
+  /// OI-348 Landing 1a-ii (§4.6): new mode → the slot push (CAS RPCs, one
+  /// ticket); legacy mode (`disable_nutrition_slot_sync`) → the verbatim
+  /// legacy body below, run inside the ticket by the legacy wrapper, which
+  /// marks the device for a FULL re-baseline first.
   Future<void> _syncNutritionLogs(String userId) async {
+    if (_nslot.newMode) {
+      await _nslot.pushBody(userId);
+      return;
+    }
+    await _nslot.legacyPass(
+        userId, () => _syncNutritionLogsLegacy(userId),
+        isPush: true);
+  }
+
+  /// The pre-1a-ii push, verbatim (legacy mode only).
+  Future<void> _syncNutritionLogsLegacy(String userId) async {
     // audit-fixwave 2026-07-02 / F5 (NUT-02) — merge same-slot logs BEFORE the
     // natural-key upsert. The cloud arbiter is (user_id,date,meal_type), so two
     // local `nlog_<date>_<meal>_<hash>` logs for the SAME slot+day would collapse
@@ -607,6 +622,85 @@ extension SyncServiceNutrition on SyncService {
   /// the parser below reads). Legacy callers omit it → paginated network read.
   /// Plan `restore-single-call-c3.md` §4 (H-1 embed nesting preserved).
   Future<void> _restoreNutritionLogs(String userId, String since,
+      {Object? preFetched = _kNoInject}) async {
+    // OI-348 Landing 1a-ii (§4.12): legacy mode → the verbatim legacy restore
+    // inside the ticket (marks a FULL re-baseline first).
+    if (!_nslot.newMode) {
+      await _nslot.legacyPass(
+          userId,
+          () => _restoreNutritionLogsLegacy(userId, since,
+              preFetched: preFetched),
+          isPush: false);
+      return;
+    }
+    final List<Map<String, dynamic>>? injected = identical(
+            preFetched, _kNoInject)
+        ? null
+        : [
+            for (final r in (preFetched as List? ?? const []))
+              if (r is Map) Map<String, dynamic>.from(r),
+          ];
+    // Never throws, like the legacy body (B-pass seat B P3): a network error
+    // from the read or a Hive error from the merge is reported here, so a
+    // caller outside `_safeRestoreOp` (restoreNutritionLogsForSyncDomain)
+    // keeps the old contract.
+    try {
+      final result = await _nslot.restoreBody(
+        userId,
+        preFetched: injected,
+        fetchRows: () => _fetchNutritionRowsForSlotRestore(userId, since),
+      );
+      if (!result.ok) {
+        // No caller may treat nutrition as restored (R14 P2-2).
+        await _reportSyncFailure(
+          opType: 'restore_nutrition_slots',
+          error: StateError('restore_nutrition_slots: ${result.reason}'),
+        );
+      }
+    } catch (e, st) {
+      debugPrint('[SyncService._restoreNutritionLogs] $e');
+      // audit-2026-05-11 H-42 — telemetry pair.
+      unawaited(ErrorTelemetry.recordNonFatal(e, st,
+          reason: 'sync_service_restore_nutrition_slots', skipServerPost: true));
+      try {
+        await _reportSyncFailure(opType: 'restore_nutrition_logs', error: e);
+      } catch (_) {}
+    }
+  }
+
+  /// §4.12: the steady restore's own read — today's paging, each page under
+  /// the pull's 20 s timeout (an unbounded page would hold the one ticket).
+  Future<List<Map<String, dynamic>>> _fetchNutritionRowsForSlotRestore(
+      String userId, String since) async {
+    final fetched = <Map<String, dynamic>>[];
+    int offset = 0;
+    const pageSize = 1000;
+    while (true) {
+      final page = await _supabase.client
+          .from('nutrition_logs')
+          .select('*, nutrition_log_items(*)')
+          .eq('user_id', userId)
+          .gte('created_at', since)
+          .order('created_at', ascending: false)
+          .order('id', ascending: false)
+          .range(offset, offset + pageSize - 1)
+          .timeout(kNslotPageTimeout);
+      for (final r in page) {
+        fetched.add(Map<String, dynamic>.from(r as Map));
+      }
+      if (page.length < pageSize) break;
+      if (fetched.length >= 50000) {
+        unawaited(ErrorTelemetry.logEvent('restore_row_ceiling_hit',
+            message: 'nutrition_logs'));
+        break;
+      }
+      offset += pageSize;
+    }
+    return fetched;
+  }
+
+  /// The pre-1a-ii restore, verbatim (legacy mode only).
+  Future<void> _restoreNutritionLogsLegacy(String userId, String since,
       {Object? preFetched = _kNoInject}) async {
     try {
       // Join with nutrition_log_items to restore individual food items.

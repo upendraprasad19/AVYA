@@ -34,6 +34,11 @@ class SerialSlot {
     return SerialTicket._(this, prior, done, future);
   }
 
+  /// True while any ticket is held or waiting (OI-348 Landing 1a-ii §4.7: a
+  /// push that finds the nutrition section busy sets "owed" and returns
+  /// instead of queueing).
+  bool get isBusy => _tail != null;
+
   /// Account switch: the line belongs to the previous owner. Tickets that are
   /// already waiting still run after the one they wait behind; a NEW caller
   /// starts immediately.
