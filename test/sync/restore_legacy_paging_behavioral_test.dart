@@ -31,6 +31,8 @@ import 'package:hive/hive.dart';
 import 'package:icanbefitter/core/services/error_telemetry.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
 import 'package:icanbefitter/core/services/supabase_service.dart';
+import 'package:icanbefitter/core/services/sync/nutrition_slot_engine.dart'
+    show kDisableNutritionSlotSyncKey;
 import 'package:icanbefitter/core/services/sync_flags.dart';
 import 'package:icanbefitter/core/services/sync_service.dart';
 
@@ -145,6 +147,10 @@ void main() {
   setUp(() async {
     h = SyncHarness();
     await h.setUp();
+    // OI-348 Landing 1a-ii: these cases pin the pre-1a-ii nutrition_logs
+    // restore loop, which is now the LEGACY-mode body (kill switch). The
+    // new mode reads by keyset (nutrition_slot_sync_behavioral_test).
+    await HiveService.instance.configBox.put(kDisableNutritionSlotSyncKey, true);
   });
   tearDown(() async {
     ErrorTelemetry.debugOnLogEventForTests = null;

@@ -99,6 +99,10 @@ const _expectedEmitFields = <String, Set<String>>{
     // `log_key`; NlogKeyMigrator re-stamps both and records `migrated_from`
     // (OI-493 Landing B, diagnose 4cb58f: an interrupted run re-reads it).
     'log_key', 'migrated_from',
+    // OI-348 Landing 1a-ii (a6c4e2): logMeal emits `logged_at` (ISO) and the
+    // stable `entry_id`; saved-meal rows carry `is_saved_meal`; every item map
+    // carries `quantity_g`. First read by the slot sync engine.
+    'logged_at', 'entry_id', 'is_saved_meal', 'quantity_g',
   },
   // schedule_* writer: WorkoutScheduleService → WorkoutWriteService.upsertScheduled
   'schedule': {
@@ -514,4 +518,18 @@ const _alwaysOk = <String>{
   // also walks those prefixes elsewhere for restore/sync — same mechanism as
   // `streak_progress_version` above.
   'sync_epoch',
+  // OI-348 Landing 1a-ii (a6c4e2, 2026-11-23) — nutrition slot sync. These are
+  // fields of the engine's OWN bookkeeping maps in nutritionBox, never of an
+  // nlog_* row: the slot ledger shard (`nslot_ledger_<date>`: `rev`, `ts`, `e`,
+  // `ua`), the pull cursor (`rows`, `tombs`, `_k`) and the meta map
+  // (`rebaselined`, `full`, `inflight_sigs`, `inflight_since`).
+  // nutrition_slot_engine.dart and sync_service.dart also walk nlog_*/exlog_*/
+  // wlog_* keys, so the prefix heuristic mis-attributes them. Their writer and
+  // reader are the same engine and are pinned by test/sync/nutrition_slot_*.
+  'rev', 'ts', 'e', 'ua', 'rows', 'tombs', '_k',
+  'rebaselined', 'full', 'inflight_sigs', 'inflight_since',
+  // Same batch: export_data.dart now walks nlog_* keys (only meal rows are
+  // exported), and these are keys of the EXPORT JSON it builds
+  // (`data['nutrition_logs']`, ...), not fields of a Hive row.
+  'health_logs', 'nutrition_logs', 'nutrition_logs_count', 'workout_logs',
 };

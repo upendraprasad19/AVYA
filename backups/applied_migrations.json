@@ -1421,5 +1421,14 @@
     "diagnose": "n/a",
     "slug": "diet_supplements",
     "note": "Diet plan Unit 4a (plan docs/plans/diet-supplements.md section 2): adds user_profile.diet_supplements boolean NULL, no default, no CHECK, plus a column comment; SET lock_timeout 5s / RESET. No row rewritten. Applied to project dedsavbjuwgarrhphgnl only, after the founder go (2026-11-15, 'Apply 180', given after the B-pass was dispatched), via MCP apply_migration with the file's statements (the SET, ALTER, RESET and COMMENT, without the leading comment block; the file's sha256 above is of the whole file); registered as version 20261115085602. Pre-apply live: user_profile had diet_strategy and no diet_supplements. Post-apply live: diet_supplements boolean / nullable / no default, 0 non-null rows. Rollback: the inline DROP COLUMN at the end of the file, only after the client is reverted (nothing writes the column until a build with the Supplements switch is installed; the kill switch is client side, OI-512)."
+  },
+  {
+    "migration": "181",
+    "applied_at": "2026-11-23T13:18:19+05:30",
+    "hash": "sha256:bfed7850f1a56a445ac068dd4cfac7b56383aab87daffd35ac561d415eb57501",
+    "applier": "claude-via-mcp",
+    "diagnose": "a6c4e2",
+    "slug": "nutrition_slot_sync",
+    "note": "OI-348 Landing 1a-ii (spec docs/plans/nutrition-slot-sync.md, closes OI-281): rev / updated_at / entries / legacy_rev on nutrition_logs (defaults, no rewrite), entry_key on nutrition_log_items, the nutrition_slot_tombstones table (RLS own-row), the INVOKER RPCs nutrition_slot_put / _delete / _state / nutrition_server_now (authenticated only) and three triggers for writes made outside the RPCs. Applied to project dedsavbjuwgarrhphgnl only, after the founder go (2026-11-23, 'Yes, apply 181'), via MCP apply_migration with the whole file; registered as version 20261123074819. The FIRST apply attempt failed and rolled back (42501 permission denied to set parameter app.nutrition_rpc: the B-pass fix had used a function-level SET of a custom setting, which a non-superuser cannot attach on PG 17); nothing landed (verified: 0 columns, no table, 0 functions, 163 migrations). The body now sets the marker and restores the previous value before every return; dry-run of file + live verify in BEGIN..ROLLBACK passed, a mutant (ok-path restore removed) failed at C1 as predicted, then the file was applied. Post-apply: the live verify (supabase/tests/nutrition_slot_rpc_live_verify.sql, testing user, rolled back) passed A to N incl. the cross-user case J; has_function_privilege anon false on all 7, authenticated true only on the 4 RPCs; all 92 existing nutrition_logs rows untouched (rev 1, legacy_rev 0, entries null)."
   }
 ]

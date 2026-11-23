@@ -159,6 +159,12 @@ class HiveService with WidgetsBindingObserver {
   /// layering inversion; SyncService wires it in its constructor. Best-effort.
   void Function()? onAppPaused;
 
+  /// OI-348 Landing 1a-ii (§4.9) — optional hook fired on
+  /// `AppLifecycleState.resumed`; SyncService pulls meals from other devices
+  /// there (throttled by SyncService itself). Injected for the same layering
+  /// reason as [onAppPaused].
+  void Function()? onAppResumed;
+
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     // Compact on `paused` — the app is still in memory but the user has
@@ -167,6 +173,8 @@ class HiveService with WidgetsBindingObserver {
     if (state == AppLifecycleState.paused) {
       _maybeCompact();
       onAppPaused?.call();
+    } else if (state == AppLifecycleState.resumed) {
+      onAppResumed?.call();
     }
   }
 

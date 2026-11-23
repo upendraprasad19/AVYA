@@ -37,6 +37,22 @@ const Map<String, (int, String)> _allowed = {
     'deleteLog audit: the legacy flat-row test (hasFoodMeta), the legacy '
         'fallback read, and the audit entry key (its reader passes it on)',
   ),
+  'lib/core/services/sync/nutrition_slot_engine.dart': (
+    2,
+    'OI-348 1a-ii: the slot payload item column food_name, and the item '
+        'name read from a row that only carries food_name (a cloud copy)',
+  ),
+  'lib/core/services/sync/nutrition_slot_merge.dart': (
+    1,
+    'OI-348 1a-ii B-pass: the signature reads an ITEM name as name ?? '
+        'food_name, the same fallback as the engine payload (not a top-level '
+        'nlog_ field)',
+  ),
+  'lib/core/services/sync/nutrition_slot_remote.dart': (
+    1,
+    'OI-348 1a-ii: the cloud item column food_name mapped back to the item '
+        'name of the local nlog_ row',
+  ),
   'lib/core/services/sync/sync_nutrition.dart': (
     5,
     'cloud nutrition_log_items column food_name: push maps item name to it, '

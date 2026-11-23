@@ -126,6 +126,9 @@ const List<String> childEnvStrippedNames = <String>[
   // and its scenario filter (a child would run a narrowed simulation under the full label).
   'HISTORY_SIM_OUT',
   'HISTORY_SIM_SCENARIOS',
+  // OI-348 Landing 1a-ii: the random-schedule test's seed count (a child would run a narrowed or a
+  // much longer convergence test under the same label; test/sync/nutrition_slot_convergence_random_test.dart).
+  'NSLOT_SEEDS',
 ];
 
 /// Variables read by an EXTERNAL tool (not by any repo script), stripped because a
