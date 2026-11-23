@@ -2648,7 +2648,7 @@ concepts:
           reaches the cloud as a second nutrition_log_items row. A second
           device restores ONE row with both items (accepted residual, R9).
       - file: lib/core/services/sync/sync_nutrition.dart
-        line_range: 620-890
+        line_range: 625-895
         method: _restoreNutritionLogs
         semantic: aggregated
         fields_read: [date, meal_type, items[]]
@@ -3438,7 +3438,7 @@ concepts:
       `disable_nutrition_slot_sync` is set or the RPC probe has not answered.
     writers:
       - file: lib/core/services/sync/sync_nutrition.dart
-        line_range: 205-447
+        line_range: 209-452
         method: _syncNutritionLogs -> _syncNutritionLogsLegacy (legacy mode only; constructs a SyncSkipIndex(domain: SyncSkipDomain.nlog) and drives the parent + item + vacuum writes through its pushIfChanged closure -- stores index[slotId]=nlogFp ON CONFIRMED FULL-BUNDLE SUCCESS ONLY; commit(liveKeys:) prunes to live slots + persists after the loop, or CLEARS the index entirely when disabled)
       - file: lib/core/services/sync_service.dart
         line_range: 441-501
@@ -3449,7 +3449,7 @@ concepts:
     reader_manifest_complete: true
     readers:
       - file: lib/core/services/sync/sync_nutrition.dart
-        line_range: 205-447
+        line_range: 209-452
         method: _syncNutritionLogsLegacy (legacy mode only; the skip decision is now internal to SyncSkipIndex.pushIfChanged, which reads its own `_stored[rowKey]` -- hydrated from readIndex(box, domain.indexKey) in the SyncSkipIndex constructor)
         semantic: latest
         fields_read: [sync_nlog_payload_hash_index.<slot_id>]
@@ -3556,7 +3556,7 @@ concepts:
       `cloud_restore`. Kill switch `disable_nutrition_phantom_clean`.
     writers:
       - file: lib/core/services/sync/sync_nutrition.dart
-        line_range: 1065-1112
+        line_range: 1070-1117
         method: _cleanupNutritionPullCopies (deleteAll of the matched keys; syncBox flag put)
       - file: lib/core/services/sync_service.dart
         line_range: 2690-2738
@@ -3564,7 +3564,7 @@ concepts:
     reader_manifest_complete: true
     readers:
       - file: lib/core/services/sync/sync_nutrition.dart
-        line_range: 1141-1150
+        line_range: 1146-1155
         method: isNutritionPullCopy (the one match rule)
         semantic: latest
         fields_read: [user_id, date, meal_type, items, is_saved_meal, source]
@@ -3895,7 +3895,7 @@ concepts:
           Shared by _restoreCustomExercises and _restoreCustomFoods: kill switch off -> the
           bare select().eq(user_id); on -> _fetchAllRows (no since, tieBreak id).
       - file: lib/core/services/sync/sync_nutrition.dart
-        line_range: 671-739
+        line_range: 676-744
         method: _fetchNutritionRowsForSlotRestore / _restoreNutritionLogsLegacy (both paging loops)
         notes: |
           Its own paging loop (a nested embed read) gets the same explicit-direction id
@@ -5422,7 +5422,7 @@ concepts:
         semantic: historical-series
         fields_read: [healthBox keys starting with 'water_ml_', value (int or Map total_ml)]
       - file: lib/core/services/sync/sync_nutrition.dart
-        line_range: 472-528
+        line_range: 477-533
         method: _syncWaterLogs (cloud upsert)
         semantic: pass-through
         fields_read: [healthBox keys starting with 'water_ml_']
@@ -5484,7 +5484,7 @@ concepts:
         line_range: 1-100
         method: SavedMealKeyMigrator.runIfNeeded (one-shot re-key legacy saved_meal_<ms> → canonical, boot-wired; b8d5c2)
       - file: lib/core/services/sync/sync_nutrition.dart
-        line_range: 247-345
+        line_range: 252-350
         method: _syncSavedMeals (cloud projection)
     behavioral_test_path_times_used: test/contracts/saved_meal_relog_times_used_behavioral_test.dart  # a8e3f1 — meal_* + legacy counts, re-save keeps count
     # audit-2026-05-16 reader-side — every callsite reading
@@ -5530,7 +5530,7 @@ concepts:
         semantic: flag-check
         fields_read: [is_saved_meal]
       - file: lib/core/services/sync/sync_nutrition.dart
-        line_range: 247-345
+        line_range: 252-350
         method: _syncSavedMeals (cloud upsert)
         semantic: pass-through
         fields_read: [is_saved_meal, name, total_calories, items, meal_type, created_at]

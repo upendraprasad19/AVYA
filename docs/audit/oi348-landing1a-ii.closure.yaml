@@ -6,8 +6,8 @@ batch: oi348-landing1a-ii
 plan_review_record: docs/plan-reviews/oi348-slot-sync.md
 diagnose_docs:
   - docs/diagnoses/2026-11-23-nutrition-slot-sync-a6c4e2.md
-total_findings: 49
-closed_count: 49
+total_findings: 51
+closed_count: 51
 
 findings:
   - id: U1-IDENTITY
@@ -304,3 +304,16 @@ findings:
     title: "Delta seat 2 P3: case N reads only the setting, not the behaviour of a plain write after an RPC"
     terminal_state: verified_clean
     evidence: "Live verify cases C (plain INSERT after RPC calls: rev 5, legacy_rev 5, tombstone consumed), E2b-E2d (item UPDATE and DELETE after a put) and H (plain DELETE after a put writes the tombstone) assert the behaviour and passed on the applied schema 2026-11-23."
+
+  # ---- Found in CI (PR 328, 2026-11-23) ----
+  - id: CI-1-DISPATCHER-OWNER-GUARD
+    title: "CI shard 2: _syncNutritionLogs became a dispatcher with no owner check of its own (session_owner_inflight_guard_behavioral_test sibling rule)"
+    terminal_state: closed_in_commit
+    commit: "oi348-slot-sync@branch"
+    verification: "ownerChangedSince(userId) first in _syncNutritionLogs, before the new and legacy paths; test/contracts/session_owner_inflight_guard_behavioral_test.dart green, and red with the guard removed (mutant)"
+
+  - id: CI-2-NSLOT-SEEDS-ENV
+    title: "CI shard 4: the random-schedule test reads NSLOT_SEEDS, unclassified in the spawn-env manifest"
+    terminal_state: closed_in_commit
+    commit: "oi348-slot-sync@branch"
+    verification: "NSLOT_SEEDS added to _stripped (test/contracts/spawn_env_manifest_test.dart) and childEnvStrippedNames (scripts/regression_catalog_lib.dart); the manifest test green"

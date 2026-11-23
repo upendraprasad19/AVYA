@@ -202,7 +202,12 @@ extension SyncServiceNutrition on SyncService {
   /// ticket); legacy mode (`disable_nutrition_slot_sync`) → the verbatim
   /// legacy body below, run inside the ticket by the legacy wrapper, which
   /// marks the device for a FULL re-baseline first.
+  ///
+  /// It runs under the same Future.wait as _syncWaterLogs and _syncSavedMeals,
+  /// so it carries its OWN owner check before either path (e5c2d1 sibling
+  /// rule; the paths below re-check at each sink).
   Future<void> _syncNutritionLogs(String userId) async {
+    if (ownerChangedSince(userId)) return;
     if (_nslot.newMode) {
       await _nslot.pushBody(userId);
       return;
