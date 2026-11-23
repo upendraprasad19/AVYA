@@ -1,4 +1,4 @@
-# OI-519: Android PRO purchase through RevenueCat + Play Billing (versionCode +51), v8 (after review rounds 1-6 + founder answers; converged, section 17)
+# OI-519: Android PRO purchase through RevenueCat + Play Billing (versionCode +51), v9 (after review rounds 1-6 + founder answers + U0 doc findings, section 18)
 
 Branch `oi519-revenuecat-plan`, base `8eff2037` (origin/main, 2026-11-23). Decision record: ADR-0022. Predecessor plan:
 `docs/plans/2026-11-20-android-play-billing.md` (its section 8 is the design sketch this plan replaces; facts there are
@@ -82,7 +82,7 @@ re-checked here, not inherited).
   is success; up to 5 retries at about 2.5/5/10/20/40 min; 60 s timeout; retries keep the same `id`; no ordering
   guarantee; RevenueCat RECOMMENDS calling `GET /subscribers` on every event instead of per-event logic. A refund
   arrives as `CANCELLATION` with `cancel_reason = CUSTOMER_SUPPORT`; `environment` is `SANDBOX` | `PRODUCTION`.
-- F12. **Unverified, checked in U0 before code:** the exact REST v1 shapes (`GET /v1/subscribers/{id}` creates a
+- F12. **Doc-verified at U0 (section 18); the live shapes are re-checked at L2 before the switch goes ON:** the exact REST v1 shapes (`GET /v1/subscribers/{id}` creates a
   customer when missing; `subscriber.entitlements.avya_pro.expires_date`; `subscriptions[<product>]`
   `unsubscribe_detected_at`, `billing_issues_detected_at`, `refunded_at`, `is_sandbox`, `store`, `grace_period_expires_date`);
   the Google endpoints for cancel / revoke / defer and `DELETE /v1/subscribers/{id}`; the product identifier format
@@ -95,10 +95,13 @@ re-checked here, not inherited).
 The phone buys through RevenueCat with App User ID = Supabase uid. The server never trusts the phone or the webhook
 body: every trigger (webhook event, the user's own "sync me" call, the hourly reconcile) calls ONE shared function
 `mirrorRevenueCatCustomer(uid)` that reads the customer from RevenueCat's REST API with the secret key and upserts ONE
-`subscriptions` row per (user, store product) from THAT answer. The key is `(user_id, store_product_id)`, not a
-transaction id: RevenueCat v1 keys `subscriber.subscriptions` by product id (one entry per product per customer), and
-the Google order id changes on every renewal (round 1 #1). A resubscribe to the same product after expiry updates the
-same row; monthly and yearly are two rows; the union of active rows is the entitlement, as for every other source. So delivery order, retries, duplicates and forged events
+`subscriptions` row per (user, store subscription) from THAT answer. The key is `(user_id, store_product_id)`, not a
+transaction id: RevenueCat v1 keys `subscriber.subscriptions` by the Google subscription id WITHOUT the base-plan
+suffix (`avya_pro`), returns the base plan separately in `product_plan_identifier` (`monthly` / `yearly`), and keeps ONE
+entry per subscription describing the purchase with the furthest-out expiry (RevenueCat webhook doc, "Matching
+`product_id` to the REST API"; U0, section 18); the Google order id changes on every renewal (round 1 #1). So a Play
+subscriber has ONE row (`store_product_id = 'avya_pro'`), its `plan` taken from `product_plan_identifier`; a resubscribe
+or a monthly <-> yearly switch updates that same row. So delivery order, retries, duplicates and forged events
 cannot write a wrong end date; the worst a forged event can do is cause a re-read of the truth. Every existing reader
 keeps working because a Play row is an ordinary `status='active'`, `plan in (monthly, yearly)` row whose `end_date` is
 the store expiry (F2).
@@ -109,7 +112,7 @@ Additive only; rehearsed in the local `supabase/postgres` docker image first (me
 only on its own explicit go; `backups/applied_migrations.json` and `backups/live_schema_columns.json` in the same commit.
 
 - `subscriptions` new nullable columns: `store text` (NULL = our own rows, `'play'` for Play; CHECK `store IS NULL OR
-  store = 'play'`), `store_product_id text` (`avya_pro:monthly` | `avya_pro:yearly`), `store_original_transaction_id
+  store = 'play'`), `store_product_id text` (the REST subscriptions key, `avya_pro`; `plan` from `product_plan_identifier`, U0), `store_original_transaction_id
   text` (informational only, never an arbiter), `auto_renew boolean`, `store_environment text` (CHECK in `SANDBOX`,
   `PRODUCTION`), `store_expires_at timestamptz` (the store's own expiry, for display), `store_read_at timestamptz` (the instant the RevenueCat GET was ISSUED, never the DB write time;
   round 1 #6). CHECK: `store = 'play'` implies `store_product_id`, `store_environment`, `store_read_at` NOT NULL.
@@ -161,7 +164,8 @@ only on its own explicit go; `backups/applied_migrations.json` and `backups/live
     `users` row returns `'noop'` and writes nothing. A `55P03` from the direct body's `FOR UPDATE NOWAIT` rolls the whole
     call back, leaving the row as it was; the next run tries again (round 5 P3-7).
   - New `public.upsert_play_subscription(p_user_id, p_product_id, p_plan, p_status, p_start, p_end, p_auto_renew,
-    p_environment, p_original_txn, p_read_at) RETURNS text` SECURITY DEFINER, `REVOKE ALL FROM public, anon,
+    p_environment, p_original_txn, p_store_expires_at, p_read_at) RETURNS text` (`p_store_expires_at` added at U1: the column
+    needs a writer) SECURITY DEFINER, `REVOKE ALL FROM public, anon,
     authenticated`, `GRANT EXECUTE TO service_role` (the platform default grants on new `public` functions are revoked
     explicitly from `anon` and `authenticated`, migrations CLAUDE.md). Body: `INSERT … ON CONFLICT (user_id,
     store_product_id) DO UPDATE SET … WHERE subscriptions.store_read_at <= excluded.store_read_at` (non-partial
@@ -206,8 +210,9 @@ only on its own explicit go; `backups/applied_migrations.json` and `backups/live
   Always: `store_expires_at = E` (true store expiry, for display); `auto_renew = (unsubscribe_detected_at IS NULL AND
   billing_issues_detected_at IS NULL)`; `start_date = P` (see the upsert for how a running chain keeps its first
   start); `store_environment` from `is_sandbox`. Paused / on hold (`auto_resume_date` set, past expiry) -> rule 3 ->
-  `expired`, re-activated by the next read after resume. An upgrade monthly -> yearly leaves the monthly row `expired`
-  (Google ends it) and creates the yearly row; both are shown by the union rule.
+  `expired`, re-activated by the next read after resume. A monthly <-> yearly switch is the SAME row (one REST entry, the
+  furthest-out purchase): `plan` follows `product_plan_identifier`; any value other than `monthly` / `yearly` -> no
+  write + critical alert (U0).
 - `mirrorRevenueCatCustomer(uid, deps)`: refuses a uid that is not a UUID or has no `public.users` row (a forged
   webhook must not create RevenueCat customers, since `GET /subscribers` creates one, F12); stamps `read_at = now()`
   BEFORE issuing the GET; reads the customer; upserts each row through `upsert_play_subscription`; returns `{rows,
@@ -300,9 +305,9 @@ Readers changed:
   move. `expiry-reminder` gets its own select + reducer (round 1 #7). Test case: a renewing Play row plus a later
   trial row.
 - `redeem-referral/index.ts:132`: same "paid" predicate as the SQL (F3).
-- `delete-account`: for EVERY Play row not refunded, whatever its mapped status (a paused / on-hold row maps to
-  `expired` but Google can still bill it; round 2 #6), FIRST RevenueCat's Google cancel endpoint (stop renewal; F12 verifies
-  the path), 10 s timeout so it cannot eat the function's budget; ONLY on cancel success `DELETE
+- `delete-account`: for the Play row if not refunded (one per user since U0; the text below still reads per row), whatever its mapped status (a paused / on-hold row maps to
+  `expired` but Google can still bill it; round 2 #6), FIRST RevenueCat's Google cancel endpoint `POST /v1/subscribers/{uid}/subscriptions/{store_transaction_id}/cancel`
+  (stop renewal; path keyed by the entry's `store_transaction_id`, U0), 10 s timeout so it cannot eat the function's budget; ONLY on cancel success `DELETE
   /v1/subscribers/{uid}` (DPDP; deleting first would lose the handle needed to retry the cancel). The customer is
   deleted only when EVERY Play row's cancel succeeded; one failed cancel (e.g. monthly ok, yearly failed) skips the
   delete for the whole customer (round 3 #8). A failure is
@@ -447,7 +452,8 @@ updated to pin the new rule (both directions mutated).
 - T-MAP (Deno, table-driven over U0's real fixtures): active monthly, active yearly, cancelled-but-not-expired
   (auto_renew false, still active, `cancelled_at` NULL), billing issue in grace, expired, refunded (and a later read of
   the same refunded chain stays cancelled), refund then a NEW purchase of the same product, resubscribe same product
-  after expiry, monthly -> yearly -> monthly, paused / on hold, sandbox, unknown product, non-Play store ignored.
+  after expiry, monthly -> yearly -> monthly on ONE row (`plan` follows `product_plan_identifier`), unknown plan id -> no write +
+  alert, paused / on hold, sandbox, unknown product, non-Play store ignored.
 - T-WH: missing secret -> 500 and no write; wrong header -> 401; duplicate event id -> one ledger row, mirror still
   runs; switch off -> 200 and no `subscriptions` write; uid with no users row -> no RevenueCat call; mirror failure ->
   503; TRANSFER -> both uids + alert.
@@ -695,3 +701,35 @@ Round 6 confirmed: no interleaving double-grants, loses days silently, or re-sen
 has an exit; the runbook covers every non-terminal state. Its verdict was NOT CONVERGED on text only and it stated no
 further round is needed unless the edit adds mechanism; the v8 edits are text and one written-out SQL guard, no new
 mechanism. **Verdict: converged after 6 rounds.** The code still gets the B-pass and the hermes pass.
+
+## 18. U0 findings (2026-11-23, RevenueCat docs downloaded as Markdown; fixtures doc-derived)
+
+Sources: `revenuecat.com/docs/api-v1/customers.md`, `api-v1/transactions.md`,
+`integrations/webhooks/event-types-and-fields.md`, `integrations/webhooks/sample-events.md` (fetched 2026-11-23).
+
+| # | F12 item | Doc says | Plan change |
+|---|---|---|---|
+| 1 | `GET /v1/subscribers/{id}` creates a missing customer | "or creates a new customer if it doesn't exist"; 200 found, 201 created | none (the uid guard stands) |
+| 2 | `subscriptions` key for a Google base plan | key = subscription id WITHOUT suffix (`avya_pro`), plan in `product_plan_identifier`, one entry = furthest-out purchase | **one Play row per user**; `plan` from `product_plan_identifier` (sections 2, 3, 4, 8) |
+| 3 | entry fields | `expires_date`, `purchase_date`, `original_purchase_date`, `period_type`, `store` (`play_store`), `is_sandbox`, `unsubscribe_detected_at`, `billing_issues_detected_at`, `grace_period_expires_date`, `refunded_at`, `auto_resume_date`, `ownership_type`, `store_transaction_id` | none (mapping uses exactly these) |
+| 4 | Google endpoints | defer `…/subscriptions/{product_identifier}/defer`; revoke `…/subscriptions/{product_identifier}/revoke`; cancel `…/subscriptions/{store_transaction_identifier}/cancel`; `DELETE /subscribers/{id}` | cancel path uses `store_transaction_id` (4) |
+| 5 | webhook `product_id` | carries the suffix (`avya_pro:monthly`) | the webhook never reads it for the row key; the mirror re-reads REST |
+
+Not checkable from docs, moved to the live steps: the real `GET` for a license tester (L2/L3, `revenuecat-sync` with
+the switch OFF returns the mapped result without writing; its response is saved as a fixture and T-MAP re-run before
+L4), the sandbox defer (L7), and the `purchases_flutter` API names (checked against the package source at U5). The
+secret key lives only in the Edge secret, so no read from this machine is possible before a function is deployed.
+
+## 19. U1 record (2026-11-23)
+
+- Migration 182 `play_subscriptions` (number reserved by `mint_migration.sh`; live latest is 181).
+  Generated from the repo bodies 159:89 / 160:61 / 160:129, whose md5(prosrc) equal live (457ffc0c, ee24b1f0, 7a166314),
+  by count-asserted replacements, so every untouched line is verbatim. The ROLLBACK block carries the three bodies.
+- Until the live apply it is the draft `docs/plans/2026-11-23-revenuecat-play-billing-51.migration-182-draft.sql`
+  (precedent: `streak-freeze-restore-ownership-addendum-a.migration-draft-c1.sql`): Gate 14 (`check_migrations_applied.dart`)
+  fails any file in `supabase/migrations/` without a ledger entry, and the entry only exists after the apply. At L1 the
+  draft is copied BYTE-IDENTICAL to `supabase/migrations/182_play_subscriptions.sql` and committed with its ledger entry.
+- Local proof `test/sql/play_subscriptions_local.sh` (docker `oi519-pgtest`, never a live host): cases N (no Play row) pass
+  on the pre-182 AND the 182 database (T-SQL1); cases P1-P13 pass on 182; S1 (a held users row) gives 55P03 in under 2 s
+  and leaves the deferral `pending`; mutants M1-M7 (Play branch, direct guard, job paid predicate, redeem sandbox, fall-back
+  token, upsert stale guard, start_date chain) each fail a named case.
