@@ -20,9 +20,13 @@ extension _ExportData on _ProfileScreenState {
     }
     data['workout_logs'] = workouts;
 
-    // Collect nutrition logs
+    // Collect nutrition logs. OI-348 Landing 1a-ii (§5): only meal rows
+    // (`nlog_` keys); the box also holds sync bookkeeping maps (the skip
+    // indexes, the slot ledger, cursor and meta), which are not user data.
     final nutrition = <Map<String, dynamic>>[];
-    for (final raw in hive.nutritionBox.values) {
+    for (final key in hive.nutritionBox.keys) {
+      if (key is! String || !key.startsWith('nlog_')) continue;
+      final raw = hive.nutritionBox.get(key);
       if (raw is Map) nutrition.add(Map<String, dynamic>.from(raw));
     }
     data['nutrition_logs'] = nutrition;

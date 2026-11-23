@@ -27,6 +27,8 @@ void main() {
         'flushPendingSyncs',
         'initQueue',
         'pullRecentCrossChannelLogs',
+        // OI-348 Landing 1a-ii: the nutrition slot pull (launch, resume).
+        'pullNutritionSlots',
         'pushSnapshot',
         'probeBackendReachable', // e5b2a9 retry-controller probe
         // H1b Part B1 (Unit H, 2026-06-27) — non-coalesced variant for the

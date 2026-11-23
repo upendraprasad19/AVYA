@@ -67,6 +67,8 @@ const _stripped = <String>{
   'FOCUS_GRID_OUT',
   // generator step 4 (OI-53): the history simulation dump's output directory and its scenario filter
   'HISTORY_SIM_OUT', 'HISTORY_SIM_SCENARIOS',
+  // OI-348 Landing 1a-ii: the nutrition slot random-schedule test's seed count
+  'NSLOT_SEEDS',
 };
 
 /// Read by an EXTERNAL tool only (git's author-identity fallback; d9e4b1): stripped,
