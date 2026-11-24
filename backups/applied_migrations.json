@@ -1432,6 +1432,15 @@
     "note": "OI-348 Landing 1a-ii (spec docs/plans/nutrition-slot-sync.md, closes OI-281): rev / updated_at / entries / legacy_rev on nutrition_logs (defaults, no rewrite), entry_key on nutrition_log_items, the nutrition_slot_tombstones table (RLS own-row), the INVOKER RPCs nutrition_slot_put / _delete / _state / nutrition_server_now (authenticated only) and three triggers for writes made outside the RPCs. Applied to project dedsavbjuwgarrhphgnl only, after the founder go (2026-11-23, 'Yes, apply 181'), via MCP apply_migration with the whole file; registered as version 20261123074819. The FIRST apply attempt failed and rolled back (42501 permission denied to set parameter app.nutrition_rpc: the B-pass fix had used a function-level SET of a custom setting, which a non-superuser cannot attach on PG 17); nothing landed (verified: 0 columns, no table, 0 functions, 163 migrations). The body now sets the marker and restores the previous value before every return; dry-run of file + live verify in BEGIN..ROLLBACK passed, a mutant (ok-path restore removed) failed at C1 as predicted, then the file was applied. Post-apply: the live verify (supabase/tests/nutrition_slot_rpc_live_verify.sql, testing user, rolled back) passed A to N incl. the cross-user case J; has_function_privilege anon false on all 7, authenticated true only on the 4 RPCs; all 92 existing nutrition_logs rows untouched (rev 1, legacy_rev 0, entries null)."
   },
   {
+    "migration": "183",
+    "applied_at": "2026-11-24T02:40:00+05:30",
+    "hash": "sha256:bea68b97392fdefb8ddb55478724193c5a314759a141b909ed87d3c87f84ba70",
+    "applier": "claude-via-node-api",
+    "diagnose": "b4d9e1",
+    "slug": "reseed_exercise_library",
+    "note": "Library v28 (OI-523, plan docs/plans/2026-11-23-oi523-lunge-alias-v28.md): re-seed UPSERT of the 870 active exercise_library rows; ONE changed tuple, G3470 Forward Lunge name_aliases {Reverse Lunge} -> NULL (the wrong-movement alias). Destructive?: yes. Applied to project dedsavbjuwgarrhphgnl only, after the founder go (2026-11-24, 'Go'), via .claude/apply_migration_via_api.js with the whole file (HTTP 201; not registered in supabase_migrations.schema_migrations, like seed 176). Rehearsed first in local docker inside BEGIN..ROLLBACK: one row changed, a second apply changed nothing, the inline rollback restored the 176 state exactly. Pre-apply live: 934 rows, 870 active, 14 aliased active, fingerprint 22feb825ce89ba3c616e66e7795ba002 (equal to the local 176 state). Post-apply live: 934/870/13, G3470 name_aliases NULL, and the fingerprint with G3470's alias put back is again 22feb825ce89ba3c616e66e7795ba002, so only that tuple changed. Accepted consequence: 'Reverse Lunge' remains in 4 stale testing-account saved plans (user_progress.plan_json) and possibly on-device Hive rows. Rollback: UPDATE exercise_library SET name_aliases = ARRAY['Reverse Lunge']::text[] WHERE id = '188d219e-a515-5705-aa06-590c51ca4378';"
+  },
+  {
     "migration": "184",
     "applied_at": "2026-11-24T06:57:38+05:30",
     "hash": "sha256:82cc1206185686ab7db9c5c30dd89df70b0e6120a3c33bd9641ee266e6bc1320",

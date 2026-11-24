@@ -13338,7 +13338,17 @@ concepts:
     behavioral_test_path_v25: test/contracts/library_seed_v25_upgrade_behavioral_test.dart  # Unit 1B-F 2026-11-11 (Ruling 12): real SeedService.seedIfNeeded on a v24 box (the 14 jump rows at their v24 tags, test/fixtures/library_hip_tags_v24.json); it ends at v25 with the 14 rows as bundled and every other row unchanged, a v25 box left alone; the v24 bundle digest pinned
     behavioral_test_path_v24: test/contracts/library_seed_v24_upgrade_behavioral_test.dart  # Library Batch S1b-3 2026-11-10 (OI-147): real SeedService.seedIfNeeded on a v23 box holding E053; it ends at v24 without E053 (merged_ids prune), G1373 written as bundled, a community row named Donkey Calf Raise and every other row unchanged, a box at the current version (v25 since Unit 1B-F) left alone
     behavioral_test_path_v20: test/contracts/library_seed_v20_upgrade_behavioral_test.dart  # Batch C2c 2026-11-06 (OI-474): real SeedService.seedIfNeeded on a v19 box holding the cable E230; it ends at v20 with the bodyweight E230 and its picture keys, every other row unchanged, a fresh install gets the new row, a v20 box is left alone
+    behavioral_test_path_v28: test/contracts/library_seed_v28_upgrade_behavioral_test.dart  # OI-523 2026-11-23: real SeedService.seedIfNeeded on a v27 box; G3470 is written without its alias, every other row unchanged; the v27 bundle digest ef1cea15 is pinned
+    behavioral_test_path_lunge_alias: test/contracts/library_v28_lunge_alias_contract_test.dart  # OI-523: generator, removals file, asset, seed record and ExerciseRepository.getByExactName agree that "Reverse Lunge" is no alias
     description: |
+      Library v28 (OI-523, 2026-11-23): 870 rows, one changed. G3470 Forward Lunge no longer carries name_aliases ["Reverse
+      Lunge"] (a forward lunge is not a reverse lunge, and the coach tool getFormCues answers a name through name_aliases): the
+      removals generator's REPLACEMENT.E144 is alias false, so E144 has no alias_to in scripts/data/library_batch_c2_removals.json
+      and the importer (G3470 is a source row, rebuilt on every run) writes no alias. The G1373 alias [Donkey Calf Raise] is KEPT
+      (founder 2026-11-23). scripts/data/library_v28_lunge_alias.json is the seed generator's kept-row record (before
+      ["Reverse Lunge"], after null = key absent); the v28 seed migration re-writes all 870 rows, one tuple differs from 176,
+      and its inline rollback restores the alias. Saved plans that name "Reverse Lunge" (user_progress.plan_json, 4 stale
+      testing-account plans) no longer resolve that name.
       Library v24 (Library Batch S1b-3, 2026-11-10, OI-147): 870 rows. E053 Donkey Calf Raise merged into G1373 Bodyweight
       Standing Calf Raise, the 8th merged_ids retirement and the first on a SOURCE-built kept row: the importer's merge
       stage (scripts/data/library_s1b3_merges.json) drops E053 and gives G1373 merged_ids [E053] and name_aliases [Donkey
@@ -13399,7 +13409,7 @@ concepts:
         method: scripts/repair_exercise_library_v12.js (repairText, mergeDuplicates, relabel, dropPlates)
         notes: v12 (Batch A) — 136 un-shifted text rows, cues one per item, 7 duplicates retired (name_aliases + merged_ids on the kept row), E172/E163 labels, E207/E179 plate keys dropped
       - file: lib/core/services/seed_service.dart
-        line_range: 305-350
+        line_range: 309-354
         method: _exerciseLibraryVersion (11→12) + retiredLibraryIds + pruneRetired after putAll in _seedExercises
         notes: putAll never deletes, so the prune is what removes a retired row from an existing install
       - file: supabase/migrations/162_reseed_exercise_library.sql
@@ -13597,6 +13607,12 @@ concepts:
       - file: lib/core/services/seed_service.dart
         method: _exerciseLibraryVersion (26 to 27)
         notes: putAll writes the 27 copied rows into exerciseBox by id (Unit 1B-F2)
+      - file: lib/core/services/seed_service.dart
+        method: _exerciseLibraryVersion (27 to 28)
+        notes: putAll writes G3470 into exerciseBox by id without its name_aliases entry (OI-523); without the bump an installed device keeps the alias
+      - file: scripts/data/library_v28_lunge_alias.json
+        method: before/after record for G3470 name_aliases (before ["Reverse Lunge"], after null)
+        notes: OI-523 — read ONLY by the cloud seed generator (the asset is written by the importer from the removals file); the generator hard-fails when the library row differs from after and builds the migration rollback from before
     readers:
       - file: lib/shared/repositories/plan_engine/core_list_selector.dart
         method: CoreListSelector.rankedPool / typeFor / subFocusMatches
@@ -14060,7 +14076,7 @@ concepts:
       enforced at merge.
     writers:
       - file: docs/blast_radius.yaml
-        line_range: 39-669
+        line_range: 39-681
         method: paths list (declaration order, first match wins)
         notes: |
           THE canonical writer. Exact-path rules must be declared ABOVE the
@@ -15125,7 +15141,7 @@ concepts:
         line_range: 1-2
         method: demo_slug + demo_pair fields
       - file: lib/core/services/seed_service.dart
-        line_range: 189-189
+        line_range: 193-193
         method: _exerciseLibraryVersion
     readers:
       - file: lib/shared/widgets/exercise_plate/plate_resolver.dart
@@ -15169,7 +15185,7 @@ concepts:
         line_range: 198-219
         method: applyMedia
       - file: lib/core/services/seed_service.dart
-        line_range: 189-189
+        line_range: 193-193
         method: _exerciseLibraryVersion
     readers:
       - file: lib/shared/widgets/exercise_plate/exercise_media_resolver.dart
@@ -15255,7 +15271,7 @@ concepts:
         line_range: 1-2
         method: coaching_cues + common_mistakes + breathing_cue + warmup_protocol fields
       - file: lib/core/services/seed_service.dart
-        line_range: 189-189
+        line_range: 193-193
         method: _exerciseLibraryVersion
     readers:
       - file: lib/shared/widgets/exercise_plate/exercise_cues.dart

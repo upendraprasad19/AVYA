@@ -149,8 +149,7 @@
    "decision": "remove",
    "removed_in": "c2a",
    "replacement": "G3470",
-   "alias_to": "G3470",
-   "reason": "Reverse Lunge: the hip/knee lunge twin (Forward Lunge); the name stays reachable as an alias.",
+   "reason": "Reverse Lunge: the hip/knee lunge twin (Forward Lunge); NOT an alias (OI-523): a forward lunge is not a reverse lunge, so the name is retired with no alias target.",
    "depth_before": {}
   },
   {

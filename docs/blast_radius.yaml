@@ -583,6 +583,8 @@ paths:
   # movement_pattern record decides what the seed migration's rollback restores. Both sit at account above scripts/**.
   - { glob: "scripts/data/library_overlay_copy_v27.json", tier: account }
   - { glob: "scripts/data/library_f2_movement_pattern.json", tier: account }
+  # OI-523 (2026-11-23): the lunge-alias record decides what the seed migration's rollback restores for G3470's name_aliases.
+  - { glob: "scripts/data/library_v28_lunge_alias.json", tier: account }
   - { glob: "docs/**", tier: feature }
   - { glob: "scripts/**", tier: feature }
   - { glob: "test/**", tier: feature }

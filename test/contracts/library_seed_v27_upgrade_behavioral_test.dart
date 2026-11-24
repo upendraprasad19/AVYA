@@ -20,13 +20,14 @@ import 'package:icanbefitter/core/services/hive_service.dart';
 import 'package:icanbefitter/core/services/seed_service.dart';
 
 import '../helpers/hive_test_setup.dart';
+import '../helpers/library_lunge_alias_v28.dart';
 import '../helpers/library_overlay_v26.dart';
 
 List<Map<String, dynamic>> _bundled() =>
     (jsonDecode(File('assets/data/exercise_library.json').readAsStringSync()) as List).cast<Map<String, dynamic>>();
 
 /// The v26 bundle, rebuilt: the current asset with the 27 rows' overlays restored.
-List<Map<String, dynamic>> _v26Bundle() => [for (final r in _bundled()) withOverlaysV26(r)];
+List<Map<String, dynamic>> _v26Bundle() => [for (final r in _bundled()) withLungeAliasV27(withOverlaysV26(r))];
 
 Future<void> _markSeeded(HiveService hive, int exerciseVersion) async {
   await hive.configBox.put('seeded', true);
@@ -72,7 +73,7 @@ void main() {
     await _markSeeded(hive, 26);
     expect(_asJson(hive.exerciseBox.get('E048'))['slot_pattern'], ['hip_dominant'], reason: 'precondition');
     final others = {
-      for (final id in hive.exerciseBox.keys.where((k) => !overlayRowIdsV27.contains(k)))
+      for (final id in hive.exerciseBox.keys.where((k) => !overlayRowIdsV27.contains(k) && k != lungeAliasRowIdV28))
         id as String: jsonEncode(_asJson(hive.exerciseBox.get(id)))
     };
 
@@ -87,19 +88,22 @@ void main() {
     for (final e in others.entries) {
       expect(jsonEncode(_asJson(hive.exerciseBox.get(e.key))), e.value, reason: '${e.key} must be unchanged');
     }
+    // OI-523 (seed v28): the rebuilt older box held G3470 with its alias; the upgrade writes the row as bundled, without it.
+    expect(_asJson(hive.exerciseBox.get(lungeAliasRowIdV28)).containsKey('name_aliases'), isFalse,
+        reason: 'G3470 is written as bundled, without the alias');
     expect(hive.exerciseBox.length, _bundled().length);
-    expect(hive.configBox.get('exercise_library_version') as int, 27);
+    expect(hive.configBox.get('exercise_library_version') as int, 28);
   });
 
-  test('MIRROR: a box already at v27 is not rewritten (the upgrade fires only when the stored version is older)', () async {
+  test('MIRROR: a box already at the current version (v28) is not rewritten (the upgrade fires only when the stored version is older)', () async {
     final hive = HiveService.instance;
     await _putV26Box(hive);
-    await _markSeeded(hive, 27);
+    await _markSeeded(hive, 28);
     await SeedService.instance.seedIfNeeded();
     for (final id in overlayRowIdsV27) {
       final r = _asJson(hive.exerciseBox.get(id));
       expect(r.containsKey('slot_pattern') || r.containsKey('slot_focus'), isTrue, reason: '$id keeps its v26 form');
     }
-    expect(hive.configBox.get('exercise_library_version') as int, 27);
+    expect(hive.configBox.get('exercise_library_version') as int, 28);
   });
 }

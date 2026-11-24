@@ -22,7 +22,9 @@
 // re-seeds the 862 of library v19, inserts the four twin rows and deactivates the six rows C2b removed; the Batch C2c seed
 // re-seeds the 862 of library v20 with ONE changed row (E230 retagged to bodyweight, scripts/data/library_e230_retag.json)
 // and no row added or removed; the Library Batch S1b-2 seed re-seeds the 871 of library v23, inserts the nine loaded
-// versions N14 to N22 and changes suitable_for on E010 / E045 (scripts/data/library_s1b2_suitable_for.json).
+// versions N14 to N22 and changes suitable_for on E010 / E045 (scripts/data/library_s1b2_suitable_for.json); the OI-523 seed re-seeds
+// the 870 of library v28 with ONE changed row (G3470 Forward Lunge loses its alias "Reverse Lunge",
+// scripts/data/library_v28_lunge_alias.json) and no row added or removed.
 // Rewriting 074 in place would have made the applied ledger describe a file that no
 // longer matches what ran.
 // Idempotent: uses ON CONFLICT (id) DO UPDATE so re-runs are safe.
@@ -44,36 +46,37 @@ const LEDGER_PATH = path.join(ROOT, 'backups', 'applied_migrations.json');
 // What the generated file says about itself. Edit this block for the next batch. The header text below is derived from it,
 // from the kept-row records and from the removals file.
 const BATCH = {
-  label: 'library v27, Unit 1B-F2',
-  diagnose: '2026-11-12-generator-overlay-copy-f2c7a9',
+  label: 'library v28, OI-523',
+  diagnose: '2026-11-23-lunge-alias-v28-b4d9e1',
   // Rows the Batch C1 importer wrote carry this `source` literal: the C1 rows, the four Batch C2b twins and the S1b-2 nine.
   newRowSource: 'exercise-gif-set',
   // The removals file carries `removed_in` ('c2a' | 'c2b') per remove entry: ALL are deactivated (idempotent), but a batch's
-  // rollback reactivates only the ones it removed itself. Unit 1B-F2 removes and merges no row (its tag matches no entry
+  // rollback reactivates only the ones it removed itself. OI-523 (library v28) removes and merges no row (its tag matches no entry
   // of either file).
-  batchTag: 'f2',
+  batchTag: 'v28',
   removalsFile: path.join(ROOT, 'scripts', 'data', 'library_batch_c2_removals.json'),
   // Kept-row records ({id, before, after} rows for ONE cloud column each): the library row must equal `after` (a record that
   // drifted from the library would seed one thing and roll back to another); `before` is what the inline rollback restores.
-  // Unit 1B-F2: movement_pattern on the 12 rows whose first element changes (the core-list slot_pattern copied in). The
-  // S1b-3 name_aliases record is live (migration 175) and re-seeds as an unchanged row, so it is not a record of this batch.
+  // OI-523: name_aliases on G3470 Forward Lunge (the alias "Reverse Lunge" goes; the cloud value becomes NULL). The F2
+  // movement_pattern record is live (migration 176) and the S1b-3 name_aliases record is live (migration 175): both re-seed as
+  // unchanged rows, so neither is a record of this batch.
   keptRowRecords: [
     {
-      file: path.join(ROOT, 'scripts', 'data', 'library_f2_movement_pattern.json'),
-      column: 'movement_pattern',
-      note: "movement_pattern first element: the picker's slot pattern (12 rows; E064 keeps cardio)",
+      file: path.join(ROOT, 'scripts', 'data', 'library_v28_lunge_alias.json'),
+      column: 'name_aliases',
+      note: 'name_aliases: the wrong-movement alias "Reverse Lunge" removed from G3470 Forward Lunge (1 row; the cloud value becomes NULL)',
     },
   ],
-  // Rows this batch INSERTs. The cloud never deletes, so the rollback would deactivate them. Unit 1B-F2 adds none.
+  // Rows this batch INSERTs. The cloud never deletes, so the rollback would deactivate them. OI-523 adds none.
   newRowIds: [],
   newRowNote: 'none',
   // The importer's merges record ({id, name, into, merged_in}): rows retired INTO a kept row. The rows whose merged_in is
   // batchTag are this batch's own: deactivated here for the first time, and reactivated (with their own cues from the
-  // previous seed) by its rollback. A missing file is a hard stop. Unit 1B-F2 owns no merge; the S1b-3 merge (E053 into
+  // previous seed) by its rollback. A missing file is a hard stop. OI-523 owns no merge; the S1b-3 merge (E053 into
   // G1373) re-runs as an idempotent retire UPDATE.
   mergesFile: path.join(ROOT, 'scripts', 'data', 'library_s1b3_merges.json'),
   // The seed migration this one follows: its text is the other half of the rollback sentence.
-  previousMigration: '175',
+  previousMigration: '176',
 };
 
 function fail(msg) {
@@ -440,7 +443,8 @@ for (const rec of BATCH.keptRowRecords) {
     const row = data.find((item) => item.id === e.id);
     if (!row) fail(`kept-row record names ${e.id}, which is not a library row`);
     if (BATCH.newRowIds.includes(e.id)) fail(`kept-row record names ${e.id}, which this batch inserts (BATCH.newRowIds): a new row has nothing to restore`);
-    if (JSON.stringify(row[rec.column]) !== JSON.stringify(e.after)) {
+    // A row without an alias has NO key in the asset (undefined), and a record spells that `after: null`.
+    if (JSON.stringify(row[rec.column] ?? null) !== JSON.stringify(e.after)) {
       fail(`${e.id} ${rec.column} differs from the record's after (run scripts/add_library_batch_c_v15.js, or update the record)`);
     }
     // `before` is what the rollback restores, so it must be what the previous seed gave the row: the row rebuilt with
