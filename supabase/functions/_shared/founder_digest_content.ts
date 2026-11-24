@@ -119,6 +119,9 @@ export const DIGEST_KEYS: readonly DigestKey[] = [
   // land on the previous day's digest.
   { key: "create_order", label: "create-razorpay-order", kind: "subday" },
   { key: "promo_validate", label: "validate-promo", kind: "subday" },
+  // 1-hour UTC buckets, totals only (OI-519 +51): Play store checks from the app (revenuecat-sync, limit 20 per user per
+  // hour; RESTORE and the post-purchase confirm). Same rule and the same <=30-min/day slop as create_order above.
+  { key: "revenuecat_sync", label: "revenuecat-sync", kind: "subday" },
   // 6h buckets, totals only — daily-snapshot's coaching-notes extraction
   // meter (a2b, single-owner batch, 2026-09-27; OI-162-class recurrence).
   // Same "totals only, no cap shown" precedent as delete_account/
@@ -292,6 +295,7 @@ export const NON_ACTIVITY_KEYS: ReadonlySet<string> = new Set([
   "verify_payment",
   "create_order",
   "promo_validate",
+  "revenuecat_sync",
 ]);
 
 /**

@@ -177,8 +177,24 @@ Deno.test("mirror: refuses a non-UUID and an unknown user BEFORE any RevenueCat 
   const f = fakeFetch(calls, [ok(FIXTURE)]);
   assertEquals((await mirrorRevenueCatCustomer("not-a-uuid", { db: fakeDb(true, calls), secretKey: "sk_test", fetchFn: f })).outcome, "refused_uid");
   assertEquals((await mirrorRevenueCatCustomer(UID, { db: fakeDb(false, calls), secretKey: "sk_test", fetchFn: f })).outcome, "unknown_user");
-  assertEquals((await mirrorRevenueCatCustomer(UID, { db: fakeDb(true, calls), secretKey: undefined, fetchFn: f })).outcome, "no_secret");
   assertEquals(calls.gets, []);
+});
+
+Deno.test("mirror: a missing secret key THROWS no_secret after a critical alert, before any RevenueCat call (B-pass F2)", async () => {
+  const calls: Calls = { gets: [], upserts: [], alerts: [] };
+  const f = fakeFetch(calls, [ok(FIXTURE)]);
+  const err = await assertRejects(() => mirrorRevenueCatCustomer(UID, { db: fakeDb(true, calls), secretKey: undefined, fetchFn: f }), RevenueCatReadError);
+  assertEquals(err.code, "no_secret");
+  assertEquals(calls.gets, []);
+  assertEquals(calls.upserts, []);
+  assertEquals(calls.alerts.length, 1);
+});
+
+Deno.test("mirror: an alert that REJECTS cannot replace the typed no_secret throw (B-pass round 2, F1)", async () => {
+  const calls: Calls = { gets: [], upserts: [], alerts: [] };
+  const db: MirrorDb = { ...fakeDb(true, calls), alert: () => Promise.reject(new Error("alerts down")) };
+  const err = await assertRejects(() => mirrorRevenueCatCustomer(UID, { db, secretKey: undefined, fetchFn: fakeFetch(calls, [ok(FIXTURE)]) }), RevenueCatReadError);
+  assertEquals(err.code, "no_secret");
 });
 
 Deno.test("mirror: read_at is stamped BEFORE the GET, the row is upserted, outcome mirrored", async () => {
@@ -270,4 +286,27 @@ Deno.test("adapter: upsertPlayRow passes the three known answers through and thr
     assertEquals(await db(a).upsertPlayRow(UID, row, new Date(T0).toISOString()), a);
   }
   await assertRejects(() => db("refused").upsertPlayRow(UID, row, new Date(T0).toISOString()), Error, "unknown value");
+});
+
+Deno.test("adapter: alert sends nothing when its dedup read fails, one insert when none is open, none when one is (B-pass round 2, F1)", async () => {
+  const fakeClient = (read: { data: unknown; error: unknown }, inserts: unknown[]) => ({
+    from: (_t: string) => {
+      const chain = {
+        select: () => chain, eq: () => chain, gte: () => chain,
+        limit: () => Promise.resolve(read),
+        insert: (v: unknown) => { inserts.push(v); return Promise.resolve({ error: null }); },
+      };
+      return chain;
+    },
+    rpc: () => { throw new Error("no rpc expected"); },
+  });
+  const failed: unknown[] = [];
+  await supabaseMirrorDb(fakeClient({ data: null, error: { code: "PGRST000" } }, failed)).alert("s", "critical", "x", {});
+  assertEquals(failed.length, 0);
+  const none: unknown[] = [];
+  await supabaseMirrorDb(fakeClient({ data: [], error: null }, none)).alert("s", "critical", "x", {});
+  assertEquals(none.length, 1);
+  const open: unknown[] = [];
+  await supabaseMirrorDb(fakeClient({ data: [{ id: 1 }], error: null }, open)).alert("s", "critical", "x", {});
+  assertEquals(open.length, 0);
 });

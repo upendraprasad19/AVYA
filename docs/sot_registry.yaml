@@ -19789,11 +19789,11 @@ concepts:
         method: createOrder — non-409 non-2xx -> _extractServerError(details) shown verbatim
         semantic: cloud-read
       - file: supabase/functions/_shared/founder_digest_content.ts
-        line_range: 88-137
+        line_range: 88-140
         method: DIGEST_KEYS create_order (subday, no cap)
         semantic: aggregate
       - file: supabase/functions/_shared/founder_digest_content.ts
-        line_range: 289-309
+        line_range: 292-313
         method: NON_ACTIVITY_KEYS + QUOTA_KILL_SWITCHES (create_order, promo_validate)
         semantic: aggregate
     hive:
@@ -19830,7 +19830,7 @@ concepts:
         method: _validatePromoCode — valid == true, else shows data['reason']; the call passes spendsQuotaPerCall (OI-414), so a thrown gateway error reaches the catch after one attempt
         semantic: cloud-read
       - file: supabase/functions/_shared/founder_digest_content.ts
-        line_range: 88-137
+        line_range: 88-140
         method: DIGEST_KEYS promo_validate (subday, no cap)
         semantic: aggregate
     hive:

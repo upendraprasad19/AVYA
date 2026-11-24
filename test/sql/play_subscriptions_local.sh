@@ -23,9 +23,8 @@ case "$CONTAINER" in oi519-pgtest) ;; *) echo "REFUSED: container not on the all
 ROOT=$(cd "$(dirname "$0")/../.." && pwd)
 MIG159="$ROOT/supabase/migrations/159_referral_reward_on_conversion.sql"
 MIG160="$ROOT/supabase/migrations/160_referral_hardening.sql"
-# Before the live apply the migration lives as a draft in docs/plans (Gate 14 refuses an unapplied file in supabase/migrations).
+# Applied live 2026-11-24 (L1); until then it was a draft in docs/plans, moved here byte-identical.
 MIG182="$ROOT/supabase/migrations/182_play_subscriptions.sql"
-[ -f "$MIG182" ] || MIG182="$ROOT/docs/plans/2026-11-23-revenuecat-play-billing-51.migration-182-draft.sql"
 REPLICA="$ROOT/test/sql/referral_pay_on_conversion_replica_schema.sql"
 CASES="$ROOT/test/sql/play_subscriptions_local_cases.sql"
 WORK=$(mktemp -d)

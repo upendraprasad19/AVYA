@@ -10,6 +10,7 @@
 //
 // Log safety (payment-log-safety contract): this module never logs a request or response body, a key, or a user id.
 
+import { pgErrorCode } from "./payment_log_safe.ts";
 import { isEnvExactlyTrue, type EnvReader } from "./subscription_stacking.ts";
 
 export const MIRROR_ENABLE_ENV = "ENABLE_PLAY_BILLING_MIRROR";
@@ -21,6 +22,8 @@ export const PLAY_SUBSCRIPTION_ID = "avya_pro";
 export const PLAY_RENEWAL_WINDOW_MS = 3 * 60 * 60 * 1000;
 export const REVENUECAT_TIMEOUT_MS = 10_000;
 export const UNKNOWN_PRODUCT_ALERT_SOURCE = "revenuecat_unknown_product";
+/** The secret REST key is unset while the switch is on: every read fails, so nobody gets PRO from Play (B-pass F2). */
+export const SECRET_MISSING_ALERT_SOURCE = "revenuecat_secret_missing";
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
@@ -150,7 +153,7 @@ export type MirrorDeps = {
 
 export type MirrorOutcome =
   | { outcome: "mirrored"; rows: { productId: string; status: PlayStatus; result: UpsertResult }[]; mapped: PlayRow[] }
-  | { outcome: "refused_uid" | "unknown_user" | "no_secret" };
+  | { outcome: "refused_uid" | "unknown_user" };
 
 export class RevenueCatReadError extends Error {
   constructor(public readonly code: string) {
@@ -195,11 +198,17 @@ export async function fetchRevenueCatCustomer(
  * Re-reads the customer from RevenueCat and upserts the Play row(s). Refuses a uid that is not a UUID or has no users row
  * BEFORE any RevenueCat call (a GET creates a missing customer). `read_at` is stamped BEFORE the GET is issued, so a slower,
  * older read can never overwrite a newer one (the upsert's ordering guard). Throws RevenueCatReadError on a failed read and
- * lets a database error propagate: the caller answers 5xx so the trigger is retried.
+ * lets a database error propagate: the caller answers 5xx so the trigger is retried. A missing secret key is a failed read
+ * too (code `no_secret`, after a critical alert): an answer of "nothing to do" would let a paying user silently stay free.
  */
 export async function mirrorRevenueCatCustomer(uid: string, deps: MirrorDeps): Promise<MirrorOutcome> {
   if (!isUuid(uid)) return { outcome: "refused_uid" };
-  if (!deps.secretKey) return { outcome: "no_secret" };
+  if (!deps.secretKey) {
+    try {
+      await deps.db.alert(SECRET_MISSING_ALERT_SOURCE, "critical", "REVENUECAT_SECRET_KEY is unset while the Play mirror is on: no Play purchase can be confirmed", {});
+    } catch (_) { /* the typed throw below must win over any alert failure (B-pass round 2, F1) */ }
+    throw new RevenueCatReadError("no_secret");
+  }
   if (!(await deps.db.userExists(uid))) return { outcome: "unknown_user" };
 
   const now = deps.nowMs ?? Date.now;
@@ -266,10 +275,16 @@ export function supabaseMirrorDb(client: ServiceClient): MirrorDb {
     async alert(source, severity, summary, context) {
       try {
         const since = new Date(Date.now() - 23 * 3600 * 1000).toISOString();
-        const { data } = await client.from("alerts").select("id").eq("source", source).eq("acknowledged", false)
+        const { data, error: readErr } = await client.from("alerts").select("id").eq("source", source).eq("acknowledged", false)
           .gte("detected_at", since).limit(1);
+        if (readErr) {
+          // An unreadable dedup must not become one alert per call (up to ~220 a reconcile run): say so and send none.
+          console.error(`[revenuecat_mirror] alert dedup read failed for source=${source} code=${pgErrorCode(readErr)}`);
+          return;
+        }
         if (Array.isArray(data) && data.length > 0) return; // one open alert per source per day
-        await client.from("alerts").insert({ source, severity, summary, context_json: context });
+        const { error } = await client.from("alerts").insert({ source, severity, summary, context_json: context });
+        if (error) console.error(`[revenuecat_mirror] alert insert failed for source=${source} code=${pgErrorCode(error)}`);
       } catch (_) {
         console.error(`[revenuecat_mirror] alert insert failed for source=${source}`);
       }

@@ -257,7 +257,9 @@ Entry points (each `deno check --node-modules-dir=none`, each deployed with `.cl
    `store_read_at` older than 24 hours (bounded batch, `paged_fetch_bounded`). This is what makes renewals, expiries
    and mid-term refunds land when every webhook retry failed. Accepted worst case, stated: a mid-term refund whose
    webhook and all 5 retries were lost keeps PRO for at most 24 hours (round 1 #15). Registered in
-   `docs/operations/CRON_REGISTRY.md`.
+   `docs/operations/CRON_REGISTRY.md`. Since the B-pass (section 24): the defer drain runs BEFORE this re-read, both
+   share a 60 s budget (no new row or user after it), and a run whose re-reads ALL failed, or whose drain had a row
+   error, ends `failed`. A missing secret key is a failed read (critical alert, then 503 / failure), never "nothing to do".
 4. **Referral days for a Play subscriber: Google defer (Q1 = B).** Drained by `revenuecat-reconcile`, at most 20
    oldest rows a run, each row with its own fresh customer read (no per-run cache, round 5 P3-5). Every write is
    compare-and-set. The claim is `UPDATE … SET status = 'in_flight', claim_token = gen_random_uuid(), claimed_at =
@@ -527,7 +529,8 @@ laptop `.env` is the founder's. NEW step 8: Play Console > `avya_pro` > yearly b
    in RevenueCat, so cancellations/refunds arrive in minutes, not on the next poll.
 5. Play Console > License testing: add the tester Gmail accounts.
 6. Put `REVENUECAT_GOOGLE_API_KEY=goog_…` into the laptop `.env` (public key; I add it to the VPS `.env`).
-7. Say go, separately, for: the migration apply; each Edge Function deploy; setting `ENABLE_PLAY_BILLING_MIRROR=true`;
+7. Webhook header: the value in RevenueCat may be the secret itself or `Bearer <secret>`; both are accepted (B-pass F8).
+   Say go, separately, for: the migration apply; each Edge Function deploy; setting `ENABLE_PLAY_BILLING_MIRROR=true`;
    the version bump to +51; `/build-apk --bundle --purchase-mode play_billing`.
 
 ## 10. Rollout and rollback
@@ -728,7 +731,7 @@ secret key lives only in the Edge secret, so no read from this machine is possib
 - Migration 182 `play_subscriptions` (number reserved by `mint_migration.sh`; live latest is 181).
   Generated from the repo bodies 159:89 / 160:61 / 160:129, whose md5(prosrc) equal live (457ffc0c, ee24b1f0, 7a166314),
   by count-asserted replacements, so every untouched line is verbatim. The ROLLBACK block carries the three bodies.
-- Until the live apply it is the draft `docs/plans/2026-11-23-revenuecat-play-billing-51.migration-182-draft.sql`
+- Until the live apply it was the draft `docs/plans/2026-11-23-revenuecat-play-billing-51.migration-182-draft.sql`
   (precedent: `streak-freeze-restore-ownership-addendum-a.migration-draft-c1.sql`): Gate 14 (`check_migrations_applied.dart`)
   fails any file in `supabase/migrations/` without a ledger entry, and the entry only exists after the apply. At L1 the
   draft is copied BYTE-IDENTICAL to `supabase/migrations/182_play_subscriptions.sql` and committed with its ledger entry.
@@ -779,3 +782,38 @@ Delta review (fresh Sonnet on the fix diff, 2026-11-24): no P0/P1/P2; local proo
 SANDBOX purchases: accepted, comment in the function); stale plan text (fixed above); `sandbox_refused` was silent (the
 mirror now logs it); the guard has no NULL defence (unreachable: the CHECK forces both environment and read time on a Play
 row); S2 is timing-based (a slow box gives a loud false red, never a false green: accepted).
+
+## 23. L1 record (2026-11-24): migration 182 applied live
+
+- Founder go 2026-11-24 ("Apply"), after the independent review of the draft (section 22).
+- Pre-apply live: the three replaced bodies still md5 457ffc0c / ee24b1f0 / 7a166314; no Play columns, tables or new
+  functions; `mig/182` reserved by this branch; live latest 185 (184 and 185 from other branches, unrelated tables).
+- Applied with MCP `apply_migration`, project dedsavbjuwgarrhphgnl, version 20261124012942. The statements and function
+  bodies were sent verbatim; the header comments and the commented ROLLBACK block were not (the 180 precedent).
+- Post-apply live: md5(prosrc) of all six bodies equals the file; all SECURITY DEFINER, search_path=public (writers also
+  lock_timeout=5s); anon and authenticated cannot execute any of them or read the two new tables; service_role executes
+  the three public ones; 0 Play rows.
+- The draft moved byte-identical (`git mv`, md5 ae57396c) to `supabase/migrations/182_play_subscriptions.sql`; ledger entry
+  in `backups/applied_migrations.json` (hash by `scripts/migration_ledger_hash.dart`); `backups/live_schema_columns.json`
+  updated for subscriptions and the two new tables only.
+
+## 24. B-pass of the 182 + U3 commit (fresh context-blind Sonnet, 2026-11-24; each finding checked by me)
+
+Branch synced with main first (merge 91395a49: main had added 181 to the ledger and the column snapshot). 9 findings.
+
+| # | Sev | Finding | Disposition |
+|---|---|---|---|
+| F1 | P1 | `claim` / `mark` chain `.limit(1)` on an UPDATE with no order | **Confirmed and fixed.** A local PostgREST 12.2.12 rehearsal answered `PGRST109` ("A 'limit' was applied without an explicit 'order'") to every claim and mark: every defer would have failed at launch. Both now add `.order("id")` (the primary key), keeping the literal `.limit(1)` the unbounded-read gate reads. New `test/sql/revenuecat_reconcile_postgrest_local.sh` (+ `.ts`) drives the REAL adapters (reconcile, the mirror's, the webhook ledger) through supabase-js 2.39.3 against PostgREST: 14 checks red before, 24 green after. |
+| F2 | P2 | A missing `REVENUECAT_SECRET_KEY` returned `no_secret`: webhook 200, sync 200 not-PRO, reconcile counted it mirrored, nobody paged | **Fixed.** The mirror raises a critical `revenuecat_secret_missing` alert (deduped per day) and THROWS `RevenueCatReadError("no_secret")`: webhook 503 (RevenueCat retries), sync 503, reconcile counts a failure (F9). `no_secret` left the outcome union. The mirror's alert insert now logs its own returned error (it was dropped silently; the rehearsal then caught a missing sequence grant in the harness through that line). |
+| F3 | P2 | 200 sequential re-reads with no deadline: a RevenueCat outage runs the function into the wall-clock limit before the drain | **Fixed.** One budget `RUN_BUDGET_MS` = 60 s for the drain and the reconcile; no new row or user starts after it (counts `drain_not_reached`, `reconcile_not_reached`, `budget_cut=` in the telemetry). The drain now runs BEFORE the reconcile. |
+| F4 | P2 | A throw on one drain row (lock, vanished user, failed write) aborted the drain: one poison row starves every later row | **Fixed.** Each row runs in its own try/catch (`drain_errors`); a row that fails after its claim stays `in_flight` and step 3 of a later run moves it to `needs_check` (never re-sent). |
+| F5 | P2 | The three functions and the mirror were platform tier (catch-alls) | **Fixed.** Catastrophic rules in `docs/blast_radius.yaml`; pinned by `test/contracts/blast_radius_revenuecat_catastrophic_test.dart` (classification by the own rule, order above the catch-all, look-alikes, rot). |
+| F6 | P2 | Surviving mutants W3 (paid types), R2 (crashed step), S3 (`>` vs `>=`); adapters never run | **Fixed.** Tests for every paid and non-paid type, the crashed-claim step, the `end_date` boundary; the adapters run in the F1 rehearsal. |
+| F7 | P2 (hypothesis) | A non-renewing subscriber may be refused a defer -> `needs_check` forever | **Kept by design, checked at L7.** A 4xx while the row is still active goes to `needs_check` on purpose: a fall back while active would run the days alongside paid time (the reward is lost), and a 401/403 from a bad key must not turn every reward into a fall back. The saved RevenueCat docs do not say whether Google defers a non-renewing subscription; L7 adds that case on a tester phone (cancel auto-renew, then a referral defer) and its result decides whether `decide()` should wait for expiry instead. |
+| F8 | P3 | Exact header compare: `Bearer x` in RevenueCat vs `x` in Supabase gives 401 forever; chunked body read before the cap | **Fixed (header):** the secret is accepted as is or after `Bearer ` (both compared every time). **Body: accepted** — reachable only after the secret matched, and the read is still capped after it. |
+| F9 | P3 | A run where every re-read failed ended `success` | **Fixed.** All reconcile reads failing, or any drain error, ends the run `failed` / 500 (the cron-failure alert sees it); the error summary carries the read error codes. |
+
+Mutation (rule 21), each restored by `cp` and sha256-checked: F2 (return instead of throw), F3 x2 (no drain deadline, no
+reconcile deadline), F4 (no per-row catch), F9 x2 (each half of the failed rule), F8 x2 (no Bearer form, Bearer only),
+W3, R2, S3, F5 (one glob deleted): each reddened at least one test. F1: the rehearsal on the pre-fix code (14 red).
+Whole Deno tree: 1842 pass; the 2 failures are the VPS port-8000 quirk (`future-prediction`, `re-engagement`).
