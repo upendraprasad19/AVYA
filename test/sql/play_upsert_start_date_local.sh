@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # test/sql/play_upsert_start_date_local.sh
 #
-# Local proof of docs/plans/2026-11-24-revenuecat-upsert-start-date.migration-draft.sql (OI-519, hermes H1-3). LOCAL
+# Local proof of supabase/migrations/187_play_upsert_start_date.sql (OI-519, hermes H1-3). LOCAL
 # ONLY: databases inside the allowlisted docker container started by test/sql/play_subscriptions_local.sh; no host or
 # URL argument, so it cannot reach the live project.
 #
@@ -23,7 +23,7 @@ CONTAINER=oi519-pgtest
 case "$CONTAINER" in oi519-pgtest) ;; *) echo "REFUSED: container not on the allowlist"; exit 2 ;; esac
 docker ps --format '{{.Names}}' | grep -qx "$CONTAINER" || { echo "REFUSED: run test/sql/play_subscriptions_local.sh first (it starts $CONTAINER)"; exit 2; }
 ROOT=$(cd "$(dirname "$0")/../.." && pwd)
-DRAFT="$ROOT/docs/plans/2026-11-24-revenuecat-upsert-start-date.migration-draft.sql"
+DRAFT="$ROOT/supabase/migrations/187_play_upsert_start_date.sql"
 psql_db() { db=$1; shift; docker exec -i "$CONTAINER" psql -U postgres -h 127.0.0.1 -q -At -v ON_ERROR_STOP=1 -d "$db" "$@"; }
 fresh() {
   psql_db postgres -c "drop database if exists $1 with (force)" >/dev/null

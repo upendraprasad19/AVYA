@@ -1468,6 +1468,24 @@
     "note": "OI-519 (+51, plan docs/plans/2026-11-23-revenuecat-play-billing-51.md sections 3, 4, 19, 21, 22; ADR-0022): seven nullable store_* / auto_renew columns on public.subscriptions with four CHECKs and the plain unique index subscriptions_play_product_uq (user_id, store_product_id); new tables public.subscription_events and public.store_reward_deferrals (RLS on, no policy, client roles revoked); new private.grant_referral_days_direct, public.store_reward_fall_back, public.upsert_play_subscription; private.grant_referral_days, public.redeem_referral_atomic and private.process_referral_conversions replaced with one added branch or predicate each. No row rewritten. Applied to project dedsavbjuwgarrhphgnl only, after an independent review of the draft (no P0/P1; fixes in 7705903a) and the founder go (2026-11-24, 'Apply'), via MCP apply_migration with the file's statements and function bodies verbatim (the header comment block, section-divider comments and the commented ROLLBACK block not sent; the sha256 above is of the whole file, moved byte-identical from the reviewed draft); registered as version 20261124012942. Pre-apply live: md5(prosrc) of the three replaced bodies 457ffc0c / ee24b1f0 / 7a166314 (equal to the 159/160 repo bodies); no store columns, tables or new functions; live latest 185. Post-apply live: md5(prosrc) of all six bodies equal the file (grant_referral_days_direct 8dbd9ee2, grant_referral_days fa9041f7, redeem_referral_atomic 60b6e765, process_referral_conversions 5c663a83, store_reward_fall_back 00bc863e, upsert_play_subscription 3bea3a71); every one SECURITY DEFINER with search_path=public (the two writers also lock_timeout=5s); anon and authenticated cannot execute any of them or read either new table; service_role can execute the three public functions; 0 Play rows. Local proof: test/sql/play_subscriptions_local.sh. Rollback: the inline block at the end of the file, only after ENABLE_PLAY_BILLING_MIRROR is unset and every store_reward_deferrals row is terminal."
   },
   {
+    "migration": "187",
+    "applied_at": "2026-11-24T17:13:25+05:30",
+    "hash": "sha256:a988b04bb39f3f33b31fc00443d5aac10222f365c89c09fadcb5284304be8a06",
+    "applier": "claude-via-mcp",
+    "diagnose": "n/a",
+    "slug": "play_upsert_start_date",
+    "note": "OI-519 L2 (plan docs/plans/2026-11-23-revenuecat-play-billing-51.md sections 10, 28; hermes finding H1-3, docs/audit/2026-11-24-hermes-oi519-play-billing.md): CREATE OR REPLACE of public.upsert_play_subscription, same signature and result type; the start_date rule keeps the chain's first start only when the new period begins at or before the stored row's end (excluded.start_date <= s.end_date). No row touched. Applied to project dedsavbjuwgarrhphgnl only, after the founder go (2026-11-24, 'go approved for L2, L3 and L4'), via MCP apply_migration with the file's statements and function body verbatim (header comments not sent; the sha256 above is of the whole file, moved byte-identical from the reviewed draft); registered as version 20261124114325. Pre-apply live: md5(prosrc) 3bea3a71 (the 182 body), ACL postgres + service_role only, 0 Play rows. Post-apply live: md5(prosrc) 38bffd1f equals the file's body; SECURITY DEFINER, search_path=public, lock_timeout=5s; ACL unchanged; the file's DO self-check passed. Local proof: test/sql/play_upsert_start_date_local.sh. Rollback: re-run the 182 body (section 6b of 182) as CREATE OR REPLACE."
+  },
+  {
+    "migration": "188",
+    "applied_at": "2026-11-24T17:13:41+05:30",
+    "hash": "sha256:ece7788a8d14d6cce2d2cc955369456e43e37aa6e41bab86d5d8b04b14193d29",
+    "applier": "claude-via-mcp",
+    "diagnose": "n/a",
+    "slug": "revenuecat_reconcile_cron",
+    "note": "OI-519 L2 (plan docs/plans/2026-11-23-revenuecat-play-billing-51.md sections 4, 10): pg_cron job revenuecat_reconcile_hourly ('52 * * * *') POSTing to the revenuecat-reconcile Edge Function with the private.cron_get_secret() bearer (the 131 shape) and timeout_milliseconds 120000. Applied to project dedsavbjuwgarrhphgnl only, after the revenuecat-reconcile v1 deploy from main 4afa580d (verify_jwt=false) and the founder go (2026-11-24, 'go approved for L2, L3 and L4'), via MCP apply_migration with the file's cron.schedule statement (comments not sent; the sha256 above is of the whole file, moved byte-identical from the reviewed draft); registered as version 20261124114341. Pre-apply live: no such job; private.cron_get_secret present. Post-apply live: jobid 49, active, schedule '52 * * * *', command carries the 120000 ms timeout. Rollback: the inline cron.unschedule at the end of the file."
+  },
+  {
     "migration": "186",
     "applied_at": "2026-11-24T13:38:19+05:30",
     "hash": "sha256:b95cddbdece13a8ea2350e71876bb17e9568d4e2cac094a7e01e34450d2e649a",
