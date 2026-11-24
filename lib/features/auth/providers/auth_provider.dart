@@ -13,6 +13,7 @@ import 'package:onesignal_flutter/onesignal_flutter.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:icanbefitter/core/services/auth_session_bootstrapper.dart';
 import 'package:icanbefitter/core/services/error_telemetry.dart';
+import 'package:icanbefitter/core/services/play_billing_service.dart';
 import 'package:icanbefitter/core/services/supabase_service.dart';
 import 'package:icanbefitter/core/services/sync_service.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
@@ -55,6 +56,12 @@ Future<void> releaseDeviceSessionIdentity() async {
     } catch (e) {
       debugPrint('[auth/releaseIdentity] OneSignal.logout failed: $e');
     }
+  }
+  // OI-519: the RevenueCat App User ID is the Supabase uid; unbind it so the
+  // next account on this phone never buys under the previous one. No-op when
+  // the SDK was never configured (every razorpay / none build).
+  if (!kIsWeb) {
+    await RevenueCatPlayStore.instance.releaseIdentity();
   }
   if (!kDebugMode) {
     try {

@@ -19,8 +19,10 @@ import 'package:icanbefitter/shared/widgets/paywall_sheet.dart';
 /// surface variants for context-appropriate pitch.
 void showPaywallSheetPhaseVariant(BuildContext context) {
   // ADR-0022: a binary that sells nothing has no phase pitch with a price line
-  // and an upgrade button; the neutral paywall body answers instead.
-  if (!PurchaseMode.current.showsPurchaseUi) {
+  // and an upgrade button; the neutral paywall body answers instead. OI-519:
+  // a Play build routes there too (this pitch carries a Razorpay price line);
+  // the paywall then draws its Play body.
+  if (!PurchaseMode.current.showsRazorpay) {
     showPaywallSheet(context, feature: 'Phases 2-12');
     return;
   }

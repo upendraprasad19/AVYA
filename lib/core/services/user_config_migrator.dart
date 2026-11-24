@@ -110,6 +110,11 @@ class UserConfigMigrator {
     // Active-workout ⇄/⇅ first-use hint: seen once per account, device-local,
     // never synced. New key, never in configBox - no _flagKey bump.
     'has_seen_swap_move_hint',
+    // Play subscription display state (OI-519, +51): which store owns the
+    // active row, whether it renews, and the store's own expiry for dates.
+    // Per-user: leaked, the next account would see another account's manage
+    // link or renewal line. New keys, never in configBox - no _flagKey bump.
+    'pro_store', 'pro_auto_renews', 'pro_store_expires_at',
   ];
 
   /// Keys that intentionally stay in shared `configBox`.

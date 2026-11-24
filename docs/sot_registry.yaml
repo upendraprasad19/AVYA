@@ -627,12 +627,12 @@ concepts:
         semantic: pass-through
         fields_read: [via WorkoutScheduleService.getScheduleForDate(date)]
       - file: lib/features/home/providers/home_provider.dart
-        line_range: 560-575
+        line_range: 561-576
         method: todayWorkoutProvider
         semantic: pass-through
         fields_read: [via WorkoutScheduleService.getScheduleForDate(DateTime.now())]
       - file: lib/features/home/providers/home_provider.dart
-        line_range: 722-762
+        line_range: 723-763
         method: aiInsightProvider (next-workout consistency hint)
         semantic: pass-through
         fields_read: [via ref.watch(todayWorkoutProvider) — derives from the Today card's row (c7e3a9, test/contracts/ai_insight_follows_today_row_test.dart)]
@@ -781,7 +781,7 @@ concepts:
           Reads pre-delete log entry to stash audit row in
           'recent_deletes' bucket; falls back to legacy 'calories' key.
       - file: lib/features/home/providers/home_provider.dart
-        line_range: 782-828
+        line_range: 783-829
         method: RecentFoodLogsNotifier.build
         semantic: display-only
         fields_read: [total_calories, total_protein, total_carbs, total_fat, items[] (names via deriveMealDisplayName, 8b3d4e), meal_type, date]
@@ -1157,10 +1157,19 @@ concepts:
     behavioral_test_path_cqrs: test/contracts/subscription_cqrs_behavioral_test.dart
     writers:
       - file: lib/core/services/subscription_service.dart
-        line_range: 1050-1090
+        line_range: 32-43
+        method: playDisplayFields (OI-519 U5; the Play display fields of one read, fed to writeSubscriptionState)
+        notes: |
+          OI-519: a Google Play row reaches this concept through the server mirror (concept
+          play_subscription_mirror) and verify-subscription / refreshFromSupabase; writeSubscriptionState
+          writes pro_store / pro_auto_renews / pro_store_expires_at (null DELETES each), _downgradeLocally
+          deletes them. Gating never reads them. Behavioral:
+          test/contracts/play_subscription_display_state_behavioral_test.dart.
+      - file: lib/core/services/subscription_service.dart
+        line_range: 1099-1143
         method: _downgradeLocally (the SINGLE downgrade sink — every path funnels here)
       - file: lib/core/services/subscription_service.dart
-        line_range: 416-482
+        line_range: 460-526
         method: _enforceEntitlementInvariants (cross-account guard + genuine-expiry downgrade)
         notes: |
           OI-44 Unit 6 (diagnose a9c4e1) — the MUTATING half extracted out of
@@ -1169,7 +1178,7 @@ concepts:
           never on the cross-account wipe; it survives the expiresAt wipe so the
           Home expiry banner can surface "PRO expired".
       - file: lib/core/services/subscription_service.dart
-        line_range: 483-491
+        line_range: 527-535
         method: evaluateEntitlement (explicit public enforcement entry point)
         notes: |
           Called at the two moments local state can BECOME cross-account:
@@ -1178,15 +1187,15 @@ concepts:
           refreshFromSupabase does NOT cover it (it decides from the SERVER
           response and never compares Hive profile.id against the session).
       - file: lib/core/services/subscription_service.dart
-        line_range: 260-339
+        line_range: 296-383
         method: writeSubscriptionState (atomic putAll; clears pro_lapsed_at on renewal)
       - file: lib/core/services/subscription_service.dart
-        line_range: 880-979
+        line_range: 924-1028
         method: verifyFromServer (server-confirmed upgrade / anti-spoof downgrade)
     reader_manifest_complete: true
     readers:
       - file: lib/core/services/subscription_service.dart
-        line_range: 340-368
+        line_range: 384-412
         method: isPro — the DECISION entry point
         semantic: flag-check
         fields_read: [isPro, expiresAt, plan]
@@ -1195,7 +1204,7 @@ concepts:
           byte-identical to the pre-split version, so all 32 decision callsites
           keep their defense-in-depth. Use this for an entitlement DECISION.
       - file: lib/core/services/subscription_service.dart
-        line_range: 369-393
+        line_range: 413-437
         method: proStateSnapshot — the PURE read
         semantic: flag-check
         fields_read: [isPro, expiresAt]
@@ -1206,7 +1215,7 @@ concepts:
           (build -> isPro -> _downgradeLocally -> onStateChanged -> app.dart:47
           ref.invalidate). Diagnose a9c4e1.
       - file: lib/core/services/subscription_service.dart
-        line_range: 612-702
+        line_range: 656-746
         method: gateAndVerify (gate() retained as a @Deprecated shim at :578)
         semantic: flag-check
         fields_read: [isPro, expiresAt, plan]
@@ -1218,7 +1227,7 @@ concepts:
           (phases_2_to_12, ai_coach_unlimited, progress_photos) through
           verifyFromServer() with a 5-min cache TTL.
       - file: lib/features/profile/providers/profile_provider.dart
-        line_range: 545-603
+        line_range: 566-627
         method: SubscriptionInfoNotifier / subscriptionInfoProvider
         semantic: pass-through
         fields_read: [isPro, expiresAt, plan, isVerifying]
@@ -1229,7 +1238,7 @@ concepts:
           razorpay_service.dart:749 (_invalidateSubscriptionProviders). Its build() MUST use proStateSnapshot(),
           never isPro() — pinned by subscription_cqrs_behavioral_test group E.
       - file: lib/features/home/providers/home_provider.dart
-        line_range: 554-557
+        line_range: 555-558
         method: subscriptionExpiryBannerProvider
         semantic: derived
         fields_read: [isPro, daysUntilExpiry, proLapsedAt]
@@ -1360,6 +1369,59 @@ concepts:
       kPaymentGraceWindow, payment_timing.dart) suppresses downgrade for
       ~21m45s after Razorpay success — DERIVED from the verify-payment retry
       schedule so it always outlives the last retry (OI-182).
+
+  - concept: play_subscription_mirror
+    domain: subscription
+    behavioral_test_path: supabase/functions/_shared/revenuecat_mirror_test.ts
+    description: |
+      OI-519 (+51, ADR-0022): the Google Play subscription, read from RevenueCat's REST API and written into
+      `subscriptions` as ONE row per user with store = 'play' (end_date = Google's expiry + 3 h while it
+      renews; store_expires_at = Google's own expiry; auto_renew; store_environment). The ONLY writer is
+      the shared mirror, through the SECURITY DEFINER RPC of migration 182 (ordering guard on the read
+      time; a SANDBOX read never replaces a running PRODUCTION row). Callers: revenuecat-webhook,
+      revenuecat-sync, revenuecat-reconcile. Gating reads the row like any other (status active,
+      end_date > now); display reads store_expires_at. A PRODUCTION Play row is paid for referrals; a
+      SANDBOX one is not. MRR stays web-only: every revenue reader counts Play rows apart.
+      Local proofs: test/sql/play_subscriptions_local.sh, test/sql/revenuecat_reconcile_postgrest_local.sh.
+    writers:
+      - file: supabase/functions/_shared/revenuecat_mirror.ts
+        line_range: 223-278
+        method: mirrorRevenueCatCustomer (uid guard, read_at before the GET, map, upsert)
+      - file: supabase/functions/_shared/revenuecat_mirror.ts
+        line_range: 287-339
+        method: supabaseMirrorDb (upsertPlayRow -> RPC upsert_play_subscription, alert, userExists)
+    reader_manifest_complete: true
+    readers:
+      - file: supabase/functions/verify-subscription/logic.ts
+        line_range: 17-24
+        method: playDisplayFields (store / auto_renew / store_expires_at, null on any non-Play row)
+        semantic: pass-through
+        fields_read: [store, auto_renew, store_expires_at]
+      - file: supabase/functions/revenuecat-sync/logic.ts
+        line_range: 46-60
+        method: shape (verify-subscription's body plus the Play display fields)
+        semantic: pass-through
+        fields_read: [plan, end_date, store, auto_renew, store_expires_at]
+      - file: lib/core/services/subscription_service.dart
+        line_range: 32-43
+        method: playDisplayFields (client: only store == play yields values)
+        semantic: pass-through
+        fields_read: [store, auto_renew, store_expires_at]
+      - file: supabase/functions/_shared/subscription.ts
+        line_range: 295-322
+        method: fetchRenewingPlayUserIds (expiry-reminder skips a renewing Play subscriber)
+        semantic: flag-check
+        fields_read: [store, auto_renew, status, end_date]
+      - file: supabase/functions/admin-dashboard-data/index.ts
+        line_range: 163-185
+        method: bucketActivePlans (a Play row counts only as playActive; MRR web-only)
+        semantic: aggregated
+        fields_read: [plan, store]
+      - file: supabase/functions/delete-account/index.ts
+        line_range: 314-347
+        method: cancelPlayRows via playDeps.readPlayTxns (section 4b; cancel each non-refunded Play subscription; the RevenueCat customer is deleted after the auth delete, section 6b)
+        semantic: pass-through
+        fields_read: [store_original_transaction_id, store, status]
 
   - concept: water_target
     domain: water
@@ -1871,7 +1933,7 @@ concepts:
         semantic: transformed
         fields_read: [diet_strategy, daily_calories, protein_grams, carb_grams, carbs_grams, fat_grams]
       - file: lib/features/home/providers/home_provider.dart
-        line_range: 600-678
+        line_range: 601-679
         method: NutritionSummaryNotifier.build (helper on a complete stored pack only; watches only with the flag on)
         semantic: transformed
         fields_read: [diet_strategy, daily_calories, protein_grams, carb_grams, carbs_grams, fat_grams]
@@ -2720,7 +2782,7 @@ concepts:
         semantic: historical-series
         fields_read: [total_calories, total_protein, date, is_saved_meal]
       - file: lib/features/home/providers/home_provider.dart
-        line_range: 782-828
+        line_range: 783-829
         method: RecentFoodLogsNotifier.build
         semantic: display-only
         fields_read: [total_calories, total_protein, total_carbs, total_fat, items[] (names via deriveMealDisplayName, 8b3d4e), meal_type, date]
@@ -3006,7 +3068,7 @@ concepts:
       defect this concept exists to fix.
     writers:
       - file: lib/features/auth/providers/auth_provider.dart
-        line_range: 1315-1320
+        line_range: 1322-1327
         method: terms-write block inside _ensureLocalUser (not itself a named method)
         semantic: hive-write
         notes: |
@@ -4558,7 +4620,7 @@ concepts:
           back to configBox (legacy). UserConfigMigrator one-shot
           copies legacy values on first authenticated launch.
       - file: lib/core/services/subscription_service.dart
-        line_range: 95-162
+        line_range: 121-198
         method: SubscriptionService (is_pro / expires_at / plan /
                 paymentInFlightOrder / paymentInFlightUntil)
         semantic: pass-through
@@ -4574,7 +4636,7 @@ concepts:
         semantic: flag-check
         fields_read: [onboarding_completed]
       - file: lib/features/auth/providers/auth_provider.dart
-        line_range: 370-490
+        line_range: 377-497
         method: _ensureLocalUser / signOut hooks
         semantic: flag-check
         fields_read: [onboarding_completed]
@@ -4699,12 +4761,12 @@ concepts:
       seconds after a splash-time verify.
     writers:
       - file: lib/core/services/subscription_service.dart
-        line_range: 219-231
+        line_range: 255-267
         method: markPaymentInFlight
     reader_manifest_complete: true
     readers:
       - file: lib/core/services/subscription_service.dart
-        line_range: 183-243
+        line_range: 219-279
         method: isPaymentInFlight / clearPaymentInFlight / paymentInFlightOrderId
         semantic: flag-check
         fields_read: [paymentInFlightOrder, paymentInFlightUntil]
@@ -4713,7 +4775,7 @@ concepts:
           ceiling as fallback safety cap). Legacy paymentInFlightUntil read
           once per device after upgrade until first event-based write.
       - file: lib/core/services/subscription_service.dart
-        line_range: 1023-1120
+        line_range: 1072-1197
         method: verifyFromServer (isPaymentInFlight guard; gateAndVerify at 729 and refreshFromSupabase at 834 also read it)
         semantic: flag-check
         fields_read: [paymentInFlightOrder]
@@ -4722,7 +4784,7 @@ concepts:
           splash-time verify doesn't downgrade an optimistic isPro=true
           before the webhook lands.
       - file: lib/features/profile/providers/profile_provider.dart
-        line_range: 520-603
+        line_range: 520-627
         method: subscriptionInfoProvider (isVerifying field)
         semantic: flag-check
         fields_read: [isPaymentInFlight]
@@ -4901,7 +4963,7 @@ concepts:
         semantic: flag-check
         fields_read: [status, completed_at]
       - file: lib/features/home/providers/home_provider.dart
-        line_range: 560-575
+        line_range: 561-576
         method: todayWorkoutProvider
         semantic: flag-check
         fields_read: [status, completed_at, exercises]
@@ -5300,7 +5362,7 @@ concepts:
           per-set MAX. Pre-fix returned cumulative SUM for bodyweight_reps
           + timed. Closes-diagnose: 2026-05-16-pr-cumulative-bug
       - file: lib/features/home/providers/home_provider.dart
-        line_range: 1049-1060
+        line_range: 1050-1061
         method: AllExercisePRsNotifier.build (wraps loadAllExercisePRs)
         semantic: pass-through
         fields_read: [via loadAllExercisePRs]
@@ -5614,7 +5676,7 @@ concepts:
         method: HealthWriteService.logWeight
         canonical: true
       - file: lib/features/home/providers/home_provider.dart
-        line_range: 912-1019
+        line_range: 913-1020
         method: WeightLogNotifier.logWeight
         delegate: true
         notes: |
@@ -5643,7 +5705,7 @@ concepts:
     reader_manifest_complete: true
     readers:
       - file: lib/features/home/providers/home_provider.dart
-        line_range: 685-717
+        line_range: 686-718
         method: WeightHistoryNotifier.build (weightHistoryProvider)
         semantic: historical-series
         fields_read: [type, weight_kg, date]
@@ -6474,7 +6536,7 @@ concepts:
           entry always wins (the block no-ops when a row already exists).
           Consumed by the readiness sheet's SLEEP axis via sleepAxisFromHours.
       - file: lib/features/profile/providers/profile_provider.dart
-        line_range: 721-729
+        line_range: 745-753
         method: logSleep
         # Was `BiometricNotifier.logSleep`. check_sot_registry_parity's
         # _extractSymbol takes the FIRST identifier of a dotted value, so the
@@ -6489,7 +6551,7 @@ concepts:
     reader_manifest_complete: true
     readers:
       - file: lib/features/profile/providers/profile_provider.dart
-        line_range: 599-656
+        line_range: 623-680
         method: BiometricNotifier.build (biometricProvider)
         semantic: latest
         fields_read: [type, sleep_hours, date]
@@ -6568,7 +6630,7 @@ concepts:
     sync_methods: [_syncSleepLogs]
     restore_methods: [_restoreSleepLogs]
     ist_sites:
-      - { file: lib/features/profile/providers/profile_provider.dart, line: 688, fn: logSleep }
+      - { file: lib/features/profile/providers/profile_provider.dart, line: 712, fn: logSleep }
     telemetry:
       failure_op_types: [upsert_sleep_log]
     class_constraints: |
@@ -7052,7 +7114,7 @@ concepts:
           midnight is wrong east of IST; the streak moves over in Batch B
           (OI-397).
       - file: lib/features/auth/providers/auth_provider.dart
-        line_range: 370-490
+        line_range: 377-497
         method: _ensureLocalUser (mid-onboarding resume)
         semantic: flag-check
         fields_read: [onboarding_completed]
@@ -7342,7 +7404,7 @@ concepts:
           failure -> upsert_coach_chat_cleared_at (a swept push), except
           fromSignOut, which only logs coach_chat_cleared_at_push_failed.
       - file: lib/features/auth/providers/auth_provider.dart
-        line_range: 1019-1052
+        line_range: 1026-1059
         method: _teardown
         notes: |
           2 s best-effort push (fromSignOut) BEFORE clearAllData wipes userBox.
@@ -7675,7 +7737,7 @@ concepts:
           plan-less day (total_planned == 0) — consistent with the dispatcher no
           longer vacuously auto-completing a plan-less day.
       - file: lib/features/home/providers/home_provider.dart
-        line_range: 142-573
+        line_range: 142-574
         method: calendarWeekProvider (~132) + todayWorkoutProvider (~518)
         semantic: flag-check
         fields_read: [status, completed_at_ms]
@@ -8094,7 +8156,7 @@ concepts:
           Fires hive_session_opened / hive_session_closed /
           hive_session_reopen_noop events for every owner transition.
       - file: lib/core/services/subscription_service.dart
-        line_range: 199-1230
+        line_range: 235-1317
         method: subscription refresh + verify events
         semantic: pass-through
         fields_read: []
@@ -8103,7 +8165,7 @@ concepts:
           + subscription_refresh_* + subscription_verify_non_200 +
           subscription_refresh_grace_skip events.
       - file: lib/features/auth/providers/auth_provider.dart
-        line_range: 106-560
+        line_range: 113-567
         method: auth lifecycle events
         semantic: pass-through
         fields_read: []
@@ -8256,7 +8318,7 @@ concepts:
           UI entry to deleteAllFilesForCurrentUser. After Edge Function
           succeeds, wipes Hive, signs out, and routes to /sign-in.
       - file: lib/features/auth/providers/auth_provider.dart
-        line_range: 106-560
+        line_range: 113-567
         method: signOut + _ensureLocalUser lifecycle
         semantic: pass-through
         fields_read: []
@@ -8915,7 +8977,7 @@ concepts:
     reader_manifest_complete: true
     readers:
       - file: lib/features/home/providers/home_provider.dart
-        line_range: 685-1046
+        line_range: 686-1047
         method: WeightHistoryNotifier + WeightLogNotifier + todayWeightLoggedProvider
         semantic: historical-series
         fields_read: [type, weight_kg, date]
@@ -8924,7 +8986,7 @@ concepts:
           WeightLogNotifier.logWeight (line 779) calls HealthWriteService.logWeight
           + invalidates the canonical provider set.
       - file: lib/features/profile/providers/profile_provider.dart
-        line_range: 599-691
+        line_range: 623-715
         method: BiometricNotifier (sleep) + logSleep
         semantic: latest
         fields_read: [type, sleep_hours, date]
@@ -9370,7 +9432,7 @@ concepts:
       function — repository is a thin transport wrapper.
     writers:
       - file: supabase/functions/redeem-referral/index.ts
-        line_range: 113-186
+        line_range: 116-189
         method: redeem_referral_atomic RPC call
         notes: |
           Migration 159 / unit S2 (2026-10-13): step 5b refuses a referee who
@@ -9399,7 +9461,7 @@ concepts:
           ErrorTelemetry.recordNonFatal. Wraps response into typed
           RedemptionResult (success / errorMessage / alreadyRedeemed).
       - file: lib/features/auth/providers/auth_provider.dart
-        line_range: 406-430
+        line_range: 413-437
         method: AuthNotifier.signUpWithEmail(referralCode:)
         notes: |
           c7b4d2 (2026-09-26): the sign-up field's code is stored in auth
@@ -9647,7 +9709,7 @@ concepts:
     reader_manifest_complete: true
     readers:
       - file: lib/core/services/subscription_service.dart
-        line_range: 259-259
+        line_range: 295-295
         method: onStateChanged
         semantic: callback-invocation
         fields_read: []
@@ -9731,27 +9793,27 @@ concepts:
         semantic: derived-latest-end-per-user
         fields_read: [subscriptions.user_id, subscriptions.end_date, subscriptions.status]
       - file: supabase/functions/_shared/founder_digest_content.ts
-        line_range: 971-997
+        line_range: 1005-1035
         method: gatherDigestInput latestEndRead + expiringSoon
         semantic: one-shared-read-two-sections
         fields_read: [subscriptions.user_id, subscriptions.end_date]
       - file: supabase/functions/_shared/founder_digest_content.ts
-        line_range: 1083-1095
+        line_range: 1141-1153
         method: gatherDigestInput lapsedYesterday
         semantic: half-open-yesterday-window
         fields_read: [subscriptions.user_id, subscriptions.end_date]
       - file: supabase/functions/telegram-admin-bot/index.ts
-        line_range: 281-300
+        line_range: 306-326
         method: cmdExpiring
         semantic: throws-on-null
         fields_read: [subscriptions.user_id, subscriptions.end_date]
       - file: supabase/functions/expiry-reminder/index.ts
-        line_range: 58-80
+        line_range: 62-90
         method: cron selection of users to remind (3-day window)
         semantic: latest-end-per-user
         fields_read: [subscriptions.user_id, subscriptions.end_date]
       - file: supabase/functions/admin-dashboard-data/index.ts
-        line_range: 100-130
+        line_range: 105-138
         method: loadExpiryRows
         semantic: latest-end-in-window-plus-emails
         fields_read: [subscriptions.user_id, subscriptions.end_date, users.email]
@@ -11481,7 +11543,7 @@ concepts:
           offline hold never emits because AppEventsService drops failed inserts
           with no queue.
       - file: lib/features/admin/widgets/revenue_tab.dart
-        line_range: 1-174
+        line_range: 1-187
         method: RevenueTab.build
         semantic: aggregated
         fields_read: [current.activeSubscriptions, current.freeUsers, current.proExpired, revenue.monthlyActive, revenue.yearlyActive, revenue.trialActive, revenue.otherActive, revenue.derivedMrrInr, revenue.currentMonthlyPriceInr, revenue.currentYearlyPriceInr, subscriptionsExpiring.expired, subscriptionsExpiring.expiring7d, subscriptionsExpiring.expiring30d]
@@ -11697,7 +11759,7 @@ concepts:
           (rolling 168h, matching the 093/101 house convention), holders_total
           (all-time distinct users). The parity test pins the count at 3.
       - file: supabase/functions/admin-dashboard-data/index.ts
-        line_range: 130-258
+        line_range: 138-278
         method: handler
         semantic: pass-through
         fields_read: [holds_started_today, holds_started_7d, holders_total]
@@ -14268,7 +14330,7 @@ concepts:
         fields_read: [enabled]
         notes: self-heals via NotificationPrefsRepository.read() when pushed without `extra`.
       - file: lib/features/profile/screens/profile/screen.dart
-        line_range: 237-258
+        line_range: 239-260
         method: _loadNotificationPreferences
         semantic: display-only
         fields_read: [enabled]
@@ -14311,7 +14373,7 @@ concepts:
         fields_read: [workout_reminders.enabled]
         notes: INLINE reader — does NOT use _shared/notification_prefs.ts.
       - file: supabase/functions/expiry-reminder/index.ts
-        line_range: 118-123
+        line_range: 128-133
         method: inline snapshot read
         semantic: flag-check
         fields_read: [subscription_reminders.enabled]
@@ -14518,11 +14580,11 @@ concepts:
       .timeout() frees the AWAITER and does NOT cancel the request.
     writers:
       - file: lib/features/auth/providers/auth_provider.dart
-        line_range: 923
+        line_range: 930
         method: signOutInProgress
         semantic: teardown-window-flag
       - file: lib/features/auth/providers/auth_provider.dart
-        line_range: 969-1006
+        line_range: 976-1013
         method: signOut
         semantic: set-in-try-clear-in-finally
         notes: >-
@@ -14708,19 +14770,19 @@ concepts:
       user's position worse. Kill-switch configBox.disable_sign_in_timeout.
     writers:
       - file: lib/features/auth/providers/auth_provider.dart
-        line_range: 216
+        line_range: 223
         method: signInTimeout
         semantic: the-ceiling-constant
       - file: lib/features/auth/providers/auth_provider.dart
-        line_range: 251
+        line_range: 258
         method: boundSignIn
         semantic: applies-the-ceiling-injectable-test-seam
       - file: lib/features/auth/providers/auth_provider.dart
-        line_range: 258
+        line_range: 265
         method: signInWithEmail
         semantic: sets-loading-then-error-on-timeout
       - file: lib/features/auth/providers/auth_provider.dart
-        line_range: 294
+        line_range: 301
         method: _performEmailSignIn
         semantic: the-bounded-sequence-itself
     readers:
@@ -14835,15 +14897,15 @@ concepts:
       path and never to the OAuth ENTRY path.
     writers:
       - file: lib/features/auth/providers/auth_provider.dart
-        line_range: 428
+        line_range: 435
         method: OAuth completion watch
         semantic: subscribes-to-onAuthStateChange-after-launch
       - file: lib/features/auth/providers/auth_provider.dart
-        line_range: 457
+        line_range: 464
         method: cancelOAuthWatch
         semantic: teardown-also-wired-to-ref-onDispose
       - file: lib/features/auth/providers/auth_provider.dart
-        line_range: 543
+        line_range: 550
         method: signInWithGoogle
         semantic: launches-the-redirect-then-arms-the-watch
     readers:
@@ -16037,7 +16099,7 @@ concepts:
         method: build — meter shown on the Log Food tab
         semantic: client-read
       - file: lib/features/profile/screens/profile/subscription_section.dart
-        line_range: 172-176
+        line_range: 179-183
         method: build — free-tier rate-limit meter
         semantic: client-read
       - file: supabase/functions/ai-proxy/index.ts
@@ -16569,11 +16631,11 @@ concepts:
       upendra@icanbefitter.com.
     writers:
       - file: lib/features/profile/screens/profile/screen.dart
-        line_range: 341
+        line_range: 351
         method: build (contact card)
         semantic: display-only
       - file: lib/features/profile/screens/delete_account_screen.dart
-        line_range: 165
+        line_range: 169
         method: razorpay_cancel_failed error branch
         semantic: display-only
     readers: []
@@ -16646,7 +16708,7 @@ concepts:
         fields_read: [type]
         notes: "Task 29 (wave-3 carry item 2) re-derived this as a METHOD-SPANNING range (signature to closing brace, confirmed by direct read) rather than the previous 5-line window -- needsHeal was repointed 3 times this batch (T21, T22, T21-fix1: T22 added an import + the L2 write-only-if-differs block inside mergeScheduleBundleIntoHive; T21-fix1 shortened _mondayOfIsoWeek to delegate to DaySwapRules.mondayOf; all three land ABOVE needsHeal in the same file, so the method body itself is unchanged but every narrow line_range citing it goes stale on each shift). A method-spanning range absorbs future shifts of code ABOVE it without going stale again for this reason; only a change to needsHeal's OWN body would require re-deriving this citation."
       - file: lib/features/home/providers/home_provider.dart
-        line_range: 106-762
+        line_range: 106-763
         method: "calendar week status classifier feeding streak-banner remaining-count / StreakWarningEligibility / AI-insight quick-text (3 sites)"
         semantic: flag-check
         fields_read: [type]
@@ -18206,7 +18268,7 @@ concepts:
     reader_manifest_complete: true
     readers:
       - file: supabase/functions/_shared/subscription.ts
-        line_range: 310-348
+        line_range: 368-406
         method: readProState
         semantic: three-state-pro-read
         fields_read: [subscriptions.user_id, subscriptions.status, subscriptions.end_date]
@@ -18413,7 +18475,7 @@ concepts:
         method: `cron.schedule`
         notes: Unscheduled BY JOBID, not by a quoted name (Gate 31 reads the quoted form as "this job is gone", OI-193).
       - file: supabase/functions/redeem-referral/index.ts
-        line_range: 100-145
+        line_range: 103-148
         method: redeem_referral_atomic RPC call
         notes: The only caller. Passes the four declared parameters. (The range is deliberately the whole cascade: unit S2 inserts a paid-referee check before the RPC call and shifts it a few lines.) Its mapping of the RPC's `referee_has_paid_plan` refusal to a 400 is unit S2 of the plan, not part of migration 159.
     reader_manifest_complete: true
@@ -18449,7 +18511,7 @@ concepts:
         fields_read: [referral_redemptions.id, referral_redemptions.referee_id]
         notes: Filters `referee_id = <signed-in user>` and the select reads only `id`; a NULL referrer is irrelevant, and a row whose referee was deleted cannot match. The counts surface (JOINED / SUBSCRIBED / DAYS EARNED) is unit C of the plan and adds its own reader.
       - file: supabase/functions/redeem-referral/index.ts
-        line_range: 100-120
+        line_range: 103-123
         method: idempotency read
         semantic: flag-check
         fields_read: [referral_redemptions.referee_id]
@@ -18620,7 +18682,7 @@ concepts:
         semantic: render
         fields_read: [code, expiresAt]
       - file: supabase/functions/redeem-referral/index.ts
-        line_range: 82-96
+        line_range: 86-100
         method: the code lookup (service role; refuses an expired code)
         semantic: decision
         fields_read: [user_id, expires_at]
@@ -20040,11 +20102,11 @@ concepts:
         method: createOrder — non-409 non-2xx -> _extractServerError(details) shown verbatim
         semantic: cloud-read
       - file: supabase/functions/_shared/founder_digest_content.ts
-        line_range: 88-137
+        line_range: 90-142
         method: DIGEST_KEYS create_order (subday, no cap)
         semantic: aggregate
       - file: supabase/functions/_shared/founder_digest_content.ts
-        line_range: 289-309
+        line_range: 308-329
         method: NON_ACTIVITY_KEYS + QUOTA_KILL_SWITCHES (create_order, promo_validate)
         semantic: aggregate
     hive:
@@ -20077,11 +20139,11 @@ concepts:
         semantic: cloud-write
     readers:
       - file: lib/shared/widgets/paywall_sheet.dart
-        line_range: 223-274
+        line_range: 244-295
         method: _validatePromoCode — valid == true, else shows data['reason']; the call passes spendsQuotaPerCall (OI-414), so a thrown gateway error reaches the catch after one attempt
         semantic: cloud-read
       - file: supabase/functions/_shared/founder_digest_content.ts
-        line_range: 88-137
+        line_range: 90-142
         method: DIGEST_KEYS promo_validate (subday, no cap)
         semantic: aggregate
     hive:
@@ -20490,13 +20552,13 @@ concepts:
       section 8) exists. Nothing is stored: the mode is a build constant.
     writers:
       - file: lib/core/constants/purchase_mode.dart
-        line_range: 15-82
+        line_range: 17-92
         method: PurchaseMode.current / resolvePurchaseMode / showsUpgradeAffordance
         semantic: pass-through
     reader_manifest_complete: true
     readers:
       - file: lib/shared/widgets/paywall_sheet.dart
-        line_range: 414-429
+        line_range: 435-464
         method: _PaywallSheetState.build (none-mode branch)
         semantic: flag-check
         fields_read: [showsPurchaseUi]

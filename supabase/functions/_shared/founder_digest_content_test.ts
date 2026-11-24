@@ -207,6 +207,69 @@ Deno.test("computeNewMrr counts a genuinely unrecognized plan value as unknown, 
   assertEquals(result.unknownPlanCount, 1);
 });
 
+Deno.test("computeNewMrr (OI-519 U4): a Google Play row is counted apart, never priced into New MRR", () => {
+  const result = computeNewMrr([
+    subRow("monthly"),
+    { plan: "monthly", created_at: "2026-11-24T10:00:00Z", store: "play", store_environment: "PRODUCTION" },
+    { plan: "yearly", created_at: "2026-11-24T10:00:00Z", store: "play", store_environment: "PRODUCTION" },
+    { plan: "yearly", created_at: "2026-11-24T10:00:00Z", store: "play", store_environment: "SANDBOX" },
+  ]);
+  assertEquals(result.rupees, 349);
+  assertEquals(result.playCount, 2, "PRODUCTION only (hermes seat 3)");
+  assertEquals(result.playTesterCount, 1, "a SANDBOX tester purchase is never a paid subscription");
+  assertEquals(result.unknownPlanCount, 0);
+});
+
+Deno.test("buildDigestText (OI-519 U4) prints the Play line only when there is one, and the read selects store", async () => {
+  const base = {
+    dayLabel: "2026-11-24",
+    windowed: { rows: [] },
+    lifetime: { rows: [] },
+    alerts: { rows: [] },
+    expiringSoon: { count7d: 0, count30d: 0 },
+    ...EMPTY_B_EXTRAS,
+  };
+  const withPlay = buildDigestText({
+    ...base,
+    subscriptions: {
+      rows: [
+        subRow("monthly"),
+        { plan: "monthly", created_at: "2026-11-24T10:00:00Z", store: "play", store_environment: "PRODUCTION" },
+        { plan: "yearly", created_at: "2026-11-24T10:00:00Z", store: "play", store_environment: "SANDBOX" },
+      ],
+    },
+  } as DigestInput);
+  assertStringIncludes(withPlay, "New MRR: ₹349");
+  assertStringIncludes(withPlay, "New Google Play subscriptions: 1 (not in MRR)");
+  assertStringIncludes(withPlay, "New Google Play test purchases: 1 (not paid)");
+  const webOnly = buildDigestText({ ...base, subscriptions: { rows: [subRow("monthly")] } } as DigestInput);
+  assertEquals(webOnly.includes("Google Play"), false);
+  const src = (await Deno.readTextFile(new URL("./founder_digest_content.ts", import.meta.url))).replace(/\s+/g, " ");
+  assertEquals(src.includes('.select("id, plan, created_at, store, store_environment")'), true);
+});
+
+Deno.test("buildDigestText (hermes seat 1): Play refunds are their own line, never in Cancelled (manual)", async () => {
+  const base = {
+    dayLabel: "2026-11-24",
+    windowed: { rows: [] },
+    lifetime: { rows: [] },
+    alerts: { rows: [] },
+    subscriptions: { rows: [] },
+    expiringSoon: { count7d: 0, count30d: 0 },
+    ...EMPTY_B_EXTRAS,
+  };
+  const t = buildDigestText({ ...base, playRefundsYesterday: { count: 2 } } as DigestInput);
+  assertStringIncludes(t, "Google Play refunds: 2");
+  const none = buildDigestText({ ...base, playRefundsYesterday: { count: 0 } } as DigestInput);
+  assertEquals(none.includes("Google Play refunds"), false);
+  const bad = buildDigestText({ ...base, playRefundsYesterday: { unreadable: "x" } } as DigestInput);
+  assertStringIncludes(bad, "Google Play refunds");
+  const src = (await Deno.readTextFile(new URL("./founder_digest_content.ts", import.meta.url))).replace(/\s+/g, " ");
+  assertEquals(src.includes('.or("store.is.null,store.neq.play") .gte("cancelled_at", yStart)'), true, "manual excludes Play");
+  assertEquals(src.includes('.eq("status", "cancelled") .eq("store", "play")'), true, "Play refunds read");
+  assertEquals(src.includes("withoutRenewingPlay(usersWithLatestEndIn(latestEnd, now, in7d, true), renewingPlay)"), true);
+});
+
 Deno.test("computeNewMrr returns zero/zero for an empty rows array", () => {
   const result = computeNewMrr([]);
   assertEquals(result.rupees, 0);

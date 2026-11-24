@@ -43,7 +43,19 @@ const _alertModule = 'supabase/functions/_shared/payment_alert.ts';
 /// Scanned since payment-hardening U3, which added its rate-limit and promo-read log lines.
 const _promoFunctions = ['supabase/functions/validate-promo/index.ts'];
 
-const _scanned = [..._functions, ..._promoFunctions, _alertModule];
+/// Scanned since OI-519 (+51, plan docs/plans/2026-11-23-revenuecat-play-billing-51.md section 4): the RevenueCat mirror
+/// and its three entry points. They log fixed codes, request ids and counts only; never a body, header, key or user id.
+const _revenuecatFiles = [
+  'supabase/functions/_shared/revenuecat_mirror.ts',
+  'supabase/functions/revenuecat-webhook/logic.ts',
+  'supabase/functions/revenuecat-webhook/index.ts',
+  'supabase/functions/revenuecat-sync/logic.ts',
+  'supabase/functions/revenuecat-sync/index.ts',
+  'supabase/functions/revenuecat-reconcile/logic.ts',
+];
+// revenuecat-reconcile/index.ts has no console call of its own (its run logs from logic.ts); the scan requires at least one.
+
+const _scanned = [..._functions, ..._promoFunctions, _alertModule, ..._revenuecatFiles];
 
 /// The outer catch-all line of each function: name and frames only (hermes H10, payment-hardening).
 const _catchAlls = {
@@ -152,6 +164,39 @@ const Map<String, Set<String>> _allowed = {
     r'PROMO_QUOTA_KEY', // number / boolean / constant / derived value
     r'PROMO_QUOTA_LIMIT', // number / boolean / constant / derived value
     r'guardsOn ? "on" : "off"', // number / boolean / constant / derived value
+  },
+  'supabase/functions/_shared/revenuecat_mirror.ts': {
+    r'source', // alert source constant from this codebase
+    r'pgErrorCode(error)', // helper (B-pass F2: the alert insert's own error)
+    r'pgErrorCode(readErr)', // helper (B-pass round 2 F1: the alert dedup read's own error)
+    r'pgErrorCode(e)', // helper (hermes H1-1: the entry-missing check's own error)
+  },
+  'supabase/functions/revenuecat-webhook/logic.ts': {
+    r'rid', // generated request id
+    r'WEBHOOK_AUTH_ENV', // constant (the secret's NAME, never its value)
+    r'code', // RevenueCatReadError code (http_<status> / timeout / network / unknown) or a throw's name
+    r'outcome', // derived constant (mirrored / switch_off / test / unknown_user / no_known_user / mirror_failed / ...)
+    r'typeTag', // a KNOWN RevenueCat event type or "other"; never the raw body text
+  },
+  'supabase/functions/revenuecat-webhook/index.ts': {
+    r'rid', // generated request id
+    r'(e as { name?: string })?.name ?? "error"', // the name of a library throw (as errorName)
+  },
+  'supabase/functions/revenuecat-sync/logic.ts': {
+    r'rid', // generated request id
+    r'code', // RevenueCatReadError code (http_<status> / timeout / network / unknown) or a throw's name
+    r'out.outcome', // MirrorOutcome union constant
+    r'qErr ? "rpc_error" : "bad_result"', // derived constant
+  },
+  'supabase/functions/revenuecat-sync/index.ts': {
+    r'rid', // generated request id
+    r'(e as { name?: string })?.name ?? "error"', // the name of a library throw (as errorName)
+  },
+  'supabase/functions/revenuecat-reconcile/logic.ts': {
+    r'FN_NAME', // constant
+    r'name', // the name of a library throw
+    r'errorName(e)', // helper (B-pass F4: one drain row's throw)
+    r'Object.entries(summary).map(([k, v]) => `${k}=${v}`).join(" ")', // run counters (numbers) under fixed keys
   },
   'supabase/functions/_shared/payment_alert.ts': {
     r'a.paymentId', // checked or generated id

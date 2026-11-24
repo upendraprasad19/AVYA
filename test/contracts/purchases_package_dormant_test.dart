@@ -1,39 +1,33 @@
 // Plan section 6 / 7 test 6 (presence only): the `purchases_flutter` package is
-// in pubspec so the Android build carries the Play Billing library (the Play
-// Console unlocks Subscriptions on it), but NOTHING under lib/ imports or
-// configures it until the RevenueCat plan (section 8) is built and accepted.
-// That is what "dormant" means: build +50 behaves as +49 as far as billing goes.
+// in pubspec so the Android build carries the Play Billing library. Since
+// OI-519 (+51, docs/plans/2026-11-23-revenuecat-play-billing-51.md section 5)
+// exactly ONE file imports and configures it: the Play store seam
+// `lib/core/services/play_billing_service.dart`. Every other file talks to the
+// `PlayStore` interface, so a `razorpay` or `none` build never reaches the SDK.
 
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 
+const _seam = 'lib/core/services/play_billing_service.dart';
+
+List<String> _filesContaining(String needle) => [
+      for (final f in Directory('lib')
+          .listSync(recursive: true)
+          .whereType<File>()
+          .where((f) => f.path.endsWith('.dart')))
+        if (f.readAsStringSync().contains(needle))
+          f.path.replaceAll(Platform.pathSeparator, '/'),
+    ];
+
 void main() {
-  test('no file under lib/ imports purchases_flutter', () {
-    final offenders = <String>[];
-    for (final f in Directory('lib')
-        .listSync(recursive: true)
-        .whereType<File>()
-        .where((f) => f.path.endsWith('.dart'))) {
-      final text = f.readAsStringSync();
-      if (text.contains('package:purchases_flutter')) offenders.add(f.path);
-    }
-    expect(offenders, isEmpty,
-        reason: 'Importing the package starts section 8, which needs its own '
-            'plan, review and hermes pass (docs/plans/2026-11-20-android-play-billing.md).');
+  test('only the Play store seam imports purchases_flutter', () {
+    expect(_filesContaining('package:purchases_flutter'), [_seam],
+        reason: 'a second importer bypasses the PlayStore seam (OI-519)');
   });
 
-  test('nothing under lib/ calls Purchases.configure', () {
-    final offenders = <String>[];
-    for (final f in Directory('lib')
-        .listSync(recursive: true)
-        .whereType<File>()
-        .where((f) => f.path.endsWith('.dart'))) {
-      if (f.readAsStringSync().contains('Purchases.configure')) {
-        offenders.add(f.path);
-      }
-    }
-    expect(offenders, isEmpty);
+  test('only the Play store seam calls Purchases.configure', () {
+    expect(_filesContaining('Purchases.configure'), [_seam]);
   });
 
   test('pubspec pins purchases_flutter to an exact version', () {

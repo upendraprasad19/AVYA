@@ -15,7 +15,7 @@ readers:
   - { file: lib/core/services/supabase_service.dart, method_or_widget: "parseIssuedReferralCode (List -> first Map -> out_code non-empty, out_expires_at parseable, else null)", line: 16 }
   - { file: lib/core/services/supabase_service.dart, method_or_widget: "getOrCreateReferralCode / regenerateReferralCode -> _issueReferralCode -> issueReferralCodeVia (signed out -> null, no call; ensureFreshToken, then rpc('issue_referral_code') with a 15 s timeout); empty -> referral_code_issue_empty event; throw -> recordNonFatal supabase_service_issue_referral_code; null", line: 147 }
   - { file: lib/features/profile/screens/invite_friends_sheet.dart, method_or_widget: "_load / _regenerate: a null result sets _issueFailed (ReferralCopy.codeIssueFailed + TRY AGAIN); REGENERATE keeps the old code on failure and re-enables in finally", line: 88 }
-  - { file: supabase/functions/redeem-referral/index.ts, method_or_widget: "service-role code lookup + expiry check (unchanged)", line: 82 }
+  - { file: supabase/functions/redeem-referral/index.ts, method_or_widget: "service-role code lookup + expiry check (unchanged)", line: 86 }
   - { file: lib/core/services/sync/sync_restore_completeness.dart, method_or_widget: "restore SELECT of referral_codes into Hive referral_code (unchanged)", line: 646 }
   - { file: supabase/functions/restore-user-snapshot/restore_reads.ts, method_or_widget: "single-call restore read of the own live code (gt expires_at now), injected into the restore above (unchanged)", line: 131 }
 hive_key_prefix: "userBox referral_code (written by the restore only; read by nothing else in lib/, so issue needs no cache write)"

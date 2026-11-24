@@ -66,6 +66,7 @@ function fakeClient(opts: Opts) {
       eq: record("eq"),
       in: record("in"),
       not: record("not"),
+      or: record("or"),
       limit: record("limit"),
       single: () => Promise.resolve(resolve()),
       maybeSingle: () => Promise.resolve(resolve()),
@@ -122,14 +123,15 @@ Deno.test("control: a referee with no paid row is redeemed (200, success, one RP
   });
 });
 
-Deno.test("the paid read asks for exactly: this user, plans monthly/yearly, payment id present, one row", async () => {
+Deno.test("the paid read asks for exactly: this user, plans monthly/yearly, a payment id or a PRODUCTION Play row, one row", async () => {
   const r = await redeem({ paid: [] });
   assertEquals(r.subsReads.length, 1);
   assertEquals(r.subsReads[0].ops, [
     ["select", ["id"]],
     ["eq", ["user_id", REFEREE_ID]],
     ["in", ["plan", ["monthly", "yearly"]]],
-    ["not", ["razorpay_payment_id", "is", null]],
+    // OI-519 U4: the SQL's "paid" (migration 182): a Razorpay payment id OR a PRODUCTION Play row.
+    ["or", ["razorpay_payment_id.not.is.null,and(store.eq.play,store_environment.eq.PRODUCTION)"]],
     ["limit", [1]],
   ]);
 });

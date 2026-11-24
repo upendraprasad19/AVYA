@@ -41,6 +41,9 @@ const DAYS_GRANTED = 7;
 // counts a row of ANY status; the hourly reward job additionally wants status active, not cancelled, inside the 90-day
 // window. This list and the RPC's must stay in step (test/contracts/redeem_referral_paid_referee_migration_pin_test.dart).
 const PAID_PLANS = ["monthly", "yearly"];
+// OI-519 U4 (F3): "paid" is the SQL's predicate (migration 182, redeem_referral_atomic): a Razorpay payment id, OR a
+// PRODUCTION Google Play row. A SANDBOX Play row (a license tester) is not paid.
+export const PAID_ROW_FILTER = "razorpay_payment_id.not.is.null,and(store.eq.play,store_environment.eq.PRODUCTION)";
 const PAID_REFEREE_MESSAGE = "Referral codes are for new recruits who haven't subscribed yet.";
 
 interface RedeemRequest {
@@ -129,7 +132,7 @@ export async function handleRedeemReferral(
     .select("id")
     .eq("user_id", referee.id)
     .in("plan", PAID_PLANS)
-    .not("razorpay_payment_id", "is", null)
+    .or(PAID_ROW_FILTER)
     .limit(1);
   if (paidErr) {
     console.warn(`[redeem-referral] request_id=${requestId} paid-check read failed: ${paidErr.message}`);

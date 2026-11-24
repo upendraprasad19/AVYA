@@ -968,9 +968,15 @@ function wiringFakeClient(opts: {
           ? ((opts.coachMemory ?? []) as unknown as Record<string, unknown>[])
           : ((opts.rows?.[table] ?? []) as Record<string, unknown>[]);
       const builder: Record<string, unknown> = {};
-      for (const m of ["select", "eq", "gte", "lt", "order", "not", "lte"]) {
+      for (const m of ["select", "gte", "lt", "order", "not", "lte", "or"]) {
         builder[m] = () => builder;
       }
+      // OI-519: the renewing-Play read filters on store + auto_renew; honour those two (a row without them is web).
+      // Every other .eq stays a no-op, as before.
+      builder.eq = (column: string, value: unknown) => {
+        if (column === "store" || column === "auto_renew") data = data.filter((row) => row[column] === value);
+        return builder;
+      };
       builder.in = (column: string, values: unknown[]) => {
         inCalls.push({ table, column, values });
         data = data.filter((row) => values.includes(row[column]));
@@ -1044,6 +1050,21 @@ Deno.test("OI-202: expiringSoon and lapsedYesterday reduce to the LATEST active 
   // 7d: UC only (UE's near row is superseded by its November row).
   // 30d: UC + UD.
   assertEquals(out.expiringSoon, { count7d: 1, count30d: 2 });
+});
+
+Deno.test("OI-519 (hermes seat 1): an auto-renewing Play subscriber is not counted as expiring", async () => {
+  const { client } = wiringFakeClient({
+    rows: {
+      subscriptions: [
+        subRow(1, UC, "2026-09-15T00:00:00Z"),
+        { ...subRow(2, UD, "2026-09-15T00:00:00Z"), store: "play", auto_renew: true },
+        { ...subRow(3, UE, "2026-09-15T00:00:00Z"), store: "play", auto_renew: false },
+      ],
+    },
+  });
+  // deno-lint-ignore no-explicit-any
+  const out = await gatherDigestInput(client as any, OI202_NOW);
+  assertEquals(out.expiringSoon, { count7d: 2, count30d: 2 }, "UC (web) and UE (Play, not renewing); UD renews");
 });
 
 Deno.test("OI-202: boundaries — lapsed is [yStart, tStart) (start in, end OUT); expiring is [now, now+N d] (both in)", async () => {
