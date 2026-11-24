@@ -52,7 +52,8 @@ String? filesProblem(Map<String, String> files, Iterable<String> goals) {
     final src = files[e.key];
     if (src == null) return '${e.key}: missing';
     final code = [
-      for (final l in src.split('\n'))
+      // Dart ends a line at \r\n, \n AND a lone \r: `// c\r@Skip('x')` is a comment line, then code.
+      for (final l in src.split(RegExp(r'\r\n|\r|\n')))
         if (l.trim().isNotEmpty && !l.trimLeft().startsWith('//')) l.trimRight(),
     ];
     final want = gateFileCode(e.value);
@@ -118,6 +119,8 @@ void main() {
       expect(filesProblem({...ok, y: with_('y', call, '/*\n$call\n*/\nvoid main() {}')}, ['x', 'y']), contains('code lines'));
       expect(filesProblem({...ok, y: with_('y', call, '$call\n@Skip()\nvoid other() {}')}, ['x', 'y']), contains('code lines'));
       expect(filesProblem({...ok, y: with_('y', '@Timeout(Duration(minutes: 40))', "@Skip('x')")}, ['x', 'y']), contains('is not'));
+      expect(filesProblem({...ok, y: "// c\r@Skip('x')\n${src('y')}"}, ['x', 'y']), contains('code lines'));
+      expect(filesProblem({...ok, y: src('y').replaceAll('\n', '\r\n')}, ['x', 'y']), isNull);
       expect(filesProblem({...ok, '${_prefix}z$_suffix': src('z')}, ['x', 'y']), contains('no pins'));
     });
   });

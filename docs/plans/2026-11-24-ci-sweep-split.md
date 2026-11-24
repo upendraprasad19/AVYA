@@ -190,6 +190,8 @@ Review file `docs/reviews/ci-sweep-split-bpass.md`. Each finding was reproduced 
 5. P3: two sweep files had no row in the duration table. Added (1 s each, measured on run 45399115784).
 6. P3: a pull request was judged by its own copy of the scope script. Fix: the workflow step counts changed paths under `scripts/ci_sweep_scope*`, `scripts/ci_test_partition*` and `.github/` and asks the script only on a count of exactly `0`.
 
+**Delta round on these fixes (fresh Sonnet, `cff3fb44..d94be03b`): 0 P0, 0 P1, 2 P2, 4 P3, all fixed.** Both P2 were in the fix for finding 2: the looser regex read `final part = 'a.dart';` as an edge (now a string literal must follow the keyword), and a `/*` inside a triple-quoted string hid the directive after it (triple quotes are tracked). Also: a lone `\r` as a line end in the gate-file pin, adjacent string literals joined, a stale comment, the ledger's hash. 7 more mutants, 6 red and 1 equivalent. The real closure is still 292 files, none unresolved.
+
 ## 7. Closure
 
 Six units (U1 to U5 plus the docs ripple), so `docs/audit/ci-sweep-split.closure.yaml` with a `terminal_state:` per unit (CLAUDE.md §4.2), plus the plan-review record `docs/plan-reviews/ci-sweep-split.md` and a B-pass before the merge.

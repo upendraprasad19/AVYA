@@ -79,6 +79,31 @@ void main() {
       expect(directiveUris("reimport 'no.dart'; x.part 'no2.dart'; \$export 'no3.dart';\n"), isEmpty);
     });
 
+    // Delta round on the B-pass fixes (2026-11-24).
+    test('a variable NAMED like a keyword is not a directive (an invented edge makes every pull request run)', () {
+      expect(directiveUris("final part = 'a.dart';\nString export\n = 'x.dart';\nvar import = x; f('y.dart');\n"), isEmpty);
+    });
+
+    test('a `/*` inside a triple-quoted string does not swallow the directive after it', () {
+      expect(directiveUris("const s='''\n/* \n''';\nimport 'a.dart';\n// */\n"), ['a.dart']);
+      expect(directiveUris('const s="""\n/* \' \n""";\nimport "b.dart";\n'), ['b.dart']);
+      expect(directiveUris("const s='/* ';\nimport 'c.dart';\n/* */\n"), ['c.dart']);
+    });
+
+    test('a one-line string ends at the line end even when its quote never closes', () {
+      expect(directiveUris("x = 'unterminated\n// import 'no.dart';\nimport 'yes.dart';\n"), ['yes.dart']);
+    });
+
+    test('adjacent string literals are one URI: the joined file is an edge', () {
+      expect(directiveUris("import 'a' 'b.dart';\n"), containsAll(['ab.dart']));
+      expect(directiveUris("import 'dir/'\n    'c.dart' as c;\n"), contains('dir/c.dart'));
+      expect(directiveUris("import 'a.dart' if (dart.library.io) 'b.dart';\n"), ['a.dart', 'b.dart']);
+    });
+
+    test('CRLF line endings: every directive is still read', () {
+      expect(directiveUris("import 'a.dart';\r\nexport 'b.dart' show X;\r\npart 'c/d.dart';\r\n"), ['a.dart', 'b.dart', 'c/d.dart']);
+    });
+
     test('double quotes and a `//` inside a URI string survive comment stripping', () {
       expect(directiveUris('import "a.dart";\nimport \'b//c.dart\';\n'), ['a.dart', 'b//c.dart']);
     });

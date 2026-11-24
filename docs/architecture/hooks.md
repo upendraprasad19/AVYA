@@ -187,7 +187,9 @@ runs the same gates). See §4 process invariants for the no-deferred-failures po
   `if:` (`steps.scope.outputs.run != 'false'`). The sweeps are skipped ONLY when the script prints exactly
   `run=false`: no changed path is in the import closure of `test/plan_generator/**` (derived on every run), a
   declared input (`declaredInputs`: the exercise library, fixtures) or an always-run path. A push, a failing
-  `git`/`dart`, a deleted Dart file, an unresolved import: the sweeps run. A skipped leg ends `success`, so
+  `git`/`dart`, a deleted Dart file, an unresolved import, a changed path that is not plain ASCII (git quotes
+  it), a pull request that changes the scope or partition scripts or anything under `.github/` (the shell does
+  not ask the script at all): the sweeps run. A skipped leg ends `success`, so
   `land_pr` prints `sweeps: ran | skipped (out of scope) | unknown` before `result:` (information only; it
   reads the test step's conclusion from `repos/{repo}/actions/jobs/{id}`). `ci-green` on a PR therefore means
   "every test whose inputs the PR changed"; a sweep red on `main` after a skipped PR is a scope miss, fixed by

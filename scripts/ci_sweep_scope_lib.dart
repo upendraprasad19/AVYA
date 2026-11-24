@@ -101,25 +101,35 @@ String normalizeRepoPath(String path) {
   return out.join('/');
 }
 
-/// [source] with comments removed: `//` to end of line and `/* ... */`, but not
-/// inside a string literal. Good enough for the DIRECTIVE section of a Dart file
-/// (raw and triple-quoted strings do not occur there); a comment that quotes an
-/// import must not become an edge.
+/// [source] with comments removed: `//` to end of line and `/* ... */` (nested), but
+/// not inside a string literal, so a comment that quotes an import is not an edge and
+/// a `/*` inside a string does not swallow the code after it. Strings are tracked as
+/// Dart reads them: a one-line string ends at its quote or at the line end, a
+/// triple-quoted one (`'''` or `"""`) only at its closing triple, over any number of
+/// lines. A raw string's backslash is treated as an escape too; that can only keep a
+/// string open to the end of its line, never open a comment.
 String stripDartComments(String source) {
   final b = StringBuffer();
   var i = 0;
-  String? quote;
+  String? quote; // the closing delimiter of the string being read: one quote or three
   while (i < source.length) {
     final c = source[i];
     final next = i + 1 < source.length ? source[i + 1] : '';
     if (quote != null) {
-      b.write(c);
       if (c == '\\' && next.isNotEmpty) {
+        b.write(c);
         b.write(next);
         i += 2;
         continue;
       }
-      if (c == quote || c == '\n') quote = null;
+      if (source.startsWith(quote, i)) {
+        b.write(quote);
+        i += quote.length;
+        quote = null;
+        continue;
+      }
+      b.write(c);
+      if (quote.length == 1 && (c == '\n' || c == '\r')) quote = null;
       i++;
       continue;
     }
@@ -147,7 +157,12 @@ String stripDartComments(String source) {
       b.write(' ');
       continue;
     }
-    if (c == "'" || c == '"') quote = c;
+    if (c == "'" || c == '"') {
+      quote = source.startsWith(c * 3, i) ? c * 3 : c;
+      b.write(quote);
+      i += quote.length;
+      continue;
+    }
     b.write(c);
     i++;
   }
@@ -156,8 +171,14 @@ String stripDartComments(String source) {
 
 // NOT anchored to the start of a line: `import 'a.dart'; import 'b.dart';`, `library x; import 'a.dart';` and
 // `@pragma('x') import 'a.dart';` are all legal, and an edge this misses is an input the decision cannot see
-// (B-pass finding 2, 2026-11-24). Matching the keyword anywhere it starts a word can only ADD edges.
-final RegExp _directive = RegExp(r'''(?<![\w$.'"])(import|export|part)\s+([^;]*);''');
+// (B-pass finding 2, 2026-11-24). Matching the keyword anywhere it starts a word can only ADD edges; the
+// string literal that must follow it at once keeps a variable named `part` or `export` from being one (delta
+// round). Dart source quoted inside a string can still read as an edge: to a real file that is a harmless
+// superset, to a missing one it is `unresolved`, and test/scripts/ci_sweep_scope_test.dart ("the walk is
+// COMPLETE") goes red on it in the core set, so it cannot quietly make every pull request run the sweeps.
+final RegExp _directive = RegExp(r'''(?<![\w$.'"])(import|export|part)\s+(?=r?['"])([^;]*);''');
+// Adjacent string literals are ONE string in Dart (`import 'a' 'b.dart';` imports ab.dart).
+final RegExp _adjacentLiterals = RegExp(r'''^\s*r?(['"])[^'"\n]*\1(?:\s*r?(['"])[^'"\n]*\2)+''');
 final RegExp _stringLiteral = RegExp(r'''(['"])([^'"\n]*)\1''');
 
 /// The URIs of every `import` / `export` / `part` directive in [source], read
@@ -174,6 +195,11 @@ List<String> directiveUris(String source) {
     for (final s in _stringLiteral.allMatches(body)) {
       final uri = s.group(2)!;
       if (uri.endsWith('.dart')) uris.add(uri);
+    }
+    final adjacent = _adjacentLiterals.firstMatch(body);
+    if (adjacent != null) {
+      final joined = _stringLiteral.allMatches(adjacent.group(0)!).map((s) => s.group(2)!).join();
+      if (joined.endsWith('.dart')) uris.add(joined);
     }
   }
   return uris;

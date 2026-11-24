@@ -47,8 +47,8 @@ findings:
   - id: BPASS-FIXES
     title: "B-pass: 1 P1, 3 P2, 2 P3 (quoted paths, unanchored directives, whole-file gate pin, counts, table rows, self-judging)"
     terminal_state: closed_in_commit
-    commit: "the commit that adds this ledger"
-    verification: "docs/reviews/ci-sweep-split-bpass.md; 21 mutants red (plan section 6f)"
+    commit: "d94be03b, and the delta round's fixes in the commit after it"
+    verification: "docs/reviews/ci-sweep-split-bpass.md (round 1: 6 findings, 21 mutants red; delta round: 2 P2 + 4 P3); plan section 6f"
 
   - id: ABORT-CONDITION-4
     title: "Sweep-leg skew above 1.6x: 2.1x and 2.25x on the two runs, caused by runner speed (measured, plan section 6e)"
