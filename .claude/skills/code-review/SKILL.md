@@ -208,7 +208,8 @@ When invoked, this skill should:
    the reviewer caught it by resetting to `git show :<path>` content. Lens 10 is the
    reviewer-side half; this is the check that makes the author's "done" mean the index.
    **Review CI (2026-11-11, CLAUDE.md §4.12.8):** below catastrophic tier the draft is COMMITTED and its full suite
-   comes from CI (`sh scripts/land_pr.sh <pr> --ci-only` → `result: ci-green`) before dispatch, so the reviewer reads
+   comes from CI (`sh scripts/land_pr.sh <pr> --ci-only` → `result: ci-green`; its `sweeps:` line says whether
+   the plan-generator sweeps ran or were out of scope for the diff) before dispatch, so the reviewer reads
    the committed three-dot diff (`origin/main...HEAD`) of the head that went green; this index check then only
    guards against uncommitted leftovers. A catastrophic diff is still reviewed STAGED (its commit is gated on that
    review), with its pre-review full suite from `sh scripts/run_full_suite.sh`.

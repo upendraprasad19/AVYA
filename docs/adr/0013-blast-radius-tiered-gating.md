@@ -125,3 +125,7 @@ Active. Shipped 2026-06-01 (lean-workflow batch). Platform blast radius (edits
 - **ADR-0018** — moves `flutter analyze` + `flutter test` off pre-commit, makes analyze
   unconditional at pre-push, and corrects this ADR's "CI runs the full suite on every push"
   premise (see the Correction note in Context). Refines this decision; does not supersede it.
+- **2026-11-24, `docs/plans/2026-11-24-ci-sweep-split.md`** — refines "CI is the full-suite
+  source-of-truth": on a PULL REQUEST the plan-generator sweeps (`test/plan_generator/**`) run
+  only when the diff touches one of their inputs (`scripts/ci_sweep_scope_lib.dart`); every push
+  to `main` still runs the whole suite, so `main`'s CI is unchanged as the source of truth.

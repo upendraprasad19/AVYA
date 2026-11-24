@@ -106,6 +106,7 @@ case "\$*" in
   "pr view "*"--json state") kind=pr-state;;
   "api repos/"*"/pulls/"*"/files"*) kind=pr-files;;
   "api repos/"*"/commits/"*"/check-runs"*) kind=check-runs;;
+  "api repos/"*"/actions/jobs/"*) kind=run-jobs;;
   *) echo "gh stub: unknown argv: \$*" >&2; exit 99;;
 esac
 n=\$(bump "\$kind")

@@ -14,6 +14,8 @@
 # exit 0, and nothing after the CI wait (no main-moved round, no record replay, no merge). `ci-green` is a review gate,
 # not merge-readiness (CI ran on the merge ref GitHub computed when the run started). Exit 0 is shared with `merged`:
 # read the `result:` word, never only the status.
+# A `sweeps: ran | skipped (out of scope) | unknown` line precedes it (2026-11-24): whether the plan-generator sweeps
+# ran on this pull request (information only; scripts/land_pr.dart).
 #
 # Exit codes (the CLI's): 0 merged (or ci-green with --ci-only), 1 needs-human, 2 refused (nothing changed yet), 3 ci-failed or ci-timeout,
 # 4 error, 5 record-failed, 6 merge-refused, 7 merge-unverified. Any child status above 7 (a compile error 254, an async

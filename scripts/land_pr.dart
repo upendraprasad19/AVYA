@@ -15,6 +15,11 @@
 // the PR merge ref GitHub computed when the run started, so `ci-green` is a review gate, not merge-readiness; a caller
 // reads the result word, never only the status (0 is also `merged`). With it, invoking pushes but never merges.
 //
+// `sweeps:` (2026-11-24): after a green CI one line `sweeps: ran | skipped (out of scope) | unknown` is printed BEFORE
+// `result:`. On a pull request the plan-generator sweep legs skip their test step when the diff touches none of their
+// inputs (scripts/ci_sweep_scope_lib.dart) and still end `success`; this line is how a reader of `ci-green` tells. It is
+// information only: a failing read is `unknown` and never changes the result word or the exit status.
+//
 // Flags are the PR number, `--allow-workflow-change` (forwarded to the merge wrapper) and `--ci-only`, each at most once. Test seams, never forwarded by the
 // wrapper: --gh "<cmd>", --scripts-dir <dir>, --poll-ms, --ci-timeout-ms, --fetch-timeout-ms, --gh-timeout-ms,
 // --record-gate "<cmd>". Reads no environment variable; children inherit the environment. Run directly (not through the
@@ -371,7 +376,7 @@ class _Land {
       }
       // 3. CI
       phase = 'ci';
-      await _waitCi(head);
+      await _reportSweeps(await _waitCi(head));
       if (o.ciOnly) {
         _say('--ci-only: CI is green on ${head.substring(0, 8)}; stopping before the merge (a review gate, not merge-readiness)');
         return resCiGreen;
@@ -433,7 +438,25 @@ class _Land {
     return null;
   }
 
-  Future<void> _waitCi(String sha) async {
+  /// Prints `sweeps: ran | skipped (out of scope) | unknown` (land_pr_lib.dart). Information only: a failing or
+  /// unreadable `gh` call is `unknown`, and nothing in here can change the result word or the exit status.
+  Future<void> _reportSweeps(List<Map<String, dynamic>> checkRuns) async {
+    var word = sweepsUnknown;
+    try {
+      final jobs = <Map<String, dynamic>?>[];
+      for (final id in sweepLegJobIds(checkRuns)) {
+        jobs.add(_obj((await _gh(['api', 'repos/$repo/actions/jobs/$id'])).out));
+      }
+      word = sweepsWord(jobs);
+    } on _Interrupted {
+      rethrow;
+    } catch (_) {
+      word = sweepsUnknown;
+    }
+    _out('sweeps: $word');
+  }
+
+  Future<List<Map<String, dynamic>>> _waitCi(String sha) async {
     final watch = CiWatch();
     final deadline = DateTime.now().add(Duration(milliseconds: o.ciTimeoutMs));
     List<Map<String, dynamic>>? last;
@@ -455,7 +478,7 @@ class _Land {
       switch (t.state) {
         case CiTickState.green:
           _say('CI is green on ${sha.substring(0, 8)} (poll $polls)');
-          return;
+          return last ?? const <Map<String, dynamic>>[];
         case CiTickState.red:
           final why = evaluateCheckRuns(last).reasons.join('; ');
           throw _Stop(resCiFailed, '${t.note.isEmpty ? '' : '${t.note}: '}$why');

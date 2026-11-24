@@ -127,6 +127,10 @@ jobs:
   # The first run also logs each shard's duration: a slowest/fastest skew above 1.5x
   # re-balances with a committed measured-duration table in the same batch.
   #
+  # SINCE 2026-11-24 this matrix runs the CORE set only (`--set core`: every test file
+  # not under test/plan_generator/); the sweeps have their own matrix, `sweep-test`,
+  # below. The round-robin rule above is unchanged, over the core files.
+  #
   # `fail-fast: false` so one red shard does not hide the others' failures. The shard
   # count is the matrix length (`strategy.job-total`), never a second literal.
   unit-test:
@@ -192,21 +196,133 @@ jobs:
         # step's status is that of its last command. The matrix shape test runs this
         # block with a failing flutter and pins the exact last line.
         run: |
-          FILES="$(dart scripts/ci_test_partition.dart "${{ matrix.shard }}" "${{ strategy.job-total }}")" || exit 1
+          FILES="$(dart scripts/ci_test_partition.dart "${{ matrix.shard }}" "${{ strategy.job-total }}" --set core)" || exit 1
           test -n "$FILES" || { echo "::error::shard ${{ matrix.shard }}/${{ strategy.job-total }} has no test files"; exit 1; }
           STRAY="$(printf '%s\n' "$FILES" | grep -v -E '^test/[A-Za-z0-9_./+-]+_test\.dart$' || true)"
           test -z "$STRAY" || { echo "::error::the partition printed a line that is not a test path: $STRAY"; exit 1; }
           echo "shard ${{ matrix.shard }}/${{ strategy.job-total }}: $(echo "$FILES" | wc -l) test files"
           flutter test $FILES --exclude-tags golden --reporter expanded
 
+  # ── The plan-generator sweeps: their own matrix (docs/plans/2026-11-24-ci-sweep-split.md) ──
+  #
+  # MEASURED 2026-11-24 on runs 45340748319, 45318405229 and 45343469169: the files
+  # under test/plan_generator/ (whole-engine sweeps) were 66-69% of all per-file test
+  # time, while 859 of 1072 files finished in a second or less. Dealt round-robin with
+  # everything else they left two of the four shards near 21 min and two near 13, and
+  # the workflow at a median of 20.95 min over 20 green PR runs (the B3 target was
+  # 9.84). So `unit-test` above now runs only the CORE set (`--set core`: every test
+  # file NOT under test/plan_generator/), and this matrix runs the SWEEP set, packed
+  # longest-first by the measured table scripts/data/ci_sweep_durations.json (five legs
+  # of 646-653 s by that table). The steps are the same as a core shard's on purpose:
+  # the same empty-list and stray-line guards, `flutter test` last and unpiped.
+  # A leg's wall clock is set by its LONGEST FILE (files in a leg run side by side):
+  # on the first run (45361275474) the leg holding the then single 3-goal file
+  # titration_plateau_gate_test.dart (595 s there, 367 s on a faster runner) took
+  # 13.8 min while the others took 6.5-9.6. That file is now three per-goal files
+  # (test/helpers/titration_plateau_gate_lib.dart; plan section 6d).
+  #
+  # PRE-COMMITTED ABORT CONDITIONS (plan section 5; any one reverts the batch):
+  #   (1) a PR that skips the sweeps takes more than 11.5 min (median of 3 runs);
+  #   (2) a PR that runs the sweeps takes more than 16.8 min (median of 3 runs);
+  #   (3) any test red here that is green in the old layout on the same SHA;
+  #   (4) the slowest sweep leg takes more than 16.8 min (replaced the 1.6x skew limit on
+  #       2026-11-24: runner speed alone gives about 2x, which no table can change);
+  #   (5) median queue delay of the 9 matrix legs over the first 5 runs above 120 s.
+  sweep-test:
+    name: Unit Tests sweep shard ${{ matrix.shard }}/${{ strategy.job-total }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4, 5]
+
+    steps:
+      # fetch-depth: 2 so the scope step can diff a pull request's merge commit against
+      # its first parent (the base). The default depth of 1 has no HEAD^1.
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 2
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.41.4'
+          channel: stable
+          cache: true
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Build the local indexes (strict)
+        run: dart run scripts/build_local_indexes.dart
+
+      # OPTION A (plan section 3 U1/U3): on a PULL REQUEST the sweeps run only when a
+      # changed path is one of their inputs - in the import closure of
+      # test/plan_generator/**, a declared fixture or asset, or an always-run path
+      # (scripts/ci_sweep_scope_lib.dart; the rule is derived from the sweep files on
+      # every run, not listed). Replayed with the real script over the last 80 merges on
+      # main (2026-11-24): 28 would have skipped the sweeps, 52 would have run them (27 / 53
+      # when the B-pass replayed it later the same day on a moved main).
+      #
+      # THE ONLY WAY TO SKIP is the script printing exactly `run=false` on a pull_request
+      # whose HEAD is a two-parent merge commit. RUN starts `true` and everything else
+      # leaves it `true`: a push (main ALWAYS runs the sweeps), a failing `git` or `dart`,
+      # a stray line on stdout, a missing parent. A failing `git` or `dart` cannot abort the
+      # step either: each sits in an `if` condition or in a non-final position of one &&
+      # list, where `-e` does not apply (the shape test runs the block under sh AND bash;
+      # a `{ ...; } || RUN=true` wrapper was tried and was an unkillable mutant, so it is
+      # not there). A pull request that changes the scope script itself, the partition
+      # script or anything under .github/ is NOT allowed to answer for itself: the shell
+      # counts those paths (SELF) and asks the script only on exactly `0`, so a broken copy
+      # of the script cannot print run=false for the change that broke it (B-pass finding 6;
+      # a failing grep leaves SELF empty, which is not `0`). The decision is a STEP, not a job-level
+      # `if:`: a skipped JOB reports `skipped`, which safe_pr_merge_lib.dart does not accept
+      # for `Unit Tests`; a leg whose test step is skipped ends `success`, and
+      # scripts/land_pr.dart prints `sweeps: skipped (out of scope)` from that step's
+      # conclusion so the reader of a green pull request knows which it was.
+      # `pub get` and the index build above stay UNCONDITIONAL
+      # (test/scripts/ci_local_indexes_steps_test.dart); the `if:` on the test step below
+      # is the only condition in this job, and a missing output RUNS the tests.
+      - name: Decide whether this pull request can change the sweeps
+        id: scope
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          RUN=true
+          if [ "$EVENT_NAME" = "pull_request" ] && [ "$(git rev-list --parents -n 1 HEAD | wc -w)" -eq 3 ]; then
+            CHANGED="$(git diff --no-renames --name-only HEAD^1 HEAD)" &&
+              SELF="$(printf '%s\n' "$CHANGED" | grep -c -E '^(scripts/ci_sweep_scope|scripts/ci_test_partition|\.github/)' || true)" &&
+              [ "$SELF" = "0" ] &&
+              ANSWER="$(printf '%s\n' "$CHANGED" | dart scripts/ci_sweep_scope.dart)" &&
+              [ "$ANSWER" = "run=false" ] && RUN=false
+          fi
+          if [ "$RUN" = "false" ]; then
+            echo "::notice::sweeps skipped: no changed path is in the plan-generator closure"
+            echo "sweeps skipped: no changed path is in the plan-generator closure" >> "${GITHUB_STEP_SUMMARY:-/dev/null}"
+          else
+            RUN=true
+          fi
+          echo "run=$RUN" >> "$GITHUB_OUTPUT"
+
+      - name: Run this shard's whole sweep files
+        if: steps.scope.outputs.run != 'false'
+        run: |
+          FILES="$(dart scripts/ci_test_partition.dart "${{ matrix.shard }}" "${{ strategy.job-total }}" --set sweep)" || exit 1
+          test -n "$FILES" || { echo "::error::sweep shard ${{ matrix.shard }}/${{ strategy.job-total }} has no test files"; exit 1; }
+          STRAY="$(printf '%s\n' "$FILES" | grep -v -E '^test/[A-Za-z0-9_./+-]+_test\.dart$' || true)"
+          test -z "$STRAY" || { echo "::error::the partition printed a line that is not a test path: $STRAY"; exit 1; }
+          echo "sweep shard ${{ matrix.shard }}/${{ strategy.job-total }}: $(echo "$FILES" | wc -l) test files"
+          flutter test $FILES --exclude-tags golden --reporter expanded
+
   # The single check that means "the unit tests passed". `if: !cancelled()` so it
   # still RUNS (and fails) when a shard failed — a gate that is skipped when its
   # input fails reports "skipped", which scripts/safe_pr_merge_lib.dart does not
   # treat as success for this job. It passes only on `success`: a skipped, failed or
-  # cancelled shard set is a failure of THIS check.
+  # cancelled shard set is a failure of THIS check. Since 2026-11-24 it needs BOTH
+  # matrices: the core shards and the sweep shards.
   unit-tests-gate:
     name: Unit Tests
-    needs: unit-test
+    needs: [unit-test, sweep-test]
     if: ${{ !cancelled() }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -215,10 +331,16 @@ jobs:
       - name: Every shard must have succeeded
         env:
           SHARDS_RESULT: ${{ needs.unit-test.result }}
+          SWEEPS_RESULT: ${{ needs.sweep-test.result }}
         run: |
           echo "unit-test shards finished as: $SHARDS_RESULT"
+          echo "sweep-test shards finished as: $SWEEPS_RESULT"
           if [ "$SHARDS_RESULT" != "success" ]; then
             echo "::error::Unit Tests failed: the shards finished as '$SHARDS_RESULT', not 'success'"
+            exit 1
+          fi
+          if [ "$SWEEPS_RESULT" != "success" ]; then
+            echo "::error::Unit Tests failed: the sweep shards finished as '$SWEEPS_RESULT', not 'success'"
             exit 1
           fi
 

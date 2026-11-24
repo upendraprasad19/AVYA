@@ -31,6 +31,7 @@
 // The only I/O in this file is the directory listing in [discoverTestFiles]; the
 // rest is a pure function of its arguments, so the whole contract is unit-tested.
 
+import 'dart:convert';
 import 'dart:io';
 
 /// A test file is a `*_test.dart` file under `test/` -- the set `flutter test
@@ -102,4 +103,115 @@ List<String> shardFiles(List<String> sortedFiles, int shard, int total) {
     for (var i = 0; i < sortedFiles.length; i++)
       if (i % total == shard - 1) sortedFiles[i],
   ];
+}
+
+// ── Two sets: `core` and `sweep` (docs/plans/2026-11-24-ci-sweep-split.md) ─────────
+//
+// Measured 2026-11-24 on three CI runs: the files under test/plan_generator/ (the
+// whole-engine sweeps) are 66-69% of all per-file test time, and 859 of 1072 files
+// finish in a second or less. Dealing the sweeps round-robin with everything else
+// left two of four shards at ~21 min and two at ~13. So the list is cut in two:
+//   core  = every test file NOT under test/plan_generator/, round-robin as above;
+//   sweep = the files under test/plan_generator/, packed by MEASURED duration.
+// The cut is a DIRECTORY rule, not a list, so a new sweep file cannot be forgotten.
+
+/// The directory whose test files are the `sweep` set.
+const String sweepDirPrefix = 'test/plan_generator/';
+
+/// The committed measured-duration table the sweep partition packs by.
+const String sweepDurationsPath = 'scripts/data/ci_sweep_durations.json';
+
+/// The names the CLI accepts for `--set`.
+const List<String> partitionSets = <String>['core', 'sweep'];
+
+/// True when [path] (repo-relative, forward slashes) is a sweep test file.
+bool isSweepTestPath(String path) => path.startsWith(sweepDirPrefix);
+
+/// The members of [set] (`core` or `sweep`) in [sortedFiles], order kept. The two
+/// sets are disjoint and their union is [sortedFiles] by construction: one predicate
+/// and its negation. Throws [ArgumentError] for any other set name.
+List<String> filesOfSet(List<String> sortedFiles, String set) {
+  if (!partitionSets.contains(set)) {
+    throw ArgumentError.value(set, 'set', 'must be one of $partitionSets');
+  }
+  final wantSweep = set == 'sweep';
+  return <String>[
+    for (final f in sortedFiles)
+      if (isSweepTestPath(f) == wantSweep) f,
+  ];
+}
+
+/// Parses the duration table (a JSON object `{"test/...": seconds}`). Every value
+/// must be a number > 0: a zero or negative weight would let one shard absorb every
+/// file. Throws [FormatException] otherwise.
+Map<String, num> parseDurationTable(String json) {
+  final decoded = jsonDecode(json);
+  if (decoded is! Map) throw const FormatException('the duration table must be a JSON object');
+  final out = <String, num>{};
+  decoded.forEach((k, v) {
+    if (k is! String || v is! num || v <= 0 || v.isNaN || v.isInfinite) {
+      throw FormatException('duration table entry "$k": $v is not a number > 0');
+    }
+    out[normalizeTestPath(k)] = v;
+  });
+  return out;
+}
+
+/// The weight of a file the table does not name: the median of the table's values
+/// (1 when the table is empty), so a new sweep file is packed as an average one
+/// instead of as a free one.
+num defaultDuration(Map<String, num> durations) {
+  if (durations.isEmpty) return 1;
+  final v = durations.values.toList()..sort();
+  return v[v.length ~/ 2];
+}
+
+/// Table keys that name no file in [files]: a renamed or deleted sweep file. Not an
+/// error for the CLI (a stale row only costs balance), a failure in the unit test
+/// that mirrors the real table.
+List<String> staleDurationKeys(Map<String, num> durations, Iterable<String> files) {
+  final present = files.toSet();
+  return [for (final k in durations.keys) if (!present.contains(k)) k]..sort();
+}
+
+/// Longest-processing-time-first packing of [files] into [total] shards by
+/// [durations]: heaviest file first (ties by path), each to the currently lightest
+/// shard (ties to the lowest shard number). Deterministic for a given input; every
+/// file lands in exactly one shard; each shard is returned sorted by path. With at
+/// least [total] files no shard is empty (the first [total] files each find an
+/// empty shard, because every weight is > 0).
+List<List<String>> packByDuration(List<String> files, int total, Map<String, num> durations) {
+  if (total < 1) throw ArgumentError.value(total, 'total', 'must be >= 1');
+  final fallback = defaultDuration(durations);
+  num weight(String f) => durations[f] ?? fallback;
+  final order = [...files]..sort((a, b) {
+      final byWeight = weight(b).compareTo(weight(a));
+      return byWeight != 0 ? byWeight : a.compareTo(b);
+    });
+  final shards = [for (var i = 0; i < total; i++) <String>[]];
+  final load = List<num>.filled(total, 0);
+  for (final f in order) {
+    var lightest = 0;
+    for (var i = 1; i < total; i++) {
+      if (load[i] < load[lightest]) lightest = i;
+    }
+    shards[lightest].add(f);
+    load[lightest] += weight(f);
+  }
+  for (final s in shards) {
+    s.sort();
+  }
+  return shards;
+}
+
+/// The files of shard [shard] (1-based) of [total] for [set]: `core` is the
+/// round-robin [shardFiles] over the core files; `sweep` is [packByDuration] over
+/// the sweep files.
+List<String> shardFilesOfSet(List<String> sortedFiles, String set, int shard, int total, Map<String, num> durations) {
+  if (total < 1) throw ArgumentError.value(total, 'total', 'must be >= 1');
+  if (shard < 1 || shard > total) {
+    throw ArgumentError.value(shard, 'shard', 'must be in 1..$total');
+  }
+  final mine = filesOfSet(sortedFiles, set);
+  return set == 'sweep' ? packByDuration(mine, total, durations)[shard - 1] : shardFiles(mine, shard, total);
 }
