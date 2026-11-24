@@ -39,8 +39,9 @@ findings:
 
   - id: B8-DEPLOYS
     title: "Deploy evaluate-rank-promotions + proactive-coach-promotion"
-    terminal_state: blocked_on_user
-    reason: "Edge Function deploys each need the founder's per-action go (CLAUDE.md 4.3); asked at the PR A landing, recorded in diagnose 8b1f3d when done. Until then the trigger alone stops the floor push; the cron still writes a floor ceremony row."
+    terminal_state: closed_in_commit
+    commit: "oi348-ef-deploys@branch"
+    verification: "Founder go 2026-11-24 ('Deploy all 3'). evaluate-rank-promotions v28 and proactive-coach-promotion v22 deployed from main 814c0cf5; smoke = module 401; decoded live files equal 814c0cf5. Recorded in diagnose 8b1f3d; the first post-deploy cron run's no-floor-row check is on OI-525."
 
   - id: B9-PROFILE-FIELDS
     title: "Units switch and sheet unit become per-user profile fields (units_system, measurement_unit), written through patchProfileWith(stillOwner:), never a stub"
@@ -104,8 +105,9 @@ findings:
 
   - id: B10-DEPLOY
     title: "Deploy restore-user-snapshot and read before/after execution_time_ms plus restore_timings"
-    terminal_state: blocked_on_user
-    reason: "Edge Function deploy needs the founder's per-action go (CLAUDE.md 4.3); the live timing comparison follows it and is recorded in diagnose a0d5f7."
+    terminal_state: closed_in_commit
+    commit: "oi348-ef-deploys@branch"
+    verification: "Founder go 2026-11-24. restore-user-snapshot v15 deployed from main 814c0cf5; anon-Bearer boot-verify = module 401; decoded live files equal 814c0cf5 (4/4). Recorded in diagnose a0d5f7; the before/after timing from the first real restore is on OI-525."
 
   - id: B10-REGISTRY-CONCEPT
     title: "The plan named a new SoT concept restore_snapshot_concurrency; the change is recorded in the existing restore_user_snapshot_paged_reads concept instead"
