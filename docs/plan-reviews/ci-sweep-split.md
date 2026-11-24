@@ -24,5 +24,5 @@ plan); the scope decision was replayed with the real script over the last 80 mer
 Code review: `docs/reviews/ci-sweep-split-bpass.md` on `cff3fb44` (0 P0, 1 P1, 3 P2, 2 P3; all fixed, 21 mutants red;
 plan section 6f). Full suite: the pull request's CI, sweeps run (plan sections 6d and 6e).
 
-Open with the founder, not blocking correctness: abort condition 4 (sweep-leg skew above 1.6x), which runner speed
-alone exceeds (plan section 6e).
+Abort condition 4 (sweep-leg skew above 1.6x), which runner speed alone exceeds, was replaced by the founder on
+2026-11-24 with the absolute 16.8 min limit per sweep leg (plan sections 5 and 6e); three runs pass it.

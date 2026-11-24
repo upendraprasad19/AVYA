@@ -52,8 +52,9 @@ findings:
 
   - id: ABORT-CONDITION-4
     title: "Sweep-leg skew above 1.6x: 2.1x and 2.25x on the two runs, caused by runner speed (measured, plan section 6e)"
-    terminal_state: blocked_on_user
-    reason: "A pre-committed revert condition that no packing can meet. The founder decides: keep it as written (revert) or replace it with the absolute limit of condition 2 (16.8 min), which both runs pass (13.8 and 11.7 min)."
+    terminal_state: closed_in_commit
+    commit: "the commit that adds this line (docs: abort condition 4 replaced)"
+    verification: "Founder decision 2026-11-24: replaced by the absolute 16.8 min limit per sweep leg (plan section 5). Slowest legs of the three runs: 13.8, 11.7 and 10.9 min (runs 45361275474, 45399115784, 45411931646)."
 
   - id: ABORT-CONDITIONS-MEDIANS
     title: "Abort conditions 1, 2 and 5 are medians over 3 to 5 runs; two runs exist, both of the kind that runs the sweeps"

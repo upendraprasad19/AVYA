@@ -225,7 +225,8 @@ jobs:
   #   (1) a PR that skips the sweeps takes more than 11.5 min (median of 3 runs);
   #   (2) a PR that runs the sweeps takes more than 16.8 min (median of 3 runs);
   #   (3) any test red here that is green in the old layout on the same SHA;
-  #   (4) sweep-leg skew above 1.6x (median of 3 runs) after one re-pack of the table;
+  #   (4) the slowest sweep leg takes more than 16.8 min (replaced the 1.6x skew limit on
+  #       2026-11-24: runner speed alone gives about 2x, which no table can change);
   #   (5) median queue delay of the 9 matrix legs over the first 5 runs above 120 s.
   sweep-test:
     name: Unit Tests sweep shard ${{ matrix.shard }}/${{ strategy.job-total }}
