@@ -17,6 +17,7 @@ import 'package:icanbefitter/core/theme/colors.dart';
 import 'package:icanbefitter/core/theme/spacing.dart';
 import 'package:icanbefitter/core/theme/typography.dart';
 import 'package:icanbefitter/shared/repositories/food_repository.dart';
+import 'package:icanbefitter/features/auth/providers/auth_invalidation_provider.dart';
 import 'package:icanbefitter/features/profile/providers/profile_provider.dart';
 import 'package:icanbefitter/shared/repositories/user_repository.dart';
 import '../providers/nutrition_provider.dart';
@@ -134,6 +135,9 @@ class _DietPlanScreenState extends ConsumerState<DietPlanScreen> {
   /// A change of the EFFECTIVE strategy (a tap, Edit Profile, a PRO lapse
   /// or renewal): re-run the saved-plan check and generate, once.
   void _onEffectiveStrategy(DietStrategy effective) {
+    // a2d9f4: while the session is closed the providers serve their empty
+    // value (Balanced); that is not a user change, so do not regenerate.
+    if (ref.read(authUserIdTokenProvider) == '<anon>') return;
     if (!dietPlanNeedsRegeneration(planEpoch: _planEpoch, effective: effective,
         foodType: _foodType, requested: _requestedStrategy)) return;
     _checkedSaved = false;
@@ -144,6 +148,8 @@ class _DietPlanScreenState extends ConsumerState<DietPlanScreen> {
   /// A change of the Supplements state (the switch, a PRO lapse or renewal,
   /// a date of birth edit): re-run the saved-plan check and generate, once.
   void _onSupplementsActive(bool active) {
+    // a2d9f4: the signed-out empty value is not a change of the switch.
+    if (ref.read(authUserIdTokenProvider) == '<anon>') return;
     if (!dietPlanNeedsRegenerationForSupplements(
         planEpoch: _planEpoch, planActive: _planSupplements, active: active)) {
       return;

@@ -27,6 +27,7 @@ import 'dart:io';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:icanbefitter/core/services/day_swap/day_swap_result.dart';
 import 'package:icanbefitter/core/services/guarded_box.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
 import 'package:icanbefitter/core/services/hive_user_session.dart';
@@ -53,7 +54,9 @@ import 'package:icanbefitter/features/profile/providers/promotion_history_provid
 import 'package:icanbefitter/features/profile/providers/referral_eligibility_provider.dart';
 import 'package:icanbefitter/features/profile/providers/referral_summary_provider.dart';
 import 'package:icanbefitter/features/profile/providers/weekly_report_data_provider.dart';
+import 'package:icanbefitter/features/train/providers/day_swap_provider.dart';
 import 'package:icanbefitter/features/train/providers/train_provider.dart';
+import 'package:icanbefitter/shared/repositories/user_repository.dart';
 
 import '../helpers/hive_test_setup.dart';
 
@@ -94,11 +97,37 @@ String get _today => istDateStr(DateTime.now());
 Future<void> _profile(Map<String, dynamic> p) =>
     HiveService.instance.userBox.put('profile', p);
 
+Map<String, dynamic> _dietPlan(String mealName) => {
+      'id': 'diet_plan_1',
+      'created_at': '2026-11-14T08:00:00.000',
+      'food_type': 'non_veg',
+      'meals': [
+        {
+          'name': mealName,
+          'items': [
+            {
+              'food_id': 'F0019',
+              'name': 'Chicken Breast (grilled)',
+              'serving_desc': '1 piece',
+              'serving_g': 120.0,
+              'calories': 198,
+              'protein': 37,
+              'carbs': 0,
+              'fat': 4,
+              'category': 'protein',
+            },
+          ],
+        },
+      ],
+    };
+
 const _otherUser = 'aaaaaaaa-1111-2222-3333-444444444444';
 
-/// `ref.watch(authUserIdTokenProvider)` occurrences per file under lib/ (the
-/// completeness tripwire in main()).
+/// Mentions of `authUserIdTokenProvider` per file under lib/ (import and
+/// comment lines excluded; any spelling counts: `ref.watch(...)`, a multi-line
+/// watch, `.select`, `ref.read`, `ref.listen`). The completeness tripwire in main().
 const _kTokenWatchSites = <String, int>{
+  'lib/core/services/service_providers.dart': 1,
   'lib/features/admin/providers/admin_dashboard_provider.dart': 1,
   'lib/features/ai_coach/providers/ai_coach_provider.dart': 7,
   'lib/features/ai_coach/providers/pending_tool_intents_provider.dart': 1,
@@ -109,8 +138,9 @@ const _kTokenWatchSites = <String, int>{
   'lib/features/nutrition/providers/diet_serving_view_provider.dart': 1,
   'lib/features/nutrition/providers/diet_supplements_active_provider.dart': 1,
   'lib/features/nutrition/providers/nutrition_provider.dart': 11,
+  'lib/features/nutrition/screens/diet_plan_screen.dart': 2,
   'lib/features/onboarding/providers/onboarding_provider.dart': 1,
-  'lib/features/profile/providers/body_measurements_provider.dart': 1,
+  'lib/features/profile/providers/body_measurements_provider.dart': 3,
   'lib/features/profile/providers/measurement_flag_provider.dart': 1,
   'lib/features/profile/providers/measurement_prompt_provider.dart': 1,
   'lib/features/profile/providers/notifications_inbox_provider.dart': 1,
@@ -118,11 +148,11 @@ const _kTokenWatchSites = <String, int>{
   'lib/features/profile/providers/profile_provider.dart': 6,
   'lib/features/profile/providers/promotion_history_provider.dart': 1,
   'lib/features/profile/providers/referral_eligibility_provider.dart': 1,
-  'lib/features/profile/providers/referral_summary_provider.dart': 2,
+  'lib/features/profile/providers/referral_summary_provider.dart': 6,
   'lib/features/profile/providers/weekly_report_data_provider.dart': 1,
   'lib/features/profile/widgets/measurements_card.dart': 1,
   'lib/features/profile/widgets/measurements_card_frame.dart': 1,
-  'lib/features/train/providers/day_swap_provider.dart': 1,
+  'lib/features/train/providers/day_swap_provider.dart': 2,
   'lib/features/train/providers/preview_plan_provider.dart': 1,
   'lib/features/train/providers/train_provider.dart': 6,
   'lib/features/train/providers/video_render_provider.dart': 1,
@@ -245,7 +275,16 @@ List<_Case> _cases() => <_Case>[
     'userStatsProvider',
     userStatsProvider,
     isEmpty: (v) =>
-        v is UserStatsData && v.totalWorkouts == 0 && v.primaryGoal == '',
+        v is UserStatsData &&
+        v.totalWorkouts == 0 &&
+        v.currentWeight == 0 &&
+        v.bmi == 0 &&
+        v.currentStreak == 0 &&
+        v.currentPhase == 1 &&
+        v.currentWeek == 1 &&
+        v.holdOrdinal == null &&
+        v.primaryGoal == '' &&
+        v.isPro == false,
     seed: () => _profile({'name': 'Tester', 'primary_goal': 'build_muscle'}),
     isSeeded: (v) => v is UserStatsData && v.primaryGoal != '',
   ),
@@ -278,7 +317,13 @@ List<_Case> _cases() => <_Case>[
     isEmpty: (v) =>
         v is NutritionSummaryData &&
         v.calories == 0 &&
-        v.calorieTarget == 2000,
+        v.protein == 0 &&
+        v.carbs == 0 &&
+        v.fat == 0 &&
+        v.calorieTarget == 2000 &&
+        v.proteinTarget == 120 &&
+        v.carbTarget == 250 &&
+        v.fatTarget == 65,
     seed: () => _profile({
       'daily_calories': 2100,
       'protein_grams': 150,
@@ -327,11 +372,29 @@ List<_Case> _cases() => <_Case>[
     'allExercisePRsProvider',
     allExercisePRsProvider,
     isEmpty: (v) => v is List && v.isEmpty,
+    seed: () => HiveService.instance.workoutBox.put('exlog_${_today}_aaaa0001', {
+      'exercise_name': 'Bench Press',
+      'weight_kg': 80.0,
+      'reps_completed': 5,
+      'set_number': 1,
+      'date': _today,
+      'logging_type': 'weight_reps',
+    }),
+    isSeeded: (v) => v is List && v.isNotEmpty,
   ),
   _Case(
     'macroTargetsProvider',
     macroTargetsProvider,
-    isEmpty: (v) => v is Map && v['calories'] == 2400 && v['bmr'] == 0,
+    isEmpty: (v) =>
+        v is Map &&
+        v.length == 6 &&
+        v['bmr'] == 0 &&
+        v['tdee'] == 0 &&
+        v['calories'] == 2400 &&
+        v['protein'] == 184 &&
+        v['carbs'] == 280 &&
+        v['fat'] == 80 &&
+        !v.containsKey('strategy_index'),
     seed: () => _profile({
       'daily_calories': 2100,
       'protein_grams': 150,
@@ -353,8 +416,11 @@ List<_Case> _cases() => <_Case>[
     weeklyReportDataProvider,
     isEmpty: (v) =>
         v is WeeklyReportSeries &&
+        v.weight.length == 7 &&
         v.weight.every((x) => x == 0) &&
-        v.calories.every((x) => x == 0),
+        v.calories.every((x) => x == 0) &&
+        v.protein.every((x) => x == 0) &&
+        v.workouts.every((x) => x == 0),
     seed: () => HiveService.instance.healthBox.put('weight_$_today', {
       'date': _today,
       'type': 'weight_log',
@@ -380,11 +446,26 @@ List<_Case> _cases() => <_Case>[
     'workoutStatsProvider',
     workoutStatsProvider,
     isEmpty: (v) => v is Map && v.isEmpty,
+    seed: () => HiveService.instance.workoutBox.put('exlog_${_today}_aaaa0002', {
+      'exercise_name': 'Bench Press',
+      'weight_kg': 80.0,
+    }),
+    isSeeded: (v) => v is Map && (v['bench'] as Map?)?['current'] == 80.0,
   ),
   _Case(
     'graduationStatsProvider',
     graduationStatsProvider,
-    isEmpty: (v) => v is GraduationStatsData && v.totalWorkouts == 0,
+    isEmpty: (v) =>
+        v is GraduationStatsData &&
+        v.totalWorkouts == 0 &&
+        v.streakWeeks == 0 &&
+        v.totalSets == 0 &&
+        v.personalRecords == 0 &&
+        v.topPrs.isEmpty,
+    seed: () => HiveService.instance.userBox
+        .put('progress', {'total_workouts_done': 7, 'current_streak_weeks': 3}),
+    isSeeded: (v) =>
+        v is GraduationStatsData && v.totalWorkouts == 7 && v.streakWeeks == 3,
   ),
 
   _Case(
@@ -408,6 +489,35 @@ List<_Case> _cases() => <_Case>[
     'dietPlanProvider',
     dietPlanProvider,
     isEmpty: (v) => v is Map && v.isEmpty,
+    // The user's own plan is in userBox; a DIFFERENT legacy plan sits in the
+    // shared configBox (MigratedKey.read falls back to it whenever the user
+    // box cannot answer, which is exactly the signed-out window: without the
+    // guard the provider would serve that other plan's hints).
+    seed: () async {
+      await UserRepository.instance.saveDietPlan(_dietPlan('Lunch'));
+      await HiveService.instance.configBox
+          .put('saved_diet_plan', _dietPlan('Dinner'));
+    },
+    isSeeded: (v) => v is Map && v.containsKey('lunch'),
+  ),
+
+  // `Provider.family` is NOT an AsyncValue: a throw in these builds is an
+  // uncaught provider error like any other. A fixed Monday stands in for the
+  // screen's week.
+  _Case(
+    'daySwapWeekProvider',
+    daySwapWeekProvider('2026-11-23'),
+    isEmpty: (v) => v is List && v.isEmpty,
+    isSeeded: (v) => v is List && v.length == 7,
+  ),
+  _Case(
+    'daySwapAllowanceProvider',
+    daySwapAllowanceProvider('2026-11-23'),
+    isEmpty: (v) => v is DayAllowance && v.used == 0 && v.limit == 1,
+    seed: () => HiveService.instance.userBox.put('day_swap_allowance', {
+      '2026-11-23': {'used': 1, 'limit': 3, 'pro': false},
+    }),
+    isSeeded: (v) => v is DayAllowance && v.used == 1,
   ),
 
   // ── downstream: they only watch one of the above, so they stop throwing
@@ -446,11 +556,34 @@ List<_Case> _cases() => <_Case>[
   _Case('contextualPromptsProvider', contextualPromptsProvider),
   _Case('holdStatusProvider', holdStatusProvider),
   _Case('weekIdentityProvider', weekIdentityProvider),
-  _Case('streakWarningEligibilityProvider', streakWarningEligibilityProvider),
+  _Case(
+    'streakWarningEligibilityProvider',
+    streakWarningEligibilityProvider,
+    isEmpty: (v) =>
+        v is StreakWarningEligibility &&
+        !v.shouldShow &&
+        v.medianWorkoutHour == 19 &&
+        !v.isWorkoutDayToday &&
+        !v.isTodayCompleted,
+    seed: () => HiveService.instance.workoutBox.put('schedule_$_today', {
+      'date': _today,
+      'type': 'workout',
+      'status': 'planned',
+    }),
+    isSeeded: (v) => v is StreakWarningEligibility && v.isWorkoutDayToday,
+  ),
   // State types are nullable: typed closures (see _Case.listen).
   _Case(
     'todayWorkoutProvider',
     null,
+    isEmpty: (v) => v == null,
+    seed: () => HiveService.instance.workoutBox.put('schedule_$_today', {
+      'date': _today,
+      'type': 'workout',
+      'status': 'planned',
+      'workout_name': 'Push',
+    }),
+    isSeeded: (v) => v is Map && v['workout_name'] == 'Push',
     listen: (c, onError) => c.listen(todayWorkoutProvider, (_, _) {},
         onError: (e, _) => onError(e)),
     read: (c) => c.read(todayWorkoutProvider),
@@ -503,22 +636,32 @@ void main() {
   });
 
   /// COMPLETENESS TRIPWIRE. The case list above is hand-written, so a provider
-  /// added later that watches the token would silently join no case. The count of
-  /// `ref.watch(authUserIdTokenProvider)` sites per file is pinned: adding or
-  /// removing one fails here until this file's case list (and the number) is
-  /// updated on purpose.
+  /// added later that watches the token would silently join no case. The count
+  /// of mentions of `authUserIdTokenProvider` per file (any spelling, comment
+  /// and import lines excluded) is pinned: adding or removing one fails here
+  /// until this file's case list (and the number) is updated on purpose. The
+  /// number alone is not enough: when it moves, ASK whether the new mention
+  /// is a provider whose build() reads a box, and give it a case. Residue,
+  /// stated: a provider that reads a raw box and never mentions the token
+  /// (it then never rebuilds at sign-out on its own) is not seen here.
   test('every token-watching site in lib/ is accounted for', () {
-    final re = RegExp(r'ref\.watch\(authUserIdTokenProvider\)');
+    final re = RegExp(r'\bauthUserIdTokenProvider\b');
     final counts = <String, int>{};
     for (final e in Directory('lib').listSync(recursive: true)) {
       if (e is! File || !e.path.endsWith('.dart')) continue;
-      final n = re.allMatches(e.readAsStringSync()).length;
+      var n = 0;
+      for (final line in e.readAsLinesSync()) {
+        final t = line.trimLeft();
+        if (t.startsWith('import ') || t.startsWith('//')) continue;
+        n += re.allMatches(line).length;
+      }
       if (n > 0) counts[e.path] = n;
     }
     expect(counts, _kTokenWatchSites,
-        reason: 'a provider that watches authUserIdTokenProvider was added or '
-            'removed: add it to _cases() (guarded + seeded, or a control) and '
-            'update _kTokenWatchSites');
+        reason: 'a mention of authUserIdTokenProvider was added or removed: '
+            'if it is a provider whose build() reads a box, add it to '
+            '_cases() (guarded + seeded, or a control); then update '
+            '_kTokenWatchSites');
   });
 
   for (final k in _cases()) {

@@ -61,6 +61,16 @@ double _carbsFor(DietStrategy s) => s == DietStrategy.balanced
     .carbGrams
     .toDouble();
 
+class _TokenSource extends Notifier<String> {
+  @override
+  String build() => kTestUserId;
+  // ignore: use_setters_to_change_properties
+  void set(String v) => state = v;
+}
+
+final _tokenSourceProvider =
+    NotifierProvider<_TokenSource, String>(_TokenSource.new);
+
 Future<void> _settle(WidgetTester tester) async {
   for (var i = 0; i < 6; i++) {
     await tester
@@ -587,6 +597,38 @@ void main() {
       // asks for stays Keto, so nothing else may generate).
       await _pickFoodType(tester, FoodType.veg);
       expect(debugDietPlanGenerations, 3);
+    });
+
+    testWidgets('a2d9f4: the signed-out window (the token goes anonymous and '
+        'back) is not a strategy change: no regeneration', (tester) async {
+      await seed(tester, extra: {'diet_strategy': 'keto'});
+      tester.view.physicalSize = const Size(1080, 6000);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.reset);
+      await tester.pumpWidget(ProviderScope(
+        overrides: [
+          authUserIdTokenProvider
+              .overrideWith((ref) => ref.watch(_tokenSourceProvider)),
+        ],
+        child: const MaterialApp(home: DietPlanScreen()),
+      ));
+      await _settle(tester);
+      final c = ProviderScope.containerOf(
+          tester.element(find.byType(DietPlanScreen)));
+      expect(debugDietPlanGenerations, 1, reason: 'the first plan');
+
+      // Sign-out window: MacroTargets serves its empty map (Balanced). The
+      // screen's strategy listener must not read that as a user change.
+      c.read(_tokenSourceProvider.notifier).set('<anon>');
+      await _settle(tester);
+      expect(debugDietPlanGenerations, 1,
+          reason: 'the empty value served while signed out is not a change');
+
+      // The same user back in: Keto again, equal to what the plan was built for.
+      c.read(_tokenSourceProvider.notifier).set(kTestUserId);
+      await _settle(tester);
+      expect(debugDietPlanGenerations, 1,
+          reason: 'the real value returning is not a change either');
     });
 
     testWidgets('vegan: Keto -> Low carb asks for the same Low carb plan, '

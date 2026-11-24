@@ -1452,7 +1452,7 @@ concepts:
           Wrappers over MigratedKey.write/read for the
           'saved_diet_plan' key (userBox per Test #11.1 migration).
       - file: lib/features/nutrition/screens/diet_plan_screen.dart
-        line_range: 370-438
+        line_range: 376-444
         method: _savePlan (UI save handler)
         notes: |
           Builds planData map → calls saveDietPlan → fires
@@ -1498,7 +1498,7 @@ concepts:
           Passes plannedSlots into TodaysMealsCard which renders the
           "FROM YOUR DIET PLAN" hint on every empty slot.
       - file: lib/features/nutrition/screens/diet_plan_screen.dart
-        line_range: 183-212
+        line_range: 189-218
         method: _generatePlan (entry-point check for existing saved plan)
         semantic: pass-through
         fields_read: [via UserRepository.instance.getSavedDietPlan() — Map<String, dynamic>?]
@@ -1515,7 +1515,7 @@ concepts:
           this check (ref.listenManual, idempotent on _requestedStrategy,
           never before the first plan: dietPlanNeedsRegeneration).
       - file: lib/features/nutrition/screens/diet_plan_screen.dart
-        line_range: 440-558
+        line_range: 446-564
         method: _loadSavedPlan + _sharePlanAsPdf (_swapItem moved to diet_plan_screen_swap.dart, diet chart v3) (Unit 3b-1b; the diet_strategy stamp becomes _planStrategy only with DietStrategyFlags on, Balanced otherwise; the swap gets it as the BUILT strategy and the PDF names it via dietPlanPdfStrategyLabel)
         semantic: transformed
         fields_read: [diet_strategy]
@@ -1743,7 +1743,7 @@ concepts:
         semantic: filtered
         fields_read: [diet_preference, saved plan food_type]
       - file: lib/features/nutrition/screens/diet_plan_screen.dart
-        line_range: 183-273
+        line_range: 189-279
         method: _generatePlan + _changeFoodType (selector; mismatch notice once per session)
         semantic: pass-through
         fields_read: [diet_preference, saved plan food_type]
@@ -1891,7 +1891,7 @@ concepts:
         semantic: transformed
         fields_read: [strategy_index, carbs, diet_strategy (via resolveBaseMacroPack for the vegan pair)]
       - file: lib/features/nutrition/screens/diet_plan_screen.dart
-        line_range: 106-137
+        line_range: 107-141
         method: initState listener + _onEffectiveStrategy (Unit 3b-1b; regenerates once per change of planStrategyFor(effective, foodType))
         semantic: pass-through
         fields_read: [strategy_index]
@@ -1982,13 +1982,13 @@ concepts:
         line_range: 1-336
         method: DietSupplementsField + DietSupplementsFootnotes (layout v2: the third column of the settings row and the hints under it) + DietSupplementCardSection (the collapsed card under the meals) + DietSupplementCard (the switch shows the STORED choice; reads the inputs and eligibility providers, not the raw key; the paused hint for a stored on without PRO)
       - file: lib/features/nutrition/screens/diet_plan_screen.dart
-        line_range: 139-182
+        line_range: 143-188
         method: _onSupplementsActive + _healSupplementsState + _supplementsActive (regenerates once per change of the state; the heal catches a change the listener did not deliver)
       - file: lib/features/nutrition/screens/diet_plan_screen.dart
-        line_range: 183-212
+        line_range: 189-218
         method: _generatePlan (the saved-plan load check: savedPlanMatchesSupplements against the active state, kill switch included, so a stamped plan is not loaded with the switch off)
       - file: lib/features/nutrition/screens/diet_plan_screen.dart
-        line_range: 370-438
+        line_range: 376-444
         method: _savePlan (the WRITER of the plan stamp `diet_supplements: true`, only when the plan was built active)
       - file: lib/features/nutrition/services/diet_plan_supplements_state.dart
         line_range: 1-25
@@ -2048,7 +2048,7 @@ concepts:
         line_range: 1-80
         method: DietServingViewToggle (the switch at the right end of the BMR / TDEE / TARGET card)
       - file: lib/features/nutrition/screens/diet_plan_screen.dart
-        line_range: 484-710
+        line_range: 490-716
         method: build (watches the view) + meal row text + _sharePlanAsPdf (PDF rows labelled at share time)
       - file: lib/features/nutrition/widgets/diet_plan_swap_sheet.dart
         line_range: 20-100
@@ -8711,8 +8711,9 @@ concepts:
       (a2d9f4): the token is watched so build() re-runs at sign-out, and the
       raw getter throws in both sign-out windows (rawBox on the empty stub;
       guarded_box.dart's loud StateError; and a third window, an auth/Hive owner
-      disagreement, the empty stub again). 33 build() bodies in 9 provider
-      files carry the guard; the test's completeness tripwire fails when a
+      disagreement, the empty stub again). 35 build() bodies in 10 provider
+      files carry the guard, and two Diet Plan screen listeners ignore the
+      anonymous token; the test's completeness tripwire fails when a
       new provider watches the token without joining its case table.
       The two layers are intentionally redundant. Layer A is the
       correctness net (no leak even if Layer B fails). Layer B is the
