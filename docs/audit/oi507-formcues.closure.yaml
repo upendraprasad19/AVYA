@@ -1,8 +1,7 @@
 # Closure ledger - oi507-formcues (OI-507 unit A, getFormCues lookup follow-ups)
 # Gate 40 (validate_audit_closure.dart). One terminal_state per finding; no `deferred:` key.
 # `<branch>@branch` is the in-branch commit form (precedent: unitb-deload-reason.closure.yaml).
-# OI-507 itself stays OPEN on the board until the ai-proxy deploy (a founder-only go); the
-# deploy is the one `blocked_on_user` row below.
+# The ai-proxy deploy (founder go) was the last row; it is closed by the commit that closes OI-507.
 
 batch: oi507-formcues
 plan_review_record: docs/plan-reviews/oi507-formcues.md
@@ -81,5 +80,9 @@ findings:
     verification: ".max(200) on the schema; T12; mutant red (1 test)."
   - id: DEPLOY
     title: "ai-proxy deploy of the merged getFormCues (and its post-deploy smoke)"
-    terminal_state: blocked_on_user
-    reason: "CLAUDE.md section 4.3: a live Edge Function deploy needs the founder's own explicit go. OI-507 closes after the deploy and the Quad Stretch smoke."
+    terminal_state: closed_in_commit
+    commit: oi507-close@branch
+    verification: >
+      ai-proxy v112 deployed 2026-11-24 on the founder's explicit go (HTTP 201, smoke 401 = booted); functional smoke on
+      live data: Quad Stretch -> alias, Donkey Calf Raise -> alias, Reverse Lunge / % / _ -> found:false with the hint.
+      Recorded in the diagnose `deploy_record`.
