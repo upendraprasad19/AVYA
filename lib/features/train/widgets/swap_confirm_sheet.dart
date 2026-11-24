@@ -15,6 +15,7 @@ import 'package:icanbefitter/core/theme/colors.dart';
 import 'package:icanbefitter/core/theme/spacing.dart';
 import 'package:icanbefitter/core/theme/typography.dart';
 import 'package:icanbefitter/core/utils/ist_date.dart';
+import 'package:icanbefitter/features/auth/providers/auth_invalidation_provider.dart';
 import 'package:icanbefitter/features/profile/providers/profile_provider.dart';
 import 'package:icanbefitter/shared/widgets/wardroom/wardroom.dart';
 
@@ -53,6 +54,11 @@ class _SwapConfirmSheetState extends ConsumerState<SwapConfirmSheet> {
 
   @override
   Widget build(BuildContext context) {
+    // a2d9f4: `preview` below reads the user box and the schedule rows
+    // straight, which throws while the session is closed; show nothing then.
+    if (ref.watch(authUserIdTokenProvider) == '<anon>') {
+      return const SizedBox.shrink();
+    }
     final weekStart = DaySwapRules.mondayOf(widget.dayA.date);
     // Force a rebuild if a background server reply lands while this sheet
     // is open (spec §5.3 "the server count wins").

@@ -49,12 +49,21 @@ Future<Directory> setUpHiveForTests({String userId = kTestUserId}) async {
   HiveService.debugMarkInitializedForTests();
   await HiveUserSession.openForUser(userId);
   GuardedBox.testBypassOwnership = true;
+  // a2d9f4: a signed-in app always has a live auth uid. `authUserIdTokenProvider`
+  // (and every provider that returns an empty value on the `'<anon>'` token)
+  // reads it through this seam; without it a pure-VM test has no Supabase user,
+  // so the token stays `'<anon>'` and those providers never read the box. It
+  // FOLLOWS the open session's owner (null once the session is closed), so it
+  // never produces an auth/Hive disagreement; a test that needs a disagreement
+  // or a signed-out window replaces it, and tearDownHiveForTests clears it.
+  debugAuthUidResolverForTests = () => HiveUserSession.currentOwnerFullId;
   return tempDir;
 }
 
 /// Tear down: reset bypass flag + close session + close Hive + delete temp dir.
 Future<void> tearDownHiveForTests(Directory tempDir) async {
   GuardedBox.testBypassOwnership = false;
+  debugAuthUidResolverForTests = null;
   await HiveUserSession.closeAll();
   await Hive.close();
   if (tempDir.existsSync()) tempDir.deleteSync(recursive: true);
