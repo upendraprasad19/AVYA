@@ -40,6 +40,12 @@ const _redeem = 'redeem_referral_atomic';
 const _replicaSchemaPath = 'test/sql/referral_pay_on_conversion_replica_schema.sql';
 const _m159Path = 'supabase/migrations/159_referral_reward_on_conversion.sql';
 const _m160Path = 'supabase/migrations/160_referral_hardening.sql';
+const _m182Path = 'supabase/migrations/182_play_subscriptions.sql';
+
+/// "Paid" since migration 182 (OI-519): a Razorpay payment OR a PRODUCTION Google Play row. A SANDBOX (license
+/// tester) Play row is never paid. The job reads it through the alias `s.`; the redeem function bare.
+const _paidJob = "(s.razorpay_payment_id IS NOT NULL OR (s.store = 'play' AND s.store_environment = 'PRODUCTION'))";
+const _paidRedeem = "(razorpay_payment_id IS NOT NULL OR (store = 'play' AND store_environment = 'PRODUCTION'))";
 
 /// The block of `CREATE [OR REPLACE] FUNCTION <schema>.<name> ... $tag$ ... $tag$` in [sql], comment-stripped; null if absent.
 String? schemaFunctionBlock(String sql, String schema, String name) {
@@ -78,9 +84,16 @@ void main() {
   final code = squash(stripSqlComments(liveSql));
   final redeemBody = squash(functionBlock(liveSql, _redeem) ?? '');
   final jobBody = squash(schemaFunctionBlock(liveSql, 'private', 'process_referral_conversions') ?? '');
-  // The helper is defined by 159 alone; its pins follow whichever migration defines it last.
+  // The helper: 159 defined it; since 182 private.grant_referral_days is a WRAPPER (a Play subscriber's days are queued
+  // as a Google defer) and the bounds check + NOWAIT read + insert-or-update live in private.grant_referral_days_direct.
+  // `helperBody` is the function that WRITES subscriptions (the direct one when it exists), `wrapperBody` the entry.
   final helperFile = latestMigrationDefiningIn('private', 'grant_referral_days');
-  final helperBody = squash(schemaFunctionBlock(helperFile?.readAsStringSync() ?? '', 'private', 'grant_referral_days') ?? '');
+  final wrapperBody = squash(schemaFunctionBlock(helperFile?.readAsStringSync() ?? '', 'private', 'grant_referral_days') ?? '');
+  final directFile = latestMigrationDefiningIn('private', 'grant_referral_days_direct');
+  final helperBody = directFile == null
+      ? wrapperBody
+      : squash(schemaFunctionBlock(directFile.readAsStringSync(), 'private', 'grant_referral_days_direct') ?? '');
+  final helperName = directFile == null ? 'grant_referral_days' : 'grant_referral_days_direct';
   // Migration 159's own text (applied, immutable): DDL, ACL, cron job, rollback block.
   final sql159 = File(_m159Path).readAsStringSync();
   final code159 = squash(stripSqlComments(sql159));
@@ -108,12 +121,12 @@ void main() {
     });
 
     test('the reconcile: candidates, the earliest qualifying payment, the reward CASE and the guard are ONE statement', () {
-      const expected = r"WITH cand AS MATERIALIZED ( SELECT rr.id, rr.referee_id, rr.created_at FROM referral_redemptions rr "
+      final expected = r"WITH cand AS MATERIALIZED ( SELECT rr.id, rr.referee_id, rr.created_at FROM referral_redemptions rr "
           r"WHERE rr.referrer_id IS NOT NULL AND rr.referrer_rewarded IS NOT TRUE "
           r"AND (rr.created_at > now() - c_scan OR rr.converted_at IS NOT NULL) FOR UPDATE OF rr SKIP LOCKED ), "
           r"calc AS ( SELECT c.id, q.start_date, q.plan FROM cand c LEFT JOIN LATERAL ( "
           r"SELECT s.start_date, s.plan FROM subscriptions s WHERE s.user_id = c.referee_id "
-          r"AND s.plan IN ('monthly', 'yearly') AND s.razorpay_payment_id IS NOT NULL AND s.status = 'active' "
+          "AND s.plan IN ('monthly', 'yearly') AND $_paidJob AND s.status = 'active' "
           r"AND s.cancelled_at IS NULL AND s.start_date >= c.created_at AND s.start_date <= c.created_at + c_window "
           r"ORDER BY s.start_date, s.id LIMIT 1 ) q ON true ), "
           r"upd AS ( UPDATE referral_redemptions rr SET converted_at = calc.start_date, "
@@ -176,7 +189,7 @@ void main() {
       expect(
           redeemBody,
           contains("IF EXISTS ( SELECT 1 FROM subscriptions WHERE user_id = p_referee_id AND plan IN ('monthly', 'yearly') "
-              "AND razorpay_payment_id IS NOT NULL ) THEN RAISE EXCEPTION 'referee_has_paid_plan' USING ERRCODE = 'P0001'; END IF;"));
+              "AND $_paidRedeem ) THEN RAISE EXCEPTION 'referee_has_paid_plan' USING ERRCODE = 'P0001'; END IF;"));
     });
 
     test('there is no cap left: none of the 158 constants or counts survives in the executable SQL', () {
@@ -243,11 +256,13 @@ void main() {
     });
 
     test('helper: bounds check, then the NOWAIT read of the latest ACTIVE row, then the insert-or-update by id', () {
-      const expected = r"IF p_user_id IS NULL OR p_days IS NULL OR p_days < 1 OR p_days > 30 THEN "
-          r"RAISE EXCEPTION 'grant_referral_days: a user and 1..30 days are required (got %, %)', p_user_id, p_days "
-          r"USING ERRCODE = '22023'; END IF; "
-          r"SELECT s.id, s.end_date INTO v_id, v_end FROM subscriptions s WHERE s.user_id = p_user_id AND s.status = 'active' "
-          r"ORDER BY s.end_date DESC, s.id LIMIT 1 FOR UPDATE NOWAIT; "
+      // 182: the writing helper is grant_referral_days_direct and never picks a Play row for the in-place extension.
+      final playGuard = directFile == null ? '' : "AND s.store IS DISTINCT FROM 'play' ";
+      final expected = "IF p_user_id IS NULL OR p_days IS NULL OR p_days < 1 OR p_days > 30 THEN "
+          "RAISE EXCEPTION '$helperName: a user and 1..30 days are required (got %, %)', p_user_id, p_days "
+          "USING ERRCODE = '22023'; END IF; "
+          "SELECT s.id, s.end_date INTO v_id, v_end FROM subscriptions s WHERE s.user_id = p_user_id AND s.status = 'active' "
+          "${playGuard}ORDER BY s.end_date DESC, s.id LIMIT 1 FOR UPDATE NOWAIT; "
           r"IF v_id IS NULL OR v_end < now() THEN "
           r"INSERT INTO subscriptions (user_id, plan, status, start_date, end_date) "
           r"VALUES (p_user_id, 'referral_trial', 'active', now(), now() + (p_days || ' days')::interval); "
@@ -646,6 +661,9 @@ void main() {
     final redeem159 = squash(functionBlock(sql159, _redeem) ?? '');
     final job159 = squash(schemaFunctionBlock(sql159, 'private', 'process_referral_conversions') ?? '');
     final summaryBody = squash(functionBlock(sql160, 'referrer_summary') ?? '');
+    // 160's OWN bodies: this group pins the 159 -> 160 change; the live (latest) bodies are pinned by group 7.
+    final job160 = squash(schemaFunctionBlock(sql160, 'private', 'process_referral_conversions') ?? '');
+    final redeem160 = squash(functionBlock(sql160, _redeem) ?? '');
     const hidden = <String>['converted_at', 'referrer_reward_days', 'referrer_credited_at', 'referrer_rewarded', 'referee_rewarded'];
     const granted = <String>['id', 'code', 'referrer_id', 'referee_id', 'days_granted_each', 'created_at'];
 
@@ -668,7 +686,7 @@ void main() {
           'AND rr.referee_id IS NOT NULL AND rr.referrer_rewarded IS NOT TRUE ORDER BY rr.converted_at, rr.id';
       expect(job159, isNotEmpty);
       expect(job159.split(before), hasLength(2), reason: 'the 159 credit select is the anchor of this comparison');
-      expect(jobBody, job159.replaceFirst(before, after),
+      expect(job160, job159.replaceFirst(before, after),
           reason: 'N1 changes ONE line of the job; any other difference is an unreviewed change to a catastrophic function');
     });
 
@@ -681,11 +699,11 @@ void main() {
           'EXCEPTION WHEN lock_not_available THEN IF v_attempt = 3 THEN RAISE; END IF; PERFORM pg_sleep(0.25); $paidCheck END; END LOOP; END;';
       expect(redeem159.split(grant), hasLength(2));
       expect(redeem159.split(paidCheck), hasLength(2), reason: 'the re-validation must be the SAME predicate as the 159 refusal');
-      expect(redeemBody, redeem159.replaceFirst(grant, retry),
+      expect(redeem160, redeem159.replaceFirst(grant, retry),
           reason: 'N3 wraps the grant in ONE retry loop (3 attempts, 0.25 s, lock_not_available only, the third failure re-raised, '
               'the paid-plan refusal re-checked after every pause)');
-      expect(redeemBody, contains('EXCEPTION WHEN lock_not_available THEN'));
-      expect(redeemBody, isNot(contains('WHEN OTHERS')), reason: 'a widened handler would retry every error (mutant c_when_others)');
+      expect(redeem160, contains('EXCEPTION WHEN lock_not_available THEN'));
+      expect(redeem160, isNot(contains('WHEN OTHERS')), reason: 'a widened handler would retry every error (mutant c_when_others)');
     });
 
     test('the grants: ALL privileges revoked from PUBLIC, anon and authenticated, SELECT re-granted on exactly the six columns', () {
@@ -870,6 +888,61 @@ void main() {
       expect(lv, contains('count(*) FILTER (WHERE ok IS NOT TRUE)'), reason: 'a NULL case (an A-case whose subquery returned no row) must be a FAIL, not uncounted');
       expect(lv, contains("IF has_table_privilege('authenticated', 'public.referral_redemptions', 'TRUNCATE') THEN"),
           reason: 'TRUNCATE ignores row security: it is attempted only when the privilege is already gone, so a pre-160 run cannot truncate the live audit table');
+    });
+  });
+
+  group('7. migration 182 (OI-519: Play rows, the referral defer queue)', () {
+    final sql182 = File(_m182Path).existsSync() ? File(_m182Path).readAsStringSync() : '';
+    final sql160 = File(_m160Path).existsSync() ? File(_m160Path).readAsStringSync() : '';
+    final job160 = squash(schemaFunctionBlock(sql160, 'private', 'process_referral_conversions') ?? '');
+    final redeem160 = squash(functionBlock(sql160, _redeem) ?? '');
+    final helper159 = squash(schemaFunctionBlock(sql159, 'private', 'grant_referral_days') ?? '');
+    final job182 = squash(schemaFunctionBlock(sql182, 'private', 'process_referral_conversions') ?? '');
+    final redeem182 = squash(functionBlock(sql182, _redeem) ?? '');
+    final wrapper182 = squash(schemaFunctionBlock(sql182, 'private', 'grant_referral_days') ?? '');
+    final direct182 = squash(schemaFunctionBlock(sql182, 'private', 'grant_referral_days_direct') ?? '');
+
+    test('182 is on the branch and defines all four functions', () {
+      expect(sql182, isNotEmpty, reason: '$_m182Path is missing');
+      for (final b in [job182, redeem182, wrapper182, direct182]) {
+        expect(b, isNotEmpty);
+      }
+    });
+
+    test('the job body equals the 160 body with EXACTLY the paid predicate widened to a PRODUCTION Play row', () {
+      const before = "AND s.razorpay_payment_id IS NOT NULL AND s.status = 'active'";
+      const after = "AND $_paidJob AND s.status = 'active'";
+      expect(job160.split(before), hasLength(2), reason: 'the 160 reconcile predicate is the anchor');
+      expect(job182, job160.replaceFirst(before, after),
+          reason: 'any other difference is an unreviewed change to a catastrophic function');
+    });
+
+    test('the redeem body equals the 160 body with BOTH paid checks widened the same way', () {
+      const before = "AND razorpay_payment_id IS NOT NULL )";
+      const after = "AND $_paidRedeem )";
+      expect(redeem160.split(before), hasLength(3), reason: 'the refusal and its re-check after each pause');
+      expect(redeem182, redeem160.replaceAll(before, after));
+    });
+
+    test('the direct helper equals the 159 helper, renamed, plus EXACTLY the never-a-Play-row predicate', () {
+      final expected = helper159
+          .replaceFirst('FUNCTION private.grant_referral_days(', 'FUNCTION private.grant_referral_days_direct(')
+          .replaceFirst("'grant_referral_days: a user", "'grant_referral_days_direct: a user")
+          .replaceFirst("WHERE s.user_id = p_user_id AND s.status = 'active' ORDER BY",
+              "WHERE s.user_id = p_user_id AND s.status = 'active' AND s.store IS DISTINCT FROM 'play' ORDER BY")
+          .replaceFirst('CREATE OR REPLACE FUNCTION', 'CREATE FUNCTION');
+      expect(direct182, expected);
+    });
+
+    test('the wrapper: the same bounds check, a Play subscriber is QUEUED (no subscriptions write), everyone else gets the direct grant', () {
+      expect(wrapper182,
+          contains("IF EXISTS ( SELECT 1 FROM subscriptions s WHERE s.user_id = p_user_id AND s.store = 'play' AND s.status = 'active' "
+              "AND s.end_date > now() ) THEN INSERT INTO store_reward_deferrals (user_id, store, days) VALUES (p_user_id, 'play', p_days); "
+              "RETURN; END IF; PERFORM private.grant_referral_days_direct(p_user_id, p_days);"));
+      expect(wrapper182, contains("RAISE EXCEPTION 'grant_referral_days: a user and 1..30 days are required (got %, %)'"));
+      expect(wrapper182, isNot(contains('INSERT INTO subscriptions')));
+      expect(wrapper182, isNot(contains('UPDATE subscriptions')));
+      expect(wrapper182, isNot(contains('FOR UPDATE')), reason: 'the queue branch locks no subscriptions row');
     });
   });
 }

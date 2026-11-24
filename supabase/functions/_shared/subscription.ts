@@ -275,6 +275,64 @@ export async function fetchLatestActiveEndByUser(
   return reduceLatestEndByUser(rows);
 }
 
+/**
+ * OI-519 U4 (plan section 4, readers changed): the users holding an ACTIVE
+ * Google Play row that RENEWS BY ITSELF (`store = 'play' AND auto_renew =
+ * true`), ending at or after `sinceIso`. `expiry-reminder` skips them: Google
+ * renews the row (its end_date already carries the 3-hour renewal window), so
+ * "your PRO is expiring" would be false. A Play row with auto-renew OFF is not
+ * in the set and still gets its reminder. Any active renewing Play row counts,
+ * not only the latest-ending row: PRO continues past a later referral row's
+ * end because Google keeps billing.
+ *
+ * A NEW reader, on purpose: `fetchLatestActiveEndByUser` above is shared with
+ * telegram-admin-bot, founder_digest_content and admin-dashboard-data, whose
+ * counts must not move (plan round 1 #7).
+ *
+ * NULL ON ERROR, like `fetchLatestActiveEndByUser`: an empty set would read as
+ * "nobody renews" and push a false reminder to every Play subscriber.
+ */
+export async function fetchRenewingPlayUserIds(
+  client: SupabaseLike,
+  sinceIso: string,
+): Promise<Set<string> | null> {
+  let rows: Array<{ user_id: string }>;
+  try {
+    rows = await fetchAllPages<{ user_id: string }>(
+      () =>
+        client
+          .from("subscriptions")
+          .select("user_id")
+          .eq("status", "active")
+          .eq("store", "play")
+          .eq("auto_renew", true)
+          .gte("end_date", sinceIso),
+      {
+        orderBy: "id",
+        pageSize: 1000,
+        label: "subscription renewing-play-users",
+        maxPages: 200,
+      },
+    ) ?? [];
+  } catch (err) {
+    console.error("[subscription] fetchRenewingPlayUserIds threw:", err);
+    return null;
+  }
+  return new Set(rows.map((r) => r.user_id));
+}
+
+/**
+ * PURE (OI-519, hermes seat 1). Drops the users who hold a renewing Play subscription from a latest-end list: their
+ * end_date moves every period, so an "expiring in 7 / 30 days" list or count must not show them (the same rule as
+ * expiry-reminder). Used by admin-dashboard-data, the founder digest and the admin bot.
+ */
+export function withoutRenewingPlay<T extends readonly [string, ...unknown[]]>(
+  entries: readonly T[],
+  renewingPlay: ReadonlySet<string>,
+): T[] {
+  return entries.filter(([uid]) => !renewingPlay.has(uid));
+}
+
 /** The answer of `readProState`: PRO, free, or could not tell. */
 export type ProState = "pro" | "free" | "unknown";
 

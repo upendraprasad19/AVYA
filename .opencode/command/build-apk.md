@@ -35,14 +35,17 @@ Build a production-ready APK with all required pre-flight gates, pre-flight chec
 
 ---
 
-## Purchase mode — resolve FIRST, before any gate or clean (`--purchase-mode <razorpay|none>` in `$ARGUMENTS`, ADR-0022)
+## Purchase mode — resolve FIRST, before any gate or clean (`--purchase-mode <razorpay|none|play_billing>` in `$ARGUMENTS`, ADR-0022)
 
 A release binary's purchase surface is a compile-time define, `ANDROID_PURCHASE_MODE`
 (`docs/architecture/payment.md`, "Purchase mode"). Resolve it as the very first step so a refusal wastes no gate run and no `flutter clean`:
 
-- `--purchase-mode razorpay` or `--purchase-mode none` → pass `--dart-define=ANDROID_PURCHASE_MODE=<value>` to the build command below.
-- `--purchase-mode play_billing` → **REFUSE and stop.** The RevenueCat build (plan section 8) does not exist yet; the value would silently behave as `none`.
+Run `dart run scripts/resolve_purchase_mode.dart [--purchase-mode <mode>] [--bundle]` (the same arguments as this run). Exit 1 (`REFUSED: ...`) → **stop**, say why. Exit 0 → pass its `DEFINES:` line to the build command below. It applies:
+
+- `--purchase-mode razorpay` or `--purchase-mode none` → `--dart-define=ANDROID_PURCHASE_MODE=<value>`.
+- `--purchase-mode play_billing` (OI-519, Google Play Billing through RevenueCat) → the same define, and `.env` MUST carry `REVENUECAT_GOOGLE_API_KEY=goog_...` (the RevenueCat PUBLIC Google SDK key), else **REFUSE and stop**: without it the Play body cannot load and the binary sells nothing. The key reaches the binary through `--dart-define-from-file=.env` (never typed or printed).
 - `--bundle` WITHOUT `--purchase-mode` → **REFUSE and stop** (a Play upload must name what it sells; no silent default).
+- an unknown mode → **REFUSE and stop**.
 - An APK without `--purchase-mode` → no define is passed, which a release build resolves to `none` (no price, no purchase button). A release APK built to check Razorpay checkout on a phone needs `--purchase-mode razorpay`.
 - After the build, print `purchases: <mode>` and tell the founder the Profile tab's last line must read the same.
 
@@ -451,8 +454,8 @@ After Gate 48 passes (artifact is release-signed and real), record the versionCo
 this pipeline so Gate 2.5 can catch a re-build attempt on a future invocation:
 
 ```bash
-dart run scripts/verify_versioncode_available.dart --record apk   # default APK path
-dart run scripts/verify_versioncode_available.dart --record aab   # --bundle path
+dart run scripts/verify_versioncode_available.dart --record apk [--purchase-mode <mode>]   # default APK path
+dart run scripts/verify_versioncode_available.dart --record aab --purchase-mode <mode>     # --bundle path
 ```
 
 This is separate from Gate 13's `apk_sizes.json` (APK-only, size-focused) — `--record` here

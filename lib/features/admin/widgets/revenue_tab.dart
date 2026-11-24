@@ -77,6 +77,19 @@ class RevenueTab extends StatelessWidget {
                     value: '${revenue.trialActive}',
                     unit: 'referral',
                   ),
+                  // OI-519: Play subscribers, counted apart from the web
+                  // plans and the web MRR.
+                  WardStatTile(
+                    label: 'Google Play',
+                    value: '${revenue.playActive}',
+                    unit: 'not in MRR',
+                  ),
+                  if (revenue.playSandboxActive > 0)
+                    WardStatTile(
+                      label: 'Play testers',
+                      value: '${revenue.playSandboxActive}',
+                      unit: 'not paid',
+                    ),
                   if (revenue.otherActive > 0)
                     WardStatTile(
                       label: 'Other plan',

@@ -12,8 +12,12 @@ extension _SubscriptionSection on _ProfileScreenState {
       // badge in the top-right corner, PRO chip + plan tag on top,
       // "Everything unlocked" Fraunces hero line, renewal mono line,
       // and a dashed-divider + MANAGE SUBSCRIPTION → CTA below.
-      final expiryStr = subInfo.expiresAt != null
-          ? '${subInfo.expiresAt!.day} ${_ProfileScreenState._monthName(subInfo.expiresAt!.month)} ${subInfo.expiresAt!.year}'
+      // OI-519: the SHOWN date is the store's own expiry for a Play row (its
+      // end_date carries a 3-hour renewal window), as the IST calendar day.
+      final shownExpiry = subInfo.displayExpiresAt ?? subInfo.expiresAt;
+      final shownIst = shownExpiry == null ? null : istDateOf(shownExpiry);
+      final expiryStr = shownIst != null
+          ? '${shownIst.day} ${_ProfileScreenState._monthName(shownIst.month)} ${shownIst.year}'
           : '\u2014';
       final planLabel = (subInfo.plan ?? 'monthly').toUpperCase();
       // "EST" seal carries the member-since date — the Wardroom brand
@@ -106,7 +110,10 @@ extension _SubscriptionSection on _ProfileScreenState {
                           Text(
                             subInfo.isVerifying
                                 ? 'AWAITING WEBHOOK CONFIRMATION'
-                                : '${(subInfo.plan ?? '').contains('trial') ? 'EXPIRES' : 'RENEWS'} $expiryStr'.toUpperCase(),
+                                // OI-519: RENEWS only for a plan that renews
+                                // by itself (a Play row with auto-renew on);
+                                // a web payment or free days end on the date.
+                                : '${subInfo.autoRenews ? 'RENEWS' : 'EXPIRES'} $expiryStr'.toUpperCase(),
                             style: AppTypography.mono.copyWith(
                               fontSize: 10,
                               color: AppColors.textDim,

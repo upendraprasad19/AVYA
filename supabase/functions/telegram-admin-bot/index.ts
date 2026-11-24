@@ -19,7 +19,12 @@ import { timingSafeEqual } from "../_shared/cron_auth.ts";
 import { istYesterdayWindow } from "../_shared/ist_date.ts";
 import { buildDigestText, gatherDigestInput } from "../_shared/founder_digest_content.ts";
 import { fetchAllPages } from "../_shared/paged_fetch.ts";
-import { fetchLatestActiveEndByUser, usersWithLatestEndIn } from "../_shared/subscription.ts";
+import {
+  fetchLatestActiveEndByUser,
+  fetchRenewingPlayUserIds,
+  usersWithLatestEndIn,
+  withoutRenewingPlay,
+} from "../_shared/subscription.ts";
 
 
 export const HELP_TEXT = [
@@ -199,8 +204,8 @@ export async function cmdRevenue(supabase: any): Promise<string> {
   // the opposite of every other command's "page + total" shape) — this
   // genuinely needs every active row. Routed through fetchAllPages,
   // mirroring _shared/subscription.ts's own `subscriptions` read.
-  const data = await fetchAllPages<{ plan: string }>(
-    () => supabase.from("subscriptions").select("plan").eq("status", "active"),
+  const data = await fetchAllPages<{ plan: string; store?: string | null; store_environment?: string | null }>(
+    () => supabase.from("subscriptions").select("plan, store, store_environment").eq("status", "active"),
     // maxPages: 200 (R2-14) — `/revenue` runs SYNCHRONOUSLY before the
     // webhook handler returns 200; an unbounded (DEFAULT_MAX_PAGES=10_000)
     // read risks exceeding Telegram's webhook timeout and triggering a
@@ -212,17 +217,28 @@ export async function cmdRevenue(supabase: any): Promise<string> {
   // ROWS per plan, not users: since OI-341 Piece B2a a referral-trial user who
   // buys holds a trial row and a paid row at once (stacking), so one person can
   // appear under two plans. referral_trial contributes nothing to MRR.
+  // OI-519 U4 (founder Q4/Q5): a Google Play row is priced by Google, never at
+  // the web prices above: counted on its own line, MRR stays web-only.
   const counts = new Map<string, number>();
+  let play = 0;
+  let playTesters = 0; // SANDBOX: a license tester, never paid (founder decision; hermes seat 3)
   for (const row of data ?? []) {
+    if (row.store === "play") {
+      if (row.store_environment === "PRODUCTION") play++;
+      else playTesters++;
+      continue;
+    }
     counts.set(row.plan, (counts.get(row.plan) ?? 0) + 1);
   }
   const monthly = counts.get("monthly") ?? 0;
   const yearly = counts.get("yearly") ?? 0;
   const mrr = monthly * MONTHLY_PRICE_INR + yearly * (YEARLY_PRICE_INR / 12);
-  const lines = ["<b>Revenue</b>", `MRR: ₹${Math.round(mrr)}`];
+  const lines = ["<b>Revenue</b>", `MRR: ₹${Math.round(mrr)} (web)`];
   for (const [plan, n] of counts) {
     lines.push(`${escapeHtml(plan)}: ${n}`);
   }
+  lines.push(`Google Play: ${play} (not in MRR)`);
+  if (playTesters > 0) lines.push(`Google Play testers: ${playTesters} (not paid)`);
   return lines.join("\n");
 }
 
@@ -264,12 +280,16 @@ export async function cmdSubs(supabase: any): Promise<string> {
   const { yStart, tStart } = istYesterdayWindow();
   const { data, error } = await supabase
     .from("subscriptions")
-    .select("plan, created_at")
+    .select("plan, created_at, store")
     .eq("status", "active")
     .gte("created_at", yStart)
     .limit(1000); // keep in sync with SUBS_QUERY_CAP — literal digit required by check_unbounded_cron_reads.dart
   if (error) throw error;
-  const rows = data ?? [];
+  // OI-519 (hermes seat 1): a Google Play row is its own bucket, never "monthly" / "yearly" (those are web plans).
+  const rows = (data ?? []).map((r: { plan: string; created_at: string; store?: string | null }) => ({
+    plan: r.store === "play" ? "google_play" : r.plan,
+    created_at: r.created_at,
+  }));
   const { today, yesterday } = bucketSubsByPlan(rows, tStart);
   const lines = [
     "<b>New subscriptions</b>",
@@ -297,8 +317,11 @@ export async function cmdExpiring(supabase: any): Promise<string> {
   // null = the read FAILED. Throw (the router turns it into an error reply)
   // rather than print "7d: 0 / 30d: 0", which would read as good news.
   if (latestEnd === null) throw new Error("subscriptions read failed");
-  const c7 = usersWithLatestEndIn(latestEnd, now, in7d, true).length;
-  const c30 = usersWithLatestEndIn(latestEnd, now, in30d, true).length;
+  // OI-519: a renewing Play subscriber is not expiring (its end_date moves every period).
+  const renewingPlay = await fetchRenewingPlayUserIds(supabase, now.toISOString());
+  if (renewingPlay === null) throw new Error("subscriptions renewing-play read failed");
+  const c7 = withoutRenewingPlay(usersWithLatestEndIn(latestEnd, now, in7d, true), renewingPlay).length;
+  const c30 = withoutRenewingPlay(usersWithLatestEndIn(latestEnd, now, in30d, true), renewingPlay).length;
   return `<b>Expiring soon</b>\n7d: ${c7}\n30d: ${c30}`;
 }
 

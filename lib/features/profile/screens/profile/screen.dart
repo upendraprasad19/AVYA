@@ -28,6 +28,8 @@ import 'package:icanbefitter/core/services/subscription_service.dart';
 import 'package:icanbefitter/core/services/prediction_service.dart';
 import 'package:icanbefitter/core/services/rank_service.dart';
 import 'package:icanbefitter/shared/widgets/paywall_sheet.dart';
+import 'package:icanbefitter/shared/widgets/paywall_play_body.dart'
+    show playManageOpenerProvider;
 import 'package:icanbefitter/shared/widgets/screen_loading_skeleton.dart';
 import 'package:icanbefitter/shared/widgets/error_state.dart';
 import 'package:icanbefitter/shared/widgets/sync_banner.dart';
@@ -296,6 +298,14 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
   /// support contact. Wire a richer flow later via a dedicated PR if
   /// self-service becomes a priority.
   void _onManageSubscription() {
+    // OI-519: Google Play owns a Play row (cancel, plan, payment method):
+    // open its subscriptions page. Every other row keeps the support sheet.
+    if (ref.read(subscriptionInfoProvider).isPlayStore) {
+      unawaited(ErrorTelemetry.logEvent('play_manage_tapped',
+          message: 'from=profile'));
+      unawaited(ref.read(playManageOpenerProvider)());
+      return;
+    }
     showModalBottomSheet<void>(
       context: context,
       backgroundColor: AppColors.card,

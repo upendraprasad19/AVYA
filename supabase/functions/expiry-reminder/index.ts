@@ -12,7 +12,11 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
 import { sendPushNotification } from "../_shared/send_notification.ts";
 import { markProactiveSent, shouldSendProactive } from "../_shared/proactive_dedup.ts";
 import { logCronStart, logCronEnd } from "../_shared/cron_telemetry.ts";
-import { fetchLatestActiveEndByUser, usersWithLatestEndIn } from "../_shared/subscription.ts";
+import {
+  fetchLatestActiveEndByUser,
+  fetchRenewingPlayUserIds,
+  usersWithLatestEndIn,
+} from "../_shared/subscription.ts";
 import {
   fetchNotificationPrefsDetailed,
   isNotificationEnabled,
@@ -69,8 +73,14 @@ serve(async (req: Request) => {
     //    exits 200.
     const latestEnd = await fetchLatestActiveEndByUser(supabase, now.toISOString());
     if (latestEnd === null) throw new Error("expiry-reminder: subscriptions read failed");
+    // OI-519 U4: a user whose Google Play subscription renews by itself is not
+    // expiring. Null on a read failure: an empty set would remind every Play
+    // subscriber, so it fails the run like the read above.
+    const renewingPlay = await fetchRenewingPlayUserIds(supabase, now.toISOString());
+    if (renewingPlay === null) throw new Error("expiry-reminder: renewing Play read failed");
     const expiringSubs: Array<{ user_id: string; end_date: string }> =
       usersWithLatestEndIn(latestEnd, now, threeDaysFromNow, true)
+        .filter(([user_id]) => !renewingPlay.has(user_id))
         .map(([user_id, end_date]) => ({ user_id, end_date }));
 
     if (expiringSubs.length === 0) {

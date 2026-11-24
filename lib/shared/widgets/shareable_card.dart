@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 import 'package:icanbefitter/core/constants/app_constants.dart';
+import 'package:icanbefitter/core/constants/purchase_mode.dart';
 import 'package:icanbefitter/core/theme/colors.dart';
 import 'package:icanbefitter/core/theme/typography.dart';
 
@@ -8,7 +9,13 @@ import 'package:icanbefitter/core/theme/typography.dart';
 ///
 /// Wraps [child] in a RepaintBoundary (for screenshot capture) with a
 /// consistent dark-mode background and a branded bottom strip containing
-/// the AVYA wordmark and a QR code pointing to [AppConstants.appUrl].
+/// the AVYA wordmark and a QR code pointing to [shareCardQrUrl].
+/// PURE. The share-card QR target: the website only in a build that may link
+/// to it; every store build (`none`, `play_billing`) points at the Play
+/// listing (OI-519).
+String shareCardQrUrl(PurchaseMode mode) =>
+    mode.showsWebLinks ? AppConstants.appUrl : AppConstants.playListingUrl;
+
 class ShareableCard extends StatelessWidget {
   /// The card content above the branding strip.
   final Widget child;
@@ -62,7 +69,7 @@ class ShareableCard extends StatelessWidget {
                     width: 44,
                     height: 44,
                     child: QrImageView(
-                      data: AppConstants.appUrl,
+                      data: shareCardQrUrl(PurchaseMode.current),
                       version: QrVersions.auto,
                       size: 44,
                       backgroundColor: Colors.white,

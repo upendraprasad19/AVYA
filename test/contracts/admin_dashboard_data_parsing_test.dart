@@ -62,6 +62,8 @@ void main() {
           'yearly_active': 1,
           'trial_active': 6,
           'other_active': 0,
+          'play_active': 3,
+          'play_sandbox_active': 2,
           'derived_mrr_inr': 1745.92,
           'current_monthly_price_inr': 349,
           'current_yearly_price_inr': 2999,
@@ -105,6 +107,17 @@ void main() {
       expect(data.revenue.monthlyActive, 4);
       expect(data.revenue.trialActive, 6);
       expect(data.revenue.otherActive, 0);
+      // OI-519 U4: Google Play subscribers, counted apart from the web MRR.
+      expect(data.revenue.playActive, 3);
+      expect(data.revenue.playSandboxActive, 2);
+      expect(
+          AdminRevenueMetrics.fromJson(const {'monthly_active': 1})
+              .playSandboxActive,
+          0);
+      expect(
+          AdminRevenueMetrics.fromJson(const {'monthly_active': 1}).playActive,
+          0,
+          reason: 'a server older than +51 sends no play_active');
       expect(data.revenue.derivedMrrInr, closeTo(1745.92, 0.001));
       expect(data.subscriptionsExpiring.expired, hasLength(1));
       expect(data.subscriptionsExpiring.expired.first.userId, 'u1');

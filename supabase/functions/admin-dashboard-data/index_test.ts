@@ -155,7 +155,34 @@ Deno.test("bucketActivePlans — counts monthly / yearly / referral_trial into t
     yearlyActive: 1,
     trialActive: 2,
     otherActive: 0, // none unrecognized
+    playActive: 0,
+    playSandboxActive: 0,
   });
+});
+
+Deno.test("bucketActivePlans (OI-519 U4) — a Google Play row counts only as playActive, so MRR stays web-only", () => {
+  const rows = [
+    { plan: "monthly", store: null },
+    { plan: "monthly", store: "play", store_environment: "PRODUCTION" },
+    { plan: "yearly", store: "play", store_environment: "PRODUCTION" },
+    { plan: "yearly", store: "play", store_environment: "SANDBOX" },
+    { plan: "yearly", store: null },
+    { plan: "referral_trial", store: null },
+  ];
+  const counts = bucketActivePlans(rows);
+  assertEquals(counts, { monthlyActive: 1, yearlyActive: 1, trialActive: 1, otherActive: 0, playActive: 2, playSandboxActive: 1 });
+  assertEquals(
+    counts.monthlyActive + counts.yearlyActive + counts.trialActive + counts.otherActive + counts.playActive +
+      counts.playSandboxActive,
+    rows.length,
+  );
+  assertEquals(computeDerivedMrr(counts, PRICES), 349 + 2999 / 12);
+});
+
+Deno.test("admin-dashboard-data (OI-519 U4) reads store with the plan and returns play_active", async () => {
+  const src = (await Deno.readTextFile(new URL("./index.ts", import.meta.url))).replace(/\s+/g, " ");
+  assertEquals(src.includes('admin.from("subscriptions").select("plan, store, store_environment").eq("status", "active"),'), true);
+  assertEquals(src.includes("play_active: planCounts.playActive,"), true);
 });
 
 Deno.test("bucketActivePlans — the live-shape case: 1 monthly + 6 referral_trial reconciles to 7 active, MRR counts only the monthly", () => {
@@ -174,7 +201,7 @@ Deno.test("bucketActivePlans — the live-shape case: 1 monthly + 6 referral_tri
   // Split reconciles against the active-sub total — no silently-dropped rows.
   assertEquals(
     counts.monthlyActive + counts.yearlyActive + counts.trialActive +
-      counts.otherActive,
+      counts.otherActive + counts.playActive + counts.playSandboxActive,
     rows.length,
   );
   // Trials pay nothing — MRR reflects only the 1 monthly.
@@ -205,6 +232,8 @@ Deno.test("bucketActivePlans — empty input returns all-zero counts, not an err
     yearlyActive: 0,
     trialActive: 0,
     otherActive: 0,
+    playActive: 0,
+    playSandboxActive: 0,
   });
 });
 
@@ -349,7 +378,8 @@ Deno.test("loadExpiryRows — the users lookup selects only id, email (never a d
   for (const c of userSelects) assertEquals(c, "id, email");
   const subSelects = selects.filter(([t]) => t === "subscriptions").map(([, c]) => c);
   assertEquals(subSelects.length >= 1, true);
-  for (const c of subSelects) assertEquals(c, "user_id, end_date");
+  // the latest-end read, plus (OI-519) the renewing-Play read: never a dropped mirror column.
+  assertEquals([...new Set(subSelects)].sort(), ["user_id", "user_id, end_date"]);
 });
 
 Deno.test("loadExpiryRows — returns null (NOT []) when the subscriptions read fails", async () => {
@@ -364,4 +394,29 @@ Deno.test("loadExpiryRows — a failed email lookup throws (handler turns it int
     { usersError: true },
   );
   await assertRejects(() => loadExpiryRows(fake, FLOOR, WINDOW));
+});
+
+Deno.test("bucketActivePlans (hermes seat 3) — a SANDBOX Play row is never counted as a Play subscriber", () => {
+  const c = bucketActivePlans([
+    { plan: "yearly", store: "play", store_environment: "SANDBOX" },
+    { plan: "monthly", store: "play", store_environment: null },
+  ]);
+  assertEquals(c.playActive, 0);
+  assertEquals(c.playSandboxActive, 2);
+});
+
+Deno.test("admin-dashboard-data (hermes seat 3) reads store_environment and returns play_sandbox_active", async () => {
+  const src = (await Deno.readTextFile(new URL("./index.ts", import.meta.url))).replace(/\s+/g, " ");
+  assertEquals(src.includes('select("plan, store, store_environment").eq("status", "active")'), true);
+  assertEquals(src.includes("play_sandbox_active: planCounts.playSandboxActive,"), true);
+});
+
+Deno.test("loadExpiryRows (hermes seat 1) — an auto-renewing Play subscriber is not listed as expiring", async () => {
+  const subs = [
+    { id: 1, user_id: "u-play-renews", status: "active", end_date: daysFromNow(5), store: "play", auto_renew: true },
+    { id: 2, user_id: "u-play-cancelled", status: "active", end_date: daysFromNow(5), store: "play", auto_renew: false },
+    { id: 3, user_id: "u-web", status: "active", end_date: daysFromNow(5) },
+  ];
+  const rows = await loadExpiryRows(adminFake(subs as unknown as FakeSub[], []), FLOOR, WINDOW);
+  assertEquals((rows ?? []).map((r) => r.user_id).sort(), ["u-play-cancelled", "u-web"]);
 });

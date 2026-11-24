@@ -14,6 +14,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:icanbefitter/core/constants/purchase_mode.dart';
 import 'package:icanbefitter/core/copy/purchase_copy.dart';
 import 'package:icanbefitter/core/services/error_telemetry.dart';
+import 'package:icanbefitter/core/services/play_billing_service.dart';
 import 'package:icanbefitter/core/services/razorpay_service.dart';
 import 'package:icanbefitter/core/services/service_providers.dart';
 import 'package:icanbefitter/core/services/subscription_service.dart';
@@ -59,6 +60,17 @@ class _FakeRazorpay implements RazorpayService {
   }
 }
 
+/// OI-519: a Play build WITHOUT its SDK key sells nothing, so it belongs in
+/// this file's "nothing can be bought" loop. Explicit, so a run with the key
+/// defined (`--dart-define-from-file=.env`) cannot flip it.
+class _NoKeyStore implements PlayStore {
+  @override
+  bool get hasKey => false;
+  @override
+  dynamic noSuchMethod(Invocation i) =>
+      throw StateError('no store call without a key: ${i.memberName}');
+}
+
 late _FakeSubscriptions _subs;
 late _FakeRazorpay _razorpay;
 late List<String> _events;
@@ -75,6 +87,7 @@ Future<void> _open(WidgetTester tester, PurchaseMode mode,
       subscriptionInfoProvider.overrideWith(() => _Sub()),
       subscriptionServiceProvider.overrideWithValue(_subs),
       razorpayServiceProvider.overrideWithValue(_razorpay),
+      playStoreProvider.overrideWithValue(_NoKeyStore()),
     ],
     child: MaterialApp(
       home: Scaffold(
@@ -157,7 +170,10 @@ void main() {
   });
 
   for (final mode in [PurchaseMode.none, PurchaseMode.playBilling]) {
-    group('mode ${mode.wireName}: nothing can be bought', () {
+    final label = mode == PurchaseMode.playBilling
+        ? '${mode.wireName} without its SDK key'
+        : mode.wireName;
+    group('mode $label: nothing can be bought', () {
       testWidgets('no price, plan card, promo box or purchase button',
           (tester) async {
         await _open(tester, mode);
@@ -252,6 +268,12 @@ void main() {
                 .where((e) => e == 'paywall_unavailable_shown|feature=PRO')
                 .length,
             1);
+        // OI-519: the keyless Play misbuild is counted on its own.
+        expect(
+            _events
+                .where((e) => e == 'play_billing_key_missing|feature=PRO')
+                .length,
+            mode == PurchaseMode.playBilling ? 1 : 0);
         await _tap(tester, find.text(PurchaseCopy.closeButton));
         await tester.pumpAndSettle();
         expect(_events.where((e) => e == 'paywall_dismissed|feature=PRO').length,

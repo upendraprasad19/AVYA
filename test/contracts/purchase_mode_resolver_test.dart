@@ -66,16 +66,23 @@ void main() {
   });
 
   group('what each mode lets a surface do', () {
-    test('only razorpay shows a purchase UI and starts a Razorpay order', () {
+    test('only razorpay starts a Razorpay order or links to the website', () {
       expect(PurchaseMode.razorpay.showsPurchaseUi, isTrue);
       expect(PurchaseMode.razorpay.showsRazorpay, isTrue);
+      expect(PurchaseMode.razorpay.showsWebLinks, isTrue);
+      expect(PurchaseMode.razorpay.showsPlayBilling, isFalse);
       expect(PurchaseMode.none.showsPurchaseUi, isFalse);
       expect(PurchaseMode.none.showsRazorpay, isFalse);
+      expect(PurchaseMode.none.showsWebLinks, isFalse);
+      expect(PurchaseMode.none.showsPlayBilling, isFalse);
     });
 
-    test('playBilling behaves as none until section 8 is built', () {
-      expect(PurchaseMode.playBilling.showsPurchaseUi, isFalse);
+    test('playBilling (OI-519) sells through Play only: no Razorpay, no web',
+        () {
+      expect(PurchaseMode.playBilling.showsPurchaseUi, isTrue);
+      expect(PurchaseMode.playBilling.showsPlayBilling, isTrue);
       expect(PurchaseMode.playBilling.showsRazorpay, isFalse);
+      expect(PurchaseMode.playBilling.showsWebLinks, isFalse);
     });
 
     test('wire names are the define values', () {
@@ -99,7 +106,7 @@ void main() {
       expect(PurchaseMode.current, PurchaseMode.none);
       expect(showsUpgradeAffordance(), isFalse);
       PurchaseMode.debugOverrideForTests = PurchaseMode.playBilling;
-      expect(showsUpgradeAffordance(), isFalse);
+      expect(showsUpgradeAffordance(), isTrue);
     });
   });
 }
