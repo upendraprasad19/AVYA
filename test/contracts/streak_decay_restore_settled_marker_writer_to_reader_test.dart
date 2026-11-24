@@ -105,6 +105,11 @@ void main() {
         // after-completion step writes the streak fields only behind the same
         // gate as the reckon (a sixth deciding reader, on purpose).
         'lib/features/train/services/workout_completion_bookkeeping.dart',
+        // Unit preference adopter (OI-348 B9, e9a6c1, 2026-11-23): the legacy
+        // device units value is copied into the profile only once the restore
+        // for THIS account settled, so a cloud value is never overwritten by
+        // the device one (a seventh deciding reader, on purpose).
+        'lib/core/services/units_pref_adopter.dart',
       },
           reason: 'a new file deciding on the marker must be added here on '
               'purpose (the dev simulator only MENTIONS it, in a comment)');
