@@ -128,6 +128,12 @@ Baseline, measured 2026-11-24: **20.95 min** median end-to-end wall clock of the
 - The scope step's shell wrapper is fail-safe, and the test executes that block.
 - Statement-based import parser; the full doc-ripple list; table validation; `food_database.json` confirmed a non-input.
 
+## 6c. Execution notes (2026-11-24)
+
+- Replay of the REAL script over the last 80 first-parent merges on `main`: 28 skip, 52 run (35%; the prototype in §1.8 estimated 30 to 37).
+- Mutation, option B: 8 mutants, 8 red (1 to 9 tests each). Option A: 26 mutants, 23 red on the first run. The 3 survivors and what was done: (1) directives read without comment stripping: a new test (an import at line start inside a block comment), now red; (2) "the CLI's catch says skip": the catch no longer assigns `run` at all, so the mutant has no line to change; (3) the `{ ...; } || RUN=true` shell wrapper: an equivalent mutant (`-e` does not apply inside an `if` condition or a non-final `&&` command), so the wrapper was removed and the step's behaviour tests now run under both `sh` and `bash`.
+- `land_pr` reads each sweep leg's job (`repos/{repo}/actions/jobs/{id}`, the check-run id) instead of one call per run: no run id has to be parsed out of a URL.
+
 ## 7. Closure
 
 Six units (U1 to U5 plus the docs ripple), so `docs/audit/ci-sweep-split.closure.yaml` with a `terminal_state:` per unit (CLAUDE.md §4.2), plus the plan-review record `docs/plan-reviews/ci-sweep-split.md` and a B-pass before the merge.

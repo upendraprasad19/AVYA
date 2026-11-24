@@ -234,7 +234,11 @@ jobs:
         shard: [1, 2, 3, 4, 5]
 
     steps:
+      # fetch-depth: 2 so the scope step can diff a pull request's merge commit against
+      # its first parent (the base). The default depth of 1 has no HEAD^1.
       - uses: actions/checkout@v7
+        with:
+          fetch-depth: 2
 
       - uses: subosito/flutter-action@v2
         with:
@@ -248,7 +252,49 @@ jobs:
       - name: Build the local indexes (strict)
         run: dart run scripts/build_local_indexes.dart
 
+      # OPTION A (plan section 3 U1/U3): on a PULL REQUEST the sweeps run only when a
+      # changed path is one of their inputs - in the import closure of
+      # test/plan_generator/**, a declared fixture or asset, or an always-run path
+      # (scripts/ci_sweep_scope_lib.dart; the rule is derived from the sweep files on
+      # every run, not listed). Replayed with the real script over the last 80 merges on
+      # main (2026-11-24): 28 would have skipped the sweeps, 52 would have run them.
+      #
+      # THE ONLY WAY TO SKIP is the script printing exactly `run=false` on a pull_request
+      # whose HEAD is a two-parent merge commit. RUN starts `true` and everything else
+      # leaves it `true`: a push (main ALWAYS runs the sweeps), a failing `git` or `dart`,
+      # a stray line on stdout, a missing parent. A failing `git` or `dart` cannot abort the
+      # step either: each sits in an `if` condition or in a non-final position of one &&
+      # list, where `-e` does not apply (the shape test runs the block under sh AND bash;
+      # a `{ ...; } || RUN=true` wrapper was tried and was an unkillable mutant, so it is
+      # not there). The decision is a STEP, not a job-level
+      # `if:`: a skipped JOB reports `skipped`, which safe_pr_merge_lib.dart does not accept
+      # for `Unit Tests`; a leg whose test step is skipped ends `success`, and
+      # scripts/land_pr.dart prints `sweeps: skipped (out of scope)` from that step's
+      # conclusion so the reader of a green pull request knows which it was.
+      # `pub get` and the index build above stay UNCONDITIONAL
+      # (test/scripts/ci_local_indexes_steps_test.dart); the `if:` on the test step below
+      # is the only condition in this job, and a missing output RUNS the tests.
+      - name: Decide whether this pull request can change the sweeps
+        id: scope
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          RUN=true
+          if [ "$EVENT_NAME" = "pull_request" ] && [ "$(git rev-list --parents -n 1 HEAD | wc -w)" -eq 3 ]; then
+            CHANGED="$(git diff --no-renames --name-only HEAD^1 HEAD)" &&
+              ANSWER="$(printf '%s\n' "$CHANGED" | dart scripts/ci_sweep_scope.dart)" &&
+              [ "$ANSWER" = "run=false" ] && RUN=false
+          fi
+          if [ "$RUN" = "false" ]; then
+            echo "::notice::sweeps skipped: no changed path is in the plan-generator closure"
+            echo "sweeps skipped: no changed path is in the plan-generator closure" >> "${GITHUB_STEP_SUMMARY:-/dev/null}"
+          else
+            RUN=true
+          fi
+          echo "run=$RUN" >> "$GITHUB_OUTPUT"
+
       - name: Run this shard's whole sweep files
+        if: steps.scope.outputs.run != 'false'
         run: |
           FILES="$(dart scripts/ci_test_partition.dart "${{ matrix.shard }}" "${{ strategy.job-total }}" --set sweep)" || exit 1
           test -n "$FILES" || { echo "::error::sweep shard ${{ matrix.shard }}/${{ strategy.job-total }} has no test files"; exit 1; }

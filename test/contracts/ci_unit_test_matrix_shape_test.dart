@@ -35,6 +35,7 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 
+import '../../scripts/land_pr_lib.dart' show sweepTestStepName;
 import '../helpers/spawn.dart';
 
 const _matrixJobId = 'unit-test';
@@ -189,8 +190,9 @@ void main() {
     });
 
     test('the only expressions in the shard job are matrix.shard and strategy.job-total', () {
-      expect(_expressions(matrixJob), {'matrix.shard', 'strategy.job-total'},
-          reason: 'nothing else (github.event.*, a branch name, a secret) may reach the shell script');
+      expect(_expressions(matrixJob), {'matrix.shard', 'strategy.job-total', if (set == 'sweep') 'github.event_name'},
+          reason: 'nothing else (github.event.*, a branch name, a secret) may reach the shell script; the '
+              'sweep job alone also reads the event NAME, through env, for its scope step');
     });
 
     test('the shard count is the matrix length (strategy.job-total), never a second literal', () {
@@ -262,8 +264,9 @@ void main() {
       }
       expect(_keyLines(matrixJob, 'if'), isEmpty,
           reason: 'a shard job or step with a condition can be skipped, and a skipped test step is a green one');
-      expect(_keyLines(sweepJob, 'if'), isEmpty,
-          reason: 'a sweep job or step with a condition can be skipped, and a skipped test step is a green one');
+      expect(_keyLines(sweepJob, 'if'), ["if: steps.scope.outputs.run != 'false'"],
+          reason: 'the sweep job has exactly ONE condition, on its test step, written so that a MISSING '
+              'output runs the tests (compared against false, never against true)');
       expect(_keyLines(gateJob, 'if'), [r'if: ${{ !cancelled() }}'],
           reason: 'the gate has ONE condition; a second `if:` is on its step');
       expect(gateJob, contains('\n    if: \${{ !cancelled() }}\n'),
@@ -292,6 +295,167 @@ void main() {
               reason: 'core "$core" + sweep "$sweep" must fail the Unit Tests check');
           expect(r.stdout as String, contains('::error::'));
         }
+      }
+    });
+  });
+
+  group('the sweep scope step (option A): the only way to skip is an explicit run=false on a pull request', () {
+    late List<String> stepNames;
+    late String scope;
+
+    setUpAll(() {
+      stepNames = [
+        for (final l in sweepJob.split('\n'))
+          if (RegExp(r'^      - (?:name|uses): (.+?)\s*$').firstMatch(l) case final m?) m.group(1)!,
+      ];
+      scope = _runBlock(sweepJob, contains: 'ci_sweep_scope.dart');
+    });
+
+    test('order: pub get, index build, scope, tests; the condition sits on the test step and nowhere else', () {
+      expect(stepNames, [
+        'actions/checkout@v7',
+        'subosito/flutter-action@v2',
+        'Install dependencies',
+        'Build the local indexes (strict)',
+        'Decide whether this pull request can change the sweeps',
+        sweepTestStepName,
+      ], reason: 'land_pr_lib.sweepTestStepName must be the test step\'s exact name: land_pr reads that step\'s conclusion');
+      final lines = sweepJob.split('\n');
+      final ifLine = lines.indexWhere((l) => l.trim().startsWith('if:'));
+      expect(lines[ifLine - 1].trim(), '- name: $sweepTestStepName',
+          reason: 'the one `if:` belongs to the test step; on pub get or the index build it would break '
+              'ci_local_indexes_steps_test, on the scope step it would leave the output unset');
+      expect(sweepJob, contains('        id: scope\n'));
+      expect(sweepJob, contains(r'EVENT_NAME: ${{ github.event_name }}'));
+      expect(scope, isNot(contains(r'${{')), reason: 'the event name reaches the script through env only');
+    });
+
+    test('the checkout fetches the merge commit\'s parents (fetch-depth: 2)', () {
+      expect(sweepJob, matches(RegExp(r'uses: actions/checkout@v7\n\s+with:\n\s+fetch-depth: 2\n')));
+    });
+
+    test('the output is written ONCE, as the last line, and the default is RUN', () {
+      expect(RegExp(r'GITHUB_OUTPUT').allMatches(scope), hasLength(1));
+      expect(scope.trimRight().split('\n').last, r'echo "run=$RUN" >> "$GITHUB_OUTPUT"');
+      expect(scope.split('\n').first, 'RUN=true');
+    });
+
+    // GitHub runs the step under `bash -e`; dash (`sh` here) is the stricter reading of
+    // POSIX errexit. The step relies on -e NOT applying inside an `if` condition and in
+    // the non-final commands of an && list, so both shells are run.
+    for (final shell in ['sh', 'bash'])
+    group('BEHAVIOUR under $shell -e', () {
+      late Directory tmp;
+      setUp(() => tmp = Directory.systemTemp.createTempSync('ci_sweep_scope_step_'));
+      tearDown(() {
+        try {
+          tmp.deleteSync(recursive: true);
+        } catch (_) {/* best effort */}
+      });
+
+      /// Runs the step under `sh -e` with `git` and `dart` replaced by shell functions.
+      /// [parents] is what `git rev-list --parents -n 1 HEAD` prints; [answer] what the
+      /// scope script prints. Returns the content of $GITHUB_OUTPUT and the step status.
+      ({int code, String output, String out, String calls}) runStep({
+        String event = 'pull_request',
+        String parents = 'aaa bbb ccc',
+        int revListRc = 0,
+        int diffRc = 0,
+        String answer = 'run=false',
+        int dartRc = 0,
+      }) {
+        File('${tmp.path}/answer').writeAsStringSync(answer);
+        for (final stale in ['out', 'calls.log', 'summary', 'stdin.log']) {
+          final f = File('${tmp.path}/$stale');
+          if (f.existsSync()) f.deleteSync(); // runStep may be called twice in one test
+        }
+        final prelude = [
+          'git() {',
+          r'  echo "git $*" >> calls.log',
+          r'  case "$1" in',
+          "    rev-list) printf '%s\\n' '$parents'; return $revListRc;;",
+          "    diff) printf '%s\\n' 'docs/x.md'; return $diffRc;;",
+          '  esac',
+          '}',
+          r'dart() { echo "dart $*" >> calls.log; cat > stdin.log; cat answer; return ' '$dartRc; }',
+          '',
+        ].join('\n');
+        final r = runSpawn(shell, ['-e', '-c', '$prelude$scope'],
+            why: '$shell: sweep scope step (event=$event parents="$parents" answer="$answer" dartRc=$dartRc)',
+            workingDirectory: tmp.path,
+            extraEnv: {
+              'EVENT_NAME': event,
+              'GITHUB_OUTPUT': '${tmp.path}/out',
+              'GITHUB_STEP_SUMMARY': '${tmp.path}/summary',
+            },
+            // The step under test writes these two files; they are the scenario, not a leak.
+            allowControl: const {'GITHUB_OUTPUT', 'GITHUB_STEP_SUMMARY'});
+        final out = File('${tmp.path}/out');
+        final calls = File('${tmp.path}/calls.log');
+        return (
+          code: r.exitCode,
+          output: out.existsSync() ? out.readAsStringSync() : '',
+          out: '${r.stdout}${r.stderr}',
+          calls: calls.existsSync() ? calls.readAsStringSync() : '',
+        );
+      }
+
+      test('SKIP: a pull request, a two-parent merge commit, and the script says exactly run=false', () {
+        final r = runStep(answer: 'run=false\n');
+        expect(r.code, 0, reason: r.out);
+        expect(r.output, 'run=false\n');
+        expect(r.out, contains('::notice::sweeps skipped'));
+        expect(r.calls, contains('git diff --no-renames --name-only HEAD^1 HEAD'),
+            reason: '--no-renames makes a rename print its OLD path too (the deleted-path fail-safe)');
+        expect(r.calls, contains('dart scripts/ci_sweep_scope.dart'));
+        expect(File('${tmp.path}/stdin.log').readAsStringSync(), 'docs/x.md\n',
+            reason: 'the change list must reach the script on stdin');
+        expect(File('${tmp.path}/summary').readAsStringSync(), contains('sweeps skipped'));
+      });
+
+      test('RUN: the script says run=true', () {
+        final r = runStep(answer: 'run=true\n');
+        expect(r.code, 0);
+        expect(r.output, 'run=true\n');
+        expect(r.out, isNot(contains('sweeps skipped')));
+      });
+
+      for (final event in ['push', 'workflow_dispatch', 'schedule', 'merge_group', '']) {
+        test('RUN: event "$event" never asks the script (a push to main ALWAYS runs the sweeps)', () {
+          final r = runStep(event: event);
+          expect(r.code, 0);
+          expect(r.output, 'run=true\n');
+          expect(r.calls, isNot(contains('dart ')));
+        });
+      }
+
+      for (final (why, parents) in [('one parent', 'aaa bbb'), ('no parent', 'aaa'), ('octopus', 'a b c d'), ('nothing', '')]) {
+        test('RUN: HEAD is not a two-parent merge commit ($why)', () {
+          final r = runStep(parents: parents);
+          expect(r.code, 0);
+          expect(r.output, 'run=true\n');
+          expect(r.calls, isNot(contains('git diff')));
+        });
+      }
+
+      test('RUN, and the step still SUCCEEDS: a failing `git rev-list`, a failing `git diff`, a failing `dart`', () {
+        for (final r in [
+          runStep(revListRc: 128, parents: ''),
+          runStep(diffRc: 128),
+          runStep(dartRc: 254),
+          runStep(dartRc: 1),
+        ]) {
+          expect(r.code, 0, reason: 'a broken decision must run the sweeps, not turn the leg red: ${r.out}');
+          expect(r.output, 'run=true\n');
+        }
+      });
+
+      for (final stray in ['', 'run=False\n', 'run=false \n', 'Running build hooks...\nrun=false\n', 'run=false\nrun=true\n', 'false\n']) {
+        test('RUN: anything on stdout other than exactly `run=false` (${stray.replaceAll('\n', r'\n')})', () {
+          final r = runStep(answer: stray);
+          expect(r.code, 0);
+          expect(r.output, 'run=true\n');
+        });
       }
     });
   });

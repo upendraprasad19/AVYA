@@ -181,7 +181,18 @@ runs the same gates). See §4 process invariants for the no-deferred-failures po
   round-robin as above, 4 legs); the new `sweep-test` matrix (`Unit Tests sweep shard n/N`, 5 legs) runs the
   plan-generator sweeps, packed longest-first by the measured table `scripts/data/ci_sweep_durations.json`.
   The sweeps were 66-69% of all per-file test time and left two of four mixed shards near 21 min. The gate
-  `Unit Tests` needs BOTH matrices `success`. A local run without the sweeps:
+  `Unit Tests` needs BOTH matrices `success`.
+  **Scoped on a pull request:** each sweep leg has a scope step (`dart scripts/ci_sweep_scope.dart` over
+  `git diff --no-renames --name-only HEAD^1 HEAD` of the merge commit) and its test step carries the job's only
+  `if:` (`steps.scope.outputs.run != 'false'`). The sweeps are skipped ONLY when the script prints exactly
+  `run=false`: no changed path is in the import closure of `test/plan_generator/**` (derived on every run), a
+  declared input (`declaredInputs`: the exercise library, fixtures) or an always-run path. A push, a failing
+  `git`/`dart`, a deleted Dart file, an unresolved import: the sweeps run. A skipped leg ends `success`, so
+  `land_pr` prints `sweeps: ran | skipped (out of scope) | unknown` before `result:` (information only; it
+  reads the test step's conclusion from `repos/{repo}/actions/jobs/{id}`). `ci-green` on a PR therefore means
+  "every test whose inputs the PR changed"; a sweep red on `main` after a skipped PR is a scope miss, fixed by
+  declaring the missed input. Tests: `test/scripts/ci_sweep_scope_test.dart` (exhaustive over the real
+  closure; every path literal in every closure file must be classified). A local run without the sweeps:
   `flutter test $(dart scripts/ci_test_partition.dart 1 1 --set core) --exclude-tags golden`.
   This is NOT `flutter test --total-shards`, which was tried and reverted on 2026-08-10. The shell logic of both
   jobs is executed, and their wiring (`needs`, `if`, `continue-on-error`, the matrix keys, the step's last

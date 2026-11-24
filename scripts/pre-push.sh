@@ -54,6 +54,8 @@
 # (origin/main..HEAD). FAIL-SAFE: if the range or tier can't be computed, we RUN
 # the full suite (never skip on uncertainty). Force it any time with
 # PRE_PUSH_FULL=1. CI is the full-suite source-of-truth regardless.
+# (Since 2026-11-24 a PULL REQUEST's CI runs the plan-generator sweeps only when its diff touches one of
+# their inputs, scripts/ci_sweep_scope_lib.dart; the push to main runs everything.)
 #
 # Audit 2026-05-20 / I10 introduced the pre-commit(fast)/pre-push(full) split;
 # this batch makes pre-push itself risk-aware. Install: `sh scripts/setup-hooks.sh`.

@@ -6939,3 +6939,12 @@ CLAUDE.md 4.6 step 4 tracks an old path kept behind a kill switch on the board. 
 - **Identified**: 2026-11-24 · filed via mint_oi.sh from branch `oi348-landing2`
 
 CLAUDE.md 4.6 step 4 tracks an old path kept behind a kill switch on the board. Landing 2 (diagnoses e9a6c1, a0d5f7) kept two: `configBox['disable_unit_pref_sync']` (the profile push without `units_system` / `measurement_unit`, byte-identical to the pre-B9 payload) and `configBox['disable_restore_overlap']` (the readiness read serial in step B again). Remove, in one batch after the re-check passes: `UnitPrefFlags` (and the `enabled:` parameter of `unitPrefsPushEntries`), `RestoreReadinessPrefetch.disabled` / `killSwitchKey` and the `readConfig` parameter of `start`, their naming rows, and the switch tests (`unit_preference_push_restore_test.dart` switch cases, the switch cases in `restore_readiness_prefetch_test.dart`). `RESTORE_READ_CONCURRENCY` STAYS: it is the Edge Function's tuning knob, not a rollback switch. The legacy device-key fallbacks of B9 (`configBox['units_metric']`, `body_measurement_sheet_unit`) are NOT part of this: they serve devices where the adopter has not run yet.
+
+## OI-527 — Supabase Integration Tests run only on a push to main, so a break is found after the merge (6 of 12 main runs red)
+
+- **Status**: OPEN
+- **Blocked on**: none
+- **Verified**: 2026-11-24 - `gh run list --workflow test.yml`: of the last 12 `main` runs, 6 failed, each in the job `Supabase Integration Tests` only (runs 45326076127, 45320916004, 45319467400, 45313402791, 45227053138, 45195149928); in 45326076127 the red test was `test/supabase/sync_service_test.dart` T4. The job's `if:` is `github.event_name == 'push' && github.ref == 'refs/heads/main'` (`.github/workflows/test.yml`, job `supabase-tests`).
+- **Identified**: 2026-11-24 · filed via mint_oi.sh from branch `ci-sweep-split`
+
+The job never runs on a pull request, so a change that breaks an integration test is green on its PR and red on `main` after the merge. It was left out of `docs/plans/2026-11-24-ci-sweep-split.md` (section 6) as a separate defect: the job signs in to the live project with ONE shared test account and runs with `--concurrency=1`, so two pull requests running it at once would write over each other. A fix needs a workflow `concurrency` group for the job (one run at a time across pull requests), a clean skip for Dependabot pull requests (they get no secrets), and the job added to `skippedOkJobs` / `requiredSuccessJobs` in `scripts/safe_pr_merge_lib.dart` as decided. About 2 minutes per run.

@@ -305,6 +305,8 @@ Two standing invariants, codified after a 4-round pre-implementation review of t
    sh scripts/pre-commit.sh           # LOCAL: or attempt the commit to trigger the loop
    # the full flutter test, from CI (2026-11-11): commit the draft, open the branch's PR (not a draft), then
    sh scripts/land_pr.sh <pr> --ci-only   # in the background; dispatch only on `result: ci-green`
+   # Since 2026-11-24 the line before it, `sweeps: ran | skipped (out of scope) | unknown`, says whether the
+   # plan-generator sweeps ran: on a PR they run only when the diff touches one of their inputs (hooks.md).
    ```
    **The full suite comes from CI since 2026-11-11** (founder decision, plan `docs/plans/review-ci-suite-lock.md`).
    Until then this step ran `flutter test` locally before every review dispatch, i.e. 2–4 full local suites per batch
