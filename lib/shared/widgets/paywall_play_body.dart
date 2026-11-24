@@ -98,6 +98,10 @@ class _PaywallPlayBodyState extends ConsumerState<PaywallPlayBody> {
   bool _messageOk = false;
   bool _showManage = false;
 
+  /// [_load] has run once. Lets build start it when the sheet opened on a
+  /// paid plan (no load) and that plan lapsed while it was open.
+  bool _loadStarted = false;
+
   @override
   void initState() {
     super.initState();
@@ -113,6 +117,7 @@ class _PaywallPlayBodyState extends ConsumerState<PaywallPlayBody> {
   }
 
   Future<void> _load() async {
+    _loadStarted = true;
     setState(() {
       _phase = _PlayPhase.loading;
       _say(null);
@@ -170,9 +175,20 @@ class _PaywallPlayBodyState extends ConsumerState<PaywallPlayBody> {
       _showManage = false;
       _say(null);
     });
+    // Read before the await: once the sheet is gone `ref` is unusable, and a
+    // charged user must still get their confirm.
+    final confirmer = ref.read(playProConfirmerProvider);
     final outcome =
         await ref.read(playStoreProvider).purchase(offer, expectedUid: uid);
-    if (!mounted) return;
+    if (!mounted) {
+      if (outcome.status == PlayPurchaseStatus.purchased) {
+        unawaited(confirmer(afterPurchase: true).then<void>((_) {},
+            onError: (Object e) => ErrorTelemetry.logEvent(
+                'play_confirm_failed',
+                message: 'type=${e.runtimeType} unmounted=true')));
+      }
+      return;
+    }
     switch (outcome.status) {
       case PlayPurchaseStatus.purchased:
         await _confirm(afterPurchase: true);
@@ -186,12 +202,31 @@ class _PaywallPlayBodyState extends ConsumerState<PaywallPlayBody> {
           _say(PurchaseCopy.playPending);
         });
       case PlayPurchaseStatus.ownedByOtherAccount:
+        // Google says this Google account already owns PRO. That is also what
+        // a buy answers while THIS account's own purchase is still being
+        // confirmed (another sheet, a slow server): ask once before saying
+        // "another account".
         unawaited(ErrorTelemetry.logEvent('play_purchase_owned_elsewhere',
             message: 'code=${outcome.errorCode}'));
+        setState(() => _phase = _PlayPhase.confirming);
+        bool mine;
+        try {
+          mine = await confirmer(afterPurchase: false);
+        } catch (e) {
+          unawaited(ErrorTelemetry.logEvent('play_confirm_failed',
+              message: 'type=${e.runtimeType}'));
+          mine = false;
+        }
+        if (!mounted) return;
+        ref.invalidate(subscriptionInfoProvider);
         setState(() {
           _phase = _PlayPhase.ready;
-          _showManage = true;
-          _say(PurchaseCopy.playOwnedByOtherAccount);
+          if (mine) {
+            _say(PurchaseCopy.playRestored, ok: true);
+          } else {
+            _showManage = true;
+            _say(PurchaseCopy.playOwnedByOtherAccount);
+          }
         });
       case PlayPurchaseStatus.identityMismatch:
         unawaited(ErrorTelemetry.logEvent('play_purchase_identity_mismatch'));
@@ -230,7 +265,12 @@ class _PaywallPlayBodyState extends ConsumerState<PaywallPlayBody> {
     if (!mounted) return;
     ref.invalidate(subscriptionInfoProvider);
     setState(() {
-      _phase = back == _PlayPhase.purchasing ? _PlayPhase.ready : back;
+      // Charged but not confirmed yet: no buy button (a second tap would get
+      // Google's "already owned" and read as another account's PRO). RESTORE
+      // stays.
+      _phase = back == _PlayPhase.purchasing
+          ? (pro ? _PlayPhase.ready : _PlayPhase.pending)
+          : back;
       if (pro) {
         _say(afterPurchase ? PurchaseCopy.playWelcome : PurchaseCopy.playRestored,
             ok: true);
@@ -250,6 +290,14 @@ class _PaywallPlayBodyState extends ConsumerState<PaywallPlayBody> {
   @override
   Widget build(BuildContext context) {
     final info = ref.watch(subscriptionInfoProvider);
+    if (!info.hasActivePaidPlan &&
+        !_loadStarted &&
+        _phase == _PlayPhase.loading) {
+      _loadStarted = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) unawaited(_load());
+      });
+    }
     final busy = _phase == _PlayPhase.purchasing ||
         _phase == _PlayPhase.confirming;
     return Container(

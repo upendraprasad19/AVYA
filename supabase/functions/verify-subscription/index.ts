@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
+import { playDisplayFields } from "./logic.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -22,7 +23,9 @@ const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
  * If offline or server error → client keeps its cached Hive state.
  *
  * Response:
- *   { is_pro: boolean, plan: string | null, expires_at: string | null }
+ *   { is_pro: boolean, plan: string | null, expires_at: string | null,
+ *     store: "play" | null, auto_renew: boolean | null, store_expires_at: string | null }
+ * The last three are OI-519's additive Play display fields (logic.ts; null on every non-Play row).
  */
 serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
@@ -63,9 +66,12 @@ serve(async (req: Request) => {
     const userId = user.id;
 
     // Query subscriptions table for active subscription
+    // The Play display fields (playDisplayFields) come from THIS row only: a user whose active Play row ends before
+    // another active row (a web purchase on top of Play) gets them null, so the app shows plain PRO with no Google
+    // Play manage link. delete-account still cancels the Play row server-side (B-pass seat A, 2026-11-24).
     const { data: subscription, error: subError } = await supabaseClient
       .from("subscriptions")
-      .select("plan, status, end_date")
+      .select("plan, status, end_date, store, auto_renew, store_expires_at")
       .eq("user_id", userId)
       .eq("status", "active")
       .order("end_date", { ascending: false })
@@ -83,7 +89,7 @@ serve(async (req: Request) => {
     // No active subscription found
     if (!subscription) {
       return new Response(
-        JSON.stringify({ is_pro: false, plan: null, expires_at: null }),
+        JSON.stringify({ is_pro: false, plan: null, expires_at: null, ...playDisplayFields(null) }),
         { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
       );
     }
@@ -91,7 +97,7 @@ serve(async (req: Request) => {
     const endDate = subscription.end_date as string | null;
     if (!endDate) {
       return new Response(
-        JSON.stringify({ is_pro: false, plan: null, expires_at: null }),
+        JSON.stringify({ is_pro: false, plan: null, expires_at: null, ...playDisplayFields(null) }),
         { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
       );
     }
@@ -104,6 +110,7 @@ serve(async (req: Request) => {
         is_pro: isActive,
         plan: isActive ? (subscription.plan ?? "monthly") : null,
         expires_at: isActive ? endDate : null,
+        ...playDisplayFields(isActive ? subscription : null),
       }),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
     );

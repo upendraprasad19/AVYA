@@ -199,8 +199,8 @@ export async function cmdRevenue(supabase: any): Promise<string> {
   // the opposite of every other command's "page + total" shape) — this
   // genuinely needs every active row. Routed through fetchAllPages,
   // mirroring _shared/subscription.ts's own `subscriptions` read.
-  const data = await fetchAllPages<{ plan: string }>(
-    () => supabase.from("subscriptions").select("plan").eq("status", "active"),
+  const data = await fetchAllPages<{ plan: string; store?: string | null }>(
+    () => supabase.from("subscriptions").select("plan, store").eq("status", "active"),
     // maxPages: 200 (R2-14) — `/revenue` runs SYNCHRONOUSLY before the
     // webhook handler returns 200; an unbounded (DEFAULT_MAX_PAGES=10_000)
     // read risks exceeding Telegram's webhook timeout and triggering a
@@ -212,17 +212,25 @@ export async function cmdRevenue(supabase: any): Promise<string> {
   // ROWS per plan, not users: since OI-341 Piece B2a a referral-trial user who
   // buys holds a trial row and a paid row at once (stacking), so one person can
   // appear under two plans. referral_trial contributes nothing to MRR.
+  // OI-519 U4 (founder Q4/Q5): a Google Play row is priced by Google, never at
+  // the web prices above: counted on its own line, MRR stays web-only.
   const counts = new Map<string, number>();
+  let play = 0;
   for (const row of data ?? []) {
+    if (row.store === "play") {
+      play++;
+      continue;
+    }
     counts.set(row.plan, (counts.get(row.plan) ?? 0) + 1);
   }
   const monthly = counts.get("monthly") ?? 0;
   const yearly = counts.get("yearly") ?? 0;
   const mrr = monthly * MONTHLY_PRICE_INR + yearly * (YEARLY_PRICE_INR / 12);
-  const lines = ["<b>Revenue</b>", `MRR: ₹${Math.round(mrr)}`];
+  const lines = ["<b>Revenue</b>", `MRR: ₹${Math.round(mrr)} (web)`];
   for (const [plan, n] of counts) {
     lines.push(`${escapeHtml(plan)}: ${n}`);
   }
+  lines.push(`Google Play: ${play} (not in MRR)`);
   return lines.join("\n");
 }
 

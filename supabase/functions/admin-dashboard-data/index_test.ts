@@ -155,7 +155,31 @@ Deno.test("bucketActivePlans — counts monthly / yearly / referral_trial into t
     yearlyActive: 1,
     trialActive: 2,
     otherActive: 0, // none unrecognized
+    playActive: 0,
   });
+});
+
+Deno.test("bucketActivePlans (OI-519 U4) — a Google Play row counts only as playActive, so MRR stays web-only", () => {
+  const rows = [
+    { plan: "monthly", store: null },
+    { plan: "monthly", store: "play" },
+    { plan: "yearly", store: "play" },
+    { plan: "yearly", store: null },
+    { plan: "referral_trial", store: null },
+  ];
+  const counts = bucketActivePlans(rows);
+  assertEquals(counts, { monthlyActive: 1, yearlyActive: 1, trialActive: 1, otherActive: 0, playActive: 2 });
+  assertEquals(
+    counts.monthlyActive + counts.yearlyActive + counts.trialActive + counts.otherActive + counts.playActive,
+    rows.length,
+  );
+  assertEquals(computeDerivedMrr(counts, PRICES), 349 + 2999 / 12);
+});
+
+Deno.test("admin-dashboard-data (OI-519 U4) reads store with the plan and returns play_active", async () => {
+  const src = (await Deno.readTextFile(new URL("./index.ts", import.meta.url))).replace(/\s+/g, " ");
+  assertEquals(src.includes('admin.from("subscriptions").select("plan, store").eq("status", "active"),'), true);
+  assertEquals(src.includes("play_active: planCounts.playActive,"), true);
 });
 
 Deno.test("bucketActivePlans — the live-shape case: 1 monthly + 6 referral_trial reconciles to 7 active, MRR counts only the monthly", () => {
@@ -174,7 +198,7 @@ Deno.test("bucketActivePlans — the live-shape case: 1 monthly + 6 referral_tri
   // Split reconciles against the active-sub total — no silently-dropped rows.
   assertEquals(
     counts.monthlyActive + counts.yearlyActive + counts.trialActive +
-      counts.otherActive,
+      counts.otherActive + counts.playActive,
     rows.length,
   );
   // Trials pay nothing — MRR reflects only the 1 monthly.
@@ -205,6 +229,7 @@ Deno.test("bucketActivePlans — empty input returns all-zero counts, not an err
     yearlyActive: 0,
     trialActive: 0,
     otherActive: 0,
+    playActive: 0,
   });
 });
 

@@ -857,3 +857,75 @@ Round 2 (fresh seat on the fixes) added F10-F12; all fixed; the committed review
   `isPlayStore` without isPro (1), `hasActivePaidPlan` with referral days (1). The second uid check in `_buy` is
   unreachable from the UI (no buy button without a uid); its mutant only failed to compile, so it is NOT proven.
 - SoT registry: 56 cites in the changed files shifted from the `git diff HEAD` hunks (script, not by hand).
+
+## 26. U4 + U6 record (2026-11-24): the server readers, the build helper, the docs
+
+- **verify-subscription**: selects `store, auto_renew, store_expires_at` too and returns them through `playDisplayFields`
+  (`logic.ts`) for the active row only (null on both not-PRO bodies); the PRO predicate is untouched.
+- **expiry-reminder**: `fetchRenewingPlayUserIds` (`_shared/subscription.ts`: active, play, auto_renew, end_date >= since,
+  paged; null on error = the run throws) and skips any user with an active renewing Play row.
+- **redeem-referral**: `PAID_ROW_FILTER` = a Razorpay payment OR a PRODUCTION Play row (sandbox never counts as paid);
+  six new paid-filter cases in the local PostgREST harness (section 10, a mutant caught).
+- **delete-account**: `revenuecat_leg.ts` (section 4b of `index.ts`, after the Razorpay leg): cancel each non-refunded
+  Play row, then DELETE the RevenueCat customer only if every cancel succeeded; non-fatal; a failure is one critical
+  `revenuecat_delete_failed` alert per deletion.
+- **admin-dashboard-data / founder digest / telegram-admin-bot**: Play counted apart (`play_active`, "New Google Play
+  subscriptions: n (not in MRR)", "Google Play: n (not in MRR)"); MRR stays web-only. Admin revenue tab tile.
+- **Build**: `scripts/resolve_purchase_mode.dart` (helper, not a gate): `play_billing` needs
+  `REVENUECAT_GOOGLE_API_KEY=goog_...` in `.env`, never printed; `--bundle` needs a mode;
+  `verify_versioncode_available.dart --purchase-mode` records the mode; `/build-apk` (both copies) runs the helper.
+- **Docs**: payment.md, subscription.md, ADR-0022 note, SECRET_INVENTORY, naming glossary, CLAUDE.md Payments row,
+  CRON_REGISTRY row; the hourly reconcile cron stays a draft
+  (`2026-11-23-revenuecat-play-billing-51.migration-cron-draft.sql`) until after the L2 deploy, numbered at apply.
+- SoT registry: `play_subscription_mirror` concept added; `subscription_state` gains the `playDisplayFields` writer.
+- Full local suite on the staged U4 + U6 tree: 16,587 passed, 1 failed (the `.opencode` copy of `/build-apk` was not
+  updated; synced, its test green).
+
+## 27. B-pass of U4 + U5 + U6 (two fresh context-blind Sonnet seats, 2026-11-24; each finding checked by me)
+
+Seat A (U4 + U6 staged): 0 P0/P1, 2 P2, 4 P3. Seat B (U5, c521721d): 0 P0/P1, 2 P2, 5 P3.
+
+| # | Finding | Verdict | Fix |
+|---|---|---|---|
+| A1 P2 | delete-account cancels `expired` rows; Google refuses a cancel on a truly ended sub (token dead 60 days after expiry), so a long-lapsed user's deletion pages the founder and keeps the RevenueCat customer | real | an expired row is still cancelled (paused / on hold can bill), but 410 Gone on it = already ended: in the status (`;ended:`), no alert, customer still deleted; every other failure alerts (narrowed from 400/404/410/422 in round 2, R1) |
+| A2 P2 | `readPlayTxns` awaited outside any try | real | the leg catches it: `lookup_failed` with code `exception`, alerted, never thrown |
+| A3 P3 | `--purchase-mode=x` not read: an APK built as `none` silently | real | `purchaseModeArg` reads both spellings, refuses a missing value or a repeat; the versioncode script refuses the `=` form |
+| A4 P3 | the `.env.example` placeholder passes the key check | real | key shape `^goog_[A-Za-z0-9]+$` |
+| A5 P3 | verify-subscription display fields come from the latest-ending row only | accepted (one Play row per user by the unique index; a web row on top of Play shows plain PRO) | comment at the query |
+| A6 P3 | `.limit(10)` x 10 s cancels could approach the function budget | no change (unique `(user_id, store_product_id)` + one product = at most one Play row) | none |
+| B1 P2 | the slow-confirm line names CHECK MY PRO STATUS, a button the Play body lacks | real | "tap RESTORE in a minute"; the test checks the named button is on screen |
+| B2 P2 | after a charged but unconfirmed purchase the buy button returns; a second tap gets Google's "already owned" and reads as another account's PRO | real | unconfirmed -> the `pending` phase (no buy button, RESTORE on) |
+| B3 P3 | the sheet closing mid-purchase skips the confirm | real | the confirmer is read before the await and runs unmounted on `purchased` only |
+| B4 P3 | opened on a paid plan that lapses while open: stuck on loading | real | build starts `_load` once when not paid and never loaded |
+| B5 P3 | `identify` / `releaseIdentity` can interleave | real | `SerialSteps`: one at a time, a failed step does not block the next |
+| B6 P3 | `revenuecat-sync` retried on any non-429 4xx | real | `playSyncAnswerForStatus`: every 4xx except 408 stops |
+| B7 P3 | the share QR in a `none` build changed | false alarm (decided in the section 5 audit table) | none |
+
+Seat B could not run mutants (its edits were denied) and did not read `play_billing_surfaces_behavioral_test.dart`
+(mutated 6/6 at U5). Mutants on the fixes, each applied (count checked), run and restored: 9 for U5 (unconfirmed back
+to ready, no unmounted confirm, unmounted confirm on any outcome, no lapse load, only 429 stops, `SerialSteps` unchained,
+copy reverted, the `_buy` ready guard dropped, RESTORE ignoring busy) and 11 for U4 + U6 (active rows soft, every expired
+failure soft, no try around the lookup, index never expired, 410 not ended, ended not reported, `=` form ignored, repeat
+allowed, the old key check, the versioncode `=` form accepted, a missing value accepted): all 20 red.
+
+Round 2 (one fresh Sonnet seat on the fix diff only): 0 P0/P1, 1 P2, 3 P3.
+
+| # | Finding | Verdict | Fix |
+|---|---|---|---|
+| R1 P2 | 400/404/422 on an expired row also count as ended: a paused or held sub (or a wrong id) could get them, and the customer delete would lose the handle of a sub that can still bill | real | only 410 Gone ends an expired row; 400/404/422 now alert (test lists them as failures) |
+| R2 P3 | `SerialSteps` has no timeout: one hung SDK call wedges every later identify and sign-out | real | per-step timeout (30 s); a timed-out step fails its own caller only |
+| R3 P3 | the recorder refused the `=` form and mixed case the resolver accepted: a built binary whose record fails | real | `verify_versioncode_available.dart` parses with the resolver's `purchaseModeArg` |
+| R4 P3 | the unmounted confirm has no provider refresh; a second sheet during the confirm can buy and get "already owned" read as another account | half: the refresh is there (`writeSubscriptionState` -> `onStateChanged` -> `app.dart:44` invalidates `subscriptionInfoProvider`); the second half is real | on "already owned", one confirm check first: PRO -> "PRO restored.", else the another-account line |
+
+Mutants on the round-2 fixes, each applied, run, restored: 404 ended again, 400/422 ended again, no step timeout, owned
+without the own check, the check's result ignored, the recorder's old parse: all 6 red.
+
+Round 3 (one fresh Sonnet seat on the round-2 diff only): 0 P0/P1, 1 P2, 2 P3.
+
+| # | Finding | Verdict | Fix |
+|---|---|---|---|
+| T1 P2 | a timed-out identify is not cancelled: a late `logIn(A)` after a sign-out leaves the SDK on A | accepted, documented at `SerialSteps`: `_identified` and the SDK still agree, nothing can be bought signed out, `purchase` checks the SDK's own `appUserID`, the next identify re-checks it; the old wedge was worse | comment |
+| T2 P3 | after "already owned", ONE check cannot tell "still confirming here" from "another account", so the line could be false | real | the line now names both: "If you just bought it here, tap RESTORE in a minute. If not, it is on another AVYA account..." (mutant: old copy back, red) |
+| T3 P3 | a dead ternary in the leg test | real | written as "both answer 410" |
+
+Converged: round 3 found nothing new at P0/P1, and its one P2 is a documented, contained residue of the round-2 timeout.

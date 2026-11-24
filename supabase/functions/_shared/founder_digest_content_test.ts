@@ -207,6 +207,38 @@ Deno.test("computeNewMrr counts a genuinely unrecognized plan value as unknown, 
   assertEquals(result.unknownPlanCount, 1);
 });
 
+Deno.test("computeNewMrr (OI-519 U4): a Google Play row is counted apart, never priced into New MRR", () => {
+  const result = computeNewMrr([
+    subRow("monthly"),
+    { plan: "monthly", created_at: "2026-11-24T10:00:00Z", store: "play" },
+    { plan: "yearly", created_at: "2026-11-24T10:00:00Z", store: "play" },
+  ]);
+  assertEquals(result.rupees, 349);
+  assertEquals(result.playCount, 2);
+  assertEquals(result.unknownPlanCount, 0);
+});
+
+Deno.test("buildDigestText (OI-519 U4) prints the Play line only when there is one, and the read selects store", async () => {
+  const base = {
+    dayLabel: "2026-11-24",
+    windowed: { rows: [] },
+    lifetime: { rows: [] },
+    alerts: { rows: [] },
+    expiringSoon: { count7d: 0, count30d: 0 },
+    ...EMPTY_B_EXTRAS,
+  };
+  const withPlay = buildDigestText({
+    ...base,
+    subscriptions: { rows: [subRow("monthly"), { plan: "monthly", created_at: "2026-11-24T10:00:00Z", store: "play" }] },
+  } as DigestInput);
+  assertStringIncludes(withPlay, "New MRR: ₹349");
+  assertStringIncludes(withPlay, "New Google Play subscriptions: 1 (not in MRR)");
+  const webOnly = buildDigestText({ ...base, subscriptions: { rows: [subRow("monthly")] } } as DigestInput);
+  assertEquals(webOnly.includes("Google Play"), false);
+  const src = (await Deno.readTextFile(new URL("./founder_digest_content.ts", import.meta.url))).replace(/\s+/g, " ");
+  assertEquals(src.includes('.select("id, plan, created_at, store")'), true);
+});
+
 Deno.test("computeNewMrr returns zero/zero for an empty rows array", () => {
   const result = computeNewMrr([]);
   assertEquals(result.rupees, 0);

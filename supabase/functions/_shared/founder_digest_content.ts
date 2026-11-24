@@ -158,6 +158,8 @@ export interface AlertRow {
 export interface SubscriptionRow {
   plan: string;
   created_at: string;
+  /** OI-519 U4: `'play'` for a Google Play row (never priced into New MRR), else null. */
+  store?: string | null;
 }
 
 /**
@@ -262,10 +264,18 @@ const KNOWN_ZERO_PRICE_PLANS = new Set(["referral_trial"]);
  */
 export function computeNewMrr(
   rows: readonly SubscriptionRow[],
-): { rupees: number; unknownPlanCount: number } {
+): { rupees: number; unknownPlanCount: number; playCount: number } {
   let rupeesExact = 0;
   let unknownPlanCount = 0;
+  // OI-519 U4 (founder Q4/Q5): a Google Play row is priced by Google (₹449 /
+  // ₹3,499, less Google's fee), never by PLAN_PRICES_RUPEES: counted apart,
+  // MRR stays web-only.
+  let playCount = 0;
   for (const r of rows) {
+    if (r.store === "play") {
+      playCount++;
+      continue;
+    }
     if (KNOWN_ZERO_PRICE_PLANS.has(r.plan)) continue;
     const price = PLAN_PRICES_RUPEES[r.plan];
     if (price === undefined) {
@@ -274,7 +284,7 @@ export function computeNewMrr(
     }
     rupeesExact += r.plan === "yearly" ? price / 12 : price;
   }
-  return { rupees: Math.round(rupeesExact), unknownPlanCount };
+  return { rupees: Math.round(rupeesExact), unknownPlanCount, playCount };
 }
 
 /**
@@ -736,6 +746,9 @@ export function buildDigestText(input: DigestInput): string {
     // a discount that is never persisted on the row — review round 1).
     const mrr = computeNewMrr(input.subscriptions.rows);
     lines.push(`New MRR: ₹${mrr.rupees} (gross, before promo discounts)`);
+    if (mrr.playCount > 0) {
+      lines.push(`New Google Play subscriptions: ${mrr.playCount} (not in MRR)`);
+    }
     if (mrr.unknownPlanCount > 0) {
       lines.push(
         `⚠ ${mrr.unknownPlanCount} subscription(s) with an unpriced plan value excluded from MRR — add to PLAN_PRICES_RUPEES`,
@@ -960,7 +973,7 @@ export async function gatherDigestInput(
       () =>
         supabase
           .from("subscriptions")
-          .select("id, plan, created_at")
+          .select("id, plan, created_at, store")
           .eq("status", "active")
           .gte("created_at", yStart)
           .lt("created_at", tStart),

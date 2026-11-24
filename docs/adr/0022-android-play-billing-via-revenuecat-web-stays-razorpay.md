@@ -113,10 +113,17 @@ Bad:
 - `razorpay_flutter` stays in the Android build until a separate, checked removal (checklist 2.6: it is the likely
   source of the `NFC` and `READ_BASIC_PHONE_STATE` permissions); the web build needs none of it.
 
+- **Built for +51 (OI-519, 2026-11-24).** Decision 8's price is decided: Play ₹449 / ₹3,499 (founder Q5, 2026-11-23);
+  the web keeps ₹349 / ₹2,999. Referral days for a Play subscriber defer Google's next charge (Q1 = B). Sandbox
+  purchases grant PRO but never count as paid. Every MRR figure stays web-only; Play subscribers are counted apart (Q4).
+  The `play_billing` build is the one that sells; `none` stays the fallback. Plan:
+  `docs/plans/2026-11-23-revenuecat-play-billing-51.md`; flow: `docs/architecture/payment.md` "Google Play (OI-519)".
+
 ## Status
 
-Active. Amends ADR-0005; ADR-0019 unchanged. Implementation plan:
-`docs/plans/2026-11-20-android-play-billing.md`.
+Active. Amends ADR-0005; ADR-0019 unchanged. Implementation plans:
+`docs/plans/2026-11-20-android-play-billing.md` (the purchase mode, the `none` build) and
+`docs/plans/2026-11-23-revenuecat-play-billing-51.md` (the Play Billing build, OI-519).
 
 ## See also
 

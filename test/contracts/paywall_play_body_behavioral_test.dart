@@ -38,6 +38,9 @@ class _Store implements PlayStore {
   PlayPlanOffer? bought;
   String? boughtFor;
 
+  /// When set, purchase waits for it (the Google sheet still open).
+  Completer<void>? hold;
+
   static const monthly = PlayPlanOffer(
       period: PlayPlanPeriod.monthly, priceString: '₹449.00', price: 449);
   static const yearly = PlayPlanOffer(
@@ -66,6 +69,8 @@ class _Store implements PlayStore {
     calls.add('purchase:${offer.planId}');
     bought = offer;
     boughtFor = expectedUid;
+    final h = hold;
+    if (h != null) await h.future;
     return outcome;
   }
 
@@ -78,6 +83,8 @@ class _Sub extends SubscriptionInfoNotifier {
   final SubscriptionInfoData data;
   @override
   SubscriptionInfoData build() => data;
+
+  void set(SubscriptionInfoData next) => state = next;
 }
 
 class _NoSubs implements SubscriptionService {
@@ -293,14 +300,79 @@ void main() {
       expect(_store.bought?.period, PlayPlanPeriod.yearly);
     });
 
-    testWidgets('purchased but not yet confirmed: the slow line, buy again '
-        'possible', (tester) async {
+    testWidgets('purchased but not yet confirmed: the slow line names the '
+        'RESTORE button on screen; no buy button (a second buy would read '
+        'as another account); RESTORE confirms', (tester) async {
       _confirmAnswer = false;
       await _open(tester);
       await _tap(tester, _buy);
       expect(_confirms, [true]);
       expect(_statusText(tester), PurchaseCopy.playConfirmSlow);
-      expect(_buy, findsOneWidget);
+      expect(PurchaseCopy.playConfirmSlow, contains('RESTORE'));
+      expect(find.text('RESTORE'), findsOneWidget);
+      expect(_buy, findsNothing);
+      _confirmAnswer = true;
+      await _tap(tester, find.text('RESTORE'));
+      expect(_confirms, [true, false]);
+      expect(_statusText(tester), PurchaseCopy.playRestored);
+      expect(_store.calls.where((c) => c.startsWith('purchase')).length, 1);
+    });
+
+    testWidgets('the sheet closes while Google is charging: the confirm '
+        'still runs once the purchase lands', (tester) async {
+      final hold = Completer<void>();
+      _store.hold = hold;
+      await _open(tester);
+      await tester.ensureVisible(_buy);
+      await tester.pump();
+      await tester.tap(_buy);
+      await tester.pump();
+      final nav = tester.state<NavigatorState>(find.byType(Navigator).first);
+      nav.pop();
+      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('paywall-play-body')), findsNothing);
+      expect(_confirms, isEmpty);
+      hold.complete();
+      await tester.pumpAndSettle();
+      expect(_confirms, [true]);
+    });
+
+    testWidgets('a double tap on buy starts ONE purchase; RESTORE is off '
+        'while it runs', (tester) async {
+      final hold = Completer<void>();
+      _store.hold = hold;
+      await _open(tester);
+      await tester.ensureVisible(_buy);
+      await tester.pump();
+      final onBuy = tester.widget<WardButton>(_buy).onPressed!;
+      onBuy();
+      onBuy();
+      await tester.pump();
+      await tester.tap(find.text('RESTORE'));
+      await tester.pump();
+      expect(_confirms, isEmpty, reason: 'RESTORE disabled while buying');
+      hold.complete();
+      await tester.pumpAndSettle();
+      expect(_store.calls.where((c) => c.startsWith('purchase')).length, 1);
+      expect(_confirms, [true]);
+    });
+
+    testWidgets('the sheet closes on a cancelled purchase: no confirm',
+        (tester) async {
+      final hold = Completer<void>();
+      _store
+        ..hold = hold
+        ..outcome = const PlayPurchaseOutcome(PlayPurchaseStatus.cancelled);
+      await _open(tester);
+      await tester.ensureVisible(_buy);
+      await tester.pump();
+      await tester.tap(_buy);
+      await tester.pump();
+      tester.state<NavigatorState>(find.byType(Navigator).first).pop();
+      await tester.pumpAndSettle();
+      hold.complete();
+      await tester.pumpAndSettle();
+      expect(_confirms, isEmpty);
     });
 
     testWidgets('cancelled: back to the plans, no message, no confirm',
@@ -331,13 +403,33 @@ void main() {
       _store.outcome = const PlayPurchaseOutcome(
           PlayPurchaseStatus.ownedByOtherAccount,
           errorCode: 'productAlreadyPurchasedError');
+      _confirmAnswer = false;
       await _open(tester);
       expect(_manage, findsNothing);
       await _tap(tester, _buy);
-      expect(_confirms, isEmpty);
+      expect(_confirms, [false], reason: 'this account is checked first');
       expect(_statusText(tester), PurchaseCopy.playOwnedByOtherAccount);
+      // One check cannot tell "still confirming here" from "another
+      // account": the line names both, and the RESTORE it names is on screen.
+      expect(PurchaseCopy.playOwnedByOtherAccount, contains('RESTORE'));
+      expect(PurchaseCopy.playOwnedByOtherAccount,
+          contains('another AVYA account'));
+      expect(find.text('RESTORE'), findsOneWidget);
       await _tap(tester, _manage);
       expect(_manageOpens, 1);
+    });
+
+    testWidgets('"already owned" while THIS account\'s purchase is still '
+        'confirming (another sheet): the check finds PRO, no "another '
+        'account" line', (tester) async {
+      _store.outcome = const PlayPurchaseOutcome(
+          PlayPurchaseStatus.ownedByOtherAccount,
+          errorCode: 'productAlreadyPurchasedError');
+      await _open(tester);
+      await _tap(tester, _buy);
+      expect(_confirms, [false]);
+      expect(_statusText(tester), PurchaseCopy.playRestored);
+      expect(_manage, findsNothing);
     });
 
     testWidgets('identity mismatch: nothing charged, the account line',
@@ -419,6 +511,24 @@ void main() {
       expect(_manageOpens, 1);
     });
 
+    testWidgets('the paid plan lapses while the sheet is open: the plans '
+        'load (never stuck on loading)', (tester) async {
+      await _open(tester,
+          info: SubscriptionInfoData(
+              isPro: true,
+              plan: 'monthly',
+              expiresAt: DateTime.utc(2026, 12, 10, 6)));
+      expect(_store.calls, isEmpty);
+      final container = ProviderScope.containerOf(
+          tester.element(find.byKey(const ValueKey('paywall-play-body'))));
+      (container.read(subscriptionInfoProvider.notifier) as _Sub)
+          .set(const SubscriptionInfoData());
+      await tester.pumpAndSettle();
+      expect(_store.calls, ['identify:$_uid', 'loadPlans']);
+      expect(find.byKey(const ValueKey('paywall-play-loading')), findsNothing);
+      expect(_buy, findsOneWidget);
+    });
+
     testWidgets('a web or other paid row: PRO until, no manage link',
         (tester) async {
       await _open(tester,
@@ -445,6 +555,48 @@ void main() {
       expect(playBuyerUid(authUid: 'a', hiveOwner: null), isNull);
       expect(playBuyerUid(authUid: null, hiveOwner: 'a'), isNull);
       expect(playBuyerUid(authUid: '', hiveOwner: ''), isNull);
+    });
+
+    test('playSyncAnswerForStatus: 429 and other 4xx stop, 408 and 5xx retry',
+        () {
+      for (final s in [400, 401, 403, 404, 405, 429]) {
+        expect(playSyncAnswerForStatus(s), PlaySyncAnswer.stop, reason: '$s');
+      }
+      for (final s in [408, 500, 502, 503, 0]) {
+        expect(playSyncAnswerForStatus(s), PlaySyncAnswer.notPro,
+            reason: '$s');
+      }
+    });
+
+    test('SerialSteps: the second step starts only after the first ends, '
+        'and a failed step does not block the next', () async {
+      final steps = SerialSteps();
+      final log = <String>[];
+      final gate = Completer<void>();
+      final a = steps.run(() async {
+        log.add('a-start');
+        await gate.future;
+        log.add('a-end');
+        throw StateError('a failed');
+      });
+      final b = steps.run(() async => log.add('b'));
+      await Future<void>.delayed(Duration.zero);
+      expect(log, ['a-start']);
+      gate.complete();
+      await expectLater(a, throwsStateError);
+      await b;
+      expect(log, ['a-start', 'a-end', 'b']);
+    });
+
+    test('SerialSteps: a step that hangs fails its own caller on the timeout; '
+        'the next step still runs', () async {
+      final steps = SerialSteps(timeout: const Duration(milliseconds: 30));
+      final log = <String>[];
+      final hung = steps.run(() => Completer<void>().future);
+      final next = steps.run(() async => log.add('next'));
+      await expectLater(hung, throwsA(isA<TimeoutException>()));
+      await next;
+      expect(log, ['next']);
     });
 
     test('confirmPlayPro: stops on PRO or stop, always ends with verify',

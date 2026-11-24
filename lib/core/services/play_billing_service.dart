@@ -144,8 +144,15 @@ class RevenueCatPlayStore implements PlayStore {
   @override
   bool get hasKey => AppConstants.revenueCatGoogleKey.startsWith('goog_');
 
+  /// identify / releaseIdentity run one at a time: a sign-out landing while
+  /// identify(A) is in flight must not leave the SDK (or [_identified]) on A,
+  /// and two identify calls must not both configure the SDK.
+  final SerialSteps _steps = SerialSteps();
+
   @override
-  Future<void> identify(String uid) async {
+  Future<void> identify(String uid) => _steps.run(() => _identify(uid));
+
+  Future<void> _identify(String uid) async {
     if (!hasKey) throw StateError('play_billing_key_missing');
     if (_identified == uid) return;
     if (!await Purchases.isConfigured) {
@@ -202,7 +209,9 @@ class RevenueCatPlayStore implements PlayStore {
   }
 
   @override
-  Future<void> releaseIdentity() async {
+  Future<void> releaseIdentity() => _steps.run(_releaseIdentity);
+
+  Future<void> _releaseIdentity() async {
     try {
       if (_identified == null || !await Purchases.isConfigured) return;
       _identified = null;
@@ -224,6 +233,28 @@ const String kPlayManageUrl =
     'https://play.google.com/store/account/subscriptions'
     '?sku=avya_pro&package=com.icanbefitter.icanbefitter';
 
+/// Runs async steps one at a time, in call order. A step that fails, or takes
+/// longer than [timeout], fails its own caller only; the next step still runs
+/// (a hung SDK call must not wedge every later identify or sign-out).
+///
+/// A timed-out step is NOT cancelled: a late `logIn(A)` can land after a later
+/// sign-out, leaving the SDK and `_identified` both on A while signed out.
+/// Accepted (B-pass round 3, 2026-11-24): the two still agree, nothing can be
+/// bought signed out, `purchase` checks the SDK's own `appUserID`, and the
+/// next `identify` re-checks it and logs in the right user.
+class SerialSteps {
+  SerialSteps({this.timeout = const Duration(seconds: 30)});
+
+  final Duration timeout;
+  Future<void> _tail = Future<void>.value();
+
+  Future<void> run(Future<void> Function() step) {
+    final next = _tail.then((_) => step().timeout(timeout));
+    _tail = next.then<void>((_) {}, onError: (Object _) {});
+    return next;
+  }
+}
+
 /// PURE. The signed-in user may buy only when the auth uid and the Hive
 /// owner agree (`auth_hive_owner_agreement`): a purchase is bound to the
 /// RevenueCat App User ID, so a half-switched account must never buy.
@@ -240,9 +271,17 @@ enum PlaySyncAnswer {
   /// Not PRO (yet), or a failure worth one more try.
   notPro,
 
-  /// Rate limited (429): stop asking.
+  /// Rate limited (429) or a client error another ask cannot fix: stop asking.
   stop,
 }
+
+/// PURE. A `revenuecat-sync` error status as an answer: 429 and every other
+/// 4xx except 408 stop (another ask spends a unit and gets the same answer);
+/// 408 and 5xx (503 `store_unavailable`) are worth one more try.
+PlaySyncAnswer playSyncAnswerForStatus(int status) =>
+    (status >= 400 && status < 500 && status != 408)
+        ? PlaySyncAnswer.stop
+        : PlaySyncAnswer.notPro;
 
 /// PURE loop. Asks `revenuecat-sync` up to [attempts] times until it answers
 /// [PlaySyncAnswer.pro] (or [PlaySyncAnswer.stop]), then ALWAYS ends with
@@ -277,7 +316,7 @@ Future<PlaySyncAnswer> revenueCatSyncOnce() async {
     final code = details is Map ? details['error_code'] : null;
     unawaited(ErrorTelemetry.logEvent('revenuecat_sync_failed',
         message: 'status=${e.status} code=$code'));
-    return e.status == 429 ? PlaySyncAnswer.stop : PlaySyncAnswer.notPro;
+    return playSyncAnswerForStatus(e.status);
   } catch (e) {
     unawaited(ErrorTelemetry.logEvent('revenuecat_sync_failed',
         message: 'type=${e.runtimeType}'));
@@ -286,7 +325,7 @@ Future<PlaySyncAnswer> revenueCatSyncOnce() async {
 }
 
 /// Polls after a purchase (Google can take a few seconds to hand RevenueCat
-/// the receipt); one ask on RESTORE / CHECK MY PRO STATUS. Each ask spends
+/// the receipt); one ask on RESTORE. Each ask spends
 /// one of the user's 20 hourly `revenuecat-sync` units.
 const int kPlayConfirmAttemptsAfterPurchase = 4;
 

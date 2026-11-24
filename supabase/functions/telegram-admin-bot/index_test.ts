@@ -275,6 +275,46 @@ Deno.test("cmdRevenue reports active subscription counts by plan and MRR", async
   assertStringIncludes(text, "monthly: 2");
   assertStringIncludes(text, "yearly: 1");
   assertStringIncludes(text, "MRR: ₹948");
+  assertStringIncludes(text, "Google Play: 0 (not in MRR)");
+});
+
+Deno.test("cmdRevenue (OI-519 U4): Google Play rows are counted on their own line, never priced into MRR", async () => {
+  let rangeCalls = 0;
+  let selected = "";
+  const fake = {
+    from: (_table: string) => ({
+      select: (cols: string) => {
+        selected = cols;
+        return {
+          eq: () => ({
+            order: () => ({
+              range: () => {
+                rangeCalls++;
+                return Promise.resolve(
+                  rangeCalls === 1
+                    ? {
+                      data: [
+                        { plan: "monthly", store: null },
+                        { plan: "monthly", store: "play" },
+                        { plan: "yearly", store: "play" },
+                      ],
+                      error: null,
+                    }
+                    : { data: [], error: null },
+                );
+              },
+            }),
+          }),
+        };
+      },
+    }),
+  };
+  const text = await cmdRevenue(fake);
+  assertEquals(selected, "plan, store");
+  assertStringIncludes(text, "MRR: ₹349 (web)");
+  assertStringIncludes(text, "monthly: 1");
+  assertStringIncludes(text, "Google Play: 2 (not in MRR)");
+  assertEquals(text.includes("yearly:"), false, "the Play yearly row is not a web yearly row");
 });
 
 Deno.test("cmdRevenue's fetchAllPages call is bounded at maxPages:200 (R2-14) — an unbounded read risks exceeding Telegram's webhook timeout", async () => {

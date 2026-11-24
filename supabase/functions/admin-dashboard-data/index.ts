@@ -134,6 +134,8 @@ export interface PlanCounts {
   yearlyActive: number;
   trialActive: number;
   otherActive: number;
+  /** OI-519 U4: active Google Play rows (any plan). NOT in monthly/yearly, so derived MRR stays web-only. */
+  playActive: number;
 }
 
 /**
@@ -141,22 +143,26 @@ export interface PlanCounts {
  * the paying plans; `referral_trial` is a non-paying trial (surfaced so the
  * split reconciles against the active-sub count); anything else falls into
  * `otherActive` so a future unforeseen plan value is visible, never silently
- * dropped. monthlyActive + yearlyActive + trialActive + otherActive == rows.length.
+ * dropped. monthlyActive + yearlyActive + trialActive + otherActive + playActive == rows.length.
+ * OI-519 U4: a Google Play row (`store = 'play'`) counts ONLY in `playActive`: its price is Google's (₹449 / ₹3,499,
+ * less Google's fee), never the web price, so monthly/yearly and the derived MRR are web-only (founder Q4/Q5).
  * These are ROWS per plan, not users: since OI-341 Piece B2a a referral-trial
  * user who buys holds a trial row AND a paid row at once (stacking), so the
  * same person can count under trialActive and monthlyActive/yearlyActive.
  */
 export function bucketActivePlans(
-  rows: Array<{ plan: string | null }>,
+  rows: Array<{ plan: string | null; store?: string | null }>,
 ): PlanCounts {
   const counts: PlanCounts = {
     monthlyActive: 0,
     yearlyActive: 0,
     trialActive: 0,
     otherActive: 0,
+    playActive: 0,
   };
   for (const row of rows) {
-    if (row.plan === "monthly") counts.monthlyActive++;
+    if (row.store === "play") counts.playActive++;
+    else if (row.plan === "monthly") counts.monthlyActive++;
     else if (row.plan === "yearly") counts.yearlyActive++;
     else if (row.plan === "referral_trial") counts.trialActive++;
     else counts.otherActive++;
@@ -243,7 +249,7 @@ export const handler = async (req: Request): Promise<Response> => {
         admin.rpc("founder_metrics_for_admin_api").single(),
         admin.rpc("founder_metrics_engagement").single(),
         admin.rpc("founder_metrics_ops").single(),
-        admin.from("subscriptions").select("plan").eq("status", "active"),
+        admin.from("subscriptions").select("plan, store").eq("status", "active"),
         // OI-202: derived from `subscriptions` (null = the read failed —
         // handled below).
         loadExpiryRows(admin, expiryFloorIso, expiryWindowIso),
@@ -272,7 +278,7 @@ export const handler = async (req: Request): Promise<Response> => {
     // `otherActive` is a catch-all so a future unforeseen plan value can
     // never silently re-open that gap (monthly+yearly+trial+other == active).
     const planCounts = bucketActivePlans(
-      (planRes.data ?? []) as Array<{ plan: string | null }>,
+      (planRes.data ?? []) as Array<{ plan: string | null; store: string | null }>,
     );
 
     const expiryRows = expiryRes as ExpirySubscriptionRow[];
@@ -300,6 +306,8 @@ export const handler = async (req: Request): Promise<Response> => {
         yearly_active: planCounts.yearlyActive,
         trial_active: planCounts.trialActive,
         other_active: planCounts.otherActive,
+        // OI-519 U4: Google Play subscribers, counted apart (not in derived_mrr_inr).
+        play_active: planCounts.playActive,
         derived_mrr_inr: derivedMrr,
         current_monthly_price_inr: MONTHLY_PRICE_INR,
         current_yearly_price_inr: YEARLY_PRICE_INR,

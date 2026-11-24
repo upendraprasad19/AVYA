@@ -247,7 +247,7 @@ void main() {
       expect(
           code,
           contains('const { data: paidRows, error: paidErr } = await supabase .from("subscriptions") .select("id") '
-              '.eq("user_id", referee.id) .in("plan", PAID_PLANS) .not("razorpay_payment_id", "is", null) .limit(1); '
+              '.eq("user_id", referee.id) .in("plan", PAID_PLANS) .or(PAID_ROW_FILTER) .limit(1); '
               'if (paidErr) { console.warn('),
           reason: 'the read must keep its error binding: a failing check is logged, not silently discarded');
       final warn = code.indexOf('if (paidErr) { console.warn(');

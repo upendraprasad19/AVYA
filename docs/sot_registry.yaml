@@ -1157,6 +1157,15 @@ concepts:
     behavioral_test_path_cqrs: test/contracts/subscription_cqrs_behavioral_test.dart
     writers:
       - file: lib/core/services/subscription_service.dart
+        line_range: 32-43
+        method: playDisplayFields (OI-519 U5; the Play display fields of one read, fed to writeSubscriptionState)
+        notes: |
+          OI-519: a Google Play row reaches this concept through the server mirror (concept
+          play_subscription_mirror) and verify-subscription / refreshFromSupabase; writeSubscriptionState
+          writes pro_store / pro_auto_renews / pro_store_expires_at (null DELETES each), _downgradeLocally
+          deletes them. Gating never reads them. Behavioral:
+          test/contracts/play_subscription_display_state_behavioral_test.dart.
+      - file: lib/core/services/subscription_service.dart
         line_range: 1099-1143
         method: _downgradeLocally (the SINGLE downgrade sink — every path funnels here)
       - file: lib/core/services/subscription_service.dart
@@ -1360,6 +1369,59 @@ concepts:
       kPaymentGraceWindow, payment_timing.dart) suppresses downgrade for
       ~21m45s after Razorpay success — DERIVED from the verify-payment retry
       schedule so it always outlives the last retry (OI-182).
+
+  - concept: play_subscription_mirror
+    domain: subscription
+    behavioral_test_path: supabase/functions/_shared/revenuecat_mirror_test.ts
+    description: |
+      OI-519 (+51, ADR-0022): the Google Play subscription, read from RevenueCat's REST API and written into
+      `subscriptions` as ONE row per user with store = 'play' (end_date = Google's expiry + 3 h while it
+      renews; store_expires_at = Google's own expiry; auto_renew; store_environment). The ONLY writer is
+      the shared mirror, through the SECURITY DEFINER RPC of migration 182 (ordering guard on the read
+      time; a SANDBOX read never replaces a running PRODUCTION row). Callers: revenuecat-webhook,
+      revenuecat-sync, revenuecat-reconcile. Gating reads the row like any other (status active,
+      end_date > now); display reads store_expires_at. A PRODUCTION Play row is paid for referrals; a
+      SANDBOX one is not. MRR stays web-only: every revenue reader counts Play rows apart.
+      Local proofs: test/sql/play_subscriptions_local.sh, test/sql/revenuecat_reconcile_postgrest_local.sh.
+    writers:
+      - file: supabase/functions/_shared/revenuecat_mirror.ts
+        line_range: 204-238
+        method: mirrorRevenueCatCustomer (uid guard, read_at before the GET, map, upsert)
+      - file: supabase/functions/_shared/revenuecat_mirror.ts
+        line_range: 247-293
+        method: supabaseMirrorDb (upsertPlayRow -> RPC upsert_play_subscription, alert, userExists)
+    reader_manifest_complete: true
+    readers:
+      - file: supabase/functions/verify-subscription/logic.ts
+        line_range: 17-24
+        method: playDisplayFields (store / auto_renew / store_expires_at, null on any non-Play row)
+        semantic: pass-through
+        fields_read: [store, auto_renew, store_expires_at]
+      - file: supabase/functions/revenuecat-sync/logic.ts
+        line_range: 46-60
+        method: shape (verify-subscription's body plus the Play display fields)
+        semantic: pass-through
+        fields_read: [plan, end_date, store, auto_renew, store_expires_at]
+      - file: lib/core/services/subscription_service.dart
+        line_range: 32-43
+        method: playDisplayFields (client: only store == play yields values)
+        semantic: pass-through
+        fields_read: [store, auto_renew, store_expires_at]
+      - file: supabase/functions/_shared/subscription.ts
+        line_range: 295-322
+        method: fetchRenewingPlayUserIds (expiry-reminder skips a renewing Play subscriber)
+        semantic: flag-check
+        fields_read: [store, auto_renew, status, end_date]
+      - file: supabase/functions/admin-dashboard-data/index.ts
+        line_range: 153-171
+        method: bucketActivePlans (a Play row counts only as playActive; MRR web-only)
+        semantic: aggregated
+        fields_read: [plan, store]
+      - file: supabase/functions/delete-account/index.ts
+        line_range: 312-344
+        method: cancelAndDeletePlayCustomer (cancel each non-refunded Play subscription, then delete the RevenueCat customer)
+        semantic: pass-through
+        fields_read: [store_original_transaction_id, store, status]
 
   - concept: water_target
     domain: water
@@ -9370,7 +9432,7 @@ concepts:
       function — repository is a thin transport wrapper.
     writers:
       - file: supabase/functions/redeem-referral/index.ts
-        line_range: 113-186
+        line_range: 116-189
         method: redeem_referral_atomic RPC call
         notes: |
           Migration 159 / unit S2 (2026-10-13): step 5b refuses a referee who
@@ -9731,22 +9793,22 @@ concepts:
         semantic: derived-latest-end-per-user
         fields_read: [subscriptions.user_id, subscriptions.end_date, subscriptions.status]
       - file: supabase/functions/_shared/founder_digest_content.ts
-        line_range: 971-997
+        line_range: 984-1010
         method: gatherDigestInput latestEndRead + expiringSoon
         semantic: one-shared-read-two-sections
         fields_read: [subscriptions.user_id, subscriptions.end_date]
       - file: supabase/functions/_shared/founder_digest_content.ts
-        line_range: 1083-1095
+        line_range: 1096-1108
         method: gatherDigestInput lapsedYesterday
         semantic: half-open-yesterday-window
         fields_read: [subscriptions.user_id, subscriptions.end_date]
       - file: supabase/functions/telegram-admin-bot/index.ts
-        line_range: 281-300
+        line_range: 289-308
         method: cmdExpiring
         semantic: throws-on-null
         fields_read: [subscriptions.user_id, subscriptions.end_date]
       - file: supabase/functions/expiry-reminder/index.ts
-        line_range: 58-80
+        line_range: 62-90
         method: cron selection of users to remind (3-day window)
         semantic: latest-end-per-user
         fields_read: [subscriptions.user_id, subscriptions.end_date]
@@ -11481,7 +11543,7 @@ concepts:
           offline hold never emits because AppEventsService drops failed inserts
           with no queue.
       - file: lib/features/admin/widgets/revenue_tab.dart
-        line_range: 1-174
+        line_range: 1-181
         method: RevenueTab.build
         semantic: aggregated
         fields_read: [current.activeSubscriptions, current.freeUsers, current.proExpired, revenue.monthlyActive, revenue.yearlyActive, revenue.trialActive, revenue.otherActive, revenue.derivedMrrInr, revenue.currentMonthlyPriceInr, revenue.currentYearlyPriceInr, subscriptionsExpiring.expired, subscriptionsExpiring.expiring7d, subscriptionsExpiring.expiring30d]
@@ -11697,7 +11759,7 @@ concepts:
           (rolling 168h, matching the 093/101 house convention), holders_total
           (all-time distinct users). The parity test pins the count at 3.
       - file: supabase/functions/admin-dashboard-data/index.ts
-        line_range: 130-258
+        line_range: 130-264
         method: handler
         semantic: pass-through
         fields_read: [holds_started_today, holds_started_7d, holders_total]
@@ -14311,7 +14373,7 @@ concepts:
         fields_read: [workout_reminders.enabled]
         notes: INLINE reader — does NOT use _shared/notification_prefs.ts.
       - file: supabase/functions/expiry-reminder/index.ts
-        line_range: 118-123
+        line_range: 128-133
         method: inline snapshot read
         semantic: flag-check
         fields_read: [subscription_reminders.enabled]
@@ -18206,7 +18268,7 @@ concepts:
     reader_manifest_complete: true
     readers:
       - file: supabase/functions/_shared/subscription.ts
-        line_range: 310-348
+        line_range: 356-394
         method: readProState
         semantic: three-state-pro-read
         fields_read: [subscriptions.user_id, subscriptions.status, subscriptions.end_date]
@@ -18413,7 +18475,7 @@ concepts:
         method: `cron.schedule`
         notes: Unscheduled BY JOBID, not by a quoted name (Gate 31 reads the quoted form as "this job is gone", OI-193).
       - file: supabase/functions/redeem-referral/index.ts
-        line_range: 100-145
+        line_range: 103-148
         method: redeem_referral_atomic RPC call
         notes: The only caller. Passes the four declared parameters. (The range is deliberately the whole cascade: unit S2 inserts a paid-referee check before the RPC call and shifts it a few lines.) Its mapping of the RPC's `referee_has_paid_plan` refusal to a 400 is unit S2 of the plan, not part of migration 159.
     reader_manifest_complete: true
@@ -18449,7 +18511,7 @@ concepts:
         fields_read: [referral_redemptions.id, referral_redemptions.referee_id]
         notes: Filters `referee_id = <signed-in user>` and the select reads only `id`; a NULL referrer is irrelevant, and a row whose referee was deleted cannot match. The counts surface (JOINED / SUBSCRIBED / DAYS EARNED) is unit C of the plan and adds its own reader.
       - file: supabase/functions/redeem-referral/index.ts
-        line_range: 100-120
+        line_range: 103-123
         method: idempotency read
         semantic: flag-check
         fields_read: [referral_redemptions.referee_id]
@@ -19977,7 +20039,7 @@ concepts:
         method: DIGEST_KEYS create_order (subday, no cap)
         semantic: aggregate
       - file: supabase/functions/_shared/founder_digest_content.ts
-        line_range: 292-313
+        line_range: 302-323
         method: NON_ACTIVITY_KEYS + QUOTA_KILL_SWITCHES (create_order, promo_validate)
         semantic: aggregate
     hive:

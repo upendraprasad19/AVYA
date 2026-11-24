@@ -128,10 +128,13 @@ class PurchaseCopy {
   static const String playPending =
       'Payment pending. PRO unlocks once Google confirms it.';
 
-  /// This Google account's subscription belongs to another AVYA account.
+  /// Google says this Google account already owns PRO and one check of THIS
+  /// account found none: either this account's purchase is still being
+  /// confirmed, or the subscription belongs to another AVYA account.
   static const String playOwnedByOtherAccount =
-      'This Google account already has PRO on another AVYA account. '
-      'Sign in with that account, or manage it in Google Play.';
+      'This Google account already has PRO. If you just bought it here, tap '
+      'RESTORE in a minute. If not, it is on another AVYA account: sign in '
+      'with that one, or manage it in Google Play.';
 
   /// The store's user is not (yet) the signed-in user: nothing was charged.
   static const String playAccountNotReady =
@@ -143,7 +146,7 @@ class PurchaseCopy {
   /// Google took the order but our server has not confirmed PRO yet.
   static const String playConfirmSlow =
       'Google took your order. PRO is still being confirmed: tap '
-      'CHECK MY PRO STATUS in a minute.';
+      'RESTORE in a minute.';
 
   static const String playRestored = 'PRO restored.';
   static const String playWelcome = 'You are PRO. Every feature is unlocked.';

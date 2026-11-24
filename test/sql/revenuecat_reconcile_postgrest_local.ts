@@ -6,6 +6,7 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
 import { reconcileDb } from "../../supabase/functions/revenuecat-reconcile/index.ts";
 import { ledgerWriter } from "../../supabase/functions/revenuecat-webhook/index.ts";
+import { PAID_ROW_FILTER } from "../../supabase/functions/redeem-referral/index.ts";
 import { type PlayRow, supabaseMirrorDb } from "../../supabase/functions/_shared/revenuecat_mirror.ts";
 
 const BASE = "http://127.0.0.1:" + (Deno.env.get("OI519_PGRST_PORT") ?? "54399");
@@ -125,6 +126,21 @@ await step("ledger write 2 (the retry)", () => ledgerWriter(client)(rec("mirrore
 const { data: ev } = await client.from("subscription_events").select("outcome, provider").eq("provider_event_id", "evt_local_1").limit(5);
 check("ledger: a retried event id stays ONE row, with the latest outcome", Array.isArray(ev) && ev.length === 1 && ev[0].outcome === "mirrored" &&
   ev[0].provider === "revenuecat", JSON.stringify(ev));
+
+// 10. U4: redeem-referral's paid pre-check filter, through the REAL PostgREST, means the SQL's "paid" (182): a payment id
+// OR a PRODUCTION Play row, any status; a SANDBOX Play row is not paid.
+const paid = async (uid: string) => {
+  const { data, error } = await client.from("subscriptions").select("id").eq("user_id", uid)
+    .in("plan", ["monthly", "yearly"]).or(PAID_ROW_FILTER).limit(1);
+  if (error) check(`paid filter read ${uid}`, false, JSON.stringify(error));
+  return Array.isArray(data) && data.length > 0;
+};
+check("paid: a PRODUCTION Play row (active) is paid", await paid("00000000-0000-4000-8000-00000000d002"));
+check("paid: a PRODUCTION Play row (expired) is paid", await paid("00000000-0000-4000-8000-00000000d001"));
+check("paid: a Razorpay row is paid", await paid("00000000-0000-4000-8000-00000000d006"));
+check("paid: a SANDBOX Play row (expired) is NOT paid", !(await paid("00000000-0000-4000-8000-00000000d005")));
+check("paid: a SANDBOX Play row (active) is NOT paid", !(await paid(U2)));
+check("paid: no subscriptions row is NOT paid", !(await paid(U3)));
 
 console.log(failures === 0 ? "ALL PASSED" : `${failures} FAILED`);
 Deno.exit(failures === 0 ? 0 : 1);

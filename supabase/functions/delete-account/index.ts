@@ -10,6 +10,9 @@
 //      (protects user from post-deletion charges); a failure is RECORDED in
 //      account_deletion_log.razorpay_cancel_status and the erasure PROCEEDS so a
 //      Razorpay outage can't block a legally-required DPDP §17 deletion
+//   4b. Google Play (OI-519): cancel each non-refunded Play subscription through RevenueCat, then delete the
+//      RevenueCat customer only if every cancel succeeded; best-effort/NON-FATAL, a failure raises a critical alert
+//      (revenuecat_leg.ts)
 //   5. OneSignal player unsub — best-effort, non-fatal
 //   6. Storage purge (every USER_OWNED_BUCKETS bucket) — best-effort, per-bucket errors logged
 //   7. auth.users delete (service-role) — CASCADE through public.users + all FKs
@@ -28,6 +31,7 @@ import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
 import { purgeUserStorage } from "../_shared/purge_user_storage.ts";
 import { USER_OWNED_BUCKETS } from "../_shared/user_owned_buckets.ts";
+import { cancelAndDeletePlayCustomer, PLAY_DELETE_ALERT_SOURCE } from "./revenuecat_leg.ts";
 
 // ── CORS headers (inline — no cors.ts in _shared for this project) ────────────
 const corsHeaders = {
@@ -299,6 +303,45 @@ serve(async (req: Request) => {
     if (cancelFailures.length > 0) {
       razorpayStatus = `cancel_failed:${cancelFailures.join(",")}`.slice(0, 400);
     }
+
+    // ── 4b. GOOGLE PLAY CANCEL (RevenueCat) — best-effort, NON-FATAL (OI-519 U4) ─
+    // Same rule as the Razorpay leg: cancel first, never block the erasure. It
+    // does not read the mirror switch. A failure is a critical `alerts` row (the
+    // durable record: account_deletion_log has no Play column) naming the user
+    // whose Google subscription must be cancelled by hand.
+    const play = await cancelAndDeletePlayCustomer(userId, {
+      secret: Deno.env.get("REVENUECAT_SECRET_KEY") ?? null,
+      readPlayTxns: async () => {
+        const { data, error } = await admin
+          .from("subscriptions")
+          .select("store_original_transaction_id, status")
+          .eq("user_id", userId)
+          .eq("store", "play")
+          .neq("status", "cancelled")
+          .limit(10);
+        if (error) return { error: String(error.code ?? "unknown") };
+        return {
+          txns: (data ?? []).map((r: { store_original_transaction_id: string | null; status: string }) => ({
+            txn: r.store_original_transaction_id ?? null,
+            expired: r.status === "expired",
+          })),
+        };
+      },
+      alert: async (summary, context) => {
+        const { error } = await admin.from("alerts").insert({
+          source: PLAY_DELETE_ALERT_SOURCE,
+          severity: "critical",
+          summary,
+          context_json: { ...context, request_id: requestId },
+        });
+        if (error) {
+          console.error(
+            `[delete-account] request_id=${requestId} play alert insert failed code=${error.code ?? "unknown"}`,
+          );
+        }
+      },
+    });
+    console.log(`[delete-account] request_id=${requestId} play=${play.status}`);
 
     // ── 4. ONESIGNAL UNSUBSCRIBE — best-effort, non-fatal ────────────────────
     // Unsubscribe the device so it stops receiving pushes after account deletion.
