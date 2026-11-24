@@ -130,14 +130,23 @@ class MeasurementWriteNotifier extends Notifier<void> {
       // OI-348 B9 (e9a6c1): the remembered unit is a synced profile field
       // (`measurement_unit`), so the user's other devices open the sheet in
       // the same unit. No write without an owner or a profile (no stub).
+      // The measurement is already saved: a failed unit write must never
+      // escape (the sheet would stay open and a second tap would save the day
+      // again) nor skip the refresh below (B-pass B9 F1). The old device-key
+      // write never threw either.
       final owner = HiveUserSession.currentOwnerFullId;
       if (owner != null) {
-        await ProfileWriteService.instance.patchProfileWith(
-          (current) => current.isEmpty
-              ? null
-              : {kMeasurementUnitKey: measurementUnitValue(inches: inchesUsed)},
-          stillOwner: () => HiveUserSession.currentOwnerFullId == owner,
-        );
+        try {
+          await ProfileWriteService.instance.patchProfileWith(
+            (current) => current.isEmpty
+                ? null
+                : {kMeasurementUnitKey: measurementUnitValue(inches: inchesUsed)},
+            stillOwner: () => HiveUserSession.currentOwnerFullId == owner,
+          );
+        } catch (e, st) {
+          unawaited(ErrorTelemetry.recordNonFatal(e, st,
+              reason: 'measurement_unit_write_failed'));
+        }
       }
     }
     ref.invalidate(bodyMeasurementsProvider);

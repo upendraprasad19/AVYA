@@ -22,6 +22,7 @@
 // its absence from `_ensureLocalUser`.
 library;
 
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -33,7 +34,9 @@ import 'package:icanbefitter/core/services/sync_service.dart';
 import 'package:icanbefitter/core/services/units_pref_adopter.dart';
 import 'package:icanbefitter/core/utils/unit_prefs_rule.dart';
 import 'package:icanbefitter/features/auth/providers/auth_invalidation_provider.dart';
+import 'package:icanbefitter/core/services/write_result.dart';
 import 'package:icanbefitter/features/profile/providers/body_measurements_provider.dart';
+import 'package:icanbefitter/features/profile/services/profile_write_service.dart';
 import 'package:icanbefitter/shared/repositories/user_repository.dart';
 
 import '../helpers/hive_test_setup.dart';
@@ -77,7 +80,7 @@ void main() {
   Future<void> seedProfile([Map<String, dynamic> extra = const {}]) =>
       HiveService.instance.userBox.put(
         'profile',
-        <String, dynamic>{'full_name': 'T', ...extra},
+        <String, dynamic>{'full_name': 'T', 'primary_goal': 'build_muscle', ...extra},
       );
 
   setUp(() async {
@@ -258,6 +261,62 @@ void main() {
     });
   });
 
+  group('B-pass F2: the owner changes while the write waits on the lock', () {
+    Future<void> switchTo(String uid) async {
+      await HiveUserSession.closeAll();
+      await HiveUserSession.openForUser(uid);
+    }
+
+    // Holds the profile lock, starts [write], swaps to the other account,
+    // releases, and returns what [write] answered. Neither profile may change.
+    Future<T> raceOwnerSwap<T>(Future<T> Function() write) async {
+      await seedProfile();
+      final release = Completer<void>();
+      final held = ProfileWriteService.instance.debugHoldLockUntil(release.future);
+      final pending = write();
+      await Future<void>.delayed(Duration.zero);
+      await switchTo(_otherUser);
+      await seedProfile();
+      release.complete();
+      await held;
+      final answer = await pending;
+      expect(profile()!.containsKey('units_system'), isFalse,
+          reason: 'the account that took over is never written');
+      expect(profile()!.containsKey('measurement_unit'), isFalse);
+      await switchTo(kTestUserId);
+      expect(profile()!.containsKey('units_system'), isFalse,
+          reason: 'the write was refused, not redirected');
+      expect(profile()!.containsKey('measurement_unit'), isFalse);
+      return answer;
+    }
+
+    test('setUnitsMetric', () async {
+      expect(await raceOwnerSwap(() => UserRepository.instance.setUnitsMetric(false)),
+          isFalse);
+    });
+
+    test('UnitsPrefAdopter.runIfNeeded: no flag, key kept (retried later)',
+        () async {
+      await HiveService.instance.configBox.put('units_metric', false);
+      expect(await raceOwnerSwap(UnitsPrefAdopter.runIfNeeded),
+          UnitsAdoptOutcome.noProfile);
+      expect(HiveService.instance.configBox.containsKey('units_metric'), isTrue);
+      expect(HiveService.instance.migrationBox.get(UnitsPrefAdopter.flagKey),
+          isNot(true));
+    });
+
+    test('MeasurementWriteNotifier.save (the measurement unit)', () async {
+      final c = ProviderContainer(overrides: [
+        authUserIdTokenProvider.overrideWithValue(kTestUserId),
+      ]);
+      addTearDown(c.dispose);
+      final res = await raceOwnerSwap(() => c
+          .read(measurementWriteProvider.notifier)
+          .save(sites: {'waist': 80.0}, source: WriteSource.manual, inchesUsed: true));
+      expect(res.success, isTrue);
+    });
+  });
+
   group('UnitsPrefAdopter.runIfNeeded', () {
     bool flag() =>
         HiveService.instance.migrationBox.get(UnitsPrefAdopter.flagKey) == true;
@@ -302,6 +361,34 @@ void main() {
       expect(HiveService.instance.userBox.containsKey('profile'), isFalse);
       expect(deviceKey(), isTrue);
       expect(flag(), isFalse);
+    });
+
+    test('B-pass F4: a sign-up STUB profile ({id, email, created_at}) is '
+        'not a profile: nothing written, no flag, key kept', () async {
+      await HiveService.instance.userBox.put('profile', <String, dynamic>{
+        'id': kTestUserId,
+        'email': 't@x.test',
+        'created_at': '2026-11-24T00:00:00.000',
+      });
+      await HiveService.instance.configBox.put('units_metric', false);
+      expect(await UnitsPrefAdopter.runIfNeeded(), UnitsAdoptOutcome.noProfile);
+      expect(profile()!.containsKey('units_system'), isFalse);
+      expect(deviceKey(), isTrue);
+      expect(flag(), isFalse);
+      // MIRROR: a height alone (no goal yet) is real data.
+      await HiveService.instance.userBox.put('profile',
+          <String, dynamic>{'id': kTestUserId, 'height_cm': 175.0});
+      expect(await UnitsPrefAdopter.runIfNeeded(), UnitsAdoptOutcome.copied);
+      expect(profile()!['units_system'], 'imperial');
+    });
+
+    test('profileHasRealData: a goal or a height; empty and stub are not', () {
+      expect(UnitsPrefAdopter.profileHasRealData(const {}), isFalse);
+      expect(UnitsPrefAdopter.profileHasRealData(const {'id': 'x', 'email': 'e'}),
+          isFalse);
+      expect(UnitsPrefAdopter.profileHasRealData(const {'primary_goal': 'cut'}),
+          isTrue);
+      expect(UnitsPrefAdopter.profileHasRealData(const {'height_cm': 170}), isTrue);
     });
 
     test('restore not settled: no write, no flag', () async {

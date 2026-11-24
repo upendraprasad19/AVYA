@@ -11,14 +11,14 @@ concept: unit_preference_sync
 sot_registry_entry: unit_preference_sync
 writers:
   - { file: lib/shared/repositories/user_repository.dart, method_or_widget: "setUnitsMetric: profile units_system via ProfileWriteService.patchProfileWith (owner captured at call start, no write without a profile); was configBox['units_metric']", line: 1119 }
-  - { file: lib/features/profile/providers/body_measurements_provider.dart, method_or_widget: "MeasurementWriteNotifier.save: profile measurement_unit under the same shouldRememberUnit gate, owner captured, no stub; was MigratedKey body_measurement_sheet_unit", line: 135 }
-  - { file: lib/core/services/units_pref_adopter.dart, method_or_widget: "UnitsPrefAdopter.runIfNeeded: one-time per device, copies the legacy device value into a profile without units_system, after a SETTLED restore; deletes the device key; flag units_metric_to_profile_v1_done in migrationBox", line: 66 }
+  - { file: lib/features/profile/providers/body_measurements_provider.dart, method_or_widget: "MeasurementWriteNotifier.save: profile measurement_unit under the same shouldRememberUnit gate, owner captured, no stub, a failed unit write is caught (B-pass F1); was MigratedKey body_measurement_sheet_unit", line: 140 }
+  - { file: lib/core/services/units_pref_adopter.dart, method_or_widget: "UnitsPrefAdopter.runIfNeeded: one-time per device, copies the legacy device value into a profile without units_system, after a SETTLED restore; deletes the device key; flag units_metric_to_profile_v1_done in migrationBox; a sign-up stub is not a profile (B-pass F4)", line: 73 }
   - { file: lib/core/services/sync/sync_profile.dart, method_or_widget: "_syncUserProfile payload - ...unitPrefsPushEntries(p, enabled: UnitPrefFlags.pushEnabled) (valid values only, absent stays absent)", line: 250 }
 readers:
   - { file: lib/shared/repositories/user_repository.dart, method_or_widget: "getUnitsMetric: profile units_system (only 'imperial' is imperial), else the legacy device key until the adopter ran; TOTAL (throw -> metric + units_pref_read_failed)", line: 1097 }
-  - { file: lib/features/profile/providers/body_measurements_provider.dart, method_or_widget: "lastUnitInches: profile measurement_unit, else the legacy per-user key; preferredInches (sheet + Progress card)", line: 159 }
+  - { file: lib/features/profile/providers/body_measurements_provider.dart, method_or_widget: "lastUnitInches: profile measurement_unit, else the legacy per-user key; preferredInches (sheet + Progress card)", line: 168 }
   - { file: lib/core/services/sync/sync_profile.dart, method_or_widget: "_restoreUserProfile (per-key merge) - cloud non-null wins per key, cloud null never wipes (unchanged; carries the two new keys)", line: 773 }
-  - { file: lib/features/profile/screens/profile/screen.dart, method_or_widget: "_isMetric seeded once; _onUnitsChanged (no snap-back); invalidateOnBackgroundRestore re-seeds it on the restore tick", line: 131 }
+  - { file: lib/features/profile/screens/profile/screen.dart, method_or_widget: "_isMetric seeded once; _onUnitsChanged (no snap-back); invalidateOnBackgroundRestore re-seeds it on the restore tick, except while a tap's write is pending (the write's completion re-seeds; B-pass F3)", line: 131 }
   - { file: lib/features/ai_coach/widgets/diff_preview/switch_goal_diff.dart, method_or_widget: "coach goal-change preview: was a RAW configBox['units_metric'] read; now getUnitsMetric()", line: 78 }
   - { file: lib/features/profile/screens/edit_profile_screen.dart, method_or_widget: "initState unit (getUnitsMetric, unchanged call)", line: 228 }
 hive_key_prefix: "userBox['profile'] keys units_system, measurement_unit (new); configBox units_metric and userBox body_measurement_sheet_unit become legacy fallbacks; migrationBox units_metric_to_profile_v1_done (new)"
@@ -32,7 +32,7 @@ ist_handling: ["none: no date logic"]
 provider_invalidations: ["Profile Units row: userProfileProvider after the write; the restore tick re-seeds the screen's _isMetric (HiveTabScaffoldMixin.invalidateOnBackgroundRestore)"]
 telemetry_op_types:
   success: [units_pref_adopted]
-  failure: [units_pref_read_failed, profile_units_write_failed, bg_heal_units_pref_adopter, restoring_units_pref_adopter]
+  failure: [units_pref_read_failed, profile_units_write_failed, measurement_unit_write_failed, bg_heal_units_pref_adopter, restoring_units_pref_adopter]
 cross_account_guard: "Both writers capture HiveUserSession.currentOwnerFullId first (null -> no write) and pass stillOwner to patchProfileWith (checked inside the lock). The values are per-user profile fields now; the device-wide key is read only until the adopter ran."
 forbidden_patterns_checked:
   - { pattern: "a configBox['units_metric'] write anywhere in lib/", absent: true }
@@ -94,7 +94,16 @@ Both are profile fields (`units_system`, `measurement_unit`), pushed by the prof
 - U11: the Units row reads `getUnitsMetric()` in build (snap-back) -> widget test red. U12: the restore re-seed removed -> widget test red.
 - U13: the background adopter call placed after the reckon -> pin red.
 
+## B-pass fix round (2026-11-24, docs/reviews/oi348-landing2-bpass.md, seat B9)
+- F1 (P2): `MeasurementWriteNotifier.save` awaited `patchProfileWith`, which rethrows; the old device-key write never threw. A failed unit write after the measurement was saved escaped the sheet's tap (sheet stays open, a second tap saves the day again) and skipped the refresh. Now caught (`measurement_unit_write_failed`). Test: `measurement_write_batch_behavioral_test.dart` MIRROR (the failure injected into the real patch path through `ProfileWriteService.debugFailNextPatchWith`).
+- F2 (P3): no test changed the owner WHILE a unit write waited on the profile lock. Added for all three writers (`setUnitsMetric`, the adopter, the sheet save): the write is refused, neither profile changes, the adopter keeps the key and sets no flag.
+- F3 (P3): a restore tick while a tap's write was queued re-read the OLD stored value and flipped the switch back, and nothing re-seeded it after the write. The tick now skips the re-seed while a write is pending; the last pending write's completion re-seeds from the store. Test: `profile_units_row_test.dart` step 3.
+- F4 (P3): the adopter treated the sign-up stub `{id, email, created_at}` as a profile and would push a near-empty `user_profile` row. It now needs real data (a goal or a height, the bootstrapper's own cloud test): a stub is `noProfile`, retried later.
+- F5 (P3): stated below as a residual.
+Mutations, all KILLED (applied, `grep -c` 1, restored by cp + cmp): MF1 the save catch rethrows (1 red); MF2a/b/c each `stillOwner` -> `() => true` (1 red each); MF4 `profileHasRealData` -> `isNotEmpty` (2 red); MF3 the in-flight skip removed (widget test red).
+
 ## Residual, stated
+- Shared device, B-pass F5: when the FIRST account to finish a settled restore on a device already has `units_system` in its cloud profile, the adopter drops the device key; another account on that device that had set imperial on the old build then reads metric until it sets the switch once. Accepted: the old value was one per DEVICE (the bug itself), every account is a testing account (CLAUDE.md section 1), and keeping the key per account would need a per-account offer the old build never recorded.
 - Before the adopter has run on a device (offline launch, failed or unsettled restore), a second account on it reads the device-wide value (the plan's bounded pre-adopter window).
 - A toggle made offline and followed by a relaunch before it pushes is reverted by the launch restore (every profile field's posture; accepted in the plan).
 - Old builds never push these fields; their device key stays theirs.

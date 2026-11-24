@@ -5,7 +5,7 @@ blast_radius: platform
 review_rounds: 6
 ground_truth_verified: true
 verdict: converged
-bpass: pending
+bpass: accepted
 bpass_review: docs/reviews/oi348-landing2-bpass.md
 ---
 
@@ -57,3 +57,6 @@ grants.
 ## Execution
 Inline, one worktree per PR (§4.12.7), decided at start: PR A `oi348-landing2`; PR B / PR C in
 `oi348-landing2-referral`.
+
+## B-pass (PR A)
+`docs/reviews/oi348-landing2-bpass.md`: three context-blind Sonnet seats on head `61c9433d` (CI green). No P0/P1; 1 P2 and 7 P3, all triaged: 7 fixed with tests and mutation proof in the fix-round commit, 1 stated as a residual (diagnose e9a6c1). Verdict accepted.

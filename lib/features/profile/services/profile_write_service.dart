@@ -120,6 +120,11 @@ class ProfileWriteService {
     var wrote = false;
     await _withLock(() async {
       try {
+        final injected = debugFailNextPatchWith;
+        if (injected != null) {
+          debugFailNextPatchWith = null;
+          throw injected;
+        }
         if (!stillOwner()) return;
         final box = HiveService.instance.userBox;
         final existing = box.get('profile');
@@ -163,6 +168,12 @@ class ProfileWriteService {
   @visibleForTesting
   Future<void> debugHoldLockUntil(Future<void> release) =>
       _withLock(() => release);
+
+  /// Test seam (OI-348 B-pass B9 F1): the NEXT [patchProfileWith] throws this
+  /// inside its own try, so its real report-and-rethrow path runs, then the
+  /// seam clears itself. Production never sets it.
+  @visibleForTesting
+  Object? debugFailNextPatchWith;
 
   /// Fire SyncService.syncProfileNow if we have a logged-in user.
   /// Fire-and-forget per docs/architecture/sync.md — Hive write already succeeded

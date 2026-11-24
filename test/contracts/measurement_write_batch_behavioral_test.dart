@@ -26,6 +26,7 @@ import 'package:icanbefitter/core/services/write_result.dart';
 import 'package:icanbefitter/core/utils/ist_date.dart';
 import 'package:icanbefitter/features/auth/providers/auth_invalidation_provider.dart';
 import 'package:icanbefitter/features/profile/providers/body_measurements_provider.dart';
+import 'package:icanbefitter/features/profile/services/profile_write_service.dart';
 
 import '../helpers/dart_source_slice.dart';
 import '../helpers/hive_test_setup.dart';
@@ -460,6 +461,30 @@ void main() {
         inchesUsed: false,
       );
       expect(notifier.lastUnitInches(), isFalse);
+    });
+
+    test('MIRROR (B-pass B9 F1): a unit write that THROWS after the '
+        'measurement was saved never escapes: save returns the success, the '
+        'history refreshes, and no unit is stored', () async {
+      final c = makeContainer();
+      final sub = c.listen(bodyMeasurementsProvider, (_, _) {});
+      addTearDown(sub.close);
+      final before = c.read(bodyMeasurementsProvider);
+      ProfileWriteService.instance.debugFailNextPatchWith =
+          StateError('profile box write failed');
+      addTearDown(() => ProfileWriteService.instance.debugFailNextPatchWith = null);
+      final res = await c.read(measurementWriteProvider.notifier).save(
+            sites: {'waist': 82.0},
+            source: WriteSource.manual,
+            inchesUsed: true,
+          );
+      expect(res.success, isTrue, reason: 'the measurement itself was saved');
+      expect(record()['waist'], 82.0);
+      expect(storedUnit(), isNull, reason: 'the unit write failed');
+      expect(ProfileWriteService.instance.debugFailNextPatchWith, isNull,
+          reason: 'the failure was injected into the real patch path');
+      expect(identical(before, c.read(bodyMeasurementsProvider)), isFalse,
+          reason: 'the refresh after the save still ran');
     });
 
     test('a failed save does NOT remember the unit', () async {

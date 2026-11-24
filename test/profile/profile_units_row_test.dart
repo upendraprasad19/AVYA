@@ -252,6 +252,16 @@ void main() {
       expect(shownMetric(tester), isTrue, reason: 'no snap-back, pump $i');
     }
 
+    // ── 3. B-pass F3: a restore tick WHILE the write is queued ──────────
+    // The stored value is still the old one; the tick must not flip the
+    // switch back, and the write's completion re-seeds from the store.
+    SyncService.instance.bumpRestoreCompleted();
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 50));
+    expect(storedUnits(), 'imperial');
+    expect(shownMetric(tester), isTrue,
+        reason: 'a tick during a pending write does not snap the switch back');
+
     release.complete();
     await held;
     await settle(tester);

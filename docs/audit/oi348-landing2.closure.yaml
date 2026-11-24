@@ -9,8 +9,8 @@ diagnose_docs:
   - docs/diagnoses/2026-11-23-rank-floor-never-announced-8b1f3d.md
   - docs/diagnoses/2026-11-23-unit-preference-not-synced-e9a6c1.md
   - docs/diagnoses/2026-11-24-restore-snapshot-serial-reads-a0d5f7.md
-total_findings: 18
-closed_count: 18
+total_findings: 26
+closed_count: 26
 
 findings:
   - id: B8-CLIENT-STAMP
@@ -117,3 +117,51 @@ findings:
     terminal_state: upstream_blocked
     blocker: "OI-525: removal waits for the founder's device re-check of OI-348 A3 and A8 after the applies and deploys"
     reopen_when: "OI-348 A3 and A8 re-checks pass on a build carrying PR A"
+
+  # ── B-pass (docs/reviews/oi348-landing2-bpass.md, head 61c9433d) ──
+  - id: BPASS-B9-F1-SAVE-THROW
+    title: "A failed unit write after the measurement was saved escaped MeasurementWriteNotifier.save (P2)"
+    terminal_state: closed_in_commit
+    commit: "oi348-landing2@branch"
+    verification: "caught as measurement_unit_write_failed; measurement_write_batch_behavioral_test MIRROR (debugFailNextPatchWith); mutant MF1 red"
+
+  - id: BPASS-B9-F2-OWNER-SWAP
+    title: "No test swapped the owner while a unit write waited on the profile lock (P3)"
+    terminal_state: closed_in_commit
+    commit: "oi348-landing2@branch"
+    verification: "group 'B-pass F2' for setUnitsMetric, the adopter and the sheet save; mutants MF2a/b/c red"
+
+  - id: BPASS-B9-F3-TICK-DURING-WRITE
+    title: "A restore tick during a pending toggle flipped the switch back (P3)"
+    terminal_state: closed_in_commit
+    commit: "oi348-landing2@branch"
+    verification: "in-flight counter + re-seed on completion; profile_units_row_test step 3; mutant MF3 red"
+
+  - id: BPASS-B9-F4-STUB-PROFILE
+    title: "The adopter treated the sign-up stub as a profile (P3)"
+    terminal_state: closed_in_commit
+    commit: "oi348-landing2@branch"
+    verification: "profileHasRealData (goal or height); stub case + mirror + pure predicate tests; mutant MF4 red (2)"
+
+  - id: BPASS-B9-F5-SHARED-DEVICE
+    title: "A second account on a shared device loses an old-build imperial setting when the first account already had a cloud value (P3)"
+    terminal_state: verified_clean
+    evidence: "Stated residual in diagnose e9a6c1: the old value was one per device (the bug itself); testing accounts only (CLAUDE.md section 1); no per-account record exists on the old build to restore from."
+
+  - id: BPASS-B10-F1-RESTORE-READER-RANGE
+    title: "Registry range for _attemptSingleCallRestore was off (also on main) (P3)"
+    terminal_state: closed_in_commit
+    commit: "oi348-landing2@branch"
+    verification: "now 2361-2597; check_sot_registry_parity PASS; cite text checked"
+
+  - id: BPASS-B8-F1-HOME-CITES
+    title: "Three home_screen.dart registry cites stale since main (P3)"
+    terminal_state: closed_in_commit
+    commit: "oi348-landing2@branch"
+    verification: "246-270, 155-191, 504-507; checked against the method text"
+
+  - id: BPASS-B8-F2-RANK-ROWS
+    title: "Floor predicates had no registry rows; three rank_service.dart ranges stale (P3)"
+    terminal_state: closed_in_commit
+    commit: "oi348-landing2@branch"
+    verification: "rows for rank_ladder_data.dart 259-289 and rank_engine.ts 112-119; ranges 72-220, 222-239, 140-149; the writers-vs-readers half is a recorded false alarm"

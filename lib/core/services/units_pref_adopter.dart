@@ -60,6 +60,13 @@ class UnitsPrefAdopter {
       debugRestoreSettledOverride?.call() ??
       SyncService.instance.restoreSettledForCurrentUser;
 
+  /// True when [profile] holds onboarding data (a goal or a height), the test
+  /// `AuthSessionBootstrapper` applies to the cloud row. An empty map and the
+  /// sign-up stub are not.
+  @visibleForTesting
+  static bool profileHasRealData(Map<dynamic, dynamic> profile) =>
+      profile['primary_goal'] != null || profile['height_cm'] != null;
+
   /// May throw (a box or profile-write failure); each caller wraps it in a try
   /// with its own `recordNonFatal` reason, so a failure names the heal path
   /// that ran it. A throw sets no flag, so the next settled restore retries.
@@ -86,7 +93,11 @@ class UnitsPrefAdopter {
     var outcome = UnitsAdoptOutcome.noProfile;
     await ProfileWriteService.instance.patchProfileWith(
       (current) {
-        if (current.isEmpty) {
+        // A sign-up stub ({id, email, created_at}, auth_session_bootstrapper)
+        // is not a profile: a copy into it would push a near-empty
+        // user_profile row (B-pass B9 F4). Same "real data" test as the
+        // bootstrapper's cloud check: a goal or a height.
+        if (!profileHasRealData(current)) {
           outcome = UnitsAdoptOutcome.noProfile;
           return null;
         }
